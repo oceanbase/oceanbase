@@ -79,7 +79,6 @@ ObOdpsJniConnector::OdpsType ObODPSTableRowIterator::OdpsColumn::get_odps_type()
     LOG_WARN("this_type_info_ is null", K(this_type_info_));
   } else {
     int ret = OB_SUCCESS;
-    LOG_WARN("this_type_info_ is not null", K(this_type_info_->mType), K(type_info_.mType), K(this_type_info_), K(&type_info_));
     switch (this_type_info_->mType) {
       case apsara::odps::sdk::ODPSColumnType::ODPS_BIGINT:
         odps_type = ObOdpsJniConnector::OdpsType::BIGINT;
@@ -1030,6 +1029,9 @@ int ObODPSTableRowIterator::pull_all_columns() {
         }
       }
       uint32_t partition_col_cnt = schema_handle->GetPartitionLevels();
+      if (partition_col_cnt > 0) {
+        is_part_table_ = true;
+      }
       for (uint32_t i = 0; OB_SUCC(ret) && i < partition_col_cnt; i++) {
         if (OB_FAIL(part_col_names_.push_back(ObString(schema_handle->GetTablePartition(i).GetName().c_str())))) {
           LOG_WARN("failed to push back part_col_names_", K(ret));

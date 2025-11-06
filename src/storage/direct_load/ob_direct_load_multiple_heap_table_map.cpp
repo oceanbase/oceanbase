@@ -27,6 +27,12 @@ ObDirectLoadMultipleHeapTableMap::ObDirectLoadMultipleHeapTableMap(int64_t mem_l
   allocator_.set_tenant_id(MTL_ID());
 }
 
+void ObDirectLoadMultipleHeapTableMap::reuse()
+{
+  tablet_map_.reuse();
+  allocator_.reset_remain_one_page();
+}
+
 int ObDirectLoadMultipleHeapTableMap::init()
 {
   int ret = OB_SUCCESS;

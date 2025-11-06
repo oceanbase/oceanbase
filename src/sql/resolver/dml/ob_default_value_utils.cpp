@@ -360,6 +360,10 @@ int ObDefaultValueUtils::build_default_expr_strict(const ColumnItem *column, ObR
     if (OB_FAIL(resolver_->build_heap_table_hidden_pk_expr(expr, column->get_expr()))) {
       LOG_WARN("failed to build next_val expr", K(ret), KPC(column->get_expr()));
     }
+  } else if (column->is_hidden_clustering_key_column()) {
+    if (OB_FAIL(resolver_->build_hidden_clustering_key_expr(expr, column->get_expr()))) {
+      LOG_WARN("failed to build hidden clustering key expr", K(ret), KPC(column->get_expr()));
+    }
   } else if (OB_ISNULL(column->get_expr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, column expr is nullptr", K(ret), KPC(column));
@@ -541,6 +545,10 @@ int ObDefaultValueUtils::get_default_type_for_insert(const ColumnItem *column, O
              && !lib::is_oracle_mode()
              && !column->is_auto_increment()) {
     if (column->base_cid_ == OB_HIDDEN_PK_INCREMENT_COLUMN_ID) {
+      // Hidden pk for table without primary key
+      op = OB_NORMAL_DEFAULT_OP;
+    } else if (column->is_hidden_clustering_key_column()) {
+      // Hidden clustering key for table with clustering key
       op = OB_NORMAL_DEFAULT_OP;
     } else if (!column->default_value_.is_null()) {
       op = OB_NORMAL_DEFAULT_OP;

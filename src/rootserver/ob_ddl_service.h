@@ -703,7 +703,8 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
   int drop_primary_key(ObTableSchema &new_table_schema);
   int add_primary_key(
       const common::ObIArray<common::ObString> &pk_column_names,
-      share::schema::ObTableSchema &new_table_schema);
+      share::schema::ObTableSchema &new_table_schema,
+      share::schema::ObSchemaGetterGuard &schema_guard);
   // 1. table with primary key -> hidden table with new primary key, i.e., modify primary key.
   // 2. table without primary key -> hidden table with primary key, i.e., add primary key.
   // 3. table with primary key -> hidden table without primary key, i.e., drop primary key.
@@ -1087,7 +1088,8 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
   int update_autoinc_schema(obrpc::ObAlterTableArg &alter_table_arg);
   int build_aux_lob_table_schema_if_need(
       ObTableSchema &data_table_schema,
-      ObIArray<ObTableSchema> &table_schemas);
+      ObIArray<ObTableSchema> &table_schemas,
+      const bool force_generate_lob=false);
   int rename_dropping_index_name(
       const share::schema::ObTableSchema &orig_index_schema,
       const bool is_inner_and_fts_index,
@@ -1962,8 +1964,7 @@ int check_will_be_having_domain_index_operation(
     const AlterColumnSchema *alter_column_schema,
     const ObColumnSchemaV2 &new_column_schema,
     ObDDLOperator &ddl_operator,
-    common::ObMySQLTransaction &trans,
-    ObIArray<ObTableSchema> *globla_idx_schema_array);
+    common::ObMySQLTransaction &trans);
 
   int check_new_column_for_index(
       ObIArray<share::schema::ObTableSchema> &idx_schemas,
@@ -1977,14 +1978,14 @@ int check_will_be_having_domain_index_operation(
       const share::schema::ObColumnSchemaV2 &new_column_schema,
       ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
-      common::ObIArray<share::schema::ObTableSchema> *global_idx_schema_array = NULL);
+      const common::ObIArray<share::schema::ObTableSchema> *global_idx_schema_array = NULL);
   int alter_table_update_aux_column(
       const share::schema::ObTableSchema &new_table_schema,
       const share::schema::ObColumnSchemaV2 &new_column_schema,
       ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
       const share::schema::ObTableType table_type,
-      common::ObIArray<share::schema::ObTableSchema> *global_idx_schema_array = NULL);
+      const common::ObIArray<share::schema::ObTableSchema> *global_idx_schema_array = NULL);
   int alter_sequence_in_alter_column(const share::schema::ObTableSchema &table_schema,
                                      share::schema::ObColumnSchemaV2 &column_schema,
                                      common::ObMySQLTransaction &trans,
@@ -2096,7 +2097,8 @@ int check_will_be_having_domain_index_operation(
       ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
       const bool need_sync_schema_version,
-      bool &is_add_lob);
+      bool &is_add_lob,
+      const bool is_hybrid_vector_column=false);
   int lock_tables_of_database(const share::schema::ObDatabaseSchema &database_schema,
                               ObMySQLTransaction &trans);
   int lock_tables_in_recyclebin(const share::schema::ObDatabaseSchema &database_schema,

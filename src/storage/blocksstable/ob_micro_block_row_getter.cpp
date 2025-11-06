@@ -304,19 +304,27 @@ int ObMicroBlockRowGetter::project_cache_row(const ObRowCacheValue &value, ObDat
   } else if (OB_FAIL(row.reserve(read_info->get_request_count()))) {
     LOG_WARN("fail to reserve memory for datum row", K(ret), K(read_info->get_request_count()));
   } else {
+    const int64_t trans_col_idx = read_info->get_schema_rowkey_count();
     const int64_t request_cnt = read_info->get_request_count();
     const ObColumnIndexArray &cols_index = read_info->get_columns_index();
     row.row_flag_ = value.get_flag();
     row.count_ = read_info->get_request_count();
     ObStorageDatum *const datums = value.get_datums();
     const int64_t column_cnt = value.get_column_cnt();
-    for (int64_t i = 0; OB_SUCC(ret) && i < request_cnt; i++) {
+    for (int64_t i = 0; i < request_cnt; i++) {
       if (cols_index.at(i) < column_cnt && cols_index.at(i) >= 0) {
         row.storage_datums_[i] = datums[cols_index.at(i)];
       } else {
         // new added col
         row.storage_datums_[i].set_nop();
       }
+    }
+    if (sstable_->is_minor_sstable() &&
+        value.get_flag().is_exist() &&
+        context_->is_inc_major_query_ &&
+        -datums[trans_col_idx].get_int() <= context_->trans_version_range_.base_version_) {
+      row.row_flag_.reset();
+      row.row_flag_.set_flag(DF_NOT_EXIST);
     }
   }
   return ret;
@@ -329,6 +337,7 @@ int ObMicroBlockRowGetter::inner_get_row(
     const ObDatumRow *&row)
 {
   int ret = OB_SUCCESS;
+  int64_t trans_version = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -337,29 +346,44 @@ int ObMicroBlockRowGetter::inner_get_row(
     LOG_WARN("Invalid read_info", K(ret), KPC_(read_info));
   } else if (OB_FAIL(prepare_reader(block_data.get_store_type()))) {
     LOG_WARN("failed to prepare reader", K(ret), K(block_addr));
-  } else {
-    if (OB_FAIL(row_.reserve(read_info_->get_request_count()))) {
-      LOG_WARN("fail to reserve memory for datum row", K(ret), K(read_info_->get_request_count()));
-    } else if (OB_FAIL(reader_->get_row(block_addr, block_data, rowkey, *read_info_, row_))) {
-      if (OB_BEYOND_THE_RANGE == ret) {
-        if (OB_FAIL(get_not_exist_row(rowkey, row))) {
-          LOG_WARN("Fail to get not exist row", K(ret), K(rowkey), K(block_addr));
-        }
-        STORAGE_LOG(DEBUG, "get not exist row", K(rowkey), K(block_addr));
-      } else {
-        LOG_WARN("Fail to get row", K(ret), K(rowkey), K(block_data), KPC_(read_info),
-                 KPC_(param), KPC_(context), K(block_addr));
+  } else if (OB_FAIL(row_.reserve(read_info_->get_request_count()))) {
+    LOG_WARN("fail to reserve memory for datum row", K(ret), K(read_info_->get_request_count()));
+  } else if (OB_UNLIKELY(sstable_->is_minor_sstable() && context_->is_inc_major_query_)) {
+    if (OB_FAIL(reader_->get_row_and_trans_version(block_addr, block_data, rowkey, *read_info_, row_, trans_version))) {
+      if (OB_UNLIKELY(OB_BEYOND_THE_RANGE != ret)) {
+        LOG_WARN("Fail to get row", K(ret), K(rowkey), K(block_data), KPC_(read_info), KPC_(param), KPC_(context), K(block_addr));
       }
     } else {
       row = &row_;
-      if (OB_UNLIKELY(!sstable_->is_major_sstable() &&
-                      IF_NEED_CHECK_BASE_VERSION_FILTER(context_) &&
-                      OB_FAIL(context_->check_filtered_by_base_version(row_)))) {
-        TRANS_LOG(WARN, "check base version filter fail", K(ret));
+      if (OB_UNLIKELY(trans_version <= context_->trans_version_range_.base_version_)) {
+        row_.row_flag_.reset();
+        row_.row_flag_.set_flag(DF_NOT_EXIST);
       }
-      LOG_DEBUG("Success to get row", K(ret), K(rowkey), K(row_), KPC_(read_info),
-                K(context_->enable_put_row_cache()), K(context_->use_fuse_row_cache_), K(block_addr));
     }
+  } else if (OB_FAIL(reader_->get_row(block_addr, block_data, rowkey, *read_info_, row_))) {
+    if (OB_UNLIKELY(OB_BEYOND_THE_RANGE != ret)) {
+      LOG_WARN("Fail to get row", K(ret), K(rowkey), K(block_data), KPC_(read_info), KPC_(param), KPC_(context), K(block_addr));
+    }
+  } else {
+    row = &row_;
+  }
+
+  if (OB_BEYOND_THE_RANGE == ret) {
+    if (OB_FAIL(get_not_exist_row(rowkey, row))) {
+      LOG_WARN("Fail to get not exist row", K(ret), K(rowkey), K(block_addr));
+    } else {
+      row = &row_;
+      LOG_DEBUG("get not exist row", K(rowkey), K(block_addr));
+    }
+  } else if (OB_SUCC(ret)) {
+    // TODO: zhanghuidong.zhd, add unified interface for base version check, truncate filter, and ttl filter
+    if (OB_UNLIKELY(!sstable_->is_major_type_sstable() &&
+                    IF_NEED_CHECK_BASE_VERSION_FILTER(context_) &&
+                    OB_FAIL(context_->check_filtered_by_base_version(row_)))) {
+      TRANS_LOG(WARN, "check base version filter fail", K(ret));
+    }
+    LOG_DEBUG("Success to get row", K(ret), K(rowkey), K(row_), KPC_(read_info),
+          K(context_->enable_put_row_cache()), K(context_->use_fuse_row_cache_), K(block_addr));
   }
 
   if (OB_FAIL(ret)) {

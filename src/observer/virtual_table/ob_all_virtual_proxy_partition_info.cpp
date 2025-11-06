@@ -416,11 +416,12 @@ int ObAllVirtualProxyPartitionInfo::fill_row_(const ObTableSchema &table_schema)
           // 1. The generated column of the primary key table can also be used as the partition key
           // 2. Virtual table
           // 3. No primary key table (heap table)
+          // 4. Cluster by table
           if (OB_LIKELY(OB_ENTRY_NOT_EXIST == ret)) {
-            if (table_schema.is_table_with_pk() && column_schema->is_generated_column()) {
+            if (table_schema.is_index_organized_table_with_pk() && column_schema->is_generated_column()) {
               idx = info.get_size() + next_part_key_idx_;
               ret = OB_SUCCESS;
-            } else if (table_schema.is_vir_table() || table_schema.is_table_without_pk()) {
+            } else if (table_schema.is_vir_table() || table_schema.is_table_without_pk() || table_schema.is_table_with_clustering_key()) {
               idx = -1;
               ret = OB_SUCCESS;
             } else {

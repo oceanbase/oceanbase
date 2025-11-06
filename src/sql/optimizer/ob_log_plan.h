@@ -1813,7 +1813,8 @@ public:
   int prepare_hnsw_vector_index_scan(ObSchemaGetterGuard *schema_guard,
                                     const ObTableSchema &table_schema,
                                     const uint64_t& vec_col_id,
-                                    ObLogTableScan *table_scan);
+                                    ObLogTableScan *table_scan,
+                                    bool is_hybrid);
 
   int prepare_ivf_vector_index_scan(ObSchemaGetterGuard *schema_guard,
                                     const ObTableSchema &table_schema,
@@ -1898,9 +1899,9 @@ protected:
   int get_connected_table_ids(const ObIArray<ObRawExpr*> &quals,
                               ObIArray<ObRelIds> &connected_table_ids);
 
-  int check_push_subq_hint(const ObRawExpr *expr,
-                           bool &force_push,
-                           bool &force_no_push);
+  int check_push_subq_validity(const ObRawExpr *expr,
+                               bool &force_push,
+                               bool &force_no_push);
 
   int check_subq_need_push(ObRawExpr *expr,
                            ObIArray<ObRelIds> &connected_table_ids,

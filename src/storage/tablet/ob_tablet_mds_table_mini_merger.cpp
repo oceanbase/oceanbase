@@ -423,7 +423,7 @@ int ObMdsTableMiniMerger::init(
       LOG_WARN("mds storage schema is invalid", K(ret), KP(storage_schema), KPC(storage_schema));
     } else if (OB_FAIL(data_desc_.init(false/*is ddl*/, *storage_schema, ls_id, tablet_id,
         ctx.get_merge_type(), ctx.get_snapshot(), data_version, ctx.static_desc_.micro_index_clustered_,
-        ctx.static_desc_.private_transfer_epoch_, ctx.static_desc_.reorganization_scn_, ctx.static_param_.scn_range_.end_scn_,
+        ctx.static_desc_.private_transfer_epoch_, ctx.get_concurrent_cnt(), ctx.static_desc_.reorganization_scn_, ctx.static_param_.scn_range_.end_scn_,
         nullptr/*cg_schema*/, 0/*table_cg_idx*/, ctx.get_exec_mode()))) {
       LOG_WARN("fail to init whole desc", KR(ret), K(ctx), K(ls_id), K(tablet_id));
     } else if (FALSE_IT(data_desc_.get_desc().sstable_index_builder_ = &sstable_builder_)) {
@@ -478,8 +478,7 @@ int ObMdsTableMiniMerger::generate_mds_mini_sstable(
     SMART_VARS_2((ObSSTableMergeRes, res), (ObTabletCreateSSTableParam, param)) {
       if (OB_FAIL(macro_writer_.close())) {
         LOG_WARN("fail to close macro writer", K(ret), K(macro_writer_));
-      } else if (OB_FAIL(ctx_->update_block_info(macro_writer_.get_merge_block_info(), 0/*cost_time*/))) {
-        STORAGE_LOG(WARN, "Failed to add macro blocks", K(ret));
+      } else if (FALSE_IT(ctx_->update_block_info(macro_writer_.get_merge_block_info(), 0/*cost_time*/))) {
       } else if (OB_FAIL(close_index_builder(index_tree_start_seq, res))) {
         LOG_WARN("close index builder failed", K(ret), K(index_tree_start_seq));
       } else if (CLICK_FAIL(param.init_for_mds(*ctx_, res, *storage_schema_))) {
@@ -567,6 +566,7 @@ int ObMdsDataCompatHelper::generate_mds_mini_sstable(
     ctx->static_param_.rec_scn_ = mig_param.mds_checkpoint_scn_;
     ctx->static_param_.version_range_.snapshot_version_ = mig_param.mds_checkpoint_scn_.get_val_for_tx();
     ctx->static_param_.pre_warm_param_.type_ = ObPreWarmerType::MEM_PRE_WARM;
+    ctx->parallel_merge_ctx_.init_serial_merge(); // only use concurrent_cnt for small sstable temp space optimization
     if (OB_FAIL(mig_param.transfer_info_.get_private_transfer_epoch(ctx->static_desc_.private_transfer_epoch_))) {
       LOG_WARN("failed to get transfer epoch", K(ret), K(mig_param.transfer_info_));
     }
@@ -630,6 +630,7 @@ int ObMdsDataCompatHelper::generate_mds_mini_sstable(
     ctx->static_param_.rec_scn_ = tablet.get_mds_checkpoint_scn();
     ctx->static_param_.version_range_.snapshot_version_ = tablet.get_mds_checkpoint_scn().get_val_for_tx();
     ctx->static_param_.pre_warm_param_.type_ = ObPreWarmerType::MEM_PRE_WARM;
+    ctx->parallel_merge_ctx_.init_serial_merge(); // only use concurrent_cnt for small sstable temp space optimization
 
     if (OB_FAIL(tablet.get_private_transfer_epoch(ctx->static_desc_.private_transfer_epoch_))) {
       LOG_WARN("fail to get transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());

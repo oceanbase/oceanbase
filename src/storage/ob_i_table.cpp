@@ -784,6 +784,16 @@ int ObTablesHandleArray::get_tables(common::ObIArray<ObITable *> &tables) const
   return ret;
 }
 
+int ObTablesHandleArray::get_table_handles(common::ObIArray<ObTableHandleV2> &table_handles) const
+{
+  int ret = OB_SUCCESS;
+  table_handles.reset();
+  if (OB_FAIL(table_handles.assign(handles_array_))) {
+    STORAGE_LOG(WARN, "failed to assign table handles", K(ret));
+  }
+  return ret;
+}
+
 int ObTablesHandleArray::get_first_memtable(ObIMemtable *&memtable) const
 {
   int ret = OB_SUCCESS;
@@ -796,6 +806,16 @@ int ObTablesHandleArray::get_first_memtable(ObIMemtable *&memtable) const
   }
   if (OB_SUCC(ret) && OB_ISNULL(memtable)) {
     ret = OB_ENTRY_NOT_EXIST;
+  }
+  return ret;
+}
+
+int ObTablesHandleArray::get_inc_major_tables(common::ObIArray<ObITable *> &tables) const
+{
+  int ret = OB_SUCCESS;
+  tables.reset();
+  if (OB_FAIL(get_sstable_with_type_(ObITable::is_inc_major_type_sstable, tables))) {
+    STORAGE_LOG(WARN, "failed to get inc major sstable", K(ret));
   }
   return ret;
 }
@@ -877,9 +897,8 @@ int ObTablesHandleArray::check_continues(const share::ObScnRange *scn_range) con
   int ret = OB_SUCCESS;
 
   if (!handles_array_.empty()) {
-    // 1:check major sstable
+    // 1. check major sstable
     // there can only be one major or meta merge
-    const ObITable *last_table = nullptr;
     const ObITable *table = nullptr;
     SCN base_end_scn = SCN::min_scn();
     int64_t i = 0;
@@ -889,21 +908,36 @@ int ObTablesHandleArray::check_continues(const share::ObScnRange *scn_range) con
     } else if (table->is_major_sstable()) {
       i++;
     }
-    // 2:check minor sstable
+
+    // 2. check inc major sstable
+    const ObITable *last_table = nullptr;
     for ( ; OB_SUCC(ret) && i < handles_array_.count(); ++i) {
       table = handles_array_.at(i).get_table();
-      if (OB_ISNULL(table)) {
+      if (OB_UNLIKELY(nullptr == table || table->is_major_sstable())) {
         ret = OB_ERR_SYS;
-        LOG_WARN("table is NULL", KPC(table));
-      } else if (table->is_major_sstable()) {
+        LOG_WARN("get unexpected table", KPC(table));
+      } else if (!table->is_inc_major_type_sstable()) {
+        break;
+      } else if (OB_ISNULL(last_table)) {
+        // meet first inc major table, no need to check
+      } else if (table->get_start_scn() < last_table->get_end_scn()) {
+        ret = OB_LOG_ID_RANGE_NOT_CONTINUOUS;
+        LOG_WARN("inc major range not continuous", K(ret), KPC(table), KPC(last_table));
+      }
+      last_table = table;
+    }
+
+    // 3. check minor sstable
+    last_table = nullptr;
+    for ( ; OB_SUCC(ret) && i < handles_array_.count(); ++i) {
+      table = handles_array_.at(i).get_table();
+      if (OB_UNLIKELY(nullptr == table || table->is_major_sstable() || table->is_inc_major_type_sstable())) {
         ret = OB_ERR_SYS;
-        LOG_WARN("major sstable or meta merge should be first", K(ret), K(i), K(table));
+        LOG_WARN("get unexpected table", KPC(table));
       } else if (OB_ISNULL(last_table)) { // first table
-        if (OB_NOT_NULL(scn_range)
-            && table->get_start_scn() > scn_range->start_scn_) {
+        if (OB_NOT_NULL(scn_range) && table->get_start_scn() > scn_range->start_scn_) {
           ret = OB_LOG_ID_RANGE_NOT_CONTINUOUS;
-          LOG_WARN("first minor sstable don't match the scn_range::start_log_ts", K(ret),
-              KPC(scn_range), K(i), K(*this));
+          LOG_WARN("first minor sstable don't match the scn_range::start_log_ts", K(ret), KPC(scn_range), K(i), K(*this));
         } else if (table->get_end_scn() <= base_end_scn) {
           ret = OB_LOG_ID_RANGE_NOT_CONTINUOUS;
           LOG_WARN("Unexpected end log ts of first minor sstable", K(ret), K(base_end_scn), K(i), K(*this));

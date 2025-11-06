@@ -23,6 +23,7 @@
 #include "storage/access/ob_dml_param.h"
 #include "blocksstable/ob_datum_rowkey.h"
 #include "blocksstable/ob_datum_row_iterator.h"
+#include "storage/access/ob_table_access_context.h"
 
 namespace oceanbase
 {
@@ -40,6 +41,7 @@ public:
   virtual int init();
   virtual int get_next_row(blocksstable::ObDatumRow *&row);
   virtual void reset();
+  void rescan() { cur_idx_ = 0; }
   int add_row(blocksstable::ObDatumRow &row);
   int add_row(blocksstable::ObDatumRow &row,  const ObIArray<int32_t> &projector);
 private:
@@ -75,6 +77,7 @@ public:
   int open(const blocksstable::ObDatumRowkey &rowkey, bool use_fuse_row_cache = false);
   int open(const ObIArray<blocksstable::ObDatumRowkey> &rowkeys, bool use_fuse_row_cache);
   int get_next_row(blocksstable::ObDatumRow *&row);
+  TO_STRING_KV(K(iter_type_), KPC(row_iter_));
 private:
   bool can_use_global_iter_pool(const ObDMLBaseParam &dml_param) const;
   int init_single_merge();

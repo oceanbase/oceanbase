@@ -240,7 +240,8 @@ bool ObDASIterUtils::is_vec_hnsw_scan(const ObDASBaseCtDef *attach_ctdef, ObDASB
     } else if (vec_aux_ctdef->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW
     || vec_aux_ctdef->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_SQ
     || vec_aux_ctdef->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ
-    || vec_aux_ctdef->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HGRAPH) {
+    || vec_aux_ctdef->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HGRAPH
+    || vec_aux_ctdef->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF) {
       bret = true;
     }
   }
@@ -3173,9 +3174,9 @@ int ObDASIterUtils::create_index_merge_tree_common(ObTableScanParam &scan_param,
     if (OB_SUCC(ret)) {
       ObDASIndexMergeIter *merge_iter = nullptr;
 
+      bool pushdown_topk_mode = false;
       if (limit != -1) {
         // FTS optimization path
-        ObDASIndexMergeFTSAndIterParam merge_param;
         ObDASIndexMergeFTSAndIter *merge_and_iter = nullptr;
 
         ObDASIter *child_iter = nullptr;
@@ -3202,7 +3203,15 @@ int ObDASIterUtils::create_index_merge_tree_common(ObTableScanParam &scan_param,
         } else if (OB_ISNULL(child_iter) || OB_ISNULL(pushdown_topk_iter)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected nullptr", K(ret));
+        } else if (!(static_cast<ObDASTRMergeIter*>(pushdown_topk_iter))->is_topk_mode()) {
+          // do nothing, use normal index merge path.
+          if (OB_FAIL(child_iter->release())) {
+            LOG_WARN("failed to reset child iter", K(ret));
+          }
         } else {
+          pushdown_topk_mode = true;
+
+          ObDASIndexMergeFTSAndIterParam merge_param;
           merge_param.max_size_ = merge_rtdef->eval_ctx_->is_vectorized() ? merge_rtdef->eval_ctx_->max_batch_size_ : 1;
           merge_param.eval_ctx_ = merge_rtdef->eval_ctx_;
           merge_param.exec_ctx_ = &merge_rtdef->eval_ctx_->exec_ctx_;
@@ -3222,12 +3231,6 @@ int ObDASIterUtils::create_index_merge_tree_common(ObTableScanParam &scan_param,
           merge_param.pushdown_topk_iter_ = static_cast<ObDASTRMergeIter*>(pushdown_topk_iter);
           merge_param.pushdown_topk_iter_tree_ = child_iter;
           merge_param.first_fts_idx_ = first_fts_idx;
-          merge_param.pushdown_topk_iter_->set_topk_limit((limit + offset)*2);
-
-          if (!merge_param.pushdown_topk_iter_->is_topk_mode()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected topk mode", K(ret));
-          }
 
           for (int64_t i = 0; OB_SUCC(ret) && i < children_cnt; ++i) {
             if (merge_ctdef->merge_node_types_.at(i) == INDEX_MERGE_SCAN) {
@@ -3259,7 +3262,9 @@ int ObDASIterUtils::create_index_merge_tree_common(ObTableScanParam &scan_param,
             merge_iter = static_cast<ObDASIndexMergeIter*>(merge_and_iter);
           }
         }
-      } else {
+      }
+
+      if (OB_SUCC(ret) && !pushdown_topk_mode){
         // Regular index merge path
         ObDASIndexMergeIterParam merge_param;
         ObDASIndexMergeAndIter *merge_and_iter = nullptr;
@@ -4386,6 +4391,7 @@ int ObDASIterUtils::create_vec_hnsw_lookup_tree(ObTableScanParam &scan_param,
     ObDASScanIter *index_id_table_iter = nullptr;
     ObDASScanIter *snapshot_table_iter = nullptr;
     ObDASScanIter *com_aux_vec_iter = nullptr;
+    ObDASScanIter *embedded_table_iter = nullptr;
     ObDASScanIter *data_filter_iter = nullptr;
     ObDASScanIter *vid_rowkey_table_iter = nullptr;
     ObDASScanIter *rowkey_vid_table_iter = nullptr;
@@ -4440,6 +4446,11 @@ int ObDASIterUtils::create_vec_hnsw_lookup_tree(ObTableScanParam &scan_param,
       LOG_WARN("failed to create snapshot table iter", K(ret));
     } else if (OB_FAIL(create_das_scan_iter(alloc, com_aux_tbl_ctdef, com_aux_tbl_rtdef, com_aux_vec_iter))) {
       LOG_WARN("failed to create data table iter", K(ret));
+    } else if (vec_aux_ctdef->is_hybrid_ && OB_FAIL(create_das_scan_iter(alloc,
+                                                           vec_aux_ctdef->get_vec_aux_tbl_ctdef(vec_aux_ctdef->get_embedded_tbl_idx(), ObTSCIRScanType::OB_VEC_EMBEDDED_SCAN),
+                                                           vec_aux_rtdef->get_vec_aux_tbl_rtdef(vec_aux_ctdef->get_embedded_tbl_idx()),
+                                                           embedded_table_iter))) {
+      LOG_WARN("failed to create embedded table iter", K(ret));
     } else if ((vec_aux_ctdef->is_iter_filter() || can_use_adaptive_path)
       && OB_FAIL(create_das_scan_iter(alloc, data_table_ctdef, data_table_rtdef, data_filter_iter))) {
       LOG_WARN("failed to create data filter scan iter", K(ret));
@@ -4481,6 +4492,7 @@ int ObDASIterUtils::create_vec_hnsw_lookup_tree(ObTableScanParam &scan_param,
       hnsw_scan_param.vid_rowkey_iter_ = vid_rowkey_table_iter;
       hnsw_scan_param.com_aux_vec_iter_ = com_aux_vec_iter;
       hnsw_scan_param.rowkey_vid_iter_ = rowkey_vid_table_iter;
+      hnsw_scan_param.embedded_table_iter_ = embedded_table_iter;
       hnsw_scan_param.vec_aux_ctdef_ = vec_aux_ctdef;
       hnsw_scan_param.vec_aux_rtdef_ = vec_aux_rtdef;
       hnsw_scan_param.vid_rowkey_ctdef_ = vid_rowkey_ctdef;

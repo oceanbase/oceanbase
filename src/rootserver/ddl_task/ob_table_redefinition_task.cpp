@@ -310,7 +310,7 @@ int ObTableRedefinitionTask::send_build_replica_request_by_sql()
       LOG_WARN("failed to get orig table schema", K(ret));
     } else if (OB_FAIL(schema_guard.get_table_schema(dst_tenant_id_, target_object_id_, hidden_table_schema))) {
       LOG_WARN("fail to get table schema", K(ret), K(target_object_id_));
-    } else if (OB_FAIL(task.init(*orig_table_schema, *hidden_table_schema, alter_table_arg_.alter_table_schema_, alter_table_arg_.tz_info_wrap_, alter_table_arg_.based_schema_object_infos_))) {
+    } else if (OB_FAIL(task.init(task_type_, *orig_table_schema, *hidden_table_schema, alter_table_arg_.alter_table_schema_, alter_table_arg_.tz_info_wrap_, alter_table_arg_.based_schema_object_infos_))) {
       LOG_WARN("fail to init table redefinition sstable build task", K(ret));
     } else if (OB_FAIL(root_service->submit_ddl_single_replica_build_task(task))) {
       LOG_WARN("fail to submit ddl build single replica", K(ret));
@@ -377,9 +377,11 @@ int ObTableRedefinitionTask::check_use_heap_table_ddl_plan(const ObTableSchema *
     LOG_WARN("invalid arguments", K(ret), KP(target_table_schema));
   } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, TABLE_REDEF_TASK_CHECK_USE_HEAP_PLAN_FAILED))) {
     LOG_WARN("ddl sim failure", K(tenant_id_), K(task_id_));
-  } else if (target_table_schema->is_table_with_hidden_pk_column() &&
+  } else if (target_table_schema->is_table_without_pk() &&
              (DDL_ALTER_PARTITION_BY == task_type_ || DDL_DROP_PRIMARY_KEY == task_type_ ||
               DDL_MVIEW_COMPLETE_REFRESH == task_type_)) {
+    use_heap_table_ddl_plan_ = true;
+  } else if (target_table_schema->is_table_with_clustering_key() && DDL_DROP_PRIMARY_KEY == task_type_) {
     use_heap_table_ddl_plan_ = true;
   }
   return ret;
@@ -548,6 +550,11 @@ int ObTableRedefinitionTask::copy_table_indexes()
           LOG_WARN("failed to refresh schema guard", K(ret));
         } else if (OB_FAIL(check_and_do_sync_tablet_autoinc_seq(new_schema_guard))) {
           LOG_WARN("failed to check and do sync tablet autoinc seq", K(ret), K(task_id_));
+        } else if (OB_FAIL(new_schema_guard.get_table_schema(dst_tenant_id_, target_object_id_, table_schema))) {
+          LOG_WARN("get table schema failed", K(ret), K(dst_tenant_id_), K(target_object_id_));
+        } else if (OB_ISNULL(table_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("error unexpected, table schema must not be nullptr", K(ret), K(target_object_id_));
         }
         for (int64_t i = 0; OB_SUCC(ret) && i < index_ids.count(); ++i) {
           const uint64_t index_id = index_ids.at(i);	
@@ -571,7 +578,7 @@ int ObTableRedefinitionTask::copy_table_indexes()
               // index status is final
               need_rebuild_index = false;
               LOG_INFO("index status is final", K(ret), K(task_id_), K(index_id), K(need_rebuild_index));
-            } else if (index_schema->is_built_in_index()) {
+            } else if (index_schema->is_no_need_rebuild_index()) {
               // Only domain index need rebuild, while rebuilding vector/fulltext/multivalue index.
               need_rebuild_index = false;
             } else if (active_task_cnt >= MAX_ACTIVE_TASK_CNT) {

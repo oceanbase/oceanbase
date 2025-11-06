@@ -336,6 +336,10 @@ int ObTableIndex::get_rowkey_index_column(const ObTableSchema &table_schema,
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "fail to get column schema", K(ret), K(store_column_ids.at(rowkey_info_idx_).col_id_));
     } else {
+      // For tables with clustering key, show the clustering key columns in extended mode (compat mode)
+      if (table_schema.is_table_with_clustering_key() && column_schema->is_heap_table_clustering_key_column()) {
+        is_column_visible = is_compat;
+      }
       is_end = false;
     }
   }
@@ -639,7 +643,9 @@ int ObTableIndex::add_normal_indexes(const ObTableSchema &table_schema,
             uint64_t vec_column_id = OB_INVALID_ID;
             if (index_schema->is_vec_spiv_index() && OB_FAIL(index_schema->get_sparse_vec_index_column_id(vec_column_id))) {
               LOG_WARN("get generated column id failed", K(ret));
-            } else if (!index_schema->is_vec_spiv_index() && OB_FAIL(index_schema->get_vec_index_column_id(vec_column_id))) {
+            } else if (!index_schema->is_vec_spiv_index() && !is_hybrid_vec_index(index_schema->get_index_type()) && OB_FAIL(index_schema->get_vec_index_column_id(vec_column_id))) {
+              LOG_WARN("get generated column id failed", K(ret));
+            } else if (is_hybrid_vec_index(index_schema->get_index_type()) && OB_FAIL(index_schema->get_hybrid_vec_chunk_column_id(vec_column_id))) {
               LOG_WARN("get generated column id failed", K(ret));
             } else {
               if (OB_INVALID_ID == static_cast<uint64_t>(vec_dep_col_idx_)) {

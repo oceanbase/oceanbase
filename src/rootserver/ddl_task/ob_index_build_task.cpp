@@ -130,6 +130,7 @@ int ObIndexSSTableBuildTask::process()
         LOG_WARN("fail to generate partition names", K(ret), K(batch_partition_names), K(is_oracle_mode), K(partition_names));
       }
     }
+
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ObDDLUtil::generate_build_replica_sql(tenant_id_, data_table_id_,
                                                             dest_table_id_,
@@ -142,6 +143,7 @@ int ObIndexSSTableBuildTask::process()
                                                             !data_schema->is_user_hidden_table()/*use_schema_version_hint_for_src_table*/,
                                                             nullptr,
                                                             partition_names,
+                                                            false/*is_alter_clustering_key_tbl_partition_by*/,
                                                             sql_string))) {
         LOG_WARN("fail to generate build replica sql", K(ret));
       } else if (OB_FAIL(data_schema->is_need_padding_for_generated_column(need_padding))) {
@@ -1424,7 +1426,7 @@ int ObIndexBuildTask::verify_checksum()
     bool is_column_checksum_ready = false;
     bool dummy_equal = false;
     if (!wait_column_checksum_ctx_.is_inited() && OB_FAIL(wait_column_checksum_ctx_.init(
-            task_id_, tenant_id_, object_id_, index_table_id_, schema_version_, check_unique_snapshot_, 0/*execution_id*/, checksum_wait_timeout))) {
+            task_id_, tenant_id_, object_id_, index_table_id_, schema_version_, check_unique_snapshot_, 0/*execution_id*/, checksum_wait_timeout, parallelism_))) {
       LOG_WARN("init context of wait column checksum failed", K(ret), K(object_id_), K(index_table_id_));
     } else {
       if (OB_FAIL(wait_column_checksum_ctx_.try_wait(is_column_checksum_ready))) {

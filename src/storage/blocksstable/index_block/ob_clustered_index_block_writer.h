@@ -59,6 +59,7 @@ public:
   int append_row(const ObIndexBlockRowDesc &row_desc);
   // Build clustered index micro block and append to clustered index macro writer.
   int build_and_append_clustered_index_micro_block();
+  int process_micro_block_aggregation(const ObMicroIndexData &micro_index_data, ObMicroBlockDesc &micro_block_desc);
   int reuse_clustered_micro_block(const MacroBlockId &macro_id,
                                   const ObMicroBlockData &micro_block_data);
   // Rewrite clustered index micro block.
@@ -81,6 +82,8 @@ private:
   int build_clustered_index_micro_block(
     ObMicroBlockDesc &clustered_index_micro_block_desc);
   int check_order(const ObIndexBlockRowDesc &row_desc);
+  int init_pre_agg_util(const ObDataStoreDesc &data_store_desc);
+  void release_pre_agg_util();
   int decompress_and_make_clustered_index_micro_block(
       const char *micro_buffer, const int64_t micro_size,
       const MacroBlockId &macro_id,
@@ -105,6 +108,7 @@ private:
   ObIndexTreeRootCtx * root_ctx_;  // pointer to ObDataIndexBlockBuilder::index_tree_root_ctx_
   ObMacroBlockWriter * macro_writer_;
   ObIMicroBlockWriter * micro_writer_;
+  ObSkipIndexDataAggregator *data_aggregator_;
   common::ObIAllocator * task_allocator_;
   common::ObArenaAllocator row_allocator_;
   compaction::ObLocalArena macro_block_io_allocator_;

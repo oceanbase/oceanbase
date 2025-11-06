@@ -88,6 +88,9 @@ int ObDataBlockCachePreWarmer::reserve(const blocksstable::ObMicroBlockDesc &mic
   } else if (OB_UNLIKELY(nullptr == cache_)) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(WARN, "The block cache pre warmer is not inited", K(ret), KP(cache_));
+  } else if (OB_UNLIKELY(!micro_block_desc.is_complete_micro_block_memory())) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid micro_block_desc argument, header does not point to a complete micro block buffer", K(ret), K(micro_block_desc));
   } else if (OB_UNLIKELY(!micro_block_desc.is_valid() || level < 0)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "Invalid argument", K(ret), K(micro_block_desc), K(level));

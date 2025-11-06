@@ -49,6 +49,7 @@ public:
 
 public:
   ObSSMCTabletInfoMap tablet_info_map_;
+  int get_max_alloc_cnt(int64_t &alloc_cnt);
 };
 
 void TestSSMicroMetaManager::SetUpTestCase()
@@ -83,6 +84,41 @@ void TestSSMicroMetaManager::TearDown()
   micro_cache->wait();
   micro_cache->destroy();
 }
+
+// try to alloc meta until reach mem limit, return the final alloc count
+int TestSSMicroMetaManager::get_max_alloc_cnt(int64_t &alloc_cnt) {
+  int ret = OB_SUCCESS;
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache*);
+  ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
+  ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
+  bool can_alloc = true;
+
+  ObArray<ObSSMicroBlockMetaHandle> micro_meta_handles; // record all alloced meta, free all meta after loop
+  while (can_alloc) {
+    void *ptr = SSMicroMetaAlloc.alloc();
+    if (OB_ISNULL(ptr)) {
+      can_alloc = false;
+    } else {
+      ObSSMicroBlockMeta *micro_meta = new(ptr) ObSSMicroBlockMeta();
+      micro_meta->reset();
+      ObSSMicroBlockMetaHandle micro_meta_handle;
+      micro_meta_handle.set_ptr(micro_meta);
+      const int64_t micro_meta_usage = SSMicroMetaAlloc.hold();
+      cache_stat.mem_stat().update_micro_mem_usage(1, micro_meta_usage);
+      alloc_cnt++;
+
+      if (OB_FAIL(micro_meta_handles.push_back(micro_meta_handle))) {
+        can_alloc = false;
+        LOG_WARN("fail to push back micro_meta_handle", KR(ret));
+      }
+    }
+  }
+  for (int64_t i = 0; i < micro_meta_handles.count(); ++i) {
+    micro_meta_handles.at(i).get_ptr()->try_free();
+    micro_meta_handles.at(i).reset();
+  }
+  return ret;
+};
 
 // test memory cost of meta
 TEST_F(TestSSMicroMetaManager, test_meta_memory_cost)
@@ -882,6 +918,46 @@ TEST_F(TestSSMicroMetaManager, test_micro_cnt_limit)
     ASSERT_EQ(OB_SUCCESS, micro_meta_handles.push_back(micro_meta_handle));
   }
   ASSERT_EQ(micro_cnt_limit, micro_meta_handles.count());
+}
+
+TEST_F(TestSSMicroMetaManager, test_micro_alloc_limit_when_increasing_memory)
+{
+  LOG_INFO("TEST: start test_micro_alloc_limit_when_increasing_memory");
+  ObTenantBase *tenant_base = MTL_CTX();
+  ObTenantEnv::set_tenant(tenant_base);
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ASSERT_NE(nullptr, micro_cache);
+  ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
+  ObSSMicroMetaManager *micro_meta_mgr = &micro_cache->get_micro_meta_mgr();
+  ObSSMicroCacheMemoryStat &mem_stat = cache_stat.mem_stat_;
+  ObSSMicroCacheMicroStat &micro_stat = cache_stat.micro_stat_;
+
+  // record original memory data
+  const int64_t original_mtl_mem_size = MTL_MEM_SIZE();
+  const int64_t original_mem_limit_size = micro_meta_mgr->mem_limit_size_;
+  const int64_t original_mem_limit_cnt = mem_stat.micro_cnt_limit_;
+  int64_t original_max_alloc_cnt = 0;
+  ASSERT_EQ(OB_SUCCESS, get_max_alloc_cnt(original_max_alloc_cnt));
+
+  // memory increase 1x
+  int64_t curr_mtl_mem_size = 2 * original_mtl_mem_size;
+  tenant_base->set_unit_memory_size(curr_mtl_mem_size);
+  sleep(3);
+  // get current memory data
+  ASSERT_EQ(0, mem_stat.get_micro_alloc_cnt());
+  const int64_t curr_mem_limit_size = micro_meta_mgr->mem_limit_size_;
+  const int64_t curr_mem_limit_cnt = micro_meta_mgr->micro_cnt_limit_;
+  int64_t curr_max_alloc_cnt = 0;
+  ASSERT_EQ(OB_SUCCESS, get_max_alloc_cnt(curr_max_alloc_cnt));
+  // check if alloc limit is increased, and consistent with micro_cnt_limit
+  LOG_INFO("curr_alloc_cnt", K(original_mem_limit_size), K(original_mem_limit_cnt), K(original_max_alloc_cnt),
+                             K(curr_mem_limit_size),K(curr_mem_limit_cnt), K(curr_max_alloc_cnt));
+  ASSERT_GT(curr_max_alloc_cnt, original_max_alloc_cnt);
+  ASSERT_EQ(curr_max_alloc_cnt, curr_mem_limit_cnt);
+
+  // modify memory to original value
+  tenant_base->set_unit_memory_size(original_mtl_mem_size);
+  sleep(3);
 }
 
 }  // namespace storage

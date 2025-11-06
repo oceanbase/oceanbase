@@ -5404,9 +5404,11 @@ int ObRawExprUtils::build_column_conv_expr(ObRawExprFactory &expr_factory,
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (ObRawExprUtils::is_auxiliary_generated_column(col_ref)) {
+    } else if (ObRawExprUtils::is_auxiliary_generated_column(col_ref) ||
+               col_ref.is_hidden_clustering_key_column()) {
       // 全文列不会破坏约束性，且数据不会存储，跳过强转
       // 空间索引列是虚拟列，跳过强转
+      // 隐藏的clustering key列用户无法指定值，跳过强转
     } else if (OB_FAIL(build_column_conv_expr(session_info,
                                               expr_factory,
                                               col_ref.get_data_type(),

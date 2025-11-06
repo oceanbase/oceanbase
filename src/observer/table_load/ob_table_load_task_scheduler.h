@@ -87,11 +87,13 @@ private:
   public:
     MyThreadPool(ObTableLoadTaskThreadPoolScheduler *scheduler)
       : scheduler_(scheduler), running_thread_count_(0) {}
+    int init();
     virtual ~MyThreadPool() = default;
     void run1() override;
   private:
     ObTableLoadTaskThreadPoolScheduler * const scheduler_;
     int64_t running_thread_count_ CACHE_ALIGNED;
+    common::ObThreadCond pool_cond_;
   };
   struct WorkerContext
   {

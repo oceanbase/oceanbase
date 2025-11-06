@@ -537,7 +537,7 @@ int ObTxTable::load_tx_ctx_table_()
       ObStorageMetaHandle sstable_handle;
       ObSSTable *sstable = static_cast<ObSSTable *>(sstables[0]);
       if (sstable->is_loaded()) {
-      } else if (OB_FAIL(ObTabletTableStore::load_sstable(sstable->get_addr(), false/*load_co_sstable*/, sstable_handle))) {
+      } else if (OB_FAIL(ObCacheSSTableHelper::load_sstable(sstable->get_addr(), false/*load_co_sstable*/, sstable_handle))) {
         LOG_WARN("fail to load sstable", K(ret), KPC(sstable));
       } else if (OB_FAIL(sstable_handle.get_sstable(sstable))) {
         LOG_WARN("fail to get sstable", K(ret), K(sstable_handle));

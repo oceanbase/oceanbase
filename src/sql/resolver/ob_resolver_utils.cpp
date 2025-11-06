@@ -6734,8 +6734,10 @@ int ObResolverUtils::build_partition_key_expr(ObResolverParams &params,
   for (ObTableSchema::const_column_iterator iter = table_schema.column_begin();
       OB_SUCC(ret) && iter != table_schema.column_end(); ++iter) {
     const ObColumnSchemaV2 &column_schema = (**iter);
-    if (!column_schema.is_original_rowkey_column() || column_schema.is_hidden()) {
+    if ((!column_schema.is_original_rowkey_column() && !column_schema.is_heap_table_primary_key_column())
+       || column_schema.is_hidden() || column_schema.is_heap_table_clustering_key_column()) {
       //parition by key() use primary key to create partition key not hidden auto_increment primary key
+      //also skip clustering key columns
       continue;
     } else if (column_schema.is_autoincrement()) {
       ret = OB_ERR_AUTO_PARTITION_KEY;

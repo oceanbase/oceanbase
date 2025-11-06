@@ -70,6 +70,9 @@ public:
   // Check if we can use rowkey instead of doc id.
   // if we want to add more types, make this one condition of them.
   static int determine_docid_type(const ObTableSchema &table_schema, ObDocIDType &doc_id_type);
+  static int check_need_doc_id(
+      const ObTableSchema &table_schema,
+      bool &need_doc_id);
   static int check_fts_aux_index_schema_exist(
       const ObTableSchema &data_schema,
       const obrpc::ObCreateIndexArg &arg,

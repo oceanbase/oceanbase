@@ -499,6 +499,9 @@ public:
   virtual int get_next_rows() override
   { return OB_NOT_SUPPORTED; }
   int get_first_row_mvcc_info(bool &is_first_row, bool &is_shadow_row) const;
+#ifdef ERRSIM
+  int check_uncommit_tx_info_correct(const int64_t tx_id, const int64_t sql_seq);
+#endif
   TO_STRING_KV(K_(macro_id), K_(start), K_(current), K_(last));
 protected:
   virtual int inner_get_next_row(const ObDatumRow *&row) override;

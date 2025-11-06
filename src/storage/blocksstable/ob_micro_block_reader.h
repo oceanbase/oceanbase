@@ -106,7 +106,7 @@ public:
       int64_t &row_idx,
       int64_t &row_cnt) const override;
   virtual int get_row_count(int64_t &row_count) override;
-  int get_multi_version_info(
+  virtual int get_multi_version_info(
       const int64_t row_idx,
       const int64_t schema_rowkey_cnt,
       const ObRowHeader *&row_header,
@@ -242,6 +242,14 @@ public:
       const ObDatumRowkey &rowkey,
       const storage::ObITableReadInfo &read_info,
       ObDatumRow &row) final;
+  // Only used in micro block row getter scenarios, where there are no uncommitted rows.
+  virtual int get_row_and_trans_version(
+      const ObMicroBlockAddr &block_addr,
+      const ObMicroBlockData &block_data,
+      const ObDatumRowkey &rowkey,
+      const storage::ObITableReadInfo &read_info,
+      ObDatumRow &row,
+      int64_t &trans_version) final;
   virtual int exist_row(
       const ObMicroBlockData &block_data,
       const ObDatumRowkey &rowkey,
@@ -255,7 +263,7 @@ public:
       const ObITableReadInfo &read_info,
       const uint32_t row_idx,
       ObDatumRow &row) final;
-  int get_row_id(
+  virtual int get_row_id(
       const ObMicroBlockAddr &block_addr,
       const ObMicroBlockData &block_data,
       const ObDatumRowkey &rowkey,

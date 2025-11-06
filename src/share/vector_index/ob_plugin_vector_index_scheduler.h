@@ -18,6 +18,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "share/vector_index/ob_plugin_vector_index_adaptor.h"
 #include "share/vector_index/ob_vector_index_async_task.h"
+#include "share/vector_index/ob_hybrid_vector_refresh_task.h"
 #include "observer/table/ttl/ob_tenant_ttl_manager.h"
 #include "logservice/ob_append_callback.h"
 #include "logservice/ob_log_base_type.h"
@@ -36,6 +37,23 @@ class ObPluginVectorIndexLoadScheduler;
 static const int64_t VECTOR_INDEX_TABLET_ID_COUNT = 100;
 typedef ObSEArray<ObTabletID, VECTOR_INDEX_TABLET_ID_COUNT> ObVectorIndexTabletIDArray;
 typedef ObSEArray<uint64_t, VECTOR_INDEX_TABLET_ID_COUNT> ObVectorIndexTableIDArray;
+
+enum ObVectorTaskScheduleType
+{
+  ADAPTER_MAINTENANCE = 0,
+  FOLLOWER_SYNC = 1,
+  HNSW_OPTIMIZE = 2,
+  IVF_TASK = 3,
+  SCHEDULE_MAX,
+};
+
+static const int schedule_interval[SCHEDULE_MAX] = {
+  10 * 1000 * 1000,            // adapter_maintenance: 10s
+  10 * 1000 * 1000,            // follower_sync_task: 10s
+  10 * 1000 * 1000,            // hnsw_optimize_task: 10s
+  10 * 1000 * 1000,            // ivf_task: 10s
+};
+
 class ObVectorIndexSyncLog
 {
 public:
@@ -206,7 +224,9 @@ public:
       ls_(nullptr),
       local_schema_version_(OB_INVALID_VERSION),
       local_tenant_task_(),
-      cb_()
+      cb_(),
+      last_schedule_time_{ObTimeUtility::fast_current_time()},
+      can_schedule_{false}
   {}
   virtual ~ObPluginVectorIndexLoadScheduler()
   {
@@ -299,11 +319,25 @@ private:
   int check_and_load_task_executors();
   int start_task_executors();
   int resume_task_executors();
+  bool can_schedule(ObVectorTaskScheduleType task_type) { return can_schedule_[task_type]; }
+  void check_can_schedule() {
+    for (int i = 0; i < ObVectorTaskScheduleType::SCHEDULE_MAX; i++) {
+      can_schedule_[i] = (ObTimeUtility::fast_current_time() - last_schedule_time_[i] > schedule_interval[i]);
+    }
+  }
+  void schedule_finish() {
+    for (int i = 0; i < ObVectorTaskScheduleType::SCHEDULE_MAX; i++) {
+      if (can_schedule_[i]) {
+        last_schedule_time_[i] = ObTimeUtility::fast_current_time();
+        can_schedule_[i] = false;
+      }
+    }
+  }
   static bool in_retry_list(const int ret_code) { return OB_REPLICA_NOT_READABLE == ret_code; }
 
 private:
 
-  static const int64_t VEC_INDEX_SCHEDULAR_BASIC_PERIOD = 10 * 1000 * 1000; // 10s
+  static const int64_t VEC_INDEX_SCHEDULAR_BASIC_PERIOD = 1 * 1000 * 1000; // 1s
   static const int64_t VEC_INDEX_LOAD_TIME_NORMAL_THRESHOLD = 30 * 1000 * 1000; // 30s
   static const int64_t DEFAULT_TABLE_ARRAY_SIZE = 200;
   static const int64_t TBALE_GENERATE_BATCH_SIZE = 200;
@@ -336,8 +370,11 @@ private:
   ObVectorIndexSyncLogCb cb_;
   ObVectorIndexTabletIDArray tablet_id_array_;
   ObVectorIndexTableIDArray table_id_array_;
+  int64_t last_schedule_time_[ObVectorTaskScheduleType::SCHEDULE_MAX];
+  bool can_schedule_[ObVectorTaskScheduleType::SCHEDULE_MAX];
   ObVecAsyncTaskExector async_task_exec_;
   ObIvfAsyncTaskExector ivf_task_exec_;
+  ObVecEmbeddingAsyncTaskExecutor embedding_task_exec_;
 };
 
 class ObVectorIndexTask : public share::ObITask

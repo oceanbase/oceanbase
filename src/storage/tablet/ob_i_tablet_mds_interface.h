@@ -102,6 +102,7 @@ public:
                             int &cmp_ret,
                             const int64_t timeout) const;
   int fill_virtual_info(ObIArray<mds::MdsNodeInfoForVirtualTable> &mds_node_info_array) const;
+  int get_direct_load_auto_inc_seq(ObDirectLoadAutoIncSeqData &data) const;
   TO_STRING_KV(KP(this), "is_inited", check_is_inited_(), "ls_id", get_tablet_meta_().ls_id_,
                "tablet_id", get_tablet_id_(), KP(get_tablet_pointer_()));
   int get_mds_table_rec_scn(share::SCN &rec_scn);
@@ -339,6 +340,18 @@ struct ReadSplitDataPartkeyCompareOp
   const ObITableReadInfo &rowkey_read_info_;
   const ObIArray<uint64_t> &partkey_projector_;
   int &cmp_ret_;
+};
+
+struct ReadDirectLoadAutoIncSeqOp
+{
+  ReadDirectLoadAutoIncSeqOp(ObDirectLoadAutoIncSeqData &inc_seq)
+   : inc_seq_(inc_seq) {}
+  ~ReadDirectLoadAutoIncSeqOp() = default;
+  int operator()(const ObDirectLoadAutoIncSeqData &data)
+  {
+    return inc_seq_.set_seq_val(data.get_seq_val());
+  }
+  ObDirectLoadAutoIncSeqData &inc_seq_;
 };
 
 }

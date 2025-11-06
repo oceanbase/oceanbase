@@ -296,7 +296,7 @@ int ObOdpsCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
       odps_table_metadata->lake_table_metadata_version_ = latest_schema_version;
     }
   }
-
+  bool part_table_flag = false;
   if (OB_SUCC(ret)) {
     if (GCONF._use_odps_jni_connector) {
 #ifdef OB_BUILD_JNI_ODPS
@@ -327,6 +327,7 @@ int ObOdpsCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
           LOG_WARN("failed to build column schemas for odps", K(ret));
         } else if (OB_FAIL(ObDMLResolver::set_partition_info_for_odps(*inner_table_schema, part_col_names))) {
           LOG_WARN("failed to set partition info for odps", K(ret));
+        } else if (OB_FALSE_IT(part_table_flag = odps_jni_driver.is_part_table())) {
         }
       }
 #else
@@ -347,6 +348,7 @@ int ObOdpsCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
           LOG_WARN("failed to build column schemas for odps", K(ret));
         } else if (OB_FAIL(ObDMLResolver::set_partition_info_for_odps(*inner_table_schema, part_col_names))) {
           LOG_WARN("failed to set partition info for odps", K(ret));
+        } else if (OB_FALSE_IT(part_table_flag = odps_driver.is_part_table())) {
         }
       }
 #else
@@ -354,7 +356,23 @@ int ObOdpsCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
 #endif
     }
   }
-
+  if (OB_SUCC(ret)) {
+    if (part_table_flag) {
+      int64_t part_num = inner_table_schema->get_partition_num();
+      if (part_num == 0) {
+        // ref to ob_create_table_resolver.cpp:create_default_partition_for_table
+        ObPartition partition;
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(partition.set_part_name("P_DEFAULT"))) {
+          LOG_WARN("set partition name failed", K(ret));
+        } else if (OB_FALSE_IT(partition.set_part_id(INT64_MAX))) {
+        } else if (OB_FAIL(inner_table_schema->add_partition(partition))) {
+          LOG_WARN("add partition failed", K(ret));
+        } else if (OB_FALSE_IT(inner_table_schema->set_part_num(1))) {
+        }
+      }
+    }
+  }
   if (OB_SUCC(ret)) {
     table_metadata = odps_table_metadata;
   }
@@ -463,14 +481,14 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
         // 按照比例计算每个partition的row_count
         if (OB_SUCC(ret)) {
           if (max_partition_file_size == 0) {
-            ret = OB_ERR_UNEXPECTED;
             LOG_WARN("max partition file size is 0", K(ret));
           }
         }
       }
 
       if (OB_SUCC(ret)) {
-        if(!GCONF._use_odps_jni_connector) {
+	if (max_partition_file_size == 0) {
+	} else if(!GCONF._use_odps_jni_connector) {
           #if defined(OB_BUILD_CPP_ODPS)
             // get row count for odps partition
             sql::ObODPSTableRowIterator odps_driver;
@@ -509,8 +527,12 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
         }
 
         if (OB_SUCC(ret)) {
-          row_count = max_row_count * (total_data_size * 1.00 / max_partition_file_size);
-          LOG_INFO("ODPS statistics catalog table row count estimate size", K(max_partition_file_size), K(max_row_count), K(total_data_size), K(row_count));
+	  if (0 != max_partition_file_size) {
+            row_count = max_row_count * (total_data_size * 1.00 / max_partition_file_size);
+            LOG_INFO("ODPS statistics catalog table row count estimate size", K(max_partition_file_size), K(max_row_count), K(total_data_size), K(row_count));
+	  } else {
+            row_count = 0;
+	  }
         }
       }
     } else { // Storage api mode 谓词过滤不加入
@@ -666,6 +688,8 @@ int ObOdpsCatalogUtils::get_partition_odps_str_from_table_schema(common::ObIAllo
         // do nothing as no partition
         LOG_WARN("partition is null", K(ret), K(partition_id));
         ret = OB_SUCCESS;
+      } else if (partition->get_part_name().compare("P_DEFAULT") == 0) {
+        // skip default partition
       } else if (OB_ISNULL(partition_value = partition_values.alloc_place_holder())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memory for partition value", K(ret));

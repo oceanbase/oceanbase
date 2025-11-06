@@ -40,6 +40,7 @@ public:
     ODPS_TYPE,
     FILESYSTEM_TYPE,
     HMS_TYPE,
+    REST_TYPE,
     MAX_TYPE
   };
   ObCatalogProperties() : type_(CatalogType::INVALID_TYPE) {}
@@ -158,7 +159,7 @@ public:
     MAX_CLIENT_POOL_SIZE,
     SOCKET_TIMEOUT,
     CACHE_REFRESH_INTERVAL_SEC,
-    DEFAULT_CATALOG,
+    HMS_CATALOG_NAME, // FARM COMPAT WHITELIST
     MAX_OPTIONS
   };
   ObHMSCatalogProperties() :
@@ -186,13 +187,13 @@ public:
     "MAX_CLIENT_POOL_SIZE",
     "SOCKET_TIMEOUT",
     "CACHE_REFRESH_INTERVAL_SEC",
-    "DEFAULT_CATALOG"
+    "HMS_CATALOG_NAME"
   };
   common::ObString uri_;
   common::ObString principal_;
   common::ObString keytab_;
   common::ObString krb5conf_;
-  common::ObString default_catalog_;
+  common::ObString hms_catalog_name_;
   int64_t max_client_pool_size_;
   int64_t socket_timeout_;   // us
   int64_t cache_refresh_interval_sec_;

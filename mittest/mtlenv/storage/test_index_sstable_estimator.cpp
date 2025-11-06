@@ -54,7 +54,7 @@ TestIndexSSTableEstimator::TestIndexSSTableEstimator()
 {
   is_ddl_merge_data_ = true;
   max_row_cnt_ = 150000;
-  max_partial_row_cnt_ = 77873;
+  max_partial_row_cnt_ = 77425;
   partial_kv_start_idx_ = 3;
 }
 void TestIndexSSTableEstimator::SetUpTestCase()

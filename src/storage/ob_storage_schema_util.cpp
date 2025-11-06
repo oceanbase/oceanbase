@@ -12,8 +12,10 @@
 
 #define USING_LOG_PREFIX STORAGE
 
+#include "storage/ob_i_table.h"
+#include "storage/memtable/ob_memtable.h"
+#include "storage/tablet/ob_tablet.h"
 #include "ob_storage_schema_util.h"
-
 namespace oceanbase
 {
 
@@ -66,9 +68,10 @@ int ObStorageSchemaUtil::update_tablet_storage_schema(
       // use param_schema as default base schema to init
       LOG_WARN("fail to init new storage schema", K(ret), K(input_schema));
     } else {
-      new_storage_schema_ptr->column_cnt_ = result_schema_column_cnt;
-      new_storage_schema_ptr->store_column_cnt_ = MAX(tablet_schema_stored_col_cnt, param_schema_stored_col_cnt);
-      new_storage_schema_ptr->schema_version_ = MAX(tablet_schema_version, param_schema_version);
+      new_storage_schema_ptr->update_column_cnt_and_schema_version(
+        result_schema_column_cnt,
+        MAX(tablet_schema_stored_col_cnt, param_schema_stored_col_cnt),
+        MAX(tablet_schema_version, param_schema_version));
       if (other_progressive_merge_round > input_progressive_merge_round) {
         new_storage_schema_ptr->progressive_merge_round_ = other_schema->get_progressive_merge_round();
         new_storage_schema_ptr->row_store_type_ = other_schema->get_row_store_type();
@@ -108,9 +111,10 @@ int ObStorageSchemaUtil::update_storage_schema(
   if (OB_FAIL(src_schema.get_stored_column_count_in_sstable(src_schema_stored_col_cnt))) {
     LOG_WARN("failed to get stored column count from schema", KR(ret), K(src_schema));
   } else {
-    dst_schema.column_cnt_ = MAX(dst_schema.get_column_count(), src_schema.get_column_count());
-    dst_schema.store_column_cnt_ = MAX(dst_schema.store_column_cnt_, src_schema_stored_col_cnt);
-    dst_schema.schema_version_ = MAX(dst_schema.schema_version_, src_schema.get_schema_version());
+    dst_schema.update_column_cnt_and_schema_version(
+      src_schema.get_column_count(),
+      src_schema_stored_col_cnt,
+      src_schema.get_schema_version());
     if (src_schema.get_column_group_count() > dst_schema.get_column_group_count()) {
       dst_schema.reset_column_group_array();
       if (OB_FAIL(dst_schema.deep_copy_column_group_array(allocator, src_schema))) {
@@ -118,6 +122,74 @@ int ObStorageSchemaUtil::update_storage_schema(
       }
     }
   }
+  return ret;
+}
+
+int ObStorageSchemaUtil::update_storage_schema_by_memtable(
+      const ObTablet &tablet,
+      const common::ObIArray<ObTableHandleV2> &memtable_handles,
+      ObStorageSchema &schema)
+{
+  int ret = OB_SUCCESS;
+  int64_t max_column_cnt_in_memtable = 0;
+  int64_t max_schema_version_in_memtable = 0;
+  int64_t column_cnt_in_schema = 0;
+
+  if (!tablet.is_valid() || !schema.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tablet), K(schema));
+  } else if (OB_FAIL(schema.get_store_column_count(column_cnt_in_schema, true/*full_col*/))) {
+    LOG_WARN("failed to get store column count from schema", KR(ret), K(schema));
+  } else if (OB_FAIL(get_schema_info_from_memtables_(tablet, memtable_handles, column_cnt_in_schema,
+      max_column_cnt_in_memtable, max_schema_version_in_memtable))) {
+    LOG_WARN("failed to get schema info from memtables", KR(ret), K(tablet), K(memtable_handles), K(column_cnt_in_schema));
+  } else if (max_column_cnt_in_memtable > column_cnt_in_schema || max_schema_version_in_memtable > schema.get_schema_version()) {
+    schema.update_column_cnt_and_schema_version(
+      max_column_cnt_in_memtable,
+      MAX(column_cnt_in_schema, max_column_cnt_in_memtable),
+      max_schema_version_in_memtable);
+  }
+
+  return ret;
+}
+
+int ObStorageSchemaUtil::get_schema_info_from_memtables_(
+  const ObTablet &tablet,
+  const common::ObIArray<ObTableHandleV2> &memtable_handles,
+  const int64_t column_cnt_in_schema,
+  int64_t &max_column_cnt_in_memtable,
+  int64_t &max_schema_version_in_memtable)
+{
+  int ret = OB_SUCCESS;
+  int64_t max_column_cnt_on_recorder = 0;
+  max_column_cnt_in_memtable = 0;
+  max_schema_version_in_memtable = 0;
+  const ObITable *table = nullptr;
+  const memtable::ObMemtable *memtable = nullptr;
+
+  ARRAY_FOREACH(memtable_handles, idx) {
+    table = memtable_handles.at(idx).get_table();
+    if (OB_ISNULL(table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null table pointer", K(ret), K(idx));
+    } else if (!table->is_memtable()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table is not a memtable", KR(ret), K(idx), KPC(table));
+    } else if (OB_ISNULL(memtable = static_cast<const memtable::ObMemtable *>(table))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table pointer does not point to a ObMemtable object", KR(ret), KPC(table));
+    } else if (OB_FAIL(memtable->get_schema_info(column_cnt_in_schema,
+        max_schema_version_in_memtable, max_column_cnt_in_memtable))) {
+      LOG_WARN("failed to get schema info from memtable", KR(ret), KPC(memtable));
+    }
+  }
+
+  if (FAILEDx(tablet.get_max_column_cnt_on_schema_recorder(max_column_cnt_on_recorder))) {
+    LOG_WARN("failed to get max column cnt on schema recorder", KR(ret));
+  } else {
+    max_column_cnt_in_memtable = MAX(max_column_cnt_in_memtable, max_column_cnt_on_recorder);
+  }
+
   return ret;
 }
 
@@ -146,6 +218,29 @@ void ObStorageSchemaUtil::free_storage_schema(
     allocator.free(storage_schema);
     storage_schema = nullptr;
   }
+}
+
+int ObStorageSchemaUtil::alloc_cs_replica_storage_schema(
+    common::ObIAllocator &allocator,
+    const ObStorageSchema *storage_schema,
+    ObStorageSchema *&cs_replica_storage_schema)
+{
+  int ret = OB_SUCCESS;
+  cs_replica_storage_schema = nullptr;
+  if (OB_UNLIKELY(nullptr == storage_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("input storage schema is null", K(ret));
+  } else if (OB_FAIL(alloc_storage_schema(allocator,
+                                          cs_replica_storage_schema))) {
+    LOG_WARN("fail to allocate cs replica storage schema", K(ret));
+  } else if (OB_FAIL(cs_replica_storage_schema->init(allocator,
+                                                     *storage_schema,
+                                                     false/*skip_column_info*/,
+                                                     nullptr/*column_group_schema*/,
+                                                     true/*generate_cs_replica_cg_array*/))) {
+    LOG_WARN("fail to initialize cs replica storage schema", K(ret));
+  }
+  return ret;
 }
 
 } // namespace storage

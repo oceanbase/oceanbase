@@ -1697,7 +1697,8 @@ int ObDDLOperator::create_table(ObTableSchema &table_schema,
     }
   }
 
-  if (OB_SUCC(ret) && table_schema.is_vec_delta_buffer_type() &&
+  if (OB_SUCC(ret) && (table_schema.is_vec_delta_buffer_type() ||
+      table_schema.is_hybrid_vec_index_log_type()) &&
       OB_FAIL(ObVectorIndexUtil::add_dbms_vector_jobs(trans, tenant_id,
                                                       table_schema.get_table_id(),
                                                       table_schema.get_exec_env()))) {
@@ -3905,6 +3906,47 @@ int ObDDLOperator::alter_table_rename_index(
           LOG_WARN("failed to rename built in index_snapshot_data_table index", K(ret), K(tenant_id),
               K(data_table_id), K(database_id), K(index_name), K(new_index_name));
         }
+      } else if (is_hybrid_vec_index_log_type(index_table_schema->get_index_type())) {
+        if (OB_FAIL(alter_table_rename_built_in_index_(tenant_id,
+                                                       data_table_id,
+                                                       database_id,
+                                                       INDEX_TYPE_VEC_INDEX_ID_LOCAL, /* index_type */
+                                                       index_name,
+                                                       new_index_name,
+                                                       new_index_status,
+                                                       is_in_deleting,
+                                                       schema_guard,
+                                                       trans,
+                                                       allocator))) {
+          LOG_WARN("failed to rename built in delta_buffer_table index", K(ret), K(tenant_id),
+              K(data_table_id), K(database_id), K(index_name), K(new_index_name));
+        } else if (OB_FAIL(alter_table_rename_built_in_index_(tenant_id,
+                                                       data_table_id,
+                                                       database_id,
+                                                       INDEX_TYPE_VEC_INDEX_SNAPSHOT_DATA_LOCAL, /* index_type */
+                                                       index_name,
+                                                       new_index_name,
+                                                       new_index_status,
+                                                       is_in_deleting,
+                                                       schema_guard,
+                                                       trans,
+                                                       allocator))) {
+          LOG_WARN("failed to rename built in index_snapshot_data_table index", K(ret), K(tenant_id),
+              K(data_table_id), K(database_id), K(index_name), K(new_index_name));
+        } else if (OB_FAIL(alter_table_rename_built_in_index_(tenant_id,
+                                                       data_table_id,
+                                                       database_id,
+                                                       INDEX_TYPE_HYBRID_INDEX_EMBEDDED_LOCAL, /* index_type */
+                                                       index_name,
+                                                       new_index_name,
+                                                       new_index_status,
+                                                       is_in_deleting,
+                                                       schema_guard,
+                                                       trans,
+                                                       allocator))) {
+          LOG_WARN("failed to rename built in hybrid_index_embedded_table index", K(ret), K(tenant_id),
+              K(data_table_id), K(database_id), K(index_name), K(new_index_name));
+        }
       } else if (is_vec_ivfflat_centroid_index(index_table_schema->get_index_type())) {
         if (OB_FAIL(alter_table_rename_built_in_index_(tenant_id,
                                                        data_table_id,
@@ -5319,7 +5361,7 @@ int ObDDLOperator::drop_table(
         LOG_WARN("failed to remove mlog purge job",
             KR(ret), K(tenant_id), K(table_id));
       }
-    } else if (table_schema.is_vec_delta_buffer_type() &&
+    } else if ((table_schema.is_vec_delta_buffer_type() || table_schema.is_hybrid_vec_index_log_type()) &&
                OB_FAIL(ObVectorIndexUtil::remove_dbms_vector_jobs(trans, tenant_id, table_schema.get_table_id()))) {
       LOG_WARN("failed to remove dbms vector jobs", K(ret), K(tenant_id), K(table_schema.get_table_id()));
     }

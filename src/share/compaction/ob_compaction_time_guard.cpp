@@ -125,6 +125,8 @@ uint16_t ObCompactionTimeGuard::get_max_event_count(const ObCompactionTimeGuardT
     max_event_count =  ObCompactionScheduleTimeGuard::COMPACTION_EVENT_MAX;
   } else if (STORAGE_COMPACT_TIME_GUARD == guard_type) {
     max_event_count = ObStorageCompactionTimeGuard::COMPACTION_EVENT_MAX;
+  } else if (CO_MERGE_TIME_GUARD == guard_type) {
+    max_event_count = ObCOMergeTimeGuard::COMPACTION_EVENT_MAX;
   }
   return max_event_count;
 }
@@ -317,6 +319,41 @@ const char *ObSSCompactionTimeGuard::get_comp_event_str(enum CompactionEvent eve
     str = CompactionEventStr[event];
   }
   return str;
+}
+
+/**
+ * --------------------------------------ObCOMergeTimeGuard--------------------------------------
+ */
+const char *ObCOMergeTimeGuard::CompactionEventStr[] = {
+    "MOVE_NEXT",
+    "COMPARE",
+    "BUILD_LOG",
+    "REPLAY_BASE_CG",
+    "PERSIST_LOG",
+    "REPLAY_LOG"
+};
+
+const char *ObCOMergeTimeGuard::get_comp_event_str(enum CompactionEvent event)
+{
+  STATIC_ASSERT(static_cast<int64_t>(COMPACTION_EVENT_MAX) == ARRAYSIZEOF(CompactionEventStr), "events str len is mismatch");
+  const char *str = "";
+  if (event >= COMPACTION_EVENT_MAX || event < MOVE_NEXT) {
+    str = "invalid_type";
+  } else {
+    str = CompactionEventStr[event];
+  }
+  return str;
+}
+
+int64_t ObCOMergeTimeGuard::to_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  for (int64_t idx = 0; idx < size_; ++idx) {
+    if (event_times_[idx] > 0) {
+      fmt_ts_to_meaningful_str(buf, buf_len, pos, get_comp_event_str(static_cast<CompactionEvent>(idx)), event_times_[idx]);
+    }
+  }
+  return pos;
 }
 
 } // namespace compaction

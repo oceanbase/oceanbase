@@ -1801,7 +1801,8 @@ int ObDMLStmt::formalize_relation_exprs(ObSQLSessionInfo *session_info, bool nee
       } else if (column_expr->is_virtual_generated_column() &&
                  (!column_expr->is_fulltext_column() &&
                   !column_expr->is_multivalue_generated_column() &&
-                  !column_expr->is_vec_index_column())) {
+                  !column_expr->is_vec_index_column() &&
+                  !column_expr->is_hidden_clustering_key_column())) {
         ObRawExpr *dependant_expr = static_cast<ObColumnRefRawExpr *>(
                                     column_expr)->get_dependant_expr();
         if (dependant_expr == nullptr) {

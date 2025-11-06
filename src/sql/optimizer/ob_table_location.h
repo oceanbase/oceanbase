@@ -866,6 +866,7 @@ public:
   {
     check_no_partition_ = check;
   }
+
   static bool can_use_table_location(share::ObLakeTableFormat format);
   TO_STRING_KV(K_(loc_meta),
                K_(part_projector),

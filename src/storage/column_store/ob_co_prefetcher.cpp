@@ -226,8 +226,8 @@ int ObCOPrefetcher::reset_each_levels(uint32_t start_level)
   // We assert that blocks prefetched from (start_level) to leaf level are all in the current range.
   for (uint32_t level = start_level; OB_SUCC(ret) && level < index_tree_height_; ++level) {
     ObIndexTreeLevelHandle &tree_handle = tree_handles_[level];
-    tree_handle.index_block_read_handles_[tree_handle.prefetch_idx_ % MAX_INDEX_PREFETCH_DEPTH].end_prefetched_row_idx_
-      = tree_handle.index_block_read_handles_[tree_handle.fetch_idx_ % MAX_INDEX_PREFETCH_DEPTH].end_prefetched_row_idx_;
+    tree_handle.index_block_read_handles_[tree_handle.prefetch_idx_ % tree_handle.max_index_prefetch_cnt_].end_prefetched_row_idx_
+      = tree_handle.index_block_read_handles_[tree_handle.fetch_idx_ % tree_handle.max_index_prefetch_cnt_].end_prefetched_row_idx_;
     tree_handle.read_idx_ = tree_handle.prefetch_idx_;
     tree_handle.fetch_idx_ = tree_handle.prefetch_idx_;
     tree_handle.index_scanner_.reuse();
@@ -389,6 +389,11 @@ int ObCOPrefetcher::init_tree_handles(const int64_t count)
       tree_handle_cap_ = count;
     }
   }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(init_index_prefetch_depth(count))) {
+      LOG_WARN("init index prefetch depth failed", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -416,7 +421,7 @@ int ObCOPrefetcher::ObCOIndexTreeLevelHandle::try_advancing_fetch_idx(
     LOG_WARN("Unexpected fetch_idx in ObCOIndexTreeLevelHandle", K(ret), K(range_idx), K(level), KPC(this));
   }
   for (; OB_SUCC(ret) && prefetch_idx >= fetch_idx_; --prefetch_idx) {
-    const int32_t idx = prefetch_idx % MAX_INDEX_PREFETCH_DEPTH;
+    const int32_t idx = prefetch_idx % max_index_prefetch_cnt_;
     ObMicroIndexInfo &index_info = index_block_read_handles_[idx].index_info_;
     bool is_range_end = !is_reverse && index_info.is_right_border();
     ObCommonDatumRowkey endkey;
@@ -458,9 +463,9 @@ int ObCOPrefetcher::ObCOIndexTreeLevelHandle::try_advancing_fetch_idx(
   }
   if (OB_SUCC(ret) && is_advanced_to) {
     ObMicroIndexInfo &index_info =
-      index_block_read_handles_[prefetch_idx % MAX_INDEX_PREFETCH_DEPTH].index_info_;
-    index_block_read_handles_[prefetch_idx % MAX_INDEX_PREFETCH_DEPTH].end_prefetched_row_idx_ =
-      index_block_read_handles_[fetch_idx_ % MAX_INDEX_PREFETCH_DEPTH].end_prefetched_row_idx_;
+      index_block_read_handles_[prefetch_idx % max_index_prefetch_cnt_].index_info_;
+    index_block_read_handles_[prefetch_idx % max_index_prefetch_cnt_].end_prefetched_row_idx_ =
+      index_block_read_handles_[fetch_idx_ % max_index_prefetch_cnt_].end_prefetched_row_idx_;
     read_idx_ = prefetch_idx;
     fetch_idx_ = prefetch_idx;
     index_scanner_.reuse();
@@ -494,7 +499,7 @@ int ObCOPrefetcher::ObCOIndexTreeLevelHandle::forward(
   } else {
     fetch_idx_++;
     index_scanner_.reuse();
-    int8_t fetch_idx = fetch_idx_ % MAX_INDEX_PREFETCH_DEPTH;
+    int8_t fetch_idx = fetch_idx_ % max_index_prefetch_cnt_;
     ObMicroIndexInfo &index_info = index_block_read_handles_[fetch_idx].index_info_;
     if (OB_FAIL(index_block_read_handles_[fetch_idx].data_handle_.get_micro_block_data(nullptr, index_block_, false))) {
       LOG_WARN("Fail to get index block data", K(ret), KPC(this), K(index_block_), K(fetch_idx_), K(prefetch_idx_));
@@ -538,7 +543,7 @@ int ObCOPrefetcher::ObCOIndexTreeLevelHandle::forward(
 
     if (OB_SUCC(ret) && 0 < fetch_idx_) {
       index_block_read_handles_[fetch_idx].end_prefetched_row_idx_ =
-          index_block_read_handles_[(fetch_idx_ - 1) % MAX_INDEX_PREFETCH_DEPTH].end_prefetched_row_idx_;
+          index_block_read_handles_[(fetch_idx_ - 1) % max_index_prefetch_cnt_].end_prefetched_row_idx_;
     }
   }
   return ret;

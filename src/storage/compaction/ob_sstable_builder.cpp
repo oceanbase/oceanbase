@@ -102,19 +102,13 @@ int ObSSTableRebuildMicroBlockIter::open_next_macro_block()
 
 int ObSSTableRebuildMicroBlockIter::get_next_micro_block(
     ObMicroBlockDesc &micro_block_desc,
-    ObMicroIndexInfo &micro_index_info)
+    ObMicroIndexData &micro_index_data)
 {
   int ret = OB_SUCCESS;
   allocator_.reuse();
-  if (OB_FAIL(mirco_block_iter_.get_next_micro_block_desc(micro_block_desc, micro_index_info, allocator_))) {
+  if (OB_FAIL(mirco_block_iter_.get_next_micro_block_desc(micro_block_desc, micro_index_data, allocator_))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("failed to get next micro block desc", K(ret));
-    }
-  } else {
-    micro_index_info.parent_macro_id_ = get_curr_macro_handle().get_macro_id();
-    if (OB_UNLIKELY(!micro_index_info.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected iterated invalid micro index info", K(ret));
     }
   }
   return ret;
@@ -204,6 +198,12 @@ int ObSSTableBuilder::build_sstable_merge_res(
     ret = OB_NOT_SUPPORTED;
 #endif
   } else {
+    if (OB_NOT_NULL(rebuilder_ptr_)) {
+      rebuilder_ptr_->~ObSSTableRebuilder();
+      allocator_.free(rebuilder_ptr_);
+      rebuilder_ptr_ = nullptr;
+      LOG_INFO("reset rebuilder ptr", K(rebuilder_ptr_));
+    }
     // TODO temp solution, use different sstable builder in different mode
     void *buf = NULL;
     if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObSSTableRebuilder)))) {
@@ -465,17 +465,17 @@ int ObSSTableRebuilder::rewrite_macro_block(ObSSTableRebuildMicroBlockIter &micr
 {
   int ret = OB_SUCCESS;
   ObMicroBlockDesc micro_block_desc;
-  ObMicroIndexInfo micro_index_info;
+  ObMicroIndexData micro_index_data;
 
   while (OB_SUCC(ret)) {
-    if (OB_FAIL(micro_iter.get_next_micro_block(micro_block_desc, micro_index_info))) {
+    if (OB_FAIL(micro_iter.get_next_micro_block(micro_block_desc, micro_index_data))) {
       if (ret == OB_ITER_END) {
         ret = OB_SUCCESS;
         break;
       } else {
         STORAGE_LOG(WARN, "fail to get next micro block", K(ret), K(micro_iter));
       }
-    } else if (OB_FAIL(macro_writer_.append_micro_block(micro_block_desc, micro_index_info))) {
+    } else if (OB_FAIL(macro_writer_.append_micro_block(micro_block_desc, micro_index_data))) {
       STORAGE_LOG(WARN, "fail to append micro", K(ret), K(micro_block_desc), K(macro_writer_));
     }
   }

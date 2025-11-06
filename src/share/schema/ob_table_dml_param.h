@@ -63,6 +63,8 @@ public:
   OB_INLINE int64_t get_multivalue_col_id() const { return multivalue_col_id_; }
   OB_INLINE int64_t get_multivalue_array_col_id() const { return multivalue_arr_col_id_; }
   OB_INLINE int64_t get_vec_id_col_id() const { return vec_id_col_id_; }
+  OB_INLINE int64_t get_vec_chunk_col_id() const { return vec_chunk_col_id_; }
+  OB_INLINE int64_t get_embedded_vec_col_id() const { return vec_embedded_col_id_; }
   OB_INLINE int64_t get_vec_vector_col_id() const { return vec_vector_col_id_; }
   OB_INLINE ObString get_vec_index_param() const { return vec_index_param_; }
   OB_INLINE int64_t get_vec_dim() const { return vec_dim_; }
@@ -95,6 +97,9 @@ public:
   OB_INLINE bool is_vector_index() const { return share::schema::is_vec_index(index_type_); }
   OB_INLINE bool is_sparse_vector_index() const { return share::schema::is_vec_spiv_index(index_type_); }
   OB_INLINE bool is_ivf_vector_index() const { return share::schema::is_vec_ivf_index(index_type_); }
+  OB_INLINE bool is_hybrid_vector_index() const { return share::schema::is_local_hybrid_vec_index(index_type_); }
+  OB_INLINE bool is_hybrid_vector_index_log() const { return share::schema::is_hybrid_vec_index_log_type(index_type_); }
+  OB_INLINE bool is_hybrid_vector_index_embedded() const { return share::schema::is_hybrid_vec_index_embedded_type(index_type_); }
   OB_INLINE bool is_no_need_update_vector_index() const
   {
     return share::schema::is_vec_index_id_type(index_type_) ||

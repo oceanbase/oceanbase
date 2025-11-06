@@ -763,7 +763,7 @@ bool ObMediumCompactionInfoList::need_check_finish() const
 int ObMediumCompactionInfoList::get_next_schedule_info(
     const int64_t last_major_snapshot,
     const int64_t major_frozen_snapshot,
-    const bool is_mv_refresh_tablet,
+    const bool is_mv_refresh_or_restore_remote_tablet,
     ObMediumCompactionInfo::ObCompactionType &compaction_type,
     int64_t &schedule_scn,
     ObCOMajorMergePolicy::ObCOMajorMergeType &co_major_merge_type,
@@ -776,7 +776,7 @@ int ObMediumCompactionInfoList::get_next_schedule_info(
     } else {
       if (info->is_medium_compaction()
           || info->medium_snapshot_ <= major_frozen_snapshot
-          || is_mv_refresh_tablet) {
+          || is_mv_refresh_or_restore_remote_tablet) {
         schedule_scn = info->medium_snapshot_;
         compaction_type = (ObMediumCompactionInfo::ObCompactionType)info->compaction_type_;
         co_major_merge_type = static_cast<ObCOMajorMergePolicy::ObCOMajorMergeType>(info->co_major_merge_type_);

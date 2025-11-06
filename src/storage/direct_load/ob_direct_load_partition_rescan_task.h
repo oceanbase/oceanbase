@@ -28,6 +28,7 @@ public:
   int init(ObDirectLoadTabletMergeCtx *merge_ctx, int64_t thread_cnt, int64_t thread_idx);
   int process() override;
   void stop() override;
+  int init_iterator(ObITabletSliceRowIterator *&row_iterator) override { return OB_NOT_IMPLEMENT;}
   ObDirectLoadTabletMergeCtx *get_merge_ctx() override { return merge_ctx_; }
   TO_STRING_KV(KP_(merge_ctx), K_(thread_cnt), K_(thread_idx));
 

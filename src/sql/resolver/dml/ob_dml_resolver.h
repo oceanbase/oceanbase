@@ -348,6 +348,7 @@ public:
   }
   ObIArray<ObExecParamRawExpr*> *get_query_ref_exec_params() { return query_ref_exec_params_; }
   int build_heap_table_hidden_pk_expr(ObRawExpr *&expr, const ObColumnRefRawExpr *ref_expr);
+  int build_hidden_clustering_key_expr(ObRawExpr *&expr, const ObColumnRefRawExpr *ref_expr);
   static int copy_schema_expr(ObRawExprFactory &factory,
                               ObRawExpr *expr,
                               ObRawExpr *&new_expr);
@@ -519,6 +520,12 @@ protected:
     const ObTableSchema *table_schema,
     ObRawExpr *&vec_id_expr,
     ObDMLStmt *stmt = NULL);
+  int fill_hidden_clustering_key_expr_param(
+    const uint64_t table_id,
+    const uint64_t index_tid,
+    const ObTableSchema *table_schema,
+    ObRawExpr *&hidden_clustering_key_expr,
+    ObDMLStmt *stmt = NULL);
   int fill_ivf_vec_expr_param(
     const uint64_t table_id,
     const uint64_t index_tid,
@@ -527,6 +534,13 @@ protected:
     const ObTableSchema *table_schema,
     bool need_dist_algo_expr,
     ObRawExpr *&expr,
+    ObDMLStmt *stmt = NULL);
+  int fill_embedded_vec_expr_param(
+    const uint64_t table_id,
+    const uint64_t index_tid,
+    const uint64_t column_id,
+    const ObTableSchema *table_schema,
+    ObRawExpr *&vec_id_expr,
     ObDMLStmt *stmt = NULL);
   int build_partid_expr(ObRawExpr *&expr, const uint64_t table_id);
   virtual int resolve_subquery_info(const common::ObIArray<ObSubQueryInfo> &subquery_info);
@@ -1149,6 +1163,11 @@ private:
   int build_mocked_external_table_item(const share::schema::ObTableSchema *table_schema,
                                         TableItem *&tbl_item,
                                         const ParseNode *alias_node = NULL);
+  int fill_tablet_id_seq_id_expr_param(const uint64_t table_id,
+                                       const uint64_t index_tid,
+                                       const ObTableSchema *table_schema,
+                                       ObRawExpr *&tablet_id_seq_id_expr,
+                                       ObDMLStmt *stmt = NULL);
 protected:
   struct GenColumnExprInfo {
     GenColumnExprInfo():
@@ -1188,6 +1207,10 @@ protected:
       const ObDMLStmt &stmt,
       bool &is_ddl,
       ObIndexType &index_type);
+  int check_need_fill_embedded_vec_expr_param(const ObDMLStmt &stmt,
+                                              const ObColumnSchemaV2 &column_schema,
+                                              bool &need_fill);
+
 protected:
   ObStmtScope current_scope_;
   int32_t current_level_;

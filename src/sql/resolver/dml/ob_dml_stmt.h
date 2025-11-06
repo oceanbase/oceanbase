@@ -398,6 +398,7 @@ struct ColumnItem
   bool is_auto_increment() const { return expr_ != NULL && expr_->is_auto_increment(); }
   bool is_not_null_for_write() const { return expr_ != NULL && expr_->is_not_null_for_write(); }
   bool is_not_null_for_read() const { return expr_ != NULL && expr_->is_not_null_for_read(); }
+  bool is_hidden_clustering_key_column() const { return expr_ != NULL && expr_->is_hidden_clustering_key_column(); }
   int deep_copy(ObIRawExprCopier &expr_copier,
                 const ColumnItem &other);
   void reset()

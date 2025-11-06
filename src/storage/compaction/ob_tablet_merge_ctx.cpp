@@ -89,17 +89,21 @@ int ObTabletMergeCtx::collect_running_info()
   return ret;
 }
 
-int ObTabletMergeCtx::update_block_info(
+void ObTabletMergeCtx::update_block_info(
     const ObMergeBlockInfo &block_info,
     const int64_t cost_time)
 {
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(merge_info_.get_merge_history().update_block_info(block_info, false/*without_row_cnt*/))) {
-    LOG_WARN("failed to update block info", KR(ret), K(block_info));
-  } else {
-    merge_info_.get_merge_history().update_execute_time(cost_time);
-  }
-  return ret;
+  merge_info_.get_merge_history().update_block_info(block_info, false/*without_row_cnt*/);
+  merge_info_.get_merge_history().update_execute_time(cost_time);
+}
+
+void ObTabletMergeCtx::update_block_info_with_sstable_block_info(
+    const ObMergeBlockInfo &block_info,
+    const int64_t cost_time,
+    ObIArray<ObSSTableMergeBlockInfo> &array)
+{
+  merge_info_.get_merge_history().update_block_info_with_sstable_block_info(block_info, false/*without_row_cnt*/, array);
+  merge_info_.get_merge_history().update_execute_time(cost_time);
 }
 
 /*
@@ -108,18 +112,22 @@ int ObTabletMergeCtx::update_block_info(
 int ObTabletMiniMergeCtx::prepare_schema()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(get_storage_schema())) {
+  ObStorageSchema *schema = nullptr;
+  if (OB_FAIL(get_storage_schema(schema))) {
     LOG_WARN("failed to get storage schema from tablet", KR(ret));
   } else if (get_tablet_id().is_ls_inner_tablet()) {
     // for ls_inner_tablet, schema on tablet is not changed
     if (OB_FAIL(pre_process_tx_data_table_merge())) {
       LOG_WARN("pre process tx data table for merge failed", KR(ret), "dag_param", get_dag_param());
     } else {
+      static_param_.schema_ = schema;
       static_param_.set_full_merge_and_level(true/*is_full_merge*/);
       static_param_.read_base_version_ = 0;
     }
-  } else if (OB_FAIL(update_storage_schema_by_memtable(*static_param_.schema_, get_tables_handle()))) {
-    LOG_WARN("failed to update storage schema by memtable", KR(ret));
+  } else if (OB_FAIL(update_storage_schema_by_memtable(get_tables_handle(), *schema))) {
+    LOG_WARN("failed to update storage schema by memtable", KR(ret), KPC(schema));
+  } else {
+    static_param_.schema_ = schema;
   }
 #ifdef OB_BUILD_SHARED_STORAGE
   // prepare for register mini sstable upload
@@ -302,10 +310,12 @@ int ObTabletMiniMergeCtx::update_tablet_directly(ObGetMergeTablesResult &get_mer
   int tmp_ret = OB_SUCCESS;
   ObUpdateTableStoreParam param;
   ObTabletHandle new_tablet_handle;
+  ObStorageSchema *schema = nullptr;
   if (OB_FAIL(static_param_.get_basic_info_from_result(get_merge_table_result))) {
     LOG_WARN("failed to get basic infor from result", KR(ret), K(get_merge_table_result));
-  } else if (OB_FAIL(get_storage_schema())) {
+  } else if (OB_FAIL(get_storage_schema(schema))) {
     LOG_WARN("failed to get storage schema from tablet", KR(ret));
+  } else if (FALSE_IT(static_param_.schema_ = schema)) {
   } else if (OB_FAIL(build_update_table_store_param(nullptr/*sstable*/, param))) {
     LOG_WARN("failed to build update table store param", KR(ret), K(param));
   } else if (OB_FAIL(get_ls()->update_tablet_table_store(
@@ -348,65 +358,7 @@ int ObTabletExeMergeCtx::cal_merge_param()
   int ret = OB_SUCCESS;
   if (OB_FAIL(static_param_.cal_minor_merge_param(has_filter()))) {
     LOG_WARN("failed to cal_major_merge_param", KR(ret));
-  } else if (is_minor_merge(static_param_.get_merge_type())) {
-    if (OB_FAIL(init_static_param_tx_id())) {
-      LOG_WARN("failed to init_static_param_tx_id", KR(ret));
-    }
   }
-  return ret;
-}
-
-int ObTabletExeMergeCtx::init_static_param_tx_id()
-{
-  int ret = OB_SUCCESS;
-  ObTxTableGuard tx_table_guard;
-  const storage::ObTablesHandleArray &tables_handle = static_param_.tables_handle_;
-  const int64_t table_cnt = tables_handle.get_count();
-  ObITable *table = nullptr;
-  ObLS *ls = nullptr;
-  ObSSTableMetaHandle meta_handle;
-  int64_t &static_param_tx_id = static_param_.tx_id_;
-
-  if (OB_ISNULL(ls = static_param_.ls_handle_.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "ls is null", K(ret));
-  } else if (OB_FAIL(ls->get_tx_table_guard(tx_table_guard))) {
-    STORAGE_LOG(WARN, "get_tx_table_guard from log stream fail.", K(ret), K(*ls));
-  }
-
-  static_param_tx_id = 0;
-  for (int64_t i = 0; i < table_cnt && OB_SUCC(ret); i++) {
-    if (OB_ISNULL(table = tables_handle.get_table(i)) || OB_UNLIKELY(!table->is_sstable())) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "unexpected null table", K(ret), K(i), KPC(table));
-    } else if (!static_cast<ObSSTable *>(table)->contain_uncommitted_row()) {
-      //continue
-    } else if (OB_FAIL(static_cast<ObSSTable *>(table)->get_meta(meta_handle))) {
-      STORAGE_LOG(WARN, "fail to get meta", K(ret), K(i), KPC(table));
-    } else if (meta_handle.get_sstable_meta().get_tx_id_count() > 0) {
-      const int64_t tx_id = meta_handle.get_sstable_meta().get_tx_ids(0);
-      int64_t state = 0;
-      share::SCN trans_version;
-      if (OB_UNLIKELY(meta_handle.get_sstable_meta().get_tx_id_count() != 1)) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "unexpected tx id count", K(ret), K(i), KPC(table), KPC(meta_handle.meta_));
-      } else if (tx_id == static_param_tx_id) {
-        //continue
-      } else if (OB_FAIL(tx_table_guard.get_tx_state_with_scn(transaction::ObTransID(tx_id),
-        static_param_.merge_scn_, state, trans_version))) {
-        STORAGE_LOG(WARN, "fail to get tx state", K(ret), K(tx_id), K(static_param_.merge_scn_));
-      } else if (state == ObTxData::RUNNING) {
-        if (OB_UNLIKELY(transaction::ObTransID(static_param_tx_id).is_valid())) {
-          ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "unexpected tx id", K(ret), K(static_param_tx_id), K(tx_id), K(tables_handle));
-        } else {
-          static_param_tx_id = tx_id;
-        }
-      }
-    }
-  }
-
-  STORAGE_LOG(INFO, "finish tx id init", K(ret), K(static_param_tx_id), K(tx_table_guard));
   return ret;
 }
 

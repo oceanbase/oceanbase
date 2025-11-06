@@ -1,0 +1,21 @@
+target_link_libraries(mock_object_storage PRIVATE observer_test oceanbase)
+
+function(sensitive_atomic_protocol_unittest case)
+  mit_shared_storage_unittest(${case})
+  target_link_libraries(${case} PRIVATE observer_test)
+  if (case MATCHES "^test_.*")
+    set_tests_properties(${case} PROPERTIES TIMEOUT 600)
+  endif()
+endfunction()
+
+function(sensitive_atomic_protocol_unittest_with_mock_oss case)
+  mit_shared_storage_unittest(${case})
+  target_link_libraries(${case} PRIVATE mock_object_storage observer_test)
+  if (case MATCHES "^test_.*")
+    set_tests_properties(${case} PROPERTIES TIMEOUT 800)
+  endif()
+endfunction()
+
+if(OB_BUILD_CLOSE_MODULES)
+  sensitive_atomic_protocol_unittest(test_ss_diagnose_info_mgr)
+endif()

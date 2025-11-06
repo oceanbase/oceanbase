@@ -14,6 +14,7 @@
 #define OB_AI_FUNC_UTILS_H_
 
 #include "ob_ai_func.h"
+#include "share/vector_index/ob_json_helper.h"
 
 namespace oceanbase
 {
@@ -347,9 +348,7 @@ public:
   static int check_info_type_completion(const ObAIFuncExprInfo *info);
   static int check_info_type_dense_embedding(const ObAIFuncExprInfo *info);
   static int check_info_type_rerank(const ObAIFuncExprInfo *info);
-  static bool ob_provider_check(const ObString &provider, const char *str_const) {return ob_check_string_equal_char(provider, str_const);}
-  static bool ob_type_check(const ObString &type, const char *type_const) {return ob_check_string_equal_char(type, type_const);}
-  static bool ob_check_string_equal_char(const ObString &str, const char *str_const) {return str.case_compare(str_const) == 0;}
+  static bool ob_provider_check(const ObString &provider, const char *str_const) { return provider.case_compare(str_const) == 0; }
   static int get_complete_provider(ObIAllocator &allocator, const ObString &provider, ObAIFuncIComplete *&complete_provider);
   static int get_embed_provider(ObIAllocator &allocator, const ObString &provider, ObAIFuncIEmbed *&embed_provider);
   static int get_rerank_provider(ObIAllocator &allocator, const ObString &provider, ObAIFuncIRerank *&rerank_provider);
@@ -391,9 +390,14 @@ public:
                                  ObJsonObject *http_response,
                                  ObIJsonBase *&result);
   static int set_string_result(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res, ObString &res_str);
+  static int get_ai_func_info(ObIAllocator &allocator, const ObString &model_id, ObAIFuncExprInfo *&info);
+  static bool is_provider_support_base64(const ObString &provider);
+  static int decode_base64_embedding_array(const ObIJsonBase &embedding_jbase, ObIAllocator &allocator,
+                                           const int64_t dimension, float *&vector);
+  static int decode_float_embedding_array(const ObIJsonBase &embedding_jbase, ObIAllocator &allocator,
+                                          ObJsonReaderHelper &json_reader, const int64_t dimension, float *&vector);
   static int get_ai_func_info(ObIAllocator &allocator, const ObString &model_id,
                               share::schema::ObSchemaGetterGuard &guard, ObAIFuncExprInfo *&info);
-  static int get_ai_func_info(ObIAllocator &allocator, const ObString &model_id, ObAIFuncExprInfo *&info);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAIFuncUtils);
 };

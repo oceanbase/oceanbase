@@ -57,11 +57,13 @@ protected:
   PartitionSpec *create_partition_spec(int32_t spec_id)
   {
     PartitionSpec *partition_spec = OB_NEWx(PartitionSpec, &allocator_, allocator_);
+    ObArray<PartitionField *> tmp_partition_fields;
     partition_spec->spec_id = spec_id;
     PartitionField *partition_field = OB_NEWx(PartitionField, &allocator_, allocator_);
     partition_field->name = "dt";
     partition_field->transform.transform_type = TransformType::Identity;
-    partition_spec->fields.push_back(partition_field);
+    tmp_partition_fields.push_back(partition_field);
+    partition_spec->fields.assign(tmp_partition_fields);
     return partition_spec;
   }
 

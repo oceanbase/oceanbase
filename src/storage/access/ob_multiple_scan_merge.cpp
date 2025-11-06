@@ -30,9 +30,7 @@ ObMultipleScanMerge::ObMultipleScanMerge()
     consumer_cnt_(0),
     filt_del_count_(0),
     range_(NULL),
-    cow_range_(),
-    di_base_range_(NULL),
-    di_base_cow_range_()
+    cow_range_()
 {
   type_ = ObQRIterType::T_SINGLE_SCAN;
 }
@@ -44,22 +42,19 @@ ObMultipleScanMerge::~ObMultipleScanMerge()
 int ObMultipleScanMerge::open(const ObDatumRange &range)
 {
   int ret = OB_SUCCESS;
-
   if (OB_UNLIKELY(!range.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid range, ", K(range), K(ret));
   } else if (OB_FAIL(ObMultipleMerge::open())) {
     STORAGE_LOG(WARN, "Fail to open ObMultipleMerge, ", K(ret));
-  } else {
-    range_ = &range;
-    di_base_range_ = &range;
-    if (OB_FAIL(prepare())) {
-      STORAGE_LOG(WARN, "fail to prepare", K(ret));
-    } else if (OB_FAIL(construct_iters())) {
-      STORAGE_LOG(WARN, "fail to construct iters", K(ret));
-    }
+  } else if (OB_FAIL(prepare())) {
+    STORAGE_LOG(WARN, "fail to prepare", K(ret));
+  } else if (FALSE_IT(range_ = &range)) {
+  } else if (use_di_merge_scan() && OB_FAIL(di_base_sstable_row_scanner_->prepare_ranges(range))) {
+    STORAGE_LOG(WARN, "fail to prepare di base ranges", K(ret), K(range));
+  } else if (OB_FAIL(construct_iters())) {
+    STORAGE_LOG(WARN, "fail to construct iters", K(ret));
   }
-
   return ret;
 }
 
@@ -113,63 +108,69 @@ int ObMultipleScanMerge::inner_get_next_rows()
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexpected scan state", K(ret), K_(scan_state), K_(consumer_cnt));
   } else {
-    ObStoreRowIterator *iter = (ScanState::BATCH == scan_state_) ? iters_.at(consumers_[0]) : get_di_base_iter();
+    ObStoreRowIterator *iter = ScanState::BATCH == scan_state_ ? iters_.at(consumers_[0]) : di_base_sstable_row_scanner_;
     if (OB_ISNULL(iter)) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "Unexpected null iter", K(ret), K_(scan_state), K(consumers_[0]), KP(this));
     } else if (OB_FAIL(iter->get_next_rows())) {
       if (OB_UNLIKELY(OB_ITER_END != ret && OB_PUSHDOWN_STATUS_CHANGED != ret)) {
-        STORAGE_LOG(WARN, "Failed to get next row from iterator", K(ret), K_(scan_state), K_(consumer_cnt), KPC_(range), KPC_(di_base_range));
+        STORAGE_LOG(WARN, "Failed to get next row from iterator", K(ret), K_(scan_state), K_(consumer_cnt), KPC_(range), KPC(iter));
       }
     }
   }
   return ret;
+}
+
+void ObMultipleScanMerge::inner_calc_scan_range(const blocksstable::ObDatumRange *&range,
+                                                blocksstable::ObDatumRange &cow_range,
+                                                const blocksstable::ObDatumRowkey &curr_rowkey,
+                                                const bool calc_di_base_range)
+{
+  if (curr_rowkey.is_valid()) {
+    if (range != &cow_range) {
+      cow_range = *range;
+      range = &cow_range;
+    }
+    cow_range.change_boundary(curr_rowkey, access_ctx_->query_flag_.is_reverse_scan(), calc_di_base_range);
+    // As memtable will use reverse scan when start rowkey is greater than end rowkey instead of
+    // empty result, make the range correct
+    if (access_ctx_->query_flag_.is_reverse_scan() && curr_rowkey.is_min_rowkey()) {
+      cow_range.start_key_.set_min_rowkey();
+    } else if (!access_ctx_->query_flag_.is_reverse_scan() && curr_rowkey.is_max_rowkey()) {
+      cow_range.end_key_.set_max_rowkey();
+    }
+  }
 }
 
 int ObMultipleScanMerge::calc_scan_range()
 {
   int ret = OB_SUCCESS;
-
   if (NULL == access_ctx_) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "multiple scan merge not inited", K(ret));
   } else {
-    if (curr_rowkey_.is_valid()) {
-      if (range_ != &cow_range_) {
-        cow_range_ = *range_;
-        range_ = &cow_range_;
-      }
-      cow_range_.change_boundary(curr_rowkey_, access_ctx_->query_flag_.is_reverse_scan());
-      // As memtable will use reverse scan when start rowkey is greater than end rowkey instead of
-      // empty result, make the range correct
-      if (access_ctx_->query_flag_.is_reverse_scan() && curr_rowkey_.is_min_rowkey())
-      {
-        cow_range_.start_key_.set_min_rowkey();
-      } else if (!access_ctx_->query_flag_.is_reverse_scan() && curr_rowkey_.is_max_rowkey()) {
-        cow_range_.end_key_.set_max_rowkey();
-      }
+    inner_calc_scan_range(range_, cow_range_, curr_rowkey_, false/*calc_di_base_range*/);
+    if (OB_UNLIKELY(!range_->is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "invalid range", K(ret), KPC(range_));
+    } else {
+      STORAGE_LOG(INFO, "calculate scan range", K(ret), KPC(range_));
     }
-    if (di_base_curr_rowkey_.is_valid()) {
-      if (di_base_range_ != &di_base_cow_range_) {
-        di_base_cow_range_ = *di_base_range_;
-        di_base_range_ = &di_base_cow_range_;
+    // calculate scan range for delete insert
+    if (OB_SUCC(ret) && get_di_base_table_cnt() > 0) {
+      inner_calc_scan_range(di_base_sstable_row_scanner_->get_di_base_range(),
+                            di_base_sstable_row_scanner_->get_di_base_cow_range(),
+                            di_base_sstable_row_scanner_->get_di_base_curr_rowkey(),
+                            true/*calc_di_base_range*/);
+      if (OB_UNLIKELY(!di_base_sstable_row_scanner_->get_di_base_range()->is_valid())) {
+        ret = OB_INVALID_ARGUMENT;
+        STORAGE_LOG(WARN, "invalid di base range", K(ret), KPC(di_base_sstable_row_scanner_->get_di_base_range()));
+      } else {
+        STORAGE_LOG(INFO, "calculate di base range", K(ret), KPC(di_base_sstable_row_scanner_->get_di_base_range()));
       }
-      di_base_cow_range_.change_boundary(di_base_curr_rowkey_, access_ctx_->query_flag_.is_reverse_scan(), true);
     }
   }
 
-  return ret;
-}
-
-int ObMultipleScanMerge::is_range_valid() const
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(range_) || OB_ISNULL(di_base_range_)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "range or di_base_range is null", K(ret), KP(range_), KP(di_base_range_));
-  } else if (!range_->is_valid() && !di_base_range_->is_valid()) {
-    ret = OB_ITER_END;
-  }
   return ret;
 }
 
@@ -185,56 +186,26 @@ int ObMultipleScanMerge::prepare()
 int ObMultipleScanMerge::construct_iters()
 {
   int ret = OB_SUCCESS;
-
-  if (OB_ISNULL(range_) || OB_ISNULL(di_base_range_)) {
+  if (OB_UNLIKELY((iters_.count() > 0 || get_di_base_iter_cnt() > 0)
+                   && (iters_.count() + get_di_base_iter_cnt() != tables_.count()))) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "range or di_base_range is NULL", K(ret), KP(range_), KP(di_base_range_));
-  } else if (OB_UNLIKELY(iters_.count() > 0 && iters_.count() + di_base_iters_.count() != tables_.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "iter cnt is not equal to table cnt", K(ret), "iter cnt", iters_.count(),
-        "di_base_iter cnt", di_base_iters_.count(), "table cnt", tables_.count(), KP(this));
-  } else if (tables_.count() > 0) {
-    STORAGE_LOG(TRACE, "construct iters begin", K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()),
-                K(access_param_->iter_param_.is_delete_insert_), KPC_(range), KPC_(di_base_range), K_(access_ctx_->trans_version_range), K_(tables), KPC_(access_param));
+    STORAGE_LOG(WARN, "iter cnt is not equal to table cnt", K(ret),
+                      K(iters_.count()), K(get_di_base_iter_cnt()), K(tables_), KPC(di_base_sstable_row_scanner_));
+  } else if (get_di_base_table_cnt() > 0 && OB_FAIL(di_base_sstable_row_scanner_->construct_iters(false/*is_multi_scan*/))) {
+    STORAGE_LOG(WARN, "fail to construct di base iters", K(ret));
+  } else if (tables_.count() > get_di_base_table_cnt()) {
+    STORAGE_LOG(TRACE, "construct iters begin", K(tables_.count()), K(iters_.count()),
+                KPC_(range), K_(access_ctx_->trans_version_range), K_(tables), KPC_(access_param), KPC_(di_base_sstable_row_scanner));
     ObITable *table = NULL;
     ObStoreRowIterator *iter = NULL;
     const ObTableIterParam *iter_param = NULL;
-    const bool use_cache_iter = iters_.count() > 0 || di_base_iters_.count() > 0; // rescan with the same iters and different range
-
-    if (access_param_->iter_param_.is_delete_insert_) {
-      if (OB_FAIL(tables_.at(0, table))) {  // only one di base iter currently
-        STORAGE_LOG(WARN, "Fail to get 0th store, ", K(ret), K_(tables));
-      } else if (OB_ISNULL(iter_param = get_actual_iter_param(table))) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Fail to get 0th access param", K(ret), KPC(table));
-      } else if (table->is_major_sstable()) {
-        if (!use_cache_iter) {
-          if (OB_FAIL(table->scan(*iter_param, *access_ctx_, *di_base_range_, iter))) {
-            STORAGE_LOG(WARN, "Fail to get di base iterator", K(ret), KPC(table), K(*iter_param));
-          } else if (OB_FAIL(di_base_iters_.push_back(iter))) {
-            iter->~ObStoreRowIterator();
-            STORAGE_LOG(WARN, "Fail to push di base iter to di base iterator array", K(ret));
-          }
-        } else if (OB_ISNULL(iter = di_base_iters_.at(0))) {
-          ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "Unexpected null di_base_iters_", K(ret), "idx", 0, K(di_base_iters_));
-        } else if (OB_FAIL(iter->init(*iter_param, *access_ctx_, table, di_base_range_))) {
-          STORAGE_LOG(WARN, "failed to init scan di_base_iters_", K(ret), "idx", 0);
-        }
-        if (OB_SUCC(ret)) {
-          STORAGE_LOG(DEBUG, "add di base iter for consumer", KPC(table));
-        }
-      }
-    }
-
+    const bool use_cache_iter = iters_.count() > 0; // rescan with the same iters and different range
     consumer_cnt_ = 0;
-    int32_t di_base_cnt = di_base_iters_.count();
-    if (OB_FAIL(ret) || di_base_cnt == tables_.count()) {
-    } else if (OB_FAIL(set_rows_merger(tables_.count() - di_base_cnt))) {
-      STORAGE_LOG(WARN, "Failed to alloc rows merger", K(ret), K(di_base_cnt), K(tables_));
+    if (OB_FAIL(set_rows_merger(tables_.count() - get_di_base_table_cnt()))) {
+      STORAGE_LOG(WARN, "Failed to alloc rows merger", K(ret), K(get_di_base_table_cnt()), K(tables_));
     } else {
       const int64_t table_cnt = tables_.count() - 1;
-      for (int64_t i = table_cnt; OB_SUCC(ret) && i >= di_base_cnt; --i) {
+      for (int64_t i = table_cnt; OB_SUCC(ret) && i >= get_di_base_table_cnt(); --i) {
         if (OB_FAIL(tables_.at(i, table))) {
           STORAGE_LOG(WARN, "Fail to get ith store, ", K(ret), K(i), K_(tables));
         } else if (OB_ISNULL(iter_param = get_actual_iter_param(table))) {
@@ -255,30 +226,39 @@ int ObMultipleScanMerge::construct_iters()
         }
 
         if (OB_SUCC(ret)) {
-          consumers_[consumer_cnt_++] = i - di_base_cnt;
+          consumers_[consumer_cnt_++] = i - get_di_base_table_cnt();
           STORAGE_LOG(DEBUG, "add iter for consumer", K(i), KPC(table));
         }
       }
     }
+    STORAGE_LOG(DEBUG, "construct iters end", K(ret), K(iters_.count()), K(get_di_base_table_cnt()));
+  }
 
-    if (OB_SUCC(ret) && access_param_->iter_param_.enable_pd_blockscan()) {
-      if (ScanState::DI_BASE == scan_state_) {
-        if (OB_FAIL(get_di_base_iter()->refresh_blockscan_checker(curr_rowkey_))) {
-          STORAGE_LOG(WARN, "Failed to refresh di base blockscan checker", K(ret), K(curr_rowkey_));
-        }
-      } else if (0 == consumer_cnt_ && 0 < di_base_iters_.count()) {
-        if (OB_FAIL(prepare_di_base_blockscan(true))) {
-          STORAGE_LOG(WARN, "Failed to prepare di base blockscan", K(ret));
-        } else {
-          scan_state_ = ScanState::DI_BASE;
-        }
-      } else if (consumer_cnt_ > 0 && nullptr != iters_.at(consumers_[0]) && iters_.at(consumers_[0])->is_sstable_iter()) {
-        if (OB_FAIL(locate_blockscan_border())) {
-          STORAGE_LOG(WARN, "Fail to locate blockscan border", K(ret), K(iters_.count()), K(di_base_iters_.count()), K_(tables));
-        }
-      }
+  if (FAILEDx(prepare_blockscan_after_construct_iters())) {
+    STORAGE_LOG(WARN, "failed to prepare blockscan after construct iters", K(ret));
+  }
+  return ret;
+}
+
+int ObMultipleScanMerge::prepare_blockscan_after_construct_iters()
+{
+  int ret = OB_SUCCESS;
+  if (!access_param_->iter_param_.enable_pd_blockscan()) {
+    // do nothing
+  } else if (ScanState::DI_BASE == scan_state_) {
+    if (OB_FAIL(di_base_sstable_row_scanner_->refresh_blockscan_checker(curr_rowkey_))) {
+      STORAGE_LOG(WARN, "Failed to refresh di base blockscan checker", K(ret), K(curr_rowkey_));
     }
-    STORAGE_LOG(DEBUG, "construct iters end", K(ret), K(iters_.count()), K(di_base_iters_.count()));
+  } else if (0 == consumer_cnt_ && get_di_base_table_cnt() > 0) {
+    if (OB_FAIL(di_base_sstable_row_scanner_->prepare_di_base_blockscan(true/*di_base_only*/, nullptr/*row*/))) {
+      STORAGE_LOG(WARN, "Failed to prepare di base blockscan", K(ret));
+    } else {
+      scan_state_ = ScanState::DI_BASE;
+    }
+  } else if (consumer_cnt_ > 0 && nullptr != iters_.at(consumers_[0]) && iters_.at(consumers_[0])->is_sstable_iter()) {
+    if (OB_FAIL(locate_blockscan_border())) {
+      STORAGE_LOG(WARN, "Fail to locate blockscan border", K(ret), K(iters_.count()), K(get_di_base_table_cnt()), K_(tables));
+    }
   }
   return ret;
 }
@@ -393,8 +373,6 @@ void ObMultipleScanMerge::reset()
   filt_del_count_ = 0;
   range_ = NULL;
   cow_range_.reset();
-  di_base_range_ = NULL;
-  di_base_cow_range_.reset();
   ObMultipleMerge::reset();
 }
 
@@ -411,7 +389,6 @@ void ObMultipleScanMerge::reclaim()
   tree_cmp_.reset();
   consumer_cnt_ = 0;
   range_ = NULL;
-  di_base_range_ = NULL;
   ObMultipleMerge::reclaim();
 }
 
@@ -501,7 +478,7 @@ int ObMultipleScanMerge::inner_get_next_row(ObDatumRow &row)
               consumer_cnt_ = 0;
               ret = OB_SUCCESS;
             } else if (OB_UNLIKELY(OB_PUSHDOWN_STATUS_CHANGED != ret)) {
-              STORAGE_LOG(WARN, "Failed to get next row from iterator", K(ret), K_(scan_state), K_(consumer_cnt), KPC_(range), KPC_(di_base_range));
+              STORAGE_LOG(WARN, "Failed to get next row from iterator", K(ret), K_(scan_state), K_(consumer_cnt), KPC_(range));
             }
           } else if (!iter->can_blockscan() && !rows_merger_->empty()) {
             item.iter_idx_ = consumers_[0];

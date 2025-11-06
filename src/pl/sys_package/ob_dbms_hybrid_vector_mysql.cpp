@@ -10,21 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/allocator/page_arena.h"
-#include "lib/utility/ob_macro_utils.h"
 #define USING_LOG_PREFIX PL
-
-#include "deps/oblib/src/common/object/ob_obj_type.h"
-#include "deps/oblib/src/common/object/ob_object.h"
-#include "deps/oblib/src/lib/json_type/ob_json_parse.h"
-#include "deps/oblib/src/lib/json_type/ob_json_tree.h"
-#include "deps/oblib/src/lib/mysqlclient/ob_mysql_proxy.h"
 #include "ob_dbms_hybrid_vector_mysql.h"
-#include "src/pl/ob_pl.h"
-#include "src/share/hybrid_search/ob_hybrid_search_exector.h"
-#include "src/share/hybrid_search/ob_query_parse.h"
-#include "src/share/hybrid_search/ob_query_request.h"
-#include "src/storage/lob/ob_lob_locator.h"
+#include "src/share/hybrid_search/ob_hybrid_search_executor.h"
 
 namespace oceanbase {
 namespace pl {

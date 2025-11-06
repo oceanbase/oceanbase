@@ -197,12 +197,13 @@ int ObIndexBlockMicroIterator::init(
         // shared-storage mode write independent files which are 4KB alignment.
         // cannot check read size in shared-storage mode.
         // e.g., in shared-storage mode, one 100KB macro file, but try read 2MB, real-read-size is 100KB.
-        || (!GCTX.is_shared_storage_mode() && OB_UNLIKELY(macro_handle_.get_data_size() != read_info.size_))) {
+        || (!GCTX.is_shared_storage_mode() && !macro_desc.macro_block_id_.is_backup_id() && OB_UNLIKELY(macro_handle_.get_data_size() != read_info.size_))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("buf is null or buf size is too small, ",
           K(ret), K(macro_desc), KP(macro_handle_.get_buffer()),
           "is_shared_storage_mode", GCTX.is_shared_storage_mode(),
-          K(macro_handle_.get_data_size()), K(read_info.size_));
+          K(macro_handle_.get_data_size()), K(read_info.size_),
+          "is_backup_id", macro_desc.macro_block_id_.is_backup_id());
     } else if (OB_FAIL(data_iter_.init(
         macro_handle_.get_buffer(),
         macro_handle_.get_data_size(),

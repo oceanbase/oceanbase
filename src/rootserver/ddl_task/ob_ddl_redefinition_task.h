@@ -45,6 +45,7 @@ public:
       const int64_t data_format_version,
       const bool is_retryable_ddl);
   int init(
+      const share::ObDDLType task_type,
       const ObTableSchema &orig_table_schema,
       const ObTableSchema &hidden_table_schema,
       const AlterTableSchema &alter_table_schema,
@@ -79,6 +80,7 @@ private:
   ObRootService *root_service_;
   common::ObAddr inner_sql_exec_addr_;
   int64_t data_format_version_;
+  bool is_alter_clustering_key_tbl_partition_by_;
 };
 
 class ObSyncTabletAutoincSeqCtx final

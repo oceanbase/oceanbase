@@ -30,7 +30,6 @@
 #include "common/ob_learner_list.h"
 #include "storage/high_availability/ob_tablet_ha_status.h"
 #include "share/rebuild_tablet/ob_rebuild_tablet_location.h"
-#include "storage/blocksstable/index_block/ob_index_block_builder.h"
 
 namespace oceanbase
 {
@@ -782,9 +781,11 @@ public:
   void reset();
   int assign(const ObCopySSTableMacroIdInfo &other);
   TO_STRING_KV(K_(data_block_ids), K_(other_block_ids));
+private:
+  static const int64_t DEFAULT_MACRO_BLOCK_CNT = 64L;
 public:
-  common::ObSEArray<blocksstable::MacroBlockId, blocksstable::DEFAULT_MACRO_BLOCK_CNT> data_block_ids_;
-  common::ObSEArray<blocksstable::MacroBlockId, blocksstable::DEFAULT_MACRO_BLOCK_CNT> other_block_ids_;
+  common::ObSEArray<blocksstable::MacroBlockId, DEFAULT_MACRO_BLOCK_CNT> data_block_ids_;
+  common::ObSEArray<blocksstable::MacroBlockId, DEFAULT_MACRO_BLOCK_CNT> other_block_ids_;
   DISALLOW_COPY_AND_ASSIGN(ObCopySSTableMacroIdInfo);
 };
 

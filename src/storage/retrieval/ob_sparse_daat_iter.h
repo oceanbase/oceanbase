@@ -118,6 +118,7 @@ public:
       ObSRDaaTRelevanceCollector &relevance_collector);
   virtual int get_next_rows(const int64_t capacity, int64_t &count) override;
   virtual int preset_top_k_threshold(const double threshold) override;
+  int adjust_topk_limit(const int64_t new_topk_limit);
 protected:
   virtual int process_collected_row(const ObDatum &id_datum, const double relevance) override;
   virtual int top_k_search() { return OB_NOT_IMPLEMENT; }

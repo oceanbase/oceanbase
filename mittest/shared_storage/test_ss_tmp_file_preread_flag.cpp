@@ -107,7 +107,7 @@ TEST_F(TestSSTmpFilePrereadFlag, preread)
   ObTenantFileManager *file_manager = MTL(ObTenantFileManager *);
   ASSERT_NE(nullptr, file_manager);
 
-  // 1. write
+  // 1. prepare: create tmp file directory first
   const int64_t tmp_file_id = 100;
   const int64_t segment_id = 0;
   MacroBlockId macro_id;
@@ -120,16 +120,26 @@ TEST_F(TestSSTmpFilePrereadFlag, preread)
   ObStorageObjectHandle write_object_handle;
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
 
+  // 2. exhaust local disk space to force write_through
+  ObTenantDiskSpaceManager *disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, disk_space_mgr);
+  int64_t avail_size = disk_space_mgr->get_macro_cache_free_size();
+  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->alloc_file_size(avail_size,
+            ObSSMacroCacheType::TMP_FILE, ObDiskSpaceType::FILE));
+  LOG_INFO("exhausted tmp file disk space to force write_through", K(avail_size));
+
+  // 3. write
+
   write_info_.io_desc_.set_sealed();
   ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_append_file(write_info_, write_object_handle));
   ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
 
-  // check if write through to object storage, and do not write local cache
+  // 4. check if write through to object storage, and do not write local cache
   bool is_exist = false;
   ASSERT_EQ(OB_SUCCESS, file_manager->is_exist_local_file(macro_id, 0/*ls_epoch_id*/, is_exist));
   ASSERT_FALSE(is_exist);
 
-  // 2. read with is_preread = true
+  // 5. read with is_preread = true
   read_info_.macro_block_id_ = macro_id;
   read_info_.io_desc_.set_preread();
   ObStorageObjectHandle read_object_handle;
@@ -140,14 +150,19 @@ TEST_F(TestSSTmpFilePrereadFlag, preread)
   ASSERT_EQ(read_info_.size_, read_object_handle.get_data_size());
   ASSERT_EQ(0, memcmp(write_buf_, read_object_handle.get_buffer(), read_info_.size_));
 
-  // 3. wait preread
+  // 6. wait preread
   usleep(5 * 1000L * 1000L); // sleep 5s
 
-  // 4. check if segment has been preread to local mem_macro_cache
+  // 7. check if segment has been preread to local mem_macro_cache
   ObSSMemMacroCache *mem_macro_cache = MTL(ObSSMemMacroCache *);
   ASSERT_NE(nullptr, mem_macro_cache);
   ASSERT_EQ(OB_SUCCESS, mem_macro_cache->check_exist(macro_id, is_exist));
   ASSERT_TRUE(is_exist);
+
+  // 8. cleanup: release disk space
+  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->free_file_size(avail_size,
+            ObSSMacroCacheType::TMP_FILE, ObDiskSpaceType::FILE));
+  LOG_INFO("released tmp file disk space", K(avail_size));
 }
 
 TEST_F(TestSSTmpFilePrereadFlag, no_preread)
@@ -156,7 +171,7 @@ TEST_F(TestSSTmpFilePrereadFlag, no_preread)
   ObTenantFileManager *file_manager = MTL(ObTenantFileManager *);
   ASSERT_NE(nullptr, file_manager);
 
-  // 1. write
+  // 1. prepare: create tmp file directory first
   const int64_t tmp_file_id = 101;
   const int64_t segment_id = 0;
   MacroBlockId macro_id;
@@ -169,16 +184,26 @@ TEST_F(TestSSTmpFilePrereadFlag, no_preread)
   ObStorageObjectHandle write_object_handle;
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
 
+  // 2. exhaust local disk space to force write_through
+  ObTenantDiskSpaceManager *disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, disk_space_mgr);
+  int64_t avail_size = disk_space_mgr->get_macro_cache_free_size();
+  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->alloc_file_size(avail_size,
+            ObSSMacroCacheType::TMP_FILE, ObDiskSpaceType::FILE));
+  LOG_INFO("exhausted tmp file disk space to force write_through", K(avail_size));
+
+  // 3. write
+
   write_info_.io_desc_.set_sealed();
   ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_append_file(write_info_, write_object_handle));
   ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
 
-  // check if write through to object storage, and do not write local cache
+  // 4. check if write through to object storage, and do not write local cache
   bool is_exist = false;
   ASSERT_EQ(OB_SUCCESS, file_manager->is_exist_local_file(macro_id, 0/*ls_epoch_id*/, is_exist));
   ASSERT_FALSE(is_exist);
 
-  // 2. read with is_preread = false
+  // 5. read with is_preread = false
   read_info_.macro_block_id_ = macro_id;
   read_info_.io_desc_.set_no_preread();
   ObStorageObjectHandle read_object_handle;
@@ -189,12 +214,17 @@ TEST_F(TestSSTmpFilePrereadFlag, no_preread)
   ASSERT_EQ(read_info_.size_, read_object_handle.get_data_size());
   ASSERT_EQ(0, memcmp(write_buf_, read_object_handle.get_buffer(), read_info_.size_));
 
-  // 3. wait preread
+  // 6. wait preread
   usleep(5 * 1000L * 1000L); // sleep 5s
 
-  // 4. check if segment has not been preread to local cache
+  // 7. check if segment has not been preread to local cache
   ASSERT_EQ(OB_SUCCESS, file_manager->is_exist_local_file(macro_id, 0/*ls_epoch_id*/, is_exist));
   ASSERT_FALSE(is_exist);
+
+  // 8. cleanup: release disk space
+  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->free_file_size(avail_size,
+            ObSSMacroCacheType::TMP_FILE, ObDiskSpaceType::FILE));
+  LOG_INFO("released tmp file disk space", K(avail_size));
 }
 
 } // namespace storage

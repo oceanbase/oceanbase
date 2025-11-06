@@ -95,7 +95,6 @@ public:
   virtual void reset() override;
   virtual void reuse() override;
   virtual void reclaim() override;
-  virtual int is_range_valid() const override;
 protected:
   virtual int prepare() override;
   virtual int calc_scan_range() override;
@@ -132,7 +131,6 @@ private:
   int inner_get_next_row_for_memtables_only(ObDatumRow &row);
   int inner_get_next_row_for_sstables_exist(ObDatumRow &row);
 private:
-  static const int64_t MAX_ROW_CNT_IN_CACHE = 300;
   common::ObIArray<blocksstable::ObDatumRowkey> *rowkeys_;
   ObFuseRowCacheFetcher fuse_row_cache_fetcher_;
   ObFuseRowValueHandle cache_handles_[common::OB_MULTI_GET_OPEN_ROWKEY_NUM];

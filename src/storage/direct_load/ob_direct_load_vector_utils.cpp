@@ -446,13 +446,14 @@ int ObDirectLoadVectorUtils::to_datum(ObIVector *vector, const int64_t idx, ObDa
 }
 
 int ObDirectLoadVectorUtils::check_rowkey_length(const ObDirectLoadBatchRows &batch_rows,
-                                                 const int64_t rowkey_column_count)
+                                                 const int64_t rowkey_column_count,
+                                                 const common::ObIArray<share::schema::ObColDesc> &col_descs)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(batch_rows.empty() || batch_rows.get_column_count() < rowkey_column_count ||
-                  rowkey_column_count <= 0)) {
+                  rowkey_column_count <= 0 || col_descs.count() < rowkey_column_count)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(batch_rows), K(rowkey_column_count));
+    LOG_WARN("invalid args", KR(ret), K(batch_rows), K(rowkey_column_count), K(col_descs.count()));
   } else {
     int64_t *rowkey_len = nullptr;
     const int64_t row_count = batch_rows.size();
@@ -462,9 +463,19 @@ int ObDirectLoadVectorUtils::check_rowkey_length(const ObDirectLoadBatchRows &ba
       LOG_WARN("failed to allocate memory", KR(ret), K(rowkey_len));
     } else {
       memset(rowkey_len, 0, sizeof(int64_t) * row_count);
-      for (int64_t col_idx = 0; col_idx < rowkey_column_count; col_idx++) {
+      for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < rowkey_column_count; col_idx++) {
         ObDirectLoadVector *vector = batch_rows.get_vectors().at(col_idx);
-        vector->sum_bytes_usage(rowkey_len, row_count);
+        const share::schema::ObColDesc &col_desc = col_descs.at(col_idx);
+
+        if (col_desc.col_type_.is_lob_storage()) {
+          // For LOB columns, use the new sum_lob_length method
+          if (OB_FAIL(vector->sum_lob_length(rowkey_len, row_count))) {
+            LOG_WARN("fail to sum lob bytes usage", KR(ret), K(col_idx), K(col_desc));
+          }
+        } else {
+          // For non-LOB columns, use the existing sum_bytes_usage method
+          vector->sum_bytes_usage(rowkey_len, row_count);
+        }
       }
     }
     for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < row_count; row_idx++) {
@@ -735,6 +746,29 @@ int ObDirectLoadVectorUtils::batch_fill_hidden_pk(ObIVector *vector, const int64
           break;
       }
     }
+  }
+  return ret;
+}
+
+int ObDirectLoadVectorUtils::batch_fill_value(common::ObIVector *vector, const int64_t start,
+                                              const int64_t size, const int64_t value)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr == vector || vector->get_format() != VEC_FIXED || start < 0 || size < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(start), K(size), KPC(vector));
+  } else if (size > 0) {
+    ObFixedLengthBase *fixed_vec = static_cast<ObFixedLengthBase *>(vector);
+    if (OB_UNLIKELY(fixed_vec->get_length() != sizeof(int64_t))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected vector value length", KR(ret), K(fixed_vec->get_length()));
+    } else {
+      int64_t *pks = reinterpret_cast<int64_t *>(fixed_vec->get_data());
+      for (int64_t i = 0; i < size; ++i) {
+        pks[start + i] = value;
+      }
+    }
+
   }
   return ret;
 }

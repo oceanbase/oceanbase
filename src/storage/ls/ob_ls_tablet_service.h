@@ -74,6 +74,10 @@ namespace sql
 class ObDASDMLIterator;
 class ObDASUpdIterator;
 }
+namespace rootserver
+{
+struct ObTruncateTabletArg;
+}
 
 namespace storage
 {
@@ -178,6 +182,7 @@ public:
       const bool micro_index_clustered,
       const bool has_cs_replica,
       const ObTabletID &split_src_tablet_id,
+      const uint64_t data_format_version,
       ObTabletHandle &tablet_handle);
   int create_transfer_in_tablet(
       const share::ObLSID &ls_id,
@@ -224,6 +229,9 @@ public:
   int update_tablet_report_status(
       const common::ObTabletID &tablet_id,
       const bool found_column_group_checksum_error = false);
+  int update_tablet_ddl_replay_status_for_cs_replica(
+      const common::ObTabletID &tablet_id,
+      const ObCSReplicaDDLReplayStatus &ddl_replay_status);
   int update_tablet_snapshot_version(
       const common::ObTabletID &tablet_id,
       const int64_t snapshot_version);
@@ -334,6 +342,36 @@ public:
       const common::ObTabletID &tablet_id,
       const share::SCN &scn,
       const ObTabletBindingMdsUserData &ddl_info,
+      mds::MdsCtx &ctx);
+  int set_ddl_complete(
+      const common::ObTabletID &tablet_id,
+      const ObTabletDDLCompleteMdsUserDataKey &key,
+      const ObTabletDDLCompleteMdsUserData &ddl_complete,
+      mds::MdsCtx &ctx,
+      const int64_t timeout);
+  int replay_set_ddl_complete(
+      const common::ObTabletID &tablet_id,
+      const share::SCN &scn,
+      const ObTabletDDLCompleteMdsUserDataKey &key,
+      const ObTabletDDLCompleteMdsUserData &ddl_data,
+      mds::MdsCtx &ctx);
+  int set_direct_load_auto_inc_seq(
+      const ObTabletID &tablet_id,
+      const ObDirectLoadAutoIncSeqData &data,
+      mds::MdsCtx &ctx,
+      const int64_t timeout_us);
+  int replay_set_direct_load_auto_inc_seq(
+      const ObTabletID &tablet_id,
+      const ObDirectLoadAutoIncSeqData &data,
+      mds::MdsCtx &ctx,
+      const share::SCN &scn);
+  int set_truncate_info(
+      const rootserver::ObTruncateTabletArg &arg,
+      mds::MdsCtx &ctx,
+      const int64_t timeout_us);
+  int replay_set_truncate_info(
+      const share::SCN &scn,
+      const rootserver::ObTruncateTabletArg &arg,
       mds::MdsCtx &ctx);
 
   // DAS interface
@@ -745,7 +783,6 @@ private:
 #ifdef OB_BUILD_SHARED_STORAGE
   int register_all_sstables_upload_(ObTabletHandle &new_tablet_handle);
 #endif
-
 private:
   static int replay_deserialize_tablet(
       const ObTabletMapKey &key,

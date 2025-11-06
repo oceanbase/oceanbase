@@ -19,6 +19,7 @@
 #include "observer/mysql/obmp_query.h"
 #include "rpc/obmysql/packet/ompk_row.h"
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
+#include "observer/mysql/obmp_utils.h"
 
 namespace oceanbase
 {
@@ -178,6 +179,10 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
       }
       LOG_WARN("prexecute response query head fail. ", K(ret));
     }
+  }
+  int tmp_ret = ObMPUtils::try_add_changed_package_info(session_, result.get_exec_context());
+  if (tmp_ret != OB_SUCCESS) {
+    LOG_WARN("failed to add changed package info", K(tmp_ret));
   }
   OX (session_.reset_top_query_string());
   session_.set_top_trace_id(nullptr);

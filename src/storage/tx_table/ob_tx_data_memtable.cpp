@@ -491,7 +491,7 @@ int ObTxDataMemtable::get_past_commit_versions_(ObCommitVersionsArray &past_comm
       ObSSTable *tmp_sstable = nullptr;
       if (sstable->is_loaded()) {
         tmp_sstable = sstable;
-      } else if (OB_FAIL(ObTabletTableStore::load_sstable(sstable->get_addr(), sstable->is_co_sstable(), sstable_handle))) {
+      } else if (OB_FAIL(ObCacheSSTableHelper::load_sstable(sstable->get_addr(), sstable->is_co_sstable(), sstable_handle))) {
         STORAGE_LOG(WARN, "fail to load sstable", K(ret), KPC(sstable));
       } else if (OB_FAIL(sstable_handle.get_sstable(tmp_sstable))) {
         STORAGE_LOG(WARN, "fail to get sstable", K(ret), K(sstable_handle));

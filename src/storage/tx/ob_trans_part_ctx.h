@@ -427,14 +427,17 @@ public:
   int submit_direct_load_inc_redo_log(storage::ObDDLRedoLog &ddl_redo_log,
                                  logservice::AppendCb *extra_cb,
                                  const int64_t replay_hint,
-                                 share::SCN &scn);
+                                 share::SCN &scn,
+                                 bool is_major = false);
   int submit_direct_load_inc_start_log(storage::ObDDLIncStartLog &ddl_start_log,
                                  logservice::AppendCb *extra_cb,
-                                 share::SCN &scn);
+                                 share::SCN &scn,
+                                 bool is_major = false);
   int submit_direct_load_inc_commit_log(storage::ObDDLIncCommitLog &ddl_commit_log,
                                  logservice::AppendCb *extra_cb,
                                  share::SCN &scn,
-                                 bool need_free_extra_cb = false);
+                                 bool need_free_extra_cb = false,
+                                 bool is_major = false);
   int return_redo_log_cb(ObTxLogCb *log_cb);
   int push_replaying_log_ts(const share::SCN log_ts_ns, const int64_t log_entry_no);
   int push_replayed_log_ts(const share::SCN log_ts_ns,
@@ -594,8 +597,8 @@ private:
   int submit_pending_log_block_(ObTxLogBlock &log_block,
                                 memtable::ObRedoLogSubmitHelper &helper,
                                 const logservice::ObReplayBarrierType &barrier);
-  template <typename DLI_LOG>
-  int submit_direct_load_inc_log_(DLI_LOG &dli_log,
+  template <typename DLI_INC_TX_LOG_TYPE, typename DDL_LOG_TYPE>
+  int submit_direct_load_inc_log_(DDL_LOG_TYPE &dli_log,
                                   const ObTxDirectLoadIncLog::DirectLoadIncLogType dli_log_type,
                                   const ObDDLIncLogBasic &batch_key,
                                   logservice::AppendCb *extra_cb,

@@ -894,7 +894,7 @@ TEST_F(TestSSReaderWriter, tmp_file_reader_writer)
   // 16. concurrent append and calibration
   // (a) disk space enough, write local, unsealed, [0, 8KB);
   // (b) pause tmp file gc;
-  // (c) append sealed segment, [0, 2MB], write remote; expect delete tmp_file_seg_meta
+  // (c) append sealed segment, [0, 2MB], write remote; expect write local and not delete tmp_file_seg_meta
   release_tmp_file_disk_size(avail_size);
   check_tmp_file_disk_size_enough(8192);
   macro_id.set_third_id(72); // segment_id
@@ -906,7 +906,7 @@ TEST_F(TestSSReaderWriter, tmp_file_reader_writer)
 
   write_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/, true/*is_sealed*/, write_buf_);
   read_and_compare_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/);
-  check_tmp_file_seg_meta(macro_id, false/*is_meta_exist*/);
+  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/);
 
   file_manager->set_tmp_file_cache_allow_gc();
 
@@ -1230,6 +1230,541 @@ static void get_random_io_info(ObIOInfo &io_info)
   io_info.offset_ = ObRandom::rand(1, 1000L * 1000L);
   io_info.size_ = ObRandom::rand(1, 1000L);
   io_info.flag_.set_read();
+}
+
+// Test dual write mode for 2MB sealed tmp file
+TEST_F(TestSSReaderWriter, tmp_file_2MB_sealed_dual_write)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFileManager *file_manager = MTL(ObTenantFileManager *);
+  ASSERT_NE(nullptr, file_manager);
+  ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr *);
+  ASSERT_NE(nullptr, macro_cache_mgr);
+
+  // to avoid affecting tmp file seg_meta_map and tmp file tmp_file_write_free_disk_size
+  // disable tmp_file_flush_task, preread_task_, calibrate_disk_space_task and gc_unsealed_tmp_file_task
+  // preread_task_ will affect local disk size, so preread_task_ need to disble
+  file_manager->preread_cache_mgr_.preread_task_.is_inited_ = false;
+  macro_cache_mgr->evict_task_.is_inited_ = false;
+  macro_cache_mgr->flush_task_.is_inited_ = false;
+  file_manager->calibrate_disk_space_task_.is_inited_ = false;
+  file_manager->segment_file_mgr_.gc_segment_file_task_.is_inited_ = false;
+  sleep(3);
+
+  uint64_t tmp_file_id = 300;
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tmp_file_dir(MTL_ID(), MTL_EPOCH_ID(), tmp_file_id));
+
+  MacroBlockId macro_id;
+  macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+  macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::TMP_FILE);
+  macro_id.set_second_id(tmp_file_id);
+
+  LOG_INFO("=== Test 1: Dual write mode with local space available ===");
+
+  // Ensure sufficient disk space
+  check_tmp_file_disk_size_enough(OB_DEFAULT_MACRO_BLOCK_SIZE);
+
+  // Write 2MB sealed segment
+  macro_id.set_third_id(200);
+  write_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/,
+                      OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/, true/*is_sealed*/, write_buf_);
+
+  // Verify data can be read correctly from local cache
+  read_and_compare_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/);
+
+  // For dual write with local space available: local write succeeds, meta needed
+  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/);
+
+  // Check if file exists in local cache
+  bool is_local_exist = false;
+  ASSERT_EQ(OB_SUCCESS, file_manager->is_exist_local_file(macro_id, 0/*ls_epoch_id*/, is_local_exist));
+  ASSERT_TRUE(is_local_exist);
+  LOG_INFO("dual write test 1 passed: file exists in local cache", K(macro_id), K(is_local_exist));
+
+  LOG_INFO("=== Test 2: Overwrite 8KB unsealed with 2MB sealed (dual write) ===");
+
+  // First write 8KB unsealed segment
+  macro_id.set_third_id(201);
+  check_tmp_file_disk_size_enough(8192);
+  write_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/, 8192/*valid_length*/,
+                      false/*is_sealed*/, write_buf_);
+  read_and_compare_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/);
+
+  // Verify 8KB segment has meta
+  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/, 8192/*valid_length*/);
+
+  // Then write 2MB sealed segment (should trigger dual write mode)
+  check_tmp_file_disk_size_enough(OB_DEFAULT_MACRO_BLOCK_SIZE);
+  write_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/,
+                      OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/, true/*is_sealed*/, write_buf_);
+
+  // Verify 2MB sealed data can be read correctly
+  read_and_compare_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/);
+
+  // After 2MB sealed write, meta should exist because write local need meta
+  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/);
+
+  LOG_INFO("dual write test 2 passed: 8KB to 2MB overwrite works correctly");
+
+  LOG_INFO("=== Test 3: Write_through fallback when disk space insufficient ===");
+
+  // Exhaust disk space
+  int64_t avail_size = 0;
+  exhaust_tmp_file_disk_size(avail_size);
+
+  // Write 2MB sealed segment (should fallback to write_through)
+  macro_id.set_third_id(202);
+  write_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/,
+                      OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/, true/*is_sealed*/, write_buf_);
+
+  // Verify data can be read from object storage
+  read_and_compare_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/);
+
+  // write_through mode, no meta for sealed segment
+  check_tmp_file_seg_meta(macro_id, false/*is_meta_exist*/);
+
+  LOG_INFO("dual write test 3 passed: write_through fallback works when disk full");
+  // Cleanup
+  release_tmp_file_disk_size(avail_size);
+
+  LOG_INFO("=== All dual write tests passed! ===");
+}
+
+TEST_F(TestSSReaderWriter, performance_comparison_write_through_vs_write_dual)
+{
+  // Performance comparison test:
+  // Compare write_through (old: all to object storage) vs write_dual (new: prefer local cache)
+  // Write 100 x 2MB sealed segments and measure time difference
+  int ret = OB_SUCCESS;
+  ObTenantFileManager *file_manager = MTL(ObTenantFileManager *);
+  ASSERT_NE(nullptr, file_manager);
+  ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr *);
+  ASSERT_NE(nullptr, macro_cache_mgr);
+
+  // to avoid affecting tmp file seg_meta_map and tmp file tmp_file_write_free_disk_size
+  // disable tmp_file_flush_task, preread_task_, calibrate_disk_space_task and gc_unsealed_tmp_file_task
+  // preread_task_ will affect local disk size, so preread_task_ need to disble
+  file_manager->preread_cache_mgr_.preread_task_.is_inited_ = false;
+  macro_cache_mgr->evict_task_.is_inited_ = false;
+  macro_cache_mgr->flush_task_.is_inited_ = false;
+  file_manager->calibrate_disk_space_task_.is_inited_ = false;
+  file_manager->segment_file_mgr_.gc_segment_file_task_.is_inited_ = false;
+  sleep(3);
+
+  const int64_t segment_count = 1000;
+  const int64_t segment_size = OB_DEFAULT_MACRO_BLOCK_SIZE; // 2MB
+  LOG_INFO("=== Performance Comparison Test Start ===", K(segment_count), K(segment_size));
+
+  // ===========================================
+  // Scenario 1: write_through mode (old behavior - all to object storage)
+  // ===========================================
+  LOG_INFO("--- Scenario 1: write_through mode (force write to object storage) ---");
+
+  // Exhaust local disk space to force write_through
+  int64_t avail_size = 0;
+  exhaust_tmp_file_disk_size(avail_size);
+  ASSERT_GT(avail_size, 0);
+
+  int64_t start_time_write_through = ObTimeUtility::current_time();
+
+  for (int64_t i = 0; i < segment_count; ++i) {
+    MacroBlockId macro_id;
+    macro_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+    macro_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+    macro_id.set_second_id(1000);
+    macro_id.set_third_id(1000 + i); // unique segment id for each iteration
+    macro_id.set_macro_transfer_epoch(0);
+    macro_id.set_tenant_seq(0);
+
+    // Write sealed segment (will use write_through because disk is exhausted)
+    write_tmp_file_data(macro_id, 0/*offset*/, segment_size, segment_size/*valid_length*/, true/*is_sealed*/, write_buf_);
+
+    if ((i + 1) % 20 == 0) {
+      LOG_INFO("write_through progress", K(i), K(segment_count));
+    }
+  }
+
+  int64_t end_time_write_through = ObTimeUtility::current_time();
+  int64_t duration_write_through_us = end_time_write_through - start_time_write_through;
+  int64_t duration_write_through_ms = duration_write_through_us / 1000;
+
+  LOG_INFO("Scenario 1 completed", "duration_ms", duration_write_through_ms,
+           "duration_us", duration_write_through_us,
+           "avg_per_segment_ms", duration_write_through_ms / segment_count);
+
+  // Restore local disk space
+  release_tmp_file_disk_size(avail_size);
+
+
+  // ===========================================
+  // Scenario 2a: write_dual mode with sufficient space (all to local cache)
+  // ===========================================
+  LOG_INFO("--- Scenario 2a: write_dual mode (sufficient space - all to local) ---");
+
+  int64_t start_time_write_dual_full = ObTimeUtility::current_time();
+
+  for (int64_t i = 0; i < segment_count; ++i) {
+    MacroBlockId macro_id;
+    macro_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+    macro_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+    macro_id.set_second_id(1001);
+    macro_id.set_third_id(2000 + i); // unique segment id for each iteration
+    macro_id.set_macro_transfer_epoch(0);
+    macro_id.set_tenant_seq(0);
+
+    // Write sealed segment (will use write_dual and write to local cache)
+    write_tmp_file_data(macro_id, 0/*offset*/, segment_size, segment_size/*valid_length*/, true/*is_sealed*/, write_buf_);
+
+    if ((i + 1) % 20 == 0) {
+      LOG_INFO("write_dual_full progress", K(i), K(segment_count));
+    }
+  }
+
+  int64_t end_time_write_dual_full = ObTimeUtility::current_time();
+  int64_t duration_write_dual_full_us = end_time_write_dual_full - start_time_write_dual_full;
+  int64_t duration_write_dual_full_ms = duration_write_dual_full_us / 1000;
+
+  LOG_INFO("Scenario 2a completed", "duration_ms", duration_write_dual_full_ms,
+           "duration_us", duration_write_dual_full_us,
+           "avg_per_segment_ms", duration_write_dual_full_ms / segment_count);
+
+  // ===========================================
+  // Scenario 2b: write_dual mode with 75% local (25% remote)
+  // ===========================================
+  LOG_INFO("--- Scenario 2b: write_dual mode (75% local / 25% remote) ---");
+
+  const int64_t three_quarter_count = (segment_count * 3) / 4;
+  int64_t start_time_write_dual_three_quarter = ObTimeUtility::current_time();
+
+  // Phase 1: Write first 75% to local
+  LOG_INFO("Phase 1: Writing first 75% segments to local cache...");
+  for (int64_t i = 0; i < three_quarter_count; ++i) {
+    MacroBlockId macro_id;
+    macro_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+    macro_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+    macro_id.set_second_id(1002);
+    macro_id.set_third_id(3000 + i);
+    macro_id.set_macro_transfer_epoch(0);
+    macro_id.set_tenant_seq(0);
+
+    write_tmp_file_data(macro_id, 0/*offset*/, segment_size, segment_size/*valid_length*/, true/*is_sealed*/, write_buf_);
+
+    if ((i + 1) % 20 == 0) {
+      LOG_INFO("write_dual_three_quarter phase1 progress", K(i), K(three_quarter_count));
+    }
+  }
+  LOG_INFO("Phase 1 completed: first 75% written to local");
+
+  // Phase 2: Exhaust space, then write remaining 25% to remote
+  LOG_INFO("Phase 2: Exhausting space, then writing remaining 25% to remote...");
+  int64_t exhausted_size_three_quarter = 0;
+  exhaust_tmp_file_disk_size(exhausted_size_three_quarter);
+  LOG_INFO("Exhausted disk space for phase 2", K(exhausted_size_three_quarter));
+
+  for (int64_t i = three_quarter_count; i < segment_count; ++i) {
+    MacroBlockId macro_id;
+    macro_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+    macro_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+    macro_id.set_second_id(1002);
+    macro_id.set_third_id(3000 + i);
+    macro_id.set_macro_transfer_epoch(0);
+    macro_id.set_tenant_seq(0);
+
+    write_tmp_file_data(macro_id, 0/*offset*/, segment_size, segment_size/*valid_length*/, true/*is_sealed*/, write_buf_);
+
+    if ((i + 1) % 20 == 0) {
+      LOG_INFO("write_dual_three_quarter phase2 progress", K(i), K(segment_count));
+    }
+  }
+  LOG_INFO("Phase 2 completed: remaining 25% written to remote");
+
+  int64_t end_time_write_dual_three_quarter = ObTimeUtility::current_time();
+  int64_t duration_write_dual_three_quarter_us = end_time_write_dual_three_quarter - start_time_write_dual_three_quarter;
+  int64_t duration_write_dual_three_quarter_ms = duration_write_dual_three_quarter_us / 1000;
+
+  LOG_INFO("Scenario 2b completed", "duration_ms", duration_write_dual_three_quarter_ms,
+           "duration_us", duration_write_dual_three_quarter_us,
+           "avg_per_segment_ms", duration_write_dual_three_quarter_ms / segment_count);
+
+  release_tmp_file_disk_size(exhausted_size_three_quarter);
+
+  // ===========================================
+  // Scenario 2c: write_dual mode with 50% space (mixed local + object storage)
+  // ===========================================
+  LOG_INFO("--- Scenario 2c: write_dual mode (50% space - mixed local/object) ---");
+
+  const int64_t half_count = segment_count / 2;
+  int64_t start_time_write_dual_half = ObTimeUtility::current_time();
+
+  // Phase 1: Write first 50% to local (space is available)
+  LOG_INFO("Phase 1: Writing first 50% segments to local cache...");
+  for (int64_t i = 0; i < half_count; ++i) {
+    MacroBlockId macro_id;
+    macro_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+    macro_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+    macro_id.set_second_id(1003);
+    macro_id.set_third_id(4000 + i);
+    macro_id.set_macro_transfer_epoch(0);
+    macro_id.set_tenant_seq(0);
+
+    write_tmp_file_data(macro_id, 0/*offset*/, segment_size, segment_size/*valid_length*/, true/*is_sealed*/, write_buf_);
+
+    if ((i + 1) % 20 == 0) {
+      LOG_INFO("write_dual_half phase1 progress", K(i), K(half_count));
+    }
+  }
+  LOG_INFO("Phase 1 completed: first 50% written to local");
+
+  // Phase 2: Exhaust space, then write remaining 50% to remote
+  LOG_INFO("Phase 2: Exhausting space, then writing remaining 50% to remote...");
+  int64_t exhausted_size_half = 0;
+  exhaust_tmp_file_disk_size(exhausted_size_half);
+  LOG_INFO("Exhausted disk space for phase 2", K(exhausted_size_half));
+
+  for (int64_t i = half_count; i < segment_count; ++i) {
+    MacroBlockId macro_id;
+    macro_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+    macro_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+    macro_id.set_second_id(1003);
+    macro_id.set_third_id(4000 + i);
+    macro_id.set_macro_transfer_epoch(0);
+    macro_id.set_tenant_seq(0);
+
+    write_tmp_file_data(macro_id, 0/*offset*/, segment_size, segment_size/*valid_length*/, true/*is_sealed*/, write_buf_);
+
+    if ((i + 1) % 20 == 0) {
+      LOG_INFO("write_dual_half phase2 progress", K(i), K(segment_count));
+    }
+  }
+  LOG_INFO("Phase 2 completed: remaining 50% written to remote");
+
+  int64_t end_time_write_dual_half = ObTimeUtility::current_time();
+  int64_t duration_write_dual_half_us = end_time_write_dual_half - start_time_write_dual_half;
+  int64_t duration_write_dual_half_ms = duration_write_dual_half_us / 1000;
+
+  LOG_INFO("Scenario 2c completed", "duration_ms", duration_write_dual_half_ms,
+           "duration_us", duration_write_dual_half_us,
+           "avg_per_segment_ms", duration_write_dual_half_ms / segment_count);
+
+  release_tmp_file_disk_size(exhausted_size_half);
+
+  // ===========================================
+  // Scenario 2d: write_dual mode with 25% local (75% remote)
+  // ===========================================
+  LOG_INFO("--- Scenario 2d: write_dual mode (25% local / 75% remote) ---");
+
+  const int64_t quarter_count = segment_count / 4;
+  int64_t start_time_write_dual_quarter = ObTimeUtility::current_time();
+
+  // Phase 1: Write first 25% to local
+  LOG_INFO("Phase 1: Writing first 25% segments to local cache...");
+  for (int64_t i = 0; i < quarter_count; ++i) {
+    MacroBlockId macro_id;
+    macro_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+    macro_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+    macro_id.set_second_id(1004);
+    macro_id.set_third_id(5000 + i);
+    macro_id.set_macro_transfer_epoch(0);
+    macro_id.set_tenant_seq(0);
+
+    write_tmp_file_data(macro_id, 0/*offset*/, segment_size, segment_size/*valid_length*/, true/*is_sealed*/, write_buf_);
+
+    if ((i + 1) % 20 == 0) {
+      LOG_INFO("write_dual_quarter phase1 progress", K(i), K(quarter_count));
+    }
+  }
+  LOG_INFO("Phase 1 completed: first 25% written to local");
+
+  // Phase 2: Exhaust space, then write remaining 75% to remote
+  LOG_INFO("Phase 2: Exhausting space, then writing remaining 75% to remote...");
+  int64_t exhausted_size_quarter = 0;
+  exhaust_tmp_file_disk_size(exhausted_size_quarter);
+  LOG_INFO("Exhausted disk space for phase 2", K(exhausted_size_quarter));
+
+  for (int64_t i = quarter_count; i < segment_count; ++i) {
+    MacroBlockId macro_id;
+    macro_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+    macro_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+    macro_id.set_second_id(1004);
+    macro_id.set_third_id(5000 + i);
+    macro_id.set_macro_transfer_epoch(0);
+    macro_id.set_tenant_seq(0);
+
+    write_tmp_file_data(macro_id, 0/*offset*/, segment_size, segment_size/*valid_length*/, true/*is_sealed*/, write_buf_);
+
+    if ((i + 1) % 20 == 0) {
+      LOG_INFO("write_dual_quarter phase2 progress", K(i), K(segment_count));
+    }
+  }
+  LOG_INFO("Phase 2 completed: remaining 75% written to remote");
+
+  int64_t end_time_write_dual_quarter = ObTimeUtility::current_time();
+  int64_t duration_write_dual_quarter_us = end_time_write_dual_quarter - start_time_write_dual_quarter;
+  int64_t duration_write_dual_quarter_ms = duration_write_dual_quarter_us / 1000;
+
+  LOG_INFO("Scenario 2d completed", "duration_ms", duration_write_dual_quarter_ms,
+           "duration_us", duration_write_dual_quarter_us,
+           "avg_per_segment_ms", duration_write_dual_quarter_ms / segment_count);
+
+  release_tmp_file_disk_size(exhausted_size_quarter);
+
+  // ===========================================
+  // Performance comparison summary
+  // ===========================================
+  int64_t time_saved_full_ms = duration_write_through_ms - duration_write_dual_full_ms;
+  double speedup_ratio_full = static_cast<double>(duration_write_through_us) / static_cast<double>(duration_write_dual_full_us);
+  int64_t improvement_percent_full = static_cast<int64_t>((speedup_ratio_full - 1.0) * 100);
+
+  int64_t time_saved_half_ms = duration_write_through_ms - duration_write_dual_half_ms;
+  double speedup_ratio_half = static_cast<double>(duration_write_through_us) / static_cast<double>(duration_write_dual_half_us);
+  int64_t improvement_percent_half = static_cast<int64_t>((speedup_ratio_half - 1.0) * 100);
+
+  int64_t time_saved_quarter_ms = duration_write_through_ms - duration_write_dual_quarter_ms;
+  double speedup_ratio_quarter = static_cast<double>(duration_write_through_us) / static_cast<double>(duration_write_dual_quarter_us);
+  int64_t improvement_percent_quarter = static_cast<int64_t>((speedup_ratio_quarter - 1.0) * 100);
+
+  int64_t time_saved_three_quarter_ms = duration_write_through_ms - duration_write_dual_three_quarter_ms;
+  double speedup_ratio_three_quarter = static_cast<double>(duration_write_through_us) / static_cast<double>(duration_write_dual_three_quarter_us);
+  int64_t improvement_percent_three_quarter = static_cast<int64_t>((speedup_ratio_three_quarter - 1.0) * 100);
+
+  LOG_INFO("=== Performance Comparison Summary ===");
+  LOG_INFO("Segment count", K(segment_count));
+  LOG_INFO("Segment size (bytes)", K(segment_size));
+  LOG_INFO("Scenario 1  (write_through):       total time", "ms", duration_write_through_ms, "us", duration_write_through_us);
+  LOG_INFO("Scenario 2a (write_dual - 100% local): total time", "ms", duration_write_dual_full_ms, "us", duration_write_dual_full_us);
+  LOG_INFO("Scenario 2b (write_dual - 75% local):  total time", "ms", duration_write_dual_three_quarter_ms, "us", duration_write_dual_three_quarter_us);
+  LOG_INFO("Scenario 2c (write_dual - 50% local):  total time", "ms", duration_write_dual_half_ms, "us", duration_write_dual_half_us);
+  LOG_INFO("Scenario 2d (write_dual - 25% local):  total time", "ms", duration_write_dual_quarter_ms, "us", duration_write_dual_quarter_us);
+  LOG_INFO("Time saved (100% local vs through)", "ms", time_saved_full_ms, "us", duration_write_through_us - duration_write_dual_full_us);
+  LOG_INFO("Time saved (75% local vs through)", "ms", time_saved_three_quarter_ms, "us", duration_write_through_us - duration_write_dual_three_quarter_us);
+  LOG_INFO("Time saved (50% local vs through)", "ms", time_saved_half_ms, "us", duration_write_through_us - duration_write_dual_half_us);
+  LOG_INFO("Time saved (25% local vs through)", "ms", time_saved_quarter_ms, "us", duration_write_through_us - duration_write_dual_quarter_us);
+  LOG_INFO("Speedup ratio (100% local)", K(speedup_ratio_full));
+  LOG_INFO("Speedup ratio (75% local)", K(speedup_ratio_three_quarter));
+  LOG_INFO("Speedup ratio (50% local)", K(speedup_ratio_half));
+  LOG_INFO("Speedup ratio (25% local)", K(speedup_ratio_quarter));
+  LOG_INFO("Performance improvement (100% local)", "percent", improvement_percent_full);
+  LOG_INFO("Performance improvement (75% local)", "percent", improvement_percent_three_quarter);
+  LOG_INFO("Performance improvement (50% local)", "percent", improvement_percent_half);
+  LOG_INFO("Performance improvement (25% local)", "percent", improvement_percent_quarter);
+  LOG_INFO("Average time per segment (write_through)", "ms", duration_write_through_ms / segment_count);
+  LOG_INFO("Average time per segment (write_dual_100%)", "ms", duration_write_dual_full_ms / segment_count);
+  LOG_INFO("Average time per segment (write_dual_75%)", "ms", duration_write_dual_three_quarter_ms / segment_count);
+  LOG_INFO("Average time per segment (write_dual_50%)", "ms", duration_write_dual_half_ms / segment_count);
+  LOG_INFO("Average time per segment (write_dual_25%)", "ms", duration_write_dual_quarter_ms / segment_count);
+
+  LOG_INFO("=== Performance Comparison Test Passed ===");
+}
+
+TEST_F(TestSSReaderWriter, test_batch_delete_tmp_files)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFileManager* tenant_file_mgr = MTL(ObTenantFileManager*);
+  ASSERT_NE(nullptr, tenant_file_mgr);
+
+  const int64_t write_size = 8192; // 8KB
+
+  // ======== Scenario 1: Test batch delete local tmp files ========
+  LOG_INFO("=== Test batch delete local tmp files ===");
+  check_tmp_file_disk_size_enough(write_size * 6);
+
+  const int64_t local_file_count = 3;
+  ObSEArray<MacroBlockId, local_file_count> local_file_ids;
+  ObSEArray<int64_t, local_file_count> local_lengths;
+
+  // Create and write local tmp files (100, 101, 102)
+  for (int64_t i = 0; i < local_file_count; i++) {
+    MacroBlockId file_id;
+    int64_t tmp_file_id = 100 + i;
+    file_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+    file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+    file_id.set_second_id(tmp_file_id);
+    file_id.set_third_id(0);   // segment_id
+
+    // Write first segment
+    write_tmp_file_data(file_id, 0/*offset*/, write_size, write_size/*valid_length*/, false/*is_sealed*/, write_buf_);
+
+    // Append more data for file 0 and 2
+    if (i == 0 || i == 2) {
+      write_tmp_file_data(file_id, write_size/*offset*/, write_size, write_size * 2/*valid_length*/, false/*is_sealed*/, write_buf_);
+    }
+
+    ASSERT_EQ(OB_SUCCESS, local_file_ids.push_back(file_id));
+    int64_t length = (i == 0 || i == 2) ? 2 * write_size : write_size;
+    ASSERT_EQ(OB_SUCCESS, local_lengths.push_back(length));
+  }
+
+  // Verify local files exist using segment metadata and read
+  for (int64_t i = 0; i < local_file_count; i++) {
+    check_tmp_file_seg_meta(local_file_ids.at(i), true/*is_meta_exist*/, true/*is_in_local*/, local_lengths.at(i)/*valid_length*/);
+    read_and_compare_tmp_file_data(local_file_ids.at(i), 0/*offset*/, write_size/*size*/);
+  }
+
+  // Batch delete local tmp files
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_tmp_files(local_file_ids, local_lengths));
+
+   // Verify local files are deleted - check segment metadata no longer exists
+  for (int64_t i = 0; i < local_file_count; i++) {
+    check_tmp_file_seg_meta(local_file_ids.at(i), false/*is_meta_exist*/);
+  }
+  LOG_INFO("=== Local tmp files batch delete test passed ===");
+
+  // ======== Scenario 2: Test invalid arguments ========
+  ObSEArray<MacroBlockId, 1> empty_file_ids;
+  ObSEArray<int64_t, 1> empty_lengths;
+  ASSERT_EQ(OB_INVALID_ARGUMENT, tenant_file_mgr->delete_tmp_files(empty_file_ids, empty_lengths));
+
+  ObSEArray<MacroBlockId, 2> mismatch_file_ids;
+  ObSEArray<int64_t, 1> mismatch_lengths;
+  MacroBlockId dummy_file_id;
+  dummy_file_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+  dummy_file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+  dummy_file_id.set_second_id(200);
+  dummy_file_id.set_third_id(0);
+  ASSERT_EQ(OB_SUCCESS, mismatch_file_ids.push_back(dummy_file_id));
+  ASSERT_EQ(OB_SUCCESS, mismatch_file_ids.push_back(dummy_file_id));
+  ASSERT_EQ(OB_SUCCESS, mismatch_lengths.push_back(write_size));
+  ASSERT_EQ(OB_INVALID_ARGUMENT, tenant_file_mgr->delete_tmp_files(mismatch_file_ids, mismatch_lengths));
+
+  // ======== Scenario 3: Test batch delete remote tmp files ========
+  LOG_INFO("=== Test batch delete remote tmp files ===");
+  int64_t avail_size = 0;
+  exhaust_tmp_file_disk_size(avail_size);
+
+  const int64_t remote_file_count = 2;
+  ObSEArray<MacroBlockId, remote_file_count> remote_file_ids;
+  ObSEArray<int64_t, remote_file_count> remote_lengths;
+
+  // Create remote tmp files (300, 301) with disk exhausted
+  for (int64_t i = 0; i < remote_file_count; i++) {
+    MacroBlockId remote_file_id;
+    int64_t tmp_file_id = 300 + i;
+    remote_file_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+    remote_file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+    remote_file_id.set_second_id(tmp_file_id);
+    remote_file_id.set_third_id(0);   // segment_id
+
+    // Write to remote (disk exhausted forces write through)
+    write_tmp_file_data(remote_file_id, 0/*offset*/, write_size, write_size/*valid_length*/, false/*is_sealed*/, write_buf_);
+
+    // Verify segment metadata exists (in remote)
+    check_tmp_file_seg_meta(remote_file_id, true/*is_meta_exist*/, false/*is_in_local*/, write_size/*valid_length*/);
+
+    ASSERT_EQ(OB_SUCCESS, remote_file_ids.push_back(remote_file_id));
+    ASSERT_EQ(OB_SUCCESS, remote_lengths.push_back(write_size));
+  }
+
+  // Batch delete remote tmp files from object storage
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_tmp_files(remote_file_ids, remote_lengths));
+
+  // Verify remote files are deleted - check segment metadata no longer exists
+  for (int64_t i = 0; i < remote_file_count; i++) {
+    check_tmp_file_seg_meta(remote_file_ids.at(i), false/*is_meta_exist*/);
+  }
+
+  // Release disk space for next test
+  release_tmp_file_disk_size(avail_size);
+  LOG_INFO("=== Remote tmp files batch delete test passed ===");
 }
 
 TEST_F(TestSSReaderWriter, IOFaultDetector)

@@ -24,6 +24,10 @@
 
 namespace oceanbase
 {
+namespace transaction
+{
+class ObTransID;
+}
 namespace storage
 {
 class ObDDLTableMergeDagParam;
@@ -31,11 +35,13 @@ class ObTabletDDLCompleteArg;
 struct ObTabletDDLCompleteMdsUserDataKey final
 {
 public:
+  static constexpr int64_t DDL_COMPLETE_TX_ID = 0;
+public:
   OB_UNIS_VERSION(1);
   static constexpr uint8_t MAGIC_NUMBER = 0xFF; // if meet compat case, abort directly for now
 public:
   ObTabletDDLCompleteMdsUserDataKey()
-    : trans_id_()
+    : trans_id_(DDL_COMPLETE_TX_ID)
   {}
   ObTabletDDLCompleteMdsUserDataKey(const ObTabletDDLCompleteMdsUserDataKey &other)
     : trans_id_(other.trans_id_)
@@ -54,7 +60,7 @@ public:
     trans_id_ = tx_id;
     return *this;
   }
-  void reset() { trans_id_.reset(); }
+  void reset() { trans_id_ = DDL_COMPLETE_TX_ID; }
   bool is_valid() const { return trans_id_.is_valid(); }
   transaction::ObTransID get_trans_id() const { return trans_id_; }
   int mds_serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
@@ -67,15 +73,23 @@ private:
 
 class ObTabletDDLCompleteMdsUserData
 {
-  OB_UNIS_VERSION(1);
 public:
   ObTabletDDLCompleteMdsUserData();
+  ~ObTabletDDLCompleteMdsUserData();
   void reset();
   bool is_valid() const ;
-  int assign(const ObTabletDDLCompleteMdsUserData &other);
+  int assign(ObIAllocator &allocator, const ObTabletDDLCompleteMdsUserData &other);
+  int generate_merge_param(ObDDLTableMergeDagParam &merge_param);
+  int set_with_merge_arg(const ObTabletDDLCompleteArg &merge_param, ObIAllocator &allocator);
+  int set_storage_schema(const ObStorageSchema &other, ObIAllocator &allocator);
+  ObStorageSchema &get_storage_schema() { return storage_schema_; }
+  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int deserialize(ObIAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
+  int64_t get_serialize_size() const;
   TO_STRING_KV(K_(has_complete), K_(direct_load_type), K_(has_complete),
                K_(data_format_version), K_(snapshot_version),
-               K_(table_key));
+               K_(table_key), K_(write_stat), K_(storage_schema),
+               K_(trans_id), K_(start_scn), K_(inc_major_commit_scn));
 public:
   bool has_complete_;
   /* for merge param */
@@ -83,6 +97,11 @@ public:
   uint64_t data_format_version_;
   int64_t snapshot_version_;
   ObITable::TableKey table_key_;
+  ObStorageSchema storage_schema_;
+  ObDDLWriteStat write_stat_;
+  transaction::ObTransID trans_id_;
+  share::SCN start_scn_;
+  share::SCN inc_major_commit_scn_;
 };
 } // namespace storage
 } // namespace oceanbase

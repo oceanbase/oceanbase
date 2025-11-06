@@ -626,7 +626,7 @@ public:
   int assign(const ObPxTabletRange &other);
   int64_t get_range_col_cnt() const { return range_cut_.empty() ? 0 :
       range_cut_.at(0).count(); }
-  TO_STRING_KV(K_(tablet_id), K_(range_cut));
+  TO_STRING_KV(K_(tablet_id), K_(range_cut), K_(range_weights));
 public:
   static const int64_t DEFAULT_RANGE_COUNT = 8;
   typedef common::ObSEArray<common::ObRowkey, DEFAULT_RANGE_COUNT> EndKeys;

@@ -2458,6 +2458,7 @@ data_checksum	bigint(20)	NO		NULL
 table_flag	bigint(20)	NO		NULL	
 rec_scn	bigint(20)	NO		NULL	
 row_count	bigint(20)	NO		NULL	
+uncommit_tx_info	varchar(256)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table_mgr;
 IF(count(*) >= 0, 1, 0)
 1
@@ -11753,6 +11754,9 @@ vector_mem_limit	bigint(20)	NO		NULL
 tx_share_limit	bigint(20)	NO		NULL	
 vector_mem_detail_info	varchar(65535)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_vector_mem_info;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_tenant_vector_mem_info runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
 select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_tenant_vector_mem_info limit 1;

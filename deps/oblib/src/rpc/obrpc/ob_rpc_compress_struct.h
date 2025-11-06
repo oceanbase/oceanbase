@@ -69,7 +69,8 @@ public:
   {
     return (RPC_STREAM_COMPRESS_LZ4 == mode
             || RPC_STREAM_COMPRESS_ZSTD == mode
-            || RPC_STREAM_COMPRESS_ZSTD_138 == mode);
+            || RPC_STREAM_COMPRESS_ZSTD_138 == mode
+            || RPC_STREAM_COMPRESS_ZSTD_157 == mode);
   }
 
   static ObRpcCompressMode get_compress_mode_from_type(oceanbase::common::ObCompressorType type) 
@@ -81,6 +82,8 @@ public:
       compress_mode = RPC_STREAM_COMPRESS_ZSTD;
     } else if (common::STREAM_ZSTD_1_3_8_COMPRESSOR == type) {
       compress_mode = RPC_STREAM_COMPRESS_ZSTD_138;
+    } else if (common::STREAM_ZSTD_1_5_7_COMPRESSOR == type) {
+      compress_mode = RPC_STREAM_COMPRESS_ZSTD_157;
     } else {
       compress_mode = RPC_STREAM_COMPRESS_NONE;
     }
@@ -174,6 +177,7 @@ public:
   const int8_t COMPRESS_LZ4_MASK = 0x00;
   const int8_t COMPRESS_ZSTD_MASK = 0x02;
   const int8_t COMPRESS_ZSTD_138_MASK = 0x04;
+  const int8_t COMPRESS_ZSTD_157_MASK = 0x06;
   //The lowest bit of magic_num is 0 means the data is not compressed, and the lowest bit is 1 means the data is compressed
   const int8_t COMPRESS_RESULT_MASK = 0x01;
   const int8_t COMPRESS_PACKET_TYPE_MASK = (int8_t)0x80;

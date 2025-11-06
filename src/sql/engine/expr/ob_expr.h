@@ -418,6 +418,13 @@ typedef common::ObFixedArray<common::ObString, common::ObIAllocator> ObStrValues
 extern int expr_default_eval_batch_func(BATCH_EVAL_FUNC_ARG_DECL);
 extern int expr_default_eval_vector_func(VECTOR_EVAL_FUNC_ARG_DECL);
 
+// index number for args_ in ObExpr
+extern const int64_t ARGS_IDX_ZERO;
+extern const int64_t ARGS_IDX_ONE;
+extern const int64_t ARGS_IDX_TWO;
+extern const int64_t ARGS_IDX_THREE;
+extern const int64_t ARGS_IDX_FOUR;
+extern const int64_t ARGS_IDX_FIVE;
 
 struct VectorHeader {
   VectorHeader() : format_(VEC_INVALID) {}
@@ -681,7 +688,18 @@ public:
            type_ == T_FUN_SYS_L2_SQUARED ||
            type_ == T_FUN_SYS_INNER_PRODUCT ||
            type_ == T_FUN_SYS_NEGATIVE_INNER_PRODUCT ||
-           type_ == T_FUN_SYS_COSINE_DISTANCE;
+           type_ == T_FUN_SYS_COSINE_DISTANCE ||
+           type_ == T_FUN_SYS_SEMANTIC_DISTANCE ||
+           type_ == T_FUN_SYS_SEMANTIC_VECTOR_DISTANCE;
+  }
+
+  inline bool is_semantic_distance_expr() const {
+    return type_ == T_FUN_SYS_SEMANTIC_DISTANCE ||
+           type_ == T_FUN_SYS_SEMANTIC_VECTOR_DISTANCE;
+  }
+
+  inline bool is_semantic_vector_distance_expr() const {
+    return type_ == T_FUN_SYS_SEMANTIC_VECTOR_DISTANCE;
   }
 
   // Evaluate all parameters, assign the first sizeof...(args) parameters to %args.
@@ -884,6 +902,7 @@ public:
       uint64_t is_fixed_length_data_:1; // wether data of this expr is fixed length
       uint64_t nullable_:1;
       uint64_t is_hidden_clustering_key_column_:1;
+      uint64_t eager_evaluation_:1;
     };
     uint64_t flag_;
   };

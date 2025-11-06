@@ -295,7 +295,8 @@ struct ObTableAccessContext
     KP_(truncate_part_filter),
     KP_(mds_collector),
     KP_(row_scan_cnt),
-    KP_(skip_scan_factory));
+    KP_(skip_scan_factory),
+    K_(is_inc_major_query));
 private:
   static const int64_t DEFAULT_COLUMN_SCALE_INFO_SIZE = 8;
   static const int64_t USE_BLOCK_CACHE_LIMIT = 128L << 10;  // 128K
@@ -374,6 +375,7 @@ public:
   ObMdsReadInfoCollector *mds_collector_; // used for collect mds info when query mds sstable
   uint64_t *row_scan_cnt_;
   ObIndexSkipScanFactory *skip_scan_factory_;
+  bool is_inc_major_query_;
 };
 
 } // namespace storage

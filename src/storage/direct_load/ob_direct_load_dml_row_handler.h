@@ -73,6 +73,12 @@ public:
                                 const ObDirectLoadDatumRow &new_row,
                                 const ObDirectLoadDatumRow *&result_row) = 0;
 
+  /**
+   * handle insert row conflict with delete row
+   */
+  virtual int handle_insert_delete_conflict(const ObTabletID &tablet_id,
+                                         const ObDirectLoadDatumRow &datum_row) = 0;
+
   DECLARE_PURE_VIRTUAL_TO_STRING;
 };
 

@@ -131,6 +131,7 @@ public:
     return share::ObDDLTaskStatus::REDEFINITION == task_status_ ? is_retryable_ddl_ : true;
   }
   static int deep_copy_index_arg(common::ObIAllocator &allocator, const obrpc::ObCreateIndexArg &source_arg, obrpc::ObCreateIndexArg &dest_arg);
+  bool is_offline_rebuild() const { return create_index_arg_.is_offline_rebuild_; }
   INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask, K(index_table_id_), K(is_sstable_complete_task_submitted_), K(sstable_complete_request_time_),
       K(sstable_complete_ts_), K(check_unique_snapshot_), K(complete_sstable_job_ret_code_), K_(redefinition_execution_id), K(create_index_arg_), K(target_cg_cnt_));
 private:

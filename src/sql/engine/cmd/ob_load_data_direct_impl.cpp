@@ -65,7 +65,8 @@ ObLoadDataDirectImpl::LoadExecuteParam::LoadExecuteParam()
     insert_mode_(ObDirectLoadInsertMode::INVALID_INSERT_MODE),
     load_level_(ObDirectLoadLevel::INVALID_LEVEL),
     compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
-    online_sample_percent_(100.)
+    online_sample_percent_(100.),
+    enable_inc_major_(false)
 {
   column_ids_.set_tenant_id(MTL_ID());
 }
@@ -2055,7 +2056,7 @@ int ObLoadDataDirectImpl::BackupLoadExecutor::process_partition(int32_t session_
     ObNewRow *new_row = nullptr;
     bool is_iter_end = false;
     int64_t processed_line_count = 0;
-    const bool is_heap_table = direct_loader->get_table_ctx()->schema_.is_table_with_hidden_pk_column_;
+    const bool is_heap_table = direct_loader->get_table_ctx()->schema_.is_table_without_pk_;
     ObTableLoadSequenceNo sequence_no(
       (partition_idx << ObTableLoadSequenceNo::BACKUP_PARTITION_IDX_SHIFT) +
       (subpart_idx << ObTableLoadSequenceNo::BACKUP_SUBPART_IDX_SHIFT));
@@ -2375,6 +2376,7 @@ int ObLoadDataDirectImpl::init_execute_param()
       execute_param_.method_ = optimizer_ctx->load_method_;
       execute_param_.insert_mode_ = optimizer_ctx->insert_mode_;
       execute_param_.load_level_ = optimizer_ctx->load_level_;
+      execute_param_.enable_inc_major_ = optimizer_ctx->enable_inc_major_;
     }
   }
   // parallel_
@@ -2529,6 +2531,7 @@ int ObLoadDataDirectImpl::init_execute_context()
   load_param.compressor_type_ = execute_param_.compressor_type_;
   load_param.online_sample_percent_ = execute_param_.online_sample_percent_;
   load_param.load_level_ = execute_param_.load_level_;
+  load_param.enable_inc_major_ = execute_param_.enable_inc_major_;
   if (OB_FAIL(direct_loader_.init(load_param,
                                   execute_param_.column_ids_,
                                   execute_param_.tablet_ids_,

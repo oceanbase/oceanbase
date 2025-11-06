@@ -42,6 +42,7 @@ ObDirectLoadLobBuilder::ObDirectLoadLobBuilder()
     extra_rowkey_cnt_(0),
     lob_inrow_threshold_(0),
     current_lob_slice_id_(0),
+    tmp_ddl_agent_(),
     is_closed_(false),
     is_inited_(false)
 {
@@ -71,7 +72,9 @@ int ObDirectLoadLobBuilder::init(ObDirectLoadInsertTabletContext *insert_tablet_
     lob_column_cnt_ = lob_column_idxs_->count();
     extra_rowkey_cnt_ = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
     lob_inrow_threshold_ = insert_tablet_ctx->get_lob_inrow_threshold();
-    if (OB_FAIL(init_sstable_slice_ctx())) {
+    if (OB_FAIL(insert_tablet_ctx->get_ddl_agent(tmp_ddl_agent_))) {
+      LOG_WARN("fail to get ddl_agent", K(ret));
+    } else if (OB_FAIL(init_sstable_slice_ctx())) {
       LOG_WARN("fail to init sstable slice ctx", KR(ret));
     } else {
       is_inited_ = true;
@@ -87,7 +90,8 @@ int ObDirectLoadLobBuilder::init_sstable_slice_ctx()
     LOG_WARN("fail to get write ctx", KR(ret));
   } else if (OB_FAIL(insert_lob_tablet_ctx_->open_sstable_slice(write_ctx_.start_seq_,
                                                                 0/*slice_idx*/,
-                                                                current_lob_slice_id_))) {
+                                                                current_lob_slice_id_,
+                                                                tmp_ddl_agent_))) {
     LOG_WARN("fail to construct sstable slice", KR(ret));
   }
   return ret;
@@ -96,7 +100,7 @@ int ObDirectLoadLobBuilder::init_sstable_slice_ctx()
 int ObDirectLoadLobBuilder::switch_sstable_slice()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(insert_lob_tablet_ctx_->close_sstable_slice(current_lob_slice_id_, 0/*slice_idx*/))) {
+  if (OB_FAIL(insert_lob_tablet_ctx_->close_sstable_slice(current_lob_slice_id_, 0/*slice_idx*/, tmp_ddl_agent_))) {
     LOG_WARN("fail to close sstable slice", KR(ret));
   } else if (OB_FAIL(init_sstable_slice_ctx())) {
     LOG_WARN("fail to init sstable slice ctx", KR(ret));
@@ -271,7 +275,8 @@ int ObDirectLoadLobBuilder::append_row(ObDatumRow &datum_row)
   } else if (OB_FAIL(insert_lob_tablet_ctx_->fill_lob_sstable_slice(*lob_allocator_,
                                                                 current_lob_slice_id_,
                                                                 write_ctx_.pk_interval_,
-                                                                datum_row))) {
+                                                                datum_row,
+                                                                tmp_ddl_agent_))) {
     LOG_WARN("fail to fill lob sstable slice", K(ret), KP(insert_lob_tablet_ctx_),
              K(current_lob_slice_id_), K(write_ctx_.pk_interval_), K(datum_row));
   }
@@ -293,7 +298,8 @@ int ObDirectLoadLobBuilder::append_batch(ObBatchDatumRows &datum_rows)
   } else if (OB_FAIL(insert_lob_tablet_ctx_->fill_lob_sstable_slice(*lob_allocator_,
                                                                 current_lob_slice_id_,
                                                                 write_ctx_.pk_interval_,
-                                                                datum_rows))) {
+                                                                datum_rows,
+                                                                tmp_ddl_agent_))) {
     LOG_WARN("fail to fill lob sstable slice batch", K(ret), KP(insert_lob_tablet_ctx_),
              K(current_lob_slice_id_), K(write_ctx_.pk_interval_), K(datum_rows));
   }
@@ -463,7 +469,7 @@ int ObDirectLoadLobBuilder::close()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet lob builder is closed", KR(ret));
   } else {
-    if (OB_FAIL(insert_lob_tablet_ctx_->close_sstable_slice(current_lob_slice_id_, 0/*slice_idx*/))) {
+    if (OB_FAIL(insert_lob_tablet_ctx_->close_sstable_slice(current_lob_slice_id_, 0/*slice_idx*/, tmp_ddl_agent_))) {
       LOG_WARN("fail to close sstable slice ", KR(ret));
     } else {
       current_lob_slice_id_ = 0;

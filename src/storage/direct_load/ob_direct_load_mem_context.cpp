@@ -23,29 +23,6 @@ using namespace share::schema;
 namespace storage
 {
 
-int ObDirectLoadMemContext::init_enc_param(const ObColDesc &col_desc, ObEncParam &param)
-{
-  int ret = OB_SUCCESS;
-  param.type_ = col_desc.col_type_.get_type();
-  param.cs_type_ = col_desc.col_type_.get_collation_type();
-  param.is_var_len_ = false;
-  param.is_memcmp_ = lib::is_oracle_mode();
-  param.is_nullable_ = true; // unused
-#if OB_USE_MULTITARGET_CODE
-  int tmp_ret = OB_SUCCESS;
-  tmp_ret = OB_E(EventTable::EN_DISABLE_ENCODESORTKEY_OPT) OB_SUCCESS;
-  if (OB_SUCCESS != tmp_ret) {
-    param.is_simdopt_ = false;
-  }
-#else
-  param.is_simdopt_ = false;
-#endif
-  // null pos: null first -> 0, nulls last -> 1
-  param.is_null_first_ = !lib::is_oracle_mode();
-  param.is_asc_ = (col_desc.col_order_ == ObOrderType::ASC);
-  return ret;
-}
-
 int ObMemDumpQueue::push(void *p)
 {
   int ret = OB_SUCCESS;
@@ -106,6 +83,88 @@ ObMemDumpQueue::~ObMemDumpQueue()
       op_free(item_ptr);
     }
   }
+}
+
+int ObDirectLoadMemContext::init_enc_param(const ObColDesc &col_desc, ObEncParam &param)
+{
+  int ret = OB_SUCCESS;
+  param.type_ = col_desc.col_type_.get_type();
+  param.cs_type_ = col_desc.col_type_.get_collation_type();
+  param.is_var_len_ = false;
+  param.is_memcmp_ = lib::is_oracle_mode();
+  param.is_nullable_ = true; // unused
+#if OB_USE_MULTITARGET_CODE
+  int tmp_ret = OB_SUCCESS;
+  tmp_ret = OB_E(EventTable::EN_DISABLE_ENCODESORTKEY_OPT) OB_SUCCESS;
+  if (OB_SUCCESS != tmp_ret) {
+    param.is_simdopt_ = false;
+  }
+#else
+  param.is_simdopt_ = false;
+#endif
+  // null pos: null first -> 0, nulls last -> 1
+  param.is_null_first_ = !lib::is_oracle_mode();
+  param.is_asc_ = (col_desc.col_order_ == ObOrderType::ASC);
+  return ret;
+}
+
+int ObDirectLoadMemContext::init_enc_params(const ObIArray<ObColDesc> &column_descs,
+                                            const int64_t rowkey_column_num,
+                                            const ObLoadDupActionType dup_action,
+                                            ObIArray<ObEncParam> &enc_params)
+{
+  int ret = OB_SUCCESS;
+  enc_params.reset();
+  if (OB_UNLIKELY(column_descs.count() < rowkey_column_num || rowkey_column_num <= 0 ||
+                  ObLoadDupActionType::LOAD_INVALID_MODE == dup_action)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(column_descs), K(rowkey_column_num), K(dup_action));
+  } else {
+    ObEncParam tmp_enc_param;
+    //init tablet id enc_param
+    {
+      ObColDesc tablet_id_col_desc;
+      tablet_id_col_desc.col_type_.set_type(ObUInt64Type);
+      tablet_id_col_desc.col_type_.set_collation_type(CS_TYPE_BINARY);
+      tablet_id_col_desc.col_order_ = ObOrderType::ASC;
+      if (OB_FAIL(init_enc_param(tablet_id_col_desc, tmp_enc_param))) {
+        LOG_WARN("fail to init enc param", KR(ret));
+      } else if (OB_FAIL(enc_params.push_back(tmp_enc_param))) {
+        LOG_WARN("fail to push back", KR(ret));
+      }
+    }
+    //init primary key enc_param
+    for (int i = 0; OB_SUCC(ret) && i < rowkey_column_num; i++) {
+      if (OB_FAIL(init_enc_param(column_descs.at(i), tmp_enc_param))) {
+        LOG_WARN("fail to init enc param", KR(ret));
+      } else if (OB_FAIL(enc_params.push_back(tmp_enc_param))) {
+        LOG_WARN("fail to push back", KR(ret));
+      }
+    }
+    //init seq no enc_param
+    if (OB_SUCC(ret)) {
+      ObColDesc seq_no_col_desc;
+      seq_no_col_desc.col_type_.set_type(ObUInt64Type);
+      seq_no_col_desc.col_type_.set_collation_type(CS_TYPE_BINARY);
+      seq_no_col_desc.col_order_ =
+        (dup_action == ObLoadDupActionType::LOAD_REPLACE) ? ObOrderType::DESC : ObOrderType::ASC;
+      if (OB_FAIL(init_enc_param(seq_no_col_desc, tmp_enc_param))) {
+        LOG_WARN("fail to init enc param", KR(ret));
+      } else if (OB_FAIL(enc_params.push_back(tmp_enc_param))) {
+        LOG_WARN("fail to push back", KR(ret));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      for (int i = 0; i < enc_params.count(); i++) {
+        if (!ObOrderPerservingEncoder::can_encode_sortkey(enc_params.at(i).type_, enc_params.at(i).cs_type_)) {
+          enc_params.reset();
+          break;
+        }
+      }
+    }
+  }
+  return ret;
 }
 
 void ObDirectLoadMemContext::reset()
@@ -194,50 +253,9 @@ int ObDirectLoadMemContext::init_enc_params(
       !table_data_desc_.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(dup_action), K(table_data_desc_));
-  } else {
-    ObEncParam tmp_enc_param;
-    //init tablet id enc_param
-    {
-      ObColDesc tablet_id_col_desc;
-      tablet_id_col_desc.col_type_.set_type(ObUInt64Type);
-      tablet_id_col_desc.col_type_.set_collation_type(CS_TYPE_BINARY);
-      tablet_id_col_desc.col_order_ = ObOrderType::ASC;
-      if (OB_FAIL(init_enc_param(tablet_id_col_desc, tmp_enc_param))) {
-        LOG_WARN("fail to init enc param", KR(ret));
-      } else if (OB_FAIL(enc_params_.push_back(tmp_enc_param))) {
-        LOG_WARN("fail to push back", KR(ret));
-      }
-    }
-    //init primary key enc_param
-    for (int i = 0; OB_SUCC(ret) && i < table_data_desc_.rowkey_column_num_; i++) {
-      if (OB_FAIL(init_enc_param(column_descs.at(i), tmp_enc_param))) {
-        LOG_WARN("fail to init enc param", KR(ret));
-      } else if (OB_FAIL(enc_params_.push_back(tmp_enc_param))) {
-        LOG_WARN("fail to push back", KR(ret));
-      }
-    }
-    //init seq no enc_param
-    if (OB_SUCC(ret)) {
-      ObColDesc seq_no_col_desc;
-      seq_no_col_desc.col_type_.set_type(ObUInt64Type);
-      seq_no_col_desc.col_type_.set_collation_type(CS_TYPE_BINARY);
-      seq_no_col_desc.col_order_ =
-        (dup_action == ObLoadDupActionType::LOAD_REPLACE) ? ObOrderType::DESC : ObOrderType::ASC;
-      if (OB_FAIL(init_enc_param(seq_no_col_desc, tmp_enc_param))) {
-        LOG_WARN("fail to init enc param", KR(ret));
-      } else if (OB_FAIL(enc_params_.push_back(tmp_enc_param))) {
-        LOG_WARN("fail to push back", KR(ret));
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      for (int i = 0; i < enc_params_.count(); i++) {
-        if (!ObOrderPerservingEncoder::can_encode_sortkey(enc_params_.at(i).type_, enc_params_.at(i).cs_type_)) {
-          enc_params_.reset();
-          break;
-        }
-      }
-    }
+  } else if (OB_FAIL(init_enc_params(column_descs, table_data_desc_.rowkey_column_num_, dup_action,
+                                     enc_params_))) {
+    LOG_WARN("fail to init enc params", KR(ret));
   }
   return ret;
 }
@@ -269,6 +287,17 @@ int ObDirectLoadMemContext::add_tables_from_table_compactor(
     if (OB_FAIL(tables_handle_.add(table))) {
       LOG_WARN("fail to push table", KR(ret));
     }
+  }
+  return ret;
+}
+
+int ObDirectLoadMemContext::add_tables_from_table_array(
+  ObDirectLoadTableHandleArray &table_array)
+{
+  int ret = OB_SUCCESS;
+  lib::ObMutexGuard guard(mutex_);
+  if (OB_FAIL(tables_handle_.add(table_array))) {
+    LOG_WARN("fail to push table array", KR(ret));
   }
   return ret;
 }

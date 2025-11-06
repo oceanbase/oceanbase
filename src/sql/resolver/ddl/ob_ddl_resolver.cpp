@@ -29,6 +29,7 @@
 #include "plugin/interface/ob_plugin_external_intf.h"
 #include "plugin/external_table/ob_external_struct.h"
 #include "plugin/sys/ob_plugin_helper.h"
+#include "share/vector_index/ob_plugin_vector_index_service.h"
 #include "sql/resolver/ddl/ob_interval_partition_resolver.h"
 
 namespace oceanbase
@@ -3139,6 +3140,19 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
         }
         break;
       }
+      case T_CLUSTERING_KEY: {
+        uint64_t tenant_data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", KR(ret), K(session_info_->get_effective_tenant_id()));
+        } else if (tenant_data_version < DATA_VERSION_4_4_1_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("cluster by table is not supported in data version less than 4.4.1", KR(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "cluster by table in data version less than 4.4.1");
+        } else {
+          // do nothing
+        }
+        break;
+      }
       default: {
         /* won't be here */
         ret = OB_ERR_UNEXPECTED;
@@ -4033,7 +4047,7 @@ int ObDDLResolver::resolve_normal_column_attribute_constr_null(ObColumnSchemaV2 
     }
   } else {
     //set non_primary_key_column to nullable
-    if (!resolve_stat.is_primary_key_) {
+    if (!resolve_stat.is_primary_key_ || column.is_heap_table_clustering_key_column()) {
       column.set_nullable(true);
     }
   }
@@ -7981,18 +7995,25 @@ int ObDDLResolver::resolve_vec_index_constraint(
     uint64_t tenant_id = column_schema.get_tenant_id();
     uint64_t tenant_data_version = 0;
     bool is_sparse_vec_col = false;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
 
     bool is_collection_column = ob_is_collection_sql_type(column_schema.get_data_type());
-    if (!is_collection_column) {
+    // TODO(shancai): later support text and string type
+    bool is_text_column = ob_is_varchar_type(column_schema.get_data_type(), column_schema.get_collation_type());
+    if (!is_collection_column && !is_text_column) {
       ret = OB_ERR_BAD_VEC_INDEX_COLUMN;
       LOG_USER_ERROR(OB_ERR_BAD_VEC_INDEX_COLUMN,
           column_schema.get_column_name_str().length(),
           column_schema.get_column_name_str().ptr());
-      LOG_WARN("vector index can only be built on vector column", K(ret), K(column_schema));
-    } else if (OB_FAIL(ObVectorIndexUtil::is_sparse_vec_col(column_schema.get_extended_type_info(), is_sparse_vec_col))) {
+      LOG_WARN("vector index can only be built on vector column", K(ret), K(column_schema), K(ob_obj_type_class(column_schema.get_data_type())));
+    } else if (!is_text_column && OB_FAIL(ObVectorIndexUtil::is_sparse_vec_col(column_schema.get_extended_type_info(), is_sparse_vec_col))) {
       LOG_WARN("fail to check is sparse vec col", K(ret));
     } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
       LOG_WARN("get tenant data version failed", K(ret));
+    } else if (is_text_column && !tenant_config->_enable_hybrid_vector_index) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("when _enable_hybrid_vector_index is false, hybrid vector index not supported", K(ret), K(tenant_config->_enable_hybrid_vector_index));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "when _enable_hybrid_vector_index is false, hybrid vector index");
     } else if (!is_sparse_vec_col && tenant_data_version < DATA_VERSION_4_3_3_0) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("tenant data version is less than 4.3.3, vector index not supported", K(ret), K(tenant_data_version));
@@ -8015,15 +8036,18 @@ int ObDDLResolver::resolve_vec_index_constraint(
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("tenant data version is less than 4.3.5.2, sparse vector index not supported", K(ret), K(tenant_data_version));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.5.2, sparse vector index");
+    } else if (is_text_column && tenant_data_version < DATA_VERSION_4_4_1_0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("tenant data version is less than 4.4.1.0, hybrid vector index not supported", K(ret), K(tenant_data_version));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.4.1.0, hybrid vector index");
     }
 
     if (OB_SUCC(ret)) {
-      const int64_t MAX_DIM_LIMITED = 4096;
       int64_t dim = 0;
 
-      if (!is_sparse_vec_col && OB_FAIL(ObVectorIndexUtil::get_vector_dim_from_extend_type_info(column_schema.get_extended_type_info(), dim))) {
+      if (!is_text_column && !is_sparse_vec_col && OB_FAIL(ObVectorIndexUtil::get_vector_dim_from_extend_type_info(column_schema.get_extended_type_info(), dim))) {
         LOG_WARN("fail to get vector dim", K(ret), K(column_schema));
-      } else if (!is_sparse_vec_col && dim > MAX_DIM_LIMITED) {
+      } else if (!is_text_column && !is_sparse_vec_col && dim > MAX_DIM_LIMITED) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("vector index dim larger than 4096 is not supported", K(ret), K(tenant_data_version));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "vec index dim larger than 4096 is");
@@ -8720,7 +8744,7 @@ int ObDDLResolver::check_indexes_on_same_cols(const ObTableSchema &table_schema,
       }
     }
   }
-  if (OB_SUCC(ret) && !has_other_indexes_on_same_cols && table_schema.is_table_with_pk()) {
+  if (OB_SUCC(ret) && !has_other_indexes_on_same_cols && table_schema.is_index_organized_table_with_pk()) {
     ObSEArray<uint64_t, 8> pk_column_ids;
     ObSEArray<ObString, 8> pk_columns_names;
     table_schema.get_rowkey_column_ids(pk_column_ids);
@@ -12023,6 +12047,8 @@ int ObDDLResolver::try_set_auto_partition_by_config(const ParseNode *node,
   if (!table_schema.is_user_table()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("attempt to set auto_partition by tenant config for non_user_table", KR(ret), K(table_schema));
+  } else if (table_schema.is_table_with_clustering_key()) {
+    // do nothing
   } else if (table_schema.is_partitioned_table() &&
              !table_schema.get_part_option().is_valid_split_part_type()) {
     // do nothing

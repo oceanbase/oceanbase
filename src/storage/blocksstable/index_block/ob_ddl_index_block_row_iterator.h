@@ -22,6 +22,7 @@ namespace oceanbase
 namespace storage
 {
 class ObDDLMemtable;
+class ObIncMajorDDLAggregateCGSSTable;
 }
 namespace blocksstable
 {
@@ -76,6 +77,7 @@ public:
   int get_next_meta(const ObDataMacroBlockMeta *&meta);
 private:
   int inner_get_current(const ObIndexBlockRowHeader *&idx_row_header,
+                        const ObIndexBlockRowMinorMetaInfo *&idx_minor_info,
                         ObCommonDatumRowkey &endkey,
                         int64_t &row_offset/*for co sstable*/);
 private:
@@ -220,7 +222,7 @@ public:
   INHERIT_TO_STRING_KV("base iterator:", ObIndexBlockRowIterator, "format:", "ObDDLMergeBlockRowIterator",
                        KP(raw_iter_), KP(transformed_iter_), KP(empty_merge_iter_), KP(all_range_iter_), K(iters_), KP(allocator_), KP(consumers_),
                        K(consumer_cnt_), K(compare_), KPC(simple_merge_), KPC(loser_tree_), KPC(endkey_merger_), K(is_single_sstable_),
-                       K(is_iter_start_), K(is_iter_finish_), K(query_range_), KP(idx_block_data_), K(first_index_item_), K(iter_param_));
+                       K(is_iter_start_), K(is_iter_finish_), KP(idx_block_data_), K(first_index_item_), K(iter_param_));
   struct MergeIndexItem final
   {
   public:
@@ -263,12 +265,20 @@ private:
   int locate_first_endkey(); //for reverse scan
   int get_readable_ddl_kvs(const ObIndexBlockIterParam &iter_param,
                            ObArray<storage::ObDDLMemtable *> &ddl_memtables);
+  int refine_ddl_memtables(const int64_t sstable_cg_idx,
+                           const int64_t sstable_slice_idx,
+                           const ObSSTable *ddl_sstable,
+                           const common::ObIArray<ObDDLMemtable *> &input_ddl_memtables,
+                           ObIArray<ObDDLMemtable *> &output_ddl_memtables);
   int inner_init(const ObMicroBlockData &idx_block_data,
                  const ObStorageDatumUtils *datum_utils,
                  ObIAllocator *allocator,
                  const bool is_reverse_scan,
                  const ObIndexBlockIterParam &iter_param,
                  const ObIArray<ObDDLMemtable *> *ddl_memtables);
+  int init_for_inc_major(const ObSSTable *ddl_aggregate_sstable,
+                         ObIArray<ObDDLMemtable *> &ddl_memtables,
+                         const ObSSTable *&sstable);
   int init_sstable_index_iter(const ObMicroBlockData &idx_block_data,
                               const ObStorageDatumUtils *datum_utils,
                               ObIAllocator *allocator,
@@ -313,6 +323,7 @@ private:
   ObDatumRange query_range_;
   MergeIndexItem first_index_item_;
   ObIndexBlockIterParam iter_param_;
+  const ObSSTable *sstable_;
 };
 
 class ObUnitedSliceRowIterator : public ObIndexBlockRowIterator
@@ -356,8 +367,35 @@ public:
       K_(slice_count), K_(start_slice_idx), K_(end_slice_idx), K_(cur_slice_idx), K_(is_iter_end));
 private:
   int init_slice_info(const ObIndexBlockIterParam &iter_param);
+  int init_slice_info_for_inc_major(const ObIndexBlockIterParam &iter_param);
+  int calculate_row_offsets(const int64_t cg_idx, const ObIArray<ObSSTable *> &cg_slices);
   int convert_slice_offset(int64_t abs_row_offset, int64_t &slice_idx, int64_t &slice_row_offset);
   int prepare_slice_query_param(const int64_t slice_idx, ObIndexBlockIterParam &slice_iter_param, ObIArray<ObDDLMemtable *> &slice_ddl_memtables);
+  int prepare_slice_query_param_for_inc_major(
+      const int64_t slice_idx,
+      ObIndexBlockIterParam &slice_iter_param,
+      ObIArray<ObDDLMemtable *> &slice_ddl_memtables);
+  int prepare_slice_sstable(const bool is_inc_major,
+                            const int64_t slice_idx,
+                            int64_t &cg_idx,
+                            ObSSTable *&sstable);
+  int prepare_slice_sstable_for_ddl(const int64_t slice_idx,
+                                    int64_t &cg_idx,
+                                    ObSSTable *&sstable);
+  int prepare_slice_sstable_for_inc_major(const int64_t slice_idx,
+                                          int64_t &cg_idx,
+                                          ObSSTable *&sstable);
+  int prepare_slice_memtables(const bool is_inc_major,
+                              const int64_t cg_idx,
+                              const int64_t slice_idx,
+                              ObIArray<ObDDLMemtable *> &slice_ddl_memtables);
+  int prepare_slice_memtables_for_ddl(const int64_t cg_idx,
+                                      const int64_t slice_idx,
+                                      ObIArray<ObDDLMemtable *> &slice_ddl_memtables);
+  int prepare_slice_memtables_for_inc_major(const int64_t cg_idx,
+                                            const int64_t slice_idx,
+                                            ObIArray<ObDDLMemtable *> &slice_ddl_memtables);
+  int set_slice_query_param(ObSSTable *sstable, ObIndexBlockIterParam &slice_iter_param);
   int locate_slice_idx_by_key(const ObDatumRowkey &rowkey, int64_t &slice_idx);
 private:
   ObIAllocator *allocator_;

@@ -17,7 +17,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
 #include "storage/compaction/ob_sstable_merge_info_mgr.h"
-#include "storage/ddl/ob_ddl_merge_task.h"
+#include "storage/ddl/ob_ddl_merge_schedule.h"
 #include "storage/compaction/ob_sstable_merge_info_mgr.h"
 #include "storage/column_store/ob_co_merge_dag.h"
 #include "storage/multi_data_source/ob_mds_table_merge_dag.h"
@@ -27,12 +27,15 @@
 #include "storage/incremental/ob_ss_minor_compaction.h"
 #include "storage/incremental/ob_shared_meta_service.h"
 #include "storage/incremental/ob_ss_tablet_merge_helper.h"
+#include "storage/direct_load/ob_direct_load_ss_update_inc_major_dag.h"
 #include "storage/incremental/share/ob_ss_diagnose_mgr.h"
 #endif
 #include "storage/compaction/ob_schedule_status_cache.h"
 #include "storage/compaction/ob_schedule_tablet_func.h"
 #include "storage/tablet/ob_tablet_medium_info_reader.h"
 #include "share/scheduler/ob_partition_auto_split_helper.h"
+#include "storage/compaction/ob_partition_merge_policy.h"
+#include "storage/ddl/ob_ddl_merge_schedule.h"
 
 namespace oceanbase
 {
@@ -43,6 +46,7 @@ using namespace share;
 namespace compaction
 {
 ERRSIM_POINT_DEF(EN_COMPACTION_DISABLE_META_MERGE_AFTER_MINI);
+
 /********************************************ObFastFreezeChecker impl******************************************/
 ObFastFreezeChecker::ObFastFreezeChecker()
   : store_map_(),
@@ -521,8 +525,12 @@ int ObTenantTabletScheduler::try_update_upper_trans_version_and_gc_sstable(
        */
       ObSEArray<int64_t, 8> new_upper_trans;
       new_upper_trans.set_attr(ObMemAttr(MTL_ID(), "NewUpTxnVer"));
+      ObSEArray<int64_t, 4> gc_inc_major_ddl_scns;
+      gc_inc_major_ddl_scns.set_attr(ObMemAttr(MTL_ID(), "GCIncDDLScn"));
+
       UpdateUpperTransParam upper_trans_param;
       upper_trans_param.new_upper_trans_ = &new_upper_trans;
+      upper_trans_param.gc_inc_major_ddl_scns_ = &gc_inc_major_ddl_scns;
       if (OB_TMP_FAIL(ObGCUpperTransHelper::check_need_gc_or_update_upper_trans_version(ls, *tablet, multi_version_start, upper_trans_param, need_update))) {
         LOG_WARN("faild to check need gc or update", K(tmp_ret), K(ls_id), K(tablet_id));
       } else if (need_update) {
@@ -531,7 +539,8 @@ int ObTenantTabletScheduler::try_update_upper_trans_version_and_gc_sstable(
         if (OB_TMP_FAIL(tablet->load_storage_schema(tmp_arena, storage_schema))) {
           LOG_WARN("failed to load storage schema", K(tmp_ret), K(tablet));
         } else {
-          ObUpdateTableStoreParam param(tablet->get_snapshot_version(), multi_version_start, storage_schema, rebuild_seq, upper_trans_param);
+          ObUpdateTableStoreParam param(tablet->get_snapshot_version(), multi_version_start, storage_schema, rebuild_seq);
+          param.set_upper_trans_param(upper_trans_param);
           ObTabletHandle new_tablet_handle; // no use here
           if (OB_TMP_FAIL(ls.update_tablet_table_store(tablet_id, param, new_tablet_handle))) {
             LOG_WARN("failed to update table store", K(tmp_ret), K(param), K(ls_id), K(tablet_id));
@@ -988,6 +997,7 @@ int ObTenantTabletScheduler::check_ready_for_major_merge(
     const ObLSID &ls_id,
     const storage::ObTablet &tablet,
     const ObMergeType merge_type,
+    const int64_t schedule_scn,
     ObCSReplicaTabletStatus &cs_replica_status)
 {
   int ret = OB_SUCCESS;
@@ -996,13 +1006,21 @@ int ObTenantTabletScheduler::check_ready_for_major_merge(
     ObLSHandle ls_handle;
     ObLS *ls = nullptr;
     bool need_wait_major_convert = false;
+    bool exist_unfinished_inc_major = false;
+
     if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
       LOG_WARN("failed to get ls", K(ret), K(ls_id));
     } else if (OB_UNLIKELY(!ls_handle.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls is invalid", K(ret), K(ls_id), K(ls_handle));
     } else if (FALSE_IT(ls = ls_handle.get_ls())) {
+    } else if (schedule_scn > 0 && OB_FAIL(ObTabletStatusCache::check_unfinished_inc_major(*ls, schedule_scn, tablet, exist_unfinished_inc_major))) {
+      LOG_WARN("failed to check unfinished inc major", K(ret), "tablet_id", tablet.get_tablet_id());
+    } else if (exist_unfinished_inc_major) {
+      ret = OB_EAGAIN;
+      LOG_WARN("cannot schedule dag, exists unfinished inc major, try later", K(ret), K(schedule_scn), "tablet_id", tablet.get_tablet_id());
     } else if (!ls->is_cs_replica()) {
+      // do nothing
     } else if (OB_FAIL(ObCSReplicaUtil::init_cs_replica_tablet_status(*ls, tablet, cs_replica_status))) {
       LOG_WARN("fail to init cs replica tablet status", K(ret), KPC(ls), K(tablet));
     } else if (OB_UNLIKELY(!is_valid_cs_replica_status(cs_replica_status))) {
@@ -1049,12 +1067,13 @@ int ObTenantTabletScheduler::schedule_merge_dag(
 {
   int ret = OB_SUCCESS;
   ObCSReplicaTabletStatus cs_replica_status = ObCSReplicaTabletStatus::NORMAL;
-  if (OB_FAIL(check_ready_for_major_merge(ls_id, tablet, merge_type, cs_replica_status))) {
+
+  if (OB_FAIL(check_ready_for_major_merge(ls_id, tablet, merge_type, merge_snapshot_version, cs_replica_status))) {
     LOG_WARN("failed to check ready for major merge", K(ret), K(ls_id), K(tablet), K(merge_type));
   } else if (is_major_merge_type(merge_type)
-             && (ObCSReplicaTabletStatus::NORMAL_CS_REPLICA == cs_replica_status
-                 || ObCOMajorMergePolicy::is_valid_major_merge_type(co_major_merge_type)
-                 || is_convert_co_major_merge(merge_type))) {
+          && (ObCSReplicaTabletStatus::NORMAL_CS_REPLICA == cs_replica_status ||
+              ObCOMajorMergePolicy::is_valid_major_merge_type(co_major_merge_type) ||
+              is_convert_co_major_merge(merge_type))) {
     ObCOMergeDagParam param;
     if (OB_FAIL(ObDagParamFunc::fill_param(ls_id, tablet, merge_type, merge_snapshot_version, exec_mode, dag_net_id, param))) {
       LOG_WARN("failed to fill param", KR(ret));
@@ -1066,8 +1085,7 @@ int ObTenantTabletScheduler::schedule_merge_dag(
     FLOG_INFO("schedule co merge dag", K(ret), K(param), K(tablet.is_row_store()), K(merge_type), K(co_major_merge_type), K(cs_replica_status));
   } else {
     ObTabletMergeDagParam param;
-    if (OB_FAIL(ObDagParamFunc::fill_param(
-      ls_id, tablet, merge_type, merge_snapshot_version, exec_mode, param))) {
+    if (OB_FAIL(ObDagParamFunc::fill_param(ls_id, tablet, merge_type, merge_snapshot_version, exec_mode, param))) {
       LOG_WARN("failed to fill param", KR(ret));
     } else if (OB_FAIL(ObScheduleDagFunc::schedule_tablet_merge_dag(param))) {
       if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
@@ -1372,61 +1390,6 @@ template int ObTenantTabletScheduler::schedule_tablet_minor_merge<mds::ObTabletM
   ObLSHandle &ls_handle,
   ObTabletHandle &tablet_handle);
 
-int ObTenantTabletScheduler::schedule_tablet_ddl_major_merge(
-    ObLSHandle &ls_handle,
-    ObTabletHandle &tablet_handle)
-{
-  int ret = OB_SUCCESS;
-  ObDDLTableMergeDagParam param;
-  ObTabletDirectLoadMgrHandle direct_load_mgr_handle;
-  ObDDLKvMgrHandle ddl_kv_mgr_handle;
-  ObTenantDirectLoadMgr *tenant_direct_load_mgr = MTL(ObTenantDirectLoadMgr *);
-  bool is_major_sstable_exist = false;
-  bool has_freezed_ddl_kv = false;
-  SCN ddl_commit_scn;
-  const ObLSID &ls_id = ls_handle.get_ls()->get_ls_id();
-  if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_handle.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_handle));
-  } else if (tablet_handle.get_obj()->get_tablet_meta().has_transfer_table()) {
-    if (REACH_THREAD_TIME_INTERVAL(PRINT_LOG_INTERVAL)) {
-      LOG_INFO("The tablet in the transfer process does not do ddl major_merge", K(tablet_handle));
-    }
-  } else if (OB_ISNULL(tenant_direct_load_mgr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error", K(ret), K(MTL_ID()));
-  } else if (OB_FAIL(tenant_direct_load_mgr->get_tablet_mgr_and_check_major(
-          ls_id,
-          tablet_handle.get_obj()->get_tablet_meta().tablet_id_,
-          true, /* is_full_direct_load */
-          direct_load_mgr_handle,
-          is_major_sstable_exist))) {
-    if (OB_ENTRY_NOT_EXIST == ret && is_major_sstable_exist) {
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("get tablet direct load mgr failed", K(ret), "tablet_id", tablet_handle.get_obj()->get_tablet_meta().tablet_id_);
-    }
-  } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-    LOG_WARN("get ddl kv mgr failed", K(ret));
-  } else if (FALSE_IT(ddl_commit_scn = direct_load_mgr_handle.get_full_obj()->get_commit_scn(tablet_handle.get_obj()->get_tablet_meta()))) {
-  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->try_flush_ddl_commit_scn(ls_handle, tablet_handle, direct_load_mgr_handle, ddl_commit_scn))) {
-    LOG_WARN("try flush ddl commit scn failed", K(ret), "tablet_id", tablet_handle.get_obj()->get_tablet_meta().tablet_id_);
-  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->check_has_freezed_ddl_kv(has_freezed_ddl_kv))) {
-    LOG_WARN("check has freezed ddl kv failed", K(ret));
-  } else if (OB_FAIL(direct_load_mgr_handle.get_full_obj()->prepare_ddl_merge_param(*tablet_handle.get_obj(), param))) {
-    if (OB_EAGAIN != ret) {
-      LOG_WARN("prepare major merge param failed", K(ret), "tablet_id", tablet_handle.get_obj()->get_tablet_meta().tablet_id_);
-    }
-  } else if (has_freezed_ddl_kv || param.is_commit_) {
-    if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
-      if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-        LOG_WARN("schedule ddl merge dag failed", K(ret), K(param));
-      }
-    }
-  }
-  return ret;
-}
-
 // for minor dag, only hold table key array, should not hold tablet(memtable)
 template <class T>
 int ObTenantTabletScheduler::schedule_merge_execute_dag(
@@ -1584,12 +1547,11 @@ int ObTenantTabletScheduler::schedule_tablet_minor(
   }
 #endif
   if (!tablet_id.is_ls_inner_tablet()) { // data tablet
-    if (OB_TMP_FAIL(schedule_ddl_tablet_merge(ls_handle, tablet_handle))) {
+    if (OB_TMP_FAIL(ObDDLMergeScheduler::schedule_ddl_merge(ls_handle.get_ls(), tablet_handle))) {
       if (OB_SIZE_OVERFLOW != tmp_ret && OB_EAGAIN != tmp_ret) {
         LOG_WARN("failed to schedule tablet ddl merge", K(tmp_ret), K(ls_id), K(tablet_handle));
       }
     }
-
     if (!fast_freeze_checker_.need_check() || tablet_id.is_inner_tablet() || tablet_id.is_ls_inner_tablet()) {
     } else if (OB_TMP_FAIL(fast_freeze_checker_.check_need_fast_freeze(tablet, need_fast_freeze_flag))) {
       LOG_WARN("failed to check need fast freeze", K(tmp_ret), K(tablet_handle));
@@ -1603,59 +1565,6 @@ int ObTenantTabletScheduler::schedule_tablet_minor(
       }
     }
   }
-  return ret;
-}
-
-int ObTenantTabletScheduler::schedule_ddl_tablet_merge(
-    ObLSHandle &ls_handle,
-    ObTabletHandle &tablet_handle)
-{
-  int ret = OB_SUCCESS;
-  ObDDLKvMgrHandle ddl_kv_mgr_handle;
-  const ObLSID &ls_id = ls_handle.get_ls()->get_ls_id();
-  const ObTabletID tablet_id = tablet_handle.is_valid() ? tablet_handle.get_obj()->get_tablet_meta().tablet_id_ : ObTabletID();
-  int tmp_ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_handle.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), K(ls_id), K(tablet_handle));
-  } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      LOG_TRACE("kv mgr not exist", K(ret), K(ls_id), K(tablet_id));
-      ret = OB_SUCCESS; /* for empty table, ddl kv may not exist*/
-    } else {
-      LOG_WARN("get ddl kv mgr failed", K(ret), K(ls_id), K(tablet_id));
-    }
-#ifdef OB_BUILD_SHARED_STORAGE
-  } else if (GCTX.is_shared_storage_mode()) {
-    if (OB_FAIL(ObTabletDDLUtil::schedule_ddl_minor_merge_on_demand(false/*need_freeze*/, ls_id, ddl_kv_mgr_handle))) {
-      if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-        LOG_WARN("failed to schedule tablet ddl merge", K(ret), K(ls_id), K(tablet_id));
-      } else {
-        LOG_TRACE("schedule ddl minor merge failed", K(ret), K(ls_id), K(tablet_id));
-      }
-    }
-#endif
-  } else {
-    if (OB_FAIL(schedule_tablet_ddl_major_merge(ls_handle, tablet_handle))) {
-      if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-        LOG_WARN("failed to schedule tablet ddl merge", K(ret), K(ls_id), K(tablet_id));
-      } else {
-        LOG_TRACE("schedule ddl major merge failed", K(ret), K(ls_id), K(tablet_id));
-      }
-    }
-  }
-#ifdef OB_BUILD_SHARED_STORAGE
-  bool is_ls_leader = false;
-  if (OB_FAIL(ret)) {
-  } else if (!GCTX.is_shared_storage_mode()) {
-  } else if (OB_TMP_FAIL(ObDDLUtil::is_ls_leader(*ls_handle.get_ls(), is_ls_leader))) {
-    LOG_WARN("failed to check if is ls leader", K(tmp_ret), K(*ls_handle.get_ls()));
-    is_ls_leader = false;
-  } else if (is_ls_leader && OB_TMP_FAIL(ObTenantTabletScheduler::schedule_task_if_split_src(tablet_handle))) {
-    LOG_WARN("failed to check if it is split src tablet", K(tmp_ret), K(tablet_handle));
-  }
-#endif
-  LOG_TRACE("schedule ddl tablet merge", K(ret), K(ls_id), K(tablet_id));
   return ret;
 }
 
@@ -2009,25 +1918,6 @@ int ObTenantTabletScheduler::schedule_tablet_ss_minor_merge(const ObMergeType &m
       LOG_INFO("success to schedule tablet SS minor merge", K(ret), K(ls_id), K(tablet_id),
                "table_cnt", result.handle_.get_count(),
                "merge_scn_range", result.scn_range_, K(merge_type));
-    }
-  }
-  return ret;
-}
-
-int ObTenantTabletScheduler::schedule_task_if_split_src(ObTabletHandle &tablet_handle)
-{
-  int ret = OB_SUCCESS;
-  bool is_split_src_tablet = false;
-  ObSEArray<ObTabletSplitTask, 1> task_array;
-  const ObTabletID &tablet_id = tablet_handle.get_obj()->get_tablet_id();
-  if (OB_FAIL(ObLSTabletSplitScheduler::is_split_src_tablet(tablet_handle, is_split_src_tablet))) {
-    LOG_WARN("failed to check if it is split src tablet", K(ret), K(tablet_handle));
-  } else if (OB_UNLIKELY(is_split_src_tablet)) {
-    ObTabletSplitTask tablet_split_task(MTL_ID(), tablet_id, ObTimeUtility::current_time(), TabletSplitTaskTatus::WAITING_SPLIT_DATA_COMPLEMENT);
-    if (OB_FAIL(task_array.push_back(tablet_split_task))) {
-      LOG_WARN("failed ot push back into task array", K(ret), K(tablet_split_task));
-    } else if (OB_FAIL(ObLSTabletSplitScheduler::get_instance().push_task(task_array))) {
-      LOG_WARN("failed to push back into task array", K(ret), K(tablet_id));
     }
   }
   return ret;

@@ -2645,6 +2645,9 @@ int ObWaitDataReadyTask::inner_check_tablet_transfer_table_ready_(
   ObLS *src_ls = nullptr;
   SCN scn;
   ObTabletHandle src_tablet_handle;
+  ObTablet *src_tablet = nullptr;
+  int64_t src_transfer_seq = 0;
+  int64_t dest_transfer_seq = 0;
 
   if (!tablet_id.is_valid() || OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
@@ -2703,6 +2706,20 @@ int ObWaitDataReadyTask::inner_check_tablet_transfer_table_ready_(
         LOG_WARN("failed to set result", K(ret), K(tmp_ret), KPC(ctx_));
       }
     }
+  } else if (OB_ISNULL(src_tablet = src_tablet_handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("src tablet should not be NULL", K(ret), K(src_tablet_handle));
+  } else if (FALSE_IT(src_transfer_seq = src_tablet->get_tablet_meta().transfer_info_.transfer_seq_)) {
+  } else if (FALSE_IT(dest_transfer_seq = tablet->get_tablet_meta().transfer_info_.transfer_seq_)) {
+  } else if (src_transfer_seq > dest_transfer_seq) {
+    ret = OB_TRANSFER_SRC_TABLET_NOT_EXIST;
+    LOG_WARN("src transfer seq is bigger than dest transfer seq, need retry", KPC(src_tablet), KPC(tablet));
+    if (OB_SUCCESS != (tmp_ret = ctx_->set_result(ret, true /*allow_retry*/))) {
+      LOG_WARN("failed to set result", K(ret), K(tmp_ret), KPC(ctx_));
+    }
+  } else if (src_transfer_seq != dest_transfer_seq - 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("src transfer seq is not match with dest transfer seq, unexpected", KPC(src_tablet), KPC(tablet));
   } else {
     need_check_again = true;
 #ifdef ERRSIM

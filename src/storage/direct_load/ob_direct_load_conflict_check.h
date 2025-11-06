@@ -36,7 +36,11 @@ public:
                KPC_(range),
                KP_(col_descs),
                KP_(datum_utils),
-               KP_(dml_row_handler));
+               KP_(dml_row_handler),
+               K_(need_output_conflict_row),
+               K_(need_read_delete_row),
+               K_(query_origin_row),
+               K_(column_count));
 public:
   common::ObTabletID tablet_id_;
   ObDirectLoadTableDataDesc table_data_desc_;
@@ -45,6 +49,10 @@ public:
   const common::ObIArray<share::schema::ObColDesc> *col_descs_;
   const blocksstable::ObStorageDatumUtils *datum_utils_;
   ObDirectLoadDMLRowHandler *dml_row_handler_;
+  bool need_output_conflict_row_;
+  bool need_read_delete_row_;
+  bool query_origin_row_;
+  int64_t column_count_;
 };
 
 class ObDirectLoadConflictCheck
@@ -73,6 +81,7 @@ private:
   ObDirectLoadIStoreRowIterator *load_iter_;
   ObDirectLoadOriginTableScanner *origin_scanner_;
   const ObDirectLoadDatumRow *origin_row_;
+  ObDirectLoadDatumRow delete_datum_row_;
   ObDatumRange new_range_;
   bool origin_iter_is_end_;
   bool is_inited_;

@@ -183,7 +183,8 @@ private:
 enum ObIOCBType : uint8_t
 {
   IOCB_TYPE_LOCAL = 0,
-  IOCB_TYPE_LOCAL_CACHE = 1
+  IOCB_TYPE_LOCAL_CACHE = 1,
+  IOCB_TYPE_OBJECT_DEVICE = 2
 };
 
 class ObIOCB
@@ -213,7 +214,8 @@ public:
 enum ObIOEventsType : uint8_t
 {
   IO_EVENTS_TYPE_LOCAL = 0,
-  IO_EVENTS_TYPE_LOCAL_CACHE = 1
+  IO_EVENTS_TYPE_LOCAL_CACHE = 1,
+  IO_EVENTS_TYPE_OBJECT_DEVICE = 2
 };
 
 class ObIOEvents

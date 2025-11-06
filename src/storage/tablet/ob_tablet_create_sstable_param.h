@@ -22,6 +22,7 @@
 #include "storage/ddl/ob_ddl_struct.h"
 #include "storage/blocksstable/ob_table_flag.h"
 #include "storage/compaction/ob_compaction_util.h"
+#include "storage/compaction/ob_uncommit_tx_info.h"
 
 namespace oceanbase
 {
@@ -35,6 +36,7 @@ class ObSSTableMeta;
 class ObMigrationSSTableParam;
 class ObSSTable;
 class ObSSTableIndexBuilder;
+class ObSSTableMetaHandle;
 }
 namespace compaction
 {
@@ -91,13 +93,18 @@ public:
   int init_for_ddl_mem(const ObITable::TableKey &table_key,
                        const share::SCN &ddl_start_scn,
                        const ObStorageSchema &storage_schema,
+                       const transaction::ObTransID &trans_id,
+                       const transaction::ObTxSEQ &seq_no,
                        ObBlockMetaTree &block_meta_tree);
 
   // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
   int init_for_ss_ddl(blocksstable::ObSSTableMergeRes &res,
                       const ObITable::TableKey &table_key,
                       const ObStorageSchema &storage_schema,
-                      const int64_t create_schema_version_on_tablet);
+                      const int64_t create_schema_version_on_tablet,
+                      const ObDirectLoadType direct_load_type,
+                      const transaction::ObTransID &tx_id,
+                      const transaction::ObTxSEQ &seq_no);
 
   // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
   int init_for_split(const ObTabletID &dst_tablet_id,
@@ -147,6 +154,14 @@ public:
   int init_for_mds(const compaction::ObBasicTabletMergeCtx &ctx,
                    const blocksstable::ObSSTableMergeRes &res,
                    const ObStorageSchema &mds_schema);
+  int init_for_inc_major_ddl_aggregate(const ObITable::TableKey &table_key,
+                                       blocksstable::ObSSTable &base_sstable,
+                                       blocksstable::ObSSTableMetaHandle &meta_handle,
+                                       const int64_t snapshot_version,
+                                       const int64_t column_group_cnt,
+                                       const int64_t rowkey_column_cnt,
+                                       const int64_t column_cnt,
+                                       const int64_t row_cnt);
 
   inline const ObITable::TableKey& table_key() const { return table_key_; }
   inline const share::SCN& rec_scn() const { return rec_scn_; };
@@ -212,6 +227,7 @@ public:
       K_(table_shared_flag),
       K_(uncommitted_tx_id),
       K_(co_base_snapshot_version),
+      K_(uncommit_tx_info),
       K_(rec_scn));
 private:
   static const int64_t DEFAULT_MACRO_BLOCK_CNT = 64;
@@ -224,7 +240,8 @@ private:
 private:
   friend class blocksstable::ObSSTableMeta;
   friend class blocksstable::ObSSTableMacroInfo;
-private:
+  int assign_uncommit_tx_info_from_ctx(const compaction::ObBasicTabletMergeCtx &ctx);
+public:
   ObITable::TableKey table_key_;
   int16_t sstable_logic_seq_;
   int64_t schema_version_;
@@ -276,6 +293,7 @@ private:
   storage::ObTableSharedFlag table_shared_flag_; //ObTableSharedFlag will be updated by ObTabletCreateSSTableParam
   int64_t uncommitted_tx_id_;
   int64_t co_base_snapshot_version_;
+  compaction::ObMemUncommitTxInfo uncommit_tx_info_;
   share::SCN rec_scn_;
 };
 

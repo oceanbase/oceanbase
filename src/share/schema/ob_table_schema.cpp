@@ -5762,7 +5762,7 @@ int ObTableSchema::check_column_can_be_altered_offline(
       }
       if (OB_SUCC(ret) && src_column->is_rowkey_column()) {
         ObColumnSchemaV2 *dst_col = dst_column;
-        if (!src_column->is_heap_alter_rowkey_column()) {
+        if (!src_column->is_heap_alter_rowkey_column() && !src_column->is_heap_table_clustering_key_column()) {
           dst_col->set_nullable(false);
         }
         if (OB_FAIL(check_rowkey_column_can_be_altered(src_column, dst_column))) {
@@ -5907,7 +5907,7 @@ int ObTableSchema::check_column_can_be_altered_online(
         }
         if (OB_SUCC(ret) && src_schema->is_rowkey_column()) {
           ObColumnSchemaV2 *dst_col = dst_schema;
-          if (!src_schema->is_heap_alter_rowkey_column()) {
+          if (!src_schema->is_heap_alter_rowkey_column() && !src_schema->is_heap_table_clustering_key_column()) {
             dst_col->set_nullable(false);
           }
           if (OB_FAIL(check_rowkey_column_can_be_altered(src_schema, dst_schema))) {
@@ -6746,21 +6746,29 @@ int ObTableSchema::get_rowkey_column_ids(common::ObIArray<ObColDesc> &column_ids
 int ObTableSchema::get_rowkey_column_ids(common::ObIArray<uint64_t> &column_ids) const
 {
   int ret = OB_SUCCESS;
-  const ObRowkeyColumn *rowkey_column = NULL;
-  ObColDesc col_desc;
   if (!is_valid()) {
     ret = OB_SCHEMA_ERROR;
-    LOG_WARN("The ObTableSchema is invalid", K(ret));
-  } else {
-    //add rowkey columns
-    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info_.get_size(); ++i) {
-      if (NULL == (rowkey_column = rowkey_info_.get_column(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("The rowkey column is NULL, ", K(i));
-      } else if (OB_FAIL(column_ids.push_back(rowkey_column->column_id_))) {
-        LOG_WARN("failed to push back rowkey column id", K(ret));
-      } else { /*do nothing*/ }
-    }
+    LOG_WARN("The ObTableSchema is invalid", KR(ret));
+  } else if (OB_FAIL(get_rowkey_column_ids_without_valid_check(column_ids))) {
+    LOG_WARN("fail to get rowkey column ids", KR(ret));
+  }
+  return ret;
+}
+
+int ObTableSchema::get_rowkey_column_ids_without_valid_check(common::ObIArray<uint64_t> &column_ids) const
+{
+  int ret = OB_SUCCESS;
+  const ObRowkeyColumn *rowkey_column = NULL;
+
+  // Skip is_valid() check for safe access
+  //add rowkey columns
+  for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info_.get_size(); ++i) {
+    if (NULL == (rowkey_column = rowkey_info_.get_column(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("The rowkey column is NULL, ", K(i));
+    } else if (OB_FAIL(column_ids.push_back(rowkey_column->column_id_))) {
+      LOG_WARN("failed to push back rowkey column id", KR(ret));
+    } else { /*do nothing*/ }
   }
   return ret;
 }
@@ -6972,12 +6980,9 @@ int ObTableSchema::is_table_with_logic_pk(ObSchemaGetterGuard &schema_guard, boo
   bool_result = false;
   ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
   uint64_t compat_version = 0;
-  if (!is_valid()) {
-    ret = OB_SCHEMA_ERROR;
-    LOG_WARN("The ObTableSchema is invalid", K(ret));
-  } else if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
+  if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
     LOG_WARN("get simple_index_infos failed", K(ret));
-  } else {
+  } else if (is_heap_organized_table()) {
     const uint64_t tenant_id = get_tenant_id();
     for (int64_t i = 0; !bool_result && OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
       const ObTableSchema *index_table_schema = NULL;
@@ -7016,15 +7021,15 @@ int ObTableSchema::get_logic_pk_column_ids(ObSchemaGetterGuard *schema_guard, Ob
   if (OB_ISNULL(schema_guard)) {
     int ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(schema_guard));
-  } else if (is_heap_organized_table() && OB_FAIL(get_heap_table_pk(schema_guard, pk_ids))) {
+  } else if (is_heap_organized_table() && OB_FAIL(get_heap_table_pk_without_valid_check(schema_guard, pk_ids))) {
     LOG_WARN("fail to get heap table pks", K(ret), KPC(this));
-  } else if (is_index_organized_table() && is_table_with_pk() && OB_FAIL(get_rowkey_column_ids(pk_ids))) {
+  } else if (is_index_organized_table() && is_table_with_pk() && OB_FAIL(get_rowkey_column_ids_without_valid_check(pk_ids))) {
     LOG_WARN("fail to get IOT table pks", K(ret), KPC(this));
   }
   return ret;
 }
 
-int ObTableSchema::get_heap_table_pk(ObSchemaGetterGuard *schema_guard, ObIArray<uint64_t> &pk_ids) const
+int ObTableSchema::get_heap_table_pk_without_valid_check(ObSchemaGetterGuard *schema_guard, ObIArray<uint64_t> &pk_ids) const
 {
   int ret = OB_SUCCESS;
   pk_ids.reuse();
@@ -7065,6 +7070,18 @@ int ObTableSchema::get_heap_table_pk(ObSchemaGetterGuard *schema_guard, ObIArray
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObTableSchema::get_heap_table_pk(ObSchemaGetterGuard *schema_guard, ObIArray<uint64_t> &pk_ids) const
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid()) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("The ObTableSchema is invalid", KR(ret));
+  } else if (OB_FAIL(get_heap_table_pk_without_valid_check(schema_guard, pk_ids))) {
+    LOG_WARN("fail to get heap table pks", KR(ret), KPC(this));
   }
   return ret;
 }
@@ -8238,7 +8255,8 @@ int ObTableSchema::check_can_do_manual_split_partition() const
 // 6. not support to split subpartition
 // 7. not support mismatching between partition key and primary key prefix
 // 8. not support column store table to split partition
-// 9. only support automatic partitioning global index tables in non user tables
+// 9. not support to split partition of heap organized table
+// 10. only support automatic partitioning global index tables in non user tables
 int ObTableSchema::check_enable_split_partition(bool is_auto_partitioning) const
 {
   int ret = OB_SUCCESS;
@@ -8254,6 +8272,10 @@ int ObTableSchema::check_enable_split_partition(bool is_auto_partitioning) const
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support to split table in recyclebin", KR(ret), KPC(this));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "recyclebin table is");
+  } else if (is_heap_organized_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support to split a partition of heap organized table", KR(ret), KPC(this));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "split partition of heap organized table is");
   } else if (is_table_without_pk()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support to split a partition of no primary key table", KR(ret), KPC(this));
@@ -8569,54 +8591,62 @@ int ObTableSchema::is_presetting_partition_key(const uint64_t partition_key_id,
   return ret;
 }
 
-int ObTableSchema::check_primary_key_cover_partition_column()
+int ObTableSchema::check_primary_key_cover_partition_column(ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
-  if (!is_partitioned_table() || is_table_without_pk()) {
+  bool table_with_logic_pk = false;
+  if (OB_FAIL(is_table_with_logic_pk(schema_guard, table_with_logic_pk))) {
+    LOG_WARN("Failed to check if table with logic pk", K(ret));
+  } else if (!is_partitioned_table() || !table_with_logic_pk) {
     //nothing todo
-  } else if (OB_FAIL(check_rowkey_cover_partition_keys(partition_key_info_))) {
-    LOG_WARN("Check rowkey cover partition key failed", K(ret));
-  } else if (OB_FAIL(check_rowkey_cover_partition_keys(subpartition_key_info_))) {
-    LOG_WARN("Check rowkey cover subpartition key failed", K(ret));
+  } else {
+    ObSEArray<uint64_t, 8> logic_pk_column_ids;
+    if (OB_FAIL(get_logic_pk_column_ids(&schema_guard, logic_pk_column_ids))) {
+      LOG_WARN("Failed to get logic pk column ids", K(ret));
+    } else if (OB_FAIL(check_logic_pk_cover_partition_keys(partition_key_info_, logic_pk_column_ids))) {
+      LOG_WARN("Check logic pk cover partition key failed", K(ret));
+    } else if (OB_FAIL(check_logic_pk_cover_partition_keys(subpartition_key_info_, logic_pk_column_ids))) {
+      LOG_WARN("Check logic pk cover subpartition key failed", K(ret));
+    }
   }
 
   return ret;
 }
 
-int ObTableSchema::check_rowkey_cover_partition_keys(const ObPartitionKeyInfo &part_key_info)
+int ObTableSchema::check_logic_pk_cover_partition_keys(const ObPartitionKeyInfo &part_key_info, const ObIArray<uint64_t> &logic_pks)
 {
   int ret = OB_SUCCESS;
-  bool is_rowkey = true;
+  bool is_logic_pk = true;
   uint64_t column_id = OB_INVALID_ID;
-  for (int64_t i = 0; OB_SUCC(ret) && is_rowkey && i < part_key_info.get_size(); ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && is_logic_pk && i < part_key_info.get_size(); ++i) {
     if (OB_FAIL(part_key_info.get_column_id(i, column_id))) {
       LOG_WARN("Failed to get column id", K(ret));
-    } else if (OB_FAIL(rowkey_info_.is_rowkey_column(column_id, is_rowkey))) {
-      LOG_WARN("Failed to check is rowkey column", K(ret));
-    } else if (!is_rowkey) {
-      const ObColumnSchemaV2 *column_schema = NULL;
-      if (OB_ISNULL(column_schema = get_column_schema(column_id))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Column schema is NULL", K(ret));
-      } else if (column_schema->is_generated_column()) {
-        ObSEArray<uint64_t, 5> cascaded_columns;
-        if (OB_FAIL(column_schema->get_cascaded_column_ids(cascaded_columns))) {
-          LOG_WARN("Failed to get cascaded column ids", K(ret));
-        } else {
-          for (int64_t idx = 0; OB_SUCC(ret) && idx < cascaded_columns.count(); ++idx) {
-            if (OB_FAIL(rowkey_info_.is_rowkey_column(cascaded_columns.at(idx), is_rowkey))) {
-              LOG_WARN("Failed to check is rowkey column", K(ret));
-            } else if (!is_rowkey) {
-              ret = OB_EER_UNIQUE_KEY_NEED_ALL_FIELDS_IN_PF;
-              LOG_USER_ERROR(OB_EER_UNIQUE_KEY_NEED_ALL_FIELDS_IN_PF, "PRIMARY KEY");
-            } else { }//do nothing
+    } else {
+      is_logic_pk = is_contain(logic_pks, column_id);
+      if (!is_logic_pk) {
+        const ObColumnSchemaV2 *column_schema = NULL;
+        if (OB_ISNULL(column_schema = get_column_schema(column_id))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Column schema is NULL", K(ret));
+        } else if (column_schema->is_generated_column()) {
+          ObSEArray<uint64_t, 5> cascaded_columns;
+          if (OB_FAIL(column_schema->get_cascaded_column_ids(cascaded_columns))) {
+            LOG_WARN("Failed to get cascaded column ids", K(ret));
+          } else {
+            for (int64_t idx = 0; OB_SUCC(ret) && idx < cascaded_columns.count(); ++idx) {
+              is_logic_pk = is_contain(logic_pks, cascaded_columns.at(idx));
+              if (!is_logic_pk) {
+                ret = OB_EER_UNIQUE_KEY_NEED_ALL_FIELDS_IN_PF;
+                LOG_USER_ERROR(OB_EER_UNIQUE_KEY_NEED_ALL_FIELDS_IN_PF, "PRIMARY KEY");
+              }
+            }
           }
+        } else {
+          ret = OB_EER_UNIQUE_KEY_NEED_ALL_FIELDS_IN_PF;
+          LOG_USER_ERROR(OB_EER_UNIQUE_KEY_NEED_ALL_FIELDS_IN_PF, "PRIMARY KEY");
         }
-      } else {
-        ret = OB_EER_UNIQUE_KEY_NEED_ALL_FIELDS_IN_PF;
-        LOG_USER_ERROR(OB_EER_UNIQUE_KEY_NEED_ALL_FIELDS_IN_PF, "PRIMARY KEY");
       }
-    } else { }//do nothing
+    }
   }
   return ret;
 }
@@ -9957,6 +9987,44 @@ int ObTableSchema::get_vec_index_vid_col_id(uint64_t &vec_id_col_id, bool is_cid
   return ret;
 }
 
+int ObTableSchema::get_hybrid_vec_chunk_column_id(uint64_t &hybrid_vec_chunk_col_id) const
+{
+  int ret = OB_SUCCESS;
+  hybrid_vec_chunk_col_id = OB_INVALID_ID;
+  for (int64_t i = 0; OB_SUCC(ret) && OB_INVALID_ID == hybrid_vec_chunk_col_id && i < get_column_count(); ++i) {
+    const ObColumnSchemaV2 *column_schema = get_column_schema_by_idx(i);
+    if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(i), KPC(this));
+    } else if (column_schema->is_string_type()) {
+      hybrid_vec_chunk_col_id = column_schema->get_column_id();
+    }
+  }
+  if (OB_FAIL(ret) || OB_INVALID_ID == hybrid_vec_chunk_col_id) {
+    ret = ret != OB_SUCCESS ? ret : OB_ERR_INDEX_KEY_NOT_FOUND;
+  }
+  return ret;
+}
+
+int ObTableSchema::get_hybrid_vec_embedded_column_id(uint64_t &vec_id_col_id) const
+{
+  int ret = OB_SUCCESS;
+  vec_id_col_id = OB_INVALID_ID;
+  for (int64_t i = 0; OB_SUCC(ret) && OB_INVALID_ID == vec_id_col_id && i < get_column_count(); ++i) {
+    const ObColumnSchemaV2 *column_schema = get_column_schema_by_idx(i);
+    if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(i), KPC(this));
+    } else if (column_schema->is_hybrid_embedded_vec_column()) {
+      vec_id_col_id = column_schema->get_column_id();
+    }
+  }
+  if (OB_FAIL(ret) || OB_INVALID_ID == vec_id_col_id) {
+    ret = ret != OB_SUCCESS ? ret : OB_ERR_INDEX_KEY_NOT_FOUND;
+  }
+  return ret;
+}
+
 // Get generated column's id which contains a doc_id flag
 int ObTableSchema::get_docid_col_id(uint64_t &docid_col_id) const
 {
@@ -10019,6 +10087,26 @@ int ObTableSchema::get_rowkey_vid_tid(uint64_t &index_table_id) const
   return ret;
 }
 
+int ObTableSchema::get_embedded_vec_tid(uint64_t &index_table_id) const
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+  index_table_id = OB_INVALID_ID;
+  if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
+    LOG_WARN("get simple_index_infos failed", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+    if (share::schema::is_hybrid_vec_index_embedded_type(simple_index_infos.at(i).index_type_)) {
+      index_table_id = simple_index_infos.at(i).table_id_;
+      break;
+    }
+  }
+  if (OB_SUCC(ret) && OB_UNLIKELY(OB_INVALID_ID == index_table_id)) {
+    ret = OB_ERR_INDEX_KEY_NOT_FOUND;
+    LOG_DEBUG("not found rowkey vid index", K(ret), K(simple_index_infos));
+  }
+  return ret;
+}
 
 #define DEFINE_CHECK_HAS_INDEX_FUNC(index_type)                                                                        \
 int ObTableSchema::check_has_##index_type(ObSchemaGetterGuard &schema_guard, bool &found) const                       \

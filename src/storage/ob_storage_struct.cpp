@@ -366,9 +366,10 @@ bool ObDDLTableStoreParam::is_valid() const
 }
 
 UpdateUpperTransParam::UpdateUpperTransParam()
-: new_upper_trans_(nullptr),
-  last_minor_end_scn_(),
-  ss_new_upper_trans_(nullptr)
+  : new_upper_trans_(nullptr),
+    last_minor_end_scn_(),
+    ss_new_upper_trans_(nullptr),
+    gc_inc_major_ddl_scns_(nullptr)
 {
   last_minor_end_scn_.set_min();
 }
@@ -383,12 +384,12 @@ void UpdateUpperTransParam::reset()
   new_upper_trans_ = nullptr;
   last_minor_end_scn_.set_min();
   ss_new_upper_trans_ = nullptr;
+  gc_inc_major_ddl_scns_ = nullptr;
 }
 
 
 ObHATableStoreParam::ObHATableStoreParam()
   : transfer_seq_(-1),
-    need_check_sstable_(false),
     need_check_transfer_seq_(false),
     need_replace_remote_sstable_(false),
     is_only_replace_major_(false)
@@ -396,23 +397,10 @@ ObHATableStoreParam::ObHATableStoreParam()
 
 ObHATableStoreParam::ObHATableStoreParam(
     const int64_t transfer_seq,
-    const bool need_check_sstable,
-    const bool need_check_transfer_seq)
-  : transfer_seq_(transfer_seq),
-    need_check_sstable_(need_check_sstable),
-    need_check_transfer_seq_(need_check_transfer_seq),
-    need_replace_remote_sstable_(false),
-    is_only_replace_major_(false)
-{}
-
-ObHATableStoreParam::ObHATableStoreParam(
-    const int64_t transfer_seq,
-    const bool need_check_sstable,
     const bool need_check_transfer_seq,
     const bool need_replace_remote_sstable,
     const bool is_only_replace_major)
   : transfer_seq_(transfer_seq),
-    need_check_sstable_(need_check_sstable),
     need_check_transfer_seq_(need_check_transfer_seq),
     need_replace_remote_sstable_(need_replace_remote_sstable),
     is_only_replace_major_(is_only_replace_major)
@@ -499,7 +487,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam()
       allow_adjust_next_start_scn_(false),
       update_tablet_ss_change_version_(),
       tablet_ss_change_fully_applied_(false),
-      upper_trans_param_()
+      upper_trans_param_(),
+      need_wait_check_flag_(true)
 {
 }
 
@@ -521,7 +510,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     allow_adjust_next_start_scn_(false),
     update_tablet_ss_change_version_(),
     tablet_ss_change_fully_applied_(false),
-    upper_trans_param_(upper_trans_param)
+    upper_trans_param_(upper_trans_param),
+    need_wait_check_flag_(true)
 {
 }
 
@@ -531,7 +521,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     const ObStorageSchema *storage_schema,
     const int64_t rebuild_seq,
     const blocksstable::ObSSTable *sstable,
-    const bool allow_duplicate_sstable)
+    const bool allow_duplicate_sstable,
+    const bool need_wait_check_flag)
     : compaction_info_(),
       ddl_info_(),
       ha_info_(),
@@ -544,7 +535,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
       allow_adjust_next_start_scn_(false),
       update_tablet_ss_change_version_(),
       tablet_ss_change_fully_applied_(false),
-      upper_trans_param_()
+      upper_trans_param_(),
+      need_wait_check_flag_(need_wait_check_flag)
 {
 }
 

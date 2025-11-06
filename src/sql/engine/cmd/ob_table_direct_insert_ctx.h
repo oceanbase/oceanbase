@@ -54,11 +54,10 @@ public:
       table_load_instance_(nullptr),
       is_inited_(false),
       is_direct_(false),
-      is_online_gather_statistics_(false),
-      online_sample_percent_(1.) {}
+      force_inc_direct_write_(false) {}
   ~ObTableDirectInsertCtx();
-  TO_STRING_KV(K_(is_inited), K_(is_direct),
-               K_(is_online_gather_statistics));
+  TO_STRING_KV(K_(is_inited), K_(is_direct), K_(force_inc_direct_write));
+
 public:
   int init(sql::ObExecContext *exec_ctx,
            sql::ObPhysicalPlan &phy_plan,
@@ -67,27 +66,17 @@ public:
            const bool is_incremental,
            const bool enable_inc_replace,
            const bool is_insert_overwrite,
-           const double online_sample_percent);
+           const double online_sample_percent,
+           const bool is_online_gather_statistics);
   int commit();
   int finish();
   void destroy();
 
   bool get_is_direct() const { return is_direct_; }
   void set_is_direct(bool is_direct) { is_direct_ = is_direct; }
-  bool get_is_online_gather_statistics() const {
-    return is_online_gather_statistics_;
-  }
-
-  void set_is_online_gather_statistics(const bool is_online_gather_statistics) {
-    is_online_gather_statistics_ = is_online_gather_statistics;
-  }
-
-  void set_online_sample_percent(double online_sample_percent) {
-    online_sample_percent_ = online_sample_percent;
-  }
-
-  double get_online_sample_percent() const {
-    return online_sample_percent_;
+  bool get_force_inc_direct_write() const { return force_inc_direct_write_; }
+  void set_force_inc_direct_write(const bool force_inc_direct_write) {
+    force_inc_direct_write_ = force_inc_direct_write;
   }
 
 private:
@@ -99,8 +88,7 @@ private:
   observer::ObTableLoadInstance *table_load_instance_;
   bool is_inited_;
   bool is_direct_; //indict whether the plan is direct load plan including insert into append and load data direct
-  bool is_online_gather_statistics_;
-  double online_sample_percent_;
+  bool force_inc_direct_write_;
 };
 } // namespace observer
 } // namespace oceanbase

@@ -48,6 +48,7 @@ public:
       last_row_expr_(nullptr),
       op_id_(common::OB_INVALID_ID),
       is_heap_table_insert_(false),
+      is_clustering_key_table_insert_(false),
       with_barrier_(false),
       dfo_id_(OB_INVALID_ID)
   {
@@ -61,6 +62,7 @@ public:
            ObDMLOpDataReader *reader,
            ObDMLOpDataWriter *writer,
            const bool is_heap_table_insert,
+           const bool is_clustering_key_table_insert,
            const bool with_barrier = false);
 
   int destroy();
@@ -155,6 +157,7 @@ private:
   const ObExprPtrIArray *last_row_expr_; // 指向表达式，用于把 row 数据恢复到表达式中
   int64_t op_id_; // 当前操作这个 driver 的算子 id，用于 barrier 场景下发消息传参
   bool is_heap_table_insert_;
+  bool is_clustering_key_table_insert_;
   bool with_barrier_; // 当前算子需要支持 barrier，即：没有写完之前不可以对外吐出数据
                       // 这是针对 row-movement 场景下避免 insert、delete 并发写同一行
   uint64_t dfo_id_;   // with_barrier_等于true的情况下需要知道barrier对应的DFO

@@ -129,6 +129,7 @@ int ObMicroBlockBloomFilter::insert_micro_block(const ObMicroBlock &micro_block)
 
   ObMicroBlockData decompressed_data;
   ObMicroBlockData micro_block_data(micro_block.data_.get_buf(), micro_block.data_.get_buf_size());
+  ObMicroIndexData micro_index_data(*micro_block.micro_index_info_);
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -152,7 +153,7 @@ int ObMicroBlockBloomFilter::insert_micro_block(const ObMicroBlock &micro_block)
     ObDatumRow row;
     if (OB_FAIL(decrypt_and_decompress_micro_data(header,
                                                   micro_data,
-                                                  *micro_block.micro_index_info_,
+                                                  micro_index_data,
                                                   decompressed_data))) {
       LOG_WARN("fail to decrypt and decompress micro data", K(ret), K(micro_block));
     } else if (OB_FAIL(reader_helper.init(temp_allocator))) {
@@ -186,17 +187,20 @@ int ObMicroBlockBloomFilter::insert_micro_block(const ObMicroBlock &micro_block)
 }
 
 int ObMicroBlockBloomFilter::insert_micro_block(const ObMicroBlockDesc &micro_block_desc,
-                                                const ObMicroIndexInfo &micro_index_info)
+                                                const ObMicroIndexData &micro_index_data)
 {
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("fail to insert row", K(ret), KPC(this));
-  } else if (OB_UNLIKELY(!micro_block_desc.is_valid() || !micro_index_info.is_valid())) {
+  } else if (OB_UNLIKELY(!micro_block_desc.is_complete_micro_block_memory())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid micro_block_desc argument, header does not point to a complete micro block buffer", K(ret), K(micro_block_desc));
+  } else if (OB_UNLIKELY(!micro_block_desc.is_valid() || !micro_index_data.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fail to insert micro block, invalid argument",
-             K(ret), K(micro_block_desc), K(micro_index_info), KPC(this));
+             K(ret), K(micro_block_desc), K(micro_index_data), KPC(this));
   } else if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to insert micro block, unexpected internal status", K(ret), KPC(this));
@@ -212,18 +216,18 @@ int ObMicroBlockBloomFilter::insert_micro_block(const ObMicroBlockDesc &micro_bl
     ObDatumRow row;
     if (OB_FAIL(decrypt_and_decompress_micro_data(*header,
                                                   micro_data,
-                                                  micro_index_info,
+                                                  micro_index_data,
                                                   decompressed_data))) {
-      LOG_WARN("fail to decrypt and decompress micro data", K(ret), K(micro_block_desc), K(micro_index_info));
+      LOG_WARN("fail to decrypt and decompress micro data", K(ret), K(micro_block_desc), K(micro_index_data));
     } else if (OB_FAIL(reader_helper.init(temp_allocator))) {
       LOG_WARN("fail to init micro reader helper", K(ret));
     } else if (OB_FAIL(reader_helper.get_reader(row_store_type, reader))) {
-      LOG_WARN("fail to get reader", K(ret), K(micro_block_desc), K(micro_index_info));
+      LOG_WARN("fail to get reader", K(ret), K(micro_block_desc), K(micro_index_data));
     } else if (OB_ISNULL(reader)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null reader", K(ret), K(micro_block_desc), K(micro_index_info), KP(reader));
+      LOG_WARN("unexpected null reader", K(ret), K(micro_block_desc), K(micro_index_data), KP(reader));
     } else if (OB_FAIL(reader->init(decompressed_data, nullptr))) {
-      LOG_WARN("reader init failed", K(ret), K(micro_block_desc), K(micro_index_info));
+      LOG_WARN("reader init failed", K(ret), K(micro_block_desc), K(micro_index_data));
     } else if (OB_FAIL(reader->get_row_count(row_count))) {
       LOG_WARN("fail to get row count from micro block reader", K(ret));
      } else if (OB_FAIL(row.init(reader->get_column_count()))) {
@@ -247,7 +251,7 @@ int ObMicroBlockBloomFilter::insert_micro_block(const ObMicroBlockDesc &micro_bl
 
 int ObMicroBlockBloomFilter::decrypt_and_decompress_micro_data(const ObMicroBlockHeader &header,
                                                                const ObMicroBlockData &micro_data,
-                                                               const ObMicroIndexInfo &micro_index_info,
+                                                               const ObMicroIndexData &micro_index_data,
                                                                ObMicroBlockData &decompressed_data)
 {
   int ret = OB_SUCCESS;
@@ -255,13 +259,13 @@ int ObMicroBlockBloomFilter::decrypt_and_decompress_micro_data(const ObMicroBloc
   ObMicroBlockDesMeta micro_des_meta;
   bool is_compressed = false;
 
-  if (OB_UNLIKELY(!header.is_valid() || !micro_data.is_valid() || !micro_index_info.is_valid())) {
+  if (OB_UNLIKELY(!header.is_valid() || !micro_data.is_valid() || !micro_index_data.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fail to decrypt and decompress micro data, invalid argument",
-             K(ret), K(header), K(micro_data), K(micro_index_info));
+             K(ret), K(header), K(micro_data), K(micro_index_data));
   } else if (OB_FAIL(
-                 micro_index_info.row_header_->fill_micro_des_meta(false /* need_deep_copy_key */, micro_des_meta))) {
-    LOG_WARN("fail to fill micro block deserialize meta", K(ret), K(micro_index_info));
+                 micro_index_data.row_header_->fill_micro_des_meta(false /* need_deep_copy_key */, micro_des_meta))) {
+    LOG_WARN("fail to fill micro block deserialize meta", K(ret), K(micro_index_data));
   } else if (OB_FAIL(macro_reader_.decrypt_and_decompress_data(micro_des_meta,
                                                                micro_data.get_buf(),
                                                                micro_data.get_buf_size(),

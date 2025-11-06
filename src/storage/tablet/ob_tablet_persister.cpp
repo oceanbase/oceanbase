@@ -1427,7 +1427,7 @@ int ObTabletPersister::transform(const ObTabletTransformArg &arg, char *buf, con
       remain_size_before_cache_table_store = remain;
       table_store_size = table_store->get_deep_copy_size();
       if (OB_LIKELY(remain - table_store_size >= 0)) {
-        if (pool_type == ObTabletPoolType::TP_LARGE && OB_FAIL(table_store->batch_cache_sstable_meta(allocator, remain - table_store_size))) {
+        if (pool_type == ObTabletPoolType::TP_LARGE && OB_FAIL(ObCacheSSTableHelper::batch_cache_sstable_meta(allocator, remain - table_store_size, table_store))) {
           LOG_WARN("fail to batch cache sstable meta", K(ret), K(remain), K(table_store_size));
         } else {
           ObIStorageMetaObj *table_store_obj = nullptr;

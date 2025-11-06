@@ -1120,7 +1120,7 @@ int ObTxDataTable::update_calc_upper_trans_version_cache_(ObITable *table)
     ObStorageMetaHandle sstable_handle;
     ObSSTable *sstable = static_cast<ObSSTable *>(table);
     if (sstable->is_loaded()) {
-    } else if (OB_FAIL(ObTabletTableStore::load_sstable(sstable->get_addr(), sstable->is_co_sstable(), sstable_handle))) {
+    } else if (OB_FAIL(ObCacheSSTableHelper::load_sstable(sstable->get_addr(), sstable->is_co_sstable(), sstable_handle))) {
       STORAGE_LOG(WARN, "fail to load sstable", K(ret), KPC(sstable));
     } else if (OB_FAIL(sstable_handle.get_sstable(sstable))) {
       STORAGE_LOG(WARN, "fail to get sstable", K(ret), K(sstable_handle));

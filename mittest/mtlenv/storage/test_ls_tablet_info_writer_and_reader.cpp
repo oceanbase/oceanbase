@@ -164,7 +164,7 @@ void TestLSTabletInfoWR::fill_tablet_meta()
   ret = src_handle.get_obj()->init_for_first_time_creation(arena_allocator_, src_key.ls_id_, src_key.tablet_id_, src_key.tablet_id_,
       scn, 2022, create_tablet_schema, true/*need_create_empty_major_sstable*/, share::SCN::invalid_scn()/*clog_checkpoint_scn*/,
       share::SCN::invalid_scn()/*mds_checkpoint_scn*/, false/*is_split_dest_tablet*/, ObTabletID()/*split_src_tablet_id*/,
-      false/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, false/*has_cs_replica*/, ls_handle.get_ls()->get_freezer());
+      false/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, false/*has_cs_replica*/, DATA_VERSION_4_3_0_0, ls_handle.get_ls()->get_freezer());
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   share::SCN create_commit_scn;

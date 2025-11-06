@@ -257,6 +257,8 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
   ObTableScanIterator *row_iter = static_cast<ObTableScanIterator *>(param.iter_);
   ObIAllocator *allocator = param.allocator_;
   ObTextStringIter *&str_iter = param.str_iter_;
+  bool is_vec_tablet_rebuild = param.is_vec_tablet_rebuild_;
+  bool is_need_unvisible_row = param.is_need_unvisible_row_;
   ObTextStringIterState state;
   ObString src_block_data;
   if (!param.is_valid()) {
@@ -299,10 +301,16 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid row", K(ret), K(row));
         } else {
+          bool skip_this_row = false;
           key_datum = row->storage_datums_[0];
           data_datum = row->storage_datums_[1];
-          LOG_INFO("[vec index debug] show key and data for vsag deserialize", K(key_datum), K(data_datum));
-          if (OB_ISNULL(str_iter = OB_NEWx(ObTextStringIter, allocator, ObLongTextType, CS_TYPE_BINARY, data_datum.get_string(), true))) {
+
+          LOG_INFO("[vec index debug] show key and data for vsag deserialize", K(key_datum), K(data_datum), K(is_need_unvisible_row), K(is_vec_tablet_rebuild));
+
+          if (OB_FALSE_IT(ObVecIndexAsyncTaskUtil::get_row_need_skip_for_compatibility(*row, is_need_unvisible_row, skip_this_row))) {
+          } else if (skip_this_row) {
+            LOG_INFO("skip deseriable row", K(key_datum), K(is_need_unvisible_row), K(is_vec_tablet_rebuild)); // continue;
+          } else if (OB_ISNULL(str_iter = OB_NEWx(ObTextStringIter, allocator, ObLongTextType, CS_TYPE_BINARY, data_datum.get_string(), true))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("fail to new ObTextStringIter", KR(ret));
           } else if (OB_FAIL(str_iter->init(0, NULL, allocator))) {
@@ -310,6 +318,8 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
           } else if (index_type_ == VIAT_MAX) {
             ObPluginVectorIndexAdaptor *adp = static_cast<ObPluginVectorIndexAdaptor*>(adp_);
             ObCollationType calc_cs_type = CS_TYPE_UTF8MB4_GENERAL_CI;
+            uint32_t idx_ipivf = ObCharset::locate(calc_cs_type, key_datum.get_string().ptr(), key_datum.get_string().length(),
+                                       "ipivf", 5, 1);
             uint32_t idx_sq = ObCharset::locate(calc_cs_type, key_datum.get_string().ptr(), key_datum.get_string().length(),
                                        "hnsw_sq", 7, 1);
             uint32_t idx_bq = ObCharset::locate(calc_cs_type, key_datum.get_string().ptr(), key_datum.get_string().length(),
@@ -319,6 +329,11 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
             if (OB_ISNULL(adp)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("get invalid adp", K(ret));
+            } else if (idx_ipivf > 0) {
+              index_type_ = VIAT_IPIVF;
+              if (OB_FAIL(adp->try_init_snap_data(VIAT_IPIVF))) {
+                LOG_WARN("failed to init sparse vector snap data", K(ret), K(index_type_));
+              }
             } else if (idx_sq > 0) {
               index_type_ = VIAT_HNSW_SQ;
               if (OB_FAIL(adp->try_init_snap_data(VIAT_HNSW_SQ))) {
@@ -340,7 +355,16 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
                 LOG_WARN("failed to init snap data", K(ret), K(index_type_));
               }
             }
-            LOG_INFO("HgraphIndex vector index get key data from snap_index_table", K(ret), K(index_type_), K(key_datum.get_string()));
+
+            LOG_INFO("HgraphIndex vector index get key data from snap_index_table", K(ret), K(is_vec_tablet_rebuild), K(index_type_), K(key_datum.get_string()));
+            if (OB_FAIL(ret)) {
+            } else if (is_vec_tablet_rebuild) { // only do once
+              if (OB_FAIL(ObVecIndexAsyncTaskUtil::init_tablet_rebuild_new_adapter(adp, key_datum.get_string()))) {
+                LOG_WARN("fail to init tablet rebuild new adpater", K(ret));
+              } else {
+                LOG_INFO("init tablet rebuild new adapter", K(ret), KPC(adp));
+              }
+            }
           }
         }
       }
@@ -352,7 +376,9 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
       if (OB_ISNULL(adp_ptr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get invalid adp", K(ret));
-      } else if (!adp_ptr->is_mem_data_init_atomic(VIRT_SNAP)) {
+      } else if (!adp_ptr->is_mem_data_init_atomic(VIRT_SNAP) && !is_vec_tablet_rebuild) {
+        // If it’s vec tablet rebuild and nothing was deserialized, then there’s no need to create snap_index here; the outer layer will create it.
+        // Otherwise, it may cause a mismatch between the index data and the index type.
         if (OB_FAIL(adp_ptr->init_snap_data_without_lock(VIAT_HNSW))) {
           LOG_WARN("failed to init hnsw mem data", K(ret));
         } else {

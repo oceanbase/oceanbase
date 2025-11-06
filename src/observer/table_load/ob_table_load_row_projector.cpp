@@ -21,6 +21,7 @@
 #include "storage/direct_load/ob_direct_load_datum_row.h"
 #include "storage/direct_load/ob_direct_load_vector_utils.h"
 #include "storage/ob_i_store.h"
+#include "observer/table_load/ob_table_load_schema.h"
 
 namespace oceanbase
 {
@@ -34,6 +35,7 @@ using namespace storage;
 ObTableLoadRowProjector::ObTableLoadRowProjector()
   : src_column_num_(0),
     dest_column_num_(0),
+    dest_rowkey_column_num_(0),
     lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
     index_has_lob_(false),
     is_inited_(false)
@@ -71,8 +73,28 @@ int ObTableLoadRowProjector::init(const ObTableSchema *src_table_schema,
     LOG_WARN("fail to get store column count", KR(ret));
   } else {
     dest_column_num_ = col_projector_.count();
+    dest_rowkey_column_num_ = dest_table_schema->get_rowkey_column_num();
     lob_inrow_threshold_ = src_table_schema->get_lob_inrow_threshold();
     is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObTableLoadRowProjector::init(const uint64_t src_table_id, const uint64_t dest_table_id)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *src_table_schema = nullptr;
+  const ObTableSchema *dest_table_schema = nullptr;
+  if (OB_FAIL(ObTableLoadSchema::get_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObTableLoadSchema::get_table_schema(schema_guard, tenant_id, src_table_id, src_table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret));
+  } else if (OB_FAIL(ObTableLoadSchema::get_table_schema(schema_guard, tenant_id, dest_table_id, dest_table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret));
+  } else if (OB_FAIL(init(src_table_schema, dest_table_schema))) {
+    LOG_WARN("fail to do init", KR(ret));
   }
   return ret;
 }
@@ -240,6 +262,7 @@ int ObTableLoadRowProjector::check_index_lob_inrow(storage::ObDirectLoadDatumRow
 {
   int ret = OB_SUCCESS;
   if (index_has_lob_) {
+    // Check for outrow LOB, out row lob is not supported in index table
     for (int64_t i = 0; OB_SUCC(ret) && i < col_projector_.size(); ++i) {
       const ObDatum &datum = dest_datum_row.storage_datums_[i];
       if (index_column_descs_.at(i).col_type_.is_lob_storage() && !datum.is_null() && !datum.is_nop()) {
@@ -252,6 +275,31 @@ int ObTableLoadRowProjector::check_index_lob_inrow(storage::ObDirectLoadDatumRow
           STORAGE_LOG(WARN, "outrow lob is not supported in index table", K(ret), K(locator), K(datum), K(data));
         }
       }
+    }
+    // Check primary key length sum < OB_MAX_VARCHAR_LENGTH_KEY
+    int64_t total_rowkey_length = 0;
+    int64_t lob_length = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < dest_rowkey_column_num_; ++i) {
+      const ObDatum &datum = dest_datum_row.storage_datums_[i];
+      if (!datum.is_null() && !datum.is_nop()) {
+        if (index_column_descs_.at(i).col_type_.is_lob_storage()) {
+          const ObString &data = datum.get_string();
+          ObLobLocatorV2 locator(data, true);
+          if (OB_FAIL(locator.get_lob_data_byte_len(lob_length))) {
+            LOG_WARN("fail to get lob data byte len", KR(ret), K(locator));
+          } else {
+            total_rowkey_length = total_rowkey_length + lob_length + sizeof(ObLobCommon);
+          }
+        } else {
+          total_rowkey_length = total_rowkey_length + datum.len_;
+        }
+      }
+    }
+    if (OB_SUCC(ret) && total_rowkey_length > OB_MAX_VARCHAR_LENGTH_KEY) {
+      ret = OB_ERR_TOO_LONG_KEY_LENGTH;
+      LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, OB_MAX_VARCHAR_LENGTH_KEY);
+      STORAGE_LOG(WARN, "primary key length sum is too long", K(ret), K(total_rowkey_length),
+                  K(OB_MAX_VARCHAR_LENGTH_KEY));
     }
   }
   return ret;

@@ -1096,8 +1096,10 @@ int ObLogMetaManager::check_column_(
   const bool enable_output_hidden_primary_key = (0 != TCONF.enable_output_hidden_primary_key);
   const bool enable_output_invisible_column = (0 != TCONF.enable_output_invisible_column);
   // is column not user_column in OB.
-  bool is_non_ob_user_column = (column_id < OB_APP_MIN_COLUMN_ID) || (column_id >= OB_MIN_SHADOW_COLUMN_ID);
-  is_heap_table_pk_increment_column = is_table_with_hidden_pk_column  && (OB_HIDDEN_PK_INCREMENT_COLUMN_ID == column_id);
+  bool is_non_ob_user_column = (column_id < OB_APP_MIN_COLUMN_ID) || (column_id >= OB_MIN_SHADOW_COLUMN_ID)
+                            || (column_schema.is_hidden_clustering_key_column());
+  is_heap_table_pk_increment_column = is_table_with_hidden_pk_column && ((OB_HIDDEN_PK_INCREMENT_COLUMN_ID == column_id)
+                            || (column_schema.is_hidden_clustering_key_column()));
 
   if (is_rowkey_column) {
     // user specified rowkey column should output;

@@ -80,7 +80,6 @@ public:
 private:
   const static int64_t CHECK_STATUS_CYCLE = 10000;
   static inline void make_selector(const sql::ObBatchRows &brs, uint16_t *selector, int64_t &size);
-  inline int adapt_vectors(const ObIArray<common::ObIVector *> &vectors, const sql::ObBatchRows &brs);
   int check_columns(const common::ObIArray<uint64_t> &column_ids);
   int check_tablets(ObDirectLoadVector *tablet_id_vector, const int64_t size);
   int init_batch_ctx(const bool is_vectorized, const bool use_rich_format);

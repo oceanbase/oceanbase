@@ -339,6 +339,42 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
                                                             column_list))) {
         LOG_WARN("failed to add undefined column infos", K(ret));
       }
+      // 校验视图中引用的函数的 DEFINER 用户是否存在（按依赖收集到的函数）
+      if (OB_SUCC(ret)) {
+        const ObIArray<share::schema::ObSchemaObjVersion> *dep_objs = select_stmt->get_global_dependency_table();
+        if (NULL != dep_objs) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < dep_objs->count(); ++i) {
+            const share::schema::ObSchemaObjVersion &obj = dep_objs->at(i);
+            if (share::schema::DEPENDENCY_FUNCTION == obj.object_type_) {
+              const share::schema::ObRoutineInfo *routine_info = NULL;
+              if (OB_ISNULL(params_.schema_checker_)
+                  || OB_ISNULL(params_.schema_checker_->get_schema_guard())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("schema checker or guard is null", K(ret));
+              } else if (OB_FAIL(params_.schema_checker_->get_schema_guard()->get_routine_info(
+                           session_info_->get_effective_tenant_id(), obj.object_id_, routine_info))) {
+                LOG_WARN("get routine info failed", K(ret), K(obj.object_id_));
+              } else if (OB_NOT_NULL(routine_info) && lib::is_mysql_mode()) {
+                // 解析 priv_user 为 user@host
+                ObString priv_user = routine_info->get_priv_user();
+                if (!priv_user.empty()) {
+                  ObString user_name = priv_user.split_on('@');
+                  ObString host_name = priv_user;
+                  const share::schema::ObUserInfo *user_info = nullptr;
+                  if (OB_FAIL(params_.schema_checker_->get_schema_guard()->get_user_info(
+                          session_info_->get_effective_tenant_id(), user_name, host_name, user_info))) {
+                    LOG_WARN("get user info failed", K(ret));
+                  } else if (OB_ISNULL(user_info)) {
+                    // 当视图引用函数且该对象的 DEFINER 不存在时，在创建视图时报错
+                    ret = OB_ERR_USER_NOT_EXIST;
+                    LOG_WARN("definer user for routine not exist when creating view", K(user_name), K(host_name), K(obj.object_id_), K(ret));
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(collect_dependency_infos(params_.query_ctx_, create_arg))) {
         LOG_WARN("failed to collect dependency infos", K(ret));
@@ -524,7 +560,11 @@ int ObCreateViewResolver::resolve_materialized_view_container_table(ParseNode *p
   container_table_schema.set_table_type(ObTableType::USER_TABLE);
   container_table_schema.get_view_schema().reset();
   container_table_schema.set_max_dependency_version(OB_INVALID_VERSION);
-  if (OB_FAIL(resolve_partition_option(partition_node, container_table_schema, true))) {
+  ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
+  if (OB_ISNULL(schema_guard)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema guard is null", KR(ret));
+  } else if (OB_FAIL(resolve_partition_option(partition_node, container_table_schema, true))) {
     LOG_WARN("fail to resolve_partition_option", KR(ret));
   } else if (OB_FAIL(set_table_option_to_schema(container_table_schema))) {
     SQL_RESV_LOG(WARN, "set table option to schema failed", KR(ret));
@@ -545,7 +585,7 @@ int ObCreateViewResolver::resolve_materialized_view_container_table(ParseNode *p
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(container_table_schema.check_primary_key_cover_partition_column())) {
+  } else if (OB_FAIL(container_table_schema.check_primary_key_cover_partition_column(*schema_guard))) {
     SQL_RESV_LOG(WARN, "fail to check primary key cover partition column", KR(ret));
   } else {
     container_table_schema.set_collation_type(collation_type_);

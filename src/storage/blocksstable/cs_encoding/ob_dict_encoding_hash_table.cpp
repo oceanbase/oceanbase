@@ -46,7 +46,6 @@ ObDictEncodingHashTable::ObDictEncodingHashTable()
       buckets_(NULL),
       nodes_(NULL),
       row_refs_(nullptr),
-      refs_permutation_(nullptr),
       null_node_(),
       nop_node_(),
       alloc_(blocksstable::OB_ENCODING_LABEL_HASH_TABLE,

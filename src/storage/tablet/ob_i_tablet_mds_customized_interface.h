@@ -41,6 +41,15 @@ public:
                              mds::TwoPhaseCommitState &trans_stat,
                              share::SCN &trans_version,
                              const int64_t read_seq = 0) const;
+  int get_ddl_complete(const share::SCN &snapshot,
+                       ObIAllocator &allocator,
+                       ObTabletDDLCompleteMdsUserData &data,
+                       const int64_t timeout = ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US) const;
+  int get_inc_major_direct_load_info(const share::SCN &snapshot,
+                                     ObIAllocator &allocator,
+                                     const ObTabletDDLCompleteMdsUserDataKey &key,
+                                     ObTabletDDLCompleteMdsUserData &data,
+                                     const int64_t timeout = ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US) const;
 
   int get_split_info_data(const share::SCN &snapshot,
                           ObTabletSplitInfoMdsUserData &data,
@@ -52,6 +61,18 @@ public:
     share::SCN &trans_version) const;
   // customized get_snapshot
   // TODO (jiahua.cjh): move interface from ob_i_tablet_mds_interface to this file
+};
+
+struct ReadDDLCompleteOp
+{
+  ReadDDLCompleteOp(ObIAllocator &allocator, ObTabletDDLCompleteMdsUserData &ddl_complete)
+      : allocator_(allocator), ddl_complete_(ddl_complete) {}
+  int operator()(const ObTabletDDLCompleteMdsUserData &ddl_complete)
+  {
+    return ddl_complete_.assign(allocator_, ddl_complete);
+  }
+  ObIAllocator &allocator_;
+  ObTabletDDLCompleteMdsUserData &ddl_complete_;
 };
 
 struct ReadSplitInfoDataOp

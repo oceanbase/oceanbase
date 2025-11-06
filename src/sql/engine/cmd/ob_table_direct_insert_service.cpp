@@ -33,6 +33,7 @@ int ObTableDirectInsertService::start_direct_insert(ObExecContext &ctx,
   const bool is_inc_replace = phy_plan.get_enable_replace();
   const bool is_insert_overwrite = phy_plan.get_is_insert_overwrite();
   const double online_sample_precent = phy_plan.get_online_sample_percent();
+  const bool is_online_gather_statistics = phy_plan.get_is_online_gather_statistics();
   ObSQLSessionInfo *session = GET_MY_SESSION(ctx);
   bool auto_commit = false;
   CK (OB_NOT_NULL(session));
@@ -42,13 +43,15 @@ int ObTableDirectInsertService::start_direct_insert(ObExecContext &ctx,
   } else if (is_insert_overwrite && (!auto_commit || session->is_in_transaction())) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "using insert overwrite within a transaction is");
-  } else if (!is_inc_direct_load && (!auto_commit || session->is_in_transaction())) {
+  } else if (!auto_commit || session->is_in_transaction()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "using full direct-insert within a transaction is");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "using full or inc direct-insert within a transaction is");
   } else {
     uint64_t table_id = phy_plan.get_append_table_id();
     int64_t parallel = phy_plan.get_px_dop();
-    if (OB_FAIL(table_direct_insert_ctx.init(&ctx, phy_plan, table_id, parallel, is_inc_direct_load, is_inc_replace, is_insert_overwrite, online_sample_precent))) {
+    if (OB_FAIL(table_direct_insert_ctx.init(&ctx, phy_plan, table_id, parallel, is_inc_direct_load,
+                                             is_inc_replace, is_insert_overwrite,
+                                             online_sample_precent, is_online_gather_statistics))) {
       LOG_WARN("failed to init table direct insert ctx", KR(ret), K(table_id), K(parallel), K(is_inc_direct_load), K(is_inc_replace), K(is_insert_overwrite));
     }
   }

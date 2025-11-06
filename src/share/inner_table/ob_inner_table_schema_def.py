@@ -7626,7 +7626,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'wyh329796',
+  owner = 'tushicheng.tsc',
   table_name = '__all_storage_io_usage',
   table_id = '517',
 
@@ -11737,7 +11737,8 @@ def_table_schema(
       ('data_checksum', 'int'),
       ('table_flag', 'int'),
       ('rec_scn', 'int'),
-      ('row_count','int')
+      ('row_count','int'),
+      ('uncommit_tx_info', 'varchar:MAX_UNCOMMIT_TX_INFO_LENGTH')
     ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -14845,7 +14846,7 @@ def_table_schema(
 )
 # 12375: __all_virtual_time_guard_slow_history
 def_table_schema(
-  owner = 'wyh329796',
+  owner = 'weixiaoxian.wxx',
   table_name = '__all_virtual_dup_ls_lease_mgr',
   table_id = '12376',
   table_type = 'VIRTUAL_TABLE',
@@ -14879,7 +14880,7 @@ def_table_schema(
 # 12377: __all_virtual_dup_ls_follower_lease_info
 
 def_table_schema(
-  owner = 'wyh329796',
+  owner = 'weixiaoxian.wxx',
   table_name = '__all_virtual_dup_ls_tablet_set',
   table_id = '12378',
   table_type = 'VIRTUAL_TABLE',
@@ -14908,7 +14909,7 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 def_table_schema(
-  owner = 'wyh329796',
+  owner = 'weixiaoxian.wxx',
   table_name = '__all_virtual_dup_ls_tablets',
   table_id = '12379',
   table_type = 'VIRTUAL_TABLE',
@@ -16157,7 +16158,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner      = 'wyh329796',
+  owner      = 'tushicheng.tsc',
   table_name = '__all_virtual_group_io_stat',
   table_id = '12483',
   table_type = 'VIRTUAL_TABLE',
@@ -17039,6 +17040,8 @@ def_table_schema(
   ('tx_share_limit', 'int'),
   ('vector_mem_detail_info', 'varchar:OB_MAX_MYSQL_VARCHAR_LENGTH')
   ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
 )
 
 def_table_schema(
@@ -17214,6 +17217,8 @@ def_table_schema(
 # 12577: __all_virtual_macro_block_copy_task
 # 12578: __all_virtual_macro_block_copy_task_progress
 # 12579: __all_virtual_macro_block_copy_task_history
+# 12580: __all_virtual_tablet_to_global_temporary_table
+# 12581: __all_virtual_external_catalog_client_pool_stat
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -18059,6 +18064,7 @@ def_table_schema(
           AND    t.database_id = db.database_id
           AND    db.in_recyclebin = 0
           AND    db.database_name != '__recyclebin'
+          AND    t.table_mode >> 30 & 1 = 0
         UNION ALL
           SELECT db.database_name                                           AS TABLE_SCHEMA,
               t.table_name                                                  AS TABLE_NAME,
@@ -18394,6 +18400,7 @@ def_table_schema(
                       on a.tenant_id = c.tenant_id and a.database_id = c.database_id
                     where a.tenant_id = 0
                       and a.table_mode >> 12 & 15 in (0,1)
+                      and a.table_mode >> 30 & 1 = 0
                       and a.index_attributes_set & 16 = 0
                       and c.in_recyclebin = 0
                       and c.database_name != '__recyclebin'
@@ -33942,6 +33949,7 @@ def_table_schema(
       AND t.table_mode >> 16 & 1 = 0
       AND t.table_mode >> 12 & 15 in (0,1)
       AND t.index_attributes_set & 16 = 0
+      AND t.table_mode >> 30 & 1 = 0
       AND (0 = sys_privilege_check('table_acc', effective_tenant_id())
            OR 0 = sys_privilege_check('table_acc', effective_tenant_id(), d.database_name, t.table_name))
 
@@ -40165,7 +40173,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'wyh329796',
+  owner           = 'tushicheng.tsc',
   table_name      = 'DBA_OB_RSRC_DIRECTIVES',
   table_id        = '21546',
   table_type      = 'SYSTEM_VIEW',
@@ -40191,7 +40199,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'wyh329796',
+  owner           = 'tushicheng.tsc',
   table_name      = 'CDB_OB_RSRC_DIRECTIVES',
   table_id        = '21547',
   table_type      = 'SYSTEM_VIEW',
@@ -40449,7 +40457,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'wyh329796',
+  owner           = 'tushicheng.tsc',
   table_name      = 'V$OB_GROUP_IO_STAT',
   table_id        = '21558',
   table_type      = 'SYSTEM_VIEW',
@@ -40483,7 +40491,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'wyh329796',
+  owner           = 'tushicheng.tsc',
   table_name      = 'GV$OB_GROUP_IO_STAT',
   table_id        = '21559',
   table_type      = 'SYSTEM_VIEW',
@@ -40513,7 +40521,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'wyh329796',
+  owner           = 'tushicheng.tsc',
   table_name      = 'DBA_OB_STORAGE_IO_USAGE',
   table_id        = '21560',
   table_type      = 'SYSTEM_VIEW',
@@ -40565,7 +40573,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'wyh329796',
+  owner           = 'tushicheng.tsc',
   table_name      = 'CDB_OB_STORAGE_IO_USAGE',
   table_id        = '21561',
   table_type      = 'SYSTEM_VIEW',
@@ -44286,6 +44294,9 @@ def_table_schema(
   WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
   """.replace("\n", " ")
 )
+
+# 21695: GV$OB_EXTERNAL_CATALOG_CLIENT_POOL_STAT
+# 21696: V$OB_EXTERNAL_CATALOG_CLIENT_POOL_STAT
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -66195,7 +66206,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'wyh329796',
+  owner           = 'tushicheng.tsc',
   table_name      = 'DBA_OB_STORAGE_IO_USAGE',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -75100,7 +75111,7 @@ def_table_schema(
 """.replace("\n", " ")
 )
 def_table_schema(
-  owner           = 'wyh329796',
+  owner           = 'tushicheng.tsc',
   table_name      = 'DBA_OB_RSRC_DIRECTIVES',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -75227,7 +75238,7 @@ AND
 )
 
 def_table_schema(
-  owner           = 'wyh329796',
+  owner           = 'tushicheng.tsc',
   table_name      = 'V$OB_GROUP_IO_STAT',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -75263,7 +75274,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'wyh329796',
+  owner           = 'tushicheng.tsc',
   table_name      = 'GV$OB_GROUP_IO_STAT',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',

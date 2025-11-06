@@ -111,6 +111,8 @@ enum class ObStorageObjectType : uint8_t
     EXTERNAL_TABLE_FILE,
     MACRO_CACHE_CKPT_DATA,
     MACRO_CACHE_CKPT_META,
+    SHARED_INC_MAJOR_DATA_MACRO,
+    SHARED_INC_MAJOR_META_MACRO,
     MAX
 };
 static constexpr uint8_t SS_OBJECT_MAX_TYPE_VAL = static_cast<uint8_t>(ObStorageObjectType::MAX);
@@ -1867,6 +1869,70 @@ public:
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
   virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+
+#endif
+  virtual int opt_to_string(char *buf, const int64_t buf_len, int64_t &pos, const ObStorageObjectOpt &opt) const;
+  virtual int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const;
+};
+
+/**
+ * ---------------------------------------ObSharedIncMajorDataMacroType----------------------------------------
+ */
+class ObSharedIncMajorDataMacroType : public ObStorageObjectTypeBase
+{
+public:
+  ObSharedIncMajorDataMacroType() : ObStorageObjectTypeBase(ObStorageObjectType::SHARED_INC_MAJOR_DATA_MACRO) {}
+  virtual ~ObSharedIncMajorDataMacroType() {}
+  virtual bool is_macro_data() const { return true; }
+  virtual bool is_shared() const { return true; }
+  virtual bool is_direct_write() const { return true; }
+  virtual bool is_support_fd_cache() const { return true; }
+  virtual bool is_read_out_of_bounds() const { return false; }
+  virtual bool is_valid(const MacroBlockId &file_id) const;
+  virtual bool has_effective_tablet_id() const { return true; }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+  virtual int to_local_path_format(char *path, const int64_t length, int64_t &pos,
+                                   const MacroBlockId &file_id, const uint64_t tenant_id,
+                                   const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const;
+  virtual int to_remote_path_format(char *path, const int64_t length, int64_t &pos,
+                                    const MacroBlockId &file_id, const char *object_storage_root_dir,
+                                    const uint64_t cluster_id, const uint64_t tenant_id,
+                                    const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
+  virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const;
+
+#endif
+  virtual int opt_to_string(char *buf, const int64_t buf_len, int64_t &pos, const ObStorageObjectOpt &opt) const;
+  virtual int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const;
+};
+
+/**
+ * ---------------------------------------ObSharedIncMajorMetaMacroType----------------------------------------
+ */
+class ObSharedIncMajorMetaMacroType : public ObStorageObjectTypeBase
+{
+public:
+  ObSharedIncMajorMetaMacroType() : ObStorageObjectTypeBase(ObStorageObjectType::SHARED_INC_MAJOR_META_MACRO) {}
+  virtual ~ObSharedIncMajorMetaMacroType() {}
+  virtual bool is_macro_meta() const { return true; }
+  virtual bool is_shared() const { return true; }
+  virtual bool is_direct_write() const { return true; }
+  virtual bool is_support_fd_cache() const { return true; }
+  virtual bool is_read_out_of_bounds() const { return false; }
+  virtual bool is_valid(const MacroBlockId &file_id) const;
+  virtual bool has_effective_tablet_id() const { return true; }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+  virtual int to_local_path_format(char *path, const int64_t length, int64_t &pos,
+                                   const MacroBlockId &file_id, const uint64_t tenant_id,
+                                   const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const;
+  virtual int to_remote_path_format(char *path, const int64_t length, int64_t &pos,
+                                    const MacroBlockId &file_id, const char *object_storage_root_dir,
+                                    const uint64_t cluster_id, const uint64_t tenant_id,
+                                    const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
+  virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const;
 
 #endif
   virtual int opt_to_string(char *buf, const int64_t buf_len, int64_t &pos, const ObStorageObjectOpt &opt) const;

@@ -23,6 +23,16 @@ OB_SERIALIZE_MEMBER(ObTabletAutoincInterval,
                     start_,
                     end_)
 
+void ObTabletCacheInterval::reset()
+{
+  tablet_id_ = OB_INVALID_ID;
+  cache_size_ = 0;
+  task_id_ = -1;
+  next_value_ = 0;
+  start_ = 0;
+  end_ = 0;
+}
+
 void ObTabletCacheInterval::set(uint64_t start, uint64_t end)
 {
   next_value_ = start;
@@ -44,9 +54,8 @@ int ObTabletCacheInterval::get_value(uint64_t &value)
 {
   int ret = OB_SUCCESS;
   value = next_value_;
-  if (value + 1 > end_) {
-    ret = OB_EAGAIN;
-  }
+  value = max(value, start_);
+  value = min(value, end_);
   return ret;
 }
 

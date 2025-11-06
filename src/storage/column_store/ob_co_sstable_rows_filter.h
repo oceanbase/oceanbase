@@ -99,6 +99,9 @@ private:
   int rewrite_filter_tree(
       sql::ObPushdownFilterExecutor *filter,
       uint32_t &depth);
+  int rewrite_cg_iter_idx(
+      sql::ObPushdownFilterExecutor *filter,
+      int64_t &cg_iter_idx);
   int init_co_sstable(ObITable *table);
   int try_locating_cg_iter(
       const int64_t iter_idx_to_filter_next,

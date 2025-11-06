@@ -107,7 +107,7 @@ DEF_INT(cpu_count, OB_CLUSTER_PARAMETER, "0", "[0,]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(trace_log_slow_query_watermark, OB_CLUSTER_PARAMETER, "1s", "[1ms,]",
         "the threshold of execution time (in milliseconds) of a query beyond "
-        "which it is considered to be a \\'slow query\\'. Range: [1ms,+∞)",
+        "which it is considered to be \\'slow query\\'. Range: [1ms,+∞)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_record_trace_log, OB_CLUSTER_PARAMETER, "True",
          "specifies whether to always record the trace log. The default value is True.",
@@ -159,9 +159,9 @@ DEF_STR_WITH_CHECKER(_publish_schema_mode, OB_TENANT_PARAMETER, "BEST_EFFORT",
 DEF_STR_WITH_CHECKER(default_compress_func, OB_CLUSTER_PARAMETER, "zstd_1.3.8",
                      common::ObConfigCompressFuncChecker,
                      "default compress function name for create new table, "
-                     "values: none, lz4_1.0, snappy_1.0, zstd_1.0, zstd_1.3.8",
+                     "values: none, lz4_1.0, snappy_1.0, zstd_1.0, zstd_1.3.8, zstd_1.5.7",
                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
-                     "none, lz4_1.0, snappy_1.0, zstd_1.0, zstd_1.3.8");
+                     "none, lz4_1.0, snappy_1.0, zstd_1.0, zstd_1.3.8, zstd_1.5.7");
 
 DEF_STR_WITH_CHECKER(default_row_format, OB_CLUSTER_PARAMETER, "dynamic",
                      common::ObConfigRowFormatChecker,
@@ -277,9 +277,9 @@ DEF_CAP(_chunk_row_store_mem_limit, OB_CLUSTER_PARAMETER, "0M", "[0M,]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR_WITH_CHECKER(kv_transport_compress_func, OB_TENANT_PARAMETER, "none",
                      common::ObConfigCompressFuncChecker,
-                     "compressor used for tableAPI query result. Values: none, lz4_1.0, snappy_1.0, zlib_1.0, zstd_1.0 zstd 1.3.8",
+                     "compressor used for tableAPI query result. Values: none, lz4_1.0, snappy_1.0, zlib_1.0, zstd_1.0 zstd 1.3.8, zstd_1.5.7",
                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
-                     "none, lz4_1.0, snappy_1.0, zlib_1.0, zstd_1.0, zstd_1.3.8");
+                     "none, lz4_1.0, snappy_1.0, zlib_1.0, zstd_1.0, zstd_1.3.8, zstd_1.5.7");
 DEF_CAP(kv_transport_compress_threshold, OB_TENANT_PARAMETER, "10K","[0B,]",
         "Together with the configuration item kv_transport_compress_func, it is used to specify the minimum threshold size of the OBKV query result set that needs to be compressed. Range: [0, +∞)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -713,9 +713,9 @@ DEF_BOOL(log_transport_compress_all, OB_TENANT_PARAMETER, "False",
 
 DEF_STR_WITH_CHECKER(log_transport_compress_func, OB_TENANT_PARAMETER, "lz4_1.0",
                      common::ObConfigCompressFuncChecker,
-                     "compressor used for log transport. Values: none, lz4_1.0, zstd_1.0, zstd_1.3.8",
+                     "compressor used for log transport. Values: none, lz4_1.0, zstd_1.0, zstd_1.3.8, zstd_1.5.7",
                      ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
-                     "none, lz4_1.0, zstd_1.0, zstd_1.3.8");
+                     "none, lz4_1.0, zstd_1.0, zstd_1.3.8, zstd_1.5.7");
 
 DEF_BOOL(log_storage_compress_all, OB_TENANT_PARAMETER, "False",
          "specifies whether to compress logs before storing. The default is false(no compression)",
@@ -723,9 +723,9 @@ DEF_BOOL(log_storage_compress_all, OB_TENANT_PARAMETER, "False",
 
 DEF_STR_WITH_CHECKER(log_storage_compress_func, OB_TENANT_PARAMETER, "lz4_1.0",
                      common::ObConfigPerfCompressFuncChecker,
-                     "specifies the algorithms used for log storage compression. Values: lz4_1.0, zstd_1.0, zstd_1.3.8",
+                     "specifies the algorithms used for log storage compression. Values: lz4_1.0, zstd_1.0, zstd_1.3.8, zstd_1.5.7",
                      ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
-                     "lz4_1.0, zstd_1.0, zstd_1.3.8");
+                     "lz4_1.0, zstd_1.0, zstd_1.3.8, zstd_1.5.7");
 
 //DEF_BOOL(enable_log_archive, OB_CLUSTER_PARAMETER, "False",
 //         "control if enable log archive",
@@ -1176,6 +1176,9 @@ DEF_INT(ha_low_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(ddl_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
         "the current work thread score of ddl thread. Range: [0,100] in integer. Especially, 0 means default value",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(ddl_high_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
+        "the current work thread score of ddl high thread. Range: [0,100] in integer. Especially, 0 means default value",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(minor_compact_trigger, OB_TENANT_PARAMETER, "2", "[0,16]",
         "minor_compact_trigger, Range: [0,16] in integer",
@@ -2280,10 +2283,16 @@ DEF_BOOL(enable_kv_ttl, OB_TENANT_PARAMETER, "False",
 DEF_INT(ttl_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
         "the current work thread score of ttl thread. Range: [0,100] in integer. Especially, 0 means default value",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(vector_index_optimization_concurrency, OB_TENANT_PARAMETER, "2", "[1,256]",
+        "the vector index async task parallelism. Range: [1,256] in integer. Especially, 2 means default value",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_persistent_compiled_routine, OB_CLUSTER_PARAMETER, "true",
          "specifies whether the feature of storeing dll to disk is turned on. "
          "The default value is TRUE. Value: TRUE: turned on FALSE: turned off",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(enable_parallel_vector_index_optimization, OB_TENANT_PARAMETER, "False",
+    "enable parallel vector index optimization",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_STR_WITH_CHECKER(sql_protocol_min_tls_version, OB_CLUSTER_PARAMETER, "none",
                      common::ObConfigSQLTlsVersionChecker,
@@ -3023,6 +3032,16 @@ DEF_BOOL(_enable_data_based_sqc_dop, OB_TENANT_PARAMETER, "True",
         "Assign sqc dop based on data size.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_BOOL(_enable_inc_major_direct_load, OB_TENANT_PARAMETER, "False",
+        "Specifies whether enable inc major direct load",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_restore_emergency_inc_major_sstable_threshold, OB_TENANT_PARAMETER, "48", "[2,64]",
+        "Inc Major SSTable count threshold to trigger emergency compaction during restore. "
+        "When restore tenant's Inc Major SSTable count reaches this threshold, system will "
+        "prioritize inc major compaction to prevent restore from hanging due to "
+        "too many Inc Major SSTables. Range: [2,64] in integer",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_BOOL(_enable_more_aggressive_dynamic_worker, OB_TENANT_PARAMETER, "True",
         "specifies whether worker count increases more aggressive.",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -3058,6 +3077,9 @@ DEF_BOOL(ob_enable_python_udf, OB_TENANT_PARAMETER, "False",
 DEF_BOOL(ob_enable_utl_http, OB_CLUSTER_PARAMETER, "False",
          "controls whether UTL_HTTP is enabled",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_hybrid_vector_index, OB_TENANT_PARAMETER, "False",
+         "Value:  True: can create or drop hybrid vector index; False: not support create or drop",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_ss_garbage_collector_defensive_check, OB_TENANT_PARAMETER, "True",
          "Enable or disable defensive checks for garbage collection on shared storage.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

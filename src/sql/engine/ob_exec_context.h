@@ -551,20 +551,20 @@ public:
   int get_local_var_array(int64_t local_var_array_id, const ObSolidifiedVarsContext *&var_array);
   void set_is_online_stats_gathering(bool v) { is_online_stats_gathering_ = v; }
   bool is_online_stats_gathering() const { return is_online_stats_gathering_; }
-  void set_ddl_idempotent_autoinc_params(const int64_t table_slice_count,
-                                         const int64_t table_level_slice_idx,
+  void set_ddl_idempotent_autoinc_params(const int64_t slice_count,
+                                         const int64_t slice_idx,
                                          const int64_t slice_row_idx,
                                          const int64_t autoinc_range_interval)
   {
-    table_all_slice_count_ = table_slice_count;
-    table_level_slice_idx_ = table_level_slice_idx;
+    slice_count_ = slice_count;
+    slice_idx_ = slice_idx;
     slice_row_idx_ = slice_row_idx;
     autoinc_range_interval_ = autoinc_range_interval;
     is_ddl_idempotent_auto_inc_ = true;
   }
   bool is_ddl_idempotent_autoinc() { return is_ddl_idempotent_auto_inc_; }
-  int64_t get_table_all_slice_count() { return table_all_slice_count_; }
-  int64_t get_table_level_slice_idx() { return table_level_slice_idx_; }
+  int64_t get_slice_count() { return slice_count_; }
+  int64_t get_slice_idx() { return slice_idx_; }
   int64_t get_slice_row_idx() { return slice_row_idx_; }
   int64_t get_autoinc_range_interval() { return autoinc_range_interval_; }
 
@@ -594,6 +594,8 @@ public:
   void set_external_py_sch_resource_cache(void *cache) { external_py_sch_resource_cache_ = cache; }
   void *get_py_sub_inter_ctx() { return py_sub_inter_ctx_; }
   void set_py_sub_inter_ctx(void *sub_inter_ctx) { py_sub_inter_ctx_ = sub_inter_ctx; }
+  bool need_try_serialize_package_var() const { return need_try_serialize_package_var_; }
+  void set_need_try_serialize_package_var(bool need_try_serialize_package_var) { need_try_serialize_package_var_ = need_try_serialize_package_var; }
 
 private:
   int build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCtx *&temp_expr_ctx);
@@ -777,8 +779,8 @@ protected:
 
   // for calculating idempotent auto increment value in DDL
   bool is_ddl_idempotent_auto_inc_;
-  int64_t table_all_slice_count_;
-  int64_t table_level_slice_idx_;
+  int64_t slice_count_;
+  int64_t slice_idx_;
   int64_t slice_row_idx_;
   int64_t autoinc_range_interval_;
 
@@ -800,6 +802,7 @@ protected:
    *        The value is a file array related to the key.
    * */
   ObLakeTableFileMap *lake_table_file_map_;
+  bool need_try_serialize_package_var_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecContext);
 };

@@ -1974,6 +1974,10 @@ int ObDMLStmtPrinter::print_base_table(const TableItem *table_item)
           DATA_PRINTF(" sample(");
           DATA_PRINTF("%lf", table_item->sample_info_->percent_);
           DATA_PRINTF(")");
+        } else if (SampleInfo::SampleMethod::DDL_BLOCK_SAMPLE == table_item->sample_info_->method_) {
+          DATA_PRINTF("ddl block sample(");
+          DATA_PRINTF("%lf", table_item->sample_info_->percent_);
+          DATA_PRINTF(")");
         }
         if (table_item->sample_info_->seed_ != -1) {
           DATA_PRINTF(" seed(");
@@ -2298,6 +2302,9 @@ int ObDMLStmtPrinter::print_vector_index_query_param()
       }
       if (OB_SUCC(ret) && param.is_set_ivf_nprobes_) {
         DATA_PRINTF(", ivf_nprobes=%d", param.ivf_nprobes_);
+      }
+      if (OB_SUCC(ret) && param.is_set_drop_ratio_search_) {
+        DATA_PRINTF(", drop_ratio_search=%f", param.ob_sparse_drop_ratio_search_);
       }
       if (OB_SUCC(ret) && param.is_set_similarity_threshold_) {
         DATA_PRINTF(", similarity_threshold=%f", param.similarity_threshold_);

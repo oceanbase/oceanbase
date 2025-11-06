@@ -14,9 +14,6 @@
 
 #include "sql/table_format/iceberg/ob_iceberg_utils.h"
 
-#include <avro/Generic.hh>
-#include <avro/GenericDatum.hh>
-
 #include "share/backup/ob_backup_io_adapter.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "share/ob_define.h"
@@ -32,7 +29,7 @@ namespace iceberg
 
 int ObIcebergUtils::deep_copy_optional_string(ObIAllocator &allocator,
                                               const std::optional<ObString> &src,
-                                              std::optional<ObString> dst)
+                                              std::optional<ObString> &dst)
 {
   int ret = OB_SUCCESS;
   if (src.has_value()) {
@@ -50,6 +47,9 @@ int ObIcebergUtils::deep_copy_map_string(ObIAllocator &allocator,
                                          ObIArray<std::pair<ObString, ObString>> &dst)
 {
   int ret = OB_SUCCESS;
+  if (OB_FAIL(dst.reserve(src.count()))) {
+    LOG_WARN("failed to reserve space", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < src.count(); i++) {
     const std::pair<ObString, ObString> &pair = src.at(i);
     ObString copied_key;
@@ -65,12 +65,31 @@ int ObIcebergUtils::deep_copy_map_string(ObIAllocator &allocator,
   return ret;
 }
 
+int ObIcebergUtils::deep_copy_array_string(ObIAllocator &allocator,
+                                           const ObIArray<ObString> &src,
+                                           ObIArray<ObString> &dst)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(dst.reserve(src.count()))) {
+    LOG_WARN("failed to reserve space", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < src.count(); i++) {
+    ObString tmp;
+    OZ(ob_write_string(allocator, src.at(i), tmp));
+    OZ(dst.push_back(tmp));
+  }
+  return ret;
+}
+
 template <typename T>
 int ObIcebergUtils::deep_copy_array_object(ObIAllocator &allocator,
                                            const ObIArray<T *> &src,
                                            ObIArray<T *> &dst)
 {
   int ret = OB_SUCCESS;
+  if (OB_FAIL(dst.reserve(src.count()))) {
+    LOG_WARN("failed to reserve space", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < src.count(); ++i) {
     T *src_item = src.at(i);
     T *dst_item = NULL;
@@ -319,6 +338,8 @@ ObCatalogJsonUtils::get_primitive_array(const ObJsonObject &json_object,
     if (ObJsonNodeType::J_ARRAY != json_array->json_type()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid json array", K(ret), K(key), KP(json_array));
+    } else if (OB_FAIL(value.reserve(json_array->element_count()))) {
+      LOG_WARN("failed to reserve space", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < json_array->element_count(); i++) {
         ObIJsonBase *json_element = NULL;
@@ -402,6 +423,9 @@ int ObCatalogJsonUtils::convert_json_object_to_map(ObIAllocator &allocator,
                                                    ObIArray<pair<ObString, ObString>> &values)
 {
   int ret = OB_SUCCESS;
+  if (OB_FAIL(values.reserve(json_object.element_count()))) {
+    LOG_WARN("failed to reserve space", K(ret), K(json_object.element_count()));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < json_object.element_count(); i++) {
     ObString object_key;
     ObJsonNode *object_value;
@@ -437,6 +461,8 @@ int ObCatalogJsonUtils::get_string_array(ObIAllocator &allocator,
     if (ObJsonNodeType::J_ARRAY != json_array->json_type()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid json array", K(ret), K(key), KP(json_array));
+    } else if (OB_FAIL(values.reserve(json_array->element_count()))) {
+      LOG_WARN("failed to reserve space", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < json_array->element_count(); i++) {
         ObIJsonBase *json_element = NULL;
@@ -456,233 +482,6 @@ int ObCatalogJsonUtils::get_string_array(ObIAllocator &allocator,
       }
     }
   }
-  return ret;
-}
-
-template <avro::Type T>
-int ObCatalogAvroUtils::get_binary(ObIAllocator &allocator,
-                                   const avro::GenericRecord &avro_record,
-                                   const ObString &key,
-                                   ObString &value)
-{
-  int ret = OB_SUCCESS;
-  std::optional<ObString> tmp_value;
-  if (OB_FAIL(ObCatalogAvroUtils::get_binary<T>(allocator, avro_record, key, tmp_value))) {
-    LOG_WARN("failed to get binary", K(ret), K(key));
-  } else if (!tmp_value.has_value()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get empty binary", K(ret), K(key));
-  } else {
-    value = tmp_value.value();
-  }
-  return ret;
-}
-
-template <avro::Type T>
-int ObCatalogAvroUtils::get_binary(ObIAllocator &allocator,
-                                   const avro::GenericRecord &avro_record,
-                                   const ObString &key,
-                                   std::optional<ObString> &value)
-{
-  int ret = OB_SUCCESS;
-  std::string ket_str(key.ptr(), key.length());
-  if (!avro_record.hasField(ket_str)) {
-    value = std::nullopt;
-  } else {
-    const avro::GenericDatum &field_datum = avro_record.field(ket_str);
-    if (avro::Type::AVRO_NULL == field_datum.type()) {
-      value = std::nullopt;
-    } else if (avro::Type::AVRO_STRING == T && T == field_datum.type()) {
-      const std::string &str = field_datum.value<std::string>();
-      ObString tmp_string;
-      OZ(ob_write_string(allocator, ObString(str.size(), str.data()), tmp_string, true));
-      value = tmp_string;
-    } else if (avro::Type::AVRO_BYTES == T && T == field_datum.type()) {
-      const std::vector<uint8_t> &bytes = field_datum.value<std::vector<uint8_t>>();
-      ObString tmp_string;
-      OZ(ob_write_string(allocator,
-                         ObString(bytes.size(), reinterpret_cast<const char *>(bytes.data())),
-                         tmp_string,
-                         true));
-      value = tmp_string;
-    } else {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("not supported avro type", K(ret), K(T), K(field_datum.type()));
-    }
-  }
-  return ret;
-}
-
-template <typename T>
-std::enable_if_t<std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t>
-                     || std::is_same_v<T, bool>,
-                 int>
-ObCatalogAvroUtils::get_primitive(const avro::GenericRecord &avro_record,
-                                  const ObString &key,
-                                  std::optional<T> &value)
-{
-  int ret = OB_SUCCESS;
-  std::string key_str(key.ptr(), key.length());
-  if (!avro_record.hasField(key_str)) {
-    value = std::nullopt;
-  } else {
-    const avro::GenericDatum &field_datum = avro_record.field(key_str);
-    if (avro::Type::AVRO_NULL == field_datum.type()) {
-      value = std::nullopt;
-    } else if (avro::Type::AVRO_INT == field_datum.type()
-               || avro::Type::AVRO_LONG == field_datum.type()
-               || avro::Type::AVRO_BOOL == field_datum.type()) {
-      value = field_datum.value<T>();
-    } else {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("not supported avro type", K(ret), K(field_datum.type()));
-    }
-  }
-
-  return ret;
-}
-
-template <typename T>
-std::enable_if_t<std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t>
-                     || std::is_same_v<T, bool>,
-                 int>
-ObCatalogAvroUtils::get_primitive(const avro::GenericRecord &avro_record,
-                                  const ObString &key,
-                                  T &value)
-{
-  int ret = OB_SUCCESS;
-  std::optional<T> tmp_value;
-  if (OB_FAIL(ObCatalogAvroUtils::get_primitive(avro_record, key, tmp_value))) {
-    LOG_WARN("failed to get avro primitive", K(ret), K(key));
-  } else if (!tmp_value.has_value()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get null avro primitive", K(ret), K(key));
-  } else {
-    value = tmp_value.value();
-  }
-
-  return ret;
-}
-
-template <typename K, typename V>
-typename std::enable_if_t<std::is_same_v<K, int32_t> || std::is_same_v<K, int64_t>
-                              || std::is_same_v<V, int32_t> || std::is_same_v<V, int64_t>
-                              || std::is_same_v<V, bool>,
-                          int>
-ObCatalogAvroUtils::get_primitive_map(const avro::GenericRecord &avro_record,
-                                      const ObString &key,
-                                      ObIArray<std::pair<K, V>> &value)
-{
-  int ret = OB_SUCCESS;
-  const avro::GenericDatum *avro_datum = NULL;
-  if (OB_FAIL(get_value<avro::Type::AVRO_ARRAY>(avro_record, key, avro_datum))) {
-    LOG_WARN("failed to get avro array", K(ret), K(key));
-  } else if (OB_NOT_NULL(avro_datum) && avro::Type::AVRO_ARRAY == avro_datum->type()) {
-    const avro::GenericArray &avro_array = avro_datum->value<avro::GenericArray>();
-    for (int64_t i = 0; OB_SUCC(ret) && i < avro_array.value().size(); i++) {
-      const avro::GenericDatum &element = avro_array.value()[i];
-      if (avro::Type::AVRO_RECORD != element.type()) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid element type", K(ret), K(element.type()));
-      } else {
-        const avro::GenericRecord &element_record = element.value<avro::GenericRecord>();
-        OZ(value.push_back(std::make_pair(element_record.field("key").value<K>(),
-                                          element_record.field("value").value<V>())));
-      }
-    }
-  }
-  return ret;
-}
-
-template <avro::Type AVRO_TYPE, typename K, typename V>
-std::enable_if_t<(std::is_same_v<K, int32_t> || std::is_same_v<K, int64_t>)
-                     && std::is_same_v<V, ObString>,
-                 int>
-ObCatalogAvroUtils::get_binary_map(ObIAllocator &allocator,
-                                   const avro::GenericRecord &avro_record,
-                                   const ObString &key,
-                                   ObIArray<std::pair<K, V>> &value)
-{
-  int ret = OB_SUCCESS;
-  const avro::GenericDatum *avro_datum = NULL;
-  if (OB_FAIL(get_value<avro::Type::AVRO_ARRAY>(avro_record, key, avro_datum))) {
-    LOG_WARN("failed to get avro array", K(ret), K(key));
-  } else if (OB_NOT_NULL(avro_datum) && avro::Type::AVRO_ARRAY == avro_datum->type()) {
-    const avro::GenericArray &avro_array = avro_datum->value<avro::GenericArray>();
-    for (int64_t i = 0; OB_SUCC(ret) && i < avro_array.value().size(); i++) {
-      const avro::GenericDatum &element = avro_array.value()[i];
-      if (avro::Type::AVRO_RECORD != element.type()) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid element type", K(ret), K(element.type()));
-      } else {
-        const avro::GenericRecord &element_record = element.value<avro::GenericRecord>();
-        ObString copy_string;
-        if (avro::Type::AVRO_STRING == AVRO_TYPE) {
-          std::string tmp_string = element_record.field("value").value<std::string>();
-          OZ(ob_write_string(allocator,
-                             ObString(tmp_string.size(), tmp_string.data()),
-                             copy_string,
-                             true));
-        } else if (avro::Type::AVRO_BYTES == AVRO_TYPE) {
-          std::vector<uint8_t> tmp_bytes
-              = element_record.field("value").value<std::vector<uint8_t>>();
-          OZ(ob_write_string(
-              allocator,
-              ObString(tmp_bytes.size(), reinterpret_cast<const char *>(tmp_bytes.data())),
-              copy_string,
-              true));
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid avro type", K(AVRO_TYPE));
-        }
-        OZ(value.push_back(std::make_pair(element_record.field("key").value<K>(), copy_string)));
-      }
-    }
-  }
-  return ret;
-}
-
-template <typename V>
-std::enable_if_t<std::is_same_v<V, int32_t> || std::is_same_v<V, int64_t>, int>
-ObCatalogAvroUtils::get_primitive_array(const avro::GenericRecord &avro_record,
-                                        const ObString &key,
-                                        ObIArray<V> &value)
-{
-  int ret = OB_SUCCESS;
-  const avro::GenericDatum *avro_datum = NULL;
-  if (OB_FAIL(get_value<avro::Type::AVRO_ARRAY>(avro_record, key, avro_datum))) {
-    LOG_WARN("failed to get avro map", K(ret), K(key));
-  } else if (OB_NOT_NULL(avro_datum) && avro::Type::AVRO_ARRAY == avro_datum->type()) {
-    const avro::GenericArray &avro_array = avro_datum->value<avro::GenericArray>();
-    for (int64_t i = 0; OB_SUCC(ret) && i < avro_array.value().size(); i++) {
-      const avro::GenericDatum &avro_element = avro_array.value()[i];
-      OZ(value.push_back(avro_element.value<V>()));
-    }
-  }
-  return ret;
-}
-
-template <avro::Type T>
-int ObCatalogAvroUtils::get_value(const avro::GenericRecord &avro_record,
-                                  const ObString &key,
-                                  const avro::GenericDatum *&value) // 使用指针，避免 GenericDatum 昂贵的深拷贝
-{
-  int ret = OB_SUCCESS;
-  std::string key_str(key.ptr(), key.length());
-  if (!avro_record.hasField(key_str)) {
-    value = NULL;
-  } else {
-    const avro::GenericDatum &field_datum = avro_record.field(key_str);
-    if (avro::Type::AVRO_NULL == field_datum.type()) {
-      value = &field_datum; // assign a null GenericDatum
-    } else if (T == field_datum.type()) {
-      value = &field_datum;
-    } else {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid avro type", K(ret), K(key), K(T), K(field_datum.type()));
-    }
-  }
-
   return ret;
 }
 

@@ -320,6 +320,32 @@ int ObTableLoadSchema::check_is_heap_table_with_single_unique_index(
   return ret;
 }
 
+int ObTableLoadSchema::check_has_delete_insert_engine_index(
+  share::schema::ObSchemaGetterGuard &schema_guard,
+  const share::schema::ObTableSchema *table_schema, bool &bret)
+{
+  int ret = OB_SUCCESS;
+  bret = false;
+  if (OB_UNLIKELY(nullptr == table_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(table_schema));
+  } else {
+    const ObIArray<ObAuxTableMetaInfo> &simple_index_infos = table_schema->get_simple_index_infos();
+    for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); i++) {
+      const ObAuxTableMetaInfo &index_table_info = simple_index_infos.at(i);
+      const share::schema::ObTableSchema *index_table_schema = nullptr;
+      if (OB_FAIL(get_table_schema(schema_guard, MTL_ID(), index_table_info.table_id_,
+                                   index_table_schema))) {
+        LOG_WARN("fail to get table shema of index table", KR(ret), K(index_table_info.table_id_));
+      } else if (index_table_schema->is_delete_insert_merge_engine()) {
+        bret = true;
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTableLoadSchema::get_tenant_optimizer_gather_stats_on_load(const uint64_t tenant_id,
                                                                  bool &value)
 {
@@ -421,6 +447,7 @@ ObTableLoadSchema::ObTableLoadSchema()
     is_partitioned_table_(false),
     is_table_without_pk_(false),
     is_table_with_hidden_pk_column_(false),
+    is_delete_insert_engine_(false),
     index_type_(ObIndexType::INDEX_TYPE_MAX),
     has_autoinc_column_(false),
     has_identity_column_(false),
@@ -456,6 +483,7 @@ void ObTableLoadSchema::reset()
   is_lob_table_ = false;
   is_partitioned_table_ = false;
   is_table_without_pk_ = false;
+  is_table_with_hidden_pk_column_ = false;
   is_table_with_hidden_pk_column_ = false;
   index_type_ = share::schema::ObIndexType::INDEX_TYPE_MAX;
   has_autoinc_column_ = false;
@@ -516,6 +544,7 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
     is_partitioned_table_ = table_schema->is_partitioned_table();
     is_table_without_pk_ = table_schema->is_table_without_pk();
     is_table_with_hidden_pk_column_ = table_schema->is_table_with_hidden_pk_column();
+    is_delete_insert_engine_ = table_schema->is_delete_insert_merge_engine();
     index_type_ = table_schema->get_index_type();
     has_autoinc_column_ = (table_schema->get_autoinc_column_id() != 0);
     rowkey_column_count_ = table_schema->get_rowkey_column_num();

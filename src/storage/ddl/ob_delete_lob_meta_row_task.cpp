@@ -314,7 +314,7 @@ int ObDeleteLobMetaRowTask::init_scan_param(ObTableScanParam& scan_param)
         if (OB_ISNULL(column_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(i), KPC(this));
-        } else if (!column_schema->is_vec_hnsw_key_column() && !column_schema->is_vec_hnsw_data_column()) {
+        } else if (!column_schema->is_vec_hnsw_key_column() && !column_schema->is_vec_hnsw_data_column() && !column_schema->is_vec_hnsw_visible_column()) {
           // do nothing
         } else if (OB_FAIL(scan_param.column_ids_.push_back(column_schema->get_column_id()))) {
           LOG_WARN("push col id failed.", K(ret), K(i));

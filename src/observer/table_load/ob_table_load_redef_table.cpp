@@ -146,6 +146,7 @@ int ObTableLoadRedefTable::start(const ObTableLoadRedefTableStartArg &arg,
     } else {
       res.task_id_ = plan->get_ddl_task_id();
       share::ObDDLTaskStatus status = share::ObDDLTaskStatus::PREPARE;
+      bool unused_is_offline_index_rebuild = false;
       if (OB_FAIL(ObDDLUtil::get_data_information(arg.tenant_id_,
           res.task_id_,
           res.data_format_version_,
@@ -153,7 +154,8 @@ int ObTableLoadRedefTable::start(const ObTableLoadRedefTableStartArg &arg,
           status,
           res.dest_table_id_,
           res.schema_version_,
-          res.is_no_logging_))) {
+          res.is_no_logging_,
+          unused_is_offline_index_rebuild))) {
         LOG_WARN("fail to get ddl task info", KR(ret), K(arg));
       }
     }

@@ -128,6 +128,9 @@ public:
                          ObIAllocator &allocator,
                          const uint64_t data_version) const;
   int parse_row(ObDatumRow &row);
+  int serialize(char *buf, const int64_t buf_len, int64_t &pos, const int64_t data_version) const;
+  int deserialize(const char *buf, const int64_t data_len, ObIAllocator &allocator, int64_t& pos);
+  int64_t get_serialize_size(const int64_t data_version) const;
   OB_INLINE const ObDataBlockMetaVal &get_meta_val() const { return val_; }
   OB_INLINE const MacroBlockId &get_macro_id() const
   {
@@ -151,7 +154,7 @@ public:
   }
   OB_INLINE bool is_valid() const
   {
-    return val_.is_valid() && end_key_.is_valid();
+    return version_ == ObDataMacroBlockMeta::MACRO_BLOCK_META_VERSION && val_.is_valid() && end_key_.is_valid();
   }
   OB_INLINE void reset()
   {
@@ -159,13 +162,19 @@ public:
     end_key_.reset();
     nested_offset_ = 0;
     nested_size_ = 0;
+    version_ = ObDataMacroBlockMeta::MACRO_BLOCK_META_VERSION;
   }
   TO_STRING_KV(K_(val), K_(end_key), K_(nested_offset), K_(nested_size));
+
+public:
+  static const int64_t MACRO_BLOCK_META_VERSION = 1;
+
 public:
   ObDataBlockMetaVal val_;
   ObDatumRowkey end_key_; // rowkey is primary key
   int64_t nested_offset_;
   int64_t nested_size_;
+  int32_t version_;
   DISALLOW_COPY_AND_ASSIGN(ObDataMacroBlockMeta);
 };
 

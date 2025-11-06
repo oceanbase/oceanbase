@@ -216,6 +216,14 @@ public:
   static bool enable_transfer_dml_ctrl(const uint64_t data_version);
   static int get_ls_member_list(const share::ObLSID &ls_id, common::ObMemberList &member_list);
   static int get_ls_leader(const share::ObLSID &ls_id, common::ObAddr &addr);
+  static int check_inc_major_backfill(
+      const share::ObLSID &ls_id,
+      const share::SCN &backfill_scn,
+      ObTableHandleV2 &table_handle,
+      bool &need_backfill,
+      bool &is_trans_abort);
+  static int check_ddl_merge_finished(
+    const ObTablet *tablet);
 private:
   static int get_ls_(
       ObLSHandle &ls_handle,

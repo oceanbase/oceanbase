@@ -34,6 +34,7 @@ public:
   inline bool is_success() const { return status_.is_success(); }
   inline bool is_failed() const { return status_.is_failed(); }
   inline bool is_finished() const { return status_.is_finished(); }
+  share::SCN get_scn() const { return __get_scn(); }
   int get_ret_code() const { return status_.get_ret_code(); }
 protected:
   ObDDLClogCbStatus status_;
@@ -48,14 +49,12 @@ public:
   virtual int on_success() override;
   virtual int on_failure() override;
   virtual void try_release() override;
-  share::SCN get_scn() const { return scn_; }
   const char *get_cb_name() const override { return "DDLIncStartClogCb"; }
-  TO_STRING_KV(K(is_inited_), K(ls_id_), K(log_basic_), K(scn_));
+  INHERIT_TO_STRING_KV("ObDDLIncClogCb", ObDDLIncClogCb, K(is_inited_), K(ls_id_), K(log_basic_));
 private:
   bool is_inited_;
   share::ObLSID ls_id_;
   ObDDLIncLogBasic log_basic_;
-  share::SCN scn_;
 };
 
 class ObDDLIncRedoClogCb : public ObDDLIncClogCb
@@ -66,11 +65,16 @@ public:
   int init(const share::ObLSID &ls_id,
            const storage::ObDDLMacroBlockRedoInfo &redo_info,
            const blocksstable::MacroBlockId &macro_block_id,
-           storage::ObTabletHandle &tablet_handle);
+           storage::ObTabletHandle &tablet_handle,
+           const ObDirectLoadType direct_load_type);
   virtual int on_success() override;
   virtual int on_failure() override;
   virtual void try_release() override;
   const char *get_cb_name() const override { return "DDLIncRedoClogCb"; }
+private:
+  int set_macro_block(const ObDDLMacroBlock &macro_block,
+                      const int64_t snapshot_version,
+                      const uint64_t data_format_version);
 private:
   bool is_inited_;
   share::ObLSID ls_id_;
@@ -79,6 +83,8 @@ private:
   ObSpinLock data_buffer_lock_;
   bool is_data_buffer_freed_;
   storage::ObTabletHandle tablet_handle_;
+  ObDirectLoadType direct_load_type_;
+  bool with_cs_replica_;
 };
 
 class ObDDLIncCommitClogCb : public ObDDLIncClogCb
@@ -86,18 +92,24 @@ class ObDDLIncCommitClogCb : public ObDDLIncClogCb
 public:
   ObDDLIncCommitClogCb();
   virtual ~ObDDLIncCommitClogCb() = default;
-  int init(const share::ObLSID &ls_id, const ObDDLIncLogBasic &log_basic);
+  int init(const share::ObLSID &ls_id, const ObDDLIncCommitLog &log);
   virtual int on_success() override;
   virtual int on_failure() override;
   virtual void try_release() override;
-  share::SCN get_scn() const { return scn_; }
   const char *get_cb_name() const override { return "DDLIncCommitClogCb"; }
-  TO_STRING_KV(K(is_inited_), K(ls_id_), K(log_basic_), K(scn_));
+  INHERIT_TO_STRING_KV("ObDDLIncClogCb", ObDDLIncClogCb,
+                       K(ls_id_),
+                       K(log_basic_),
+                       K(is_rollback_),
+                       K(is_inited_));
 private:
-  bool is_inited_;
+  int prepare_(const ObLSHandle &ls_handle, const common::ObTabletID &tablet_id);
+  int on_success_(const ObLSHandle &ls_handle, const common::ObTabletID &tablet_id);
+private:
   share::ObLSID ls_id_;
   ObDDLIncLogBasic log_basic_;
-  share::SCN scn_;
+  bool is_rollback_;
+  bool is_inited_;
 };
 
 } // namespace storage

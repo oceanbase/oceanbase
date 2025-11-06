@@ -54,9 +54,12 @@ public:
   virtual ~ObMergeIter() = default;
   virtual void reset() { is_inited_ = false; }
   virtual int init(const ObMergeParameter &merge_param,
-           const int64_t iter_idx,
-           const ObITableReadInfo *read_info) { return OB_NOT_SUPPORTED; }
-  virtual int init(const ObMergeParameter &merge_param, ObITable *table, const ObITableReadInfo *read_info) { return OB_NOT_SUPPORTED; }
+                   const int64_t sstable_idx,
+                   const ObITableReadInfo *read_info) { return OB_NOT_SUPPORTED; }
+  virtual int init(const ObMergeParameter &merge_param,
+                   const int64_t sstable_idx,
+                   ObITable *table,
+                   const ObITableReadInfo *read_info) { return OB_NOT_SUPPORTED; }
   virtual OB_INLINE const storage::ObITable *get_table() const = 0;
   virtual int next() = 0;
   virtual bool is_iter_end() const = 0;
@@ -101,6 +104,7 @@ public:
   virtual void reset() override;
   virtual int init(
     const ObMergeParameter &merge_param,
+    const int64_t sstable_idx,
     ObITable *table,
     const ObITableReadInfo *read_info) override final;
   virtual OB_INLINE const storage::ObITable *get_table() const override { return nullptr; }
@@ -132,9 +136,12 @@ public:
   virtual ~ObPartitionMergeIter();
   virtual void reset();
   virtual int init(const ObMergeParameter &merge_param,
-           const int64_t iter_idx,
-           const ObITableReadInfo *read_info) override;
-  virtual int init(const ObMergeParameter &merge_param, ObITable *table, const ObITableReadInfo *read_info) override final;
+                   const int64_t sstable_idx,
+                   const ObITableReadInfo *read_info) override;
+  virtual int init(const ObMergeParameter &merge_param,
+                   const int64_t sstable_idx,
+                   ObITable *table,
+                   const ObITableReadInfo *read_info) override final;
   virtual OB_INLINE bool is_iter_end() const override { return iter_end_; }
   virtual int multi_version_compare(const ObPartitionMergeIter &other, int &cmp_ret)
   { UNUSEDx(other, cmp_ret); return OB_NOT_SUPPORTED;}
@@ -144,7 +151,7 @@ public:
 
   OB_INLINE bool is_base_iter() const { return is_base_iter_; }
   OB_INLINE bool is_sstable_iter() const { return nullptr != table_ && table_->is_sstable(); }
-  OB_INLINE bool is_major_sstable_iter() const { return nullptr != table_ && table_->is_major_sstable(); }
+  OB_INLINE bool is_major_sstable_iter() const { return nullptr != table_ && table_->is_major_type_sstable(); }
   OB_INLINE bool is_base_sstable_iter() const { return is_base_iter() && is_sstable_iter(); }
   virtual OB_INLINE bool is_multi_version_minor_iter() const { return false; }
   virtual OB_INLINE bool is_macro_merge_iter() const { return false; }
@@ -173,6 +180,9 @@ public:
   }
   int check_merge_range_cross(ObDatumRange &data_range, bool &range_cross);
   virtual int64_t to_string(char *buf, const int64_t len) const override;
+  void set_major_idx(const int64_t major_idx) { major_idx_ = major_idx; }
+  int64_t get_major_idx() const { return major_idx_; }
+  int64_t get_sstable_idx() const { return sstable_idx_; }
 protected:
   virtual bool inner_check(const ObMergeParameter &merge_param) = 0;
   virtual int inner_init(const ObMergeParameter &merge_param) = 0;
@@ -197,6 +207,14 @@ protected:
   int64_t iter_row_id_;
   bool is_base_iter_;
 
+  // the idx of iter in merge iters array
+  // used to match merge iters between the merge log generation and replay steps during column store compaction.
+  // sstable maybe empty, so major_idx_ is not as same as sstable_idx_
+  int64_t major_idx_;
+  // the idx of sstable in merge sstable status array
+  // used to get merge level of sstable and record multiplexed micro/macro block count for sstable
+  int64_t sstable_idx_;
+
   const blocksstable::ObDatumRow *curr_row_;
 
   bool iter_end_;
@@ -215,7 +233,7 @@ public:
   ObPartitionRowMergeIter(common::ObIAllocator &allocator, const bool iter_co_build_row_store = false , const bool &ignore_shadow_row = false);
   virtual ~ObPartitionRowMergeIter();
   virtual int next() override;
-  INHERIT_TO_STRING_KV("ObPartitionRowMergeIter", ObPartitionMergeIter, K_(ignore_shadow_row));
+  INHERIT_TO_STRING_KV("ObPartitionRowMergeIter", ObPartitionMergeIter, K_(iter_co_build_row_store), K_(ignore_shadow_row));
 protected:
   virtual int inner_init(const ObMergeParameter &merge_param) override;
   virtual bool inner_check(const ObMergeParameter &merge_param) override;

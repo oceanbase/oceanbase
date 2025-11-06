@@ -2212,7 +2212,9 @@ int ObAlterTableArg::serialize_index_args(char *buf, const int64_t data_len, int
   for (int i = 0; OB_SUCC(ret) && i < index_arg_list_.size(); ++i) {
     ObIndexArg *index_arg = index_arg_list_.at(i);
     if (index_arg->index_action_type_ == ObIndexArg::ALTER_PRIMARY_KEY
-      || index_arg->index_action_type_ == ObIndexArg::DROP_PRIMARY_KEY) {
+      || index_arg->index_action_type_ == ObIndexArg::DROP_PRIMARY_KEY
+      || index_arg->index_action_type_ == ObIndexArg::DROP_CLUSTERING_KEY
+      || index_arg->index_action_type_ == ObIndexArg::ALTER_CLUSTERING_KEY) {
       ObAlterPrimaryArg *alter_pk_arg = static_cast<ObAlterPrimaryArg *>(index_arg);
       if (NULL == alter_pk_arg) {
         ret = OB_INVALID_ARGUMENT;
@@ -2224,7 +2226,8 @@ int ObAlterTableArg::serialize_index_args(char *buf, const int64_t data_len, int
         SHARE_LOG(WARN, "failed to serialize create index arg!", K(data_len), K(pos), K(ret));
       }
     } else if (index_arg->index_action_type_ == ObIndexArg::ADD_INDEX
-              || index_arg->index_action_type_ == ObIndexArg::ADD_PRIMARY_KEY) {
+              || index_arg->index_action_type_ == ObIndexArg::ADD_PRIMARY_KEY
+              || index_arg->index_action_type_ == ObIndexArg::ADD_CLUSTERING_KEY) {
       ObCreateIndexArg *create_index_arg = static_cast<ObCreateIndexArg *>(index_arg);
       if (NULL == create_index_arg) {
         ret = OB_INVALID_ARGUMENT;
@@ -2318,7 +2321,9 @@ int ObAlterTableArg::alloc_index_arg(const ObIndexArg::IndexActionType index_act
   int ret = OB_SUCCESS;
   void *tmp_ptr = nullptr;
   if (index_action_type == ObIndexArg::ALTER_PRIMARY_KEY
-    || index_action_type == ObIndexArg::DROP_PRIMARY_KEY) {
+    || index_action_type == ObIndexArg::DROP_PRIMARY_KEY
+    || index_action_type == ObIndexArg::DROP_CLUSTERING_KEY
+    || index_action_type == ObIndexArg::ALTER_CLUSTERING_KEY) {
     ObAlterPrimaryArg *alter_pk_arg = NULL;
     if (NULL == (tmp_ptr = allocator_.alloc(sizeof(ObAlterPrimaryArg)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -2327,7 +2332,8 @@ int ObAlterTableArg::alloc_index_arg(const ObIndexArg::IndexActionType index_act
       index_arg = new (tmp_ptr) ObAlterPrimaryArg();
     }
   } else if (index_action_type == ObIndexArg::ADD_INDEX
-            || index_action_type == ObIndexArg::ADD_PRIMARY_KEY) {
+            || index_action_type == ObIndexArg::ADD_PRIMARY_KEY
+            || index_action_type == ObIndexArg::ADD_CLUSTERING_KEY) {
     ObCreateIndexArg *create_index_arg = NULL;
     if (NULL == (tmp_ptr = allocator_.alloc(sizeof(ObCreateIndexArg)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -2444,7 +2450,9 @@ int64_t ObAlterTableArg::get_index_args_serialize_size() const
     } else {
       len += serialization::encoded_length(index_arg->index_action_type_);
       if (ObIndexArg::DROP_PRIMARY_KEY == index_arg->index_action_type_
-        || ObIndexArg::ALTER_PRIMARY_KEY == index_arg->index_action_type_) {
+        || ObIndexArg::ALTER_PRIMARY_KEY == index_arg->index_action_type_
+        || ObIndexArg::DROP_CLUSTERING_KEY == index_arg->index_action_type_
+        || ObIndexArg::ALTER_CLUSTERING_KEY == index_arg->index_action_type_) {
         ObAlterPrimaryArg *alter_pk_arg = static_cast<ObAlterPrimaryArg *>(index_arg);
         if (NULL == alter_pk_arg) {
           ret = OB_INVALID_ARGUMENT;
@@ -2453,7 +2461,8 @@ int64_t ObAlterTableArg::get_index_args_serialize_size() const
           len += alter_pk_arg->get_serialize_size();
         }
       } else if (ObIndexArg::ADD_INDEX == index_arg->index_action_type_
-                || ObIndexArg::ADD_PRIMARY_KEY == index_arg->index_action_type_) {
+                || ObIndexArg::ADD_PRIMARY_KEY == index_arg->index_action_type_
+                || ObIndexArg::ADD_CLUSTERING_KEY == index_arg->index_action_type_) {
         ObCreateIndexArg *create_index_arg = static_cast<ObCreateIndexArg *>(index_arg);
         if (NULL == create_index_arg) {
           ret = OB_INVALID_ARGUMENT;
@@ -2895,7 +2904,8 @@ OB_SERIALIZE_MEMBER((ObTruncateTableArg, ObDDLArg),
                     session_id_,
                     is_add_to_scheduler_,
                     compat_mode_,
-                    foreign_key_checks_);
+                    foreign_key_checks_,
+                    table_id_)
 
 DEF_TO_STRING(ObTruncateTableArg)
 {
@@ -2907,7 +2917,8 @@ DEF_TO_STRING(ObTruncateTableArg)
        K_(session_id),
        K_(is_add_to_scheduler),
        K_(compat_mode),
-       K_(foreign_key_checks));
+       K_(foreign_key_checks),
+       K_(table_id));
   J_OBJ_END();
   return pos;
 }
@@ -3303,7 +3314,10 @@ DEF_TO_STRING(ObCreateIndexArg)
        K_(index_cgs),
        K_(vidx_refresh_info),
        K_(is_rebuild_index),
-       K_(is_index_scope_specified));
+       K_(is_index_scope_specified),
+       K_(is_offline_rebuild),
+       K_(index_key),
+       K_(data_version));
   J_OBJ_END();
   return pos;
 }
@@ -3404,7 +3418,8 @@ DEF_TO_STRING(ObDropIndexArg) {
        K_(only_set_status),
        K_(index_ids),
        K_(table_id),
-       K_(is_drop_in_rebuild_task));
+       K_(is_drop_in_rebuild_task),
+       K_(is_oracle_tmp_table_v2_index_table));
   J_OBJ_END();
   return pos;
 }
@@ -3426,7 +3441,8 @@ OB_SERIALIZE_MEMBER((ObDropIndexArg, ObIndexArg),
                     is_parent_task_dropping_multivalue_index_,
                     table_id_,
                     is_drop_in_rebuild_task_,
-                    is_parent_task_dropping_spiv_index_);
+                    is_parent_task_dropping_spiv_index_,
+                    is_oracle_tmp_table_v2_index_table_);
 
 OB_SERIALIZE_MEMBER(ObDropIndexRes, tenant_id_, index_table_id_, schema_version_, task_id_);
 
@@ -3450,6 +3466,7 @@ int ObDropIndexArg::assign(const ObDropIndexArg &other)
     only_set_status_ = other.only_set_status_;
     table_id_ = other.table_id_;
     is_drop_in_rebuild_task_ = other.is_drop_in_rebuild_task_;
+    is_oracle_tmp_table_v2_index_table_ = other.is_oracle_tmp_table_v2_index_table_;
   }
   return ret;
 }
@@ -3957,7 +3974,7 @@ bool ObCalcColumnChecksumRequestArg::is_valid() const
   bool bret = OB_INVALID_ID != tenant_id_ &&  OB_INVALID_ID != target_table_id_
       && OB_INVALID_VERSION != schema_version_ && execution_id_ >= 0
       && OB_INVALID_VERSION != snapshot_version_ && OB_INVALID_ID != source_table_id_
-      && task_id_ > 0;
+      && task_id_ > 0 && user_parallelism_ > 0;
   for (int64_t i = 0; bret && i < calc_items_.count(); ++i) {
     bret = calc_items_.at(i).is_valid();
   }
@@ -11966,6 +11983,14 @@ int ObRpcRemoteWriteDDLIncCommitLogArg::init(const uint64_t tenant_id,
   } else if (OB_UNLIKELY(!is_incremental_direct_load(direct_load_type))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("only support incremental direct load type", KR(ret), K(direct_load_type));
+  } else if (is_incremental_major_direct_load(direct_load_type)
+      && OB_UNLIKELY(!trans_id.is_valid()
+                  || !seq_no.is_valid()
+                  || (snapshot_version <= 0)
+                  || (data_format_version < DATA_VERSION_4_4_1_0))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments for incremental major direct load", KR(ret),
+        K(direct_load_type), K(trans_id), K(seq_no), K(snapshot_version), K(data_format_version));
   } else if (OB_FAIL(release())) {
     LOG_WARN("fail to release tx_desc", K(ret));
   } else {

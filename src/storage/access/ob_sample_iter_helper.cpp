@@ -24,7 +24,8 @@ int ObGetSampleIterHelper::check_scan_range_count(bool &res, ObIArray<ObDatumRan
 {
   int ret = OB_SUCCESS;
   need_scan_multiple_range_ = false;
-  if (scan_param_.sample_info_.is_block_sample()) {
+  if (scan_param_.sample_info_.is_block_sample() ||
+      scan_param_.sample_info_.is_ddl_block_sample()) {
     bool retire_to_memtable_row_sample = false;
     if (!get_table_param_.tablet_iter_.table_iter()->is_valid() &&
         OB_FAIL(get_table_param_.tablet_iter_.refresh_read_tables_from_tablet(
@@ -220,6 +221,27 @@ int ObGetSampleIterHelper::get_sample_iter(ObBlockSampleIterator *&sample_iter,
                                 get_table_param_,
                                 scan_param_.scan_flag_.is_reverse_scan()))) {
     STORAGE_LOG(WARN, "failed to open block_sample_iterator_", K(ret));
+  } else {
+    main_iter = sample_iter;
+    main_table_ctx_.use_fuse_row_cache_ = false;
+  }
+  return ret;
+}
+
+int ObGetSampleIterHelper::get_sample_iter(ObDDLBlockSampleIterator *&sample_iter,
+                                           ObQueryRowIterator *&main_iter,
+                                           ObMultipleScanMerge *scan_merge)
+{
+  int ret = OB_SUCCESS;
+  CONSTRUCT_SAMPLE_ITER(ObDDLBlockSampleIterator, sample_iter);
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(static_cast<ObDDLBlockSampleIterator *>(sample_iter)
+                         ->open(*scan_merge,
+                                main_table_ctx_,
+                                table_scan_range_.get_ranges().at(0),
+                                get_table_param_,
+                                scan_param_.scan_flag_.is_reverse_scan()))) {
+    STORAGE_LOG(WARN, "failed to open ddl block sample iterator", K(ret));
   } else {
     main_iter = sample_iter;
     main_table_ctx_.use_fuse_row_cache_ = false;

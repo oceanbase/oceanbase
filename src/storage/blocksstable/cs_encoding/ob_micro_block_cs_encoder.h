@@ -234,7 +234,6 @@ private:
   common::ObArray<ObIColumnCSEncoder *> encoders_;
   common::ObArray<uint32_t> stream_offsets_;
   ObCSEncoderAllocator encoder_allocator_;
-  int64_t hash_tables_unused_times_;
   common::ObArray<ObDictEncodingHashTable *> hashtables_;
   ObDictEncodingHashTableFactory hashtable_factory_;
   common::ObArray<ObColumnCSEncodingCtx> col_ctxs_;

@@ -362,7 +362,7 @@ bool ObTableLoadTableCtx::is_stopped() const
   if (nullptr != coordinator_ctx_ && !coordinator_ctx_->task_scheduler_->is_stopped()) {
     bret = false;
   }
-  if (nullptr != store_ctx_ && !store_ctx_->task_scheduler_->is_stopped()) {
+  if (nullptr != store_ctx_ && !store_ctx_->is_stopped()) {
     bret = false;
   }
   return bret;

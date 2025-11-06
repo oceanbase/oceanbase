@@ -240,7 +240,7 @@ int ObRebuildIndexTask::rebuild_index_impl()
   } else if (OB_ISNULL(index_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("index schema is null", KR(ret), K(target_object_id_));
-  } else if (index_schema->is_vec_delta_buffer_type() &&          // only hnsw index here, because ivf not support refresh
+  } else if ((index_schema->is_vec_delta_buffer_type() || index_schema->is_hybrid_vec_index_log_type()) &&  // only hnsw index here, because ivf not support refresh
              OB_FAIL(ObVectorIndexUtil::get_dbms_vector_job_info(*GCTX.sql_proxy_, tenant_id_,
                                                                  index_schema->get_table_id(),
                                                                  dbms_vector_job_info_allocator,

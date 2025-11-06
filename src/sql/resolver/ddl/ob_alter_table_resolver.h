@@ -41,6 +41,7 @@ class ObAlterTableResolver : public ObDDLResolver
   static const int64_t SPECIAL_TABLE_TYPE = 2;   // 2. special table type
   static const int64_t ALTER_HINT = 3; // the hint.
   static const int64_t ALTER_INDEX_CHILD_NUM = 6;
+  static const int64_t MAX_CLUSTERING_KEY_COLUMNS = OB_USER_MAX_ROWKEY_COLUMN_NUMBER - 1;  // 63
 public:
   explicit ObAlterTableResolver(ObResolverParams &params);
   virtual ~ObAlterTableResolver();
@@ -133,6 +134,11 @@ private:
   int resolve_alter_index_parallel_mysql(const ParseNode &node);
   int check_is_drop_primary_key(const ParseNode &node, bool &is_drop_primary_key);
   int resolve_drop_primary(const ParseNode &action_node_list);
+  int resolve_drop_clustering_key(const ParseNode &action_node_list);
+  int resolve_modify_clustering_key(const ParseNode &action_node_list,
+                                    const ParseNode &node);
+  int resolve_add_clustering_key(const ParseNode &action_node_list);
+  int check_is_drop_clustering_key(const ParseNode &node, bool &is_drop_clustering_key);
   int resolve_add_primary(const ParseNode &node);
   int resolve_alter_primary(const ParseNode &action_node_list, const ParseNode &node);
   int resolve_alter_index_tablespace_oracle(const ParseNode &node);

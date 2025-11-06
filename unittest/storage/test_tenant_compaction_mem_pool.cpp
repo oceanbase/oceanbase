@@ -227,7 +227,14 @@ TEST_F(TestTenantCompactionMemPool, max_alloc_test)
   EXPECT_EQ(ObCompactionBufferBlock::PIECE_TYPE, tmp_block.type_);
   mem_pool->free(tmp_block);
 
+  ObArenaAllocator inner_arena;
+  ObTabletMergeDagParam param;
+  ObCompactionMemoryContext mem_ctx(param, inner_arena);
+
   ObCompactionBufferWriter buffer_writer("test");
+  buffer_writer.use_mem_pool_ = true;
+  buffer_writer.ref_mem_ctx_ = &mem_ctx;
+
   buffer_writer.ensure_space(ObCompactionBufferChunk::DEFAULT_BLOCK_SIZE);
   EXPECT_EQ(max_block_num, mem_pool->get_total_block_num());
   EXPECT_EQ(max_block_num, mem_pool->used_block_num_);
@@ -283,7 +290,13 @@ TEST_F(TestTenantCompactionMemPool, writer_basic_test)
   int64_t curr_total_block_num = mem_pool->get_total_block_num();
   ASSERT_TRUE(0 == curr_total_block_num);
 
+  ObArenaAllocator inner_arena;
+  ObTabletMergeDagParam param;
+  ObCompactionMemoryContext mem_ctx(param, inner_arena);
+
   ObCompactionBufferWriter buffer_writer("test");
+  buffer_writer.use_mem_pool_ = true;
+  buffer_writer.ref_mem_ctx_ = &mem_ctx;
   int64_t alloc_size = ObCompactionBufferChunk::DEFAULT_BLOCK_SIZE / 2;
 
   buffer_writer.ensure_space(alloc_size);
@@ -311,7 +324,13 @@ TEST_F(TestTenantCompactionMemPool, writer_write_test)
   int64_t curr_total_block_num = mem_pool->get_total_block_num();
   ASSERT_TRUE(0 == curr_total_block_num);
 
+  ObArenaAllocator inner_arena;
+  ObTabletMergeDagParam param;
+  ObCompactionMemoryContext mem_ctx(param, inner_arena);
+
   ObCompactionBufferWriter buffer_writer("test");
+  buffer_writer.use_mem_pool_ = true;
+  buffer_writer.ref_mem_ctx_ = &mem_ctx;
   int64_t alloc_size = ObCompactionBufferChunk::DEFAULT_BLOCK_SIZE / 2;
 
   buffer_writer.ensure_space(alloc_size);
@@ -358,6 +377,7 @@ TEST_F(TestTenantCompactionMemPool, monitor_buffer_test)
   ObCompactionMemoryContext mem_ctx(param, inner_arena);
 
   ObCompactionBufferWriter buffer_writer("test");
+  buffer_writer.use_mem_pool_ = true;
   buffer_writer.ref_mem_ctx_ = &mem_ctx;
 
   int64_t alloc_size = ObCompactionBufferChunk::DEFAULT_BLOCK_SIZE;
@@ -367,6 +387,24 @@ TEST_F(TestTenantCompactionMemPool, monitor_buffer_test)
   mem_ctx.mem_click();
   ASSERT_TRUE(0 != mem_ctx.get_total_mem_peak());
 }
+
+TEST_F(TestTenantCompactionMemPool, mtl_alloc_test)
+{
+  ObTenantCompactionMemPool *mem_pool = MTL(ObTenantCompactionMemPool *);
+  ASSERT_TRUE(NULL != mem_pool);
+  int64_t curr_total_block_num = mem_pool->get_total_block_num();
+  ASSERT_TRUE(0 == curr_total_block_num);
+
+  ObCompactionBufferWriter buffer_writer("test");
+  int64_t alloc_size = ObCompactionBufferChunk::DEFAULT_BLOCK_SIZE;
+  buffer_writer.ensure_space(alloc_size);
+  EXPECT_EQ(alloc_size, buffer_writer.capacity_);
+
+  curr_total_block_num = mem_pool->get_total_block_num();
+  ASSERT_TRUE(0 == curr_total_block_num);
+}
+
+
 
 
 } // namespace unittest

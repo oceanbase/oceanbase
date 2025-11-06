@@ -39,6 +39,7 @@ public:
   virtual int do_write_io() { return OB_SUCCESS;}
 
   virtual int wait() = 0;
+  virtual void reset() {}
   virtual int64_t get_ddl_start_row_offset() const { return -1; };
 };
 

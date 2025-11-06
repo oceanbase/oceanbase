@@ -15,6 +15,7 @@
 
 #include "storage/access/ob_block_sample_iterator.h"
 #include "storage/access/ob_row_sample_iterator.h"
+#include "storage/access/ob_ddl_block_sample_iterator.h"
 
 namespace oceanbase {
 namespace storage {
@@ -41,6 +42,9 @@ public:
                       ObQueryRowIterator *&main_iter,
                       ObMultipleScanMerge *scan_merge);
   int get_sample_iter(ObBlockSampleIterator *&sample_iter,
+                      ObQueryRowIterator *&main_iter,
+                      ObMultipleScanMerge *scan_merge);
+  int get_sample_iter(ObDDLBlockSampleIterator *&sample_iter,
                       ObQueryRowIterator *&main_iter,
                       ObMultipleScanMerge *scan_merge);
 

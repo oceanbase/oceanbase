@@ -296,6 +296,12 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline bool is_vec_hnsw_scn_column() const { return ObSchemaUtils::is_vec_hnsw_scn_column(column_flags_); }
   inline bool is_vec_hnsw_key_column() const { return ObSchemaUtils::is_vec_hnsw_key_column(column_flags_); }
   inline bool is_vec_hnsw_data_column() const { return ObSchemaUtils::is_vec_hnsw_data_column(column_flags_); }
+  inline bool is_hybrid_vec_index_chunk_column() const { return ObSchemaUtils::is_hybrid_vec_index_chunk_column(column_flags_); }
+  inline bool is_hybrid_embedded_vec_column() const {
+    return get_column_name_str().prefix_match(OB_HYBRID_VEC_EMBEDDED_VECTOR_COLUMN_NAME_PREFIX) &&
+           ObSchemaUtils::is_vec_hnsw_vector_column(column_flags_);
+  }
+  inline bool is_vec_hnsw_visible_column() const { return ObSchemaUtils::is_vec_hnsw_visible_column(column_flags_); }
 
   inline bool is_vec_spiv_dim_column() const { return ObSchemaUtils::is_vec_spiv_dim_column(column_flags_); }
   inline bool is_vec_spiv_value_column() const { return ObSchemaUtils::is_vec_spiv_value_column(column_flags_); }
@@ -348,6 +354,11 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline static bool is_hidden_pk_column_id(const uint64_t column_id);
   inline bool is_heap_table_primary_key_column() const
   { return ::oceanbase::share::schema::is_heap_table_primary_key_column(column_flags_); }
+  inline bool is_heap_table_clustering_key_column() const
+  { return ::oceanbase::share::schema::is_heap_table_clustering_key_column(column_flags_); }
+  inline bool is_hidden_clustering_key_column() const
+  { return ::oceanbase::share::schema::is_heap_table_clustering_key_column(column_flags_) && is_hidden(); }
+
   inline bool is_unused() const { return column_flags_ & UNUSED_COLUMN_FLAG; }
   inline bool is_user_visible_column() const { return !(is_hidden() || is_invisible_column()); }
   inline void set_unused()

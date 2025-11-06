@@ -37,6 +37,7 @@ ObDirectLoadInsertTableBatchRowBufferWriter::ObDirectLoadInsertTableBatchRowBuff
     batch_rows_(),
     datum_rows_(),
     tablet_id_(),
+    ddl_agent_(),
     slice_id_(0),
     max_bytes_size_(0),
     row_count_(0),
@@ -107,6 +108,10 @@ int ObDirectLoadInsertTableBatchRowBufferWriter::inner_init(
       tablet_id_ = insert_tablet_ctx->get_tablet_id();
       max_bytes_size_ = max_bytes_size;
     }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(insert_tablet_ctx_->get_ddl_agent(ddl_agent_))) {
+      LOG_WARN("failed to get direct load mgr agent", K(ret));
+    }
   }
   return ret;
 }
@@ -162,7 +167,7 @@ int ObDirectLoadInsertTableBatchRowBufferWriter::flush_batch(ObBatchDatumRows &d
   int ret = OB_SUCCESS;
   if (OB_FAIL(before_flush_batch(datum_rows))) {
     LOG_WARN("fail to before flush batch", KR(ret));
-  } else if (OB_FAIL(insert_tablet_ctx_->fill_sstable_slice(slice_id_, datum_rows))) {
+  } else if (OB_FAIL(insert_tablet_ctx_->fill_sstable_slice(slice_id_, datum_rows, ddl_agent_))) {
     LOG_WARN("fail to fill sstable slice", KR(ret), K(slice_id_));
   } else if (OB_FAIL(after_flush_batch(datum_rows))) {
     LOG_WARN("fail to after flush batch", KR(ret));
@@ -227,7 +232,7 @@ int ObDirectLoadInsertTableBatchRowDirectWriter::init_sstable_slice()
   int ret = OB_SUCCESS;
   if (OB_FAIL(insert_tablet_ctx_->get_write_ctx(write_ctx_))) {
     LOG_WARN("fail to get write ctx", KR(ret));
-  } else if (OB_FAIL(insert_tablet_ctx_->open_sstable_slice(write_ctx_.start_seq_, write_ctx_.slice_idx_, slice_id_))) {
+  } else if (OB_FAIL(insert_tablet_ctx_->open_sstable_slice(write_ctx_.start_seq_, write_ctx_.slice_idx_, slice_id_, ddl_agent_))) {
     LOG_WARN("fail to open sstable slice", KR(ret));
   }
   return ret;
@@ -236,7 +241,8 @@ int ObDirectLoadInsertTableBatchRowDirectWriter::init_sstable_slice()
 int ObDirectLoadInsertTableBatchRowDirectWriter::close_sstable_slice()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(insert_tablet_ctx_->close_sstable_slice(slice_id_, write_ctx_.slice_idx_))) {
+
+  if (OB_FAIL(insert_tablet_ctx_->close_sstable_slice(slice_id_, write_ctx_.slice_idx_, ddl_agent_))) {
     LOG_WARN("fail to close sstable slice", KR(ret));
   } else {
     slice_id_ = 0;

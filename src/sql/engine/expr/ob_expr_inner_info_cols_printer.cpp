@@ -949,7 +949,8 @@ int ObExprInnerInfoColsColumnKeyPrinter::eval_column_column_key(const ObExpr &ex
       } else if (OB_ISNULL(column_schema = table_schema->get_column_schema(column_id->get_int()))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get column schema", K(ret), K(table_schema->get_table_id()), K(column_id->get_int()));
-      } else if (column_schema->is_original_rowkey_column() || column_schema->is_heap_table_primary_key_column()) {
+      } else if ((column_schema->is_original_rowkey_column() && !column_schema->is_heap_table_clustering_key_column())
+               || column_schema->is_heap_table_primary_key_column()) {
         expr_datum.set_string("PRI");
       } else if (OB_FAIL(table_schema->
         is_unique_key_column(schema_guard, column_schema->get_column_id(),

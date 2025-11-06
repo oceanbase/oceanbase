@@ -83,7 +83,8 @@ ObTableAccessContext::ObTableAccessContext()
     truncate_part_filter_(nullptr),
     mds_collector_(nullptr),
     row_scan_cnt_(nullptr),
-    skip_scan_factory_(nullptr)
+    skip_scan_factory_(nullptr),
+    is_inc_major_query_(false)
 {
   merge_scn_.set_max();
 }
@@ -228,6 +229,7 @@ int ObTableAccessContext::init(ObTableScanParam &scan_param,
     use_fuse_row_cache_ = false;
     mds_collector_ = scan_param.mds_collector_;
     row_scan_cnt_ = scan_param.row_scan_cnt_;
+    is_inc_major_query_ = false;
     if(OB_FAIL(build_lob_locator_helper(scan_param, ctx, trans_version_range))) {
       STORAGE_LOG(WARN, "Failed to build lob locator helper", K(ret));
       // new static engine do not need fill scale
@@ -287,6 +289,7 @@ int ObTableAccessContext::init(const common::ObQueryFlag &query_flag,
     trans_version_range_ = trans_version_range;
     ls_id_ = ctx.ls_id_;
     tablet_id_ = ctx.tablet_id_;
+    is_inc_major_query_ = false;
     // handle lob types without ObTableScanParam:
     // 1. use lob locator instead of full lob data
     // 2. without rowkey, since need not send result to dbmslob/client
@@ -344,6 +347,7 @@ int ObTableAccessContext::init(const common::ObQueryFlag &query_flag,
     tablet_id_ = ctx.tablet_id_;
     lob_locator_helper_ = nullptr;
     cached_iter_node_ = cached_iter_node;
+    is_inc_major_query_ = false;
     if (micro_block_handle_mgr_.is_valid()) {
       // Note: update effective_tablet_id for reused micro_block_handle_mgr_
       micro_block_handle_mgr_.set_effective_tablet_id(tablet_id_);
@@ -392,6 +396,7 @@ int ObTableAccessContext::init_for_mview(common::ObIAllocator *allocator, const 
     range_array_pos_ = nullptr;
     use_fuse_row_cache_ = true;
     lob_locator_helper_ = nullptr;
+    is_inc_major_query_ = false;
     if (micro_block_handle_mgr_.is_valid()) {
       // Note: update effective_tablet_id for reused micro_block_handle_mgr_
       micro_block_handle_mgr_.set_effective_tablet_id(tablet_id_);
@@ -421,7 +426,8 @@ void ObTableAccessContext::inc_micro_access_cnt()
 int ObTableAccessContext::init_scan_allocator(ObTableScanParam &scan_param)
 {
   int ret = OB_SUCCESS;
-  if (OB_LIKELY(!scan_param.sample_info_.is_block_sample())) {
+  if (OB_LIKELY(!(scan_param.sample_info_.is_block_sample() ||
+                  scan_param.sample_info_.is_ddl_block_sample()))) {
     allocator_ = scan_param.scan_allocator_;
   } else {
     if (scan_mem_ == nullptr) {
@@ -522,6 +528,7 @@ void ObTableAccessContext::reset()
     ObRowSampleFilterFactory::destroy_sample_filter(sample_filter_);
   }
   row_scan_cnt_ = nullptr;
+  is_inc_major_query_ = false;
 }
 
 int ObTableAccessContext::rescan_reuse(ObTableScanParam &scan_param)
@@ -537,6 +544,7 @@ int ObTableAccessContext::rescan_reuse(ObTableScanParam &scan_param)
     if (nullptr != sample_filter_) {
       sample_filter_->reuse();
     }
+    is_inc_major_query_ = false;
   }
   return ret;
 }
@@ -569,6 +577,7 @@ void ObTableAccessContext::reuse()
   }
   reuse_skip_scan_factory();
   row_scan_cnt_ = nullptr;
+  is_inc_major_query_ = false;
 }
 
 int ObTableAccessContext::alloc_iter_pool(const bool use_column_store)

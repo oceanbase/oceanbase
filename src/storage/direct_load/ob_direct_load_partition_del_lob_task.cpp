@@ -58,6 +58,8 @@ int ObDirectLoadPartitionDelLobTask::RowIterator::init(
     } else if (OB_FAIL(insert_tablet_ctx->init_datum_row(datum_row_, true/*is_delete*/))) {
       LOG_WARN("fail to init lob datum row", KR(ret));
     } else {
+      tablet_id_ = merge_ctx->get_tablet_id();
+      parallel_idx_ = parallel_idx;
       is_inited_ = true;
     }
   }
@@ -134,36 +136,34 @@ int ObDirectLoadPartitionDelLobTask::init(ObDirectLoadTabletMergeCtx *merge_ctx,
   return ret;
 }
 
-int ObDirectLoadPartitionDelLobTask::process()
+int ObDirectLoadPartitionDelLobTask::init_iterator(ObITabletSliceRowIterator *&row_iterator)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDirectLoadPartitionDelLobTask not init", KR(ret), KP(this));
   } else {
-    int64_t slice_id = 0;
-    const ObTabletID &tablet_id = merge_ctx_->get_tablet_id();
-    ObDirectLoadInsertTabletContext *insert_tablet_ctx = merge_ctx_->get_insert_tablet_ctx();
-    RowIterator row_iter;
-    int64_t affected_rows = 0;
-    if (OB_FAIL(row_iter.init(merge_ctx_, *origin_table_, table_data_desc_, sstable_array_, *range_,
-                              parallel_idx_))) {
-      LOG_WARN("fail to init row iter", KR(ret));
-    } else if (OB_FAIL(insert_tablet_ctx->open_sstable_slice(data_seq_, 0/*slice_idx*/, slice_id))) {
-      LOG_WARN("fail to open lob sstable slice ", KR(ret), K(slice_id), K(data_seq_));
+    row_iterator = nullptr;
+    RowIterator *iter = nullptr;
+    ObMemAttr attr(MTL_ID(), "TLD_SliceIter");
+    if (OB_ISNULL(iter = OB_NEW(RowIterator, attr))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory", KR(ret));
+    } else if (OB_FAIL(iter->init(merge_ctx_, *origin_table_, table_data_desc_, sstable_array_, *range_, parallel_idx_))) {
+      LOG_WARN("fail to init row iterator", KR(ret));
     } else {
-      LOG_INFO("add lob meta sstable slice begin", K(tablet_id), K(parallel_idx_), K(data_seq_),
-               K(slice_id), KPC(range_));
-      if (OB_FAIL(insert_tablet_ctx->fill_sstable_slice(slice_id, row_iter, affected_rows))) {
-        LOG_WARN("fail to fill lob sstable slice", KR(ret));
-      } else if (OB_FAIL(insert_tablet_ctx->close_sstable_slice(slice_id, 0/*slice_idx*/))) {
-        LOG_WARN("fail to close sstable slice", KR(ret));
-      }
-      LOG_INFO("add lob meta sstable slice end", KR(ret), K(tablet_id), K(parallel_idx_),
-               K(affected_rows));
+      row_iterator = iter;
+    }
+    if (OB_FAIL(ret)) {
+      OB_DELETE(RowIterator, attr, iter);
     }
   }
   return ret;
+}
+
+int ObDirectLoadPartitionDelLobTask::process()
+{
+  return OB_ERR_UNEXPECTED;
 }
 
 void ObDirectLoadPartitionDelLobTask::stop()

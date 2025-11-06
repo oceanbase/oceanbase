@@ -271,9 +271,9 @@ int ObIndexBuilderUtil::add_shadow_partition_keys(
   ObTableSchema &schema)
 {
   int ret = OB_SUCCESS;
-  if (!data_schema.is_table_without_pk()) {
+  if (!data_schema.is_table_without_pk() && !data_schema.is_table_with_clustering_key()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("only heap table should add shadow partition keys", K(data_schema), K(ret));
+    LOG_WARN("only heap table or cluster by table should add shadow partition keys", K(data_schema), K(ret));
   } else {
     const bool is_index_column = false;
     const bool is_rowkey = !schema.is_unique_index();
@@ -282,7 +282,7 @@ int ObIndexBuilderUtil::add_shadow_partition_keys(
     const ObColumnSchemaV2 *const_data_column = NULL;
     ObColumnSchemaV2 data_column;
     ObSEArray<uint64_t, 2> column_ids;
-    if (data_schema.is_table_without_pk()) {
+    if (data_schema.is_table_without_pk() || data_schema.is_table_with_clustering_key()) {
       if (partition_keys.is_valid() && OB_FAIL(partition_keys.get_column_ids(column_ids))) {
         LOG_WARN("fail to get column ids from partition keys", K(ret));
       } else if (subpartition_keys.is_valid() && OB_FAIL(subpartition_keys.get_column_ids(column_ids))) {
@@ -573,8 +573,9 @@ int ObIndexBuilderUtil::set_index_table_columns(
         index_schema.set_rowkey_column_num(row_desc.get_column_num());
       }
 
-      // if data table is a heap table, add partition keys to index table
-      if (OB_SUCC(ret) && data_schema.is_table_without_pk() && index_schema.is_global_index_table()) {
+      // if data table is a heap table or a cluster by table, add partition keys to index table
+      if (OB_SUCC(ret) && (data_schema.is_table_without_pk() || data_schema.is_table_with_clustering_key())
+       && index_schema.is_global_index_table()) {
         if (OB_FAIL(add_shadow_partition_keys(data_schema, row_desc, index_schema))) {
           LOG_WARN("add_shadow_partition_keys failed", K(data_schema), K(row_desc), K(ret));
         }
@@ -1146,6 +1147,7 @@ int ObIndexBuilderUtil::generate_prefix_column(
       if (OB_FAIL(prefix_column.assign(*old_column))) {
         LOG_WARN("fail to assign column", KR(ret), KPC(old_column));
       } else if (FALSE_IT(prefix_column.del_column_flag(HEAP_ALTER_ROWKEY_FLAG))) { // clear flag
+      } else if (FALSE_IT(prefix_column.del_column_flag(HEAP_TABLE_CLUSTERING_KEY_FLAG))) {
       } else if (!prefix_column.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("prefix column is invalid", K(ret));

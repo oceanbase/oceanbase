@@ -2427,8 +2427,11 @@ struct MergeKeyInfoHelper
                                      bool &best_need_sort,
                                      int64_t &best_prefix_pos,
                                      bool prune_mj);
-
-    int push_down_order_siblings(JoinPath *join_path, const Path *right_path);
+    int map_connect_by_columns(const ObSelectStmt *stmt,
+                               const ObIArray<ObRawExpr *> &right_column_exprs,
+                               ObIArray<ObRawExpr *> &left_column_exprs);
+    int push_down_left_order_siblings(JoinPath *join_path, const Path *right_path);
+    int push_down_right_order_siblings(JoinPath *join_path, const Path *right_path);
 
     int create_and_add_nl_path(const Path *left_path,
                                const Path *right_path,
@@ -3099,8 +3102,9 @@ struct MergeKeyInfoHelper
                                  const ObIArray<ObRawExpr*> &pushdown_quals);
     int compute_valid_inner_path(Path *inner_path,
                                  const ObIArray<ObRawExpr*> &pushdown_quals);
-    int extract_range_filters(Path *inner_path, ObIArray<ObRawExpr*> &all_range_filters);
-    int extract_range_filters(ObLogicalOperator *root, ObIArray<ObRawExpr*> &all_range_filters);
+    int extract_valid_range_filters(Path *inner_path, ObIArray<ObRawExpr*> &all_range_filters);
+    int extract_valid_range_filters(ObLogicalOperator *root, ObIArray<ObRawExpr*> &all_range_filters);
+    int extract_valid_range_filters(ObIArray<ObRawExpr*> &candi_filters, ObIArray<ObRawExpr*> &all_range_filters);
 
     int check_and_fill_inner_path_info(PathHelper &helper,
                                        const ObDMLStmt &stmt,

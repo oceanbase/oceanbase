@@ -80,7 +80,12 @@ public:
   inline bool is_pre_filter() const { return ObVecIndexType::VEC_INDEX_PRE == vec_type_;  }
   inline bool is_vec_adaptive_scan() const { return ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN == vec_type_ && ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN != adaptive_try_path_; }
   inline bool is_post_filter() const { return ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER == vec_type_ || ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER == vec_type_; }
-  inline bool is_iter_filter() const { return ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER == vec_type_; }
+  inline bool is_iter_filter() const
+  {
+    return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF
+               ? false
+               : ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER == vec_type_;
+  }
   inline bool filter_in_hnsw_iter() const { return ObVecIndexType::VEC_INDEX_PRE == vec_type_ || ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER == vec_type_; }
   inline void set_can_use_vec_pri_opt(bool can_use_vec_pri_opt) {can_use_vec_pri_opt_ = can_use_vec_pri_opt;}
   inline bool can_use_vec_pri_opt() const { return can_use_vec_pri_opt_; }
@@ -91,7 +96,9 @@ public:
   int64_t get_snapshot_tbl_idx() const { return ObVecAuxTableIdx::THIRD_VEC_AUX_TBL_IDX; }
   int64_t get_com_aux_tbl_idx() const { return ObVecAuxTableIdx::FOURTH_VEC_AUX_TBL_IDX; }
   int64_t get_rowkey_vid_tbl_idx() const { return ObVecAuxTableIdx::FIFTH_VEC_AUX_TBL_IDX; }
+  int64_t get_embedded_tbl_idx() const { return use_rowkey_vid_tbl_ ? ObVecAuxTableIdx::SIXTH_VEC_AUX_TBL_IDX : ObVecAuxTableIdx::FIFTH_VEC_AUX_TBL_IDX; }
   const ObVectorIndexParam& get_vec_index_param() const { return vector_index_param_; }
+
   int64_t get_functial_lookup_idx() const { return children_cnt_ - 1; }
 
   // IVF
@@ -153,7 +160,8 @@ public:
                        K_(vec_type), K_(algorithm_type), K_(selectivity), K_(row_count),
                        K_(extra_column_count), K_(vector_index_param), K_(vec_query_param),
                        K_(vector_index_param), K_(adaptive_try_path), K_(is_multi_value_index),
-                       K_(is_spatial_index), K_(can_extract_range));
+                       K_(is_spatial_index), K_(can_extract_range), K_(is_hybrid),
+                       K_(all_filters_can_be_picked_out), K_(use_rowkey_vid_tbl));
 
   ObExpr *inv_scan_vec_id_col_;
   ObString vec_index_param_;

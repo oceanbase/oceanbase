@@ -26,6 +26,8 @@ using namespace compaction;
 namespace blocksstable
 {
 
+class ObIndexBlockRowParser;
+
 ObMacroBlockReader::ObMacroBlockReader(const uint64_t tenant_id)
     :compressor_(NULL),
      uncomp_buf_(NULL),
@@ -209,6 +211,7 @@ int ObMacroBlockReader::decrypt_and_decompress_data(
     const ObSSTableMacroBlockHeader &block_header,
     const char *buf,
     const int64_t size,
+    const bool need_deep_copy,
     const char *&uncomp_buf,
     int64_t &uncomp_size,
     bool &is_compressed)
@@ -228,7 +231,38 @@ int ObMacroBlockReader::decrypt_and_decompress_data(
         block_header.fixed_header_.master_key_id_,
         block_header.fixed_header_.encrypt_key_);
     if (OB_FAIL(decrypt_and_decompress_data(deserialize_meta, buf, size, uncomp_buf, uncomp_size,
-        is_compressed, false/*need_deep_copy*/, nullptr/*ext_allocator*/))) {
+        is_compressed, need_deep_copy, nullptr/*ext_allocator*/))) {
+      STORAGE_LOG(WARN, "fail to decrypt and decompress data", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObMacroBlockReader::decrypt_and_decompress_data(
+    const ObSimplifiedSSTableMacroBlockHeader &block_header,
+    const char *buf,
+    const int64_t size,
+    const bool need_deep_copy,
+    const char *&uncomp_buf,
+    int64_t &uncomp_size,
+    bool &is_compressed)
+{
+  int ret = OB_SUCCESS;
+  int64_t header_size = 0;
+  int64_t pos = 0;
+  if (OB_ISNULL(buf) || OB_UNLIKELY(!block_header.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid arguments to decompress data",
+        K(ret), KP(buf), K(size), K(block_header));
+  } else {
+    ObMicroBlockDesMeta deserialize_meta(
+        block_header.compressor_type_,
+        static_cast<common::ObRowStoreType>(block_header.row_store_type_),
+        block_header.encrypt_id_,
+        block_header.master_key_id_,
+        block_header.encrypt_key_);
+    if (OB_FAIL(decrypt_and_decompress_data(deserialize_meta, buf, size, uncomp_buf, uncomp_size,
+        is_compressed, need_deep_copy, nullptr/*ext_allocator*/))) {
       STORAGE_LOG(WARN, "fail to decrypt and decompress data", K(ret));
     }
   }
@@ -863,6 +897,8 @@ int ObSSTableDataBlockReader::dump_sstable_micro_data(
   const ObMicroBlockHeader *block_header = nullptr;
   const ObIndexBlockRowHeader *idx_row_header = nullptr;
   const ObIndexBlockRowMinorMetaInfo *minor_meta = nullptr;
+  const char *agg_row_buf = nullptr;
+  int64_t agg_row_buf_size = 0;
   if (OB_FAIL(macro_bare_iter.get_curr_micro_block_row_cnt(row_cnt))) {
     LOG_WARN("Fail to get row count of current micro block", K(ret));
   } else if (OB_FAIL(macro_bare_iter.get_curr_micro_block_data(block_data))) {
@@ -901,27 +937,20 @@ int ObSSTableDataBlockReader::dump_sstable_micro_data(
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Null pointer to index block row header", K(ret));
         } else if (FALSE_IT(printer_.print_index_row_header(idx_row_header))) {
-        } else if (idx_row_header->is_major_node()) {
-          // skip
-        } else if (OB_FAIL(idx_row_parser.get_minor_meta(minor_meta))) {
-          LOG_WARN("Fail to get index row minor meta info", K(ret));
-        } else if (OB_ISNULL(minor_meta)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Null pointer to minor meta", K(ret));
+        } else if (OB_FAIL(idx_row_parser.parse_minor_meta_and_agg_row(
+            minor_meta, agg_row_buf, agg_row_buf_size))) {
+          LOG_WARN("Fail to parse minor meta and agg row", K(ret));
         } else {
-          printer_.print_index_minor_meta(minor_meta);
-        }
-
-        if (OB_SUCC(ret) && idx_row_header->is_pre_aggregated()) {
-          const char *agg_row_buf = nullptr;
-          int64_t agg_row_buf_size = 0;
-          ObAggRowReader agg_row_reader;
-          if (OB_FAIL(idx_row_parser.get_agg_row(agg_row_buf, agg_row_buf_size))) {
-            LOG_WARN("Failed to get agg row", K(ret), KP(agg_row_buf), K(agg_row_buf_size));
-          } else if (OB_FAIL(agg_row_reader.init(agg_row_buf, agg_row_buf_size))) {
-            LOG_WARN("Failed to init agg row reader", K(ret));
-          } else {
-            printer_.print_pre_agg_row(macro_header_.fixed_header_.column_count_, agg_row_reader);
+          if (nullptr != minor_meta) {
+            printer_.print_index_minor_meta(minor_meta);
+          }
+          if (nullptr != agg_row_buf) {
+            ObAggRowReader agg_row_reader;
+            if (OB_FAIL(agg_row_reader.init(agg_row_buf, agg_row_buf_size))) {
+              LOG_WARN("Failed to init agg row reader", K(ret));
+            } else {
+              printer_.print_pre_agg_row(macro_header_.fixed_header_.column_count_, agg_row_reader);
+            }
           }
         }
       }

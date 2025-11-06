@@ -68,9 +68,13 @@ public:
   static ObVectorIndexRecordType index_type_to_record_type(schema::ObIndexType type);
 
   static ObAdapterCreateType index_type_to_create_type(schema::ObIndexType type);
-
+  static int get_vector_index_prefix_inner(const ObTableSchema &index_schema, const ObString index_name, ObString &prefix);
   static int get_vector_index_prefix(const ObTableSchema &index_schema, ObString &prefix);
-  static int split_snapshot_prefix(const ObString &src, const ObString &item, ObString &dst);
+  static int get_vector_index_name_prefix(const ObTableSchema &index_schema, ObString &prefix);
+  static int get_prefix(const ObString &src, const ObString &item, ObString &dst);
+  static int get_suffix(const ObString &src, const ObString &item, ObString &dst);
+  static int get_key_prefix_scn(const ObString &key_prefix, int64_t &scn);
+  static int get_table_key_scn(const ObString &key_str, int64_t &scn);
   static int get_split_snapshot_prefix(const ObVectorIndexAlgorithmType index_type,
                                        const ObString &src,
                                        ObString &dst);
@@ -81,8 +85,10 @@ public:
   static int get_ls_leader_flag(const ObLSID &ls_id, bool &is_leader);
   static int get_read_scn(bool is_leader, ObLSID &ls_id, SCN &target_scn);
   static int query_need_refresh_memdata(ObPluginVectorIndexAdaptor *adapter, ObLSID &ls_id, bool is_leader);
+  static int check_snapshot_iter_need_rescan(common::ObNewRowIterator *snapshot_idx_iter, bool &need_rescan, blocksstable::ObDatumRow *&row);
 
   static int add_key_ranges(uint64_t table_id, ObRowkey& rowkey, storage::ObTableScanParam &scan_param);
+  static int add_key_ranges(uint64_t table_id, ObRowkey& start_key, ObRowkey& end_key, storage::ObTableScanParam &scan_param);
   static int iter_table_rescan(storage::ObTableScanParam &scan_param, common::ObNewRowIterator *iter);
 
   static int read_object_from_vid_rowkey_table_iter(ObObj *input_obj,
@@ -104,7 +110,18 @@ public:
                                               int64_t extra_info_count,
                                               ObVecExtraInfoObj *output_extra_objs,
                                               bool &get_data);
+  static int read_object_from_embedded_table_iter(ObObj *&input_obj,
+                                                  int32_t data_table_rowkey_count,
+                                                  uint64_t table_id,
+                                                  storage::ObTableScanParam &scan_param,
+                                                  common::ObNewRowIterator *iter,
+                                                  ObIAllocator &allocator,
+                                                  ObObj &output_vec_obj,
+                                                  int64_t extra_column_count,
+                                                  ObVecExtraInfoObj *output_extra_info_objs,
+                                                  bool &get_data);
   static int64_t get_extra_column_count(const schema::ObTableParam &table_param, schema::ObIndexType type);
+  static int get_extra_column_count(ObPluginVectorIndexAdaptor &adapter, int &column_count);
   static int get_data_table_out_column_id(ObSEArray<uint64_t, 4> &vector_column_ids,
                                           uint64_t incr_index_table_id,
                                           uint64_t data_table_id,
@@ -114,7 +131,8 @@ public:
                                  ObIAllocator &allocator,
                                  int64_t extra_info_count,
                                  blocksstable::ObDatumRow *datum_row,
-                                 ObVecExtraInfoObj *out_extra_info_objs);
+                                 ObVecExtraInfoObj *out_extra_info_objs,
+                                 int offset = 1);
   static int read_vector_info(ObPluginVectorIndexAdaptor *adapter,
                               ObIAllocator &allocator,
                               ObLSID &ls_id,
@@ -130,7 +148,23 @@ public:
                                ObTableParam &table_param,
                                common::ObNewRowIterator *&scan_iter,
                                ObIArray<uint64_t> *out_column_ids = nullptr,
-                               const bool need_all_columns = false);
+                               const bool need_all_columns = false,
+                               const bool is_reverse_scan = false,
+                               const bool need_ora_scn = false);
+  static int get_snap_index_visible_row_iter(ObAccessService *tsc_service,
+                                            ObLSID &ls_id,
+                                            ObPluginVectorIndexAdaptor *adapter,
+                                            SCN &target_scn,
+                                            ObIAllocator &allocator,
+                                            storage::ObTableScanParam &snapshot_scan_param,
+                                            schema::ObTableParam &snapshot_table_param,
+                                            common::ObNewRowIterator *&snapshot_idx_iter,
+                                            blocksstable::ObDatumRow *&row);
+  static int get_snap_index_visible_row_key(ObLSID &ls_id,
+                                            ObPluginVectorIndexAdaptor *adapter,
+                                            share::SCN &target_scn,
+                                            ObIAllocator &allocator,
+                                            ObString &row_key);
 
   static int test_read_local_data(ObLSID &ls_id,
                                   ObPluginVectorIndexAdaptor *adapter,
@@ -145,13 +179,15 @@ public:
                                          char *buf, int64_t buf_len, int64_t &pos);
 
 private:
+  static const int EMBEDDED_TABLE_BASE_COLUMN_CNT = 2;
   static int init_common_scan_param(storage::ObTableScanParam& scan_param,
                                     ObPluginVectorIndexAdaptor *adapter,
                                     SCN target_scn,
                                     ObIAllocator *allocator,
                                     ObIAllocator *scan_allocator,
                                     schema::ObIndexType type,
-                                    uint64_t table_id);
+                                    uint64_t table_id,
+                                    const bool is_reverse_scan);
   static int init_table_param(ObTableParam *table_param,
                               uint64_t inc_table_id,
                               uint64_t data_table_id,
@@ -159,7 +195,8 @@ private:
                               schema::ObIndexType type,
                               ObPluginVectorIndexAdaptor *adapter,
                               ObIArray<uint64_t> *out_column_ids = nullptr,
-                              const bool need_all_columns = false);
+                              const bool need_all_columns = false,
+                              const bool need_ora_scn = false);
   static int get_non_shared_index_aux_table_colum_count(schema::ObIndexType type, uint32 &col_cnt);
   static int get_non_shared_index_aux_table_rowkey_colum_count(schema::ObIndexType type, uint32 &col_cnt);
   static int get_special_index_aux_table_column_count(schema::ObIndexType type,

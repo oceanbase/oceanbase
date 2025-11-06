@@ -990,20 +990,46 @@ int ObDASScanOp::reuse_iter()
                 attach_ctdef_, attach_rtdef_, tablet_ids_, ls_id_, result_iter))) {
               LOG_WARN("failed to set index merge related ids", K(ret));
             } else {
-              ObDASIndexMergeFTSAndIter *fts_and_iter = dynamic_cast<ObDASIndexMergeFTSAndIter *>(result_iter);
-              if (OB_NOT_NULL(fts_and_iter)) {
-                int64_t first_fts_idx = fts_and_iter->get_first_fts_idx();
-                const ObDASBaseCtDef *child_attach_ctdef = attach_ctdef_->children_[first_fts_idx];
-                ObDASBaseRtDef *child_attach_rtdef = attach_rtdef_->children_[first_fts_idx];
-
-                if (OB_FAIL(ObDASIterUtils::set_index_merge_related_ids(child_attach_ctdef,
-                                                        child_attach_rtdef,
-                                                        tablet_ids_,
-                                                        ls_id_,
-                                                        fts_and_iter->get_pushdown_topk_iter_tree()))) {
-                  LOG_WARN("failed to set index merge related ids", K(ret));
+              const bool need_lookup = (attach_ctdef_->op_type_ == ObDASOpType::DAS_OP_TABLE_LOOKUP) ||
+                             (attach_ctdef_->op_type_ == ObDASOpType::DAS_OP_INDEX_PROJ_LOOKUP);
+              const ObDASBaseCtDef *index_merge_ctdef = need_lookup ? attach_ctdef_->children_[0] : attach_ctdef_;
+              ObDASBaseRtDef *index_merge_rtdef = need_lookup ? attach_rtdef_->children_[0] : attach_rtdef_;
+              bool fts_index_merge_and_opt = false;
+              if (OB_FAIL(ObDASIterUtils::check_fts_index_merge_and_opt(scan_ctdef_, scan_rtdef_, index_merge_ctdef, index_merge_rtdef, fts_index_merge_and_opt))) {
+                LOG_WARN("failed to check fts index merge and opt", K(ret));
+              } else if (fts_index_merge_and_opt) {
+                ObDASIndexMergeFTSAndIter *fts_and_iter = nullptr;
+                if (need_lookup) {
+                  fts_and_iter = static_cast<ObDASIndexMergeFTSAndIter *>(result_iter->get_children()[0]);
+                } else {
+                  fts_and_iter = static_cast<ObDASIndexMergeFTSAndIter *>(result_iter);
                 }
+                if (OB_ISNULL(fts_and_iter)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("unexpected nullptr", K(ret));
+                } else {
+                  int64_t first_fts_idx = fts_and_iter->get_first_fts_idx();
+                  const ObDASBaseCtDef *child_ctdef = nullptr;
+                  ObDASBaseRtDef *child_rtdef = nullptr;
+                  if (need_lookup) {
+                    child_ctdef = attach_ctdef_->children_[0]->children_[first_fts_idx];
+                    child_rtdef = attach_rtdef_->children_[0]->children_[first_fts_idx];
+                  } else {
+                    child_ctdef = attach_ctdef_->children_[first_fts_idx];
+                    child_rtdef = attach_rtdef_->children_[first_fts_idx];
+                  }
 
+                  if (OB_ISNULL(child_ctdef) || OB_ISNULL(child_rtdef)) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("unexpected nullptr", K(ret));
+                  } else if (OB_FAIL(ObDASIterUtils::set_index_merge_related_ids(child_ctdef,
+                                                                                 child_rtdef,
+                                                                                 tablet_ids_,
+                                                                                 ls_id_,
+                                                                                 fts_and_iter->get_pushdown_topk_iter_tree()))) {
+                    LOG_WARN("failed to set index merge related ids", K(ret));
+                  }
+                }
               }
             }
             break;
@@ -1341,6 +1367,7 @@ int ObDASScanOp::get_vec_ir_tablet_ids(ObDASRelatedTabletID &related_tablet_ids)
                                        related_tablet_ids.delta_buf_tablet_id_,
                                        related_tablet_ids.index_id_tablet_id_,
                                        related_tablet_ids.snapshot_tablet_id_,
+                                       related_tablet_ids.embedded_tablet_id_,
                                        related_tablet_ids.lookup_tablet_id_,
                                        related_tablet_ids.rowkey_vid_tablet_id_,
                                        related_tablet_ids.vid_rowkey_tablet_id_))) {
@@ -1416,6 +1443,7 @@ int ObDASScanOp::get_hnsw_ir_tablet_ids(
     common::ObTabletID &delta_buf_tid,
     common::ObTabletID &index_id_tid,
     common::ObTabletID &snapshot_tid,
+    common::ObTabletID &embedded_tid,
     common::ObTabletID &com_aux_vec_tid,
     common::ObTabletID &rowkey_vid_tid,
     common::ObTabletID &vid_rowkey_tid)
@@ -1425,6 +1453,7 @@ int ObDASScanOp::get_hnsw_ir_tablet_ids(
   delta_buf_tid.reset();
   index_id_tid.reset();
   snapshot_tid.reset();
+  embedded_tid.reset();
   com_aux_vec_tid.reset();
   rowkey_vid_tid.reset();
   if (OB_UNLIKELY(related_ctdefs_.count() != related_tablet_ids_.count())) {
@@ -1452,6 +1481,10 @@ int ObDASScanOp::get_hnsw_ir_tablet_ids(
       }
       case ObTSCIRScanType::OB_VEC_SNAPSHOT_SCAN: {
         snapshot_tid = related_tablet_ids_.at(i);
+        break;
+      }
+      case ObTSCIRScanType::OB_VEC_EMBEDDED_SCAN: {
+        embedded_tid = related_tablet_ids_.at(i);
         break;
       }
       case ObTSCIRScanType::OB_VEC_COM_AUX_SCAN: {

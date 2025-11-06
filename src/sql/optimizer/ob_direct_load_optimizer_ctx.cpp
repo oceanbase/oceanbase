@@ -41,7 +41,8 @@ ObDirectLoadOptimizerCtx::ObDirectLoadOptimizerCtx()
     need_sort_(false),
     can_use_direct_load_(false),
     use_direct_load_(false),
-    is_optimized_by_default_load_mode_(false)
+    is_optimized_by_default_load_mode_(false),
+    enable_inc_major_(false)
 {
 }
 
@@ -58,6 +59,7 @@ void ObDirectLoadOptimizerCtx::reset()
   can_use_direct_load_ = false;
   use_direct_load_ = false;
   is_optimized_by_default_load_mode_ = false;
+  enable_inc_major_ = false;
 }
 
 int ObDirectLoadOptimizerCtx::init_direct_load_ctx(ObExecContext *exec_ctx, ObLoadDataStmt &stmt)
@@ -69,6 +71,7 @@ int ObDirectLoadOptimizerCtx::init_direct_load_ctx(ObExecContext *exec_ctx, ObLo
   } else if (GCONF._ob_enable_direct_load) {
     reset();
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    enable_inc_major_ = tenant_config->_enable_inc_major_direct_load;
     ObLoadDataHint &load_data_hint = stmt.get_hints();
     ObDirectLoadHint &direct_load_hint = load_data_hint.get_direct_load_hint();
     int64_t append = 0;
@@ -85,7 +88,7 @@ int ObDirectLoadOptimizerCtx::init_direct_load_ctx(ObExecContext *exec_ctx, ObLo
     } else if (append != 0) {
       enable_by_append_hint();
     } else if (!session_info->is_inner()) {
-      enable_by_config();
+      enable_by_config(exec_ctx);
     }
     if (OB_SUCC(ret)) {
       if (load_method_ != ObDirectLoadMethod::INVALID_METHOD) {
@@ -121,7 +124,7 @@ int ObDirectLoadOptimizerCtx::init_direct_load_ctx(ObExecContext *exec_ctx, ObLo
     }
     LOG_INFO("init direct load ctx result", K(ret), K(direct_load_hint), K(append), K(table_id_), K(load_method_),
         K(insert_mode_), K(load_mode_), K(load_level_), K(dup_action_), K(max_error_row_count_), K(need_sort_),
-        K(can_use_direct_load_), K(use_direct_load_), K(is_optimized_by_default_load_mode_));
+        K(can_use_direct_load_), K(use_direct_load_), K(is_optimized_by_default_load_mode_), K(enable_inc_major_));
   }
   return ret;
 }
@@ -137,6 +140,8 @@ int ObDirectLoadOptimizerCtx::init_direct_load_ctx(
     LOG_WARN("exec_ctx cannot be null", K(ret));
   } else {
     reset();
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    enable_inc_major_ = tenant_config->_enable_inc_major_direct_load;
     uint64_t table_id = stmt.get_table_item(0) != nullptr ? stmt.get_table_item(0)->ref_id_ : 0;
     const ObGlobalHint &global_hint = optimizer_ctx.get_global_hint();
     const ObDirectLoadHint &direct_load_hint = global_hint.direct_load_hint_;
@@ -163,7 +168,7 @@ int ObDirectLoadOptimizerCtx::init_direct_load_ctx(
         load_mode_ = ObDirectLoadMode::INSERT_INTO;
       } else if (!session_info->is_inner()) {
         if (stmt.get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_3_4) {
-          enable_by_config();
+          enable_by_config(exec_ctx);
           load_mode_ = ObDirectLoadMode::INSERT_INTO;
         }
       }
@@ -226,7 +231,7 @@ int ObDirectLoadOptimizerCtx::init_direct_load_ctx(
       }
     }
     LOG_INFO("init direct load ctx result", K(ret), K(direct_load_hint), K(global_hint.has_append()), K(table_id_), K(load_method_), K(insert_mode_), K(load_mode_), K(load_level_), K(dup_action_),
-        K(max_error_row_count_), K(need_sort_), K(can_use_direct_load_), K(use_direct_load_), K(is_optimized_by_default_load_mode_));
+        K(max_error_row_count_), K(need_sort_), K(can_use_direct_load_), K(use_direct_load_), K(is_optimized_by_default_load_mode_), K(enable_inc_major_));
 
     if (load_method_ > 0) {
       // Only for direct load
@@ -259,23 +264,30 @@ void ObDirectLoadOptimizerCtx::enable_by_append_hint()
   load_method_ = ObDirectLoadMethod::FULL;
 }
 
-void ObDirectLoadOptimizerCtx::enable_by_config()
+void ObDirectLoadOptimizerCtx::enable_by_config(ObExecContext *exec_ctx)
 {
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-  const ObString &config_str = tenant_config->default_load_mode.get_value_string();
-  need_sort_ = true;
-  insert_mode_ = ObDirectLoadInsertMode::NORMAL;
-  if (tenant_config.is_valid()) {
-    if (0 == config_str.case_compare("FULL_DIRECT_WRITE")) {
-      load_method_ = ObDirectLoadMethod::FULL;
-    } else if (0 == config_str.case_compare("INC_DIRECT_WRITE")) {
-      load_method_ = ObDirectLoadMethod::INCREMENTAL;
-    } else if (0 == config_str.case_compare("INC_REPLACE_DIRECT_WRITE")) {
-      load_method_ = ObDirectLoadMethod::INCREMENTAL;
-      insert_mode_ = ObDirectLoadInsertMode::INC_REPLACE;
-    }
-    if (load_method_ != ObDirectLoadMethod::INVALID_METHOD) {
-      is_optimized_by_default_load_mode_ = true;
+  if (OB_UNLIKELY(exec_ctx->get_table_direct_insert_ctx().get_force_inc_direct_write())) {
+    insert_mode_ = ObDirectLoadInsertMode::NORMAL;
+    need_sort_ = true;
+    load_method_ = ObDirectLoadMethod::INCREMENTAL;
+    is_optimized_by_default_load_mode_ = true;
+  } else {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    const ObString &config_str = tenant_config->default_load_mode.get_value_string();
+    need_sort_ = true;
+    insert_mode_ = ObDirectLoadInsertMode::NORMAL;
+    if (tenant_config.is_valid()) {
+      if (0 == config_str.case_compare("FULL_DIRECT_WRITE")) {
+        load_method_ = ObDirectLoadMethod::FULL;
+      } else if (0 == config_str.case_compare("INC_DIRECT_WRITE")) {
+        load_method_ = ObDirectLoadMethod::INCREMENTAL;
+      } else if (0 == config_str.case_compare("INC_REPLACE_DIRECT_WRITE")) {
+        load_method_ = ObDirectLoadMethod::INCREMENTAL;
+        insert_mode_ = ObDirectLoadInsertMode::INC_REPLACE;
+      }
+      if (load_method_ != ObDirectLoadMethod::INVALID_METHOD) {
+        is_optimized_by_default_load_mode_ = true;
+      }
     }
   }
 }
@@ -341,8 +353,8 @@ int ObDirectLoadOptimizerCtx::check_support_direct_load(ObExecContext *exec_ctx)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get schema guard", K(ret), KP(sql_ctx));
   } else {
-    // insert overwrite和insert into select全量不支持autocommit=false和session在事务内
-    if (is_insert_overwrite() || (is_insert_into() && is_full_direct_load())) {
+    // insert overwrite和insert into select全量和增量不支持autocommit=false和session在事务内
+    if (is_insert_overwrite() || is_insert_into()) {
       bool auto_commit = false;
       ObSQLSessionInfo *session_info = nullptr;
       if (OB_ISNULL(session_info = exec_ctx->get_my_session())) {
@@ -357,8 +369,8 @@ int ObDirectLoadOptimizerCtx::check_support_direct_load(ObExecContext *exec_ctx)
           LOG_WARN("insert overwrite within a transaction is not support", KR(ret), K(auto_commit), K(session_info->is_in_transaction()));
         } else {
           ret = OB_NOT_SUPPORTED;
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "using full direct-insert within a transaction is");
-          LOG_WARN("using full direct-insert within a transaction is not support", KR(ret), K(auto_commit), K(session_info->is_in_transaction()));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "using full or inc direct-insert within a transaction is");
+          LOG_WARN("using full or inc direct-insert within a transaction is not support", KR(ret), K(auto_commit), K(session_info->is_in_transaction()));
         }
       }
     }
@@ -375,7 +387,8 @@ int ObDirectLoadOptimizerCtx::check_support_direct_load(ObExecContext *exec_ctx)
         insert_mode_,
         load_mode_,
         load_level_,
-        column_ids))) {
+        column_ids,
+        enable_inc_major_))) {
       LOG_WARN("fail to check support direct load", K(ret));
     }
   }

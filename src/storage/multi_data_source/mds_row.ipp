@@ -19,6 +19,7 @@
 #include "storage/multi_data_source/compile_utility/mds_dummy_key.h"
 #include "storage/multi_data_source/mds_node.h"
 #include "storage/multi_data_source/mds_table_base.h"
+#include "storage/multi_data_source/adapter_define/mds_dump_node.h"
 #include "storage/multi_data_source/runtime_utility/common_define.h"
 #include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
 #include "storage/tx/ob_tx_seq.h"

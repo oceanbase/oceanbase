@@ -36,12 +36,13 @@ TEST_F(TestPartition, test_is_partition)
   iceberg::PartitionField partition_field1(allocator);
   partition_field1.name = "dt";
   partition_field1.transform.transform_type = iceberg::TransformType::Void;
-  partition_spec.fields.push_back(&partition_field1);
+  ASSERT_EQ(OB_SUCCESS, partition_spec.fields.init(2));
+  ASSERT_EQ(OB_SUCCESS, partition_spec.fields.push_back(&partition_field1));
   ASSERT_TRUE(partition_spec.is_unpartitioned());
   iceberg::PartitionField partition_field2(allocator);
   partition_field2.name = "dt";
   partition_field2.transform.transform_type = iceberg::TransformType::Identity;
-  partition_spec.fields.push_back(&partition_field2);
+  ASSERT_EQ(OB_SUCCESS, partition_spec.fields.push_back(&partition_field2));
   ASSERT_TRUE(partition_spec.is_partitioned());
 }
 

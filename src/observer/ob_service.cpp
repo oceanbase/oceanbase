@@ -595,7 +595,8 @@ int ObService::calc_column_checksum_request(const obrpc::ObCalcColumnChecksumReq
                                            arg.schema_version_,
                                            arg.task_id_,
                                            arg.execution_id_,
-                                           arg.snapshot_version_))) {
+                                           arg.snapshot_version_,
+                                           arg.user_parallelism_))) {
             STORAGE_LOG(WARN, "fail to init ObUniqueCheckingDag", KR(tmp_ret));
           } else if (OB_TMP_FAIL(dag->alloc_global_index_task_callback(calc_item.tablet_id_,
                                                                        arg.target_table_id_,
@@ -604,7 +605,7 @@ int ObService::calc_column_checksum_request(const obrpc::ObCalcColumnChecksumReq
                                                                        arg.task_id_,
                                                                        callback))) {
             STORAGE_LOG(WARN, "fail to alloc global index task callback", KR(tmp_ret));
-          } else if (OB_TMP_FAIL(dag->alloc_unique_checking_prepare_task(callback))) {
+          } else if (OB_TMP_FAIL(dag->alloc_unique_checking_prepare_task(dag->get_param(), dag->get_context()))) {
             STORAGE_LOG(WARN, "fail to alloc unique checking prepare task", KR(tmp_ret));
           } else if (OB_TMP_FAIL(dag_scheduler->add_dag(dag))) {
             saved_ret = tmp_ret;
@@ -3040,8 +3041,31 @@ int ObService::fetch_split_tablet_info(const ObFetchSplitTabletInfoArg &arg,
           const ObTabletID &tablet_id = arg.tablet_ids_.at(i);
           ObTabletHandle tablet_handle;
           ObTabletCreateDeleteMdsUserData user_data;
+          ObTableStoreIterator table_store_iter;
+          ObArray<ObDDLKV *> ddl_kvs;
+          const transaction::ObTransID invalid_trans_id;
+          const transaction::ObTxSEQ invalid_seq_no;
           if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle))) {
             LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
+          } else if (OB_FAIL(tablet_handle.get_obj()->get_inc_major_sstables(table_store_iter, invalid_trans_id, invalid_seq_no))) {
+            LOG_WARN("failed to get inc major", K(ret));
+          } else if (0 < table_store_iter.count()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support to split with inc major sstables", K(ret), K(arg.ls_id_), K(tablet_id));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "splitting partition with inc major sstables is");
+          } else if (OB_FALSE_IT(table_store_iter.reset())) {
+          } else if (OB_FAIL(tablet_handle.get_obj()->get_inc_major_ddl_sstables(table_store_iter, invalid_trans_id, invalid_seq_no))) {
+            LOG_WARN("failed to get inc major", K(ret));
+          } else if (0 < table_store_iter.count()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support to split with inc major ddl sstables", K(ret), K(arg.ls_id_), K(tablet_id));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "splitting partition with inc major ddl sstables is");
+          } else if (OB_FAIL(tablet_handle.get_obj()->get_inc_major_ddl_kvs(ddl_kvs))) {
+            LOG_WARN("failed to get inc major", K(ret));
+          } else if (0 < ddl_kvs.count()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support to split with inc major ddl kvs", K(ret), K(arg.ls_id_), K(tablet_id));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "splitting partition with inc major ddl kvs is");
           } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_tablet_status(
                   share::SCN::max_scn(), user_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
             LOG_WARN("failed to get tablet status", K(ret), K(arg.ls_id_), K(tablet_id));

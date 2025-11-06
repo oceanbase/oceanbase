@@ -23,6 +23,7 @@
 #include "common/object/ob_object.h"
 #include "sql/session/ob_sql_session_mgr.h"
 #include "sql/engine/expr/ob_expr_vector.h"
+#include "sql/engine/expr/ob_expr_vector_similarity.h"
 #include "share/allocator/ob_tenant_vector_allocator.h"
 
 namespace oceanbase {
@@ -359,8 +360,8 @@ class ObVectorCenterClusterHelper
 {
 
 public:
-  ObVectorCenterClusterHelper(ObIAllocator &allocator, const VEC_T *const_vec, oceanbase::sql::ObExprVectorDistance::ObVecDisType dis_type, int64_t dim, int64_t nprobe, float distance_threshold)
-      : alloc_(allocator), const_vec_(const_vec), dis_type_(dis_type), dim_(dim), nprobe_(nprobe), compare_(dis_type), heap_(compare_), distance_threshold_(distance_threshold)
+  ObVectorCenterClusterHelper(ObIAllocator &allocator, const VEC_T *const_vec, oceanbase::sql::ObExprVectorDistance::ObVecDisType dis_type, int64_t dim, int64_t nprobe, float similarity_threshold)
+      : alloc_(allocator), const_vec_(const_vec), dis_type_(dis_type), dim_(dim), nprobe_(nprobe), compare_(dis_type), heap_(compare_), similarity_threshold_(similarity_threshold)
   {}
 
   int push_center(const CENTER_T &center, VEC_T *center_vec, const int64_t dim, CenterSaveMode center_save_mode = NOT_SAVE_CENTER_VEC);
@@ -371,6 +372,7 @@ public:
   int get_nearest_probe_centers(ObIArray<std::pair<CENTER_T, VEC_T *>> &center_ids);
   int get_nearest_probe_centers_vec_dist(ObIArray<std::pair<CENTER_T, VEC_T *>> &center_ids,
                                          ObIArray<float> &distances);
+  bool is_satify_similarity_threshold(const double& distance);
   int64_t get_center_count() const {
     return heap_.count();
   }
@@ -425,7 +427,7 @@ private:
   int64_t nprobe_;
   HeapCompare compare_;
   CenterHeap heap_;
-  float distance_threshold_;
+  float similarity_threshold_;
 };
 
 // ------------------ ObCentersBuffer implement ------------------
@@ -572,58 +574,55 @@ int ObVectorCenterClusterHelper<VEC_T, CENTER_T>::push_center(
   VEC_T *center_vec /*= nullptr*/)
 {
   int ret = OB_SUCCESS;
-  if (distance > distance_threshold_) {
-  } else {
-    if (heap_.count() < nprobe_) {
-      void *ptr = alloc_.alloc(sizeof(ObCenterWithBuf<CENTER_T>));
-      if (NULL == ptr) {
-        ret = common::OB_ALLOCATE_MEMORY_FAILED;
-        SHARE_LOG(WARN, "no memory for table entity", K(ret));
+  if (heap_.count() < nprobe_) {
+    void *ptr = alloc_.alloc(sizeof(ObCenterWithBuf<CENTER_T>));
+    if (NULL == ptr) {
+      ret = common::OB_ALLOCATE_MEMORY_FAILED;
+      SHARE_LOG(WARN, "no memory for table entity", K(ret));
+    } else {
+      ObCenterWithBuf<CENTER_T> *center_with_buf = new (ptr) ObCenterWithBuf<CENTER_T>(&alloc_);
+      if (OB_ISNULL(center_with_buf)) {
+        ret = OB_ERR_UNEXPECTED;
+        SHARE_LOG(WARN, "center_entity is null", K(ret));
+      } else if (OB_FAIL(center_with_buf->new_from_src(center))) {
+        SHARE_LOG(WARN, "center_entity fail init", K(ret));
       } else {
-        ObCenterWithBuf<CENTER_T> *center_with_buf = new (ptr) ObCenterWithBuf<CENTER_T>(&alloc_);
-        if (OB_ISNULL(center_with_buf)) {
-          ret = OB_ERR_UNEXPECTED;
-          SHARE_LOG(WARN, "center_entity is null", K(ret));
-        } else if (OB_FAIL(center_with_buf->new_from_src(center))) {
-          SHARE_LOG(WARN, "center_entity fail init", K(ret));
-        } else {
-          HeapCenterItemTemp item(distance, center_with_buf);
-          if (center_save_mode == DEEP_COPY_CENTER_VEC && OB_FAIL(item.vec_dim_.new_from_src(alloc_, center_vec, dim_))) {
-            SHARE_LOG(WARN, "failed to new from src", K(ret), K(center_vec));
-          } else if (center_save_mode == SHALLOW_COPY_CENTER_VEC && OB_FALSE_IT(item.vec_dim_.vec_ = center_vec)) {
-          }
-          if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(heap_.push(item))) {
-            SHARE_LOG(WARN, "failed to push center heap", K(ret), K(center), K(distance));
-          }
+        HeapCenterItemTemp item(distance, center_with_buf);
+        if (center_save_mode == DEEP_COPY_CENTER_VEC && OB_FAIL(item.vec_dim_.new_from_src(alloc_, center_vec, dim_))) {
+          SHARE_LOG(WARN, "failed to new from src", K(ret), K(center_vec));
+        } else if (center_save_mode == SHALLOW_COPY_CENTER_VEC && OB_FALSE_IT(item.vec_dim_.vec_ = center_vec)) {
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(heap_.push(item))) {
+          SHARE_LOG(WARN, "failed to push center heap", K(ret), K(center), K(distance));
         }
       }
-    } else {
-      const HeapCenterItemTemp &top = heap_.top();
-      ObCenterWithBuf<CENTER_T> tmp_center_with_buf;
-      HeapCenterItemTemp tmp(distance, &tmp_center_with_buf);
-      if (compare_(tmp, top)) {
-        ObCenterWithBuf<CENTER_T> *old_center_with_buf = top.center_with_buf_;
-        if (OB_ISNULL(old_center_with_buf)) {
-          ret = OB_ERR_UNEXPECTED;
-          SHARE_LOG(WARN, "center_with_buf is null", K(ret));
-        } else if (OB_FAIL(old_center_with_buf->new_from_src(center))) {
-          SHARE_LOG(WARN, "failed to new from src", K(ret), K(center));
-        } else {
-          HeapCenterItemTemp new_top(distance, old_center_with_buf);
-          if (center_save_mode == DEEP_COPY_CENTER_VEC) {
-            new_top.set_vec_dim(top.vec_dim_);
-            if (OB_FAIL(new_top.vec_dim_.reuse_from_src(center_vec, dim_))) {
-              SHARE_LOG(WARN, "failed to new from src", K(ret), K(center_vec));
-            }
-          } else if (center_save_mode == SHALLOW_COPY_CENTER_VEC) {
-            new_top.set_vec_dim(top.vec_dim_);
-            new_top.vec_dim_.vec_ = center_vec;
+    }
+  } else {
+    const HeapCenterItemTemp &top = heap_.top();
+    ObCenterWithBuf<CENTER_T> tmp_center_with_buf;
+    HeapCenterItemTemp tmp(distance, &tmp_center_with_buf);
+    if (compare_(tmp, top)) {
+      ObCenterWithBuf<CENTER_T> *old_center_with_buf = top.center_with_buf_;
+      if (OB_ISNULL(old_center_with_buf)) {
+        ret = OB_ERR_UNEXPECTED;
+        SHARE_LOG(WARN, "center_with_buf is null", K(ret));
+      } else if (OB_FAIL(old_center_with_buf->new_from_src(center))) {
+        SHARE_LOG(WARN, "failed to new from src", K(ret), K(center));
+      } else {
+        HeapCenterItemTemp new_top(distance, old_center_with_buf);
+        if (center_save_mode == DEEP_COPY_CENTER_VEC) {
+          new_top.set_vec_dim(top.vec_dim_);
+          if (OB_FAIL(new_top.vec_dim_.reuse_from_src(center_vec, dim_))) {
+            SHARE_LOG(WARN, "failed to new from src", K(ret), K(center_vec));
           }
-          if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(heap_.replace_top(new_top))) {
-            SHARE_LOG(WARN, "failed to replace top", K(ret), K(new_top));
-          }
+        } else if (center_save_mode == SHALLOW_COPY_CENTER_VEC) {
+          new_top.set_vec_dim(top.vec_dim_);
+          new_top.vec_dim_.vec_ = center_vec;
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(heap_.replace_top(new_top))) {
+          SHARE_LOG(WARN, "failed to replace top", K(ret), K(new_top));
         }
       }
     }
@@ -639,12 +638,14 @@ int ObVectorCenterClusterHelper<VEC_T, CENTER_T>::get_nearest_probe_center_ids(O
     ret = OB_ERR_UNEXPECTED;
     SHARE_LOG(WARN, "max heap count is not equal to nprobe", K(ret), K(heap_.count()), K(nprobe_));
   }
+  bool is_satify_distance_threshold = false;
   while(OB_SUCC(ret) && !heap_.empty()) {
     const HeapCenterItemTemp &cur_top = heap_.top();
     if (OB_ISNULL(cur_top.center_with_buf_)) {
       ret = OB_ERR_UNEXPECTED;
       SHARE_LOG(WARN, "center_with_buf is null", K(ret));
-    } else if (OB_FAIL(center_ids.push_back(cur_top.center_with_buf_->get_center()))) {
+    } else if (OB_FALSE_IT(is_satify_distance_threshold = is_satify_similarity_threshold(cur_top.distance_))) {
+    } else if ( is_satify_distance_threshold && OB_FAIL(center_ids.push_back(cur_top.center_with_buf_->get_center()))) {
       ret = OB_ERR_UNEXPECTED;
       SHARE_LOG(WARN, "failed to push center id", K(ret), K(cur_top.center_with_buf_->get_center()));
     } else if (OB_FAIL(heap_.pop())) {
@@ -657,6 +658,20 @@ int ObVectorCenterClusterHelper<VEC_T, CENTER_T>::get_nearest_probe_center_ids(O
     std::reverse(center_ids.get_data(), center_ids.get_data() + center_ids.count());
   }
   return ret;
+}
+
+template <typename VEC_T, typename CENTER_T>
+bool ObVectorCenterClusterHelper<VEC_T, CENTER_T>::is_satify_similarity_threshold(const double& distance)
+{
+  bool is_satify = true;
+  int ret = OB_SUCCESS;
+  float similarity = 0.0;
+  if (similarity_threshold_ != 0.0 && OB_FAIL(oceanbase::sql::ObExprVectorSimilarity::calc_similarity_from_distance(dis_type_, distance, similarity))){
+    SHARE_LOG(WARN, "get similarity from distance fail", K(ret));
+  } else if (similarity < similarity_threshold_){
+    is_satify = false;
+  }
+  return is_satify;
 }
 
 template <typename VEC_T, typename CENTER_T>

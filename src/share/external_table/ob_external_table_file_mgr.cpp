@@ -517,24 +517,24 @@ int ObExternalTableFileManager::get_mocked_external_table_files(
     if (is_part_table) {
       for (int64_t i = 0; OB_SUCC(ret) && i < partition_ids.count(); i++) {
         int64_t part_id = partition_ids.at(i);
-
-        ObExternalFileInfo file;
-        bool found = false;
-
-        for (int64_t j = 0; OB_SUCC(ret) && !found && j < das_ctdef.partition_infos_.count(); j++) {
-          share::ObExternalTablePartInfo part_info = das_ctdef.partition_infos_.at(j);
-          if (part_id == part_info.part_id_) {
-            file.file_url_ = part_info.partition_spec_;
-            file.part_id_ = part_id;
-            found = true;
+        if (part_id != INT64_MAX) {
+          ObExternalFileInfo file;
+          bool found = false;
+          for (int64_t j = 0; OB_SUCC(ret) && !found && j < das_ctdef.partition_infos_.count(); j++) {
+            share::ObExternalTablePartInfo part_info = das_ctdef.partition_infos_.at(j);
+            if (part_id == part_info.part_id_) {
+              file.file_url_ = part_info.partition_spec_;
+              file.part_id_ = part_id;
+              found = true;
+            }
           }
-        }
 
-        if (found) {
-          file.file_size_ = -1;
-          file.file_id_ = i + 1;
-          file.file_addr_ = GCTX.self_addr();
-          OZ(external_files.push_back(file));
+          if (found) {
+            file.file_size_ = -1;
+            file.file_id_ = i + 1;
+            file.file_addr_ = GCTX.self_addr();
+            OZ(external_files.push_back(file));
+          }
         }
       }
     } else {

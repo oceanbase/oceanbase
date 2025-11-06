@@ -43,7 +43,8 @@ int ObPxMultiPartInsertOp::inner_open()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table or row desc is invalid", K(ret), K(MY_SPEC.row_desc_));
   } else if (OB_FAIL(data_driver_.init(get_spec(), ctx_.get_allocator(), ins_rtdef_, this, this,
-                                       MY_SPEC.ins_ctdef_.is_table_without_pk_))) {
+                                       MY_SPEC.ins_ctdef_.is_table_without_pk_,
+                                       MY_SPEC.ins_ctdef_.is_table_with_clustering_key_))) {
     LOG_WARN("failed to init data driver", K(ret));
   } else if (OB_UNLIKELY(GET_PHY_PLAN_CTX(ctx_)->get_is_direct_insert_plan())) {
     ret = OB_ERR_UNEXPECTED;

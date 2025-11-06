@@ -19,11 +19,11 @@
 #include "storage/tablet/ob_tablet_medium_info_reader.h"
 #include "storage/truncate_info/ob_tablet_truncate_info_reader.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "share/compaction/ob_shared_storage_compaction_util.h"
 
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/meta_store/ob_shared_storage_obj_meta.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
-#include "close_modules/shared_storage/share/compaction/ob_shared_storage_compaction_util.h"
 #include "close_modules/shared_storage/storage/incremental/ob_ss_minor_compaction.h"
 #include "storage/incremental/ob_shared_meta_service.h"
 #include "storage/compaction_v2/ob_ss_compact_helper.h"
@@ -246,11 +246,11 @@ int ObTabletSplitUtil::split_task_ranges(
   ObSEArray<ObITable::TableKey, 1> empty_skipped_keys;
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
-  ObTableStoreIterator table_store_iterator;
   ObSEArray<ObStoreRange, 32> store_ranges;
   ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> tables;
   const bool is_table_restore = ObDDLType::DDL_TABLE_RESTORE == ddl_type;
   common::ObArenaAllocator tmp_arena("SplitRange", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  SMART_VAR(ObTableStoreIterator, table_store_iterator) {
   if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(ls_id), K(tablet_id));
@@ -339,6 +339,7 @@ int ObTabletSplitUtil::split_task_ranges(
              K(parallel_datum_rowkey_list),
              K(multi_range_split_array));
   }
+  } // end SMART_VAR
   tmp_arena.reset();
   return ret;
 }
@@ -652,6 +653,10 @@ int ObTabletSplitUtil::check_medium_compaction_info_list_cnt(
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
   ObTablet *tablet = nullptr;
+  ObTabletCreateDeleteMdsUserData user_data;
+  mds::MdsWriter writer;// will be removed later
+  mds::TwoPhaseCommitState trans_stat;// will be removed later
+  share::SCN trans_version;// will be removed later
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(arg));
@@ -663,6 +668,17 @@ int ObTabletSplitUtil::check_medium_compaction_info_list_cnt(
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(arg));
+  } else if (!tablet->get_tablet_meta().ha_status_.check_allow_read()) {
+    ret = OB_EAGAIN;
+    LOG_WARN("tablet status is not allow read, try again", K(ret), KPC(tablet));
+  } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, writer, trans_stat, trans_version))) {
+    LOG_WARN("failed to get tablet status", K(ret), KPC(tablet));
+  } else if (OB_UNLIKELY(trans_stat != mds::TwoPhaseCommitState::ON_COMMIT)) {
+    ret = OB_EAGAIN;
+    LOG_WARN("tablet status not committed, retry", K(ret), K(user_data), KPC(tablet));
+  } else if (ObTabletStatus::SPLIT_SRC != user_data.tablet_status_) {
+    ret = OB_EAGAIN;
+    LOG_WARN("the src tablet status is stale, try again", K(ret));
   } else {
     ObSEArray<ObITable::TableKey, 1> empty_skipped_keys;
     common::ObArenaAllocator allocator("ChkMediumList", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());

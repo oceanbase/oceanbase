@@ -32,7 +32,7 @@ class ObTableLoadDDLParam;
 
 class ObTableLoadInstance
 {
-  static const int64_t WAIT_INTERVAL_US = 3 * 1000 * 1000; // 3s
+  static const int64_t WAIT_INTERVAL_US = 1 * 1000 * 1000; // 1s
 public:
   ObTableLoadInstance();
   ~ObTableLoadInstance();

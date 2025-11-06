@@ -1204,6 +1204,99 @@
                      VER_KEY_STR, file_id_.second_id())), \
     /*get_parent_dir*/OB_NOT_SUPPORTED, \
     /*create_parent_dir*/OB_NOT_SUPPORTED)
+  STORAGE_OBJECT_TYPE_INFO(SHARED_INC_MAJOR_DATA_MACRO, "SHARED_INC_MAJOR_DATA_MACRO", false/*is_pin_local*/, false/*is_read_through*/, \
+    true/*is_write_through*/, false/*is_overwrite*/, true/*is_support_fd_cache*/, \
+    /*is_valid second_id:tablet_id, third_id:seq_id, fourth_id:N/A */ \
+    ((file_id_.second_id() > 0) && (file_id_.second_id() < INT64_MAX) && (file_id_.third_id() >= 0)), \
+    /*to_local_path_format: tenant_id_epoch_id/shared_inc_major_macro_cache/scatter_id/tablet%ldreorg%ldcg%ldseq%ld */ \
+    (databuff_printf(path_, length, pos, "%s/%lu_%ld/%s/%02lX/%s%ld%s%ld%s%ld%s%ld", \
+                     OB_DIR_MGR.get_local_cache_root_dir(), tenant_id, tenant_epoch_id, \
+                     INC_MAJOR_DATA_DIR_STR, (file_id_.hash() % ObDirManager::SHARED_MACRO_SCATTER_DIR_NUM), \
+                     TABLET_KEY_STR, file_id_.second_id(), REORG_KEY_STR, file_id_.reorganization_scn(), \
+                     CG_KEY_STR, file_id_.column_group_id(), SEQ_KEY_STR, file_id_.third_id())), \
+    /*local_path_to_macro_id*/ \
+    char format[512] = {0}; \
+    int num = 0; \
+    const char *sub_path = nullptr; \
+    if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 1))) { \
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path)); \
+    } else { \
+      int64_t tablet_id = 0; \
+      int64_t reorganization_scn = 0; \
+      int64_t cg_id = 0; \
+      int64_t macro_seq_id = 0; \
+      if (OB_FAIL(databuff_printf(format, sizeof(format), "/%s%%ld%s%%ld%s%%ld%s%%ld.T%hhu", \
+                  TABLET_KEY_STR, REORG_KEY_STR, CG_KEY_STR, SEQ_KEY_STR, (uint8_t)ObStorageObjectType::SHARED_INC_MAJOR_DATA_MACRO))) { \
+        LOG_WARN("fail to databuff printf", KR(ret)); \
+      } else if (FALSE_IT(num = sscanf(sub_path, format, &tablet_id, &reorganization_scn, &cg_id, &macro_seq_id))) { \
+      } else if (OB_UNLIKELY(4 != num)) { \
+        ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+        LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path)); \
+      } else { \
+        macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE); \
+        macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::SHARED_INC_MAJOR_DATA_MACRO); \
+        macro_id.set_column_group_id(cg_id); \
+        macro_id.set_second_id(tablet_id); \
+        macro_id.set_third_id(macro_seq_id); \
+        macro_id.set_reorganization_scn(reorganization_scn); \
+      } \
+    }, \
+    /*to_remote_path_format: cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/inc_major/sstable/cg_id/data/seq%ld */ \
+    (databuff_printf(path_, length, pos, "%s/%s_%ld/%s_%lu/%s/%ld/%ld/%s/%s/%s_%ld/%s/%s%ld", \
+                     object_storage_root_dir, CLUSTER_DIR_STR, cluster_id, \
+                     TENANT_DIR_STR, tenant_id, TABLET_DIR_STR, file_id_.second_id(), \
+                     file_id_.reorganization_scn(), INC_MAJOR_DIR_STR, SHARED_TABLET_SSTABLE_DIR_STR, COLUMN_GROUP_STR, \
+                     file_id_.column_group_id(), DATA_MACRO_DIR_STR, SEQ_KEY_STR, file_id_.third_id())), \
+    /*get_parent_dir*/OB_NOT_SUPPORTED, \
+    /*create_parent_dir*/OB_NOT_SUPPORTED)
+
+  STORAGE_OBJECT_TYPE_INFO(SHARED_INC_MAJOR_META_MACRO, "SHARED_INC_MAJOR_META_MACRO", false/*is_pin_local*/, false/*is_read_through*/, \
+    true/*is_write_through*/, false/*is_overwrite*/, true/*is_support_fd_cache*/, \
+    /*is_valid second_id:tablet_id, third_id:seq_id, fourth_id:N/A */ \
+    ((file_id_.second_id() > 0) && (file_id_.second_id() < INT64_MAX) && (file_id_.third_id() >= 0)), \
+    /*to_local_path_format: tenant_id_epoch_id/shared_inc_major_macro_cache/scatter_id/tablet%ldreorg%ldcg%ldseq%ld */ \
+    (databuff_printf(path_, length, pos, "%s/%lu_%ld/%s/%02lX/%s%ld%s%ld%s%ld%s%ld", \
+                     OB_DIR_MGR.get_local_cache_root_dir(), tenant_id, tenant_epoch_id, \
+                     INC_MAJOR_DATA_DIR_STR, (file_id_.hash() % ObDirManager::SHARED_MACRO_SCATTER_DIR_NUM), \
+                     TABLET_KEY_STR, file_id_.second_id(), REORG_KEY_STR, file_id_.reorganization_scn(), \
+                     CG_KEY_STR, file_id_.column_group_id(), SEQ_KEY_STR, file_id_.third_id())), \
+    /*local_path_to_macro_id*/ \
+    char format[512] = {0}; \
+    int num = 0; \
+    const char *sub_path = nullptr; \
+    if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 1))) { \
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path)); \
+    } else { \
+      int64_t tablet_id = 0; \
+      int64_t reorganization_scn = 0; \
+      int64_t cg_id = 0; \
+      int64_t macro_seq_id = 0; \
+      if (OB_FAIL(databuff_printf(format, sizeof(format), "/%s%%ld%s%%ld%s%%ld%s%%ld.T%hhu", \
+                  TABLET_KEY_STR, REORG_KEY_STR, CG_KEY_STR, SEQ_KEY_STR, (uint8_t)ObStorageObjectType::SHARED_INC_MAJOR_META_MACRO))) { \
+        LOG_WARN("fail to databuff printf", KR(ret)); \
+      } else if (FALSE_IT(num = sscanf(sub_path, format, &tablet_id, &reorganization_scn, &cg_id, &macro_seq_id))) { \
+      } else if (OB_UNLIKELY(4 != num)) { \
+        ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+        LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path)); \
+      } else { \
+        macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE); \
+        macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::SHARED_INC_MAJOR_META_MACRO); \
+        macro_id.set_column_group_id(cg_id); \
+        macro_id.set_second_id(tablet_id); \
+        macro_id.set_third_id(macro_seq_id); \
+        macro_id.set_reorganization_scn(reorganization_scn); \
+      } \
+    }, \
+    /*to_remote_path_format: cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/inc_major/sstable/cg_id/meta/seq%ld */ \
+    (databuff_printf(path_, length, pos, "%s/%s_%ld/%s_%lu/%s/%ld/%ld/%s/%s/%s_%ld/%s/%s%ld", \
+                     object_storage_root_dir, CLUSTER_DIR_STR, cluster_id, \
+                     TENANT_DIR_STR, tenant_id, TABLET_DIR_STR, file_id_.second_id(), \
+                     file_id_.reorganization_scn(), INC_MAJOR_DIR_STR, SHARED_TABLET_SSTABLE_DIR_STR, COLUMN_GROUP_STR, \
+                     file_id_.column_group_id(), META_MACRO_DIR_STR, SEQ_KEY_STR, file_id_.third_id())), \
+    /*get_parent_dir*/OB_NOT_SUPPORTED, \
+    /*create_parent_dir*/OB_NOT_SUPPORTED)
 
   STORAGE_OBJECT_TYPE_INFO(MAX, "MAX", false/*is_pin_local*/, false/*is_read_through*/, \
     false/*is_write_through*/, false/*is_overwrite*/, false/*is_support_fd_cache*/, \

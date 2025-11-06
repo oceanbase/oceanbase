@@ -41,6 +41,7 @@ public:
   // convert vectors_ to datum_row at row idx = idx
   // performance is low, use it in performance non sensitive position
   int to_datum_row(int64_t idx, ObDatumRow &datum_row) const;
+  int shadow_copy(const ObBatchDatumRows &other);
 
 public:
   ObDmlRowFlag row_flag_;

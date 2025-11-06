@@ -1755,12 +1755,26 @@ int ObTxDescMgr::wait()
 }
 
 void ObTxDescMgr::destroy() { inited_ = false; }
-int ObTxDescMgr::alloc(ObTxDesc *&tx_desc)
+int ObTxDescMgr::alloc(ObTxDesc *&tx_desc, const bool in_tenant_space)
 {
   int ret = OB_SUCCESS;
   OV(inited_, OB_NOT_INIT);
   OV(!stoped_, OB_IN_STOP_STATE);
-  OZ(map_.alloc_value(tx_desc));
+  OV(tx_desc, NULL);
+  if (OB_SUCC(ret)) {
+    if (in_tenant_space) {
+       OZ(map_.alloc_value(tx_desc));
+    } else {
+      tx_desc = (ObTxDesc*)ob_malloc(sizeof(ObTxDesc), "ObTxDesc");
+      if (tx_desc) {
+        new(tx_desc) ObTxDesc();
+        tx_desc->__alloced_in_current_tenant__ = false;
+      } else {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        TRANS_LOG(WARN, "alloc tx desc failed", K(ret));
+      }
+    }
+  }
   OX(tx_desc->inc_ref(1));
   return ret;
 }

@@ -50,15 +50,16 @@ ObMviewBaseMerge::~ObMviewBaseMerge()
 {
 }
 
-bool ObMviewBaseMerge::check_table_need_read(const ObITable &table, int64_t &major_version) const
+int ObMviewBaseMerge::check_table_need_read(const ObITable *table, bool &need_table) const
 {
-  bool need_read = true;
-  if (table.is_major_sstable()) {
-    major_version = table.get_snapshot_version();
-  } else if (major_version > 0) {
-    need_read = major_version != access_ctx_->trans_version_range_.snapshot_version_;
+  int ret = OB_SUCCESS;
+  need_table = true;
+  if (OB_FAIL(ObMultipleMerge::check_table_need_read(table, need_table))) {
+    LOG_WARN("fail to check table need read", K(ret), KPC(table));
+  } else if (need_table && !table->is_major_sstable() && major_table_version_ > 0) {
+    need_table = major_table_version_ != access_ctx_->trans_version_range_.snapshot_version_;
   }
-  return need_read;
+  return ret;
 }
 
 int ObMviewBaseMerge::alloc_row_store(ObTableAccessContext &context, const ObTableAccessParam &param)

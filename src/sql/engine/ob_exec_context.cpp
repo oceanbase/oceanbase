@@ -132,8 +132,8 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     user_logging_ctx_(),
     is_online_stats_gathering_(false),
     is_ddl_idempotent_auto_inc_(false),
-    table_all_slice_count_(0),
-    table_level_slice_idx_(0),
+    slice_count_(0),
+    slice_idx_(0),
     slice_row_idx_(0),
     autoinc_range_interval_(0),
     lob_access_ctx_(nullptr),
@@ -145,7 +145,8 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     external_py_url_resource_cache_(nullptr),
     external_py_sch_resource_cache_(nullptr),
     py_sub_inter_ctx_(nullptr),
-    lake_table_file_map_(nullptr)
+    lake_table_file_map_(nullptr),
+    need_try_serialize_package_var_(false)
 {
 }
 
@@ -267,6 +268,7 @@ ObExecContext::~ObExecContext()
     lake_table_file_map_->destroy();
     lake_table_file_map_ = NULL;
   }
+  need_try_serialize_package_var_ = false;
 }
 
 void ObExecContext::clean_resolve_ctx()

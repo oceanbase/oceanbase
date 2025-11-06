@@ -12,6 +12,7 @@
 
 #include "logservice/replayservice/ob_tablet_replay_executor.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "rootserver/truncate_info/ob_truncate_info_service.h"
 
 namespace oceanbase
 {
@@ -323,6 +324,83 @@ int ObTabletReplayExecutor::replay_to_mds_table_(
       if (OB_FAIL(ls->get_tablet_svr()->replay_set_ddl_info(tablet_id, scn, mds, ctx))) {
         CLOG_LOG(WARN, "failed to replay set ddl info", K(ret), K(ls_id), K(tablet_id), K(scn), K(mds));
       }
+    }
+  }
+  return ret;
+}
+
+int ObTabletReplayExecutor::replay_to_mds_table_(
+    storage::ObTabletHandle &tablet_handle,
+    const ObTabletDDLCompleteMdsUserData &mds,
+    storage::mds::MdsCtx &ctx,
+    const share::SCN &scn,
+    const bool for_old_mds)
+{
+  int ret = OB_SUCCESS;
+  storage::ObTablet *tablet = tablet_handle.get_obj();
+  if (for_old_mds) {
+    ret = OB_ERR_UNDEFINED;
+    CLOG_LOG(WARN, "ddl complete only support new interface", K(ret));
+  } else if (!is_replay_update_mds_table_()) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "replay log do not update mds table, cannot replay to mds table", K(ret), K(tablet_handle));
+  } else if (OB_ISNULL(tablet)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "tablet should not be NULL", KR(ret));
+  } else if (tablet->is_ls_inner_tablet()) {
+    ret = OB_NOT_SUPPORTED;
+    CLOG_LOG(WARN, "inner tablets have no mds table", KR(ret));
+  } else {
+    ObLSService *ls_svr = MTL(ObLSService*);
+    ObLSHandle ls_handle;
+    ObLS *ls = nullptr;
+    const share::ObLSID &ls_id = tablet->get_tablet_meta().ls_id_;
+    const common::ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
+    if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::TABLET_MOD))) {
+      CLOG_LOG(WARN, "failed to get ls", K(ret), K(ls_id));
+    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      CLOG_LOG(WARN, "ls is null", K(ret), K(ls_id), KP(ls));
+    } else {
+      if (OB_FAIL(ls->get_tablet_svr()->replay_set_ddl_complete(
+          tablet_id, scn, ObTabletDDLCompleteMdsUserDataKey(mds.trans_id_), mds, ctx))) {
+        CLOG_LOG(WARN, "failed to replay set tablet status", K(ret), K(ls_id), K(tablet_id), K(scn), K(mds));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTabletReplayExecutor::replay_to_mds_table_(
+  storage::ObTabletHandle &tablet_handle,
+  const rootserver::ObTruncateTabletArg &mds,
+  storage::mds::MdsCtx &ctx,
+  const share::SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  storage::ObTablet *tablet = tablet_handle.get_obj();
+  if (!is_replay_update_mds_table_()) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "replay log do not update mds table, cannot replay to mds table", K(ret), K(tablet_handle));
+  } else if (OB_ISNULL(tablet)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "tablet should not be NULL", KR(ret));
+  } else if (tablet->is_ls_inner_tablet()) {
+    ret = OB_NOT_SUPPORTED;
+    CLOG_LOG(WARN, "inner tablets have no mds table", KR(ret));
+  } else {
+    ObLSService *ls_svr = MTL(ObLSService*);
+    ObLSHandle ls_handle;
+    ObLS *ls = nullptr;
+    const share::ObLSID &ls_id = tablet->get_tablet_meta().ls_id_;
+    const common::ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
+    if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::TABLET_MOD))) {
+      CLOG_LOG(WARN, "failed to get ls", K(ret), K(ls_id));
+    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      CLOG_LOG(WARN, "ls is null", K(ret), K(ls_id), KP(ls));
+    } else if (OB_FAIL(ls->get_tablet_svr()->replay_set_truncate_info(scn, mds, ctx))) {
+      CLOG_LOG(WARN, "failed to replay set truncate info", K(ret), K(ls_id), K(tablet_id), K(scn), K(mds));
     }
   }
   return ret;

@@ -66,14 +66,17 @@ int ObBlockSampleSSTableEndkeyIterator::open(
     const ObDatumRange &range,
     const ObITableReadInfo &rowkey_read_info,
     ObIAllocator &allocator,
-    const bool is_reverse_scan)
+    const bool is_reverse_scan,
+    const SampleInfo::SampleMethod sample_method)
 {
   int ret = OB_SUCCESS;
 
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "Inited twice", K(ret));
-  } else if (OB_UNLIKELY(!sstable.is_valid() || !range.is_valid())) {
+  } else if (OB_UNLIKELY(!sstable.is_valid() ||
+                         !range.is_valid() ||
+                         !is_valid_sample_method(sample_method))) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid sstable", K(ret), K(sstable), K(range));
   } else if (sstable.is_empty()) {
@@ -85,12 +88,22 @@ int ObBlockSampleSSTableEndkeyIterator::open(
     sample_level_ = ObIndexBlockTreeCursor::LEAF;
     is_reverse_scan_ = is_reverse_scan;
 
-    if (OB_FAIL(tree_cursor_.estimate_range_macro_count(range, macro_count_, micro_count_))) {
+    if (SampleInfo::SampleMethod::BLOCK_SAMPLE == sample_method &&
+        OB_FAIL(tree_cursor_.estimate_range_macro_count(range, macro_count_, micro_count_))) {
       if (OB_LIKELY(OB_BEYOND_THE_RANGE == ret)) {
         is_iter_end_ = true;
         ret = OB_SUCCESS;
       } else {
         STORAGE_LOG(WARN, "Fail to estimate macro block count in range", K(ret), K(range), K(tree_cursor_));
+      }
+    } else if (SampleInfo::SampleMethod::DDL_BLOCK_SAMPLE == sample_method &&
+               OB_FAIL(tree_cursor_.calc_range_macro_and_micro_count(range, macro_count_, micro_count_))) {
+      if (OB_LIKELY(OB_BEYOND_THE_RANGE == ret)) {
+        is_iter_end_ = true;
+        ret = OB_SUCCESS;
+      } else {
+        STORAGE_LOG(WARN, "fail to estimate accurately macro and micro block count in range",
+            K(ret), K(range), K(tree_cursor_));
       }
     } else if (OB_FAIL(locate_bound(range))) {
       STORAGE_LOG(WARN, "Fail to locate bound", K(ret));
@@ -300,7 +313,8 @@ int ObBlockSampleRangeIterator::open(
     const blocksstable::ObDatumRange &range,
     ObIAllocator &allocator,
     const double percent,
-    const bool is_reverse_scan)
+    const bool is_reverse_scan,
+    const SampleInfo::SampleMethod sample_method)
 {
   int ret = OB_SUCCESS;
 
@@ -318,11 +332,11 @@ int ObBlockSampleRangeIterator::open(
     schema_rowkey_column_count_ = get_table_param.tablet_iter_.get_tablet()->get_rowkey_read_info().get_schema_rowkey_count();
     endkey_comparor_.init(*datum_utils_, is_reverse_scan_);
 
-    if (OB_FAIL(init_and_push_endkey_iterator(get_table_param))) {
+    if (OB_FAIL(init_and_push_endkey_iterator(get_table_param, sample_method))) {
       STORAGE_LOG(WARN, "Fail to init and push endkey iterator", K(ret));
     } else if (endkey_iters_.empty()) {
       is_range_iter_end_ = true;
-    } else if (OB_FAIL(calculate_level_and_batch_size(percent))) {
+    } else if (OB_FAIL(calculate_level_and_batch_size(percent, sample_method))) {
       STORAGE_LOG(WARN, "Fail to calculate macro level and batch size", K(ret));
     } else if (is_reverse_scan_) {
       curr_key_.key_ = range.get_end_key();
@@ -384,7 +398,8 @@ int ObBlockSampleRangeIterator::get_next_range(const ObDatumRange *&range)
   return ret;
 }
 
-int ObBlockSampleRangeIterator::init_and_push_endkey_iterator(ObGetTableParam &get_table_param)
+int ObBlockSampleRangeIterator::init_and_push_endkey_iterator(ObGetTableParam &get_table_param,
+                                                              const SampleInfo::SampleMethod sample_method)
 {
   int ret = OB_SUCCESS;
 
@@ -405,7 +420,7 @@ int ObBlockSampleRangeIterator::init_and_push_endkey_iterator(ObGetTableParam &g
         } else {
           STORAGE_LOG(WARN, "Fail to get next table iter", K(ret), K(get_table_param.tablet_iter_.table_iter()));
         }
-      } else if (!table->is_sstable() || table->is_ddl_mem_sstable()) {
+      } else if (!table->is_sstable() || table->is_ddl_mem_sstable() || table->is_inc_major_ddl_aggregate_sstable()) {
       } else if (OB_ISNULL(table) || OB_ISNULL(sample_range_) || OB_ISNULL(allocator_)) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "Unexpected null sstable", K(ret), KP(table), KP(sample_range_), KP(allocator_));
@@ -420,7 +435,7 @@ int ObBlockSampleRangeIterator::init_and_push_endkey_iterator(ObGetTableParam &g
 
         if (OB_FAIL(iter->open(*sstable, *sample_range_,
             get_table_param.tablet_iter_.get_tablet()->get_rowkey_read_info(),
-            *allocator_, is_reverse_scan_))) {
+            *allocator_, is_reverse_scan_, sample_method))) {
           STORAGE_LOG(WARN, "Fail to open ObBlockSampleSSTableEndkeyIterator", K(ret), KPC(sstable), KPC(sample_range_));
         } else if (OB_FAIL(endkey_iters_.push_back(iter))) {
           STORAGE_LOG(WARN, "Fail to push back ObBlockSampleSSTableEndkeyIterator iter", K(ret), KPC(iter));
@@ -443,7 +458,9 @@ int ObBlockSampleRangeIterator::init_and_push_endkey_iterator(ObGetTableParam &g
   return ret;
 }
 
-int ObBlockSampleRangeIterator::calculate_level_and_batch_size(const double percent)
+int ObBlockSampleRangeIterator::calculate_level_and_batch_size(
+    const double percent,
+    const SampleInfo::SampleMethod sample_method)
 {
   int ret = OB_SUCCESS;
 
@@ -469,7 +486,10 @@ int ObBlockSampleRangeIterator::calculate_level_and_batch_size(const double perc
     }
   } else {
     // micro level
-   batch_size_ = micro_count * percent / 100 / EXPECTED_OPEN_RANGE_NUM;
+    batch_size_ = micro_count * percent / 100 / EXPECTED_OPEN_RANGE_NUM;
+  }
+  if (SampleInfo::SampleMethod::DDL_BLOCK_SAMPLE == sample_method) {
+    ++batch_size_;
   }
   STORAGE_LOG(TRACE, "calculate", K(ret), K(macro_count), K(micro_count), K(macro_threshold), K(batch_size_));
   return ret;
@@ -661,7 +681,12 @@ int ObBlockSampleIterator::open(ObMultipleScanMerge &scan_merge,
   if (OB_UNLIKELY(!access_ctx.is_valid() || !get_table_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument", K(ret), K(access_ctx), K(get_table_param));
-  }  else if (OB_FAIL(range_iterator_.open(get_table_param, range, *access_ctx.stmt_allocator_, sample_info_->percent_, is_reverse_scan))) {
+  }  else if (OB_FAIL(range_iterator_.open(get_table_param,
+                                           range,
+                                           *access_ctx.stmt_allocator_,
+                                           sample_info_->percent_,
+                                           is_reverse_scan,
+                                           SampleInfo::SampleMethod::BLOCK_SAMPLE))) {
     STORAGE_LOG(WARN, "Fail to init micro block iterator", K(ret));
   } else {
     scan_merge_ = &scan_merge;
@@ -724,11 +749,25 @@ int ObBlockSampleIterator::get_next_row(blocksstable::ObDatumRow *&row)
 int ObBlockSampleIterator::open_range(blocksstable::ObDatumRange &range)
 {
   int ret = OB_SUCCESS;
-
   scan_merge_->reuse();
   range_allocator_.reuse();
   access_ctx_->scan_mem_->reuse_arena();
-  if (OB_FAIL(range.start_key_.to_store_rowkey(read_info_->get_columns_desc(), range_allocator_, range.start_key_.store_rowkey_))) {
+  if (OB_UNLIKELY(!range.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "the are invalid argument", K(ret), K(range));
+  } else if (OB_FAIL(inner_open_range(range))) {
+    STORAGE_LOG(WARN, "failed to inner open range", K(ret), K(range));
+  }
+  return ret;
+}
+
+int ObBlockSampleIterator::inner_open_range(blocksstable::ObDatumRange &range)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!range.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "the are invalid argument", K(ret), K(range));
+  } else if (OB_FAIL(range.start_key_.to_store_rowkey(read_info_->get_columns_desc(), range_allocator_, range.start_key_.store_rowkey_))) {
     STORAGE_LOG(WARN, "Failed to convert start key", K(ret), K(range));
   } else if (OB_FAIL(range.end_key_.to_store_rowkey(read_info_->get_columns_desc(), range_allocator_, range.end_key_.store_rowkey_))) {
     STORAGE_LOG(WARN, "Failed to convert end key", K(ret), K(range));
@@ -737,7 +776,6 @@ int ObBlockSampleIterator::open_range(blocksstable::ObDatumRange &range)
   } else {
     has_opened_range_ = true;
   }
-
   return ret;
 }
 

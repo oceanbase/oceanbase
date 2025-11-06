@@ -211,7 +211,7 @@ int ObDASDomainUtils::generate_spatial_index_rows(
             int64_t projector_idx = row_projector.at(j);
             if (FALSE_IT(rows[i].storage_datums_[j].shallow_copy_from_datum(dml_row.cells()[projector_idx]))) {
             } else if (rows[i].storage_datums_[j].is_null()) {
-            } else if (OB_FAIL(ObDASUtils::reshape_datum_value(col_type, col_accuracy, true, allocator, rows[i].storage_datums_[j]))) {
+            } else if (OB_FAIL(ObDASUtils::reshape_datum_value(col_type, col_accuracy, false, allocator, rows[i].storage_datums_[j]))) {
               LOG_WARN("reshape storage value failed", K(ret), K(col_type), K(projector_idx), K(j));
             }
           }
@@ -561,7 +561,7 @@ int ObDASDomainUtils::generate_multivalue_index_rows(ObIAllocator &allocator,
             }
 
             if (rows[i].storage_datums_[j].is_null()) {  // do nothing
-            } else if (OB_SUCC(ret) && OB_FAIL(ObDASUtils::reshape_datum_value(col_type, col_accuracy, true, allocator, rows[i].storage_datums_[j]))) {
+            } else if (OB_SUCC(ret) && OB_FAIL(ObDASUtils::reshape_datum_value(col_type, col_accuracy, false, allocator, rows[i].storage_datums_[j]))) {
               LOG_WARN("reshape storage value failed", K(ret), K(col_type), K(projector_idx), K(j));
             }
           }
@@ -633,6 +633,28 @@ int ObDomainDMLIterator::create_domain_dml_iterator(
         ObSparseVecIndexDMLIterator *iter = new (buf) ObSparseVecIndexDMLIterator(param.allocator_, param.row_projector_,
                                                                                   param.write_iter_, param.das_ctdef_,
                                                                                   param.main_ctdef_);
+        domain_iter = static_cast<ObDomainDMLIterator *>(iter);
+      }
+    } else if (share::schema::is_hybrid_vec_index_log_type(param.das_ctdef_->table_param_.get_data_table().get_index_type())) {
+      void *buf = nullptr;
+      if (OB_ISNULL(buf = param.allocator_.alloc(sizeof(ObHybridVecLogDMLIterator)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate hybrid vec log dml iterator memory", K(ret), KP(buf));
+      } else {
+        ObHybridVecLogDMLIterator *iter = new (buf) ObHybridVecLogDMLIterator(param.allocator_, param.row_projector_,
+                                                                              param.write_iter_, param.das_ctdef_,
+                                                                              param.main_ctdef_);
+        domain_iter = static_cast<ObDomainDMLIterator *>(iter);
+      }
+    } else if (share::schema::is_hybrid_vec_index_embedded_type(param.das_ctdef_->table_param_.get_data_table().get_index_type())) {
+      void *buf = nullptr;
+      if (OB_ISNULL(buf = param.allocator_.alloc(sizeof(ObEmbeddedVecDMLIterator)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate embedded vec dml iterator memory", K(ret), KP(buf));
+      } else {
+        ObEmbeddedVecDMLIterator *iter = new (buf) ObEmbeddedVecDMLIterator(param.allocator_, param.row_projector_,
+                                                                            param.write_iter_, param.das_ctdef_,
+                                                                            param.main_ctdef_);
         domain_iter = static_cast<ObDomainDMLIterator *>(iter);
       }
     } else {

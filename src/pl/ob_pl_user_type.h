@@ -625,6 +625,9 @@ public:
   int deep_copy(common::ObIAllocator &alloc, const ObCollectionType &other);
 
   int get_init_size(int64_t &size) const;
+  int convert_anonymous_array(ObPLResolveCtx &ctx,
+                              ObObj *&src,
+                              ObObj *&dest) const;
 
 public:
   virtual int generate_construct(ObPLCodeGenerator &generator,

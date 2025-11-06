@@ -22,8 +22,10 @@ struct ObMediumLoop
 {
   ObMediumLoop()
     : merge_version_(ObBasicMergeScheduler::INIT_COMPACTION_SCN),
+      loop_version_(ObBasicMergeScheduler::INIT_COMPACTION_SCN),
       loop_cnt_(0),
-      ls_tablet_iter_(true/*is_major*/)
+      ls_tablet_iter_(true/*is_major*/),
+      lock_()
   {}
   ~ObMediumLoop() {}
   int start_merge(const int64_t merge_version);
@@ -48,9 +50,11 @@ private:
   static const int64_t ADD_LOOP_EVENT_INTERVAL = 120 * 1000 * 1000L; // 120s
 
   int64_t merge_version_;
+  int64_t loop_version_;
   int64_t loop_cnt_;
   ObScheduleStatistics schedule_stats_;
   ObCompactionScheduleIterator ls_tablet_iter_;
+  lib::ObMutex lock_;
 };
 
 struct ObScheduleNewMediumLoop

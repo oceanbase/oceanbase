@@ -70,6 +70,7 @@ const char *const compress_funcs[] =
   "zlib_1.0", // temporarily disable zlib_1.0
   "zstd_1.0",
   "zstd_1.3.8",
+  "zstd_1.5.7",
   "lz4_1.9.1",
   "zlib_lite_1.0",
   "zstd_1.5.7",

@@ -217,6 +217,10 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
     const int64_t nested_size = table->is_sstable() ? static_cast<ObSSTable *>(table)->get_macro_read_size() : 0;
     const ObITable::TableKey &table_key = table->get_key();
     const int64_t col_count = output_column_ids_.count();
+    blocksstable::ObSSTableMetaHandle sst_meta_hdl;
+    if (table->is_sstable() && OB_FAIL(static_cast<blocksstable::ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
+      SERVER_LOG(WARN, "fail to get sstable meta handle", K(ret));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
       uint64_t col_id = output_column_ids_.at(i);
       switch (col_id) {
@@ -288,12 +292,7 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
         case LINKED_BLOCK_CNT: {
           int64_t blk_cnt = 0;
           if (table->is_sstable()) {
-            blocksstable::ObSSTableMetaHandle sst_meta_hdl;
-            if (OB_FAIL(static_cast<blocksstable::ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
-              SERVER_LOG(WARN, "fail to get sstable meta handle", K(ret));
-            } else {
-              blk_cnt = sst_meta_hdl.get_sstable_meta().get_linked_macro_block_count();
-            }
+            blk_cnt = sst_meta_hdl.get_sstable_meta().get_linked_macro_block_count();
           }
           cur_row_.cells_[i].set_int(blk_cnt);
           break;
@@ -345,20 +344,15 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
         case TABLE_FLAG: {
           int32_t flag = 0;
           if (table->is_sstable()) {
-            blocksstable::ObSSTableMetaHandle sst_meta_hdl;
-            if (OB_FAIL(static_cast<blocksstable::ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
-              SERVER_LOG(WARN, "fail to get sstable meta handle", K(ret));
-            } else {
 #ifdef OB_BUILD_SHARED_STORAGE
-              if (!GCTX.is_shared_storage_mode()) {
-                flag = sst_meta_hdl.get_sstable_meta().get_table_backup_flag().get_flag();
-              } else {
-                flag = sst_meta_hdl.get_sstable_meta().get_table_shared_flag().get_flag();
-              }
-#else
+            if (!GCTX.is_shared_storage_mode()) {
               flag = sst_meta_hdl.get_sstable_meta().get_table_backup_flag().get_flag();
-#endif
+            } else {
+              flag = sst_meta_hdl.get_sstable_meta().get_table_shared_flag().get_flag();
             }
+#else
+            flag = sst_meta_hdl.get_sstable_meta().get_table_backup_flag().get_flag();
+#endif
           }
           cur_row_.cells_[i].set_int(flag);
           break;
@@ -376,6 +370,20 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
             row_count = static_cast<memtable::ObMemtable *>(table)->get_physical_row_cnt();
           }
           cur_row_.cells_[i].set_int(row_count);
+          break;
+        }
+        case UNCOMMIT_TX_INFO: {
+          if (table->is_sstable()) {
+            const compaction::ObMetaUncommitTxInfo &uncommit_tx_info = sst_meta_hdl.get_sstable_meta().get_uncommit_tx_info();
+            if (uncommit_tx_info.to_string(uncommit_tx_info_buf_, sizeof(uncommit_tx_info_buf_), true/*is_simplified*/) >= 0) {
+              cur_row_.cells_[i].set_varchar(uncommit_tx_info_buf_);
+              cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            } else {
+              cur_row_.cells_[i].set_null();
+            }
+          } else {
+            cur_row_.cells_[i].set_null();
+          }
           break;
         }
         default:

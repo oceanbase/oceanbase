@@ -125,7 +125,8 @@ int ObStatCollectorOp::find_sample_scan(ObOperator *op, ObOperator *&tsc)
   if (OB_ISNULL(op) || OB_NOT_NULL(tsc)) {
     /*do nothing*/
   } else if (PHY_BLOCK_SAMPLE_SCAN == op->get_spec().get_type() ||
-             PHY_ROW_SAMPLE_SCAN == op->get_spec().get_type()) {
+             PHY_ROW_SAMPLE_SCAN == op->get_spec().get_type() ||
+             PHY_DDL_BLOCK_SAMPLE_SCAN == op->get_spec().get_type()) {
     tsc = op;
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < op->get_child_cnt(); ++i) {
@@ -288,14 +289,15 @@ int ObStatCollectorOp::split_partition_range()
             (OB_FAIL(partition_row_count_map_.get_refactored(cur_tablet_id, count_ptr)))) {
           LOG_WARN("fail to get partition id", K(ret));
         } else {
+          const int64_t expect_sampling_count = get_one_thread_sampling_count_by_parallel(ctx_.get_expect_range_count());
           if (pre_tablet_id != OB_INVALID_ID) {
             OZ(tmp_part_ranges.push_back(partition_range));
             partition_range.reset();
           }
           if (is_none_partition()) {
-            step = max(1, non_partition_row_count_ / (expect_range_count + 1));
+            step = max(1, non_partition_row_count_ / expect_sampling_count);
           } else {
-            step = max(1, (*count_ptr) / (expect_range_count + 1));
+            step = max(1, (*count_ptr) / expect_sampling_count);
           }
           pre_tablet_id = cur_tablet_id;
         }
@@ -425,4 +427,18 @@ int ObStatCollectorOp::get_tablet_id(int64_t &tablet_id)
 bool ObStatCollectorOp::is_none_partition()
 {
   return MY_SPEC.is_none_partition_;
+}
+
+int64_t ObStatCollectorOp::get_one_thread_sampling_count_by_parallel(const int64_t parallel)
+{
+  int64_t sampling_count = parallel;
+  if (sampling_count < 128 && sampling_count > 0) {
+    const int64_t factor_count = 6;
+    const int64_t amplification_factors[factor_count] = { 64, 32, 16, 8, 4, 2 };
+    const int64_t factor_idx = static_cast<int64_t>(LOG2(sampling_count)) - 1;
+    if (OB_LIKELY(factor_idx >= 0 && factor_idx < factor_count)) {
+      sampling_count *= amplification_factors[factor_idx];
+    }
+  }
+  return sampling_count;
 }

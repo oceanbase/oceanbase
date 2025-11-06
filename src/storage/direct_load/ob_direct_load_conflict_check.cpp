@@ -34,7 +34,10 @@ ObDirectLoadConflictCheckParam::ObDirectLoadConflictCheckParam()
     range_(nullptr),
     col_descs_(nullptr),
     datum_utils_(nullptr),
-    dml_row_handler_(nullptr)
+    dml_row_handler_(nullptr),
+    need_read_delete_row_(false),
+    query_origin_row_(false),
+    column_count_(0)
 {
 }
 
@@ -94,7 +97,10 @@ int ObDirectLoadConflictCheck::init(
     param_ = param;
     load_iter_ = load_iter;
     new_range_ = *param_.range_;
-    if (OB_FAIL(param_.origin_table_->scan(*param_.range_, allocator_, origin_scanner_, true/*skip_read_lob*/))) {
+    delete_datum_row_.is_delete_ = true;
+    if (OB_FAIL(param_.origin_table_->scan(*param_.range_, allocator_, origin_scanner_,
+                                           true /*skip_read_lob*/,
+                                           !param_.need_read_delete_row_ /*skip_del_row*/))) {
       LOG_WARN("fail to scan origin table", KR(ret));
     } else {
       is_inited_ = true;
@@ -118,9 +124,6 @@ int ObDirectLoadConflictCheck::get_next_row(const ObDirectLoadDatumRow *&result_
         if (ret != OB_ITER_END) {
           LOG_WARN("fail to get next row", KR(ret));
         }
-      } else if (OB_UNLIKELY(datum_row->is_delete_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected delete row", KR(ret), KPC(datum_row));
       } else if (OB_FAIL(handle_get_next_row_finish(datum_row, result_row))) {
         LOG_WARN("fail to handle get next row finish", KR(ret), KPC(datum_row));
       }
@@ -168,20 +171,54 @@ int ObDirectLoadConflictCheck::handle_get_next_row_finish(
     }
   }
   if (OB_SUCC(ret)) {
-    if (nullptr != origin_row_ && cmp_ret == 0) {
-      // 有冲突
-      if (OB_FAIL(param_.dml_row_handler_->handle_update_row(param_.tablet_id_, *origin_row_, *load_row, result_row))) {
-        LOG_WARN("fail to handle update row", KR(ret), KP(origin_row_), KP(load_row));
-      } else if (result_row == origin_row_) {
-        // 不吐出origin_row_
-        result_row = nullptr;
+    if (param_.query_origin_row_) {
+      if (nullptr != origin_row_ && cmp_ret == 0) {
+        delete_datum_row_.seq_no_ = origin_row_->seq_no_;
+        delete_datum_row_.storage_datums_ = origin_row_->storage_datums_;
+        delete_datum_row_.count_ = origin_row_->count_;
+        result_row = &delete_datum_row_;
+        if (OB_FAIL(param_.dml_row_handler_->handle_delete_row(param_.tablet_id_, *result_row))) {
+          LOG_WARN("fail to handle insert row", KR(ret), KP(result_row));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected not found origin row", KR(ret), K(cmp_ret), KPC(origin_row_), KPC(load_row));
       }
-      origin_row_ = nullptr;
     } else {
-      // 无冲突
-      result_row = load_row;
-      if (OB_FAIL(param_.dml_row_handler_->handle_insert_row(param_.tablet_id_, *result_row))) {
-        LOG_WARN("fail to handle insert row", KR(ret), KP(result_row));
+      if (nullptr != origin_row_ && cmp_ret == 0) {
+        if (param_.need_output_conflict_row_) {
+          // 有冲突吐出行，用于eput场景
+          if (OB_FAIL(param_.dml_row_handler_->handle_update_row(param_.tablet_id_, *origin_row_,
+                                                                 *load_row, result_row))) {
+            LOG_WARN("fail to handle update row", KR(ret), KP(origin_row_), KP(load_row));
+          } else if (result_row == origin_row_) {
+            // 结果为源表行，不用吐出
+            result_row = nullptr;
+          }
+        } else {
+          // 有冲突, 不吐出行
+          if (origin_row_->is_delete_) {
+            // delete行冲突
+            if (OB_FAIL(param_.dml_row_handler_->handle_insert_delete_conflict(param_.tablet_id_,
+                                                                               *load_row))) {
+              LOG_WARN("fail to handle insert delete conflict", KR(ret), KP(load_row));
+            }
+          } else {
+            // insert行冲突
+            if (OB_FAIL(param_.dml_row_handler_->handle_update_row(param_.tablet_id_, *origin_row_,
+                                                                   *load_row, result_row))) {
+              LOG_WARN("fail to handle update row", KR(ret), KP(origin_row_), KP(load_row));
+            }
+          }
+          result_row = nullptr;
+        }
+        origin_row_ = nullptr;
+      } else {
+        // 无冲突
+        result_row = load_row;
+        if (OB_FAIL(param_.dml_row_handler_->handle_insert_row(param_.tablet_id_, *result_row))) {
+          LOG_WARN("fail to handle insert row", KR(ret), KP(result_row));
+        }
       }
     }
   }
@@ -259,7 +296,7 @@ int ObDirectLoadSSTableConflictCheck::init(
     } else {
       // set parent params
       row_flag_ = param.table_data_desc_.row_flag_;
-      column_count_ = param.table_data_desc_.column_count_;
+      column_count_ = param.query_origin_row_ ? param.column_count_ : param.table_data_desc_.column_count_;
       is_inited_ = true;
     }
   }
@@ -317,7 +354,8 @@ int ObDirectLoadMultipleSSTableConflictCheck::init(
     } else {
       // set parent params
       row_flag_ = param.table_data_desc_.row_flag_;
-      column_count_ = param.table_data_desc_.column_count_;
+      column_count_ =
+        param.query_origin_row_ ? param.column_count_ : param.table_data_desc_.column_count_;
       is_inited_ = true;
     }
   }

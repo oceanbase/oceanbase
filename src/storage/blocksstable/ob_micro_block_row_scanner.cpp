@@ -1235,7 +1235,8 @@ int ObIMicroBlockRowScanner::get_next_border_rows(const ObDatumRowkey &rowkey)
         }
       }
     }
-    LOG_DEBUG("Get next border rows", K(ret), K(rowkey), K_(reverse_scan), K_(current), K_(last), KPC(batch_store));
+    FLOG_INFO("Get next border rows", K(ret), K(rowkey), K_(reverse_scan), K_(current), K_(last),
+        K(is_equal), K(scan_end_idx), KPC(batch_store));
   }
   return ret;
 }
@@ -2909,6 +2910,7 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::open(
   return ret;
 }
 
+ERRSIM_POINT_DEF(CHECK_UNCOMMIT_TX_CORRECT, "used to check uncommit tx correct");
 int ObMultiVersionMicroBlockMinorMergeRowScanner::inner_get_next_row(const ObDatumRow *&row)
 {
   int ret = OB_SUCCESS;
@@ -2955,6 +2957,18 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::inner_get_next_row(const ObDat
   } else if (row_.row_flag_.is_delete() && !row_.mvcc_row_flag_.is_uncommitted_row()) {
     // set delete committed row compacted
     row_.set_compacted_multi_version_row();
+  } else {
+#ifdef ERRSIM
+    // here row committed or during execution will be output, only used for minor merge.
+    bool is_check_uncommit_tx_info_correct = CHECK_UNCOMMIT_TX_CORRECT ? true : false;
+    if (is_check_uncommit_tx_info_correct && row_.mvcc_row_flag_.is_uncommitted_row()) {
+      const int64_t tx_id = row_.trans_id_.get_id();
+      const int64_t sql_seq = row_.storage_datums_[sql_sequence_col_idx_].get_int();
+      if (OB_FAIL(check_uncommit_tx_info_correct(tx_id, sql_seq))) {
+        LOG_WARN("Failed to check uncommit tx info valid", K(ret));
+      }
+    }
+#endif
   }
   return ret;
 }
@@ -3099,6 +3113,38 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::get_first_row_mvcc_info(
   }
   return ret;
 }
+
+#ifdef ERRSIM
+int ObMultiVersionMicroBlockMinorMergeRowScanner::check_uncommit_tx_info_correct(const int64_t tx_id, const int64_t sql_seq)
+{
+  int ret = OB_SUCCESS;
+  blocksstable::ObSSTableMetaHandle meta_handle;
+  if (OB_FAIL(sstable_->get_meta(meta_handle))) {
+    LOG_WARN("failed to get meta", K(ret), K_(sstable), K(meta_handle));
+  } else {
+    const compaction::ObMetaUncommitTxInfo &tmp_uncommit_tx_info = meta_handle.get_sstable_meta().get_uncommit_tx_info();
+    if (tmp_uncommit_tx_info.is_info_overflow()) { // if info overflow, skip
+    } else {
+      // this path will be executed only when have uncommitted row,
+      // if info_status not INFO_OVERFLOW but count == 0 , it means uncommit tx info collected is not correct
+      bool has_found = false;
+      for (int64_t i = 0; OB_SUCC(ret) && i < tmp_uncommit_tx_info.uncommit_tx_desc_count_; ++i) {
+        if (tx_id == tmp_uncommit_tx_info.tx_infos_[i].tx_id_) {
+          if (!tmp_uncommit_tx_info.tx_infos_[i].is_sql_seq() || sql_seq == tmp_uncommit_tx_info.tx_infos_[i].sql_seq_) {
+            has_found = true;
+            break;
+          }
+        }
+      }
+      if (!has_found) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("uncommit tx info collected is not correct", K(ret), K(tx_id), K(sql_seq), K(tmp_uncommit_tx_info));
+      }
+    }
+  }
+  return ret;
+}
+#endif
 
 }
 }

@@ -821,7 +821,9 @@ int ObSelectResolver::check_group_by()
       }
     } else {
       //在解析过程中，standard group checker会记录需要检查的column和expr,在所有语句都解析完成后
-      if (OB_FAIL(standard_group_checker_.check_only_full_group_by())) {
+      if (is_oracle_compat_groupby_ || select_stmt->get_rollup_expr_size() > 0) {
+        only_need_constraints = false;
+      } else if (OB_FAIL(standard_group_checker_.check_only_full_group_by())) {
         LOG_WARN("failed to check group by");
       }
     }

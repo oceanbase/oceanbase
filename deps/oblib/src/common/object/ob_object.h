@@ -1315,6 +1315,30 @@ public:
   uint64_t center_id_;
 };
 
+class ObHiddenClusteringKey final
+{
+public:
+  ObHiddenClusteringKey();
+  ObHiddenClusteringKey(const uint64_t tablet_id, const uint64_t seq_id);
+  ~ObHiddenClusteringKey() = default;
+
+  void reset();
+  bool is_valid() const;
+
+  bool operator ==(const ObHiddenClusteringKey &other) const;
+  bool operator !=(const ObHiddenClusteringKey &other) const;
+  bool operator <(const ObHiddenClusteringKey &other) const;
+  bool operator >(const ObHiddenClusteringKey &other) const;
+  static int set_hidden_clustering_key_to_string(const ObHiddenClusteringKey &hidden_clustering_key,
+                                                 ObString &str);
+
+  TO_STRING_KV(K_(tablet_id), K_(seq_id));
+public:
+  uint64_t tablet_id_;
+  uint64_t seq_id_;
+};
+
+
 class ObPqCenterId final
 {
 public:

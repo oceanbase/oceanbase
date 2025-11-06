@@ -546,6 +546,9 @@ private:
 
 class ObTxDesc final : public share::ObLightHashLink<ObTxDesc>
 {
+public:
+  bool __alloced_in_current_tenant__ = true; // used in allocator, do not touch this field
+private:
   static constexpr const char *OP_LABEL = "TX_DESC_VALUE";
   static constexpr int64_t MAX_RESERVED_CONFLICT_TX_NUM = 30;
   friend class ObTransService;
@@ -987,7 +990,7 @@ public:
   int stop();
   int wait();
   void destroy();
-  int alloc(ObTxDesc *&tx_desc);
+  int alloc(ObTxDesc *&tx_desc, const bool in_tenant_space = true);
   void free(ObTxDesc *tx_desc);
   int add(ObTxDesc &tx_desc);
   int add_with_txid(const ObTransID &tx_id, ObTxDesc &tx_desc);
@@ -1022,7 +1025,8 @@ public:
    ObTxDesc* alloc_value()
    {
      ATOMIC_INC(&alloc_cnt_);
-     ObTxDesc *it = op_alloc_v2(ObTxDesc);
+     ObTxDesc *it = MTL_NEW(ObTxDesc, "TxDesc");
+     if (it) { it->__alloced_in_current_tenant__ = true; }
 #ifdef ENABLE_DEBUG_LOG
      if (OB_NOT_NULL(it)) {
        ObSpinLockGuard guard(lk_);
@@ -1039,12 +1043,23 @@ public:
         ObSpinLockGuard guard(lk_);
         v->alloc_link_.remove();
 #endif
-        op_free_v2(v);
+        if (v->__alloced_in_current_tenant__) {
+          MTL_DELETE(ObTxDesc, "TxDesc", v);
+        } else {
+          ob_free(v);
+          v = NULL;
+        }
       }
     }
     static void force_free(ObTxDesc *v)
     {
-      op_free_v2(v);
+      if (NULL == v) {
+      } else if (v->__alloced_in_current_tenant__) {
+        MTL_DELETE(ObTxDesc, "TxDesc", v);
+      } else {
+        ob_free(v);
+        v = NULL;
+      }
     }
     int64_t get_alloc_cnt() const { return ATOMIC_LOAD(&alloc_cnt_); }
 #ifdef ENABLE_DEBUG_LOG

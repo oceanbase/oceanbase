@@ -145,6 +145,10 @@ private:
       const ObTablet *tablet,
       const ObSSTableArray &ddl_sstable_array,
       share::ObScnRange &scn_range);
+  int get_need_copy_inc_major_ddl_sstable_end_scn_(
+      const ObTablet *tablet,
+      const ObSSTableArray &ddl_sstable_array,
+      share::SCN &need_copy_end_scn);
   int get_ddl_sstable_min_start_scn_(
       const ObSSTableArray &ddl_sstable_array,
       share::SCN &max_start_scn);
@@ -349,7 +353,9 @@ public:
     int assign_sstables(
         ObTablesHandleArray &mds_tables,
         ObTablesHandleArray &minor_tables,
-        ObTablesHandleArray &ddl_tables);
+        ObTablesHandleArray &ddl_tables,
+        ObTablesHandleArray &inc_major_tables,
+        ObTablesHandleArray &inc_major_ddl_tables);
 
     ObLS *ls_;
     common::ObTabletID tablet_id_;
@@ -357,10 +363,12 @@ public:
     ObTablesHandleArray mds_tables_;
     ObTablesHandleArray minor_tables_;
     ObTablesHandleArray ddl_tables_;
+    ObTablesHandleArray inc_major_ddl_tables_;
+    ObTablesHandleArray inc_major_tables_;
     ObTabletRestoreAction::ACTION restore_action_;
     share::SCN release_mds_scn_;
     TO_STRING_KV(KP_(ls), K_(tablet_id), KP_(src_tablet_meta), K_(mds_tables),
-        K_(minor_tables), K_(ddl_tables), K_(restore_action), K_(release_mds_scn));
+        K_(minor_tables), K_(ddl_tables), K_(inc_major_ddl_tables), K_(inc_major_tables), K_(restore_action), K_(release_mds_scn));
     DISALLOW_COPY_AND_ASSIGN(BatchBuildMinorSSTablesParam);
   };
 
@@ -446,6 +454,9 @@ private:
       const ObStorageSchema &storage_schema,
       const ObTablesHandleArray &major_tables,
       bool &is_hybrid_store);
+  static int assemble_and_append_hybrid_store_tables_(
+    const ObTablesHandleArray &hybrid_tables,
+    ObTablesHandleArray &sstables);
 };
 
 

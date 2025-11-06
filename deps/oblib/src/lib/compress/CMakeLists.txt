@@ -20,13 +20,18 @@ oblib_add_library(compress
   zstd_1_3_8/ob_zstd_compressor_1_3_8.h
   zstd_1_3_8/ob_zstd_stream_compressor_1_3_8.cpp
   zstd_1_3_8/ob_zstd_stream_compressor_1_3_8.h
+  zstd_1_5_7/ob_zstd_compressor_1_5_7.cpp
+  zstd_1_5_7/ob_zstd_compressor_1_5_7.h
+  zstd_1_5_7/ob_zstd_stream_compressor_1_5_7.cpp
+  zstd_1_5_7/ob_zstd_stream_compressor_1_5_7.h
   zlib_lite/ob_zlib_lite_compressor.cpp
   zlib_lite/ob_zlib_lite_compressor.h)
 
 add_subdirectory(zstd)
 add_subdirectory(zstd_1_3_8)
+add_subdirectory(zstd_1_5_7)
 add_subdirectory(lz4)
 add_subdirectory(snappy)
 add_subdirectory(zlib_lite)
 
-target_link_libraries(compress PUBLIC lz4 snappy zstd zstd_1_3_8 zlib_lite)
+target_link_libraries(compress PUBLIC lz4 snappy zstd zstd_1_3_8 zstd_1_5_7 zlib_lite)

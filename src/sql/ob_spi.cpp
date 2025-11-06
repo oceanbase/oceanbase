@@ -4683,10 +4683,9 @@ int ObSPIService::cursor_release(ObPLExecCtx *ctx,
     } else {
       if (OB_FAIL(cursor_close_impl(session, cursor, is_refcursor, package_id, routine_id, ignore))) {
         LOG_WARN("fail to close non session cursor", K(ret), K(cursor));
-      } else if (is_refcursor) {
-        CK (OB_NOT_NULL(ctx));
-        CK (OB_NOT_NULL(ctx->allocator_));
-        OX (ctx->allocator_->free(cursor));
+      }
+      if (is_refcursor && OB_NOT_NULL(ctx) && OB_NOT_NULL(ctx->allocator_)) { // release refcursor memory
+        ctx->allocator_->free(cursor);
       }
     }
   }
@@ -6290,7 +6289,7 @@ int ObSPIService::spi_add_ref_cursor_refcount(ObPLExecCtx *ctx, ObObj *cursor, i
         CK (OB_NOT_NULL(ctx->exec_ctx_));
         OZ (cursor_release(ctx, ctx->exec_ctx_->get_my_session(), cursor_info, is_ref_cursor, OB_INVALID_ID, OB_INVALID_ID, true));
       }
-      OX (is_ref_cursor && -1 == addend ? cursor->set_extend(0, PL_REF_CURSOR_TYPE) : (void)NULL); //addend == -1 means cursor_obj is not ref to refcursor
+      (is_ref_cursor && -1 == addend) ? cursor->set_extend(0, PL_REF_CURSOR_TYPE) : (void)NULL; //addend == -1 means cursor_obj is not ref to refcursor
     }
   } else {
     // do nothing; 例如，这种case，在return之前，会对cur进行操作，但cur是null

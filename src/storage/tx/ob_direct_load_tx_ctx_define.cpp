@@ -26,7 +26,7 @@ namespace transaction
 OB_SERIALIZE_MEMBER(ObTxDirectLoadIncBatchInfo,
                     batch_key_, /* 1 */
                     start_scn_ /* 2 */,
-                    flag_.val_ /* 3 */)
+                    flag_.val_ /* 3 */);
 
 int ObTxDirectLoadIncBatchInfo::set_start_log_synced()
 {
@@ -133,7 +133,7 @@ int64_t ObDLIBatchSet::get_serialize_size() const
   return total_size;
 }
 
-int ObDLIBatchSet::before_submit_ddl_start(const ObDDLIncLogBasic &key, const share::SCN &start_scn)
+int ObDLIBatchSet::before_submit_ddl_start(const ObDDLIncLogBasic &key, const share::SCN &start_scn, const bool is_major)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -144,7 +144,7 @@ int ObDLIBatchSet::before_submit_ddl_start(const ObDDLIncLogBasic &key, const sh
   } else if (!created() && OB_FAIL(create(32, mem_attr, mem_attr))) {
     TRANS_LOG(WARN, "create batch hash set failed", K(ret), K(key));
   } else {
-    ObTxDirectLoadIncBatchInfo batch_info(key);
+    ObTxDirectLoadIncBatchInfo batch_info(key, is_major);
 
     if (OB_FAIL(set_refactored(batch_info, 0))) {
       if (OB_HASH_EXIST != ret) {
@@ -180,11 +180,11 @@ int ObDLIBatchSet::before_submit_ddl_start(const ObDDLIncLogBasic &key, const sh
   return ret;
 }
 
-int ObDLIBatchSet::submit_ddl_start_succ(const ObDDLIncLogBasic &key, const share::SCN &start_scn)
+int ObDLIBatchSet::submit_ddl_start_succ(const ObDDLIncLogBasic &key, const share::SCN &start_scn, const bool is_major)
 {
   int ret = OB_SUCCESS;
 
-  ObTxDirectLoadIncBatchInfo batch_info(key);
+  ObTxDirectLoadIncBatchInfo batch_info(key, is_major);
 
   ObTxDirectLoadIncBatchInfo *info_in_hashset = get(batch_info);
   if (OB_ISNULL(info_in_hashset)) {
@@ -199,11 +199,11 @@ int ObDLIBatchSet::submit_ddl_start_succ(const ObDDLIncLogBasic &key, const shar
   return ret;
 }
 
-int ObDLIBatchSet::sync_ddl_start_succ(const ObDDLIncLogBasic &key, const share::SCN &start_scn)
+int ObDLIBatchSet::sync_ddl_start_succ(const ObDDLIncLogBasic &key, const share::SCN &start_scn, const bool is_major)
 {
   int ret = OB_SUCCESS;
 
-  ObTxDirectLoadIncBatchInfo batch_info(key);
+  ObTxDirectLoadIncBatchInfo batch_info(key, is_major);
 
   ObTxDirectLoadIncBatchInfo *info_in_hashset = get(batch_info);
   if (OB_ISNULL(info_in_hashset)) {
@@ -218,11 +218,11 @@ int ObDLIBatchSet::sync_ddl_start_succ(const ObDDLIncLogBasic &key, const share:
   return ret;
 }
 
-int ObDLIBatchSet::sync_ddl_start_fail(const ObDDLIncLogBasic &key)
+int ObDLIBatchSet::sync_ddl_start_fail(const ObDDLIncLogBasic &key, const bool is_major)
 {
   int ret = OB_SUCCESS;
 
-  ObTxDirectLoadIncBatchInfo batch_info(key);
+  ObTxDirectLoadIncBatchInfo batch_info(key, is_major);
 
   ObTxDirectLoadIncBatchInfo *info_in_hashset = get(batch_info);
   if (OB_ISNULL(info_in_hashset)) {
@@ -236,12 +236,12 @@ int ObDLIBatchSet::sync_ddl_start_fail(const ObDDLIncLogBasic &key)
   return ret;
 }
 
-int ObDLIBatchSet::before_submit_ddl_end(const ObDDLIncLogBasic &key, const share::SCN &end_scn)
+int ObDLIBatchSet::before_submit_ddl_end(const ObDDLIncLogBasic &key, const share::SCN &end_scn, const bool is_major)
 {
   int ret = OB_SUCCESS;
 
 
-  ObTxDirectLoadIncBatchInfo batch_info(key);
+  ObTxDirectLoadIncBatchInfo batch_info(key, is_major);
 
   ObTxDirectLoadIncBatchInfo *info_in_hashset = get(batch_info);
   if (OB_ISNULL(info_in_hashset)) {
@@ -256,11 +256,11 @@ int ObDLIBatchSet::before_submit_ddl_end(const ObDDLIncLogBasic &key, const shar
   return ret;
 }
 
-int ObDLIBatchSet::submit_ddl_end_succ(const ObDDLIncLogBasic &key, const share::SCN &end_scn)
+int ObDLIBatchSet::submit_ddl_end_succ(const ObDDLIncLogBasic &key, const share::SCN &end_scn, const bool is_major)
 {
   int ret = OB_SUCCESS;
 
-  ObTxDirectLoadIncBatchInfo batch_info(key);
+  ObTxDirectLoadIncBatchInfo batch_info(key, is_major);
 
   ObTxDirectLoadIncBatchInfo *info_in_hashset = get(batch_info);
   if (OB_ISNULL(info_in_hashset)) {
@@ -273,10 +273,10 @@ int ObDLIBatchSet::submit_ddl_end_succ(const ObDDLIncLogBasic &key, const share:
   return ret;
 }
 
-int ObDLIBatchSet::sync_ddl_end_succ(const ObDDLIncLogBasic &key, const share::SCN &end_scn)
+int ObDLIBatchSet::sync_ddl_end_succ(const ObDDLIncLogBasic &key, const share::SCN &end_scn, const bool is_major)
 {
   int ret = OB_SUCCESS;
-  ObTxDirectLoadIncBatchInfo batch_info(key);
+  ObTxDirectLoadIncBatchInfo batch_info(key, is_major);
   if (OB_FAIL(erase_refactored(batch_info))) {
     if (OB_HASH_NOT_EXIST == ret) {
       ret = OB_ENTRY_NOT_EXIST;
@@ -286,11 +286,11 @@ int ObDLIBatchSet::sync_ddl_end_succ(const ObDDLIncLogBasic &key, const share::S
   return ret;
 }
 
-int ObDLIBatchSet::sync_ddl_end_fail(const ObDDLIncLogBasic &key)
+int ObDLIBatchSet::sync_ddl_end_fail(const ObDDLIncLogBasic &key, const bool is_major)
 {
 
   int ret = OB_SUCCESS;
-  ObTxDirectLoadIncBatchInfo batch_info(key);
+  ObTxDirectLoadIncBatchInfo batch_info(key, is_major);
 
   ObTxDirectLoadIncBatchInfo *info_in_hashset = get(batch_info);
   if (OB_ISNULL(info_in_hashset)) {
@@ -310,9 +310,8 @@ int ObDLIBatchSet::remove_unlog_batch_info(const ObTxDirectLoadBatchKeyArray &ba
 
   for (int i = 0; i < batch_key_array.count() && OB_SUCC(ret); i++) {
 
-    ObTxDirectLoadIncBatchInfo batch_info(batch_key_array[i]);
-    if (OB_FAIL(erase_refactored(batch_info))) {
-      TRANS_LOG(WARN, "erase from hash set failed", K(ret), K(batch_info), K(i),
+    if (OB_FAIL(erase_refactored(batch_key_array[i]))) {
+      TRANS_LOG(WARN, "erase from hash set failed", K(ret), K(batch_key_array[i]), K(i),
                 K(batch_key_array.count()));
     }
   }

@@ -2945,6 +2945,10 @@ DEFINE_ERROR_EXT(OB_AI_FUNC_MODEL_NOT_FOUND, -11118, -1, "HY000", "This ai model
 DEFINE_ERROR_EXT(OB_AI_FUNC_MODEL_EXISTS, -11119, -1, "HY000", "This ai model is already exists", "This ai model \'%.*s\' is already exists");
 DEFINE_ERROR_EXT(OB_ERROR_DURING_COMMIT, -11120, ER_ERROR_DURING_COMMIT, "HY000", "Got error during COMMIT", "Got error during COMMIT: %s");
 DEFINE_ERROR_EXT(OB_ERR_TABLE_SNAPSHOT_NOT_EXIST, -11121, -1, "HY000", "Table snapshot does not exist", "Table snapshot '%.*s' does not exist");
+DEFINE_ERROR_EXT(OB_HTTP_BAD_REQUEST, -11122, OB_HTTP_BAD_REQUEST, "HY000", "Bad http request", "Bad http request: %s");
+DEFINE_ERROR_EXT(OB_HTTP_UNAUTHORIZED, -11123, OB_HTTP_UNAUTHORIZED, "HY000", "Unauthorized http request", "Unauthorized http request: %s");
+DEFINE_ERROR_EXT(OB_HTTP_NOT_FOUND, -11124, OB_HTTP_NOT_FOUND, "HY000", "Http request not found", "Http request not found: %s");
+DEFINE_ERROR_EXT(OB_HTTP_SERVER_ERROR, -11125, OB_HTTP_SERVER_ERROR, "HY000", "Http server error", "Http server error: %s");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // SQL扩展区段1：[-11000, -12000)

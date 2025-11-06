@@ -31,6 +31,7 @@ class ObStorageDatumUtils;
 class ObMicroIndexInfo;
 class ObMicroBlock;
 class ObBloomFilter;
+struct ObMicroIndexData;
 
 class ObMicroBlockBloomFilter
 {
@@ -42,7 +43,7 @@ public:
   int init(const ObDataStoreDesc &data_store_desc);
   int insert_row(const ObDatumRow &row);
   int insert_micro_block(const ObMicroBlock &micro_block);
-  int insert_micro_block(const ObMicroBlockDesc &micro_block_desc, const ObMicroIndexInfo &micro_index_info);
+  int insert_micro_block(const ObMicroBlockDesc &micro_block_desc, const ObMicroIndexData &micro_index_data);
   template<typename F> int foreach(F &functor) const;
   OB_INLINE bool is_valid() const
   {
@@ -61,7 +62,7 @@ public:
 private:
   int decrypt_and_decompress_micro_data(const ObMicroBlockHeader &header,
                                         const ObMicroBlockData &micro_data,
-                                        const ObMicroIndexInfo &micro_index_info,
+                                        const ObMicroIndexData &micro_index_data,
                                         ObMicroBlockData &decompressed_data);
 
 private:

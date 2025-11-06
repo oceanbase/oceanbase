@@ -149,6 +149,7 @@ public:
   common::ObTabletID delta_buf_tablet_id_;
   common::ObTabletID index_id_tablet_id_;
   common::ObTabletID snapshot_tablet_id_;
+  common::ObTabletID embedded_tablet_id_;
     // for ivf
   common::ObTabletID centroid_tablet_id_;
   common::ObTabletID cid_vec_tablet_id_;
@@ -174,6 +175,7 @@ public:
     delta_buf_tablet_id_.reset();
     index_id_tablet_id_.reset();
     snapshot_tablet_id_.reset();
+    embedded_tablet_id_.reset();
     vid_rowkey_tablet_id_.reset();
   }
 };

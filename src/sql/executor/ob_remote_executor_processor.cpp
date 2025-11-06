@@ -300,7 +300,7 @@ int ObRemoteBaseExecuteP<T>::sync_send_result(ObExecContext &exec_ctx,
         if (need_flush) {
           last_row_used = false;
           //set user var map
-          if (OB_FAIL(scanner.set_session_var_map(exec_ctx.get_my_session()))) {
+          if (OB_FAIL(scanner.set_session_var_map(exec_ctx))) {
             LOG_WARN("set user var to scanner failed");
           } else {
             has_send_result_ = true;
@@ -338,7 +338,7 @@ int ObRemoteBaseExecuteP<T>::sync_send_result(ObExecContext &exec_ctx,
   }
   if (OB_SUCC(ret)) {
     //所有需要通过scanner传回的数据先存入collector
-    if (OB_FAIL(scanner.set_session_var_map(exec_ctx.get_my_session()))) {
+    if (OB_FAIL(scanner.set_session_var_map(exec_ctx))) {
       LOG_WARN("set user var to scanner failed");
     } else {
       scanner.set_found_rows(plan_ctx->get_found_rows());

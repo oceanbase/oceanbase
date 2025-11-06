@@ -2789,6 +2789,26 @@ int JsonObjectStarChecker::add_expr(ObRawExpr *&expr)
   return ret;
 }
 
+int SemanticVectorDistExprChecker::add_expr(ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else if (expr->get_expr_type() == T_FUN_SYS_SEMANTIC_VECTOR_DISTANCE) {
+    if (OB_FAIL(add_var_to_array_no_dup(rel_array_, expr))) {
+      LOG_WARN("failed to add semantic_distance expr to array", K(ret));
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(add_expr(expr->get_param_expr(i))))) {
+        LOG_WARN("failed to check param expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 //used for C module
 bool check_stack_overflow_c()
 {

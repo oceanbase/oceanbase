@@ -232,6 +232,23 @@ int ObExternalTableUtils::convert_external_table_scan_task(const ObString &file_
   return ret;
 }
 
+int ObExternalTableUtils::convert_lake_table_scan_task(const int64_t file_id,
+                                                       const uint64_t part_id,
+                                                       ObFileScanTask *scan_task)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(scan_task)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null scan task", K(ret), KP(scan_task));
+  } else if (scan_task->get_file_type() == LakeFileType::ICEBERG) {
+    scan_task->file_id_ = file_id;
+    scan_task->part_id_ = part_id;
+  } else if (scan_task->get_file_type() == LakeFileType::HIVE) {
+    scan_task->file_id_ = file_id;
+  }
+  return ret;
+}
+
 int ObExternalTableUtils::convert_external_table_empty_task(const ObString &file_url,
                                                              const ObString &content_digest,
                                                              const int64_t file_size,
@@ -640,12 +657,10 @@ int ObExternalTableUtils::prepare_lake_table_single_scan_task(ObExecContext &exe
         if (OB_ISNULL(scan_task)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get null scan task");
-        } else {
-          scan_task->file_id_ = j;
-          scan_task->part_id_ = tablet_loc->partition_id_;
-          if (OB_FAIL(scan_tasks.push_back(scan_task))) {
-            LOG_WARN("failed to push back scan task");
-          }
+        } else if (OB_FAIL(convert_lake_table_scan_task(j, tablet_loc->partition_id_, scan_task))) {
+          LOG_WARN("failed to convert lake table scan task", K(ret));
+        } else if (OB_FAIL(scan_tasks.push_back(scan_task))) {
+          LOG_WARN("failed to push back scan task");
         }
       }
     }

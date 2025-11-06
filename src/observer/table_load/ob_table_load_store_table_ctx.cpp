@@ -12,18 +12,19 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/ob_table_load_store_table_ctx.h"
-#include "observer/table_load/ob_table_load_index_table_builder.h"
+#include "observer/table_load/dag/ob_table_load_dag.h"
 #include "observer/table_load/ob_table_load_data_table_builder.h"
-#include "observer/table_load/ob_table_load_row_projector.h"
+#include "observer/table_load/ob_table_load_index_table_builder.h"
 #include "observer/table_load/ob_table_load_lob_table_builder.h"
+#include "observer/table_load/ob_table_load_row_projector.h"
 #include "observer/table_load/ob_table_load_schema.h"
 #include "observer/table_load/ob_table_load_store_ctx.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "storage/direct_load/ob_direct_load_insert_data_table_ctx.h"
 #include "storage/direct_load/ob_direct_load_insert_lob_table_ctx.h"
+#include "storage/direct_load/ob_direct_load_struct.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "src/observer/table_load/ob_table_load_error_row_handler.h"
 
 namespace oceanbase
 {
@@ -68,6 +69,55 @@ int ObTableLoadStoreTableCtx::inner_init(const uint64_t table_id)
     LOG_WARN("fail to new ObTableLoadSchema", KR(ret));
   } else if (OB_FAIL(schema_->init(store_ctx_->ctx_->param_.tenant_id_, table_id_, store_ctx_->ctx_->ddl_param_.schema_version_))) {
     LOG_WARN("fail to init schema", KR(ret));
+  }
+  return ret;
+}
+
+int ObTableLoadStoreTableCtx::get_table_data_desc(
+  const ObTableLoadInputDataType::Type input_data_type,
+  ObDirectLoadTableDataDesc &table_data_desc)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadStoreTableCtx not init", KR(ret), KP(this));
+  } else {
+    table_data_desc = store_ctx_->basic_table_data_desc_;
+    switch (input_data_type) {
+      case ObTableLoadInputDataType::FULL_ROW: {
+        table_data_desc.rowkey_column_num_ = schema_->rowkey_column_count_;
+        table_data_desc.column_count_ = schema_->store_column_count_;
+        table_data_desc.row_flag_.reset();
+        break;
+      }
+      case ObTableLoadInputDataType::ADAPTIVE_FULL_ROW: {
+        table_data_desc.rowkey_column_num_ =
+          (!schema_->is_table_without_pk_ ? schema_->rowkey_column_count_ : 0);
+        table_data_desc.column_count_ =
+          (!schema_->is_table_without_pk_ ? schema_->store_column_count_
+                                          : schema_->store_column_count_ - 1);
+        table_data_desc.row_flag_.reset();
+        table_data_desc.row_flag_.uncontain_hidden_pk_ = schema_->is_table_without_pk_;
+        break;
+      }
+      case ObTableLoadInputDataType::ROWKEY: {
+        table_data_desc.rowkey_column_num_ = schema_->rowkey_column_count_;
+        table_data_desc.column_count_ = schema_->rowkey_column_count_;
+        table_data_desc.row_flag_.reset();
+        break;
+      }
+      case ObTableLoadInputDataType::LOB_ID: {
+        table_data_desc.rowkey_column_num_ = 1;
+        table_data_desc.column_count_ = 1;
+        table_data_desc.row_flag_.reset();
+        table_data_desc.row_flag_.lob_id_only_ = true;
+        break;
+      }
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected input data type", KR(ret), K(input_data_type));
+        break;
+    }
   }
   return ret;
 }
@@ -381,6 +431,7 @@ int ObTableLoadStoreDataTableCtx::init_insert_table_ctx(const ObDirectLoadTransP
     insert_table_param.is_partitioned_table_ = schema_->is_partitioned_table_;
     insert_table_param.is_table_without_pk_ = schema_->is_table_without_pk_;
     insert_table_param.is_table_with_hidden_pk_column_ = schema_->is_table_with_hidden_pk_column_;
+    insert_table_param.is_index_table_ = schema_->is_index_table_;
     insert_table_param.online_opt_stat_gather_ = online_opt_stat_gather && store_ctx_->ctx_->param_.online_opt_stat_gather_;
     insert_table_param.reuse_pk_ = !ObDirectLoadInsertMode::is_overwrite_mode(store_ctx_->ctx_->param_.insert_mode_);
     insert_table_param.is_insert_lob_ = is_insert_lob;
@@ -395,7 +446,9 @@ int ObTableLoadStoreDataTableCtx::init_insert_table_ctx(const ObDirectLoadTransP
     insert_table_param.online_sample_percent_ = store_ctx_->ctx_->param_.online_sample_percent_;
     insert_table_param.is_no_logging_ = store_ctx_->ctx_->ddl_param_.is_no_logging_;
     insert_table_param.max_batch_size_ = store_ctx_->ctx_->param_.batch_size_;
-    insert_table_param.is_index_table_ = schema_->is_index_table_;
+    insert_table_param.enable_dag_ = store_ctx_->enable_dag_;
+    insert_table_param.dag_ = store_ctx_->dag_exec_ctx_.dag_;
+    insert_table_param.is_inc_major_log_ = store_ctx_->ctx_->param_.enable_inc_major_;
     // new ObDirectLoadInsertDataTableContext
     ObDirectLoadInsertDataTableContext *insert_data_table_ctx = nullptr;
     if (OB_ISNULL(insert_table_ctx_ = insert_data_table_ctx =
@@ -432,6 +485,76 @@ int ObTableLoadStoreDataTableCtx::close_insert_table_ctx()
       insert_table_ctx_->~ObDirectLoadInsertTableContext();
       allocator_.free(insert_table_ctx_);
       insert_table_ctx_ = nullptr;
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadStoreDataTableCtx::open_insert_table_ctx(
+  const ObTableLoadStoreInsertTableParam &param, ObIAllocator &allocator,
+  ObDirectLoadInsertTableContext *&insert_table_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadStoreDataTableCtx not init", KR(ret), KP(this));
+  } else {
+    ObDirectLoadInsertDataTableContext *insert_data_table_ctx = nullptr;
+    ObDirectLoadInsertTableContext *insert_lob_table_ctx = nullptr;
+    ObDirectLoadInsertTableParam insert_table_param;
+    // 目标表table_id, 目前只用于填充统计信息收集结果
+    insert_table_param.table_id_ = store_ctx_->ctx_->ddl_param_.dest_table_id_;
+    insert_table_param.schema_version_ = store_ctx_->ctx_->ddl_param_.schema_version_;
+    insert_table_param.snapshot_version_ = store_ctx_->ctx_->ddl_param_.snapshot_version_;
+    insert_table_param.ddl_task_id_ = store_ctx_->ctx_->ddl_param_.task_id_;
+    insert_table_param.data_version_ = store_ctx_->ctx_->ddl_param_.data_version_;
+    insert_table_param.parallel_ = store_ctx_->thread_cnt_;
+    insert_table_param.reserved_parallel_ =
+      param.need_reserved_parallel_ ? store_ctx_->thread_cnt_ : 0;
+    insert_table_param.rowkey_column_count_ = schema_->rowkey_column_count_;
+    insert_table_param.column_count_ = schema_->store_column_count_;
+    insert_table_param.lob_inrow_threshold_ = schema_->lob_inrow_threshold_;
+    insert_table_param.is_partitioned_table_ = schema_->is_partitioned_table_;
+    insert_table_param.is_table_without_pk_ = schema_->is_table_without_pk_;
+    insert_table_param.is_table_with_hidden_pk_column_ = schema_->is_table_with_hidden_pk_column_;
+    insert_table_param.is_index_table_ = schema_->is_index_table_;
+    insert_table_param.online_opt_stat_gather_ =
+      param.need_online_opt_stat_gather_ && store_ctx_->ctx_->param_.online_opt_stat_gather_;
+    insert_table_param.reuse_pk_ =
+      !ObDirectLoadInsertMode::is_overwrite_mode(store_ctx_->ctx_->param_.insert_mode_);
+    insert_table_param.is_insert_lob_ = param.need_insert_lob_;
+    insert_table_param.is_incremental_ =
+      ObDirectLoadMethod::is_incremental(store_ctx_->ctx_->param_.method_);
+    insert_table_param.is_inc_major_ = ObDirectLoadInsertSSTableType::Type::INC_MAJOR == param.insert_sstable_type_;
+    insert_table_param.trans_param_ = param.trans_param_;
+    insert_table_param.datum_utils_ = &(schema_->datum_utils_);
+    insert_table_param.col_descs_ = &(schema_->column_descs_);
+    insert_table_param.cmp_funcs_ = &(schema_->cmp_funcs_);
+    insert_table_param.col_nullables_ = schema_->col_nullables_;
+    insert_table_param.lob_column_idxs_ = &(schema_->lob_column_idxs_);
+    insert_table_param.online_sample_percent_ = store_ctx_->ctx_->param_.online_sample_percent_;
+    insert_table_param.is_no_logging_ = store_ctx_->ctx_->ddl_param_.is_no_logging_;
+    insert_table_param.max_batch_size_ = store_ctx_->ctx_->param_.batch_size_;
+    insert_table_param.enable_dag_ = store_ctx_->enable_dag_;
+    insert_table_param.dag_ = store_ctx_->dag_exec_ctx_.dag_;
+    insert_table_param.is_inc_major_log_ = store_ctx_->ctx_->param_.enable_inc_major_;
+    // new insert_data_table_ctx
+    if (OB_ISNULL(insert_data_table_ctx =
+                    OB_NEWx(ObDirectLoadInsertDataTableContext, (&allocator)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to new ObDirectLoadInsertDataTableContext", KR(ret));
+    } else if (OB_FAIL(insert_data_table_ctx->init(insert_table_param, ls_partition_ids_,
+                                                   target_ls_partition_ids_))) {
+      LOG_WARN("fail to init insert table ctx", KR(ret));
+    } else {
+      insert_table_ctx = insert_data_table_ctx;
+    }
+    if (OB_FAIL(ret)) {
+      if (nullptr != insert_data_table_ctx) {
+        insert_data_table_ctx->~ObDirectLoadInsertDataTableContext();
+        allocator.free(insert_data_table_ctx);
+        insert_data_table_ctx = nullptr;
+      }
     }
   }
   return ret;
@@ -658,6 +781,7 @@ int ObTableLoadStoreLobTableCtx::init_insert_table_ctx(const ObDirectLoadTransPa
     insert_table_param.is_partitioned_table_ = schema_->is_partitioned_table_;
     insert_table_param.is_table_without_pk_ = schema_->is_table_without_pk_;
     insert_table_param.is_table_with_hidden_pk_column_ = schema_->is_table_with_hidden_pk_column_;
+    insert_table_param.is_index_table_ = schema_->is_index_table_;
     insert_table_param.online_opt_stat_gather_ = online_opt_stat_gather;
     insert_table_param.is_insert_lob_ = is_insert_lob;
     insert_table_param.reuse_pk_ = true;
@@ -672,7 +796,9 @@ int ObTableLoadStoreLobTableCtx::init_insert_table_ctx(const ObDirectLoadTransPa
     insert_table_param.online_sample_percent_ = store_ctx_->ctx_->param_.online_sample_percent_;
     insert_table_param.is_no_logging_ = store_ctx_->ctx_->ddl_param_.is_no_logging_;
     insert_table_param.max_batch_size_ = store_ctx_->ctx_->param_.batch_size_;
-    insert_table_param.is_index_table_ = schema_->is_index_table_;
+    insert_table_param.enable_dag_ = store_ctx_->enable_dag_;
+    insert_table_param.dag_ = store_ctx_->dag_exec_ctx_.dag_;
+    insert_table_param.is_inc_major_log_ = store_ctx_->ctx_->param_.enable_inc_major_;
     // new ObDirectLoadInsertLobTableContext
     ObDirectLoadInsertLobTableContext *insert_lob_table_ctx = nullptr;
     if (OB_ISNULL(data_table_ctx_->insert_table_ctx_)) {
@@ -706,6 +832,72 @@ int ObTableLoadStoreLobTableCtx::close_insert_table_ctx()
     insert_table_ctx_->~ObDirectLoadInsertTableContext();
     allocator_.free(insert_table_ctx_);
     insert_table_ctx_ = nullptr;
+  }
+  return ret;
+}
+
+int ObTableLoadStoreLobTableCtx::open_insert_table_ctx(
+  const ObTableLoadStoreInsertTableParam &param, ObIAllocator &allocator,
+  ObDirectLoadInsertTableContext *&insert_table_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadStoreLobTableCtx not init", KR(ret), KP(this));
+  } else {
+    ObDirectLoadInsertTableParam insert_table_param;
+    // TODO 目标表table_id, DAG版本lob只在增量场景, 目标表和原表是同一个
+    insert_table_param.table_id_ = table_id_;
+    insert_table_param.schema_version_ = store_ctx_->ctx_->ddl_param_.schema_version_;
+    insert_table_param.snapshot_version_ = store_ctx_->ctx_->ddl_param_.snapshot_version_;
+    insert_table_param.ddl_task_id_ = store_ctx_->ctx_->ddl_param_.task_id_;
+    insert_table_param.data_version_ = store_ctx_->ctx_->ddl_param_.data_version_;
+    insert_table_param.parallel_ = store_ctx_->thread_cnt_;
+    insert_table_param.reserved_parallel_ = 0;
+    insert_table_param.rowkey_column_count_ = schema_->rowkey_column_count_;
+    insert_table_param.column_count_ = schema_->store_column_count_;
+    insert_table_param.lob_inrow_threshold_ = schema_->lob_inrow_threshold_;
+    insert_table_param.is_partitioned_table_ = schema_->is_partitioned_table_;
+    insert_table_param.is_table_without_pk_ = schema_->is_table_without_pk_;
+    insert_table_param.is_table_with_hidden_pk_column_ = schema_->is_table_with_hidden_pk_column_;
+    insert_table_param.is_index_table_ = false;
+    insert_table_param.online_opt_stat_gather_ = false;
+    insert_table_param.is_insert_lob_ = false;
+    insert_table_param.reuse_pk_ = true;
+    insert_table_param.is_incremental_ =
+      ObDirectLoadMethod::is_incremental(store_ctx_->ctx_->param_.method_);
+    insert_table_param.trans_param_ = param.trans_param_;
+    insert_table_param.datum_utils_ = &(schema_->datum_utils_);
+    insert_table_param.col_descs_ = &(schema_->column_descs_);
+    insert_table_param.cmp_funcs_ = &(schema_->cmp_funcs_);
+    insert_table_param.col_nullables_ = schema_->col_nullables_;
+    insert_table_param.lob_column_idxs_ = &(schema_->lob_column_idxs_);
+    insert_table_param.online_sample_percent_ = store_ctx_->ctx_->param_.online_sample_percent_;
+    insert_table_param.is_no_logging_ = store_ctx_->ctx_->ddl_param_.is_no_logging_;
+    insert_table_param.max_batch_size_ = store_ctx_->ctx_->param_.batch_size_;
+    insert_table_param.enable_dag_ = store_ctx_->enable_dag_;
+    insert_table_param.dag_ = store_ctx_->dag_exec_ctx_.dag_;
+    insert_table_param.is_inc_major_log_ = store_ctx_->ctx_->param_.enable_inc_major_;
+    // new ObDirectLoadInsertDataTableContext
+    ObDirectLoadInsertDataTableContext *insert_lob_table_ctx = nullptr;
+    if (OB_ISNULL(insert_lob_table_ctx =
+                    OB_NEWx(ObDirectLoadInsertDataTableContext, (&allocator)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to new ObDirectLoadInsertDataTableContext", KR(ret));
+    } else if (OB_FAIL(insert_lob_table_ctx->init(
+                 insert_table_param,
+                 ls_partition_ids_, target_ls_partition_ids_))) {
+      LOG_WARN("fail to init insert table ctx", KR(ret));
+    } else {
+      insert_table_ctx = insert_lob_table_ctx;
+    }
+    if (OB_FAIL(ret)) {
+      if (nullptr != insert_lob_table_ctx) {
+        insert_lob_table_ctx->~ObDirectLoadInsertDataTableContext();
+        allocator.free(insert_lob_table_ctx);
+        insert_lob_table_ctx = nullptr;
+      }
+    }
   }
   return ret;
 }
@@ -905,6 +1097,7 @@ int ObTableLoadStoreIndexTableCtx::init_insert_table_ctx(const ObDirectLoadTrans
     insert_table_param.is_partitioned_table_ = schema_->is_partitioned_table_;
     insert_table_param.is_table_without_pk_ = schema_->is_table_without_pk_;
     insert_table_param.is_table_with_hidden_pk_column_ = schema_->is_table_with_hidden_pk_column_;
+    insert_table_param.is_index_table_ = schema_->is_index_table_;
     insert_table_param.online_opt_stat_gather_ = online_opt_stat_gather;
     insert_table_param.is_insert_lob_ = is_insert_lob;
     insert_table_param.reuse_pk_ = true;
@@ -919,7 +1112,9 @@ int ObTableLoadStoreIndexTableCtx::init_insert_table_ctx(const ObDirectLoadTrans
     insert_table_param.online_sample_percent_ = store_ctx_->ctx_->param_.online_sample_percent_;
     insert_table_param.is_no_logging_ = store_ctx_->ctx_->ddl_param_.is_no_logging_;
     insert_table_param.max_batch_size_ = store_ctx_->ctx_->param_.batch_size_;
-    insert_table_param.is_index_table_ = schema_->is_index_table_;
+    insert_table_param.enable_dag_ = store_ctx_->enable_dag_;
+    insert_table_param.dag_ = store_ctx_->dag_exec_ctx_.dag_;
+    insert_table_param.is_inc_major_log_ = store_ctx_->ctx_->param_.enable_inc_major_;
     // new ObDirectLoadInsertDataTableContext
     ObDirectLoadInsertDataTableContext *insert_data_table_ctx = nullptr;
     if (OB_ISNULL(insert_table_ctx_ = insert_data_table_ctx =
@@ -951,6 +1146,71 @@ int ObTableLoadStoreIndexTableCtx::close_insert_table_ctx()
   return ret;
 }
 
+int ObTableLoadStoreIndexTableCtx::open_insert_table_ctx(
+  const ObTableLoadStoreInsertTableParam &param, ObIAllocator &allocator,
+  ObDirectLoadInsertTableContext *&insert_table_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadStoreIndexTableCtx not init", KR(ret), KP(this));
+  } else {
+    ObDirectLoadInsertDataTableContext *insert_index_table_ctx = nullptr;
+    ObDirectLoadInsertTableParam insert_table_param;
+    // TODO 目标表table_id, 索引只在增量场景, 目标表和原表是同一个
+    insert_table_param.table_id_ = table_id_;
+    insert_table_param.schema_version_ = store_ctx_->ctx_->ddl_param_.schema_version_;
+    insert_table_param.snapshot_version_ = store_ctx_->ctx_->ddl_param_.snapshot_version_;
+    insert_table_param.ddl_task_id_ = store_ctx_->ctx_->ddl_param_.task_id_;
+    insert_table_param.data_version_ = store_ctx_->ctx_->ddl_param_.data_version_;
+    insert_table_param.parallel_ = store_ctx_->thread_cnt_;
+    insert_table_param.reserved_parallel_ = 0;
+    insert_table_param.rowkey_column_count_ = schema_->rowkey_column_count_;
+    insert_table_param.column_count_ = schema_->store_column_count_;
+    insert_table_param.lob_inrow_threshold_ = schema_->lob_inrow_threshold_;
+    insert_table_param.is_partitioned_table_ = schema_->is_partitioned_table_;
+    insert_table_param.is_table_without_pk_ = schema_->is_table_without_pk_;
+    insert_table_param.is_table_with_hidden_pk_column_ = schema_->is_table_with_hidden_pk_column_;
+    insert_table_param.is_index_table_ = true;
+    insert_table_param.online_opt_stat_gather_ = false;
+    insert_table_param.is_insert_lob_ = false;
+    insert_table_param.reuse_pk_ = true;
+    insert_table_param.is_incremental_ =
+      ObDirectLoadMethod::is_incremental(store_ctx_->ctx_->param_.method_);
+    insert_table_param.trans_param_ = param.trans_param_;
+    insert_table_param.datum_utils_ = &(schema_->datum_utils_);
+    insert_table_param.col_descs_ = &(schema_->column_descs_);
+    insert_table_param.cmp_funcs_ = &(schema_->cmp_funcs_);
+    insert_table_param.col_nullables_ = schema_->col_nullables_;
+    insert_table_param.lob_column_idxs_ = &(schema_->lob_column_idxs_);
+    insert_table_param.online_sample_percent_ = store_ctx_->ctx_->param_.online_sample_percent_;
+    insert_table_param.is_no_logging_ = store_ctx_->ctx_->ddl_param_.is_no_logging_;
+    insert_table_param.max_batch_size_ = store_ctx_->ctx_->param_.batch_size_;
+    insert_table_param.enable_dag_ = store_ctx_->enable_dag_;
+    insert_table_param.dag_ = store_ctx_->dag_exec_ctx_.dag_;
+    insert_table_param.is_inc_major_log_ = store_ctx_->ctx_->param_.enable_inc_major_;
+    // new insert_index_table_ctx
+    if (OB_ISNULL(insert_index_table_ctx =
+                    OB_NEWx(ObDirectLoadInsertDataTableContext, (&allocator)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to new ObDirectLoadInsertDataTableContext", KR(ret));
+    } else if (OB_FAIL(insert_index_table_ctx->init(insert_table_param, ls_partition_ids_,
+                                                    target_ls_partition_ids_))) {
+      LOG_WARN("fail to init insert table ctx", KR(ret));
+    } else {
+      insert_table_ctx = insert_index_table_ctx;
+    }
+    if (OB_FAIL(ret)) {
+      if (nullptr != insert_index_table_ctx) {
+        insert_index_table_ctx->~ObDirectLoadInsertDataTableContext();
+        allocator.free(insert_index_table_ctx);
+        insert_index_table_ctx = nullptr;
+      }
+    }
+  }
+  return ret;
+}
+
 //////////////////////// table builder ////////////////////////
 
 ObDirectLoadTableDataDesc ObTableLoadStoreIndexTableCtx::get_insert_table_data_desc()
@@ -970,8 +1230,8 @@ ObDirectLoadTableDataDesc ObTableLoadStoreIndexTableCtx::get_delete_table_data_d
 }
 
 int ObTableLoadStoreIndexTableCtx::acquire_table_builder(
-  ObTableLoadIndexTableBuilder *&table_builder,
-  ObIAllocator &allocator, ObDirectLoadTableDataDesc table_data_desc)
+  ObTableLoadIndexTableBuilder *&table_builder, ObIAllocator &allocator,
+  ObDirectLoadTableDataDesc table_data_desc)
 {
   int ret = OB_SUCCESS;
   table_builder = nullptr;

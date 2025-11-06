@@ -55,27 +55,30 @@ protected:
   virtual int inner_get_next_row(blocksstable::ObDatumRow &row);
   virtual int inner_get_next_rows() override;
   virtual int can_batch_scan(bool &can_batch) override;
-  virtual int is_range_valid() const override;
   virtual int prepare() override;
   virtual int supply_consume();
   virtual int inner_merge_row(blocksstable::ObDatumRow &row);
   int set_rows_merger(const int64_t table_cnt);
+  // TODO: zhanghuidong.zhd, refactor the interfaces for building border rowkey and refresh blockscan
+  int prepare_blockscan_after_construct_iters();
   int locate_blockscan_border();
 private:
   int prepare_blockscan(ObStoreRowIterator &iter);
+  void inner_calc_scan_range(const blocksstable::ObDatumRange *&range,
+                             blocksstable::ObDatumRange &cow_range,
+                             const blocksstable::ObDatumRowkey &curr_rowkey,
+                             const bool calc_di_base_range);
 protected:
   ObScanMergeLoserTreeCmp tree_cmp_;
   ObScanSimpleMerger *simple_merge_;
   ObScanMergeLoserTree *loser_tree_;
   common::ObRowsMerger<ObScanMergeLoserTreeItem, ObScanMergeLoserTreeCmp> *rows_merger_;
-  int64_t consumers_[2*common::MAX_TABLE_CNT_IN_STORAGE];
+  int64_t consumers_[common::MAX_QUERY_TABLE_CNT];
   int64_t consumer_cnt_;
 private:
   int64_t filt_del_count_;
   const blocksstable::ObDatumRange *range_;
   blocksstable::ObDatumRange cow_range_;
-  const blocksstable::ObDatumRange *di_base_range_;
-  blocksstable::ObDatumRange di_base_cow_range_;
 
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObMultipleScanMerge);

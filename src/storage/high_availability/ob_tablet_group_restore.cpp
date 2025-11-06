@@ -2344,7 +2344,11 @@ int ObTabletRestoreTask::generate_restore_tasks_()
   } else if (OB_FAIL(generate_major_restore_tasks_(tablet_copy_finish_task, parent_task))) {
     LOG_WARN("failed to generate restore major tasks", K(ret), KPC(tablet_restore_ctx_));
   } else if (OB_FAIL(generate_ddl_restore_tasks_(tablet_copy_finish_task, parent_task))) {
-    LOG_WARN("failed to generate ddl copy tasks", K(ret), KPC(tablet_restore_ctx_));
+    LOG_WARN("failed to generate restore ddl tasks", K(ret), KPC(tablet_restore_ctx_));
+  } else if (OB_FAIL(generate_inc_major_ddl_restore_tasks_(tablet_copy_finish_task, parent_task))) {
+    LOG_WARN("failed to generate restore inc major ddl tasks", K(ret), KPC(tablet_restore_ctx_));
+  } else if (OB_FAIL(generate_inc_major_restore_tasks_(tablet_copy_finish_task, parent_task))) {
+    LOG_WARN("failed to generate restore inc major tasks", K(ret), KPC(tablet_restore_ctx_));
   } else if (OB_FAIL(generate_finish_restore_task_(tablet_copy_finish_task, parent_task))) {
     LOG_WARN("failed to generate finish restore task", K(ret), KPC(tablet_restore_ctx_));
   }
@@ -2407,11 +2411,51 @@ int ObTabletRestoreTask::generate_ddl_restore_tasks_(
     LOG_WARN("tablet restore ddl task do not init", K(ret));
   } else if (OB_ISNULL(tablet_copy_finish_task) || OB_ISNULL(parent_task)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("generate minor task get invalid argument", K(ret), KP(tablet_copy_finish_task), KP(parent_task));
+    LOG_WARN("generate ddl task get invalid argument", K(ret), KP(tablet_copy_finish_task), KP(parent_task));
   } else if (!ObTabletRestoreAction::need_restore_ddl_sstable(tablet_restore_ctx_->action_)) {
     LOG_INFO("no need restore ddl, skip ddl restore tasks", KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
   } else if (OB_FAIL(generate_restore_task_(ObITable::is_ddl_dump_sstable, tablet_copy_finish_task, parent_task))) {
     LOG_WARN("failed to generate ddl restore task", K(ret), KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
+  }
+  return ret;
+}
+
+int ObTabletRestoreTask::generate_inc_major_ddl_restore_tasks_(
+    ObTabletCopyFinishTask *tablet_copy_finish_task,
+    share::ObITask *&parent_task)
+{
+  int ret = OB_SUCCESS;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet restore inc major ddl task do not init", K(ret));
+  } else if (OB_ISNULL(tablet_copy_finish_task) || OB_ISNULL(parent_task)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("generate inc major ddl task get invalid argument", K(ret), KP(tablet_copy_finish_task), KP(parent_task));
+  } else if (!ObTabletRestoreAction::need_restore_inc_major_ddl_sstable(tablet_restore_ctx_->action_)) {
+    LOG_INFO("no need restore inc major ddl, skip inc major ddl restore tasks", KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
+  } else if (OB_FAIL(generate_restore_task_(ObITable::is_inc_major_ddl_dump_sstable, tablet_copy_finish_task, parent_task))) {
+    LOG_WARN("failed to generate inc major ddl restore task", K(ret), KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
+  }
+  return ret;
+}
+
+int ObTabletRestoreTask::generate_inc_major_restore_tasks_(
+    ObTabletCopyFinishTask *tablet_copy_finish_task,
+    share::ObITask *&parent_task)
+{
+  int ret = OB_SUCCESS;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet restore inc major task do not init", K(ret));
+  } else if (OB_ISNULL(tablet_copy_finish_task) || OB_ISNULL(parent_task)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("generate inc major task get invalid argument", K(ret), KP(tablet_copy_finish_task), KP(parent_task));
+  } else if (!ObTabletRestoreAction::need_restore_inc_major_sstable(tablet_restore_ctx_->action_)) {
+    LOG_INFO("no need restore inc major, skip inc major restore tasks", KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
+  } else if (OB_FAIL(generate_restore_task_(ObITable::is_inc_major_type_sstable, tablet_copy_finish_task, parent_task))) {
+    LOG_WARN("failed to generate inc major restore task", K(ret), KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
   }
   return ret;
 }
@@ -2814,10 +2858,6 @@ int ObTabletRestoreTask::check_need_copy_sstable_(
                                                               tablet_restore_ctx_->tablet_handle_,
                                                               need_copy))) {
       LOG_WARN("failed to check need copy sstable", K(ret), KPC(tablet_restore_ctx_), K(table_key));
-      if (OB_INVALID_DATA == ret) {
-        LOG_ERROR("restore invalid data", K(ret), K(table_key), KPC(tablet_restore_ctx_));
-        abort(); // TODO@wenqu: remove this line
-      }
     } else if (table_key.is_major_sstable() && !src_tablet_meta->table_store_flag_.with_major_sstable()) {
       need_copy = false;
       SERVER_EVENT_ADD("storage_ha", "tablet_restore_task",
@@ -3056,8 +3096,6 @@ int ObTabletFinishRestoreTask::process()
     if (OB_FAIL(update_deleted_and_undefine_tablet(*ls_, tablet_restore_ctx_->tablet_id_))) {
       LOG_WARN("failed to update deleted and undefine tablet", K(ret), KPC(tablet_restore_ctx_));
     }
-  } else if (OB_FAIL(verify_table_store_())) {
-    LOG_WARN("failed to veryfy table store", K(ret), KPC(tablet_restore_ctx_));
   } else if (OB_FAIL(update_restore_status_())) {
     LOG_WARN("failed to update restore status", K(ret), KPC(tablet_restore_ctx_));
   }
@@ -3100,124 +3138,6 @@ int ObTabletFinishRestoreTask::report_restore_stat_()
   return ret;
 }
 
-int ObTabletFinishRestoreTask::verify_table_store_()
-{
-  int ret = OB_SUCCESS;
-  ObTabletHandle tablet_handle;
-  ObTablet *tablet = nullptr;
-  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
-
-  if (!ObTabletRestoreAction::need_verify_table_store(tablet_restore_ctx_->action_)) {
-    //do nothing
-  } else if (OB_FAIL(ls_->ha_get_tablet(tablet_restore_ctx_->tablet_id_, tablet_handle))) {
-    LOG_WARN("failed to get tablet", K(ret), KPC(tablet_restore_ctx_));
-  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), KPC(tablet_restore_ctx_));
-  } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
-    LOG_WARN("fail to fetch table store", K(ret));
-  } else {
-    const bool remote_table_should_not_exist = ObTabletRestoreAction::disallow_remote_table_exist(tablet_restore_ctx_->action_);
-    const ObSSTableArray &mds_sstables = table_store_wrapper.get_member()->get_mds_sstables();
-    const ObSSTableArray &minor_sstables = table_store_wrapper.get_member()->get_minor_sstables();
-    const ObSSTableArray &ddl_sstables = table_store_wrapper.get_member()->get_ddl_sstables();
-    const ObSSTableArray &major_sstables = table_store_wrapper.get_member()->get_major_sstables();
-    ObSSTableMetaHandle sst_meta_hdl;
-    ObITable *table = nullptr;
-
-    for (int64_t i = 0; OB_SUCC(ret) && i < mds_sstables.count(); ++i) {
-      table = mds_sstables[i];
-      if (OB_ISNULL(table)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table should not be NULL", K(ret), KP(table));
-      } else if (!table->is_sstable()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table is not sstable", K(ret), KPC(table));
-      } else if (table->is_remote_logical_minor_sstable()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("remote logical sstable should not exist", K(ret), KPC(table));
-      } else if (!remote_table_should_not_exist) {
-        // do nothing
-      } else if (OB_FAIL(static_cast<ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
-        LOG_WARN("failed to get new sstable meta handle", K(ret), KPC(table));
-      } else if (sst_meta_hdl.get_sstable_meta().get_basic_meta().table_backup_flag_.has_backup()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("remote table should not exist", K(ret), KPC(table));
-      }
-    }
-
-    for (int64_t i = 0; OB_SUCC(ret) && i < minor_sstables.count(); ++i) {
-      table = minor_sstables[i];
-      if (OB_ISNULL(table)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table should not be NULL", K(ret), KP(table));
-      } else if (!table->is_sstable()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table is not sstable", K(ret), KPC(table));
-      } else if (table->is_remote_logical_minor_sstable()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("remote logical sstable should not exist", K(ret), KPC(table));
-      } else if (!remote_table_should_not_exist) {
-        // do nothing
-      } else if (OB_FAIL(static_cast<ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
-        LOG_WARN("failed to get new sstable meta handle", K(ret), KPC(table));
-      } else if (sst_meta_hdl.get_sstable_meta().get_basic_meta().table_backup_flag_.has_backup()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("remote table should not exist", K(ret), KPC(table));
-      }
-    }
-
-    for (int64_t i = 0; OB_SUCC(ret) && i < ddl_sstables.count(); ++i) {
-      table = ddl_sstables[i];
-      if (OB_ISNULL(table)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table should not be NULL", K(ret), KP(table), KPC(tablet));
-      } else if (!table->is_sstable()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table is not sstable", K(ret), KPC(table), KPC(tablet));
-      } else if (table->is_remote_logical_minor_sstable()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("remote logical sstable should not exist", K(ret), KPC(table));
-      } else if (!remote_table_should_not_exist) {
-        // do nothing
-      } else if (OB_FAIL(static_cast<ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
-        LOG_WARN("failed to get new sstable meta handle", K(ret), KPC(table));
-      } else if (sst_meta_hdl.get_sstable_meta().get_basic_meta().table_backup_flag_.has_backup()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("remote table should not exist", K(ret), KPC(table));
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (!tablet->get_tablet_meta().table_store_flag_.with_major_sstable()) {
-      // do nothing
-    } else if (major_sstables.empty()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tablet should has major sstable, unexpected", K(ret), KPC(tablet));
-    } else if (!remote_table_should_not_exist) {
-      // do nothing
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < major_sstables.count(); ++i) {
-        table = major_sstables[i];
-        if (OB_ISNULL(table)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("table should not be NULL", K(ret), KP(table));
-        } else if (!table->is_sstable()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("table is not sstable", K(ret), KPC(table));
-        } else if (OB_FAIL(static_cast<ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
-          LOG_WARN("failed to get new sstable meta handle", K(ret), KPC(table));
-        } else if (sst_meta_hdl.get_sstable_meta().get_basic_meta().table_backup_flag_.has_backup()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("remote table should not exist", K(ret), KPC(table));
-        }
-      }
-    }
-  }
-
-  return ret;
-}
-
 int ObTabletFinishRestoreTask::update_restore_status_()
 {
   int ret = OB_SUCCESS;
@@ -3242,6 +3162,12 @@ int ObTabletFinishRestoreTask::update_restore_status_()
       LOG_WARN("failed to update tablet restore status", K(ret), KPC(tablet_restore_ctx_), K(tablet_restore_status));
     }
   } else {
+#ifdef ERRSIM
+    if (GCONF.errsim_backup_tablet_id == tablet->get_tablet_id().id()
+        && ObTabletRestoreStatus::REMOTE == tablet_restore_status) {
+      DEBUG_SYNC(AFTER_UPDATE_TABLET_RESTORE_STATUS);
+    }
+#endif
     FLOG_INFO("succeed to update restore", K(tablet_restore_ctx_->tablet_id_),
         K(tablet_restore_ctx_->action_), K(tablet_restore_status));
   }

@@ -54,6 +54,11 @@ class ObDirectLoadMemContext
 {
 public:
   static int init_enc_param(const ObColDesc &col_desc, share::ObEncParam &param);
+  static int init_enc_params(const common::ObIArray<share::schema::ObColDesc> &column_descs,
+                             const int64_t rowkey_column_num,
+                             const sql::ObLoadDupActionType dup_action,
+                             ObIArray<share::ObEncParam> &enc_params);
+
   typedef ObDirectLoadExternalMultiPartitionRowChunk ChunkType;
   ObDirectLoadMemContext() : datum_utils_(nullptr),
                              dml_row_handler_(nullptr),
@@ -84,6 +89,7 @@ public:
   void reset();
   int add_tables_from_table_builder(ObIDirectLoadPartitionTableBuilder &builder);
   int add_tables_from_table_compactor(ObIDirectLoadTabletTableCompactor &compactor);
+  int add_tables_from_table_array(ObDirectLoadTableHandleArray &table_array);
   int acquire_chunk(ChunkType *&chunk);
   void release_chunk(ChunkType *chunk);
 
@@ -113,6 +119,7 @@ public:
   int64_t running_dump_task_cnt_; // 还在运行的dump任务数目
   int64_t fly_mem_chunk_count_; // 当前存在的chunk数目, 包含还在写的和已经close的chunk
 
+  ObDirectLoadEasyQueue<int64_t> pre_sort_chunk_queue_; // presort任务队列
   ObDirectLoadEasyQueue<ObDirectLoadMemWorker *> mem_loader_queue_; // loader任务队列
   ObMemDumpQueue mem_dump_queue_; // dump任务队列
   ObDirectLoadEasyQueue<storage::ObDirectLoadExternalMultiPartitionRowChunk *> mem_chunk_queue_; // 已经close的chunk队列

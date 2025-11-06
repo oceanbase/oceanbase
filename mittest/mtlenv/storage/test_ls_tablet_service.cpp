@@ -1235,7 +1235,7 @@ TEST_F(TestLSTabletService, test_new_tablet_has_backup_table_with_ha_status)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = ls_tablet_service_->build_tablet_with_batch_tables(tablet_id, update_table_store_param);
-  ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
+  ASSERT_EQ(OB_NO_NEED_MERGE, ret);
 
   tablet_handle.reset();
   new_table_handle.reset();

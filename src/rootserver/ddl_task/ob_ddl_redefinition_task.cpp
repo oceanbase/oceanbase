@@ -53,12 +53,14 @@ ObDDLRedefinitionSSTableBuildTask::ObDDLRedefinitionSSTableBuildTask(
     execution_id_(execution_id), consumer_group_id_(consumer_group_id), sql_mode_(sql_mode), trace_id_(trace_id),
     parallelism_(parallelism), use_heap_table_ddl_plan_(use_heap_table_ddl_plan),
     is_mview_complete_refresh_(is_mview_complete_refresh), is_retryable_ddl_(is_retryable_ddl), mview_table_id_(mview_table_id),
-    root_service_(root_service), inner_sql_exec_addr_(inner_sql_exec_addr), data_format_version_(0)
+    root_service_(root_service), inner_sql_exec_addr_(inner_sql_exec_addr), data_format_version_(0),
+    is_alter_clustering_key_tbl_partition_by_(false)
 {
   set_retry_times(0); // do not retry
 }
 
 int ObDDLRedefinitionSSTableBuildTask::init(
+    const share::ObDDLType task_type,
     const ObTableSchema &orig_table_schema,
     const ObTableSchema &hidden_table_schema,
     const AlterTableSchema &alter_table_schema,
@@ -78,6 +80,8 @@ int ObDDLRedefinitionSSTableBuildTask::init(
   } else if (OB_FAIL(based_schema_object_infos_.assign(based_schema_object_infos))) {
     LOG_WARN("fail to assign based schema object infos", K(ret), K(based_schema_object_infos));
   } else {
+    // Initialize is_alter_clustering_key_tbl_partition_by_ based on task_type and dest_table_schema
+    is_alter_clustering_key_tbl_partition_by_ = (share::DDL_ALTER_PARTITION_BY == task_type && hidden_table_schema.is_table_with_clustering_key());
     is_inited_ = true;
   }
   return ret;
@@ -153,6 +157,7 @@ int ObDDLRedefinitionSSTableBuildTask::process()
                                                         true/*use_schema_version_hint_for_src_table*/,
                                                         &col_name_map_,
                                                         partition_names,
+                                                        is_alter_clustering_key_tbl_partition_by_,
                                                         sql_string))) {
         LOG_WARN("fail to generate build replica sql", K(ret));
       }
@@ -309,6 +314,7 @@ ObAsyncTask *ObDDLRedefinitionSSTableBuildTask::deep_copy(char *buf, const int64
       new_task->~ObDDLRedefinitionSSTableBuildTask();
       new_task = nullptr;
     } else {
+      new_task->is_alter_clustering_key_tbl_partition_by_ = is_alter_clustering_key_tbl_partition_by_;
       new_task->is_inited_ = true;
     }
   }
@@ -2991,7 +2997,7 @@ int ObDDLRedefinitionTask::check_and_cancel_complement_data_dag(bool &all_comple
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_FAIL(ObDDLUtil::check_and_cancel_single_replica_dag(this, object_id_, target_object_id_,
-            check_dag_exit_tablets_map_, check_dag_exit_retry_cnt_, true /*is_complement_data_dag*/, all_complement_dag_exit))) {
+            check_dag_exit_tablets_map_, data_format_version_, check_dag_exit_retry_cnt_, true /*is_complement_data_dag*/, all_complement_dag_exit))) {
     LOG_WARN("failed to check and cancel complement data dag", K(ret));
   }
   return ret;

@@ -13,6 +13,8 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/ob_table_load_store.h"
+#include "observer/table_load/dag/ob_table_load_dag.h"
+#include "observer/table_load/dag/ob_table_load_dag_write_channel.h"
 #include "observer/table_load/ob_table_load_pre_sort_writer.h"
 #include "observer/table_load/ob_table_load_pre_sorter.h"
 #include "observer/table_load/ob_table_load_service.h"
@@ -177,9 +179,24 @@ int ObTableLoadStore::confirm_begin()
   } else {
     LOG_INFO("store confirm begin");
     store_ctx_->heart_beat(); // init heart beat
-    if (OB_FAIL(ctx_->store_ctx_->init_write_ctx())) {
-      LOG_WARN("fail to init write ctx", KR(ret));
-    } else if (OB_FAIL(ctx_->store_ctx_->set_status_loading())) {
+    if (store_ctx_->enable_dag_) {
+      // 等待write_ctx初始化完成
+      while (OB_SUCC(ret)) {
+        if (OB_FAIL(store_ctx_->dag_exec_ctx_.dag_->check_status())) {
+          LOG_WARN("fail to check status", KR(ret));
+        } else if (ATOMIC_LOAD(&store_ctx_->write_ctx_.is_inited_)) {
+          break;
+        } else {
+          ob_usleep(10 * 1000);
+        }
+      }
+    } else {
+      if (OB_FAIL(store_ctx_->init_write_ctx())) {
+        LOG_WARN("fail to init write ctx", KR(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(store_ctx_->set_status_loading())) {
       LOG_WARN("fail to set store status loading", KR(ret));
     }
   }
@@ -290,6 +307,13 @@ int ObTableLoadStore::start_merge()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStore not init", KR(ret), KP(this));
+  } else if (store_ctx_->enable_dag_) {
+    LOG_INFO("store start merge");
+    if (OB_FAIL(ctx_->store_ctx_->write_ctx_.write_channel_->flush())) {
+      LOG_WARN("fail to flush write channel", KR(ret));
+    } else if (OB_FAIL(store_ctx_->set_status_merging())) {
+      LOG_WARN("fail to set store status merging", KR(ret));
+    }
   } else {
     LOG_INFO("store start merge");
     if (OB_FAIL(store_ctx_->set_status_merging())) {
@@ -512,6 +536,8 @@ int ObTableLoadStore::abandon_trans(const ObTableLoadTransId &trans_id)
       LOG_WARN("fail to set trans status abort", KR(ret));
     } else if (OB_FAIL(store_ctx_->abort_trans(trans))) {
       LOG_WARN("fail to abort trans", KR(ret));
+    } else if (store_ctx_->enable_dag_) {
+      // do nothing
     } else if (OB_FAIL(clean_up_trans(trans))) {
       LOG_WARN("fail to clean up trans", KR(ret));
     }
@@ -756,7 +782,7 @@ int ObTableLoadStore::write(const ObTableLoadTransId &trans_id, int32_t session_
     //  } else {
     //    ret = OB_SUCCESS;
     //  }
-    } else if (store_ctx_->write_ctx_.enable_pre_sort_) {
+    } else if (!store_ctx_->enable_dag_ && store_ctx_->write_ctx_.enable_pre_sort_) {
       ObTableLoadPreSortWriter pre_sort_writer;
       if (OB_FAIL(store_ctx_->check_status(ObTableLoadStatusType::LOADING))) {
         LOG_WARN("fail to check store ctx status", KR(ret));
@@ -903,7 +929,7 @@ int ObTableLoadStore::flush(ObTableLoadStoreTrans *trans)
     // after get store writer, avoid early commit
     else if (OB_FAIL(trans->set_trans_status_frozen())) {
       LOG_WARN("fail to freeze trans", KR(ret));
-    } else if (store_ctx_->write_ctx_.enable_pre_sort_) {
+    } else if (!store_ctx_->enable_dag_ && store_ctx_->write_ctx_.enable_pre_sort_) {
       // do nothing
     } else {
       for (int32_t session_id = 1; OB_SUCC(ret) && session_id <= param_.write_session_count_; ++session_id) {
@@ -1082,6 +1108,8 @@ int ObTableLoadStore::px_abandon_trans(ObTableLoadTableCtx *ctx, const ObTableLo
       LOG_WARN("fail to set trans status abort", KR(ret));
     } else if (OB_FAIL(store_ctx->abort_trans(trans))) {
       LOG_WARN("fail to abort trans", KR(ret));
+    } else if (ctx->store_ctx_->enable_dag_) {
+      // do nothing
     } else if (OB_FAIL(px_clean_up_trans(trans))) {
       LOG_WARN("fail to clean up trans", KR(ret));
     }

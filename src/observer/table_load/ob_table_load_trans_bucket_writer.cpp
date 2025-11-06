@@ -99,7 +99,7 @@ int ObTableLoadTransBucketWriter::init()
     const ObTableLoadSchema &schema = coordinator_ctx_->ctx_->schema_;
     is_partitioned_ = schema.is_partitioned_table_;
     column_count_ =
-      (!schema.is_table_with_hidden_pk_column_ ? schema.store_column_count_ : schema.store_column_count_ - 1);
+      (!schema.is_table_without_pk_ ? schema.store_column_count_ : schema.store_column_count_ - 1);
     if (OB_FAIL(ObSQLUtils::get_default_cast_mode(coordinator_ctx_->ctx_->session_info_, cast_mode_))) {
       LOG_WARN("fail to get_default_cast_mode", KR(ret));
     } else if (OB_FAIL(init_session_ctx_array())) {
@@ -402,11 +402,12 @@ int ObTableLoadTransBucketWriter::write_for_partitioned(SessionContext &session_
     } else if (OB_ISNULL(part_key.cells_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc memory", KR(ret));
-    } else if (OB_FAIL(coordinator_ctx_->partition_calc_.get_part_key(obj_rows.at(i), part_key))) {
-      LOG_WARN("fail to get part key", KR(ret));
+    } else if (OB_FAIL(coordinator_ctx_->partition_calc_.get_part_key(row, part_key))) {
+      LOG_WARN("fail to get part key", KR(ret), K(i), K(row));
     } else if (OB_FAIL(coordinator_ctx_->partition_calc_.cast_part_key(part_key, allocator))) {
+      LOG_INFO("cast part key error", K(ret), K(part_key), K(row));
       if (OB_FAIL(error_row_handler->handle_error_row(ret))) {
-        LOG_WARN("failed to handle error row", K(ret), K(part_key));
+        LOG_WARN("failed to handle error row", K(ret), K(part_key), K(row));
       } else {
         ret = OB_SUCCESS;
       }
@@ -428,8 +429,9 @@ int ObTableLoadTransBucketWriter::write_for_partitioned(SessionContext &session_
     bool need_write = false;
     if (OB_UNLIKELY(!partition_id.is_valid())) {
       ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
+      LOG_INFO("no partition for given value", K(ret), K(partition_id), K(part_keys.at(i)), K(row));
       if (OB_FAIL(error_row_handler->handle_error_row(ret))) {
-        LOG_WARN("failed to handle error row", K(ret), K(part_keys.at(i)));
+        LOG_WARN("failed to handle error row", K(ret), K(part_keys.at(i)), K(row));
       } else {
         ret = OB_SUCCESS;
       }

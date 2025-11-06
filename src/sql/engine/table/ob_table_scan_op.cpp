@@ -1375,6 +1375,7 @@ OB_INLINE int ObTableScanOp::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef
   das_rtdef.das_tasks_key_.init(das_tasks_key_);
   if(is_foreign_check_nested_session()) {
     das_rtdef.is_for_foreign_check_ = true;
+    das_rtdef.scan_flag_.set_for_foreign_key_check();
     if (plan_ctx->get_phy_plan()->has_for_update() && ObSQLUtils::is_iter_uncommitted_row(&ctx_)) {
       das_rtdef.scan_flag_.set_iter_uncommitted_row();
     }
@@ -1963,7 +1964,9 @@ int ObTableScanOp::inner_open()
       if (PHY_TABLE_SCAN == MY_SPEC.get_type()) {
         // heap table ddl doesn't have sample scan, report checksum directly
         report_checksum_ = true;
-      } else if (PHY_BLOCK_SAMPLE_SCAN == MY_SPEC.get_type() || PHY_ROW_SAMPLE_SCAN == MY_SPEC.get_type()) {
+      } else if (PHY_BLOCK_SAMPLE_SCAN == MY_SPEC.get_type() ||
+                 PHY_ROW_SAMPLE_SCAN == MY_SPEC.get_type() ||
+                 PHY_DDL_BLOCK_SAMPLE_SCAN == MY_SPEC.get_type()) {
         // normal ddl need sample scan first, report_cheksum_ will be marked as true when rescan
         report_checksum_ = false;
       }
@@ -3085,8 +3088,7 @@ int ObTableScanOp::cherry_pick_range_by_tablet_id(ObDASScanOp *scan_op)
   }
   if (OB_SUCC(ret) && prune_all && !input_ranges.empty()) {
     if (MY_CTDEF.enable_new_false_range_) {
-      scan_ranges.reuse();
-      ss_ranges.reuse();
+      // do nothing
     } else {
       ObNewRange false_range;
       ObNewRange whole_range;
@@ -3500,7 +3502,7 @@ int ObTableScanOp::add_ddl_column_checksum()
       // } else if (OB_FAIL(corrupt_obj(store_datum))) {
       //   LOG_WARN("failed to corrupt obj", K(ret));
 #endif
-      } else if (col_need_reshape_[i] && OB_FAIL(ObDDLUtil::reshape_ddl_column_obj(store_datum, e->obj_meta_))) {
+      } else if (col_need_reshape_[i] && e->type_ != T_FUN_SYS_EMBEDDED_VEC && OB_FAIL(ObDDLUtil::reshape_ddl_column_obj(store_datum, e->obj_meta_))) {
         LOG_WARN("reshape ddl column obj failed", K(ret));
       } else {
         column_checksum_[i] += store_datum.checksum(0);
@@ -3546,7 +3548,7 @@ int ObTableScanOp::add_ddl_column_checksum_batch(const int64_t row_count)
           // } else if (OB_FAIL(corrupt_obj(store_datum))) {
           //   LOG_WARN("failed to corrupt obj", K(ret));
 #endif
-          } else if (col_need_reshape_[i] && OB_FAIL(ObDDLUtil::reshape_ddl_column_obj(store_datum, e->obj_meta_))) {
+          } else if (col_need_reshape_[i] && e->type_ != T_FUN_SYS_EMBEDDED_VEC && OB_FAIL(ObDDLUtil::reshape_ddl_column_obj(store_datum, e->obj_meta_))) {
             LOG_WARN("reshape ddl column obj failed", K(ret));
           } else {
             column_checksum_[i] += store_datum.checksum(0);
@@ -3652,12 +3654,19 @@ int ObTableScanOp::report_ddl_column_checksum()
     }
 
     if (OB_SUCC(ret)) {
-      LOG_INFO("report ddl checksum table scan", K(tablet_id), K(checksum_items));
+      bool is_vec_tablet_rebuild = GET_MY_SESSION(ctx_)->get_ddl_info().is_vec_tablet_rebuild();
+      LOG_INFO("report ddl checksum table scan", K(tablet_id), K(checksum_items), K(is_vec_tablet_rebuild));
       uint64_t data_format_version = 0;
       int64_t snapshot_version = 0;
       share::ObDDLTaskStatus unused_task_status = share::ObDDLTaskStatus::PREPARE;
-      if (OB_FAIL(ObDDLUtil::get_data_information(MTL_ID(), MY_SPEC.plan_->get_ddl_task_id(), data_format_version, snapshot_version, unused_task_status))) {
+      if (is_vec_tablet_rebuild) {
+        if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_format_version))) {
+          LOG_WARN("fail to get min data version", K(ret), K(MY_SPEC.plan_->get_ddl_task_id()));
+        }
+      } else if (OB_FAIL(ObDDLUtil::get_data_information(MTL_ID(), MY_SPEC.plan_->get_ddl_task_id(), data_format_version, snapshot_version, unused_task_status))) {
         LOG_WARN("get ddl cluster version failed", K(ret));
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObDDLChecksumOperator::update_checksum(data_format_version, checksum_items, *GCTX.sql_proxy_))) {
         LOG_WARN("fail to update checksum", K(ret));
       } else {

@@ -69,13 +69,48 @@ int ObVecITaskExecutor::resume_task()
     ObVecIndexFieldArray filters;
     ObVecIndexTaskStatusField field;
     field.field_name_ = "tenant_id";
-    field.data_.uint_ = tenant_id_;
-
+    field.data_.uint_ = ObSchemaUtils::get_extract_tenant_id(tenant_id_, tenant_id_);
     if (OB_FAIL(filters.push_back(field))) {
       LOG_WARN("fail to push back field", K(ret));
     } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::resume_task_from_inner_table(
         tenant_id_, OB_ALL_VECTOR_INDEX_TASK_TNAME, for_update, filters, ls_,  *GCTX.sql_proxy_, task_opt))) {
       LOG_WARN("fail to resume task from inner table", K(ret), K(tenant_id_));
+    }
+  }
+  return ret;
+}
+
+int ObVecITaskExecutor::load_task_from_inner_table()
+{
+  int ret = OB_SUCCESS;
+  ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
+  ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("vector index load task not inited", KR(ret));
+  } else if (!check_operation_allow()) { // skip
+  } else if (OB_FAIL(get_index_ls_mgr(index_ls_mgr))) {
+    LOG_WARN("fail to get index ls mgr", K(ret), K(tenant_id_), K(ls_->get_ls_id()));
+  } else if (OB_ISNULL(index_ls_mgr) || OB_ISNULL(sql_proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null pointer", K(ret), K(index_ls_mgr), K(sql_proxy));
+  } else {
+    ObVecIndexFieldArray filters;
+    ObVecIndexTaskStatusField field1;
+    field1.field_name_ = "trigger_type";
+    field1.data_.uint_ = ObVecIndexAsyncTaskTriggerType::OB_VEC_TRIGGER_MANUAL;
+    ObVecIndexTaskStatusField field2;
+    field2.field_name_ = "status";
+    field2.data_.uint_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE;
+    ObVecIndexAsyncTaskOption &task_opt = index_ls_mgr->get_async_task_opt();
+
+    if (OB_FAIL(filters.push_back(field1))) {
+      LOG_WARN("fail to push back field", K(ret));
+    } else if (OB_FAIL(filters.push_back(field2))) {
+      LOG_WARN("fail to push back field", K(ret));
+    } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::resume_task_from_inner_table(tenant_id_, OB_ALL_VECTOR_INDEX_TASK_TNAME,
+        false, filters, ls_, *sql_proxy, task_opt))) {
+      LOG_WARN("fail to load task from inner table", K(ret));
     }
   }
   return ret;
@@ -108,6 +143,9 @@ int ObVecITaskExecutor::start_task()
       } else {
         switch (task_ctx->task_status_.status_) {
           case ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE:
+          case ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_RUNNING:
+          case ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_EXCHANGE:
+          case ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_CLEAN:
           {
             // lock ctx to change task status
             common::ObSpinLockGuard ctx_guard(task_ctx->lock_);
@@ -118,7 +156,7 @@ int ObVecITaskExecutor::start_task()
             } else if (OB_FAIL(task_handle.push_task(tenant_id_, ls_->get_ls_id(), task_ctx, task_opt.get_allocator()))) {
               LOG_WARN("fail to push task to thread pool", K(ret), K(tenant_id_), K(ls_->get_ls_id()), K(*task_ctx));
             } else if (FALSE_IT(task_ctx->in_thread_pool_ = true)) {
-            } else if (OB_FAIL(update_status_and_ret_code(task_ctx))) {
+            } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::update_status_and_ret_code(task_ctx))) {
               LOG_WARN("fail to update task status to inner table",
                 K(ret), K(tenant_id_), K(ls_->get_ls_id()), K(*task_ctx));
             } else if (task_ctx->sys_task_id_.is_invalid() && OB_TMP_FAIL(ObVecIndexAsyncTaskUtil::add_sys_task(task_ctx))) {
@@ -126,18 +164,10 @@ int ObVecITaskExecutor::start_task()
             }
             break;
           }
-          case ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_RUNNING:
-          {
-            if (OB_FAIL(update_status_and_ret_code(task_ctx))) {
-              LOG_WARN("fail to update task status to inner table",
-                K(ret), K(tenant_id_), K(ls_->get_ls_id()), K(*task_ctx));
-            }
-            break;
-          }
           case ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH:
           {
             // update task status in inner table
-            if (OB_FAIL(update_status_and_ret_code(task_ctx))) {
+            if (OB_FAIL(ObVecIndexAsyncTaskUtil::update_status_and_ret_code(task_ctx))) {
               LOG_WARN("fail to update task status to inner table",
                 K(ret), K(tenant_id_), K(ls_->get_ls_id()), K(*task_ctx));
             } else if (OB_FAIL(task_ctx_array.push_back(task_ctx))) {
@@ -155,63 +185,6 @@ int ObVecITaskExecutor::start_task()
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(clear_task_ctxs(task_opt, task_ctx_array))) {  // iter map and clean / add map is not allow in same foreach
       LOG_WARN("fail to clean map", K(ret), K(task_ctx_array));
-    }
-  }
-  return ret;
-}
-
-
-int ObVecITaskExecutor::update_status_and_ret_code(ObVecIndexAsyncTaskCtx *task_ctx)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("vector index load task not inited", K(ret));
-  } else if (OB_ISNULL(task_ctx)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid task ctx", K(ret), KP(task_ctx));
-  } else {
-    ObVecIndexTaskKey key(task_ctx->task_status_.tenant_id_,
-                          task_ctx->task_status_.table_id_,
-                          task_ctx->task_status_.tablet_id_.id(),
-                          task_ctx->task_status_.task_id_);
-
-    ObVecIndexFieldArray update_fields;
-    ObVecIndexTaskStatusField task_status;
-    ObVecIndexTaskStatusField ret_code;
-    ObVecIndexTaskStatusField target_scn;
-
-    task_status.field_name_ = "status";
-    task_status.data_.uint_ = task_ctx->task_status_.status_;
-    ret_code.field_name_ = "ret_code";
-    ret_code.data_.uint_ = task_ctx->task_status_.ret_code_;
-    target_scn.field_name_ = "target_scn";
-    target_scn.data_.int_ = task_ctx->task_status_.target_scn_.convert_to_ts();
-
-    if (OB_FAIL(update_fields.push_back(task_status))) {
-      LOG_WARN("fail to push back update field", K(ret), K(task_status));
-    } else if (OB_FAIL(update_fields.push_back(ret_code))) {
-      LOG_WARN("fail to push back update field", K(ret), K(ret_code));
-    } else if (OB_FAIL(update_fields.push_back(target_scn))) {
-      LOG_WARN("fail to push back update field", K(ret), K(target_scn));
-    } else {
-      ObMySQLTransaction trans;
-      if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id_))) {
-        LOG_WARN("fail start transaction", K(ret), K(tenant_id_));
-      } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::update_vec_task(
-          tenant_id_, OB_ALL_VECTOR_INDEX_TASK_TNAME, trans, key,
-          update_fields, task_ctx->task_status_.progress_info_))) {
-        LOG_WARN("fail to update task status", K(ret));
-      } else {
-        LOG_DEBUG("success to update_status_and_ret_code", KPC(task_ctx));
-      }
-      if (trans.is_started()) {
-        int tmp_ret = OB_SUCCESS;
-        if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("fail to commit trans", KR(ret), K(tmp_ret));
-          ret = OB_SUCC(ret) ? tmp_ret : ret;
-        }
-      }
     }
   }
   return ret;
@@ -265,7 +238,6 @@ int ObVecITaskExecutor::clear_task_ctxs(
   return ret;
 }
 
-
 int ObVecITaskExecutor::check_task_result(ObVecIndexAsyncTaskCtx *task_ctx)
 {
   int ret = OB_SUCCESS;
@@ -276,10 +248,12 @@ int ObVecITaskExecutor::check_task_result(ObVecIndexAsyncTaskCtx *task_ctx)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid task ctx", K(ret), KP(task_ctx));
   } else {
-    LOG_DEBUG("ObVecAsyncTaskExector::check_task_result", K(task_ctx->task_status_));
+    LOG_DEBUG("ObVecITaskExecutor::check_task_result", K(task_ctx->task_status_));
     common::ObSpinLockGuard ctx_guard(task_ctx->lock_);
-    if (task_ctx->task_status_.status_ == ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_RUNNING) {
-      LOG_WARN("ObVecAsyncTaskExector::check_task_result status=running", KPC(task_ctx));
+    if (task_ctx->task_status_.status_ == ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_RUNNING ||
+        task_ctx->task_status_.status_ == ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_EXCHANGE ||
+        task_ctx->task_status_.status_ == ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_CLEAN) {
+      LOG_DEBUG("start check vec async task result", KPC(task_ctx));
       if (task_ctx->task_status_.ret_code_ == OB_SUCCESS) {
         task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH;
         LOG_WARN("vector index async task is finish", K(ret), KPC(task_ctx));
@@ -293,8 +267,8 @@ int ObVecITaskExecutor::check_task_result(ObVecIndexAsyncTaskCtx *task_ctx)
         LOG_WARN("vector index async task is finish and not retry anymore", KR(ret), KPC(task_ctx));
       } else {
         task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE;
-        task_ctx->task_status_.ret_code_ = VEC_ASYNC_TASK_DEFAULT_ERR_CODE; // reset ret_code
-        LOG_WARN("vector index async task is finish and will do retry", KR(ret), KPC(task_ctx));
+        task_ctx->task_status_.ret_code_ = VEC_ASYNC_TASK_DEFAULT_ERR_CODE;
+        LOG_INFO("vector index async task is finish and will do retry", KR(ret), KPC(task_ctx));
         // check task is canceled
         if (task_ctx->sys_task_id_.is_valid()) {
           bool is_cancel = false;
@@ -306,10 +280,15 @@ int ObVecITaskExecutor::check_task_result(ObVecIndexAsyncTaskCtx *task_ctx)
           }
         }
       }
+      if (task_ctx->task_status_.ret_code_ == OB_SUCCESS && task_ctx->task_status_.task_type_ == OB_VECTOR_ASYNC_HYBRID_VECTOR_EMBEDDING && !task_ctx->task_status_.all_finished_) {
+        task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE;
+        task_ctx->task_status_.ret_code_ = VEC_ASYNC_TASK_DEFAULT_ERR_CODE; // reset ret_code
+      }
       // task need retry or go to end
       if (OB_SUCC(ret) &&
          (task_ctx->task_status_.status_ == ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE ||
           task_ctx->task_status_.status_ == ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH)) {
+        task_ctx->task_status_.all_finished_ = (task_ctx->task_status_.status_ == ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH);
         task_ctx->in_thread_pool_ = false; // clear old task flag
       }
     } else {
@@ -323,16 +302,26 @@ int ObVecITaskExecutor::check_task_result(ObVecIndexAsyncTaskCtx *task_ctx)
 int ObVecITaskExecutor::insert_new_task(ObVecIndexTaskCtxArray &task_ctx_array)
 {
   int ret = OB_SUCCESS;
+  common::hash::ObHashSet<uint64_t> duplicate_tablet_task;
+  ObVecIndexTaskCtxArray new_task_ctx_array;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("vector index load task not inited", K(ret));
   } else if (task_ctx_array.count() <= 0) {  // skip empty array
+  } else if (OB_FAIL(duplicate_tablet_task.create(MAX_ASYNC_TASK_PROCESSING_COUNT))) {
+    LOG_WARN("fail to create duplicate tablet task set", K(ret));
   } else {
     ObMySQLTransaction trans;
     if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id_))) {
       LOG_WARN("fail start transaction", K(ret), K(tenant_id_));
+    } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::get_duplicate_tablet_vec_task(
+        tenant_id_, OB_ALL_VECTOR_INDEX_TASK_TNAME, trans, duplicate_tablet_task))) {
+      LOG_WARN("fail to get duplicate tablet vec set", K(ret));
+    } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::get_insert_task_ctx_array(
+        task_ctx_array, new_task_ctx_array, duplicate_tablet_task))) {
+      LOG_WARN("fail to get insert task ctx array", K(ret));
     } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::batch_insert_vec_task(
-        tenant_id_, OB_ALL_VECTOR_INDEX_TASK_TNAME, trans, task_ctx_array))) {
+        tenant_id_, OB_ALL_VECTOR_INDEX_TASK_TNAME, trans, new_task_ctx_array))) {
       LOG_WARN("fail to insert vec tasks", K(ret), K(tenant_id_), K(ls_->get_ls_id()));
     }
     if (trans.is_started()) {
@@ -365,7 +354,8 @@ int ObVecITaskExecutor::clear_old_task_ctx_if_need()
       if (OB_ISNULL(task_ctx)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected nullptr", K(ret));
-      } else if (!task_ctx->in_thread_pool_) {
+      } else if (!task_ctx->in_thread_pool_ &&
+          task_ctx->task_status_.status_ == ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH) {
         // current task is finished
       } else {
         all_task_is_finish = false; // break if has unfinish task

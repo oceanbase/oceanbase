@@ -67,6 +67,7 @@ public:
                                           bool &is_single) const;
   // !!Attension only compare start key
   OB_INLINE int compare(const ObDatumRange &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret) const;
+  int deep_copy(ObDatumRange &dest, ObIAllocator &allocator) const;
   // maybe we will need serialize
   // NEED_SERIALIZE_AND_DESERIALIZE;
   TO_STRING_KV(K_(start_key), K_(end_key), K_(group_idx), K_(border_flag), K_(is_skip_prefetch));
@@ -345,6 +346,23 @@ OB_INLINE int ObDatumRange::prepare_memtable_readable(const common::ObIArray<sha
     STORAGE_LOG(WARN, "Failed to prepare start key", K(ret), K(start_key_), K(col_descs));
   } else if (OB_FAIL(end_key_.prepare_memtable_readable(col_descs, allocator))) {
     STORAGE_LOG(WARN, "Failed to prepare end key", K(ret), K(end_key_), K(col_descs));
+  }
+  return ret;
+}
+
+OB_INLINE int ObDatumRange::deep_copy(ObDatumRange &dest, ObIAllocator &allocator) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(this == &dest)) {
+    // by pass
+  } else {
+    dest.group_idx_ = group_idx_;
+    dest.border_flag_ = border_flag_;
+    if (OB_FAIL(start_key_.deep_copy(dest.start_key_, allocator))) {
+      STORAGE_LOG(WARN, "fail to deep copy start key", K(ret), K(start_key_));
+    } else if (OB_FAIL(end_key_.deep_copy(dest.end_key_, allocator))) {
+      STORAGE_LOG(WARN, "fail to deep copy end key", K(ret), K(end_key_));
+    }
   }
   return ret;
 }

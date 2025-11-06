@@ -3454,6 +3454,17 @@ int ObBackupStatus::get_backup_data_type(share::ObBackupDataType &backup_data_ty
   return ret;
 }
 
+bool ObBackupStatus::is_task_doing_status() const
+{
+  bool is_doing = false;
+  if (BACKUP_SYS_META == status_ || BACKUP_USER_META == status_ || BACKUP_META_FINISH == status_
+          || BACKUP_SYS_DATA == status_ || BACKUP_USER_DATA == status_ || BEFORE_BACKUP_LOG == status_
+          || BACKUP_LOG == status_ || BACKUP_FUSE_TABLET_META == status_ || PREPARE_BACKUP_LOG == status_) {
+    is_doing = true;
+  }
+  return is_doing;
+}
+
 OB_SERIALIZE_MEMBER(ObBackupDataType, type_);
 
 bool ObBackupTaskStatus::is_valid() const

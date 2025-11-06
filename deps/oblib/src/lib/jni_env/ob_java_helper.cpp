@@ -523,7 +523,7 @@ int JVMFunctionHelper::init_jni_env() {
   int ret = OB_SUCCESS;
   // init_jni_env can be called by multiple thread which it needs to add lock.
   LockGuard guard(lock_);
-  if (OB_FAIL(detect_java_runtime())) {
+  if (OB_FAIL(detect_java_runtime_variables())) {
     LOG_WARN("jni env is invalid", K(ret));
   } else if (OB_FAIL(load_lib(java_env_ctx_, hdfs_env_ctx_))) {
     LOG_WARN("failed to load dynamic library", K(ret));
@@ -589,7 +589,7 @@ int JVMFunctionHelper::do_init_() {
   return ret;
 }
 
-int JVMFunctionHelper::detect_java_runtime() {
+int JVMFunctionHelper::detect_java_runtime_variables() {
   int ret = OB_SUCCESS;
 
   const char *java_home = std::getenv("JAVA_HOME");

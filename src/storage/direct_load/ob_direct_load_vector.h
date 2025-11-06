@@ -14,6 +14,7 @@
 
 #include "share/datum/ob_datum.h"
 #include "share/vector/ob_i_vector.h"
+#include "common/object/ob_object.h"
 
 namespace oceanbase
 {
@@ -37,6 +38,8 @@ public:
   virtual int64_t bytes_usage(const int64_t batch_size) const = 0;
   // for check rowkey length
   virtual void sum_bytes_usage(int64_t *sum_bytes, const int64_t batch_size) const = 0;
+  // for check rowkey length with LOB columns
+  virtual int sum_lob_length(int64_t *sum_bytes, const int64_t batch_size) const = 0;
 
   virtual void reuse(const int64_t batch_size) = 0;
 
@@ -77,6 +80,9 @@ public:
                            ObDirectLoadVector *&vector);
   // 定长类型:VEC_FIXED, 变长类型:VEC_DISCRETE
   static int create_vector(const share::schema::ObColDesc &col_desc, bool is_nullable,
+                           const int64_t max_batch_size, ObIAllocator &allocator,
+                           ObDirectLoadVector *&vector);
+  static int create_vector(const common::ObObjMeta &col_type, bool is_nullable,
                            const int64_t max_batch_size, ObIAllocator &allocator,
                            ObDirectLoadVector *&vector);
 };

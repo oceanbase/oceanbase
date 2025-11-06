@@ -138,16 +138,23 @@ int ObDirectLoadVector::create_vector(const ObColDesc &col_desc, bool is_nullabl
                                       const int64_t max_batch_size, ObIAllocator &allocator,
                                       ObDirectLoadVector *&vector)
 {
+  return create_vector(col_desc.col_type_, is_nullable, max_batch_size, allocator, vector);
+}
+
+int ObDirectLoadVector::create_vector(const common::ObObjMeta &col_type, bool is_nullable,
+                                      const int64_t max_batch_size, ObIAllocator &allocator,
+                                      ObDirectLoadVector *&vector)
+{
   int ret = OB_SUCCESS;
-  const int16_t precision = col_desc.col_type_.is_decimal_int()
-                              ? col_desc.col_type_.get_stored_precision()
+  const int16_t precision = col_type.is_decimal_int()
+                              ? col_type.get_stored_precision()
                               : PRECISION_UNKNOWN_YET;
   VecValueTypeClass value_tc =
-    get_vec_value_tc(col_desc.col_type_.get_type(), col_desc.col_type_.get_scale(), precision);
+    get_vec_value_tc(col_type.get_type(), col_type.get_scale(), precision);
   const bool is_fixed = is_fixed_length_vec(value_tc);
   VectorFormat format = is_fixed ? VEC_FIXED : VEC_DISCRETE; // VEC_CONTINUOUS;
   if (OB_FAIL(create_vector(format, value_tc, is_nullable, max_batch_size, allocator, vector))) {
-    LOG_WARN("fail to create vector", KR(ret), K(col_desc), K(value_tc), K(format), K(is_nullable));
+    LOG_WARN("fail to create vector", KR(ret), K(col_type), K(value_tc), K(format), K(is_nullable));
   }
   return ret;
 }

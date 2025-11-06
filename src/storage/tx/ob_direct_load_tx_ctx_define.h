@@ -41,10 +41,11 @@ public:
   {
     flag_.reset();
   }
-  ObTxDirectLoadIncBatchInfo(const ObDDLIncLogBasic &ddl_inc_basic)
+  ObTxDirectLoadIncBatchInfo(const ObDDLIncLogBasic &ddl_inc_basic, bool is_major)
       : batch_key_(ddl_inc_basic), start_scn_(), tmp_start_scn_(), tmp_end_scn_()
   {
     flag_.reset();
+    flag_.bit_.is_major_ = is_major;
   }
 
 public:
@@ -53,7 +54,7 @@ public:
 
   bool operator==(const ObTxDirectLoadIncBatchInfo &other) const
   {
-    return batch_key_ == other.batch_key_;
+    return batch_key_ == other.batch_key_ && flag_.bit_.is_major_ == flag_.bit_.is_major_;
   }
 
 private:
@@ -61,6 +62,7 @@ private:
 
 public:
   const ObDDLIncLogBasic &get_batch_key() const { return batch_key_; }
+  bool is_major() const { return flag_.bit_.is_major_; }
 
   // void set_start_scn(const share::SCN scn) { start_scn_ = scn; }
   share::SCN get_start_scn() const { return start_scn_; }
@@ -96,7 +98,7 @@ public:
   int set_start_log_synced(); // void clear_start_log_synced() { start_scn_.set_invalid(); }
   bool is_start_log_synced() const { return start_scn_.is_valid_and_not_min(); }
 
-  TO_STRING_KV(K(batch_key_), K(start_scn_), K(tmp_start_scn_), K(tmp_end_scn_));
+  TO_STRING_KV(K(batch_key_), K(start_scn_), K(flag_.bit_),K(tmp_start_scn_), K(tmp_end_scn_));
 
 private:
   ObDDLIncLogBasic batch_key_;
@@ -110,7 +112,7 @@ private:
 
 typedef common::hash::ObHashSet<ObTxDirectLoadIncBatchInfo, common::hash::NoPthreadDefendMode>
     ObTxDirectLoadBatchSet;
-typedef common::ObSEArray<ObDDLIncLogBasic, 4> ObTxDirectLoadBatchKeyArray;
+typedef common::ObSEArray<ObTxDirectLoadIncBatchInfo, 4> ObTxDirectLoadBatchKeyArray;
 
 // hash_count  | hashkey 1 | hashkey 2 | hashkey 3 | ...
 class ObDLIBatchSet : public ObTxDirectLoadBatchSet
@@ -124,16 +126,26 @@ public:
   // }
 public:
   int before_submit_ddl_start(const ObDDLIncLogBasic &key,
-                              const share::SCN &start_scn = share::SCN::invalid_scn());
-  int submit_ddl_start_succ(const ObDDLIncLogBasic &key, const share::SCN &start_scn);
-  int sync_ddl_start_succ(const ObDDLIncLogBasic &key, const share::SCN &start_scn);
-  int sync_ddl_start_fail(const ObDDLIncLogBasic &key);
+                              const share::SCN &start_scn = share::SCN::invalid_scn(),
+                              const bool is_major = false);
+  int submit_ddl_start_succ(const ObDDLIncLogBasic &key,
+                            const share::SCN &start_scn,
+                            const bool is_major);
+  int sync_ddl_start_succ(const ObDDLIncLogBasic &key,
+                          const share::SCN &start_scn,
+                          const bool is_major);
+  int sync_ddl_start_fail(const ObDDLIncLogBasic &key, const bool is_major);
 
   int before_submit_ddl_end(const ObDDLIncLogBasic &key,
-                            const share::SCN &end_scn = share::SCN::invalid_scn());
-  int submit_ddl_end_succ(const ObDDLIncLogBasic &key, const share::SCN &end_scn);
-  int sync_ddl_end_succ(const ObDDLIncLogBasic &key, const share::SCN &end_scn);
-  int sync_ddl_end_fail(const ObDDLIncLogBasic &key);
+                            const share::SCN &end_scn = share::SCN::invalid_scn(),
+                            const bool is_major = false);
+  int submit_ddl_end_succ(const ObDDLIncLogBasic &key,
+                          const share::SCN &end_scn,
+                          const bool is_major);
+  int sync_ddl_end_succ(const ObDDLIncLogBasic &key,
+                        const share::SCN &end_scn,
+                        const bool is_major);
+  int sync_ddl_end_fail(const ObDDLIncLogBasic &key, const bool is_major);
 
   int remove_unlog_batch_info(const ObTxDirectLoadBatchKeyArray &batch_key_array);
 

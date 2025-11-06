@@ -33,7 +33,9 @@ public:
   virtual ~ObVecITaskExecutor() {}
   virtual int init(const uint64_t tenant_id, storage::ObLS *ls);
   int resume_task();
+  int load_task_from_inner_table();
   int start_task();
+  int clear_task_ctxs(ObVecIndexAsyncTaskOption &task_opt, const ObVecIndexTaskCtxArray &task_ctx_array);
   int clear_old_task_ctx_if_need();
   virtual int load_task(uint64_t &task_trace_base_num) = 0;
   virtual int check_and_set_thread_pool() = 0;
@@ -45,9 +47,7 @@ protected:
 
   int get_index_ls_mgr(ObPluginVectorIndexMgr *&index_ls_mgr);
   virtual bool check_operation_allow() = 0;
-  int update_status_and_ret_code(ObVecIndexAsyncTaskCtx *task_ctx);
   int clear_task_ctx(ObVecIndexAsyncTaskOption &task_opt, ObVecIndexAsyncTaskCtx *task_ctx);
-  int clear_task_ctxs(ObVecIndexAsyncTaskOption &task_opt, const ObVecIndexTaskCtxArray &task_ctx_array);
   int check_task_result(ObVecIndexAsyncTaskCtx *task_ctx);
   int insert_new_task(ObVecIndexTaskCtxArray &task_ctx_array);
 

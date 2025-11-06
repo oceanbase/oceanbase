@@ -83,6 +83,8 @@ private:
   int get_tablet_id(int64_t &tablet_id);
   int set_no_need_sample();
   int find_sample_scan(ObOperator *op, ObOperator *&tsc);
+  int64_t get_one_thread_sampling_count_by_parallel(const int64_t parallel);
+
 private:
   ObSortOpImpl sort_impl_;
   bool iter_end_;

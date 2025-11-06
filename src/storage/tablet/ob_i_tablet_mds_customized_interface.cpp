@@ -11,7 +11,7 @@
  */
 
 #include "ob_i_tablet_mds_customized_interface.h"
-
+#include "storage/tablet/ob_tablet_ddl_complete_mds_data.h"
 namespace oceanbase
 {
 namespace storage
@@ -114,6 +114,50 @@ int ObITabletMdsCustomizedInterface::get_latest_autoinc_seq(
       if (OB_EMPTY_RESULT != ret) {
         MDS_LOG_GET(WARN, "fail to cross ls get latest", K(lbt()));
       }
+    }
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
+int ObITabletMdsCustomizedInterface::get_ddl_complete(const share::SCN &snapshot,
+                                                      ObIAllocator &allocator,
+                                                      ObTabletDDLCompleteMdsUserData &data,
+                                                      const int64_t timeout) const
+{
+  #define PRINT_WRAPPER KR(ret), K(data)
+  MDS_TG(10_ms);
+  int ret = OB_SUCCESS;
+  if (CLICK_FAIL((get_snapshot<ObTabletDDLCompleteMdsUserDataKey, ObTabletDDLCompleteMdsUserData>(
+      ObTabletDDLCompleteMdsUserDataKey(ObTabletDDLCompleteMdsUserDataKey::DDL_COMPLETE_TX_ID),
+      ReadDDLCompleteOp(allocator, data),
+      snapshot,
+      timeout)))) {
+    if (OB_EMPTY_RESULT != ret) {
+      MDS_LOG(WARN, "fail to get snapshot", K(ret));
+    }
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
+int ObITabletMdsCustomizedInterface::get_inc_major_direct_load_info(
+    const share::SCN &snapshot,
+    ObIAllocator &allocator,
+    const ObTabletDDLCompleteMdsUserDataKey &key,
+    ObTabletDDLCompleteMdsUserData &data,
+    const int64_t timeout) const
+{
+  #define PRINT_WRAPPER KR(ret), K(data)
+  MDS_TG(10_ms);
+  int ret = OB_SUCCESS;
+  if (CLICK_FAIL((get_snapshot<ObTabletDDLCompleteMdsUserDataKey, ObTabletDDLCompleteMdsUserData>(
+      key,
+      ReadDDLCompleteOp(allocator, data),
+      snapshot,
+      timeout)))) {
+    if (OB_EMPTY_RESULT != ret) {
+      MDS_LOG(WARN, "fail to get snapshot", K(ret));
     }
   }
   return ret;

@@ -1215,6 +1215,7 @@ public:
                     const ObNameTypeClass type_class, bool &is_equal) const;
   int kill_query();
   int set_query_deadlocked();
+  inline void set_inner_flag(bool inner_flag) { inner_flag_ = inner_flag; }
 
   inline void set_inner_session()
   {
@@ -1772,10 +1773,10 @@ public:
   void set_affected_rows_is_changed(int64_t affected_rows);
   int close_all_ps_stmt();
   void destory_mem_context();
+  void set_cur_exec_ctx(ObExecContext *cur_exec_ctx) { cur_exec_ctx_ = cur_exec_ctx; }
 private:
   void destroy_contexts_map(ObContextsMap &map, common::ObIAllocator &alloc);
   inline int init_mem_context(uint64_t tenant_id);
-  void set_cur_exec_ctx(ObExecContext *cur_exec_ctx) { cur_exec_ctx_ = cur_exec_ctx; }
   inline int64_t get_truncated_sql_len(const ObString &stmt) override;
 
   static const int64_t MAX_STORED_PLANS_COUNT = 10240;

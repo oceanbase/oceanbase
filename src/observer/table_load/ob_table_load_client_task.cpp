@@ -186,7 +186,8 @@ public:
                                                                    load_param.insert_mode_,
                                                                    load_param.load_mode_,
                                                                    load_param.load_level_,
-                                                                   column_ids))) {
+                                                                   column_ids,
+                                                                   load_param.enable_inc_major_))) {
       LOG_WARN("fail to check support direct load", KR(ret));
     }
     // begin
@@ -320,6 +321,8 @@ public:
       load_param.online_sample_percent_ = online_sample_percent;
       load_param.load_level_ = tablet_ids.empty() ? ObDirectLoadLevel::TABLE
                                                   : ObDirectLoadLevel::PARTITION;
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+      load_param.enable_inc_major_ = tenant_config->_enable_inc_major_direct_load;
     }
     return ret;
   }
@@ -797,6 +800,7 @@ int ObTableLoadClientTask::set_status_error(int error_code)
     } else {
       client_status_ = ObTableLoadClientStatus::ERROR;
       error_code_ = error_code;
+      FLOG_INFO("LOAD DATA CLIENT status error", KR(error_code_), K(lbt()));
     }
   }
   return ret;
@@ -812,6 +816,7 @@ void ObTableLoadClientTask::set_status_abort(int error_code)
     if (OB_SUCCESS == error_code_) {
       error_code_ = error_code;
     }
+    FLOG_INFO("LOAD DATA CLIENT status abort", KR(error_code_), K(lbt()));
   }
 }
 

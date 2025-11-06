@@ -698,6 +698,7 @@ protected:
   void reclaim_tree_handles();
   void inner_reset();
   virtual int init_tree_handles(const int64_t count);
+  int init_index_prefetch_depth(const int64_t count);
   int get_prefetch_depth(int64_t &depth);
   int prefetch_data_block(
       const int64_t prefetch_idx,
@@ -738,6 +739,7 @@ protected:
         read_idx_(0),
         fetch_idx_(-1),
         prefetch_idx_(-1),
+        max_index_prefetch_cnt_(MAX_INDEX_PREFETCH_DEPTH),
         index_scanner_(),
         index_block_()
     {}
@@ -833,14 +835,14 @@ protected:
     OB_INLINE ObIndexBlockReadHandle &current_block_read_handle()
     {
       OB_ASSERT(0 <= fetch_idx_);
-      return index_block_read_handles_[fetch_idx_ % MAX_INDEX_PREFETCH_DEPTH];
+      return index_block_read_handles_[fetch_idx_ % max_index_prefetch_cnt_];
     }
     OB_INLINE bool is_prefetching_range(const int64_t range_idx) const
     {
       bool is_prefetching = false;
       if (prefetch_idx_ >= 0 && (fetch_idx_ < prefetch_idx_ || !reach_scanner_end())) {
-        int8_t fetch_idx = reach_scanner_end() ? (fetch_idx_ + 1) % MAX_INDEX_PREFETCH_DEPTH :
-            fetch_idx_ % MAX_INDEX_PREFETCH_DEPTH;
+        int8_t fetch_idx = reach_scanner_end() ? (fetch_idx_ + 1) % max_index_prefetch_cnt_:
+            fetch_idx_ % max_index_prefetch_cnt_;
         is_prefetching = (range_idx == index_block_read_handles_[fetch_idx].index_info_.range_idx());
       }
       return is_prefetching;
@@ -930,10 +932,29 @@ protected:
     OB_INLINE const ObMicroIndexInfo &last_prefetched_index() const
     {
       OB_ASSERT(0 <= prefetch_idx_);
-      return index_block_read_handles_[prefetch_idx_ % MAX_INDEX_PREFETCH_DEPTH].index_info_;
+      return index_block_read_handles_[prefetch_idx_ % max_index_prefetch_cnt_].index_info_;
+    }
+    OB_INLINE bool is_prefetch_full(const int64_t level, ObIndexTreeMultiPassPrefetcher &prefetcher) const
+    {
+      bool is_full = false;
+      if (1 == max_index_prefetch_cnt_) {
+        is_full = (-1 != fetch_idx_) && is_curr_read_handle_consumed(level, prefetcher);
+      } else if (max_index_prefetch_cnt_ == (prefetch_idx_ - read_idx_ + 1)) {
+        is_full = true;
+      }
+      return is_full;
+    }
+    OB_INLINE bool is_curr_read_handle_consumed(const int64_t level, ObIndexTreeMultiPassPrefetcher &prefetcher) const
+    {
+      const int64_t end_prefetched_row_idx = index_block_read_handles_[read_idx_ % max_index_prefetch_cnt_].end_prefetched_row_idx_;
+      const int32_t child_fetch_idx = (level == prefetcher.index_tree_height_ - 1)
+                                        ? prefetcher.cur_micro_data_fetch_idx_
+                                        : prefetcher.tree_handles_[level + 1].fetch_idx_;
+      return (end_prefetched_row_idx > child_fetch_idx) ||
+             ((end_prefetched_row_idx == child_fetch_idx) && !index_scanner_.end_of_block());
     }
     TO_STRING_KV(K_(is_skip_prefetch), K_(is_prefetch_end), K_(can_blockscan), K_(fetch_idx), K_(prefetch_idx),
-                 K_(read_idx), K_(index_scanner),
+                 K_(read_idx), K_(index_scanner), K_(max_index_prefetch_cnt),
                  K(ObArrayWrap<ObIndexBlockReadHandle>(index_block_read_handles_, MAX_INDEX_PREFETCH_DEPTH)));
   public:
     bool is_skip_prefetch_;
@@ -943,6 +964,7 @@ protected:
     int32_t read_idx_;
     int32_t fetch_idx_;
     int32_t prefetch_idx_;
+    int32_t max_index_prefetch_cnt_;
     ObIndexBlockRowScanner index_scanner_;
     ObMicroBlockData index_block_;
     ObIndexBlockReadHandle index_block_read_handles_[MAX_INDEX_PREFETCH_DEPTH];

@@ -41,7 +41,7 @@ public:
       const int64_t proposal_id,
       const ObLSReplica::MemberList &member_list,
       const int64_t paxos_replica_num,
-      const int64_t end_scn);
+      const bool in_sync);
   int assign(const ObLSLogStatReplica &other);
   bool is_leader() const { return LEADER == role_; }
   bool is_in_member_list(const ObLSReplica::MemberList &member_list) const;
@@ -53,10 +53,10 @@ public:
   int64_t get_proposal_id() const { return proposal_id_; }
   const ObLSReplica::MemberList &get_member_list() const { return member_list_; }
   int64_t get_paxos_replica_num() const { return paxos_replica_num_; }
-  int64_t get_end_scn() const { return end_scn_; }
+  bool get_in_sync() const { return in_sync_; }
 
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(server), K_(role),
-      K_(proposal_id), K_(member_list), K_(paxos_replica_num), K_(end_scn));
+      K_(proposal_id), K_(member_list), K_(paxos_replica_num), K_(in_sync));
 private:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -65,7 +65,7 @@ private:
   int64_t proposal_id_;
   ObLSReplica::MemberList member_list_;
   int64_t paxos_replica_num_;
-  int64_t end_scn_; // used to check log in sync
+  bool in_sync_; // used to check log in sync
 };
 
 typedef common::ObSEArray<ObLSLogStatReplica, OB_DEFAULT_REPLICA_NUM> ObLSLogStatReplicaArray;

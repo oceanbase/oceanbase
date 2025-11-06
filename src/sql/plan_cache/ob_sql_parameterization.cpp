@@ -2845,7 +2845,9 @@ bool ObSqlParameterization::is_vector_index_query(const ParseNode *tree)
             ObString func_name(curr->str_len_, curr->str_value_);
             bret = func_name.case_compare("l2_distance") == 0
                    || func_name.case_compare("negative_inner_product") == 0
-                   || func_name.case_compare("cosine_distance") == 0;
+                   || func_name.case_compare("cosine_distance") == 0
+                   || func_name.case_compare("semantic_distance") == 0
+                   || func_name.case_compare("semantic_vector_distance") == 0;
           }
         }
       }

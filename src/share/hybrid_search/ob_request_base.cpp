@@ -224,12 +224,15 @@ int ObReqOpExpr::need_parentheses_for_sub_expr(const ObReqOpExpr &expr, int expr
   return ret;
 }
 
-void ObReqOpExpr::simplify_recursive() {
+void ObReqOpExpr::pullup_recursive() {
   for (uint64_t i = 0; i < params.count(); i++) {
     ObReqOpExpr *op_expr = dynamic_cast<ObReqOpExpr*>(params.at(i));
     if (OB_NOT_NULL(op_expr)) {
-      op_expr->simplify_recursive();
+      op_expr->pullup_recursive();
       if (op_expr->params.count() == 1 && IS_SIMPLIFIABLE_OPERATOR(op_expr->get_op_type())) {
+        if (!op_expr->alias_name.empty()) {
+          op_expr->params.at(0)->set_alias(op_expr->alias_name);
+        }
         params.at(i) = op_expr->params.at(0);
       }
     }
@@ -319,6 +322,9 @@ int ObReqColumnExpr::translate_expr(ObObjPrintParams &print_params_, char *buf_,
     DATA_PRINTF(".");
   }
   PRINT_IDENT(expr_name);
+  if (OB_SUCC(ret) && need_alias && translate_alias(print_params_, buf_, buf_len_, pos_)) {
+    LOG_WARN("fail to translate expr alias", K(ret));
+  }
   return ret;
 }
 

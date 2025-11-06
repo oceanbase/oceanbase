@@ -51,6 +51,10 @@ inline bool is_medium_merge(const ObMergeType &merge_type)
 {
   return MEDIUM_MERGE == merge_type;
 }
+inline bool is_inc_major_merge(const ObMergeType &merge_type)
+{
+  return INC_MAJOR_MERGE == merge_type;
+}
 inline bool is_convert_co_major_merge(const ObMergeType &merge_type)
 {
   return CONVERT_CO_MAJOR_MERGE == merge_type;
@@ -94,6 +98,10 @@ inline bool is_major_or_meta_merge_type(const ObMergeType &merge_type)
 inline bool is_backfill_tx_merge(const ObMergeType &merge_type)
 {
   return BACKFILL_TX_MERGE == merge_type;
+}
+inline bool need_collect_uncommit_tx_info(const ObMergeType &merge_type)
+{
+  return is_mini_merge(merge_type) || is_minor_merge_type(merge_type);
 }
 inline bool is_mds_mini_merge(const ObMergeType &merge_type)
 {

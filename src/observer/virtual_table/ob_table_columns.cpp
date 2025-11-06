@@ -1341,7 +1341,7 @@ int ObTableColumns::is_primary_key(const ObTableSchema &table_schema,
     LOG_WARN("check if rowkey column failed.", K(ret), "column_id",
              column_schema.get_column_id(), K(rowkey_info));
   } else {
-    is_pri |= column_schema.is_heap_table_primary_key_column();
+    is_pri = (is_pri && !column_schema.is_heap_table_clustering_key_column()) || column_schema.is_heap_table_primary_key_column();
   }
   return ret;
 }

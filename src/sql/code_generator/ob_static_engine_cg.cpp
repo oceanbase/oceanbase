@@ -99,6 +99,7 @@
 #include "sql/engine/window_function/ob_window_function_vec_op.h"
 #include "sql/engine/table/ob_row_sample_scan_op.h"
 #include "sql/engine/table/ob_block_sample_scan_op.h"
+#include "sql/engine/table/ob_ddl_block_sample_scan_op.h"
 #include "sql/engine/table/ob_table_scan_with_index_back_op.h"
 #include "sql/executor/ob_direct_receive_op.h"
 #include "sql/engine/basic/ob_temp_table_access_op.h"
@@ -140,6 +141,7 @@
 #include "sql/engine/basic/ob_values_table_access_op.h"
 #include "sql/engine/direct_load/ob_table_direct_insert_op.h"
 #include "sql/code_generator/ob_enable_rich_format_flags.h"
+#include "share/ob_heap_organized_table_util.h"
 
 namespace oceanbase
 {
@@ -465,6 +467,7 @@ int ObStaticEngineCG::check_expr_columnlized(const ObRawExpr *expr)
              // T_TABLET_AUTOINC_NEXTVAL is the hidden_pk for heap_table
              // this column is an pseudo column
              || T_TABLET_AUTOINC_NEXTVAL == expr->get_expr_type()
+             || T_PSEUDO_HIDDEN_CLUSTERING_KEY == expr->get_expr_type()
              || T_PSEUDO_ROW_TRANS_INFO_COLUMN == expr->get_expr_type()
              || expr->is_set_op_expr()
              || (expr->is_sys_func_expr() && 0 == expr->get_param_count()) // sys func with no param
@@ -1057,7 +1060,8 @@ int ObStaticEngineCG::generate_spec_final(ObLogicalOperator &op, ObOpSpec &spec)
 
   if (PHY_TABLE_SCAN == spec.type_ ||
       PHY_ROW_SAMPLE_SCAN == spec.type_ ||
-      PHY_BLOCK_SAMPLE_SCAN == spec.type_) {
+      PHY_BLOCK_SAMPLE_SCAN == spec.type_ ||
+      PHY_DDL_BLOCK_SAMPLE_SCAN == spec.type_) {
     ObTableScanSpec &tsc_spec = static_cast<ObTableScanSpec&>(spec);
     ObDASScanCtDef &scan_ctdef = tsc_spec.tsc_ctdef_.scan_ctdef_;
     ObDASScanCtDef *lookup_ctdef = tsc_spec.tsc_ctdef_.lookup_ctdef_;
@@ -3428,6 +3432,14 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableReplaceSpec &spec, c
     OZ(check_only_one_unique_key(*log_plan, table_schema, spec.only_one_unique_key_));
     uint64_t ft_col_id = OB_INVALID_ID;
     OZ(table_schema->get_fulltext_column_ids(spec.doc_id_col_id_, ft_col_id));
+
+    // set hidden clustering key column id if exists
+    if (OB_FAIL(ret)) {
+    } else if (table_schema->is_table_with_clustering_key()) {
+      uint64_t hidden_ck_col_id = OB_INVALID_ID;
+      OZ(share::ObHeapTableUtil::get_hidden_clustering_key_column_id(*table_schema, hidden_ck_col_id));
+      OX(spec.hidden_ck_col_id_ = hidden_ck_col_id);
+    }
 
     // 记录当前主表的rowkey的column_ref表达式和column_id
     CK(primary_dml_info->column_exprs_.count() == primary_dml_info->column_convert_exprs_.count());
@@ -5827,6 +5839,12 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
       ObBlockSampleScanSpec &sample_scan = static_cast<ObBlockSampleScanSpec &>(spec);
       sample_scan.set_sample_info(op.get_sample_info());
     }
+
+    if (OB_SUCC(ret) && op.is_sample_scan()
+        && op.get_sample_info().is_ddl_block_sample()) {
+      ObDDLBlockSampleScanSpec &sample_scan = static_cast<ObDDLBlockSampleScanSpec &>(spec);
+      sample_scan.set_sample_info(op.get_sample_info());
+    }
   }
 
   if (OB_SUCC(ret) && spec.report_col_checksum_) {
@@ -7657,6 +7675,14 @@ int ObStaticEngineCG::generate_spec(ObLogTableScan &op, ObBlockSampleScanSpec &s
   return ret;
 }
 
+int ObStaticEngineCG::generate_spec(ObLogTableScan &op, ObDDLBlockSampleScanSpec &spec, const bool)
+{
+  int ret = OB_SUCCESS;
+  OZ(generate_normal_tsc(op, spec));
+
+  return ret;
+}
+
 int ObStaticEngineCG::generate_spec(ObLogTableScan &op, ObTableScanWithIndexBackSpec &spec,
                                     const bool)
 {
@@ -7757,6 +7783,11 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObPxMultiPartSSTableInsertS
     }
   }
   return ret;
+}
+
+int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObPxMultiPartSSTableInsertVecSpec &spec, const bool in_root_job)
+{
+  return generate_spec(op, static_cast<ObPxMultiPartSSTableInsertSpec &>(spec), in_root_job);
 }
 
 int ObStaticEngineCG::generate_spec(ObLogUpdate &op,
@@ -10107,6 +10138,8 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
           type = PHY_ROW_SAMPLE_SCAN;
         } else if (op.get_sample_info().is_block_sample()){
           type = PHY_BLOCK_SAMPLE_SCAN;
+        } else if (op.get_sample_info().is_ddl_block_sample()) {
+          type = PHY_DDL_BLOCK_SAMPLE_SCAN;
         }
       } else if (op.get_is_multi_part_table_scan()) {
         type = PHY_MULTI_PART_TABLE_SCAN;
@@ -10284,6 +10317,26 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
           type = PHY_TABLE_DIRECT_INSERT;
         } else if (op.get_plan()->get_optimizer_context().get_session_info()->get_ddl_info().is_ddl()) {
           type = PHY_PX_MULTI_PART_SSTABLE_INSERT;
+          const TableItem *insert_table_item = op.get_plan()->get_stmt()->get_table_item(0);
+          const ObSqlSchemaGuard *schema_guard = op.get_plan()->get_optimizer_context().get_sql_schema_guard();
+          if (OB_NOT_NULL(insert_table_item) && OB_NOT_NULL(schema_guard)) {
+            const int64_t ddl_table_id = insert_table_item->ddl_table_id_;
+            const ObTableSchema *table_schema = nullptr;
+            bool is_column_store = false;
+            int tmp_ret = OB_SUCCESS;
+            if (OB_TMP_FAIL(schema_guard->get_table_schema(ddl_table_id, table_schema))) {
+              LOG_WARN("fail to get index schema", K(tmp_ret), K(ddl_table_id));
+            } else if (OB_NOT_NULL(table_schema)) {
+              if (OB_TMP_FAIL(table_schema->get_is_column_store(is_column_store))) {
+                LOG_WARN("get is column store failed", K(tmp_ret), K(ddl_table_id), K(is_column_store));
+              } else if (is_column_store
+                  && !table_schema->is_vec_index() // not vector index
+                  && !table_schema->is_rowkey_doc_id() // not rowkey doc
+                  && (OB_INVALID_ID == table_schema->get_autoinc_column_id() || table_schema->get_autoinc_column_id() <= 0)) { // not table autoinc
+                type = PHY_VEC_PX_MULTI_PART_SSTABLE_INSERT;
+              }
+            }
+          }
         } else {
           type = PHY_PX_MULTI_PART_INSERT;
         }
@@ -10777,7 +10830,7 @@ int ObStaticEngineCG::check_only_one_unique_key(const ObLogPlan& log_plan,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(schema_guard), K(table_schema));
   } else {
-    if (table_schema->is_table_with_pk()) {
+    if (table_schema->is_index_organized_table_with_pk()) {
       ++unique_index_cnt;
     }
     if (OB_FAIL(table_schema->get_simple_index_infos(simple_index_infos))) {
@@ -11251,10 +11304,10 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op,
     spec.plan_->set_enable_append(direct_load_optimizer_ctx.use_direct_load());
     spec.plan_->set_enable_inc_direct_load(ObDirectLoadMethod::is_incremental(direct_load_optimizer_ctx.load_method_));
     spec.plan_->set_enable_replace(direct_load_optimizer_ctx.insert_mode_ == ObDirectLoadInsertMode::INC_REPLACE);
-    spec.plan_->set_online_sample_percent(op.get_plan()->get_optimizer_context()
-                                                         .get_exec_ctx()->get_table_direct_insert_ctx()
-                                                         .get_online_sample_percent());
+    spec.plan_->set_online_sample_percent(direct_load_optimizer_ctx.online_sample_percent_);
+    spec.plan_->set_is_online_gather_statistics(direct_load_optimizer_ctx.is_online_gather_statistics_);
     spec.plan_->set_direct_load_need_sort(direct_load_optimizer_ctx.need_sort_);
+    spec.plan_->set_enable_inc_major(direct_load_optimizer_ctx.enable_inc_major_);
     // check is insert overwrite
     bool is_insert_overwrite = false;
     ObExecContext *exec_ctx = NULL;

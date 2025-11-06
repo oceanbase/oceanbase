@@ -49,6 +49,14 @@ int ObDDLIncLogBasic::init(
   } else if (OB_UNLIKELY(!is_incremental_direct_load(direct_load_type))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("only support incremental direct load type", KR(ret), K(direct_load_type));
+  } else if (is_incremental_major_direct_load(direct_load_type)
+          && OB_UNLIKELY(!trans_id.is_valid()
+                      || !seq_no.is_valid()
+                      || (snapshot_version <= 0)
+                      || (data_format_version < DATA_VERSION_4_4_1_0))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments for incremental major direct load", KR(ret),
+        K(direct_load_type), K(trans_id), K(seq_no), K(snapshot_version), K(data_format_version));
   } else {
     tablet_id_ = tablet_id;
     lob_meta_tablet_id_ = lob_meta_tablet_id;
@@ -67,6 +75,9 @@ uint64_t ObDDLIncLogBasic::hash() const
   uint64_t hash_val = 0;
   hash_val = common::murmurhash(&tablet_id_, sizeof(tablet_id_), hash_val);
   hash_val = common::murmurhash(&lob_meta_tablet_id_, sizeof(lob_meta_tablet_id_), hash_val);
+  hash_val = common::murmurhash(&direct_load_type_, sizeof(direct_load_type_), hash_val);
+  hash_val = common::murmurhash(&trans_id_, sizeof(trans_id_), hash_val);
+  hash_val = common::murmurhash(&seq_no_, sizeof(seq_no_), hash_val);
   return hash_val;
 }
 
@@ -79,6 +90,10 @@ int ObDDLIncLogBasic::hash(uint64_t &hash_val) const
 OB_SERIALIZE_MEMBER(ObDDLIncLogBasic, tablet_id_, lob_meta_tablet_id_, direct_load_type_,
                     trans_id_, seq_no_, snapshot_version_, data_format_version_);
 
+/**
+ * ObDDLIncStartLog
+ */
+
 ObDDLIncStartLog::ObDDLIncStartLog()
   : log_basic_(),
     has_cs_replica_(false),
@@ -90,6 +105,45 @@ ObDDLIncStartLog::ObDDLIncStartLog()
 
 ObDDLIncStartLog::~ObDDLIncStartLog()
 {
+  reset();
+}
+
+int ObDDLIncStartLog::init(
+    const ObDDLIncLogBasic &log_basic,
+    const bool has_cs_replica,
+    const ObStorageSchema *storage_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!log_basic.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(log_basic));
+  } else if (is_incremental_major_direct_load(log_basic.get_direct_load_type())
+          && (OB_ISNULL(storage_schema) || !storage_schema->is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments for incremental major direct load", KR(ret),
+        K(log_basic), KPC(storage_schema));
+  } else if (OB_FAIL(set_storage_schema(*storage_schema))) {
+    LOG_WARN("failed to set storage schema", KR(ret), KPC(storage_schema));
+  } else {
+    log_basic_ = log_basic;
+    has_cs_replica_ = has_cs_replica;
+  }
+  return ret;
+}
+
+bool ObDDLIncStartLog::is_valid() const
+{
+  return log_basic_.is_valid()
+      && (is_incremental_minor_direct_load(log_basic_.get_direct_load_type())
+          || (is_incremental_major_direct_load(log_basic_.get_direct_load_type())
+              && OB_NOT_NULL(storage_schema_)
+              && storage_schema_->is_valid()));
+}
+
+void ObDDLIncStartLog::reset()
+{
+  log_basic_.reset();
+  has_cs_replica_ = false;
   if (OB_NOT_NULL(storage_schema_)) {
     storage_schema_->~ObStorageSchema();
     storage_schema_ = nullptr;
@@ -97,16 +151,24 @@ ObDDLIncStartLog::~ObDDLIncStartLog()
   allocator_.reset();
 }
 
-int ObDDLIncStartLog::init(const ObDDLIncLogBasic &log_basic)
+int ObDDLIncStartLog::set_storage_schema(const ObStorageSchema &other)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!log_basic.is_valid())) {
+  char *buf = nullptr;
+  if (OB_UNLIKELY(!other.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(log_basic));
+    LOG_WARN("invalid storage schema", KR(ret), K(other));
+  } else if (OB_NOT_NULL(storage_schema_)) {
+  } else if (OB_ISNULL(buf = static_cast<char*>(allocator_.alloc(sizeof(ObStorageSchema))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate buf", KR(ret), KP(buf));
   } else {
-    log_basic_ = log_basic;
-    has_cs_replica_ = false;
-    storage_schema_ = nullptr;
+    storage_schema_ = new (buf) ObStorageSchema();
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(storage_schema_->assign(allocator_, other))) {
+    LOG_WARN("failed to assign storage schema", KR(ret), K(other));
   }
   return ret;
 }
@@ -142,6 +204,7 @@ OB_DEF_SERIALIZE(ObDDLIncStartLog)
 OB_DEF_DESERIALIZE(ObDDLIncStartLog)
 {
   int ret = OB_SUCCESS;
+  reset();
   LST_DO_CODE(OB_UNIS_DECODE, log_basic_, has_cs_replica_);
   if (OB_FAIL(ret)) {
   } else if (is_incremental_major_direct_load(log_basic_.get_direct_load_type())) {
@@ -162,12 +225,16 @@ OB_DEF_DESERIALIZE(ObDDLIncStartLog)
   return ret;
 }
 
+/**
+ * ObDDLIncCommitLog
+ */
+
 ObDDLIncCommitLog::ObDDLIncCommitLog()
   : log_basic_(), is_rollback_(false)
 {
 }
 
-int ObDDLIncCommitLog::init(const ObDDLIncLogBasic &log_basic)
+int ObDDLIncCommitLog::init(const ObDDLIncLogBasic &log_basic, const bool is_rollback)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!log_basic.is_valid())) {
@@ -175,8 +242,8 @@ int ObDDLIncCommitLog::init(const ObDDLIncLogBasic &log_basic)
     LOG_WARN("invalid argument", KR(ret), K(log_basic));
   } else {
     log_basic_ = log_basic;
+    is_rollback_ = is_rollback;
   }
-
   return ret;
 }
 

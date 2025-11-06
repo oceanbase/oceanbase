@@ -45,6 +45,10 @@ public:
                      const ObTableLoadDDLParam &ddl_param,
                      const ObIArray<table::ObTableLoadLSIdAndPartitionId> &ls_part_ids,
                      const ObIArray<table::ObTableLoadLSIdAndPartitionId> &target_ls_part_ids);
+  static int execute_for_dag(const uint64_t &table_id,
+                             const ObTableLoadDDLParam &ddl_param,
+                             const ObIArray<table::ObTableLoadLSIdAndPartitionId> &ls_part_ids,
+                             const ObIArray<table::ObTableLoadLSIdAndPartitionId> &target_ls_part_ids);
 private:
   ObTableLoadPartitionLocation partition_location_;
   ObTableLoadPartitionLocation target_partition_location_;

@@ -391,12 +391,11 @@ int ObGranuleUtil::split_granule_for_lake_table(ObExecContext &exec_ctx,
           if (OB_ISNULL(scan_task)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get null file");
-          } else {
-            scan_task->file_id_ = j;
-            scan_task->part_id_ = tablet_loc->partition_id_;
-          }
-
-          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(ObExternalTableUtils::convert_lake_table_scan_task(
+                         j,
+                         tablet_loc->partition_id_,
+                         scan_task))) {
+            LOG_WARN("failed to convert lake table scan task", K(ret));
           } else if (OB_FAIL(granule_tablets.push_back(tablet_loc))) {
             LOG_WARN("failed to push basck tablet loc");
           } else if (OB_FAIL(granule_tasks.push_back(scan_task))) {

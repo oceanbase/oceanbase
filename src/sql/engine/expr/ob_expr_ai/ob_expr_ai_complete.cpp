@@ -263,8 +263,8 @@ int ObExprAIComplete::get_vector_params(const ObExpr &expr,
       if (OB_FAIL(ObTextStringHelper::read_real_string_data(
         temp_allocator,
         config_vec,
-        expr.args_[3]->datum_meta_,
-        expr.args_[3]->obj_meta_.has_lob_header(),
+        expr.args_[2]->datum_meta_,
+        expr.args_[2]->obj_meta_.has_lob_header(),
         config_str,
         0))) {
         LOG_WARN("fail to get real string data", K(ret), K(config_str));
@@ -668,7 +668,7 @@ int ObExprAIComplete::cg_expr(ObExprCGCtx &expr_cg_ctx,
 
   if (OB_SUCC(ret)) {
     rt_expr.eval_func_ = ObExprAIComplete::eval_ai_complete;
-    rt_expr.eval_vector_func_ = ObExprAIComplete::eval_ai_complete_vector;
+    //rt_expr.eval_vector_func_ = ObExprAIComplete::eval_ai_complete_vector;
   }
   return ret;
 }

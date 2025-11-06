@@ -59,7 +59,8 @@ class ObAllVirtualTableMgr : public common::ObVirtualTableScannerIterator,
     DATA_CHECKSUM,
     TABLE_FLAG,
     REC_SCN,
-    ROW_COUNT
+    ROW_COUNT,
+    UNCOMMIT_TX_INFO
   };
   enum INDEX_KEY_ID
   {
@@ -103,6 +104,7 @@ private:
   storage::ObTableStoreIterator table_store_iter_;
   void *iter_buf_;
   INDEX_TYPE index_type_;
+  char uncommit_tx_info_buf_[common::MAX_UNCOMMIT_TX_INFO_LENGTH];
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualTableMgr);
 };

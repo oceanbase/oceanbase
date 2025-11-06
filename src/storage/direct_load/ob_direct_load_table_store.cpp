@@ -29,14 +29,24 @@ ObDirectLoadTableStore::ObDirectLoadTableStore()
 
 ObDirectLoadTableStore::~ObDirectLoadTableStore()
 {
+  reset();
+}
+
+void ObDirectLoadTableStore::reset()
+{
   clear();
   tablet_table_map_.destroy();
 }
 
-void ObDirectLoadTableStore::clear()
+void ObDirectLoadTableStore::reuse()
 {
   table_data_desc_.reset();
   table_type_ = ObDirectLoadTableType::INVALID_TABLE_TYPE;
+  clear();
+}
+
+void ObDirectLoadTableStore::clear()
+{
   FOREACH(it, tablet_table_map_)
   {
     ObDirectLoadTableHandleArray *table_handle_array = it->second;
@@ -59,7 +69,8 @@ int ObDirectLoadTableStore::init()
 
 bool ObDirectLoadTableStore::is_valid() const
 {
-  return table_data_desc_.is_valid() && ObDirectLoadTableType::is_type_valid(table_type_);
+  return tablet_table_map_.created() && table_data_desc_.is_valid() &&
+         ObDirectLoadTableType::is_type_valid(table_type_);
 }
 
 int ObDirectLoadTableStore::get_tablet_tables(const ObTabletID &tablet_id,

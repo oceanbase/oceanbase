@@ -536,6 +536,7 @@ int ObTabletSplitCtx::prepare_index_builder(
             dst_tablet_id, merge_type, snapshot_version, param.data_format_version_,
             tablet_handle.get_obj()->get_tablet_meta().micro_index_clustered_,
             transfer_epoch,
+            0/*concurrent_cnt*/,
             split_reorganization_scn, sstable->get_end_scn(),
             nullptr/*cg_schema*/,
             0/*table_cg_idx*/,
@@ -642,8 +643,6 @@ int ObIDataSplitDag::alloc_and_add_common_task(
     LOG_WARN("alloc task failed", K(ret));
   } else if (OB_FAIL(finish_task->init())) {
     LOG_WARN("init failed", K(ret));
-  } else if (OB_FAIL(add_task(*finish_task))) {
-    LOG_WARN("add task failed", K(ret));
 #ifdef OB_BUILD_SHARED_STORAGE
   } else if (GCTX.is_shared_storage_mode()) {
     ObSplitDownloadSSTableTask *download_sstable_task = nullptr;
@@ -661,13 +660,15 @@ int ObIDataSplitDag::alloc_and_add_common_task(
         dest_reorg_scn,
         split_start_scn))) {
       LOG_WARN("init failed", K(ret));
-    } else if (OB_FAIL(add_task(*download_sstable_task))) {
-      LOG_WARN("add task failed", K(ret));
     } else if (nullptr != last_task
         && OB_FAIL(last_task->add_child(*download_sstable_task))) {
       LOG_WARN("add child task failed", K(ret));
     } else if (OB_FAIL(download_sstable_task->add_child(*finish_task))) {
       LOG_WARN("add child task failed", K(ret));
+    } else if (OB_FAIL(add_task(*download_sstable_task))) {
+      LOG_WARN("add task failed", K(ret));
+    } else if (OB_FAIL(add_task(*finish_task))) {
+      LOG_WARN("add task failed", K(ret));
     }
 #endif
   } else {
@@ -676,6 +677,8 @@ int ObIDataSplitDag::alloc_and_add_common_task(
       LOG_WARN("unexpected null last", K(ret), KPC(last_task));
     } else if (OB_FAIL(last_task->add_child(*finish_task))) {
       LOG_WARN("add child task failed", K(ret));
+    } else if (OB_FAIL(add_task(*finish_task))) {
+      LOG_WARN("add task failed", K(ret));
     }
   }
   return ret;
@@ -733,8 +736,6 @@ int ObTabletSplitDag::create_first_task()
     LOG_WARN("unexpected nullptr task", K(ret));
   } else if (OB_FAIL(merge_task->init(param_, context_))) {
     LOG_WARN("init merge task failed", K(ret));
-  } else if (OB_FAIL(add_task(*merge_task))) {
-    LOG_WARN("add task failed", K(ret));
   } else if (OB_FAIL(alloc_and_add_common_task(
       merge_task/*last_task*/,
       context_.ls_rebuild_seq_,
@@ -767,6 +768,10 @@ int ObTabletSplitDag::create_first_task()
         LOG_WARN("add child task failed", K(ret));
       }
     }
+    // child task is recommended to be added after all the other tasks are added.
+    if (FAILEDx(add_task(*merge_task))) {
+      LOG_WARN("add task failed", K(ret));
+    }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < source_sstables.count(); i++) {
       if (OB_ISNULL(source_sstables.at(i))) {
@@ -790,7 +795,12 @@ int ObTabletSplitDag::create_first_task()
         }
       }
     }
+    // child task is recommended to be added after all the other tasks are added.
+    if (FAILEDx(add_task(*merge_task))) {
+      LOG_WARN("add task failed", K(ret));
+    }
   }
+
   FLOG_INFO("create first task finish", K(ret),
 #ifdef OB_BUILD_SHARED_STORAGE
     K(context_.is_data_split_executor_),
@@ -1363,6 +1373,7 @@ int ObTabletSplitWriteTask::prepare_macro_block_writer(
                                       param_->data_format_version_,
                                       micro_index_clustered,
                                       transfer_epoch,
+                                      0/*concurrent cnt*/,
                                       split_reorganization_scn,
                                       sstable_->get_end_scn(),
                                       nullptr/*cg_schema*/,

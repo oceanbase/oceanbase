@@ -437,7 +437,7 @@ void ObMultiVersionSSTableTest::reset_writer(
   SCN end_scn;
   end_scn.convert_for_tx(snapshot_version);
   ASSERT_EQ(OB_SUCCESS, data_desc_.init(false/*is_ddl*/, table_schema_, ls_id, tablet_id, merge_type, snapshot_version, DATA_VERSION_4_1_0_0,
-                                        table_schema_.get_micro_index_clustered(), 0 /*transfer_seq*/, reorganization_scn, end_scn));
+                                        table_schema_.get_micro_index_clustered(), 0 /*transfer_seq*/, 0/*concurrent_cnt*/, reorganization_scn, end_scn));
   void *builder_buf = allocator_.alloc(sizeof(ObSSTableIndexBuilder));
   root_index_builder_ = new (builder_buf) ObSSTableIndexBuilder(false /* not need writer buffer*/);
   ASSERT_NE(nullptr, root_index_builder_);
@@ -564,6 +564,12 @@ void ObMultiVersionSSTableTest::prepare_data_end(
   param.rec_scn_ = table_key_.get_start_scn();
   if (table_type == ObITable::MAJOR_SSTABLE) {
     ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_));
+  }
+
+  if (ObITable::is_inc_major_type_sstable(table_type)) {
+    ObUncommitTxDesc tx_seq_key(10, 1);
+    param.uncommit_tx_info_.reuse();
+    OK(param.uncommit_tx_info_.tx_infos_.push_back(tx_seq_key));
   }
 
   if (table_type == ObITable::COLUMN_ORIENTED_SSTABLE) {

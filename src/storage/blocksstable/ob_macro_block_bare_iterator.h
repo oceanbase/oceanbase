@@ -15,6 +15,7 @@
 
 #include "ob_macro_block_reader.h"
 #include "ob_micro_block_reader_helper.h"
+#include "storage/blocksstable/index_block/ob_index_block_row_struct.h"
 
 
 namespace oceanbase
@@ -31,13 +32,24 @@ public:
   void reset();
   void reuse();
 
-  // whole macro block scan
+  // whole macro block scan, used for:
+  //     1.index macro block
+  //     2.data macro block without n-1 index micro block
+  //     3.data macro block with n-1 index micro block, but can not get micro_index_data
   int open(
       const char *macro_block_buf,
       const int64_t macro_block_buf_size,
       const bool need_check_data_integrity = false,
       const bool need_deserialize = true);
-  // scan by range
+
+  // whole macro block scan, used for data macro block with n-1 index micro block
+  //      Only after calling this interface can the get_next function retrieve micro_index_data.
+  int open_for_whole_range(
+      const char *macro_block_buf,
+      const int64_t macro_block_buf_size,
+      const bool need_deserialize);
+
+  // scan by range, used for data macro block with n-1 index micro block
   int open(
       const char *macro_block_buf,
       const int64_t macro_block_buf_size,
@@ -51,13 +63,19 @@ public:
   int get_curr_start_row_offset(int64_t &row_offset);
   int get_next_micro_block_data(ObMicroBlockData &micro_block);
   int get_next_micro_block_data_and_offset(ObMicroBlockData &micro_block, int64_t &offset);
+  // get index micro block when whole macro block scan
   int get_next_micro_block_desc(ObMicroBlockDesc &micro_block_desc,
                                 const ObDataStoreDesc &data_store_desc,
                                 ObIAllocator &allocator,
                                 const bool need_check_sum);
+  // get uncompressed data micro block and raw micro block filled in macro block when whole macro block scan
+  int get_next_micro_block_desc(ObMicroBlockDesc &uncompressed_micro_block_desc,
+      ObMicroBlockDesc &micro_block_desc,
+      ObIAllocator &allocator);
+  // get data micro block and micro_index_data when scan by range or whole macro block scan
   int get_next_micro_block_desc(
       ObMicroBlockDesc &micro_block_desc,
-      ObMicroIndexInfo &micro_index_info,
+      ObMicroIndexData &micro_index_data,
       ObIAllocator &rowkey_allocator);
   int get_macro_block_header(ObSSTableMacroBlockHeader &macro_header);
   int get_macro_meta(ObDataMacroBlockMeta *&macro_meta, ObIAllocator &allocator);
@@ -77,6 +95,26 @@ protected:
       const bool is_left_border,
       const bool is_right_border);
   int set_reader(const ObRowStoreType store_type);
+private:
+  int generate_uncompressed_micro_block(
+    const ObDatumRowkey &rowkey,
+    const ObMicroBlockHeader *header,
+    const ObMicroBlockData &micro_block,
+    ObIAllocator &allocator,
+    ObMicroBlockDesc &micro_block_desc);
+  int generate_micro_block(
+    const ObDatumRowkey &rowkey,
+    const ObMicroBlockHeader *header,
+    int64_t block_offset,
+    const char *micro_buf,
+    ObIAllocator &allocator,
+    ObMicroBlockDesc &micro_block_desc);
+  int generate_basic_micro_block_desc(
+    const ObDatumRowkey &rowkey,
+    const ObMicroBlockHeader *header,
+    ObIAllocator &allocator,
+    ObMicroBlockDesc &micro_block_desc);
+  int get_micro_block_header(const char *buf, int64_t buf_len, ObMicroBlockHeader *&header) const;
 protected:
   ObArenaAllocator allocator_;
   const char *macro_block_buf_;
@@ -88,6 +126,7 @@ protected:
   ObIMicroBlockReader *reader_;
   ObMicroBlockReaderHelper micro_reader_helper_;
   int64_t index_rowkey_cnt_;
+  int64_t column_cnt_;
   int64_t begin_idx_;
   int64_t end_idx_;
   int64_t iter_idx_;

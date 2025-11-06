@@ -20,6 +20,7 @@
 #include "share/ob_errno.h"
 #include "runtime_utility/mds_retry_control.h"
 #include "storage/multi_data_source/runtime_utility/common_define.h"
+#include "storage/multi_data_source/adapter_define/mds_dump_node.h"
 #include <type_traits>
 #ifndef STORAGE_MULTI_DATA_SOURCE_MDS_UNIT_H_IPP
 #define STORAGE_MULTI_DATA_SOURCE_MDS_UNIT_H_IPP

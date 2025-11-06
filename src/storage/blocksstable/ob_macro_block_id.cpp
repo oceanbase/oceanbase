@@ -242,6 +242,8 @@ const ObStorageObjectTypeBase &MacroBlockId::get_type_instance() const
   SHARED_MAJOR_DATA_MACRO
   SHARED_MAJOR_META_MACRO
   SHARED_TABLET_SUB_META
+  SHARED_INC_MAJOR_DATA_MACRO
+  SHARED_INC_MAJOR_META_MACRO
 */
 bool MacroBlockId::is_shared_data_or_meta() const
 {
@@ -261,6 +263,8 @@ bool MacroBlockId::is_shared_data_or_meta() const
   SHARED_MDS_MINOR_META_MACRO
   SHARED_MAJOR_DATA_MACRO
   SHARED_MAJOR_META_MACRO
+  SHARED_INC_MAJOR_DATA_MACRO
+  SHARED_INC_MAJOR_META_MACRO
 */
 bool MacroBlockId::is_shared_data_block_or_meta_block() const
 {
@@ -278,6 +282,7 @@ SHARED_MICRO_DATA_MACRO
 SHARED_MINI_DATA_MACRO
 SHARED_MINOR_DATA_MACRO
 SHARED_MAJOR_DATA_MACRO
+SHARED_INC_MAJOR_DATA_MACRO
 */
 bool MacroBlockId::is_shared_data_block_except_mds() const
 {
@@ -306,6 +311,7 @@ bool MacroBlockId::is_private_data_or_meta() const
   SHARED_MDS_MINOR_DATA_MACRO
   SHARED_MAJOR_DATA_MACRO
   EXTERNAL_TABLE_FILE
+  SHARED_INC_MAJOR_DATA_MACRO
 */
 bool MacroBlockId::is_data() const
 {
@@ -321,6 +327,7 @@ bool MacroBlockId::is_data() const
   SHARED_MDS_MINOR_META_MACRO
   SHARED_MAJOR_META_MACRO
   SHARED_TABLET_SUB_META
+  SHARED_INC_MAJOR_META_MACRO
 */
 bool MacroBlockId::is_meta() const
 {
@@ -341,6 +348,8 @@ bool MacroBlockId::is_meta() const
   SHARED_MDS_MINOR_DATA_MACRO
   SHARED_MDS_MINOR_META_MACRO
   SHARED_TABLET_SUB_META
+  SHARED_INC_MAJOR_DATA_MACRO
+  SHARED_INC_MAJOR_META_MACRO
 */
 bool MacroBlockId::is_tablet_local_cache_object() const
 {

@@ -894,9 +894,33 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
             break;
           }
         case T_TABLE_OPTION_LIST: {
-            alter_table_stmt->set_alter_table_option();
-            if (OB_FAIL(resolve_alter_table_option_list(*action_node))) {
+            // 1. only add clustering key, allowed
+            // 2. add clustering key and other options, not allowed report error later
+            bool is_current_clustering_key_node = T_CLUSTERING_KEY == action_node->children_[0]->type_;
+            if (!is_current_clustering_key_node && OB_FALSE_IT(alter_table_stmt->set_alter_table_option())) {
+            } else if (OB_FAIL(resolve_alter_table_option_list(*action_node))) {
               SQL_RESV_LOG(WARN, "Resolve table option failed!", K(ret));
+            } else if (lib::is_mysql_mode()) {
+              bool is_exist_drop_clustering_key = false;
+              if (OB_FAIL(is_exist_item_type(node, T_CLUSTERING_KEY_DROP, is_exist_drop_clustering_key))) {
+                SQL_RESV_LOG(WARN, "failed to check item type!", KR(ret));
+              } else if (is_current_clustering_key_node) {
+                // for alter table cluster by, it's the same as alter table add primary key
+                alter_table_stmt->set_alter_table_index();
+                if (table_schema_->is_index_organized_table()) {
+                  ret = OB_NOT_SUPPORTED;
+                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table cluster by is not supported for index organized table");
+                  LOG_WARN("alter table cluster by is not supported for index organized table", K(ret));
+                } else if (is_exist_drop_clustering_key || table_schema_->is_table_with_clustering_key()) {
+                  if (OB_FAIL(resolve_modify_clustering_key(node, *action_node))) {
+                    SQL_RESV_LOG(WARN, "resolve drop clustering key failed", KR(ret));
+                  }
+                } else {
+                  if (OB_FAIL(resolve_add_clustering_key(*action_node))) {
+                    SQL_RESV_LOG(WARN, "resolve add clustering key failed", KR(ret));
+                  }
+                }
+              }
             }
             break;
           }
@@ -4055,6 +4079,58 @@ int ObAlterTableResolver::check_is_drop_primary_key(const ParseNode &node,
   return ret;
 }
 
+// to check whether to drop clustering key only.
+// to check whether to drop clustering key legally.
+int ObAlterTableResolver::check_is_drop_clustering_key(const ParseNode &node,
+                                                       bool &is_drop_clustering_key)
+{
+  int ret = OB_SUCCESS;
+  is_drop_clustering_key = false;
+  // Not supported is reported when,
+  // there are multiple add clustering key nodes and at least one drop clustering key node,
+  // or there are at least one other action node and at least one drop clustering key node,
+  // or there are multiple drop clustering key nodes.
+  // or drop clustering key if the table is implicit key partition table.
+  int64_t drop_clustering_key_node_cnt = 0;
+  int64_t add_clustering_key_node_cnt = 0;
+  int64_t other_action_cnt = 0;
+  if (OB_ISNULL(table_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table_schema is null", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < node.num_child_; ++i) {
+    ParseNode *action_node = node.children_[i];
+    if (OB_ISNULL(action_node)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid parse tree!", K(ret));
+    } else if (T_CLUSTERING_KEY == action_node->children_[0]->type_) {
+      add_clustering_key_node_cnt++;
+    } else if (T_CLUSTERING_KEY_DROP == action_node->children_[0]->type_) {
+      drop_clustering_key_node_cnt++;
+    } else {
+      other_action_cnt++;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (drop_clustering_key_node_cnt <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpected, there is no drop clustering key node",
+      KR(ret), K(drop_clustering_key_node_cnt), K(add_clustering_key_node_cnt), K(other_action_cnt));
+  } else if (drop_clustering_key_node_cnt == 1 && add_clustering_key_node_cnt == 1 && other_action_cnt == 0) {
+    // is modify clustering key operation.
+    is_drop_clustering_key = false;
+  } else if (drop_clustering_key_node_cnt == 1 && add_clustering_key_node_cnt == 0 && other_action_cnt == 0) {
+    // is drop clustering key operation.
+    is_drop_clustering_key = true;
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("Multiple complex DDLs about clustering key in single stmt is not supported now",
+      KR(ret), K(drop_clustering_key_node_cnt), K(add_clustering_key_node_cnt), K(other_action_cnt));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Multiple complex DDLs about clustering key in single stmt");
+  }
+  return ret;
+}
+
 int ObAlterTableResolver::resolve_drop_primary(const ParseNode &action_node_list)
 {
   int ret = OB_SUCCESS;
@@ -4131,6 +4207,278 @@ int ObAlterTableResolver::resolve_drop_primary(const ParseNode &action_node_list
   }
   return ret;
 }
+
+int ObAlterTableResolver::resolve_drop_clustering_key(const ParseNode &action_node_list)
+{
+  int ret = OB_SUCCESS;
+  void *tmp_ptr = nullptr;
+  bool is_exist_drop_clustering_key = false;
+  bool is_drop_clustering_key = false;
+  ObAlterPrimaryArg *drop_clustering_key_arg = nullptr;
+  ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
+  uint64_t tenant_data_version = 0;
+  if (OB_ISNULL(alter_table_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("alter table stmt should not be null", K(ret));
+  } else if (OB_ISNULL(table_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table_schema is null", KR(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema_->get_tenant_id(), tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if (tenant_data_version < DATA_VERSION_4_4_1_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("can't DROP Clustering Key, feature is not supported when tenant's data version is below 4.4.1.0", K(ret), KPC(table_schema_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "can't DROP 'CLUSTERING KEY', DROP 'CLUSTERING KEY' in the "
+                                     "heap organized table when tenant's data version is below 4.4.1.0");
+  } else if (!table_schema_->is_table_with_clustering_key()) {
+    const ObString clustering_key_name = "CLUSTERING KEY";
+    ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
+    LOG_WARN("can't DROP Clustering Key, check clustering key exists", KR(ret), KPC(table_schema_));
+    LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, clustering_key_name.length(), clustering_key_name.ptr());
+  } else if (OB_FAIL(is_exist_item_type(action_node_list, T_CLUSTERING_KEY_DROP, is_exist_drop_clustering_key))) {
+    LOG_WARN("failed to check item type", KR(ret));
+  } else if (!is_exist_drop_clustering_key) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpected, invalid parser tree", KR(ret));
+  } else if (OB_FAIL(check_is_drop_clustering_key(action_node_list, is_drop_clustering_key))) {
+    LOG_WARN("fail to check whether to drop clustering key only", KR(ret));
+  } else if (!is_drop_clustering_key) {
+    // modify clustering key, thus skip to add drop clustering key arg.
+  } else if (OB_ISNULL(tmp_ptr = (ObAlterPrimaryArg *)allocator_->alloc(sizeof(ObAlterPrimaryArg)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory", KR(ret));
+  } else {
+    drop_clustering_key_arg = new (tmp_ptr) ObAlterPrimaryArg();
+    drop_clustering_key_arg->set_index_action_type(ObIndexArg::DROP_CLUSTERING_KEY);
+    drop_clustering_key_arg->index_type_ = INDEX_TYPE_PRIMARY;
+    drop_clustering_key_arg->tenant_id_ = session_info_->get_effective_tenant_id();
+    if (OB_FAIL(alter_table_stmt->add_index_arg(drop_clustering_key_arg))) {
+      LOG_WARN("failed to add index arg", KR(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    if (nullptr != drop_clustering_key_arg) {
+      drop_clustering_key_arg->~ObAlterPrimaryArg();
+      drop_clustering_key_arg = nullptr;
+    }
+    if (nullptr != tmp_ptr) {
+      allocator_->free(tmp_ptr);
+      tmp_ptr = nullptr;
+    }
+  }
+  return ret;
+}
+
+int ObAlterTableResolver::resolve_modify_clustering_key(const ParseNode &action_node_list,
+                                                        const ParseNode &node)
+{
+  int ret = OB_SUCCESS;
+  bool is_exist_add_clustering_key = false;
+  bool is_exist_drop_clustering_key = false;
+  if (OB_FAIL(is_exist_item_type(action_node_list, T_CLUSTERING_KEY, is_exist_add_clustering_key))
+      || OB_FAIL(is_exist_item_type(action_node_list, T_CLUSTERING_KEY_DROP, is_exist_drop_clustering_key))) {
+    SQL_RESV_LOG(WARN, "failed to check item type!", KR(ret));
+  } else if (OB_ISNULL(table_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "table_schema is null", KR(ret));
+  } else if (!(is_exist_add_clustering_key && is_exist_drop_clustering_key) && !(is_exist_add_clustering_key && table_schema_->is_table_with_clustering_key())) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "modify clustering key requires both add and drop operations", KR(ret));
+  } else if (!table_schema_->is_table_with_clustering_key()) {
+    const ObString clustering_key_name = "CLUSTERING KEY";
+    ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
+    LOG_WARN("can't DROP 'CLUSTERING KEY', check clustering key exists", KR(ret), KPC(table_schema_));
+    LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, clustering_key_name.length(), clustering_key_name.ptr());
+  } else {
+    obrpc::ObAlterPrimaryArg *alter_clustering_key_arg = NULL;
+    void *tmp_ptr = NULL;
+    if (NULL == (tmp_ptr = (ObAlterPrimaryArg *)allocator_->alloc(sizeof(obrpc::ObAlterPrimaryArg)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      SQL_RESV_LOG(ERROR, "failed to allocate memory", KR(ret));
+    } else {
+      alter_clustering_key_arg = new (tmp_ptr) ObAlterPrimaryArg();
+      alter_clustering_key_arg->set_index_action_type(ObIndexArg::ALTER_CLUSTERING_KEY);
+      ParseNode *cluster_key_node = nullptr;
+      ParseNode *column_list = nullptr;
+
+      // Find the clustering key node from action_node_list
+      for (int64_t i = 0; OB_SUCC(ret) && i < node.num_child_; ++i) {
+        ParseNode *action_node = node.children_[i];
+        if (OB_ISNULL(action_node)) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "invalid parse tree!", K(ret));
+        } else if (T_CLUSTERING_KEY == action_node->type_) {
+          cluster_key_node = action_node;
+          break;
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(cluster_key_node) || T_CLUSTERING_KEY != cluster_key_node->type_ ||
+          OB_ISNULL(cluster_key_node->children_)) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_RESV_LOG(WARN, "invalid parse tree!", KR(ret));
+      } else if (OB_FALSE_IT(column_list = cluster_key_node->children_[0])) {
+      } else if (OB_ISNULL(column_list) || T_COLUMN_LIST != column_list->type_ ||
+          OB_ISNULL(column_list->children_)) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_RESV_LOG(WARN, "invalid parse tree!", KR(ret));
+      } else if (OB_SUCC(ret) && column_list->num_child_ > MAX_CLUSTERING_KEY_COLUMNS) {
+        ret = OB_ERR_TOO_MANY_ROWKEY_COLUMNS;
+        LOG_USER_ERROR(OB_ERR_TOO_MANY_ROWKEY_COLUMNS, OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
+      } else {
+        obrpc::ObColumnSortItem sort_item;
+        const ObColumnSchemaV2 *col = NULL;
+        for (int32_t i = 0; OB_SUCC(ret) && i < column_list->num_child_; ++i) {
+          ParseNode *column_node = column_list->children_[i];
+          if (OB_ISNULL(column_node)) {
+            ret = OB_ERR_UNEXPECTED;
+            SQL_RESV_LOG(WARN, "invalid parse tree", KR(ret));
+          } else {
+            sort_item.reset();
+            sort_item.column_name_.assign_ptr(column_node->str_value_,
+                                              static_cast<int32_t>(column_node->str_len_));
+            sort_item.prefix_len_ = 0;
+            sort_item.order_type_ = common::ObOrderType::ASC;
+            if (OB_ISNULL(col = table_schema_->get_column_schema(sort_item.column_name_))) {
+              ret = OB_ERR_KEY_DOES_NOT_EXISTS;
+              SQL_RESV_LOG(WARN, "col is null", KR(ret), "column_name", sort_item.column_name_);
+              LOG_USER_ERROR(OB_ERR_KEY_DOES_NOT_EXISTS,
+              sort_item.column_name_.length(), sort_item.column_name_.ptr(),
+              table_schema_->get_table_name_str().length(), table_schema_->get_table_name_str().ptr());
+            } else if (OB_FAIL(check_add_column_as_pk_allowed(*col))) {
+              LOG_WARN("the column can not be clustering key", KR(ret));
+            } else if (OB_FAIL(add_sort_column(sort_item, *alter_clustering_key_arg))) {
+              SQL_RESV_LOG(WARN, "failed to add sort column to index arg", KR(ret));
+            }
+          }
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
+      alter_clustering_key_arg->index_type_ = INDEX_TYPE_PRIMARY;
+      alter_clustering_key_arg->index_name_.assign_ptr(
+      common::OB_PRIMARY_INDEX_NAME, static_cast<int32_t>(strlen(common::OB_PRIMARY_INDEX_NAME)));
+      alter_clustering_key_arg->tenant_id_ = session_info_->get_effective_tenant_id();
+      if (OB_ISNULL(alter_table_stmt)) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_RESV_LOG(WARN, "alter table stmt should not be null", KR(ret));
+      } else if (OB_FAIL(alter_table_stmt->add_index_arg(alter_clustering_key_arg))) {
+        SQL_RESV_LOG(WARN, "push back index arg failed", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAlterTableResolver::resolve_add_clustering_key(const ParseNode &node)
+{
+  return OB_NOT_SUPPORTED;
+  /*
+  int ret = OB_SUCCESS;
+  ParseNode *cluster_key_node = nullptr;
+  // go through the node, find the clustering key node
+  for (int64_t i = 0; OB_SUCC(ret) && i < node.num_child_; ++i) {
+    ParseNode *child_node = node.children_[i];
+    if (OB_ISNULL(child_node)) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_RESV_LOG(WARN, "invalid parse tree!", KR(ret));
+    } else if (T_CLUSTERING_KEY == child_node->type_) {
+      cluster_key_node = child_node;
+      break;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(cluster_key_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "cluster key node is null", KR(ret));
+  } else if (T_CLUSTERING_KEY != cluster_key_node->type_ || OB_ISNULL(cluster_key_node->children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "invalid parse tree!", KR(ret));
+  } else if (OB_ISNULL(table_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "table_schema is null", KR(ret));
+  } else if (OB_ISNULL(params_.schema_checker_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "schema_checker is null", KR(ret));
+  } else {
+    // Check if table has FTS indexes - clustering key is not allowed on tables with FTS indexes
+    bool has_fts_index = false;
+    if (OB_FAIL(table_schema_->check_has_fts_index_aux(*params_.schema_checker_->get_schema_guard(), has_fts_index))) {
+      SQL_RESV_LOG(WARN, "failed to check if table has FTS indexes", KR(ret));
+    } else if (has_fts_index) {
+      ret = OB_NOT_SUPPORTED;
+      SQL_RESV_LOG(WARN, "can't ADD Clustering Key, clustering key is not supported on tables with fulltext indexes", K(ret), KPC(table_schema_));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "can't ADD 'CLUSTERING KEY', clustering key is not supported on tables with fulltext indexes");
+    } else {
+      obrpc::ObCreateIndexArg *create_index_arg = NULL;
+      void *tmp_ptr = NULL;
+      if (NULL == (tmp_ptr = (ObCreateIndexArg *)allocator_->alloc(sizeof(obrpc::ObCreateIndexArg)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SQL_RESV_LOG(ERROR, "failed to allocate memory", KR(ret));
+      } else {
+        create_index_arg = new (tmp_ptr) ObCreateIndexArg();
+        create_index_arg->set_index_action_type(ObIndexArg::ADD_CLUSTERING_KEY);
+      }
+      ParseNode *column_list = cluster_key_node->children_[0];
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(column_list) || T_COLUMN_LIST != column_list->type_ ||
+                 OB_ISNULL(column_list->children_)) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_RESV_LOG(WARN, "invalid parse tree!", KR(ret));
+      } else if (OB_SUCC(ret) && column_list->num_child_ > MAX_CLUSTERING_KEY_COLUMNS) {
+        ret = OB_ERR_TOO_MANY_ROWKEY_COLUMNS;
+        LOG_USER_ERROR(OB_ERR_TOO_MANY_ROWKEY_COLUMNS, OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
+      }
+
+      obrpc::ObColumnSortItem sort_item;
+      const ObColumnSchemaV2 *col = NULL;
+      for (int32_t i = 0; OB_SUCC(ret) && i < column_list->num_child_; ++i) {
+        ParseNode *column_node = column_list->children_[i];
+        if (OB_ISNULL(column_node)) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "invalid parse tree", KR(ret));
+        } else {
+          sort_item.reset();
+          sort_item.column_name_.assign_ptr(column_node->str_value_,
+                                            static_cast<int32_t>(column_node->str_len_));
+          sort_item.prefix_len_ = 0;
+          sort_item.order_type_ = common::ObOrderType::ASC;
+          if (OB_ISNULL(col = table_schema_->get_column_schema(sort_item.column_name_))) {
+            ret = OB_ERR_KEY_DOES_NOT_EXISTS;
+            SQL_RESV_LOG(WARN, "col is null", KR(ret), "column_name", sort_item.column_name_);
+            LOG_USER_ERROR(OB_ERR_KEY_DOES_NOT_EXISTS,
+              sort_item.column_name_.length(), sort_item.column_name_.ptr(),
+              table_schema_->get_table_name_str().length(), table_schema_->get_table_name_str().ptr());
+          } else if (OB_FAIL(check_add_column_as_pk_allowed(*col))) {
+            LOG_WARN("the column can not be clustering key", KR(ret));
+          } else if (OB_FAIL(add_sort_column(sort_item, *create_index_arg))) {
+            SQL_RESV_LOG(WARN, "failed to add sort column to index arg", KR(ret));
+          }
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
+        create_index_arg->index_type_ = INDEX_TYPE_PRIMARY;
+        create_index_arg->index_name_.assign_ptr(common::OB_PRIMARY_INDEX_NAME,
+                                                 static_cast<int32_t>(strlen(common::OB_PRIMARY_INDEX_NAME)));
+        create_index_arg->tenant_id_ = session_info_->get_effective_tenant_id();
+        if (OB_ISNULL(alter_table_stmt)) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "alter table stmt should not be null", KR(ret));
+        } else if (OB_FAIL(alter_table_stmt->add_index_arg(create_index_arg))) {
+          SQL_RESV_LOG(WARN, "push back index arg failed", KR(ret));
+        }
+      }
+    }
+  }
+  return ret;
+  */
+}
+
 
 int ObAlterTableResolver::resolve_alter_index_tablespace_oracle(const ParseNode &node)
 {
@@ -4295,6 +4643,12 @@ int ObAlterTableResolver::resolve_index_options(const ParseNode &action_node_lis
           SQL_RESV_LOG(WARN, "4.0 support to drop primary key", K(ret));
         } else if (OB_FAIL(resolve_drop_primary(action_node_list))) {
           SQL_RESV_LOG(WARN, "failed to resolve drop primary key", K(ret));
+        }
+        break;
+      }
+    case T_CLUSTERING_KEY_DROP: {
+        if (OB_FAIL(resolve_drop_clustering_key(action_node_list))) {
+          SQL_RESV_LOG(WARN, "failed to resolve drop clustering key", KR(ret));
         }
         break;
       }
@@ -5271,7 +5625,11 @@ int ObAlterTableResolver::resolve_partitioned_partition(const ParseNode *node,
     LOG_WARN("fail to wirte string", K(ret));
   } else {
     AlterTableSchema &table_schema = alter_table_stmt->get_alter_table_arg().alter_table_schema_;
-    if (OB_FAIL(table_schema.assign(origin_table_schema))) {
+    ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
+    if (OB_ISNULL(schema_guard)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema guard is null", KR(ret));
+    } else if (OB_FAIL(table_schema.assign(origin_table_schema))) {
       LOG_WARN("fail to assign", K(ret));
     } else {
       table_schema.reuse_partition_schema();
@@ -5282,7 +5640,7 @@ int ObAlterTableResolver::resolve_partitioned_partition(const ParseNode *node,
       LOG_WARN("failed to resolve partition option", K(ret));
     } else if (OB_FAIL(resolve_auto_partition(alter_table_stmt, node->children_[0], table_schema))) {
       LOG_WARN("failed to resolve auto partition option", K(ret));
-    } else if (OB_FAIL(table_schema.check_primary_key_cover_partition_column())) {
+    } else if (OB_FAIL(table_schema.check_primary_key_cover_partition_column(*schema_guard))) {
       LOG_WARN("fail to check primary key cover partition column", K(ret));
     } else if (OB_FAIL(table_schema.set_origin_table_name(origin_table_name))) {
       LOG_WARN("fail to set origin table name", K(ret), K(origin_table_name));
@@ -6918,12 +7276,12 @@ int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
           }
         }
         if (OB_SUCC(ret) && lib::is_mysql_mode()) {
-          if (0 != origin_col_schema->get_rowkey_position()
+          if ((0 != origin_col_schema->get_rowkey_position() && !origin_col_schema->is_heap_table_clustering_key_column())
               && alter_column_schema.is_set_default_
               && alter_column_schema.get_cur_default_value().is_null()) {
             ret = OB_ERR_PRIMARY_CANT_HAVE_NULL;
             LOG_USER_ERROR(OB_ERR_PRIMARY_CANT_HAVE_NULL);
-          } else if (0 != origin_col_schema->get_rowkey_position()
+          } else if ((0 != origin_col_schema->get_rowkey_position() && !origin_col_schema->is_heap_table_clustering_key_column())
               && alter_column_schema.is_set_nullable_) {
             ret = OB_ERR_PRIMARY_CANT_HAVE_NULL;
             LOG_WARN("can't set primary key nullable", K(ret));

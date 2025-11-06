@@ -529,7 +529,7 @@ int ObTxDataSingleRowGetter::get_row_from_sstables_(blocksstable::ObDatumRowkey 
       ret = OB_ERR_SYS;
       STORAGE_LOG(ERROR, "Unexpected null table", KR(ret), K(i), K(sstables));
     } else if (table->is_loaded()) {
-    } else if (OB_FAIL(ObTabletTableStore::load_sstable(table->get_addr(), table->is_co_sstable(), sstable_handle))) {
+    } else if (OB_FAIL(ObCacheSSTableHelper::load_sstable(table->get_addr(), table->is_co_sstable(), sstable_handle))) {
       STORAGE_LOG(WARN, "fail to load sstable", K(ret), KPC(table));
     } else if (OB_FAIL(sstable_handle.get_sstable(table))) {
       STORAGE_LOG(WARN, "fail to get sstable", K(ret), K(sstable_handle));

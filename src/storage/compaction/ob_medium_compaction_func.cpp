@@ -14,6 +14,8 @@
 #include "logservice/ob_log_service.h"
 #include "storage/ob_partition_range_spliter.h"
 #include "storage/truncate_info/ob_mds_info_distinct_mgr.h"
+#include "storage/compaction/ob_schedule_status_cache.h"
+
 
 namespace oceanbase
 {
@@ -24,6 +26,7 @@ using namespace common;
 namespace compaction
 {
 ERRSIM_POINT_DEF(EN_COMPACTION_SKIP_INIT_SCHEMA_CHANGED);
+ERRSIM_POINT_DEF(EN_COMPACTION_SET_MAJOR_PARALLEL_CNT);
 int64_t ObMediumCompactionScheduleFunc::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
@@ -72,6 +75,7 @@ int ObMediumCompactionScheduleFunc::choose_medium_snapshot(
   } else if (OB_FAIL(tablet.get_schema_version_from_storage_schema(schema_version))) {
     LOG_WARN("failed to get schema version from tablet", KR(ret), K(tablet));
   }
+
   if (OB_FAIL(ret)) {
   } else if (medium_info.medium_snapshot_ <= max_sync_medium_scn) {
     ret = OB_NO_NEED_MERGE;
@@ -84,10 +88,12 @@ int ObMediumCompactionScheduleFunc::choose_medium_snapshot(
       LOG_WARN("failed to check medium scn valid", K(ret), KPC(this));
     }
   } else {
-    medium_info.set_basic_info(
-      ObMediumCompactionInfo::MEDIUM_COMPACTION,
-      merge_reason_,
-      medium_info.medium_snapshot_);
+    medium_info.set_basic_info(ObMediumCompactionInfo::MEDIUM_COMPACTION, merge_reason_, medium_info.medium_snapshot_);
+    result.reset();
+    // TODO(@DanLing) refactor choose_xxx_snapshot logic
+    if (OB_FAIL(ObPartitionMergePolicy::get_result_by_snapshot(ls_, tablet, medium_info.medium_snapshot_, result, false/*need_check_tablet*/))) {
+      LOG_WARN("failed get result by medium snapshot", K(ret), K(medium_info));
+    }
     LOG_TRACE("choose_medium_snapshot", K(ret), KPC(this), K(result), K(medium_info));
   }
   return ret;
@@ -220,7 +226,7 @@ int ObMediumCompactionScheduleFunc::choose_major_snapshot(
     schema_version = freeze_info.schema_version_;
   }
   if (!skip_do_real_merge &&
-      FAILEDx(ObPartitionMergePolicy::get_result_by_snapshot(tablet, medium_info.medium_snapshot_, result, false/*need_check_tablet*/))) {
+      FAILEDx(ObPartitionMergePolicy::get_result_by_snapshot(ls_, tablet, medium_info.medium_snapshot_, result, false/*need_check_tablet*/))) {
     LOG_WARN("failed get result for major", K(ret), K(medium_info));
   } else {
     LOG_TRACE("choose_major_snapshot", K(ret), KPC(this), K(medium_info), K(freeze_info), K(result),
@@ -462,7 +468,7 @@ int ObMediumCompactionScheduleFunc::choose_scn_for_user_request(
         LOG_TRACE("exist truncate info, but not reach schedule interval", KR(ret), K(interval), K(last_major_snapshot_version), K(medium_info.medium_snapshot_));
       }
     }
-    if (FAILEDx(ObPartitionMergePolicy::get_result_by_snapshot(*tablet, medium_info.medium_snapshot_, result, false/*need_check_tablet*/))) {
+    if (FAILEDx(ObPartitionMergePolicy::get_result_by_snapshot(ls_, *tablet, medium_info.medium_snapshot_, result, false/*need_check_tablet*/))) {
       LOG_WARN("failed to get result for major", K(ret), K(last_major_snapshot_version), K(medium_info));
     } else if (OB_FAIL(tablet->get_newest_schema_version(schema_version))) {
       LOG_WARN("failed to get schema version from tablet", K(ret), KPC(tablet));
@@ -591,9 +597,8 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(bool &medium_clog_sub
     LOG_WARN("failed to get min data version", KR(ret));
   } else if (OB_UNLIKELY(compat_version < DATA_VERSION_4_1_0_0)) {
   } else if (FALSE_IT(tablet = tablet_handle_.get_obj())) {
-  } else if (OB_FAIL(ObMediumCompactionScheduleFunc::get_max_sync_medium_scn(
-      *tablet, *medium_info_list_, max_sync_medium_scn))) {
-      LOG_WARN("failed to get max sync medium scn", KR(ret), KPC(this));
+  } else if (OB_FAIL(get_max_sync_medium_scn(*tablet, *medium_info_list_, max_sync_medium_scn))) {
+    LOG_WARN("failed to get max sync medium scn", KR(ret), KPC(this));
   } else if (OB_FAIL(ls_.add_dependent_medium_tablet(tablet->get_tablet_meta().tablet_id_))) { // add dependent_id in ObLSReservedSnapshotMgr
     LOG_WARN("failed to add dependent tablet", K(ret), KPC(this));
   } else {
@@ -606,7 +611,8 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(bool &medium_clog_sub
     if (OB_FAIL(medium_info.init_data_version(compat_version))) {
       LOG_WARN("fail to set data version", K(ret), K(tablet_id), K(compat_version));
     } else if (ObAdaptiveMergePolicy::is_user_request_merge_reason(merge_reason_)
-        || ObAdaptiveMergePolicy::is_recycle_truncate_info_merge_reason(merge_reason_)) {
+            || ObAdaptiveMergePolicy::is_recycle_truncate_info_merge_reason(merge_reason_)
+            || ObAdaptiveMergePolicy::TOO_MANY_INC_MAJOR == merge_reason_) {
       if (OB_FAIL(choose_scn_for_user_request(max_sync_medium_scn, medium_info, result, schema_version))) {
         LOG_WARN("failed to choose medium scn for user request", K(ret), KPC(this));
       }
@@ -639,9 +645,16 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(bool &medium_clog_sub
       }
     }
 #endif
+
+    bool exists_unfinished_inc_major = false;
     if (OB_FAIL(ret)) {
+    } else if (ObTabletStatusCache::check_unfinished_inc_major(ls_, medium_info.medium_snapshot_, *tablet, exists_unfinished_inc_major)) {
+      LOG_WARN("failed to check unfinished inc major", K(ret), KPC(this));
+    } else if (exists_unfinished_inc_major) {
+      ret = OB_EAGAIN;
+      LOG_WARN("cannot schedule dag, exists unfinished inc major, try later", K(ret), K(tablet_id), K(medium_info.medium_snapshot_));
     } else if (!ObAdaptiveMergePolicy::is_skip_merge_reason((ObAdaptiveMergePolicy::AdaptiveMergeReason)medium_info.medium_merge_reason_)
-               && OB_FAIL(prepare_medium_info(result, schema_version, medium_info))) {
+            && OB_FAIL(prepare_medium_info(result, schema_version, medium_info))) {
       if (OB_TABLE_IS_DELETED == ret || OB_NO_NEED_MERGE == ret) {
         ret = OB_SUCCESS;
       } else {
@@ -668,6 +681,7 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(bool &medium_clog_sub
                 ObSuspectInfoType::SUSPECT_SCHEDULE_MEDIUM_FAILED,
                 medium_info.medium_snapshot_,
                 medium_info.storage_schema_.store_column_cnt_,
+                (int64_t) exists_unfinished_inc_major,
                 static_cast<int64_t>(ret)))) {
         LOG_WARN("failed to add suspect info", K(tmp_ret));
       }
@@ -703,7 +717,7 @@ int ObMediumCompactionScheduleFunc::errsim_choose_medium_snapshot(
     } else if (medium_info.medium_snapshot_ <= max_sync_medium_scn
         || medium_info.medium_snapshot_ < max_reserved_snapshot) {
       ret = OB_NO_NEED_MERGE;
-    } else if (OB_FAIL(ObPartitionMergePolicy::get_result_by_snapshot(tablet, medium_info.medium_snapshot_, result, false/*need_check_tablet*/))) {
+    } else if (OB_FAIL(ObPartitionMergePolicy::get_result_by_snapshot(ls_, tablet, medium_info.medium_snapshot_, result, false/*need_check_tablet*/))) {
       LOG_WARN("failed to get result by snapshot", K(ret), K(medium_info), KPC(this));
     } else {
       FLOG_INFO("ERRSIM EN_SCHEDULE_MEDIUM_COMPACTION", KPC(this));
@@ -734,6 +748,50 @@ int ObMediumCompactionScheduleFunc::check_if_schema_changed(ObMediumCompactionIn
   return ret;
 }
 
+int ObMediumCompactionScheduleFunc::check_if_table_schema_changed(
+    const ObSSTable &major_sstable,
+    const int64_t major_column_count,
+    const common::ObRowStoreType major_row_store_type,
+    const common::ObCompressorType major_compressor_type,
+    const ObStorageSchema &schema,
+    const uint64_t data_version,
+    bool &is_schema_changed)
+{
+  int ret = OB_SUCCESS;
+  is_schema_changed = false;
+  int64_t full_stored_col_cnt = 0;
+  if (OB_UNLIKELY(!schema.is_inited())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema is not inited", KR(ret), K(schema));
+  } else if (OB_FAIL(schema.get_stored_column_count_in_sstable(full_stored_col_cnt))) {
+    LOG_WARN("failed to get stored column count in sstable", K(ret), K(schema));
+  } else if (OB_UNLIKELY(major_column_count > full_stored_col_cnt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("stored col cnt in curr schema is less than old major sstable", K(ret),
+              "col_cnt_in_sstable", major_column_count,
+              "col_cnt_in_schema", full_stored_col_cnt, K(schema));
+  } else if (major_column_count != full_stored_col_cnt) {
+    is_schema_changed = true;
+    LOG_INFO("schema changed", K(schema), K(full_stored_col_cnt),
+             "col_cnt_in_sstable", major_column_count);
+  } else if (GCTX.is_shared_storage_mode()
+          && data_version >= DATA_VERSION_4_3_5_0
+          && 0 == major_sstable.get_data_macro_block_count()) {
+    // empty major, no need to check whether schema changed
+  } else if (ObRowStoreType::DUMMY_ROW_STORE != major_row_store_type
+          && major_row_store_type != schema.row_store_type_) {
+    is_schema_changed = true;
+    LOG_INFO("schema changed", K(schema),
+             "latest_row_store_type_in_sstable", major_row_store_type);
+  } else if (major_compressor_type == schema.get_compressor_type()) {
+    // schema not changed, do nothing
+  } else {
+    is_schema_changed = true;
+    LOG_INFO("schema changed", K(schema), K(major_sstable), K(major_compressor_type));
+  }
+  return ret;
+}
+
 int ObMediumCompactionScheduleFunc::check_if_schema_changed(
     const ObTablet &tablet,
     const ObStorageSchema &schema,
@@ -742,45 +800,22 @@ int ObMediumCompactionScheduleFunc::check_if_schema_changed(
 {
   int ret = OB_SUCCESS;
   is_schema_changed = false;
-  int64_t full_stored_col_cnt = 0;
   ObTabletMemberWrapper<ObTabletTableStore> wrapper;
   ObSSTable *last_major = nullptr;
 
   if (OB_FAIL(tablet.fetch_table_store(wrapper))) {
     LOG_WARN("failed to get table store wrapper", K(ret));
-  } else if (FALSE_IT(last_major = static_cast<ObSSTable*>(wrapper.get_member()->get_major_sstables().get_boundary_table(true/*last*/)))) {
-  } else if (OB_ISNULL(last_major)) {
+  } else if (OB_ISNULL(last_major = static_cast<ObSSTable*>(wrapper.get_member()->get_major_sstables().get_boundary_table(true/*last*/)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null major sstable", KR(ret), KPC(last_major));
-  } else if (OB_UNLIKELY(!schema.is_inited())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema is not inited", KR(ret), K(schema));
-  } else if (OB_FAIL(schema.get_stored_column_count_in_sstable(full_stored_col_cnt))) {
-    LOG_WARN("failed to get stored column count in sstable", K(ret), K(schema));
-  } else if (OB_UNLIKELY(tablet.get_last_major_column_count() > full_stored_col_cnt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("stored col cnt in curr schema is less than old major sstable", K(ret),
-              "col_cnt_in_sstable", tablet.get_last_major_column_count(),
-              "col_cnt_in_schema", full_stored_col_cnt, K(schema));
-  } else if (tablet.get_last_major_column_count() != full_stored_col_cnt) {
-    is_schema_changed = true;
-    LOG_INFO("schema changed", K(schema), K(full_stored_col_cnt),
-             "col_cnt_in_sstable", tablet.get_last_major_column_count());
-  } else if (GCTX.is_shared_storage_mode()
-          && data_version >= DATA_VERSION_4_3_5_0
-          && 0 == last_major->get_data_macro_block_count()) {
-    // empty major, no need to check whether schema changed
-  } else if (ObRowStoreType::DUMMY_ROW_STORE != tablet.get_last_major_latest_row_store_type()
-          && tablet.get_last_major_latest_row_store_type() != schema.row_store_type_) {
-    is_schema_changed = true;
-    LOG_INFO("schema changed", K(schema),
-             "latest_row_store_type_in_sstable", tablet.get_last_major_latest_row_store_type());
-  } else if (tablet.get_last_major_compressor_type() == schema.get_compressor_type()) {
-    // schema not changed, do nothing
-  } else {
-    is_schema_changed = true;
-    LOG_INFO("schema changed", K(schema), KPC(last_major),
-             "compressor_type_in_sstable", tablet.get_last_major_compressor_type());
+  } else if (OB_FAIL(check_if_table_schema_changed(*last_major,
+                                                   tablet.get_last_major_column_count(),
+                                                   tablet.get_last_major_latest_row_store_type(),
+                                                   tablet.get_last_major_compressor_type(),
+                                                   schema,
+                                                   data_version,
+                                                   is_schema_changed))) {
+    LOG_WARN("failed to check if schema changed", K(ret), K(tablet), K(schema));
   }
   return ret;
 }
@@ -828,18 +863,21 @@ int ObMediumCompactionScheduleFunc::init_parallel_range_and_schema_changed_and_c
 
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    ret = OB_E(EventTable::EN_COMPACTION_MEDIUM_INIT_PARALLEL_RANGE) ret;
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ret = OB_E(EventTable::EN_COMPACTION_MEDIUM_INIT_PARALLEL_RANGE) OB_SUCCESS)) {
       expected_task_count = 2;
       LOG_INFO("ERRSIM EN_COMPACTION_MEDIUM_INIT_PARALLEL_RANGE", KPC(this), K(expected_task_count));
       ret = OB_SUCCESS;
-    } else {
-      ret = OB_E(EventTable::EN_COMPACTION_MEDIUM_INIT_LARGE_PARALLEL_RANGE) ret;
-      if (OB_FAIL(ret)) {
-        expected_task_count = 64;
-        LOG_INFO("ERRSIM EN_COMPACTION_MEDIUM_INIT_LARGE_PARALLEL_RANGE", KPC(this), K(expected_task_count));
-        ret = OB_SUCCESS;
+    } else if (OB_FAIL(ret = OB_E(EventTable::EN_COMPACTION_MEDIUM_INIT_LARGE_PARALLEL_RANGE) OB_SUCCESS)) {
+      expected_task_count = 64;
+      LOG_INFO("ERRSIM EN_COMPACTION_MEDIUM_INIT_LARGE_PARALLEL_RANGE", KPC(this), K(expected_task_count));
+      ret = OB_SUCCESS;
+    } else if (OB_UNLIKELY(EN_COMPACTION_SET_MAJOR_PARALLEL_CNT)) {
+      if (macro_block_cnt >= 50) {
+        expected_task_count = -EN_COMPACTION_SET_MAJOR_PARALLEL_CNT;
+        LOG_INFO("ERRSIM EN_COMPACTION_SET_MAJOR_PARALLEL_CNT", K(expected_task_count));
+        SERVER_EVENT_SYNC_ADD("merge_errsim", "set major parallel cnt", "expected_task_count", expected_task_count);
       }
+      ret = OB_SUCCESS;
     }
   }
 #endif
@@ -855,7 +893,7 @@ int ObMediumCompactionScheduleFunc::init_parallel_range_and_schema_changed_and_c
     if (OB_FAIL(ret)) {
     } else if (expected_task_count < 1) {
       medium_info.clear_parallel_range();
-    } else {
+    } else if (!medium_info.is_inc_major_compaction()) { // only collect parallel merge info for major/medium merge
       ObTableStoreIterator table_iter;
       ObArrayArray<ObStoreRange> range_array;
       ObPartitionMultiRangeSpliter range_spliter;
@@ -1009,7 +1047,10 @@ int ObMediumCompactionScheduleFunc::prepare_medium_info(
       }
     }
   }
-  if (FAILEDx(init_parallel_range_and_schema_changed_and_co_merge_type(result, medium_info))) {
+
+  if (FAILEDx(medium_info.try_gene_inc_major_info(result.handle_))) {
+    LOG_WARN("failed to gene inc major info", K(ret), K(medium_info));
+  } else if (OB_FAIL(init_parallel_range_and_schema_changed_and_co_merge_type(result, medium_info))) {
     LOG_WARN("failed to init parallel range", K(ret), K(medium_info));
   } else if (OB_FAIL(choose_encoding_limit(medium_info))) {
     LOG_WARN("Failed to choose encoding rows limit", K(ret), K(medium_info));
@@ -1621,18 +1662,27 @@ int ObMediumCompactionScheduleFunc::check_tablet_inc_data(
     LOG_WARN("failed to get newest truncate version", KR(ret));
   } else if (medium_info.storage_schema_.is_global_index_table() && newest_truncate_version > last_major_snapshot) {
     LOG_TRACE("exist truncate info, should not do skip merge", KR(ret), K(newest_truncate_version), K(truncate_info_count));
-  } else if (0 == tablet.get_minor_table_count()) {
+  } else if (0 == tablet.get_minor_table_count() && 0 == wrapper.get_member()->get_inc_major_sstables().count()) {
     no_inc_data = true;
     FLOG_INFO("tablet no minor table", K(tablet));
   } else {
     const ObSSTableArray &minor_tables = wrapper.get_member()->get_minor_sstables();
-
+    const ObSSTableArray &inc_major_tables = wrapper.get_member()->get_inc_major_sstables();
     no_inc_data = true;
     for (int64_t idx = 0; OB_SUCC(ret) && no_inc_data && idx < minor_tables.count(); ++idx) {
       const ObSSTable *cur = minor_tables[idx];
       if (OB_ISNULL(cur)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null sstable", K(ret), K(minor_tables));
+      } else if (cur->get_upper_trans_version() > last_major_snapshot) {
+        no_inc_data = false;
+      }
+    }
+    for (int64_t idx = 0; OB_SUCC(ret) && no_inc_data && idx < inc_major_tables.count(); ++idx) {
+      const ObSSTable *cur = inc_major_tables.at(idx);
+      if (OB_ISNULL(cur)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null sstable", KR(ret), K(inc_major_tables));
       } else if (cur->get_upper_trans_version() > last_major_snapshot) {
         no_inc_data = false;
       }

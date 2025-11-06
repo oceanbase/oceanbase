@@ -394,6 +394,11 @@ public:
   {
     enable_inc_direct_load_ = enable_inc_direct_load;
   }
+  inline void set_enable_inc_major(const bool enable_inc_major)
+  {
+    enable_inc_major_ = enable_inc_major;
+  }
+  inline bool get_enable_inc_major() const { return enable_inc_major_; }
   inline bool get_enable_replace() const { return enable_replace_; }
   inline void set_enable_replace(const bool enable_replace)
   {
@@ -401,6 +406,8 @@ public:
   }
   inline double get_online_sample_percent() const { return online_sample_percent_; }
   inline void set_online_sample_percent(double v) { online_sample_percent_ = v; }
+  inline void set_is_online_gather_statistics(const bool is_online_gather_statistics) { is_online_gather_statistics_ = is_online_gather_statistics; }
+  inline bool get_is_online_gather_statistics() const { return is_online_gather_statistics_; }
   int64_t get_das_dop() { return das_dop_; }
   void set_das_dop(int64_t v) { das_dop_ = v; }
   void set_gen_plan_usec(uint64_t v) { stat_.gen_plan_usec_  = v; }
@@ -793,9 +800,11 @@ public:
 private:
   common::ObFixedArray<uint64_t, common::ObIAllocator> mview_ids_;
   bool enable_inc_direct_load_; // for incremental direct load
+  bool enable_inc_major_; // for incremental direct load
   bool enable_replace_; // for incremental direct load
   bool insert_overwrite_; // for insert overwrite
   double online_sample_percent_; // for incremental direct load
+  bool is_online_gather_statistics_; // for incremental direct load
   std::atomic<bool> can_set_feedback_info_;
   bool need_switch_to_table_lock_worker_; // for table lock switch worker thread
   bool data_complement_gen_doc_id_;

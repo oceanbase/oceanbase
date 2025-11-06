@@ -41,13 +41,14 @@ public:
       IVFFLAT_CID = 2,
       IVFSQ_CID = 3,
       IVFPQ_CID = 4,
+      EMB_VEC = 5, //FARM COMPAT WHITELIST
       MAX
   };
 public:
   typedef common::ObSEArray<ObString, 2> DomainIds;
   /* DML Resolver Begin */
   static bool is_domain_id_index_col(const void *col_schema);
-  static bool check_table_need_column_ref_in_ddl(const void *table_schema);
+  static bool check_table_need_column_ref_in_ddl(const void *table_schema, const ObColumnSchemaV2 *col_schema);
   /* DML Resolver End */
 
   /* ObLogTableScan Begin */
@@ -107,7 +108,8 @@ public:
     "vid",
     "ivfflat_cid",
     "ivfsq_cid",
-    "ivfpq_cid"
+    "ivfpq_cid",
+    "emb_vec"
   };
 };
 

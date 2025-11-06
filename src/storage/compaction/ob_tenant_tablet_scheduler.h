@@ -219,7 +219,6 @@ public:
       ObTabletHandle &tablet_handle,
       const ObSSTabletTableStoreMetaInfo &table_store_meta_info,
       bool &scheduled);
-  static int schedule_task_if_split_src(ObTabletHandle &tablet_handle);
 #endif
   static int schedule_tablet_meta_merge(
       ObLSHandle &ls_handle,
@@ -236,6 +235,7 @@ public:
       const ObLSID &ls_id,
       const storage::ObTablet &tablet,
       const ObMergeType merge_type,
+      const int64_t schedule_scn,
       ObCSReplicaTabletStatus &cs_replica_status);
   static int get_co_merge_type_for_compaction(
       const int64_t merge_version,
@@ -255,9 +255,6 @@ public:
       const int64_t retry_times,
       const ObDagId& curr_dag_net_id,
       int &schedule_ret);
-  static int schedule_tablet_ddl_major_merge(
-      ObLSHandle &ls_handle,
-      ObTabletHandle &tablet_handle);
 #ifdef ERRSIM
   static void errsim_after_mini_schedule_adaptive(
     const ObLSID &ls_id,
@@ -290,9 +287,6 @@ private:
     ObTabletHandle &tablet_handle,
     bool &schedule_minor_flag,
     bool &need_fast_freeze_flag);
-  int schedule_ddl_tablet_merge(
-    ObLSHandle &ls_handle,
-    ObTabletHandle &tablet_handle);
 public:
   typedef common::ObSEArray<ObGetMergeTablesResult, compaction::ObPartitionMergePolicy::OB_MINOR_PARALLEL_INFO_ARRAY_SIZE> MinorParallelResultArray;
 private:

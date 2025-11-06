@@ -48,6 +48,12 @@ public:
                        const common::ObLimitParam &limit_param,
                        ObExpr *&search_vec,
                        ObExpr *&distance_calc);
+  static int init_sort_of_hybrid_index(ObIAllocator &allocator,
+                                       const ObDASVecAuxScanCtDef *ir_ctdef,
+                                       const ObDASSortCtDef *sort_ctdef,
+                                       ObDASSortRtDef *sort_rtdef,
+                                       ObString &hybrid_search_vec,
+                                       ObExpr *&distance_calc);
   static int reuse_iter(const share::ObLSID &ls_id,
                         ObDASScanIter *iter,
                         ObTableScanParam &scan_param,
@@ -81,9 +87,7 @@ public:
   static int get_distance_threshold_hnsw(ObExpr &expr,
                                          float &similarity_threshold,
                                          float &distance_threshold);
-  static int get_distance_threshold_ivf(ObExpr &expr,
-                                        float &similarity_threshold,
-                                        float &distance_threshold);
+  static int check_ivf_support_similarity_threshold(ObExpr &expr);
 };
 
 }  // namespace sql

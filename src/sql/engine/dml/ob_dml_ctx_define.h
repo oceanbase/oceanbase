@@ -480,7 +480,8 @@ public:
                        K_(is_table_without_pk),
                        K_(has_instead_of_trigger),
                        KPC_(trans_info_expr),
-                       K_(is_vec_hnsw_index_vid_opt));
+                       K_(is_vec_hnsw_index_vid_opt),
+                       K_(is_table_with_clustering_key));
 
   ObDMLOpType dml_type_;
   ExprFixedArray check_cst_exprs_;

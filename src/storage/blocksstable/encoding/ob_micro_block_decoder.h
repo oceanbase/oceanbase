@@ -155,6 +155,13 @@ public:
       const ObDatumRowkey &rowkey,
       const ObITableReadInfo &read_info,
       ObDatumRow &row) final;
+  virtual int get_row_and_trans_version(
+      const ObMicroBlockAddr &block_addr,
+      const ObMicroBlockData &block_data,
+      const ObDatumRowkey &rowkey,
+      const ObITableReadInfo &read_info,
+      ObDatumRow &row,
+      int64_t &trans_version) final { return OB_NOT_SUPPORTED; }
   virtual int exist_row(
       const ObMicroBlockData &block_data,
       const ObDatumRowkey &rowkey,
@@ -167,7 +174,7 @@ public:
       const ObITableReadInfo &read_info,
       const uint32_t row_idx,
       ObDatumRow &row) final;
-  int get_row_id(
+  virtual int get_row_id(
       const ObMicroBlockAddr &block_addr,
       const ObMicroBlockData &block_data,
       const ObDatumRowkey &rowkey,

@@ -184,7 +184,7 @@ void TestFileManager::TearDownTestCase()
 
 void TestFileManager::get_macro_block_scatter_dir_size(int64_t &scatter_dir_size)
 {
-  // scatter dirs of private data/meta macro, shared mini/minor/major macro, external table file
+  // scatter dirs of private data/meta macro, shared mini/minor/major/inc_major macro, external table file
   scatter_dir_size = 0;
   ObIODFileStat statbuf;
   char dir_path[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
@@ -205,7 +205,7 @@ void TestFileManager::get_macro_block_scatter_dir_size(int64_t &scatter_dir_size
     ASSERT_EQ(OB_SUCCESS, databuff_printf(scatter_dir_path,
               sizeof(scatter_dir_path), "%s/%02lX", dir_path, i));
     ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::stat(scatter_dir_path, statbuf));
-    scatter_dir_size += (statbuf.size_ * 3); // mini + minor + major, thus multiply with 3
+    scatter_dir_size += (statbuf.size_ * 4); // mini + minor + major + inc_major, thus multiply with 4
   }
   dir_path[0] ='\0';
   ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_external_table_file_dir(dir_path, sizeof(dir_path), MTL_ID(), MTL_EPOCH_ID()));
@@ -933,7 +933,6 @@ TEST_F(TestFileManager, test_private_macro_file_operator)
   shared_minor_ls_dir_size = statbuf.size_;
   expected_disk_size += statbuf.size_;
   dir_path[0] ='\0';
-
   int64_t scatter_dir_size = 0;
   get_macro_block_scatter_dir_size(scatter_dir_size);
   expected_disk_size += scatter_dir_size;
@@ -956,7 +955,6 @@ TEST_F(TestFileManager, test_private_macro_file_operator)
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->calc_macro_block_disk_space(start_calc_size_time_s, calibrate_res));
   get_macro_block_scatter_dir_size(scatter_dir_size);
   ASSERT_EQ(shared_mini_ls_dir_size + shared_minor_ls_dir_size + scatter_dir_size, calibrate_res.total_file_size_);
-
 }
 
 TEST_F(TestFileManager, test_tmp_file_operator)

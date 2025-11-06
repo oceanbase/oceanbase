@@ -56,7 +56,7 @@ public:
   int32_t ivf_nprobes_;
 
   TO_STRING_KV(K_(is_set_ef_search), K_(ef_search),
-      K_(is_set_refine_k), K_(refine_k), K_(ob_sparse_drop_ratio_search), K_(is_set_similarity_threshold), K_(similarity_threshold), K_(is_set_ivf_nprobes), K_(ivf_nprobes), K_(reserved));
+      K_(is_set_refine_k), K_(refine_k), K_(is_set_drop_ratio_search), K_(ob_sparse_drop_ratio_search), K_(is_set_similarity_threshold), K_(similarity_threshold), K_(is_set_ivf_nprobes), K_(ivf_nprobes), K_(reserved));
 
 };
 

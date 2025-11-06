@@ -19,11 +19,15 @@
 #include "storage/blocksstable/ob_macro_block_common_header.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/blocksstable/ob_imicro_block_reader.h"
+#include "storage/slog_ckpt/ob_linked_macro_block_struct.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
+#include "lib/hash/ob_hashset.h"
 
 namespace oceanbase
 {
 namespace blocksstable
 {
+class ObMacroBlockRowBareIterator;
 enum ObMacroBlockCheckLevel
 {
   CHECK_LEVEL_NONE = 0,  // no check
@@ -42,6 +46,10 @@ public:
       const char *macro_block_buf,
       const int64_t macro_block_buf_size,
       ObMacroBlockCheckLevel check_level = CHECK_LEVEL_PHYSICAL);
+  static int check_macro_block(
+      const char *macro_block_buf,
+      const int64_t macro_block_buf_size,
+      const ObMacroBlockCheckLevel check_level);
 private:
   static int check_logical_checksum(
       const ObMacroBlockCommonHeader &common_header,
@@ -64,6 +72,14 @@ private:
       const int64_t macro_block_buf_size,
       ObSSTableMacroBlockHeader &header,
       const int64_t *&column_checksum);
+  static int check_sstable_macro_block(
+      const char *macro_block_buf,
+      const int64_t macro_block_buf_size,
+      const ObMacroBlockCommonHeader &common_header);
+  static int check_data_micro_block(
+      ObMacroBlockRowBareIterator &macro_iter);
+  static int check_index_micro_block(
+      ObMacroBlockRowBareIterator &macro_iter);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSSTableMacroBlockChecker);
 };

@@ -115,7 +115,7 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
     const int64_t rowkey_cnt = read_info_->get_schema_rowkey_count();
     memtable::ObMvccAccessCtx &ctx = context_->store_ctx_->mvcc_acc_ctx_;
     const transaction::ObTransID &read_trans_id = ctx.get_tx_id();
-    const bool is_major_sstable = sstable_->is_major_sstable() || sstable_->is_ddl_sstable();
+    const bool is_major_sstable = sstable_->is_major_type_sstable() || sstable_->is_ddl_type_sstable() || sstable_->is_ddl_merge_sstable();
     int64_t trans_version = INT64_MAX;
     int64_t current;
     row = &row_;
@@ -382,7 +382,7 @@ int ObMicroBlockRowLockMultiChecker::seek_forward()
   ObIMicroBlockReader *micro_block_reader = reader_;
   bool need_search_duplicate_row = false;
   if (ObIMicroBlockReader::Reader == reader_->get_type() || ObIMicroBlockReader::NewFlatReader == reader_->get_type()) {
-    need_search_duplicate_row = !sstable_->is_major_sstable() && !static_cast<ObIMicroBlockFlatReaderBase *>(reader_)->single_version_rows();
+    need_search_duplicate_row = !sstable_->is_major_type_sstable() && !static_cast<ObIMicroBlockFlatReaderBase *>(reader_)->single_version_rows();
   }
   const int64_t row_count = micro_block_reader->row_count();
   while (OB_SUCC(ret)) {

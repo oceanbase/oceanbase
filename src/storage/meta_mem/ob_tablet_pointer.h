@@ -180,7 +180,10 @@ private:
   int hook_obj(ObTablet *&t, ObTabletHandle &guard);
   int release_obj(ObTablet *&t);
   int dump_meta_obj(ObTabletHandle &guard, void *&free_obj);
-  int create_ddl_kv_mgr(const share::ObLSID &ls_id, const ObTabletID &tablet_id, ObDDLKvMgrHandle &ddl_kv_mgr_handle);
+  int create_ddl_kv_mgr(const share::ObLSID &ls_id,
+                        const ObTabletID &tablet_id,
+                        ObDDLKvMgrHandle &ddl_kv_mgr_handle,
+                        bool &is_created);
   int set_ddl_kv_mgr(const ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   int remove_ddl_kv_mgr(const ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   int set_tablet_attr(const ObTabletAttr &attr);

@@ -69,6 +69,15 @@ public:
                         const storage::ObDirectLoadDatumRow &new_row,
                         const storage::ObDirectLoadDatumRow *&result_row) override;
 
+  /**
+   * handle insert row conflict with delete row
+   */
+  int handle_insert_delete_conflict(const ObTabletID &tablet_id,
+                                   const storage::ObDirectLoadDatumRow &datum_row) override
+  {
+    return OB_ERR_UNEXPECTED;
+  }
+
   TO_STRING_KV(KP_(store_ctx),
                KP_(error_row_handler),
                KP_(result_info),

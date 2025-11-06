@@ -1418,6 +1418,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                                 param.vec_domain_index_schema_,
                                                 param.vec_index_id_schema_,
                                                 param.vec_snapshot_data_schema_,
+                                                param.hybrid_vec_embedded_schema_,
                                                 param.tenant_data_version_,
                                                 drop_index_arg,
                                                 *param.allocator_,
@@ -2519,6 +2520,7 @@ int ObDDLScheduler::create_drop_vec_index_task(
     const share::schema::ObTableSchema *domain_index_schema,
     const share::schema::ObTableSchema *index_id_schema,
     const share::schema::ObTableSchema *snapshot_data_schema,
+    const share::schema::ObTableSchema *embedded_vec_schema,
     const uint64_t tenant_data_version,
     const obrpc::ObDropIndexArg *drop_index_arg,
     ObIAllocator &allocator,
@@ -2532,6 +2534,7 @@ int ObDDLScheduler::create_drop_vec_index_task(
   common::ObString vec_rowkey_vid_name;
   common::ObString vec_index_id_name;
   common::ObString vec_snapshot_data_name;
+  common::ObString hybrid_embedded_vec_name;
 
   // multivalue index may run here, need calc index type first
   if (OB_UNLIKELY(!is_inited_)) {
@@ -2566,6 +2569,10 @@ int ObDDLScheduler::create_drop_vec_index_task(
     } else if (OB_FAIL(snapshot_data_schema->get_index_name(vec_snapshot_data_name))) {
       LOG_WARN("fail to get snapshot data name", K(ret), KPC(snapshot_data_schema));
     }
+    if (OB_FAIL(ret) || OB_ISNULL(embedded_vec_schema)) {
+    } else if (OB_FAIL(embedded_vec_schema->get_index_name(hybrid_embedded_vec_name))) {
+      LOG_WARN("fail to get snapshot data name", K(ret), KPC(embedded_vec_schema));
+    }
 
     const int64_t init_task_id = 0;
     const uint64_t data_table_id = index_schema->get_data_table_id();
@@ -2575,12 +2582,14 @@ int ObDDLScheduler::create_drop_vec_index_task(
     uint64_t domain_index_table_id = OB_ISNULL(domain_index_schema) ? OB_INVALID_ID : domain_index_schema->get_table_id();
     uint64_t index_id_table_id = OB_ISNULL(index_id_schema) ? OB_INVALID_ID : index_id_schema->get_table_id();
     uint64_t snapshot_data_table_id = OB_ISNULL(snapshot_data_schema) ? OB_INVALID_ID : snapshot_data_schema->get_table_id();
+    uint64_t embedded_vec_table_id = OB_ISNULL(embedded_vec_schema) ? OB_INVALID_ID : embedded_vec_schema->get_table_id();
 
     const ObVecIndexDDLChildTaskInfo domain_index(vec_domain_index_name, domain_index_table_id, init_task_id);
     const ObVecIndexDDLChildTaskInfo vid_rowkey(vec_vid_rowkey_name, vid_rowkey_table_id, init_task_id);
     const ObVecIndexDDLChildTaskInfo rowkey_vid(vec_rowkey_vid_name, rowkey_vid_table_id, init_task_id);
     const ObVecIndexDDLChildTaskInfo index_id(vec_index_id_name, index_id_table_id, init_task_id);
     const ObVecIndexDDLChildTaskInfo snapshot_data(vec_snapshot_data_name, snapshot_data_table_id, init_task_id);
+    const ObVecIndexDDLChildTaskInfo embedded_vec(hybrid_embedded_vec_name, embedded_vec_table_id, init_task_id);
 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(index_task.init(index_schema->get_tenant_id(),
@@ -2592,6 +2601,7 @@ int ObDDLScheduler::create_drop_vec_index_task(
                                 domain_index,
                                 index_id,
                                 snapshot_data,
+                                embedded_vec,
                                 schema_version,
                                 consumer_group_id,
                                 tenant_data_version,

@@ -2218,7 +2218,7 @@ int ObBackfillTabletsTableMgr::ObTabletTableMgr::add_sstable(
     ObStorageMetaHandle sstable_handle;
     if (sstable->is_loaded()) {
       orig_sstable = sstable;
-    } else if (OB_FAIL(ObTabletTableStore::load_sstable(
+    } else if (OB_FAIL(ObCacheSSTableHelper::load_sstable(
         sstable->get_addr(), sstable->is_co_sstable(), sstable_handle))) {
       LOG_WARN("failed to load sstable", K(ret), KPC(sstable));
     } else if (OB_FAIL(sstable_handle.get_sstable(orig_sstable))) {

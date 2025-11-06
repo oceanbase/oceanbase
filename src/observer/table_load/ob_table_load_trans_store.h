@@ -40,6 +40,8 @@ namespace observer
 class ObTableLoadParam;
 class ObTableLoadTransCtx;
 class ObTableLoadStoreCtx;
+class ObTableLoadStoreTrans;
+class ObTableLoadDagWriter;
 
 class ObTableLoadTransStore
 {
@@ -68,7 +70,7 @@ public:
 class ObTableLoadTransStoreWriter
 {
 public:
-  ObTableLoadTransStoreWriter(ObTableLoadTransStore *trans_store);
+  ObTableLoadTransStoreWriter(ObTableLoadStoreTrans *trans, ObTableLoadTransStore *trans_store);
   ~ObTableLoadTransStoreWriter();
   int init();
   int advance_sequence_no(int32_t session_id, uint64_t sequence_no, ObTableLoadMutexGuard &guard);
@@ -76,6 +78,8 @@ public:
 public:
   // 只在对应工作线程中调用, 串行执行
   int write(int32_t session_id, const table::ObTableLoadTabletObjRowArray &row_array);
+  int px_write(common::ObIVector *tablet_id_vector,
+               const storage::ObDirectLoadBatchRows &batch_rows);
   int px_write(const common::ObTabletID &tablet_id,
                const storage::ObDirectLoadBatchRows &batch_rows);
   int px_write(const common::ObTabletID &tablet_id,
@@ -84,7 +88,8 @@ public:
                const int64_t size);
   int cast_row(int32_t session_id,
                const table::ObTableLoadObjRow &obj_row,
-               const ObDirectLoadDatumRow *&datum_row);
+               const ObDirectLoadDatumRow *&datum_row,
+               const common::ObTabletID &tablet_id);
   int flush(int32_t session_id);
   int clean_up(int32_t session_id);
 public:
@@ -99,12 +104,14 @@ private:
                   const share::schema::ObColumnSchemaV2 *column_schema,
                   const common::ObObj &obj,
                   blocksstable::ObStorageDatum &datum,
-                  int32_t session_id);
+                  int32_t session_id,
+                  const common::ObTabletID &tablet_id);
   int cast_row(common::ObArenaAllocator &cast_allocator,
                ObDataTypeCastParams cast_params,
                const table::ObTableLoadObjRow &obj_row,
                ObDirectLoadDatumRow &datum_row,
-               int32_t session_id);
+               int32_t session_id,
+               const common::ObTabletID &tablet_id);
   int handle_autoinc_column(const share::schema::ObColumnSchemaV2 *column_schema,
                             const common::ObObj &obj,
                             blocksstable::ObStorageDatum &datum,
@@ -113,6 +120,11 @@ private:
                              const common::ObObj &obj,
                              common::ObObj &out_obj,
                              common::ObArenaAllocator &cast_allocator);
+  int handle_hidden_clustering_key_column(common::ObArenaAllocator &cast_allocator,
+                                          const share::schema::ObColumnSchemaV2 *column_schema,
+                                          const common::ObObj &obj,
+                                          const common::ObTabletID &tablet_id,
+                                          blocksstable::ObStorageDatum &datum);
   int check_rowkey_length(const ObDirectLoadDatumRow &datum_row,
                           const int64_t rowkey_column_count);
 
@@ -214,6 +226,7 @@ private:
   };
 
 private:
+  ObTableLoadStoreTrans *const trans_;
   ObTableLoadTransStore *const trans_store_;
   ObTableLoadTransCtx *const trans_ctx_;
   ObTableLoadStoreCtx *const store_ctx_;
@@ -235,7 +248,9 @@ private:
     common::ObArenaAllocator cast_allocator_;
     ObDataTypeCastParams cast_params_;
     IWriter *writer_;
+    ObTableLoadDagWriter *dag_writer_;
     uint64_t last_receive_sequence_no_;
+    int64_t processed_rows_;
   };
   SessionContext *session_ctx_array_;
   int64_t lob_inrow_threshold_; // for incremental direct load

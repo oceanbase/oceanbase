@@ -1109,6 +1109,19 @@ int ObCreateTableHelper::generate_aux_table_schemas_()
                                                        false, /*generate_id*/
                                                        index_schema))) {
         LOG_WARN("generate_schema for index failed", KR(ret), K(index_arg), KPC(data_table));
+      } else if (index_schema.is_hybrid_vec_index_log_type()) {
+        if (!has_lob_table) {
+          object_cnt += 2;
+          if (FAILEDx(gen_object_ids_(object_cnt, id_generator))) {
+            LOG_WARN("fail to gen object ids", KR(ret), K_(tenant_id), K(object_cnt));
+          }
+          has_lob_table = true;
+        } else {
+          // do nothing, don't need to force generate the lob table
+        }
+      }
+
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(id_generator.next(object_id))) {
         LOG_WARN("fail to get next object_id", KR(ret));
       } else if (FALSE_IT(index_schema.set_table_id(object_id))) {
@@ -2114,7 +2127,7 @@ int ObCreateTableHelper::create_tables_()
       } else if (OB_FAIL(schema_service_impl->get_table_sql_service().insert_temp_table_info(
                  get_trans_(), new_table))) {
         LOG_WARN("insert_temp_table_info failed", KR(ret), K(new_table));
-      } else if (new_table.is_vec_delta_buffer_type() &&
+      } else if ((new_table.is_vec_delta_buffer_type() || new_table.is_hybrid_vec_index_log_type()) &&
                  OB_FAIL(ObVectorIndexUtil::add_dbms_vector_jobs(get_trans_(), new_table.get_tenant_id(),
                                                                  new_table.get_table_id(),
                                                                  new_table.get_exec_env()))) {

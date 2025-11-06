@@ -196,7 +196,7 @@ int ObIndexBlockScanEstimator::cal_total_estimate_result(
       if (datum_range.is_whole_range()) {
       } else {
         const bool is_multi_version_minor = sstable.is_multi_version_minor_sstable();
-        const bool is_major = sstable.is_major_sstable();
+        const bool is_major = sstable.is_major_type_sstable();
         if (!datum_range.get_start_key().is_min_rowkey()) {
           if (OB_FAIL(estimate_excluded_border_result(
                   is_multi_version_minor, is_major, datum_range, true, result))) {

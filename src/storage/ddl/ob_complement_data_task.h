@@ -16,7 +16,8 @@
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "storage/access/ob_table_access_context.h"
 #include "storage/compaction/ob_column_checksum_calculator.h"
-#include "storage/ddl/ob_direct_load_mgr_agent.h"
+#include "storage/ddl/ob_cg_macro_block_write_task.h"
+#include "storage/ddl/ob_tablet_slice_row_iterator.h"
 
 namespace oceanbase
 {
@@ -53,6 +54,7 @@ class ObScan;
 class ObLocalScan;
 class ObRemoteScan;
 class ObMultipleScanMerge;
+class ObChunk;
 struct ObComplementDataParam final
 {
 public:
@@ -63,7 +65,7 @@ public:
     row_store_type_(common::ENCODING_ROW_STORE), orig_schema_version_(0), dest_schema_version_(0),
     snapshot_version_(0), task_id_(0), execution_id_(-1), tablet_task_id_(0), compat_mode_(lib::Worker::CompatMode::INVALID), data_format_version_(0),
     orig_schema_tablet_size_(0), dest_schema_cg_cnt_(0), user_parallelism_(0), concurrent_cnt_(0), ranges_(),
-    need_rescan_fill_cg_(false), is_no_logging_(false), allocator_("CompleteDataPar", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
+    is_no_logging_(false), dest_lob_meta_tablet_id_(), allocator_("CompleteDataPar", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
   {}
   ~ObComplementDataParam() { destroy(); }
   int init(const obrpc::ObDDLBuildSingleReplicaRequestArg &arg);
@@ -81,8 +83,7 @@ public:
     const common::ObTabletID &tablet_id,
     const int64_t tablet_size,
     const int64_t hint_parallelism,
-    const int64_t dest_schema_cg_cnt,
-    const bool need_rescan_fill_cg);
+    const int64_t dest_schema_cg_cnt);
   bool is_valid() const
   {
     return common::OB_INVALID_TENANT_ID != orig_tenant_id_ && common::OB_INVALID_TENANT_ID != dest_tenant_id_
@@ -108,7 +109,7 @@ public:
     dest_table_id_ = common::OB_INVALID_ID;
     orig_tablet_id_.reset();
     dest_tablet_id_.reset();
-    allocator_.reset();
+    dest_lob_meta_tablet_id_.reset();
     row_store_type_ = common::ENCODING_ROW_STORE;
     orig_schema_version_ = 0;
     dest_schema_version_ = 0;
@@ -122,16 +123,28 @@ public:
     dest_schema_cg_cnt_ = 0;
     user_parallelism_ = 0;
     concurrent_cnt_ = 0;
-    need_rescan_fill_cg_ = false;
     is_no_logging_ = false;
     ranges_.reset();
+    direct_load_type_ = DIRECT_LOAD_INVALID;
+    if (nullptr != tablet_param_.storage_schema_) {
+      tablet_param_.storage_schema_->~ObStorageSchema();
+      allocator_.free(tablet_param_.storage_schema_);
+      tablet_param_.storage_schema_ = nullptr;
+    }
+    if (nullptr != lob_meta_tablet_param_.storage_schema_) {
+      lob_meta_tablet_param_.storage_schema_->~ObStorageSchema();
+      allocator_.free(lob_meta_tablet_param_.storage_schema_);
+      lob_meta_tablet_param_.storage_schema_ = nullptr;
+    }
+    allocator_.reset();
   }
   TO_STRING_KV(K_(is_inited), K_(orig_tenant_id), K_(dest_tenant_id), K_(orig_ls_id), K_(dest_ls_id),
       K_(orig_table_id), K_(dest_table_id), K_(orig_tablet_id), K_(dest_tablet_id), K_(orig_schema_version),
       K_(tablet_task_id), K_(dest_schema_version), K_(snapshot_version), K_(task_id),
       K_(execution_id), K_(compat_mode), K_(data_format_version), K_(orig_schema_tablet_size),K_(user_parallelism),
-      K_(concurrent_cnt), K_(ranges), K_(need_rescan_fill_cg), K_(is_no_logging));
+      K_(concurrent_cnt), K_(ranges), K_(is_no_logging), K_(direct_load_type), K_(tablet_param), K_(lob_meta_tablet_param));
 private:
+  int fill_tablet_param();
   int get_complement_parallel_mode(
       const uint64_t tenant_id,
       const uint64_t table_id,
@@ -164,9 +177,12 @@ public:
   /* complememt prepare task will initialize parallel task ranges */
   int64_t concurrent_cnt_; /* real complement tasks num */
   ObArray<blocksstable::ObDatumRange> ranges_;
-  bool need_rescan_fill_cg_;  /* use to select different dag task structure */
   bool is_no_logging_;
-private:
+  ObDDLTableSchema ddl_table_schema_;
+  ObWriteTabletParam tablet_param_;
+  ObWriteTabletParam lob_meta_tablet_param_;
+  ObDirectLoadType direct_load_type_;
+  ObTabletID dest_lob_meta_tablet_id_;
   common::ObArenaAllocator allocator_;
   static constexpr int64_t MAX_RPC_STREAM_WAIT_THREAD_COUNT = 100;
   static constexpr int64_t ROW_TABLE_PARALLEL_MIN_TASK_SIZE = 2 * 1024 * 1024L; /*2MB*/
@@ -179,25 +195,25 @@ struct ObComplementDataContext final
 {
 public:
   ObComplementDataContext():
-    is_inited_(false), ddl_agent_(), direct_load_type_(ObDirectLoadType::DIRECT_LOAD_INVALID),
-    is_major_sstable_exist_(false), complement_data_ret_(common::OB_SUCCESS),
+    allocator_("DDL_COMPL_CTX", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    is_inited_(false), is_major_sstable_exist_(false), complement_data_ret_(common::OB_SUCCESS),
     lock_(ObLatchIds::COMPLEMENT_DATA_CONTEXT_LOCK), concurrent_cnt_(0),
-    physical_row_count_(0), row_scanned_(0), row_inserted_(0), cg_row_inserted_(0), context_id_(0), lob_cols_cnt_(0), total_slice_cnt_(-1)
+    physical_row_count_(0), row_scanned_(0), row_inserted_(0), total_slice_cnt_(-1),
+    tablet_ctx_(), cg_row_inserted_(0)
   {}
   ~ObComplementDataContext() { destroy(); }
   int init(
     const ObComplementDataParam &param,
     const share::schema::ObTableSchema &hidden_table_schema);
   void destroy();
-  int write_start_log(const ObComplementDataParam &param);
   int add_column_checksum(const ObIArray<int64_t> &report_col_checksums, const ObIArray<int64_t> &report_col_ids);
   int get_column_checksum(ObIArray<int64_t> &report_col_checksums, ObIArray<int64_t> &report_col_ids);
-  TO_STRING_KV(K_(is_inited), K_(ddl_agent), K_(direct_load_type), K_(is_major_sstable_exist), K_(complement_data_ret), K_(concurrent_cnt),
-      K_(physical_row_count), K_(row_scanned), K_(row_inserted), K_(cg_row_inserted), K_(context_id), K_(lob_cols_cnt), K_(total_slice_cnt));
+
+  TO_STRING_KV(K_(is_inited), K_(is_major_sstable_exist), K_(complement_data_ret), K_(concurrent_cnt),
+      K_(physical_row_count), K_(row_scanned), K_(row_inserted), K_(total_slice_cnt));
 public:
+  ObArenaAllocator allocator_;
   bool is_inited_;
-  ObDirectLoadMgrAgent ddl_agent_;
-  ObDirectLoadType direct_load_type_;
   bool is_major_sstable_exist_;
   int complement_data_ret_;
   ObSpinLock lock_;
@@ -205,12 +221,13 @@ public:
   int64_t physical_row_count_;
   int64_t row_scanned_;
   int64_t row_inserted_;
-  int64_t cg_row_inserted_; // unused now.
-  int64_t context_id_;
-  int64_t lob_cols_cnt_;
   ObArray<int64_t> report_col_checksums_;
   ObArray<int64_t> report_col_ids_;
   int64_t total_slice_cnt_;
+  ObDDLTabletContext *tablet_ctx_;
+
+  /* for compat, unused yet */
+  int64_t cg_row_inserted_;
 };
 
 class ObComplementPrepareTask;
@@ -239,7 +256,6 @@ public:
   virtual int create_first_task() override;
   virtual bool ignore_warning() override;
   virtual bool is_ha_dag() const override { return false; }
-  int create_first_task_for_fill_cg();
   // report replica build status to RS.
   int report_replica_build_status();
   int calc_total_row_count();
@@ -264,21 +280,54 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObComplementPrepareTask);
 };
 
-class ObComplementWriteTask final : public share::ObITask
+class ObComplementWriteMacroOperator : public ObWriteMacroBaseOperator
+{
+public:
+  explicit ObComplementWriteMacroOperator(ObPipeline *pipeline)
+    : ObWriteMacroBaseOperator(pipeline)
+  {}
+  virtual ~ObComplementWriteMacroOperator() = default;
+  virtual int execute(
+      const ObChunk &input_chunk,
+      ResultState &result_state,
+      ObChunk &output_chunk) override;
+  virtual int try_execute_finish(const ObChunk &input_chunk,
+                                 ResultState &result_state,
+                                 ObChunk &output_chunk);
+};
+
+class ObComplementRowIterator : public ObIStoreRowIterator
+{
+public:
+  ObComplementRowIterator()
+    : is_inited_(false), scan_(nullptr)
+  {}
+  virtual ~ObComplementRowIterator() = default;
+  int init(ObScan *scan);
+  virtual int get_next_row(const blocksstable::ObDatumRow *&row);
+private:
+  bool is_inited_;
+  ObScan *scan_;
+};
+
+class ObComplementWriteTask final : public ObWriteMacroPipeline
 {
 public:
   ObComplementWriteTask();
   ~ObComplementWriteTask();
   int init(const int64_t task_id, ObComplementDataParam &param, ObComplementDataContext &context);
-  int process() override;
+  virtual int preprocess() override;
+  virtual void postprocess(int &ret_code) override;
+protected:
+  virtual int get_next_chunk(ObChunk *&next_chunk) override;
+  virtual int fill_writer_param(ObWriteMacroParam &param);
 private:
-  int generate_next_task(share::ObITask *&next_task) override;
+  virtual int generate_next_task(share::ObITask *&next_task) override;
   int generate_col_param();
   int local_scan_by_range();
   int remote_scan();
   int do_local_scan();
   int do_remote_scan();
-  int append_row(ObScan *scan);
 
 private:
   static const int64_t RETRY_INTERVAL = 100 * 1000; // 100ms
@@ -289,6 +338,12 @@ private:
   ObArray<ObColDesc> col_ids_;
   ObArray<ObColDesc> org_col_ids_;
   ObArray<int32_t> output_projector_;
+  ObComplementWriteMacroOperator write_op_;
+  ObScan *scan_;
+  common::ObArenaAllocator allocator_;
+  ObComplementRowIterator row_iter_;
+  ObTabletSliceRowIterator slice_row_iter_;
+  ObChunk chunk_;
   DISALLOW_COPY_AND_ASSIGN(ObComplementWriteTask);
 };
 
@@ -304,37 +359,6 @@ private:
   ObComplementDataParam *param_;
   ObComplementDataContext *context_;
   DISALLOW_COPY_AND_ASSIGN(ObComplementMergeTask);
-};
-
-class ObComplementCalcRangeTask final : public share::ObITask
-{
-public:
-  ObComplementCalcRangeTask();
-  virtual ~ObComplementCalcRangeTask();
-  int init(ObComplementDataParam &param, ObComplementDataContext &context);
-  int process() override;
-private:
-  bool is_inited_;
-  ObComplementDataParam *param_;
-  ObComplementDataContext *context_;
-  DISALLOW_COPY_AND_ASSIGN(ObComplementCalcRangeTask);
-};
-
-class ObComplementRescanWriteTask final : public share::ObITask
-{
-public:
-  ObComplementRescanWriteTask();
-  virtual ~ObComplementRescanWriteTask();
-  int init(const int64_t task_id, ObComplementDataParam &param, ObComplementDataContext &context);
-  int process() override;
-private:
-  int generate_next_task(share::ObITask *&next_task) override;
-private:
-  bool is_inited_;
-  int64_t task_id_;
-  ObComplementDataParam *param_;
-  ObComplementDataContext *context_;
-  DISALLOW_COPY_AND_ASSIGN(ObComplementRescanWriteTask);
 };
 
 struct ObExtendedGCParam final

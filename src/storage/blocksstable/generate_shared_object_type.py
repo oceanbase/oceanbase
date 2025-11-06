@@ -569,7 +569,9 @@ int ObStorageObjectTypeBase::aio_read(
       case ObStorageObjectType::SHARED_MDS_MINOR_DATA_MACRO:
       case ObStorageObjectType::SHARED_MDS_MINOR_META_MACRO:
       case ObStorageObjectType::SHARED_MAJOR_DATA_MACRO:
-      case ObStorageObjectType::SHARED_MAJOR_META_MACRO: {
+      case ObStorageObjectType::SHARED_MAJOR_META_MACRO:
+      case ObStorageObjectType::SHARED_INC_MAJOR_DATA_MACRO:
+      case ObStorageObjectType::SHARED_INC_MAJOR_META_MACRO: {
         ObSSShareMacroReader share_macro_reader;
         if (OB_FAIL(share_macro_reader.aio_read(read_info, object_handle))) {
           LOG_WARN("fail to aio read", KR(ret), K(read_info), K(object_handle));
@@ -656,7 +658,9 @@ int ObStorageObjectTypeBase::aio_write(
       case ObStorageObjectType::SHARED_MDS_MINOR_DATA_MACRO:
       case ObStorageObjectType::SHARED_MDS_MINOR_META_MACRO:
       case ObStorageObjectType::SHARED_MAJOR_DATA_MACRO:
-      case ObStorageObjectType::SHARED_MAJOR_META_MACRO: {
+      case ObStorageObjectType::SHARED_MAJOR_META_MACRO:
+      case ObStorageObjectType::SHARED_INC_MAJOR_DATA_MACRO:
+      case ObStorageObjectType::SHARED_INC_MAJOR_META_MACRO: {
         ObSSShareMacroWriter share_macro_writer;
         if (OB_FAIL(share_macro_writer.aio_write(write_info, object_handle))) {
           LOG_WARN("fail to aio write", KR(ret), K(write_info), K(object_handle));

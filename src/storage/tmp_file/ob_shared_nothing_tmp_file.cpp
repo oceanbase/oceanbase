@@ -72,7 +72,6 @@ int ObSharedNothingTmpFile::init(const uint64_t tenant_id, const int64_t fd, con
     is_inited_ = false;
   }
 
-  LOG_INFO("tmp file init over", KR(ret), K(fd), K(dir_id));
   return ret;
 }
 
@@ -114,8 +113,6 @@ int ObSharedNothingTmpFile::release_resource()
       LOG_ERROR("fail to clear meta tree", KR(ret), K(fd_), K(truncated_offset_), K(pre_allocated_file_size_));
     }
   }
-
-  LOG_INFO("tmp file release resource over", KR(ret), "fd", fd_);
   return ret;
 }
 

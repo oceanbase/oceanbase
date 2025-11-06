@@ -33,6 +33,7 @@ const char *ObCatalogProperties::CATALOG_TYPE_STR[] = {
     "ODPS",
     "FILESYSTEM",
     "HMS",
+    "REST"
 };
 static_assert(array_elements(ObCatalogProperties::CATALOG_TYPE_STR) == static_cast<size_t>(ObCatalogProperties::CatalogType::MAX_TYPE), "Not enough initializer for ObCatalogProperties");
 static_assert(array_elements(ObODPSCatalogProperties::OPTION_NAMES) == static_cast<size_t>(ObODPSCatalogProperties::ObOdpsCatalogOptions::MAX_OPTIONS), "Not enough initializer for ObODPSCatalogProperties");
@@ -779,8 +780,8 @@ int ObHMSCatalogProperties::to_json_kv_string(char *buf, const int64_t buf_len, 
                      buf_len,
                      pos,
                      R"("%s":"%s")",
-                     OPTION_NAMES[DEFAULT_CATALOG],
-                     helper.convert(ObHexStringWrap(default_catalog_))));
+                     OPTION_NAMES[HMS_CATALOG_NAME],
+                     helper.convert(ObHexStringWrap(hms_catalog_name_))));
   return ret;
 }
 
@@ -855,12 +856,12 @@ int ObHMSCatalogProperties::load_from_string(const ObString &str, ObIAllocator &
       cache_refresh_interval_sec_ = node->value_->get_number();
       node = node->get_next();
     }
-    if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[DEFAULT_CATALOG])
+    if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[HMS_CATALOG_NAME])
         && json::JT_STRING == node->value_->get_type()) {
       ObObj obj;
       OZ(ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
       if (OB_SUCC(ret) && !obj.is_null()) {
-        default_catalog_ = obj.get_string();
+        hms_catalog_name_ = obj.get_string();
       }
       node = node->get_next();
     }
@@ -913,8 +914,8 @@ int ObHMSCatalogProperties::resolve_catalog_properties(const ParseNode &node)
           cache_refresh_interval_sec_ = child_value->value_;
           break;
         }
-        case T_DEFAULT_CATALOG: {
-          default_catalog_ = ObString(child_value->str_len_, child_value->str_value_).trim_space_only();
+        case T_HMS_CATALOG_NAME: {
+          hms_catalog_name_ = ObString(child_value->str_len_, child_value->str_value_).trim_space_only();
           break;
         }
         default: {

@@ -25,6 +25,7 @@ namespace oceanbase
 namespace sql
 {
 
+
 class ObFTIndexRowCache final
 {
 public:
@@ -247,6 +248,8 @@ protected:
       const ObDASDMLBaseCtDef *das_ctdef,
       const ObDASDMLBaseCtDef *main_ctdef);
   virtual int generate_domain_rows(const ObChunkDatumStore::StoredRow *store_row) = 0;
+
+  virtual int check_sync_interval(bool &is_sync_interval) const { UNUSED(is_sync_interval); return OB_SUCCESS; }
 
 protected:
   ObDomainDMLMode mode_;

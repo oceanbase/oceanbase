@@ -710,6 +710,7 @@ int ObOptimizer::check_is_heap_table(const ObDMLStmt &stmt)
   const share::schema::ObTableSchema *table_schema = NULL;
   const ObDelUpdStmt *pdml_stmt = NULL;
   ObSEArray<const ObDmlTableInfo*, 1> dml_table_infos;
+  bool is_table_with_logic_pk = false;
   // check if the target table is heap table
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
@@ -729,18 +730,30 @@ int ObOptimizer::check_is_heap_table(const ObDMLStmt &stmt)
                                                     dml_table_infos.at(0)->ref_table_id_,
                                                     table_schema))) {
     LOG_WARN("failed to get table schema", K(ret));
-  } else if(OB_NOT_NULL(table_schema) && table_schema->is_table_without_pk()) {
+  } else if (OB_NOT_NULL(table_schema) && table_schema->is_table_with_logic_pk(*schema_guard, is_table_with_logic_pk)) {
+    LOG_WARN("fail to check table is with logic pk", KPC(table_schema));
+  } else if (!is_table_with_logic_pk) {
     ctx_.set_is_pdml_heap_table(true);
   }
   return ret;
 }
 
+ERRSIM_POINT_DEF(FORCE_INC_DIRECT_WRITE);
 int ObOptimizer::init_env_info(ObDMLStmt &stmt)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session_info = NULL;
   int64_t rowgoal_type = -1;
   const ObOptParamHint &opt_params = ctx_.get_global_hint().opt_params_;
+  if (OB_UNLIKELY(FORCE_INC_DIRECT_WRITE)) {
+    if (stmt::T_INSERT == stmt.get_stmt_type()) {
+      ObGlobalHint *global_hint_for_update = const_cast<ObGlobalHint *>(&(ctx_.get_global_hint()));
+      global_hint_for_update->pdml_option_ = ObPDMLOption::ENABLE;
+      global_hint_for_update->parallel_ =
+        global_hint_for_update->parallel_ == 0 ? 2 : global_hint_for_update->parallel_;
+      ctx_.get_exec_ctx()->get_table_direct_insert_ctx().set_force_inc_direct_write(true);
+    }
+  }
   if (OB_ISNULL(session_info = ctx_.get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(session_info), K(ret));

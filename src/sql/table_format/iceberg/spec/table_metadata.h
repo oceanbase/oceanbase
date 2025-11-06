@@ -92,13 +92,13 @@ public:
   int32_t last_column_id;
 
   // The table’s schemas. Only store latest schema
-  ObArray<Schema *> schemas;
+  ObFixedArray<Schema *, ObIAllocator> schemas;
 
   // ID of the table's current schema.
   int32_t current_schema_id;
 
   // A list of partition specs, stored as full partition spec objects.
-  ObArray<PartitionSpec *> partition_specs;
+  ObFixedArray<PartitionSpec *, ObIAllocator> partition_specs;
 
   // ID of the "current" spec that writers should use by default.
   int32_t default_spec_id;
@@ -108,14 +108,14 @@ public:
   int32_t last_partition_id;
 
   // A string to string map of table properties.
-  ObArray<std::pair<ObString, ObString>> properties;
+  ObFixedArray<std::pair<ObString, ObString>, ObIAllocator> properties;
 
   // long ID of the current table snapshot; must be the same as the current ID of the main branch in
   // refs.
   int64_t current_snapshot_id;
 
   // A list of valid snapshots.
-  ObArray<Snapshot *> snapshots;
+  ObFixedArray<Snapshot *, ObIAllocator> snapshots;
 
   // A list (optional) of timestamp and snapshot ID pairs that encodes changes to the
   // current snapshot for the table.
@@ -135,7 +135,7 @@ public:
   // ObArray<SnapshotRef> refs;
 
   // Mapping of snapshot ids to statistics files.
-  ObArray<StatisticsFile *> statistics;
+  ObFixedArray<StatisticsFile *, ObIAllocator> statistics;
 
   // Mapping of snapshot ids to partition statistics files.
   // ObArray<PartitionStatisticsFile> partition_statistics;

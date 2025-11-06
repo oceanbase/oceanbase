@@ -301,7 +301,8 @@ int ObCreateTableResolverBase::add_primary_key_part(const ObString &column_name,
                                                     ObTableSchema &table_schema,
                                                     const int64_t cur_rowkey_size,
                                                     int64_t &pk_data_length,
-                                                    ObColumnSchemaV2 *&col)
+                                                    ObColumnSchemaV2 *&col,
+                                                    const bool is_heap_table_clustering_key)
 {
   int ret = OB_SUCCESS;
   col = NULL;
@@ -326,8 +327,9 @@ int ObCreateTableResolverBase::add_primary_key_part(const ObString &column_name,
   } else if (OB_USER_MAX_ROWKEY_COLUMN_NUMBER == cur_rowkey_size) {
     ret = OB_ERR_TOO_MANY_ROWKEY_COLUMNS;
     LOG_USER_ERROR(OB_ERR_TOO_MANY_ROWKEY_COLUMNS, OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
-  } else if (OB_FALSE_IT(col->set_nullable(false))
-             || OB_FALSE_IT(col->set_rowkey_position(cur_rowkey_size + 1))) {
+  } else if (is_heap_table_clustering_key && OB_FALSE_IT(col->add_column_flag(HEAP_TABLE_CLUSTERING_KEY_FLAG))) {
+  } else if (!is_heap_table_clustering_key && OB_FALSE_IT(col->set_nullable(false))) {
+  } else if (OB_FALSE_IT(col->set_rowkey_position(cur_rowkey_size + 1))) {
   } else if (OB_FAIL(table_schema.set_rowkey_info(*col))) {
     LOG_WARN("failed to set rowkey info", K(ret));
   } else if (!col->is_string_type()) {
@@ -467,15 +469,19 @@ int ObCreateTableResolverBase::resolve_column_group(const ParseNode *cg_node)
   return ret;
 }
 
-int ObCreateTableResolverBase::resolve_table_organization(omt::ObTenantConfigGuard &tenant_config, ParseNode *node)
+int ObCreateTableResolverBase::resolve_table_organization(omt::ObTenantConfigGuard &tenant_config, ParseNode *node,
+                                                          bool &has_clustering_key, int64_t &clustering_key_index)
 {
   int ret = OB_SUCCESS;
+  bool table_organization_set_to_index = false;
+  has_clustering_key = false;
+  clustering_key_index = -1;
   // get the table organization from the tenant config
   if (OB_LIKELY(tenant_config.is_valid())) {
     const char *ptr = NULL;
     if (OB_ISNULL(ptr = tenant_config->default_table_organization.get_value())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("default organization ptr is null", K(ret));
+      LOG_WARN("default organization ptr is null", KR(ret));
     } else {
       table_organization_ =
         (0 == ObString::make_string("HEAP").case_compare(ptr)) ?
@@ -508,28 +514,54 @@ int ObCreateTableResolverBase::resolve_table_organization(omt::ObTenantConfigGua
       if (OB_ISNULL(option_node = node->children_[i])) {
         ret = OB_ERR_UNEXPECTED;
         SQL_RESV_LOG(WARN, "node is null", K(ret));
+      } else if (T_CLUSTERING_KEY == option_node->type_) {
+        if (table_organization_set_to_index) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("IOT table should not have cluster key", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Defining cluster key in IOT table is");
+        } else if (has_clustering_key) {
+          ret = OB_DUPLICATE_OPTION;
+          const char *option_name = "cluster by";
+          LOG_WARN("duplicate cluster by specifications", KR(ret));
+          LOG_USER_ERROR(OB_DUPLICATE_OPTION, 10, option_name);
+        } else {
+          has_clustering_key = true;
+          clustering_key_index = i;
+          table_organization_ = ObTableOrganizationType::OB_HEAP_ORGANIZATION;
+        }
       } else if (T_ORGANIZATION == option_node->type_) {
         if (lib::is_oracle_mode()) {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("oracle mode should not specify organization type", K(ret));
+          LOG_WARN("oracle mode should not specify organization type", KR(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "specify organization type in oracle mode");
+        } else if (OB_ISNULL(stmt_)) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "unexpected error, stmt is null", KR(ret), KP(stmt_));
         } else if (stmt_->get_stmt_type() == stmt::T_CREATE_TABLE) {
           if (OB_ISNULL(option_node->children_[0])) {
             ret = OB_ERR_UNEXPECTED;
-            SQL_RESV_LOG(WARN, "option_node child is null", K(option_node->children_[0]), K(ret));
+            SQL_RESV_LOG(WARN, "option_node child is null", K(option_node->children_[0]), KR(ret));
           } else {
             if (T_ORGANIZATION_HEAP == option_node->children_[0]->type_) {
               table_organization_ = ObTableOrganizationType::OB_HEAP_ORGANIZATION;
             } else if (T_ORGANIZATION_INDEX == option_node->children_[0]->type_) {
-              table_organization_ = ObTableOrganizationType::OB_INDEX_ORGANIZATION;
+              if (has_clustering_key) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("IOT table should not have cluster key", KR(ret));
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "Defining cluster key in IOT table is");
+              } else {
+                table_organization_set_to_index = true;
+                table_organization_ = ObTableOrganizationType::OB_INDEX_ORGANIZATION;
+              }
             }
           }
         } else if (stmt_->get_stmt_type() == stmt::T_ALTER_TABLE) {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("alter table statement should not specify organization type", K(ret));
+          LOG_WARN("alter table statement should not specify organization type", KR(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "specify organization type in alter table query");
         } else {
           ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "invalid stmt type", KR(ret));
         }
       }
     }

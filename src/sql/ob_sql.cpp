@@ -964,8 +964,14 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
                 if (column_expr->is_mul_key_column()) {
                   field.flags_ |= MULTIPLE_KEY_FLAG;
                 }
+                // Remove PRI_KEY_FLAG and PART_KEY_FLAG for clustering key columns for compatibility with jdbc
+                if (::oceanbase::share::schema::is_heap_table_clustering_key_column(column_expr->get_column_flags())) {
+                  field.flags_ &= ~PRI_KEY_FLAG;
+                  field.flags_ &= ~PART_KEY_FLAG;
+                }
                 if (::oceanbase::share::schema::is_heap_table_primary_key_column(column_expr->get_column_flags())) {
                   field.flags_ |= PRI_KEY_FLAG;
+                  field.flags_ |= PART_KEY_FLAG;
                 }
               }
             }

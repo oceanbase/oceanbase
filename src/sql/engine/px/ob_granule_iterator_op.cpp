@@ -452,7 +452,8 @@ int ObGranuleIteratorOp::rescan()
       } else if (OB_ISNULL(real_child_)) {
         ret = OB_ERR_UNEXPECTED;
       } else if (PHY_BLOCK_SAMPLE_SCAN == real_child_->get_spec().type_ ||
-          PHY_ROW_SAMPLE_SCAN == real_child_->get_spec().type_) {
+          PHY_ROW_SAMPLE_SCAN == real_child_->get_spec().type_ ||
+          PHY_DDL_BLOCK_SAMPLE_SCAN == real_child_->get_spec().type_) {
         OZ(const_cast<ObGranulePump *>(pump_)->reset_gi_task());
       }
     }
@@ -989,7 +990,8 @@ int ObGranuleIteratorOp::get_gi_task_consumer_node(ObOperator *cur,
   if (0 == child_cnt) {
     if (PHY_TABLE_SCAN == cur->get_spec().type_
         || PHY_BLOCK_SAMPLE_SCAN == cur->get_spec().type_
-        || PHY_ROW_SAMPLE_SCAN == cur->get_spec().type_) {
+        || PHY_ROW_SAMPLE_SCAN == cur->get_spec().type_
+        || PHY_DDL_BLOCK_SAMPLE_SCAN == cur->get_spec().type_) {
       const ObTableScanSpec &tsc_spec = static_cast<const ObTableScanSpec&>(cur->get_spec());
       if (!tsc_spec.use_dist_das_) {
         consumer = cur;

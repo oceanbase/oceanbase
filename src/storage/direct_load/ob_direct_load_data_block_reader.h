@@ -35,6 +35,7 @@ public:
   int get_next_item(const T *&item) override;
   OB_INLINE bool is_opened() const { return is_opened_; }
   OB_INLINE int64_t get_block_count() const { return block_count_; }
+  OB_INLINE int64_t get_offset() const { return offset_; }
 protected:
   virtual int prepare_read_block() { return common::OB_SUCCESS; }
 private:

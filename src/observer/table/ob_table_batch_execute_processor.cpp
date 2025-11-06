@@ -171,6 +171,7 @@ void ObTableBatchExecuteP::reset_ctx()
   result_.reset();
   ObTableApiProcessorBase::reset_ctx();
   batch_ctx_.tb_ctx_.reset();
+  batch_ctx_.tablet_ids_.reset();
   result_entity_.reset();
 }
 

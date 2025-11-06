@@ -364,7 +364,10 @@
 #include "ob_expr_vec_scn.h"
 #include "ob_expr_vec_vid.h"
 #include "ob_expr_vec_data.h"
+#include "ob_expr_vec_visible.h"
 #include "ob_expr_vec_type.h"
+#include "ob_expr_vec_chunk.h"
+#include "ob_expr_embedded_vec.h"
 #include "ob_expr_spiv_dim.h"
 #include "ob_expr_spiv_value.h"
 #include "ob_expr_vector.h"
@@ -458,6 +461,7 @@
 #include "sql/engine/expr/ob_expr_ai/ob_expr_ai_embed.h"
 #include "sql/engine/expr/ob_expr_ai/ob_expr_ai_rerank.h"
 #include "ob_expr_local_dynamic_filter.h"
+#include "ob_expr_semantic_distance.h"
 #include "ob_expr_format_profile.h"
 #include "ob_expr_bucket.h"
 #include "sql/engine/expr/ob_expr_ai/ob_expr_ai_prompt.h"
@@ -1432,20 +1436,20 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprAIRerank::eval_ai_rerank,                                     /* 859 */
   NULL,//ObExprMd5ConcatWs::calc_md5_concat_ws_expr                   /* 860 */
   ObExprUDF::eval_mysql_udtf,                                         /* 861 */
-  NULL,//ObExprHiddenClusteringKey::eval_hidden_clustering_key,       /* 862 */
+  NULL, // ObExprHiddenClusteringKey::eval_hidden_clustering_key,     /* 862 */
   ObExprFormatProfile::format_profile,                                /* 863 */
   ObExprLocalDynamicFilter::eval_local_dynamic_filter,                /* 864 */
-  NULL, // ObExprVecChunk::generate_vec_chunk,                        /* 865 */
-  NULL, // ObExprEmbeddedVec::generate_embedded_vec,                  /* 866 */
-  NULL, // ObExprSemanticDistance::calc_semantic_distance,            /* 867 */
+  ObExprVecChunk::generate_vec_chunk,                                 /* 865 */
+  ObExprEmbeddedVec::generate_embedded_vec,                           /* 866 */
+  ObExprSemanticDistance::calc_semantic_distance,                     /* 867 */
   ObExprBucket::calc_bucket_expr,                                     /* 868 */
-  NULL, // ObExprSemanticVectorDistance::calc_semantic_vector_distance, /* 869 */
+  ObExprSemanticVectorDistance::calc_semantic_vector_distance,        /* 869 */
   ObExprAIPrompt::eval_ai_prompt,                                     /* 870 */
   ObExprVectorL2Similarity::calc_l2_similarity,                       /* 871 */
   ObExprVectorCosineSimilarity::calc_cosine_similarity,               /* 872 */
   ObExprVectorIPSimilarity::calc_ip_similarity,                       /* 873 */
   ObExprVectorSimilarity::calc_similarity,                            /* 874 */
-  NULL, // ObExprVecVisible::generate_vec_visible                     /* 875 */
+  ObExprVecVisible::generate_vec_visible,                             /* 875 */
   NULL, // ObExprArrayContains::eval_array_contains_int32_t           /* 876 */
   NULL, // ObExprMaxPt::eval_max_pt,                                  /* 877 */
 };
@@ -1868,7 +1872,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   ObExprAIEmbed::eval_ai_embed_vector,                                   /* 230 */
   NULL, // ObExprAIRerank::eval_ai_rerank_vector,                               /* 231 */
   NULL, // ObExprMd5ConcatWs::calc_md5_concat_ws_vector                         /* 232 */
-  NULL, // ObExprHiddenClusteringKey::eval_vector_hidden_clustering_key,         /* 233 */
+  NULL, // ObExprHiddenClusteringKey::eval_vector_hidden_clustering_key, /* 233 */
   ObExprToPinyin::eval_to_pinyin_vector,                                 /* 234 */
   ObExprMul::mul_decint32_decint32_int32_vector,                         /* 235 */
   ObExprMul::mul_decint32_int32_decint32_vector,                         /* 236 */
@@ -1903,6 +1907,18 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprTimestamp::calc_timestamp1_vector,                      /* 265 */
   NULL, // ObExprWeekDay::calc_weekday_vector,                           /* 266 */
   NULL, // ObExprTimeDiff::calc_timediff_vector,                         /* 267 */
+  NULL, // ObExprIsIpv4::calc_is_ipv4_vector,                            /* 268 */
+  NULL, // ObExprIsIpv6::calc_is_ipv6_vector,                            /* 269 */
+  NULL, // ObExprIsIpv4Mapped::calc_is_ipv4_mapped_vector,               /* 270 */
+  NULL, // ObExprIsIpv4Compat::calc_is_ipv4_compat_vector,               /* 271 */
+  NULL, // ObExprInet6Ntoa::calc_inet6_ntoa_vector,                      /* 272 */
+  NULL, // ObExprInet6Aton::calc_inet6_aton_vector,                      /* 273 */
+  NULL, // ObExprAtan::eval_number_atan_vector,                          /* 274 */
+  NULL, // ObExprAtan::eval_double_atan_vector,                          /* 275 */
+  NULL, // ObExprAtan2::eval_number_atan2_vector,                        /* 276 */
+  NULL, // ObExprAtan2::eval_double_atan2_vector,                        /* 277 */
+  NULL, // ObExprDegrees::calc_degrees_vector_expr,                      /* 278 */
+  NULL, // ObExprRadians::calc_radians_vector_expr,                      /* 279 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,

@@ -39,8 +39,8 @@ public:
   virtual ~ObDirectLoadInsertTableRowIterator();
   int init(ObDirectLoadInsertTabletContext *insert_tablet_ctx,
            const ObIArray<ObDirectLoadIStoreRowIterator *> &row_iters,
-           ObDirectLoadDMLRowHandler *dml_row_handler,
-           sql::ObLoadDataStat *job_stat);
+           ObDirectLoadDMLRowHandler *dml_row_handler, sql::ObLoadDataStat *job_stat,
+           bool is_delete_full_row);
   int get_next_row(const blocksstable::ObDatumRow *&datum_row) override;
   int get_next_row(const bool skip_lob, const blocksstable::ObDatumRow *&row) override;
   int close();
@@ -55,6 +55,7 @@ protected:
   ObDirectLoadInsertTableRowHandler row_handler_;
   blocksstable::ObDatumRow insert_datum_row_;
   blocksstable::ObDatumRow delete_datum_row_;
+  bool is_delete_full_row_;
   int64_t rowkey_column_count_;
   int64_t column_count_;
   int64_t pos_;

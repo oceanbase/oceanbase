@@ -280,7 +280,7 @@ END_P SET_VAR DELIMITER
         BADFILE BOUNDARY_COLUMN BOUNDARY_COLUMN_UNIT BUFFER_SIZE BIGINT_PRECISION
 
         CACHE CALIBRATION CALIBRATION_INFO CANCEL CASCADED CAST CATALOG CATALOGS CATALOG_NAME CHAIN CHANGED CHARSET CHECKSUM CHECKPOINT CHUNK CIPHER
-        CLASS_ORIGIN CLEAN CLEAR CLIENT CLONE CLOG CLOSE CLUSTER CLUSTER_ID CLUSTER_NAME COALESCE COLUMN_BLOOM_FILTER COLUMN_STAT
+        CLASS_ORIGIN CLEAN CLEAR CLIENT CLONE CLOG CLOSE CLUSTER CLUSTERING CLUSTER_ID CLUSTER_NAME COALESCE COLUMN_BLOOM_FILTER COLUMN_STAT
         CODE COLLATION COLLECT_STATISTICS_ON_CREATE COLUMN_FORMAT COLUMN_INDEX_TYPE COLUMN_NAME COLUMNS COMMENT COMMIT COMMITTED COMPACT COMPLETION COMPLETE
         COMPRESSED COMPRESSION COMPRESSION_BLOCK_SIZE COMPRESSION_CODE COMPUTATION COMPUTE CONCURRENT CONCURRENT_LIMITING_RULE CONDENSED CONDITIONAL CONFIGS CONNECTION CONSISTENT CONSISTENT_MODE CONSTRAINT_CATALOG
         CONSTRAINT_NAME CONSTRAINT_SCHEMA CONTAINS CONTEXT CONTRIBUTORS COPY COSINE COUNT CPU CREATE_TIMESTAMP CREDENTIAL
@@ -289,7 +289,7 @@ END_P SET_VAR DELIMITER
         DAG DATA DATAFILE DATA_DISK_SIZE DATA_SOURCE DATA_TABLE_ID DATE DATE_ADD DATE_SUB DATETIME DAY DEALLOCATE DECRYPT DECRYPTION
         DEFAULT_AUTH DEFAULT_LOB_INROW_THRESHOLD DEFINER DELAY DELAY_KEY_WRITE DEPTH DES_KEY_FILE DENSE_RANK DESCRIPTION DESTINATION DIAGNOSTICS DICT_TABLE
         DIRECTORY DISABLE DISALLOW DISCARD DISK DISKGROUP DO DOT DUMP DUMPFILE DUPLICATE DUPLICATE_SCOPE DUPLICATE_READ_CONSISTENCY DYNAMIC
-        DATABASE_ID DEFAULT_TABLEGROUP DISCONNECT DEMAND DELETE_INSERT DYNAMIC_PARTITION_POLICY DEFAULT_CATALOG
+        DATABASE_ID DEFAULT_TABLEGROUP DISCONNECT DEMAND DELETE_INSERT DYNAMIC_PARTITION_POLICY
 
         EFFECTIVE EMPTY ENABLE ENABLE_ARBITRATION_SERVICE ENABLE_EXTENDED_ROWID ENABLE_MACRO_BLOCK_BLOOM_FILTER ENCODING_TYPE ENCRYPT ENCRYPTED ENCRYPTION END ENDPOINT ENDS ENFORCED ENGINE_ ENGINES ENUM ENTITY ERROR_CODE ERROR_P ERRORS ESTIMATE
         ESCAPE EVENT EVENTS EVERY EXCHANGE EXCLUDING EXECUTE EXPANSION EXPIRE EXPIRE_INFO EXPORT OUTLINE EXTENDED
@@ -302,7 +302,7 @@ END_P SET_VAR DELIMITER
         GENERAL GEOMETRY GEOMCOLLECTION GEOMETRYCOLLECTION GET_FORMAT GLOBAL GRANTS GRANULARITY GROUP_CONCAT GROUPING GROUPING_ID GTS
         GLOBAL_NAME GLOBAL_ALIAS
 
-        HANDLER HASH HEAP HELP HISTOGRAM HOST HOSTS HOT_RETENTION HOUR HIDDEN HYBRID HYBRID_HIST HYBRID_SEARCH
+        HANDLER HASH HEAP HELP HISTOGRAM HOST HOSTS HOT_RETENTION HOUR HIDDEN HYBRID HYBRID_HIST HYBRID_SEARCH HMS_CATALOG_NAME
 
         ID IDC IDENTIFIED IGNORE_SERVER_IDS IK_MODE ILOG IMMEDIATE IMPORT INCLUDING INCR INDEXES INDEX_TABLE_ID INFO INITIAL_SIZE
         INNODB INSERT_METHOD INSTALL INSTANCE INVOKER IO IOPS_WEIGHT IO_THREAD IPC ISOLATE ISOLATION ISSUER
@@ -1530,6 +1530,7 @@ bool_pri IS NULLX %prec IS
   if ($3->type_ == T_ANY && $4->type_ == T_EXPR_LIST && $4->reserved_ == 1) {
     /* rewrite any operation to array_contains expr*/
     malloc_non_terminal_node($$, result->malloc_pool_, T_FUNC_SYS_ARRAY_CONTAINS, 2, $1, $4);
+    $$->reserved_ = 0;
   } else {
     ParseNode *sub_query = NULL;
     malloc_non_terminal_node(sub_query, result->malloc_pool_, $3->type_, 1, $4);
@@ -3640,6 +3641,15 @@ MOD '(' expr ',' expr ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_RB_AND_CARDINALITY_AGG, 1, $3);
   $$->reserved_ = 0;
+}
+| SPLIT '(' expr ',' expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUNC_SYS_STRING_TO_ARRAY, 2, $3, $5);
+}
+| CONTAINS '(' expr_list ',' expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUNC_SYS_ARRAY_CONTAINS, 2, $3, $5);
+  $$->reserved_ = 1;
 }
 ;
 
@@ -6536,6 +6546,14 @@ BINARY opt_string_length_i_v2
   $$->param_num_ = $2[1];
   $$->sql_str_off_ = @1.first_column;
 }
+| INTEGER
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT);
+  $$->value_ = 0;
+  $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_INT32;
+  $$->param_num_ = 0;
+  $$->sql_str_off_ = @1.first_column;
+}
 | UNSIGNED opt_integer
 {
   malloc_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT);
@@ -6675,6 +6693,12 @@ BINARY opt_string_length_i_v2
   $$->param_num_ = $3[1];
   $$->str_value_ = parse_strdup("utf8mb4", result->malloc_pool_, &($$->str_len_));
   $$->sql_str_off_ = @1.first_column;
+}
+| ARRAY '(' data_type ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT, 1, $3);
+  $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_COLLECTION; /* data type */
+  $$->int16_values_[OB_NODE_CAST_COLLECTION_TYPE_IDX] = 0 /* array type */
 }
 ;
 
@@ -8211,6 +8235,12 @@ TABLE_MODE opt_equal_mark STRING_VALUE
   merge_nodes($$, result, T_DYNAMIC_PARTITION_POLICY, $4);
   dup_expr_string($$, result, @4.first_column, @4.last_column);
 }
+| CLUSTER BY '(' column_name_list ')'
+{
+  ParseNode *col_list= NULL;
+  merge_nodes(col_list, result, T_COLUMN_LIST, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CLUSTERING_KEY, 1, col_list);
+}
 ;
 
 semistruct_properties_list:
@@ -9538,9 +9568,9 @@ TYPE COMP_EQ STRING_VALUE
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_CACHE_REFRESH_INTERVAL_SEC, 1, $3);
 }
-| DEFAULT_CATALOG COMP_EQ STRING_VALUE
+| HMS_CATALOG_NAME COMP_EQ STRING_VALUE
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_DEFAULT_CATALOG, 1, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_HMS_CATALOG_NAME, 1, $3);
 }
 ;
 
@@ -11374,11 +11404,8 @@ with_param_column_ref { $$ = $1}
 with_param_column_ref:
 no_param_column_ref '^' literal
 {
-  ParseNode *node = NULL;
-  malloc_non_terminal_node(node, result->malloc_pool_, T_COLUMN_REF, 3, NULL, NULL, $1);
-  dup_node_string($1, node, result->malloc_pool_);
   ParseNode *list_node = NULL;
-  malloc_non_terminal_node(list_node, result->malloc_pool_, T_LINK_NODE, 2, node, $3);
+  malloc_non_terminal_node(list_node, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
   merge_nodes($$, result, T_MATCH_COLUMN_LIST, list_node);
 }
 ;
@@ -19865,6 +19892,10 @@ ADD add_key_or_index_opt
 {
   malloc_terminal_node($$, result->malloc_pool_, T_PRIMARY_KEY_DROP);
 }
+| DROP CLUSTERING KEY
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_CLUSTERING_KEY_DROP);
+}
 | alter_with_opt_hint INDEX index_name visibility_option
 {
   (void)($1); // TODO
@@ -26402,6 +26433,7 @@ ACCESS_INFO
 |       CLOSE
 |       CLOG
 |       CLUSTER
+|       CLUSTERING
 |       CLUSTER_ID
 |       CLUSTER_NAME
 |       COALESCE
@@ -26470,7 +26502,6 @@ ACCESS_INFO
 |       DEALLOCATE
 |       DECRYPTION
 |       DEFAULT_AUTH
-|       DEFAULT_CATALOG
 |       DEFINER
 |       DELAY
 |       DELAY_KEY_WRITE
@@ -26591,6 +26622,7 @@ ACCESS_INFO
 |       HEAP
 |       HELP
 |       HISTOGRAM
+|       HMS_CATALOG_NAME
 |       HOST
 |       HOSTS
 |       HOUR

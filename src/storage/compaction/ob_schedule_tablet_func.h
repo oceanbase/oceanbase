@@ -36,8 +36,7 @@ struct ObScheduleTabletFunc : public ObBasicScheduleTabletFunc
     const bool user_request);
   const ObTabletStatusCache &get_tablet_status() const { return tablet_status_; }
   virtual const ObCompactionTimeGuard &get_time_guard() const override { return time_guard_; }
-  int diagnose_switch_tablet(storage::ObLS &ls, const storage::ObTablet &tablet);
-  int64_t get_merged_version() const { return merge_version_; }
+  int diagnose_switch_tablet(storage::ObLS &ls, storage::ObTablet &tablet);
   INHERIT_TO_STRING_KV("ObScheduleTabletFunc", ObBasicScheduleTabletFunc,
     K_(merge_reason), K_(tablet_status), K_(time_guard));
 protected:

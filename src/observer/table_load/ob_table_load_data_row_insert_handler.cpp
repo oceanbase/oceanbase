@@ -143,6 +143,7 @@ int ObTableLoadDataRowInsertHandler::handle_update_row(const ObTabletID &tablet_
     LOG_WARN("not init", K(ret));
   } else {
     if (ObLoadDupActionType::LOAD_STOP_ON_DUP == dup_action_) {
+      LOG_INFO("duplicate row", K(tablet_id), K(datum_row));
       if (OB_FAIL(error_row_handler_->handle_error_row(OB_ERR_PRIMARY_KEY_DUPLICATE))) {
         LOG_WARN("fail to handle error row", KR(ret));
       }
@@ -259,6 +260,7 @@ int ObTableLoadDataRowInsertHandler::handle_update_row(const ObTabletID &tablet_
     LOG_WARN("ObTableLoadDataRowInsertHandler not init", KR(ret), KP(this));
   } else {
     if (ObLoadDupActionType::LOAD_STOP_ON_DUP == dup_action_) {
+      LOG_INFO("duplicate row", K(tablet_id), K(old_row), K(new_row));
       if (OB_FAIL(error_row_handler_->handle_error_row(OB_ERR_PRIMARY_KEY_DUPLICATE))) {
         LOG_WARN("fail to handle error row", KR(ret));
       } else {

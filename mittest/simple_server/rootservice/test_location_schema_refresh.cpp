@@ -28,7 +28,7 @@ namespace share
 using namespace share::schema;
 using namespace common;
 
-static uint64_t g_tenant_id = OB_INVALID_TENANT_ID;;
+static uint64_t g_tenant_id = OB_INVALID_TENANT_ID;
 
 class TestLocationSchemaRefresh : public unittest::ObSimpleClusterTestBase
 {

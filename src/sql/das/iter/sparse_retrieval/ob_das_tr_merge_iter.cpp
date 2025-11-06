@@ -287,6 +287,7 @@ int ObDASTRMergeIter::init_doc_length_est_param()
       doc_len_est_spec.scan_col_proj_,
       *inv_scan_params_[0], // TODO: use independent param with whole scan range
       true,
+      true,
       true))) {
     LOG_WARN("failed to init doc length est param", K(ret));
   }
@@ -780,6 +781,26 @@ int ObDASTRMergeIter::set_children_iter_rangekey(const common::ObIArray<std::pai
       ->set_hints(virtual_rangekeys, batch_size))) {
     LOG_WARN("failed to set hints", K(ret), K(batch_size));
   }
+  return ret;
+}
+
+int ObDASTRMergeIter::adjust_topk_limit(const int64_t limit)
+{
+  int ret = OB_SUCCESS;
+  topk_limit_ = limit;
+
+  if (!topk_mode_) {
+    // do nothing
+  } else if (OB_ISNULL(sparse_retrieval_iter_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null sparse retrieval iter", K(ret));
+  } else {
+    storage::ObTextBMWIter *bmw_iter = static_cast<storage::ObTextBMWIter *>(sparse_retrieval_iter_);
+    if (OB_FAIL(bmw_iter->adjust_topk_limit(limit))) {
+      LOG_WARN("failed to adjust topk limit for bmw iter", K(ret), K(limit));
+    }
+  }
+
   return ret;
 }
 

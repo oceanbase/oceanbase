@@ -204,6 +204,7 @@ ob_set_subtarget(ob_share common
   ob_global_merge_table_operator.cpp
   ob_global_stat_proxy.cpp
   ob_gts_info.cpp
+  ob_heap_organized_table_util.cpp
   ob_i_tablet_scan.cpp
   ob_index_builder_util.cpp
   ob_fts_index_builder_util.cpp
@@ -297,6 +298,7 @@ ob_set_subtarget(ob_share common
   ob_define.cpp
   ob_dynamic_partition_manager.cpp
   ob_scheduled_manage_dynamic_partition.cpp
+  ob_batch_selector.cpp
   ob_timezone_importer.cpp
   ob_srs_importer.cpp
   ob_compute_property.cpp
@@ -400,6 +402,7 @@ ob_set_subtarget(ob_share common_mixed
   table/ob_table_util.cpp
   table/ob_table_object.cpp
   scheduler/ob_tenant_dag_scheduler.cpp
+  scheduler/ob_independent_dag.cpp
   scheduler/ob_sys_task_stat.cpp
   scheduler/ob_dag_warning_history_mgr.cpp
   scheduler/ob_partition_auto_split_helper.cpp
@@ -801,6 +804,9 @@ ob_set_subtarget(ob_share vector_index
   vector_index/ob_ivf_async_task_executor.cpp
   vector_index/ob_vector_index_i_task_executor.cpp
   vector_index/ob_vector_index_ivf_cache_util.cpp
+  vector_index/ob_vector_embedding_handler.cpp
+  vector_index/ob_json_helper.cpp
+  vector_index/ob_hybrid_vector_refresh_task.cpp
 )
 
 ob_set_subtarget(ob_share vector_type
@@ -823,7 +829,7 @@ ob_set_subtarget(ob_share hybrid_search
   hybrid_search/ob_request_base.cpp
   hybrid_search/ob_query_request.cpp
   hybrid_search/ob_query_translator.cpp
-  hybrid_search/ob_hybrid_search_exector.cpp
+  hybrid_search/ob_hybrid_search_executor.cpp
 )
 
 ob_set_subtarget(ob_share domain_id

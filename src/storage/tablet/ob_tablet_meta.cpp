@@ -214,7 +214,8 @@ int ObTabletMeta::init(
     const bool micro_index_clustered,
     const bool has_cs_replica,
     const bool need_generate_cs_replica_cg_array,
-    const bool has_truncate_info)
+    const bool has_truncate_info,
+    const uint64_t ddl_data_format_version)
 {
   int ret = OB_SUCCESS;
 
@@ -252,7 +253,7 @@ int ObTabletMeta::init(
     ddl_commit_scn_.set_min();
     ddl_snapshot_version_ = 0;
     max_sync_storage_schema_version_ = create_schema_version;
-    ddl_data_format_version_ = 0;
+    ddl_data_format_version_ = ddl_data_format_version;
     mds_checkpoint_scn_ = mds_checkpoint_scn.is_valid() ? mds_checkpoint_scn : INIT_CLOG_CHECKPOINT_SCN;
     split_info_ = split_info;
     has_truncate_info_ = has_truncate_info;
@@ -273,8 +274,8 @@ int ObTabletMeta::init(
     }
 
     if (OB_FAIL(ret)) {
-    } else if (GCTX.is_shared_storage_mode()) {
-      /* for shared stoage mode, ddl start scn not used, mock a value */
+    } else if (GCTX.is_shared_storage_mode() || DDL_IDEM_DATA_FORMAT_VERSION <= ddl_data_format_version_) {
+      /* for shared stoage mode & idem type, ddl start scn not used, mock a value */
       if (OB_FAIL(ddl_start_scn_.convert_for_tx(SS_DDL_START_SCN_VAL))) {
         LOG_WARN("failed to convert from ts", K(ret));
       } else if (OB_FAIL(ddl_checkpoint_scn_.convert_for_tx(SS_DDL_START_SCN_VAL))) {
@@ -1175,12 +1176,13 @@ SCN ObTabletMeta::get_max_replayed_scn() const
 
 void ObTabletMeta::update_extra_medium_info(
     const compaction::ObMergeType merge_type,
-    const int64_t finish_medium_scn)
+    const int64_t finish_medium_scn,
+    const bool need_wait_check_flag)
 {
   if (is_major_merge_type(merge_type)) {
     extra_medium_info_.last_compaction_type_ = is_major_merge(merge_type) ? compaction::ObMediumCompactionInfo::MAJOR_COMPACTION : compaction::ObMediumCompactionInfo::MEDIUM_COMPACTION;
     extra_medium_info_.last_medium_scn_ = finish_medium_scn;
-    extra_medium_info_.wait_check_flag_ = true;
+    extra_medium_info_.wait_check_flag_ = need_wait_check_flag ? true : false;
   }
 }
 

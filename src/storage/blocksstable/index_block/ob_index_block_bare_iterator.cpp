@@ -114,7 +114,7 @@ int ObIndexBlockBareIterator::get_next_logic_micro_id(
   } else if (OB_ISNULL(idx_row_header)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("idx_row_header is NULL", KR(ret), K(idx_row_parser), K(row_), KPC(this));
-  } else if (OB_UNLIKELY(!idx_row_header->has_logic_micro_id())) {
+  } else if (OB_UNLIKELY(!idx_row_header->has_valid_logic_micro_id())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("logic micro id is invalid", KR(ret),
         K(idx_row_header), K(idx_row_parser), K(row_), KPC(this));

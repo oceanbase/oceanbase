@@ -253,6 +253,11 @@ int ObColumnRedefinitionTask::copy_table_indexes()
           LOG_WARN("failed to refresh schema guard", K(ret));
         }  else if (OB_FAIL(check_and_do_sync_tablet_autoinc_seq(new_schema_guard))) {
           LOG_WARN("failed to check and do sync tablet autoinc seq", K(ret), K(task_id_));
+        } else if (OB_FAIL(new_schema_guard.get_table_schema(tenant_id_, target_object_id_, table_schema))) {
+          LOG_WARN("get table schema failed", K(ret), K(tenant_id_), K(target_object_id_));
+        } else if (OB_ISNULL(table_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("error unexpected, table schema must not be nullptr", K(ret), K(target_object_id_));
         }
         for (int64_t i = 0; OB_SUCC(ret) && i < index_ids.count(); ++i) {
           const uint64_t index_id = index_ids.at(i);	
@@ -276,7 +281,7 @@ int ObColumnRedefinitionTask::copy_table_indexes()
               // index status is final
               need_rebuild_index = false;
               LOG_INFO("index status is final", K(ret), K(task_id_), K(index_id), K(need_rebuild_index));
-            } else if (index_schema->is_built_in_index()) {
+            } else if (index_schema->is_no_need_rebuild_index()) {
               // Only domain index need rebuild, while rebuilding vector/fulltext/multivalue index.
               need_rebuild_index = false;
             } else if (active_task_cnt >= MAX_ACTIVE_TASK_CNT) {

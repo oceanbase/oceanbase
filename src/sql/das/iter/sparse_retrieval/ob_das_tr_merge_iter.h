@@ -138,6 +138,7 @@ public:
   }
   int is_topk_mode() const { return topk_mode_; }
   void set_topk_limit(const int64_t limit) { topk_limit_ = limit; }
+  int adjust_topk_limit(const int64_t limit);
 private:
   int init_das_iter_scan_params();
   static int init_das_iter_scan_param(

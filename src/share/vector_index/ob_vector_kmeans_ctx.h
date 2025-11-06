@@ -485,7 +485,7 @@ class ObKmeansBuildTaskHandler : public lib::TGTaskHandler
 public:
   ObKmeansBuildTaskHandler() : is_inited_(false), tg_id_(INVALID_TG_ID), task_ref_cnt_(0), lock_() {};
   virtual ~ObKmeansBuildTaskHandler() = default;
-  int init();
+  int init(int tg_id);
   int start();
   void stop();
   void wait();

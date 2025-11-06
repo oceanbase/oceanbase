@@ -31,6 +31,8 @@ struct ObTabletStatAnalyzer;
 struct ObTableHandleV2;
 struct ObStorageMetaHandle;
 class ObLS;
+template <typename T, typename U>
+class ObTabletMemberWrapper;
 }
 
 namespace blocksstable
@@ -41,6 +43,7 @@ class ObSSTable;
 namespace compaction
 {
 struct ObMinorExecuteRangeMgr;
+struct ObMediumCompactionInfo;
 
 class ObPartitionMergePolicy
 {
@@ -68,6 +71,11 @@ public:
       const storage::ObTablet &tablet,
       storage::ObGetMergeTablesResult &result);
   static int get_medium_merge_tables(
+      const storage::ObGetMergeTablesParam &param,
+      storage::ObLS &ls,
+      const storage::ObTablet &tablet,
+      storage::ObGetMergeTablesResult &result);
+  static int get_inc_major_merge_tables(
       const storage::ObGetMergeTablesParam &param,
       storage::ObLS &ls,
       const storage::ObTablet &tablet,
@@ -118,6 +126,7 @@ public:
 
   static int add_table_with_check(storage::ObGetMergeTablesResult &result, storage::ObTableHandleV2 &table_handle);
   static int get_result_by_snapshot(
+      storage::ObLS &ls,
       const storage::ObTablet &tablet,
       const int64_t snapshot,
       storage::ObGetMergeTablesResult &result,
@@ -132,7 +141,6 @@ private:
       const storage::ObTablet &tablet,
       common::ObIArray<ObTableHandleV2> &memtable_handles,
       storage::ObGetMergeTablesResult &result);
-
   static int find_minor_merge_tables(
       const storage::ObGetMergeTablesParam &param,
       const int64_t min_snapshot_version,
@@ -140,14 +148,11 @@ private:
       storage::ObLS &ls,
       const storage::ObTablet &tablet,
       storage::ObGetMergeTablesResult &result);
-
   static int refine_minor_merge_tables(
       const storage::ObTablet &tablet,
       const storage::ObTablesHandleArray &merge_tables,
       int64_t &left_border,
       int64_t &right_border);
-
-private:
   static int refine_mini_merge_result(
       const storage::ObTablet &tablet,
       storage::ObGetMergeTablesResult &result,
@@ -261,6 +266,7 @@ public:
     // no major sstable / table schema is hidden or invalid index
     DURING_DDL = 10,
     RECYCLE_TRUNCATE_INFO = 11,
+    TOO_MANY_INC_MAJOR = 12,
     INVALID_REASON
   };
 
@@ -322,11 +328,6 @@ private:
         const ObMergeType &merge_type,
         const storage::ObTablet &tablet,
         storage::ObGetMergeTablesResult &result);
-  static int add_meta_merge_result(
-      storage::ObITable *table,
-      const storage::ObStorageMetaHandle &table_meta_handle,
-      storage::ObGetMergeTablesResult &result,
-      const bool update_snapshot_flag);
 private:
   static int check_load_data_situation(
       const storage::ObTabletStatAnalyzer &analyzer,
@@ -337,7 +338,7 @@ private:
   static int check_ineffecient_read(
       const storage::ObTabletStatAnalyzer &analyzer,
       AdaptiveMergeReason &merge_reason);
-  static int check_inc_sstable_row_cnt_percentage(
+  static int check_incremental_table(
       const storage::ObTablet &tablet,
       AdaptiveMergeReason &merge_reason);
 
@@ -431,6 +432,77 @@ private:
   static const int64_t ROW_CNT_THRESHOLD_REBUILD_ROWKEY_STORE = 16000;
   static const int64_t COL_CNT_THRESHOLD_REBUILD_COLUMN_STORE = 5;
 };
+
+
+class ObIncMajorTxHelper final
+{
+public:
+  static int get_inc_major_commit_version(
+    ObLS &ls,
+    const blocksstable::ObSSTable &inc_major_table,
+    const share::SCN &read_tx_scn,
+    int64_t &trans_state,
+    int64_t &commit_version);
+  static int check_inc_major_trans_can_read(
+      ObLS *ls,
+      const transaction::ObTransID &trans_id,
+      const transaction::ObTxSEQ &seq_no,
+      const share::SCN &read_scn,
+      int64_t &trans_state,
+      bool &can_read,
+      share::SCN &trans_version);
+
+  static int get_trans_id_and_seq_no_from_sstable(
+      const blocksstable::ObSSTable *sstable,
+      transaction::ObTransID &trans_id,
+      transaction::ObTxSEQ &seq_no);
+
+  static int check_can_access(ObTableAccessContext &context,
+                              const transaction::ObTransID &trans_id,
+                              const transaction::ObTxSEQ &seq_no,
+                              const share::SCN &max_scn,
+                              bool &can_access);
+  static int check_can_access(ObTableAccessContext &context,
+                              const ObUncommitTxDesc &tx_desc,
+                              const share::SCN &max_scn,
+                              bool &can_access);
+  static int check_can_access(ObTableAccessContext &context,
+                              const blocksstable::ObSSTable &sstable,
+                              bool &can_access);
+
+  static int check_inc_major_table_status(
+      const compaction::ObMediumCompactionInfo &medium_info,
+      const ObMergeType merge_type,
+      const int64_t &merge_snapshot_version,
+      const ObTablesHandleArray &candidates,
+      const bool is_cs_replica);
+  static int find_inc_major_sstable(
+    const ObSSTableArray &inc_major_array,
+    const blocksstable::ObSSTable *inc_major_ddl_sstable,
+    bool &found);
+  static int find_inc_major_sstable(
+      const common::ObIArray<ObITable *> &inc_major_sstables,
+      const blocksstable::ObSSTable *inc_major_ddl_sstable,
+      bool &found);
+  static int check_inc_major_exist(
+      const ObTabletHandle &tablet_handle,
+      const transaction::ObTransID &trans_id,
+      const transaction::ObTxSEQ &seq_no,
+      bool &is_exist);
+  static int check_inc_major_exist(
+      const common::ObIArray<ObITable *> &inc_major_sstables,
+      const transaction::ObTransID &trans_id,
+      const transaction::ObTxSEQ &seq_no,
+      bool &is_exist);
+  static int get_ls(const share::ObLSID &ls_id, ObLSHandle &ls_handle);
+private:
+  static void dump_inc_major_error_info(
+      const int64_t merge_snapshot_version,
+      const ObMergeType merge_type,
+      const ObIArray<ObITable *> &sstables,
+      const ObMediumCompactionInfo &medium_info);
+};
+
 
 
 } /* namespace compaction */

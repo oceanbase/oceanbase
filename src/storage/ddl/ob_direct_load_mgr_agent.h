@@ -25,12 +25,29 @@ struct ObTabletCacheInterval;
 
 namespace storage
 {
+class ObTabletDirectLoadMgrV3;
 
 struct ObDirectLoadMgrAgent final
 {
 public:
-    ObDirectLoadMgrAgent();
-    ~ObDirectLoadMgrAgent();
+  ObDirectLoadMgrAgent();
+  ~ObDirectLoadMgrAgent();
+  void reset();
+
+public:
+  // some static method using ObDirectLoadMgrUtil to hidden ObDirectLoadMgrUitls Interface
+  static int create_tablet_direct_load_mgr(int64_t tenant_id,
+                                           const int64_t execution_id,
+                                           const int64_t context_id,
+                                           const ObTabletDirectLoadInsertParam &build_param,
+                                           ObIAllocator &allocator,
+                                           bool &is_major_eixst,
+                                           ObTabletDirectLoadMgrHandle &data_mgr_handle,
+                                           ObTabletDirectLoadMgrHandle &lob_mgr_handle);
+  static ObDirectLoadType load_data_get_direct_load_type(const bool is_incremental,
+                                                         const uint64_t data_format_version,
+                                                         const bool shared_storage_mode,
+                                                         const bool is_inc_major);
 public:
   int init(
       const int64_t context_id,
@@ -68,17 +85,45 @@ public:
       ObInsertMonitor *insert_monitor,
       blocksstable::ObMacroDataSeq &next_seq);
   int calc_range(const int64_t context_id, const int64_t thread_cnt);
+
+  /* new interface for direct load mgr v3 */
+  int init(ObBaseTabletDirectLoadMgr* direct_load_mgr, ObBaseTabletDirectLoadMgr *lob_load_mgr);
+  int fill_sstable_slice(ObDirectLoadSliceInfo &slice_info,
+                         ObIStoreRowIterator *iter,
+                         const blocksstable::ObMacroDataSeq &start_seq,
+                         blocksstable::ObMacroDataSeq &next_seq,
+                         int64_t &affected_rows,
+                         ObInsertMonitor *insert_monitor = nullptr);
+
+  int fill_lob_sstable_slice_idem(ObIAllocator &allocator,
+                                  const ObDirectLoadSliceInfo &slice_info,
+                                  share::ObTabletCacheInterval &pk_interval,
+                                  blocksstable::ObDatumRow &datum_row);
+  int fill_batch_lob_sstable_slice_idem(ObIAllocator &allocator,
+                                        const ObDirectLoadSliceInfo &slice_info,
+                                        share::ObTabletCacheInterval &pk_interval,
+                                        blocksstable::ObBatchDatumRows &datum_rows);
+  int calc_range(const int64_t thread_cnt);
   int fill_column_group(
       const int64_t thread_cnt,
       const int64_t thread_id,
       ObInsertMonitor *insert_monitor=nullptr);
   int cancel();
+  int close(const int64_t context_id, const bool need_commit, const int64_t execution_id);
   // other utils
-  inline ObDirectLoadType get_direct_load_type() const { return direct_load_type_; }
+  ObDirectLoadType  get_direct_load_type() { return direct_load_type_; }
+  ObTabletDirectLoadMgrHandle &get_mgr_handle() { return mgr_handle_; }
+
+  int get_lob_mgr_handle(ObTabletDirectLoadMgrHandle &lob_mgr_handle);
+  const ObTabletDirectLoadMgrHandle& get_data_mgr_handle() { return mgr_handle_; }
+
   int get_lob_meta_tablet_id(ObTabletID &lob_meta_tablet_id);
   int update_max_lob_id(const int64_t lob_id);
-  TO_STRING_KV(K_(is_inited), K_(direct_load_type), K_(start_scn), K_(execution_id), K_(cgs_count), KPC(mgr_handle_.get_obj()));
+  bool is_inited() { return is_inited_; }
+  int get_tablet_cache_interval(const int64_t context_id, const ObTabletID &tablet_id, share::ObTabletCacheInterval &interval);
+  TO_STRING_KV(K_(is_inited), K_(direct_load_type), K_(start_scn), K_(execution_id), KP(mgr_handle_.get_obj()));
 private:
+  int close_for_idem();
   int init_for_sn(
       const share::ObLSID &ls_id,
       const ObTabletID &tablet_id);
@@ -95,6 +140,16 @@ private:
       const ObDirectLoadSliceInfo &slice_info,
       const blocksstable::ObBatchDatumRows &datum_rows,
       ObInsertMonitor *insert_monitor = nullptr);
+  int fill_sstable_slice_for_idem(const ObDirectLoadSliceInfo &slice_info,
+                                  ObIStoreRowIterator *iter,
+                                  const blocksstable::ObMacroDataSeq &start_seq,
+                                  blocksstable::ObMacroDataSeq &next_seq,
+                                  int64_t &affected_rows,
+                                  ObInsertMonitor *insert_monitor);
+  int close_sstable_slice_for_idem(const ObDirectLoadSliceInfo &slice_info,
+                                   const blocksstable::ObMacroDataSeq &start_seq,
+                                   blocksstable::ObMacroDataSeq &next_seq,
+                                   ObInsertMonitor *insert_monitor = nullptr);
   int fill_lob_sstable_slice_for_ss(
       ObIAllocator &allocator,
       const ObDirectLoadSliceInfo &slice_info /*contains data_tablet_id, lob_slice_id, start_seq*/,
@@ -150,10 +205,20 @@ private:
   share::SCN start_scn_; // start scn in the context.
   int64_t execution_id_; // execution_id in the context.
   ObTabletDirectLoadMgrHandle mgr_handle_;
+  ObTabletDirectLoadMgrHandle lob_mgr_handle_;
   int64_t cgs_count_; // count of the column groups, used for the sn's statistics when retry after committed.
+
+  /* thread local parameter
+   * in direct load mgr, these args are used to save some temp paramters
+   * to keep direct load mgr always keep same interface
+  */
+  ObDirectLoadSliceWriter lob_writer_;
+  ObDirectLoadSliceWriter data_writer_;
+  blocksstable::ObMacroDataSeq idem_start_seq_; /* start_seq & next_seq should be update at the same time*/
+  blocksstable::ObMacroDataSeq idem_next_seq_;
+
 DISALLOW_COPY_AND_ASSIGN(ObDirectLoadMgrAgent);
 };
-
 
 }// namespace storage
 }// namespace oceanbase

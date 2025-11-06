@@ -323,8 +323,8 @@ int ObExprAutoincNextval::generate_autoinc_value(const ObSQLSessionInfo &my_sess
     LOG_WARN("Invalid argument(s)", K(ret), K(autoinc_param), K(plan_ctx));
   } else {
     if (ctx.exec_ctx_.is_ddl_idempotent_autoinc()) {
-      const int64_t table_all_slice_count = ctx.exec_ctx_.get_table_all_slice_count();
-      const int64_t table_level_slice_idx = ctx.exec_ctx_.get_table_level_slice_idx();
+      const int64_t table_all_slice_count = ctx.exec_ctx_.get_slice_count();
+      const int64_t table_level_slice_idx = ctx.exec_ctx_.get_slice_idx();
       const int64_t slice_row_idx = ctx.exec_ctx_.get_slice_row_idx();
       const int64_t autoinc_range_interval = ctx.exec_ctx_.get_autoinc_range_interval();
       if (OB_FAIL(auto_service.calculate_idempotent_autoinc_val_for_ddl(

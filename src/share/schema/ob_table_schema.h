@@ -940,6 +940,12 @@ public:
   // returns true when users define the table organization as index (by tenant config or table option)
   inline bool is_index_organized_table() const
   { return TOM_INDEX_ORGANIZED == (enum ObTableOrganizationMode)table_mode_.table_organization_mode_; }
+  inline bool is_table_with_clustering_key() const
+  { return is_table_with_pk() && is_table_with_hidden_pk_column(); }
+  // returns true when the table is index-organized and has a user-defined primary key (IOT with PK)
+  // 返回true: 表为索引组织表（IOT）且用户明确指定了主键
+  inline bool is_index_organized_table_with_pk() const
+  { return is_index_organized_table() && is_table_with_pk(); }
   inline bool view_column_filled() const
   { return FILLED == (enum ObViewColumnFilledFlag)table_mode_.view_column_filled_flag_; }
   inline void set_view_column_filled_flag(const ObViewColumnFilledFlag flag)
@@ -1183,6 +1189,8 @@ public:
   inline bool is_vec_domain_index() const;
   inline bool is_built_in_vec_index() const;
   inline bool is_vec_hnsw_index() const;
+  inline bool is_hybrid_vec_index() const;
+  inline static bool is_hybrid_vec_index(const ObIndexType index_type);
   inline bool is_vec_ivf_index() const;
   inline bool is_vec_ivfpq_index() const;
   inline bool is_vec_ivfsq8_index() const;
@@ -1204,6 +1212,8 @@ public:
   inline bool is_vec_rowkey_vid_type() const;
   inline bool is_vec_vid_rowkey_type() const;
   inline bool is_vec_delta_buffer_type() const;
+  inline bool is_hybrid_vec_index_log_type() const;
+  inline bool is_hybrid_vec_index_embedded_type() const;
   inline bool is_vec_dim_docid_value_type() const;
   inline bool is_vec_index_id_type() const;
   inline bool is_vec_index_snapshot_data_type() const;
@@ -1211,6 +1221,7 @@ public:
   inline bool is_built_in_fts_index() const;
   inline bool is_built_in_multivalue_index() const;
   inline bool is_built_in_index() const;  // fts / vector index
+  inline bool is_no_need_rebuild_index() const;  // for offline ddl.
   inline bool is_rowkey_doc_id() const;
   inline bool is_doc_id_rowkey() const;
   inline bool is_fts_index_aux() const;
@@ -1309,7 +1320,8 @@ public:
     const bool multivalue_case = is_partitioned_table() && is_index_local_storage() && is_multivalue_index_aux();
     const bool vec_case = is_partitioned_table() && is_index_local_storage() &&
                           (is_vec_delta_buffer_type() || is_vec_index_id_type() || is_vec_index_snapshot_data_type() || is_vec_spiv_index_aux());
-    return heap_case || fts_case || vec_case || multivalue_case;
+    const bool cluster_case = is_partitioned_table() && is_index_local_storage() && data_table_schema.is_table_with_clustering_key();
+    return heap_case || fts_case || vec_case || multivalue_case || cluster_case;
   }
   inline void set_with_dynamic_partition_policy(bool with_dynamic_partition_policy)
   {
@@ -1769,6 +1781,7 @@ public:
   virtual int get_rowkey_column_ids(common::ObIArray<share::schema::ObColDesc> &column_ids) const override;
   virtual int set_precision_to_column_desc(common::ObIArray<share::schema::ObColDesc> &column_ids) const override;
   int get_rowkey_column_ids(common::ObIArray<uint64_t> &column_ids) const;
+  int get_rowkey_column_ids_without_valid_check(common::ObIArray<uint64_t> &column_ids) const;
   int get_rowkey_partkey_column_ids(common::ObIArray<uint64_t> &column_ids) const;
   int get_column_ids_without_rowkey(common::ObIArray<share::schema::ObColDesc> &column_ids, const bool no_virtual = false) const;
   int get_generated_column_ids(common::ObIArray<uint64_t> &column_ids) const;
@@ -1780,6 +1793,7 @@ public:
   // 返回用户指定的主键列（IOT模式和HEAP模式）；
   int get_logic_pk_column_ids(ObSchemaGetterGuard *schema_guard, ObIArray<uint64_t> &pk_ids) const;
   int get_heap_table_pk(ObSchemaGetterGuard *schema_guard, ObIArray<uint64_t> &pk_ids) const;
+  int get_heap_table_pk_without_valid_check(ObSchemaGetterGuard *schema_guard, ObIArray<uint64_t> &pk_ids) const;
 
   // The table has a generated column that is a partition key.
   bool has_generated_and_partkey_column() const;
@@ -1820,6 +1834,8 @@ public:
   int get_sparse_vec_index_column_id(uint64_t &sparse_vec_col_id) const;
   int get_vec_index_column_id(uint64_t &with_cascaded_info_column_id) const;
   int get_vec_index_vid_col_id(uint64_t &vec_id_col_id, bool is_cid = false) const;
+  int get_hybrid_vec_chunk_column_id(uint64_t &hybrid_vec_chunk_col_id) const;
+  int get_hybrid_vec_embedded_column_id(uint64_t &vec_id_col_id) const;
   // get columns for building rowid
   int get_column_ids_serialize_to_rowid(common::ObIArray<uint64_t> &col_ids,
                                         int64_t &rowkey_cnt) const;
@@ -1943,8 +1959,8 @@ public:
   int get_partition_keys_by_part_func_expr(const common::ObString &part_func_expr_str, common::ObIArray<uint64_t> &partition_key_ids) const;
   int extract_actual_index_rowkey_columns_name(ObIArray<ObString> &rowkey_columns_name) const;
   int is_presetting_partition_key(const uint64_t partition_key_id, bool &is_presetting_partition_key) const;
-  int check_primary_key_cover_partition_column();
-  int check_rowkey_cover_partition_keys(const common::ObPartitionKeyInfo &part_key);
+  int check_primary_key_cover_partition_column(ObSchemaGetterGuard &schema_guard);
+  int check_logic_pk_cover_partition_keys(const common::ObPartitionKeyInfo &part_key, const common::ObIArray<uint64_t> &logic_pks);
   int check_index_table_cover_partition_keys(const common::ObPartitionKeyInfo &part_key) const;
   int check_create_index_on_hidden_primary_key(const ObTableSchema &index_table) const;
   int check_skip_index_valid() const;
@@ -2132,6 +2148,7 @@ public:
   // NOTE: here you can get a **generated** doc id column id.
   int get_docid_col_id(uint64_t &docid_col_id) const;
   int get_rowkey_vid_tid(uint64_t &index_table_id) const;
+  int get_embedded_vec_tid(uint64_t &index_table_id) const;
   uint64_t get_aux_lob_meta_tid() const { return aux_lob_meta_tid_; }
   uint64_t get_aux_lob_piece_tid() const { return aux_lob_piece_tid_; }
   bool has_lob_column(const bool ignore_unused_column) const;
@@ -2585,6 +2602,16 @@ inline bool ObSimpleTableSchemaV2::is_vec_domain_index() const
   return share::schema::is_vec_domain_index(index_type_);
 }
 
+inline bool ObSimpleTableSchemaV2::is_hybrid_vec_index() const
+{
+  return share::schema::is_hybrid_vec_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_hybrid_vec_index(const ObIndexType index_type)
+{
+  return share::schema::is_hybrid_vec_index(index_type);
+}
+
 inline bool ObSimpleTableSchemaV2::is_vec_spiv_index() const
 {
   return share::schema::is_vec_spiv_index(index_type_);
@@ -2675,6 +2702,16 @@ inline bool ObSimpleTableSchemaV2::is_vec_delta_buffer_type() const
   return share::schema::is_vec_delta_buffer_type(index_type_);
 }
 
+inline bool ObSimpleTableSchemaV2::is_hybrid_vec_index_log_type() const
+{
+  return share::schema::is_hybrid_vec_index_log_type(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_hybrid_vec_index_embedded_type() const
+{
+  return share::schema::is_hybrid_vec_index_embedded_type(index_type_);
+}
+
 inline bool ObSimpleTableSchemaV2::is_vec_dim_docid_value_type() const
 {
   return share::schema::is_vec_dim_docid_value_type(index_type_);
@@ -2708,6 +2745,11 @@ inline bool ObSimpleTableSchemaV2::is_built_in_multivalue_index() const
 inline bool ObSimpleTableSchemaV2::is_built_in_index() const
 {
   return share::schema::is_built_in_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_no_need_rebuild_index() const
+{
+  return (is_built_in_index() && !is_vec_index_snapshot_data_type()) || is_vec_delta_buffer_type() || is_hybrid_vec_index_log_type();
 }
 
 inline bool ObSimpleTableSchemaV2::is_rowkey_doc_id() const

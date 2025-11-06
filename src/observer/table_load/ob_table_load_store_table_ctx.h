@@ -13,10 +13,13 @@
 #pragma once
 
 #include "lib/hash/ob_hashmap.h"
+#include "observer/table_load/plan/ob_table_load_plan_common.h"
+#include "observer/table_load/ob_table_load_schema.h"
 #include "share/table/ob_table_load_define.h"
 #include "storage/direct_load/ob_direct_load_i_table.h"
 #include "storage/direct_load/ob_direct_load_table_data_desc.h"
 #include "storage/direct_load/ob_direct_load_table_store.h"
+#include "storage/direct_load/ob_direct_load_trans_param.h"
 
 namespace oceanbase
 {
@@ -28,7 +31,6 @@ class ObDirectLoadTransParam;
 namespace observer
 {
 class ObTableLoadStoreCtx;
-class ObTableLoadSchema;
 class ObTableLoadRowProjector;
 class ObTableLoadStoreDataTableCtx;
 class ObTableLoadStoreLobTableCtx;
@@ -36,6 +38,30 @@ class ObTableLoadStoreIndexTableCtx;
 class ObTableLoadLobTableBuilder;
 class ObTableLoadIndexTableBuilder;
 class ObTableLoadDataTableBuilder;
+
+struct ObTableLoadStoreInsertTableParam
+{
+public:
+  ObTableLoadStoreInsertTableParam()
+    : insert_sstable_type_(storage::ObDirectLoadInsertSSTableType::INVALID_INSERT_SSTABLE_TYPE),
+      trans_param_(),
+      need_reserved_parallel_(false),
+      need_online_opt_stat_gather_(false),
+      need_insert_lob_(false)
+  {
+  }
+  TO_STRING_KV("insert_sstable_type",
+               storage::ObDirectLoadInsertSSTableType::get_type_string(insert_sstable_type_),
+               K_(trans_param), K_(need_reserved_parallel), K_(need_online_opt_stat_gather),
+               K_(need_insert_lob));
+
+public:
+  storage::ObDirectLoadInsertSSTableType::Type insert_sstable_type_;
+  storage::ObDirectLoadTransParam trans_param_; // 增量导入需要事务信息
+  bool need_reserved_parallel_; // 是否需要预留data_seq, 目前只有全量快速堆表需要预留
+  bool need_online_opt_stat_gather_; // 是否需要收集统计信息
+  bool need_insert_lob_; // 插入主表行的时候是否需要将其中的lob列写入lob表
+};
 
 class ObTableLoadStoreTableCtx
 {
@@ -51,6 +77,9 @@ public:
     const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId>
       &target_partition_id_array) = 0;
 
+  int get_table_data_desc(const ObTableLoadInputDataType::Type input_data_type,
+                          storage::ObDirectLoadTableDataDesc &table_data_desc);
+
   TO_STRING_KV(KP_(store_ctx), KPC_(schema), K_(is_inited));
 
 protected:
@@ -61,6 +90,11 @@ public:
   virtual int init_insert_table_ctx(const storage::ObDirectLoadTransParam &trans_param,
                                     bool online_opt_stat_gather, bool is_insert_lob) = 0;
   virtual int close_insert_table_ctx() = 0;
+
+  // DAG版本使用的接口
+  virtual int open_insert_table_ctx(const ObTableLoadStoreInsertTableParam &param,
+                                    ObIAllocator &allocator,
+                                    storage::ObDirectLoadInsertTableContext *&insert_table_ctx) = 0;
 
   //////////////////////// table builder ////////////////////////
 public:
@@ -122,6 +156,10 @@ public:
   int init_insert_table_ctx(const storage::ObDirectLoadTransParam &trans_param,
                             bool online_opt_stat_gather, bool is_insert_lob) override;
   int close_insert_table_ctx() override;
+
+  int open_insert_table_ctx(const ObTableLoadStoreInsertTableParam &param, ObIAllocator &allocator,
+                            storage::ObDirectLoadInsertTableContext *&insert_table_ctx) override;
+
   //////////////////////// table builder ////////////////////////
   DEFINE_TABLE_LOAD_STORE_TABLE_BUILD(ObTableLoadDataTableBuilder, delete);
   DEFINE_TABLE_LOAD_STORE_TABLE_BUILD(ObTableLoadDataTableBuilder, ack);
@@ -134,6 +172,7 @@ public:
 
 class ObTableLoadStoreLobTableCtx : public ObTableLoadStoreTableCtx
 {
+  friend class ObTableLoadStoreDataTableCtx;
 public:
   ObTableLoadStoreLobTableCtx(ObTableLoadStoreCtx *store_ctx,
                               ObTableLoadStoreDataTableCtx *data_table_ctx);
@@ -156,6 +195,9 @@ public:
   int init_insert_table_ctx(const storage::ObDirectLoadTransParam &trans_param,
                             bool online_opt_stat_gather, bool is_insert_lob) override;
   int close_insert_table_ctx() override;
+
+  int open_insert_table_ctx(const ObTableLoadStoreInsertTableParam &param, ObIAllocator &allocator,
+                            storage::ObDirectLoadInsertTableContext *&insert_table_ctx) override;
 
   //////////////////////// table builder ////////////////////////
   DEFINE_TABLE_LOAD_STORE_TABLE_BUILD(ObTableLoadLobTableBuilder, delete);
@@ -193,6 +235,9 @@ public:
   int init_insert_table_ctx(const storage::ObDirectLoadTransParam &trans_param,
                             bool online_opt_stat_gather, bool is_insert_lob) override;
   int close_insert_table_ctx() override;
+
+  int open_insert_table_ctx(const ObTableLoadStoreInsertTableParam &param, ObIAllocator &allocator,
+                            storage::ObDirectLoadInsertTableContext *&insert_table_ctx) override;
 
   //////////////////////// table builder ////////////////////////
   DEFINE_TABLE_LOAD_STORE_TABLE_BUILD(ObTableLoadIndexTableBuilder, insert);

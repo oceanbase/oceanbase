@@ -317,6 +317,11 @@ private:
       const bool handling_miss_log,
       transaction::ObTxLogBlock &tx_log_block);
 
+  int handle_direct_log_inc_major_log_(
+      const transaction::ObTransID &tx_id,
+      const palf::LSN &lsn,
+      const bool handling_miss_log);
+
   // read ObTxRecordLog
   int handle_record_(
       const transaction::ObTransID &tx_id,

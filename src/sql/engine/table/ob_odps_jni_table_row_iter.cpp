@@ -497,7 +497,8 @@ int ObODPSJNITableRowIterator::pull_partition_columns()
       LOG_WARN("failed to get mirror columns", K(ret));
     } else if (OB_FAIL(extract_mirror_odps_columns(mirror_columns, mirror_partition_column_list_))) {
       LOG_WARN("failed to extract mirror columns", K(ret));
-    } else { /* do nothing */
+    } else if (mirror_partition_column_list_.count() > 0) {
+      is_part_table_ = true;
     }
   }
   return ret;

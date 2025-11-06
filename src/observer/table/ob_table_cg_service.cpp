@@ -199,21 +199,43 @@ int ObTableExprCgService::generate_heap_table_hidden_pk_increment_expr(ObTableCt
   ObSQLSessionInfo &sess_info = ctx.get_session_info();
   ObRawExprFactory &expr_factory = ctx.get_expr_factory();
   const ObColumnRefRawExpr *ref_expr = item.expr_;
-  if (OB_ISNULL(ref_expr)) {
+  const ObTableColumnInfo *column_info = nullptr;
+  if (OB_ISNULL(column_info = item.column_info_) || OB_ISNULL(ref_expr)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ref_expr is NULL", K(ret));
-  } else if (OB_FAIL(expr_factory.create_raw_expr(T_TABLET_AUTOINC_NEXTVAL, func_expr))) {
-    LOG_WARN("create nextval failed", K(ret));
-  } else {
-    func_expr->set_expr_name(ObString::make_string("pk_tablet_seq"));
-    func_expr->set_accuracy(ref_expr->get_accuracy());
-    func_expr->set_result_flag(ref_expr->get_result_flag());
-    func_expr->set_data_type(ref_expr->get_data_type());
-    if (OB_FAIL(func_expr->formalize(&sess_info))) {
-      LOG_WARN("failed to extract info", K(ret));
+    LOG_WARN("column info or ref expr is NULL", KR(ret));
+  } else if (ref_expr->is_hidden_clustering_key_column()) {
+    // 隐藏排序键列：使用 T_PSEUDO_HIDDEN_CLUSTERING_KEY
+    if (OB_FAIL(expr_factory.create_raw_expr(T_PSEUDO_HIDDEN_CLUSTERING_KEY, func_expr))) {
+      LOG_WARN("create hidden clustering key expr failed", KR(ret));
     } else {
-      expr = func_expr;
+      func_expr->set_expr_name(ObString::make_string("hidden_clustering_key"));
+      func_expr->set_accuracy(ref_expr->get_accuracy());
+      func_expr->set_result_flag(ref_expr->get_result_flag());
+      func_expr->set_data_type(ref_expr->get_data_type());
+      if (OB_FAIL(func_expr->formalize(&sess_info))) {
+        LOG_WARN("failed to formalize hidden clustering key expr", K(ret));
+      } else {
+        expr = func_expr;
+      }
     }
+  } else if (column_info->column_id_ == OB_HIDDEN_PK_INCREMENT_COLUMN_ID) {
+    // 无主键表的隐藏列：使用 T_TABLET_AUTOINC_NEXTVAL
+    if (OB_FAIL(expr_factory.create_raw_expr(T_TABLET_AUTOINC_NEXTVAL, func_expr))) {
+      LOG_WARN("create nextval failed", K(ret));
+    } else {
+      func_expr->set_expr_name(ObString::make_string("pk_tablet_seq"));
+      func_expr->set_accuracy(ref_expr->get_accuracy());
+      func_expr->set_result_flag(ref_expr->get_result_flag());
+      func_expr->set_data_type(ref_expr->get_data_type());
+      if (OB_FAIL(func_expr->formalize(&sess_info))) {
+        LOG_WARN("failed to extract info", K(ret));
+      } else {
+        expr = func_expr;
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpected", KR(ret), K(item));
   }
   return ret;
 }
@@ -476,7 +498,7 @@ int ObTableExprCgService::resolve_exprs(ObTableCtx &ctx)
                 LOG_WARN("fail to fill doc_id expr param", K(ret));
               }
             }
-          } else if (column_info->column_id_ == OB_HIDDEN_PK_INCREMENT_COLUMN_ID) {
+          } else if (column_info->column_id_ == OB_HIDDEN_PK_INCREMENT_COLUMN_ID || item.expr_->is_hidden_clustering_key_column()) {
             if (OB_FAIL(generate_heap_table_hidden_pk_increment_expr(ctx, item, expr))) {
               LOG_WARN("fail to generate hidden pk increment expr", K(ret), K(item));
             }

@@ -424,7 +424,7 @@ int ObCOMajorMergeProgress::finish_merge_progress()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObCOMajorMergeProgress not inited", K(ret));
-  } else if (OB_UNLIKELY(OB_ISNULL(merge_dag_) || typeid(*merge_dag_) != typeid(ObCOMergeBatchExeDag))) {
+  } else if (OB_UNLIKELY(OB_ISNULL(merge_dag_) || typeid(*merge_dag_) != typeid(ObCOMergeExeDag))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("merge_dag has unexpected type", K(ret), KPC_(merge_dag));
   } else if (OB_ISNULL(ctx_)) {
@@ -443,23 +443,16 @@ int ObCOMajorMergeProgress::finish_merge_progress()
   }
 
   if (OB_SUCC(ret)) {
-    ObCOMergeBatchExeDag *merge_dag = static_cast<ObCOMergeBatchExeDag*>(merge_dag_);
+    ObCOMergeExeDag *merge_dag = static_cast<ObCOMergeExeDag*>(merge_dag_);
     ObCOTabletMergeCtx *ctx = static_cast<ObCOTabletMergeCtx*>(ctx_);
     if (OB_FAIL(finish_progress(ctx->get_merge_version(),
-                                &merge_dag->get_time_guard(),
+                                &ctx->info_collector_.time_guard_,
                                 true/*co_merge*/))) {
       LOG_WARN("failed to update progress", K(ret), KPC(this));
-    } else {
-      for (int64_t i = start_cg_idx_; OB_SUCC(ret) && i < end_cg_idx_; ++i) {
-        if (OB_UNLIKELY(OB_ISNULL(ctx->cg_merge_info_array_) || OB_ISNULL(ctx->cg_merge_info_array_[i]))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("merge_info is unexpected null", K(ret), KPC(ctx));
-        } else if (OB_FAIL(MTL(ObTenantCompactionProgressMgr*)->update_compression_ratio(
-          ctx->get_merge_version(),
-          ctx->cg_merge_info_array_[i]->get_merge_history()))) {
-          LOG_WARN("failed to update progress", K(ret));
-        }
-      }
+    } else if (OB_FAIL(MTL(ObTenantCompactionProgressMgr*)->update_compression_ratio(
+      ctx->get_merge_version(),
+      ctx->dag_net_merge_history_))) {
+      LOG_WARN("failed to update progress", K(ret));
     }
   }
   if (OB_SUCC(ret)) {

@@ -11,6 +11,10 @@
 #include "ob_schedule_status_cache.h"
 #include "src/storage/compaction/ob_basic_schedule_tablet_func.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
+#include "storage/ddl/ob_inc_ddl_merge_task_utils.h"
+#include "observer/ob_server_event_history_table_operator.h"
+#include "share/restore/ob_ls_restore_status.h"
+
 namespace oceanbase
 {
 using namespace storage;
@@ -21,6 +25,9 @@ const static char * ObLSStateStr[] = {
     "CAN_MERGE",
     "WEAK_READ_TS_NOT_READY",
     "OFFLINE_OR_DELETED",
+    "RESTORE_NOT_READY",
+    "ALLOW_EMERGENCY_MERGE",
+    "LOOP_NOT_READY_LS",
     "STATE_MAX"
 };
 
@@ -41,8 +48,9 @@ const char * ObLSStatusCache::ls_state_to_str(const ObLSStatusCache::LSState &st
 * weak_read_ts
 */
 int ObLSStatusCache::init_for_major(
-  const int64_t merge_version,
-  ObLSHandle &ls_handle)
+    const int64_t merge_version,
+    const int64_t loop_cnt,
+    ObLSHandle &ls_handle)
 {
   int ret = OB_SUCCESS;
   reset(); // reset before init
@@ -59,7 +67,13 @@ int ObLSStatusCache::init_for_major(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid weak read ts", KR(ret), K_(weak_read_ts));
   } else if (merge_version > 0 && weak_read_ts_.get_val_for_tx() < merge_version) {
-    state_ = WEAK_READ_TS_NOT_READY;
+    if (loop_cnt % 50 == 0) {
+      state_ = LOOP_NOT_READY_LS;
+      is_leader_ = false; // only schedule unfinished medium merge, not launch new medium merge
+      LOG_INFO("start loop weak read ts not ready ls", K(ls_id_), K(loop_cnt), K(merge_version), KPC(this));
+    } else {
+      state_ = WEAK_READ_TS_NOT_READY;
+    }
   } else if (can_merge() && OB_FAIL(ObMediumCompactionScheduleFunc::is_election_leader(ls_id_, is_leader_))) {
     is_leader_ = false;
     if (OB_LS_NOT_EXIST != ret) {
@@ -99,9 +113,37 @@ void ObLSStatusCache::check_ls_state(ObLS &ls, LSState &state)
     if (REACH_THREAD_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
       LOG_INFO("ls is deleted or offline", K(ls), K(ls.is_deleted()), K(ls.is_offline()));
     }
+  } else if (!is_restore_ready_for_merge(ls)) {
+    state = RESTORE_NOT_READY;
+    if (REACH_THREAD_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
+      LOG_INFO("ls is not ready for merge due to restore status", K(ls));
+    }
   } else {
     state = CAN_MERGE;
   }
+}
+
+bool ObLSStatusCache::is_restore_ready_for_merge(ObLS &ls)
+{
+  int ret = OB_SUCCESS;
+  bool is_restore_ready = false;
+
+  share::ObLSRestoreStatus restore_status;
+  if (OB_FAIL(ls.get_restore_status(restore_status))) {
+    is_restore_ready = false;
+    LOG_WARN("failed to get ls restore status", KR(ret), "ls_id", ls.get_ls_id());
+  } else if (restore_status.is_quick_restore()) {
+    is_restore_ready = true;
+    if (REACH_THREAD_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
+      LOG_INFO("LS is in QUICK_RESTORE phase, allowing emergency merge", K(ret),
+               "ls_id", ls.get_ls_id(), K(restore_status));
+    }
+  } else if (restore_status.is_none()) {
+    is_restore_ready = true;
+  } else {
+    is_restore_ready = false;
+  }
+  return true;
 }
 
 bool ObLSStatusCache::check_weak_read_ts_ready(
@@ -127,7 +169,8 @@ const static char * ObTabletExecuteStateStr[] = {
     "NO_MAJOR_SSTABLE",
     "INVALID_LS_STATE",
     "TENANT_SKIP_MERGE",
-    "EXIST_UNFINISH_INC_MAJOR",
+    "RESTORE_STATUS_NOT_READY",
+    "EMERGENCY_MERGE_REQUIRED",
     "STATE_MAX"
 };
 
@@ -168,11 +211,10 @@ const char * ObTabletStatusCache::new_round_state_to_str(const ObTabletStatusCac
 }
 
 int ObTabletStatusCache::init_for_major(
-  ObLS &ls,
-  const int64_t merge_version,
-  const ObTablet &tablet,
-  const bool is_skip_merge_tenant,
-  const bool ls_could_schedule_new_round)
+    ObLS &ls,
+    const int64_t merge_version,
+    const ObTablet &tablet,
+    const bool ls_could_schedule_new_round)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -181,7 +223,7 @@ int ObTabletStatusCache::init_for_major(
   } else {
     const ObLSID &ls_id = ls.get_ls_id();
     const ObTabletID &tablet_id = tablet.get_tablet_id();
-    if (OB_FAIL(inner_init_state(merge_version, tablet, is_skip_merge_tenant))) {
+    if (OB_FAIL(inner_init_state(merge_version, ls, tablet))) {
       LOG_WARN("failed to init state", KR(ret), K(merge_version), K(ls_id), K(tablet_id));
     } else if (OB_FAIL(update_tablet_report_status(ls, tablet))) {
       LOG_WARN("failed to update tablet report status", KR(ret), K(ls_id), K(tablet_id));
@@ -214,7 +256,7 @@ int ObTabletStatusCache::init_for_diagnose(
     LOG_WARN("init twice", KR(ret), KPC(this));
   } else {
     const ObTabletID &tablet_id = tablet.get_tablet_id();
-    if (OB_FAIL(inner_init_state(merge_version, tablet, false/*is_skip_merge_tenant*/))) {
+    if (OB_FAIL(inner_init_state(merge_version, ls, tablet))) {
       LOG_WARN("failed to init state", KR(ret), K(merge_version), K(tablet_id));
     } else {
       inner_init_could_schedule_new_round(ls.get_ls_id(), tablet,
@@ -231,6 +273,29 @@ int ObTabletStatusCache::init_for_diagnose(
   return ret;
 }
 
+int ObTabletStatusCache::check_unfinished_inc_major(
+    storage::ObLS &ls,
+    const int64_t schedule_scn,
+    const storage::ObTablet &tablet,
+    bool &exists_unfinished_inc_major)
+{
+  int ret = OB_SUCCESS;
+  const ObTabletID &tablet_id = tablet.get_tablet_id();
+
+  if (OB_UNLIKELY(schedule_scn <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(schedule_scn));
+  } else if (OB_FAIL(ObIncDDLMergeTaskUtils::check_unfinished_inc_major_before_merge(
+      &ls, &tablet, schedule_scn, exists_unfinished_inc_major))) {
+    LOG_WARN("failed to check unfinished inc major before merge", K(ret), K(tablet_id));
+  } else if (exists_unfinished_inc_major) {
+    FLOG_INFO("tablet can't schedule dag, exists unfinished inc major", K(ret), K(tablet_id)); // tmp log, remove later
+    // TODO tmp event, work under errsim later.
+    SERVER_EVENT_ADD("major_merge", "exist_unfinished_inc_major", "tenant_id", MTL_ID(), "ls_id", ls.get_ls_id().id(), "tablet_id", tablet_id.id());
+  }
+  return ret;
+}
+
 /*
 * check_list
 * tablet is_data_complete
@@ -239,12 +304,13 @@ int ObTabletStatusCache::init_for_diagnose(
 */
 int ObTabletStatusCache::inner_init_state(
     const int64_t merge_version,
-    const ObTablet &tablet,
-    const bool is_skip_merge_tenant)
+    ObLS &ls,
+    const ObTablet &tablet)
 {
   int ret = OB_SUCCESS;
   const ObTabletID &tablet_id = tablet.get_tablet_id();
   const int64_t last_major_snapshot = tablet.get_last_major_snapshot_version();
+  bool is_mv_major_refresh_tablet = false;
 
   if (OB_UNLIKELY(!tablet.is_data_complete())) {
     execute_state_ = DATA_NOT_COMPLETE;
@@ -255,15 +321,17 @@ int ObTabletStatusCache::inner_init_state(
     execute_state_ = NO_MAJOR_SSTABLE;
     LOG_TRACE("no major", KR(ret), K(tablet_id), K(last_major_snapshot));
   } else if (FALSE_IT(tablet_merge_finish_ = (last_major_snapshot >= merge_version))){
-  } else if (is_skip_merge_tenant) {
-    bool is_mv_major_refresh_tablet = false;
-    if (OB_FAIL(tablet.check_is_mv_major_refresh_tablet(is_mv_major_refresh_tablet))) {
-      LOG_WARN("check mv major refresh tablet failed", KR(ret));
-    } else if (!is_mv_major_refresh_tablet) {
-      execute_state_ = TENANT_SKIP_MERGE;
-    } else {
-      // MV tablet should schedule merge in skip_merge_tenant
-      execute_state_ = CAN_MERGE;
+  } else if (tablet.get_tablet_meta().ha_status_.is_restore_status_empty()) {
+    execute_state_ = RESTORE_STATUS_NOT_READY;
+    LOG_INFO("tablet restore status is EMPTY, not ready for merge", K(tablet_id));
+  } else if (OB_FAIL(tablet.check_is_mv_major_refresh_tablet(is_mv_major_refresh_tablet))) {
+    LOG_WARN("check mv major refresh tablet failed", KR(ret));
+  } else if (is_mv_major_refresh_tablet) {
+    // MV tablet should schedule merge in restore tenant
+    execute_state_ = CAN_MERGE;
+  } else if (tablet.get_tablet_meta().ha_status_.is_restore_status_remote()) {
+    if (OB_FAIL(check_execute_state_for_remote_tablet_(ls, tablet))) {
+      LOG_WARN("failed to check execute state for remote tablet", K(ret), K(ls), K(tablet));
     }
   } else {
     execute_state_ = CAN_MERGE;
@@ -476,6 +544,63 @@ bool ObTabletStatusCache::need_diagnose() const
     bret = (INVALID_LS_STATE != execute_state_ && TENANT_SKIP_MERGE != execute_state_);
   }
   return bret;
+}
+
+int ObTabletStatusCache::get_tablet_inc_major_sstable_count(const storage::ObTablet &tablet, int64_t &sstable_count)
+{
+  int ret = OB_SUCCESS;
+  sstable_count = 0;
+  storage::ObTabletMemberWrapper<storage::ObTabletTableStore> table_store_wrapper;
+
+  if (OB_FAIL(tablet.fetch_table_store(table_store_wrapper))) {
+    LOG_WARN("failed to fetch table store", K(ret), K(tablet.get_tablet_id()));
+  } else {
+    const storage::ObTabletTableStore *table_store = table_store_wrapper.get_member();
+    if (OB_ISNULL(table_store)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table store should not be null", K(ret));
+    } else {
+      sstable_count = table_store->get_inc_major_sstables().count();
+    }
+  }
+  return ret;
+}
+
+int ObTabletStatusCache::check_execute_state_for_remote_tablet_(
+    storage::ObLS &ls,
+    const ObTablet &tablet)
+{
+  int ret = OB_SUCCESS;
+  int64_t inc_major_sstable_count = 0;
+  int64_t threshold = 0;
+  const ObTabletID &tablet_id = tablet.get_tablet_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    threshold = (tenant_config->_restore_emergency_inc_major_sstable_threshold);
+  } else {
+    threshold = ObTabletTableStore::EMERGENCY_SSTABLE_CNT;
+  }
+
+  if (OB_FAIL(get_tablet_inc_major_sstable_count(tablet, inc_major_sstable_count))) {
+    LOG_WARN("failed to get tablet inc major sstable count", K(ret), K(tablet));
+  } else if (inc_major_sstable_count >= threshold) {
+    execute_state_ = EMERGENCY_MERGE_REQUIRED;
+    if (REACH_THREAD_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
+#ifdef ERRSIM
+    SERVER_EVENT_SYNC_ADD("storage_ha", "tablet_need_emergency_merge",
+                          "tenant_id", MTL_ID(),
+                          "ls_id", ls.get_ls_id().id(),
+                          "tablet_id", tablet_id.id(),
+                          "inc_major_sstable_count", inc_major_sstable_count,
+                          "threshold", threshold);
+#endif
+      LOG_INFO("tablet requires emergency merge due to sstable threshold", K(tablet_id), K(inc_major_sstable_count), K(threshold));
+    }
+  } else {
+    execute_state_ = RESTORE_STATUS_NOT_READY;
+    LOG_INFO("tablet has not reach sstable threshold, can not merge", K(tablet_id), "restore_status", tablet.get_tablet_meta().ha_status_);
+  }
+  return ret;
 }
 
 } // namespace compaction

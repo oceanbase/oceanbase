@@ -573,6 +573,22 @@ private:
   int get_copy_sstable_count_(int64_t &sstable_count);
   int get_tablet_meta_(ObMigrationTabletParam &tablet_meta);
   int fake_deleted_tablet_meta_(ObMigrationTabletParam &tablet_meta);
+  int check_ddl_sstable_scn_range_(
+      const ObTablet &tablet,
+      const share::ObScnRange &ddl_sstable_scn_range);
+  int check_inc_major_ddl_sstable_end_scn_(
+      const ObTablet &tablet,
+      const share::SCN &inc_major_ddl_sstable_end_scn);
+  int check_need_copy_ddl_sstable_(
+      const common::ObTabletID &tablet_id,
+      const blocksstable::ObSSTable &sstable,
+      const share::ObScnRange &ddl_sstable_scn_range,
+      bool &need_copy_sstable);
+  int check_need_copy_inc_major_ddl_sstable_(
+      const common::ObTabletID &tablet_id,
+      const blocksstable::ObSSTable &sstable,
+      const share::SCN &inc_major_ddl_sstable_end_scn,
+      bool &need_copy_sstable);
 
 private:
   bool is_inited_;

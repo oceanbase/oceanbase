@@ -2923,6 +2923,7 @@ int ObRpcRemoteWriteDDLIncCommitLogP::process()
       ObTransService *trans_service = MTL(ObTransService *);
       ObLSHandle ls_handle;
       ObLS *ls = nullptr;
+      share::SCN commit_scn;
       if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
         LOG_WARN("get ls failed", K(ret), K(arg_));
       } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
@@ -2933,14 +2934,24 @@ int ObRpcRemoteWriteDDLIncCommitLogP::process()
       } else if (ObRole::LEADER != role) {
         ret = OB_NOT_MASTER;
         LOG_INFO("leader may not have finished replaying clog, caller retry", K(ret), K(MTL_ID()), K(arg_.ls_id_));
-      } else if (OB_FAIL(sstable_redo_writer.init(arg_.ls_id_, arg_.tablet_id_))) {
-        LOG_WARN("init sstable redo writer", K(ret), K(arg_.tablet_id_));
+      } else if (OB_FAIL(sstable_redo_writer.init(arg_.ls_id_,
+                                                  arg_.tablet_id_,
+                                                  arg_.direct_load_type_,
+                                                  arg_.trans_id_,
+                                                  arg_.seq_no_))) {
+        LOG_WARN("init sstable redo writer", K(ret), K(arg_.tablet_id_),
+            K(arg_.direct_load_type_), K(arg_.trans_id_), K(arg_.seq_no_));
       } else if (OB_FAIL(sstable_redo_writer.write_inc_commit_log_with_retry(false/*allow_remote_write*/,
                                                                              arg_.lob_meta_tablet_id_,
-                                                                             arg_.tx_desc_))) {
+                                                                             arg_.snapshot_version_,
+                                                                             arg_.data_format_version_,
+                                                                             arg_.tx_desc_,
+                                                                             commit_scn))) {
         LOG_WARN("fail to write inc commit log", K(ret), K(arg_));
       } else if (OB_FAIL(trans_service->get_tx_exec_result(*arg_.tx_desc_, result_.tx_result_))) {
         LOG_WARN("fail to get_tx_exec_result", K(ret), K(arg_));
+      } else {
+        result_.commit_scn_ = commit_scn;
       }
     }
   }

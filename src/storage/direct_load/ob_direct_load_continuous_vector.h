@@ -14,6 +14,7 @@
 
 #include "share/vector/ob_continuous_base.h"
 #include "storage/direct_load/ob_direct_load_vector.h"
+#include "common/object/ob_object.h"
 
 namespace oceanbase
 {
@@ -31,10 +32,31 @@ public:
   int64_t bytes_usage(const int64_t batch_size) const override { return size_; }
   void sum_bytes_usage(int64_t *sum_bytes, const int64_t batch_size) const override
   {
-    uint32_t *offsets = continuous_vector_->get_offsets();
     for (int64_t i = 0; i < batch_size; ++i) {
-      sum_bytes[i] += (offsets[i + 1] - offsets[i]);
+      sum_bytes[i] += (offsets_[i + 1] - offsets_[i]);
     }
+  }
+
+  int sum_lob_length(int64_t *sum_bytes, const int64_t batch_size) const override
+  {
+    int ret = OB_SUCCESS;
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; ++i) {
+      const uint32_t offset1 = offsets_[i];
+      const uint32_t offset2 = offsets_[i + 1];
+      const int32_t len = offset2 - offset1;
+      if (len > 0) {
+        const char *row_data = data_ + offset1;
+        ObLobLocatorV2 locator(ObString(len, row_data), true);
+        int64_t lob_length = 0;
+        if (OB_FAIL(locator.get_lob_data_byte_len(lob_length))) {
+          STORAGE_LOG(WARN, "fail to get lob data byte len", KR(ret), K(locator));
+        } else {
+          sum_bytes[i] += lob_length + sizeof(ObLobCommon);
+        }
+      }
+    }
+    return ret;
   }
 
   void reuse(const int64_t batch_size) override;

@@ -16,6 +16,7 @@
 #include "lib/lock/ob_thread_cond.h"
 #include "logservice/ob_log_base_type.h"
 #include "storage/ls/ob_ls.h"
+#include "lib/mysqlclient/ob_mysql_transaction.h"
 namespace oceanbase
 {
 
@@ -51,6 +52,7 @@ public:
   int64_t get_idle_time() const { return interval_idle_time_us_; }
   // role change
   int check_leader();
+  int end_transaction(common::ObMySQLTransaction &trans, const int upstream_ret);
   virtual void switch_to_follower_forcedly() override;
   virtual int switch_to_leader() override;
   virtual int switch_to_follower_gracefully() override;

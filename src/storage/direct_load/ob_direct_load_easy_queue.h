@@ -43,7 +43,6 @@ public:
   }
 
   void pop_one(T &value) {
-    value = nullptr;
     lib::ObMutexGuard guard(mutex_);
     if (!queue_.empty()) {
       value = queue_.get_first();
@@ -54,6 +53,15 @@ public:
   void pop_all(common::ObIArray<T> &values) {
     lib::ObMutexGuard guard(mutex_);
     while (!queue_.empty()) {
+      T &e = queue_.get_first();
+      values.push_back(e);
+      queue_.pop_front();
+    }
+  }
+
+  void pop_count(common::ObIArray<T> &values, int count) {
+    lib::ObMutexGuard guard(mutex_);
+    while (!queue_.empty() && count--) {
       T &e = queue_.get_first();
       values.push_back(e);
       queue_.pop_front();

@@ -38,6 +38,9 @@ public:
   static void add_all_and_each_column_group(
     ObIAllocator &allocator,
     share::schema::ObTableSchema &table_schema);
+  static void add_rowkey_and_each_column_group(
+    ObIAllocator &allocator,
+    share::schema::ObTableSchema &table_schema);
   static const int64_t TENANT_ID = 1;
   static const int64_t TABLE_ID = 7777;
   static const int64_t TEST_ROWKEY_COLUMN_CNT = 3;
@@ -149,5 +152,52 @@ void TestSchemaPrepare::add_all_and_each_column_group(
   allocator.free(cg_1_ids);
 }
 
+void TestSchemaPrepare::add_rowkey_and_each_column_group(
+  ObIAllocator &allocator,
+  share::schema::ObTableSchema &table_schema)
+{
+  ObArray<share::schema::ObColDesc> col_ids;
+  ObArray<share::schema::ObColDesc> rowkey_col_ids;
+  int64_t store_column_count;
+  int64_t rowkey_column_count;
+  ASSERT_EQ(OB_SUCCESS, table_schema.get_store_column_ids(col_ids));
+  ASSERT_EQ(OB_SUCCESS, table_schema.get_store_column_count(store_column_count));
+  ASSERT_EQ(store_column_count, col_ids.count());
+
+  ASSERT_EQ(OB_SUCCESS, table_schema.get_rowkey_column_ids(rowkey_col_ids));
+  rowkey_column_count = rowkey_col_ids.count();
+  ObRowStoreType row_store_type = FLAT_ROW_STORE;
+
+  //add rowkey_cg_schema
+  share::schema::ObColumnGroupSchema cg_1;
+  cg_1.column_group_type_ = share::schema::ObColumnGroupType::ROWKEY_COLUMN_GROUP;
+  cg_1.column_group_id_ = store_column_count;
+  cg_1.column_id_cnt_ = rowkey_column_count;
+  uint64_t *cg_1_ids = static_cast<uint64_t *>(allocator.alloc(rowkey_column_count * sizeof(uint64_t)));
+  for(int64_t i = 0; i < rowkey_column_count; i++) {
+    cg_1_ids[i] = rowkey_col_ids.at(i).col_id_;
+  }
+  cg_1.column_id_arr_ = cg_1_ids;
+  cg_1.column_group_name_ = "test_rowkey";
+  cg_1.row_store_type_ = row_store_type;
+  ASSERT_EQ(OB_SUCCESS, table_schema.add_column_group(cg_1));
+
+  //add single_cg_schema
+  for(int64_t i = 0; i < store_column_count; i++) {
+    share::schema::ObColumnGroupSchema cg_2;
+    cg_2.column_group_type_ = share::schema::ObColumnGroupType::SINGLE_COLUMN_GROUP;
+    cg_2.column_group_id_ = i;
+    char c = i + '0';
+    cg_2.column_group_name_ = &c;
+    cg_2.column_id_cnt_ = 1;
+    cg_2.column_id_arr_capacity_ = 1;
+    uint64_t column_ids[1] = {col_ids.at(i).col_id_};
+    cg_2.column_id_arr_ = column_ids;
+    cg_2.row_store_type_ = row_store_type;
+    ASSERT_EQ(OB_SUCCESS, table_schema.add_column_group(cg_2));
+  }
+
+  allocator.free(cg_1_ids);
+}
 }
 }

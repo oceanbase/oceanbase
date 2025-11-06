@@ -359,7 +359,6 @@ int ObTestSSLogMetaService::build_update_table_store_param_(ObArenaAllocator &al
     }
 
     param.rebuild_seq_ = ls_handle.get_ls()->get_rebuild_seq();
-    const bool need_check_sstable = true;
     param.ddl_info_.update_with_major_flag_ = false;
 
     param.sstable_ = sstable;
@@ -367,7 +366,6 @@ int ObTestSSLogMetaService::build_update_table_store_param_(ObArenaAllocator &al
 
     if (FAILEDx(param.init_with_ha_info(ObHATableStoreParam(
             tablet_handle.get_obj()->get_tablet_meta().transfer_info_.transfer_seq_,
-            need_check_sstable,
             true /*need_check_transfer_seq*/)))) {
       LOG_WARN("failed to init with ha info", KR(ret));
     } else if (OB_FAIL(param.init_with_compaction_info(ObCompactionTableStoreParam(

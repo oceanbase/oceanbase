@@ -213,8 +213,7 @@ int64_t ObCompactionDagStatus::to_string(char *buf, const int64_t buf_len) const
     J_TMP_STRING(ObDagType::DAG_TYPE_MAJOR_MERGE);
     J_TMP_STRING(ObDagType::DAG_TYPE_CO_MERGE_PREPARE);
     J_TMP_STRING(ObDagType::DAG_TYPE_CO_MERGE_SCHEDULE);
-    J_TMP_STRING(ObDagType::DAG_TYPE_CO_MERGE_BATCH_EXECUTE);
-    J_TMP_STRING(ObDagType::DAG_TYPE_CO_MERGE_FINISH);
+    J_TMP_STRING(ObDagType::DAG_TYPE_CO_MERGE_EXECUTE);
     J_OBJ_END();
   }
   #undef J_TMP_STRING
@@ -243,15 +242,6 @@ void ObCompactionDagStatus::update_finish_cnt(
   if (COMPACTION_DAG_MAX > type) {
     histogram_stat_[type].add_value(exe_time, failed);
   }
-}
-
-int64_t ObCompactionDagStatus::get_cost_long_time(const int64_t prio)
-{
-  int64_t ret_time = INT64_MAX;
-  if (0 <= prio && COMPACTION_PRIORITY_MAX > prio) {
-    ret_time = COST_LONG_TIME[prio];
-  }
-  return ret_time;
 }
 
 /*
@@ -295,6 +285,26 @@ const char* ObCompactionSuggestionMgr::get_add_thread_suggestion(const int64_t p
     str = ObAddWorkerThreadSuggestion[priority];
   }
   return str;
+}
+
+const int64_t ObCompactionSuggestionMgr::ObCompactionLongTimeThreshold[share::ObDagPrio::DAG_PRIO_MAX] =
+{
+  [share::ObDagPrio::DAG_PRIO_COMPACTION_HIGH] = 10 * 60 * 1000 * 1000L,
+  [share::ObDagPrio::DAG_PRIO_COMPACTION_MID] = 20 * 60 * 1000 * 1000L,
+  [share::ObDagPrio::DAG_PRIO_COMPACTION_LOW] = 60 * 60 * 1000 * 1000L,
+};
+
+int64_t ObCompactionSuggestionMgr::get_long_time_threshold(const int64_t priority)
+{
+  int64_t threshold;
+  static_assert(sizeof(ObCompactionLongTimeThreshold)/ sizeof(int64_t) == static_cast<int64_t>(share::ObDagPrio::DAG_PRIO_MAX),
+                "ObCompactionLongTimeThreshold array size mismatch enum ObDagPrio count");
+  if (share::ObDagPrio::DAG_PRIO_MAX <= priority|| share::ObDagPrio::DAG_PRIO_COMPACTION_HIGH > priority) {
+    threshold = INT64_MAX;
+  } else {
+    threshold = ObCompactionLongTimeThreshold[priority];
+  }
+  return threshold;
 }
 
 int ObCompactionSuggestionMgr::mtl_init(ObCompactionSuggestionMgr *&compaction_suggestion_mgr)
@@ -402,8 +412,7 @@ int ObCompactionSuggestionMgr::analyze_for_suggestion(
     ADD_COMPACTION_DAG_INFO_PARAM(ObDagType::ObDagTypeEnum::DAG_TYPE_MAJOR_MERGE);
     ADD_COMPACTION_DAG_INFO_PARAM(ObDagType::ObDagTypeEnum::DAG_TYPE_CO_MERGE_PREPARE);
     ADD_COMPACTION_DAG_INFO_PARAM(ObDagType::ObDagTypeEnum::DAG_TYPE_CO_MERGE_SCHEDULE);
-    ADD_COMPACTION_DAG_INFO_PARAM(ObDagType::ObDagTypeEnum::DAG_TYPE_CO_MERGE_BATCH_EXECUTE);
-    ADD_COMPACTION_DAG_INFO_PARAM(ObDagType::ObDagTypeEnum::DAG_TYPE_CO_MERGE_FINISH);
+    ADD_COMPACTION_DAG_INFO_PARAM(ObDagType::ObDagTypeEnum::DAG_TYPE_CO_MERGE_EXECUTE);
   }
   if (strlen(buf) > 0) {
     suggestion.merge_type_ =  INVALID_MERGE_TYPE;
@@ -449,30 +458,31 @@ int ObCompactionSuggestionMgr::diagnose_for_suggestion(
     int64_t thread_limit;
     int64_t running_cnt;
     update_running_cnt(dag_running_cnts);
-    ObCompactionDagStatus dag_status;
-    {
-      ObMutexGuard guard(lock_);
-      dag_status = compaction_dag_status_; // copy
-    }
-    // force to print log
-    int64_t end_time = common::ObTimeUtility::fast_current_time();
-    STORAGE_LOG(INFO, "[COMPACTION DAG STATUS] ", "start_time", click_time_, K(end_time), K(dag_status));
-    click_time_ = end_time;
-    // ayalyze
-    for (int64_t i = 0; i < ObIDag::MergeDagPrioCnt; ++i) {
-      if (ObCompactionSuggestionReason::MAX_REASON <= reasons.at(i)
-          || ObCompactionSuggestionReason::DAG_FULL > reasons.at(i)) {
-        // do nothing
-      } else if (OB_TMP_FAIL(analyze_for_suggestion(
-              reasons.at(i),
-              ObIDag::MergeDagPrio[i],
-              thread_limits.at(i),
-              running_cnts.at(i),
-              dag_status))) {
-        COMMON_LOG(WARN, "fail to analyze insufficient thread", K(tmp_ret));
+    SMART_VAR(ObCompactionDagStatus, dag_status) {
+      {
+        ObMutexGuard guard(lock_);
+        dag_status = compaction_dag_status_; // copy
       }
+      // force to print log
+      int64_t end_time = common::ObTimeUtility::fast_current_time();
+      STORAGE_LOG(INFO, "[COMPACTION DAG STATUS] ", "start_time", click_time_, K(end_time), K(dag_status));
+      click_time_ = end_time;
+      // ayalyze
+      for (int64_t i = 0; i < ObIDag::MergeDagPrioCnt; ++i) {
+        if (ObCompactionSuggestionReason::MAX_REASON <= reasons.at(i)
+            || ObCompactionSuggestionReason::DAG_FULL > reasons.at(i)) {
+          // do nothing
+        } else if (OB_TMP_FAIL(analyze_for_suggestion(
+                reasons.at(i),
+                ObIDag::MergeDagPrio[i],
+                thread_limits.at(i),
+                running_cnts.at(i),
+                dag_status))) {
+          COMMON_LOG(WARN, "fail to analyze insufficient thread", K(tmp_ret));
+        }
+      }
+      clear_compaction_dag_status();
     }
-    clear_compaction_dag_status();
   }
   return ret;
 }
@@ -511,7 +521,7 @@ int ObCompactionSuggestionMgr::analyze_merge_info(
     const ObMergeStaticInfo &static_info = merge_history.static_info_;
     const ObMergeRunningInfo &running_info = merge_history.running_info_;
     const ObMergeBlockInfo &block_info = merge_history.block_info_;
-    if (ObCompactionDagStatus::get_cost_long_time(OB_DAG_TYPES[type].init_dag_prio_) <= cost_time) {
+    if (get_long_time_threshold(OB_DAG_TYPES[type].init_dag_prio_) <= cost_time) {
       ADD_COMPACTION_INFO_PARAM(buf, buf_len,
                 "reason", get_suggestion_reason(ObCompactionSuggestionReason::DAG_COST_LONGTIME));
       if (TOO_MANY_FAILED_COUNT <= merge_history.diagnose_info_.retry_cnt_) {

@@ -50,12 +50,17 @@ public:
   bool is_inc_replace_direct_load() const { return load_method_ == ObDirectLoadMethod::INCREMENTAL && insert_mode_ == ObDirectLoadInsertMode::INC_REPLACE; }
   bool is_insert_overwrite() const { return ObDirectLoadMode::is_insert_overwrite(load_mode_); }
   bool is_insert_into() const { return load_mode_ == ObDirectLoadMode::INSERT_INTO; }
-  TO_STRING_KV(K_(table_id), K_(load_method), K_(insert_mode), K_(load_mode), K_(load_level), K_(dup_action),
-               K_(max_error_row_count), K_(need_sort), K_(can_use_direct_load), K_(use_direct_load), K_(is_optimized_by_default_load_mode));
+  void set_is_online_gather_statistics(bool is_online_gather_statistics) { is_online_gather_statistics_ = is_online_gather_statistics; }
+  void set_online_sample_percent(double online_sample_percent) { online_sample_percent_ = online_sample_percent; }
+  TO_STRING_KV(K_(table_id), K_(load_method), K_(insert_mode), K_(load_mode), K_(load_level),
+               K_(dup_action), K_(max_error_row_count), K_(need_sort), K_(can_use_direct_load),
+               K_(use_direct_load), K_(is_optimized_by_default_load_mode),
+               K_(is_online_gather_statistics), K_(online_sample_percent));
+
 private:
   void enable_by_direct_load_hint(const ObDirectLoadHint &hint);
   void enable_by_append_hint();
-  void enable_by_config();
+  void enable_by_config(ObExecContext *exec_ctx);
   void enable_by_overwrite();
   int check_semantics();
   int check_support_insert_overwrite(const ObGlobalHint &global_hint);
@@ -72,6 +77,9 @@ public:
   bool can_use_direct_load_;
   bool use_direct_load_;
   bool is_optimized_by_default_load_mode_;  // optimized by default load mode
+  bool enable_inc_major_;
+  bool is_online_gather_statistics_;
+  double online_sample_percent_;
 };
 
 } // namespace sql

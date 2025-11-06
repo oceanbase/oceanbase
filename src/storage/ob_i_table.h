@@ -139,6 +139,7 @@ public:
     SliceRange() : start_slice_idx_(0), end_slice_idx_(0) {}
     void reset() { start_slice_idx_ = 0; end_slice_idx_ = 0; }
     bool operator ==(const SliceRange &other) const { return start_slice_idx_ == other.start_slice_idx_ && end_slice_idx_ == other.end_slice_idx_; }
+    bool operator !=(const SliceRange &other) const { return !this->operator==(other); }
     bool is_merge_slice() const { return 0 == start_slice_idx_ && end_slice_idx_ > 0; }
     TO_STRING_KV(K_(start_slice_idx), K_(end_slice_idx));
   public:
@@ -170,8 +171,24 @@ public:
 	OB_INLINE bool is_multi_version_minor_sstable() const { return ObITable::is_multi_version_minor_sstable(table_type_); }
     OB_INLINE bool is_mini_sstable() const { return ObITable::is_mini_sstable(table_type_); }
     OB_INLINE bool is_major_sstable() const { return ObITable::is_major_sstable(table_type_) || ObITable::is_meta_major_sstable(table_type_); }
-    OB_INLINE bool is_major_or_ddl_merge_sstable() const { return is_major_sstable() || ObITable::is_ddl_merge_sstable(table_type_); }
-    OB_INLINE bool is_ddl_merge_sstable() const { return ObITable::is_ddl_merge_sstable(table_type_); }
+    OB_INLINE bool is_major_or_ddl_merge_sstable() const { return is_major_sstable()
+                                                               || is_ddl_merge_sstable()
+                                                               || ObITable::is_inc_major_ddl_aggregate_sstable(table_type_)
+                                                               || ObITable::is_inc_major_type_sstable(table_type_)
+                                                               || ObITable::is_inc_major_ddl_dump_co_cg_sstable(table_type_); }
+    OB_INLINE bool is_ddl_merge_sstable() const
+    {
+      // in the situation of is_merge_slice() = true,
+      // an inc_major_ddl_dump_sstable behaves as a normal sstable,
+      // providing higher reading performance than ddl merge sstables.
+      return (ObITable::TableType::DDL_MERGE_CO_SSTABLE == table_type_
+        || ObITable::TableType::DDL_MERGE_CG_SSTABLE == table_type_
+        || ObITable::TableType::INC_MAJOR_DDL_AGGREGATE_CO_SSTABLE == table_type_
+        || ObITable::TableType::INC_MAJOR_DDL_AGGREGATE_CG_SSTABLE == table_type_
+        || ObITable::TableType::INC_MAJOR_DDL_MERGE_CO_SSTABLE == table_type_
+        || ObITable::TableType::INC_MAJOR_DDL_MERGE_CG_SSTABLE == table_type_)
+        && !slice_range_.is_merge_slice();
+    }
     OB_INLINE bool is_ddl_mem_co_cg_sstable() const { return ObITable::is_ddl_mem_co_cg_sstable(table_type_); }
     OB_INLINE bool is_meta_major_sstable() const { return ObITable::is_meta_major_sstable(table_type_); }
     OB_INLINE bool is_multi_version_table() const { return ObITable::is_multi_version_table(table_type_); }
@@ -179,8 +196,13 @@ public:
     OB_INLINE bool is_mds_mini_sstable() const { return ObITable::is_mds_mini_sstable(table_type_); }
     OB_INLINE bool is_mds_minor_sstable() const { return ObITable::is_mds_minor_sstable(table_type_); }
     OB_INLINE bool is_ddl_sstable() const { return ObITable::is_ddl_sstable(table_type_); }
+    OB_INLINE bool is_inc_major_ddl_sstable() const { return ObITable::is_inc_major_ddl_sstable(table_type_); }
+    OB_INLINE bool is_ddl_type_sstable() const { return ObITable::is_ddl_type_sstable(table_type_); }
     OB_INLINE bool is_ddl_dump_sstable() const { return ObITable::is_ddl_dump_sstable(table_type_); }
+    OB_INLINE bool is_inc_major_ddl_dump_sstable() const { return ObITable::is_inc_major_ddl_dump_sstable(table_type_); }
     OB_INLINE bool is_ddl_mem_sstable() const { return ObITable::is_ddl_mem_sstable(table_type_); }
+    OB_INLINE bool is_inc_major_ddl_mem_sstable() const { return ObITable::is_inc_major_ddl_mem_sstable(table_type_); }
+    OB_INLINE bool is_inc_major_ddl_dump_co_cg_sstable() const { return ObITable::is_inc_major_ddl_dump_co_cg_sstable(table_type_); }
     OB_INLINE bool is_table_with_scn_range() const { return ObITable::is_table_with_scn_range(table_type_); }
     OB_INLINE bool is_remote_logical_minor_sstable() const { return ObITable::is_remote_logical_minor_sstable(table_type_); }
     OB_INLINE bool is_co_sstable() const { return ObITable::is_co_sstable(table_type_); }
@@ -191,6 +213,16 @@ public:
     OB_INLINE bool is_row_store_major_sstable() const { return ObITable::is_row_store_major_sstable(table_type_); }
     OB_INLINE bool is_column_store_major_sstable() const { return ObITable::is_column_store_major_sstable(table_type_); }
     OB_INLINE bool is_true_major_sstable() const { return is_row_store_major_sstable() || is_column_store_major_sstable(); }
+    OB_INLINE bool is_inc_major_sstable() const { return ObITable::is_inc_major_sstable(table_type_); }
+    OB_INLINE bool is_inc_co_sstable() const { return ObITable::is_inc_co_sstable(table_type_); }
+    OB_INLINE bool is_inc_rowkey_cg_sstable() const { return ObITable::is_inc_rowkey_cg_sstable(table_type_); }
+    OB_INLINE bool is_inc_normal_cg_sstable() const { return ObITable::is_inc_normal_cg_sstable(table_type_); }
+    OB_INLINE bool is_inc_major_type_sstable() const { return is_inc_major_sstable() || is_inc_co_sstable() || is_inc_rowkey_cg_sstable() || is_inc_normal_cg_sstable(); }
+    OB_INLINE bool is_inc_column_store_sstable() const { return is_inc_co_sstable() || is_inc_rowkey_cg_sstable() || is_inc_normal_cg_sstable(); }
+    OB_INLINE bool is_inc_major_ddl_aggregate_sstable() const { return ObITable::is_inc_major_ddl_aggregate_sstable(table_type_); }
+    OB_INLINE bool is_inc_major_ddl_aggregate_co_sstable() const { return ObITable::is_inc_major_ddl_aggregate_co_sstable(table_type_); }
+    OB_INLINE bool is_inc_major_ddl_aggregate_cg_sstable() const { return ObITable::is_inc_major_ddl_aggregate_cg_sstable(table_type_); }
+    OB_INLINE bool is_inc_major_related_sstable() const { return is_inc_major_type_sstable() || is_inc_major_ddl_sstable() || is_inc_major_ddl_aggregate_sstable(); }
 
     OB_INLINE const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
     share::SCN get_start_scn() const { return scn_range_.start_scn_.atomic_get(); }
@@ -288,9 +320,20 @@ public:
   virtual bool is_column_store_sstable() const { return is_co_sstable() || is_cg_sstable(); }
   virtual bool is_meta_major_sstable() const { return is_meta_major_sstable(key_.table_type_); }
   virtual bool is_major_sstable() const { return is_major_sstable(key_.table_type_) || is_meta_major_sstable(key_.table_type_); }
-  virtual bool is_major_or_ddl_merge_sstable() const { return is_major_sstable() || is_ddl_merge_sstable(key_.table_type_); }
+  virtual bool is_major_or_ddl_merge_sstable() const { return is_major_sstable()
+                                                           || is_ddl_merge_sstable()
+                                                           || is_inc_major_ddl_aggregate_sstable(key_.table_type_)
+                                                           || is_inc_major_type_sstable(key_.table_type_)
+                                                           || is_inc_major_ddl_dump_co_cg_sstable(key_.table_type_); }
   virtual bool is_minor_sstable() const { return is_minor_sstable(key_.table_type_); }
   virtual bool is_mini_sstable() const { return is_mini_sstable(key_.table_type_); }
+  virtual bool is_inc_major_sstable() const { return is_inc_major_sstable(key_.table_type_); }
+  virtual bool is_inc_co_sstable() const { return is_inc_co_sstable(key_.table_type_); }
+  virtual bool is_inc_rowkey_cg_sstable() const { return is_inc_rowkey_cg_sstable(key_.table_type_); }
+  virtual bool is_inc_normal_cg_sstable() const { return is_inc_normal_cg_sstable(key_.table_type_); }
+  virtual bool is_inc_cg_sstable() const { return is_inc_rowkey_cg_sstable() || is_inc_normal_cg_sstable(); }
+  virtual bool is_inc_major_type_sstable() const { return is_inc_major_sstable() || is_inc_co_sstable() || is_inc_cg_sstable(); }
+  virtual bool is_major_type_sstable() const { return is_major_sstable() || is_inc_major_type_sstable(); }
   virtual bool is_mds_minor_sstable() const { return is_mds_minor_sstable(key_.table_type_); }
   virtual bool is_mds_mini_sstable() const { return is_mds_mini_sstable(key_.table_type_); }
   virtual bool is_multi_version_minor_sstable() const { return is_multi_version_minor_sstable(key_.table_type_); }
@@ -309,14 +352,23 @@ public:
   virtual OB_INLINE int64_t get_timestamp() const { return 0; }
   virtual bool is_mds_sstable() const { return is_mds_sstable(key_.table_type_); }
   virtual bool is_ddl_sstable() const { return is_ddl_sstable(key_.table_type_); }
+  virtual bool is_inc_major_ddl_sstable() const { return is_inc_major_ddl_sstable(key_.table_type_); }
+  virtual bool is_ddl_type_sstable() const { return is_ddl_type_sstable(key_.table_type_); }
   virtual bool is_ddl_dump_sstable() const { return is_ddl_dump_sstable(key_.table_type_); }
+  virtual bool is_inc_major_ddl_mem_sstable() const { return is_inc_major_ddl_mem_sstable(key_.table_type_); }
+  virtual bool is_inc_major_ddl_dump_sstable() const { return is_inc_major_ddl_dump_sstable(key_.table_type_); }
   virtual bool is_ddl_mem_sstable() const { return is_ddl_mem_sstable(key_.table_type_); }
-  virtual bool is_ddl_merge_sstable() const { return is_ddl_merge_sstable(key_.table_type_); }
+  virtual bool is_ddl_merge_sstable() const { return key_.is_ddl_merge_sstable(); }
   virtual bool is_ddl_mem_co_cg_sstable() const { return is_ddl_mem_co_cg_sstable(key_.table_type_); }
   virtual bool is_remote_logical_minor_sstable() const { return is_remote_logical_minor_sstable(key_.table_type_); }
   virtual bool is_empty() const = 0;
   virtual bool no_data_to_read() const { return is_empty(); }
   virtual bool is_ddl_merge_empty_sstable() const { return is_empty() && is_ddl_merge_sstable(); }
+  virtual bool is_inc_major_ddl_aggregate_sstable() const { return is_inc_major_ddl_aggregate_sstable(key_.table_type_); }
+  virtual bool is_inc_major_ddl_aggregate_co_sstable() const { return is_inc_major_ddl_aggregate_co_sstable(key_.table_type_); }
+  virtual bool is_inc_major_ddl_aggregate_cg_sstable() const { return is_inc_major_ddl_aggregate_cg_sstable(key_.table_type_); }
+  virtual bool is_inc_column_store_sstable() const { return is_inc_co_sstable() || is_inc_rowkey_cg_sstable() || is_inc_normal_cg_sstable(); }
+  virtual bool is_inc_major_related_sstable() const { return is_inc_major_type_sstable() || is_inc_major_ddl_sstable() || is_inc_major_ddl_aggregate_sstable(); }
   virtual bool is_all_cg_base() const { return false; }
   DECLARE_VIRTUAL_TO_STRING;
 
@@ -370,17 +422,25 @@ public:
   {
     return ObITable::TableType::COLUMN_ORIENTED_SSTABLE == table_type
         || ObITable::TableType::COLUMN_ORIENTED_META_SSTABLE == table_type
-      || ObITable::TableType::DDL_MERGE_CO_SSTABLE == table_type;
+        || ObITable::TableType::DDL_MERGE_CO_SSTABLE == table_type
+        || ObITable::TableType::INC_COLUMN_ORIENTED_SSTABLE == table_type
+        || ObITable::TableType::INC_MAJOR_DDL_MERGE_CO_SSTABLE == table_type
+        || ObITable::TableType::INC_MAJOR_DDL_AGGREGATE_CO_SSTABLE == table_type;
   }
   static bool is_normal_cg_sstable(const TableType table_type)
   {
     return ObITable::TableType::NORMAL_COLUMN_GROUP_SSTABLE == table_type
       || ObITable::TableType::DDL_MERGE_CG_SSTABLE == table_type
-      || ObITable::TableType::DDL_MEM_CG_SSTABLE == table_type;
+      || ObITable::TableType::DDL_MEM_CG_SSTABLE == table_type
+      || ObITable::TableType::INC_NORMAL_COLUMN_GROUP_SSTABLE == table_type
+      || ObITable::TableType::INC_MAJOR_DDL_MERGE_CG_SSTABLE == table_type
+      || ObITable::TableType::INC_MAJOR_DDL_MEM_CG_SSTABLE == table_type
+      || ObITable::TableType::INC_MAJOR_DDL_AGGREGATE_CG_SSTABLE == table_type;
   }
   static bool is_rowkey_cg_sstable(const TableType table_type)
   {
-    return ObITable::TableType::ROWKEY_COLUMN_GROUP_SSTABLE == table_type;
+    return ObITable::TableType::ROWKEY_COLUMN_GROUP_SSTABLE == table_type
+        || ObITable::TableType::INC_ROWKEY_COLUMN_GROUP_SSTABLE == table_type;
   }
   static bool is_cg_sstable(const TableType table_type)
   {
@@ -391,9 +451,43 @@ public:
   {
     return is_co_sstable(table_type)
         || is_cg_sstable(table_type)
-        || ObITable::TableType::DDL_MEM_CO_SSTABLE == table_type;
+        || ObITable::TableType::DDL_MEM_CO_SSTABLE == table_type
+        || ObITable::TableType::INC_MAJOR_DDL_MEM_CO_SSTABLE == table_type;
   }
 
+  /*
+   * inc sstables
+   */
+   static bool is_inc_major_sstable(const TableType table_type)
+   {
+     return ObITable::INC_MAJOR_SSTABLE == table_type;
+   }
+   static bool is_inc_co_sstable(const TableType table_type)
+   {
+     return ObITable::INC_COLUMN_ORIENTED_SSTABLE == table_type;
+   }
+   static bool is_inc_rowkey_cg_sstable(const TableType table_type)
+   {
+     return ObITable::INC_ROWKEY_COLUMN_GROUP_SSTABLE == table_type;
+   }
+   static bool is_inc_normal_cg_sstable(const TableType table_type)
+   {
+     return ObITable::INC_NORMAL_COLUMN_GROUP_SSTABLE == table_type;
+   }
+   static bool is_inc_major_type_sstable(const TableType table_type)
+   {
+     return is_inc_major_sstable(table_type)
+         || is_inc_co_sstable(table_type)
+         || is_inc_rowkey_cg_sstable(table_type)
+         || is_inc_normal_cg_sstable(table_type);
+   }
+
+   static bool is_inc_column_store_sstable(const TableType table_type)
+   {
+     return is_inc_co_sstable(table_type)
+         || is_inc_rowkey_cg_sstable(table_type)
+         || is_inc_normal_cg_sstable(table_type);
+   }
   static bool is_remote_logical_minor_sstable(const TableType table_type)
   {
     return ObITable::TableType::REMOTE_LOGICAL_MINOR_SSTABLE == table_type;
@@ -452,28 +546,58 @@ public:
       || ObITable::TableType::DDL_MEM_CO_SSTABLE == table_type
       || ObITable::TableType::DDL_MEM_CG_SSTABLE == table_type;
   }
+  static bool is_inc_major_ddl_sstable(const TableType table_type)
+  {
+    return ObITable::TableType::INC_MAJOR_DDL_DUMP_SSTABLE == table_type
+      || ObITable::TableType::INC_MAJOR_DDL_MERGE_CO_SSTABLE == table_type
+      || ObITable::TableType::INC_MAJOR_DDL_MERGE_CG_SSTABLE == table_type
+      || ObITable::TableType::INC_MAJOR_DDL_MEM_SSTABLE == table_type
+      || ObITable::TableType::INC_MAJOR_DDL_MEM_CO_SSTABLE == table_type
+      || ObITable::TableType::INC_MAJOR_DDL_MEM_CG_SSTABLE == table_type;
+  }
+  static bool is_ddl_type_sstable(const TableType table_type)
+  {
+    return is_ddl_sstable(table_type) || is_inc_major_ddl_sstable(table_type);
+  }
   static bool is_ddl_dump_sstable(const TableType table_type)
   {
     return ObITable::TableType::DDL_DUMP_SSTABLE == table_type
       || ObITable::TableType::DDL_MERGE_CO_SSTABLE == table_type
       || ObITable::TableType::DDL_MERGE_CG_SSTABLE == table_type;
   }
+  static bool is_inc_major_ddl_dump_co_cg_sstable(const TableType table_type)
+  {
+    return ObITable::TableType::INC_MAJOR_DDL_MERGE_CO_SSTABLE == table_type
+           || ObITable::TableType::INC_MAJOR_DDL_MERGE_CG_SSTABLE == table_type;
+  }
+  static bool is_inc_major_ddl_dump_sstable(const TableType table_type)
+  {
+    return ObITable::TableType::INC_MAJOR_DDL_DUMP_SSTABLE == table_type
+      || ObITable::TableType::INC_MAJOR_DDL_MERGE_CO_SSTABLE == table_type
+      || ObITable::TableType::INC_MAJOR_DDL_MERGE_CG_SSTABLE == table_type;
+  }
+  static bool is_inc_major_ddl_mem_sstable(const TableType table_type)
+  {
+    return ObITable::TableType::INC_MAJOR_DDL_MEM_SSTABLE == table_type
+      || ObITable::TableType::INC_MAJOR_DDL_MEM_CO_SSTABLE == table_type
+      || ObITable::TableType::INC_MAJOR_DDL_MEM_CG_SSTABLE == table_type;
+  }
   static bool is_ddl_mem_sstable(const TableType table_type)
   {
     return ObITable::TableType::DDL_MEM_SSTABLE == table_type
       || ObITable::TableType::DDL_MEM_CO_SSTABLE == table_type
       || ObITable::TableType::DDL_MEM_CG_SSTABLE == table_type
-      || ObITable::TableType::DDL_MEM_MINI_SSTABLE == table_type;
-  }
-  static bool is_ddl_merge_sstable(const TableType table_type)
-  {
-    return ObITable::TableType::DDL_MERGE_CO_SSTABLE == table_type
-      || ObITable::TableType::DDL_MERGE_CG_SSTABLE == table_type;
+      || ObITable::TableType::DDL_MEM_MINI_SSTABLE == table_type
+      || ObITable::TableType::INC_MAJOR_DDL_MEM_SSTABLE == table_type
+      || ObITable::TableType::INC_MAJOR_DDL_MEM_CO_SSTABLE == table_type
+      || ObITable::TableType::INC_MAJOR_DDL_MEM_CG_SSTABLE == table_type;
   }
   static bool is_ddl_mem_co_cg_sstable(const TableType table_type)
   {
     return ObITable::TableType::DDL_MEM_CG_SSTABLE == table_type
-      || ObITable::TableType::DDL_MEM_CO_SSTABLE == table_type;
+      || ObITable::TableType::DDL_MEM_CO_SSTABLE == table_type
+      || ObITable::TableType::INC_MAJOR_DDL_MEM_CG_SSTABLE == table_type
+      || ObITable::TableType::INC_MAJOR_DDL_MEM_CO_SSTABLE == table_type;
   }
   static bool is_mds_mini_sstable(const TableType table_type)
   {
@@ -506,6 +630,19 @@ public:
         && cs_key.is_true_major_sstable()
         && rs_key.tablet_id_ == cs_key.tablet_id_
         && rs_key.scn_range_ == cs_key.scn_range_;
+  }
+  static bool is_inc_major_ddl_aggregate_sstable(const TableType table_type)
+  {
+    return ObITable::TableType::INC_MAJOR_DDL_AGGREGATE_CO_SSTABLE == table_type
+           || ObITable::TableType::INC_MAJOR_DDL_AGGREGATE_CG_SSTABLE == table_type;
+  }
+  static bool is_inc_major_ddl_aggregate_co_sstable(const TableType table_type)
+  {
+    return ObITable::TableType::INC_MAJOR_DDL_AGGREGATE_CO_SSTABLE == table_type;
+  }
+  static bool is_inc_major_ddl_aggregate_cg_sstable(const TableType table_type)
+  {
+    return ObITable::TableType::INC_MAJOR_DDL_AGGREGATE_CG_SSTABLE == table_type;
   }
   OB_INLINE static const char* get_table_type_name(const TableType &table_type)
   {
@@ -612,7 +749,9 @@ public:
   int add_table(const ObTableHandleV2 &handle);
   int assign(const ObTablesHandleArray &other);
   int get_tables(common::ObIArray<ObITable *> &tables) const;
+  int get_table_handles(common::ObIArray<ObTableHandleV2> &table_handles) const;
   int get_first_memtable(ObIMemtable *&memtable) const;
+  int get_inc_major_tables(common::ObIArray<ObITable *> &tables) const;
   int get_all_minor_sstables(common::ObIArray<ObITable *> &tables) const;
   int get_all_remote_major_sstables(common::ObIArray<ObITable *> &tables) const;
   int get_all_ddl_sstables(common::ObIArray<ObITable *> &tables) const;

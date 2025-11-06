@@ -617,6 +617,11 @@ int ObCompactionBufferWriter::ensure_space(int64_t size)
   int ret = OB_SUCCESS;
   const int64_t old_capacity = capacity_;
 
+  ref_mem_ctx_ = nullptr == ref_mem_ctx_
+               ? CURRENT_MEM_CTX()
+               : ref_mem_ctx_;
+  use_mem_pool_ = nullptr != ref_mem_ctx_;
+
   if (size <= 0) {
     // do nothing
   } else if (nullptr == data_) { // first alloc
@@ -639,10 +644,6 @@ int ObCompactionBufferWriter::ensure_space(int64_t size)
   }
 
   if (OB_SUCC(ret) && old_capacity != capacity_) {
-    ref_mem_ctx_ = NULL == ref_mem_ctx_
-                  ? CURRENT_MEM_CTX()
-                  : ref_mem_ctx_;
-
     if (NULL != ref_mem_ctx_) {
       ref_mem_ctx_->inc_buffer_hold_mem(capacity_ - old_capacity);
     } else {

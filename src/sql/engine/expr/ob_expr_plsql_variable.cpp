@@ -14,6 +14,7 @@
 
 #include "ob_expr_plsql_variable.h"
 #include "pl/ob_pl.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {

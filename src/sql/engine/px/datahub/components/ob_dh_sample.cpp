@@ -465,12 +465,22 @@ int ObDynamicSamplePieceMsgCtx::build_whole_msg(ObDynamicSampleWholeMsg &whole_m
         LOG_WARN("push back sample range cut failed", K(ret), K(partition_range));
       }
     }
+    bool is_vec_tablet_rebuild = GET_MY_SESSION(exec_ctx_)->get_ddl_info().is_vec_tablet_rebuild();
+    LOG_DEBUG("build_whole_msg", K(is_vec_tablet_rebuild), K(ddl_task_id), K(tablet_ids_), K(GET_MY_SESSION(exec_ctx_)->get_ddl_info()));
+
     if (OB_SUCC(ret) && ddl_task_id > 0) {
       // persist ddl slice info
       rootserver::ObDDLSliceInfo ddl_slice_info;
       bool is_idempotent_mode = false;
       if (OB_FAIL(ddl_slice_info.part_ranges_.assign(whole_msg.part_ranges_))) {
         LOG_WARN("assign part ranges failed", K(ret), K(tenant_id_), K(ddl_task_id), K(whole_msg.part_ranges_));
+      } else if (is_vec_tablet_rebuild) {
+        if (tablet_ids_.count() != 1) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("vec async task tablet id should be only one", K(ret), K(tablet_ids_.count()));
+        } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::set_inner_sql_slice_info(ddl_task_id, ddl_slice_info))) {
+          LOG_WARN("fail to set vec async task slice into", K(ret), K(ddl_task_id), K(ddl_slice_info));
+        }
       } else if (OB_FAIL(rootserver::ObDDLTaskRecordOperator::get_or_insert_schedule_info(tenant_id_, ddl_task_id, exec_ctx_.get_allocator(), ddl_slice_info, is_idempotent_mode))) {
         LOG_WARN("insert slice info failed", K(ret), K(tenant_id_), K(ddl_task_id), K(ddl_slice_info));
       } else if (is_idempotent_mode) {
@@ -614,7 +624,6 @@ int ObDynamicSamplePieceMsgCtx::on_message(
   }
   received_ += piece.piece_count_;
   LOG_DEBUG("process a sample picece msg", K(piece), "all_got", received_, "expected", task_cnt_);
-
   // send whole message when all piece received
   if (OB_SUCC(ret) && received_ == task_cnt_) {
     if (OB_FAIL(send_whole_msg(sqcs))) {

@@ -2808,6 +2808,10 @@ int ObTabletMigrationTask::generate_migration_tasks_()
     LOG_WARN("failed to generate migrate major tasks", K(ret), K(*ctx_));
   } else if (OB_FAIL(generate_ddl_copy_tasks_(tablet_copy_finish_task, parent_task))) {
     LOG_WARN("failed to generate ddl copy tasks", K(ret), K(*ctx_));
+  } else if (OB_FAIL(generate_inc_major_ddl_copy_tasks_(tablet_copy_finish_task, parent_task))) {
+    LOG_WARN("failed to generate inc major ddl copy tasks", K(ret), K(*ctx_));
+  } else if (OB_FAIL(generate_inc_major_copy_tasks_(tablet_copy_finish_task, parent_task))) {
+    LOG_WARN("failed to generate inc major copy tasks", K(ret), K(*ctx_));
   } else if (OB_FAIL(generate_tablet_finish_migration_task_(tablet_finish_migration_task))) {
     LOG_WARN("failed to generate tablet finish migration task", K(ret), K(ctx_->arg_));
   } else if (OB_FAIL(tablet_copy_finish_task->add_child(*tablet_finish_migration_task))) {
@@ -2896,6 +2900,40 @@ int ObTabletMigrationTask::generate_ddl_copy_tasks_(
     LOG_WARN("generate minor task get invalid argument", K(ret), KP(tablet_copy_finish_task), KP(parent_task));
   } else if (OB_FAIL(generate_copy_tasks_(ObITable::is_ddl_dump_sstable, tablet_copy_finish_task, parent_task))) {
     LOG_WARN("failed to generate copy ddl tasks", K(ret), KPC(copy_tablet_ctx_));
+  }
+  return ret;
+}
+
+int ObTabletMigrationTask::generate_inc_major_ddl_copy_tasks_(
+    ObTabletCopyFinishTask *tablet_copy_finish_task,
+    share::ObITask *&parent_task)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet migration task do not init", K(ret));
+  } else if (OB_ISNULL(tablet_copy_finish_task) || OB_ISNULL(parent_task)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("generate minor task get invalid argument", K(ret), KP(tablet_copy_finish_task), KP(parent_task));
+  } else if (OB_FAIL(generate_copy_tasks_(ObITable::is_inc_major_ddl_dump_sstable, tablet_copy_finish_task, parent_task))) {
+    LOG_WARN("failed to generate copy ddl tasks", K(ret), KPC(copy_tablet_ctx_));
+  }
+  return ret;
+}
+
+int ObTabletMigrationTask::generate_inc_major_copy_tasks_(
+    ObTabletCopyFinishTask *tablet_copy_finish_task,
+    share::ObITask *&parent_task)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet migration task do not init", K(ret));
+  } else if (OB_ISNULL(tablet_copy_finish_task) || OB_ISNULL(parent_task)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("generate inc major task get invalid argument", K(ret), KP(tablet_copy_finish_task), KP(parent_task));
+  } else if (OB_FAIL(generate_copy_tasks_(ObITable::is_inc_major_type_sstable, tablet_copy_finish_task, parent_task))) {
+    LOG_WARN("failed to generate copy inc major tasks", K(ret), KPC(copy_tablet_ctx_));
   }
   return ret;
 }
@@ -3808,6 +3846,7 @@ int ObDataTabletsMigrationTask::init()
   ObIDagNet *dag_net = nullptr;
   ObMigrationDagNet* migration_dag_net = nullptr;
   ObArray<ObTabletID> tablet_id_array;
+  ObSEArray<ObINodeWithChild*, 1> child_node_array;
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
@@ -3820,8 +3859,9 @@ int ObDataTabletsMigrationTask::init()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
   } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
+  } else if (OB_FAIL(this->get_dag()->copy_child_nodes(child_node_array))) {
+    LOG_WARN("failed to copy child nodes", K(ret));
   } else {
-    const common::ObIArray<ObINodeWithChild*> &child_node_array = this->get_dag()->get_child_nodes();
     if (child_node_array.count() != 1) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("data tablets migration dag get unexpected child node", K(ret), K(child_node_array));

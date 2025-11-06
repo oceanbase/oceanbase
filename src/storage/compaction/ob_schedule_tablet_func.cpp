@@ -10,6 +10,7 @@
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "storage/compaction/ob_schedule_tablet_func.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
+
 namespace oceanbase
 {
 using namespace storage;
@@ -55,7 +56,7 @@ int ObScheduleTabletFunc::schedule_tablet(
   } else if (FALSE_IT(tablet_id = tablet->get_tablet_id())) {
   } else if (OB_FAIL(tablet_status_.init_for_major(
                  ls_status_.get_ls(), merge_version_, *tablet,
-                 is_skip_merge_tenant_, ls_could_schedule_new_round_))) {
+                 ls_could_schedule_new_round_))) {
     need_diagnose = true;
     LOG_WARN("failed to init tablet status", KR(ret), K_(ls_status), K(tablet_id));
   } else {
@@ -70,14 +71,13 @@ int ObScheduleTabletFunc::schedule_tablet(
     }
     if (!tablet_status_.can_merge()) {
       need_diagnose = tablet_status_.need_diagnose();
-    } else if (ls_could_schedule_merge_
-        && OB_TMP_FAIL(schedule_tablet_execute(*tablet))) {
+    } else if (ls_could_schedule_merge_ && OB_TMP_FAIL(schedule_tablet_execute(*tablet))) {
       need_diagnose = true;
       if (OB_SIZE_OVERFLOW != tmp_ret && OB_EAGAIN != tmp_ret) {
         LOG_WARN("failed to schedule tablet execute", KR(tmp_ret), K_(ls_status), K(tablet_id));
       }
     } else {
-      LOG_DEBUG("success to schedule tablet execute", KR(tmp_ret), K_(ls_status), K(tablet_status_), K_(ls_could_schedule_merge));
+      LOG_DEBUG("success to schedule tablet execute", KR(tmp_ret), K(tablet_id), K_(ls_status), K(tablet_status_), K_(ls_could_schedule_merge));
     }
   }
   if (need_diagnose
@@ -104,17 +104,16 @@ int ObScheduleTabletFunc::schedule_tablet_new_round(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("medium list in tablet status is null", KR(ret), K_(tablet_status));
   } else if (!tablet_status_.tablet_merge_finish()
-      || user_request
-      || ObBasicMergeScheduler::get_merge_scheduler()->get_tenant_status().enable_adaptive_compaction_with_cpu_load()) {
-    ObMediumCompactionScheduleFunc func(
-        ls_status_.get_ls(), ls_status_.weak_read_ts_,
-        *tablet_status_.medium_list(), &tablet_cnt_,
-        merge_reason_);
+           || user_request
+           || MERGE_SCHEDULER_PTR->get_tenant_status().enable_adaptive_compaction_with_cpu_load()) {
+    ObMediumCompactionScheduleFunc func(ls_status_.get_ls(),
+                                        ls_status_.weak_read_ts_,
+                                        *tablet_status_.medium_list(),
+                                        &tablet_cnt_,
+                                        merge_reason_);
     if (OB_FAIL(func.init_tablet_handle(tablet_handle))) {
       LOG_WARN("failed to init func with tablet_handle", K(ret), K(tablet_handle), K(func));
-    } else if (OB_FAIL(func.schedule_next_medium_for_leader(
-        tablet_status_.tablet_merge_finish() ? 0 : merge_version_,
-        medium_clog_submitted))) {
+    } else if (OB_FAIL(func.schedule_next_medium_for_leader(tablet_status_.tablet_merge_finish() ? 0 : merge_version_, medium_clog_submitted))) {
       if (OB_NOT_MASTER == ret) {
         ls_status_.is_leader_ = false;
         ls_could_schedule_new_round_ = false;
@@ -155,7 +154,7 @@ int ObScheduleTabletFunc::request_schedule_new_round(
   } else if (FALSE_IT(tablet_id = tablet->get_tablet_id())) {
   } else if (OB_FAIL(tablet_status_.init_for_major(
                  ls_status_.get_ls(), merge_version_, *tablet,
-                 is_skip_merge_tenant_, ls_could_schedule_new_round_))) {
+                 ls_could_schedule_new_round_))) {
     LOG_WARN("failed to init tablet status", KR(ret), K_(ls_status), K(tablet_id));
   } else if (user_request) { // should print error log for user request
     if (!tablet_status_.tablet_merge_finish()) {
@@ -183,8 +182,7 @@ int ObScheduleTabletFunc::request_schedule_new_round(
   return ret;
 }
 
-int ObScheduleTabletFunc::schedule_tablet_execute(
-  ObTablet &tablet)
+int ObScheduleTabletFunc::schedule_tablet_execute(ObTablet &tablet)
 {
   int ret = OB_SUCCESS;
 #ifdef ERRSIM
@@ -208,7 +206,8 @@ int ObScheduleTabletFunc::schedule_tablet_execute(
   ObCOMajorMergePolicy::ObCOMajorMergeType co_major_merge_type = ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE;
   ObCSReplicaTabletStatus cs_replica_status = ObCSReplicaTabletStatus::NORMAL;
   ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason = ObAdaptiveMergePolicy::AdaptiveMergeReason::INVALID_REASON;
-  if (OB_FAIL(ObTenantTabletScheduler::check_ready_for_major_merge(ls_id, tablet, MEDIUM_MERGE, cs_replica_status))) {
+
+  if (OB_FAIL(ObTenantTabletScheduler::check_ready_for_major_merge(ls_id, tablet, MEDIUM_MERGE, schedule_scn, cs_replica_status))) { // schedule scn = 0, skip to check unfinish inc major
     LOG_WARN("failed to check ready for major merge", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_FAIL(get_schedule_execute_info(tablet, schedule_scn, co_major_merge_type, merge_reason))) {
     if (OB_NO_NEED_MERGE == ret) {
@@ -248,6 +247,7 @@ int ObScheduleTabletFunc::get_schedule_execute_info(
   ObMediumCompactionInfo::ObCompactionType compaction_type = ObMediumCompactionInfo::COMPACTION_TYPE_MAX;
   schedule_scn = 0; // medium_snapshot in medium info
   bool is_mv_major_refresh_tablet = false;
+  bool is_restore_remote_sstable_tablet = tablet.get_tablet_meta().ha_status_.is_restore_status_remote();
   const ObMediumCompactionInfoList *medium_list = nullptr;
 
   if (OB_ISNULL(tablet_status_.medium_list())) {
@@ -267,11 +267,11 @@ int ObScheduleTabletFunc::get_schedule_execute_info(
     LOG_INFO("mv creation has not finished, can not schedule mv tablet", K(ret),
              K(last_major_snapshot));
   } else if (OB_FAIL(tablet_status_.medium_list()->get_next_schedule_info(
-    last_major_snapshot, merge_version_, is_mv_major_refresh_tablet, compaction_type, schedule_scn, co_major_merge_type, merge_reason))) {
+    last_major_snapshot, merge_version_, is_mv_major_refresh_tablet || is_restore_remote_sstable_tablet, compaction_type, schedule_scn, co_major_merge_type, merge_reason))) {
     if (OB_NO_NEED_MERGE != ret) {
-      LOG_WARN("failed to get next schedule info", KR(ret), K(last_major_snapshot), K_(merge_version));
+      LOG_WARN("failed to get next schedule info", KR(ret), K(tablet_id), KPC(tablet_status_.medium_list()), K(last_major_snapshot), K_(merge_version));
     }
-  } else if (is_standy_tenant && !is_mv_major_refresh_tablet) { // for STANDBY/RESTORE TENANT
+  } else if (is_standy_tenant && !is_mv_major_refresh_tablet && !is_restore_remote_sstable_tablet) { // for STANDBY/RESTORE TENANT
     if (OB_FAIL(ObMediumCompactionScheduleFunc::decide_standy_tenant_schedule(
         ls_id, tablet_id, compaction_type, schedule_scn, frozen_version, *tablet_status_.medium_list(), schedule_flag))) {
       LOG_WARN("failed to decide whehter to schedule standy schedule", K(ret), K_(ls_status), K(tablet_id),
@@ -300,8 +300,8 @@ void ObScheduleTabletFunc::schedule_freeze_dag(const bool force)
 }
 
 int ObScheduleTabletFunc::diagnose_switch_tablet(
-  ObLS &ls,
-  const ObTablet &tablet)
+    ObLS &ls,
+    ObTablet &tablet)
 {
   int ret = OB_SUCCESS;
   const ObTabletID &tablet_id = tablet.get_tablet_id();
@@ -339,6 +339,9 @@ int ObScheduleTabletFunc::schedule_merge_dag(
 {
   int ret = OB_SUCCESS;
   UNUSED(merge_reason);
+  if (is_major_merge(merge_type)) {
+    DEBUG_SYNC(BEFORE_SCHEDULE_TABLET_FUNC);
+  }
   if (GCTX.is_shared_storage_mode()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("this functor can not be used in shared-storage mode", K(ret));

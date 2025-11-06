@@ -11,15 +11,19 @@
  */
 
 //SUSPECT_INFO_TYPE_DEF(suspect_info_type, info_priority, with_comment, info_str, int_info_cnt, ...)
+// ATTENTION:
+// 1. the int_info_cnt must be consistent with the number of parameters in the macro,
+//    only int info need to be defined in the macro
+// 2. with_comment is true means that suspect_info contain other string info
 #ifdef SUSPECT_INFO_TYPE_DEF
 SUSPECT_INFO_TYPE_DEF(SUSPECT_MEMTABLE_CANT_MINOR_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "memtable can not minor merge",
     2, {"memtable end_scn", "memtable timestamp"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_CANT_SCHEDULE_MINOR_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_MID, false, "can't schedule minor merge",
     3, {"min_snapshot_version", "max_snapshot_version", "mini_sstable_cnt"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_CANT_MAJOR_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_MID, false, "need major merge but can't merge now",
-    5, {"compaction_scn", "tablet_snapshot_version", "ls_weak_read_ts_ready", "need_force_freeze", "max_serialized_medium_scn"})
+    6, {"compaction_scn", "tablet_snapshot_version", "need_force_freeze", "ls_weak_read_ts_ready", "exist_unfinished_inc_major", "max_serialized_medium_scn"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_SCHEDULE_MEDIUM_FAILED, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_MID, false, "schedule medium failed",
-    3, {"compaction_scn", "store_column_cnt", "error_code"})
+    4, {"compaction_scn", "store_column_cnt", "exist_unfinished_inc_major", "error_code"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_SSTABLE_COUNT_NOT_SAFE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, true, "sstable count is not safe",
     4, {"minor_compact_trigger", "major_table_count", "minor_tables_count", "first_minor_start_scn"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_SUBMIT_LOG_FOR_FREEZE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "traverse_trans_to_submit_redo_log failed",
@@ -31,7 +35,7 @@ SUSPECT_INFO_TYPE_DEF(SUSPECT_NOT_READY_FOR_FLUSH, ObDiagnoseInfoPrio::DIAGNOSE_
 SUSPECT_INFO_TYPE_DEF(SUSPECT_MEMTABLE_CANT_CREATE_DAG, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "memtable can not create dag successfully",
     3, {"error_code", "has been ready for flush time", "ready for flush time"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_SUSPEND_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "merge has been paused",
-    2, {"schedule_scn", "is_row_store"})
+    1, {"schedule_scn"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_INVALID_DATA_VERSION, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "invalid data version to schedule medium merge",
     2, {"curr_data_version", "target_data_version"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_FAILED_TO_REFRESH_LS_LOCALITY, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "refresh ls locality cache failed",
@@ -44,8 +48,8 @@ SUSPECT_INFO_TYPE_DEF(SUSPECT_COMPACTION_REPORT_ADD_FAILED, ObDiagnoseInfoPrio::
     1, {"errno"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_COMPACTION_REPORT_PROGRESS_FAILED, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, false, "compaction report task process failed",
     1, {"errno"})
-SUSPECT_INFO_TYPE_DEF(SUSPECT_LS_CANT_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "ls can't schedule merge",
-    2, {"weak_read_ts", "ls_status"})
+SUSPECT_INFO_TYPE_DEF(SUSPECT_LS_CANT_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, true, "ls can't schedule merge",
+    1, {"weak_read_ts"})
 #ifdef OB_BUILD_SHARED_STORAGE
 SUSPECT_INFO_TYPE_DEF(SUSPECT_SS_TABLET_CANT_MAJOR_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, false, "shared tablet can't schedule major merge",
     5, {"compaction_scn", "ss_tablet_snapshot_version", "ss_checkpoint_scn", "local_tablet_clog_checkpoint_scn", "ss_tablet_clog_checkpoint_scn"})
