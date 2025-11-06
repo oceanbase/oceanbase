@@ -113,10 +113,19 @@ int ObDASIter::get_next_row()
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("das iter get next row before init", K(ret));
-  } else if (OB_FAIL(inner_get_next_row())) {
-    LOG_WARN("failed to inner get next row", K(ret));
   } else {
-    ++ output_row_cnt_;
+    if (limit_param_.is_valid()) {
+      const int64_t offset = limit_param_.offset_;
+      const int64_t limit = limit_param_.limit_;
+      if (limit == 0 || output_row_cnt_ >= offset + limit) {
+        ret = OB_ITER_END;
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      ret = inner_get_next_row();
+       ++ output_row_cnt_;
+    }
   }
   return ret;
 }
@@ -128,10 +137,26 @@ int ObDASIter::get_next_rows(int64_t &count, int64_t capacity)
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("das iter get next rows before init", K(ret));
-  } else if (OB_FAIL(inner_get_next_rows(count, capacity))) {
-    LOG_WARN("failed to inner get next rows", K(ret));
   } else {
-    output_row_cnt_ += count;
+    if (limit_param_.is_valid()) {
+      const int64_t offset = limit_param_.offset_;
+      const int64_t limit = limit_param_.limit_;
+      if (limit == 0 || output_row_cnt_ >= offset + limit) {
+        ret = OB_ITER_END;
+      } else if (output_row_cnt_ < offset) {
+        const int64_t remaining_offset = offset - output_row_cnt_;
+        capacity = capacity > remaining_offset ?
+                   std::min(capacity - remaining_offset, limit) + remaining_offset :
+                   capacity;
+      } else {
+        capacity = std::min(capacity, limit + offset - output_row_cnt_ );
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      ret = inner_get_next_rows(count, capacity);
+      output_row_cnt_ += count;
+    }
   }
   return ret;
 }

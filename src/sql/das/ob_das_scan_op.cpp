@@ -615,7 +615,7 @@ int ObDASScanOp::open_op()
                                                                  op_alloc_,
                                                                  result))) {
       LOG_WARN("failed to create das scan iter tree", K(get_iter_tree_type()), K(ret));
-    } else if (scan_rtdef_->topn_param_.is_valid() &&
+    } else if (scan_rtdef_->topn_param_.is_valid() && tree_type != ITER_TREE_INDEX_MERGE &&
                OB_FAIL(result->prepare_limit_pushdown_param(scan_ctdef_->push_down_topn_, scan_rtdef_->topn_param_))) {
       LOG_WARN("failed to prepare limit pushdown param", K(ret));
     } else {
