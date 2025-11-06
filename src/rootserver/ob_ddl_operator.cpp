@@ -4240,7 +4240,7 @@ int ObDDLOperator::drop_table(
     LOG_WARN("failed to modify obj status", K(ret));
   } else if (OB_FAIL(drop_table_for_not_dropped_schema(
               table_schema, trans, ddl_stmt_str, is_truncate_table,
-              drop_table_set, is_drop_db))) {
+              drop_table_set, is_drop_db, delete_priv))) {
     LOG_WARN("drop table for not dropped shema failed", K(ret));
   } else if (table_schema.is_view_table()
             && OB_FAIL(ObDependencyInfo::delete_schema_object_dependency(
