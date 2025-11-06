@@ -507,6 +507,7 @@ public:
   int get_lob_access_ctx(ObLobAccessCtx *&lob_access_ctx);
   void set_retry_info(const ObQueryRetryInfo *retry_info) { das_ctx_.get_location_router().set_retry_info(retry_info); }
   common::ObArenaAllocator &get_deterministic_udf_cache_allocator() { return deterministic_udf_cache_allocator_; }
+  void print_logical_plan_raw_data() const;
 
 private:
   int build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCtx *&temp_expr_ctx);

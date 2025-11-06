@@ -1264,6 +1264,7 @@ int ObPXServerAddrUtil::set_sqcs_accessed_location(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("we do not find this addr's execution sqc", K(ret), K(n_locations),
              K(locations.size()), K(sqcs), K(locations));
+    ctx.print_logical_plan_raw_data();
   }
   return ret;
 }

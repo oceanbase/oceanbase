@@ -1265,5 +1265,14 @@ int ObExecContext::get_lob_access_ctx(ObLobAccessCtx *&lob_access_ctx)
   return ret;
 }
 
+void ObExecContext::print_logical_plan_raw_data() const
+{
+  if (OB_NOT_NULL(phy_plan_ctx_) && OB_NOT_NULL(phy_plan_ctx_->get_phy_plan())) {
+    const ObLogicalPlanRawData &plan = phy_plan_ctx_->get_phy_plan()->get_logical_plan();
+    LOG_INFO("logical plan raw data:", K(plan.logical_plan_len_), K(plan.uncompress_len_),
+            KPHEX(plan.logical_plan_, plan.logical_plan_len_));
+  }
+}
+
 }  // namespace sql
 }  // namespace oceanbase
