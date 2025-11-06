@@ -7995,6 +7995,8 @@ int ObDDLService::create_aux_index(
                                                 task_record))) {
         LOG_WARN("failed to create aux index ddl task", K(ret), K(create_index_arg));
       } else if (FALSE_IT(result.ddl_task_id_ = task_record.task_id_)) {
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObDDLTaskRecordOperator::update_parent_task_message(tenant_id,
           arg.task_id_, index_schema, result.aux_table_id_, result.ddl_task_id_, ObDDLUpdateParentTaskIDType::UPDATE_CREATE_INDEX_ID, allocator, trans))) {
         LOG_WARN("fail to update parent task message", K(ret), K(arg.task_id_), K(index_schema));
