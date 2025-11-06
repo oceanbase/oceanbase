@@ -797,8 +797,11 @@ int ObPLCodeGenerateVisitor::visit(const ObPLIfStmt &s)
             ObLLVMValue p_result_obj;
             ObLLVMValue result;
             ObLLVMValue is_false;
-            if (OB_FAIL(generator_.generate_expr(s.get_cond(), s, OB_INVALID_INDEX,
-                                                 p_result_obj))) {
+            ObLLVMValue stack;
+            if (OB_FAIL(generator_.get_helper().stack_save(stack))) {
+              LOG_WARN("failed to stack_save", K(ret));
+            } else if (OB_FAIL(generator_.generate_expr(s.get_cond(), s, OB_INVALID_INDEX,
+                                                        p_result_obj))) {
               LOG_WARN("failed to generate calc_expr func", K(ret));
             } else if (OB_FAIL(generator_.extract_value_from_objparam(p_result_obj,
                                                                       expr->get_data_type(),
@@ -806,6 +809,8 @@ int ObPLCodeGenerateVisitor::visit(const ObPLIfStmt &s)
               LOG_WARN("failed to extract_value_from_objparam", K(ret));
             } else if (OB_FAIL(generator_.get_helper().create_icmp_eq(result, FALSE, is_false))) {
               LOG_WARN("failed to create_icmp_eq", K(ret));
+            } else if (OB_FAIL(generator_.get_helper().stack_restore(stack))) {
+              LOG_WARN("failed to stack_restore", K(ret));
             } else if (OB_FAIL(generator_.get_helper().create_cond_br(is_false, else_branch, then_branch))) {
               LOG_WARN("failed to create_cond_br", K(ret));
             } else if (OB_FAIL(generator_.set_current(continue_branch))) {
