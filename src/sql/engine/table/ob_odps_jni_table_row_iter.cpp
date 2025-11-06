@@ -2509,7 +2509,7 @@ int ObODPSJNITableRowIterator::fill_column_arrow(ObEvalCtx &ctx, const ObExpr &e
             datums[row_idx].set_null();
           }
         }
-      } else if ((ObVarcharType == type && (column.type_ == OdpsType::STRING || column.type_ == OdpsType::BINARY)) ||
+      } else if ((ObVarcharType == type && (column.type_ == OdpsType::STRING || column.type_ == OdpsType::BINARY || column.type_ == OdpsType::JSON)) ||
                   ((ObTinyTextType == type || ObTextType == type || ObLongTextType == type || ObMediumTextType == type)
                       && (column.type_ == OdpsType::STRING || column.type_ == OdpsType::BINARY)) ||
                   (ObJsonType == type && column.type_ == OdpsType::JSON)) {

@@ -27,7 +27,7 @@ void ObExternalTableColumnSchemaHelper::set_column_accuracy(
   if (ob_is_accuracy_length_valid_tc(accuracy_type)) {
     // logic is different: length set by external table settings, precision and scale -1
     if (mode == ORACLE_MODE) {
-      column_schema.set_data_precision(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][accuracy_type].get_precision());
+      column_schema.set_length_semantics(LS_CHAR);
       column_schema.set_data_scale(-1);
     } else {
       column_schema.set_data_precision(-1);
@@ -46,11 +46,13 @@ int ObExternalTableColumnSchemaHelper::setup_bool(const bool &is_oracle_mode,
   int ret = OB_SUCCESS;
   if (is_oracle_mode) {
     column_schema.set_data_type(ObDecimalIntType);
-    set_column_accuracy(ORACLE_MODE, ObTinyIntType, column_schema);
   } else {
     column_schema.set_data_type(ObTinyIntType);
-    set_column_accuracy(MYSQL_MODE, ObTinyIntType, column_schema);
   }
+  ObAccuracy accuracy;
+  accuracy.set_precision(1);
+  accuracy.set_scale(0);
+  column_schema.set_accuracy(accuracy);
   return ret;
 }
 
@@ -201,7 +203,6 @@ int ObExternalTableColumnSchemaHelper::setup_varchar(const bool &is_oracle_mode,
   } else {
     column_schema.set_data_length(length);
   }
-  column_schema.set_length_semantics(LS_CHAR);
   column_schema.set_charset_type(cs_type);
   column_schema.set_collation_type(collation);
   // Later, we need to choose nvarchar2 based on the external column semantics.
@@ -239,7 +240,6 @@ int ObExternalTableColumnSchemaHelper::setup_char(const bool &is_oracle_mode,
   } else {
     column_schema.set_data_length(length);
   }
-  column_schema.set_length_semantics(LS_CHAR);
   column_schema.set_charset_type(cs_type);
   column_schema.set_collation_type(collation);
   // must put here, stmt before will set data_precision and data_scale
