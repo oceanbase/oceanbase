@@ -1840,7 +1840,14 @@ int ObTransferHandler::wait_ls_replay_event_(
       LOG_WARN("already timeout", K(ret), K(task_info));
       break;
     } else if (OB_FAIL(check_self_is_leader_(is_leader))) {
-      LOG_WARN("failed to check self is leader", K(ret), KPC(ls_));
+      // The abs timeout for checking if I am the leader's SQL execution is controlled by the `timeout_ctx` here.
+      if (OB_TIMEOUT == ret) {
+        LOG_WARN("failed to check self is leader. "
+          "The root cause is most likely the continued failure of check all replicas replay to target scn.",
+          K(ret), KPC(ls_));
+      } else {
+        LOG_WARN("failed to check self is leader", K(ret), KPC(ls_));
+      }
     } else if (!is_leader) {
       ret = OB_LS_NOT_LEADER;
       LOG_WARN("ls leader has been changed", K(ret), K(task_info));
@@ -1850,13 +1857,16 @@ int ObTransferHandler::wait_ls_replay_event_(
     } else if (OB_FAIL(ObTransferUtils::check_ls_replay_scn(task_info.tenant_id_, ls_id, check_scn,
         group_id, member_addr_list, timeout_ctx, finished_member_addr_list))) {
       LOG_WARN("failed to check ls replay scn", K(ret), K(task_info), K(ls_id), K(check_scn));
-    }
-
-    if (OB_SUCC(ret)) {
+    } else {
       if (finished_member_addr_list.count() == total_addr_list.count()) {
         FLOG_INFO("[TRANSFER] src ls all replicas replay reach check_scn", "src_ls", task_info.src_ls_id_,
             K(check_scn), K(total_addr_list), "cost", ObTimeUtil::current_time() - start_ts);
         break;
+      } else {
+        if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+          LOG_WARN("[TRANSFER] not all src ls replicas replay to target scn", "src_ls", task_info.src_ls_id_,
+            K(check_scn), K(total_addr_list), K(finished_member_addr_list));
+        }
       }
     }
 
@@ -3099,7 +3109,14 @@ int ObTransferHandler::wait_transfer_in_tablet_abort_(
         LOG_WARN("wait transfer in tablet abort timeout, need retry", K(ret), K(task_info));
         break;
       } else if (OB_FAIL(check_self_is_leader_(is_leader))) {
-        LOG_WARN("failed to check self is leader", K(ret), KPC(ls_));
+        // The abs timeout for checking if I am the leader's SQL execution is controlled by the `timeout_ctx` here.
+        if (OB_TIMEOUT == ret) {
+          LOG_WARN("failed to check self is leader. "
+            "The root cause is most likely the continued failure of check all replicas transfer in tablets aborted.",
+            K(ret), KPC(ls_));
+        } else {
+          LOG_WARN("failed to check self is leader", K(ret), KPC(ls_));
+        }
       } else if (!is_leader) {
         ret = OB_LS_NOT_LEADER;
         LOG_WARN("ls leader has been changed", K(ret), K(task_info));
@@ -3108,15 +3125,19 @@ int ObTransferHandler::wait_transfer_in_tablet_abort_(
         LOG_WARN("failed to get need check member", K(ret), K(task_info), K(total_addr_list));
       } else if (OB_FAIL(check_transfer_in_tablet_abort_(task_info, member_addr_list, timeout_ctx, finished_member_addr_list))) {
         LOG_WARN("failed to check transfer in tablet abort", K(ret), K(task_info), K(member_addr_list));
-      }
-
-      if (OB_SUCC(ret)) {
+      } else {
         if (finished_member_addr_list.count() == total_addr_list.count()) {
           FLOG_INFO("[TRANSFER] dest ls all replicas transfer in tablets aborted", "dest_ls", task_info.dest_ls_id_,
               K(total_addr_list), "cost", ObTimeUtil::current_time() - start_ts);
           break;
+        } else {
+          if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+            LOG_WARN("[TRANSFER] not all dest ls replicas transfer in tablets aborted", "dest_ls", task_info.dest_ls_id_,
+              K(total_addr_list), K(finished_member_addr_list));
+          }
         }
       }
+
       ob_usleep(OB_CHECK_TRANSFER_IN_ABORT_INTERVAL);
     }
   }
