@@ -912,7 +912,9 @@ int ObBuildMViewTask::check_mlog_valid(bool &is_valid)
       ObSchemaGetterGuard schema_guard;
       const ObTableSchema *base_table_schema = nullptr;
       const ObTableSchema *mlog_schema = nullptr;
-      if (root_service_ == nullptr) {
+      if (required_columns.empty()) {
+        continue;
+      } else if (root_service_ == nullptr) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("root_service_ is null", KR(ret));
       } else if (OB_FAIL(root_service_->get_ddl_service()
