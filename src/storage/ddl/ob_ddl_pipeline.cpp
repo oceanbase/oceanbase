@@ -17,6 +17,7 @@
 #include "share/vector_index/ob_vector_index_async_task_util.h"
 #include "storage/ddl/ob_ddl_tablet_context.h"
 #include "storage/ddl/ob_tablet_slice_writer.h"
+#include "storage/ddl/ob_direct_load_struct.h"
 #include "storage/lob/ob_lob_util.h"
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx_storage/ob_ls_service.h"
@@ -1141,6 +1142,8 @@ int ObHNSWIndexBuildOperator::serialize_vector_index(
         LOG_WARN("unexpected nullptr", K(ret), KP(adp), K(is_vec_tablet_rebuild));
       } else if (OB_FAIL(adp->check_snap_hnswsq_index())) {
         LOG_WARN("failed to check snap hnswsq index", K(ret));
+      } else if (OB_FAIL(adp->set_snapshot_key_prefix(tablet_id_.id(), ctx.snapshot_version_, ObVectorIndexSliceStore::OB_VEC_IDX_SNAPSHOT_KEY_LENGTH))) {
+        LOG_WARN("failed to set snapshot key prefix", K(ret), K(tablet_id_.id()), K(ctx.snapshot_version_));
       } else if (OB_FAIL(adp->serialize(&row_allocator_, param, cb))) {
         if (OB_NOT_INIT == ret) {
           // ignore // no data in slice store
