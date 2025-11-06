@@ -92,7 +92,7 @@ TEST_F(TestSSMemMacroCacheStruct, test_mem_block)
     ASSERT_EQ(OB_SUCCESS, buckets[0]->alloc_new_mem_blk(new_mem_blk));
     ASSERT_NE(nullptr, new_mem_blk);
     ObSSMacroCacheMemBlkHandle mem_blk_handle;
-    ASSERT_EQ(OB_SUCCESS, buckets[0]->get_mem_blk_handle_to_write(mem_blk_handle));
+    ASSERT_EQ(OB_SUCCESS, buckets[0]->get_first_mem_blk_handle(mem_blk_handle));
     ASSERT_EQ(true, mem_blk_handle.is_valid());
     ObSSMacroCacheMemBlock *new_mem_blk2 = nullptr;
     ASSERT_EQ(OB_SUCCESS, buckets[0]->alloc_new_mem_blk(new_mem_blk2));
