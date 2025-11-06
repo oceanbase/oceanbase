@@ -3977,8 +3977,8 @@ int ObPluginVectorIndexAdaptor::deserialize_snap_data(ObVectorQueryConditions *q
 int ObPluginVectorIndexAdaptor::try_init_snap_data(ObVectorIndexAlgorithmType actual_type)
 {
   INIT_SUCC(ret);
-  if (type_ == VIAT_HNSW_SQ || type_ == VIAT_HNSW_BQ || type_ == VIAT_IPIVF) {
-    if (actual_type == VIAT_HNSW_SQ || actual_type == VIAT_HNSW_BQ || type_ == VIAT_IPIVF) {
+  if (type_ == VIAT_HNSW_SQ || type_ == VIAT_HNSW_BQ) {
+    if (actual_type == VIAT_HNSW_SQ || actual_type == VIAT_HNSW_BQ) {
       // actual create hnswsq index
       if (OB_FAIL(init_snap_data_without_lock())) {
         LOG_WARN("failed to init snap mem data", K(ret), K(type_));
@@ -3992,7 +3992,7 @@ int ObPluginVectorIndexAdaptor::try_init_snap_data(ObVectorIndexAlgorithmType ac
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get serialize type invalid", K(ret), K(actual_type), K(type_));
     }
-  } else if (type_ == VIAT_HNSW || type_ == VIAT_HGRAPH) {
+  } else if (type_ == VIAT_HNSW || type_ == VIAT_HGRAPH || type_ == VIAT_IPIVF) {
     if (OB_FAIL(init_snap_data_without_lock())) {
       LOG_WARN("failed to init snap mem data", K(ret), K(type_));
     }
