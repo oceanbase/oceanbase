@@ -579,6 +579,8 @@ int ObPxTargetCond::wait(const int64_t wait_time_us)
     THIS_WORKER.sched_wait();
     {
       ObMonitor<Mutex>::Lock guard(monitor_);
+      oceanbase::common::ObWaitEventGuard
+        wait_guard(oceanbase::common::ObWaitEventIds::PX_TARGET_WAIT, wait_time_us, reinterpret_cast<uint64_t>(this));
       if (!monitor_.timed_wait(ObSysTime(wait_time_us))) { // timeout
         ret = OB_TIMEOUT;
       }
@@ -599,6 +601,8 @@ void ObPxTargetCond::usleep(const int64_t us)
   if (us > 0) {
     ObMonitor<Mutex> monitor;
     THIS_WORKER.sched_wait();
+    oceanbase::common::ObWaitEventGuard
+        wait_guard(oceanbase::common::ObWaitEventIds::PX_TARGET_WAIT, us);
     (void)monitor.timed_wait(ObSysTime(us));
     THIS_WORKER.sched_run();
   }
