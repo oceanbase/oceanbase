@@ -158,7 +158,6 @@ int ObSRDaaTIterImpl::init(
 
 void ObSRDaaTIterImpl::reset()
 {
-  iter_domain_ids_.reset();
   if (OB_NOT_NULL(merge_heap_)) {
     merge_heap_->~ObSRMergeLoserTree();
     merge_heap_ = nullptr;
