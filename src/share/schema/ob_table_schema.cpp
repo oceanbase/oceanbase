@@ -11045,11 +11045,11 @@ int ObTableSchema::check_support_interval_part() const
   ObPartition **part_array = get_part_array();
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
     LOG_WARN("get tenant data version failed", KR(ret), K_(tenant_id));
-  } else if (tenant_data_version < DATA_VERSION_4_5_0_0) {
+  } else if (tenant_data_version < MOCK_DATA_VERSION_4_4_2_0) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("tenant data version is less than 4.5.0, interval partition is not supported",
+    LOG_WARN("tenant data version is less than 4.4.2, interval partition is not supported",
               KR(ret), KDV(tenant_data_version));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.5.0, interval partition");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.4.2, interval partition");
   } else if (OB_UNLIKELY(with_dynamic_partition_policy())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("interval partition and dynamic partition can not be used together", KR(ret));

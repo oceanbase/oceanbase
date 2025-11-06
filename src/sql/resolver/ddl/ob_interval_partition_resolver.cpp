@@ -73,11 +73,11 @@ int ObIntervalPartitionResolver::resolve_set_interval(
     LOG_WARN("session_info_ is null", KR(ret));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
     LOG_WARN("get tenant data version failed", KR(ret), K(session_info_->get_effective_tenant_id()));
-  } else if (tenant_data_version < DATA_VERSION_4_5_0_0) {
+  } else if (tenant_data_version < MOCK_DATA_VERSION_4_4_2_0) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("tenant data version is less than 4.5.0, set interval is not supported",
+    LOG_WARN("tenant data version is less than 4.4.2, set interval is not supported",
              KR(ret), KDV(tenant_data_version));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.5.0, set interval");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.4.2, set interval");
   } else if (!table_schema.is_range_part()) {
     ret = OB_ERR_SET_INTERVAL_IS_NOT_LEGAL_ON_THIS_TABLE;
     SQL_RESV_LOG(WARN, "set interval on no range partitioned table", KR(ret));
@@ -334,11 +334,11 @@ int ObIntervalPartitionResolver::resolve_interval_expr_low_(
     LOG_WARN("transition_expr is null", KR(ret));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
     LOG_WARN("get tenant data version failed", KR(ret), K(session_info_->get_effective_tenant_id()));
-  } else if (tenant_data_version < DATA_VERSION_4_5_0_0) {
+  } else if (tenant_data_version < MOCK_DATA_VERSION_4_4_2_0) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("tenant data version is less than 4.5.0, interval partition is not supported",
+    LOG_WARN("tenant data version is less than 4.4.2, interval partition is not supported",
             KR(ret), KDV(tenant_data_version));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.5.0, interval partition");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.4.2, interval partition");
   }
 
   /* 1. interval 分区只支持一个分区键 否则 ORA-14750*/

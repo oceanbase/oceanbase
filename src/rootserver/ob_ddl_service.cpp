@@ -14770,11 +14770,11 @@ int ObDDLService::reset_interval_info_for_interval_to_range(ObTableSchema &new_t
   uint64_t tenant_data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(new_table_schema.get_tenant_id(), tenant_data_version))) {
     LOG_WARN("get tenant data version failed", KR(ret), K(new_table_schema.get_tenant_id()));
-  } else if (tenant_data_version < DATA_VERSION_4_5_0_0) {
+  } else if (tenant_data_version < MOCK_DATA_VERSION_4_4_2_0) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("tenant data version is less than 4.5.0, set interval is not supported",
+    LOG_WARN("tenant data version is less than 4.4.2, set interval is not supported",
              KR(ret), KDV(tenant_data_version));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.5.0, set interval");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.4.2, set interval");
   } else if (OB_FAIL(new_table_schema.set_transition_point(null_row_key))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to set_transition_point", K(new_table_schema), KR(ret));
