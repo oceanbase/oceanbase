@@ -268,10 +268,12 @@ int ObDASIvfBaseScanIter::inner_init(ObDASIterParam &param)
             LOG_WARN("build search param fail", K(vec_aux_ctdef_->vector_index_param_), K(vec_aux_ctdef_->vec_query_param_));
           } else {
             LOG_TRACE("search param", K(vec_aux_ctdef_->vector_index_param_), K(vec_aux_ctdef_->vec_query_param_), K(search_param_));
-            if (OB_FAIL(ObDasVecScanUtils::check_ivf_support_similarity_threshold(*sort_ctdef_->sort_exprs_[0]))) {
-              LOG_WARN("check support similarity threshold fail", K(ret));
-            } else {
-              similarity_threshold_ = search_param_.similarity_threshold_;
+            if (search_param_.similarity_threshold_ > 0) {
+              if (OB_FAIL(ObDasVecScanUtils::check_ivf_support_similarity_threshold(*sort_ctdef_->sort_exprs_[0]))) {
+                LOG_WARN("check support similarity threshold fail", K(ret));
+              } else {
+                similarity_threshold_ = search_param_.similarity_threshold_;
+              }
             }
           }
         }
