@@ -238,6 +238,9 @@ private:
   bool group_changed_;
   int ret_;
 };
+
+bool is_global_background_resource_isolation_enabled();
+
 #define CONSUMER_GROUP_ID_GUARD(group_id) oceanbase::lib::ConsumerGroupIdGuard consumer_group_id_guard_(group_id)
 
 class ConsumerGroupFuncGuard
@@ -252,12 +255,12 @@ public:
     } else {
       uint64_t group_id = 0;
       ret_ = CONVERT_FUNCTION_TYPE_TO_GROUP_ID(func_type, group_id);
-      // if (OB_SUCCESS == ret_ && group_id != thread_group_id_) {
-      /* need to move to background even if group_id not changed */
+      if (OB_SUCCESS == ret_ &&
+          (is_global_background_resource_isolation_enabled() || group_id != thread_group_id_)) {
         group_changed_ = true;
         ret_ = SET_GROUP_ID(group_id, true /* is_background */);
-      // }
-    }
+      }
+   }
   }
   ~ConsumerGroupFuncGuard()
   {

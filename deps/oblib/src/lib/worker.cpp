@@ -74,6 +74,12 @@ int __attribute__((weak)) CONVERT_FUNCTION_TYPE_TO_GROUP_ID(const uint8_t functi
   return ret;
 }
 
+bool __attribute__((weak)) is_global_background_resource_isolation_enabled()
+{
+  // Default implementation: disabled
+  return false;
+}
+
 }  // namespace lib
 }  // namespace oceanbase
 __thread Worker *Worker::self_;
