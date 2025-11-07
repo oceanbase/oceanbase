@@ -284,7 +284,7 @@ private:
   int load_lib(ObJavaEnvContext &java_env_ctx, ObHdfsEnvContext &hdfs_env_ctx);
 
   // Check whether java runtime can work
-  int detect_java_runtime();
+  int detect_java_runtime_variables();
 private:
   int init_result_ = OB_NOT_INIT;
   static thread_local JNIEnv *jni_env_;
@@ -392,7 +392,6 @@ public:
   int get_method_object(jclass clazz, const std::string &method_name,
                         jobject &jobj);
 };
-
 
 
 } // namespace sql
