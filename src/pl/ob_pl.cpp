@@ -1091,7 +1091,8 @@ void ObPLContext::destory(
               //异步提交无法带给proxy未hit信息(ObPartitionHitInfo默认值是Hit),如果未hit走同步提交
               && session_info_->partition_hit().get_bool()
               // 如果顶层调用有出参也不走异步提交, 因为要向客户端回数据
-              && !has_output_arguments()) {
+              && !has_output_arguments()
+              && !ctx.need_try_serialize_package_var()) {
             if (OB_SUCCESS !=
                 (tmp_ret = implicit_end_trans(session_info, ctx, false, true))) {
               // 不覆盖原来的错误码
@@ -5128,14 +5129,7 @@ int ObPLExecState::execute(bool is_first_execute)
     if (top_call_
         && ctx_.exec_ctx_->get_my_session()->is_track_session_info()
         && ctx_.exec_ctx_->get_my_session()->is_package_state_changed()) {
-      LOG_DEBUG("++++++++ add changed package info to session! +++++++++++");
-      int tmp_ret = ctx_.exec_ctx_->get_my_session()->add_changed_package_info();
-      if (tmp_ret != OB_SUCCESS) {
-        ret = OB_SUCCESS == ret ? tmp_ret : ret;
-        LOG_WARN("failed to add changed package info", K(ret));
-      } else {
-        ctx_.exec_ctx_->get_my_session()->reset_all_package_changed_info();
-      }
+      ctx_.exec_ctx_->set_need_try_serialize_package_var(true);
     }
 #undef PL_DYNAMIC_STACK_CHECK
 

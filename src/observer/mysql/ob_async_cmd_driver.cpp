@@ -15,6 +15,7 @@
 #include "ob_async_cmd_driver.h"
 
 #include "observer/mysql/obmp_query.h"
+#include "observer/mysql/obmp_utils.h"
 
 namespace oceanbase
 {
@@ -73,6 +74,10 @@ int ObAsyncCmdDriver::response_result(ObMySQLResultSet &result)
     } else {
       LOG_WARN("result set open failed, async end trans submmited, don't retry", K(ret));
     }
+    int tmp_ret = ObMPUtils::try_add_changed_package_info(session_, result.get_exec_context());
+    if (tmp_ret != OB_SUCCESS) {
+      LOG_WARN("failed to add changed package info", K(tmp_ret));
+    }
     //send error packet in sql thread
     if (!OB_SUCC(ret) && !retry_ctrl_.need_retry() && (!result.is_async_end_trans_submitted())) {
       int sret = OB_SUCCESS;
@@ -85,6 +90,10 @@ int ObAsyncCmdDriver::response_result(ObMySQLResultSet &result)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("async end trans should not have rows", K(ret));
   } else {
+    int tmp_ret = ObMPUtils::try_add_changed_package_info(session_, result.get_exec_context());
+    if (tmp_ret != OB_SUCCESS) {
+      LOG_WARN("failed to add changed package info", K(tmp_ret));
+    }
     //what if begin;select 1; select 2; commit; commit;
     //we should still have to respond a packet to client in terms of the last commit
     if (OB_UNLIKELY(!result.is_async_end_trans_submitted())) {
