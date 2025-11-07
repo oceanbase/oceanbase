@@ -442,7 +442,6 @@ public:
   int execute_exchange();
   int execute_clean();
   int get_task_paralellism(int64_t &parallelism);
-  int get_enable_paralellism(bool &enable_parallelism);
   int get_partition_name(const ObTableSchema &data_table_schema, const int64_t data_table_id, const int64_t index_table_id, const ObTabletID &tablet_id, common::ObIAllocator &allocator, ObString &partition_names);
   int create_new_adapter(ObPluginVectorIndexService *vector_index_service, ObPluginVectorIndexAdapterGuard &old_adapter_guard, ObPluginVectorIndexAdaptor *&new_adapter);
   // pipeline call

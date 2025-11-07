@@ -120,7 +120,6 @@ enable_manual_storage_cache_policy
 enable_monotonic_weak_read
 enable_ob_error_msg_style
 enable_ob_ratelimit
-enable_parallel_vector_index_optimization
 enable_perf_event
 enable_ps_parameterize
 enable_rebalance

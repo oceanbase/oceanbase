@@ -1770,10 +1770,7 @@ int ObVecIndexAsyncTask::do_work()
   } else if (OB_FAIL(check_snapshot_table_has_visible_column(has_visible_column))) {
     LOG_WARN("fail to check snapshot table column", K(ret), K(ctx_));
   } else if (has_visible_column && !new_adapter->is_hybrid_index()) {
-    bool enable_parallelism = false;
-    if (OB_FAIL(get_enable_paralellism(enable_parallelism))) {
-      LOG_WARN("fail to get enable parallelism", K(ret));
-    } else if (enable_parallelism && OB_FAIL(parallel_optimize_vec_index())) {
+    if (OB_FAIL(parallel_optimize_vec_index())) {
       LOG_WARN("fail to inner do work", K(ret), K(ctx_));
     }
   } else if (OB_FAIL(optimize_vector_index(*new_adapter, *adpt_guard.get_adatper()))) {
@@ -2222,20 +2219,6 @@ int ObVecIndexAsyncTask::get_task_paralellism(int64_t &parallelism)
       parallelism = tenant_max_cpu < 4 ? 1 : user_config_parallelism;
       LOG_INFO("get execute inner sql parallelism", K(ret), K(tenant_max_cpu), K(user_config_parallelism), K(parallelism));
     }
-  }
-  return ret;
-}
-
-int ObVecIndexAsyncTask::get_enable_paralellism(bool &enable_parallelism)
-{
-  int ret = OB_SUCCESS;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
-  enable_parallelism = false;
-  if (!tenant_config.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail get tenant_config", KR(ret), K(tenant_id_));
-  } else {
-    enable_parallelism = tenant_config->enable_parallel_vector_index_optimization;
   }
   return ret;
 }

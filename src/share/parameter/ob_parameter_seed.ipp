@@ -2290,9 +2290,6 @@ DEF_BOOL(_enable_persistent_compiled_routine, OB_CLUSTER_PARAMETER, "true",
          "specifies whether the feature of storeing dll to disk is turned on. "
          "The default value is TRUE. Value: TRUE: turned on FALSE: turned off",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(enable_parallel_vector_index_optimization, OB_TENANT_PARAMETER, "False",
-    "enable parallel vector index optimization",
-    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_STR_WITH_CHECKER(sql_protocol_min_tls_version, OB_CLUSTER_PARAMETER, "none",
                      common::ObConfigSQLTlsVersionChecker,
