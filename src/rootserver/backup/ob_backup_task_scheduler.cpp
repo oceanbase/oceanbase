@@ -134,13 +134,18 @@ int ObBackupTaskSchedulerQueue::push_task(const ObBackupScheduleTask &task)
 int ObBackupTaskSchedulerQueue::push_task_without_lock_(const ObBackupScheduleTask &task)
 {
   int ret = OB_SUCCESS;
+  int64_t queue_capacity = max_size_;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(gen_user_tenant_id(MTL_ID())));
+  if (tenant_config.is_valid() && 0 != tenant_config->_backup_task_queue_size) {
+    queue_capacity = tenant_config->_backup_task_queue_size;
+  }
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup scheduler queue not inited", K(ret));
   } else if (task_scheduler_->has_set_stop()) {
-  } else if (get_task_cnt_() >= max_size_) {
+  } else if (get_task_cnt_() >= queue_capacity) {
     ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("task scheduler queue is full, cant't push task", K(ret), K(get_task_cnt_()));
+    LOG_WARN("task scheduler queue is full, cant't push task", K(ret), K(get_task_cnt_()), K(queue_capacity));
   } else if (OB_FAIL(check_push_unique_task_(task))) {
     LOG_WARN("fail to check unique task", K(ret), K(task));
   } else {

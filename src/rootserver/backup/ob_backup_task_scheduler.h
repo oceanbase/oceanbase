@@ -136,7 +136,7 @@ private:
 class ObBackupTaskScheduler : public ObBackupBaseService 
 {
 public:
-  const static int64_t MAX_BACKUP_TASK_QUEUE_LIMIT = 1024;
+  const static int64_t MAX_BACKUP_TASK_QUEUE_LIMIT = 2000;
   const static int64_t CONCURRENCY_LIMIT_INTERVAL = 10 * 60 * 1000000L;  // 10min
   const static int64_t BACKUP_TASK_CONCURRENCY = 1;
   const static int64_t BACKUP_SERVER_DATA_LIMIT_INTERVAL = 20 * 60 * 1000000; // 60 min;
