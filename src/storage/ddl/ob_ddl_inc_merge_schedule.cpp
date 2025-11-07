@@ -323,13 +323,15 @@ int ObDDLMergeScheduler::check_ddl_kv_dump_delay(ObDDLKV &ddl_kv)
     // do nothing
   } else {
     const SCN &freeze_scn = ddl_kv.get_freeze_scn();
-    const int64_t warn_time_interval = 60 * 60 * 1000 * 1000L; // 1 hour
+    const int64_t warn_time_interval = 2 * 60 * 60 * 1000 * 1000L; // 2 hours
     const int64_t freeze_time_us = freeze_scn.convert_to_ts();
     const int64_t current_time_us = ObTimeUtility::current_time();
     const int64_t time_interval = current_time_us - freeze_time_us;
     if (OB_UNLIKELY(time_interval > warn_time_interval)) {
-      LOG_ERROR("ddl kv dump is delayed more than 1 hour", K(ddl_kv), K(freeze_scn),
-          K(freeze_time_us), K(current_time_us), K(time_interval), K(warn_time_interval));
+      LOG_ERROR("ddl kv dump is delayed more than 2 hours", K(ddl_kv), K(freeze_scn),
+          K(freeze_time_us), K(current_time_us),
+          "delay time (minutes)", time_interval / (60 * 1000 * 1000L),
+          "threshold time (minutes)", warn_time_interval / (60 * 1000 * 1000L));
     }
   }
   return ret;
@@ -349,14 +351,16 @@ int ObDDLMergeScheduler::check_inc_major_merge_delay(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", KR(ret), K(tablet_handle), K(cur_trans_id), K(cur_seq_no), K(trans_version));
   } else {
-    const int64_t warn_time_interval = 60 * 60 * 1000 * 1000L; // 1 hour
+    const int64_t warn_time_interval = 2 * 60 * 60 * 1000 * 1000L; // 2 hours
     const int64_t commit_time_us = trans_version.convert_to_ts();
     const int64_t current_time_us = ObTimeUtility::current_time();
     const int64_t time_interval = current_time_us - commit_time_us;
     if (OB_UNLIKELY(time_interval > warn_time_interval)) {
       const ObTabletID &tablet_id = tablet_handle.get_obj()->get_tablet_id();
-      LOG_ERROR("inc major merge is delayed more than 1 hour", K(tablet_id), K(cur_trans_id), K(cur_seq_no),
-          K(trans_version), K(commit_time_us), K(current_time_us), K(time_interval), K(warn_time_interval));
+      LOG_ERROR("inc major merge is delayed more than 2 hours", K(tablet_id), K(cur_trans_id), K(cur_seq_no),
+          K(trans_version), K(commit_time_us), K(current_time_us),
+          "delay time (minutes)", time_interval / (60 * 1000 * 1000L),
+          "threshold time (minutes)", warn_time_interval / (60 * 1000 * 1000L));
     }
   }
   return ret;
