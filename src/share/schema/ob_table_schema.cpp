@@ -5235,12 +5235,13 @@ int ObTableSchema::check_alter_column_type(const ObColumnSchemaV2 &src_column,
     } else {
       if ((dst_meta.is_json() && src_meta.is_string_type()) ||
           (src_meta.is_json() && dst_meta.is_string_type())) {
-        if (is_oracle_mode) {
+        if (is_oracle_mode || src_meta.is_lob() || dst_meta.is_lob()) {
           is_offline = true;
         } else {
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "Alter non string type");
         }
+
       } else if (dst_column.is_xmltype()) {
         // if xmltype, must be oracle mode
         ret = OB_INVALID_ALTERATIONG_DATATYPE;
