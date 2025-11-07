@@ -1452,6 +1452,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprVecVisible::generate_vec_visible,                             /* 875 */
   NULL, // ObExprArrayContains::eval_array_contains_int32_t           /* 876 */
   NULL, // ObExprMaxPt::eval_max_pt,                                  /* 877 */
+  NULL, // ObExprDateTrunc::eval_date_trunc,                          /* 878 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1923,6 +1924,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprExp::eval_number_exp_vector,                            /* 281 */
   NULL, // ObExprSign::eval_sign_vector_int,                             /* 282 */
   NULL, // ObExprSign::eval_sign_vector_number,                          /* 283 */
+  NULL, // ObExprDateTrunc::eval_date_trunc_vector,                      /* 284 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,

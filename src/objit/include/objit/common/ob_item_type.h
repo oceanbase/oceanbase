@@ -1057,6 +1057,7 @@ typedef enum ObItemType
   T_FUN_SYS_BUCKET = 2086,
   T_FUN_SYS_SDO_ANYINTERACT = 2087,
   T_FUN_SYS_SDO_CONTAINS = 2088,
+  T_FUN_SYS_DATE_TRUNC = 2089,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
