@@ -225,6 +225,10 @@ private:
   int add_idempotence_checker();
   int add_idempotence_checker_nolock();
   int handle_ddl_kv_queue_overflow(const ObDDLKVType ddl_kv_type);
+  int add_tablet_to_ddl_log_handler(const share::ObLSID &ls_id,
+                                    const common::ObTabletID &tablet_id);
+  int del_tablet_from_ddl_log_handler(const share::ObLSID &ls_id,
+                                      const common::ObTabletID &tablet_id);
 public:
   static const int64_t MAX_DDL_KV_CNT_IN_STORAGE = 16;
   static const int64_t MAX_DDL_KV_CNT_TO_DUMP = 10;

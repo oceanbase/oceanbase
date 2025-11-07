@@ -869,12 +869,6 @@ int ObIncMajorDDLMergeHelper::assemble_sstable(ObDDLTabletMergeDagParamV2 &merge
     LOG_WARN("release all ddl kv failed", K(ret), K(merge_param));
   }
 
-  /* remove tablet from log handler */
-  if (OB_FAIL(ret)) {
-  } else if (for_major && OB_FAIL(ObIDDLMergeHelper::remove_tablet_from_log_handler(target_ls_id, target_tablet_id, ddl_kv_mgr_handle))) {
-    LOG_WARN("failed to remove tablet from log handler", K(ret), K(target_ls_id), K(target_tablet_id), K(ddl_kv_mgr_handle.get_obj()->get_count()));
-  }
-
   char extra_info[512];
   snprintf(extra_info, sizeof(extra_info), "table_key:{table_type:%s, column_group_idx:%ld, slice_range:{start_slice_idx:%ld, end_slice_idx:%ld}, scn_range:{start_scn:%ld, end_scn:%ld}}, for_major:%s, is_sstables_empty:%s, start_scn:%ld, rec_scn:%ld",
       ObITable::get_table_type_name(merge_param.table_key_.table_type_),

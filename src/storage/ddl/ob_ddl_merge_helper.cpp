@@ -667,34 +667,6 @@ int ObIDDLMergeHelper::get_rec_scn_from_ddl_kvs(ObDDLTabletMergeDagParamV2 &merg
   return ret;
 }
 
-int ObIDDLMergeHelper::remove_tablet_from_log_handler(
-    const ObLSID &ls_id,
-    const ObTabletID &tablet_id,
-    ObDDLKvMgrHandle &ddl_kv_mgr_handle)
-{
-  int ret = OB_SUCCESS;
-  ObLSHandle ls_handle;
-  ObLS *ls = nullptr;
-  ObSEArray<ObTabletID, 1> tablet_ids;
-  ObLSService *ls_service = MTL(ObLSService *);
-  if (!ls_id.is_valid() || !tablet_id.is_valid() || !ddl_kv_mgr_handle.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(ddl_kv_mgr_handle));
-  } else if (nullptr == ls_service) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls service should not be null", K(ret));
-  } else if (ddl_kv_mgr_handle.get_obj()->get_count() > 0) {
-    // do nothing
-  } else if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
-    LOG_WARN("failed to push back tablet id", K(ret));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
-    LOG_WARN("failed to get ls", K(ret), K(ls_id));
-  } else if (OB_FAIL(ls_handle.get_ls()->get_ddl_log_handler()->del_tablets(tablet_ids))) {
-    LOG_WARN("failed to del tablets", K(ret), K(ls_id), K(tablet_id));
-  }
-  return ret;
-}
-
 int ObSNDDLMergeHelperV2::get_rec_scn(ObDDLTabletMergeDagParamV2 &merge_param)
 {
   return ObIDDLMergeHelper::get_rec_scn_from_ddl_kvs(merge_param);
@@ -770,11 +742,6 @@ int ObSNDDLMergeHelperV2::assemble_sstable(ObDDLTabletMergeDagParamV2 &merge_par
     LOG_WARN("release all ddl kv failed", K(ret), K(merge_param));
   }
 
-  /* remove tablet from log handler */
-  if (OB_FAIL(ret)) {
-  } else if (merge_param.for_major_ && OB_FAIL(ObIDDLMergeHelper::remove_tablet_from_log_handler(target_ls_id, target_tablet_id, ddl_kv_mgr_handle))) {
-    LOG_WARN("failed to remove tablet from log handler", K(ret), K(target_ls_id), K(target_tablet_id), K(ddl_kv_mgr_handle.get_obj()->get_count()));
-  }
   return ret;
 }
 
@@ -1788,11 +1755,6 @@ int ObSSDDLMergeHelper::assemble_sstable(ObDDLTabletMergeDagParamV2 &merge_param
     LOG_WARN("failed to remove idempotence checker", K(ret));
   }
 
-  /* remove tablet from log handler */
-  if (OB_FAIL(ret)) {
-  } else if (merge_param.for_major_ && OB_FAIL(ObIDDLMergeHelper::remove_tablet_from_log_handler(target_ls_id, target_tablet_id, ddl_kv_mgr_handle))) {
-    LOG_WARN("failed to remove tablet from log handler", K(ret), K(target_ls_id), K(target_tablet_id), K(ddl_kv_mgr_handle.get_obj()->get_count()));
-  }
   return ret;
 }
 

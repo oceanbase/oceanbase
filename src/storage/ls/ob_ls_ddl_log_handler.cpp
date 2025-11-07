@@ -141,11 +141,6 @@ int ObActiveDDLKVIterator::get_next_ddl_kv_mgr(ObDDLKvMgrHandle &handle)
           if (OB_FAIL(to_del_tablets_.push_back(tablet_id))) {
             LOG_WARN("push back to deleted tablet failed", K(ret));
           }
-        } else if (tablet_handle.get_obj()->get_major_table_count() > 0
-            || tablet_handle.get_obj()->get_tablet_meta().table_store_flag_.with_major_sstable()) {
-          if (OB_FAIL(to_del_tablets_.push_back(tablet_id))) {
-            LOG_WARN("push back to deleted tablet failed", K(ret));
-          }
         } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(handle))) {
           LOG_WARN("get ddl kv mgr failed", K(ret));
         }
