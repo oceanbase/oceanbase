@@ -138,7 +138,7 @@ int ObIvfAsyncTaskExector::LoadTaskCallback::is_cache_writable(const ObIvfAuxTab
                                                        IvfCacheType::IVF_CENTROID_CACHE,
                                                        is_writable))) {
     LOG_WARN("fail to check is cache writable", K(ret), K(table_info));
-  } else if (!is_writable && table_info.type_ == ObVectorIndexAlgorithmType::VIAT_IVF_PQ) {
+  } else if (!is_writable && table_info.type_ == ObVectorIndexAlgorithmType::VIAT_IVF_PQ && table_info.is_ivf_pq_centroid_table_valid()) {
     if (OB_FAIL(ObIvfCacheUtil::is_cache_writable(ls_->get_ls_id(),
                                                   table_info.centroid_table_id_,
                                                   table_info.centroid_tablet_ids_[idx],
