@@ -1077,7 +1077,7 @@ int ObUserTenantBackupJobMgr::deal_non_reentrant_job(const int err)
       // lock backup set task row and check leader
       ObBackupSetTaskAttr lock_set_task_attr;
       if (OB_FAIL(ObBackupTaskOperator::get_backup_task(trans,
-              job_attr_->job_id_, tenant_id_, /*for update*/true, lock_set_task_attr))) {
+              job_attr_->job_id_, job_attr_->tenant_id_, /*for update*/true, lock_set_task_attr))) {
         LOG_WARN("failed to lock backup set task row for update", K(ret), K_(tenant_id), KPC(job_attr_));
       } else if (lock_set_task_attr.status_.is_backup_finish()) {
         ret = OB_STATE_NOT_MATCH;
