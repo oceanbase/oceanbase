@@ -694,11 +694,11 @@ int ObComplementDataDag::calc_total_row_count()
 
 /*
   1.normal data complemet dag:
-                WriteTask
-              /           \
-   PrepareTask- WriteTask - MergePrepareTask - MergeTask
-              \           /               (only used for reporting original checksum)
-                WriteTask
+                WriteTask                                     data_tablet_mereg_prepare_task
+              /           \                                /
+   PrepareTask- WriteTask -     MergePrepareTask -
+              \           / (reporting original checksum)  \
+                WriteTask                                      lob_tablet_mereg_prepare_task
 */
 
 /*
@@ -788,10 +788,10 @@ int ObComplementDataDag::create_first_task()
       LOG_WARN("failed to alloc task", K(ret));
     } else if (OB_FAIL(data_merge_prepare_task->init(dag_merge_param))) {
       LOG_WARN("failed to init data merge prepare task", K(ret));
-    } else if (OB_FAIL(write_task->add_child(*data_merge_prepare_task))) {
+    } else if (OB_FAIL(write_task->add_child(*merge_task))) {
+        LOG_WARN("add child failed", K(ret));
+    } else if (OB_FAIL(merge_task->add_child(*data_merge_prepare_task))) {
       LOG_WARN("failed to add child", K(ret));
-    } else if (OB_FAIL(data_merge_prepare_task->add_child(*merge_task))) {
-      LOG_WARN("add child failed", K(ret));
     }
 
     if (OB_FAIL(ret)) {
@@ -806,20 +806,18 @@ int ObComplementDataDag::create_first_task()
       LOG_WARN("failed to alloc task", K(ret));
     } else if (OB_FAIL(lob_merge_prepare_task->init(lob_dag_merge_param))) {
       LOG_WARN("failed to init lob merge prepare task", K(ret));
-    } else if (OB_FAIL(write_task->add_child(*lob_merge_prepare_task))) {
-      LOG_WARN("failed to init lob merge task", K(ret));
-    } else if (OB_FAIL(lob_merge_prepare_task->add_child(*merge_task))) {
-      LOG_WARN("add child failed", K(ret));
+    } else if (OB_FAIL(merge_task->add_child(*lob_merge_prepare_task))) {
+      LOG_WARN("failed to add child", K(ret));
     }
   }
 
   if (OB_FAIL(ret)) { // add task in reverse order
-  } else if (OB_FAIL(add_task(*merge_task))) {
-    LOG_WARN("add task failed", K(ret));
   } else if (OB_FAIL(add_task(*data_merge_prepare_task))) {
       LOG_WARN("failed to merge prepare task", K(ret));
   } else if (nullptr != lob_merge_prepare_task && OB_FAIL(add_task(*lob_merge_prepare_task))) {
       LOG_WARN("failed to merge prepare task", K(ret));
+  } else if (OB_FAIL(add_task(*merge_task))) {
+      LOG_WARN("add task failed", K(ret));
   } else if (OB_FAIL(add_task(*write_task))) {
     LOG_WARN("add task failed", K(ret));
   } else if (OB_FAIL(add_task(*prepare_task))) {
