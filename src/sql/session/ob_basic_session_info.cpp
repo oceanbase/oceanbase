@@ -3062,6 +3062,24 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       OX (sys_vars_cache_.set_plsql_can_transform_sql_to_assign(int_val != 0));
       break;
     }
+    case SYS_VAR_CHARACTER_SET_CLIENT: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_character_set_client(int_val));
+      break;
+    }
+    case SYS_VAR_COLLATION_DATABASE: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_collation_database(int_val));
+      break;
+    }
+    case SYS_VAR_PLSQL_OPTIMIZE_LEVEL: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_plsql_optimize_level(int_val));
+      break;
+    }
     default: {
       //do nothing
     }
@@ -3597,6 +3615,24 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
       OX (sys_vars_cache.set_base_plsql_can_transform_sql_to_assign(int_val != 0));
+      break;
+    }
+    case SYS_VAR_CHARACTER_SET_CLIENT: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_base_character_set_client(int_val));
+      break;
+    }
+    case SYS_VAR_COLLATION_DATABASE: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_base_collation_database(int_val));
+      break;
+    }
+    case SYS_VAR_PLSQL_OPTIMIZE_LEVEL: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_base_plsql_optimize_level(int_val));
       break;
     }
     default: {

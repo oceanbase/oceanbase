@@ -1849,6 +1849,9 @@ public:
         ob_pl_block_timeout_(0),
         log_row_value_option_(),
         default_lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
+        character_set_client_(ObCharsetType::CHARSET_INVALID),
+        collation_database_(CS_TYPE_INVALID),
+        plsql_optimize_level_(0),
         autocommit_(false),
         ob_enable_trace_log_(false),
         ob_enable_sql_audit_(false),
@@ -1951,6 +1954,9 @@ public:
       ob_enable_ps_parameter_anonymous_block_ = false;
       current_default_catalog_ = 0;
       plsql_can_transform_sql_to_assign_ = true;
+      character_set_client_ = ObCharsetType::CHARSET_INVALID;
+      collation_database_ = CS_TYPE_INVALID;
+      plsql_optimize_level_ = 0;
     }
 
     inline bool operator==(const SysVarsCacheData &other) const {
@@ -2006,7 +2012,10 @@ public:
             security_version_ == other.security_version_ &&
             ob_enable_ps_parameter_anonymous_block_ == other.ob_enable_ps_parameter_anonymous_block_ &&
             current_default_catalog_ == other.current_default_catalog_ &&
-            plsql_can_transform_sql_to_assign_ == other.plsql_can_transform_sql_to_assign_;
+            plsql_can_transform_sql_to_assign_ == other.plsql_can_transform_sql_to_assign_ &&
+            character_set_client_ == other.character_set_client_ &&
+            collation_database_ == other.collation_database_ &&
+            plsql_optimize_level_ == other.plsql_optimize_level_;
       bool equal2 = true;
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         if (nls_formats_[i] != other.nls_formats_[i]) {
@@ -2160,6 +2169,9 @@ public:
     common::ObString log_row_value_option_;
     char log_row_value_option_buf_[OB_TMP_BUF_SIZE_256];
     int64_t default_lob_inrow_threshold_;
+    int64_t character_set_client_;
+    int64_t collation_database_;
+    int64_t plsql_optimize_level_;
 
     //==========  需要序列化  ============
     bool autocommit_;
@@ -2321,6 +2333,9 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(bool, ob_enable_ps_parameter_anonymous_block);
     DEF_SYS_VAR_CACHE_FUNCS(bool, plsql_can_transform_sql_to_assign);
     DEF_SYS_VAR_CACHE_FUNCS(uint64_t, current_default_catalog);
+    DEF_SYS_VAR_CACHE_FUNCS(int64_t, character_set_client);
+    DEF_SYS_VAR_CACHE_FUNCS(int64_t, collation_database);
+    DEF_SYS_VAR_CACHE_FUNCS(int64_t, plsql_optimize_level);
     void set_autocommit_info(bool inc_value)
     {
       inc_data_.autocommit_ = inc_value;
@@ -2399,9 +2414,12 @@ private:
       bool inc_ob_enable_ps_parameter_anonymous_block_:1;
       bool inc_current_default_catalog_:1;
       bool inc_plsql_can_transform_sql_to_assign_:1;
+      bool inc_character_set_client_:1;
+      bool inc_collation_database_:1;
+      bool inc_plsql_optimize_level_:1;
       // when add new inc bit, please update reserved_bits_,
       // so that the total bits is 64
-      int reserved_bits_:4;
+      int reserved_bits_:1;
     };
     union { // FARM COMPAT WHITELIST
       uint64_t inc_flags_;
@@ -2899,7 +2917,7 @@ public:
     collation_connection_(CS_TYPE_INVALID),
     collation_database_(CS_TYPE_INVALID),
     plsql_ccflags_(),
-    plsql_optimize_level_(2),  // default PLSQL_OPTIMIZE_LEVEL = 2
+    plsql_optimize_level_(0),  // default PLSQL_OPTIMIZE_LEVEL = 0
     plsql_can_transform_to_assign_(1)  // default PLSQL_CAN_TRANSFORM_TO_ASSIGN = 1
   { }
 
