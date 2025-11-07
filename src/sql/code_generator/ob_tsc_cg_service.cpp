@@ -1308,7 +1308,8 @@ int ObTscCgService::extract_das_access_exprs(const ObLogTableScan &op,
                  && expr->is_column_ref_expr()
                  && (static_cast<ObColumnRefRawExpr *>(expr)->is_vec_cid_column()
                      || static_cast<ObColumnRefRawExpr *>(expr)->is_vec_pq_cids_column()
-                     || static_cast<ObColumnRefRawExpr *>(expr)->is_vec_hnsw_vid_column())) {
+                     || static_cast<ObColumnRefRawExpr *>(expr)->is_vec_hnsw_vid_column()
+                     || static_cast<ObColumnRefRawExpr *>(expr)->is_hybrid_embedded_vec_column())) {
         share::schema::ObSchemaGetterGuard *schema_guard = cg_.opt_ctx_->get_schema_guard();
         const ObTableSchema *table_schema = nullptr;
         uint64_t rowkey_id_tid = OB_INVALID_ID;
@@ -1328,6 +1329,9 @@ int ObTscCgService::extract_das_access_exprs(const ObLogTableScan &op,
           LOG_WARN("failed to check_rowkey_cid_table_readable", K(ret));
         } else if (static_cast<ObColumnRefRawExpr *>(expr)->is_vec_hnsw_vid_column()
                    && OB_FAIL(ObVectorIndexUtil::check_rowkey_tid_table_readable(schema_guard, *table_schema, rowkey_id_tid))) {
+          LOG_WARN("failed to check_rowkey_vid_table_readable", K(ret));
+        } else if (static_cast<ObColumnRefRawExpr *>(expr)->is_hybrid_embedded_vec_column()
+                   && OB_FAIL(ObVectorIndexUtil::check_hybrid_embedded_vec_cid_table_readable(schema_guard, *table_schema, static_cast<ObColumnRefRawExpr *>(expr)->get_column_id(), rowkey_id_tid))) {
           LOG_WARN("failed to check_rowkey_vid_table_readable", K(ret));
         } else if (OB_INVALID_ID == rowkey_id_tid) {
         } else {

@@ -734,10 +734,14 @@ int ObEmbeddedVecDMLIterator::generate_embedded_vec_row(const ObChunkDatumStore:
           } else {
             obj_arr[vid_idx].set_int(vid);
             ObString embedded_vector;
-            if (OB_FAIL(!is_old_row_ && ObVectorIndexUtil::get_vector_from_text_by_embedding(allocator_, chunk, vec_index_param, embedded_vector))) {
-              LOG_WARN("failed to get vector from text by embedding", K(ret));
+            if (is_old_row_) {
+              obj_arr[embedded_vec_idx].set_null();
             } else {
-              obj_arr[embedded_vec_idx].set_string(embedded_vector);
+              if (OB_FAIL(ObVectorIndexUtil::get_vector_from_text_by_embedding(allocator_, chunk, vec_index_param, embedded_vector))) {
+                LOG_WARN("failed to get vector from text by embedding", K(ret));
+              } else {
+                obj_arr[embedded_vec_idx].set_string(embedded_vector);
+              }
             }
           }
           if (OB_SUCC(ret) && OB_FAIL(rows_.push_back(row))) {

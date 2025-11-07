@@ -20564,7 +20564,7 @@ int ObDMLResolver::fill_embedded_vec_expr_param(
                                                                param,
                                                                param_filled))) {
     LOG_WARN("failed to get vector index param", K(ret));
-  } else if (table_schema->is_user_table() && OB_FAIL(ObVectorIndexUtil::check_hybrid_embedded_vec_table_readable(schema_checker_->get_schema_guard(), *table_schema, embedded_vec_tid, true))) {
+  } else if (table_schema->is_user_table() && OB_FAIL(ObVectorIndexUtil::check_hybrid_embedded_vec_cid_table_readable(schema_checker_->get_schema_guard(), *table_schema, column_id, embedded_vec_tid, true))) {
     LOG_WARN("not embedded vec expr", K(ret), "expr type", embedded_vec_expr->get_expr_type());
   } else if (OB_INVALID_ID == embedded_vec_tid) {
     // do nothing, skip the embedded vec column
@@ -21564,6 +21564,21 @@ int ObDMLResolver::check_domain_id_need_column_ref_expr(ObDMLStmt &stmt, ObSchem
           rowkey_vid_tid))) {
         LOG_WARN("fail to check rowkey cid table", K(ret), KPC(table));
       } else if (OB_INVALID_ID != rowkey_vid_tid) {
+        need_column_ref_expr = true;
+      }
+    } else if (col_schema->is_hybrid_embedded_vec_column()) {
+      uint64_t embedded_vec_tid = OB_INVALID_ID;
+      const share::schema::ObTableSchema *table = nullptr;
+      const ObSimpleTableSchemaV2 *index_schema = nullptr;
+      if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), col_schema->get_table_id(), table))) {
+        LOG_WARN("fail to get ddl table schema", K(ret));
+      } else if (OB_FAIL(ObVectorIndexUtil::check_hybrid_embedded_vec_cid_table_readable(
+          schema_guard,
+          *table,
+          col_schema->get_column_id(),
+          embedded_vec_tid))) {
+        LOG_WARN("fail to check hybrid vector embedding table", K(ret), KPC(table));
+      } else if (OB_INVALID_ID != embedded_vec_tid) {
         need_column_ref_expr = true;
       }
     } else {
