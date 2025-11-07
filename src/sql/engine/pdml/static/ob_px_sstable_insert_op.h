@@ -128,6 +128,7 @@ protected:
   int write_ordered_slice_by_batch();
   int finish_dag();
   bool need_autoinc_by_row();
+  int get_data_tablet_id(const ObTabletID &tablet_id, ObTabletID &data_tablet_id);
   int sync_tablet_doc_id(ObISliceWriter *slice_writer);
   int init_table_autoinc_param(const ObTabletID &tablet_id, const int64_t slice_idx, ObDDLAutoincParam &autoinc_param);
   int init_tablet_autoinc_param(const ObTabletID &tablet_id, const int64_t slice_idx, ObDDLAutoincParam &autoinc_param);
