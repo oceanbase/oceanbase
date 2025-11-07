@@ -6303,6 +6303,7 @@ int ObTablet::fetch_tablet_autoinc_seq_cache(
 
 // MIN { ls min_reserved_snapshot, freeze_info, all_acquired_snapshot}
 ERRSIM_POINT_DEF(ERRSIM_MULTI_VERSION_START)
+ERRSIM_POINT_DEF(EN_PRINT_MULTI_VERSION_START_SNAPSHOT_INFO)
 int ObTablet::get_kept_and_old_snapshot_info(
     const int64_t min_reserved_snapshot_on_ls,
     ObStorageSnapshotInfo &snapshot_info,
@@ -6390,9 +6391,17 @@ int ObTablet::get_kept_and_old_snapshot_info(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("snapshot info is invalid", KR(ret), K(snapshot_info));
   }
+#ifdef ERRSIM
+  if (OB_SUCCESS != EN_PRINT_MULTI_VERSION_START_SNAPSHOT_INFO) {
+    LOG_INFO("[ERRSIM] get multi version start", "ls_id", get_tablet_meta().ls_id_, K(tablet_id),
+            K(snapshot_info), K(old_snapshot_info),
+            K(min_medium_snapshot), K(min_reserved_snapshot_on_ls), K(max_merged_snapshot));
+  }
+#else
   LOG_TRACE("get multi version start", "ls_id", get_tablet_meta().ls_id_, K(tablet_id),
            K(snapshot_info), K(old_snapshot_info),
            K(min_medium_snapshot), K(min_reserved_snapshot_on_ls), K(max_merged_snapshot));
+#endif
   return ret;
 }
 
