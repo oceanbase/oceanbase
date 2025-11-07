@@ -16,15 +16,17 @@
 static void* imap_fetch(int id);
 struct QStat
 {
-  QStat(): count_(0), bytes_(0), delay_(0) {}
+  QStat(): count_(0), bytes_(0), delay_(0), canceled_(0) {}
   void inc(QStat& that) {
     count_ += that.count_;
     bytes_ += that.bytes_;
     delay_ += that.delay_;
+    canceled_ += that.canceled_;
   }
   int64_t count_;
   int64_t bytes_;
   int64_t delay_;
+  int64_t canceled_;
 };
 
 class IQD
@@ -226,6 +228,9 @@ public:
     stat_.count_ += 1;
     stat_.bytes_ += req->bytes_;
     stat_.delay_ += refresh_ns_ - req->start_ns_;
+    if (req->is_canceled()) {
+      stat_.canceled_ += req->bytes_;
+    }
   }
 public:
   static IQDisc* ready2qdisc(TCDLink* p) { return structof(p, IQDisc, ready_dlink_); }
@@ -308,8 +313,10 @@ public:
     if (req) {
       cur_vast_ += calc_req_st(req);
       inc_stat(req);
-      desc_->limiter_.inc_due_ns(req);
-      desc_->reserver_.inc_due_ns(req);
+      if (!req->is_canceled()) {
+        desc_->limiter_.inc_due_ns(req);
+        desc_->reserver_.inc_due_ns(req);
+      }
       IQDisc* parent = get_parent();
       if (parent) {
         parent->add_to_dirty_list(this);

@@ -903,7 +903,7 @@ void ObIOResult::cancel()
         // do nothing
       } else {
         if (REACH_TIME_INTERVAL(1000000)) {
-          LOG_WARN("io cancelled", K(lbt()), K(*this));
+          LOG_WARN("io canceled", K(lbt()), K(*this));
         }
         ObRefHolder<ObTenantIOManager> tenant_holder(tenant_io_mgr_.get_ptr());
         if (OB_NOT_NULL(tenant_holder.get_ptr())) {
@@ -1107,6 +1107,7 @@ int ObIOResult::cal_delay_us(int64_t &prepare_delay, int64_t &schedule_delay, in
 
 ObIORequest::ObIORequest()
   : io_result_(nullptr),
+    qsched_req_(this),
     is_inited_(false),
     retry_count_(0),
     ref_cnt_(0),
@@ -1268,7 +1269,7 @@ void ObIORequest::destroy()
   part_id_ = -1;
 }
 
-bool ObIORequest::is_canceled()
+bool ObIORequest::is_canceled() const
 {
   //result = null should not happen, no need to continue request
   return nullptr == io_result_ ? true : io_result_->is_canceled_;
