@@ -2287,6 +2287,12 @@ int ObTabletSplitMergeTask::update_table_store_with_batch_tables(
     LOG_WARN("ddl sim failed, update minor failed", K(ret));
   } else if (is_major_merge(merge_type) && OB_FAIL(DDL_SIM(MTL_ID(), 1/*ddl_task_id*/, SPLIT_UPDATE_MAJOR_FAILED))) {
     LOG_WARN("ddl sim failed, update major failed", K(ret));
+  } else if (is_mds_merge(merge_type) && OB_FAIL(DDL_SIM_WHEN(true/*condition*/, MTL_ID(), 1/*ddl_task_id*/, SPLIT_UPDATE_MDS_SLOW))) {
+    LOG_WARN("ddl sim failed, download sstables slow", K(ret));
+  } else if (is_minor_merge(merge_type) && OB_FAIL(DDL_SIM_WHEN(true/*condition*/, MTL_ID(), 1/*ddl_task_id*/, SPLIT_UPDATE_MINOR_SLOW))) {
+    LOG_WARN("ddl sim failed, download sstables slow", K(ret));
+  } else if (is_major_merge(merge_type) && OB_FAIL(DDL_SIM_WHEN(true/*condition*/, MTL_ID(), 1/*ddl_task_id*/, SPLIT_UPDATE_MAJOR_SLOW))) {
+    LOG_WARN("ddl sim failed, download sstables slow", K(ret));
   } else if (GCTX.is_shared_storage_mode()) {
     ObArenaAllocator tmp_arena("SplitUpdTablet", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObTabletHandle local_tablet_handle;
