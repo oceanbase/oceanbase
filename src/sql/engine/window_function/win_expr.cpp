@@ -637,6 +637,7 @@ int LeadOrLag::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int
   ObBitVector *mock_skip = to_bit_vector(&mock_skip_data);
   char *default_val = nullptr;
   int32_t default_val_len = 0;
+  bool has_default_val = false;
   if (OB_UNLIKELY(params.count() > NUM_LEAD_LAG_PARAMS || params.count() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid number of params", K(ret), K(params.count()));
@@ -655,6 +656,7 @@ int LeadOrLag::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int
         const char *payload = nullptr;
         int32_t len = 0;
         params.at(j)->get_vector(eval_ctx)->get_payload(0, payload, len);
+        has_default_val = true;
         if (OB_UNLIKELY(len == 0)) {
           default_val_len = len;
           default_val = nullptr;
@@ -720,7 +722,7 @@ int LeadOrLag::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int
     VecValueTypeClass res_tc = params.at(0)->get_vec_value_tc();
     if (OB_SUCC(ret)) {
       if (!found) {
-        if (default_val != nullptr) {
+        if (has_default_val) {
           if (OB_FAIL(memcpy_results(ctx, res_tc, res, default_val, default_val_len))) {
             LOG_WARN("copy results failed", K(ret));
           }
