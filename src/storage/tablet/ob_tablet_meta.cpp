@@ -621,13 +621,13 @@ int ObTabletMeta::init(
     }
 
     ObTabletTableStoreFlag table_store_flag = old_tablet_meta.table_store_flag_;
-    SCN ddl_checkpoint_scn = old_tablet_meta.ddl_checkpoint_scn_;
+    SCN ddl_checkpoint_scn = OB_ISNULL(tablet_meta) ?
+        old_tablet_meta.ddl_checkpoint_scn_ : MAX(old_tablet_meta.ddl_checkpoint_scn_, tablet_meta->ddl_checkpoint_scn_);
     if (!table_store_flag.with_major_sstable()) {
       if (OB_ISNULL(tablet_meta)) {
         //do nothing
       } else if (tablet_meta->table_store_flag_.with_major_sstable()) {
         table_store_flag.set_with_major_sstable();
-        ddl_checkpoint_scn = tablet_meta->ddl_checkpoint_scn_;
         FLOG_INFO("update tablet table store flag with major", KPC(tablet_meta), K(table_store_flag), K(ddl_checkpoint_scn));
       }
     }

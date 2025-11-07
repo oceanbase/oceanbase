@@ -272,8 +272,11 @@ int ObDDLMergeScheduler::schedule_tablet_ddl_inc_major_merge_for_sn(
     }
   }
 
-  if (OB_FAIL(ret)) {
-  } else if (need_merge && cur_trans_id.is_valid() && cur_seq_no.is_valid()) {
+  if (OB_FAIL(ret) || !need_merge) {
+  } else if (OB_UNLIKELY(!cur_trans_id.is_valid() || !cur_seq_no.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected invalid cur_trans_id or cur_seq_no", KR(ret), K(cur_trans_id), K(cur_seq_no));
+  } else {
     ObTabletDDLCompleteMdsUserData user_data;
     if (can_read && OB_FAIL(check_inc_major_merge_delay(tablet_handle, cur_trans_id, cur_seq_no, trans_version))) {
       LOG_WARN("failed to check inc major merge delay", KR(ret),

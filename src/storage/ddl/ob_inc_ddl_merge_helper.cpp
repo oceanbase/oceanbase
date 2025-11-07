@@ -815,7 +815,7 @@ int ObIncMajorDDLMergeHelper::assemble_sstable(ObDDLTabletMergeDagParamV2 &merge
     LOG_WARN("merge ctx should not be null", K(ret), K(merge_param));
   }
 
-  /* check inc major sstable exist */
+  /* check inc major sstable exist and build sstable */
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObDirectLoadMgrUtil::get_tablet_handle(target_ls_id, target_tablet_id, tablet_handle))) {
     LOG_WARN("failed to get tablet handle", K(ret));
@@ -824,37 +824,27 @@ int ObIncMajorDDLMergeHelper::assemble_sstable(ObDDLTabletMergeDagParamV2 &merge
     LOG_WARN("failed to get inc major sstables", K(ret), K(merge_param));
   } else if (OB_UNLIKELY(inc_major_iter.count() > 0)) {
     inc_major_already_exist = true;
-    FLOG_INFO("inc major sstable already exist", K(inc_major_iter), K(inc_major_already_exist), K(merge_param));
-  }
-
-  /* build sstable and update table store */
-  if (OB_FAIL(ret)) {
-  } else if (OB_UNLIKELY(inc_major_already_exist)) {
     FLOG_INFO("no need to build sstable because inc major sstable already exist",
-        K(inc_major_already_exist), K(merge_param));
+        K(inc_major_iter), K(inc_major_already_exist), K(merge_param));
   } else if (OB_FAIL(ObDDLMergeTaskUtils::build_sstable(merge_param, co_sstable_array, major_sstable)))  {
-    LOG_WARN("failed to build sstable", K(ret));
-  } else if (OB_UNLIKELY(merge_ctx->ddl_kv_handles_.empty() && co_sstable_array.empty())) {
-    FLOG_INFO("no need to update table store because frozen ddl kvs and ddl sstables are empty",
-        K(merge_param), K(co_sstable_array));
-  } else { // need to update table store
+    LOG_WARN("failed to build sstable", KR(ret), K(merge_param));
+  } else if (for_major) {
     if (OB_FAIL(check_sstables_empty(merge_param, co_sstable_array, is_sstables_empty))) {
       LOG_WARN("failed to check sstables empty", KR(ret), K(co_sstable_array));
     } else if (is_sstables_empty) {
       // do not record empty inc major sstables to tablet table store
-      if (for_major) {
-        major_sstable = nullptr;
-      }
-      FLOG_INFO("inc major merge empty sstables", K(target_ls_id), K(target_tablet_id),
+      major_sstable = nullptr;
+      FLOG_INFO("merge empty inc major sstable", K(target_ls_id), K(target_tablet_id),
           K(is_sstables_empty), K(for_major), K(co_sstable_array), KP(major_sstable));
     }
+  }
 
-    if (OB_FAIL(ret)) {
-    } else if (OB_NOT_NULL(major_sstable) && OB_FAIL(verify_inc_major_sstable(*major_sstable, tablet_handle))) {
-      LOG_WARN("failed to verify inc major sstable", KR(ret), KPC(major_sstable), K(tablet_handle));
-    } else if (OB_FAIL(update_tablet_table_store(merge_param, co_sstable_array, major_sstable))) {
-      LOG_WARN("failed to update tablet table store", K(ret), K(merge_param));
-    }
+  /* update tablet table store */
+  if (OB_FAIL(ret)) {
+  } else if (OB_NOT_NULL(major_sstable) && OB_FAIL(verify_inc_major_sstable(*major_sstable, tablet_handle))) {
+    LOG_WARN("failed to verify inc major sstable", KR(ret), KPC(major_sstable), K(tablet_handle));
+  } else if (OB_FAIL(update_tablet_table_store(merge_param, co_sstable_array, major_sstable))) {
+    LOG_WARN("failed to update tablet table store", K(ret), K(merge_param));
   }
 
   /* release ddl kvs after merge */
