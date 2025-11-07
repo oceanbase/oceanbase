@@ -205,8 +205,9 @@ int ObIndependentDag::process()
     int task_ret = OB_SUCCESS;
     while (OB_SUCC(ret) && OB_SUCCESS == task_ret && !is_final_status()) {
       ObITask *task = nullptr;
-      if (OB_FAIL(THIS_WORKER.check_status())) {
-        LOG_WARN("check status failed", K(ret));
+      task_ret = THIS_WORKER.check_status();
+      if (OB_SUCCESS != task_ret) {
+        LOG_WARN("check status failed", K(task_ret));
       } else if (OB_FAIL(schedule_one(task))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
@@ -449,6 +450,7 @@ int ObIndependentDag::deal_with_finish_task(
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   task_is_suspended = false;
+  ObITask *cur_task = task;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "dag is not inited", K(ret));
@@ -485,7 +487,8 @@ int ObIndependentDag::deal_with_finish_task(
       COMMON_LOG(INFO, "dag finished", K(ret), K_(dag_ret), K(status), "runtime", ObTimeUtility::fast_current_time() - start_time_, KPC(this));
     }
   }
-  COMMON_LOG(INFO, "finish deal with finish task", K(ret), K(error_code), K(task_is_suspended));
+  // ATTENTION!! Only print address for cur_task, since its memory is freed after finish_task
+  COMMON_LOG(INFO, "finish deal with finish task", K(ret), KP(cur_task), K(error_code), K(task_is_suspended));
   return ret;
 }
 
