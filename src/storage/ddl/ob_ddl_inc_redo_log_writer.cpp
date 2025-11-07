@@ -177,7 +177,7 @@ int ObDDLIncRedoLogWriter::write_inc_start_log(
     LOG_WARN("invalid argument", K(ret), KP(tx_desc));
   } else if (is_incremental_major_direct_load(direct_load_type_)
       && OB_UNLIKELY((snapshot_version <= 0)
-                  || (data_format_version < DATA_VERSION_4_4_1_0)
+                  || !is_data_version_support_inc_major_direct_load(data_format_version)
                   || OB_ISNULL(storage_schema)
                   || !storage_schema->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -240,7 +240,7 @@ int ObDDLIncRedoLogWriter::write_inc_commit_log(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(tx_desc));
   } else if (is_incremental_major_direct_load(direct_load_type_)
-      && OB_UNLIKELY((snapshot_version <= 0) || (data_format_version < DATA_VERSION_4_4_1_0))) {
+      && OB_UNLIKELY((snapshot_version <= 0) || !is_data_version_support_inc_major_direct_load(data_format_version))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments for incremental major direct load", KR(ret),
         K_(direct_load_type), K_(trans_id), K_(seq_no), K(snapshot_version), K(data_format_version));

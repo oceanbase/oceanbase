@@ -143,7 +143,7 @@ int ObDDLIncStartTask::record_inc_major_start_info_to_mds(
                   || !tablet_id.is_valid()
                   || !ls_id.is_valid()
                   || !trans_id.is_valid()
-                  || (data_format_version < DATA_VERSION_4_4_1_0)
+                  || !is_data_version_support_inc_major_direct_load(data_format_version)
                   || (snapshot_version <= 0)
                   || !start_scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;

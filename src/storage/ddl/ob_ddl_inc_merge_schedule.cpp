@@ -281,7 +281,7 @@ int ObDDLMergeScheduler::schedule_tablet_ddl_inc_major_merge_for_sn(
     } else if (OB_FAIL(tablet_handle.get_obj()->get_inc_major_direct_load_info(
         share::SCN::max_scn(), ObTabletDDLCompleteMdsUserDataKey(cur_trans_id), user_data))) {
       LOG_WARN("failed to get inc major direct load info", KR(ret), K(tablet_id), K(cur_trans_id));
-    } else if (OB_UNLIKELY(user_data.data_format_version_ < DATA_VERSION_4_4_1_0)) {
+    } else if (OB_UNLIKELY(!is_data_version_support_inc_major_direct_load(user_data.data_format_version_))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected invalid data format version", KR(ret), K(user_data.data_format_version_));
     } else if (OB_UNLIKELY(can_read && !user_data.inc_major_commit_scn_.is_valid_and_not_min())) {
