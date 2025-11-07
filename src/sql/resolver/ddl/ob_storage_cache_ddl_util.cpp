@@ -527,7 +527,12 @@ int ObDDLResolver::check_storage_cache_policy(ObStorageCachePolicy &storage_cach
     } else {
       const ObPartitionOption &part_option = column_schema->is_part_key_column() ?
                                             tbl_schema->get_part_option() : tbl_schema->get_sub_part_option();
-      const ObString &part_func_str = ObString(part_option.get_part_func_expr_str());
+      ObString part_func_str = ObString(part_option.get_part_func_expr_str());
+      // remove the '`' in the part_func_str, example: `part_func_expr` -> part_func_expr
+      if (part_func_str.length() > 2 && part_func_str[part_func_str.length() - 1] == '`' && part_func_str[0] == '`') {
+        ++part_func_str;
+        part_func_str.assign(part_func_str.ptr(), part_func_str.length() - 1);
+      }
       const ObString &boundary_column_name = ObString(column_schema->get_column_name());
       if (!(ObColumnNameHashWrapper(part_func_str) == ObColumnNameHashWrapper(boundary_column_name))) {
         ret = OB_NOT_SUPPORTED;

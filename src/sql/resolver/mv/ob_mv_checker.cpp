@@ -1601,11 +1601,24 @@ int ObMVChecker::check_left_table_partition_rule_valid(const ObSelectStmt &stmt,
                    !expr->get_relation_ids().is_subset(left_table_set)) {
         } else {
           const ObColumnRefRawExpr *col_expr = static_cast<const ObColumnRefRawExpr *>(expr);
+          ObString format_mv_part_str = mv_part_str;
+          ObString format_left_part_str = left_part_str;
+          // remove ` or " from part_func_expr_str
+          if (format_mv_part_str.length() > 2 &&
+              ((format_mv_part_str[format_mv_part_str.length() - 1] == '`' && format_mv_part_str[0] == '`') ||
+               (format_mv_part_str[format_mv_part_str.length() - 1] == '"' && format_mv_part_str[0] == '"'))) {
+            format_mv_part_str.assign_ptr(format_mv_part_str.ptr() + 1, format_mv_part_str.length() - 2);
+          }
+          if (format_left_part_str.length() > 2 &&
+              ((format_left_part_str[format_left_part_str.length() - 1] == '`' && format_left_part_str[0] == '`') ||
+               (format_left_part_str[format_left_part_str.length() - 1] == '"' && format_left_part_str[0] == '"'))) {
+            format_left_part_str.assign_ptr(format_left_part_str.ptr() + 1, format_left_part_str.length() - 2);
+          }
           if (!col_expr->get_alias_column_name().empty() &&
-              mv_part_str.case_compare(col_expr->get_alias_column_name()) != 0) {
+              format_mv_part_str.case_compare(col_expr->get_alias_column_name()) != 0) {
           } else if (col_expr->get_alias_column_name().empty() &&
-                     mv_part_str.case_compare(col_expr->get_column_name()) != 0) {
-          } else if (left_part_str.case_compare(col_expr->get_column_name()) != 0) {
+                     format_mv_part_str.case_compare(col_expr->get_column_name()) != 0) {
+          } else if (format_left_part_str.case_compare(col_expr->get_column_name()) != 0) {
           } else {
             found_item = true;
             break;

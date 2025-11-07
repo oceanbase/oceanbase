@@ -1068,6 +1068,7 @@ protected:
 
   int add_new_indexkey_for_oracle_temp_table();
   int check_index_param(const ParseNode *option_node, ObString &index_params, const int64_t vector_dim);
+  int formalize_part_str(ObIArray<ObRawExpr*> &part_exprs, ObString &part_str);
 
 
   // for storage cache policy
