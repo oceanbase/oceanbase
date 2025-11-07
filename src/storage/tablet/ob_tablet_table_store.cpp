@@ -3611,7 +3611,7 @@ int ObTabletTableStore::replace_ha_remote_inc_major_tables_(
   int ret = OB_SUCCESS;
   ObArray<ObITable *> new_inc_major_tables;
   ObSEArray<ObITable *, MAX_SSTABLE_CNT> old_inc_major_tables;
-  const bool check_continue = true;
+  const bool check_continue = false; // the scn ranges of inc major sstables are not continuous
 
   if (OB_FAIL(old_store.inc_major_tables_.get_all_tables(old_inc_major_tables))) {
     LOG_WARN("failed to get old inc major tables", K(ret), K(old_store));
