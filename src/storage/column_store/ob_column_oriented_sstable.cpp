@@ -824,8 +824,10 @@ int ObCOSSTableV2::cg_scan(
   } else if (param.cg_idx_ >= cs_meta_.column_group_cnt_) {
     if (param.enable_pd_group_by() && is_projector) {
       ALLOCATE_CG_ITER(context, param.cg_idx_, ObDefaultCGGroupByScanner, cg_scanner);
-    } else {
+    } else if (is_projector) {
       ALLOCATE_CG_ITER(context, param.cg_idx_, ObDefaultCGScanner, cg_scanner);
+    } else {
+      ALLOCATE_CG_ITER(context, param.cg_idx_, ObDefaultCGFilterScanner, cg_scanner);
     }
   } else if (param.enable_pd_group_by() && is_projector) {
     ALLOCATE_CG_ITER(context, param.cg_idx_, ObCGGroupByScanner, cg_scanner);
