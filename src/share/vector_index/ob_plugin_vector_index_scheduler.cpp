@@ -604,12 +604,23 @@ int ObPluginVectorIndexLoadScheduler::check_and_load_task_executors()
 {
   int ret = OB_SUCCESS;
   uint64_t task_trace_base_num = 0;
+  bool schema_changed = false;
   if (OB_FAIL(async_task_exec_.check_and_set_thread_pool())) {
     LOG_WARN("fail to check and open thread pool", K(ret));
   } else if (OB_FAIL(async_task_exec_.clear_old_task_ctx_if_need())) {
     LOG_WARN("fail to clear old task ctx", K(ret));
   } else if (OB_FAIL(async_task_exec_.load_task(task_trace_base_num))) {
     LOG_WARN("fail to load tenant sync task", K(ret));
+  } else if (OB_FAIL(ivf_task_exec_.check_schema_version_changed(schema_changed))) {
+    //only when schema changed, load ivf task 
+    LOG_WARN("fail to check schema version changed", K(ret));
+  } else if (!schema_changed) {
+    // schema not changed, only do cleanup if needed, skip thread pool check and task loading
+    if (OB_FAIL(ivf_task_exec_.clear_old_task_ctx_if_need())) {
+      LOG_WARN("fail to clear old ivf task ctx", K(ret));
+    } else {
+      LOG_TRACE("schema not changed, skip ivf task loading", K(ret));
+    }
   } else if (OB_FAIL(ivf_task_exec_.check_and_set_thread_pool())) {
     LOG_WARN("fail to check and open thread pool", K(ret));
   } else if (OB_FAIL(ivf_task_exec_.clear_old_task_ctx_if_need())) {
