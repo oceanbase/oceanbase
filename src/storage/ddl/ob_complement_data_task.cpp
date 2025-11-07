@@ -1180,7 +1180,7 @@ int ObComplementWriteTask::get_next_chunk(ObChunk *&next_chunk)
   if (OB_ISNULL(context_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("complement context is null", K(ret), KP(context_));
-  } else if (context_->is_major_sstable_exist_) {
+  } else if (context_->is_major_sstable_exist_ || OB_SUCCESS != (context_->complement_data_ret_)) {
     ret = OB_ITER_END;
   } else if (OB_ISNULL(scan_)) {
     ret = OB_ERR_SYS;
