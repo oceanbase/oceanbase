@@ -1600,9 +1600,7 @@ int ObArrayExprUtils::deduce_array_type(ObExecContext *exec_ctx, ObExprResType &
     uint16_t child_subschema_id;
     ObExprResType child_type;
     ObExprResType coll_calc_type;
-    if (type2.get_subschema_id() == type1.get_subschema_id()) {
-      subschema_id = type1.get_subschema_id();
-    } else if (OB_FAIL(ObArrayExprUtils::get_coll_type_by_subschema_id(exec_ctx, type2.get_subschema_id(), type2_coll_type))) {
+    if (OB_FAIL(ObArrayExprUtils::get_coll_type_by_subschema_id(exec_ctx, type2.get_subschema_id(), type2_coll_type))) {
       LOG_WARN("failed to get array type by subschema id", K(ret), K(type1.get_subschema_id()));
     } else if (type2_coll_type->type_id_ != ObNestedType::OB_ARRAY_TYPE && type2_coll_type->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
