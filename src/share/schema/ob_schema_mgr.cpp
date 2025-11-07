@@ -508,6 +508,7 @@ ObSchemaMgr::ObSchemaMgr()
       rls_context_mgr_(allocator_),
       catalog_mgr_(allocator_),
       ccl_rule_mgr_(allocator_),
+      sensitive_rule_mgr_(allocator_),
       timestamp_in_slot_(0),
       allocator_idx_(OB_INVALID_INDEX),
       mlog_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_MLOG_INFO_VEC, ObCtxIds::SCHEMA_SERVICE)),
@@ -569,6 +570,7 @@ ObSchemaMgr::ObSchemaMgr(ObIAllocator &allocator)
       rls_context_mgr_(allocator_),
       catalog_mgr_(allocator_),
       ccl_rule_mgr_(allocator_),
+      sensitive_rule_mgr_(allocator_),
       timestamp_in_slot_(0),
       allocator_idx_(OB_INVALID_INDEX),
       mlog_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_MLOG_INFO_VEC, ObCtxIds::SCHEMA_SERVICE)),
@@ -648,6 +650,8 @@ int ObSchemaMgr::init(const uint64_t tenant_id)
     LOG_WARN("init rls_context mgr failed", K(ret));
   } else if (OB_FAIL(catalog_mgr_.init())) {
     LOG_WARN("init catalog mgr failed", K(ret));
+  } else if (OB_FAIL(sensitive_rule_mgr_.init())) {
+    LOG_WARN("init sensitive_rule mgr failed", K(ret));
   } else if (OB_FAIL(hidden_table_name_map_.init())) {
     LOG_WARN("init hidden table name map failed", K(ret));
   } else if (OB_FAIL(built_in_index_name_map_.init())) {
@@ -726,6 +730,7 @@ void ObSchemaMgr::reset()
     rls_context_mgr_.reset();
     catalog_mgr_.reset();
     ccl_rule_mgr_.reset();
+    sensitive_rule_mgr_.reset();
     tenant_id_ = OB_INVALID_TENANT_ID;
     hidden_table_name_map_.clear();
     built_in_index_name_map_.clear();
@@ -857,6 +862,8 @@ int ObSchemaMgr::assign(const ObSchemaMgr &other)
         LOG_WARN("assign ai_model_mgr_ failed", K(ret));
       } else if (OB_FAIL(ccl_rule_mgr_.assign(other.ccl_rule_mgr_))) {
         LOG_WARN("assign ccl_rule mgr failed", K(ret));
+      } else if (OB_FAIL(sensitive_rule_mgr_.assign(other.sensitive_rule_mgr_))) {
+        LOG_WARN("assign sensitive_rule mgr failed", K(ret));
       }
     }
   }
@@ -964,6 +971,8 @@ int ObSchemaMgr::deep_copy(const ObSchemaMgr &other)
         LOG_WARN("deep copy ai_model mgr failed", K(ret));
       } else if (OB_FAIL(ccl_rule_mgr_.deep_copy(other.ccl_rule_mgr_))) {
         LOG_WARN("deep copy ccl_rule mgr failed", K(ret));
+      } else if (OB_FAIL(sensitive_rule_mgr_.deep_copy(other.sensitive_rule_mgr_))) {
+        LOG_WARN("deep copy sensitive_rule mgr failed", K(ret));
       }
     }
     if (OB_SUCC(ret)) {
@@ -4673,6 +4682,8 @@ int ObSchemaMgr::del_schemas_in_tenant(const uint64_t tenant_id)
         LOG_WARN("del ai_model in tenant failed", K(ret), K(tenant_id));
       } else if (OB_FAIL(ccl_rule_mgr_.del_schemas_in_tenant(tenant_id))) {
         LOG_WARN("del ccl_rule in tenant failed", K(ret), K(tenant_id));
+      } else if (OB_FAIL(sensitive_rule_mgr_.del_schemas_in_tenant(tenant_id))) {
+        LOG_WARN("del sensitive_rule in tenant failed", K(ret), K(tenant_id));
       }
     }
   }
@@ -4722,6 +4733,7 @@ int ObSchemaMgr::get_schema_count(int64_t &schema_count) const
     int64_t external_resource_schema_count = 0;
     int64_t ai_model_schema_count = 0;
     int64_t ccl_rule_schema_count = 0;
+    int64_t sensitive_rule_schema_count = 0;
     if (OB_FAIL(outline_mgr_.get_outline_schema_count(outline_schema_count))) {
       LOG_WARN("get_outline_schema_count failed", K(ret));
     } else if (OB_FAIL(routine_mgr_.get_routine_schema_count(routine_schema_count))) {
@@ -4782,6 +4794,8 @@ int ObSchemaMgr::get_schema_count(int64_t &schema_count) const
       LOG_WARN("get ai_model schema count failed", K(ret));
     } else if (OB_FAIL(ccl_rule_mgr_.get_schema_count(ccl_rule_schema_count))) {
       LOG_WARN("get ccl_rule schema count failed", K(ret));
+    } else if (OB_FAIL(sensitive_rule_mgr_.get_schema_count(sensitive_rule_schema_count))) {
+      LOG_WARN("get sensitive_rule schema count failed", K(ret));
     } else {
       schema_count += (outline_schema_count + routine_schema_count + priv_schema_count
                        + synonym_schema_count + package_schema_count
@@ -4801,6 +4815,7 @@ int ObSchemaMgr::get_schema_count(int64_t &schema_count) const
                        + rls_context_schema_count
                        + catalog_schema_count
                        + ccl_rule_schema_count
+                       + sensitive_rule_schema_count
                        + sys_variable_schema_count
                        + context_schema_count
                        + mock_fk_parent_table_schema_count
@@ -5594,6 +5609,14 @@ int ObSchemaMgr::get_schema_statistics(common::ObIArray<ObSchemaStatisticsInfo> 
     LOG_WARN("fail to push back schema statistics", K(ret), K(schema_info));
   } else if (OB_FAIL(ccl_rule_mgr_.get_schema_statistics(schema_info))) {
     LOG_WARN("fail to get ccl_rule statistics", K(ret));
+  } else if (OB_FAIL(schema_infos.push_back(schema_info))) {
+    LOG_WARN("fail to push back schema statistics", K(ret), K(schema_info));
+  } else if (OB_FAIL(sensitive_rule_mgr_.get_schema_statistics(schema_info))) {
+    LOG_WARN("fail to get sensitive_rule statistics", K(ret));
+  } else if (OB_FAIL(schema_infos.push_back(schema_info))) {
+    LOG_WARN("fail to push back schema statistics", K(ret), K(schema_info));
+  } else if (OB_FAIL(sensitive_rule_mgr_.get_schema_statistics(schema_info))) {
+    LOG_WARN("fail to get sensitive_rule statistics", K(ret));
   } else if (OB_FAIL(schema_infos.push_back(schema_info))) {
     LOG_WARN("fail to push back schema statistics", K(ret), K(schema_info));
   } else if (OB_FAIL(external_resource_mgr_.get_schema_statistics(schema_info))) {

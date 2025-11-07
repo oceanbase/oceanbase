@@ -406,6 +406,10 @@ public:
             // ccl
             || stmt_type == stmt::T_CREATE_CCL_RULE
             || stmt_type == stmt::T_DROP_CCL_RULE
+            // sensitive rule
+            || stmt_type == stmt::T_CREATE_SENSITIVE_RULE
+            || stmt_type == stmt::T_DROP_SENSITIVE_RULE
+            || stmt_type == stmt::T_ALTER_SENSITIVE_RULE
             );
   }
 

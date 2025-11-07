@@ -5634,6 +5634,18 @@ OB_SERIALIZE_MEMBER((ObRevokeCatalogArg, ObDDLArg),
                     catalog_,
                     priv_set_);
 
+bool ObRevokeSensitiveRuleArg::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_ && OB_INVALID_ID != user_id_
+      && !sensitive_rule_.empty();
+}
+
+OB_SERIALIZE_MEMBER((ObRevokeSensitiveRuleArg, ObDDLArg),
+                     tenant_id_,
+                     user_id_,
+                     sensitive_rule_,
+                     priv_set_);
+
 bool ObRevokeDBArg::is_valid() const
 {
   return OB_INVALID_ID != tenant_id_ && OB_INVALID_ID != user_id_
@@ -14663,6 +14675,11 @@ int ObCreateTableGroupRes::assign(const ObCreateTableGroupRes &other)
 }
 
 OB_SERIALIZE_MEMBER((ObCreateTableGroupRes, ObParallelDDLRes), tablegroup_id_);
+
+OB_SERIALIZE_MEMBER((ObSensitiveRuleDDLArg, ObDDLArg),
+                     ddl_type_,
+                     schema_,
+                     user_id_);
 
 }//end namespace obrpc
 }//end namespace oceanbase

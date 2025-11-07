@@ -72,23 +72,20 @@ int ObExprEnhancedAes::eval_param(const ObExpr &expr,
   int ret = OB_SUCCESS;
   bool is_ecb = false;
   ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  op_mode = static_cast<ObCipherOpMode>(expr.extra_);
+  bool is_for_sensitive_rule = (ObCipherOpMode::ob_invalid_mode != op_mode);
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null session", K(ret));
-  } else if (OB_FAIL(ObEncryptionUtil::get_cipher_op_mode(op_mode, session))) {
+  } else if (!is_for_sensitive_rule && OB_FAIL(ObEncryptionUtil::get_cipher_op_mode(op_mode, session))) {
     LOG_WARN("failed to get cipher op mode", K(ret));
-  } else if (!ObEncryptionUtil::is_aes_encryption(op_mode)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "using aes_encrypt with non-aes block_encryption_mode");
   } else if (FALSE_IT(is_ecb = ObEncryptionUtil::is_ecb_mode(op_mode))) {
-  } else if (OB_UNLIKELY(!is_ecb && 2 != expr.arg_cnt_)) {  // non-ecb mode requires iv param
+  } else if (OB_UNLIKELY(!is_for_sensitive_rule && !is_ecb && 2 != expr.arg_cnt_)) {
     ret = OB_ERR_PARAM_SIZE;
     LOG_USER_ERROR(OB_ERR_PARAM_SIZE, func_name.length(), func_name.ptr());
   } else if (OB_UNLIKELY(1 != expr.arg_cnt_ && 2 != expr.arg_cnt_)) {
     ret = OB_ERR_PARAM_SIZE;
     LOG_USER_ERROR(OB_ERR_PARAM_SIZE, func_name.length(), func_name.ptr());
-  }
-  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(expr.eval_param_value(ctx, src))) {
     LOG_WARN("failed to eval param value", K(ret));
   } else if (OB_ISNULL(src)) {
@@ -98,6 +95,8 @@ int ObExprEnhancedAes::eval_param(const ObExpr &expr,
     if (OB_UNLIKELY(2 == expr.arg_cnt_)) {
       LOG_USER_WARN(OB_ERR_INVALID_INPUT_STRING, "iv"); // warn user but not set error
     }
+  } else if (is_for_sensitive_rule) {
+    // for sensitive rule, the iv will be generated in eval_aes_encrypt
   } else if (FALSE_IT(iv_str = expr.locate_param_datum(ctx, 1).get_string())){
   } else if (OB_UNLIKELY(iv_str.length() < ObBlockCipher::OB_DEFAULT_IV_LENGTH)) {
     ret = OB_ERR_AES_IV_LENGTH;
@@ -112,14 +111,17 @@ int ObExprEnhancedAes::eval_param(const ObExpr &expr,
 int ObExprEnhancedAesEncrypt::eval_aes_encrypt(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
   ObString func_name(strlen(N_ENHANCED_AES_ENCRYPT), N_ENHANCED_AES_ENCRYPT);
-  ObCipherOpMode op_mode = ObCipherOpMode::ob_invalid_mode;
+  bool is_for_sensitive_rule = (ObCipherOpMode::ob_invalid_mode != static_cast<ObCipherOpMode>(expr.extra_));
+  // params
   ObDatum *src = NULL;
   ObString iv_str;
-  ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
-  char master_key[OB_MAX_MASTER_KEY_LENGTH];
+  ObCipherOpMode op_mode = ObCipherOpMode::ob_invalid_mode;
+  // master key
   int64_t master_key_len = 0;
   uint64_t master_key_id = 0;
+  char master_key[OB_MAX_MASTER_KEY_LENGTH];
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null session", K(ret));
@@ -135,29 +137,52 @@ int ObExprEnhancedAesEncrypt::eval_aes_encrypt(const ObExpr &expr, ObEvalCtx &ct
     LOG_WARN("failed to get active master key", K(ret));
   } else {
     const ObString &src_str = expr.locate_param_datum(ctx, 0).get_string();
-    char *buf = NULL;
-    const int64_t buf_len = MAX(1, ObBlockCipher::get_ciphertext_length(op_mode, src_str.length()));
+    char *buf = NULL; // stores the ciphertext
+    int64_t buf_len = 0;
     int64_t enc_len = 0;
     ObEvalCtx::TempAllocGuard alloc_guard(ctx);
-    if (OB_ISNULL(buf = static_cast<char *>(alloc_guard.get_allocator().alloc(buf_len)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory", K(ret), K(buf_len));
-    } else if (OB_FAIL(ObBlockCipher::encrypt(master_key, master_key_len,
-                                              src_str.ptr(), src_str.length(), buf_len,
-                                              iv_str.ptr(), iv_str.length(),
-                                              NULL, 0, 0,
-                                              op_mode, buf, enc_len, NULL))) {
-      LOG_WARN("failed to encrypt", K(ret));
-    } else {
+    if (!is_for_sensitive_rule) {
+      // not sensitive rule scenario, encrypt data with ObBlockCipher::encrypt
+      // - the master key id will be stored in front of the ciphertext for decryption
+      // - the iv will not be stored in the ciphertext, the user should provide it for decryption
+      // - DOES NOT support gcm algorithm for now
       ObExprStrResAlloc res_alloc(expr, ctx);
       char *res_buf = NULL;
-      if (OB_ISNULL(res_buf = static_cast<char *>(res_alloc.alloc(enc_len + KEY_ID_LENGTH)))) {
+      // MAX(1, ...) is to avoid the case that the ciphertext length is 0
+      buf_len = MAX(1, ObBlockCipher::get_ciphertext_length(op_mode, src_str.length()));
+      if (OB_ISNULL(buf = static_cast<char *>(alloc_guard.get_allocator().alloc(buf_len)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory", K(ret), K(buf_len));
+      } else if (OB_FAIL(ObBlockCipher::encrypt(master_key, master_key_len,
+                                                src_str.ptr(), src_str.length(), buf_len,
+                                                iv_str.ptr(), iv_str.length(),
+                                                NULL, 0, 0,
+                                                op_mode, buf, enc_len, NULL))) {
+        LOG_WARN("failed to encrypt", K(ret));
+      // store master key id ahead of ciphertext
+      } else if (OB_ISNULL(res_buf = static_cast<char *>(res_alloc.alloc(KEY_ID_LENGTH + enc_len)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memory", K(ret), K(enc_len));
       } else {
-        MEMCPY(res_buf, &master_key_id, KEY_ID_LENGTH); // store master key id ahead of data
+        MEMCPY(res_buf, &master_key_id, KEY_ID_LENGTH);
         MEMCPY(res_buf + KEY_ID_LENGTH, buf, enc_len);
         res.set_string(res_buf, enc_len + KEY_ID_LENGTH);
+      }
+    } else {
+      // sensitive rule scenario, encrypt data with ObEncryptionUtil::encrypt_data
+      // - the master key id will NOT be stored in the ciphertext
+      // - the iv (and tag str if exists) will be stored in the ciphertext
+      // - support gcm algorithm
+      buf_len = MAX(1, ObEncryptionUtil::encrypted_length(op_mode, src_str.length()));
+      if (OB_ISNULL(buf = static_cast<char *>(alloc_guard.get_allocator().alloc(buf_len)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory", K(ret), K(buf_len));
+      } else if (OB_FAIL(ObEncryptionUtil::encrypt_data(master_key, master_key_len, op_mode,
+                                                        src_str.ptr(), src_str.length(),
+                                                        buf, buf_len, enc_len))) {
+        LOG_WARN("failed to encrypt", K(ret));
+      } else {
+        res.set_string(buf, enc_len);
       }
     }
   }
@@ -182,7 +207,15 @@ int ObExprEnhancedAesEncrypt::calc_result_typeN(ObExprResType &type,
 {
   int ret = OB_SUCCESS;
   ObCipherOpMode mode = ob_invalid_mode;
-  if (OB_FAIL(ObEncryptionUtil::get_cipher_op_mode(mode, type_ctx.get_session()))) {
+  if (NULL != type_ctx.get_raw_expr()) {
+    // the encryption mode is specified by a sensitive rule
+    uint64_t encryption_mode = type_ctx.get_raw_expr()->get_encryption_mode();
+    if (encryption_mode > 0 && encryption_mode < ObCipherOpMode::ob_max_mode) {
+      mode = static_cast<ObCipherOpMode>(encryption_mode);
+    }
+  }
+  if (mode == ob_invalid_mode
+      && OB_FAIL(ObEncryptionUtil::get_cipher_op_mode(mode, type_ctx.get_session()))) {
     LOG_WARN("failed to get cipher op mode", K(ret));
   } else if (OB_FAIL(ObExprEnhancedAes::calc_result_typeN(type, types, param_num, type_ctx))) {
     LOG_WARN("failed to calc aes encryption result type", K(ret));
@@ -202,6 +235,9 @@ int ObExprEnhancedAesEncrypt::cg_expr(ObExprCGCtx &expr_cg_ctx,
   UNUSED(raw_expr);
   int ret = OB_SUCCESS;
   rt_expr.eval_func_ = eval_aes_encrypt;
+  // if the encryption mode is set, it means this ENHANCED_AES_ENCRYPT expr
+  // was implicitly added by a sensitive rule
+  rt_expr.extra_ = raw_expr.get_encryption_mode();
   return ret;
 }
 

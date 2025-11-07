@@ -28,6 +28,7 @@
 #include "share/schema/ob_location_schema_struct.h"
 #include "share/schema/ob_objpriv_mysql_schema_struct.h"
 #include "share/schema/ob_ccl_schema_struct.h"
+#include "share/schema/ob_sensitive_rule_schema_struct.h"
 
 namespace oceanbase
 {
@@ -453,6 +454,7 @@ IS_DDL_TYPE(CATALOG, catalog)
 IS_DDL_TYPE(EXTERNAL_RESOURCE, external_resource)
 IS_DDL_TYPE(AI_MODEL, ai_model)
 IS_DDL_TYPE(CCL_RULE, ccl_rule)
+IS_DDL_TYPE(SENSITIVE_RULE, sensitive_rule)
 
 struct ObSchemaOperation
 {
@@ -506,6 +508,7 @@ public:
     uint64_t ccl_rule_id_;
     uint64_t external_resource_id_;
     uint64_t ai_model_id_;
+    uint64_t sensitive_rule_id_;
   };
   union {
     common::ObString table_name_;
@@ -520,6 +523,7 @@ public:
     common::ObString obj_name_;
     common::ObString external_resource_name_;
     common::ObString ai_model_name_;
+    common::ObString sensitive_rule_name_;
   };
   ObSchemaOperationType op_type_;
   common::ObString ddl_stmt_str_;
@@ -812,6 +816,7 @@ class ObCatalogSqlService;
 class ObExternalResourceSqlService;
 class ObAiModelSqlService;
 class ObCCLRuleSqlService;
+class ObSensitiveRuleSqlService;
 class ObSchemaService
 {
 public:
@@ -870,6 +875,7 @@ public:
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(Context, context);
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(Rls, rls);
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(Catalog, catalog);
+  DECLARE_GET_DDL_SQL_SERVICE_FUNC(SensitiveRule, sensitive_rule);
   //DECLARE_GET_DDL_SQL_SERVICE_FUNC(sys_priv, priv);
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(ExternalResource, external_resource);
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(AiModel, ai_model);
@@ -992,6 +998,7 @@ public:
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(database, ObSimpleDatabaseSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(tablegroup, ObSimpleTablegroupSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(catalog_priv, ObCatalogPriv);
+  GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(sensitive_rule_priv, ObSensitiveRulePriv);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(db_priv, ObDBPriv);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(table_priv, ObTablePriv);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(routine_priv, ObRoutinePriv);
@@ -1027,6 +1034,7 @@ public:
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(external_resource, ObSimpleExternalResourceSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(ai_model, ObAiModelSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(ccl_rule, ObSimpleCCLRuleSchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(sensitive_rule, ObSensitiveRuleSchema);
 
   //get tenant increment schema operation between (base_version, new_schema_version]
   virtual int get_increment_schema_operations(const ObRefreshSchemaStatus &schema_status,
@@ -1107,6 +1115,7 @@ public:
   virtual int fetch_new_external_resource_id(const uint64_t tenant_id, uint64_t &new_external_resource_id) = 0;
   virtual int fetch_new_ai_model_id(const uint64_t tenant_id, uint64_t &new_ai_model_id) = 0;
   virtual int fetch_new_ccl_rule_id(const uint64_t tenant_id, uint64_t &new_ccl_rule_id) = 0;
+  virtual int fetch_new_sensitive_rule_id(const uint64_t tenant_id, uint64_t &new_sensitive_rule_id) = 0;
 
 //------------------For managing privileges-----------------------------//
   #define GET_BATCH_SCHEMAS_WITH_ALLOCATOR_FUNC_DECLARE_PURE_VIRTUAL(SCHEMA, SCHEMA_TYPE)  \
@@ -1167,6 +1176,9 @@ public:
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(external_resource, ObSimpleExternalResourceSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(ai_model, ObAiModelSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(ccl_rule, ObSimpleCCLRuleSchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(sensitive_rule, ObSensitiveRuleSchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(sensitive_rule_priv, ObSensitiveRulePriv);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(sensitive_column, ObSensitiveColumnSchema);
 
 
   //--------------For manaing recyclebin -----//

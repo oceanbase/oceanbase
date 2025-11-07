@@ -406,6 +406,15 @@
 # 554: __all_external_resource
 # 555: __all_external_resource_history
 # 555: __all_external_resource  # BASE_TABLE_NAME
+# 556: __all_sensitive_rule
+# 557: __all_sensitive_rule_history
+# 557: __all_sensitive_rule  # BASE_TABLE_NAME
+# 558: __all_sensitive_column
+# 559: __all_sensitive_column_history
+# 559: __all_sensitive_column  # BASE_TABLE_NAME
+# 560: __all_sensitive_rule_privilege
+# 561: __all_sensitive_rule_privilege_history
+# 561: __all_sensitive_rule_privilege  # BASE_TABLE_NAME
 # 569: __all_tenant_ss_storage_stat
 # 570: __all_ai_model
 # 571: __all_ai_model_history
@@ -1304,6 +1313,21 @@
 # 12551: __all_virtual_logservice_cluster_info
 # 12552: __all_virtual_ss_gc_status
 # 12553: __all_virtual_ss_gc_detect_info
+# 12555: __all_virtual_sensitive_rule
+# 12555: __all_sensitive_rule  # BASE_TABLE_NAME
+# 12556: __all_virtual_sensitive_rule_history
+# 12556: __all_sensitive_rule  # BASE_TABLE_NAME
+# 12556: __all_sensitive_rule_history  # BASE_TABLE_NAME1
+# 12557: __all_virtual_sensitive_column
+# 12557: __all_sensitive_column  # BASE_TABLE_NAME
+# 12558: __all_virtual_sensitive_column_history
+# 12558: __all_sensitive_column  # BASE_TABLE_NAME
+# 12558: __all_sensitive_column_history  # BASE_TABLE_NAME1
+# 12559: __all_virtual_sensitive_rule_privilege
+# 12559: __all_sensitive_rule_privilege  # BASE_TABLE_NAME
+# 12560: __all_virtual_sensitive_rule_privilege_history
+# 12560: __all_sensitive_rule_privilege  # BASE_TABLE_NAME
+# 12560: __all_sensitive_rule_privilege_history  # BASE_TABLE_NAME1
 # 12569: __all_virtual_tenant_ss_storage_stat
 # 12569: __all_tenant_ss_storage_stat  # BASE_TABLE_NAME
 # 12570: __all_virtual_hms_client_pool_stat
@@ -2608,6 +2632,12 @@
 # 21660: V$OB_SS_SSTABLES
 # 21661: GV$OB_VECTOR_MEMORY
 # 21662: V$OB_VECTOR_MEMORY
+# 21663: DBA_OB_SENSITIVE_RULES
+# 21664: CDB_OB_SENSITIVE_RULES
+# 21665: DBA_OB_SENSITIVE_COLUMNS
+# 21666: CDB_OB_SENSITIVE_COLUMNS
+# 21667: DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS
+# 21668: CDB_OB_SENSITIVE_RULE_PLAINACCESS_USERS
 # 21681: GV$OB_HNSW_INDEX_INFO
 # 21682: V$OB_HNSW_INDEX_INFO
 # 21683: GV$OB_IVF_INDEX_INFO

@@ -86,7 +86,8 @@ public:
       common::ObString &table,
       share::schema::ObPrivLevel &grant_level,
       ObIAllocator &allocator,
-      common::ObString &catalog);
+      common::ObString &catalog,
+      common::ObString &sensitive_rule);
 
   static int resolve_priv_level_with_object_type(const ObSQLSessionInfo *session_info,
                                                  const ParseNode *priv_object_node,
@@ -99,6 +100,7 @@ public:
                                  common::ObString &db,
                                  common::ObString &table,
                                  common::ObString &catalog,
+                                 common::ObString &sensitive_rule,
                                  const uint64_t tenant_id,
                                  ObIAllocator *allocator,
                                  bool is_grant = true); // revoke on object which has been deleted
@@ -328,6 +330,14 @@ int ObGrantResolver::resolve_priv_set(
           } else {
             priv_set |= priv_type;
           }
+        } else if (OB_PRIV_SENSITIVE_RULE_LEVEL == grant_level) {
+          if (priv_type & (~(OB_PRIV_SENSITIVE_RULE_ACC | OB_PRIV_GRANT))) {
+            ret = OB_ILLEGAL_GRANT_FOR_TABLE;
+            SQL_RESV_LOG(WARN, "Grant/Revoke privilege than can not be used",
+                         "priv_type", ObPrintPrivSet(priv_type), K(ret));
+          } else {
+            priv_set |= priv_type;
+          }
         } else if (OB_PRIV_OBJECT_LEVEL == grant_level) {
           if (OB_PRIV_ALL == priv_type) {
             priv_set |= OB_PRIV_OBJECT_ACC;
@@ -357,6 +367,7 @@ int ObGrantResolver::resolve_priv_object(const ParseNode *priv_object_node,
                                          common::ObString &db,
                                          common::ObString &table,
                                          common::ObString &catalog,
+                                         common::ObString &sensitive_rule,
                                          const uint64_t tenant_id,
                                          ObIAllocator *allocator,
                                          bool is_grant)
@@ -411,6 +422,13 @@ int ObGrantResolver::resolve_priv_object(const ParseNode *priv_object_node,
       object_type = ObObjectType::LOCATION;
       if (OB_FAIL(schema_checker->get_location_id(tenant_id, table, object_id))) {
         LOG_WARN("failed to get location id", K(ret));
+      }
+    } else if (priv_object_node->value_ == 6) {
+      object_type = ObObjectType::SENSITIVE_RULE;
+      if (OB_FAIL(schema_checker->get_sensitive_rule_id_name(tenant_id, sensitive_rule, object_id, allocator, !is_grant))) {
+        LOG_WARN("failed to get sensitive rule id", K(ret));
+      } else {
+        grant_stmt->set_sensitive_rule_name(sensitive_rule);
       }
     }
   } else {

@@ -20,6 +20,7 @@
 #include "share/sequence/ob_sequence_ddl_proxy.h"
 #include "rootserver/ob_ddl_sql_generator.h"
 #include "rootserver/ob_root_service.h"
+#include "rootserver/ob_sensitive_rule_ddl_operator.h"
 #include "observer/ob_sql_client_decorator.h"
 #include "rootserver/ob_root_service.h"
 #include "rootserver/ob_tablet_drop.h"
@@ -5343,6 +5344,7 @@ int ObDDLOperator::drop_table_for_not_dropped_schema(
   int64_t new_schema_version = OB_INVALID_VERSION;
   ObSchemaService *schema_service_impl = schema_service_.get_schema_service();
   ObSchemaGetterGuard schema_guard;
+  ObSensitiveRuleDDLOperator sensitive_rule_ddl_operator(get_multi_schema_service(), get_sql_proxy());
   if (OB_ISNULL(schema_service_impl)) {
     ret = OB_ERR_SYS;
     LOG_ERROR("schema_service_impl must not null", K(ret));
@@ -5366,6 +5368,9 @@ int ObDDLOperator::drop_table_for_not_dropped_schema(
     LOG_WARN("drop sequence in drop table fail", K(ret));
   } else if (OB_FAIL(drop_rls_object_in_drop_table(table_schema, trans, schema_guard))) {
     LOG_WARN("fail to drop rls object in drop table", K(ret));
+  } else if (OB_FAIL(sensitive_rule_ddl_operator.drop_sensitive_column_in_drop_table(
+                                                   table_schema, trans, schema_guard))) {
+    LOG_WARN("fail to drop sensitive column in drop table", K(ret));
   } else if (OB_FAIL(schema_service_impl->get_table_sql_service().drop_table(
                      table_schema,
                      new_schema_version,
@@ -6693,7 +6698,8 @@ int ObDDLOperator::init_tenant_user(const uint64_t tenant_id,
     if ((!is_oracle_mode || is_user) &&
         pure_user_id != OB_ORA_LBACSYS_USER_ID &&
         pure_user_id != OB_ORA_AUDITOR_USER_ID) {
-      user.set_priv_set(OB_PRIV_ALL | OB_PRIV_GRANT | OB_PRIV_ENCRYPT | OB_PRIV_DECRYPT);
+      user.set_priv_set(OB_PRIV_ALL | OB_PRIV_GRANT | OB_PRIV_ENCRYPT | OB_PRIV_DECRYPT
+                        | OB_PRIV_CREATE_SENSITIVE_RULE | OB_PRIV_PLAINACCESS);
     }
     user.set_schema_version(OB_CORE_SCHEMA_VERSION);
     user.set_profile_id(OB_INVALID_ID);
@@ -7185,6 +7191,33 @@ int ObDDLOperator::drop_db_table_privs(
                                                                   new_schema_version,
                                                                   ddl_stmt_str, trans))) {
           LOG_WARN("apply catalog failed", K(ret));
+        }
+      }
+    }
+  }
+  // delete sensitive rule privileges of this user
+  if (OB_SUCC(ret)) {
+    ObArray<const ObSensitiveRulePriv *> sensitive_rule_privs;
+    if (OB_FAIL(schema_guard.get_sensitive_rule_priv_with_user_id(tenant_id, user_id, sensitive_rule_privs))) {
+      LOG_WARN("Get sensitive rule privileges of user to be deleted error",
+                K(tenant_id), K(user_id), K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < sensitive_rule_privs.count(); ++i) {
+        const ObSensitiveRulePriv *sensitive_rule_priv = sensitive_rule_privs.at(i);
+        int64_t new_schema_version = OB_INVALID_VERSION;
+        ObPrivSet empty_priv = 0;
+        ObString ddl_stmt_str;
+        if (OB_ISNULL(sensitive_rule_priv)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("db priv is NULL", K(ret), K(sensitive_rule_priv));
+        } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+          LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+        } else if (OB_FAIL(schema_sql_service->get_sensitive_rule_sql_service().grant_revoke_sensitive_rule(
+                                                                  sensitive_rule_priv->get_sort_key(),
+                                                                  empty_priv,
+                                                                  new_schema_version,
+                                                                  ddl_stmt_str, trans))) {
+          LOG_WARN("delete sensitive rule privilege failed", K(ret));
         }
       }
     }

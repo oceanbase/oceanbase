@@ -74,7 +74,8 @@ public:
         : (share::schema::OB_PRIV_ROUTINE_LEVEL == grant_level_ ?  static_cast<obrpc::ObDDLArg &>(routine_arg_)
         : (share::schema::OB_PRIV_CATALOG_LEVEL == grant_level_ ?  static_cast<obrpc::ObDDLArg &>(catalog_arg_)
         : (share::schema::OB_PRIV_OBJECT_LEVEL == grant_level_ ?  static_cast<obrpc::ObDDLArg &>(obj_mysql_arg_)
-        : static_cast<obrpc::ObDDLArg &>(syspriv_arg_))))));
+        : (share::schema::OB_PRIV_SENSITIVE_RULE_LEVEL == grant_level_ ? static_cast<obrpc::ObDDLArg &>(sensitive_rule_arg_)
+        : static_cast<obrpc::ObDDLArg &>(syspriv_arg_)))))));
   }
   int add_column_privs(const ObString& column_name,const ObPrivSet priv_set) { return column_names_priv_.push_back(std::make_pair(column_name, priv_set)); }
   const ObIArray<std::pair<ObString, ObPrivType>> &get_column_privs() const { return column_names_priv_; }
@@ -82,6 +83,8 @@ public:
   int64_t get_table_schema_version() { return table_schema_version_; }
   void set_catalog_name(const common::ObString &catalog_name) { catalog_arg_.catalog_ = catalog_name; }
   const common::ObString& get_catalog_name() const { return catalog_arg_.catalog_; }
+  void set_sensitive_rule_name(const common::ObString &sensitive_rule_name) { sensitive_rule_arg_.sensitive_rule_ = sensitive_rule_name; }
+  const common::ObString &get_sensitive_rule_name() const {return sensitive_rule_arg_.sensitive_rule_; }
 
   bool is_grant_stmt() const { return false; }
   DECLARE_VIRTUAL_TO_STRING;
@@ -113,6 +116,7 @@ private:
   ObSEArray<std::pair<ObString, ObPrivType>, 4, common::ModulePageAllocator, true> column_names_priv_;
   int64_t table_schema_version_;
   obrpc::ObRevokeCatalogArg catalog_arg_;
+  obrpc::ObRevokeSensitiveRuleArg sensitive_rule_arg_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRevokeStmt);
 };

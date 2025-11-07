@@ -12,7 +12,7 @@
 
 #define USING_LOG_PREFIX RS
 #include "rootserver/parallel_ddl/ob_drop_table_helper.h"
-
+#include "rootserver/ob_sensitive_rule_ddl_operator.h"
 #include "rootserver/ob_snapshot_info_manager.h"
 #include "rootserver/ob_tablet_drop.h"
 #include "share/external_table/ob_external_table_file_mgr.h"
@@ -20,6 +20,7 @@
 #include "share/ob_rpc_struct.h"
 #include "share/schema/ob_table_sql_service.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
+#include "share/schema/ob_sensitive_rule_schema_struct.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
 
 using namespace oceanbase::rootserver;
@@ -764,6 +765,11 @@ int ObDropTableHelper::lock_objects_by_id_()
           }
         }
 
+        // sensitive rules
+        if (FAILEDx(lock_sensitive_rules_by_id_(*table_schema))) {
+          LOG_WARN("fail to lock sensitive rules by id", KR(ret), KPC(table_schema));
+        }
+
         if (FAILEDx(dep_objs_before_lock_array.push_back(dep_objs_before_lock))) {
           LOG_WARN("fail to push back obj", KR(ret), K(dep_objs_before_lock));
         }
@@ -1182,6 +1188,15 @@ int ObDropTableHelper::calc_schema_version_cnt_for_table_(
       if (table_schema.has_tablet()) {
         schema_version_cnt_++;
       }
+
+      // sensitive rule
+      if (OB_SUCC(ret) && (table_schema.is_user_table() || table_schema.is_user_view())) {
+        ObArray<ObSensitiveRuleSchema *> sensitive_rules;
+        if (OB_FAIL(latest_schema_guard_.get_sensitive_rule_schemas_by_table(table_schema, sensitive_rules))) {
+          LOG_WARN("get sensitive rule schemas failed", KR(ret), K(table_schema));
+        }
+        schema_version_cnt_ += sensitive_rules.count();
+      }
     }
   }
 
@@ -1428,6 +1443,32 @@ int ObDropTableHelper::lock_audits_by_id_(const ObTableSchema &table_schema)
   return ret;
 }
 
+int ObDropTableHelper::lock_sensitive_rules_by_id_(const ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if ((table_schema.is_user_table() || table_schema.is_user_view())) {
+    const uint64_t table_id = table_schema.get_table_id();
+    ObArray<ObSensitiveRuleSchema *> sensitive_rules;
+    if (OB_FAIL(latest_schema_guard_.get_sensitive_rule_schemas_by_table(table_schema, sensitive_rules))) {
+      LOG_WARN("fail to get sensitive rule schemas by table", KR(ret), K(table_schema));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < sensitive_rules.count(); i++) {
+      ObSensitiveRuleSchema *sensitive_rule = sensitive_rules.at(i);
+      if (OB_ISNULL(sensitive_rule)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid sensitive rule", KR(ret), K(sensitive_rule));
+      } else if (OB_FAIL(add_lock_object_by_id_(sensitive_rules.at(i)->get_sensitive_rule_id(),
+                                                SENSITIVE_RULE_SCHEMA, EXCLUSIVE))) {
+        LOG_WARN("fail to lock sensitive rule id",
+                 KR(ret), K(sensitive_rules.at(i)->get_sensitive_rule_id()));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDropTableHelper::add_table_to_tablet_autoinc_cleaner_(const ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
@@ -1504,6 +1545,8 @@ int ObDropTableHelper::drop_table_(const ObTableSchema &table_schema, const ObSt
       LOG_WARN("fail to drop sequences", KR(ret), K_(tenant_id), K(table_schema));
     } else if (OB_FAIL(drop_rls_object_(table_schema))) {
       LOG_WARN("fail to drop rls object", KR(ret));
+    } else if (OB_FAIL(drop_sensitive_column_(table_schema))) {
+      LOG_WARN("fail to drop sensitive column", KR(ret));
     } else if (OB_FAIL(schema_service_impl->get_table_sql_service().drop_table(
                        table_schema,
                        new_schema_version,
@@ -1868,6 +1911,21 @@ int ObDropTableHelper::drop_rls_object_(const ObTableSchema &table_schema)
                          NULL/*table_schema*/))) {
         LOG_WARN("fail to drop rls context", KR(ret), KPC(context_schema));
       }
+    }
+  }
+  return ret;
+}
+
+int ObDropTableHelper::drop_sensitive_column_(const ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else {
+    ObSensitiveRuleDDLOperator sensitive_rule_ddl_operator(*schema_service_, *sql_proxy_);
+    if (OB_FAIL(sensitive_rule_ddl_operator.drop_sensitive_column_in_drop_table(table_schema, get_trans_(),
+                                                                                latest_schema_guard_))) {
+      LOG_WARN("fail to drop sensitive column in drop table", KR(ret), K(table_schema));
     }
   }
   return ret;

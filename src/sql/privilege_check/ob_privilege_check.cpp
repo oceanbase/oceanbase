@@ -46,6 +46,7 @@
 #include "sql/resolver/ddl/ob_lock_table_stmt.h"
 #include "sql/resolver/ddl/ob_alter_routine_stmt.h"
 #include "sql/resolver/ddl/ob_drop_routine_stmt.h"
+#include "sql/resolver/ddl/ob_sensitive_rule_stmt.h"
 #include "sql/resolver/ddl/ob_trigger_stmt.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
 #include "sql/resolver/dml/ob_insert_all_stmt.h"
@@ -388,9 +389,46 @@ int add_col_id_array_to_need_priv(
   return ret;
 }
 
+#ifdef OB_BUILD_TDE_SECURITY
+int add_plainaccess_priv_to_need_priv(const uint64_t tenant_id,
+                                      const uint64_t table_id,
+                                      const uint64_t column_id,
+                                      ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  const ObSensitiveRuleSchema *sensitive_rule = NULL;
+  ObSchemaGetterGuard schema_guard;
+  CK (GCTX.schema_service_ != NULL);
+  OZ (GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard));
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(schema_guard.get_sensitive_rule_schema_by_column(tenant_id,
+                                                                      table_id,
+                                                                      column_id,
+                                                                      sensitive_rule))) {
+    LOG_WARN("failed to get sensitive rule schema by column", K(ret));
+  } else if (NULL != sensitive_rule && sensitive_rule->get_enabled()) {
+    ObNeedPriv plainaccess_priv;
+    plainaccess_priv.priv_level_ = OB_PRIV_SENSITIVE_RULE_LEVEL;
+    plainaccess_priv.sensitive_rule_ = sensitive_rule->get_sensitive_rule_name();
+    plainaccess_priv.priv_set_ = OB_PRIV_PLAINACCESS;
+    ADD_NEED_PRIV(plainaccess_priv);
+  }
+  return ret;
+}
+#else
+int add_plainaccess_priv_to_need_priv(const uint64_t tenant_id,
+                                      const uint64_t table_id,
+                                      const uint64_t column_id,
+                                      ObIArray<ObNeedPriv> &need_privs)
+{
+  return OB_SUCCESS;
+}
+#endif // OB_BUILD_TDE_SECURITY
+
 int add_col_priv_to_need_priv(
     const ObStmt *basic_stmt,
     const TableItem &table_item,
+    const ObSessionPrivInfo &session_priv,
     ObIArray<ObNeedPriv> &need_privs)
 {
   int ret = OB_SUCCESS;
@@ -414,7 +452,8 @@ int add_col_priv_to_need_priv(
   visitor.remove_scope(SCOPE_DMLINFOS);
   ObSEArray<ObRawExpr *, 4> col_exprs;
   bool has_dml_info = false;
-  if (OB_ISNULL(basic_stmt)) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(basic_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("basic_stmt is NULL", K(ret));
   } else if (basic_stmt->is_dml_write_stmt() &&
@@ -453,6 +492,10 @@ int add_col_priv_to_need_priv(
             } else if (table_id == value_desc->get_table_id()
                       && value_desc->get_column_id() >= OB_APP_MIN_COLUMN_ID) {
               OZ (need_priv.columns_.push_back(value_desc->get_column_name()));
+              OZ (add_plainaccess_priv_to_need_priv(session_priv.tenant_id_,
+                                                    table_item.ref_id_,
+                                                    value_desc->get_column_id(),
+                                                    need_privs));
             }
           }
           if (OB_SUCC(ret)) {
@@ -476,6 +519,10 @@ int add_col_priv_to_need_priv(
                 } else if (col_expr->get_table_id() == table_id
                         && col_expr->get_column_id() >= OB_APP_MIN_COLUMN_ID) {
                   OZ (need_priv.columns_.push_back(col_expr->get_column_name()));
+                  OZ (add_plainaccess_priv_to_need_priv(session_priv.tenant_id_,
+                                                        table_item.ref_id_,
+                                                        col_expr->get_column_id(),
+                                                        need_privs));
                 }
               }
             }
@@ -519,6 +566,10 @@ int add_col_priv_to_need_priv(
                   } else if (col_expr->get_table_id() == table_id
                           && col_expr->get_column_id() >= OB_APP_MIN_COLUMN_ID) {
                     OZ (need_priv.columns_.push_back(col_expr->get_column_name()));
+                    OZ (add_plainaccess_priv_to_need_priv(session_priv.tenant_id_,
+                                                          table_info->ref_table_id_,
+                                                          col_expr->get_column_id(),
+                                                          need_privs));
                   } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(value_expr, col_exprs))) {
                     LOG_WARN("extract column exprs failed", K(ret));
                   }
@@ -557,6 +608,14 @@ int add_col_priv_to_need_priv(
             LOG_WARN("unexpected error", K(ret));
           } else if (col_expr->get_table_id() == table_id && col_expr->get_column_id() >= OB_APP_MIN_COLUMN_ID) {
             OZ (need_priv.columns_.push_back(col_expr->get_column_name()));
+            if (ObStmt::is_dml_stmt(basic_stmt->get_stmt_type())
+                && (basic_stmt->get_stmt_type() != stmt::T_DELETE)
+                && (basic_stmt->get_stmt_type() != stmt::T_SELECT)
+                && (basic_stmt->get_stmt_type() != stmt::T_EXPLAIN)) {
+              // need plainaccess privilege for dml stmts except for delete
+              OZ (add_plainaccess_priv_to_need_priv(session_priv.tenant_id_, table_item.ref_id_,
+                col_expr->get_column_id(), need_privs));
+            }
           }
         }
       }
@@ -1215,7 +1274,10 @@ int check_encrypt_priv_for_expr(const ObRawExpr *expr,
   }
   if (OB_FAIL(ret)) {
   } else {
-    need_encrypt_priv |= T_FUN_SYS_ENHANCED_AES_ENCRYPT == expr->get_expr_type();
+    // expr with a valid encryption_mode_ is implicitly created by a sensitive rule.
+    // Do not check encryption privilege for such expr.
+    need_encrypt_priv |= (T_FUN_SYS_ENHANCED_AES_ENCRYPT == expr->get_expr_type()
+                          && expr->get_encryption_mode() == ob_invalid_mode);
     need_decrypt_priv |= T_FUN_SYS_ENHANCED_AES_DECRYPT == expr->get_expr_type();
   }
   return ret;
@@ -1444,7 +1506,7 @@ int get_dml_stmt_need_privs(
             }
             if (OB_SUCC(ret)) {
               if (lib::is_mysql_mode()) {
-                if (OB_FAIL(add_col_priv_to_need_priv(basic_stmt, *table_item, need_privs))) {
+                if (OB_FAIL(add_col_priv_to_need_priv(basic_stmt, *table_item, session_priv, need_privs))) {
                   LOG_WARN("add col id array to need priv failed", K(ret));
                 }
               } else {
@@ -2223,6 +2285,7 @@ int get_grant_stmt_need_privs(
       need_priv.priv_set_ = stmt->get_priv_set() | OB_PRIV_GRANT;
       need_priv.priv_level_ = stmt->get_grant_level();
       need_priv.obj_type_ = stmt->get_object_type();
+      need_priv.sensitive_rule_ = stmt->get_sensitive_rule_name();
       ADD_NEED_PRIV(need_priv);
       #define DEF_COLUM_NEED_PRIV(priv_prefix, priv_type) \
         ObNeedPriv priv_prefix##_need_priv;  \
@@ -2328,6 +2391,7 @@ int get_revoke_stmt_need_privs(
     } else if (lib::is_mysql_mode() && stmt->get_revoke_all()) {
       //check privs at resolver
     } else {
+      need_priv.sensitive_rule_ = stmt->get_sensitive_rule_name();
       need_priv.catalog_ = stmt->get_catalog_name();
       need_priv.db_ = stmt->get_database_name();
       need_priv.table_ = stmt->get_table_name();
@@ -2574,6 +2638,53 @@ int get_location_util_privs(const ObSessionPrivInfo &session_priv,
         tmp_need_priv.priv_set_ = OB_PRIV_WRITE;
         tmp_need_priv.obj_type_ = ObObjectType::LOCATION;
         ADD_NEED_PRIV(tmp_need_priv);
+        break;
+      }
+      default: {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("Stmt type not in types dealt in this function", K(ret), K(stmt_type));
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
+int get_sensitive_rule_need_privs(
+    const ObSessionPrivInfo &session_priv,
+    const ObStmt *basic_stmt,
+    ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(basic_stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Basic stmt should be not be NULL", K(ret));
+  } else if (lib::is_oracle_mode()) {
+    ret = no_priv_needed(session_priv, basic_stmt, need_privs);
+  } else {
+    ObNeedPriv need_priv;
+    stmt::StmtType stmt_type = basic_stmt->get_stmt_type();
+    const ObSensitiveRuleStmt *sensitive_rule_stmt = NULL;
+    switch (stmt_type) {
+      case stmt::T_CREATE_SENSITIVE_RULE:
+      case stmt::T_ALTER_SENSITIVE_RULE:
+      case stmt::T_DROP_SENSITIVE_RULE: {
+        need_priv.priv_set_ = OB_PRIV_CREATE_SENSITIVE_RULE;
+        need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
+        ADD_NEED_PRIV(need_priv);
+        sensitive_rule_stmt = static_cast<const ObSensitiveRuleStmt *>(basic_stmt);
+        need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
+        need_priv.priv_set_ = OB_PRIV_COLUMN_ACC;
+        for (int64_t i = 0; OB_SUCC(ret) && i < sensitive_rule_stmt->get_sensitive_field_item_names().count(); ++i) {
+          ObSensitiveFieldItemWithName field_item = sensitive_rule_stmt->get_sensitive_field_item_names().at(i);
+          need_priv.db_ = field_item.db_name_;
+          need_priv.table_ = field_item.table_name_;
+          if (OB_FAIL(need_priv.columns_.assign(field_item.column_names_))) {
+            LOG_WARN("Failed to assign columns", K(ret));
+          } else {
+            ADD_NEED_PRIV(need_priv);
+          }
+        }
         break;
       }
       default: {
@@ -4714,6 +4825,43 @@ int ObPrivilegeCheck::get_priv_need_check(const ObSessionPrivInfo &session_priv,
   if (OB_FAIL(ObCompatControl::check_feature_enable(session_priv.security_version_,
                                                     feature_type, need_check))) {
     LOG_WARN("failed to check feature enable", K(ret), K(feature_type));
+  }
+  return ret;
+}
+
+int ObPrivilegeCheck::check_sensitive_rule_plainaccess_priv(const share::schema::ObSensitiveRuleSchema *rule_schema,
+                                                            sql::ObSQLSessionInfo &session_info,
+                                                            share::schema::ObStmtNeedPrivs &stmt_need_privs)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = session_info.get_effective_tenant_id();
+  uint64_t user_id = session_info.get_user_id();
+  common::ObSEArray<ObNeedPriv, 1> need_privs;
+
+  ObNeedPriv need_priv;
+  if (OB_ISNULL(rule_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(rule_schema));
+  } else if (NULL == session_info.get_cur_exec_ctx()
+             || NULL == session_info.get_cur_exec_ctx()->get_sql_ctx()) {
+    // do nothing
+  } else {
+    need_priv.sensitive_rule_ = rule_schema->get_sensitive_rule_name();
+    need_priv.priv_level_ = OB_PRIV_SENSITIVE_RULE_LEVEL;
+    need_priv.priv_set_ = OB_PRIV_PLAINACCESS;
+    ADD_NEED_PRIV(need_priv);
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(stmt_need_privs.need_privs_.assign(need_privs))) {
+      LOG_WARN("fail to assign need privs", K(ret));
+    } else if (OB_FAIL(check_privilege(*session_info.get_cur_exec_ctx()->get_sql_ctx(), stmt_need_privs))) {
+      if (OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE == ret) {
+        // no plainaccess privilege
+        LOG_WARN("no plainaccess privilege", K(ret), K(tenant_id), K(user_id),
+                                             K(rule_schema->get_sensitive_rule_name()));
+      } else {
+        LOG_WARN("fail to check privilege", K(ret));
+      }
+    }
   }
   return ret;
 }

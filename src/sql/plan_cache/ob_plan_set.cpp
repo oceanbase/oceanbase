@@ -15,6 +15,7 @@
 #include "ob_plan_set.h"
 #include "sql/plan_cache/ob_pcv_set.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
+#include "sql/privilege_check/ob_privilege_check.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -417,6 +418,7 @@ int ObPlanSet::match_multi_stmt_info(const ParamStore &params,
   }
   return ret;
 }
+
 int ObPlanSet::match_priv_cons(ObPlanCacheCtx &pc_ctx, bool &is_matched)
 {
   int ret = OB_SUCCESS;
@@ -431,20 +433,51 @@ int ObPlanSet::match_priv_cons(ObPlanCacheCtx &pc_ctx, bool &is_matched)
   for (int64_t i = 0; OB_SUCC(ret) && is_matched && i < all_priv_constraints_.count(); ++i) {
     const ObPCPrivInfo &priv_info = all_priv_constraints_.at(i);
     bool has_priv = false;
-    if (OB_FAIL(ObOraSysChecker::check_ora_user_sys_priv(*schema_guard,
-                                                         session_info->get_effective_tenant_id(),
-                                                         session_info->get_priv_user_id(),
-                                                         session_info->get_database_name(),
-                                                         priv_info.sys_priv_,
-                                                         session_info->get_enable_role_array()))) {
-      if (OB_ERR_NO_PRIVILEGE == ret) {
-        ret = OB_SUCCESS;
-        LOG_DEBUG("lack sys privilege", "priv_type", all_priv_constraints_.at(i).sys_priv_);
+    if (lib::is_oracle_mode()) {
+      if (OB_FAIL(ObOraSysChecker::check_ora_user_sys_priv(*schema_guard,
+                                                           session_info->get_effective_tenant_id(),
+                                                           session_info->get_priv_user_id(),
+                                                           session_info->get_database_name(),
+                                                           priv_info.sys_priv_,
+                                                           session_info->get_enable_role_array()))) {
+        if (OB_ERR_NO_PRIVILEGE == ret) {
+          ret = OB_SUCCESS;
+          LOG_DEBUG("lack sys privilege", "priv_type", all_priv_constraints_.at(i).sys_priv_);
+        } else {
+          LOG_WARN("failed to check ora user sys priv", K(ret));
+        }
       } else {
-        LOG_WARN("failed to check ora user sys priv", K(ret));
+        has_priv = true;
       }
     } else {
-      has_priv = true;
+      if (!is_valid_id(priv_info.sensitive_rule_id_)) {
+        // only check sensitive rule for mysql mode
+        has_priv = true;
+      } else {
+        uint64_t tenant_id = session_info->get_effective_tenant_id();
+        ObStmtNeedPrivs stmt_need_privs(alloc_);
+        const share::schema::ObSensitiveRuleSchema *rule_schema = NULL;
+        if (OB_FAIL(schema_guard->get_sensitive_rule_schema_by_id(tenant_id,
+                                                                   priv_info.sensitive_rule_id_,
+                                                                   rule_schema))) {
+          LOG_WARN("fail to get sensitive rule schema", K(ret), K(tenant_id),
+                                                        K(priv_info.sensitive_rule_id_));
+        } else if (OB_ISNULL(rule_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("rule schema is null", K(ret));
+        } else if (OB_FAIL(ObPrivilegeCheck::check_sensitive_rule_plainaccess_priv(rule_schema,
+                                                                                   *session_info,
+                                                                                   stmt_need_privs))) {
+          if (OB_ERR_NO_PRIVILEGE == ret) {
+            ret = OB_SUCCESS;
+            LOG_DEBUG("lack plainaccess privilege", K(priv_info.sensitive_rule_id_));
+          } else {
+            LOG_WARN("failed to check plainaccess priv", K(ret));
+          }
+        } else {
+          has_priv = true;
+        }
+      }
     }
     if (OB_SUCC(ret)) {
       is_matched = priv_info.has_privilege_ == has_priv;
@@ -956,7 +989,8 @@ int ObPlanSet::set_priv_constraint(common::ObIArray<ObPCPrivInfo> &priv_constrai
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < priv_constraint.count(); ++i) {
     const ObPCPrivInfo &priv_info = priv_constraint.at(i);
-    if (OB_UNLIKELY(!(priv_info.sys_priv_ > PRIV_ID_NONE && priv_info.sys_priv_ < PRIV_ID_MAX))) {
+    if (OB_UNLIKELY(!(priv_info.sys_priv_ > PRIV_ID_NONE && priv_info.sys_priv_ < PRIV_ID_MAX)
+                    && priv_info.sensitive_rule_id_ == OB_INVALID_ID )) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid priv type", K(priv_info), K(ret));
     } else if (OB_FAIL(all_priv_constraints_.push_back(priv_info))) {

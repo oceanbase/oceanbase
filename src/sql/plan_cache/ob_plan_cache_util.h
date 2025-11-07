@@ -338,21 +338,25 @@ struct ObDupTabConstraint
 struct ObPCPrivInfo
 {
   share::ObRawPriv sys_priv_;
+  uint64_t sensitive_rule_id_;  // means plainaccess priv to specific sensitive rule
   bool has_privilege_;
-  TO_STRING_KV(K_(sys_priv), K_(has_privilege));
-  ObPCPrivInfo() : sys_priv_(PRIV_ID_NONE), has_privilege_(false)
+  TO_STRING_KV(K_(sys_priv), K_(sensitive_rule_id), K_(has_privilege));
+  ObPCPrivInfo() : sys_priv_(PRIV_ID_NONE), sensitive_rule_id_(OB_INVALID_ID), has_privilege_(false)
   {
   }
   int assign(const ObPCPrivInfo &other)
   {
     int ret = OB_SUCCESS;
     sys_priv_ = other.sys_priv_;
+    sensitive_rule_id_ = other.sensitive_rule_id_;
     has_privilege_ = other.has_privilege_;
     return ret;
   }
   inline bool operator==(const ObPCPrivInfo &other) const
   {
-    return sys_priv_ == other.sys_priv_ && has_privilege_ == other.has_privilege_;
+    return sys_priv_ == other.sys_priv_
+           && sensitive_rule_id_ == other.sensitive_rule_id_
+           && has_privilege_ == other.has_privilege_;
   }
 };
 

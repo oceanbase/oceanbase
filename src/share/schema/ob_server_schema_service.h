@@ -45,6 +45,7 @@
 #include "share/schema/ob_catalog_mgr.h"
 #include "share/schema/ob_ai_model_mgr.h"
 #include "share/schema/ob_ccl_rule_mgr.h"
+#include "share/schema/ob_sensitive_rule_mgr.h"
 
 namespace oceanbase
 {
@@ -115,6 +116,7 @@ struct SchemaKey
     uint64_t location_id_;
     uint64_t ai_model_id_;
     uint64_t ccl_rule_id_;
+    uint64_t sensitive_rule_id_;
   };
   union {
     common::ObString table_name_;
@@ -128,6 +130,7 @@ struct SchemaKey
     common::ObString catalog_name_;
     common::ObString obj_name_;
     common::ObString ai_model_name_;
+    common::ObString sensitive_rule_name_;
   };
   int64_t schema_version_;
   uint64_t col_id_;
@@ -182,7 +185,9 @@ struct SchemaKey
                K_(catalog_name),
                K_(external_resource_id),
                K_(ai_model_id),
-               K_(ccl_rule_id));
+               K_(ccl_rule_id),
+               K_(sensitive_rule_id),
+               K_(sensitive_rule_name));
 
   SchemaKey()
     : tenant_id_(common::OB_INVALID_ID),
@@ -373,6 +378,14 @@ struct SchemaKey
   {
     return ObTenantCCLRuleId(tenant_id_, ccl_rule_id_);
   }
+  ObTenantSensitiveRuleId get_sensitive_rule_key() const
+  {
+    return ObTenantSensitiveRuleId(tenant_id_, sensitive_rule_id_);
+  }
+  ObSensitiveRulePrivSortKey get_sensitive_rule_priv_key() const
+  {
+    return ObSensitiveRulePrivSortKey(tenant_id_, user_id_, sensitive_rule_name_);
+  }
 };
 
 struct VersionHisKey
@@ -522,6 +535,7 @@ public:
   SCHEMA_KEY_FUNC(external_resource);
   SCHEMA_KEY_FUNC(ai_model);
   SCHEMA_KEY_FUNC(ccl_rule);
+  SCHEMA_KEY_FUNC(sensitive_rule);
   #undef SCHEMA_KEY_FUNC
 
   struct udf_key_hash_func {
@@ -561,6 +575,34 @@ public:
       return a.tenant_id_ == b.tenant_id_ &&
           a.user_id_ == b.user_id_ &&
           a.catalog_name_ == b.catalog_name_;
+    }
+  };
+
+  struct sensitive_rule_priv_key_hash_func
+  {
+    int operator()(const SchemaKey &schema_key, uint64_t &hash_code) const
+    {
+      hash_code = 0;
+      hash_code = common::murmurhash(&schema_key.tenant_id_,
+                                     sizeof(schema_key.tenant_id_),
+                                     hash_code);
+      hash_code = common::murmurhash(&schema_key.user_id_,
+                                     sizeof(schema_key.user_id_),
+                                     hash_code);
+      hash_code = common::murmurhash(schema_key.sensitive_rule_name_.ptr(),
+                                     schema_key.sensitive_rule_name_.length(),
+                                     hash_code);
+      return OB_SUCCESS;
+    }
+  };
+
+  struct sensitive_rule_priv_key_equal_to
+  {
+    bool operator()(const SchemaKey &a, const SchemaKey &b) const
+    {
+      return a.tenant_id_ == b.tenant_id_
+             && a.user_id_ == b.user_id_
+             && a.sensitive_rule_name_ == b.sensitive_rule_name_;
     }
   };
 
@@ -871,6 +913,8 @@ public:
   SCHEMA_KEYS_DEF(external_resource, ExternalResourceKeys);
   SCHEMA_KEYS_DEF(ai_model, AiModelKeys);
   SCHEMA_KEYS_DEF(ccl_rule, CCLRuleKeys);
+  SCHEMA_KEYS_DEF(sensitive_rule, SensitiveRuleKeys);
+  SCHEMA_KEYS_DEF(sensitive_rule_priv, SensitiveRulePrivKeys);
 
   #undef SCHEMA_KEYS_DEF
   typedef common::hash::ObHashSet<SchemaKey, common::hash::NoPthreadDefendMode,
@@ -1029,6 +1073,12 @@ public:
     CCLRuleKeys new_ccl_rule_keys_;
     CCLRuleKeys del_ccl_rule_keys_;
 
+    // Sensitive Rule
+    SensitiveRuleKeys new_sensitive_rule_keys_;
+    SensitiveRuleKeys del_sensitive_rule_keys_;
+    SensitiveRulePrivKeys new_sensitive_rule_priv_keys_;
+    SensitiveRulePrivKeys del_sensitive_rule_priv_keys_;
+
     void reset();
     int create(int64_t bucket_size);
 
@@ -1083,6 +1133,8 @@ public:
     common::ObArray<ObRlsContextSchema> simple_rls_context_schemas_;
     common::ObArray<ObCatalogSchema> simple_catalog_schemas_;
     common::ObArray<ObSimpleCCLRuleSchema> simple_ccl_rule_schemas_;
+    common::ObArray<ObSensitiveRuleSchema> simple_sensitive_rule_schemas_;
+    common::ObArray<ObSensitiveRulePriv> simple_sensitive_rule_priv_schemas_;
     common::ObArray<ObTableSchema *> non_sys_tables_;
     common::ObArray<ObSimpleExternalResourceSchema> simple_external_resource_schemas_;
     common::ObArray<ObAiModelSchema> simple_ai_model_schemas_;
@@ -1255,6 +1307,8 @@ private:
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(external_resource);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(ai_model);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(ccl_rule);
+  GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(sensitive_rule);
+  GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(sensitive_rule_priv);
 #undef GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE
 
 
@@ -1306,6 +1360,9 @@ private:
   APPLY_SCHEMA_TO_CACHE(external_resource, ObExternalResourceMgr);
   APPLY_SCHEMA_TO_CACHE(ai_model, ObSchemaMgr);
   APPLY_SCHEMA_TO_CACHE(ccl_rule, ObSchemaMgr);
+  APPLY_SCHEMA_TO_CACHE(sensitive_rule, ObSensitiveRuleMgr);
+  APPLY_SCHEMA_TO_CACHE(sensitive_column, ObSensitiveRuleMgr);
+  APPLY_SCHEMA_TO_CACHE(sensitive_rule_priv, ObPrivMgr);
 #undef APPLY_SCHEMA_TO_CACHE
 
   // replay log

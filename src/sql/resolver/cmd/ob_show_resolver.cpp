@@ -183,7 +183,8 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
             && OB_UNLIKELY(parse_tree.type_ != T_SHOW_CREATE_CATALOG)
             && OB_UNLIKELY(parse_tree.type_ != T_SHOW_LOCATIONS)
             && OB_UNLIKELY(parse_tree.type_ != T_SHOW_CREATE_LOCATION)
-            && OB_UNLIKELY(parse_tree.type_ != T_LOCATION_UTILS_LIST)) {
+            && OB_UNLIKELY(parse_tree.type_ != T_LOCATION_UTILS_LIST)
+            && OB_UNLIKELY(parse_tree.type_ != T_SHOW_SENSITIVE_RULES)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected parse tree type", K(ret), K(parse_tree.type_));
   } else {
@@ -2119,6 +2120,140 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
         }
         break;
       }
+      case T_SHOW_SENSITIVE_RULES: {
+        show_resv_ctx.stmt_type_ = stmt::T_SHOW_SENSITIVE_RULES;
+        ParseNode *option_node = NULL;
+        uint64_t tenant_id = is_oracle_mode ? session_info_->get_effective_tenant_id() : sql_tenant_id;
+        uint64_t min_version = OB_INVALID_VERSION;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(real_tenant_id, min_version))) {
+            LOG_WARN("get min data_version failed", K(ret), K(real_tenant_id));
+        } else if (!((min_version >= MOCK_DATA_VERSION_4_3_5_3 && min_version < DATA_VERSION_4_4_0_0)
+                     || min_version >= DATA_VERSION_4_4_2_0)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "show sensitive rules");
+          LOG_WARN("not support to show sensitive rules", K(ret), K(real_tenant_id));
+        } else if (OB_UNLIKELY(parse_tree.num_child_ != 1)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("parse tree is wrong", K(ret), K(parse_tree.num_child_));
+        } else if (OB_ISNULL(option_node = parse_tree.children_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("parse tree is wrong", K(ret), K(parse_tree.num_child_));
+        } else if (OB_UNLIKELY(T_SHOW_SENSITIVE_RULES_OPTION != option_node->type_)
+                   || OB_UNLIKELY(3 != option_node->num_child_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("parse tree is wrong", K(ret), K(option_node->type_), K(option_node->num_child_));
+        } else {
+          ParseNode *from_relation_node = option_node->children_[0];
+          ParseNode *from_database_node = option_node->children_[1];
+          ParseNode *condition_node = option_node->children_[2];
+          show_resv_ctx.condition_node_ = condition_node;
+          bool show_from_table = false;
+          bool show_from_database = false;
+          uint64_t show_catalog_id = OB_INVALID_ID;
+          ObString show_db_name;
+          uint64_t show_db_id = OB_INVALID_ID;
+          ObString show_table_name;
+          uint64_t show_table_id = OB_INVALID_ID;
+          bool is_view;
+          if (OB_FAIL(ret)) {
+          } else if (NULL != from_relation_node) {  // show sensitive rule from table
+            show_from_table = true;
+            if (OB_FAIL(resolve_show_from_table(from_relation_node, from_database_node,
+                                                database_name.empty(), T_SHOW_SENSITIVE_RULES,
+                                                real_tenant_id, show_catalog_id, show_db_name,
+                                                show_db_id, show_table_name, show_table_id,
+                                                is_view, synonym_checker))) {
+              LOG_WARN("failed to resolve show from table", K(ret));
+            }
+          } else if (NULL != from_database_node) {  // show sensitive rule from DATABASE database
+            show_from_database = true;
+            if (OB_FAIL(resolve_show_from_database(*from_database_node,
+                                                   real_tenant_id,
+                                                   catalog_id,
+                                                   show_db_id,
+                                                   show_resv_ctx.show_database_name_))) {
+              LOG_WARN("fail to get database info", K(ret));
+            }
+          }
+
+          if (OB_FAIL(ret)) {
+          } else if (NULL != condition_node && T_LIKE_CLAUSE == condition_node->type_) {
+            if (OB_UNLIKELY(condition_node->num_child_ != 2 || NULL == condition_node->children_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid like parse node", K(ret),
+                                                  K(condition_node->num_child_),
+                                                  K(condition_node->children_));
+            } else if (OB_UNLIKELY(NULL == condition_node->children_[0]
+                                   || NULL == condition_node->children_[1])) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid like parse node", K(ret),
+                                                  K(condition_node->num_child_),
+                                                  K(condition_node->children_[0]),
+                                                  K(condition_node->children_[1]));
+
+            } else if (show_from_table) {
+              GEN_SQL_STEP_1(ObShowSqlSet::SHOW_SENSITIVE_RULES_FROM_TABLE_LIKE,
+                             static_cast<ObString::obstr_size_t>(condition_node->children_[0]->str_len_),
+                             condition_node->children_[0]->str_value_);
+              GEN_SQL_STEP_2(ObShowSqlSet::SHOW_SENSITIVE_RULES_FROM_TABLE_LIKE,
+                             OB_SYS_DATABASE_NAME, OB_ALL_SENSITIVE_RULE_TNAME,
+                             OB_SYS_DATABASE_NAME, OB_ALL_SENSITIVE_COLUMN_TNAME,
+                             OB_SYS_DATABASE_NAME, OB_ALL_TABLE_TNAME,
+                             OB_SYS_DATABASE_NAME, OB_ALL_COLUMN_TNAME,
+                             OB_SYS_DATABASE_NAME, OB_ALL_DATABASE_TNAME,
+                             show_table_id);
+            } else if (show_from_database) {
+              GEN_SQL_STEP_1(ObShowSqlSet::SHOW_SENSITIVE_RULES_FROM_DATABASE_LIKE,
+                             static_cast<ObString::obstr_size_t>(condition_node->children_[0]->str_len_),
+                             condition_node->children_[0]->str_value_);
+              GEN_SQL_STEP_2(ObShowSqlSet::SHOW_SENSITIVE_RULES_FROM_DATABASE_LIKE,
+                             OB_SYS_DATABASE_NAME, OB_ALL_SENSITIVE_RULE_TNAME,
+                             OB_SYS_DATABASE_NAME, OB_ALL_SENSITIVE_COLUMN_TNAME,
+                             OB_SYS_DATABASE_NAME, OB_ALL_TABLE_TNAME,
+                             OB_SYS_DATABASE_NAME, OB_ALL_COLUMN_TNAME,
+                             OB_SYS_DATABASE_NAME, OB_ALL_DATABASE_TNAME,
+                             show_db_id);
+            } else {
+              GEN_SQL_STEP_1(ObShowSqlSet::SHOW_SENSITIVE_RULES_LIKE,
+                             static_cast<ObString::obstr_size_t>(condition_node->children_[0]->str_len_),
+                             condition_node->children_[0]->str_value_);
+              GEN_SQL_STEP_2(ObShowSqlSet::SHOW_SENSITIVE_RULES_LIKE,
+                             OB_SYS_DATABASE_NAME, OB_ALL_SENSITIVE_RULE_TNAME,
+                             OB_SYS_DATABASE_NAME, OB_ALL_SENSITIVE_COLUMN_TNAME,
+                             OB_SYS_DATABASE_NAME, OB_ALL_TABLE_TNAME,
+                             OB_SYS_DATABASE_NAME, OB_ALL_COLUMN_TNAME,
+                             OB_SYS_DATABASE_NAME, OB_ALL_DATABASE_TNAME);
+            }
+          } else if (show_from_table) {
+            GEN_SQL_STEP_1(ObShowSqlSet::SHOW_SENSITIVE_RULES_FROM_TABLE);
+            GEN_SQL_STEP_2(ObShowSqlSet::SHOW_SENSITIVE_RULES_FROM_TABLE,
+                           OB_SYS_DATABASE_NAME, OB_ALL_SENSITIVE_RULE_TNAME,
+                           OB_SYS_DATABASE_NAME, OB_ALL_SENSITIVE_COLUMN_TNAME,
+                           OB_SYS_DATABASE_NAME, OB_ALL_TABLE_TNAME,
+                           OB_SYS_DATABASE_NAME, OB_ALL_COLUMN_TNAME,
+                           OB_SYS_DATABASE_NAME, OB_ALL_DATABASE_TNAME,
+                           show_table_id);
+          } else if (show_from_database) {
+            GEN_SQL_STEP_1(ObShowSqlSet::SHOW_SENSITIVE_RULES_FROM_DATABASE);
+            GEN_SQL_STEP_2(ObShowSqlSet::SHOW_SENSITIVE_RULES_FROM_DATABASE,
+                           OB_SYS_DATABASE_NAME, OB_ALL_SENSITIVE_RULE_TNAME,
+                           OB_SYS_DATABASE_NAME, OB_ALL_SENSITIVE_COLUMN_TNAME,
+                           OB_SYS_DATABASE_NAME, OB_ALL_TABLE_TNAME,
+                           OB_SYS_DATABASE_NAME, OB_ALL_COLUMN_TNAME,
+                           OB_SYS_DATABASE_NAME, OB_ALL_DATABASE_TNAME,
+                           show_db_id);
+          } else {
+            GEN_SQL_STEP_1(ObShowSqlSet::SHOW_SENSITIVE_RULES);
+            GEN_SQL_STEP_2(ObShowSqlSet::SHOW_SENSITIVE_RULES,
+                           OB_SYS_DATABASE_NAME, OB_ALL_SENSITIVE_RULE_TNAME,
+                           OB_SYS_DATABASE_NAME, OB_ALL_SENSITIVE_COLUMN_TNAME,
+                           OB_SYS_DATABASE_NAME, OB_ALL_TABLE_TNAME,
+                           OB_SYS_DATABASE_NAME, OB_ALL_COLUMN_TNAME,
+                           OB_SYS_DATABASE_NAME, OB_ALL_DATABASE_TNAME);
+          }
+        }
+        break;
+      }
       default:
         /* won't be here */
         ret = OB_NOT_IMPLEMENT;
@@ -3124,7 +3259,8 @@ int ObShowResolver::resolve_like_or_where_clause(ObShowResolverContext &ctx)
                  && parse_tree->type_ != T_SHOW_PROCEDURE_STATUS
                  && parse_tree->type_ != T_SHOW_FUNCTION_STATUS
                  && parse_tree->type_ != T_SHOW_TRIGGERS
-                 && parse_tree->type_ != T_SHOW_SEQUENCES)) {
+                 && parse_tree->type_ != T_SHOW_SEQUENCES
+                 && parse_tree->type_ != T_SHOW_SENSITIVE_RULES)) {
     // do nothing
   } else {
     // Like or Where clause
@@ -4238,5 +4374,281 @@ DEFINE_SHOW_CLAUSE_SET(LOCATION_UTILS_LIST,
                        "SELECT `file_name` AS `File`, `file_size` AS `Size` FROM %s.%s WHERE location_id = %ld and location_sub_path = '%.*s' and pattern = '%.*s'",
                        R"(SELECT file_name AS `File`, file_size AS `Size` FROM %s.%s WHERE location_id = %ld and location_sub_path = '%.*s' and pattern = '%.*s')",
                        NULL);
+DEFINE_SHOW_CLAUSE_SET(SHOW_SENSITIVE_RULES,
+                       NULL,
+                       "SELECT `rule_name`, `protection_policy`, `method`, `enabled`, group_concat(`cols` separator ', ') AS protected_columns FROM (                                   \
+                          SELECT /*+no_simplify_order_by*/ *, concat(`database_name`,'.',`table_name`,'(',group_concat(`column_name`),')') AS `cols` FROM (                             \
+                            SELECT                                                                                                                                                      \
+                              SR.`tenant_id` AS `tenant_id`,                                                                                                                            \
+                              SR.`sensitive_rule_id` AS `rule_id`,                                                                                                                      \
+                              SR.`sensitive_rule_name` AS `rule_name`,                                                                                                                  \
+                              CASE WHEN SR.`protection_policy` = 1 THEN 'NONE'                                                                                                          \
+                                  WHEN SR.`protection_policy` = 2 THEN 'ENCRYPTION'                                                                                                     \
+                                  WHEN SR.`protection_policy` = 3 THEN 'MASKING'                                                                                                        \
+                                  ELSE NULL                                                                                                                                             \
+                                  END AS `protection_policy`,                                                                                                                           \
+                              SR.`method` AS `method`,                                                                                                                                  \
+                              CASE WHEN SR.`enabled` = 1 THEN \"YES\" ELSE \"NO\" END AS `enabled`,                                                                                     \
+                              D.`database_id` AS `database_id`,                                                                                                                         \
+                              D.`database_name`AS `database_name`,                                                                                                                      \
+                              T.`table_id` AS `table_id`,                                                                                                                               \
+                              T.`table_name` AS `table_name`,                                                                                                                           \
+                              C.`column_name` AS `column_name`                                                                                                                          \
+                            FROM                                                                                                                                                        \
+                              %s.%s AS SR                                                                                                                                               \
+                              LEFT JOIN (                                                                                                                                               \
+                                %s.%s AS SC                                                                                                                                             \
+                                JOIN %s.%s AS T                                                                                                                                         \
+                                  ON SC.`tenant_id` = T.`tenant_id`                                                                                                                     \
+                                 AND SC.`table_id` = T.`table_id`                                                                                                                       \
+                                 AND T.`table_mode` >> 12 & 15 in (0,1)                                                                                                                 \
+                                JOIN %s.%s AS C                                                                                                                                         \
+                                  ON SC.`tenant_id` = C.`tenant_id`                                                                                                                     \
+                                 AND SC.`column_id` = C.`column_id`                                                                                                                     \
+                                 AND T.`table_id` = C.`table_id`                                                                                                                        \
+                                JOIN %s.%s AS D                                                                                                                                         \
+                                  ON SC.`tenant_id` = D.`tenant_id`                                                                                                                     \
+                                 AND T.`database_id` = D.`database_id`                                                                                                                  \
+                                 AND D.`database_name` != '__recyclebin'                                                                                                                \
+                                 AND D.`in_recyclebin` = 0                                                                                                                              \
+                              ) ON SR.`tenant_id` = SC.`tenant_id`                                                                                                                      \
+                                AND SR.`sensitive_rule_id` = SC.`sensitive_rule_id`                                                                                                     \
+                            WHERE (0 = sys_privilege_check('table_acc', effective_tenant_id())                                                                                          \
+                                  OR 0 = sys_privilege_check('table_acc', effective_tenant_id(), D.database_name, T.table_name))                                                        \
+                            ORDER BY SR.`sensitive_rule_id`, D.`database_id`, T.`table_id`, C.`column_id`                                                                               \
+                          ) GROUP BY `rule_id`, `database_id`, `table_id`                                                                                                               \
+                        ) GROUP BY `rule_id`",
+                       NULL,
+                       "rule_name");
+DEFINE_SHOW_CLAUSE_SET(SHOW_SENSITIVE_RULES_FROM_TABLE,
+                       NULL,
+                       "SELECT `rule_name`, `protection_policy`, `method`, `enabled`, group_concat(`cols` separator ', ') AS protected_columns FROM (                                   \
+                          SELECT /*+no_simplify_order_by*/ *, concat(`database_name`,'.',`table_name`,'(',group_concat(`column_name`),')') AS `cols` FROM (                             \
+                            SELECT                                                                                                                                                      \
+                              SR.`tenant_id` AS `tenant_id`,                                                                                                                            \
+                              SR.`sensitive_rule_id` AS `rule_id`,                                                                                                                      \
+                              SR.`sensitive_rule_name` AS `rule_name`,                                                                                                                  \
+                              CASE WHEN SR.`protection_policy` = 1 THEN 'NONE'                                                                                                          \
+                                  WHEN SR.`protection_policy` = 2 THEN 'ENCRYPTION'                                                                                                     \
+                                  WHEN SR.`protection_policy` = 3 THEN 'MASKING'                                                                                                        \
+                                  ELSE NULL                                                                                                                                             \
+                                  END AS `protection_policy`,                                                                                                                           \
+                              SR.`method` AS `method`,                                                                                                                                  \
+                              CASE WHEN SR.`enabled` = 1 THEN \"YES\" ELSE \"NO\" END AS `enabled`,                                                                                     \
+                              D.`database_id` AS `database_id`,                                                                                                                         \
+                              D.`database_name`AS `database_name`,                                                                                                                      \
+                              T.`table_id` AS `table_id`,                                                                                                                               \
+                              T.`table_name` AS `table_name`,                                                                                                                           \
+                              C.`column_name` AS `column_name`                                                                                                                          \
+                            FROM                                                                                                                                                        \
+                              %s.%s AS SR                                                                                                                                               \
+                              LEFT JOIN (                                                                                                                                               \
+                                %s.%s AS SC                                                                                                                                             \
+                                JOIN %s.%s AS T                                                                                                                                         \
+                                  ON SC.`tenant_id` = T.`tenant_id`                                                                                                                     \
+                                 AND SC.`table_id` = T.`table_id`                                                                                                                       \
+                                 AND T.`table_mode` >> 12 & 15 in (0,1)                                                                                                                 \
+                                JOIN %s.%s AS C                                                                                                                                         \
+                                  ON SC.`tenant_id` = C.`tenant_id`                                                                                                                     \
+                                 AND SC.`column_id` = C.`column_id`                                                                                                                     \
+                                 AND T.`table_id` = C.`table_id`                                                                                                                        \
+                                JOIN %s.%s AS D                                                                                                                                         \
+                                  ON SC.`tenant_id` = D.`tenant_id`                                                                                                                     \
+                                 AND T.`database_id` = D.`database_id`                                                                                                                  \
+                                 AND D.`database_name` != '__recyclebin'                                                                                                                \
+                                 AND D.`in_recyclebin` = 0                                                                                                                              \
+                              ) ON SR.`tenant_id` = SC.`tenant_id`                                                                                                                      \
+                                AND SR.`sensitive_rule_id` = SC.`sensitive_rule_id`                                                                                                     \
+                            WHERE (0 = sys_privilege_check('table_acc', effective_tenant_id())                                                                                          \
+                                  OR 0 = sys_privilege_check('table_acc', effective_tenant_id(), D.database_name, T.table_name))                                                        \
+                            ORDER BY SR.`sensitive_rule_id`, D.`database_id`, T.`table_id`, C.`column_id`                                                                               \
+                          ) GROUP BY `rule_id`, `database_id`, `table_id`                                                                                                               \
+                        ) WHERE `table_id` = %ld GROUP BY `rule_id`",
+                       NULL,
+                       "rule_name");
+DEFINE_SHOW_CLAUSE_SET(SHOW_SENSITIVE_RULES_FROM_DATABASE,
+                       NULL,
+                       "SELECT `rule_name`, `protection_policy`, `method`, `enabled`, group_concat(`cols` separator ', ') AS protected_columns FROM (                                   \
+                          SELECT /*+no_simplify_order_by*/ *, concat(`database_name`,'.',`table_name`,'(',group_concat(`column_name`),')') AS `cols` FROM (                             \
+                            SELECT                                                                                                                                                      \
+                              SR.`tenant_id` AS `tenant_id`,                                                                                                                            \
+                              SR.`sensitive_rule_id` AS `rule_id`,                                                                                                                      \
+                              SR.`sensitive_rule_name` AS `rule_name`,                                                                                                                  \
+                              CASE WHEN SR.`protection_policy` = 1 THEN 'NONE'                                                                                                          \
+                                  WHEN SR.`protection_policy` = 2 THEN 'ENCRYPTION'                                                                                                     \
+                                  WHEN SR.`protection_policy` = 3 THEN 'MASKING'                                                                                                        \
+                                  ELSE NULL                                                                                                                                             \
+                                  END AS `protection_policy`,                                                                                                                           \
+                              SR.`method` AS `method`,                                                                                                                                  \
+                              CASE WHEN SR.`enabled` = 1 THEN \"YES\" ELSE \"NO\" END AS `enabled`,                                                                                     \
+                              D.`database_id` AS `database_id`,                                                                                                                         \
+                              D.`database_name`AS `database_name`,                                                                                                                      \
+                              T.`table_id` AS `table_id`,                                                                                                                               \
+                              T.`table_name` AS `table_name`,                                                                                                                           \
+                              C.`column_name` AS `column_name`                                                                                                                          \
+                            FROM                                                                                                                                                        \
+                              %s.%s AS SR                                                                                                                                               \
+                              LEFT JOIN (                                                                                                                                               \
+                                %s.%s AS SC                                                                                                                                             \
+                                JOIN %s.%s AS T                                                                                                                                         \
+                                  ON SC.`tenant_id` = T.`tenant_id`                                                                                                                     \
+                                 AND SC.`table_id` = T.`table_id`                                                                                                                       \
+                                 AND T.`table_mode` >> 12 & 15 in (0,1)                                                                                                                 \
+                                JOIN %s.%s AS C                                                                                                                                         \
+                                  ON SC.`tenant_id` = C.`tenant_id`                                                                                                                     \
+                                 AND SC.`column_id` = C.`column_id`                                                                                                                     \
+                                 AND T.`table_id` = C.`table_id`                                                                                                                        \
+                                JOIN %s.%s AS D                                                                                                                                         \
+                                  ON SC.`tenant_id` = D.`tenant_id`                                                                                                                     \
+                                 AND T.`database_id` = D.`database_id`                                                                                                                  \
+                                 AND D.`database_name` != '__recyclebin'                                                                                                                \
+                                 AND D.`in_recyclebin` = 0                                                                                                                              \
+                              ) ON SR.`tenant_id` = SC.`tenant_id`                                                                                                                      \
+                                AND SR.`sensitive_rule_id` = SC.`sensitive_rule_id`                                                                                                     \
+                            WHERE (0 = sys_privilege_check('table_acc', effective_tenant_id())                                                                                          \
+                                  OR 0 = sys_privilege_check('table_acc', effective_tenant_id(), D.database_name, T.table_name))                                                        \
+                            ORDER BY SR.`sensitive_rule_id`, D.`database_id`, T.`table_id`, C.`column_id`                                                                               \
+                          ) GROUP BY `rule_id`, `database_id`, `table_id`                                                                                                               \
+                        ) WHERE `database_id` = %ld GROUP BY `rule_id`",
+                       NULL,
+                       "rule_name");
+DEFINE_SHOW_CLAUSE_SET(SHOW_SENSITIVE_RULES_LIKE,
+                       "SELECT rule_name as `rule_name (%.*s)`, method, enabled, protected_columns",
+                       "SELECT `rule_name`, `protection_policy`, `method`, `enabled`, group_concat(`cols` separator ', ') AS protected_columns FROM (                                   \
+                          SELECT /*+no_simplify_order_by*/ *, concat(`database_name`,'.',`table_name`,'(',group_concat(`column_name`),')') AS `cols` FROM (                             \
+                            SELECT                                                                                                                                                      \
+                              SR.`tenant_id` AS `tenant_id`,                                                                                                                            \
+                              SR.`sensitive_rule_id` AS `rule_id`,                                                                                                                      \
+                              SR.`sensitive_rule_name` AS `rule_name`,                                                                                                                  \
+                              CASE WHEN SR.`protection_policy` = 1 THEN 'NONE'                                                                                                          \
+                                  WHEN SR.`protection_policy` = 2 THEN 'ENCRYPTION'                                                                                                     \
+                                  WHEN SR.`protection_policy` = 3 THEN 'MASKING'                                                                                                        \
+                                  ELSE NULL                                                                                                                                             \
+                                  END AS `protection_policy`,                                                                                                                           \
+                              SR.`method` AS `method`,                                                                                                                                  \
+                              CASE WHEN SR.`enabled` = 1 THEN \"YES\" ELSE \"NO\" END AS `enabled`,                                                                                     \
+                              D.`database_id` AS `database_id`,                                                                                                                         \
+                              D.`database_name`AS `database_name`,                                                                                                                      \
+                              T.`table_id` AS `table_id`,                                                                                                                               \
+                              T.`table_name` AS `table_name`,                                                                                                                           \
+                              C.`column_name` AS `column_name`                                                                                                                          \
+                            FROM                                                                                                                                                        \
+                              %s.%s AS SR                                                                                                                                               \
+                              LEFT JOIN (                                                                                                                                               \
+                                %s.%s AS SC                                                                                                                                             \
+                                JOIN %s.%s AS T                                                                                                                                         \
+                                  ON SC.`tenant_id` = T.`tenant_id`                                                                                                                     \
+                                 AND SC.`table_id` = T.`table_id`                                                                                                                       \
+                                 AND T.`table_mode` >> 12 & 15 in (0,1)                                                                                                                 \
+                                JOIN %s.%s AS C                                                                                                                                         \
+                                  ON SC.`tenant_id` = C.`tenant_id`                                                                                                                     \
+                                 AND SC.`column_id` = C.`column_id`                                                                                                                     \
+                                 AND T.`table_id` = C.`table_id`                                                                                                                        \
+                                JOIN %s.%s AS D                                                                                                                                         \
+                                  ON SC.`tenant_id` = D.`tenant_id`                                                                                                                     \
+                                 AND T.`database_id` = D.`database_id`                                                                                                                  \
+                                 AND D.`database_name` != '__recyclebin'                                                                                                                \
+                                 AND D.`in_recyclebin` = 0                                                                                                                              \
+                              ) ON SR.`tenant_id` = SC.`tenant_id`                                                                                                                      \
+                                AND SR.`sensitive_rule_id` = SC.`sensitive_rule_id`                                                                                                     \
+                            WHERE (0 = sys_privilege_check('table_acc', effective_tenant_id())                                                                                          \
+                                  OR 0 = sys_privilege_check('table_acc', effective_tenant_id(), D.database_name, T.table_name))                                                        \
+                            ORDER BY SR.`sensitive_rule_id`, D.`database_id`, T.`table_id`, C.`column_id`                                                                               \
+                          ) GROUP BY `rule_id`, `database_id`, `table_id`                                                                                                               \
+                        ) GROUP BY `rule_id`",
+                       NULL,
+                       "rule_name");
+ DEFINE_SHOW_CLAUSE_SET(SHOW_SENSITIVE_RULES_FROM_TABLE_LIKE,
+                        "SELECT rule_name as `rule_name (%.*s)`, method, enabled, protected_columns",
+                        "SELECT `rule_name`, `protection_policy`, `method`, `enabled`, group_concat(`cols` separator ', ') AS protected_columns FROM (                                  \
+                          SELECT /*+no_simplify_order_by*/ *, concat(`database_name`,'.',`table_name`,'(',group_concat(`column_name`),')') AS `cols` FROM (                             \
+                            SELECT                                                                                                                                                      \
+                              SR.`tenant_id` AS `tenant_id`,                                                                                                                            \
+                              SR.`sensitive_rule_id` AS `rule_id`,                                                                                                                      \
+                              SR.`sensitive_rule_name` AS `rule_name`,                                                                                                                  \
+                              CASE WHEN SR.`protection_policy` = 1 THEN 'NONE'                                                                                                          \
+                                  WHEN SR.`protection_policy` = 2 THEN 'ENCRYPTION'                                                                                                     \
+                                  WHEN SR.`protection_policy` = 3 THEN 'MASKING'                                                                                                        \
+                                  ELSE NULL                                                                                                                                             \
+                                  END AS `protection_policy`,                                                                                                                           \
+                              SR.`method` AS `method`,                                                                                                                                  \
+                              CASE WHEN SR.`enabled` = 1 THEN \"YES\" ELSE \"NO\" END AS `enabled`,                                                                                     \
+                              D.`database_id` AS `database_id`,                                                                                                                         \
+                              D.`database_name`AS `database_name`,                                                                                                                      \
+                              T.`table_id` AS `table_id`,                                                                                                                               \
+                              T.`table_name` AS `table_name`,                                                                                                                           \
+                              C.`column_name` AS `column_name`                                                                                                                          \
+                            FROM                                                                                                                                                        \
+                              %s.%s AS SR                                                                                                                                               \
+                              LEFT JOIN (                                                                                                                                               \
+                                %s.%s AS SC                                                                                                                                             \
+                                JOIN %s.%s AS T                                                                                                                                         \
+                                  ON SC.`tenant_id` = T.`tenant_id`                                                                                                                     \
+                                 AND SC.`table_id` = T.`table_id`                                                                                                                       \
+                                 AND T.`table_mode` >> 12 & 15 in (0,1)                                                                                                                 \
+                                JOIN %s.%s AS C                                                                                                                                         \
+                                  ON SC.`tenant_id` = C.`tenant_id`                                                                                                                     \
+                                 AND SC.`column_id` = C.`column_id`                                                                                                                     \
+                                 AND T.`table_id` = C.`table_id`                                                                                                                        \
+                                JOIN %s.%s AS D                                                                                                                                         \
+                                  ON SC.`tenant_id` = D.`tenant_id`                                                                                                                     \
+                                 AND T.`database_id` = D.`database_id`                                                                                                                  \
+                                 AND D.`database_name` != '__recyclebin'                                                                                                                \
+                                 AND D.`in_recyclebin` = 0                                                                                                                              \
+                              ) ON SR.`tenant_id` = SC.`tenant_id`                                                                                                                      \
+                                AND SR.`sensitive_rule_id` = SC.`sensitive_rule_id`                                                                                                     \
+                            WHERE (0 = sys_privilege_check('table_acc', effective_tenant_id())                                                                                          \
+                                  OR 0 = sys_privilege_check('table_acc', effective_tenant_id(), D.database_name, T.table_name))                                                        \
+                            ORDER BY SR.`sensitive_rule_id`, D.`database_id`, T.`table_id`, C.`column_id`                                                                               \
+                          ) GROUP BY `rule_id`, `database_id`, `table_id`                                                                                                               \
+                        ) WHERE `table_id` = %ld GROUP BY `rule_id`",
+                      NULL,
+                      "rule_name");
+ DEFINE_SHOW_CLAUSE_SET(SHOW_SENSITIVE_RULES_FROM_DATABASE_LIKE,
+                        "SELECT rule_name as `rule_name (%.*s)`, method, enabled, protected_columns",
+                        "SELECT `rule_name`, `protection_policy`, `method`, `enabled`, group_concat(`cols` separator ', ') AS protected_columns FROM (                                  \
+                          SELECT /*+no_simplify_order_by*/ *, concat(`database_name`,'.',`table_name`,'(',group_concat(`column_name`),')') AS `cols` FROM (                             \
+                            SELECT                                                                                                                                                      \
+                              SR.`tenant_id` AS `tenant_id`,                                                                                                                            \
+                              SR.`sensitive_rule_id` AS `rule_id`,                                                                                                                      \
+                              SR.`sensitive_rule_name` AS `rule_name`,                                                                                                                  \
+                              CASE WHEN SR.`protection_policy` = 1 THEN 'NONE'                                                                                                          \
+                                  WHEN SR.`protection_policy` = 2 THEN 'ENCRYPTION'                                                                                                     \
+                                  WHEN SR.`protection_policy` = 3 THEN 'MASKING'                                                                                                        \
+                                  ELSE NULL                                                                                                                                             \
+                                  END AS `protection_policy`,                                                                                                                           \
+                              SR.`method` AS `method`,                                                                                                                                  \
+                              CASE WHEN SR.`enabled` = 1 THEN \"YES\" ELSE \"NO\" END AS `enabled`,                                                                                     \
+                              D.`database_id` AS `database_id`,                                                                                                                         \
+                              D.`database_name`AS `database_name`,                                                                                                                      \
+                              T.`table_id` AS `table_id`,                                                                                                                               \
+                              T.`table_name` AS `table_name`,                                                                                                                           \
+                              C.`column_name` AS `column_name`                                                                                                                          \
+                            FROM                                                                                                                                                        \
+                              %s.%s AS SR                                                                                                                                               \
+                              LEFT JOIN (                                                                                                                                               \
+                                %s.%s AS SC                                                                                                                                             \
+                                JOIN %s.%s AS T                                                                                                                                         \
+                                  ON SC.`tenant_id` = T.`tenant_id`                                                                                                                     \
+                                 AND SC.`table_id` = T.`table_id`                                                                                                                       \
+                                 AND T.`table_mode` >> 12 & 15 in (0,1)                                                                                                                 \
+                                JOIN %s.%s AS C                                                                                                                                         \
+                                  ON SC.`tenant_id` = C.`tenant_id`                                                                                                                     \
+                                 AND SC.`column_id` = C.`column_id`                                                                                                                     \
+                                 AND T.`table_id` = C.`table_id`                                                                                                                        \
+                                JOIN %s.%s AS D                                                                                                                                         \
+                                  ON SC.`tenant_id` = D.`tenant_id`                                                                                                                     \
+                                 AND T.`database_id` = D.`database_id`                                                                                                                  \
+                                 AND D.`database_name` != '__recyclebin'                                                                                                                \
+                                 AND D.`in_recyclebin` = 0                                                                                                                              \
+                              ) ON SR.`tenant_id` = SC.`tenant_id`                                                                                                                      \
+                                AND SR.`sensitive_rule_id` = SC.`sensitive_rule_id`                                                                                                     \
+                            WHERE (0 = sys_privilege_check('table_acc', effective_tenant_id())                                                                                          \
+                                  OR 0 = sys_privilege_check('table_acc', effective_tenant_id(), D.database_name, T.table_name))                                                        \
+                            ORDER BY SR.`sensitive_rule_id`, D.`database_id`, T.`table_id`, C.`column_id`                                                                               \
+                          ) GROUP BY `rule_id`, `database_id`, `table_id`                                                                                                               \
+                        ) WHERE `database_id` = %ld GROUP BY `rule_id`",
+                        NULL,
+                        "rule_name");
 }/* ns sql*/
 }/* ns oceanbase */

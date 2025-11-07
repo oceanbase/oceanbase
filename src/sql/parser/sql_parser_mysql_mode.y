@@ -334,7 +334,7 @@ END_P SET_VAR DELIMITER
         LOGSERVICE_ACCESS_POINT
 
         PACK_KEYS PAGE PARALLEL PARAMETERS PARSER PARSER_PROPERTIES PARTIAL PARTITION_ID PARTITIONING PARTITIONS PASSWORD PATH PAUSE PAXOS_REPLICA_NUM PER PERCENTAGE
-        PERCENT_RANK PERCENTILE_CONT PHASE PHRASE PLAN PHYSICAL PLANREGRESS PLUGIN PLUGIN_DIR PLUGINS POINT POLYGON PERFORMANCE
+        PERCENT_RANK PERCENTILE_CONT PHASE PHRASE PHYSICAL PLAN PLAINACCESS PLANREGRESS PLUGIN PLUGIN_DIR PLUGINS POINT POLYGON PERFORMANCE
         PRINCIPAL PROTECTION PROJECT_NAME PRIORITY PL POLICY POOL PORT POSITION PREPARE PRESERVE PRETTY PRETTY_COLOR PREV PRIMARY_ZONE PRIVILEGES PROCESS
         PROCESSLIST PROFILE PROFILES PROPERTIES PROXY PRECEDING PCTFREE P_ENTITY P_CHUNK
         PUBLIC PROGRESSIVE_MERGE_NUM PREVIEW PS PLUS PATTERN PARTITION_TYPE FILES PARTIAL_UPDATE PRECREATE_TIME ON_ERROR
@@ -347,7 +347,7 @@ END_P SET_VAR DELIMITER
         RESTORE RESUME RETURNED_SQLSTATE RETURNS RETURNING REVERSE REWRITE ROLLBACK ROLLUP ROOT
         ROARINGBITMAP ROOTTABLE ROOTSERVICE ROOTSERVICE_LIST ROUTINE ROW ROLLING ROWID ROW_COUNT ROW_FORMAT ROW_GROUP_SIZE ROW_INDEX_STRIDE ROWS RTREE RUN
         RECYCLEBIN ROTATE ROW_NUMBER RUDUNDANT RECURSIVE RANDOM REDO_TRANSPORT_OPTIONS REMOTE_OSS RT
-        RANK READ_ERROR_LOG READ_ONLY RECOVERY REJECT ROLE
+        RANK READ_ERROR_LOG READ_ONLY RECOVERY REJECT ROLE RULE RULES
 
         S3_REGION SAMPLE SAVEPOINT SCALARS SCHEDULE SCHEMA_NAME SCN SCOPE SCORE SECOND SECURITY SEED SEMISTRUCT_ENCODING_TYPE SEMISTRUCT_PROPERTIES SEQUENCES SERIAL SERIALIZABLE SERVER
         SERVER_IP SERVER_PORT SERVER_TYPE SERVICE SESSION SESSION_USER SETS SET_MASTER_CLUSTER SET_SLAVE_CLUSTER
@@ -447,7 +447,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_equal_mark opt_default_mark read_only_or_write not not2 opt_disk_alias
 %type <node> int_or_decimal
 %type <node> opt_column_attribute_list column_attribute column_attribute_list opt_column_default_value opt_column_default_value_list
-%type <node> show_stmt from_or_in columns_or_fields database_or_schema index_or_indexes_or_keys opt_from_or_in_database_clause opt_show_condition opt_desc_column_option opt_status opt_storage opt_show_engine
+%type <node> show_stmt from_or_in columns_or_fields database_or_schema index_or_indexes_or_keys opt_from_or_in_database_clause opt_show_condition opt_desc_column_option opt_status opt_storage opt_show_engine show_sensitive_rule_option
 %type <node> prepare_stmt stmt_name preparable_stmt
 %type <node> variable_set_stmt var_and_val_list var_and_val to_or_eq set_expr_or_default sys_var_and_val_list sys_var_and_val opt_set_sys_var opt_global_sys_vars_set
 %type <node> execute_stmt argument_list argument opt_using_args
@@ -589,6 +589,8 @@ END_P SET_VAR DELIMITER
 %type <node> hybrid_search_expr hybrid_search_param
 
 %type <node> algorithm_opt lock_opt
+%type <node> create_sensitive_rule_stmt drop_sensitive_rule_stmt alter_sensitive_rule_stmt alter_sensitive_rule_action sensitive_rule_name sensitive_field_list sensitive_field sensitivity_protection_spec sensitivity_encryption_spec
+
 %start sql_stmt
 %%
 ////////////////////////////////////////////////////////////////
@@ -778,6 +780,9 @@ stmt:
   | flashback_standby_log_stmt { $$ = $1; check_question_mark($$, result); }
   | create_ccl_rule_stmt       { $$ = $1; check_question_mark($$, result); }
   | drop_ccl_rule_stmt       { $$ = $1; check_question_mark($$, result); }
+  | create_sensitive_rule_stmt { $$ = $1; check_question_mark($$, result); }
+  | drop_sensitive_rule_stmt { $$ = $1; check_question_mark($$, result); }
+  | alter_sensitive_rule_stmt { $$ = $1; check_question_mark($$, result); }
   ;
 
 /*****************************************************************************
@@ -16504,6 +16509,27 @@ SHOW opt_extended_or_full TABLES opt_from_or_in_database_clause opt_show_conditi
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_LOCATION_UTILS_LIST, 3, $5, $6, $7);
 }
+| SHOW SENSITIVE RULES show_sensitive_rule_option
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_SENSITIVE_RULES, 1, $4);
+}
+;
+
+show_sensitive_rule_option:
+opt_show_condition
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_SENSITIVE_RULES_OPTION, 3, NULL, NULL, $1);
+}
+| from_or_in relation_factor opt_from_or_in_database_clause opt_show_condition
+{
+  UNUSED($1);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_SENSITIVE_RULES_OPTION, 3, $2, $3, $4);
+}
+| from_or_in DATABASE database_factor opt_show_condition
+{
+  UNUSED($1);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_SENSITIVE_RULES_OPTION, 3, NULL, $3, $4);
+}
 ;
 
 check_table_options:
@@ -18478,6 +18504,16 @@ role_with_host
   malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
   $$->value_ = OB_PRIV_ACCESS_AI_MODEL;
 }
+| CREATE SENSITIVE RULE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
+  $$->value_ = OB_PRIV_CREATE_SENSITIVE_RULE;
+}
+| PLAINACCESS
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
+  $$->value_ = OB_PRIV_PLAINACCESS;
+}
 ;
 
 opt_privilege:
@@ -18516,6 +18552,11 @@ TABLE
 {
   malloc_terminal_node($$, result->malloc_pool_, T_PRIV_OBJECT);
   $$->value_ = 5;
+}
+| SENSITIVE RULE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_OBJECT);
+  $$->value_ = 6;
 }
 ;
 
@@ -26241,6 +26282,121 @@ DROP CONCURRENT_LIMITING_RULE opt_if_exists relation_factor
 }
 ;
 
+/*****************************************************************************
+ *
+ *	sensitive rule grammar
+ *
+ *****************************************************************************/
+create_sensitive_rule_stmt:
+CREATE SENSITIVE RULE sensitive_rule_name ON sensitive_field_list USING sensitivity_protection_spec
+{
+  ParseNode *sensitive_field_list_node = NULL;
+  merge_nodes(sensitive_field_list_node, result, T_SENSITIVE_FIELD_LIST, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_SENSITIVE_RULE, 3, $4, sensitive_field_list_node, $8);
+}
+;
+
+sensitive_rule_name:
+relation_name
+{
+  $$ = $1;
+}
+;
+
+sensitive_field_list:
+sensitive_field
+{
+  $$ = $1;
+}
+| sensitive_field_list ',' sensitive_field
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+sensitive_field:
+relation_factor '(' column_name_list ')'
+{
+  ParseNode *col_list = NULL;
+  merge_nodes(col_list, result, T_COLUMN_LIST, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SENSITIVE_FIELD, 2, $1, col_list);
+}
+;
+
+sensitivity_protection_spec:
+sensitivity_encryption_spec
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SENSITIVE_PROTECTION_SPEC, 1, $1);
+}
+// sensitivity_masking_spec is not supported for now
+;
+
+sensitivity_encryption_spec:
+ENCRYPTION
+{
+  ParseNode *default_node = NULL;
+  malloc_terminal_node(default_node, result->malloc_pool_, T_DEFAULT);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SENSITIVE_ENCRYPTION_SPEC, 1, default_node);
+}
+| ENCRYPTION COMP_EQ DEFAULT
+{
+  ParseNode *default_node = NULL;
+  malloc_terminal_node(default_node, result->malloc_pool_, T_DEFAULT);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SENSITIVE_ENCRYPTION_SPEC, 1, default_node);
+}
+| ENCRYPTION COMP_EQ complex_string_literal
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SENSITIVE_ENCRYPTION_SPEC, 1, $3);
+}
+;
+
+drop_sensitive_rule_stmt:
+DROP SENSITIVE RULE sensitive_rule_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_SENSITIVE_RULE, 1, $4);
+}
+;
+
+// use value_ to mark alter operation type
+alter_sensitive_rule_stmt:
+ALTER SENSITIVE RULE sensitive_rule_name alter_sensitive_rule_action
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_SENSITIVE_RULE, 2, $4, $5);
+}
+;
+
+alter_sensitive_rule_action:
+ADD COLUMN sensitive_field_list
+{
+  ParseNode *sensitive_field_list_node = NULL;
+  merge_nodes(sensitive_field_list_node, result, T_SENSITIVE_FIELD_LIST, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_SENSITIVE_RULE_ACTION, 1, sensitive_field_list_node);
+  $$->value_ = 1;
+}
+| DROP COLUMN sensitive_field_list
+{
+  ParseNode *sensitive_field_list_node = NULL;
+  merge_nodes(sensitive_field_list_node, result, T_SENSITIVE_FIELD_LIST, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_SENSITIVE_RULE_ACTION, 1, sensitive_field_list_node);
+  $$->value_ = 2;
+}
+| ENABLE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_SENSITIVE_RULE_ACTION, 1, NULL);
+  $$->value_ = 3;
+}
+| DISABLE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_SENSITIVE_RULE_ACTION, 1, NULL);
+  $$->value_ = 4;
+}
+| USING sensitivity_protection_spec
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_SENSITIVE_RULE_ACTION, 1, $2);
+  $$->value_ = 5;
+}
+;
+
 unreserved_keyword:
 unreserved_keyword_for_role_name { $$=$1;}
 | unreserved_keyword_ambiguous_roles { $$=$1;}
@@ -26904,6 +27060,8 @@ ACCESS_INFO
 |       ROW_FORMAT
 |       ROWS
 |       RTREE
+|       RULE
+|       RULES
 |       RUN
 |       SAMPLE
 |       SAVEPOINT
@@ -27198,6 +27356,7 @@ unreserved_keyword_ambiguous_roles:
 |       PROCESS
 |       NONE
 |       EVENT
+|       PLAINACCESS
 |       PROXY
 |       RELOAD
 |       REPLICATION

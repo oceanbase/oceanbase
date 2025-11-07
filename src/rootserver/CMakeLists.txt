@@ -131,6 +131,8 @@ ob_set_subtarget(ob_rootserver common
   ob_create_index_on_empty_table_helper.cpp
   ob_ccl_ddl_service.cpp
   ob_ccl_ddl_operator.cpp
+  ob_sensitive_rule_ddl_operator.cpp
+  ob_sensitive_rule_ddl_service.cpp
 )
 
 ob_set_subtarget(ob_rootserver balance

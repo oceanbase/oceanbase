@@ -140,6 +140,10 @@ int ObDDLSqlGenerator::get_priv_name(const int64_t priv, const char *&name)
       name = "DROP AI MODEL"; break;
     case OB_PRIV_ACCESS_AI_MODEL:
       name = "ACCESS AI MODEL"; break;
+    case OB_PRIV_CREATE_SENSITIVE_RULE:
+      name = "CREATE SENSITIVE RULE"; break;
+    case OB_PRIV_PLAINACCESS:
+      name = "PLAINACCESS"; break;
     default: {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid priv", K(ret), K(priv));
@@ -889,6 +893,82 @@ int ObDDLSqlGenerator::gen_routine_priv_sql(const obrpc::ObAccountArg &account,
   }
   LOG_DEBUG("gen routine priv sql", K(sql_string.string()), K(priv_string.string()),
             K(need_priv), K(is_grant), K(account));
+  return ret;
+}
+
+int ObDDLSqlGenerator::gen_sensitive_rule_priv_sql(const obrpc::ObAccountArg &account,
+                                                   const ObNeedPriv &need_priv,
+                                                   const bool is_grant,
+                                                   ObSqlString &sql_string)
+{
+  int ret = OB_SUCCESS;
+  char GRANT_SENSITIVE_RULE_SQL[] = "GRANT %s ON SENSITIVE RULE `%.*s` TO `%.*s`";
+  char REVOKE_SENSITIVE_RULE_SQL[] = "REVOKE %s ON SENSITIVE RULE `%.*s` FROM `%.*s`";
+  char NEW_GRANT_SENSITIVE_RULE_SQL[] = "GRANT %s ON SENSITIVE RULE `%.*s` TO `%.*s`@`%.*s`";
+  char NEW_REVOKE_SENSITIVE_RULE_SQL[] = "REVOKE %s ON SENSITIVE RULE `%.*s` FROM `%.*s`@`%.*s`";
+  ObSqlString priv_string;
+  if (OB_UNLIKELY(OB_UNLIKELY(!account.is_valid()))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("db or user_name is empty", K(ret), K(need_priv), K(account));
+  } else if (need_priv.priv_level_ != OB_PRIV_SENSITIVE_RULE_LEVEL) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("priv level is invalid", K(need_priv), K(ret));
+  } else if (need_priv.priv_set_ & (~(OB_PRIV_SENSITIVE_RULE_ACC | OB_PRIV_GRANT))) {
+    ret = OB_ILLEGAL_GRANT_FOR_TABLE;
+    LOG_WARN("Grant/Revoke privilege than can not be used",
+              "priv_type", ObPrintPrivSet(need_priv.priv_set_), K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    if ((need_priv.priv_set_ & OB_PRIV_SENSITIVE_RULE_ACC) == OB_PRIV_SENSITIVE_RULE_ACC) {
+      if (OB_FAIL(priv_string.append("ALL PRIVILEGES"))) {
+        LOG_WARN("append sql failed", K(ret));
+      } else if (!is_grant) {
+        if ((need_priv.priv_set_ & OB_PRIV_GRANT)) {
+          if (OB_FAIL(priv_string.append(", GRANT OPTION"))) {
+            LOG_WARN("append sql failed", K(ret));
+          }
+        }
+      }
+    } else if (OB_FAIL(priv_to_name(need_priv.priv_set_, priv_string))) {
+      LOG_WARN("get priv to name failed", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObCStringHelper helper;
+    const char *priv_str = helper.convert(ObHexEscapeSqlStr(priv_string.string().ptr(), false, false));
+    const char *sensitive_rule_str = helper.convert(ObHexEscapeSqlStr(need_priv.sensitive_rule_.ptr(), false, false));
+    const char *user_name_str = helper.convert(ObHexEscapeSqlStr(account.user_name_.ptr(), false, false));
+    if (0 == account.host_name_.compare(OB_DEFAULT_HOST_NAME)) {
+      if (OB_FAIL(sql_string.append_fmt(adjust_ddl_format_str(is_grant ? GRANT_SENSITIVE_RULE_SQL : REVOKE_SENSITIVE_RULE_SQL),
+                                        priv_str,
+                                        static_cast<int32_t>(strlen(sensitive_rule_str)),
+                                        sensitive_rule_str,
+                                        static_cast<int32_t>(strlen(user_name_str)),
+                                        user_name_str))) {
+        LOG_WARN("append sql failed", K(ret));
+      }
+    } else {
+      const char *host_name_str = helper.convert(ObHexEscapeSqlStr(account.host_name_.ptr(), false, false));
+      if (OB_FAIL(sql_string.append_fmt(adjust_ddl_format_str(is_grant ? NEW_GRANT_SENSITIVE_RULE_SQL : NEW_REVOKE_SENSITIVE_RULE_SQL),
+                                        priv_str,
+                                        static_cast<int32_t>(strlen(sensitive_rule_str)),
+                                        sensitive_rule_str,
+                                        static_cast<int32_t>(strlen(user_name_str)),
+                                        user_name_str,
+                                        static_cast<int32_t>(strlen(host_name_str)),
+                                        host_name_str))) {
+        LOG_WARN("append sql failed", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && is_grant) {
+    if (need_priv.priv_set_ & OB_PRIV_GRANT) {
+      if (OB_FAIL(sql_string.append(" WITH GRANT OPTION"))) {
+        LOG_WARN("append sql failed", K(ret));
+      }
+    }
+  }
+  LOG_DEBUG("gen sensitive rule priv sql", K(sql_string.string()), K(is_grant), K(need_priv));
   return ret;
 }
 

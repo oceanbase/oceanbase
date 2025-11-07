@@ -1970,6 +1970,8 @@ int ObSchemaRetrieveUtils::fill_user_schema(
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_ALTER_AI_MODEL) != 0 ? OB_PRIV_ALTER_AI_MODEL : 0);
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_DROP_AI_MODEL) != 0 ? OB_PRIV_DROP_AI_MODEL : 0);
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_ACCESS_AI_MODEL) != 0 ? OB_PRIV_ACCESS_AI_MODEL : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_CREATE_SENSITIVE_RULE) != 0 ? OB_PRIV_CREATE_SENSITIVE_RULE : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_PLAINACCESS) != 0 ? OB_PRIV_PLAINACCESS : 0);
     if (OB_SUCC(ret)) {
       int64_t default_flags = 0;
       //In user schema def, flag is a int column.
@@ -2251,6 +2253,26 @@ int ObSchemaRetrieveUtils::fill_catalog_priv_schema(
   if (!is_deleted) {
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, priv_set, catalog_priv, int64_t);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, schema_version, catalog_priv, int64_t);
+  }
+
+  return ret;
+}
+
+template<typename T>
+int ObSchemaRetrieveUtils::fill_sensitive_rule_priv_schema(
+    const uint64_t tenant_id, T &result, ObSensitiveRulePriv &sensitive_rule_priv, bool &is_deleted)
+{
+  int ret = common::OB_SUCCESS;
+  sensitive_rule_priv.reset();
+  is_deleted = false;
+
+  sensitive_rule_priv.set_tenant_id(tenant_id);
+  EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID(result, user_id, sensitive_rule_priv, tenant_id);
+  EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, sensitive_rule_name, sensitive_rule_priv);
+  EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
+  if (!is_deleted) {
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, priv_set, sensitive_rule_priv, int64_t);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, schema_version, sensitive_rule_priv, int64_t);
   }
 
   return ret;
@@ -3863,6 +3885,46 @@ int ObSchemaRetrieveUtils::retrieve_catalog_priv_schema(
   }
   if (ret != common::OB_ITER_END) {
     SHARE_SCHEMA_LOG(WARN, "failed to get catalog privileges. iter quit", K(ret));
+  } else {
+    ret = common::OB_SUCCESS;
+  }
+  return ret;
+}
+
+template<typename T, typename S>
+int ObSchemaRetrieveUtils::retrieve_sensitive_rule_priv_schema(
+    const uint64_t tenant_id,
+    T &result,
+    ObIArray<S> &sensitive_rule_priv_array)
+{
+  int ret = common::OB_SUCCESS;
+  ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
+  ObArenaAllocator tmp_allocator(ObModIds::OB_TEMP_VARIABLES);
+  S sensitive_rule_priv(&allocator);
+  ObSensitiveRulePrivSortKey pre_sensitive_rule_sort_key;
+  while (OB_SUCC(ret) && OB_SUCC(ret = result.next())) {
+    bool is_deleted = false;
+    sensitive_rule_priv.reset();
+    allocator.reuse();
+    if (OB_FAIL(fill_sensitive_rule_priv_schema(tenant_id, result, sensitive_rule_priv, is_deleted))) {
+      SHARE_SCHEMA_LOG(WARN, "failed to fill sensitive_rule privileges", K(ret));
+    } else if (sensitive_rule_priv.get_sort_key() == pre_sensitive_rule_sort_key) {
+      // ignore it
+      ret = common::OB_SUCCESS;
+    } else if (is_deleted) {
+      SHARE_SCHEMA_LOG(TRACE, "sensitive_rule_priv is is_deleted", K(sensitive_rule_priv));
+    } else if (OB_FAIL(sensitive_rule_priv_array.push_back(sensitive_rule_priv))) {
+      SHARE_SCHEMA_LOG(WARN, "failed to push back", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      tmp_allocator.reuse();
+      if (OB_FAIL(pre_sensitive_rule_sort_key.deep_copy(sensitive_rule_priv.get_sort_key(), tmp_allocator))) {
+        SHARE_SCHEMA_LOG(WARN, "deep copy failed", KR(ret));
+      }
+    }
+  }
+  if (ret != common::OB_ITER_END) {
+    SHARE_SCHEMA_LOG(WARN, "failed to get sensitive_rule privileges. iter quit", K(ret));
   } else {
     ret = common::OB_SUCCESS;
   }
@@ -5999,6 +6061,56 @@ RETRIEVE_SCHEMA_FUNC_DEFINE(rls_group);
 RETRIEVE_SCHEMA_FUNC_DEFINE(rls_context);
 
 RETRIEVE_SCHEMA_FUNC_DEFINE(catalog);
+RETRIEVE_SCHEMA_FUNC_DEFINE(sensitive_rule);
+
+template<typename T, typename S>
+int ObSchemaRetrieveUtils::retrieve_sensitive_column_schema(const uint64_t tenant_id,
+                                                            T &result,
+                                                            ObIArray<S> &schema_array)
+{
+  int ret = OB_SUCCESS;
+  bool is_deleted = false;
+  uint64_t prev_rule_id = common::OB_INVALID_ID;
+  uint64_t prev_table_id = common::OB_INVALID_ID;
+  uint64_t prev_column_id = common::OB_INVALID_ID;
+  ObSensitiveRuleSchema *sensitive_rule_schema_ptr = NULL;
+  ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
+  S schema(&allocator);
+  while (OB_SUCC(ret) && OB_SUCC(result.next())) {
+    is_deleted = false;
+    schema.reset();
+    allocator.reuse();
+    if (OB_FAIL(fill_sensitive_column_schema(tenant_id, result, schema, is_deleted))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to fill sensitive_column schema", K(ret));
+    } else if (schema.get_sensitive_rule_id() == prev_rule_id
+               && schema.get_table_id() == prev_table_id
+               && schema.get_column_id() == prev_column_id) {
+      SHARE_SCHEMA_LOG(DEBUG, "ignore",
+                       "sensitive_rule_id", schema.get_sensitive_rule_id(),
+                       "table_id", schema.get_table_id(),
+                       "column_id", schema.get_column_id(),
+                       "version", schema.get_schema_version());
+    } else if (is_deleted) {
+      SHARE_SCHEMA_LOG(TRACE, "sensitive_column is is_deleted, don't add",
+                       "sensitive_rule_id", schema.get_sensitive_rule_id(),
+                       "table_id", schema.get_table_id(),
+                       "column_id", schema.get_column_id());
+    } else if (OB_FAIL(schema_array.push_back(schema))) {
+    } else {
+      SHARE_SCHEMA_LOG(TRACE, "retrieve sensitive_column schema succeed", K(schema));
+    }
+    prev_rule_id = schema.get_sensitive_rule_id();
+    prev_table_id = schema.get_table_id();
+    prev_column_id = schema.get_column_id();
+  }
+  if (ret != OB_ITER_END) {
+    SHARE_SCHEMA_LOG(WARN, "fail to get sensitive column schema. iter quit. ", K(ret));
+  } else {
+    SHARE_SCHEMA_LOG(TRACE, "retrieve sensitive column schema", K(tenant_id));
+    ret = OB_SUCCESS;
+  }
+  return ret;
+}
 
 template<typename T>
 int ObSchemaRetrieveUtils::retrieve_rls_column_schema(
@@ -6198,6 +6310,87 @@ int ObSchemaRetrieveUtils::fill_catalog_schema(
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, catalog_name, catalog_schema);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
       result, catalog_properties, catalog_schema, true/*skip null*/, false, "");
+  }
+  return ret;
+}
+
+template<typename T>
+int ObSchemaRetrieveUtils::fill_sensitive_column_schema(
+    const uint64_t tenant_id,
+    T &result,
+    ObSensitiveColumnSchema &sensitive_column_schema,
+    bool &is_deleted)
+{
+  sensitive_column_schema.reset();
+  is_deleted = false;
+  int ret = common::OB_SUCCESS;
+  sensitive_column_schema.set_tenant_id(tenant_id);
+  EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, sensitive_rule_id, sensitive_column_schema, uint64_t);
+  EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, table_id, sensitive_column_schema, uint64_t);
+  EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, column_id, sensitive_column_schema, uint64_t);
+  EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
+  if (!is_deleted) {
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, schema_version, sensitive_column_schema, int64_t);
+  }
+  return ret;
+}
+
+template<typename T>
+bool ObSchemaRetrieveUtils::compare_sensitive_rule_id(
+    const T *sensitive_rule_schema,
+    const uint64_t sensitive_rule_id)
+{
+  bool cmp = false;
+  if (OB_ISNULL(sensitive_rule_schema)) {
+    SHARE_SCHEMA_LOG_RET(WARN, OB_ERR_UNEXPECTED, "sensitive_rule schema is NULL");
+  } else {
+    cmp = sensitive_rule_schema->get_sensitive_rule_id() > sensitive_rule_id;
+  }
+  return cmp;
+}
+
+template<typename T>
+int ObSchemaRetrieveUtils::find_sensitive_rule_schema(
+    const uint64_t sensitive_rule_id,
+    ObArray<T *> sensitive_rule_schema_array,
+    T *&sensitive_rule_schema)
+{
+  int ret = OB_SUCCESS;
+  typename ObArray<T *>::iterator iter = sensitive_rule_schema_array.end();
+  iter = std::lower_bound(sensitive_rule_schema_array.begin(),
+                          sensitive_rule_schema_array.end(),
+                          sensitive_rule_id,
+                          compare_sensitive_rule_id<T>);
+  if (iter != sensitive_rule_schema_array.end()) {
+    if (OB_ISNULL(iter)) {
+      ret = OB_ERR_UNEXPECTED;
+      SHARE_SCHEMA_LOG(WARN, "fail to get rls policy schema", K(ret));
+    } else if ((*iter)->get_sensitive_rule_id() == sensitive_rule_id) {
+      sensitive_rule_schema = (*iter);
+    }
+  }
+  return ret;
+}
+
+template<typename T>
+int ObSchemaRetrieveUtils::fill_sensitive_rule_schema(
+    const uint64_t tenant_id,
+    T &result,
+    ObSensitiveRuleSchema &sensitive_rule_schema,
+    bool &is_deleted)
+{
+  sensitive_rule_schema.reset();
+  is_deleted = false;
+  int ret = common::OB_SUCCESS;
+  sensitive_rule_schema.set_tenant_id(tenant_id);
+  EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, sensitive_rule_id, sensitive_rule_schema, uint64_t);
+  EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
+  if (!is_deleted) {
+    EXTRACT_BOOL_FIELD_TO_CLASS_MYSQL(result, enabled, sensitive_rule_schema);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, schema_version, sensitive_rule_schema, int64_t);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, protection_policy, sensitive_rule_schema, int64_t);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, sensitive_rule_name, sensitive_rule_schema);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, method, sensitive_rule_schema);
   }
   return ret;
 }

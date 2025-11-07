@@ -394,6 +394,12 @@ OB_STMT_TYPE_DEF_UNKNOWN_AT(T_LOCATION_UTILS_LIST, no_priv_needed, 390)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_LOCATION_UTILS, get_location_util_privs, 391)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_FLUSH_SS_LOCAL_CACHE, get_sys_tenant_alter_system_priv, 392)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_REPLACE_TENANT, get_sys_tenant_alter_system_priv, 393)
+
+OB_STMT_TYPE_DEF_UNKNOWN_AT(T_CREATE_SENSITIVE_RULE, get_sensitive_rule_need_privs, 394)
+OB_STMT_TYPE_DEF_UNKNOWN_AT(T_DROP_SENSITIVE_RULE, get_sensitive_rule_need_privs, 395)
+OB_STMT_TYPE_DEF_UNKNOWN_AT(T_ALTER_SENSITIVE_RULE, get_sensitive_rule_need_privs, 396)
+OB_STMT_TYPE_DEF_UNKNOWN_AT(T_SHOW_SENSITIVE_RULES, no_priv_needed, 397)
+
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_MAX, err_stmt_type_priv, 500)
 #endif
 

@@ -6014,6 +6014,8 @@ PRIV_DECRYPT	varchar(3)	NO
 PRIV_EVENT	varchar(3)	NO			
 PRIV_CREATE_CATALOG	varchar(3)	NO			
 PRIV_USE_CATALOG	varchar(3)	NO			
+PRIV_CREATE_SENSITIVE_RULE	varchar(3)	NO			
+PRIV_PLAINACCESS	varchar(3)	NO			
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_USERS|%') then 2
@@ -11145,6 +11147,53 @@ when ('|V$OB_SS_SSTABLES|' like '%|V$OB_VECTOR_MEMORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_VECTOR_MEMORY limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_SENSITIVE_RULES;
+Field	Type	Null	Key	Default	Extra
+RULE_NAME	varchar(256)	NO		NULL	
+PROTECTION_POLICY	varchar(10)	NO			
+METHOD	varchar(4096)	NO		NULL	
+ENABLED	varchar(3)	NO			
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_SENSITIVE_RULES|%') then 2
+when ('' like '%|DBA_OB_SENSITIVE_RULES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_SENSITIVE_RULES|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_SENSITIVE_RULES limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_SENSITIVE_COLUMNS;
+Field	Type	Null	Key	Default	Extra
+RULE_NAME	varchar(256)	NO		NULL	
+DATABASE_NAME	varchar(128)	NO			
+TABLE_NAME	varchar(256)	NO			
+COLUMN_NAME	varchar(128)	NO			
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_SENSITIVE_COLUMNS|%') then 2
+when ('' like '%|DBA_OB_SENSITIVE_COLUMNS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_SENSITIVE_COLUMNS|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_SENSITIVE_COLUMNS limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS;
+Field	Type	Null	Key	Default	Extra
+RULE_NAME	varchar(64)	NO		NULL	
+USER_NAME	varchar(128)	NO		NULL	
+USER_TYPE	varchar(4)	NO			
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS|%') then 2
+when ('' like '%|DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS limit 1);
 cnt
 1
 desc oceanbase.GV$OB_HNSW_INDEX_INFO;

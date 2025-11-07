@@ -374,6 +374,10 @@ void ObServerSchemaService::AllSchemaKeys::reset()
   del_ai_model_keys_.clear();
   new_ccl_rule_keys_.clear();
   del_ccl_rule_keys_.clear();
+  new_sensitive_rule_keys_.clear();
+  del_sensitive_rule_keys_.clear();
+  new_sensitive_rule_priv_keys_.clear();
+  del_sensitive_rule_priv_keys_.clear();
 }
 
 int ObServerSchemaService::AllSchemaKeys::create(int64_t bucket_size)
@@ -556,6 +560,14 @@ int ObServerSchemaService::AllSchemaKeys::create(int64_t bucket_size)
     LOG_WARN("failed to create new_ccl_rule_keys hashset", K(bucket_size), K(ret));
   } else if (OB_FAIL(del_ccl_rule_keys_.create(bucket_size))) {
     LOG_WARN("failed to create del_ccl_rule_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(new_sensitive_rule_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create new_sensitive_rule_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(del_sensitive_rule_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create del_sensitive_rule_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(new_sensitive_rule_priv_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create new_sensitive_rule_priv_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(del_sensitive_rule_priv_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create del_sensitive_rule_priv_keys hashset", K(bucket_size), K(ret));
   }
   return ret;
 }
@@ -696,6 +708,12 @@ int ObServerSchemaService::del_tenant_operation(
   } else if (OB_FAIL(del_operation(tenant_id,
              new_flag ? schema_keys.new_ccl_rule_keys_ : schema_keys.del_ccl_rule_keys_))) {
     LOG_WARN("fail to del ccl_rule operation", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(del_operation(tenant_id,
+             new_flag ? schema_keys.new_sensitive_rule_keys_ : schema_keys.del_sensitive_rule_keys_))) {
+    LOG_WARN("fail to del sensitive_rule operation", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(del_operation(tenant_id,
+             new_flag ? schema_keys.new_sensitive_rule_priv_keys_ : schema_keys.del_sensitive_rule_priv_keys_))) {
+    LOG_WARN("fail to del sensitive_rule_priv operation", KR(ret), K(tenant_id));
   }
   return ret;
 }
@@ -4569,6 +4587,174 @@ int ObServerSchemaService::get_increment_ccl_rule_keys_reversely(
   return ret;
 }
 
+int ObServerSchemaService::get_increment_sensitive_rule_keys(const ObSchemaMgr &schema_mgr,
+                                                             const ObSchemaOperation &schema_operation,
+                                                             AllSchemaKeys &schema_keys)
+{
+  int ret = OB_SUCCESS;
+  if (!(schema_operation.op_type_ > OB_DDL_SENSITIVE_RULE_OPERATION_BEGIN
+        && schema_operation.op_type_ < OB_DDL_SENSITIVE_RULE_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), KR(ret));
+  } else {
+    uint64_t tenant_id = schema_operation.tenant_id_;
+    uint64_t sensitive_rule_id = schema_operation.sensitive_rule_id_;
+    int64_t schema_version = schema_operation.schema_version_;
+    int hash_ret = OB_SUCCESS;
+    SchemaKey schema_key;
+    schema_key.tenant_id_ = tenant_id;
+    schema_key.sensitive_rule_id_ = sensitive_rule_id;
+    schema_key.schema_version_ = schema_version;
+    if (schema_operation.op_type_ == OB_DDL_DROP_SENSITIVE_RULE) {
+      hash_ret = schema_keys.new_sensitive_rule_keys_.erase_refactored(schema_key);
+      if (OB_SUCCESS != hash_ret && OB_HASH_NOT_EXIST != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to del dropped sensitive_rule id", K(hash_ret), KR(ret));
+      } else {
+        const ObSensitiveRuleSchema *schema = NULL;
+        if (OB_FAIL(schema_mgr.sensitive_rule_mgr_.get_schema_by_id(sensitive_rule_id, schema))) {
+          LOG_WARN("failed to get label security sensitive_rule schema", K(sensitive_rule_id), KR(ret));
+        } else if (NULL != schema) {
+          hash_ret = schema_keys.del_sensitive_rule_keys_.set_refactored_1(schema_key, 1);
+          if (OB_SUCCESS != hash_ret) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to add del sensitive_rule id", K(hash_ret), KR(ret));
+          }
+        }
+      }
+    } else {
+      hash_ret = schema_keys.new_sensitive_rule_keys_.set_refactored_1(schema_key, 1);
+      if (OB_SUCCESS != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to add new sensitive_rule id", K(hash_ret), KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObServerSchemaService::get_increment_sensitive_rule_keys_reversely(const ObSchemaMgr &schema_mgr,
+                                                                       const ObSchemaOperation &schema_operation,
+                                                                       AllSchemaKeys &schema_keys)
+{
+  int ret = OB_SUCCESS;
+  if (!(schema_operation.op_type_ > OB_DDL_SENSITIVE_RULE_OPERATION_BEGIN
+        && schema_operation.op_type_ < OB_DDL_SENSITIVE_RULE_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), KR(ret));
+  } else {
+    const uint64_t tenant_id = schema_operation.tenant_id_;
+    const int64_t schema_version = schema_operation.schema_version_;
+    SchemaKey schema_key;
+    schema_key.tenant_id_ = tenant_id;
+    schema_key.sensitive_rule_id_ = schema_operation.sensitive_rule_id_;
+    schema_key.schema_version_ = schema_version;
+    bool is_delete = (OB_DDL_CREATE_SENSITIVE_RULE == schema_operation.op_type_);
+    bool is_exist = false;
+    const ObSensitiveRuleSchema *schema = NULL;
+    if (OB_FAIL(schema_mgr.sensitive_rule_mgr_.get_schema_by_id(schema_key.sensitive_rule_id_, schema))) {
+      LOG_WARN("failed to get schema", K(schema_key), KR(ret));
+    } else if (NULL != schema) {
+      is_exist = true;
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(REPLAY_OP(schema_key, schema_keys.del_sensitive_rule_keys_,
+          schema_keys.new_sensitive_rule_keys_, is_delete, is_exist))) {
+        LOG_WARN("replay operation failed", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObServerSchemaService::get_increment_sensitive_rule_priv_keys(const ObSchemaMgr &schema_mgr,
+                                                                  const ObSchemaOperation &schema_operation,
+                                                                  AllSchemaKeys &schema_keys)
+{
+  int ret = OB_SUCCESS;
+  if (!(schema_operation.op_type_ > OB_DDL_SENSITIVE_RULE_PRIV_OPERATION_BEGIN
+        && schema_operation.op_type_ < OB_DDL_SENSITIVE_RULE_PRIV_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), KR(ret));
+  } else {
+    const uint64_t tenant_id = schema_operation.tenant_id_;
+    const uint64_t user_id = schema_operation.user_id_;
+    const ObString &sensitive_rule_name = schema_operation.sensitive_rule_name_;
+    const int64_t schema_version = schema_operation.schema_version_;
+    int hash_ret = OB_SUCCESS;
+    SchemaKey schema_key;
+    schema_key.tenant_id_ = tenant_id;
+    schema_key.user_id_ = user_id;
+    schema_key.sensitive_rule_name_ = sensitive_rule_name;
+    schema_key.schema_version_ = schema_version;
+    if (OB_DDL_DEL_SENSITIVE_RULE_PRIV == schema_operation.op_type_) { //delete
+      hash_ret = schema_keys.new_sensitive_rule_priv_keys_.erase_refactored(schema_key);
+      if (OB_SUCCESS != hash_ret && OB_HASH_NOT_EXIST != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Failed to del sensitive_rule_priv_key from new_sensitive_rule_priv_keys", KR(ret));
+      } else {
+        const ObSensitiveRulePriv *sensitive_rule_priv = NULL;
+        if (OB_FAIL(schema_mgr.priv_mgr_.get_sensitive_rule_priv(
+            ObSensitiveRulePrivSortKey(tenant_id, user_id, sensitive_rule_name), sensitive_rule_priv))) {
+          LOG_WARN("get sensitive_rule priv set failed", KR(ret));
+        } else if (NULL != sensitive_rule_priv) {
+          hash_ret = schema_keys.del_sensitive_rule_priv_keys_.set_refactored_1(schema_key, 1);
+          if (OB_SUCCESS != hash_ret) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("Failed to add sensitive_rule_priv_key to del_sensitive_rule_priv_keys", K(hash_ret), KR(ret));
+          }
+        }
+      }
+    } else {
+      hash_ret = schema_keys.new_sensitive_rule_priv_keys_.set_refactored_1(schema_key, 1);
+      if (OB_SUCCESS != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Failed to add new sensitive_rule_priv_key", K(hash_ret), KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObServerSchemaService::get_increment_sensitive_rule_priv_keys_reversely(const ObSchemaMgr &schema_mgr,
+                                                                            const ObSchemaOperation &schema_operation,
+                                                                            AllSchemaKeys &schema_keys)
+{
+  int ret = OB_SUCCESS;
+  if (!(schema_operation.op_type_ > OB_DDL_SENSITIVE_RULE_PRIV_OPERATION_BEGIN
+        && schema_operation.op_type_ < OB_DDL_SENSITIVE_RULE_PRIV_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), KR(ret));
+  } else {
+    const uint64_t tenant_id = schema_operation.tenant_id_;
+    const uint64_t user_id = schema_operation.user_id_;
+    const ObString &sensitive_rule_name = schema_operation.sensitive_rule_name_;
+    const int64_t schema_version = schema_operation.schema_version_;
+    SchemaKey schema_key;
+    schema_key.tenant_id_ = tenant_id;
+    schema_key.user_id_ = user_id;
+    schema_key.sensitive_rule_name_ = sensitive_rule_name;
+    schema_key.schema_version_ = schema_version;
+    bool is_delete = (OB_DDL_GRANT_REVOKE_SENSITIVE_RULE == schema_operation.op_type_);
+    bool is_exist = false;
+    const ObSensitiveRulePriv *sensitive_rule_priv = NULL;
+    if (OB_FAIL(schema_mgr.priv_mgr_.get_sensitive_rule_priv(schema_key.get_sensitive_rule_priv_key(), sensitive_rule_priv))) {
+      LOG_WARN("get sensitive_rule_priv failed",
+              "sensitive_rule_priv_key", schema_key.get_sensitive_rule_priv_key(),
+              KR(ret));
+    } else if (NULL != sensitive_rule_priv) {
+      is_exist = true;
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(REPLAY_OP(schema_key, schema_keys.del_sensitive_rule_priv_keys_,
+          schema_keys.new_sensitive_rule_priv_keys_, is_delete, is_exist))) {
+        LOG_WARN("replay operation failed", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 // Currently only the full tenant schema of the system tenant is cached
 int ObServerSchemaService::add_tenant_schemas_to_cache(const TenantKeys &tenant_keys,
                                                        ObISQLClient &sql_client)
@@ -4727,6 +4913,7 @@ int ObServerSchemaService::fetch_increment_schemas(
   GET_BATCH_SCHEMAS(obj_priv, ObObjPriv, ObjPrivKeys);
   GET_BATCH_SCHEMAS(obj_mysql_priv, ObObjMysqlPriv, ObjMysqlPrivKeys);
   GET_BATCH_SCHEMAS(column_priv, ObColumnPriv, ColumnPrivKeys);
+  GET_BATCH_SCHEMAS(sensitive_rule_priv, ObSensitiveRulePriv, SensitiveRulePrivKeys);
 
   // After the schema is split, because the operation_type has not been updated,
   // the OB_DDL_TENANT_OPERATION is still reused
@@ -4746,6 +4933,7 @@ int ObServerSchemaService::fetch_increment_schemas(
   GET_BATCH_SCHEMAS(external_resource, ObSimpleExternalResourceSchema, ExternalResourceKeys);
   GET_BATCH_SCHEMAS(ai_model, ObAiModelSchema, AiModelKeys);
   GET_BATCH_SCHEMAS(ccl_rule, ObSimpleCCLRuleSchema, CCLRuleKeys);
+  GET_BATCH_SCHEMAS(sensitive_rule, ObSensitiveRuleSchema, SensitiveRuleKeys);
 
   // After the schema is split, ordinary tenants do not refresh the tenant schema and system table schema
   const uint64_t tenant_id = schema_status.tenant_id_;
@@ -4906,6 +5094,12 @@ int ObServerSchemaService::apply_increment_schema_to_cache(
   } else if (OB_FAIL(apply_ccl_rule_schema_to_cache(
              tenant_id, all_keys, simple_incre_schemas, schema_mgr))) {
     LOG_WARN("fail to apply rls_context schema to cache", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(apply_sensitive_rule_schema_to_cache(
+             tenant_id, all_keys, simple_incre_schemas, schema_mgr.sensitive_rule_mgr_))) {
+    LOG_WARN("fail to apply sensitive_rule schema to cache", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(apply_sensitive_rule_priv_schema_to_cache(
+             tenant_id, all_keys, simple_incre_schemas, schema_mgr.priv_mgr_))) {
+    LOG_WARN("fail to apply sensitive_rule schema to cache", KR(ret), K(tenant_id));
   } else if (OB_FAIL(apply_external_resource_schema_to_cache(
              tenant_id, all_keys, simple_incre_schemas, schema_mgr.external_resource_mgr_))) {
     LOG_WARN("fail to apply external_resource schema to cache", KR(ret), K(tenant_id));
@@ -5077,6 +5271,8 @@ APPLY_SCHEMA_TO_CACHE_IMPL(ObSchemaMgr, catalog, ObCatalogSchema, CatalogKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObExternalResourceMgr, external_resource, ObSimpleExternalResourceSchema, ExternalResourceKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObSchemaMgr, ai_model, ObAiModelSchema, AiModelKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObSchemaMgr, ccl_rule, ObSimpleCCLRuleSchema, CCLRuleKeys);
+APPLY_SCHEMA_TO_CACHE_IMPL(ObSensitiveRuleMgr, sensitive_rule, ObSensitiveRuleSchema, SensitiveRuleKeys);
+APPLY_SCHEMA_TO_CACHE_IMPL(ObPrivMgr, sensitive_rule_priv, ObSensitiveRulePriv, SensitiveRulePrivKeys);
 
 int ObServerSchemaService::update_schema_mgr(ObISQLClient &sql_client,
                                              const ObRefreshSchemaStatus &schema_status,
@@ -5566,6 +5762,16 @@ int ObServerSchemaService::replay_log(
           if (OB_FAIL(get_increment_ccl_rule_keys(schema_mgr, schema_operation, schema_keys))) {
             LOG_WARN("fail to get increment ccl rule id", K(ret));
           }
+        } else if (schema_operation.op_type_ > OB_DDL_SENSITIVE_RULE_OPERATION_BEGIN &&
+            schema_operation.op_type_ < OB_DDL_SENSITIVE_RULE_OPERATION_END) {
+          if (OB_FAIL(get_increment_sensitive_rule_keys(schema_mgr, schema_operation, schema_keys))) {
+            LOG_WARN("fail to get increment sensitive rule id", K(ret));
+          }
+        } else if (schema_operation.op_type_ > OB_DDL_SENSITIVE_RULE_PRIV_OPERATION_BEGIN &&
+            schema_operation.op_type_ < OB_DDL_SENSITIVE_RULE_PRIV_OPERATION_END) {
+          if (OB_FAIL(get_increment_sensitive_rule_priv_keys(schema_mgr, schema_operation, schema_keys))) {
+            LOG_WARN("fail to get increment sensitive rule priv id", K(ret));
+          }
         }
       }
     }
@@ -5803,6 +6009,16 @@ int ObServerSchemaService::replay_log_reversely(
                  schema_operation.op_type_ < OB_DDL_CCL_RULE_OPERATION_END) {
         if (OB_FAIL(get_increment_ccl_rule_keys_reversely(schema_mgr, schema_operation, schema_keys))) {
           LOG_WARN("fail to get increment ccl rule keys reversely", KR(ret));
+        }
+      } else if (schema_operation.op_type_ > OB_DDL_SENSITIVE_RULE_OPERATION_BEGIN
+                 && schema_operation.op_type_ < OB_DDL_SENSITIVE_RULE_OPERATION_END) {
+        if (OB_FAIL(get_increment_sensitive_rule_keys_reversely(schema_mgr, schema_operation, schema_keys))) {
+          LOG_WARN("fail to get increment sensitive_rule keys reversely", KR(ret));
+        }
+      } else if (schema_operation.op_type_ > OB_DDL_SENSITIVE_RULE_PRIV_OPERATION_BEGIN
+                 && schema_operation.op_type_ < OB_DDL_SENSITIVE_RULE_PRIV_OPERATION_END) {
+        if (OB_FAIL(get_increment_sensitive_rule_priv_keys_reversely(schema_mgr, schema_operation, schema_keys))) {
+          LOG_WARN("fail to get increment sensitive_rule_priv keys reversely", KR(ret));
         }
       } else {
         // ingore other operaton.
@@ -7136,6 +7352,8 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
       INIT_ARRAY(ObSimpleExternalResourceSchema, simple_external_resources);
       INIT_ARRAY(ObAiModelSchema, simple_ai_models);
       INIT_ARRAY(ObSimpleCCLRuleSchema, simple_ccl_rules);
+      INIT_ARRAY(ObSensitiveRuleSchema, simple_sensitive_rules);
+      INIT_ARRAY(ObSensitiveRulePriv, sensitive_rule_privs);
       #undef INIT_ARRAY
       ObSimpleSysVariableSchema simple_sys_variable;
 
@@ -7374,6 +7592,30 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
         }
       }
 
+      if (OB_SUCC(ret)) {
+        const ObSimpleTableSchemaV2 *tmp_table = NULL;
+        if (OB_FAIL(schema_mgr_for_cache->get_table_schema(tenant_id, OB_ALL_SENSITIVE_RULE_HISTORY_TID, tmp_table))) {
+          LOG_WARN("fail to get table schema", KR(ret), K(tenant_id));
+        } else if (OB_ISNULL(tmp_table)) {
+          // for compatibility
+        } else if (OB_FAIL(schema_service_->get_all_sensitive_rules(
+          sql_client, schema_status, schema_version, tenant_id, simple_sensitive_rules))) {
+          LOG_WARN("get all sensitive_rule schema failed", K(ret), K(schema_version), K(tenant_id));
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        const ObSimpleTableSchemaV2 *tmp_table = NULL;
+        if (OB_FAIL(schema_mgr_for_cache->get_table_schema(tenant_id, OB_ALL_SENSITIVE_RULE_PRIVILEGE_HISTORY_TID, tmp_table))) {
+          LOG_WARN("fail to get table schema", KR(ret), K(tenant_id));
+        } else if (OB_ISNULL(tmp_table)) {
+          // for compatibility
+        } else if (OB_FAIL(schema_service_->get_all_sensitive_rule_privs(
+          sql_client, schema_status, schema_version, tenant_id, sensitive_rule_privs))) {
+          LOG_WARN("get all sensitive_rule priv failed", K(ret), K(schema_version), K(tenant_id));
+        }
+      }
+
       const bool refresh_full_schema = true;
       // add simple schema for cache
       if (OB_FAIL(ret)) {
@@ -7463,6 +7705,10 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
         LOG_WARN("add ai_models failed", K(ret));
       } else if (OB_FAIL(schema_mgr_for_cache->add_ccl_rules(simple_ccl_rules))) {
         LOG_WARN("add ccl rules failed", K(ret));
+      } else if (OB_FAIL(schema_mgr_for_cache->sensitive_rule_mgr_.add_sensitive_rules(simple_sensitive_rules))) {
+        LOG_WARN("add sensitive_rules failed", K(ret));
+      } else if (OB_FAIL(schema_mgr_for_cache->priv_mgr_.add_sensitive_rule_privs(sensitive_rule_privs))) {
+        LOG_WARN("add sensitive_rule_privs failed", K(ret));
       }
 
       LOG_INFO("add schemas for tenant finish",
@@ -7500,7 +7746,9 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
                "rls_contexts", simple_rls_contexts.count(),
                "catalogs", simple_catalogs.count(),
                "catalog_privs", catalog_privs.count(),
-               "ccl_rules", simple_ccl_rules.count()
+               "ccl_rules", simple_ccl_rules.count(),
+               "sensitive_rules", simple_sensitive_rules.count(),
+               "sensitive_rule_privs", sensitive_rule_privs.count()
               );
     }
 

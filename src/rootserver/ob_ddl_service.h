@@ -1135,6 +1135,7 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
                                          const share::schema::ObTableSchema &table_schema,
                                          const AlterTableSchema &alter_table_schema,
                                          bool &is_alter_decimal_int_off);
+  int check_inner_stat() const;
 private:
   enum PartitionBornMethod : int64_t
   {
@@ -1303,7 +1304,6 @@ int check_will_be_having_domain_index_operation(
       const share::schema::ObSynonymInfo *&synonym_info,
       const share::schema::ObSequenceSchema *&sequence_schema,
       RenameOracleObjectType &obj_type);
-  int check_inner_stat() const;
   int get_valid_index_schema_by_id_for_drop_index_(
       const uint64_t data_table_id,
       const obrpc::ObDropIndexArg &drop_index_arg,
@@ -1436,6 +1436,7 @@ int check_will_be_having_domain_index_operation(
   int create_user_hidden_table(
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::ObTableSchema &hidden_table_schema,
+      const share::schema::AlterTableSchema &alter_table_schema,
       const obrpc::ObSequenceDDLArg *sequence_ddl_arg,
       const bool bind_tablets,
       share::schema::ObSchemaGetterGuard &src_tenant_schema_guard,
