@@ -20,6 +20,7 @@
 #include "pl/ob_pl_udt_object_manager.h"
 #endif
 #include "pl/ob_pl_resolver.h"
+#include "sql/engine/expr/ob_expr_operator_factory.h"
 
 namespace oceanbase
 {
@@ -1070,6 +1071,15 @@ int ObCreateRoutineResolver::resolve_impl(ObRoutineType routine_type,
       session_info_->set_database_id(old_database_id);
     }
   }
+
+  // Check if function name conflicts with native function
+  if (OB_SUCC(ret) && ROUTINE_FUNCTION_TYPE == routine_type && lib::is_mysql_mode()) {
+    ObString func_name = crt_routine_arg->routine_info_.get_routine_name();
+    if (OB_FAIL(check_builtin_function_conflict(func_name))) {
+      LOG_WARN("failed to check builtin function conflict", K(ret), K(func_name));
+    }
+  }
+
   return ret;
 }
 
@@ -1501,6 +1511,30 @@ int ObCreateRoutineResolver::check_external_udf_version(uint64_t tenant_id,
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("external UDAF or UDTF is only supported after 4.4.1", K(ret), K(lbt()));
     }
+  }
+
+  return ret;
+}
+
+int ObCreateRoutineResolver::check_builtin_function_conflict(const ObString &function_name)
+{
+  int ret = OB_SUCCESS;
+  // Check if the function name conflicts with any built-in functions
+  bool conflict_found = false;
+  ObString real_function_name = function_name;
+  if (0 == function_name.case_compare("contains")) {
+    // treat "contains" as "array_contains" because the MySQL parser rules will resolve func_expr "contains"'s type to T_FUNC_SYS_ARRAY_CONTAINS
+    real_function_name.assign_ptr("array_contains", strlen("array_contains"));
+  }
+
+  ObExprOperatorType type = ObExprOperatorFactory::get_type_by_name(real_function_name);
+  if (type != T_INVALID) {
+    conflict_found = true;
+  }
+
+  if (conflict_found) {
+    // Emit a warning for built-in function name conflict
+    LOG_USER_WARN(OB_ERR_SP_ALREADY_EXISTS, "FUNCTION", function_name.length(), function_name.ptr());
   }
 
   return ret;
