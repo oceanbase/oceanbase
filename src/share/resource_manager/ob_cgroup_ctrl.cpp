@@ -49,6 +49,12 @@ int CONVERT_FUNCTION_TYPE_TO_GROUP_ID(const uint8_t function_type, uint64_t &gro
   return G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_function_type(MTL_ID(), function_type, group_id);
 }
 
+bool is_global_background_resource_isolation_enabled()
+{
+  // Check the GCONF configuration
+  return GCONF.enable_global_background_resource_isolation;
+}
+
 }  // namespace lib
 
 namespace share
