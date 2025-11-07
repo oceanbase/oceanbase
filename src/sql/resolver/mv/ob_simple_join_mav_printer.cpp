@@ -267,7 +267,7 @@ int ObSimpleJoinMAVPrinter::gen_pre_data_access_stmt(const TableItem &source_tab
   ObSelectStmt *unchanged_data_stmt = NULL;
   ObSelectStmt *deleted_data_stmt = NULL;
   access_sel = NULL;
-  if (OB_FAIL(gen_delta_pre_table_view(&source_table, unchanged_data_stmt, false, false))) {
+  if (OB_FAIL(gen_delta_pre_table_view(&source_table, unchanged_data_stmt, false))) {
     LOG_WARN("failed to unchanged deleted data access stmt ", K(ret));
   } else if (is_table_skip_refresh(source_table)) {
     // only unchanged data for skip refresh table

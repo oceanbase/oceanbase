@@ -273,7 +273,7 @@ protected:
                              const bool is_for_mlog_table,
                              const bool use_orig_sel_alias,
                              ObIArray<ObRawExpr *> &rowkey_exprs);
-  int gen_mv_rowkey_expr(const TableItem *mv_table, ObOpRawExpr *&rowkey_expr);
+  int get_mv_rowkey_exprs(const TableItem *mv_table, ObIArray<ObRawExpr*> &mv_rowkey_exprs);
   int add_col_exprs_into_select(ObIArray<SelectItem> &select_items, const ObIArray<ObRawExpr*> &col_exprs);
   int add_mv_rowkey_into_select(ObSelectStmt *stmt, const TableItem *mv_table);
   int add_semi_to_inner_hint(ObDMLStmt *stmt);
@@ -285,6 +285,9 @@ protected:
                                 const ObIArray<ObRawExpr*> &conds,
                                 const bool is_exists,
                                 ObRawExpr *&exists_expr);
+  int build_exists_equal_expr(ObSelectStmt *subq_stmt,
+                              const ObIArray<ObRawExpr*> &equal_cond_exprs,
+                              ObRawExpr *&exists_expr);
   template <typename StmtType>
   inline int create_simple_stmt(StmtType *&stmt)
   {

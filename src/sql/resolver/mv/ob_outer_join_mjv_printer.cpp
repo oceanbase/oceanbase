@@ -140,8 +140,10 @@ int ObOuterJoinMJVPrinter::gen_delete_for_inner_join(const TableItem *delta_tabl
   } else if (OB_FALSE_IT(mv_table->database_name_ = mv_db_name_)) {
   } else if (OB_FAIL(gen_exists_cond_for_table(delta_table, mv_table, true, true, semi_filter))) {
     LOG_WARN("failed to create simple column exprs", K(ret));
-  } else if (OB_FAIL(del_stmt->get_condition_exprs().push_back(semi_filter))) {
+  } else if (OB_FAIL(del_stmt->add_condition_expr(semi_filter))) {
     LOG_WARN("failed to push back semi filter", K(ret));
+  } else if (OB_FAIL(add_semi_to_inner_hint(del_stmt))) {
+    LOG_WARN("failed to add semi to inner hint", K(ret));
   } else if (OB_FAIL(add_union_all_child_refresh_filter_if_needed(del_stmt, mv_table))) {
     LOG_WARN("failed to add union all child refresh filter", K(ret));
   } else if (OB_FAIL(dml_stmts.push_back(del_stmt))) {
@@ -289,9 +291,8 @@ int ObOuterJoinMJVPrinter::gen_delete_for_left_join(const TableItem *delta_table
   ObDeleteStmt *del_stmt = NULL;
   ObSelectStmt *cond_sel_stmt = NULL;
   TableItem *mv_table = NULL;
-  ObOpRawExpr *mv_pk_expr = NULL;
-  ObQueryRefRawExpr *cond_query_expr = NULL;
-  ObOpRawExpr *semi_filter = NULL;
+  ObSEArray<ObRawExpr*, 8> mv_rowkey_exprs;
+  ObRawExpr *semi_filter = NULL;
   if (OB_FAIL(create_simple_stmt(del_stmt))) {
     LOG_WARN("failed to create simple stmt", K(ret));
   } else if (OB_FAIL(create_simple_table_item(del_stmt, mv_schema_.get_table_name(), mv_table))) {
@@ -312,16 +313,11 @@ int ObOuterJoinMJVPrinter::gen_delete_for_left_join(const TableItem *delta_table
                                                                upper_table,
                                                                cond_sel_stmt))) {
     LOG_WARN("failed to generate select stmt for semi filter", K(ret));
-  } else if (OB_FAIL(gen_mv_rowkey_expr(mv_table, mv_pk_expr))) {
-    LOG_WARN("failed to generate mv rowkey expr", K(ret));
-  } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_REF_QUERY, cond_query_expr))) {
-    LOG_WARN("failed to create query ref raw expr", K(ret));
-  } else if (OB_FALSE_IT(cond_query_expr->set_ref_stmt(cond_sel_stmt))) {
-  } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_OP_IN, semi_filter))) {
-    LOG_WARN("failed to create op in raw expr", K(ret));
-  } else if (OB_FAIL(semi_filter->set_param_exprs(mv_pk_expr, cond_query_expr))) {
-    LOG_WARN("failed to set param exprs", K(ret));
-  } else if (OB_FAIL(del_stmt->get_condition_exprs().push_back(semi_filter))) {
+  } else if (OB_FAIL(get_mv_rowkey_exprs(mv_table, mv_rowkey_exprs))) {
+    LOG_WARN("failed to get mv rowkey exprs", K(ret));
+  } else if (OB_FAIL(build_exists_equal_expr(cond_sel_stmt, mv_rowkey_exprs, semi_filter))) {
+    LOG_WARN("failed to build exists equal expr", K(ret));
+  } else if (OB_FAIL(del_stmt->add_condition_expr(semi_filter))) {
     LOG_WARN("failed to push back semi filter", K(ret));
   } else if (OB_FAIL(add_semi_to_inner_hint(del_stmt))) {
     LOG_WARN("failed to add semi to inner hint", K(ret));
@@ -346,9 +342,7 @@ int ObOuterJoinMJVPrinter::gen_select_for_left_join_first_delete(const TableItem
   ObSEArray<int64_t, 4> other_join_table_idxs; // useless for the first delete
   ObSEArray<ObRawExpr*, 16> other_join_table_rowkeys;
   ObSEArray<ObRawExpr*, 16> win_func_partition_key;
-  ObOpRawExpr *mv_stat_cond_expr = NULL;
-  ObQueryRefRawExpr *in_sel_query_expr = NULL;
-  ObOpRawExpr *left_table_rowkey_row = NULL;
+  ObRawExpr *mv_stat_cond_expr = NULL;
   ObSelectStmt *in_sel_stmt = NULL;
   ObRawExpr *in_sel_cond_expr = NULL;
   cond_sel_stmt = NULL;
@@ -418,24 +412,15 @@ int ObOuterJoinMJVPrinter::gen_select_for_left_join_first_delete(const TableItem
     LOG_WARN("failed to add from item", K(ret));
   } else if (OB_FAIL(gen_exists_cond_for_table(delta_table, mv_table, true, true, in_sel_cond_expr))) {
     LOG_WARN("failed to generate exists cond for mv_stat cond", K(ret));
-  } else if (OB_FAIL(in_sel_stmt->get_condition_exprs().push_back(in_sel_cond_expr))) {
+  } else if (OB_FAIL(in_sel_stmt->add_condition_expr(in_sel_cond_expr))) {
     LOG_WARN("failed to push back semi filter", K(ret));
   } else if (OB_FAIL(add_semi_to_inner_hint(in_sel_stmt))) {
     LOG_WARN("failed to add semi to inner hint", K(ret));
   } else if (OB_FAIL(add_col_exprs_into_select(in_sel_stmt->get_select_items(), other_join_table_rowkeys))) {
     LOG_WARN("failed to add col exprs into select", K(ret));
-  } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_REF_QUERY, in_sel_query_expr))) {
-    LOG_WARN("failed to create query ref raw expr", K(ret));
-  } else if (OB_FALSE_IT(in_sel_query_expr->set_ref_stmt(in_sel_stmt))) {
-  } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_OP_ROW, left_table_rowkey_row))) {
-    LOG_WARN("failed to create query ref raw expr", K(ret));
-  } else if (OB_FAIL(left_table_rowkey_row->set_param_exprs(other_join_table_rowkeys))) {
-    LOG_WARN("failed to set param exprs", K(ret));
-  } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_OP_IN, mv_stat_cond_expr))) {
-    LOG_WARN("failed to create op in raw expr", K(ret));
-  } else if (OB_FAIL(mv_stat_cond_expr->set_param_exprs(left_table_rowkey_row, in_sel_query_expr))) {
-    LOG_WARN("failed to set param exprs", K(ret));
-  } else if (OB_FAIL(mv_stat_stmt->get_condition_exprs().push_back(mv_stat_cond_expr))) {
+  } else if (OB_FAIL(build_exists_equal_expr(in_sel_stmt, other_join_table_rowkeys, mv_stat_cond_expr))) {
+    LOG_WARN("failed to build exists equal expr", K(ret));
+  } else if (OB_FAIL(mv_stat_stmt->add_condition_expr(mv_stat_cond_expr))) {
     LOG_WARN("failed to push back semi filter", K(ret));
   } else if (OB_FAIL(add_semi_to_inner_hint(mv_stat_stmt))) {
     LOG_WARN("failed to add semi to inner hint", K(ret));
@@ -640,7 +625,7 @@ int ObOuterJoinMJVPrinter::gen_update_for_left_join(const TableItem *delta_table
     LOG_WARN("get unexpected null", K(ret), K(upd_stmt), K(mv_table));
   } else if (OB_FAIL(gen_exists_cond_for_table(delta_table, mv_table, true, true, semi_filter))) {
     LOG_WARN("failed to gen exists semi filter", K(ret));
-  } else if (OB_FAIL(upd_stmt->get_condition_exprs().push_back(semi_filter))) {
+  } else if (OB_FAIL(upd_stmt->add_condition_expr(semi_filter))) {
     LOG_WARN("failed to push back semi filter", K(ret));
   } else if (OB_FAIL(add_semi_to_inner_hint(upd_stmt))) {
     LOG_WARN("failed to add semi to inner hint", K(ret));
@@ -753,10 +738,7 @@ int ObOuterJoinMJVPrinter::gen_select_for_left_join_second_delete(const TableIte
   ObSEArray<ObRawExpr*, 16> other_join_table_rowkeys;
   ObSEArray<ObRawExpr*, 16> all_other_table_rowkeys; // useless for the second delete
   TableItem *new_table = NULL;
-  ObOpRawExpr *mv_stat_cond_expr = NULL;
-  ObOpRawExpr *left_table_rowkey_row = NULL;
-  ObSEArray<ObRawExpr*, 16> left_table_rowkey_row_params;
-  ObQueryRefRawExpr *in_sel_query_expr = NULL;
+  ObRawExpr *mv_stat_cond_expr = NULL;
   ObRawExprCopier in_sel_stmt_copier(ctx_.expr_factory_);
   cond_sel_stmt = NULL;
   if (OB_ISNULL(delta_table) || OB_ISNULL(upper_table)) {
@@ -795,23 +777,6 @@ int ObOuterJoinMJVPrinter::gen_select_for_left_join_second_delete(const TableIte
   // generate where conditions for mv_stat
   } else if (OB_FAIL(create_simple_stmt(in_sel_stmt))) {
     LOG_WARN("failed to create simple stmt", K(ret));
-  } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_REF_QUERY, in_sel_query_expr))) {
-    LOG_WARN("failed to create query ref raw expr", K(ret));
-  } else if (OB_FALSE_IT(in_sel_query_expr->set_ref_stmt(in_sel_stmt))) {
-  } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_OP_ROW, left_table_rowkey_row))) {
-    LOG_WARN("failed to create query ref raw expr", K(ret));
-  } else if (OB_FAIL(left_table_rowkey_row->set_param_exprs(other_join_table_rowkeys))) {
-    LOG_WARN("failed to set rowkey row params", K(ret));
-  } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_OP_IN, mv_stat_cond_expr))) {
-    LOG_WARN("failed to create op in raw expr", K(ret));
-  } else if (OB_FAIL(mv_stat_cond_expr->set_param_exprs(left_table_rowkey_row, in_sel_query_expr))) {
-    LOG_WARN("failed to set param exprs", K(ret));
-  } else if (OB_FAIL(mv_stat_stmt->get_condition_exprs().push_back(mv_stat_cond_expr))) {
-    LOG_WARN("failed to push back where condition", K(ret));
-  } else if (OB_FAIL(add_semi_to_inner_hint(mv_stat_stmt))) {
-    LOG_WARN("failed to add semi to inner hint", K(ret));
-  } else if (OB_FAIL(add_union_all_child_refresh_filter_if_needed(mv_stat_stmt, mv_table))) {
-    LOG_WARN("failed to add union all child refresh filter", K(ret));
   } else if (OB_UNLIKELY(0 > delta_table_idx || all_delta_table_views_.count() <= delta_table_idx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected table idx", K(ret), K(delta_table_idx), K(all_delta_table_views_.count()));
@@ -862,6 +827,14 @@ int ObOuterJoinMJVPrinter::gen_select_for_left_join_second_delete(const TableIte
     LOG_WARN("failed to copy condition exprs", K(ret));
   } else if (OB_FAIL(add_semi_to_inner_hint(in_sel_stmt))) {
     LOG_WARN("failed to add semi to inner hint", K(ret));
+  } else if (OB_FAIL(build_exists_equal_expr(in_sel_stmt, other_join_table_rowkeys, mv_stat_cond_expr))) {
+    LOG_WARN("failed to build exists equal expr", K(ret));
+  } else if (OB_FAIL(mv_stat_stmt->add_condition_expr(mv_stat_cond_expr))) {
+    LOG_WARN("failed to push back where condition", K(ret));
+  } else if (OB_FAIL(add_semi_to_inner_hint(mv_stat_stmt))) {
+    LOG_WARN("failed to add semi to inner hint", K(ret));
+  } else if (OB_FAIL(add_union_all_child_refresh_filter_if_needed(mv_stat_stmt, mv_table))) {
+    LOG_WARN("failed to add union all child refresh filter", K(ret));
   }
   // build cond_sel_stmt
   TableItem *mv_stat_table = NULL;

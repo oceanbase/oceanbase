@@ -83,8 +83,10 @@ int ObSimpleMJVPrinter::gen_delete_for_simple_mjv(ObIArray<ObDMLStmt*> &dml_stmt
       } else if (OB_FAIL(gen_exists_cond_for_table(orig_table_items.at(i), mv_table, true, true, semi_filter))) {
         LOG_WARN("failed to create simple column exprs", K(ret));
       } else if (orig_table_items.count() - 1 == i) {
-        if (OB_FAIL(base_del_stmt->get_condition_exprs().push_back(semi_filter))) {
+        if (OB_FAIL(base_del_stmt->add_condition_expr(semi_filter))) {
           LOG_WARN("failed to push back semi filter", K(ret));
+        } else if (OB_FAIL(add_semi_to_inner_hint(base_del_stmt))) {
+          LOG_WARN("failed to add semi to inner hint", K(ret));
         } else if (NULL != marker_filter
                    && OB_FAIL(base_del_stmt->get_condition_exprs().push_back(marker_filter))) {
           LOG_WARN("failed to push back maker filter", K(ret));
@@ -96,8 +98,10 @@ int ObSimpleMJVPrinter::gen_delete_for_simple_mjv(ObIArray<ObDMLStmt*> &dml_stmt
       } else if (OB_FAIL(del_stmt->get_table_items().assign(base_del_stmt->get_table_items()))
                 || OB_FAIL(del_stmt->get_from_items().assign(base_del_stmt->get_from_items()))) {
         LOG_WARN("failed to assign structure", K(ret));
-      } else if (OB_FAIL(del_stmt->get_condition_exprs().push_back(semi_filter))) {
+      } else if (OB_FAIL(del_stmt->add_condition_expr(semi_filter))) {
         LOG_WARN("failed to push back semi filter", K(ret));
+      } else if (OB_FAIL(add_semi_to_inner_hint(del_stmt))) {
+        LOG_WARN("failed to add semi to inner hint", K(ret));
       } else if (NULL != marker_filter
                  && OB_FAIL(del_stmt->get_condition_exprs().push_back(marker_filter))) {
         LOG_WARN("failed to push back maker filter", K(ret));
@@ -255,12 +259,8 @@ int ObSimpleMJVPrinter::prepare_gen_access_delta_data_for_simple_mjv(ObSelectStm
     LOG_WARN("failed to prepare allocate arrays", K(ret), K(orig_table_items.count()));
   } else if (OB_FAIL(deep_copy_mv_def_stmt(base_delta_stmt))) {
     LOG_WARN("failed to deep copy mv def stmt", K(ret));
-  } else if (OB_FAIL(ObQueryHint::create_hint(&ctx_.alloc_, T_SEMI_TO_INNER, semi_to_inner_hint))) {
-    LOG_WARN("failed to create hint", K(ret));
-  } else if (OB_FAIL(base_delta_stmt->get_stmt_hint().merge_hint(*semi_to_inner_hint,
-                                                                  ObHintMergePolicy::HINT_DOMINATED_EQUAL,
-                                                                  conflict_hints))) {
-    LOG_WARN("failed to merge hint", K(ret));
+  } else if (OB_FAIL(add_semi_to_inner_hint(base_delta_stmt))) {
+    LOG_WARN("failed to add semi to inner hint", K(ret));
   } else {
     const ObIArray<TableItem*> &cur_table_items = base_delta_stmt->get_table_items();
     if (OB_UNLIKELY(cur_table_items.count() != orig_table_items.count())) {
@@ -316,8 +316,10 @@ int ObSimpleMJVPrinter::gen_one_access_delta_data_for_simple_mjv(const ObSelectS
              || OB_FAIL(sel_stmt->get_condition_exprs().assign(base_delta_stmt.get_condition_exprs()))
              || OB_FAIL(sel_stmt->get_stmt_hint().merge_stmt_hint(base_delta_stmt.get_stmt_hint()))) {
     LOG_WARN("failed to assign structure", K(ret));
-  } else if (OB_FAIL(sel_stmt->get_condition_exprs().push_back(semi_filters.at(table_idx)))) {
+  } else if (OB_FAIL(sel_stmt->add_condition_expr(semi_filters.at(table_idx)))) {
     LOG_WARN("failed to push back semi filter", K(ret));
+  } else if (OB_FAIL(add_semi_to_inner_hint(sel_stmt))) {
+    LOG_WARN("failed to add semi to inner hint", K(ret));
   } else {
     for (int64_t i = table_idx + 1; OB_SUCC(ret) && i < anti_filters.count(); ++i) {
       const TableItem *orig_table = mv_def_stmt_.get_table_item(i);
@@ -326,7 +328,7 @@ int ObSimpleMJVPrinter::gen_one_access_delta_data_for_simple_mjv(const ObSelectS
         LOG_WARN("get unexpected null table item", K(ret), K(i));
       } else if (is_table_skip_refresh(*orig_table)) {
         // do nothing, no need to add anti filter
-      } else if (OB_FAIL(sel_stmt->get_condition_exprs().push_back(anti_filters.at(i)))) {
+      } else if (OB_FAIL(sel_stmt->add_condition_expr(anti_filters.at(i)))) {
         LOG_WARN("failed to push back anti filter", K(ret));
       }
     }
