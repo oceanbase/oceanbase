@@ -81,14 +81,16 @@ void ObTabletTableStore::reset()
 int ObTabletTableStore::serialize(const uint64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
+  const int64_t serialize_version = get_compat_serialize_version(data_version);
   int64_t serialized_length = get_serialize_size(data_version);
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
   } else if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(buf_len));
-  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, version_))) {
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, serialize_version))) {
     LOG_WARN("failed to serialize table_store_version", K(ret));
   } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, serialized_length))) {
     LOG_WARN("failed to seriazlie serialized_length", K(ret));
@@ -108,12 +110,12 @@ int ObTabletTableStore::serialize(const uint64_t data_version, char *buf, const 
         major_ckm_info_);
     }
   }
-  if (OB_SUCC(ret) && version_ >= TABLE_STORE_VERSION_V5) {
-    if (OB_FAIL(inc_major_tables_.serialize(data_version, buf, buf_len, pos))){
-      LOG_WARN("failed to serialize inc major sstables", K(ret));
-    } else if (OB_FAIL(inc_major_ddl_sstables_.serialize(data_version, buf, buf_len, pos))){
-      LOG_WARN("failed to serialize inc major ddl sstables", K(ret));
-    }
+
+  if (OB_FAIL(ret) || serialize_version < TABLE_STORE_VERSION_V5 ) {
+  } else if (OB_FAIL(inc_major_tables_.serialize(data_version, buf, buf_len, pos))){
+    LOG_WARN("failed to serialize inc major sstables", K(ret));
+  } else if (OB_FAIL(inc_major_ddl_sstables_.serialize(data_version, buf, buf_len, pos))){
+    LOG_WARN("failed to serialize inc major ddl sstables", K(ret));
   }
   return ret;
 }
@@ -156,13 +158,11 @@ int ObTabletTableStore::deserialize(
     LOG_WARN("fail to deserialize meta major sstables", K(ret));
   } else if (pos - start_pos < serialized_length && OB_FAIL(mds_sstables_.deserialize(allocator, buf, data_len, pos, is_compat_deserialize))) {
     LOG_WARN("fail to deserialize mds sstables", K(ret));
-  } else if (TABLE_STORE_VERSION_V4 <= version_ && OB_FAIL(major_ckm_info_.deserialize(allocator, buf, data_len, pos))) {
+  } else if (pos - start_pos < serialized_length && TABLE_STORE_VERSION_V4 <= version_ && OB_FAIL(major_ckm_info_.deserialize(allocator, buf, data_len, pos))) {
     LOG_WARN("fail to deserialize major ckm info", K(ret));
-  } else if (TABLE_STORE_VERSION_V5 <= version_ && OB_FAIL(inc_major_tables_.deserialize(allocator, buf, data_len, pos, is_compat_deserialize))) {
+  } else if (pos - start_pos < serialized_length && TABLE_STORE_VERSION_V5 <= version_ && OB_FAIL(inc_major_tables_.deserialize(allocator, buf, data_len, pos, is_compat_deserialize))) {
     LOG_WARN("fail to deserialize inc major sstables", K(ret));
-  } else if ((pos - start_pos < serialized_length)
-             && (TABLE_STORE_VERSION_V5 <= version_)
-             && OB_FAIL(inc_major_ddl_sstables_.deserialize(allocator, buf, data_len, pos, is_compat_deserialize))) {
+  } else if (pos - start_pos < serialized_length && TABLE_STORE_VERSION_V5 <= version_ && OB_FAIL(inc_major_ddl_sstables_.deserialize(allocator, buf, data_len, pos, is_compat_deserialize))) {
     LOG_WARN("fail to deserialize inc major ddl sstables", K(ret));
   } else if (OB_FAIL(build_memtable_array(tablet))) {
     LOG_WARN("fail to pull memtables from tablet", K(ret));
@@ -192,7 +192,8 @@ int ObTabletTableStore::deserialize(
 int64_t ObTabletTableStore::get_serialize_size(const uint64_t data_version) const
 {
   int64_t len = 0;
-  len += serialization::encoded_length_i64(version_);
+  int64_t serialize_version = get_compat_serialize_version(data_version);
+  len += serialization::encoded_length_i64(serialize_version);
   len += serialization::encoded_length_i64(len);
   len += major_tables_.get_serialize_size(data_version);
   len += minor_tables_.get_serialize_size(data_version);
@@ -202,7 +203,8 @@ int64_t ObTabletTableStore::get_serialize_size(const uint64_t data_version) cons
   if (version_ >= TABLE_STORE_VERSION_V4) {
     LST_DO_CODE(OB_UNIS_ADD_LEN, major_ckm_info_);
   }
-  if (version_ >= TABLE_STORE_VERSION_V5) {
+
+  if (serialize_version >= TABLE_STORE_VERSION_V5) {
     len += inc_major_tables_.get_serialize_size(data_version);
     len += inc_major_ddl_sstables_.get_serialize_size(data_version);
   }

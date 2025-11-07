@@ -23,6 +23,9 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tablet/ob_tablet_table_store.h"
 #include "storage/tablet/ob_table_store_util.h"
+#include "storage/tablet/ob_tablet_create_sstable_param.h"
+#include "storage/blocksstable/index_block/ob_index_block_builder.h"
+
 
 namespace oceanbase
 {
@@ -87,7 +90,7 @@ public:
   virtual ~TestTableStore();
   virtual void SetUp();
   virtual void TearDown();
-  int mock_sstable(const ObITable::TableKey &key, ObSSTable *&sstable);
+  int mock_sstable(const ObITable::TableKey &key, ObSSTable *&sstable, int64_t tx_id = 100, int64_t seq_no = 200);
   int mock_memtable(const ObITable::TableKey &key, ObMemtable *&memtable);
   int batch_mock_tables();
   int mock_tablet(ObTablet *&tablet);
@@ -128,11 +131,74 @@ void TestTableStore::TearDown()
 {
 }
 
-int TestTableStore::mock_sstable(const ObITable::TableKey &key, ObSSTable *&sstable)
+int TestTableStore::mock_sstable(
+    const ObITable::TableKey &key,
+    ObSSTable *&sstable,
+    int64_t tx_id,
+    int64_t seq_no)
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
   sstable = nullptr;
+
+  ObTabletCreateSSTableParam param;
+  param.table_key_ = key;
+  param.max_merged_trans_version_ = key.scn_range_.end_scn_.get_val_for_tx();
+  param.schema_version_ = 100;
+  param.create_snapshot_version_ = 0;
+  param.progressive_merge_round_ = 0;
+  param.progressive_merge_step_ = 0;
+  param.index_type_ = ObIndexType::INDEX_TYPE_IS_NOT;
+  param.table_mode_.mode_flag_ = ObTableModeFlag::TABLE_MODE_NORMAL;
+  param.table_mode_.pk_mode_ = ObTablePKMode::TPKM_OLD_NO_PK;
+  param.table_mode_.state_flag_ = ObTableStateFlag::TABLE_STATE_NORMAL;
+  param.rowkey_column_cnt_ = 3;
+  param.root_block_addr_.set_none_addr();
+  param.data_block_macro_meta_addr_.set_none_addr();
+  param.root_row_store_type_ = ObRowStoreType::ENCODING_ROW_STORE;
+  param.latest_row_store_type_ = ObRowStoreType::ENCODING_ROW_STORE;
+  param.data_index_tree_height_ = 0;
+  param.index_blocks_cnt_ = 0;
+  param.data_blocks_cnt_ = 0;
+  param.micro_block_cnt_ = 0;
+  param.use_old_macro_block_count_ = 0;
+  param.data_checksum_ = 0;
+  param.occupy_size_ = 0;
+  param.ddl_scn_.set_min();
+  param.filled_tx_scn_ = key.scn_range_.end_scn_;
+  param.tx_data_recycle_scn_.set_min();
+  param.rec_scn_.set_min();
+  param.original_size_ = 0;
+  param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+  param.table_backup_flag_.reset();
+  param.table_shared_flag_.reset();
+  param.sstable_logic_seq_ = 0;
+  param.row_count_ = 0;
+  param.recycle_version_ = 0;
+  param.root_macro_seq_ = 0;
+  param.nested_size_ = 0;
+  param.nested_offset_ = 0;
+  param.column_group_cnt_ = 1;
+  param.co_base_type_ = ObCOSSTableBaseType::INVALID_TYPE;
+  param.full_column_cnt_ = 0;
+  param.is_co_table_without_cgs_ = false;
+  param.co_base_snapshot_version_ = 0;
+  param.column_cnt_ = param.rowkey_column_cnt_;
+  ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_);
+
+  if (key.is_major_sstable()) {
+    param.rec_scn_.set_min();
+  } else {
+    param.rec_scn_ = SCN::plus(key.get_start_scn(), 1);
+  }
+
+  if (ObITable::is_inc_major_type_sstable(key.table_type_) || ObITable::is_inc_major_ddl_sstable(key.table_type_)) {
+    compaction::ObUncommitTxDesc tx_desc(tx_id, seq_no);
+    param.uncommit_tx_info_.push_back(tx_desc);
+    param.uncommit_tx_info_.set_info_status_record_seq();
+    param.ddl_scn_.set_base();
+  }
+
 
   if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObSSTable)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -140,40 +206,16 @@ int TestTableStore::mock_sstable(const ObITable::TableKey &key, ObSSTable *&ssta
   } else if (OB_ISNULL(sstable = new (buf) ObSSTable())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Fail to allocate memory for sstable", K(ret));
-  } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObSSTableMeta)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("Fail to allocate memory for sstable meta", K(ret));
-  } else if (OB_ISNULL(sstable->meta_ = new (buf) ObSSTableMeta())) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("Fail to allocate memory for sstable meta", K(ret));
+  } else if (OB_FAIL(sstable->init(param, &allocator_))) {
+    LOG_WARN("failed to init sstable", K(ret));
   } else {
-    sstable->meta_->is_inited_ = true;
-    sstable->key_ = key;
-    sstable->valid_for_reading_ = true;
-
     if (sstable->is_meta_major_sstable()) {
       sstable->meta_cache_.max_merged_trans_version_ = key.scn_range_.end_scn_.get_val_for_tx();
       sstable->meta_->basic_meta_.max_merged_trans_version_ = key.scn_range_.end_scn_.get_val_for_tx();
-    } else if (sstable->is_inc_major_type_sstable()) {
-      compaction::ObUncommitTxDesc tx_desc(100, 200);
-      ObMemUncommitTxInfo tx_info;
-      tx_info.set_info_status_only_tx_id();
-      EXPECT_EQ(OB_SUCCESS, tx_info.push_back(tx_desc));
-      EXPECT_EQ(OB_SUCCESS, sstable->meta_->uncommit_tx_info_.init(allocator_, tx_info));
-
-      sstable->meta_->basic_meta_.data_macro_block_count_ = 1;
-      sstable->meta_cache_.data_macro_block_count_ = 1;
-    } else if (sstable->is_inc_major_ddl_sstable()) {
-      compaction::ObUncommitTxDesc tx_desc(100, 200);
-      ObMemUncommitTxInfo tx_info;
-      tx_info.set_info_status_only_tx_id();
-      EXPECT_EQ(OB_SUCCESS, tx_info.push_back(tx_desc));
-      EXPECT_EQ(OB_SUCCESS, sstable->meta_->uncommit_tx_info_.init(allocator_, tx_info));
-
+    } else if (sstable->is_inc_major_type_sstable() || sstable->is_inc_major_ddl_sstable()) {
       sstable->meta_->basic_meta_.data_macro_block_count_ = 1;
       sstable->meta_cache_.data_macro_block_count_ = 1;
     }
-
   }
   return ret;
 }
@@ -902,6 +944,94 @@ TEST_F(TestTableStore, test_basic_add_new_inc_major_ddl_sstable)
   EXPECT_EQ(2, new_table_store3.minor_tables_.count());
   EXPECT_EQ(1, new_table_store3.inc_major_tables_.count());
   EXPECT_EQ(0, new_table_store3.inc_major_ddl_sstables_.count());
+}
+
+TEST_F(TestTableStore, test_compat_serialization)
+{
+  ObTablet *tablet = nullptr;
+  EXPECT_EQ(OB_SUCCESS, mock_tablet(tablet));
+  tablet->tablet_meta_.clog_checkpoint_scn_.convert_for_tx(300);
+  tablet->tablet_meta_.ha_status_.set_restore_status(ObTabletRestoreStatus::STATUS::FULL);
+  tablet->tablet_meta_.ha_status_.set_data_status(ObTabletDataStatus::STATUS::COMPLETE);
+
+  // add major and inc major
+  key_data_ = "table_type    start_scn    end_scn    max_ver    upper_ver\n"
+              "10            0            100        100        100      \n"
+              "29            0            80         80         120      \n"
+              "29            80           130        130        150      \n";
+  ObTabletTableStore old_table_store;
+  EXPECT_EQ(OB_SUCCESS, mock_old_table_store(&old_table_store));
+  EXPECT_EQ(1, old_table_store.major_tables_.count());
+  EXPECT_EQ(2, old_table_store.inc_major_tables_.count());
+  const int64_t boundary_version = ObTabletTableStore::TABLE_STORE_VERSION_V4;
+  EXPECT_LT(boundary_version, old_table_store.version_);
+
+
+  // add a new inc major ddl sstable
+  ObSSTable *new_inc_major_ddl_sstable = nullptr;
+  ObITable::TableKey inc_major_ddl_key;
+  inc_major_ddl_key.tablet_id_ = tablet_id_;
+  inc_major_ddl_key.scn_range_.start_scn_.convert_for_tx(130);
+  inc_major_ddl_key.scn_range_.end_scn_.convert_for_tx(200);
+  inc_major_ddl_key.table_type_ = ObITable::TableType::INC_MAJOR_DDL_DUMP_SSTABLE;
+  EXPECT_EQ(OB_SUCCESS, mock_sstable(inc_major_ddl_key, new_inc_major_ddl_sstable, 300, 400));
+  new_inc_major_ddl_sstable->meta_->basic_meta_.upper_trans_version_ = INT64_MAX;
+  new_inc_major_ddl_sstable->meta_cache_.upper_trans_version_ = INT64_MAX;
+  new_inc_major_ddl_sstable->meta_->basic_meta_.ddl_scn_ = tablet->get_tablet_meta().ddl_start_scn_;
+
+  ObUpdateTableStoreParam param;
+  param.multi_version_start_ = 100;
+  param.sstable_ = new_inc_major_ddl_sstable;
+  param.allow_duplicate_sstable_ = false;
+  param.compaction_info_.merge_type_ = ObMergeType::MINI_MERGE;
+  param.compaction_info_.need_report_ = false;
+
+  ObTabletTableStore new_table_store;
+  EXPECT_EQ(OB_SUCCESS, new_table_store.init(allocator_, *tablet, param, old_table_store));
+  EXPECT_EQ(1, new_table_store.major_tables_.count());
+  EXPECT_EQ(2, new_table_store.inc_major_tables_.count());
+  EXPECT_EQ(1, new_table_store.inc_major_ddl_sstables_.count());
+  EXPECT_LT(boundary_version, new_table_store.version_);
+
+
+
+  const int64_t old_data_version = DATA_VERSION_4_4_0_0;
+  const int64_t cur_data_version = DATA_VERSION_4_5_0_0;
+
+  const int64_t old_len = new_table_store.get_serialize_size(old_data_version);
+  const int64_t cur_len = new_table_store.get_serialize_size(cur_data_version);
+  EXPECT_LT(old_len, cur_len); // old_len < cur_len
+
+
+  // serialize V5 table store with old data version
+  char *old_buf = static_cast<char *>(allocator_.alloc(old_len));
+  ASSERT_TRUE(nullptr != old_buf);
+  int64_t pos = 0;
+  EXPECT_EQ(OB_SUCCESS, new_table_store.serialize(old_data_version, old_buf, old_len, pos));
+  EXPECT_EQ(old_len, pos);
+
+  // deserialize table store, the inc major tables should be empty
+  ObTabletTableStore old_deserialized_table_store;
+  int64_t pos2 = 0;
+  EXPECT_EQ(OB_SUCCESS, old_deserialized_table_store.deserialize(allocator_, *tablet, old_buf, old_len, pos2));
+  EXPECT_EQ(new_table_store.major_tables_.count(), old_deserialized_table_store.major_tables_.count());
+  EXPECT_EQ(new_table_store.minor_tables_.count(), old_deserialized_table_store.minor_tables_.count());
+  EXPECT_EQ(0, old_deserialized_table_store.inc_major_tables_.count());
+
+  // serialize V5 table store with current data version
+  char *cur_buf = static_cast<char *>(allocator_.alloc(cur_len));
+  ASSERT_TRUE(nullptr != cur_buf);
+  int64_t pos3 = 0;
+  EXPECT_EQ(OB_SUCCESS, new_table_store.serialize(cur_data_version, cur_buf, cur_len, pos3));
+  EXPECT_EQ(cur_len, pos3);
+
+  // deserialize table store with current data version
+  ObTabletTableStore deserialized_table_store;
+  int64_t pos4 = 0;
+  EXPECT_EQ(OB_SUCCESS, deserialized_table_store.deserialize(allocator_, *tablet, cur_buf, cur_len, pos4));
+  EXPECT_EQ(new_table_store.major_tables_.count(), deserialized_table_store.major_tables_.count());
+  EXPECT_EQ(new_table_store.minor_tables_.count(), deserialized_table_store.minor_tables_.count());
+  EXPECT_EQ(new_table_store.inc_major_tables_.count(), deserialized_table_store.inc_major_tables_.count());
 }
 
 } // unittest

@@ -182,6 +182,11 @@ public:
   const blocksstable::ObMajorChecksumInfo &get_major_ckm_info() const { return major_ckm_info_; }
   int get_all_minor_sstables(ObTableStoreIterator &iter) const;
 private:
+  int64_t get_compat_serialize_version(const uint64_t data_version) const {
+    return data_version < DATA_VERSION_4_5_0_0
+         ? TABLE_STORE_VERSION_V4 // this compat serialization is for SS, whose table store version must >= V4
+         : version_;
+  }
   int build_memtable_array(const ObTablet &tablet);
   // Synchronous cache sstable meta with 2MB memory.
   //  - The cache size is 2M, and include the size of the table store itself.
