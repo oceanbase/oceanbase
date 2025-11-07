@@ -1316,9 +1316,12 @@ int ObTscCgService::extract_das_access_exprs(const ObLogTableScan &op,
         if (OB_ISNULL(schema_guard)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get null schema guard", K(ret));
-        } else if (OB_FAIL(schema_guard->get_table_schema(MTL_ID(), static_cast<ObColumnRefRawExpr *>(expr)->get_database_name(), static_cast<ObColumnRefRawExpr *>(expr)->get_table_name(), false, table_schema))) {
+        } else if (OB_FAIL(schema_guard->get_table_schema(MTL_ID(), op.get_ref_table_id(), table_schema))) {
           LOG_WARN("failed to get table schema", K(ret));
         } else if (OB_ISNULL(table_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("table schema is null", K(ret));
+        } else if (table_schema->is_index_table()) {
           // select from index table do not need to check rowkey cid table.
           if (OB_FAIL(add_var_to_array_no_dup(tmp_access_exprs, expr))) {
             LOG_WARN("failed to add param expr", K(ret));
