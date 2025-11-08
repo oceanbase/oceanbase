@@ -699,7 +699,6 @@ int init_jvm_options(ObArenaAllocator &allocator, ObIArray<JavaVMOptionWrapper> 
 int ObJniTool::init_jni()
 {
   int ret = OB_SUCCESS;
-  JavaVM *jvm = nullptr;
   JNIEnv *jni_env = nullptr;
   int num_jvms = 0;
   jint jni_ret = JNI_OK;
@@ -709,51 +708,63 @@ int ObJniTool::init_jni()
   allocator.set_tenant_id(tenant_id);
   if (!ObJavaEnv::getInstance().is_env_inited() && OB_FAIL(ObJavaEnv::getInstance().setup_java_env())) {
     LOG_WARN("failed to setup java env", K(ret));
-  } else if (OB_FAIL(ObJavaEnv::getInstance().setup_java_env_classpath_and_ldlib_path())) {
-    LOG_WARN("failed to setup java env for hdfs", K(ret));
-  } else if (ret != OB_JNI_CONNECTOR_PATH_NOT_FOUND_ERROR || !OB_FALSE_IT(ret = OB_SUCCESS)) {
-    /*如果ret 是path not found 忽略错误，继续往下执行。因为插件目录下可能没有hadoop jar包，但是不影响使用。
-    if (ret == OB_PATH_NOT_FOUND) {
-      ret = OB_SUCCESS;
-    }
-    如果ret 不是 OB_JNI_CONNECTOR_PATH_NOT_FOUND_ERROR 出错处理
-    如果ret 是 OB_JNI_CONNECTOR_PATH_NOT_FOUND_ERROR 忽略错误，继续往下执行。
-    */
-    LOG_WARN("failed to setup java env for hdfs", K(ret));
-  } else if (OB_SUCC(ObJniConnector::get_jni_env(jni_env))) {
-    jni_env_getter_ = &ObJniTool::get_jni_env_connector;
-    LOG_INFO("get jni env from ObJniConnector successfully");
-  } else if (FALSE_IT(ret = OB_SUCCESS)) {
-  } else if (OB_NOT_NULL(getJNIEnv)) {
-    jni_env_getter_ = &ObJniTool::get_jni_env_hdfs;
-    LOG_INFO("we can get jni env by hdfs");
-  } else if (OB_FAIL(jvm_functions.init())) {
-    LOG_WARN("failed to init jvm functions", K(ret));
-  } else if (JNI_OK != (jni_ret = jvm_functions.JNI_GetCreatedJavaVMs(&jvm, 1, &num_jvms))) {
-    ret = OB_JNI_ERROR;
-    LOG_WARN("failed to get created java vm", K(jni_ret), K(ret));
-  } else if (0 == num_jvms) {
-    ObArray<JavaVMOptionWrapper> options;
-    if (OB_FAIL(init_jvm_options(allocator, options))) {
-      LOG_WARN("failed to init jvm options to create jvm", K(ret));
-    } else {
-      JavaVMInitArgs jvm_args;
-      jvm_args.version = JNI_VERSION_1_8;
-      jvm_args.nOptions = options.count();
-      jvm_args.options = (JavaVMOption *)(&options.at(0));
-      jvm_args.ignoreUnrecognized = JNI_TRUE;
-      jni_ret = jvm_functions.JNI_CreateJavaVM(&jvm, (void **)&jni_env, &jvm_args);
-      if (jni_ret != JNI_OK) {
-        ret = OB_JNI_ERROR;
-        LOG_WARN("failed to create java vm", K(jni_ret), K(ret));
+  } else {
+    ret = ObJavaEnv::getInstance().setup_java_env_classpath_and_ldlib_path();
+    // 优先尝试从ObJniConnector获取jni env
+    // 如果失败，尝试从hdfs获取jni env
+    if (OB_SUCC(ret)) {
+      if (OB_SUCC(ObJniConnector::get_jni_env(jni_env))) {
+        // hdfs正确, hdfs classpath正确, ob jar正确
+        jni_env_getter_ = &ObJniTool::get_jni_env_connector;
+        LOG_INFO("get jni env from ObJniConnector successfully");
+      } else {
+        // hdfs正确, ob jar不正确
+        if (OB_NOT_NULL(getJNIEnv)) {
+          jni_env_getter_ = &ObJniTool::get_jni_env_hdfs;
+          LOG_INFO("we can get jni env by hdfs");
+        } else {
+          // libhdfs.so完全没有的时候
+        }
       }
+    }
+
+    // 如果hdfs获取失败，尝试创建java vm
+    if (OB_ISNULL(jni_env_getter_)) {
+      // 补救机会
+      JavaVM *jvm = nullptr;
+      ret = OB_SUCCESS;
+      if (OB_FAIL(jvm_functions.init())) {
+          LOG_WARN("failed to init jvm functions", K(ret));
+      } else if (JNI_OK != (jni_ret = jvm_functions.JNI_GetCreatedJavaVMs(&jvm, 1, &num_jvms))) {
+        ret = OB_JNI_ERROR;
+        LOG_WARN("failed to get created java vm", K(jni_ret), K(ret));
+      } else if (0 == num_jvms) {
+        ObArray<JavaVMOptionWrapper> options;
+        if (OB_FAIL(init_jvm_options(allocator, options))) {
+          LOG_WARN("failed to init jvm options to create jvm", K(ret));
+        } else {
+          JavaVMInitArgs jvm_args;
+          jvm_args.version = JNI_VERSION_1_8;
+          jvm_args.nOptions = options.count();
+          jvm_args.options = (JavaVMOption *)(&options.at(0));
+          jvm_args.ignoreUnrecognized = JNI_TRUE;
+          jni_ret = jvm_functions.JNI_CreateJavaVM(&jvm, (void **)&jni_env, &jvm_args);
+          if (jni_ret != JNI_OK) {
+            ret = OB_JNI_ERROR;
+            LOG_WARN("failed to create java vm", K(jni_ret), K(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        jni_env_getter_ = &ObJniTool::get_jni_env_local; // 补救机会成功，设置jni env getter
+      }
+      jvm_ = jvm;
+    } else {
+      jvm_ = nullptr;
+      LOG_INFO("get jni env from external source successfully , jvm is not needed", K(ret));
     }
   }
 
-  if (OB_NOT_NULL(jvm) && OB_ISNULL(jni_env_getter_)) {
-    jni_env_getter_ = &ObJniTool::get_jni_env_local;
-  }
-  jvm_ = jvm;
   LOG_TRACE("create jvm done", KP(jvm_));
   return ret;
 }
