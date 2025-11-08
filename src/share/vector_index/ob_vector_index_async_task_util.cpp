@@ -3212,12 +3212,12 @@ int ObVecIndexAsyncTask::process_data_for_index(ObPluginVectorIndexAdaptor &adap
           ObString vector_str;
           float *vector_ptr = nullptr;
           const int64_t vec_col_idx = 0;  // ObPluginVectorIndexUtils::read_local_tablet get from INDEX_TYPE_IS_NOT only output one vector column
+          blocksstable::ObDatumRow *vector_row = datum_row;
           int32_t vector_column_pos = is_hybrid_index? data_table_rowkey_count + 1: vec_col_idx;
           if (is_hybrid_index && !adaptor.get_is_need_vid()) {
-            //  hybrid without vid_rowkey_tbl:  [pk(vid)] [vector]
-            vector_column_pos = 1;
+            //  hybrid without vid_rowkey_tbl:  [pk(vid)] [part_key] [vector]
+            vector_column_pos = vector_row->get_column_count() - 1;
           }
-          blocksstable::ObDatumRow *vector_row = datum_row;
           if (OB_FAIL(ret)) {
           } else if (vector_row->storage_datums_[vector_column_pos].is_null() || vector_row->storage_datums_[vector_column_pos].is_nop()) { // skip null row
           } else if (FALSE_IT(vector_str = vector_row->storage_datums_[vector_column_pos].get_string())) {
