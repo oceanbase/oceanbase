@@ -8782,7 +8782,15 @@ int ObLSTabletService::estimate_skip_index_sortedness(
   } else if (OB_FAIL(res_sample_counts.reserve(column_ids.count()))) {
     LOG_WARN("Fail to reserve sortedness array", KR(ret));
   } else if (OB_FAIL(get_tablet(tablet_id, tablet_handle))) {
-    LOG_WARN("Fail to get tablet", KR(ret), K(tablet_id));
+    if (OB_TABLET_IS_SPLIT_SRC == ret) {
+      if (OB_FAIL(get_tablet(tablet_id, tablet_handle, timeout_us, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+        LOG_WARN("failed to check and get tablet", K(ret), K(table_id), K(tablet_id), K(timeout_us));
+      }
+    } else {
+      LOG_WARN("Fail to get tablet", KR(ret), K(tablet_id));
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(tablet_handle.get_obj()->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("Fail to fetch table store", KR(ret));
   } else if (FALSE_IT(latest_major_sstable = static_cast<ObSSTable *>(
