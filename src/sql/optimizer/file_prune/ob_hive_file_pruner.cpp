@@ -374,6 +374,8 @@ int ObHiveFilePruner::prune_partition_by_hms(ObExecContext &exec_ctx,
           }
 
           if (OB_FAIL(ret)) {
+          } else if (i % 10 == 0 && OB_FAIL(THIS_WORKER.check_status())) {
+            LOG_WARN("check status failed", KR(ret));
           } else if (OB_FAIL(ObExternalTableUtils::collect_external_file_list_with_cache(
                          table_schema->get_tenant_id(),
                          partition_info->modify_ts_,

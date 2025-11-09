@@ -14289,7 +14289,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null stmt", K(ret));
-  } else if (right_path.is_access_path()) {
+  } else if (right_path.is_access_path() || right_path.is_lake_table_access_path()) {
     const AccessPath &access = static_cast<const AccessPath&>(right_path);
     bool can_join_filter = false;
     const ObJoinFilterHint *force_hint = NULL;
