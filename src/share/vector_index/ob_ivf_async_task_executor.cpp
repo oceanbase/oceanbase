@@ -395,7 +395,7 @@ int ObIvfAsyncTaskExector::record_aux_table_info(ObSchemaGetterGuard &schema_gua
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("table schema is null", KR(ret), K(aux_table_info), K_(tenant_id));
       } else if (index_table_schema.get_schema_version()
-                 < other_idx_tb_schema->get_schema_version()) {
+                 > other_idx_tb_schema->get_schema_version()) {
         need_record = false;
       }
     }

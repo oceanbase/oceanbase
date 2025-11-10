@@ -2944,9 +2944,15 @@ int ObDASIvfPQScanIter::calc_nearest_limit_rowkeys_in_cids(
 int ObDASIvfPQScanIter::get_nearest_probe_centers(bool is_vectorized)
 {
   int ret = OB_SUCCESS;
+  //precompute table use euclidean_squared, so we need to convert to euclidean_squared
+  //L2_squared = dis0^2 + precomcute.result
+  ObExprVectorDistance::ObVecDisType cur_dis_type = dis_type_;
+  if (dis_type_ == oceanbase::sql::ObExprVectorDistance::ObVecDisType::EUCLIDEAN) {
+    cur_dis_type = oceanbase::sql::ObExprVectorDistance::ObVecDisType::EUCLIDEAN_SQUARED;
+  }
   share::ObVectorCenterClusterHelper<float, ObCenterId> nearest_cid_heap(
       mem_context_->get_arena_allocator(), reinterpret_cast<const float *>(real_search_vec_.ptr()),
-      dis_type_, dim_, nprobes_, FLT_MAX, (is_pre_filter() || is_iter_filter()), &iterative_filter_ctx_.allocator_);
+      cur_dis_type, dim_, nprobes_, FLT_MAX, (is_pre_filter() || is_iter_filter()), &iterative_filter_ctx_.allocator_);
   if (OB_FAIL(generate_nearest_cid_heap(is_vectorized, nearest_cid_heap, true/*save_center_vec*/))) {
     LOG_WARN("failed to generate nearest cid heap", K(ret), K(nprobes_), K(dim_), K(real_search_vec_));
   } else {
