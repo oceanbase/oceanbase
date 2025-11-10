@@ -2859,9 +2859,15 @@ int ObDeviceChannel::submit(ObIORequest &req)
   ObIOChannel *ch = nullptr;
   RequestHolder holder(&req);
   const bool is_sync = req.io_result_ != nullptr && req.get_flag().is_sync();
+  char *io_buf = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
+  } else if (req.fd_.device_handle_->is_object_device()
+             && req.get_flag().is_read()
+             && req.io_result_->get_user_io_size() > 0
+             && OB_FAIL(req.alloc_io_buf(io_buf))) {
+    LOG_WARN("alloc io buffer failed", K(ret), K(req));
   } else {
     if (is_sync) {
       lock_for_sync_io_.lock();
