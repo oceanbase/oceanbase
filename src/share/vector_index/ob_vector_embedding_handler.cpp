@@ -498,6 +498,7 @@ int ObEmbeddingTask::start_async_work()
 
     int64_t start_idx = current_batch_idx_ * batch_size_;
     int64_t end_idx = OB_MIN(start_idx + batch_size_, input_chunks_.count());
+    uint64_t total_text_length = 0;
     if (OB_FAIL(ret)) {
     } else if (start_idx >= input_chunks_.count()
               && OB_FAIL(complete_task(OB_EMBEDDING_TASK_DONE, OB_SUCCESS, true))) {
@@ -517,6 +518,8 @@ int ObEmbeddingTask::start_async_work()
           LOG_DEBUG("Adding text to input array", K(i), K(text));
           if (OB_FAIL(json_builder.array_add_string(input_array, text))) {
             LOG_WARN("failed to add text to input array", K(ret), K(i));
+          } else {
+            total_text_length += text.length();
           }
         }
         if (OB_FAIL(ret)) {
@@ -529,7 +532,7 @@ int ObEmbeddingTask::start_async_work()
         } else if (dimension_ > 0 && OB_FAIL(json_builder.add_int_field(root, DIMENSIONS_NAME, dimension_))) {
           LOG_WARN("failed to add dimensions field", K(ret));
         } else {
-          const int64_t json_buf_len = 8192;
+          const int64_t json_buf_len = total_text_length + 2048;
           char *json_buf = (char*)allocator_.alloc(json_buf_len);
           if (OB_ISNULL(json_buf)) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -679,7 +682,6 @@ int ObEmbeddingTask::get_async_result(ObArray<float*> &vectors)
 int ObEmbeddingTask::send_http_request_async(const char *json_data, int64_t json_len)
 {
   int ret = OB_SUCCESS;
-
   if (OB_FAIL(init_http_request(json_data, json_len))) {
     LOG_WARN("failed to init async http request", K(ret), K(*this));
   } else {
