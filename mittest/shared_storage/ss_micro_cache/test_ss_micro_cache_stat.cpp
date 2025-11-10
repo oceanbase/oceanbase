@@ -231,9 +231,7 @@ TEST_F(TestSSMicroCacheStat, test_micro_cache_stat)
         ObSSMicroBlockMetaHandle micro_meta_handle;
         ASSERT_EQ(OB_SUCCESS, micro_meta_mgr->get_micro_block_meta(micro_key, micro_meta_handle, ObTabletID::INVALID_TABLET_ID, false));
         ASSERT_EQ(true, micro_meta_handle.is_valid());
-        bool succ_delete = false;
-        ASSERT_EQ(OB_SUCCESS, micro_meta_mgr->try_force_delete_micro_block_meta(micro_key, succ_delete));
-        ASSERT_EQ(true, succ_delete);
+        ASSERT_EQ(OB_SUCCESS, micro_meta_mgr->try_force_delete_micro_block_meta(micro_key));
         del_micro_cnt++;
         ASSERT_EQ(del_micro_cnt, cache_stat.micro_stat().mark_del_micro_cnt_);
       }

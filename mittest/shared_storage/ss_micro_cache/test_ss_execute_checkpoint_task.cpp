@@ -720,9 +720,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
       micro_meta_handle()->get_micro_meta_info(delete_micro_info);
       ASSERT_EQ(true, delete_micro_info.is_valid_field());
 
-      bool succ_delete = true;
-      ASSERT_EQ(OB_SUCCESS, micro_meta_mgr_->try_force_delete_micro_block_meta(micro_key, succ_delete));
-      ASSERT_EQ(true, succ_delete);
+      ASSERT_EQ(OB_SUCCESS, micro_meta_mgr_->try_force_delete_micro_block_meta(micro_key));
       force_del_blk_idx = delete_micro_info.data_loc_ / phy_blk_mgr_->block_size_;
     }
   }
