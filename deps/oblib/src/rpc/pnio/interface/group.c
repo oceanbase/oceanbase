@@ -353,7 +353,6 @@ static pktc_req_t* pn_create_pktc_req(pn_t* pn, uint64_t pkt_id, addr_t dest, co
   pn_client_req_t* pn_req = (typeof(pn_req))req - 1;
   struct pn_pktc_cb_t* pn_cb = (typeof(pn_cb))cfifo_alloc(&pn->client_cb_alloc, sizeof(*pn_cb));
   if (unlikely(NULL == pn_cb)) {
-    cfifo_free(pn_req);
     return NULL;
   }
   pktc_cb_t* cb = &pn_cb->cb;

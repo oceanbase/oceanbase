@@ -62,6 +62,12 @@ void fifo_alloc_init(fifo_alloc_t* alloc, chunk_cache_t* chunk_alloc)
 
 void* fifo_alloc(fifo_alloc_t* alloc, int sz1)
 {
+#ifdef ERRSIM
+  bool bret = OB_SUCCESS != EventTable::EN_4;
+  if (bret) {
+    return NULL;
+  }
+#endif
   void* ret = NULL;
   fifo_page_t* pg = (fifo_page_t*)alloc->cur;
   int sz = (int)upalign8(sz1);
