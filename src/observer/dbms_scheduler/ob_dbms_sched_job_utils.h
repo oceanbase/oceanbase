@@ -28,6 +28,9 @@
 #define DATA_VERSION_SUPPORT_STOP_JOB(data_version) ((MOCK_DATA_VERSION_4_2_1_5 <= data_version && DATA_VERSION_4_2_2_0 > data_version) \
                                                   || (MOCK_DATA_VERSION_4_2_4_0 <= data_version && DATA_VERSION_4_3_0_0 > data_version) \
                                                   || (DATA_VERSION_4_3_2_0 <= data_version))
+#define DATA_VERSION_SUPPORT_CALENDAR(data_version) ((MOCK_DATA_VERSION_4_3_5_4 <= data_version && DATA_VERSION_4_4_0_0 > data_version) \
+                                                  || (DATA_VERSION_4_4_2_0 <= data_version))
+
 
 namespace oceanbase
 {
@@ -410,7 +413,7 @@ public:
    * @retval OB_SUCCESS execute success
    * @retval OB_NOT_SUPPORTED 不支持
   */
-  static int check_is_valid_repeat_interval(const ObString &str, bool is_limit_interval_num = false);
+  static int check_is_valid_repeat_interval(const int64_t tenant_id, const ObString &str, bool is_limit_interval_num = false);
   /**
    * @brief  检查是否有效的 max_run_duration
    * @param [in] max_run_duration
@@ -518,7 +521,7 @@ public:
    * @retval OB_ERR_UNEXPECTED 未知错误
    * @retval OB_INVALID_ARGUMENT 无效参数
    */
-  static int calc_dbms_sched_repeat_expr(const ObDBMSSchedJobInfo &job_info, int64_t &next_run_time);
+  static int calc_dbms_sched_repeat_expr(const ObDBMSSchedJobInfo &job_info, int64_t &next_run_time, bool is_first_time = false);
   static int zone_check_impl(int64_t tenant_id, const ObString &zone);
   static int job_class_check_impl(int64_t tenant_id, const ObString &job_class_name);
   static int get_max_failures_value(int64_t tenant_id, const ObString &src_str, int64_t &value);
