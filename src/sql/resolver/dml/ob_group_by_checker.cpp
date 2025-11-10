@@ -333,11 +333,6 @@ int ObGroupByChecker::add_pc_const_param_info(ObExprEqualCheckContext &check_ctx
     } else if (const_param_info.const_idx_.count() > 0
                && OB_FAIL(query_ctx_->all_plan_const_param_constraints_.push_back(const_param_info))) {
       LOG_WARN("failed to push back element", K(ret));
-    } else if (const_param_info.const_idx_.count() > 0
-               && OB_FAIL(query_ctx_->all_possible_const_param_constraints_.push_back(const_param_info))) {
-      LOG_WARN("failed to push back element", K(ret));
-    } else {
-      // do nothing
     }
   }
   return ret;

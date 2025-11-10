@@ -960,21 +960,6 @@ int ObSqlPlan::get_constraint_info(char *buf,
       }
     }
   }
-  if (OB_SUCC(ret) && !ctx.all_possible_const_param_constraints_.empty()) {
-    if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
-    } else if (OB_FAIL(BUF_PRINTF("  "))) {
-    } else if (OB_FAIL(BUF_PRINTF("Possible Const Parameter Constraints:"))) {
-    } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < ctx.all_possible_const_param_constraints_.count(); ++i) {
-      if (OB_FAIL(print_constraint_info(buf,
-                                        buf_len,
-                                        pos,
-                                        ctx.all_possible_const_param_constraints_.at(i)))) {
-        LOG_WARN("failed to print constraint info", K(ret));
-      }
-    }
-  }
   if (OB_SUCC(ret) && !ctx.all_equal_param_constraints_.empty()) {
     if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
     } else if (OB_FAIL(BUF_PRINTF("  "))) {

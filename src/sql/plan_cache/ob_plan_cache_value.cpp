@@ -1317,63 +1317,143 @@ int ObPlanCacheValue::add_plan(ObPlanCacheObject &plan,
              && outline_params_wrapper_.get_outline_params().count() > 0) {
     plan.get_outline_state().reset();
   }
+#ifdef OB_BUILD_SPM
   if (OB_SUCC(ret)) {
-    DLIST_FOREACH(cur_plan_set, plan_sets_) {
+    ObSpmCacheCtx& spm_ctx = pc_ctx.sql_ctx_.spm_ctx_;
+    if (ObSpmCacheCtx::STAT_ADD_BASELINE_PLAN == spm_ctx.spm_stat_ && spm_ctx.evo_plan_set_ != nullptr) {
+      ObPlanSet *evo_plan_set = nullptr;
+      bool plan_added = false;
       bool is_same = false;
-      if (OB_FAIL(cur_plan_set->match_params_info(plan.get_params_info(),
-                                                  outline_param_idx,
-                                                  pc_ctx,
-                                                  is_same))) {
+      DLIST_FOREACH(cur_plan_set, plan_sets_) {
+        if (cur_plan_set == spm_ctx.evo_plan_set_) {
+          evo_plan_set = cur_plan_set;
+          break;
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(evo_plan_set)) {
+        // plan set with evolving plan has been deleted, stoping add baseline plan
+        ret = OB_SQL_PC_PLAN_DUPLICATE;
+      } else if (OB_FAIL(evo_plan_set->match_and_merge_plan_cons(pc_ctx, is_same))) {
+        LOG_WARN("failed to match baseline plan cons");
+      } else if (OB_UNLIKELY(!is_same)) {
+        // do nothing
+      } else if (OB_FAIL(evo_plan_set->match_params_info(plan.get_params_info(),
+                                                         outline_param_idx,
+                                                         pc_ctx,
+                                                         false,
+                                                         is_same))) {
         SQL_PC_LOG(WARN, "fail to match params info", K(ret));
       } else if (false == is_same) { //do nothing
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("plan constraint mismatch after constraint check");
       } else {//param info已经匹配
-        SQL_PC_LOG(DEBUG, "add plan to plan set");
-        need_new_planset = false;
+        // add to same plan set, do not swap evolving plan
+        spm_ctx.evolution_plan_ = nullptr;
         if (is_multi_stmt_batch &&
-            OB_FAIL(match_and_generate_ext_params(cur_plan_set, pc_ctx, outline_param_idx))) {
+            OB_FAIL(match_and_generate_ext_params(evo_plan_set, pc_ctx, outline_param_idx))) {
           LOG_TRACE("fail to match and generate ext_params", K(ret));
-        } else if (OB_FAIL(cur_plan_set->add_cache_obj(plan, pc_ctx, outline_param_idx, add_plan_ret))) {
-          SQL_PC_LOG(TRACE, "failed to add plan", K(ret));
+        } else if (OB_FAIL(evo_plan_set->add_cache_obj(plan, pc_ctx, outline_param_idx, add_plan_ret))) {
+          LOG_TRACE("failed to add plan", K(ret));
         }
-        break;
+        plan_added = true;
       }
-    } // end for
 
-    /**
-     *  Add the plan to a new allocated plan set
-     *  and then add the plan set to plan cache value
-     */
-    if (OB_SUCC(ret) && need_new_planset) {
-      SQL_PC_LOG(DEBUG, "add new plan set");
-      ObPlanSet *plan_set = nullptr;
-      if (OB_FAIL(create_new_plan_set(ObPlanSet::get_plan_set_type_by_cache_obj_type(plan.get_ns()),
-                                      plan_set))) {
-        SQL_PC_LOG(WARN, "failed to create new plan set", K(ret));
+      if (OB_FAIL(ret) || plan_added) {
+        // do nothing
+      } else if (OB_FAIL(add_to_plan_set(pc_ctx, plan, outline_param_idx, is_multi_stmt_batch, false))) {
+        LOG_WARN("failed to add to plan set");
+      } else if (!evo_plan_set->has_any_plan()) {
+        // free origin plan set if all plan has been removed
+        plan_sets_.remove(evo_plan_set);
+        evo_plan_set->remove_all_plan();
+        free_plan_set(evo_plan_set);
+        evo_plan_set = nullptr;
+        spm_ctx.evo_plan_set_ = nullptr;
+      }
+    } else {
+      if (OB_FAIL(add_to_plan_set(pc_ctx, plan, outline_param_idx, is_multi_stmt_batch))) {
+        LOG_WARN("failed to add to plan set");
+      }
+    }
+  }
+#else
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(add_to_plan_set(pc_ctx, plan, outline_param_idx, is_multi_stmt_batch))) {
+      LOG_WARN("failed to add to plan set");
+    }
+  }
+#endif
+  return ret;
+}
+
+int ObPlanCacheValue::add_to_plan_set(ObPlanCacheCtx &pc_ctx,
+                                      ObPlanCacheObject &plan,
+                                      int64_t outline_param_idx,
+                                      bool is_multi_stmt_batch,
+                                      bool add_last/* = true*/)
+{
+  int ret = OB_SUCCESS;
+  int add_plan_ret = OB_SUCCESS;
+  bool need_new_planset = true;
+  DLIST_FOREACH(cur_plan_set, plan_sets_) {
+    bool is_same = false;
+    if (OB_FAIL(cur_plan_set->match_params_info(plan.get_params_info(),
+                                                outline_param_idx,
+                                                pc_ctx,
+                                                true,
+                                                is_same))) {
+      SQL_PC_LOG(WARN, "fail to match params info", K(ret));
+    } else if (false == is_same) { //do nothing
+    } else {//param info已经匹配
+      SQL_PC_LOG(DEBUG, "add plan to plan set");
+      need_new_planset = false;
+      if (is_multi_stmt_batch &&
+          OB_FAIL(match_and_generate_ext_params(cur_plan_set, pc_ctx, outline_param_idx))) {
+        LOG_TRACE("fail to match and generate ext_params", K(ret));
+      } else if (OB_FAIL(cur_plan_set->add_cache_obj(plan, pc_ctx, outline_param_idx, add_plan_ret))) {
+        SQL_PC_LOG(TRACE, "failed to add plan", K(ret));
+      }
+      break;
+    }
+  }
+  /**
+   *  Add the plan to a new allocated plan set
+   *  and then add the plan set to plan cache value
+   */
+  if (OB_SUCC(ret) && need_new_planset) {
+    SQL_PC_LOG(DEBUG, "add new plan set");
+    ObPlanSet *plan_set = nullptr;
+    if (OB_FAIL(create_new_plan_set(ObPlanSet::get_plan_set_type_by_cache_obj_type(plan.get_ns()),
+                                    plan_set))) {
+      SQL_PC_LOG(WARN, "failed to create new plan set", K(ret));
+    } else {
+      plan_set->set_plan_cache_value(this);
+      if (OB_FAIL(plan_set->init_new_set(pc_ctx,
+                                        plan,
+                                        outline_param_idx,
+                                        get_pc_malloc()))) {
+        LOG_WARN("init new plan set failed", K(ret));
+      } else if (is_multi_stmt_batch &&
+          OB_FAIL(match_and_generate_ext_params(plan_set, pc_ctx, outline_param_idx))) {
+        LOG_TRACE("fail to match and generate ext_params", K(ret));
+      } else if (OB_FAIL(plan_set->add_cache_obj(plan, pc_ctx, outline_param_idx, add_plan_ret))) {
+        SQL_PC_LOG(TRACE, "failed to add plan to plan set", K(ret));
+      } else if (add_last && !plan_sets_.add_last(plan_set)) {
+        ret = OB_ERROR;
+        SQL_PC_LOG(WARN, "failed to add plan set to plan cache value", K(ret));
+      } else if (!add_last && !plan_sets_.add_first(plan_set)) {
+        ret = OB_ERROR;
+        SQL_PC_LOG(WARN, "failed to add plan set to plan cache value", K(ret));
       } else {
-        plan_set->set_plan_cache_value(this);
-        if (OB_FAIL(plan_set->init_new_set(pc_ctx,
-                                           plan,
-                                           outline_param_idx,
-                                           get_pc_malloc()))) {
-          LOG_WARN("init new plan set failed", K(ret));
-        } else if (is_multi_stmt_batch &&
-            OB_FAIL(match_and_generate_ext_params(plan_set, pc_ctx, outline_param_idx))) {
-          LOG_TRACE("fail to match and generate ext_params", K(ret));
-        } else if (OB_FAIL(plan_set->add_cache_obj(plan, pc_ctx, outline_param_idx, add_plan_ret))) {
-          SQL_PC_LOG(TRACE, "failed to add plan to plan set", K(ret));
-        } else if (!plan_sets_.add_last(plan_set)) {
-          ret = OB_ERROR;
-          SQL_PC_LOG(WARN, "failed to add plan set to plan cache value", K(ret));
-        } else {
-          ret = OB_SUCCESS;
-          SQL_PC_LOG(DEBUG, "plan set added", K(ret));
-        }
+        ret = OB_SUCCESS;
+        SQL_PC_LOG(DEBUG, "plan set added", K(ret));
+      }
 
-        // free the memory if not used
-        if (OB_FAIL(ret) && NULL != plan_set) {
-          free_plan_set(plan_set);
-          plan_set = NULL;
-        }
+      // free the memory if not used
+      if (OB_FAIL(ret) && NULL != plan_set) {
+        free_plan_set(plan_set);
+        plan_set = NULL;
       }
     }
   }

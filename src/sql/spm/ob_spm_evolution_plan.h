@@ -96,6 +96,7 @@ public:
   int init(ObSqlPlanSet *plan_set);
   int init(ObSqlPlanSet *plan_set,
            const int64_t evolution_count_ts);
+  int swap_evolution_plan(ObPlanCacheCtx &ctx, ObEvolutionPlan &evolution_plan);
   void disable_is_evolving_flag() { ATOMIC_STORE(&is_evolving_, false); }
   void enable_is_evolving_flag() { ATOMIC_STORE(&is_evolving_, true); }
   bool get_is_evolving_flag() const { return ATOMIC_LOAD(&is_evolving_); }
@@ -109,6 +110,8 @@ public:
   int get_plan(ObPlanCacheCtx &ctx, ObPhysicalPlan *&plan);
   int add_plan(ObPlanCacheCtx &ctx, ObPhysicalPlan *plan);
   void inc_evolution_finish_count();
+  ObPhysicalPlan* get_evolving_plan_for_update() { return evolving_plan_; }
+  bool has_any_plan();
   TO_STRING_KV(K_(is_evolving),
                K_(evolution_count),
                K_(start_evolution_time),
