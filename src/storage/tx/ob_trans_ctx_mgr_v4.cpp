@@ -623,9 +623,9 @@ int ObLSTxCtxMgr::retry_apply_start_working_log()
     ret = on_start_working_log_cb_succ(retry_start_working_ts);
   }
 
-  if (OB_TMP_FAIL(log_cb_pool_mgr_.clear_log_cb_pool(false /*for_replay*/))) {
-    TRANS_LOG(WARN, "clear log cb pool failed", K(ret), K(ls_id_), K(log_cb_pool_mgr_));
-  }
+  // if (OB_TMP_FAIL(log_cb_pool_mgr_.clear_log_cb_pool(false /*for_replay*/))) {
+  //   TRANS_LOG(WARN, "clear log cb pool failed", K(ret), K(ls_id_), K(log_cb_pool_mgr_));
+  // }
   return ret;
 }
 

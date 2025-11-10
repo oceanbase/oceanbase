@@ -61,8 +61,9 @@ private:
   int append_new_log_cb_pool_();
 
   int alloc_log_cb_pool_(ObTxLogCbPool *&alloc_ptr);
-  int free_log_cb_pool_(ObTxLogCbPool *free_ptr, const int64_t wait_timeout = INT64_MAX);
+  int free_log_cb_pool_(ObTxLogCbPool *&free_ptr, const int64_t wait_timeout = 1000);
 
+  void print_gc_pool_list_();
   int iter_idle_pool_(ObTxLogCbPoolRefGuard &ref_guard);
 
   enum SyncSizeHistoryFlag
@@ -107,6 +108,8 @@ private:
   common::SpinRWLock pool_list_rw_lock_;
   TxLogCbPoolList pool_list_;
   bool allow_expand_;
+
+  TxLogCbPoolList gc_pool_list_;
 
   common::SpinRWLock sync_size_his_lock_;
   int64_t sync_size_history_[MAX_SYNC_SIZE_HISTORY_RECORD_SIZE * 2];

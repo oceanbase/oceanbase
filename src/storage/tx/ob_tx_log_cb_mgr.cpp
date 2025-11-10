@@ -45,14 +45,24 @@ void ObTxLogCbPoolMgr::reset()
   ATOMIC_STORE(&ls_occupying_cnt_, 0);
   ATOMIC_STORE(&acquire_extra_log_cb_group_failed_cnt_, 0);
   clear_sync_size_history_();
-  {
+  ATOMIC_STORE(&allow_expand_, false);
+
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObTxLogCbPool *pool_ptr = nullptr;
+  while (ret == OB_SUCCESS) {
     SpinWLockGuard guard(pool_list_rw_lock_);
-    ObTxLogCbPool *pool_ptr = nullptr;
-    while (OB_NOT_NULL(pool_ptr = pool_list_.remove_first())) {
-      // TODO check
-      (void)free_log_cb_pool_(pool_ptr);
+    pool_ptr = pool_list_.get_first();
+
+    if (pool_ptr == nullptr || pool_ptr == pool_list_.get_header()) {
+      pool_ptr == nullptr;
     }
-    allow_expand_ = false;
+
+    if (pool_list_.get_size() <= 0 && gc_pool_list_.get_size() <= 0) {
+      ret = OBP_ITER_END;
+    } else if (OB_TMP_FAIL(free_log_cb_pool_(pool_ptr))) {
+      TRANS_LOG(WARN, "free a log cb pool failed", K(tmp_ret), KP(pool_ptr));
+    }
   }
 }
 
@@ -64,29 +74,34 @@ int ObTxLogCbPoolMgr::clear_log_cb_pool(const bool for_replay)
 
   ATOMIC_STORE(&allow_expand_, false);
 
-  if (OB_SUCC(ret) && for_replay) {
-    SpinRLockGuard guard(pool_list_rw_lock_);
-    if (pool_list_.is_empty()) {
-      ret = OB_EMPTY_RANGE;
-    }
-  }
+  // if (OB_SUCC(ret) && for_replay) {
+  //   SpinRLockGuard guard(pool_list_rw_lock_);
+  //   if (pool_list_.is_empty()) {
+  //     ret = OB_EMPTY_RANGE;
+  //   }
+  // }
 
   if (OB_SUCC(ret)) {
     SpinWLockGuard guard(pool_list_rw_lock_);
     ObTxLogCbPool *pool_ptr = nullptr;
-    while (OB_SUCC(ret) && pool_list_.get_size() > 0) {
-      if (OB_ISNULL(pool_ptr = pool_list_.remove_first())) {
-        ret = OB_EMPTY_RANGE;
-        TRANS_LOG(INFO, "remove log cb pool failed", K(ret), KPC(this));
+    while (OB_SUCC(ret) && (pool_list_.get_size() > 0 || gc_pool_list_.get_size() > 0)) {
+      pool_ptr = pool_list_.get_first();
+      if (OB_ISNULL(pool_ptr) || pool_ptr == pool_list_.get_header()) {
+        pool_ptr = nullptr;
+      }
+
+      if (OB_ISNULL(pool_ptr)) {
+        //do nothing
       } else if (OB_FALSE_IT(ATOMIC_BCAS(&idle_pool_ptr_, pool_ptr, nullptr))) {
-        // do nothing
-      } else if (OB_FAIL(free_log_cb_pool_(pool_ptr, 10 * 1000 /*10ms*/))) {
+        //do nothing
+      }
+
+      if (OB_FAIL(free_log_cb_pool_(pool_ptr, 10 * 1000 /*10ms*/))) {
         if (!for_replay) {
           TRANS_LOG(WARN, "free a log cb pool failed", K(ret), K(pool_ptr), KPC(this));
         } else {
           TRANS_LOG(ERROR, "free a log cb pool in replay error", K(ret), KPC(pool_ptr), KPC(this));
         }
-        pool_list_.add_first(pool_ptr);
       }
     }
   }
@@ -393,7 +408,8 @@ int ObTxLogCbPoolMgr::append_new_log_cb_pool_()
     }
 
     if (OB_FAIL(ret)) {
-      (void)free_log_cb_pool_(log_cb_alloc_ptr);
+      log_cb_alloc_ptr->~ObTxLogCbPool();
+      (void)allocator_.free(log_cb_alloc_ptr);
     } else {
       TRANS_LOG(INFO, "append a new log cb pool", K(ret), KPC(log_cb_alloc_ptr), KPC(this));
     }
@@ -425,29 +441,88 @@ int ObTxLogCbPoolMgr::alloc_log_cb_pool_(ObTxLogCbPool *&alloc_ptr)
   return ret;
 }
 
-int ObTxLogCbPoolMgr::free_log_cb_pool_(ObTxLogCbPool *free_ptr, const int64_t wait_timeout)
+int ObTxLogCbPoolMgr::free_log_cb_pool_(ObTxLogCbPool *&free_ptr, const int64_t wait_timeout)
 {
   int ret = OB_SUCCESS;
 
   const int64_t start_time = ObTimeUtility::fast_current_time();
+  int64_t gc_pool_count = 0;
+  ObTxLogCbPool *gc_pool_ptr = nullptr;
 
-  while (!free_ptr->can_be_freed() && OB_SUCC(ret)) {
-    if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
-      TRANS_LOG(INFO, "wait the tmp_ref of a log cb pool", K(ret), KPC(free_ptr));
-    }
-    if (ObTimeUtility::fast_current_time() - start_time >= wait_timeout) {
-      ret = OB_EAGAIN;
+  if (OB_NOT_NULL(free_ptr)) {
+    // lock pool_list
+    pool_list_.remove(free_ptr);
+    if (!gc_pool_list_.add_last(free_ptr)) {
+      gc_pool_ptr = free_ptr;
+      free_ptr->unlink();
+      TRANS_LOG(ERROR, "push into gc_pool_list failed", K(ret), KPC(free_ptr),
+                KP(free_ptr->get_prev()), KP(free_ptr->get_next()));
     } else {
-      ob_usleep(1 * 1000 * 1000);
+      TRANS_LOG(INFO, "move the free_pool into gc_list", K(ret), KPC(free_ptr));
+    }
+
+    free_ptr = nullptr;
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(gc_pool_ptr) && gc_pool_list_.get_size() > 0) {
+      gc_pool_ptr = gc_pool_list_.get_last();
+    }
+
+    if (OB_NOT_NULL(gc_pool_ptr)) {
+      for (ObTxLogCbPool* save = gc_pool_ptr->get_next();
+           OB_SUCC(ret) && gc_pool_ptr != gc_pool_list_.get_header();
+           gc_pool_ptr = save, save = save->get_next()) {
+
+        while (!gc_pool_ptr->can_be_freed() && OB_SUCC(ret)) {
+          if (ObTimeUtility::fast_current_time() - start_time >= wait_timeout) {
+            ret = OB_EAGAIN;
+            TRANS_LOG(INFO, "wait the ref of a free_log_cb until timeout", K(ret), K(start_time),
+                      K(wait_timeout), KPC(free_ptr));
+          } else {
+            ob_usleep(1 * 1000);
+            if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
+              TRANS_LOG(INFO, "wait the tmp_ref of a log cb pool", K(ret), KPC(free_ptr));
+            }
+          }
+        }
+
+        if (OB_SUCC(ret) && OB_NOT_NULL(gc_pool_ptr)) {
+          TRANS_LOG(INFO, "free a log cb pool", K(ret), KP(gc_pool_ptr), KPC(gc_pool_ptr));
+          if (gc_pool_ptr->get_next() != nullptr || gc_pool_ptr->get_prev() != nullptr) {
+            gc_pool_list_.remove(gc_pool_ptr);
+          }
+          gc_pool_ptr->~ObTxLogCbPool();
+          (void)allocator_.free(gc_pool_ptr);
+          gc_pool_count++;
+        }
+      }
     }
   }
-  if (OB_SUCC(ret) && OB_NOT_NULL(free_ptr)) {
-    TRANS_LOG(INFO, "free a log cb pool", K(ret), KP(free_ptr), KPC(free_ptr));
-    free_ptr->~ObTxLogCbPool();
-    (void)allocator_.free(free_ptr);
+
+  if (gc_pool_count == 0) {
+    print_gc_pool_list_();
   }
 
   return ret;
+}
+
+void ObTxLogCbPoolMgr::print_gc_pool_list_()
+{
+  int ret = OB_SUCCESS;
+  const int64_t MAX_PRINT_CNT = 10;
+  int64_t print_index = 0;
+  if (gc_pool_list_.get_size() > 0) {
+    DLIST_FOREACH(cur, gc_pool_list_)
+    {
+      if (print_index > MAX_PRINT_CNT) {
+        break;
+      }
+      TRANS_LOG(INFO, "print the gc pool", K(ret), K(print_index), K(gc_pool_list_.get_size()),
+                KPC(cur));
+      print_index++;
+    }
+  }
 }
 
 int ObTxLogCbPoolMgr::iter_idle_pool_(ObTxLogCbPoolRefGuard &ref_guard)

@@ -27,15 +27,21 @@ class ObTxELRUtil
 {
 public:
   ObTxELRUtil() : last_refresh_ts_(0),
-                  can_tenant_elr_(false) {}
+                  can_tenant_elr_(false),
+                  trx_max_log_cb_limit_(-1) {}
   int check_and_update_tx_elr_info();
   bool is_can_tenant_elr() const { return can_tenant_elr_; }
+  int64_t get_trx_max_log_cb_limit() const
+  {
+    return trx_max_log_cb_limit_;
+  }
   void reset()
   {
     last_refresh_ts_ = 0;
     can_tenant_elr_ = false;
+    trx_max_log_cb_limit_ = -1;
   }
-  TO_STRING_KV(K_(last_refresh_ts), K_(can_tenant_elr));
+  TO_STRING_KV(K_(last_refresh_ts), K_(can_tenant_elr), K_(trx_max_log_cb_limit));
 private:
   void refresh_elr_tenant_config_();
 private:
@@ -43,6 +49,7 @@ private:
 private:
   int64_t last_refresh_ts_;
   bool can_tenant_elr_;
+  int64_t trx_max_log_cb_limit_;
 };
 
 } // transaction

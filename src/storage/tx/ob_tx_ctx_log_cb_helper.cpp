@@ -11,6 +11,7 @@
  */
 
 #include "storage/tx/ob_trans_part_ctx.h"
+#include "storage/tx/ob_trans_service.h"
 
 namespace oceanbase
 
@@ -113,7 +114,6 @@ int ObPartTransCtx::get_log_cb_(const bool need_freeze_cb, ObTxLogCb *&log_cb)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
 
   if (OB_NOT_NULL(log_cb)) {
     ret = OB_INVALID_ARGUMENT;
@@ -142,7 +142,9 @@ int ObPartTransCtx::get_log_cb_(const bool need_freeze_cb, ObTxLogCb *&log_cb)
       if (free_cbs_.is_empty()) {
         const int64_t busy_cbs_cnt = busy_cbs_.get_size();
         const int64_t trx_max_log_cb_limit =
-            tenant_config.is_valid() ? tenant_config->_trx_max_log_cb_limit : 16;
+            trans_service_->get_tx_elr_util().get_trx_max_log_cb_limit() >= 0
+                ? trans_service_->get_tx_elr_util().get_trx_max_log_cb_limit()
+                : 16;
         if (busy_cbs_cnt < trx_max_log_cb_limit || trx_max_log_cb_limit <= 0) {
           if (OB_TMP_FAIL(extend_log_cb_group_())) {
             TRANS_LOG(WARN, "extend a log cb group  failed", K(ret), K(tmp_ret), K(trans_id_),
