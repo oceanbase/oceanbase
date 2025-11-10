@@ -6036,10 +6036,12 @@ int ObDMLResolver::resolve_and_split_sql_expr(const ParseNode &node, ObIArray<Ob
     ctx.stmt_ = static_cast<ObStmt*>(get_stmt());
     ctx.query_ctx_ = params_.query_ctx_;
     ctx.session_info_ = params_.session_info_;
+    ctx.param_list_ = params_.param_list_;
     ObRawExprCanonicalizerImpl canonicalizer(ctx);
     if (OB_FAIL(resolve_sql_expr(node, expr))) {
       LOG_WARN("resolve sql expr failed", K(ret));
-    } else if ( !is_resolving_view_ && OB_FAIL(canonicalizer.canonicalize(expr))) { // canonicalize expression
+    } else if (!is_resolving_view_ && !is_prepare_stage_
+               && OB_FAIL(canonicalizer.canonicalize(expr))) {  // canonicalize expression
       LOG_WARN("resolve canonicalize expression", K(ret));
     } else if (OB_FAIL(expr->formalize(session_info_))) {
       LOG_WARN("failed to formalize expr", K(ret));
