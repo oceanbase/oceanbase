@@ -1010,10 +1010,12 @@ int ObVecIndexAsyncTaskUtil::resume_task_from_inner_table(
                   LOG_INFO("resume task success", K(tenant_id), KPC(task_ctx));
                 }
                 // free on failed
-                if (OB_FAIL(ret) && OB_NOT_NULL(task_ctx)) {
-                  task_ctx->~ObVecIndexAsyncTaskCtx();
-                  allocator->free(task_ctx);
-                  task_ctx = nullptr;
+                if (OB_FAIL(ret) || !inc_new_task) {
+                  if (OB_NOT_NULL(task_ctx)) {
+                    task_ctx->~ObVecIndexAsyncTaskCtx();
+                    allocator->free(task_ctx);
+                    task_ctx = nullptr;
+                  }
                 }
               }
             }

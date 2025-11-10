@@ -526,6 +526,7 @@ int ObHybridVectorRefreshTask::prepare_for_embedding(ObPluginVectorIndexAdaptor 
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret), K(table_param));
     } else if (FALSE_IT(table_param = new(table_param)schema::ObTableParam(task_ctx->allocator_))) {
+    } else if (FALSE_IT(ctx_->task_status_.target_scn_.convert_from_ts(ObTimeUtility::current_time()))) {
     } else if (OB_FAIL(ObPluginVectorIndexUtils::read_local_tablet(ls_id_,
         &adaptor,
         ctx_->task_status_.target_scn_,
