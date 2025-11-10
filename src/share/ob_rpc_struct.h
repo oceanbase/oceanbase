@@ -3266,6 +3266,27 @@ public:
   bool is_auto_split_;
 };
 
+struct ObCleanSplittedTabletDDLArg: public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCleanSplittedTabletDDLArg():
+    ObDDLArg(),
+    clean_arg_()
+  {}
+  ~ObCleanSplittedTabletDDLArg() = default;
+  bool is_valid() const { return clean_arg_.is_valid(); }
+  void reset()
+  {
+    clean_arg_.reset();
+    ObDDLArg::reset();
+  }
+  int assign(const ObCleanSplittedTabletDDLArg &other);
+  INHERIT_TO_STRING_KV("ObDDLArg", ObDDLArg, K(clean_arg_));
+public:
+  ObCleanSplittedTabletArg clean_arg_;
+};
+
 struct ObCheckMemtableCntArg final
 {
   OB_UNIS_VERSION(1);
