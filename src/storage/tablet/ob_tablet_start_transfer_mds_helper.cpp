@@ -1207,6 +1207,12 @@ int ObTabletStartTransferInHelper::check_transfer_dest_tablet_(
           || (local_tablet_start_scn < transfer_info_scn && local_transfer_seq > transfer_info_seq)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("transfer in tablet in empty shell status is unexpected", K(ret), KPC(tablet), K(tablet_meta));
+      } else if (GCTX.is_shared_storage_mode()
+                 && local_tablet_start_scn < transfer_info_scn
+                 && local_transfer_seq < transfer_info_seq) {
+        ret = OB_EAGAIN;
+        LOG_WARN("the previous round's transfer out tablet has not finished gc", K(ret), KPC(tablet),
+          K(tablet_meta));
       }
     } else if (local_tablet_start_scn < transfer_info_scn) {
       ret = OB_EAGAIN;

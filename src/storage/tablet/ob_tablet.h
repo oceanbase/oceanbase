@@ -251,8 +251,7 @@ public:
       common::ObArenaAllocator &allocator,
       const ObTablet &sstablet,
       const share::SCN sstablet_version,
-      const bool is_update,
-      const int32_t private_transfer_epoch);
+      const bool is_update);
   bool get_gc_occupy_flag() { return gc_occupy_flag_; }
   void set_gc_occupy_flag_true() { gc_occupy_flag_ = true; }  // only allow from false to true
 #endif
@@ -263,8 +262,7 @@ public:
       const ObMigrationTabletParam &param,
       const bool is_update,
       ObFreezer *freezer,
-      const bool is_transfer,
-      const int32_t private_transfer_epoch);
+      const bool is_transfer);
   //batch update table store with range cut
   int init_for_sstable_replace(
       common::ObArenaAllocator &allocator,

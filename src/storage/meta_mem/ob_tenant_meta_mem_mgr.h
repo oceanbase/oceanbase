@@ -269,6 +269,7 @@ public:
   /// NOTE: make sure call within the scope of ls_tablet_svr's bucket lock.
   /// need special handling of OB_ENTRY_NOT_EXIST
   int alloc_tablet_meta_version(const ObTabletMapKey &key, int64_t &tablet_meta_version);
+  int set_tablet_next_meta_version(const ObTabletMapKey &key, const int64_t next_meta_version);
 
   // NOTE: This interface return tablet handle, which couldn't be used by compare_and_swap_tablet.
   int get_tablet_with_allocator(
@@ -277,6 +278,11 @@ public:
       common::ObArenaAllocator &allocator,
       ObTabletHandle &handle,
       const bool force_alloc_new = false);
+
+  int get_current_version_for_tablet(
+      const share::ObLSID &ls_id,
+      const ObTabletID &tablet_id,
+      /*out*/ int64_t &tablet_version);
 
   int get_current_version_for_tablet(
       const share::ObLSID &ls_id,
@@ -304,6 +310,15 @@ public:
       const uintptr_t tablet_fingerprint,
       const int64_t new_gc_version);
   int check_allow_tablet_gc(const ObTabletID &tablet_id, const int32_t transfer_epoch, bool &allow);
+  /// @brief: check if macro check is safe.
+  /// Need to hold @c ObLSTabletService::bucket_lock_ before checking due to
+  /// tablet creation, initialization and persistence should be ATOMIC(this might
+  /// happens at create_with_ss_tablet)
+  int check_allow_tablet_macro_check(
+      const share::ObLSID &ls_id,
+      const ObTabletID &tablet_id,
+      const int32_t private_transfer_epoch,
+      bool &allow);
   int get_tablet_buffer_infos(ObIArray<ObTabletBufferInfo> &buffer_infos);
   int check_tablet_has_sstable_need_upload(const SCN &ls_ss_checkpoint_scn, const ObTabletMapKey &key, bool &need_upload);
   int get_tablet_addr(const ObTabletMapKey &key, ObMetaDiskAddr &addr);

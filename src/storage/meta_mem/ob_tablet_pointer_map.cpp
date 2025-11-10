@@ -961,5 +961,36 @@ int ObTabletPointerMap::alloc_tablet_meta_version(const ObTabletMapKey &key, int
   return ret;
 }
 
+int ObTabletPointerMap::set_tablet_next_meta_version(const ObTabletMapKey &key, const int64_t next_meta_version)
+{
+  int ret = OB_SUCCESS;
+  uint64_t hash_val = 0;
+  ObTabletPointerHandle ptr_hdl(*this);
+  ObTabletPointer *t_ptr = nullptr;
+  if (OB_UNLIKELY(!ResourceMap::is_inited_)) {
+    ret = common::OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObMetaPointerMap has not been inited", K(ret));
+  } else if (OB_UNLIKELY(!key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid tablet key", K(ret), K(key));
+  } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
+    STORAGE_LOG(WARN, "calc hash failed", K(ret), K(key));
+  } else {
+    // hold wlock
+    common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
+    if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
+      STORAGE_LOG(WARN, "get pointer handle failed", K(ret), K(key));
+    } else if (OB_ISNULL(t_ptr = ptr_hdl.get_tablet_pointer())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected null tablet pointer", K(ret), K(key));
+    } else {
+      t_ptr->set_next_meta_version(next_meta_version);
+      STORAGE_LOG(INFO, "set tablet next meta version", K(ret), K(t_ptr->next_meta_version_),
+        K(t_ptr->last_gc_version_));
+    }
+  }
+  return ret;
+}
+
 } // end namespace storage
 } // end namespace oceanbase

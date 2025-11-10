@@ -319,6 +319,65 @@ int ObTenantMetaMemMgr::check_allow_tablet_gc(
   return ret;
 }
 
+int ObTenantMetaMemMgr::check_allow_tablet_macro_check(
+    const share::ObLSID &ls_id,
+    const ObTabletID &tablet_id,
+    const int32_t private_transfer_epoch,
+    bool &allow)
+{
+  int ret = OB_SUCCESS;
+  allow = true;
+  const ObTabletMapKey key(ls_id, tablet_id);
+
+  if (!GCTX.is_shared_storage_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("only supported for SS mode", K(ret));
+  } else if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantMetaMemMgr hasn't been initialized", K(ret));
+  } else if (OB_UNLIKELY(!key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tablet map key", K(ret), K(key));
+  } else if (OB_UNLIKELY(!ObTabletTransferInfo::is_private_transfer_epoch_valid(private_transfer_epoch))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid private transfer epoch", K(ret), K(key), K(private_transfer_epoch));
+  } else {
+    // hold bucket rlock
+    ObTabletHandle tablet_handle;
+    ObTablet *tablet = nullptr;
+    ObBucketHashRLockGuard lock_guard(bucket_lock_, key.hash());
+    int32_t cur_private_transfer_epoch = -1;
+    if (OB_FAIL(get_tablet(WashTabletPriority::WTP_HIGH, key, tablet_handle))) {
+      if (OB_ENTRY_NOT_EXIST != ret && OB_ITEM_NOT_SETTED != ret) {
+        LOG_WARN("fail to get tablet", K(ret), K(key));
+      } else {
+        // tablet already been removed from t3m, allow macro check
+        LOG_INFO("tablet not exists at t3m, allow macro check", K(ret), K(key));
+        ret = OB_SUCCESS;
+      }
+    } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null tablet_ptr", K(ret), K(key), K(tablet_handle));
+    }
+    /// NOTE: must get @c cur_private_transfer_epoch from tablet meta, cause
+    /// tablet's addr may be none(before persist)
+    else if (OB_FAIL(tablet->get_private_transfer_epoch(cur_private_transfer_epoch))) {
+      LOG_WARN("failed to get private transfer epoch from tablet", K(ret), "tablet_meta",
+        tablet->get_tablet_meta());
+    } else if (private_transfer_epoch == cur_private_transfer_epoch) {
+        allow = false;
+        LOG_INFO("tablet with same private transfer epoch exists at t3m(transfer might be retried)"
+          ", skip macro check to avoid accidental GC", K(ret), K(key), K(private_transfer_epoch),
+          K(cur_private_transfer_epoch));
+    }
+  }
+
+  // abort macro check if some err happens
+  if (OB_FAIL(ret)) {
+    allow = false;
+  }
+  return ret;
+}
 void ObTenantMetaMemMgr::init_pool_arr()
 {
   pool_arr_[static_cast<int>(ObITable::TableType::DATA_MEMTABLE)] = &memtable_pool_;
@@ -1818,6 +1877,26 @@ int ObTenantMetaMemMgr::get_tablet_with_allocator(
 int ObTenantMetaMemMgr::get_current_version_for_tablet(
     const share::ObLSID &ls_id,
     const ObTabletID &tablet_id,
+    /*out*/ int64_t &tablet_version)
+{
+  int ret = OB_SUCCESS;
+  int64_t unused_arg0 = 0;
+  int64_t unused_arg1 = 0;
+  uintptr_t unused_arg2 = 0;
+  bool unused_arg3 = false;
+  tablet_version = 0;
+  return get_current_version_for_tablet(ls_id,
+                                        tablet_id,
+                                        tablet_version,
+                                        unused_arg0,
+                                        unused_arg1,
+                                        unused_arg2,
+                                        unused_arg3);
+}
+
+int ObTenantMetaMemMgr::get_current_version_for_tablet(
+    const share::ObLSID &ls_id,
+    const ObTabletID &tablet_id,
     int64_t &tablet_version,
     int64_t &last_gc_version,
     int64_t &tablet_transfer_seq,
@@ -1826,7 +1905,11 @@ int ObTenantMetaMemMgr::get_current_version_for_tablet(
 {
   int ret = OB_SUCCESS;
   const ObTabletMapKey key(ls_id, tablet_id);
-  if (OB_UNLIKELY(!is_inited_)) {
+
+  if (!GCTX.is_shared_storage_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("only supported for SS mode", K(ret));
+  } else if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTenantMetaMemMgr hasn't been initialized", K(ret));
   } else if (OB_UNLIKELY(!key.is_valid())) {
@@ -2030,6 +2113,24 @@ int ObTenantMetaMemMgr::alloc_tablet_meta_version(const ObTabletMapKey &key, int
     LOG_WARN("invalid argument", K(ret), K(key));
   } else if (OB_FAIL(tablet_map_.alloc_tablet_meta_version(key, tablet_meta_version))) {
     LOG_WARN("failed to alloc tablet meta version", K(ret), K(key));
+  }
+  return ret;
+}
+
+int ObTenantMetaMemMgr::set_tablet_next_meta_version(const ObTabletMapKey &key, const int64_t next_meta_version)
+{
+  int ret = OB_SUCCESS;
+
+  if (!GCTX.is_shared_storage_mode()) {
+    // do nothing
+  } else if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantMetaMemMgr hasn't been initialized", K(ret));
+  } else if (OB_UNLIKELY(!key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(key));
+  } else if (OB_FAIL(tablet_map_.set_tablet_next_meta_version(key, next_meta_version))) {
+    LOG_WARN("failed to set tablet next meta version", K(ret), K(key), K(next_meta_version));
   }
   return ret;
 }

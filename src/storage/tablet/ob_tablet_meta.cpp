@@ -379,8 +379,7 @@ int ObTabletMeta::init(
 
 int ObTabletMeta::init(
     const ObTabletMeta &old_tablet_meta,
-    const share::SCN &flush_scn,
-    const int32_t private_transfer_epoch)
+    const share::SCN &flush_scn)
 {
   int ret = OB_SUCCESS;
 
@@ -391,10 +390,6 @@ int ObTabletMeta::init(
       || OB_UNLIKELY(!flush_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(old_tablet_meta), K(flush_scn));
-  } else if (OB_UNLIKELY(GCTX.is_shared_storage_mode()
-                         && !ObTabletTransferInfo::is_private_transfer_epoch_valid(private_transfer_epoch))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid private transfer epoch", K(ret), K(private_transfer_epoch));
   } else {
     version_ = TABLET_META_VERSION;
     ls_id_ = old_tablet_meta.ls_id_;
@@ -429,9 +424,7 @@ int ObTabletMeta::init(
     split_info_ = old_tablet_meta.split_info_;
     has_truncate_info_ = old_tablet_meta.has_truncate_info_;
     min_ss_tablet_version_ = old_tablet_meta.min_ss_tablet_version_;
-    if (GCTX.is_shared_storage_mode() && OB_FAIL(transfer_info_.set_private_transfer_epoch(private_transfer_epoch))) {
-      LOG_WARN("failed to set private transfer epoch", K(ret), K(private_transfer_epoch));
-    } else if (OB_FAIL(last_persisted_committed_tablet_status_.assign(old_tablet_meta.last_persisted_committed_tablet_status_))) {
+    if (OB_FAIL(last_persisted_committed_tablet_status_.assign(old_tablet_meta.last_persisted_committed_tablet_status_))) {
       LOG_WARN("fail to init last_persisted_committed_tablet_status from old tablet meta", K(ret),
           "last_persisted_committed_tablet_status", old_tablet_meta.last_persisted_committed_tablet_status_);
     }
@@ -450,8 +443,7 @@ int ObTabletMeta::init(
 
 int ObTabletMeta::init(
     const ObMigrationTabletParam &param,
-    const bool is_transfer,
-    const int32_t private_transfer_epoch)
+    const bool is_transfer)
 {
   int ret = OB_SUCCESS;
 
@@ -461,10 +453,6 @@ int ObTabletMeta::init(
   } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(param));
-  } else if (OB_UNLIKELY(GCTX.is_shared_storage_mode()
-                         && !ObTabletTransferInfo::is_private_transfer_epoch_valid(private_transfer_epoch))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid private transfer epoch", K(ret), K(private_transfer_epoch));
   } else {
     version_ = TABLET_META_VERSION;
     ls_id_ = param.ls_id_;
@@ -500,9 +488,7 @@ int ObTabletMeta::init(
     min_ss_tablet_version_ = param.min_ss_tablet_version_;
     inc_major_snapshot_ = param.inc_major_snapshot_;
 
-    if (GCTX.is_shared_storage_mode() && OB_FAIL(transfer_info_.set_private_transfer_epoch(private_transfer_epoch))) {
-      LOG_WARN("failed to set private transfer epoch", K(ret), K(private_transfer_epoch));
-    } else if (param.version_ < ObMigrationTabletParam::PARAM_VERSION_V3) {
+    if (param.version_ < ObMigrationTabletParam::PARAM_VERSION_V3) {
       int64_t tmp_pos = 0;
       const ObString &user_data = param.mds_data_.tablet_status_committed_kv_.v_.user_data_;
       if (user_data.empty()) {

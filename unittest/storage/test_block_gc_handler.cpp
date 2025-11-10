@@ -220,6 +220,12 @@ public:
     return OB_SUCCESS;
   }
 
+  int safe_delete_blocks_for_macro_check_(
+        ObIArray<blocksstable::MacroBlockId> &block_ids) override
+  {
+    return delete_macro_blocks(block_ids);
+  }
+
   blocksstable::MacroBlockId macro_block_ids_[30];
 };
 

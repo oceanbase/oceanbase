@@ -850,6 +850,11 @@ void ObTabletPointer::update_last_gc_version(const int64_t new_gc_version)
   LOG_INFO("update last_gc_version", K_(phy_addr), K_(last_gc_version), K(new_gc_version), K(common::lbt()));
 }
 
+void ObTabletPointer::set_next_meta_version(const int64_t next_meta_version)
+{
+  next_meta_version_ = max(next_meta_version_, next_meta_version);
+}
+
 void ObSSTabletDummyPointer::set_obj(const ObTabletHandle &guard)
 {
   reset_obj();

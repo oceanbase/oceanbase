@@ -90,12 +90,10 @@ public:
       const bool has_truncate_info = false);
   int init(
       const ObTabletMeta &old_tablet_meta,
-      const share::SCN &flush_scn,
-      const int32_t private_transfer_epoch);
+      const share::SCN &flush_scn);
   int init(
       const ObMigrationTabletParam &param,
-      const bool is_transfer,
-      const int32_t private_transfer_epoch);
+      const bool is_transfer);
   int init(
       const ObTabletMeta &old_tablet_meta,
       const ObMigrationTabletParam *tablet_meta);

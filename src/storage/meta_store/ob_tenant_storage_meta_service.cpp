@@ -614,97 +614,6 @@ int ObTenantStorageMetaService::update_real_sys_tenant_super_block_to_hidden(omt
   return ret;
 }
 
-/// NOTE: Might be a potential issue with bad case. If performance problems arise later,
-/// consider group wait_gc_tablet_arr by tablet_id later.
-int ObTenantStorageMetaService::get_max_transfer_seq_from_wait_gc_map(
-      const ObTabletID &tablet_id,
-      int32_t &max_transfer_seq,
-      ObTimeGuard &time_guard,
-      int64_t &iter_cnt)
-{
-  int ret = OB_SUCCESS;
-  max_transfer_seq = -1;
-  iter_cnt = 0;
-
-  if (OB_UNLIKELY(!tablet_id.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(tablet_id));
-  } else {
-    WaitGCTabletArray *tablet_array = nullptr;
-    lib::ObMutexGuard guard(wait_gc_map_lock_);
-    for (WaitGCTabletArrayMap::iterator ls_and_tablet_arr = wait_gc_tablet_arr_map_.begin();
-         OB_SUCC(ret) && ls_and_tablet_arr != wait_gc_tablet_arr_map_.end(); ++ls_and_tablet_arr) {
-      if (OB_ISNULL(tablet_array = ls_and_tablet_arr->second)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("wait gc tablet arr is null", K(ret), K(tablet_id), "ls_info", ls_and_tablet_arr->first);
-      } else {
-        lib::ObMutexGuard guard(tablet_array->lock_);
-        const ObLSPendingFreeTabletArray &wait_gc_array = tablet_array->wait_gc_tablet_arr_;
-        for (int64_t i = 0; OB_SUCC(ret) && i < wait_gc_array.items_.count(); ++i) {
-          ++iter_cnt;
-          const ObPendingFreeTabletItem &item = wait_gc_array.items_.at(i);
-          if (item.tablet_id_ != tablet_id) {
-            continue;
-          }
-          if (OB_UNLIKELY(!ObTabletTransferInfo::is_private_transfer_epoch_valid(item.tablet_transfer_seq_))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected pending free tablet with invalid tablet transfer seq", K(ret), K(tablet_id), K(item));
-          } else {
-            max_transfer_seq = MAX(max_transfer_seq, static_cast<int32_t>(item.tablet_transfer_seq_));
-          }
-        }
-      }
-    }
-    time_guard.click("CalMaxSeq");
-  }
-  return ret;
-}
-
-int ObTenantStorageMetaService::pick_private_transfer_epoch(
-    const ObLSID &ls_id,
-    const int64_t ls_epoch,
-    const ObTabletID &tablet_id,
-    const int32_t old_private_transfer_epoch,
-    int32_t &final_private_transfer_epoch)
-{
-  int ret = OB_SUCCESS;
-  final_private_transfer_epoch = -1;
-  int64_t iter_cnt = 0;
-  int32_t max_gc_transfer_seq = -1;
-  ObTimeGuard time_guard("ObTenantStorageMetaService::pick_transfer_epoch", 20_ms);
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(!ls_id.is_valid()
-            || !tablet_id.is_valid()
-            || ls_epoch < 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(ls_id), K(tablet_id), K(ls_epoch));
-  } else if (!GCTX.is_shared_storage_mode()) {
-    // do nothing
-    // transfer_info::get_private_transfer_epoch returns transfer_seq if transfer_epoch is -1
-  } else if (OB_UNLIKELY(!ObTabletTransferInfo::is_private_transfer_epoch_valid(old_private_transfer_epoch))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid transfer seq", K(ret), K(old_private_transfer_epoch));
-  } else if (OB_FAIL(get_max_transfer_seq_from_wait_gc_map(tablet_id, max_gc_transfer_seq, time_guard, iter_cnt))) {
-    LOG_WARN("failed to collect transfer seqs from wait gc map", K(ret), K(ls_id), K(ls_epoch),
-      K(tablet_id), K(max_gc_transfer_seq));
-  } else if (FALSE_IT(max_gc_transfer_seq = MAX(max_gc_transfer_seq, old_private_transfer_epoch))) {
-  } else if (FALSE_IT(final_private_transfer_epoch = max_gc_transfer_seq + 1)) {
-  } else if (OB_UNLIKELY(!ObTabletTransferInfo::is_private_transfer_epoch_valid(final_private_transfer_epoch))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to pick transfer epoch", K(ret), K(ls_id), K(ls_epoch), K(tablet_id),
-      K(final_private_transfer_epoch));
-  }
-
-  LOG_INFO("pick transfer epoch finished", KR(ret),
-    K(ls_id), K(ls_epoch), K(tablet_id), K(final_private_transfer_epoch),
-    K(old_private_transfer_epoch), "pending_gc_queue_size", iter_cnt, K(max_gc_transfer_seq),
-    K(time_guard));
-  return ret;
-}
-
 int ObTenantStorageMetaService::read_from_share_blk(
     const ObMetaDiskAddr &addr,
     const int64_t ls_epoch,
@@ -1542,6 +1451,60 @@ int ObTenantStorageMetaService::add_wait_gc_set_items_except_gc_set(
         }
       } else if (OB_FAIL(final_items.push_back(tablet_item))) {
         LOG_WARN("fail to push back tablet item", K(ret), K(tablet_item));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTenantStorageMetaService::get_max_meta_version_from_wait_gc_map(
+    const ObLSID &ls_id,
+    const int64_t ls_epoch,
+    const ObTabletID &tablet_id,
+    /*out*/ int64_t &max_meta_version)
+{
+  int ret = OB_SUCCESS;
+  max_meta_version = 0;
+
+  if (!GCTX.is_shared_storage_mode()) {
+    // do nothing
+  } else if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantStorageMetaSerivce has not been inited", K(ret));
+  } else if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ls id or tablet id", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_UNLIKELY(ls_epoch < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ls epoch", K(ret), K(ls_epoch));
+  } else {
+    WaitGCTabletArray *tablet_array = nullptr;
+    const WaitGCTabletArrayKey key(ls_id, ls_epoch);
+    {
+      // hold map's lock
+      lib::ObMutexGuard guard(wait_gc_map_lock_);
+      if (OB_FAIL(wait_gc_tablet_arr_map_.get_refactored(key, tablet_array))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to get pending free tablet array info", K(ret), K(key));
+        }
+      } else if (OB_ISNULL(tablet_array)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null tablet array", K(ret), K(key), KP(tablet_array));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_NOT_NULL(tablet_array)) {
+      // hold array's lock
+      lib::ObMutexGuard guard(tablet_array->lock_);
+      const ObIArray<ObPendingFreeTabletItem> &pending_free_arr = tablet_array->wait_gc_tablet_arr_.items_;
+      for (int64_t i = 0; OB_SUCC(ret) && i < pending_free_arr.count(); ++i) {
+        const ObPendingFreeTabletItem &item = pending_free_arr.at(i);
+        if (item.tablet_id_ == tablet_id) {
+          max_meta_version = MAX(max_meta_version, item.tablet_meta_version_);
+        }
       }
     }
   }
