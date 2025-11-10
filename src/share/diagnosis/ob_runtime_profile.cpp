@@ -235,15 +235,20 @@ int ObOpProfile<MetricType>::pretty_print_(char *buf, const int64_t buf_len, int
   }
   if (OB_SUCC(ret) && pos < buf_len) {
     char temp_buf[1024] = "\0";
-    MEMCPY(temp_buf, child_prefix.ptr(), child_prefix.length());
-    MEMCPY(temp_buf + child_prefix.length(), "  \0", 3);
-    ObString sub_child_prefix(child_prefix.length() + 3, temp_buf);
+    int64_t temp_buf_len = sizeof(temp_buf);
+    int64_t temp_pos = 0;
+    OZ(oceanbase::common::databuff_printf(temp_buf, temp_buf_len, temp_pos,
+                                          "%s  ", child_prefix.ptr()));
+    ObString sub_child_prefix(temp_pos, temp_buf);
     while (nullptr != cur_child && OB_SUCC(ret)) {
       if (OB_FAIL(cur_child->elem_->pretty_print_(
               buf, buf_len, pos, child_prefix, sub_child_prefix, display_level))) {
         LOG_WARN("failed to print child profile", K(pos), K(buf_len));
       } else {
         cur_child = ATOMIC_LOAD(&cur_child->next_);
+        if (NULL != cur_child) {
+          OZ(BUF_PRINTF("\n"));
+        }
       }
     }
   }
@@ -386,9 +391,8 @@ int ObOpProfile<ObMetric>::convert_current_profile_to_persist(char *buf, int64_t
     profile_head[id].length_ = buf_pos - profile_head[id].offset_;
     ProfileWrap *cur_child = ATOMIC_LOAD(&child_head_);
     while (nullptr != cur_child && (id < max_head_count - 1)) {
-      int32_t next_id = ++id;
       cur_child->elem_->convert_current_profile_to_persist(buf, buf_pos, buf_len, max_head_count,
-                                                           profile_head, next_id, cur_id);
+                                                           profile_head, ++id, cur_id);
       cur_child = ATOMIC_LOAD(&cur_child->next_);
     }
   }
@@ -437,10 +441,14 @@ int ObOpProfile<MetricType>::to_persist_profile(const char *&persist_profile, in
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory");
   } else {
+    MEMSET(buf, 0, persist_profile_size);
     ObProfileHeads *profile_heads = new (buf) ObProfileHeads();
     profile_heads->head_count_ = profile_cnt;
     profile_heads->metric_count_ = metric_count;
     profile_heads->head_offset_ = sizeof(ObProfileHeads);
+    for (int64_t i = 0; i < profile_cnt; ++i) {
+      new (buf + sizeof(ObProfileHeads) + sizeof(ObProfileHead) * i) ObProfileHead();
+    }
     ObProfileHead *profile_head = reinterpret_cast<ObProfileHead *>(buf + sizeof(ObProfileHeads));
     int64_t buf_pos = sizeof(ObProfileHeads) + sizeof(ObProfileHead) * profile_cnt;
     int32_t id = 0;
