@@ -149,6 +149,12 @@ int ObOrcTableRowIterator::prepare_read_orc_file()
       }
     }
     if (OB_SUCC(ret)) {
+      if (type != nullptr) {
+        orc_col_id
+            = column_index_type_ == sql::ColumnIndexType::ID ? type->getColumnId() : orc_col_id;
+      }
+    }
+    if (OB_SUCC(ret)) {
       bool need_init_project_loader = true;
       if (is_eager_column_.count() > 0 && is_eager_column_.at(i)) {
         OrcRowReader &eager_reader = sector_reader_->get_eager_reader();
@@ -967,7 +973,7 @@ int ObOrcTableRowIterator::create_row_readers()
 
             if (OB_SUCC(ret) && type != nullptr) {
               bool is_project_column = true;
-              int64_t orc_col_id = type->getColumnId() - 1;
+              int64_t orc_col_id = type->getColumnId();
               if (is_eager_column_.count() > 0 && is_eager_column_.at(i)) {
                 eager_column_ids.push_back(orc_col_id);
                 if (!is_dup_project_.at(i)) {
@@ -2059,28 +2065,24 @@ int ObOrcTableRowIterator::get_data_column_batch(
   const orc::Type *cur_type = type;
   const orc::StructVectorBatch *cur_batch = root_batch;
   batch = nullptr;
-  if (column_index_type_ == sql::ColumnIndexType::ID) {
+
+  bool should_continue = true;
+  while (OB_SUCC(ret) && !found && should_continue) {
+    should_continue = false;
     for (int64_t i = 0; OB_SUCC(ret) && !found && i < cur_type->getSubtypeCount(); i++) {
-      const std::string &id_val = cur_type->getSubtype(i)->getAttributeValue(ICEBERG_ID_KEY);
-      if (id_val == std::to_string(col_id)) {
+      const orc::Type *subtype = cur_type->getSubtype(i);
+      if (subtype->getColumnId() == col_id) {
         batch = cur_batch->fields[i];
         found = true;
-      }
-    }
-  } else {
-    while (OB_SUCC(ret) && !found) {
-      for (int64_t i = 0; OB_SUCC(ret) && !found && i < cur_type->getSubtypeCount(); i++) {
-        if (cur_type->getSubtype(i)->getColumnId() == col_id) {
-          batch = cur_batch->fields[i];
-          found = true;
-        } else if (cur_type->getSubtype(i)->getColumnId() < col_id && col_id < cur_type->getSubtype(i)->getMaximumColumnId()) {
-          cur_batch = dynamic_cast<const orc::StructVectorBatch *>(cur_batch->fields[i]);
-          cur_type = cur_type->getSubtype(i);
-          CK (OB_NOT_NULL(cur_batch));
-          break;
-        } else {
-          //do nothing
-        }
+      } else if (subtype->getColumnId() < col_id && col_id < subtype->getMaximumColumnId()) {
+        // 目标列在当前子类型的范围内，需要进入下一层搜索
+        cur_batch = dynamic_cast<const orc::StructVectorBatch *>(cur_batch->fields[i]);
+        cur_type = subtype;
+        CK (OB_NOT_NULL(cur_batch));
+        should_continue = true;
+        break;
+      } else {
+        // do nothing
       }
     }
   }
@@ -2936,7 +2938,13 @@ void ObOrcTableRowIterator::OrcRowReader::init(int64_t capacity,
                                                orc::Reader *reader)
 {
   orc::RowReaderOptions rowReaderOptions;
-  rowReaderOptions.include(include_columns);
+  if constexpr (std::is_same_v<T, uint64_t>) {
+    // 如果是uint64_t，使用includeTypes（传入的是type ID）
+    rowReaderOptions.includeTypes(include_columns);
+  } else {
+    // 如果是string，使用include（传入的是字段名）
+    rowReaderOptions.include(include_columns);
+  }
   row_reader_ = reader->createRowReader(rowReaderOptions);
   // create orc read batch for reuse.
   orc_batch_ = row_reader_->createRowBatch(capacity);
