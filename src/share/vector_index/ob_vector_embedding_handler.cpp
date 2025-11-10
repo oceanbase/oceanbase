@@ -24,6 +24,8 @@
 #include "sql/engine/expr/ob_expr_ai/ob_ai_func_utils.h"
 #include "storage/ddl/ob_hnsw_embedmgr.h"
 #include "lib/lock/ob_thread_cond.h"
+#include "lib/allocator/ob_malloc.h"
+#include "lib/atomic/ob_atomic.h"
 
 #include <curl/curl.h>
 
@@ -188,7 +190,8 @@ ObEmbeddingTask::ObEmbeddingTask() : local_allocator_("EmbeddingTask", OB_MALLOC
                                     current_batch_size_(10),
                                     successful_requests_count_(0),
                                     task_cond_(),
-                                    callback_done_(false) {}
+                                    callback_done_(false),
+                                    ref_cnt_(0) {}
 ObEmbeddingTask::ObEmbeddingTask(ObArenaAllocator &allocator) : local_allocator_(), allocator_(allocator),
                                      model_url_(),
                                      model_name_(),
@@ -234,7 +237,8 @@ ObEmbeddingTask::ObEmbeddingTask(ObArenaAllocator &allocator) : local_allocator_
                                      current_batch_size_(10),
                                      successful_requests_count_(0),
                                      task_cond_(),
-                                     callback_done_(false) {}
+                                     callback_done_(false),
+                                     ref_cnt_(0) {}
 ObEmbeddingTask::~ObEmbeddingTask() {
   reset();
 }
@@ -282,6 +286,7 @@ int ObEmbeddingTask::init(const ObString &model_url,
     cb_handle_ = cb_handle;
     if (nullptr != cb_handle_) {
       cb_handle_->retain();
+      ref_cnt_ = 1;
     }
 
     output_vectors_.prepare_allocate_and_keep_count(total_chunks_);
@@ -406,6 +411,7 @@ void ObEmbeddingTask::reset()
   http_total_retry_count_ = 0;
   original_batch_size_ = 10;
   batch_size_adjusted_ = false;
+  callback_done_ = false;
 
   cleanup_async_http();
   local_allocator_.reset();
@@ -432,6 +438,7 @@ int ObEmbeddingTask::reschedule(ObEmbeddingTaskHandler *thread_pool)
     int64_t retry_cnt = 0;
 
     while (OB_SUCC(ret) && !is_push_succ && retry_cnt++ < MAX_RESCHEDULE_RETRY_CNT) {
+      retain_if_managed();
       if (OB_FAIL(TG_PUSH_TASK(thread_pool->get_tg_id(), this))) {
         if (ret == OB_EAGAIN) { // task queue is full, will retry
           LOG_DEBUG("task queue is full, will retry", K(retry_cnt), K(MAX_RESCHEDULE_RETRY_CNT), K(*this));
@@ -440,6 +447,7 @@ int ObEmbeddingTask::reschedule(ObEmbeddingTaskHandler *thread_pool)
         } else {
           LOG_WARN("failed to push task to thread pool", K(ret), K(retry_cnt), K(*this));
         }
+        release_if_managed();
       } else {
         is_push_succ = true;
         LOG_DEBUG("task rescheduled successfully", K(retry_cnt), K(*this));
@@ -744,7 +752,6 @@ int ObEmbeddingTask::check_http_progress()
           if (res == CURLE_OK) {
             long response_code;
             curl_easy_getinfo(easy_handle, CURLINFO_RESPONSE_CODE, &response_code);
-
             if (response_code == 200 /* HTTP OK */) {
               if (OB_NOT_NULL(curl_response_data_) && OB_NOT_NULL(curl_response_data_->data)) {
                 http_response_data_size_ = curl_response_data_->size;
@@ -897,6 +904,22 @@ bool ObEmbeddingTask::is_http_response_ready() const
   return OB_NOT_NULL(http_response_data_);
 }
 
+void ObEmbeddingTask::retain_if_managed()
+{
+  if (need_callback()) { ATOMIC_AAF(&ref_cnt_, 1); }
+}
+
+void ObEmbeddingTask::release_if_managed()
+{
+  if (need_callback()) {
+    int64_t v = ATOMIC_AAF(&ref_cnt_, -1);
+    if (0 == v) {
+      this->~ObEmbeddingTask();
+      ob_free(this);
+    }
+  }
+}
+
 template <typename ThreadPoolType>
 int ObEmbeddingTask::do_work(ThreadPoolType *thread_pool)
 {
@@ -986,24 +1009,39 @@ int ObEmbeddingTask::do_work(ThreadPoolType *thread_pool)
 int ObEmbeddingTask::set_phase(ObEmbeddingTaskPhase new_phase)
 {
   int ret = OB_SUCCESS;
-  ObThreadCondGuard guard(task_cond_);
-
-  ObEmbeddingTaskPhase current_phase = phase_;
-
-  // Validate phase transition
-  if (!ObEmbeddingTaskPhaseManager::is_valid_transition(current_phase, new_phase)) {
-    ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("invalid phase transition", K(ret),
-            "from", ObEmbeddingTaskPhaseManager::get_phase_string(current_phase),
-            "to", ObEmbeddingTaskPhaseManager::get_phase_string(new_phase));
-  } else {
-    log_phase_transition(current_phase, new_phase);
-    phase_ = new_phase;
-    if (phase_ == OB_EMBEDDING_TASK_HTTP_SENT) {
-      http_send_count_++;
+  bool should_callback = false;
+  {
+    ObThreadCondGuard guard(task_cond_);
+    ObEmbeddingTaskPhase current_phase = phase_;
+    // Validate phase transition
+    if (!ObEmbeddingTaskPhaseManager::is_valid_transition(current_phase, new_phase)) {
+      ret = OB_STATE_NOT_MATCH;
+      LOG_WARN("invalid phase transition", K(ret),
+              "from", ObEmbeddingTaskPhaseManager::get_phase_string(current_phase),
+              "to", ObEmbeddingTaskPhaseManager::get_phase_string(new_phase));
+    } else {
+      log_phase_transition(current_phase, new_phase);
+      phase_ = new_phase;
+      if (phase_ == OB_EMBEDDING_TASK_HTTP_SENT) {
+        http_send_count_++;
+      }
+      if (phase_ == OB_EMBEDDING_TASK_DONE && need_callback()) {
+        should_callback = true;
+      }
     }
   }
 
+  if (OB_SUCC(ret) && should_callback) {
+    int cb_ret = maybe_callback();
+    if (OB_SUCCESS != cb_ret) {
+      LOG_WARN("failed to maybe callback", K(cb_ret));
+    }
+    int tmp_ret = wake_up();
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("failed to wake up after callback", K(tmp_ret));
+    }
+    release_if_managed();
+  }
   return ret;
 }
 
@@ -1012,29 +1050,20 @@ int ObEmbeddingTask::set_phase(ObEmbeddingTaskPhase new_phase)
 int ObEmbeddingTask::complete_task(ObEmbeddingTaskPhase new_phase, int result_code, bool finished)
 {
   int ret = OB_SUCCESS;
-  ObThreadCondGuard guard(task_cond_);
 
-  ObEmbeddingTaskPhase current_phase = phase_;
+  {
+    ObThreadCondGuard guard(task_cond_);
+    internal_error_code_ = result_code;
+  }
 
-  // Validate phase transition
-  if (!ObEmbeddingTaskPhaseManager::is_valid_transition(current_phase, new_phase)) {
-    ret = OB_STATE_NOT_MATCH;
+  if (OB_FAIL(set_phase(new_phase))) {
     LOG_WARN("invalid phase transition for task completion", K(ret),
-            "from", ObEmbeddingTaskPhaseManager::get_phase_string(current_phase),
             "to", ObEmbeddingTaskPhaseManager::get_phase_string(new_phase));
   } else {
-    // Log phase transition
-    log_phase_transition(current_phase, new_phase);
-
-    // Update phase and task completion info
-    phase_ = new_phase;
-    internal_error_code_ = result_code;
-
-    // Set end time when task is completed
+    ObThreadCondGuard guard(task_cond_);
     if (finished && new_phase == OB_EMBEDDING_TASK_DONE) {
       process_end_time_us_ = ObTimeUtility::current_time();
     }
-
     LOG_DEBUG("task completion phase transition successful",
               "new_phase", ObEmbeddingTaskPhaseManager::get_phase_string(new_phase),
               K(result_code), K(finished));
@@ -1271,6 +1300,7 @@ int ObEmbeddingTaskHandler::push_task(ObEmbeddingTask &task)
     int64_t has_retry_cnt = 0;
 
     while (OB_SUCC(ret) && !is_push_succ && has_retry_cnt++ <= MAX_RETRY_PUSH_TASK_CNT) {
+      task.retain_if_managed();
       if (OB_FAIL(TG_PUSH_TASK(tg_id_, &task))) {
         if (ret != OB_EAGAIN) {
           LOG_WARN("fail to TG_PUSH_TASK", KR(ret), K(task));
@@ -1279,6 +1309,7 @@ int ObEmbeddingTaskHandler::push_task(ObEmbeddingTask &task)
           ob_usleep(WAIT_RETRY_PUSH_TASK_TIME);
           ret = OB_SUCCESS;
         }
+        task.release_if_managed();
       } else {
         is_push_succ = true;
         inc_task_ref();
@@ -1308,21 +1339,15 @@ void ObEmbeddingTaskHandler::handle(void *task)
     LOG_WARN("invalid argument", KR(ret));
   } else {
     embedding_task = static_cast<ObEmbeddingTask *>(task);
-    bool need_callback = embedding_task->need_callback();
     LOG_INFO("handling embedding task", K_(task_ref_cnt), KPC(embedding_task));
 
     if (OB_FAIL(embedding_task->do_work(this))) {
       LOG_WARN("failed to do work for embedding task", K(ret), KPC(embedding_task));
-    } else if (need_callback && embedding_task->is_completed()) {
-      if (OB_FAIL(embedding_task->maybe_callback())) {
-        LOG_WARN("failed to maybe callback", K(ret));
-      }
-      // wake up task regardless of callback result
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(embedding_task->wake_up())) {
-        LOG_WARN("failed to wake up", K(tmp_ret));
-      }
     }
+  }
+
+  if (OB_NOT_NULL(embedding_task)) {
+    embedding_task->release_if_managed();
   }
   LOG_INFO("task handling completed", K_(task_ref_cnt));
 }
@@ -1348,8 +1373,11 @@ void ObEmbeddingTaskHandler::handle_drop(void *task)
       }
     }
 
-    embedding_task->~ObEmbeddingTask();
-    embedding_task = nullptr;
+    if (embedding_task->need_callback()) {
+      embedding_task->release_if_managed();
+    } else {
+      embedding_task->~ObEmbeddingTask();
+    }
 
     remove_task_from_tracking(embedding_task);
 

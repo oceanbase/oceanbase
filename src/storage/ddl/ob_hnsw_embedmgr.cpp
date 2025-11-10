@@ -381,10 +381,8 @@ int ObTaskSlotRing::pop_ready_in_order(ObTaskBatchInfo *&batch_info, int &ret_co
       slot.batch_info_ = nullptr;
     }
 
-    // Release task
     if (OB_NOT_NULL(slot.task_)) {
-      slot.task_->~ObEmbeddingTask();
-      ob_free(slot.task_);
+      slot.task_->release_if_managed();
       slot.task_ = nullptr;
     }
 
@@ -423,8 +421,7 @@ void ObTaskSlotRing::clean_all_slots()
   for (int64_t i = 0; i < slots_.count(); ++i) {
     Slot &slot = slots_.at(i);
     if (OB_NOT_NULL(slot.task_)) {
-      slot.task_->~ObEmbeddingTask();
-      ob_free(slot.task_);
+      slot.task_->release_if_managed();
       slot.task_ = nullptr;
     }
     if (OB_NOT_NULL(slot.batch_info_)) {
@@ -660,8 +657,12 @@ int ObEmbeddingTaskMgr::submit_batch_info(ObTaskBatchInfo *&batch_info)
           if (OB_SUCC(ret) && OB_NOT_NULL(task)) {
             if (OB_FAIL(cb->init(this, slot_idx, batch_info, task, results.at(0)->get_vector_dim()))) {
               LOG_WARN("init callback failed", K(ret));
-            } else if (OB_FAIL(embedding_handler_->push_task(*task))) {
-              LOG_WARN("submit task failed", K(ret));
+            } else {
+              task->retain_if_managed();
+              if (OB_FAIL(embedding_handler_->push_task(*task))) {
+                LOG_WARN("submit task failed", K(ret));
+                task->release_if_managed();
+              }
             }
           }
 
@@ -670,10 +671,8 @@ int ObEmbeddingTaskMgr::submit_batch_info(ObTaskBatchInfo *&batch_info)
             slot_ring_.set_batch_info(slot_idx, batch_info); // Take ownership
             batch_info = nullptr;
           } else {
-            // Cleanup on failure
             if (OB_NOT_NULL(task)) {
-              task->~ObEmbeddingTask();
-              ob_free(task);
+              task->release_if_managed();
             }
             if (OB_NOT_NULL(cb_handle)) {
               cb_handle->release();

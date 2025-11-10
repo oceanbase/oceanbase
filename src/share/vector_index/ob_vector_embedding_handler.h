@@ -187,6 +187,8 @@ class ObEmbeddingTask
                 K_(total_chunks),
                 K_(process_callback_offset));
   bool is_completed();
+  void retain_if_managed();
+  void release_if_managed();
   int get_async_result(ObArray<float*> &output_vectors);
   // 公共方法用于外部设置任务失败
   int mark_task_failed(int error_code);
@@ -195,7 +197,7 @@ class ObEmbeddingTask
   int wake_up();
   void disable_callback();
   void set_callback_done();
-  bool need_callback() { return cb_handle_ != nullptr ? true : false; }
+  bool need_callback() { return cb_handle_ != nullptr ? true : false; };
 
 public:
   static const ObString MODEL_URL_NAME;
@@ -364,6 +366,10 @@ private:
 
   ObThreadCond task_cond_;
   bool callback_done_;
+
+  // TODO(fanfangyao.ffy): use taskhandle to manage task reference count
+  // ref_cnt_ is only used to track the reference count of the post create embedding task
+  int64_t ref_cnt_;
 
   private:
     DISALLOW_COPY_AND_ASSIGN(ObEmbeddingTask);
