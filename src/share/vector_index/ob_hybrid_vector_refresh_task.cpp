@@ -545,9 +545,9 @@ int ObHybridVectorRefreshTask::prepare_for_embedding(ObPluginVectorIndexAdaptor 
     } else if (OB_ISNULL(tsc_iter)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null table scan iter", K(ret), KPC(task_ctx), K(tsc_iter));
-    } else if (OB_FAIL(get_index_id_column_ids(adaptor))) {
+    } else if (task_ctx->index_id_column_ids_.empty() && OB_FAIL(get_index_id_column_ids(adaptor))) {
       LOG_WARN("failed to get index id table column ids", K(ret), K(adaptor));
-    } else if (OB_FAIL(get_embedded_table_column_ids(adaptor))) {
+    } else if (task_ctx->embedded_table_column_ids_.empty() && OB_FAIL(get_embedded_table_column_ids(adaptor))) {
       LOG_WARN("failed to get embedded table column ids", K(ret), K(adaptor));
     }
 
@@ -1149,6 +1149,8 @@ void ObHybridVectorRefreshTaskCtx::set_task_finish()
       LOG_WARN("revert scan iter failed", K(ret));
     }
     scan_iter_ = nullptr;
+    table_scan_param_ = nullptr;
+    table_param_ = nullptr;
   }
   if (task_started_) {
     adp_guard_.get_adatper()->vector_index_task_finish();
