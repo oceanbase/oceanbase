@@ -65,6 +65,7 @@ protected:
 private:
   int check_dup_routine_param(const common::ObIArray<share::schema::ObRoutineParam*> &params,
                               const common::ObString &param_name);
+  int check_builtin_function_conflict(const common::ObString &function_name);
   int create_routine_arg(obrpc::ObCreateRoutineArg *&crt_routine_arg);
   int set_routine_info(const share::schema::ObRoutineType &type,
                        share::schema::ObRoutineInfo &routine_info,
