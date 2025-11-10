@@ -35,49 +35,49 @@ namespace pl
 class ObDbmsXplan
 {
 public:
-  static int enable_opt_trace(sql::ObExecContext &ctx,
+  static int enable_opt_trace(ObPLExecCtx &ctx,
                               sql::ParamStore &params,
                               common::ObObj &result);
 
-  static int disable_opt_trace(sql::ObExecContext &ctx,
+  static int disable_opt_trace(ObPLExecCtx &ctx,
                               sql::ParamStore &params,
                               common::ObObj &result);
 
-  static int set_opt_trace_parameter(sql::ObExecContext &ctx,
+  static int set_opt_trace_parameter(ObPLExecCtx &ctx,
                                     sql::ParamStore &params,
                                     common::ObObj &result);
 
-  static int display(sql::ObExecContext &ctx,
+  static int display(ObPLExecCtx &ctx,
                     sql::ParamStore &params,
                     common::ObObj &result);
 
-  static int display_cursor(sql::ObExecContext &ctx,
+  static int display_cursor(ObPLExecCtx &ctx,
                             sql::ParamStore &params,
                             common::ObObj &result);
 
-  static int display_sql_plan_baseline(sql::ObExecContext &ctx,
+  static int display_sql_plan_baseline(ObPLExecCtx &ctx,
                                       sql::ParamStore &params,
                                       common::ObObj &result);
 
-  static int display_active_session_plan(sql::ObExecContext &ctx,
+  static int display_active_session_plan(ObPLExecCtx &ctx,
                                         sql::ParamStore &params,
                                         common::ObObj &result);
 
 private:
 
-  static int get_server_ip_port(sql::ObExecContext &ctx,
+  static int get_server_ip_port(ObPLExecCtx &ctx,
                                 ObString &svr_ip,
                                 int64_t &svr_port);
 
-  static int set_display_result(sql::ObExecContext &ctx,
+  static int set_display_result(ObPLExecCtx &ctx,
                                 PlanText &plan_text,
                                 common::ObObj &result);
 
-  static int set_display_result_for_oracle(sql::ObExecContext &ctx,
+  static int set_display_result_for_oracle(ObPLExecCtx &ctx,
                                            PlanText &plan_text,
                                            common::ObObj &result);
 
-  static int set_display_result_for_mysql(sql::ObExecContext &ctx,
+  static int set_display_result_for_mysql(ObPLExecCtx &ctx,
                                           PlanText &plan_text,
                                           common::ObObj &result);
 
@@ -85,13 +85,13 @@ private:
                              ExplainType &type,
                              ObExplainDisplayOpt& option);
 
-  static int get_plan_info_by_plan_table(sql::ObExecContext &ctx,
+  static int get_plan_info_by_plan_table(ObPLExecCtx &ctx,
                                          ObString table_name,
                                          ObString statement_id,
                                          ObString filter_preds,
                                          ObIArray<ObSqlPlanItem*> &plan_infos);
 
-  static int get_plan_info_by_id(sql::ObExecContext &ctx,
+  static int get_plan_info_by_id(ObPLExecCtx &ctx,
                                   int64_t tenant_id,
                                   const ObString &svr_ip,
                                   int64_t svr_port,
@@ -100,7 +100,7 @@ private:
                                   uint64_t plan_hash,
                                   ObIArray<ObSqlPlanItem*> &plan_infos);
 
-  static int get_baseline_plan_info(sql::ObExecContext &ctx,
+  static int get_baseline_plan_info(ObPLExecCtx &ctx,
                                     int64_t tenant_id,
                                     const ObString &svr_ip,
                                     int64_t svr_port,
@@ -108,40 +108,40 @@ private:
                                     uint64_t plan_hash,
                                     ObIArray<ObSqlPlanItem*> &plan_infos);
 
-  static int get_baseline_plan_detail(sql::ObExecContext &ctx,
+  static int get_baseline_plan_detail(ObPLExecCtx &ctx,
                                       const ObString& sql_handle,
                                       const ObString& plan_name,
                                       int64_t tenant_id,
                                       PlanText &plan_text,
                                       bool from_plan_cache);
 
-  static int inner_get_baseline_plan_detail(sql::ObExecContext &ctx,
+  static int inner_get_baseline_plan_detail(ObPLExecCtx &ctx,
                                             const ObSqlString& sql,
                                             PlanText &plan_text,
                                             bool from_plan_cache);
 
-  static int format_baseline_plan_detail(sql::ObExecContext &ctx,
+  static int format_baseline_plan_detail(ObPLExecCtx &ctx,
                                         sqlclient::ObMySQLResult& mysql_result,
                                         PlanText &plan_text,
                                         bool from_plan_cache);
 
-  static int get_plan_info_by_session_id(sql::ObExecContext &ctx,
+  static int get_plan_info_by_session_id(ObPLExecCtx &ctx,
                                         int64_t session_id,
                                         const ObString &svr_ip,
                                         int64_t svr_port,
                                         int64_t tenant_id,
                                         ObIArray<ObSqlPlanItem*> &plan_infos);
 
-  static int inner_get_plan_info(sql::ObExecContext &ctx,
+  static int inner_get_plan_info(ObPLExecCtx &ctx,
                                 const ObSqlString& sql,
                                 ObIArray<ObSqlPlanItem*> &plan_infos,
                                 const bool is_from_wr=false);
 
-  static int inner_get_plan_info_use_current_session(sql::ObExecContext &ctx,
+  static int inner_get_plan_info_use_current_session(ObPLExecCtx &ctx,
                                                     const ObSqlString& sql,
                                                     ObIArray<ObSqlPlanItem*> &plan_infos);
 
-  static int read_plan_info_from_result(sql::ObExecContext &ctx,
+  static int read_plan_info_from_result(ObPLExecCtx &ctx,
                                         sqlclient::ObMySQLResult& mysql_result,
                                         ObSqlPlanItem &plan_info,
                                         const bool is_from_wr=false);
