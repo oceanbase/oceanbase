@@ -759,6 +759,29 @@ bool ObOptimizerUtil::is_point_based_sub_expr(const ObRawExpr *sub_expr, const O
   return found;
 }
 
+int ObOptimizerUtil::is_const_exprs(const ObIArray<ObRawExpr *> &exprs,
+                                    const EqualSets &equal_sets,
+                                    const ObIArray<ObRawExpr *> &const_exprs,
+                                    const ObIArray<ObRawExpr *> &exec_ref_exprs,
+                                    bool &is_const)
+{
+  int ret = OB_SUCCESS;
+  is_const = true;
+  for (int64_t i = 0; OB_SUCC(ret) && is_const && i < exprs.count(); ++i) {
+    bool is_one_const = false;
+    if (OB_FAIL(is_const_expr(exprs.at(i),
+                              equal_sets,
+                              const_exprs,
+                              exec_ref_exprs,
+                              is_one_const))) {
+      LOG_WARN("failed to check whether expr is const", K(ret), K(i), KPC(exprs.at(i)));
+    } else {
+      is_const &= is_one_const;
+    }
+  }
+  return ret;
+}
+
 int ObOptimizerUtil::is_const_expr(const ObRawExpr *expr,
                                    const EqualSets &equal_sets,
                                    const ObIArray<ObRawExpr *> &const_exprs,

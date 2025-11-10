@@ -48,8 +48,10 @@ int ObSelectLogPlan::candi_allocate_group_by()
 {
   int ret = OB_SUCCESS;
   bool is_unique = false;
+  bool is_const = false;
   bool having_has_rownum = false;
   const ObSelectStmt *stmt = NULL;
+  ObQueryCtx* query_ctx = NULL;
   ObLogicalOperator *best_plan = NULL;
   ObSEArray<ObRawExpr*, 4> reduce_exprs;
   ObSEArray<ObRawExpr*, 4> group_by_exprs;
@@ -60,9 +62,9 @@ int ObSelectLogPlan::candi_allocate_group_by()
   ObSEArray<ObRawExpr*, 8> having_normal_exprs;
   ObSEArray<ObRawExpr*, 8> candi_subquery_exprs;
   ObSEArray<CandidatePlan, 4> groupby_plans;
-  if (OB_ISNULL(stmt = get_stmt())) {
+  if (OB_ISNULL(stmt = get_stmt()) || OB_ISNULL(query_ctx = get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
+    LOG_WARN("get unexpected null", K(ret), K(stmt), K(query_ctx));
   } else if (OB_FAIL(append(candi_subquery_exprs, stmt->get_group_exprs())) ||
              OB_FAIL(append(candi_subquery_exprs, stmt->get_rollup_exprs())) ||
              OB_FAIL(append(candi_subquery_exprs, stmt->get_aggr_items()))) {
@@ -121,6 +123,45 @@ int ObSelectLogPlan::candi_allocate_group_by()
     if (!having_normal_exprs.empty() && OB_FAIL(candi_allocate_filter(having_normal_exprs))) {
       LOG_WARN("failed to allocate filter", K(ret));
     } else { /*do nothing*/ }
+  } else if (query_ctx->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP5)
+             && OB_FAIL(ObOptimizerUtil::is_const_exprs(group_by_exprs,
+                                                        best_plan->get_output_equal_sets(),
+                                                        best_plan->get_output_const_exprs(),
+                                                        get_onetime_query_refs(),
+                                                        is_const))) {
+    LOG_WARN("failed to check whether group by exprs are const", K(ret));
+  } else if (is_const && 0 == stmt->get_aggr_item_size()) {
+    // if all the group by exprs are const and aggr item is empty, we add limit operator instead of group by operator
+    ObConstRawExpr *limit_expr = NULL;
+    if (OB_FAIL(ObRawExprUtils::build_const_int_expr(get_optimizer_context().get_expr_factory(),
+                                                     ObIntType,
+                                                     1,
+                                                     limit_expr))) {
+      LOG_WARN("failed to create const expr", K(ret));
+    } else if (OB_FAIL(candi_allocate_limit(limit_expr))) {
+      LOG_WARN("failed to allocate limit operator", K(ret));
+    } else if (!having_normal_exprs.empty() || !having_subquery_exprs.empty()) {
+      // Having exprs should execute after limit 1, we need a group by op to put having exprs.
+      // We can put the having exprs on the limit op, but if the limit is push into table scan,
+      // candi_allocate_filter() will put filter on the table scan, which will cause the having
+      // exprs execute before the limit 1.
+      if (OB_FAIL(candi_allocate_normal_group_by(reduce_exprs,
+                                                 group_by_exprs,
+                                                 group_by_directions,
+                                                 having_normal_exprs,
+                                                 stmt->get_aggr_items(),
+                                                 stmt->is_from_pivot(),
+                                                 candidates_.candidate_plans_,
+                                                 groupby_plans))) {
+        LOG_WARN("failed to allocate normal group by", K(ret));
+      } else {
+        OPT_TRACE("group by exprs are const and aggr item is empty, add limit 1");
+        LOG_TRACE("group by exprs are const and aggr item is empty, add limit 1", K(group_by_exprs), K(stmt->get_aggr_items()));
+      }
+    } else {
+      OPT_TRACE("group by exprs are const and aggr item is empty, need limit op instead of group by op");
+      LOG_TRACE("group by exprs are const and aggr item is empty, need limit op instead of group by op", K(group_by_exprs), K(stmt->get_aggr_items()));
+    }
   } else {
     if (OB_FAIL(candi_allocate_normal_group_by(reduce_exprs,
                                                group_by_exprs,

@@ -1475,15 +1475,15 @@ Query Plan
 ===============================================================================
 |ID|OPERATOR                                   |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT                  |        |3       |591         |
-|1 |└─EXCHANGE OUT DISTR                       |:EX10000|3       |591         |
-|2 |  └─SORT                                   |        |3       |591         |
-|3 |    └─SUBPLAN FILTER                       |        |3       |590         |
+|0 |PX COORDINATOR MERGE SORT                  |        |3       |590         |
+|1 |└─EXCHANGE OUT DISTR                       |:EX10000|3       |589         |
+|2 |  └─SORT                                   |        |3       |589         |
+|3 |    └─SUBPLAN FILTER                       |        |3       |589         |
 |4 |      ├─PX BLOCK ITERATOR                  |        |5       |6           |
 |5 |      │ └─TABLE FULL SCAN                  |t1      |5       |6           |
-|6 |      └─MERGE GROUP BY                     |        |1       |234         |
-|7 |        └─NESTED-LOOP JOIN CARTESIAN       |        |25      |234         |
-|8 |          ├─NESTED-LOOP JOIN CARTESIAN     |        |5       |162         |
+|6 |      └─LIMIT                              |        |1       |234         |
+|7 |        └─NESTED-LOOP JOIN CARTESIAN       |        |1       |234         |
+|8 |          ├─NESTED-LOOP JOIN CARTESIAN     |        |1       |162         |
 |9 |          │ ├─DISTRIBUTED TABLE FULL SCAN  |t2      |1       |90          |
 |10|          │ └─MATERIAL                     |        |5       |72          |
 |11|          │   └─DISTRIBUTED TABLE FULL SCAN|t3      |5       |72          |
@@ -1506,7 +1506,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   6 - output([1]), filter(nil), rowset=16
-      group(nil), agg_func(nil)
+      limit(1), offset(nil)
   7 - output(nil), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
   8 - output(nil), filter(nil), rowset=16

@@ -173,6 +173,12 @@ public:
   static bool is_expr_equivalent(const ObRawExpr *from,
                                  const ObRawExpr *to);
 
+  static int is_const_exprs(const ObIArray<ObRawExpr *> &exprs,
+                            const EqualSets &equal_sets,
+                            const ObIArray<ObRawExpr *> &const_exprs,
+                            const ObIArray<ObRawExpr *> &exec_ref_exprs,
+                            bool &is_const);
+
   static int is_const_expr(const ObRawExpr* expr,
                            const EqualSets &equal_sets,
                            const common::ObIArray<ObRawExpr *> &const_exprs,
