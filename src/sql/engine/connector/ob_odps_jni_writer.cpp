@@ -114,10 +114,23 @@ int ObOdpsJniWriter::init_jni_table_writer_(JNIEnv *env)
         ret = OB_JNI_METHOD_NOT_FOUND_ERROR;
         LOG_WARN("failed to get writer method", K(ret));
       } else {
-        jni_writer_cls_ = (jclass)env->CallObjectMethod(writer_factory_obj, get_writer_method);
+        jclass local_cls = (jclass)env->CallObjectMethod(writer_factory_obj, get_writer_method);
         if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
           ret = OB_JNI_ERROR;
           LOG_WARN("failed to init writer class.", K(ret));
+        } else if (OB_ISNULL(local_cls)) {
+          ret = OB_JNI_ERROR;
+          LOG_WARN("failed to get writer class", K(ret));
+        } else {
+          jni_writer_cls_ = (jclass)env->NewGlobalRef(local_cls);
+          if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
+            ret = OB_JNI_ERROR;
+            LOG_WARN("failed to create global ref for writer class", K(ret));
+          } else if (OB_ISNULL(jni_writer_cls_)) {
+            ret = OB_JNI_ERROR;
+            LOG_WARN("failed to create global ref for writer class", K(ret));
+          }
+          env->DeleteLocalRef(local_cls);
         }
       }
       if (OB_NOT_NULL(writer_factory_obj)) {
@@ -166,24 +179,35 @@ int ObOdpsJniWriter::init_jni_table_writer_(JNIEnv *env)
         }
         env->DeleteLocalRef(hashmap_class);
         // LOG_INFO("Initialze the writer with parameters:", K(ret), K(message), K(is_get_session));
+        jobject local_obj = nullptr;
         if (is_get_session) {
-          jni_writer_obj_ = env->NewObject(jni_writer_cls_, writer_constructor, hashmap_object);
+          local_obj = env->NewObject(jni_writer_cls_, writer_constructor, hashmap_object);
           is_get_session = false;
         } else {
-          jni_writer_obj_ = env->NewObject(jni_writer_cls_, writer_constructor, 1, hashmap_object);
+          local_obj = env->NewObject(jni_writer_cls_, writer_constructor, 1, hashmap_object);
         }
         if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
           ret = OB_JNI_ERROR;
           LOG_WARN("failed to initialize a writer instance.", K(ret));
+        } else if (OB_ISNULL(local_obj)) {
+          ret = OB_JNI_ERROR;
+          LOG_WARN("jni writer obj is null", K(ret));
+        } else {
+          jni_writer_obj_ = env->NewGlobalRef(local_obj);
+          if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
+            ret = OB_JNI_ERROR;
+            LOG_WARN("failed to create global ref for writer obj", K(ret));
+          } else if (OB_ISNULL(jni_writer_obj_)) {
+            ret = OB_JNI_ERROR;
+            LOG_WARN("failed to create global ref for writer obj", K(ret));
+          }
+          env->DeleteLocalRef(local_obj);
         }
         if (OB_SUCC(ret)) {
           env->DeleteLocalRef(hashmap_object);
           if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
             ret = OB_JNI_ERROR;
             LOG_WARN("failed to initialize a writer instance.", K(ret));
-          } else if (nullptr == jni_writer_obj_) {
-            ret = OB_JNI_ERROR;
-            LOG_WARN("jni scanner obj is null", K(ret));
           }
         }
       }
@@ -574,11 +598,11 @@ int ObOdpsJniWriter::do_close()
     }
 
     if (OB_SUCC(ret) && OB_NOT_NULL(jni_writer_obj_)) {
-      env->DeleteLocalRef(jni_writer_obj_);
+      env->DeleteGlobalRef(jni_writer_obj_);
       jni_writer_obj_ = nullptr;
     }
     if (OB_SUCC(ret) && OB_NOT_NULL(jni_writer_cls_)) {
-      env->DeleteLocalRef(jni_writer_cls_);
+      env->DeleteGlobalRef(jni_writer_cls_);
       jni_writer_cls_ = nullptr;
     }
     writer_params_.reuse();
