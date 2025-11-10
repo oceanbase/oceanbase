@@ -38,6 +38,20 @@ namespace observer
 class ObInnerSQLResult : public common::sqlclient::ObMySQLResult
 {
   friend class ObInnerSQLConnection;
+
+  // Guard class to control inner_flag_ during inner SQL execution
+  class ObInnerSessionGuard
+  {
+  public:
+    ObInnerSessionGuard(sql::ObSQLSessionInfo *session_info, bool force_inner = true);
+    ~ObInnerSessionGuard();
+
+  private:
+    sql::ObSQLSessionInfo *session_info_;
+    bool old_inner_flag_;
+    bool is_inner_;
+  };
+
 public:
   explicit ObInnerSQLResult(sql::ObSQLSessionInfo &session, bool is_inner_session, ObDiagnosticInfo *di);
   virtual ~ObInnerSQLResult();
@@ -228,6 +242,7 @@ private:
   bool is_inner_session_;
   ObDiagnosticInfo *inner_sql_di_;
   ObInterruptChecker interrupt_checker_;
+  ObInnerSessionGuard inner_session_guard_;
 
   DISALLOW_COPY_AND_ASSIGN(ObInnerSQLResult);
 };
