@@ -4748,9 +4748,11 @@ int ObTscCgService::generate_doc_id_lookup_ctdef(const ObLogTableScan &op,
 
     if (OB_SUCC(ret)) {
       if (op.is_multivalue_index_scan() && !op.is_spiv_vec_scan()) {
-        ObDASScanCtDef *index_ctdef = static_cast<ObDASScanCtDef *>(ir_scan_ctdef);
-        if (OB_FAIL(append_array_no_dup(result_outputs, index_ctdef->result_output_))) {
-          LOG_WARN("append result output failed", K(ret));
+        ObDASScanCtDef *index_ctdef = dynamic_cast<ObDASScanCtDef *>(ir_scan_ctdef);
+        if (nullptr != index_ctdef && index_ctdef->ir_scan_type_ == ObTSCIRScanType::OB_IR_MULTIVALUE_IDX_SCAN) {
+          if (OB_FAIL(append_array_no_dup(result_outputs, index_ctdef->result_output_))) {
+            LOG_WARN("append result output failed", K(ret));
+          }
         }
       }
 
