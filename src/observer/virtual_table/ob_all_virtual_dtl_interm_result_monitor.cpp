@@ -57,135 +57,139 @@ int ObDTLIntermResultMonitorInfoGetter::operator() (common::hash::HashMapPair<Ob
     int64_t owner_len = 0;
     const char *owner = NULL;
     ObObj *cells = cur_row_.cells_;
-    if (info.is_store_valid()) {
-      if (info.is_rich_format()) {
-        GET_CHUNK_STORE_INFO(info.block_store_);
-      } else {
-        GET_CHUNK_STORE_INFO(info.datum_store_);
-      }
-    }
-    for (int64_t cell_idx = 0;
-        OB_SUCC(ret) && cell_idx < output_column_ids_.count();
-        ++cell_idx) {
-      const uint64_t column_id = output_column_ids_.at(cell_idx);
-      switch(column_id) {
-        case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::SVR_IP: {
-          cells[cell_idx].set_varchar(addr_ip_);
-          cells[cell_idx].set_collation_type(
-              ObCharset::get_default_collation(ObCharset::get_default_charset()));
-          break;
-        }
-        case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::SVR_PORT: {
-          cells[cell_idx].set_int(addr_.get_port());
-          break;
-        }
-        case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::TENANT_ID: {
-          cells[cell_idx].set_int(tenant_id);
-          break;
-        }
-        case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::TRACE_ID: {
-          char *buf = NULL;
-          if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(OB_MAX_TRACE_ID_BUFFER_SIZE)))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            SERVER_LOG(WARN, "allocate memory failed", K(ret));
-          } else {
-            int len = info.trace_id_.to_string(buf, OB_MAX_TRACE_ID_BUFFER_SIZE);
-            cells[cell_idx].set_varchar(buf, len);
-            cells[cell_idx].set_collation_type(
-                ObCharset::get_default_collation(ObCharset::get_default_charset()));
-          }
-          break;
-        }
-        case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::OWNER: {
-          char *buf = NULL;
-          if (OB_UNLIKELY(0 == owner_len || NULL == owner)) {
-            cells[cell_idx].set_varchar(ObString());
-            cells[cell_idx].set_collation_type(
-                ObCharset::get_default_collation(ObCharset::get_default_charset()));
-          } else if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(owner_len)))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            SERVER_LOG(WARN, "allocate memory failed", K(ret), K(owner_len));
-          } else {
-            MEMCPY(buf, owner, owner_len);
-            cells[cell_idx].set_varchar(buf, owner_len);
-            cells[cell_idx].set_collation_type(
-                ObCharset::get_default_collation(ObCharset::get_default_charset()));
-          }
-          break;
-        }
-        case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::START_TIME: {
-          int64_t start_time = key.start_time_;
-          cells[cell_idx].set_timestamp(start_time);
-          break;
-        }
-        case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::EXPIRE_TIME: {
-          int64_t expire_time = key.timeout_ts_;
-          cells[cell_idx].set_timestamp(expire_time);
-          break;
-        }
-        case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::HOLD_MEMORY: {
-          cells[cell_idx].set_int(hold_mem);
-          break;
-        }
-        case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::DUMP_SIZE: {
-          cells[cell_idx].set_int(dump_size);
-          break;
-        }
-        case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::DUMP_COST: {
-          cells[cell_idx].set_int(info.dump_cost_);
-          break;
-        }
-        case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::DUMP_TIME: {
-          if (0 != info.dump_time_) {
-            cells[cell_idx].set_timestamp(info.dump_time_);
-          } else {
-            // not dump.
-            cells[cell_idx].set_null();
-          }
-          break;
-        }
-        case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::DUMP_FD: {
-          cells[cell_idx].set_int(dump_fd);
-          break;
-        }
-        case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::DUMP_DIR_ID: {
-          cells[cell_idx].set_int(dump_dir_id);
-          break;
-        }
-        case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::CHANNEL_ID: {
-          cells[cell_idx].set_int(key.channel_id_);
-          break;
-        }
-        case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::QC_ID: {
-          cells[cell_idx].set_int(info.monitor_info_.qc_id_);
-          break;
-        }
-        case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::DFO_ID: {
-          cells[cell_idx].set_int(info.monitor_info_.dfo_id_);
-          break;
-        }
-        case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::SQC_ID: {
-          cells[cell_idx].set_int(info.monitor_info_.sqc_id_);
-          break;
-        }
-        case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::BATCH_ID: {
-          cells[cell_idx].set_int(key.batch_id_);
-          break;
-        }
-        case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::MAX_HOLD_MEM: {
-          cells[cell_idx].set_int(max_hold_mem);
-          break;
-        }
-        default: {
-          ret = OB_ERR_UNEXPECTED;
-          SERVER_LOG(WARN, "invalid column id", K(cell_idx),
-              K_(output_column_ids), K(ret));
-          break;
+    if (OB_SUCCESS != info.lock_.try_rdlock(ObLatchIds::HASH_MAP_LOCK)) {
+    } else {
+      if (info.is_store_valid()) {
+        if (info.is_rich_format()) {
+          GET_CHUNK_STORE_INFO(info.block_store_);
+        } else {
+          GET_CHUNK_STORE_INFO(info.datum_store_);
         }
       }
-    }
-    if (OB_SUCCESS == ret && OB_FAIL(scanner_.add_row(cur_row_))) {
-      SERVER_LOG(WARN, "fail to add row", K(ret), K(cur_row_));
+      for (int64_t cell_idx = 0;
+          OB_SUCC(ret) && cell_idx < output_column_ids_.count();
+          ++cell_idx) {
+        const uint64_t column_id = output_column_ids_.at(cell_idx);
+        switch(column_id) {
+          case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::SVR_IP: {
+            cells[cell_idx].set_varchar(addr_ip_);
+            cells[cell_idx].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            break;
+          }
+          case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::SVR_PORT: {
+            cells[cell_idx].set_int(addr_.get_port());
+            break;
+          }
+          case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::TENANT_ID: {
+            cells[cell_idx].set_int(tenant_id);
+            break;
+          }
+          case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::TRACE_ID: {
+            char *buf = NULL;
+            if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(OB_MAX_TRACE_ID_BUFFER_SIZE)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              SERVER_LOG(WARN, "allocate memory failed", K(ret));
+            } else {
+              int len = info.trace_id_.to_string(buf, OB_MAX_TRACE_ID_BUFFER_SIZE);
+              cells[cell_idx].set_varchar(buf, len);
+              cells[cell_idx].set_collation_type(
+                  ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            }
+            break;
+          }
+          case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::OWNER: {
+            char *buf = NULL;
+            if (OB_UNLIKELY(0 == owner_len || NULL == owner)) {
+              cells[cell_idx].set_varchar(ObString());
+              cells[cell_idx].set_collation_type(
+                  ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            } else if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(owner_len)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              SERVER_LOG(WARN, "allocate memory failed", K(ret), K(owner_len));
+            } else {
+              MEMCPY(buf, owner, owner_len);
+              cells[cell_idx].set_varchar(buf, owner_len);
+              cells[cell_idx].set_collation_type(
+                  ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            }
+            break;
+          }
+          case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::START_TIME: {
+            int64_t start_time = key.start_time_;
+            cells[cell_idx].set_timestamp(start_time);
+            break;
+          }
+          case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::EXPIRE_TIME: {
+            int64_t expire_time = key.timeout_ts_;
+            cells[cell_idx].set_timestamp(expire_time);
+            break;
+          }
+          case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::HOLD_MEMORY: {
+            cells[cell_idx].set_int(hold_mem);
+            break;
+          }
+          case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::DUMP_SIZE: {
+            cells[cell_idx].set_int(dump_size);
+            break;
+          }
+          case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::DUMP_COST: {
+            cells[cell_idx].set_int(info.dump_cost_);
+            break;
+          }
+          case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::DUMP_TIME: {
+            if (0 != info.dump_time_) {
+              cells[cell_idx].set_timestamp(info.dump_time_);
+            } else {
+              // not dump.
+              cells[cell_idx].set_null();
+            }
+            break;
+          }
+          case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::DUMP_FD: {
+            cells[cell_idx].set_int(dump_fd);
+            break;
+          }
+          case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::DUMP_DIR_ID: {
+            cells[cell_idx].set_int(dump_dir_id);
+            break;
+          }
+          case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::CHANNEL_ID: {
+            cells[cell_idx].set_int(key.channel_id_);
+            break;
+          }
+          case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::QC_ID: {
+            cells[cell_idx].set_int(info.monitor_info_.qc_id_);
+            break;
+          }
+          case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::DFO_ID: {
+            cells[cell_idx].set_int(info.monitor_info_.dfo_id_);
+            break;
+          }
+          case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::SQC_ID: {
+            cells[cell_idx].set_int(info.monitor_info_.sqc_id_);
+            break;
+          }
+          case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::BATCH_ID: {
+            cells[cell_idx].set_int(key.batch_id_);
+            break;
+          }
+          case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::MAX_HOLD_MEM: {
+            cells[cell_idx].set_int(max_hold_mem);
+            break;
+          }
+          default: {
+            ret = OB_ERR_UNEXPECTED;
+            SERVER_LOG(WARN, "invalid column id", K(cell_idx),
+                K_(output_column_ids), K(ret));
+            break;
+          }
+        }
+      }
+      if (OB_SUCCESS == ret && OB_FAIL(scanner_.add_row(cur_row_))) {
+        SERVER_LOG(WARN, "fail to add row", K(ret), K(cur_row_));
+      }
+      info.lock_.unlock();
     }
   }
   return ret;
