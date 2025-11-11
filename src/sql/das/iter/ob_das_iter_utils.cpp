@@ -475,7 +475,7 @@ int ObDASIterUtils::set_index_merge_related_ids(const ObDASBaseCtDef *attach_ctd
         break;
       }
       case ObDASOpType::DAS_OP_INDEX_MERGE: {
-        if (OB_UNLIKELY(iter_type != ObDASIterType::DAS_ITER_INDEX_MERGE)) {
+        if (OB_UNLIKELY(iter_type != ObDASIterType::DAS_ITER_INDEX_MERGE && iter_type != ObDASIterType::DAS_ITER_TWO_PHASE_INDEX_MERGE)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("iter type not match with ctdef", K(ret), K(attach_ctdef->op_type_), K(iter_type));
         } else {
@@ -668,7 +668,7 @@ int ObDASIterUtils::set_func_lookup_iter_related_ids(const ObDASBaseCtDef *attac
       break;
     }
     case ObDASOpType::DAS_OP_INDEX_MERGE: {
-      if (OB_UNLIKELY(iter_type != ObDASIterType::DAS_ITER_INDEX_MERGE)) {
+      if (OB_UNLIKELY(iter_type != ObDASIterType::DAS_ITER_INDEX_MERGE && iter_type != ObDASIterType::DAS_ITER_TWO_PHASE_INDEX_MERGE)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("iter type not match with ctdef", K(ret), K(attach_ctdef->op_type_), K(iter_type));
       } else {
@@ -3105,7 +3105,7 @@ int ObDASIterUtils::create_index_merge_tree_common(ObTableScanParam &scan_param,
     ObArray<ObDASScanIter*> child_scan_iters;
     ObArray<ObDASScanRtDef*> child_scan_rtdefs;
     int64_t children_cnt = ctdef->children_cnt_;
-    int64_t first_fts_idx = OB_INVALID_INDEX;
+    int64_t pushdown_topk_iter_idx = OB_INVALID_INDEX;
     bool lookup_non_ror_opt = merge_ctdef->main_scan_ctdef_ != nullptr;
 
     bool forbidden_pushdown_topk = (limit != -1);
@@ -3135,8 +3135,8 @@ int ObDASIterUtils::create_index_merge_tree_common(ObTableScanParam &scan_param,
         // skip non-ror scan iter (except the first one)
         continue;
       } else if (limit != -1 && merge_ctdef->merge_node_types_.at(i) == INDEX_MERGE_FTS_INDEX) {
-        if (OB_INVALID_INDEX == first_fts_idx) {
-          first_fts_idx = i;
+        if (OB_INVALID_INDEX == pushdown_topk_iter_idx) {
+          pushdown_topk_iter_idx = i;
         }
       }
 
@@ -3183,9 +3183,9 @@ int ObDASIterUtils::create_index_merge_tree_common(ObTableScanParam &scan_param,
         ObDASScanIter *child_scan_iter = nullptr;
         ObDASScanRtDef *child_scan_rtdef = nullptr;
         ObDASIter *pushdown_topk_iter = nullptr;
-        if (OB_INVALID_INDEX == first_fts_idx) {
+        if (OB_INVALID_INDEX == pushdown_topk_iter_idx) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected first_fts_idx", K(ret));
+          LOG_WARN("unexpected pushdown topk iter idx", K(ret));
         } else if (OB_FAIL(create_index_merge_child_tree(scan_param,
                                                          alloc,
                                                          merge_ctdef,
@@ -3193,7 +3193,7 @@ int ObDASIterUtils::create_index_merge_tree_common(ObTableScanParam &scan_param,
                                                          related_tablet_ids,
                                                          tx_desc,
                                                          snapshot,
-                                                         first_fts_idx,
+                                                         pushdown_topk_iter_idx,
                                                          lookup_non_ror_opt,
                                                          child_iter,
                                                          child_scan_iter,
@@ -3212,6 +3212,7 @@ int ObDASIterUtils::create_index_merge_tree_common(ObTableScanParam &scan_param,
           pushdown_topk_mode = true;
 
           ObDASIndexMergeFTSAndIterParam merge_param;
+          merge_param.type_ = DAS_ITER_TWO_PHASE_INDEX_MERGE;
           merge_param.max_size_ = merge_rtdef->eval_ctx_->is_vectorized() ? merge_rtdef->eval_ctx_->max_batch_size_ : 1;
           merge_param.eval_ctx_ = merge_rtdef->eval_ctx_;
           merge_param.exec_ctx_ = &merge_rtdef->eval_ctx_->exec_ctx_;
@@ -3230,7 +3231,7 @@ int ObDASIterUtils::create_index_merge_tree_common(ObTableScanParam &scan_param,
           merge_param.offset_ = offset;
           merge_param.pushdown_topk_iter_ = static_cast<ObDASTRMergeIter*>(pushdown_topk_iter);
           merge_param.pushdown_topk_iter_tree_ = child_iter;
-          merge_param.first_fts_idx_ = first_fts_idx;
+          merge_param.pushdown_topk_iter_idx_ = pushdown_topk_iter_idx;
 
           for (int64_t i = 0; OB_SUCC(ret) && i < children_cnt; ++i) {
             if (merge_ctdef->merge_node_types_.at(i) == INDEX_MERGE_SCAN) {

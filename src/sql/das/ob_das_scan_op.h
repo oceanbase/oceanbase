@@ -467,6 +467,7 @@ protected:
   common::ObITabletScan &get_tsc_service();
   common::ObNewRowIterator *get_output_result_iter() { return result_; }
   ObDASIterTreeType get_iter_tree_type() const;
+  int try_set_pushdown_topk_related_ids(ObDASIter *result_iter);
 
 public:
   ObSEArray<ObDatum *, 4> trans_info_array_;

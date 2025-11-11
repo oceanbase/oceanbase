@@ -989,48 +989,8 @@ int ObDASScanOp::reuse_iter()
             if (OB_FAIL(ObDASIterUtils::set_index_merge_related_ids(
                 attach_ctdef_, attach_rtdef_, tablet_ids_, ls_id_, result_iter))) {
               LOG_WARN("failed to set index merge related ids", K(ret));
-            } else {
-              const bool need_lookup = (attach_ctdef_->op_type_ == ObDASOpType::DAS_OP_TABLE_LOOKUP) ||
-                             (attach_ctdef_->op_type_ == ObDASOpType::DAS_OP_INDEX_PROJ_LOOKUP);
-              const ObDASBaseCtDef *index_merge_ctdef = need_lookup ? attach_ctdef_->children_[0] : attach_ctdef_;
-              ObDASBaseRtDef *index_merge_rtdef = need_lookup ? attach_rtdef_->children_[0] : attach_rtdef_;
-              bool fts_index_merge_and_opt = false;
-              if (OB_FAIL(ObDASIterUtils::check_fts_index_merge_and_opt(scan_ctdef_, scan_rtdef_, index_merge_ctdef, index_merge_rtdef, fts_index_merge_and_opt))) {
-                LOG_WARN("failed to check fts index merge and opt", K(ret));
-              } else if (fts_index_merge_and_opt) {
-                ObDASIndexMergeFTSAndIter *fts_and_iter = nullptr;
-                if (need_lookup) {
-                  fts_and_iter = static_cast<ObDASIndexMergeFTSAndIter *>(result_iter->get_children()[0]);
-                } else {
-                  fts_and_iter = static_cast<ObDASIndexMergeFTSAndIter *>(result_iter);
-                }
-                if (OB_ISNULL(fts_and_iter)) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("unexpected nullptr", K(ret));
-                } else {
-                  int64_t first_fts_idx = fts_and_iter->get_first_fts_idx();
-                  const ObDASBaseCtDef *child_ctdef = nullptr;
-                  ObDASBaseRtDef *child_rtdef = nullptr;
-                  if (need_lookup) {
-                    child_ctdef = attach_ctdef_->children_[0]->children_[first_fts_idx];
-                    child_rtdef = attach_rtdef_->children_[0]->children_[first_fts_idx];
-                  } else {
-                    child_ctdef = attach_ctdef_->children_[first_fts_idx];
-                    child_rtdef = attach_rtdef_->children_[first_fts_idx];
-                  }
-
-                  if (OB_ISNULL(child_ctdef) || OB_ISNULL(child_rtdef)) {
-                    ret = OB_ERR_UNEXPECTED;
-                    LOG_WARN("unexpected nullptr", K(ret));
-                  } else if (OB_FAIL(ObDASIterUtils::set_index_merge_related_ids(child_ctdef,
-                                                                                 child_rtdef,
-                                                                                 tablet_ids_,
-                                                                                 ls_id_,
-                                                                                 fts_and_iter->get_pushdown_topk_iter_tree()))) {
-                    LOG_WARN("failed to set index merge related ids", K(ret));
-                  }
-                }
-              }
+            } else if (OB_FAIL(try_set_pushdown_topk_related_ids(result_iter))) {
+              LOG_WARN("failed to set pushdown topk related ids", K(ret));
             }
             break;
           }
@@ -1082,6 +1042,67 @@ int ObDASScanOp::reuse_iter()
     LOG_WARN("invalid iter tree type", K(ret), K(tree_type));
   }
 
+  return ret;
+}
+
+int ObDASScanOp::try_set_pushdown_topk_related_ids(ObDASIter *result_iter)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(result_iter)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr result_iter", K(ret));
+  } else if (OB_ISNULL(attach_ctdef_) || OB_ISNULL(attach_rtdef_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr attach_ctdef or attach_rtdef", K(ret));
+  } else {
+    const bool need_lookup = (attach_ctdef_->op_type_ == ObDASOpType::DAS_OP_TABLE_LOOKUP) ||
+                             (attach_ctdef_->op_type_ == ObDASOpType::DAS_OP_INDEX_PROJ_LOOKUP);
+    const ObDASBaseCtDef *index_merge_ctdef = need_lookup ? attach_ctdef_->children_[0] : attach_ctdef_;
+    ObDASBaseRtDef *index_merge_rtdef = need_lookup ? attach_rtdef_->children_[0] : attach_rtdef_;
+    ObDASIndexMergeFTSAndIter *two_phase_index_merge_iter = nullptr;
+
+    if (need_lookup) {
+      if (ObDASIterType::DAS_ITER_TWO_PHASE_INDEX_MERGE == result_iter->get_children()[0]->get_type()) {
+        two_phase_index_merge_iter = static_cast<ObDASIndexMergeFTSAndIter *>(result_iter->get_children()[0]);
+      } else if (ObDASIterType::DAS_ITER_INDEX_MERGE == result_iter->get_type()) {
+        two_phase_index_merge_iter = static_cast<ObDASIndexMergeFTSAndIter *>(result_iter);
+      }
+    }
+
+    if (OB_ISNULL(two_phase_index_merge_iter)) {
+      // do nothing
+    } else {
+      int64_t pushdown_topk_iter_idx = two_phase_index_merge_iter->get_pushdown_topk_iter_idx();
+      ObDASIter *pushdown_topk_iter_tree = two_phase_index_merge_iter->get_pushdown_topk_iter_tree();
+
+      const ObDASBaseCtDef *child_ctdef = nullptr;
+      ObDASBaseRtDef *child_rtdef = nullptr;
+      if (need_lookup) {
+        child_ctdef = attach_ctdef_->children_[0]->children_[pushdown_topk_iter_idx];
+        child_rtdef = attach_rtdef_->children_[0]->children_[pushdown_topk_iter_idx];
+      } else {
+        child_ctdef = attach_ctdef_->children_[pushdown_topk_iter_idx];
+        child_rtdef = attach_rtdef_->children_[pushdown_topk_iter_idx];
+      }
+
+      if (OB_ISNULL(child_ctdef) || OB_ISNULL(child_rtdef) || OB_ISNULL(pushdown_topk_iter_tree)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected nullptr", K(ret));
+      } else if (ObDASOpType::DAS_OP_SORT == child_ctdef->op_type_ && ObDASIterType::DAS_ITER_SORT != pushdown_topk_iter_tree->get_type()) {
+        child_ctdef = child_ctdef->children_[0];
+        child_rtdef = child_rtdef->children_[0];
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObDASIterUtils::set_index_merge_related_ids(child_ctdef,
+                                                                     child_rtdef,
+                                                                     tablet_ids_,
+                                                                     ls_id_,
+                                                                     pushdown_topk_iter_tree))) {
+        LOG_WARN("failed to set index merge related ids", K(ret));
+      }
+    }
+  }
   return ret;
 }
 

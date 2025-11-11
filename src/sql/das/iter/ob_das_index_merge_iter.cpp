@@ -299,7 +299,7 @@ void ObDASIndexMergeIter::MergeResultBuffer::reset()
 int ObDASIndexMergeIter::inner_init(ObDASIterParam &param)
 {
   int ret = OB_SUCCESS;
-  if (ObDASIterType::DAS_ITER_INDEX_MERGE != param.type_) {
+  if (ObDASIterType::DAS_ITER_INDEX_MERGE != param.type_ && ObDASIterType::DAS_ITER_TWO_PHASE_INDEX_MERGE != param.type_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("inner init das iter with bad param type", K(param));
   } else {

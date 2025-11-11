@@ -43,6 +43,7 @@ enum ObDASIterType : uint32_t
   DAS_ITER_SPIV_MERGE,
   DAS_ITER_SPIV_SCAN,
   DAS_ITER_ES_MATCH,
+  DAS_ITER_TWO_PHASE_INDEX_MERGE,
   // append DASIterType before me
   DAS_ITER_MAX
 };
