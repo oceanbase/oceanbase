@@ -423,7 +423,10 @@ int ObBuildMViewTask::build_mlog_impl(const obrpc::ObMVRequiredColumnsInfo &requ
       }
     }
   }
-  if (OB_SUCC(ret) && !missing_columns.empty()) {
+  if (OB_FAIL(ret)) {  
+  } else if (OB_NOT_NULL(mlog_schema) && missing_columns.empty()) {
+    // if the base table already has a mlog, and all of its required columns are already in the mlog, skip
+  } else {
     ObSEArray<ObString, 16> final_missing_columns;
     if (OB_NOT_NULL(mlog_schema)) {
       // if the base table already has a mlog, we should add all of its existing columns to the new mlog
@@ -912,9 +915,7 @@ int ObBuildMViewTask::check_mlog_valid(bool &is_valid)
       ObSchemaGetterGuard schema_guard;
       const ObTableSchema *base_table_schema = nullptr;
       const ObTableSchema *mlog_schema = nullptr;
-      if (required_columns.empty()) {
-        continue;
-      } else if (root_service_ == nullptr) {
+      if (root_service_ == nullptr) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("root_service_ is null", KR(ret));
       } else if (OB_FAIL(root_service_->get_ddl_service()
