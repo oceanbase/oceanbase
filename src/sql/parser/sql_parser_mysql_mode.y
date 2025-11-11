@@ -6698,7 +6698,10 @@ BINARY opt_string_length_i_v2
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT, 1, $3);
   $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_COLLECTION; /* data type */
-  $$->int16_values_[OB_NODE_CAST_COLLECTION_TYPE_IDX] = 0 /* array type */
+  $$->int16_values_[OB_NODE_CAST_COLLECTION_TYPE_IDX] = 0; /* array type */
+  if (OB_NOT_NULL($3)) {
+    $3->is_hidden_const_ = 1;
+  }
 }
 | ARRAY COMP_LT data_type COMP_GT
 {
