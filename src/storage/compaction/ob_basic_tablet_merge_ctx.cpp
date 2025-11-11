@@ -351,23 +351,26 @@ int ObStaticMergeParam::init_progressive_mgr_and_check(
     ObProgressiveMergeMgr &progressive_mgr)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(progressive_mgr.init(
-    dag_param_.tablet_id_, is_full_merge_,
-    base_meta, *schema_,
-    data_version_))) {
+  if (OB_FAIL(progressive_mgr.init(dag_param_.tablet_id_,
+                                   is_full_merge_,
+                                   base_meta,
+                                   *schema_,
+                                   data_version_))) {
     LOG_WARN("failed to init progressive merge mgr", KR(ret), K_(is_full_merge), K(base_meta), KPC(schema_));
-  } else if (is_full_merge_ && progressive_mgr.need_calc_progressive_merge() && data_version_ >= DATA_VERSION_4_3_3_0) {
-      bool is_schema_changed = false;
-      if (OB_FAIL(ObMediumCompactionScheduleFunc::check_if_schema_changed(tablet, *schema_, data_version_, is_schema_changed))) {
-        LOG_WARN("failed to check is schema changed", KR(ret), KPC(schema_));
-      } else if (is_schema_changed && !merge_sstable_status_array_.at(0).is_schema_changed_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("found schema changed when compare sstable & schema but progressive merge round is not increasing", KR(ret),
-          K(is_schema_changed), "param", dag_param_, KPC(schema_));
+  } else if (is_full_merge_) {
+    // full merge, no need to check whether schema changes or not
+  } else if (!progressive_mgr.need_calc_progressive_merge() && data_version_ >= DATA_VERSION_4_3_3_0) {
+    bool is_schema_changed = false;
+    if (OB_FAIL(ObMediumCompactionScheduleFunc::check_if_schema_changed(tablet, *schema_, data_version_, is_schema_changed))) {
+      LOG_WARN("failed to check is schema changed", KR(ret), KPC(schema_));
+    } else if (is_schema_changed && !merge_sstable_status_array_.at(0).is_schema_changed_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("found schema changed when compare sstable & schema but progressive merge round is not increasing", KR(ret),
+               K(is_schema_changed), "param", dag_param_, KPC(schema_));
 #ifdef ERRSIM
-        SERVER_EVENT_SYNC_ADD("merge_errsim", "found_schema_changed", "ls_id", get_ls_id(), "tablet_id", get_tablet_id());
+      SERVER_EVENT_SYNC_ADD("merge_errsim", "found_schema_changed", "ls_id", get_ls_id(), "tablet_id", get_tablet_id());
 #endif
-      }
+    }
   }
   return ret;
 }

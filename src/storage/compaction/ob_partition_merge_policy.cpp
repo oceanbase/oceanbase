@@ -2724,6 +2724,8 @@ void ObIncMajorTxHelper::dump_inc_major_error_info(
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObIncMajorSSTableInfo::IncMajorInfo, 4> local_inc_major_infos;
+  ObSEArray<ObIncMajorSSTableInfo::IncMajorInfo, 4> local_inc_major_infos_part_2;
+
   for (int64_t idx = 0; OB_SUCC(ret) && idx < sstables.count(); idx++) {
     ObSSTable *cur_table = static_cast<ObSSTable *>(sstables.at(idx));
     if (OB_ISNULL(cur_table)) {
@@ -2734,15 +2736,17 @@ void ObIncMajorTxHelper::dump_inc_major_error_info(
                                                          cur_table->get_end_scn().get_val_for_tx(),
                                                          cur_table->get_data_checksum(),
                                                          cur_table->get_row_count());
-      if (OB_FAIL(local_inc_major_infos.push_back(cur_info))) {
+      ObIArray<ObIncMajorSSTableInfo::IncMajorInfo> &write_array = idx < 32 ? local_inc_major_infos : local_inc_major_infos_part_2;
+      if (OB_FAIL(write_array.push_back(cur_info))) {
         LOG_WARN("failed to push back inc major info", K(ret));
       }
     }
   }
+
   if (OB_SUCC(ret)) {
+    const int64_t local_info_cnt = local_inc_major_infos.count() + local_inc_major_infos_part_2.count();
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "dump inc major error info", K(merge_snapshot_version), K(merge_type),
-                  "local_info_cnt", local_inc_major_infos.count(), K(local_inc_major_infos),
-                  "inc_major_info_in_clog", medium_info.inc_major_info_);
+                    K(local_info_cnt), K(local_inc_major_infos), K(local_inc_major_infos_part_2), "inc_major_info_in_clog", medium_info.inc_major_info_);
   }
 }
 
