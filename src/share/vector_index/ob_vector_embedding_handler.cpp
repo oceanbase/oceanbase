@@ -265,14 +265,18 @@ int ObEmbeddingTask::init(const ObString &model_url,
     LOG_WARN("failed to init curl handler", K(ret), K(model_url), K(user_key));
   } else if (OB_FAIL(task_cond_.init(ObWaitEventIds::DEFAULT_COND_WAIT))) {
     LOG_WARN("failed to init completion cond", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator_, model_url, model_url_))) {
+    LOG_WARN("failed to copy model_url", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator_, model_name, model_name_))) {
+    LOG_WARN("failed to copy model_name", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator_, user_key, user_key_))) {
+    LOG_WARN("failed to copy user_key", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator_, provider, provider_))) {
+    LOG_WARN("failed to copy provider", K(ret));
   } else {
     tenant_id_ = MTL_ID();
     task_id_ = (static_cast<int64_t>(tenant_id_) << 32) | (ObTimeUtility::current_time() & 0xFFFFFFFF);
-    model_url_ = model_url;
-    model_name_ = model_name;
     use_base64_format_ = ObAIFuncUtils::is_provider_support_base64(provider);
-    provider_ = provider;
-    user_key_ = user_key;
     dimension_ = dimension;
     total_chunks_ = input_chunks.count();
     processed_chunks_ = 0;
