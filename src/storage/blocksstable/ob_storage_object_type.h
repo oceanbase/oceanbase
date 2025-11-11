@@ -113,6 +113,7 @@ enum class ObStorageObjectType : uint8_t
     MACRO_CACHE_CKPT_META,
     SHARED_INC_MAJOR_DATA_MACRO,
     SHARED_INC_MAJOR_META_MACRO,
+    SHARED_TABLET_SUB_META_IN_TABLE,
     MAX
 };
 static constexpr uint8_t SS_OBJECT_MAX_TYPE_VAL = static_cast<uint8_t>(ObStorageObjectType::MAX);
@@ -1939,6 +1940,23 @@ public:
 #endif
   virtual int opt_to_string(char *buf, const int64_t buf_len, int64_t &pos, const ObStorageObjectOpt &opt) const;
   virtual int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const;
+};
+
+/**
+ * ---------------------------------------ObSharedTabletSubMetaInTableType----------------------------------------
+ */
+class ObSharedTabletSubMetaInTableType : public ObStorageObjectTypeBase
+{
+public:
+  ObSharedTabletSubMetaInTableType() : ObStorageObjectTypeBase(ObStorageObjectType::SHARED_TABLET_SUB_META_IN_TABLE) {}
+  virtual ~ObSharedTabletSubMetaInTableType() {}
+  virtual bool is_tablet_meta() const { return true; }
+  virtual bool is_shared() const { return true; }
+  virtual bool is_direct_read() const { return true; }
+  virtual bool is_direct_write() const { return true; }
+  virtual bool is_overwrite() const { return true; }
+  virtual bool is_path_include_inner_tablet() const { return true; }
+  virtual bool is_valid(const MacroBlockId &file_id) const;
 };
 
 } // end namespace blocksstable

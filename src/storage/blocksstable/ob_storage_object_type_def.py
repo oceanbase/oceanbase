@@ -5036,3 +5036,20 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 }
 ''',
 )
+
+def_storage_object_type_cfg(
+    obj_type = 'SHARED_TABLET_SUB_META_IN_TABLE',  #ObSharedTabletSubMetaInTableType
+    owner = 'wangxiaohui.wxh',
+    access_mode = 'shared',
+    data_type = 'tablet_meta',
+    read_odirect = True,
+    write_odirect = True,
+    is_overwrite = True,
+    is_path_include_inner_tablet = True,
+    is_valid = '''
+bool is_valid(const MacroBlockId &file_id) const
+{
+  return true;
+}
+''',
+)

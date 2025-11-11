@@ -109,6 +109,7 @@ static const char *ob_storage_object_type_strs[] = {
   "MACRO_CACHE_CKPT_META",
   "SHARED_INC_MAJOR_DATA_MACRO",
   "SHARED_INC_MAJOR_META_MACRO",
+  "SHARED_TABLET_SUB_META_IN_TABLE",
   "MAX"
 };
 
@@ -4767,6 +4768,14 @@ int ObSharedIncMajorMetaMacroType::get_object_id(const ObStorageObjectOpt &opt, 
                              opt.ss_share_opt_.ls_id_, opt.ss_share_opt_.reorganization_scn_);
   return ret;
 }
+/**
+ * ---------------------------------------ObSharedTabletSubMetaInTableType----------------------------------------
+ */
+
+bool ObSharedTabletSubMetaInTableType::is_valid(const MacroBlockId &file_id) const
+{
+  return true;
+}
 
 const ObStorageObjectTypeBase &ObStorageObjectTypeInstance::get_instance(ObStorageObjectType type)
 {
@@ -5101,6 +5110,10 @@ const ObStorageObjectTypeBase &ObStorageObjectTypeInstance::get_instance(ObStora
     }
     case ObStorageObjectType::SHARED_INC_MAJOR_META_MACRO: {
       static const ObSharedIncMajorMetaMacroType instance;
+      return instance;
+    }
+    case ObStorageObjectType::SHARED_TABLET_SUB_META_IN_TABLE: {
+      static const ObSharedTabletSubMetaInTableType instance;
       return instance;
     }
     default: {
