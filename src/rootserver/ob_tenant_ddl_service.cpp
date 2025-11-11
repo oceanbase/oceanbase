@@ -2295,6 +2295,8 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
   ObString config_value_spf_batch_rescan("true");
   ObString config_name_batch_rescan_flag("_enable_das_batch_rescan_flag");
   ObString config_value_batch_rescan_flag("15");
+  ObString config_name_prexec_prepare_with_params("_prexec_prepare_with_params");
+  ObString config_value_prexec_prepare_with_params("true");
 
   if (OB_FAIL(ObParallelDDLControlMode::generate_parallel_ddl_control_config_for_create_tenant(config_value))) {
     LOG_WARN("fail to generate parallel ddl control config value", KR(ret));
@@ -2327,6 +2329,8 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
         LOG_WARN("fail to add config", KR(ret), K(config_name_spf_batch_rescan), K(config_value_spf_batch_rescan));
       } else if (OB_FAIL(tenant_init_config.add_config(config_name_batch_rescan_flag, config_value_batch_rescan_flag))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name_batch_rescan_flag), K(config_value_batch_rescan_flag));
+      } else if (OB_FAIL(tenant_init_config.add_config(config_name_prexec_prepare_with_params, config_value_prexec_prepare_with_params))) {
+        LOG_WARN("fail to add config", KR(ret), K(config_name_prexec_prepare_with_params), K(config_value_prexec_prepare_with_params));
       }
       // ---- Add new tenant init config above this line -----
       // At the same time, to verify modification, you need modify test case tenant_init_config(_oracle).test

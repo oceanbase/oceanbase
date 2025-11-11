@@ -175,7 +175,10 @@ ObSqlCtx::ObSqlCtx()
     exec_type_(InvalidType),
     is_prepare_protocol_(false),
     is_pre_execute_(false),
+    is_prepare_with_params_(false),
     is_prepare_stage_(false),
+    parse_result_(nullptr),
+    prepare_params_(nullptr),
     is_dynamic_sql_(false),
     is_dbms_sql_(false),
     is_cursor_(false),
@@ -236,7 +239,10 @@ void ObSqlCtx::reset()
   exec_type_ = InvalidType;
   is_prepare_protocol_ = false;
   is_pre_execute_ = false;
+  is_prepare_with_params_ = false;
   is_prepare_stage_ = false;
+  parse_result_ = nullptr;
+  prepare_params_ = nullptr;
   is_dynamic_sql_ = false;
   is_remote_sql_ = false;
   is_restore_ = false;

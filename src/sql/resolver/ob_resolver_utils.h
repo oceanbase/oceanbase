@@ -94,6 +94,15 @@ public:
     return match_info_.at(i).dest_type_;
   }
 
+  bool has_null_actual_params()
+  {
+    bool has_null_actual_params = false;
+    for (int64_t i = 0; i < match_info_.count(); ++i) {
+      has_null_actual_params = has_null_actual_params || ObNullType == match_info_.at(i).src_type_;
+    }
+    return has_null_actual_params;
+  }
+
 public:
   const share::schema::ObIRoutineInfo *routine_info_;
   common::ObSEArray<MatchInfo, 16> match_info_;
@@ -1011,6 +1020,22 @@ private:
   // disallow construct
   ObResolverUtils();
   ~ObResolverUtils();
+
+public:
+  /**
+   * @brief: walk through parse tree and calculate the returning param count,
+   *         designed for prexecute protocol
+   * @param parse_tree [in] parse tree of the sql
+   * @param returning_param_count [out] the count of returning params
+   * @return oceanbase error code defined in lib/ob_errno.def
+   */
+  static int calc_returning_param_count(const ParseNode &parse_tree,
+                                        int64_t &returning_param_count);
+
+private:
+  static int calc_returning_param_count_recursive(const ParseNode &parse_tree,
+                                                  int64_t &returning_param_count,
+                                                  bool &returning_stmt_found);
 };
 } // end namespace sql
 } // end namespace oceanbase
