@@ -2238,6 +2238,9 @@ int get_schema_info_from_ddl_kvs(
     if (OB_ISNULL(ddl_kv = ddl_kv_handle.get_obj())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected ddl kv is null", KR(ret), K(ddl_kv_handle));
+    } else if (OB_UNLIKELY(!ddl_kv->is_inc_minor_ddl_kv())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected not inc minor ddl kv", KR(ret), KPC(ddl_kv));
     } else if (OB_FAIL(ddl_kv->get_schema_info(column_cnt_in_schema,
                                                max_schema_version_in_memtable,
                                                max_column_cnt_in_memtable))) {
