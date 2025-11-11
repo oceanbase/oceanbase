@@ -176,12 +176,15 @@ int ob_pthread_cond_timedwait(pthread_cond_t *__restrict __cond,
 // ob_usleep wrapper function for C file
 void ob_usleep(const useconds_t v)
 {
-  oceanbase::common::ob_usleep<oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>(v);
+  oceanbase::common::ob_usleep<oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>(
+      v, static_cast<int64_t>(get_rel_offset(reinterpret_cast<int64_t>(__builtin_return_address(0)))));
+  
 }
 
 void ob_idle_usleep(const useconds_t v)
 {
-  oceanbase::common::ob_usleep<oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>(v, true);
+  oceanbase::common::ob_usleep<oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>(
+      v, true, get_rel_offset(reinterpret_cast<int64_t>(__builtin_return_address(0))));
 }
 
 int futex_hook(uint32_t *uaddr, int futex_op, uint32_t val, const struct timespec* timeout)

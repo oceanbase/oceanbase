@@ -199,7 +199,7 @@ int ObITenantTmpFileManager::remove(const int64_t fd)
             K(start_remove_ts), KP(tmp_file), KPC(tmp_file), K(lbt()));
         sleep(2); // 2s
       } else {
-        usleep(100 * 1000); // 100ms
+        ob_usleep(100 * 1000); // 100ms
       }
     }
     if (OB_FAIL(tmp_file->release_resource())) {

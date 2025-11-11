@@ -562,7 +562,7 @@ int ObTenantStorageMetaService::force_write_gc_tablet_scn_arr_(
     do {
       if (OB_FAIL(write_gc_tablet_scn_arr(tablet_id, obj_type, tablet_scn_arr))) {
         LOG_WARN("failed to write_gc_tablet_scn_arr", K(ret), K(tablet_id), K(obj_type), K(tablet_scn_arr));
-        usleep(100 * 1000);
+        ob_usleep(100 * 1000);
       }
     } while (OB_FAIL(ret));
   }

@@ -1605,7 +1605,7 @@ int ObUpgradeExecutor::run_upgrade_end_action_(
               break;
             } else {
               LOG_INFO("[UPGRADE] config doesn't take effective", K(tenant_id));
-              usleep(1 * 1000 * 1000L); // 1s
+              ob_usleep(1 * 1000 * 1000L); // 1s
             }
           }
         }

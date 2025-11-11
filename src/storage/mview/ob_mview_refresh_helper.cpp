@@ -444,7 +444,7 @@ int ObMViewRefreshHelper::sync_get_min_target_data_sync_scn(
           LOG_WARN("post nested mview cost too long time", K(ret));
           break;
         }
-        usleep(200 * 1000); // 200ms
+        ob_usleep(200 * 1000); // 200ms
       }
     } while (OB_NOT_MASTER == ret ||
             OB_EAGAIN == ret);

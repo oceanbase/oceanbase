@@ -241,7 +241,7 @@ int ObThrottleUnit<ALLOCATOR>::inner_get_throttle_info_(share::ObThrottleInfo *&
               SHARE_LOG(WARN, "allocate throttle info failed", KR(ret), K(tid));
             } else {
               // sleep 10 ms and retry
-              usleep(10 * 1000);
+              ob_usleep(10 * 1000);
               ret = OB_SUCCESS;
             }
           } else {

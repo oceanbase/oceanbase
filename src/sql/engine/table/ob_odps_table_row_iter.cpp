@@ -2888,7 +2888,7 @@ int ObOdpsPartitionDownloaderMgr::create_upload_session(const sql::ObODPSGeneral
             LOG_WARN("session is invalid", K(ret));
           } else {
             sleepTimeMs += 1000;
-            usleep(1000 * 1000);
+            ob_usleep(1000 * 1000);
           }
         }
         if (OB_SUCC(ret)) {

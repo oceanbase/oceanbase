@@ -2230,7 +2230,7 @@ int ObDDLRedoLogWriter::write_finish_log_with_retry(
       LOG_WARN("write ddl finish log failed", K(ret));
     }
     if (ObDDLRedoLogWriter::need_retry(ret)) {
-      usleep(1000L * 1000L); // 1s
+      ob_usleep(1000L * 1000L); // 1s
       ++retry_count;
       LOG_INFO("retry write ddl finish log", K(ret), K(log), K(retry_count));
     } else {

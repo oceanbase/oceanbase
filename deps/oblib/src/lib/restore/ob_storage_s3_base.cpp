@@ -49,7 +49,7 @@ void *ObS3MemoryManager::AllocateMemory(std::size_t blockSize,
   do {
     ptr = allocator_.alloc_align(blockSize, alignment);
     if (OB_ISNULL(ptr)) {
-      ::usleep(10000); // 10ms
+      ob_usleep(10000); // 10ms
       if (TC_REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         OB_LOG(ERROR, "ObVSliceAlloc failed to allocate memory",

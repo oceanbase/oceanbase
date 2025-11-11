@@ -873,7 +873,7 @@ int ObTenantStorageMetaPersister::ss_check_and_delete_tablet_current_version(
     while (OB_FAIL(ss_delete_tablet_current_version_(tablet_id, ls_id, ls_epoch))) {
       LOG_WARN("try delete tablet current version failed", K(ret), K(tablet_id), K(ls_id), K(ls_epoch), K(retry_count));
       retry_count++;  
-      usleep(1000 * 1000); // sleep 1s for each time 
+      ob_usleep(1000 * 1000); // sleep 1s for each time 
       if (retry_count > 60) { // 1min
         LOG_ERROR("failed to delete tablet current version", K(ret), K(tablet_id), K(ls_id), K(ls_epoch), K(retry_count));
         break;
@@ -969,7 +969,7 @@ int ObTenantStorageMetaPersister::ss_remove_tablet_(
         //       Though we write pending_free_tablet_arr firstly, the un-deleted current_version do no affect to the transfer-in tablet.
         LOG_WARN("failed to delete tablet current version", K(ret), K(tablet_id), K(ls_id), K(ls_epoch), K(retry_count));
         retry_count++;
-        usleep(2 * 1000);
+        ob_usleep(2 * 1000);
       }
     }
   }
@@ -1294,7 +1294,7 @@ int ObTenantStorageMetaPersister::ss_batch_remove_ls_tablets(
             while (OB_FAIL(ss_delete_tablet_current_version_(tablet_id, ls_id, ls_epoch))) {
               LOG_WARN("fail to delete tablet_current_version", K(ret), K(tablet_id), K(ls_id), K(ls_epoch), K(retry_count));
               retry_count++;
-              usleep(2 * 1000);
+              ob_usleep(2 * 1000);
             }
           } // end for
         }// end persist

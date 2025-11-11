@@ -447,7 +447,7 @@ int ObLogResourceCollector::push_task_into_queue_(ObLogResourceRecycleTask &task
       if (TC_REACH_TIME_INTERVAL(PUSH_TASK_TIMEOUT_PRINT_INTERVAL)) {
         LOG_INFO("push task into RC Thread timeout, retrying", KR(ret));
       }
-      usleep(PUSH_TASK_TIMEOUT_WAIT_TIME);
+      ob_usleep(PUSH_TASK_TIMEOUT_WAIT_TIME);
       ret = OB_SUCCESS;
     } else {
       break;

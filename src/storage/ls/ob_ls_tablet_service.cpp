@@ -678,7 +678,7 @@ int ObLSTabletService::refresh_tablet_addr(
     if (OB_SUCC(ret)) {
       break;
     } else if (OB_ALLOCATE_MEMORY_FAILED == ret) {
-      usleep(100 * 1000);
+      ob_usleep(100 * 1000);
       if (REACH_COUNT_INTERVAL(100)) {
         LOG_ERROR("no memory for tablet id set, retry", K(ret), K(tablet_id));
       }

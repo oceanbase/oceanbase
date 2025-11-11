@@ -2861,7 +2861,7 @@ int ObLSBackupDataTask::do_wait_index_builder_ready_(const common::ObTabletID &t
       LOG_WARN("failed to check sstable index builder mgr exist", K(ret), K(tablet_id), K(table_key));
     } else if (!exist) {
       LOG_INFO("index builder mgr still not exist", K(ret), K(tablet_id), K(table_key));
-      usleep(DEFAULT_SLEEP_US);
+      ob_usleep(DEFAULT_SLEEP_US);
     } else {
       break;
     }
@@ -4169,7 +4169,7 @@ int ObLSBackupDataTask::wait_reuse_other_block_ready_(
 #endif
       break;
     } else {
-      usleep(DEFAULT_SLEEP_US);
+      ob_usleep(DEFAULT_SLEEP_US);
     }
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(ls_backup_ctx_)) {

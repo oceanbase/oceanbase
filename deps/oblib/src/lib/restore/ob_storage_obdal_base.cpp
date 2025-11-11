@@ -120,7 +120,7 @@ void *obdal_malloc(std::size_t size, std::size_t align)
     // ptr = ObDalMemoryManager::get_instance().allocate(size, align);
     ptr = ob_malloc_align(align, size, attr);
     if (OB_ISNULL(ptr)) {
-      ::usleep(10000);   // 10ms
+      ob_usleep(10000);   // 10ms
       if (TC_REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
         OB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "obdal failed to allocate memory", K(size), K(align));
       }

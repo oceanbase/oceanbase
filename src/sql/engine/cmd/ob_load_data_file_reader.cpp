@@ -505,7 +505,7 @@ int ObPacketStreamFileReader::receive_packet()
       // sleep can reduce cpu usage while the network is not so good.
       // We need not worry about the speed while the speed of load data core is lower than
       // file receiver's.
-      usleep(100 * 1000); // 100 ms
+      ob_usleep(100 * 1000); // 100 ms
       ret = packet_handle_->read_packet(mem_pool, pkt);
       cached_packet_ = static_cast<obmysql::ObMySQLRawPacket *>(pkt);
     }

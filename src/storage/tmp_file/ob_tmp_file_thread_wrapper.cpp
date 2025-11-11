@@ -207,7 +207,7 @@ void ObTmpFileFlushTG::clean_up_lists()
         flush_mgr_.free_flush_task(flush_task);
       }
     }
-    usleep(10 * 1000);  // 10ms
+    ob_usleep(10 * 1000);  // 10ms
   }
 }
 

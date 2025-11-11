@@ -144,7 +144,7 @@ int ObLogExternalStorageHandler::resize(const int64_t new_concurrency,
       do {
         ret = resize_(new_concurrency);
         if (OB_FAIL(ret)) {
-          usleep(DEFAULT_RETRY_INTERVAL);
+          ob_usleep(DEFAULT_RETRY_INTERVAL);
         }
       } while (OB_FAIL(ret));
       time_guard.click("after create new thread pool");

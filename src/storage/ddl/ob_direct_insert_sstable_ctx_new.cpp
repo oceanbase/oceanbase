@@ -816,7 +816,7 @@ int ObTenantDirectLoadMgr::check_and_process_finished_tablet(
           table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(false/*first*/)))) {
     } else if (nullptr == first_major_sstable) {
       LOG_INFO("major not exist, retry later", K(ret), K(ls_id), K(tablet_id), K(tg));
-      usleep(100L * 1000L); // 100ms
+      ob_usleep(100L * 1000L); // 100ms
     } else if (OB_FAIL(ObTabletDDLUtil::check_and_get_major_sstable(
         ls_id, tablet_id, first_major_sstable, table_store_wrapper))) {
       LOG_WARN("check if major sstable exist failed", K(ret), K(ls_id), K(tablet_id));
@@ -3076,7 +3076,7 @@ int ObTabletFullDirectLoadMgr::commit(
         LOG_WARN("update ddl major sstable failed", K(ret), K(tablet_id_), K(start_scn), K(commit_scn));
       }
       if (OB_EAGAIN == ret) {
-        usleep(1000L);
+        ob_usleep(1000L);
       }
     }
 
@@ -3141,7 +3141,7 @@ int ObTabletFullDirectLoadMgr::replay_commit(
         LOG_WARN("update ddl major sstable failed", K(ret), K(tablet_id_), K(start_scn), K(commit_scn));
       }
       if (OB_EAGAIN == ret) {
-        usleep(1000L);
+        ob_usleep(1000L);
       }
     }
 

@@ -64,7 +64,7 @@ int ObReconfigCheckerAdapter::check_can_add_member(const ObAddr &server,
     }
     // if check failed, retry to timeout
     if (OB_FAIL(ret) && ret != OB_TIMEOUT) {
-      usleep(sleep_time);
+      ob_usleep(sleep_time);
     }
   } while (OB_FAIL(ret) && ret != OB_TIMEOUT);
 

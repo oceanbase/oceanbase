@@ -2105,7 +2105,7 @@ int ObLogger::alloc_log_item(const int32_t level, const int64_t size, ObPLogItem
         if (nullptr != (buf = (char*)p_alloc->alloc(size))) {
           break;
         } else {
-          usleep(per_us);
+          ob_usleep(per_us);
           wait_us -= per_us;
         }
       }

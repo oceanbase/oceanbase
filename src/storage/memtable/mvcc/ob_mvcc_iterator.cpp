@@ -297,7 +297,7 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
 
         }
 
-        usleep(10); // 10us
+        ob_usleep(10); // 10us
       }
       version_iter_ = iter;
     } else {

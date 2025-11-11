@@ -408,7 +408,7 @@ int ObRestoreCommonUtil::rebuild_master_key_version(obrpc::ObCommonRpcProxy *rpc
           if (OB_KEYSTORE_OPEN_NO_MASTER_KEY == ret) {
             ret = OB_SUCCESS;
             LOG_INFO("master key is not active, need wait", K(tenant_id));
-            usleep(SLEEP_US);
+            ob_usleep(SLEEP_US);
           } else {
             LOG_WARN("fail to get active master key", KR(ret), K(tenant_id));
           }

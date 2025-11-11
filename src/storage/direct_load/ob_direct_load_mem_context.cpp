@@ -277,7 +277,7 @@ int ObDirectLoadMemContext::acquire_chunk(ChunkType *&chunk)
 {
   int ret = OB_SUCCESS;
   while (fly_mem_chunk_count_ >= max_mem_chunk_count_ && OB_LIKELY(!has_error_)) {
-    usleep(50000);
+    ob_usleep(50000);
   }
   if (OB_UNLIKELY(has_error_)) {
     ret = OB_CANCELED;

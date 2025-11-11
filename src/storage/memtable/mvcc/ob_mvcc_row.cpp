@@ -635,7 +635,7 @@ int ObMvccRow::insert_trans_node(ObIMvccCtx &ctx,
                      && !(prev->seq_no_.get_branch() == 0 && node.seq_no_.get_branch() == 0)) {
             ret = OB_ERR_UNEXPECTED;
             TRANS_LOG(ERROR, "prev node seq_no > this node", KR(ret), KPC(prev), K(node), KPC(this));
-            usleep(1000);
+            ob_usleep(1000);
             ob_abort();
           } else {
             next_node = next;
@@ -680,7 +680,7 @@ int ObMvccRow::insert_trans_node(ObIMvccCtx &ctx,
             && !(tmp->seq_no_.get_branch() == 0 && node.seq_no_.get_branch() == 0)) {
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(ERROR, "prev node seq_no > this node", KR(ret), "prev", PC(tmp), K(node), KPC(this));
-          usleep(1000);
+          ob_usleep(1000);
           ob_abort();
         }
       }

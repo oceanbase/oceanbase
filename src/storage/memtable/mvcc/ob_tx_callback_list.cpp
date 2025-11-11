@@ -338,7 +338,7 @@ int ObTxCallbackList::callback_(ObITxCallbackFunctor &functor,
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "callback with min_scn", K(ret), KPC(iter), KPC(this));
 #ifdef ENABLE_DEBUG_LOG
-      usleep(5000);
+      ob_usleep(5000);
       ob_abort();
 #endif
     } else if (functor.is_iter_end(iter)) {
@@ -360,7 +360,7 @@ int ObTxCallbackList::callback_(ObITxCallbackFunctor &functor,
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(ERROR, "remove parallel callback while serial part not all replayed", K(ret), KPC(iter), KPC(this));
 #ifdef ENABLE_DEBUG_LOG
-          usleep(5000);
+          ob_usleep(5000);
           ob_abort();
 #endif
         } else {

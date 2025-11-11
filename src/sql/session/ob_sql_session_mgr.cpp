@@ -137,7 +137,7 @@ void ObTenantSQLSessionMgr::mtl_wait(ObTenantSQLSessionMgr *&t_session_mgr)
     while (t_session_mgr->count() != 0) {
       LOG_WARN_RET(OB_NEED_RETRY, "tenant session mgr should be empty",
                    K(t_session_mgr->count()));
-      usleep(1000 * 1000);
+      ob_usleep(1000 * 1000);
     }
   }
   LOG_INFO("success to wait tenant session mgr");

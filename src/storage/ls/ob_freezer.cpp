@@ -1045,7 +1045,7 @@ int ObFreezer::set_tablet_freeze_flag_(const int64_t trace_id,
     while (OB_FAIL(frozen_memtable_handles.push_back(frozen_memtable_handle))) {
       TRANS_LOG(ERROR, "[Freezer] fail to push_back", K(ret), K(tablet_id));
       stat_.add_diagnose_info("fail to push_back");
-      usleep(100 * 1000);  // sleep 100ms
+      ob_usleep(100 * 1000);  // sleep 100ms
     }
   }
 

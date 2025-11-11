@@ -726,7 +726,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
               int receive_asr_times = 0;
               while (OB_SUCC(ret) && OB_ISNULL(asr_pkt)) {
                 ++receive_asr_times;
-                usleep(10 * 1000); // Sleep 10 ms at every time trying receive auth-switch-response mysql pkt
+                ob_usleep(10 * 1000); // Sleep 10 ms at every time trying receive auth-switch-response mysql pkt
                 // TO DO:
                 // In most unix system, The max TCP Retransmission Timeout is under 240 seconds, 
                 // we need to set a suitable timeout, what should this be?

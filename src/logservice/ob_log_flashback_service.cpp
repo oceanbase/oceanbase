@@ -162,7 +162,7 @@ int ObLogFlashbackService::wait_all_ls_replicas_log_sync_(
         if (REACH_TIME_INTERVAL(500 * 1000)) {
           CLOG_LOG(WARN, "wait_all_ls_replicas_log_sync_ eagain", COMMON_LOG_INFO, K(check_log_op_array));
         }
-        ::usleep(10 * 1000);
+        ob_usleep(10 * 1000);
       } else {
         CLOG_LOG(WARN, "wait_all_ls_replicas_log_sync_ fail", COMMON_LOG_INFO, K(check_log_op_array));
       }
@@ -221,7 +221,7 @@ int ObLogFlashbackService::get_and_change_access_mode_(
           // display sync process
           CLOG_LOG(WARN, "get_and_change_access_mode_ eagain", COMMON_LOG_INFO, K(change_mode_op_array));
         }
-        ::usleep(10 * 1000);
+        ob_usleep(10 * 1000);
       } else {
         CLOG_LOG(WARN, "get_and_change_access_mode_ fail", COMMON_LOG_INFO, K(change_mode_op_array));
       }
@@ -255,7 +255,7 @@ int ObLogFlashbackService::do_flashback_(
           // display sync process
           CLOG_LOG(WARN, "do_flashback_ eagain", COMMON_LOG_INFO, K_(flashback_op_array));
         }
-        ::usleep(50 * 1000);
+        ob_usleep(50 * 1000);
       } else {
         CLOG_LOG(INFO, "do_flashback_ fail", COMMON_LOG_INFO, K_(flashback_op_array));
       }

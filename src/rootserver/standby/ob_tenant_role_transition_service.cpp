@@ -946,7 +946,7 @@ int ObTenantRoleTransitionService::wait_ls_balance_task_finish_()
         }
         // if is_finish = true, check_ls_balance_task_finish_ must return OB_SUCCESS
         if (!is_finish) {
-          usleep(100L * 1000L);
+          ob_usleep(100L * 1000L);
         }
       }
       if (!is_finish) {
@@ -1740,7 +1740,7 @@ int ObTenantRoleTransitionService::check_sync_to_latest_do_while_(
         LOG_WARN("not sync to latest, wait a while", K(tenant_id), K(only_check_sys_ls));
       }
     }
-    usleep(10L * 1000L);
+    ob_usleep(10L * 1000L);
   }
   if (logservice::ObLogRestoreHandler::need_fail_when_switch_to_primary(ret)) {
   } else if (THIS_WORKER.is_timeout() || !is_synced) {

@@ -384,7 +384,7 @@ int ObTabletAutoincrementService::get_autoinc_seq_for_mlog(
           LOG_WARN("get auto inc timeout", K(ret), K(abs_timeout_us));
         } else {
           need_retry = true;
-          usleep(100);
+          ob_usleep(100);
         }
       } else if (OB_FAIL(tmp_autoinc_seq.get_autoinc_seq_value(current_value))) {
         LOG_WARN("failed to get autoinc seq value", K(ret), K(tmp_autoinc_seq));

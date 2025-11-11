@@ -324,7 +324,7 @@ int ObPxMsgProc::process_sqc_finish_msg_once(ObExecContext &ctx, const ObPxFinis
       int ecode = EventTable::EN_PX_SLOW_PROCESS_SQC_FINISH_MSG;
       if (OB_SUCCESS != ecode && OB_SUCC(ret)) {
         LOG_WARN("qc slow process sqc finish msg by desgin", K(ret));
-        usleep(100 * 1000L);
+        ob_usleep(100 * 1000L);
       }
 #endif
       int set_finish_ret = edge->get_detect_cb()->atomic_set_finished(sqc->get_sqc_addr());

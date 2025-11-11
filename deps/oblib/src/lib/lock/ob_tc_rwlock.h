@@ -128,7 +128,7 @@ public:
         abs_timeout_us = common::ObTimeUtility::current_time() + try_thresold_us;
         if (OB_FAIL(lock_.wrlock(abs_timeout_us))) {
           // sleep retry_interval_us when wrlock failed, then retry
-          ::usleep(retry_interval_us);
+          ob_usleep(retry_interval_us);
         } else {
           locked = true;
         }
@@ -212,7 +212,7 @@ public:
     while (!locked) {
       if (OB_FAIL(wrlock(abs_timeout_us))) {
         COMMON_LOG(WARN, "wrlock_with_retry failed", K(ret), K(abs_timeout_us));
-        ::usleep(WRLOCK_FAILED_SLEEP_US);
+        ob_usleep(WRLOCK_FAILED_SLEEP_US);
       } else {
         locked = true;
       }
@@ -449,7 +449,7 @@ public:
     while (!locked) {
       if (OB_FAIL(wrlock(abs_timeout_us))) {
         COMMON_LOG(WARN, "wrlock_with_retry failed", K(ret), K(abs_timeout_us));
-        ::usleep(WRLOCK_FAILED_SLEEP_US);
+        ob_usleep(WRLOCK_FAILED_SLEEP_US);
       } else {
         locked = true;
       }

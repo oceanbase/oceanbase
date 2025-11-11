@@ -461,7 +461,7 @@ int ObMViewRefreshExecutor::sync_check_nested_mview_mds(
           LOG_WARN("post nested mview cost too long time", K(ret));
           break;
         }
-        usleep(200 * 1000); // sleep 100ms
+        ob_usleep(200 * 1000); // sleep 100ms
       }
     } while (OB_NOT_MASTER == ret ||
             OB_EAGAIN == ret);
@@ -632,7 +632,7 @@ int ObMViewRefreshExecutor::scheduler_nested_mviews_sync_refresh_(
               }
             }
             if (need_retry) {
-              usleep(1 * 1000 * 1000); // 1s
+              ob_usleep(1 * 1000 * 1000); // 1s
             }
             LOG_INFO("do nested refresh mview", K(ret), K(refresh_arg), K(mview_info), K(idx), K(need_retry));
           } while (need_retry && OB_SUCC(ret) && OB_SUCC(ctx_->check_status()));
