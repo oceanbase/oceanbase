@@ -1431,8 +1431,6 @@ int ObDDLKV::prepare_sstable(const bool need_check/*=true*/)
   } else if (!is_freezed()) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("ddl kv not freezed", K(ret), K(*this));
-  } else if (ddl_memtables_.empty()) {
-    // do nothing
   } else if (need_check && OB_FAIL(wait_pending())) {
     if (OB_EAGAIN != ret) {
       LOG_WARN("wait pending failed", K(ret));

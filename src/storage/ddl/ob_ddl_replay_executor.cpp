@@ -560,7 +560,7 @@ int check_idem_block_exist(const ObDDLMacroBlockRedoInfo &redo_info, ObTabletHan
                                                                          redo_info.table_key_.table_type_,
                                                                          is_macro_block_exist))) {
     LOG_WARN("failed to check block exist", K(ret), K(redo_info));
-  } else if (is_macro_block_exist ) {
+  } else if (is_macro_block_exist) {
     need_replay = false;
     LOG_INFO("macro block already exist, skip replay the redo", K(redo_info), K(need_replay), K(checksum));
   }
@@ -760,7 +760,7 @@ int ObDDLRedoReplayExecutor::do_full_replay_(
       }
     }
   }
-  FLOG_INFO("[DDL_REPLAY] finish replay ddl full redo log", K(ret), K(need_replay), K(checksum), KPC_(log), K(macro_block), "ddl_event_info", ObDDLEventInfo());
+  FLOG_INFO("[DDL_REPLAY] finish replay ddl full redo log", K(ret), K(need_replay), K(block_exist_need_replay), K(checksum), KPC_(log), K(macro_block), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 

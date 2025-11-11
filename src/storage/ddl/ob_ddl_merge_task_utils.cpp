@@ -409,6 +409,59 @@ int ObDDLMergeTaskUtils::get_ddl_tables_from_dump_tables(
   return ret;
 }
 
+int ObDDLMergeTaskUtils::only_update_ddl_checkpoint(ObDDLTabletMergeDagParamV2 &dag_merge_param)
+{
+  int ret = OB_SUCCESS;
+
+  ObLSID target_ls_id;
+  ObTabletID target_tablet_id;
+  ObWriteTabletParam *tablet_param = nullptr;
+  bool for_major = dag_merge_param.for_major_;
+
+  ObLSHandle ls_handle;
+  ObLSService *ls_service = MTL(ObLSService*);
+  ObTabletHandle tablet_handle, new_tablet_handle;
+  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
+  const ObSSTable *first_major_sstable = nullptr;
+
+  int64_t rebuild_seq = -1;
+  int64_t snapshot_version = 0;
+  int64_t multi_version_start = 0;
+
+  if (!dag_merge_param.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(dag_merge_param));
+  } else if (OB_FAIL(dag_merge_param.get_tablet_param(target_ls_id, target_tablet_id, tablet_param))) {
+    LOG_WARN("failed to get tablet param", K(ret));
+  } else if (OB_FAIL(ObDirectLoadMgrUtil::get_tablet_handle(target_ls_id, target_tablet_id, tablet_handle))) {
+    LOG_WARN("failed to get tablet handle", K(ret));
+  } else if (OB_FAIL(ls_service->get_ls(target_ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
+    LOG_WARN("failed to get ls", K(ret));
+  } else if (!ls_handle.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls handle should be valid", K(ret), K(ls_handle));
+  } else if (OB_FAIL(tablet_handle.get_obj()->fetch_table_store(table_store_wrapper))) {
+    LOG_WARN("fail to fetch table store", K(ret));
+  } else if (OB_FALSE_IT(first_major_sstable = static_cast<ObSSTable *>(
+                                                table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(false/*first*/)))) {
+  } else {
+    rebuild_seq = ls_handle.get_ls()->get_rebuild_seq();
+    snapshot_version    =  max(dag_merge_param.ddl_task_param_.snapshot_version_, tablet_handle.get_obj()->get_snapshot_version());
+    multi_version_start =  max(dag_merge_param.ddl_task_param_.snapshot_version_, tablet_handle.get_obj()->get_multi_version_start());
+
+    ObUpdateTableStoreParam param (snapshot_version, multi_version_start, tablet_param->storage_schema_, rebuild_seq);
+    param.ddl_info_.update_with_major_flag_ = true;
+    param.ddl_info_.keep_old_ddl_sstable_ = false;
+    param.ddl_info_.data_format_version_ = dag_merge_param.ddl_task_param_.tenant_data_version_;
+    param.ddl_info_.ddl_checkpoint_scn_ = dag_merge_param.rec_scn_;
+    param.ddl_info_.ddl_replay_status_ = tablet_handle.get_obj()->get_tablet_meta().ddl_replay_status_; /* not change replay status*/
+    if (OB_FAIL(ls_handle.get_ls()->update_tablet_table_store(target_tablet_id, param, new_tablet_handle))) {
+      LOG_WARN("failed to update table store", K(ret));
+    }
+  }
+  return ret;
+}
+
 /* do not add any new logic to this function !!! */
 int ObDDLMergeTaskUtils::update_tablet_table_store(ObDDLTabletMergeDagParamV2 &dag_merge_param,
                                                     ObTablesHandleArray &co_sstable_array,

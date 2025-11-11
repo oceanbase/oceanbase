@@ -77,6 +77,7 @@ public:
   static int refine_incremental_direct_load_merge_param(const ObTablet &tablet,
                                                         ObITable::TableKey &ddl_param,
                                                         bool &need_check_tablet);
+  static int only_update_ddl_checkpoint(ObDDLTabletMergeDagParamV2 &dag_merge_param);
   static int update_storage_schema(ObTablet &tablet,
                                    const ObTabletDDLParam &ddl_param,
                                    ObArenaAllocator &allocator,
