@@ -15067,6 +15067,8 @@ int ObLogPlan::adjust_final_plan_info(ObLogicalOperator *&op)
     if (OB_SUCC(ret)) {
       if (op->is_plan_root() && OB_FAIL(op->set_plan_root_output_exprs())) {
         LOG_WARN("failed to add plan root exprs", K(ret));
+      } else if (OB_FAIL(op->get_plan()->perform_adjust_onetime_expr(op))) {
+        LOG_WARN("failed to perform adjust onetime expr", K(ret));
       } else if (OB_FAIL(op->get_plan()->perform_groupingsets_replacement(op))) {
         LOG_WARN("failed to perform grouping set replacement", K(ret));
       } else if (OB_FAIL(op->get_plan()->perform_one_distinct_pushdown(op))) {
@@ -15077,8 +15079,6 @@ int ObLogPlan::adjust_final_plan_info(ObLogicalOperator *&op)
         LOG_WARN("failed to perform simplify win expr", K(ret));
       } else if (OB_FAIL(op->get_plan()->perform_window_function_pushdown(op))) {
         LOG_WARN("failed to perform window function push down", K(ret));
-      } else if (OB_FAIL(op->get_plan()->perform_adjust_onetime_expr(op))) {
-        LOG_WARN("failed to perform adjust onetime expr", K(ret));
       } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0 &&
                  get_optimizer_context().get_query_ctx()->get_global_hint().has_dbms_stats_hint() &&
                  OB_FAIL(op->get_plan()->perform_gather_stat_replace(op))) {
