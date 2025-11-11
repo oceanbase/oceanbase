@@ -427,6 +427,7 @@ const char *const OB_STR_BACKUP_SET_DESC_LIST = "backup_set_desc_list";
 const char *const OB_STR_BACKUP_PIECE_LIST = "backup_piece_list";
 const char *const OB_STR_LOG_PATH_LIST = "log_path_list";
 const char *const OB_STR_LS_META_INFOS = "ls_meta_infos";
+const char *const OB_STR_LS_ID_LIST_INFO = "ls_id_list_info";
 const char *const OB_STR_TRANSFER_SEQ = "transfer_seq";
 const char *const OB_STR_TRANSFER_SRC_LS_ID = "transfer_src_ls_id";
 const char *const OB_STR_TRANSFER_SRC_SEQ = "transfer_src_seq";
@@ -498,6 +499,7 @@ enum ObBackupFileType
   BACKUP_TABLE_LIST_META_FILE = 39,
   BACKUP_MVIEW_DEP_TABLET_LIST_FILE = 40,
   BACKUP_PARAMETERS_INFO = 41,
+  BACKUP_LS_ID_LIST_INFO = 42,
   // type <=255 is write header struct to disk directly
   // type > 255 is use serialization to disk
   BACKUP_MAX_DIRECT_WRITE_TYPE = 255,

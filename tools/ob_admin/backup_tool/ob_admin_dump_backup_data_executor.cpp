@@ -790,6 +790,12 @@ int ObAdminDumpBackupDataExecutor::do_execute_()
       }
       break;
     }
+    case share::ObBackupFileType::BACKUP_LS_ID_LIST_INFO: {
+      if (OB_FAIL(print_ls_id_list_info_())) {
+        STORAGE_LOG(WARN, "failed to print ls id list info file", K(ret));
+      }
+      break;
+    }
     case share::ObBackupFileType::BACKUP_TABLET_TO_LS_INFO: {
       if (OB_FAIL(print_tablet_to_ls_info_())) {
         STORAGE_LOG(WARN, "failed to print meta index file", K(ret));
@@ -1468,6 +1474,28 @@ int ObAdminDumpBackupDataExecutor::print_ls_attr_info_()
         STORAGE_LOG(WARN, "fail to dump ls attr info", K(ret), K(ls_attr));
       }
     }
+  }
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_ls_id_list_info_()
+{
+  int ret = OB_SUCCESS;
+  storage::ObBackupDataLSIdListDesc ls_id_list_desc;
+  if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
+    STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(
+                 ObString(backup_path_), ObString(storage_info_), ls_id_list_desc))) {
+    STORAGE_LOG(WARN, "fail to read ls id list info", K(ret), K(backup_path_), K(storage_info_));
+  } else {
+    PrintHelper::print_dump_title("ls_id_list info");
+    PrintHelper::print_dump_list_start("ls_id");
+    ARRAY_FOREACH_X(ls_id_list_desc.ls_id_array_, i, cnt, OB_SUCC(ret)) {
+      const share::ObLSID &ls_id = ls_id_list_desc.ls_id_array_.at(i);
+      PrintHelper::print_dump_list_value(ls_id.id(), i == cnt - 1);
+    }
+    PrintHelper::print_dump_list_end();
   }
   PrintHelper::print_end_line();
   return ret;

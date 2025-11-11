@@ -17,6 +17,7 @@
 #include "share/ob_dml_sql_splicer.h"
 #include "lib/container/ob_iarray.h"
 #include "share/backup/ob_backup_struct.h"
+#include "share/ob_ls_id.h"
 #include "share/tablet/ob_tablet_to_ls_operator.h"
 
 
@@ -202,6 +203,8 @@ public:
   static int get_statistics_info(common::ObISQLClient &proxy, const int64_t task_id, const uint64_t tenant_id, 
       const ObLSID &ls_id, const int64_t turn_id, const int64_t retry_id, ObIArray<ObBackupLSTaskInfoAttr> &task_infos);
   static int move_ls_task_info_to_his(common::ObISQLClient &proxy, const int64_t task_id, const uint64_t tenant_id);
+  static int get_distinct_ls_ids(common::ObISQLClient &proxy, const int64_t task_id,
+      const uint64_t tenant_id, ObIArray<ObLSID> &ls_ids);
 private:
   static int parse_ls_task_info_(sqlclient::ObMySQLResult &result, ObIArray<ObBackupLSTaskInfoAttr> &task_infos);
   static int do_parse_ls_task_info_(sqlclient::ObMySQLResult &result, ObBackupLSTaskInfoAttr &task_info);
