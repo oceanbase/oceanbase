@@ -93,7 +93,7 @@ int ObExprAIComplete::eval_ai_complete(const ObExpr &expr,
   } else if (arg_model_id->is_null() || arg_prompt->is_null()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("parameters is null", K(ret));
-    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "parameters is null");
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_complete, parameters is null");
     res.set_null();
   } else {
     ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
@@ -125,12 +125,12 @@ int ObExprAIComplete::eval_ai_complete(const ObExpr &expr,
       } else if (!ObAIFuncPromptObjectUtils::is_valid_prompt_object(prompt_object)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("prompt is not valid", K(ret));
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "prompt is not valid");
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_complete, prompt is not valid");
         res.set_null();
       } else if (!ObAIFuncJsonUtils::ob_is_json_array_all_str(static_cast<ObJsonArray *>(prompt_object->get_value(ObAIFuncPromptObjectUtils::prompt_args_key)))) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("prompt object is not support", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "prompt object is not support");
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "prompt object current is");
       } else if (OB_FAIL(ObAIFuncPromptObjectUtils::replace_all_str_args_in_template(temp_allocator, prompt_object, prompt))) {
         LOG_WARN("fail to replace all str args in template", K(ret));
       }
@@ -151,7 +151,7 @@ int ObExprAIComplete::eval_ai_complete(const ObExpr &expr,
     } else if (model_id.empty() || prompt.empty()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("model id or input is empty", K(ret));
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "model id or input is empty");
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_complete, model id or input is empty");
       res.set_null();
     }
 
@@ -291,7 +291,7 @@ int ObExprAIComplete::get_vector_params(const ObExpr &expr,
           } else if (prompt.empty()) {
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("input is empty", K(ret));
-            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "input is empty");
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_complete, input is empty");
             res_vec->set_null(idx);
           } else if (OB_FAIL(prompts.push_back(prompt))) {
             LOG_WARN("fail to push back prompt", K(ret), K(idx));

@@ -54,11 +54,11 @@ int ObExprAIRerank::calc_result_typeN(ObExprResType &type,
     if (!ob_is_string_tc(types_stack[MODEL_IDX].get_type())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid param type", K(ret), K(types_stack[MODEL_IDX]));
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "model key must be string type");
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_rerank, model key must be string type");
     } else if (!ob_is_string_tc(types_stack[QUERY_IDX].get_type())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid param type", K(ret), K(types_stack[QUERY_IDX]));
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "query must be string type");
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_rerank, query must be string type");
     } else {
       types_stack[MODEL_IDX].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
       types_stack[QUERY_IDX].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
@@ -82,7 +82,7 @@ int ObExprAIRerank::calc_result_typeN(ObExprResType &type,
       } else {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid param type", K(ret), K(types_stack[DOC_KEY_IDX]));
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "doc key must be string type");
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_rerank, doc key must be string type");
       }
     }
 
@@ -106,7 +106,7 @@ int ObExprAIRerank::eval_ai_rerank(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
   } else if (arg_model_id->is_null() || arg_query->is_null() || arg_documents->is_null()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("model id or query or documents is null", K(ret));
-    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "model id or query or documents is null");
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_rerank, model id or query or documents is null");
     res.set_null();
   } else {
     ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);

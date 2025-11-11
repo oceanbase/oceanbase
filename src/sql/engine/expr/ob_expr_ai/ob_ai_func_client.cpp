@@ -85,6 +85,7 @@ int ObAIFuncClient::init(common::ObIAllocator &allocator, const common::ObString
       LOG_WARN("failed to convert url to cstring", K(ret));
     } else {
       url_ = url_str.ptr();
+      LOG_DEBUG("ai_function, url_", K(url_str));
     }
     timeout_sec_ = std::min(std::max(1L, remain_timeout_us / 1000000), CURL_MAX_TIMEOUT_SEC);
     abs_timeout_ts_ = remain_timeout_us + ObTimeUtility::current_time();
@@ -97,6 +98,8 @@ int ObAIFuncClient::init(common::ObIAllocator &allocator, const common::ObString
         } else if (OB_ISNULL(header_list_ = curl_slist_append(header_list_, header_c_str.ptr()))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to append header", K(ret), K(i));
+        } else {
+          LOG_DEBUG("ai_function, header:", K(headers.at(i)));
         }
       }
     }
@@ -117,7 +120,10 @@ int ObAIFuncClient::error_handle(CURLcode res)
     }
     default:{
       ret = OB_CURL_ERROR;
-      LOG_WARN("curl error", K(res));
+      LOG_WARN("curl error, error code is ", K(res));
+      char http_code_str[1024] = "curl error, curl error code is ";
+      snprintf(http_code_str, sizeof(http_code_str), "curl error, curlerror code is %d", res);
+      FORWARD_USER_ERROR(ret, http_code_str);
       break;
     }
   }
@@ -145,7 +151,7 @@ int ObAIFuncClient::send_post(ObJsonObject *data, ObJsonObject *&response)
       LOG_WARN("fail to init easy handle", K(ret));
     }
     // retry if need
-    for (int64_t i = 0; OB_SUCC(ret) && i < max_retry_times_; ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i <= max_retry_times_; ++i) {
       http_code = 0;
       if (CURLE_OK != (res = curl_easy_perform(curl_))) {
         LOG_WARN("perform curl failed", K(res));
@@ -431,12 +437,13 @@ int ObAIFuncClient::init_easy_handle(CURL *curl, ObJsonObject *body, ObStringBuf
     LOG_WARN("fail to init curl", K(ret));
   }
   ObString body_str = j_buf.string();
+  LOG_DEBUG("ai_function, body_str", K(body_str));
   CURLcode res;
   const int64_t no_delay = 1;
   const int64_t no_signal = 1;
   if (OB_SUCC(ret)) {
     if (CURLE_OK != (res = curl_easy_setopt(curl, CURLOPT_URL, url_))) {
-      LOG_WARN("set url failed", K(res));
+      LOG_WARN("set url failed", K(res), K(url_));
     } else if (CURLE_OK !=(res = curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, ObAIFuncClient::write_callback))) {
       LOG_WARN("set write function failed", K(res));
     } else if (CURLE_OK !=(res = curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_buf))) {
@@ -448,19 +455,19 @@ int ObAIFuncClient::init_easy_handle(CURL *curl, ObJsonObject *body, ObStringBuf
     } else if (CURLE_OK !=(res = curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 10000))) {
       LOG_WARN("set connection timeout ms failed", K(res));
     } else if (CURLE_OK != (res = curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout_sec_))) {
-      LOG_WARN("set timeout failed", K(res));
+      LOG_WARN("set timeout failed", K(res), K(timeout_sec_));
     } else if (CURLE_OK !=(res = curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_list_))) {
       LOG_WARN("set headers failed", K(res));
     } else if (CURLE_OK !=(res = curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body_str.ptr()))) {
-      LOG_WARN("set post failed", K(res));
+      LOG_WARN("set post failed", K(res), K(body_str.ptr()));
     } else if (CURLE_OK != (res = curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE,body_str.length()))) {
-      LOG_WARN("set post failed", K(res));
+      LOG_WARN("set post failed", K(res), K(body_str.length()));
     } else if (CURLE_OK != (res = curl_easy_setopt(curl, CURLOPT_POST, 1))) {
       LOG_WARN("set post method failed", K(res));
     }
     if (CURLE_OK != res) {
       ret = OB_CURL_ERROR;
-      LOG_WARN("fail to set curl options", K(res), K(res));
+      LOG_WARN("fail to set curl options", K(ret), K(res), K(body_str.ptr()), K(timeout_sec_));
     }
   }
   return ret;
@@ -500,6 +507,8 @@ size_t ObAIFuncClient::write_callback(void *contents, size_t size, size_t nmemb,
     result.reserve(total_size);
     if (OB_FAIL(result.append(static_cast<const char *>(contents), total_size, 0))) {
       LOG_WARN("failed to append to result", K(ret));
+    } else {
+      LOG_DEBUG("ai_function, http response", K(result.string()));
     }
   }
   return OB_SUCC(ret) ? total_size : 0;

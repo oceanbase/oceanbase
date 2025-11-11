@@ -64,7 +64,7 @@ int ObExprAIPrompt::calc_result_typeN(ObExprResType &type,
     } else if (ob_is_json(types_stack[i].get_type())) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("json type is not supported", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "json type is not supported");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "json type current is");
     } else {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("invalid data type", K(ret), K(types_stack[i].get_type()));
@@ -121,7 +121,7 @@ int ObExprAIPrompt::eval_ai_prompt(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
       } else if (ob_is_json(arg->datum_meta_.type_)) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("json type is not supported", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "json type is not supported");
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "json type current is");
       } else if (datum->is_null()) {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_WARN("invalid data type", K(ret), K(arg->datum_meta_.type_));
