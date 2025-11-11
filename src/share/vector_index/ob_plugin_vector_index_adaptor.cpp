@@ -439,7 +439,7 @@ ObPluginVectorIndexAdaptor::ObPluginVectorIndexAdaptor(common::ObIAllocator *all
     rowkey_vid_table_id_(OB_INVALID_ID), vid_rowkey_table_id_(OB_INVALID_ID),
     ref_cnt_(0), idle_cnt_(0), mem_check_cnt_(0), is_mem_limited_(false), all_vsag_use_mem_(nullptr), allocator_(allocator),
     parent_mem_ctx_(entity), index_identity_(), follower_sync_statistics_(), is_in_opt_task_(false), need_be_optimized_(false), extra_info_column_count_(0),
-    query_lock_(), reload_finish_(false), last_embedding_time_(ObTimeUtility::fast_current_time()), is_need_vid_(true)
+    query_lock_(), reload_finish_(false), last_embedding_time_(ObTimeUtility::fast_current_time()), is_need_vid_(true), sparse_vector_type_(nullptr)
 {
 }
 
@@ -464,6 +464,8 @@ ObPluginVectorIndexAdaptor::~ObPluginVectorIndexAdaptor()
       && OB_FAIL(try_free_memdata_resource(VIRT_SNAP, snap_data_, allocator_, tenant_id_))) {
     LOG_WARN("failed to free snap memdata", K(ret), KPC(this));
   }
+
+  free_sparse_vector_type_mem();
 
   // use another memdata struct for the following?
   if (OB_NOT_NULL(allocator_)) {
@@ -1423,6 +1425,30 @@ int ObPluginVectorIndexAdaptor::handle_insert_embedded_table_rows(blocksstable::
 
   }
   return ret;
+}
+
+void ObPluginVectorIndexAdaptor::free_sparse_vector_type_mem()
+{
+  if (OB_NOT_NULL(allocator_)) {
+    if (sparse_vector_type_) {
+      if (sparse_vector_type_->key_type_) {
+        ObCollectionArrayType *key_type = (ObCollectionArrayType *)sparse_vector_type_->key_type_;
+        if (key_type->element_type_) {
+          allocator_->free(key_type->element_type_);
+        }
+        allocator_->free(sparse_vector_type_->key_type_);
+      }
+      if(sparse_vector_type_->value_type_) {
+        ObCollectionArrayType *vector_type = (ObCollectionArrayType *)sparse_vector_type_->value_type_;
+        if(vector_type->element_type_) {
+          allocator_->free(vector_type->element_type_);
+        }
+        allocator_->free(sparse_vector_type_->value_type_);
+      }
+      allocator_->free(sparse_vector_type_);
+      sparse_vector_type_ = nullptr;
+    }
+  }
 }
 
 int ObPluginVectorIndexAdaptor::init_sparse_vector_type()
