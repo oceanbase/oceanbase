@@ -78,8 +78,14 @@ int value_print_help(char *buf, const int64_t buf_len, int64_t &pos, uint64_t va
       time_t t = static_cast<time_t>(usec);
       struct tm tm;
       localtime_r(&t, &tm);
+      if (as_json_format) {
+        OZ(J_QUOTE());
+      }
       pos += strftime(buf + pos, buf_len - pos, "%Y-%m-%d %H:%M:%S", &tm);
       OZ(BUF_PRINTF(".%lu", nsec));
+      if (as_json_format) {
+        OZ(J_QUOTE());
+      }
     }
     break;
   }

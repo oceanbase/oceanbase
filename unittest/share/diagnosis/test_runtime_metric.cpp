@@ -96,7 +96,7 @@ TEST_F(ObRuntimeMetricTest, test_counter)
   ASSERT_EQ(1753983318743793, timestamp_gauge.value());
   timestamp_gauge.to_format_json(&alloc, json);
   cout << json << endl;
-  ASSERT_STREQ("{\"open time\":2025-08-01 01:35:18.743793}", json);
+  ASSERT_STREQ("{\"open time\":\"2025-08-01 01:35:18.743793\"}", json);
 }
 
 TEST_F(ObRuntimeMetricTest, test_gauge)

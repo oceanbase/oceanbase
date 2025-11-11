@@ -285,6 +285,33 @@ void stk1()
   INC_METRIC_VAL(ObMetricId::OUTPUT_BATCHES, 100);
 }
 
+void stk0_0()
+{
+  int ret = OB_SUCCESS;
+  ObProfileSwitcher switcher(ObProfileId::PHY_LIMIT);
+  INC_METRIC_VAL(ObMetricId::OUTPUT_BATCHES, 100);
+  INC_METRIC_VAL(ObMetricId::OUTPUT_ROWS, 100);
+  stk1();
+}
+
+void stk0_1()
+{
+  int ret = OB_SUCCESS;
+  ObProfileSwitcher switcher(ObProfileId::PHY_SUBPLAN_SCAN);
+  INC_METRIC_VAL(ObMetricId::OUTPUT_BATCHES, 100);
+  INC_METRIC_VAL(ObMetricId::OUTPUT_ROWS, 100);
+  stk1();
+}
+
+void stk0_2()
+{
+  int ret = OB_SUCCESS;
+  ObProfileSwitcher switcher(ObProfileId::PHY_HASH_GROUP_BY);
+  INC_METRIC_VAL(ObMetricId::OUTPUT_BATCHES, 100);
+  INC_METRIC_VAL(ObMetricId::OUTPUT_ROWS, 100);
+  stk1();
+}
+
 TEST_F(ObRuntimeProfileTest, test_deep_profile_tree)
 {
   int ret = OB_SUCCESS;
@@ -299,18 +326,26 @@ TEST_F(ObRuntimeProfileTest, test_deep_profile_tree)
   ObOpProfile<> op_profile(ObProfileId::PHY_HASH_JOIN, &arena_alloc);
   ObProfileSwitcher switcher(&op_profile);
   INC_METRIC_VAL(ObMetricId::OUTPUT_BATCHES, 100);
-  stk1();
+  stk0_0();
+  stk0_1();
+  stk0_2();
   INC_METRIC_VAL(ObMetricId::OUTPUT_ROWS, 100);
 
   get_current_profile()->to_format_json(&arena_alloc, json);
   cout << json << endl;
-  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"output rows\":100, \"PHY_JOIN_FILTER\":{\"filtered row count\":100, \"PHY_GRANULE_ITERATOR\":{\"output rows\":100, \"PHY_TABLE_SCAN\":{\"output rows\":100}, \"PHY_INSERT\":{}}}}}", json);
+  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"output rows\":100, \"PHY_LIMIT\":{\"output rows\":100, \"PHY_JOIN_FILTER\":{\"filtered row count\":100, \"PHY_GRANULE_ITERATOR\":{\"output rows\":100, \"PHY_TABLE_SCAN\":{\"output rows\":100}, \"PHY_INSERT\":{}}}}, \"PHY_SUBPLAN_SCAN\":{\"output rows\":100, \"PHY_JOIN_FILTER\":{\"filtered row count\":100, \"PHY_GRANULE_ITERATOR\":{\"output rows\":100, \"PHY_TABLE_SCAN\":{\"output rows\":100}, \"PHY_INSERT\":{}}}}, \"PHY_HASH_GROUP_BY\":{\"output rows\":100, \"PHY_JOIN_FILTER\":{\"filtered row count\":100, \"PHY_GRANULE_ITERATOR\":{\"output rows\":100, \"PHY_TABLE_SCAN\":{\"output rows\":100}, \"PHY_INSERT\":{}}}}}}", json);
 
   get_current_profile()->to_persist_profile(persist_profile, persist_profile_size, &arena_alloc);
   convert_persist_profile_to_realtime(persist_profile, persist_profile_size, new_profile, &arena_alloc);
   new_profile->to_format_json(&arena_alloc, persist_profile_json, true, metric::Level::AD_HOC);
   cout << persist_profile_json << endl;
-  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"output batches\":100, \"output rows\":100, \"PHY_JOIN_FILTER\":{\"filtered row count\":100, \"skipped rows\":100, \"output batches\":100, \"PHY_GRANULE_ITERATOR\":{\"output rows\":100, \"skipped rows\":100, \"output batches\":100, \"PHY_TABLE_SCAN\":{\"output rows\":100, \"skipped rows\":100}, \"PHY_INSERT\":{\"skipped rows\":100, \"output batches\":100}}}}}", persist_profile_json);
+  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"output batches\":100, \"output rows\":100, \"PHY_LIMIT\":{\"output batches\":100, \"output rows\":100, \"PHY_JOIN_FILTER\":{\"filtered row count\":100, \"skipped rows\":100, \"output batches\":100, \"PHY_GRANULE_ITERATOR\":{\"output rows\":100, \"skipped rows\":100, \"output batches\":100, \"PHY_TABLE_SCAN\":{\"output rows\":100, \"skipped rows\":100}, \"PHY_INSERT\":{\"skipped rows\":100, \"output batches\":100}}}}, \"PHY_SUBPLAN_SCAN\":{\"output batches\":100, \"output rows\":100, \"PHY_JOIN_FILTER\":{\"filtered row count\":100, \"skipped rows\":100, \"output batches\":100, \"PHY_GRANULE_ITERATOR\":{\"output rows\":100, \"skipped rows\":100, \"output batches\":100, \"PHY_TABLE_SCAN\":{\"output rows\":100, \"skipped rows\":100}, \"PHY_INSERT\":{\"skipped rows\":100, \"output batches\":100}}}}, \"PHY_HASH_GROUP_BY\":{\"output batches\":100, \"output rows\":100, \"PHY_JOIN_FILTER\":{\"filtered row count\":100, \"skipped rows\":100, \"output batches\":100, \"PHY_GRANULE_ITERATOR\":{\"output rows\":100, \"skipped rows\":100, \"output batches\":100, \"PHY_TABLE_SCAN\":{\"output rows\":100, \"skipped rows\":100}, \"PHY_INSERT\":{\"skipped rows\":100, \"output batches\":100}}}}}}", persist_profile_json);
+  const char *pretty_text = nullptr;
+  new_profile->pretty_print(&arena_alloc, pretty_text, "", "  ",
+                            metric::Level::AD_HOC);
+  cout << pretty_text << endl;
+  ASSERT_STREQ("PHY_HASH_JOIN \n  output batches:100\n  output rows:100\n  PHY_LIMIT \n    output batches:100\n    output rows:100\n    PHY_JOIN_FILTER \n      filtered row count:100\n      skipped rows:100\n      output batches:100\n      PHY_GRANULE_ITERATOR \n        output rows:100\n        skipped rows:100\n        output batches:100\n        PHY_TABLE_SCAN \n          output rows:100\n          skipped rows:100\n        PHY_INSERT \n          skipped rows:100\n          output batches:100\n  PHY_SUBPLAN_SCAN \n    output batches:100\n    output rows:100\n    PHY_JOIN_FILTER \n      filtered row count:100\n      skipped rows:100\n      output batches:100\n      PHY_GRANULE_ITERATOR \n        output rows:100\n        skipped rows:100\n        output batches:100\n        PHY_TABLE_SCAN \n          output rows:100\n          skipped rows:100\n        PHY_INSERT \n          skipped rows:100\n          output batches:100\n  PHY_HASH_GROUP_BY \n    output batches:100\n    output rows:100\n    PHY_JOIN_FILTER \n      filtered row count:100\n      skipped rows:100\n      output batches:100\n      PHY_GRANULE_ITERATOR \n        output rows:100\n        skipped rows:100\n        output batches:100\n        PHY_TABLE_SCAN \n          output rows:100\n          skipped rows:100\n        PHY_INSERT \n          skipped rows:100\n          output batches:100", pretty_text);
+
 }
 
 void prepare_profile_item(int64_t op_id, int64_t plan_depth, ObOpProfile<> *profile,
@@ -440,6 +475,8 @@ TEST_F(ObRuntimeProfileTest, test_pretty_print_profile_incomplete)
   ASSERT_STREQ("0.PHY_HASH_JOIN \n\xE2\x94\x82  output batches:100 [min=100, max=100]\n\xE2\x94\x82  output rows:100 [min=100, max=100]\n\xE2\x94\x9C\xE2\x94\x80" "1.PHY_JOIN_FILTER \n\xE2\x94\x82   output batches:100 [min=100, max=100]\n\xE2\x94\x82   output rows:100 [min=100, max=100]\n\xE2\x94\x82 \xE2\x94\x82 3.PHY_TABLE_SCAN \n\xE2\x94\x82 \xE2\x94\x82   output batches:100 [min=100, max=100]\n\xE2\x94\x82 \xE2\x94\x82   output rows:100 [min=100, max=100]\n\xE2\x94\x94\xE2\x94\x80" "4.PHY_JOIN_FILTER \n    output batches:100 [min=100, max=100]\n    output rows:100 [min=100, max=100]\n  \xE2\x94\x82 6.PHY_TABLE_SCAN \n  \xE2\x94\x82   output batches:100 [min=100, max=100]\n  \xE2\x94\x82   output rows:100 [min=100, max=100]\n", buf);
   ASSERT_EQ(0, ret);
 }
+
+
 
 int main(int argc, char **argv)
 {
