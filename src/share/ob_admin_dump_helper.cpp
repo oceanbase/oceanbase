@@ -233,6 +233,7 @@ void ObAdminMutatorStringArg::reset()
   writer_ptr_ = nullptr;
   filter_.reset();
   log_stat_ = NULL;
+  dir_path_ = nullptr;
 }
 
 void ObAdminMutatorStringArg::reset_buf()
@@ -252,6 +253,7 @@ ObAdminMutatorStringArg &ObAdminMutatorStringArg::operator=(const ObAdminMutator
   writer_ptr_ = rhs.writer_ptr_;
   filter_ = rhs.filter_;
   log_stat_ = rhs.log_stat_;
+  dir_path_ = rhs.dir_path_;
   return *this;
 }
 

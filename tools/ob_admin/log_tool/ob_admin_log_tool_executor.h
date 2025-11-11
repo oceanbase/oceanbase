@@ -33,6 +33,7 @@ private:
   int dump_tx_format(int argc, char **argv);
   int dump_filter(int argc, char **argv);
   int stat(int argc, char **argv);
+  int dump_inc_major_redo_log(int argc, char **argv);
   int parse_options(int argc, char *argv[]);
   int dump_all_blocks_(int argc, char **argv, share::LogFormatFlag flag);
   int dump_single_block_(const char *block_path,
@@ -54,6 +55,7 @@ private:
   int64_t decompress_buf_size_;
   share::ObAdminLogDumpFilter filter_;
   bool is_ob_log_service_;
+  char dir_path_[common::MAX_PATH_SIZE];
 };
 }
 }

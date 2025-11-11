@@ -31,6 +31,7 @@ enum class LogFormatFlag
   STAT_FORMAT = 3,
   META_FORMAT = 4,
   DECOMPRESS_FORMAT = 5,
+  BLOCK_FORMAT = 6,
 };
 
 class ObAdminLogDumperInterface
@@ -173,7 +174,7 @@ public:
   void reset_buf();
   ObAdminMutatorStringArg &operator= (const ObAdminMutatorStringArg &rhs);
   TO_STRING_KV(KP_(buf), K_(buf_len), KP(decompress_buf_), K(decompress_buf_len_), K_(pos), K(flag_), K(filter_),
-               KPC(log_stat_));
+               KPC(log_stat_), KP(dir_path_));
 public:
   char *buf_;
   int64_t buf_len_;
@@ -186,6 +187,7 @@ public:
   ObAdminLogDumperInterface *writer_ptr_;
   ObAdminLogDumpFilter filter_;
   ObLogStat *log_stat_;
+  char *dir_path_;
 };
 
 } // namespace share
