@@ -385,7 +385,8 @@ public:
         new_adapter_(nullptr),
         mem_attr_(mem_attr),
         allocator_(mem_attr),
-        has_replace_old_adapter_(false)
+        has_replace_old_adapter_(false),
+        all_finished_(false)
   {}
   ObVecIndexIAsyncTask(const uint64_t tenant_id, const ObLSID &ls_id, ObPluginVectorIndexAdaptor *adapter) : tenant_id_(tenant_id), ls_id_(ls_id), new_adapter_(adapter) {}
   virtual ~ObVecIndexIAsyncTask() {}
@@ -398,6 +399,7 @@ public:
   bool invalid_snapshot_column_ids() {
     return vector_vid_col_idx_ == -1 || vector_col_idx_ == -1 || vector_key_col_idx_ == -1 || vector_data_col_idx_ == -1 || vector_visible_col_idx_ == -1;
   }
+  bool all_finished() { return all_finished_; }
   virtual void check_task_free() {}
   virtual int do_work() = 0;
 
@@ -424,6 +426,7 @@ protected:
   ObMemAttr mem_attr_;
   common::ObArenaAllocator allocator_;
   bool has_replace_old_adapter_;
+  bool all_finished_;
   DISALLOW_COPY_AND_ASSIGN(ObVecIndexIAsyncTask);
 };
 

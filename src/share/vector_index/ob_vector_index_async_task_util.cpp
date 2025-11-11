@@ -1605,7 +1605,7 @@ void ObVecIndexAsyncTaskHandler::handle(void *task)
     }
   }
   if (OB_NOT_NULL(async_task)
-      && (async_task->get_task_type() != ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_HYBRID_VECTOR_EMBEDDING || async_task->get_task_ctx()->task_status_.all_finished_)) {
+      && (async_task->get_task_type() != ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_HYBRID_VECTOR_EMBEDDING || async_task->all_finished())) {
     handle_ls_process_task_cnt(async_task->get_ls_id(), false);
     dec_async_task_ref();
   }
