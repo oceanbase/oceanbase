@@ -1899,6 +1899,7 @@ public:
                                     const MacroBlockId &file_id, const char *object_storage_root_dir,
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
+  virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
   virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
   virtual int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const;
 
@@ -1931,6 +1932,7 @@ public:
                                     const MacroBlockId &file_id, const char *object_storage_root_dir,
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
+  virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
   virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
   virtual int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const;
 
