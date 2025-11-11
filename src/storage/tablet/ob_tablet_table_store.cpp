@@ -874,7 +874,10 @@ int ObTabletTableStore::calculate_ddl_read_tables(
 {
   int ret = OB_SUCCESS;
   base_table = nullptr;
-  if (ddl_sstables_.count() > 0
+  if (GCTX.is_shared_storage_mode()) {
+    ret = OB_REPLICA_NOT_READABLE;
+    LOG_WARN("shared storage mode don't need to calculate ddl read tables", K(ret), K(tablet));
+  } else if (ddl_sstables_.count() > 0
       && OB_NOT_NULL(ddl_sstables_.at(0))
       && ddl_sstables_.at(0)->is_ddl_merge_sstable()
       && !ObDDLUtil::need_rescan_column_store(tablet.get_tablet_meta().ddl_data_format_version_)) {

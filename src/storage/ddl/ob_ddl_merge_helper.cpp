@@ -1713,6 +1713,10 @@ int ObSSDDLMergeHelper::update_major_table_store(ObDDLTabletMergeDagParamV2 &dag
     LOG_INFO("major already exist on shared tablet, skip update shared tablet", K(ret), K(table_key), K(target_ls_id));
   } else if (OB_FAIL(ObSSDDLUtil::update_shared_tablet_table_store(ls_handle, *out_sstable, *tablet_param->storage_schema_, dag_merge_param.ddl_task_param_.tenant_data_version_, transfer_scn))) {
     LOG_WARN("failed to update shared tablet", K(ret), K(target_ls_id), K(target_tablet_id));
+  }
+
+  /* cannot skip write finish log, even if major already exist */
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(write_ddl_finish_log(dag_merge_param, out_sstable))) {
     LOG_WARN("write ddl finish log fail", K(ret));
   } else if (OB_FAIL(MTL(observer::ObTabletTableUpdater*)->submit_tablet_update_task(target_ls_id, target_tablet_id))) {
