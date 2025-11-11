@@ -30,6 +30,7 @@ using namespace compaction;
 namespace blocksstable
 {
 ERRSIM_POINT_DEF(EN_NO_NEED_MERGE_MICRO_BLK);
+ERRSIM_POINT_DEF(EN_NO_SHARED_MACRO);
 
 class ObIntConstUniform
 {
@@ -2111,6 +2112,13 @@ bool ObMacroBlockWriter::check_can_flush_small_sstable(const bool is_flush_for_l
   const int64_t macro_size = macro_block.get_data_size();
   const int64_t align_macro_size = upper_align(macro_size, DIO_READ_ALIGN_SIZE);
   ObSSTableIndexBuilder *sstable_index_builder = OB_ISNULL(data_store_desc_) ? nullptr : data_store_desc_->sstable_index_builder_;
+#ifdef ERRSIM
+  // disable shared macro block in merge progress
+  if (EN_NO_SHARED_MACRO) {
+    FLOG_INFO("ERRSIM EN_NO_SHARED_MACRO");
+    return false;
+  }
+#endif
   return is_flush_for_last_block
         && OB_NOT_NULL(sstable_index_builder)
         && is_alloc_block_needed()
