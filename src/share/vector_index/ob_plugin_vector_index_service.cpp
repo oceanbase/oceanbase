@@ -894,6 +894,7 @@ int ObPluginVectorIndexService::release_vector_index_tmp_info(const int64_t task
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr", K(ret), K(task_id), K(tmp_info));
   } else {
+    tmp_info->reset();
     tmp_info->~ObVectorIndexTmpInfo();
     allocator_.free(tmp_info);
     tmp_info = nullptr;

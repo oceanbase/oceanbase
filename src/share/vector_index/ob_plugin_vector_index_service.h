@@ -320,6 +320,7 @@ struct ObVectorIndexTmpInfo final
 public:
   ObVectorIndexTmpInfo() : snapshot_version_(0), schema_version_(0), ret_code_(OB_NOT_INIT), ddl_slice_info_(), adapter_(nullptr) {}
   ~ObVectorIndexTmpInfo() {}
+  void reset() { ddl_slice_info_.reset(); }
   TO_STRING_KV(K_(ddl_slice_info), KP_(adapter), K_(snapshot_version), K_(schema_version), K_(ret_code));
 
 public:
