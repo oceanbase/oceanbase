@@ -111,15 +111,7 @@ int ObDDLReplayExecutor::check_need_replay_ddl_inc_log_(
     LOG_WARN("fail to check need replay", K(ret), KP(ls), K(tablet_handle));
   } else if (!need_replay) {
     // do nothing
-  } else if (tablet->get_tablet_meta().ha_status_.is_restore_status_empty()) {
-    ret = OB_EAGAIN;
-    need_replay = false;
-    (void) ls->get_ls_restore_handler()->try_record_one_tablet_to_restore(tablet->get_tablet_meta().tablet_id_);
-    if (REACH_COUNT_INTERVAL(1000L)) {
-      LOG_INFO("can not replay ddl log, need wait tablet restore status change to remote, prevent sstable array explosion",
-          K(tablet_handle), "tablet_meta", tablet->get_tablet_meta());
-    }
-  }else if (is_incremental_minor_direct_load(direct_load_type)) {
+  } else if (is_incremental_minor_direct_load(direct_load_type)) {
     if (scn <= tablet->get_tablet_meta().clog_checkpoint_scn_) {
       need_replay = false;
       if (REACH_COUNT_INTERVAL(1000L)) {
@@ -133,6 +125,17 @@ int ObDDLReplayExecutor::check_need_replay_ddl_inc_log_(
       if (REACH_COUNT_INTERVAL(1000L)) {
         LOG_INFO("no need to replay ddl inc log, because the log ts is less than the ddl checkpoint ts",
             K(tablet_handle), K(scn), "ddl_checkpoint_ts", tablet->get_tablet_meta().ddl_checkpoint_scn_);
+      }
+    }
+  }
+  if (OB_SUCC(ret) && need_replay) {
+    if (tablet->get_tablet_meta().ha_status_.is_restore_status_empty()) {
+      ret = OB_EAGAIN;
+      need_replay = false;
+      (void) ls->get_ls_restore_handler()->try_record_one_tablet_to_restore(tablet->get_tablet_meta().tablet_id_);
+      if (REACH_COUNT_INTERVAL(1000L)) {
+        LOG_INFO("can not replay ddl log, need wait tablet restore status change to remote, prevent sstable array explosion",
+            K(tablet_handle), "tablet_meta", tablet->get_tablet_meta());
       }
     }
   }
