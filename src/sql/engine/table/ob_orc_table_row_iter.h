@@ -519,7 +519,7 @@ private:
     ObFilePreBuffer file_prebuffer_;
     common::ObArenaAllocator temp_allocator_; // used for lob filter pushdown
     common::ObArrayWrap<ObFilePreBuffer::ColumnRangeSlices *> column_range_slices_;
-    ObLakeTableReaderMetrics reader_metrics_;
+    ObLakeTableORCReaderMetrics reader_metrics_;
     sql::ColumnIndexType column_index_type_;
     bool is_col_name_case_sensitive_;
 };

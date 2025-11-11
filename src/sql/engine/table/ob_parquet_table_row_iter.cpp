@@ -73,11 +73,11 @@ int ObParquetTableRowIterator::init(const storage::ObTableScanParam *scan_param)
                                           scan_param->ext_tbl_filter_pd_level_,
                                           scan_param->column_ids_,
                                           eval_ctx));
-  OZ (reader_profile_.register_metrics(&reader_metrics_, "READER_METRICS"));
-  OZ (data_access_driver_.register_io_metrics(reader_profile_, "IO_METRICS"));
-  OZ (file_prebuffer_.register_metrics(reader_profile_, "PREBUFFER_METRICS"));
-  OZ (eager_data_access_driver_.register_io_metrics(reader_profile_, "EAGER_IO_METRICS"));
-  OZ (eager_file_prebuffer_.register_metrics(reader_profile_, "EAGER_PREBUFFER_METRICS"));
+  OZ(reader_profile_.register_metrics(&reader_metrics_, READER_METRICS_LABEL));
+  OZ(data_access_driver_.register_io_metrics(reader_profile_, IO_METRICS_LABEL));
+  OZ(file_prebuffer_.register_metrics(reader_profile_, PREBUFFER_METRICS_LABEL));
+  OZ(eager_data_access_driver_.register_io_metrics(reader_profile_, EAGER_IO_METRICS_LABEL));
+  OZ(eager_file_prebuffer_.register_metrics(reader_profile_, EAGER_PREBUFFER_METRICS_LABEL));
 
   if (OB_SUCC(ret)) {
     if (!scan_param->ext_enable_late_materialization_
@@ -633,8 +633,8 @@ int ObParquetTableRowIterator::create_file_reader(const ObString& data_path,
       LOG_WARN("failed to open eager file", K(ret));
     } else {
       file_reader = parquet::ParquetFileReader::Open(cur_file, read_props_);
-      eager_file_reader_ = parquet::ParquetFileReader::Open(eager_file, read_props_);
-      if (!file_reader || !eager_file_reader_) {
+      eager_file_reader = parquet::ParquetFileReader::Open(eager_file, read_props_);
+      if (!file_reader || !eager_file_reader) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("create row reader failed", K(ret));
       } else {

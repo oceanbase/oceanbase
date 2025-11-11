@@ -57,7 +57,7 @@ struct ReadPages
             int64_t &cur_eager_id,
             common::ObIArray<int64_t> &read_row_counts,
             common::ObIArray<ObArray<std::pair<int64_t, int64_t>> *> &page_skip_ranges,
-            ObLakeTableReaderMetrics &reader_metrics)
+            ObLakeTableParquetReaderMetrics &reader_metrics)
             : cur_col_id_(cur_col_id),
               cur_eager_id_(cur_eager_id),
               read_row_counts_(read_row_counts),
@@ -90,7 +90,7 @@ struct ReadPages
   int64_t &cur_eager_id_;
   common::ObIArray<int64_t> &read_row_counts_;
   common::ObIArray<ObArray<std::pair<int64_t, int64_t>> *> &page_skip_ranges_;
-  ObLakeTableReaderMetrics &reader_metrics_;
+  ObLakeTableParquetReaderMetrics &reader_metrics_;
 };
 
 
@@ -494,7 +494,7 @@ private:
   common::ObFixedArray<ObArray<std::pair<int64_t, int64_t>> *, ObIAllocator> page_skip_ranges_;
   ParquetStatInfo stat_;
   FilterCalcMode mode_;
-  ObLakeTableReaderMetrics reader_metrics_;
+  ObLakeTableParquetReaderMetrics reader_metrics_;
   sql::ColumnIndexType column_index_type_;
   bool is_col_name_case_sensitive_;
 };
