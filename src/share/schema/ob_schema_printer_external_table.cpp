@@ -283,6 +283,13 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
         OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  COLUMN_INDEX_TYPE = '%.*s',",
                                 static_cast<int>(STRLEN(column_index_type)), column_index_type))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print column index type", K(ret));
+      } else if (orc.column_name_case_sensitive_
+                 && OB_FAIL(databuff_printf(buf,
+                                            buf_len,
+                                            pos,
+                                            "\n  COLUMN_NAME_CASE_SENSITIVE = %s,",
+                                            orc.column_name_case_sensitive_ ? "TRUE" : "FALSE"))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print column name case sensitive", K(ret));
       }
     } else if (OB_SUCC(ret) && ObExternalFileFormat::PARQUET_FORMAT == format.format_type_) {
       const ObParquetGeneralFormat &parquet = format.parquet_format_;
@@ -291,6 +298,14 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
         OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  COLUMN_INDEX_TYPE = '%.*s',",
                                 static_cast<int>(STRLEN(column_index_type)), column_index_type))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print column index type", K(ret));
+      } else if (parquet.column_name_case_sensitive_
+                 && OB_FAIL(
+                     databuff_printf(buf,
+                                     buf_len,
+                                     pos,
+                                     "\n  COLUMN_NAME_CASE_SENSITIVE = %s,",
+                                     parquet.column_name_case_sensitive_ ? "TRUE" : "FALSE"))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print column name case sensitive", K(ret));
       }
     }
     if (OB_SUCC(ret)) {

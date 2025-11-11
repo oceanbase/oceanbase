@@ -233,12 +233,14 @@ struct ObParquetGeneralFormat {
   ObParquetGeneralFormat () :
     row_group_size_(256LL * 1024 * 1024), /* default 256 MB */
     compress_type_index_(0), /* default UNCOMPRESSED */
-    column_index_type_(sql::ColumnIndexType::NAME)
+    column_index_type_(sql::ColumnIndexType::NAME),
+    column_name_case_sensitive_(false)
   {}
   static constexpr const char *OPTION_NAMES[] = {
     "ROW_GROUP_SIZE",
     "COMPRESSION",
-    "COLUMN_INDEX_TYPE"
+    "COLUMN_INDEX_TYPE",
+    "COLUMN_NAME_CASE_SENSITIVE"
   };
   static constexpr const char *COMPRESSION_ALGORITHMS[] = {
     "UNCOMPRESSED",
@@ -257,9 +259,13 @@ struct ObParquetGeneralFormat {
   int64_t row_group_size_;
   int64_t compress_type_index_;
   sql::ColumnIndexType column_index_type_;
+  bool column_name_case_sensitive_;
   int to_json_kv_string(char* buf, const int64_t buf_len, int64_t &pos) const;
   int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
-  TO_STRING_KV(K_(row_group_size), K_(compress_type_index), K_(column_index_type));
+  TO_STRING_KV(K_(row_group_size),
+               K_(compress_type_index),
+               K_(column_index_type),
+               K_(column_name_case_sensitive));
   OB_UNIS_VERSION(1);
 };
 
@@ -270,7 +276,8 @@ struct ObOrcGeneralFormat {
     compression_block_size_(256LL * 1024), /* default 256 KB */
     row_index_stride_(10000),
     column_use_bloom_filter_(),
-    column_index_type_(sql::ColumnIndexType::NAME)
+    column_index_type_(sql::ColumnIndexType::NAME),
+    column_name_case_sensitive_(false)
   {}
   static constexpr const char *OPTION_NAMES[] = {
     "STRIPE_SIZE",
@@ -278,7 +285,8 @@ struct ObOrcGeneralFormat {
     "COMPRESSION_BLOCK_SIZE",
     "ROW_INDEX_STRIDE",
     "COLUMN_USE_BLOOM_FILTER",
-    "COLUMN_INDEX_TYPE"
+    "COLUMN_INDEX_TYPE",
+    "COLUMN_NAME_CASE_SENSITIVE"
   };
   static constexpr const char *COMPRESSION_ALGORITHMS[] = {
     "UNCOMPRESSED",
@@ -296,11 +304,16 @@ struct ObOrcGeneralFormat {
   int64_t row_index_stride_;
   common::ObArrayWrap<int64_t> column_use_bloom_filter_;
   sql::ColumnIndexType column_index_type_;
-
+  bool column_name_case_sensitive_;
   int to_json_kv_string(char* buf, const int64_t buf_len, int64_t &pos) const;
   int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
-  TO_STRING_KV(K(stripe_size_), K(compress_type_index_), K(compression_block_size_),
-              K(row_index_stride_), K(column_use_bloom_filter_), K(column_index_type_));
+  TO_STRING_KV(K(stripe_size_),
+               K(compress_type_index_),
+               K(compression_block_size_),
+               K(row_index_stride_),
+               K(column_use_bloom_filter_),
+               K(column_index_type_),
+               K(column_name_case_sensitive_));
   OB_UNIS_VERSION(1);
 };
 

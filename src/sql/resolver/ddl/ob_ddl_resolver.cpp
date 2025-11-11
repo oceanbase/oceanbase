@@ -113,6 +113,7 @@ ObDDLResolver::ObDDLResolver(ObResolverParams &params)
     auto_increment_cache_size_(0),
     external_table_format_type_(ObExternalFileFormat::INVALID_FORMAT),
     column_index_type_(sql::ColumnIndexType::NAME),
+    column_name_case_sensitive_(false),
     mocked_external_table_column_ids_(),
     index_params_(),
     table_organization_(ObTableOrganizationType::OB_ORGANIZATION_INVALID),
@@ -3792,8 +3793,10 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
       format.format_type_ = external_table_format_type_;
       if (format.format_type_ == ObExternalFileFormat::FormatType::ORC_FORMAT) {
         format.orc_format_.column_index_type_ = column_index_type_;
+        format.orc_format_.column_name_case_sensitive_ = column_name_case_sensitive_;
       } else if (format.format_type_ == ObExternalFileFormat::FormatType::PARQUET_FORMAT) {
         format.parquet_format_.column_index_type_ = column_index_type_;
+        format.parquet_format_.column_name_case_sensitive_ = column_name_case_sensitive_;
       }
       ObString mock_gen_column_str;
       if (OB_FAIL(format.mock_gen_column_def(column, *allocator_, mock_gen_column_str))) {

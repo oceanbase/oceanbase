@@ -52,7 +52,14 @@ int ObOrcTableRowIterator::build_type_name_id_map(const orc::Type* type, ObIArra
       OZ (col_names.push_back(field_name));
       ObString path;
       OZ (to_dot_column_path(col_names, path));
-      OZ (name_to_id_.set_refactored(path, type->getSubtype(i)->getColumnId(), 1 /*overwrite*/));
+
+      if (!is_col_name_case_sensitive_) {
+        ObString capitalize_str;
+        OZ (ob_simple_low_to_up(allocator_, path, capitalize_str));
+        OZ (name_to_id_.set_refactored(capitalize_str, type->getSubtype(i)->getColumnId(), 1 /*overwrite*/));
+      } else {
+        OZ (name_to_id_.set_refactored(path, type->getSubtype(i)->getColumnId(), 1 /*overwrite*/));
+      }
       OZ (build_type_name_id_map(type->getSubtype(i), col_names));
       if (OB_FAIL(ret)) {
       } else if (col_names.count() > 0) {
@@ -77,7 +84,13 @@ int ObOrcTableRowIterator::compute_column_id_by_index_type(int64_t index, int64_
       ObDataAccessPathExtraInfo *data_access_info =
         static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(index)->extra_info_);
       col_name = data_access_info->data_access_path_;
-      OZ (name_to_id_.get_refactored(col_name, orc_col_id));
+      if (!is_col_name_case_sensitive_) {
+        ObString capitalize_str;
+        OZ (ob_simple_low_to_up(allocator_, col_name, capitalize_str));
+        OZ (name_to_id_.get_refactored(capitalize_str, orc_col_id));
+      } else {
+        OZ (name_to_id_.get_refactored(col_name, orc_col_id));
+      }
       break;
     }
     case sql::ColumnIndexType::POSITION:
@@ -332,6 +345,25 @@ int ObOrcTableRowIterator::init(const storage::ObTableScanParam *scan_param)
       OZ (init_query_flag());
     }
   }
+
+  bool insensitive_feature_enabled = false;
+  uint64_t compat_version = 0;
+  OZ(scan_param->op_->get_eval_ctx().exec_ctx_.get_my_session()->get_compatibility_version(
+      compat_version));
+  OZ(ObCompatControl::check_feature_enable(
+      compat_version,
+      ObCompatFeatureType::EXTERNAL_COLUMN_NAME_CASE_INSENSITIVE,
+      insensitive_feature_enabled));
+
+  if (OB_SUCC(ret)) {
+    if (insensitive_feature_enabled) {
+      is_col_name_case_sensitive_
+          = scan_param->external_file_format_.orc_format_.column_name_case_sensitive_;
+    } else {
+      is_col_name_case_sensitive_ = true;
+    }
+  }
+
   return ret;
 }
 
@@ -899,12 +931,52 @@ bool ObOrcTableRowIterator::is_contain_attribute_key(const orc::Type *type)
   return contains_id;
 }
 
+int ObOrcTableRowIterator::find_column_type_id_by_name(const orc::Type *type,
+                                                       const ObString &col_name,
+                                                       ObIArray<ObString> &col_names,
+                                                       uint64_t &type_id)
+{
+  int ret = OB_SUCCESS;
+  CK(type != nullptr);
+
+  if (OB_SUCC(ret) && orc::TypeKind::STRUCT == type->getKind()) {
+    for (size_t i = 0; OB_SUCC(ret) && i < type->getSubtypeCount() && type_id == 0; ++i) {
+      const std::string &cpp_field_name = type->getFieldName(i);
+      ObString field_name;
+      OZ(ob_write_string(allocator_, ObString(cpp_field_name.c_str()), field_name));
+      OZ(col_names.push_back(field_name));
+      ObString path;
+      OZ(to_dot_column_path(col_names, path));
+
+      // Compare with input column name (case-insensitive if needed)
+      bool is_match = !is_col_name_case_sensitive_ ? (col_name.case_compare(path) == 0)
+                                                    : (col_name.compare(path) == 0);
+
+      if (is_match) {
+        type_id = type->getSubtype(i)->getColumnId();
+      } else {
+        OZ(find_column_type_id_by_name(type->getSubtype(i), col_name, col_names, type_id));
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (col_names.count() > 0) {
+        col_names.pop_back();
+      }
+    }
+  } else {
+    // For non-struct types, recursively search in subtypes
+    for (size_t j = 0; OB_SUCC(ret) && j < type->getSubtypeCount() && type_id == 0; ++j) {
+      OZ(find_column_type_id_by_name(type->getSubtype(j), col_name, col_names, type_id));
+    }
+  }
+
+  return ret;
+}
+
 int ObOrcTableRowIterator::create_row_readers()
 {
   int ret = OB_SUCCESS;
-  std::list<std::string> project_column_names;
   std::list<uint64_t> project_column_ids;
-  std::list<std::string> eager_column_names;
   std::list<uint64_t> eager_column_ids;
 
   column_index_type_ = scan_param_->external_file_format_.orc_format_.column_index_type_;
@@ -922,21 +994,35 @@ int ObOrcTableRowIterator::create_row_readers()
   if (OB_SUCC(ret)) {
     switch (column_index_type_) {
       case sql::ColumnIndexType::NAME: {
+        orc::RowReaderOptions rowReaderOptions;
+        all_row_reader_ = reader_->createRowReader(rowReaderOptions);
         for (int64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
-          ObDataAccessPathExtraInfo *data_access_info =
-              static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(i)->extra_info_);
+          ObDataAccessPathExtraInfo *data_access_info
+              = static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(i)->extra_info_);
+
+          uint64_t orc_col_id = 0;
+          ObArray<ObString> col_names;
+          OZ(find_column_type_id_by_name(&all_row_reader_->getSelectedType(),
+                                         data_access_info->data_access_path_,
+                                         col_names,
+                                         orc_col_id));
+          if (OB_FAIL(ret)) {
+          } else if (orc_col_id == 0) {
+            ret = OB_INVALID_EXTERNAL_FILE_COLUMN_PATH;
+            LOG_USER_ERROR(OB_INVALID_EXTERNAL_FILE_COLUMN_PATH,
+                           data_access_info->data_access_path_.length(),
+                           data_access_info->data_access_path_.ptr());
+          }
           if (OB_SUCC(ret)) {
-            std::string col_name(data_access_info->data_access_path_.ptr(),
-                                  data_access_info->data_access_path_.length());
             bool is_project_column = true;
             if (is_eager_column_.count() > 0 && is_eager_column_.at(i)) {
-              eager_column_names.push_front(col_name);
+              eager_column_ids.push_back(orc_col_id);
               if (!is_dup_project_.at(i)) {
                 is_project_column = false;
               }
             }
             if (is_project_column) {
-              project_column_names.push_front(col_name);
+              project_column_ids.push_front(orc_col_id);
             }
           }
         }
@@ -945,7 +1031,7 @@ int ObOrcTableRowIterator::create_row_readers()
       case sql::ColumnIndexType::POSITION: {
         for (uint64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
           bool is_project_column = true;
-          int64_t column_id = file_column_exprs_.at(i)->extra_ - 1;
+          int64_t column_id = file_column_exprs_.at(i)->extra_;
           if (is_eager_column_.count() > 0 && is_eager_column_.at(i)) {
             eager_column_ids.push_back(column_id);
             if (!is_dup_project_.at(i)) {
@@ -1007,15 +1093,11 @@ int ObOrcTableRowIterator::create_row_readers()
         } else {
           project_reader_.init(capacity, project_column_ids, reader_.get());
         }
-      } else if (project_column_names.size() > 0) {
-        project_reader_.init(capacity, project_column_names, reader_.get());
       } else {
         project_reader_.row_id_ = 0;
       }
       if (sector_reader_ != nullptr) {
-        if (eager_column_names.size() > 0) {
-          sector_reader_->get_eager_reader().init(capacity, eager_column_names, reader_.get());
-        } else if (eager_column_ids.size() > 0) {
+        if (eager_column_ids.size() > 0) {
           if (is_hive_lake_table()) {
             sector_reader_->get_eager_reader().init_for_hive_table(capacity, eager_column_ids, reader_.get());
           } else {
@@ -2908,19 +2990,12 @@ int ObOrcTableRowIterator::DataLoader::load_double(ObEvalCtx &eval_ctx)
   return ret;
 }
 
-template<typename T>
 void ObOrcTableRowIterator::OrcRowReader::init(int64_t capacity,
-                                               const std::list<T>& include_columns,
+                                               const std::list<uint64_t>& include_columns,
                                                orc::Reader *reader)
 {
   orc::RowReaderOptions rowReaderOptions;
-  if constexpr (std::is_same_v<T, uint64_t>) {
-    // 如果是uint64_t，使用includeTypes（传入的是type ID）
-    rowReaderOptions.includeTypes(include_columns);
-  } else {
-    // 如果是string，使用include（传入的是字段名）
-    rowReaderOptions.include(include_columns);
-  }
+  rowReaderOptions.includeTypes(include_columns);
   row_reader_ = reader->createRowReader(rowReaderOptions);
   // create orc read batch for reuse.
   orc_batch_ = row_reader_->createRowBatch(capacity);

@@ -3623,8 +3623,10 @@ int ObCreateTableResolver::resolve_external_table_format_early(const ParseNode *
               } else {
                 if (format.format_type_ == ObExternalFileFormat::FormatType::ORC_FORMAT) {
                   column_index_type_ = format.orc_format_.column_index_type_;
+                  column_name_case_sensitive_ = format.orc_format_.column_name_case_sensitive_;
                 } else if (format.format_type_ == ObExternalFileFormat::FormatType::PARQUET_FORMAT) {
                   column_index_type_ = format.parquet_format_.column_index_type_;
+                  column_name_case_sensitive_ = format.parquet_format_.column_name_case_sensitive_;
                 }
               }
             }

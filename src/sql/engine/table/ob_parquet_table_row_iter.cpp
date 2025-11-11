@@ -162,6 +162,24 @@ int ObParquetTableRowIterator::init(const storage::ObTableScanParam *scan_param)
                                mem_attr_));
   }
 
+  bool insensitive_feature_enabled = false;
+  uint64_t compat_version = 0;
+  OZ(scan_param->op_->get_eval_ctx().exec_ctx_.get_my_session()->get_compatibility_version(
+      compat_version));
+  OZ(ObCompatControl::check_feature_enable(
+      compat_version,
+      ObCompatFeatureType::EXTERNAL_COLUMN_NAME_CASE_INSENSITIVE,
+      insensitive_feature_enabled));
+
+  if (OB_SUCC(ret)) {
+    if (insensitive_feature_enabled) {
+      is_col_name_case_sensitive_
+          = scan_param->external_file_format_.parquet_format_.column_name_case_sensitive_;
+    } else {
+      is_col_name_case_sensitive_ = true;
+    }
+  }
+
   return ret;
 }
 
@@ -185,21 +203,17 @@ int ObParquetTableRowIterator::compute_column_id_by_index_type(int index, int &f
     case sql::ColumnIndexType::NAME: {
       ObDataAccessPathExtraInfo *data_access_info =
         static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(index)->extra_info_);
-      file_col_id = -1;
-      if (is_collection_column) {
-        for (int i = 0; i < file_meta_->schema()->num_columns(); i++) {
-          const std::string& field_path = file_meta_->schema()->GetColumnRoot(i)->name();
-          if (field_path.compare(0, field_path.length(),
-                                data_access_info->data_access_path_.ptr(),
-                                data_access_info->data_access_path_.length()) == 0) {
-            file_col_id = i;
-            break;
-          }
+      for (int i = 0; i < file_meta_->schema()->num_columns(); i++) {
+        const std::string &field_path = file_meta_->schema()->GetColumnRoot(i)->name();
+        ObString field_path_obstr(field_path.length(), field_path.c_str());
+        if (!is_col_name_case_sensitive_
+                ? data_access_info->data_access_path_.case_compare(field_path_obstr) == 0
+                : data_access_info->data_access_path_.compare(field_path_obstr) == 0) {
+          file_col_id = i;
+          break;
         }
-      } else {
-        file_col_id = file_meta_->schema()->ColumnIndex(std::string(
-          data_access_info->data_access_path_.ptr(), data_access_info->data_access_path_.length()));
       }
+
       break;
     }
     case sql::ColumnIndexType::POSITION: {

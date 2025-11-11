@@ -161,6 +161,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"column_format", COLUMN_FORMAT},
   {"column_index_type", COLUMN_INDEX_TYPE},
   {"column_name", COLUMN_NAME},
+  {"column_name_case_sensitive", COLUMN_NAME_CASE_SENSITIVE},
   {"column", COLUMN},
   {"columns", COLUMNS},
   {"column_bloom_filter", COLUMN_BLOOM_FILTER},

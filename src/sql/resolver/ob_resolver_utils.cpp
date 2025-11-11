@@ -10612,6 +10612,20 @@ int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFo
         }
         break;
       }
+      case T_COLUMN_NAME_CASE_SENSITIVE: {
+        if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_0_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "cluster version is less than 4.5.0.0, column_name_case_sensitive");
+        } else if (format.format_type_ == ObExternalFileFormat::PARQUET_FORMAT) {
+          format.parquet_format_.column_name_case_sensitive_ = node->children_[0]->value_;
+        } else if (format.format_type_ == ObExternalFileFormat::ORC_FORMAT) {
+          format.orc_format_.column_name_case_sensitive_ = node->children_[0]->value_;
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid file format option", K(ret), K(node->type_));
+        }
+        break;
+      }
       default: {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid file format option", K(ret), K(node->type_));

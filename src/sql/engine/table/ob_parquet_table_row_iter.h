@@ -168,7 +168,8 @@ public:
     stat_(),
     mode_(FilterCalcMode::DYNAMIC_EAGER_CALC),
     reader_metrics_(),
-    column_index_type_(sql::ColumnIndexType::NAME) {}
+    column_index_type_(sql::ColumnIndexType::NAME),
+    is_col_name_case_sensitive_(false) {}
   virtual ~ObParquetTableRowIterator();
 
   int init(const storage::ObTableScanParam *scan_param) override;
@@ -495,6 +496,7 @@ private:
   FilterCalcMode mode_;
   ObLakeTableReaderMetrics reader_metrics_;
   sql::ColumnIndexType column_index_type_;
+  bool is_col_name_case_sensitive_;
 };
 
 }
