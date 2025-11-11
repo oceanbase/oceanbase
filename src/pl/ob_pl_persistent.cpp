@@ -820,7 +820,17 @@ int ObRoutinePersistentInfo::get_pl_extra_info(const DependencyTable &dep_table,
   char *buf = NULL;
   ObSqlString concat_ids_sql;
   for (int64_t i = 0; OB_SUCC(ret) && i < dep_table.count(); ++i) {
-    OZ (add_var_to_array_no_dup(dep_table_objs, dep_table.at(i)));
+    bool found = false;
+    for (int64_t j = 0; OB_SUCC(ret) && j < dep_table_objs.count(); ++j) {
+      // for type body , remove the same object_id
+      if (dep_table_objs.at(j).object_id_ == dep_table.at(i).object_id_) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      OZ (dep_table_objs.push_back(dep_table.at(i)));
+    }
   }
   OX (lib::ob_sort(dep_table_objs.begin(), dep_table_objs.end(), ob_schema_obj_version_less));
   for (int64_t i = 0; OB_SUCC(ret) && i < dep_table_objs.count(); ++i) {
