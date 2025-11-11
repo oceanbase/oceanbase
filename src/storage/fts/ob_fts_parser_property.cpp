@@ -810,10 +810,10 @@ int ObFTParserJsonProps::space_rebuild_props_for_ddl(const bool log_to_user)
         LOG_USER_ERROR(OB_INVALID_ARGUMENT, ObFTSLiteral::MAX_TOKEN_SIZE_SCOPE_STR);
       }
     } else if (min_token_size > max_token_size) {
-      ret = OB_INVALID_ARGUMENT;
+      ret = OB_INVALID_CONFIG;
       LOG_WARN("Invalid token size", K(ret), K(min_token_size), K(max_token_size));
       if (log_to_user) {
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT, ObFTSLiteral::MIN_MAX_TOKEN_SIZE_SCOPE_STR);
+        LOG_USER_ERROR(OB_INVALID_CONFIG, ObFTSLiteral::MIN_MAX_TOKEN_SIZE_SCOPE_STR);
       }
     }
   }
