@@ -1121,8 +1121,8 @@ public:
 #ifdef OB_BUILD_ORACLE_PL
   ObPLCallStackTrace *get_call_stack_trace();
   ObPLCallStackTrace *get_call_stack_trace_directly() { return call_stack_trace_; }
-  ObIAllocator &get_allocator() { return alloc_; }
 #endif
+  ObIAllocator &get_allocator() { return alloc_; }
 
 private:
   ObPLContext* get_stack_pl_ctx();

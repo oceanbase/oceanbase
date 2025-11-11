@@ -5271,16 +5271,10 @@ int ObSPIService::spi_raise_application_error(pl::ObPLExecCtx *ctx,
    OX (error_code = errcode_result.get_int32());
    if (OB_SUCC(ret)) {
     ObPLContext *pl_ctx = NULL;
-    ObPLExecState *frame = NULL;
-    ObIAllocator *expr_allocator = NULL;
     CK (OB_NOT_NULL(pl_ctx = ctx->exec_ctx_->get_my_session()->get_pl_context()));
-    CK (pl_ctx->get_exec_stack().count() > 0);
-    CK (OB_NOT_NULL(frame = pl_ctx->get_exec_stack().at(0)));
-    CK (frame->is_top_call());
-    CK (OB_NOT_NULL(expr_allocator = frame->get_exec_ctx().get_top_expr_allocator()));
     if (OB_SUCC(ret) && OB_ISNULL(sqlcode_info->get_sqlmsg_buf())) {
       char* sqlmsg_buf = NULL;
-      if (OB_ISNULL(sqlmsg_buf = static_cast<char*>(expr_allocator->alloc(OB_PL_SQLMSG_MAX_SIZE)))) {
+      if (OB_ISNULL(sqlmsg_buf = static_cast<char*>(pl_ctx->get_allocator().alloc(OB_PL_SQLMSG_MAX_SIZE)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc sqlmsg buf", K(ret));
       } else {
