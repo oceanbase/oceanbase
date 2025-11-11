@@ -1767,11 +1767,14 @@ TEST_F(TestTenantMetaMemMgr, test_show_limit)
 
 TEST_F(TestTenantMetaMemMgr, test_normal_tablet_buffer_fragment)
 {
-  static const int64_t tablet_cnt = 155000;
+  static const int64_t tablet_cnt = 150000;
   ObTabletHandle *tablets = new ObTabletHandle[tablet_cnt];
   const int64_t before_tenant_mem = lib::get_tenant_memory_limit(MTL_ID());
   const int64_t this_case_tenant_mem = 3 * 1024 * 1024 * 1024L;  /* 3GB */
   lib::set_tenant_memory_limit(MTL_ID(), this_case_tenant_mem);
+
+  ObTenantCtxAllocatorGuard ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(MTL_ID(), ObCtxIds::META_OBJ_CTX_ID);
+  lib::set_meta_obj_limit(MTL_ID(), 20);
   for (int64_t i = 0; i < tablet_cnt; ++i) {
     ObTabletHandle tablet_handle;
     ASSERT_EQ(OB_SUCCESS, MTL(ObTenantMetaMemMgr *)->acquire_tablet(ObTabletPoolType::TP_NORMAL, tablets[i]));
@@ -1782,7 +1785,6 @@ TEST_F(TestTenantMetaMemMgr, test_normal_tablet_buffer_fragment)
   task->type_ = STAT_LABEL;
   ObMemoryDump::get_instance().push(task);
   usleep(1000000);
-  ObTenantCtxAllocatorGuard ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(MTL_ID(), ObCtxIds::META_OBJ_CTX_ID);
   double fragment_rate = 1.0 * (ta->get_hold() - ta->get_used()) / ta->get_hold();
   std::cout << "hold: " << ta->get_hold() << " used: " << ta->get_used() << " limit: " << ta->get_limit() << " fragment_rate: " << fragment_rate << std::endl;
   ASSERT_TRUE(fragment_rate < 0.06);

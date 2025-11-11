@@ -120,7 +120,6 @@ void *ObMallocAllocator::alloc(const int64_t size, const oceanbase::lib::ObMemAt
       attr.use_500() && !attr.expect_500()) {
     attr.ctx_id_ = ObCtxIds::UNEXPECTED_IN_500;
   }
-  attr.use_malloc_v2_ = is_malloc_v2_enabled();
   attr.numa_id_ = AFFINITY_CTRL.get_numa_id();
   lib::ObMemAttr inner_attr = attr;
   bool do_not_use_me = false;
@@ -192,7 +191,6 @@ void *ObMallocAllocator::realloc(
   // Won't create tenant allocator!!
   void *nptr = NULL;
   ObMemAttr inner_attr = attr;
-  inner_attr.use_malloc_v2_ = is_malloc_v2_enabled();
   ObTenantCtxAllocatorGuard allocator = NULL;
   if (OB_ISNULL(allocator = get_tenant_ctx_allocator(inner_attr.tenant_id_, inner_attr.ctx_id_))) {
     // do nothing
@@ -848,75 +846,5 @@ void ObMallocAllocator::modify_tenant_memory_access_permission(ObTenantCtxAlloca
   }
 }
 #endif
-ObMallocHook::ObMallocHook()
-  : attr_(OB_SERVER_TENANT_ID, "glibc_malloc", ObCtxIds::GLIBC),
-    ta_(ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(OB_SERVER_TENANT_ID, ObCtxIds::GLIBC)),
-    mgr_(((ObjectMgr&)(ta_->get_block_mgr())).obj_mgr_v2_)
-{
-  STRNCPY(label_, "glibc_malloc_v2", AOBJECT_LABEL_SIZE);
-  label_[AOBJECT_LABEL_SIZE] = '\0';
-}
-
-ObMallocHook &ObMallocHook::get_instance()
-{
-  static char buffer[sizeof(ObMallocHook)] __attribute__((__aligned__(16)));
-  static ObMallocHook *instance = new (buffer) ObMallocHook();
-  return *instance;
-}
-
-void *ObMallocHook::alloc(const int64_t size, bool &from_malloc_hook)
-{
-  SANITY_DISABLE_CHECK_RANGE();
-  from_malloc_hook = g_malloc_v2_enabled
-      && ObMallocHookAttrGuard::get_tl_use_500();
-  if (OB_UNLIKELY(!from_malloc_hook)) {
-    ObMemAttr attr = ObMallocHookAttrGuard::get_tl_mem_attr();
-    return ob_malloc(size, attr);
-  }
-  void *ptr = NULL;
-  AObject *obj = NULL;
-  ObMemAttr attr = attr_;
-  static thread_local ObMallocSampleLimiter sample_limiter;
-  bool sample_allowed = sample_limiter.try_acquire(size);
-  if (OB_UNLIKELY(sample_allowed)) {
-    attr.extra_size_ = AOBJECT_EXTRA_INFO_SIZE;
-  }
-  obj = mgr_.alloc_object(size, attr);
-  if (OB_UNLIKELY(NULL == obj)) {
-    ta_->sync_wash();
-    obj = mgr_.alloc_object(size, attr);
-  }
-  if (OB_LIKELY(obj)) {
-    if (OB_UNLIKELY(sample_allowed)) {
-      void *addrs[100] = {nullptr};
-      backtrace(addrs, ARRAYSIZEOF(addrs));
-      MEMCPY(obj->bt(), (char*)addrs, AOBJECT_BACKTRACE_SIZE);
-      obj->on_malloc_sample_ = true;
-    }
-    MEMCPY(obj->label_, label_, AOBJECT_LABEL_SIZE + 1);
-    obj->ignore_version_ = true;
-    SANITY_POISON(obj, AOBJECT_HEADER_SIZE);
-    SANITY_UNPOISON(obj->data_, obj->alloc_bytes_);
-    SANITY_POISON(obj->data_ + obj->alloc_bytes_,
-        AOBJECT_TAIL_SIZE + (obj->on_malloc_sample_ ? AOBJECT_BACKTRACE_SIZE : 0));
-    ptr = (void*)obj->data_;
-  } else {
-    print_alloc_failed_msg(OB_SERVER_TENANT_ID, ObCtxIds::GLIBC,
-        ta_->get_hold(), ta_->get_limit(),
-        ta_->get_tenant_hold(), ta_->get_tenant_limit());
-  }
-  return ptr;
-}
-
-void ObMallocHook::free(void *ptr)
-{
-  SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
-  if (NULL != ptr) {
-    AObject *obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);
-    SANITY_POISON(obj->data_, obj->alloc_bytes_);
-    ABlock *block = obj->block_;
-    block->obj_set_v2_->free_object(obj, block);
-  }
-}
 } // end of namespace lib
 } // end of namespace oceanbase

@@ -8,6 +8,7 @@
 #include "timer.h"
 #include "benchmark_malloc.h"
 #include <sys/syscall.h>
+#include <malloc.h>
 #define PRIsize "zu"
 
 #define MODE_RANDOM 0
@@ -38,7 +39,7 @@ struct benchmark_arg {
   int32_t peak_allocated;
   thread_arg thread_arg;
   benchmark_arg* args;
-};
+} __attribute__((aligned(64)));
 
 struct thread_pointers {
   void** pointers;
@@ -299,13 +300,12 @@ benchmark_worker(void* argptr) {
   benchmark_thread_initialize();
 
   size_t pointers_size = sizeof(void*) * arg->alloc_count;
-  pointers = (void**)benchmark_malloc(16, pointers_size);
+  pointers = (void**)memalign(16, pointers_size);
   memset(pointers, 0, pointers_size);
   atomic_add32(&arg->allocated, (int32_t)pointers_size);
 
   while (!atomic_load32(&benchmark_start))
     thread_sleep(10);
-
   arg->ticks = 0;
   arg->mops = 0;
   for (size_t iter = 0; iter < 2; ++iter) {
@@ -562,7 +562,7 @@ benchmark_worker(void* argptr) {
     thread_fence();
   } while (atomic_load32(&benchmark_threads_sync) < 0);
 
-  benchmark_free(pointers);
+  free(pointers);
   atomic_add32(&arg->allocated, -(int32_t)pointers_size);
 
   benchmark_thread_finalize();
@@ -676,8 +676,8 @@ benchmark_run(int argc, char** argv) {
   benchmark_arg* arg;
   uintptr_t* thread_handle;
 
-  arg = (benchmark_arg *)benchmark_malloc(0, sizeof(benchmark_arg) * thread_count);
-  thread_handle = (uintptr_t *)benchmark_malloc(0, sizeof(thread_handle) * thread_count);
+  arg = (benchmark_arg *)memalign(16, sizeof(benchmark_arg) * thread_count);
+  thread_handle = (uintptr_t *)memalign(16, sizeof(thread_handle) * thread_count);
 
   atomic_store32(&benchmark_start, 0);
 
@@ -773,8 +773,8 @@ benchmark_run(int argc, char** argv) {
   if (!ticks)
     ticks = 1;
 
-  benchmark_free(thread_handle);
-  benchmark_free(arg);
+  free(thread_handle);
+  free(arg);
 
   FILE* fd;
   char filebuf[64];

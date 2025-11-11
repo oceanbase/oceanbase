@@ -169,13 +169,15 @@ TEST_F(TestObjectMgr, TestFragmentWash)
   vector<pair<AChunk*, vector<void*> > > chunk_ptrs;
   int chunk_cnt = 1000;
   int alloc_size = ABLOCK_SIZE - 256;
+  ObMemAttr attr(OB_SERVER_TENANT_ID, "mod");
+  attr.use_malloc_v2_ = false;
   do {
-    void *ptr = ob_malloc(alloc_size, "mod");
+    void *ptr = ob_malloc(alloc_size, attr);
     abort_unless(ptr != nullptr);
     AChunk *cur_chunk = chunk(ptr);
     vector<void*> ptrs{ptr};
     do {
-      void *ptr = ob_malloc(alloc_size, "mod");
+      void *ptr = ob_malloc(alloc_size, attr);
       abort_unless(ptr != nullptr);
       if (chunk(ptr) != cur_chunk) {
         ob_free(ptr);
@@ -238,6 +240,7 @@ TEST_F(TestObjectMgr, TestSubObjectMgr)
     tenant_id, ctx_id);
   ObjectMgr som(*ta.ref_allocator(), false, INTACT_NORMAL_AOBJECT_SIZE, 1, false, NULL);
   ObMemAttr attr;
+  attr.use_malloc_v2_ = false;
   ObTenantResourceMgrHandle resource_handle;
   ObResourceMgr::get_instance().get_tenant_resource_mgr(
 		  tenant_id, resource_handle);
