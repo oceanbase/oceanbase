@@ -763,7 +763,7 @@ int ObExternalTableRowIterator::generate_mapping_column_id(
   return ret;
 }
 
-int ObExternalTableRowIterator::fill_file_partition_expr(ObExpr *expr, ObNewRow &value, const int64_t row_count)
+int ObExternalTableRowIterator::fill_file_partition_expr(ObExpr *expr, ObNewRow &value)
 {
   int ret = OB_SUCCESS;
   ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
@@ -772,16 +772,16 @@ int ObExternalTableRowIterator::fill_file_partition_expr(ObExpr *expr, ObNewRow 
   if (OB_UNLIKELY(loc_idx < 0 || loc_idx >= value.get_count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("loc idx is out of range", K(loc_idx), K(value), K(ret));
+  } else if (OB_UNLIKELY(expr->get_format(eval_ctx) != VEC_UNIFORM_CONST)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected format for partition expr", K(ret), K(expr->get_format(eval_ctx)));
   } else {
+    // for VEC_UNIFORM_CONST, only set datums[0]
     if (value.get_cell(loc_idx).is_null()) {
-      for (int j = 0; OB_SUCC(ret) && j < row_count; j++) {
-        datums[j].set_null();
-      }
+      datums[0].set_null();
     } else {
-      for (int j = 0; OB_SUCC(ret) && j < row_count; j++) {
-        CK (OB_NOT_NULL(datums[j].ptr_));
-        OZ (datums[j].from_obj(value.get_cell(loc_idx)));
-      }
+      CK (OB_NOT_NULL(datums[0].ptr_));
+      OZ (datums[0].from_obj(value.get_cell(loc_idx)));
     }
   }
   return ret;

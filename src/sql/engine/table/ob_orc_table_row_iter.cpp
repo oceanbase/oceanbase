@@ -2173,8 +2173,8 @@ int ObOrcTableRowIterator::fill_file_meta_column(ObEvalCtx &eval_ctx, ObExpr *me
       text_vec->set_lens(file_url_lens_.get_data());
     }
   } else if (meta_expr->type_ == T_PSEUDO_PARTITION_LIST_COL) {
-    OZ (meta_expr->init_vector_for_write(eval_ctx, VEC_UNIFORM, read_count));
-    OZ (fill_file_partition_expr(meta_expr, state_.part_list_val_, read_count));
+    OZ (meta_expr->init_vector_for_write(eval_ctx, VEC_UNIFORM_CONST, read_count));
+    OZ (fill_file_partition_expr(meta_expr, state_.part_list_val_));
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected expr", KPC(meta_expr));
