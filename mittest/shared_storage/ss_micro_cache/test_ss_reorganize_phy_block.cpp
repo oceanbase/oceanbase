@@ -82,9 +82,6 @@ void TestSSReorganizePhyBlock::TearDown()
 {
   const uint64_t tenant_id = MTL_ID();
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache*);
-  // clear micro_meta_ckpt
-  ObSSMicroCacheSuperBlk new_super_blk(tenant_id, micro_cache->cache_file_size_, SS_PERSIST_MICRO_CKPT_SPLIT_CNT);
-  ASSERT_EQ(OB_SUCCESS, micro_cache->phy_blk_mgr_.update_ss_super_block(new_super_blk));
   micro_cache->stop();
   micro_cache->wait();
   micro_cache->destroy();
