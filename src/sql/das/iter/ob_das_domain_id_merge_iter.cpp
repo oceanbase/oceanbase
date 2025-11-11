@@ -939,10 +939,20 @@ int ObDASDomainIdMergeIter::get_domain_id(
   }
   if (OB_SUCC(ret)) {
     const int64_t rowkey_cnt = ctdef->table_param_.get_read_info().get_schema_rowkey_count();
+    int64_t part_key_num = 0;
     ObExpr *expr = nullptr;
     int64_t expect_result_output_cnt = rowkey_cnt + 1;
     expect_result_output_cnt = OB_NOT_NULL(ctdef->trans_info_expr_) ? (expect_result_output_cnt + 1) : expect_result_output_cnt;
     expect_result_output_cnt = (domain_type == ObDomainIdUtils::IVFPQ_CID) ? (expect_result_output_cnt + 1) : expect_result_output_cnt;
+    // when partition and heap organization table, use hybrid vector index; the dml return all_columns as output, but tsc only use
+    // rowkey and embeded_vec; the dml has more columns that is partition key.
+    if (domain_type != ObDomainIdUtils::EMB_VEC) {
+      // skip, do nothing
+    } else if (OB_FAIL(check_table_need_add_part_key(data_table_iter_->get_scan_param().index_id_, part_key_num, ctdef))) {
+      LOG_WARN("fail to check embedded table add part key ", K(ret), K(data_table_iter_->get_scan_param().index_id_), K(ctdef->ref_table_id_));
+    } else {
+      expect_result_output_cnt = expect_result_output_cnt + part_key_num;
+    }
     // When the defensive check level is set to 2 (strict defensive check), the transaction information of the current
     // row is recorded for 4377 diagnosis. Then, it will add pseudo_trans_info_expr into result output of das scan.
     //
@@ -954,7 +964,7 @@ int ObDASDomainIdMergeIter::get_domain_id(
 
     int domain_id_num = (domain_type == ObDomainIdUtils::IVFPQ_CID) ? 2 : 1;
     for (int i = 0; OB_SUCC(ret) && i < domain_id_num; ++i) {
-      if (OB_ISNULL(expr = ctdef->result_output_.at(rowkey_cnt + i))) {
+      if (OB_ISNULL(expr = ctdef->result_output_.at(rowkey_cnt + part_key_num + i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error, domain id expr is nullptr", K(ret), K(rowkey_cnt), K(ctdef->result_output_));
       } else {
@@ -1450,6 +1460,34 @@ int ObDASDomainIdMergeIter::check_use_rowkey_vid_tbl_by_table_id(int64_t table_i
     LOG_WARN("table schema is null", K(ret), K(table_id));
   } else {
     use_rowkey_vid_tbl = !table_schema->is_table_with_hidden_pk_column();
+  }
+  return ret;
+}
+
+int ObDASDomainIdMergeIter::check_table_need_add_part_key(int64_t table_id, int64_t &part_key_num, const ObDASScanCtDef *ctdef)
+{
+  int ret = OB_SUCCESS;
+  part_key_num = 0;
+  share::schema::ObSchemaGetterGuard schema_guard;
+  ObIArray<uint64_t> *column_ids;
+  const ObTableSchema *table_schema = nullptr;
+  const ObTableSchema *domain_table_schema = nullptr;
+  if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(MTL_ID(), schema_guard))) {
+    LOG_WARN("fail to get schema guard", K(ret));
+  } else if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(), table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", K(ret), K(table_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(), ctdef->ref_table_id_, domain_table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(ctdef->ref_table_id_));
+  } else if (OB_ISNULL(domain_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", K(ret), K(table_id));
+  } else if (table_schema->is_table_with_hidden_pk_column() && table_schema->is_partitioned_table()) {
+    if (ctdef->result_output_.count() == domain_table_schema->get_column_count()) {
+      part_key_num += table_schema->get_part_level();
+    }
   }
   return ret;
 }
