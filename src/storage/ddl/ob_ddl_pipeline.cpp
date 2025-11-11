@@ -90,7 +90,8 @@ ObVectorIndexTabletContext::ObVectorIndexTabletContext()
       lob_inrow_threshold_(0), rowkey_cnt_(0), column_cnt_(0), snapshot_version_(0), index_type_(share::VIAT_MAX), helper_(nullptr),
       allocator_("VecIndexCtx", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       memory_context_(MTL(ObPluginVectorIndexService *)->get_memory_context()),
-      all_vsag_use_mem_(MTL(ObPluginVectorIndexService *)->get_all_vsag_use_mem())
+      all_vsag_use_mem_(MTL(ObPluginVectorIndexService *)->get_all_vsag_use_mem()),
+      table_id_(0)
 {
 
 }
@@ -119,6 +120,7 @@ int ObVectorIndexTabletContext::init(
     column_cnt_ = ddl_table_schema.column_items_.count();
     snapshot_version_ = snapshot_version;
     ddl_task_id_ = ddl_task_id;
+    table_id_ = ddl_table_schema.table_id_;
 
     if (schema::is_vec_index_snapshot_data_type(index_type)) {
       if (OB_FAIL(init_hnsw_index(ddl_table_schema))) {
@@ -1774,13 +1776,18 @@ int ObHNSWEmbeddingOperator::init(const ObTabletID &tablet_id)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, vector index ctx is null", K(ret));
   } else {
+    const uint64_t table_id = vector_index_ctx->table_id_;
     vec_dim_ = vector_index_ctx->vec_dim_;
     rowkey_cnt_ = vector_index_ctx->rowkey_cnt_;
     text_col_idx_ = vector_index_ctx->vector_chunk_col_idx_;
     extra_column_idxs_.reset();
     ObVectorIndexParam index_param;
+    ObSchemaGetterGuard schema_guard;
+    ObCollationType col_type = CS_TYPE_INVALID;
 
-    if (OB_FAIL(vector_index_ctx->build_extra_column_idxs(static_cast<int32_t>(text_col_idx_), extra_column_idxs_))) {
+    if (OB_FAIL(ObVectorIndexUtil::get_index_column_collation_type(MTL_ID(), table_id, col_type))) {
+      LOG_WARN("fail to get vector column collation type", K(ret), K(text_col_idx_), K(table_id));
+    } else if (OB_FAIL(vector_index_ctx->build_extra_column_idxs(static_cast<int32_t>(text_col_idx_), extra_column_idxs_))) {
       LOG_WARN("build_extra_column_idxs failed", K(ret), K(text_col_idx_));
     } else if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(vector_index_ctx->vec_idx_param_, ObVectorIndexType::VIT_HNSW_INDEX, index_param, false))) {
       LOG_WARN("failed to parser params from string", K(ret));
@@ -1797,7 +1804,7 @@ int ObHNSWEmbeddingOperator::init(const ObTabletID &tablet_id)
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(embedmgr_->init(model_id_, http_timeout_us_))) {
+      if (OB_FAIL(embedmgr_->init(model_id_, http_timeout_us_, col_type))) {
         embedmgr_->~ObEmbeddingTaskMgr();
         op_allocator_.free(embedmgr_);
         embedmgr_ = nullptr;

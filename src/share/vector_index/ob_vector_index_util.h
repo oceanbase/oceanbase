@@ -847,6 +847,9 @@ public:
                                                const ObTableSchema &index_table_schema,
                                                bool &need_embedding_when_rebuild);
   static bool is_sindi_index(const ObTableSchema *vec_index_schema);
+
+  static int get_index_column_collation_type(const int64_t tenant_id, const uint64_t index_table_id, ObCollationType &col_type);
+
 private:
   static void save_column_schema(
       const ObColumnSchemaV2 *&old_column,

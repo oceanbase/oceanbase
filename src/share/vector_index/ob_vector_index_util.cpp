@@ -3727,6 +3727,70 @@ int ObVectorIndexUtil::check_index_param(
 
   return ret;
 }
+// index_table_id must be table which has vector column
+int ObVectorIndexUtil::get_index_column_collation_type(
+    const int64_t tenant_id,
+    const uint64_t index_table_id,
+    ObCollationType &col_type)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *data_table_schema = nullptr;
+  const ObTableSchema *table_schema = nullptr;
+  int64_t main_table_id = OB_INVALID_ID;
+  ObArray<uint64_t> tmp_column_ids;
+  col_type = CS_TYPE_INVALID;
+  ObSchemaGetterGuard schema_guard;
+
+  if (!is_valid_tenant_id(tenant_id) || OB_INVALID_ID == index_table_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(index_table_id));
+  } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get tenant schema guard", K(ret), K(MTL_ID()));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, index_table_id, table_schema))) {
+    LOG_WARN("fail to get table scheam", K(ret), K(tenant_id), K(index_table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_INFO("table not exit", K(ret), K(tenant_id), K(index_table_id));
+  } else if (OB_FALSE_IT(main_table_id = table_schema->get_data_table_id())) {
+  } else if (OB_INVALID_ID == main_table_id) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected invalid id", K(ret), K(main_table_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, main_table_id, data_table_schema))) {
+    LOG_WARN("fail to get table scheam", K(ret), K(tenant_id), K(index_table_id));
+  } else if (OB_ISNULL(data_table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_INFO("table not exit", K(ret), K(tenant_id), K(main_table_id));
+  } else if (OB_FAIL(table_schema->get_column_ids(tmp_column_ids))) {
+    LOG_WARN("fail to get index table all column ids", K(ret), K(data_table_schema));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tmp_column_ids.count() && col_type == CS_TYPE_INVALID; ++i) {
+      const ObColumnSchemaV2 *col_schema = data_table_schema->get_column_schema(tmp_column_ids[i]);
+      if (OB_ISNULL(col_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null column schema ptr", K(ret));
+      } else if (!col_schema->is_vec_hnsw_vector_column()) {
+        // only need vector column
+      } else {
+        ObArray<uint64_t> cascaded_column_ids;
+        if (OB_FAIL(col_schema->get_cascaded_column_ids(cascaded_column_ids))) {
+          LOG_WARN("failed to get cascaded column ids", K(ret));
+        } else {
+          for (int64_t j = 0; OB_SUCC(ret) && j < cascaded_column_ids.count() && col_type == CS_TYPE_INVALID; ++j) {
+            const ObColumnSchemaV2 *cascaded_column = NULL;
+            if (OB_ISNULL(cascaded_column = data_table_schema->get_column_schema(cascaded_column_ids.at(j)))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected cascaded column", K(ret));
+            } else {
+              col_type = cascaded_column->get_collation_type();
+              LOG_DEBUG("get vector index collation type", K(col_type));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
 
 int ObVectorIndexUtil::get_vector_index_type(
     sql::ObRawExpr *&raw_expr,

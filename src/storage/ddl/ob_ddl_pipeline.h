@@ -171,6 +171,7 @@ public:
   common::ObArenaAllocator allocator_;
   lib::MemoryContext &memory_context_;
   uint64_t *all_vsag_use_mem_;
+  uint64_t table_id_;
 };
 
 class ObVectorIndexRowIterator

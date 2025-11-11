@@ -556,7 +556,7 @@ ObEmbeddingTaskMgr::~ObEmbeddingTaskMgr()
   }
 }
 
-int ObEmbeddingTaskMgr::init(const ObString &model_id, const int64_t http_timeout_us)
+int ObEmbeddingTaskMgr::init(const ObString &model_id, const int64_t http_timeout_us, const ObCollationType col_type)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -577,6 +577,7 @@ int ObEmbeddingTaskMgr::init(const ObString &model_id, const int64_t http_timeou
   if (OB_SUCC(ret)) {
     // TODO(fanfangyao.ffy): 待调参
     http_timeout_us_ = http_timeout_us;
+    cs_type_ = col_type;
     const int64_t reserve_slots = ring_capacity_ > 0 ? ring_capacity_ : 5;
     if (OB_FAIL(slot_ring_.init(reserve_slots))) {
       LOG_WARN("init slot ring failed", K(ret), K(reserve_slots));
@@ -648,7 +649,7 @@ int ObEmbeddingTaskMgr::submit_batch_info(ObTaskBatchInfo *&batch_info)
               task = new (task_mem) share::ObEmbeddingTask();
               const int64_t vec_dim = results.at(0)->get_vector_dim();
               if (OB_FAIL(task->init(cfg_.model_url_, cfg_.model_name_, cfg_.provider_,
-                                   cfg_.user_key_, texts, vec_dim, http_timeout_us_, cb_handle))) {
+                                   cfg_.user_key_, texts, cs_type_, vec_dim, http_timeout_us_, cb_handle))) {
                 LOG_WARN("failed to initialize EmbeddingTask", K(ret));
               }
             }

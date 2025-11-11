@@ -191,7 +191,8 @@ ObEmbeddingTask::ObEmbeddingTask() : local_allocator_("EmbeddingTask", OB_MALLOC
                                     successful_requests_count_(0),
                                     task_cond_(),
                                     callback_done_(false),
-                                    ref_cnt_(0) {}
+                                    ref_cnt_(0),
+                                    col_type_(CS_TYPE_INVALID) {}
 ObEmbeddingTask::ObEmbeddingTask(ObArenaAllocator &allocator) : local_allocator_(), allocator_(allocator),
                                      model_url_(),
                                      model_name_(),
@@ -238,7 +239,8 @@ ObEmbeddingTask::ObEmbeddingTask(ObArenaAllocator &allocator) : local_allocator_
                                      successful_requests_count_(0),
                                      task_cond_(),
                                      callback_done_(false),
-                                     ref_cnt_(0) {}
+                                     ref_cnt_(0),
+                                     col_type_(CS_TYPE_INVALID) {}
 ObEmbeddingTask::~ObEmbeddingTask() {
   reset();
 }
@@ -248,6 +250,7 @@ int ObEmbeddingTask::init(const ObString &model_url,
                           const ObString &provider,
                           const ObString &user_key,
                           const ObIArray<ObString> &input_chunks,
+                          const ObCollationType col_type,
                           int64_t dimension,
                           int64_t http_timeout_us,
                           storage::ObEmbeddingIOCallbackHandle *cb_handle)
@@ -304,7 +307,7 @@ int ObEmbeddingTask::init(const ObString &model_url,
     batch_size_adjusted_ = false;
     current_batch_size_ = batch_size_;
     successful_requests_count_ = 0;
-
+    col_type_ = col_type;
     LOG_DEBUG("task initialized successfully", K(user_key_), K(task_id_), K(dimension_));
   }
 
@@ -513,11 +516,21 @@ int ObEmbeddingTask::start_async_work()
       } else if (OB_FAIL(json_builder.add_array_field(root, INPUT_NAME, input_array))) {
         LOG_WARN("failed to add input array field", K(ret));
       } else {
+        ObString new_utf8_text;
         for (int64_t i = start_idx; i < end_idx && OB_SUCC(ret); i++) {
           const ObString &text = input_chunks_.at(i);
           LOG_DEBUG("Adding text to input array", K(i), K(text));
-          if (OB_FAIL(json_builder.array_add_string(input_array, text))) {
-            LOG_WARN("failed to add text to input array", K(ret), K(i));
+          if (col_type_ != CS_TYPE_UTF8MB4_BIN && col_type_ != CS_TYPE_UTF8MB4_GENERAL_CI) {
+            if (col_type_ == CS_TYPE_INVALID) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected cs_type", K(ret), K(col_type_));
+            } else if (OB_FAIL(ObCharset::charset_convert(allocator_, text, col_type_, CS_TYPE_UTF8MB4_GENERAL_CI, new_utf8_text))) {
+              LOG_WARN("charset convertion failed", K(ret), K(text));
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(json_builder.array_add_string(input_array, new_utf8_text))) {
+            LOG_WARN("failed to add new_utf8_text to input array", K(ret), K(i));
           } else {
             total_text_length += text.length();
           }

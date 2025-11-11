@@ -239,9 +239,9 @@ class ObEmbeddingTaskMgr
 public:
   ObEmbeddingTaskMgr() : allocator_("EmbedTaskMgr", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
                          embedding_handler_(nullptr), slot_ring_(), ring_capacity_(9),
-                         cfg_(), is_inited_(false), is_failed_(false), http_timeout_us_(0) {}
+                         cfg_(), is_inited_(false), is_failed_(false), http_timeout_us_(0), cs_type_(CS_TYPE_INVALID) {}
   ~ObEmbeddingTaskMgr();
-  int init(const common::ObString &model_id, const int64_t http_timeout_us);
+  int init(const common::ObString &model_id, const int64_t http_timeout_us, const ObCollationType cs_type);
   int submit_batch_info(ObTaskBatchInfo *&batch_info);
   int get_ready_batch_info(ObTaskBatchInfo *&batch_info, int &error_ret_code);
   int mark_task_ready(const int64_t slot_idx, const int ret_code);
@@ -263,6 +263,7 @@ private:
   bool is_inited_;
   bool is_failed_;
   int64_t http_timeout_us_;
+  ObCollationType cs_type_;
   DISALLOW_COPY_AND_ASSIGN(ObEmbeddingTaskMgr);
 };
 

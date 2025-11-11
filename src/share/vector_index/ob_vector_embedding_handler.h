@@ -165,6 +165,7 @@ class ObEmbeddingTask
           const ObString &provider,
           const ObString &user_key,
           const ObIArray<ObString> &input_chunks,
+          const ObCollationType col_type,
           int64_t dimension,
           int64_t http_timeout_us,
           storage::ObEmbeddingIOCallbackHandle *cb_handle = nullptr);
@@ -185,7 +186,8 @@ class ObEmbeddingTask
                 K_(batch_size),
                 K_(processed_chunks),
                 K_(total_chunks),
-                K_(process_callback_offset));
+                K_(process_callback_offset),
+                K_(col_type));
   bool is_completed();
   void retain_if_managed();
   void release_if_managed();
@@ -370,6 +372,7 @@ private:
   // TODO(fanfangyao.ffy): use taskhandle to manage task reference count
   // ref_cnt_ is only used to track the reference count of the post create embedding task
   int64_t ref_cnt_;
+  ObCollationType col_type_;
 
   private:
     DISALLOW_COPY_AND_ASSIGN(ObEmbeddingTask);
