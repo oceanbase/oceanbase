@@ -1345,6 +1345,12 @@ int ObTscCgService::extract_das_access_exprs(const ObLogTableScan &op,
               need_add = true;
             }
           }
+          if (op.is_vec_idx_scan() &&
+              scan_ctdef.ir_scan_type_ == OB_VEC_COM_AUX_SCAN &&
+              expr->is_column_ref_expr() &&
+              static_cast<ObColumnRefRawExpr *>(expr)->is_hybrid_embedded_vec_column()) {
+            need_add = true;
+          }
           if (need_add && OB_FAIL(add_var_to_array_no_dup(tmp_access_exprs, expr))) {
             LOG_WARN("failed to add param expr", K(ret));
           }
