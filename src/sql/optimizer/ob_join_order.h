@@ -2962,7 +2962,8 @@ struct MergeKeyInfoHelper
     static double calc_single_parallel_rows(double rows, int64_t parallel);
     int init_basic_text_retrieval_info(uint64_t table_id,
                                        uint64_t ref_table_id,
-                                       PathHelper &helper);
+                                       PathHelper &helper,
+                                       bool &is_es_match);
     int extract_fts_preliminary_query_range(const ObIArray<ColumnItem> &range_columns,
                                             const ObIArray<ObRawExpr*> &predicates,
                                             const ObTableSchema *table_schema,
