@@ -54,8 +54,8 @@ public:
                                                   const ObString &type_str,
                                                   ObString &return_type);
   int32_t schema_id;
-  ObArray<int32_t> identifier_field_ids;
-  ObArray<schema::ObColumnSchemaV2 *> fields;
+  ObFixedArray<int32_t, ObIAllocator> identifier_field_ids;
+  ObFixedArray<schema::ObColumnSchemaV2 *, ObIAllocator> fields;
 
   static constexpr const char *SCHEMA_ID = "schema-id";
   static constexpr const char *IDENTIFIER_FIELD_IDS = "identifier-field-ids";
@@ -87,7 +87,7 @@ public:
   static constexpr const char *TYPE_MAP = "map";
   // TODO more types need to handle
 private:
-  int parse_fields_(const ObJsonArray &json_array, ObArray<schema::ObColumnSchemaV2 *> &fields);
+  int parse_fields_(const ObJsonArray &json_array, ObIArray<schema::ObColumnSchemaV2 *> &fields);
   int parse_field_(const ObJsonObject &json_object, schema::ObColumnSchemaV2 &field);
   int set_column_properties_(schema::ObColumnSchemaV2 &column_schema);
 };

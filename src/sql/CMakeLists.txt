@@ -1654,7 +1654,10 @@ ob_set_subtarget(ob_sql odps
 
 ob_set_subtarget(ob_sql iceberg
   table_format/iceberg/ob_iceberg_utils.cpp
+  table_format/iceberg/avro_schema_util.cpp
   table_format/iceberg/ob_iceberg_table_metadata.cpp
+  table_format/iceberg/spec/type.cpp
+  table_format/iceberg/spec/schema_field.cpp
   table_format/iceberg/spec/table_metadata.cpp
   table_format/iceberg/spec/statistics.cpp
   table_format/iceberg/spec/schema.cpp

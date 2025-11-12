@@ -13,7 +13,6 @@
 #ifndef OB_ICEBERG_UTILS_H
 #define OB_ICEBERG_UTILS_H
 
-#include "lib/hash/ob_hashmap.h"
 #include "lib/json_type/ob_json_parse.h"
 #include "sql/engine/cmd/ob_load_data_parser.h"
 
@@ -51,10 +50,15 @@ public:
 
   static int deep_copy_optional_string(ObIAllocator &allocator,
                                        const std::optional<ObString> &src,
-                                       std::optional<ObString> dst);
+                                       std::optional<ObString> &dst);
   static int deep_copy_map_string(ObIAllocator &allocator,
                                   const ObIArray<std::pair<ObString, ObString>> &src,
                                   ObIArray<std::pair<ObString, ObString>> &dst);
+
+  static int deep_copy_array_string(ObIAllocator &allocator,
+                                    const ObIArray<ObString> &src,
+                                    ObIArray<ObString> &dst);
+
   template <typename T>
   static int deep_copy_array_object(ObIAllocator &allocator,
                                     const ObIArray<T *> &src,
@@ -121,67 +125,6 @@ public:
                               const ObJsonObject &json_object,
                               const ObString &key,
                               ObIArray<ObString> &values);
-};
-
-class ObCatalogAvroUtils
-{
-public:
-  template <avro::Type T>
-  static int get_binary(ObIAllocator &allocator,
-                        const avro::GenericRecord &avro_record,
-                        const ObString &key,
-                        ObString &value);
-
-  template <avro::Type T>
-  static int get_binary(ObIAllocator &allocator,
-                        const avro::GenericRecord &avro_record,
-                        const ObString &key,
-                        std::optional<ObString> &value);
-
-  template <typename T>
-  static typename std::enable_if_t<std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t>
-                                       || std::is_same_v<T, bool>,
-                                   int>
-  get_primitive(const avro::GenericRecord &avro_record, const ObString &key, T &value);
-
-  template <typename T>
-  static typename std::enable_if_t<std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t>
-                                       || std::is_same_v<T, bool>,
-                                   int>
-  get_primitive(const avro::GenericRecord &avro_record,
-                const ObString &key,
-                std::optional<T> &value);
-
-  // 因为 avro 的 map 类型的 key 列只能是 string，所以 iceberg 使用 Array<Record<Key, Value>> 来存储
-  // map 因此这里解析按照 AVRO_ARRAY 类型进行处理
-  template <typename K, typename V>
-  static typename std::enable_if_t<std::is_same_v<K, int32_t> || std::is_same_v<K, int64_t>
-                                       || std::is_same_v<V, int32_t> || std::is_same_v<V, int64_t>
-                                       || std::is_same_v<V, bool>,
-                                   int>
-  get_primitive_map(const avro::GenericRecord &avro_record,
-                    const ObString &key,
-                    ObIArray<std::pair<K, V>> &value);
-
-  template <avro::Type AVRO_TYPE, typename K, typename V>
-  static typename std::enable_if_t<(std::is_same_v<K, int32_t> || std::is_same_v<K, int64_t>)
-                                       && std::is_same_v<V, ObString>,
-                                   int>
-  get_binary_map(ObIAllocator &allocator,
-                 const avro::GenericRecord &avro_record,
-                 const ObString &key,
-                 ObIArray<std::pair<K, V>> &value);
-
-  template <typename V>
-  static typename std::enable_if_t<std::is_same_v<V, int32_t> || std::is_same_v<V, int64_t>, int>
-  get_primitive_array(const avro::GenericRecord &avro_record,
-                      const ObString &key,
-                      ObIArray<V> &value);
-
-  template <avro::Type T>
-  static int get_value(const avro::GenericRecord &avro_record,
-                       const ObString &key,
-                       const avro::GenericDatum *&value);
 };
 
 } // namespace iceberg

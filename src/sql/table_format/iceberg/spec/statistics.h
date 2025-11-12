@@ -38,8 +38,8 @@ public:
   ObString type;
   long snapshot_id;
   long sequence_number;
-  ObArray<int32_t> fields;
-  ObArray<std::pair<ObString, ObString>> properties;
+  ObFixedArray<int32_t, ObIAllocator> fields;
+  ObFixedArray<std::pair<ObString, ObString>, ObIAllocator> properties;
 
   static constexpr const char *TYPE = "type";
   static constexpr const char *SNAPSHOT_ID = "snapshot-id";
@@ -60,7 +60,7 @@ public:
   int64_t file_size_in_bytes;
   int64_t file_footer_size_in_bytes;
   std::optional<ObString> key_metadata;
-  ObArray<BlobMetadata *> blob_metadata;
+  ObFixedArray<BlobMetadata *, ObIAllocator> blob_metadata;
 
   static constexpr const char *SNAPSHOT_ID = "snapshot-id";
   static constexpr const char *STATISTICS_PATH = "statistics-path";

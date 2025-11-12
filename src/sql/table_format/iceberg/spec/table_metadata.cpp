@@ -27,11 +27,11 @@ namespace iceberg
 
 TableMetadata::TableMetadata(ObIAllocator &allocator)
     : SpecWithAllocator(allocator),
-      schemas(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator)),
-      partition_specs(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator)),
-      properties(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator)),
-      snapshots(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator)),
-      statistics(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator))
+      schemas(allocator),
+      partition_specs(allocator),
+      properties(allocator),
+      snapshots(allocator),
+      statistics(allocator)
 {
 }
 
@@ -355,6 +355,8 @@ int TableMetadata::parse_schemas_(const ObJsonObject &json_object)
     } else if (ObJsonNodeType::J_ARRAY != json_schemas->json_type()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid schemas", K(ret));
+    } else if (OB_FAIL(schemas.reserve(json_schemas->element_count()))) {
+      LOG_WARN("failed to init schemas array", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < json_schemas->element_count(); i++) {
         Schema *schema = NULL;
@@ -391,6 +393,8 @@ int TableMetadata::parse_schemas_(const ObJsonObject &json_object)
       LOG_WARN("failed to alloc", K(ret));
     } else if (OB_FAIL(schema->init_from_json(*down_cast<const ObJsonObject *>(json_schema)))) {
       LOG_WARN("parse schema failed", K(ret));
+    } else if (OB_FAIL(schemas.reserve(1))) {
+      LOG_WARN("failed to init schema array", K(ret));
     } else if (OB_FAIL(schemas.push_back(schema))) {
       LOG_WARN("failed to add schema", K(ret));
     } else {
@@ -412,6 +416,8 @@ int TableMetadata::parse_partition_specs_(const ObJsonObject &json_object)
                                                          DEFAULT_SPEC_ID,
                                                          default_spec_id))) {
       LOG_WARN("failed to get default-spec-id", K(ret));
+    } else if (OB_FAIL(partition_specs.reserve(json_partition_specs->element_count()))) {
+      LOG_WARN("failed to init partition_specs array", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < json_partition_specs->element_count(); i++) {
         PartitionSpec *partition_spec = NULL;
@@ -449,6 +455,8 @@ int TableMetadata::parse_partition_specs_(const ObJsonObject &json_object)
                    PARTITION_DATA_ID_START,
                    *down_cast<const ObJsonArray *>(json_partition_spec)))) {
       LOG_WARN("failed to init v1 partition-spec", K(ret));
+    } else if (OB_FAIL(partition_specs.reserve(1))) {
+      LOG_WARN("failed to init partition_specs array", K(ret));
     } else if (OB_FAIL(partition_specs.push_back(partition_spec))) {
       LOG_WARN("failed to add partition spec", K(ret));
     } else {
@@ -481,6 +489,8 @@ int TableMetadata::parse_snapshots_(const ObJsonObject &json_object)
     if (ObJsonNodeType::J_ARRAY != json_snapshots_array->json_type()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid json snapshots", K(ret));
+    } else if (OB_FAIL(snapshots.reserve(json_snapshots_array->element_count()))) {
+      LOG_WARN("failed to reserve snapshots", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < json_snapshots_array->element_count(); i++) {
         ObIJsonBase *json_snapshot = NULL;
@@ -514,6 +524,8 @@ int TableMetadata::parse_statistics_files_(const ObJsonObject &json_object)
     if (ObJsonNodeType::J_ARRAY != json_statistics_array->json_type()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid json statistics array", K(ret));
+    } else if (OB_FAIL(statistics.reserve(json_statistics_array->element_count()))) {
+      LOG_WARN("failed to reserve statistics", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < json_statistics_array->element_count(); i++) {
         ObIJsonBase *json_statistics = NULL;

@@ -151,6 +151,8 @@ int ObLakeTablePartitionInfo::prune_file_and_select_location(ObSqlSchemaGuard &s
                                             manifest_files,
                                             manifest_entries))) {
       LOG_WARN("failed to get manifest entries");
+    } else if (manifest_entries.empty()) {
+      // do nothing
     } else if (OB_FAIL(check_iceberg_use_hash_part(
                    iceberg_table_metadata->table_metadata_.partition_specs,
                    first_bucket_partition_value_offset_))) {

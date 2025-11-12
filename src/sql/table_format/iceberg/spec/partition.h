@@ -92,11 +92,14 @@ public:
   int init_from_v1_json(int32_t next_partition_field_id, const ObJsonArray &json_partition_fields);
   int convert_to_unpartitioned(); // 转换为 unpartitioned PartitionSpec,主要用于 UT
   int assign(const PartitionSpec &other);
+  // 浅拷贝，因为 一个 Manifest 下面的 ManifestEntry 其实都是同一个 PartitionSpec，这里浅拷贝即可
+  int shallow_assign(const PartitionSpec &other);
   bool is_partitioned() const;
   bool is_unpartitioned() const;
+  int get_partition_field_by_field_id(int32_t field_id, const PartitionField *&partition_field) const;
   int32_t spec_id;
   int32_t last_assigned_field_id; // 非持久化字段
-  ObArray<PartitionField *> fields;
+  ObFixedArray<PartitionField *, ObIAllocator> fields;
   TO_STRING_KV(K(spec_id));
   static constexpr const char *SPEC_ID = "spec-id";
   static constexpr const char *FIELDS = "fields";

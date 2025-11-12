@@ -1,4 +1,5 @@
 ob_unittest(test_table_metadata)
+ob_unittest(test_manifest_list)
 ob_unittest(test_manifest)
 ob_unittest(test_partition)
 ob_unittest(test_schema)

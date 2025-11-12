@@ -30,9 +30,7 @@ namespace iceberg
 {
 
 Schema::Schema(ObIAllocator &allocator)
-    : SpecWithAllocator(allocator),
-      identifier_field_ids(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator)),
-      fields(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator))
+    : SpecWithAllocator(allocator), identifier_field_ids(allocator), fields(allocator)
 {
 }
 
@@ -43,6 +41,8 @@ int Schema::assign(const Schema &other)
     schema_id = other.schema_id;
     if (OB_FAIL(identifier_field_ids.assign(other.identifier_field_ids))) {
       LOG_WARN("failed to assign identifier-field-ids", K(ret));
+    } else if (OB_FAIL(fields.reserve(other.fields.count()))) {
+      LOG_WARN("failed to reserve fields", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < other.fields.count(); i++) {
         const schema::ObColumnSchemaV2 *other_column_schema = other.fields.at(i);
@@ -104,7 +104,7 @@ int Schema::get_column_schema_by_field_id(int32_t field_id,
 {
   int ret = OB_SUCCESS;
   column_schema = NULL;
-  for (int32_t i = 0; OB_SUCC(ret) && NULL == column_schema && i < fields.size(); i++) {
+  for (int32_t i = 0; OB_SUCC(ret) && NULL == column_schema && i < fields.count(); i++) {
     const schema::ObColumnSchemaV2 *tmp_column_schema = fields.at(i);
     if (tmp_column_schema->get_column_id() == ObIcebergUtils::get_ob_column_id(field_id)) {
       column_schema = tmp_column_schema;
@@ -119,9 +119,12 @@ int Schema::get_column_schema_by_field_id(int32_t field_id,
 }
 
 int Schema::parse_fields_(const ObJsonArray &json_array,
-                          ObArray<schema::ObColumnSchemaV2 *> &fields)
+                          ObIArray<schema::ObColumnSchemaV2 *> &fields)
 {
   int ret = OB_SUCCESS;
+  if (OB_FAIL(fields.reserve(json_array.element_count()))) {
+    LOG_WARN("failed to reserve space", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < json_array.element_count(); i++) {
     ObIJsonBase *json_array_element = NULL;
     schema::ObColumnSchemaV2 *field = NULL;
@@ -336,14 +339,14 @@ int Schema::parse_complex_type(ObIAllocator &allocator,
       LOG_WARN("failed to get type str", K(ret));
     } else if (0 == type_str.case_compare(TYPE_STRUCT)) {
       ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "struct not supported yet");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "struct is");
     } else if (0 == type_str.case_compare(TYPE_LIST)) {
       if (OB_FAIL(parse_array(allocator, json_object, return_type))) {
         LOG_WARN("failed to parse array", K(ret));
       }
     } else if (0 == type_str.case_compare(TYPE_MAP)) {
       ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "map not supported yet");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "map is");
     } else {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid type", K(ret), K(type_str));
@@ -398,17 +401,19 @@ int Schema::parse_primitive_type_in_complex_type(ObIAllocator &allocator,
   } else if (0 == type_str.case_compare(TYPE_DOUBLE)) {
     return_type = "DOUBLE";
   } else if (type_str.prefix_match_ci(TYPE_DECIMAL)) {
-    std::string tmp_type_str(type_str.ptr(), type_str.length());
-    std::regex decimal_regex(R"(decimal\(\s*(\d+)\s*,\s*(\d+)\s*\))");
-    std::smatch match;
-    if (std::regex_match(tmp_type_str, match, decimal_regex)) {
-      ObSqlString sql_string;
-      sql_string.append_fmt("DECIMAL(%d, %d)",std::stoi(match[1].str()), std::stoi(match[2].str()));
-      OZ(ob_write_string(allocator, sql_string.string(), return_type));
-    } else {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid decimal type", K(ret), K(type_str));
-    }
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "decimal in complex type is");
+    // std::string tmp_type_str(type_str.ptr(), type_str.length());
+    // std::regex decimal_regex(R"(decimal\(\s*(\d+)\s*,\s*(\d+)\s*\))");
+    // std::smatch match;
+    // if (std::regex_match(tmp_type_str, match, decimal_regex)) {
+    //   ObSqlString sql_string;
+    //   sql_string.append_fmt("DECIMAL(%d, %d)",std::stoi(match[1].str()), std::stoi(match[2].str()));
+    //   OZ(ob_write_string(allocator, sql_string.string(), return_type));
+    // } else {
+    //   ret = OB_INVALID_ARGUMENT;
+    //   LOG_WARN("invalid decimal type", K(ret), K(type_str));
+    // }
   } else if (0 == type_str.case_compare(TYPE_DATE)) {
     return_type = "DATE";
   } else if (0 == type_str.case_compare(TYPE_TIME)) {

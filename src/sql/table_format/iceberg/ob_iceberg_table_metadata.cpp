@@ -145,7 +145,7 @@ int ObIcebergTableMetadata::load_by_metadata_location(const ObString &metadata_l
   } else if (OB_ISNULL(buf) || 0 == read_size) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to read table metadata file", K(ret));
-  } else if (ObJsonParser::get_tree(&tmp_allocator, ObString(read_size, buf), json_node)) {
+  } else if (OB_FAIL(ObJsonParser::get_tree(&tmp_allocator, ObString(read_size, buf), json_node))) {
     LOG_WARN("failed to parse table metadata file", K(ret));
   } else if (OB_ISNULL(json_node) || ObJsonNodeType::J_OBJECT != json_node->json_type()) {
     ret = OB_INVALID_ARGUMENT;

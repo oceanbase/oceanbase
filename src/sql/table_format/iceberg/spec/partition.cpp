@@ -311,8 +311,7 @@ int PartitionField::assign(const PartitionField &other)
 }
 
 PartitionSpec::PartitionSpec(ObIAllocator &allocator)
-    : SpecWithAllocator(allocator),
-      fields(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator))
+    : SpecWithAllocator(allocator), fields(allocator)
 {
 }
 
@@ -325,6 +324,8 @@ int PartitionSpec::init_from_json(const ObJsonObject &json_object)
   } else if (NULL == json_fields || ObJsonNodeType::J_ARRAY != json_fields->json_type()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid fields", K(ret));
+  } else if (OB_FAIL(fields.reserve(json_fields->element_count()))) {
+    LOG_WARN("failed to reserve fields", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < json_fields->element_count(); i++) {
       ObIJsonBase *json_field = NULL;
@@ -363,6 +364,11 @@ int PartitionSpec::init_from_v1_json(int32_t next_partition_field_id, const ObJs
   // v1 spec id always = 0
   spec_id = INITIAL_SPEC_ID;
   int32_t last_assigned_partition_field_id = next_partition_field_id - 1;
+
+  if (OB_FAIL(fields.reserve(json_partition_fields.element_count()))) {
+    LOG_WARN("failed to reserve fields", K(ret));
+  }
+
   for (int64_t i = 0; OB_SUCC(ret) && i < json_partition_fields.element_count(); i++) {
     PartitionField *partition_field = NULL;
     ObIJsonBase *json_field = NULL;
@@ -409,6 +415,22 @@ int PartitionSpec::assign(const PartitionSpec &other)
   return ret;
 }
 
+int PartitionSpec::shallow_assign(const PartitionSpec &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    spec_id = other.spec_id;
+    last_assigned_field_id = other.last_assigned_field_id;
+    if (OB_FAIL(fields.reserve(other.fields.count()))) {
+      LOG_WARN("failed to reserve fields", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < other.fields.count(); i++) {
+      OZ(fields.push_back(other.fields[i]));
+    }
+  }
+  return ret;
+}
+
 bool PartitionSpec::is_partitioned() const
 {
   bool has_valid_partition = false;
@@ -423,6 +445,24 @@ bool PartitionSpec::is_partitioned() const
 bool PartitionSpec::is_unpartitioned() const
 {
   return !is_partitioned();
+}
+
+int PartitionSpec::get_partition_field_by_field_id(int32_t field_id,
+                                                   const PartitionField *&partition_field) const
+{
+  int ret = OB_SUCCESS;
+  partition_field = NULL;
+  for (int64_t i = 0; partition_field == NULL && i < fields.count(); i++) {
+    if (fields[i]->field_id == field_id) {
+      partition_field = fields[i];
+    }
+  }
+
+  if (OB_ISNULL(partition_field)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("failed to find specific PartitionField", K(ret), K(field_id));
+  }
+  return ret;
 }
 
 int PartitionKey::assign(const PartitionKey &other)
