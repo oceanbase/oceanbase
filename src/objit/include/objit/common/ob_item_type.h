@@ -2968,7 +2968,7 @@ typedef enum ObItemType
   T_HTTP_KEEPLIVE_TIME = 4932,
   T_RANDOM_PARTITION = 4933, // random distribution
   T_COLUMN_NAME_CASE_SENSITIVE = 4934,
-
+  T_REPLACE_LS = 4935, // replace LS
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

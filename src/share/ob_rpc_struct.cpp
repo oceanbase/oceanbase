@@ -4037,6 +4037,7 @@ static const char* alter_ls_replica_task_type_strs[] = {
   "MODIFY_LS_REPLICA_TYPE",
   "MODIFY_LS_PAXOS_REPLICA_NUM",
   "CANCEL_LS_REPLICA_TASK",
+  "REPLACE_LS"
 };
 
 const char* ObAlterLSReplicaTaskType::get_type_str() const {

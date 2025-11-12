@@ -4698,6 +4698,7 @@ public:
     ModifyLSReplicaTypeTask,
     ModifyLSPaxosReplicaNumTask,
     CancelLSReplicaTask,
+    ReplaceLSReplicaTask,
     LSReplicaTaskMax
   };
 public:
