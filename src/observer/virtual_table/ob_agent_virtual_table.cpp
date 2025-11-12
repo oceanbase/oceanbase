@@ -145,11 +145,19 @@ int ObAgentVirtualTable::do_open()
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
+  ObSessionParam session_param;
+  ObTimeZoneInfoWrap tz_wrap;
+  if (OB_NOT_NULL(session_)) {
+    tz_wrap.deep_copy(session_->get_tz_info_wrap());
+    session_param.tz_info_wrap_ = &tz_wrap;
+  } else {
+    session_param.tz_info_wrap_ = nullptr;
+  }
   if (OB_FAIL(ObAgentTableBase::do_open())) {
     LOG_WARN("base agent table open failed", KR(ret));
   } else if (OB_FAIL(construct_sql(base_tenant_id_, sql))) {
     LOG_WARN("construct sql failed", KR(ret), K(base_tenant_id_));
-  } else if (OB_FAIL(GCTX.sql_proxy_->read(*sql_res_, base_tenant_id_, sql.ptr()))) {
+  } else if (OB_FAIL(GCTX.sql_proxy_->read(*sql_res_, base_tenant_id_, sql.ptr(), &session_param))) {
     LOG_WARN("execute sql failed", KR(ret), K(base_tenant_id_), K(sql));
   } else if (OB_ISNULL(sql_res_->get_result())) {
     ret = OB_ERR_UNEXPECTED;
