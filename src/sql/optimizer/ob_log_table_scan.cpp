@@ -6291,7 +6291,7 @@ int ObLogTableScan::set_scan_order()
     bool order_used = false;
     if (OB_FAIL(check_op_orderding_used_by_parent(order_used))) {
       LOG_WARN("fail to check op ordering", K(ret));
-    } else if (order_used || das_keep_ordering_ || is_tsc_with_domain_id()) {
+    } else if (order_used || das_keep_ordering_ || is_tsc_with_domain_id() || is_skip_scan() || use_index_merge()) {
       scan_order_ = is_descending_direction(scan_direction_) ? ObQueryFlag::Reverse : ObQueryFlag::Forward;
     } else {
       scan_order_ = common::ObQueryFlag::NoOrder;
