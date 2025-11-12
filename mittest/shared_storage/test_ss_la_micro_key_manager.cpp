@@ -68,7 +68,7 @@ TEST_F(TestLAMicroKeyManager, test_push_micro_key_to_hashset)
   macro_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_DATA_MACRO));
   macro_id.set_second_id(100);  //tablet_id
   macro_id.set_third_id(101);   //seq_id
-  macro_id.set_macro_transfer_epoch(0); // transfer_seq
+  macro_id.set_macro_private_transfer_epoch(0); // transfer_seq
   macro_id.set_tenant_seq(102);  //tenant_seq
   ObSSMicroBlockCacheKey micro_key;
   ObSSMicroPrewarmMeta micro_meta;

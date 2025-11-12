@@ -114,7 +114,7 @@ public:
         macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
         macro_id.set_second_id(MACRO_BLOCK_TABLET_ID);       //tablet_id
         macro_id.set_third_id(MACRO_BLOCK_SERVER_ID);        //server_id
-        macro_id.set_macro_transfer_epoch(MACRO_BLOCK_TRANSFER_SEQ);   // transfer_seq
+        macro_id.set_macro_private_transfer_epoch(MACRO_BLOCK_TRANSFER_SEQ);   // transfer_seq
         macro_id.set_tenant_seq(i);           // tenant_seq
         break;
       case ObSSMacroCacheType::META_FILE:
@@ -122,7 +122,7 @@ public:
         macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_TABLET_META);
         macro_id.set_second_id(META_FILE_LS_ID);  // ls_id
         macro_id.set_third_id(META_FILE_TABLET_ID); // tablet_id
-        macro_id.set_meta_transfer_epoch(META_FILE_TRANSFER_SEQ); //transfer_seq
+        macro_id.set_meta_private_transfer_epoch(META_FILE_TRANSFER_SEQ); //transfer_seq
         macro_id.set_meta_version_id(i); // meta_version_id
         break;
       case ObSSMacroCacheType::TMP_FILE:
@@ -136,7 +136,7 @@ public:
         macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
         macro_id.set_second_id(HOT_TABLET_TABLET_ID);
         macro_id.set_third_id(HOT_TABLET_SERVER_ID); // server_id
-        macro_id.set_macro_transfer_epoch(HOT_TABLET_TRANSFER_SEQ); // transfer_seq
+        macro_id.set_macro_private_transfer_epoch(HOT_TABLET_TRANSFER_SEQ); // transfer_seq
         macro_id.set_tenant_seq(i); // tenant_seq
         break;
       default:
@@ -159,7 +159,7 @@ public:
           macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
           macro_id.set_second_id(MACRO_BLOCK_TABLET_ID);
           macro_id.set_third_id(MACRO_BLOCK_SERVER_ID); // server_id
-          macro_id.set_macro_transfer_epoch(MACRO_BLOCK_TRANSFER_SEQ); // transfer_seq
+          macro_id.set_macro_private_transfer_epoch(MACRO_BLOCK_TRANSFER_SEQ); // transfer_seq
           macro_id.set_tenant_seq(j); // tenant_seq
           break;
         case ObSSMacroCacheType::META_FILE:
@@ -167,7 +167,7 @@ public:
           macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_TABLET_META);
           macro_id.set_second_id(META_FILE_LS_ID);  // ls_id
           macro_id.set_third_id(META_FILE_TABLET_ID); // tablet_id
-          macro_id.set_meta_transfer_epoch(META_FILE_TRANSFER_SEQ); //transfer_seq
+          macro_id.set_meta_private_transfer_epoch(META_FILE_TRANSFER_SEQ); //transfer_seq
           macro_id.set_meta_version_id(j); // meta_version_id
           ls_epoch_id = META_FILE_LS_EPOCH_ID;
           break;
@@ -182,7 +182,7 @@ public:
           macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
           macro_id.set_second_id(HOT_TABLET_TABLET_ID);
           macro_id.set_third_id(HOT_TABLET_SERVER_ID); // server_id
-          macro_id.set_macro_transfer_epoch(HOT_TABLET_TRANSFER_SEQ); // transfer_seq
+          macro_id.set_macro_private_transfer_epoch(HOT_TABLET_TRANSFER_SEQ); // transfer_seq
           macro_id.set_tenant_seq(j); // tenant_seq
           break;
         default:
@@ -211,7 +211,7 @@ public:
         macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
         macro_id.set_second_id(tablet_id);       //tablet_id
         macro_id.set_third_id(MACRO_BLOCK_SERVER_ID);             //server_id
-        macro_id.set_macro_transfer_epoch(MACRO_BLOCK_TRANSFER_SEQ);   // transfer_seq
+        macro_id.set_macro_private_transfer_epoch(MACRO_BLOCK_TRANSFER_SEQ);   // transfer_seq
         macro_id.set_tenant_seq(i);           // tenant_seq
         break;
       case ObSSMacroCacheType::META_FILE:
@@ -220,7 +220,7 @@ public:
         macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_TABLET_META);
         macro_id.set_second_id(META_FILE_LS_ID);  // ls_id
         macro_id.set_third_id(tablet_id); // tablet_id
-        macro_id.set_meta_transfer_epoch(META_FILE_TRANSFER_SEQ); //transfer_seq
+        macro_id.set_meta_private_transfer_epoch(META_FILE_TRANSFER_SEQ); //transfer_seq
         macro_id.set_meta_version_id(i); // meta_version_id
         write_info_.set_ls_epoch_id(META_FILE_LS_EPOCH_ID); // ls_epoch_id
         break;
@@ -240,7 +240,7 @@ public:
         macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
         macro_id.set_second_id(tablet_id);
         macro_id.set_third_id(HOT_TABLET_SERVER_ID); //server_id
-        macro_id.set_macro_transfer_epoch(HOT_TABLET_TRANSFER_SEQ); // transfer_seq
+        macro_id.set_macro_private_transfer_epoch(HOT_TABLET_TRANSFER_SEQ); // transfer_seq
         macro_id.set_tenant_seq(i); // tenant_seq
         break;
       default:

@@ -1446,10 +1446,10 @@ int ObCOMergeDagNet::get_compat_mode()
           0/*timeout_us*/,
           storage::ObMDSGetTabletMode::READ_ALL_COMMITED))) {
     LOG_WARN("failed to get tablet", K(ret), K(ls_id_), K(tablet_id_));
-  } else if (OB_FAIL(ObTablet::check_transfer_epoch_equal(*tmp_tablet_handle.get_obj(), basic_param_.schedule_transfer_epoch_))) {
-    LOG_WARN("tmp tablet transfer epoch not eq with old transfer epoch", K(ret),
+  } else if (OB_FAIL(ObTablet::check_private_transfer_epoch_equal(*tmp_tablet_handle.get_obj(), basic_param_.schedule_private_transfer_epoch_))) {
+    LOG_WARN("tmp tablet private transfer epoch not eq with old private transfer epoch", K(ret),
         "tmp_tablet_meta", tmp_tablet_handle.get_obj()->get_tablet_meta(),
-        "old_transfer_epoch", basic_param_.schedule_transfer_epoch_);
+        "old_private_transfer_epoch", basic_param_.schedule_private_transfer_epoch_);
   } else {
     basic_param_.dag_net_id_ = get_dag_id();
     basic_param_.skip_get_tablet_ = true;

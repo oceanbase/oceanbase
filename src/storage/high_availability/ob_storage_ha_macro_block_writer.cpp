@@ -315,14 +315,14 @@ int ObStorageHALocalMacroBlockWriter::set_macro_write_info_(
     blocksstable::ObStorageObjectOpt &opt)
 {
   int ret = OB_SUCCESS;
-  int32_t tablet_transfer_epoch = OB_INVALID_TRANSFER_SEQ;
+  int32_t tablet_private_transfer_epoch = OB_INVALID_TRANSFER_SEQ;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret));
   } else if (OB_ISNULL(index_block_rebuilder_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "index_block_rebuilder_ should not be nullptr", KR(ret), KP(index_block_rebuilder_));
-  } else if (OB_FAIL(index_block_rebuilder_->get_tablet_transfer_epoch(tablet_transfer_epoch))) {
+  } else if (OB_FAIL(index_block_rebuilder_->get_tablet_private_transfer_epoch(tablet_private_transfer_epoch))) {
     STORAGE_LOG(WARN, "failed to get tablet_transfer_seq", K(ret));
   } else {
     write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_MIGRATE_WRITE);
@@ -333,10 +333,10 @@ int ObStorageHALocalMacroBlockWriter::set_macro_write_info_(
     write_info.offset_ = 0;
     /*
       For private_block in SS_mode, macro_block is seperated by transfer_seq directory.
-      But the macro_transfer_epoch of input macro_block_id may be old.
+      But the macro_private_transfer_epoch of input macro_block_id may be old.
       Therefore, we use the tablet_transfer_seq_ from index_builder to write new macro_block.
     */
-    opt.set_private_object_opt(tablet_id_.id(), tablet_transfer_epoch);
+    opt.set_private_object_opt(tablet_id_.id(), tablet_private_transfer_epoch);
   }
   return ret;
 }

@@ -94,7 +94,7 @@ TEST_F(TestSSMacroCacheStat, test_tablet_stat)
   macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
   macro_id.set_second_id(tablet_id);
   macro_id.set_third_id(server_id);
-  macro_id.set_macro_transfer_epoch(0); // transfer_seq
+  macro_id.set_macro_private_transfer_epoch(0); // transfer_seq
   macro_id.set_tenant_seq(100); // tenant_seq
   ASSERT_TRUE(macro_id.is_valid());
 
@@ -187,7 +187,7 @@ TEST_F(TestSSMacroCacheStat, test_tablet_stat_after_evict)
   macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
   macro_id.set_second_id(tablet_id);
   macro_id.set_third_id(server_id);
-  macro_id.set_macro_transfer_epoch(0); // transfer_seq
+  macro_id.set_macro_private_transfer_epoch(0); // transfer_seq
   macro_id.set_tenant_seq(100); // tenant_seq
   ASSERT_TRUE(macro_id.is_valid());
 

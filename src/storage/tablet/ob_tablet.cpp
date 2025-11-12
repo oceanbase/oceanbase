@@ -9138,17 +9138,17 @@ int ObTablet::check_snapshot_readable(const ObDDLInfoCache& ddl_info_cache, cons
   return ret;
 }
 
-/* static */int ObTablet::check_transfer_epoch_equal(const ObTablet &tablet, const int32_t transfer_epoch)
+/* static */int ObTablet::check_private_transfer_epoch_equal(const ObTablet &tablet, const int32_t private_transfer_epoch)
 {
   int ret = OB_SUCCESS;
-  if (0 <= transfer_epoch) {
-    int32_t expected_transfer_epoch = -1;
-    if (OB_FAIL(tablet.get_private_transfer_epoch(expected_transfer_epoch))) {
-      LOG_WARN("failed to get transfer epoch", K(ret), K(tablet));
-    } else if (transfer_epoch != expected_transfer_epoch) {
+  if (0 <= private_transfer_epoch) {
+    int32_t expected_private_transfer_epoch = -1;
+    if (OB_FAIL(tablet.get_private_transfer_epoch(expected_private_transfer_epoch))) {
+      LOG_WARN("failed to get private transfer epoch", K(ret), K(tablet));
+    } else if (private_transfer_epoch != expected_private_transfer_epoch) {
       ret = OB_TABLET_TRANSFER_SEQ_NOT_MATCH;
-      LOG_WARN("tablet transfer epoch not eq with transfer epoch",
-          K(expected_transfer_epoch), K(transfer_epoch), K(tablet));
+      LOG_WARN("tablet private transfer epoch not eq with expected private transfer epoch",
+          K(expected_private_transfer_epoch), K(private_transfer_epoch), K(tablet));
     }
   }
   return ret;
@@ -9894,11 +9894,11 @@ int ObTablet::check_tx_data_can_explain_user_data(const share::SCN &tx_data_tabl
   }
   return ret;
 }
-int ObTablet::get_private_transfer_epoch(int32_t &transfer_epoch) const
+int ObTablet::get_private_transfer_epoch(int32_t &private_transfer_epoch) const
 {
   int ret = OB_SUCCESS;
-  transfer_epoch = -1;
-  if (OB_FAIL(tablet_meta_.transfer_info_.get_private_transfer_epoch(transfer_epoch))) {
+  private_transfer_epoch = -1;
+  if (OB_FAIL(tablet_meta_.transfer_info_.get_private_transfer_epoch(private_transfer_epoch))) {
     LOG_WARN("failed to get transfer epoch from transfer info", K(ret), K_(tablet_meta_.transfer_info));
   }
   return ret;

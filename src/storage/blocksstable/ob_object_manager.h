@@ -116,13 +116,13 @@ public:
   };
 
   void set_ss_private_tablet_meta_object_opt(
-      const int64_t ls_id, const uint64_t tablet_id, const uint64_t version, const int64_t tablet_trasfer_seq)
+      const int64_t ls_id, const uint64_t tablet_id, const uint64_t version, const int64_t tablet_private_trasfer_epoch)
   {
     object_type_ = ObStorageObjectType::PRIVATE_TABLET_META;
     ss_private_tablet_opt_.ls_id_ = ls_id;
     ss_private_tablet_opt_.tablet_id_ = tablet_id;
     ss_private_tablet_opt_.version_ = version;
-    ss_private_tablet_opt_.tablet_transfer_seq_ = tablet_trasfer_seq;
+    ss_private_tablet_opt_.tablet_private_transfer_epoch_ = tablet_private_trasfer_epoch;
   }
 
   void set_ss_is_shared_tenant_deleted_object_opt(
@@ -252,7 +252,7 @@ private:
     uint64_t ls_id_;
     uint64_t tablet_id_;
     int64_t version_;
-    int64_t tablet_transfer_seq_;
+    int64_t tablet_private_transfer_epoch_;
   };
   struct SSPrivateTabletCurrentVersionObjectOpt
   {

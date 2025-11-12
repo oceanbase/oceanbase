@@ -18,9 +18,9 @@ using namespace oceanbase;
 using namespace share;
 using namespace storage;
 
-/*static*/bool ObTabletTransferInfo::is_private_transfer_epoch_valid(const int64_t transfer_epoch)
+/*static*/bool ObTabletTransferInfo::is_private_transfer_epoch_valid(const int64_t private_transfer_epoch)
 {
-  return transfer_epoch >= 0 && transfer_epoch < blocksstable::MacroBlockId::MAX_TRANSFER_SEQ;
+  return private_transfer_epoch >= 0 && private_transfer_epoch < blocksstable::MacroBlockId::MAX_TRANSFER_SEQ;
 }
 
 ObTabletTransferInfo::ObTabletTransferInfo()
@@ -92,7 +92,7 @@ bool ObTabletTransferInfo::is_valid() const
       && transfer_start_scn_.is_valid()
       && transfer_seq_ >= 0;
       // won't check src_reorganization_scn_ for compatibility
-      // won't check transfer_epoch cause it's inited at dest.
+      // won't check private_transfer_epoch cause it's inited at dest.
 }
 
 bool ObTabletTransferInfo::has_transfer_table() const
@@ -111,10 +111,10 @@ bool ObTabletTransferInfo::is_transfer_out_deleted() const
   return unused_is_transfer_out_deleted_;
 }
 
-int ObTabletTransferInfo::get_private_transfer_epoch(int32_t &transfer_epoch) const
+int ObTabletTransferInfo::get_private_transfer_epoch(int32_t &private_transfer_epoch) const
 {
   int ret = OB_SUCCESS;
-  transfer_epoch = -1;
+  private_transfer_epoch = -1;
   if (-1 == private_transfer_epoch_) {
     // transfer seq(!= -1) for previous version should within [0, 1<<20 - 1)
     if (transfer_seq_ != -1
@@ -123,13 +123,13 @@ int ObTabletTransferInfo::get_private_transfer_epoch(int32_t &transfer_epoch) co
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected transfer seq", K(ret), K(transfer_seq_));
     } else {
-      transfer_epoch = transfer_seq_;
+      private_transfer_epoch = transfer_seq_;
     }
   } else if (OB_UNLIKELY(!is_private_transfer_epoch_valid(private_transfer_epoch_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected transfer epoch", K(ret), K(private_transfer_epoch_));
   } else {
-    transfer_epoch = private_transfer_epoch_;
+    private_transfer_epoch = private_transfer_epoch_;
   }
   return ret;
 }

@@ -1368,7 +1368,7 @@ TEST_F(TestSSMicroCache, test_private_macro_cache_miss_cnt)
   uint64_t tablet_id = 200001;
   uint64_t server_id = 1;
 
-  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tablet_data_tablet_id_transfer_seq_dir(MTL_ID(), MTL_EPOCH_ID(), tablet_id, 0/*transfer_seq*/));
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tablet_data_tablet_id_private_transfer_epoch_dir(MTL_ID(), MTL_EPOCH_ID(), tablet_id, 0/*transfer_seq*/));
 
   // 1. write
   MacroBlockId macro_id;
@@ -1376,7 +1376,7 @@ TEST_F(TestSSMicroCache, test_private_macro_cache_miss_cnt)
   macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
   macro_id.set_second_id(tablet_id); // tablet_id
   macro_id.set_third_id(100); // seq_id
-  macro_id.set_macro_transfer_epoch(0); // tablet_transfer_seq
+  macro_id.set_macro_private_transfer_epoch(0); // tablet_transfer_seq
   macro_id.set_tenant_seq(server_id); // macro_seq
   ASSERT_TRUE(macro_id.is_valid());
   ObStorageObjectHandle write_object_handle;

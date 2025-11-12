@@ -77,7 +77,7 @@ int ObPartitionMergePolicy::get_medium_merge_tables(
   }
 
   if (FAILEDx(tablet.get_private_transfer_epoch(result.private_transfer_epoch_))) {
-    LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
+    LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
   } else {
     // major sstable's rec scn will always be 0
     result.rec_scn_.set_min();
@@ -237,7 +237,7 @@ int ObPartitionMergePolicy::get_mds_merge_tables(
     ret = OB_NO_NEED_MERGE;
     result.handle_.reset();
   } else if (OB_FAIL(tablet.get_private_transfer_epoch(result.private_transfer_epoch_))) {
-    LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
+    LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
   } else {
     result.version_range_.snapshot_version_ = tablet.get_snapshot_version();
   }
@@ -272,7 +272,7 @@ int ObPartitionMergePolicy::get_convert_co_major_merge_tables(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("convert co major merge should not change major snapshot version", K(ret), KPC(base_table), K(param), K(tablet));
   } else if (OB_FAIL(tablet.get_private_transfer_epoch(result.private_transfer_epoch_))) {
-    LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
+    LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
   } else {
     result.version_range_.base_version_ = 0;
     result.version_range_.multi_version_start_ = tablet.get_multi_version_start();
@@ -445,7 +445,7 @@ int ObPartitionMergePolicy::get_mini_merge_tables(
       LOG_WARN("failed to find mini merge tables", K(ret), K(next_freeze_info));
     }
   } else if (OB_FAIL(tablet.get_private_transfer_epoch(result.private_transfer_epoch_))) {
-    LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
+    LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
   } else if (result.update_tablet_directly_) {
     // do nothing else
   } else if (OB_FAIL(deal_with_minor_result(merge_type, ls, tablet, result))) {
@@ -582,7 +582,7 @@ int ObPartitionMergePolicy::deal_with_minor_result(
   } else {
     result.version_range_.base_version_ = 0;
     if (OB_FAIL(tablet.get_private_transfer_epoch(result.private_transfer_epoch_))) {
-      LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
+      LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
     } else if (OB_FAIL(tablet.get_recycle_version(result.version_range_.multi_version_start_, result.version_range_.base_version_))) {
       LOG_WARN("Fail to get table store recycle version", K(ret), K(result.version_range_), K(tablet));
     }
@@ -1654,7 +1654,7 @@ int ObAdaptiveMergePolicy::get_meta_merge_tables(
   }
 
   if (FAILEDx(tablet.get_private_transfer_epoch(result.private_transfer_epoch_))) {
-    LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
+    LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
   } else {
     FLOG_INFO("succeed to get meta major merge tables", K(merge_type), K(result), K(tablet));
   }
@@ -2503,7 +2503,7 @@ int ObPartitionMergePolicy::deal_with_ss_minor_result(
   if (OB_SUCC(ret)) {
     result.version_range_.base_version_ = 0;
     if (OB_FAIL(tablet.get_private_transfer_epoch(result.private_transfer_epoch_))) {
-      LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
+      LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
     } else if (OB_FAIL(tablet.get_recycle_version(result.version_range_.multi_version_start_, result.version_range_.base_version_))) {
       LOG_WARN("Fail to get table store recycle version", K(ret), K(result.version_range_), K(tablet));
     }

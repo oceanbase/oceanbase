@@ -678,10 +678,10 @@ int ObBasicTabletMergeCtx::build_ctx(bool &finish_flag)
     if (OB_TABLET_NOT_EXIST != ret) {
       LOG_PRINT_WRAPPER("failed to get ls_handle/tablet_handle/rebuild_seq");
     }
-  } else if (OB_FAIL(ObTablet::check_transfer_epoch_equal(*get_tablet(), get_schedule_transfer_epoch()))) {
-    LOG_WARN("new tablet transfer epoch not eq with old transfer epoch", K(ret),
+  } else if (OB_FAIL(ObTablet::check_private_transfer_epoch_equal(*get_tablet(), get_schedule_private_transfer_epoch()))) {
+    LOG_WARN("new tablet private transfer epoch not eq with old private transfer epoch", K(ret),
         "new_tablet_meta", get_tablet()->get_tablet_meta(),
-        "old_transfer_epoch", get_schedule_transfer_epoch());
+        "old_private_transfer_epoch", get_schedule_private_transfer_epoch());
   } else if (OB_FAIL(get_merge_tables(get_merge_table_result))) {
     if (OB_NO_NEED_MERGE != ret) {
       LOG_PRINT_WRAPPER("failed to get merge tables");
@@ -909,10 +909,10 @@ int ObBasicTabletMergeCtx::swap_tablet()
   if (OB_FAIL(get_ls()->get_tablet_svr()->get_tablet_without_memtables(
       WashTabletPriority::WTP_LOW, key, mem_ctx_.get_allocator(), tablet_handle_))) {
     LOG_WARN("failed to get tablet without memtables", K(ret), K(key));
-  } else if (OB_FAIL(ObTablet::check_transfer_epoch_equal(*get_tablet(), get_schedule_transfer_epoch()))) {
-    LOG_WARN("new tablet transfer epoch not eq with old transfer epoch", K(ret),
+  } else if (OB_FAIL(ObTablet::check_private_transfer_epoch_equal(*get_tablet(), get_schedule_private_transfer_epoch()))) {
+    LOG_WARN("new tablet private transfer epoch not eq with old private transfer epoch", K(ret),
         "new_tablet_meta", get_tablet()->get_tablet_meta(),
-        "old_transfer_epoch", get_schedule_transfer_epoch());
+        "old_private_transfer_epoch", get_schedule_private_transfer_epoch());
   } else {
     static_param_.rowkey_read_info_ = static_cast<const ObRowkeyReadInfo *>(&(get_tablet()->get_rowkey_read_info()));
     LOG_INFO("success to swap tablet handle", K(ret), K(tablet_handle_),
@@ -1634,10 +1634,10 @@ int ObBasicTabletMergeCtx::swap_tablet(ObGetMergeTablesResult &get_merge_table_r
       if (OB_FAIL(swap_tablet())) {
         LOG_WARN("failed to get alloc tablet handle", KR(ret));
       } else if (GCTX.is_shared_storage_mode() &&
-                OB_FAIL(ObTablet::check_transfer_epoch_equal(*get_tablet(), get_merge_table_result.private_transfer_epoch_))) {
-        LOG_WARN("new tablet transfer epoch not eq with old transfer epoch in ss", K(ret),
+                OB_FAIL(ObTablet::check_private_transfer_epoch_equal(*get_tablet(), get_merge_table_result.private_transfer_epoch_))) {
+        LOG_WARN("new tablet private transfer epoch not eq with old private transfer epoch in ss", K(ret),
             "new_tablet_meta", get_tablet()->get_tablet_meta(),
-            "old_transfer_epoch", get_merge_table_result.private_transfer_epoch_, K(lbt()));
+            "old_private_transfer_epoch", get_merge_table_result.private_transfer_epoch_, K(lbt()));
       } else if (OB_FAIL(get_merge_tables(get_merge_table_result))) {
         if (OB_NO_NEED_MERGE != ret) {
           LOG_WARN("failed to get merge tables", KR(ret), KPC(this));

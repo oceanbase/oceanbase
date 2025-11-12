@@ -138,7 +138,7 @@ int ObTenantSlogCkptUtil::write_and_apply_tablet(
       } else if (OB_NOT_NULL(src_tablet) && OB_FAIL(src_tablet->get_ls_epoch(ls_epoch))) {
         STORAGE_LOG(WARN, "failed to get ls epoch", K(ret), K(tablet_key));
       } else if (OB_NOT_NULL(src_tablet) && OB_FAIL(src_tablet->get_private_transfer_epoch(private_transfer_epoch))) {
-        STORAGE_LOG(WARN, "failed to get transfer epoch", K(ret), "tablet_meta", src_tablet->get_tablet_meta());
+        STORAGE_LOG(WARN, "failed to get private transfer epoch", K(ret), "tablet_meta", src_tablet->get_tablet_meta());
       }
 
       const ObTabletPersisterParam param(data_version, tablet_key.ls_id_, ls_epoch, tablet_key.tablet_id_, private_transfer_epoch, tablet_meta_version);

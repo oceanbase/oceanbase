@@ -1329,7 +1329,7 @@ int ObTenantTabletScheduler::schedule_tablet_minor_merge(
       LOG_WARN("failed to check need merge", K(ret), K(merge_type), K(tablet_id), K(tablet_handle));
     }
   } else if (OB_FAIL(tablet_handle.get_obj()->get_private_transfer_epoch(result.private_transfer_epoch_))) {
-    LOG_WARN("failed to get transfer epoch", K(ret), K(tablet_handle));
+    LOG_WARN("failed to get private transfer epoch", K(ret), K(tablet_handle));
   } else {
     int64_t minor_compact_trigger = ObPartitionMergePolicy::DEFAULT_MINOR_COMPACT_TRIGGER;
     {
@@ -1360,12 +1360,12 @@ int ObTenantTabletScheduler::schedule_tablet_minor_merge(
       const int64_t parallel_dag_cnt = minor_range_mgr.exe_range_array_.count() + parallel_results.count();
       const int64_t total_sstable_cnt = result.handle_.get_count();
       const int64_t create_time = common::ObTimeUtility::fast_current_time();
-      int32_t transfer_epoch = -1;
-      if (OB_FAIL(tablet_handle.get_obj()->get_private_transfer_epoch(transfer_epoch))) {
-        LOG_WARN("failed to get transfer epoch", K(ret), K(tablet_handle));
+      int32_t private_transfer_epoch = -1;
+      if (OB_FAIL(tablet_handle.get_obj()->get_private_transfer_epoch(private_transfer_epoch))) {
+        LOG_WARN("failed to get private transfer epoch", K(ret), K(tablet_handle));
       }
 
-      ObTabletMergeDagParam dag_param(merge_type, ls_id, tablet_id, transfer_epoch);
+      ObTabletMergeDagParam dag_param(merge_type, ls_id, tablet_id, private_transfer_epoch);
       for (int64_t k = 0; OB_SUCC(ret) && k < parallel_results.count(); ++k) {
         if (OB_UNLIKELY(parallel_results.at(k).handle_.get_count() <= 1)) {
           LOG_WARN("invalid parallel result", K(ret), K(k), K(parallel_results));
@@ -1900,7 +1900,7 @@ int ObTenantTabletScheduler::schedule_tablet_ss_minor_merge(const ObMergeType &m
   } else if (OB_FAIL(ret)) {
     LOG_WARN("failed to check need merge", K(ret), K(merge_type), K(ls_id), K(tablet_id), K(tablet_handle));
   } else if (OB_FAIL(tablet.get_private_transfer_epoch(result.private_transfer_epoch_))) {
-    LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
+    LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
   } else {
     const int64_t parallel_dag_cnt = 1;
     const int64_t total_sstable_cnt = result.handle_.get_count();

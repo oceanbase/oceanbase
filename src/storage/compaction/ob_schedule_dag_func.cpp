@@ -173,8 +173,8 @@ int ObDagParamFunc::fill_param(
     LOG_WARN("invalid argument", KR(ret), K(ls_id), K(merge_snapshot_version),
       K(exec_mode));
   }
-  if (FAILEDx(tablet.get_private_transfer_epoch(param.schedule_transfer_epoch_))) {
-    LOG_WARN("failed to get transfer epoch", K(ret), K(tablet));
+  if (FAILEDx(tablet.get_private_transfer_epoch(param.schedule_private_transfer_epoch_))) {
+    LOG_WARN("failed to get private transfer epoch", K(ret), K(tablet));
   } else {
     param.ls_id_ = ls_id;
     param.tablet_id_ = tablet.get_tablet_meta().tablet_id_;
@@ -204,8 +204,8 @@ int ObDagParamFunc::fill_param(
     LOG_WARN("invalid argument", KR(ret), K(ls_id), K(merge_snapshot_version),
       K(exec_mode));
   }
-  if (FAILEDx(tablet.get_private_transfer_epoch(param.schedule_transfer_epoch_))) {
-    LOG_WARN("failed to get transfer epoch", K(ret), K(tablet));
+  if (FAILEDx(tablet.get_private_transfer_epoch(param.schedule_private_transfer_epoch_))) {
+    LOG_WARN("failed to get private transfer epoch", K(ret), K(tablet));
   } else {
     param.ls_id_ = ls_id;
     param.tablet_id_ = tablet.get_tablet_meta().tablet_id_;

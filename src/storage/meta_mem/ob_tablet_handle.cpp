@@ -196,15 +196,15 @@ void ObTabletHandle::reset()
         case ObTabletHandle::ObTabletHdlType::COPY_FROM_T3M :
         case ObTabletHandle::ObTabletHdlType::STANDALONE : {
           int tmp_ret = OB_SUCCESS;
-          int32_t transfer_epoch = -1;
+          int32_t private_transfer_epoch = -1;
           if (0 != ref_cnt) {
             LOG_ERROR("obj ref cnt isn't 0", K(ref_cnt), KPC(this));
           }
-          if (OB_TMP_FAIL(obj_->get_private_transfer_epoch(transfer_epoch))) {
-            LOG_ERROR("fail to get transfer epoch", K(ret), "tablet_meta", obj_->get_tablet_meta());
+          if (OB_TMP_FAIL(obj_->get_private_transfer_epoch(private_transfer_epoch))) {
+            LOG_ERROR("fail to get private transfer epoch", K(ret), "tablet_meta", obj_->get_tablet_meta());
           } else if (ObTabletHdlType::COPY_FROM_T3M == type_
-              && OB_TMP_FAIL(t3m_->dec_external_tablet_cnt(obj_->get_tablet_id().id(), transfer_epoch))) {
-            LOG_ERROR("fail to dec external tablet_cnt", K(tmp_ret), KPC(this), KP(obj_), KPC(obj_));
+              && OB_TMP_FAIL(t3m_->dec_external_tablet_cnt(obj_->get_tablet_id().id(), private_transfer_epoch))) {
+            LOG_ERROR("fail to dec external tablet_cnt", K(tmp_ret), KPC(this), KP(obj_), KPC(obj_), K(private_transfer_epoch));
           }
           if (OB_NOT_NULL(obj_pool_)) {
             ob_usleep(1000 * 1000);

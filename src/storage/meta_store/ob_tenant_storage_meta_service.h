@@ -129,7 +129,7 @@ public:
       const int64_t ls_epoch,
       const ObTabletID &tablet_id,
       const int64_t tablet_version,
-      const int32_t tablet_transfer_epoch,
+      const int32_t tablet_private_transfer_epoch,
       const bool is_shared,
       ObIArray<blocksstable::MacroBlockId> &block_ids);
   int get_shared_blocks_for_tablet(

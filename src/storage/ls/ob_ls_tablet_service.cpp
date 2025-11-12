@@ -933,7 +933,7 @@ int ObLSTabletService::update_tablet_table_store(
       int32_t private_transfer_epoch = -1;
       int64_t tablet_meta_version = 0;
       if (OB_FAIL(old_tablet->get_private_transfer_epoch(private_transfer_epoch))) {
-        LOG_WARN("failed to get transfer epoch", K(ret), "old_tablet_meta", old_tablet->get_tablet_meta());
+        LOG_WARN("failed to get private transfer epoch", K(ret), "old_tablet_meta", old_tablet->get_tablet_meta());
       } else if (OB_FAIL(alloc_private_tablet_meta_version_without_lock(key, tablet_meta_version))) {
         LOG_WARN("failed to alloc tablet meta version", K(ret), K(key));
       }
@@ -1023,7 +1023,7 @@ int ObLSTabletService::update_tablet_table_store(
       int32_t private_transfer_epoch = -1;
       int64_t tablet_meta_version = 0;
       if (OB_FAIL(old_tablet->get_private_transfer_epoch(private_transfer_epoch))) {
-        LOG_WARN("failed to get transfer epoch", K(ret), "old_tablet_meta", old_tablet->get_tablet_meta());
+        LOG_WARN("failed to get private transfer epoch", K(ret), "old_tablet_meta", old_tablet->get_tablet_meta());
       } else if (OB_FAIL(alloc_private_tablet_meta_version_without_lock(key, tablet_meta_version))) {
         LOG_WARN("failed to alloc tablet meta version", K(ret), K(key));
       }
@@ -1104,7 +1104,7 @@ int ObLSTabletService::update_tablet_to_empty_shell(
     int32_t private_transfer_epoch = -1;
     int64_t tablet_meta_version = 0;
     if (OB_FAIL(old_tablet->get_private_transfer_epoch(private_transfer_epoch))) {
-      LOG_WARN("failed to get transfer epoch", K(ret), "old_tablet_meta", old_tablet->get_tablet_meta());
+      LOG_WARN("failed to get private transfer epoch", K(ret), "old_tablet_meta", old_tablet->get_tablet_meta());
     } else if (OB_FAIL(alloc_private_tablet_meta_version_without_lock(key, tablet_meta_version))) {
       LOG_WARN("failed to alloc tablet meta version", K(ret), K(key));
     }
@@ -1179,7 +1179,7 @@ int ObLSTabletService::update_medium_compaction_info(
     int32_t private_transfer_epoch = -1;
     int64_t tablet_meta_version = 0;
     if (OB_FAIL(old_tablet->get_private_transfer_epoch(private_transfer_epoch))) {
-      LOG_WARN("failed to get transfer epoch", K(ret), "old_tablet_meta", old_tablet->get_tablet_meta());
+      LOG_WARN("failed to get private transfer epoch", K(ret), "old_tablet_meta", old_tablet->get_tablet_meta());
     } else if (OB_FAIL(alloc_private_tablet_meta_version_without_lock(key, tablet_meta_version))) {
       LOG_WARN("failed to alloc tablet meta version", K(ret), K(key));
     }
@@ -1287,7 +1287,7 @@ int ObLSTabletService::build_new_tablet_from_mds_table(
         int32_t private_transfer_epoch = -1;
         int64_t tablet_meta_version = 0;
         if (OB_FAIL(old_tablet->get_private_transfer_epoch(private_transfer_epoch))) {
-          LOG_WARN("failed to get transfer epoch", K(ret), "old_tablet_meta", old_tablet->get_tablet_meta());
+          LOG_WARN("failed to get private transfer epoch", K(ret), "old_tablet_meta", old_tablet->get_tablet_meta());
         } else if (OB_FAIL(alloc_private_tablet_meta_version_without_lock(key, tablet_meta_version))) {
           LOG_WARN("failed to alloc tablet meta version", K(ret), K(key));
         }
@@ -1369,7 +1369,7 @@ int ObLSTabletService::update_tablet_release_memtable_for_offline(
       int32_t private_transfer_epoch = -1;
       int64_t tablet_meta_version = 0;
       if (OB_FAIL(tablet->get_private_transfer_epoch(private_transfer_epoch))) {
-        LOG_WARN("failed to get transfer epoch", K(ret), "old_tablet_meta", tablet->get_tablet_meta());
+        LOG_WARN("failed to get private transfer epoch", K(ret), "old_tablet_meta", tablet->get_tablet_meta());
       } else if (OB_FAIL(alloc_private_tablet_meta_version_without_lock(key, tablet_meta_version))) {
         LOG_WARN("failed to alloc tablet meta version", K(ret), K(key));
       }
@@ -1463,7 +1463,7 @@ int ObLSTabletService::update_tablet_report_status(
       int32_t private_transfer_epoch = -1;
       int64_t tablet_meta_version = 0;
       if (OB_FAIL(tablet->get_private_transfer_epoch(private_transfer_epoch))) {
-        LOG_WARN("failed to get transfer epoch", K(ret), "old_tablet_meta", tablet->get_tablet_meta());
+        LOG_WARN("failed to get private transfer epoch", K(ret), "old_tablet_meta", tablet->get_tablet_meta());
       } else if (OB_FAIL(alloc_private_tablet_meta_version_without_lock(key, tablet_meta_version))) {
         LOG_WARN("failed to alloc tablet meta version", K(ret), K(key));
       }
@@ -1583,7 +1583,7 @@ int ObLSTabletService::update_tablet_snapshot_version(
     int32_t private_transfer_epoch = -1;
     int64_t tablet_meta_version = 0;
     if (OB_FAIL(old_tablet->get_private_transfer_epoch(private_transfer_epoch))) {
-      LOG_WARN("failed to get transfer epoch", K(ret), "old_tablet_meta", old_tablet->get_tablet_meta());
+      LOG_WARN("failed to get private transfer epoch", K(ret), "old_tablet_meta", old_tablet->get_tablet_meta());
     } else if (OB_FAIL(alloc_private_tablet_meta_version_without_lock(key, tablet_meta_version))) {
       LOG_WARN("failed to alloc tablet meta version", K(ret), K(key));
     }
@@ -1677,7 +1677,7 @@ int ObLSTabletService::update_tablet_restore_status(
       int32_t private_transfer_epoch = -1;
       int64_t tablet_meta_version = 0;
       if (OB_FAIL(tablet->get_private_transfer_epoch(private_transfer_epoch))) {
-        LOG_WARN("failed to get transfer epoch", K(ret), "old_tablet_meta", tablet->get_tablet_meta());
+        LOG_WARN("failed to get private transfer epoch", K(ret), "old_tablet_meta", tablet->get_tablet_meta());
       } else if (OB_FAIL(alloc_private_tablet_meta_version_without_lock(key, tablet_meta_version))) {
         LOG_WARN("failed to alloc tablet meta version", K(ret), K(key));
       }
@@ -1745,7 +1745,7 @@ int ObLSTabletService::update_tablet_ha_data_status(
     int32_t private_transfer_epoch = -1;
     int64_t tablet_meta_version = 0;
     if (OB_FAIL(old_tablet->get_private_transfer_epoch(private_transfer_epoch))) {
-      LOG_WARN("failed to get transfer epoch", K(ret), "old_tablet_meta", old_tablet->get_tablet_meta());
+      LOG_WARN("failed to get private transfer epoch", K(ret), "old_tablet_meta", old_tablet->get_tablet_meta());
     } else if (OB_FAIL(alloc_private_tablet_meta_version_without_lock(key, tablet_meta_version))) {
       LOG_WARN("failed to alloc tablet meta version", K(ret), K(key));
     }
@@ -1846,7 +1846,7 @@ int ObLSTabletService::update_tablet_ha_expected_status(
     int32_t private_transfer_epoch = -1;
     int64_t tablet_meta_version = 0;
     if (OB_FAIL(tablet->get_private_transfer_epoch(private_transfer_epoch))) {
-      LOG_WARN("failed to get transfer epoch", K(ret), "old_tablet_meta", tablet->get_tablet_meta());
+      LOG_WARN("failed to get private transfer epoch", K(ret), "old_tablet_meta", tablet->get_tablet_meta());
     } else if (OB_FAIL(alloc_private_tablet_meta_version_without_lock(key, tablet_meta_version))) {
       LOG_WARN("failed to alloc tablet meta version", K(ret), K(key));
     }
@@ -4627,7 +4627,7 @@ int ObLSTabletService::build_tablet_with_batch_tables(
         int32_t private_transfer_epoch = -1;
         int64_t tablet_meta_version = 0;
         if (FAILEDx(old_tablet->get_private_transfer_epoch(private_transfer_epoch))) {
-          LOG_WARN("failed to get transfer epoch", K(ret), "old_tablet_meta", old_tablet->get_tablet_meta());
+          LOG_WARN("failed to get private transfer epoch", K(ret), "old_tablet_meta", old_tablet->get_tablet_meta());
         } else if (OB_FAIL(alloc_private_tablet_meta_version_without_lock(key, tablet_meta_version))) {
           LOG_WARN("failed to alloc tablet meta version", K(ret), K(key));
         }
@@ -9576,7 +9576,7 @@ int ObLSTabletService::update_tablet_ss_change_version(
     int32_t private_transfer_epoch = -1;
     int64_t tablet_meta_version = 0;
     if (OB_FAIL(old_tablet.get_private_transfer_epoch(private_transfer_epoch))) {
-      LOG_WARN("failed to get transfer epoch", K(ret), "old_tablet_meta", old_tablet.get_tablet_meta());
+      LOG_WARN("failed to get private transfer epoch", K(ret), "old_tablet_meta", old_tablet.get_tablet_meta());
     } else if (OB_FAIL(alloc_private_tablet_meta_version_without_lock(key, tablet_meta_version))) {
       LOG_WARN("failed to alloc tablet meta version", K(ret), K(key));
     }

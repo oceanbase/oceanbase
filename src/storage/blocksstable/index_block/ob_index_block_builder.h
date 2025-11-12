@@ -529,7 +529,7 @@ public:
       const MacroBlockId &macro_id,
       common::ObIAllocator &allocator,
       ObDataMacroBlockMeta *&macro_meta);
-  int get_tablet_transfer_epoch(int32_t &tablet_transfer_seq) const;
+  int get_tablet_private_transfer_epoch(int32_t &tablet_private_transfer_epoch) const;
 
 private:
   int inner_init(

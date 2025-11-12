@@ -118,12 +118,12 @@ public:
   void set_incarnation_id(const uint64_t incarnation_id) { incarnation_id_ = incarnation_id; }
   int64_t column_group_id() const { return column_group_id_; }
   void set_column_group_id(const uint64_t column_group_id) { column_group_id_ = column_group_id; }
-  int64_t macro_transfer_epoch() const { return macro_transfer_epoch_; }
-  void set_macro_transfer_epoch(const int64_t macro_transfer_epoch) { macro_transfer_epoch_ = macro_transfer_epoch; }
+  int64_t macro_private_transfer_epoch() const { return macro_private_transfer_epoch_; }
+  void set_macro_private_transfer_epoch(const int64_t macro_private_transfer_epoch) { macro_private_transfer_epoch_ = macro_private_transfer_epoch; }
   uint64_t tenant_seq() const { return tenant_seq_; }
   void set_tenant_seq(const uint64_t tenant_seq) { tenant_seq_ = tenant_seq; }
-  int64_t meta_transfer_epoch() const { return meta_transfer_epoch_; }
-  void set_meta_transfer_epoch(const int64_t meta_transfer_epoch) { meta_transfer_epoch_ = meta_transfer_epoch; }
+  int64_t meta_private_transfer_epoch() const { return meta_private_transfer_epoch_; }
+  void set_meta_private_transfer_epoch(const int64_t meta_private_transfer_epoch) { meta_private_transfer_epoch_ = meta_private_transfer_epoch; }
   uint64_t meta_version_id() const { return meta_version_id_; }
   void set_meta_version_id(const uint64_t meta_version_id) { meta_version_id_ = meta_version_id; }
   bool meta_is_inner_tablet() const;
@@ -185,10 +185,10 @@ public:
   static const uint64_t SF_BIT_RESERVED = 4;
   static const uint64_t SF_BIT_ID_MODE = 8;
   static const uint64_t SF_BIT_VERSION = 4;
-  static const uint64_t SF_BIT_TRANSFER_SEQ = 20;
+  static const uint64_t SF_BIT_PRIVATE_TRANSFER_EPOCH = 20;
   static const uint64_t SF_BIT_TENANT_SEQ = 44;
   static constexpr uint64_t SF_BIT_META_VERSION_ID = 44;
-  static const uint64_t MAX_TRANSFER_SEQ = (0x1UL << MacroBlockId::SF_BIT_TRANSFER_SEQ) - 1;
+  static const uint64_t MAX_TRANSFER_SEQ = (0x1UL << MacroBlockId::SF_BIT_PRIVATE_TRANSFER_EPOCH) - 1;
   static const uint64_t MAX_WRITE_SEQ = (0x1UL << MacroBlockId::SF_BIT_WRITE_SEQ) - 1;
 
 private:
@@ -228,12 +228,12 @@ private:
     int64_t fourth_id_;
     // for PRIVATE_DATA_MACRO and PRIVATE_META_MACRO
     struct {
-      int64_t macro_transfer_epoch_  : SF_BIT_TRANSFER_SEQ; // FARM COMPAT WHITELIST FOR macro_transfer_seq_: renamed
+      int64_t macro_private_transfer_epoch_  : SF_BIT_PRIVATE_TRANSFER_EPOCH; // FARM COMPAT WHITELIST FOR macro_transfer_seq_: renamed
       uint64_t tenant_seq_          : SF_BIT_TENANT_SEQ;
     };
     // for PRIVATE_TABLET_META and PRIVATE_TABLET_CURRENT_VERSION
     struct {
-      int64_t meta_transfer_epoch_   : SF_BIT_TRANSFER_SEQ; // FARM COMPAT WHITELIST FOR meta_transfer_seq_: renamed
+      int64_t meta_private_transfer_epoch_   : SF_BIT_PRIVATE_TRANSFER_EPOCH;  // FARM COMPAT WHITELIST FOR meta_transfer_seq_: renamed
       uint64_t meta_version_id_     : SF_BIT_META_VERSION_ID;
     };
     // for SHARED object

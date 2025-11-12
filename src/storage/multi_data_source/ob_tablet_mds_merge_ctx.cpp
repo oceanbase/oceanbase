@@ -240,7 +240,7 @@ int ObTabletCrossLSMdsMinorMergeCtxHelper::get_merge_tables(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(tablet_handle));
   } else if (OB_FAIL(tablet->get_private_transfer_epoch(get_merge_table_result.private_transfer_epoch_))) {
-    LOG_WARN("failed to get transfer epoch", K(ret), KPC(tablet));
+    LOG_WARN("failed to get private transfer epoch", K(ret), KPC(tablet));
   } else {
     get_merge_table_result.scn_range_.start_scn_ = tables_handle.get_table(0)->get_start_scn();
     get_merge_table_result.rec_scn_ = tables_handle.get_table(0)->get_rec_scn();

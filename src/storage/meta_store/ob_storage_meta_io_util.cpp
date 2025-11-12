@@ -39,7 +39,7 @@ int ObStorageMetaIOUtil::check_meta_existence(
     const share::ObLSID &ls_id,
     const int64_t ls_epoch,
     const common::ObTabletID &tablet_id,
-    const int64_t transfer_seq,
+    const int64_t private_transfer_epoch,
     const int64_t start_version,
     const int64_t end_version,
     common::ObIArray<int64_t> &tablet_versions)
@@ -58,11 +58,11 @@ int ObStorageMetaIOUtil::check_meta_existence(
   else if (OB_UNLIKELY(!ls_id.is_valid()
                        || (ls_epoch < 0)
                        || !tablet_id.is_valid()
-                       || (transfer_seq < 0)
+                       || (private_transfer_epoch < 0)
                        || (start_version < 0)
                        || (end_version < 0))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid version", KR(ret), K(ls_id), K(ls_epoch), K(tablet_id), K(transfer_seq),
+    LOG_WARN("invalid version", KR(ret), K(ls_id), K(ls_epoch), K(tablet_id), K(private_transfer_epoch),
              K(start_version), K(end_version));
   } else if (OB_UNLIKELY(start_version > end_version)) {
     ret = OB_ERR_UNEXPECTED;
@@ -70,7 +70,7 @@ int ObStorageMetaIOUtil::check_meta_existence(
   } else if ((end_version - start_version + 1) < LIST_THRESHOLD) {
     for (int64_t ver = start_version; OB_SUCC(ret) && (ver <= end_version); ++ver) {
       blocksstable::ObStorageObjectOpt opt;
-      opt.set_ss_private_tablet_meta_object_opt(ls_id.id(), tablet_id.id(), ver, transfer_seq);
+      opt.set_ss_private_tablet_meta_object_opt(ls_id.id(), tablet_id.id(), ver, private_transfer_epoch);
       if (OB_FAIL(ObStorageMetaIOUtil::check_meta_existence(opt, ls_epoch, is_exist))) {
         LOG_WARN("failed to check meta existence", KR(ret), K(opt), K(ls_epoch));
       } else if (is_exist) {
@@ -86,9 +86,9 @@ int ObStorageMetaIOUtil::check_meta_existence(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tenant file manager should not be null", KR(ret));
     } else if (OB_FAIL(tfm->list_private_tablet_meta(ls_id.id(), ls_epoch, tablet_id.id(),
-                                                     transfer_seq, tablet_versions))) {
+                                                     private_transfer_epoch, tablet_versions))) {
       LOG_WARN("failed to list private tablet meta", KR(ret), K(ls_id), K(ls_epoch), K(tablet_id),
-               K(transfer_seq));
+               K(private_transfer_epoch));
     } else {
       const int64_t total = tablet_versions.count();
       int64_t cur = 0;

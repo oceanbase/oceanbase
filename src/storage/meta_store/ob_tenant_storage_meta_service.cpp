@@ -735,7 +735,7 @@ int ObTenantStorageMetaService::get_blocks_from_private_tablet_meta(
     const int64_t ls_epoch,
     const ObTabletID &tablet_id,
     const int64_t tablet_version,
-    const int32_t tablet_transfer_epoch,
+    const int32_t tablet_private_transfer_epoch,
     const bool is_shared,
     ObIArray<blocksstable::MacroBlockId> &block_ids)
 {
@@ -745,7 +745,7 @@ int ObTenantStorageMetaService::get_blocks_from_private_tablet_meta(
   blocksstable::ObStorageObjectOpt opt;
   const int64_t object_size = OB_DEFAULT_MACRO_BLOCK_SIZE;
 
-  opt.set_ss_private_tablet_meta_object_opt(ls_id.id(), tablet_id.id(), tablet_version, tablet_transfer_epoch);
+  opt.set_ss_private_tablet_meta_object_opt(ls_id.id(), tablet_id.id(), tablet_version, tablet_private_transfer_epoch);
   if (OB_FAIL(OB_STORAGE_OBJECT_MGR.ss_get_object_id(opt, object_id))) {
     LOG_WARN("fail to get object id", K(ret), K(opt));
   } else if (OB_FAIL(tablet_addr.set_block_addr(object_id, 0/*offset*/, object_size, ObMetaDiskAddr::DiskType::RAW_BLOCK))) {
@@ -911,7 +911,7 @@ int ObTenantStorageMetaService::safe_batch_write_gc_tablet_slog(
                                  item.tablet_id_,
                                  item.tablet_meta_version_,
                                  item.status_,
-                                 item.tablet_transfer_seq_);
+                                 item.tablet_private_transfer_epoch_);
         if (OB_FAIL(slog_array.push_back(slog_entry))) {
           LOG_WARN("fail to push slog entry into slog array", K(ret), K(slog_entry), K(i));
         }
@@ -1043,7 +1043,7 @@ int ObTenantStorageMetaService::write_remove_tablet_slog_for_ss(
                                               ObPendingFreeTabletStatus::WAIT_GC,
                                               ObTimeUtility::fast_current_time(),
                                               gc_type,
-                                              tablet_addr.block_id().meta_transfer_epoch(),
+                                              tablet_addr.block_id().meta_private_transfer_epoch(),
                                               last_gc_version);
     ObDeleteTabletLog slog_entry(ls_id,
                                  tablet_id,
@@ -1052,7 +1052,7 @@ int ObTenantStorageMetaService::write_remove_tablet_slog_for_ss(
                                  tablet_item.status_,
                                  tablet_item.free_time_,
                                  tablet_item.gc_type_,
-                                 tablet_item.tablet_transfer_seq_,
+                                 tablet_item.tablet_private_transfer_epoch_,
                                  tablet_item.last_gc_version_);
     ObStorageLogParam log_param;
     log_param.cmd_ = ObIRedoModule::gen_cmd(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
@@ -1225,7 +1225,7 @@ int ObTenantStorageMetaService::safe_batch_write_remove_tablet_slog_for_ss(
                                                   ObPendingFreeTabletStatus::WAIT_GC,
                                                   INT64_MAX /* delete_time */,
                                                   GCTabletType::DropLS,
-                                                  tablet_addr.block_id().meta_transfer_epoch(),
+                                                  tablet_addr.block_id().meta_private_transfer_epoch(),
                                                   last_gc_version);
         ObDeleteTabletLog slog_entry(ls_id,
                                      tablet_id,
@@ -1234,7 +1234,7 @@ int ObTenantStorageMetaService::safe_batch_write_remove_tablet_slog_for_ss(
                                      tablet_item.status_,
                                      tablet_item.free_time_,
                                      tablet_item.gc_type_,
-                                     tablet_item.tablet_transfer_seq_,
+                                     tablet_item.tablet_private_transfer_epoch_,
                                      tablet_item.last_gc_version_);
         if (OB_UNLIKELY(!tablet_info.is_valid())) {
           ret = OB_ERR_UNEXPECTED;
@@ -1385,7 +1385,7 @@ int ObTenantStorageMetaService::get_wait_gc_tablet_items_except_gc_set(
                                  tablet_item.tablet_id_,
                                  tablet_item.tablet_meta_version_,
                                  tablet_item.status_,
-                                 tablet_item.tablet_transfer_seq_);
+                                 tablet_item.tablet_private_transfer_epoch_);
       const ObDeleteTabletLog del_log(ls_id,
                                       tablet_item.tablet_id_,
                                       ls_epoch,
@@ -1393,7 +1393,7 @@ int ObTenantStorageMetaService::get_wait_gc_tablet_items_except_gc_set(
                                       tablet_item.status_,
                                       tablet_item.free_time_,
                                       tablet_item.gc_type_,
-                                      tablet_item.tablet_transfer_seq_,
+                                      tablet_item.tablet_private_transfer_epoch_,
                                       tablet_item.last_gc_version_);
       if (OB_FAIL(gc_set.exist_refactored(gc_log)) && OB_HASH_NOT_EXIST != ret) {
         if (OB_HASH_EXIST == ret) {
@@ -1435,14 +1435,14 @@ int ObTenantStorageMetaService::add_wait_gc_set_items_except_gc_set(
                                                 log.status_,
                                                 log.free_time_,
                                                 log.gc_type_,
-                                                log.tablet_transfer_seq_,
+                                                log.tablet_private_transfer_epoch_,
                                                 log.last_gc_version_);
       const ObGCTabletLog gc_log(ls_id,
                                  ls_epoch,
                                  tablet_item.tablet_id_,
                                  tablet_item.tablet_meta_version_,
                                  tablet_item.status_,
-                                 tablet_item.tablet_transfer_seq_);
+                                 tablet_item.tablet_private_transfer_epoch_);
       if (OB_FAIL(gc_set.exist_refactored(gc_log)) && OB_HASH_NOT_EXIST != ret) {
         if (OB_HASH_EXIST == ret) {
           ret = OB_SUCCESS; // just skip, nothing to do.

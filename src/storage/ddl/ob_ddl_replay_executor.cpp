@@ -462,7 +462,7 @@ int ObDDLRedoReplayExecutor::do_inc_replay_(
 {
   int ret = OB_SUCCESS;
   bool need_replay = true;
-  int32_t transfer_epoch = -1;
+  int32_t private_transfer_epoch = -1;
   if (OB_UNLIKELY(!is_incremental_direct_load(direct_load_type))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("only support incremental direct load", KR(ret), K(direct_load_type));
@@ -472,11 +472,11 @@ int ObDDLRedoReplayExecutor::do_inc_replay_(
     }
   } else if (!need_replay) {
     // do nothing
-  } else if (OB_FAIL(tablet_handle.get_obj()->get_private_transfer_epoch(transfer_epoch)))  {
-    LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
+  } else if (OB_FAIL(tablet_handle.get_obj()->get_private_transfer_epoch(private_transfer_epoch)))  {
+    LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
   } else {
     ObStorageObjectOpt opt;
-    opt.set_private_object_opt(tablet_handle.get_obj()->get_tablet_id().id(), transfer_epoch);
+    opt.set_private_object_opt(tablet_handle.get_obj()->get_tablet_id().id(), private_transfer_epoch);
     ObStorageObjectWriteInfo object_write_info;
     object_write_info.buffer_ = write_info.buffer_;
     object_write_info.size_= write_info.size_;
@@ -601,7 +601,7 @@ int ObDDLRedoReplayExecutor::do_full_replay_(
   int ret = OB_SUCCESS;
   ObMacroBlockHandle macro_handle;
   bool need_replay = true;
-  int32_t transfer_epoch = -1;
+  int32_t private_transfer_epoch = -1;
   bool block_exist_need_replay = false;
 
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
@@ -629,8 +629,8 @@ int ObDDLRedoReplayExecutor::do_full_replay_(
 
   if (OB_FAIL(ret)) {
   } else if (!need_replay) {
-  } else if (OB_FAIL(tablet_handle.get_obj()->get_private_transfer_epoch(transfer_epoch))) {
-    LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
+  } else if (OB_FAIL(tablet_handle.get_obj()->get_private_transfer_epoch(private_transfer_epoch))) {
+    LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
   } else if (!block_exist_need_replay) {
     /* only update max scn value */
     if (OB_FAIL(ObDDLKVPendingGuard::set_skip_block_scn(tablet_handle.get_obj(),
@@ -644,7 +644,7 @@ int ObDDLRedoReplayExecutor::do_full_replay_(
   } else {
     const ObDDLMacroBlockRedoInfo &redo_info = log_->get_redo_info();
     ObStorageObjectOpt opt;
-    opt.set_private_object_opt(tablet_handle.get_obj()->get_tablet_id().id(), transfer_epoch);
+    opt.set_private_object_opt(tablet_handle.get_obj()->get_tablet_id().id(), private_transfer_epoch);
     ObStorageObjectHandle macro_handle;
     ObStorageObjectWriteInfo write_info;
     write_info.buffer_ = redo_info.data_buffer_.ptr();

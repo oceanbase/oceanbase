@@ -949,7 +949,7 @@ private:
   int64_t parallel_task_count_; // for gc flag in shared storage mode
   bool is_micro_index_clustered_;
   /// COMMENT: make sure if tablet_transfer_seq is unused. If it's still being used
-  /// please replace it with transfer_epoch.
+  /// please replace it with private_transfer_epoch.
   /// see:
   int64_t tablet_transfer_seq_;
 
@@ -1099,7 +1099,7 @@ public:
   int64_t parallel_task_count_; // for gc flag in shared storage mode
   bool is_micro_index_clustered_;
   /// COMMENT: make sure if tablet_transfer_seq is unused. If it's still being used
-  /// please replace it with transfer_epoch.
+  /// please replace it with private_transfer_epoch.
   /// see:
   int64_t tablet_transfer_seq_;
   share::SCN start_scn_;

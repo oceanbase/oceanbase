@@ -289,7 +289,7 @@ public:
       const ObTabletID &tablet_id,
       int64_t &tablet_version,
       int64_t &last_gc_version,
-      int64_t &tablet_transfer_seq,
+      int64_t &tablet_private_transfer_epoch,
       uintptr_t &tablet_fingerprint,
       bool &allow_tablet_version_gc);
   int get_last_gc_version_for_tablet(
@@ -309,7 +309,7 @@ public:
       const ObTabletID &tablet_id,
       const uintptr_t tablet_fingerprint,
       const int64_t new_gc_version);
-  int check_allow_tablet_gc(const ObTabletID &tablet_id, const int32_t transfer_epoch, bool &allow);
+  int check_allow_tablet_gc(const ObTabletID &tablet_id, const int32_t private_transfer_epoch, bool &allow);
   /// @brief: check if macro check is safe.
   /// Need to hold @c ObLSTabletService::bucket_lock_ before checking due to
   /// tablet creation, initialization and persistence should be ATOMIC(this might
@@ -360,8 +360,8 @@ public:
 
   int inc_ref_in_leak_checker(const int32_t index);
   int dec_ref_in_leak_checker(const int32_t index);
-  int inc_external_tablet_cnt(const uint64_t tablet_id, const int32_t tablet_transfer_epoch);
-  int dec_external_tablet_cnt(const uint64_t tablet_id, const int32_t tablet_transfer_epoch);
+  int inc_external_tablet_cnt(const uint64_t tablet_id, const int32_t tablet_private_transfer_epoch);
+  int dec_external_tablet_cnt(const uint64_t tablet_id, const int32_t tablet_private_transfer_epoch);
   int insert_or_update_ss_tablet(const ObSSTabletMapKey &key, const ObTabletHandle &tablet_hdl);
   int fetch_ss_tablet(const ObSSTabletMapKey &key, ObTabletHandle &tablet_hdl);
   int schedule_load_bloomfilter(const storage::ObITable::TableKey &sstable_key,

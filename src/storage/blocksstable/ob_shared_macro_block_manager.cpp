@@ -780,9 +780,9 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
 {
   int ret = OB_SUCCESS;
   data_desc.reset();
-  int32_t transfer_epoch = -1;
-  if (OB_FAIL(tablet.get_private_transfer_epoch(transfer_epoch))) {
-      LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
+  int32_t private_transfer_epoch = -1;
+  if (OB_FAIL(tablet.get_private_transfer_epoch(private_transfer_epoch))) {
+      LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
   } else if (is_mds_merge(merge_type)) {
     const ObStorageSchema *storage_schema = ObMdsSchemaHelper::get_instance().get_storage_schema();
     if (OB_ISNULL(storage_schema)) {
@@ -800,7 +800,7 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
           snapshot_version,
           cluster_version,
           tablet.get_tablet_meta().micro_index_clustered_,
-          transfer_epoch,
+          private_transfer_epoch,
           0/*concurrent_cnt*/,
           tablet.get_reorganization_scn(),
           end_scn))) {
@@ -834,7 +834,7 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
           snapshot_version,
           cluster_version,
           tablet.get_tablet_meta().micro_index_clustered_,
-          transfer_epoch,
+          private_transfer_epoch,
           0/*concurrent_cnt*/,
           tablet.get_reorganization_scn(),
           end_scn,

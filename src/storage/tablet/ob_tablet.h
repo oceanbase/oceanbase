@@ -487,7 +487,7 @@ public:
       share::ObLSID &ls_id,
       common::ObTabletID &tablet_id);
   static int check_transfer_seq_equal(const ObTablet &tablet, const int64_t transfer_seq);
-  static int check_transfer_epoch_equal(const ObTablet &tablet, const int32_t transfer_epoch);
+  static int check_private_transfer_epoch_equal(const ObTablet &tablet, const int32_t private_transfer_epoch);
 
   // migration section
   // used for migration source generating create tablet rpc argument
@@ -583,7 +583,7 @@ public:
   int64_t get_snapshot_version() const { return tablet_meta_.snapshot_version_; }
   int64_t get_multi_version_start() const { return tablet_meta_.multi_version_start_; }
   int64_t get_transfer_seq() const { return tablet_meta_.transfer_info_.transfer_seq_; }
-  int get_private_transfer_epoch(int32_t &transfer_epoch) const;
+  int get_private_transfer_epoch(int32_t &private_transfer_epoch) const;
   share::SCN get_reorganization_scn() const { return tablet_meta_.transfer_info_.transfer_start_scn_; }
   int get_multi_version_start(share::SCN &scn) const;
   int get_snapshot_version(share::SCN &scn) const;

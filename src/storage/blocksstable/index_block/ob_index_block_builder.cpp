@@ -4168,7 +4168,7 @@ bool ObIndexBlockRebuilder::use_absolute_offset(const ObITable::TableKey &table_
   return table_key.is_ddl_merge_sstable();
 }
 
-int ObIndexBlockRebuilder::get_tablet_transfer_epoch(int32_t &tablet_transfer_epoch) const
+int ObIndexBlockRebuilder::get_tablet_private_transfer_epoch(int32_t &tablet_private_transfer_epoch) const
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -4178,7 +4178,7 @@ int ObIndexBlockRebuilder::get_tablet_transfer_epoch(int32_t &tablet_transfer_ep
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sstable_builder_ shoulde not be nullptr", K(ret), KP(sstable_builder_));
   } else {
-    tablet_transfer_epoch = sstable_builder_->get_private_transfer_epoch();
+    tablet_private_transfer_epoch = sstable_builder_->get_private_transfer_epoch();
   }
   return ret;
 }

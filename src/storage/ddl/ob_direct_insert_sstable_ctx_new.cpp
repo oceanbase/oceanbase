@@ -1317,7 +1317,7 @@ int ObTabletDirectLoadMgr::update(
     if (OB_FAIL(sqc_build_ctx_.build_param_.assign(build_param))) {
       LOG_WARN("assign build param failed", K(ret));
     } else if (OB_FAIL(tablet_handle.get_obj()->get_private_transfer_epoch(private_transfer_epoch_))) {
-      LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
+      LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
     } else {
       ls_id_ = build_param.common_param_.ls_id_;
       tablet_id_ = build_param.common_param_.tablet_id_;

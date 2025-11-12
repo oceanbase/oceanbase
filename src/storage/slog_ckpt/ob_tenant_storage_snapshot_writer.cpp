@@ -421,7 +421,7 @@ int ObTenantStorageSnapshotWriter::copy_tablet(
     int32_t private_transfer_epoch = -1;
     int64_t tablet_meta_version = 0;
     if (OB_FAIL(tablet->get_private_transfer_epoch(private_transfer_epoch))) {
-      LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet->get_tablet_meta());
+      LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet->get_tablet_meta());
     } else if (GCTX.is_shared_storage_mode() && OB_FAIL(ls.get_tablet_svr()->alloc_private_tablet_meta_version_with_lock(tablet_key, tablet_meta_version))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         LOG_INFO("skip writing snapshot for this tablet", K(tablet_key));

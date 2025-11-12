@@ -340,7 +340,7 @@ TEST_F(TestFileManager, test_path_convert)
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_DATA_MACRO));
   file_id.set_second_id(3);
   file_id.set_third_id(2);
-  file_id.set_macro_transfer_epoch(0);
+  file_id.set_macro_private_transfer_epoch(0);
   file_id.set_tenant_seq(5);
   char *object_storage_root_dir = nullptr;
   ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_object_storage_root_dir(object_storage_root_dir));
@@ -591,7 +591,7 @@ TEST_F(TestFileManager, test_remote_path_to_macro_id)
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_DATA_MACRO));
   file_id.set_second_id(3);
   file_id.set_third_id(2);
-  file_id.set_macro_transfer_epoch(0);
+  file_id.set_macro_private_transfer_epoch(0);
   file_id.set_tenant_seq(5);
   char *object_storage_root_dir = nullptr;
   ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_object_storage_root_dir(object_storage_root_dir));
@@ -671,7 +671,7 @@ TEST_F(TestFileManager, test_remote_path_to_macro_id)
   // cluster_id/server_id/tenant_id_epoch_id/tmp_data/tmp_file_id/segment_id
   file_id.set_fourth_id(0);
   check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::TMP_FILE, file_id);
-  file_id.set_macro_transfer_epoch(0);
+  file_id.set_macro_private_transfer_epoch(0);
   file_id.set_tenant_seq(5);
   // 10.PRIVATE_TABLET_META
   // tenant_id_epoch_id/ls/ls_id_epoch_id/tablet_meta/tablet_id/tablet_meta_version_transfer_seq
@@ -717,7 +717,7 @@ TEST_F(TestFileManager, test_remote_path_to_macro_id)
   file_id.set_fourth_id(0);
   check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::IS_SHARED_TENANT_DELETED, file_id);
   file_id.set_third_id(2);
-  file_id.set_macro_transfer_epoch(0);
+  file_id.set_macro_private_transfer_epoch(0);
   file_id.set_tenant_seq(5);
 
   // 21. UNSEALED_REMOTE_SEG_FILE
@@ -796,7 +796,7 @@ TEST_F(TestFileManager, test_get_file_parent_dir)
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_DATA_MACRO));
   file_id.set_second_id(3);
   file_id.set_third_id(2);
-  file_id.set_macro_transfer_epoch(0);
+  file_id.set_macro_private_transfer_epoch(0);
   file_id.set_tenant_seq(5);
 
   // each object type and print out the parent dir path log
@@ -852,12 +852,12 @@ TEST_F(TestFileManager, test_private_macro_file_operator)
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_DATA_MACRO));
   file_id.set_second_id(3);  //tablet_id
   file_id.set_third_id(2);   //seq_id
-  file_id.set_macro_transfer_epoch(0); // transfer_seq
+  file_id.set_macro_private_transfer_epoch(0); // transfer_seq
   file_id.set_tenant_seq(5);  //tenant_seq
 
   // step 1: create dir
   int64_t tablet_id = 3;
-  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tablet_data_tablet_id_transfer_seq_dir(MTL_ID(), MTL_EPOCH_ID(), tablet_id, 0/*transfer_seq*/));
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tablet_data_tablet_id_private_transfer_epoch_dir(MTL_ID(), MTL_EPOCH_ID(), tablet_id, 0/*transfer_seq*/));
 
   // step 2: test write private_macro_file
   ObStorageObjectHandle write_object_handle;
@@ -918,7 +918,7 @@ TEST_F(TestFileManager, test_private_macro_file_operator)
   ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::stat(dir_path, statbuf));
   expected_disk_size += statbuf.size_;
   dir_path[0] ='\0';
-  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_tablet_data_tablet_id_transfer_seq_dir(dir_path, sizeof(dir_path),
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_tablet_data_tablet_id_private_transfer_epoch_dir(dir_path, sizeof(dir_path),
             MTL_ID(), MTL_EPOCH_ID(), tablet_id, 0/*transfer_seq*/));
   ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::stat(dir_path, statbuf));
   expected_disk_size += statbuf.size_;
@@ -962,7 +962,7 @@ TEST_F(TestFileManager, test_private_macro_file_operator)
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_file(file_id));
 
   // step 10: test delete dir
-  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.delete_tablet_data_tablet_id_transfer_seq_dir(MTL_ID(), MTL_EPOCH_ID(), tablet_id, 0/*transfer_seq*/));
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.delete_tablet_data_tablet_id_private_transfer_epoch_dir(MTL_ID(), MTL_EPOCH_ID(), tablet_id, 0/*transfer_seq*/));
   ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.delete_tablet_data_tablet_id_dir(MTL_ID(), MTL_EPOCH_ID(), tablet_id));
   // step 11: test calc_private_macro_disk_space after delete file
   ob_usleep(2000*1000);
@@ -1089,13 +1089,13 @@ TEST_F(TestFileManager, test_meta_file_operator)
   const int64_t ls_id = 7;
   const int64_t ls_epoch_id = 0;
   const int64_t tablet_id = 8;
-  const int64_t meta_transfer_epoch = 0;
+  const int64_t meta_private_transfer_epoch = 0;
   const int64_t meta_version_id = 9;
   file_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_TABLET_META));
   file_id.set_second_id(ls_id);
   file_id.set_third_id(tablet_id);
-  file_id.set_meta_transfer_epoch(meta_transfer_epoch);
+  file_id.set_meta_private_transfer_epoch(meta_private_transfer_epoch);
   file_id.set_meta_version_id(meta_version_id);
 
   // step 2: test write private_tablet_meta
@@ -1155,8 +1155,8 @@ TEST_F(TestFileManager, test_meta_file_operator)
   int64_t expected_disk_size = write_io_size;
   char dir_path[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
   ObIODFileStat statbuf;
-  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_tablet_meta_tablet_id_transfer_seq_dir(dir_path, sizeof(dir_path),
-            MTL_ID(), MTL_EPOCH_ID(), ls_id, ls_epoch_id, tablet_id, meta_transfer_epoch));
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_tablet_meta_tablet_id_private_transfer_epoch_dir(dir_path, sizeof(dir_path),
+            MTL_ID(), MTL_EPOCH_ID(), ls_id, ls_epoch_id, tablet_id, meta_private_transfer_epoch));
   ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::stat(dir_path, statbuf));
   expected_disk_size += statbuf.size_;
   dir_path[0] = '\0';
@@ -1181,7 +1181,7 @@ TEST_F(TestFileManager, test_meta_file_operator)
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_file(file_id, ls_epoch_id, is_exist));
   ASSERT_FALSE(is_exist);
   // step 10: test delete dir
-  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.delete_tablet_meta_tablet_id_transfer_seq_dir(MTL_ID(), MTL_EPOCH_ID(), ls_id, ls_epoch_id, tablet_id, meta_transfer_epoch));
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.delete_tablet_meta_tablet_id_private_transfer_epoch_dir(MTL_ID(), MTL_EPOCH_ID(), ls_id, ls_epoch_id, tablet_id, meta_private_transfer_epoch));
   ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.delete_tablet_meta_tablet_id_dir(MTL_ID(), MTL_EPOCH_ID(), ls_id, ls_epoch_id, tablet_id));
   ob_usleep(2000*1000);
   start_calc_size_time_s = ObTimeUtility::current_time_s();
@@ -1210,7 +1210,7 @@ TEST_F(TestFileManager, test_list_private_tablet_meta)
   meta_file_1.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_TABLET_META));
   meta_file_1.set_second_id(ls_id);
   meta_file_1.set_third_id(tablet_id);
-  meta_file_1.set_meta_transfer_epoch(meta_transfer_seq);
+  meta_file_1.set_meta_private_transfer_epoch(meta_transfer_seq);
   meta_file_1.set_meta_version_id(meta_version_id_1);
 
   MacroBlockId meta_file_2;
@@ -1219,7 +1219,7 @@ TEST_F(TestFileManager, test_list_private_tablet_meta)
   meta_file_2.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_TABLET_META));
   meta_file_2.set_second_id(ls_id);
   meta_file_2.set_third_id(tablet_id);
-  meta_file_2.set_meta_transfer_epoch(meta_transfer_seq);
+  meta_file_2.set_meta_private_transfer_epoch(meta_transfer_seq);
   meta_file_2.set_meta_version_id(meta_version_id_2);
 
   ObStorageObjectHandle write_object_handle_1;
@@ -1477,7 +1477,7 @@ TEST_F(TestFileManager, test_list_and_delete_dir_operator)
   tablet_data_macro.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_DATA_MACRO));
   tablet_data_macro.set_second_id(tablet_id);
   tablet_data_macro.set_third_id(server_id);
-  tablet_data_macro.set_macro_transfer_epoch(0); // transfer_seq
+  tablet_data_macro.set_macro_private_transfer_epoch(0); // transfer_seq
   tablet_data_macro.set_tenant_seq(seq_id);  //tenant_seq
   write_object_handle.reset();
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(tablet_data_macro));
@@ -1492,7 +1492,7 @@ TEST_F(TestFileManager, test_list_and_delete_dir_operator)
   ASSERT_EQ(tablet_data_macro.second_id(), tablet_data_macros.at(0).second_id());
   ASSERT_EQ(tablet_data_macro.third_id(), tablet_data_macros.at(0).third_id());
   ASSERT_EQ(tablet_data_macro.tenant_seq(), tablet_data_macros.at(0).tenant_seq());
-  ASSERT_EQ(tablet_data_macro.macro_transfer_epoch(), tablet_data_macros.at(0).macro_transfer_epoch());
+  ASSERT_EQ(tablet_data_macro.macro_private_transfer_epoch(), tablet_data_macros.at(0).macro_private_transfer_epoch());
 
   // test3: list private meta macro
   MacroBlockId tablet_meta_macro;
@@ -1503,7 +1503,7 @@ TEST_F(TestFileManager, test_list_and_delete_dir_operator)
   tablet_meta_macro.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_META_MACRO));
   tablet_meta_macro.set_second_id(tablet_id);
   tablet_meta_macro.set_third_id(server_id);
-  tablet_meta_macro.set_macro_transfer_epoch(0); // transfer_seq
+  tablet_meta_macro.set_macro_private_transfer_epoch(0); // transfer_seq
   tablet_meta_macro.set_tenant_seq(seq_id);  //tenant_seq
   write_object_handle.reset();
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(tablet_meta_macro));
@@ -1518,11 +1518,11 @@ TEST_F(TestFileManager, test_list_and_delete_dir_operator)
   ASSERT_EQ(tablet_meta_macro.second_id(), tablet_meta_macros.at(1).second_id());
   ASSERT_EQ(tablet_meta_macro.third_id(), tablet_meta_macros.at(1).third_id());
   ASSERT_EQ(tablet_meta_macro.tenant_seq(), tablet_meta_macros.at(1).tenant_seq());
-  ASSERT_EQ(tablet_meta_macro.macro_transfer_epoch(), tablet_meta_macros.at(1).macro_transfer_epoch());
+  ASSERT_EQ(tablet_meta_macro.macro_private_transfer_epoch(), tablet_meta_macros.at(1).macro_private_transfer_epoch());
   ASSERT_EQ(tablet_data_macro.second_id(), tablet_meta_macros.at(0).second_id());
   ASSERT_EQ(tablet_data_macro.third_id(), tablet_meta_macros.at(0).third_id());
   ASSERT_EQ(tablet_data_macro.tenant_seq(), tablet_meta_macros.at(0).tenant_seq());
-  ASSERT_EQ(tablet_data_macro.macro_transfer_epoch(), tablet_meta_macros.at(0).macro_transfer_epoch());
+  ASSERT_EQ(tablet_data_macro.macro_private_transfer_epoch(), tablet_meta_macros.at(0).macro_private_transfer_epoch());
 
   // test4: list private tablet meta version
   int64_t ls_id = 8;
@@ -1533,7 +1533,7 @@ TEST_F(TestFileManager, test_list_and_delete_dir_operator)
   tablet_meta_version.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_TABLET_META));
   tablet_meta_version.set_second_id(ls_id);
   tablet_meta_version.set_third_id(tablet_id);
-  tablet_data_macro.set_meta_transfer_epoch(0); // transfer_epoch
+  tablet_data_macro.set_meta_private_transfer_epoch(0); // private_transfer_epoch
   tablet_data_macro.set_meta_version_id(meta_version_id);  //tenant_seq
   write_object_handle.reset();
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(tablet_meta_version));
@@ -1646,7 +1646,7 @@ TEST_F(TestFileManager, test_list_local_files_rec)
   tablet_data_macro.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_DATA_MACRO));
   tablet_data_macro.set_second_id(tablet_id);
   tablet_data_macro.set_third_id(server_id);
-  tablet_data_macro.set_macro_transfer_epoch(0); // transfer_seq
+  tablet_data_macro.set_macro_private_transfer_epoch(0); // transfer_seq
   tablet_data_macro.set_tenant_seq(seq_id);  //tenant_seq
   write_object_handle.reset();
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(tablet_data_macro));
@@ -1659,7 +1659,7 @@ TEST_F(TestFileManager, test_list_local_files_rec)
   tablet_meta_macro.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_META_MACRO));
   tablet_meta_macro.set_second_id(tablet_id);
   tablet_meta_macro.set_third_id(server_id);
-  tablet_meta_macro.set_macro_transfer_epoch(0); // transfer_seq
+  tablet_meta_macro.set_macro_private_transfer_epoch(0); // transfer_seq
   tablet_meta_macro.set_tenant_seq(seq_id);  //tenant_seq
   write_object_handle.reset();
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(tablet_meta_macro));
