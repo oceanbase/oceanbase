@@ -530,9 +530,9 @@ int ObEmbeddingTask::start_async_work()
       } else if (OB_FAIL(json_builder.add_array_field(root, INPUT_NAME, input_array))) {
         LOG_WARN("failed to add input array field", K(ret));
       } else {
-        ObString new_utf8_text;
         for (int64_t i = start_idx; i < end_idx && OB_SUCC(ret); i++) {
           const ObString &text = input_chunks_.at(i);
+          ObString new_utf8_text = text;
           LOG_DEBUG("Adding text to input array", K(i), K(text));
           if (col_type_ != CS_TYPE_UTF8MB4_BIN && col_type_ != CS_TYPE_UTF8MB4_GENERAL_CI) {
             if (col_type_ == CS_TYPE_INVALID) {
@@ -546,7 +546,7 @@ int ObEmbeddingTask::start_async_work()
           } else if (OB_FAIL(json_builder.array_add_string(input_array, new_utf8_text))) {
             LOG_WARN("failed to add new_utf8_text to input array", K(ret), K(i));
           } else {
-            total_text_length += text.length();
+            total_text_length += new_utf8_text.length();
           }
         }
         if (OB_FAIL(ret)) {
