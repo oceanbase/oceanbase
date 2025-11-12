@@ -507,7 +507,19 @@ int ObHybridVectorRefreshTask::prepare_for_embedding(ObPluginVectorIndexAdaptor 
   ObCollationType col_type = CS_TYPE_INVALID;
   int64_t dim = 0;
   int64_t loop_cnt = 0;
-  uint64_t timeout_us = ObTimeUtility::current_time() + ObInsertLobColumnHelper::LOB_TX_TIMEOUT;
+  int64_t http_timeout_us = 0;
+  int64_t http_max_retries = 0;
+
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    http_timeout_us = tenant_config->model_request_timeout;
+    http_max_retries = tenant_config->model_max_retries;
+  } else {
+    SHARE_LOG_RET(WARN, OB_INVALID_CONFIG, "init model request timeout and max retries config with default value");
+    http_timeout_us = 60 * 1000 * 1000; // 60 seconds
+    http_max_retries = 2;
+  }
+
   if (OB_ISNULL(task_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error", K(ret), KPC(task_ctx));
@@ -647,7 +659,7 @@ int ObHybridVectorRefreshTask::prepare_for_embedding(ObPluginVectorIndexAdaptor 
           } else if (OB_FAIL(ob_write_string(task_ctx->allocator_, endpoint->get_url(), url, true))) {
             LOG_WARN("fail to write string", K(ret));
           } else if (OB_FAIL(task_ctx->embedding_task_->init(url, endpoint->get_request_model_name(),
-                             endpoint->get_provider(), access_key, chunk_array, col_type, dim, timeout_us))) {
+                             endpoint->get_provider(), access_key, chunk_array, col_type, dim, http_timeout_us, http_max_retries))) {
             LOG_WARN("failed to init embedding task", K(ret), KPC(endpoint));
           } else {
             ObEmbeddingTaskHandler *embedding_handler = nullptr;

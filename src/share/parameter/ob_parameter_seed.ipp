@@ -2291,6 +2291,16 @@ DEF_BOOL(_enable_persistent_compiled_routine, OB_CLUSTER_PARAMETER, "true",
          "The default value is TRUE. Value: TRUE: turned on FALSE: turned off",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+// AI / LLM
+DEF_TIME(model_request_timeout, OB_TENANT_PARAMETER, "60s", "[1s,)",
+        "Used to control the HTTP timeout for accessing the  model. Especially, the default value is 60s.",
+        ObParameterAttr(Section::AI, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(model_max_retries, OB_TENANT_PARAMETER, "2", "[1,)",
+    "Used to control the retry times after a failed model interaction. Especially, the default value is 2",
+    ObParameterAttr(Section::AI, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+
 DEF_STR_WITH_CHECKER(sql_protocol_min_tls_version, OB_CLUSTER_PARAMETER, "none",
                      common::ObConfigSQLTlsVersionChecker,
                      "SQL SSL control options, used to specify the minimum SSL/TLS version number. "

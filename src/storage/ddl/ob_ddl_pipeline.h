@@ -752,7 +752,7 @@ public:
   explicit ObHNSWEmbeddingOperator(ObPipeline *pipeline)
     : ObVectorIndexBaseOperator(pipeline), embedmgr_(nullptr), vec_dim_(-1), rowkey_cnt_(-1),
       text_col_idx_(-1), is_inited_(false), error_ret_code_(OB_SUCCESS),
-      batch_size_(0), current_batch_(nullptr), http_timeout_us_(20 * 1000 * 1000) /* 20s */
+      batch_size_(0), current_batch_(nullptr)
   {}
   ~ObHNSWEmbeddingOperator();
   int init(const ObTabletID &tablet_id);
@@ -798,7 +798,6 @@ private:
   blocksstable::ObBatchDatumRows *cur_datum_rows_;
   int64_t cur_row_in_batch_;
   bool chunk_exhausted_;
-  int64_t http_timeout_us_;
   DISALLOW_COPY_AND_ASSIGN(ObHNSWEmbeddingOperator);
 };
 

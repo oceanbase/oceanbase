@@ -158,7 +158,7 @@ public:
 class ObTaskSlotRing
 {
 public:
-  ObTaskSlotRing() : lock_(), capacity_(1), slots_(), next_idx_(0), head_idx_(0) {}
+  ObTaskSlotRing() : lock_(), capacity_(0), slots_(), next_idx_(0), head_idx_(0) {}
   ~ObTaskSlotRing();
 
   int init(const int64_t capacity);
@@ -168,14 +168,14 @@ public:
   int mark_ready(const int64_t slot_idx, const int ret_code);
   // Pop ready batch_info
   int pop_ready_in_order(ObTaskBatchInfo *&batch_info, int &ret_code);
-  int wait_for_head_completion(const int64_t timeout_us);
+  int wait_for_head_completion();
   void set_task(const int64_t slot_idx, share::ObEmbeddingTask *task);
   void set_batch_info(const int64_t slot_idx, ObTaskBatchInfo *batch_info);
 
   // Cleanup operations
   void disable_all_callbacks();
   void clean_all_slots();
-  int wait_all_tasks_finished(const int64_t timeout_us);
+  int wait_all_tasks_finished();
 
   TO_STRING_KV(K_(capacity), K_(next_idx), K_(head_idx));
 
@@ -238,14 +238,14 @@ class ObEmbeddingTaskMgr
 {
 public:
   ObEmbeddingTaskMgr() : allocator_("EmbedTaskMgr", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-                         embedding_handler_(nullptr), slot_ring_(), ring_capacity_(9),
-                         cfg_(), is_inited_(false), is_failed_(false), http_timeout_us_(0), cs_type_(CS_TYPE_INVALID) {}
+                         embedding_handler_(nullptr), slot_ring_(), ring_capacity_(8),
+                         cfg_(), is_inited_(false), is_failed_(false), cs_type_(CS_TYPE_INVALID) {}
   ~ObEmbeddingTaskMgr();
-  int init(const common::ObString &model_id, const int64_t http_timeout_us, const ObCollationType cs_type);
+  int init(const common::ObString &model_id, const ObCollationType cs_type);
   int submit_batch_info(ObTaskBatchInfo *&batch_info);
   int get_ready_batch_info(ObTaskBatchInfo *&batch_info, int &error_ret_code);
   int mark_task_ready(const int64_t slot_idx, const int ret_code);
-  int wait_for_completion(const int64_t timeout_ms = 0);
+  int wait_for_completion();
   bool get_failed() const { return is_failed_; }
 
   TO_STRING_KV(K_(ring_capacity), K_(slot_ring), K_(cfg), K_(is_inited));
@@ -258,12 +258,13 @@ private:
   ObArenaAllocator allocator_;
   share::ObEmbeddingTaskHandler *embedding_handler_;
   ObTaskSlotRing slot_ring_;  // Ring buffer for task slots
-  int64_t ring_capacity_;  // TODO(fanfangyao.ffy): 待调参
+  int64_t ring_capacity_;  // TODO(fanfangyao.ffy): To be tuned
   ObEmbeddingConfig cfg_;
   bool is_inited_;
   bool is_failed_;
-  int64_t http_timeout_us_;
   ObCollationType cs_type_;
+  int64_t model_request_timeout_us_; //For controlling the maximum timeout of calling model http service
+  int64_t model_max_retries_; //For controlling the maximum retries of calling model http service
   DISALLOW_COPY_AND_ASSIGN(ObEmbeddingTaskMgr);
 };
 

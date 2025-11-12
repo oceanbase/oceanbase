@@ -1804,13 +1804,13 @@ int ObHNSWEmbeddingOperator::init(const ObTabletID &tablet_id)
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(embedmgr_->init(model_id_, http_timeout_us_, col_type))) {
+      if (OB_FAIL(embedmgr_->init(model_id_, col_type))) {
         embedmgr_->~ObEmbeddingTaskMgr();
         op_allocator_.free(embedmgr_);
         embedmgr_ = nullptr;
         LOG_WARN("failed to init embedding task manager", K(ret));
       } else {
-        batch_size_ = 64; // TODO(fanfangyao.ffy):待调参
+        batch_size_ = 64; // TODO(fanfangyao.ffy): To be tuned
         void *batch_buf = ob_malloc(sizeof(ObTaskBatchInfo), ObMemAttr(MTL_ID(), "TaskBatch"));
         if (OB_ISNULL(batch_buf)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1845,7 +1845,6 @@ int ObHNSWEmbeddingOperator::execute(const ObChunk &input_chunk,
   int ret = OB_SUCCESS;
   output_chunk.reset();
   result_state = ObPipelineOperator::NEED_MORE_INPUT;
-  int64_t wait_timeout_us = http_timeout_us_;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -1876,7 +1875,7 @@ int ObHNSWEmbeddingOperator::execute(const ObChunk &input_chunk,
 
     //wait for task completion
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(embedmgr_->wait_for_completion(wait_timeout_us))) {
+      if (OB_FAIL(embedmgr_->wait_for_completion())) {
         LOG_WARN("wait for completion failed", K(ret));
       } else if (OB_FAIL(get_ready_results(output_chunk, result_state))) {
         LOG_WARN("get ready results failed", K(ret));

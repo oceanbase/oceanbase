@@ -299,14 +299,14 @@ int ObTaskSlotRing::init(const int64_t capacity)
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(lock_);
 
-  if (capacity <= 1) {
+  if (capacity <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid capacity", K(ret), K(capacity));
   } else if (slots_.count() > 0) {
     ret = OB_INIT_TWICE;
     LOG_WARN("slot ring already initialized", K(ret));
   } else {
-    capacity_ = capacity;
+    capacity_ = capacity + 1; // +1 for the extra slot to differentiate between full and empty queue
     if (OB_FAIL(slots_.prepare_allocate(capacity_))) {
       LOG_WARN("prepare allocate slots failed", K(ret), K(capacity_));
     } else {
@@ -433,14 +433,13 @@ void ObTaskSlotRing::clean_all_slots()
   }
 }
 
-int ObTaskSlotRing::wait_all_tasks_finished(const int64_t timeout_us)
+int ObTaskSlotRing::wait_all_tasks_finished()
 {
   int ret = OB_SUCCESS;
-  const int64_t timeout_ms = timeout_us / 1000;
   for (int64_t i = 0; OB_SUCC(ret) && i < slots_.count(); ++i) {
     Slot &slot = slots_.at(i);
     if (OB_NOT_NULL(slot.task_)) {
-      if (OB_FAIL(slot.task_->wait_for_completion(timeout_ms))) {
+      if (OB_FAIL(slot.task_->wait_for_completion())) {
         LOG_WARN("wait for task completion failed", K(ret), K(i));
       }
     }
@@ -448,7 +447,7 @@ int ObTaskSlotRing::wait_all_tasks_finished(const int64_t timeout_us)
   return ret;
 }
 
-int ObTaskSlotRing::wait_for_head_completion(const int64_t timeout_us)
+int ObTaskSlotRing::wait_for_head_completion()
 {
   int ret = OB_SUCCESS;
   share::ObEmbeddingTask *task_to_wait = nullptr;
@@ -464,8 +463,8 @@ int ObTaskSlotRing::wait_for_head_completion(const int64_t timeout_us)
   }
 
   if (OB_NOT_NULL(task_to_wait)) {
-    if (OB_FAIL(task_to_wait->wait_for_completion(timeout_us / 1000))) {
-      LOG_WARN("wait for head embedding task completion failed", K(ret), K(timeout_us));
+    if (OB_FAIL(task_to_wait->wait_for_completion())) {
+      LOG_WARN("wait for head embedding task completion failed", K(ret));
     }
   }
   return ret;
@@ -547,8 +546,7 @@ ObEmbeddingTaskMgr::~ObEmbeddingTaskMgr()
   int ret = OB_SUCCESS;
   if (is_inited_) {
     slot_ring_.disable_all_callbacks();
-    const int64_t timeout_us = http_timeout_us_;
-    if (OB_FAIL(slot_ring_.wait_all_tasks_finished(timeout_us))) {
+    if (OB_FAIL(slot_ring_.wait_all_tasks_finished())) {
       LOG_WARN("failed to wait for all tasks to finish", K(ret));
     }
     slot_ring_.clean_all_slots();
@@ -556,7 +554,7 @@ ObEmbeddingTaskMgr::~ObEmbeddingTaskMgr()
   }
 }
 
-int ObEmbeddingTaskMgr::init(const ObString &model_id, const int64_t http_timeout_us, const ObCollationType col_type)
+int ObEmbeddingTaskMgr::init(const ObString &model_id, const ObCollationType col_type)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -575,10 +573,20 @@ int ObEmbeddingTaskMgr::init(const ObString &model_id, const int64_t http_timeou
   }
 
   if (OB_SUCC(ret)) {
-    // TODO(fanfangyao.ffy): 待调参
-    http_timeout_us_ = http_timeout_us;
     cs_type_ = col_type;
-    const int64_t reserve_slots = ring_capacity_ > 0 ? ring_capacity_ : 5;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      model_request_timeout_us_ = tenant_config->model_request_timeout;
+      model_max_retries_ = tenant_config->model_max_retries;
+    } else {
+      SHARE_LOG_RET(WARN, OB_INVALID_CONFIG, "init model request timeout and max retries config with default value");
+      model_request_timeout_us_ = 60 * 1000 * 1000; // 60 seconds
+      model_max_retries_ = 2;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    const int64_t reserve_slots = ring_capacity_;
     if (OB_FAIL(slot_ring_.init(reserve_slots))) {
       LOG_WARN("init slot ring failed", K(ret), K(reserve_slots));
     } else {
@@ -649,7 +657,7 @@ int ObEmbeddingTaskMgr::submit_batch_info(ObTaskBatchInfo *&batch_info)
               task = new (task_mem) share::ObEmbeddingTask();
               const int64_t vec_dim = results.at(0)->get_vector_dim();
               if (OB_FAIL(task->init(cfg_.model_url_, cfg_.model_name_, cfg_.provider_,
-                                   cfg_.user_key_, texts, cs_type_, vec_dim, http_timeout_us_, cb_handle))) {
+                                   cfg_.user_key_, texts, cs_type_, vec_dim, model_request_timeout_us_, model_max_retries_, cb_handle))) {
                 LOG_WARN("failed to initialize EmbeddingTask", K(ret));
               }
             }
@@ -715,7 +723,7 @@ int ObEmbeddingTaskMgr::get_ready_batch_info(ObTaskBatchInfo *&batch_info, int &
   return ret;
 }
 
-//TODO(fanfangyao.ffy): 在vectorindexctx处获取有已知bug，修复后将该流程放到vectorindexctx处
+//TODO(fanfangyao.ffy): Move this process to vectorindexctx
 int ObEmbeddingTaskMgr::get_ai_config(const common::ObString &model_id)
 {
   int ret = OB_SUCCESS;
@@ -769,13 +777,13 @@ int ObEmbeddingTaskMgr::mark_task_ready(const int64_t slot_idx, const int ret_co
   return ret;
 }
 
-int ObEmbeddingTaskMgr::wait_for_completion(const int64_t timeout_us)
+int ObEmbeddingTaskMgr::wait_for_completion()
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("embedding task mgr not inited", K(ret));
-  } else if (OB_FAIL(slot_ring_.wait_for_head_completion(timeout_us))) {
+  } else if (OB_FAIL(slot_ring_.wait_for_head_completion())) {
     LOG_WARN("wait for head completion failed", K(ret));
   }
   return ret;

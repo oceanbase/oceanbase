@@ -67,14 +67,14 @@ const ObString ObEmbeddingTask::USER_KEY_NAME = "user_key";
 const ObString ObEmbeddingTask::INPUT_NAME = "input";
 const ObString ObEmbeddingTask::DIMENSIONS_NAME = "dimensions";
 
-const int64_t ObEmbeddingTask::HTTP_REQUEST_TIMEOUT = 20 * 1000 * 1000; // default http request timeout. 20 seconds
+const int64_t ObEmbeddingTask::HTTP_REQUEST_TIMEOUT = 60 * 1000 * 1000; // default http request timeout. 60 seconds
 
 // Reschedule related constants
 const int64_t ObEmbeddingTask::MAX_RESCHEDULE_RETRY_CNT = 3;
 const int64_t ObEmbeddingTask::RESCHEDULE_RETRY_INTERVAL_US = 100 * 1000; // 100ms
 
 // HTTP retry related constants
-const int64_t ObEmbeddingTask::MAX_HTTP_RETRY_CNT = 3;
+const int64_t ObEmbeddingTask::MAX_HTTP_RETRY_CNT = 2;
 const int64_t ObEmbeddingTask::HTTP_RETRY_BASE_INTERVAL_US = 1 * 1000 * 1000; // 1 second
 const int64_t ObEmbeddingTask::HTTP_RETRY_MAX_INTERVAL_US = 10 * 1000 * 1000; // 10 seconds
 const int64_t ObEmbeddingTask::HTTP_RETRY_MULTIPLIER = 2;
@@ -171,7 +171,7 @@ ObEmbeddingTask::ObEmbeddingTask() : local_allocator_("EmbeddingTask", OB_MALLOC
                                     internal_error_message_(),
                                     task_lock_(),
                                     batch_size_(10),
-                                    current_batch_idx_(),
+                                    current_batch_idx_(0),
                                     http_send_time_us_(0),
                                     http_response_data_size_(0),
                                     http_response_data_(nullptr),
@@ -184,6 +184,8 @@ ObEmbeddingTask::ObEmbeddingTask() : local_allocator_("EmbeddingTask", OB_MALLOC
                                     http_total_retry_count_(0),
                                     http_retry_start_time_us_(0),
                                     http_last_retry_time_us_(0),
+                                    http_max_retry_count_(0),
+                                    wait_for_completion_timeout_us_(0),
                                     need_retry_flag_(false),
                                     original_batch_size_(batch_size_),
                                     batch_size_adjusted_(false),
@@ -219,7 +221,7 @@ ObEmbeddingTask::ObEmbeddingTask(ObArenaAllocator &allocator) : local_allocator_
                                      internal_error_message_(),
                                      task_lock_(),
                                      batch_size_(10),
-                                     current_batch_idx_(),
+                                     current_batch_idx_(0),
                                      http_send_time_us_(0),
                                      http_response_data_size_(0),
                                      http_response_data_(nullptr),
@@ -232,6 +234,8 @@ ObEmbeddingTask::ObEmbeddingTask(ObArenaAllocator &allocator) : local_allocator_
                                      http_total_retry_count_(0),
                                      http_retry_start_time_us_(0),
                                      http_last_retry_time_us_(0),
+                                     http_max_retry_count_(0),
+                                     wait_for_completion_timeout_us_(0),
                                      need_retry_flag_(false),
                                      original_batch_size_(batch_size_),
                                      batch_size_adjusted_(false),
@@ -253,15 +257,19 @@ int ObEmbeddingTask::init(const ObString &model_url,
                           const ObCollationType col_type,
                           int64_t dimension,
                           int64_t http_timeout_us,
+                          int64_t http_max_retries,
                           storage::ObEmbeddingIOCallbackHandle *cb_handle)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObEmbeddingTask already inited", K(ret), K(model_url), K(model_name), K(user_key), K(input_chunks));
+  } else if (http_timeout_us <= 0 || http_max_retries <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid http timeout", K(ret), K(http_timeout_us), K(http_max_retries));
   } else if (OB_FAIL(input_chunks_.assign(input_chunks))) {
     LOG_WARN("failed to assign input chunks", K(ret), K(input_chunks));
-  } else if (OB_FAIL(init_curl_handler(model_url, user_key))) {
+  } else if (OB_FAIL(init_curl_handler(model_url, user_key, http_timeout_us))) {
     LOG_WARN("failed to init curl handler", K(ret), K(model_url), K(user_key));
   } else if (OB_FAIL(task_cond_.init(ObWaitEventIds::DEFAULT_COND_WAIT))) {
     LOG_WARN("failed to init completion cond", K(ret));
@@ -297,13 +305,15 @@ int ObEmbeddingTask::init(const ObString &model_url,
     }
 
     output_vectors_.prepare_allocate_and_keep_count(total_chunks_);
-    if (http_timeout_us > 0) {
-      http_timeout_us_ = http_timeout_us;
-    } else {
-      http_timeout_us_ = HTTP_REQUEST_TIMEOUT;
-    }
 
     // Initialize retry related variables
+    http_timeout_us_ = http_timeout_us;
+    http_max_retry_count_ = http_max_retries;
+    // task total timeout for all retries
+    wait_for_completion_timeout_us_ = (http_max_retry_count_ + 1) * http_timeout_us_ * input_chunks.count() / batch_size_ +
+                                      (http_max_retry_count_ + 1) * HTTP_RETRY_MAX_INTERVAL_US;
+
+
     http_retry_start_time_us_ = 0;
     http_last_retry_time_us_ = 0;
     http_total_retry_count_ = 0;
@@ -312,7 +322,7 @@ int ObEmbeddingTask::init(const ObString &model_url,
     current_batch_size_ = batch_size_;
     successful_requests_count_ = 0;
     col_type_ = col_type;
-    LOG_DEBUG("task initialized successfully", K(user_key_), K(task_id_), K(dimension_));
+    LOG_DEBUG("task initialized successfully", K(user_key_), K(task_id_), K(dimension_), K(http_max_retry_count_), K(http_timeout_us));
   }
 
   return ret;
@@ -588,6 +598,7 @@ int ObEmbeddingTask::check_async_progress()
     LOG_WARN("task not started yet", K(ret));
   } else if (current_phase == OB_EMBEDDING_TASK_DONE) {
     ret = OB_SUCCESS;
+    LOG_DEBUG("check_async_progress", K(current_phase), K(curl_request_in_progress_));
   } else if (current_phase == OB_EMBEDDING_TASK_HTTP_SENT) {
     if (OB_FAIL(check_http_progress())) {
       if (ret == OB_NEED_RETRY) {
@@ -608,6 +619,10 @@ int ObEmbeddingTask::check_async_progress()
               LOG_WARN("failed to handle retry failure", K(ret));
             }
           }
+          // reset flag
+          if (OB_SUCC(ret)) {
+            need_retry_flag_ = false;
+          }
         } else {
           // not time to retry yet, continue waiting
           ret = OB_SUCCESS;
@@ -625,14 +640,9 @@ int ObEmbeddingTask::check_async_progress()
       if (OB_FAIL(set_phase(OB_EMBEDDING_TASK_HTTP_COMPLETED))) {
         LOG_WARN("failed to set phase to HTTP_COMPLETED", K(ret));
       }
-    } else {
-      int64_t current_time = ObTimeUtility::current_time();
-      int64_t elapsed_time = current_time - http_send_time_us_;
-      if (elapsed_time > http_timeout_us_) {
-        if (OB_FAIL(complete_task(OB_EMBEDDING_TASK_DONE, OB_TIMEOUT, true))) {
-          LOG_WARN("failed to handle task failure", K(ret));
-        }
-        LOG_WARN("HTTP request timeout", K(elapsed_time), K(http_timeout_us_), K(*this));
+    } else { // http not response
+      if (REACH_TIME_INTERVAL(10L * 1000L * 1000L)) { //10s
+        LOG_INFO("wait http response", K(ret), K(*this));
       }
     }
   } else if (current_phase == OB_EMBEDDING_TASK_HTTP_COMPLETED) {
@@ -821,7 +831,18 @@ int ObEmbeddingTask::check_http_progress()
                 }
                 http_last_retry_time_us_ = ObTimeUtility::current_time();
               }
+              LOG_WARN("curl request error, need retry", K(ret), K(need_retry_flag_), K(http_retry_count_), K(http_max_retry_count_));
             }
+          } else if (res == CURLE_OPERATION_TIMEDOUT) { // curl timeout
+            if (++http_retry_count_ < http_max_retry_count_) {
+              need_retry_flag_ = true;
+              http_total_retry_count_++;
+              http_last_retry_time_us_ = ObTimeUtility::current_time();
+              ret = OB_NEED_RETRY;
+            } else {
+              ret = OB_TIMEOUT;
+            }
+            LOG_WARN("curl request timeot, need retry", K(ret), K(need_retry_flag_), K(http_retry_count_), K(http_max_retry_count_));
           } else {
             ret = OB_CURL_ERROR;
             LOG_WARN("curl request failed", K(ret), K(res), K(*this));
@@ -1020,7 +1041,6 @@ int ObEmbeddingTask::do_work(ThreadPoolType *thread_pool)
       }
     }
   }
-
   return ret;
 }
 
@@ -1460,7 +1480,7 @@ bool ObEmbeddingTask::should_retry_http_request(int64_t http_error_code) const
     case 502:
     case 503:
     case 504:
-      return http_retry_count_ < MAX_HTTP_RETRY_CNT;
+      return http_retry_count_ < http_max_retry_count_;
     default:
       return false;
   }
@@ -1614,13 +1634,16 @@ int ObEmbeddingTask::maybe_callback()
   return ret;
 }
 
-int ObEmbeddingTask::init_curl_handler(const ObString &model_url, const ObString &user_key)
+int ObEmbeddingTask::init_curl_handler(const ObString &model_url, const ObString &user_key, const int64_t http_timeout_us)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(curl_multi_handle_ || curl_easy_handle_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("curl handles already initialized", K(ret), KPC(this));
-  }else if (OB_ISNULL(curl_multi_handle_ = curl_multi_init())) {
+  } else if (http_timeout_us <=0 ) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid http_timeout_us", K(ret), K(http_timeout_us));
+  } else if (OB_ISNULL(curl_multi_handle_ = curl_multi_init())) {
     ret = OB_CURL_ERROR;
     LOG_WARN("failed to init curl multi handle", K(ret));
   } else if (OB_ISNULL(curl_easy_handle_ = curl_easy_init())) {
@@ -1652,8 +1675,8 @@ int ObEmbeddingTask::init_curl_handler(const ObString &model_url, const ObString
       } else {
         curl_easy_setopt(curl_easy_handle_, CURLOPT_WRITEDATA, (void *)curl_response_data_);
 
-        curl_easy_setopt(curl_easy_handle_, CURLOPT_TIMEOUT, HTTP_REQUEST_TIMEOUT / 1000);
-        curl_easy_setopt(curl_easy_handle_, CURLOPT_CONNECTTIMEOUT, HTTP_REQUEST_TIMEOUT / 1000);
+        curl_easy_setopt(curl_easy_handle_, CURLOPT_TIMEOUT_MS, http_timeout_us / 1000);
+        curl_easy_setopt(curl_easy_handle_, CURLOPT_CONNECTTIMEOUT_MS, http_timeout_us / 1000);
 
         CURLMcode multi_res = curl_multi_add_handle(curl_multi_handle_, curl_easy_handle_);
         if (multi_res != CURLM_OK) {
@@ -1663,11 +1686,12 @@ int ObEmbeddingTask::init_curl_handler(const ObString &model_url, const ObString
       }
     }
   }
+
   return ret;
 
 }
 
-int ObEmbeddingTask::wait_for_completion(const int64_t timeout_ms)
+int ObEmbeddingTask::wait_for_completion()
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -1678,7 +1702,7 @@ int ObEmbeddingTask::wait_for_completion(const int64_t timeout_ms)
     if (callback_done_) {
       // do nothing
     } else {
-      if (OB_FAIL(task_cond_.wait(timeout_ms))) {
+      if (OB_FAIL(task_cond_.wait(wait_for_completion_timeout_us_ / 1000))) {
         LOG_WARN("failed to wait for completion", K(ret));
       }
     }
