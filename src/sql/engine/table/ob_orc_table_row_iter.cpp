@@ -390,7 +390,7 @@ int ObOrcTableRowIterator::init_sector_reader()
   return ret;
 }
 
-#define CATCH_ORC_EXCEPTIONS                                  \
+#define CATCH_ORC_EXCEPTIONS_FILE_ERROR                       \
   catch (const ObErrorCodeException &ob_error) {              \
     if (OB_SUCC(ret)) {                                       \
       ret = ob_error.get_error_code();                        \
@@ -398,7 +398,8 @@ int ObOrcTableRowIterator::init_sector_reader()
     }                                                         \
   } catch (const std::exception& e) {                         \
     if (OB_SUCC(ret)) {                                       \
-      ret = OB_ERR_UNEXPECTED;                                \
+      ret = OB_INVALID_EXTERNAL_FILE;                         \
+      LOG_USER_ERROR(OB_INVALID_EXTERNAL_FILE, e.what());     \
       LOG_WARN("unexpected error", K(ret), "Info", e.what()); \
     }                                                         \
   } catch(...) {                                              \
@@ -408,6 +409,24 @@ int ObOrcTableRowIterator::init_sector_reader()
     }                                                         \
   }
 
+#define CATCH_ORC_EXCEPTIONS_READ_ERROR                       \
+  catch (const ObErrorCodeException &ob_error) {              \
+    if (OB_SUCC(ret)) {                                       \
+      ret = ob_error.get_error_code();                        \
+      LOG_WARN("fail to read orc file", K(ret));              \
+    }                                                         \
+  } catch (const std::exception& e) {                         \
+    if (OB_SUCC(ret)) {                                       \
+      ret = OB_ORC_READ_ERROR;                                \
+      LOG_USER_ERROR(OB_ORC_READ_ERROR, e.what());            \
+      LOG_WARN("unexpected error", K(ret), "Info", e.what()); \
+    }                                                         \
+  } catch(...) {                                              \
+    if (OB_SUCC(ret)) {                                       \
+      ret = OB_ERR_UNEXPECTED;                                \
+      LOG_WARN("unexpected error", K(ret));                   \
+    }                                                         \
+  }
 int ObOrcTableRowIterator::next_row_range()
 {
   int ret = OB_SUCCESS;
@@ -442,7 +461,7 @@ int ObOrcTableRowIterator::next_row_range()
         } else if (project_reader_.row_reader_) {
           project_reader_.row_reader_->seekToRow(row_range.first_row_id);
         }
-      } CATCH_ORC_EXCEPTIONS
+      } CATCH_ORC_EXCEPTIONS_READ_ERROR
       state_.orc_reader_cur_row_id_ = row_range.first_row_id;
     }
   }
@@ -469,7 +488,7 @@ int ObOrcTableRowIterator::next_stripe()
         if (OB_FAIL(select_row_ranges(state_.cur_stripe_idx_))) {
           LOG_WARN("fail to select row ranges", K(ret), K(state_.cur_stripe_idx_));
         }
-      } CATCH_ORC_EXCEPTIONS
+      } CATCH_ORC_EXCEPTIONS_READ_ERROR
     }
   } while (OB_SUCC(ret) && !state_.has_row_range());
   return ret;
@@ -852,23 +871,7 @@ int ObOrcTableRowIterator::next_file()
             LOG_WARN("fail to build delete bitmap", K(ret));
           }
         }
-      } catch(const ObErrorCodeException &ob_error) {
-        if (OB_SUCC(ret)) {
-          ret = ob_error.get_error_code();
-          LOG_WARN("fail to read orc file", K(ret));
-        }
-      } catch(const std::exception& e) {
-        if (OB_SUCC(ret)) {
-          ret = OB_INVALID_EXTERNAL_FILE;
-          LOG_USER_ERROR(OB_INVALID_EXTERNAL_FILE, e.what());
-          LOG_WARN("unexpected error", K(ret), "Info", e.what());
-        }
-      } catch(...) {
-        if (OB_SUCC(ret)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected error", K(ret));
-        }
-      }
+      } CATCH_ORC_EXCEPTIONS_FILE_ERROR
     }
   }
   return ret;
@@ -1019,18 +1022,7 @@ int ObOrcTableRowIterator::create_row_readers()
       if (OB_FAIL(init_selected_columns())) {
         LOG_WARN("fail to init selected columns", K(ret));
       }
-    } catch(const std::exception& e) {
-      if (OB_SUCC(ret)) {
-        ret = OB_ORC_READ_ERROR;
-        LOG_USER_ERROR(OB_ORC_READ_ERROR, e.what());
-        LOG_WARN("unexpected error", K(ret), "Info", e.what());
-      }
-    } catch(...) {
-      if (OB_SUCC(ret)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected error", K(ret));
-      }
-    }
+    } CATCH_ORC_EXCEPTIONS_READ_ERROR
   }
   return ret;
 }
@@ -2260,23 +2252,7 @@ int ObOrcTableRowIterator::next_batch(int64_t &read_count, const int64_t capacit
         state_.cur_range_read_row_count_ += read_rows;
       }
     }
-  } catch(const ObErrorCodeException &ob_error) {
-    if (OB_SUCC(ret)) {
-      ret = ob_error.get_error_code();
-      LOG_WARN("fail to read orc file", K(ret));
-    }
-  } catch(const std::exception& e) {
-    if (OB_SUCC(ret)) {
-      ret = OB_ORC_READ_ERROR;
-      LOG_USER_ERROR(OB_ORC_READ_ERROR, e.what());
-      LOG_WARN("unexpected error", K(ret), "Info", e.what());
-    }
-  } catch(...) {
-    if (OB_SUCC(ret)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error", K(ret));
-    }
-  }
+  } CATCH_ORC_EXCEPTIONS_READ_ERROR
   return ret;
 }
 
@@ -3233,7 +3209,7 @@ int ObOrcTableRowIterator::create_file_reader(const ObString& data_file_path,
       LOG_WARN("orc create reader failed", K(ret));
       throw std::bad_exception();
     }
-  } CATCH_ORC_EXCEPTIONS
+  } CATCH_ORC_EXCEPTIONS_FILE_ERROR
 
   return ret;
 }
@@ -3284,6 +3260,7 @@ DEF_TO_STRING(ObOrcIteratorState)
   J_OBJ_END();
   return pos;
 }
-#undef CATCH_ORC_EXCEPTIONS
+#undef CATCH_ORC_EXCEPTIONS_FILE_ERROR
+#undef CATCH_ORC_EXCEPTIONS_READ_ERROR
 }
 }
