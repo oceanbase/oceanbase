@@ -515,7 +515,6 @@ int ObDDLMergeTaskUtils::update_tablet_table_store(ObDDLTabletMergeDagParamV2 &d
       table_store_param.ddl_info_.update_with_major_flag_ =  for_major;
       table_store_param.ddl_info_.keep_old_ddl_sstable_ = !for_major;
       table_store_param.ddl_info_.data_format_version_ = dag_merge_param.ddl_task_param_.tenant_data_version_;
-      table_store_param.ddl_info_.ddl_commit_scn_ = dag_merge_param.rec_scn_;
       table_store_param.ddl_info_.ddl_checkpoint_scn_ = dag_merge_param.rec_scn_;
       if (!for_major) {
         // data is not complete, now update ddl table store only for reducing count of ddl dump sstable.

@@ -1106,10 +1106,7 @@ int ObIncMajorDDLMergeHelper::update_tablet_table_store(
     }
 
     if (OB_SUCC(ret)) {
-      table_store_param.ddl_info_.update_with_major_flag_ =  false;
       table_store_param.ddl_info_.keep_old_ddl_sstable_ = !for_major;
-      table_store_param.ddl_info_.data_format_version_ = dag_merge_param.ddl_task_param_.tenant_data_version_;
-      table_store_param.ddl_info_.ddl_commit_scn_ = dag_merge_param.rec_scn_;
       table_store_param.ddl_info_.ddl_checkpoint_scn_ = dag_merge_param.rec_scn_;
 
       for (int64_t i = 0; !for_major && OB_SUCC(ret) && i < co_sstable_array.get_count(); i++ ) {
@@ -2086,10 +2083,7 @@ int ObSSIncMajorDDLMergeHelper::update_tablet_table_store(
                                   false /* has truncate info*/)))) {
       LOG_WARN("init with compaction info failed", K(ret));
     } else {
-      table_store_param.ddl_info_.update_with_major_flag_ = false;
       table_store_param.ddl_info_.keep_old_ddl_sstable_ = !dag_merge_param.table_key_.is_inc_major_type_sstable();
-      table_store_param.ddl_info_.data_format_version_ = dag_merge_param.ddl_task_param_.tenant_data_version_;
-      table_store_param.ddl_info_.ddl_commit_scn_ = dag_merge_param.rec_scn_;
       table_store_param.ddl_info_.ddl_checkpoint_scn_ = dag_merge_param.rec_scn_;
 
       for (int64_t i = 0; !for_major && OB_SUCC(ret) && i < table_array.get_count(); i++ ) {
