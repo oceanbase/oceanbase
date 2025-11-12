@@ -1394,6 +1394,10 @@ ERRSIM_DEF_TIME(backup_lease_takeover_time, OB_CLUSTER_PARAMETER, "10s", "[1s, 5
          "Lease Takeover Time for Rootserver Backup heartbeat. Range: [1s, 5m]",
          ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_INT(_backup_task_queue_size, OB_TENANT_PARAMETER, "0", "[0, 100000]",
+        "the size of the backup task scheduler queue for each tenant. "
+        "Range: [0, 100000] in integer",
+        ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_TIME(trigger_auto_backup_delete_interval, OB_CLUSTER_PARAMETER, "1h", "[1s,)",
          "trigger auto backup delete interval."
          "The default value is 1h. Range: [1s,)",
