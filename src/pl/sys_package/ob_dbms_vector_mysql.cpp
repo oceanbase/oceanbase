@@ -218,7 +218,7 @@ int ObDBMSVectorMySql::index_vector_memory_advisor(ObPLExecCtx &ctx, ParamStore 
       LOG_WARN("allocator is null", K(ret));
     } else {
       ObStringBuffer res_buf(allocator);
-      uint64_t tablet_count = ceil(num_vectors / max_tablet_vectors);
+      uint64_t tablet_count = ceil(num_vectors / MAX(max_tablet_vectors, 1));
       if (OB_FAIL(get_estimate_memory_str(index_param, num_vectors, max_tablet_vectors, tablet_count, res_buf))) {
         LOG_WARN("failed to get estimate memory string");
       } else {
