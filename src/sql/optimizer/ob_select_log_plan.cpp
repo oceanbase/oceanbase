@@ -6672,7 +6672,6 @@ int ObSelectLogPlan::create_one_window_function(CandidatePlan &candidate_plan,
     const ObIArray<ObWinFunRawExpr*> &win_func_exprs = win_func_helper.ordered_win_func_exprs_;
     const ObIArray<OrderItem> &sort_keys = win_func_helper.sort_keys_;
     const int64_t part_cnt = win_func_helper.part_cnt_;
-    bool is_local_order = false;
     bool need_normal_sort = !win_func_helper.force_hash_sort_;
     bool need_hash_sort = need_sort && part_cnt > 0 && prefix_pos <= 0 && !win_func_helper.force_normal_sort_;
     bool use_topn = need_normal_sort &&
@@ -7814,7 +7813,6 @@ int ObSelectLogPlan::create_hash_local_dist_win_func(ObLogicalOperator *top,
   ObExchangeInfo exch_info;
   exch_info.slave_mapping_type_ = SlaveMappingType::SM_PWJ_HASH_HASH;
   const int64_t part_cnt = win_func_helper.part_cnt_;
-  bool is_local_order = false;
   ObRawExpr *topn_const = NULL;
   if (OB_ISNULL(top)) {
     ret = OB_ERR_UNEXPECTED;
@@ -7827,8 +7825,6 @@ int ObSelectLogPlan::create_hash_local_dist_win_func(ObLogicalOperator *top,
     LOG_TRACE("begin to create hash local dist window function", K(top->is_distributed()),
                K(need_sort), K(part_cnt),
                K(win_func_helper.force_hash_sort_), K(win_func_helper.force_normal_sort_));
-    is_local_order = top->get_is_local_order();
-    is_local_order &= top->is_single() || (top->is_distributed() && top->is_exchange_allocated());
     if (OB_FAIL(create_dist_win_func_no_pushdown(WinDistAlgo::WIN_DIST_HASH_LOCAL,
                                                  top,
                                                  win_func_helper,
@@ -7836,7 +7832,7 @@ int ObSelectLogPlan::create_hash_local_dist_win_func(ObLogicalOperator *top,
                                                  false, /* single_part_parallel*/
                                                  false, /* is_partition_wise*/
                                                  prefix_pos ,
-                                                 is_local_order,
+                                                 top->get_is_local_order(),
                                                  &exch_info,
                                                  all_plans))) {
       LOG_WARN("failed to create plan for hash local dist window", K(ret));
