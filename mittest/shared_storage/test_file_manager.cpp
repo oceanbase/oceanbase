@@ -771,7 +771,7 @@ TEST_F(TestFileManager, test_remote_path_to_macro_id)
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::SHARED_INC_MAJOR_DATA_MACRO));
   file_id.set_second_id(3);
   file_id.set_third_id(2);
-  file_id.set_macro_transfer_epoch(0);
+  file_id.set_macro_private_transfer_epoch(0);
   file_id.set_tenant_seq(5);
   // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/inc_major/cg_id/data/macro_seq_id
   check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_INC_MAJOR_DATA_MACRO, file_id);
