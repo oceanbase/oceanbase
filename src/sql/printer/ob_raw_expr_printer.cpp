@@ -5538,20 +5538,15 @@ int ObRawExprPrinter::print_alias_for_expr(ObRawExpr* expr, ObStmtScope scope, b
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is NULL", K(ret));
-  } else if (!expr->get_alias_column_name().empty()
-      && !expr->is_column_ref_expr()
-      && !expr->is_aggr_expr()
-      && !expr->is_pseudo_column_expr()
-     // quertionmark 是一个const expr，如果是prepare，需要打印成:0这样的东西，不能用alias来代替
-      && T_QUESTIONMARK != expr->get_expr_type()
-      && scope != T_DBLINK_SCOPE
-      && scope != T_FIELD_LIST_SCOPE
-      && scope != T_WHERE_SCOPE
-      && scope != T_NONE_SCOPE
-      && (scope != T_GROUP_SCOPE || lib::is_mysql_mode())
-      && (scope != T_HAVING_SCOPE || lib::is_mysql_mode())
-      && (scope != T_UPDATE_SCOPE || lib::is_mysql_mode())
-      && (scope != T_INSERT_SCOPE || lib::is_mysql_mode())) {
+  } else if (lib::is_mysql_mode() &&
+             !expr->get_alias_column_name().empty() &&
+             !expr->is_column_ref_expr() &&
+             !expr->is_aggr_expr() &&
+             !expr->is_pseudo_column_expr() &&
+             // quertionmark 是一个const expr，如果是prepare，需要打印成:0这样的东西，不能用alias来代替
+             T_QUESTIONMARK != expr->get_expr_type() &&
+             (scope == T_HAVING_SCOPE ||
+             (scope == T_GROUP_SCOPE && expr->is_const_or_param_expr()))) {
     //expr is a alias column ref
     //alias column target list
     print_alias = true;
