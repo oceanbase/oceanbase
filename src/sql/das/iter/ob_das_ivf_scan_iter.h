@@ -341,7 +341,7 @@ public:
         can_retry_(false),
         tmp_main_rowkey_(),
         search_param_(),
-        distance_threshold_(FLT_MAX)
+        similarity_threshold_(0)
   {
     dis_type_ = ObExprVectorDistance::ObVecDisType::MAX_TYPE;
     saved_rowkeys_.set_attr(ObMemAttr(MTL_ID(), "VecIdxKeyRanges"));
@@ -570,7 +570,7 @@ protected:
   ObRowkey tmp_main_rowkey_;
   // similarity threshold
   ObVectorIndexParam search_param_;
-  float distance_threshold_;
+  float similarity_threshold_;
 };
 
 class ObDASIvfScanIter : public ObDASIvfBaseScanIter

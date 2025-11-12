@@ -23,10 +23,26 @@
 #include "common/object/ob_object.h"
 #include "sql/session/ob_sql_session_mgr.h"
 #include "sql/engine/expr/ob_expr_vector.h"
+#include "sql/engine/expr/ob_expr_vector_similarity.h"
 #include "share/allocator/ob_tenant_vector_allocator.h"
 
 namespace oceanbase {
 namespace share {
+
+int get_distance_threshold(const oceanbase::sql::ObExprVectorDistance::ObVecDisType& dis_type, const float& similarity_threshold, float& distance_threshold);
+
+
+static bool is_satify_distance_threshold(const oceanbase::sql::ObExprVectorDistance::ObVecDisType& dis_type, const float& distance_threshold, const double& distance)
+{
+  bool is_satify = true;
+  if (dis_type == oceanbase::sql::ObExprVectorDistance::ObVecDisType::DOT) {
+    is_satify = distance >= distance_threshold;
+  } else {
+    is_satify = distance <= distance_threshold;
+  } 
+  return is_satify;
+}
+
 struct ObDocidScoreItem
 {
   ObDocidScoreItem() = default;
@@ -413,11 +429,17 @@ class ObVectorCenterClusterHelper
 public:
   ObVectorCenterClusterHelper(ObIAllocator &allocator, const VEC_T *const_vec,
       oceanbase::sql::ObExprVectorDistance::ObVecDisType dis_type,
-      int64_t dim, int64_t nprobe, float distance_threshold, const bool is_save_all_center=false, ObIAllocator *center_alloc_=nullptr)
+      int64_t dim, int64_t nprobe, float similarity_threshold, const bool is_save_all_center=false, ObIAllocator *center_alloc_=nullptr)
       : alloc_(allocator), const_vec_(const_vec), dis_type_(dis_type), dim_(dim),
-        nprobe_(nprobe), compare_(dis_type), heap_(compare_), distance_threshold_(distance_threshold),
+        nprobe_(nprobe), compare_(dis_type), heap_(compare_), similarity_threshold_(similarity_threshold),
         is_save_all_center_(is_save_all_center), center_alloc_(center_alloc_)
-  {}
+  {
+    int ret = OB_SUCCESS;
+    distance_threshold_ = FLT_MAX; // default value
+    if (OB_FAIL(get_distance_threshold(dis_type, similarity_threshold, distance_threshold_))) {
+      SHARE_LOG(WARN, "failed to get distance threshold", K(ret), K(dis_type), K(similarity_threshold), K(distance_threshold_));
+    }
+  }
 
   int push_center(const CENTER_T &center, VEC_T *center_vec, const int64_t dim, CenterSaveMode center_save_mode = NOT_SAVE_CENTER_VEC);
   int push_center(const CENTER_T &center, double distance, CenterSaveMode center_save_mode = NOT_SAVE_CENTER_VEC, VEC_T *center_vec = nullptr);
@@ -557,6 +579,7 @@ private:
   int64_t nprobe_;
   HeapCompare compare_;
   CenterHeap heap_;
+  float similarity_threshold_;
   float distance_threshold_;
   bool is_save_all_center_;
   ObIAllocator *center_alloc_;
@@ -781,8 +804,8 @@ int ObVectorCenterClusterHelper<VEC_T, CENTER_T>::push_center(
   VEC_T *center_vec /*= nullptr*/)
 {
   int ret = OB_SUCCESS;
-  if (distance > distance_threshold_) {
-    // skip for similarity threshold
+  if (distance_threshold_ != FLT_MAX && !is_satify_distance_threshold(dis_type_, distance_threshold_, distance)) {
+    // if not satify distance threshold, do not push center
   } else if (is_save_all_center_) {
     if (OB_FAIL(record_center(center, distance, center_save_mode, center_vec))) {
       SHARE_LOG(WARN, "failed to push back centroids", K(ret), K(center), K(distance));
@@ -854,6 +877,7 @@ int ObVectorCenterClusterHelper<VEC_T, CENTER_T>::get_nearest_probe_center_ids(O
     ret = OB_ERR_UNEXPECTED;
     SHARE_LOG(WARN, "max heap count is not equal to nprobe", K(ret), K(heap_.count()), K(nprobe_));
   }
+  
   while(OB_SUCC(ret) && !heap_.empty()) {
     const HeapCenterItemTemp &cur_top = heap_.top();
     if (OB_ISNULL(cur_top.center_with_buf_)) {
@@ -906,6 +930,9 @@ int ObVectorCenterClusterHelper<VEC_T, CENTER_T>::get_nearest_probe_centers(ObIA
   } else if (heap_.count() > nprobe_) {
     ret = OB_ERR_UNEXPECTED;
     SHARE_LOG(WARN, "max heap count is not equal to nprobe", K(ret), K(heap_.count()), K(nprobe_));
+  } else if (similarity_threshold_ > 0.0 ){
+    ret = OB_NOT_SUPPORTED;
+    SHARE_LOG(WARN, "similarity threshold", K(ret), K(similarity_threshold_));
   }
   while(OB_SUCC(ret) && !heap_.empty()) {
     const HeapCenterItemTemp &cur_top = heap_.top();
@@ -934,6 +961,9 @@ int ObVectorCenterClusterHelper<VEC_T, CENTER_T>::get_nearest_probe_centers_vec_
   } else if (heap_.count() > nprobe_) {
     ret = OB_ERR_UNEXPECTED;
     SHARE_LOG(WARN, "max heap count is not equal to nprobe", K(ret), K(heap_.count()), K(nprobe_));
+  } else if (similarity_threshold_ > 0.0 ){
+    ret = OB_NOT_SUPPORTED;
+    SHARE_LOG(WARN, "similarity threshold", K(ret), K(similarity_threshold_));
   }
   while(OB_SUCC(ret) && !heap_.empty()) {
     const HeapCenterItemTemp &cur_top = heap_.top();
