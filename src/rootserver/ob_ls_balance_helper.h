@@ -53,7 +53,7 @@ struct ObLSGroupStat
   {
     lg_id_ = OB_INVALID_ID;
     current_unit_list_.reset();
-    ls_info_set_.reset();
+    ls_info_list_.reset();
     ug_ids_.reset();
     target_unit_list_.reset();
   }
@@ -64,23 +64,22 @@ struct ObLSGroupStat
   }
   int init(const uint64_t lg_id, const ObUnitIDList &unit_list);
   int assign(const ObLSGroupStat &other);
-  int add_ls_status(const int64_t ls_info_index);
+  int add_ls_status(share::ObLSStatusInfo *ls_info);
   int64_t ls_count_in_group() const
   {
-    return ls_info_set_.num_members();
+    return ls_info_list_.count();
   }
   bool need_change_unit_list() const
   {
     return current_unit_list_ != target_unit_list_;
   }
-  int find_and_remove_ls(int64_t &ls_index);
-  //ls_info_set打印出来特别不友好，移除打印
+  int try_remove_ls(share::ObLSStatusInfo* &ls_info);
   TO_STRING_KV(K_(lg_id), K_(current_unit_list), K(ug_ids_),
-      K(target_unit_list_), "ls_count", ls_count_in_group());
+      K(target_unit_list_), "ls_count", ls_count_in_group(), K_(ls_info_list));
 public:
   uint64_t lg_id_;
   ObUnitIDList current_unit_list_;
-  ObFixedBitSet<OB_MAX_LS_NUM_PER_TENANT_PER_SERVER_CAN_BE_SET> ls_info_set_;
+  ObSEArray<share::ObLSStatusInfo*, 8> ls_info_list_;
   ObSEArray<uint64_t, 2> ug_ids_;
   ObUnitIDList target_unit_list_;
 };
@@ -106,7 +105,7 @@ public:
     return OB_NOT_NULL(unit_) && unit_->is_valid();
   }
   int init(share::ObUnit &unit);
-  int add_ls_group(ObLSGroupStat &ls_group_info);
+  int add_ls_group(ObLSGroupStat *ls_group_info);
   int assign(const ObUnitLSStat &other);
   bool is_deleting() const
   {
@@ -158,7 +157,7 @@ struct ObUnitGroupStat
            && unit_info_.at(0)->is_valid_for_normal_ls();
   }
   int init(ObUnitLSStat &unit_info);
-  int add_unit(ObUnitLSStat &unit);
+  int add_unit(ObUnitLSStat *unit);
   int assign(const ObUnitGroupStat& other);
   int get_unit_info_by_zone(const ObZone &zone, const ObUnitLSStat* &unit_info) const;
   //日志流初始化的时候，取的是第一个unit上所有的日志流组信息
@@ -207,7 +206,7 @@ public:
     return !zone_.is_empty();
   }
   int assign(const ObZoneLSStat &other);
-  int add_unit_ls_info(ObUnitLSStat &zone_ls_stat);
+  int add_unit_ls_info(ObUnitLSStat *zone_ls_stat);
   int set_unit_gts_standalone(ObUnitLSStat &unit_stat);
   //由于deleting状态的unit不计入unit_group中，所以直接使用ug_array的大小即可
   int64_t get_valid_unit_num() const
@@ -296,7 +295,7 @@ class ObTenantLSBalanceInfo
 {
 public:
   ObTenantLSBalanceInfo(ObIAllocator &allocator):
-    is_inited_(false), tenant_id_(), tenant_role_(), job_desc_(), sys_ls_info_(), sys_ls_target_unit_list_(),
+    allocator_(allocator), is_inited_(false), tenant_id_(), tenant_role_(), job_desc_(), sys_ls_info_(), sys_ls_target_unit_list_(),
     normal_ls_info_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "LSInfo")),
     duplicate_ls_info_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "DupLSInfo")),
     unit_info_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "UnitInfo")),
@@ -305,23 +304,8 @@ public:
     ug_array_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "UGArray")),
     zone_array_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "ZoneArray"))
   {}
-  ~ObTenantLSBalanceInfo() {}
-  void reset()
-  {
-    is_inited_ = false;
-    tenant_id_ = OB_INVALID_TENANT_ID;
-    tenant_role_.reset();
-    job_desc_.reset();
-    sys_ls_info_.reset();
-    sys_ls_target_unit_list_.reset();
-    normal_ls_info_.reset();
-    duplicate_ls_info_.reset();
-    unit_info_.reset();
-    ls_group_array_.reset();
-    unit_array_.reset();
-    ug_array_.reset();
-    zone_array_.reset();
-  }
+  ~ObTenantLSBalanceInfo() { reset(); }
+  void reset();
 
   int init_tenant_ls_balance_info(const uint64_t tenant_id,
       const share::ObLSStatusInfoArray &status_array,
@@ -353,8 +337,6 @@ public:
   int get_unit_zone_info(const uint64_t unit_id, ObZoneLSStat* &zone_info);
   int get_ls_group_info(const uint64_t ls_group_id, ObLSGroupStat* &lg_info);
   int get_unit_ls_info(const uint64_t unit_id, ObUnitLSStat* &unit_ls_info);
-  int get_ls_unit_list(const share::ObLSStatusInfo &ls_info,
-      ObArray<ObUnit*> &unit_list);
   int get_unit_group_info(const uint64_t ug_id, ObUnitGroupStat* &ug_info);
   int check_unit_list_valid(const share::ObUnitIDList &unit_list, bool &is_valid);
   int get_min_unit_group(common::ObIArray<ObUnitGroupStat*> &ug_array,
@@ -376,12 +358,20 @@ public:
   }
 
 private:
+  template <typename T, typename... Args>
+  int alloc_stat_info_(T *&stat_info, Args&&... args);
   int build_ls_group_array_();
   int build_unit_ls_array_();
   int get_or_create_unit_group_info_(ObUnitLSStat &unit_ls_info, ObUnitGroupStat* &ug_info);
   int create_new_zone_info_(ObZone &zone, const common::ObReplicaType replica_type);
   int build_zone_ls_info_();
 private:
+  // allocator_ is used to allocate all stat info objects, including ObLSGroupStat, ObUnitLSStat, ObUnitGroupStat, ObZoneLSStat.
+  // Make sure all these stat info objects are allocated by allocator_ using alloc_stat_info_() method,
+  //   so that pointers to these objects are valid during the balance process.
+  // Also store pointers to these objects in the corresponding member arrays,
+  //   so that they can be iterated and destroyed in reset() method to avoid memory leak.
+  common::ObIAllocator &allocator_;
   bool is_inited_;
   uint64_t tenant_id_;
   ObTenantRole tenant_role_;
@@ -393,11 +383,11 @@ private:
   common::ObArray<share::ObLSStatusInfo> normal_ls_info_;
   common::ObArray<share::ObLSStatusInfo> duplicate_ls_info_;
   common::ObArray<ObUnit> unit_info_;
-  //构造值
-  common::ObArray<ObLSGroupStat> ls_group_array_;
-  common::ObArray<ObUnitLSStat> unit_array_;
-  common::ObArray<ObUnitGroupStat> ug_array_;
-  common::ObArray<ObZoneLSStat> zone_array_;
+  //构造值, pointers to objects allocated by allocator_
+  common::ObArray<ObLSGroupStat *> ls_group_array_;
+  common::ObArray<ObUnitLSStat *> unit_array_;
+  common::ObArray<ObUnitGroupStat *> ug_array_;
+  common::ObArray<ObZoneLSStat *> zone_array_;
 };
 
 //for split or transfer
@@ -637,7 +627,6 @@ public:
 
   int64_t to_string(char *buf, const int64_t buf_len) const;
 private:
-  int inner_add_ls_group_(ObLSGroupStat* &ls_groups_to_add);
   ObArray<ObLSGroupStat*> inner_ls_group_stat_array_;
   int64_t target_lg_cnt_;
 };
@@ -690,8 +679,7 @@ private:
       ObArray<ObLSGroupStat> &expand_lg);
   int construct_expand_task_for_cell_emtpy_lg_(ObIArray<ObLSGroupStat*> &curr_lg_array);
   int get_cell_expand_lg_(ObLSGroupMatrixCell &cell,
-    ObIArray<ObLSGroupStat*> &curr_lg_array,
-    ObArray<ObLSGroupStat> &expand_lg_array);
+    ObIArray<ObLSGroupStat*> &curr_lg_array);
   int balance_ls_between_lgs_in_cell_(ObArray<ObLSGroupStat*> &curr_lg_array);
   int generate_alter_task_for_each_lg_(ObArray<ObLSGroupStat*> &curr_lg_array);
   int construct_ls_expand_task(const uint64_t ls_group_id,
