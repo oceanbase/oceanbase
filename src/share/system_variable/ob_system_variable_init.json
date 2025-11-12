@@ -11896,5 +11896,19 @@
     "background_cn": "",
     "ref_url": "",
     "placeholder": true
+  },
+  "json_float_full_precision": {
+    "id": 10760,
+    "name": "json_float_full_precision",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "bool",
+    "info": "Parse number in JSON with full precision (but slower)",
+    "flags": "SESSION | GLOBAL | NEED_SERIALIZE",
+    "publish_version": "4.4.2.0",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": "",
+    "placeholder": true
   }
 }
