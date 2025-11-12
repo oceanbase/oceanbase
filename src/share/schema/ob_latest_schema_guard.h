@@ -438,6 +438,8 @@ int get_table_id_and_table_name_in_tablegroup(
   int get_sequence_schema(const uint64_t sequence_id,
                           const ObSequenceSchema *&sequence_schema);
 
+  int get_sys_variable_schema(const ObSysVariableSchema *&sys_variable_schema);
+
   /* -------------- interfaces with cache end ---------------*/
 private:
   int check_inner_stat_();

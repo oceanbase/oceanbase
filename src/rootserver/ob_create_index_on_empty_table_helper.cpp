@@ -26,6 +26,7 @@ namespace rootserver
 int ObCreateIndexOnEmptyTableHelper::check_create_index_on_empty_table_opt(
     rootserver::ObDDLService &ddl_service,
     ObMySQLTransaction &trans,
+    const share::schema::ObSysVariableSchema &sys_var_schema,
     const ObString &database_name,
     const share::schema::ObTableSchema &table_schema,
     ObIndexType index_type,
@@ -36,7 +37,7 @@ int ObCreateIndexOnEmptyTableHelper::check_create_index_on_empty_table_opt(
   is_create_index_on_empty_table_opt = false;
   if (DATA_VERSION_SUPPORT_EMPTY_TABLE_CREATE_INDEX_OPT(executor_data_version)) {
     if (!share::schema::is_index_support_empty_table_opt(index_type) && index_type != ObIndexType::INDEX_TYPE_IS_NOT) {
-    } else if (OB_FAIL(ObDDLUtil::check_table_empty(database_name,
+    } else if (OB_FAIL(ObDDLUtil::check_table_empty(sys_var_schema, database_name,
                                                     table_schema,
                                                     sql_mode,
                                                     is_create_index_on_empty_table_opt))) {
@@ -49,13 +50,16 @@ int ObCreateIndexOnEmptyTableHelper::check_create_index_on_empty_table_opt(
       } else {
         LOG_WARN("failed to lock table", KR(ret), K(table_schema));
       }
-    } else if (OB_FAIL(ObDDLUtil::check_table_empty(database_name,
+    } else if (OB_FAIL(ObDDLUtil::check_table_empty(sys_var_schema, database_name,
                                                     table_schema,
                                                     sql_mode,
                                                     is_create_index_on_empty_table_opt))) {
       LOG_WARN("failed to check table empty", KR(ret), K(database_name), K(table_schema));
     }
   }
+  LOG_TRACE("check_create_index_on_empty_table_opt", K(ret), K(is_create_index_on_empty_table_opt),
+    "name_case_mode", sys_var_schema.get_name_case_mode(),
+    K(database_name), "table_name", table_schema.get_table_name_str());
   return ret;
 }
 
