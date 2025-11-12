@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_partition_pre_split.h"
 #include "share/scheduler/ob_partition_auto_split_helper.h"
+#include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "share/ob_index_builder_util.h"
 #include "src/share/scheduler/ob_partition_auto_split_helper.h"
@@ -660,12 +661,15 @@ int ObPartitionPreSplit::build_table_pre_split_schema(
       ObRowkey src_h_bound_val;
       ObObj obj_l_buf[OB_MAX_ROWKEY_COLUMN_NUMBER];
       ObObj obj_h_buf[OB_MAX_ROWKEY_COLUMN_NUMBER];
+      bool is_oracle_mode = false;
 
       if (FALSE_IT(get_split_num(data_table_phycical_size, split_size, split_num))) {
       } else if (split_num < 2) {
         LOG_DEBUG("[PRE_SPLIT] tablet physical size no reach split limited, no need to split",
             K(data_table_phycical_size), K(split_size), K(split_num));
-      } else if (OB_FAIL(get_partition_columns_name(table_schema, part_columns_name))) {
+      } else if (OB_FAIL(ori_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+        LOG_WARN("failed to check is oracle mode", K(ret), K(ori_table_schema.get_table_id()));
+      } else if (OB_FAIL(get_partition_columns_name(table_schema, is_oracle_mode, part_columns_name))) {
         LOG_WARN("[PRE_SPLIT] fail to get partition columns name", K(ret));
       } else if (OB_FAIL(get_partition_columns_range(table_schema, part_columns_name.count(), part_columns_range))) {
         LOG_WARN("[PRE_SPLIT] fail to get partition ranges", K(ret));
@@ -1126,7 +1130,10 @@ int ObPartitionPreSplit::build_global_index_pre_split_ranges(
     ObRowkey src_h_bound_val;
     ObObj obj_l_buf[OB_MAX_ROWKEY_COLUMN_NUMBER];
     ObObj obj_h_buf[OB_MAX_ROWKEY_COLUMN_NUMBER];
-    if (OB_FAIL(get_partition_columns_name(index_schema, part_columns_name))) {
+    bool is_oracle_mode = false;
+    if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+      LOG_WARN("failed to check is oracle mode", K(ret), K(table_schema.get_table_id()));
+    } else if (OB_FAIL(get_partition_columns_name(index_schema, is_oracle_mode, part_columns_name))) {
       LOG_WARN("[PRE_SPLIT] fail to get partition columns range", K(ret));
     } else if (OB_FAIL(get_partition_columns_range(index_schema, part_columns_name.count(), part_columns_range))) {
       LOG_WARN("[PRE_SPLIT] fail to get partition ranges", K(ret));
@@ -1236,6 +1243,7 @@ description
 */
 int ObPartitionPreSplit::get_partition_columns_name(
     const ObTableSchema &table_schema,
+    const bool is_oracle_mode,
     ObIArray<ObString> &part_columns)
 {
   int ret = OB_SUCCESS;
@@ -1262,15 +1270,8 @@ int ObPartitionPreSplit::get_partition_columns_name(
     }
   } else {
     ObString tmp_part_func_expr = table_schema.get_part_option().get_part_func_expr_str();
-    ObArray<ObString> part_expr_strs;
-    if (OB_FAIL(split_on(tmp_part_func_expr, ',', part_expr_strs))) {
-      LOG_WARN("[PRE_SPLIT] fail to split func expr", K(ret), K(tmp_part_func_expr));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < part_expr_strs.count(); ++i) {
-        if (OB_FAIL(part_columns.push_back(part_expr_strs.at(i).trim()))) {
-          LOG_WARN("[PRE_SPLIT] fail to push back part func str.", K(ret), K(part_expr_strs));
-        }
-      }
+    if (OB_FAIL(ObDDLResolver::get_partition_keys_by_part_func_expr(tmp_part_func_expr, is_oracle_mode, allocator_, part_columns))) {
+      LOG_WARN("failed to get partition keys", K(ret), K(tmp_part_func_expr), K(table_schema.get_table_id()));
     }
   }
   return ret;
@@ -1339,15 +1340,18 @@ int ObPartitionPreSplit::check_is_modify_partition_rule(
   ObArray<ObString> old_part_names;
   ObArray<ObNewRange> new_part_ranges;
   ObArray<ObNewRange> old_part_ranges;
+  bool is_oracle_mode = false;
   if (!new_table_schema.is_partitioned_table()) {
     // skip, only partition table should be check, new table is not partition table means not modifing partition rule
   } else if (!old_table_schema.is_partitioned_table()) {
     // ori table is auto split none partition table, and new table is auto split partition table,
     // so is must be modified partition rule
     has_modify_partition_rule = true;
-  } else if (OB_FAIL(get_partition_columns_name(new_table_schema, new_part_names))) {
+  } else if (OB_FAIL(old_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("failed to check is oracle mode", K(ret), K(old_table_schema.get_table_id()));
+  } else if (OB_FAIL(get_partition_columns_name(new_table_schema, is_oracle_mode, new_part_names))) {
     LOG_WARN("[PRE_SPLIT] fail to get partition column name", K(ret));
-  } else if (OB_FAIL(get_partition_columns_name(old_table_schema, old_part_names))) {
+  } else if (OB_FAIL(get_partition_columns_name(old_table_schema, is_oracle_mode, old_part_names))) {
     LOG_WARN("[PRE_SPLIT] fail to get partition column name", K(ret));
   } else if (OB_FAIL(get_partition_ranges(new_table_schema, new_part_ranges))) {
     LOG_WARN("[PRE_SPLIT] fail to get partition range", K(ret));
@@ -1398,6 +1402,7 @@ int ObPartitionPreSplit::build_tablet_pre_split_ranges(
   ObSplitSampler range_builder;
   ObArray<ObNewRange> tmp_ranges;
   ObArray<ObString> part_columns_name;
+  bool is_oracle_mode = false;
   if (OB_UNLIKELY(tenant_id == OB_INVALID_TENANT_ID || tablet_phycical_size <= 0
       || split_num <= 0
       || !source_tablet_id.is_valid()
@@ -1415,7 +1420,9 @@ int ObPartitionPreSplit::build_tablet_pre_split_ranges(
   } else if (tmp_ranges.count() <= 0) {
     // empty range, do nothing
     LOG_DEBUG("[PRE_SPLIT] query ranges result is none, no need to split");
-  } else if (OB_FAIL(get_partition_columns_name(new_table_schema, part_columns_name))) {
+  } else if (OB_FAIL(old_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("failed to check is oracle mode", K(ret), K(old_table_schema.get_table_id()));
+  } else if (OB_FAIL(get_partition_columns_name(new_table_schema, is_oracle_mode, part_columns_name))) {
     LOG_WARN("[PRE_SPLIT] fail to get rowkey column name.", K(ret), K(part_columns_name));
   } else {
     /* if table is partition table, then get bounder. if not, regard bounder as min or max */
