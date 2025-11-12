@@ -187,7 +187,8 @@ int ObSingleMerge::get_and_fuse_cache_row(const int64_t read_snapshot_version,
         STORAGE_LOG(WARN, "Unexpected null table", K(ret), K(i), K(tables_));
       } else if (table->is_memtable()) {
         break;
-      } else if (handle_.value_->get_read_snapshot_version() < table->get_upper_trans_version()) {
+      } else if ((table->is_major_sstable() && handle_.value_->get_read_snapshot_version() < table->get_snapshot_version())
+		 || (!table->is_major_sstable() && handle_.value_->get_read_snapshot_version() < table->get_upper_trans_version())) {
         end_table_idx = i;
         need_update_fuse_cache = true;
         break;
