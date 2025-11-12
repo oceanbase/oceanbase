@@ -291,7 +291,8 @@ public:
       int64_t &last_gc_version,
       int64_t &tablet_private_transfer_epoch,
       uintptr_t &tablet_fingerprint,
-      bool &allow_tablet_version_gc);
+      bool &allow_tablet_version_gc,
+      bool &is_transfer_out_deleted);
   int get_last_gc_version_for_tablet(
       const share::ObLSID &ls_id,
       const ObTabletID &tablet_id,

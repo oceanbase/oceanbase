@@ -195,10 +195,11 @@ void ObMacroCacheMultiVersionGCTest::get_tablet_version(int64_t &tablet_version)
   int64_t current_tablet_trans_seq = -1;
   int64_t last_gc_version = -1;
   uintptr_t tablet_fingerprint = 0;
+  bool is_transfer_out_deleted = false;
   do {
     ASSERT_EQ(OB_SUCCESS, MTL(ObTenantMetaMemMgr*)->get_current_version_for_tablet(run_ctx_.ls_id_,
               run_ctx_.tablet_id_, current_tablet_version, last_gc_version, current_tablet_trans_seq,
-              tablet_fingerprint, is_old_version_empty));
+              tablet_fingerprint, is_old_version_empty, is_transfer_out_deleted));
     ASSERT_NE(-1, current_tablet_version);
     ASSERT_GE(last_gc_version, -1);
     ASSERT_LT(last_gc_version, current_tablet_version);
@@ -206,7 +207,8 @@ void ObMacroCacheMultiVersionGCTest::get_tablet_version(int64_t &tablet_version)
 
     ObPrivateBlockGCHandler handler(run_ctx_.ls_id_, run_ctx_.ls_epoch_, run_ctx_.tablet_id_,
                                     current_tablet_version, last_gc_version,
-                                    current_tablet_trans_seq, tablet_fingerprint);
+                                    current_tablet_trans_seq, tablet_fingerprint,
+                                    is_transfer_out_deleted);
     LOG_INFO("wait old tablet version delete", K(current_tablet_version), K(is_old_version_empty),
              K(run_ctx_.ls_id_), K(run_ctx_.ls_epoch_), K(handler));
     ASSERT_EQ(OB_SUCCESS, handler.list_tablet_meta_version(tablet_versions));
@@ -223,9 +225,10 @@ void ObMacroCacheMultiVersionGCTest::get_shared_blocks_for_tablet(
   int64_t current_tablet_trans_seq = -1;
   int64_t last_gc_version = -1;
   uintptr_t tablet_fingerprint = 0;
+  bool is_transfer_out_deleted = false;
   ASSERT_EQ(OB_SUCCESS, MTL(ObTenantMetaMemMgr*)->get_current_version_for_tablet(run_ctx_.ls_id_,
             run_ctx_.tablet_id_, current_tablet_version, last_gc_version, current_tablet_trans_seq,
-            tablet_fingerprint, is_old_version_empty));
+            tablet_fingerprint, is_old_version_empty, is_transfer_out_deleted));
   ASSERT_NE(-1, current_tablet_version);
   ASSERT_TRUE(is_old_version_empty);
   ASSERT_GE(last_gc_version, -1);
@@ -233,7 +236,7 @@ void ObMacroCacheMultiVersionGCTest::get_shared_blocks_for_tablet(
 
   ObPrivateBlockGCHandler handler(run_ctx_.ls_id_, run_ctx_.ls_epoch_, run_ctx_.tablet_id_,
                                   current_tablet_version, last_gc_version, current_tablet_trans_seq,
-                                  tablet_fingerprint);
+                                  tablet_fingerprint, is_transfer_out_deleted);
   ASSERT_EQ(OB_SUCCESS, handler.get_blocks_for_tablet(current_tablet_version, true/*is_shared*/, block_ids));
   LOG_INFO("get shared blocks for tablet", K(block_ids));
 }

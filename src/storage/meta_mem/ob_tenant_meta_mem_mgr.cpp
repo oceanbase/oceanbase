@@ -1884,6 +1884,7 @@ int ObTenantMetaMemMgr::get_current_version_for_tablet(
   int64_t unused_arg1 = 0;
   uintptr_t unused_arg2 = 0;
   bool unused_arg3 = false;
+  bool unused_arg4 = false;
   tablet_version = 0;
   return get_current_version_for_tablet(ls_id,
                                         tablet_id,
@@ -1891,7 +1892,8 @@ int ObTenantMetaMemMgr::get_current_version_for_tablet(
                                         unused_arg0,
                                         unused_arg1,
                                         unused_arg2,
-                                        unused_arg3);
+                                        unused_arg3,
+                                        unused_arg4);
 }
 
 int ObTenantMetaMemMgr::get_current_version_for_tablet(
@@ -1901,7 +1903,8 @@ int ObTenantMetaMemMgr::get_current_version_for_tablet(
     int64_t &last_gc_version,
     int64_t &tablet_private_transfer_epoch,
     uintptr_t &tablet_fingerprint,
-    bool &allow_tablet_version_gc)
+    bool &allow_tablet_version_gc,
+    bool &is_transfer_out_deleted)
 {
   int ret = OB_SUCCESS;
   const ObTabletMapKey key(ls_id, tablet_id);
@@ -1946,8 +1949,12 @@ int ObTenantMetaMemMgr::get_current_version_for_tablet(
         tablet_private_transfer_epoch = tablet_ptr->get_addr().block_id().meta_private_transfer_epoch();
         allow_tablet_version_gc = tablet_ptr->is_old_version_chain_empty() && !exist_in_external;
         OB_ASSERT(tablet_private_transfer_epoch == private_transfer_epoch);
+        const ObTabletStatus tablet_status = tablet_handle.get_obj()->get_tablet_meta().last_persisted_committed_tablet_status_.get_tablet_status();
+        if (tablet_handle.get_obj()->is_empty_shell() && (ObTabletStatus::TRANSFER_OUT_DELETED == tablet_status)) {
+          is_transfer_out_deleted = true;
+        }
         FLOG_INFO("PRINT TABLET ADDRESS", K(ret), K(tablet_ptr->get_addr()), K(tablet_handle.get_obj()->get_tablet_addr()),
-          K(tablet_version), K(last_gc_version), K(tablet_fingerprint));
+          K(tablet_version), K(last_gc_version), K(tablet_fingerprint), K(is_transfer_out_deleted));
       }
     }
   }
