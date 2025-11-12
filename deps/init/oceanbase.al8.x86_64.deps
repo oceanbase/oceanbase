@@ -37,7 +37,7 @@ devdeps-protobuf-c-1.5.1-100000052025032810.al8.x86_64.rpm
 devdeps-roaringbitmap-croaring-3.0.0-92024092815.al8.x86_64.rpm
 devdeps-apache-arrow-20.0.0-42025082815.al8.x86_64.rpm
 devdeps-hyperscan-5.4.2-252024092817.al8.x86_64.rpm
-devdeps-vsag-1.1.0-862025102814.al8.x86_64.rpm
+devdeps-vsag-1.1.0-882025110711.al8.x86_64.rpm
 devdeps-apache-orc-2.1.1-82025081116.al8.x86_64.rpm
 devdeps-fast-float-6.1.3-42024112122.al8.x86_64.rpm
 devdeps-hdfs-sdk-3.3.6-112024123116.al8.x86_64.rpm
