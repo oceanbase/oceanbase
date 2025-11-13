@@ -1047,7 +1047,7 @@ int ObHybridVectorRefreshTask::after_embedding(ObPluginVectorIndexAdaptor &adapt
             ObRowkey rowkey(obj_ptr, embedded_rowkey_count);
             if (OB_FAIL(ObPluginVectorIndexUtils::read_local_tablet(ls_id_,
                 &adaptor,
-                ctx_->task_status_.target_scn_,
+                snapshot.version(),
                 INDEX_TYPE_HYBRID_INDEX_EMBEDDED_LOCAL,
                 allocator_,
                 embedde_scan_allocator,
@@ -1067,6 +1067,8 @@ int ObHybridVectorRefreshTask::after_embedding(ObPluginVectorIndexAdaptor &adapt
             } else if (OB_FAIL(embedded_table_scan_iter->get_next_row(datum_row))) {
               if (OB_ITER_END != ret) {
                 LOG_WARN("failed to get next row from next table.", K(ret));
+              } else {
+                ret = OB_SUCCESS;
               }
             } else if (OB_ISNULL(datum_row) || !datum_row->is_valid()) {
               ret = OB_ERR_UNEXPECTED;
