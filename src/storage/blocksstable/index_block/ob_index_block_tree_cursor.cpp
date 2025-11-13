@@ -1364,8 +1364,7 @@ int ObIndexBlockTreeCursor::estimate_boundary_macro_and_micro_count(const ObDatu
   } else if (OB_FAIL(drill_down(boundary_rowkey, ONE_LEVEL, is_beyond_range))) {
     LOG_WARN("fail to drill down", K(ret));
   } else if (is_beyond_range) {
-    ret = OB_BEYOND_THE_RANGE;
-    LOG_WARN("fail to drill down because beyond range",
+    LOG_INFO("drill down beyond range",
         K(ret), K(is_left), K(range), K(macro_count), K(micro_count));
   } else {
     const bool is_left_and_non_min = is_left && !range.get_start_key().is_min_rowkey();
@@ -1389,8 +1388,7 @@ int ObIndexBlockTreeCursor::estimate_boundary_macro_and_micro_count(const ObDatu
       } else if (OB_FAIL(drill_down(boundary_rowkey, ONE_LEVEL, is_beyond_range))) {
         LOG_WARN("fail to drill down", K(ret));
       } else if (is_beyond_range) {
-        ret = OB_BEYOND_THE_RANGE;
-        LOG_WARN("fail to drill down because beyond range",
+        LOG_INFO("drill down beyond range",
             K(ret), K(is_left), K(range), K(macro_count), K(micro_count));
         break;
       }
