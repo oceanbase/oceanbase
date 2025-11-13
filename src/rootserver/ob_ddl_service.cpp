@@ -15202,7 +15202,7 @@ int ObDDLService::check_need_add_progressive_round(
   return ret;
 }
 
-int ObDDLService::check_is_only_add_index_on_empty_table(ObMySQLTransaction &trans,
+int ObDDLService::check_is_only_add_index_on_empty_table(ObSchemaGetterGuard &schema_guard, ObMySQLTransaction &trans,
                                                          const ObString &database_name,
                                                          const share::schema::ObTableSchema &table_schema,
                                                          const obrpc::ObAlterTableArg &alter_table_arg,
@@ -15225,8 +15225,16 @@ int ObDDLService::check_is_only_add_index_on_empty_table(ObMySQLTransaction &tra
     }
   }
   if (OB_SUCC(ret) && is_only_creata_index_on_empty_table) {
-    if (OB_FAIL(ObCreateIndexOnEmptyTableHelper::check_create_index_on_empty_table_opt(*this,
+    const ObSysVariableSchema *sys_var_schema = nullptr;
+    const uint64_t tenant_id = table_schema.get_tenant_id();
+    if (OB_FAIL(schema_guard.get_sys_variable_schema(tenant_id, sys_var_schema))) {
+      LOG_WARN("fail to get sysvar schema", KR(ret), K(tenant_id));
+    } else if (OB_ISNULL(sys_var_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sys_var_schema is null", KR(ret));
+    } else if (OB_FAIL(ObCreateIndexOnEmptyTableHelper::check_create_index_on_empty_table_opt(*this,
                                                                                        trans,
+                                                                                       *sys_var_schema,
                                                                                        database_name,
                                                                                        table_schema,
                                                                                        ObIndexType::INDEX_TYPE_IS_NOT,
@@ -15448,7 +15456,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                                                     orig_table_schema->get_table_id(),
                                                                     ddl_operator, *schema_service_))) {
         LOG_WARN("failed to modify obj status", K(ret));
-      } else if (OB_FAIL(check_is_only_add_index_on_empty_table(trans,
+      } else if (OB_FAIL(check_is_only_add_index_on_empty_table(schema_guard, trans,
                                                                 alter_table_schema.get_origin_database_name(),
                                                                 new_table_schema,
                                                                 alter_table_arg,
@@ -17380,14 +17388,20 @@ int ObDDLService::add_not_null_column_default_null_to_table_schema(
   bool is_table_empty = false;
   bool is_oracle_mode = false;
   const uint64_t tenant_id = origin_table_schema.get_tenant_id();
+  const ObSysVariableSchema *sys_var_schema = nullptr;
   if (OB_FAIL(origin_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("fail to check is oracle mode", K(ret), K(origin_table_schema));
+  } else if (OB_FAIL(schema_guard.get_sys_variable_schema(tenant_id, sys_var_schema))) {
+    LOG_WARN("fail to get sysvar schema", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(sys_var_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sys_var_schema is null", KR(ret));
   } else if (OB_UNLIKELY(!is_oracle_mode)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("add column not null in mysql mode is online ddl, not offline ddl", K(ret), K(is_oracle_mode));
   } else if (OB_FAIL(lock_table(trans, origin_table_schema))) {
     LOG_WARN("failed to lock ddl lock", K(ret));
-  } else if (OB_FAIL(ObDDLUtil::check_table_empty(alter_table_arg.alter_table_schema_.get_origin_database_name(),
+  } else if (OB_FAIL(ObDDLUtil::check_table_empty(*sys_var_schema, alter_table_arg.alter_table_schema_.get_origin_database_name(),
                                                   origin_table_schema,
                                                   alter_table_arg.sql_mode_,
                                                   is_table_empty))) {

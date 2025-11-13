@@ -29,6 +29,7 @@ public:
   static int check_create_index_on_empty_table_opt(
     rootserver::ObDDLService &ddl_service,
     ObMySQLTransaction &trans,
+    const share::schema::ObSysVariableSchema &sys_var_schema,
     const ObString &database_name,
     const share::schema::ObTableSchema &table_schema,
     ObIndexType index_type,

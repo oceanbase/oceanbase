@@ -3808,12 +3808,14 @@ int ObDDLUtil::check_tablet_checksum_error(
 }
 
 int ObDDLUtil::check_table_empty(
+    const share::schema::ObSysVariableSchema &sys_var_schema,
     const ObString &database_name,
     const share::schema::ObTableSchema &table_schema,
     const ObSQLMode sql_mode,
     bool &is_table_empty)
 {
   int ret = OB_SUCCESS;
+  UNUSED(sql_mode);
   is_table_empty = false;
   bool is_oracle_mode = false;
   uint64_t table_id = OB_INVALID_ID;
@@ -3827,34 +3829,46 @@ int ObDDLUtil::check_table_empty(
   } else if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("fail to check is oracle mode", K(ret), K(table_schema));
   } else {
-    const ObString &check_expr_str = "1 != 1";
     const ObString &table_name = table_schema.get_table_name_str();
     ObSqlString sql_string;
-    ObSessionParam session_param;
-    int64_t new_sql_mode = static_cast<int64_t>(sql_mode);
-    session_param.sql_mode_ = &new_sql_mode;
-    session_param.tz_info_wrap_ = nullptr;
-    session_param.ddl_info_.set_is_ddl(true);
-    session_param.ddl_info_.set_retryable_ddl(true);
-    session_param.ddl_info_.set_source_table_hidden(table_schema.is_user_hidden_table());
-    session_param.ddl_info_.set_dest_table_hidden(false);
     ObTimeoutCtx timeout_ctx;
-    ObCommonSqlProxy *sql_proxy = nullptr;
     const char* format_str = nullptr;
+    const uint64_t tenant_id = table_schema.get_tenant_id();
+    ObOracleSqlProxy oracle_sql_proxy(*GCTX.sql_proxy_);
+    ObSingleConnectionProxy single_conn_proxy;
+    sqlclient::ObISQLConnection *connection = nullptr;
+    const ObSysVarSchema *var_schema = nullptr;
+
     if (is_oracle_mode) {
       format_str = "SELECT /*+ %.*s */ 1 FROM \"%.*s\".\"%.*s\" WHERE NOT 1 != 1 AND ROWNUM = 1";
-      sql_proxy = GCTX.ddl_oracle_sql_proxy_;
+      if (OB_FAIL(single_conn_proxy.connect(tenant_id, 0/*group_id*/, &oracle_sql_proxy))) {
+        LOG_WARN("failed to get mysql connect", KR(ret), K(tenant_id));
+      }
     } else {
       format_str = "SELECT /*+ %.*s */ 1 FROM `%.*s`.`%.*s` WHERE NOT 1 != 1 LIMIT 1";
-      sql_proxy = GCTX.ddl_sql_proxy_;
+      if (OB_FAIL(single_conn_proxy.connect(tenant_id, 0/*group_id*/, GCTX.sql_proxy_))) {
+        LOG_WARN("failed to get mysql connect", KR(ret), K(tenant_id));
+      }
     }
+
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       common::sqlclient::ObMySQLResult *result = nullptr;
       ObSqlString ddl_schema_hint_str;
       ObArenaAllocator allocator("ObDDLTmp");
       ObString new_table_name;
       ObString new_database_name;
-      if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(sys_var_schema.get_sysvar_schema(SYS_VAR_LOWER_CASE_TABLE_NAMES, var_schema))) {
+        LOG_WARN("failed to get lower_case_table_names", KR(ret));
+      } else if (OB_ISNULL(var_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("var_schema is null", KR(ret));
+      } else if (OB_ISNULL(connection = single_conn_proxy.get_connection())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null conn", K(ret));
+      } else if (OB_FAIL(connection->set_session_variable(share::OB_SV_LOWER_CASE_TABLE_NAMES, var_schema->get_value()))) {
+        LOG_WARN("update lower_case_table_names for ddl inner sql failed", K(ret));
+      } else if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
                   allocator,
                   database_name,
                   new_database_name,
@@ -3878,16 +3892,11 @@ int ObDDLUtil::check_table_empty(
                          static_cast<int>(new_database_name.length()), new_database_name.ptr(),
                          static_cast<int>(new_table_name.length()), new_table_name.ptr()))) {
         LOG_WARN("fail to assign format", K(ret));
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_ISNULL(sql_proxy)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("sql proxy is null", K(ret));
-      } else if (OB_FAIL(sql_proxy->read(res, table_schema.get_tenant_id(), sql_string.ptr(), &session_param))) {
+      } else if (OB_FAIL(single_conn_proxy.read(res, tenant_id, sql_string.ptr()))) {
         LOG_WARN("execute sql failed", K(ret), K(sql_string.ptr()));
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("execute sql failed", K(ret), K(table_schema.get_tenant_id()), K(sql_string));
+        LOG_WARN("execute sql failed", K(ret), K(tenant_id), K(sql_string));
       } else if (OB_FAIL(result->next())) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;

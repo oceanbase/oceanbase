@@ -1397,6 +1397,7 @@ public:
       const bool calc_memtable,
       int64_t &physical_row_count /*OUT*/);
   static int check_table_empty(
+      const share::schema::ObSysVariableSchema &sys_var_schema,
       const ObString &database_name,
       const share::schema::ObTableSchema &table_schema,
       const ObSQLMode sql_mode,
