@@ -2688,6 +2688,58 @@ int ObBackupLSTaskInfoOperator::get_statistics_info(
   return ret;
 }
 
+int ObBackupLSTaskInfoOperator::get_distinct_ls_ids(
+    common::ObISQLClient &proxy,
+    const int64_t task_id,
+    const uint64_t tenant_id,
+    ObIArray<ObLSID> &ls_ids)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  if (task_id <= 0 || OB_INVALID_TENANT_ID == tenant_id || !ls_ids.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("[DATA_BACKUP]invalid argument for get distinct ls ids", K(ret), K(task_id), K(tenant_id), K(ls_ids.count()));
+  } else {
+    HEAP_VAR(ObMySQLProxy::ReadResult, res) {
+      ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql.assign_fmt("select distinct %s from %s where %s=%ld and %s=%lu order by %s",
+              OB_STR_LS_ID, OB_ALL_BACKUP_LS_TASK_INFO_TNAME, OB_STR_TASK_ID, task_id, OB_STR_TENANT_ID, tenant_id, OB_STR_LS_ID))) {
+        LOG_WARN("[DATA_BACKUP]failed to assign sql", K(ret));
+      } else if (OB_FAIL(proxy.read(res, get_exec_tenant_id(tenant_id), sql.ptr()))) {
+        LOG_WARN("[DATA_BACKUP]failed to exec sql", K(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("[DATA_BACKUP]result is null", K(ret), K(sql));
+      } else {
+        while (OB_SUCC(ret)) {
+          if (OB_FAIL(result->next())) {
+            if (OB_ITER_END == ret) {
+              ret = OB_SUCCESS;
+              break;
+            } else {
+              LOG_WARN("[DATA_BACKUP]failed to get next row", K(ret));
+            }
+          } else {
+            int64_t int_ls_id = ObLSID::INVALID_LS_ID;
+            EXTRACT_INT_FIELD_MYSQL(*result, OB_STR_LS_ID, int_ls_id, int64_t);
+            if (OB_FAIL(ret)) {
+              LOG_WARN("[DATA_BACKUP]failed to extract ls id field", K(ret));
+            } else {
+              ObLSID ls_id(int_ls_id);
+              if (!ls_id.is_valid()) {
+                LOG_WARN("[DATA_BACKUP]skip invalid ls id", K(ls_id), K(int_ls_id));
+              } else if (OB_FAIL(ls_ids.push_back(ls_id))) {
+                LOG_WARN("[DATA_BACKUP]failed to push ls id", K(ret), K(ls_id));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObBackupLSTaskInfoOperator::parse_ls_task_info_(
     sqlclient::ObMySQLResult &result, 
     ObIArray<ObBackupLSTaskInfoAttr> &task_infos)

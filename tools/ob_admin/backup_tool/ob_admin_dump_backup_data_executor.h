@@ -112,6 +112,7 @@ private:
   int print_macro_range_index_index_list_();
   int print_meta_index_index_list_();
   int print_ls_attr_info_();
+  int print_ls_id_list_info_();
   int print_tablet_to_ls_info_();
   int print_deleted_tablet_info_();
   int print_tenant_locality_info_();

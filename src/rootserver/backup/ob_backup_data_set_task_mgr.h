@@ -133,6 +133,7 @@ private:
   int write_backup_set_placeholder_(const bool is_start);
   int write_table_list_(const share::SCN &end_scn);
   int write_extern_infos_();
+  int write_extern_ls_id_info_();
   int write_tenant_backup_set_infos_();
   int write_extern_locality_info_(storage::ObExternTenantLocalityInfoDesc &locality_info);
   int write_extern_tenant_param_info_();
