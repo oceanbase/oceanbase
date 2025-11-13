@@ -174,6 +174,8 @@ int ObHiveFilePruner::generate_partition_bound(const ObDMLStmt &stmt,
           LOG_WARN("failed to get tablet ranges", K(ret));
         } else if (OB_FAIL(build_field_bound_from_ranges(ranges, *part_field_bound))) {
           LOG_WARN("failed to build field bound from ranges", K(ret));
+        } else if (OB_FAIL(part_field_bound->range_exprs_.assign(pre_range_graph.get_range_exprs()))) {
+          LOG_WARN("failed to assign range exprs");
         } else if (ranges.count() == 1) {
           ObNewRange *range = ranges.at(0);
           if (range->is_false_range()) {
@@ -480,7 +482,7 @@ bool ObHiveFilePruner::check_one_part(ObObj &part_val, ObHivePartFieldBound &fie
 
 ObHivePartFieldBound::ObHivePartFieldBound(common::ObIAllocator &allocator)
     : allocator_(allocator), column_id_(OB_INVALID_ID), is_whole_range_(false),
-      is_always_false_(false), bounds_(allocator)
+      is_always_false_(false), bounds_(allocator), range_exprs_(allocator)
 {
 }
 
@@ -495,6 +497,7 @@ void ObHivePartFieldBound::reset()
     }
   }
   bounds_.reset();
+  range_exprs_.reset();
 }
 
 int ObHivePartFieldBound::assign(const ObHivePartFieldBound &other)
@@ -506,6 +509,8 @@ int ObHivePartFieldBound::assign(const ObHivePartFieldBound &other)
     is_always_false_ = other.is_always_false_;
     if (OB_FAIL(bounds_.assign(other.bounds_))) {
       LOG_WARN("failed to assign field bound", K(ret));
+    } else if (OB_FAIL(range_exprs_.assign(other.range_exprs_))) {
+      LOG_WARN("failed to assign range exprs");
     }
   }
   return ret;
@@ -519,6 +524,8 @@ int ObHivePartFieldBound::deep_copy(ObHivePartFieldBound &src)
   is_always_false_ = src.is_always_false_;
   if (OB_FAIL(bounds_.init(src.bounds_.count()))) {
     LOG_WARN("failed to init fixed array", K(ret));
+  } else if (OB_FAIL(range_exprs_.assign(src.range_exprs_))) {
+    LOG_WARN("failed to assign range exprs");
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < src.bounds_.count(); ++i) {
     ObFieldBound *bound = OB_NEWx(ObFieldBound, &allocator_);
@@ -635,5 +642,23 @@ int ObHiveFilePruner::construct_partition_values(common::ObIAllocator &allocator
     }
   }
 
+  return ret;
+}
+
+int ObHiveFilePruner::get_part_id_and_range_exprs(ObIArray<uint64_t> &part_column_ids,
+                                                  ObIArray<ObRawExpr*> &range_exprs)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < hive_part_bounds_.count(); ++i) {
+    ObHivePartFieldBound *part_field_bound = hive_part_bounds_.at(i);
+    if (OB_ISNULL(part_field_bound)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("part field bound is null");
+    } else if (OB_FAIL(part_column_ids.push_back(part_field_bound->column_id_))) {
+      LOG_WARN("failed to push back part column id");
+    } else if (OB_FAIL(append(range_exprs, part_field_bound->range_exprs_))) {
+      LOG_WARN("failed to append range exprs");
+    }
+  }
   return ret;
 }

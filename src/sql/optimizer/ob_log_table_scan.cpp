@@ -16,6 +16,8 @@
 #include "share/vector_index/ob_vector_index_util.h"
 #include "share/domain_id/ob_domain_id.h"
 #include "plugin/interface/ob_plugin_external_intf.h"
+#include "sql/optimizer/ob_lake_table_partition_info.h"
+#include "sql/optimizer/file_prune/ob_hive_file_pruner.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -1735,6 +1737,8 @@ int ObLogTableScan::set_table_scan_filters(const common::ObIArray<ObRawExpr *> &
     LOG_WARN("failed to pick out query range exprs", K(ret));
   } else if (OB_FAIL(pick_out_dbms_calc_partition_id_exprs())) {
     LOG_WARN("failed to pick out dbms calc partiton id exprs", K(ret));
+  } else if (OB_FAIL(pick_out_lake_table_part_exprs())) {
+    LOG_WARN("failed to pick out lake table partition exprs", K(ret));
   } else if (OB_FAIL(pick_out_startup_filters())) {
     LOG_WARN("failed to pick out startup filters", K(ret));
   }
@@ -6546,6 +6550,57 @@ int ObLogTableScan::build_column_expr(ObRawExprFactory &expr_factory,
   } else if (OB_FAIL(ObRawExprUtils::build_column_expr(expr_factory, column_schema,
                                                        session, column_expr))) {
     LOG_WARN("failed to build column expr", K(ret), K(column_schema));
+  }
+  return ret;
+}
+
+int ObLogTableScan::pick_out_lake_table_part_exprs()
+{
+  int ret = OB_SUCCESS;
+  // only process HIVE tables
+  if (lake_table_format_ != share::ObLakeTableFormat::HIVE) {
+    // do nothing
+  } else {
+    ObTablePartitionInfo *part_info = get_table_partition_info();
+    ObILakeTableFilePruner *file_pruner = nullptr;
+    ObSEArray<uint64_t, 4> part_column_ids;
+    ObSEArray<ObRawExpr*, 16> range_exprs;
+    if (OB_ISNULL(part_info) ||
+        OB_UNLIKELY(!part_info->is_lake_table_partition_info()) ||
+        OB_ISNULL(file_pruner = static_cast<ObLakeTablePartitionInfo*>(part_info)->get_file_pruner())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(part_info), K(file_pruner));
+    } else if (OB_FAIL(static_cast<ObHiveFilePruner*>(file_pruner)->get_part_id_and_range_exprs(part_column_ids, range_exprs))) {
+      LOG_WARN("failed to get part id and range exprs", K(ret));
+    } else if (part_column_ids.empty() || range_exprs.empty()) {
+      // do nothing
+    } else {
+      ObSEArray<ObRawExpr*, 4> filter_exprs;
+      if (OB_FAIL(filter_exprs.assign(filter_exprs_))) {
+        LOG_WARN("assign filter exprs failed", K(ret));
+      } else {
+        filter_exprs_.reset();
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < filter_exprs.count(); ++i) {
+        ObRawExpr *expr = filter_exprs.at(i);
+        ObSEArray<ObRawExpr*, 4> columns;
+        bool skip = false;
+        if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr, columns))) {
+          LOG_WARN("failed to extract column exprs", K(ret));
+        } else if (columns.count() == 1) {
+          const ObColumnRefRawExpr* column_expr = static_cast<const ObColumnRefRawExpr*>(columns.at(0));
+          if (ObOptimizerUtil::find_item(part_column_ids, column_expr->get_column_id()) &&
+              ObOptimizerUtil::find_item(range_exprs, expr)) {
+            // expr generate precise range for partition pruning can be removed
+            skip = true;
+          }
+        }
+        if (OB_FAIL(ret) || skip) {
+        } else if (OB_FAIL(filter_exprs_.push_back(expr))) {
+          LOG_WARN("failed to push back filter expr");
+        }
+      }
+    }
   }
   return ret;
 }

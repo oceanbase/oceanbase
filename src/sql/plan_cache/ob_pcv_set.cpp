@@ -228,7 +228,8 @@ int ObPCVSet::inner_add_cache_obj(ObILibCacheCtx &ctx,
     if (REACH_TIME_INTERVAL(PRINT_PLAN_EXCEEDS_LOG_INTERVAL)) {
       LOG_INFO("number of plans in a single pcv_set reach limit", K(ret), K(get_plan_num()), K(pc_ctx));
     }
-  } else if (OB_FAIL(ObPlanCacheValue::get_all_dep_schema(*pc_ctx.sql_ctx_.schema_guard_,
+  } else if (!ObPlanCache::is_contains_external_object(plan->get_dependency_table()) &&
+             OB_FAIL(ObPlanCacheValue::get_all_dep_schema(*pc_ctx.sql_ctx_.schema_guard_,
                                                           plan->get_dependency_table(),
                                                           schema_array))) {
     LOG_WARN("failed to get all dep schema", K(ret));

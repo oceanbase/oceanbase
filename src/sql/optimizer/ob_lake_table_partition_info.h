@@ -81,6 +81,8 @@ public:
   bool is_hash_aggregate() const { return is_hash_aggregate_; }
   void set_hash_count(int64_t v) { hash_count_ = v; }
   int64_t get_hash_count() const { return hash_count_; }
+  const ObILakeTableFilePruner *get_file_pruner() const { return file_pruner_; }
+  ObILakeTableFilePruner *get_file_pruner() { return file_pruner_; }
 
   ObIArray<ObIcebergFileDesc*>& get_file_descs() { return iceberg_file_descs_; }
 
