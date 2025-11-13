@@ -3500,7 +3500,7 @@ int ObTabletTableStore::build_ha_inc_major_tables_(
     for (int64_t i = 0; OB_SUCC(ret) && i < old_store.inc_major_tables_.count(); ++i) {
       ObITable *cur_old_table = old_store.inc_major_tables_[i];
       bool need_add = true;
-      if (OB_UNLIKELY(nullptr == cur_old_table && !cur_old_table->is_inc_major_type_sstable())) {
+      if (OB_UNLIKELY(nullptr == cur_old_table || !cur_old_table->is_inc_major_type_sstable())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected table", K(ret), KPC(cur_old_table));
       }
