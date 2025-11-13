@@ -87,8 +87,6 @@ public:
 class ObMultipleGetMerge : public ObMultipleMerge
 {
 public:
-  typedef bool (*CHECK_TABLE_TYPE)(const ObITable *table);
-public:
   ObMultipleGetMerge();
   virtual ~ObMultipleGetMerge();
   int open(const common::ObIArray<blocksstable::ObDatumRowkey> &rowkeys);
@@ -105,7 +103,7 @@ protected:
 private:
   int alloc_resource();
   int init_resource();
-  int construct_specified_iters(const CHECK_TABLE_TYPE check_table_type);
+  int construct_specified_iters(int64_t &table_start_idx, const bool need_stop_at_first_sstable = false);
   int try_get_fuse_row_cache(
     const int64_t &read_snapshot_version,
     const int64_t &multi_version_start,

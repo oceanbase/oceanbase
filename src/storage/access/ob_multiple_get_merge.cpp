@@ -19,16 +19,6 @@ using namespace oceanbase::common;
 using namespace oceanbase::blocksstable;
 namespace storage
 {
-bool is_memtable(const ObITable *table)
-{
-  return table->is_memtable();
-}
-
-bool is_sstable(const ObITable *table)
-{
-  return !table->is_memtable();
-}
-
 ObMultipleGetMerge::ObMultipleGetMerge()
   : rowkeys_(nullptr),
     fuse_row_cache_fetcher_(),
@@ -173,9 +163,10 @@ int ObMultipleGetMerge::construct_iters()
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(tables_.count() == 0)) {
   } else {
+    int64_t table_start_idx = tables_.count() - 1;
     if (is_read_memtable_only()) {
       access_ctx_->use_fuse_row_cache_ = false;
-      if (OB_FAIL(construct_specified_iters(is_memtable))) {
+      if (OB_FAIL(construct_specified_iters(table_start_idx))) {
         STORAGE_LOG(WARN, "fail to construct iterators from all memtables only", K(ret));
       }
     } else {
@@ -185,12 +176,12 @@ int ObMultipleGetMerge::construct_iters()
       // and prefetch OB_MULTI_GET_OPEN_ROWKEY_NUM rowkeys in sstables at most
       if (OB_FAIL(init_resource())) {
         STORAGE_LOG(WARN, "fail to init resource", K(ret));
-      } else if (OB_FAIL(construct_specified_iters(is_memtable))) {
+      } else if (OB_FAIL(construct_specified_iters(table_start_idx, true))) {
         STORAGE_LOG(WARN, "fail to construct iterators from all memtables", K(ret));
       } else if (OB_FAIL(get_rows_from_memory())) {
         STORAGE_LOG(WARN, "fail to get rows from memory", K(ret), K(prefetch_row_range_idx_));
       } else if (!all_in_memory_) {
-        if (OB_FAIL(construct_specified_iters(is_sstable))) {
+        if (OB_FAIL(construct_specified_iters(table_start_idx))) {
           STORAGE_LOG(WARN, "fail to construct iterators from all sstables", K(ret));
         }
       }
@@ -291,41 +282,41 @@ int ObMultipleGetMerge::init_resource()
   return ret;
 }
 
-int ObMultipleGetMerge::construct_specified_iters(const CHECK_TABLE_TYPE check_table_type)
+int ObMultipleGetMerge::construct_specified_iters(int64_t &table_start_idx, const bool need_stop_at_first_sstable)
 {
   int ret = OB_SUCCESS;
   ObStoreRowIterator *iter = nullptr;
   const ObTableIterParam *iter_param = nullptr;
   const int64_t iter_cnt = iters_.count();
-  int64_t iter_idx = 0;
+  int64_t iter_idx = tables_.count() - 1 - table_start_idx;
+  const int64_t table_idx = table_start_idx;
 
   if (OB_UNLIKELY(0 == rowkeys_->count())) {
     ret = OB_ITER_END;
   } else {
-    for (int64_t i = tables_.count() - 1; OB_SUCC(ret) && i >= 0; --i, ++iter_idx) {
+    for (int64_t i = table_idx; OB_SUCC(ret) && i >= 0; --i, ++iter_idx) {
       ObITable *table = nullptr;
       if (OB_FAIL(tables_.at(i, table))) {
         STORAGE_LOG(WARN, "fail to get table", K(ret));
-      } else if (check_table_type(table)) {
-        if (OB_ISNULL(iter_param = get_actual_iter_param(table))) {
-          ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "fail to get iter param", K(ret), K(i), K(*table));
-        } else if (iter_idx >= iter_cnt) {
-          if (OB_FAIL(table->multi_get(*iter_param, *access_ctx_, *rowkeys_, iter))) {
-            STORAGE_LOG(WARN, "fail to multi get", K(ret));
-          } else if (OB_FAIL(iters_.push_back(iter))) {
-            iter->~ObStoreRowIterator();
-            iter = nullptr;
-            STORAGE_LOG(WARN, "fail to push back iter", K(ret));
-          }
-        } else if (OB_FAIL(iters_.at(iter_idx)->init(*iter_param, *access_ctx_, table, rowkeys_))) {
-          STORAGE_LOG(WARN, "fail to init iterator", K(ret));
-        }
-      } else if (is_sstable(table)) {
+      } else if (need_stop_at_first_sstable && table->is_sstable()) {
+        table_start_idx = i;
         break;
+      } else if (OB_ISNULL(iter_param = get_actual_iter_param(table))) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "fail to get iter param", K(ret), K(i), K(*table));
+      } else if (iter_idx >= iter_cnt) {
+        if (OB_FAIL(table->multi_get(*iter_param, *access_ctx_, *rowkeys_, iter))) {
+          STORAGE_LOG(WARN, "fail to multi get", K(ret));
+        } else if (OB_FAIL(iters_.push_back(iter))) {
+          iter->~ObStoreRowIterator();
+          iter = nullptr;
+          STORAGE_LOG(WARN, "fail to push back iter", K(ret));
+        }
+      } else if (OB_FAIL(iters_.at(iter_idx)->init(*iter_param, *access_ctx_, table, rowkeys_))) {
+        STORAGE_LOG(WARN, "fail to init iterator", K(ret));
       }
     }
-    STORAGE_LOG(DEBUG, "construct iterators success", K(ret), K(iter_cnt), K(iters_.count()));
+    STORAGE_LOG(DEBUG, "construct iterators success", K(ret), K(iter_cnt), K(iters_.count()), K(table_idx), K(table_start_idx));
   }
   return ret;
 }
@@ -437,13 +428,15 @@ int ObMultipleGetMerge::iter_fuse_row_from_sstable(ObQueryRowInfo &row_info)
   int ret = OB_SUCCESS;
   ObDatumRowkey &cur_rowkey = rowkeys_->at(get_row_range_idx_);
   const ObDatumRow *tmp_row = nullptr;
+  bool can_continue_iter = false;
   // TODO by xuanxi：
   // When the final_result of fuse row is true, end the iteration of the current rowkey;
   for (int64_t i = 0; OB_SUCC(ret) && i < iters_.count(); ++i) {
     cur_rowkey.is_skip_prefetch_ = cur_rowkey.is_skip_prefetch_ ? true : (i >= row_info.end_iter_idx_);
-    if (!iters_[i]->is_sstable_iter()) {
+    if (!iters_[i]->is_sstable_iter() && !can_continue_iter) {
     } else if (OB_FAIL(iters_[i]->get_next_row(tmp_row))) {
       STORAGE_LOG(WARN, "iterator get next row failed", K(ret), K(i),  K(cur_rowkey));
+    } else if (FALSE_IT(can_continue_iter = true)) {
     } else if (cur_rowkey.is_skip_prefetch_) {
     } else if (OB_ISNULL(tmp_row)) {
       ret = OB_ERR_UNEXPECTED;
