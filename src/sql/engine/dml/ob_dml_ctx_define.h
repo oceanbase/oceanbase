@@ -164,6 +164,8 @@ public:
     trigger_id_ = common::OB_INVALID_ID;
     trigger_events_.reset();
     timing_points_.reset();
+    analyze_flag_ = 0;
+    trigger_type_ = 0;
   }
 
   inline void set_trigger_id(uint64_t trigger_id)
@@ -234,6 +236,7 @@ private:
       uint64_t reserved_:54;
     };
   };
+  uint64_t trigger_type_;
 };
 typedef common::ObFixedArray<ObTriggerArg, common::ObIAllocator> ObTriggerArgArray;
 

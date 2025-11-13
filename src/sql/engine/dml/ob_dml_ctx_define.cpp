@@ -125,7 +125,8 @@ OB_SERIALIZE_MEMBER(ObForeignKeyCheckerCtdef,
                     rowkey_count_,
                     rowkey_ids_);
 
-OB_SERIALIZE_MEMBER(ObTriggerArg, trigger_id_, trigger_events_.bit_value_, timing_points_.bit_value_);
+OB_SERIALIZE_MEMBER(ObTriggerArg, trigger_id_, trigger_events_.bit_value_, timing_points_.bit_value_,
+                    analyze_flag_, trigger_type_);
 
 OB_SERIALIZE_MEMBER(ObForeignKeyColumn, name_, idx_, name_idx_, obj_meta_);
 
