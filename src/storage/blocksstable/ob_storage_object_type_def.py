@@ -10,6 +10,7 @@
 #
 # required parameters:
 # obj_type: the name of the storage object type
+# id: explicitly set the enum value
 # owner: the owner of the storage object type
 # data_type: the type of the storage object data, include macro_data, tenant_data, macro_meta, tablet_meta, tenant_meta, others
 # access_mode: the access mode of the storage object, include private, shared
@@ -128,6 +129,7 @@ def_storage_object_type_default_cfg = {
 # PRIVATE_DATA_MACRO
 def_storage_object_type_cfg(
     obj_type = 'PRIVATE_DATA_MACRO',  #ObPrivateDataMacroType
+    id = 0,
     owner = 'zhaomiao',
     access_mode = 'private',
     data_type = 'macro_data',
@@ -281,6 +283,7 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 
 def_storage_object_type_cfg(
     obj_type = 'PRIVATE_META_MACRO',  #ObPrivateMetaMacroType
+    id = 1,
     owner = 'zhaomiao',
     access_mode = 'private',
     data_type = 'macro_meta',
@@ -433,6 +436,7 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 )
 def_storage_object_type_cfg(
     obj_type = 'SHARED_MINI_DATA_MACRO',  #ObSharedMiniDataMacroType
+    id = 2,
     owner = 'zhaomiao',
     access_mode = 'shared',
     data_type = 'macro_data',
@@ -631,6 +635,7 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 
 def_storage_object_type_cfg(
     obj_type = 'SHARED_MINI_META_MACRO',  #ObSharedMiniDataMacroType
+    id = 3,
     owner = 'zhaomiao',
     access_mode = 'shared',
     data_type = 'macro_meta',
@@ -828,6 +833,7 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 )
 def_storage_object_type_cfg(
     obj_type = 'SHARED_MINOR_DATA_MACRO',  #ObSharedMinorDataMacroType
+    id = 4,
     owner = 'zhaomiao',
     access_mode = 'shared',
     data_type = 'macro_data',
@@ -1024,6 +1030,7 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 
 def_storage_object_type_cfg(
     obj_type = 'SHARED_MINOR_META_MACRO',  #ObSharedMinorMetaMacroType
+    id = 5,
     owner = 'zhaomiao',
     access_mode = 'shared',
     data_type = 'macro_meta',
@@ -1220,6 +1227,7 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 
 def_storage_object_type_cfg(
     obj_type = 'SHARED_MAJOR_DATA_MACRO',  #ObSharedMajorDataMacroType
+    id = 6,
     owner = 'zhaomiao',
     access_mode = 'shared',
     data_type = 'macro_data',
@@ -1344,6 +1352,7 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 
 def_storage_object_type_cfg(
     obj_type = 'SHARED_MAJOR_META_MACRO',  #ObSharedMajorMetaMacroType
+    id = 7,
     owner = 'zhaomiao',
     access_mode = 'shared',
     data_type = 'macro_meta',
@@ -1468,6 +1477,7 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 
 def_storage_object_type_cfg(
     obj_type = 'TMP_FILE',  #ObTmpFileType
+    id = 8,
     owner = 'zhaomiao',
     access_mode = 'private',
     data_type = 'tenant_data',
@@ -1598,6 +1608,7 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 # SERVER_META
 def_storage_object_type_cfg(
     obj_type = 'SERVER_META',  #ObServerMetaType
+    id = 9,
     owner = 'zhaomiao',
     access_mode = 'private',
     data_type = 'others',
@@ -1653,6 +1664,7 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 
 def_storage_object_type_cfg(
     obj_type = 'PRIVATE_TABLET_META',  #ObPrivateTabletMetaType
+    id = 10,
     owner = 'zhaomiao',
     access_mode = 'private',
     data_type = 'tablet_meta',
@@ -1801,6 +1813,7 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 
 def_storage_object_type_cfg(
     obj_type = 'PRIVATE_SLOG_FILE',  #ObPrivateSlogFileType
+    id = 11,
     owner = 'zhaomiao',
     access_mode = 'private',
     data_type = 'tenant_meta',
@@ -1925,6 +1938,7 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 
 def_storage_object_type_cfg(
     obj_type = 'PRIVATE_CKPT_FILE',  #ObPrivateCkptFileType
+    id = 12,
     owner = 'zhaomiao',
     access_mode = 'private',
     data_type = 'tenant_meta',
@@ -1975,6 +1989,7 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 
 def_storage_object_type_cfg(
     obj_type = 'MAJOR_PREWARM_DATA',  #ObMajorPrewarmDataType
+    id = 13,
     owner = 'zhaomiao',
     access_mode = 'shared',
     data_type = 'others',
@@ -2020,6 +2035,7 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 
 def_storage_object_type_cfg(
     obj_type = 'MAJOR_PREWARM_DATA_INDEX',  #ObMajorPrewarmDataIndexType
+    id = 14,
     owner = 'zhaomiao',
     access_mode = 'shared',
     data_type = 'others',
@@ -2065,6 +2081,7 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 
 def_storage_object_type_cfg(
     obj_type = 'MAJOR_PREWARM_META',  #ObMajorPrewarmMetaType
+    id = 15,
     owner = 'zhaomiao',
     access_mode = 'shared',
     data_type = 'others',
@@ -2110,6 +2127,7 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 
 def_storage_object_type_cfg(
     obj_type = 'MAJOR_PREWARM_META_INDEX',  #ObMajorPrewarmMetaIndexType
+    id = 16,
     owner = 'zhaomiao',
     access_mode = 'shared',
     data_type = 'others',
@@ -2155,6 +2173,7 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 
 def_storage_object_type_cfg(
     obj_type = 'TENANT_DISK_SPACE_META',  #ObTenantDiskSpaceMetaType
+    id = 17,
     owner = 'zhaomiao',
     access_mode = 'private',
     data_type = 'others',
@@ -2228,6 +2247,7 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 )
 def_storage_object_type_cfg(
     obj_type = 'IS_SHARED_TENANT_DELETED',  #ObIsSharedTenantDeletedType
+    id = 18,
     owner = 'zhaomiao',
     access_mode = 'shared',
     data_type = 'others',
@@ -2280,6 +2300,7 @@ int opt_to_string(char *buf, const int64_t buf_len, int64_t &pos, const ObStorag
 
 def_storage_object_type_cfg(
     obj_type = 'SHARED_MICRO_DATA_MACRO',  #ObSharedMicroDataMacroType
+    id = 19,
     owner = 'zhaomiao',
     access_mode = 'shared',
     data_type = 'macro_data',
@@ -2289,6 +2310,7 @@ def_storage_object_type_cfg(
 
 def_storage_object_type_cfg(
     obj_type = 'SHARED_MICRO_META_MACRO',  #ObSharedMicroMetaMacroType
+    id = 20,
     owner = 'zhaomiao',
     access_mode = 'shared',
     data_type = 'macro_meta',
@@ -2298,6 +2320,7 @@ def_storage_object_type_cfg(
 
 def_storage_object_type_cfg(
     obj_type = 'UNSEALED_REMOTE_SEG_FILE',  #ObUnsealedRemoteSegFileType
+    id = 21,
     owner = 'zhaomiao',
     access_mode = 'private',
     data_type = 'others',
@@ -2329,6 +2352,7 @@ int to_remote_path_format(char *path, const int64_t length, int64_t &pos, const 
 
 def_storage_object_type_cfg(
     obj_type = 'SHARED_MDS_MINI_DATA_MACRO',  #ObSharedMdsMiniDataMacroType
+    id = 22,
     owner = 'yanyuan.cxf',
     access_mode = 'shared',
     data_type = 'macro_data',
@@ -2456,6 +2480,7 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 
 def_storage_object_type_cfg(
     obj_type = 'SHARED_MDS_MINI_META_MACRO',  #ObSharedMdsMiniMetaMacroType
+    id = 23,
     owner = 'yanyuan.cxf',
     access_mode = 'shared',
     data_type = 'macro_meta',
@@ -2583,6 +2608,7 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 )
 def_storage_object_type_cfg(
     obj_type = 'SHARED_MDS_MINOR_DATA_MACRO',  #ObSharedMdsMinorDataMacroType
+    id = 24,
     owner = 'yanyuan.cxf',
     access_mode = 'shared',
     data_type = 'macro_data',
@@ -2709,6 +2735,7 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 )
 def_storage_object_type_cfg(
     obj_type = 'SHARED_MDS_MINOR_META_MACRO',  #ObSharedMdsMinorMetaMacroType
+    id = 25,
     owner = 'yanyuan.cxf',
     access_mode = 'shared',
     data_type = 'macro_meta',
@@ -2834,211 +2861,8 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 '''
 )
 def_storage_object_type_cfg(
-    obj_type = 'SHARED_MINI_SSTABLE_LIST',  #ObSharedMiniSstableListType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_MINI_SSTABLE_LIST_TASK',  #ObSharedMiniSstableListTaskType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_MINI_SSTABLE_LIST_OP_ID',  #ObSharedMiniSstableListOpIdType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_MINI_SSTABLE_LIST_CURRENT',  #ObSharedMiniSstableListCurrentType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_MINI_SSTABLE_LIST_OLDEST',  #ObSharedMiniSstableListOldestType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_MINOR_SSTABLE_LIST',  #ObSharedMinorSstableListType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_MINOR_SSTABLE_LIST_TASK',  #ObSharedMinorSstableListTaskType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_MINOR_SSTABLE_LIST_OP_ID',  #ObSharedMinorSstableListOpIdType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_MINOR_SSTABLE_LIST_CURRENT',  #ObSharedMinorSstableListCurrentType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_MINOR_SSTABLE_LIST_OLDEST',  #ObSharedMinorSstableListOldestType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_LS_META',  #ObSharedLsMetaType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_LS_META_TASK',  #ObSharedLsMetaTaskType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_LS_META_OP_ID',  #ObSharedLsMetaOpIdType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_LS_META_CURRENT',  #ObSharedLsMetaCurrentType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_LS_META_OLDEST',  #ObSharedLsMetaOldestType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
     obj_type = 'SHARED_TABLET_META',  #ObSharedTabletMetaType
+    id = 41,
     owner = 'jianyue',
     access_mode = 'shared',
     data_type = 'others',
@@ -3065,470 +2889,8 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 '''
 )
 def_storage_object_type_cfg(
-    obj_type = 'SHARED_TABLET_META_TASK',  #ObSharedTabletMetaTaskType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_TABLET_META_OP_ID',  #ObSharedTabletMetaOpIdType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_TABLET_META_CURRENT',  #ObSharedTabletMetaCurrentType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_TABLET_META_OLDEST',  #ObSharedTabletMetaOldestType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_MDS_MINI_SSTABLE_LIST',  #ObSharedMdsMiniSstableListType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_MDS_MINI_SSTABLE_LIST_TASK',  #ObSharedMdsMiniSstableListTaskType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_MDS_MINI_SSTABLE_LIST_OP_ID',  #ObSharedMdsMiniSstableListOpIdType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_MDS_MINI_SSTABLE_LIST_CURRENT',  #ObSharedMdsMiniSstableListCurrentType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_MDS_MINI_SSTABLE_LIST_OLDEST',  #ObSharedMdsMiniSstableListOldestType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_MDS_MINOR_SSTABLE_LIST',  #ObSharedMdsMinorSstableListType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_MDS_MINOR_SSTABLE_LIST_TASK',  #ObSharedMdsMinorSstableListTaskType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_MDS_MINOR_SSTABLE_LIST_OP_ID',  #ObSharedMdsMinorSstableListOpIdType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_MDS_MINOR_SSTABLE_LIST_CURRENT',  #ObSharedMdsMinorSstableListCurrentType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_MDS_MINOR_SSTABLE_LIST_OLDEST',  #ObSharedMdsMinorSstableListOldestType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_DDLKV_MINI_SSTABLE_LIST',  #ObSharedDdlkvMiniSstableListType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_DDLKV_MINI_SSTABLE_LIST_TASK',  #ObSharedDdlkvMiniSstableListTaskType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_DDLKV_MINI_SSTABLE_LIST_OP_ID',  #ObSharedDdlkvMiniSstableListOpIdType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_DDLKV_MINI_SSTABLE_LIST_CURRENT',  #ObSharedDdlkvMiniSstableListCurrentType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_DDLKV_MINI_SSTABLE_LIST_OLDEST',  #ObSharedDdlkvMiniSstableListOldestType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_SPLIT_MINOR_SSTABLE',  #ObSharedSplitMinorSstableType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_SPLIT_MINOR_SSTABLE_TASK',  #ObSharedSplitMinorSstableTaskType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_SPLIT_MINOR_SSTABLE_OP_ID',  #ObSharedSplitMinorSstableOpIdType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_SPLIT_MINOR_SSTABLE_CURRENT',  #ObSharedSplitMinorSstableCurrentType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_SPLIT_MINOR_SSTABLE_OLDEST',  #ObSharedSplitMinorSstableOldestType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_SPLIT_MDS_MINOR_SSTABLE',  #ObSharedSplitMdsMinorSstableType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_SPLIT_MDS_MINOR_SSTABLE_TASK',  #ObSharedSplitMdsMinorSstableTaskType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_SPLIT_MDS_MINOR_SSTABLE_OP_ID',  #ObSharedSplitMdsMinorSstableOpIdType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_SPLIT_MDS_MINOR_SSTABLE_CURRENT',  #ObSharedSplitMdsMinorSstableCurrentType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_SPLIT_MDS_MINOR_SSTABLE_OLDEST',  #ObSharedSplitMdsMinorSstableOldestType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_MAJOR_SSTABLE',  #ObSharedMajorSstableType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_MAJOR_SSTABLE_TASK',  #ObSharedMajorSstableTaskType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_MAJOR_SSTABLE_OP_ID',  #ObSharedMajorSstableOpIdType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_MAJOR_SSTABLE_CURRENT',  #ObSharedMajorSstableCurrentType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_MAJOR_SSTABLE_OLDEST',  #ObSharedMajorSstableOldestType
-    owner = 'jianyue',
-    access_mode = 'shared',
-    data_type = 'others',
-    read_odirect = True,
-    write_odirect = True,
-    is_overwrite = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}''',
-)
-def_storage_object_type_cfg(
     obj_type = 'SHARED_TABLET_SUB_META',  #ObSharedTabletSubMetaType
+    id = 76,
     owner = 'zhaomiao',
     access_mode = 'shared',
     data_type = 'tablet_meta',
@@ -3624,6 +2986,7 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 )
 def_storage_object_type_cfg(
     obj_type = 'TENANT_ROOT_KEY',
+    id = 77,
     owner = 'zhaomiao',
     access_mode = 'shared',
     data_type = 'others',
@@ -3669,6 +3032,7 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 
 def_storage_object_type_cfg(
     obj_type = 'EXTERNAL_TABLE_FILE',
+    id = 78,
     owner = 'zhaomiao',
     access_mode = 'private',
     data_type = 'tenant_data',
@@ -3767,6 +3131,7 @@ int get_parent_dir(char *path, const int64_t length, int64_t &pos, const MacroBl
 )
 def_storage_object_type_cfg(
     obj_type = 'MACRO_CACHE_CKPT_DATA',
+    id = 79,
     owner = 'zhaomiao',
     access_mode = 'private',
     data_type = 'others',
@@ -3818,6 +3183,7 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 )
 def_storage_object_type_cfg(
     obj_type = 'MACRO_CACHE_CKPT_META',
+    id = 80,
     owner = 'zhaomiao',
     access_mode = 'private',
     data_type = 'others',
