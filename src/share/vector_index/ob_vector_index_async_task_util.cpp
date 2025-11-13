@@ -570,7 +570,7 @@ int ObVecIndexAsyncTaskUtil::move_task_to_history_table(
   } else if (OB_FAIL(proxy.write(tenant_id, sql.ptr(), insert_rows))) {
     LOG_WARN("fail to execute sql", K(ret), K(sql), K(tenant_id));
   } else if (OB_FAIL(sql.assign_fmt("DELETE FROM %s"
-          " WHERE tenant_id = %ld AND status = 3 AND gmt_create <= (SELECT gmt_create FROM %s ORDER BY gmt_create desc LIMIT 1)",
+          " WHERE tenant_id = %ld AND status = 3 AND gmt_modified <= (SELECT gmt_modified FROM %s ORDER BY gmt_modified desc LIMIT 1)",
           share::OB_ALL_VECTOR_INDEX_TASK_TNAME,
           ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
           share::OB_ALL_VECTOR_INDEX_TASK_HISTORY_TNAME))) {
