@@ -3028,11 +3028,11 @@ void ObOrcTableRowIterator::OrcRowReader::init_for_hive_table(int64_t capacity,
   std::list<uint64_t>::const_iterator it;
   for (it = include_columns.begin(); it != include_columns.end(); ++it) {
     uint64_t col_id = *it;
-    if (col_id < col_cnt - 1) {
+    if (col_id < col_cnt) {
       filtered_column_ids.push_back(col_id);
     }
   }
-  rowReaderOptions.include(filtered_column_ids);
+  rowReaderOptions.includeTypes(filtered_column_ids);
   row_reader_ = reader->createRowReader(rowReaderOptions);
   orc_batch_ = row_reader_->createRowBatch(capacity);
   row_id_ = 0;
