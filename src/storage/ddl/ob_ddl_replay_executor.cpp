@@ -129,7 +129,12 @@ int ObDDLReplayExecutor::check_need_replay_ddl_inc_log_(
     }
   }
   if (OB_SUCC(ret) && need_replay) {
-    if (tablet->get_tablet_meta().ha_status_.is_restore_status_empty()) {
+    ObLSRestoreStatus restore_status;
+    if (OB_FAIL(ls->get_restore_status(restore_status))) {
+      LOG_WARN("failed to get restore status", K(ret), KPC(ls));
+    } else if (!restore_status.is_quick_restore()) {
+      // do nothing
+    } else if (tablet->get_tablet_meta().ha_status_.is_restore_status_empty()) {
       ret = OB_EAGAIN;
       need_replay = false;
       (void) ls->get_ls_restore_handler()->try_record_one_tablet_to_restore(tablet->get_tablet_meta().tablet_id_);
