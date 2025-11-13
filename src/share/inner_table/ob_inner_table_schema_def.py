@@ -5255,7 +5255,8 @@ all_kv_ttl_task_def = dict(
     ('scan_cnt', 'int'),
     ('row_key', 'varbinary:2048'),
     ('ret_code', 'varchar:OB_MAX_ERROR_MSG_LEN'),
-    ('task_type', 'int', 'false', 0)
+    ('task_type', 'int', 'false', 0),
+    ('scan_index', 'varchar:OB_MAX_OBJECT_NAME_LENGTH', 'false', 'PRIMARY KEY')
   ],
 )
 
@@ -5284,7 +5285,8 @@ all_kv_ttl_task_history_def = dict(
     ('scan_cnt', 'int'),
     ('row_key', 'varbinary:2048'),
     ('ret_code', 'varchar:OB_MAX_ERROR_MSG_LEN'),
-    ('task_type', 'int', 'false', 0)
+    ('task_type', 'int', 'false', 0),
+    ('scan_index', 'varchar:OB_MAX_OBJECT_NAME_LENGTH', 'false', 'PRIMARY KEY')
   ],
 )
 def_table_schema(**all_kv_ttl_task_def)
@@ -31240,7 +31242,8 @@ def_table_schema(
       case a.task_type
         when 0 then "NORMAL"
         when 1 then "HBASE ROWKEY"
-        else "INVALID" END AS TASK_TYPE
+        else "INVALID" END AS TASK_TYPE,
+      a.scan_index as SCAN_INDEX
       FROM oceanbase.__all_virtual_kv_ttl_task a left outer JOIN oceanbase.__all_table b on
           a.table_id = b.table_id and a.tenant_id = effective_tenant_id()
           and b.table_mode >> 12 & 15 in (0,1)
@@ -31284,7 +31287,8 @@ def_table_schema(
       case a.task_type
         when 0 then "NORMAL"
         when 1 then "HBASE ROWKEY"
-        else "INVALID" END AS TASK_TYPE
+        else "INVALID" END AS TASK_TYPE,
+      a.scan_index as SCAN_INDEX
       FROM oceanbase.__all_virtual_kv_ttl_task_history a left outer JOIN oceanbase.__all_table b on
           a.table_id = b.table_id and a.tenant_id = effective_tenant_id()
           and b.table_mode >> 12 & 15 in (0,1)
@@ -31497,7 +31501,8 @@ def_table_schema(
       case a.task_type
         when 0 then "NORMAL"
         when 1 then "HBASE ROWKEY"
-        else "INVALID" END AS TASK_TYPE
+        else "INVALID" END AS TASK_TYPE,
+      a.scan_index as SCAN_INDEX
       FROM oceanbase.__all_virtual_kv_ttl_task a left outer JOIN oceanbase.__all_virtual_table b on
           a.table_id = b.table_id and a.tenant_id = b.tenant_id
           and b.table_mode >> 12 & 15 in (0,1)
@@ -31541,7 +31546,8 @@ def_table_schema(
       case a.task_type
         when 0 then "NORMAL"
         when 1 then "HBASE ROWKEY"
-        else "INVALID" END AS TASK_TYPE
+        else "INVALID" END AS TASK_TYPE,
+      a.scan_index as SCAN_INDEX
       FROM oceanbase.__all_virtual_kv_ttl_task_history a left outer JOIN oceanbase.__all_virtual_table b on
           a.table_id = b.table_id and a.tenant_id = b.tenant_id
           and b.table_mode >> 12 & 15 in (0,1)

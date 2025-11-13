@@ -622,7 +622,7 @@ int ObTTLUtil::move_task_to_history_table(uint64_t tenant_id, uint64_t task_id,
   if (OB_FAIL(sql.assign_fmt("replace into %s select gmt_create, gmt_modified,"
               " tenant_id, task_id, table_id, tablet_id, task_start_time,"
               " task_update_time, trigger_type, if(status=4, 4, 3) as status,"
-              " ttl_del_cnt, max_version_del_cnt, scan_cnt, row_key, ret_code, task_type from %s"
+              " ttl_del_cnt, max_version_del_cnt, scan_cnt, row_key, ret_code, task_type, scan_index from %s"
               " where task_id = %ld and tablet_id >= 0  and table_id >= 0"
               " order by tenant_id, task_id, table_id, tablet_id LIMIT %ld",
               share::OB_ALL_KV_TTL_TASK_HISTORY_TNAME,
