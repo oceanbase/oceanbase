@@ -206,6 +206,13 @@ public:
              const int64_t len,
              const transaction::ObMulSourceDataNotifyArg &notify_arg);
 
+  static int update_empty_mds_tablet_id_array_if_need(
+      const ObTablet &tablet,
+      common::ObIArray<common::ObTabletID> &empty_mds_tablet_id_array);
+  static int rollback_is_written(
+      const share::ObLSID &ls_id,
+      const common::ObIArray<common::ObTabletID> &empty_mds_tablet_id_array);
+
 private:
   static int inner_create_empty_sstable(
       common::ObArenaAllocator &allocator,

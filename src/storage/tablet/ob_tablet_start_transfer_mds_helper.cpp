@@ -1430,7 +1430,8 @@ int ObTabletStartTransferInHelper::create_transfer_in_tablets_(
   ObLSHandle dest_ls_handle;
   ObLS *dest_ls = NULL;
   ObLSService* ls_srv = nullptr;
-  ObArray<ObTabletID> tablet_id_array;
+  ObArray<ObTabletID> creating_tablet_id_array;
+  ObArray<ObTabletID> empty_mds_tablet_id_array;
   ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
   if ((!scn.is_valid() && for_replay) || !tx_start_transfer_in_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -1453,7 +1454,8 @@ int ObTabletStartTransferInHelper::create_transfer_in_tablets_(
       MDS_TG(10_ms);
       const ObMigrationTabletParam &tablet_meta = tx_start_transfer_in_info.tablet_meta_list_.at(i);
       if (CLICK_FAIL(create_transfer_in_tablet_(scn, for_replay, tablet_meta,
-          tx_start_transfer_in_info.src_ls_id_, dest_ls, ctx, tablet_id_array))) {
+          tx_start_transfer_in_info.src_ls_id_, dest_ls, ctx, creating_tablet_id_array,
+          empty_mds_tablet_id_array))) {
         LOG_WARN("failed to create transfer in tablet", K(ret), K(tablet_meta));
       }
     }
@@ -1461,7 +1463,12 @@ int ObTabletStartTransferInHelper::create_transfer_in_tablets_(
     // roll back operation
     if (OB_FAIL(ret)) {
       int tmp_ret = OB_SUCCESS;
-      if (CLICK() && OB_TMP_FAIL(rollback_transfer_in_tablets_(tx_start_transfer_in_info, tablet_id_array, dest_ls))) {
+      if (CLICK() && OB_TMP_FAIL(ObTabletCreateDeleteHelper::rollback_is_written(dest_ls->get_ls_id(), empty_mds_tablet_id_array))) {
+        LOG_ERROR("failed to rollback_is_written", K(tmp_ret));
+        ob_usleep(1 * 1000 * 1000);
+        ob_abort();
+      } else if (CLICK() && OB_TMP_FAIL(rollback_transfer_in_tablets_(tx_start_transfer_in_info,
+              creating_tablet_id_array, dest_ls))) {
         LOG_WARN("failed to roll back remove tablets", K(tmp_ret),
             K(tx_start_transfer_in_info), K(lbt()));
         ob_usleep(1000 * 1000);
@@ -1479,7 +1486,8 @@ int ObTabletStartTransferInHelper::create_transfer_in_tablet_(
     const share::ObLSID &src_ls_id,
     ObLS *dest_ls,
     mds::BufferCtx &ctx,
-    common::ObIArray<common::ObTabletID> &tablet_id_array)
+    common::ObIArray<common::ObTabletID> &creating_tablet_id_array,
+    common::ObIArray<common::ObTabletID> &empty_mds_tablet_id_array)
 {
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
@@ -1508,8 +1516,12 @@ int ObTabletStartTransferInHelper::create_transfer_in_tablet_(
 
   if (OB_FAIL(ret)) {
   } else if (!need_create_tablet) {
-    //do nothing
-  } else if (OB_FAIL(tablet_id_array.push_back(tablet_meta.tablet_id_))) {
+    if (OB_FAIL(ObTabletCreateDeleteHelper::update_empty_mds_tablet_id_array_if_need(*tablet_handle.get_obj(),
+            empty_mds_tablet_id_array))) {
+      LOG_WARN("failed to update_empty_mds_tablet_id_array_if_need", K(ret), KPC(dest_ls), K(tablet_id));
+    }
+    LOG_INFO("no need create transfer in tablet", K(key));
+  } else if (OB_FAIL(creating_tablet_id_array.push_back(tablet_meta.tablet_id_))) {
     LOG_WARN("failed to push tablet id into array", K(ret), K(tablet_meta));
   } else if (OB_FAIL(inner_create_transfer_in_tablet_(scn, for_replay, tablet_meta, dest_ls, tablet_handle))) {
     LOG_WARN("failed to create transfer in tablet", K(ret), K(scn), K(for_replay), K(tablet_meta), KPC(dest_ls));

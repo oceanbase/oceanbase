@@ -98,7 +98,8 @@ private:
     const bool for_replay,
     const share::SCN &scn,
     mds::BufferCtx &ctx,
-    common::ObIArray<common::ObTabletID> &tablet_id_array);
+    common::ObIArray<common::ObTabletID> &creating_tablet_id_array,
+    common::ObIArray<common::ObTabletID> &emtpy_mds_tablet_id_array);
   static int get_table_schema_index(
       const common::ObTabletID &tablet_id,
       const common::ObIArray<common::ObTabletID> &tablet_ids,
@@ -130,28 +131,32 @@ private:
       const bool for_replay,
       const share::SCN &scn,
       mds::BufferCtx &ctx,
-      common::ObIArray<common::ObTabletID> &tablet_id_array);
+      common::ObIArray<common::ObTabletID> &creating_tablet_id_array,
+      common::ObIArray<common::ObTabletID> &emtpy_mds_tablet_id_array);
   static int build_mixed_tablets(
       const obrpc::ObBatchCreateTabletArg &arg,
       const obrpc::ObCreateTabletInfo &info,
       const bool for_replay,
       const share::SCN &scn,
       mds::BufferCtx &ctx,
-      common::ObIArray<common::ObTabletID> &tablet_id_array);
+      common::ObIArray<common::ObTabletID> &creating_tablet_id_array,
+      common::ObIArray<common::ObTabletID> &emtpy_mds_tablet_id_array);
   static int build_pure_aux_tablets(
       const obrpc::ObBatchCreateTabletArg &arg,
       const obrpc::ObCreateTabletInfo &info,
       const bool for_replay,
       const share::SCN &scn,
       mds::BufferCtx &ctx,
-      common::ObIArray<common::ObTabletID> &tablet_id_array);
+      common::ObIArray<common::ObTabletID> &creating_tablet_id_array,
+      common::ObIArray<common::ObTabletID> &emtpy_mds_tablet_id_array);
   static int build_bind_hidden_tablets(
       const obrpc::ObBatchCreateTabletArg &arg,
       const obrpc::ObCreateTabletInfo &info,
       const bool for_replay,
       const share::SCN &scn,
       mds::BufferCtx &ctx,
-      common::ObIArray<common::ObTabletID> &tablet_id_array);
+      common::ObIArray<common::ObTabletID> &creating_tablet_id_array,
+      common::ObIArray<common::ObTabletID> &emtpy_mds_tablet_id_array);
   static int rollback_remove_tablets(
       const share::ObLSID &ls_id,
       const common::ObIArray<common::ObTabletID> &tablet_id_array);

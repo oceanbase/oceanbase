@@ -199,7 +199,8 @@ private:
       const share::ObLSID &src_ls_id,
       ObLS *dest_ls,
       mds::BufferCtx &ctx,
-      common::ObIArray<common::ObTabletID> &tablet_id_array);
+      common::ObIArray<common::ObTabletID> &creating_tablet_id_array,
+      common::ObIArray<common::ObTabletID> &empty_mds_tablet_id_array);
   static int rollback_transfer_in_tablets_(
       const ObTXStartTransferInInfo &tx_start_transfer_in_info,
       const common::ObIArray<common::ObTabletID> &tablet_id_array,

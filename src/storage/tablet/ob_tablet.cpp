@@ -9948,5 +9948,39 @@ int ObTablet::check_can_set_restore_status(const ObTabletRestoreStatus::STATUS &
   return ret;
 }
 
+int ObTablet::check_tablet_status_empty(bool &is_empty) const
+{
+  int ret = OB_SUCCESS;
+  is_empty = false;
+  ObTabletCreateDeleteMdsUserData unused_data;
+  mds::MdsWriter unused_writer;
+  mds::TwoPhaseCommitState unused_trans_stat;
+  share::SCN unused_trans_version;
+  if (OB_FAIL(get_latest_tablet_status(unused_data, unused_writer,
+          unused_trans_stat, unused_trans_version))) {
+    if (OB_EMPTY_RESULT == ret) {
+      ret = OB_SUCCESS;
+      is_empty = true;
+    } else {
+      LOG_WARN("failed to get_latest_tablet_status", K(ret), KPC(this));
+    }
+  }
+  return ret;
+}
+
+int ObTablet::reset_tablet_status_written()
+{
+  int ret = OB_SUCCESS;
+  ObTabletPointer *tablet_ptr= nullptr;
+  if (OB_ISNULL(tablet_ptr = pointer_hdl_.get_tablet_pointer())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, tablet pointer is nullptr", K(pointer_hdl_));
+  } else {
+    tablet_ptr->reset_tablet_status_written();
+    LOG_INFO("reset_tablet_status_written", K(tablet_meta_));
+  }
+  return ret;
+}
+
 } // namespace storage
 } // namespace oceanbase

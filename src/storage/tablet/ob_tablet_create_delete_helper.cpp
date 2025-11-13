@@ -914,5 +914,59 @@ bool ObTabletCreateDeleteHelper::is_pure_hidden_tablets(const ObCreateTabletInfo
   const ObSArray<ObTabletID> &tablet_ids = info.tablet_ids_;
   return tablet_ids.count() >= 1 && !is_contain(tablet_ids, data_tablet_id) && info.is_create_bind_hidden_tablets_;
 }
+
+int ObTabletCreateDeleteHelper::update_empty_mds_tablet_id_array_if_need(
+    const ObTablet &tablet,
+    common::ObIArray<common::ObTabletID> &empty_mds_tablet_id_array)
+{
+  int ret = OB_SUCCESS;
+  const ObTabletID tablet_id = tablet.get_tablet_id();
+  const ObLSID ls_id = tablet.get_ls_id();
+  bool is_empty = false;
+  if (OB_FAIL(tablet.check_tablet_status_empty(is_empty))) {
+    LOG_WARN("failed to check_tablet_status_empty", K(ret), K(ls_id), K(tablet_id));
+  } else if (is_empty) {
+    LOG_INFO("tablet has been created, but tablet status is empty."
+        "when replay failed, this tablet's is_written need be clear",
+        KR(ret), K(ls_id), K(tablet_id));
+    if (OB_FAIL(empty_mds_tablet_id_array.push_back(tablet_id))) {
+      LOG_WARN("failed to push back tablet id", K(ret), K(ls_id), K(tablet_id));
+    }
+  }
+  return ret;
+}
+
+int ObTabletCreateDeleteHelper::rollback_is_written(
+    const share::ObLSID &ls_id,
+    const common::ObIArray<common::ObTabletID> &tablet_id_array)
+{
+  int ret = OB_SUCCESS;
+
+  if (!ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ls_id", K(ret), K(ls_id), K(tablet_id_array));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < tablet_id_array.count(); ++i) {
+    ObTabletHandle tablet_handle;
+    const common::ObTabletID &tablet_id = tablet_id_array.at(i);
+    const ObTabletMapKey key(ls_id, tablet_id);
+    if (!tablet_id.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid ls_id", K(ret), K(ls_id), K(tablet_id), K(tablet_id_array));
+    } else if (OB_FAIL(get_tablet(key, tablet_handle))) {
+      if (OB_TABLET_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        LOG_INFO("tablet does not exist, maybe already deleted", K(ret), K(key));
+      } else {
+        LOG_WARN("failed to get tablet", K(ret), K(key));
+      }
+    } else if (OB_FAIL(tablet_handle.get_obj()->reset_tablet_status_written())) {
+      LOG_WARN("failed to reset_tablet_status_written", K(ret), K(key));
+    }
+  }
+
+  return ret;
+}
+
 } // namespace storage
 } // namespace oceanbase
