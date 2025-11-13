@@ -22,8 +22,8 @@ namespace share
 void ObITextAnalyzer::reset()
 {
   for (int64_t i = analyze_pipeline_.count() - 1; i >= 0; --i) {
-    ObITokenStream *cur_ts = analyze_pipeline_.at(i);
-    cur_ts->~ObITokenStream();
+    ObIFTTokenStream *cur_ts = analyze_pipeline_.at(i);
+    cur_ts->~ObIFTTokenStream();
     if (nullptr != allocator_) {
       allocator_->free(cur_ts);
     }
@@ -64,7 +64,7 @@ int ObITextAnalyzer::add_tokenizer(const ObTextTokenizer::TokenizerType &type)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("there is already an tokenizer in analyse pipeline", K(ret));
   } else {
-    ObITokenStream *token_stream = nullptr;
+    ObIFTTokenStream *token_stream = nullptr;
     switch (type) {
     case ObTextTokenizer::WHITESPACE: {
       if (OB_FAIL(add_token_stream<ObTextWhitespaceTokenizer>(token_stream))) {
@@ -94,7 +94,7 @@ int ObITextAnalyzer::add_normalizer(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cannot add a normalizer to an empty analyse pipeline", K(ret), K(type));
   } else {
-    ObITokenStream *token_stream = nullptr;
+    ObIFTTokenStream *token_stream = nullptr;
     switch (type) {
     case ObTokenNormalizer::STOPWORD_FILTER: {
       if (OB_FAIL(add_token_stream<ObTokenStopWordNormalizer>(token_stream))) {
@@ -133,8 +133,7 @@ int ObITextAnalyzer::add_normalizer(
   return ret;
 }
 
-template<typename T>
-int ObITextAnalyzer::add_token_stream(ObITokenStream *&token_stream)
+template <typename T> int ObITextAnalyzer::add_token_stream(ObIFTTokenStream *&token_stream)
 {
   int ret = OB_SUCCESS;
   char *buf = nullptr;
@@ -147,10 +146,10 @@ int ObITextAnalyzer::add_token_stream(ObITokenStream *&token_stream)
   return ret;
 }
 
-ObITokenStream *ObITextAnalyzer::get_tail_token_stream()
+ObIFTTokenStream *ObITextAnalyzer::get_tail_token_stream()
 {
   OB_ASSERT(!analyze_pipeline_.empty());
-  ObITokenStream *tail_stream = analyze_pipeline_.at(analyze_pipeline_.count() - 1);
+  ObIFTTokenStream *tail_stream = analyze_pipeline_.at(analyze_pipeline_.count() - 1);
   OB_ASSERT(nullptr != tail_stream);
   return tail_stream;
 }
@@ -171,7 +170,7 @@ int ObEnglishTextAnalyzer::inner_init(const ObTextAnalysisCtx &ctx, ObIAllocator
   return ret;
 }
 
-int ObEnglishTextAnalyzer::analyze(const ObDatum &document, ObITokenStream *&token_stream)
+int ObEnglishTextAnalyzer::analyze(const ObDatum &document, ObIFTTokenStream *&token_stream)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {

@@ -21,7 +21,7 @@ namespace share
 {
 
 ObTextTokenizer::ObTextTokenizer()
-  : ObITokenStream(),
+  : ObIFTTokenStream(),
     input_doc_(nullptr),
     cs_(nullptr),
     iter_end_(false),
@@ -164,7 +164,7 @@ void ObTokenNormalizer::reuse()
   }
 }
 
-int ObTokenNormalizer::init(const ObCharsetInfo *cs, ObITokenStream &in_stream)
+int ObTokenNormalizer::init(const ObCharsetInfo *cs, ObIFTTokenStream &in_stream)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -343,7 +343,7 @@ void ObTextTokenGroupNormalizer::reuse()
   ObTokenNormalizer::reuse();
 }
 
-int ObTextTokenGroupNormalizer::inner_init(const ObCharsetInfo *cs, ObITokenStream &in_stream)
+int ObTextTokenGroupNormalizer::inner_init(const ObCharsetInfo *cs, ObIFTTokenStream &in_stream)
 {
   // TODO: use resaonable initialize bucket cnt
   int ret = OB_SUCCESS;
