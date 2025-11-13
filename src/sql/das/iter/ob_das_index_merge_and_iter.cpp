@@ -40,6 +40,14 @@ int ObDASIndexMergeAndIter::inner_init(ObDASIterParam &param)
       LOG_WARN("index merge iter failed to check can be shorted", K(ret));
     } else {
       shorted_child_idx_ = OB_INVALID_INDEX;
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+      enable_bitmap_cursor_ = (tenant_config.is_valid() ? tenant_config->_enable_index_merge_intersect_bitmap : false) &&
+                              rowkey_is_uint64_ &&
+                              !is_reverse_ &&
+                              eval_ctx_->is_vectorized();
+      if (OB_FAIL(init_child_cursors())) {
+        LOG_WARN("failed to init child cursors", K(ret));
+      }
     }
   }
   return ret;
@@ -48,8 +56,18 @@ int ObDASIndexMergeAndIter::inner_init(ObDASIterParam &param)
 int ObDASIndexMergeAndIter::inner_reuse()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObDASIndexMergeIter::inner_reuse())) {
-    LOG_WARN("index merge iter failed to reuse", K(ret));
+  for (int64_t i = 0; OB_SUCC(ret) && i < child_cursors_.count(); ++i) {
+    if (OB_ISNULL(child_cursors_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr cursor", K(ret), K(i));
+    } else {
+      child_cursors_.at(i)->reuse();
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObDASIndexMergeIter::inner_reuse())) {
+      LOG_WARN("index merge iter failed to reuse", K(ret));
+    }
   }
   if (main_scan_iter_ != nullptr) {
     const ObTabletID &new_tablet_id = main_scan_tablet_id_;
@@ -70,6 +88,12 @@ int ObDASIndexMergeAndIter::inner_reuse()
 int ObDASIndexMergeAndIter::inner_release()
 {
   int ret = OB_SUCCESS;
+  for (int64_t i = 0; i < child_cursors_.count(); ++i) {
+    if (OB_NOT_NULL(child_cursors_.at(i))) {
+      child_cursors_.at(i)->reset();
+    }
+  }
+  child_cursors_.reset();
   if (OB_FAIL(ObDASIndexMergeIter::inner_release())) {
     LOG_WARN("inner release index merge or iter failed");
   }
@@ -173,6 +197,8 @@ int ObDASIndexMergeAndIter::get_next_merge_rows(int64_t &count, int64_t capacity
     clear_evaluated_flag();
     if (OB_FAIL(fill_child_stores(capacity))) {
       LOG_WARN("fill child stores failed", K(ret), K(child_empty_count_));
+    } else if (enable_bitmap_cursor_ && OB_FAIL(check_child_cursors())) {
+      LOG_WARN("failed to check cursors", K(ret));
     } else if (child_empty_count_ > 0) {
       ret = OB_ITER_END;
     } else if (can_be_shorted_ && iter_end_count_ > 0 && force_merge_mode_ == 0) {
@@ -358,21 +384,27 @@ int ObDASIndexMergeAndIter::sort_get_next_rows(int64_t &count, int64_t capacity)
         count += output_row_cnt;
       }
     } else {
-      IndexMergeRowStore &first_store = child_stores_.at(0);
-      IndexMergeRowStore &second_store = child_stores_.at(1);
+      IndexMergeRowIdCursor *base_cursor = child_cursors_.at(0);
+      if (OB_ISNULL(base_cursor)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected nullptr cursor", K(ret));
+      }
       uint64_t doc_id = 0;
       uint64_t next_id = 0;
       while (OB_SUCC(ret) && count < capacity) {
-        if (first_store.is_empty()) {
+        if (base_cursor->is_exhausted()) {
           ret = OB_ITER_END;
         } else {
-          doc_id = first_store.rowids_[first_store.idx_];
+          doc_id = base_cursor->current_rowid();
         }
         while (OB_SUCC(ret)) {
           bool all_matched = true;
           for (int64_t i = 1; OB_SUCC(ret) && i < child_cnt; i++) {
-            IndexMergeRowStore &child_store = child_stores_.at(i);
-            if (OB_FAIL(child_store.lower_bound(doc_id, next_id))) {
+            IndexMergeRowIdCursor *child_cursor = child_cursors_.at(i);
+            if (OB_ISNULL(child_cursor)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected nullptr cursor", K(ret), K(i));
+            } else if (OB_FAIL(child_cursor->advance_to(doc_id, next_id))) {
             } else if (doc_id != next_id) {
               doc_id = next_id;
               all_matched = false;
@@ -381,7 +413,7 @@ int ObDASIndexMergeAndIter::sort_get_next_rows(int64_t &count, int64_t capacity)
           if (OB_FAIL(ret)) {
           } else if (all_matched) {
             break;
-          } else if (OB_FAIL(first_store.lower_bound(doc_id, next_id))) {
+          } else if (OB_FAIL(base_cursor->advance_to(doc_id, next_id))) {
           } else if (doc_id != next_id) {
             doc_id = next_id;
           }
@@ -391,9 +423,12 @@ int ObDASIndexMergeAndIter::sort_get_next_rows(int64_t &count, int64_t capacity)
           // find a valid doc_id
           LOG_TRACE("find a valid doc_id", K(doc_id));
           for (int64_t i = 0; OB_SUCC(ret) && i < child_cnt; i++) {
-            IndexMergeRowStore &output_store = child_stores_.at(i);
-            if (OB_FAIL(output_store.to_expr(1))) {
-              LOG_WARN("failed to expr", K(ret), K(output_store));
+            IndexMergeRowIdCursor *output_cursor = child_cursors_.at(i);
+            if (OB_ISNULL(output_cursor)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected nullptr cursor", K(ret), K(i));
+            } else if (OB_FAIL(output_cursor->to_expr())) {
+              LOG_WARN("failed to expr", K(ret), KPC(output_cursor));
             }
           }
 
@@ -483,6 +518,349 @@ int ObDASIndexMergeAndIter::check_can_be_shorted()
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObDASIndexMergeAndIter::SortedRowIdCursor::init(ObDASIndexMergeIter::IndexMergeRowStore *store)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(store)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(store));
+  } else {
+    store_ = store;
+  }
+  return ret;
+}
+
+int ObDASIndexMergeAndIter::BitmapRowIdCursor::init(
+    common::ObIAllocator &allocator,
+    ObDASScanIter *scan_iter,
+    int64_t scan_size,
+    ObExpr *rowid_expr,
+    ObEvalCtx *eval_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(scan_iter) || OB_ISNULL(rowid_expr) || OB_ISNULL(eval_ctx)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument for bitmap cursor init", K(ret), KP(scan_iter), KP(rowid_expr), KP(eval_ctx));
+  } else if (OB_UNLIKELY(scan_size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid scan_size for bitmap cursor", K(ret), K(scan_size));
+  } else if (OB_ISNULL(bitmap_ = OB_NEWx(ObRoaringBitmap, &allocator, &allocator))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate roaring bitmap", K(ret));
+  } else {
+    allocator_ = &allocator;
+    scan_iter_ = scan_iter;
+    scan_size_ = scan_size;
+    rowid_expr_ = rowid_expr;
+    eval_ctx_ = eval_ctx;
+    bitmap_->set_empty();
+    exhausted_ = true;
+    bitmap_iter_ = nullptr;
+    LOG_TRACE("bitmap cursor init", K(scan_size));
+  }
+  return ret;
+}
+
+int ObDASIndexMergeAndIter::BitmapRowIdCursor::build_bitmap()
+{
+  int ret = OB_SUCCESS;
+
+  int64_t total_count = 0;
+  while (OB_SUCC(ret)) {
+    int64_t count = 0;
+    if (OB_FAIL(scan_iter_->get_next_rows(count, scan_size_))) {
+      if (OB_UNLIKELY(ret != OB_ITER_END)) {
+        LOG_WARN("failed to get next rows from scan", K(ret), K_(scan_size));
+      } else {
+        if (count > 0) {
+          ret = OB_SUCCESS;
+        }
+      }
+    }
+    if (OB_SUCC(ret) && count > 0) {
+      total_count += count;
+      ObDatum *datums = rowid_expr_->locate_batch_datums(*eval_ctx_);
+      if (OB_ISNULL(datums)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to locate batch datums", K(ret), K(count));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+          uint64_t rowid = datums[i].get_uint64();
+          if (OB_FAIL(bitmap_->value_add(rowid))) {
+            LOG_WARN("failed to add rowid to bitmap", K(ret), K(rowid), K(i));
+          }
+        }
+      }
+    }
+    if (ret == OB_ITER_END) {
+      ret = OB_SUCCESS;
+      break;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    uint64_t cardinality = bitmap_->get_cardinality();
+    if (cardinality == 0) {
+      exhausted_ = true;
+      LOG_TRACE("bitmap built with no data", K(total_count));
+    } else {
+      if (OB_ISNULL(bitmap_iter_ = static_cast<ObRoaringBitmapIter *>(allocator_->alloc(sizeof(ObRoaringBitmapIter))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate bitmap iterator", K(ret));
+      } else {
+        new (bitmap_iter_) ObRoaringBitmapIter(bitmap_);
+        if (OB_FAIL(bitmap_iter_->init())) {
+          LOG_WARN("failed to init bitmap iterator", K(ret), K(cardinality));
+        } else {
+          exhausted_ = false;
+        }
+      }
+    }
+    LOG_TRACE("bitmap build complete", K(ret), K(total_count), K(cardinality), K_(exhausted));
+  }
+
+  return ret;
+}
+
+int ObDASIndexMergeAndIter::BitmapRowIdCursor::advance_to(uint64_t target, uint64_t &rowid)
+{
+  int ret = OB_SUCCESS;
+  if (exhausted_) {
+    ret = OB_ITER_END;
+  } else if (OB_ISNULL(bitmap_iter_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("bitmap iterator not initialized", K(ret));
+  } else {
+    uint64_t curr_val = bitmap_iter_->get_curr_value();
+    // advance until we find a value >= target
+    while (OB_SUCC(ret) && curr_val < target) {
+      if (OB_FAIL(bitmap_iter_->get_next())) {
+        if (ret == OB_ITER_END) {
+          exhausted_ = true;
+        } else {
+          LOG_WARN("failed to get next from bitmap", K(ret), K(target), K(curr_val));
+        }
+      } else {
+        curr_val = bitmap_iter_->get_curr_value();
+      }
+    }
+    if (OB_SUCC(ret)) {
+      rowid = curr_val;
+    }
+  }
+  return ret;
+}
+
+int ObDASIndexMergeAndIter::BitmapRowIdCursor::to_expr()
+{
+  int ret = OB_SUCCESS;
+  if (exhausted_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("bitmap cursor exhausted, cannot output", K(ret));
+  } else if (OB_ISNULL(bitmap_iter_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("bitmap iterator not initialized", K(ret));
+  } else {
+    ObEvalCtx::BatchInfoScopeGuard batch_info_guard(*eval_ctx_);
+    batch_info_guard.set_batch_size(1);
+    batch_info_guard.set_batch_idx(0);
+    uint64_t curr_val = bitmap_iter_->get_curr_value();
+    ObDatum &datum = rowid_expr_->locate_datum_for_write(*eval_ctx_);
+    datum.set_uint(curr_val);
+    rowid_expr_->set_evaluated_projected(*eval_ctx_);
+
+    // advance to next position
+    if (OB_FAIL(bitmap_iter_->get_next())) {
+      if (ret == OB_ITER_END) {
+        exhausted_ = true;
+        ret = OB_SUCCESS;  // to_expr succeeded, just no more data
+      } else {
+        LOG_WARN("failed to advance bitmap iterator", K(ret), K(curr_val));
+      }
+    }
+
+    LOG_TRACE("bitmap cursor output rowid", K(ret), K(curr_val), K_(exhausted));
+  }
+  return ret;
+}
+
+void ObDASIndexMergeAndIter::BitmapRowIdCursor::reuse()
+{
+  if (OB_NOT_NULL(bitmap_iter_)) {
+    bitmap_iter_->deinit();
+    bitmap_iter_ = nullptr;
+  }
+  if (OB_NOT_NULL(bitmap_)) {
+    bitmap_->set_empty();
+  }
+  exhausted_ = true;
+  counted_as_empty_ = false;
+}
+
+void ObDASIndexMergeAndIter::BitmapRowIdCursor::reset()
+{
+  if (OB_NOT_NULL(bitmap_iter_)) {
+    bitmap_iter_->deinit();
+    bitmap_iter_ = nullptr;
+  }
+  if (OB_NOT_NULL(bitmap_)) {
+    bitmap_->set_empty();
+    bitmap_ = nullptr;
+  }
+  exhausted_ = true;
+  allocator_ = nullptr;
+  scan_iter_ = nullptr;
+  scan_size_ = 0;
+  rowid_expr_ = nullptr;
+  eval_ctx_ = nullptr;
+}
+
+bool ObDASIndexMergeAndIter::should_use_bitmap_for_child(int64_t child_idx) const
+{
+  bool use_bitmap = false;
+  if (child_idx < 0 || child_idx >= merge_ctdef_->children_cnt_ || merge_ctdef_->children_cnt_ == 1) {
+    use_bitmap = false;
+  } else {
+    const ObDASBaseCtDef *child_ctdef = merge_ctdef_->children_[child_idx];
+    use_bitmap = OB_NOT_NULL(child_ctdef) &&
+                 child_ctdef->op_type_ == DAS_OP_SORT &&  // non-ROR index has SORT operator inserted by optimizer
+                 merge_ctdef_->merge_node_types_.at(child_idx) == INDEX_MERGE_SCAN;
+  }
+  return use_bitmap;
+}
+
+ObDASScanIter* ObDASIndexMergeAndIter::extract_scan_iter_from_child(int64_t child_idx) const
+{
+  ObDASIter *child_iter = child_iters_.at(child_idx);
+  ObDASScanIter *scan_iter = nullptr;
+  if (OB_ISNULL(child_iter)) {
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected null child iter", K(child_idx));
+  } else if (child_iter->get_children_cnt() != 1 || OB_ISNULL(child_iter->get_children())) {
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "expect exactly one child (scan iter) under sort iter", K(child_idx), K(child_iter->get_children_cnt()));
+  } else if (OB_ISNULL(child_iter->get_children()[0])) {
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected null scan iter under sort iter", K(child_idx));
+  } else {
+    scan_iter = static_cast<ObDASScanIter*>(child_iter->get_children()[0]);
+  }
+  return scan_iter;
+}
+
+int ObDASIndexMergeAndIter::init_child_cursors()
+{
+  int ret = OB_SUCCESS;
+  int64_t child_cnt = child_stores_.count();
+  common::ObArenaAllocator &allocator = mem_ctx_->get_arena_allocator();
+
+  if (FALSE_IT(child_cursors_.set_allocator(&allocator))) {
+  } else if (OB_FAIL(child_cursors_.prepare_allocate(child_cnt))) {
+    LOG_WARN("failed to prepare allocate child cursors", K(ret), K(child_cnt));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_cnt; ++i) {
+      IndexMergeRowIdCursor *cursor;
+      if (enable_bitmap_cursor_ && should_use_bitmap_for_child(i)) {
+        BitmapRowIdCursor *bitmap_cursor = OB_NEWx(BitmapRowIdCursor, &allocator);
+        ObDASScanIter *scan_iter = nullptr;
+        if (OB_ISNULL(bitmap_cursor)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate bitmap cursor", K(ret), K(i));
+        } else if (OB_ISNULL(scan_iter = extract_scan_iter_from_child(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to extract scan iter from child", K(ret), K(i));
+        } else if (OB_FAIL(bitmap_cursor->init(allocator,
+                                               scan_iter,
+                                               child_stores_.at(i).capacity_,
+                                               rowkey_exprs_->at(0),
+                                               eval_ctx_))) {
+          LOG_WARN("failed to init bitmap cursor", K(ret), K(i));
+        } else {
+          cursor = bitmap_cursor;
+          LOG_TRACE("created bitmap cursor for child", K(i));
+        }
+      } else {
+        SortedRowIdCursor *sorted_cursor = OB_NEWx(SortedRowIdCursor, &allocator);
+        if (OB_ISNULL(sorted_cursor)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate sorted cursor", K(ret), K(i));
+        } else if (OB_FAIL(sorted_cursor->init(&child_stores_.at(i)))) {
+          LOG_WARN("failed to init sorted cursor", K(ret), K(i));
+        } else {
+          cursor = sorted_cursor;
+          LOG_TRACE("created sorted cursor for child", K(i));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        child_cursors_.at(i) = cursor;
+      }
+    }
+  }
+  LOG_TRACE("init child cursors", K(ret), K(child_cnt), K(child_cursors_.count()));
+  return ret;
+}
+
+int ObDASIndexMergeAndIter::check_child_cursors()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && child_empty_count_ <= 0 && i < child_cursors_.count(); ++i) {
+    if (!should_use_bitmap_for_child(i)) {
+    } else {
+      BitmapRowIdCursor *bitmap_cursor = static_cast<BitmapRowIdCursor *>(child_cursors_.at(i));
+      if (OB_ISNULL(bitmap_cursor)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected nullptr bitmap cursor", K(ret), K(i));
+      } else if (bitmap_cursor->counted_as_empty_) {
+      } else if (bitmap_cursor->is_exhausted()) {
+        bitmap_cursor->counted_as_empty_ = true;
+        ++child_empty_count_;
+        LOG_TRACE("bitmap cursor exhausted", K(i), K_(child_empty_count));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDASIndexMergeAndIter::build_bitmaps_for_children()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < child_cursors_.count(); ++i) {
+    if (should_use_bitmap_for_child(i)) {
+      BitmapRowIdCursor *bitmap_cursor = static_cast<BitmapRowIdCursor *>(child_cursors_.at(i));
+      if (OB_ISNULL(bitmap_cursor)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected nullptr bitmap cursor", K(ret), K(i));
+      } else if (OB_FAIL(bitmap_cursor->build_bitmap())) {
+        LOG_WARN("failed to build bitmap for cursor", K(ret), K(i));
+      } else {
+        LOG_TRACE("bitmap cursor built successfully", K(i));
+        child_stores_.at(i).iter_end_ = true;
+        child_stores_.at(i).drained_ = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDASIndexMergeAndIter::do_table_scan()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDASIndexMergeIter::do_table_scan())) {
+    LOG_WARN("failed to do table scan in parent", K(ret));
+  } else if (enable_bitmap_cursor_ && OB_FAIL(build_bitmaps_for_children())) {
+    LOG_WARN("failed to build bitmaps for children", K(ret));
+  }
+  return ret;
+}
+
+int ObDASIndexMergeAndIter::rescan()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDASIndexMergeIter::rescan())) {
+    LOG_WARN("failed to rescan in parent", K(ret));
+  } else if (enable_bitmap_cursor_ && OB_FAIL(build_bitmaps_for_children())) {
+    LOG_WARN("failed to build bitmaps for children in rescan", K(ret));
   }
   return ret;
 }

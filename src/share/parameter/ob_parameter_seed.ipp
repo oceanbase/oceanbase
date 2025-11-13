@@ -1716,6 +1716,9 @@ DEF_BOOL(_enable_nlj_spf_use_rich_format, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_enable_index_merge, OB_TENANT_PARAMETER, "False",
          "enable index merge optimization",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_index_merge_intersect_bitmap, OB_TENANT_PARAMETER, "True",
+         "enable bitmap optimization for index merge intersect",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_distributed_das_scan, OB_TENANT_PARAMETER, "True",
          "enable distributed DAS scan",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
