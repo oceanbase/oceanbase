@@ -489,8 +489,13 @@ int ObMultipleGetMerge::check_final_row(ObDatumRow &fuse_row, bool &is_valid_row
   } else {
     // When the index lookups the rowkeys from the main table, it should exists
     // and if we find that it does not exist, there must be an anomaly
+    // Skip 4377 check for foreign key check scenarios:
+    // 1. is_lookup_for_4377() already excludes "child-to-parent" check (via for_foreign_key_check_ flag)
+    // 2. is_check_row_locked() excludes "parent-to-child" check
     if (GCONF.enable_defensive_check()
-        && access_ctx_->query_flag_.is_lookup_for_4377()) {
+        && access_ctx_->query_flag_.is_lookup_for_4377()
+        && (nullptr == access_ctx_->store_ctx_ ||
+            !access_ctx_->store_ctx_->mvcc_acc_ctx_.write_flag_.is_check_row_locked())) {
       ret = handle_4377("[index lookup]ObMultipleGetMerge::inner_get_next_row");
       STORAGE_LOG(WARN,"[index lookup] row not found", K(ret),
                   K(access_ctx_->use_fuse_row_cache_),
