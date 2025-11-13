@@ -1157,37 +1157,25 @@ int ObDASDomainIdMergeIter::multi_get_row()
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator(ObMemAttr(MTL_ID(), "DomainIDMGR"));
+  common::ObRowkey data_table_rowkey;
   if (OB_FAIL(data_table_iter_->get_next_row())) {
-    if (OB_ITER_END == ret && is_no_sample_) {
-      int tmp_ret = ret;
-      ret = OB_SUCCESS;
-      for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_domain_iters_.count(); i++) {
-        if (OB_ISNULL(rowkey_domain_iters_.at(i))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get null domain iter", K(ret), K(i));
-        } else if (OB_FAIL(rowkey_domain_iters_.at(i)->get_next_row())) {
-          if (OB_UNLIKELY(OB_ITER_END != ret)) {
-            LOG_WARN("fail to get next rows", K(ret));
-          } else {
-            ret = OB_SUCCESS;
+    if (OB_ITER_END != ret) {
+      LOG_WARN("fail to get next data table row", K(ret));
+    } else if (OB_ITER_END == ret) {
+      if (is_no_sample_) {
+        for (int64_t i = 0; i < rowkey_domain_iters_.count(); i++) {
+          while (OB_SUCC(rowkey_domain_iters_.at(i)->get_next_row()))
+          {
+            // do nothing
           }
-        } else {
-          common::ObRowkey rowkey;
-          if (OB_FAIL(get_rowkey(allocator, rowkey_domain_ctdefs_.at(i), rowkey_domain_rtdefs_.at(i), rowkey))) {
-            LOG_WARN("fail to process_data_table_rowkey", K(ret));
-          } else {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("row count isn't equal between data table and rowkey domain", K(ret), K(rowkey),
-                K(rowkey_domain_iters_.at(i)->get_scan_param()), K(data_table_iter_->get_scan_param()));
+          if (OB_ITER_END != ret) {
+            LOG_WARN("fail to get next rowkey domain row", K(ret), K(i), KPC(rowkey_domain_iters_.at(i)));
           }
         }
       }
-      if (OB_SUCC(ret)) {
-        ret = tmp_ret;
-      }
-    } else if (ret != OB_ITER_END) {
-      LOG_WARN("fail to get next row", K(ret));
     }
+  } else if (is_no_sample_ && OB_FAIL(get_rowkey(allocator, data_table_ctdef_, data_table_rtdef_, data_table_rowkey))) {
+    LOG_WARN("fail to get data table rowkey", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_domain_iters_.count(); i++) {
       if (is_no_sample_) {
@@ -1195,10 +1183,7 @@ int ObDASDomainIdMergeIter::multi_get_row()
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get null domain iter", K(ret), K(i));
         } else {
-          common::ObRowkey data_table_rowkey;
-          if (OB_FAIL(get_rowkey(allocator, data_table_ctdef_, data_table_rtdef_, data_table_rowkey))) {
-            LOG_WARN("fail to get data table rowkey", K(ret));
-          } else if (OB_FAIL(reset_rowkey_domain_iter_scan_range(i, data_table_rowkey))) {
+          if (OB_FAIL(reset_rowkey_domain_iter_scan_range(i, data_table_rowkey))) {
             LOG_WARN("fail to reset rowkey domain iter scan range", K(ret), K(i));
           } else {
             bool is_found = false;
