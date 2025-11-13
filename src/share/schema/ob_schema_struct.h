@@ -296,6 +296,11 @@ inline bool is_range_part(const ObPartitionFuncType part_type)
       || PARTITION_FUNC_TYPE_INTERVAL == part_type;
 }
 
+inline bool is_range_columns_part(const ObPartitionFuncType part_type)
+{
+  return PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_type;
+}
+
 inline bool is_interval_part(const ObPartitionFuncType part_type)
 {
   return PARTITION_FUNC_TYPE_INTERVAL == part_type;
