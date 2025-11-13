@@ -1658,7 +1658,8 @@ public:
                                       uint64_t &table_id,
                                       uint64_t &index_id,
                                       double &range_row_count);
-  static int flatten_multivalue_index_exprs(ObRawExpr* expr, ObIArray<ObRawExpr*> &exprs);
+  static int flatten_multivalue_index_exprs(ObRawExpr* expr, ObIArray<ObRawExpr*> &exprs,
+                                            bool &has_original_or_expr);
   static int preprocess_multivalue_range_exprs(ObIAllocator &allocator,
                                                const ObIArray<ObRawExpr*> &range_exprs,
                                                ObIArray<ObRawExpr*> &out_range_exprs,
