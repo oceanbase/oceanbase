@@ -822,9 +822,10 @@ int ObIncMajorDDLMergeHelper::assemble_sstable(ObDDLTabletMergeDagParamV2 &merge
     } else if (OB_FALSE_IT(first_major_sstable = static_cast<ObSSTable *>(
         table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(false/*first*/)))) {
     } else if (OB_NOT_NULL(first_major_sstable)
-        && OB_UNLIKELY(first_major_sstable->get_snapshot_version() >= merge_param.rec_scn_.get_val_for_tx())) {
+        && OB_UNLIKELY(first_major_sstable->get_snapshot_version() >= merge_param.ddl_task_param_.snapshot_version_)) {
       major_already_included = true;
-      FLOG_INFO("rec_scn is already included in major sstable", K(major_already_included), KPC(first_major_sstable), K(merge_param));
+      FLOG_INFO("snapshot version is already included in major sstable",
+          K(major_already_included), KPC(first_major_sstable), K(merge_param));
     } else if (OB_FAIL(check_sstables_empty(merge_param, co_sstable_array, sstables_empty))) {
       LOG_WARN("failed to check sstables empty", KR(ret), K(co_sstable_array));
     }
