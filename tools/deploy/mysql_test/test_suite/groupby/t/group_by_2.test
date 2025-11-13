@@ -1,7 +1,7 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-# owner: yuchen.wyc
+# owner: xiaoyi.xy
 # owner group: sql4
 # description: group_by聚集函数测试
 # tags: optimizer, cost

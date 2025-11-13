@@ -1,6 +1,6 @@
-#### owner: yuchen.wyc
-#### owner group: sql2
-#### description: foreign key
+#owner: laibingzheng.lbz
+#owner group: sql2
+#description: foreign key
 
 --disable_warnings
 set foreign_key_checks=on;

@@ -1,9 +1,9 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-# owner: yuchen.wyc
+# owner: zhuhuashi.zhs
 # owner group: sql4
-# description: ����select for update�������������
+# description: 测试select for update表别名的情况；
 --disable_query_log
 --source mysql_test/include/index_quick_major.inc
 sleep 2;
@@ -12,7 +12,7 @@ sleep 2;
 drop table if exists tbl1,tbl2;
 --enable_warnings
 create table tbl1 (pk int,i1 int, v2 varchar(80), i3 char(20),i4 float, d4 datetime(6),i5 decimal(5,3),i6 bool, primary key(pk));
-####һ�뾲̬���ݣ�һ�붯̬����
+####一半静态数据，一半动态数据
 insert into tbl1 values(1,1,'abc12','1agc',1.25,'2014-01-01 12:00:00',23.23,1),
                        (2,10,'23abc12','4agc1',-0.25,'2015-11-01 12:00:00',-23.230,0),
                        (3,201,'xx23abc12','cagc1',-2.25,'2015-11-21 11:20:10',3.231,1),
@@ -45,10 +45,10 @@ set autocommit=0;
 connection conn2;
 set autocommit=0;
 
-####����1 sfuһ������,���ӱ���,����2������У�����1�ٸ��¸��У�
+####事务1 sfu一条空行,表加别名,事务2插入该行，事务1再更新该行；
 connection conn1;
 #select * from tbl1 a where a.pk=100 for update;
-#�޸ĸô������ñ���
+#修改该处，不用别名
 select * from tbl1  where pk=100 for update;
 
 
@@ -68,7 +68,7 @@ select * from tbl1 where pk in (100,200);
 delete  from tbl1 where pk in (100,200);
 commit;
 
-####����1 sfuһ������,���ӱ���,����2������У�����1�ٲ�����У�
+####事务1 sfu一条空行,加表别名,事务2 sfu 同一行
 connection conn1;
 #select * from tbl1 abc where abc.pk=100 for update;
 select * from tbl1  where pk=100 for update;
@@ -91,7 +91,7 @@ select * from tbl1 where pk in (100,200);
 delete  from tbl1 where pk in (100,200);
 commit;
 
-####����1 sfuһ������,�ӱ�����,����2 sfu ͬһ��
+####事务1 sfu多条（空行+非空行）,加表别名，,事务2插入该行，事务1再replace 该行，sfu 同一行
 connection conn1;
 #select * from tbl1 abc where abc.pk=100 for update;
 select * from tbl1  where pk=100 for update;
@@ -114,7 +114,7 @@ commit;
 select * from tbl1 where pk in (100,200);
 delete  from tbl1 where pk in (100,200);
 commit;
-####����1 sfu����������+�ǿ��У�,�ӱ�������,����2������У�����1��replace ���У�sfu ͬһ��
+####事务1 sfu多条（空行+非空行）,加表别名，,事务2插入该行，事务1再replace 该行，sfu 同一行
 connection conn1;
 #select * from tbl1 t1 where t1.pk in(100,10,1,200) for update;
 select * from tbl1  where pk in(100,10,1,200) for update;

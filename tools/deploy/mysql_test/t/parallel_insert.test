@@ -3,7 +3,7 @@ set @@session.explicit_defaults_for_timestamp=off;
 set transaction_isolation='READ-COMMITTED';
 set tx_isolation='READ-COMMITTED';
 --enable_query_log
-#owner: yuchen.wyc
+#owner: zhuhuashi.zhs
 #owner group: sql1
 
 ####test:two trx on one rows,one trx rollback

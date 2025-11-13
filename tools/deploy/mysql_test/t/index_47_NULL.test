@@ -1,9 +1,9 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-#### owner: yuchen.wyc
-#### owner group: sql3
-#### description: 用于测试NULL上的索引相关
+#owner: zhuhuashi.zhs
+#owner group: sql3
+#description: 用于测试NULL上的索引相关
 --disable_warnings
 drop table if exists t1;
 --enable_warnings

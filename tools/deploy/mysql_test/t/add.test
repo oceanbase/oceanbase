@@ -1,6 +1,6 @@
-#### owner: yuchen.wyc
-#### owner group: sql3
-#### description: test
+#owner: zhuhuashi.zhs
+#owner group: sql3
+#description: test
 --disable_warnings
 drop table if exists add_sb;
 create table add_sb(c1 int,c2 int(255) zerofill,c3 bigint,c4 bigint unsigned,c5 bigint(255) zerofill,c6 decimal,c7 decimal(35, 15),c8 decimal(35, 7) zerofill,c9 varchar(123) collate utf8mb4_general_ci,c10 date,c11 datetime(5),c12 timestamp(5),c13 year(4),c14 char(24),c15 binary(24),c16 varchar(123) collate utf8mb4_bin);

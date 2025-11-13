@@ -1,7 +1,7 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-# owner: yuchen.wyc
+# owner: laibingzheng.lbz
 # owner group: SQL3
 # description: 本case是为了测试insert ignore的语法
 # tags: dml,dml_ignore
