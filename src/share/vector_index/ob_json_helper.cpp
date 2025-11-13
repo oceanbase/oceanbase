@@ -69,29 +69,39 @@ int ObJsonBuilder::add_string_field(Value *obj, const ObString &key, const ObStr
   } else {
     Pair *pair = nullptr;
     Value *str_val = nullptr;
-    char *str_buf = nullptr;
-
+    int32_t escaped_len = 0;
+    char *escaped_str = nullptr;
     if (OB_ISNULL(pair = (Pair*)allocator_.alloc(sizeof(Pair)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc pair", K(ret));
     } else if (OB_ISNULL(str_val = (Value*)allocator_.alloc(sizeof(Value)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc string value", K(ret));
-    } else if (OB_ISNULL(str_buf = (char*)allocator_.alloc(value.length() + 1))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to alloc string buffer", K(ret));
     } else {
+     // convert the string to an escaped string
+      ObJsonBuffer jbuf(&allocator_);
+      if (OB_FAIL(ObJsonBaseUtil::add_double_quote(jbuf, value.ptr(), value.length()))) {
+        LOG_WARN("failed to add double quote (escape string)", K(ret));
+      } else if (jbuf.length() < 2) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected escaped length", K(ret), "len", jbuf.length());
+      } else {
+        ObString jbuf_str;
+        if (OB_FAIL(jbuf.get_result_string(jbuf_str))) {
+          LOG_WARN("failed to detach json buffer", K(ret));
+        } else {
+          escaped_str = jbuf_str.ptr() + 1;
+          escaped_len = jbuf_str.length() - 2;
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
       new (pair) Pair();
       new (str_val) Value();
-
-      memcpy(str_buf, value.ptr(), value.length());
-      str_buf[value.length()] = '\0';
       str_val->set_type(JT_STRING);
-      str_val->set_string(str_buf, value.length());
-
+      str_val->set_string(escaped_str, escaped_len);
       pair->name_ = key;
       pair->value_ = str_val;
-
       obj->object_add(pair);
     }
   }
@@ -172,19 +182,33 @@ int ObJsonBuilder::array_add_string(Value *array, const ObString &value)
   } else {
     Value *str_val = nullptr;
     char *str_buf = nullptr;
-
+    char *escaped_str = nullptr;
+    int32_t escaped_len = 0;
     if (OB_ISNULL(str_val = (Value*)allocator_.alloc(sizeof(Value)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc string value", K(ret));
-    } else if (OB_ISNULL(str_buf = (char*)allocator_.alloc(value.length() + 1))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to alloc string buffer", K(ret));
     } else {
+      ObJsonBuffer jbuf(&allocator_);
+      // convert the string to an escaped string
+      if (OB_FAIL(ObJsonBaseUtil::add_double_quote(jbuf, value.ptr(), value.length()))) {
+        LOG_WARN("failed to add double quote (escape string)", K(ret));
+      } else if (jbuf.length() < 2) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected escaped length", K(ret), "len", jbuf.length());
+      } else {
+        ObString jbuf_str;
+        if (OB_FAIL(jbuf.get_result_string(jbuf_str))) {
+          LOG_WARN("failed to detach json buffer", K(ret));
+        } else {
+          escaped_len = jbuf_str.length() - 2;
+          escaped_str = jbuf_str.ptr() + 1;
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
       new (str_val) Value();
-      memcpy(str_buf, value.ptr(), value.length());
-      str_buf[value.length()] = '\0';
       str_val->set_type(JT_STRING);
-      str_val->set_string(str_buf, value.length());
+      str_val->set_string(escaped_str, escaped_len);
       array->array_add(str_val);
     }
   }
