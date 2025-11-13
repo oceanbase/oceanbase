@@ -309,6 +309,11 @@ int ObLobTabletDmlHelper::delete_lob_col(
       LOG_WARN("[STORAGE_LOB]Invalid Lob data.", K(ret), K(datum), K(data));
     } else if (locator.is_inrow()) {
       // delete inrow lob no need to use the lob manager
+    } else if (run_ctx.relative_table_.is_index_table()) {
+      // create index is online ddl, so outrow lob may be deleted in main table before create index reports error.
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "outrow lob in index table");
+      LOG_WARN("outrow lob in index table is not supported", K(ret));
     } else if (OB_ISNULL(buf = static_cast<char*>(run_ctx.dml_param_.lob_allocator_.alloc(data.length())))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to deep copy lob data.", K(ret), K(data));
