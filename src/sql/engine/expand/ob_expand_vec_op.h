@@ -52,7 +52,8 @@ public:
 public:
   ObExpandVecSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type) :
     ObOpSpec(alloc, type), expand_exprs_(alloc), gby_exprs_(alloc), grouping_id_expr_(nullptr),
-    dup_expr_pairs_(alloc), group_set_exprs_(alloc), pruned_groupby_exprs_(alloc)
+    dup_expr_pairs_(alloc), group_set_exprs_(alloc), pruned_groupby_exprs_(alloc),
+    is_ordered_output_(false)
   {}
   virtual ~ObExpandVecSpec() {}
 public:
@@ -67,6 +68,7 @@ public:
   ObFixedArray<DupExprPair, ObIAllocator> dup_expr_pairs_;
   ObFixedArray<ExprFixedArray, ObIAllocator> group_set_exprs_;
   ExprFixedArray pruned_groupby_exprs_;
+  bool is_ordered_output_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExpandVecSpec);
 };

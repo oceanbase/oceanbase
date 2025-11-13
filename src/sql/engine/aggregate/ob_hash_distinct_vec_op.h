@@ -43,6 +43,10 @@ public:
   bool is_block_mode_;
   bool by_pass_enabled_;
   bool is_push_down_;
+  common::ObFixedArray<ExprFixedArray, common::ObIAllocator> group_distinct_exprs_;
+  ObExpr *grouping_id_;
+  common::ObFixedArray<ObSortCollations, common::ObIAllocator> group_sort_collations_;
+  bool has_non_distinct_aggr_params_;
 };
 
 class ObHashDistinctVecOp : public ObOperator

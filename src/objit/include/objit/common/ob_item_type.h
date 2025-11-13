@@ -1074,6 +1074,7 @@ typedef enum ObItemType
   T_PSEUDO_ROW_TRANS_INFO_COLUMN = 3012, // trans_info, only for defensive check
   T_PSEUDO_IDENTIFY_SEQ = 3013,
   T_PSEUDO_ROLLUP_GROUPING_ID = 3014,
+  T_PSEUDO_ENCODE_DUP_EXPR = 3015,
   T_PSEUDO_GROUP_PARAM = 3040,
   T_PSEUDO_EXTERNAL_FILE_COL = 3041,
   T_PSEUDO_RELEVANCE_SCORE = 3042, // relecance score for sparse retireval

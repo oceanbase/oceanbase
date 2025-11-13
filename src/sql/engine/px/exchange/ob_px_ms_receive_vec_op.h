@@ -57,6 +57,10 @@ public:
   ObSortCollations sort_collations_;
   ObSortFuncs sort_cmp_funs_;
   bool local_order_;
+  int32_t max_ordered_aggr_code_;
+  ExprFixedArray dup_expr_list_;
+  ObExpr *aggr_code_;
+  ObExpr *encoded_dup_expr_;
 };
 
 class ObPxMSReceiveVecOp : public ObPxReceiveOp

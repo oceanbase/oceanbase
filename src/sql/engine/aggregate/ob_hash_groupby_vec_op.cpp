@@ -28,7 +28,7 @@ OB_SERIALIZE_MEMBER(ObGroupByDupColumnPairVec, org_expr, dup_expr);
 OB_SERIALIZE_MEMBER((ObHashGroupByVecSpec, ObGroupBySpec),
   group_exprs_,cmp_funcs_, est_group_cnt_,
   org_dup_cols_, new_dup_cols_, dist_col_group_idxs_,
-  distinct_exprs_);
+  distinct_exprs_, grouping_id_, group_distinct_exprs_, group_sort_collations_);
 
 DEF_TO_STRING(ObHashGroupByVecSpec)
 {

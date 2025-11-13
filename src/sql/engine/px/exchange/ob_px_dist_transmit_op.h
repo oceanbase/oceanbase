@@ -45,7 +45,11 @@ public:
     sort_cmp_funs_(alloc),
     sort_collations_(alloc),
     popular_values_hash_(alloc),
-    calc_tablet_id_expr_(NULL)
+    calc_tablet_id_expr_(NULL),
+    dup_expr_list_(alloc),
+    encoded_dup_expr_(NULL),
+    aggr_code_expr_(NULL),
+    max_aggr_code_(0)
   {}
   ~ObPxDistTransmitSpec() {}
   virtual int register_to_datahub(ObExecContext &ctx) const override;
@@ -55,6 +59,10 @@ public:
   ObSortCollations sort_collations_;
   common::ObFixedArray<uint64_t, ObIAllocator> popular_values_hash_; // for hybrid hash distribution
   ObExpr *calc_tablet_id_expr_;   // for slave mapping
+  ExprFixedArray dup_expr_list_;
+  ObExpr *encoded_dup_expr_;
+  ObExpr *aggr_code_expr_;
+  int64_t max_aggr_code_;
 };
 
 class ObPxDistTransmitOp : public ObPxTransmitOp

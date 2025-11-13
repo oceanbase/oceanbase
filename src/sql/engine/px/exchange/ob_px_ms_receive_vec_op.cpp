@@ -29,14 +29,22 @@ OB_SERIALIZE_MEMBER((ObPxMSReceiveVecSpec, ObPxReceiveSpec),
                     all_exprs_,
                     sort_collations_,
                     sort_cmp_funs_,
-                    local_order_);
+                    local_order_,
+                    max_ordered_aggr_code_,
+                    dup_expr_list_,
+                    aggr_code_,
+                    encoded_dup_expr_);
 
 ObPxMSReceiveVecSpec::ObPxMSReceiveVecSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
   : ObPxReceiveSpec(alloc, type),
     all_exprs_(alloc),
     sort_collations_(alloc),
     sort_cmp_funs_(alloc),
-    local_order_(false)
+    local_order_(false),
+    max_ordered_aggr_code_(0),
+    dup_expr_list_(alloc),
+    aggr_code_(nullptr),
+    encoded_dup_expr_(nullptr)
 {
 }
 

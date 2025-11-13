@@ -22,7 +22,7 @@ namespace sql
 {
 OB_SERIALIZE_MEMBER(ObExpandVecSpec::DupExprPair, org_expr_, dup_expr_);
 OB_SERIALIZE_MEMBER((ObExpandVecSpec, ObOpSpec), expand_exprs_, gby_exprs_, grouping_id_expr_,
-                    dup_expr_pairs_, group_set_exprs_, pruned_groupby_exprs_);
+                    dup_expr_pairs_, group_set_exprs_, pruned_groupby_exprs_, is_ordered_output_);
 
 int ObExpandVecOp::inner_open()
 {
