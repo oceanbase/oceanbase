@@ -466,6 +466,8 @@
 #include "ob_expr_bucket.h"
 #include "sql/engine/expr/ob_expr_ai/ob_expr_ai_prompt.h"
 #include "ob_expr_vector_similarity.h"
+#include "ob_expr_left.h"
+#include "ob_expr_right.h"
 
 namespace oceanbase
 {
@@ -1927,6 +1929,13 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprSign::eval_sign_vector_number,                          /* 283 */
   NULL, // ObExprDateTrunc::eval_date_trunc_vector,                      /* 284 */
   NULL, // ObExprToDate::calc_to_date_with_format_vector,                /* 285 */
+  NULL, // ObExprConcat::eval_concat_vector,                             /* 286 */
+  NULL, // ObExprLpad::calc_mysql_lpad_expr_vector,                      /* 287 */
+  NULL, // ObExprRpad::calc_mysql_rpad_expr_vector,                      /* 288 */
+  NULL, // ObExprOracleLpad::calc_oracle_lpad_expr_vector,               /* 289 */
+  NULL, // ObExprOracleRpad::calc_oracle_rpad_expr_vector,               /* 290 */
+  NULL, // ObExprLeft::calc_left_vector,                                 /* 291 */
+  NULL, // ObExprRight::calc_right_vector,                               /* 292 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
