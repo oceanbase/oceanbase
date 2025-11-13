@@ -160,11 +160,15 @@ int ObMdsMinorFilter::filter_ddl_complete_mds_info(
     need_filter = false;
   } else if (OB_FAIL(should_filter_ddl_inc_major_info(ddl_complete_info, need_filter))) {
     LOG_WARN("fail to filter inc major info", K(ret), K(row), K(ddl_complete_info), K(kv_adapter));
-  } else if (need_filter) {
-    filter_ret = FILTER_RET_REMOVE;
-    LOG_TRACE("ddl complete info is filtered", K(ret), K(row), K(ddl_complete_info), K(kv_adapter));
-  } else {
-    filter_ret = FILTER_RET_NOT_CHANGE;
+  }
+
+  if (OB_SUCC(ret)) {
+    if (need_filter) {
+      filter_ret = FILTER_RET_REMOVE;
+      LOG_TRACE("ddl complete info is filtered", K(ret), K(row), K(ddl_complete_info), K(kv_adapter));
+    } else {
+      filter_ret = FILTER_RET_NOT_CHANGE;
+    }
   }
   if (OB_UNLIKELY(INC_MAJOR_MDS_EXPIRED_TIME_SMALL)) {
     FLOG_INFO("filter inc major info", K(ret), K(row), K(ddl_complete_info), K(kv_adapter), K(need_filter));
