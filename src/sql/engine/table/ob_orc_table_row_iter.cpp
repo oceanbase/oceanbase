@@ -274,9 +274,9 @@ int ObOrcTableRowIterator::init(const storage::ObTableScanParam *scan_param)
                                             scan_param->ext_tbl_filter_pd_level_,
                                             scan_param->column_ids_,
                                             eval_ctx));
-    OZ (reader_profile_.register_metrics(&reader_metrics_, "READER_METRICS"));
-    OZ (data_access_driver_.register_io_metrics(reader_profile_, "IO_METRICS"));
-    OZ (file_prebuffer_.register_metrics(reader_profile_, "PREBUFFER_METRICS"));
+    OZ (reader_profile_.register_metrics(&reader_metrics_, READER_METRICS_LABEL));
+    OZ (data_access_driver_.register_io_metrics(reader_profile_, IO_METRICS_LABEL));
+    OZ (file_prebuffer_.register_metrics(reader_profile_, PREBUFFER_METRICS_LABEL));
 
     if (OB_SUCC(ret) && OB_ISNULL(bit_vector_cache_)) {
       void *mem = nullptr;
@@ -541,9 +541,19 @@ int ObOrcTableRowIterator::select_row_ranges(const int64_t stripe_idx)
                                                          build_whole_stripe_range))) {
           LOG_WARN("fail to select row ranges by pushdown filters", K(ret));
         }
-      } else if (need_pre_buffer_index_ && OB_FAIL(pre_buffer(true /* row index */))) {
-        // pre buffer row index for lazy seek
-        LOG_WARN("fail to pre buffer row index", K(ret));
+      } else {
+        // 在没有 pushdown_filter 的情况下，需要更新 selected 指标
+        reader_metrics_.selected_stripe_count_++;
+        const int64_t row_index_stride = reader_->getRowIndexStride();
+        if (row_index_stride > 0) {
+          // if row_index_stripe == 0 means row index is disabled
+          reader_metrics_.selected_row_group_count_ += (stripe_num_rows + row_index_stride - 1) / row_index_stride;
+        }
+
+        if (need_pre_buffer_index_ && OB_FAIL(pre_buffer(true /* row index */))) {
+          // pre buffer row index for lazy seek
+          LOG_WARN("fail to pre buffer row index", K(ret));
+        }
       }
       if (OB_SUCC(ret) && build_whole_stripe_range) {
         SelectedRowRange whole_stripe_range;
@@ -670,14 +680,14 @@ int ObOrcTableRowIterator::select_row_ranges_by_pushdown_filter(
   if (OB_SUCC(ret)) {
     // update reader metrics
     if (build_whole_stripe_range) { // no statistic or read orc exception
-      ++reader_metrics_.selected_row_group_count_;
-      reader_metrics_.selected_page_count_ += groups_in_stripe;
+      ++reader_metrics_.selected_stripe_count_;
+      reader_metrics_.selected_row_group_count_ += groups_in_stripe;
     } else if (is_stripe_filtered) {
-      ++reader_metrics_.skipped_row_group_count_;
+      ++reader_metrics_.skipped_stripe_count_;
     } else {
-      ++reader_metrics_.selected_row_group_count_;
-      reader_metrics_.selected_page_count_ += (groups_in_stripe - groups_filtered);
-      reader_metrics_.skipped_page_count_ += groups_filtered;
+      ++reader_metrics_.selected_stripe_count_;
+      reader_metrics_.selected_row_group_count_ += (groups_in_stripe - groups_filtered);
+      reader_metrics_.skipped_row_group_count_ += groups_filtered;
     }
   }
   return ret;
@@ -1075,12 +1085,17 @@ int ObOrcTableRowIterator::filter_file(const int64_t task_idx)
       // no column statistics, do nothing
     } else if (OB_FAIL(filter_by_statistic(PushdownLevel::FILE, orc_col_stat.get(), file_skipped))) {
       LOG_WARN("fail to apply skipping index filter", K(ret));
-    } else if (file_skipped) {
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (file_skipped) {
       ++reader_metrics_.skipped_file_count_;
     } else {
       ++reader_metrics_.selected_file_count_;
     }
   }
+
   if (OB_SUCC(ret) && !file_skipped) {
     // resolve stripe index by task id
     int64_t start_lineno = scan_param_->scan_tasks_.at(task_idx)->first_lineno_;
