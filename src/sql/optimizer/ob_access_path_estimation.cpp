@@ -1826,7 +1826,7 @@ int ObAccessPathEstimation::update_use_skip_scan(AccessPath &path)
     } else if (!table_meta_info->has_opt_stat_) {
       reset_skip_scan = true;
       OPT_TRACE("NO OPT STAT, DISABLE SKIP SCAN");
-    } else if (est_cost_info.ss_prefix_ndv_ > 200000 // set threshold to 0.002 of 100 million
+    } else if (est_cost_info.ss_prefix_ndv_ > 256
                 || est_cost_info.ss_prefix_ndv_ > 0.002 * row_count
                 || est_cost_info.ss_postfix_range_filters_sel_ > 0.01) {
       reset_skip_scan = true;
