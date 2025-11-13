@@ -177,6 +177,7 @@ private:
 
   int get_partition_columns_name(
       const ObTableSchema &table_schema, 
+      const bool is_oracle_mode,
       ObIArray<ObString> &rowkey_columns);
     
   int get_partition_ranges(
