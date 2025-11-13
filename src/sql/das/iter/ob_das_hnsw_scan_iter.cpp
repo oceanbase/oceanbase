@@ -568,7 +568,11 @@ int ObDASHNSWScanIter::save_distance_expr_result(ObNewRow *row)
     double dis_value = 0;
     if (is_hybrid_ && is_hnsw_bq()) {
       if (OB_FAIL(calc_dis_by_vid(row->get_cell(1), dis_value))) {
-        LOG_WARN("failed to process adaptor state", K(ret));
+        if (ret == OB_ITER_END) {
+          // failed to find rowkey or vector by vid
+          ret = OB_ERR_DEFENSIVE_CHECK;
+        }
+        LOG_WARN("failed to process adaptor state", K(ret), K(row->get_cell(1)));
       }
     } else {
       dis_value = row->get_cell(0).get_float();
@@ -728,7 +732,11 @@ int ObDASHNSWScanIter::save_distance_expr_result(ObNewRow *row, int64_t size)
       if (is_hybrid_ && is_hnsw_bq()) {
         ObObj& vid_obj = row->get_cell(i * a_batch_obj_cnt + 1);
         if (OB_FAIL(calc_dis_by_vid(vid_obj, dis_value))) {
-          LOG_WARN("failed to calc distance by vid", K(ret));
+          if (ret == OB_ITER_END) {
+            // failed to find rowkey or vector by vid
+            ret = OB_ERR_DEFENSIVE_CHECK;
+          }
+          LOG_WARN("failed to calc distance by vid", K(ret), K(vid_obj));
         }
       } else {
         ObObj& dist_obj = row->get_cell(i * a_batch_obj_cnt);

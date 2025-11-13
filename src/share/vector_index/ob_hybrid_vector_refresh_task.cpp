@@ -852,7 +852,7 @@ int ObHybridVectorRefreshTask::delete_embedded_table(ObPluginVectorIndexAdaptor 
         LOG_WARN("fail to init iter", K(ret), K(delete_iter));
       }
       bool scan_finish = false;
-      const int32_t data_table_rowkey_count = table_param.get_output_projector().count() - 2;
+      const int32_t data_table_rowkey_count = table_param.get_output_projector().count() - task_ctx->part_key_num_ - 2;
       storage::ObTableScanIterator *table_scan_iter = dynamic_cast<storage::ObTableScanIterator *>(scan_iter);
       while (OB_SUCC(ret) && !scan_finish) {
         blocksstable::ObDatumRow *datum_row = nullptr;
