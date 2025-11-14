@@ -149,6 +149,24 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTriggerColumnsInfo);
 };
 
+struct ObTriggerRowRefType
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum RefType {
+    RT_NONE = 0,  // trigger not reference the column
+    RT_READ = 1,  // trigger only read the column
+    RT_WRITE = 2, // trigger write(include read) the column
+  };
+  ObTriggerRowRefType()
+    : old_type_(RT_NONE),
+      new_type_(RT_NONE)
+  {}
+  TO_STRING_KV(K_(old_type), K_(new_type));
+  RefType old_type_;
+  RefType new_type_;
+};
+
 class ObTriggerArg
 {
   OB_UNIS_VERSION(1);
@@ -237,6 +255,8 @@ private:
     };
   };
   uint64_t trigger_type_;
+  // pair<old_row_ref_type, new_row_ref_type>
+  ObFixedArray<ObTriggerRowRefType, ObIAllocator> ref_types_;
 };
 typedef common::ObFixedArray<ObTriggerArg, common::ObIAllocator> ObTriggerArgArray;
 
@@ -267,6 +287,17 @@ public:
   ExprFixedArray new_row_exprs_;
   ObExpr *rowid_old_expr_;
   ObExpr *rowid_new_expr_;
+  ObFixedArray<ObTriggerRowRefType, common::ObIAllocator> ref_types_;
+  union {
+    uint64_t trig_flags_;
+    struct {
+      uint64_t is_ref_old_row_ : 1;
+      uint64_t is_ref_new_row_ : 1;
+      uint64_t is_ref_old_rowid_ : 1;
+      uint64_t is_ref_new_rowid_ : 1;
+      uint64_t reserved_: 60;
+    };
+  };
 };
 
 //trigger runtime context definition
