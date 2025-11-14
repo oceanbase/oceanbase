@@ -2031,6 +2031,10 @@ void ObTenant::update_token_usage()
         const auto w = static_cast<ObThWorker*>(wnode->get_data());
         idle_us += ATOMIC_SET(&w->idle_us_, 0);
       }
+      DLIST_FOREACH_REMOVESAFE(wnode, group->nesting_workers_) {
+        ObThWorker* const w = static_cast<ObThWorker*>(wnode->get_data());
+        idle_us += ATOMIC_SET(&w->idle_us_, 0);
+      }
     }
     workers_lock_.unlock();
     const auto total_us = duration * total_worker_cnt_;
