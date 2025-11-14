@@ -62,6 +62,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminRemoveLockP);
 };
 
+class ObAdminRemoveLockPriorityP : public obrpc::ObRpcProcessor<obrpc::ObSrvRpcProxy::ObRpc<obrpc::OB_REMOVE_LOCK_PRIORITY>>
+{
+public:
+  explicit ObAdminRemoveLockPriorityP() {}
+  ~ObAdminRemoveLockPriorityP() {}
+protected:
+  int process();
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObAdminRemoveLockPriorityP);
+};
+
 class ObAdminUpdateLockP : public obrpc::ObRpcProcessor<obrpc::ObSrvRpcProxy::ObRpc<obrpc::OB_UPDATE_OBJ_LOCK>>
 {
 public:

@@ -155,7 +155,7 @@ protected:
       related_ctdefs_(nullptr),
       related_rtdefs_(nullptr),
       is_immediate_row_conflict_check_(true)
-  { }
+  {}
 };
 
 struct ObDASInsCtDef : ObDASDMLBaseCtDef

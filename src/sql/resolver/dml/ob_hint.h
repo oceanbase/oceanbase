@@ -427,6 +427,7 @@ struct ObGlobalHint {
   void merge_plan_cache_hint(ObPlanCachePolicy policy);
   void merge_log_level_hint(const ObString &log_level);
   void merge_read_consistency_hint(ObConsistencyLevel read_consistency, int64_t frozen_version);
+  void merge_table_lock_mode_hint(int64_t table_lock_mode);
   void merge_opt_features_version_hint(uint64_t opt_features_version);
   void merge_osg_hint(int8_t flag);
   void merge_dynamic_sampling_hint(int64_t dynamic_sampling);
@@ -538,6 +539,7 @@ struct ObGlobalHint {
   int64_t max_concurrent_;
   bool enable_lock_early_release_;
   bool force_refresh_lc_;
+  int64_t table_lock_mode_;
   common::ObString log_level_;
   int64_t parallel_;
   int64_t dml_parallel_;
@@ -577,7 +579,8 @@ public:
         force_trace_log_(false),
         log_level_(),
         parallel_(-1),
-        monitor_(false)
+        monitor_(false),
+        table_lock_mode_(0)
   {}
 
   ObPhyPlanHint(const ObGlobalHint &global_hint)
@@ -587,15 +590,22 @@ public:
         force_trace_log_(global_hint.force_trace_log_),
         log_level_(global_hint.log_level_),
         parallel_(global_hint.parallel_),
-        monitor_(global_hint.monitor_)
+        monitor_(global_hint.monitor_),
+        table_lock_mode_(global_hint.table_lock_mode_)
   {}
 
   int deep_copy(const ObPhyPlanHint &other, common::ObIAllocator &allocator);
 
   void reset();
 
-  TO_STRING_KV(K_(read_consistency), K_(query_timeout), K_(plan_cache_policy),
-               K_(force_trace_log), K_(log_level), K_(parallel), K_(monitor));
+  TO_STRING_KV(K_(read_consistency),
+               K_(query_timeout),
+               K_(plan_cache_policy),
+               K_(force_trace_log),
+               K_(log_level),
+               K_(parallel),
+               K_(monitor),
+               K_(table_lock_mode));
 
   common::ObConsistencyLevel read_consistency_;
   int64_t query_timeout_;
@@ -604,6 +614,7 @@ public:
   common::ObString log_level_;
   int64_t parallel_;
   bool monitor_;
+  int64_t table_lock_mode_;
 };
 
 struct ObTableInHint

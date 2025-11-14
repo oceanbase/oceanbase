@@ -796,6 +796,7 @@ private:
   bool enable_replace_; // for incremental direct load
   bool insert_overwrite_; // for insert overwrite
   double online_sample_percent_; // for incremental direct load
+  bool is_online_gather_statistics_; // for incremental direct load
   std::atomic<bool> can_set_feedback_info_;
   bool need_switch_to_table_lock_worker_; // for table lock switch worker thread
   bool data_complement_gen_doc_id_;

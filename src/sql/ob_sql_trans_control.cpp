@@ -20,6 +20,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "sql/dblink/ob_tm_service.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
+#include "sql/engine/dml/ob_table_modify_op.h"
 
 #ifdef CHECK_SESSION
 #error "redefine macro CHECK_SESSION"
@@ -646,6 +647,7 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
   OX (tx_desc->clear_interrupt());
   if (OB_SUCC(ret) && !is_plain_select) {
     OZ (stmt_setup_savepoint_(session, das_ctx, plan_ctx, txs, nested_level, is_for_sslog), session_id, *tx_desc);
+    OZ (acquire_table_lock_if_needed_(session, plan, exec_ctx), session_id, *tx_desc);
   }
 
   if (is_for_sslog) {
@@ -1112,6 +1114,68 @@ int ObSqlTransControl::stmt_setup_savepoint_(ObSQLSessionInfo *session,
   tx_param.is_for_sslog_ = is_for_sslog;
   OZ (txs->create_implicit_savepoint(tx, tx_param, savepoint, nested_level == 0), tx, tx_param);
   OX (das_ctx.set_savepoint(savepoint));
+  return ret;
+}
+
+int ObSqlTransControl::acquire_table_lock_if_needed_(ObSQLSessionInfo *session,
+                                                     const ObPhysicalPlan *plan,
+                                                     ObExecContext &exec_ctx)
+{
+  int ret = OB_SUCCESS;
+  uint64_t table_id = OB_INVALID_ID;
+
+  if (OB_NOT_NULL(plan)) {
+    const int64_t table_lock_mode = plan->get_phy_plan_hint().table_lock_mode_;
+    if (table_lock_mode != 0) {
+      // First, try to get from root operator's das_ctdef (most reliable for Insert/Update operations)
+      // This directly accesses das_base_ctdef_.index_tid_ which contains the actual table_id
+      // Reference: get_single_table_loc_id in ob_table_modify_op.h
+      const ObOpSpec *root_op = plan->get_root_op_spec();
+      if (OB_NOT_NULL(root_op) && root_op->is_dml_operator()) {
+        const ObTableModifySpec *modify_spec = static_cast<const ObTableModifySpec *>(root_op);
+        ObTableID table_loc_id = OB_INVALID_ID;
+        ObTableID ref_table_id = OB_INVALID_ID;
+        if (OB_SUCC(modify_spec->get_single_table_loc_id(table_loc_id, ref_table_id))) {
+          table_id = ref_table_id;
+          LOG_DEBUG("get table_id from modify_spec", K(table_id));
+        }
+      }
+
+      // If no valid table_id from root operator, try to get from plan's table locations
+      if (OB_SUCC(ret) && OB_INVALID_ID == table_id) {
+        const ObIArray<ObTableLocation> &das_locations = plan->get_das_table_locations();
+        if (das_locations.count() > 0) {
+          // Get the first table ID as target table ID
+          // For most DML operations, there is usually only one main table
+          table_id = das_locations.at(0).get_ref_table_id();
+          LOG_DEBUG("get table_id from das_locations", K(table_id));
+        }
+      }
+
+      // If no DAS locations, try to get from normal table locations
+      if (OB_SUCC(ret) && OB_INVALID_ID == table_id) {
+        const ObIArray<ObTableLocation> &normal_locations = plan->get_table_locations();
+        if (normal_locations.count() > 0) {
+          table_id = normal_locations.at(0).get_ref_table_id();
+          LOG_DEBUG("get table_id from normal_locations", K(table_id));
+        }
+      }
+
+      if (OB_SUCC(ret) && OB_INVALID_ID != table_id) {
+        ObArray<ObObjectID> partition_ids;  // empty partition list, means lock whole table
+        if (OB_FAIL(lock_table(exec_ctx,
+                               table_id,
+                               partition_ids,
+                               static_cast<ObTableLockMode>(table_lock_mode),
+                               THIS_WORKER.get_timeout_remain(),
+                               ObTableLockPriority::HIGH1))) {
+          LOG_WARN("failed to lock table", K(ret), K(table_id), K(table_lock_mode));
+        }
+      } else {
+        LOG_WARN("failed to get target table id for table lock", K(ret), K(table_id));
+      }
+    }
+  }
   return ret;
 }
 
@@ -1721,13 +1785,15 @@ int ObSqlTransControl::lock_table(ObExecContext &exec_ctx,
                                   const uint64_t table_id,
                                   const ObIArray<ObObjectID> &part_ids,
                                   const ObTableLockMode lock_mode,
-                                  const int64_t wait_lock_seconds)
+                                  const int64_t wait_lock_seconds,
+                                  const ObTableLockPriority lock_priority)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = GET_MY_SESSION(exec_ctx);
   const ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(exec_ctx);
   ObTransService *txs = NULL;
   tablelock::ObTableLockService *lock_service = NULL;
+  const bool use_lock_priority = lock_priority != ObTableLockPriority::INVALID;
 
   CK (OB_NOT_NULL(session), OB_NOT_NULL(plan_ctx));
   CHECK_SESSION (session);
@@ -1764,6 +1830,7 @@ int ObSqlTransControl::lock_table(ObExecContext &exec_ctx,
       lock_timeout_us = lock_timeout_us < 0 ? 0 : lock_timeout_us;
     }
   }
+
   if (part_ids.empty()) {
     ObLockTableRequest arg;
     arg.table_id_ = table_id;
@@ -1772,10 +1839,13 @@ int ObSqlTransControl::lock_table(ObExecContext &exec_ctx,
     arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
     arg.timeout_us_ = lock_timeout_us;
     arg.is_from_sql_ = true;
+    arg.lock_priority_ = use_lock_priority ? lock_priority : ObTableLockPriority::NORMAL;
 
     OZ (lock_service->lock(*session->get_tx_desc(),
                            tx_param,
-                           arg),
+                           arg,
+                           false, /*is_for_replace*/
+                           use_lock_priority /*force_use_priority*/),
         tx_param, table_id, lock_mode, lock_timeout_us);
   } else {
     ObLockPartitionRequest arg;
@@ -1785,6 +1855,7 @@ int ObSqlTransControl::lock_table(ObExecContext &exec_ctx,
     arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
     arg.timeout_us_ = lock_timeout_us;
     arg.is_from_sql_ = true;
+    arg.lock_priority_ = use_lock_priority ? lock_priority : ObTableLockPriority::NORMAL;
 
     for (int64_t i = 0; i < part_ids.count() && OB_SUCC(ret); ++i) {
       arg.part_object_id_ = part_ids.at(i);

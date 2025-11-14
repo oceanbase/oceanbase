@@ -273,7 +273,8 @@ public:
   int lock(ObTxDesc &tx_desc,
            const ObTxParam &tx_param,
            const ObLockRequest &arg,
-           const bool is_for_replace = false);
+           const bool is_for_replace = false,
+           const bool force_use_priority = false);
   int unlock(ObTxDesc &tx_desc,
              const ObTxParam &tx_param,
              const ObUnLockRequest &arg);

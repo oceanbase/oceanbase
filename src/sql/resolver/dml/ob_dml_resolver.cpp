@@ -16153,6 +16153,12 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
       }
       break;
     }
+    case T_TABLE_LOCK_MODE_HINT: {
+      CHECK_HINT_PARAM(hint_node, 1) {
+        global_hint.merge_table_lock_mode_hint(child0->value_);
+      }
+      break;
+    }
     case T_LOG_LEVEL: {
       CHECK_HINT_PARAM(hint_node, 1) {
         if (NULL != child0->str_value_) {

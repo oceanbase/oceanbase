@@ -1025,6 +1025,9 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>WEAK  { return WEAK; }
 <hint>STRONG  { return STRONG; }
 <hint>FROZEN  { return FROZEN; }
+<hint>EXCLUSIVE { return EXCLUSIVE; }
+<hint>SHARE { return SHARE; }
+<hint>ROW { return ROW; }
 <hint>NONE  { return NONE; }
 <hint>DEFAULT  { return DEFAULT; }
 <hint>MAX_CONCURRENT { return MAX_CONCURRENT; }
@@ -1207,6 +1210,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>PX_NODE_ADDRS {return PX_NODE_ADDRS; }
 <hint>PX_NODE_COUNT {return PX_NODE_COUNT; }
 <hint>DISABLE_OP_RICH_FORMAT { return DISABLE_OP_RICH_FORMAT; }
+<hint>TABLE_LOCK_MODE { return TABLE_LOCK_MODE; }
 <hint>{identifier} {
   if (!(IS_FAST_PARAMETERIZE)) {
     check_value(yylval);

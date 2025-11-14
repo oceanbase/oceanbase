@@ -703,6 +703,10 @@ public:
   //                          const share::SCN &commit_scn,
   //                          const ObTableLockOpStatus status);
   DELEGATE_WITH_RET(lock_table_, admin_update_lock_op, int);
+  // admin remove a lock priority
+  // @param[in] op_info, contain the lock id, lock type and so on.
+  // void admin_remove_lock_op(const ObTableLockOp &op_info);
+  DELEGATE_WITH_RET(lock_table_, admin_remove_lock_priority, int);
   // get the lock memtable, used by ObMemtableCtx create process.
   // @param[in] handle, will store the memtable of lock table.
   // int get_lock_memtable(ObTableHandleV2 &handle)

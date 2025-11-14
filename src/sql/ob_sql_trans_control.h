@@ -26,6 +26,10 @@ namespace transaction
 {
 class ObStartTransParam;
 class ObTxDesc;
+namespace tablelock
+{
+enum class ObTableLockPriority : int8_t;
+}
 }
 
 namespace share
@@ -240,6 +244,9 @@ public:
                                    transaction::ObTransService* txs,
                                    const int64_t nested_level,
                                    const bool is_for_sslog);
+  static int acquire_table_lock_if_needed_(ObSQLSessionInfo *session,
+                                           const ObPhysicalPlan *plan,
+                                           ObExecContext &exec_ctx);
   static int end_stmt(ObExecContext &exec_ctx, const bool is_rollback, const bool will_retry);
   static int alloc_branch_id(ObExecContext &exec_ctx, const int64_t count, int16_t &branch_id);
   static int kill_query_session(ObSQLSessionInfo &session, const ObSQLSessionState &status);
@@ -275,7 +282,9 @@ public:
                         const uint64_t table_id,
                         const ObIArray<ObObjectID> &part_ids,
                         const transaction::tablelock::ObTableLockMode lock_mode,
-                        const int64_t wait_lock_seconds);
+                        const int64_t wait_lock_seconds,
+                        const transaction::tablelock::ObTableLockPriority lock_priority =
+                          transaction::tablelock::ObTableLockPriority::INVALID);
   static void clear_xa_branch(const transaction::ObXATransID &xid, transaction::ObTxDesc *&tx_desc);
   static int check_ls_readable(const uint64_t tenant_id,
                                const share::ObLSID &ls_id,

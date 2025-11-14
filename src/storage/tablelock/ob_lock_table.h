@@ -144,6 +144,9 @@ public:
                            const share::SCN &commit_version,
                            const share::SCN &commit_scn,
                            const ObTableLockOpStatus status);
+  // used by admin tool. remove lock priority.
+  // @param[in] op_info, the lock priority op will be removed by admin.
+  int admin_remove_lock_priority(const ObTableLockOp &op_info, const ObTableLockPrioArg &prio_arg);
   // check and clear paired lock ops which can be compacted,
   // and clear empty obj locks to recycle resources.
   // See the ObLockMemtable::check_and_clear_obj_lock for deatails.
