@@ -1966,7 +1966,7 @@ int ObDASIvfScanIter::do_ivf_scan_post(bool is_vectorized, T *search_vec)
         LOG_INFO("postfilter does not get enough result", K(limit_k), "near_rowkeys_count", near_rowkeys.count(),
             K(selectivity_), K(left_search), K(next_nprobe), K(iter_cnt), K(nprobes_), K(heap_size));
         near_cid_.reuse();
-        if (no_new_near_rowkeys) {
+        if (similarity_threshold_ != 0 && no_new_near_rowkeys) {
           iter_end = true;
           LOG_INFO("there are no new rowkeys in near_rowkeys after post filter, stop iterative filter", K(ret), K(no_new_near_rowkeys), K(near_rowkeys.count()), K(start_idx));
         } else if (! iterative_filter_ctx_.has_next_center()) {
@@ -2218,7 +2218,7 @@ int ObDASIvfScanIter::do_ivf_scan_pre(ObIAllocator &allocator, bool is_vectorize
                 K(selectivity_), K(left_search), K(next_nprobe), K(iter_cnt), K(nprobes_));
             near_cid_.reuse();
             is_first_scan = false;
-            if (no_new_near_rowkeys) {
+            if (similarity_threshold_ != 0 && no_new_near_rowkeys) {
               iter_end = true;
               LOG_INFO("there are no new rowkeys in near_rowkeys after post filter, stop iterative filter", K(ret), K(no_new_near_rowkeys), K(nearest_rowkey_heap.count()), K(start_idx), K(limit_k));
             } else if (! iterative_filter_ctx_.has_next_center()) {
@@ -3278,7 +3278,7 @@ int ObDASIvfPQScanIter::process_ivf_scan_post(bool is_vectorized)
             K(selectivity_), K(left_search), K(next_nprobe), K(iter_cnt), K(nprobes_), K(heap_size));
         near_cid_vec_.reuse();
         near_cid_vec_dis_.reuse();
-        if (no_new_near_rowkeys) {
+        if (similarity_threshold_ != 0 && no_new_near_rowkeys) {
           iter_end = true;
           LOG_INFO("there are no new rowkeys in near_rowkeys after post filter, stop iterative filter", K(ret), K(no_new_near_rowkeys), K(near_rowkeys.count()), K(start_idx));
         } else if (! iterative_filter_ctx_.has_next_center()) {
@@ -3674,7 +3674,7 @@ int ObDASIvfPQScanIter::process_ivf_scan_pre(ObIAllocator &allocator, bool is_ve
             near_cid_vec_.reuse();
             near_cid_vec_dis_.reuse();
             is_first_scan = false;
-            if (no_new_near_rowkeys) {
+            if (similarity_threshold_ != 0 && no_new_near_rowkeys) {
               iter_end = true;
               LOG_INFO("there are no new rowkeys in near_rowkeys after post filter, stop iterative filter", K(ret), K(no_new_near_rowkeys), K(nearest_rowkey_heap.count()), K(start_idx), K(limit_k));
             } else if (! iterative_filter_ctx_.has_next_center()) {
