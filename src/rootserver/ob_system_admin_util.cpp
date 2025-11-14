@@ -835,6 +835,8 @@ int ObAdminSetConfig::update_tenant_config_(
   int ret = OB_SUCCESS;
   share::schema::ObSchemaGetterGuard schema_guard;
   const share::schema::ObSimpleTenantSchema *tenant_schema = NULL;
+  common::ObSEArray<std::pair<uint64_t, int64_t>, 10> versions;
+  std::pair<uint64_t, int64_t> pair;
   if (OB_UNLIKELY(!item.want_to_set_tenant_config_)) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("not expected to update tenant config", KR(ret), K(item));
@@ -871,15 +873,23 @@ int ObAdminSetConfig::update_tenant_config_(
                                                            new_version))) {
         LOG_WARN("failed to set tenant config version", K(tenant_id), KR(ret),
                  K(item), K(new_version));
-      } else if (GCTX.omt_->has_tenant(tenant_id) &&
-                 OB_FAIL(OTC_MGR.got_version(tenant_id, new_version))) {
-        LOG_WARN("failed to got version", K(tenant_id), KR(ret), K(item));
+      } else if (!GCTX.omt_->has_tenant(tenant_id)) {
+        LOG_WARN("tenant not exist", K(tenant_id), K(new_version), KR(ret), K(item));
       } else {
-        LOG_INFO("got new tenant config version", K(new_version), K(tenant_id), K(item));
+        pair.first = tenant_id;
+        pair.second = new_version;
+        if (OB_FAIL(versions.push_back(pair))) {
+          LOG_WARN("push back tenant config fail",
+                  "tenant_id", pair.first, "version", pair.second, K(ret));
+        } else {
+          LOG_INFO("got new tenant config version", K(new_version), K(tenant_id), K(item));
+        }
       }
     } // end for each tenant
     // try to broadcast config is changed to all server
     if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(OTC_MGR.got_versions(versions))) {
+      LOG_WARN("failed to got versions", K(ret));
     } else if (OB_FAIL(construct_arg_and_broadcast_tenant_config_map())) {
       LOG_WARN("fail to construct arg and broadcast tenant config map", KR(ret));
     }

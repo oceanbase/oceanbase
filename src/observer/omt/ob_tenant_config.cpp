@@ -26,9 +26,9 @@ ObTenantConfig::ObTenantConfig() : ObTenantConfig(OB_INVALID_TENANT_ID)
 }
 
 ObTenantConfig::ObTenantConfig(uint64_t tenant_id)
-    : tenant_id_(tenant_id), current_version_(INITIAL_TENANT_CONF_VERSION),
+    : tenant_id_(tenant_id), current_version_(INITIAL_TENANT_CONF_VERSION), version_(0), last_version_(0), update_local_(false),
       mutex_(),
-      update_task_(), system_config_(), config_mgr_(nullptr),
+      system_config_(), config_mgr_(nullptr),
       ref_(0L), is_deleting_(false), create_timestamp_(0L)
 {
 }
@@ -40,8 +40,6 @@ int ObTenantConfig::init(ObTenantConfigMgr *config_mgr)
   create_timestamp_ = ObTimeUtility::current_time();
   if (OB_FAIL(system_config_.init())) {
     LOG_ERROR("init system config failed", K(ret));
-  } else if (OB_FAIL(update_task_.init(config_mgr, this))) {
-    LOG_ERROR("init tenant config updata task failed", K_(tenant_id), K(ret));
   }
   return ret;
 }
@@ -103,109 +101,21 @@ int ObTenantConfig::read_config()
   return ret;
 }
 
-void ObTenantConfig::TenantConfigUpdateTask::runTimerTask()
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(config_mgr_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("invalid argument", K_(config_mgr), K(ret));
-  } else if (OB_ISNULL(tenant_config_)){
-    ret = OB_NOT_INIT;
-    LOG_WARN("invalid argument", K_(tenant_config), K(ret));
-  } else {
-    const int64_t saved_current_version = tenant_config_->current_version_;
-    const int64_t version = version_;
-    THIS_WORKER.set_timeout_ts(INT64_MAX);
-    if (tenant_config_->current_version_ >= version) {
-      ret = OB_ALREADY_DONE;
-    } else if (update_local_) {
-      tenant_config_->current_version_ = version;
-      if (OB_FAIL(tenant_config_->system_config_.clear())) {
-        LOG_WARN("Clear system config map failed", K(ret));
-      } else if (OB_FAIL(config_mgr_->update_local(tenant_config_->tenant_id_, version))) {
-        LOG_WARN("ObTenantConfigMgr update_local failed", K(ret), K(tenant_config_));
-      } else {
-        config_mgr_->notify_tenant_config_changed(tenant_config_->tenant_id_);
-      }
-
-      sql::ObFLTControlInfoManager mgr(tenant_config_->tenant_id_);
-      if (OB_FAIL(ret)) {
-        // do nothing
-      } else if (OB_FAIL(mgr.init())) {
-        LOG_WARN("fail to init", KR(ret));
-      } else if (OB_FAIL(mgr.apply_control_info())) {
-        LOG_WARN("fail to apply control info", KR(ret));
-      } else {
-        LOG_TRACE("apply control info", K(tenant_config_->tenant_id_));
-      }
-
-      if (OB_FAIL(ret)) {
-        int tmp_ret = OB_SUCCESS;
-        uint64_t tenant_id = tenant_config_->tenant_id_;
-        tenant_config_->current_version_ = saved_current_version;
-        share::schema::ObSchemaGetterGuard schema_guard;
-        share::schema::ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
-        bool tenant_dropped = false;
-        // 租户如果正在删除过程中,schema失效，则返回添加反复失败，会导致定时器任务超量
-        if (OB_ISNULL(schema_service)) {
-          tmp_ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("schema_service is null", K(ret), K(tmp_ret));
-        } else if (OB_SUCCESS != (tmp_ret = schema_service->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
-          LOG_WARN("fail to get schema guard", K(ret), K(tmp_ret), K(tenant_id));
-        } else if (OB_SUCCESS != (tmp_ret = schema_guard.check_if_tenant_has_been_dropped(tenant_id, tenant_dropped))) {
-          LOG_WARN("fail to check if tenant has been dropped", K(ret), K(tmp_ret), K(tenant_id));
-        } else {
-          if (tenant_dropped) {
-            LOG_INFO("tenant has dropped", K(tenant_id));
-          } else if ((ATOMIC_FAA(&running_task_count_, 1) < 2)) {
-            if (OB_FAIL(config_mgr_->schedule(*this, 0))) {
-              LOG_WARN("schedule task failed", K(tenant_id), K(ret));
-              ATOMIC_DEC(&running_task_count_);
-            } else if (tenant_config_->is_deleting_) {
-              LOG_INFO("tenant under deleting, cancel task", K(tenant_id));
-              if (OB_FAIL(config_mgr_->cancel(*this))) {
-                LOG_WARN("cancel task failed", K(tenant_id), K(ret));
-              } else {
-                ATOMIC_DEC(&running_task_count_);
-              }
-            } else {
-              LOG_INFO("Schedule a retry task!", K(tenant_id));
-            }
-          } else {
-            ATOMIC_DEC(&running_task_count_);
-            LOG_INFO("already 2 running task, temporory no need more", K(tenant_id));
-          }
-        }
-      } else {
-        const int64_t read_version = tenant_config_->system_config_.get_version();
-        LOG_INFO("loaded new tenant config",
-                 "tenant_id", tenant_config_->tenant_id_,
-                 "read_version", read_version,
-                 "old_version", saved_current_version,
-                 "current_version", tenant_config_->current_version_,
-                 "expected_version", version);
-        tenant_config_->print();
-      }
-    }
-  }
-
-  ATOMIC_DEC(&running_task_count_);
-}
-
 // 需要解决的场景：
 // 场景1：脚本中更新上百个参数，每个参数触发一次 got_version，如果不加以防范，
 //        会导致 timer 线程 32 个槽位被耗尽，导致参数更新丢失。
 // 场景2: heartbeat 始终广播相同的 version，只需要响应最多一次
-int ObTenantConfig::got_version(int64_t version, const bool remove_repeat)
+int ObTenantConfig::got_version(int64_t version, const bool remove_repeat, bool &need_update)
 {
   UNUSED(remove_repeat);
   int ret = OB_SUCCESS;
-  bool schedule_task = false;
   if (version < 0) {
-    update_task_.update_local_ = false;
-    schedule_task = true;
+    update_local_ = false;
+    need_update = true;
   } else if (0 == version) {
     LOG_DEBUG("root server restarting");
+  } else if (is_deleting_) {
+    LOG_INFO("tenant config is deleting, no need update", K(tenant_id_));
   } else if (current_version_ == version) {
   } else if (version < current_version_) {
     LOG_WARN("Local tenant config is newer than rs, weird", K_(current_version), K(version));
@@ -215,71 +125,16 @@ int ObTenantConfig::got_version(int64_t version, const bool remove_repeat)
     } else {
       LOG_INFO("Got new tenant config version", K_(tenant_id),
                 K_(current_version), K(version));
-      update_task_.update_local_ = true;
-      update_task_.version_ = version;
-      update_task_.scheduled_time_ = ObClockGenerator::getClock();
-      schedule_task = true;
+      update_local_ = true;
+      version_ = version;
+      need_update = true;
       mutex_.unlock();
-    }
-  }
-  if (schedule_task) {
-    bool schedule = true;
-    if (!config_mgr_->inited()) {
-      schedule = false;
-      ret = OB_NOT_INIT;
-      LOG_WARN("Couldn't update config because timer is NULL", K(ret));
-    }
-    if (schedule && !is_deleting_) {
-      // 为了避免极短时间内上百个变量被更新导致生成上百个update_task
-      // 占满 timer slots （32个），我们需要限定短时间内生成的 update_task
-      // 数量。考虑到每个 update_task 的任务都是同质的（不区分version，都是
-      // 负责把 parameter 刷到最新），我们只需要为这数百个变量更新生成
-      // 1个 update task 即可。但是，考虑到 update  task 执行过程中还会有
-      // 新的变量更新到来，为了让这些更新不丢失，需要另外在生成一个任务负责
-      // “扫尾”。整个时序如下图：
-      //
-      // t----> 时间增长的方向
-      // '~' 表示在 timer 队列中等待调度
-      // '-' 表示 task 被 timer 调度执行中
-      //
-      // case1: task3 在 task1 结束后进入 timer 队列
-      // |~~~~|--- task1 ----|
-      //            |~~~~~~~~|--- task2 ----|
-      //                      |~~~~~~~~~~~~~|--- task3 ----|
-      //
-      // case2: task3 在 task1 结束前就进入了 timer 队列
-      // |~~~~|--- task1 ----|
-      //            |~~~~~~~~|--- task2 ----|
-      //                    |~~~~~~~~~~~~~~~|--- task3 ----|
-      //
-      //
-
-      // running_task_count_ 可以
-      // 不甚精确地限定同一时刻只能有两个 update_task，要么两个都在
-      // 调度队列中等待，要么一个在运行另一个在调度队列中等待（上图 case1)。
-      // 之所以说“不甚精确”，是因为 running_task_count_-- 操作是在
-      // runTimerTask() 的结尾调用的，那么存在一种小概率的情况，某一很短的
-      // 时刻，有大于 2 个 update_task 在调度队列中等待（上图的case2）。
-      // 不过我们认为，这种情况可以接受，不会影响正确性。
-      if ((ATOMIC_FAA(&update_task_.running_task_count_, 1) < 2)) {
-        if (OB_FAIL(config_mgr_->schedule(update_task_, 0))) {
-          LOG_WARN("schedule task failed", K_(tenant_id), K(ret));
-          ret = OB_SUCCESS; // if task reach 32 limit, it has chance to retry later
-          ATOMIC_DEC(&update_task_.running_task_count_);
-        } else {
-          LOG_INFO("Schedule update tenant config task successfully!", K_(tenant_id));
-        }
-      } else {
-        ATOMIC_DEC(&update_task_.running_task_count_);
-        LOG_INFO("already 2 running task, temporory no need more", K_(tenant_id));
-      }
     }
   }
   return ret;
 }
 
-int ObTenantConfig::update_local(int64_t expected_version, ObMySQLProxy::MySQLResult &result,
-                                 bool save2file /* = true */, bool publish_special_config /* = true*/)
+int ObTenantConfig::update_local(int64_t expected_version, ObMySQLProxy::MySQLResult &result)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(system_config_.update(result))) {
@@ -296,12 +151,9 @@ int ObTenantConfig::update_local(int64_t expected_version, ObMySQLProxy::MySQLRe
   }
 
   if (OB_SUCC(ret)) {
+    DRWLock::WRLockGuard guard(config_mgr_->rwlock_);
     if (OB_FAIL(read_config())) {
       LOG_ERROR("Read tenant config failed", K_(tenant_id), K(ret));
-    } else if (save2file && OB_FAIL(config_mgr_->dump2file_unsafe())) {
-      LOG_WARN("Dump to file failed", K(ret));
-    } else if (publish_special_config && OB_FAIL(publish_special_config_after_dump())) {
-      LOG_WARN("publish special config after dump failed", K(tenant_id_), K(ret));
     }
     print();
   } else {
