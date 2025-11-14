@@ -1457,6 +1457,7 @@ int ObDASDomainIdMergeIter::check_table_need_add_part_key(int64_t table_id, int6
   ObIArray<uint64_t> *column_ids;
   const ObTableSchema *table_schema = nullptr;
   const ObTableSchema *domain_table_schema = nullptr;
+  int64_t trans_expr_cnt = OB_NOT_NULL(ctdef->trans_info_expr_) ? 1 : 0;
   if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(MTL_ID(), schema_guard))) {
     LOG_WARN("fail to get schema guard", K(ret));
   } else if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(), table_id, table_schema))) {
@@ -1470,7 +1471,7 @@ int ObDASDomainIdMergeIter::check_table_need_add_part_key(int64_t table_id, int6
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is null", K(ret), K(table_id));
   } else if (table_schema->is_table_with_hidden_pk_column() && table_schema->is_partitioned_table()) {
-    if (ctdef->result_output_.count() == domain_table_schema->get_column_count()) {
+    if (ctdef->result_output_.count() == (domain_table_schema->get_column_count() + trans_expr_cnt)) {
       part_key_num += table_schema->get_part_level();
     }
   }
