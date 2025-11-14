@@ -2073,20 +2073,33 @@ void ObTenant::update_token_usage()
     ObResourceGroup* group = nullptr;
     int64_t idle_us = 0;
     token_usage_check_ts_ = now;
+    int64_t idle_check_count = 0;
     DLIST_FOREACH_REMOVESAFE(wnode, workers_) {
       const auto w = static_cast<ObThWorker*>(wnode->get_data());
       idle_us += ATOMIC_SET(&w->idle_us_, 0);
+      idle_check_count ++;
     }
     DLIST_FOREACH_REMOVESAFE(wnode, nesting_workers_) {
       const auto w = static_cast<ObThWorker*>(wnode->get_data());
       idle_us += ATOMIC_SET(&w->idle_us_, 0);
+      idle_check_count ++;
     }
     while (OB_NOT_NULL(iter = group_map_.quick_next(iter))) {
       group = static_cast<ObResourceGroup*>(iter);
       DLIST_FOREACH_REMOVESAFE(wnode, group->workers_) {
         const auto w = static_cast<ObThWorker*>(wnode->get_data());
         idle_us += ATOMIC_SET(&w->idle_us_, 0);
+        idle_check_count ++;
       }
+      DLIST_FOREACH_REMOVESAFE(wnode, group->nesting_workers_) {
+        ObThWorker* const w = static_cast<ObThWorker*>(wnode->get_data());
+        idle_us += ATOMIC_SET(&w->idle_us_, 0);
+        idle_check_count ++;
+      }
+    }
+    if (idle_check_count != total_worker_cnt_) {
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "some threads are not counted in idle_us, which will cause cpu_usage is inaccurate",
+        K(idle_check_count), K(total_worker_cnt_), K(id_));
     }
     workers_lock_.unlock();
     const auto total_us = duration * total_worker_cnt_;
