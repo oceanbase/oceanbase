@@ -54,12 +54,18 @@ void ObTxLogCbPoolMgr::reset()
     SpinWLockGuard guard(pool_list_rw_lock_);
     pool_ptr = pool_list_.get_first();
 
-    if (pool_ptr == nullptr || pool_ptr == pool_list_.get_header()) {
-      pool_ptr == nullptr;
+    if (pool_ptr == pool_list_.get_header()) {
+      pool_ptr = nullptr;
     }
 
     if (pool_list_.get_size() <= 0 && gc_pool_list_.get_size() <= 0) {
-      ret = OBP_ITER_END;
+      if (pool_ptr != nullptr && pool_ptr != pool_list_.get_header()) {
+        TRANS_LOG(
+            ERROR,
+            "A valid log_cb_pool was found in an empty list, which may indicate a memory leak",
+           K(ret), K(pool_list_.get_size()), K(gc_pool_list_.get_size()), KPC(pool_ptr));
+      }
+      ret = OB_ITER_END;
     } else if (OB_TMP_FAIL(free_log_cb_pool_(pool_ptr))) {
       TRANS_LOG(WARN, "free a log cb pool failed", K(tmp_ret), KP(pool_ptr));
     }
@@ -308,10 +314,13 @@ int ObTxLogCbPoolMgr::adjust_log_cb_pool(const int64_t active_tx_cnt)
           curr, pool_list_, removed_cnt < actual_need_remove_cnt && iter_cnt < MAX_ITER_POOL_CNT)
       {
         if (curr->can_be_freed()) {
-          pool_list_.remove(curr);
           ATOMIC_BCAS(&idle_pool_ptr_, curr, nullptr);
-          free_log_cb_pool_(curr);
-          removed_cnt++;
+          if (OB_TMP_FAIL(free_log_cb_pool_(curr))) {
+            TRANS_LOG(WARN, "free a log_cb_pool failed", K(ret), K(iter_cnt), K(removed_cnt),
+                      KPC(curr));
+          } else {
+            removed_cnt++;
+          }
         }
         iter_cnt++;
       }
