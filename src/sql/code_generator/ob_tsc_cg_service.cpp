@@ -1366,6 +1366,13 @@ int ObTscCgService::extract_das_access_exprs(const ObLogTableScan &op,
       LOG_WARN("failed to remove generated column exprs", K(ret));
     }
   }
+
+  // extract match columns for vector adaptive scan on data table
+  if (scan_ctdef.ref_table_id_ == op.get_real_ref_table_id() && op.is_vec_adaptive_scan()) {
+    if (OB_FAIL(extract_match_columns_from_filters(op, access_exprs))) {
+      LOG_WARN("failed to extract match columns from filters", K(ret));
+    }
+  }
   LOG_TRACE("extract das access exprs", K(scan_table_id), K(op.get_real_ref_table_id()),
       K(op.get_index_back()), K(scan_ctdef.is_index_merge_), K(access_exprs));
   return ret;
@@ -5380,6 +5387,64 @@ int ObTscCgService::extract_doc_id_index_back_output_column_ids(
     LOG_WARN("get rowkey column ids failed", K(ret));
   } else if (OB_FAIL(append(output_cids, rowkey_cids))) {
     LOG_WARN("failed to append output column ids", K(ret));
+  }
+  return ret;
+}
+
+int ObTscCgService::extract_match_columns_from_filters(const ObLogTableScan &op,
+                                                        ObIArray<ObRawExpr*> &access_exprs)
+{
+  int ret = OB_SUCCESS;
+  const ObTextRetrievalInfo &tr_info = op.get_text_retrieval_info();
+
+  // extract columns from match_expr_
+  if (OB_NOT_NULL(tr_info.match_expr_)) {
+    const ObIArray<ObRawExpr*> &match_columns = tr_info.match_expr_->get_match_columns();
+    for (int64_t i = 0; OB_SUCC(ret) && i < match_columns.count(); ++i) {
+      if (OB_FAIL(add_var_to_array_no_dup(access_exprs, match_columns.at(i)))) {
+        LOG_WARN("failed to add match column from text_retrieval_info to access exprs", K(ret), K(i));
+      }
+    }
+  }
+
+  // extract columns from pushdown_match_filter_
+  if (OB_SUCC(ret) && OB_NOT_NULL(tr_info.pushdown_match_filter_)) {
+    ObArray<ObRawExpr *> filter_columns;
+    if (OB_FAIL(ObRawExprUtils::extract_column_exprs(tr_info.pushdown_match_filter_,
+                                                     filter_columns))) {
+      LOG_WARN("failed to extract column exprs from pushdown_match_filter in text_retrieval_info", K(ret));
+    } else if (OB_FAIL(append_array_no_dup(access_exprs, filter_columns))) {
+      LOG_WARN("failed to append pushdown_match_filter columns from text_retrieval_info to access exprs", K(ret));
+    }
+  }
+
+  // extract match columns directly from all filter exprs
+  if (OB_SUCC(ret)) {
+    const ObIArray<ObRawExpr*> &filter_exprs = op.get_filter_exprs();
+    for (int64_t i = 0; OB_SUCC(ret) && i < filter_exprs.count(); ++i) {
+      ObRawExpr *filter_expr = filter_exprs.at(i);
+      if (OB_ISNULL(filter_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null filter expr", K(ret), K(i));
+      } else if (filter_expr->is_match_against_expr()) {
+        // extract columns from match expression
+        ObMatchFunRawExpr *match_expr = static_cast<ObMatchFunRawExpr *>(filter_expr);
+        const ObIArray<ObRawExpr*> &match_columns = match_expr->get_match_columns();
+        for (int64_t j = 0; OB_SUCC(ret) && j < match_columns.count(); ++j) {
+          if (OB_FAIL(add_var_to_array_no_dup(access_exprs, match_columns.at(j)))) {
+            LOG_WARN("failed to add match column to access exprs", K(ret), K(i), K(j));
+          }
+        }
+      } else if (filter_expr->has_flag(CNT_MATCH_EXPR)) {
+        // extract columns from expressions containing match exprs recursively (e.g., match(...) > 0.5)
+        ObArray<ObRawExpr *> match_filter_columns;
+        if (OB_FAIL(ObRawExprUtils::extract_column_exprs(filter_expr, match_filter_columns))) {
+          LOG_WARN("failed to extract column exprs from filter containing match expr", K(ret), K(i));
+        } else if (OB_FAIL(append_array_no_dup(access_exprs, match_filter_columns))) {
+          LOG_WARN("failed to append match filter columns to access exprs", K(ret), K(i));
+        }
+      }
+    }
   }
   return ret;
 }

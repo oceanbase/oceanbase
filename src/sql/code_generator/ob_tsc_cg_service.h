@@ -319,6 +319,8 @@ private:
                                                ObIArray<ObRawExpr *> &access_exprs);
   int extract_doc_id_index_back_output_column_ids(const ObLogTableScan &op,
                                                   ObIArray<uint64_t> &output_cids);
+  int extract_match_columns_from_filters(const ObLogTableScan &op,
+                                         ObIArray<ObRawExpr*> &access_exprs);
   int filter_out_match_exprs(ObIArray<ObRawExpr*> &exprs);
   int flatten_and_filter_match_exprs(ObRawExpr *expr, ObIArray<ObRawExpr *> &res_exprs);
   int append_fts_relavence_project_col(
