@@ -414,8 +414,13 @@ void ObVectorIndexTabletContext::destroy_ivf_build_helper()
 {
   int ret = OB_SUCCESS;
   if (nullptr != helper_) {
-    if (OB_FAIL(ObPluginVectorIndexUtils::release_vector_index_build_helper(helper_))) {
-      LOG_ERROR("fail to release vector index adapter", KR(ret));
+    ObIAllocator *allocator = helper_->get_allocator();
+    if (OB_ISNULL(allocator)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null allocator", K(ret));
+    } else {
+      helper_->~ObIvfBuildHelper();
+      allocator->free(helper_);
     }
     helper_ = nullptr;
   }
