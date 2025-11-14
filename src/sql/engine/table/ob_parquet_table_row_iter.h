@@ -380,18 +380,23 @@ private:
                        ObPushdownFilterExecutor *root_filter, ObEvalCtx &eval_ctx);
       void rewind(const int64_t capacity);
       void reset();
-      int fill_ranges(const int64_t batch_size);
+      int fill_ranges(const int64_t batch_size, const bool has_no_skip_bits);
       int fill_ranges_one();
-      int fill_eager_ranegs(const ObBitVector &rg_bitmap,
+      int fill_eager_ranges(const ObBitVector &rg_bitmap,
                             const int64_t max_batch_size,
                             const int64_t start_idx,
-                            const int64_t capacity);
+                            const int64_t capacity,
+                            const bool has_no_skip_bits);
       ObIArray<int64_t> &get_skip_ranges() { return skip_ranges_; }
       ObIArray<int64_t> &get_read_ranges() { return read_ranges_; }
       bool is_end() const { return 0 == size_ || idx_ >= size_; }
       bool is_empty() const { return 0 == size_; }
       void check_cross_pages(const int64_t capacity);
       bool is_cross_page(const int64_t column_id) { return cross_pages_.at(column_id); }
+
+    private:
+      bool has_no_skip_bits();
+
     private:
       ObParquetTableRowIterator *iter_;
       int64_t capacity_;
