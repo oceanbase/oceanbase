@@ -392,7 +392,7 @@ int ObHybridVectorRefreshTask::get_embedded_table_column_ids(ObPluginVectorIndex
         vid_column_id = col_schema->get_column_id();
       } else if (col_schema->is_vec_hnsw_vector_column()) {
         vector_column_id = col_schema->get_column_id();
-      } else if (col_schema->is_part_key_column() && !col_schema->is_rowkey_column()) {
+      } else if (!col_schema->is_rowkey_column()) {
         part_key_column_ids.push_back(col_schema->get_column_id());
       }
     }
