@@ -63,7 +63,7 @@ public:
                                     SCN target_scn,
                                     ObIAllocator &allocator);
   static int release_vector_index_adapter(ObPluginVectorIndexAdaptor* &adapter);
-  static int release_vector_index_build_helper(ObIvfBuildHelper* &helper);
+  static int release_vector_index_build_helper(ObIvfBuildHelper* &helper, bool *fully_released = nullptr);
   static int release_ivf_cache_mgr(ObIvfCacheMgr* &mgr);
   static ObVectorIndexRecordType index_type_to_record_type(schema::ObIndexType type);
 
@@ -171,7 +171,7 @@ public:
                                   ObIndexType index_type,
                                   SCN target_scn,
                                   ObIAllocator &allocator);
-  static int erase_ivf_build_helper(ObLSID ls_id, const ObIvfHelperKey &key);
+  static int erase_ivf_build_helper(ObLSID ls_id, const ObIvfHelperKey &key, bool *fully_cleared = nullptr);
   static int get_mem_context_detail_info(ObPluginVectorIndexService *service,
                                          ObIArray<ObLSTabletPair> &complete_tablet_ids,
                                          ObIArray<ObLSTabletPair> &partial_tablet_ids,

@@ -1613,12 +1613,13 @@ void ObVecIndexAsyncTaskHandler::handle(void *task)
   if (OB_NOT_NULL(async_task)) {
     int tmp_ret = OB_SUCCESS;
     ObIAllocator *allocator = nullptr;
+    ObLSID ls_id = async_task->get_ls_id();
     async_task->~ObVecIndexIAsyncTask();
-    if (OB_TMP_FAIL(get_allocator_by_ls(async_task->get_ls_id(), allocator))) {
-      LOG_WARN("fail to get allocator by ls id", K(tmp_ret), K(async_task->get_ls_id()));
+    if (OB_TMP_FAIL(get_allocator_by_ls(ls_id, allocator))) {
+      LOG_WARN("fail to get allocator by ls id", K(tmp_ret), K(ls_id));
     } else if (OB_ISNULL(allocator)) {
       tmp_ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get null allocator", K(tmp_ret), K(async_task->get_ls_id()));
+      LOG_WARN("get null allocator", K(tmp_ret), K(ls_id));
     } else {
       allocator->free(async_task);
     }
@@ -1645,12 +1646,13 @@ void ObVecIndexAsyncTaskHandler::handle_drop(void *task)
     if (OB_NOT_NULL(async_task)) {
       int tmp_ret = OB_SUCCESS;
       ObIAllocator *allocator = nullptr;
+      ObLSID ls_id = async_task->get_ls_id();
       async_task->~ObVecIndexAsyncTask();
-      if (OB_TMP_FAIL(get_allocator_by_ls(async_task->get_ls_id(), allocator))) {
-        LOG_WARN("fail to get allocator by ls id", K(tmp_ret), K(async_task->get_ls_id()));
+      if (OB_TMP_FAIL(get_allocator_by_ls(ls_id, allocator))) {
+        LOG_WARN("fail to get allocator by ls id", K(tmp_ret), K(ls_id));
       } else if (OB_ISNULL(allocator)) {
         tmp_ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get null allocator", K(tmp_ret), K(async_task->get_ls_id()));
+        LOG_WARN("get null allocator", K(tmp_ret), K(ls_id));
       } else {
         allocator->free(async_task);
       }
@@ -1702,7 +1704,7 @@ int ObVecIndexIAsyncTask::init(
                                                                                  vec_idx_mgr_))) {
     if (OB_HASH_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
-    } else {
+  } else {
       LOG_WARN("fail to get vector index ls mgr", KR(ret), K(tenant_id_), K(ls_id_));
     }
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || (!ls_id.is_valid()) || OB_ISNULL(ctx))) {

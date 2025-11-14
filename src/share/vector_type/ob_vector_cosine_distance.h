@@ -41,10 +41,6 @@ OB_INLINE int cosine_calculate_normal(const float *a, const float *b, const int6
     ip += a[i] * b[i];
     abs_dist_a += a[i] * a[i];
     abs_dist_b += b[i] * b[i];
-    if (OB_UNLIKELY(0 != ::isinf(ip) || 0 != ::isinf(abs_dist_a) || 0 != ::isinf(abs_dist_b))) {
-      ret = OB_NUMERIC_OVERFLOW;
-      LIB_LOG(WARN, "value is overflow", K(ret), K(ip), K(abs_dist_a), K(abs_dist_b));
-    }
   }
   return ret;
 }
@@ -56,10 +52,6 @@ OB_INLINE int cosine_calculate_normal(const uint8_t *a, const uint8_t *b, const 
     ip += a[i] * b[i];
     abs_dist_a += a[i] * a[i];
     abs_dist_b += b[i] * b[i];
-    if (OB_UNLIKELY(0 != ::isinf(ip) || 0 != ::isinf(abs_dist_a) || 0 != ::isinf(abs_dist_b))) {
-      ret = OB_NUMERIC_OVERFLOW;
-      LIB_LOG(WARN, "value is overflow", K(ret), K(ip), K(abs_dist_a), K(abs_dist_b));
-    }
   }
   return ret;
 }
@@ -392,6 +384,116 @@ inline static int cosine_similarity(const float *a, const float *b, const int64_
   return cosine_similarity_normal(a, b, len, similarity);
 }
 )
+
+#if defined(__aarch64__)
+
+inline static float cosine_inner_product_neon(const float *x, const float *y, const int64_t len) {
+  float32x4_t sum0 = vdupq_n_f32(0.0f);
+  float32x4_t sum1 = vdupq_n_f32(0.0f);
+  float32x4_t sum2 = vdupq_n_f32(0.0f);
+  float32x4_t sum3 = vdupq_n_f32(0.0f);
+
+  int64_t i = 0;
+
+  for (; i + 15 < len; i += 16) {
+    float32x4x4_t a = vld1q_f32_x4(x + i);
+    float32x4x4_t b = vld1q_f32_x4(y + i);
+
+    sum0 = vfmaq_f32(sum0, a.val[0], b.val[0]);
+    sum1 = vfmaq_f32(sum1, a.val[1], b.val[1]);
+    sum2 = vfmaq_f32(sum2, a.val[2], b.val[2]);
+    sum3 = vfmaq_f32(sum3, a.val[3], b.val[3]);
+  }
+
+  if (i + 7 < len) {
+    float32x4x2_t a = vld1q_f32_x2(x + i);
+    float32x4x2_t b = vld1q_f32_x2(y + i);
+
+    sum0 = vfmaq_f32(sum0, a.val[0], b.val[0]);
+    sum1 = vfmaq_f32(sum1, a.val[1], b.val[1]);
+    i += 8;
+  }
+
+  if (i + 3 < len) {
+    float32x4_t a = vld1q_f32(x + i);
+    float32x4_t b = vld1q_f32(y + i);
+    sum0 = vfmaq_f32(sum0, a, b);
+    i += 4;
+  }
+
+  sum0 = vaddq_f32(sum0, sum1);
+  sum2 = vaddq_f32(sum2, sum3);
+  sum0 = vaddq_f32(sum0, sum2);
+
+  float result = vaddvq_f32(sum0);
+  for (; i < len; i++) {
+    result += x[i] * y[i];
+  }
+
+  return result;
+}
+
+inline static float cosine_norm_square_neon(const float *x, const int64_t len) {
+  float32x4_t sum0 = vdupq_n_f32(0.0f);
+  float32x4_t sum1 = vdupq_n_f32(0.0f);
+  float32x4_t sum2 = vdupq_n_f32(0.0f);
+  float32x4_t sum3 = vdupq_n_f32(0.0f);
+
+  int64_t i = 0;
+
+  for (; i + 15 < len; i += 16) {
+    float32x4x4_t a = vld1q_f32_x4(x + i);
+
+    sum0 = vfmaq_f32(sum0, a.val[0], a.val[0]);
+    sum1 = vfmaq_f32(sum1, a.val[1], a.val[1]);
+    sum2 = vfmaq_f32(sum2, a.val[2], a.val[2]);
+    sum3 = vfmaq_f32(sum3, a.val[3], a.val[3]);
+  }
+
+  if (i + 7 < len) {
+    float32x4x2_t a = vld1q_f32_x2(x + i);
+
+    sum0 = vfmaq_f32(sum0, a.val[0], a.val[0]);
+    sum1 = vfmaq_f32(sum1, a.val[1], a.val[1]);
+    i += 8;
+  }
+
+  if (i + 3 < len) {
+    float32x4_t a = vld1q_f32(x + i);
+    sum0 = vfmaq_f32(sum0, a, a);
+    i += 4;
+  }
+
+  sum0 = vaddq_f32(sum0, sum1);
+  sum2 = vaddq_f32(sum2, sum3);
+  sum0 = vaddq_f32(sum0, sum2);
+
+  float result = vaddvq_f32(sum0);
+  for (; i < len; i++) {
+    result += x[i] * x[i];
+  }
+
+  return result;
+}
+
+inline static int cosine_similarity_neon(const float *a, const float *b, const int64_t len, double &similarity)
+{
+  int ret = OB_SUCCESS;
+
+  double ip = cosine_inner_product_neon(a, b, len);
+  double norm_a_sq = cosine_norm_square_neon(a, len);
+  double norm_b_sq = cosine_norm_square_neon(b, len);
+
+  if (0 == norm_a_sq || 0 == norm_b_sq) {
+    ret = OB_ERR_NULL_VALUE;
+  } else {
+    similarity = ip / (sqrt(norm_a_sq) * sqrt(norm_b_sq));
+  }
+
+  return ret;
+}
+
+#endif
 
 } // common
 } // oceanbase

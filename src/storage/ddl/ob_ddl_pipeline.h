@@ -553,11 +553,12 @@ class ObIVFIndexBaseOperator : public ObVectorIndexBaseOperator
 public:
   explicit ObIVFIndexBaseOperator(ObPipeline *pipeline)
     : ObVectorIndexBaseOperator(pipeline),
-      helper_(nullptr)
+      table_id_(), helper_(nullptr)
   {}
   ~ObIVFIndexBaseOperator() = default;
   int init(const ObTabletID &tablet_id);
 protected:
+  ObTableID table_id_;
   ObIvfBuildHelper *helper_;
 };
 

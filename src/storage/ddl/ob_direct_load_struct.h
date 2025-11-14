@@ -646,6 +646,7 @@ public:
     const ObIArray<ObColumnSchemaItem> &col_array,
     const int64_t context_id) override;
   virtual void reset();
+  virtual void cancel() override;
   virtual int build_clusters(ObInsertMonitor* insert_monitor) = 0;
   virtual int is_empty(bool &empty) = 0;
   OB_INLINE int64_t get_context_id() { return context_id_; }

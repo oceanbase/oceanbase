@@ -24,6 +24,10 @@ int ObVectorCosineDistance<float>::cosine_distance_func(const float *a, const fl
     if (OB_ERR_NULL_VALUE != ret) {
       LIB_LOG(WARN, "failed to cal cosine similaity", K(ret));
     }
+  } else if (::isnan(similarity)) {
+      ret = OB_NUMERIC_OVERFLOW;
+      LIB_LOG(WARN, "cosine value is nan", K(ret), K(similarity));
+      FORWARD_USER_ERROR(OB_NUMERIC_OVERFLOW, "cosine value is nan");
   } else {
     distance = get_cosine_distance(similarity);
   }
@@ -59,6 +63,12 @@ int ObVectorCosineDistance<float>::cosine_similarity_func(const float *a, const 
       ret = common::specific::avx2::cosine_similarity(a, b, len, similarity);
     } else if (common::is_arch_supported(ObTargetArch::SSE42)) {
       ret = common::specific::sse42::cosine_similarity(a, b, len, similarity);
+    } else {
+      ret = common::specific::normal::cosine_similarity(a, b, len, similarity);
+    }
+  #elif defined(__aarch64__)
+    if (common::is_arch_supported(ObTargetArch::NEON)) {
+      ret = cosine_similarity_neon(a, b, len, similarity);
     } else {
       ret = common::specific::normal::cosine_similarity(a, b, len, similarity);
     }

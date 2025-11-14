@@ -619,8 +619,10 @@ int ObVectorIndexRefresher::do_rebuild() {
     is_hybrid_vector = domain_table_schema->is_hybrid_vec_index_log_type();
     if (!refresh_ctx_->idx_parameters_.empty() && OB_FAIL(ob_write_string(allocator, refresh_ctx_->idx_parameters_, idx_parameters))) {
       LOG_WARN("fail to write string", K(ret), K(refresh_ctx_->idx_parameters_));
-    } else if (!idx_parameters.empty()
-        && OB_FAIL(ObVectorIndexUtil::construct_rebuild_index_param(*base_table_schema, domain_table_schema->get_index_params(), idx_parameters, &allocator))) {
+    } else if (!idx_parameters.empty() && OB_FAIL(ObVectorIndexUtil::construct_rebuild_index_param(*base_table_schema,
+                                                                    domain_table_schema->get_index_params(),
+                                                                    idx_parameters, ObVectorIndexType::VIT_HNSW_INDEX,
+                                                                    &allocator))) {
       LOG_WARN("fail to construct rebuild index params", K(ret), K(refresh_ctx_->idx_parameters_));
     } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, refresh_ctx_->index_id_tb_id_, index_id_tb_schema))) {
       LOG_WARN("fail to get index id table schema", KR(ret), K(tenant_id), K(refresh_ctx_->index_id_tb_id_));
@@ -634,9 +636,19 @@ int ObVectorIndexRefresher::do_rebuild() {
         LOG_WARN("index id table is not available now", K(ret), K(index_id_tb_schema->get_index_status()));
       }
     }
-  } else if (domain_table_schema->is_vec_ivf_index() && !idx_parameters.empty()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not support rebuild ivf index with params", K(ret), K(idx_parameters));
+  } else if (domain_table_schema->is_vec_ivf_index()) {
+    int64_t vector_dim = 0;
+    if (OB_FAIL(ObVectorIndexUtil::get_vector_index_column_dim(*domain_table_schema, *base_table_schema, vector_dim))) {
+      LOG_WARN("fail to get vector index column dim", K(ret));
+    } else if (!refresh_ctx_->idx_parameters_.empty() && OB_FAIL(ob_write_string(allocator, refresh_ctx_->idx_parameters_, idx_parameters))) {
+      LOG_WARN("fail to write string", K(ret), K(refresh_ctx_->idx_parameters_));
+    } else if (!idx_parameters.empty() && OB_FAIL(ObVectorIndexUtil::construct_rebuild_index_param(*base_table_schema,
+                                                                    domain_table_schema->get_index_params(),
+                                                                    idx_parameters, ObVectorIndexType::VIT_IVF_INDEX,
+                                                                    &allocator,
+                                                                    vector_dim))) {
+      LOG_WARN("fail to construct rebuild index params", K(ret), K(refresh_ctx_->idx_parameters_));
+    }
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id,

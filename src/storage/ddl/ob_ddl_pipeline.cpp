@@ -244,7 +244,7 @@ int ObVectorIndexTabletContext::init_ivf_center_index(const ObDDLTableSchema &dd
       LOG_WARN("create ivf build helper failed", K(ret));
     } else {
       helper = static_cast<ObIvfFlatBuildHelper *>(helper_);
-      if (OB_FAIL(helper->init_kmeans_ctx(vec_dim_))) {
+      if (OB_FAIL(helper->init_ctx(vec_dim_))) {
         LOG_WARN("init kmeans ctx failed", K(ret));
       }
     }
@@ -270,7 +270,7 @@ int ObVectorIndexTabletContext::init_ivf_sq8_meta_index(const ObDDLTableSchema &
       LOG_WARN("create ivf build helper", K(ret));
     } else {
       helper = static_cast<ObIvfSq8BuildHelper *>(helper_);
-      if (OB_FAIL(helper->init_result_vectors(vec_dim_))) {
+      if (OB_FAIL(helper->init_ctx(vec_dim_))) {
         LOG_WARN("init result vectors failed", K(ret));
       }
     }
@@ -625,15 +625,19 @@ int ObIVFCenterRowIterator::get_next_row(
           LOG_WARN("unexpected outrow datum in ivf vector index",
                     K(ret), K(vec_res.length()), K(cid_str.length()), K(lob_inrow_threshold_));
         } else {
-          for (int64_t idx = rowkey_cnt_ + extra_rowkey_cnt; idx < request_cnt; ++idx) {
-            if (idx != center_id_col_idx_ && idx != center_vector_col_idx_) {
-              current_row_.storage_datums_[idx].set_null(); // set null part key
+          for (int64_t i = 0; i < current_row_.get_column_count(); ++i) {
+            if (center_vector_col_idx_ == i) {
+              current_row_.storage_datums_[center_vector_col_idx_].set_string(vec_res);
+            } else if (center_id_col_idx_ == i) {
+              current_row_.storage_datums_[center_id_col_idx_].set_string(cid_str);
+            } else if (rowkey_cnt_ == i) {
+              current_row_.storage_datums_[i].set_int(-snapshot_version_);
+            } else if (rowkey_cnt_ + 1 == i) {
+              current_row_.storage_datums_[i].set_int(0);
+            } else {
+              current_row_.storage_datums_[i].set_null(); // set part key null
             }
           }
-          current_row_.storage_datums_[center_vector_col_idx_].set_string(vec_res);
-          current_row_.storage_datums_[center_id_col_idx_].set_string(cid_str);
-          current_row_.storage_datums_[rowkey_cnt_].set_int(-snapshot_version_);
-          current_row_.storage_datums_[rowkey_cnt_ + 1].set_int(0);
           current_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
           datum_row = &current_row_;
           cur_row_pos_++;
@@ -872,6 +876,7 @@ int ObIVFIndexBaseOperator::init(const ObTabletID &tablet_id)
   } else if (OB_FAIL(get_ddl_tablet_context(tablet_context))) {
     LOG_WARN("get ddl tablet context failed", K(ret));
   } else {
+    table_id_ = tablet_context->vector_index_ctx_->table_id_;
     helper_ = tablet_context->vector_index_ctx_->helper_;
     is_inited_ = true;
   }
@@ -1521,7 +1526,7 @@ int ObIVFCenterIndexBuildOperator::execute(
     } else if (OB_ISNULL(executor = helper->get_kmeans_ctx())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected nullptr ctx", K(ret));
-    } else if (OB_FAIL(executor->build())) {
+    } else if (OB_FAIL(executor->build(nullptr /* insert monitor */))) {
       LOG_WARN("failed to build clusters", K(ret));
     } else {
       output_chunk = input_chunk;
@@ -1717,14 +1722,10 @@ int ObIVFPqIndexBuildOperator::execute(
   } else if (OB_FAIL(input_chunk.get_dag_tablet_context(tablet_context))) {
     LOG_WARN("get dag tablet context failed", K(ret));
   } else {
-    ObMultiKmeansExecutor *executor = nullptr;
     ObIvfPqBuildHelper *helper = nullptr;
     if (OB_FAIL(get_spec_ivf_helper<ObIvfPqBuildHelper>(helper_, helper))) {
       LOG_WARN("fail to get ivf flat helper", K(ret));
-    } else if (OB_ISNULL(executor = helper->get_kmeans_ctx())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected nullptr ctx", K(ret));
-    } else if (OB_FAIL(executor->build(nullptr/*insert_monitor*/))) {
+    } else if (OB_FAIL(helper->build(table_id_, tablet_id_, nullptr/*insert_monitor*/))) {
       LOG_WARN("failed to build clusters", K(ret));
     } else {
       output_chunk = input_chunk;

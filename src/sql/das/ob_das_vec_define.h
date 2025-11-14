@@ -86,6 +86,7 @@ public:
                ? false
                : ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER == vec_type_;
   }
+  inline bool is_post_without_filter() const { return ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER == vec_type_; }
   inline bool filter_in_hnsw_iter() const { return ObVecIndexType::VEC_INDEX_PRE == vec_type_ || ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER == vec_type_; }
   inline void set_can_use_vec_pri_opt(bool can_use_vec_pri_opt) {can_use_vec_pri_opt_ = can_use_vec_pri_opt;}
   inline bool can_use_vec_pri_opt() const { return can_use_vec_pri_opt_; }

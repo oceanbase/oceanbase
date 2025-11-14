@@ -194,7 +194,7 @@ int ObPluginVectorIndexMgr::erase_partial_adapter(ObTabletID tablet_id)
   return erase_partial_adapter_(tablet_id);
 }
 
-int ObPluginVectorIndexMgr::erase_ivf_build_helper(const ObIvfHelperKey &key)
+int ObPluginVectorIndexMgr::erase_ivf_build_helper(const ObIvfHelperKey &key, bool *fully_cleared)
 {
   int ret = OB_SUCCESS;
   ObIvfBuildHelper *helper_inst = nullptr;
@@ -204,8 +204,11 @@ int ObPluginVectorIndexMgr::erase_ivf_build_helper(const ObIvfHelperKey &key)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("helper inst is null", K(key), KR(ret));
   } else {
-    if (OB_FAIL(ObPluginVectorIndexUtils::release_vector_index_build_helper(helper_inst))) {
+    bool fully_released = false;
+    if (OB_FAIL(ObPluginVectorIndexUtils::release_vector_index_build_helper(helper_inst, &fully_released))) {
       LOG_WARN("fail to release ivf build helper", K(key), KR(ret));
+    } else if (nullptr != fully_cleared) {
+      *fully_cleared = fully_released;
     }
   }
   return ret;
@@ -1037,7 +1040,7 @@ int ObPluginVectorIndexService::create_ivf_build_helper(
   return ret;
 }
 
-int ObPluginVectorIndexService::erase_ivf_build_helper(ObLSID ls_id, const ObIvfHelperKey &key)
+int ObPluginVectorIndexService::erase_ivf_build_helper(ObLSID ls_id, const ObIvfHelperKey &key, bool *fully_cleared)
 {
   int ret = OB_SUCCESS;
   ObPluginVectorIndexMgr *ls_index_mgr = nullptr;
@@ -1052,8 +1055,8 @@ int ObPluginVectorIndexService::erase_ivf_build_helper(ObLSID ls_id, const ObIvf
   } else if (OB_ISNULL(ls_index_mgr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null vector index mgr for ls", KR(ret), K(ls_id));
-  } else if (OB_FAIL(ls_index_mgr->erase_ivf_build_helper(key))) {
-    LOG_WARN("failed to create ivf build helper", KR(ret), K(ls_id), K(key));
+  } else if (OB_FAIL(ls_index_mgr->erase_ivf_build_helper(key, fully_cleared))) {
+    LOG_WARN("failed to erase ivf build helper", KR(ret), K(ls_id), K(key));
   }
 
   return ret;
@@ -1116,6 +1119,8 @@ void ObPluginVectorIndexService::destroy()
       TG_DESTROY(embedding_tg_id_);
       embedding_tg_id_ = OB_INVALID_TG_ID;
     }
+    // destroy kmeans build task handler
+    kmeans_build_task_handler_.destroy();
   }
 }
 
@@ -1758,11 +1763,200 @@ int ObPluginVectorIndexMgr::create_ivf_cache_mgr(ObIAllocator &allocator,
   return ret;
 }
 
+int ObPluginVectorIndexService::process_pq_centroid_cache(ObIvfCentCache *cent_cache,
+                                                        ObIArray<float*> &aux_info,
+                                                        ObExprVecIvfCenterIdCache *expr_cache,
+                                                        int64_t m)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(cent_cache)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("cent_cache is null", K(ret));
+  } else {
+    int64_t pq_m = m;
+
+    if (pq_m <= 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Invalid m value for PQ cache", K(ret), K(pq_m));
+    } else {
+      uint64_t capacity = cent_cache->get_count();
+      LOG_DEBUG("Using m value for PQ centroid cache", K(pq_m), K(capacity), K(cent_cache->get_cent_vec_dim()));
+
+      uint64_t count_per_m = capacity / pq_m;
+
+      for (int64_t m_idx = 1; m_idx <= pq_m && OB_SUCC(ret); ++m_idx) {
+        for (uint64_t i = 1; i <= count_per_m && OB_SUCC(ret); ++i) {
+          float *centroid_vec = nullptr;
+          if (OB_FAIL(cent_cache->read_pq_centroid(m_idx, i, centroid_vec))) {
+            LOG_WARN("fail to read pq centroid", K(ret), K(m_idx), K(i));
+          } else if (OB_ISNULL(centroid_vec)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("read pq centroid returned null pointer", K(m_idx), K(i));
+          } else {
+            if (OB_FAIL(aux_info.push_back(centroid_vec))) {
+              LOG_WARN("failed to add pq centroid to aux_info array", K(ret), K(m_idx), K(i));
+            } else if (OB_NOT_NULL(expr_cache)) {
+              if (OB_FAIL(expr_cache->append_center(centroid_vec))) {
+                LOG_WARN("failed to add pq centroid to expression cache", K(ret), K(m_idx), K(i));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObPluginVectorIndexService::process_centroid_cache(ObIvfCentCache *cent_cache,
+                                                     ObIArray<float*> &aux_info,
+                                                     ObExprVecIvfCenterIdCache *expr_cache)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(cent_cache)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("cent_cache is null", K(ret));
+  } else {
+    uint64_t capacity = cent_cache->get_count();
+
+    for (uint64_t i = 1; i <= capacity && OB_SUCC(ret); ++i) {
+      float *centroid_vec = nullptr;
+      if (OB_FAIL(cent_cache->read_centroid(i, centroid_vec))) {
+        LOG_WARN("fail to read centroid", K(ret), K(i));
+      } else if (OB_ISNULL(centroid_vec)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("read centroid returned null pointer", K(i));
+      } else {
+        if (OB_FAIL(aux_info.push_back(centroid_vec))) {
+          LOG_WARN("failed to add centroid to aux_info array", K(ret), K(i));
+        } else if (OB_NOT_NULL(expr_cache)) {
+          if (OB_FAIL(expr_cache->append_center(centroid_vec))) {
+            LOG_WARN("failed to add centroid to expression cache", K(ret), K(i));
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObPluginVectorIndexService::get_ivf_aux_info_from_cache(
+  const uint64_t table_id,
+  const ObTabletID tablet_id,
+  const IvfCacheType cache_type,
+  ObIAllocator &allocator,
+  ObIArray<float*> &aux_info,
+  ObExprVecIvfCenterIdCache *expr_cache,
+  const ObTabletID cache_tablet_id,
+  int64_t m)
+{
+
+  int ret = OB_SUCCESS;
+  bool cache_hit = false;
+  ObIvfCacheMgrGuard cache_guard;
+  ObIvfCacheMgr *cache_mgr = nullptr;
+  // Get ls_id through LocationService
+  ObLSID ls_id;
+  bool location_cache_hit = false;
+  if (OB_FAIL(GCTX.location_service_->get(tenant_id_, cache_tablet_id, INT64_MAX, location_cache_hit, ls_id))) {
+    LOG_DEBUG("Failed to get ls_id by cache_tablet_id, will try original logic", K(ret), K(cache_tablet_id));
+  } else {
+
+    ObIvfCacheMgrKey cache_key(cache_tablet_id);
+
+    if (OB_FAIL(acquire_ivf_cache_mgr_guard(ls_id, cache_key, cache_guard))) {
+      ret = OB_CACHE_NOT_HIT;
+      LOG_DEBUG("Failed to acquire cache mgr guard, will try original logic", K(ret), K(ls_id), K(cache_key));
+    } else if (OB_ISNULL(cache_mgr = cache_guard.get_ivf_cache_mgr())) {
+      ret = OB_CACHE_NOT_HIT;
+      LOG_DEBUG("Cache mgr is null, will try original logic", K(ret));
+    } else {
+      LOG_DEBUG("Successfully acquired cache mgr, checking cache status", K(cache_tablet_id), K(ls_id),
+               "cache_mgr_key", cache_mgr->get_cache_mgr_key(), "cache_type", cache_type);
+
+      ObIvfCentCache *cent_cache = nullptr;
+      IvfCacheKey ivf_cache_key(cache_type);
+
+      if (OB_FAIL(cache_mgr->get_cache_node(ivf_cache_key, cent_cache))) {
+        // Failed to get cache node (including non-existence), fallback to original logic
+        if (ret == OB_HASH_NOT_EXIST) {
+          LOG_DEBUG("Cache node does not exist, will try original logic", K(table_id), K(cache_tablet_id), K(cache_type));
+        } else {
+          LOG_WARN("Failed to get cache node, will fallback to original logic", K(ret), K(table_id), K(cache_tablet_id), K(cache_type));
+        }
+        ret = OB_CACHE_NOT_HIT;
+      } else if (OB_ISNULL(cent_cache)) {
+        // Cache node is null, this is an abnormal situation
+        ret = OB_CACHE_NOT_HIT;
+        LOG_WARN("Cache node is null, will fallback to original logic", K(table_id), K(cache_tablet_id), K(cache_type));
+      } else {
+        if (cent_cache->is_completed()) {
+
+          RWLock::RLockGuard guard(cent_cache->get_lock());
+          uint64_t capacity = cent_cache->get_count();
+
+          LOG_DEBUG("Found completed cache, reading data", K(capacity), K(cache_type));
+
+          switch (cache_type) {
+            case IvfCacheType::IVF_PQ_CENTROID_CACHE: {
+              if (OB_FAIL(process_pq_centroid_cache(cent_cache, aux_info, expr_cache, m))) {
+                LOG_WARN("failed to process PQ centroid cache", K(ret));
+              }
+              break;
+            }
+            case IvfCacheType::IVF_CENTROID_CACHE: {
+              if (OB_FAIL(process_centroid_cache(cent_cache, aux_info, expr_cache))) {
+                LOG_WARN("failed to process centroid cache", K(ret));
+              }
+              break;
+            }
+            default: {
+              ret = OB_CACHE_NOT_HIT;
+              LOG_WARN("unsupported cache type", K(ret), K(cache_type));
+              break;
+            }
+          }
+
+          if (OB_SUCC(ret)) {
+            if (aux_info.count() > 0) {
+              cache_hit = true;
+              LOG_DEBUG("[IVF_CACHE_HIT] Successfully read centers from system cache", K(table_id), K(cache_tablet_id),
+                       K(aux_info.count()), "cache_type", cache_type,
+                       "cache_type_name", cache_type == IvfCacheType::IVF_CENTROID_CACHE ? "IVF_CENTROID" : "PQ_CENTROID");
+
+              if (OB_NOT_NULL(expr_cache)) {
+                expr_cache->set_cache_key(table_id, tablet_id);
+                LOG_DEBUG("System cache hit, expression cache updated with shallow copy", K(table_id), K(tablet_id), K(aux_info.count()));
+              }
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_ERROR("[IVF_CACHE_ERROR] Cache is completed but contains no data, possible corruption",
+                       K(ret), K(table_id), K(cache_tablet_id), K(cache_type), K(capacity),
+                       "cache_type_name", cache_type == IvfCacheType::IVF_CENTROID_CACHE ? "IVF_CENTROID" : "PQ_CENTROID");
+            }
+          } else {
+            ret = OB_CACHE_NOT_HIT;
+            LOG_DEBUG("[IVF_CACHE_MISS] Cache processing failed, will try original logic", K(ret), K(table_id), K(cache_tablet_id));
+          }
+        } else {
+          ret = OB_CACHE_NOT_HIT;
+          LOG_DEBUG("Cache not completed, will try original logic", K(ret), K(cache_type));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObPluginVectorIndexService::get_ivf_aux_info(
-    const uint64_t table_id,
-    const ObTabletID tablet_id,
-    ObIAllocator &allocator,
-    ObIArray<float*> &aux_info)
+  const uint64_t table_id,
+  const ObTabletID tablet_id,
+  ObIAllocator &allocator,
+  ObIArray<float*> &aux_info)
 {
   int ret = OB_SUCCESS;
   bool is_hidden_table = false;

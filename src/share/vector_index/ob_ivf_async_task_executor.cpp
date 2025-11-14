@@ -135,14 +135,16 @@ int ObIvfAsyncTaskExector::LoadTaskCallback::is_cache_writable(const ObIvfAuxTab
                                                        table_info.centroid_tablet_ids_[idx],
                                                        vec_param,
                                                        vec_param.dim_,
+                                                       IvfCacheType::IVF_CENTROID_CACHE,
                                                        is_writable))) {
     LOG_WARN("fail to check is cache writable", K(ret), K(table_info));
-  } else if (!is_writable && table_info.type_ == ObVectorIndexAlgorithmType::VIAT_IVF_PQ) {
+  } else if (!is_writable && table_info.type_ == ObVectorIndexAlgorithmType::VIAT_IVF_PQ && table_info.is_ivf_pq_centroid_table_valid()) {
     if (OB_FAIL(ObIvfCacheUtil::is_cache_writable(ls_->get_ls_id(),
                                                   table_info.centroid_table_id_,
                                                   table_info.centroid_tablet_ids_[idx],
                                                   vec_param,
                                                   vec_param.dim_,
+                                                  IvfCacheType::IVF_PQ_CENTROID_CACHE,
                                                   is_writable))) {
       LOG_WARN("fail to check is cache writable", K(ret), K(table_info));
     }
@@ -156,9 +158,9 @@ int ObIvfAsyncTaskExector::LoadTaskCallback::operator()(ObIvfAuxTableInfoEntry &
   const ObIvfAuxTableInfo &table_info = entry.second;
   ObIAllocator *allocator = task_opt_.get_allocator();
 
-  if (!table_info.is_valid()) {
+  if (!table_info.is_ivf_centroid_table_valid() && !table_info.is_ivf_pq_centroid_table_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid table info", K(ret), K(table_info));
+    LOG_WARN("neither ivf centroid table nor ivf pq centroid table is ready for construction", K(ret), K(table_info));
   }
 
   for (int i = 0; OB_SUCC(ret) && i < table_info.count(); ++i) {
@@ -394,7 +396,7 @@ int ObIvfAsyncTaskExector::record_aux_table_info(ObSchemaGetterGuard &schema_gua
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("table schema is null", KR(ret), K(aux_table_info), K_(tenant_id));
       } else if (index_table_schema.get_schema_version()
-                 < other_idx_tb_schema->get_schema_version()) {
+                 > other_idx_tb_schema->get_schema_version()) {
         need_record = false;
       }
     }

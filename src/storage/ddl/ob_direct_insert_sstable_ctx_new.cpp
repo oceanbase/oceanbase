@@ -623,7 +623,6 @@ int ObTenantDirectLoadMgr::close_tablet_direct_load_for_sn(
     }
   }
 
-
   // clean ivf build helper(if it is an IVF vector index task)
   if (OB_SUCC(ret) && handle.is_valid() && handle.get_obj() != nullptr) {
     ObTabletDirectLoadMgr *mgr = handle.get_obj();
@@ -632,23 +631,18 @@ int ObTenantDirectLoadMgr::close_tablet_direct_load_for_sn(
       LOG_INFO("Detected IVF vector index task from schema_item, cleaning up IVF helper",
                K(tablet_id), K(context_id));
       ObIvfHelperKey key(tablet_id, context_id);
-      if (OB_FAIL(ObPluginVectorIndexUtils::erase_ivf_build_helper(ls_id, key))) {
-        if (ret != OB_HASH_NOT_EXIST) {
-          LOG_WARN("failed to cleanup ivf build helper, potential memory leak",
-                    K(ret), K(ls_id), K(tablet_id), K(context_id));
-        } else {
-          ret = OB_SUCCESS;
-          LOG_DEBUG("ivf build helper not exist, already cleaned", K(ls_id), K(tablet_id), K(context_id));
+      bool fully_cleared = false;
+      if (OB_TMP_FAIL(ObPluginVectorIndexUtils::erase_ivf_build_helper(ls_id, key, &fully_cleared))) {
+        if (tmp_ret != OB_HASH_NOT_EXIST) {
+          LOG_WARN("failed to cleanup ivf build helper, potential memory leak", K(tmp_ret), K(ls_id), K(tablet_id), K(context_id));
         }
-      } else {
-        LOG_WARN("Successfully cleaned up ivf build helper after ddl task finish",
-                 K(ls_id), K(tablet_id), K(context_id));
+      } else if (!fully_cleared) {
+        LOG_INFO("ivf build helper not fully cleared after single cleanup", K(ret), K(ls_id), K(tablet_id), K(context_id));
       }
     } else {
       LOG_DEBUG("not an IVF vector index task, skip cleanup ivf build helper", K(tablet_id), K(context_id), K(is_ivf));
     }
   }
-
 
   ObBucketHashWLockGuard guard(bucket_lock_, exec_id.hash());
   if (OB_TMP_FAIL(tablet_exec_context_map_.erase_refactored(exec_id))) {

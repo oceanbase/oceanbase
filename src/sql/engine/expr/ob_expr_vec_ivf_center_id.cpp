@@ -91,7 +91,7 @@ int ObExprVecIVFCenterID::calc_center_id(
   } else if (OB_UNLIKELY(4 != expr.arg_cnt_) || OB_ISNULL(expr.args_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(expr), KP(expr.args_));
-  } else {;
+  } else {
     common::ObArenaAllocator tmp_allocator("IVFExprCID", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObTableID table_id;
     ObTabletID tablet_id;

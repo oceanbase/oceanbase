@@ -468,6 +468,7 @@ int ObDirectLoadMgrUtil::prepare_schema_item_for_vec_idx_data(
                                                           *data_table_schema,
                                                           index_type,
                                                           col_ids.at(0),
+                                                          false,
                                                           with_param_table_tid))) {
         LOG_WARN("fail to get spec vector delta buffer table id", K(ret), K(col_ids), KPC(data_table_schema));
       }

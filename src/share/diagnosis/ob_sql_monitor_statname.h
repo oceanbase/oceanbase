@@ -72,6 +72,9 @@ SQL_MONITOR_STATNAME_DEF(SSTABLE_INSERT_CG_ROW_COUNT, metric::Unit::INT, "sstabl
 SQL_MONITOR_STATNAME_DEF(VECTOR_INDEX_TASK_THREAD_POOL_COUNT, metric::Unit::INT, "vector index task thread pool count", "vector index task thread pool count", E_MAX, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(VECTOR_INDEX_TASK_TOTAL_COUNT, metric::Unit::INT, "vector index task total count", "vector index task total count", M_SUM, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(VECTOR_INDEX_TASK_FINISH_COUNT, metric::Unit::INT, "vector index task finish count", "vector index task finish count", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(VECTOR_INDEX_TASK_TABLET_COUNT, metric::Unit::INT, "vector index task tablet count", "vector index task tablet count", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(VECTOR_INDEX_TASK_KMEANS_INFO, metric::Unit::INT, "vector index task kmeans info", "vector index task kmeans info", E_MAX, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(VECTOR_INDEX_TASK_IMBALANCE, metric::Unit::INT, "vector index task imbalance factor", "vector index task imbalance factor", E_MAX, metric::Level::STANDARD)
 // Table Scan stat
 SQL_MONITOR_STATNAME_DEF(IO_READ_BYTES, metric::Unit::BYTES, "total io bytes read from disk", "total io bytes read from storage", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(SSSTORE_READ_BYTES, metric::Unit::BYTES, "total bytes processed by ssstore", "total bytes processed by ssstore", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)

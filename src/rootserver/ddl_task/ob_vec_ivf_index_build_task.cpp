@@ -270,14 +270,32 @@ int ObVecIVFIndexBuildTask::process()
       break;
     }
     case ObDDLTaskStatus::GENERATE_VEC_AUX_SCHEMA: {
-      if (OB_FAIL(prepare_aux_index_tables())) {
-        LOG_WARN("generate schema failed", K(ret), K(*this));
+      if ((data_format_version_ >= MOCK_DATA_VERSION_4_3_5_4 && data_format_version_ < DATA_VERSION_4_4_0_0) || data_format_version_ >= DATA_VERSION_4_5_0_0) {
+        if (OB_FAIL(prepare_rowkey_cid_table())) {
+          LOG_WARN("failed to prepare ivfflat rowkey cid table", K(ret));
+        }
+      } else {
+        if (OB_FAIL(prepare_aux_index_tables())) {
+          LOG_WARN("generate schema failed", K(ret), K(*this));
+        }
       }
       break;
     }
     case ObDDLTaskStatus::WAIT_VEC_AUX_TABLE_COMPLEMENT: {
       if (OB_FAIL(wait_aux_table_complement())) {
         LOG_WARN("wait aux table complement failed", K(ret), K(*this));
+      }
+      break;
+    }
+    case ObDDLTaskStatus::GENERATE_CID_VEC_SCHEMA: {
+      if (OB_FAIL(prepare_cid_vec_tables())) {
+        LOG_WARN("generate schema failed", K(ret), K(*this));
+      }
+      break;
+    }
+    case ObDDLTaskStatus::WAIT_CID_VEC_TABLE_COMPLEMENT: {
+      if (OB_FAIL(wait_aux_table_complement())) {
+        LOG_WARN("wait rowkey_cid table complement failed", K(ret), K(*this));
       }
       break;
     }
@@ -419,7 +437,9 @@ int ObVecIVFIndexBuildTask::check_ivfflat_aux_table_schema_exist(bool &is_all_ex
     if (status == ObDDLTaskStatus::GENERATE_PQ_CENTROID_TABLE_SCHEMA ||
         status == ObDDLTaskStatus::WAIT_PQ_CENTROID_TABLE_COMPLEMENT ||
         status == ObDDLTaskStatus::GENERATE_VEC_AUX_SCHEMA ||
-        status == ObDDLTaskStatus::WAIT_VEC_AUX_TABLE_COMPLEMENT) {
+        status == ObDDLTaskStatus::WAIT_VEC_AUX_TABLE_COMPLEMENT ||
+        status == ObDDLTaskStatus::GENERATE_CID_VEC_SCHEMA ||
+        status == ObDDLTaskStatus::WAIT_CID_VEC_TABLE_COMPLEMENT) {
       if (OB_INVALID_ID != centroid_table_id_) {
         if (OB_FAIL(schema_guard.check_table_exist(tenant_id_, centroid_table_id_, centroid_table_exist))) {
           LOG_WARN("check rowkey vid table exist failed", K(ret), K(tenant_id_), K(centroid_table_id_));
@@ -474,7 +494,9 @@ int ObVecIVFIndexBuildTask::check_ivfpq_aux_table_schema_exist(bool &is_all_exis
         }
       }
     } else if (status == ObDDLTaskStatus::GENERATE_VEC_AUX_SCHEMA ||
-               status == ObDDLTaskStatus::WAIT_VEC_AUX_TABLE_COMPLEMENT) {
+               status == ObDDLTaskStatus::WAIT_VEC_AUX_TABLE_COMPLEMENT ||
+               status == ObDDLTaskStatus::GENERATE_CID_VEC_SCHEMA ||
+               status == ObDDLTaskStatus::WAIT_CID_VEC_TABLE_COMPLEMENT) {
       if (OB_INVALID_ID != pq_centroid_table_id_) {
         if (OB_FAIL(schema_guard.check_table_exist(tenant_id_, pq_centroid_table_id_, pq_centroid_table_exist))) {
           LOG_WARN("check rowkey vid table exist failed", K(ret), K(tenant_id_), K(pq_centroid_table_id_));
@@ -533,7 +555,9 @@ int ObVecIVFIndexBuildTask::check_ivfsq8_aux_table_schema_exist(bool &is_all_exi
     } else if (status == ObDDLTaskStatus::GENERATE_PQ_CENTROID_TABLE_SCHEMA ||
                status == ObDDLTaskStatus::WAIT_PQ_CENTROID_TABLE_COMPLEMENT ||
                status == ObDDLTaskStatus::GENERATE_VEC_AUX_SCHEMA ||
-               status == ObDDLTaskStatus::WAIT_VEC_AUX_TABLE_COMPLEMENT) {
+               status == ObDDLTaskStatus::WAIT_VEC_AUX_TABLE_COMPLEMENT ||
+               status == ObDDLTaskStatus::GENERATE_CID_VEC_SCHEMA ||
+               status == ObDDLTaskStatus::WAIT_CID_VEC_TABLE_COMPLEMENT) {
       if (OB_INVALID_ID != centroid_table_id_) {
         if (OB_FAIL(schema_guard.check_table_exist(tenant_id_, centroid_table_id_, centroid_table_exist))) {
           LOG_WARN("check rowkey vid table exist failed", K(ret), K(tenant_id_), K(centroid_table_id_));
@@ -630,6 +654,18 @@ int ObVecIVFIndexBuildTask::get_next_status(share::ObDDLTaskStatus &next_status)
         break;
       }
       case ObDDLTaskStatus::WAIT_VEC_AUX_TABLE_COMPLEMENT: {
+        if ((data_format_version_ >= MOCK_DATA_VERSION_4_3_5_4 && data_format_version_ < DATA_VERSION_4_4_0_0) || data_format_version_ >= DATA_VERSION_4_5_0_0) {
+          next_status = ObDDLTaskStatus::GENERATE_CID_VEC_SCHEMA;
+        } else {
+          next_status = ObDDLTaskStatus::VALIDATE_CHECKSUM;
+        }
+        break;
+      }
+      case ObDDLTaskStatus::GENERATE_CID_VEC_SCHEMA: {
+        next_status = ObDDLTaskStatus::WAIT_CID_VEC_TABLE_COMPLEMENT;
+        break;
+      }
+      case ObDDLTaskStatus::WAIT_CID_VEC_TABLE_COMPLEMENT: {
         next_status = ObDDLTaskStatus::VALIDATE_CHECKSUM;
         break;
       }
@@ -708,6 +744,200 @@ int ObVecIVFIndexBuildTask::prepare_aux_table(
 /*
   cid_vector_table, rowkey_cid_table,
 */
+
+int ObVecIVFIndexBuildTask::prepare_ivfflat_rowkey_cid_table(bool &state_finished)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(prepare_aux_table(ObIndexType::INDEX_TYPE_VEC_IVFFLAT_ROWKEY_CID_LOCAL,
+                                      rowkey_cid_table_task_submitted_,
+                                      rowkey_cid_table_id_,
+                                      rowkey_cid_table_task_id_))) {
+    LOG_WARN("failed to prepare index id aux table", K(ret),
+        K(rowkey_cid_table_task_submitted_), K(rowkey_cid_table_id_));
+  }
+  if (OB_SUCC(ret) && rowkey_cid_table_task_submitted_) {
+    state_finished = true;
+  }
+  return ret;
+}
+
+int ObVecIVFIndexBuildTask::prepare_ivfpq_rowkey_cid_table(bool &state_finished)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(prepare_aux_table(ObIndexType::INDEX_TYPE_VEC_IVFPQ_ROWKEY_CID_LOCAL,
+                                      pq_rowkey_cid_table_task_submitted_,
+                                      pq_rowkey_cid_table_id_,
+                                      pq_rowkey_cid_table_task_id_))) {
+    LOG_WARN("failed to prepare index id aux table", K(ret),
+        K(pq_rowkey_cid_table_task_submitted_), K(pq_rowkey_cid_table_id_));
+  }
+  if (OB_SUCC(ret) && pq_rowkey_cid_table_task_submitted_) {
+    state_finished = true;
+  }
+  return ret;
+}
+
+int ObVecIVFIndexBuildTask::prepare_ivfsq8_rowkey_cid_table(bool &state_finished)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(prepare_aux_table(ObIndexType::INDEX_TYPE_VEC_IVFSQ8_ROWKEY_CID_LOCAL,
+                                      rowkey_cid_table_task_submitted_,
+                                      rowkey_cid_table_id_,
+                                      rowkey_cid_table_task_id_))) {
+    LOG_WARN("failed to prepare index id aux table", K(ret),
+        K(rowkey_cid_table_task_submitted_), K(rowkey_cid_table_id_));
+  }
+  if (OB_SUCC(ret) && rowkey_cid_table_task_submitted_) {
+    state_finished = true;
+  }
+  return ret;
+}
+
+int ObVecIVFIndexBuildTask::prepare_rowkey_cid_table()
+{
+  int ret = OB_SUCCESS;
+  bool state_finished = false;
+  const ObIndexType index_type = create_index_arg_.index_type_;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (ObDDLTaskStatus::GENERATE_VEC_AUX_SCHEMA != task_status_) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("task status not match", K(ret), K(task_status_));
+  } else if (share::schema::is_vec_ivfflat_index(index_type)) {
+    if (OB_FAIL(prepare_ivfflat_rowkey_cid_table(state_finished))) {
+      LOG_WARN("failed to prepare ivfflat rowkey cid table", K(ret));
+    }
+  } else if (share::schema::is_vec_ivfsq8_index(index_type)) {
+    if (OB_FAIL(prepare_ivfsq8_rowkey_cid_table(state_finished))) {
+      LOG_WARN("failed to prepare ivfsq8 rowkey cid table", K(ret));
+    }
+  } else if (share::schema::is_vec_ivfpq_index(index_type)) {
+    if (OB_FAIL(prepare_ivfpq_rowkey_cid_table(state_finished))) {
+      LOG_WARN("failed to prepare ivfpq rowkey cid table", K(ret));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected index type", K(ret), K(index_type));
+  }
+  if (state_finished && OB_SUCC(ret)) {
+    ObDDLTaskStatus next_status;
+    if (OB_FAIL(get_next_status(next_status))) {
+      LOG_WARN("failed to get next status", K(ret));
+    } else {
+      (void)switch_status(next_status, true, ret);
+      LOG_INFO("generate schema finished", K(ret), K(parent_task_id_), K(task_id_),
+          K(*this));
+    }
+  } else if (OB_FAIL(ret) && !ObIDDLTask::in_ddl_retry_white_list(ret)) {
+    (void)switch_status(ObDDLTaskStatus::FAIL, false, ret);  // allow clean up
+    LOG_INFO("prepare failed", K(ret), K(parent_task_id_), K(task_id_), K(*this));
+    ret = OB_SUCCESS;
+  }
+  return ret;
+}
+
+int ObVecIVFIndexBuildTask::prepare_ivfflat_cid_vec_tables(bool &state_finished)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(prepare_aux_table(ObIndexType::INDEX_TYPE_VEC_IVFFLAT_CID_VECTOR_LOCAL,
+                                      cid_vector_table_task_submitted_,
+                                      cid_vector_table_id_,
+                                      cid_vector_table_task_id_))) {
+    LOG_WARN("failed to prepare cid vector aux table", K(ret),
+        K(cid_vector_table_task_submitted_), K(cid_vector_table_id_));
+  }
+  if (OB_SUCC(ret) && cid_vector_table_task_submitted_) {
+    state_finished = true;
+  }
+  return ret;
+}
+
+/*
+  cid_vector_table, rowkey_cid_table
+*/
+int ObVecIVFIndexBuildTask::prepare_ivfsq8_cid_vec_tables(bool &state_finished)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(prepare_aux_table(ObIndexType::INDEX_TYPE_VEC_IVFSQ8_CID_VECTOR_LOCAL,
+                                      cid_vector_table_task_submitted_,
+                                      cid_vector_table_id_,
+                                      cid_vector_table_task_id_))) {
+    LOG_WARN("failed to prepare cid vector aux table", K(ret),
+        K(cid_vector_table_task_submitted_), K(cid_vector_table_id_));
+  }
+  if (OB_SUCC(ret) && cid_vector_table_task_submitted_) {
+    state_finished = true;
+  }
+  return ret;
+}
+
+/*
+  pq_code_table, pq_rowkey_cid_table
+*/
+int ObVecIVFIndexBuildTask::prepare_ivfpq_cid_vec_tables(bool &state_finished)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(prepare_aux_table(ObIndexType::INDEX_TYPE_VEC_IVFPQ_CODE_LOCAL,
+                                      pq_code_table_task_submitted_,
+                                      pq_code_table_id_,
+                                      pq_code_table_task_id_))) {
+    LOG_WARN("failed to prepare pq code aux table", K(ret),
+        K(pq_code_table_task_submitted_), K(pq_code_table_id_));
+  }
+  if (OB_SUCC(ret) &&
+      pq_code_table_task_submitted_) {
+    state_finished = true;
+  }
+  return ret;
+}
+
+int ObVecIVFIndexBuildTask::prepare_cid_vec_tables()
+{
+  int ret = OB_SUCCESS;
+  bool state_finished = false;
+
+  const ObIndexType index_type = create_index_arg_.index_type_;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (ObDDLTaskStatus::GENERATE_CID_VEC_SCHEMA != task_status_) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("task status not match", K(ret), K(task_status_));
+  } else if (share::schema::is_vec_ivfflat_index(index_type)) {
+    if (OB_FAIL(prepare_ivfflat_cid_vec_tables(state_finished))) {
+      LOG_WARN("fail to prepare aux ivfflat index table", K(ret));
+    }
+  } else if (share::schema::is_vec_ivfsq8_index(index_type)) {
+    if (OB_FAIL(prepare_ivfsq8_cid_vec_tables(state_finished))) {
+      LOG_WARN("fail to prepare aux ivfsq8 index table", K(ret));
+    }
+  } else if (share::schema::is_vec_ivfpq_index(index_type)) {
+    if (OB_FAIL(prepare_ivfpq_cid_vec_tables(state_finished))) {
+      LOG_WARN("fail to prepare aux ivfpq index table", K(ret));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected index type", K(ret), K(index_type));
+  }
+  DEBUG_SYNC(BUILD_VECTOR_INDEX_PREPARE_AUX_INDEX);
+  if (state_finished && OB_SUCC(ret)) {
+    ObDDLTaskStatus next_status;
+    if (OB_FAIL(get_next_status(next_status))) {
+      LOG_WARN("failed to get next status", K(ret));
+    } else {
+      (void)switch_status(next_status, true, ret);
+      LOG_INFO("generate schema finished", K(ret), K(parent_task_id_), K(task_id_),
+          K(*this));
+    }
+  } else if (OB_FAIL(ret) && !ObIDDLTask::in_ddl_retry_white_list(ret)) {
+    (void)switch_status(ObDDLTaskStatus::FAIL, false, ret);  // allow clean up
+    LOG_INFO("prepare failed", K(ret), K(parent_task_id_), K(task_id_), K(*this));
+    ret = OB_SUCCESS;
+  }
+  return ret;
+}
+
 int ObVecIVFIndexBuildTask::prepare_aux_ivfflat_index_tables(bool &state_finished)
 {
   int ret = OB_SUCCESS;
@@ -1048,7 +1278,8 @@ int ObVecIVFIndexBuildTask::wait_aux_table_complement()
   } else if (ObDDLTaskStatus::WAIT_SQ_META_TABLE_COMPLEMENT != task_status_ &&
              ObDDLTaskStatus::WAIT_CENTROID_TABLE_COMPLEMENT != task_status_ &&
              ObDDLTaskStatus::WAIT_PQ_CENTROID_TABLE_COMPLEMENT != task_status_ &&
-             ObDDLTaskStatus::WAIT_VEC_AUX_TABLE_COMPLEMENT != task_status_) {
+             ObDDLTaskStatus::WAIT_VEC_AUX_TABLE_COMPLEMENT != task_status_ &&
+             ObDDLTaskStatus::WAIT_CID_VEC_TABLE_COMPLEMENT != task_status_) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("task status not match", K(ret), K(task_status_));
   } else {
@@ -1656,6 +1887,24 @@ int ObVecIVFIndexBuildTask::collect_longops_stat(ObLongopsValue &value)
                                   MAX_LONG_OPS_MESSAGE_LENGTH,
                                   pos,
                                   "STATUS: WAIT_VEC_AUX_TABLE_COMPLEMENT"))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      break;
+    }
+    case ObDDLTaskStatus::GENERATE_CID_VEC_SCHEMA: {
+      if (OB_FAIL(databuff_printf(stat_info_.message_,
+                                  MAX_LONG_OPS_MESSAGE_LENGTH,
+                                  pos,
+                                  "STATUS: GENERATE_CID_VEC_SCHEMA"))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      break;
+    }
+    case ObDDLTaskStatus::WAIT_CID_VEC_TABLE_COMPLEMENT: {
+      if (OB_FAIL(databuff_printf(stat_info_.message_,
+                                  MAX_LONG_OPS_MESSAGE_LENGTH,
+                                  pos,
+                                  "STATUS: WAIT_CID_VEC_TABLE_COMPLEMENT"))) {
         LOG_WARN("failed to print", K(ret));
       }
       break;
