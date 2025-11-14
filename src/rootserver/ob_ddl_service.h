@@ -1513,7 +1513,8 @@ private:
                               common::ObMySQLTransaction &trans,
                               const share::schema::ObSchemaOperationType operation_type,
                               const common::ObString &ddl_stmt_str);
-  int check_is_only_add_index_on_empty_table(ObMySQLTransaction &trans,
+  int check_is_only_add_index_on_empty_table(ObSchemaGetterGuard &schema_guard,
+                                             ObMySQLTransaction &trans,
                                              const ObString &database_name,
                                              const share::schema::ObTableSchema &table_schema,
                                              const obrpc::ObAlterTableArg &alter_table_arg,

@@ -420,6 +420,8 @@ public:
   int get_sequence_schema(const uint64_t sequence_id,
                           const ObSequenceSchema *&sequence_schema);
 
+  int get_sys_variable_schema(const ObSysVariableSchema *&sys_variable_schema);
+
   /* -------------- interfaces with cache end ---------------*/
 private:
   int check_inner_stat_();

@@ -979,3 +979,17 @@ int ObLatestSchemaGuard::get_trigger_info(const uint64_t trigger_id,
   }
   return ret;
 }
+
+int ObLatestSchemaGuard::get_sys_variable_schema(const ObSysVariableSchema *&sys_variable_schema)
+{
+  int ret = OB_SUCCESS;
+  sys_variable_schema = NULL;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(get_schema_(SYS_VARIABLE_SCHEMA, tenant_id_, tenant_id_/*schema_id*/, sys_variable_schema))) {
+    LOG_WARN("fail to get tenant system variable", KR(ret), K_(tenant_id), KPC(sys_variable_schema));
+  } else if (OB_ISNULL(sys_variable_schema)) {
+    LOG_INFO("sys_variable_schema is null", KR(ret), K_(tenant_id));
+  }
+  return ret;
+}

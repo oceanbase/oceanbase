@@ -609,6 +609,7 @@ public:
       share::schema::ObSchemaGetterGuard *&src_tenant_schema_guard,
       share::schema::ObSchemaGetterGuard *&dst_tenant_schema_guard);
   static int check_table_empty(
+      const share::schema::ObSysVariableSchema &sys_var_schema,
       const ObString &database_name,
       const share::schema::ObTableSchema &table_schema,
       const ObSQLMode sql_mode,

@@ -61,21 +61,24 @@ public:
       worker_timeout_(OB_DEFAULT_SESSION_TIMEOUT),
       query_timeout_(OB_DEFAULT_SESSION_TIMEOUT), trx_timeout_(OB_DEFAULT_SESSION_TIMEOUT),
       sql_mode_(0), tz_info_wrap_(), ddl_info_(), is_load_data_exec_(false), nls_formats_{},
-      use_external_session_(false), consumer_group_id_(0) {};
+      use_external_session_(false), consumer_group_id_(0),
+      name_case_mode_(OB_NAME_CASE_INVALID), select_index_enabled_(false) {};
   ObInnerSQLTransmitArg(common::ObAddr ctrl_svr, common::ObAddr runner_svr,
                         uint64_t tenant_id, uint64_t conn_id, common::ObString inner_sql,
                         InnerSQLOperationType operation_type, bool is_oracle_mode,
                         const int64_t source_cluster_id, const int64_t worker_timeout,
                         const int64_t query_timeout, const int64_t trx_timeout,
                         ObSQLMode sql_mode, ObSessionDDLInfo ddl_info, const bool is_load_data_exec,
-                        const bool use_external_session, const int64_t consumer_group_id = 0)
+                        const bool use_external_session, const int64_t consumer_group_id,
+                        const ObNameCaseMode &name_case_mode, const bool select_index_enabled)
         : ctrl_svr_(ctrl_svr), runner_svr_(runner_svr),
           tenant_id_(tenant_id), conn_id_(conn_id), inner_sql_(inner_sql),
           operation_type_(operation_type), is_oracle_mode_(is_oracle_mode),
           source_cluster_id_(source_cluster_id), worker_timeout_(worker_timeout),
           query_timeout_(query_timeout), trx_timeout_(trx_timeout), sql_mode_(sql_mode),
           tz_info_wrap_(), ddl_info_(ddl_info), is_load_data_exec_(is_load_data_exec), nls_formats_{},
-          use_external_session_(use_external_session), consumer_group_id_(consumer_group_id) {}
+          use_external_session_(use_external_session), consumer_group_id_(consumer_group_id),
+          name_case_mode_(name_case_mode), select_index_enabled_(select_index_enabled) {}
   ~ObInnerSQLTransmitArg() {}
 
   const common::ObAddr &get_ctrl_svr() const { return ctrl_svr_; }
@@ -146,6 +149,8 @@ public:
   bool get_is_load_data_exec() const { return is_load_data_exec_; }
   const ObString *get_nls_formats() const { return nls_formats_; }
   bool get_use_external_session() const { return use_external_session_; }
+  const ObNameCaseMode &get_name_case_mode() const { return name_case_mode_; }
+  const bool &get_select_index_enabled() const { return select_index_enabled_; }
 
   TO_STRING_KV(K_(ctrl_svr),
                K_(runner_svr),
@@ -164,7 +169,9 @@ public:
                K_(is_load_data_exec),
                K_(nls_formats),
                K_(use_external_session),
-               K_(consumer_group_id));
+               K_(consumer_group_id),
+               K_(name_case_mode),
+               K_(select_index_enabled));
 
 private:
   common::ObAddr ctrl_svr_;
@@ -185,6 +192,8 @@ private:
   common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
   bool use_external_session_;
   uint64_t consumer_group_id_;
+  ObNameCaseMode name_case_mode_;
+  bool select_index_enabled_;
 };
 
 class ObInnerSQLTransmitResult
