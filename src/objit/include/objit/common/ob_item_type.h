@@ -1058,6 +1058,9 @@ typedef enum ObItemType
   T_FUN_SYS_SDO_ANYINTERACT = 2087,
   T_FUN_SYS_SDO_CONTAINS = 2088,
   T_FUN_SYS_DATE_TRUNC = 2089,
+  T_FUN_ANY = 2090,
+  T_FUN_ARBITRARY = 2091,
+
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
@@ -1104,6 +1107,8 @@ typedef enum ObItemType
   T_WIN_FUN_LAG = 3171,
   T_WIN_FUN_AVG = 3172,
   T_WIN_FUN_RATIO_TO_REPORT = 3173,
+  T_WIN_FUN_LEAD_IN_FRAME = 3174,
+  T_WIN_FUN_LAG_IN_FRAME = 3175,
   T_TABLET_AUTOINC_NEXTVAL = 3266, // hidden_pk for heap table
 
   ///< @note values of the following symbols are insiginificant
