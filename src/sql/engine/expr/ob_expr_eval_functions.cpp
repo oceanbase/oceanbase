@@ -1936,6 +1936,10 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprOracleRpad::calc_oracle_rpad_expr_vector,               /* 290 */
   NULL, // ObExprLeft::calc_left_vector,                                 /* 291 */
   NULL, // ObExprRight::calc_right_vector,                               /* 292 */
+  NULL, //ObExprAcos::eval_double_acos_vector,                           /* 293 */
+  NULL, //ObExprAcos::eval_number_acos_vector,                           /* 294 */
+  NULL, //ObExprAsin::eval_double_asin_vector,                           /* 295 */
+  NULL, //ObExprAsin::eval_number_asin_vector,                           /* 296 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
