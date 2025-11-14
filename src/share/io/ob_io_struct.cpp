@@ -3283,9 +3283,7 @@ int ObIOCallbackManager::enqueue_callback(ObIORequest &req)
     } else {
       DRWLock::RDLockGuard guard(lock_);
       ObIOCallback *cb = req.get_callback();
-      const int64_t idx1 = get_callback_queue_idx_(cb->get_type());
-      const int64_t idx2 = get_callback_queue_idx_(cb->get_type());
-      const int64_t queue_idx = runners_.at(idx1)->get_queue_count() < runners_.at(idx2)->get_queue_count() ? idx1 : idx2;
+      const int64_t queue_idx = get_callback_queue_idx_(cb->get_type());
       if (OB_FAIL(runners_.at(queue_idx)->push(req))) {
         LOG_WARN("push callback failed", K(ret), K(req));
       }
@@ -3300,10 +3298,21 @@ int64_t ObIOCallbackManager::get_callback_queue_idx_(const ObIOCallbackType cb_t
   const int64_t active_thread_count = min(config_thread_count_, runners_.count());
   int64_t atomic_write_cb_thread_idx = (active_thread_count - active_thread_count / ATOMIC_WRITE_CALLBACK_THREAD_RATIO);
   atomic_write_cb_thread_idx = min(atomic_write_cb_thread_idx, active_thread_count - 1);
-  if (is_atomic_write_callback(cb_type)) {
-    idx = ObRandom::rand(atomic_write_cb_thread_idx, active_thread_count - 1);
-  } else {
-    idx = ObRandom::rand(0, max(0, atomic_write_cb_thread_idx - 1));
+  int64_t lower = is_atomic_write_callback(cb_type) ? atomic_write_cb_thread_idx : 0;
+  int64_t upper = is_atomic_write_callback(cb_type) ? active_thread_count - 1 : max(0, atomic_write_cb_thread_idx - 1);
+  int64_t nway = upper - lower + 1;
+  int64_t start = ObRandom::rand(0, nway - 1);
+  int64_t min_queue_count = INT64_MAX;
+  for (int i = 0; i < nway; ++i) {
+    int64_t tmp_idx = (start + i) % nway + lower;
+    int64_t queue_count = runners_.at(tmp_idx)->get_queue_count();
+    if (0 == queue_count) {
+      idx = tmp_idx;
+      break;
+    } else if (queue_count < min_queue_count) {
+      min_queue_count = queue_count;
+      idx = tmp_idx;
+    }
   }
   return idx;
 }
