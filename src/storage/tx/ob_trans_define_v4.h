@@ -282,6 +282,7 @@ public:
   ObTransID tx_id_;
   ObTxSEQ scn_;
   bool elr_; // whether allowed read elr
+  bool force_strongly_read_;
 public:
   TO_STRING_KV(K_(version), K_(tx_id), K_(scn));
   ObTxSnapshot();
