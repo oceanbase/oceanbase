@@ -307,7 +307,7 @@ int ObPartitionMergePolicy::get_result_by_snapshot(
   } else if (OB_ISNULL(base_table = static_cast<ObSSTable*>(
       table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(true/*last*/)))) {
     ret = OB_ENTRY_NOT_EXIST;
-    LOG_ERROR("major sstable not exist", K(ret), KPC(table_store_wrapper.get_member()));
+    LOG_WARN("major sstable not exist", K(ret), KPC(table_store_wrapper.get_member()));
   } else if (OB_FAIL(result.handle_.add_sstable(base_table, table_store_wrapper.get_meta_handle()))) {
     LOG_WARN("failed to add base_table to result", K(ret));
   } else if (base_table->get_snapshot_version() >= snapshot) {
