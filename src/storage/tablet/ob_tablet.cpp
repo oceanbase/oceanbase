@@ -6718,7 +6718,8 @@ int ObTablet::start_direct_load_task_for_idem(ObLSHandle &ls_handle)
     LOG_WARN("ls handle is not valid", K(ret));
   } else if (OB_FAIL(fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
-  } else if (nullptr != table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(false/*first*/)) {
+  } else if (nullptr != table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(false/*first*/) ||
+             tablet_meta_.table_store_flag_.with_major_sstable()) {
     // the major sstable has already existed.
     LOG_DEBUG("no need to reload tablet direct load task", K(ret), K(tablet_meta_));
   } else if (OB_FAIL(get_ddl_kv_mgr(ddl_kv_mgr_handle, true /* try create */))) {

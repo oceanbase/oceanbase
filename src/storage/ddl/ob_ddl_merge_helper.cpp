@@ -753,6 +753,8 @@ int ObSNDDLMergeHelperV2::assemble_sstable(ObDDLTabletMergeDagParamV2 &merge_par
     } else {
       LOG_WARN("get ddl kv mgr failed", K(ret), K(merge_param));
     }
+  } else if (merge_param.for_major_ && OB_FAIL(ddl_kv_mgr_handle.get_obj()->remove_idempotence_checker())) { /* keep remove before release ddl kv, to make sure idem checker will be released with ddl kv */
+    LOG_WARN("failed to remove idem checker", K(ret));
   } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->release_ddl_kvs(ObDDLKVType::DDL_KV_FULL, merge_param.for_major_ ? share::SCN::max_scn() : merge_param.rec_scn_))) {
     LOG_WARN("release all ddl kv failed", K(ret), K(merge_param));
   }
