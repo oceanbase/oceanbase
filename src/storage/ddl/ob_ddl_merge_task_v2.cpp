@@ -35,6 +35,23 @@ namespace oceanbase
 namespace storage
 {
 
+int ObDDLMergeBaseTask::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(inner_process())) {
+    LOG_WARN("failed to inner process", K(ret));
+  }
+
+  if (OB_FAIL(ret) && nullptr != fail_cb_) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(fail_cb_->process(ret))) {
+      LOG_WARN("failed to call fail callback", K(tmp_ret));
+    }
+  }
+  return ret;
+}
+
+
 int ObDDLMergeGuardTask::init(const bool for_replay, const ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
@@ -156,14 +173,14 @@ void ObDDLMergeGuardTask::task_debug_info_to_string(char *buf, const int64_t buf
 }
 
 ObDDLMergePrepareTask::ObDDLMergePrepareTask():
-  ObITask(ObITaskType::TASK_TYPE_DDL_MERGE_PREPARE),
+  ObDDLMergeBaseTask(ObITaskType::TASK_TYPE_DDL_MERGE_PREPARE),
   merge_param_(), guard_task_(nullptr), is_inited_(false)
 {}
 
 ObDDLMergePrepareTask::~ObDDLMergePrepareTask()
 {}
 
-int ObDDLMergePrepareTask::init(const ObDDLTabletMergeDagParamV2 &merge_param)
+int ObDDLMergePrepareTask::init(const ObDDLTabletMergeDagParamV2 &merge_param, ObDDLFailCallback *fail_cb)
 {
   int ret = OB_SUCCESS;
   if (!merge_param.is_valid()) {
@@ -172,6 +189,7 @@ int ObDDLMergePrepareTask::init(const ObDDLTabletMergeDagParamV2 &merge_param)
   } else {
     merge_param_ = merge_param;
     guard_task_  = nullptr;
+    set_fail_callback(fail_cb);
     is_inited_   = true;
   }
   FLOG_INFO("[DDL_MERGE_TASK] success to create merge prepare task", K(ret), K(merge_param_));
@@ -260,7 +278,7 @@ int ObDDLMergePrepareTask::inner_process()
   } else if (OB_ISNULL(assemble_task)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("assemble task should not be null", K(ret), K(merge_param_));
-  } else if (OB_FAIL(assemble_task->init(merge_param_))) {
+  } else if (OB_FAIL(assemble_task->init(merge_param_, fail_cb_))) {
     LOG_WARN("failed to init assemble", K(ret));
   } else if (OB_FAIL(assemble_task->add_child(*guard_task_))) {
     LOG_WARN("faield to add guard task as child", K(ret));
@@ -274,7 +292,7 @@ int ObDDLMergePrepareTask::inner_process()
       int64_t end_slice_idx   = cg_slices.at(i).element<2>();
       if (OB_FAIL(dag->alloc_task(merge_slice_task))) {
         LOG_WARN("failed to alloc merge slice task", K(ret));
-      } else if (OB_FAIL(merge_slice_task->init(merge_param_, cg_idx, start_slice_idx, end_slice_idx))) {
+      } else if (OB_FAIL(merge_slice_task->init(merge_param_, cg_idx, start_slice_idx, end_slice_idx, fail_cb_))) {
         LOG_WARN("failed to init merge slice task", K(ret));
       } else if (OB_FAIL(merge_slice_task->add_child(*assemble_task))) {
         LOG_WARN("failed add child for merge slice task", K(ret));
@@ -309,25 +327,6 @@ int ObDDLMergePrepareTask::inner_process()
       }
     }
   }
-  return ret;
-}
-
-int ObDDLMergePrepareTask::process()
-{
-  int ret = OB_SUCCESS;
-  bool has_lob = false;
-  ObLSID target_ls_id;
-  ObTabletID target_tablet_id;
-  ObWriteTabletParam *tablet_param = nullptr;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("task is not inited", K(ret), KPC(this));
-  } else if (OB_FAIL(inner_process())) {
-    LOG_WARN("failed to inner process prepare task", K(ret));
-  } else if (OB_FAIL(merge_param_.get_tablet_param(target_ls_id, target_tablet_id, tablet_param))) {
-    LOG_WARN("failed to get tablet param", K(ret));
-  }
-
   FLOG_INFO("[DDL_MERGE_TASK] finish merge prepare task", K(ret), K(merge_param_));
   return ret;
 }
@@ -346,13 +345,14 @@ void ObDDLMergePrepareTask::task_debug_info_to_string(char *buf, const int64_t b
 }
 
 ObDDLMergeCgSliceTask::ObDDLMergeCgSliceTask():
-ObITask(ObITaskType::TASK_TYPE_DDL_MERGE_CG_SLICE), merge_param_(), cg_idx_(-1), start_slice_idx_(-1), end_slice_idx_(-1)
+ObDDLMergeBaseTask(ObITaskType::TASK_TYPE_DDL_MERGE_CG_SLICE), merge_param_(), cg_idx_(-1), start_slice_idx_(-1), end_slice_idx_(-1)
 {}
 
 int ObDDLMergeCgSliceTask::init(const ObDDLTabletMergeDagParamV2 &merge_param,
                                 const int64_t cg_idx,
                                 const int64_t start_slice_idx,
-                                const int64_t end_slice_idx)
+                                const int64_t end_slice_idx,
+                                ObDDLFailCallback *fail_cb)
 {
   int ret = OB_SUCCESS;
   ObLSID target_ls_id;
@@ -365,13 +365,14 @@ int ObDDLMergeCgSliceTask::init(const ObDDLTabletMergeDagParamV2 &merge_param,
     cg_idx_          = cg_idx;
     start_slice_idx_ = start_slice_idx;
     end_slice_idx_   = end_slice_idx;
+    set_fail_callback(fail_cb);
   }
   FLOG_INFO("[DDL_MERGE_TASK]  create ddl slice merge task,", K(ret), K(cg_idx_), K(start_slice_idx_), K(end_slice_idx_), K(merge_param_.for_replay_));
 
   return ret;
 }
 
-int ObDDLMergeCgSliceTask::process()
+int ObDDLMergeCgSliceTask::inner_process()
 {
   int ret = OB_SUCCESS;
   ObIDag *dag = get_dag();
@@ -411,10 +412,10 @@ void ObDDLMergeCgSliceTask::task_debug_info_to_string(char *buf, const int64_t b
 
 
 ObDDLMergeAssembleTask::ObDDLMergeAssembleTask():
-  ObITask(ObITaskType::TASK_TYPE_DDL_MERGE_ASSEMBLE), merge_param_(), is_inited_(false)
+  ObDDLMergeBaseTask(ObITaskType::TASK_TYPE_DDL_MERGE_ASSEMBLE), merge_param_(), is_inited_(false)
 {}
 
-int ObDDLMergeAssembleTask::init(const ObDDLTabletMergeDagParamV2 &ddl_merge_param)
+int ObDDLMergeAssembleTask::init(const ObDDLTabletMergeDagParamV2 &ddl_merge_param, ObDDLFailCallback *fail_cb)
 {
   int ret = OB_SUCCESS;
   if (!ddl_merge_param.is_valid()) {
@@ -422,6 +423,7 @@ int ObDDLMergeAssembleTask::init(const ObDDLTabletMergeDagParamV2 &ddl_merge_par
     LOG_WARN("invalid argument", K(ret), K(ddl_merge_param));
   } else {
     merge_param_ = ddl_merge_param;
+    set_fail_callback(fail_cb);
     is_inited_ = true;
   }
   FLOG_INFO("[DDL_MERGE_TASK] create ddl assemble merge task,", K(ret), K(ddl_merge_param));
@@ -429,7 +431,7 @@ int ObDDLMergeAssembleTask::init(const ObDDLTabletMergeDagParamV2 &ddl_merge_par
 }
 
 
-int ObDDLMergeAssembleTask::process()
+int ObDDLMergeAssembleTask::inner_process()
 {
   int ret = OB_SUCCESS;
   ObIDDLMergeHelper *merge_helper = nullptr;
