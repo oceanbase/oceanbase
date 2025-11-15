@@ -146,13 +146,14 @@ int ObMdsMinorFilter::filter_ddl_complete_mds_info(
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
+  ObArenaAllocator allocator(ObMemAttr(MTL_ID(), "MdsMinFilter"));
   ObTabletDDLCompleteMdsUserData ddl_complete_info;
   bool need_filter = false;
   if (OB_UNLIKELY(row.is_uncommitted_row()
       || !row.is_compacted_multi_version_row())) { // not filter uncommitted row
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("uncommitted row or uncompacted row in mds table", K(ret), K(row));
-  } else if (OB_FAIL(ddl_complete_info.deserialize(kv_adapter.get_user_data().ptr(),
+  } else if (OB_FAIL(ddl_complete_info.deserialize(allocator, kv_adapter.get_user_data().ptr(),
                                                    kv_adapter.get_user_data().length(), pos))) {
     LOG_WARN("fail to deserialize ddl complete info", K(ret), K(kv_adapter));
   } else if  (!ddl_complete_info.trans_id_.is_valid()) {

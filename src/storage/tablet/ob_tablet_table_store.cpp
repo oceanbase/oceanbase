@@ -933,10 +933,11 @@ int ObTabletTableStore::calculate_ddl_read_tables(
     } else if (has_co_ddl_memtable) {
       const SCN ddl_start_scn = ddl_mem_sstables_[0]->get_ddl_start_scn();
       ObTableHandleV2 ddl_tmp_handle;
+      ObArenaAllocator arena(ObMemAttr(MTL_ID(), "Ddl_Com_Store"));
       ObTabletDDLCompleteMdsUserData ddl_complete_data;
       ObStorageSchema *storage_schema = nullptr;
       ObTmpSSTable *ddl_tmp_sstable = nullptr;
-      if (OB_FAIL(tablet.get_ddl_complete(share::SCN::max_scn(), ddl_complete_data))) {
+      if (OB_FAIL(tablet.get_ddl_complete(share::SCN::max_scn(), arena, ddl_complete_data))) {
         LOG_WARN("failed to get ddl complete mds user data", K(ret));
       } else if (ddl_complete_data.snapshot_version_ > snapshot_version) {
         // skip
@@ -1192,6 +1193,7 @@ int ObTabletTableStore::inner_calculate_inc_ddl_column_read_tables(
   int64_t tx_id = OB_INVALID_ID;
   ObTableHandleV2 table_handle;
   ObIncMajorDDLAggregateCOSSTable *agg_sstable = nullptr;
+  ObArenaAllocator arena(attr);
   ObTabletDDLCompleteMdsUserData user_data;
 
   // locate sstable start idx and ddlkv start idx
@@ -1252,7 +1254,7 @@ int ObTabletTableStore::inner_calculate_inc_ddl_column_read_tables(
         continue;
       }
     } else if (OB_FAIL(tablet.get_inc_major_direct_load_info(
-        SCN::max_scn(), ObTabletDDLCompleteMdsUserDataKey(tx_id), user_data))) {
+        SCN::max_scn(), arena, ObTabletDDLCompleteMdsUserDataKey(tx_id), user_data))) {
       LOG_WARN("failed to get inc major direct load info", KR(ret), K(tx_id));
     } else if (OB_UNLIKELY(!user_data.inc_major_commit_scn_.is_valid_and_not_min())) {
       LOG_INFO("skip incomplete inc major direct load", K(user_data));
@@ -2568,8 +2570,9 @@ OB_INLINE int ObTabletTableStore::check_major_sstable_empty(const share::SCN &dd
 OB_INLINE int ObTabletTableStore::check_ddl_complete(const ObTablet &tablet, bool &is_empty) const
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator arena(ObMemAttr(MTL_ID(), "DdlCom_Sto"));
   ObTabletDDLCompleteMdsUserData data;
-  if (OB_FAIL(tablet.get_ddl_complete(share::SCN::max_scn(), data))) {
+  if (OB_FAIL(tablet.get_ddl_complete(share::SCN::max_scn(), arena, data))) {
     if (OB_EMPTY_RESULT == ret) {
       ret = OB_SUCCESS;
       is_empty = true;

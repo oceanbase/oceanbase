@@ -277,12 +277,13 @@ int ObDDLMergeScheduler::schedule_tablet_ddl_inc_major_merge_for_sn(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected invalid cur_trans_id or cur_seq_no", KR(ret), K(cur_trans_id), K(cur_seq_no));
   } else {
+    ObArenaAllocator allocator(ObMemAttr(MTL_ID(), "DdlIncCommitCb"));
     ObTabletDDLCompleteMdsUserData user_data;
     if (can_read && OB_FAIL(check_inc_major_merge_delay(tablet_handle, cur_trans_id, cur_seq_no, trans_version))) {
       LOG_WARN("failed to check inc major merge delay", KR(ret),
           K(tablet_id), K(cur_trans_id), K(cur_seq_no), K(trans_version));
     } else if (OB_FAIL(tablet_handle.get_obj()->get_inc_major_direct_load_info(
-        share::SCN::max_scn(), ObTabletDDLCompleteMdsUserDataKey(cur_trans_id), user_data))) {
+        share::SCN::max_scn(), allocator, ObTabletDDLCompleteMdsUserDataKey(cur_trans_id), user_data))) {
       LOG_WARN("failed to get inc major direct load info", KR(ret), K(tablet_id), K(cur_trans_id));
     } else if (OB_UNLIKELY(!is_data_version_support_inc_major_direct_load(user_data.data_format_version_))) {
       ret = OB_ERR_UNEXPECTED;

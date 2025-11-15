@@ -225,7 +225,7 @@ int TestCGMicroMacroWriteOp::initialize_args_and_env(const ObObjType *col_types,
   ddl_dag_.direct_load_type_ = ObDirectLoadMgrUtil::ddl_get_direct_load_type(GCTX.is_shared_storage_mode(), tenant_data_version);
   ddl_dag_.ddl_task_param_.target_table_id_ = ddl_table_id;
   ddl_dag_.ddl_task_param_.execution_id_ = ddl_execution_id;
-  ddl_dag_.direct_load_type_ = ObDirectLoadType::DIRECT_LOAD_DDL;
+  ddl_dag_.direct_load_type_ = ObDirectLoadType::SN_IDEM_DIRECT_LOAD_DDL;
   ddl_dag_.set_start_time();
   ddl_dag_.ObDDLIndependentDag::is_inited_ = true;
   ddl_dag_.is_inited_ = true;

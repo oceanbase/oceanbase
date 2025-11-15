@@ -231,11 +231,14 @@ int ObDDLMergePrepareTask::inner_process()
 
   /* pre-check before merge */
   bool need_merge = true;
+  ObIDDLMergeHelper *merge_helper = nullptr;
   if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(merge_param_.get_merge_helper())) {
+  } else if (OB_FAIL(merge_param_.get_merge_helper(merge_helper))) {
+    LOG_WARN("failed to get merge helper", K(ret));
+  } else if (OB_ISNULL(merge_helper)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("merge param is invalid", K(ret));
-  } else if (OB_FAIL(merge_param_.get_merge_helper()->check_need_merge(dag, merge_param_, need_merge))) {
+  } else if (OB_FAIL(merge_helper->check_need_merge(dag, merge_param_, need_merge))) {
     LOG_WARN("failed to check need merge", KR(ret));
   }
 
@@ -244,9 +247,9 @@ int ObDDLMergePrepareTask::inner_process()
    * 2. get_rec_scn for release ddl kvs
   */
   if (OB_FAIL(ret) || !need_merge) {
-  } else if (OB_FAIL(merge_param_.get_merge_helper()->process_prepare_task(dag, merge_param_, cg_slices))) {
+  } else if (OB_FAIL(merge_helper->process_prepare_task(dag, merge_param_, cg_slices))) {
     LOG_WARN("failed to process prepare task", KR(ret), K(merge_param_));
-  } else if (OB_FAIL(merge_param_.get_merge_helper()->get_rec_scn(merge_param_))) {
+  } else if (OB_FAIL(merge_helper->get_rec_scn(merge_param_))) {
     LOG_WARN("failed to get rec scn", K(ret));
   }
 
@@ -378,10 +381,13 @@ int ObDDLMergeCgSliceTask::process()
   if (OB_ISNULL(dag)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag should not be null", K(ret));
-  } else if (OB_ISNULL(merge_param_.get_merge_helper())) {
+  } else if (OB_FAIL(merge_param_.get_merge_helper(merge_helper))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get merge helper", K(ret), K(merge_param_));
-  } else if (OB_FAIL(merge_param_.get_merge_helper()->merge_cg_slice(dag, merge_param_, cg_idx_, start_slice_idx_, end_slice_idx_))) {
+  } else if (OB_ISNULL(merge_helper)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("merge helper should not be null", K(ret), K(merge_param_));
+  } else if (OB_FAIL(merge_helper->merge_cg_slice(dag, merge_param_, cg_idx_, start_slice_idx_, end_slice_idx_))) {
     LOG_WARN("failed merge_cg_slice", K(ret));
   }
 
@@ -439,14 +445,13 @@ int ObDDLMergeAssembleTask::process()
     LOG_WARN("assemble task has not been init", K(ret), KPC(this));
   } else if (OB_FAIL(merge_param_.get_tablet_param(target_ls_id, target_tablet_id, tablet_param))) {
     LOG_WARN("failed to get tablet param", K(ret));
-  } else if (OB_ISNULL(merge_param_.get_merge_helper())) {
-    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(merge_param_.get_merge_helper(merge_helper))) {
     LOG_WARN("failed to get merge helper", K(ret), K(merge_param_));
   } else if (merge_param_.for_major_) {
     DEBUG_SYNC(BEFORE_DDL_MERGE_ASSEMBLE_TASK);
   }
 
-  if (FAILEDx(merge_param_.get_merge_helper()->assemble_sstable(merge_param_))) {
+  if (FAILEDx(merge_helper->assemble_sstable(merge_param_))) {
     LOG_WARN("failed to assemble major sstable", K(ret));
   }
   FLOG_INFO("[DDL_MERGE_TASK]  ddl update table store finish", K(ret), K(merge_param_));

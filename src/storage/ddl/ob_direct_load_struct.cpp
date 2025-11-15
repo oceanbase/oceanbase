@@ -5097,7 +5097,7 @@ int ObDDLTableMergeDagParam::assign(const ObDDLTableMergeDagParam &merge_param)
     seq_no_           = merge_param.seq_no_;
     table_type_       = merge_param.table_type_;
     if (is_commit_ && is_idem_type(direct_load_type_) &&
-        OB_FAIL(user_data_.assign(merge_param.user_data_))) {
+        OB_FAIL(user_data_.assign(arena_, merge_param.user_data_))) {
       LOG_WARN("failed to assign user data", K(ret));
     }
   }
@@ -5110,7 +5110,6 @@ int ObDDLTabletMergeDagParamV2::init(const bool for_major,
                                      const share::SCN start_scn,
                                      const ObDirectLoadType &direct_load_type,
                                      const ObDDLTaskParam &task_param,
-                                     ObIAllocator &allocator,
                                      ObDDLTabletContext *tablet_ctx,
                                      const ObTransID &trans_id,
                                      const ObTxSEQ &seq_no)
@@ -5157,8 +5156,6 @@ int ObDDLTabletMergeDagParamV2::init(const bool for_major,
   } else if (FALSE_IT(is_column_store = (is_cs_replica || is_column_store))) {
   } else if (OB_FAIL(merge_ctx->slice_cg_sstables_.create(DDL_SLICE_BUCKET_NUM, ObMemAttr(MTL_ID(), "Ddl_Mrg_Task")))) {
     LOG_WARN("failed to create macro block checksum map", K(ret));
-  } else if (OB_FAIL(ObIDDLMergeHelper::get_merge_helper(allocator, direct_load_type, merge_helper_))) {
-    LOG_WARN("failed to get_merge_helper", K(ret));
   } else {
     // TODO@ zhuoran.zzr, reconstruct it
     int64_t base_cg_idx = 0;
@@ -5229,6 +5226,30 @@ int ObDDLTabletMergeDagParamV2::init(const bool for_major,
 bool ObDDLTabletMergeDagParamV2::is_valid() const
 {
   return is_inited_;
+}
+
+int ObDDLTabletMergeDagParamV2::get_merge_helper(ObIDDLMergeHelper *&merge_helper)
+{
+  int ret = OB_SUCCESS;
+  merge_helper = nullptr;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("merge dag param not inited", K(ret), KPC(this));
+  } else if (nullptr == tablet_ctx_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet ctx should not be null", K(ret), KPC(this));
+  } else if (for_lob_) {
+    merge_helper = tablet_ctx_->lob_merge_ctx_.merge_helper_;
+  } else {
+    merge_helper = tablet_ctx_->merge_ctx_.merge_helper_;
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (nullptr == merge_helper) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("merge helper should not be null", K(ret), KPC(this));
+  }
+  return ret;
 }
 
 int ObDDLTabletMergeDagParamV2::set_cg_slice_sstable(const int64_t slice_idx, const int64_t cg_idx, const ObTableHandleV2 &sstable_handle)

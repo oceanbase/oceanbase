@@ -754,10 +754,11 @@ int ObSNTabletDirectLoadMgr::schedule_merge_tablet_task(const ObTabletDDLComplet
     }
     while (OB_SUCC(ret)) {
       ObDDLTableMergeDagParam param;
+      ObArenaAllocator arena(ObMemAttr(MTL_ID(), "Ddl_Com_DLMgr"));
       ObTabletDDLCompleteMdsUserData data;
       if (OB_FAIL(THIS_WORKER.check_status())) {
         LOG_WARN("check status failed", K(ret), K(arg));
-      } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_complete(share::SCN::max_scn(), data))) {
+      } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_complete(share::SCN::max_scn(), arena, data))) {
         LOG_WARN("failed to get ddl complete", K(ret), K(arg));
       } else if (!data.has_complete_) {
         LOG_WARN("ddl complete has not been set, wait to schedule merge", K(ret), K(arg));

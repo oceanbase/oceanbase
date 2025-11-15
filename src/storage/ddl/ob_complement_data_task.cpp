@@ -781,7 +781,7 @@ int ObComplementDataDag::create_first_task()
 
     if (OB_FAIL(dag_merge_param.init(true /* for major */, false /* for lob*/, false /* for replay*/,
                                      mock_scn /* start_scn*/,
-                                     param_.direct_load_type_, task_param, param_.allocator_,
+                                     param_.direct_load_type_, task_param,
                                      context_.tablet_ctx_))) {
       LOG_WARN("failed to init dag merge param", K(ret));
     } else if (OB_FAIL(alloc_task(data_merge_prepare_task))) {
@@ -799,7 +799,7 @@ int ObComplementDataDag::create_first_task()
       /* if lob tablet id invalid, skip */
     } else if (OB_FAIL(lob_dag_merge_param.init(true /* for major*/, true /* for lob */, false /* for replay */,
                                      mock_scn /* start_scn*/,
-                                     param_.direct_load_type_, task_param, param_.allocator_,
+                                     param_.direct_load_type_, task_param,
                                      context_.tablet_ctx_))) {
       LOG_WARN("failed to init lob dag merge param", K(ret), K(param_));
     } else if (OB_FAIL(alloc_task(lob_merge_prepare_task))) {

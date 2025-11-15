@@ -192,7 +192,6 @@ int ObDDLIndependentDag::schedule_tablet_merge_task()
                                           mock_start_scn,
                                           direct_load_type_,
                                           ddl_task_param_,
-                                          arena_,
                                           tablet_context))) {
         LOG_WARN("failed to init  ddl merge task param", K(ret));
       } else if (OB_FAIL(create_task(nullptr /* parent task*/, ddl_merge_task, merge_param))) {
@@ -213,7 +212,6 @@ int ObDDLIndependentDag::schedule_tablet_merge_task()
                                           mock_start_scn,
                                           direct_load_type_,
                                           ddl_task_param_,
-                                          arena_,
                                           tablet_context))) {
         LOG_WARN("failed to init  ddl merge task param", K(ret));
       } else if (OB_FAIL(create_task(nullptr /* parent task*/, lob_merge_task, lob_merge_param))) {
@@ -955,7 +953,6 @@ int ObDDLIndependentDag::init_tablet_merge_task(
                                       mock_start_scn,
                                       direct_load_type_,
                                       ddl_task_param_,
-                                      arena_,
                                       tablet_context,
                                       tx_info_.trans_id_,
                                       transaction::ObTxSEQ::cast_from_int(tx_info_.seq_no_)))) {
@@ -980,7 +977,6 @@ int ObDDLIndependentDag::init_tablet_merge_task(
                                       mock_start_scn,
                                       direct_load_type_,
                                       ddl_task_param_,
-                                      arena_,
                                       tablet_context,
                                       tx_info_.trans_id_,
                                       transaction::ObTxSEQ::cast_from_int(tx_info_.seq_no_)))) {
