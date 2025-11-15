@@ -359,6 +359,10 @@ int ObSNDDLMergeHelperV2::process_prepare_task(ObIDag *dag,
       LOG_WARN("get ddl memtables failed", K(ret), K(frozen_ddl_kvs));
     } else if (OB_FAIL(ObDDLMergeTaskUtils::get_slice_indexes(ddl_sstables, slice_idxes))) { // get slice idx from ddl memtable only
       LOG_WARN("get slice indexes failed", K(ret), K(ddl_merge_param));
+    } else if (0 == ddl_sstables.count()  && 0 != frozen_ddl_kvs.count()) {
+      if (OB_FAIL(slice_idxes.set_refactored(0))) { /* set 0 for empty ddl kv merge */
+        LOG_WARN("failed to set refactored", K(ret));
+      }
     }
   }
 
@@ -381,10 +385,10 @@ int ObSNDDLMergeHelperV2::process_prepare_task(ObIDag *dag,
       }
     }
   }
-  if (OB_FAIL(ret)) {
-  } else if (OB_UNLIKELY(ERRSIM_DDL_PRINT_DDL_CHECKPOINT_SCN)) {
+  if (OB_UNLIKELY(ERRSIM_DDL_PRINT_DDL_CHECKPOINT_SCN)) {
+    int tmp_ret = OB_SUCCESS;
     if (ddl_merge_param.for_major_ && !ddl_merge_param.for_replay_) {
-      if (OB_FAIL(get_rec_scn(ddl_merge_param))) {
+      if (OB_TMP_FAIL(get_rec_scn(ddl_merge_param))) {
         LOG_WARN("failed to get rec scn", K(ret));
       } else {
         SERVER_EVENT_ADD("ddl", "ddl checkpoint scn",
@@ -392,7 +396,7 @@ int ObSNDDLMergeHelperV2::process_prepare_task(ObIDag *dag,
           "ret", ret,
           "trace_id", *ObCurTraceId::get_trace_id(),
           "tablet_id", target_tablet_id,
-          "trans_id", ddl_merge_param.rec_scn_);
+          "trans_id", SCN::max(ddl_merge_param.rec_scn_, tablet_handle.get_obj()->get_tablet_meta().ddl_checkpoint_scn_));
       }
     }
   }

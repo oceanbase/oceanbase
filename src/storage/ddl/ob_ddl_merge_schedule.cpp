@@ -597,11 +597,7 @@ int ObDDLMergeScheduler::schedule_tablet_ddl_major_merge(
     ObDDLTableMergeDagParam param;
     ObArenaAllocator arena(ObMemAttr(MTL_ID(), "DDL_Mrg_Par"));
     ObTabletDDLCompleteMdsUserData  ddl_complete;
-    if (OB_FAIL(ObDDLUtil::is_major_exist(ls_id, tablet_handle.get_obj()->get_tablet_meta().tablet_id_, is_major_sstable_exist))) {
-      LOG_WARN("failed to check major sstable exist", K(ret), K(ls_id), K(tablet_handle.get_obj()->get_tablet_meta().tablet_id_));
-    } else if (is_major_sstable_exist) {
-      LOG_INFO("major sstable already exist, don't need to schdule ddl merge", K(ret), K(ls_id), K(tablet_handle.get_obj()->get_tablet_meta().tablet_id_));
-    } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
+    if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
       LOG_WARN("get ddl kv mgr failed", K(ret));
     } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->check_has_freezed_ddl_kv(has_freezed_ddl_kv))) {
       LOG_WARN("check has freezed ddl kv failed", K(ret));
