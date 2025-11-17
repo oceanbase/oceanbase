@@ -5385,6 +5385,11 @@ int ObRootService::clean_splitted_tablet(const obrpc::ObCleanSplittedTabletArg &
   return ret;
 }
 
+int ObRootService::clean_splitted_tablet_ddl(const obrpc::ObCleanSplittedTabletDDLArg &arg)
+{
+  return clean_splitted_tablet(arg.clean_arg_);
+}
+
 int ObRootService::flashback_index(const ObFlashBackIndexArg &arg) {
   int ret = OB_SUCCESS;
   if (!inited_) {

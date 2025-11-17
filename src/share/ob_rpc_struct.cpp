@@ -10600,6 +10600,19 @@ OB_SERIALIZE_MEMBER(ObCleanSplittedTabletArg,
                     dest_lob_tablet_ids_,
                     is_auto_split_);
 
+int ObCleanSplittedTabletDDLArg::assign(const ObCleanSplittedTabletDDLArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("failed to assign ddl arg", K(ret), K(other));
+  } else if (OB_FAIL(clean_arg_.assign(other.clean_arg_))) {
+    LOG_WARN("failed to assign ddl arg", K(ret), K(other.clean_arg_));
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER((ObCleanSplittedTabletDDLArg, ObDDLArg), clean_arg_);
+
 int ObCheckMemtableCntArg::assign(const ObCheckMemtableCntArg &other)
 {
   int ret = OB_SUCCESS;

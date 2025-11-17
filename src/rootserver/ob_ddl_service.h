@@ -158,6 +158,7 @@ public:
 
 
   int clean_splitted_tablet(const obrpc::ObCleanSplittedTabletArg &arg);
+  int clean_splitted_tablet_ddl(const obrpc::ObCleanSplittedTabletDDLArg &arg);
   int generate_splitted_schema_array(const obrpc::ObCleanSplittedTabletArg &arg,
                                     ObSchemaGetterGuard &schema_guard,
                                     ObArenaAllocator& allocator,

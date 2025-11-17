@@ -264,6 +264,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
 
     // auto part ddl
     RPC_PROCESSOR(rootserver::ObRpcCleanSplittedTabletP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcCleanSplittedTabletDDLP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObAutoSplitTabletTaskP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObSplitGlobalIndexTabletTaskP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcFlushOptStatMonitoringInfoP, *gctx_.root_service_);

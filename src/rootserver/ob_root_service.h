@@ -563,6 +563,7 @@ public:
 
   // the interface only for gc splitted source tablet
   int clean_splitted_tablet(const obrpc::ObCleanSplittedTabletArg &arg);
+  int clean_splitted_tablet_ddl(const obrpc::ObCleanSplittedTabletDDLArg &arg);
 
   //the interface only for switchover: execute skip check enable_ddl
   int flashback_index(const obrpc::ObFlashBackIndexArg &arg);

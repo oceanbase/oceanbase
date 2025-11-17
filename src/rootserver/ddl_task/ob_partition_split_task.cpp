@@ -2229,8 +2229,20 @@ int ObPartitionSplitTask::clean_splitted_tablet()
     LOG_WARN("fail to assign array", KR(ret));
   } else if (OB_FAIL(clean_arg.dest_lob_tablet_ids_.assign(partition_split_arg_.dest_lob_tablet_ids_))) {
     LOG_WARN("fail to assign array", KR(ret));
-  } else if (OB_FAIL(rpc_proxy->timeout(GCONF._ob_ddl_timeout).clean_splitted_tablet(clean_arg))) {
-    LOG_WARN("failed to clean splitted tablet", KR(ret), K(clean_arg));
+  } else if (data_format_version_ >= DATA_VERSION_4_4_2_0) {
+    ObCleanSplittedTabletDDLArg arg;
+    arg.exec_tenant_id_ = tenant_id_;
+    arg.task_id_ = task_id_;
+    arg.parallelism_ = parallelism_;
+    if (OB_FAIL(arg.clean_arg_.assign(clean_arg))) {
+      LOG_WARN("failed to assign", K(ret), K(arg));
+    } else if (OB_FAIL(rpc_proxy->timeout(GCONF._ob_ddl_timeout).clean_splitted_tablet_ddl(arg))) {
+      LOG_WARN("failed to clean splitted tablet", KR(ret), K(clean_arg));
+    }
+  } else {
+    if (OB_FAIL(rpc_proxy->timeout(GCONF._ob_ddl_timeout).clean_splitted_tablet(clean_arg))) {
+      LOG_WARN("failed to clean splitted tablet", KR(ret), K(clean_arg));
+    }
   }
 
   return ret;

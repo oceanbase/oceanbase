@@ -236,6 +236,7 @@
   RPC_S(PR5 calc_column_checksum_response, obrpc::OB_CALC_COLUMN_CHECKSUM_RESPONSE, (obrpc::ObCalcColumnChecksumResponseArg));
   RPC_S(PR5 build_ddl_single_replica_response, obrpc::OB_DDL_BUILD_SINGLE_REPLICA_RESPONSE, (obrpc::ObDDLBuildSingleReplicaResponseArg));
   RPC_S(PRD clean_splitted_tablet, obrpc::OB_CLEAN_SPLITTED_TABLET, (ObCleanSplittedTabletArg));
+  RPC_S(PRD clean_splitted_tablet_ddl, obrpc::OB_CLEAN_SPLITTED_TABLET_DDL, (ObCleanSplittedTabletDDLArg));
   RPC_S(PR5 send_auto_split_tablet_task_request, obrpc::OB_AUTO_SPLIT_TABLET_TASK_REQUEST, (obrpc::ObAutoSplitTabletBatchArg), obrpc::ObAutoSplitTabletBatchRes);
   RPC_S(PR5 cancel_ddl_task, obrpc::OB_CANCEL_DDL_TASK, (obrpc::ObCancelDDLTaskArg));
   RPC_S(PR5 start_redef_table, obrpc::OB_START_REDEF_TABLE, (ObStartRedefTableArg), ObStartRedefTableRes);
