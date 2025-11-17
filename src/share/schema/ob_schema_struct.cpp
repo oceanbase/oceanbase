@@ -8077,6 +8077,17 @@ int ObPartitionUtils::convert_rows_to_sql_literal(
   return ret;
 }
 
+int ObPartitionUtils::check_range_high_bound_val(const ObRowkey &high_bound_val)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < high_bound_val.get_obj_cnt(); i++) {
+    if (OB_UNLIKELY(high_bound_val.get_obj_ptr()[i].is_null())) {
+      ret = OB_EER_NULL_IN_VALUES_LESS_THAN;
+      LOG_WARN("null value is not allowed in range high bound", K(ret), K(i), K(high_bound_val));
+    }
+  }
+  return ret;
+}
 
 int ObPartitionUtils::convert_rowkey_to_sql_literal(
     const bool is_oracle_mode,

@@ -762,6 +762,8 @@ int ObAddPartInfoHelper::add_high_bound_val_column(const P &part_option,
       LOG_WARN("get tenant timezone map failed", K(ret), K(table_->get_tenant_id()));
     } else if (OB_FAIL(table_->check_if_oracle_compat_mode(is_oracle_mode))) {
       LOG_WARN("fail to get compat mode", KR(ret), KPC_(table));
+    } else if (OB_FAIL(ObPartitionUtils::check_range_high_bound_val(part_option.get_high_bound_val()))) {
+      LOG_WARN("Failed to check range high bound val", K(ret), K(part_option.get_high_bound_val()));
     } else if (OB_FAIL(ObPartitionUtils::convert_rowkey_to_sql_literal(
                is_oracle_mode, part_option.get_high_bound_val(), high_bound_val_,
                OB_MAX_B_HIGH_BOUND_VAL_LENGTH, pos, false, &tz_info))) {
@@ -1400,6 +1402,8 @@ int ObAddSplitIncPartHelper::add_split_partition_info()
       if (OB_ISNULL(part)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("part array is null", KR(ret), K(index), K(inc_table_));
+      } else if (inc_table_->is_range_part() && OB_FAIL(ObPartitionUtils::check_range_high_bound_val(part->get_high_bound_val()))) {
+        LOG_WARN("failed to check range high bound val", KR(ret), KPC(part));
       } else {
         HEAP_VAR(ObAddIncPartDMLGenerator, part_dml_gen,
                  ori_table_, *part, part_array_size, index, schema_version_) {
