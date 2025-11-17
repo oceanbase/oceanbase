@@ -200,30 +200,5 @@ int ObExprVectorIPSimilarity::calc_ip_similarity(const ObExpr &expr, ObEvalCtx &
   return ObExprVectorSimilarity::calc_similarity(expr, ctx, res_datum, ObVecSimilarityType::DOT);
 }
 
-int ObExprVectorSimilarity::calc_similarity_from_distance(const ObExprVectorDistance::ObVecDisType dis_type, const float &distance, float &similarity)
-{
-  int ret = OB_SUCCESS;
-  switch (dis_type) {
-    case ObExprVectorDistance::ObVecDisType::EUCLIDEAN:
-      // l2_similarity = 1 / (1 + l2_square_distance), ob use l2_distance
-      similarity = 1 / (1 + distance * distance);
-      break;
-      // currently we don't support ip similarity
-    case ObExprVectorDistance::ObVecDisType::DOT:
-      similarity = (1 + distance) / 2;
-      break;
-      // case T_FUN_SYS_NEGATIVE_INNER_PRODUCT:
-    case ObExprVectorDistance::ObVecDisType::COSINE:
-      // cosine_similarity = (1 + cosine) / 2, ob cosine_distance = 1 - cosine
-      similarity = (2 - distance) / 2;
-      break;
-    default:
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not support vector sort expr", K(ret), K(dis_type));
-      break;
-  }
-  return ret;
-}
-
 } // sql
 } // oceanbase

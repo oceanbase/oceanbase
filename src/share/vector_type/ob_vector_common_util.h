@@ -29,6 +29,21 @@
 
 namespace oceanbase {
 namespace share {
+
+void get_distance_threshold(const oceanbase::sql::ObExprVectorDistance::ObVecDisType& dis_type, const float& similarity_threshold, float& distance_threshold);
+
+
+static bool is_satify_distance_threshold(const oceanbase::sql::ObExprVectorDistance::ObVecDisType& dis_type, const float& distance_threshold, const double& distance)
+{
+  bool is_satify = true;
+  if (dis_type == oceanbase::sql::ObExprVectorDistance::ObVecDisType::DOT) {
+    is_satify = distance >= distance_threshold;
+  } else {
+    is_satify = distance <= distance_threshold;
+  }
+  return is_satify;
+}
+
 struct ObDocidScoreItem
 {
   ObDocidScoreItem() = default;
@@ -417,7 +432,9 @@ public:
       : alloc_(allocator), const_vec_(const_vec), dis_type_(dis_type), dim_(dim),
         nprobe_(nprobe), compare_(dis_type), heap_(compare_), similarity_threshold_(similarity_threshold),
         is_save_all_center_(is_save_all_center), center_alloc_(center_alloc_)
-  {}
+  {
+    get_distance_threshold(dis_type, similarity_threshold, distance_threshold_);
+  }
 
   int push_center(const CENTER_T &center, VEC_T *center_vec, const int64_t dim, CenterSaveMode center_save_mode = NOT_SAVE_CENTER_VEC);
   int push_center(const CENTER_T &center, double distance, CenterSaveMode center_save_mode = NOT_SAVE_CENTER_VEC, VEC_T *center_vec = nullptr);
@@ -454,7 +471,6 @@ public:
   }
   int get_nearest_probe_centers_vec_dist(ObIArray<std::pair<CENTER_T, VEC_T *>> &center_ids,
                                          ObIArray<float> &distances);
-  bool is_satify_similarity_threshold(const double& distance);
   int64_t get_center_count() const {
     return is_save_all_center_ ? all_centroids_.count() : heap_.count();
   }
@@ -559,6 +575,7 @@ private:
   HeapCompare compare_;
   CenterHeap heap_;
   float similarity_threshold_;
+  float distance_threshold_;
   bool is_save_all_center_;
   ObIAllocator *center_alloc_;
   ObArray<ObCentroidQueryInfo<VEC_T, CENTER_T>> all_centroids_;
@@ -710,7 +727,9 @@ int ObVectorCenterClusterHelper<VEC_T, CENTER_T>::push_center(
   VEC_T *center_vec /*= nullptr*/)
 {
   int ret = OB_SUCCESS;
-  if (is_save_all_center_) {
+  if (distance_threshold_ != FLT_MAX && !is_satify_distance_threshold(dis_type_, distance_threshold_, distance)) {
+    // if not satify distance threshold, do not push center
+  } else if (is_save_all_center_) {
     if (OB_FAIL(record_center(center, distance, center_save_mode, center_vec))) {
       SHARE_LOG(WARN, "failed to push back centroids", K(ret), K(center), K(distance));
     }
@@ -781,14 +800,13 @@ int ObVectorCenterClusterHelper<VEC_T, CENTER_T>::get_nearest_probe_center_ids(O
     ret = OB_ERR_UNEXPECTED;
     SHARE_LOG(WARN, "max heap count is not equal to nprobe", K(ret), K(heap_.count()), K(nprobe_));
   }
-  bool is_satify_distance_threshold = false;
+
   while(OB_SUCC(ret) && !heap_.empty()) {
     const HeapCenterItemTemp &cur_top = heap_.top();
     if (OB_ISNULL(cur_top.center_with_buf_)) {
       ret = OB_ERR_UNEXPECTED;
       SHARE_LOG(WARN, "center_with_buf is null", K(ret));
-    } else if (OB_FALSE_IT(is_satify_distance_threshold = is_satify_similarity_threshold(cur_top.distance_))) {
-    } else if ( is_satify_distance_threshold && OB_FAIL(center_ids.push_back(cur_top.center_with_buf_->get_center()))) {
+    } else if (OB_FAIL(center_ids.push_back(cur_top.center_with_buf_->get_center()))) {
       ret = OB_ERR_UNEXPECTED;
       SHARE_LOG(WARN, "failed to push center id", K(ret), K(cur_top.center_with_buf_->get_center()));
     } else if (OB_FAIL(heap_.pop())) {
@@ -801,20 +819,6 @@ int ObVectorCenterClusterHelper<VEC_T, CENTER_T>::get_nearest_probe_center_ids(O
     std::reverse(center_ids.get_data(), center_ids.get_data() + center_ids.count());
   }
   return ret;
-}
-
-template <typename VEC_T, typename CENTER_T>
-bool ObVectorCenterClusterHelper<VEC_T, CENTER_T>::is_satify_similarity_threshold(const double& distance)
-{
-  bool is_satify = true;
-  int ret = OB_SUCCESS;
-  float similarity = 0.0;
-  if (similarity_threshold_ != 0.0 && OB_FAIL(oceanbase::sql::ObExprVectorSimilarity::calc_similarity_from_distance(dis_type_, distance, similarity))){
-    SHARE_LOG(WARN, "get similarity from distance fail", K(ret));
-  } else if (similarity < similarity_threshold_){
-    is_satify = false;
-  }
-  return is_satify;
 }
 
 template <typename VEC_T, typename CENTER_T>

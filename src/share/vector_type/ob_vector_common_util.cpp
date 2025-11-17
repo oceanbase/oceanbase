@@ -583,5 +583,36 @@ int ObVectorCenterClusterHelper<float, ObCenterId>::get_nearest_probe_centers_pt
   }
   return ret;
 }
+
+void get_distance_threshold(const oceanbase::sql::ObExprVectorDistance::ObVecDisType& dis_type, const float& similarity_threshold, float& distance_threshold)
+{
+  switch (dis_type) {
+    case oceanbase::sql::ObExprVectorDistance::ObVecDisType::DOT:
+      distance_threshold = 2 * similarity_threshold - 1;
+      break;
+    case oceanbase::sql::ObExprVectorDistance::ObVecDisType::EUCLIDEAN:
+      // l2_similarity = 1 / (1 + l2_square_distance), ob use l2_distance
+      if (similarity_threshold <= 0.0) {
+        distance_threshold = FLT_MAX;
+      } else {
+        distance_threshold = sqrt(1.0 / similarity_threshold - 1);
+      }
+      break;
+    case oceanbase::sql::ObExprVectorDistance::ObVecDisType::COSINE:
+      distance_threshold = 2 - 2 * similarity_threshold;
+      break;
+    case oceanbase::sql::ObExprVectorDistance::ObVecDisType::EUCLIDEAN_SQUARED:
+      if (similarity_threshold <= 0.0) {
+        distance_threshold = FLT_MAX;
+      } else {
+        distance_threshold = 1.0 / similarity_threshold - 1;
+      }
+      break;
+    default:
+      distance_threshold = FLT_MAX;
+      break;
+  }
+}
+
 }
 }

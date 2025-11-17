@@ -1797,8 +1797,9 @@ int ObDASIvfScanIter::get_nearest_limit_rowkeys_in_cids(
 {
   int ret = OB_SUCCESS;
   // only scan without filter can reach here
+  ObExprVectorDistance::ObVecDisType cur_dis_type = dis_type_ == oceanbase::sql::ObExprVectorDistance::ObVecDisType::EUCLIDEAN ? oceanbase::sql::ObExprVectorDistance::ObVecDisType::EUCLIDEAN_SQUARED : dis_type_;
   share::ObVectorCenterClusterHelper<T, ObRowkey> nearest_rowkey_heap(
-      vec_op_alloc_, search_vec, dis_type_, dim_, get_nprobe(limit_param_, 1), similarity_threshold_);
+      vec_op_alloc_, search_vec, cur_dis_type, dim_, get_nprobe(limit_param_, 1), similarity_threshold_);
   if (OB_FAIL(get_nearest_limit_rowkeys_in_cids<T>(is_vectorized, search_vec, nearest_rowkey_heap, prefilter))) {
     LOG_WARN("calc_nearest_limit_rowkeys_in_cids fail", K(ret));
   } else if (OB_FAIL(nearest_rowkey_heap.get_nearest_probe_center_ids(saved_rowkeys))) {
@@ -1925,6 +1926,7 @@ int ObDASIvfScanIter::do_ivf_scan_post(bool is_vectorized, T *search_vec)
     int64_t iter_cnt = 0;
     int64_t next_nprobe = 0;
     bool iter_end = false;
+    bool no_new_near_rowkeys = false;
     int64_t heap_size = get_heap_size(limit_k, selectivity_);
     share::ObVectorCenterClusterHelper<T, ObRowkey> nearest_rowkey_heap(
         vec_op_alloc_, search_vec, dis_type_, dim_, heap_size, similarity_threshold_);
@@ -1945,6 +1947,8 @@ int ObDASIvfScanIter::do_ivf_scan_post(bool is_vectorized, T *search_vec)
       } else if (OB_FALSE_IT(start_idx = near_rowkeys.count())) {
       } else if (OB_FAIL(do_post_filter(is_vectorized, rowkey_dist_map, near_rowkeys))) {
         LOG_WARN("do post filter fail", K(ret), K(near_rowkeys.count()));
+      } else if (OB_FALSE_IT(no_new_near_rowkeys = (near_rowkeys.count() == start_idx))) {
+        // there are no new rowkeys in near_rowkeys after post filter
       } else {
         for (int64_t i = start_idx; OB_SUCC(ret) && i < near_rowkeys.count(); ++i) {
           const ObIvfRowkeyDistEntry &entry = near_rowkeys.at(i);
@@ -1963,7 +1967,10 @@ int ObDASIvfScanIter::do_ivf_scan_post(bool is_vectorized, T *search_vec)
         LOG_INFO("postfilter does not get enough result", K(limit_k), "near_rowkeys_count", near_rowkeys.count(),
             K(selectivity_), K(left_search), K(next_nprobe), K(iter_cnt), K(nprobes_), K(heap_size));
         near_cid_.reuse();
-        if (! iterative_filter_ctx_.has_next_center()) {
+        if (similarity_threshold_ != 0 && no_new_near_rowkeys) {
+          iter_end = true;
+          LOG_INFO("there are no new rowkeys in near_rowkeys after post filter, stop iterative filter", K(ret), K(no_new_near_rowkeys), K(near_rowkeys.count()), K(start_idx));
+        } else if (! iterative_filter_ctx_.has_next_center()) {
           iter_end = true;
         } else if (OB_FAIL(iterative_filter_ctx_.get_next_nearest_probe_center_ids(next_nprobe, near_cid_))) {
           LOG_WARN("get next centers from iterative_filter_ctx fail", K(ret), K(iterative_filter_ctx_),
@@ -2188,15 +2195,20 @@ int ObDASIvfScanIter::do_ivf_scan_pre(ObIAllocator &allocator, bool is_vectorize
         int64_t next_nprobe = 0;
         bool iter_end = false;
         bool is_first_scan = true;
+        int32_t start_idx = -1;
+        bool no_new_near_rowkeys = false;
         share::ObVectorCenterClusterHelper<T, ObRowkey> nearest_rowkey_heap(
             vec_op_alloc_, search_vec, dis_type_, dim_, limit_k, similarity_threshold_);
         while (OB_SUCC(ret) && ! iter_end && nearest_rowkey_heap.count() < limit_k) {
-          if (OB_FAIL(get_nearest_limit_rowkeys_in_cids<T>(
+          if (OB_FALSE_IT(start_idx = nearest_rowkey_heap.count())) {
+          } else if (OB_FAIL(get_nearest_limit_rowkeys_in_cids<T>(
               is_vectorized,
               search_vec,
               nearest_rowkey_heap,
               &prefilter))) {
             LOG_WARN("fail to calc nearest limit rowkeys in cids", K(ret), K(dim_));
+          } else if (OB_FALSE_IT(no_new_near_rowkeys = (nearest_rowkey_heap.count() == start_idx))) {
+            // there are no new rowkeys in near_rowkeys after post filter
           }
           if (OB_FAIL(ret)) {
           } else if (nearest_rowkey_heap.count() < limit_k) {
@@ -2207,7 +2219,10 @@ int ObDASIvfScanIter::do_ivf_scan_pre(ObIAllocator &allocator, bool is_vectorize
                 K(selectivity_), K(left_search), K(next_nprobe), K(iter_cnt), K(nprobes_));
             near_cid_.reuse();
             is_first_scan = false;
-            if (! iterative_filter_ctx_.has_next_center()) {
+            if (similarity_threshold_ != 0 && no_new_near_rowkeys) {
+              iter_end = true;
+              LOG_INFO("there are no new rowkeys in near_rowkeys after post filter, stop iterative filter", K(ret), K(no_new_near_rowkeys), K(nearest_rowkey_heap.count()), K(start_idx), K(limit_k));
+            } else if (! iterative_filter_ctx_.has_next_center()) {
               iter_end = true;
             } else if (OB_FAIL(iterative_filter_ctx_.get_next_nearest_probe_center_ids(next_nprobe, near_cid_))) {
               LOG_WARN("get next centers from iterative_filter_ctx fail", K(ret), K(iterative_filter_ctx_),
@@ -2736,8 +2751,9 @@ int ObDASIvfPQScanIter::calc_nearest_limit_rowkeys_in_cids(
   int ret = OB_SUCCESS;
   int64_t sub_dim = dim_ / m_;
   // only scan without filter can reach here
+  ObExprVectorDistance::ObVecDisType cur_dis_type = dis_type_ == oceanbase::sql::ObExprVectorDistance::ObVecDisType::EUCLIDEAN ? oceanbase::sql::ObExprVectorDistance::ObVecDisType::EUCLIDEAN_SQUARED : dis_type_;
   IvfRowkeyHeap nearest_rowkey_heap(
-      vec_op_alloc_, search_vec, dis_type_, sub_dim, get_nprobe(limit_param_, 1), similarity_threshold_);
+      vec_op_alloc_, search_vec, cur_dis_type, sub_dim, get_nprobe(limit_param_, 1), similarity_threshold_);
   if (OB_FAIL(calc_nearest_limit_rowkeys_in_cids(is_vectorized, search_vec, nearest_rowkey_heap, prefilter))) {
     LOG_WARN("calc_nearest_limit_rowkeys_in_cids fail", K(ret));
   } else if (OB_FAIL(nearest_rowkey_heap.get_nearest_probe_center_ids(saved_rowkeys))) {
@@ -3219,13 +3235,15 @@ int ObDASIvfPQScanIter::process_ivf_scan_post(bool is_vectorized)
     int64_t iter_cnt = 0;
     int64_t next_nprobe = 0;
     bool iter_end = false;
+    bool no_new_near_rowkeys = false;
     float* search_vec = reinterpret_cast<float *>(real_search_vec_.ptr());
     const int64_t sub_dim = dim_ / m_;
     int64_t enlargement_factor = (selectivity_ != 0 && selectivity_ != 1 && is_iter_filter()) ? POST_ENLARGEMENT_FACTOR : 1;
     int64_t heap_size = get_heap_size(limit_k, selectivity_);
-    IvfRowkeyHeap nearest_rowkey_heap(vec_op_alloc_, search_vec/*unused*/, dis_type_, sub_dim, heap_size, similarity_threshold_);
+    ObExprVectorDistance::ObVecDisType cur_dis_type = dis_type_ == oceanbase::sql::ObExprVectorDistance::ObVecDisType::EUCLIDEAN ? oceanbase::sql::ObExprVectorDistance::ObVecDisType::EUCLIDEAN_SQUARED : dis_type_;
+    IvfRowkeyHeap nearest_rowkey_heap(vec_op_alloc_, search_vec/*unused*/, cur_dis_type, sub_dim, heap_size, similarity_threshold_);
     ObIVFRowkeyDistMap rowkey_dist_map;
-    ObIvfRowkeyDistItemCompare head_cmp(dis_type_);
+    ObIvfRowkeyDistItemCompare head_cmp(cur_dis_type);
     ObIvfRowkeyDistHeap rowkey_dist_heap(head_cmp);
     if (OB_FAIL(rowkey_dist_map.create(32, lib::ObMemAttr(MTL_ID(), "IVFMap") ))) {
       LOG_WARN("create rowkey dist map fail", K(ret));
@@ -3245,6 +3263,8 @@ int ObDASIvfPQScanIter::process_ivf_scan_post(bool is_vectorized)
       } else if (OB_FALSE_IT(start_idx = near_rowkeys.count())) {
       } else if (OB_FAIL(do_post_filter(is_vectorized, rowkey_dist_map, near_rowkeys))) {
         LOG_WARN("do post filter fail", K(ret), K(near_rowkeys.count()));
+      } else if (OB_FALSE_IT(no_new_near_rowkeys = (near_rowkeys.count() == start_idx))) {
+        // there are no new rowkeys in near_rowkeys after post filter
       } else {
         for (int64_t i = start_idx; OB_SUCC(ret) && i < near_rowkeys.count(); ++i) {
           const ObIvfRowkeyDistEntry &entry = near_rowkeys.at(i);
@@ -3264,7 +3284,10 @@ int ObDASIvfPQScanIter::process_ivf_scan_post(bool is_vectorized)
             K(selectivity_), K(left_search), K(next_nprobe), K(iter_cnt), K(nprobes_), K(heap_size));
         near_cid_vec_.reuse();
         near_cid_vec_dis_.reuse();
-        if (! iterative_filter_ctx_.has_next_center()) {
+        if (similarity_threshold_ != 0 && no_new_near_rowkeys) {
+          iter_end = true;
+          LOG_INFO("there are no new rowkeys in near_rowkeys after post filter, stop iterative filter", K(ret), K(no_new_near_rowkeys), K(near_rowkeys.count()), K(start_idx));
+        } else if (! iterative_filter_ctx_.has_next_center()) {
           iter_end = true;
         } else if (OB_FAIL(iterative_filter_ctx_.get_next_nearest_probe_centers_vec_dist(next_nprobe, near_cid_vec_, near_cid_vec_dis_))) {
           LOG_WARN("get next centers from iterative_filter_ctx fail", K(ret), K(iterative_filter_ctx_),
@@ -3631,15 +3654,21 @@ int ObDASIvfPQScanIter::process_ivf_scan_pre(ObIAllocator &allocator, bool is_ve
         bool iter_end = false;
         bool is_first_scan = true;
         const int64_t sub_dim = dim_ / m_;
+        int32_t start_idx = -1;
+        bool no_new_near_rowkeys = false;
+        ObExprVectorDistance::ObVecDisType cur_dis_type = dis_type_ == oceanbase::sql::ObExprVectorDistance::ObVecDisType::EUCLIDEAN ? oceanbase::sql::ObExprVectorDistance::ObVecDisType::EUCLIDEAN_SQUARED : dis_type_;
         IvfRowkeyHeap nearest_rowkey_heap(
-            vec_op_alloc_, reinterpret_cast<float *>(real_search_vec_.ptr()), dis_type_, sub_dim, limit_k, similarity_threshold_);
+            vec_op_alloc_, reinterpret_cast<float *>(real_search_vec_.ptr()), cur_dis_type, sub_dim, limit_k, similarity_threshold_);
         while (OB_SUCC(ret) && ! iter_end && nearest_rowkey_heap.count() < limit_k) {
-          if (OB_FAIL(calc_nearest_limit_rowkeys_in_cids(
+          if (OB_FALSE_IT(start_idx = nearest_rowkey_heap.count())) {
+          } else if (OB_FAIL(calc_nearest_limit_rowkeys_in_cids(
               is_vectorized,
               reinterpret_cast<float *>(real_search_vec_.ptr()),
               nearest_rowkey_heap,
               &prefilter))) {
             LOG_WARN("fail to calc nearest limit rowkeys in cids", K(ret), K(dim_));
+          } else if (OB_FALSE_IT(no_new_near_rowkeys = (nearest_rowkey_heap.count() == start_idx))) {
+            // there are no new rowkeys in near_rowkeys after post filter
           }
           if (OB_FAIL(ret)) {
           } else if (nearest_rowkey_heap.count() < limit_k) {
@@ -3651,7 +3680,10 @@ int ObDASIvfPQScanIter::process_ivf_scan_pre(ObIAllocator &allocator, bool is_ve
             near_cid_vec_.reuse();
             near_cid_vec_dis_.reuse();
             is_first_scan = false;
-            if (! iterative_filter_ctx_.has_next_center()) {
+            if (similarity_threshold_ != 0 && no_new_near_rowkeys) {
+                iter_end = true;
+                LOG_INFO("there are no new rowkeys in near_rowkeys after post filter, stop iterative filter", K(ret), K(no_new_near_rowkeys), K(nearest_rowkey_heap.count()), K(start_idx), K(limit_k));
+            } else if (! iterative_filter_ctx_.has_next_center()) {
               iter_end = true;
             } else if (OB_FAIL(iterative_filter_ctx_.get_next_nearest_probe_centers_vec_dist(next_nprobe, near_cid_vec_, near_cid_vec_dis_))) {
               LOG_WARN("get next centers from iterative_filter_ctx fail", K(ret), K(iterative_filter_ctx_),
