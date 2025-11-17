@@ -223,6 +223,9 @@ int ObHybridVectorRefreshTask::do_work()
     }
   }
 
+  if (OB_FAIL(ret) || current_status() == ObHybridVectorRefreshTaskStatus::TASK_FINISH) {
+    check_task_free();
+  }
   if (OB_NOT_NULL(ctx_)) {
     common::ObSpinLockGuard ctx_guard(ctx_->lock_);
     ctx_->task_status_.ret_code_ = ret;
@@ -230,9 +233,6 @@ int ObHybridVectorRefreshTask::do_work()
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("unexpected error: null context pointer", K(ret), KPC(this));
-  }
-  if (OB_FAIL(ret) || current_status() == ObHybridVectorRefreshTaskStatus::TASK_FINISH) {
-    check_task_free();
   }
   return ret;
 }
