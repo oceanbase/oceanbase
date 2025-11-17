@@ -3093,8 +3093,11 @@ int ObParquetTableRowIterator::ParquetSectorIterator::prepare_next(const int64_t
       rewind(capacity);
       if (group_remain_count > 0) {
         check_cross_pages(capacity);
-        OZ (fill_eager_ranegs(*iter_->rg_bitmap_, batch_size,
-                              iter_->state_.logical_eager_read_row_count_, capacity));
+        OZ(fill_eager_ranges(*iter_->rg_bitmap_,
+          batch_size,
+          iter_->state_.logical_eager_read_row_count_,
+          capacity,
+          has_no_skip_bits()));
         CK (skip_ranges_.count() == read_ranges_.count());
         ObPushdownFilterExecutor *real_filter = iter_->has_eager_columns() ? root_filter : nullptr;
         for (int64_t i = 0; OB_SUCC(ret) && i < skip_ranges_.count(); ++i) {
@@ -3129,7 +3132,8 @@ int ObParquetTableRowIterator::ParquetSectorIterator::prepare_next(const int64_t
   }
   if (OB_FAIL(ret)) {
   } else if (0 == size_) {
-  } else if (OB_FAIL(1 == batch_size ? fill_ranges_one() : fill_ranges(batch_size))) {
+  } else if (OB_FAIL(
+      1 == batch_size ? fill_ranges_one() : fill_ranges(batch_size, has_no_skip_bits()))) {
     LOG_WARN("failed to fill ranges", K(ret));
   } else if (skip_ranges_.empty()) {
     ret = OB_ERR_UNEXPECTED;
@@ -3182,41 +3186,48 @@ int ObParquetTableRowIterator::ParquetSectorIterator::fill_ranges_one()
   return ret;
 }
 
-int ObParquetTableRowIterator::ParquetSectorIterator::fill_ranges(const int64_t batch_size)
+int ObParquetTableRowIterator::ParquetSectorIterator::fill_ranges(
+    const int64_t batch_size,
+    const bool has_no_skip_bits)
 {
   int ret = OB_SUCCESS;
   skip_ranges_.reuse();
   read_ranges_.reuse();
-  int64_t read_count = 0;
   if (idx_ < size_) {
     int64_t start_idx = idx_;
-    for (; read_count < batch_size && idx_ < size_; ++idx_) {
-      if (0 == bitmap_.get_data()[idx_]) {
-        ++read_count;
-      }
+    if (idx_ + batch_size > size_) {
+      idx_ = size_;
+    } else {
+      idx_ += batch_size;
     }
-    int64_t end_idx = idx_;
-    int8_t val = bitmap_.get_data()[start_idx++];
-    int64_t continus_len = 1;
-    if (0 == val) {
+    if (has_no_skip_bits) {
+      // 没有被过滤数据时，可以直接生成 ranges
       OZ (skip_ranges_.push_back(0));
-    }
-    for (; OB_SUCC(ret) && start_idx < end_idx; ++start_idx) {
-      if (bitmap_.get_data()[start_idx] == val) {
-        ++continus_len;
-      } else if (0 == val) {
+      OZ (read_ranges_.push_back(idx_ - start_idx));
+    } else {
+      int64_t end_idx = idx_;
+      int8_t val = bitmap_.get_data()[start_idx++];
+      int64_t continus_len = 1;
+      if (0 == val) {
+        OZ (skip_ranges_.push_back(0));
+      }
+      for (; OB_SUCC(ret) && start_idx < end_idx; ++start_idx) {
+        if (bitmap_.get_data()[start_idx] == val) {
+          ++continus_len;
+        } else if (0 == val) {
+          OZ (read_ranges_.push_back(continus_len));
+          continus_len = 1;
+        } else {
+          OZ (skip_ranges_.push_back(continus_len));
+          continus_len = 1;
+        }
+        val = bitmap_.get_data()[start_idx];
+      }
+      if (0 == val) {
         OZ (read_ranges_.push_back(continus_len));
-        continus_len = 1;
       } else {
         OZ (skip_ranges_.push_back(continus_len));
-        continus_len = 1;
       }
-      val = bitmap_.get_data()[start_idx];
-    }
-    if (0 == val) {
-      OZ (read_ranges_.push_back(continus_len));
-    } else {
-      OZ (skip_ranges_.push_back(continus_len));
     }
   }
   if (read_ranges_.count() == skip_ranges_.count() - 1) {
@@ -3226,40 +3237,57 @@ int ObParquetTableRowIterator::ParquetSectorIterator::fill_ranges(const int64_t 
   return ret;
 }
 
-int ObParquetTableRowIterator::ParquetSectorIterator::fill_eager_ranegs(const ObBitVector &rg_bitmap,
+int ObParquetTableRowIterator::ParquetSectorIterator::fill_eager_ranges(const ObBitVector &rg_bitmap,
                                                                         const int64_t max_batch_size,
                                                                         const int64_t start_idx,
-                                                                        const int64_t capacity)
+                                                                        const int64_t capacity,
+                                                                        const bool has_no_skip_bits)
 {
   int ret = OB_SUCCESS;
   skip_ranges_.reuse();
   read_ranges_.reuse();
-  int64_t i = start_idx;
-  int64_t n = start_idx + capacity;
-  if (rg_bitmap.at(i) == 0) {
+
+  if (has_no_skip_bits) {
+    // 没有被过滤数据时，可以直接生成 ranges
     OZ (skip_ranges_.push_back(0));
-  }
-  while (i < n) {
-    bool current_bit = rg_bitmap.at(i);
-    int64_t start = i;
-    while (i < n && rg_bitmap.at(i) == current_bit) {
-      ++i;
+    int64_t remaining = capacity;
+    while (remaining > 0) {
+        int64_t chunk = std::min(remaining, max_batch_size);
+        if (read_ranges_.count() == skip_ranges_.count()) {
+          OZ (skip_ranges_.push_back(0));
+        }
+        OZ (read_ranges_.push_back(chunk));
+        remaining -= chunk;
     }
-    int64_t length = i - start;
-    if (current_bit) {
-      OZ (skip_ranges_.push_back(length));
-    } else {
-      int64_t remaining = length;
-      while (remaining > 0) {
-          int64_t chunk = std::min(remaining, max_batch_size);
-          if (read_ranges_.count() == skip_ranges_.count()) {
-            OZ (skip_ranges_.push_back(0));
-          }
-          OZ (read_ranges_.push_back(chunk));
-          remaining -= chunk;
+  } else {
+    int64_t i = start_idx;
+    int64_t n = start_idx + capacity;
+    if (rg_bitmap.at(i) == 0) {
+      OZ (skip_ranges_.push_back(0));
+    }
+    while (i < n) {
+      bool current_bit = rg_bitmap.at(i);
+      int64_t start = i;
+      while (i < n && rg_bitmap.at(i) == current_bit) {
+        ++i;
+      }
+      int64_t length = i - start;
+      if (current_bit) {
+        OZ (skip_ranges_.push_back(length));
+      } else {
+        int64_t remaining = length;
+        while (remaining > 0) {
+            int64_t chunk = std::min(remaining, max_batch_size);
+            if (read_ranges_.count() == skip_ranges_.count()) {
+              OZ (skip_ranges_.push_back(0));
+            }
+            OZ (read_ranges_.push_back(chunk));
+            remaining -= chunk;
+        }
       }
     }
   }
+
   if (read_ranges_.count() == skip_ranges_.count() - 1) {
     OZ (read_ranges_.push_back(0));
   }
@@ -3298,7 +3326,12 @@ void ObParquetTableRowIterator::ParquetSectorIterator::check_cross_pages(const i
   }
 }
 
-
+bool ObParquetTableRowIterator::ParquetSectorIterator::has_no_skip_bits()
+{
+  return (iter_->delete_bitmap_ == nullptr
+          || iter_->delete_bitmap_->get_cardinality() == 0)
+         && !iter_->has_eager_columns();
+}
 
 int64_t ObParquetTableRowIterator::SkipRowsInColumn(const int64_t column_id,
                                                     const int64_t num_rows_to_skip,
