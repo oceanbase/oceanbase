@@ -172,7 +172,8 @@ ObPlanCacheValue::ObPlanCacheValue()
     stored_schema_objs_(pc_alloc_),
     stmt_type_(stmt::T_MAX),
     enable_rich_vector_format_(false),
-    switchover_epoch_(OB_INVALID_VERSION)
+    switchover_epoch_(OB_INVALID_VERSION),
+    force_miss_match_(false)
 {
   MEMSET(sql_id_, 0, sizeof(sql_id_));
   MEMSET(format_sql_id_, 0, sizeof(format_sql_id_));
@@ -1572,6 +1573,7 @@ void ObPlanCacheValue::reset()
   }
   stored_schema_objs_.reset();
   enable_rich_vector_format_ = false;
+  force_miss_match_ = false;
   pcv_set_ = NULL; //放最后，前面可能存在需要pcv_set
 }
 
