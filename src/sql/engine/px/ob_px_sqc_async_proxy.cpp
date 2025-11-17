@@ -162,6 +162,7 @@ int ObPxSqcAsyncProxy::wait_all() {
   // 2. 超时，ret = OB_TIMEOUT
   // 3. retry一个rpc失败
   oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_PX_MSG);
+  common::ScopedTimer timer(ObMetricId::PX_WAIT_DISPATCH);
   while (return_cb_count_ < sqcs_.count() && OB_SUCC(ret)) {
 
     ObThreadCondGuard guard(cond_);

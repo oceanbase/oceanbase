@@ -86,6 +86,7 @@ int ObPxTransmitOpInput::get_self_sqc_info(ObDtlSqcInfo &sqc_info)
 int ObPxTransmitOpInput::get_data_ch(ObPxTaskChSet &task_ch_set, int64_t timeout_ts, ObDtlChTotalInfo *&ch_info)
 {
   int ret = OB_SUCCESS;
+  common::ScopedTimer timer(ObMetricId::WAIT_CHANNEL_INFO_COST);
   ObPxSQCProxy *ch_provider = reinterpret_cast<ObPxSQCProxy *>(ch_provider_ptr_);
   if (OB_ISNULL(ch_provider)) {
     ret = OB_NOT_INIT;
@@ -177,6 +178,24 @@ int ObPxTransmitOp::inner_open()
   // 所以如果inner_open里面嵌套了get_next_row，则opened_ flag就没有设置，这样在drain逻辑里面就会一直open
   // 导致函数栈溢出core掉
   opened_ = true;
+  ObPxTask *task_ptr = nullptr;
+  ctx_.get_sqc_handler()->get_sqc_ctx().get_task(ctx_.get_px_task_id(), task_ptr);
+  if (OB_NOT_NULL(task_ptr)) {
+    SET_METRIC_VAL(ObMetricId::PX_DISPATCH_TASK_COST, task_ptr->dispatch_task_cost_);
+    SET_METRIC_VAL(ObMetricId::PX_WORKER_PREPARE_COST, task_ptr->px_worker_prepare_cost_);
+  }
+  if (ctx_.get_px_task_id() == 0) {
+    const ObPxSqcMetrics &sqc_metrics = ctx_.get_sqc_handler()->get_sqc_metrics();
+    // record sqc metric to the first worker
+    SET_METRIC_VAL(ObMetricId::SQC_DESERIALIZE_COST, sqc_metrics.sqc_des_cost_);
+    // for fast init sqc we can not access rpc process time here
+    SET_METRIC_VAL(ObMetricId::SQC_RPC_PROCESS_COST,
+                   sqc_metrics.sqc_rpc_process_cost_);
+    if (sqc_metrics.sqc_rpc_after_cost_ > 0) {
+      SET_METRIC_VAL(ObMetricId::SQC_RPC_AFTER_PROCESS_COST,
+                     sqc_metrics.sqc_rpc_after_cost_);
+    }
+  }
   ObPxTransmitOpInput *trans_input = static_cast<ObPxTransmitOpInput*>(input_);
   metric_.set_id(get_spec().id_);
   if (OB_ISNULL(child_)) {
@@ -242,6 +261,7 @@ int ObPxTransmitOp::inner_open()
 
 int ObPxTransmitOp::transmit()
 {
+  ObProfileSwitcher switcher(op_monitor_info_.profile_);
   begin_cpu_time_counting();
   ASH_ITEM_ATTACH_GUARD(plan_line_id, spec_.id_);
   int ret = do_transmit();
@@ -1742,6 +1762,7 @@ int ObPxTransmitOp::wait_channel_ready_msg()
 int ObPxTransmitOp::try_wait_channel()
 {
   int ret = OB_SUCCESS;
+  common::ScopedTimer timer(ObMetricId::WAIT_CHANNEL_READY_COST);
   if (OB_UNLIKELY(!receive_channel_ready_) && OB_FAIL(wait_channel_ready_msg())) {
     LOG_WARN("failed to wait channel ready msg", K(ret));
   }

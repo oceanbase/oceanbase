@@ -71,9 +71,9 @@ private:
                                   const ObIArray<ObProfileItem> &profile_items,
                                   const ObString &trace_id, ProfileText &profile_text);
 
-  static int format_summary_info(const ObIArray<ObMergedProfileItem> &merged_items,
-                                 int64_t execution_count,
-                                 ProfileText &profile_text);
+  static int format_summary_info(const ObMergedProfileItem *compile_profile,
+                                 const ObIArray<ObMergedProfileItem> &merged_items,
+                                 int64_t execution_count, ProfileText &profile_text);
 
   static int format_agg_profiles(const ObIArray<ObMergedProfileItem> &merged_items,
                                  ProfileText &profile_text);

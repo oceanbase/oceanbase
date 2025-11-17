@@ -77,17 +77,17 @@ TEST_F(ObRuntimeMetricTest, test_counter)
   time_counter.inc(30);
   ASSERT_EQ(60, time_counter.value());
   time_counter.to_format_json(&alloc, json);
-  ASSERT_STREQ("{\"total io time\":\"60NS\"}", json);
+  ASSERT_STREQ("{\"total io time\":\"60ns\"}", json);
 
   time_counter.inc(1000);
   ASSERT_EQ(1060, time_counter.value());
   time_counter.to_format_json(&alloc, json);
-  ASSERT_STREQ("{\"total io time\":\"1.060US\"}", json);
+  ASSERT_STREQ("{\"total io time\":\"1.060us\"}", json);
 
   time_counter.inc(15000000);
   time_counter.to_format_json(&alloc, json);
   ASSERT_EQ(15001060, time_counter.value());
-  ASSERT_STREQ("{\"total io time\":\"15.001MS\"}", json);
+  ASSERT_STREQ("{\"total io time\":\"15.001ms\"}", json);
 
   ObMetric timestamp_gauge;
   timestamp_gauge.id_ = ObMetricId::OPEN_TIME;

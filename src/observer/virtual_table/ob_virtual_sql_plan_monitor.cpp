@@ -797,6 +797,16 @@ int ObVirtualSqlPlanMonitor::convert_node_to_row(ObMonitorNode &node, ObNewRow *
       }
       case PLAN_OPERATION: {
         const char *name = node.get_operator_name();
+        if (node.op_id_ < 0 && strcmp(name, "PHY_INVALID") == 0 && node.raw_profile_ != nullptr) {
+          // op_id_ < 0 means not operator monitor, these nodes only store profile, we should get
+          // name from profile
+          const ObProfileHeads *profile_heads =
+              reinterpret_cast<const ObProfileHeads *>(node.raw_profile_);
+          const ObProfileHead *profile_head = reinterpret_cast<const ObProfileHead *>(
+              node.raw_profile_ + profile_heads->head_offset_);
+          ObProfileId id = profile_head[0].id_;
+          name = ObProfileNameSet::get_profile_name(id);
+        }
         cells[cell_idx].set_varchar(name);
         cells[cell_idx].set_collation_type(
             ObCharset::get_default_collation(ObCharset::get_default_charset()));

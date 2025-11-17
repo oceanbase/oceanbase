@@ -214,17 +214,21 @@ int ObDbmsXprofile::aggregate_op_profile(ObExecContext &ctx,
       int64_t start_idx = execution_bound.start_idx_;
       int64_t end_idx = execution_bound.end_idx_;
       int64_t execution_count = execution_bound.execution_count_;
-      ObTMArray<ObMergedProfileItem> profiles_of_one_plan;
+      ObTMArray<ObMergedProfileItem> profiles_of_one_plan; // for plan operations
+      const ObMergedProfileItem *compile_profile = nullptr; // for sql compile info
       if (OB_FAIL(profiles_of_one_plan.reserve(end_idx - start_idx + 1))) {
         LOG_WARN("failed to reserve", K(end_idx - start_idx + 1));
       }
       for (int64_t i = start_idx; i <= end_idx && OB_SUCC(ret); ++i) {
-        if (OB_FAIL(profiles_of_one_plan.push_back(merged_items.at(i)))) {
+        if (merged_items.at(i).op_id_ == -1) {
+          compile_profile = &merged_items.at(i);
+        } else if (OB_FAIL(profiles_of_one_plan.push_back(merged_items.at(i)))) {
           LOG_WARN("failed to push back");
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(format_summary_info(profiles_of_one_plan, execution_count, profile_text))) {
+      } else if (OB_FAIL(format_summary_info(compile_profile, profiles_of_one_plan,
+                                             execution_count, profile_text))) {
         LOG_WARN("failed to format summary info");
       } else if (OB_FAIL(format_agg_profiles(profiles_of_one_plan, profile_text))) {
         LOG_WARN("failed to format agg profile");
@@ -234,9 +238,9 @@ int ObDbmsXprofile::aggregate_op_profile(ObExecContext &ctx,
   return ret;
 }
 
-int ObDbmsXprofile::format_summary_info(const ObIArray<ObMergedProfileItem> &merged_items,
-                                        int64_t execution_count,
-                                        ProfileText &profile_text)
+int ObDbmsXprofile::format_summary_info(const ObMergedProfileItem *compile_profile,
+                                        const ObIArray<ObMergedProfileItem> &merged_items,
+                                        int64_t execution_count, ProfileText &profile_text)
 {
   int ret = OB_SUCCESS;
   int64_t buf_len = profile_text.buf_len_;
@@ -258,6 +262,15 @@ int ObDbmsXprofile::format_summary_info(const ObIArray<ObMergedProfileItem> &mer
     const ObString sql_id = copied_items.at(0).sql_id_;
     pos += sql_id.to_string(buf + pos, buf_len - pos);
     OZ(BUF_PRINTF(", Execution Count: %d", execution_count));
+  }
+
+  if (OB_SUCC(ret) && (OB_NOT_NULL(compile_profile))) {
+    OZ(BUF_PRINTF("\nGenerate Plan Cost: "));
+    ObArenaAllocator arena_alloc;
+    const char *plan_info = nullptr;
+    OZ(compile_profile->profile_->pretty_print(&arena_alloc, plan_info, "", "  ",
+                                               profile_text.display_level_));
+    OZ(BUF_PRINTF("\n%s", plan_info));
   }
 
   if (OB_SUCC(ret) && total_db_time > 0) {

@@ -469,6 +469,11 @@ int ObGranuleIteratorOp::rescan()
 int ObGranuleIteratorOp::inner_open()
 {
   int ret = OB_SUCCESS;
+  if (ctx_.get_px_task_id() == 0) {
+    INC_METRIC_VAL(ObMetricId::SPLIT_GI_TASK_COST,
+                   ctx_.get_sqc_handler()->get_sqc_metrics().split_gi_cost_);
+  }
+
   ObOperator *real_child = nullptr;
   splitter_type_ = ObGranuleUtil::calc_split_type(MY_SPEC.gi_attri_flag_);
   if (OB_FAIL(parameters_init())) {

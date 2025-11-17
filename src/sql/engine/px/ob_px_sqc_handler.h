@@ -55,6 +55,15 @@ private:
   common::ObArray<int64_t> tid_array_;
 };
 
+struct ObPxSqcMetrics
+{
+  int64_t sqc_des_cost_{0};
+  int64_t sqc_rpc_process_cost_{0};
+  int64_t sqc_rpc_after_cost_{0};
+  int64_t split_gi_cost_{0};
+  int64_t dispatch_tasks_ts_{0};
+};
+
 class ObPxSqcHandler
 {
 public:
@@ -66,7 +75,8 @@ public:
     des_phy_plan_(nullptr), sqc_init_args_(nullptr), sub_coord_(nullptr), rpc_level_(INT32_MAX),
     node_sequence_id_(0), has_interrupted_(false),
     part_ranges_spin_lock_(common::ObLatchIds::PX_TENANT_TARGET_LOCK),
-    is_session_query_locked_(false) {
+    is_session_query_locked_(false),
+    sqc_metrics_() {
   }
   ~ObPxSqcHandler() = default;
   static constexpr const char *OP_LABEL = ObModIds::ObModIds::OB_SQL_SQC_HANDLER;
@@ -134,6 +144,9 @@ public:
                            char *buf = NULL, int64_t max_size = 0);
   int prepare_tablets_info();
 
+  ObPxSqcMetrics &get_sqc_metrics() { return sqc_metrics_; }
+  const ObPxSqcMetrics &get_sqc_metrics() const { return sqc_metrics_; }
+
   TO_STRING_KV(K_(tenant_id), K_(reserved_px_thread_count), KP_(notifier),
       K_(exec_ctx), K_(des_phy_plan), K_(sqc_init_args), KP_(sub_coord), K_(rpc_level));
 
@@ -168,6 +181,7 @@ private:
   Ob2DArray<ObPxTabletRange> part_ranges_;
   SpinRWLock part_ranges_spin_lock_;
   bool is_session_query_locked_;
+  ObPxSqcMetrics sqc_metrics_;
 };
 
 }

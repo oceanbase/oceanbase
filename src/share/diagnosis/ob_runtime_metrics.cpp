@@ -65,7 +65,7 @@ int value_print_help(char *buf, const int64_t buf_len, int64_t &pos, uint64_t va
     break;
   }
   case metric::Unit::TIME_NS: {
-    UNIT_PRINT(kilo, mega, giga, "NS", "US", "MS", "S", value)
+    UNIT_PRINT(kilo, mega, giga, "ns", "us", "ms", "s", value)
     break;
   }
   case metric::Unit::TIMESTAMP: {
