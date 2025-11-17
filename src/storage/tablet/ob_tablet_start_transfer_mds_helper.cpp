@@ -17,6 +17,7 @@
 #include "storage/high_availability/ob_transfer_service.h"
 #include "storage/high_availability/ob_rebuild_service.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
+#include "storage/tx/ob_trans_service.h"
 #define USING_LOG_PREFIX MDS
 
 namespace oceanbase
@@ -2082,6 +2083,7 @@ bool ObTabletStartTransferInHelper::check_can_replay_commit(
   }
   if (b_ret) {
     int tmp_ret = OB_SUCCESS;
+    transaction::ObTransService *tx_svr = MTL(transaction::ObTransService *);
     for (int64_t i = 0; OB_SUCC(ret) && i < tx_start_transfer_in_info.tablet_meta_list_.count(); ++i) {
       const ObMigrationTabletParam &tablet_info = tx_start_transfer_in_info.tablet_meta_list_.at(i);
       if (OB_ISNULL(MTL(observer::ObTabletTableUpdater*))) {
@@ -2090,6 +2092,10 @@ bool ObTabletStartTransferInHelper::check_can_replay_commit(
       } else if (OB_SUCCESS != (tmp_ret = MTL(observer::ObTabletTableUpdater*)->submit_tablet_update_task(
           tx_start_transfer_in_info.dest_ls_id_, tablet_info.tablet_id_))) {
         LOG_WARN("failed to submit tablet update task", K(tmp_ret), K(tablet_info));
+      }
+
+      if (OB_SUCCESS != (tmp_ret = tx_svr->create_tablet(tablet_info.tablet_id_, tx_start_transfer_in_info.dest_ls_id_))) {
+        LOG_WARN("failed to create tablet to ls cache", K(tmp_ret), K(tablet_info));
       }
     }
   }
