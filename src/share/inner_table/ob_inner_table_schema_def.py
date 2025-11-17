@@ -8439,6 +8439,7 @@ def_table_schema(**all_ai_model_endpoint_def)
 # 575: __all_tenant_macro_block_copy_task_progress
 # 576: __all_tenant_macro_block_copy_task_history
 # 577: __all_tablet_to_global_temporary_table
+# 578: __all_tiered_metadata_store
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
