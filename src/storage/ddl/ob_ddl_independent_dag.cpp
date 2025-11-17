@@ -673,8 +673,13 @@ int ObDDLIndependentDag::full_generate_write_macro_block_tasks(ObIArray<ObITask 
       LOG_WARN("fail to push back", KR(ret));
     }
   }
+
+  const bool is_vec_tablet_rebuild = ddl_table_schema_.table_item_.is_vec_tablet_rebuild_;
+
   // merge_tasks
   if (OB_FAIL(ret)) {
+  } else if (is_vec_tablet_rebuild) {
+    LOG_INFO("skip vec table rebuild generate merge task", K(ddl_table_schema_));
   } else if (OB_FAIL(init_merge_tasks(true, data_merge_tasks, lob_merge_tasks))) {
     LOG_WARN("fail to init merge tasks", KR(ret));
   } else if (OB_UNLIKELY(data_merge_tasks.empty() ||
@@ -716,16 +721,26 @@ int ObDDLIndependentDag::full_generate_write_macro_block_tasks(ObIArray<ObITask 
       }
     }
   } else {
-    if (OB_UNLIKELY(data_merge_tasks.count() != vector_index_tasks.count())) {
+    if (is_vec_tablet_rebuild) {
+      if (nullptr != next_task || !data_merge_tasks.empty() || !lob_merge_tasks.empty()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected task pointer", K(ret), KP(next_task), K(data_merge_tasks.count()), K(lob_merge_tasks.count()));
+      }
+    } else if (OB_UNLIKELY(data_merge_tasks.count() != vector_index_tasks.count())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected task count not match", KR(ret), K(data_merge_tasks.count()), K(vector_index_tasks.count()));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < vector_index_tasks.count(); ++i) {
       ObITask *vector_index_task = vector_index_tasks.at(i);
-      ObITask *data_merge_task = data_merge_tasks.at(i);
+      ObITask *data_merge_task = data_merge_tasks.empty() ? nullptr : data_merge_tasks.at(i);
       ObITask *lob_merge_task = lob_merge_tasks.empty() ? nullptr : lob_merge_tasks.at(i);
       if (OB_FAIL(scan_task->add_child(*vector_index_task))) {
         LOG_WARN("fail to add child", KR(ret));
+      } else if (is_vec_tablet_rebuild) {
+        if (nullptr != next_task || nullptr != data_merge_task || nullptr != lob_merge_task) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected task pointer", K(ret), KP(next_task), KP(data_merge_task), KP(lob_merge_task));
+        }
       } else if (OB_FAIL(vector_index_task->add_child(*data_merge_task))) {
         LOG_WARN("fail to add child", KR(ret));
       } else if (nullptr != lob_merge_task && OB_FAIL(vector_index_task->add_child(*lob_merge_task))) {
