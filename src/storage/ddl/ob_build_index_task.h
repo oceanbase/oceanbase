@@ -304,9 +304,11 @@ public:
 private:
   int generate_unique_checking_task(ObUniqueCheckingDag *dag);
 private:
+  static const int64_t RETRY_INTERVAL = 10 * 1000L;
   bool is_inited_;
   ObUniqueCheckingParam *param_;
   ObUniqueCheckingContext *context_;
+  int report_unique_check_error_(share::ObIDag *dag, int64_t &ret_code);
 };
 
 class ObSimpleUniqueCheckingTask : public share::ObITask
@@ -333,9 +335,11 @@ public:
   int init(ObUniqueCheckingParam &param, ObUniqueCheckingContext &context);
   virtual int process() override;
 private:
+  static const int64_t RETRY_INTERVAL = 10 * 1000L;
   bool is_inited_;
   ObUniqueCheckingParam *param_;
   ObUniqueCheckingContext *context_;
+  int report_unique_check_error(share::ObIDag *dag, int64_t &ret_code);
 };
 
 }  // end namespace storage

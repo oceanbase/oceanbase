@@ -429,7 +429,6 @@ int ObUniqueIndexChecker::check_global_index(ObIDag *dag, const int64_t task_id)
 int ObUniqueIndexChecker::check_unique_index(ObIDag *dag, const int64_t task_id)
 {
   int ret = OB_SUCCESS;
-  bool need_report_error_msg = true;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObUniqueIndexChecker has not been inited", K(ret));
@@ -455,55 +454,6 @@ int ObUniqueIndexChecker::check_unique_index(ObIDag *dag, const int64_t task_id)
       }
     } else {
       LOG_WARN("switch to tenant guard failed", K(ret));
-    }
-  }
-  if (OB_SUCCESS != ret && share::ObIDDLTask::in_ddl_retry_white_list(ret)) {
-    need_report_error_msg = false;
-  }
-  if (is_inited_ && need_report_error_msg) {
-    int tmp_ret = OB_SUCCESS;
-    int report_ret_code = OB_SUCCESS;
-    const ObAddr &self_addr = GCTX.self_addr();
-    bool keep_report_err_msg = true;
-    LOG_INFO("begin to report build index status & ddl error message", K(param_->index_schema_->get_table_id()), K(*(param_->index_schema_)),
-              K(param_->tablet_id_), K(task_id));
-    while (!dag->has_set_stop() && keep_report_err_msg) {
-      ObDDLErrorMessageTableOperator::ObDDLErrorInfo info;
-      if (OB_SUCCESS != (tmp_ret = ObDDLErrorMessageTableOperator::get_index_task_info(*GCTX.sql_proxy_, *param_->index_schema_, info))) {
-        if (OB_ITER_END == tmp_ret) {
-          keep_report_err_msg = false;
-          LOG_INFO("get task id failed, check whether index building task is cancled", K(ret), K(tmp_ret), KPC(param_->index_schema_));
-        } else {
-          LOG_INFO("get task id failed, but retry to get it", K(ret), K(tmp_ret), KPC(param_->index_schema_));
-        }
-      } else if (OB_UNLIKELY(param_->task_id_ != info.task_id_)) {
-        keep_report_err_msg = false;
-        LOG_INFO("get task id mismatched, check whether index building task is cancled", K(ret), K(param_->task_id_), K(info.task_id_));
-      } else if (OB_SUCCESS != (tmp_ret = ObDDLErrorMessageTableOperator::generate_index_ddl_error_message(
-          ret, *(param_->index_schema_), info.trace_id_str_, info.task_id_, info.parent_task_id_, param_->tablet_id_.id(), self_addr, *GCTX.sql_proxy_, "\0", report_ret_code))) {
-        LOG_WARN("fail to generate index ddl error message", K(ret), K(tmp_ret), KPC(param_->index_schema_), K(param_->tablet_id_), K(self_addr));
-        ob_usleep(RETRY_INTERVAL);
-        if (OB_FAIL(dag_yield())) {
-          LOG_WARN("fail to yield dag", KR(ret));
-          keep_report_err_msg = false;
-        }
-      } else {
-        if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret && OB_ERR_DUPLICATED_UNIQUE_KEY == report_ret_code) {
-          //error message of OB_ERR_PRIMARY_KEY_DUPLICATE is not compatiable with oracle, so use a new error code
-          ret = OB_ERR_DUPLICATED_UNIQUE_KEY;
-        }
-        keep_report_err_msg = false;
-      }
-
-      if (OB_TMP_FAIL(tmp_ret) && keep_report_err_msg) {
-        bool is_tenant_dropped = false;
-        if (OB_TMP_FAIL(GSCHEMASERVICE.check_if_tenant_has_been_dropped(param_->tenant_id_, is_tenant_dropped))) {
-          LOG_WARN("check if tenant has been dropped failed", K(tmp_ret), K(param_->tenant_id_));
-        } else if (is_tenant_dropped) {
-          keep_report_err_msg = false;
-          LOG_INFO("break when tenant dropped", K(tmp_ret), KPC(param_->index_schema_), K(param_->tablet_id_), K(self_addr));
-        }
-      }
     }
   }
   return ret;
@@ -864,6 +814,9 @@ int ObSimpleUniqueCheckingTask::process()
     STORAGE_LOG(WARN, "unique checking has already failed", "ret", context_->unique_checking_ret_);
   } else if (OB_FAIL(unique_checker_.check_unique_index(dag, task_id_))) {
     STORAGE_LOG(WARN, "fail to check unique index", K(ret));
+    if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
+      ret = OB_ERR_DUPLICATED_UNIQUE_KEY;
+    }
   }
   // store the ret code by the check unique index and report it in the merge task
   if (OB_FAIL(ret) && OB_NOT_NULL(context_)) {
@@ -947,59 +900,136 @@ int ObUniqueCheckingMergeTask::process()
   int ret = OB_SUCCESS;
   ObArray<int64_t> column_checksum;
   ObArray<int64_t> column_ids;
-  if (OB_SUCCESS != (context_->unique_checking_ret_)) {
-    LOG_WARN("unique checking has already failed", "ret", context_->unique_checking_ret_);
-  } else if (OB_FAIL(context_->get_column_checksum_and_id(column_checksum, column_ids))) {
-    LOG_WARN("fail to get column checksums and ids", KR(ret));
+  share::ObIDag *dag = get_dag();
+  if (OB_ISNULL(context_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unique checking context is null", KR(ret));
+  } else if (OB_ISNULL(param_) || OB_ISNULL(param_->data_table_schema_) || OB_ISNULL(param_->index_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unique checking param is invalid", KR(ret), KP(param_));
   } else {
-    if (column_ids.count() != column_checksum.count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("error unexpected, column id count mismatch", K(ret), K(column_ids), K(column_checksum));
-    }
-    ObArray<ObDDLChecksumItem> checksum_items;
-    for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
-      const ObColumnSchemaV2 *column_schema = param_->data_table_schema_->get_column_schema(column_ids.at(i));
-      if (NULL == column_schema) {
-        column_schema = param_->index_schema_->get_column_schema(column_ids.at(i));
-      }
-      if (OB_ISNULL(column_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "error unexpected, column schema must not be NULL", K(ret), K(column_ids.at(i)));
-      } else {
-        ObDDLChecksumItem item;
-        item.execution_id_ = param_->execution_id_;
-        item.tenant_id_ = param_->tenant_id_;
-        item.table_id_ = param_->is_scan_index_ ? param_->index_schema_->get_table_id() :
-        param_->data_table_schema_->get_table_id();
-        item.tablet_id_ = param_->tablet_id_.id();
-        item.ddl_task_id_ = param_->task_id_;
-        item.column_id_ = column_ids.at(i);
-        item.task_id_ = -param_->tablet_id_.id();
-        item.checksum_ = column_checksum.at(i);
-        if (OB_FAIL(checksum_items.push_back(item))) {
-          LOG_WARN("fail to push back item", K(ret));
+    const int unique_ret = context_->unique_checking_ret_;
+    if (OB_SUCCESS != unique_ret) {
+      LOG_WARN("unique checking has already failed", "ret", unique_ret);
+      if (!share::ObIDDLTask::in_ddl_retry_white_list(unique_ret)) {
+        int64_t &context_ret = context_->unique_checking_ret_;
+        int tmp_ret = report_unique_check_error(dag, context_ret);
+        if (OB_SUCCESS != tmp_ret) {
+          ret = tmp_ret;
+          LOG_WARN("report unique check error failed", KR(ret));
         }
       }
-    }
+    } else if (OB_FAIL(context_->get_column_checksum_and_id(column_checksum, column_ids))) {
+      LOG_WARN("fail to get column checksums and ids", KR(ret));
+    } else {
+      if (column_ids.count() != column_checksum.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, column id count mismatch", K(ret), K(column_ids), K(column_checksum));
+      }
+      ObArray<ObDDLChecksumItem> checksum_items;
+      for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
+        const ObColumnSchemaV2 *column_schema = param_->data_table_schema_->get_column_schema(column_ids.at(i));
+        if (NULL == column_schema) {
+          column_schema = param_->index_schema_->get_column_schema(column_ids.at(i));
+        }
+        if (OB_ISNULL(column_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(WARN, "error unexpected, column schema must not be NULL", K(ret), K(column_ids.at(i)));
+        } else {
+          ObDDLChecksumItem item;
+          item.execution_id_ = param_->execution_id_;
+          item.tenant_id_ = param_->tenant_id_;
+          item.table_id_ = param_->is_scan_index_ ? param_->index_schema_->get_table_id() :
+            param_->data_table_schema_->get_table_id();
+          item.tablet_id_ = param_->tablet_id_.id();
+          item.ddl_task_id_ = param_->task_id_;
+          item.column_id_ = column_ids.at(i);
+          item.task_id_ = -param_->tablet_id_.id();
+          item.checksum_ = column_checksum.at(i);
+          if (OB_FAIL(checksum_items.push_back(item))) {
+            LOG_WARN("fail to push back item", K(ret));
+          }
+        }
+      }
 
-    if (OB_SUCC(ret)) {
-      uint64_t data_format_version = 0;
-      int64_t snapshot_version = 0;
-      share::ObDDLTaskStatus unused_task_status = share::ObDDLTaskStatus::PREPARE;
-      if (OB_FAIL(ObDDLUtil::get_data_information(param_->tenant_id_, param_->task_id_, data_format_version, snapshot_version, unused_task_status))) {
-        LOG_WARN("get ddl cluster version failed", K(ret));
-      } else if (OB_FAIL(ObDDLChecksumOperator::update_checksum(data_format_version, checksum_items, *GCTX.sql_proxy_))) {
-        LOG_WARN("fail to update checksum", K(ret));
+      if (OB_SUCC(ret)) {
+        uint64_t data_format_version = 0;
+        int64_t snapshot_version = 0;
+        share::ObDDLTaskStatus unused_task_status = share::ObDDLTaskStatus::PREPARE;
+        if (OB_FAIL(ObDDLUtil::get_data_information(param_->tenant_id_, param_->task_id_, data_format_version, snapshot_version, unused_task_status))) {
+          LOG_WARN("get ddl cluster version failed", K(ret));
+        } else if (OB_FAIL(ObDDLChecksumOperator::update_checksum(data_format_version, checksum_items, *GCTX.sql_proxy_))) {
+          LOG_WARN("fail to update checksum", K(ret));
+        }
       }
     }
   }
   // overwrite ret
-  if (NULL != param_->callback_) {
+  if (OB_NOT_NULL(param_) && NULL != param_->callback_) {
     if (NULL != param_->index_schema_) {
       STORAGE_LOG(INFO, "unique checking callback", K(param_->tablet_id_), "index_id", param_->index_schema_->get_table_id());
     }
     if (OB_FAIL(param_->callback_->operator()(context_->unique_checking_ret_))) {
       STORAGE_LOG(WARN, "fail to check unique index response", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObUniqueCheckingMergeTask::report_unique_check_error(share::ObIDag *dag, int64_t &ret_code)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  int report_ret_code = OB_SUCCESS;
+  const ObAddr &self_addr = GCTX.self_addr();
+  bool keep_report_err_msg = true;
+  if (OB_UNLIKELY(!is_inited_) || OB_ISNULL(param_) || OB_ISNULL(param_->index_schema_) || OB_ISNULL(dag)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("report unique check error not inited", K(ret), K(is_inited_), KP(param_), KP(dag));
+  } else {
+    LOG_INFO("begin to report build index status & ddl error message", K(param_->index_schema_->get_table_id()),
+        K(*(param_->index_schema_)), K(param_->tablet_id_), K(ret_code));
+    while (!dag->has_set_stop() && keep_report_err_msg) {
+      ObDDLErrorMessageTableOperator::ObDDLErrorInfo info;
+      tmp_ret = ObDDLErrorMessageTableOperator::get_index_task_info(*GCTX.sql_proxy_, *param_->index_schema_, info);
+      if (OB_SUCCESS != tmp_ret) {
+        if (OB_ITER_END == tmp_ret) {
+          keep_report_err_msg = false;
+          LOG_INFO("get task id failed, check whether index building task is cancled", K(tmp_ret), KPC(param_->index_schema_));
+        } else {
+          LOG_INFO("get task id failed, but retry to get it", K(tmp_ret), KPC(param_->index_schema_));
+        }
+      } else if (OB_UNLIKELY(param_->task_id_ != info.task_id_)) {
+        keep_report_err_msg = false;
+        LOG_INFO("get task id mismatched, check whether index building task is cancled", K(param_->task_id_), K(info.task_id_));
+      } else if (OB_SUCCESS != (tmp_ret = ObDDLErrorMessageTableOperator::generate_index_ddl_error_message(
+                     static_cast<int>(ret_code), *(param_->index_schema_), info.trace_id_str_, info.task_id_, info.parent_task_id_,
+                     param_->tablet_id_.id(), self_addr, *GCTX.sql_proxy_, "\0", report_ret_code))) {
+        LOG_WARN("fail to generate index ddl error message", K(ret_code), K(tmp_ret), KPC(param_->index_schema_),
+            K(param_->tablet_id_), K(self_addr));
+        ob_usleep(ObUniqueCheckingMergeTask::RETRY_INTERVAL);
+        int yield_ret = dag_yield();
+        if (OB_SUCCESS != yield_ret) {
+          LOG_WARN("fail to yield dag", KR(yield_ret));
+          ret = yield_ret;
+          keep_report_err_msg = false;
+        }
+      } else {
+        if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret_code && OB_ERR_DUPLICATED_UNIQUE_KEY == report_ret_code) {
+          ret_code = OB_ERR_DUPLICATED_UNIQUE_KEY;
+        }
+        keep_report_err_msg = false;
+      }
+
+      if (OB_TMP_FAIL(tmp_ret) && keep_report_err_msg) {
+        bool is_tenant_dropped = false;
+        if (OB_TMP_FAIL(GSCHEMASERVICE.check_if_tenant_has_been_dropped(param_->tenant_id_, is_tenant_dropped))) {
+          LOG_WARN("check if tenant has been dropped failed", K(tmp_ret), K(param_->tenant_id_));
+        } else if (is_tenant_dropped) {
+          keep_report_err_msg = false;
+          LOG_INFO("break when tenant dropped", K(tmp_ret), KPC(param_->index_schema_), K(param_->tablet_id_), K(self_addr));
+        }
+      }
     }
   }
   return ret;
