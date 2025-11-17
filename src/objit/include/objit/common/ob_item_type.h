@@ -2979,6 +2979,7 @@ typedef enum ObItemType
   T_RANDOM_PARTITION = 4933, // random distribution
   T_COLUMN_NAME_CASE_SENSITIVE = 4934,
   T_REPLACE_LS = 4935, // replace LS
+  T_DISABLE_TRIGGER_HINT = 4936, // disable_trigger hint
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
