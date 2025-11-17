@@ -77,9 +77,16 @@ void keepalive_check(pktc_t* client_io, pkts_t* server_io) {
         update_socket_keepalive_params(sk->fd, pnio_keepalive_timeout);
         sk->user_keepalive_timeout = pnio_keepalive_timeout;
       }
+      if (pnio_keepalive_timeout > 0
+           && 0 != check_socket_write_ack(sk->fd, &sk->sk_diag_info, pnio_keepalive_timeout)) {
+        rk_warn("socket send data is hung and it will be closed, sock=%p, dest=%d:%d",
+                 sk, sk->dest.ip, sk->dest.port);
+        sk->mask |= EPOLLERR;
+        eloop_fire(client_io->ep, (sock_t*)sk);
+      }
     }
     // walks through pkts_t skmap, refresh tcp keepalive params
-    if (server_io->user_keepalive_timeout != pnio_keepalive_timeout) {
+    if (pkts_is_init(server_io) && server_io->user_keepalive_timeout != pnio_keepalive_timeout) {
       dlink_for(&server_io->sk_list, p) {
         pkts_sk_t *sk = structof(p, pkts_sk_t, list_link);
         rk_info("user_keepalive_timeout has been reset, sock_ptr=%p, old=%ld, new=%ld",
@@ -87,6 +94,18 @@ void keepalive_check(pktc_t* client_io, pkts_t* server_io) {
         update_socket_keepalive_params(sk->fd, pnio_keepalive_timeout);
       }
       server_io->user_keepalive_timeout = pnio_keepalive_timeout;
+    }
+    if (pnio_keepalive_timeout > 0 && pkts_is_init(server_io)) {
+      dlink_for(&server_io->sk_list, p) {
+        pkts_sk_t *sk = structof(p, pkts_sk_t, list_link);
+        if (0 != check_socket_write_ack(sk->fd, &sk->sk_diag_info, pnio_keepalive_timeout)) {
+          char peer_addr_buf[PNIO_NIO_ADDR_LEN] = {'\0'};
+          rk_warn("socket send data is hung and it will be closed, sock=%p, peer=%s",
+                  sk, addr_str(sk->peer, peer_addr_buf, sizeof(peer_addr_buf)));
+          sk->mask |= EPOLLERR;
+          eloop_fire(server_io->ep, (sock_t*)sk);
+        }
+      }
     }
   }
 }

@@ -62,3 +62,7 @@ typedef struct pkts_t {
   int64_t user_keepalive_timeout;
   diag_info_t diag_info;
 } pkts_t;
+
+inline bool pkts_is_init(pkts_t* pkts) {
+  return pkts->ep != NULL;
+}

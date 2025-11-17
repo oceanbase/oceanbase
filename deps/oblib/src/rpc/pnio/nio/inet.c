@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include <sys/ioctl.h>
 #define PNIO_TCP_SYNCNT 3
 int check_connect_result(int fd) {
   int err = 0;
@@ -128,6 +129,13 @@ int set_sock_opt(int fd, int option, int value)
 }
 
 void update_socket_keepalive_params(int fd, int64_t user_timeout) {
+#ifdef ERRSIM
+  int tmp_ret = OB_E(EventTable::EN_RPC_DISABLE_RPC_SOCKET_KEEPALIVE) OB_SUCCESS;
+  if (OB_SUCCESS != tmp_ret) {
+    rk_warn("disable rpc socket keepalive for errsim, fd=%d, tmp_ret=%d", fd, tmp_ret);
+    return;
+  }
+#endif
   int tcp_keepalive = (user_timeout > 0) ? 1: 0;
   int tcp_keepidle = user_timeout/5000000;
   if (tcp_keepidle < 1) {
@@ -146,13 +154,35 @@ void update_socket_keepalive_params(int fd, int64_t user_timeout) {
       ignore_ret_value(set_tcpopt(fd, TCP_USER_TIMEOUT, tcp_user_timeout));
     }
   } else {
-    if (set_tcpopt(fd, SO_KEEPALIVE, 0)) {
+    if (set_sock_opt(fd, SO_KEEPALIVE, 0)) {
       rk_warn("disable SO_KEEPALIVE error: %d, fd=%d\n", errno, fd);
     } else {
       ignore_ret_value(set_tcpopt(fd, TCP_USER_TIMEOUT, 0));
     }
   }
 }
+int check_socket_write_ack(int fd, socket_diag_info_t* sk_diag_info, const int64_t user_timeout) {
+  int err = 0;
+  int qlen = 0;
+  if (0 != ioctl(fd, TIOCOUTQ, &qlen)) {
+    // this case not to close socket, just to log error
+    rk_error("Failed to do TIOCOUTQ ioctl on fd=%d, errno(%d)", fd, errno);
+  } else {
+    int64_t cur_time = rk_get_us();
+    int64_t ack_size = sk_diag_info->write_size - qlen;
+    if (qlen <= 0 || ack_size != sk_diag_info->write_ack_size) {
+      sk_diag_info->write_ack_time = cur_time;
+      sk_diag_info->write_ack_size = ack_size;
+    } else if (0 != sk_diag_info->write_ack_time && cur_time - sk_diag_info->write_ack_time > user_timeout) {
+      err = -EIO;
+      rk_error("socket is unable to send data for more than %ld us, tcp socket is hung or cpu load is too high, "
+               "the socket will be closed, fd=%d, write_ack_time=%ld, write_ack_size=%ld, qlen=%d",
+               user_timeout, fd, sk_diag_info->write_ack_time, sk_diag_info->write_ack_size, qlen);
+    }
+  }
+  return err;
+}
+
 
 int set_tcp_recv_buf(int fd, int size) {
   return setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (const char*)&size, sizeof(size));
