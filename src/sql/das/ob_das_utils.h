@@ -96,7 +96,7 @@ public:
       SQL_DAS_LOG(WARN, "find chld das def failed", K(ret));
     } else if (OB_ISNULL(base_ctdef) || OB_ISNULL(base_rtdef)) {
       ret = common::OB_ERR_UNEXPECTED;
-      SQL_DAS_LOG(WARN, "can not find the target op def", K(ret), K(op_type), KP(base_ctdef), KP(base_rtdef));
+      SQL_DAS_LOG(DEBUG, "can not find the target op def", K(ret), K(op_type), KP(base_ctdef), KP(base_rtdef));
     } else {
       target_ctdef = static_cast<const CtDefType*>(base_ctdef);
       target_rtdef = static_cast<RtDefType*>(base_rtdef);

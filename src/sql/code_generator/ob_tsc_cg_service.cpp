@@ -2908,6 +2908,8 @@ int ObTscCgService::generate_index_merge_node_ctdef(const ObLogTableScan &op,
             } else if (child->node_type_ == INDEX_MERGE_MULTIVALUE_INDEX) {
               // Set multivalue index scan type
               scan_ctdef->ir_scan_type_ = ObTSCIRScanType::OB_IR_MULTIVALUE_IDX_SCAN;
+              cg_ctx.is_func_lookup_ = false;
+              cg_ctx.is_merge_fts_index_ = false;
             } else {
               cg_ctx.is_func_lookup_ = false;
               cg_ctx.is_merge_fts_index_ = false;
