@@ -20767,8 +20767,7 @@ int ObJoinOrder::add_valid_vec_index_ids(const ObDMLStmt &stmt,
     if (((tenant_cluster_version >= MOCK_CLUSTER_VERSION_4_3_5_3 &&
           tenant_cluster_version < CLUSTER_VERSION_4_4_0_0) ||
          tenant_cluster_version >= CLUSTER_VERSION_4_4_1_0)
-    && index_type >= ObIndexType::INDEX_TYPE_VEC_ROWKEY_VID_LOCAL
-    && index_type <= INDEX_TYPE_VEC_INDEX_SNAPSHOT_DATA_LOCAL
+    && (is_local_vec_hnsw_index(index_type))
     && helper.vec_index_type_ != ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN) {
       // if hnsw, do not add vec_index_tid, mark adaptive_scan
       helper.vec_index_type_ = ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN;

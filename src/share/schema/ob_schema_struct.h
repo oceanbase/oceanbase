@@ -440,7 +440,7 @@ enum ObIndexType
   INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY = 41,
   // sparse vector inverted index
   INDEX_TYPE_VEC_SPIV_DIM_DOCID_VALUE_LOCAL = 42,
-  // hybrid vec
+  // hybrid vec hnsw
   INDEX_TYPE_HYBRID_INDEX_LOG_LOCAL = 43,
   INDEX_TYPE_HYBRID_INDEX_EMBEDDED_LOCAL = 44,
 
