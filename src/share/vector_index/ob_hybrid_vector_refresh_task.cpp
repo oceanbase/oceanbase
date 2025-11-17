@@ -525,6 +525,8 @@ int ObHybridVectorRefreshTask::prepare_for_embedding(ObPluginVectorIndexAdaptor 
     LOG_WARN("unexpected error", K(ret), KPC(task_ctx));
   } else if (OB_FAIL(adaptor.get_dim(dim))) {
     LOG_WARN("get dim failed", K(ret));
+  } else if (OB_FAIL(ObVectorIndexUtil::get_index_column_collation_type(tenant_id_, adaptor.get_embedded_table_id(), col_type))) {
+    LOG_WARN("failed to get chunc column col_type", K(ret), K(adaptor));
   } else {
     if (OB_NOT_NULL(tsc_iter) || OB_NOT_NULL(table_scan_param) || OB_NOT_NULL(table_param)) {
       if (OB_ISNULL(tsc_iter) || OB_ISNULL(table_scan_param) || OB_ISNULL(table_param)) {
@@ -562,8 +564,6 @@ int ObHybridVectorRefreshTask::prepare_for_embedding(ObPluginVectorIndexAdaptor 
       LOG_WARN("failed to get index id table column ids", K(ret), K(adaptor));
     } else if (task_ctx->embedded_table_column_ids_.empty() && OB_FAIL(get_embedded_table_column_ids(adaptor))) {
       LOG_WARN("failed to get embedded table column ids", K(ret), K(adaptor));
-    } else if (OB_FAIL(ObVectorIndexUtil::get_index_column_collation_type(tenant_id_, adaptor.get_embedded_table_id(), col_type))) {
-      LOG_WARN("failed to get chunc column col_type", K(ret), K(adaptor));
     }
 
     int cur_row_count = 0;
@@ -1166,10 +1166,10 @@ void ObHybridVectorRefreshTaskCtx::set_task_finish()
     if (ret != OB_SUCCESS) {
       LOG_WARN("revert scan iter failed", K(ret));
     }
-    scan_iter_ = nullptr;
-    table_scan_param_ = nullptr;
-    table_param_ = nullptr;
   }
+  scan_iter_ = nullptr;
+  table_scan_param_ = nullptr;
+  table_param_ = nullptr;
   if (task_started_) {
     adp_guard_.get_adatper()->vector_index_task_finish();
     adp_guard_.~ObPluginVectorIndexAdapterGuard();
