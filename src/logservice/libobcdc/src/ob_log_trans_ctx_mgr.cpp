@@ -186,7 +186,6 @@ int ObLogTransCtxMgr::get_trans_ctx(
       } else if (OB_FAIL(map_.insert_and_get(key, tmp_trans_ctx))) {
         if (OB_ENTRY_EXIST == ret) {
           // TransCtx already created by other thread, free tmp_trans_ctx and get the existing one
-          tmp_trans_ctx->~TransCtx();
           map_.free_value(tmp_trans_ctx);
           tmp_trans_ctx = nullptr;
           if (OB_FAIL(map_.get(key, trans_ctx))) {
