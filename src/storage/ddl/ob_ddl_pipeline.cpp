@@ -1971,7 +1971,7 @@ int ObHNSWEmbeddingOperator::process_input_chunk(const ObChunk &input_chunk)
       LOG_WARN("cg row file array is null", K(ret));
     } else {
       while (OB_SUCC(ret) && !chunk_exhausted_) {
-        ObString text;
+        blocksstable::ObStorageDatum text;
         common::ObArray<blocksstable::ObStorageDatum> extras;
         bool has_row = false;
         if (current_batch_->is_full()) {
@@ -1987,9 +1987,8 @@ int ObHNSWEmbeddingOperator::process_input_chunk(const ObChunk &input_chunk)
         } else if (!has_row) {
           chunk_exhausted_ = true;
         } else {
-          ObEmbeddingResult::EmbeddingStatus status = text.length() > 0 ? ObEmbeddingResult::NEED_EMBEDDING : ObEmbeddingResult::SKIP_EMBEDDING;
-          if (OB_FAIL(current_batch_->add_item(text, extras, status))) {
-            LOG_WARN("add item to batch failed", K(ret), K(text.length()));
+          if (OB_FAIL(current_batch_->add_item(text, extras))) {
+            LOG_WARN("add item to batch failed", K(ret));
           }
         }
       }
@@ -1999,7 +1998,7 @@ int ObHNSWEmbeddingOperator::process_input_chunk(const ObChunk &input_chunk)
 }
 
 int ObHNSWEmbeddingOperator::get_next_row_from_tmp_files(ObArray<ObCGRowFile *> *cg_row_file_arr,
-                                                          ObString &text,
+                                                          blocksstable::ObStorageDatum &text,
                                                           common::ObArray<blocksstable::ObStorageDatum> &extras,
                                                           bool &has_row)
 {
@@ -2080,7 +2079,7 @@ int ObHNSWEmbeddingOperator::get_next_batch_from_tmp_files(ObCGRowFile *&row_fil
 }
 
 int ObHNSWEmbeddingOperator::parse_row(const blocksstable::ObDatumRow &current_row,
-                                       common::ObString &text,
+                                       blocksstable::ObStorageDatum &text,
                                        common::ObArray<blocksstable::ObStorageDatum> &extras)
 {
   int ret = OB_SUCCESS;
@@ -2091,7 +2090,8 @@ int ObHNSWEmbeddingOperator::parse_row(const blocksstable::ObDatumRow &current_r
     LOG_WARN("invalid datum row", K(ret), K(current_row), K(text_col_idx_));
   } else {
     const blocksstable::ObStorageDatum &chunk_cell = current_row.storage_datums_[text_col_idx_];
-    text = chunk_cell.get_string();
+    text.shallow_copy_from_datum(chunk_cell);
+
     for (int64_t i = 0; OB_SUCC(ret) && i < extra_column_idxs_.count(); ++i) {
       int32_t col_idx = extra_column_idxs_.at(i);
       if (col_idx < 0 || col_idx >= current_row.get_column_count()) {

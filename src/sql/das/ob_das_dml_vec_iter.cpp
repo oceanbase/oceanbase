@@ -783,6 +783,13 @@ int ObEmbeddedVecDMLIterator::get_chunk_data(const ObChunkDatumStore::StoredRow 
   } else {
     const int64_t main_table_embedded_idx = row_projector_->at(embedded_vec_idx);
     chunk = store_row->cells()[main_table_embedded_idx].get_string();
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator_,
+                                                          ObLongTextType,
+                                                          CS_TYPE_BINARY,
+                                                          true,
+                                                          chunk))) {
+      LOG_WARN("fail to get real data.", K(ret), K(chunk));
+    }
   }
   return ret;
 }

@@ -68,7 +68,7 @@ public:
   }
 
   common::ObString get_text() const { return text_; }
-  void set_text(const common::ObString &text) { text_ = text; }
+  int set_text(const blocksstable::ObStorageDatum &text, ObArenaAllocator &allocator);
 
   // Deep copy extra non-embedding columns
   int set_extra_cols(const common::ObArray<blocksstable::ObStorageDatum> &src_extras, ObArenaAllocator &allocator);
@@ -113,9 +113,8 @@ public:
   int init(const int64_t batch_size, const int64_t vec_dim);
 
   // Add an item during batching phase (deep copy to allocator)
-  int add_item(const common::ObString &text,
-               const common::ObArray<blocksstable::ObStorageDatum> &extras,
-               const ObEmbeddingResult::EmbeddingStatus status);
+  int add_item(const blocksstable::ObStorageDatum &text,
+               const common::ObArray<blocksstable::ObStorageDatum> &extras);
   int64_t get_count() const { return current_count_; }
   int64_t get_need_embedding_count() const { return need_embedding_count_; }
   bool is_full() const { return current_count_ >= batch_size_; }

@@ -1132,8 +1132,14 @@ int ObArrayExprUtils::calc_nested_expr_data_size(const ObExpr &expr, ObEvalCtx &
   ObIVector *root_vec = expr.get_vector(ctx);
   const char *payload = NULL;
   ObLength payload_len = 0;
+  ObCollectionTypeBase *coll_type = NULL;
   root_vec->get_payload(batch_idx, payload, payload_len);
   if (root_vec->is_null(batch_idx)) {
+  } else if (payload_len == 0 && OB_FAIL(get_coll_type_by_subschema_id(&ctx.exec_ctx_, expr.obj_meta_.get_subschema_id(), coll_type))) {
+    LOG_WARN("failed to get array type by subschema id", K(ret), K(expr));
+  } else if ((OB_NOT_NULL(coll_type) && coll_type->type_id_ == ObNestedType::OB_VECTOR_TYPE)) {
+    size = payload_len;
+    LOG_DEBUG("skip one row with vector type and length is 0", K(ret));
   } else if (ObCollectionExprUtil::is_compact_fmt_cell(payload)) {
     size = payload_len;
   } else if (payload_len != sizeof(ObCollectionExprCell)) {

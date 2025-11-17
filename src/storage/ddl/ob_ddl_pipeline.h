@@ -768,12 +768,12 @@ private:
   int get_ready_results(ObChunk &output_chunk, ResultState &result_state);
   int process_input_chunk(const ObChunk &input_chunk);
   int get_next_row_from_tmp_files(common::ObArray<ObCGRowFile *> *cg_row_file_arr,
-                                  common::ObString &text,
+                                  blocksstable::ObStorageDatum &text,
                                   common::ObArray<blocksstable::ObStorageDatum> &extras,
                                   bool &has_row);
   int get_next_batch_from_tmp_files(ObCGRowFile *&row_file);
   int parse_row(const blocksstable::ObDatumRow &current_row,
-                common::ObString &text,
+                blocksstable::ObStorageDatum &text,
                 common::ObArray<blocksstable::ObStorageDatum> &extras);
   int flush_current_batch();
   bool is_chunk_exhausted() const { return chunk_exhausted_; }

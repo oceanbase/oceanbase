@@ -58,6 +58,27 @@ int ObEmbeddingConfig::assign(const ObEmbeddingConfig &other)
 }
 
 // -------------------------------- ObEmbeddingResult --------------------------------
+int ObEmbeddingResult::set_text(const blocksstable::ObStorageDatum &text, ObArenaAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  ObString tmp_text = text.get_string();
+  if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator, ObLongTextType, CS_TYPE_BINARY, true, tmp_text))) {
+    LOG_WARN("read real string data failed", K(ret));
+  } else {
+    if (tmp_text.length() > 0) {
+      char *text_buf = static_cast<char*>(allocator.alloc(tmp_text.length()));
+      if (OB_ISNULL(text_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate text buffer failed", K(ret), K(tmp_text.length()));
+      } else {
+        MEMCPY(text_buf, tmp_text.ptr(), tmp_text.length());
+        text_ = common::ObString(tmp_text.length(), text_buf);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObEmbeddingResult::set_extra_cols(const common::ObArray<blocksstable::ObStorageDatum> &src_extras, ObArenaAllocator &allocator)
 {
   int ret = OB_SUCCESS;
@@ -208,9 +229,8 @@ int ObTaskBatchInfo::init(const int64_t batch_size, const int64_t vec_dim)
   return ret;
 }
 
-int ObTaskBatchInfo::add_item(const common::ObString &text,
-                              const common::ObArray<blocksstable::ObStorageDatum> &extras,
-                              const ObEmbeddingResult::EmbeddingStatus status)
+int ObTaskBatchInfo::add_item(const blocksstable::ObStorageDatum &text,
+                              const common::ObArray<blocksstable::ObStorageDatum> &extras)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(current_count_ >= batch_size_)) {
@@ -218,27 +238,17 @@ int ObTaskBatchInfo::add_item(const common::ObString &text,
     LOG_WARN("batch is full", K(ret), K_(current_count), K_(batch_size));
   } else {
     ObEmbeddingResult *result = results_.at(current_count_);
-    result->set_status(status);
-    if (status == ObEmbeddingResult::NEED_EMBEDDING) {
-      need_embedding_count_++;
-    }
-
     //deep copy
-    if (text.length() > 0) {
-      char *text_buf = static_cast<char*>(allocator_.alloc(text.length()));
-      if (OB_ISNULL(text_buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("allocate text buffer failed", K(ret), K(text.length()));
-      } else {
-        MEMCPY(text_buf, text.ptr(), text.length());
-        result->set_text(common::ObString(text.length(), text_buf));
-      }
-    }
-
-    // deep copy extras
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(result->set_extra_cols(extras, allocator_))) {
-        LOG_WARN("deep copy extras failed", K(ret));
+    if (OB_FAIL(result->set_text(text, allocator_))) {
+      LOG_WARN("set text failed", K(ret));
+    } else if (OB_FAIL(result->set_extra_cols(extras, allocator_))) {
+      LOG_WARN("set extra cols failed", K(ret));
+    } else {
+      const ObString tmp_text = result->get_text();
+      ObEmbeddingResult::EmbeddingStatus status = tmp_text.length() > 0 ? ObEmbeddingResult::NEED_EMBEDDING : ObEmbeddingResult::SKIP_EMBEDDING;
+      result->set_status(status);
+      if (status == ObEmbeddingResult::NEED_EMBEDDING) {
+        need_embedding_count_++;
       }
     }
 
@@ -250,11 +260,8 @@ int ObTaskBatchInfo::add_item(const common::ObString &text,
         LOG_WARN("allocate vector buffer failed", K(ret), K_(vec_dim));
       } else {
         result->set_vector(vec_buf, vec_dim_);
+        current_count_++;
       }
-    }
-
-    if (OB_SUCC(ret)) {
-      current_count_++;
     }
   }
   return ret;
