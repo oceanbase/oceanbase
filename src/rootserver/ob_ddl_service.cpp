@@ -29543,6 +29543,13 @@ int ObDDLService::rebuild_vec_index(const ObRebuildIndexArg &arg, obrpc::ObAlter
         ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
         LOG_WARN("index table schema should not be null", K(ret), K(arg.index_name_));
         LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, arg.index_name_.length(), arg.index_name_.ptr());
+      } else if (!ObVectorIndexUtil::check_index_is_all_ready(schema_guard, *table_schema, *index_table_schema)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "rebuild on not ready vector index is");
+      } else if (OB_FAIL(check_vec_index_conflict(table_schema->get_tenant_id(), table_id))) {
+        if (OB_EAGAIN != ret) {
+          LOG_WARN("failed to check vec index ", K(ret));
+        }
       } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
         LOG_WARN("get min data version failed", K(ret), K(tenant_id));
       } else if (tenant_data_version < DATA_VERSION_4_3_3_0) {
