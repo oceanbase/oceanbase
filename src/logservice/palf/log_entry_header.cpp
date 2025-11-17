@@ -247,7 +247,8 @@ int16_t LogEntryHeader::get_version_() const
   uint64_t min_data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), min_data_version))) {
     PALF_LOG(WARN, "GET_MIN_DATA_VERSION failed", K(ret));
-  } else if (min_data_version >= DATA_VERSION_4_3_3_0) {
+  } else if ((min_data_version >= MOCK_DATA_VERSION_4_2_5_0 && min_data_version < DATA_VERSION_4_3_0_0)
+             || min_data_version >= DATA_VERSION_4_3_3_0) {
     version = LOG_ENTRY_HEADER_VERSION2;
   }
   return version;
