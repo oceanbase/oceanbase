@@ -37,9 +37,10 @@ namespace pl
 {
 enum class ProfileDisplayType
 {
-  AGGREGATED = 0,    // Display aggregated profile with detail info, with raw json format
+  AGGREGATED = 0,    // Display aggregated profile, default in pretty format
   ORIGINAL,          // Display original profile without aggregation, with raw json format
   AGGREGATED_PRETTY, // Display aggregated profile with pretty format
+  AGGREGATED_JSON,   // Display aggregated profile with json format
 };
 
 struct ProfileText

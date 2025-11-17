@@ -101,16 +101,18 @@ int ObDbmsXprofile::display_profile(ObExecContext &ctx, ParamStore &params, ObOb
 int ObDbmsXprofile::set_display_type(const ObString &format, ProfileDisplayType &type)
 {
   int ret = OB_SUCCESS;
-  if (format.case_compare("AGGREGATED") == 0) {
-    type = ProfileDisplayType::AGGREGATED;
-  } else if (format.case_compare("AGGREGATED_PRETTY") == 0) {
+  if (format.case_compare("AGGREGATED") == 0 || format.case_compare("AGGREGATED_PRETTY") == 0) {
     type = ProfileDisplayType::AGGREGATED_PRETTY;
+  } else if (format.case_compare("AGGREGATED_JSON") == 0) {
+    type = ProfileDisplayType::AGGREGATED_JSON;
   } else if (format.case_compare("ORIGINAL") == 0) {
     type = ProfileDisplayType::ORIGINAL;
   } else {
     ret = OB_INVALID_ARGUMENT;
-    LOG_USER_ERROR(OB_INVALID_ARGUMENT,
-                   "display format must be AGGREGATED, ORIGINAL or AGGREGATED_PRETTY ");
+    LOG_USER_ERROR(
+        OB_INVALID_ARGUMENT,
+        "display format must be AGGREGATED, AGGREGATED_PRETTY, ORIGINAL or "
+        "AGGREGATED_JSON");
     LOG_WARN("Invalid display format", K(format));
   }
   return ret;
@@ -143,8 +145,8 @@ int ObDbmsXprofile::format_profile_result(ObExecContext &ctx,
     if (OB_FAIL(flatten_op_profile(profile_items, profile_text))) {
       LOG_WARN("failed to flatten op profile");
     }
-  } else if (ProfileDisplayType::AGGREGATED == profile_text.type_
-             || ProfileDisplayType::AGGREGATED_PRETTY == profile_text.type_) {
+  } else if (ProfileDisplayType::AGGREGATED_PRETTY == profile_text.type_
+             || ProfileDisplayType::AGGREGATED_JSON == profile_text.type_) {
     if (OB_FAIL(aggregate_op_profile(ctx, profile_items, trace_id, profile_text))) {
       LOG_WARN("failed to aggregate op profile");
     }
@@ -323,7 +325,7 @@ int ObDbmsXprofile::format_agg_profiles(const ObIArray<ObMergedProfileItem> &mer
       LOG_WARN("too many profile to print", K(merged_items.count()), K(pos), K(format_size),
                K(buf_len));
       break;
-    } else if (ProfileDisplayType::AGGREGATED == profile_text.type_) {
+    } else if (ProfileDisplayType::AGGREGATED_JSON == profile_text.type_) {
       if (OB_FAIL(item.profile_->to_format_json(&arena_alloc, text, true, display_level))) {
         LOG_WARN("failed to format profile", K(item.profile_->get_name_str()), K(buf_len), K(pos));
       } else if (pos + item.plan_depth_ < buf_len) {
