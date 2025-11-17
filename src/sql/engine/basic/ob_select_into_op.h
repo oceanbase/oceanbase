@@ -264,7 +264,6 @@ private:
 #endif
 #ifdef OB_BUILD_JNI_ODPS
   int init_odps_jni_tunnel();
-  int into_odps_jni();
   int into_odps_jni_batch(const ObBatchRows &brs);
   int odps_jni_commit_upload();
 
@@ -274,23 +273,6 @@ private:
       ObDatumMeta &meta, ObObjMeta &obj_meta, ObIVector &expr_vector, arrow::ArrayBuilder *builder,
       const ObBatchRows &brs, int &act_cnt, ObIAllocator &alloc, const bool is_strict_mode, const ObDateSqlMode date_sql_mode);
 
-  int set_odps_column_value_mysql_jni(arrow::ArrayBuilder *builder,
-                                                ObOdpsJniConnector::OdpsType odps_type,
-                                                const ObDatum &datum,
-                                                const ObDatumMeta &datum_meta,
-                                                const ObObjMeta &obj_meta,
-                                                arrow::Field &arrow_field,
-                                                uint32_t col_idx,
-                                                const bool is_strict_mode,
-                                                const ObDateSqlMode date_sql_mode);
-
-  int set_odps_column_value_oracle_jni(arrow::ArrayBuilder *builder,
-                                                 ObOdpsJniConnector::OdpsType odps_type,
-                                                 const ObDatum &datum,
-                                                 const ObDatumMeta &datum_meta,
-                                                 const ObObjMeta &obj_meta,
-                                                 arrow::Field &arrow_field,
-                                                 uint32_t col_idx);
 #endif
 
   int decimal_or_number_to_int64(const ObDatum &datum, const ObDatumMeta &datum_meta, int64_t &res);
@@ -424,7 +406,6 @@ private:
                                 const ObDateSqlMode date_sql_mode);
   bool file_need_split(int64_t file_size);
   int check_oracle_number(ObObjType obj_type, int16_t &precision, int8_t scale);
-  static bool day_number_checker(int32_t days);
 
   #ifdef OB_BUILD_CPP_ODPS
   int recursive_fill_list_record(shared_ptr<apsara::odps::sdk::ODPSArray> odps_array,
