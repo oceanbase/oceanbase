@@ -1915,8 +1915,14 @@ int ObMergeJoinOp::inner_get_next_batch(const int64_t max_row_cnt)
             OB_FAIL(match_group_rows(max_row_cnt))) {
         LOG_WARN("fail to match group rows", K(ret));
       } else if (OB_UNLIKELY(BJS_MATCH_GROUP == batch_join_state_)) {
-        // join result for the match_groups is empty and both fetcher still have data to join,
-        // should do join both again to produce new match groups.
+        // Zero-output in MATCH_GROUP:
+        // If current groups are fully consumed (no pending rows and no more groups),
+        // reset them and then switch to JOIN_BOTH to build subsequent groups.
+        if (!left_group_.has_next() && !right_group_.has_next() &&
+            group_idx_ >= match_groups_.count()) {
+          match_groups_.reset();
+          group_idx_ = 0;
+        }
         batch_join_state_ = BJS_JOIN_BOTH;
       }
     }
