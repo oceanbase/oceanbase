@@ -1734,7 +1734,8 @@ OB_NOINLINE int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_
     ret = OB_NOT_MASTER;
     TRANS_LOG(WARN, "invalid ls, acquire gts for snapshot", K(ret), K(ls_id), K(ls_handle));
   } else if (ls_handle.get_ls()->is_logonly_replica()) {
-    role = FOLLOWER;
+    ret = OB_NOT_MASTER;
+    TRANS_LOG(WARN, "logonly replica should not have read/write request", KR(ret), K(ls_id));
   } else if (OB_FAIL(ls_handle.get_ls()->get_tx_svr()->get_tx_ls_log_adapter()->get_role(leader,
                                                                                          epoch))) {
     TRANS_LOG(WARN, "get replica role fail", K(ret), K(ls_id));
