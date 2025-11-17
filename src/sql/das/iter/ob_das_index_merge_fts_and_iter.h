@@ -189,7 +189,6 @@ private:
   int get_relevance(int64_t child_idx, double &relevance);
   int compare(ObDASIndexMergeIter::MergeResultBuffer* row_buffer, IndexMergeRowStore &cmp_store, int &cmp_ret) const;
   int fill_other_child_stores(int64_t capacity);
-  int fill_one_child_stores(int64_t capacity, int64_t child_idx, ObDASIter *child_iter);
   int prepare_outout(bool is_vectorized, int64_t capacity);
 
   int execute_second_round_scan(bool is_vectorized, int64_t capacity, ObMinRelevanceHeap &first_round_results);
