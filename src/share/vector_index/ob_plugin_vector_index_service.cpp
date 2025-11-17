@@ -905,7 +905,7 @@ int ObPluginVectorIndexService::release_vector_index_tmp_info(const int64_t task
   return ret;
 }
 
-int ObPluginVectorIndexService::get_vector_index_tmp_info(const int64_t task_id, ObVectorIndexTmpInfo *&tmp_info)
+int ObPluginVectorIndexService::get_vector_index_tmp_info(const int64_t task_id, ObVectorIndexTmpInfo *&tmp_info, const bool get_from_exist)
 {
   int ret = OB_SUCCESS;
   tmp_info = nullptr;
@@ -914,21 +914,25 @@ int ObPluginVectorIndexService::get_vector_index_tmp_info(const int64_t task_id,
     LOG_WARN("invalid argument", K(ret), K(task_id));
   } else if (OB_FAIL(get_vector_index_tmp_info_map().get_refactored(task_id, tmp_info))) {
     if (OB_HASH_NOT_EXIST == ret) {
-      void *tmp_info_buff = allocator_.alloc(sizeof(ObVectorIndexTmpInfo));
-      if (OB_ISNULL(tmp_info_buff)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate memeory for new vector index tmp info", K(ret), K(task_id));
+      if (get_from_exist) {
+        LOG_WARN("vector tmp_info hash not exist", K(ret), K(task_id));
       } else {
-        ObVectorIndexTmpInfo *new_tmp_info = new(tmp_info_buff)ObVectorIndexTmpInfo();
-        if (OB_FAIL(get_vector_index_tmp_info_map().set_refactored(task_id, new_tmp_info))) {
-          LOG_WARN("set vector index tmp info faild", K(ret), K(task_id));
+        void *tmp_info_buff = allocator_.alloc(sizeof(ObVectorIndexTmpInfo));
+        if (OB_ISNULL(tmp_info_buff)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memeory for new vector index tmp info", K(ret), K(task_id));
         } else {
-          tmp_info = new_tmp_info;
-        }
-        if (OB_FAIL(ret)) {
-          new_tmp_info->~ObVectorIndexTmpInfo();
-          allocator_.free(tmp_info_buff);
-          tmp_info_buff = nullptr;
+          ObVectorIndexTmpInfo *new_tmp_info = new(tmp_info_buff)ObVectorIndexTmpInfo();
+          if (OB_FAIL(get_vector_index_tmp_info_map().set_refactored(task_id, new_tmp_info))) {
+            LOG_WARN("set vector index tmp info faild", K(ret), K(task_id));
+          } else {
+            tmp_info = new_tmp_info;
+          }
+          if (OB_FAIL(ret)) {
+            new_tmp_info->~ObVectorIndexTmpInfo();
+            allocator_.free(tmp_info_buff);
+            tmp_info_buff = nullptr;
+          }
         }
       }
     }

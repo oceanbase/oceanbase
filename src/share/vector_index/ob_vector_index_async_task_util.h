@@ -547,6 +547,10 @@ private:
       const int64_t visible_col_idx,
       ObIArray<uint64_t> &extra_column_idxs,
       storage::ObValueRowIterator &dml_row_iter);
+  int get_ls_leader_addr(
+      const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
+      common::ObAddr &leader_addr);
 
   bool check_task_satisfied_memory_limited(ObPluginVectorIndexAdaptor &adaptor);
   bool check_new_adapter_exist(const int64_t task_id);

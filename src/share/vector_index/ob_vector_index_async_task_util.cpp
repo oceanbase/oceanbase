@@ -236,13 +236,15 @@ int ObVecIndexAsyncTaskUtil::set_inner_sql_slice_info(const int64_t task_id, roo
   if (!ddl_slice_info.is_valid() || OB_ISNULL(vector_index_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected ddl slice info", K(ret), K(ddl_slice_info), KP(vector_index_service));
-  } else if (OB_FAIL(vector_index_service->get_vector_index_tmp_info(task_id, tmp_info))) {
+  } else if (OB_FAIL(vector_index_service->get_vector_index_tmp_info(task_id, tmp_info, true /*get_from_exist*/))) {
     LOG_WARN("fail to get vector index tmp info", K(task_id));
   } else if (OB_ISNULL(tmp_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr", K(ret), K(task_id), K(tmp_info));
   } else if (OB_FAIL(tmp_info->ddl_slice_info_.deep_copy(ddl_slice_info, tmp_info->allocator_))) {
     LOG_WARN("fail to copy ddl slice info", K(ret), K(ddl_slice_info));
+  } else {
+    LOG_INFO("set_inner_sql_slice_info, task_id", K(task_id));
   }
   return ret;
 }
@@ -2269,6 +2271,28 @@ int ObVecIndexAsyncTask::get_current_scn(share::SCN &current_scn)
   return ret;
 }
 
+int ObVecIndexAsyncTask::get_ls_leader_addr(
+    const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObAddr &leader_addr)
+{
+  int ret = OB_SUCCESS;
+  bool force_renew = false;
+  share::ObLocationService *location_service = nullptr;
+  const uint64_t cluster_id = GCONF.cluster_id;
+
+  if (OB_ISNULL(location_service = GCTX.location_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to check and wait old completement, null pointer. ", K(ret));
+  } else if (OB_FAIL(location_service->get_leader(cluster_id, tenant_id, ls_id, force_renew, leader_addr))) {
+    LOG_WARN("failed to get ls_leader", K(ret));
+  } else if (OB_UNLIKELY(!leader_addr.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("leader addr is invalid", K(ret), K(tenant_id), K(leader_addr), K(cluster_id));
+  } else {
+    LOG_INFO("succ to get ls leader addr", K(cluster_id), K(tenant_id), K(leader_addr));
+  }
+  return ret;
+}
+
 int ObVecIndexAsyncTask::execute_inner_sql(
     const ObTableSchema &data_schema, const int64_t data_table_id, const int64_t dest_table_id,
     const int64_t task_id, const int64_t parallelism, ObString &partition_names, share::SCN &current_scn)
@@ -2277,6 +2301,7 @@ int ObVecIndexAsyncTask::execute_inner_sql(
 
   ObSqlString sql_string;
   bool need_padding = false;
+  common::ObAddr ls_leader_addr;
   int ret_code = -1;
 
   if (data_table_id == OB_INVALID_ID || dest_table_id == OB_INVALID_ID || parallelism < 1 || !current_scn.is_valid()) {
@@ -2298,6 +2323,8 @@ int ObVecIndexAsyncTask::execute_inner_sql(
     LOG_WARN("fail to generate build replica sql", K(ret));
   } else if (OB_FAIL(data_schema.is_need_padding_for_generated_column(need_padding))) {
     LOG_WARN("fail to check need padding", K(ret));
+  } else if (OB_FAIL(get_ls_leader_addr(tenant_id_, ls_id_, ls_leader_addr))) {
+    LOG_WARN("fail to get ls leader addr", K(ret), K(tenant_id_), K(ls_id_));
   } else {
     common::ObCommonSqlProxy *user_sql_proxy = GCTX.ddl_sql_proxy_;
     int64_t affected_rows = 0;
@@ -2324,7 +2351,7 @@ int ObVecIndexAsyncTask::execute_inner_sql(
       LOG_WARN("set trx timeout failed", K(ret));
     } else if (OB_FAIL(timeout_ctx.set_timeout(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
       LOG_WARN("set timeout failed", K(ret));
-    } else if (OB_FAIL(user_sql_proxy->write(tenant_id_, sql_string.ptr(), affected_rows, ObCompatibilityMode::MYSQL_MODE, &session_param))) {
+    } else if (OB_FAIL(user_sql_proxy->write(tenant_id_, sql_string.ptr(), affected_rows, ObCompatibilityMode::MYSQL_MODE, &session_param, &ls_leader_addr))) {
       LOG_WARN("fail to execute build replica sql", K(ret), K(tenant_id_));
     } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::get_inner_sql_ret_code(task_id, ret_code))) {
       LOG_WARN("inner sql execute fail", K(ret), K(ctx_));

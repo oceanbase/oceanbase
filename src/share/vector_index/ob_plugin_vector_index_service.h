@@ -419,7 +419,7 @@ public:
   int erase_ivf_build_helper(ObLSID ls_id, const ObIvfHelperKey &key, bool *fully_cleared = nullptr);
   int check_and_merge_adapter(ObLSID ls_id, ObVecIdxSharedTableInfoMap &info_map);
   int acquire_vector_index_mgr(ObLSID ls_id, ObPluginVectorIndexMgr *&mgr);
-  int get_vector_index_tmp_info(const int64_t task_id, ObVectorIndexTmpInfo *&tmp_info);
+  int get_vector_index_tmp_info(const int64_t task_id, ObVectorIndexTmpInfo *&tmp_info, const bool get_from_exist = false);
 
   // user interfaces
   int acquire_adapter_guard(ObLSID ls_id,
