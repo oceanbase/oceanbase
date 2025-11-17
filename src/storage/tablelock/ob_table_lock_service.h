@@ -288,7 +288,8 @@ public:
   // lock the table level lock and all the tablet level lock of this table.
   int lock_table(ObTxDesc &tx_desc,
                  const ObTxParam &tx_param,
-                 const ObLockTableRequest &arg);
+                 const ObLockTableRequest &arg,
+                 const bool force_use_priority = false);
   // arg.op_type_ should be OUT_TRANS_UNLOCK:
   // unlock the table level lock and all the tablet level lock of this table.
   int unlock_table(ObTxDesc &tx_desc,

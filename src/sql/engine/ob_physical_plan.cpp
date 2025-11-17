@@ -827,7 +827,7 @@ OB_SERIALIZE_MEMBER(FlashBackQueryItem,
 
 //因为还没看到远程执行对force_trace_log的处理，所以暂时不序列化
 OB_SERIALIZE_MEMBER(ObPhysicalPlan,
-                    tenant_schema_version_, //该字段执行期没被使用
+                    tenant_schema_version_,  // 该字段执行期没被使用
                     phy_hint_.query_timeout_,
                     phy_hint_.read_consistency_,
                     is_sfu_,
@@ -893,7 +893,14 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     need_switch_to_table_lock_worker_,
                     data_complement_gen_doc_id_,
                     direct_load_need_sort_,
-                    px_parallel_rule_);
+                    px_parallel_rule_,
+                    px_node_policy_,
+                    px_node_addrs_,
+                    px_node_count_,
+                    px_worker_share_plan_enabled_,
+                    extend_sql_plan_monitor_metrics_,
+                    is_online_gather_statistics_,
+                    phy_hint_.table_lock_mode_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)

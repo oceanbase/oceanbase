@@ -301,6 +301,7 @@ protected:
                              int64_t found_rows);
   int discharge_das_write_buffer();
   virtual void record_err_for_load_data(int err_ret, int row_num) { UNUSED(err_ret); UNUSED(row_num); }
+
 public:
   common::ObMySQLProxy *sql_proxy_;
   observer::ObInnerSQLConnection *inner_conn_;

@@ -2641,7 +2641,7 @@ typedef enum ObItemType
   T_UNIT_LIST= 4848,
   T_SP_SYS_DISPATCH_CALL = 4849,
   T_FORMAT_OBJECT_NAME_DISPLAY = 4909,
-
+  T_TABLE_LOCK_MODE_HINT = 4920,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
