@@ -2520,13 +2520,14 @@ int ObPluginVectorIndexAdaptor::complete_delta_buffer_table_data(ObVectorQueryAd
         LOG_WARN("failed to alloc sparse byte lens", K(ret), K(count));
       } else {
         char *sparse_curr_pos = sparse_vectors;
+        int j = 0;
         // Copy the raw sparse vector data
         for (int i = 0; OB_SUCC(ret) && i < ctx->get_vec_cnt(); i++) {
           if (!ctx->vec_data_.vectors_[i].is_null() && !ctx->vec_data_.vectors_[i].get_string().empty()) {
             ObString vec_str = ctx->vec_data_.vectors_[i].get_string();
-            memcpy(sparse_curr_pos, vec_str.ptr(), vec_str.length());
+            MEMCPY(sparse_curr_pos, vec_str.ptr(), vec_str.length());
             sparse_curr_pos += vec_str.length();
-            sparse_byte_lens[i] = vec_str.length();
+            sparse_byte_lens[j++] = vec_str.length();
           }
         }
 
