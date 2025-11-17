@@ -256,6 +256,7 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObHighPriorityBatchLockTaskP, gctx_);
   RPC_PROCESSOR(ObAdminRemoveLockP);
   RPC_PROCESSOR(ObAdminUpdateLockP);
+  RPC_PROCESSOR(ObAdminRemoveLockPriorityP);
 
   // Region Ratelimit rpc
   RPC_PROCESSOR(ObRLGetRegionBWP, gctx_);

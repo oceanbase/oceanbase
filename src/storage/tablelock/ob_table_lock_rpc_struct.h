@@ -560,6 +560,24 @@ public:
   ObTableLockOp lock_op_;
 };
 
+struct ObAdminRemoveLockPriorityArg : ObAdminRemoveLockOpArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObAdminRemoveLockPriorityArg() : ObAdminRemoveLockOpArg(), prio_arg_() {}
+  ~ObAdminRemoveLockPriorityArg() { prio_arg_.priority_ = ObTableLockPriority::INVALID; }
+  int set(const uint64_t tenant_id,
+          const share::ObLSID &ls_id,
+          const ObTableLockOp &lock_op,
+          const ObTableLockPrioArg &prio_arg);
+  int assign(const ObAdminRemoveLockPriorityArg &arg);
+  bool is_valid() const;
+  INHERIT_TO_STRING_KV("ObAdminRemoveLockOpArg", ObAdminRemoveLockOpArg, K_(prio_arg));
+
+public:
+  ObTableLockPrioArg prio_arg_;
+};
+
 struct ObAdminUpdateLockOpArg
 {
   OB_UNIS_VERSION(1);

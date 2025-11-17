@@ -744,6 +744,47 @@ bool ObAdminRemoveLockOpArg::is_valid() const
           lock_op_.is_valid());
 }
 
+OB_SERIALIZE_MEMBER(ObAdminRemoveLockPriorityArg, tenant_id_, ls_id_, lock_op_, prio_arg_);
+
+int ObAdminRemoveLockPriorityArg::set(const uint64_t tenant_id,
+                                      const share::ObLSID &ls_id,
+                                      const ObTableLockOp &lock_op,
+                                      const ObTableLockPrioArg &prio_arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id ||
+                  !ls_id.is_valid() ||
+                  !lock_op.is_valid()||
+                  !prio_arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(lock_op), K(prio_arg));
+  } else {
+    tenant_id_ = tenant_id;
+    ls_id_ = ls_id;
+    lock_op_ = lock_op;
+    prio_arg_ = prio_arg;
+  }
+  return ret;
+}
+
+int ObAdminRemoveLockPriorityArg::assign(const ObAdminRemoveLockPriorityArg &arg)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = arg.tenant_id_;
+  ls_id_ = arg.ls_id_;
+  lock_op_ = arg.lock_op_;
+  prio_arg_ = arg.prio_arg_;
+  return ret;
+}
+
+bool ObAdminRemoveLockPriorityArg::is_valid() const
+{
+  return (OB_INVALID_TENANT_ID != tenant_id_ &&
+          ls_id_.is_valid() &&
+          lock_op_.is_valid() &&
+          prio_arg_.is_valid());
+}
+
 OB_SERIALIZE_MEMBER(ObAdminUpdateLockOpArg, tenant_id_, ls_id_, lock_op_,
                     commit_version_, commit_scn_);
 
