@@ -167,7 +167,7 @@ int ObInnerSQLResult::open()
     LOG_WARN("switch tenant failed", K(ret), K(session_.get_effective_tenant_id()));
   } else {
     lib::CompatModeGuard g(compat_mode_);
-    SQL_INFO_GUARD(session_.get_current_query_string(), session_.get_cur_sql_id());
+    SQL_INFO_GUARD(sql_ctx_.cur_sql_, ObString(sql_ctx_.sql_id_));
     ObInnerSQLSessionGuard sess_guard(&session_);
     bool is_select = has_tenant_resource() ?
            ObStmt::is_select_stmt(result_set_->get_stmt_type())
@@ -234,7 +234,7 @@ int ObInnerSQLResult::inner_close()
 {
   int ret = OB_SUCCESS;
   lib::CompatModeGuard g(compat_mode_);
-  SQL_INFO_GUARD(session_.get_current_query_string(), session_.get_cur_sql_id());
+  SQL_INFO_GUARD(sql_ctx_.cur_sql_, ObString(sql_ctx_.sql_id_));
   ObInnerSQLSessionGuard sess_guard(&session_);
   ObInterruptCheckerGuard interrupt_guard(interrupt_checker_);
   LOG_DEBUG("compat_mode_", K(ret), K(compat_mode_), K(lbt()));
@@ -280,7 +280,7 @@ int ObInnerSQLResult::next()
   } else {
     row_ = NULL;
     lib::CompatModeGuard g(compat_mode_);
-    SQL_INFO_GUARD(session_.get_current_query_string(), session_.get_cur_sql_id());
+    SQL_INFO_GUARD(sql_ctx_.cur_sql_, ObString(sql_ctx_.sql_id_));
     ObInnerSQLSessionGuard sess_guard(&session_);
     WITH_CONTEXT(mem_context_) {
       if (has_tenant_resource() && OB_FAIL(result_set_->get_next_row(row_))) {
