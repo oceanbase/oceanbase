@@ -9044,7 +9044,8 @@ ObUserInfo::ObUserInfo(ObIAllocator *allocator)
     proxy_user_info_capacity_(0),
     proxy_user_info_cnt_(0),
     user_flags_(),
-    trigger_list_()
+    trigger_list_(),
+    plugin_()
 {
 }
 
@@ -9123,6 +9124,8 @@ int ObUserInfo::assign(const ObUserInfo &other)
       LOG_WARN("Fail to deep copy x509_issuer", K(ret));
     } else if (OB_FAIL(deep_copy_str(other.x509_subject_, x509_subject_))) {
       LOG_WARN("Fail to deep copy ssl_subject", K(ret));
+    } else if (OB_FAIL(deep_copy_str(other.plugin_, plugin_))) {
+      LOG_WARN("Fail to deep copy plugin", K(ret));
     } else if (OB_FAIL(grantee_id_array_.assign(other.grantee_id_array_))) {
       LOG_WARN("Fail to assign grantee_id_array ", K(ret));
     } else if (OB_FAIL(role_id_array_.assign(other.role_id_array_))) {
@@ -9298,6 +9301,7 @@ void ObUserInfo::reset()
   trigger_list_.reset();
   ObSchema::reset();
   ObPriv::reset();
+  plugin_.reset();
 }
 
 int64_t ObUserInfo::get_convert_size() const
@@ -9328,6 +9332,7 @@ int64_t ObUserInfo::get_convert_size() const
     }
   }
   convert_size += trigger_list_.get_data_size();
+  convert_size += plugin_.length() + 1;
   return convert_size;
 }
 
@@ -9380,6 +9385,7 @@ OB_DEF_SERIALIZE(ObUserInfo)
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_ENCODE, user_flags_);
     LST_DO_CODE(OB_UNIS_ENCODE, trigger_list_);
+    LST_DO_CODE(OB_UNIS_ENCODE, plugin_);
   }
   return ret;
 }
@@ -9480,6 +9486,7 @@ OB_DEF_DESERIALIZE(ObUserInfo)
     if (OB_SUCC(ret)) {
       LST_DO_CODE(OB_UNIS_DECODE, user_flags_);
       LST_DO_CODE(OB_UNIS_DECODE, trigger_list_);
+      LST_DO_CODE(OB_UNIS_DECODE, plugin_);
     }
   }
 
@@ -9521,6 +9528,7 @@ OB_DEF_SERIALIZE_SIZE(ObUserInfo)
   }
   LST_DO_CODE(OB_UNIS_ADD_LEN, user_flags_);
   LST_DO_CODE(OB_UNIS_ADD_LEN, trigger_list_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, plugin_);
   return len;
 }
 

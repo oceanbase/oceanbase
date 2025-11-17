@@ -11910,5 +11910,22 @@
     "background_cn": "",
     "ref_url": "",
     "placeholder": true
+  },
+  "caching_sha2_password_digest_rounds": {
+    "id": 10761,
+    "name": "caching_sha2_password_digest_rounds",
+    "default_value": "5000",
+    "base_value": "5000",
+    "data_type": "int",
+    "info": "Number of SHA256 iterations for password hash stored to disk",
+    "flags": "GLOBAL",
+    "min_val": "5000",
+    "max_val": "4095000",
+    "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_caching_sha2_password_digest_rounds",
+    "publish_version": "4.4.2.0",
+    "info_cn": "存储到磁盘的密码哈希所使用的 SHA256 迭代次数",
+    "background_cn": "",
+    "ref_url": "",
+    "placeholder": true
   }
 }

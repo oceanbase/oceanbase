@@ -473,6 +473,7 @@ all_user_def = dict(
       ('priv_create_database_link', 'int', 'false', '0'),
       ('priv_others', 'int', 'false', '0'),
       ('flags', 'int', 'false', '0'),
+      ('plugin', 'varchar:64', 'false', 'mysql_native_password'),
     ],
 )
 
@@ -32702,6 +32703,7 @@ def_table_schema(
   SELECT USER_NAME,
           HOST,
           PASSWD,
+          PLUGIN,
           INFO,
           (CASE WHEN PRIV_ALTER = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_ALTER,
           (CASE WHEN PRIV_CREATE = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE,
@@ -32772,6 +32774,7 @@ def_table_schema(
           USER_NAME,
           HOST,
           PASSWD,
+          PLUGIN,
           INFO,
           (CASE WHEN PRIV_ALTER = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_ALTER,
           (CASE WHEN PRIV_CREATE = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE,
@@ -46284,6 +46287,7 @@ def_table_schema(
       B.USER_NAME AS USERNAME,
       B.USER_ID AS USERID,
       B.PASSWD AS PASSWORD,
+      B.PLUGIN AS PLUGIN,
       CAST(CASE WHEN B.IS_LOCKED = 1 THEN 'LOCKED' ELSE 'OPEN' END as VARCHAR2(32)) AS ACCOUNT_STATUS,
       CAST(NULL as DATE) AS LOCK_DATE,
       CAST(NULL as DATE) AS EXPIRY_DATE,

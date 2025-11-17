@@ -5249,7 +5249,8 @@ OB_DEF_SERIALIZE(ObSetPasswdArg)
               x509_subject_,
               modify_max_connections_,
               max_connections_per_hour_,
-              max_user_connections_);
+              max_user_connections_,
+              plugin_);
   return ret;
 }
 
@@ -5261,6 +5262,7 @@ OB_DEF_DESERIALIZE(ObSetPasswdArg)
   ssl_cipher_.reset();
   x509_issuer_.reset();
   x509_subject_.reset();
+  plugin_.reset();
 
   BASE_DESER((, ObDDLArg));
   LST_DO_CODE(OB_UNIS_DECODE,
@@ -5274,7 +5276,8 @@ OB_DEF_DESERIALIZE(ObSetPasswdArg)
               x509_subject_,
               modify_max_connections_,
               max_connections_per_hour_,
-              max_user_connections_);
+              max_user_connections_,
+              plugin_);
   return ret;
 }
 
@@ -5292,7 +5295,8 @@ OB_DEF_SERIALIZE_SIZE(ObSetPasswdArg)
               x509_subject_,
               modify_max_connections_,
               max_connections_per_hour_,
-              max_user_connections_);
+              max_user_connections_,
+              plugin_);
   return len;
 }
 
@@ -5462,6 +5466,8 @@ int ObGrantArg::assign(const ObGrantArg &other)
     SHARE_LOG(WARN, "fail to assign users_passwd_", K(ret));
   } else if (OB_FAIL(hosts_.assign(other.hosts_))) {
     SHARE_LOG(WARN, "fail to assign hosts_", K(ret));
+  } else if (OB_FAIL(plugins_.assign(other.plugins_))) {
+    SHARE_LOG(WARN, "fail to assign plugins_", K(ret));
   } else if (OB_FAIL(roles_.assign(other.roles_))) {
     SHARE_LOG(WARN, "fail to assign roles_", K(ret));
   } else if (OB_FAIL(sys_priv_array_.assign(other.sys_priv_array_))) {
@@ -5513,7 +5519,8 @@ OB_DEF_SERIALIZE(ObGrantArg)
               grantor_,
               grantor_host_,
               catalog_,
-              sensitive_rule_);
+              sensitive_rule_,
+              plugins_);
 return ret;
 }
 
@@ -5548,7 +5555,8 @@ OB_DEF_DESERIALIZE(ObGrantArg)
               grantor_,
               grantor_host_,
               catalog_,
-              sensitive_rule_);
+              sensitive_rule_,
+              plugins_);
 
   //compatibility for old version
   if (OB_SUCC(ret) && users_passwd_.count() > 0 && hosts_.empty()) {
@@ -5593,7 +5601,8 @@ OB_DEF_SERIALIZE_SIZE(ObGrantArg)
               grantor_,
               grantor_host_,
               catalog_,
-              sensitive_rule_);
+              sensitive_rule_,
+              plugins_);
   return len;
 }
 

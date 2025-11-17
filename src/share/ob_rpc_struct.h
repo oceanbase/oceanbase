@@ -6082,14 +6082,15 @@ public:
   ObSetPasswdArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID),
   ssl_type_(share::schema::ObSSLType::SSL_TYPE_NOT_SPECIFIED),
   modify_max_connections_(false),
-  max_connections_per_hour_(OB_INVALID_ID), max_user_connections_(OB_INVALID_ID)
+  max_connections_per_hour_(OB_INVALID_ID), max_user_connections_(OB_INVALID_ID),
+  plugin_()
   { }
   virtual ~ObSetPasswdArg() {}
   bool is_valid() const;
   virtual bool contain_sensitive_data() const { return true; }
   TO_STRING_KV(K_(tenant_id), K_(user), K_(host), K_(passwd), K_(ssl_type),
                K_(ssl_cipher), K_(x509_issuer), K_(x509_subject),
-               K_(max_connections_per_hour), K_(max_user_connections));
+               K_(max_connections_per_hour), K_(max_user_connections), K_(plugin));
 
   uint64_t tenant_id_;
   common::ObString user_;
@@ -6102,6 +6103,7 @@ public:
   bool modify_max_connections_;
   uint64_t max_connections_per_hour_;
   uint64_t max_user_connections_;
+  common::ObString plugin_;
 };
 
 struct ObLockUserArg : public ObDDLArg
@@ -6280,7 +6282,7 @@ struct ObGrantArg : public ObDDLArg
 public:
   ObGrantArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID),
                  priv_level_(share::schema::OB_PRIV_INVALID_LEVEL),
-                 priv_set_(0), users_passwd_(), hosts_(), need_create_user_(false),
+                 priv_set_(0), users_passwd_(), hosts_(), plugins_(), need_create_user_(false),
                  has_create_user_priv_(false), roles_(), option_(0),
                  sys_priv_array_(), obj_priv_array_(),
                  object_type_(share::schema::ObObjectType::INVALID),
@@ -6297,7 +6299,7 @@ public:
   virtual bool contain_sensitive_data() const { return true; }
 
   TO_STRING_KV(K_(tenant_id), K_(priv_level), K_(db), K_(table), K_(priv_set),
-               K_(users_passwd), K_(hosts), K_(need_create_user), K_(has_create_user_priv),
+               K_(users_passwd), K_(hosts), K_(plugins), K_(need_create_user), K_(has_create_user_priv),
                K_(option), K_(object_type), K_(object_id), K_(grantor_id), K_(ins_col_ids),
                K_(upd_col_ids), K_(ref_col_ids), K_(grantor_id), K_(column_names_priv),
                K_(grantor), K_(grantor_host), K_(catalog), K_(sensitive_rule));
@@ -6309,6 +6311,7 @@ public:
   ObPrivSet priv_set_;
   common::ObSArray<common::ObString> users_passwd_;//user_name1, pwd1; user_name2, pwd2
   common::ObSArray<common::ObString> hosts_;//hostname1, hostname2, ..
+  common::ObSArray<common::ObString> plugins_;//plugin1, plugin2, ..
   bool need_create_user_;
   bool has_create_user_priv_;
   common::ObSArray<common::ObString> roles_;
