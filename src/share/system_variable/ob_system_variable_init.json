@@ -3350,7 +3350,7 @@
   "optimizer_features_enable": {
     "id": 10150,
     "name": "optimizer_features_enable",
-    "default_value": "4.4.1.0",
+    "default_value": "4.4.2.0",
     "base_value": "",
     "data_type": "varchar",
     "info": "enabling a series of optimizer features based on an OceanBase release number",
