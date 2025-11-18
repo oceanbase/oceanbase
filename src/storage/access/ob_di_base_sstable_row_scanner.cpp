@@ -147,7 +147,7 @@ int ObDIBaseSSTableRowScanner::refresh_blockscan_checker(const blocksstable::ObD
       LOG_WARN("fail to refresh blockscan checker", K(ret), K(border_rowkey), KPC(iter));
     }
   }
-  FLOG_INFO("refresh blockscan checker", K(ret), K(get_di_base_iter_cnt()), K(border_rowkey));
+  LOG_DEBUG("refresh blockscan checker", K(ret), K(get_di_base_iter_cnt()), K(border_rowkey));
   return ret;
 }
 

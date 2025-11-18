@@ -834,7 +834,7 @@ int ObSSTableRowScanner<PrefetcheType>::try_skip_deleted_row(ObCSRowId &co_curre
                                                                         co_current))) {
     LOG_WARN("fail to check and revert non border rowkey", K(ret), K(co_prefetcher->get_border_rowkey()), KPC(deleted_row), K(co_current));
   } else {
-    FLOG_INFO("co sstable try skip deleted row", K(ret), K(co_prefetcher->get_border_rowkey()), KPC(deleted_row), K(co_current));
+    LOG_DEBUG("co sstable try skip deleted row", K(ret), K(co_prefetcher->get_border_rowkey()), KPC(deleted_row), K(co_current));
   }
   return ret;
 }
