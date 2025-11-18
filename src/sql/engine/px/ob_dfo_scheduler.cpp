@@ -1307,6 +1307,7 @@ int ObParallelDfoScheduler::try_schedule_next_dfo(ObExecContext &ctx)
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(px_schedule);
+  common::ScopedTimer timer(ObMetricId::SCHEDULE_DFO_COST);
   ObSEArray<ObDfo *, 3> dfos;
   while (OB_SUCC(ret)) {
     // 每次只迭代出一对 DFO，parent & child

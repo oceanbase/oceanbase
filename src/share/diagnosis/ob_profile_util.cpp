@@ -221,9 +221,9 @@ int ObProfileUtil::get_merged_profiles(ObIAllocator *alloc,
         const ObMergedProfileItem &cur_item = merged_profile_items.at(i);
         if (last_sql_id == cur_item.sql_id_ && last_plan_hash == cur_item.plan_hash_value_) {
           // in same plan execution, continue
-          if (cur_item.op_id_ == 0) {
-            // record the number of operator 0 as the execution count of this plan sinc
-            // operator 0 can not be paralleled
+          if (cur_item.op_id_ == -1) {
+            // record the number of operator -1 (means sql compile) as the execution count of this
+            // plan since operator -1 can not be paralleled
             execution_cnt++;
           }
         } else {
@@ -470,7 +470,8 @@ int ObProfileUtil::read_profile_from_result(ObIAllocator *alloc, const ObMySQLRe
 
   // fill common metrics and other stats into profile
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(fill_metrics_into_profile(profile_item))) {
+  // op_od == -1 means sqc compile process, do not fill common metrics into it
+  } else if (profile_item.op_id_ != -1 && OB_FAIL(fill_metrics_into_profile(profile_item))) {
     LOG_WARN("failed to fill metrics");
   }
 #undef GET_NUM_VALUE

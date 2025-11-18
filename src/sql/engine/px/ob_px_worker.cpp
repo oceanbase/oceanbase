@@ -146,6 +146,7 @@ private:
 void PxWorkerFunctor::operator ()(bool need_exec)
 {
   int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtil::current_time_ns();
   const char *px_parallel_rule_str = nullptr;
   if (task_arg_.op_spec_root_ != nullptr && task_arg_.op_spec_root_->plan_ != nullptr) {
     PXParallelRule px_parallel_rule = task_arg_.op_spec_root_->plan_->get_px_parallel_rule();
@@ -215,6 +216,11 @@ void PxWorkerFunctor::operator ()(bool need_exec)
             ObPxTaskProcess worker(*env_arg_.get_gctx(), runtime_arg);
             worker.set_is_oracle_mode(env_arg_.is_oracle_mode());
             if (OB_SUCC(ret)) {
+              runtime_arg.sqc_task_ptr_->dispatch_task_cost_ =
+                  start_time - runtime_arg.sqc_handler_->get_sqc_metrics()
+                                   .dispatch_tasks_ts_;
+              runtime_arg.sqc_task_ptr_->px_worker_prepare_cost_ =
+                  ObTimeUtil::current_time_ns() - start_time;
               worker.run();
             }
             runtime_arg.destroy();

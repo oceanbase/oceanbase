@@ -85,10 +85,10 @@ SQL_MONITOR_STATNAME_DEF(OUTPUT_ROWS, metric::Unit::INT, "output rows", "output 
 SQL_MONITOR_STATNAME_DEF(OUTPUT_BATCHES, metric::Unit::INT, "output batches", "output batches", M_SUM | E_MIN | E_MAX, metric::Level::AD_HOC)
 SQL_MONITOR_STATNAME_DEF(SKIPPED_ROWS, metric::Unit::INT, "skipped rows", "skipped rows", M_SUM | E_MIN | E_MAX, metric::Level::AD_HOC)
 SQL_MONITOR_STATNAME_DEF(RESCAN_TIMES, metric::Unit::INT, "rescan times", "rescan times", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)
-SQL_MONITOR_STATNAME_DEF(OPEN_TIME, metric::Unit::TIMESTAMP, "open time", "open time", E_MIN | E_MAX, metric::Level::CRITICAL)
-SQL_MONITOR_STATNAME_DEF(FIRST_ROW_TIME, metric::Unit::TIMESTAMP, "first row time", "first row time", E_MIN | E_MAX, metric::Level::STANDARD)
-SQL_MONITOR_STATNAME_DEF(LAST_ROW_TIME, metric::Unit::TIMESTAMP, "last row time", "last row time", E_MIN | E_MAX, metric::Level::STANDARD)
-SQL_MONITOR_STATNAME_DEF(CLOSE_TIME, metric::Unit::TIMESTAMP, "close time", "close time", E_MIN | E_MAX, metric::Level::CRITICAL)
+SQL_MONITOR_STATNAME_DEF(OPEN_TIME, metric::Unit::TIMESTAMP, "open time", "open time", E_MIN | E_MAX, metric::Level::AD_HOC)
+SQL_MONITOR_STATNAME_DEF(FIRST_ROW_TIME, metric::Unit::TIMESTAMP, "first row time", "first row time", E_MIN | E_MAX, metric::Level::AD_HOC)
+SQL_MONITOR_STATNAME_DEF(LAST_ROW_TIME, metric::Unit::TIMESTAMP, "last row time", "last row time", E_MIN | E_MAX, metric::Level::AD_HOC)
+SQL_MONITOR_STATNAME_DEF(CLOSE_TIME, metric::Unit::TIMESTAMP, "close time", "close time", E_MIN | E_MAX, metric::Level::AD_HOC)
 SQL_MONITOR_STATNAME_DEF(DB_TIME, metric::Unit::TIME_NS, "db time", "db time", M_AVG | E_MIN | E_MAX, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(WORKAREA_MEM, metric::Unit::BYTES, "work area memory", "work area memory", E_MIN | E_MAX, metric::Level::AD_HOC)
 SQL_MONITOR_STATNAME_DEF(WORKAREA_MAX_MEM, metric::Unit::BYTES, "work area max memory", "work area max memory", E_MIN | E_MAX, metric::Level::AD_HOC)
@@ -151,6 +151,25 @@ SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_STORAGE_IO_COUNT, metric::Unit::INT, "lake t
 // Lake Table Reader
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_SELECTED_STRIPE_COUNT, metric::Unit::INT, "lake table selected stripe count", "lake table selected stripe count", M_SUM, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_SKIPPED_STRIPE_COUNT, metric::Unit::INT, "lake table skipped stripe count", "lake table skipped stripe count", M_SUM, metric::Level::CRITICAL)
+
+// PX Metrics
+SQL_MONITOR_STATNAME_DEF(GET_STAT_OF_DFO_TABLES, metric::Unit::TIME_NS, "get stat of dfo tables", "get stat of dfo tables", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(SCHEDULE_DFO_COST, metric::Unit::TIME_NS, "schedule dfo cost", "schedule dfo cost", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(PX_WAIT_DISPATCH, metric::Unit::TIME_NS, "px wait dispatch sqc", "px wait dispatch sqc", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(WAIT_CHANNEL_INFO_COST, metric::Unit::TIME_NS, "wait channel info cost", "wait channel info cost", M_AVG | E_MAX, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(WAIT_CHANNEL_READY_COST, metric::Unit::TIME_NS, "wait channel ready msg cost", "wait channel ready msg cost", M_AVG | E_MAX, metric::Level::STANDARD)
+
+SQL_MONITOR_STATNAME_DEF(SQC_DESERIALIZE_COST, metric::Unit::TIME_NS, "sqc deserialize cost", "sqc deserialize cost", M_AVG | E_MAX, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(SQC_RPC_PROCESS_COST, metric::Unit::TIME_NS, "sqc rpc process cost", "sqc rpc process cost", M_AVG | E_MAX, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(SQC_RPC_AFTER_PROCESS_COST, metric::Unit::TIME_NS, "sqc rpc after process cost", "sqc rpc after process cost", M_AVG | E_MAX, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(SPLIT_GI_TASK_COST, metric::Unit::TIME_NS, "split gi task cost", "split gi task cost", M_AVG | E_MAX, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(PX_DISPATCH_TASK_COST, metric::Unit::TIME_NS, "px dispatch task cost", "px dispatch task cost", M_AVG | E_MAX, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(PX_WORKER_PREPARE_COST, metric::Unit::TIME_NS, "px worker prepare cost", "px worker prepare cost", M_AVG | E_MAX, metric::Level::STANDARD)
+
+SQL_MONITOR_STATNAME_DEF(ELAPSED_TIME, metric::Unit::TIME_NS, "elapsed time", "elapsed time", M_SUM, metric::Level::STANDARD)
+
+// Plan Cache Metrics
+SQL_MONITOR_STATNAME_DEF(IS_HIT_PLAN, metric::Unit::INT, "is hit plan", "is hit plan", M_SUM, metric::Level::STANDARD)
 
 //end
 SQL_MONITOR_STATNAME_DEF(MONITOR_STATNAME_END, metric::Unit::INVALID, "monitor end", "monitor stat name end", E_MIN | E_MAX, metric::Level::AD_HOC)
