@@ -21502,7 +21502,7 @@ int ObDMLResolver::check_domain_id_need_column_ref_expr(ObDMLStmt &stmt, ObSchem
           *table,
           col_schema->get_column_id(),
           embedded_vec_tid))) {
-        LOG_WARN("fail to check hybrid vector embedding table", K(ret), KPC(table));
+        LOG_WARN("fail to check semantic vector embedding table", K(ret), KPC(table));
       } else if (OB_INVALID_ID != embedded_vec_tid) {
         need_column_ref_expr = true;
       }

@@ -33,7 +33,7 @@ int ObExprVecChunk::calc_result_typeN(ObExprResType &type,
   int ret = OB_SUCCESS;
   if (OB_ISNULL(types)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument for hybrid vector index expr", K(ret), K(param_num), KP(types));
+    LOG_WARN("invalid argument for semantic vector index expr", K(ret), K(param_num), KP(types));
   } else {
     type.set_type(types->get_type());
     type.set_length(types->get_length());

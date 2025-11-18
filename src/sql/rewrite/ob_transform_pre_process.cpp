@@ -7916,7 +7916,7 @@ int ObTransformPreProcess::create_embedded_table_vector_col_ref(
     if (OB_ISNULL(col_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null column schema ptr", K(ret));
-    } else if (col_schema->is_hybrid_embedded_vec_column()) { // only support one hybrid vector index to one table now
+    } else if (col_schema->is_hybrid_embedded_vec_column()) { // only support one semantic vector index to one table now
       if (OB_NOT_NULL(exist_column_item = stmt->get_column_item(table_item->table_id_, col_schema->get_column_id()))) {
         vector_col_ref = exist_column_item->expr_;
       } else if (OB_FAIL(ObRawExprUtils::build_column_expr(*ctx_->expr_factory_, *col_schema,
@@ -7946,8 +7946,8 @@ int ObTransformPreProcess::create_embedded_table_vector_col_ref(
 
   if (OB_SUCC(ret) && OB_ISNULL(vector_col_ref)) {
     ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "use semantic_vector_distance without hybrid vector index");
-    LOG_WARN("not find hybrid vector index", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "use semantic_vector_distance without semantic vector index");
+    LOG_WARN("not find semantic vector index", K(ret));
   }
 
   return ret;
@@ -8054,7 +8054,7 @@ int ObTransformPreProcess::transform_semantic_vector_dis_expr(ObDMLStmt *stmt, b
         } else {
           ObRawExpr *new_semantic_expr = nullptr;
           if (OB_FAIL(add_semantic_vector_dis_params_to_new_expr(stmt, semantic_expr, new_semantic_expr))) {
-            LOG_WARN("failed to add hybrid vector params to expr", K(ret));
+            LOG_WARN("failed to add semantic vector params to expr", K(ret));
           } else if (OB_ISNULL(new_semantic_expr)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("new semantic_distance expr is null", K(ret));

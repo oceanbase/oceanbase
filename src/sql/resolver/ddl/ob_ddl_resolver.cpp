@@ -8015,10 +8015,10 @@ int ObDDLResolver::resolve_vec_index_constraint(
       LOG_WARN("fail to check is sparse vec col", K(ret));
     } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
       LOG_WARN("get tenant data version failed", K(ret));
-    } else if (is_text_column && !tenant_config->_enable_hybrid_vector_index) {
+    } else if (is_text_column && !tenant_config->_enable_semantic_index) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("when _enable_hybrid_vector_index is false, hybrid vector index not supported", K(ret), K(tenant_config->_enable_hybrid_vector_index));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "when _enable_hybrid_vector_index is false, hybrid vector index");
+      LOG_WARN("semantic vector index not supported", K(ret), K(tenant_config->_enable_semantic_index));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "semantic vector index");
     } else if (!is_sparse_vec_col && tenant_data_version < DATA_VERSION_4_3_3_0) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("tenant data version is less than 4.3.3, vector index not supported", K(ret), K(tenant_data_version));
@@ -8041,10 +8041,10 @@ int ObDDLResolver::resolve_vec_index_constraint(
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("tenant data version is less than 4.3.5.2, sparse vector index not supported", K(ret), K(tenant_data_version));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.5.2, sparse vector index");
-    } else if (is_text_column && tenant_data_version < DATA_VERSION_4_4_1_0) {
+    } else if (is_text_column && tenant_data_version < DATA_VERSION_4_5_0_0) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("tenant data version is less than 4.4.1.0, hybrid vector index not supported", K(ret), K(tenant_data_version));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.4.1.0, hybrid vector index");
+      LOG_WARN("tenant data version is less than 4.5.0.0, semantic vector index not supported", K(ret), K(tenant_data_version));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.5.0.0, semantic vector index");
     }
 
     if (OB_SUCC(ret)) {

@@ -2307,6 +2307,9 @@ DEF_INT(model_max_retries, OB_TENANT_PARAMETER, "2", "[1,)",
     "Used to control the retry times after a failed model interaction. Especially, the default value is 2",
     ObParameterAttr(Section::AI, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_BOOL(_enable_semantic_index, OB_TENANT_PARAMETER, "False",
+         "Specifies whether the tenant's semantic index is enabled. Value: True: turned on; False: turned off.",
+         ObParameterAttr(Section::AI, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_STR_WITH_CHECKER(sql_protocol_min_tls_version, OB_CLUSTER_PARAMETER, "none",
                      common::ObConfigSQLTlsVersionChecker,
@@ -3094,9 +3097,6 @@ DEF_BOOL(ob_enable_utl_http, OB_CLUSTER_PARAMETER, "False",
 DEF_BOOL(ob_enable_utl_tcp, OB_CLUSTER_PARAMETER, "False",
          "controls whether UTL_TCP is enabled",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(_enable_hybrid_vector_index, OB_TENANT_PARAMETER, "False",
-         "Value:  True: can create or drop hybrid vector index; False: not support create or drop",
-         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_ss_garbage_collector_defensive_check, OB_TENANT_PARAMETER, "True",
          "Enable or disable defensive checks for garbage collection on shared storage.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
