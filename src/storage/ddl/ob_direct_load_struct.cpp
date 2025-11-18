@@ -5433,7 +5433,6 @@ int ObDDLTabletMergeDagParamV2::init_cg_sstable_array( hash::ObHashSet<int64_t> 
       }
     }
     merge_ctx->slice_cg_sstables_.destroy();
-    merge_ctx->arena_.reset();
   }
   return ret;
 }
