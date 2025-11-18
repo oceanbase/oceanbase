@@ -516,7 +516,7 @@ int ObTablet::init_for_merge(
     LOG_WARN("fail to init aggregated info", K(ret));
   } else if (FALSE_IT(set_initial_addr())) {
   } else if (OB_FAIL(check_tablet_schema_mismatch(old_tablet, *storage_schema_addr_.ptr_, is_convert_co_merge))) {
-    LOG_ERROR("find error while checking tablet schema mismatch", K(ret), KPC(param.storage_schema_), K(old_tablet), K(param.compaction_info_));
+    LOG_WARN("find error while checking tablet schema mismatch", K(ret), KPC(param.storage_schema_), K(old_tablet), K(param.compaction_info_));
   } else if (OB_FAIL(check_table_store_flag_match_with_table_store_(table_store_addr_.get_ptr()))) {
     LOG_WARN("failed to check table store flag match with table store", K(ret), K(old_tablet), K_(table_store_addr));
   } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
@@ -796,7 +796,7 @@ int ObTablet::init_with_ss_tablet(
     LOG_WARN("fail to init aggregated info", K(ret));
   } else if (FALSE_IT(set_initial_addr())) {
   } else if (OB_FAIL(check_tablet_schema_mismatch(sstablet, *storage_schema_addr_.ptr_, false/*is_convert_co_major_merge*/))) {
-    LOG_ERROR("find error while checking tablet schema mismatch", K(ret), KPC(this), K(sstablet));
+    LOG_WARN("find error while checking tablet schema mismatch", K(ret), KPC(this), K(sstablet));
   } else if (OB_FAIL(check_table_store_flag_match_with_table_store_(table_store_addr_.get_ptr()))) {
     LOG_WARN("failed to check table store flag match with table store", K(ret), K(sstablet), K_(table_store_addr));
   } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
@@ -1202,7 +1202,7 @@ int ObTablet::init_for_sstable_replace(
   } else if (OB_FAIL(try_update_start_scn())) {
     LOG_WARN("failed to update start scn", K(ret), K(param), K(table_store_addr_));
   } else if (OB_FAIL(check_tablet_schema_mismatch(old_tablet, *storage_schema_addr_.ptr_, false/*is_convert_co_major_merge*/))) {
-    LOG_ERROR("find error while checking tablet schema mismatch", K(ret), KPC(storage_schema), K(old_tablet));
+    LOG_WARN("find error while checking tablet schema mismatch", K(ret), KPC(storage_schema), K(old_tablet));
   } else if (OB_FAIL(table_store_cache_.init(table_store_addr_.get_ptr()->get_major_sstables(),
       table_store_addr_.get_ptr()->get_minor_sstables(),
       storage_schema_addr_.get_ptr()->is_row_store(),
@@ -1739,7 +1739,7 @@ int ObTablet::check_tablet_schema_mismatch(
     LOG_INFO("For columns tore replica, allow old tablet and new schema mismatch", K(ret), K(old_tablet), K(storage_schema));
   } else if (!is_old_tablet_row_store && is_storage_schema_row_store) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected schema, old tablet is column store while new storage schema is column store", K(ret), K(old_tablet), K(storage_schema));
+    LOG_ERROR("unexpected schema, old tablet is column store while new storage schema is column store", K(ret), K(old_tablet), K(storage_schema));
   } else if (is_old_tablet_row_store
              && (!is_storage_schema_row_store || is_convert_co_major_merge)) {
     LOG_INFO("old tablet is row store and new storage schema is column store", K(ret), K(old_tablet), K(storage_schema), K(is_storage_schema_row_store), K(is_convert_co_major_merge));
