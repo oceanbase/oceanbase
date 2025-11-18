@@ -137,14 +137,8 @@ int ObTableScanIterator::prepare_table_param(const ObTabletHandle &tablet_handle
     main_table_param_.iter_param_.set_use_stmt_iter_pool();
     STORAGE_LOG(TRACE, "use global iter pool", K(main_table_param_));
   }
-  if (OB_SUCC(ret) && main_table_param_.iter_param_.is_skip_scan() && !table_scan_range_.is_empty()) {
-    if (OB_UNLIKELY(!table_scan_range_.has_valid_suffix_ranges())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected skip scan range", K(ret), K_(table_scan_range));
-    } else {
-      main_table_param_.iter_param_.set_skip_scan_range(table_scan_range_.get_suffix_range());
-      LOG_DEBUG("[INDEX SKIP SCAN] use index skip scan", K(table_scan_range_.get_suffix_range()));
-    }
+  if (OB_SUCC(ret) && OB_FAIL(set_skip_scan_range())) {
+    STORAGE_LOG(WARN, "Failed to set skip scan range", K(ret));
   }
   return ret;
 }
@@ -310,6 +304,11 @@ int ObTableScanIterator::rescan(ObTableScanParam &scan_param)
       STORAGE_LOG(WARN, "Failed to rescan reuse", K(ret));
     } else if (OB_FAIL(table_scan_range_.init(*scan_param_, *tablet, is_tablet_spliting))) {
       STORAGE_LOG(WARN, "Failed to init table scan range", K(ret));
+    } else if (scan_param.use_index_skip_scan() &&
+        OB_FAIL(main_table_param_.check_skip_scan(scan_param, main_table_param_.iter_param_))) {
+      STORAGE_LOG(WARN, "Failed to get prefix for skip scan", K(ret));
+    } else if (OB_FAIL(set_skip_scan_range())) {
+      STORAGE_LOG(WARN, "Failed to set skip scan range", K(ret));
     } else if (OB_FAIL(rescan_for_iter())) {
       STORAGE_LOG(WARN, "Failed to switch param for iter", K(ret), K(*this));
     } else if (OB_FAIL(table_scan_range_.get_query_iter_type(rescan_iter_type))) {
@@ -770,6 +769,21 @@ int ObTableScanIterator::check_txn_status_if_read_uncommitted_()
 bool ObTableScanIterator::need_trace() const
 {
   return OB_SUCCESS != ERRSIM_STORAGE_ITER_TRACE;
+}
+
+int ObTableScanIterator::set_skip_scan_range()
+{
+  int ret = OB_SUCCESS;
+  if (main_table_param_.iter_param_.is_skip_scan() && !table_scan_range_.is_empty()) {
+    if (OB_UNLIKELY(!table_scan_range_.has_valid_suffix_ranges())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected skip scan range", K(ret), K_(table_scan_range));
+    } else {
+      main_table_param_.iter_param_.set_skip_scan_range(table_scan_range_.get_suffix_range());
+      LOG_DEBUG("[INDEX SKIP SCAN] use index skip scan", K(table_scan_range_.get_suffix_range()));
+    }
+  }
+  return ret;
 }
 
 } // namespace storage
