@@ -3173,7 +3173,7 @@ bool ObMulValueIndexBuilderUtil::is_multivalue_index_column(const ObString& expr
       MEMCPY(buf, expr_string.ptr(), expr_string.length());
       buf[expr_string.length()] = 0;
 
-      std::regex pattern(R"(JSON_QUERY\s*\(\s*.*\s*ASIS\s*.*\s*\))", std::regex_constants::icase);
+      static const std::regex pattern(R"(JSON_QUERY\s*\(\s*.*\s*ASIS\s*.*\s*\))", std::regex_constants::icase);
       if (std::regex_match(buf, pattern)) {
         bool_ret = true;
       }
@@ -3193,7 +3193,7 @@ bool ObMulValueIndexBuilderUtil::is_multivalue_array_column(const ObString& expr
       MEMCPY(buf, expr_string.ptr(), expr_string.length());
       buf[expr_string.length()] = 0;
 
-      std::regex pattern(R"(JSON_QUERY\s*\(\s*.*\s*ASIS\s*.*\s*\s*multivalue\))", std::regex_constants::icase);
+      static const std::regex pattern(R"(JSON_QUERY\s*\(\s*.*\s*ASIS\s*.*\s*\s*multivalue\))", std::regex_constants::icase);
       if (std::regex_match(buf, pattern)) {
         bool_ret = true;
       }
