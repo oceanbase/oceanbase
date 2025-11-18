@@ -10849,7 +10849,8 @@ int ObOptimizerUtil::get_rescan_path_index_id(const ObLogicalOperator *op,
   return ret;
 }
 
-int ObOptimizerUtil::flatten_multivalue_index_exprs(ObRawExpr* expr, ObIArray<ObRawExpr*> &exprs)
+int ObOptimizerUtil::flatten_multivalue_index_exprs(ObRawExpr* expr, ObIArray<ObRawExpr*> &exprs,
+                                                    bool &has_original_or_expr)
 {
   int ret = OB_SUCCESS;
 
@@ -10858,9 +10859,16 @@ int ObOptimizerUtil::flatten_multivalue_index_exprs(ObRawExpr* expr, ObIArray<Ob
     LOG_WARN("expr is null", K(ret));
   } else if (T_OP_OR == expr->get_expr_type() || T_OP_AND == expr->get_expr_type()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
-      if (OB_FAIL(SMART_CALL(flatten_multivalue_index_exprs(expr->get_param_expr(i), exprs)))) {
+      if (OB_FAIL(SMART_CALL(flatten_multivalue_index_exprs(expr->get_param_expr(i), exprs,
+                                                            has_original_or_expr)))) {
         LOG_WARN("failed to flatten children exprs", K(ret), K(i));
       }
+    }
+    if (OB_SUCC(ret) && T_OP_OR == expr->get_expr_type()) {
+      // For combinations that are originally OR expressions, we cannot extract a single
+      // multivalue expression for query range extraction.
+      // for example: A or B, the query range of A alone is not complete.
+      has_original_or_expr = true;
     }
   } else if (expr->is_multivalue_expr()) {
     ObRawExpr *tmp_expr = ObRawExprUtils::skip_inner_added_expr(expr);
@@ -10886,12 +10894,14 @@ int ObOptimizerUtil::preprocess_multivalue_range_exprs(ObIAllocator &allocator,
   ObRawExprFactory expr_factory(allocator);
   ObSEArray<ObRawExpr*, 4> flatten_exprs;
   ObRawExpr* tmp_expr = nullptr;
+  bool has_original_or_expr = false;
 
   for (int64_t i = 0; OB_SUCC(ret) && i < range_exprs.count(); i++) {
     if (OB_ISNULL(tmp_expr = range_exprs.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr is null", K(ret), K(i));
-    } else if (OB_FAIL(flatten_multivalue_index_exprs(tmp_expr, flatten_exprs))) {
+    } else if (OB_FAIL(flatten_multivalue_index_exprs(tmp_expr, flatten_exprs,
+                                                      has_original_or_expr))) {
       LOG_WARN("failed to flatten child exprs", K(ret), K(i));
     }
   }
@@ -10902,7 +10912,9 @@ int ObOptimizerUtil::preprocess_multivalue_range_exprs(ObIAllocator &allocator,
     if (OB_FAIL(out_range_exprs.assign(range_exprs))) {
       LOG_WARN("failed to assign range exprs", K(ret));
     }
-  } else {
+  } else if (has_original_or_expr) {
+    // If there is OR expression, treat all expressions as one group
+    // and use OR to connect them
     ObOpRawExpr *or_expr = nullptr;
     if (OB_FAIL(expr_factory.create_raw_expr(T_OP_OR, or_expr))) {
       LOG_WARN("failed to create a new expr", K(ret));
@@ -10913,6 +10925,77 @@ int ObOptimizerUtil::preprocess_multivalue_range_exprs(ObIAllocator &allocator,
       LOG_WARN("failed to set param exprs", K(ret));
     } else if (OB_FAIL(out_range_exprs.push_back(or_expr))) {
       LOG_WARN("failed to push back and exprs");
+    }
+  } else {
+    // If there is no OR expression, group by path and reorganize:
+    // A1 and A2 (same path) => A1 or A2
+    // A1 and B1 (different paths) => (A1) and (B1)
+    // A1 and A2 and B1 (mixed) => (A1 or A2) and (B1)
+    ObSEArray<ObSEArray<ObRawExpr*, 4>, 4> path_groups;
+    ObSEArray<const ObRawExpr*, 4> path_exprs;
+
+    // Group expressions by path
+    for (int64_t i = 0; OB_SUCC(ret) && i < flatten_exprs.count(); i++) {
+      ObRawExpr *expr = flatten_exprs.at(i);
+      ObRawExpr *tmp_expr = nullptr;
+      ObRawExpr *index_path_expr = nullptr;
+      if (OB_ISNULL(expr) || OB_ISNULL(tmp_expr = ObRawExprUtils::skip_inner_added_expr(expr))
+          || OB_ISNULL(index_path_expr = tmp_expr->get_json_domain_param_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get index path expr", K(ret), K(i));
+      } else if (index_path_expr->get_expr_type() != T_REF_COLUMN) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid path expr", K(ret), K(i));
+      } else {
+        // Find the group for this path
+        int64_t group_idx = -1;
+        for (int64_t j = 0; j < path_exprs.count(); j++) {
+          if (path_exprs.at(j)->same_as(*index_path_expr)) {
+            group_idx = j;
+            break;
+          }
+        }
+        if (group_idx < 0) {
+          // Create a new group
+          ObSEArray<ObRawExpr*, 4> new_group;
+          if (OB_FAIL(new_group.push_back(expr))) {
+            LOG_WARN("failed to push back expr", K(ret));
+          } else if (OB_FAIL(path_groups.push_back(new_group))) {
+            LOG_WARN("failed to push back group", K(ret));
+          } else if (OB_FAIL(path_exprs.push_back(index_path_expr))) {
+            LOG_WARN("failed to push back path expr", K(ret));
+          }
+        } else {
+          // Add expr to existing group
+          if (OB_FAIL(path_groups.at(group_idx).push_back(expr))) {
+            LOG_WARN("failed to add expr to group", K(ret));
+          }
+        }
+      }
+    }
+
+    // Create OR expressions for each path group, then add them to out_range_exprs
+    for (int64_t i = 0; OB_SUCC(ret) && i < path_groups.count(); i++) {
+      const ObSEArray<ObRawExpr*, 4> &group = path_groups.at(i);
+      if (group.count() == 1) {
+        // If there is only one expression in the group, add it directly
+        if (OB_FAIL(out_range_exprs.push_back(group.at(0)))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        }
+      } else {
+        // If there are multiple expressions in the group, create an OR expression
+        ObOpRawExpr *or_expr = nullptr;
+        if (OB_FAIL(expr_factory.create_raw_expr(T_OP_OR, or_expr))) {
+          LOG_WARN("failed to create a new expr", K(ret));
+        } else if (OB_ISNULL(or_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("group expr is null", K(ret));
+        } else if (OB_FAIL(or_expr->set_param_exprs(group))) {
+          LOG_WARN("failed to set param exprs", K(ret));
+        } else if (OB_FAIL(out_range_exprs.push_back(or_expr))) {
+          LOG_WARN("failed to push back or expr", K(ret));
+        }
+      }
     }
   }
   return ret;
