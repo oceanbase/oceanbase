@@ -872,6 +872,34 @@ int ObLogTableScan::has_nonpushdown_filter(bool &has_npd_filter)
   return ret;
 }
 
+int ObLogTableScan::has_nonpushdown_aggr(const ObIArray<ObAggFunRawExpr*> &aggr_items,
+                                         bool &has_npd_aggr)
+{
+  int ret = OB_SUCCESS;
+  has_npd_aggr = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !has_npd_aggr && i < aggr_items.count(); ++i) {
+    ObSEArray<ObRawExpr*, 4> cols; 
+    if (OB_ISNULL(aggr_items.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(aggr_items.at(i), cols))) {
+      LOG_WARN("failed to extract column exprs", K(ret));
+    } else {
+      for (int64_t j = 0; OB_SUCC(ret) && !has_npd_aggr && j < cols.count(); ++j) {
+        if (OB_ISNULL(cols.at(j))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (cols.at(j)->is_column_ref_expr() &&
+                   static_cast<ObColumnRefRawExpr*>(cols.at(j))->is_fulltext_column()) {
+          has_npd_aggr = true;
+          // aggr item containing fulltext auxiliary generated column, can't pushdown
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_filters,
                                              ObIArray<ObRawExpr*> &scan_pushdown_filters,
                                              ObIArray<ObRawExpr*> &lookup_pushdown_filters,

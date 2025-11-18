@@ -5855,12 +5855,16 @@ int ObLogPlan::try_push_aggr_into_table_scan(ObLogicalOperator *top,
     ObLogTableScan *scan_op = static_cast<ObLogTableScan*>(top);
     bool is_get = false;
     bool has_npd_filter = false; //has non-pushdown filter
+    bool has_npd_aggr = false; //has non-pushdown aggr
     if (OB_FAIL(scan_op->is_table_get(is_get))) {
       LOG_WARN("failed to check is get", K(ret));
     } else if (OB_FAIL(scan_op->has_nonpushdown_filter(has_npd_filter))) {
       LOG_WARN("check whether hash non-pushdown filter failed", K(ret));
+    } else if (OB_FAIL(scan_op->has_nonpushdown_aggr(aggr_items, has_npd_aggr))) {
+      LOG_WARN("check whether hash non-pushdown aggr failed", K(ret));
     } else if (is_get ||
                has_npd_filter ||
+               has_npd_aggr ||
                scan_op->get_index_back() ||
                scan_op->is_text_retrieval_scan() ||
                scan_op->is_sample_scan() ||
