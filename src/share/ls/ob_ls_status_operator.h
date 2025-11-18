@@ -700,11 +700,14 @@ private:
   int construct_ls_primary_info_sql_(common::ObSqlString &sql);
 
   //////////for checking all ls log_stat_info/////////
-  int construct_ls_log_stat_info_sql_(common::ObSqlString &sql);
+  int construct_ls_log_stat_info_sql_(
+      const common::ObIArray<ObAddr> &valid_servers,
+      common::ObSqlString &sql);
   int parse_result_and_check_paxos_(
       common::sqlclient::ObMySQLResult &result,
       schema::ObMultiVersionSchemaService &schema_service,
       const common::ObIArray<ObAddr> &to_stop_servers,
+      const common::ObIArray<ObLSInfo> &ls_info_array,
       const bool skip_log_sync_check,
       const char *print_str,
       bool &need_retry);
@@ -719,10 +722,11 @@ private:
       schema::ObMultiVersionSchemaService &schema_service,
       const ObLSLogStatInfo &ls_log_stat_info,
       const common::ObIArray<ObAddr> &to_stop_servers,
+      const common::ObIArray<ObLSInfo> &ls_info_array,
       const bool skip_log_sync_check,
       const char *print_str,
       bool &need_retry);
-  int generate_valid_servers_(
+  int gen_valid_servers_in_member_list_(
       const ObLSReplica::MemberList &member_list,
       const common::ObIArray<ObAddr> &to_stop_servers,
       common::ObIArray<ObAddr> &valid_servers);
@@ -732,9 +736,22 @@ private:
     ObISQLClient &client,
     const ObMember &arb_member,
     const common::GlobalLearnerList &learner_list);
+  int generate_alive_dest_server_array_(
+      const common::ObIArray<common::ObAddr> &excluded_server_array,
+      common::ObIArray<common::ObAddr> &dest_server_array);
+  int get_all_ls_info_(common::ObIArray<ObLSInfo> &ls_info_array);
+  int get_ls_leader_info_(
+      const uint64_t tenant_id,
+      const ObLSID &ls_id,
+      const common::ObIArray<ObLSInfo> &ls_info_array,
+      ObLSReplica::MemberList &member_list,
+      int64_t &paxos_replica_number);
+  bool has_no_member_in_servers_(
+      const ObLSReplica::MemberList &member_list,
+      const common::ObIArray<ObAddr> &servers);
 
 private:
-  const int64_t MAX_ERROR_LOG_PRINT_SIZE = 1024;
+  static constexpr int64_t MAX_ERROR_LOG_PRINT_SIZE = 1024;
 };
 
 }
