@@ -181,6 +181,9 @@ int TransCtx::set_ready_participant_count(const int64_t count)
 int TransCtx::set_ready_participant_objs(PartTransTask *part_trans_task)
 {
   int ret = OB_SUCCESS;
+  // Note: This function should be called with lock held by the caller
+  // Currently it's only used internally in build_ready_participants_list_()
+  // which is called from add_ready_participant_() that already holds the lock
   if (OB_ISNULL(part_trans_task)) {
     ret = OB_INVALID_ARGUMENT;
   } else {
@@ -632,6 +635,7 @@ int TransCtx::wait_data_ready(const int64_t timeout, volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
   int64_t end_time = get_timestamp() + timeout;
+  ObSpinLockGuard guard(lock_);
 
   if (OB_UNLIKELY(TRANS_CTX_STATE_SEQUENCED != state_)) {
     LOG_ERROR("state is not match which is not SEQUENCED", "state", print_state());
@@ -789,6 +793,7 @@ int TransCtx::get_tenant_id(uint64_t &tenant_id) const
 bool TransCtx::has_ddl_participant() const
 {
   bool has_ddl_part = false;
+  ObSpinLockGuard guard(lock_);
   PartTransTask* participant = ready_participant_objs_;
 
   while (! has_ddl_part && OB_NOT_NULL(participant)) {
