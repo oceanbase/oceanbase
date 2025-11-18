@@ -38,7 +38,7 @@ class ObMergeSetSpec;
 class ObMergeUnionSpec;
 class ObMergeIntersectSpec;
 class ObMergeExceptSpec;
-class ObRecursiveUnionAllSpec;
+class ObRecursiveUnionSpec;
 class ObHashSetSpec;
 class ObHashSetVecSpec;
 class ObHashUnionSpec;
@@ -332,14 +332,14 @@ private:
   int generate_spec(ObLogSet &op, ObMergeUnionSpec &spec, const bool in_root_job);
   int generate_spec(ObLogSet &op, ObMergeIntersectSpec &spec, const bool in_root_job);
   int generate_spec(ObLogSet &op, ObMergeExceptSpec &spec, const bool in_root_job);
-  int generate_cte_pseudo_column_row_desc(ObLogSet &op, ObRecursiveUnionAllSpec &phy_set_op);
-  int generate_spec(ObLogSet &op, ObRecursiveUnionAllSpec &spec, const bool in_root_job);
+  int generate_cte_pseudo_column_row_desc(ObLogSet &op, ObRecursiveUnionSpec &phy_set_op);
+  int generate_spec(ObLogSet &op, ObRecursiveUnionSpec &spec, const bool in_root_job);
   int generate_merge_set_spec(ObLogSet &op, ObMergeSetSpec &spec);
   int generate_spec(ObLogSet &op, ObMergeUnionVecSpec &spec, const bool in_root_job);
   int generate_spec(ObLogSet &op, ObMergeIntersectVecSpec &spec, const bool in_root_job);
   int generate_spec(ObLogSet &op, ObMergeExceptVecSpec &spec, const bool in_root_job);
   int generate_merge_set_spec(ObLogSet &op, ObMergeSetVecSpec &spec);
-  int generate_recursive_union_all_spec(ObLogSet &op, ObRecursiveUnionAllSpec &spec);
+  int generate_recursive_union_spec(ObLogSet &op, ObRecursiveUnionSpec &spec);
 
   int generate_spec(ObLogMaterial &op, ObMaterialSpec &spec, const bool in_root_job);
 

@@ -153,7 +153,7 @@ ob_set_subtarget(ob_sql engine
   engine/prepare/ob_prepare_executor.cpp
   engine/recursive_cte/ob_fake_cte_table_op.cpp
   engine/recursive_cte/ob_recursive_inner_data_op.cpp
-  engine/recursive_cte/ob_recursive_union_all_op.cpp
+  engine/recursive_cte/ob_recursive_union_op.cpp
   engine/recursive_cte/ob_search_method_op.cpp
   engine/sequence/ob_sequence_op.cpp
   engine/sort/ob_base_sort.cpp

@@ -11,27 +11,80 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
+#include "ob_recursive_union_op.h"
+#include "sql/engine/ob_exec_context.h"
+#include "lib/allocator/ob_malloc.h"
 #include "ob_recursive_inner_data_op.h"
-#include "ob_recursive_union_all_op.h"
 
 namespace oceanbase
 {
 namespace sql
 {
-
-int ObRecursiveInnerDataOp::init(const ObExpr *search_expr, const ObExpr *cycle_expr)
+int ObRCTEHashTable::init(ObIAllocator *allocator,
+                          lib::ObMemAttr &mem_attr,
+                          const common::ObIArray<ObSortFieldCollation> *sort_collations,
+                          const common::ObIArray<ObCmpFunc> *cmp_funcs, int64_t initial_size)
 {
   int ret = OB_SUCCESS;
-  search_expr_ = search_expr;
-  cycle_expr_ = cycle_expr;
+  if(OB_FAIL(ObExtendHashTable::init(allocator, mem_attr, initial_size))) {
+    LOG_WARN("RCTE init hash table failed", K(ret));
+  } else {
+    sort_collations_ = sort_collations;
+    cmp_funcs_ = cmp_funcs;
+  }
+  return ret;
+}
 
+int ObRCTEHashTable::likely_equal(const ObIArray<ObExpr *> &exprs, ObEvalCtx *eval_ctx,
+                                  const ObRCTEStoredRowWrapper &right,
+                                  ObRADatumStore::Reader *reader, bool &result)
+{
+  int ret = OB_SUCCESS;
+  int cmp_result = 0;
+  ObDatum *l_cell = nullptr;
+  const ObRADatumStore::StoredRow *right_sr = nullptr;
+  if (OB_FAIL(reader->get_row(right.row_id_, right_sr))) {
+    LOG_WARN("Fail to read row from CTE Table when RCTE deduplicate data", K(ret));
+  } else {
+    const ObDatum *r_cells = right_sr->cells();
+    // must evaled in calc_hash_values
+    for (int64_t i = 0; OB_SUCC(ret) && i < sort_collations_->count() && 0 == cmp_result; ++i) {
+      int64_t idx = sort_collations_->at(i).field_idx_;
+      l_cell = &exprs.at(idx)->locate_expr_datum(*eval_ctx);
+      if (OB_FAIL(cmp_funcs_->at(i).cmp_func_(*l_cell, r_cells[idx], cmp_result))) {
+        LOG_WARN("do cmp failed", K(ret));
+      }
+    }
+    result = (0 == cmp_result);
+  }
+
+  return ret;
+}
+
+int ObRCTEHashTable::exist(uint64_t hash_val, const ObIArray<ObExpr *> &exprs, ObEvalCtx *eval_ctx,
+                           ObRADatumStore::Reader *reader, bool &exist)
+{
+  int ret = OB_SUCCESS;
+  exist = false;
+  if (buckets_ != NULL) {
+    ObRCTEStoredRowWrapper *it = locate_bucket(*buckets_, hash_val).item_;
+    while (NULL != it && OB_SUCC(ret)) {
+      if (OB_FAIL(likely_equal(exprs, eval_ctx, *it, reader, exist))) {
+        LOG_WARN("failed to cmp", K(ret));
+      } else if (exist) {
+        break;
+      }
+      it = it->next();
+    }
+  }
+  return ret;
+}
+
+int ObRecursiveInnerDataOp::init() {
+  int ret = OB_SUCCESS;
   if (OB_ISNULL(ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql session info is null", K(ret));
-  } else if (OB_FAIL(dfs_pump_.init())) {
-    LOG_WARN("Failed to init depth first search pump", K(ret));
-  } else if (OB_FAIL(ctx_.get_my_session()->get_sys_variable(share::SYS_VAR_CTE_MAX_RECURSION_DEPTH, max_recursion_depth_))) {
-    LOG_WARN("Get sys variable error", K(ret));
   } else {
     int64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
     stored_row_buf_.set_tenant_id(tenant_id);
@@ -40,7 +93,23 @@ int ObRecursiveInnerDataOp::init(const ObExpr *search_expr, const ObExpr *cycle_
   return ret;
 }
 
-int ObRecursiveInnerDataOp::get_all_data_from_left_child()
+int ObRecursiveInnerDataOracleOp::init(const ObExpr *search_expr, const ObExpr *cycle_expr)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(ObRecursiveInnerDataOp::init())) {
+    LOG_WARN("Failed to init ObRecursiveInnerDataOp", K(ret));
+  } else if (OB_FAIL(dfs_pump_.init())) {
+    LOG_WARN("Failed to init depth first search pump", K(ret));
+  } else {
+    search_expr_ = search_expr;
+    cycle_expr_ = cycle_expr;
+  }
+
+  return ret;
+}
+
+int ObRecursiveInnerDataOracleOp::get_all_data_from_left_child()
 {
   int ret = OB_SUCCESS;
   uint64_t left_rows_count = 0;
@@ -82,7 +151,7 @@ int ObRecursiveInnerDataOp::get_all_data_from_left_child()
 }
 
 // Batch mode API of get_all_data_from_left_child
-int ObRecursiveInnerDataOp::get_all_data_from_left_batch()
+int ObRecursiveInnerDataOracleOp::get_all_data_from_left_batch()
 {
   int ret = OB_SUCCESS;
   bool all_skiped = true;
@@ -124,7 +193,7 @@ int ObRecursiveInnerDataOp::get_all_data_from_left_batch()
   return ret;
 }
 
-int ObRecursiveInnerDataOp::get_all_data_from_right_child()
+int ObRecursiveInnerDataOracleOp::get_all_data_from_right_child()
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(left_op_) || OB_ISNULL(right_op_)) {
@@ -156,7 +225,7 @@ int ObRecursiveInnerDataOp::get_all_data_from_right_child()
 }
 
 // Batch mode API of get_all_data_from_right_child
-int ObRecursiveInnerDataOp::get_all_data_from_right_batch()
+int ObRecursiveInnerDataOracleOp::get_all_data_from_right_batch()
 {
   int ret = OB_SUCCESS;
   const ObBatchRows *child_brs = nullptr;
@@ -189,7 +258,7 @@ int ObRecursiveInnerDataOp::get_all_data_from_right_batch()
   return ret;
 }
 
-int ObRecursiveInnerDataOp::try_format_output_row(int64_t &read_rows)
+int ObRecursiveInnerDataOracleOp::try_format_output_row(int64_t &read_rows)
 {
   int ret = OB_SUCCESS;
   ObTreeNode result_node;
@@ -218,7 +287,7 @@ int ObRecursiveInnerDataOp::try_format_output_row(int64_t &read_rows)
   return ret;
 }
 
-int ObRecursiveInnerDataOp::try_format_output_batch(int64_t batch_size, int64_t &read_rows)
+int ObRecursiveInnerDataOracleOp::try_format_output_batch(int64_t batch_size, int64_t &read_rows)
 {
   int ret = OB_SUCCESS;
   ObTreeNode result_node;
@@ -276,7 +345,7 @@ int ObRecursiveInnerDataOp::try_format_output_batch(int64_t batch_size, int64_t 
   return ret;
 }
 
-int ObRecursiveInnerDataOp::depth_first_union(const bool sort /*=true*/)
+int ObRecursiveInnerDataOracleOp::depth_first_union(const bool sort /*=true*/)
 {
   int ret = OB_SUCCESS;
   ObTreeNode node;
@@ -296,7 +365,7 @@ int ObRecursiveInnerDataOp::depth_first_union(const bool sort /*=true*/)
   return ret;
 }
 
-int ObRecursiveInnerDataOp::fake_cte_table_add_row(ObTreeNode &node)
+int ObRecursiveInnerDataOracleOp::fake_cte_table_add_row(ObTreeNode &node)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(pump_operator_)) {
@@ -314,7 +383,7 @@ int ObRecursiveInnerDataOp::fake_cte_table_add_row(ObTreeNode &node)
   return ret;
 }
 
-int ObRecursiveInnerDataOp::breadth_first_union(bool left_branch, bool &continue_search)
+int ObRecursiveInnerDataOracleOp::breadth_first_union(bool left_branch, bool &continue_search)
 {
   int ret = OB_SUCCESS;
   ObTreeNode node;
@@ -349,7 +418,7 @@ int ObRecursiveInnerDataOp::breadth_first_union(bool left_branch, bool &continue
   return ret;
 }
 
-int ObRecursiveInnerDataOp::start_new_level(bool left_branch)
+int ObRecursiveInnerDataOracleOp::start_new_level(bool left_branch)
 {
   int ret = OB_SUCCESS;
   ObTreeNode node;
@@ -369,20 +438,20 @@ int ObRecursiveInnerDataOp::start_new_level(bool left_branch)
 }
 
 // for breadth bulk search first
-int ObRecursiveInnerDataOp::fake_cte_table_add_bulk_rows(bool left_branch)
+int ObRecursiveInnerDataOracleOp::fake_cte_table_add_bulk_rows(bool left_branch)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(pump_operator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Fake cte table op can not be nullptr", K(ret));
   } else if (FALSE_IT(pump_operator_->update_status())) {
-  } else if (OB_FAIL(bfs_bulk_pump_.update_search_depth(max_recursion_depth_))) {
+  } else if (OB_FAIL(bfs_bulk_pump_.update_search_depth())) {
     LOG_WARN("Failed to update last bst node stask", K(ret));
   }
   return ret;
 }
 
-int ObRecursiveInnerDataOp::breadth_first_bulk_union(bool left_branch)
+int ObRecursiveInnerDataOracleOp::breadth_first_bulk_union(bool left_branch)
 {
   int ret = OB_SUCCESS;
   bool need_sort = !sort_collations_.empty();
@@ -407,7 +476,7 @@ int ObRecursiveInnerDataOp::breadth_first_bulk_union(bool left_branch)
   return ret;
 }
 
-int ObRecursiveInnerDataOp::try_get_left_rows(
+int ObRecursiveInnerDataOracleOp::try_get_left_rows(
     bool batch_mode, int64_t batch_size, int64_t &read_rows)
 {
   int ret = OB_SUCCESS;
@@ -458,7 +527,7 @@ int ObRecursiveInnerDataOp::try_get_left_rows(
   return ret;
 }
 
-int ObRecursiveInnerDataOp::try_get_right_rows(
+int ObRecursiveInnerDataOracleOp::try_get_right_rows(
     bool batch_mode, int64_t batch_size, int64_t &read_rows)
 {
   int ret = OB_SUCCESS;
@@ -527,7 +596,7 @@ int ObRecursiveInnerDataOp::try_get_right_rows(
  * 没有输出行的时候，第一次先从左边拿，
  * 左边拿过来了则从右边拿。
  */
-int ObRecursiveInnerDataOp::get_next_row()
+int ObRecursiveInnerDataOracleOp::get_next_row()
 {
   int ret = OB_SUCCESS;
   int64_t read_rows = 0;
@@ -536,9 +605,7 @@ int ObRecursiveInnerDataOp::get_next_row()
       LOG_WARN("Format output row failed", K(ret));
     } else { }
   } else if (RecursiveUnionState::R_UNION_READ_LEFT == state_) {
-    if (is_mysql_mode() && OB_FAIL(check_recursive_depth())) {
-      LOG_WARN("Recursive query abort", K(ret));
-    } else if (OB_FAIL(try_get_left_rows(false, 1, read_rows))) {
+    if (OB_FAIL(try_get_left_rows(false, 1, read_rows))) {
       if (ret != OB_ITER_END) {
         LOG_WARN("Get left rows failed", K(ret));
       } else {
@@ -548,9 +615,7 @@ int ObRecursiveInnerDataOp::get_next_row()
       state_ = R_UNION_READ_RIGHT;
     }
   } else if (RecursiveUnionState::R_UNION_READ_RIGHT == state_) {
-    if (is_mysql_mode() && OB_FAIL(check_recursive_depth())) {
-      LOG_WARN("Recursive query abort", K(ret));
-    } else if (OB_FAIL(try_get_right_rows(false, 1, read_rows))) {
+    if (OB_FAIL(try_get_right_rows(false, 1, read_rows))) {
       if (ret != OB_ITER_END) {
         LOG_WARN("Get right rows failed", K(ret));
       } else {
@@ -573,7 +638,7 @@ int ObRecursiveInnerDataOp::get_next_row()
 // during batch iterating make it MUCH MUCH more complicated. And its benefits
 // outweight the overhead of maintaining the parent-child relation.
 // Thus, make recursive union all return output with batch size to 1 so far.
-int ObRecursiveInnerDataOp::get_next_batch(const int64_t batch_size,
+int ObRecursiveInnerDataOracleOp::get_next_batch(const int64_t batch_size,
                                            ObBatchRows &brs)
 {
   int ret = OB_SUCCESS;
@@ -590,9 +655,7 @@ int ObRecursiveInnerDataOp::get_next_batch(const int64_t batch_size,
       }
     }
   } else if (RecursiveUnionState::R_UNION_READ_LEFT == state_) {
-    if (is_mysql_mode() && OB_FAIL(check_recursive_depth())) {
-      LOG_WARN("Recursive query abort", K(ret));
-    } else if (OB_FAIL(try_get_left_rows(true, batch_size, read_rows))) {
+    if (OB_FAIL(try_get_left_rows(true, batch_size, read_rows))) {
       if (ret != OB_ITER_END) {
         LOG_WARN("Get left rows failed", K(ret));
       } else {
@@ -602,9 +665,7 @@ int ObRecursiveInnerDataOp::get_next_batch(const int64_t batch_size,
       state_ = R_UNION_READ_RIGHT;
     }
   } else if (RecursiveUnionState::R_UNION_READ_RIGHT == state_) {
-    if (is_mysql_mode() && OB_FAIL(check_recursive_depth())) {
-      LOG_WARN("Recursive query abort", K(ret));
-    } else if (OB_FAIL(try_get_right_rows(true, batch_size, read_rows))) {
+    if (OB_FAIL(try_get_right_rows(true, batch_size, read_rows))) {
       if (ret != OB_ITER_END) {
         LOG_WARN("Get right rows failed", K(ret));
       } else {
@@ -638,7 +699,7 @@ int ObRecursiveInnerDataOp::get_next_batch(const int64_t batch_size,
   return ret;
 }
 
-int ObRecursiveInnerDataOp::add_pseudo_column(bool cycle /*default false*/)
+int ObRecursiveInnerDataOracleOp::add_pseudo_column(bool cycle /*default false*/)
 {
   int ret = OB_SUCCESS;
   if (nullptr != search_expr_) {
@@ -666,7 +727,7 @@ int ObRecursiveInnerDataOp::add_pseudo_column(bool cycle /*default false*/)
   return ret;
 }
 
-int ObRecursiveInnerDataOp::rescan()
+int ObRecursiveInnerDataOracleOp::rescan()
 {
   int ret = OB_SUCCESS;
   state_ = R_UNION_READ_LEFT;
@@ -682,7 +743,7 @@ int ObRecursiveInnerDataOp::rescan()
   return ret;
 }
 
-int ObRecursiveInnerDataOp::set_fake_cte_table_empty()
+int ObRecursiveInnerDataOracleOp::set_fake_cte_table_empty()
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(pump_operator_)) {
@@ -694,7 +755,7 @@ int ObRecursiveInnerDataOp::set_fake_cte_table_empty()
   return ret;
 }
 
-void ObRecursiveInnerDataOp::destroy()
+void ObRecursiveInnerDataOracleOp::destroy()
 {
   result_output_.reset();
   left_op_ = nullptr;
@@ -709,7 +770,7 @@ void ObRecursiveInnerDataOp::destroy()
   stored_row_buf_.reset();
 }
 
-int ObRecursiveInnerDataOp::assign_to_cur_row(ObChunkDatumStore::StoredRow *stored_row)
+int ObRecursiveInnerDataOracleOp::assign_to_cur_row(ObChunkDatumStore::StoredRow *stored_row)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(stored_row)) {
@@ -722,21 +783,483 @@ int ObRecursiveInnerDataOp::assign_to_cur_row(ObChunkDatumStore::StoredRow *stor
   return ret;
 }
 
-int ObRecursiveInnerDataOp::check_recursive_depth() {
+void ObRecursiveInnerDataMysqlOp::destroy()
+{
+  left_op_ = nullptr;
+  right_op_ = nullptr;
+  if (OB_NOT_NULL(pump_operator_)) {
+    pump_operator_->destroy();
+    pump_operator_ = nullptr;
+  }
+
+  hash_table_.destroy();
+
+  stored_row_buf_.reset();
+}
+
+int ObRecursiveInnerDataMysqlOp::init(const ObExpr *search_expr, const ObExpr *cycle_expr)
+{
   int ret = OB_SUCCESS;
-  ObSearchMethodOp *pump = NULL;
-  if (OB_ISNULL(pump = get_search_method_bump())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret));
-  } else if (SearchStrategyType::BREADTH_FIRST_BULK == search_type_) {
-    // do nothing
+
+  UNUSED(search_expr);
+  UNUSED(cycle_expr);
+
+  if (OB_FAIL(ObRecursiveInnerDataOp::init())) {
+    LOG_WARN("Failed to init ObRecursiveInnerDataOp", K(ret));
+  } else if (OB_FAIL(ctx_.get_my_session()->get_sys_variable(share::SYS_VAR_CTE_MAX_RECURSION_DEPTH, max_recursion_depth_))) {
+    LOG_WARN("Get sys variable error", K(ret));
   } else {
-    uint64_t level = pump->get_last_node_level();
-    if (level != UINT64_MAX && level > max_recursion_depth_) {
-      ret = OB_ERR_CTE_MAX_RECURSION_DEPTH;
-      LOG_USER_ERROR(OB_ERR_CTE_MAX_RECURSION_DEPTH, level);
-      LOG_WARN("Recursive query aborted after too many iterations.", K(ret), K(level));
+    ObMemAttr attr(ctx_.get_my_session()->get_effective_tenant_id(), "SqlCteHashTable",
+                   ObCtxIds::WORK_AREA);
+    void *skip_mem = nullptr;
+    if (OB_FAIL(hash_table_.init(&stored_row_buf_, attr, &deduplicate_sort_collations_,
+                                 &sort_cmp_funs_))) {
+      LOG_WARN("RCTE fail to init hash_table", K(ret));
+    } else if (OB_ISNULL(skip_mem = stored_row_buf_.alloc(ObBitVector::memory_size(batch_size_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc memory for skip", K(ret), K(batch_size_));
+    } else if (OB_ISNULL(hash_values_for_batch_ = static_cast<uint64_t *>(
+                           stored_row_buf_.alloc(sizeof(uint64_t) * batch_size_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc memory for hash value temp array", K(ret), K(batch_size_));
+    } else {
+      skips_ = to_bit_vector(skip_mem);
+      skips_->reset(batch_size_);
     }
+  }
+
+  return ret;
+}
+
+int ObRecursiveInnerDataMysqlOp::rescan()
+{
+  int ret = OB_SUCCESS;
+  state_ = R_UNION_READ_LEFT;
+
+  hash_table_.reuse();
+  pump_operator_->reuse();
+  hash_value_reader_->reuse();
+  curr_level_ = 0;
+
+  return ret;
+}
+
+int ObRecursiveInnerDataMysqlOp::set_fake_cte_table_and_reader(ObFakeCTETableOp *cte_table)
+{
+  ObRecursiveInnerDataOp::set_fake_cte_table_and_reader(cte_table);
+  int ret = OB_SUCCESS;
+  void *reader_mem = nullptr;
+  if (OB_ISNULL(reader_mem = ctx_.get_allocator().alloc(sizeof(ObRADatumStore::Reader)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc memory for ObRADatumStore::Reader", K(ret));
+  } else {
+    hash_value_reader_ =
+      new (reader_mem) ObRADatumStore::Reader(*pump_operator_->get_intermedia_table());
+  }
+  return ret;
+}
+
+int ObRecursiveInnerDataMysqlOp::get_next_row()
+{
+  int ret = OB_SUCCESS;
+  do {
+    if (curr_level_ > max_recursion_depth_) {
+      ret = OB_ERR_CTE_MAX_RECURSION_DEPTH;
+      LOG_USER_ERROR(OB_ERR_CTE_MAX_RECURSION_DEPTH, curr_level_);
+      LOG_WARN("Recursive query aborted after too many iterations.", K(ret), K(curr_level_));
+    } else {
+      ret = get_next_row_no_materialization();
+    }
+  } while (ret == OB_ITER_END && state_ != RecursiveUnionState::R_UNION_END);
+  return ret;
+}
+
+int ObRecursiveInnerDataMysqlOp::get_next_batch(const int64_t batch_size, ObBatchRows &brs)
+{
+  int ret = OB_SUCCESS;
+  if (curr_level_ > max_recursion_depth_) {
+    ret = OB_ERR_CTE_MAX_RECURSION_DEPTH;
+    LOG_USER_ERROR(OB_ERR_CTE_MAX_RECURSION_DEPTH, curr_level_);
+    LOG_WARN("Recursive query aborted after too many iterations.", K(ret), K(curr_level_));
+  } else {
+    ret = get_next_batch_no_materialization(batch_size, brs);
+  }
+  return ret;
+}
+
+
+// The detailed procedure is described as follows:
+// 1. The Recursive Union operator reads data from the left branch child node
+// 2. If the Recursive Union is Distinct, deduplication is performed
+// 3. Read all the data of the child operator in batches, which is the iteration data of this round, and:
+//    a. pass data to the upper-layer operator
+//    b. pass data to CTE Table in the CTE operator of right branch
+// 4. When this round of recursive iteration ends, determine whether there is no more any new data is generated in this iteration round
+//    a. If yes, the iteration ends
+//    b. If no, data is still available, rescan() right branch, cotinue process logic, go to Step 5
+// 5. Read the data from the right child node and go back to Step 2
+int ObRecursiveInnerDataMysqlOp::get_next_batch_no_materialization(const int64_t batch_size,
+                                                                   ObBatchRows &brs)
+{
+  int ret = OB_SUCCESS;
+
+  if (state_ == RecursiveUnionState::R_UNION_END) {
+    brs.size_ = 0;
+    brs.end_ = true;
+  } else {
+    // 0.no need to get from result_output_ anymore
+
+    ObOperator *child = ((state_ == RecursiveUnionState::R_UNION_READ_LEFT) ? left_op_ : right_op_);
+    const ObBatchRows *child_brs = nullptr;
+
+    // 1 or 5. read data from child(left or right)
+    if (OB_FAIL(child->get_next_batch(batch_size, child_brs))) {
+      LOG_WARN("get data from child branch failed", K(ret), K(curr_level_));
+    } else if (OB_FAIL(handle_batch_data(child->get_spec().output_, child_brs->size_,
+                                         child_brs->skip_, brs.skip_, hash_values_for_batch_))) {
+      LOG_WARN("handle_batch_data failed", K(ret));
+    } else if (child_brs->end_) {
+      // 4. here we reach the end of a round of iteration
+      if (state_ == RecursiveUnionState::R_UNION_READ_LEFT) {
+        pump_operator_->update_round_limit();
+        LOG_TRACE("RCTE finish round: ", K_(curr_level), K_(write_rows_in_this_iteration), K(pump_operator_->get_round_limit()));
+        state_ = RecursiveUnionState::R_UNION_READ_RIGHT;
+        curr_level_++;
+        write_rows_in_this_iteration_ = 0;
+        // todo: need rescan here?
+      } else if (state_ == RecursiveUnionState::R_UNION_READ_RIGHT) {
+        // if no more data are appended in this round iteration, we are already reach the final end
+
+        // CTE table may still have data remain if there is a short-cut scenario
+        // e.g. Right branch is a hash join, but build-side doesn't output even a single row, so
+        // when cte in probe-side, it still has data but will be skipped
+        // So whether is in the end of the operator can not be judged by whether the CTE table still
+        // has unread data
+        // That's why we need the RCTE operator to maintain the ‘write_rows_in_this_iteration_’ variable
+        if (write_rows_in_this_iteration_ == 0) {
+          // 4.a
+          LOG_TRACE("RCTE finish *Finial* round: ", K_(curr_level), K_(write_rows_in_this_iteration), K(pump_operator_->get_round_limit()));
+          brs.end_ = true;
+          state_ = RecursiveUnionState::R_UNION_END;
+        } else {
+          // 4.b
+          pump_operator_->update_round_limit();
+          LOG_TRACE("RCTE finish round: ", K_(curr_level), K_(write_rows_in_this_iteration), K(pump_operator_->get_round_limit()));
+          curr_level_++;
+          write_rows_in_this_iteration_ = 0;
+          right_op_->rescan();
+        }
+      } else {
+        LOG_WARN("state_ should never be RecursiveUnionState::R_UNION_END after executing");
+        OB_ASSERT(false);
+      }
+    }
+
+    brs.size_ = child_brs->size_;
+
+    // 3.a directly pass data to upper operator
+    if (OB_SUCC(ret)
+        && OB_FAIL(
+             convert_batch(child->get_spec().output_, output_union_exprs_, brs.size_, brs.skip_))) {
+      LOG_WARN("convert_batch failed", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+int ObRecursiveInnerDataMysqlOp::get_next_row_no_materialization()
+{
+  int ret = OB_SUCCESS;
+
+  // 0.no need to get from result_output_ anymore
+  ObOperator *child = ((state_ == RecursiveUnionState::R_UNION_READ_LEFT) ? left_op_ : right_op_);
+
+  // 1 or 5. read data from child(left or right)
+  bool is_duplicate = false;
+  // keep loop to get data from lower operator untill
+  // get a unique data
+  // or
+  // reach the end of this round iteration
+  // or
+  // other failure reason
+  do {
+    if (OB_FAIL(child->get_next_row())) {
+      if (ret != OB_ITER_END) {
+        LOG_WARN("get data from child branch failed", K(ret), K(curr_level_));
+      }
+    } else {
+      if (OB_SUCC(ret)
+          && OB_FAIL(
+               handle_row_data(child->get_spec().output_, hash_values_for_batch_, is_duplicate))) {
+        LOG_WARN("handle_batch_data failed", K(ret));
+      }
+    }
+
+  } while (OB_SUCC(ret) && is_duplicate);
+
+  if (ret == OB_ITER_END) {
+    // 4. here we reach the end of a round of iteration
+    if (state_ == RecursiveUnionState::R_UNION_READ_LEFT) {
+      state_ = RecursiveUnionState::R_UNION_READ_RIGHT;
+      curr_level_++;
+      write_rows_in_this_iteration_ = 0;
+      pump_operator_->update_round_limit();
+      // todo: need rescan here?
+    } else if (state_ == RecursiveUnionState::R_UNION_READ_RIGHT) {
+      // if no more data are appended in this round iteration, we are already reach the final end
+
+      // CTE table may still have data remain if there is a short-cut scenario
+      // e.g. Right branch is a hash join, but build-side doesn't output even a single row, so
+      // when cte in probe-side, it still has data but will be skipped
+      // So whether is in the end of the operator can not be judged by whether the CTE table still
+      // has unread data
+      // That's why we need the RCTE operator to maintain the ‘write_rows_in_this_iteration_’
+      // variable
+      if (write_rows_in_this_iteration_ == 0) {
+        // 4.a
+        state_ = RecursiveUnionState::R_UNION_END;
+      } else {
+        // 4.b
+        curr_level_++;
+        write_rows_in_this_iteration_ = 0;
+        right_op_->rescan();
+        pump_operator_->update_round_limit();
+      }
+    } else {
+      LOG_WARN("state_ should never be RecursiveUnionState::R_UNION_END after executing");
+      OB_ASSERT(false);
+    }
+  }
+
+  // 3.a directly pass data to upper operator
+  if (OB_SUCC(ret)
+      && OB_FAIL(convert_batch(child->get_spec().output_, output_union_exprs_, 1, nullptr))) {
+    LOG_WARN("convert_batch failed", K(ret));
+  }
+
+  return ret;
+}
+
+int ObRecursiveInnerDataMysqlOp::handle_batch_data(const common::ObIArray<ObExpr *> &exprs,
+                                                   const int64_t batch_size,
+                                                   ObBitVector *child_skip, ObBitVector *this_skip,
+                                                   uint64_t *hash_values_for_batch)
+{
+  int ret = OB_SUCCESS;
+  // 2. hash deduplication
+  if (OB_NOT_NULL(child_skip) && OB_NOT_NULL(this_skip)) {
+    this_skip->deep_copy(*child_skip, batch_size);
+  }
+
+  if (is_union_distinct_) {
+    if (OB_ISNULL(hash_values_for_batch)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("hash values vector is not init", K(ret));
+    } else if (OB_FAIL(
+                 calc_hash_value_for_batch(exprs, batch_size, child_skip, hash_values_for_batch))) {
+      LOG_WARN("failed to calc hash values", K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else {
+    void *buf;
+    ObRCTEStoredRowWrapper *key;
+    bool data_exist = false;
+    ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx_);
+    guard.set_batch_size(batch_size);
+    for (int64_t i = 0; i < batch_size && OB_SUCC(ret); i++) {
+      if (OB_NOT_NULL(child_skip) && child_skip->at(i)) {
+        continue;
+      }
+      guard.set_batch_idx(i);
+
+      if (is_union_distinct_) {
+        if (OB_FAIL(hash_table_.exist(hash_values_for_batch[i], exprs, &eval_ctx_,
+                                      hash_value_reader_, data_exist))) {
+          LOG_WARN("Fail to check whether data is exist in hash table in Recursive Union Distinct",
+                   K(ret));
+        }
+      }
+
+      // 3.b write data into intermedia table and update hashtable_
+      // now CTE operator will maintenance ObRADatumStore
+      // Append data into CTE table in
+      // Recursive Union All
+      // or
+      // Recursive Union Distinct which is unique data
+      if (OB_SUCC(ret) && (!is_union_distinct_ || !data_exist)) {
+        write_rows_in_this_iteration_++;
+        if (OB_FAIL(pump_operator_->add_single_row_to_intermedia_table(exprs, &eval_ctx_))) {
+          LOG_WARN("Fail to append data into CTE intermedia table", K(ret));
+        }
+      }
+
+      if (OB_SUCC(ret) && is_union_distinct_) {
+        if (!data_exist) {
+          if (OB_ISNULL(buf = stored_row_buf_.alloc(sizeof(ObRCTEStoredRowWrapper)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("alloc buf for ObRCTEStoredRowWrapper failed", K(ret));
+          } else {
+            key = new (buf) ObRCTEStoredRowWrapper(
+              hash_values_for_batch[i], pump_operator_->get_intermedia_table()->get_row_cnt() - 1);
+            if (OB_FAIL(hash_table_.set(*key))) {
+              LOG_WARN("failed to set key", K(ret));
+            }
+          }
+        } else {
+          // already exist, just skip this data
+          this_skip->set(i);
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObRecursiveInnerDataMysqlOp::handle_row_data(const common::ObIArray<ObExpr *> &exprs,
+                                                 uint64_t *hash_values_for_batch,
+                                                 bool &is_duplicate)
+{
+  int ret = OB_SUCCESS;
+  // 2. hash deduplication
+
+  if (is_union_distinct_) {
+    if (OB_ISNULL(hash_values_for_batch)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("hash values vector is not init", K(ret));
+    } else if (OB_FAIL(calc_hash_value_for_row(exprs, hash_values_for_batch))) {
+      LOG_WARN("failed to calc hash values", K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else {
+    void *buf;
+    ObRCTEStoredRowWrapper *key;
+    bool data_exist = false;
+
+    if (is_union_distinct_) {
+      if (OB_FAIL(hash_table_.exist(*hash_values_for_batch, exprs, &eval_ctx_, hash_value_reader_,
+                                    data_exist))) {
+        LOG_WARN("Fail to check whether data is exist in hash table in Recursive Union Distinct",
+                 K(ret));
+      }
+    }
+
+    // 3.b write data into intermedia table and update hashtable_
+    // now CTE operator will maintenance ObRADatumStore
+    // Append data into CTE table in
+    // Recursive Union All
+    // or
+    // Recursive Union Distinct which is unique data
+    if (OB_SUCC(ret) && (!is_union_distinct_ || !data_exist)) {
+      write_rows_in_this_iteration_++;
+      if (OB_FAIL(pump_operator_->add_single_row_to_intermedia_table(exprs, &eval_ctx_))) {
+        LOG_WARN("Fail to append data into CTE intermedia table", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret) && is_union_distinct_) {
+      if (!data_exist) {
+        if (OB_ISNULL(buf = stored_row_buf_.alloc(sizeof(ObRCTEStoredRowWrapper)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("alloc buf for ObRCTEStoredRowWrapper failed", K(ret));
+        } else {
+          key = new (buf) ObRCTEStoredRowWrapper(
+            *hash_values_for_batch, pump_operator_->get_intermedia_table()->get_row_cnt() - 1);
+          if (OB_FAIL(hash_table_.set(*key))) {
+            LOG_WARN("failed to set key", K(ret));
+          }
+        }
+      } else {
+        // already exist, just skip this data
+        is_duplicate = true;
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObRecursiveInnerDataMysqlOp::calc_hash_value_for_row(const common::ObIArray<ObExpr *> &exprs,
+                                                         uint64_t *hash_values_for_batch)
+{
+  int ret = OB_SUCCESS;
+  ObDatum *curr_datum = NULL;
+  *hash_values_for_batch = ObRCTEStoredRowWrapper::DEFAULT_HASH_VALUE;
+  for (int j = 0; j < deduplicate_sort_collations_.count(); j++) {
+    const int64_t idx = deduplicate_sort_collations_.at(j).field_idx_;
+
+    ObDatumHashFuncType hash_func = hash_funcs_.at(j).hash_func_;
+    // There is no guarantee that the expression has been evaluated in non-vectorization
+    // executing mode.
+    // So we have to evalute them explicitly before use them
+    if (OB_FAIL(exprs.at(idx)->eval(eval_ctx_, curr_datum))) {
+      LOG_WARN("expr evaluate failed", K(ret), KPC(exprs.at(idx)), K_(eval_ctx));
+    } else {
+      hash_func(*curr_datum, *hash_values_for_batch, *hash_values_for_batch);
+    }
+  }
+
+  *hash_values_for_batch &= ObRCTEStoredRowWrapper::HASH_VAL_MASK;
+
+  return ret;
+}
+
+int ObRecursiveInnerDataMysqlOp::calc_hash_value_for_batch(const common::ObIArray<ObExpr *> &exprs,
+                                                           const int64_t batch_size,
+                                                           ObBitVector *child_skip,
+                                                           uint64_t *hash_values_for_batch)
+{
+  int ret = OB_SUCCESS;
+  uint64_t default_hash_value = ObRCTEStoredRowWrapper::DEFAULT_HASH_VALUE;
+  for (int j = 0; j < deduplicate_sort_collations_.count(); j++) {
+    bool is_batch_seed = (0 != j);
+    const int64_t idx = deduplicate_sort_collations_.at(j).field_idx_;
+    ObBatchDatumHashFunc hash_func = hash_funcs_.at(j).batch_hash_func_;
+    ObDatum *curr_datum = exprs.at(idx)->locate_batch_datums(eval_ctx_);
+    hash_func(hash_values_for_batch, curr_datum, exprs.at(idx)->is_batch_result(), *child_skip,
+              batch_size, is_batch_seed ? hash_values_for_batch : &default_hash_value,
+              is_batch_seed);
+  }
+
+  for (int64_t i = 0; i < batch_size; ++i) {
+    hash_values_for_batch[i] &= ObRCTEStoredRowWrapper::HASH_VAL_MASK;
+  }
+
+  return ret;
+}
+
+int ObRecursiveInnerDataMysqlOp::convert_batch(const common::ObIArray<ObExpr *> &src_exprs,
+                                               const common::ObIArray<ObExpr *> &dst_exprs,
+                                               const int64_t batch_size, ObBitVector *skip)
+{
+  int ret = OB_SUCCESS;
+  if (0 == batch_size) {
+  } else if (OB_UNLIKELY(dst_exprs.count() != src_exprs.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected status: exprs is not match", K(ret), K(src_exprs.count()),
+             K(dst_exprs.count()));
+  } else {
+    for (int64_t i = 0; i < dst_exprs.count(); ++i) {
+      ObDatum *dst = dst_exprs.at(i)->locate_batch_datums(eval_ctx_);
+      if (!src_exprs.at(i)->is_batch_result()) {
+        ObDatum &src = src_exprs.at(i)->locate_expr_datum(eval_ctx_, 0);
+        for (int64_t j = 0; j < batch_size; ++j) {
+          if (OB_NOT_NULL(skip) && skip->at(j)) {
+            continue;
+          }
+          dst_exprs.at(i)->locate_expr_datum(eval_ctx_, j) = src;
+        }
+      } else {
+        ObDatum *src = src_exprs.at(i)->locate_batch_datums(eval_ctx_);
+        MEMCPY(dst, src, sizeof(ObDatum) * batch_size);
+      }
+      dst_exprs.at(i)->set_evaluated_projected(eval_ctx_);
+    } // end for
   }
   return ret;
 }
