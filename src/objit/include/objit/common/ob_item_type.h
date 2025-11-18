@@ -979,6 +979,8 @@ typedef enum ObItemType
   T_FUN_VARSAMP = 1933,
   T_FUN_STDDEVSAMP = 1934,
   T_FUN_UNIQ = 1935,
+  T_FUN_SYS_EDIT_DISTANCE = 1936,
+  T_FUN_SYS_EDIT_DISTANCE_UTF8 = 1937,
 
   ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,

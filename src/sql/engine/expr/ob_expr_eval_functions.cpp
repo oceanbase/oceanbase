@@ -1456,6 +1456,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprMaxPt::eval_max_pt,                                  /* 877 */
   NULL, // ObExprDateTrunc::eval_date_trunc,                          /* 878 */
   NULL, // ObExprToDate::calc_to_date_with_format                     /* 879 */
+  NULL, // ObExprEditDistance::calc_edit_distance,                    /* 880 */
+  NULL, // ObExprEditDistanceUTF8::calc_edit_distance_utf8,           /* 881 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1940,6 +1942,13 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, //ObExprAcos::eval_number_acos_vector,                           /* 294 */
   NULL, //ObExprAsin::eval_double_asin_vector,                           /* 295 */
   NULL, //ObExprAsin::eval_number_asin_vector,                           /* 296 */
+  NULL, // ObExprHex::eval_hex_vector,                                   /* 297 */
+  NULL, // ObExprSha::eval_sha_vector,                                   /* 298 */
+  NULL, // ObExprSha2::eval_sha2_vector,                                 /* 299 */
+  NULL, // ObExprAesEncrypt::eval_aes_encrypt_vector,                    /* 300 */
+  NULL, // ObExprAesDecrypt::eval_aes_decrypt_vector,                    /* 301 */
+  NULL, // ObExprEditDistance::calc_edit_distance_vector,                /* 302 */
+  NULL, // ObExprEditDistanceUTF8::calc_edit_distance_utf8_vector,       /* 303 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
