@@ -167,6 +167,7 @@ ObUnwindException *ObPLEH::eh_create_exception(int64_t pl_context,
         unwind->exception_cleanup = NULL;
         exception->type_.type_ = value->type_;
         exception->type_.error_code_ = value->error_code_;
+        exception->type_.ob_error_code_ = value->ob_error_code_;
         if (NULL == value->sql_state_ || 0 == value->str_len_) {
           exception->type_.sql_state_ = value->sql_state_;
         } else {
@@ -433,7 +434,7 @@ int ObPLEH::match_action_value(const ObPLConditionValue *action, const ObPLCondi
       break;
     }
     case SQL_EXCEPTION: {
-      precedence = (eh_classify_exception(exception->sql_state_) == SQL_EXCEPTION) && !is_internal_error(exception->error_code_) ? SQL_EXCEPTION : INVALID_TYPE;
+      precedence = (eh_classify_exception(exception->sql_state_) == SQL_EXCEPTION) && !is_internal_error(exception->ob_error_code_) ? SQL_EXCEPTION : INVALID_TYPE;
       break;
     }
     case SQL_WARNING: {
@@ -446,7 +447,7 @@ int ObPLEH::match_action_value(const ObPLConditionValue *action, const ObPLCondi
     }
     case OTHERS: {
       if (ERROR_CODE == exception->type_) {
-        precedence = is_internal_error(exception->error_code_) ? INVALID_TYPE : OTHERS;
+        precedence = is_internal_error(exception->ob_error_code_) ? INVALID_TYPE : OTHERS;
       } else {
         precedence = OTHERS;
       }

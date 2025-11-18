@@ -2272,6 +2272,10 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareHandlerStmt &s)
             LOG_WARN("failed to get_llvm_type", K(ret));
           } else if (OB_FAIL(condition_elements.push_back(elem_value))) {
             LOG_WARN("push_back error", K(ret));
+          }  else if (OB_FAIL(generator_.get_helper().get_int64(s.get_handler(i).get_desc()->get_condition(j).ob_error_code_, elem_value))) {
+            LOG_WARN("failed to get int64", K(ret));
+          } else if (OB_FAIL(condition_elements.push_back(elem_value))) {
+            LOG_WARN("push_back error", K(ret));
           } else if (OB_FAIL(generator_.get_adt_service().get_pl_condition_value(
                          condition_value_type))) {
             LOG_WARN("failed to get_pl_condition_value", K(ret));
@@ -7714,11 +7718,14 @@ int ObPLCodeGenerator::generate_exception(ObLLVMValue &type,
       ObLLVMValue condition;
       ObLLVMValue type_pointer;
       ObLLVMValue error_code_pointer;
+      ObLLVMValue ob_error_code_pointer;
       ObLLVMValue sql_state_pointer;
       ObLLVMValue str_len_pointer;
       ObLLVMValue stmt_id_pointer;
       ObLLVMValue signal_pointer;
       ObLLVMValue int_value;
+      ObLLVMValue ob_error_code_int64;
+      ObLLVMType int64_type;
       ObPLCGBufferGuard buffer_guard(*this);
 
       if (OB_FAIL(buffer_guard.get_condition_buffer(condition))) {
@@ -7748,6 +7755,14 @@ int ObPLCodeGenerator::generate_exception(ObLLVMValue &type,
       } else if (OB_FAIL(helper_.get_int8(signal, int_value))) {
         LOG_WARN("failed to get int8", K(ret));
       } else if (OB_FAIL(helper_.create_store(int_value, signal_pointer))) {
+        LOG_WARN("failed to create_store", K(ret));
+      } else if (OB_FAIL(extract_ob_error_code_ptr_from_condition_value(condition, ob_error_code_pointer))) {
+        LOG_WARN("failed to extract_ob_error_code_ptr_from_condition_value", K(ret));
+      } else if (OB_FAIL(helper_.get_llvm_type(ObIntType, int64_type))) {
+        LOG_WARN("failed to get int64 type", K(ret));
+      } else if (OB_FAIL(helper_.create_sext(ObString("sext ob_error_code to int64"), ob_error_code, int64_type, ob_error_code_int64))) {
+        LOG_WARN("failed to sext ob_error_code to int64", K(ret));
+      } else if (OB_FAIL(helper_.create_store(ob_error_code_int64, ob_error_code_pointer))) {
         LOG_WARN("failed to create_store", K(ret));
       } else if (OB_FAIL(args.push_back(condition))) {
         LOG_WARN("push_back error", K(ret));
@@ -10322,14 +10337,14 @@ DEFINE_EXTRACT_PTR_FROM_STRUCT(name, condition_value, IDX_CONDITION_STATE)
 DEFINE_EXTRACT_PTR_FROM_STRUCT(len, condition_value, IDX_CONDITION_LEN)
 DEFINE_EXTRACT_PTR_FROM_STRUCT(stmt, condition_value, IDX_CONDITION_STMT)
 DEFINE_EXTRACT_PTR_FROM_STRUCT(signal, condition_value, IDX_CONDITION_SIGNAL)
-
+DEFINE_EXTRACT_PTR_FROM_STRUCT(ob_error_code, condition_value, IDX_CONDITION_OB_ERROR_CODE)
 DEFINE_EXTRACT_VALUE_FROM_STRUCT(type, condition_value)
 DEFINE_EXTRACT_VALUE_FROM_STRUCT(code, condition_value)
 DEFINE_EXTRACT_VALUE_FROM_STRUCT(name, condition_value)
 DEFINE_EXTRACT_VALUE_FROM_STRUCT(len, condition_value)
 DEFINE_EXTRACT_VALUE_FROM_STRUCT(stmt, condition_value)
 DEFINE_EXTRACT_VALUE_FROM_STRUCT(signal, condition_value)
-
+DEFINE_EXTRACT_VALUE_FROM_STRUCT(ob_error_code, condition_value)
 
 DEFINE_EXTRACT_PTR_FROM_STRUCT(type, collection, IDX_COLLECTION_TYPE)
 DEFINE_EXTRACT_PTR_FROM_STRUCT(id, collection, IDX_COLLECTION_ID)
