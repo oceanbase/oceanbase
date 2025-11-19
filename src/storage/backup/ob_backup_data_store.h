@@ -49,6 +49,25 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupDataLSAttrDesc);
 };
 
+struct ObBackupDataLSIdListDesc final : public ObExternBackupDataDesc
+{
+public:
+  static const uint8_t FILE_VERSION = 1;
+  OB_UNIS_VERSION(1);
+public:
+  ObBackupDataLSIdListDesc()
+    : ObExternBackupDataDesc(share::ObBackupFileType::BACKUP_LS_ID_LIST_INFO, FILE_VERSION),
+      ls_id_array_() {}
+  virtual ~ObBackupDataLSIdListDesc() {}
+
+  bool is_valid() const override;
+  INHERIT_TO_STRING_KV("ObExternBackupDataDesc", ObExternBackupDataDesc, K_(ls_id_array));
+public:
+  ObSArray<share::ObLSID> ls_id_array_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBackupDataLSIdListDesc);
+};
+
 struct ObBackupDataTabletToLSInfo 
 {
 public:
@@ -388,6 +407,8 @@ public:
   int write_ls_attr(const int64_t turn_id, const ObBackupDataLSAttrDesc &ls_info); 
   int read_ls_attr_info(ObBackupDataLSAttrDesc &ls_info);
   int read_ls_attr_info(const int64_t turn_id, ObBackupDataLSAttrDesc &ls_info);
+  int write_ls_id_list(const ObBackupDataLSIdListDesc &ls_id_list);
+  int read_ls_id_list(ObBackupDataLSIdListDesc &ls_id_list);
 
   int write_ls_meta_infos(const ObBackupLSMetaInfosDesc &ls_meta_infos);
   // get the ObBackupLSMetaInfosDesc of target turn_id

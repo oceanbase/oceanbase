@@ -197,6 +197,13 @@ struct ObBackupPathUtil
   static int get_backup_ls_attr_info_path(const share::ObBackupDest &backup_tenant_dest,
       const share::ObBackupSetDesc &desc, const int64_t turn_id, share::ObBackupPath &backup_path); 
 
+  // file:///obbackup/backup_set_1_full/infos/meta_info/ls_id_list_info.obbak
+  static int get_backup_ls_id_list_path(const share::ObBackupDest &backup_set_dest,
+      share::ObBackupPath &backup_path);
+
+  static int get_backup_ls_id_list_path(const share::ObBackupDest &backup_tenant_dest,
+      const share::ObBackupSetDesc &desc, share::ObBackupPath &backup_path);
+
   // file:///obbackup/backup_set_1_full/infos/meta_info/ls_meta_infos.obbak
   static int get_ls_meta_infos_path(const share::ObBackupDest &backup_set_dest, share::ObBackupPath &backup_path);
 

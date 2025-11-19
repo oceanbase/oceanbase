@@ -144,11 +144,16 @@ int ObGCUpperTransHelper::check_need_gc_or_update_upper_trans_version(
         ObSSTable *cur_table = inc_major_ddl_dump_sstable[idx];
         int64_t trans_state = ObTxData::UNKOWN;
         int64_t commit_version = cur_table->get_upper_trans_version();
+        bool need_gc = false;
 
         if (OB_LIKELY(INT64_MAX == commit_version)) {
           if (OB_TMP_FAIL(compaction::ObIncMajorTxHelper::get_inc_major_commit_version(ls, *cur_table, SCN::max_scn(), trans_state, commit_version))) {
             LOG_WARN("failed to get commit version for inc major", K(tmp_ret), KPC(cur_table));
           } else if (ObTxData::ABORT != trans_state) {
+            // do nothing
+          } else if (OB_TMP_FAIL(compaction::ObIncMajorTxHelper::check_need_gc_ddl_dump(tablet, *cur_table, need_gc))) {
+            LOG_WARN("fail to check ddlkv exist", K(tmp_ret), K(tablet_id));
+          } else if (!need_gc) {
             // do nothing
           } else if (OB_TMP_FAIL(gc_inc_major_ddl_scns->push_back(cur_table->get_end_scn().get_val_for_tx()))) {
             LOG_WARN("failed to add ddl end scn", K(tmp_ret));

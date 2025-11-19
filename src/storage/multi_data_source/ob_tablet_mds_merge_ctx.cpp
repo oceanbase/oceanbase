@@ -57,7 +57,7 @@ int ObTabletMdsMinorMergeCtx::get_merge_tables(ObGetMergeTablesResult &get_merge
     int tmp_ret = OB_SUCCESS;
     filter_ctx_.compaction_filter_ = NULL;
     ObICompactionFilter *compaction_filter = NULL;
-    if (OB_TMP_FAIL(prepare_compaction_filter(mem_ctx_.get_allocator(), *get_tablet(), compaction_filter))) {
+    if (OB_TMP_FAIL(prepare_compaction_filter(mem_ctx_.get_allocator(), *get_tablet(), static_param_.get_ls_id(), compaction_filter))) {
       LOG_WARN("prepare compaction filter fail", K(tmp_ret));
     } else {
       filter_ctx_.compaction_filter_ = compaction_filter;
@@ -187,7 +187,7 @@ int ObTabletCrossLSMdsMinorMergeCtx::prepare_merge_tables(
   return ret;
 }
 
-int ObTabletMdsMinorMergeCtx::prepare_compaction_filter(ObIAllocator &allocator, ObTablet &tablet, ObICompactionFilter *&filter)
+int ObTabletMdsMinorMergeCtx::prepare_compaction_filter(ObIAllocator &allocator, ObTablet &tablet, const share::ObLSID &ls_id, ObICompactionFilter *&filter)
 {
   int ret = OB_SUCCESS;
   void* buf = NULL;
@@ -200,7 +200,7 @@ int ObTabletMdsMinorMergeCtx::prepare_compaction_filter(ObIAllocator &allocator,
     const int64_t last_major_snapshot = tablet.get_last_major_snapshot_version();
     const int64_t multi_version_start = tablet.get_multi_version_start();
     int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(compaction_filter->init(last_major_snapshot, multi_version_start))) {
+    if (OB_TMP_FAIL(compaction_filter->init(last_major_snapshot, multi_version_start, ls_id))) {
       LOG_WARN("failed to init mds compaction_filter", K(tmp_ret), K(last_major_snapshot), K(multi_version_start));
     } else {
       filter = compaction_filter;
@@ -240,7 +240,7 @@ int ObTabletCrossLSMdsMinorMergeCtxHelper::get_merge_tables(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(tablet_handle));
   } else if (OB_FAIL(tablet->get_private_transfer_epoch(get_merge_table_result.private_transfer_epoch_))) {
-    LOG_WARN("failed to get transfer epoch", K(ret), KPC(tablet));
+    LOG_WARN("failed to get private transfer epoch", K(ret), KPC(tablet));
   } else {
     get_merge_table_result.scn_range_.start_scn_ = tables_handle.get_table(0)->get_start_scn();
     get_merge_table_result.rec_scn_ = tables_handle.get_table(0)->get_rec_scn();

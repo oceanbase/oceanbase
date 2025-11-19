@@ -137,7 +137,7 @@ public:
     : type_(ObLinkedMacroBlockWriteType::LMI_MAX_TYPE),
       ls_id_(),
       tablet_id_(),
-      tablet_transfer_epoch_(-1),
+      tablet_private_transfer_epoch_(-1),
       start_macro_seq_(-1),
       reorganization_scn_(-1),
       op_id_(0),
@@ -153,7 +153,7 @@ public:
   TO_STRING_KV(K_(type),
                K_(ls_id),
                K_(tablet_id),
-               K_(tablet_transfer_epoch),
+               K_(tablet_private_transfer_epoch),
                K_(start_macro_seq),
                K_(reorganization_scn),
                K_(op_id),
@@ -164,7 +164,7 @@ private:
   ObLinkedMacroBlockWriteType type_;
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
-  int32_t tablet_transfer_epoch_;
+  int32_t tablet_private_transfer_epoch_;
   int64_t start_macro_seq_;
   int64_t reorganization_scn_;
   uint64_t op_id_;

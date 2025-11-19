@@ -115,7 +115,7 @@ TEST_F(TestSSMacroCacheMgr, put_update_erase)
   macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
   macro_id.set_second_id(tablet_id);
   macro_id.set_third_id(server_id);
-  macro_id.set_macro_transfer_epoch(0); // transfer_seq
+  macro_id.set_macro_private_transfer_epoch(0); // transfer_seq
   macro_id.set_tenant_seq(100); // tenant_seq
   ASSERT_TRUE(macro_id.is_valid());
 
@@ -163,7 +163,7 @@ TEST_F(TestSSMacroCacheMgr, put_or_update_and_batch_update)
   macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
   macro_id.set_second_id(tablet_id);
   macro_id.set_third_id(server_id);
-  macro_id.set_macro_transfer_epoch(0); // transfer_seq
+  macro_id.set_macro_private_transfer_epoch(0); // transfer_seq
   macro_id.set_tenant_seq(100); // tenant_seq
   ASSERT_TRUE(macro_id.is_valid());
 
@@ -190,7 +190,7 @@ TEST_F(TestSSMacroCacheMgr, put_or_update_and_batch_update)
   macro_id_2.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
   macro_id_2.set_second_id(tablet_id);
   macro_id_2.set_third_id(server_id);
-  macro_id_2.set_macro_transfer_epoch(0); // transfer_seq
+  macro_id_2.set_macro_private_transfer_epoch(0); // transfer_seq
   macro_id_2.set_tenant_seq(101); // tenant_seq
   ASSERT_TRUE(macro_id_2.is_valid());
 
@@ -246,7 +246,7 @@ TEST_F(TestSSMacroCacheMgr, update_effective_tablet_id_by_get)
   macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
   macro_id.set_second_id(tablet_id);
   macro_id.set_third_id(server_id);
-  macro_id.set_macro_transfer_epoch(0); // transfer_seq
+  macro_id.set_macro_private_transfer_epoch(0); // transfer_seq
   macro_id.set_tenant_seq(100); // tenant_seq
   ASSERT_TRUE(macro_id.is_valid());
 
@@ -306,7 +306,7 @@ TEST_F(TestSSMacroCacheMgr, shift_lru_list)
   macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
   macro_id.set_second_id(tablet_id);
   macro_id.set_third_id(server_id);
-  macro_id.set_macro_transfer_epoch(0); // transfer_seq
+  macro_id.set_macro_private_transfer_epoch(0); // transfer_seq
   macro_id.set_tenant_seq(100); // tenant_seq
   ASSERT_TRUE(macro_id.is_valid());
 
@@ -388,7 +388,7 @@ TEST_F(TestSSMacroCacheMgr, update_lru_list)
   macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
   macro_id.set_second_id(tablet_id);
   macro_id.set_third_id(server_id);
-  macro_id.set_macro_transfer_epoch(0); // transfer_seq
+  macro_id.set_macro_private_transfer_epoch(0); // transfer_seq
   macro_id.set_tenant_seq(100); // tenant_seq
   ASSERT_TRUE(macro_id.is_valid());
 
@@ -397,7 +397,7 @@ TEST_F(TestSSMacroCacheMgr, update_lru_list)
   macro_id_2.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
   macro_id_2.set_second_id(tablet_id);
   macro_id_2.set_third_id(server_id);
-  macro_id_2.set_macro_transfer_epoch(0); // transfer_seq
+  macro_id_2.set_macro_private_transfer_epoch(0); // transfer_seq
   macro_id_2.set_tenant_seq(101); // tenant_seq
   ASSERT_TRUE(macro_id_2.is_valid());
 
@@ -470,7 +470,7 @@ TEST_F(TestSSMacroCacheMgr, force_evict_by_macro_id_write_cache)
   macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
   macro_id.set_second_id(tablet_id);
   macro_id.set_third_id(server_id);
-  macro_id.set_macro_transfer_epoch(0); // transfer_seq
+  macro_id.set_macro_private_transfer_epoch(0); // transfer_seq
   macro_id.set_tenant_seq(100); // tenant_seq
   ASSERT_TRUE(macro_id.is_valid());
 
@@ -510,7 +510,7 @@ TEST_F(TestSSMacroCacheMgr, clear_macro_cache)
   macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
   macro_id.set_second_id(tablet_id);
   macro_id.set_third_id(server_id);
-  macro_id.set_macro_transfer_epoch(0); // transfer_seq
+  macro_id.set_macro_private_transfer_epoch(0); // transfer_seq
   macro_id.set_tenant_seq(100); // tenant_seq
   ASSERT_TRUE(macro_id.is_valid());
 

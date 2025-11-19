@@ -267,7 +267,7 @@ protected:
                                         common::ObIAllocator &allocator,
                                         const share::ObExternalTablePartInfoArray *partition_array,
                                         common::ObNewRow &value);
-  int fill_file_partition_expr(ObExpr *expr, common::ObNewRow &value, const int64_t row_count);
+  int fill_file_partition_expr(ObExpr *expr, common::ObNewRow &value);
   int calc_exprs_for_rowid(const int64_t read_count, ObExternalIteratorState &state,
                            const bool update_state = true);
   bool is_dummy_file(const ObString &file_url);

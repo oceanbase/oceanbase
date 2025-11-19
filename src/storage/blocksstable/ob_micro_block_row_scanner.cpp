@@ -1235,7 +1235,7 @@ int ObIMicroBlockRowScanner::get_next_border_rows(const ObDatumRowkey &rowkey)
         }
       }
     }
-    FLOG_INFO("Get next border rows", K(ret), K(rowkey), K_(reverse_scan), K_(current), K_(last),
+    LOG_DEBUG("Get next border rows", K(ret), K(rowkey), K_(reverse_scan), K_(current), K_(last),
         K(is_equal), K(scan_end_idx), KPC(batch_store));
   }
   return ret;

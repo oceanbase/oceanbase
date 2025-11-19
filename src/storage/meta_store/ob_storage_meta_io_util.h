@@ -129,7 +129,7 @@ public:
   static int collect_private_tablet_versions(const share::ObLSID &ls_id,
                                              const int64_t ls_epoch,
                                              const common::ObTabletID &tablet_id,
-                                             const int64_t transfer_seq,
+                                             const int64_t private_transfer_epoch,
                                              const int64_t start_version,
                                              const int64_t end_version,
                                              common::ObIArray<int64_t> &tablet_versions);

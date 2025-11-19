@@ -16,6 +16,7 @@
 #include "lib/container/ob_array.h"
 #include "share/ob_ddl_common.h"
 #include "share/scn.h"
+#include "share/vector_type/ob_kmeans_monitor.h"
 #include "storage/access/ob_store_row_iterator.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/blocksstable/ob_macro_block_meta.h"
@@ -333,23 +334,20 @@ static ObDDLKVType convert_direct_load_type_to_ddl_kv_type(const ObDirectLoadTyp
 }
 
 struct ObInsertMonitor final {
-public:
-  ObInsertMonitor(int64_t &tmp_scan_row, int64_t &tmp_insert_row, int64_t &cg_insert_row)
-      : scanned_row_cnt_(tmp_scan_row),
-        inserted_row_cnt_(tmp_insert_row),
-        inserted_cg_row_cnt_(cg_insert_row),
-        vec_index_task_thread_pool_cnt_(nullptr),
-        vec_index_task_total_cnt_(nullptr),
-        vec_index_task_finish_cnt_(nullptr){};
-  ~ObInsertMonitor() {}
+  public:
+    ObInsertMonitor(int64_t &tmp_scan_row, int64_t &tmp_insert_row, int64_t &cg_insert_row)
+        : scanned_row_cnt_(tmp_scan_row),
+          inserted_row_cnt_(tmp_insert_row),
+          inserted_cg_row_cnt_(cg_insert_row),
+          kmeans_monitor_()
+    {}
+    ~ObInsertMonitor() {};
 
-public:
-  int64_t &scanned_row_cnt_;
-  int64_t &inserted_row_cnt_;
-  int64_t &inserted_cg_row_cnt_;
-  int64_t *vec_index_task_thread_pool_cnt_;
-  int64_t *vec_index_task_total_cnt_;
-  int64_t *vec_index_task_finish_cnt_;
+  public:
+    int64_t &scanned_row_cnt_;
+    int64_t &inserted_row_cnt_;
+    int64_t &inserted_cg_row_cnt_;
+    share::ObKmeansMonitor kmeans_monitor_;
 };
 
 struct ObDDLWriteStat final

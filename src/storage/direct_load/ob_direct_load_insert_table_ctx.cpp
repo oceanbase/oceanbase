@@ -100,7 +100,7 @@ ObDirectLoadInsertTabletContext::ObDirectLoadInsertTabletContext()
     slice_idx_(0),
     start_seq_(),
     pk_cache_(),
-    row_count_(0),
+    insert_table_result_(),
     is_inited_(false)
 {
   closed_slices_.set_tenant_id(MTL_ID());

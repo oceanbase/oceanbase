@@ -1082,7 +1082,7 @@ int ObDelUpdLogPlan::candi_allocate_one_pdml_delete(bool is_index_maintain,
                      is_index_maintain ? dummy_filters : get_stmt()->get_condition_exprs(),
                      index_dml_info->loc_table_id_,
                      index_dml_info->ref_table_id_,
-                     NULL,
+                     &index_dml_info->part_ids_,
                      source_sharding,
                      source_table_partition))) {
     LOG_WARN("failed to calculate table location and sharding", K(ret));
@@ -1601,7 +1601,7 @@ int ObDelUpdLogPlan::candi_allocate_one_pdml_update(bool is_index_maintenance,
                      is_index_maintenance ? dummy_filters : get_stmt()->get_condition_exprs(),
                      index_dml_info->loc_table_id_,
                      index_dml_info->ref_table_id_,
-                     NULL,
+                     &index_dml_info->part_ids_,
                      source_sharding,
                      source_table_partition))) {
     LOG_WARN("failed to calculate table location and sharding", K(ret));
@@ -2449,7 +2449,26 @@ int ObDelUpdLogPlan::check_update_primary_key(ObSchemaGetterGuard &schema_guard,
     }
   }
 
-  if (index_schema->is_table_with_hidden_pk_column()) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(check_vec_hnsw_index_vid_opt(schema_guard, stmt, index_schema, index_dml_info))) {
+    LOG_WARN("failed to check vec hnsw index vid opt", K(ret));
+  }
+
+  return ret;
+}
+
+
+int ObDelUpdLogPlan::check_vec_hnsw_index_vid_opt(
+    ObSchemaGetterGuard &schema_guard,
+    const ObDelUpdStmt *stmt,
+    const ObTableSchema* index_schema,
+    IndexDMLInfo*& index_dml_info) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(index_schema) || OB_ISNULL(index_dml_info) || OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(index_schema), K(index_dml_info));
+  } else if (index_schema->is_table_with_hidden_pk_column()) {
     ObDocIDType vid_type = ObDocIDType::INVALID;
     if (OB_FAIL(ObVectorIndexUtil::determine_vid_type(*index_schema, vid_type))) {
       LOG_WARN("failed to determine vid type", K(ret), K(vid_type));

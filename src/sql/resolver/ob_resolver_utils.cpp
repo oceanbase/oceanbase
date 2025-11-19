@@ -7974,7 +7974,7 @@ int ObResolverUtils::check_foreign_key_set_null_satisfy(
       const ObString &fk_col_name = arg.child_columns_.at(i);
       const ObColumnSchemaV2 *fk_col_schema = child_table_schema.get_column_schema(fk_col_name);
       if (OB_ISNULL(fk_col_schema)) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_ERR_COLUMN_NOT_FOUND;
         LOG_WARN("foreign key column schema is null", K(ret), K(i));
       } else if (fk_col_schema->is_generated_column()) {
         ret = OB_ERR_UNSUPPORTED_FK_SET_NULL_ON_GENERATED_COLUMN;
@@ -10609,6 +10609,20 @@ int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFo
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "cluster version is less than 4.3.5.2, column_index_type");
         } else if (OB_FAIL(ObResolverUtils::resolve_column_index_type(node, format))) {
           LOG_WARN("failed to resolve column index type", K(ret));
+        }
+        break;
+      }
+      case T_COLUMN_NAME_CASE_SENSITIVE: {
+        if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_0_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "cluster version is less than 4.5.0.0, column_name_case_sensitive");
+        } else if (format.format_type_ == ObExternalFileFormat::PARQUET_FORMAT) {
+          format.parquet_format_.column_name_case_sensitive_ = node->children_[0]->value_;
+        } else if (format.format_type_ == ObExternalFileFormat::ORC_FORMAT) {
+          format.orc_format_.column_name_case_sensitive_ = node->children_[0]->value_;
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid file format option", K(ret), K(node->type_));
         }
         break;
       }

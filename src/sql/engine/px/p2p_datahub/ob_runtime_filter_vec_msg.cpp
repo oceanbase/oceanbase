@@ -103,7 +103,8 @@ OB_DEF_DESERIALIZE(ObRFRangeFilterVecMsg)
               build_row_cmp_info_,
               probe_row_cmp_info_,
               query_range_info_);
-  if (OB_FAIL(adjust_cell_size())) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(adjust_cell_size())) {
     LOG_WARN("fail do adjust cell size", K(ret));
   }
   return ret;

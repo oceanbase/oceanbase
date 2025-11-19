@@ -276,7 +276,7 @@ int ObDASTextRetrievalMergeIter::build_query_tokens(const ObDASIRScanCtDef *ir_c
     }
 // TODO: try use this interface instead
 /*
-    share::ObITokenStream *token_stream = nullptr;
+    share::ObIFTTokenStream *token_stream = nullptr;
     share::ObTextAnalysisCtx query_analysis_ctx;
     query_analysis_ctx.need_grouping_ = true;
     query_analysis_ctx.filter_stopword_ = true;

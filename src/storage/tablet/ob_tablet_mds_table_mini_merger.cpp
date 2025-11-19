@@ -633,7 +633,7 @@ int ObMdsDataCompatHelper::generate_mds_mini_sstable(
     ctx->parallel_merge_ctx_.init_serial_merge(); // only use concurrent_cnt for small sstable temp space optimization
 
     if (OB_FAIL(tablet.get_private_transfer_epoch(ctx->static_desc_.private_transfer_epoch_))) {
-      LOG_WARN("fail to get transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
+      LOG_WARN("fail to get private transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
     } else if (CLICK_FAIL(tablet.build_full_memory_mds_data(allocator, data))) {
       LOG_WARN("fail to build full memory mds data", K(ret));
     } else {

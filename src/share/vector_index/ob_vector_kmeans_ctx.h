@@ -25,6 +25,7 @@ namespace storage
 {
 struct ObInsertMonitor;
 }
+
 namespace share {
 enum ObKMeansStatus
 {
@@ -96,6 +97,10 @@ public:
 
 // normal kmeans
 // quantization and normalization are not of concern here
+class ObKmeansBaseTask;
+class ObKmeansBuildTaskHandler;
+class ObKmeansDistanceCalcTask;
+class ObKmeansAssignTask;
 class ObKmeansAlgo {
 public:
   explicit ObKmeansAlgo(ObIvfMemContext &ivf_build_mem_ctx)
@@ -104,19 +109,35 @@ public:
       weight_(nullptr),
       status_(PREPARE_CENTERS),
       force_stop_(false),
-      ivf_build_mem_ctx_(ivf_build_mem_ctx)
+      ivf_build_mem_ctx_(ivf_build_mem_ctx),
+      task_handler_(nullptr),
+      distance_tasks_(nullptr),
+      assign_tasks_(nullptr),
+      max_distance_tasks_(0),
+      max_assign_tasks_(0),
+      enable_parallel_(false),
+      kmeans_monitor_(nullptr)
   {}
   virtual ~ObKmeansAlgo() {
     ObKmeansAlgo::destroy();
   }
   virtual void destroy();
-  int init(ObKmeansCtx &kmeans_ctx);
+  // ivfpq enable_parallel is false, because ivf_dim is small, there is no need for parallel kmeans.
+  int init(ObKmeansCtx &kmeans_ctx, bool enable_parallel = false);
   int build(const ObIArray<float*> &input_vectors);
   bool is_finish() const { return FINISH == status_; }
   int64_t next_idx() { return 1L - cur_idx_; }
   ObCentersBuffer<float> &get_cur_centers() { return centers_[cur_idx_]; }
   ObCentersBuffer<float> &get_centers(int64_t idx) { return centers_[idx]; }
+  int64_t get_dim() const { return kmeans_ctx_ ? kmeans_ctx_->dim_ : 0; }
+  ObKmeansBuildTaskHandler* get_task_handler() { return task_handler_; }
+  int init_build_handle(ObKmeansBuildTaskHandler &handle);
+  float get_centers_distance_public(float* centers_distance, int64_t i, int64_t j) { return get_centers_distance(centers_distance, i, j); }
+  static int calc_distances_range(const ObIArray<float*> &input_vectors, int64_t start_idx, int64_t end_idx,
+                                 float* current_center, float* weight, const int64_t dim, float &sum);
 
+  template<typename TaskType>
+  void wait_parallel_task_finish(TaskType *tasks, int64_t tasks_cnt, ObKmeansBuildTaskHandler &handle);
   VIRTUAL_TO_STRING_KV(K(is_inited_),
                KP(kmeans_ctx_),
                KPC(kmeans_ctx_),
@@ -125,16 +146,20 @@ public:
                K(status_));
   // virtual functions
   virtual int do_kmeans(const ObIArray<float*> &input_vectors) = 0;
-  int calc_kmeans_distance(const float* a, const float* b, const int64_t len, float &distance);
+  static int calc_kmeans_distance(const float* a, const float* b, const int64_t len, float &distance);
+  OB_INLINE void set_kmeans_monitor(ObKmeansMonitor &kmeans_monitor) { kmeans_monitor_ = &kmeans_monitor; }
 
   void set_stop() { ATOMIC_STORE(&force_stop_, true); }
-  bool check_stop() { return ATOMIC_LOAD(&force_stop_) == true; }
+  bool check_stop();
+
 protected:
   int inner_build(const ObIArray<float*> &input_vectors);
   int quick_centers(const ObIArray<float*> &input_vectors); // use samples as finally centers
   virtual int init_first_center(const ObIArray<float*> &input_vectors);
   // use kmeans++ to init centers
   virtual int init_centers(const ObIArray<float*> &input_vectors);
+  int calc_distances_parallel(const ObIArray<float*> &input_vectors,
+                             float *current_center, float &sum);
   double calc_imbalance_factor(const ObIArray<float*> &input_vectors, int32_t *data_cnt_in_cluster);
   void set_centers_distance(float* centers_distance, int64_t i, int64_t j, float distance);
   float get_centers_distance(float* centers_distance, int64_t i, int64_t j);
@@ -149,6 +174,13 @@ protected:
   // When executing in parallel, tasks may be forcibly stopped.
   volatile bool force_stop_;
   ObIvfMemContext &ivf_build_mem_ctx_; // from ObIvfBuildHelper, used for alloc memory for kmeans build process
+  ObKmeansBuildTaskHandler *task_handler_;
+  ObKmeansDistanceCalcTask *distance_tasks_; // Dynamically allocated task array to avoid stack memory limitations
+  ObKmeansAssignTask *assign_tasks_; // Dynamically allocated assignment task array
+  int64_t max_distance_tasks_; // Maximum number of distance calculation tasks
+  int64_t max_assign_tasks_; // Maximum number of assignment tasks
+  bool enable_parallel_; // Whether to enable parallel computation
+  ObKmeansMonitor *kmeans_monitor_;
 };
 
 class ObElkanKmeansAlgo : public ObKmeansAlgo
@@ -161,17 +193,27 @@ public:
     destroy();
   }
   virtual void destroy() override;
+  int assign_vectors_range(const ObIArray<float *> &input_vectors, int64_t start_idx, int64_t end_idx,
+                           float *centers_distance, int32_t *data_cnt_in_cluster, float &dis_obj,
+                           bool use_safe_add = false);
 
 protected:
   virtual int do_kmeans(const ObIArray<float*> &input_vectors) override;
 
 private:
-  int search_nearest_center(const ObIArray<float*> &input_vectors, float* centers_distance, int32_t *data_cnt_in_cluster, float &dis_obj);
+  int search_nearest_center(const ObIArray<float *> &input_vectors, float *centers_distance,
+                            int32_t *data_cnt_in_cluster, float &dis_obj);
+  int assign_vectors_parallel(const ObIArray<float *> &input_vectors, float *centers_distance,
+                              int32_t *data_cnt_in_cluster, float &dis_obj);
 
 protected:
   static constexpr float GATE_DISTANCE_FACTOR = 4.0; // for gate distance
-  static constexpr float EARLY_FINISH_THRESHOLD = 1; // 0.1% for early finish threshold
+  static constexpr float EARLY_FINISH_THRESHOLD = 1e-3F; // 0.1% for early finish threshold
   static const int64_t N_ITER = 25; // for max iterations
+  common::ObSpinLock assign_lock_; // Lock to protect vector assignment operations
+
+public:
+  int add_vector_to_center_safe(int64_t center_idx, int64_t dim, float* vector, int32_t* data_cnt_in_cluster);
 };
 
 class ObKmeansExecutor
@@ -181,6 +223,7 @@ public:
   virtual ~ObKmeansExecutor() {
     is_inited_ = false;
   }
+  virtual void cancel() = 0;
   virtual int init(ObKmeansAlgoType algo_type,
            const int64_t tenant_id,
            const int64_t lists,
@@ -193,6 +236,7 @@ public:
   virtual int append_sample_vector(float* vector);
   OB_INLINE int64_t get_max_sample_count() { return ctx_.max_sample_count_; }
   bool is_empty() { return ctx_.is_empty(); }
+  bool check_stop();
 
   VIRTUAL_TO_STRING_KV(K(is_inited_),
                K(ctx_));
@@ -215,6 +259,11 @@ public:
       algo_ = nullptr;
     }
   }
+  virtual void cancel() override {
+    if (OB_NOT_NULL(algo_)) {
+      algo_->set_stop();
+    }
+  }
   virtual int init(ObKmeansAlgoType algo_type,
            const int64_t tenant_id,
            const int64_t lists,
@@ -223,7 +272,7 @@ public:
            ObVectorIndexDistAlgorithm dist_algo,
            ObVectorNormalizeInfo *norm_info = nullptr,
            const int64_t pq_m_size = 1) override;
-  virtual int build();
+  virtual int build(ObInsertMonitor *insert_monitor);
   int get_kmeans_algo(ObKmeansAlgo *&algo);
   int64_t get_centers_count() const;
   int64_t get_centers_dim() const;
@@ -237,6 +286,7 @@ private:
 
 class ObKmeansBuildTaskHandler;
 class ObKmeansBuildTask;
+class ObKmeansDistanceCalcTask;
 class ObMultiKmeansExecutor : public ObKmeansExecutor
 {
 public:
@@ -244,6 +294,13 @@ public:
     algos_.set_attr(ObMemAttr(MTL_ID(), "MKmeansExu"));
   }
   virtual ~ObMultiKmeansExecutor();
+  virtual void cancel() override {
+    for (int i = 0; i < algos_.count(); ++i) {
+      if (OB_NOT_NULL(algos_[i])) {
+        algos_[i]->set_stop();
+      }
+    }
+  }
   virtual int init(
           ObKmeansAlgoType algo_type,
           const int64_t tenant_id,
@@ -268,9 +325,12 @@ public:
 private:
   int split_vector(float* vector, ObArrayArray<float*> &splited_arrs);
   int prepare_splited_arrs(ObArrayArray<float *> &splited_arrs);
-  void wait_kmeans_task_finish(ObKmeansBuildTask *build_tasks, ObKmeansBuildTaskHandler &handle,
-                               ObInsertMonitor *insert_monitor);
+  void wait_kmeans_task_finish(ObKmeansBuildTask *build_tasks, ObKmeansBuildTaskHandler &handle);
+  int do_build_task_local(const common::ObTableID &table_id, const common::ObTabletID &tablet_id,
+                          ObKmeansBuildTaskHandler &handle, const ObArrayArray<float *> &splited_arrs,
+                          ObKmeansBuildTask *build_tasks, int task_idx, ObInsertMonitor *insert_monitor);
 
+private:
   int pq_m_size_;
   ObSEArray<ObKmeansAlgo *, 4> algos_;
 };
@@ -291,7 +351,10 @@ public:
     reset();
   }
   void reset();
+  virtual void cancel() = 0;
   virtual int init(ObString &init_str, lib::MemoryContext &parent_mem_ctx, uint64_t* all_vsag_use_mem);
+  int init_ctx(int64_t dim);
+  virtual int init_kmeans_ctx(int64_t dim) = 0;
   ObIAllocator *get_allocator() { return allocator_; }
 
   void inc_ref();
@@ -321,8 +384,14 @@ public:
     norm_info_()
   {}
   virtual ~ObIvfFlatBuildHelper();
-  virtual int init_kmeans_ctx(const int64_t dim);
+  virtual int init_kmeans_ctx(const int64_t dim) override;
   ObSingleKmeansExecutor *get_kmeans_ctx() { return executor_; }
+  void cancel() override
+  {
+    if (OB_NOT_NULL(executor_)) {
+      executor_->cancel();
+    }
+  }
 
   TO_STRING_KV(K_(tenant_id), K_(ref_cnt), KP_(allocator), KP_(executor), K_(param), KPC_(executor));
 private:
@@ -341,7 +410,8 @@ public:
     dim_(0)
   {}
   virtual ~ObIvfSq8BuildHelper();
-  int init_result_vectors(int64_t vec_dim);
+  void cancel() override {}
+  virtual int init_kmeans_ctx(const int64_t dim) override;
   int update(const float *vector, int64_t dim);
   int build();
   // shallow copy
@@ -364,7 +434,12 @@ public:
     norm_info_()
   {}
   virtual ~ObIvfPqBuildHelper();
-  virtual int init_ctx(const int64_t dim);
+  void cancel() override {
+    if (OB_NOT_NULL(executor_)) {
+      executor_->cancel();
+    }
+  }
+  virtual int init_kmeans_ctx(const int64_t dim) override;
   bool can_use_parallel();
   ObMultiKmeansExecutor *get_kmeans_ctx() { return executor_; }
   int build(const common::ObTableID &table_id, const common::ObTabletID &tablet_id, ObInsertMonitor* insert_monitor);
@@ -413,65 +488,244 @@ public:
     }
     return ret;
   }
+
+  void cancel()
+  {
+    if (is_valid()) {
+      helper_->cancel();
+    }
+  }
   TO_STRING_KV(KP_(helper), KPC_(helper));
 
 private:
   ObIvfBuildHelper *helper_;
 };
 
-struct ObKmeansBuildTaskCtx {
-  ObKmeansBuildTaskCtx()
-      : table_id_(OB_INVALID_ID),
-        tablet_id_(OB_INVALID_ID),
-        gmt_create_(0),
+// Common base class for task contexts
+struct ObKmeansBaseTaskCtx {
+  ObKmeansBaseTaskCtx()
+      : gmt_create_(0),
         gmt_modified_(0),
         is_finish_(false),
-        m_idx_(-1),
         ret_code_(OB_ERR_UNEXPECTED)
   {}
-  TO_STRING_KV(K_(table_id), K_(tablet_id), K_(gmt_create), K_(gmt_modified), K_(is_finish), K_(m_idx), K_(ret_code));
+  virtual ~ObKmeansBaseTaskCtx() = default;
+
+  void init();
+  void finish(int ret_code);
+
   void reset()
   {
     gmt_create_ = 0;
     gmt_modified_ = 0;
     is_finish_ = false;
-    m_idx_ = -1;
     ret_code_ = OB_ERR_UNEXPECTED;
   }
-  common::ObTableID table_id_;
-  common::ObTabletID tablet_id_;
+  TO_STRING_KV(K_(gmt_create), K_(gmt_modified), K_(is_finish), K_(ret_code));
+
   int64_t gmt_create_;
   int64_t gmt_modified_;
   bool is_finish_;
-  int m_idx_;
   int ret_code_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObKmeansBaseTaskCtx);
 };
 
-class ObKmeansBuildTask
+struct ObKmeansBuildTaskCtx {
+  ObKmeansBuildTaskCtx()
+      : table_id_(OB_INVALID_ID),
+        tablet_id_(OB_INVALID_ID),
+        m_idx_(-1),
+        vectors_(nullptr),
+        insert_monitor_(nullptr)
+  {}
+  TO_STRING_KV(K_(table_id), K_(tablet_id), K_(m_idx), K_(vectors));
+  void reset()
+  {
+    m_idx_ = -1;
+    vectors_ = nullptr;
+    insert_monitor_ = nullptr;
+  }
+  common::ObTableID table_id_;
+  common::ObTabletID tablet_id_;
+  int m_idx_;
+  const ObIArray<float *> *vectors_;
+  ObInsertMonitor *insert_monitor_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObKmeansBuildTaskCtx);
+};
+
+// Task class for chunked parallel distance calculation
+struct ObKmeansDistanceCalcTaskCtx {
+  ObKmeansDistanceCalcTaskCtx()
+      : start_idx_(0),
+        end_idx_(0),
+        sum_(0.0f),
+        vectors_(nullptr),
+        current_center_(nullptr),
+        weight_(nullptr),
+        dim_(0)
+  {}
+  TO_STRING_KV(K_(start_idx), K_(end_idx), K_(sum), K_(dim));
+  void reset()
+  {
+    start_idx_ = 0;
+    end_idx_ = 0;
+    sum_ = 0.0f;
+    vectors_ = nullptr;
+    current_center_ = nullptr;
+    weight_ = nullptr;
+    dim_ = 0;
+  }
+  int64_t start_idx_;
+  int64_t end_idx_;
+  float sum_;
+  const ObIArray<float *> *vectors_;
+  float *current_center_;
+  float *weight_;
+  int64_t dim_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObKmeansDistanceCalcTaskCtx);
+};
+
+struct ObKmeansAssignTaskCtx {
+  ObKmeansAssignTaskCtx()
+      : start_idx_(0),
+        end_idx_(0),
+        input_vectors_(nullptr),
+        centers_distance_(nullptr),
+        data_cnt_in_cluster_(nullptr),
+        dis_obj_(0.0f)
+  {}
+  TO_STRING_KV(K_(start_idx), K_(end_idx), K_(dis_obj));
+  void reset()
+  {
+    start_idx_ = 0;
+    end_idx_ = 0;
+    input_vectors_ = nullptr;
+    centers_distance_ = nullptr;
+    data_cnt_in_cluster_ = nullptr;
+    dis_obj_ = 0.0f;
+  }
+  int64_t start_idx_;
+  int64_t end_idx_;
+  const ObIArray<float*> *input_vectors_;
+  float* centers_distance_;
+  int32_t* data_cnt_in_cluster_;
+  float dis_obj_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObKmeansAssignTaskCtx);
+};
+
+// Forward declarations
+class ObKmeansBuildTaskHandler;
+class ObKmeansDistanceCalcTask;
+
+// Base task class
+class ObKmeansBaseTask
+{
+public:
+  ObKmeansBaseTask() : is_inited_(false), is_stop_(false) {}
+  virtual ~ObKmeansBaseTask() = default;
+  virtual void reset() {
+    is_inited_ = false;
+    is_stop_ = false;
+    base_ctx_.reset();
+  }
+  virtual void set_task_stop() { ATOMIC_STORE(&is_stop_, true); }
+  OB_INLINE bool is_stop() const { return ATOMIC_LOAD(&is_stop_); }
+  virtual int do_work() = 0;
+  OB_INLINE bool is_finish() const { return !is_inited_ || ATOMIC_LOAD(&base_ctx_.is_finish_); }
+  OB_INLINE void set_finish(int ret_code) { base_ctx_.finish(ret_code); }
+  OB_INLINE int get_ret() const { return base_ctx_.ret_code_; }
+  VIRTUAL_TO_STRING_KV(K_(is_inited), K_(is_stop), K_(base_ctx));
+
+protected:
+  bool is_inited_;
+  bool is_stop_;
+  ObKmeansBaseTaskCtx base_ctx_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObKmeansBaseTask);
+};
+
+class ObKmeansDistanceCalcTask : public ObKmeansBaseTask
+{
+public:
+  ObKmeansDistanceCalcTask() : ObKmeansBaseTask() {}
+  virtual ~ObKmeansDistanceCalcTask() { reset(); }
+  int init(int64_t start_idx, int64_t end_idx,
+           const ObIArray<float *> *vectors,
+           float *current_center, float *weight, const int64_t dim);
+  void reset() override;
+  int do_work() override;
+  OB_INLINE float get_sum() const { return task_ctx_.sum_; }
+
+  VIRTUAL_TO_STRING_KV(K_(is_inited), K_(task_ctx));
+
+private:
+  // task ctx
+  ObKmeansDistanceCalcTaskCtx task_ctx_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObKmeansDistanceCalcTask);
+};
+
+
+class ObKmeansAssignTask : public ObKmeansBaseTask {
+public:
+  ObKmeansAssignTask() : ObKmeansBaseTask(), algo_(nullptr) {}
+  virtual ~ObKmeansAssignTask() = default;
+
+  int init(int64_t start_idx, int64_t end_idx, ObElkanKmeansAlgo *algo, const ObIArray<float *> *input_vectors,
+           float *centers_distance, int32_t *data_cnt_in_cluster);
+  virtual void reset() override;
+  virtual void set_task_stop() override {
+    if (OB_NOT_NULL(algo_)) {
+      algo_->set_stop();
+    }
+    ObKmeansBaseTask::set_task_stop();
+  }
+  virtual int do_work() override;
+  OB_INLINE float get_dis_obj() const { return task_ctx_.dis_obj_; }
+
+private:
+  ObElkanKmeansAlgo *algo_;
+  ObKmeansAssignTaskCtx task_ctx_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObKmeansAssignTask);
+};
+
+class ObKmeansBuildTask : public ObKmeansBaseTask
 {
 public:
 
-  ObKmeansBuildTask() : is_inited_(false), algo_(nullptr), vectors_(nullptr) {}
-  ~ObKmeansBuildTask() { reset(); }
+  ObKmeansBuildTask() : ObKmeansBaseTask(), algo_(nullptr) {}
+  virtual ~ObKmeansBuildTask() { reset(); }
   int init(const common::ObTableID &table_id, const common::ObTabletID &tablet_id, int m_idx, ObKmeansAlgo *algo,
-           const ObIArray<float *> *vectors);
-  void reset();
-  int do_work();
-  OB_INLINE bool is_finish() const { return is_inited_ == false || task_ctx_.is_finish_; }
-  OB_INLINE int get_ret() const { return task_ctx_.ret_code_; }
-  OB_INLINE void set_task_stop()
+           const ObIArray<float *> *vectors, ObInsertMonitor *insert_monitor);
+  void reset() override {
+    ObKmeansBaseTask::reset();
+    algo_ = nullptr;
+    task_ctx_.reset();
+  }
+  int do_work() override;
+  virtual void set_task_stop() override
   {
     if (OB_NOT_NULL(algo_)) {
       algo_->set_stop();
     }
+    ObKmeansBaseTask::set_task_stop();
   }
 
-  TO_STRING_KV(K_(is_inited), K_(task_ctx));
+  VIRTUAL_TO_STRING_KV(K_(is_inited), K_(task_ctx));
 
 private:
-  bool is_inited_;
-  ObKmeansAlgo *algo_;
-  const ObIArray<float *> *vectors_;
+  ObKmeansAlgo *algo_; // Algorithm instance
   // task ctx
   ObKmeansBuildTaskCtx task_ctx_;
 
@@ -483,15 +737,16 @@ private:
 class ObKmeansBuildTaskHandler : public lib::TGTaskHandler
 {
 public:
-  ObKmeansBuildTaskHandler() : is_inited_(false), tg_id_(INVALID_TG_ID), task_ref_cnt_(0), lock_() {};
+  ObKmeansBuildTaskHandler() : is_inited_(false), tg_id_(INVALID_TG_ID), task_ref_cnt_(0), max_thread_cnt_(0), lock_() {};
   virtual ~ObKmeansBuildTaskHandler() = default;
   int init(int tg_id);
   int start();
   void stop();
   void wait();
   void destroy();
-  int push_task(ObKmeansBuildTask &build_task);
+  int push_task(ObKmeansBaseTask &task);
   int get_tg_id() { return tg_id_; }
+  int get_max_thread_count(int64_t& max_thread_cnt, bool with_refresh = false);
 
   void inc_task_ref() { ATOMIC_INC(&task_ref_cnt_); }
   void dec_task_ref() { ATOMIC_DEC(&task_ref_cnt_); }
@@ -514,6 +769,7 @@ private:
   bool is_inited_;
   int tg_id_;
   volatile int64_t task_ref_cnt_;
+  int64_t max_thread_cnt_;
 
 public:
   common::ObSpinLock lock_; // lock for init
@@ -521,7 +777,39 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObKmeansBuildTaskHandler);
 };
 
-}  // namespace share
+template<typename TaskType>
+void ObKmeansAlgo::wait_parallel_task_finish(TaskType *tasks, int64_t tasks_cnt, ObKmeansBuildTaskHandler &handle)
+{
+  int ret = OB_SUCCESS;
+  bool is_all_finish = false;
+  if (OB_ISNULL(tasks)) {
+    ret = OB_INVALID_ARGUMENT;
+    SHARE_LOG(WARN, "invalid argument", K(ret), K(tasks), K(tasks_cnt));
+  }
+  while (OB_SUCC(ret) && !is_all_finish && handle.get_task_ref() > 0) {
+    is_all_finish = true;
+    for (int64_t i = 0; i < tasks_cnt; ++i) {
+      if (!tasks[i].is_finish()) {
+        is_all_finish = false;        break;
+      }
+    }
+    if (!is_all_finish) {
+      ob_usleep(1000);  // 1ms
+      if (check_stop()) {
+        for (int64_t i = 0; i < tasks_cnt; ++i) {
+          tasks[i].set_task_stop();
+        }
+        SHARE_LOG(WARN, "check stop");
+        // do not break, wait for all task finish
+      }
+    }
+  }
+  if (is_all_finish && handle.get_task_ref() != 0) {
+    SHARE_LOG(INFO, "wait parallel task finish but task ref is not 0", K(ret), K(is_all_finish), K(handle.get_task_ref()), K(tasks_cnt));
+  }
 }
+
+}  // namespace share
+}  // namespace oceanbase
 
 #endif

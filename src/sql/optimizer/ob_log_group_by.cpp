@@ -547,6 +547,28 @@ int ObLogGroupBy::inner_replace_op_exprs(ObRawExprReplacer &replacer)
       }
     }
   }
+  if (OB_SUCC(ret) && grouping_set_info_ != nullptr && grouping_set_info_->replaced_agg_pairs_.count() > 0) {
+    // org expr may be replaced by other replacer, do replace here
+    for (int i = 0; OB_SUCC(ret) && i < grouping_set_info_->replaced_agg_pairs_.count(); i++) {
+      ObRawExpr *expr = grouping_set_info_->replaced_agg_pairs_.at(i).element<0>();
+      ObRawExpr *&org_expr = grouping_set_info_->replaced_agg_pairs_.at(i).element<0>();
+      if (OB_ISNULL(org_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("org expr is null", K(ret));
+      } else if (OB_FAIL(replace_expr_action(replacer, org_expr))) {
+        LOG_WARN("failed to replace org expr", K(ret));
+      }
+    }
+  }
+  for (int i = 0; OB_SUCC(ret) && i < distinct_pairs_.count(); i++) {
+    ObRawExpr *&org_expr = distinct_pairs_.at(i).element<0>();
+    if (OB_ISNULL(org_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("org expr is null", K(ret));
+    } else if (OB_FAIL(replace_expr_action(replacer, org_expr))) {
+      LOG_WARN("failed to replace org expr", K(ret));
+    }
+  }
   return ret;
 }
 

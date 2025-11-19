@@ -286,7 +286,7 @@ public:
                             const ObITableReadInfo &rowkey_read_info,
                             const share::schema::ObTableSchemaParam &schema_param,
                             const common::ObIArray<int32_t> *out_cols_project);
-  // used for index back when query
+  int check_skip_scan(const ObTableScanParam &scan_param, ObTableIterParam &iter_param);
   OB_INLINE int64_t get_out_col_cnt() const
   {
     return is_use_global_iter_pool() ? ObGlobalIteratorPool::get_max_col_count() : iter_param_.get_out_col_cnt();
@@ -303,7 +303,6 @@ public:
   OB_INLINE bool is_use_global_iter_pool() const { return iter_param_.is_use_global_iter_pool(); }
 private:
   int check_valid_before_query_init(const ObTableParam &table_param, const ObTabletHandle &tablet_handle);
-  int check_skip_scan(const ObTableScanParam &scan_param, ObTableIterParam &iter_param);
 public:
   DECLARE_TO_STRING;
 public:

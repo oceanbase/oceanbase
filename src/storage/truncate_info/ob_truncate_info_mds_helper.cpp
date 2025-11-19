@@ -137,7 +137,7 @@ int ObTruncateInfoClogReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
   mds::MdsCtx &user_ctx = static_cast<mds::MdsCtx&>(*user_ctx_);
-  if (OB_FAIL(replay_to_mds_table_(tablet_handle, truncate_arg_, user_ctx, scn_))) {
+  if (OB_FAIL(replay_to_mds_table_(tablet_handle, static_cast<const rootserver::ObTruncateTabletArg &>(truncate_arg_), user_ctx, scn_))) {
     LOG_WARN("failed to replay to truncate info", K(ret));
   }
   return ret;

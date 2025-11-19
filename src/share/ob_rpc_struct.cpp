@@ -4037,6 +4037,7 @@ static const char* alter_ls_replica_task_type_strs[] = {
   "MODIFY_LS_REPLICA_TYPE",
   "MODIFY_LS_PAXOS_REPLICA_NUM",
   "CANCEL_LS_REPLICA_TASK",
+  "REPLACE_LS"
 };
 
 const char* ObAlterLSReplicaTaskType::get_type_str() const {
@@ -5248,7 +5249,8 @@ OB_DEF_SERIALIZE(ObSetPasswdArg)
               x509_subject_,
               modify_max_connections_,
               max_connections_per_hour_,
-              max_user_connections_);
+              max_user_connections_,
+              plugin_);
   return ret;
 }
 
@@ -5260,6 +5262,7 @@ OB_DEF_DESERIALIZE(ObSetPasswdArg)
   ssl_cipher_.reset();
   x509_issuer_.reset();
   x509_subject_.reset();
+  plugin_.reset();
 
   BASE_DESER((, ObDDLArg));
   LST_DO_CODE(OB_UNIS_DECODE,
@@ -5273,7 +5276,8 @@ OB_DEF_DESERIALIZE(ObSetPasswdArg)
               x509_subject_,
               modify_max_connections_,
               max_connections_per_hour_,
-              max_user_connections_);
+              max_user_connections_,
+              plugin_);
   return ret;
 }
 
@@ -5291,7 +5295,8 @@ OB_DEF_SERIALIZE_SIZE(ObSetPasswdArg)
               x509_subject_,
               modify_max_connections_,
               max_connections_per_hour_,
-              max_user_connections_);
+              max_user_connections_,
+              plugin_);
   return len;
 }
 
@@ -5461,6 +5466,8 @@ int ObGrantArg::assign(const ObGrantArg &other)
     SHARE_LOG(WARN, "fail to assign users_passwd_", K(ret));
   } else if (OB_FAIL(hosts_.assign(other.hosts_))) {
     SHARE_LOG(WARN, "fail to assign hosts_", K(ret));
+  } else if (OB_FAIL(plugins_.assign(other.plugins_))) {
+    SHARE_LOG(WARN, "fail to assign plugins_", K(ret));
   } else if (OB_FAIL(roles_.assign(other.roles_))) {
     SHARE_LOG(WARN, "fail to assign roles_", K(ret));
   } else if (OB_FAIL(sys_priv_array_.assign(other.sys_priv_array_))) {
@@ -5512,7 +5519,8 @@ OB_DEF_SERIALIZE(ObGrantArg)
               grantor_,
               grantor_host_,
               catalog_,
-              sensitive_rule_);
+              sensitive_rule_,
+              plugins_);
 return ret;
 }
 
@@ -5547,7 +5555,8 @@ OB_DEF_DESERIALIZE(ObGrantArg)
               grantor_,
               grantor_host_,
               catalog_,
-              sensitive_rule_);
+              sensitive_rule_,
+              plugins_);
 
   //compatibility for old version
   if (OB_SUCC(ret) && users_passwd_.count() > 0 && hosts_.empty()) {
@@ -5592,7 +5601,8 @@ OB_DEF_SERIALIZE_SIZE(ObGrantArg)
               grantor_,
               grantor_host_,
               catalog_,
-              sensitive_rule_);
+              sensitive_rule_,
+              plugins_);
   return len;
 }
 
@@ -9663,12 +9673,18 @@ int ObAutoSplitTabletArg::assign(const ObAutoSplitTabletArg &other)
     tenant_id_ = other.tenant_id_;
     auto_split_tablet_size_ = other.auto_split_tablet_size_;
     used_disk_space_ = other.used_disk_space_;
+    is_random_part_ = other.is_random_part_;
+    table_id_ = other.table_id_;
+    if (OB_FAIL(inactive_tablet_ids_.assign(other.inactive_tablet_ids_))) {
+      LOG_WARN("failed to assign", K(ret));
+    }
   }
   return ret;
 }
 
 OB_SERIALIZE_MEMBER(ObAutoSplitTabletArg, ls_id_, tablet_id_,
-    tenant_id_, auto_split_tablet_size_, used_disk_space_);
+    tenant_id_, auto_split_tablet_size_, used_disk_space_,
+    is_random_part_, table_id_, inactive_tablet_ids_);
 
 int ObAutoSplitTabletBatchArg::assign(const ObAutoSplitTabletBatchArg &other)
 {
@@ -10565,6 +10581,19 @@ OB_SERIALIZE_MEMBER(ObCleanSplittedTabletArg,
                     src_lob_tablet_ids_,
                     dest_lob_tablet_ids_,
                     is_auto_split_);
+
+int ObCleanSplittedTabletDDLArg::assign(const ObCleanSplittedTabletDDLArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("failed to assign ddl arg", K(ret), K(other));
+  } else if (OB_FAIL(clean_arg_.assign(other.clean_arg_))) {
+    LOG_WARN("failed to assign ddl arg", K(ret), K(other.clean_arg_));
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER((ObCleanSplittedTabletDDLArg, ObDDLArg), clean_arg_);
 
 int ObCheckMemtableCntArg::assign(const ObCheckMemtableCntArg &other)
 {

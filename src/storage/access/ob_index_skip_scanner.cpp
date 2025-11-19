@@ -927,7 +927,7 @@ int ObIndexSkipScanner::check_disabled()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("skip scanner mgr is null", KR(ret), KPC(this), K(lbt()));
   } else if (skip_scan_factory_->is_pending_disabled()) {
-    const ObDatumRowkey &cur_prefix_key = complete_range_.start_key_;
+    const ObDatumRowkey &cur_prefix_key = is_reverse_scan_ ? complete_range_.start_key_ : complete_range_.end_key_;
     const ObDatumRowkey *newest_prefix_key = nullptr;
     int cmp_ret = 0;
     if (OB_FAIL(skip_scan_factory_->get_newest_prefix_key(newest_prefix_key))) {
@@ -943,15 +943,22 @@ int ObIndexSkipScanner::check_disabled()
       is_border_after_disabled_ = true;
       if (is_reverse_scan_) {
         SET_ROWKEY_TO_SCAN_ROWKEY(start, left);
+        complete_range_.set_end_key(*newest_prefix_key);
+        complete_range_.set_right_open();
       } else {
         SET_ROWKEY_TO_SCAN_ROWKEY(end, right);
+        // set start key to the right border of the disabled prefix
+        // only this can ensure all iters start scanning from the same point
+        complete_range_.set_start_key(*newest_prefix_key);
+        complete_range_.set_left_open();
       }
       LOG_INFO("[INDEX SKIP SCAN] disabled", K_(is_disabled), K_(complete_range), KPC(this), KPC_(skip_scan_factory), K(lbt()));
     }
   } else if (OB_FAIL(index_skip_strategy_.check_disabled(index_skip_state_, should_disabled))) {
     LOG_WARN("failed to check disabled", KR(ret));
   } else if (should_disabled) {
-    if (OB_FAIL(skip_scan_factory_->set_pending_disabled(is_reverse_scan_,prefix_cnt_, datum_utils_))) {
+    const ObIArray<ObColDesc> &col_descs = read_info_->get_columns_desc();
+    if (OB_FAIL(skip_scan_factory_->set_pending_disabled(is_reverse_scan_,prefix_cnt_, datum_utils_, col_descs))) {
       LOG_WARN("failed to set pending disabled", KR(ret), KPC(this), K_(complete_range), K(lbt()));
     } else {
       LOG_INFO("[INDEX SKIP SCAN] pending disabled", K(should_disabled), K_(complete_range), KPC_(skip_scan_factory), KPC(this), K(lbt()));
@@ -1066,7 +1073,8 @@ int ObIndexSkipScanFactory::add_skip_scanner(ObIndexSkipScanner *skip_scanner)
 int ObIndexSkipScanFactory::set_pending_disabled(
     const bool is_reverse_scan,
     const int64_t prefix_cnt,
-    const ObStorageDatumUtils &datum_utils)
+    const ObStorageDatumUtils &datum_utils,
+    const ObIArray<ObColDesc> &col_descs)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_pending_disabled_ || newest_prefix_key_.is_valid() || skip_scanners_.empty())) {
@@ -1079,13 +1087,15 @@ int ObIndexSkipScanFactory::set_pending_disabled(
       if (OB_ISNULL(skip_scanner)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid null skip scanner", KR(ret), K(i), KPC(this));
-      } else if (!skip_scanner->is_prefix_filled()) {
       } else if (!is_pending_disabled_) {
-        newest_key = &skip_scanner->get_complete_range().start_key_;
+        newest_key = is_reverse_scan ? &skip_scanner->get_complete_range().start_key_ :
+                                       &skip_scanner->get_complete_range().end_key_;
         is_pending_disabled_ = true;
+      } else if (!skip_scanner->is_prefix_filled()) {
       } else {
         int cmp_ret = 0;
-        const ObDatumRowkey &cur_prefix_key = skip_scanner->get_complete_range().start_key_;
+        const ObDatumRowkey &cur_prefix_key = is_reverse_scan ? skip_scanner->get_complete_range().start_key_ :
+                                                                skip_scanner->get_complete_range().end_key_;
         LOG_INFO("[INDEX SKIP SCAN] compare prefix", K(i), K(skip_scanners_.count()), K(cur_prefix_key), KPC(newest_key));
         if (OB_FAIL(cur_prefix_key.compare(*newest_key, datum_utils, cmp_ret))) {
           LOG_WARN("failed to compare", KR(ret), K(cur_prefix_key), K(newest_key));
@@ -1100,6 +1110,8 @@ int ObIndexSkipScanFactory::set_pending_disabled(
       LOG_WARN("invalid state to set pending disabled", KR(ret), KPC(newest_key), KPC(this), K(lbt()));
     } else if (OB_FAIL(newest_key->deep_copy(newest_prefix_key_, alloc_))) {
       LOG_WARN("failed to deep copy newest prefix key", KR(ret), KPC(newest_key));
+    } else if (OB_FAIL(newest_prefix_key_.prepare_memtable_readable(col_descs, alloc_))) {
+      LOG_WARN("Failed to prepare start key", K(ret), K(newest_prefix_key_), K(col_descs));
     }
   }
   return ret;

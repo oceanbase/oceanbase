@@ -151,7 +151,7 @@ static void update_sslog(
   // read
   share::SCN row_scn_ret;
   ObString value;
-  ObSSLogIteratorGuard iter(true, true);
+  ObSSLogIteratorGuard iter(true, true, true);
   param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY, ObSSMetaReadResultType::READ_WHOLE_ROW, false, sslog_type, RunCtx.ls_id_, RunCtx.tablet_id_, transfer_scn);
   ASSERT_EQ(OB_SUCCESS, ObAtomicFile::read_meta_row(param,
                                                     share::SCN::invalid_scn(),

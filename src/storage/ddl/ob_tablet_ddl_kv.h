@@ -383,7 +383,8 @@ public:
                        K_(ddl_kv_type),
                        K_(column_group_cnt),
                        K_(full_column_cnt),
-                       K_(co_base_type));
+                       K_(co_base_type),
+                       K_(ddl_snapshot_version));
 
 private:
   bool is_pending() const { return ATOMIC_LOAD(&pending_cnt_) > 0; }

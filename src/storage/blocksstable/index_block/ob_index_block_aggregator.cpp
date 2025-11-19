@@ -931,9 +931,9 @@ void ObIMultiColAggregator::reuse()
   if (agg_result_row_ != nullptr) {
     for (int64_t i = 0; i < result_idxes_.count(); ++i) {
       const int64_t result_idx = result_idxes_.at(i);
-      if (OB_LIKELY(result_idx > 0 && result_idx < agg_result_row_->get_agg_col_cnt())) {
-        agg_result_row_->get_agg_datum_row().storage_datums_[i].reuse();
-        agg_result_row_->get_agg_datum_row().storage_datums_[i].set_null();
+      if (OB_LIKELY(result_idx >= 0 && result_idx < agg_result_row_->get_agg_col_cnt())) {
+        agg_result_row_->get_agg_datum_row().storage_datums_[result_idx].reuse();
+        agg_result_row_->get_agg_datum_row().storage_datums_[result_idx].set_null();
       }
     }
   }
@@ -978,7 +978,7 @@ int ObBM25ParamAggregator::init(
         result_idxes_.at(TOKEN_FREQ_IDX) = i;
         col_agg_metas_.at(TOKEN_FREQ_IDX) = idx_col_meta;
         agg_result_row.get_agg_datum_row().storage_datums_[i].reuse();
-        agg_result_row.get_agg_datum_row().storage_datums_[i].set_null();
+        agg_result_row.get_agg_datum_row().storage_datums_[i].set_uint(0);
       }
     } else if (idx_col_meta.get_col_type() == SK_IDX_BM25_MAX_SCORE_DOC_LEN) {
       if (OB_UNLIKELY(found_doc_length)) {
@@ -993,7 +993,7 @@ int ObBM25ParamAggregator::init(
         result_idxes_.at(DOC_LENGTH_IDX) = i;
         col_agg_metas_.at(DOC_LENGTH_IDX) = idx_col_meta;
         agg_result_row.get_agg_datum_row().storage_datums_[i].reuse();
-        agg_result_row.get_agg_datum_row().storage_datums_[i].set_null();
+        agg_result_row.get_agg_datum_row().storage_datums_[i].set_uint(0);
       }
     }
   }
@@ -1024,6 +1024,16 @@ void ObBM25ParamAggregator::reset()
 void ObBM25ParamAggregator::reuse()
 {
   ObIMultiColAggregator::reuse();
+  if (nullptr != agg_result_row_ && result_idxes_.count() >= 2) {
+    const int64_t token_freq_result_idx = result_idxes_.at(TOKEN_FREQ_IDX);
+    const int64_t doc_length_result_idx = result_idxes_.at(DOC_LENGTH_IDX);
+    if (OB_LIKELY(token_freq_result_idx >= 0 && token_freq_result_idx < agg_result_row_->get_agg_col_cnt())) {
+      agg_result_row_->get_agg_datum_row().storage_datums_[token_freq_result_idx].set_uint(0);
+    }
+    if (OB_LIKELY(doc_length_result_idx >= 0 && doc_length_result_idx < agg_result_row_->get_agg_col_cnt())) {
+      agg_result_row_->get_agg_datum_row().storage_datums_[doc_length_result_idx].set_uint(0);
+    }
+  }
   curr_max_score_ = 0.0;
 }
 
@@ -1962,9 +1972,7 @@ int ObIndexBlockAggregator::init(const ObDataStoreDesc &store_desc, ObIAllocator
     ret = OB_INIT_TWICE;
     LOG_WARN("Already inited", K(ret));
   } else {
-    const bool can_aggregate = store_desc.get_major_working_cluster_version() > DATA_VERSION_4_4_1_0 ?
-        true : store_desc.is_major_or_meta_merge_type();
-    need_data_aggregate_ = store_desc.get_agg_meta_array().count() != 0 && can_aggregate;
+    need_data_aggregate_ = store_desc.get_agg_meta_array().count() != 0;
     if (!need_data_aggregate_) {
     } else if (OB_FAIL(skip_index_aggregator_.init(
         store_desc.is_major_or_meta_merge_type(),

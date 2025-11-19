@@ -49,6 +49,12 @@ int CONVERT_FUNCTION_TYPE_TO_GROUP_ID(const uint8_t function_type, uint64_t &gro
   return G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_function_type(MTL_ID(), function_type, group_id);
 }
 
+bool is_global_background_resource_isolation_enabled()
+{
+  // Check the GCONF configuration
+  return GCONF.enable_global_background_resource_isolation;
+}
+
 }  // namespace lib
 
 namespace share
@@ -314,6 +320,18 @@ int ObCgroupCtrl::remove_dir_(const char *curr_dir)
   if (OB_SUCCESS != ret) {
   } else if (OB_FAIL(FileDirectoryUtils::delete_directory(curr_dir))) {
     LOG_WARN("remove group directory failed", K(ret), K(curr_dir));
+    if (ret == OB_IO_ERROR && errno == EBUSY) {
+      int tmp_ret = OB_SUCCESS;
+      char task_file_path[PATH_BUFSIZE];
+      char task_buf[TASKS_BUFSIZE + 1];
+      snprintf(task_file_path, PATH_BUFSIZE, "%s/%s", curr_dir, TASKS_FILE);
+      if (OB_TMP_FAIL(get_string_from_file_(task_file_path, task_buf))) {
+        LOG_WARN("dump cgroup task file failed", K(tmp_ret), K(task_file_path));
+      } else {
+        task_buf[TASKS_BUFSIZE] = '\0';
+        LOG_WARN("cgroup task file content", K(curr_dir), K(task_file_path), K(task_buf));
+      }
+    }
   } else {
     LOG_INFO("remove group directory success", K(curr_dir));
   }

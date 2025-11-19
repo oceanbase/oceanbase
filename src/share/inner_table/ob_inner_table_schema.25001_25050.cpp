@@ -417,7 +417,7 @@ int ObInnerTableSchema::dba_users_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       B.USER_NAME AS USERNAME,       B.USER_ID AS USERID,       B.PASSWD AS PASSWORD,       CAST(CASE WHEN B.IS_LOCKED = 1 THEN 'LOCKED' ELSE 'OPEN' END as VARCHAR2(32)) AS ACCOUNT_STATUS,       CAST(NULL as DATE) AS LOCK_DATE,       CAST(NULL as DATE) AS EXPIRY_DATE,       CAST(NULL as VARCHAR2(30)) AS DEFAULT_TABLESPACE,       CAST(NULL as VARCHAR2(30)) AS TEMPORARY_TABLESPACE,       CAST(NULL as VARCHAR2(30)) AS LOCAL_TEMP_TABLESPACE,       CAST(B.GMT_CREATE AS DATE) AS CREATED,       CAST(NVL(P.PROFILE_NAME, 'DEFAULT') AS VARCHAR2(128)) AS PROFILE,       CAST(NULL as VARCHAR2(30)) AS INITIAL_RSRC_CONSUMER_GROUP,       CAST(NULL as VARCHAR2(4000)) AS EXTERNAL_NAME,       CAST(NULL as VARCHAR2(12)) AS PASSWORD_VERSIONS,       CAST('N' as VARCHAR2(1)) AS EDITIONS_ENABLED,       CAST('PASSWORD' as VARCHAR2(8)) AS AUTHENTICATION_TYPE,       CAST('N' as VARCHAR2(1)) AS PROXY_ONLY_CONNECT,       CAST('NO' as VARCHAR2(3)) AS COMMON,       CAST(NULL as TIMESTAMP(9) WITH TIME ZONE) AS LAST_LOGIN,       CAST('N' as VARCHAR2(1)) AS ORACLE_MAINTAINED,       CAST('NO' as VARCHAR2(3)) AS INHERITED,       CAST('USING_NLS_COMP' as VARCHAR2(100)) AS DEFAULT_COLLATION,       CAST('NO' as VARCHAR2(3)) AS IMPLICIT,       CAST('NO' as VARCHAR2(3)) AS ALL_SHARD,       CAST(B.PASSWORD_LAST_CHANGED AS DATE) AS PASSWORD_CHANGE_DATE     FROM       SYS.ALL_VIRTUAL_USER_REAL_AGENT B       LEFT JOIN SYS.ALL_VIRTUAL_TENANT_PROFILE_REAL_AGENT P       ON B.TENANT_ID = P.TENANT_ID AND B.PROFILE_ID = P.PROFILE_ID     WHERE       B.TYPE = 0       AND B.TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       B.USER_NAME AS USERNAME,       B.USER_ID AS USERID,       B.PASSWD AS PASSWORD,       B.PLUGIN AS PLUGIN,       CAST(CASE WHEN B.IS_LOCKED = 1 THEN 'LOCKED' ELSE 'OPEN' END as VARCHAR2(32)) AS ACCOUNT_STATUS,       CAST(NULL as DATE) AS LOCK_DATE,       CAST(NULL as DATE) AS EXPIRY_DATE,       CAST(NULL as VARCHAR2(30)) AS DEFAULT_TABLESPACE,       CAST(NULL as VARCHAR2(30)) AS TEMPORARY_TABLESPACE,       CAST(NULL as VARCHAR2(30)) AS LOCAL_TEMP_TABLESPACE,       CAST(B.GMT_CREATE AS DATE) AS CREATED,       CAST(NVL(P.PROFILE_NAME, 'DEFAULT') AS VARCHAR2(128)) AS PROFILE,       CAST(NULL as VARCHAR2(30)) AS INITIAL_RSRC_CONSUMER_GROUP,       CAST(NULL as VARCHAR2(4000)) AS EXTERNAL_NAME,       CAST(NULL as VARCHAR2(12)) AS PASSWORD_VERSIONS,       CAST('N' as VARCHAR2(1)) AS EDITIONS_ENABLED,       CAST('PASSWORD' as VARCHAR2(8)) AS AUTHENTICATION_TYPE,       CAST('N' as VARCHAR2(1)) AS PROXY_ONLY_CONNECT,       CAST('NO' as VARCHAR2(3)) AS COMMON,       CAST(NULL as TIMESTAMP(9) WITH TIME ZONE) AS LAST_LOGIN,       CAST('N' as VARCHAR2(1)) AS ORACLE_MAINTAINED,       CAST('NO' as VARCHAR2(3)) AS INHERITED,       CAST('USING_NLS_COMP' as VARCHAR2(100)) AS DEFAULT_COLLATION,       CAST('NO' as VARCHAR2(3)) AS IMPLICIT,       CAST('NO' as VARCHAR2(3)) AS ALL_SHARD,       CAST(B.PASSWORD_LAST_CHANGED AS DATE) AS PASSWORD_CHANGE_DATE     FROM       SYS.ALL_VIRTUAL_USER_REAL_AGENT B       LEFT JOIN SYS.ALL_VIRTUAL_TENANT_PROFILE_REAL_AGENT P       ON B.TENANT_ID = P.TENANT_ID AND B.PROFILE_ID = P.PROFILE_ID     WHERE       B.TYPE = 0       AND B.TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1402,7 +1402,7 @@ int ObInnerTableSchema::all_tables_schema(ObTableSchema &table_schema)
   return ret;
 }
 
-int ObInnerTableSchema::dba_tables_schema(ObTableSchema &table_schema)
+int ObInnerTableSchema::dba_tables_ora_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
   uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
@@ -1411,7 +1411,7 @@ int ObInnerTableSchema::dba_tables_schema(ObTableSchema &table_schema)
   table_schema.set_tenant_id(OB_SYS_TENANT_ID);
   table_schema.set_tablegroup_id(OB_INVALID_ID);
   table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
-  table_schema.set_table_id(OB_DBA_TABLES_TID);
+  table_schema.set_table_id(OB_DBA_TABLES_ORA_TID);
   table_schema.set_rowkey_split_pos(0);
   table_schema.set_is_use_bloomfilter(false);
   table_schema.set_progressive_merge_num(0);
@@ -1422,7 +1422,7 @@ int ObInnerTableSchema::dba_tables_schema(ObTableSchema &table_schema)
   table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_table_name(OB_DBA_TABLES_TNAME))) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_TABLES_ORA_TNAME))) {
       LOG_ERROR("fail to set table_name", K(ret));
     }
   }

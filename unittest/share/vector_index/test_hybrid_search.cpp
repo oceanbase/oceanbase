@@ -1221,6 +1221,50 @@ TEST_F(TestHybridSearch, query_string_cross_fields_no_default_operator)
   }
 }
 
+TEST_F(TestHybridSearch, query_string_best_fields_with_and_operator)
+{
+  int ret = OB_SUCCESS;
+  common::ObString req_str = R"({
+      "query": {
+        "query_string": {
+          "type": "best_fields",
+          "fields": ["title^3", "content^2.5"],
+          "query": "elasticsearch database tutorial",
+          "default_operator": "AND"
+        }
+      }
+    })";
+
+  common::ObString result(
+    "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, "
+    "(GREATEST(match(title) against('elasticsearch' in natural language mode) * 3, match(content) against('elasticsearch' in natural language mode) * 2.5) +"
+    " GREATEST(match(title) against('database' in natural language mode) * 3, match(content) against('database' in natural language mode) * 2.5) +"
+    " GREATEST(match(title) against('tutorial' in natural language mode) * 3, match(content) against('tutorial' in natural language mode) * 2.5))"
+    " as _score FROM doc_table WHERE"
+    " (match(title) against('elasticsearch' in natural language mode) AND match(title) against('database' in natural language mode) AND match(title) against('tutorial' in natural language mode)) OR"
+    " (match(content) against('elasticsearch' in natural language mode) AND match(content) against('database' in natural language mode) AND match(content) against('tutorial' in natural language mode))"
+    " ORDER BY _score DESC, __pk_increment LIMIT 10");
+
+  ObArenaAllocator tmp_allocator;
+  ObString table_name("doc_table");
+  ObQueryReqFromJson *req = nullptr;
+  ObESQueryParser parser(tmp_allocator, &table_name);
+  SMART_VAR(char[OB_MAX_SQL_LENGTH], buf) {
+    MEMSET(buf, 0, sizeof(buf));
+    int64_t res_len = 0;
+    const int64_t start_ts = ObClockGenerator::getClock();
+    ret = parser.parse(req_str, req);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_EQ(OB_SUCCESS, req->translate(buf, OB_MAX_SQL_LENGTH, res_len));
+    const int64_t translate_cost_time = ObClockGenerator::getClock() - start_ts;
+    std::cout << "translate cost time: " << translate_cost_time << std::endl;
+    std::cout << "translate sql:" << std::endl << buf << std::endl;
+    std::cout << "expect sql:" << std::endl << result.ptr() << std::endl;
+    ObString trans_res(res_len, buf);
+    ASSERT_EQ(0, result.case_compare(trans_res));
+  }
+}
+
 TEST_F(TestHybridSearch, query_string_cross_fields_with_and_operator)
 {
   int ret = OB_SUCCESS;

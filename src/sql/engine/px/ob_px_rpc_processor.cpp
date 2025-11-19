@@ -53,6 +53,18 @@ void ObInitSqcP::destroy()
   }
 }
 
+int ObInitSqcP::deserialize()
+{
+  int ret = OB_SUCCESS;
+  int64_t *sqc_des_cost = nullptr;
+  if (OB_NOT_NULL(arg_.sqc_handler_)) {
+    sqc_des_cost = &arg_.sqc_handler_->get_sqc_metrics().sqc_des_cost_;
+  }
+  ScopedTimer timer(sqc_des_cost);
+  ret = ObRpcProcessorBase::deserialize();
+  return ret;
+}
+
 int ObInitSqcP::process()
 {
   GET_DIAGNOSTIC_INFO->get_ash_stat().in_px_execution_ = true;
@@ -64,7 +76,9 @@ int ObInitSqcP::process()
    * 只要能进process，after process一定会被调用，所以可以用中断覆盖整个
    * SQC的生命周期。
    */
+  int64_t *sqc_rpc_process_cost = nullptr;
   if (OB_NOT_NULL(sqc_handler)) {
+    sqc_rpc_process_cost = &arg_.sqc_handler_->get_sqc_metrics().sqc_rpc_process_cost_;
     ObPxRpcInitSqcArgs &arg = sqc_handler->get_sqc_init_arg();
     if (OB_FAIL(SET_INTERRUPTABLE(arg.sqc_.get_interrupt_id().px_interrupt_id_))) {
       LOG_WARN("sqc failed to SET_INTERRUPTABLE");
@@ -72,6 +86,7 @@ int ObInitSqcP::process()
       unregister_interrupt_ = true;
     }
   }
+  ScopedTimer timer(sqc_rpc_process_cost);
 
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(sqc_handler)) {
@@ -215,6 +230,11 @@ int ObInitSqcP::after_process(int error_code)
   UNUSED(error_code);
   ObSQLSessionInfo *session = nullptr;
   ObPxSqcHandler *sqc_handler = arg_.sqc_handler_;
+  int64_t *sqc_rpc_after_cost = nullptr;
+  if (OB_NOT_NULL(sqc_handler)) {
+    sqc_rpc_after_cost = &sqc_handler->get_sqc_metrics().sqc_rpc_after_cost_;
+  }
+  ScopedTimer timer(sqc_rpc_after_cost);
   bool no_need_startup_normal_sqc = (OB_SUCCESS != result_.rc_);
   if (no_need_startup_normal_sqc) {
     /**
@@ -394,12 +414,25 @@ void ObInitFastSqcP::destroy()
   }
 }
 
+int ObInitFastSqcP::deserialize()
+{
+  int ret = OB_SUCCESS;
+  int64_t *sqc_des_cost = nullptr;
+  if (OB_NOT_NULL(arg_.sqc_handler_)) {
+    sqc_des_cost = &arg_.sqc_handler_->get_sqc_metrics().sqc_des_cost_;
+  }
+  ScopedTimer timer(sqc_des_cost);
+  ret = ObRpcProcessorBase::deserialize();
+  return ret;
+}
+
 int ObInitFastSqcP::process()
 {
   GET_DIAGNOSTIC_INFO->get_ash_stat().in_sql_execution_ = true;
   int ret = OB_SUCCESS;
   LOG_TRACE("receive dfo", K_(arg));
   ObPxSqcHandler *sqc_handler = arg_.sqc_handler_;
+  int64_t start_time = ObTimeUtil::current_time_ns();
   ObSQLSessionInfo *session = nullptr;
   if (OB_ISNULL(sqc_handler)) {
     ret = OB_ERR_UNEXPECTED;
@@ -434,6 +467,7 @@ int ObInitFastSqcP::process()
                 K(arg),
                 K(session->get_compatibility_mode()),
                 K(sqc_handler->get_reserved_px_thread_count()));
+        sqc_handler->get_sqc_metrics().sqc_rpc_process_cost_ = ObTimeUtil::current_time_ns() - start_time;
       if (OB_FAIL(startup_normal_sqc(*sqc_handler))) {
         LOG_WARN("fail to startup normal sqc", K(ret));
       }

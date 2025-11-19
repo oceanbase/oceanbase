@@ -112,9 +112,6 @@ private:
   // remove task from the scheduler_list and wait_list
   int remove_task_(ObBackupScheduleTask *task, const bool &in_schedule);
   int check_push_unique_task_(const ObBackupScheduleTask &task);
-  int add_overflow_task_type_(const BackupJobType &job_type);
-  int wakeup_overflowed_services_();
-  int get_and_clear_overflow_types_(common::ObIArray<int64_t> &overflow_task_types);
 
   int64_t get_task_cnt_() const { return task_map_.size(); }
   int64_t get_wait_task_cnt_() const { return wait_list_.get_size(); }
@@ -135,7 +132,6 @@ private:
   TaskList schedule_list_;
   // key: task_key value: task
   TaskMap task_map_;
-  common::hash::ObHashSet<int64_t> overflow_task_types_; // job_types that have overflow
   obrpc::ObSrvRpcProxy *rpc_proxy_;
   ObBackupTaskScheduler *task_scheduler_;
   common::ObMySQLProxy *sql_proxy_; 
@@ -145,7 +141,7 @@ private:
 class ObBackupTaskScheduler : public ObBackupBaseService
 {
 public:
-  const static int64_t MAX_BACKUP_TASK_QUEUE_LIMIT = 1024;
+  const static int64_t MAX_BACKUP_TASK_QUEUE_LIMIT = 2000;
   const static int64_t CONCURRENCY_LIMIT_INTERVAL = 10 * 60 * 1000000L;  // 10min
   const static int64_t BACKUP_TASK_CONCURRENCY = 1;
   const static int64_t BACKUP_SERVER_DATA_LIMIT_INTERVAL = 20 * 60 * 1000000; // 60 min;
@@ -181,7 +177,6 @@ public:
   int register_backup_srv(ObBackupService &srv);
   int reuse();
   uint64_t get_exec_tenant_id() { return gen_user_tenant_id(tenant_id_); }
-  int wakeup_services_by_type(const ObIArray<int64_t> &overflow_task_types);
 private:
   int reload_task_(int64_t &last_reload_task_ts, bool &reload_flag);
   // Send task to execute.
@@ -190,7 +185,6 @@ private:
   void dump_statistics_(int64_t &last_dump_time);
   int check_alive_(int64_t &last_check_task_on_server_ts, bool &reload_flag);
   int pop_and_send_task_();
-  int get_type_matched_service_(const BackupJobType &type, ObBackupService *&srv);
 
   int check_tenant_status_normal_(bool &is_normal);
   

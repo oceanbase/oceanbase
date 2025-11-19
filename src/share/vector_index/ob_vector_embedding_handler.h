@@ -165,8 +165,10 @@ class ObEmbeddingTask
           const ObString &provider,
           const ObString &user_key,
           const ObIArray<ObString> &input_chunks,
+          const ObCollationType col_type,
           int64_t dimension,
           int64_t http_timeout_us,
+          int64_t http_max_retries,
           storage::ObEmbeddingIOCallbackHandle *cb_handle = nullptr);
   template <typename ThreadPoolType>
   int do_work(ThreadPoolType *thread_pool);
@@ -185,17 +187,20 @@ class ObEmbeddingTask
                 K_(batch_size),
                 K_(processed_chunks),
                 K_(total_chunks),
-                K_(process_callback_offset));
+                K_(process_callback_offset),
+                K_(col_type));
   bool is_completed();
+  void retain_if_managed();
+  void release_if_managed();
   int get_async_result(ObArray<float*> &output_vectors);
   // 公共方法用于外部设置任务失败
   int mark_task_failed(int error_code);
   int maybe_callback();
-  int wait_for_completion(const int64_t timeout_ms = 0);
+  int wait_for_completion();
   int wake_up();
   void disable_callback();
   void set_callback_done();
-  bool need_callback() { return cb_handle_ != nullptr ? true : false; }
+  bool need_callback() { return cb_handle_ != nullptr ? true : false; };
 
 public:
   static const ObString MODEL_URL_NAME;
@@ -256,7 +261,7 @@ private:
   void reset_retry_state();
   int map_http_error_to_internal_error(int64_t http_error_code) const;
   void try_increase_batch_size();
-  int init_curl_handler(const ObString &model_url, const ObString &user_key);
+  int init_curl_handler(const ObString &model_url, const ObString &user_key, const int64_t http_timeout_us);
 
   struct HttpResponseData {
     HttpResponseData(ObIAllocator &allocator) : data(nullptr), size(0), allocator(allocator) {}
@@ -354,6 +359,9 @@ private:
   int64_t http_total_retry_count_;
   int64_t http_retry_start_time_us_;
   int64_t http_last_retry_time_us_;
+  int64_t http_max_retry_count_;
+  int64_t wait_for_completion_timeout_us_; // For controlling the maximum timeout of waiting for completion
+
   bool need_retry_flag_;
 
   // Batch size adjustment for retry
@@ -364,6 +372,11 @@ private:
 
   ObThreadCond task_cond_;
   bool callback_done_;
+
+  // TODO(fanfangyao.ffy): use taskhandle to manage task reference count
+  // ref_cnt_ is only used to track the reference count of the post create embedding task
+  int64_t ref_cnt_;
+  ObCollationType col_type_;
 
   private:
     DISALLOW_COPY_AND_ASSIGN(ObEmbeddingTask);

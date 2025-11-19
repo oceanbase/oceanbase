@@ -155,10 +155,7 @@ int Snapshot::get_manifest_files(const ObString &access_info,
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_UNLIKELY(cached_manifest_file_.empty())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("ManifestFile is empty", K(ret));
-    } else if (OB_FAIL(manifest_files.assign(cached_manifest_file_))) {
+    if (OB_FAIL(manifest_files.assign(cached_manifest_file_))) {
       LOG_WARN("failed to assign manifest files", K(ret));
     }
   }

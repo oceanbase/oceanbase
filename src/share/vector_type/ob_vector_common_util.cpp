@@ -13,6 +13,8 @@
 #include "lib/geo/ob_s2adapter.h" // for htonll
 #include "ob_vector_common_util.h"
 #include "observer/ob_inner_sql_connection_pool.h"
+#include <cmath>
+#include <cstdio>
 
 namespace oceanbase {
 namespace share {
@@ -524,7 +526,10 @@ template <>
 int ObVectorCenterClusterHelper<float, ObCenterId>::get_nearest_probe_center_ids_dist(ObArrayWrap<bool> &nearest_cid_dist)
 {
   int ret = OB_SUCCESS;
-  if (heap_.count() > nprobe_) {
+  if (is_save_all_center_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("save all center mode not support this", K(ret), K(lbt()));
+  } else if (heap_.count() > nprobe_) {
     ret = OB_ERR_UNEXPECTED;
     SHARE_LOG(WARN, "max heap count is not equal to nprobe", K(ret), K(heap_.count()), K(nprobe_));
   }
@@ -552,7 +557,10 @@ template <>
 int ObVectorCenterClusterHelper<float, ObCenterId>::get_nearest_probe_centers_ptrs(ObArrayWrap<float *> &nearest_cid_dist)
 {
   int ret = OB_SUCCESS;
-  if (heap_.count() > nprobe_) {
+  if (is_save_all_center_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("save all center mode not support this", K(ret), K(lbt()));
+  } else if (heap_.count() > nprobe_) {
     ret = OB_ERR_UNEXPECTED;
     SHARE_LOG(WARN, "max heap count is not equal to nprobe", K(ret), K(heap_.count()), K(nprobe_));
   }
@@ -575,5 +583,36 @@ int ObVectorCenterClusterHelper<float, ObCenterId>::get_nearest_probe_centers_pt
   }
   return ret;
 }
+
+void get_distance_threshold(const oceanbase::sql::ObExprVectorDistance::ObVecDisType& dis_type, const float& similarity_threshold, float& distance_threshold)
+{
+  switch (dis_type) {
+    case oceanbase::sql::ObExprVectorDistance::ObVecDisType::DOT:
+      distance_threshold = 2 * similarity_threshold - 1;
+      break;
+    case oceanbase::sql::ObExprVectorDistance::ObVecDisType::EUCLIDEAN:
+      // l2_similarity = 1 / (1 + l2_square_distance), ob use l2_distance
+      if (similarity_threshold <= 0.0) {
+        distance_threshold = FLT_MAX;
+      } else {
+        distance_threshold = sqrt(1.0 / similarity_threshold - 1);
+      }
+      break;
+    case oceanbase::sql::ObExprVectorDistance::ObVecDisType::COSINE:
+      distance_threshold = 2 - 2 * similarity_threshold;
+      break;
+    case oceanbase::sql::ObExprVectorDistance::ObVecDisType::EUCLIDEAN_SQUARED:
+      if (similarity_threshold <= 0.0) {
+        distance_threshold = FLT_MAX;
+      } else {
+        distance_threshold = 1.0 / similarity_threshold - 1;
+      }
+      break;
+    default:
+      distance_threshold = FLT_MAX;
+      break;
+  }
+}
+
 }
 }

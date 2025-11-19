@@ -27,6 +27,7 @@ class ObPipeline;
 class ObMacroMetaStoreManager;
 class ObDDLIndependentDag;
 class ObDDLTabletScanTask;
+class ObIDDLMergeHelper;
 
 struct ObDDLChunk final
 {
@@ -103,15 +104,17 @@ public:
   struct MergeCtx
   {
   public:
-    MergeCtx() : ddl_kv_handles_(), mutex_(), fifo_(MTL_ID()), arena_(ObMemAttr(MTL_ID(), "ddl_tblt_prm")), slice_cg_sstables_()  {}
+    MergeCtx() : ddl_kv_handles_(), mutex_(), fifo_(MTL_ID()), arena_(ObMemAttr(MTL_ID(), "ddl_tblt_prm")), slice_cg_sstables_(), merge_helper_(nullptr), is_inited_(false)  {}
     ~MergeCtx();
+    int init(const ObDirectLoadType direct_load_type);
   public:
     ObArray<ObDDLKVHandle> ddl_kv_handles_;
     lib::ObMutex mutex_;     // arena mutex, whic may be used in merge cg slice at the same time;
     ObFIFOAllocator fifo_;    // used for build index layer, thread safe
     ObArenaAllocator arena_;  // used for prepare task & create sstable;
     hash::ObHashMap<int64_t, ObArray<ObTableHandleV2>*> slice_cg_sstables_;
-
+    ObIDDLMergeHelper *merge_helper_;
+    bool is_inited_;
   };
 
 public:

@@ -151,7 +151,9 @@ int ObDDLTableMergeDag::init_tablet_ctx()
     /* only sn major merge need to load storage schema from user data
      * otherwise, load from cur tablet
     */
-    if (ddl_param_.is_commit_ && !is_cs_replica_for_full_direct_load &&
+    if (OB_FAIL(tablet_ctx_->merge_ctx_.init(ddl_param_.direct_load_type_))) {
+      LOG_WARN("failed to get merge helper", K(ret));
+    } else if (ddl_param_.is_commit_ && !is_cs_replica_for_full_direct_load &&
                (ddl_param_.direct_load_type_ == SN_IDEM_DIRECT_LOAD_DDL || ddl_param_.direct_load_type_ == SN_IDEM_DIRECT_LOAD_DATA)) {
       tablet_ctx_->tablet_param_.storage_schema_ = &ddl_param_.user_data_.storage_schema_;
     } else if (is_incremental_major_direct_load(ddl_param_.direct_load_type_)) {
@@ -247,7 +249,6 @@ int ObDDLTableMergeDag::create_first_task()
                                     ddl_param_.start_scn_,
                                     ddl_param_.direct_load_type_,
                                     task_param,
-                                    arena_,
                                     tablet_ctx_,
                                     ddl_param_.trans_id_,
                                     ddl_param_.seq_no_))) {
@@ -1123,7 +1124,7 @@ int ObTabletDDLUtil::prepare_index_data_desc(const ObTablet &tablet,
   const int64_t cg_idx = table_key.is_column_store_sstable() ? table_key.get_column_group_id() : -1/*negative value means row store*/;
   const SCN end_scn = table_key.get_end_scn();
   const bool micro_index_clustered = tablet.get_tablet_meta().micro_index_clustered_;
-  int32_t transfer_epoch = -1;
+  int32_t private_transfer_epoch = -1;
   if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || snapshot_version <= 0 || data_format_version <= 0
       || OB_ISNULL(storage_schema) || !reorganization_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -1139,14 +1140,14 @@ int ObTabletDDLUtil::prepare_index_data_desc(const ObTablet &tablet,
       LOG_WARN("unexpected table key is minor sstable", K(ret), K(table_key));
     } else {
       const ObStorageColumnGroupSchema &cur_cg_schema = cg_schemas.at(cg_idx);
-      int32_t transfer_epoch = -1;
-      if (OB_FAIL(tablet.get_private_transfer_epoch(transfer_epoch))) {
-        LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
+      int32_t private_transfer_epoch = -1;
+      if (OB_FAIL(tablet.get_private_transfer_epoch(private_transfer_epoch))) {
+        LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
       } else if (OB_FAIL(data_desc.init(true/*is_ddl*/, *storage_schema, ls_id, tablet_id,
                                  compaction::ObMergeType::MAJOR_MERGE,
                                  snapshot_version, data_format_version,
                                  tablet.get_tablet_meta().micro_index_clustered_,
-                                 transfer_epoch, 0 /*concurrent_cnt*/, reorganization_scn,
+                                 private_transfer_epoch, 0 /*concurrent_cnt*/, reorganization_scn,
                                  end_scn, &cur_cg_schema, cg_idx))) {
         LOG_WARN("init data desc for cg failed", K(ret));
       } else {
@@ -1156,8 +1157,8 @@ int ObTabletDDLUtil::prepare_index_data_desc(const ObTablet &tablet,
                   K(micro_index_clustered));
       }
     }
-  } else if (OB_FAIL(tablet.get_private_transfer_epoch(transfer_epoch))) {
-    LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
+  } else if (OB_FAIL(tablet.get_private_transfer_epoch(private_transfer_epoch))) {
+    LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
   } else if (OB_FAIL(data_desc.init(true/*is_ddl*/,
                                     *storage_schema,
                                     ls_id,
@@ -1166,7 +1167,7 @@ int ObTabletDDLUtil::prepare_index_data_desc(const ObTablet &tablet,
                                     snapshot_version,
                                     data_format_version,
                                     tablet.get_tablet_meta().micro_index_clustered_,
-                                    transfer_epoch,
+                                    private_transfer_epoch,
                                     0 /* concurrent cnt */,
                                     reorganization_scn,
                                     end_scn))) {
@@ -2242,6 +2243,9 @@ int get_schema_info_from_ddl_kvs(
     if (OB_ISNULL(ddl_kv = ddl_kv_handle.get_obj())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected ddl kv is null", KR(ret), K(ddl_kv_handle));
+    } else if (OB_UNLIKELY(!ddl_kv->is_inc_minor_ddl_kv())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected not inc minor ddl kv", KR(ret), KPC(ddl_kv));
     } else if (OB_FAIL(ddl_kv->get_schema_info(column_cnt_in_schema,
                                                max_schema_version_in_memtable,
                                                max_column_cnt_in_memtable))) {

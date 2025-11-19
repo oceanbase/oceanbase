@@ -694,11 +694,11 @@ int ObComplementDataDag::calc_total_row_count()
 
 /*
   1.normal data complemet dag:
-                WriteTask
-              /           \
-   PrepareTask- WriteTask - MergePrepareTask - MergeTask
-              \           /               (only used for reporting original checksum)
-                WriteTask
+                WriteTask                                     data_tablet_mereg_prepare_task
+              /           \                                /
+   PrepareTask- WriteTask -     MergePrepareTask -
+              \           / (reporting original checksum)  \
+                WriteTask                                      lob_tablet_mereg_prepare_task
 */
 
 /*
@@ -717,6 +717,8 @@ int ObComplementDataDag::create_first_task()
 
   ObDDLMergePrepareTask *data_merge_prepare_task = nullptr;
   ObDDLMergePrepareTask *lob_merge_prepare_task  = nullptr;
+
+  ObComplementReportReplicaTask *report_replica_task = nullptr;
   char *buf = nullptr;
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -779,19 +781,32 @@ int ObComplementDataDag::create_first_task()
     task_param.target_table_id_     = param_.dest_table_id_;
     task_param.is_no_logging_       = param_.is_no_logging_;
 
-    if (OB_FAIL(dag_merge_param.init(true /* for major */, false /* for lob*/, false /* for replay*/,
+    if (OB_FAIL(alloc_task(report_replica_task))) {
+      LOG_WARN("failed to alloc task", K(ret));
+    } else if (OB_ISNULL(report_replica_task)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr task", K(ret));
+    }
+
+    /* init failure callback*/
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(fail_cb_.init(this))) {
+      LOG_WARN("failed to init failure callback", K(ret));
+    } else if (OB_FAIL(dag_merge_param.init(true /* for major */, false /* for lob*/, false /* for replay*/,
                                      mock_scn /* start_scn*/,
-                                     param_.direct_load_type_, task_param, param_.allocator_,
+                                     param_.direct_load_type_, task_param,
                                      context_.tablet_ctx_))) {
       LOG_WARN("failed to init dag merge param", K(ret));
     } else if (OB_FAIL(alloc_task(data_merge_prepare_task))) {
       LOG_WARN("failed to alloc task", K(ret));
-    } else if (OB_FAIL(data_merge_prepare_task->init(dag_merge_param))) {
+    } else if (OB_FAIL(data_merge_prepare_task->init(dag_merge_param, &fail_cb_))) {
       LOG_WARN("failed to init data merge prepare task", K(ret));
-    } else if (OB_FAIL(write_task->add_child(*data_merge_prepare_task))) {
+    } else if (OB_FAIL(write_task->add_child(*merge_task))) {
+        LOG_WARN("add child failed", K(ret));
+    } else if (OB_FAIL(merge_task->add_child(*data_merge_prepare_task))) {
       LOG_WARN("failed to add child", K(ret));
-    } else if (OB_FAIL(data_merge_prepare_task->add_child(*merge_task))) {
-      LOG_WARN("add child failed", K(ret));
+    } else if (OB_FAIL(data_merge_prepare_task->add_child(*report_replica_task))) {
+      LOG_WARN("failed to add child", K(ret));
     }
 
     if (OB_FAIL(ret)) {
@@ -799,27 +814,29 @@ int ObComplementDataDag::create_first_task()
       /* if lob tablet id invalid, skip */
     } else if (OB_FAIL(lob_dag_merge_param.init(true /* for major*/, true /* for lob */, false /* for replay */,
                                      mock_scn /* start_scn*/,
-                                     param_.direct_load_type_, task_param, param_.allocator_,
+                                     param_.direct_load_type_, task_param,
                                      context_.tablet_ctx_))) {
       LOG_WARN("failed to init lob dag merge param", K(ret), K(param_));
     } else if (OB_FAIL(alloc_task(lob_merge_prepare_task))) {
       LOG_WARN("failed to alloc task", K(ret));
-    } else if (OB_FAIL(lob_merge_prepare_task->init(lob_dag_merge_param))) {
+    } else if (OB_FAIL(lob_merge_prepare_task->init(lob_dag_merge_param, &fail_cb_))) {
       LOG_WARN("failed to init lob merge prepare task", K(ret));
-    } else if (OB_FAIL(write_task->add_child(*lob_merge_prepare_task))) {
-      LOG_WARN("failed to init lob merge task", K(ret));
-    } else if (OB_FAIL(lob_merge_prepare_task->add_child(*merge_task))) {
-      LOG_WARN("add child failed", K(ret));
+    } else if (OB_FAIL(merge_task->add_child(*lob_merge_prepare_task))) {
+      LOG_WARN("failed to add child", K(ret));
+    } else if (OB_FAIL(lob_merge_prepare_task->add_child(*report_replica_task))) {
+      LOG_WARN("failed to add child", K(ret));
     }
   }
 
   if (OB_FAIL(ret)) { // add task in reverse order
-  } else if (OB_FAIL(add_task(*merge_task))) {
-    LOG_WARN("add task failed", K(ret));
+  } else if (OB_FAIL(add_task(*report_replica_task))) {
+      LOG_WARN("add task failed", K(ret));
   } else if (OB_FAIL(add_task(*data_merge_prepare_task))) {
       LOG_WARN("failed to merge prepare task", K(ret));
   } else if (nullptr != lob_merge_prepare_task && OB_FAIL(add_task(*lob_merge_prepare_task))) {
       LOG_WARN("failed to merge prepare task", K(ret));
+  } else if (OB_FAIL(add_task(*merge_task))) {
+      LOG_WARN("add task failed", K(ret));
   } else if (OB_FAIL(add_task(*write_task))) {
     LOG_WARN("add task failed", K(ret));
   } else if (OB_FAIL(add_task(*prepare_task))) {
@@ -993,6 +1010,35 @@ int ObComplementDataDag::fill_dag_key(char *buf, const int64_t buf_len) const
   return ret;
 }
 
+int ObComplementFailCallback::init(ObComplementDataDag *dag)
+{
+  int ret = OB_SUCCESS;
+  if (nullptr == dag) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else if (nullptr != dag_) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObComplementFailCallback has already been inited", K(ret));
+  } else {
+    dag_ = dag;
+  }
+  return ret;
+}
+
+int ObComplementFailCallback::process(int ret_code)
+{
+  int ret = OB_SUCCESS;
+  if (nullptr == dag_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObComplementFailCallback has not been inited", K(ret));
+  } else if (FALSE_IT(dag_->get_context().complement_data_ret_ = ret_code)) {
+  } else if (OB_FAIL(dag_->report_replica_build_status())) {
+    LOG_WARN("failed to report replica build status", K(ret));
+  }
+  return ret;
+}
+
+
 ObComplementPrepareTask::ObComplementPrepareTask()
   : ObITask(TASK_TYPE_COMPLEMENT_PREPARE), is_inited_(false), param_(nullptr), context_(nullptr)
 {
@@ -1050,10 +1096,14 @@ int ObComplementPrepareTask::process()
   }
 
   if (OB_FAIL(ret)) {
-    context_->complement_data_ret_ = ret;
-    ret = OB_SUCCESS;
+    int tmp_ret = OB_SUCCESS;
+    if (nullptr == dag) {
+      tmp_ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dag should not be null", K(ret));
+    } else if (OB_TMP_FAIL(dag->get_fail_callback().process(ret))) {
+      LOG_WARN("failed to execute fail callback", K(ret), K(tmp_ret));
+    }
   }
-
   add_ddl_event(param_, "complement prepare task");
   return ret;
 }
@@ -1270,11 +1320,11 @@ int ObComplementWriteTask::preprocess()
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObComplementWriteTask has not been inited before", K(ret));
+  } else if (OB_SUCCESS != (context_->complement_data_ret_)) {
+    LOG_WARN("complement data has already failed", "ret", context_->complement_data_ret_);
   } else if (OB_ISNULL(tmp_dag) || ObDagType::DAG_TYPE_DDL != tmp_dag->get_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag is invalid", K(ret), KP(tmp_dag));
-  } else if (OB_SUCCESS != (context_->complement_data_ret_)) {
-    LOG_WARN("complement data has already failed", "ret", context_->complement_data_ret_);
   } else if (context_->is_major_sstable_exist_) {
   } else if (OB_FAIL(guard.switch_to(param_->dest_tenant_id_, false))) {
     LOG_WARN("switch to tenant failed", K(ret), K(param_->dest_tenant_id_));
@@ -1304,9 +1354,15 @@ void ObComplementWriteTask::postprocess(int &ret_code)
   if (OB_ITER_END == ret_code) {
     ret_code = OB_SUCCESS;
   }
-  if (OB_SUCCESS != ret_code && OB_NOT_NULL(context_)) {
-    context_->complement_data_ret_ = ret_code;
-    ret_code = OB_SUCCESS;
+  if (OB_SUCCESS != ret_code) {
+    int tmp_ret = OB_SUCCESS;
+    ObComplementDataDag *dag = static_cast<ObComplementDataDag*>(get_dag());
+    if (nullptr == dag) {
+      tmp_ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dag should not be null", K(tmp_ret));
+    } else if (OB_TMP_FAIL(dag->get_fail_callback().process(ret_code))) {
+      LOG_WARN("failed to execute fail callback", K(ret_code), K(tmp_ret));
+    }
   }
 }
 
@@ -1557,7 +1613,9 @@ int ObComplementWriteTask::do_local_scan()
       FLOG_INFO("local scan read tables", K(iterator), KPC(param_));
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(param_->ranges_.at(task_id_).prepare_memtable_readable(org_col_ids_, allocator_))) {
+    } else if (OB_FAIL(param_->ranges_.at(task_id_, scan_range_))) {
+      LOG_WARN("get scan range failed", K(ret), K(task_id_));
+    } else if (OB_FAIL(scan_range_.prepare_memtable_readable(org_col_ids_, allocator_))) {
       LOG_WARN("prepare datum range for memtable readable", K(ret));
     } else {
       ObSchemaGetterGuard schema_guard;
@@ -1595,7 +1653,7 @@ int ObComplementWriteTask::do_local_scan()
                                                param_->orig_tablet_id_,
                                                iterator,
                                                query_flag,
-                                               param_->ranges_.at(task_id_)))) {
+                                               scan_range_))) {
         LOG_WARN("fail to do table scan", K(ret));
       }
     }
@@ -1640,7 +1698,9 @@ int ObComplementWriteTask::do_remote_scan()
   } else if (OB_FALSE_IT(scan = new (buf) ObRemoteScan())) {
   } else {
     scan_ = scan;
-    if (OB_FAIL(param_->ranges_.at(task_id_).prepare_memtable_readable(org_col_ids_, allocator_))) {
+    if (OB_FAIL(param_->ranges_.at(task_id_, scan_range_))) {
+      LOG_WARN("get scan range failed", K(ret), K(task_id_));
+    } else if (OB_FAIL(scan_range_.prepare_memtable_readable(org_col_ids_, allocator_))) {
       LOG_WARN("prepare datum range for memtable readable", K(ret));
     } else if (OB_FAIL(scan->init(param_->orig_tenant_id_,
                                   param_->orig_table_id_,
@@ -1650,7 +1710,7 @@ int ObComplementWriteTask::do_remote_scan()
                                   param_->dest_schema_version_,
                                   param_->snapshot_version_,
                                   param_->orig_tablet_id_,
-                                  param_->ranges_.at(task_id_)))) {
+                                  scan_range_))) {
       LOG_WARN("fail to remote_scan init", K(ret), KPC(param_));
     }
   }
@@ -1701,9 +1761,9 @@ int ObComplementMergeTask::process()
   if (OB_ISNULL(tmp_dag) || ObDagType::DAG_TYPE_DDL != tmp_dag->get_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag is invalid", K(ret), KP(tmp_dag));
-  } else if (FALSE_IT(dag = static_cast<ObComplementDataDag *>(tmp_dag))) {
   } else if (OB_SUCCESS != (context_->complement_data_ret_)) {
     LOG_WARN("complement data has already failed", "ret", context_->complement_data_ret_);
+  } else if (FALSE_IT(dag = static_cast<ObComplementDataDag *>(tmp_dag))) {
   } else if (OB_FAIL(guard.switch_to(param_->dest_tenant_id_, false))) {
     LOG_WARN("switch to tenant failed", K(ret), K(param_->dest_tenant_id_));
   } else if (context_->is_major_sstable_exist_) {
@@ -1766,17 +1826,41 @@ int ObComplementMergeTask::process()
 
   if (OB_FAIL(ret) && OB_NOT_NULL(context_)) {
     context_->complement_data_ret_ = ret;
-    ret = OB_SUCCESS;
   }
 
-  if (OB_NOT_NULL(dag) &&
-    OB_SUCCESS != (tmp_ret = dag->report_replica_build_status())) {
-    // do not override ret if it has already failed.
-    ret = OB_SUCCESS == ret ? tmp_ret : ret;
-    LOG_WARN("fail to report replica build status", K(ret), K(tmp_ret));
+  if (OB_FAIL(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    if (nullptr == dag) {
+      tmp_ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dag should not be null", K(tmp_ret));
+    } else if (OB_TMP_FAIL(dag->get_fail_callback().process(ret))) {
+      LOG_WARN("failed to execute fail callback", K(ret), K(tmp_ret));
+    }
   }
-
   add_ddl_event(param_, "complement merge task");
+  return ret;
+}
+
+ObComplementReportReplicaTask::ObComplementReportReplicaTask()
+  : ObITask(TASK_TYPE_COMPLEMENT_REPORT_REPLICA_TASK)
+{
+}
+
+ObComplementReportReplicaTask::~ObComplementReportReplicaTask()
+{
+}
+
+int ObComplementReportReplicaTask::process()
+{
+  int ret = OB_SUCCESS;
+  ObIDag *dag = get_dag();
+
+  if (nullptr == dag) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag is null", K(ret));
+  } else if (OB_FAIL(static_cast<ObComplementDataDag *>(dag)->report_replica_build_status())) {
+    LOG_WARN("fail to report replica build status", K(ret));
+  }
   return ret;
 }
 

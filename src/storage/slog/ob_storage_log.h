@@ -198,7 +198,7 @@ public:
       const ObPendingFreeTabletStatus &status,
       const int64_t free_time,
       const GCTabletType &gc_type,
-      const int64_t tablet_transfer_seq,
+      const int64_t tablet_private_transfer_epoch,
       const int64_t last_gc_version);
   virtual ~ObDeleteTabletLog() {}
   virtual bool is_valid() const override;
@@ -219,7 +219,7 @@ public:
   ObPendingFreeTabletStatus status_;
   int64_t free_time_;
   GCTabletType gc_type_;
-  int64_t tablet_transfer_seq_; // FARM COMPAT WHITELIST FOR tablet_transfer_seq_: renamed
+  int64_t tablet_private_transfer_epoch_;
   int64_t last_gc_version_;
 };
 
@@ -233,7 +233,7 @@ public:
       const common::ObTabletID &tablet_id,
       const int64_t tablet_meta_version,
       const ObPendingFreeTabletStatus &status,
-      const int64_t tablet_transfer_seq);
+      const int64_t tablet_private_transfer_epoch);
   virtual ~ObGCTabletLog() = default;
 
   virtual bool is_valid() const override;
@@ -250,7 +250,7 @@ public:
   int64_t ls_epoch_;
   int64_t tablet_meta_version_;
   ObPendingFreeTabletStatus status_;
-  int64_t tablet_transfer_seq_; // FARM COMPAT WHITELIST FOR tablet_transfer_seq_: renamed
+  int64_t tablet_private_transfer_epoch_;
 };
 
 struct ObUpdateTabletLog : public ObIBaseStorageLogEntry

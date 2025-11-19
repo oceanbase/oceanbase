@@ -177,6 +177,10 @@ int ObVecTaskManager::process_task()
     } else {
       ob_usleep(1LL * 1000 * 1000);
     }
+
+    if (REACH_TIME_INTERVAL(10 * 60L * 1000000)) {  // 60s
+      LOG_INFO("vector index task not finished", K(ret), K(task_ids_));
+    }
   }
   return ret;
 }

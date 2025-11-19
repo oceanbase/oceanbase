@@ -3551,6 +3551,7 @@ int ObPxEstimateSizeUtil::get_statistic_of_dfo_tables(
     2. for pkey affinity, binding partitions to workers
   */
   int ret = OB_SUCCESS;
+  ScopedTimer timer(ObMetricId::GET_STAT_OF_DFO_TABLES);
   static constexpr int64_t max_get_stat_tables = 3;
   bool feature_enable = false;
   bool dop_assign_among_sqc = addrs.count() > 1;

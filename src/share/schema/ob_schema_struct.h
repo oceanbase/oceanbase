@@ -296,6 +296,11 @@ inline bool is_range_part(const ObPartitionFuncType part_type)
       || PARTITION_FUNC_TYPE_INTERVAL == part_type;
 }
 
+inline bool is_range_columns_part(const ObPartitionFuncType part_type)
+{
+  return PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_type;
+}
+
 inline bool is_interval_part(const ObPartitionFuncType part_type)
 {
   return PARTITION_FUNC_TYPE_INTERVAL == part_type;
@@ -435,7 +440,7 @@ enum ObIndexType
   INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY = 41,
   // sparse vector inverted index
   INDEX_TYPE_VEC_SPIV_DIM_DOCID_VALUE_LOCAL = 42,
-  // hybrid vec
+  // hybrid vec hnsw
   INDEX_TYPE_HYBRID_INDEX_LOG_LOCAL = 43,
   INDEX_TYPE_HYBRID_INDEX_EMBEDDED_LOCAL = 44,
 
@@ -3509,6 +3514,9 @@ public:
              bool print_collation,
              const common::ObTimeZoneInfo *tz_info);
 
+  // Check range partition's high_bound_val before write to inner table
+  static int check_range_high_bound_val(const common::ObRowkey &high_bound_val);
+
   // Used to display the defined value of the LIST partition
   static int convert_rows_to_sql_literal(
              const bool is_oracle_mode,
@@ -5049,7 +5057,7 @@ public:
      max_user_connections_(0),
      proxied_user_info_(NULL), proxied_user_info_capacity_(0), proxied_user_info_cnt_(0),
      proxy_user_info_(NULL), proxy_user_info_capacity_(0), proxy_user_info_cnt_(0), user_flags_(),
-     trigger_list_()
+     trigger_list_(), plugin_()
   { }
   explicit ObUserInfo(common::ObIAllocator *allocator);
   virtual ~ObUserInfo();
@@ -5076,6 +5084,8 @@ public:
   inline int set_x509_issuer(const common::ObString &x509_issuer) { return deep_copy_str(x509_issuer, x509_issuer_); }
   inline int set_x509_subject(const char *x509_subject) { return deep_copy_str(x509_subject, x509_subject_); }
   inline int set_x509_subject(const common::ObString &x509_subject) { return deep_copy_str(x509_subject, x509_subject_); }
+  inline int set_plugin(const char *plugin) { return deep_copy_str(plugin, plugin_); }
+  inline int set_plugin(const common::ObString &plugin) { return deep_copy_str(plugin, plugin_); }
   inline void set_type(const int32_t type) { type_ = type; }
   inline void set_profile_id(const uint64_t profile_id) { profile_id_ = profile_id; }
   inline void set_password_last_changed(int64_t ts) { password_last_changed_timestamp_ = ts; }
@@ -5099,6 +5109,8 @@ public:
   inline const common::ObString& get_x509_issuer_str() const { return x509_issuer_; }
   inline const char* get_x509_subject() const { return extract_str(x509_subject_); }
   inline const common::ObString& get_x509_subject_str() const { return x509_subject_; }
+  inline const char* get_plugin() const { return extract_str(plugin_); }
+  inline const common::ObString& get_plugin_str() const { return plugin_; }
   inline uint64_t get_profile_id() const { return profile_id_; }
   inline int64_t get_password_last_changed() const { return password_last_changed_timestamp_; }
   inline uint64_t get_max_connections() const { return max_connections_; }
@@ -5141,7 +5153,7 @@ public:
                K_(profile_id), K_(proxied_user_info_cnt), K_(proxy_user_info_cnt),
                "proxied info", ObArrayWrap<ObProxyInfo*>(proxied_user_info_, proxied_user_info_cnt_),
                "proxy info", ObArrayWrap<ObProxyInfo*>(proxy_user_info_, proxy_user_info_cnt_),
-               K_(user_flags), K_(trigger_list)
+               K_(user_flags), K_(trigger_list), K_(plugin)
               );
   bool role_exists(const uint64_t role_id, const uint64_t option) const;
   int get_seq_by_role_id(uint64_t role_id, uint64_t &seq) const;
@@ -5194,6 +5206,7 @@ private:
   uint64_t proxy_user_info_cnt_;
   ObUserFlags user_flags_;
   common::ObSArray<uint64_t> trigger_list_;
+  common::ObString plugin_;
   DISABLE_COPY_ASSIGN(ObUserInfo);
 };
 

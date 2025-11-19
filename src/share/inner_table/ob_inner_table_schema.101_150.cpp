@@ -894,6 +894,25 @@ int ObInnerTableSchema::all_user_schema(ObTableSchema &table_schema)
       flags_default,
       flags_default); //default_value
   }
+
+  if (OB_SUCC(ret)) {
+    ObObj plugin_default;
+    plugin_default.set_varchar(ObString::make_string("mysql_native_password"));
+    ADD_COLUMN_SCHEMA_T("plugin", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      64, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      plugin_default,
+      plugin_default); //default_value
+  }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
   table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
@@ -1806,6 +1825,25 @@ int ObInnerTableSchema::all_user_history_schema(ObTableSchema &table_schema)
       false, //is_autoincrement
       flags_default,
       flags_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj plugin_default;
+    plugin_default.set_varchar(ObString::make_string("mysql_native_password"));
+    ADD_COLUMN_SCHEMA_T("plugin", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      64, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false, //is_autoincrement
+      plugin_default,
+      plugin_default); //default_value
   }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);

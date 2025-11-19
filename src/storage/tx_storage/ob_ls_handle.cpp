@@ -84,6 +84,7 @@ void ObLSHandle::reset()
     ls_map_ = nullptr;
     ls_ = nullptr;
     mod_ = ObLSGetMod::INVALID_MOD;
+    RESET_OBJ_LEAK_DEBUG_NODE(node_);
   }
 }
 } // namespace storage

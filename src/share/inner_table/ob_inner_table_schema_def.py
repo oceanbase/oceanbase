@@ -473,6 +473,7 @@ all_user_def = dict(
       ('priv_create_database_link', 'int', 'false', '0'),
       ('priv_others', 'int', 'false', '0'),
       ('flags', 'int', 'false', '0'),
+      ('plugin', 'varchar:64', 'false', 'mysql_native_password'),
     ],
 )
 
@@ -5255,7 +5256,8 @@ all_kv_ttl_task_def = dict(
     ('scan_cnt', 'int'),
     ('row_key', 'varbinary:2048'),
     ('ret_code', 'varchar:OB_MAX_ERROR_MSG_LEN'),
-    ('task_type', 'int', 'false', 0)
+    ('task_type', 'int', 'false', 0),
+    ('scan_index', 'varchar:OB_MAX_OBJECT_NAME_LENGTH', 'false', 'PRIMARY KEY')
   ],
 )
 
@@ -5284,7 +5286,8 @@ all_kv_ttl_task_history_def = dict(
     ('scan_cnt', 'int'),
     ('row_key', 'varbinary:2048'),
     ('ret_code', 'varchar:OB_MAX_ERROR_MSG_LEN'),
-    ('task_type', 'int', 'false', 0)
+    ('task_type', 'int', 'false', 0),
+    ('scan_index', 'varchar:OB_MAX_OBJECT_NAME_LENGTH', 'false', 'PRIMARY KEY')
   ],
 )
 def_table_schema(**all_kv_ttl_task_def)
@@ -8436,6 +8439,7 @@ def_table_schema(**all_ai_model_endpoint_def)
 # 575: __all_tenant_macro_block_copy_task_progress
 # 576: __all_tenant_macro_block_copy_task_history
 # 577: __all_tablet_to_global_temporary_table
+# 578: __all_tiered_metadata_store
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -31240,7 +31244,8 @@ def_table_schema(
       case a.task_type
         when 0 then "NORMAL"
         when 1 then "HBASE ROWKEY"
-        else "INVALID" END AS TASK_TYPE
+        else "INVALID" END AS TASK_TYPE,
+      a.scan_index as SCAN_INDEX
       FROM oceanbase.__all_virtual_kv_ttl_task a left outer JOIN oceanbase.__all_table b on
           a.table_id = b.table_id and a.tenant_id = effective_tenant_id()
           and b.table_mode >> 12 & 15 in (0,1)
@@ -31284,7 +31289,8 @@ def_table_schema(
       case a.task_type
         when 0 then "NORMAL"
         when 1 then "HBASE ROWKEY"
-        else "INVALID" END AS TASK_TYPE
+        else "INVALID" END AS TASK_TYPE,
+      a.scan_index as SCAN_INDEX
       FROM oceanbase.__all_virtual_kv_ttl_task_history a left outer JOIN oceanbase.__all_table b on
           a.table_id = b.table_id and a.tenant_id = effective_tenant_id()
           and b.table_mode >> 12 & 15 in (0,1)
@@ -31497,7 +31503,8 @@ def_table_schema(
       case a.task_type
         when 0 then "NORMAL"
         when 1 then "HBASE ROWKEY"
-        else "INVALID" END AS TASK_TYPE
+        else "INVALID" END AS TASK_TYPE,
+      a.scan_index as SCAN_INDEX
       FROM oceanbase.__all_virtual_kv_ttl_task a left outer JOIN oceanbase.__all_virtual_table b on
           a.table_id = b.table_id and a.tenant_id = b.tenant_id
           and b.table_mode >> 12 & 15 in (0,1)
@@ -31541,7 +31548,8 @@ def_table_schema(
       case a.task_type
         when 0 then "NORMAL"
         when 1 then "HBASE ROWKEY"
-        else "INVALID" END AS TASK_TYPE
+        else "INVALID" END AS TASK_TYPE,
+      a.scan_index as SCAN_INDEX
       FROM oceanbase.__all_virtual_kv_ttl_task_history a left outer JOIN oceanbase.__all_virtual_table b on
           a.table_id = b.table_id and a.tenant_id = b.tenant_id
           and b.table_mode >> 12 & 15 in (0,1)
@@ -32696,6 +32704,7 @@ def_table_schema(
   SELECT USER_NAME,
           HOST,
           PASSWD,
+          PLUGIN,
           INFO,
           (CASE WHEN PRIV_ALTER = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_ALTER,
           (CASE WHEN PRIV_CREATE = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE,
@@ -32766,6 +32775,7 @@ def_table_schema(
           USER_NAME,
           HOST,
           PASSWD,
+          PLUGIN,
           INFO,
           (CASE WHEN PRIV_ALTER = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_ALTER,
           (CASE WHEN PRIV_CREATE = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE,
@@ -44298,6 +44308,190 @@ def_table_schema(
 # 21695: GV$OB_EXTERNAL_CATALOG_CLIENT_POOL_STAT
 # 21696: V$OB_EXTERNAL_CATALOG_CLIENT_POOL_STAT
 
+def_table_schema(
+  owner           = 'xingrui.cwh',
+  table_name      = 'DBA_TABLES',
+  table_id        = '21697',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+  CAST(DB.DATABASE_NAME AS CHAR(128) IGNORE) AS OWNER,
+  CAST(T.TABLE_NAME AS CHAR(128) IGNORE) AS TABLE_NAME,
+  CAST(TP.TABLESPACE_NAME AS CHAR(30)) AS TABLESPACE_NAME,
+  CAST(NULL AS CHAR(128)) AS CLUSTER_NAME,
+  CAST(NULL AS CHAR(128)) AS IOT_NAME,
+  CAST('VALID' AS CHAR(8)) AS STATUS,
+  CAST(T.PCTFREE AS SIGNED) AS PCT_FREE,
+  CAST(NULL AS SIGNED) AS PCT_USED,
+  CAST(NULL AS SIGNED) AS INI_TRANS,
+  CAST(NULL AS SIGNED) AS MAX_TRANS,
+  CAST(NULL AS SIGNED) AS INITIAL_EXTENT,
+  CAST(NULL AS SIGNED) AS NEXT_EXTENT,
+  CAST(NULL AS SIGNED) AS MIN_EXTENTS,
+  CAST(NULL AS SIGNED) AS MAX_EXTENTS,
+  CAST(NULL AS SIGNED) AS PCT_INCREASE,
+  CAST(NULL AS SIGNED) AS FREELISTS,
+  CAST(NULL AS SIGNED) AS FREELIST_GROUPS,
+  CAST(NULL AS CHAR(3)) AS LOGGING,
+  CAST(NULL AS CHAR(1)) AS BACKED_UP,
+  CAST(INFO.ROW_COUNT AS SIGNED) AS NUM_ROWS,
+  CAST(NULL AS SIGNED) AS BLOCKS,
+  CAST(NULL AS SIGNED) AS EMPTY_BLOCKS,
+  CAST(NULL AS SIGNED) AS AVG_SPACE,
+  CAST(NULL AS SIGNED) AS CHAIN_CNT,
+  CAST(NULL AS SIGNED) AS AVG_ROW_LEN,
+  CAST(NULL AS SIGNED) AS AVG_SPACE_FREELIST_BLOCKS,
+  CAST(NULL AS SIGNED) AS NUM_FREELIST_BLOCKS,
+  CAST(NULL AS CHAR(10)) AS DEGREE,
+  CAST(NULL AS CHAR(10)) AS INSTANCES,
+  CAST(NULL AS CHAR(5)) AS CACHE,
+  CAST(NULL AS CHAR(8)) AS TABLE_LOCK,
+  CAST(NULL AS SIGNED) AS SAMPLE_SIZE,
+  CAST(NULL AS DATE) AS LAST_ANALYZED,
+  CAST(
+  CASE
+    WHEN
+      T.PART_LEVEL = 0
+    THEN
+      'NO'
+    ELSE
+      'YES'
+  END
+  AS CHAR(3)) AS PARTITIONED,
+  CAST(NULL AS CHAR(12)) AS IOT_TYPE,
+  CAST(CASE WHEN T.TABLE_TYPE = 6 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS TEMPORARY,
+  CAST(NULL AS CHAR(1)) AS SECONDARY,
+  CAST('NO' AS CHAR(3)) AS NESTED,
+  CAST(NULL AS CHAR(7)) AS BUFFER_POOL,
+  CAST(NULL AS CHAR(7)) AS FLASH_CACHE,
+  CAST(NULL AS CHAR(7)) AS CELL_FLASH_CACHE,
+  CAST(
+  CASE
+    WHEN
+    (T.INDEX_ATTRIBUTES_SET & 8) != 0
+    THEN
+      'YES'
+    ELSE
+      'NO'
+  END
+  AS CHAR(8)) AS ROW_MOVEMENT,
+  CAST(NULL AS CHAR(3)) AS GLOBAL_STATS,
+  CAST(NULL AS CHAR(3)) AS USER_STATS,
+  CAST(CASE WHEN T.TABLE_TYPE = 6 THEN 'SYS$SESSION' ELSE NULL END AS CHAR(15)) AS DURATION,
+  CAST(NULL AS CHAR(8)) AS SKIP_CORRUPT,
+  CAST(NULL AS CHAR(3)) AS MONITORING,
+  CAST(NULL AS CHAR(128)) AS CLUSTER_OWNER,
+  CAST(NULL AS CHAR(8)) AS DEPENDENCIES,
+  CAST(NULL AS CHAR(8)) AS COMPRESSION,
+  CAST(NULL AS CHAR(30)) AS COMPRESS_FOR,
+  CAST(CASE WHEN DB.IN_RECYCLEBIN = 1 THEN 'YES' ELSE 'NO' END AS CHAR(3)) AS DROPPED,
+  CAST(NULL AS CHAR(3)) AS READ_ONLY,
+  CAST(NULL AS CHAR(3)) AS SEGMENT_CREATED,
+  CAST(NULL AS CHAR(7)) AS RESULT_CACHE,
+  CAST(NULL AS CHAR(3)) AS CLUSTERING,
+  CAST(NULL AS CHAR(23)) AS ACTIVITY_TRACKING,
+  CAST(NULL AS CHAR(25)) AS DML_TIMESTAMP,
+  CAST(NULL AS CHAR(3)) AS HAS_IDENTITY,
+  CAST(NULL AS CHAR(3)) AS CONTAINER_DATA,
+  CAST(NULL AS CHAR(8)) AS INMEMORY,
+  CAST(NULL AS CHAR(8)) AS INMEMORY_PRIORITY,
+  CAST(NULL AS CHAR(15)) AS INMEMORY_DISTRIBUTE,
+  CAST(NULL AS CHAR(17)) AS INMEMORY_COMPRESSION,
+  CAST(NULL AS CHAR(13)) AS INMEMORY_DUPLICATE,
+  CAST(NULL AS CHAR(100)) AS DEFAULT_COLLATION,
+  CAST(NULL AS CHAR(1)) AS DUPLICATED,
+  CAST(NULL AS CHAR(1)) AS SHARDED,
+  CAST(NULL AS CHAR(1)) AS EXTERNALLY_SHARDED,
+  CAST(NULL AS CHAR(1)) AS EXTERNALLY_DUPLICATED,
+  CAST(CASE WHEN T.TABLE_TYPE = 14 THEN 'YES' ELSE 'NO' END AS CHAR(3)) AS EXTERNAL,
+  CAST(NULL AS CHAR(3)) AS HYBRID,
+  CAST(NULL AS CHAR(24)) AS CELLMEMORY,
+  CAST(NULL AS CHAR(3)) AS CONTAINERS_DEFAULT,
+  CAST(NULL AS CHAR(3)) AS CONTAINER_MAP,
+  CAST(NULL AS CHAR(3)) AS EXTENDED_DATA_LINK,
+  CAST(NULL AS CHAR(3)) AS EXTENDED_DATA_LINK_MAP,
+  CAST(NULL AS CHAR(12)) AS INMEMORY_SERVICE,
+  CAST(NULL AS CHAR(1000)) AS INMEMORY_SERVICE_NAME,
+  CAST(NULL AS CHAR(3)) AS CONTAINER_MAP_OBJECT,
+  CAST(NULL AS CHAR(8)) AS MEMOPTIMIZE_READ,
+  CAST(NULL AS CHAR(8)) AS MEMOPTIMIZE_WRITE,
+  CAST(NULL AS CHAR(3)) AS HAS_SENSITIVE_COLUMN,
+  CAST(NULL AS CHAR(3)) AS ADMIT_NULL,
+  CAST(NULL AS CHAR(3)) AS DATA_LINK_DML_ENABLED,
+  CAST(NULL AS CHAR(8)) AS LOGICAL_REPLICATION,
+  CAST(CASE WHEN T.AUTO_PART = 1 THEN 'TRUE' ELSE 'FALSE' END AS CHAR(16)) AS AUTO_SPLIT,
+  CAST(CASE WHEN T.AUTO_PART = 1 THEN T.AUTO_PART_SIZE ELSE 0 END AS CHAR(128)) AS AUTO_SPLIT_TABLET_SIZE
+FROM
+  (SELECT
+     CAST(0 AS SIGNED) AS TENANT_ID,
+     TABLE_ID,
+     ROW_CNT AS ROW_COUNT
+   FROM
+     OCEANBASE.__ALL_TABLE_STAT TS
+   WHERE
+     TS.TENANT_ID = 0
+     AND (PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID)
+  ) INFO
+
+  RIGHT JOIN
+  (SELECT
+     TENANT_ID,
+     TABLE_ID,
+     TABLE_NAME,
+     DATABASE_ID,
+     PCTFREE,
+     PART_LEVEL,
+     TABLE_TYPE,
+     TABLESPACE_ID,
+     AUTO_PART,
+     AUTO_PART_SIZE,
+     INDEX_ATTRIBUTES_SET
+   FROM
+     OCEANBASE.__ALL_VIRTUAL_CORE_ALL_TABLE
+     WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+
+   UNION ALL
+
+   SELECT
+     TENANT_ID,
+     TABLE_ID,
+     TABLE_NAME,
+     DATABASE_ID,
+     PCTFREE,
+     PART_LEVEL,
+     TABLE_TYPE,
+     TABLESPACE_ID,
+     AUTO_PART,
+     AUTO_PART_SIZE,
+     INDEX_ATTRIBUTES_SET
+   FROM OCEANBASE.__ALL_TABLE
+   WHERE TABLE_TYPE != 12 AND TABLE_TYPE != 13
+   AND ((TABLE_MODE / 4096) & 15) IN (0,1)
+   AND (INDEX_ATTRIBUTES_SET & 16) = 0
+  ) T
+  ON
+    T.TABLE_ID = INFO.TABLE_ID
+
+  JOIN
+    OCEANBASE.__ALL_DATABASE DB
+  ON
+    DB.TENANT_ID = 0
+    AND DB.DATABASE_ID = T.DATABASE_ID
+    AND T.TABLE_TYPE IN (0, 3, 8, 9, 14, 15)
+    AND DB.DATABASE_NAME !=  '__recyclebin'
+
+  LEFT JOIN
+    OCEANBASE.__ALL_TENANT_TABLESPACE TP
+  ON
+    TP.TABLESPACE_ID = T.TABLESPACE_ID
+    AND T.TENANT_ID = TP.TENANT_ID
+""".replace("\n", " ")
+)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
@@ -46094,6 +46288,7 @@ def_table_schema(
       B.USER_NAME AS USERNAME,
       B.USER_ID AS USERID,
       B.PASSWD AS PASSWORD,
+      B.PLUGIN AS PLUGIN,
       CAST(CASE WHEN B.IS_LOCKED = 1 THEN 'LOCKED' ELSE 'OPEN' END as VARCHAR2(32)) AS ACCOUNT_STATUS,
       CAST(NULL as DATE) AS LOCK_DATE,
       CAST(NULL as DATE) AS EXPIRY_DATE,
@@ -48455,6 +48650,7 @@ FROM
 def_table_schema(
   owner = 'bin.lb',
   table_name      = 'DBA_TABLES',
+  name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25028',
   table_type      = 'SYSTEM_VIEW',

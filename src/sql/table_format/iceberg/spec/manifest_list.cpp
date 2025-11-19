@@ -335,11 +335,7 @@ int ManifestFile::get_manifest_entries(const ObString &access_info,
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_UNLIKELY(cached_manifest_entries_.empty())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("empty manifest entry", K(ret));
-    }
-
+    // 这里不能用 assign，因为 manifest_entries 指所有的 manifest file 的 manifest entries
     for (int64_t idx = 0; OB_SUCC(ret) && idx < cached_manifest_entries_.count(); ++idx) {
       if (OB_FAIL(manifest_entries.push_back(cached_manifest_entries_[idx]))) {
         LOG_WARN("failed to add manifest entry", K(ret));

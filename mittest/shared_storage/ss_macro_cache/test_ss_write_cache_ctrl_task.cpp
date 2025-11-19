@@ -124,7 +124,7 @@ TEST_F(TestSSWriteCacheCtrlTask, write_cache_threshold)
     macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
     macro_id.set_second_id(tablet_id); // tablet_id
     macro_id.set_third_id(server_id); // server_id
-    macro_id.set_macro_transfer_epoch(transfer_seq); // transfer_seq
+    macro_id.set_macro_private_transfer_epoch(transfer_seq); // transfer_seq
     macro_id.set_tenant_seq(i);  //tenant_seq
     ASSERT_TRUE(macro_id.is_valid());
     last_private_macro = macro_id;
@@ -159,7 +159,7 @@ TEST_F(TestSSWriteCacheCtrlTask, write_cache_threshold)
       macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
       macro_id.set_second_id(tablet_id); // tablet_id
       macro_id.set_third_id(server_id); // server_id
-      macro_id.set_macro_transfer_epoch(transfer_seq); // transfer_seq
+      macro_id.set_macro_private_transfer_epoch(transfer_seq); // transfer_seq
       macro_id.set_tenant_seq(i);  //tenant_seq
       ASSERT_TRUE(macro_id.is_valid());
       ObSSMacroCacheMetaHandle meta_handle;

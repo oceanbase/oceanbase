@@ -10087,6 +10087,27 @@ int ObTableSchema::get_rowkey_vid_tid(uint64_t &index_table_id) const
   return ret;
 }
 
+int ObTableSchema::get_rowkey_cid_tid(uint64_t &index_table_id, const ObIndexType index_type) const
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+  index_table_id = OB_INVALID_ID;
+  if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
+    LOG_WARN("get simple_index_infos failed", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+    if (index_type == simple_index_infos.at(i).index_type_) {
+      index_table_id = simple_index_infos.at(i).table_id_;
+      break;
+    }
+  }
+  if (OB_SUCC(ret) && OB_UNLIKELY(OB_INVALID_ID == index_table_id)) {
+    ret = OB_ERR_INDEX_KEY_NOT_FOUND;
+    LOG_DEBUG("not found rowkey cid index", K(ret), K(simple_index_infos));
+  }
+  return ret;
+}
+
 int ObTableSchema::get_embedded_vec_tid(uint64_t &index_table_id) const
 {
   int ret = OB_SUCCESS;
@@ -11045,11 +11066,11 @@ int ObTableSchema::check_support_interval_part() const
   ObPartition **part_array = get_part_array();
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
     LOG_WARN("get tenant data version failed", KR(ret), K_(tenant_id));
-  } else if (tenant_data_version < DATA_VERSION_4_5_0_0) {
+  } else if (tenant_data_version < MOCK_DATA_VERSION_4_4_2_0) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("tenant data version is less than 4.5.0, interval partition is not supported",
+    LOG_WARN("tenant data version is less than 4.4.2, interval partition is not supported",
               KR(ret), KDV(tenant_data_version));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.5.0, interval partition");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.4.2, interval partition");
   } else if (OB_UNLIKELY(with_dynamic_partition_policy())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("interval partition and dynamic partition can not be used together", KR(ret));

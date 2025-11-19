@@ -66,7 +66,10 @@ public:
       org_dup_cols_(alloc),
       new_dup_cols_(alloc),
       dist_col_group_idxs_(alloc),
-      distinct_exprs_(alloc)
+      distinct_exprs_(alloc),
+      grouping_id_(nullptr),
+      group_distinct_exprs_(alloc),
+      group_sort_collations_(alloc)
     {
     }
 
@@ -89,6 +92,9 @@ public:
   common::ObFixedArray<ObExpr*, common::ObIAllocator> new_dup_cols_;
   common::ObFixedArray<int64_t, common::ObIAllocator> dist_col_group_idxs_;
   ExprFixedArray distinct_exprs_; // the distinct arguments of aggregate function
+  ObExpr *grouping_id_;
+  ExprFixedArray group_distinct_exprs_;
+  common::ObFixedArray<ObSortCollations, common::ObIAllocator> group_sort_collations_;
 };
 
 // 输入数据已经按照groupby列排序

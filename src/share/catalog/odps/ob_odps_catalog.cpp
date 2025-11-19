@@ -487,8 +487,8 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
       }
 
       if (OB_SUCC(ret)) {
-	if (max_partition_file_size == 0) {
-	} else if(!GCONF._use_odps_jni_connector) {
+	      if (max_partition_file_size == 0) {
+	      } else if(!GCONF._use_odps_jni_connector) {
           #if defined(OB_BUILD_CPP_ODPS)
             // get row count for odps partition
             sql::ObODPSTableRowIterator odps_driver;
@@ -527,12 +527,12 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
         }
 
         if (OB_SUCC(ret)) {
-	  if (0 != max_partition_file_size) {
+          if (0 != max_partition_file_size) {
             row_count = max_row_count * (total_data_size * 1.00 / max_partition_file_size);
             LOG_INFO("ODPS statistics catalog table row count estimate size", K(max_partition_file_size), K(max_row_count), K(total_data_size), K(row_count));
-	  } else {
+          } else {
             row_count = 0;
-	  }
+          }
         }
       }
     } else { // Storage api mode 谓词过滤不加入

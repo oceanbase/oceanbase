@@ -241,6 +241,10 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
                                           ::oceanbase::storage::mds::MdsCtx,\
                                           44,\
                                           DIRECT_LOAD_AUTO_INC_SEQ)
+  // GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletRandomMdsHelper,\
+  //                                          ::oceanbase::storage::mds::MdsCtx,\
+  //                                          45,\
+  //                                          TABLET_RANDOM)
   // # 余留位置（此行之前占位）
 #undef GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION
 #endif
@@ -327,6 +331,9 @@ _GENERATE_MDS_UNIT_(KEY_TYPE, VALUE_TYPE, NEED_MULTI_VERSION)
   GENERATE_MDS_UNIT(::oceanbase::storage::mds::DummyKey,\
                     ::oceanbase::storage::ObDirectLoadAutoIncSeqData,\
                     false)
+  // GENERATE_MDS_UNIT(::oceanbase::storage::mds::DummyKey,\
+  //                   ::oceanbase::storage::ObTabletRandomMdsUserData,\
+  //                   false)
   // # 余留位置（此行之前占位）
 #endif
 

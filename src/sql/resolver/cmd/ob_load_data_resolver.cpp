@@ -846,7 +846,7 @@ int ObLoadDataResolver::resolve_filename(ObLoadDataStmt *load_stmt, ParseNode *n
           char *path = nullptr;
           int64_t path_len = 0;
           ObArray<ObString> file_list;
-          if (load_args.access_info_.get_load_data_format() == ObLoadDataFormat::OB_BACKUP_1_4) {
+          if (ObLoadDataFormat::is_backup(load_args.access_info_.get_load_data_format())) {
             load_args.file_name_ = temp_file_name;
           } else {
             if (OB_ISNULL(file_ptr = temp_file_name.reverse_find('/'))) {

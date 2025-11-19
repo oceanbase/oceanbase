@@ -107,7 +107,8 @@ void TestSSExecuteCheckpointTask::TearDown()
   const uint64_t tenant_id = MTL_ID();
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache*);
   // clear micro_meta_ckpt
-  ObSSMicroCacheSuperBlk new_super_blk(tenant_id, micro_cache->cache_file_size_, SS_PERSIST_MICRO_CKPT_SPLIT_CNT);
+  const int64_t micro_ckpt_split_cnt = micro_cache->get_micro_ckpt_split_cnt();
+  ObSSMicroCacheSuperBlk new_super_blk(tenant_id, micro_cache->cache_file_size_, micro_ckpt_split_cnt);
   ASSERT_EQ(OB_SUCCESS, micro_cache->phy_blk_mgr_.update_ss_super_block(new_super_blk));
   micro_cache->stop();
   micro_cache->wait();
@@ -720,9 +721,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
       micro_meta_handle()->get_micro_meta_info(delete_micro_info);
       ASSERT_EQ(true, delete_micro_info.is_valid_field());
 
-      bool succ_delete = true;
-      ASSERT_EQ(OB_SUCCESS, micro_meta_mgr_->try_force_delete_micro_block_meta(micro_key, succ_delete));
-      ASSERT_EQ(true, succ_delete);
+      ASSERT_EQ(OB_SUCCESS, micro_meta_mgr_->try_force_delete_micro_block_meta(micro_key));
       force_del_blk_idx = delete_micro_info.data_loc_ / phy_blk_mgr_->block_size_;
     }
   }

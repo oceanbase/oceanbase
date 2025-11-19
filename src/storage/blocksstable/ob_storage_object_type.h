@@ -113,6 +113,7 @@ enum class ObStorageObjectType : uint8_t
     MACRO_CACHE_CKPT_META,
     SHARED_INC_MAJOR_DATA_MACRO,
     SHARED_INC_MAJOR_META_MACRO,
+    SHARED_TABLET_SUB_META_IN_TABLE,
     MAX
 };
 static constexpr uint8_t SS_OBJECT_MAX_TYPE_VAL = static_cast<uint8_t>(ObStorageObjectType::MAX);
@@ -1899,6 +1900,7 @@ public:
                                     const MacroBlockId &file_id, const char *object_storage_root_dir,
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
+  virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
   virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
   virtual int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const;
 
@@ -1931,12 +1933,30 @@ public:
                                     const MacroBlockId &file_id, const char *object_storage_root_dir,
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
+  virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
   virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
   virtual int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const;
 
 #endif
   virtual int opt_to_string(char *buf, const int64_t buf_len, int64_t &pos, const ObStorageObjectOpt &opt) const;
   virtual int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const;
+};
+
+/**
+ * ---------------------------------------ObSharedTabletSubMetaInTableType----------------------------------------
+ */
+class ObSharedTabletSubMetaInTableType : public ObStorageObjectTypeBase
+{
+public:
+  ObSharedTabletSubMetaInTableType() : ObStorageObjectTypeBase(ObStorageObjectType::SHARED_TABLET_SUB_META_IN_TABLE) {}
+  virtual ~ObSharedTabletSubMetaInTableType() {}
+  virtual bool is_tablet_meta() const { return true; }
+  virtual bool is_shared() const { return true; }
+  virtual bool is_direct_read() const { return true; }
+  virtual bool is_direct_write() const { return true; }
+  virtual bool is_overwrite() const { return true; }
+  virtual bool is_path_include_inner_tablet() const { return true; }
+  virtual bool is_valid(const MacroBlockId &file_id) const;
 };
 
 } // end namespace blocksstable

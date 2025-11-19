@@ -1611,6 +1611,7 @@ constexpr int OB_DISK_QUOTA_EXCEEDED = -9148;
 constexpr int OB_BACKUP_DEST_NOT_ALLOWED_TO_SET = -9149;
 constexpr int OB_LOG_ONLY_POLICY_NOT_ALLOWED_TO_SET = -9150;
 constexpr int OB_BACKUP_CLEAN_CAN_NOT_START = -9151;
+constexpr int OB_LS_ARCHIVE_MAX_SCN_LESS_THAN_CHECKPOINT = -9154;
 constexpr int OB_ERR_RESIZE_FILE_TO_SMALLER = -9200;
 constexpr int OB_MARK_BLOCK_INFO_TIMEOUT = -9201;
 constexpr int OB_NOT_READY_TO_EXTEND_FILE = -9202;
@@ -2063,6 +2064,7 @@ constexpr int OB_HTTP_BAD_REQUEST = -11122;
 constexpr int OB_HTTP_UNAUTHORIZED = -11123;
 constexpr int OB_HTTP_NOT_FOUND = -11124;
 constexpr int OB_HTTP_SERVER_ERROR = -11125;
+constexpr int OB_INVALID_DATE_TRUNC_FORMAT = -11126;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -4084,6 +4086,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_BACKUP_CLEAN_CAN_NOT_START__USER_ERROR_MSG "backup clean can not start, because %s"
 #define OB_BACKUP_DEVICE_NOT_MOUNTED__USER_ERROR_MSG "backup device may be not mounted, %s did not read any data written by %s"
 #define OB_BACKUP_DEVICE_NOT_STRONG_RW_CONSISTENT__USER_ERROR_MSG "backup device is not read and write strongly consistent. %s did not read the latest data written by %s."
+#define OB_LS_ARCHIVE_MAX_SCN_LESS_THAN_CHECKPOINT__USER_ERROR_MSG "ls archive max scn less than checkpoint scn"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__USER_ERROR_MSG "Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__USER_ERROR_MSG "Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__USER_ERROR_MSG "Auto extend param is not ready to start extending file"
@@ -4576,6 +4579,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_HTTP_UNAUTHORIZED__USER_ERROR_MSG "Unauthorized http request: %s"
 #define OB_HTTP_NOT_FOUND__USER_ERROR_MSG "Http request not found: %s"
 #define OB_HTTP_SERVER_ERROR__USER_ERROR_MSG "Http server error: %s"
+#define OB_INVALID_DATE_TRUNC_FORMAT__USER_ERROR_MSG "unit \'%.*s\' not recognized"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -8607,6 +8611,8 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_BACKUP_DEVICE_NOT_MOUNTED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9152, backup device may be not mounted, %s did not read any data written by %s"
 #define OB_BACKUP_DEVICE_NOT_STRONG_RW_CONSISTENT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9153, backup device is not read and write strongly consistent. %s did not read the latest data written by %s."
 #define OB_BACKUP_DEVICE_NOT_STRONG_RW_CONSISTENT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9153, backup device is not read and write strongly consistent. %s did not read the latest data written by %s."
+#define OB_LS_ARCHIVE_MAX_SCN_LESS_THAN_CHECKPOINT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9154, ls archive max scn less than checkpoint scn"
+#define OB_LS_ARCHIVE_MAX_SCN_LESS_THAN_CHECKPOINT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9154, ls archive max scn less than checkpoint scn"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9201, Mark blocks timeout(5s) in auto extend process when alloc block fail"
@@ -9591,6 +9597,8 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_HTTP_NOT_FOUND__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11124, Http request not found: %s"
 #define OB_HTTP_SERVER_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11125, Http server error: %s"
 #define OB_HTTP_SERVER_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11125, Http server error: %s"
+#define OB_INVALID_DATE_TRUNC_FORMAT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11126, unit \'%.*s\' not recognized"
+#define OB_INVALID_DATE_TRUNC_FORMAT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11126, unit \'%.*s\' not recognized"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR__OBE_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
@@ -9610,7 +9618,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 
-extern int g_all_ob_errnos[2509];
+extern int g_all_ob_errnos[2511];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

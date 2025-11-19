@@ -599,7 +599,7 @@ OB_SERIALIZE_MEMBER(ObPendingFreeTabletItem,
                     status_,
                     free_time_,
                     gc_type_,
-                    tablet_transfer_seq_ // FARM COMPAT WHITELIST
+                    tablet_private_transfer_epoch_ // FARM COMPAT WHITELIST
                     );
 OB_SERIALIZE_MEMBER(ObLSPendingFreeTabletArray,
                     ls_id_, // FARM COMPAT WHITELIST

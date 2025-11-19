@@ -1393,11 +1393,11 @@ ERRSIM_DEF_INT(_max_block_per_backup_task, OB_CLUSTER_PARAMETER, "0", "[0,)",
 ERRSIM_DEF_TIME(backup_lease_takeover_time, OB_CLUSTER_PARAMETER, "10s", "[1s, 5m]",
          "Lease Takeover Time for Rootserver Backup heartbeat. Range: [1s, 5m]",
          ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-ERRSIM_DEF_INT(backup_task_scheduler_queue_size, OB_TENANT_PARAMETER, "1024", "[1, 70000]",
-        "the size of the backup task scheduler queue for each tenant. "
-        "Range: [1, 70000] in integer",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_INT(_backup_task_queue_size, OB_TENANT_PARAMETER, "0", "[0, 100000]",
+        "the size of the backup task scheduler queue for each tenant. "
+        "Range: [0, 100000] in integer",
+        ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_TIME(trigger_auto_backup_delete_interval, OB_CLUSTER_PARAMETER, "1h", "[1s,)",
          "trigger auto backup delete interval."
          "The default value is 1h. Range: [1s,)",
@@ -1716,6 +1716,9 @@ DEF_BOOL(_enable_nlj_spf_use_rich_format, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_enable_index_merge, OB_TENANT_PARAMETER, "False",
          "enable index merge optimization",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_index_merge_intersect_bitmap, OB_TENANT_PARAMETER, "True",
+         "enable bitmap optimization for index merge intersect",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_distributed_das_scan, OB_TENANT_PARAMETER, "True",
          "enable distributed DAS scan",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1961,6 +1964,10 @@ DEF_TIME(_transfer_task_retry_interval, OB_TENANT_PARAMETER, "1m", "[0s,)",
         "Retry interval after transfer task failure. "
         "Range: [0s, +∞). Default: 1m",
         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_skip_checking_ls_migration_required_size, OB_TENANT_PARAMETER, "False",
+        "Skip checking ls migration required size",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 // end of transfer
 
@@ -2290,9 +2297,19 @@ DEF_BOOL(_enable_persistent_compiled_routine, OB_CLUSTER_PARAMETER, "true",
          "specifies whether the feature of storeing dll to disk is turned on. "
          "The default value is TRUE. Value: TRUE: turned on FALSE: turned off",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(enable_parallel_vector_index_optimization, OB_TENANT_PARAMETER, "False",
-    "enable parallel vector index optimization",
-    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+// AI / LLM
+DEF_TIME(model_request_timeout, OB_TENANT_PARAMETER, "60s", "[1s,)",
+        "Used to control the HTTP timeout for accessing the  model. Especially, the default value is 60s.",
+        ObParameterAttr(Section::AI, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(model_max_retries, OB_TENANT_PARAMETER, "2", "[1,)",
+    "Used to control the retry times after a failed model interaction. Especially, the default value is 2",
+    ObParameterAttr(Section::AI, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_semantic_index, OB_TENANT_PARAMETER, "False",
+         "Specifies whether the tenant's semantic index is enabled. Value: True: turned on; False: turned off.",
+         ObParameterAttr(Section::AI, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_STR_WITH_CHECKER(sql_protocol_min_tls_version, OB_CLUSTER_PARAMETER, "none",
                      common::ObConfigSQLTlsVersionChecker,
@@ -3077,9 +3094,9 @@ DEF_BOOL(ob_enable_python_udf, OB_TENANT_PARAMETER, "False",
 DEF_BOOL(ob_enable_utl_http, OB_CLUSTER_PARAMETER, "False",
          "controls whether UTL_HTTP is enabled",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(_enable_hybrid_vector_index, OB_TENANT_PARAMETER, "False",
-         "Value:  True: can create or drop hybrid vector index; False: not support create or drop",
-         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(ob_enable_utl_tcp, OB_CLUSTER_PARAMETER, "False",
+         "controls whether UTL_TCP is enabled",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_ss_garbage_collector_defensive_check, OB_TENANT_PARAMETER, "True",
          "Enable or disable defensive checks for garbage collection on shared storage.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

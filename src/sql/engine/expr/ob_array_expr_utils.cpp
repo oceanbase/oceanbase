@@ -84,9 +84,12 @@ int ObArrayExprUtils::get_type_vector(
     } else if (OB_FAIL(result->init(blob_data))) {
       LOG_WARN("failed to init array", K(ret));
     } else {
-      if (result->size() > ObExprVector::MAX_VECTOR_DIM) {
+      const bool is_dense_vector = (coll_info != NULL
+                                    && coll_info->collection_meta_ != NULL
+                                    && coll_info->collection_meta_->type_id_ == ObNestedType::OB_VECTOR_TYPE);
+      if (is_dense_vector && result->size() > ObExprVector::MAX_VECTOR_DIM) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("vector dimension exceeds maximum limit", K(ret), K(result->size()));
+        LOG_WARN("vector dimension exceeds maximum limit for dense vector", K(ret), K(result->size()));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector dimension exceeds maximum limit of 16000");
       }
     }
@@ -1129,8 +1132,14 @@ int ObArrayExprUtils::calc_nested_expr_data_size(const ObExpr &expr, ObEvalCtx &
   ObIVector *root_vec = expr.get_vector(ctx);
   const char *payload = NULL;
   ObLength payload_len = 0;
+  ObCollectionTypeBase *coll_type = NULL;
   root_vec->get_payload(batch_idx, payload, payload_len);
   if (root_vec->is_null(batch_idx)) {
+  } else if (payload_len == 0 && OB_FAIL(get_coll_type_by_subschema_id(&ctx.exec_ctx_, expr.obj_meta_.get_subschema_id(), coll_type))) {
+    LOG_WARN("failed to get array type by subschema id", K(ret), K(expr));
+  } else if ((OB_NOT_NULL(coll_type) && coll_type->type_id_ == ObNestedType::OB_VECTOR_TYPE)) {
+    size = payload_len;
+    LOG_DEBUG("skip one row with vector type and length is 0", K(ret));
   } else if (ObCollectionExprUtil::is_compact_fmt_cell(payload)) {
     size = payload_len;
   } else if (payload_len != sizeof(ObCollectionExprCell)) {
@@ -1597,9 +1606,7 @@ int ObArrayExprUtils::deduce_array_type(ObExecContext *exec_ctx, ObExprResType &
     uint16_t child_subschema_id;
     ObExprResType child_type;
     ObExprResType coll_calc_type;
-    if (type2.get_subschema_id() == type1.get_subschema_id()) {
-      subschema_id = type1.get_subschema_id();
-    } else if (OB_FAIL(ObArrayExprUtils::get_coll_type_by_subschema_id(exec_ctx, type2.get_subschema_id(), type2_coll_type))) {
+    if (OB_FAIL(ObArrayExprUtils::get_coll_type_by_subschema_id(exec_ctx, type2.get_subschema_id(), type2_coll_type))) {
       LOG_WARN("failed to get array type by subschema id", K(ret), K(type1.get_subschema_id()));
     } else if (type2_coll_type->type_id_ != ObNestedType::OB_ARRAY_TYPE && type2_coll_type->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;

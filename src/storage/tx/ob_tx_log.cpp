@@ -1179,6 +1179,74 @@ int ObTxRollbackToLog::ob_admin_dump(ObAdminMutatorStringArg &arg)
   return ret;
 }
 
+int ObTxDirectLoadIncLog::ob_admin_dump_macro_block(share::ObAdminMutatorStringArg &arg,
+                                                    int64_t scn_val)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(arg.dir_path_) || strlen(arg.dir_path_) == 0) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid dir_path", K(ret), KP(arg.dir_path_));
+  } else if (ObTxDirectLoadIncLog::DirectLoadIncLogType::DLI_REDO == ddl_log_type_) {
+    storage::ObDDLRedoLog ddl_redo_log;
+    if (OB_FAIL(log_buf_.deserialize_log_object(&ddl_redo_log))) {
+      TRANS_LOG(WARN, "deserialize ddl redo log failed", K(ret), KPC(this));
+    } else {
+      storage::ObDDLMacroBlockRedoInfo redo_info = ddl_redo_log.get_redo_info();
+      // Convert scn_range to string for filename: start_scn_end_scn_
+      char file_name[128] = {0};
+      int64_t name_len = snprintf(file_name, sizeof(file_name), "%ld", scn_val);
+      if (name_len < 0 || name_len >= static_cast<int64_t>(sizeof(file_name))) {
+        ret = OB_INVALID_ARGUMENT;
+        TRANS_LOG(WARN, "failed to convert scn to string", K(ret), K(scn_val));
+      } else {
+        // Construct full file path
+        char file_path[common::MAX_PATH_SIZE] = {0};
+        int64_t path_len =
+          snprintf(file_path, sizeof(file_path), "%s/%s", arg.dir_path_, file_name);
+        if (path_len < 0 || path_len >= static_cast<int64_t>(sizeof(file_path))) {
+          ret = OB_INVALID_ARGUMENT;
+          TRANS_LOG(WARN, "file path too long", K(ret), K(arg.dir_path_), K(file_name));
+        } else {
+          // Create and write file
+          int fd =
+            ::open(file_path, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+          if (fd < 0) {
+            ret = OB_IO_ERROR;
+            TRANS_LOG(WARN, "failed to create file", K(ret), K(file_path), K(errno));
+          } else {
+            if (redo_info.data_buffer_.length() > 0 && OB_NOT_NULL(redo_info.data_buffer_.ptr())) {
+              ssize_t write_size =
+                ::write(fd, redo_info.data_buffer_.ptr(), redo_info.data_buffer_.length());
+              if (write_size < 0) {
+                ret = OB_IO_ERROR;
+                TRANS_LOG(WARN, "failed to write file", K(ret), K(file_path), K(errno));
+              } else if (static_cast<int64_t>(write_size) != redo_info.data_buffer_.length()) {
+                ret = OB_IO_ERROR;
+                TRANS_LOG(WARN, "partial write", K(ret), K(write_size),
+                          K(redo_info.data_buffer_.length()));
+              }
+            }
+
+            if (OB_FAIL(ret)) {
+              // Error occurred, close file anyway
+              ::close(fd);
+            } else {
+              if (0 != ::close(fd)) {
+                ret = OB_IO_ERROR;
+                TRANS_LOG(WARN, "failed to close file", K(ret), K(file_path), K(errno));
+              } else {
+                TRANS_LOG(INFO, "successfully dump macro block to file", K(file_path), K(scn_val),
+                          K(redo_info.data_buffer_.length()));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int  ObTxDirectLoadIncLog::ob_admin_dump(share::ObAdminMutatorStringArg &arg)
 {
   int ret = OB_SUCCESS;
@@ -1197,6 +1265,33 @@ int  ObTxDirectLoadIncLog::ob_admin_dump(share::ObAdminMutatorStringArg &arg)
     arg.writer_ptr_->dump_string(helper.convert(batch_key_));
     //TODO direct_load_inc
     //dump direct_load_inc log_buf as a string in ob_admin log_tool
+    if (ddl_log_type_ == ObTxDirectLoadIncLog::DirectLoadIncLogType::DLI_START) {
+      storage::ObDDLIncStartLog ddl_start_log;
+      if (OB_FAIL(log_buf_.deserialize_log_object(&ddl_start_log))) {
+        TRANS_LOG(WARN, "deserialize ddl start log failed", K(ret), KPC(this));
+      } else {
+        arg.writer_ptr_->dump_key("dli_start_log");
+        arg.writer_ptr_->dump_string(helper.convert(ddl_start_log));
+      }
+    } else if (ddl_log_type_ == ObTxDirectLoadIncLog::DirectLoadIncLogType::DLI_REDO) {
+      storage::ObDDLRedoLog ddl_redo_log;
+      if (OB_FAIL(log_buf_.deserialize_log_object(&ddl_redo_log))) {
+        TRANS_LOG(WARN, "deserialize ddl redo log failed", K(ret), KPC(this));
+      } else {
+        arg.writer_ptr_->dump_key("dli_redo_log");
+        arg.writer_ptr_->dump_string(helper.convert(ddl_redo_log));
+      }
+    } else if (ddl_log_type_ == ObTxDirectLoadIncLog::DirectLoadIncLogType::DLI_END) {
+      storage::ObDDLIncCommitLog ddl_commit_log;
+      if (OB_FAIL(log_buf_.deserialize_log_object(&ddl_commit_log))) {
+        TRANS_LOG(WARN, "deserialize ddl commit log failed", K(ret), KPC(this));
+      } else {
+        arg.writer_ptr_->dump_key("dli_commit_log");
+        arg.writer_ptr_->dump_string(helper.convert(ddl_commit_log));
+      }
+    } else {
+      TRANS_LOG(WARN, "invalid ddl log type", K(ddl_log_type_));
+    }
     arg.writer_ptr_->end_object();
   }
   return ret;

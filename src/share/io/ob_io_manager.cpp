@@ -1877,8 +1877,13 @@ int ObTenantIOManager::inner_aio(const ObIOInfo &info, ObIOHandle &handle)
   } else if (OB_UNLIKELY(!is_working())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("tenant not working", K(ret), K(tenant_id_));
+  } else if (OB_ISNULL(info.fd_.device_handle_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("device handle is null", K(ret), K(info));
   } else if ((SLOG_IO != info.flag_.get_sys_module_id() &&
-              CLOG_READ_IO != info.flag_.get_sys_module_id() && CLOG_WRITE_IO != info.flag_.get_sys_module_id()) &&
+              CLOG_READ_IO != info.flag_.get_sys_module_id() &&
+              CLOG_WRITE_IO != info.flag_.get_sys_module_id()) &&
+              !info.fd_.device_handle_->is_object_device() &&
               NULL != detector && detector->is_data_disk_has_fatal_error()) {
     ret = OB_DISK_HUNG;
     // for temporary positioning issue, get lbt of log replay

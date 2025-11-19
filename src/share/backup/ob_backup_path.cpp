@@ -1242,6 +1242,31 @@ int ObBackupPathUtil::get_backup_ls_attr_info_path(const share::ObBackupDest &ba
   return ret;
 }
 
+int ObBackupPathUtil::get_backup_ls_id_list_path(const share::ObBackupDest &backup_set_dest,
+    ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_tenant_meta_info_dir_path(backup_set_dest, backup_path))) {
+    LOG_WARN("failed to get backup set dir path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(backup_path.join(OB_STR_LS_ID_LIST_INFO, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join ls id list info", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPathUtil::get_backup_ls_id_list_path(const share::ObBackupDest &backup_tenant_dest,
+    const share::ObBackupSetDesc &desc, ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupDest backup_set_dest;
+  if (OB_FAIL(construct_backup_set_dest(backup_tenant_dest, desc, backup_set_dest))) {
+    LOG_WARN("fail to construct backup set dest", K(ret));
+  } else if (OB_FAIL(get_backup_ls_id_list_path(backup_set_dest, backup_path))) {
+    LOG_WARN("fail to get ls id list path", K(ret));
+  }
+  return ret;
+}
+
 // file:///obbackup/backup_set_1_full/infos/meta_info/ls_meta_infos.obbak
 int ObBackupPathUtil::get_ls_meta_infos_path(const share::ObBackupDest &backup_set_dest, ObBackupPath &backup_path)
 {

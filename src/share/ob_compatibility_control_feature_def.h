@@ -66,4 +66,8 @@ DEF_COMPAT_CONTROL_FEATURE(IMPLICIT_FIRST_CENTURY_YEAR,
 DEF_COMPAT_CONTROL_FEATURE(PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN,
     "Whether can transform the PL/SQL select into from dual statement to an assignment statement",
     MOCK_CLUSTER_VERSION_4_4_2_0)
+
+DEF_COMPAT_CONTROL_FEATURE(EXTERNAL_COLUMN_NAME_CASE_INSENSITIVE,
+    "Whether column name mapping in Parquet/ORC file is case insensitive",
+    CLUSTER_VERSION_4_5_0_0)
 #endif

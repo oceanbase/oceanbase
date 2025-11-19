@@ -215,6 +215,7 @@ private:
   int init_next_meta_version();
   /// NOTE: hold T3M::bucket_lock_
   void update_last_gc_version(const int64_t new_gc_version);
+  void set_next_meta_version(const int64_t next_meta_version);
 
 private:
   ObLSHandle ls_handle_; // 24B

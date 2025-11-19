@@ -439,7 +439,7 @@ ObPluginVectorIndexAdaptor::ObPluginVectorIndexAdaptor(common::ObIAllocator *all
     rowkey_vid_table_id_(OB_INVALID_ID), vid_rowkey_table_id_(OB_INVALID_ID),
     ref_cnt_(0), idle_cnt_(0), mem_check_cnt_(0), is_mem_limited_(false), all_vsag_use_mem_(nullptr), allocator_(allocator),
     parent_mem_ctx_(entity), index_identity_(), follower_sync_statistics_(), is_in_opt_task_(false), need_be_optimized_(false), extra_info_column_count_(0),
-    query_lock_(), reload_finish_(false), last_embedding_time_(ObTimeUtility::fast_current_time()), is_need_vid_(true)
+    query_lock_(), reload_finish_(false), last_embedding_time_(ObTimeUtility::fast_current_time()), is_need_vid_(true), sparse_vector_type_(nullptr)
 {
 }
 
@@ -464,6 +464,8 @@ ObPluginVectorIndexAdaptor::~ObPluginVectorIndexAdaptor()
       && OB_FAIL(try_free_memdata_resource(VIRT_SNAP, snap_data_, allocator_, tenant_id_))) {
     LOG_WARN("failed to free snap memdata", K(ret), KPC(this));
   }
+
+  free_sparse_vector_type_mem();
 
   // use another memdata struct for the following?
   if (OB_NOT_NULL(allocator_)) {
@@ -1423,6 +1425,30 @@ int ObPluginVectorIndexAdaptor::handle_insert_embedded_table_rows(blocksstable::
 
   }
   return ret;
+}
+
+void ObPluginVectorIndexAdaptor::free_sparse_vector_type_mem()
+{
+  if (OB_NOT_NULL(allocator_)) {
+    if (sparse_vector_type_) {
+      if (sparse_vector_type_->key_type_) {
+        ObCollectionArrayType *key_type = (ObCollectionArrayType *)sparse_vector_type_->key_type_;
+        if (key_type->element_type_) {
+          allocator_->free(key_type->element_type_);
+        }
+        allocator_->free(sparse_vector_type_->key_type_);
+      }
+      if(sparse_vector_type_->value_type_) {
+        ObCollectionArrayType *vector_type = (ObCollectionArrayType *)sparse_vector_type_->value_type_;
+        if(vector_type->element_type_) {
+          allocator_->free(vector_type->element_type_);
+        }
+        allocator_->free(sparse_vector_type_->value_type_);
+      }
+      allocator_->free(sparse_vector_type_);
+      sparse_vector_type_ = nullptr;
+    }
+  }
 }
 
 int ObPluginVectorIndexAdaptor::init_sparse_vector_type()
@@ -2494,13 +2520,14 @@ int ObPluginVectorIndexAdaptor::complete_delta_buffer_table_data(ObVectorQueryAd
         LOG_WARN("failed to alloc sparse byte lens", K(ret), K(count));
       } else {
         char *sparse_curr_pos = sparse_vectors;
+        int j = 0;
         // Copy the raw sparse vector data
         for (int i = 0; OB_SUCC(ret) && i < ctx->get_vec_cnt(); i++) {
           if (!ctx->vec_data_.vectors_[i].is_null() && !ctx->vec_data_.vectors_[i].get_string().empty()) {
             ObString vec_str = ctx->vec_data_.vectors_[i].get_string();
-            memcpy(sparse_curr_pos, vec_str.ptr(), vec_str.length());
+            MEMCPY(sparse_curr_pos, vec_str.ptr(), vec_str.length());
             sparse_curr_pos += vec_str.length();
-            sparse_byte_lens[i] = vec_str.length();
+            sparse_byte_lens[j++] = vec_str.length();
           }
         }
 
@@ -3977,8 +4004,8 @@ int ObPluginVectorIndexAdaptor::deserialize_snap_data(ObVectorQueryConditions *q
 int ObPluginVectorIndexAdaptor::try_init_snap_data(ObVectorIndexAlgorithmType actual_type)
 {
   INIT_SUCC(ret);
-  if (type_ == VIAT_HNSW_SQ || type_ == VIAT_HNSW_BQ || type_ == VIAT_IPIVF) {
-    if (actual_type == VIAT_HNSW_SQ || actual_type == VIAT_HNSW_BQ || type_ == VIAT_IPIVF) {
+  if (type_ == VIAT_HNSW_SQ || type_ == VIAT_HNSW_BQ) {
+    if (actual_type == VIAT_HNSW_SQ || actual_type == VIAT_HNSW_BQ) {
       // actual create hnswsq index
       if (OB_FAIL(init_snap_data_without_lock())) {
         LOG_WARN("failed to init snap mem data", K(ret), K(type_));
@@ -3992,7 +4019,7 @@ int ObPluginVectorIndexAdaptor::try_init_snap_data(ObVectorIndexAlgorithmType ac
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get serialize type invalid", K(ret), K(actual_type), K(type_));
     }
-  } else if (type_ == VIAT_HNSW || type_ == VIAT_HGRAPH) {
+  } else if (type_ == VIAT_HNSW || type_ == VIAT_HGRAPH || type_ == VIAT_IPIVF) {
     if (OB_FAIL(init_snap_data_without_lock())) {
       LOG_WARN("failed to init snap mem data", K(ret), K(type_));
     }

@@ -131,7 +131,7 @@ private:
                  && 2 == ITER_POOL_MAX_CACHED_ITER_TYPE, "[Global Iterator Pool] invalid iter type");
 
   static constexpr int64_t ITER_TYPE_POOL_MEM_LIMITS[1 + ITER_POOL_MAX_CACHED_ITER_TYPE] =
-      {100L << 10/*SINGLE_GET*/, 500L << 10/*MULTI_GET*/, 400L << 10/*SINGLE_SCAN*/};
+      {256L << 10/*SINGLE_GET*/, 500L << 10/*MULTI_GET*/, 400L << 10/*SINGLE_SCAN*/};
 
   static constexpr int64_t ALL_ITER_TYPES_MEM_LIMIT =
       ITER_TYPE_POOL_MEM_LIMITS[0] + ITER_TYPE_POOL_MEM_LIMITS[1] + ITER_TYPE_POOL_MEM_LIMITS[2];

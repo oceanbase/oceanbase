@@ -152,7 +152,7 @@ bool ObLinkedMacroInfoWriteParam::is_valid() const
   bool is_valid = false;
   switch (type_) {
     case ObLinkedMacroBlockWriteType::PRIV_MACRO_INFO : {
-      is_valid = tablet_id_.is_valid() && tablet_transfer_epoch_ >= 0;
+      is_valid = tablet_id_.is_valid() && tablet_private_transfer_epoch_ >= 0;
       break;
     }
     case ObLinkedMacroBlockWriteType::SHARED_MAJOR_MACRO_INFO : {
@@ -197,7 +197,7 @@ int ObLinkedMacroInfoWriteParam::build_linked_marco_info_param(
   } else { // private
     type_                = ObLinkedMacroBlockWriteType::PRIV_MACRO_INFO;
     tablet_id_           = persist_param.tablet_id_;
-    tablet_transfer_epoch_ = persist_param.private_transfer_epoch_;
+    tablet_private_transfer_epoch_ = persist_param.private_transfer_epoch_;
     write_callback_      = persist_param.ddl_redo_callback_;
   }
   return ret;
@@ -208,7 +208,7 @@ void ObLinkedMacroInfoWriteParam::reset()
   type_ = ObLinkedMacroBlockWriteType::LMI_MAX_TYPE;
   ls_id_.reset();
   tablet_id_.reset();
-  tablet_transfer_epoch_ = -1;
+  tablet_private_transfer_epoch_ = -1;
   start_macro_seq_  = -1;
   reorganization_scn_ = -1;
   op_id_ = 0;

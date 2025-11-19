@@ -2629,9 +2629,9 @@ int ObTabletBackfillMergeCtx::get_merge_tables(ObGetMergeTablesResult &get_merge
       //snapshot_info is only for calculate multi version start, backfill will not change mulit version start
       get_merge_table_result.snapshot_info_.snapshot_type_ = ObStorageSnapshotInfo::SNAPSHOT_MULTI_VERSION_START_ON_TABLET;
       get_merge_table_result.snapshot_info_.snapshot_ = get_tablet()->get_multi_version_start();
-      //src_tablet_transfer_epoch, should not be used to write block;
+      //src_tablet_private_transfer_epoch, should not be used to write block;
       if (OB_FAIL(get_tablet()->get_private_transfer_epoch(get_merge_table_result.private_transfer_epoch_))) {
-        LOG_WARN("Fail to get transfer epoch", K(ret), "tablet_meta", get_tablet()->get_tablet_meta());
+        LOG_WARN("Fail to get private transfer epoch", K(ret), "tablet_meta", get_tablet()->get_tablet_meta());
       } else if (OB_FAIL(get_tablet()->get_recycle_version(get_merge_table_result.version_range_.multi_version_start_,
                                                     get_merge_table_result.version_range_.base_version_))) {
         LOG_WARN("Fail to get table store recycle version", K(ret), K_(get_merge_table_result.version_range), KPC(get_tablet()));

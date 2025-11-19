@@ -114,15 +114,13 @@ int ObPxRepartTransmitOp::do_transmit()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("repartition table id should be set for repart transmit op", K(ret));
   } else {
-    ObSchemaGetterGuard schema_guard;
     const ObTableSchema *table_schema = NULL;
-    if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(
+    if (OB_ISNULL(ctx_.get_sql_ctx()) || OB_ISNULL(ctx_.get_sql_ctx()->schema_guard_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sql ctx or schema guard is null", K(ret), KP(ctx_.get_sql_ctx()));
+    } else if (OB_FAIL(ctx_.get_sql_ctx()->schema_guard_->get_table_schema(
                 ctx_.get_my_session()->get_effective_tenant_id(),
-                schema_guard))) {
-      LOG_WARN("faile to get schema guard", K(ret));
-    } else if (OB_FAIL(schema_guard.get_table_schema(
-               ctx_.get_my_session()->get_effective_tenant_id(),
-               MY_SPEC.repartition_ref_table_id_, table_schema))) {
+                MY_SPEC.repartition_ref_table_id_, table_schema))) {
       LOG_WARN("faile to get table schema", K(ret), K(MY_SPEC.repartition_ref_table_id_));
     } else if (OB_ISNULL(table_schema)) {
       ret = OB_SCHEMA_ERROR;

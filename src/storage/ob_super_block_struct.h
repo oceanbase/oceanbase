@@ -317,7 +317,7 @@ public:
     int64_t union_id_;
     // for PRIVATE_TABLET_META
     struct {
-      int64_t meta_transfer_seq_  : blocksstable::MacroBlockId::SF_BIT_TRANSFER_SEQ;
+      int64_t meta_transfer_seq_  : blocksstable::MacroBlockId::SF_BIT_PRIVATE_TRANSFER_EPOCH;
       uint64_t meta_version_id_   : blocksstable::MacroBlockId::SF_BIT_META_VERSION_ID;
     };
   };
@@ -360,7 +360,7 @@ public:
       status_(ObPendingFreeTabletStatus::MAX),
       free_time_(0),
       gc_type_(GCTabletType::DropTablet),
-      tablet_transfer_seq_(share::OB_INVALID_TRANSFER_SEQ),
+      tablet_private_transfer_epoch_(share::OB_INVALID_TRANSFER_SEQ),
       last_gc_version_(-1)
   {}
   ObPendingFreeTabletItem(
@@ -369,11 +369,11 @@ public:
     const ObPendingFreeTabletStatus status,
     const int64_t free_time,
     const GCTabletType gc_type,
-    const int32_t tablet_transfer_epoch,
+    const int32_t tablet_private_transfer_epoch,
     const int64_t last_gc_version)
     : tablet_id_(tablet_id), tablet_meta_version_(tablet_meta_version),
       status_(status), free_time_(free_time),
-      gc_type_(gc_type), tablet_transfer_seq_(tablet_transfer_epoch),
+      gc_type_(gc_type), tablet_private_transfer_epoch_(tablet_private_transfer_epoch),
       last_gc_version_(last_gc_version)
   {}
 
@@ -381,18 +381,18 @@ public:
   {
     return tablet_id_.is_valid() && tablet_meta_version_ >= 0 &&
         ObPendingFreeTabletStatus::MAX != status_ &&
-        tablet_transfer_seq_ != share::OB_INVALID_TRANSFER_SEQ &&
+        tablet_private_transfer_epoch_!= share::OB_INVALID_TRANSFER_SEQ &&
         last_gc_version_ >= -1 && last_gc_version_ < tablet_meta_version_;
   }
   bool operator == (const ObPendingFreeTabletItem &other) const {
     return tablet_id_ == other.tablet_id_ &&
            tablet_meta_version_ == other.tablet_meta_version_ &&
            status_ == other.status_ &&
-           tablet_transfer_seq_ == other.tablet_transfer_seq_ &&
+           tablet_private_transfer_epoch_== other.tablet_private_transfer_epoch_&&
            last_gc_version_ == other.last_gc_version_;
   }
 
-  TO_STRING_KV(K_(tablet_id), K_(tablet_meta_version), K_(status), K_(gc_type), K_(tablet_transfer_seq), K_(last_gc_version));
+  TO_STRING_KV(K_(tablet_id), K_(tablet_meta_version), K_(status), K_(gc_type), K_(tablet_private_transfer_epoch), K_(last_gc_version));
   OB_UNIS_VERSION(1);
 
 public:
@@ -402,7 +402,7 @@ public:
   // pending_free_items in pending_free_tablet_arr are incremented according to free time
   int64_t free_time_;
   GCTabletType gc_type_;
-  int64_t tablet_transfer_seq_; // FARM COMPAT WHITELIST FOR tablet_transfer_seq_: renamed
+  int64_t tablet_private_transfer_epoch_; // FARM COMPAT WHITELIST FOR tablet_transfer_seq_: renamed
   int64_t last_gc_version_;
 };
 

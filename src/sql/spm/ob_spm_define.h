@@ -25,7 +25,8 @@ namespace oceanbase
 {
 namespace sql
 {
-class ObSqlPlanSet;
+class ObPlanSet;
+class ObEvolutionPlan;
 struct ObSpmCacheCtx;
 
 enum PlanBaselineFlag
@@ -268,7 +269,8 @@ public:
     : ObILibCacheNode(lib_cache, mem_context),
       is_inited_(false),
       baseline_key_(),
-      ref_lock_(common::ObLatchIds::SPM_SET_LOCK)
+      ref_lock_(common::ObLatchIds::SPM_SET_LOCK),
+      last_sync_time_(-1)
   {
   }
   virtual ~ObSpmSet()
@@ -311,6 +313,8 @@ private:
   ObBaselineKey baseline_key_; //used for manager key memory
   common::ObSEArray<ObPlanBaselineItem*, 4> baseline_array_;
   common::SpinRWLock ref_lock_;
+  int64_t last_sync_time_;
+  const static int64_t REFRESH_INTERVAL = 15L * 60L * 1000L * 1000L; // 15 min
 };
 
 class ObEvoPlanGuard {
@@ -347,7 +351,10 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
       spm_plan_timeout_(0),
       flags_(0),
       spm_mode_(SPM_MODE_DISABLE),
-      evo_plan_guard_()
+      evo_plan_guard_(),
+      sync_time_(-1),
+      evo_plan_set_(nullptr),
+      evolution_plan_(nullptr)
   {
     cache_node_empty_ = true;
   }
@@ -410,12 +417,17 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
       uint64_t evo_plan_added_:                 1;
       uint64_t finish_start_evolution_:         1;
       uint64_t has_concurrent_limited_:         1;
-      uint64_t reserved_:                      54;
+      uint64_t check_need_sync_:                1;
+      uint64_t set_need_sync_:                  1;
+      uint64_t reserved_:                      52;
     };
   };
   int64_t spm_mode_;
   ObEvoPlanGuard evo_plan_guard_;
   common::ObFixedArray<uint64_t, common::ObIAllocator> baseline_plan_hash_array_;
+  int64_t sync_time_;
+  ObPlanSet *evo_plan_set_;
+  ObEvolutionPlan *evolution_plan_;
 };
 
 struct EvolutionTaskResult
@@ -437,7 +449,10 @@ public:
   ~EvolutionTaskResult() {}
   int deep_copy(common::ObIAllocator& allocator, const EvolutionTaskResult& other);
   bool need_record_evolution_result() const { return !update_baseline_outline_; }
-  inline bool need_update_evo_plan_baseline() const { return (0 == type_ && accept_new_plan_) || type_ >= 3; }
+  inline bool need_update_evo_plan_baseline() const
+  {
+    return (0 == type_ && evo_plan_is_baseline_ && accept_new_plan_) || (type_ >= 3 && type_ <= 5);
+  }
   inline bool is_valid()  const { return old_plan_hash_array_.count() == old_stat_array_.count(); }
   inline bool is_self_evolution()  const { return  old_plan_hash_array_.empty(); }
   TO_STRING_KV(K_(key), K_(old_plan_hash_array), K_(old_stat_array), K_(new_plan_hash),

@@ -118,7 +118,7 @@ int ObLinkedMacroBlockWriter::write_block(
         break;
       }
       case WriteType::PRIV_MACRO_INFO: {
-        opt.set_private_meta_macro_object_opt(macro_info_param_.tablet_id_.id(), macro_info_param_.tablet_transfer_epoch_);
+        opt.set_private_meta_macro_object_opt(macro_info_param_.tablet_id_.id(), macro_info_param_.tablet_private_transfer_epoch_);
         break;
       }
       default: {

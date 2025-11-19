@@ -53,7 +53,7 @@ int ObAIFuncExprInfo::init(ObIAllocator &allocator, const ObString &model_id, sh
   } else if (OB_ISNULL(ai_model_schema)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ai model schema is null", KR(ret), K(MTL_ID()), K(model_id));
-    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai model not found, please check if the model exists");
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_function, ai model not found, please check if the model exists");
   } else {
     OZ(ob_write_string(allocator, ai_model_schema->get_name(), name_));
     OZ(ob_write_string(allocator, ai_model_schema->get_model_name(), model_));

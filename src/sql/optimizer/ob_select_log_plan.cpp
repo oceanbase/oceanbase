@@ -48,8 +48,10 @@ int ObSelectLogPlan::candi_allocate_group_by()
 {
   int ret = OB_SUCCESS;
   bool is_unique = false;
+  bool is_const = false;
   bool having_has_rownum = false;
   const ObSelectStmt *stmt = NULL;
+  ObQueryCtx* query_ctx = NULL;
   ObLogicalOperator *best_plan = NULL;
   ObSEArray<ObRawExpr*, 4> reduce_exprs;
   ObSEArray<ObRawExpr*, 4> group_by_exprs;
@@ -60,9 +62,9 @@ int ObSelectLogPlan::candi_allocate_group_by()
   ObSEArray<ObRawExpr*, 8> having_normal_exprs;
   ObSEArray<ObRawExpr*, 8> candi_subquery_exprs;
   ObSEArray<CandidatePlan, 4> groupby_plans;
-  if (OB_ISNULL(stmt = get_stmt())) {
+  if (OB_ISNULL(stmt = get_stmt()) || OB_ISNULL(query_ctx = get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
+    LOG_WARN("get unexpected null", K(ret), K(stmt), K(query_ctx));
   } else if (OB_FAIL(append(candi_subquery_exprs, stmt->get_group_exprs())) ||
              OB_FAIL(append(candi_subquery_exprs, stmt->get_rollup_exprs())) ||
              OB_FAIL(append(candi_subquery_exprs, stmt->get_aggr_items()))) {
@@ -148,6 +150,46 @@ int ObSelectLogPlan::candi_allocate_group_by()
     if (!having_normal_exprs.empty() && OB_FAIL(candi_allocate_filter(having_normal_exprs))) {
       LOG_WARN("failed to allocate filter", K(ret));
     } else { /*do nothing*/ }
+  } else if (query_ctx->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP5, COMPAT_VERSION_4_4_0,
+                                                 COMPAT_VERSION_4_4_2)
+             && OB_FAIL(ObOptimizerUtil::is_const_exprs(group_by_exprs,
+                                                        best_plan->get_output_equal_sets(),
+                                                        best_plan->get_output_const_exprs(),
+                                                        get_onetime_query_refs(),
+                                                        is_const))) {
+    LOG_WARN("failed to check whether group by exprs are const", K(ret));
+  } else if (is_const && 0 == stmt->get_aggr_item_size()) {
+    // if all the group by exprs are const and aggr item is empty, we add limit operator instead of group by operator
+    ObConstRawExpr *limit_expr = NULL;
+    if (OB_FAIL(ObRawExprUtils::build_const_int_expr(get_optimizer_context().get_expr_factory(),
+                                                     ObIntType,
+                                                     1,
+                                                     limit_expr))) {
+      LOG_WARN("failed to create const expr", K(ret));
+    } else if (OB_FAIL(candi_allocate_limit(limit_expr))) {
+      LOG_WARN("failed to allocate limit operator", K(ret));
+    } else if (!having_normal_exprs.empty() || !having_subquery_exprs.empty()) {
+      // Having exprs should execute after limit 1, we need a group by op to put having exprs.
+      // We can put the having exprs on the limit op, but if the limit is push into table scan,
+      // candi_allocate_filter() will put filter on the table scan, which will cause the having
+      // exprs execute before the limit 1.
+      if (OB_FAIL(candi_allocate_normal_group_by(reduce_exprs,
+                                                 group_by_exprs,
+                                                 group_by_directions,
+                                                 having_normal_exprs,
+                                                 stmt->get_aggr_items(),
+                                                 stmt->is_from_pivot(),
+                                                 candidates_.candidate_plans_,
+                                                 groupby_plans))) {
+        LOG_WARN("failed to allocate normal group by", K(ret));
+      } else {
+        OPT_TRACE("group by exprs are const and aggr item is empty, add limit 1");
+        LOG_TRACE("group by exprs are const and aggr item is empty, add limit 1", K(group_by_exprs), K(stmt->get_aggr_items()));
+      }
+    } else {
+      OPT_TRACE("group by exprs are const and aggr item is empty, need limit op instead of group by op");
+      LOG_TRACE("group by exprs are const and aggr item is empty, need limit op instead of group by op", K(group_by_exprs), K(stmt->get_aggr_items()));
+    }
   } else {
     if (OB_FAIL(candi_allocate_normal_group_by(reduce_exprs,
                                                group_by_exprs,
@@ -6672,7 +6714,6 @@ int ObSelectLogPlan::create_one_window_function(CandidatePlan &candidate_plan,
     const ObIArray<ObWinFunRawExpr*> &win_func_exprs = win_func_helper.ordered_win_func_exprs_;
     const ObIArray<OrderItem> &sort_keys = win_func_helper.sort_keys_;
     const int64_t part_cnt = win_func_helper.part_cnt_;
-    bool is_local_order = false;
     bool need_normal_sort = !win_func_helper.force_hash_sort_;
     bool need_hash_sort = need_sort && part_cnt > 0 && prefix_pos <= 0 && !win_func_helper.force_normal_sort_;
     bool use_topn = need_normal_sort &&
@@ -7814,7 +7855,6 @@ int ObSelectLogPlan::create_hash_local_dist_win_func(ObLogicalOperator *top,
   ObExchangeInfo exch_info;
   exch_info.slave_mapping_type_ = SlaveMappingType::SM_PWJ_HASH_HASH;
   const int64_t part_cnt = win_func_helper.part_cnt_;
-  bool is_local_order = false;
   ObRawExpr *topn_const = NULL;
   if (OB_ISNULL(top)) {
     ret = OB_ERR_UNEXPECTED;
@@ -7827,8 +7867,6 @@ int ObSelectLogPlan::create_hash_local_dist_win_func(ObLogicalOperator *top,
     LOG_TRACE("begin to create hash local dist window function", K(top->is_distributed()),
                K(need_sort), K(part_cnt),
                K(win_func_helper.force_hash_sort_), K(win_func_helper.force_normal_sort_));
-    is_local_order = top->get_is_local_order();
-    is_local_order &= top->is_single() || (top->is_distributed() && top->is_exchange_allocated());
     if (OB_FAIL(create_dist_win_func_no_pushdown(WinDistAlgo::WIN_DIST_HASH_LOCAL,
                                                  top,
                                                  win_func_helper,
@@ -7836,7 +7874,7 @@ int ObSelectLogPlan::create_hash_local_dist_win_func(ObLogicalOperator *top,
                                                  false, /* single_part_parallel*/
                                                  false, /* is_partition_wise*/
                                                  prefix_pos ,
-                                                 is_local_order,
+                                                 top->get_is_local_order(),
                                                  &exch_info,
                                                  all_plans))) {
       LOG_WARN("failed to create plan for hash local dist window", K(ret));

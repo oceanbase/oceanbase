@@ -509,6 +509,7 @@ int ObDDLTabletScheduler::calculate_candidate_tablets(const uint64_t left_space_
       int64_t subpart_index = -1;
       int64_t pre_data_size = 0;
       int64_t pre_data_row_cnt = 0;
+      int64_t pre_vec_construct_mem = 0;  // accumulated vector index construct memory
       int64_t tablet_data_size = 0;
       int64_t tablet_data_row_cnt = 0;
       uint64_t task_max_data_size = 0;
@@ -543,9 +544,17 @@ int ObDDLTabletScheduler::calculate_candidate_tablets(const uint64_t left_space_
           }
           if (OB_SUCC(ret)) {
             bool satisfied_built_vec_index_if_need = true;
+            uint64_t current_vec_construct_mem = 0;  // current vector index construct memory
             if (index_schema->is_vec_hnsw_index() && !ObVectorIndexUtil::check_vector_index_memory(schema_guard, *index_schema, leader_addr, tenant_id_, tablet_data_row_cnt + pre_data_row_cnt)) {
               satisfied_built_vec_index_if_need = false;
-            } else if (index_schema->is_vec_ivf_index() && !ObVectorIndexUtil::check_ivf_vector_index_memory(schema_guard, tenant_id_, *index_schema, tablet_data_row_cnt + pre_data_row_cnt)) {
+            } else if (index_schema->is_vec_ivf_index() && !ObVectorIndexUtil::check_ivf_vector_index_memory(
+                                                            schema_guard,
+                                                            *index_schema,
+                                                            leader_addr,
+                                                            tenant_id_,
+                                                            tablet_data_row_cnt,
+                                                            pre_vec_construct_mem,
+                                                            current_vec_construct_mem)) {
               satisfied_built_vec_index_if_need = false;
             }
             if (pre_data_size == 0 || ((tablet_data_row_cnt + pre_data_row_cnt) <= task_max_data_row_cnt && (tablet_data_size + pre_data_size) <= task_max_data_size && satisfied_built_vec_index_if_need)) {
@@ -554,6 +563,7 @@ int ObDDLTabletScheduler::calculate_candidate_tablets(const uint64_t left_space_
               } else {
                 pre_data_size = pre_data_size + tablet_data_size;
                 pre_data_row_cnt = pre_data_row_cnt + tablet_data_row_cnt;
+                pre_vec_construct_mem = pre_vec_construct_mem + current_vec_construct_mem;  // accumulated vector index construct memory
               }
               if (OB_SUCC(ret)) {
                 int64_t has_scheduled_times = 0;

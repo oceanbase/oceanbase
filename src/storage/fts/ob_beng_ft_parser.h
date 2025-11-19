@@ -51,13 +51,13 @@ public:
 private:
   int segment(
       const common::ObDatum &doc,
-      share::ObITokenStream *&token_stream);
+      share::ObIFTTokenStream *&token_stream);
 private:
   common::ObIAllocator &allocator_;
   share::ObTextAnalysisCtx analysis_ctx_;
   share::ObEnglishTextAnalyzer english_analyzer_;
   common::ObDatum doc_;
-  share::ObITokenStream *token_stream_;
+  share::ObIFTTokenStream *token_stream_;
   bool is_inited_;
 
   DISALLOW_COPY_AND_ASSIGN(ObBEngFTParser);

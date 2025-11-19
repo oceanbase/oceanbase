@@ -25,7 +25,8 @@ namespace sql
 OB_SERIALIZE_MEMBER((ObPxDistTransmitOpInput, ObPxTransmitOpInput));
 
 OB_SERIALIZE_MEMBER((ObPxDistTransmitSpec, ObPxTransmitSpec), dist_exprs_,
-    dist_hash_funcs_, sort_cmp_funs_, sort_collations_, calc_tablet_id_expr_, popular_values_hash_);
+    dist_hash_funcs_, sort_cmp_funs_, sort_collations_, calc_tablet_id_expr_, popular_values_hash_,
+    dup_expr_list_, encoded_dup_expr_, aggr_code_expr_, max_aggr_code_);
 
 int ObPxDistTransmitOp::inner_open()
 {
@@ -466,17 +467,16 @@ int ObPxDistTransmitOp::do_sm_broadcast_dist()
 {
   int ret = OB_SUCCESS;
   ObPxDistTransmitOpInput *trans_input = NULL;
-  ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = NULL;
   uint64_t repart_ref_table_id = MY_SPEC.repartition_ref_table_id_;
   uint64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
   if (OB_ISNULL(trans_input = static_cast<ObPxDistTransmitOpInput *>(get_input()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("input is null", K(ret));
-  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(
-      tenant_id, schema_guard))) {
-    LOG_WARN("faile to get schema guard", K(ret));
-  } else if (OB_FAIL(schema_guard.get_table_schema(
+  } else if (OB_ISNULL(ctx_.get_sql_ctx()) || OB_ISNULL(ctx_.get_sql_ctx()->schema_guard_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql ctx or schema guard is null", K(ret), KP(ctx_.get_sql_ctx()));
+  } else if (OB_FAIL(ctx_.get_sql_ctx()->schema_guard_->get_table_schema(
       tenant_id, repart_ref_table_id, table_schema))) {
     LOG_WARN("faile to get table schema", K(ret), K(repart_ref_table_id));
   } else if (OB_ISNULL(table_schema)) {
@@ -509,18 +509,17 @@ int ObPxDistTransmitOp::do_sm_pkey_hash_dist()
   int ret = OB_SUCCESS;
   // TODO bin.lb: to be implement
   ObPxDistTransmitOpInput *trans_input = NULL;
-  ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = NULL;
   uint64_t repart_ref_table_id = MY_SPEC.repartition_ref_table_id_;
   if (OB_ISNULL(trans_input = static_cast<ObPxDistTransmitOpInput *>(get_input()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("input is null", K(ret));
-  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(
-      ctx_.get_my_session()->get_effective_tenant_id(), schema_guard))) {
-    LOG_WARN("faile to get schema guard", K(ret));
-  } else if (OB_FAIL(schema_guard.get_table_schema(
-    ctx_.get_my_session()->get_effective_tenant_id(),
-    repart_ref_table_id, table_schema))) {
+  } else if (OB_ISNULL(ctx_.get_sql_ctx()) || OB_ISNULL(ctx_.get_sql_ctx()->schema_guard_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql ctx or schema guard is null", K(ret), KP(ctx_.get_sql_ctx()));
+  } else if (OB_FAIL(ctx_.get_sql_ctx()->schema_guard_->get_table_schema(
+      ctx_.get_my_session()->get_effective_tenant_id(),
+      repart_ref_table_id, table_schema))) {
     LOG_WARN("faile to get table schema", K(ret), K(repart_ref_table_id));
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_SCHEMA_ERROR;

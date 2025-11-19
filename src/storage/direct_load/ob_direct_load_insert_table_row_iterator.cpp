@@ -16,7 +16,6 @@
 #include "sql/engine/cmd/ob_load_data_utils.h"
 #include "storage/direct_load/ob_direct_load_datum_row.h"
 #include "storage/direct_load/ob_direct_load_dml_row_handler.h"
-#include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
 #include "storage/direct_load/ob_direct_load_row_iterator.h"
 
 namespace oceanbase
@@ -37,7 +36,7 @@ ObDirectLoadInsertTableRowIterator::ObDirectLoadInsertTableRowIterator()
     rowkey_column_count_(0),
     column_count_(0),
     pos_(0),
-    row_count_(0),
+    insert_table_result_(),
     is_inited_(false)
 {
 }
@@ -121,7 +120,11 @@ int ObDirectLoadInsertTableRowIterator::get_next_row(const bool skip_lob,
       LOG_WARN("fail to handle row", KR(ret));
     } else {
       result_row = datum_row;
-      ++row_count_;
+      if (datum_row->row_flag_.is_delete()) {
+        insert_table_result_.delete_row_count_++;
+      } else {
+        insert_table_result_.insert_row_count_++;
+      }
       ATOMIC_AAF(&job_stat_->store_.merge_stage_write_rows_, 1);
     }
   }
@@ -201,7 +204,7 @@ int ObDirectLoadInsertTableRowIterator::close()
   } else if (OB_FAIL(row_handler_.close())) {
     LOG_WARN("fail to close row handler", KR(ret));
   } else {
-    insert_tablet_ctx_->inc_row_count(row_count_);
+    insert_tablet_ctx_->update_insert_table_result(insert_table_result_);
   }
   return ret;
 }

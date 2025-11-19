@@ -38,7 +38,7 @@ devdeps-s3-cpp-sdk-1.11.156-102023122011.el8.aarch64.rpm
 devdeps-protobuf-c-1.5.1-100000052025032810.el8.aarch64.rpm
 devdeps-roaringbitmap-croaring-3.0.0-42024042816.el8.aarch64.rpm
 devdeps-apache-arrow-20.0.0-42025082815.el8.aarch64.rpm
-devdeps-vsag-1.1.0-862025102814.el8.aarch64.rpm
+devdeps-vsag-1.1.0-882025110711.el8.aarch64.rpm
 devdeps-apache-orc-2.1.1-82025081116.el8.aarch64.rpm
 devdeps-fast-float-6.1.3-42024112122.el8.aarch64.rpm
 devdeps-hdfs-sdk-3.3.6-112024123116.el8.aarch64.rpm
@@ -64,8 +64,8 @@ obdevtools-llvm-17.0.6-72025060300.el8.aarch64.rpm
 devdeps-oblogmsg-1.1-52024052811.el8.aarch64.rpm
 devdeps-rocksdb-6.22.1-32024123015.el8.aarch64.rpm
 obstack-2.0.4-172024070513.el8.aarch64.rpm
-obshell-4.3.1.0-12025070719.el8.aarch64.rpm target=community
-#obshell-4.3.2.0-52025092411.el8.aarch64.rpm target=community
+obshell-4.3.2.0-52025092411.el8.aarch64.rpm target=community
+#obshell-4.3.2.1-12025101110.el8.aarch64.rpm target=community
 
 [test-utils]
 ob-deploy-1.6.0-41.el8.aarch64.rpm target=community

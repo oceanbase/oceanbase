@@ -605,6 +605,7 @@ int ObIndexBuilder::do_create_global_index(
     const uint64_t tenant_id = table_schema.get_tenant_id();
     bool create_index_on_empty_table_opt = false;
     const ObString &database_name = arg.database_name_;
+    const ObSysVariableSchema *sys_var_schema = nullptr;
     if (database_name.empty()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("database name is empty", K(ret), K(database_name));
@@ -622,8 +623,14 @@ int ObIndexBuilder::do_create_global_index(
     } else if (!new_arg.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to copy create index arg", K(ret));
+    } else if (OB_FAIL(schema_guard.get_sys_variable_schema(tenant_id, sys_var_schema))) {
+      LOG_WARN("fail to get sysvar schema", KR(ret), K(tenant_id));
+    } else if (OB_ISNULL(sys_var_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sys_var_schema is null", KR(ret));
     } else if (OB_FAIL(ObCreateIndexOnEmptyTableHelper::check_create_index_on_empty_table_opt(ddl_service_,
                                                                                               trans,
+                                                                                              *sys_var_schema,
                                                                                               database_name,
                                                                                               table_schema,
                                                                                               new_arg.index_type_,
@@ -1415,6 +1422,7 @@ int ObIndexBuilder::do_create_local_index(
     ObDocIDType type = ObDocIDType::INVALID;
     bool create_index_on_empty_table_opt = false;
     const ObString &database_name = create_index_arg.database_name_;
+    const ObSysVariableSchema *sys_var_schema = nullptr;
     if (database_name.empty()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("database name is empty", K(ret), K(database_name));
@@ -1440,8 +1448,14 @@ int ObIndexBuilder::do_create_local_index(
     } else if (!my_arg.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to copy create index arg", K(ret));
+    } else if (OB_FAIL(schema_guard.get_sys_variable_schema(tenant_id, sys_var_schema))) {
+      LOG_WARN("fail to get sysvar schema", KR(ret), K(tenant_id));
+    } else if (OB_ISNULL(sys_var_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sys_var_schema is null", KR(ret));
     } else if (OB_FAIL(ObCreateIndexOnEmptyTableHelper::check_create_index_on_empty_table_opt(ddl_service_,
                                                                                               trans,
+                                                                                              *sys_var_schema,
                                                                                               database_name,
                                                                                               table_schema,
                                                                                               my_arg.index_type_,

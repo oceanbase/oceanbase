@@ -97,7 +97,7 @@ bool MacroBlockId::is_valid() const
   } else if (is_valid && id_mode_ == (uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE) {
     is_valid &= MACRO_BLOCK_ID_VERSION_V2 == version_ && id_mode_ < (uint64_t)ObMacroBlockIdMode::ID_MODE_MAX;
     if (is_private_data_or_meta()) {
-      is_valid &= meta_transfer_epoch() != -1 &&  meta_version_id() != ObStorageObjectOpt::INVALID_TABLET_VERSION;
+      is_valid &= meta_private_transfer_epoch() != -1 &&  meta_version_id() != ObStorageObjectOpt::INVALID_TABLET_VERSION;
             //                   -1                       : INVLAID_TABLET_TRANSFER_SEQ;
             // ObStorageObjectOpt::INVALID_TABLET_VERSION : macro_seq / tablet_meta_version
     } else if (is_shared_data_or_meta()) {
@@ -128,7 +128,7 @@ int64_t MacroBlockId::to_string(char *buf, const int64_t buf_len) const
         "[4th=(trans_epoch=%lu,sec_id=%lu)]}",
         (uint64_t) second_id_,
         (uint64_t) third_id_,
-        (int64_t) macro_transfer_epoch_,
+        (int64_t) macro_private_transfer_epoch_,
         (uint64_t) tenant_seq_);
     } else if (is_shared_data_or_meta()) {
       databuff_printf(buf, buf_len, pos,

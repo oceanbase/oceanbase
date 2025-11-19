@@ -23,7 +23,6 @@ namespace oceanbase
 
 namespace common
 {
-ObClusterEnableObdalConfigBase *cluster_enable_obdal_config = nullptr;
 const char *OB_STORAGE_CHECKSUM_TYPE_STR[] = {CHECKSUM_TYPE_NO_CHECKSUM, CHECKSUM_TYPE_MD5, CHECKSUM_TYPE_CRC32};
 
 const char *get_storage_checksum_type_str(const ObStorageChecksumType &type)
@@ -58,11 +57,11 @@ int get_storage_checksum_type(const char *checksum_type_str, ObStorageChecksumTy
 
 bool is_use_obdal()
 {
-  if (OB_NOT_NULL(cluster_enable_obdal_config)) {
-    return cluster_enable_obdal_config->is_enable_obdal();
-  } else {
-    return false;
+  bool ret = false;
+  if (OB_NOT_NULL(ObObjectStorageInfo::cluster_state_mgr_)) {
+    ret = ObObjectStorageInfo::cluster_state_mgr_->is_enable_obdal();
   }
+  return ret;
 }
 
 //***********************ObSTSToken***************************

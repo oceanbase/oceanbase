@@ -356,11 +356,13 @@ uint64_t HnswIndexHandler::estimate_memory(const uint64_t row_count, const bool 
   if (IPIVF_TYPE == index_type_) {
     // TODO(ningxin.ning): use vsag EstimateMemory
     size += 2 * sizeof(int64_t) * row_count;
-    // nonzero dim = 100
-    size += 100 * row_count * sizeof(float) * 2;
+    const uint64_t NON_ZERO_NUM = 120;
+    size += NON_ZERO_NUM * row_count * sizeof(float) * 2;
     if (use_reorder_) {
       size *= 2;
     }
+    const uint64_t MAX_DIM_LIMIT = 500000;
+    size += sizeof(std::vector<float>) * 2 * MAX_DIM_LIMIT;
   } else {
     size = index_->EstimateMemory(row_count);
   }

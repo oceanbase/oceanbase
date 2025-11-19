@@ -919,6 +919,7 @@ private:
   bool is_sync_index();
 
   int init_sparse_vector_type();
+  void free_sparse_vector_type_mem();
 private:
   const double_t VEC_INDEX_OPTIMIZE_RATIO = 0.2;
   ObAdapterCreateType create_type_;

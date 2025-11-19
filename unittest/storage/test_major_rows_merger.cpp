@@ -71,6 +71,7 @@ public:
   void prepare_merge_context(const ObMergeType &merge_type,
                              const bool is_full_merge,
                              const ObVersionRange &trans_version_range,
+                             const bool is_schema_changed_in_medium_info,
                              ObTabletMergeCtx &merge_context);
   ObTabletMergeExecuteDag merge_dag_;
 };
@@ -115,10 +116,15 @@ void ObMajorRowsMergerTest::TearDown()
 void ObMajorRowsMergerTest::prepare_merge_context(const ObMergeType &merge_type,
                                                   const bool is_full_merge,
                                                   const ObVersionRange &trans_version_range,
+                                                  const bool is_schema_changed_in_medium_info,
                                                   ObTabletMergeCtx &merge_context)
 {
   merge_context.merge_dag_ = &merge_dag_;
   TestMergeBasic::prepare_merge_context(merge_type, is_full_merge, trans_version_range, merge_context);
+  if (is_schema_changed_in_medium_info && merge_context.static_param_.merge_sstable_status_array_.count() > 0) {
+    merge_context.static_param_.merge_sstable_status_array_.at(0).is_schema_changed_ = true;
+  }
+
   ASSERT_EQ(OB_SUCCESS, merge_context.cal_merge_param());
   ASSERT_EQ(OB_SUCCESS, merge_context.init_parallel_merge_ctx());
   ASSERT_EQ(OB_SUCCESS, merge_context.static_param_.init_static_info(merge_context.tablet_handle_));
@@ -195,7 +201,7 @@ TEST_F(ObMajorRowsMergerTest, test_compare_func)
   trans_version_range.multi_version_start_ = 1;
   trans_version_range.base_version_ = 1;
 
-  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context);
+  prepare_merge_context(MINOR_MERGE, false, trans_version_range, false, merge_context);
   ObMergeParameter merge_param(merge_context.static_param_);
   OK(merge_param.init(merge_context, 0, &allocator_));
   ObPartitionMergeIter *iter_0 = nullptr;
@@ -279,11 +285,11 @@ TEST_F(ObMajorRowsMergerTest, single)
   scn_range.start_scn_.set_min();
   scn_range.end_scn_.convert_for_tx(10);
   prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version);
+
   reset_writer(snapshot_version, MAJOR_MERGE);
   prepare_one_macro(micro_data, 1);
   prepare_data_end(handle1, ObITable::MAJOR_SSTABLE);
   merge_context.static_param_.tables_handle_.add_table(handle1);
-  STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
   const char *micro_data2[2];
@@ -304,14 +310,13 @@ TEST_F(ObMajorRowsMergerTest, single)
   prepare_one_macro(&micro_data2[1], 1);
   prepare_data_end(handle2);
   merge_context.static_param_.tables_handle_.add_table(handle2);
-  STORAGE_LOG(INFO, "finish prepare sstable2");
 
   ObVersionRange trans_version_range;
   trans_version_range.snapshot_version_ = 100;
   trans_version_range.multi_version_start_ = 1;
   trans_version_range.base_version_ = 1;
 
-  prepare_merge_context(MAJOR_MERGE, false, trans_version_range, merge_context);
+  prepare_merge_context(MAJOR_MERGE, false, trans_version_range, true, merge_context);
   ObMergeParameter merge_param(merge_context.static_param_);
   OK(merge_param.init(merge_context, 0, &allocator_));
   ObPartitionMergeIter *iter_0 = nullptr;
@@ -425,7 +430,7 @@ TEST_F(ObMajorRowsMergerTest, two_iters)
   trans_version_range.multi_version_start_ = 1;
   trans_version_range.base_version_ = 1;
 
-  prepare_merge_context(MAJOR_MERGE, false, trans_version_range, merge_context);
+  prepare_merge_context(MAJOR_MERGE, false, trans_version_range, true, merge_context);
   ObMergeParameter merge_param(merge_context.static_param_);
   OK(merge_param.init(merge_context, 0, &allocator_));
   ObPartitionMergeIter *iter_0 = nullptr;
@@ -572,7 +577,7 @@ TEST_F(ObMajorRowsMergerTest, multi_majors)
   trans_version_range.multi_version_start_ = 1;
   trans_version_range.base_version_ = 1;
 
-  prepare_merge_context(MAJOR_MERGE, false, trans_version_range, merge_context);
+  prepare_merge_context(MAJOR_MERGE, false, trans_version_range, true, merge_context);
   ObMergeParameter merge_param(merge_context.static_param_);
   OK(merge_param.init(merge_context, 0, &allocator_));
 

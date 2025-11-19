@@ -1531,6 +1531,8 @@ int ObTransService::rollback_to_explicit_savepoint(ObTxDesc &tx,
       }
     }
   }
+  tx.state_change_flags_.EXTRA_CHANGED_ = true;
+  TRANS_LOG(TRACE, "normal savepoint", K(ret), K(savepoint), K(sp_scn), K(tx));
   int64_t elapsed_us = ObTimeUtility::current_time() - start_ts;
   ObTransTraceLog &tlog = tx.get_tlog();
   REC_TRANS_TRACE_EXT(&tlog, rollback_explicit_savepoint, OB_Y(ret),
@@ -1579,6 +1581,7 @@ int ObTransService::release_explicit_savepoint(ObTxDesc &tx, const ObString &sav
       TRANS_LOG(TRACE, "release savepoint", K(savepoint), K(sp_id), K(session_id), K(tx));
     }
   }
+  tx.state_change_flags_.EXTRA_CHANGED_ = true;
   ObTransTraceLog &tlog = tx.get_tlog();
   REC_TRANS_TRACE_EXT(&tlog, release_explicit_savepoint, OB_Y(ret),
                       OB_ID(savepoint), savepoint,

@@ -177,7 +177,7 @@ TEST_F(ObOpenAIUtilsTest, test_complete_parse_output_empty)
     ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, response, ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_base));
     ObJsonObject *http_response = static_cast<ObJsonObject *>(j_base);
     ObIJsonBase *result = nullptr;
-    ASSERT_EQ(OB_ERR_UNEXPECTED, completion.parse_output(allocator, http_response, result));
+    ASSERT_EQ(OB_INVALID_DATA, completion.parse_output(allocator, http_response, result));
 }
 
 TEST_F(ObOpenAIUtilsTest, test_embedding_get_header)
@@ -279,7 +279,7 @@ TEST_F(ObOpenAIUtilsTest, test_embedding_parse_output_empty)
     ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, response, ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_base));
     ObJsonObject *http_response = static_cast<ObJsonObject *>(j_base);
     ObIJsonBase *result = nullptr;
-    ASSERT_EQ(OB_ERR_UNEXPECTED, embedding.parse_output(allocator, http_response, result));
+    ASSERT_EQ(OB_INVALID_DATA, embedding.parse_output(allocator, http_response, result));
 }
 
 

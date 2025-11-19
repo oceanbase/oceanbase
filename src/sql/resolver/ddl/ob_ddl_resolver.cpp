@@ -113,6 +113,7 @@ ObDDLResolver::ObDDLResolver(ObResolverParams &params)
     auto_increment_cache_size_(0),
     external_table_format_type_(ObExternalFileFormat::INVALID_FORMAT),
     column_index_type_(sql::ColumnIndexType::NAME),
+    column_name_case_sensitive_(false),
     mocked_external_table_column_ids_(),
     index_params_(),
     table_organization_(ObTableOrganizationType::OB_ORGANIZATION_INVALID),
@@ -1784,6 +1785,8 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
           } else if (OB_FAIL(ObVectorIndexUtil::check_vec_index_param(tenant_id, option_node, *allocator_,
               *tbl_schema, index_params_, vec_column_name_, vec_index_type_, session_info_))) {
             LOG_WARN("fail to check vec index params", K(ret));
+          } else if (OB_FAIL(ObVectorIndexUtil::check_vec_index_in_stmt(*stmt_, vec_index_type_))) {
+            LOG_WARN("fail to check vec index in stmt", K(ret));
           }
         }
         break;
@@ -3792,8 +3795,10 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
       format.format_type_ = external_table_format_type_;
       if (format.format_type_ == ObExternalFileFormat::FormatType::ORC_FORMAT) {
         format.orc_format_.column_index_type_ = column_index_type_;
+        format.orc_format_.column_name_case_sensitive_ = column_name_case_sensitive_;
       } else if (format.format_type_ == ObExternalFileFormat::FormatType::PARQUET_FORMAT) {
         format.parquet_format_.column_index_type_ = column_index_type_;
+        format.parquet_format_.column_name_case_sensitive_ = column_name_case_sensitive_;
       }
       ObString mock_gen_column_str;
       if (OB_FAIL(format.mock_gen_column_def(column, *allocator_, mock_gen_column_str))) {
@@ -8010,10 +8015,10 @@ int ObDDLResolver::resolve_vec_index_constraint(
       LOG_WARN("fail to check is sparse vec col", K(ret));
     } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
       LOG_WARN("get tenant data version failed", K(ret));
-    } else if (is_text_column && !tenant_config->_enable_hybrid_vector_index) {
+    } else if (is_text_column && !tenant_config->_enable_semantic_index) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("when _enable_hybrid_vector_index is false, hybrid vector index not supported", K(ret), K(tenant_config->_enable_hybrid_vector_index));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "when _enable_hybrid_vector_index is false, hybrid vector index");
+      LOG_WARN("semantic vector index not supported", K(ret), K(tenant_config->_enable_semantic_index));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "semantic vector index");
     } else if (!is_sparse_vec_col && tenant_data_version < DATA_VERSION_4_3_3_0) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("tenant data version is less than 4.3.3, vector index not supported", K(ret), K(tenant_data_version));
@@ -8036,10 +8041,10 @@ int ObDDLResolver::resolve_vec_index_constraint(
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("tenant data version is less than 4.3.5.2, sparse vector index not supported", K(ret), K(tenant_data_version));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.5.2, sparse vector index");
-    } else if (is_text_column && tenant_data_version < DATA_VERSION_4_4_1_0) {
+    } else if (is_text_column && tenant_data_version < DATA_VERSION_4_5_0_0) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("tenant data version is less than 4.4.1.0, hybrid vector index not supported", K(ret), K(tenant_data_version));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.4.1.0, hybrid vector index");
+      LOG_WARN("tenant data version is less than 4.5.0.0, semantic vector index not supported", K(ret), K(tenant_data_version));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.5.0.0, semantic vector index");
     }
 
     if (OB_SUCC(ret)) {
@@ -11857,6 +11862,7 @@ int ObDDLResolver::resolve_auto_partition(ObPartitionedStmt *stmt, ParseNode *no
           } else if (ObPartitionOption::MIN_AUTO_PART_SIZE_BY_USER > auto_part_size) {
             ret = OB_NOT_SUPPORTED;
             SQL_RESV_LOG(WARN, "auto part size must be greater than or equal to 128MB", K(ret), K(buf));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "auto part size less than 128MB");
           }
         }
       }

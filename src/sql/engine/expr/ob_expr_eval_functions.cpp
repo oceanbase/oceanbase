@@ -466,6 +466,8 @@
 #include "ob_expr_bucket.h"
 #include "sql/engine/expr/ob_expr_ai/ob_expr_ai_prompt.h"
 #include "ob_expr_vector_similarity.h"
+#include "ob_expr_left.h"
+#include "ob_expr_right.h"
 
 namespace oceanbase
 {
@@ -1452,6 +1454,10 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprVecVisible::generate_vec_visible,                             /* 875 */
   NULL, // ObExprArrayContains::eval_array_contains_int32_t           /* 876 */
   NULL, // ObExprMaxPt::eval_max_pt,                                  /* 877 */
+  NULL, // ObExprDateTrunc::eval_date_trunc,                          /* 878 */
+  NULL, // ObExprToDate::calc_to_date_with_format                     /* 879 */
+  NULL, // ObExprEditDistance::calc_edit_distance,                    /* 880 */
+  NULL, // ObExprEditDistanceUTF8::calc_edit_distance_utf8,           /* 881 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1919,6 +1925,30 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprAtan2::eval_double_atan2_vector,                        /* 277 */
   NULL, // ObExprDegrees::calc_degrees_vector_expr,                      /* 278 */
   NULL, // ObExprRadians::calc_radians_vector_expr,                      /* 279 */
+  NULL, // ObExprExp::eval_double_exp_vector,                            /* 280 */
+  NULL, // ObExprExp::eval_number_exp_vector,                            /* 281 */
+  NULL, // ObExprSign::eval_sign_vector_int,                             /* 282 */
+  NULL, // ObExprSign::eval_sign_vector_number,                          /* 283 */
+  NULL, // ObExprDateTrunc::eval_date_trunc_vector,                      /* 284 */
+  NULL, // ObExprToDate::calc_to_date_with_format_vector,                /* 285 */
+  NULL, // ObExprConcat::eval_concat_vector,                             /* 286 */
+  NULL, // ObExprLpad::calc_mysql_lpad_expr_vector,                      /* 287 */
+  NULL, // ObExprRpad::calc_mysql_rpad_expr_vector,                      /* 288 */
+  NULL, // ObExprOracleLpad::calc_oracle_lpad_expr_vector,               /* 289 */
+  NULL, // ObExprOracleRpad::calc_oracle_rpad_expr_vector,               /* 290 */
+  NULL, // ObExprLeft::calc_left_vector,                                 /* 291 */
+  NULL, // ObExprRight::calc_right_vector,                               /* 292 */
+  NULL, //ObExprAcos::eval_double_acos_vector,                           /* 293 */
+  NULL, //ObExprAcos::eval_number_acos_vector,                           /* 294 */
+  NULL, //ObExprAsin::eval_double_asin_vector,                           /* 295 */
+  NULL, //ObExprAsin::eval_number_asin_vector,                           /* 296 */
+  NULL, // ObExprHex::eval_hex_vector,                                   /* 297 */
+  NULL, // ObExprSha::eval_sha_vector,                                   /* 298 */
+  NULL, // ObExprSha2::eval_sha2_vector,                                 /* 299 */
+  NULL, // ObExprAesEncrypt::eval_aes_encrypt_vector,                    /* 300 */
+  NULL, // ObExprAesDecrypt::eval_aes_decrypt_vector,                    /* 301 */
+  NULL, // ObExprEditDistance::calc_edit_distance_vector,                /* 302 */
+  NULL, // ObExprEditDistanceUTF8::calc_edit_distance_utf8_vector,       /* 303 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,

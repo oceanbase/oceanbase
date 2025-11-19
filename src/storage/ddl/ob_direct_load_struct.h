@@ -452,14 +452,13 @@ struct ObDDLTabletMergeDagParamV2
 public:
   ObDDLTabletMergeDagParamV2():
     for_major_(false), for_lob_(false), for_replay_(false), merge_all_slice_(false), direct_load_type_(ObDirectLoadType::DIRECT_LOAD_INVALID), start_scn_(share::SCN::min_scn()),
-    rec_scn_(share::SCN::min_scn()),  ddl_task_param_(), tablet_ctx_(nullptr), merge_helper_(nullptr), is_inited_(false) {}
+    rec_scn_(share::SCN::min_scn()),  ddl_task_param_(), tablet_ctx_(nullptr), is_inited_(false) {}
   int init(const bool for_major,
            const bool for_lob,
            const bool for_replay,
            const share::SCN start_scn,
            const ObDirectLoadType &direct_load_type,
            const ObDDLTaskParam &task_param,
-           ObIAllocator &allocator,
            ObDDLTabletContext *tablet_ctx_,
            const transaction::ObTransID &trans_id = transaction::ObTransID(),
            const transaction::ObTxSEQ &seq_no = transaction::ObTxSEQ());
@@ -477,7 +476,7 @@ public:
   bool need_merge_all_slice() const { return for_major_ || merge_all_slice_; }
   ObDDLTabletContext *get_tablet_ctx() { return tablet_ctx_; }
   ObDDLTabletContext *get_tablet_ctx() const { return tablet_ctx_; }
-  ObIDDLMergeHelper *get_merge_helper() const { return merge_helper_; }
+  int get_merge_helper(ObIDDLMergeHelper *&merge_helper);
   VIRTUAL_TO_STRING_KV(K(for_major_), K(for_replay_), K(for_lob_), K(merge_all_slice_), K(direct_load_type_), K(start_scn_), K(rec_scn_), K(table_key_), K(ddl_task_param_), K_(trans_id), K_(seq_no), KPC(tablet_ctx_));
 public:
   bool for_major_;
@@ -493,8 +492,6 @@ public:
   ObITable::TableKey table_key_;
 private:
   ObDDLTabletContext *tablet_ctx_;
-  ObIDDLMergeHelper  *merge_helper_;
-
   bool is_inited_;
 };
 
@@ -648,6 +645,7 @@ public:
     const ObIArray<ObColumnSchemaItem> &col_array,
     const int64_t context_id) override;
   virtual void reset();
+  virtual void cancel() override;
   virtual int build_clusters(ObInsertMonitor* insert_monitor) = 0;
   virtual int is_empty(bool &empty) = 0;
   OB_INLINE int64_t get_context_id() { return context_id_; }
@@ -951,7 +949,7 @@ private:
   int64_t parallel_task_count_; // for gc flag in shared storage mode
   bool is_micro_index_clustered_;
   /// COMMENT: make sure if tablet_transfer_seq is unused. If it's still being used
-  /// please replace it with transfer_epoch.
+  /// please replace it with private_transfer_epoch.
   /// see:
   int64_t tablet_transfer_seq_;
 
@@ -1101,7 +1099,7 @@ public:
   int64_t parallel_task_count_; // for gc flag in shared storage mode
   bool is_micro_index_clustered_;
   /// COMMENT: make sure if tablet_transfer_seq is unused. If it's still being used
-  /// please replace it with transfer_epoch.
+  /// please replace it with private_transfer_epoch.
   /// see:
   int64_t tablet_transfer_seq_;
   share::SCN start_scn_;

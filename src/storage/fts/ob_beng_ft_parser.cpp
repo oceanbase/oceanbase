@@ -101,7 +101,7 @@ int ObBEngFTParser::init(ObFTParserParam *param)
 
 int ObBEngFTParser::segment(
     const common::ObDatum &doc,
-    share::ObITokenStream *&token_stream)
+    share::ObIFTTokenStream *&token_stream)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(doc.ptr_) || OB_UNLIKELY(0 >= doc.len_)) {

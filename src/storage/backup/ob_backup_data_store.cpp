@@ -29,6 +29,20 @@ bool ObBackupDataLSAttrDesc::is_valid() const
   return backup_scn_.is_valid() && !ls_attr_array_.empty();
 }
 
+OB_SERIALIZE_MEMBER(ObBackupDataLSIdListDesc, ls_id_array_);
+
+bool ObBackupDataLSIdListDesc::is_valid() const
+{
+  bool bret = true;
+  for (int64_t i = 0; i < ls_id_array_.count(); ++i) {
+    if (!ls_id_array_.at(i).is_valid()) {
+      bret = false;
+      break;
+    }
+  }
+  return bret;
+}
+
 /*
  *------------------------------ObBackupDataTabletToLSInfo----------------------------
  */
@@ -550,6 +564,47 @@ int ObBackupDataStore::read_ls_attr_info(const int64_t turn_id, ObBackupDataLSAt
     LOG_WARN("fail to assign full path", K(ret));
   } else if (OB_FAIL(read_single_file(full_path, ls_info))) {
     LOG_WARN("failed to read single file", K(ret), K(full_path));
+  }
+  return ret;
+}
+
+int ObBackupDataStore::write_ls_id_list(const ObBackupDataLSIdListDesc &ls_id_list)
+{
+  int ret = OB_SUCCESS;
+  ObBackupPathString full_path;
+  share::ObBackupPath path;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data extern mgr not init", K(ret));
+  } else if (!ls_id_list.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ls id list desc", K(ret), K(ls_id_list));
+  } else if (OB_FAIL(ObBackupPathUtil::get_backup_ls_id_list_path(backup_set_dest_, path))) {
+    LOG_WARN("fail to get ls id list path", K(ret));
+  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
+    LOG_WARN("fail to assign full path", K(ret));
+  } else if (OB_FAIL(write_single_file(full_path, ls_id_list))) {
+    LOG_WARN("fail to write ls id list file", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupDataStore::read_ls_id_list(ObBackupDataLSIdListDesc &ls_id_list)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupPath path;
+  ObBackupPathString full_path;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupDataStore not init", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_backup_ls_id_list_path(backup_set_dest_, path))) {
+    LOG_WARN("fail to get ls id list info path", K(ret));
+  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
+    LOG_WARN("fail to assign full path", K(ret));
+  } else if (OB_FAIL(read_single_file(full_path, ls_id_list))) {
+    if (OB_OBJECT_NOT_EXIST != ret) {
+      LOG_WARN("failed to read ls id list file", K(ret), K(full_path));
+    }
   }
   return ret;
 }

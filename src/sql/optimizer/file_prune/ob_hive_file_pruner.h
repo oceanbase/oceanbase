@@ -47,13 +47,14 @@ public:
   void reset();
   int assign(const ObHivePartFieldBound &other);
   int deep_copy(ObHivePartFieldBound &src);
-  TO_STRING_KV(K_(column_id), K_(is_whole_range), K_(is_always_false), K_(bounds));
+  TO_STRING_KV(K_(column_id), K_(is_whole_range), K_(is_always_false), K_(bounds), K_(range_exprs));
 
   common::ObIAllocator &allocator_;
   uint64_t column_id_;
   bool is_whole_range_;
   bool is_always_false_;
   ObFixedArray<ObFieldBound *, ObIAllocator> bounds_;
+  ObFixedArray<ObRawExpr*, ObIAllocator> range_exprs_;
 
 private:
   DISABLE_COPY_ASSIGN(ObHivePartFieldBound);
@@ -82,7 +83,8 @@ public:
 
   int prunner_files(ObExecContext &exec_ctx,
                     ObIArray<ObHiveFileDesc> &filtered_files);
-
+  int get_part_id_and_range_exprs(ObIArray<uint64_t> &part_column_ids,
+                                  ObIArray<ObRawExpr*> &range_exprs);
 private:
   int prune_partition_by_hms(ObExecContext &exec_ctx,
                              ObIArray<ObHiveFileDesc> &filtered_files);

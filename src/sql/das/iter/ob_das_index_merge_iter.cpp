@@ -299,7 +299,7 @@ void ObDASIndexMergeIter::MergeResultBuffer::reset()
 int ObDASIndexMergeIter::inner_init(ObDASIterParam &param)
 {
   int ret = OB_SUCCESS;
-  if (ObDASIterType::DAS_ITER_INDEX_MERGE != param.type_) {
+  if (ObDASIterType::DAS_ITER_INDEX_MERGE != param.type_ && ObDASIterType::DAS_ITER_TWO_PHASE_INDEX_MERGE != param.type_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("inner init das iter with bad param type", K(param));
   } else {
@@ -751,77 +751,90 @@ int ObDASIndexMergeIter::update_skip_id(int64_t child_idx, uint64_t *skip_id)
   return ret;
 }
 
+int ObDASIndexMergeIter::fill_one_child_store(
+    int64_t capacity,
+    int64_t index,
+    common::ObIArray<ObExpr*> *relevance_exprs,
+    ObDASIter *input_child_iter)
+{
+  int ret = OB_SUCCESS;
+  IndexMergeRowStore &child_store = child_stores_.at(index);
+  if (child_store.iter_end_) {
+    // no more rows for child iter
+  } else if (!child_store.is_empty()) {
+  } else {
+    ObDASIter *child_iter = input_child_iter != nullptr ? input_child_iter : child_iters_.at(index);
+    int64_t child_count = 0;
+    int64_t child_capacity = std::min(capacity, child_store.capacity_);
+    if (OB_ISNULL(child_iter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr", K(ret), K(index));
+    } else if (OB_UNLIKELY(child_capacity <= 0)) {
+      // do nothing
+    } else {
+      int64_t max_child_count = 0;
+      if (merge_ctdef_->has_dynamic_id_filter_ && OB_FAIL(update_skip_id(index, &current_skip_id_))) {
+        LOG_WARN("failed to update skip id", K(ret));
+      } else {
+        while (OB_SUCC(ret) && !child_store.iter_end_ && child_count == 0) {
+          if (OB_FAIL(child_iter->get_next_rows(child_count, child_capacity))) {
+            if (ret == OB_ITER_END) {
+              ret = OB_SUCCESS;
+              child_store.iter_end_ = true;
+              iter_end_count_ ++;
+            } else {
+              LOG_WARN("failed to get next rows from child iter", K(ret), K(capacity), K(child_count), K(child_capacity));
+            }
+          }
+          max_child_count = std::max(max_child_count, child_count);
+          if (OB_FAIL(ret) || child_count <= 0) {
+          } else if (rowkey_is_uint64_ && !is_reverse_) {
+            // check read rows whether match skip id
+            if (OB_ISNULL(rowkey_exprs_) ||
+                OB_UNLIKELY(rowkey_exprs_->count() != 1) ||
+                OB_ISNULL(rowkey_exprs_->at(0))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected rowkey exprs", K(ret));
+            } else {
+              ObDatum *datums = rowkey_exprs_->at(0)->locate_batch_datums(*eval_ctx_);
+              if (datums[child_count - 1].get_uint64() < current_skip_id_) {
+                child_count = 0;
+              }
+            }
+            LOG_TRACE("check read rows whether match skip id", K(ret), K(child_count), K(current_skip_id_));
+          }
+        }
+      }
+      ObExpr *relevance_expr = relevance_exprs != nullptr ? relevance_exprs->at(index) : nullptr;
+      if (OB_FAIL(ret) || child_count <= 0) {
+      } else if (OB_FAIL(child_store.save(true, child_count, relevance_expr))) {
+        LOG_WARN("failed to save child rows", K(ret), K(child_count));
+      } else if (merge_ctdef_->has_dynamic_id_filter_) {
+        current_skip_id_ = std::max(current_skip_id_, child_store.rowids_[0]);
+      }
+      LOG_TRACE("fill child store", K(ret), K(child_count), K(child_store), K(index));
+
+      // we need to reset datum ptr for sort iter
+      if (OB_SUCC(ret) && child_iter->get_type() == DAS_ITER_SORT && max_child_count > 0) {
+        reset_datum_ptr(child_iter->get_output(), max_child_count);
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (child_store.iter_end_ && !child_store.drained_ && child_store.is_empty()) {
+    child_empty_count_ ++;
+    child_store.drained_ = true;
+  }
+  return ret;
+}
+
 int ObDASIndexMergeIter::fill_child_stores(int64_t capacity, common::ObIArray<ObExpr*> *relevance_exprs)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < child_stores_.count(); i++) {
-    IndexMergeRowStore &child_store = child_stores_.at(i);
-    if (child_store.iter_end_) {
-      // no more rows for child iter
-    } else if (!child_store.is_empty()) {
-    } else {
-      ObDASIter *child_iter = child_iters_.at(i);
-      int64_t child_count = 0;
-      int64_t child_capacity = std::min(capacity, child_store.capacity_);
-      if (OB_ISNULL(child_iter)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected nullptr", K(i));
-      } else if (OB_UNLIKELY(child_capacity <= 0)) {
-        // do nothing
-      } else {
-        int64_t max_child_count = 0;
-        if (merge_ctdef_->has_dynamic_id_filter_ && OB_FAIL(update_skip_id(i, &current_skip_id_))) {
-          LOG_WARN("failed to update skip id", K(ret));
-        } else {
-          while (OB_SUCC(ret) && !child_store.iter_end_ && child_count == 0) {
-            if (OB_FAIL(child_iter->get_next_rows(child_count, child_capacity))) {
-              if (ret == OB_ITER_END) {
-                ret = OB_SUCCESS;
-                child_store.iter_end_ = true;
-                iter_end_count_ ++;
-              } else {
-                LOG_WARN("failed to get next rows from child iter", K(ret), K(capacity), K(child_count), K(child_capacity));
-              }
-            }
-            max_child_count = std::max(max_child_count, child_count);
-            if (OB_FAIL(ret) || child_count <= 0) {
-            } else if (rowkey_is_uint64_ && !is_reverse_) {
-              // check read rows whether match skip id
-              if (OB_ISNULL(rowkey_exprs_) ||
-                  OB_UNLIKELY(rowkey_exprs_->count() != 1) ||
-                  OB_ISNULL(rowkey_exprs_->at(0))) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("unexpected rowkey exprs", K(ret));
-              } else {
-                ObDatum *datums = rowkey_exprs_->at(0)->locate_batch_datums(*eval_ctx_);
-                if (datums[child_count - 1].get_uint64() < current_skip_id_) {
-                  child_count = 0;
-                }
-              }
-              LOG_TRACE("check read rows whether match skip id", K(ret), K(child_count), K(current_skip_id_));
-            }
-          }
-        }
-        ObExpr *relevance_expr = relevance_exprs != nullptr ? relevance_exprs->at(i) : nullptr;
-        if (OB_FAIL(ret) || child_count <= 0) {
-        } else if (OB_FAIL(child_store.save(true, child_count, relevance_expr))) {
-          LOG_WARN("failed to save child rows", K(ret), K(child_count));
-        } else if (merge_ctdef_->has_dynamic_id_filter_) {
-          current_skip_id_ = std::max(current_skip_id_, child_store.rowids_[0]);
-        }
-        LOG_TRACE("fill child store", K(ret), K(child_count), K(child_store), K(i));
-
-        // we need to reset datum ptr for sort iter
-        if (OB_SUCC(ret) && child_iter->get_type() == DAS_ITER_SORT && max_child_count > 0) {
-          reset_datum_ptr(child_iter->get_output(), max_child_count);
-        }
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (child_store.iter_end_ && !child_store.drained_ && child_store.is_empty()) {
-      child_empty_count_ ++;
-      child_store.drained_ = true;
+    if (OB_FAIL(fill_one_child_store(capacity, i, relevance_exprs))) {
+      LOG_WARN("failed to fill one child store", K(ret), K(i));
     }
   } // end for
   return ret;

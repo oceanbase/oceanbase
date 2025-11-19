@@ -765,6 +765,12 @@ int ObParquetGeneralFormat::to_json_kv_string(char *buf, const int64_t buf_len, 
     OZ(databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[idx++],
                       column_index_type_to_string(column_index_type_)));
   }
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_0_0) {
+    OZ(J_COMMA());
+    OZ(databuff_printf(buf, buf_len, pos, R"("%s":%s)",
+                       OPTION_NAMES[idx++],
+                       STR_BOOL(column_name_case_sensitive_)));
+  }
   return ret;
 }
 
@@ -789,6 +795,14 @@ int ObParquetGeneralFormat::load_from_json_data(json::Pair *&node, common::ObIAl
     } else {
       node = node->get_next();
     }
+  }
+  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[idx++])) {
+    if (json::JT_TRUE == node->value_->get_type()) {
+      column_name_case_sensitive_ = true;
+    } else {
+      column_name_case_sensitive_ = false;
+    }
+    node = node->get_next();
   }
   return ret;
 }
@@ -821,6 +835,12 @@ int ObOrcGeneralFormat::to_json_kv_string(char *buf, const int64_t buf_len, int6
     OZ(J_COMMA());
     OZ(databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[idx++],
                       column_index_type_to_string(column_index_type_)));
+  }
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_0_0) {
+    OZ(J_COMMA());
+    OZ(databuff_printf(buf, buf_len, pos, R"("%s":%s)",
+                       OPTION_NAMES[idx++],
+                       STR_BOOL(column_name_case_sensitive_)));
   }
   return ret;
 }
@@ -878,6 +898,14 @@ int ObOrcGeneralFormat::load_from_json_data(json::Pair *&node, common::ObIAlloca
     } else {
       node = node->get_next();
     }
+  }
+  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[idx++])) {
+    if (json::JT_TRUE == node->value_->get_type()) {
+      column_name_case_sensitive_ = true;
+    } else {
+      column_name_case_sensitive_ = false;
+    }
+    node = node->get_next();
   }
   return ret;
 }

@@ -374,42 +374,50 @@ int ObDASDomainIdMergeIter::build_rowkey_domain_range()
           key_range.table_id_ = scan_param.index_id_;
           if (is_emb_vec && use_rowkey_vid_tbl) {
             // range [rowkey][vid]
-            int64_t extend_start_key_obj_cnt = key_range.start_key_.get_obj_cnt() + 1;
-            int64_t extend_end_key_obj_cnt = key_range.end_key_.get_obj_cnt() + 1;
-            if (extend_start_key_obj_cnt != extend_end_key_obj_cnt) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected error, extend start key obj cnt != extend end key obj cnt", K(ret),
-                                                                                               K(extend_start_key_obj_cnt),
-                                                                                               K(extend_end_key_obj_cnt),
-                                                                                               K(key_range.start_key_),
-                                                                                               K(key_range.end_key_));
-            } else {
-              ObObj *extend_start_key_obj_ptr = static_cast<ObObj *>(get_arena_allocator().alloc(sizeof(ObObj) * extend_start_key_obj_cnt));
-              ObObj *extend_end_key_obj_ptr = static_cast<ObObj *>(get_arena_allocator().alloc(sizeof(ObObj) * extend_end_key_obj_cnt));
-              if (OB_ISNULL(extend_start_key_obj_ptr) || OB_ISNULL(extend_end_key_obj_ptr)) {
-                ret = OB_ALLOCATE_MEMORY_FAILED;
-                LOG_WARN("failed to allocate memory for extend start key obj ptr", K(ret), K(extend_start_key_obj_cnt),
-                                                                                              K(extend_end_key_obj_cnt));
+            for (int64_t j = 0; OB_SUCCESS == ret && j < 2; ++j) {
+              const ObRowkey *p_key = nullptr;
+              if (0 == j) {
+                p_key = &key_range.get_start_key();
               } else {
-                for (int64_t i = 0; OB_SUCC(ret) && i < key_range.start_key_.get_obj_cnt(); i++) {
-                  extend_start_key_obj_ptr[i] = key_range.start_key_.get_obj_ptr()[i];
-                }
-                if (key_range.border_flag_.inclusive_start() || key_range.start_key_.is_min_row()) {
-                  extend_start_key_obj_ptr[key_range.start_key_.get_obj_cnt()].set_min_value();
+                p_key = &key_range.get_end_key();
+              }
+              if (p_key->is_min_row() || p_key->is_max_row()) {
+                // do nothing
+              } else {
+                int64_t padding_num = 1; // add vid col
+                const int64_t old_objs_num = p_key->get_obj_cnt();
+                const int64_t new_objs_num = old_objs_num + padding_num;
+                ObObj *new_objs = static_cast<ObObj*>(get_arena_allocator().alloc(sizeof(ObObj)*new_objs_num));
+                if (OB_ISNULL(new_objs)) {
+                  ret = OB_ALLOCATE_MEMORY_FAILED;
+                  LOG_WARN("fail to alloc new objs", K(ret));
                 } else {
-                  extend_start_key_obj_ptr[key_range.start_key_.get_obj_cnt()].set_max_value();
+                  const ObObj *old_objs = p_key->get_obj_ptr();
+                  for (int64_t k = 0; k < old_objs_num; ++k) {
+                    new_objs[k] = old_objs[k];  // shallow copy
+                  }
+                  if (0 == j) {  // padding for startkey
+                    for (int64_t k = 0; k < padding_num; ++k) {
+                      // if inclusive start, should padding min value. else padding max value
+                      if (key_range.border_flag_.inclusive_start()) {
+                        new_objs[k+old_objs_num] = ObObj::make_min_obj();
+                      } else {
+                        new_objs[k+old_objs_num] = ObObj::make_max_obj();
+                      }
+                    }
+                    key_range.start_key_.assign(new_objs, new_objs_num);
+                  } else {  // padding for endkey
+                    for (int64_t k = 0; k < padding_num; ++k) {
+                      // if inclusive end, should padding max value. else padding min value
+                      if (key_range.border_flag_.inclusive_end()) {
+                        new_objs[k+old_objs_num] = ObObj::make_max_obj();
+                      } else {
+                        new_objs[k+old_objs_num] = ObObj::make_min_obj();
+                      }
+                    }
+                    key_range.end_key_.assign(new_objs, new_objs_num);
+                  }
                 }
-                key_range.start_key_.assign(extend_start_key_obj_ptr, extend_start_key_obj_cnt);
-
-                for (int64_t i = 0; OB_SUCC(ret) && i < key_range.end_key_.get_obj_cnt(); i++) {
-                  extend_end_key_obj_ptr[i] = key_range.end_key_.get_obj_ptr()[i];
-                }
-                if (key_range.border_flag_.inclusive_end() || key_range.end_key_.is_max_row()) {
-                  extend_end_key_obj_ptr[key_range.end_key_.get_obj_cnt()].set_max_value();
-                } else {
-                  extend_end_key_obj_ptr[key_range.end_key_.get_obj_cnt()].set_min_value();
-                }
-                key_range.end_key_.assign(extend_end_key_obj_ptr, extend_end_key_obj_cnt);
               }
             }
           }
@@ -939,10 +947,20 @@ int ObDASDomainIdMergeIter::get_domain_id(
   }
   if (OB_SUCC(ret)) {
     const int64_t rowkey_cnt = ctdef->table_param_.get_read_info().get_schema_rowkey_count();
+    int64_t part_key_num = 0;
     ObExpr *expr = nullptr;
     int64_t expect_result_output_cnt = rowkey_cnt + 1;
     expect_result_output_cnt = OB_NOT_NULL(ctdef->trans_info_expr_) ? (expect_result_output_cnt + 1) : expect_result_output_cnt;
     expect_result_output_cnt = (domain_type == ObDomainIdUtils::IVFPQ_CID) ? (expect_result_output_cnt + 1) : expect_result_output_cnt;
+    // when partition and heap organization table, use hybrid vector index; the dml return all_columns as output, but tsc only use
+    // rowkey and embeded_vec; the dml has more columns that is partition key.
+    if (domain_type != ObDomainIdUtils::EMB_VEC) {
+      // skip, do nothing
+    } else if (OB_FAIL(check_table_need_add_part_key(data_table_iter_->get_scan_param().index_id_, part_key_num, ctdef))) {
+      LOG_WARN("fail to check embedded table add part key ", K(ret), K(data_table_iter_->get_scan_param().index_id_), K(ctdef->ref_table_id_));
+    } else {
+      expect_result_output_cnt = expect_result_output_cnt + part_key_num;
+    }
     // When the defensive check level is set to 2 (strict defensive check), the transaction information of the current
     // row is recorded for 4377 diagnosis. Then, it will add pseudo_trans_info_expr into result output of das scan.
     //
@@ -954,7 +972,7 @@ int ObDASDomainIdMergeIter::get_domain_id(
 
     int domain_id_num = (domain_type == ObDomainIdUtils::IVFPQ_CID) ? 2 : 1;
     for (int i = 0; OB_SUCC(ret) && i < domain_id_num; ++i) {
-      if (OB_ISNULL(expr = ctdef->result_output_.at(rowkey_cnt + i))) {
+      if (OB_ISNULL(expr = ctdef->result_output_.at(rowkey_cnt + part_key_num + i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error, domain id expr is nullptr", K(ret), K(rowkey_cnt), K(ctdef->result_output_));
       } else {
@@ -1147,37 +1165,25 @@ int ObDASDomainIdMergeIter::multi_get_row()
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator(ObMemAttr(MTL_ID(), "DomainIDMGR"));
+  common::ObRowkey data_table_rowkey;
   if (OB_FAIL(data_table_iter_->get_next_row())) {
-    if (OB_ITER_END == ret && is_no_sample_) {
-      int tmp_ret = ret;
-      ret = OB_SUCCESS;
-      for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_domain_iters_.count(); i++) {
-        if (OB_ISNULL(rowkey_domain_iters_.at(i))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get null domain iter", K(ret), K(i));
-        } else if (OB_FAIL(rowkey_domain_iters_.at(i)->get_next_row())) {
-          if (OB_UNLIKELY(OB_ITER_END != ret)) {
-            LOG_WARN("fail to get next rows", K(ret));
-          } else {
-            ret = OB_SUCCESS;
+    if (OB_ITER_END != ret) {
+      LOG_WARN("fail to get next data table row", K(ret));
+    } else if (OB_ITER_END == ret) {
+      if (is_no_sample_) {
+        for (int64_t i = 0; i < rowkey_domain_iters_.count(); i++) {
+          while (OB_SUCC(rowkey_domain_iters_.at(i)->get_next_row()))
+          {
+            // do nothing
           }
-        } else {
-          common::ObRowkey rowkey;
-          if (OB_FAIL(get_rowkey(allocator, rowkey_domain_ctdefs_.at(i), rowkey_domain_rtdefs_.at(i), rowkey))) {
-            LOG_WARN("fail to process_data_table_rowkey", K(ret));
-          } else {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("row count isn't equal between data table and rowkey domain", K(ret), K(rowkey),
-                K(rowkey_domain_iters_.at(i)->get_scan_param()), K(data_table_iter_->get_scan_param()));
+          if (OB_ITER_END != ret) {
+            LOG_WARN("fail to get next rowkey domain row", K(ret), K(i), KPC(rowkey_domain_iters_.at(i)));
           }
         }
       }
-      if (OB_SUCC(ret)) {
-        ret = tmp_ret;
-      }
-    } else if (ret != OB_ITER_END) {
-      LOG_WARN("fail to get next row", K(ret));
     }
+  } else if (is_no_sample_ && OB_FAIL(get_rowkey(allocator, data_table_ctdef_, data_table_rtdef_, data_table_rowkey))) {
+    LOG_WARN("fail to get data table rowkey", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_domain_iters_.count(); i++) {
       if (is_no_sample_) {
@@ -1185,10 +1191,7 @@ int ObDASDomainIdMergeIter::multi_get_row()
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get null domain iter", K(ret), K(i));
         } else {
-          common::ObRowkey data_table_rowkey;
-          if (OB_FAIL(get_rowkey(allocator, data_table_ctdef_, data_table_rtdef_, data_table_rowkey))) {
-            LOG_WARN("fail to get data table rowkey", K(ret));
-          } else if (OB_FAIL(reset_rowkey_domain_iter_scan_range(i, data_table_rowkey))) {
+          if (OB_FAIL(reset_rowkey_domain_iter_scan_range(i, data_table_rowkey))) {
             LOG_WARN("fail to reset rowkey domain iter scan range", K(ret), K(i));
           } else {
             bool is_found = false;
@@ -1450,6 +1453,35 @@ int ObDASDomainIdMergeIter::check_use_rowkey_vid_tbl_by_table_id(int64_t table_i
     LOG_WARN("table schema is null", K(ret), K(table_id));
   } else {
     use_rowkey_vid_tbl = !table_schema->is_table_with_hidden_pk_column();
+  }
+  return ret;
+}
+
+int ObDASDomainIdMergeIter::check_table_need_add_part_key(int64_t table_id, int64_t &part_key_num, const ObDASScanCtDef *ctdef)
+{
+  int ret = OB_SUCCESS;
+  part_key_num = 0;
+  share::schema::ObSchemaGetterGuard schema_guard;
+  ObIArray<uint64_t> *column_ids;
+  const ObTableSchema *table_schema = nullptr;
+  const ObTableSchema *domain_table_schema = nullptr;
+  int64_t trans_expr_cnt = OB_NOT_NULL(ctdef->trans_info_expr_) ? 1 : 0;
+  if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(MTL_ID(), schema_guard))) {
+    LOG_WARN("fail to get schema guard", K(ret));
+  } else if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(), table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", K(ret), K(table_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(), ctdef->ref_table_id_, domain_table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(ctdef->ref_table_id_));
+  } else if (OB_ISNULL(domain_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", K(ret), K(table_id));
+  } else if (table_schema->is_table_with_hidden_pk_column() && table_schema->is_partitioned_table()) {
+    if (ctdef->result_output_.count() == (domain_table_schema->get_column_count() + trans_expr_cnt)) {
+      part_key_num += table_schema->get_part_level();
+    }
   }
   return ret;
 }

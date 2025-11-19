@@ -187,6 +187,8 @@ enum ObLogBaseType
     BACKUP_VALIDATE_SERVICE_LOG_BASE_TYPE = 59,
   // for vector index scheduler
   VEC_INDEX_SERVICE_LOG_BASE_TYPE = 60,
+  // for random partition
+  SYS_RANDOM_PARTITION_SCHEDULER_LOG_BASE_TYPE = 61,
 
   // pay attention!!!
   // add log type in log_base_type_to_string
@@ -334,6 +336,8 @@ int log_base_type_to_string(const ObLogBaseType log_type,
     strncpy(str, "BACKUP_VALIDATE_SERVICE", str_len);
   } else if (log_type == VEC_INDEX_SERVICE_LOG_BASE_TYPE) {
     strncpy(str, "VEC_INDEX_SERVICE", str_len);
+  } else if (log_type == SYS_RANDOM_PARTITION_SCHEDULER_LOG_BASE_TYPE) {
+    strncpy(str, "RANDOM_PARTITION_SCHEDULER", str_len);
   } else {
     ret = OB_INVALID_ARGUMENT;
   }

@@ -230,6 +230,7 @@ protected:
   // compare the first row of two stores
   int compare(IndexMergeRowStore &cur_store, IndexMergeRowStore &cmp_store, int &cmp_ret) const;
   int fill_child_stores(int64_t capacity, common::ObIArray<ObExpr*> *relevance_exprs = nullptr);
+  int fill_one_child_store(int64_t capacity, int64_t index, common::ObIArray<ObExpr*> *relevance_exprs, ObDASIter *child_iter = nullptr);
   int fill_child_bitmaps();
   int save_row_to_result_buffer(int64_t size);
   // expect_size is the expected count of rows, that is the 'count'

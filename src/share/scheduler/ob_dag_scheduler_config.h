@@ -270,9 +270,6 @@ DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_SS_TABLET_UPDATE_INFO, ObDagPrio::DAG_PRIO_H
     true, 3, {"ls_id", "tablet_id", "backfill_scn"})
 // DAG_TYPE_SS_TRANSFER END
 
-// inc major direct load
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_SS_UPDATE_INC_MAJOR, ObDagPrio::DAG_PRIO_DDL, ObSysTaskType::UPDATE_SS_INC_MAJOR_TASK, "SS_TABLET_UPDATE_INFO", "DIRECT_LOAD",
-    true, 3, {"ls_id", "tablet_id", "backfill_scn"})
 #endif
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_MAX, ObDagPrio::DAG_PRIO_MAX, ObSysTaskType::MAX_SYS_TASK_TYPE, "DAG_TYPE_MAX", "INVALID", false, 0, {})
 #endif

@@ -234,6 +234,7 @@ bool ObColDataStoreDesc::is_valid() const
   return row_column_count_ > 0
          && rowkey_column_count_ >= 0
          && row_column_count_ >= rowkey_column_count_
+         && full_stored_col_cnt_ <= col_default_checksum_array_.count()
          && schema_rowkey_col_cnt_ >= 0;
 }
 
@@ -322,6 +323,10 @@ int ObColDataStoreDesc::init(
     } else if (OB_FAIL(datum_utils_.init(
         col_desc_array_, schema_rowkey_col_cnt_, is_oracle_mode, allocator_))) {
       STORAGE_LOG(WARN, "Failed to init datum utils", K(ret));
+    } else if (OB_UNLIKELY(!is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected invalid col data desc", K(ret), K(col_default_checksum_array_.count()), KPC(this), K(merge_schema),
+        K(table_cg_idx), K(is_oracle_mode), K(col_desc_array_));
     } else {
       STORAGE_LOG(TRACE, "success to init col data desc", K(ret), KPC(this), K(merge_schema), K(table_cg_idx),
         K(is_oracle_mode), K(col_desc_array_));
@@ -437,6 +442,10 @@ int ObColDataStoreDesc::mock_valid_col_default_checksum_array(int64_t column_cnt
     STORAGE_LOG(WARN, "failed to init col default checksum array", KR(ret));
   } else {
     default_col_checksum_array_valid_ = true;
+    if (OB_UNLIKELY(!is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected invalid col data desc", K(ret), K(col_default_checksum_array_.count()), KPC(this), K(column_cnt));
+    }
   }
   return ret;
 }

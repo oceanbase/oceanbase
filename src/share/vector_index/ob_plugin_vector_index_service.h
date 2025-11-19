@@ -207,7 +207,7 @@ public:
   int check_need_mem_data_sync_task(bool &need_sync);
   int erase_complete_adapter(ObTabletID tablet_id);
   int erase_partial_adapter(ObTabletID tablet_id);
-  int erase_ivf_build_helper(const ObIvfHelperKey &key);
+  int erase_ivf_build_helper(const ObIvfHelperKey &key, bool *fully_cleared = nullptr);
   int release_ivf_cache_mgr(ObIvfCacheMgr* &mgr);
   int set_ivf_cache_mgr(const ObIvfCacheMgrKey& cachr_mgr_key,
                         ObIvfCacheMgr *cache_mgr,
@@ -320,6 +320,7 @@ struct ObVectorIndexTmpInfo final
 public:
   ObVectorIndexTmpInfo() : snapshot_version_(0), schema_version_(0), ret_code_(OB_NOT_INIT), ddl_slice_info_(), adapter_(nullptr) {}
   ~ObVectorIndexTmpInfo() {}
+  void reset() { ddl_slice_info_.reset(); }
   TO_STRING_KV(K_(ddl_slice_info), KP_(adapter), K_(snapshot_version), K_(schema_version), K_(ret_code));
 
 public:
@@ -415,10 +416,10 @@ public:
                               const ObIvfHelperKey &key,
                               ObIndexType type,
                               ObString &vec_index_param);
-  int erase_ivf_build_helper(ObLSID ls_id, const ObIvfHelperKey &key);
+  int erase_ivf_build_helper(ObLSID ls_id, const ObIvfHelperKey &key, bool *fully_cleared = nullptr);
   int check_and_merge_adapter(ObLSID ls_id, ObVecIdxSharedTableInfoMap &info_map);
   int acquire_vector_index_mgr(ObLSID ls_id, ObPluginVectorIndexMgr *&mgr);
-  int get_vector_index_tmp_info(const int64_t task_id, ObVectorIndexTmpInfo *&tmp_info);
+  int get_vector_index_tmp_info(const int64_t task_id, ObVectorIndexTmpInfo *&tmp_info, const bool get_from_exist = false);
 
   // user interfaces
   int acquire_adapter_guard(ObLSID ls_id,
@@ -452,6 +453,15 @@ public:
       const ObTabletID tablet_id,
       ObIAllocator &allocator,
       ObIArray<float*> &aux_info);
+  int get_ivf_aux_info_from_cache(
+      const uint64_t table_id,
+      const ObTabletID tablet_id,
+      const IvfCacheType cache_type,
+      ObIAllocator &allocator,
+      ObIArray<float*> &aux_info,
+      ObExprVecIvfCenterIdCache *expr_cache = nullptr,
+      const ObTabletID cache_tablet_id = ObTabletID(),
+      int64_t m = 0); // Number of PQ subspaces, 0 means using default value
   // NOTE(liyao): int callback_func(int64_t dim, float *data);
   //              data should be deep copied if used outside callback_func
   template<class CallbackFunc>
@@ -480,6 +490,14 @@ private:
       const ObTabletID tablet_id,
       bool &is_hidden_table,
       ObSqlString &sql_string);
+
+  int process_pq_centroid_cache(ObIvfCentCache *cent_cache,
+                                ObIArray<float*> &aux_info,
+                                ObExprVecIvfCenterIdCache *expr_cache,
+                                int64_t m);
+  int process_centroid_cache(ObIvfCentCache *cent_cache,
+                            ObIArray<float*> &aux_info,
+                            ObExprVecIvfCenterIdCache *expr_cache);
 private:
   static const int64_t BASIC_TIMER_INTERVAL = 30 * 1000 * 1000; // 30s
   static const int64_t VEC_INDEX_LOAD_TIME_TASKER_THRESHOLD = 30 * 1000 * 1000; // 30s

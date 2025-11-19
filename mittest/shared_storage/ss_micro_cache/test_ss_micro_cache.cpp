@@ -51,6 +51,8 @@ public:
   int get_micro_block_cache(ObArray<TestSSCommonUtil::MicroBlockInfo> &micro_block_info_arr, int idx, int thread_num);
   int add_micro_block(const int64_t macro_blk_cnt, const int64_t micro_blk_cnt, const int64_t tid,
       const int64_t thread_num, const bool is_random, ObHashMap<ObSSMicroBlockCacheKey, int64_t> &micro_key_map);
+  int batch_add_micro_block(const uint64_t tablet_id, const int64_t micro_cnt, const int64_t micro_size);
+  int batch_get_micro_block_meta(const uint64_t tablet_id, const int64_t micro_cnt, const int64_t micro_size, int64_t &get_cnt);
 };
 
 void TestSSMicroCache::SetUpTestCase()
@@ -182,6 +184,92 @@ int TestSSMicroCache::add_micro_block(
         }
       }
     }
+  }
+  return ret;
+}
+
+int TestSSMicroCache::batch_add_micro_block(
+  const uint64_t tablet_id,
+  const int64_t micro_cnt,
+  const int64_t micro_size)
+{
+  int ret = OB_SUCCESS;
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ObArenaAllocator allocator;
+  char *data_buf = nullptr;
+  if (OB_UNLIKELY(micro_cnt <= 0 || micro_size <= 0 || tablet_id == 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(micro_cnt), K(micro_size), K(tablet_id));
+  } else if (OB_ISNULL(micro_cache)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("micro_cache should not be null", KR(ret), KP(micro_cache));
+  } else if (OB_ISNULL(data_buf = static_cast<char *>(allocator.alloc(micro_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate memory", KR(ret), K(micro_size));
+  } else {
+    const int32_t phy_blk_size = micro_cache->phy_blk_size_;
+    const int64_t payload_offset = ObSSMemBlock::get_reserved_size();
+    const int64_t offset = payload_offset;
+    int64_t add_cnt = 0;
+    for (int64_t i = 1; OB_SUCC(ret) && (i <= micro_cnt); ++i) {
+      MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(tablet_id, i);
+      ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+      const uint32_t effective_tablet_id = macro_id.second_id();
+      char c = micro_key.hash() % 26 + 'a';
+      MEMSET(data_buf, c, micro_size);
+      const ObSSMicroCacheAccessType access_type = ObSSMicroCacheAccessType::COMMON_IO_TYPE;
+      if (OB_FAIL(micro_cache->add_micro_block_cache(micro_key, data_buf, micro_size, effective_tablet_id, access_type))) {
+        if (OB_EAGAIN == ret) { // if add too fast, sleep for a while, and retry
+          ob_usleep(1000);
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to add micro_block cache", KR(ret), K(i), K(micro_key), K(tablet_id), K(access_type));
+        }
+      } else if (i % 200 == 0) {
+        ob_usleep(1000);
+        ++add_cnt;
+      } else {
+        ++add_cnt;
+      }
+    }
+    LOG_INFO("TEST: finish batch add micro_block", K(add_cnt), K(tablet_id), K(micro_cnt));
+    allocator.clear();
+  }
+  return ret;
+}
+
+int TestSSMicroCache::batch_get_micro_block_meta(
+  const uint64_t tablet_id,
+  const int64_t micro_cnt,
+  const int64_t micro_size,
+  int64_t &get_cnt)
+{
+  int ret = OB_SUCCESS;
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
+  if (OB_UNLIKELY(micro_cnt <= 0 || micro_size <= 0 || tablet_id == 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(micro_cnt), K(micro_size), K(tablet_id));
+  } else {
+    get_cnt = 0;
+    const int64_t payload_offset = ObSSMemBlock::get_reserved_size();
+    const int64_t offset = payload_offset;
+    for (int64_t i = 1; OB_SUCC(ret) && (i <= micro_cnt); ++i) {
+      MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(tablet_id, i);
+      ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+      ObSSMicroBlockMetaHandle micro_meta_handle;
+      ret = micro_meta_mgr.get_micro_block_meta(micro_key, micro_meta_handle, macro_id.second_id(), true/*update_arc*/);
+      if (OB_FAIL(ret)) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to get micro_block meta", KR(ret), K(micro_key), K(i), K(tablet_id));
+        }
+      } else {
+        ++get_cnt;
+      }
+    }
+    LOG_INFO("TEST: finish batch get micro_block", K(tablet_id), K(micro_cnt), K(get_cnt));
   }
   return ret;
 }
@@ -778,6 +866,305 @@ TEST_F(TestSSMicroCache, test_get_not_exist_micro_blocks)
 }
 
 /*
+  Test clear micro meta by tablet id.
+*/
+TEST_F(TestSSMicroCache, test_clear_micro_meta_by_tablet_id)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("TEST_CASE: start test_clear_micro_meta_by_tablet_id");
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
+  ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
+  ObSSMicroCacheMemoryStat &mem_stat = cache_stat.mem_stat_;
+  ObSSMicroCacheMicroStat &micro_stat = cache_stat.micro_stat_;
+  ObSSARCInfo &arc_info = micro_meta_mgr.arc_info_;
+  ObSSMicroCacheTaskStat &task_stat = cache_stat.task_stat_;
+  ObSSPersistMicroMetaTask &persist_meta_task = micro_cache->task_runner_.persist_meta_task_;
+  ObSSMicroCacheSuperBlk &super_blk = micro_cache->phy_blk_mgr_.super_blk_;
+
+  const int64_t avg_micro_size = 12 * 1024;
+  const int64_t micro_cnt = 10000;
+  const int64_t TIMEOUT_S = 200;
+  const int64_t meta_ckpt_split_cnt = micro_cache->micro_ckpt_split_cnt_;  // 1
+  micro_meta_mgr.enable_save_meta_mem_ = true;
+
+  // Disable meta ckpt
+  persist_meta_task.cur_interval_us_ = 3600 * 1000 * 1000L;
+  ob_usleep(1000 * 1000);
+
+  // Scenario 1: only tablet_id 100 is in the micro cache, clear tablet_id 100
+  {
+    ASSERT_EQ(OB_SUCCESS, batch_add_micro_block(100/* tablet_id */, micro_cnt, avg_micro_size));
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
+
+    ASSERT_EQ(OB_SUCCESS, micro_cache->clear_micro_meta_by_tablet_id(ObTabletID(100)));
+    bool need_delete = false;
+    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.is_tablet_need_delete(ObTabletID(100), need_delete));
+    ASSERT_EQ(true, need_delete);
+    int64_t ckpt_op_cnt = -1;
+    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.tablets_to_delete_.get_refactored(ObTabletID(100), ckpt_op_cnt));
+    ASSERT_EQ(0, ckpt_op_cnt);
+    ASSERT_GT(micro_stat.total_micro_cnt_, 0);
+    ASSERT_EQ(1, micro_stat.pending_delete_tablet_cnt_);
+
+    // Perform a full round of meta ckpt to erase meta which tablet_id is 100
+    int64_t ori_micro_ckpt_op_cnt = task_stat.micro_ckpt_op_cnt_;
+    bool finish_ckpt = false;
+    int64_t cur_time_s = ObTimeUtility::current_time_s();
+    do {
+      if (task_stat.micro_ckpt_op_cnt_ >= ori_micro_ckpt_op_cnt + meta_ckpt_split_cnt) {
+        finish_ckpt = true;
+      } else {
+        ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.start_op());
+        persist_meta_task.persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
+        ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.gen_checkpoint());
+        ob_usleep(10 * 1000);
+      }
+    } while (!finish_ckpt && ObTimeUtility::current_time_s() - cur_time_s <= TIMEOUT_S);
+    ASSERT_EQ(true, finish_ckpt);
+
+    ASSERT_EQ(0, micro_stat.total_micro_cnt_);
+    ASSERT_EQ(0, mem_stat.micro_alloc_cnt_);
+    ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_T1].cnt_);
+    ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_T1].size_);
+    ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_T2].cnt_);
+    ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_T2].size_);
+    ASSERT_EQ(0, super_blk.tablet_info_list_.count());
+    ASSERT_EQ(1, micro_meta_mgr.tablets_to_delete_.size());
+    ASSERT_EQ(1, micro_stat.pending_delete_tablet_cnt_);
+
+    // Perform one more meta ckpt to clear the tablet_id from tablets_to_delete_
+    finish_ckpt = false;
+    cur_time_s = ObTimeUtility::current_time_s();
+    do {
+      if (task_stat.micro_ckpt_op_cnt_ >= ori_micro_ckpt_op_cnt + meta_ckpt_split_cnt + 1) {
+        finish_ckpt = true;
+      } else {
+        ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.start_op());
+        persist_meta_task.persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
+        ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.gen_checkpoint());
+        ob_usleep(10 * 1000);
+      }
+    } while (!finish_ckpt && ObTimeUtility::current_time_s() - cur_time_s <= TIMEOUT_S);
+    ASSERT_EQ(true, finish_ckpt);
+    ASSERT_EQ(0, micro_meta_mgr.tablets_to_delete_.size());
+    ASSERT_EQ(0, micro_stat.pending_delete_tablet_cnt_);
+  }
+
+  // Scenario 2: exist tablet_id 100 and 200 in the micro cache, clear tablet_id 200
+  {
+    ASSERT_EQ(OB_SUCCESS, batch_add_micro_block(100/* tablet_id */, micro_cnt, avg_micro_size));
+    ASSERT_EQ(OB_SUCCESS, batch_add_micro_block(200/* tablet_id */, micro_cnt, avg_micro_size));
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
+
+    int64_t get_cnt_100 = 0;
+    ASSERT_EQ(OB_SUCCESS, batch_get_micro_block_meta(100/* tablet_id */, micro_cnt, avg_micro_size, get_cnt_100));
+    ASSERT_GT(get_cnt_100, 0);
+    ASSERT_EQ(get_cnt_100, arc_info.seg_info_arr_[SS_ARC_T2].cnt_);
+    int64_t get_cnt_200 = 0;
+    ASSERT_EQ(OB_SUCCESS, batch_get_micro_block_meta(200/* tablet_id */, micro_cnt, avg_micro_size, get_cnt_200));
+    ASSERT_GT(get_cnt_200, 0);
+
+    // Perform the deletion request of tablet_id 200
+    ASSERT_EQ(OB_SUCCESS, micro_cache->clear_micro_meta_by_tablet_id(ObTabletID(200)));
+    bool need_delete = false;
+    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.is_tablet_need_delete(ObTabletID(200), need_delete));
+    ASSERT_EQ(true, need_delete);
+    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.is_tablet_need_delete(ObTabletID(100), need_delete));
+    ASSERT_EQ(false, need_delete);
+    int64_t ori_micro_ckpt_op_cnt = task_stat.micro_ckpt_op_cnt_;
+    ASSERT_EQ(meta_ckpt_split_cnt + 1, ori_micro_ckpt_op_cnt);
+    int64_t ckpt_op_cnt = -1;
+    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.tablets_to_delete_.get_refactored(ObTabletID(200), ckpt_op_cnt));
+    ASSERT_EQ(ori_micro_ckpt_op_cnt, ckpt_op_cnt);
+    ASSERT_EQ(1, micro_stat.pending_delete_tablet_cnt_);
+
+    // Perform a full round of meta ckpt to check if the meta is deleted
+    bool finish_ckpt = false;
+    int64_t cur_time_s = ObTimeUtility::current_time_s();
+    do {
+      if (task_stat.micro_ckpt_op_cnt_ >= ori_micro_ckpt_op_cnt + meta_ckpt_split_cnt) {
+        finish_ckpt = true;
+      } else {
+        ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.start_op());
+        persist_meta_task.persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
+        ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.gen_checkpoint());
+        ob_usleep(10 * 1000);
+      }
+    } while (!finish_ckpt && ObTimeUtility::current_time_s() - cur_time_s <= TIMEOUT_S);
+    ASSERT_EQ(true, finish_ckpt);
+
+    ASSERT_EQ(micro_stat.total_micro_cnt_, arc_info.seg_info_arr_[SS_ARC_T2].cnt_);
+    ASSERT_EQ(micro_stat.total_micro_cnt_, micro_stat.valid_micro_cnt_);
+    ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_T1].cnt_);
+    ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_T1].size_);
+    ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_B1].cnt_);
+    ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_B1].size_);
+    ASSERT_EQ(get_cnt_100, arc_info.seg_info_arr_[SS_ARC_T2].cnt_);
+    ASSERT_EQ(1, micro_meta_mgr.tablets_to_delete_.size());
+    ASSERT_EQ(1, micro_stat.pending_delete_tablet_cnt_);
+
+    // Perform a full round of meta ckpt to check if the tablets_to_delete_ is cleared
+    finish_ckpt = false;
+    cur_time_s = ObTimeUtility::current_time_s();
+    do {
+      if (task_stat.micro_ckpt_op_cnt_ >= ori_micro_ckpt_op_cnt + meta_ckpt_split_cnt + 1) {
+        finish_ckpt = true;
+      } else {
+        ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.start_op());
+        persist_meta_task.persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
+        ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.gen_checkpoint());
+        ob_usleep(10 * 1000);
+      }
+    } while (!finish_ckpt && ObTimeUtility::current_time_s() - cur_time_s <= TIMEOUT_S);
+    ASSERT_EQ(true, finish_ckpt);
+    ASSERT_EQ(0, micro_meta_mgr.tablets_to_delete_.size());
+    ASSERT_EQ(0, micro_stat.pending_delete_tablet_cnt_);
+  }
+
+  // Scenario 3: exist tablet_id 100 and 300 in the micro cache, clear tablet_id 100
+  {
+    ASSERT_EQ(OB_SUCCESS, batch_add_micro_block(100/* tablet_id */, micro_cnt, avg_micro_size));
+    ASSERT_EQ(OB_SUCCESS, batch_add_micro_block(300/* tablet_id */, micro_cnt, avg_micro_size));
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
+
+    // Read the micro_block meta of tablet_id 100
+    int64_t get_cnt_100 = 0;
+    ASSERT_EQ(OB_SUCCESS, batch_get_micro_block_meta(100/* tablet_id */, micro_cnt, avg_micro_size, get_cnt_100));
+    ASSERT_GT(get_cnt_100, 0);
+    ASSERT_EQ(get_cnt_100, arc_info.seg_info_arr_[SS_ARC_T2].cnt_);
+
+    // Perform the deletion request of tablet_id 100
+    ASSERT_EQ(OB_SUCCESS, micro_cache->clear_micro_meta_by_tablet_id(ObTabletID(100)));
+    bool need_delete = false;
+    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.is_tablet_need_delete(ObTabletID(100), need_delete));
+    ASSERT_EQ(true, need_delete);
+    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.is_tablet_need_delete(ObTabletID(300), need_delete));
+    ASSERT_EQ(false, need_delete);
+    int64_t ori_micro_ckpt_op_cnt = task_stat.micro_ckpt_op_cnt_;
+    int64_t ckpt_op_cnt = -1;
+    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.tablets_to_delete_.get_refactored(ObTabletID(100), ckpt_op_cnt));
+    ASSERT_EQ(ori_micro_ckpt_op_cnt, ckpt_op_cnt);
+    ASSERT_EQ(1, micro_stat.pending_delete_tablet_cnt_);
+
+    // Perform a full round of meta ckpt to check if the meta is deleted
+    bool finish_ckpt = false;
+    int64_t cur_time_s = ObTimeUtility::current_time_s();
+    do {
+      if (task_stat.micro_ckpt_op_cnt_ >= ori_micro_ckpt_op_cnt + meta_ckpt_split_cnt) {
+        finish_ckpt = true;
+      } else {
+        ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.start_op());
+        persist_meta_task.persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
+        ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.gen_checkpoint());
+        ob_usleep(10 * 1000);
+      }
+    } while (!finish_ckpt && ObTimeUtility::current_time_s() - cur_time_s <= TIMEOUT_S);
+    ASSERT_EQ(true, finish_ckpt);
+
+    get_cnt_100 = 0;
+    ASSERT_EQ(OB_SUCCESS, batch_get_micro_block_meta(100/* tablet_id */, micro_cnt, avg_micro_size, get_cnt_100));
+    ASSERT_EQ(get_cnt_100, 0);
+    int64_t get_cnt_300 = 0;
+    ASSERT_EQ(OB_SUCCESS, batch_get_micro_block_meta(300/* tablet_id */, micro_cnt, avg_micro_size, get_cnt_300));
+    ASSERT_GT(get_cnt_300, 0);
+    ASSERT_EQ(get_cnt_300, arc_info.seg_info_arr_[SS_ARC_T2].cnt_);
+    ASSERT_EQ(micro_stat.total_micro_cnt_, arc_info.seg_info_arr_[SS_ARC_T2].cnt_);
+    ASSERT_EQ(micro_stat.total_micro_cnt_, micro_stat.valid_micro_cnt_);
+    ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_T1].cnt_);
+    ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_T1].size_);
+    ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_B1].cnt_);
+    ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_B1].size_);
+  }
+
+  // Scenario 4: exist tablet_id 300 in the micro cache, and all the meta are in T2
+  // Evict half of the meta to B2, then perform 1st meta ckpt to persist the ghost meta into disk
+  // Then perform 2nd meta ckpt to clear tablet_id 300, check if the meta in memory and disk are correctly cleared
+  {
+    // Evict half of the meta from T2 to B2
+    const int64_t offset = ObSSMemBlock::get_reserved_size();
+    for (int64_t i = 1; OB_SUCC(ret) && (i <= micro_cnt / 2); ++i) {
+      MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(300/*tablet_id*/, i);
+      ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, avg_micro_size);
+      ObSSMicroBlockMetaHandle micro_meta_handle;
+      ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_block_meta(micro_key, micro_meta_handle, macro_id.second_id(), true/*update_arc*/));
+      ASSERT_EQ(true, micro_meta_handle.is_valid());
+      ASSERT_EQ(false, micro_meta_handle()->is_in_l1_);
+      ASSERT_EQ(false, micro_meta_handle()->is_in_ghost_);
+
+      ObSSMicroBlockMetaInfo cold_micro_info;
+      micro_meta_handle()->get_micro_meta_info(cold_micro_info);
+
+      // If micro data haven't been persisted, it can't be evicted
+      if (cold_micro_info.can_evict()) {
+        ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.try_evict_micro_block_meta(cold_micro_info));
+        ASSERT_EQ(true, micro_meta_handle()->is_in_ghost_);
+        ASSERT_EQ(false, micro_meta_handle()->is_valid_field());
+      }
+    }
+    int64_t get_cnt_300 = 0;
+    ASSERT_EQ(OB_SUCCESS, batch_get_micro_block_meta(300/* tablet_id */, micro_cnt, avg_micro_size, get_cnt_300));
+    ASSERT_GE(get_cnt_300, micro_cnt / 2);
+
+    // Perform 1st meta ckpt to check if the ghost meta is persisted into disk
+    bool finish_ckpt = false;
+    int64_t cur_time_s = ObTimeUtility::current_time_s();
+    int64_t ori_micro_ckpt_op_cnt = task_stat.micro_ckpt_op_cnt_;
+    do {
+      if (task_stat.micro_ckpt_op_cnt_ >= ori_micro_ckpt_op_cnt + meta_ckpt_split_cnt) {
+        finish_ckpt = true;
+      } else {
+        ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.start_op());
+        persist_meta_task.persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
+        ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.gen_checkpoint());
+        ob_usleep(10 * 1000);
+      }
+    } while (!finish_ckpt && ObTimeUtility::current_time_s() - cur_time_s <= TIMEOUT_S);
+    ASSERT_EQ(true, finish_ckpt);
+
+    ASSERT_EQ(micro_stat.total_micro_cnt_, micro_stat.valid_micro_cnt_);
+    ASSERT_LT(micro_stat.total_micro_cnt_, micro_cnt);
+    ASSERT_EQ(arc_info.seg_info_arr_[SS_ARC_T1].cnt_, 0);
+    ASSERT_EQ(arc_info.seg_info_arr_[SS_ARC_B1].cnt_, 0);
+    ASSERT_GE(arc_info.seg_info_arr_[SS_ARC_T2].cnt_, micro_cnt / 2);
+    ASSERT_LE(arc_info.seg_info_arr_[SS_ARC_B2].cnt_, micro_cnt / 2);
+    ASSERT_GT(arc_info.seg_info_arr_[SS_ARC_B2].cnt_, 0);
+    ASSERT_EQ(1, super_blk.tablet_info_list_.count());
+
+    // Perform 2nd meta ckpt to clear the meta of tablet_id 300
+    ASSERT_EQ(OB_SUCCESS, micro_cache->clear_micro_meta_by_tablet_id(ObTabletID(300)));
+    finish_ckpt = false;
+    cur_time_s = ObTimeUtility::current_time_s();
+    do {
+      if (task_stat.micro_ckpt_op_cnt_ >= ori_micro_ckpt_op_cnt + meta_ckpt_split_cnt + 1) {
+        finish_ckpt = true;
+      } else {
+        ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.start_op());
+        persist_meta_task.persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
+        ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.gen_checkpoint());
+        ob_usleep(10 * 1000);
+      }
+    } while (!finish_ckpt && ObTimeUtility::current_time_s() - cur_time_s <= TIMEOUT_S);
+    ASSERT_EQ(true, finish_ckpt);
+
+    ASSERT_EQ(0, task_stat.micro_ckpt_item_cnt_);
+    ASSERT_EQ(0, micro_stat.total_micro_cnt_);
+    ASSERT_EQ(0, micro_stat.valid_micro_cnt_);
+    ASSERT_EQ(0, mem_stat.micro_alloc_cnt_);
+    ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_T1].cnt_);
+    ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_B1].cnt_);
+    ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_T2].cnt_);
+    ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_B2].cnt_);
+
+    get_cnt_300 = 0;
+    ASSERT_EQ(OB_SUCCESS, batch_get_micro_block_meta(300/* tablet_id */, micro_cnt, avg_micro_size, get_cnt_300));
+    ASSERT_EQ(get_cnt_300, 0);
+  }
+
+  LOG_INFO("TEST_CASE: finish test_clear_micro_meta_by_tablet_id");
+}
+
+/*
   Test the effect of update_micro_block_heat when set transfer_seg, update_access_time true/false
 */
 TEST_F(TestSSMicroCache, test_update_micro_block_heat)
@@ -981,7 +1368,7 @@ TEST_F(TestSSMicroCache, test_private_macro_cache_miss_cnt)
   uint64_t tablet_id = 200001;
   uint64_t server_id = 1;
 
-  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tablet_data_tablet_id_transfer_seq_dir(MTL_ID(), MTL_EPOCH_ID(), tablet_id, 0/*transfer_seq*/));
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tablet_data_tablet_id_private_transfer_epoch_dir(MTL_ID(), MTL_EPOCH_ID(), tablet_id, 0/*transfer_seq*/));
 
   // 1. write
   MacroBlockId macro_id;
@@ -989,7 +1376,7 @@ TEST_F(TestSSMicroCache, test_private_macro_cache_miss_cnt)
   macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
   macro_id.set_second_id(tablet_id); // tablet_id
   macro_id.set_third_id(100); // seq_id
-  macro_id.set_macro_transfer_epoch(0); // tablet_transfer_seq
+  macro_id.set_macro_private_transfer_epoch(0); // tablet_transfer_seq
   macro_id.set_tenant_seq(server_id); // macro_seq
   ASSERT_TRUE(macro_id.is_valid());
   ObStorageObjectHandle write_object_handle;

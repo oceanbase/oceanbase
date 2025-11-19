@@ -39,9 +39,7 @@ ObDDLIndependentDag::ObDDLIndependentDag()
     ddl_thread_count_(0),
     pipeline_count_(0),
     ret_code_(OB_SUCCESS),
-    is_inc_major_log_(false),
-    fifo_allocator_(),
-    merge_helper_array_()
+    is_inc_major_log_(false)
 {
 
 }
@@ -80,17 +78,6 @@ void ObDDLIndependentDag::reuse()
   ret_code_ = OB_SUCCESS;
   is_inc_major_log_ = false;
   arena_.reset();
-
-
-  for (int64_t i = 0; i < merge_helper_array_.count(); ++i) {
-    ObIDDLMergeHelper *merge_helper = merge_helper_array_.at(i);
-    if (OB_NOT_NULL(merge_helper)) {
-      merge_helper->~ObIDDLMergeHelper();
-      fifo_allocator_.free(merge_helper);
-    }
-  }
-  merge_helper_array_.reset();
-  fifo_allocator_.reset();
 }
 
 int ObDDLIndependentDag::init_by_param(const share::ObIDagInitParam *param)
@@ -105,8 +92,6 @@ int ObDDLIndependentDag::init_by_param(const share::ObIDagInitParam *param)
     LOG_WARN("reject execute dag when request comes from old version", K(ret), KPC(init_param));
   } else if (OB_FAIL(ls_tablet_ids_.assign(init_param->ls_tablet_ids_))) {
     LOG_WARN("assign ls tablet id array failed", K(ret), K(init_param->ls_tablet_ids_));
-  } else if (OB_FAIL(fifo_allocator_.init(ObMallocAllocator::get_instance(), OB_MALLOC_NORMAL_BLOCK_SIZE, ObMemAttr( MTL_ID(), "ddl_dag")))) {
-    LOG_WARN("failed to init fifo allocator", K(ret));
   } else {
     direct_load_type_ = init_param->direct_load_type_;
     ddl_thread_count_ = init_param->ddl_thread_count_;
@@ -197,6 +182,7 @@ int ObDDLIndependentDag::schedule_tablet_merge_task()
         LOG_WARN("get ddl tablet context failed", K(ret), K(tablet_id));
       }
       /* create merge task for data tablet*/
+
       ObDDLTabletMergeDagParamV2 merge_param;
       ObDDLMergePrepareTask *ddl_merge_task = nullptr;
       if (OB_FAIL(ret)) {
@@ -206,12 +192,8 @@ int ObDDLIndependentDag::schedule_tablet_merge_task()
                                           mock_start_scn,
                                           direct_load_type_,
                                           ddl_task_param_,
-                                          fifo_allocator_,
                                           tablet_context))) {
         LOG_WARN("failed to init  ddl merge task param", K(ret));
-      } else if (OB_FAIL(merge_helper_array_.push_back(merge_param.get_merge_helper()))) {
-        LOG_WARN("failed to push back merge helper", K(ret));
-        fifo_allocator_.free(merge_param.get_merge_helper());
       } else if (OB_FAIL(create_task(nullptr /* parent task*/, ddl_merge_task, merge_param))) {
         LOG_WARN("failed to create ddl merge taks ", K(ret));
       } else if (OB_FAIL(add_task(*ddl_merge_task))) {
@@ -230,12 +212,8 @@ int ObDDLIndependentDag::schedule_tablet_merge_task()
                                           mock_start_scn,
                                           direct_load_type_,
                                           ddl_task_param_,
-                                          fifo_allocator_,
                                           tablet_context))) {
         LOG_WARN("failed to init  ddl merge task param", K(ret));
-      } else if (OB_FAIL(merge_helper_array_.push_back(lob_merge_param.get_merge_helper()))) {
-        LOG_WARN("failed to push back merge helper", K(ret));
-        fifo_allocator_.free(lob_merge_param.get_merge_helper());
       } else if (OB_FAIL(create_task(nullptr /* parent task*/, lob_merge_task, lob_merge_param))) {
         LOG_WARN("failed to create ddl merge taks ", K(ret));
       } else if (OB_FAIL(add_task(*lob_merge_task))) {
@@ -695,8 +673,13 @@ int ObDDLIndependentDag::full_generate_write_macro_block_tasks(ObIArray<ObITask 
       LOG_WARN("fail to push back", KR(ret));
     }
   }
+
+  const bool is_vec_tablet_rebuild = ddl_table_schema_.table_item_.is_vec_tablet_rebuild_;
+
   // merge_tasks
   if (OB_FAIL(ret)) {
+  } else if (is_vec_tablet_rebuild) {
+    LOG_INFO("skip vec table rebuild generate merge task", K(ddl_table_schema_));
   } else if (OB_FAIL(init_merge_tasks(true, data_merge_tasks, lob_merge_tasks))) {
     LOG_WARN("fail to init merge tasks", KR(ret));
   } else if (OB_UNLIKELY(data_merge_tasks.empty() ||
@@ -738,16 +721,26 @@ int ObDDLIndependentDag::full_generate_write_macro_block_tasks(ObIArray<ObITask 
       }
     }
   } else {
-    if (OB_UNLIKELY(data_merge_tasks.count() != vector_index_tasks.count())) {
+    if (is_vec_tablet_rebuild) {
+      if (nullptr != next_task || !data_merge_tasks.empty() || !lob_merge_tasks.empty()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected task pointer", K(ret), KP(next_task), K(data_merge_tasks.count()), K(lob_merge_tasks.count()));
+      }
+    } else if (OB_UNLIKELY(data_merge_tasks.count() != vector_index_tasks.count())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected task count not match", KR(ret), K(data_merge_tasks.count()), K(vector_index_tasks.count()));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < vector_index_tasks.count(); ++i) {
       ObITask *vector_index_task = vector_index_tasks.at(i);
-      ObITask *data_merge_task = data_merge_tasks.at(i);
+      ObITask *data_merge_task = data_merge_tasks.empty() ? nullptr : data_merge_tasks.at(i);
       ObITask *lob_merge_task = lob_merge_tasks.empty() ? nullptr : lob_merge_tasks.at(i);
       if (OB_FAIL(scan_task->add_child(*vector_index_task))) {
         LOG_WARN("fail to add child", KR(ret));
+      } else if (is_vec_tablet_rebuild) {
+        if (nullptr != next_task || nullptr != data_merge_task || nullptr != lob_merge_task) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected task pointer", K(ret), KP(next_task), KP(data_merge_task), KP(lob_merge_task));
+        }
       } else if (OB_FAIL(vector_index_task->add_child(*data_merge_task))) {
         LOG_WARN("fail to add child", KR(ret));
       } else if (nullptr != lob_merge_task && OB_FAIL(vector_index_task->add_child(*lob_merge_task))) {
@@ -969,32 +962,23 @@ int ObDDLIndependentDag::init_tablet_merge_task(
     LOG_WARN("failed to convert for tx", K(ret));
   } else if (OB_FAIL(get_tablet_context(tablet_id, tablet_context))) {
     LOG_WARN("get ddl tablet context failed", K(ret), K(tablet_id));
-  }
-
-  if (OB_FAIL(ret)) {
-  } else {
-    if (OB_FAIL(merge_param.init(for_major  /*for major*/,
-      false /* for lob*/,
-      false /* for replay*/,
-      mock_start_scn,
-      direct_load_type_,
-      ddl_task_param_,
-      fifo_allocator_,
-      tablet_context,
-      tx_info_.trans_id_,
-      transaction::ObTxSEQ::cast_from_int(tx_info_.seq_no_)))) {
-      LOG_WARN("failed to init  ddl merge task param", K(ret));
-    } else if (OB_FAIL(merge_helper_array_.push_back(merge_param.get_merge_helper()))) {
-      LOG_WARN("failed to push back merge helper", K(ret));
-      fifo_allocator_.free(merge_param.get_merge_helper());
-    } else if (!for_major && FALSE_IT(merge_param.set_merge_all_slice())) {
-    } else if (OB_FAIL(alloc_task(ddl_merge_task))) {
+  } else if (OB_FAIL(merge_param.init(for_major  /*for major*/,
+                                      false /* for lob*/,
+                                      false /* for replay*/,
+                                      mock_start_scn,
+                                      direct_load_type_,
+                                      ddl_task_param_,
+                                      tablet_context,
+                                      tx_info_.trans_id_,
+                                      transaction::ObTxSEQ::cast_from_int(tx_info_.seq_no_)))) {
+    LOG_WARN("failed to init  ddl merge task param", K(ret));
+  } else if (!for_major && FALSE_IT(merge_param.set_merge_all_slice())) {
+  } else if (OB_FAIL(alloc_task(ddl_merge_task))) {
     LOG_WARN("failed to alloc ddl merge task", K(ret));
-    } else if (OB_FAIL(ddl_merge_task->init(merge_param))) {
+  } else if (OB_FAIL(ddl_merge_task->init(merge_param))) {
     LOG_WARN("failed to init ddl merge task", K(ret));
-    } else {
-      data_task = ddl_merge_task;
-    }
+  } else {
+    data_task = ddl_merge_task;
   }
 
   /* create merge task for lob tablet*/
@@ -1008,14 +992,10 @@ int ObDDLIndependentDag::init_tablet_merge_task(
                                       mock_start_scn,
                                       direct_load_type_,
                                       ddl_task_param_,
-                                      fifo_allocator_,
                                       tablet_context,
                                       tx_info_.trans_id_,
                                       transaction::ObTxSEQ::cast_from_int(tx_info_.seq_no_)))) {
       LOG_WARN("failed to init  ddl merge task param", K(ret));
-    } else if (OB_FAIL(merge_helper_array_.push_back(lob_merge_param.get_merge_helper()))) {
-      LOG_WARN("failed to push back merge helper", K(ret));
-      fifo_allocator_.free(lob_merge_param.get_merge_helper());
     } else if (!for_major && FALSE_IT(lob_merge_param.set_merge_all_slice())) {
     } else if (OB_FAIL(alloc_task(lob_merge_task))) {
       LOG_WARN("failed to create ddl merge taks ", K(ret));

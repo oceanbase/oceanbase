@@ -1243,6 +1243,8 @@ int ObLSMigrationHandler::check_disk_space_(const ObMigrationOpArg &arg)
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   int64_t required_size = 0;
+  const uint64_t tenant_id = MTL_ID();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1254,6 +1256,11 @@ int ObLSMigrationHandler::check_disk_space_(const ObMigrationOpArg &arg)
         K(arg));
   } else if (!ObReplicaTypeCheck::is_replica_with_ssstore(arg.dst_.get_replica_type())) {
     LOG_INFO("dst has no ssstore, no need check disk space", K(arg));
+  } else if (tenant_config.is_valid() && tenant_config->_skip_checking_ls_migration_required_size) {
+    // the required_size read from virtual table may not be accurate,
+    // so we set it to 1 to bypass the check in emergency
+    required_size = 1;
+    LOG_INFO("skip checking ls migration required size", K(tenant_id));
   } else if (OB_TMP_FAIL(get_ls_required_size_(arg, required_size))) {
     // use OB_TMP_FAIL to ignore return value because when tenant is restoring,
     // inner table may not created yet, which is not readable,

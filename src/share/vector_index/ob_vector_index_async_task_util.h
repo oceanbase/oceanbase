@@ -385,7 +385,8 @@ public:
         new_adapter_(nullptr),
         mem_attr_(mem_attr),
         allocator_(mem_attr),
-        has_replace_old_adapter_(false)
+        has_replace_old_adapter_(false),
+        all_finished_(false)
   {}
   ObVecIndexIAsyncTask(const uint64_t tenant_id, const ObLSID &ls_id, ObPluginVectorIndexAdaptor *adapter) : tenant_id_(tenant_id), ls_id_(ls_id), new_adapter_(adapter) {}
   virtual ~ObVecIndexIAsyncTask() {}
@@ -398,6 +399,7 @@ public:
   bool invalid_snapshot_column_ids() {
     return vector_vid_col_idx_ == -1 || vector_col_idx_ == -1 || vector_key_col_idx_ == -1 || vector_data_col_idx_ == -1 || vector_visible_col_idx_ == -1;
   }
+  bool all_finished() { return all_finished_; }
   virtual void check_task_free() {}
   virtual int do_work() = 0;
 
@@ -424,6 +426,7 @@ protected:
   ObMemAttr mem_attr_;
   common::ObArenaAllocator allocator_;
   bool has_replace_old_adapter_;
+  bool all_finished_;
   DISALLOW_COPY_AND_ASSIGN(ObVecIndexIAsyncTask);
 };
 
@@ -442,7 +445,6 @@ public:
   int execute_exchange();
   int execute_clean();
   int get_task_paralellism(int64_t &parallelism);
-  int get_enable_paralellism(bool &enable_parallelism);
   int get_partition_name(const ObTableSchema &data_table_schema, const int64_t data_table_id, const int64_t index_table_id, const ObTabletID &tablet_id, common::ObIAllocator &allocator, ObString &partition_names);
   int create_new_adapter(ObPluginVectorIndexService *vector_index_service, ObPluginVectorIndexAdapterGuard &old_adapter_guard, ObPluginVectorIndexAdaptor *&new_adapter);
   // pipeline call
@@ -545,6 +547,10 @@ private:
       const int64_t visible_col_idx,
       ObIArray<uint64_t> &extra_column_idxs,
       storage::ObValueRowIterator &dml_row_iter);
+  int get_ls_leader_addr(
+      const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
+      common::ObAddr &leader_addr);
 
   bool check_task_satisfied_memory_limited(ObPluginVectorIndexAdaptor &adaptor);
   bool check_new_adapter_exist(const int64_t task_id);

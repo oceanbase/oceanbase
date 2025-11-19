@@ -61,9 +61,23 @@ int ObExprEmbeddedVec::calc_result_typeN(ObExprResType &type,
                                                                    elem_type, subschema_id))) {
       LOG_WARN("failed to get vector subschema id", K(ret), K(types[0]));
     } else {
-      LOG_WARN("exec ctx is null", K(ret));
+      LOG_DEBUG("EmbeddedVec subschema_id is : ", K(ret), K(subschema_id));
       type.set_collection(subschema_id);
     }
+  }
+  return ret;
+}
+
+int ObExprEmbeddedVec::pack_embedded_res(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res, const ObString &str)
+{
+  int ret = OB_SUCCESS;
+  ObTextStringDatumResult text_result(expr.datum_meta_.type_, &expr, &ctx, &res);
+  if (OB_FAIL(text_result.init(str.length()))) {
+    LOG_WARN("init lob result failed");
+  } else if (OB_FAIL(text_result.append(str.ptr(), str.length()))) {
+    LOG_WARN("failed to append realdata", K(ret), K(text_result));
+  } else {
+    text_result.set_result();
   }
   return ret;
 }
@@ -112,7 +126,12 @@ int ObExprEmbeddedVec::cg_expr(
     if (OB_FAIL(raw_ctx.args_[0]->eval(eval_ctx, data_datum))) {
       LOG_WARN("failed to eval data parameter", K(ret));
     } else {
-      expr_datum.set_string(data_datum->get_string());
+      ObString chunk_data = data_datum->get_string();
+      if (OB_FAIL(pack_embedded_res(raw_ctx, eval_ctx, expr_datum, chunk_data))) {
+        LOG_WARN("fail to pack embedded res", K(ret));
+      } else {
+        LOG_DEBUG("generated inrow LOB chunk when ai embedding: ", K(chunk_data));
+      }
     }
   } else if (raw_ctx.arg_cnt_ == 6) {
     if (OB_FAIL(raw_ctx.args_[0]->eval(eval_ctx, data_datum))) {
@@ -134,7 +153,12 @@ int ObExprEmbeddedVec::cg_expr(
       // If any parameter is null, return null
       expr_datum.set_null();
     } else {
-      expr_datum.set_string(data_datum->get_string());
+      ObString chunk_data = data_datum->get_string();
+      if (OB_FAIL(pack_embedded_res(raw_ctx, eval_ctx, expr_datum, chunk_data))) {
+        LOG_WARN("fail to pack embedded res", K(ret));
+      } else {
+        LOG_DEBUG("generated inrow LOB chunk when ai embedding: ", K(chunk_data));
+      }
     }
   } else {
     ret = OB_INVALID_ARGUMENT;

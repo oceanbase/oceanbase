@@ -32,7 +32,7 @@ namespace pl {
  * @param result
  * @return
  */
-int ObDbmsXplan::enable_opt_trace(ObExecContext &ctx, ParamStore &params, ObObj &result)
+int ObDbmsXplan::enable_opt_trace(ObPLExecCtx &ctx, ParamStore &params, ObObj &result)
 {
   int ret = OB_SUCCESS;
   UNUSED(result);
@@ -41,13 +41,16 @@ int ObDbmsXplan::enable_opt_trace(ObExecContext &ctx, ParamStore &params, ObObj 
   number::ObNumber level_num;
   int64_t level;
   int idx = 0;
-  ObSQLSessionInfo *session = ctx.get_my_session();
-  if (3 != params.count()) {
+  ObSQLSessionInfo *session = NULL;
+  if (OB_ISNULL(ctx.exec_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expect four params", K(ret));
-  } else if (OB_ISNULL(session)) {
+    LOG_WARN("unexpect null exec context", K(ret));
+  } else if (OB_ISNULL(session=ctx.exec_ctx_->get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null session", K(ret));
+  } else if (3 != params.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expect four params", K(ret));
   } else if (OB_FAIL(params.at(idx++).get_varchar(sql_id))) {
     LOG_WARN("failed to get sql string", K(ret));
   } else if (OB_FAIL(params.at(idx++).get_varchar(identifier))) {
@@ -72,17 +75,20 @@ int ObDbmsXplan::enable_opt_trace(ObExecContext &ctx, ParamStore &params, ObObj 
  * @param result
  * @return
  */
-int ObDbmsXplan::disable_opt_trace(ObExecContext &ctx, ParamStore &params, ObObj &result)
+int ObDbmsXplan::disable_opt_trace(ObPLExecCtx &ctx, ParamStore &params, ObObj &result)
 {
   int ret = OB_SUCCESS;
   UNUSED(result);
-  ObSQLSessionInfo *session = ctx.get_my_session();
-  if (0 != params.count()) {
+  ObSQLSessionInfo *session = NULL;
+  if (OB_ISNULL(ctx.exec_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expect four params", K(ret));
-  } else if (OB_ISNULL(session)) {
+    LOG_WARN("unexpect null exec context", K(ret));
+  } else if (OB_ISNULL(session=ctx.exec_ctx_->get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null session", K(ret));
+  } else if (0 != params.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expect four params", K(ret));
   } else {
     session->get_optimizer_tracer().set_enable(false);
   }
@@ -98,7 +104,7 @@ int ObDbmsXplan::disable_opt_trace(ObExecContext &ctx, ParamStore &params, ObObj
  * @param result
  * @return
  */
-int ObDbmsXplan::set_opt_trace_parameter(ObExecContext &ctx, ParamStore &params, ObObj &result)
+int ObDbmsXplan::set_opt_trace_parameter(ObPLExecCtx &ctx, ParamStore &params, ObObj &result)
 {
   int ret = OB_SUCCESS;
   UNUSED(result);
@@ -106,14 +112,17 @@ int ObDbmsXplan::set_opt_trace_parameter(ObExecContext &ctx, ParamStore &params,
   ObString identifier;
   number::ObNumber level_num;
   int64_t level;
-  ObSQLSessionInfo *session = ctx.get_my_session();
   int idx = 0;
-  if (3 != params.count()) {
+  ObSQLSessionInfo *session = NULL;
+  if (OB_ISNULL(ctx.exec_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expect four params", K(ret));
-  } else if (OB_ISNULL(session)) {
+    LOG_WARN("unexpect null exec context", K(ret));
+  } else if (OB_ISNULL(session=ctx.exec_ctx_->get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null session", K(ret));
+  } else if (3 != params.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expect four params", K(ret));
   } else if (OB_FAIL(params.at(idx++).get_varchar(sql_id))) {
     LOG_WARN("failed to get sql string", K(ret));
   } else if (OB_FAIL(params.at(idx++).get_varchar(identifier))) {
@@ -130,7 +139,7 @@ int ObDbmsXplan::set_opt_trace_parameter(ObExecContext &ctx, ParamStore &params,
   return ret;
 }
 
-int ObDbmsXplan::display(sql::ObExecContext &ctx,
+int ObDbmsXplan::display(ObPLExecCtx &ctx,
                         sql::ParamStore &params,
                         common::ObObj &result)
 {
@@ -139,14 +148,17 @@ int ObDbmsXplan::display(sql::ObExecContext &ctx,
   ObString statement_id;
   ObString format;
   ObString filter_preds;
-  ObSQLSessionInfo *session = ctx.get_my_session();
   int idx = 0;
-  if (4 != params.count()) {
+  ObSQLSessionInfo *session = NULL;
+  if (OB_ISNULL(ctx.exec_ctx_) || OB_ISNULL(ctx.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expect four params", K(ret));
-  } else if (OB_ISNULL(session)) {
+    LOG_WARN("unexpect null exec context", K(ret));
+  } else if (OB_ISNULL(session=ctx.exec_ctx_->get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null session", K(ret));
+  } else if (4 != params.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expect four params", K(ret));
   } else if (OB_FAIL(params.at(idx++).get_varchar(format))) {
     LOG_WARN("failed to get format", K(ret));
   } else if (OB_FAIL(params.at(idx++).get_varchar(statement_id))) {
@@ -161,7 +173,7 @@ int ObDbmsXplan::display(sql::ObExecContext &ctx,
     ObExplainDisplayOpt option;
     int last_id = -1;
     bool alloc_buffer = true;
-    ObSqlPlan sql_plan(ctx.get_allocator());
+    ObSqlPlan sql_plan(*ctx.allocator_);
     sql_plan.set_session_info(session);
     ObSEArray<ObSqlPlanItem*, 4> plan_infos;
     ObSEArray<ObSqlPlanItem*, 4> cur_plan_infos;
@@ -214,7 +226,7 @@ int ObDbmsXplan::display(sql::ObExecContext &ctx,
   return ret;
 }
 
-int ObDbmsXplan::display_cursor(sql::ObExecContext &ctx,
+int ObDbmsXplan::display_cursor(ObPLExecCtx &ctx,
                                 sql::ParamStore &params,
                                 common::ObObj &result)
 {
@@ -229,21 +241,24 @@ int ObDbmsXplan::display_cursor(sql::ObExecContext &ctx,
   ObString plan_name;
   ObString sql_handle;
   uint64_t plan_hash = 0;
-  ObSQLSessionInfo *session = ctx.get_my_session();
   int idx = 0;
   bool use_old_params = false;
   uint64_t data_version = 0;
+  ObSQLSessionInfo *session = NULL;
   if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
     LOG_WARN("fail to get sys tenant data version", KR(ret), K(data_version));
   } else if (DATA_VERSION_4_3_5_1 >= data_version) {
     use_old_params = true;
   }
-  if (!(7 == params.count() || (use_old_params && 5 == params.count()))) {
+  if (OB_ISNULL(ctx.exec_ctx_) || OB_ISNULL(ctx.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("params num not match", K(ret));
-  } else if (OB_ISNULL(session)) {
+    LOG_WARN("unexpect null exec context", K(ret));
+  } else if (OB_ISNULL(session=ctx.exec_ctx_->get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null session", K(ret));
+  } else if (!(7 == params.count() || (use_old_params && 5 == params.count()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params num not match", K(ret));
   } else if (OB_FAIL(params.at(idx++).get_number(num_val))) {
     LOG_WARN("failed to get number value", K(ret));
   } else if (OB_FAIL(num_val.cast_to_int64(plan_id))) {
@@ -264,9 +279,11 @@ int ObDbmsXplan::display_cursor(sql::ObExecContext &ctx,
     LOG_WARN("failed to get sql string", K(ret));
   } else if (!use_old_params && OB_FAIL(params.at(idx++).get_varchar(plan_name))) {
     LOG_WARN("failed to get plan name", K(ret));
-  } else if (!use_old_params && !plan_name.empty() && OB_FAIL(num_val.from(plan_name.ptr(),
-                                                        plan_name.length(),
-                                                        ctx.get_allocator()))) {
+  } else if (!use_old_params &&
+             !plan_name.empty() &&
+             OB_FAIL(num_val.from(plan_name.ptr(),
+                                  plan_name.length(),
+                                  *ctx.allocator_))) {
       ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
       LOG_WARN("failed to get plan hash");
       ObString msg = "plan_name";
@@ -291,7 +308,7 @@ int ObDbmsXplan::display_cursor(sql::ObExecContext &ctx,
     PlanText plan_text;
     ExplainType type;
     ObExplainDisplayOpt option;
-    ObSqlPlan sql_plan(ctx.get_allocator());
+    ObSqlPlan sql_plan(*ctx.allocator_);
     sql_plan.set_session_info(session);
     ObSEArray<ObSqlPlanItem*, 4> plan_infos;
     if (0 == svr_ip.length() &&
@@ -320,7 +337,7 @@ int ObDbmsXplan::display_cursor(sql::ObExecContext &ctx,
   return ret;
 }
 
-int ObDbmsXplan::display_sql_plan_baseline(sql::ObExecContext &ctx,
+int ObDbmsXplan::display_sql_plan_baseline(ObPLExecCtx &ctx,
                                           sql::ParamStore &params,
                                           common::ObObj &result)
 {
@@ -333,21 +350,24 @@ int ObDbmsXplan::display_sql_plan_baseline(sql::ObExecContext &ctx,
   int64_t tenant_id = 0;
   ObString svr_ip;
   int64_t svr_port;
-  ObSQLSessionInfo *session = ctx.get_my_session();
   int idx = 0;
-  if (6 != params.count()) {
+  ObSQLSessionInfo *session = NULL;
+  if (OB_ISNULL(ctx.exec_ctx_) || OB_ISNULL(ctx.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expect four params", K(ret));
-  } else if (OB_ISNULL(session)) {
+    LOG_WARN("unexpect null exec context", K(ret));
+  } else if (OB_ISNULL(session=ctx.exec_ctx_->get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null session", K(ret));
+  } else if (6 != params.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expect four params", K(ret));
   } else if (OB_FAIL(params.at(idx++).get_varchar(sql_handle))) {
     LOG_WARN("failed to get sql string", K(ret));
   } else if (OB_FAIL(params.at(idx++).get_varchar(plan_name))) {
     LOG_WARN("failed to get plan name", K(ret));
   } else if (OB_FAIL(num_val.from(plan_name.ptr(),
                                   plan_name.length(),
-                                  ctx.get_allocator()))) {
+                                  *ctx.allocator_))) {
     ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
     LOG_WARN("failed to get plan hash", K(ret));
     ObString msg = "plan_name";
@@ -376,7 +396,7 @@ int ObDbmsXplan::display_sql_plan_baseline(sql::ObExecContext &ctx,
     PlanText plan_text;
     ExplainType type;
     ObExplainDisplayOpt option;
-    ObSqlPlan sql_plan(ctx.get_allocator());
+    ObSqlPlan sql_plan(*ctx.allocator_);
     sql_plan.set_session_info(session);
     ObSEArray<ObSqlPlanItem*, 4> plan_infos;
     if (0 == svr_ip.length() &&
@@ -414,7 +434,7 @@ int ObDbmsXplan::display_sql_plan_baseline(sql::ObExecContext &ctx,
   return ret;
 }
 
-int ObDbmsXplan::display_active_session_plan(sql::ObExecContext &ctx,
+int ObDbmsXplan::display_active_session_plan(ObPLExecCtx &ctx,
                                             sql::ParamStore &params,
                                             common::ObObj &result)
 {
@@ -424,9 +444,15 @@ int ObDbmsXplan::display_active_session_plan(sql::ObExecContext &ctx,
   ObString format;
   ObString svr_ip;
   int64_t svr_port;
-  ObSQLSessionInfo *session = ctx.get_my_session();
   int idx = 0;
-  if (4 != params.count()) {
+  ObSQLSessionInfo *session = NULL;
+  if (OB_ISNULL(ctx.exec_ctx_) || OB_ISNULL(ctx.allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null exec context", K(ret));
+  } else if (OB_ISNULL(session=ctx.exec_ctx_->get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null session", K(ret));
+  } else if (4 != params.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expect four params", K(ret));
   } else if (OB_FAIL(params.at(idx++).get_number(num_val))) {
@@ -435,9 +461,6 @@ int ObDbmsXplan::display_active_session_plan(sql::ObExecContext &ctx,
     LOG_WARN("failed to cast int", K(ret));
   } else if (OB_FAIL(params.at(idx++).get_varchar(format))) {
     LOG_WARN("failed to get format", K(ret));
-  } else if (OB_ISNULL(session)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null session", K(ret));
   } else if (OB_FAIL(params.at(idx++).get_varchar(svr_ip))) {
     LOG_WARN("failed to get sql id", K(ret));
   } else if (OB_FAIL(params.at(idx++).get_number(num_val))) {
@@ -448,7 +471,7 @@ int ObDbmsXplan::display_active_session_plan(sql::ObExecContext &ctx,
     PlanText plan_text;
     ExplainType type;
     ObExplainDisplayOpt option;
-    ObSqlPlan sql_plan(ctx.get_allocator());
+    ObSqlPlan sql_plan(*ctx.allocator_);
     sql_plan.set_session_info(session);
     ObSEArray<ObSqlPlanItem*, 4> plan_infos;
     if (0 == svr_ip.length() &&
@@ -475,7 +498,7 @@ int ObDbmsXplan::display_active_session_plan(sql::ObExecContext &ctx,
   return ret;
 }
 
-int ObDbmsXplan::get_server_ip_port(sql::ObExecContext &ctx,
+int ObDbmsXplan::get_server_ip_port(ObPLExecCtx &ctx,
                                     ObString &svr_ip,
                                     int64_t &svr_port)
 {
@@ -486,9 +509,12 @@ int ObDbmsXplan::get_server_ip_port(sql::ObExecContext &ctx,
   if (!addr.ip_to_string(ip_buf, sizeof(ip_buf))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ip to string failed", K(ret));
+  } else if (OB_ISNULL(ctx.allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null allocator", K(ret));
   } else {
     ObString ipstr_tmp = ObString::make_string(ip_buf);
-    if (OB_FAIL(ob_write_string (ctx.get_allocator(), ipstr_tmp, svr_ip))) {
+    if (OB_FAIL(ob_write_string (*ctx.allocator_, ipstr_tmp, svr_ip))) {
       LOG_WARN("ob write string failed", K(ret));
     } else if (svr_ip.empty()) {
       ret = OB_ERR_UNEXPECTED;
@@ -525,7 +551,7 @@ int ObDbmsXplan::get_plan_format(const ObString &format,
   return ret;
 }
 
-int ObDbmsXplan::set_display_result(sql::ObExecContext &ctx,
+int ObDbmsXplan::set_display_result(ObPLExecCtx &ctx,
                                     PlanText &plan_text,
                                     common::ObObj &result)
 {
@@ -544,36 +570,39 @@ int ObDbmsXplan::set_display_result(sql::ObExecContext &ctx,
   return ret;
 }
 
-int ObDbmsXplan::set_display_result_for_oracle(sql::ObExecContext &exec_ctx,
+int ObDbmsXplan::set_display_result_for_oracle(ObPLExecCtx &ctx,
                                               PlanText &plan_text,
                                               common::ObObj &result)
 {
   int ret = OB_SUCCESS;
 #ifdef OB_BUILD_ORACLE_PL
   ObSEArray<ObString, 64> plan_strs;
-  ObSQLSessionInfo *session = exec_ctx.get_my_session();
-  if (OB_FAIL(ObSqlPlan::plan_text_to_strings(plan_text, plan_strs))) {
-    LOG_WARN("failed to convert plan text to string", K(ret));
-  } else if (OB_ISNULL(session)) {
+  ObSQLSessionInfo *session = NULL;
+  if (OB_ISNULL(ctx.exec_ctx_) || OB_ISNULL(ctx.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null param", K(ret));
+    LOG_WARN("unexpect null exec context", K(ret));
+  } else if (OB_ISNULL(session=ctx.exec_ctx_->get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null session", K(ret));
+  } else if (OB_FAIL(ObSqlPlan::plan_text_to_strings(plan_text, plan_strs))) {
+    LOG_WARN("failed to convert plan text to string", K(ret));
   } else {
     ObObj obj;
     ObSEArray<ObObj, 2> row;
     ObPLNestedTable *table = reinterpret_cast<ObPLNestedTable*>
-                (exec_ctx.get_allocator().alloc(sizeof(ObPLNestedTable)));
+                (ctx.allocator_->alloc(sizeof(ObPLNestedTable)));
     if (OB_ISNULL(table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null param", K(ret));
     } else {
       new (table)ObPLNestedTable();
       table->set_column_count(1);
-      if (OB_FAIL(table->init_allocator(exec_ctx.get_allocator(), true))) {
+      if (OB_FAIL(table->init_allocator(*ctx.allocator_, true))) {
         LOG_WARN("failed to init allocator", K(ret));
       } else if (OB_FAIL(ObSPIService::spi_set_collection(session->get_effective_tenant_id(),
-                                                  NULL,
-                                                  *table,
-                                                  plan_strs.count()))) {
+                                                          NULL,
+                                                          *table,
+                                                          plan_strs.count()))) {
         LOG_WARN("failed to set collection size", K(ret));
       }
     }
@@ -598,13 +627,13 @@ int ObDbmsXplan::set_display_result_for_oracle(sql::ObExecContext &exec_ctx,
   return ret;
 }
 
-int ObDbmsXplan::set_display_result_for_mysql(sql::ObExecContext &ctx,
+int ObDbmsXplan::set_display_result_for_mysql(ObPLExecCtx &ctx,
                                               PlanText &plan_text,
                                               common::ObObj &result)
 {
   int ret = OB_SUCCESS;
   ObString ret_str;
-  ObTextStringResult text_res(ObTextType, true, &ctx.get_allocator());
+  ObTextStringResult text_res(ObTextType, true, ctx.allocator_);
   if (OB_FAIL(text_res.init(plan_text.pos_))) {
     LOG_WARN("failed to init text res", K(ret), K(text_res), K(plan_text.pos_));
   } else if (OB_FAIL(text_res.append(plan_text.buf_, plan_text.pos_))) {
@@ -617,7 +646,7 @@ int ObDbmsXplan::set_display_result_for_mysql(sql::ObExecContext &ctx,
   return ret;
 }
 
-int ObDbmsXplan::get_plan_info_by_plan_table(sql::ObExecContext &ctx,
+int ObDbmsXplan::get_plan_info_by_plan_table(ObPLExecCtx &ctx,
                                              ObString table_name,
                                              ObString statement_id,
                                              ObString filter_preds,
@@ -719,7 +748,7 @@ int ObDbmsXplan::get_plan_info_by_plan_table(sql::ObExecContext &ctx,
   return ret;
 }
 
-int ObDbmsXplan::get_plan_info_by_id(sql::ObExecContext &ctx,
+int ObDbmsXplan::get_plan_info_by_id(ObPLExecCtx &ctx,
                                       int64_t tenant_id,
                                       const ObString &svr_ip,
                                       int64_t svr_port,
@@ -896,7 +925,7 @@ int ObDbmsXplan::get_plan_info_by_id(sql::ObExecContext &ctx,
   return ret;
 }
 
-int ObDbmsXplan::get_baseline_plan_info(sql::ObExecContext &ctx,
+int ObDbmsXplan::get_baseline_plan_info(ObPLExecCtx &ctx,
                                         int64_t tenant_id,
                                         const ObString &svr_ip,
                                         int64_t svr_port,
@@ -1061,7 +1090,7 @@ int ObDbmsXplan::get_baseline_plan_info(sql::ObExecContext &ctx,
   return ret;
 }
 
-int ObDbmsXplan::get_baseline_plan_detail(sql::ObExecContext &ctx,
+int ObDbmsXplan::get_baseline_plan_detail(ObPLExecCtx &ctx,
                                           const ObString& sql_handle,
                                           const ObString& plan_name,
                                           int64_t tenant_id,
@@ -1071,8 +1100,11 @@ int ObDbmsXplan::get_baseline_plan_detail(sql::ObExecContext &ctx,
   int ret = OB_SUCCESS;
   ObSqlString sql;
   ObSqlString baseline_filter;
-  ObSQLSessionInfo *session = ctx.get_my_session();
-  if (OB_ISNULL(session)) {
+  ObSQLSessionInfo *session = NULL;
+  if (OB_ISNULL(ctx.exec_ctx_) || OB_ISNULL(ctx.allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null exec context", K(ret));
+  } else if (OB_ISNULL(session=ctx.exec_ctx_->get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null session", K(ret));
   } else if (is_sys_tenant(session->get_effective_tenant_id()) &&
@@ -1113,19 +1145,20 @@ int ObDbmsXplan::get_baseline_plan_detail(sql::ObExecContext &ctx,
   return ret;
 }
 
-int ObDbmsXplan::inner_get_baseline_plan_detail(sql::ObExecContext &ctx,
+int ObDbmsXplan::inner_get_baseline_plan_detail(ObPLExecCtx &ctx,
                                                 const ObSqlString& sql,
                                                 PlanText &plan_text,
                                                 bool from_plan_cache)
 {
   int ret = OB_SUCCESS;
   common::ObISQLClient *sql_proxy = GCTX.sql_proxy_;
-  if (OB_ISNULL(sql_proxy)) {
+  sql::ObExecContext *exec_ctx = ctx.exec_ctx_;
+  if (OB_ISNULL(sql_proxy) || OB_ISNULL(exec_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null sql proxy", K(ret));
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      ObSQLSessionInfo *my_session = ctx.get_my_session();
+      ObSQLSessionInfo *my_session = exec_ctx->get_my_session();
       sqlclient::ObMySQLResult *mysql_result = NULL;
       if (OB_ISNULL(my_session)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1154,7 +1187,7 @@ int ObDbmsXplan::inner_get_baseline_plan_detail(sql::ObExecContext &ctx,
   return ret;
 }
 
-int ObDbmsXplan::format_baseline_plan_detail(sql::ObExecContext &ctx,
+int ObDbmsXplan::format_baseline_plan_detail(ObPLExecCtx &ctx,
                                               sqlclient::ObMySQLResult& mysql_result,
                                               PlanText &plan_text,
                                               bool from_plan_cache)
@@ -1250,7 +1283,7 @@ int ObDbmsXplan::format_baseline_plan_detail(sql::ObExecContext &ctx,
   return ret;
 }
 
-int ObDbmsXplan::get_plan_info_by_session_id(sql::ObExecContext &ctx,
+int ObDbmsXplan::get_plan_info_by_session_id(ObPLExecCtx &ctx,
                                             int64_t session_id,
                                             const ObString &svr_ip,
                                             int64_t svr_port,
@@ -1362,19 +1395,20 @@ int ObDbmsXplan::get_plan_info_by_session_id(sql::ObExecContext &ctx,
   return ret;
 }
 
-int ObDbmsXplan::inner_get_plan_info(sql::ObExecContext &ctx,
+int ObDbmsXplan::inner_get_plan_info(ObPLExecCtx &ctx,
                                     const ObSqlString& sql,
                                     ObIArray<ObSqlPlanItem*> &plan_infos,
                                     const bool is_from_wr)
 {
   int ret = OB_SUCCESS;
   common::ObISQLClient *sql_proxy = GCTX.sql_proxy_;
-  if (OB_ISNULL(sql_proxy)) {
+  sql::ObExecContext *exec_ctx = ctx.exec_ctx_;
+  if (OB_ISNULL(sql_proxy) || OB_ISNULL(exec_ctx) || OB_ISNULL(ctx.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null sql proxy", K(ret));
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      ObSQLSessionInfo *my_session = ctx.get_my_session();
+      ObSQLSessionInfo *my_session = exec_ctx->get_my_session();
       sqlclient::ObMySQLResult *mysql_result = NULL;
       if (OB_ISNULL(my_session)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1390,7 +1424,7 @@ int ObDbmsXplan::inner_get_plan_info(sql::ObExecContext &ctx,
       while (OB_SUCC(ret) && OB_SUCC(mysql_result->next())) {
         void *buf = NULL;
         ObSqlPlanItem *plan_info = NULL;
-        if (OB_ISNULL(buf=ctx.get_allocator().alloc(sizeof(ObSqlPlanItem)))) {
+        if (OB_ISNULL(buf=ctx.allocator_->alloc(sizeof(ObSqlPlanItem)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to allocate memory", K(ret));
         } else {
@@ -1410,7 +1444,7 @@ int ObDbmsXplan::inner_get_plan_info(sql::ObExecContext &ctx,
   return ret;
 }
 
-int ObDbmsXplan::inner_get_plan_info_use_current_session(sql::ObExecContext &ctx,
+int ObDbmsXplan::inner_get_plan_info_use_current_session(ObPLExecCtx &ctx,
                                                         const ObSqlString& sql,
                                                         ObIArray<ObSqlPlanItem*> &plan_infos)
 {
@@ -1418,9 +1452,13 @@ int ObDbmsXplan::inner_get_plan_info_use_current_session(sql::ObExecContext &ctx
   ObInnerSQLConnectionPool *pool = NULL;
   ObInnerSQLConnection *conn = NULL;
   sql::ObSQLSessionInfo *session = NULL;
-  if (OB_ISNULL(ctx.get_sql_proxy()) ||
-      OB_ISNULL(session = ctx.get_my_session()) ||
-      OB_ISNULL((pool = static_cast<ObInnerSQLConnectionPool *>(ctx.get_sql_proxy()->get_pool())))) {
+  sql::ObExecContext *exec_ctx = ctx.exec_ctx_;
+  if (OB_ISNULL(exec_ctx) || OB_ISNULL(ctx.allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null exec context", K(ret));
+  } else if (OB_ISNULL(exec_ctx->get_sql_proxy()) ||
+      OB_ISNULL(session=exec_ctx->get_my_session()) ||
+      OB_ISNULL((pool = static_cast<ObInnerSQLConnectionPool *>(exec_ctx->get_sql_proxy()->get_pool())))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null sql proxy", K(ret));
   } else if (OB_FAIL(pool->acquire_spi_conn(session, conn))) {
@@ -1440,7 +1478,7 @@ int ObDbmsXplan::inner_get_plan_info_use_current_session(sql::ObExecContext &ctx
       while (OB_SUCC(ret) && OB_SUCC(mysql_result->next())) {
         void *buf = NULL;
         ObSqlPlanItem *plan_info = NULL;
-        if (OB_ISNULL(buf=ctx.get_allocator().alloc(sizeof(ObSqlPlanItem)))) {
+        if (OB_ISNULL(buf=ctx.allocator_->alloc(sizeof(ObSqlPlanItem)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to allocate memory", K(ret));
         } else {
@@ -1457,13 +1495,13 @@ int ObDbmsXplan::inner_get_plan_info_use_current_session(sql::ObExecContext &ctx
       }
     }
   }
-  if (OB_NOT_NULL(conn)) {
-    ctx.get_sql_proxy()->close(conn, ret);
+  if (OB_NOT_NULL(conn) && OB_NOT_NULL(exec_ctx) && OB_NOT_NULL(exec_ctx->get_sql_proxy())) {
+    exec_ctx->get_sql_proxy()->close(conn, ret);
   }
   return ret;
 }
 
-int ObDbmsXplan::read_plan_info_from_result(sql::ObExecContext &ctx,
+int ObDbmsXplan::read_plan_info_from_result(ObPLExecCtx &ctx,
                                             sqlclient::ObMySQLResult& mysql_result,
                                             ObSqlPlanItem &plan_info,
                                             bool is_from_wr)
@@ -1542,9 +1580,12 @@ int ObDbmsXplan::read_plan_info_from_result(sql::ObExecContext &ctx,
     } else {                                                                            \
       char *buf = NULL;                                                                 \
       plan_info.value##len_ = varchar_val.length();                                     \
-      if (0 == varchar_val.length()) {                                                  \
+      if (OB_ISNULL(ctx.allocator_)) {                                                  \
+        ret = OB_ERR_UNEXPECTED;                                                        \
+        LOG_WARN("unexpect null allocator", K(ret));                                    \
+      } else if (0 == varchar_val.length()) {                                           \
         plan_info.value = NULL;                                                         \
-      } else if (OB_ISNULL(buf=(char*)ctx.get_allocator().alloc(varchar_val.length()))) { \
+      } else if (OB_ISNULL(buf=(char*)ctx.allocator_->alloc(varchar_val.length()))) {   \
         ret = OB_ALLOCATE_MEMORY_FAILED;                                                \
         LOG_WARN("failed to allocate memory", K(ret));                                  \
       } else {                                                                          \

@@ -40,6 +40,7 @@
 #include "sql/plan_cache/ob_values_table_compression.h"
 #include "pl/ob_pl_resolver.h"
 #include "sql/ob_sql_ccl_rule_manager.h"
+#include "share/diagnosis/ob_runtime_profile.h"
 
 namespace oceanbase
 {
@@ -156,46 +157,77 @@ int ObSql::stmt_query(const common::ObString &stmt, ObSqlCtx &context, ObResultS
   int ret = OB_SUCCESS;
   LinkExecCtxGuard link_guard(result.get_session(), result.get_exec_context());
   FLTSpanGuard(sql_compile);
-  ObTruncatedString trunc_stmt(stmt);
-#ifndef NDEBUG
-  LOG_INFO("Begin to handle text statement",
-           "sess_id", result.get_session().get_server_sid(),
-           "proxy_sess_id", result.get_session().get_proxy_sessid(),
-           "tenant_id", result.get_session().get_effective_tenant_id(),
-           "execution_id", result.get_session().get_current_execution_id(),
-           K(trunc_stmt));
-#endif
-  NG_TRACE(parse_begin);
-  //1 check inited
-  if (OB_FAIL(sanity_check(context))) {
-    LOG_WARN("Failed to do sanity check", K(ret));
-  } else if (OB_FAIL(handle_text_query(stmt, context, result))) {
-    if (OB_EAGAIN != ret && OB_ERR_PROXY_REROUTE != ret) {
-      LOG_WARN("fail to handle text query",
-               "stmt", context.is_sensitive_ ? ObString(OB_MASKED_STR) : stmt, K(ret));
+  common::ObOpProfile<ObMetric> sql_compile_profile(ObProfileId::SQL_COMPILE,
+                                                    &result.get_exec_context().get_allocator());
+  bool enable_monitor_profile = false;
+  if (GCONF.enable_sql_audit) {
+    int64_t tenant_id = result.get_session().get_effective_tenant_id();
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid() && tenant_config->_extend_sql_plan_monitor_metrics) {
+      enable_monitor_profile = true;
     }
   }
-  CHECK_STMT_SUPPORTED_BY_TXN_FREE_ROUTE(result, true);
-  if (OB_SUCC(ret)) {
-    result.get_session().set_exec_min_cluster_version();
-  }
-  //LOG_DEBUG("result errno", N_ERR_CODE, result.get_errcode(), K(ret));
-  if (OB_SUCCESS != ret
-      && OB_SUCCESS == result.get_errcode()) {
-    result.set_errcode(ret);
-  }
-  if (OB_ISNULL(result.get_physical_plan())) {
-  } else {
-    FLT_SET_TAG(plan_hash, result.get_physical_plan()->get_plan_hash_value());
-  }
-  FLT_SET_TAG(database_id, result.get_session().get_database_id(),
-                sql_id, context.sql_id_);
-  NG_TRACE_EXT(stmt_query_end, OB_ID(stmt),
-               context.is_sensitive_ ? ObString(OB_MASKED_STR) : trunc_stmt.string(),
-               OB_ID(stmt_len), stmt.length());
+  ObProfileSwitcher switcher(enable_monitor_profile ? &sql_compile_profile : nullptr);
+  {
+    ScopedTimer timer(ObMetricId::ELAPSED_TIME);
+    ObTruncatedString trunc_stmt(stmt);
+#ifndef NDEBUG
+    LOG_INFO("Begin to handle text statement",
+            "sess_id", result.get_session().get_server_sid(),
+            "proxy_sess_id", result.get_session().get_proxy_sessid(),
+            "tenant_id", result.get_session().get_effective_tenant_id(),
+            "execution_id", result.get_session().get_current_execution_id(),
+            K(trunc_stmt));
+#endif
+    NG_TRACE(parse_begin);
+    //1 check inited
+    if (OB_FAIL(sanity_check(context))) {
+      LOG_WARN("Failed to do sanity check", K(ret));
+    } else if (OB_FAIL(handle_text_query(stmt, context, result))) {
+      if (OB_EAGAIN != ret && OB_ERR_PROXY_REROUTE != ret) {
+        LOG_WARN("fail to handle text query",
+                 "stmt", context.is_sensitive_ ? ObString(OB_MASKED_STR) : stmt, K(ret));
+      }
+    }
+    CHECK_STMT_SUPPORTED_BY_TXN_FREE_ROUTE(result, true);
+    if (OB_SUCC(ret)) {
+      result.get_session().set_exec_min_cluster_version();
+    }
+    //LOG_DEBUG("result errno", N_ERR_CODE, result.get_errcode(), K(ret));
+    if (OB_SUCCESS != ret
+        && OB_SUCCESS == result.get_errcode()) {
+      result.set_errcode(ret);
+    }
+    if (OB_ISNULL(result.get_physical_plan())) {
+    } else {
+      FLT_SET_TAG(plan_hash, result.get_physical_plan()->get_plan_hash_value());
+    }
+    FLT_SET_TAG(database_id, result.get_session().get_database_id(),
+                  sql_id, context.sql_id_);
+    NG_TRACE_EXT(stmt_query_end, OB_ID(stmt),
+                 context.is_sensitive_ ? ObString(OB_MASKED_STR) : trunc_stmt.string(),
+                 OB_ID(stmt_len), stmt.length());
 
-  if (OB_FAIL(ret)) {
-    rollback_implicit_trans_when_fail(result, ret);
+    if (OB_FAIL(ret)) {
+      rollback_implicit_trans_when_fail(result, ret);
+    }
+  }
+
+  if (OB_SUCC(ret) && enable_monitor_profile && OB_NOT_NULL(result.get_physical_plan())
+      && (result.get_physical_plan()->get_phy_plan_hint().monitor_
+          || (result.get_session().is_user_session()
+              && (result.get_physical_plan()->get_px_dop() > 1)))) {
+    ObPlanMonitorNodeList *list = MTL(ObPlanMonitorNodeList *);
+    if (OB_NOT_NULL(list)) {
+      ObMonitorNode monitor_node;
+      monitor_node.tenant_id_ = result.get_session().get_effective_tenant_id();
+      monitor_node.profile_ = &sql_compile_profile;
+      monitor_node.op_id_ = -1;
+      monitor_node.set_sql_id(result.get_physical_plan()->get_sql_id_string());
+      monitor_node.set_plan_hash_value(result.get_physical_plan()->get_plan_hash_value());
+      SET_METRIC_VAL(ObMetricId::IS_HIT_PLAN, result.get_is_from_plan_cache());
+      IGNORE_RETURN list->submit_node(monitor_node);
+    }
   }
   return ret;
 }
@@ -3040,6 +3072,8 @@ int ObSql::generate_stmt(ParseResult &parse_result,
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(resolve);
+  ObProfileSwitcher switcher(ObProfileId::SQL_RESOLVE);
+  ScopedTimer timer(ObMetricId::ELAPSED_TIME);
   uint64_t session_id = 0;
   ObResolverParams resolver_ctx;
   ObPhysicalPlanCtx *plan_ctx = NULL;
@@ -3181,7 +3215,6 @@ int ObSql::generate_stmt(ParseResult &parse_result,
 
       // set const param constraint after resolving
       context.all_plan_const_param_constraints_ = &(resolver_ctx.query_ctx_->all_plan_const_param_constraints_);
-      context.all_possible_const_param_constraints_ = &(resolver_ctx.query_ctx_->all_possible_const_param_constraints_);
       context.all_equal_param_constraints_ = &(resolver_ctx.query_ctx_->all_equal_param_constraints_);
       context.all_pre_calc_constraints_ = &(resolver_ctx.query_ctx_->all_pre_calc_constraints_);
       context.all_expr_constraints_ = &(resolver_ctx.query_ctx_->all_expr_constraints_);
@@ -3194,7 +3227,6 @@ int ObSql::generate_stmt(ParseResult &parse_result,
           result.get_session().get_effective_tenant_id());
       context.resource_map_rule_.shadow_copy(resource_map_rule);
       LOG_DEBUG("got plan const param constraints", K(resolver_ctx.query_ctx_->all_plan_const_param_constraints_));
-      LOG_DEBUG("got all const param constraints", K(resolver_ctx.query_ctx_->all_possible_const_param_constraints_));
       LOG_TRACE("set sql context rule id", K(ret), K(context.resource_map_rule_), K(&context),
                 K(&resolver_ctx), K(context.is_prepare_stage_), K(context.is_prepare_protocol_),
                 K(NULL != GCTX.cgroup_ctrl_ && GCTX.cgroup_ctrl_->is_valid()),
@@ -3869,6 +3901,8 @@ int ObSql::transform_stmt(ObSqlSchemaGuard *sql_schema_guard,
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(rewrite);
+  ObProfileSwitcher switcher(ObProfileId::SQL_REWRITE);
+  ScopedTimer timer(ObMetricId::ELAPSED_TIME);
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_rewrite);
   ObDMLStmt *transform_stmt = stmt;
   int64_t last_mem_usage = exec_ctx.get_allocator().total();
@@ -3965,6 +3999,8 @@ int ObSql::optimize_stmt(
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(optimize);
+  ObProfileSwitcher switcher(ObProfileId::SQL_OPTIMIZE);
+  ScopedTimer timer(ObMetricId::ELAPSED_TIME);
   logical_plan = NULL;
   LOG_TRACE("stmt to generate plan", K(stmt));
   OPT_TRACE_TITLE("START GENERATE PLAN");
@@ -4068,9 +4104,7 @@ int ObSql::code_generate(
     } else {
       if (OB_FAIL(logical_plan->get_global_table_partition_info(tbl_part_infos))) {
         LOG_WARN("get_global_table_partition_info fails", K(ret));
-      } else if (OB_FAIL(sql_ctx.set_partition_infos(
-              tbl_part_infos,
-              result.get_exec_context().get_allocator()))) {
+      } else if (OB_FAIL(sql_ctx.set_partition_infos(tbl_part_infos, result.get_exec_context().get_allocator()))) {
         LOG_WARN("Failed to set table location in sql ctx", K(ret));
       } else {
         ObDASCtx &das_ctx = DAS_CTX(result.get_exec_context());
@@ -5189,9 +5223,6 @@ int ObSql::need_add_plan(const ObPlanCacheCtx &pc_ctx,
     LOG_WARN("unexpected null ptr", K(ret), KP(result.get_exec_context().get_stmt_factory()));
   } else if (result.get_exec_context().get_stmt_factory()->get_query_ctx()->has_dblink()) {
     need_add_plan = false;
-  } else if (ObPlanCache::is_contains_external_object(
-                                            result.get_physical_plan()->get_dependency_table())) {
-    need_add_plan = false;
   } else if (result.get_exec_context().get_stmt_factory()->get_query_ctx()->has_hybrid_search()) {
     need_add_plan = false;
   }
@@ -5548,6 +5579,8 @@ int ObSql::handle_parser(const ObString &sql,
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(parse);
+  ObProfileSwitcher switcher(ObProfileId::SQL_PARSE);
+  ScopedTimer timer(ObMetricId::ELAPSED_TIME);
   int64_t last_mem_usage = pc_ctx.allocator_.total();
   int64_t parser_mem_usage = 0;
   ObPhysicalPlanCtx *pctx = exec_ctx.get_physical_plan_ctx();

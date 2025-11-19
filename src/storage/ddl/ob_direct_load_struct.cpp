@@ -3463,6 +3463,9 @@ int ObDirectLoadSliceWriter::fill_vector_index_data(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(ATOMIC_LOAD(&is_canceled_))) {
+    ret = OB_CANCELED;
+    LOG_WARN("fil vector index data task canceled", K(ret), K(is_canceled_));
   } else if (OB_ISNULL(storage_schema) || snapshot_version < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(storage_schema), KP(slice_store_), K(snapshot_version));
@@ -4359,6 +4362,12 @@ void ObIvfSliceStore::reset()
   tmp_allocator_.reset();
 }
 
+void ObIvfSliceStore::cancel()
+{
+  helper_guard_.cancel();
+  LOG_INFO("cancel ivf slice store", K(*this));
+}
+
 int ObIvfSliceStore::clean_ivf_build_helper() {
   int ret = OB_SUCCESS;
   ObPluginVectorIndexService *vec_index_service = MTL(ObPluginVectorIndexService *);
@@ -4446,7 +4455,7 @@ int ObIvfCenterSliceStore::init(
           LOG_WARN("failed to acquire ivf build helper guard", K(ret), K(ls_id_), K(tablet_id_));
         } else if (OB_FAIL(get_spec_ivf_helper(helper))) {
           LOG_WARN("fail to get ivf flat helper", K(ret));
-        } else if (OB_FAIL(helper->init_kmeans_ctx(vec_dim_))) {
+        } else if (OB_FAIL(helper->init_ctx(vec_dim_))) {
           LOG_WARN("failed ot init kmeans ctx", K(ret), K_(vec_dim));
         } else {
           is_inited_ = true;
@@ -4519,7 +4528,7 @@ int ObIvfCenterSliceStore::build_clusters(ObInsertMonitor* insert_monitor)
     } else if (OB_ISNULL(executor = helper->get_kmeans_ctx())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected nullptr ctx", K(ret));
-    } else if (OB_FAIL(executor->build())) {
+    } else if (OB_FAIL(executor->build(insert_monitor))) {
       LOG_WARN("failed to build clusters", K(ret));
     }
   }
@@ -4605,15 +4614,19 @@ int ObIvfCenterSliceStore::get_next_vector_data_row(
           LOG_WARN("unexpected outrow datum in ivf vector index",
                     K(ret), K(vec_res.length()), K(cid_str.length()), K(lob_inrow_threshold_));
         } else {
-          for (int64_t idx = rowkey_cnt + extra_rowkey_cnt; idx < request_cnt; ++idx) {
-            if (idx != center_id_col_idx_ && idx != center_vector_col_idx_) {
-              current_row_.storage_datums_[idx].set_null(); // set null part key
+          for (int64_t i = 0; i < current_row_.get_column_count(); ++i) {
+            if (center_vector_col_idx_ == i) {
+              current_row_.storage_datums_[center_vector_col_idx_].set_string(vec_res);
+            } else if (center_id_col_idx_ == i) {
+              current_row_.storage_datums_[center_id_col_idx_].set_string(cid_str);
+            } else if (rowkey_cnt == i) {
+              current_row_.storage_datums_[i].set_int(-snapshot_version);
+            } else if (rowkey_cnt + 1 == i) {
+              current_row_.storage_datums_[i].set_int(0);
+            } else {
+              current_row_.storage_datums_[i].set_null(); // set part key null
             }
           }
-          current_row_.storage_datums_[center_vector_col_idx_].set_string(vec_res);
-          current_row_.storage_datums_[center_id_col_idx_].set_string(cid_str);
-          current_row_.storage_datums_[rowkey_cnt].set_int(-snapshot_version);
-          current_row_.storage_datums_[rowkey_cnt + 1].set_int(0);
           current_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
           datum_row = &current_row_;
           cur_row_pos_++;
@@ -4689,7 +4702,7 @@ int ObIvfSq8MetaSliceStore::init(
           LOG_WARN("failed to acquire ivf build helper guard", K(ret), K(ls_id_), K(tablet_id_));
         } else if (OB_FAIL(get_spec_ivf_helper(helper))) {
           LOG_WARN("fail to get ivf flat helper", K(ret));
-        } else if (OB_FAIL(helper->init_result_vectors(vec_dim_))) {
+        } else if (OB_FAIL(helper->init_ctx(vec_dim_))) {
           LOG_WARN("failed ot init kmeans ctx", K(ret), K(vec_dim_));
         } else {
           is_inited_ = true;
@@ -5097,7 +5110,6 @@ int ObDDLTabletMergeDagParamV2::init(const bool for_major,
                                      const share::SCN start_scn,
                                      const ObDirectLoadType &direct_load_type,
                                      const ObDDLTaskParam &task_param,
-                                     ObIAllocator &allocator,
                                      ObDDLTabletContext *tablet_ctx,
                                      const ObTransID &trans_id,
                                      const ObTxSEQ &seq_no)
@@ -5144,8 +5156,6 @@ int ObDDLTabletMergeDagParamV2::init(const bool for_major,
   } else if (FALSE_IT(is_column_store = (is_cs_replica || is_column_store))) {
   } else if (OB_FAIL(merge_ctx->slice_cg_sstables_.create(DDL_SLICE_BUCKET_NUM, ObMemAttr(MTL_ID(), "Ddl_Mrg_Task")))) {
     LOG_WARN("failed to create macro block checksum map", K(ret));
-  } else if (OB_FAIL(ObIDDLMergeHelper::get_merge_helper(allocator, direct_load_type, merge_helper_))) {
-    LOG_WARN("failed to get_merge_helper", K(ret));
   } else {
     // TODO@ zhuoran.zzr, reconstruct it
     int64_t base_cg_idx = 0;
@@ -5216,6 +5226,30 @@ int ObDDLTabletMergeDagParamV2::init(const bool for_major,
 bool ObDDLTabletMergeDagParamV2::is_valid() const
 {
   return is_inited_;
+}
+
+int ObDDLTabletMergeDagParamV2::get_merge_helper(ObIDDLMergeHelper *&merge_helper)
+{
+  int ret = OB_SUCCESS;
+  merge_helper = nullptr;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("merge dag param not inited", K(ret), KPC(this));
+  } else if (nullptr == tablet_ctx_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet ctx should not be null", K(ret), KPC(this));
+  } else if (for_lob_) {
+    merge_helper = tablet_ctx_->lob_merge_ctx_.merge_helper_;
+  } else {
+    merge_helper = tablet_ctx_->merge_ctx_.merge_helper_;
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (nullptr == merge_helper) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("merge helper should not be null", K(ret), KPC(this));
+  }
+  return ret;
 }
 
 int ObDDLTabletMergeDagParamV2::set_cg_slice_sstable(const int64_t slice_idx, const int64_t cg_idx, const ObTableHandleV2 &sstable_handle)
@@ -5399,7 +5433,6 @@ int ObDDLTabletMergeDagParamV2::init_cg_sstable_array( hash::ObHashSet<int64_t> 
       }
     }
     merge_ctx->slice_cg_sstables_.destroy();
-    merge_ctx->arena_.reset();
   }
   return ret;
 }

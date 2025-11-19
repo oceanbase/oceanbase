@@ -11019,7 +11019,7 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
     if (OB_FAIL(check_need_fill_embedded_vec_expr_param(*stmt, *column_schema, need_fill))) {
       LOG_WARN("fail to check need fill embedded_vec expr param", K(ret), KPC(column_schema), KPC(ref_expr));
     } else if (need_fill) {
-      if (OB_FAIL(fill_embedded_vec_expr_param(table_item.table_id_, table_item.ref_id_, basic_column_item->column_id_, table_schema, ref_expr, stmt))) {
+      if (OB_FAIL(fill_embedded_vec_expr_param(table_item.table_id_, table_item.ref_id_, column_schema->get_column_id(), table_schema, ref_expr, stmt))) {
         LOG_WARN("fail to fill embedded vec expr param", K(ret), K(table_item), KP(table_schema), KP(ref_expr));
       }
     }
@@ -11156,116 +11156,6 @@ int ObDMLResolver::resolve_generated_column_expr_temp(TableItem *table_item)
         if (OB_FAIL(resolve_basic_column_item(*table_item, col_schema->get_column_name_str(), true, col_item, get_stmt(), false))) {
           LOG_WARN("fail to add column item to array", K(ret));
         }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDMLResolver::find_generated_column_expr(ObRawExpr *&expr, bool &is_found)
-{
-  int ret = OB_SUCCESS;
-  CK( OB_NOT_NULL(expr) );
-
-  is_found = false;
-  if (current_scope_ != T_INSERT_SCOPE && current_scope_ != T_UPDATE_SCOPE &&
-      !expr->is_const_expr()) {
-    // find all the possible const param constraint first
-    OC( (find_const_params_for_gen_column)(*expr));
-
-    int64_t found_idx = 0;
-    ObColumnRefRawExpr *ref_expr = NULL;
-    ObExprEqualCheckContext check_ctx;
-    check_ctx.override_const_compare_ = true;
-    check_ctx.ignore_implicit_cast_ = true;
-    for (int64_t i = 0; OB_SUCC(ret) && !is_found && i < gen_col_exprs_.count(); ++i) {
-      if (OB_ISNULL(gen_col_exprs_.at(i).dependent_expr_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("gen col expr is null");
-      } else if (gen_col_exprs_.at(i).dependent_expr_->same_as(*expr, &check_ctx) && OB_SUCC(check_ctx.err_code_)) {
-        is_found = true;
-        found_idx = i;
-      } else if (OB_FAIL(ret)) {
-        LOG_WARN("compare expr same as failed", K(ret));
-      }
-    }
-    if (OB_SUCC(ret) && is_found) {
-      // if found, store the const params
-      CK( OB_NOT_NULL(params_.param_list_) );
-      CK( OB_NOT_NULL(params_.query_ctx_) );
-      ObPCConstParamInfo const_param_info;
-      ObObj const_param;
-      for (int64_t i = 0; OB_SUCC(ret) && i < check_ctx.param_expr_.count(); i++) {
-        int64_t param_idx = check_ctx.param_expr_.at(i).param_idx_;
-        CK( param_idx < params_.param_list_->count());
-        if (OB_SUCC(ret)) {
-          const_param.meta_ = params_.param_list_->at(i).meta_;
-          const_param.v_ = params_.param_list_->at(param_idx).v_;
-        }
-        OC( (const_param_info.const_idx_.push_back)(param_idx) );
-        OC( (const_param_info.const_params_.push_back)(const_param) );
-      }
-      if (check_ctx.param_expr_.count() > 0) {
-        OC( (params_.query_ctx_->all_plan_const_param_constraints_.push_back)(const_param_info) );
-        LOG_DEBUG("plan const constraint", K(params_.query_ctx_->all_plan_const_param_constraints_));
-      }
-      ObDMLStmt *stmt = gen_col_exprs_.at(found_idx).stmt_;
-      TableItem *table_item = gen_col_exprs_.at(found_idx).table_item_;
-      const ObString &column_name = gen_col_exprs_.at(found_idx).column_name_;
-      ColumnItem *col_item = NULL;
-      if (OB_ISNULL(table_item)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null table item", K(ret));
-      } else if (OB_FAIL(resolve_basic_column_item(*table_item, column_name, true, col_item, stmt))) {
-        LOG_WARN("resolve basic column item failed", K(ret), K(table_item), K(column_name));
-      } else if (OB_ISNULL(col_item) || OB_ISNULL(ref_expr = col_item->expr_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("col_item is invalid", K(col_item), K(ref_expr));
-      } else {
-        expr = ref_expr;
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDMLResolver::find_const_params_for_gen_column(const ObRawExpr &expr)
-{
-  int ret = OB_SUCCESS;
-
-  CK( OB_NOT_NULL(params_.query_ctx_) );
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < gen_col_exprs_.count(); i++) {
-    CK( OB_NOT_NULL(gen_col_exprs_.at(i).dependent_expr_) );
-    ObExprEqualCheckContext check_context;
-    ObPCConstParamInfo const_param_info;
-
-    check_context.err_code_ = OB_SUCCESS;
-    check_context.override_const_compare_ = false;
-    check_context.ignore_implicit_cast_ = true;
-
-    if (OB_SUCC(ret) &&
-        gen_col_exprs_.at(i).dependent_expr_->same_as(expr, &check_context)) {
-      if (OB_FAIL(check_context.err_code_)) {
-        LOG_WARN("failed to compare exprs", K(ret));
-      } else if (check_context.param_expr_.count() > 0) {
-        // generate column may not contain const param, so check this
-        const_param_info.const_idx_.reset();
-        const_param_info.const_params_.reset();
-        for (int64_t i = 0; OB_SUCC(ret) && i < check_context.param_expr_.count(); i++) {
-          ObExprEqualCheckContext::ParamExprPair &param_expr = check_context.param_expr_.at(i);
-          CK( OB_NOT_NULL(param_expr.expr_),
-              param_expr.param_idx_ >= 0 );
-          if (OB_SUCC(ret)) {
-            OC( (const_param_info.const_idx_.push_back)(param_expr.param_idx_) );
-
-            const ObConstRawExpr *c_expr = dynamic_cast<const ObConstRawExpr *>(param_expr.expr_);
-            CK( OB_NOT_NULL(c_expr) );
-            OC( (const_param_info.const_params_.push_back)(c_expr->get_value()) );
-          }
-        }
-        OC( (params_.query_ctx_->all_possible_const_param_constraints_.push_back)(const_param_info) );
-        LOG_DEBUG("found all const param constraints", K(params_.query_ctx_->all_possible_const_param_constraints_));
       }
     }
   }
@@ -20406,8 +20296,12 @@ int ObDMLResolver::fill_ivf_vec_expr_param(
 
   // add calc_table_id_expr & calc_tablet_id_expr
   ObSysFunRawExpr *expr = static_cast<ObSysFunRawExpr *>(raw_expr);
+  bool is_support_reuse_cid_expr = ((GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_3_5_5 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_0_0) || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_0_0);
   if (OB_SUCC(ret)) {
     int64_t new_capacity = expr->get_param_count() + 2 * index_type_array.count() + ObIvfConstant::IVF_VEC_EXPR_PARAM_COUNT;
+    if (is_support_reuse_cid_expr) {
+      new_capacity += 1; // for ObExprVecIVFPQCenterIds will inc one param after 4.3.5.5
+    }
     if (OB_FAIL(expr->extend_param_exprs(new_capacity))) {
       LOG_WARN("failed to extend param exprs", K(ret));
     }
@@ -20491,6 +20385,37 @@ int ObDMLResolver::fill_ivf_vec_expr_param(
         LOG_WARN("fail to replace param expr", K(ret), KP(calc_table_id_expr));
       } else if (OB_FAIL(expr->add_param_expr(calc_tablet_id_expr))) {
         LOG_WARN("fail to replace param expr", K(ret), KP(calc_tablet_id_expr));
+      } else if (is_support_reuse_cid_expr &&
+                 T_FUN_SYS_VEC_IVF_PQ_CENTER_IDS == raw_expr->get_expr_type() &&
+                 index_type_array.at(i) == INDEX_TYPE_VEC_IVFPQ_CENTROID_LOCAL) {
+        ObColumnRefRawExpr *cid_expr = nullptr;
+        ColumnItem *col_item = nullptr;
+        bool is_find = false;
+        // get cid expr from stmt
+        for (int64_t j = 0; OB_SUCC(ret) && j < index_table_schema->get_column_count(); j++) {
+          const ObColumnSchemaV2 *col_schema = nullptr;
+          const ObColumnSchemaV2 *origin_col_schema = nullptr;
+          if (OB_ISNULL(col_schema = index_table_schema->get_column_schema_by_idx(j))) {
+          } else if (OB_ISNULL(origin_col_schema = table_schema->get_column_schema(col_schema->get_column_id()))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected col_schema, is nullptr", K(ret), K(col_schema->get_column_id()), KPC(table_schema));
+          } else if (!origin_col_schema->is_vec_ivf_center_id_column()) {
+          } else if (OB_ISNULL(col_item = stmt->get_column_item(table_id, origin_col_schema->get_column_id()))) {
+            LOG_INFO("pq center cid col is exist, but center id col not found. Maybe index is rebuilding and old center id col is dropped",
+                     K(table_id), K(origin_col_schema->get_column_id()), KPC(table_schema), KPC(index_table_schema), KPC(col_schema));
+          } else if (FALSE_IT(cid_expr = col_item->expr_)) {
+          } else if (OB_ISNULL(cid_expr->get_dependant_expr())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected cid expr, is nullptr", K(ret), KP(cid_expr));
+          } else if (OB_FAIL(expr->add_param_expr(cid_expr->get_dependant_expr()))) {
+            LOG_WARN("fail to replace param expr", K(ret), KP(cid_expr->get_dependant_expr()));
+          } else {
+            is_find = true;
+          }
+        }
+        if (OB_SUCC(ret) && !is_find) {
+          LOG_INFO("cid expr not found", K(ret), K(vec_index_tid), K(column_schema->get_column_id()), KPC(table_schema));
+        }
       }
     }
   }
@@ -20564,7 +20489,7 @@ int ObDMLResolver::fill_embedded_vec_expr_param(
                                                                param,
                                                                param_filled))) {
     LOG_WARN("failed to get vector index param", K(ret));
-  } else if (table_schema->is_user_table() && OB_FAIL(ObVectorIndexUtil::check_hybrid_embedded_vec_table_readable(schema_checker_->get_schema_guard(), *table_schema, embedded_vec_tid, true))) {
+  } else if (table_schema->is_user_table() && OB_FAIL(ObVectorIndexUtil::check_hybrid_embedded_vec_cid_table_readable(schema_checker_->get_schema_guard(), *table_schema, column_id, embedded_vec_tid, true))) {
     LOG_WARN("not embedded vec expr", K(ret), "expr type", embedded_vec_expr->get_expr_type());
   } else if (OB_INVALID_ID == embedded_vec_tid) {
     // do nothing, skip the embedded vec column
@@ -21566,6 +21491,21 @@ int ObDMLResolver::check_domain_id_need_column_ref_expr(ObDMLStmt &stmt, ObSchem
       } else if (OB_INVALID_ID != rowkey_vid_tid) {
         need_column_ref_expr = true;
       }
+    } else if (col_schema->is_hybrid_embedded_vec_column()) {
+      uint64_t embedded_vec_tid = OB_INVALID_ID;
+      const share::schema::ObTableSchema *table = nullptr;
+      const ObSimpleTableSchemaV2 *index_schema = nullptr;
+      if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), col_schema->get_table_id(), table))) {
+        LOG_WARN("fail to get ddl table schema", K(ret));
+      } else if (OB_FAIL(ObVectorIndexUtil::check_hybrid_embedded_vec_cid_table_readable(
+          schema_guard,
+          *table,
+          col_schema->get_column_id(),
+          embedded_vec_tid))) {
+        LOG_WARN("fail to check semantic vector embedding table", K(ret), KPC(table));
+      } else if (OB_INVALID_ID != embedded_vec_tid) {
+        need_column_ref_expr = true;
+      }
     } else {
       need_column_ref_expr = true;
     }
@@ -21579,16 +21519,23 @@ int ObDMLResolver::check_domain_id_need_column_ref_expr(ObDMLStmt &stmt, ObSchem
     } else if (session_info_->get_ddl_info().is_ddl()) {
       ObDMLStmt *insert_stmt = upper_insert_resolver_->get_stmt();
       const share::schema::ObTableSchema *ddl_table_schema = nullptr;
-      if (OB_ISNULL(insert_stmt) || OB_UNLIKELY(insert_stmt->get_table_items().count() <= 0)) {
+      const share::schema::ObTableSchema *data_table = nullptr;
+      if (col_schema->is_vec_ivf_center_id_column() || col_schema->is_vec_ivf_pq_center_ids_column()) {
+        if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), col_schema->get_table_id(), data_table))) {
+          LOG_WARN("fail to get ddl table schema", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(insert_stmt) || OB_UNLIKELY(insert_stmt->get_table_items().count() <= 0)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error, insert stmt is nullptr or hasn't table item", K(ret), KPC(insert_stmt));
       } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
               insert_stmt->get_table_item(0)->ddl_table_id_, ddl_table_schema))) {
         LOG_WARN("fail to get ddl table schema", K(ret), K(insert_stmt->get_table_item(0)->ddl_table_id_));
-      } else if (OB_ISNULL(ddl_table_schema)) {
+      } else if (OB_ISNULL(ddl_table_schema) || OB_ISNULL(schema_guard)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ddl table schema is nullptr", K(ret), K(insert_stmt->get_table_item(0)->ddl_table_id_));
-      } else if (ObDomainIdUtils::check_table_need_column_ref_in_ddl(ddl_table_schema, col_schema)) {
+        LOG_WARN("ddl table schema or schema guard is nullptr", K(ret), K(insert_stmt->get_table_item(0)->ddl_table_id_), K(ddl_table_schema));
+      } else if (ObDomainIdUtils::check_table_need_column_ref_in_ddl(*schema_guard, data_table, ddl_table_schema, col_schema)) {
         need_column_ref_expr = false;
       }
     }

@@ -42,7 +42,7 @@ int ObDASIndexMergeFTSAndIter::inner_init(ObDASIterParam &param)
       offset_ = fts_and_iter_param.offset_;
       pushdown_topk_iter_ = fts_and_iter_param.pushdown_topk_iter_;
       pushdown_topk_iter_tree_ = fts_and_iter_param.pushdown_topk_iter_tree_;
-      first_fts_idx_ = fts_and_iter_param.first_fts_idx_;
+      pushdown_topk_iter_idx_ = fts_and_iter_param.pushdown_topk_iter_idx_;
 
       for (int64_t i = 0; OB_SUCC(ret) && i < relevance_exprs_.count(); i++) {
         ObDASIter *child = child_iters_.at(i);
@@ -264,7 +264,7 @@ int ObDASIndexMergeFTSAndIter::inner_release()
 
   if (OB_FAIL(ObDASIndexMergeAndIter::inner_release())) {
     LOG_WARN("failed to release index merge and iter", K(ret));
-  } else if (OB_FAIL(pushdown_topk_iter_tree_->release())) {
+  } else if (OB_NOT_NULL(pushdown_topk_iter_tree_) && OB_FAIL(pushdown_topk_iter_tree_->release())) {
     LOG_WARN("failed to release pushdown topk iter tree", K(ret));
   } else {
     result_items_ = nullptr;
@@ -286,7 +286,7 @@ int ObDASIndexMergeFTSAndIter::prepare_outout(bool is_vectorized, int64_t capaci
     } else if (OB_FAIL(sort_first_round_result_by_relevance(first_round_results, result_items_))) {
       LOG_WARN("failed to sort first round result by relevance", K(ret));
     } else {
-      cur_result_item_idx_ = offset_;
+      cur_result_item_idx_ = 0;
       ready_to_output_ = true;
     }
   }
@@ -332,65 +332,17 @@ int ObDASIndexMergeFTSAndIter::fill_other_child_stores(int64_t capacity)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < fts_index_idxs_.count(); i++) {
-    if (fts_index_idxs_.at(i) == first_fts_idx_) {
+    if (fts_index_idxs_.at(i) == pushdown_topk_iter_idx_) {
       // skip
-    } else if (OB_FAIL(fill_one_child_stores(capacity, fts_index_idxs_.at(i), child_iters_.at(fts_index_idxs_.at(i))))) {
+    } else if (OB_FAIL(fill_one_child_store(capacity, fts_index_idxs_.at(i), &relevance_exprs_))) {
       LOG_WARN("failed to fill one child stores", K(ret));
     }
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < normal_index_idxs_.count(); i++) {
-    if (OB_FAIL(fill_one_child_stores(capacity, normal_index_idxs_.at(i), child_iters_.at(normal_index_idxs_.at(i))))) {
+    if (OB_FAIL(fill_one_child_store(capacity, normal_index_idxs_.at(i), nullptr))) {
       LOG_WARN("failed to fill one child stores", K(ret));
     }
-  }
-
-  return ret;
-}
-
-int ObDASIndexMergeFTSAndIter::fill_one_child_stores(int64_t capacity, int64_t child_idx, ObDASIter *child_iter)
-{
-  int ret = OB_SUCCESS;
-
-  IndexMergeRowStore &child_store = child_stores_.at(child_idx);
-  if (child_store.iter_end_) {
-    // no more rows for child iter
-  } else {
-    int64_t child_count = 0;
-    int64_t child_capacity = std::min(capacity, child_store.capacity_ - child_store.count());
-    if (OB_ISNULL(child_iter)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected nullptr", K(child_idx));
-    } else if (OB_UNLIKELY(child_capacity <= 0)) {
-      // do nothing
-    } else {
-      if (OB_FAIL(child_iter->get_next_rows(child_count, child_capacity))) {
-        if (ret == OB_ITER_END) {
-          ret = OB_SUCCESS;
-          child_store.iter_end_ = true;
-          iter_end_count_ ++;
-        } else {
-          LOG_WARN("failed to get next rows from child iter", K(ret), K(capacity), K(child_count), K(child_capacity));
-        }
-      } else if (OB_UNLIKELY(child_count <= 0)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("child count is invalid", K(ret), K(child_count));
-      }
-
-      ObExpr *relevance_expr = relevance_exprs_.at(child_idx);
-      if (OB_FAIL(ret) || child_count <= 0) {
-      } else if (OB_FAIL(child_store.save(true, child_count, relevance_expr))) {
-        LOG_WARN("failed to save child rows", K(ret), K(child_count));
-      } else if (child_iter->get_type() == DAS_ITER_SORT) {
-        reset_datum_ptr(child_iter->get_output(), child_count);
-      }
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (child_store.iter_end_ && !child_store.drained_ && child_store.is_empty()) {
-    child_empty_count_ ++;
-    child_store.drained_ = true;
   }
 
   return ret;
@@ -457,7 +409,9 @@ int ObDASIndexMergeFTSAndIter::filter_fts_result_by_other_index_vectorized(
   while (OB_SUCC(ret) && child_empty_count_ <= 0 && fts_row_idx < actual_top_n) {
     clear_evaluated_flag();
     for (int64_t i = 0; i < child_stores_.count(); i++) {
-      child_stores_.at(i).reuse();
+      if (child_stores_.at(i).is_empty()) {
+        child_stores_.at(i).reuse();
+      }
     }
 
     if (OB_FAIL(fill_other_child_stores(capacity))) {
@@ -466,15 +420,15 @@ int ObDASIndexMergeFTSAndIter::filter_fts_result_by_other_index_vectorized(
       ret = OB_ITER_END;
     } else {
       int64_t child_cnt = child_stores_.count();
-      int64_t last_child_store_idx = OB_INVALID_INDEX;
       while (OB_SUCC(ret) && child_empty_count_ <= 0 && fts_row_idx < actual_top_n) {
+        int64_t last_child_store_idx = OB_INVALID_INDEX;
         ObFTSResultItem &item = sorted_fts_result_items[fts_row_idx];
         MergeResultBuffer *row_buffer = item.row_buffer_;
         int cmp_ret = 0;
         for (int64_t i = 0; OB_SUCC(ret) && (cmp_ret == 0) &&
                             child_empty_count_ <= 0 &&
                             i < child_cnt && fts_row_idx < actual_top_n; i++) {
-          if (i == first_fts_idx_) {
+          if (i == pushdown_topk_iter_idx_) {
             // skip
           } else {
             IndexMergeRowStore &child_store = child_stores_.at(i);
@@ -508,7 +462,6 @@ int ObDASIndexMergeFTSAndIter::filter_fts_result_by_other_index_vectorized(
                 LOG_WARN("failed to compare row", K(ret), K(child_store), K(last_child_store));
               } else if (cmp_ret < 0) {
                 child_store.incre_idx();
-                last_child_store_idx = i;
               } else if (cmp_ret > 0) {
                 last_child_store.incre_idx();
               }
@@ -518,7 +471,7 @@ int ObDASIndexMergeFTSAndIter::filter_fts_result_by_other_index_vectorized(
 
         if (OB_SUCC(ret) && cmp_ret == 0) {
           for (int64_t i = 0; OB_SUCC(ret) && i < child_cnt; i++) {
-            if (i == first_fts_idx_) {
+            if (i == pushdown_topk_iter_idx_) {
               if (OB_FAIL(item.row_buffer_->to_expr(1))) {
                 LOG_WARN("failed to to expr", K(ret));
               }
@@ -573,14 +526,14 @@ int ObDASIndexMergeFTSAndIter::get_topn_fts_result_vectorized(
     ObMinRelevanceHeap &heap)
 {
   int ret = OB_SUCCESS;
-  IndexMergeRowStore &child_store = child_stores_.at(first_fts_idx_);
+  IndexMergeRowStore &child_store = child_stores_.at(pushdown_topk_iter_idx_);
 
   while (OB_SUCC(ret) && child_empty_count_ <= 0) {
     clear_evaluated_flag();
     pushdown_topk_iter_tree_->clear_evaluated_flag();
     child_store.reuse();
 
-    if (OB_FAIL(fill_one_child_stores(capacity, first_fts_idx_, pushdown_topk_iter_tree_))) {
+    if (OB_FAIL(fill_one_child_store(capacity, pushdown_topk_iter_idx_, &relevance_exprs_, pushdown_topk_iter_tree_))) {
       LOG_WARN("failed to fill child stores", K(ret));
     } else if (child_empty_count_ > 0) {
       ret = OB_ITER_END;
@@ -590,9 +543,10 @@ int ObDASIndexMergeFTSAndIter::get_topn_fts_result_vectorized(
           child_store.incre_idx();
         }
 
-        double relevance = child_store.get_relevance();
+        double relevance = 0;
         if (child_store.is_empty()) {
           ret = OB_ITER_END;
+        } else if (OB_FALSE_IT(relevance = child_store.get_relevance())) {
         } else if (OB_FAIL(child_store.to_expr(1))) {
           LOG_WARN("failed to expr", K(ret), K(child_store));
         } else {

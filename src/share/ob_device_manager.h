@@ -51,23 +51,11 @@ public:
   virtual int is_supported_azblob_version() const override;
   virtual bool is_shared_storage_mode() const override;
   virtual bool is_write_with_if_match() const override;
+  virtual bool is_enable_obdal() const override;
   static ObClusterStateMgr &get_instance()
   {
     static ObClusterStateMgr mgr;
     return mgr;
-  }
-};
-
-class ObClusterEnableObdalConfig: public ObClusterEnableObdalConfigBase
-{
-public:
-  ObClusterEnableObdalConfig() {};
-  virtual ~ObClusterEnableObdalConfig() override {};
-  virtual bool is_enable_obdal() const override;
-  static ObClusterEnableObdalConfig &get_instance()
-  {
-    static ObClusterEnableObdalConfig cfg;
-    return cfg;
   }
 };
 

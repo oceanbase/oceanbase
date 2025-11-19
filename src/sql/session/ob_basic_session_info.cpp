@@ -1315,6 +1315,7 @@ int ObBasicSessionInfo::load_default_sys_variable(const bool print_info_log, con
   } else if (OB_FAIL(init_system_variables(print_info_log, is_sys_tenant, is_deserialized))) {
     LOG_WARN("Init system variables failed !", K(ret));
   }
+  release_to_pool_ = OB_SUCC(ret);
   return ret;
 }
 
@@ -3062,6 +3063,24 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       OX (sys_vars_cache_.set_plsql_can_transform_sql_to_assign(int_val != 0));
       break;
     }
+    case SYS_VAR_CHARACTER_SET_CLIENT: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_character_set_client(int_val));
+      break;
+    }
+    case SYS_VAR_COLLATION_DATABASE: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_collation_database(int_val));
+      break;
+    }
+    case SYS_VAR_PLSQL_OPTIMIZE_LEVEL: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_plsql_optimize_level(int_val));
+      break;
+    }
     default: {
       //do nothing
     }
@@ -3597,6 +3616,24 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
       OX (sys_vars_cache.set_base_plsql_can_transform_sql_to_assign(int_val != 0));
+      break;
+    }
+    case SYS_VAR_CHARACTER_SET_CLIENT: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_base_character_set_client(int_val));
+      break;
+    }
+    case SYS_VAR_COLLATION_DATABASE: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_base_collation_database(int_val));
+      break;
+    }
+    case SYS_VAR_PLSQL_OPTIMIZE_LEVEL: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_base_plsql_optimize_level(int_val));
       break;
     }
     default: {
@@ -5507,6 +5544,7 @@ int ObBasicSessionInfo::load_all_sys_vars(ObSchemaGetterGuard &schema_guard)
   OZ (schema_guard.get_sys_variable_schema(effective_tenant_id_, sys_var_schema));
   OV (OB_NOT_NULL(sys_var_schema));
   OZ (load_all_sys_vars(*sys_var_schema, true));
+  release_to_pool_ = OB_SUCC(ret);
   return ret;
 }
 

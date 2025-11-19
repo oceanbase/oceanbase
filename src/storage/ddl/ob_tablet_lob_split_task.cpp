@@ -1485,7 +1485,7 @@ int ObTabletLobWriteDataTask::prepare_sstable_index_builder(const ObTabletLobWri
   compaction::ObExecMode exec_mode = GCTX.is_shared_storage_mode() ?
         ObExecMode::EXEC_MODE_OUTPUT : ObExecMode::EXEC_MODE_LOCAL;
   const share::SCN split_reorganization_scn = ctx_->split_scn_.is_valid() ? ctx_->split_scn_ : SCN::min_scn()/*use min_scn to avoid invalid*/;
-  int32_t transfer_epoch = -1;
+  int32_t private_transfer_epoch = -1;
   if (OB_UNLIKELY(!ctx_->lob_meta_tablet_handle_.is_valid())) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("table is null", K(ret), K(ctx_->lob_meta_tablet_handle_));
@@ -1495,8 +1495,8 @@ int ObTabletLobWriteDataTask::prepare_sstable_index_builder(const ObTabletLobWri
   } else if (OB_FAIL(ObTabletSplitUtil::get_tablet(tmp_arena, ctx_->ls_handle_, new_tablet_id,
       false/*is_shared_mode*/, tablet_handle, ObMDSGetTabletMode::READ_ALL_COMMITED))) {
     LOG_WARN("get tablet failed", K(ret));
-  } else if (OB_FAIL(tablet_handle.get_obj()->get_private_transfer_epoch(transfer_epoch))) {
-    LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
+  } else if (OB_FAIL(tablet_handle.get_obj()->get_private_transfer_epoch(private_transfer_epoch))) {
+    LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
   } else if (OB_FAIL(data_desc.init(true/*is_ddl*/, storage_schema,
         param_->ls_id_,
         new_tablet_id,
@@ -1504,7 +1504,7 @@ int ObTabletLobWriteDataTask::prepare_sstable_index_builder(const ObTabletLobWri
         snapshot_version,
         param_->data_format_version_,
         ctx_->lob_meta_tablet_handle_.get_obj()->get_tablet_meta().micro_index_clustered_,
-        transfer_epoch,
+        private_transfer_epoch,
         0/*concurrent_cnt*/,
         split_reorganization_scn,
         write_sstable_ctx.table_key_.get_end_scn(),

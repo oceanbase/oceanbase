@@ -281,7 +281,7 @@ END_P SET_VAR DELIMITER
 
         CACHE CALIBRATION CALIBRATION_INFO CANCEL CASCADED CAST CATALOG CATALOGS CATALOG_NAME CHAIN CHANGED CHARSET CHECKSUM CHECKPOINT CHUNK CIPHER
         CLASS_ORIGIN CLEAN CLEAR CLIENT CLONE CLOG CLOSE CLUSTER CLUSTERING CLUSTER_ID CLUSTER_NAME COALESCE COLUMN_BLOOM_FILTER COLUMN_STAT
-        CODE COLLATION COLLECT_STATISTICS_ON_CREATE COLUMN_FORMAT COLUMN_INDEX_TYPE COLUMN_NAME COLUMNS COMMENT COMMIT COMMITTED COMPACT COMPLETION COMPLETE
+        CODE COLLATION COLLECT_STATISTICS_ON_CREATE COLUMN_FORMAT COLUMN_INDEX_TYPE COLUMN_NAME COLUMN_NAME_CASE_SENSITIVE COLUMNS COMMENT COMMIT COMMITTED COMPACT COMPLETION COMPLETE
         COMPRESSED COMPRESSION COMPRESSION_BLOCK_SIZE COMPRESSION_CODE COMPUTATION COMPUTE CONCURRENT CONCURRENT_LIMITING_RULE CONDENSED CONDITIONAL CONFIGS CONNECTION CONSISTENT CONSISTENT_MODE CONSTRAINT_CATALOG
         CONSTRAINT_NAME CONSTRAINT_SCHEMA CONTAINS CONTEXT CONTRIBUTORS COPY COSINE COUNT CPU CREATE_TIMESTAMP CREDENTIAL
         CTXCAT CTX_ID CUBE CURDATE CURRENT STACKED CURTIME CURSOR_NAME CUME_DIST CYCLE CALC_PARTITION_ID CONNECT CACHE_REFRESH_INTERVAL_SEC
@@ -6698,6 +6698,24 @@ BINARY opt_string_length_i_v2
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT, 1, $3);
   $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_COLLECTION; /* data type */
+  $$->int16_values_[OB_NODE_CAST_COLLECTION_TYPE_IDX] = 0; /* array type */
+  if (OB_NOT_NULL($3)) {
+    $3->is_hidden_const_ = 1;
+  }
+}
+| ARRAY COMP_LT data_type COMP_GT
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT, 1, $3);
+  $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_COLLECTION; /* data type */
+  $$->int16_values_[OB_NODE_CAST_COLLECTION_TYPE_IDX] = 0 /* array type */
+}
+| ARRAY COMP_LT ARRAY COMP_LT data_type SHIFT_RIGHT
+{
+  ParseNode *inner_array = NULL;
+  malloc_non_terminal_node(inner_array, result->malloc_pool_, T_COLLECTION, 1, $5);
+  inner_array->int32_values_[0] = 0; /* arry type */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT, 1, inner_array);
+  $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_COLLECTION; /* data type */
   $$->int16_values_[OB_NODE_CAST_COLLECTION_TYPE_IDX] = 0 /* array type */
 }
 ;
@@ -7136,6 +7154,19 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
 | ARRAY '(' data_type ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLLECTION, 1, $3);
+  $$->int32_values_[0] = 0; /* arry type */
+}
+| ARRAY COMP_LT data_type COMP_GT
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COLLECTION, 1, $3);
+  $$->int32_values_[0] = 0; /* arry type */
+}
+| ARRAY COMP_LT ARRAY COMP_LT data_type SHIFT_RIGHT
+{
+  ParseNode *inner_array = NULL;
+  malloc_non_terminal_node(inner_array, result->malloc_pool_, T_COLLECTION, 1, $5);
+  inner_array->int32_values_[0] = 0; /* arry type */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COLLECTION, 1, inner_array);
   $$->int32_values_[0] = 0; /* arry type */
 }
 | data_type '[' ']'
@@ -9707,6 +9738,10 @@ TYPE COMP_EQ STRING_VALUE
 | IGNORE_LAST_EMPTY_COLUMN COMP_EQ BOOL_VALUE
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_IGNORE_LAST_EMPTY_COLUMN, 1, $3);
+}
+| COLUMN_NAME_CASE_SENSITIVE COMP_EQ BOOL_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_NAME_CASE_SENSITIVE, 1, $3);
 }
 ;
 
@@ -26444,6 +26479,7 @@ ACCESS_INFO
 |       COLUMN_FORMAT
 |       COLUMN_INDEX_TYPE
 |       COLUMN_NAME
+|       COLUMN_NAME_CASE_SENSITIVE
 |       COLUMN_STAT
 |       COLUMNS
 |       COMMENT

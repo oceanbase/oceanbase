@@ -348,6 +348,7 @@ int ObAllVirtualSSTabletMeta::generate_virtual_rows_(ObArray<VirtualTabletMetaRo
                                   ls_id_,
                                   tablet_id_,
                                   SCN::invalid_scn());
+      param.set_read_mark_delete(true);
 
       if (OB_FAIL(meta_service->get_max_committed_meta_scn(ls_id_, read_snapshot))) {
         SERVER_LOG(WARN, "get max committed meta scn failed", K(ret));

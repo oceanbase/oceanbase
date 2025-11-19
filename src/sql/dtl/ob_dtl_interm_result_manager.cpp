@@ -71,26 +71,13 @@ void ObAtomicAppendBlockCall::operator() (common::hash::HashMapPair<ObDTLIntermR
       ObDTLIntermResultInfo *> &entry)
 {
   int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(block_buf_)) {
-    if (OB_SUCCESS != entry.second->ret_) {
-      ret = entry.second->ret_;
-    } else if (OB_UNLIKELY(!entry.second->is_store_valid())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("store of result info is invalid.", K(ret));
-    } else {
-      int row_cnt_before_append = DTL_IR_STORE_DO(*(entry.second), get_row_cnt_in_memory);
-      if (OB_FAIL(DTL_IR_STORE_DO_APPEND_BLOCK(*entry.second, block_buf_, size_, true))) {
-        LOG_WARN("store of result info append_block failed", K(ret));
-      } else if (OB_FAIL(interm_res_manager_->process_dump(*(entry.second), mem_profile_info_))) {
-        LOG_WARN("process_dump failed", K(ret));
-      } else {
-        int64_t row_cnt_after_append = DTL_IR_STORE_DO(*(entry.second), get_row_cnt_in_memory);
-        mem_profile_info_->update_row_count(row_cnt_after_append - row_cnt_before_append);
-      }
-      if (is_eof_) {
-        entry.second->is_eof_ = is_eof_;
-      }
-    }
+  if (OB_SUCCESS != entry.second->ret_) {
+    ret = entry.second->ret_;
+  } else if (OB_UNLIKELY(!entry.second->is_store_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("store of result info is invalid.", K(ret));
+  } else {
+    result_info_guard_.set_result_info(*entry.second, interm_res_manager_);
   }
   ret_ = ret;
 }
@@ -99,27 +86,13 @@ void ObAtomicAppendPartBlockCall::operator() (common::hash::HashMapPair<ObDTLInt
       ObDTLIntermResultInfo *> &entry)
 {
   int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(block_buf_)) {
-    if (OB_SUCCESS != entry.second->ret_) {
-      ret = entry.second->ret_;
-    } else if (OB_UNLIKELY(!entry.second->is_store_valid())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("store of result info is invalid.", K(ret));
-    } else {
-      int64_t row_cnt_before_append = DTL_IR_STORE_DO(*(entry.second), get_row_cnt_in_memory);
-      if (OB_FAIL(DTL_IR_STORE_DO_APPEND_BLOCK_PAYLOAD(*entry.second,
-                                  block_buf_ + start_pos_, length_, rows_, true))) {
-        LOG_WARN("store of result info append_block_payload failed", K(ret));
-      } else if (OB_FAIL(interm_res_manager_->process_dump(*(entry.second), mem_profile_info_))) {
-        LOG_WARN("process_dump failed", K(ret));
-      } else {
-        int64_t row_cnt_after_append = DTL_IR_STORE_DO(*(entry.second), get_row_cnt_in_memory);
-        mem_profile_info_->update_row_count(row_cnt_after_append - row_cnt_before_append);
-      }
-      if (is_eof_) {
-        entry.second->is_eof_ = is_eof_;
-      }
-    }
+  if (OB_SUCCESS != entry.second->ret_) {
+    ret = entry.second->ret_;
+  } else if (OB_UNLIKELY(!entry.second->is_store_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("store of result info is invalid.", K(ret));
+  } else {
+    result_info_guard_.set_result_info(*entry.second, interm_res_manager_);
   }
   ret_ = ret;
 }
@@ -407,12 +380,42 @@ int ObDTLIntermResultManager::atomic_append_block(ObDTLIntermResultKey &key,
                                               ObAtomicAppendBlockCall &call)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(interm_res_map_.atomic_refactored(key, call))) {
+  if (OB_ISNULL(call.block_buf_)) {
+  } else if (OB_FAIL(interm_res_map_.atomic_refactored(key, call))) {
     LOG_WARN("fail to get row store in result manager", K(ret));
   } else if (OB_FAIL(call.ret_)) {
-    LOG_WARN("ObAtomicAppendBlockCall fail", K(ret));
+    LOG_WARN("fail to get result info", K(ret));
+  } else if (OB_FAIL(call.append_block())){
+    LOG_WARN("fail to append block", K(ret));
   } else {
     LOG_DEBUG("debug append block to interm result info", K(key));
+  }
+  return ret;
+}
+ERRSIM_POINT_DEF(ERRSIM_TRACEPOINT_DTL_WRITE_SLEEP, "make dtl interm result info write sleep");
+int ObAtomicAppendBlockCall::append_block()
+{
+  int ret = OB_SUCCESS;
+  ObDTLIntermResultInfo::writelocker locker(result_info_guard_.result_info_->lock_);
+  if (OB_UNLIKELY(result_info_guard_.result_info_->is_eof_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("result info is eof", K(ret));
+  } else {
+    int row_cnt_before_append = DTL_IR_STORE_DO(*(result_info_guard_.result_info_), get_row_cnt_in_memory);
+    if (OB_FAIL(DTL_IR_STORE_DO_APPEND_BLOCK(*(result_info_guard_.result_info_), block_buf_, size_, true))) {
+      LOG_WARN("store of result info append_block failed", K(ret));
+    } else if (OB_FAIL(interm_res_manager_->process_dump(*(result_info_guard_.result_info_), mem_profile_info_))) {
+      LOG_WARN("process_dump failed", K(ret));
+    } else {
+      int64_t row_cnt_after_append = DTL_IR_STORE_DO(*(result_info_guard_.result_info_), get_row_cnt_in_memory);
+      mem_profile_info_->update_row_count(row_cnt_after_append - row_cnt_before_append);
+    }
+    if (is_eof_) {
+      (result_info_guard_.result_info_)->set_eof(is_eof_);
+    }
+  }
+  if (ERRSIM_TRACEPOINT_DTL_WRITE_SLEEP){
+    sleep(10);
   }
   return ret;
 }
@@ -421,12 +424,40 @@ int ObDTLIntermResultManager::atomic_append_part_block(ObDTLIntermResultKey &key
                                               ObAtomicAppendPartBlockCall &call)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(interm_res_map_.atomic_refactored(key, call))) {
+  if (OB_ISNULL(call.block_buf_)) {
+  } else if (OB_FAIL(interm_res_map_.atomic_refactored(key, call))) {
     LOG_WARN("fail to get row store in result manager", K(ret));
   } else if (OB_FAIL(call.ret_)) {
-    LOG_WARN("ObAtomicAppendPartBlockCall fail", K(ret));
+    LOG_WARN("IntermResultInfo is not valid", K(ret));
+  } else if (OB_FAIL(call.append_part_block())) {
+    LOG_WARN("fail to append part block", K(ret));
   } else {
     LOG_DEBUG("debug append part block to interm result info", K(key));
+  }
+  return ret;
+}
+
+int ObAtomicAppendPartBlockCall::append_part_block()
+{
+  int ret = OB_SUCCESS;
+  ObDTLIntermResultInfo::writelocker locker(result_info_guard_.result_info_->lock_);
+  if (OB_UNLIKELY(result_info_guard_.result_info_->is_eof_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("result info is eof", K(ret));
+  } else {
+    int64_t row_cnt_before_append = DTL_IR_STORE_DO(*(result_info_guard_.result_info_), get_row_cnt_in_memory);
+    if (OB_FAIL(DTL_IR_STORE_DO_APPEND_BLOCK_PAYLOAD(*(result_info_guard_.result_info_),
+                                block_buf_ + start_pos_, length_, rows_, true))) {
+      LOG_WARN("store of result info append_block_payload failed", K(ret));
+    } else if (OB_FAIL(interm_res_manager_->process_dump(*(result_info_guard_.result_info_), mem_profile_info_))) {
+      LOG_WARN("process_dump failed", K(ret));
+    } else {
+      int64_t row_cnt_after_append = DTL_IR_STORE_DO(*(result_info_guard_.result_info_), get_row_cnt_in_memory);
+      mem_profile_info_->update_row_count(row_cnt_after_append - row_cnt_before_append);
+    }
+    if (is_eof_) {
+      (result_info_guard_.result_info_)->set_eof(is_eof_);
+    }
   }
   return ret;
 }
@@ -602,12 +633,7 @@ int ObDTLIntermResultManager::process_interm_result_inner(ObDtlLinkedBuffer &buf
             oceanbase::common::ObTimeUtility::current_time() > interm_res_key.timeout_ts_) {
           ret = OB_TIMEOUT;
         }
-        LOG_WARN("fail to append block", K(ret), K(interm_res_key.batch_id_));
-      } else {
-        ret = call.ret_;
-        if (OB_SUCCESS != ret) {
-          LOG_WARN("fail to append block", K(ret), K(interm_res_key));
-        }
+        LOG_WARN("fail to append block", K(ret), K(interm_res_key));
       }
     } else {
       ObAtomicAppendPartBlockCall call(buffer.buf(), start_pos, length, rows,
@@ -617,12 +643,7 @@ int ObDTLIntermResultManager::process_interm_result_inner(ObDtlLinkedBuffer &buf
             oceanbase::common::ObTimeUtility::current_time() > interm_res_key.timeout_ts_) {
           ret = OB_TIMEOUT;
         }
-        LOG_WARN("fail to append part block", K(ret), K(interm_res_key.batch_id_));
-      } else {
-        ret = call.ret_;
-        if (OB_SUCCESS != ret) {
-          LOG_WARN("fail to append part block", K(ret), K(interm_res_key));
-        }
+        LOG_WARN("fail to append part block", K(ret), K(interm_res_key));
       }
     }
   }

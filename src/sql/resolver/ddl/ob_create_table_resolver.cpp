@@ -3623,8 +3623,10 @@ int ObCreateTableResolver::resolve_external_table_format_early(const ParseNode *
               } else {
                 if (format.format_type_ == ObExternalFileFormat::FormatType::ORC_FORMAT) {
                   column_index_type_ = format.orc_format_.column_index_type_;
+                  column_name_case_sensitive_ = format.orc_format_.column_name_case_sensitive_;
                 } else if (format.format_type_ == ObExternalFileFormat::FormatType::PARQUET_FORMAT) {
                   column_index_type_ = format.parquet_format_.column_index_type_;
+                  column_name_case_sensitive_ = format.parquet_format_.column_name_case_sensitive_;
                 }
               }
             }
@@ -3760,6 +3762,7 @@ int ObCreateTableResolver::resolve_auto_partition(const ParseNode *partition_nod
           } else if (ObPartitionOption::MIN_AUTO_PART_SIZE_BY_USER > part_size) {
             ret = OB_NOT_SUPPORTED;
             SQL_RESV_LOG(WARN, "auto part size must be greater than or equal to 128MB", K(ret), K(buf));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "auto part size less than 128MB");
           }
         }
       } else if (T_AUTO == part_size_node->type_) {

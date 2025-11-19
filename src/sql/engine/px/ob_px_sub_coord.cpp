@@ -207,6 +207,11 @@ int ObPxSubCoord::setup_gi_op_input(ObExecContext &ctx,
     const ObIArray<ObSqcTableLocationKey> &tsc_location_keys)
 {
   int ret = OB_SUCCESS;
+  int64_t *split_gi_cost = nullptr;
+  if (OB_NOT_NULL(sqc_arg_.sqc_handler_)) {
+    split_gi_cost = &sqc_arg_.sqc_handler_->get_sqc_metrics().split_gi_cost_;
+  }
+  ScopedTimer timer(split_gi_cost);
   if (IS_PX_GI(root.get_type())) {
     ObPxSqcMeta &sqc = sqc_arg_.sqc_;
     common::ObArray<DASTabletLocArray> tablets_array;
@@ -677,6 +682,8 @@ int ObPxSubCoord::dispatch_tasks(ObPxRpcInitSqcArgs &sqc_arg, ObSqcCtx &sqc_ctx,
       || OB_ISNULL(sqc_arg.des_phy_plan_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Invalid sqc args", K(ret), K(sqc));
+  } else if (FALSE_IT(sqc_arg.sqc_handler_->get_sqc_metrics().dispatch_tasks_ts_
+      = ObTimeUtility::current_time_ns())) {
   } else if (is_fast_sqc) {
     dispatch_worker_count = 0;
     ret = dispatch_task_to_local_thread(sqc_arg, sqc_ctx, sqc);

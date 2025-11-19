@@ -150,16 +150,7 @@ void ObInterruptUtil::update_schema_error_code(ObExecContext *exec_ctx, int &cod
              || (px_worker_execute_start_schema_version != OB_INVALID_VERSION
                  && px_worker_execute_start_schema_version != query_tenant_begin_schema_version)))
         || ret == OB_TENANT_NOT_EXIST || ret == OB_SCHEMA_ERROR || ret == OB_SCHEMA_EAGAIN) {
-      bool overwrite_error_code = true;
-      ObPhysicalPlanCtx *plan_ctx = exec_ctx->get_physical_plan_ctx();
-      if (OB_NOT_NULL(plan_ctx) && plan_ctx->get_is_direct_insert_plan()
-          && (OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR == code)) {
-        // overwriting error code would cause retry for direct load
-        overwrite_error_code = false;
-      }
-      if (overwrite_error_code) {
-        code = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
-      }
+      code = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
     }
 
     // overwrite to make sure sql will retry

@@ -34,6 +34,7 @@ enum BenchmarkTaskType //FARM COMPAT WHITELIST
   BENCHMARK_TASK_DEL = 5,
   BENCHMARK_TASK_IS_EXIST = 6,
   BENCHMARK_TASK_READ_USER_PROVIDED = 7,
+  BENCHMARK_TASK_NOHEAD_READ = 8,
   BENCHMARK_TASK_MAX_TYPE
 };
 
@@ -46,6 +47,7 @@ static const char *BenchmarkTaskTypeStr[] = {
   "DEL",
   "IS_EXIST",
   "READ_USER_PROVIDED",
+  "NOHEAD_READ",
   "MAX_TYPE"
 };
 
@@ -105,6 +107,8 @@ struct Metrics
   int64_t status_;
   int64_t throughput_bytes_;
   int64_t operation_num_;
+  struct timeval end_real_time_;  // the actual test end time
+  struct rusage end_usage_;      // the actual test end resource usage
   TimeMap total_op_time_ms_map_;
   TimeMap open_time_ms_map_;
   TimeMap close_time_ms_map_;
@@ -197,7 +201,7 @@ public:
       share::ObBackupStorageInfo *storage_info, const TaskConfig &config) override;
   virtual int execute() override;
 
-private:
+protected:
   int64_t obj_size_;
   int64_t obj_num_;
   bool is_adaptive_;
@@ -205,7 +209,7 @@ private:
   char *read_buf_;
   ObArenaAllocator allocator_;
 
-private:
+protected:
   static const int64_t ALIGNMENT = 16 * 1024;
 };
 
@@ -245,6 +249,14 @@ public:
 
 protected:
   virtual int prepare_(const int64_t object_id) override;
+};
+
+class NoHeadReadTaskExecutor : public ReadTaskExecutor
+{
+public:
+  NoHeadReadTaskExecutor();
+  virtual ~NoHeadReadTaskExecutor() {}
+  virtual int execute() override;
 };
 
 } //namespace tools

@@ -53,7 +53,7 @@ int ObDDLIncLogBasic::init(
           && OB_UNLIKELY(!trans_id.is_valid()
                       || !seq_no.is_valid()
                       || (snapshot_version <= 0)
-                      || (data_format_version < DATA_VERSION_4_4_1_0))) {
+                      || !is_data_version_support_inc_major_direct_load(data_format_version))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments for incremental major direct load", KR(ret),
         K(direct_load_type), K(trans_id), K(seq_no), K(snapshot_version), K(data_format_version));

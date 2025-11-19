@@ -77,7 +77,7 @@ int ObPartitionMergePolicy::get_medium_merge_tables(
   }
 
   if (FAILEDx(tablet.get_private_transfer_epoch(result.private_transfer_epoch_))) {
-    LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
+    LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
   } else {
     // major sstable's rec scn will always be 0
     result.rec_scn_.set_min();
@@ -237,7 +237,7 @@ int ObPartitionMergePolicy::get_mds_merge_tables(
     ret = OB_NO_NEED_MERGE;
     result.handle_.reset();
   } else if (OB_FAIL(tablet.get_private_transfer_epoch(result.private_transfer_epoch_))) {
-    LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
+    LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
   } else {
     result.version_range_.snapshot_version_ = tablet.get_snapshot_version();
   }
@@ -272,7 +272,7 @@ int ObPartitionMergePolicy::get_convert_co_major_merge_tables(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("convert co major merge should not change major snapshot version", K(ret), KPC(base_table), K(param), K(tablet));
   } else if (OB_FAIL(tablet.get_private_transfer_epoch(result.private_transfer_epoch_))) {
-    LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
+    LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
   } else {
     result.version_range_.base_version_ = 0;
     result.version_range_.multi_version_start_ = tablet.get_multi_version_start();
@@ -307,7 +307,7 @@ int ObPartitionMergePolicy::get_result_by_snapshot(
   } else if (OB_ISNULL(base_table = static_cast<ObSSTable*>(
       table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(true/*last*/)))) {
     ret = OB_ENTRY_NOT_EXIST;
-    LOG_ERROR("major sstable not exist", K(ret), KPC(table_store_wrapper.get_member()));
+    LOG_WARN("major sstable not exist", K(ret), KPC(table_store_wrapper.get_member()));
   } else if (OB_FAIL(result.handle_.add_sstable(base_table, table_store_wrapper.get_meta_handle()))) {
     LOG_WARN("failed to add base_table to result", K(ret));
   } else if (base_table->get_snapshot_version() >= snapshot) {
@@ -445,7 +445,7 @@ int ObPartitionMergePolicy::get_mini_merge_tables(
       LOG_WARN("failed to find mini merge tables", K(ret), K(next_freeze_info));
     }
   } else if (OB_FAIL(tablet.get_private_transfer_epoch(result.private_transfer_epoch_))) {
-    LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
+    LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
   } else if (result.update_tablet_directly_) {
     // do nothing else
   } else if (OB_FAIL(deal_with_minor_result(merge_type, ls, tablet, result))) {
@@ -582,7 +582,7 @@ int ObPartitionMergePolicy::deal_with_minor_result(
   } else {
     result.version_range_.base_version_ = 0;
     if (OB_FAIL(tablet.get_private_transfer_epoch(result.private_transfer_epoch_))) {
-      LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
+      LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
     } else if (OB_FAIL(tablet.get_recycle_version(result.version_range_.multi_version_start_, result.version_range_.base_version_))) {
       LOG_WARN("Fail to get table store recycle version", K(ret), K(result.version_range_), K(tablet));
     }
@@ -1654,7 +1654,7 @@ int ObAdaptiveMergePolicy::get_meta_merge_tables(
   }
 
   if (FAILEDx(tablet.get_private_transfer_epoch(result.private_transfer_epoch_))) {
-    LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
+    LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
   } else {
     FLOG_INFO("succeed to get meta major merge tables", K(merge_type), K(result), K(tablet));
   }
@@ -2503,7 +2503,7 @@ int ObPartitionMergePolicy::deal_with_ss_minor_result(
   if (OB_SUCC(ret)) {
     result.version_range_.base_version_ = 0;
     if (OB_FAIL(tablet.get_private_transfer_epoch(result.private_transfer_epoch_))) {
-      LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
+      LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
     } else if (OB_FAIL(tablet.get_recycle_version(result.version_range_.multi_version_start_, result.version_range_.base_version_))) {
       LOG_WARN("Fail to get table store recycle version", K(ret), K(result.version_range_), K(tablet));
     }
@@ -2724,6 +2724,8 @@ void ObIncMajorTxHelper::dump_inc_major_error_info(
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObIncMajorSSTableInfo::IncMajorInfo, 4> local_inc_major_infos;
+  ObSEArray<ObIncMajorSSTableInfo::IncMajorInfo, 4> local_inc_major_infos_part_2;
+
   for (int64_t idx = 0; OB_SUCC(ret) && idx < sstables.count(); idx++) {
     ObSSTable *cur_table = static_cast<ObSSTable *>(sstables.at(idx));
     if (OB_ISNULL(cur_table)) {
@@ -2734,15 +2736,17 @@ void ObIncMajorTxHelper::dump_inc_major_error_info(
                                                          cur_table->get_end_scn().get_val_for_tx(),
                                                          cur_table->get_data_checksum(),
                                                          cur_table->get_row_count());
-      if (OB_FAIL(local_inc_major_infos.push_back(cur_info))) {
+      ObIArray<ObIncMajorSSTableInfo::IncMajorInfo> &write_array = idx < 32 ? local_inc_major_infos : local_inc_major_infos_part_2;
+      if (OB_FAIL(write_array.push_back(cur_info))) {
         LOG_WARN("failed to push back inc major info", K(ret));
       }
     }
   }
+
   if (OB_SUCC(ret)) {
+    const int64_t local_info_cnt = local_inc_major_infos.count() + local_inc_major_infos_part_2.count();
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "dump inc major error info", K(merge_snapshot_version), K(merge_type),
-                  "local_info_cnt", local_inc_major_infos.count(), K(local_inc_major_infos),
-                  "inc_major_info_in_clog", medium_info.inc_major_info_);
+                    K(local_info_cnt), K(local_inc_major_infos), K(local_inc_major_infos_part_2), "inc_major_info_in_clog", medium_info.inc_major_info_);
   }
 }
 
@@ -2924,6 +2928,46 @@ int ObIncMajorTxHelper::get_ls(const share::ObLSID &ls_id, ObLSHandle &ls_handle
   } else if (OB_UNLIKELY(!ls_handle.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls handle is invalid", KR(ret), K(ls_handle));
+  }
+  return ret;
+}
+
+int ObIncMajorTxHelper::check_need_gc_ddl_dump(
+    const ObTablet &tablet,
+    const ObSSTable &ddl_dump,
+    bool &need_gc)
+{
+  int ret = OB_SUCCESS;
+  need_gc = true;
+  ObTransID trans_id;
+  ObTxSEQ seq_no;
+  ObDDLKvMgrHandle ddlkv_mgr_handle;
+  ObArray<ObDDLKVHandle> ddlkv_handles;
+  if (OB_UNLIKELY(!ddl_dump.is_inc_major_ddl_sstable())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ddl_dump));
+  } else if (OB_FAIL(get_trans_id_and_seq_no_from_sstable(&ddl_dump, trans_id, seq_no))) {
+    LOG_WARN("fail to get trans id and seq no", KR(ret), K(ddl_dump));
+  } else if (OB_FAIL(tablet.get_ddl_kv_mgr(ddlkv_mgr_handle))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      LOG_INFO("ddl kv mgr is not exist", KR(ret), K(tablet));
+    } else {
+      LOG_WARN("fail to get ddl kv mgr", KR(ret), K(tablet));
+    }
+  } else if (OB_FAIL(ddlkv_mgr_handle.get_obj()->get_ddl_kvs(false/*frozen_only*/, ddlkv_handles))) {
+    LOG_WARN("fail to get ddl kv", KR(ret), K(tablet));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < ddlkv_handles.count(); ++i) {
+      const ObDDLKV *cur_ddlkv = ddlkv_handles.at(i).get_obj();
+      if (OB_ISNULL(cur_ddlkv)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ddlkv is nullptr", KR(ret), K(i));
+      } else if (cur_ddlkv->get_trans_id() == trans_id && cur_ddlkv->get_seq_no() == seq_no) {
+        need_gc = false;
+        break;
+      }
+    }
   }
   return ret;
 }

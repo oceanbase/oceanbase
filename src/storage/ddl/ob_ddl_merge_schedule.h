@@ -27,10 +27,6 @@
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 #include "storage/ddl/ob_direct_load_struct.h"
 
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/direct_load/ob_direct_load_ss_update_inc_major_dag.h"
-#endif
-
 
 namespace oceanbase
 {
@@ -55,7 +51,7 @@ public:
                                                 const share::ObLSID &ls_id,
                                                 ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   static int schedule_ss_gc_inc_major_ddl_dump(ObLS *ls, ObTabletHandle &tablet_handle);
-  static int schedule_ss_update_inc_major_and_gc_inc_major(const ObLSID &ls_id, const ObTabletHandle &tablet_handle);
+  static int schedule_ss_update_inc_major_and_gc_inc_major(ObLS *ls, const ObTabletHandle &tablet_handle);
   static int finish_log_freeze_ddl_kv(const ObLSID &ls_id, ObTabletHandle &tablet_handle);
   #endif
   static int schedule_tablet_ddl_major_merge(ObLS *ls, ObTabletHandle &tablet_handle);

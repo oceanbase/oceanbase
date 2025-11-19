@@ -51,6 +51,7 @@ int ObPxReceiveOpInput::get_dfo_key(ObDtlDfoKey &key)
 int ObPxReceiveOpInput::get_data_ch(ObPxTaskChSet &task_ch_set, int64_t timeout_ts, ObDtlChTotalInfo &ch_info)
 {
   int ret = OB_SUCCESS;
+  common::ScopedTimer timer(ObMetricId::WAIT_CHANNEL_INFO_COST);
   ObPxSQCProxy *ch_provider = reinterpret_cast<ObPxSQCProxy *>(ch_provider_ptr_);
   int64_t task_id = OB_INVALID_ID;
   if (OB_ISNULL(ch_provider)) {

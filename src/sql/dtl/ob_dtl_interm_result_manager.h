@@ -174,7 +174,8 @@ struct ObDTLIntermResultInfo
       : datum_store_(NULL), block_store_(NULL), ret_(common::OB_SUCCESS),
       is_read_(false), is_eof_(false), ref_count_(0),
       trace_id_(), dump_time_(0), dump_cost_(0), unregister_dm_info_(),
-      store_type_(StoreType::INVALID), mem_profile_key_()
+      store_type_(StoreType::INVALID), mem_profile_key_(),
+      lock_(common::ObLatchIds::DTL_INTERM_RESULT_INFO_LOCK)
   {}
   ~ObDTLIntermResultInfo() {}
 
@@ -222,6 +223,10 @@ public:
   ObDTLIntermResultMonitorInfo monitor_info_;
   StoreType store_type_;
   ObDTLMemProfileKey mem_profile_key_;
+  // 读写锁，保护对result_info的并发访问
+  typedef typename common::hash::LatchReadWriteDefendMode::readlocker readlocker;
+  typedef typename common::hash::LatchReadWriteDefendMode::writelocker writelocker;
+  mutable common::hash::LatchReadWriteDefendMode::lock_type lock_;
 };
 
 struct ObDTLIntermResultInfoGuard
@@ -345,10 +350,12 @@ public:
                           ObDTLMemProfileInfo *mem_profile_info)
     : block_buf_(buf), size_(size), ret_(common::OB_SUCCESS), is_eof_(is_eof),
       interm_res_manager_(interm_res_manager),
-      mem_profile_info_(mem_profile_info)  {}
+      mem_profile_info_(mem_profile_info),
+      result_info_guard_() {}
   ~ObAtomicAppendBlockCall() = default;
   void operator() (common::hash::HashMapPair<ObDTLIntermResultKey,
       ObDTLIntermResultInfo *> &entry);
+  int append_block();
 public:
   char* block_buf_;
   int64_t start_pos_;
@@ -357,6 +364,7 @@ public:
   bool is_eof_;
   ObDTLIntermResultManager *interm_res_manager_;
   ObDTLMemProfileInfo *mem_profile_info_;
+  ObDTLIntermResultInfoGuard result_info_guard_;
 };
 
 class ObAtomicAppendPartBlockCall
@@ -369,10 +377,12 @@ public:
     : block_buf_(buf), start_pos_(start_pos), length_(len), rows_(rows),
       ret_(common::OB_SUCCESS), is_eof_(is_eof),
       interm_res_manager_(interm_res_manager),
-      mem_profile_info_(mem_profile_info) {}
+      mem_profile_info_(mem_profile_info),
+      result_info_guard_() {}
   ~ObAtomicAppendPartBlockCall() = default;
   void operator() (common::hash::HashMapPair<ObDTLIntermResultKey,
       ObDTLIntermResultInfo *> &entry);
+  int append_part_block();
 public:
   char* block_buf_;
   int64_t start_pos_;
@@ -382,6 +392,7 @@ public:
   bool is_eof_;
   ObDTLIntermResultManager *interm_res_manager_;
   ObDTLMemProfileInfo *mem_profile_info_;
+  ObDTLIntermResultInfoGuard result_info_guard_;
 };
 
 class ObDTLIntermResultGCTask : public common::ObTimerTask

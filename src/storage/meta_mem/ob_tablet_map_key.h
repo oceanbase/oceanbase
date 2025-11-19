@@ -69,8 +69,8 @@ class ObDieingTabletMapKey final
 {
 public:
   ObDieingTabletMapKey();
-  ObDieingTabletMapKey(const uint64_t tablet_id, const int32_t transfer_epoch);
-  ObDieingTabletMapKey(const ObTabletMapKey &tablet_map_key, const int32_t transfer_epoch);
+  ObDieingTabletMapKey(const uint64_t tablet_id, const int32_t private_transfer_epoch);
+  ObDieingTabletMapKey(const ObTabletMapKey &tablet_map_key, const int32_t private_transfer_epoch);
   ~ObDieingTabletMapKey();
 
   void reset();
@@ -82,20 +82,20 @@ public:
   int hash(uint64_t &hash_val) const;
   uint64_t hash() const;
 
-  TO_STRING_KV(K_(tablet_id), K_(transfer_epoch));
+  TO_STRING_KV(K_(tablet_id), K_(private_transfer_epoch));
 private:
   uint64_t tablet_id_;
-  int32_t transfer_epoch_;
+  int32_t private_transfer_epoch_;
 };
 
 inline bool ObDieingTabletMapKey::is_valid() const
 {
-  return ObTabletID::INVALID_TABLET_ID != tablet_id_ && transfer_epoch_ >= 0;
+  return ObTabletID::INVALID_TABLET_ID != tablet_id_ && private_transfer_epoch_ >= 0;
 }
 
 inline bool ObDieingTabletMapKey::operator ==(const ObDieingTabletMapKey &other) const
 {
-  return tablet_id_ == other.tablet_id_ && transfer_epoch_ == other.transfer_epoch_;
+  return tablet_id_ == other.tablet_id_ && private_transfer_epoch_ == other.private_transfer_epoch_;
 }
 
 inline bool ObDieingTabletMapKey::operator !=(const ObDieingTabletMapKey &other) const
@@ -105,7 +105,7 @@ inline bool ObDieingTabletMapKey::operator !=(const ObDieingTabletMapKey &other)
 
 inline bool ObDieingTabletMapKey::operator <(const ObDieingTabletMapKey &other) const
 {
-  return tablet_id_ < other.tablet_id_ && transfer_epoch_ < other.transfer_epoch_;
+  return tablet_id_ < other.tablet_id_ && private_transfer_epoch_ < other.private_transfer_epoch_;
 }
 
 class ObSSTabletMapKey final

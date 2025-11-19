@@ -978,7 +978,9 @@ public:
       err_msg_(),
       memstore_read_row_count_(0),
       ssstore_read_row_count_(0),
-      px_worker_execute_start_schema_version_(0)
+      px_worker_execute_start_schema_version_(0),
+      px_worker_prepare_cost_(0),
+      dispatch_task_cost_(0)
   {
 
   }
@@ -1136,6 +1138,9 @@ public:
   //we don't need to serialize it from sqc rpc thread to px worker thread
   //because it is inited used only in px worker
   int64_t px_worker_execute_start_schema_version_;
+  // record the time that px worker prepare arg before execute plan
+  int64_t px_worker_prepare_cost_;
+  int64_t dispatch_task_cost_;
 };
 
 class ObPxRpcInitTaskArgs

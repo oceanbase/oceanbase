@@ -850,6 +850,7 @@ int ObSSTable::check_rows_locked(
   ObSSTableRowLockMultiChecker *multi_checker = nullptr;
   bool can_access = true;
   bool may_exist = true;
+  const bool is_inc_major_or_major = is_inc_major_related_sstable() || is_major_sstable();
   const share::SCN snapshot_version = context.store_ctx_->mvcc_acc_ctx_.get_snapshot_version();
   if (OB_UNLIKELY(rows_info.all_rows_found())) {
     ret = OB_ERR_UNEXPECTED;
@@ -860,7 +861,7 @@ int ObSSTable::check_rows_locked(
   } else if (need_check_inc_major_can_access()
              && OB_FAIL(compaction::ObIncMajorTxHelper::check_can_access(context, *this, can_access))) {
     LOG_WARN("fail to check can access", K(ret), K(context), K(*this));
-  } else if (no_data_to_read() || !can_access || (is_major_sstable() && !check_exist)) {
+  } else if (no_data_to_read() || !can_access || (is_inc_major_or_major && !check_exist)) {
   } else if (!check_exist && get_upper_trans_version() <= snapshot_version.get_val_for_tx()) {
     if (max_trans_version.get_val_for_tx() < get_upper_trans_version()) {
       if (OB_FAIL(max_trans_version.convert_for_tx(get_upper_trans_version()))) {
@@ -878,7 +879,7 @@ int ObSSTable::check_rows_locked(
     LOG_WARN("Failed to check min rowkey boundary", K(ret), KPC(sstable_endkey), K(rows_info));
   } else if (may_exist) {
     // TODO(hanling): Do we need to optimize for the mini/minor sstable which does not have uncommitted row?
-    if (is_major_sstable()) {
+    if (is_inc_major_or_major) {
       rows_info.set_all_rows_lock_checked(check_exist);
     }
     if (OB_FAIL(rows_info.refine_rowkeys())) {

@@ -55,7 +55,7 @@ public:
                       ObExpr &rt_expr) const override;
   static int calc_similarity(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
   static int calc_similarity(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum, ObVecSimilarityType dis_type);
-  static int calc_similarity_from_distance(const ObExprVectorDistance::ObVecDisType dis_type, const float &distance, float &similarity);
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprVectorSimilarity);
 };

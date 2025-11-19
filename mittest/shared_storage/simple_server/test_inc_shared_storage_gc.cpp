@@ -437,13 +437,15 @@ void ObSharedStorageTest::check_block_for_private_dir(
   int64_t last_gc_version = -1;
   uintptr_t tablet_fingerprint = 0;
   bool is_old_version_empty = false;
+  bool is_transfer_out_deleted = false;
   ASSERT_EQ(OB_SUCCESS, MTL(ObTenantMetaMemMgr*)->get_current_version_for_tablet(RunCtx.ls_id_,
                                                                                  RunCtx.tablet_id_,
                                                                                  current_tablet_version,
                                                                                  last_gc_version,
                                                                                  current_tablet_transfer_seq,
                                                                                  tablet_fingerprint,
-                                                                                 is_old_version_empty));
+                                                                                 is_old_version_empty,
+                                                                                 is_transfer_out_deleted));
   ASSERT_NE(-1, current_tablet_version);
   ASSERT_GE(last_gc_version, -1);
   ASSERT_LT(last_gc_version, current_tablet_version);
@@ -453,7 +455,8 @@ void ObSharedStorageTest::check_block_for_private_dir(
                                   tablet_version,
                                   last_gc_version,
                                   current_tablet_transfer_seq,
-                                  tablet_fingerprint);
+                                  tablet_fingerprint,
+                                  is_transfer_out_deleted);
   ObArray<blocksstable::MacroBlockId> block_ids_in_tablet;
   ObArray<blocksstable::MacroBlockId> unuse_block_ids;
   ObArray<blocksstable::MacroBlockId> block_ids_in_dir;
@@ -525,6 +528,7 @@ void ObSharedStorageTest::get_tablet_version(
   int64_t current_tablet_transfer_seq = -1;
   int64_t last_gc_version = -1;
   uintptr_t tablet_fingerprint = 0;
+  bool is_transfer_out_deleted = false;
   do {
     ASSERT_EQ(OB_SUCCESS, MTL(ObTenantMetaMemMgr*)->get_current_version_for_tablet(RunCtx.ls_id_,
                                                                                    RunCtx.tablet_id_,
@@ -532,7 +536,8 @@ void ObSharedStorageTest::get_tablet_version(
                                                                                    last_gc_version,
                                                                                    current_tablet_transfer_seq,
                                                                                    tablet_fingerprint,
-                                                                                   is_old_version_empty));
+                                                                                   is_old_version_empty,
+                                                                                   is_transfer_out_deleted));
     ASSERT_NE(-1, current_tablet_version);
     ASSERT_GE(last_gc_version, -1);
     ASSERT_LT(last_gc_version, current_tablet_version);
@@ -544,7 +549,8 @@ void ObSharedStorageTest::get_tablet_version(
                                     current_tablet_version,
                                     last_gc_version,
                                     current_tablet_transfer_seq,
-                                    tablet_fingerprint);
+                                    tablet_fingerprint,
+                                    is_transfer_out_deleted);
     LOG_INFO("wait old tablet version delete", K(current_tablet_version), K(is_old_version_empty), K(RunCtx.ls_id_), K(RunCtx.ls_epoch_), K(handler));
     ASSERT_EQ(OB_SUCCESS, handler.list_tablet_meta_version(tablet_versions));
     usleep(100 * 1000);

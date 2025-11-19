@@ -53,15 +53,15 @@ ObStorageSnapshotInfo::ObStorageSnapshotInfo()
   STATIC_ASSERT(SNAPSHOT_MAX - share::ObSnapShotType::MAX_SNAPSHOT_TYPE == ARRAYSIZEOF(ObSnapShotTypeStr), "snapshot type len is mismatch");
 }
 
-const char * ObStorageSnapshotInfo::get_snapshot_type_str() const
+const char * ObStorageSnapshotInfo::get_snapshot_type_str(const uint64_t snapshot_type)
 {
   const char * str = nullptr;
-  if (OB_UNLIKELY(snapshot_type_ >= SNAPSHOT_MAX)) {
+  if (OB_UNLIKELY(snapshot_type >= SNAPSHOT_MAX)) {
     str = "invalid_snapshot_type";
-  } else if (snapshot_type_ < ObSnapShotType::MAX_SNAPSHOT_TYPE) {
-    str = ObSnapshotInfo::get_snapshot_type_str((ObSnapShotType)snapshot_type_);
+  } else if (snapshot_type < ObSnapShotType::MAX_SNAPSHOT_TYPE) {
+    str = ObSnapshotInfo::get_snapshot_type_str((ObSnapShotType)snapshot_type);
   } else {
-    str = ObSnapShotTypeStr[snapshot_type_ - ObSnapShotType::MAX_SNAPSHOT_TYPE];
+    str = ObSnapShotTypeStr[snapshot_type - ObSnapShotType::MAX_SNAPSHOT_TYPE];
   }
   return str;
 }

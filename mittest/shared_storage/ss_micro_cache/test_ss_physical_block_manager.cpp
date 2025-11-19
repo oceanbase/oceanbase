@@ -309,11 +309,13 @@ TEST_F(TestSSPhysicalBlockManager, test_different_blk_allocation_performance)
 
 TEST_F(TestSSPhysicalBlockManager, super_block)
 {
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
   ObSSPhysicalBlockManager &phy_blk_mgr = MTL(ObSSMicroCache *)->phy_blk_mgr_;
   ASSERT_EQ(true, phy_blk_mgr.is_inited_);
   phy_blk_mgr.super_blk_.reset();
   ASSERT_EQ(false, phy_blk_mgr.super_blk_.is_valid());
-  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.format_ss_super_block(SS_PERSIST_MICRO_CKPT_SPLIT_CNT));
+  const int64_t &micro_ckpt_split_cnt = micro_cache->get_micro_ckpt_split_cnt();
+  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.format_ss_super_block(micro_ckpt_split_cnt));
   ASSERT_EQ(true, phy_blk_mgr.super_blk_.is_valid());
   ObSSMicroCacheSuperBlk super_blk;
   ASSERT_EQ(false, super_blk.is_valid());
@@ -700,6 +702,7 @@ TEST_F(TestSSPhysicalBlockManager, alloc_and_reuse)
 TEST_F(TestSSPhysicalBlockManager, resize_file_size)
 {
   LOG_INFO("TEST_CASE: start resize_file_size");
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
   // 1. total_block count is less than count of a sub_arr
   int64_t total_block_cnt = ObSSPhysicalBlockManager::PHY_BLOCK_SUB_ARR_SIZE / sizeof(ObSSPhysicalBlock) - 1;
   int64_t file_size = DEFAULT_BLOCK_SIZE * total_block_cnt;
@@ -740,7 +743,8 @@ TEST_F(TestSSPhysicalBlockManager, resize_file_size)
   const int64_t old_min_micro_blk_cnt = blk_cnt_info.meta_blk_.min_cnt_;
   const int64_t old_max_micro_blk_cnt = blk_cnt_info.meta_blk_.max_cnt_;
   const int64_t old_micro_blk_cnt = blk_cnt_info.meta_blk_.used_cnt_;
-  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.format_ss_super_block(SS_PERSIST_MICRO_CKPT_SPLIT_CNT));
+  const int64_t &micro_ckpt_split_cnt = micro_cache->get_micro_ckpt_split_cnt();
+  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.format_ss_super_block(micro_ckpt_split_cnt));
   total_block_cnt += ObSSPhysicalBlockManager::PHY_BLOCK_SUB_ARR_SIZE / sizeof(ObSSPhysicalBlock);
   file_size = DEFAULT_BLOCK_SIZE * total_block_cnt;
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.resize_file_size(file_size, DEFAULT_BLOCK_SIZE));
@@ -1016,13 +1020,15 @@ TEST_F(TestSSPhysicalBlockManager, parallel_allocate_block_and_check_reuse_versi
 TEST_F(TestSSPhysicalBlockManager, parallel_allocate_block_and_resize)
 {
   LOG_INFO("TEST_CASE: start parallel_allocate_block_and_resize");
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
   const static uint64_t FILE_SIZE = (1L << 32);
   ObSSMicroCacheStat cache_stat;
   ObConcurrentFIFOAllocator allocator;
   ASSERT_EQ(OB_SUCCESS, allocator.init(DEFAULT_BLOCK_SIZE, ObMemAttr(MTL_ID(), "test"), 1L << 30));
   ObSSPhysicalBlockManager phy_blk_mgr(cache_stat, allocator);
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.init(MTL_ID(), FILE_SIZE, DEFAULT_BLOCK_SIZE));
-  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.format_ss_super_block(SS_PERSIST_MICRO_CKPT_SPLIT_CNT));
+  const int64_t &micro_ckpt_split_cnt = micro_cache->get_micro_ckpt_split_cnt();
+  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.format_ss_super_block(micro_ckpt_split_cnt));
 
   const int64_t origin_file_size = phy_blk_mgr.cache_file_size_;
   const int64_t thread_num = 10;
@@ -1091,6 +1097,7 @@ TEST_F(TestSSPhysicalBlockManager, parallel_allocate_block_and_resize)
 TEST_F(TestSSPhysicalBlockManager, double_write_super_blk)
 {
   LOG_INFO("TEST_CASE: start double_write_super_blk");
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
   const uint64_t tenant_id = MTL_ID();
   const static uint64_t FILE_SIZE = (1L << 32);
   ObTenantFileManager *tnt_file_mgr = MTL(ObTenantFileManager*);
@@ -1099,7 +1106,8 @@ TEST_F(TestSSPhysicalBlockManager, double_write_super_blk)
   ASSERT_EQ(OB_SUCCESS, allocator.init(DEFAULT_BLOCK_SIZE, ObMemAttr(MTL_ID(), "test"), 1L << 30));
   ObSSPhysicalBlockManager phy_blk_mgr(cache_stat, allocator);
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.init(MTL_ID(), FILE_SIZE, DEFAULT_BLOCK_SIZE));
-  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.format_ss_super_block(SS_PERSIST_MICRO_CKPT_SPLIT_CNT));
+  const int64_t &micro_ckpt_split_cnt = micro_cache->get_micro_ckpt_split_cnt();
+  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.format_ss_super_block(micro_ckpt_split_cnt));
 
   const int64_t align_size = SS_MEM_BUF_ALIGNMENT;
   char *buf = static_cast<char *>(ob_malloc_align(SS_MEM_BUF_ALIGNMENT, align_size, ObMemAttr(MTL_ID(), "test")));
@@ -1108,8 +1116,8 @@ TEST_F(TestSSPhysicalBlockManager, double_write_super_blk)
   // Scenario 1
   const int64_t old_cache_file_size = phy_blk_mgr.cache_file_size_ * 2;
   const int64_t new_cache_file_size = phy_blk_mgr.cache_file_size_ * 4;
-  ObSSMicroCacheSuperBlk old_super_blk(tenant_id, old_cache_file_size, SS_PERSIST_MICRO_CKPT_SPLIT_CNT);
-  ObSSMicroCacheSuperBlk new_super_blk(tenant_id, new_cache_file_size, SS_PERSIST_MICRO_CKPT_SPLIT_CNT);
+  ObSSMicroCacheSuperBlk old_super_blk(tenant_id, old_cache_file_size, micro_ckpt_split_cnt);
+  ObSSMicroCacheSuperBlk new_super_blk(tenant_id, new_cache_file_size, micro_ckpt_split_cnt);
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.update_ss_super_block(old_super_blk));
 
   new_super_blk.modify_time_us_ = old_super_blk.modify_time_us_ + 888888;
@@ -1124,7 +1132,7 @@ TEST_F(TestSSPhysicalBlockManager, double_write_super_blk)
   // Scenario 2
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.update_ss_super_block(new_super_blk));
   const int64_t fake_cache_file_size = phy_blk_mgr.cache_file_size_ * 8;
-  ObSSMicroCacheSuperBlk fake_super_blk(tenant_id, new_cache_file_size, SS_PERSIST_MICRO_CKPT_SPLIT_CNT);
+  ObSSMicroCacheSuperBlk fake_super_blk(tenant_id, new_cache_file_size, micro_ckpt_split_cnt);
   fake_super_blk.modify_time_us_ = new_super_blk.modify_time_us_ + 888888;
 
   ASSERT_EQ(OB_SUCCESS, serialize_super_block(buf, align_size, fake_super_blk));

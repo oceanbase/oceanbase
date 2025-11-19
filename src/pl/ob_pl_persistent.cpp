@@ -15,6 +15,7 @@
 #include "ob_pl_code_generator.h"
 #include "ob_pl_compile.h"
 #include "share/ob_version.h"
+#include "ob_pl_package.h"
 
 namespace oceanbase
 {
@@ -286,9 +287,15 @@ int ObRoutinePersistentInfo::decode_dll(ObSQLSessionInfo &session_info,
                   OX (routine->set_ret_type(routine_ast->get_ret_type()));
                   OZ (routine->set_types(routine_ast->get_user_type_table()));
                   if (OB_SUCC(ret) && cg.get_profile_mode()) {
-                    OX (routine->set_profiler_unit_info(key_id_, routine->get_proc_type()));
+                    uint64_t object_id = key_id_;
+                    if (share::schema::ObUDTObjectType::is_object_id(key_id_)) {
+                      object_id = static_cast<const ObPLPackage&>(unit).get_id();
+                    } else if (share::schema::ObTriggerInfo::is_trigger_body_package_id(key_id_)) {
+                      object_id = share::schema::ObTriggerInfo::get_package_trigger_id(key_id_);
+                    }
+                    OX (routine->set_profiler_unit_info(object_id, routine->get_proc_type()));
                     OZ (SMART_CALL(
-                          ObPLCodeGenerator::set_profiler_unit_info_recursive(*routine)));
+                      ObPLCodeGenerator::set_profiler_unit_info_recursive(*routine)));
                   }
                 } else {
                   // simple routine(generate by generate_simpile interface), skip encode header byte
@@ -816,7 +823,17 @@ int ObRoutinePersistentInfo::get_pl_extra_info(const DependencyTable &dep_table,
   char *buf = NULL;
   ObSqlString concat_ids_sql;
   for (int64_t i = 0; OB_SUCC(ret) && i < dep_table.count(); ++i) {
-    OZ (add_var_to_array_no_dup(dep_table_objs, dep_table.at(i)));
+    bool found = false;
+    for (int64_t j = 0; OB_SUCC(ret) && j < dep_table_objs.count(); ++j) {
+      // for type body , remove the same object_id
+      if (dep_table_objs.at(j).object_id_ == dep_table.at(i).object_id_) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      OZ (dep_table_objs.push_back(dep_table.at(i)));
+    }
   }
   OX (lib::ob_sort(dep_table_objs.begin(), dep_table_objs.end(), ob_schema_obj_version_less));
   for (int64_t i = 0; OB_SUCC(ret) && i < dep_table_objs.count(); ++i) {

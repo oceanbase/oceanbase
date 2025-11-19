@@ -185,7 +185,6 @@ ObSqlCtx::ObSqlCtx()
     is_restore_(false),
     need_late_compile_(false),
     all_plan_const_param_constraints_(nullptr),
-    all_possible_const_param_constraints_(nullptr),
     all_equal_param_constraints_(nullptr),
     all_pre_calc_constraints_(nullptr),
     all_expr_constraints_(nullptr),
@@ -242,7 +241,6 @@ void ObSqlCtx::reset()
   is_restore_ = false;
   need_late_compile_ = false;
   all_plan_const_param_constraints_ = nullptr;
-  all_possible_const_param_constraints_ = nullptr;
   all_equal_param_constraints_ = nullptr;
   all_pre_calc_constraints_ = nullptr;
   all_expr_constraints_ = nullptr;

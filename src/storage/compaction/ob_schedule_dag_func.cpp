@@ -17,9 +17,6 @@
 #include "storage/multi_data_source/ob_mds_table_merge_dag_param.h"
 #include "storage/ddl/ob_tablet_lob_split_task.h"
 #include "storage/compaction/ob_batch_freeze_tablets_dag.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/direct_load/ob_direct_load_ss_update_inc_major_dag.h"
-#endif
 
 namespace oceanbase
 {
@@ -159,17 +156,6 @@ int ObScheduleDagFunc::schedule_batch_freeze_dag(
   return ret;
 }
 
-#ifdef OB_BUILD_SHARED_STORAGE
-int ObScheduleDagFunc::schedule_ss_update_inc_major_dag(
-    const storage::ObDirectLoadSSUpdateIncMajorDagParam &param)
-{
-  int ret = OB_SUCCESS;
-  bool is_emergency = true;
-  CREATE_DAG(ObDirectLoadSSUpdateIncMajorDag);
-  return ret;
-}
-#endif
-
 int ObDagParamFunc::fill_param(
     const share::ObLSID &ls_id,
     const storage::ObTablet &tablet,
@@ -187,8 +173,8 @@ int ObDagParamFunc::fill_param(
     LOG_WARN("invalid argument", KR(ret), K(ls_id), K(merge_snapshot_version),
       K(exec_mode));
   }
-  if (FAILEDx(tablet.get_private_transfer_epoch(param.schedule_transfer_epoch_))) {
-    LOG_WARN("failed to get transfer epoch", K(ret), K(tablet));
+  if (FAILEDx(tablet.get_private_transfer_epoch(param.schedule_private_transfer_epoch_))) {
+    LOG_WARN("failed to get private transfer epoch", K(ret), K(tablet));
   } else {
     param.ls_id_ = ls_id;
     param.tablet_id_ = tablet.get_tablet_meta().tablet_id_;
@@ -218,8 +204,8 @@ int ObDagParamFunc::fill_param(
     LOG_WARN("invalid argument", KR(ret), K(ls_id), K(merge_snapshot_version),
       K(exec_mode));
   }
-  if (FAILEDx(tablet.get_private_transfer_epoch(param.schedule_transfer_epoch_))) {
-    LOG_WARN("failed to get transfer epoch", K(ret), K(tablet));
+  if (FAILEDx(tablet.get_private_transfer_epoch(param.schedule_private_transfer_epoch_))) {
+    LOG_WARN("failed to get private transfer epoch", K(ret), K(tablet));
   } else {
     param.ls_id_ = ls_id;
     param.tablet_id_ = tablet.get_tablet_meta().tablet_id_;

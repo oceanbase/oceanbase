@@ -9,9 +9,13 @@ return 1;
 
 create function upper() returns int
 return 2;
+Warnings:
+Warning	1304	FUNCTION upper already exists
 
 create function lower() returns int
 return 3;
+Warnings:
+Warning	1304	FUNCTION lower already exists
 
 select a();
 +------+

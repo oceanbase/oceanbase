@@ -35,7 +35,11 @@ typedef lib::ObLockGuard<lib::ObMutex> LockGuard;
 class ObOdpsJniWriter: public ObOdpsJniConnector {
 public:
   ObOdpsJniWriter(ObString factory_class, int64_t batch_size = DEFAULT_BATCH_SIZE)
-      : params_created_(false), is_opened_(false), jni_writer_factory_class_(factory_class)
+      : params_created_(false), is_opened_(false), jni_writer_cls_(nullptr), jni_writer_obj_(nullptr),
+      jni_writer_open_(nullptr), jni_writer_write_next_brs_(nullptr), jni_writer_close_(nullptr),
+      jni_writer_get_session_id_(nullptr), jni_get_scheam_address_(nullptr), jni_get_array_address_(nullptr),
+      jni_get_export_schema_address_(nullptr), jni_writer_get_odps_schema_(nullptr), jni_append_block_id_(nullptr), jni_commit_session_(nullptr),
+      jni_writer_factory_class_(factory_class), schema_ptr_(0), array_ptr_(0), export_schema_ptr_(0), writer_params_(), column_types_()
   {}
 
   virtual ~ObOdpsJniWriter() = default;

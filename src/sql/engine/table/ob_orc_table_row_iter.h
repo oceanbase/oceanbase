@@ -246,7 +246,7 @@ namespace sql {
     ObOrcTableRowIterator() :
       query_flag_(0), inner_sector_reader_(nullptr), sector_reader_(nullptr), bit_vector_cache_(NULL),
       options_(), file_prebuffer_(data_access_driver_), reader_metrics_(),
-      column_index_type_(sql::ColumnIndexType::NAME)
+      column_index_type_(sql::ColumnIndexType::NAME), is_col_name_case_sensitive_(false)
     {}
     virtual ~ObOrcTableRowIterator()
     {
@@ -330,8 +330,7 @@ private:
       data_loaders_.reset();
     }
 
-    template<typename T>
-    void init(int64_t capacity, const std::list<T>& include_columns, orc::Reader *reader);
+    void init(int64_t capacity, const std::list<uint64_t>& include_columns, orc::Reader *reader);
     void init_for_hive_table(int64_t capacity,
                             const std::list<uint64_t>& include_columns,
                             orc::Reader *reader);
@@ -436,6 +435,10 @@ private:
                         OrcRowReader &reader, ObColumnDefaultValue *default_value);
     int compute_column_id_by_index_type(int64_t index, int64_t &orc_col_id);
     int to_dot_column_path(ObIArray<ObString> &col_names, ObString &path);
+    int find_column_type_id_by_name(const orc::Type* type,
+                                     const ObString &col_name,
+                                     ObIArray<ObString> &col_names,
+                                     uint64_t &type_id);
     int get_data_column_batch(const orc::Type *type, const orc::StructVectorBatch *root_batch,
                               const int col_id, orc::ColumnVectorBatch *&batch);
     ObExternalTableAccessOptions& make_external_table_access_options(stmt::StmtType stmt_type);
@@ -516,8 +519,9 @@ private:
     ObFilePreBuffer file_prebuffer_;
     common::ObArenaAllocator temp_allocator_; // used for lob filter pushdown
     common::ObArrayWrap<ObFilePreBuffer::ColumnRangeSlices *> column_range_slices_;
-    ObLakeTableReaderMetrics reader_metrics_;
+    ObLakeTableORCReaderMetrics reader_metrics_;
     sql::ColumnIndexType column_index_type_;
+    bool is_col_name_case_sensitive_;
 };
 
 }

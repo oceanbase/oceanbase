@@ -522,20 +522,20 @@ int ObTabletSplitCtx::prepare_index_builder(
         const int64_t snapshot_version = sstable->is_major_sstable() ?
           sstable->get_snapshot_version() : sstable->get_end_scn().get_val_for_tx();
         const ObStorageSchema *clipped_storage_schema = nullptr;
-        int32_t transfer_epoch = -1;
+        int32_t private_transfer_epoch = -1;
         if (OB_FAIL(get_clipped_storage_schema_on_demand(
             param.source_tablet_id_, *sstable, *storage_schema,
             true/*try_create*/, clipped_storage_schema))) {
           LOG_WARN("get storage schema via sstable failed", K(ret));
         } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle_, dst_tablet_id, tablet_handle))) {
           LOG_WARN("get tablet failed", K(ret));
-        } else if (OB_FAIL(tablet_handle.get_obj()->get_private_transfer_epoch(transfer_epoch))) {
-          LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
+        } else if (OB_FAIL(tablet_handle.get_obj()->get_private_transfer_epoch(private_transfer_epoch))) {
+          LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
         } else if (OB_FAIL(data_desc.init(
             true/*is_ddl*/, *clipped_storage_schema, param.ls_id_,
             dst_tablet_id, merge_type, snapshot_version, param.data_format_version_,
             tablet_handle.get_obj()->get_tablet_meta().micro_index_clustered_,
-            transfer_epoch,
+            private_transfer_epoch,
             0/*concurrent_cnt*/,
             split_reorganization_scn, sstable->get_end_scn(),
             nullptr/*cg_schema*/,
@@ -1356,15 +1356,15 @@ int ObTabletSplitWriteTask::prepare_macro_block_writer(
         sstable_->get_snapshot_version() : sstable_->get_end_scn().get_val_for_tx();
     compaction::ObExecMode exec_mode = GCTX.is_shared_storage_mode() ?
         ObExecMode::EXEC_MODE_OUTPUT : ObExecMode::EXEC_MODE_LOCAL;
-    int32_t transfer_epoch = -1;
+    int32_t private_transfer_epoch = -1;
     if (OB_FAIL(prepare_macro_seq_param(i/*dest_tablet_index*/, macro_seq_param))) {
       LOG_WARN("prepare macro seq par failed", K(ret), K(macro_seq_param));
     } else if (OB_FAIL(context_->index_builder_map_.get_refactored(task_key, sst_idx_builder))) {
       LOG_WARN("get refactored failed", K(ret));
     } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(context_->ls_handle_, dst_tablet_id, tablet_handle))) {
       LOG_WARN("get tablet failed", K(ret));
-    } else if (OB_FAIL(tablet_handle.get_obj()->get_private_transfer_epoch(transfer_epoch))) {
-      LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
+    } else if (OB_FAIL(tablet_handle.get_obj()->get_private_transfer_epoch(private_transfer_epoch))) {
+      LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
     } else if (OB_FAIL(data_desc.init(true/*is_ddl*/, clipped_storage_schema,
                                       param_->ls_id_,
                                       dst_tablet_id,
@@ -1372,7 +1372,7 @@ int ObTabletSplitWriteTask::prepare_macro_block_writer(
                                       snapshot_version,
                                       param_->data_format_version_,
                                       micro_index_clustered,
-                                      transfer_epoch,
+                                      private_transfer_epoch,
                                       0/*concurrent cnt*/,
                                       split_reorganization_scn,
                                       sstable_->get_end_scn(),
@@ -1853,8 +1853,11 @@ int ObTabletSplitMergeTask::process()
   } else if (share::ObSplitSSTableType::SPLIT_BOTH == param_->split_sstable_type_) {
     if (OB_FAIL(create_sstable(share::ObSplitSSTableType::SPLIT_MINOR))) {
       LOG_WARN("create sstable failed", K(ret));
-    } else if (OB_FAIL(create_sstable(share::ObSplitSSTableType::SPLIT_MAJOR))) {
-      LOG_WARN("create sstable failed", K(ret));
+    } else {
+      DEBUG_SYNC(BEFORE_TABLET_SPLIT_MAJOR_SSTABLE);
+      if (OB_FAIL(create_sstable(share::ObSplitSSTableType::SPLIT_MAJOR))) {
+        LOG_WARN("create sstable failed", K(ret));
+      }
     }
   } else if (OB_FAIL(create_sstable(param_->split_sstable_type_))) {
     LOG_WARN("create sstable failed", K(ret));
@@ -2284,6 +2287,12 @@ int ObTabletSplitMergeTask::update_table_store_with_batch_tables(
     LOG_WARN("ddl sim failed, update minor failed", K(ret));
   } else if (is_major_merge(merge_type) && OB_FAIL(DDL_SIM(MTL_ID(), 1/*ddl_task_id*/, SPLIT_UPDATE_MAJOR_FAILED))) {
     LOG_WARN("ddl sim failed, update major failed", K(ret));
+  } else if (is_mds_merge(merge_type) && OB_FAIL(DDL_SIM_WHEN(true/*condition*/, MTL_ID(), 1/*ddl_task_id*/, SPLIT_UPDATE_MDS_SLOW))) {
+    LOG_WARN("ddl sim failed, download sstables slow", K(ret));
+  } else if (is_minor_merge(merge_type) && OB_FAIL(DDL_SIM_WHEN(true/*condition*/, MTL_ID(), 1/*ddl_task_id*/, SPLIT_UPDATE_MINOR_SLOW))) {
+    LOG_WARN("ddl sim failed, download sstables slow", K(ret));
+  } else if (is_major_merge(merge_type) && OB_FAIL(DDL_SIM_WHEN(true/*condition*/, MTL_ID(), 1/*ddl_task_id*/, SPLIT_UPDATE_MAJOR_SLOW))) {
+    LOG_WARN("ddl sim failed, download sstables slow", K(ret));
   } else if (GCTX.is_shared_storage_mode()) {
     ObArenaAllocator tmp_arena("SplitUpdTablet", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObTabletHandle local_tablet_handle;
@@ -3010,31 +3019,35 @@ int ObSplitDownloadSSTableTask::collect_split_sstables(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null majors when downloading", K(ret), K(ss_table_store_iterator));
   } else {
-    ObSSTableMetaHandle meta_handle;
     ObTableHandleV2 table_handle_v2;
     share::SCN sstable_max_end_scn = share::SCN::min_scn();
     for (int64_t j = 0; OB_SUCC(ret) && j < sstables_in_table_store.count(); j++) {
-      meta_handle.reset();
       table_handle_v2.reset();
       ObITable *iter_sstable = sstables_in_table_store.at(j);
       if (OB_ISNULL(iter_sstable)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected err", K(ret), KPC(iter_sstable));
-      } else if (OB_FAIL(static_cast<ObSSTable *>(iter_sstable)->get_meta(meta_handle))) {
-        LOG_WARN("get meta failed", K(ret), KPC(static_cast<ObSSTable *>(iter_sstable)));
-      } else if (!meta_handle.get_sstable_meta().get_table_shared_flag().is_split_sstable()) {
-        if (OB_UNLIKELY(iter_sstable->is_major_sstable())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected major sstable", K(ret), KPC(iter_sstable));
-        } else {
-          LOG_TRACE("skip not split sstable", K(ret), KPC(iter_sstable));
+      } else if (iter_sstable->is_major_sstable()) {
+        if (OB_FAIL(table_handle_v2.set_sstable(iter_sstable, &allocator))) {
+          LOG_WARN("set sstable failed", K(ret));
+        } else if (OB_FAIL(batch_sstables_handle.add_table(table_handle_v2))) {
+          LOG_WARN("add table failed", K(ret));
         }
-      } else if (OB_FAIL(table_handle_v2.set_sstable(iter_sstable, &allocator))) {
-        LOG_WARN("set sstable failed", K(ret));
-      } else if (OB_FAIL(batch_sstables_handle.add_table(table_handle_v2))) {
-        LOG_WARN("add table failed", K(ret));
-      } else if (iter_sstable->is_minor_sstable() || iter_sstable->is_mds_sstable()) {
-        sstable_max_end_scn = SCN::max(sstable_max_end_scn, iter_sstable->get_end_scn());
+      } else {
+        const SCN &sstable_start_scn = iter_sstable->get_start_scn();
+        const SCN &sstable_end_scn = iter_sstable->get_end_scn();
+        if (sstable_start_scn >= split_start_scn_) {
+          LOG_TRACE("skip incremental sstable", K(ret), K(split_start_scn_), KPC(iter_sstable));
+        } else if (sstable_end_scn > split_start_scn_) {
+          ret = OB_ERR_SYS;
+          LOG_WARN("a sstable with cross range", K(ret), K(split_start_scn_), KPC(iter_sstable));
+        } else if (OB_FAIL(table_handle_v2.set_sstable(iter_sstable, &allocator))) {
+          LOG_WARN("set sstable failed", K(ret));
+        } else if (OB_FAIL(batch_sstables_handle.add_table(table_handle_v2))) {
+          LOG_WARN("add table failed", K(ret));
+        } else {
+          sstable_max_end_scn = SCN::max(sstable_max_end_scn, sstable_end_scn);
+        }
       }
     }
     if (OB_SUCC(ret)) {

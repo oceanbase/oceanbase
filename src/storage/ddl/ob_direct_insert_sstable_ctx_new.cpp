@@ -623,7 +623,6 @@ int ObTenantDirectLoadMgr::close_tablet_direct_load_for_sn(
     }
   }
 
-
   // clean ivf build helper(if it is an IVF vector index task)
   if (OB_SUCC(ret) && handle.is_valid() && handle.get_obj() != nullptr) {
     ObTabletDirectLoadMgr *mgr = handle.get_obj();
@@ -632,23 +631,18 @@ int ObTenantDirectLoadMgr::close_tablet_direct_load_for_sn(
       LOG_INFO("Detected IVF vector index task from schema_item, cleaning up IVF helper",
                K(tablet_id), K(context_id));
       ObIvfHelperKey key(tablet_id, context_id);
-      if (OB_FAIL(ObPluginVectorIndexUtils::erase_ivf_build_helper(ls_id, key))) {
-        if (ret != OB_HASH_NOT_EXIST) {
-          LOG_WARN("failed to cleanup ivf build helper, potential memory leak",
-                    K(ret), K(ls_id), K(tablet_id), K(context_id));
-        } else {
-          ret = OB_SUCCESS;
-          LOG_DEBUG("ivf build helper not exist, already cleaned", K(ls_id), K(tablet_id), K(context_id));
+      bool fully_cleared = false;
+      if (OB_TMP_FAIL(ObPluginVectorIndexUtils::erase_ivf_build_helper(ls_id, key, &fully_cleared))) {
+        if (tmp_ret != OB_HASH_NOT_EXIST) {
+          LOG_WARN("failed to cleanup ivf build helper, potential memory leak", K(tmp_ret), K(ls_id), K(tablet_id), K(context_id));
         }
-      } else {
-        LOG_WARN("Successfully cleaned up ivf build helper after ddl task finish",
-                 K(ls_id), K(tablet_id), K(context_id));
+      } else if (!fully_cleared) {
+        LOG_INFO("ivf build helper not fully cleared after single cleanup", K(ret), K(ls_id), K(tablet_id), K(context_id));
       }
     } else {
       LOG_DEBUG("not an IVF vector index task, skip cleanup ivf build helper", K(tablet_id), K(context_id), K(is_ivf));
     }
   }
-
 
   ObBucketHashWLockGuard guard(bucket_lock_, exec_id.hash());
   if (OB_TMP_FAIL(tablet_exec_context_map_.erase_refactored(exec_id))) {
@@ -1317,7 +1311,7 @@ int ObTabletDirectLoadMgr::update(
     if (OB_FAIL(sqc_build_ctx_.build_param_.assign(build_param))) {
       LOG_WARN("assign build param failed", K(ret));
     } else if (OB_FAIL(tablet_handle.get_obj()->get_private_transfer_epoch(private_transfer_epoch_))) {
-      LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
+      LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
     } else {
       ls_id_ = build_param.common_param_.ls_id_;
       tablet_id_ = build_param.common_param_.tablet_id_;

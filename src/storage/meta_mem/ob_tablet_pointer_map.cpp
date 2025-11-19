@@ -611,12 +611,12 @@ int ObTabletPointerMap::get_meta_obj_with_external_memory(
             }
           } else if (OB_UNLIKELY(!is_in_memory)) {
             STORAGE_LOG(WARN, "add macro ref cnt in write lock, may poor performance", K(key), K(disk_addr));
-            int32_t transfer_epoch = -1;
+            int32_t private_transfer_epoch = -1;
             if (CLICK_FAIL(t->deserialize_post_work(allocator))) {
               STORAGE_LOG(WARN, "fail to deserialize post work", K(ret), KP(t));
-            } else if (CLICK_FAIL(t->get_private_transfer_epoch(transfer_epoch))) {
-              STORAGE_LOG(WARN, "fail to get transfer epoch", K(ret), "tablet_meta", t->get_tablet_meta());
-            } else if (CLICK_FAIL(t3m->inc_external_tablet_cnt(t->get_tablet_id().id(), transfer_epoch))) {
+            } else if (CLICK_FAIL(t->get_private_transfer_epoch(private_transfer_epoch))) {
+              STORAGE_LOG(WARN, "fail to get private transfer epoch", K(ret), "tablet_meta", t->get_tablet_meta());
+            } else if (CLICK_FAIL(t3m->inc_external_tablet_cnt(t->get_tablet_id().id(), private_transfer_epoch))) {
                 // !CAUTION: t3m->inc_external_tablet_cnt must be the last step which can modify ret; or, we have to dec_external_tablet_cnt in the failure process
               STORAGE_LOG(WARN, "fail to inc external tablet cnt", K(ret), KP(t), KPC(t));
             } else {
@@ -627,12 +627,12 @@ int ObTabletPointerMap::get_meta_obj_with_external_memory(
 
         if (OB_SUCC(ret) && force_alloc_new && is_in_memory) {
           // tmp_guard is kept, so do post work outside write lock is safe
-          int32_t transfer_epoch = -1;
+          int32_t private_transfer_epoch = -1;
           if (CLICK_FAIL(t->deserialize_post_work(allocator))) {
             STORAGE_LOG(WARN, "fail to deserialize post work", K(ret), KP(t));
-          } else if (CLICK_FAIL(t->get_private_transfer_epoch(transfer_epoch))) {
-            STORAGE_LOG(WARN, "fail to get transfer epoch", K(ret), "tablet_meta", t->get_tablet_meta());
-          } else if (CLICK_FAIL(t3m->inc_external_tablet_cnt(t->get_tablet_id().id(), transfer_epoch))) {
+          } else if (CLICK_FAIL(t->get_private_transfer_epoch(private_transfer_epoch))) {
+            STORAGE_LOG(WARN, "fail to get private transfer epoch", K(ret), "tablet_meta", t->get_tablet_meta());
+          } else if (CLICK_FAIL(t3m->inc_external_tablet_cnt(t->get_tablet_id().id(), private_transfer_epoch))) {
             // !CAUTION: t3m->inc_external_tablet_cnt must be the last step which can modify ret; or, we have to dec_external_tablet_cnt in the failure process
             STORAGE_LOG(WARN, "fail to inc external tablet cnt", K(ret), KP(t), KPC(t));
           } else {
@@ -956,6 +956,37 @@ int ObTabletPointerMap::alloc_tablet_meta_version(const ObTabletMapKey &key, int
       STORAGE_LOG(WARN, "unexpected null tablet pointer", K(ret), K(key));
     } else if (OB_FAIL(t_ptr->try_alloc_meta_version(tablet_meta_version))) {
       STORAGE_LOG(WARN, "failed to alloc tablet meta version", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTabletPointerMap::set_tablet_next_meta_version(const ObTabletMapKey &key, const int64_t next_meta_version)
+{
+  int ret = OB_SUCCESS;
+  uint64_t hash_val = 0;
+  ObTabletPointerHandle ptr_hdl(*this);
+  ObTabletPointer *t_ptr = nullptr;
+  if (OB_UNLIKELY(!ResourceMap::is_inited_)) {
+    ret = common::OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObMetaPointerMap has not been inited", K(ret));
+  } else if (OB_UNLIKELY(!key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid tablet key", K(ret), K(key));
+  } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
+    STORAGE_LOG(WARN, "calc hash failed", K(ret), K(key));
+  } else {
+    // hold wlock
+    common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
+    if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
+      STORAGE_LOG(WARN, "get pointer handle failed", K(ret), K(key));
+    } else if (OB_ISNULL(t_ptr = ptr_hdl.get_tablet_pointer())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected null tablet pointer", K(ret), K(key));
+    } else {
+      t_ptr->set_next_meta_version(next_meta_version);
+      STORAGE_LOG(INFO, "set tablet next meta version", K(ret), K(t_ptr->next_meta_version_),
+        K(t_ptr->last_gc_version_));
     }
   }
   return ret;

@@ -59,6 +59,7 @@ void *obdal_malloc(std::size_t size, std::size_t align)
   void *ptr = nullptr;
   ObMemAttr attr;
   attr.label_ = OB_DAL_SDK;
+  attr.ctx_id_ = ObCtxIds::GLIBC;
   const int64_t tenant_id = ObDalAccessor::obdal_get_tenant_id();
   if (size < OBDAL_MALLOC_BIG_SIZE) {
     attr.tenant_id_ = OB_SERVER_TENANT_ID;

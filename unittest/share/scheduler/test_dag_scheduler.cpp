@@ -1595,8 +1595,9 @@ TEST_F(TestDagScheduler, test_max_concurrent_task)
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
   ASSERT_EQ(OB_SUCCESS, scheduler->init(MTL_ID(), time_slice, 64));
-  EXPECT_EQ(OB_SUCCESS, scheduler->set_thread_score(ObDagPrio::DAG_PRIO_COMPACTION_MID, 7));
-  EXPECT_EQ(7, scheduler->prio_sche_[ObDagPrio::DAG_PRIO_COMPACTION_MID].limits_);
+  const int64_t MAX_MINOR_THREAD_CNT = 10;
+  EXPECT_EQ(OB_SUCCESS, scheduler->set_thread_score(ObDagPrio::DAG_PRIO_COMPACTION_MID, MAX_MINOR_THREAD_CNT));
+  EXPECT_EQ(MAX_MINOR_THREAD_CNT, scheduler->prio_sche_[ObDagPrio::DAG_PRIO_COMPACTION_MID].limits_);
 
   const int64_t dag_cnt = 3;
   ObLSID ls_id(1001);
@@ -1640,7 +1641,7 @@ TEST_F(TestDagScheduler, test_max_concurrent_task)
   int64_t start_time = oceanbase::common::ObTimeUtility::current_time();
   while (oceanbase::common::ObTimeUtility::current_time() - start_time < CHECK_TIMEOUT) {
     const int64_t cnt = scheduler->get_running_task_cnt(ObDagPrio::DAG_PRIO_COMPACTION_MID);
-    EXPECT_LE(cnt, 7);
+    EXPECT_LE(cnt, MAX_MINOR_THREAD_CNT);
     if (cnt == 6) {
       break;
     } else {

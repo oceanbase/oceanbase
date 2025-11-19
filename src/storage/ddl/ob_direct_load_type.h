@@ -106,6 +106,11 @@ static inline bool is_idem_type(const ObDirectLoadType &type)
          DIRECT_LOAD_DDL_V2 == type      || DIRECT_LOAD_LOAD_DATA_V2 == type;
 }
 
+static inline bool is_data_version_support_inc_major_direct_load(const uint64_t data_format_version)
+{
+  return (data_format_version >= DATA_VERSION_4_5_0_0);
+}
+
 }  // end namespace storage
 }  // end namespace oceanbase
    //

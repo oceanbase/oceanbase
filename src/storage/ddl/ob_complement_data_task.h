@@ -18,6 +18,7 @@
 #include "storage/compaction/ob_column_checksum_calculator.h"
 #include "storage/ddl/ob_cg_macro_block_write_task.h"
 #include "storage/ddl/ob_tablet_slice_row_iterator.h"
+#include "storage/ddl/ob_ddl_merge_task_v2.h"
 
 namespace oceanbase
 {
@@ -55,6 +56,17 @@ class ObLocalScan;
 class ObRemoteScan;
 class ObMultipleScanMerge;
 class ObChunk;
+class ObComplementDataDag;
+class ObComplementFailCallback : public ObDDLFailCallback
+{
+public:
+  ObComplementFailCallback():dag_(nullptr) {};
+  virtual ~ObComplementFailCallback() {};
+  int init(ObComplementDataDag *dag);
+  virtual int process(int ret_code) override;
+private:
+  ObComplementDataDag *dag_;
+};
 struct ObComplementDataParam final
 {
 public:
@@ -259,10 +271,12 @@ public:
   // report replica build status to RS.
   int report_replica_build_status();
   int calc_total_row_count();
+  ObComplementFailCallback &get_fail_callback() { return fail_cb_; }
 private:
   bool is_inited_;
   ObComplementDataParam param_;
   ObComplementDataContext context_;
+  ObComplementFailCallback fail_cb_;
   DISALLOW_COPY_AND_ASSIGN(ObComplementDataDag);
 };
 
@@ -344,6 +358,7 @@ private:
   ObComplementRowIterator row_iter_;
   ObTabletSliceRowIterator slice_row_iter_;
   ObChunk chunk_;
+  blocksstable::ObDatumRange scan_range_;
   DISALLOW_COPY_AND_ASSIGN(ObComplementWriteTask);
 };
 
@@ -359,6 +374,15 @@ private:
   ObComplementDataParam *param_;
   ObComplementDataContext *context_;
   DISALLOW_COPY_AND_ASSIGN(ObComplementMergeTask);
+};
+
+class ObComplementReportReplicaTask final : public share::ObITask
+{
+public:
+  ObComplementReportReplicaTask();
+  ~ObComplementReportReplicaTask();
+  int process() override;
+private:
 };
 
 struct ObExtendedGCParam final

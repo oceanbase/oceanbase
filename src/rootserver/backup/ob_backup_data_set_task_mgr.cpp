@@ -20,6 +20,7 @@
 #include "rootserver/backup/ob_backup_table_list_mgr.h"
 #include "rootserver/backup/ob_backup_param_operator.h"
 #include "share/backup/ob_archive_persist_helper.h"
+#include "share/backup/ob_backup_data_table_operator.h"
 #include "share/ob_tablet_replica_checksum_operator.h"
 #include "share/ob_zone_merge_info.h"
 #include "share/ob_global_merge_table_operator.h"
@@ -2505,10 +2506,59 @@ int ObBackupSetTaskMgr::write_extern_infos_()
       LOG_WARN("[DATA_BACKUP]failed to write backup set info", K(ret), KPC(job_attr_));
     } else if (OB_FAIL(write_tenant_backup_set_infos_())) {
       LOG_WARN("[DATA_BACKUP]failed to write tenant backup set infos", K(ret));
+    } else if (OB_FAIL(write_extern_ls_id_info_())) {
+      LOG_WARN("[DATA_BACKUP]failed to write extern ls id info", K(ret));
     } else if (OB_FAIL(write_extern_diagnose_info_(locality_info, backup_set_info))) { // 
       LOG_WARN("[DATA_BACKUP]failed to write extern tenant diagnose info", K(ret), KPC(job_attr_));
     } else if (OB_FAIL(write_backup_set_placeholder_(false/*finish job*/))) {
       LOG_WARN("[DATA_BACKUP]failed to write backup set finish placeholder", K(ret), KPC(job_attr_));
+    }
+  }
+  return ret;
+}
+
+int ObBackupSetTaskMgr::write_extern_ls_id_info_()
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObLSID> queried_ls_ids;
+  storage::ObBackupDataLSIdListDesc ls_id_list_desc;
+
+  if (OB_ISNULL(sql_proxy_) || OB_ISNULL(job_attr_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup set task mgr not init", K(ret), KP_(sql_proxy), KP_(job_attr));
+  } else if (!set_task_attr_.is_valid() || set_task_attr_.task_id_ <= 0 || set_task_attr_.meta_turn_id_ <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid backup set task attr", K(ret), K_(set_task_attr));
+  } else if (OB_FAIL(share::ObBackupLSTaskInfoOperator::get_distinct_ls_ids(
+                 *sql_proxy_, set_task_attr_.task_id_, set_task_attr_.tenant_id_, queried_ls_ids))) {
+    LOG_WARN("[DATA_BACKUP]failed to get distinct ls ids", K(ret), K_(set_task_attr));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(store_.read_ls_id_list(ls_id_list_desc))) {
+      if (OB_OBJECT_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        ls_id_list_desc.ls_id_array_.reset();
+        for (int64_t i = 0; OB_SUCC(ret) && i < queried_ls_ids.count(); ++i) {
+          if (OB_FAIL(ls_id_list_desc.ls_id_array_.push_back(queried_ls_ids.at(i)))) {
+            LOG_WARN("failed to append ls id", K(ret), K(queried_ls_ids.at(i)));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (!ls_id_list_desc.is_valid()) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("ls id list desc invalid", K(ret), K(ls_id_list_desc));
+          } else if (OB_FAIL(store_.write_ls_id_list(ls_id_list_desc))) {
+            LOG_WARN("failed to persist ls id list", K(ret), K_(set_task_attr));
+          } else {
+            LOG_INFO("[DATA_BACKUP]write ls id list info succeed", "ls_count", ls_id_list_desc.ls_id_array_.count());
+          }
+        }
+      } else {
+        LOG_WARN("failed to read existing ls id list", K(ret), K_(set_task_attr));
+      }
+    } else {
+      LOG_INFO("[DATA_BACKUP]ls id list file already exists, skip writing", "tenant_id", set_task_attr_.tenant_id_, "task_id", set_task_attr_.task_id_);
     }
   }
   return ret;

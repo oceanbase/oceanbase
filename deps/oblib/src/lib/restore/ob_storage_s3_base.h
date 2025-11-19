@@ -166,6 +166,7 @@ public:
   ObS3MemoryManager() : attr_(), mem_limiter_(), allocator_()
   {
     attr_.label_ = S3_SDK;
+    attr_.ctx_id_ = ObCtxIds::GLIBC;
   }
   virtual ~ObS3MemoryManager() {}
   // when aws init/shutdown, it will execute like this: init/shutdown_memory_system->Begin()/End()

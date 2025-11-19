@@ -3136,6 +3136,11 @@ int ObCheckStartTransferTabletsDelegate::check_start_transfer_in_tablets_()
       } else if (!tablet->is_empty_shell()) {
         ret = OB_EAGAIN;
         LOG_WARN("dest ls in start status should not exist transfer tablet, need retry", K(ret), KPC(tablet), K(tablet_info));
+      } else if (GCTX.is_shared_storage_mode()
+                 && tablet->get_transfer_seq() < tablet_info.transfer_seq_) {
+        ret = OB_EAGAIN;
+        LOG_WARN("the previous round's transfer out tablet has not finished gc", K(ret), KPC(tablet),
+          K(tablet_info));
       } else if (tablet->get_tablet_meta().transfer_info_.transfer_seq_ > tablet_info.transfer_seq_ + 1) {
         ret = OB_TABLET_TRANSFER_SEQ_NOT_MATCH;
         LOG_WARN("tablet is in empty shell but transfer seq not match", K(ret), KPC(tablet), K(tablet_info));

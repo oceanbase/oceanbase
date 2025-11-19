@@ -543,6 +543,10 @@ public:
     const ObMetaDiskAddr &old_addr);
 
   int alloc_private_tablet_meta_version_with_lock(const ObTabletMapKey &key, int64_t &tablet_meta_version);
+  int check_allow_tablet_macro_check(
+      const ObTabletID &tablet_id,
+      const int32_t private_transfer_epoch,
+      bool &allow);
 protected:
   virtual int prepare_dml_running_ctx(
       const common::ObIArray<uint64_t> *column_ids,
@@ -652,10 +656,6 @@ private:
       ObTabletHandle &new_handle,
       ObTimeGuard &time_guard,
       const share::SCN &ss_change_version = share::SCN::invalid_scn());
-  static int pick_private_transfer_epoch_by_mig_param(
-      const ObMigrationTabletParam &mig_param,
-      const ObLS &dest_ls,
-      int32_t &private_transfer_epoch);
   int safe_update_cas_empty_shell(
       const uint64_t data_version,
       const ObTabletMapKey &key,
@@ -726,6 +726,14 @@ private:
   int do_remove_tablet(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id);
+  /// @brief: remove tablet if it exists and return its(only called by create_transfer_in_tablet)
+  /// current meta version
+  /// @param[out] need_check_gc_queue: true if tablet not exists; false by default.
+  int do_remove_tablet(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id,
+      /*out*/ int64_t &tablet_meta_version,
+      /*out*/ bool &need_check_gc_queue);
   int inner_remove_tablet(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id);

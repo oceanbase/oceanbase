@@ -7995,6 +7995,8 @@ int ObDDLService::create_aux_index(
                                                 task_record))) {
         LOG_WARN("failed to create aux index ddl task", K(ret), K(create_index_arg));
       } else if (FALSE_IT(result.ddl_task_id_ = task_record.task_id_)) {
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObDDLTaskRecordOperator::update_parent_task_message(tenant_id,
           arg.task_id_, index_schema, result.aux_table_id_, result.ddl_task_id_, ObDDLUpdateParentTaskIDType::UPDATE_CREATE_INDEX_ID, allocator, trans))) {
         LOG_WARN("fail to update parent task message", K(ret), K(arg.task_id_), K(index_schema));
@@ -14768,11 +14770,11 @@ int ObDDLService::reset_interval_info_for_interval_to_range(ObTableSchema &new_t
   uint64_t tenant_data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(new_table_schema.get_tenant_id(), tenant_data_version))) {
     LOG_WARN("get tenant data version failed", KR(ret), K(new_table_schema.get_tenant_id()));
-  } else if (tenant_data_version < DATA_VERSION_4_5_0_0) {
+  } else if (tenant_data_version < MOCK_DATA_VERSION_4_4_2_0) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("tenant data version is less than 4.5.0, set interval is not supported",
+    LOG_WARN("tenant data version is less than 4.4.2, set interval is not supported",
              KR(ret), KDV(tenant_data_version));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.5.0, set interval");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.4.2, set interval");
   } else if (OB_FAIL(new_table_schema.set_transition_point(null_row_key))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to set_transition_point", K(new_table_schema), KR(ret));
@@ -15380,7 +15382,7 @@ int ObDDLService::check_need_add_progressive_round(
   return ret;
 }
 
-int ObDDLService::check_is_only_add_index_on_empty_table(ObMySQLTransaction &trans,
+int ObDDLService::check_is_only_add_index_on_empty_table(ObSchemaGetterGuard &schema_guard, ObMySQLTransaction &trans,
                                                          const ObString &database_name,
                                                          const share::schema::ObTableSchema &table_schema,
                                                          const obrpc::ObAlterTableArg &alter_table_arg,
@@ -15403,8 +15405,16 @@ int ObDDLService::check_is_only_add_index_on_empty_table(ObMySQLTransaction &tra
     }
   }
   if (OB_SUCC(ret) && is_only_creata_index_on_empty_table) {
-    if (OB_FAIL(ObCreateIndexOnEmptyTableHelper::check_create_index_on_empty_table_opt(*this,
+    const ObSysVariableSchema *sys_var_schema = nullptr;
+    const uint64_t tenant_id = table_schema.get_tenant_id();
+    if (OB_FAIL(schema_guard.get_sys_variable_schema(tenant_id, sys_var_schema))) {
+      LOG_WARN("fail to get sysvar schema", KR(ret), K(tenant_id));
+    } else if (OB_ISNULL(sys_var_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sys_var_schema is null", KR(ret));
+    } else if (OB_FAIL(ObCreateIndexOnEmptyTableHelper::check_create_index_on_empty_table_opt(*this,
                                                                                        trans,
+                                                                                       *sys_var_schema,
                                                                                        database_name,
                                                                                        table_schema,
                                                                                        ObIndexType::INDEX_TYPE_IS_NOT,
@@ -15626,7 +15636,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                                                     orig_table_schema->get_table_id(),
                                                                     ddl_operator, *schema_service_))) {
         LOG_WARN("failed to modify obj status", K(ret));
-      } else if (OB_FAIL(check_is_only_add_index_on_empty_table(trans,
+      } else if (OB_FAIL(check_is_only_add_index_on_empty_table(schema_guard, trans,
                                                                 alter_table_schema.get_origin_database_name(),
                                                                 new_table_schema,
                                                                 alter_table_arg,
@@ -17559,14 +17569,20 @@ int ObDDLService::add_not_null_column_default_null_to_table_schema(
   bool is_table_empty = false;
   bool is_oracle_mode = false;
   const uint64_t tenant_id = origin_table_schema.get_tenant_id();
+  const ObSysVariableSchema *sys_var_schema = nullptr;
   if (OB_FAIL(origin_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("fail to check is oracle mode", K(ret), K(origin_table_schema));
+  } else if (OB_FAIL(schema_guard.get_sys_variable_schema(tenant_id, sys_var_schema))) {
+    LOG_WARN("fail to get sysvar schema", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(sys_var_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sys_var_schema is null", KR(ret));
   } else if (OB_UNLIKELY(!is_oracle_mode)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("add column not null in mysql mode is online ddl, not offline ddl", K(ret), K(is_oracle_mode));
   } else if (OB_FAIL(lock_table(trans, origin_table_schema))) {
     LOG_WARN("failed to lock ddl lock", K(ret));
-  } else if (OB_FAIL(ObDDLUtil::check_table_empty(alter_table_arg.alter_table_schema_.get_origin_database_name(),
+  } else if (OB_FAIL(ObDDLUtil::check_table_empty(*sys_var_schema, alter_table_arg.alter_table_schema_.get_origin_database_name(),
                                                   origin_table_schema,
                                                   alter_table_arg.sql_mode_,
                                                   is_table_empty))) {
@@ -29527,6 +29543,13 @@ int ObDDLService::rebuild_vec_index(const ObRebuildIndexArg &arg, obrpc::ObAlter
         ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
         LOG_WARN("index table schema should not be null", K(ret), K(arg.index_name_));
         LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, arg.index_name_.length(), arg.index_name_.ptr());
+      } else if (!ObVectorIndexUtil::check_index_is_all_ready(schema_guard, *table_schema, *index_table_schema)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "rebuild on not ready vector index is");
+      } else if (OB_FAIL(check_vec_index_conflict(table_schema->get_tenant_id(), table_id))) {
+        if (OB_EAGAIN != ret) {
+          LOG_WARN("failed to check vec index ", K(ret));
+        }
       } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
         LOG_WARN("get min data version failed", K(ret), K(tenant_id));
       } else if (tenant_data_version < DATA_VERSION_4_3_3_0) {

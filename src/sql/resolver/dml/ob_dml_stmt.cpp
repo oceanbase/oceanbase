@@ -5592,6 +5592,24 @@ int ObDMLStmt::get_match_expr_on_table(uint64_t table_id, ObIArray<ObRawExpr *> 
   return ret;
 }
 
+int ObDMLStmt::has_match_expr_on_table(uint64_t table_id, bool &has_match_expr) const
+{
+  int ret = OB_SUCCESS;
+  has_match_expr = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !has_match_expr && i < get_match_exprs().count(); i++) {
+    uint64_t cur_tid = OB_INVALID_ID;
+    if (OB_ISNULL(get_match_exprs().at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(get_match_exprs().at(i)->get_table_id(cur_tid))) {
+      LOG_WARN("failed to get fulltext search exprs", K(ret));
+    } else if (cur_tid == table_id) {
+      has_match_expr = true;
+    }
+  }
+  return ret;
+}
+
 ObJtColBaseInfo::ObJtColBaseInfo()
   : col_type_(0),
     truncate_(0),

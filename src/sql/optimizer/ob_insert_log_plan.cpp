@@ -1216,6 +1216,25 @@ int ObInsertLogPlan::prepare_dml_infos()
         if (OB_FAIL(insert_up_index_upd_infos_.at(0)->related_index_ids_.assign(
                     table_dml_info->related_index_ids_))) {
           LOG_WARN("assing related index id failed", K(ret));
+        } else {
+          // Check if UPDATE part needs vector index optimization for heap table
+          // This logic is similar to ObDelUpdResolver::check_vec_hnsw_index_vid_opt()
+          IndexDMLInfo *primary_upd_dml_info = insert_up_index_upd_infos_.at(0);
+          const ObTableSchema *table_schema = nullptr;
+          ObSchemaGetterGuard *schema_guard = optimizer_context_.get_schema_guard();
+          if (OB_ISNULL(schema_guard)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("schema guard is null", K(ret));
+          } else if (OB_FAIL(schema_guard->get_table_schema(optimizer_context_.get_session_info()->get_effective_tenant_id(),
+                                                            primary_upd_dml_info->ref_table_id_,
+                                                            table_schema))) {
+            LOG_WARN("failed to get table schema", K(ret), K(primary_upd_dml_info->ref_table_id_));
+          } else if (OB_NOT_NULL(table_schema) && OB_FAIL(ObDelUpdLogPlan::check_vec_hnsw_index_vid_opt(*schema_guard,
+                                                                                                        stmt,
+                                                                                                        table_schema,
+                                                                                                        primary_upd_dml_info))) {
+            LOG_WARN("failed to check vec hnsw index vid opt", K(ret));
+          }
         }
       }
     } else if (OB_FAIL(ObDelUpdLogPlan::prepare_table_dml_info_special(table_info,

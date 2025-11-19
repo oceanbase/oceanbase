@@ -975,6 +975,12 @@ typedef enum ObItemType
   T_FUN_SYS_AI_PROMPT = 1929,
   T_FUN_SYS_VEC_VISIBLE = 1930, // vector index table 5
   T_FUN_SYS_MAX_PT = 1931,
+  T_FUN_GROUPCONCAT = 1932,
+  T_FUN_VARSAMP = 1933,
+  T_FUN_STDDEVSAMP = 1934,
+  T_FUN_UNIQ = 1935,
+  T_FUN_SYS_EDIT_DISTANCE = 1936,
+  T_FUN_SYS_EDIT_DISTANCE_UTF8 = 1937,
 
   ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,
@@ -1057,6 +1063,10 @@ typedef enum ObItemType
   T_FUN_SYS_BUCKET = 2086,
   T_FUN_SYS_SDO_ANYINTERACT = 2087,
   T_FUN_SYS_SDO_CONTAINS = 2088,
+  T_FUN_SYS_DATE_TRUNC = 2089,
+  T_FUN_ANY = 2090,
+  T_FUN_ARBITRARY = 2091,
+
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
@@ -1073,6 +1083,7 @@ typedef enum ObItemType
   T_PSEUDO_ROW_TRANS_INFO_COLUMN = 3012, // trans_info, only for defensive check
   T_PSEUDO_IDENTIFY_SEQ = 3013,
   T_PSEUDO_ROLLUP_GROUPING_ID = 3014,
+  T_PSEUDO_ENCODE_DUP_EXPR = 3015,
   T_PSEUDO_GROUP_PARAM = 3040,
   T_PSEUDO_EXTERNAL_FILE_COL = 3041,
   T_PSEUDO_RELEVANCE_SCORE = 3042, // relecance score for sparse retireval
@@ -1102,6 +1113,8 @@ typedef enum ObItemType
   T_WIN_FUN_LAG = 3171,
   T_WIN_FUN_AVG = 3172,
   T_WIN_FUN_RATIO_TO_REPORT = 3173,
+  T_WIN_FUN_LEAD_IN_FRAME = 3174,
+  T_WIN_FUN_LAG_IN_FRAME = 3175,
   T_TABLET_AUTOINC_NEXTVAL = 3266, // hidden_pk for heap table
 
   ///< @note values of the following symbols are insiginificant
@@ -2965,6 +2978,10 @@ typedef enum ObItemType
   T_VENDED_CREDENTAIL_ENABLED = 4930,
   T_HTTP_TIMEOUT = 4931,
   T_HTTP_KEEPLIVE_TIME = 4932,
+  T_RANDOM_PARTITION = 4933, // random distribution
+  T_COLUMN_NAME_CASE_SENSITIVE = 4934,
+  T_REPLACE_LS = 4935, // replace LS
+  T_DISABLE_TRIGGER_HINT = 4936, // disable_trigger hint
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
@@ -3137,7 +3154,8 @@ extern const char *get_type_name(int type);
                          ((op) >= T_FUN_SYS_BIT_AND && (op) <= T_FUN_SYS_BIT_XOR) || \
                          (op) == T_FUN_INNER_PREFIX_MAX || \
                          (op) == T_FUN_INNER_PREFIX_MIN || \
-                         ((op) >= T_FUN_ARG_MIN && (op) <= T_FUN_ARG_MAX))
+                         ((op) >= T_FUN_ARG_MIN && (op) <= T_FUN_ARG_MAX) || \
+                         ((op) >= T_FUN_GROUPCONCAT) && ((op) <= T_FUN_UNIQ))
 #define MAYBE_ROW_OP(op) ((op) >= T_OP_EQ && (op) <= T_OP_NE)
 #define IS_PSEUDO_COLUMN_TYPE(op) \
   ((op) == T_LEVEL || (op) == T_CONNECT_BY_ISLEAF || (op) == T_CONNECT_BY_ISCYCLE || (op) == T_ORA_ROWSCN)

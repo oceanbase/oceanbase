@@ -100,7 +100,8 @@ private:
                  K_(compressor_type),
                  K_(online_sample_percent),
                  K_(tablet_ids),
-                 K_(enable_inc_major));
+                 K_(enable_inc_major),
+                 K_(is_backup));
   public:
     uint64_t tenant_id_;
     uint64_t database_id_;
@@ -126,6 +127,7 @@ private:
     double online_sample_percent_;
     ObArray<ObTabletID> tablet_ids_;
     bool enable_inc_major_;
+    bool is_backup_;
   };
 
   struct LoadExecuteContext

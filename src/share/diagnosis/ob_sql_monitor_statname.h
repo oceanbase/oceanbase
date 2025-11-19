@@ -72,6 +72,9 @@ SQL_MONITOR_STATNAME_DEF(SSTABLE_INSERT_CG_ROW_COUNT, metric::Unit::INT, "sstabl
 SQL_MONITOR_STATNAME_DEF(VECTOR_INDEX_TASK_THREAD_POOL_COUNT, metric::Unit::INT, "vector index task thread pool count", "vector index task thread pool count", E_MAX, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(VECTOR_INDEX_TASK_TOTAL_COUNT, metric::Unit::INT, "vector index task total count", "vector index task total count", M_SUM, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(VECTOR_INDEX_TASK_FINISH_COUNT, metric::Unit::INT, "vector index task finish count", "vector index task finish count", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(VECTOR_INDEX_TASK_TABLET_COUNT, metric::Unit::INT, "vector index task tablet count", "vector index task tablet count", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(VECTOR_INDEX_TASK_KMEANS_INFO, metric::Unit::INT, "vector index task kmeans info", "vector index task kmeans info", E_MAX, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(VECTOR_INDEX_TASK_IMBALANCE, metric::Unit::INT, "vector index task imbalance factor", "vector index task imbalance factor", E_MAX, metric::Level::STANDARD)
 // Table Scan stat
 SQL_MONITOR_STATNAME_DEF(IO_READ_BYTES, metric::Unit::BYTES, "total io bytes read from disk", "total io bytes read from storage", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(SSSTORE_READ_BYTES, metric::Unit::BYTES, "total bytes processed by ssstore", "total bytes processed by ssstore", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)
@@ -89,10 +92,10 @@ SQL_MONITOR_STATNAME_DEF(OUTPUT_ROWS, metric::Unit::INT, "output rows", "output 
 SQL_MONITOR_STATNAME_DEF(OUTPUT_BATCHES, metric::Unit::INT, "output batches", "output batches", M_SUM | E_MIN | E_MAX, metric::Level::AD_HOC)
 SQL_MONITOR_STATNAME_DEF(SKIPPED_ROWS, metric::Unit::INT, "skipped rows", "skipped rows", M_SUM | E_MIN | E_MAX, metric::Level::AD_HOC)
 SQL_MONITOR_STATNAME_DEF(RESCAN_TIMES, metric::Unit::INT, "rescan times", "rescan times", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)
-SQL_MONITOR_STATNAME_DEF(OPEN_TIME, metric::Unit::TIMESTAMP, "open time", "open time", E_MIN | E_MAX, metric::Level::CRITICAL)
-SQL_MONITOR_STATNAME_DEF(FIRST_ROW_TIME, metric::Unit::TIMESTAMP, "first row time", "first row time", E_MIN | E_MAX, metric::Level::STANDARD)
-SQL_MONITOR_STATNAME_DEF(LAST_ROW_TIME, metric::Unit::TIMESTAMP, "last row time", "last row time", E_MIN | E_MAX, metric::Level::STANDARD)
-SQL_MONITOR_STATNAME_DEF(CLOSE_TIME, metric::Unit::TIMESTAMP, "close time", "close time", E_MIN | E_MAX, metric::Level::CRITICAL)
+SQL_MONITOR_STATNAME_DEF(OPEN_TIME, metric::Unit::TIMESTAMP, "open time", "open time", E_MIN | E_MAX, metric::Level::AD_HOC)
+SQL_MONITOR_STATNAME_DEF(FIRST_ROW_TIME, metric::Unit::TIMESTAMP, "first row time", "first row time", E_MIN | E_MAX, metric::Level::AD_HOC)
+SQL_MONITOR_STATNAME_DEF(LAST_ROW_TIME, metric::Unit::TIMESTAMP, "last row time", "last row time", E_MIN | E_MAX, metric::Level::AD_HOC)
+SQL_MONITOR_STATNAME_DEF(CLOSE_TIME, metric::Unit::TIMESTAMP, "close time", "close time", E_MIN | E_MAX, metric::Level::AD_HOC)
 SQL_MONITOR_STATNAME_DEF(DB_TIME, metric::Unit::TIME_NS, "db time", "db time", M_AVG | E_MIN | E_MAX, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(WORKAREA_MEM, metric::Unit::BYTES, "work area memory", "work area memory", E_MIN | E_MAX, metric::Level::AD_HOC)
 SQL_MONITOR_STATNAME_DEF(WORKAREA_MAX_MEM, metric::Unit::BYTES, "work area max memory", "work area max memory", E_MIN | E_MAX, metric::Level::AD_HOC)
@@ -129,28 +132,51 @@ SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_PREBUFFER_COUNT, metric::Unit::INT, "lake ta
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_MISS_COUNT, metric::Unit::INT, "lake table miss count", "lake table miss count", M_SUM, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_HIT_COUNT, metric::Unit::INT, "lake table hit count", "lake table hit count", M_SUM, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_ASYNC_IO_COUNT, metric::Unit::INT, "lake table async io count", "lake table async io count", M_SUM, metric::Level::CRITICAL)
-SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_ASYNC_IO_SIZE, metric::Unit::INT, "lake table async io size", "lake table async io size", M_SUM, metric::Level::CRITICAL)
+SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_ASYNC_IO_SIZE, metric::Unit::BYTES, "lake table async io size", "lake table async io size", M_SUM, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_TOTAL_IO_WAIT_TIME, metric::Unit::TIME_NS, "lake table total io wait time", "lake table total io wait time", M_SUM, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_MAX_IO_WAIT_TIME, metric::Unit::TIME_NS, "lake table max io wait time", "lake table max io wait time", E_MAX, metric::Level::CRITICAL)
-SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_TOTAL_READ_SIZE, metric::Unit::INT, "lake table total read size", "lake table total read size", M_SUM, metric::Level::CRITICAL)
+SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_TOTAL_READ_SIZE, metric::Unit::BYTES, "lake table total read size", "lake table total read size", M_SUM, metric::Level::CRITICAL)
 
 // Lake Table IO
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_READ_COUNT, metric::Unit::INT, "lake table read count", "lake table read count", M_SUM, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_SYNC_READ_COUNT, metric::Unit::INT, "lake table sync read count", "lake table sync read count", M_SUM, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_ASYNC_READ_COUNT, metric::Unit::INT, "lake table async read count", "lake table async read count", M_SUM, metric::Level::CRITICAL)
-SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_READ_IO_SIZE, metric::Unit::INT, "lake table read io size", "lake table read io size", M_SUM, metric::Level::CRITICAL)
+SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_READ_IO_SIZE, metric::Unit::BYTES, "lake table read io size", "lake table read io size", M_SUM, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_MEM_CACHE_HIT_COUNT, metric::Unit::INT, "lake table memory cache hit count", "lake table memory cache hit count", M_SUM, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_MEM_CACHE_MISS_COUNT, metric::Unit::INT, "lake table memory cache miss count", "lake table memory cache miss count", M_SUM, metric::Level::CRITICAL)
-SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_MEM_CACHE_HIT_IO_SIZE, metric::Unit::INT, "lake table memory cache hit io size", "lake table memory cache hit io size", M_SUM, metric::Level::CRITICAL)
-SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_MEM_CACHE_MISS_IO_SIZE, metric::Unit::INT, "lake table memory cache miss io size", "lake table memory cache miss io size", M_SUM, metric::Level::CRITICAL)
+SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_MEM_CACHE_HIT_IO_SIZE, metric::Unit::BYTES, "lake table memory cache hit io size", "lake table memory cache hit io size", M_SUM, metric::Level::CRITICAL)
+SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_MEM_CACHE_MISS_IO_SIZE, metric::Unit::BYTES, "lake table memory cache miss io size", "lake table memory cache miss io size", M_SUM, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_DISK_CACHE_HIT_COUNT, metric::Unit::INT, "lake table disk cache hit count", "lake table disk cache hit count", M_SUM, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_DISK_CACHE_MISS_COUNT, metric::Unit::INT, "lake table disk cache miss count", "lake table disk cache miss count", M_SUM, metric::Level::CRITICAL)
-SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_DISK_CACHE_HIT_IO_SIZE, metric::Unit::INT, "lake table disk cache hit io size", "lake table disk cache hit io size", M_SUM, metric::Level::CRITICAL)
-SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_DISK_CACHE_MISS_IO_SIZE, metric::Unit::INT, "lake table disk cache miss io size", "lake table disk cache miss io size", M_SUM, metric::Level::CRITICAL)
+SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_DISK_CACHE_HIT_IO_SIZE, metric::Unit::BYTES, "lake table disk cache hit io size", "lake table disk cache hit io size", M_SUM, metric::Level::CRITICAL)
+SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_DISK_CACHE_MISS_IO_SIZE, metric::Unit::BYTES, "lake table disk cache miss io size", "lake table disk cache miss io size", M_SUM, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_MAX_IO_TIME, metric::Unit::TIME_NS, "lake table max io time", "lake table total io wait time", E_MAX, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_AVG_IO_TIME, metric::Unit::TIME_NS, "lake table avg io time", "lake table avg io time", M_AVG, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_TOTAL_IO_TIME, metric::Unit::TIME_NS, "lake table total io time", "lake table total io time", M_SUM, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_STORAGE_IO_COUNT, metric::Unit::INT, "lake table storage io count", "lake table storage io count", M_SUM, metric::Level::CRITICAL)
+
+// Lake Table Reader
+SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_SELECTED_STRIPE_COUNT, metric::Unit::INT, "lake table selected stripe count", "lake table selected stripe count", M_SUM, metric::Level::CRITICAL)
+SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_SKIPPED_STRIPE_COUNT, metric::Unit::INT, "lake table skipped stripe count", "lake table skipped stripe count", M_SUM, metric::Level::CRITICAL)
+
+// PX Metrics
+SQL_MONITOR_STATNAME_DEF(GET_STAT_OF_DFO_TABLES, metric::Unit::TIME_NS, "get stat of dfo tables", "get stat of dfo tables", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(SCHEDULE_DFO_COST, metric::Unit::TIME_NS, "schedule dfo cost", "schedule dfo cost", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(PX_WAIT_DISPATCH, metric::Unit::TIME_NS, "px wait dispatch sqc", "px wait dispatch sqc", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(WAIT_CHANNEL_INFO_COST, metric::Unit::TIME_NS, "wait channel info cost", "wait channel info cost", M_AVG | E_MAX, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(WAIT_CHANNEL_READY_COST, metric::Unit::TIME_NS, "wait channel ready msg cost", "wait channel ready msg cost", M_AVG | E_MAX, metric::Level::STANDARD)
+
+SQL_MONITOR_STATNAME_DEF(SQC_DESERIALIZE_COST, metric::Unit::TIME_NS, "sqc deserialize cost", "sqc deserialize cost", M_AVG | E_MAX, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(SQC_RPC_PROCESS_COST, metric::Unit::TIME_NS, "sqc rpc process cost", "sqc rpc process cost", M_AVG | E_MAX, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(SQC_RPC_AFTER_PROCESS_COST, metric::Unit::TIME_NS, "sqc rpc after process cost", "sqc rpc after process cost", M_AVG | E_MAX, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(SPLIT_GI_TASK_COST, metric::Unit::TIME_NS, "split gi task cost", "split gi task cost", M_AVG | E_MAX, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(PX_DISPATCH_TASK_COST, metric::Unit::TIME_NS, "px dispatch task cost", "px dispatch task cost", M_AVG | E_MAX, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(PX_WORKER_PREPARE_COST, metric::Unit::TIME_NS, "px worker prepare cost", "px worker prepare cost", M_AVG | E_MAX, metric::Level::STANDARD)
+
+SQL_MONITOR_STATNAME_DEF(ELAPSED_TIME, metric::Unit::TIME_NS, "elapsed time", "elapsed time", M_SUM, metric::Level::STANDARD)
+
+// Plan Cache Metrics
+SQL_MONITOR_STATNAME_DEF(IS_HIT_PLAN, metric::Unit::INT, "is hit plan", "is hit plan", M_SUM, metric::Level::STANDARD)
 
 //end
 SQL_MONITOR_STATNAME_DEF(MONITOR_STATNAME_END, metric::Unit::INVALID, "monitor end", "monitor stat name end", E_MIN | E_MAX, metric::Level::AD_HOC)

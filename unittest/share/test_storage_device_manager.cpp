@@ -151,17 +151,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(TestDeviceManager);
 };
 
-class ObClusterEnableObdalConfigFalse: public ObClusterEnableObdalConfigBase
-{
-public:
-  ObClusterEnableObdalConfigFalse() {};
-  virtual ~ObClusterEnableObdalConfigFalse() {};
-  virtual bool is_enable_obdal() const { return false; }
-  static ObClusterEnableObdalConfigFalse &get_instance() {
-    static ObClusterEnableObdalConfigFalse instance;
-    return instance;
-  }
-};
 
 TEST_F(TestDeviceManager, test_device_manager)
 {
@@ -308,16 +297,17 @@ TEST_F(TestDeviceManager, test_device_manager)
     ASSERT_EQ(OB_SUCCESS, databuff_printf(tmp_storage_info.access_id_,
                                           sizeof(tmp_storage_info.access_id_),
                                           "%d", 0));
-    cluster_enable_obdal_config = &ObClusterEnableObdalConfigFalse::get_instance();
+    ASSERT_EQ(OB_SUCCESS, ObObjectStorageInfo::register_cluster_state_mgr(&ObClusterStateBaseMgr::get_instance()));
+    ObClusterStateBaseMgr::get_instance().set_enable_obdal(false);
     ObIODevice *device_handle = nullptr;
     ASSERT_EQ(OB_SUCCESS, manager.get_device(storage_prefix_oss, tmp_storage_info,
                                              default_storage_id_mod, device_handle));
-    cluster_enable_obdal_config = &ObClusterEnableObdalConfigBase::get_instance();
+    ObClusterStateBaseMgr::get_instance().set_enable_obdal(true);
     ObIODevice *device_handle2 = nullptr;
     ASSERT_EQ(OB_SUCCESS, manager.get_device(storage_prefix_oss, tmp_storage_info,
                                              default_storage_id_mod, device_handle2));
     ASSERT_NE(device_handle, device_handle2);
-    cluster_enable_obdal_config = &ObClusterEnableObdalConfig::get_instance();
+    ObClusterStateBaseMgr::get_instance().set_enable_obdal(false);
   }
 }
 

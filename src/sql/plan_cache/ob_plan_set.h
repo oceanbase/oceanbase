@@ -169,7 +169,6 @@ public:
         outline_param_idx_(common::OB_INVALID_INDEX),
         related_user_var_names_(alloc_),
         related_user_sess_var_metas_(alloc_),
-        all_possible_const_param_constraints_(alloc_),
         all_plan_const_param_constraints_(alloc_),
         all_pre_calc_constraints_(),
         all_priv_constraints_(),
@@ -194,6 +193,7 @@ public:
                         common::ObWrapperAllocator, false> &infos,
                         int64_t outline_param_idx,
                         const ObPlanCacheCtx &pc_ctx,
+                        const bool need_match_cons,
                         bool &is_same);
   bool can_skip_params_match();
   bool can_delay_init_datum_store();
@@ -239,6 +239,8 @@ public:
 
   bool get_can_skip_params_match() { return can_skip_params_match_; }
   bool get_can_delay_init_datum_store() { return can_delay_init_datum_store_; }
+  int match_and_merge_plan_cons(const ObPlanCacheCtx &pc_ctx, bool &is_matched);
+  virtual bool has_any_plan() = 0;
 
 private:
   bool is_match_outline_param(int64_t param_idx)
@@ -250,8 +252,7 @@ private:
    * @brief set const param constraints
    *
    */
-  int set_const_param_constraint(common::ObIArray<ObPCConstParamInfo> &const_param_constraint,
-                                 const bool is_all_constraint);
+  int set_const_param_constraint(common::ObIArray<ObPCConstParamInfo> &const_param_constraint);
 
   int set_equal_param_constraint(common::ObIArray<ObPCParamEqualInfo> &equal_param_constraint);
 
@@ -259,12 +260,14 @@ private:
 
   int set_priv_constraint(common::ObIArray<ObPCPrivInfo> &priv_constraint);
 
+  int deep_copy_pre_calc_constraint(ObIAllocator &allocator,
+                                    ObPreCalcExprConstraint* src,
+                                    ObPreCalcExprConstraint*& dst);
+
   int match_cons(const ObPlanCacheCtx &pc_ctx, bool &is_matched);
   /**
    * @brief Match const param constraint.
    * If all_plan_const_param_constraints_ is not empty, check wether the constraints is mached and return the result.
-   * If all_plan_const_param_constraints_ is empty, but any of the constraints in all_possible_const_param_constraints_ is
-   * matched, the is_matched is false (new plan shoule be generated).
    *
    * @param params Const Params about to match
    * @retval is_matched Matching result
@@ -299,7 +302,6 @@ protected:
   // related user session var names
   common::ObFixedArray<common::ObString, common::ObIAllocator> related_user_var_names_;
   UserSessionVarMetaArray related_user_sess_var_metas_;
-  ConstParamConstraint all_possible_const_param_constraints_;
   ConstParamConstraint all_plan_const_param_constraints_;
   EqualParamConstraint all_equal_param_constraints_;
   PreCalcExprConstraint all_pre_calc_constraints_;
@@ -325,14 +327,11 @@ class ObSqlPlanSet : public ObPlanSet
 public:
   ObSqlPlanSet()
     : ObPlanSet(PST_SQL_CRSR),
-      is_all_non_partition_(true),
-      table_locations_(alloc_),
       array_binding_plan_(),
       local_plans_(),
       remote_plan_(NULL),
       direct_local_plan_(NULL),
       dist_plans_(),
-      need_try_plan_(0),
       has_duplicate_table_(false),
       //has_array_binding_(false),
       is_contain_virtual_table_(false),
@@ -452,9 +451,8 @@ private:
                                 ObIArray<ParamStore *> &expanded_params);
 
   bool is_local_plan_opt_allowed(int last_retry_err);
+  virtual bool has_any_plan();
 private:
-  bool is_all_non_partition_; //判断该plan对应的表是否均为非分区表
-  TableLocationFixedArray table_locations_;
   //used for array binding, only local plan
   ObPhysicalPlan *array_binding_plan_;
   common::ObSEArray<ObPhysicalPlan *, 4> local_plans_;
@@ -467,10 +465,6 @@ private:
   ObPhysicalPlan *direct_local_plan_;
   ObDistPlans dist_plans_;
 
-  // 用于处理or expansion、晚期物化，全局索引等特殊场景
-  // 以上的特殊场景的共同特点是plan_set缓存的table location和计划内的table location不一致，
-  // 必须从计划内拿table location去计算物理分区地址
-  int64_t need_try_plan_;
   //计划中是否含有复制表
   bool has_duplicate_table_;
   ObSEArray<int64_t, 4> part_param_idxs_;

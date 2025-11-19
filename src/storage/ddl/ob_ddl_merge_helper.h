@@ -39,9 +39,6 @@ public:
                               const ObDirectLoadType direct_load_type,
                               ObIDDLMergeHelper *&helper);
   static int get_rec_scn_from_ddl_kvs(ObDDLTabletMergeDagParamV2 &merge_param);
-  static int remove_tablet_from_log_handler(const ObLSID &ls_id,
-                                            const ObTabletID &tablet_id,
-                                            ObDDLKvMgrHandle &ddl_kv_mgr_handle);
 public:
 /* interface used for prpare_task*/
   ObIDDLMergeHelper() {}

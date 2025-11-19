@@ -876,6 +876,8 @@ static lib::ObMemAttr get_mem_attr_from_storage_info(const ObObjectStorageInfo *
       ret_attr = hdfs_attr;
     }
   }
+  ret_attr.ctx_id_ = ObCtxIds::GLIBC;
+
   return ret_attr;
 }
 

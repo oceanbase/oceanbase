@@ -23,6 +23,7 @@
  public:
    explicit ObExprEmbeddedVec(common::ObIAllocator &alloc);
    virtual ~ObExprEmbeddedVec() {}
+   static int pack_embedded_res(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res, const ObString &str);
    virtual int calc_result_typeN(ObExprResType &type,
                                  ObExprResType *types,
                                  int64_t param_num,

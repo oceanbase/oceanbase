@@ -66,7 +66,8 @@ ObLoadDataDirectImpl::LoadExecuteParam::LoadExecuteParam()
     load_level_(ObDirectLoadLevel::INVALID_LEVEL),
     compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
     online_sample_percent_(100.),
-    enable_inc_major_(false)
+    enable_inc_major_(false),
+    is_backup_(false)
 {
   column_ids_.set_tenant_id(MTL_ID());
 }
@@ -2191,7 +2192,6 @@ int ObLoadDataDirectImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
   ObSQLSessionInfo *session = nullptr;
   ObSchemaGetterGuard *schema_guard = nullptr;
   int64_t total_line_count = 0;
-  const bool is_backup = ObLoadDataFormat::OB_BACKUP_1_4 == load_args.access_info_.get_load_data_format();
 
   if (OB_UNLIKELY(load_args.file_iter_.count() > ObTableLoadSequenceNo::MAX_DATA_ID)) {
     ret = OB_NOT_SUPPORTED;
@@ -2247,7 +2247,7 @@ int ObLoadDataDirectImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
     }
   }
 
-  if (OB_SUCC(ret) && !is_backup) {
+  if (OB_SUCC(ret) && !execute_param_.is_backup_) {
     FileLoadExecutor *file_load_executor = nullptr;
     DataDescIterator data_desc_iter;
     if (1 == load_args.file_iter_.count() && 0 == execute_param_.ignore_row_num_ &&
@@ -2295,7 +2295,7 @@ int ObLoadDataDirectImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
       file_load_executor = nullptr;
     }
   }
-  if (OB_SUCC(ret) && is_backup) {
+  if (OB_SUCC(ret) && execute_param_.is_backup_) {
     BackupLoadExecutor *backup_load_executor = nullptr;
     if (OB_ISNULL(backup_load_executor = OB_NEWx(BackupLoadExecutor, execute_ctx_.allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -2350,7 +2350,6 @@ int ObLoadDataDirectImpl::init_execute_param()
     load_stmt_->get_field_or_var_list();
   ObSchemaGetterGuard *schema_guard = ctx_->get_sql_ctx()->schema_guard_;
   const ObTableSchema *table_schema = nullptr;
-  const bool is_backup = ObLoadDataFormat::OB_BACKUP_1_4 == load_args.access_info_.get_load_data_format();
   execute_param_.tenant_id_ = load_args.tenant_id_;
   execute_param_.database_id_ = load_args.database_id_;
   execute_param_.table_id_ = load_args.table_id_;
@@ -2377,6 +2376,10 @@ int ObLoadDataDirectImpl::init_execute_param()
       execute_param_.insert_mode_ = optimizer_ctx->insert_mode_;
       execute_param_.load_level_ = optimizer_ctx->load_level_;
       execute_param_.enable_inc_major_ = optimizer_ctx->enable_inc_major_;
+      execute_param_.is_backup_ = optimizer_ctx->is_backup();
+      if (OB_FAIL(execute_param_.column_ids_.assign(optimizer_ctx->get_column_ids()))) {
+        LOG_WARN("fail to assign columns ids", KR(ret));
+      }
     }
   }
   // parallel_
@@ -2433,53 +2436,6 @@ int ObLoadDataDirectImpl::init_execute_param()
     }
     data_access_param.compression_format_ = load_args.compression_format_;
   }
-  // column_ids_
-  if (OB_SUCC(ret)) {
-    execute_param_.column_ids_.reset();
-    if (is_backup) { // 备份数据导入
-      if (OB_FAIL(ObTableLoadSchema::get_column_ids(table_schema, execute_param_.column_ids_))) {
-        LOG_WARN("fail to get column ids for backup", KR(ret));
-      }
-    } else if (load_stmt_->get_default_table_columns()) { // 默认列导入
-      if (OB_FAIL(ObTableLoadSchema::get_user_column_ids(table_schema, execute_param_.column_ids_))) {
-        LOG_WARN("fail to get user column ids", KR(ret));
-      }
-    } else { // 指定列导入
-      const static uint64_t INVALID_COLUMN_ID = UINT64_MAX;
-      ObArray<uint64_t> user_column_ids;
-      ObArray<ObString> user_column_names;
-      user_column_ids.set_tenant_id(MTL_ID());
-      user_column_names.set_tenant_id(MTL_ID());
-      if (OB_FAIL(ObTableLoadSchema::get_user_column_id_and_names(table_schema, user_column_ids, user_column_names))) {
-        LOG_WARN("fail to get user column ids and names", KR(ret));
-      }
-      for (int64_t i = 0; OB_SUCC(ret) && i < field_or_var_list.count(); ++i) {
-        const ObLoadDataStmt::FieldOrVarStruct &field_or_var_struct = field_or_var_list.at(i);
-        if (OB_UNLIKELY(!field_or_var_struct.is_table_column_)) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("var is not supported", KR(ret), K(field_or_var_struct), K(i),
-                   K(field_or_var_list));
-        } else {
-          const uint64_t column_id = field_or_var_struct.column_id_;
-          int64_t found_column_idx = -1;
-          for (int64_t j = 0; found_column_idx == -1 && j < user_column_ids.count(); ++j) {
-            const uint64_t user_column_id = user_column_ids.at(j);
-            if (column_id == user_column_id) {
-              found_column_idx = j;
-            }
-          }
-          if (OB_UNLIKELY(found_column_idx == -1)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unknow column", KR(ret), K(user_column_ids), K(field_or_var_struct));
-          } else if (OB_FAIL(execute_param_.column_ids_.push_back(column_id))) {
-            LOG_WARN("fail to push back column id", KR(ret));
-          } else {
-            user_column_ids.at(found_column_idx) = INVALID_COLUMN_ID;
-          }
-        }
-      }
-    }
-  }
   // compressor_type_
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(
@@ -2510,7 +2466,6 @@ int ObLoadDataDirectImpl::init_execute_context()
 {
   int ret = OB_SUCCESS;
   const ObLoadArgument &load_args = load_stmt_->get_load_arguments();
-  const bool is_backup = ObLoadDataFormat::OB_BACKUP_1_4 == load_args.access_info_.get_load_data_format();
   execute_ctx_.exec_ctx_.exec_ctx_ = ctx_;
   execute_ctx_.allocator_ = &ctx_->get_allocator();
   ObTableLoadParam load_param;
@@ -2521,7 +2476,7 @@ int ObLoadDataDirectImpl::init_execute_context()
   load_param.batch_size_ = execute_param_.batch_row_count_;
   load_param.max_error_row_count_ = execute_param_.max_error_rows_;
   load_param.column_count_ = execute_param_.column_ids_.count();
-  load_param.need_sort_ = is_backup ? false : execute_param_.need_sort_;
+  load_param.need_sort_ = execute_param_.need_sort_;
   load_param.px_mode_ = false;
   load_param.online_opt_stat_gather_ = execute_param_.online_opt_stat_gather_;
   load_param.dup_action_ = execute_param_.dup_action_;

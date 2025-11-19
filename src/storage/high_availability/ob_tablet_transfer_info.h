@@ -25,7 +25,7 @@ struct ObTabletTransferInfo final
 {
   OB_UNIS_VERSION(1);
 public:
-  static bool is_private_transfer_epoch_valid(const int64_t transfer_epoch);
+  static bool is_private_transfer_epoch_valid(const int64_t private_transfer_epoch);
 public:
   ObTabletTransferInfo();
   ~ObTabletTransferInfo() = default;
@@ -41,7 +41,7 @@ public:
   bool has_transfer_table() const;
   void reset_transfer_table();
   bool is_transfer_out_deleted() const;
-  int get_private_transfer_epoch(int32_t &transfer_epoch) const;
+  int get_private_transfer_epoch(int32_t &private_transfer_epoch) const;
   int set_private_transfer_epoch(const int32_t private_transfer_epoch);
 
   TO_STRING_KV(K_(ls_id), K_(transfer_start_scn), K_(transfer_seq), K_(has_transfer_table),
@@ -57,7 +57,7 @@ public:
 private:
   static const int64_t TRANSFER_INIT_LS_ID = 0;
   /**
-   * @brief: transfer epoch:
+   * @brief: private transfer epoch:
    * == MacroBlockID.forth_id(20 bits), initialized at dest.
    * It's DIFFERENT with transfer_seq!!!
    * Only used for local and private data storage path.

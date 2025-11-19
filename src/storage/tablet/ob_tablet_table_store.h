@@ -182,6 +182,11 @@ public:
   const blocksstable::ObMajorChecksumInfo &get_major_ckm_info() const { return major_ckm_info_; }
   int get_all_minor_sstables(ObTableStoreIterator &iter) const;
 private:
+  int64_t get_compat_serialize_version(const uint64_t data_version) const {
+    return data_version < DATA_VERSION_4_5_0_0
+         ? TABLE_STORE_VERSION_V4 // this compat serialization is for SS, whose table store version must >= V4
+         : version_;
+  }
   int build_memtable_array(const ObTablet &tablet);
   // Synchronous cache sstable meta with 2MB memory.
   //  - The cache size is 2M, and include the size of the table store itself.
@@ -514,14 +519,14 @@ private:
                             ObCOSSTableBaseType &co_base_type) const;
   int inner_calculate_inc_ddl_row_read_tables(
       const int64_t snapshot_version,
+      const share::SCN &inc_major_end_scn,
       ObTableStoreIterator &iterator) const;
   int inner_calculate_inc_ddl_column_read_tables(
       const ObTablet &tablet,
       const int64_t snapshot_version,
-      const bool need_rescan,
+      const share::SCN &inc_major_end_scn,
       ObTableStoreIterator &iterator) const;
   int inner_calculate_inc_ddl_column_read_sstables(
-      const bool need_rescan,
       int64_t &cur_sstable_idx,
       int64_t &tx_id,
       ObIArray<ObITable *> &read_tables) const;
@@ -535,11 +540,6 @@ private:
       const ObBatchUpdateTableStoreParam &param,
       const ObTabletTableStore &old_store,
       const int64_t inc_base_snapshot_version);
-  int check_scn_range_less_than_inc_major_right_border(const ObScnRange &scn_range, bool &is_less_than_right_border) const;
-  int get_filtered_inc_major_ddl_sstables(
-    ObIArray<ObSSTable *> &filtered_inc_major_ddl_sstables) const;
-  int get_filtered_inc_major_ddl_mem_sstables(
-    ObIArray<ObDDLKV *> &filtered_inc_major_ddl_mem_sstables) const;
 
 public:
   static const int64_t TABLE_STORE_VERSION_V1 = 0x0100;

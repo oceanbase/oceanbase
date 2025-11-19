@@ -46,6 +46,7 @@ private:
   static int get_estimate_memory_str(ObVectorIndexParam index_param,
                                      uint64_t num_vectors,
                                      uint64_t tablet_max_num_vectors,
+                                     uint64_t tablet_count,
                                      ObStringBuffer &res_buf);
   static int print_mem_size(uint64_t mem_size, ObStringBuffer &res_buf);
 };

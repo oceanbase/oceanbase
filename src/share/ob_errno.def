@@ -2384,6 +2384,7 @@ DEFINE_ERROR(OB_LOG_ONLY_POLICY_NOT_ALLOWED_TO_SET, -9150, -1, "HY000", "log_onl
 DEFINE_ERROR_EXT(OB_BACKUP_CLEAN_CAN_NOT_START, -9151, -1, "HY000", "backup clean can not start", "backup clean can not start, because %s");
 DEFINE_ERROR_EXT_DEP(OB_BACKUP_DEVICE_NOT_MOUNTED, -9152, -1, "HY000", "backup device may be not mounted", "backup device may be not mounted, %s did not read any data written by %s");
 DEFINE_ERROR_EXT_DEP(OB_BACKUP_DEVICE_NOT_STRONG_RW_CONSISTENT, -9153, -1, "HY000", "backup device is not read & write strongly consistent", "backup device is not read and write strongly consistent. %s did not read the latest data written by %s.");
+DEFINE_ERROR(OB_LS_ARCHIVE_MAX_SCN_LESS_THAN_CHECKPOINT, -9154, -1, "HY000", "ls archive max scn less than checkpoint scn");
 // 余留位置，在该行之前继续添加storage错误码
 
 ////////////////////////////////////////////////////////////////
@@ -2949,6 +2950,7 @@ DEFINE_ERROR_EXT(OB_HTTP_BAD_REQUEST, -11122, OB_HTTP_BAD_REQUEST, "HY000", "Bad
 DEFINE_ERROR_EXT(OB_HTTP_UNAUTHORIZED, -11123, OB_HTTP_UNAUTHORIZED, "HY000", "Unauthorized http request", "Unauthorized http request: %s");
 DEFINE_ERROR_EXT(OB_HTTP_NOT_FOUND, -11124, OB_HTTP_NOT_FOUND, "HY000", "Http request not found", "Http request not found: %s");
 DEFINE_ERROR_EXT(OB_HTTP_SERVER_ERROR, -11125, OB_HTTP_SERVER_ERROR, "HY000", "Http server error", "Http server error: %s");
+DEFINE_ERROR_EXT(OB_INVALID_DATE_TRUNC_FORMAT, -11126, -1, "HY000", "unit not recognized", "unit \'%.*s\' not recognized");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // SQL扩展区段1：[-11000, -12000)

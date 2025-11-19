@@ -14,6 +14,7 @@
 
 #include "ob_index_block_builder.h"
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "share/compaction/ob_shared_storage_compaction_util.h"
@@ -24,6 +25,7 @@ namespace oceanbase
 ERRSIM_POINT_DEF(EN_COMPACTION_DISABLE_SHARED_MACRO);
 ERRSIM_POINT_DEF(EN_SSTABLE_SINGLE_ROOT_TREE);
 ERRSIM_POINT_DEF(EN_SSTABLE_META_IN_TAIL);
+ERRSIM_POINT_DEF(EN_REWRITE_SMALL_SSTABLE_FAILED);
 using namespace common;
 using namespace storage;
 using namespace compaction;
@@ -1844,6 +1846,9 @@ int ObSSTableIndexBuilder::rewrite_small_sstable(ObSSTableMergeRes &res)
     } else if (FALSE_IT(read_info.macro_block_id_ = macro_meta.val_.macro_id_)) {
     } else if (OB_FAIL(ObObjectManager::async_read_object(read_info, read_handle))) {
       STORAGE_LOG(WARN, "fail to async read macro block", K(ret), K(read_info), K(macro_meta), K(roots_[0]->last_macro_size_));
+#ifdef ERRSIM
+      SERVER_EVENT_SYNC_ADD("merge_errsim", "async_read_macro_block_failed", "ret_code", ret);
+#endif
     } else if (OB_FAIL(read_handle.wait())) {
       STORAGE_LOG(WARN, "fail to wait io finish", K(ret), K(read_info));
     } else {
@@ -1855,7 +1860,20 @@ int ObSSTableIndexBuilder::rewrite_small_sstable(ObSSTableMergeRes &res)
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "successfully rewrite small sstable, but block info is invalid", K(ret), K(block_info));
       } else if (FALSE_IT(macro_meta.val_.macro_id_ = block_info.macro_id_)) {
-      } else if (OB_FAIL(change_single_macro_meta_for_small_sstable(macro_meta))){
+#ifdef ERRSIM
+      // failed after dec old block ref cnt and before change macro meta
+      } else if (EN_REWRITE_SMALL_SSTABLE_FAILED) {
+        ret = EN_REWRITE_SMALL_SSTABLE_FAILED;
+        const int64_t cg_idx = data_store_desc_.get_desc().get_table_cg_idx();
+        if (cg_idx == -ret) {
+          LOG_INFO("ERRSIM EN_REWRITE_SMALL_SSTABLE_FAILED", K(ret), K(cg_idx));
+          SERVER_EVENT_SYNC_ADD("merge_errsim", "rewrite_small_sst_failed", "ret_code", ret);
+        } else {
+          ret = OB_SUCCESS;
+        }
+#endif
+      }
+      if (FAILEDx(change_single_macro_meta_for_small_sstable(macro_meta))){
         STORAGE_LOG(WARN, "fail to change index tree root ctx macro id for small sst", K(ret),
             K(block_info.macro_id_), KPC(roots_[0]));
       } else {
@@ -4150,7 +4168,7 @@ bool ObIndexBlockRebuilder::use_absolute_offset(const ObITable::TableKey &table_
   return table_key.is_ddl_merge_sstable();
 }
 
-int ObIndexBlockRebuilder::get_tablet_transfer_epoch(int32_t &tablet_transfer_epoch) const
+int ObIndexBlockRebuilder::get_tablet_private_transfer_epoch(int32_t &tablet_private_transfer_epoch) const
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -4160,7 +4178,7 @@ int ObIndexBlockRebuilder::get_tablet_transfer_epoch(int32_t &tablet_transfer_ep
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sstable_builder_ shoulde not be nullptr", K(ret), KP(sstable_builder_));
   } else {
-    tablet_transfer_epoch = sstable_builder_->get_private_transfer_epoch();
+    tablet_private_transfer_epoch = sstable_builder_->get_private_transfer_epoch();
   }
   return ret;
 }

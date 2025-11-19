@@ -1962,6 +1962,12 @@ protected:
   bool is_pipelined_plan_;
   bool is_nl_style_pipelined_plan_;
   bool is_at_most_one_row_;
+
+  // when op_ordering_
+  // is_local_order_ == true, means only has local sort property
+  // is_local_order_ == false, means globally sorted
+  // when has no op_ordering_
+  // is_local_order has no meanings
   bool is_local_order_;
   bool is_range_order_;
   common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true> op_ordering_;

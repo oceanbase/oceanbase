@@ -203,6 +203,10 @@ public:
   {
     return is_border_after_disabled_;
   }
+  OB_INLINE bool should_skip() const
+  {
+    return !is_disabled() || is_border_after_disabled();
+  }
   OB_INLINE bool is_prefix_filled() const
   {
     return is_prefix_filled_;
@@ -332,7 +336,8 @@ public:
   int set_pending_disabled(
       const bool is_reverse_scan,
       const int64_t prefix_cnt,
-      const blocksstable::ObStorageDatumUtils &datum_utils);
+      const blocksstable::ObStorageDatumUtils &datum_utils,
+      const ObIArray<share::schema::ObColDesc> &col_descs);
   int get_newest_prefix_key(const blocksstable::ObDatumRowkey *&newest_prefix_key) const;
   OB_INLINE bool is_pending_disabled() const
   {

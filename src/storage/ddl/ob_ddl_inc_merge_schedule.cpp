@@ -24,7 +24,7 @@
 #include "storage/incremental/ob_ls_inc_sstable_uploader.h"
 #include "storage/incremental/ob_shared_meta_service.h"
 #include "share/scheduler/ob_partition_auto_split_helper.h"
-#include "storage/direct_load/ob_direct_load_ss_update_inc_major_dag.h"
+#include "storage/direct_load/ob_direct_load_ss_update_inc_major_task.h"
 #endif
 #include "storage/compaction/ob_schedule_dag_func.h"
 #include "storage/ddl/ob_ddl_merge_task_utils.h"
@@ -272,9 +272,12 @@ int ObDDLMergeScheduler::schedule_tablet_ddl_inc_major_merge_for_sn(
     }
   }
 
-  if (OB_FAIL(ret)) {
-  } else if (need_merge && cur_trans_id.is_valid() && cur_seq_no.is_valid()) {
-    ObArenaAllocator allocator(ObMemAttr(MTL_ID(), "IncMrgSche"));
+  if (OB_FAIL(ret) || !need_merge) {
+  } else if (OB_UNLIKELY(!cur_trans_id.is_valid() || !cur_seq_no.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected invalid cur_trans_id or cur_seq_no", KR(ret), K(cur_trans_id), K(cur_seq_no));
+  } else {
+    ObArenaAllocator allocator(ObMemAttr(MTL_ID(), "DdlIncCommitCb"));
     ObTabletDDLCompleteMdsUserData user_data;
     if (can_read && OB_FAIL(check_inc_major_merge_delay(tablet_handle, cur_trans_id, cur_seq_no, trans_version))) {
       LOG_WARN("failed to check inc major merge delay", KR(ret),
@@ -282,7 +285,7 @@ int ObDDLMergeScheduler::schedule_tablet_ddl_inc_major_merge_for_sn(
     } else if (OB_FAIL(tablet_handle.get_obj()->get_inc_major_direct_load_info(
         share::SCN::max_scn(), allocator, ObTabletDDLCompleteMdsUserDataKey(cur_trans_id), user_data))) {
       LOG_WARN("failed to get inc major direct load info", KR(ret), K(tablet_id), K(cur_trans_id));
-    } else if (OB_UNLIKELY(user_data.data_format_version_ < DATA_VERSION_4_4_1_0)) {
+    } else if (OB_UNLIKELY(!is_data_version_support_inc_major_direct_load(user_data.data_format_version_))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected invalid data format version", KR(ret), K(user_data.data_format_version_));
     } else if (OB_UNLIKELY(can_read && !user_data.inc_major_commit_scn_.is_valid_and_not_min())) {
@@ -319,17 +322,20 @@ int ObDDLMergeScheduler::schedule_tablet_ddl_inc_major_merge_for_sn(
 int ObDDLMergeScheduler::check_ddl_kv_dump_delay(ObDDLKV &ddl_kv)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!ddl_kv.is_freezed())) {
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (OB_UNLIKELY(!tenant_config->_enable_inc_major_direct_load || !ddl_kv.is_freezed())) {
     // do nothing
   } else {
     const SCN &freeze_scn = ddl_kv.get_freeze_scn();
-    const int64_t warn_time_interval = 60 * 60 * 1000 * 1000L; // 1 hour
+    const int64_t warn_time_interval = 2 * 60 * 60 * 1000 * 1000L; // 2 hours
     const int64_t freeze_time_us = freeze_scn.convert_to_ts();
     const int64_t current_time_us = ObTimeUtility::current_time();
     const int64_t time_interval = current_time_us - freeze_time_us;
     if (OB_UNLIKELY(time_interval > warn_time_interval)) {
-      LOG_ERROR("ddl kv dump is delayed more than 1 hour", K(ddl_kv), K(freeze_scn),
-          K(freeze_time_us), K(current_time_us), K(time_interval), K(warn_time_interval));
+      LOG_ERROR("ddl kv dump is delayed more than 2 hours", K(ddl_kv), K(freeze_scn),
+          K(freeze_time_us), K(current_time_us),
+          "delay time (minutes)", time_interval / (60 * 1000 * 1000L),
+          "threshold time (minutes)", warn_time_interval / (60 * 1000 * 1000L));
     }
   }
   return ret;
@@ -349,14 +355,16 @@ int ObDDLMergeScheduler::check_inc_major_merge_delay(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", KR(ret), K(tablet_handle), K(cur_trans_id), K(cur_seq_no), K(trans_version));
   } else {
-    const int64_t warn_time_interval = 60 * 60 * 1000 * 1000L; // 1 hour
+    const int64_t warn_time_interval = 2 * 60 * 60 * 1000 * 1000L; // 2 hours
     const int64_t commit_time_us = trans_version.convert_to_ts();
     const int64_t current_time_us = ObTimeUtility::current_time();
     const int64_t time_interval = current_time_us - commit_time_us;
     if (OB_UNLIKELY(time_interval > warn_time_interval)) {
       const ObTabletID &tablet_id = tablet_handle.get_obj()->get_tablet_id();
-      LOG_ERROR("inc major merge is delayed more than 1 hour", K(tablet_id), K(cur_trans_id), K(cur_seq_no),
-          K(trans_version), K(commit_time_us), K(current_time_us), K(time_interval), K(warn_time_interval));
+      LOG_ERROR("inc major merge is delayed more than 2 hours", K(tablet_id), K(cur_trans_id), K(cur_seq_no),
+          K(trans_version), K(commit_time_us), K(current_time_us),
+          "delay time (minutes)", time_interval / (60 * 1000 * 1000L),
+          "threshold time (minutes)", warn_time_interval / (60 * 1000 * 1000L));
     }
   }
   return ret;
@@ -364,37 +372,51 @@ int ObDDLMergeScheduler::check_inc_major_merge_delay(
 
 #ifdef OB_BUILD_SHARED_STORAGE
 int ObDDLMergeScheduler::schedule_ss_update_inc_major_and_gc_inc_major(
-    const ObLSID &ls_id,
+    ObLS *ls,
     const ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
-  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-  bool need_schedule = false;
-  if (!tenant_config->_enable_inc_major_direct_load) {
-    // do nothing
-  } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tablet_handle));
-  } else if (OB_FAIL(tablet_handle.get_obj()->fetch_table_store(table_store_wrapper))) {
-    LOG_WARN("fail to fetch table store", KR(ret));
-  } else if (OB_UNLIKELY(!table_store_wrapper.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table store wrapper is invalid", KR(ret));
-  } else if (table_store_wrapper.get_member()->get_inc_major_sstables().count() > 0) {
-    const ObSSTableArray &inc_major_sstables = table_store_wrapper.get_member()->get_inc_major_sstables();
-    for (int64_t i = 0; i < inc_major_sstables.count(); ++i) {
-      if (inc_major_sstables.at(i)->get_upper_trans_version() == INT64_MAX) {
-        need_schedule = true;
-        break;
-      }
-    }
+  const ObLSID &ls_id = ls->get_ls_id();
+  const ObTabletID &tablet_id = tablet_handle.get_obj()->get_tablet_id();
+  // process local
+  ObDirectLoadSSUpdateLocalIncMajorTask local_task(*ls, *tablet_handle.get_obj(), ls_id, tablet_id);
+  if (OB_FAIL(local_task.process())) {
+    LOG_WARN("fail to process local task", KR(ret));
+    ret = OB_SUCCESS;
   }
 
-  if (OB_SUCC(ret) && need_schedule) {
-    storage::ObDirectLoadSSUpdateIncMajorDagParam param(ls_id, tablet_handle.get_obj()->get_tablet_id());
-    if (OB_FAIL(ObScheduleDagFunc::schedule_ss_update_inc_major_dag(param))) {
-      LOG_WARN("fail to schedule ss update inc major dag", KR(ret), K(param));
+  // process shared
+  if (OB_SUCC(ret)) {
+    ObMemAttr attr(MTL_ID(), "SS_INC_MAJOR");
+    ObArenaAllocator tmp_allocator(attr);
+    ObSSMetaService *ss_meta_service = MTL(ObSSMetaService *);
+    ObSSWriterService *ss_writer_service = MTL(ObSSWriterService *);
+    ObSSMetaUpdateMetaInfo ss_meta_info;
+    ObTabletHandle shared_tablet_handle;
+    SCN row_scn;
+    ObSSWriterKey key(ObSSWriterType::COMPACTION, ls_id, tablet_id);
+    bool is_sswriter = false;
+    int64_t sswriter_epoch = OB_INVALID_VERSION;
+    if (OB_ISNULL(ss_meta_service) || OB_ISNULL(ss_writer_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("service is nullptr", KR(ret), KP(ss_meta_service), KP(ss_writer_service));
+    } else if (OB_FAIL(ss_writer_service->check_lease(key, is_sswriter, sswriter_epoch))) {
+      LOG_WARN("fail to check lease", KR(ret), K(ls_id), K(tablet_id));
+    } else if (!is_sswriter) {
+      // only ss writer can update ss inc major
+    } else if (OB_FAIL(ss_meta_service->get_tablet(ls_id,
+                                                   tablet_id,
+                                                   tablet_handle.get_obj()->get_reorganization_scn(),
+                                                   tmp_allocator,
+                                                   shared_tablet_handle,
+                                                   ss_meta_info,
+                                                   row_scn))) {
+      LOG_WARN("fail to get ss tablet", KR(ret), K(ls_id), K(tablet_id));
+    } else if (ss_meta_info.table_store_meta_info_.uncommited_inc_major_cnt_ > 0) {
+      ObDirectLoadSSUpdateSharedIncMajorTask shared_task(*ls, *shared_tablet_handle.get_obj(), ls_id, tablet_id);
+      if (OB_FAIL(shared_task.process())) {
+        LOG_WARN("fail to process shared task", KR(ret));
+      }
     }
   }
   return ret;

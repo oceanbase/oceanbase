@@ -66,7 +66,7 @@ public:
       macro_id.set_second_id(tablet_id_); // tablet_id
       macro_id.set_third_id(server_id_);  //tenant_seq
       for (int64_t i = 0; i < read_times_; ++i) {
-        macro_id.set_macro_transfer_epoch(0); // transfer_seq
+        macro_id.set_macro_private_transfer_epoch(0); // transfer_seq
         macro_id.set_tenant_seq(idx * file_num_per_thread_ + 1 + (i % file_num_per_thread_));  //seq_id
         get_read_device_and_fd(get_fd_from_cache_, fd_cache_, macro_id, io_info);
         ObIOHandle io_handle;
@@ -142,13 +142,13 @@ void TestOpenClose::prepare()
   write_info.mtl_tenant_id_ = MTL_ID();
 
   for (int64_t i = 0; i < file_num_; ++i) {
-    ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tablet_data_tablet_id_transfer_seq_dir(MTL_ID(), MTL_EPOCH_ID(), tablet_id_, 0/*transfer_seq*/));
+    ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tablet_data_tablet_id_private_transfer_epoch_dir(MTL_ID(), MTL_EPOCH_ID(), tablet_id_, 0/*transfer_seq*/));
     MacroBlockId macro_id;
     macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
     macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
     macro_id.set_second_id(tablet_id_); // tablet_id
     macro_id.set_third_id(server_id_); // server_id
-    macro_id.set_macro_transfer_epoch(0); // transfer_seq
+    macro_id.set_macro_private_transfer_epoch(0); // transfer_seq
     macro_id.set_tenant_seq(i + 1);  //seq_id
     ASSERT_TRUE(macro_id.is_valid());
     ObStorageObjectHandle write_object_handle;
@@ -173,7 +173,7 @@ void TestOpenClose::prepare_fd_cache()
   macro_id.set_second_id(tablet_id_); // tablet_id
   macro_id.set_third_id(server_id_); // server_id
   for (int64_t i = 0; i < file_num_; ++i) {
-    macro_id.set_macro_transfer_epoch(0); // transfer_seq
+    macro_id.set_macro_private_transfer_epoch(0); // transfer_seq
     macro_id.set_tenant_seq(i + 1);  //seq_id
     int fd = INVALID_FD;
     ObPathContext ctx;

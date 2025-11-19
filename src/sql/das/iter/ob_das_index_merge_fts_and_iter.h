@@ -124,7 +124,7 @@ struct ObDASIndexMergeFTSAndIterParam : public ObDASIndexMergeIterParam
       relevance_exprs_(),
       pushdown_topk_iter_(nullptr),
       pushdown_topk_iter_tree_(nullptr),
-      first_fts_idx_(OB_INVALID_INDEX)
+      pushdown_topk_iter_idx_(OB_INVALID_INDEX)
   {}
 
   int64_t limit_;
@@ -132,7 +132,7 @@ struct ObDASIndexMergeFTSAndIterParam : public ObDASIndexMergeIterParam
   common::ObSEArray<ObExpr*, 16> relevance_exprs_;
   ObDASTRMergeIter *pushdown_topk_iter_;
   ObDASIter *pushdown_topk_iter_tree_;
-  int64_t first_fts_idx_;
+  int64_t pushdown_topk_iter_idx_;
 };
 
 class ObDASIndexMergeFTSAndIter : public ObDASIndexMergeAndIter
@@ -150,7 +150,7 @@ public:
       pushdown_topk_iter_(nullptr),
       pushdown_topk_iter_tree_(nullptr),
       pushdown_topk_(0),
-      first_fts_idx_(OB_INVALID_INDEX),
+      pushdown_topk_iter_idx_(OB_INVALID_INDEX),
       pushdown_topk_iter_first_scan_(true),
       fts_index_idxs_(),
       normal_index_idxs_(),
@@ -163,7 +163,7 @@ public:
 
   virtual ~ObDASIndexMergeFTSAndIter() {}
 
-  int64_t get_first_fts_idx() const { return first_fts_idx_; }
+  int64_t get_pushdown_topk_iter_idx() const { return pushdown_topk_iter_idx_; }
   ObDASIter *get_pushdown_topk_iter_tree() const { return pushdown_topk_iter_tree_; }
 
 protected:
@@ -189,7 +189,6 @@ private:
   int get_relevance(int64_t child_idx, double &relevance);
   int compare(ObDASIndexMergeIter::MergeResultBuffer* row_buffer, IndexMergeRowStore &cmp_store, int &cmp_ret) const;
   int fill_other_child_stores(int64_t capacity);
-  int fill_one_child_stores(int64_t capacity, int64_t child_idx, ObDASIter *child_iter);
   int prepare_outout(bool is_vectorized, int64_t capacity);
 
   int execute_second_round_scan(bool is_vectorized, int64_t capacity, ObMinRelevanceHeap &first_round_results);
@@ -210,7 +209,7 @@ private:
   ObDASTRMergeIter *pushdown_topk_iter_;
   ObDASIter *pushdown_topk_iter_tree_;
   int64_t pushdown_topk_;
-  int64_t first_fts_idx_;
+  int64_t pushdown_topk_iter_idx_;
   bool pushdown_topk_iter_first_scan_;
 
   common::ObSEArray<uint64_t, 16> fts_index_idxs_;

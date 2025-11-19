@@ -30,7 +30,33 @@ namespace oceanbase
 {
 namespace storage
 {
+class ObDDLFailCallback
+{
+public:
+  virtual int process(int ret_code) = 0;
+};
 class ObIDDLMergeHelper;
+/*
+ * Base Task: provide unified process/inner_process and failure callback
+ */
+class ObDDLMergeBaseTask : public share::ObITask
+{
+public:
+  explicit ObDDLMergeBaseTask(const ObITaskType type) : ObITask(type), fail_cb_(nullptr) {}
+  virtual ~ObDDLMergeBaseTask()
+  {
+    fail_cb_ = nullptr;
+  }
+  virtual int inner_process() = 0;
+  virtual int process() override;
+
+  void set_fail_callback(ObDDLFailCallback *cb) { fail_cb_ = cb; }
+  INHERIT_TO_STRING_KV("MergeBaseTask", share::ObITask, KP(fail_cb_));
+protected:
+  ObDDLFailCallback *fail_cb_;
+};
+
+
 /*
 new ddl merge task sequence can be describle as the following graph
 for  a data tablet, it has three parts, prepare , merge_cg & assemble
@@ -89,15 +115,15 @@ public:
   ObTabletID tablet_id_;
   bool is_inited_;
 };
-class ObDDLMergePrepareTask: public share::ObITask
+
+class ObDDLMergePrepareTask: public ObDDLMergeBaseTask
 {
 public:
   ObDDLMergePrepareTask();
   ~ObDDLMergePrepareTask();
 
-  int init(const ObDDLTabletMergeDagParamV2 &merge_param);
-  int inner_process();
-  virtual int process() override;
+  int init(const ObDDLTabletMergeDagParamV2 &merge_param, ObDDLFailCallback *fail_cb = nullptr);
+  virtual int inner_process() override;
   virtual void task_debug_info_to_string(char *buf, const int64_t buf_len, int64_t &pos) const override;
   INHERIT_TO_STRING_KV("MergePrepareTask", share::ObITask, K(merge_param_), KP(guard_task_), K(is_inited_));
 private:
@@ -122,17 +148,18 @@ private:
   bool is_inited_;
 };
 
-class ObDDLMergeCgSliceTask: public share::ObITask
+class ObDDLMergeCgSliceTask: public ObDDLMergeBaseTask
 {
 public:
   ObDDLMergeCgSliceTask();
   int init(const ObDDLTabletMergeDagParamV2 &ddl_merge_param,
            const int64_t cg_idx,
            const int64_t start_slice_idx,
-           const int64_t end_slice_idx);
-  virtual int process() override;
+           const int64_t end_slice_idx,
+           ObDDLFailCallback *fail_cb = nullptr);
+  virtual int inner_process() override;
   virtual void task_debug_info_to_string(char *buf, const int64_t buf_len, int64_t &pos) const override;
-  INHERIT_TO_STRING_KV("MergeCgSliceTask", share::ObITask, K(merge_param_), K(cg_idx_), K(start_slice_idx_), K(is_inited_));
+  INHERIT_TO_STRING_KV("MergeCgSliceTask", ObDDLMergeBaseTask, K(merge_param_), K(cg_idx_), K(start_slice_idx_), K(is_inited_));
 private:
   ObDDLTabletMergeDagParamV2 merge_param_;
   int64_t cg_idx_;
@@ -141,14 +168,14 @@ private:
   bool is_inited_;
 };
 
-class ObDDLMergeAssembleTask: public share::ObITask
+class ObDDLMergeAssembleTask: public ObDDLMergeBaseTask
 {
 public:
   ObDDLMergeAssembleTask();
-  int init(const ObDDLTabletMergeDagParamV2 &ddl_merge_param);
-  int process() override;
+  int init(const ObDDLTabletMergeDagParamV2 &ddl_merge_param, ObDDLFailCallback *fail_cb = nullptr);
+  int inner_process() override;
   virtual void task_debug_info_to_string(char *buf, const int64_t buf_len, int64_t &pos) const override;
-  INHERIT_TO_STRING_KV("MergeAssembleTask", share::ObITask, K(merge_param_), K(is_inited_));
+  INHERIT_TO_STRING_KV("MergeAssembleTask", ObDDLMergeBaseTask, K(merge_param_), K(is_inited_));
 private:
   ObDDLTabletMergeDagParamV2 merge_param_;
   bool is_inited_;

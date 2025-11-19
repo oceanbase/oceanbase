@@ -268,7 +268,7 @@ int ObSSTableRowScanner<PrefetchType>::open_cur_data_block(ObSSTableReadHandle &
     if (OB_SUCC(ret)) {
       bool can_blockscan = false;
       ObMicroBlockData block_data;
-      if (OB_UNLIKELY(has_skip_scanner())) {
+      if (OB_UNLIKELY(has_skip_scanner() && nullptr != micro_scanner_->get_reader())) {
         if (access_ctx_->query_flag_.is_reverse_scan()) {
           const ObIndexSkipState *next_state = prefetcher_.get_next_skip_state();
           if (nullptr != next_state) {
@@ -834,7 +834,7 @@ int ObSSTableRowScanner<PrefetcheType>::try_skip_deleted_row(ObCSRowId &co_curre
                                                                         co_current))) {
     LOG_WARN("fail to check and revert non border rowkey", K(ret), K(co_prefetcher->get_border_rowkey()), KPC(deleted_row), K(co_current));
   } else {
-    FLOG_INFO("co sstable try skip deleted row", K(ret), K(co_prefetcher->get_border_rowkey()), KPC(deleted_row), K(co_current));
+    LOG_DEBUG("co sstable try skip deleted row", K(ret), K(co_prefetcher->get_border_rowkey()), KPC(deleted_row), K(co_current));
   }
   return ret;
 }

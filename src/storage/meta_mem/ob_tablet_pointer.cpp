@@ -336,7 +336,7 @@ int ObTabletPointer::dump_meta_obj(ObTabletHandle &guard, void *&free_obj)
 {
   int ret = OB_SUCCESS;
   ObMetaObj<ObTablet> meta_obj;
-  int32_t transfer_epoch = -1;
+  int32_t private_transfer_epoch = -1;
   if (OB_ISNULL(obj_.ptr_)) {
     LOG_INFO("tablet may be washed", KPC(obj_.ptr_));
   } else if (OB_UNLIKELY(obj_.ptr_->get_ref() > 1)) {
@@ -352,14 +352,14 @@ int ObTabletPointer::dump_meta_obj(ObTabletHandle &guard, void *&free_obj)
   } else if (0 != obj_.ptr_->dec_ref()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("obj is still being used", K(ret), K(*this));
-  } else if (OB_FAIL(obj_.ptr_->get_private_transfer_epoch(transfer_epoch))) {
-    LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", obj_.ptr_->get_tablet_meta());
+  } else if (OB_FAIL(obj_.ptr_->get_private_transfer_epoch(private_transfer_epoch))) {
+    LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", obj_.ptr_->get_tablet_meta());
   } else {
     const ObLSID ls_id = obj_.ptr_->tablet_meta_.ls_id_;
     const ObTabletID tablet_id = obj_.ptr_->tablet_meta_.tablet_id_;
     const int64_t wash_score = obj_.ptr_->get_wash_score();
     guard.get_obj(meta_obj);
-    const ObTabletPersisterParam param(0/*data_version*/, ls_id, ls_handle_.get_ls()->get_ls_epoch(), tablet_id, transfer_epoch, 0);
+    const ObTabletPersisterParam param(0/*data_version*/, ls_id, ls_handle_.get_ls()->get_ls_epoch(), tablet_id, private_transfer_epoch, 0);
     ObTablet *tmp_obj = obj_.ptr_;
     if (OB_NOT_NULL(meta_obj.ptr_) && obj_.ptr_->get_try_cache_size() <= ObTenantMetaMemMgr::NORMAL_TABLET_POOL_SIZE) {
       char *buf = reinterpret_cast<char*>(meta_obj.ptr_);
@@ -848,6 +848,11 @@ void ObTabletPointer::update_last_gc_version(const int64_t new_gc_version)
 {
   last_gc_version_ = max(last_gc_version_, new_gc_version);
   LOG_INFO("update last_gc_version", K_(phy_addr), K_(last_gc_version), K(new_gc_version), K(common::lbt()));
+}
+
+void ObTabletPointer::set_next_meta_version(const int64_t next_meta_version)
+{
+  next_meta_version_ = max(next_meta_version_, next_meta_version);
 }
 
 void ObSSTabletDummyPointer::set_obj(const ObTabletHandle &guard)

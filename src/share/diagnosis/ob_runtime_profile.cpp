@@ -21,7 +21,7 @@ namespace common
 {
 
 template<typename MetricType>
-int64_t ObOpProfile<MetricType>::get_format_size()
+int64_t ObOpProfile<MetricType>::get_format_size() const
 {
   /*
     format example:
@@ -231,19 +231,24 @@ int ObOpProfile<MetricType>::pretty_print_(char *buf, const int64_t buf_len, int
     }
   }
   if (has_metric && has_child) {
-    OB_FAIL(BUF_PRINTF("\n"));
+    OZ(BUF_PRINTF("\n"));
   }
   if (OB_SUCC(ret) && pos < buf_len) {
     char temp_buf[1024] = "\0";
-    MEMCPY(temp_buf, child_prefix.ptr(), child_prefix.length());
-    MEMCPY(temp_buf + child_prefix.length(), "  \0", 3);
-    ObString sub_child_prefix(child_prefix.length() + 3, temp_buf);
+    int64_t temp_buf_len = sizeof(temp_buf);
+    int64_t temp_pos = 0;
+    OZ(oceanbase::common::databuff_printf(temp_buf, temp_buf_len, temp_pos,
+                                          "%s  ", child_prefix.ptr()));
+    ObString sub_child_prefix(temp_pos, temp_buf);
     while (nullptr != cur_child && OB_SUCC(ret)) {
       if (OB_FAIL(cur_child->elem_->pretty_print_(
               buf, buf_len, pos, child_prefix, sub_child_prefix, display_level))) {
         LOG_WARN("failed to print child profile", K(pos), K(buf_len));
       } else {
         cur_child = ATOMIC_LOAD(&cur_child->next_);
+        if (NULL != cur_child) {
+          OZ(BUF_PRINTF("\n"));
+        }
       }
     }
   }
@@ -335,7 +340,7 @@ int ObOpProfile<MetricType>::get_or_register_child(ObProfileId id, ObOpProfile<M
 }
 
 template<typename MetricType>
-int ObOpProfile<MetricType>::get_all_count(int64_t &metric_count, int64_t &profile_cnt)
+int ObOpProfile<MetricType>::get_all_count(int64_t &metric_count, int64_t &profile_cnt) const
 {
   int ret = OB_SUCCESS;
   metric_count += ATOMIC_LOAD(&metric_count_);
@@ -349,19 +354,20 @@ int ObOpProfile<MetricType>::get_all_count(int64_t &metric_count, int64_t &profi
 }
 
 // profile_cnt include itself
-template<typename MetricType>
-int64_t ObOpProfile<MetricType>::get_persist_profile_size(int64_t metric_count, int64_t profile_cnt)
+template <typename MetricType>
+int64_t ObOpProfile<MetricType>::get_persist_profile_size(int64_t metric_count,
+                                                          int64_t profile_cnt) const
 {
   return sizeof(ObProfileHeads) + sizeof(ObProfileHead) * profile_cnt
          + 2 * sizeof(uint64_t) * metric_count;
 }
 
-template<>
+template <>
 int ObOpProfile<ObMetric>::convert_current_profile_to_persist(char *buf, int64_t &buf_pos,
-                                                    const int64_t buf_len,
-                                                    const int64_t max_head_count,
-                                                    ObProfileHead *profile_head, int32_t &id,
-                                                    int32_t parent_idx)
+                                                              const int64_t buf_len,
+                                                              const int64_t max_head_count,
+                                                              ObProfileHead *profile_head,
+                                                              int32_t &id, int32_t parent_idx) const
 {
   int ret = OB_SUCCESS;
   static constexpr uint64_t step = sizeof(uint64_t) * 2;
@@ -386,9 +392,8 @@ int ObOpProfile<ObMetric>::convert_current_profile_to_persist(char *buf, int64_t
     profile_head[id].length_ = buf_pos - profile_head[id].offset_;
     ProfileWrap *cur_child = ATOMIC_LOAD(&child_head_);
     while (nullptr != cur_child && (id < max_head_count - 1)) {
-      int32_t next_id = ++id;
       cur_child->elem_->convert_current_profile_to_persist(buf, buf_pos, buf_len, max_head_count,
-                                                           profile_head, next_id, cur_id);
+                                                           profile_head, ++id, cur_id);
       cur_child = ATOMIC_LOAD(&cur_child->next_);
     }
   }
@@ -400,7 +405,7 @@ int ObOpProfile<ObMergeMetric>::convert_current_profile_to_persist(char *buf, in
                                                     const int64_t buf_len,
                                                     const int64_t max_head_count,
                                                     ObProfileHead *profile_head, int32_t &id,
-                                                    int32_t parent_id)
+                                                    int32_t parent_id) const
 {
   return OB_NOT_IMPLEMENT;
 }
@@ -421,9 +426,10 @@ profile structure
   total_size = sizeof(ObProfileHeads) + sizeof(ObProfileHead) * profile_cnt
               + 2 * 8 * metric_cnt
 */
-template<typename MetricType>
-int ObOpProfile<MetricType>::to_persist_profile(const char *&persist_profile, int64_t &persist_profile_size,
-                                    ObIAllocator *alloc)
+template <typename MetricType>
+int ObOpProfile<MetricType>::to_persist_profile(const char *&persist_profile,
+                                                int64_t &persist_profile_size,
+                                                ObIAllocator *alloc) const
 {
   int ret = OB_SUCCESS;
   int64_t metric_count = 0;
@@ -437,10 +443,14 @@ int ObOpProfile<MetricType>::to_persist_profile(const char *&persist_profile, in
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory");
   } else {
+    MEMSET(buf, 0, persist_profile_size);
     ObProfileHeads *profile_heads = new (buf) ObProfileHeads();
     profile_heads->head_count_ = profile_cnt;
     profile_heads->metric_count_ = metric_count;
     profile_heads->head_offset_ = sizeof(ObProfileHeads);
+    for (int64_t i = 0; i < profile_cnt; ++i) {
+      new (buf + sizeof(ObProfileHeads) + sizeof(ObProfileHead) * i) ObProfileHead();
+    }
     ObProfileHead *profile_head = reinterpret_cast<ObProfileHead *>(buf + sizeof(ObProfileHeads));
     int64_t buf_pos = sizeof(ObProfileHeads) + sizeof(ObProfileHead) * profile_cnt;
     int32_t id = 0;
@@ -531,6 +541,21 @@ ObProfileSwitcher::ObProfileSwitcher(ObProfileId name)
     LOG_WARN("failed to get or add child", K(name));
   } else {
     get_current_profile() = new_profile;
+  }
+}
+
+ScopedTimer::~ScopedTimer()
+{
+  int ret = OB_SUCCESS;
+  ObMetric *metric = nullptr;
+  if (elapse_time_ != nullptr) {
+    *elapse_time_ += (ObTimeUtil::current_time_ns() - start_time_);
+  } else if (OB_ISNULL(profile_)) {
+  } else if (OB_FAIL(profile_->get_or_register_metric(metric_id_, metric))) {
+    COMMON_LOG(WARN, "failed to register metric", K(metric_id_));
+  } else {
+    int64_t elapsed_time = ObTimeUtil::current_time_ns() - start_time_;
+    metric->inc(elapsed_time);
   }
 }
 

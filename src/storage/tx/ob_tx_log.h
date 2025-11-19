@@ -626,6 +626,7 @@ public:
   const ObTxDLIncLogBuf &get_dli_buf() { return log_buf_; }
 
   int ob_admin_dump(share::ObAdminMutatorStringArg &arg);
+  int ob_admin_dump_macro_block(share::ObAdminMutatorStringArg &arg, int64_t scn_val);
 
   static const ObTxLogType LOG_TYPE;
   TO_STRING_KV(K(LOG_TYPE), K(ddl_log_type_), K(log_buf_));

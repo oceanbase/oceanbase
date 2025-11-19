@@ -491,7 +491,8 @@ public:
         block_num_(0),
         init_parallel_(0),
         need_commit_(true),
-        write_arena_alloc_("IntoOdps", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
+        write_arena_alloc_("IntoOdps", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+        session_holder_ptr_(nullptr)
   {}
 
   ~ObOdpsPartitionJNIUploaderMgr()

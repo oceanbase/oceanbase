@@ -269,6 +269,7 @@ public:
   /// NOTE: make sure call within the scope of ls_tablet_svr's bucket lock.
   /// need special handling of OB_ENTRY_NOT_EXIST
   int alloc_tablet_meta_version(const ObTabletMapKey &key, int64_t &tablet_meta_version);
+  int set_tablet_next_meta_version(const ObTabletMapKey &key, const int64_t next_meta_version);
 
   // NOTE: This interface return tablet handle, which couldn't be used by compare_and_swap_tablet.
   int get_tablet_with_allocator(
@@ -281,11 +282,17 @@ public:
   int get_current_version_for_tablet(
       const share::ObLSID &ls_id,
       const ObTabletID &tablet_id,
+      /*out*/ int64_t &tablet_version);
+
+  int get_current_version_for_tablet(
+      const share::ObLSID &ls_id,
+      const ObTabletID &tablet_id,
       int64_t &tablet_version,
       int64_t &last_gc_version,
-      int64_t &tablet_transfer_seq,
+      int64_t &tablet_private_transfer_epoch,
       uintptr_t &tablet_fingerprint,
-      bool &allow_tablet_version_gc);
+      bool &allow_tablet_version_gc,
+      bool &is_transfer_out_deleted);
   int get_last_gc_version_for_tablet(
       const share::ObLSID &ls_id,
       const ObTabletID &tablet_id,
@@ -303,7 +310,16 @@ public:
       const ObTabletID &tablet_id,
       const uintptr_t tablet_fingerprint,
       const int64_t new_gc_version);
-  int check_allow_tablet_gc(const ObTabletID &tablet_id, const int32_t transfer_epoch, bool &allow);
+  int check_allow_tablet_gc(const ObTabletID &tablet_id, const int32_t private_transfer_epoch, bool &allow);
+  /// @brief: check if macro check is safe.
+  /// Need to hold @c ObLSTabletService::bucket_lock_ before checking due to
+  /// tablet creation, initialization and persistence should be ATOMIC(this might
+  /// happens at create_with_ss_tablet)
+  int check_allow_tablet_macro_check(
+      const share::ObLSID &ls_id,
+      const ObTabletID &tablet_id,
+      const int32_t private_transfer_epoch,
+      bool &allow);
   int get_tablet_buffer_infos(ObIArray<ObTabletBufferInfo> &buffer_infos);
   int check_tablet_has_sstable_need_upload(const SCN &ls_ss_checkpoint_scn, const ObTabletMapKey &key, bool &need_upload);
   int get_tablet_addr(const ObTabletMapKey &key, ObMetaDiskAddr &addr);
@@ -345,8 +361,8 @@ public:
 
   int inc_ref_in_leak_checker(const int32_t index);
   int dec_ref_in_leak_checker(const int32_t index);
-  int inc_external_tablet_cnt(const uint64_t tablet_id, const int32_t tablet_transfer_epoch);
-  int dec_external_tablet_cnt(const uint64_t tablet_id, const int32_t tablet_transfer_epoch);
+  int inc_external_tablet_cnt(const uint64_t tablet_id, const int32_t tablet_private_transfer_epoch);
+  int dec_external_tablet_cnt(const uint64_t tablet_id, const int32_t tablet_private_transfer_epoch);
   int insert_or_update_ss_tablet(const ObSSTabletMapKey &key, const ObTabletHandle &tablet_hdl);
   int fetch_ss_tablet(const ObSSTabletMapKey &key, ObTabletHandle &tablet_hdl);
   int schedule_load_bloomfilter(const storage::ObITable::TableKey &sstable_key,

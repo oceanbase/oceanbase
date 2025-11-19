@@ -172,7 +172,7 @@ OB_SERIALIZE_MEMBER(ObTxExecResult, incomplete_, parts_,
                     conflict_txs_,// FARM COMPAT WHITELIST for cflict_txs_
                     conflict_info_array_,
                     touched_ls_list_);
-OB_SERIALIZE_MEMBER(ObTxSnapshot, tx_id_, version_, scn_, elr_);
+OB_SERIALIZE_MEMBER(ObTxSnapshot, tx_id_, version_, scn_, elr_, force_strongly_read_);
 OB_SERIALIZE_MEMBER(ObTxReadSnapshot,
                     valid_,
                     core_,
@@ -1283,9 +1283,9 @@ ObTxParam::~ObTxParam()
 }
 
 ObTxSnapshot::ObTxSnapshot()
-  : version_(), tx_id_(), scn_(), elr_(false) {}
+  : version_(), tx_id_(), scn_(), elr_(false), force_strongly_read_(false) {}
 ObTxSnapshot::ObTxSnapshot(const share::SCN &version)
-  : version_(version), tx_id_(), scn_(), elr_(false) {}
+  : version_(version), tx_id_(), scn_(), elr_(false), force_strongly_read_(false) {}
 
 ObTxSnapshot::~ObTxSnapshot()
 {

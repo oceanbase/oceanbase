@@ -31,8 +31,6 @@ struct ObTabletStatAnalyzer;
 struct ObTableHandleV2;
 struct ObStorageMetaHandle;
 class ObLS;
-template <typename T, typename U>
-class ObTabletMemberWrapper;
 }
 
 namespace blocksstable
@@ -495,6 +493,10 @@ public:
       const transaction::ObTxSEQ &seq_no,
       bool &is_exist);
   static int get_ls(const share::ObLSID &ls_id, ObLSHandle &ls_handle);
+  static int check_need_gc_ddl_dump(
+      const ObTablet &tablet,
+      const blocksstable::ObSSTable &ddl_dump,
+      bool &need_gc);
 private:
   static void dump_inc_major_error_info(
       const int64_t merge_snapshot_version,

@@ -108,9 +108,10 @@ public:
   ObHybridVectorRefreshTask() : ObVecIndexIAsyncTask(ObMemAttr(MTL_ID(), "VecIdxASyTask")) {}
   virtual ~ObHybridVectorRefreshTask() {}
   virtual void check_task_free() override {
+    all_finished_ = true;
     ObHybridVectorRefreshTaskCtx *ctx = static_cast<ObHybridVectorRefreshTaskCtx *>(get_task_ctx());
     if (OB_NOT_NULL(ctx)) {
-      ctx->check_task_free();
+      ctx->set_task_finish();
     }
   }
   virtual int do_work() override;

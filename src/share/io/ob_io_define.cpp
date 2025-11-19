@@ -1205,7 +1205,7 @@ int ObIORequest::init(const ObIOInfo &info, ObIOResult *result)
       if (OB_UNLIKELY(!is_valid())) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid argument", K(ret), K(*this));
-      } else if ((info.flag_.is_read() || info.flag_.is_write())
+      } else if (info.flag_.is_write()
                  && (io_result_->size_ > 0) // size == 0 does not need to alloc io buf
                  && (OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER != flag)
                  && OB_FAIL(alloc_io_buf(io_buf))) {

@@ -60,6 +60,7 @@ void ObTabletDDLKvMgr::destroy()
   }
   head_ = 0;
   tail_ = 0;
+  (void)del_tablet_from_ddl_log_handler(ls_id_, tablet_id_);
   for (int64_t i = 0; i < MAX_DDL_KV_CNT_IN_STORAGE; ++i) {
     ddl_kv_handles_[i].reset();
   }
@@ -73,21 +74,14 @@ void ObTabletDDLKvMgr::destroy()
 int ObTabletDDLKvMgr::init(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
-  ObLSHandle ls_handle;
-  ObLSService *ls_service = MTL(ObLSService *);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTabletDDLKvMgr is already inited", K(ret));
   } else if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id));
-  } else if (OB_ISNULL(ls_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("ls service should not be null", K(ret));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
-    LOG_WARN("failed to get ls", K(ret), K(ls_id));
-  } else if (OB_FAIL(ls_handle.get_ls()->get_ddl_log_handler()->add_tablet(tablet_id))) {
-    LOG_WARN("failed to add tablet", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_FAIL(add_tablet_to_ddl_log_handler(ls_id, tablet_id))) {
+    LOG_WARN("failed to add tablet to ddl log handler", KR(ret), K(ls_id), K(tablet_id));
   }
 
   if (OB_FAIL(ret)) {
@@ -226,6 +220,7 @@ void ObTabletDDLKvMgr::cleanup_unlock()
   }
   head_ = 0;
   tail_ = 0;
+  (void)del_tablet_from_ddl_log_handler(ls_id_, tablet_id_);
   for (int64_t i = 0; i < MAX_DDL_KV_CNT_IN_STORAGE; ++i) {
     ddl_kv_handles_[i].reset();
   }
@@ -698,9 +693,16 @@ int ObTabletDDLKvMgr::release_ddl_kvs(const ObDDLKVType ddl_kv_type, const SCN &
         LOG_WARN("ddl kv is null", K(ret), K(ls_id_), K(tablet_id_), KP(kv), K(i), K(head_), K(tail_));
       } else if (kv->is_closed() && kv->get_freeze_scn() <= end_scn && kv->get_ddl_kv_type() == ddl_kv_type) {
         const SCN &freeze_scn = kv->get_freeze_scn();
+        const uint64_t data_format_version = kv->get_data_format_version();
         free_ddl_kv(idx);
         ++head_;
         LOG_INFO("succeed to release ddl kv", K(ls_id_), K(tablet_id_), K(freeze_scn));
+
+        if ((get_count_nolock() == 0) && (data_format_version >= DATA_VERSION_4_5_0_0)) {
+          if (OB_FAIL(del_tablet_from_ddl_log_handler(ls_id_, tablet_id_))) {
+            LOG_WARN("failed to del tablet from ddl log handler", KR(ret), K_(ls_id), K_(tablet_id));
+          }
+        }
       }
     }
   }
@@ -931,6 +933,12 @@ int ObTabletDDLKvMgr::alloc_ddl_kv(
     ddl_kv_handles_[idx] = tmp_kv_handle;
     kv_handle = tmp_kv_handle;
     FLOG_INFO("succeed to add ddl kv", K(ls_id_), K(tablet_id_), K(head_), K(tail_), K(max_freeze_scn_), "ddl_kv_cnt", get_count_nolock(), KP(kv));
+
+    if (data_format_version >= DATA_VERSION_4_5_0_0) {
+      if (OB_FAIL(add_tablet_to_ddl_log_handler(ls_id_, tablet_id_))) {
+        LOG_WARN("failed to add tablet to ddl log handler", KR(ret), K_(ls_id), K_(tablet_id));
+      }
+    }
   }
   return ret;
 }
@@ -976,6 +984,51 @@ int ObTabletDDLKvMgr::handle_ddl_kv_queue_overflow(const ObDDLKVType ddl_kv_type
     if (ddl_kv_count == MAX_DDL_KV_CNT_IN_STORAGE) {
       ret = OB_ERR_UNEXPECTED;
     }
+  }
+  return ret;
+}
+
+int ObTabletDDLKvMgr::add_tablet_to_ddl_log_handler(
+    const ObLSID &ls_id,
+    const ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  ObLSService *ls_service = MTL(ObLSService *);
+  if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_id), K(tablet_id));
+  } else if (OB_ISNULL(ls_service)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("ls service should not be null", KR(ret), KP(ls_service));
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
+    LOG_WARN("failed to get ls", KR(ret), K(ls_id));
+  } else if (OB_FAIL(ls_handle.get_ls()->get_ddl_log_handler()->add_tablet(tablet_id))) {
+    LOG_WARN("failed to add tablet", KR(ret), K(ls_id), K(tablet_id), K(common::lbt()));
+  }
+  return ret;
+}
+
+int ObTabletDDLKvMgr::del_tablet_from_ddl_log_handler(
+    const ObLSID &ls_id,
+    const ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  ObLSService *ls_service = MTL(ObLSService *);
+  ObSEArray<ObTabletID, 1> tablet_ids;
+  if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_id), K(tablet_id));
+  } else if (OB_ISNULL(ls_service)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("ls service should not be null", KR(ret), KP(ls_service));
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
+    LOG_WARN("failed to get ls", KR(ret), K(ls_id));
+  } else if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
+    LOG_WARN("failed to push back tablet id", KR(ret), K(tablet_id));
+  } else if (OB_FAIL(ls_handle.get_ls()->get_ddl_log_handler()->del_tablets(tablet_ids))) {
+    LOG_WARN("failed to del tablets", KR(ret), K(ls_id), K(tablet_ids), K(common::lbt()));
   }
   return ret;
 }

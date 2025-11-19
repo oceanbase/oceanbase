@@ -154,7 +154,7 @@ int ObMdsTableMergeTask::process()
 #endif
     } else if (FALSE_IT(ctx.static_param_.scn_range_.start_scn_ = tablet->get_mds_checkpoint_scn())) {
     } else if (OB_FAIL(tablet->get_private_transfer_epoch(ctx.static_desc_.private_transfer_epoch_))) {
-      LOG_WARN("fail to get transfer epoch", K(ret), "tablet_meta", tablet->get_tablet_meta());
+      LOG_WARN("fail to get private transfer epoch", K(ret), "tablet_meta", tablet->get_tablet_meta());
     } else if (FALSE_IT(ctx.static_param_.rec_scn_ = mds_table.get_mds_table_ptr()->get_rec_scn())) {
     } else if (MDS_FAIL(build_mds_sstable(ctx, mds_construct_sequence, table_handle))) {
       if (OB_EMPTY_RESULT != ret) {

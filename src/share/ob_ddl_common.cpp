@@ -5013,12 +5013,14 @@ int ObDDLUtil::check_tablet_checksum_error(
 }
 
 int ObDDLUtil::check_table_empty(
+    const share::schema::ObSysVariableSchema &sys_var_schema,
     const ObString &database_name,
     const share::schema::ObTableSchema &table_schema,
     const ObSQLMode sql_mode,
     bool &is_table_empty)
 {
   int ret = OB_SUCCESS;
+  UNUSED(sql_mode);
   is_table_empty = false;
   bool is_oracle_mode = false;
   uint64_t table_id = OB_INVALID_ID;
@@ -5032,34 +5034,46 @@ int ObDDLUtil::check_table_empty(
   } else if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("fail to check is oracle mode", K(ret), K(table_schema));
   } else {
-    const ObString &check_expr_str = "1 != 1";
     const ObString &table_name = table_schema.get_table_name_str();
     ObSqlString sql_string;
-    ObSessionParam session_param;
-    int64_t new_sql_mode = static_cast<int64_t>(sql_mode);
-    session_param.sql_mode_ = &new_sql_mode;
-    session_param.tz_info_wrap_ = nullptr;
-    session_param.ddl_info_.set_is_ddl(true);
-    session_param.ddl_info_.set_retryable_ddl(true);
-    session_param.ddl_info_.set_source_table_hidden(table_schema.is_user_hidden_table());
-    session_param.ddl_info_.set_dest_table_hidden(false);
     ObTimeoutCtx timeout_ctx;
-    ObCommonSqlProxy *sql_proxy = nullptr;
     const char* format_str = nullptr;
+    const uint64_t tenant_id = table_schema.get_tenant_id();
+    ObOracleSqlProxy oracle_sql_proxy(*GCTX.sql_proxy_);
+    ObSingleConnectionProxy single_conn_proxy;
+    sqlclient::ObISQLConnection *connection = nullptr;
+    const ObSysVarSchema *var_schema = nullptr;
+
     if (is_oracle_mode) {
       format_str = "SELECT /*+ %.*s */ 1 FROM \"%.*s\".\"%.*s\" WHERE NOT 1 != 1 AND ROWNUM = 1";
-      sql_proxy = GCTX.ddl_oracle_sql_proxy_;
+      if (OB_FAIL(single_conn_proxy.connect(tenant_id, 0/*group_id*/, &oracle_sql_proxy))) {
+        LOG_WARN("failed to get mysql connect", KR(ret), K(tenant_id));
+      }
     } else {
       format_str = "SELECT /*+ %.*s */ 1 FROM `%.*s`.`%.*s` WHERE NOT 1 != 1 LIMIT 1";
-      sql_proxy = GCTX.ddl_sql_proxy_;
+      if (OB_FAIL(single_conn_proxy.connect(tenant_id, 0/*group_id*/, GCTX.sql_proxy_))) {
+        LOG_WARN("failed to get mysql connect", KR(ret), K(tenant_id));
+      }
     }
+
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       common::sqlclient::ObMySQLResult *result = nullptr;
       ObSqlString ddl_schema_hint_str;
       ObArenaAllocator allocator("ObDDLTmp");
       ObString new_table_name;
       ObString new_database_name;
-      if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(sys_var_schema.get_sysvar_schema(SYS_VAR_LOWER_CASE_TABLE_NAMES, var_schema))) {
+        LOG_WARN("failed to get lower_case_table_names", KR(ret));
+      } else if (OB_ISNULL(var_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("var_schema is null", KR(ret));
+      } else if (OB_ISNULL(connection = single_conn_proxy.get_connection())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null conn", K(ret));
+      } else if (OB_FAIL(connection->set_session_variable(share::OB_SV_LOWER_CASE_TABLE_NAMES, var_schema->get_value()))) {
+        LOG_WARN("update lower_case_table_names for ddl inner sql failed", K(ret));
+      } else if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
                   allocator,
                   database_name,
                   new_database_name,
@@ -5083,16 +5097,11 @@ int ObDDLUtil::check_table_empty(
                          static_cast<int>(new_database_name.length()), new_database_name.ptr(),
                          static_cast<int>(new_table_name.length()), new_table_name.ptr()))) {
         LOG_WARN("fail to assign format", K(ret));
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_ISNULL(sql_proxy)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("sql proxy is null", K(ret));
-      } else if (OB_FAIL(sql_proxy->read(res, table_schema.get_tenant_id(), sql_string.ptr(), &session_param))) {
+      } else if (OB_FAIL(single_conn_proxy.read(res, tenant_id, sql_string.ptr()))) {
         LOG_WARN("execute sql failed", K(ret), K(sql_string.ptr()));
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("execute sql failed", K(ret), K(table_schema.get_tenant_id()), K(sql_string));
+        LOG_WARN("execute sql failed", K(ret), K(tenant_id), K(sql_string));
       } else if (OB_FAIL(result->next())) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
@@ -5452,7 +5461,7 @@ int ObSqlMonitorStatsCollector::init(ObMySQLProxy *sql_proxy)
   if (OB_SUCC(ret)) {
     if (OB_FAIL(select_sql_monitor_sql.assign_fmt(
         "SELECT TENANT_ID, TRACE_ID, THREAD_ID, OUTPUT_ROWS, FIRST_CHANGE_TIME, LAST_CHANGE_TIME, LAST_REFRESH_TIME, PLAN_OPERATION, OTHERSTAT_5_VALUE AS TASK_ID,  "
-        "OTHERSTAT_1_VALUE, OTHERSTAT_2_VALUE, OTHERSTAT_6_VALUE, OTHERSTAT_7_ID, OTHERSTAT_7_VALUE, OTHERSTAT_8_VALUE, OTHERSTAT_9_VALUE, OTHERSTAT_10_VALUE FROM %s "
+        "OTHERSTAT_1_VALUE, OTHERSTAT_2_VALUE, OTHERSTAT_6_VALUE, OTHERSTAT_7_ID, OTHERSTAT_7_VALUE, OTHERSTAT_8_ID, OTHERSTAT_8_VALUE, OTHERSTAT_9_VALUE, OTHERSTAT_10_VALUE FROM %s "
         "WHERE PLAN_OPERATION in ('PHY_STAT_COLLECTOR', 'PHY_SORT', 'PHY_VEC_SORT', 'PHY_PX_MULTI_PART_SSTABLE_INSERT', 'PHY_VEC_PX_MULTI_PART_SSTABLE_INSERT') AND OTHERSTAT_5_ID = '%d' AND (%s) ORDER BY OTHERSTAT_5_VALUE DESC, TENANT_ID DESC, THREAD_ID ASC",
         OB_ALL_VIRTUAL_SQL_PLAN_MONITOR_TNAME, sql::ObSqlMonitorStatIds::DDL_TASK_ID, cond_sql.ptr()))) {
       LOG_WARN("failed to assign sql", K(ret), K(select_sql_monitor_sql));
@@ -5596,9 +5605,12 @@ int ObSqlMonitorStatsCollector::get_insert_monitor_stats_batch(sqlclient::ObMySQ
     EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(*scan_result, "LAST_REFRESH_TIME", insert_node_info.last_refresh_time_);
     EXTRACT_INT_FIELD_MYSQL(*scan_result, "OTHERSTAT_1_VALUE", insert_node_info.cg_row_inserted_, int64_t);
     EXTRACT_INT_FIELD_MYSQL(*scan_result, "OTHERSTAT_2_VALUE", insert_node_info.sstable_row_inserted_, int64_t);
-    EXTRACT_INT_FIELD_MYSQL(*scan_result, "OTHERSTAT_8_VALUE", insert_node_info.vec_task_thread_pool_cnt_, int64_t);
-    EXTRACT_INT_FIELD_MYSQL(*scan_result, "OTHERSTAT_9_VALUE", insert_node_info.vec_task_total_cnt_, int64_t);
-    EXTRACT_INT_FIELD_MYSQL(*scan_result, "OTHERSTAT_10_VALUE", insert_node_info.vec_task_finish_cnt_, int64_t);
+
+    EXTRACT_INT_FIELD_MYSQL(*scan_result, "OTHERSTAT_8_ID", insert_node_info.vec_task_monitor_type_, int16_t);
+    EXTRACT_INT_FIELD_MYSQL(*scan_result, "OTHERSTAT_7_VALUE", insert_node_info.vec_task_finish_tablet_cnt_, int16_t);
+    EXTRACT_INT_FIELD_MYSQL(*scan_result, "OTHERSTAT_8_VALUE", insert_node_info.vec_task_value1_, int64_t);
+    EXTRACT_INT_FIELD_MYSQL(*scan_result, "OTHERSTAT_9_VALUE", insert_node_info.vec_task_value2_, int64_t);
+    EXTRACT_INT_FIELD_MYSQL(*scan_result, "OTHERSTAT_10_VALUE", insert_node_info.vec_task_value3_, int64_t);
     int trace_id_len = 0;
     EXTRACT_STRBUF_FIELD_MYSQL(*scan_result, "TRACE_ID", trace_id_str, OB_MAX_TRACE_ID_BUFFER_SIZE, trace_id_len);
     if (OB_FAIL(ret)) {
@@ -5941,8 +5953,7 @@ int ObDDLDiagnoseInfo::calculate_insert_info(
             }
           }
         }
-        vec_task_thread_pool_cnt_ = OB_MAX(vec_task_thread_pool_cnt_, insert_monitor_node.vec_task_thread_pool_cnt_);
-        if (vec_task_thread_pool_cnt_ > 0 && OB_FAIL(calculate_vec_task_info(insert_monitor_node))) {
+        if (OB_FAIL(calculate_vec_task_info(insert_monitor_node))) {
           LOG_WARN("failed to calculate vec task info", K(ret));
         }
       }
@@ -5955,22 +5966,37 @@ int ObDDLDiagnoseInfo::calculate_insert_info(
 int ObDDLDiagnoseInfo::calculate_vec_task_info(const InsertMonitorNodeInfo &insert_monitor_node)
 {
   int ret = OB_SUCCESS;
-  uint64_t thread_id_tmp = insert_monitor_node.thread_id_;
-  int64_t vec_index_task_total_cnt_tmp = insert_monitor_node.vec_task_total_cnt_;
-  int64_t vec_index_task_finish_cnt_tmp = insert_monitor_node.vec_task_finish_cnt_;
-  vec_task_total_cnt_ += vec_index_task_total_cnt_tmp;
-  vec_task_finish_cnt_ += vec_index_task_finish_cnt_tmp;
-  if (vec_index_task_total_cnt_tmp == 0 || vec_index_task_finish_cnt_tmp == 0) {
-  } else if (vec_index_task_finish_cnt_tmp <= vec_index_task_total_cnt_tmp) {
-    vec_task_trigger_cnt_++;
-    double vec_task_progress_tmp = static_cast<double>(vec_index_task_finish_cnt_tmp) / vec_index_task_total_cnt_tmp;
-    if (vec_task_progress_tmp <= vec_task_progress_) {
-      vec_task_slowest_trigger_id_ = thread_id_tmp;
-      vec_task_slowest_cnt_ = vec_index_task_total_cnt_tmp;
-      vec_task_slowest_finish_cnt_ = vec_index_task_finish_cnt_tmp;
-      vec_task_progress_ = vec_task_progress_tmp;
+  vec_task_monitor_type_ = insert_monitor_node.vec_task_monitor_type_;
+  vec_task_finish_tablet_cnt_ += insert_monitor_node.vec_task_finish_tablet_cnt_;
+  if (vec_task_monitor_type_ == sql::ObSqlMonitorStatIds::VECTOR_INDEX_TASK_THREAD_POOL_COUNT) {
+    thread_pool_cnt_cur_iter_ = OB_MAX(thread_pool_cnt_cur_iter_, insert_monitor_node.vec_task_value1_);
+    if (thread_pool_cnt_cur_iter_ > 0) {
+      int64_t vec_index_task_total_cnt_tmp = insert_monitor_node.vec_task_value2_;
+      int64_t vec_index_task_finish_cnt_tmp = insert_monitor_node.vec_task_value3_;
+      total_cnt_ += vec_index_task_total_cnt_tmp;
+      finish_cnt_ += vec_index_task_finish_cnt_tmp;
+      if (vec_index_task_total_cnt_tmp == 0 || vec_index_task_finish_cnt_tmp == 0) {
+      } else if (vec_index_task_finish_cnt_tmp <= vec_index_task_total_cnt_tmp) {
+        vec_task_trigger_cnt_++;
+      }
+    }
+  } else if (vec_task_monitor_type_ == sql::ObSqlMonitorStatIds::VECTOR_INDEX_TASK_KMEANS_INFO) {
+    int64_t kmeans_iter_info = insert_monitor_node.vec_task_value1_;
+    int64_t tmp_cur_iter = 0;
+    int64_t tmp_finish_diff = 0;
+    int64_t tmp_now_diff = 0;
+    ObKmeansIterInfo::get_kmeans_iter_info(kmeans_iter_info, tmp_cur_iter, tmp_finish_diff, tmp_now_diff);
+    if (tmp_cur_iter != 0) {
+      if (thread_pool_cnt_cur_iter_ == 0 || tmp_cur_iter < thread_pool_cnt_cur_iter_) {
+        vec_task_trigger_cnt_++;
+        thread_pool_cnt_cur_iter_ = tmp_cur_iter;
+        finish_diff_ = ObKmeansMonitor::diff_int_to_float(tmp_finish_diff);
+        cur_diff_ = ObKmeansMonitor::diff_int_to_float(tmp_now_diff);
+        kmeans_imbalance_ = ObKmeansMonitor::imbalance_int_to_float(insert_monitor_node.vec_task_value2_);
+      }
     }
   }
+
   return ret;
 }
 
@@ -6190,13 +6216,8 @@ int ObDDLDiagnoseInfo::generate_session_longops_message(const int64_t target_cg_
                                     insert_slowest_thread_id_, min_insert_row_))) {
           LOG_WARN("failed to print", K(ret));
         } else if (vec_task_trigger_cnt_ > 0) {
-          if (OB_FAIL(databuff_printf(
-                                    stat_info.message_, MAX_LONG_OPS_MESSAGE_LENGTH, pos,
-                                    ", VEC_TASK_INFO:{ VEC_TASK_TRIGGER_THREAD_CNT: %ld, VEC_TASK_THREAD_POOL_CNT: %ld, VEC_INDEX_TASK_TOTAL_CNT: %ld, VEC_INDEX_TASK_FINISH_CNT: %ld },"
-                                    " SLOWEST_THREAD_INFO:{ THREAD_ID: %ld, TASK_TOTAL_CNT: %ld, TASK_FINISH_CNT: %ld }",
-                                    vec_task_trigger_cnt_, vec_task_thread_pool_cnt_, vec_task_total_cnt_, vec_task_finish_cnt_,
-                                    vec_task_slowest_trigger_id_, vec_task_slowest_cnt_, vec_task_slowest_finish_cnt_))) {
-            LOG_WARN("failed to print", K(ret));
+          if (OB_FAIL(print_vec_task_info(stat_info, pos))) {
+            LOG_WARN("failed to print vec task info", K(ret));
           }
         }
         break;
@@ -6238,11 +6259,41 @@ int ObDDLDiagnoseInfo::generate_session_longops_message_v1(const int64_t target_
                                 row_inserted_file_))) {
       LOG_WARN("failed to print", K(ret));
     } else if (vec_task_trigger_cnt_ > 0) {
+      if (OB_FAIL(print_vec_task_info(stat_info, pos))) {
+        LOG_WARN("failed to print vec task info", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLDiagnoseInfo::print_vec_task_info(ObDDLTaskStatInfo &stat_info, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (vec_task_monitor_type_ == sql::ObSqlMonitorStatIds::VECTOR_INDEX_TASK_THREAD_POOL_COUNT) {
+    if (OB_FAIL(databuff_printf(stat_info.message_, MAX_LONG_OPS_MESSAGE_LENGTH, pos,
+                                ", VEC_TASK:{TRI_CNT:%ld, POOL_CNT:%ld, TOTAL:%ld, FINISH:%ld, SUCC_TABLET:%ld}",
+                                static_cast<long>(vec_task_trigger_cnt_),
+                                static_cast<long>(thread_pool_cnt_cur_iter_), total_cnt_,
+                                finish_cnt_, static_cast<long>(vec_task_finish_tablet_cnt_)))) {
+      LOG_WARN("failed to print", K(ret));
+    }
+  } else if (vec_task_monitor_type_ == sql::ObSqlMonitorStatIds::VECTOR_INDEX_TASK_KMEANS_INFO) {
+    if (kmeans_imbalance_ == 0) {
       if (OB_FAIL(databuff_printf(stat_info.message_, MAX_LONG_OPS_MESSAGE_LENGTH, pos,
-                                  ", VEC_TASK_INFO:{ VEC_TASK_TRIGGER_THREAD_CNT: %ld, VEC_TASK_THREAD_POOL_CNT: %ld, VEC_INDEX_TASK_TOTAL_CNT: %ld, VEC_INDEX_TASK_FINISH_CNT: %ld },"
-                                  " SLOWEST_THREAD_INFO:{ THREAD_ID: %ld, TASK_TOTAL_CNT: %ld, TASK_FINISH_CNT: %ld }",
-                                  vec_task_trigger_cnt_, vec_task_thread_pool_cnt_, vec_task_total_cnt_, vec_task_finish_cnt_,
-                                  vec_task_slowest_trigger_id_, vec_task_slowest_cnt_, vec_task_slowest_finish_cnt_))) {
+                                  ", VEC_TASK:{TRI_CNT:%ld, INIT_CENTERS_PROGRESS:%ld%%, SUCC_TABLET:%ld}",
+                                  static_cast<long>(vec_task_trigger_cnt_),
+                                  static_cast<long>(thread_pool_cnt_cur_iter_),
+                                  static_cast<long>(vec_task_finish_tablet_cnt_)))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+    } else {
+      if (OB_FAIL(databuff_printf(stat_info.message_, MAX_LONG_OPS_MESSAGE_LENGTH, pos,
+                                  ", VEC_TASK:{TRI_CNT:%ld, CUR_ITER:%ld, END_DIFF:%.5f, DIFF:%.5f, "
+                                  "IMPALANCE:%.2f, SUCC_TABLET:%ld}",
+                                  static_cast<long>(vec_task_trigger_cnt_),
+                                  static_cast<long>(thread_pool_cnt_cur_iter_), finish_diff_, cur_diff_,
+                                  kmeans_imbalance_, static_cast<long>(vec_task_finish_tablet_cnt_)))) {
         LOG_WARN("failed to print", K(ret));
       }
     }

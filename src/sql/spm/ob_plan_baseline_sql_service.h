@@ -104,18 +104,6 @@ public:
                                       ObSpmCacheCtx &spm_ctx,
                                       ObBaselineKey &key,
                                       sqlclient::ObMySQLResult &result);
-  int get_need_sync_baseline_keys(ObIAllocator& allocator,
-                                  const uint64_t tenant_id,
-                                  const int64_t last_sync_time,
-                                  const ObString& sql_id_str,
-                                  const uint64_t database_id,
-                                  const int64_t batch_size,
-                                  int64_t& new_sync_time,
-                                  ObIArray<ObBaselineKey>& keys);
-
-  int sync_baseline_from_table(ObPlanCache* lib_cache,
-                               ObSpmCacheCtx& spm_ctx,
-                               ObIArray<ObBaselineKey>& keys);
 
   int alter_plan_baseline(const uint64_t tenant_id,
                           const uint64_t database_id,
@@ -145,6 +133,7 @@ public:
                                            const ObBaselineKey& key,
                                            const uint64_t& plan_hash,
                                            const ObEvolutionStat &evo_stat,
+                                           const bool update_last_verified,
                                            int64_t& affected_rows);
 
   int insert_new_baseline(ObIAllocator& allocator,
@@ -191,6 +180,11 @@ public:
                                         ObBaselineKey &key,
                                         const uint64_t plan_hash,
                                         int64_t& affected_rows);
+  int check_need_sync_baseline(const uint64_t tenant_id,
+                               const uint64_t database_id,
+                               const ObString& sql_id,
+                               const int64_t last_sync_time,
+                               bool& need_sync);
 private:
   const static char *EMPTY_STR;
   bool inited_;

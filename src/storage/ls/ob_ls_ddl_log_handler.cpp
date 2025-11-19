@@ -76,7 +76,10 @@ int ObActiveDDLKVMgr::del_tablets(const common::ObIArray<ObTabletID> &tablet_ids
       if (OB_FAIL(active_ddl_tablets_.assign(tmp_active_tablet_ids))) {
         LOG_WARN("assign active ddl tablet ids failed", K(ret));
       } else {
-        FLOG_INFO("del tablets from active ddl kv mgr", K_(active_ddl_tablets), K(tablet_ids));
+        FLOG_INFO("del tablets from active ddl kv mgr", K_(active_ddl_tablets));
+        if (!tablet_ids.empty()) {
+          FLOG_INFO("succeed to del tablets", K(tablet_ids), K(common::lbt()));
+        }
       }
     }
   }
@@ -135,16 +138,6 @@ int ObActiveDDLKVIterator::get_next_ddl_kv_mgr(ObDDLKvMgrHandle &handle)
             }
           } else {
             LOG_WARN("failed to get tablet", K(ret), K(ls_->get_ls_id()), K(tablet_id));
-          }
-        } else if (tablet_handle.get_obj()->get_tablet_meta().ddl_commit_scn_.is_valid_and_not_min() &&
-          tablet_handle.get_obj()->get_tablet_meta().ddl_checkpoint_scn_ >= tablet_handle.get_obj()->get_tablet_meta().ddl_commit_scn_) {
-          if (OB_FAIL(to_del_tablets_.push_back(tablet_id))) {
-            LOG_WARN("push back to deleted tablet failed", K(ret));
-          }
-        } else if (tablet_handle.get_obj()->get_major_table_count() > 0
-            || tablet_handle.get_obj()->get_tablet_meta().table_store_flag_.with_major_sstable()) {
-          if (OB_FAIL(to_del_tablets_.push_back(tablet_id))) {
-            LOG_WARN("push back to deleted tablet failed", K(ret));
           }
         } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(handle))) {
           LOG_WARN("get ddl kv mgr failed", K(ret));

@@ -14,8 +14,9 @@
 #define OCEANBASE_BASIC_OB_LAKE_TABLE_READER_PROFILE_H_
 
 #include "lib/container/ob_se_array.h"
-#include "lib/statistic_event/ob_stat_event.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
+#include "lib/statistic_event/ob_stat_event.h"
+#include "share/diagnosis/ob_runtime_profile.h"
 
 namespace oceanbase
 {
@@ -23,6 +24,12 @@ using namespace common;
 using namespace lib;
 namespace sql
 {
+
+static constexpr const char *READER_METRICS_LABEL = "READER_METRICS";
+static constexpr const char *IO_METRICS_LABEL = "IO_METRICS";
+static constexpr const char *EAGER_IO_METRICS_LABEL = "EAGER_IO_METRICS";
+static constexpr const char *PREBUFFER_METRICS_LABEL = "PREBUFFER_METRICS";
+static constexpr const char *EAGER_PREBUFFER_METRICS_LABEL = "EAGER_PREBUFFER_METRICS";
 
 struct ObLakeTableIMetrics
 {
@@ -36,27 +43,52 @@ struct ObLakeTableIMetrics
   common::ObString label_;
 };
 
-struct ObLakeTableReaderMetrics : public ObLakeTableIMetrics
+struct ObLakeTableParquetReaderMetrics : public ObLakeTableIMetrics
 {
 public:
-  ObLakeTableReaderMetrics() :
-    selected_file_count_(0), skipped_file_count_(0), selected_page_count_(0),
-    skipped_page_count_(0), selected_row_group_count_(0), skipped_row_group_count_(0),
-    read_rows_count_()
-  {}
+  ObLakeTableParquetReaderMetrics() = default;
+  ~ObLakeTableParquetReaderMetrics() = default;
   virtual int update_profile() override;
   virtual void dump_metrics() override;
-  VIRTUAL_TO_STRING_KV(K_(selected_file_count), K_(skipped_file_count), K_(selected_page_count),
-                       K_(skipped_page_count), K_(selected_row_group_count),
-                       K_(skipped_row_group_count), K_(read_rows_count));
+  VIRTUAL_TO_STRING_KV(K_(selected_file_count),
+                       K_(skipped_file_count),
+                       K_(selected_row_group_count),
+                       K_(skipped_row_group_count),
+                       K_(selected_page_count),
+                       K_(skipped_page_count),
+                       K_(read_rows_count));
 
-  int64_t selected_file_count_;
-  int64_t skipped_file_count_;
-  int64_t selected_page_count_;
-  int64_t skipped_page_count_;
-  int64_t selected_row_group_count_;
-  int64_t skipped_row_group_count_;
-  int64_t read_rows_count_;
+  int64_t selected_file_count_ = 0;
+  int64_t skipped_file_count_ = 0;
+  int64_t selected_row_group_count_ = 0;
+  int64_t skipped_row_group_count_ = 0;
+  int64_t selected_page_count_ = 0;
+  int64_t skipped_page_count_ = 0;
+  int64_t read_rows_count_ = 0;
+};
+
+struct ObLakeTableORCReaderMetrics : public ObLakeTableIMetrics
+{
+public:
+  ObLakeTableORCReaderMetrics() = default;
+  ~ObLakeTableORCReaderMetrics() = default;
+  virtual int update_profile() override;
+  virtual void dump_metrics() override;
+  VIRTUAL_TO_STRING_KV(K_(selected_file_count),
+                       K_(skipped_file_count),
+                       K_(selected_stripe_count),
+                       K_(skipped_stripe_count),
+                       K_(selected_row_group_count),
+                       K_(skipped_row_group_count),
+                       K_(read_rows_count));
+
+  int64_t selected_file_count_ = 0;
+  int64_t skipped_file_count_ = 0;
+  int64_t selected_stripe_count_ = 0;
+  int64_t skipped_stripe_count_ = 0;
+  int64_t selected_row_group_count_ = 0;
+  int64_t skipped_row_group_count_ = 0;
+  int64_t read_rows_count_ = 0;
 };
 
 struct ObLakeTablePreBufferMetrics : public ObLakeTableIMetrics
@@ -81,6 +113,9 @@ public:
   int64_t total_io_wait_time_us_; // total waiting time for async read IO
   int64_t max_io_wait_time_us_; // max waiting time for async read IO
   int64_t total_read_size_; // total size read from the prebuffer
+
+private:
+  int update_specific_profile_(ObProfileId id);
 };
 
 struct ObLakeTableIOMetrics : public ObLakeTableIMetrics
@@ -163,6 +198,9 @@ public:
   int64_t disk_cache_miss_io_size_; // total IO size that miss the disk cache
   int64_t max_io_time_us_; // maximum waiting time for read IO
   int64_t total_io_time_us_; // total waiting time for read IO
+
+private:
+  int update_specific_profile_(ObProfileId id);
 };
 
 class ObLakeTableReaderProfile
