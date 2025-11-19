@@ -617,12 +617,14 @@ public:
   int extract_len_ptr_from_condition_value(jit::ObLLVMValue &p_condition_value, jit::ObLLVMValue &result);
   int extract_stmt_ptr_from_condition_value(jit::ObLLVMValue &p_condition_value, jit::ObLLVMValue &result);
   int extract_signal_ptr_from_condition_value(jit::ObLLVMValue &p_condition_value, jit::ObLLVMValue &result);
+  int extract_ob_error_code_ptr_from_condition_value(jit::ObLLVMValue &p_condition_value, jit::ObLLVMValue &result);
   int extract_type_from_condition_value(jit::ObLLVMValue &p_condition_value, jit::ObLLVMValue &result);
   int extract_code_from_condition_value(jit::ObLLVMValue &p_condition_value, jit::ObLLVMValue &result);
   int extract_name_from_condition_value(jit::ObLLVMValue &p_condition_value, jit::ObLLVMValue &result);
   int extract_len_from_condition_value(jit::ObLLVMValue &p_condition_value, jit::ObLLVMValue &result);
   int extract_stmt_from_condition_value(jit::ObLLVMValue &p_condition_value, jit::ObLLVMValue &result);
   int extract_signal_from_condition_value(jit::ObLLVMValue &p_condition_value, jit::ObLLVMValue &result);
+  int extract_ob_error_code_from_condition_value(jit::ObLLVMValue &p_condition_value, jit::ObLLVMValue &result);
   int extract_type_ptr_from_collection(jit::ObLLVMValue &p_collection, jit::ObLLVMValue &result);
   int extract_id_ptr_from_collection(jit::ObLLVMValue &p_collection, jit::ObLLVMValue &result);
   int extract_isnull_ptr_from_collection(jit::ObLLVMValue &p_collection, jit::ObLLVMValue &result);
