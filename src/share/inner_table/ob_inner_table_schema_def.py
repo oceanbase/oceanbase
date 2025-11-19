@@ -17810,6 +17810,9 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15534', all_def_keyword
 # 15536: __all_virtual_wr_sqlstat_v2
 # 15537: __all_virtual_lob_check_exception_result
 
+# 15538: all_sensitive_rule_real_agent
+# 15539: all_sensitive_column_real_agent
+
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
 # - 示例：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
@@ -78795,6 +78798,10 @@ def_table_schema(
 # 28287: DBA_OB_LOB_CHECK_EXCEPTION_RESULT
 # 28288: CDB_OB_LOB_CHECK_EXCEPTION_RESULT
 
+
+# 28289: DBA_OB_SENSITIVE_RULES
+# 28290: DBA_OB_SENSITIVE_COLUMNS
+# 28291: DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
