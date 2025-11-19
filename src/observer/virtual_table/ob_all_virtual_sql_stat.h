@@ -130,7 +130,8 @@ private:
     FULL_TABLE_SCAN_TOTAL,
     FULL_TABLE_SCAN_DELTA,
     ERROR_COUNT_TOTAL,
-    ERROR_COUNT_DELTA
+    ERROR_COUNT_DELTA,
+    LATEST_ACTIVE_TIME
   };
   int fill_row(const uint64_t tenant_id,
                const ObExecutedSqlStatRecord *sql_stat_record,

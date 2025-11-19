@@ -401,8 +401,9 @@ int ObDbmsWorkloadRepository::modify_snapshot_settings(
     }
 
     if (OB_SUCC(ret)) {
+      int64_t sqlstat_interval = 0;//placeholder
       ObWrUserModifySettingsArg wr_user_modify_settings_arg(
-          ctx.exec_ctx_->get_my_session()->get_effective_tenant_id(), retention, interval, topnsql);
+          ctx.exec_ctx_->get_my_session()->get_effective_tenant_id(), retention, interval, topnsql, sqlstat_interval);
       if (OB_FAIL(wr_proxy.to(leader)
                       .by(OB_SYS_TENANT_ID)
                       .group_id(share::OBCG_WR)

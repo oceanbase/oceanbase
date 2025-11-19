@@ -27,6 +27,7 @@ enum class WrTaskType : int {
   USER_MODIFY_SETTINGS,
   INVALID,
   SQL_HISTOGRAM_AHEAD,
+  UPDATE_SQLSTAT
 };
 
 class ObWrSnapshotArg {
@@ -211,19 +212,21 @@ class ObWrUserModifySettingsArg : public ObWrSnapshotArg {
   OB_UNIS_VERSION(1);
 
 public:
-  explicit ObWrUserModifySettingsArg(int64_t tenant_id, int64_t retention, int64_t interval, int64_t topnsql)
+  explicit ObWrUserModifySettingsArg(int64_t tenant_id, int64_t retention, int64_t interval, int64_t topnsql, int64_t sqlstat_interval)
       : ObWrSnapshotArg(WrTaskType::USER_MODIFY_SETTINGS),
         tenant_id_(tenant_id),
         retention_(retention),
         interval_(interval),
-        topnsql_(topnsql)
+        topnsql_(topnsql),
+        sqlstat_interval_(sqlstat_interval)
   {}
   ObWrUserModifySettingsArg()
       : ObWrSnapshotArg(WrTaskType::USER_MODIFY_SETTINGS),
         tenant_id_(0),
         retention_(0),
         interval_(0),
-        topnsql_(0)
+        topnsql_(0),
+        sqlstat_interval_(0)
   {}
   ~ObWrUserModifySettingsArg() = default;
   inline int64_t get_tenant_id() const
@@ -242,6 +245,10 @@ public:
   {
     return topnsql_;
   }
+  inline int64_t get_sqlstat_interval() const
+  {
+    return sqlstat_interval_;
+  }
   int assign(const ObWrUserModifySettingsArg &other)
   {
     int ret = common::OB_SUCCESS;
@@ -249,6 +256,7 @@ public:
     retention_ = other.retention_;
     interval_ = other.interval_;
     topnsql_ = other.topnsql_;
+    sqlstat_interval_ = other.sqlstat_interval_;
     if (OB_FAIL(ObWrSnapshotArg::assign(other))) {
       SHARE_LOG(WARN, "fail to assign wr snapshot arg", KR(ret));
     } else { /*do nothing*/
@@ -263,6 +271,48 @@ private:
   int64_t retention_;
   int64_t interval_;
   int64_t topnsql_;
+  int64_t sqlstat_interval_;
+};
+
+class ObWrAsyncUpdateSqlStatArg : public ObWrSnapshotArg {
+  OB_UNIS_VERSION(1);
+public:
+  explicit ObWrAsyncUpdateSqlStatArg(uint64_t tenant_id, int64_t timeout_ts)
+      : ObWrSnapshotArg(WrTaskType::UPDATE_SQLSTAT),
+        tenant_id_(tenant_id),
+        timeout_ts_(timeout_ts)
+  {}
+  ObWrAsyncUpdateSqlStatArg()
+      : ObWrSnapshotArg(WrTaskType::UPDATE_SQLSTAT),
+        tenant_id_(0),
+        timeout_ts_(0)
+  {}
+  ~ObWrAsyncUpdateSqlStatArg() = default;
+  uint64_t get_tenant_id() const
+  {
+    return tenant_id_;
+  };
+  int64_t get_timeout_ts() const
+  {
+    return timeout_ts_;
+  };
+
+  int assign(const ObWrAsyncUpdateSqlStatArg &other)
+  {
+    int ret = common::OB_SUCCESS;
+    tenant_id_ = other.tenant_id_;
+    timeout_ts_ = other.timeout_ts_;
+    if (OB_FAIL(ObWrSnapshotArg::assign(other))) {
+      SHARE_LOG(WARN, "fail to assign wr snapshot arg", KR(ret));
+    } else {
+      /*do nothing*/
+    }
+    return ret;
+  }
+  DECLARE_VIRTUAL_TO_STRING;
+private:
+  uint64_t tenant_id_;
+  int64_t timeout_ts_;
 };
 
 class ObWrUserSubmitSnapResp {
@@ -344,6 +394,15 @@ public:
   virtual int process() override final;
 };
 
+class ObWrAsyncUpdateSqlStatTaskP final
+    : public ObWrBaseSnapshotTaskP<obrpc::OB_WR_ASYNC_UPDATE_SQLSTAT_TASK> {
+public:
+  ObWrAsyncUpdateSqlStatTaskP(const observer::ObGlobalContext &gctx) : ObWrBaseSnapshotTaskP(gctx)
+  {}
+  virtual ~ObWrAsyncUpdateSqlStatTaskP()
+  {}
+  virtual int process() override final;
+};
 }  // end namespace share
 }  // end namespace oceanbase
 #endif  // OCEANBASE_WR_OB_WORKLOAD_REPOSITORY_SNAPSHOT_RPC_PROCESSOR_H_

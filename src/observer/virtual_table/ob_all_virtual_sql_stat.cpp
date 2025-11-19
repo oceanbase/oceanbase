@@ -423,6 +423,10 @@ int ObAllVirtualSqlStat::fill_row(
         cells[cell_idx].set_int(0);
         break;
       }
+      case LATEST_ACTIVE_TIME: {
+        cells[cell_idx].set_timestamp(0);
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected column id", K(col_id));

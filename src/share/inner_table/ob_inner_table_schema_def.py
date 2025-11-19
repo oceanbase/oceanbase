@@ -6522,6 +6522,7 @@ def_table_schema(
       ('mrct_baseline_id', 'int', 'true'),
       ('topnsql', 'int'),
       ('mrct_bltmpl_id', 'int', 'true'),
+      ('sqlstat_interval', 'int', 'true'),
     ],
 )
 
@@ -8440,6 +8441,7 @@ def_table_schema(**all_ai_model_endpoint_def)
 # 576: __all_tenant_macro_block_copy_task_history
 # 577: __all_tablet_to_global_temporary_table
 # 578: __all_tiered_metadata_store
+# 579: __wr_sqlstat_v2
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -14023,7 +14025,9 @@ def_table_schema(
     ('DELTA_READ_IO_REQUESTS', 'int', 'false', '0'),
     ('DELTA_READ_IO_BYTES', 'int', 'false', '0'),
     ('DELTA_WRITE_IO_REQUESTS', 'int', 'false', '0'),
-    ('DELTA_WRITE_IO_BYTES', 'int', 'false', '0')
+    ('DELTA_WRITE_IO_BYTES', 'int', 'false', '0'),
+    ('WEIGHT', 'int', 'false', '1'),
+    ('IS_WR_WEIGHT_SAMPLE', 'bool', 'false', 'false')
   ],
   partition_columns = ['SVR_IP', 'SVR_PORT'],
   vtable_route_policy = 'distributed',
@@ -15794,6 +15798,7 @@ def_table_schema(
     ('FULL_TABLE_SCAN_DELTA', 'bigint', 'false', '0'),
     ('ERROR_COUNT_TOTAL', 'bigint', 'false', '0'),
     ('ERROR_COUNT_DELTA', 'bigint', 'false', '0'),
+    ('LATEST_ACTIVE_TIME', 'timestamp', 'true'),
   ],
   partition_columns = ['SVR_IP', 'SVR_PORT'],
   vtable_route_policy = 'distributed',
@@ -17223,6 +17228,7 @@ def_table_schema(
 # 12579: __all_virtual_macro_block_copy_task_history
 # 12580: __all_virtual_tablet_to_global_temporary_table
 # 12581: __all_virtual_external_catalog_client_pool_stat
+# 12582: __all_virtual_wr_sqlstat_v2
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -17797,6 +17803,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15532', all_def_keyword
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15533', all_def_keywords['__all_virtual_source']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15534', all_def_keywords['__all_virtual_ss_diagnose_info']))
 # 15535: __all_virtual_wr_active_session_history_v2
+# 15536: __all_virtual_wr_sqlstat_v2
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -37744,7 +37751,8 @@ def_table_schema(
       FULL_TABLE_SCAN_TOTAL AS FULL_TABLE_SCAN_TOTAL,
       FULL_TABLE_SCAN_DELTA AS FULL_TABLE_SCAN_DELTA,
       ERROR_COUNT_TOTAL AS ERROR_COUNT_TOTAL,
-      ERROR_COUNT_DELTA AS ERROR_COUNT_DELTA
+      ERROR_COUNT_DELTA AS ERROR_COUNT_DELTA,
+      LATEST_ACTIVE_TIME AS LATEST_ACTIVE_TIME
   FROM oceanbase.__all_virtual_sqlstat
 """.replace("\n", " "),
   normal_columns  = [],
@@ -37826,7 +37834,8 @@ MUTI_QUERY_BATCH_DELTA,
 FULL_TABLE_SCAN_TOTAL,
 FULL_TABLE_SCAN_DELTA,
 ERROR_COUNT_TOTAL,
-ERROR_COUNT_DELTA
+ERROR_COUNT_DELTA,
+LATEST_ACTIVE_TIME
 FROM oceanbase.gv$ob_sqlstat WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
   normal_columns  = [],
@@ -37912,16 +37921,9 @@ def_table_schema(
     FROM
     (
       oceanbase.__all_virtual_wr_sqlstat STAT
-      JOIN oceanbase.__all_virtual_wr_snapshot SNAP
-      ON STAT.CLUSTER_ID = SNAP.CLUSTER_ID
-      AND STAT.TENANT_ID = SNAP.TENANT_ID
-      AND STAT.SNAP_ID = SNAP.SNAP_ID
-      AND STAT.SVR_IP = SNAP.SVR_IP
-      AND STAT.SVR_PORT = SNAP.SVR_PORT
     )
     WHERE
       STAT.TENANT_ID = EFFECTIVE_TENANT_ID()
-      AND SNAP.STATUS = 0
   """.replace("\n", " ")
 )
 def_table_schema(
@@ -38003,17 +38005,7 @@ def_table_schema(
       STAT.ERROR_COUNT_TOTAL AS ERROR_COUNT_TOTAL,
       STAT.ERROR_COUNT_DELTA AS ERROR_COUNT_DELTA
     FROM
-    (
       oceanbase.__all_virtual_wr_sqlstat STAT
-      JOIN oceanbase.__all_virtual_wr_snapshot SNAP
-      ON STAT.CLUSTER_ID = SNAP.CLUSTER_ID
-      AND STAT.TENANT_ID = SNAP.TENANT_ID
-      AND STAT.SNAP_ID = SNAP.SNAP_ID
-      AND STAT.SVR_IP = SNAP.SVR_IP
-      AND STAT.SVR_PORT = SNAP.SVR_PORT
-    )
-    WHERE
-      SNAP.STATUS = 0
   """.replace("\n", " ")
 )
 def_table_schema(
@@ -38516,7 +38508,9 @@ def_table_schema(
       CAST(DELTA_READ_IO_REQUESTS AS SIGNED) AS DELTA_READ_IO_REQUESTS,
       CAST(DELTA_READ_IO_BYTES AS SIGNED) AS DELTA_READ_IO_BYTES,
       CAST(DELTA_WRITE_IO_REQUESTS AS SIGNED) AS DELTA_WRITE_IO_REQUESTS,
-      CAST(DELTA_WRITE_IO_BYTES AS SIGNED) AS DELTA_WRITE_IO_BYTES
+      CAST(DELTA_WRITE_IO_BYTES AS SIGNED) AS DELTA_WRITE_IO_BYTES,
+      CAST(WEIGHT AS SIGNED) AS WEIGHT,
+      CAST(IF (IS_WR_WEIGHT_SAMPLE = 1, 'Y', 'N') AS CHAR(1)) AS IS_WR_WEIGHT_SAMPLE
   FROM oceanbase.__all_virtual_ash ASH LEFT JOIN oceanbase.v$event_name on EVENT_NO = `event#`
 """.replace("\n", " "),
   normal_columns  = [],
@@ -38602,7 +38596,9 @@ def_table_schema(
       DELTA_READ_IO_REQUESTS,
       DELTA_READ_IO_BYTES,
       DELTA_WRITE_IO_REQUESTS,
-      DELTA_WRITE_IO_BYTES
+      DELTA_WRITE_IO_BYTES,
+      WEIGHT,
+      IS_WR_WEIGHT_SAMPLE
       FROM oceanbase.GV$OB_ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
   normal_columns  = [],
@@ -64995,16 +64991,9 @@ def_table_schema(
       STAT.ERROR_COUNT_TOTAL AS ERROR_COUNT_TOTAL,
       STAT.ERROR_COUNT_DELTA AS ERROR_COUNT_DELTA
   FROM
-    SYS.ALL_VIRTUAL_WR_SQLSTAT STAT,
-    SYS.ALL_VIRTUAL_WR_SNAPSHOT SNAP
+    SYS.ALL_VIRTUAL_WR_SQLSTAT STAT
   WHERE
     STAT.TENANT_ID = EFFECTIVE_TENANT_ID()
-    AND STAT.CLUSTER_ID = SNAP.CLUSTER_ID
-    AND STAT.TENANT_ID = SNAP.TENANT_ID
-    AND STAT.SNAP_ID = SNAP.SNAP_ID
-    AND STAT.SVR_IP = SNAP.SVR_IP
-    AND STAT.SVR_PORT = SNAP.SVR_PORT
-    AND SNAP.STATUS = 0
   """.replace("\n", " ")
 )
 def_table_schema(
@@ -72588,7 +72577,10 @@ PROXY_SID,
 DELTA_READ_IO_REQUESTS,
 DELTA_READ_IO_BYTES,
 DELTA_WRITE_IO_REQUESTS,
-DELTA_WRITE_IO_BYTES FROM SYS.GV$OB_ACTIVE_SESSION_HISTORY
+DELTA_WRITE_IO_BYTES,
+WEIGHT,
+IS_WR_WEIGHT_SAMPLE
+FROM SYS.GV$OB_ACTIVE_SESSION_HISTORY
 """.replace("\n", " "),
 )
 
@@ -72673,7 +72665,9 @@ def_table_schema(
       DELTA_READ_IO_REQUESTS,
       DELTA_READ_IO_BYTES,
       DELTA_WRITE_IO_REQUESTS,
-      DELTA_WRITE_IO_BYTES FROM SYS.GV$ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+      DELTA_WRITE_IO_BYTES,
+      WEIGHT,
+      IS_WR_WEIGHT_SAMPLE FROM SYS.GV$ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 )
 
@@ -74545,7 +74539,8 @@ def_table_schema(
       CAST(FULL_TABLE_SCAN_TOTAL AS NUMBER) AS FULL_TABLE_SCAN_TOTAL,
       CAST(FULL_TABLE_SCAN_DELTA AS NUMBER) AS FULL_TABLE_SCAN_DELTA,
       CAST(ERROR_COUNT_TOTAL AS NUMBER) AS ERROR_COUNT_TOTAL,
-      CAST(ERROR_COUNT_DELTA AS NUMBER) AS ERROR_COUNT_DELTA
+      CAST(ERROR_COUNT_DELTA AS NUMBER) AS ERROR_COUNT_DELTA,
+      CAST(LATEST_ACTIVE_TIME AS TIMESTAMP(6)) AS LATEST_ACTIVE_TIME
     FROM SYS.ALL_VIRTUAL_SQLSTAT
 """.replace("\n", " "),
 )
@@ -74628,7 +74623,8 @@ MUTI_QUERY_BATCH_DELTA,
 FULL_TABLE_SCAN_TOTAL,
 FULL_TABLE_SCAN_DELTA,
 ERROR_COUNT_TOTAL,
-ERROR_COUNT_DELTA
+ERROR_COUNT_DELTA,
+LATEST_ACTIVE_TIME
 FROM SYS.GV$OB_SQLSTAT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 )
@@ -74902,7 +74898,9 @@ def_table_schema(
       CAST(DELTA_READ_IO_REQUESTS AS NUMBER) AS DELTA_READ_IO_REQUESTS,
       CAST(DELTA_READ_IO_BYTES AS NUMBER) AS DELTA_READ_IO_BYTES,
       CAST(DELTA_WRITE_IO_REQUESTS AS NUMBER) AS DELTA_WRITE_IO_REQUESTS,
-      CAST(DELTA_WRITE_IO_BYTES AS NUMBER) AS DELTA_WRITE_IO_BYTES
+      CAST(DELTA_WRITE_IO_BYTES AS NUMBER) AS DELTA_WRITE_IO_BYTES,
+      CAST(WEIGHT AS NUMBER) AS WEIGHT,
+      CAST(DECODE(IS_WR_WEIGHT_SAMPLE, 1, 'Y', 'N') AS CHAR(1)) AS IS_WR_WEIGHT_SAMPLE
     FROM SYS.ALL_VIRTUAL_ASH LEFT JOIN SYS.V$EVENT_NAME on EVENT_NO = "EVENT#"
 """.replace("\n", " "),
 )
@@ -74987,7 +74985,9 @@ PROXY_SID,
 DELTA_READ_IO_REQUESTS,
 DELTA_READ_IO_BYTES,
 DELTA_WRITE_IO_REQUESTS,
-DELTA_WRITE_IO_BYTES
+DELTA_WRITE_IO_BYTES,
+WEIGHT,
+IS_WR_WEIGHT_SAMPLE
 FROM SYS.GV$OB_ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 )
