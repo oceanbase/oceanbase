@@ -860,6 +860,23 @@ int ObTransformAggrSubquery::transform_child_stmt(ObDMLStmt *stmt,
   } else {
     subquery.get_group_exprs().reset();
   }
+
+  // tuliwei.tlw: useless remove_const expr may cause issue, so we need to remove them
+  for (int64_t i = 0; OB_SUCC(ret) && i < subquery.get_select_item_size(); ++i) {
+    ObRawExpr *&expr = subquery.get_select_item(i).expr_;
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("select expr is null", K(ret), K(expr));
+    } else if (expr->get_expr_type() == T_FUN_SYS_REMOVE_CONST) {
+      if (OB_ISNULL(expr->get_param_expr(0))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param expr is null", K(ret));
+      } else {
+        expr = expr->get_param_expr(0);
+      }
+    }
+  }
+
   for (int64_t i = 0; OB_SUCC(ret) && i < nested_conditions.count(); ++i) {
     ObRawExpr *cond_expr = nested_conditions.at(i);
     bool left_is_correlated = false;
