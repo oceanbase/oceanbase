@@ -923,7 +923,7 @@ int ObSelectResolver::check_order_by()
               LOG_WARN("to_char has no child expr", K(ret));
             } else {
               ObObjType type = expr->get_param_expr(0)->get_result_meta().get_type();
-              if ((ObTinyIntType <= type && type <= ObUNumberType) || type == ObDecimalIntType) {
+              if ((ObTinyIntType <= type && type <= ObUNumberType) || type == ObDecimalIntType || type == ObNumberFloatType) {
                 if (OB_FAIL(select_item_exprs.push_back(expr->get_param_expr(0)))) {
                   LOG_WARN("fail to push back expr", K(ret));
                 }
