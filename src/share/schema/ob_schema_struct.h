@@ -3425,6 +3425,9 @@ public:
              bool print_collation,
              const common::ObTimeZoneInfo *tz_info);
 
+  // Check range partition's high_bound_val before write to inner table
+  static int check_range_high_bound_val(const common::ObRowkey &high_bound_val);
+
   // Used to display the defined value of the LIST partition
   static int convert_rows_to_sql_literal(
              const bool is_oracle_mode,

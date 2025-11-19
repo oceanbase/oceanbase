@@ -2199,6 +2199,7 @@ int ObSplitSampler::query_ranges_(const uint64_t tenant_id, const ObString &db_n
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("invalid column count", KR(ret), K(column_count), K(sql));
           } else {
+            bool has_null = false;
             // build start_row_key
             if (ranges.size() == 0) {
               // copy low_bound_val to range.start_key_
@@ -2214,6 +2215,9 @@ int ObSplitSampler::query_ranges_(const uint64_t tenant_id, const ObString &db_n
             if (OB_FAIL(ret)) {
             } else {
               for (int64_t i = 0; i < column_count; i++) {
+                if (row->get_cell(i).is_null()) {
+                  has_null = true;
+                }
                 objs[i] = row->get_cell(i);
               }
 
@@ -2227,6 +2231,8 @@ int ObSplitSampler::query_ranges_(const uint64_t tenant_id, const ObString &db_n
             }
 
             if (OB_FAIL(ret)) {
+            } else if (has_null) {
+              // null values are not allowed in range high bound
             } else if (OB_FAIL(ranges.push_back(range))) {
               LOG_WARN("range push back failed", KR(ret));
             }
