@@ -872,6 +872,7 @@ int ObDropVecIndexTask::create_drop_index_task(
     arg.ddl_stmt_str_        = drop_index_sql.string();
     arg.is_add_to_scheduler_ = true;
     arg.task_id_             = task_id_;
+    arg.is_hidden_           = drop_index_arg_.is_hidden_;
     if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(
             index_schema->get_all_part_num() + data_table_schema->get_all_part_num(), ddl_rpc_timeout_us))) {
       LOG_WARN("fail to get ddl rpc timeout", K(ret));

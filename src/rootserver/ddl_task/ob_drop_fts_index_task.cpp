@@ -611,6 +611,7 @@ int ObDropFTSIndexTask::create_drop_index_task(
     arg.ddl_stmt_str_        = nullptr;
     arg.is_add_to_scheduler_ = true;
     arg.task_id_             = task_id_;
+    arg.is_hidden_           = data_table_schema->is_user_hidden_table();
     if (index_schema->is_fts_index_aux()) {
       arg.ddl_stmt_str_ = drop_index_sql.string();
     }

@@ -9504,6 +9504,9 @@ int ObDDLService::rename_dropping_index_name(
       rename_index_arg.tenant_id_         = index_table_schema->get_tenant_id();
       rename_index_arg.origin_index_name_ = index_name;
       rename_index_arg.new_index_name_    = new_index_name;
+      if (drop_index_arg.is_hidden_) {
+        new_index_schema.set_in_offline_ddl_white_list(true);
+      }
       if (OB_INVALID_ID != drop_index_arg.index_table_id_) {
         if (OB_FAIL(ddl_operator.alter_table_rename_index_with_origin_index_name(index_table_schema->get_tenant_id(),
                                                           index_table_schema->get_table_id(),
