@@ -28,8 +28,6 @@ typedef struct socket_diag_info_t
   int64_t last_read_time;
   uint64_t write_cnt;
   uint64_t write_size;
-  uint64_t write_ack_size; // the size of data that has been acknowledged by the remote side
-  int64_t write_ack_time; // the last check time when the write_ack_size is updated
   uint64_t write_wait_time;
   uint64_t read_cnt;
   uint64_t read_size;
