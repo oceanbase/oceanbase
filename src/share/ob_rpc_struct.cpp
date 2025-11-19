@@ -13306,7 +13306,7 @@ int ObSeqCleanCacheRes::assign(const ObSeqCleanCacheRes &other)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObTTLRequestArg, cmd_code_, trigger_type_, task_id_, tenant_id_);
+OB_SERIALIZE_MEMBER(ObTTLRequestArg, cmd_code_, trigger_type_, task_id_, tenant_id_, table_with_tablet_);
 
 int ObTTLRequestArg::assign(const ObTTLRequestArg &other)
 {

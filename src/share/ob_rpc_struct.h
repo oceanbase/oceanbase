@@ -13542,19 +13542,30 @@ private:
 
 struct ObTTLRequestArg final
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   enum TTLRequestType {
     TTL_TRIGGER_TYPE = 0,
     TTL_SUSPEND_TYPE = 1,
     TTL_RESUME_TYPE = 2,
     TTL_CANCEL_TYPE = 3,
+
     TTL_MOVE_TYPE = 4,
-    TTL_INVALID_TYPE = 5
+    TTL_INVALID_TYPE = 5,
+    LOB_CHECK_TRIGGER_TYPE = 10,
+    LOB_CHECK_SUSPEND_TYPE,
+    LOB_CHECK_RESUME_TYPE,
+    LOB_CHECK_CANCEL_TYPE,
+    LOB_CHECK_INVALID_TYPE,
+    LOB_CORRECT_TRIGGER_TYPE = 20,
+    LOB_CORRECT_SUSPEND_TYPE,
+    LOB_CORRECT_RESUME_TYPE,
+    LOB_CORRECT_CANCEL_TYPE,
+    LOB_CORRECT_INVALID_TYPE,
   };
 
   ObTTLRequestArg()
-    : cmd_code_(-1), trigger_type_(-1), task_id_(OB_INVALID_ID), tenant_id_(OB_INVALID_ID)
+    : cmd_code_(-1), trigger_type_(-1), task_id_(OB_INVALID_ID), tenant_id_(OB_INVALID_ID), table_with_tablet_()
   {}
   ~ObTTLRequestArg() = default;
   bool is_valid() const {
@@ -13562,12 +13573,13 @@ public:
     return cmd_code_ != -1 && trigger_type_ != -1 && tenant_id_ != OB_INVALID_ID;
   }
   int assign(const ObTTLRequestArg &other);
-  TO_STRING_KV(K_(cmd_code), K_(trigger_type), K_(task_id), K_(tenant_id));
+  TO_STRING_KV(K_(cmd_code), K_(trigger_type), K_(task_id), K_(tenant_id), K_(table_with_tablet));
 public:
   int32_t cmd_code_; // enum TTLCmdType
   int32_t trigger_type_; // system or user
   int64_t task_id_;  // task id
   uint64_t tenant_id_; // tenand_id array
+  ObString table_with_tablet_; // {"500001":[200001, 200002, 200003], "500002":[], "500003":[200008, 200009]}
 };
 
 struct ObTTLResponseArg {

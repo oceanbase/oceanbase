@@ -5257,7 +5257,8 @@ all_kv_ttl_task_def = dict(
     ('row_key', 'varbinary:2048'),
     ('ret_code', 'varchar:OB_MAX_ERROR_MSG_LEN'),
     ('task_type', 'int', 'false', 0),
-    ('scan_index', 'varchar:OB_MAX_OBJECT_NAME_LENGTH', 'false', 'PRIMARY KEY')
+    ('scan_index', 'varchar:OB_MAX_OBJECT_NAME_LENGTH', 'false', 'PRIMARY KEY'),
+    ('ls_id', 'int', 'false', -1)
   ],
 )
 
@@ -5287,7 +5288,8 @@ all_kv_ttl_task_history_def = dict(
     ('row_key', 'varbinary:2048'),
     ('ret_code', 'varchar:OB_MAX_ERROR_MSG_LEN'),
     ('task_type', 'int', 'false', 0),
-    ('scan_index', 'varchar:OB_MAX_OBJECT_NAME_LENGTH', 'false', 'PRIMARY KEY')
+    ('scan_index', 'varchar:OB_MAX_OBJECT_NAME_LENGTH', 'false', 'PRIMARY KEY'),
+    ('ls_id', 'int', 'false', -1)
   ],
 )
 def_table_schema(**all_kv_ttl_task_def)
@@ -8442,6 +8444,7 @@ def_table_schema(**all_ai_model_endpoint_def)
 # 577: __all_tablet_to_global_temporary_table
 # 578: __all_tiered_metadata_store
 # 579: __wr_sqlstat_v2
+# 580: __all_lob_check_exception_result
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -17229,6 +17232,7 @@ def_table_schema(
 # 12580: __all_virtual_tablet_to_global_temporary_table
 # 12581: __all_virtual_external_catalog_client_pool_stat
 # 12582: __all_virtual_wr_sqlstat_v2
+# 12583: __all_virtual_lob_check_exception_result
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -17804,6 +17808,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15533', all_def_keyword
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15534', all_def_keywords['__all_virtual_ss_diagnose_info']))
 # 15535: __all_virtual_wr_active_session_history_v2
 # 15536: __all_virtual_wr_sqlstat_v2
+# 15537: __all_virtual_lob_check_exception_result
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -31257,6 +31262,7 @@ def_table_schema(
           a.table_id = b.table_id and a.tenant_id = effective_tenant_id()
           and b.table_mode >> 12 & 15 in (0,1)
           and b.index_attributes_set & 16 = 0
+      WHERE a.task_type in (0, 1)
 """.replace("\n", " ")
 )
 
@@ -31302,6 +31308,7 @@ def_table_schema(
           a.table_id = b.table_id and a.tenant_id = effective_tenant_id()
           and b.table_mode >> 12 & 15 in (0,1)
           and b.index_attributes_set & 16 = 0
+      WHERE a.task_type in (0, 1)
 """.replace("\n", " ")
 )
 
@@ -31516,6 +31523,7 @@ def_table_schema(
           a.table_id = b.table_id and a.tenant_id = b.tenant_id
           and b.table_mode >> 12 & 15 in (0,1)
           and b.index_attributes_set & 16 = 0
+      WHERE a.task_type in (0, 1)
 """.replace("\n", " ")
 )
 
@@ -31561,6 +31569,7 @@ def_table_schema(
           a.table_id = b.table_id and a.tenant_id = b.tenant_id
           and b.table_mode >> 12 & 15 in (0,1)
           and b.index_attributes_set & 16 = 0
+      WHERE a.task_type in (0, 1)
 """.replace("\n", " ")
 )
 
@@ -44487,6 +44496,12 @@ FROM
     AND T.TENANT_ID = TP.TENANT_ID
 """.replace("\n", " ")
 )
+
+# LOB Check Task Views
+# 21698: DBA_OB_LOB_CHECK_TASKS
+# 21699: CDB_OB_LOB_CHECK_TASKS
+# 21700: DBA_OB_LOB_CHECK_EXCEPTION_RESULT
+# 21701: CDB_OB_LOB_CHECK_EXCEPTION_RESULT
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -78773,6 +78788,13 @@ def_table_schema(
       SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
 )
+
+# LOB Check Task Views for Oracle
+# 28285: DBA_OB_LOB_CHECK_TASKS
+# 28286: CDB_OB_LOB_CHECK_TASKS
+# 28287: DBA_OB_LOB_CHECK_EXCEPTION_RESULT
+# 28288: CDB_OB_LOB_CHECK_EXCEPTION_RESULT
+
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
