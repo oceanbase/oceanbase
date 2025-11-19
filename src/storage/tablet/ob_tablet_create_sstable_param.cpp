@@ -350,7 +350,7 @@ int ObTabletCreateSSTableParam::init_for_split_empty_minor_sstable(const ObTable
 
   root_block_addr_.set_none_addr();
   data_block_macro_meta_addr_.set_none_addr();
-  root_row_store_type_ = basic_meta.latest_row_store_type_;
+  root_row_store_type_ = basic_meta.root_row_store_type_;
   data_index_tree_height_ = 0;
   index_blocks_cnt_ = 0;
   data_blocks_cnt_ = 0;
@@ -369,6 +369,13 @@ int ObTabletCreateSSTableParam::init_for_split_empty_minor_sstable(const ObTable
   root_macro_seq_ = 0;
   full_column_cnt_ = 0;
   column_group_cnt_ = 1;
+  
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(ObStoreFormat::is_row_store_type_with_encoding(root_row_store_type_))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("split empty minor sstable do not support encoding row store", K(ret), K(root_row_store_type_),
+              K(basic_meta), KPC(this));
+  }
   return ret;
 }                                                          
 
