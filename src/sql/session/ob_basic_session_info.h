@@ -2417,9 +2417,9 @@ private:
       bool inc_character_set_client_:1;
       bool inc_collation_database_:1;
       bool inc_plsql_optimize_level_:1;
-      // when add new inc bit, please update reserved_bits_,
-      // so that the total bits is 64
-      int reserved_bits_:1;
+      bool inc_ob_enable_pl_async_commit_:1;
+      // total bits has been used out !!!
+      // can not add new inc bit !!!
     };
     union { // FARM COMPAT WHITELIST
       uint64_t inc_flags_;
