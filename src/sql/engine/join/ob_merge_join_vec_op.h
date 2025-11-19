@@ -419,14 +419,10 @@ public:
         for (int i = 0; i < match_pair_array_size_; ++i) {
           semi_anti_match_pair_array_[i].reuse();
         }
-      }
-      if (OB_NOT_NULL(semi_anti_match_pair_ptr_array_)) {
-        MEMSET(semi_anti_match_pair_ptr_array_, NULL,
-               sizeof(SemiAntiMatchPair *) * match_pair_array_size_);
-      }
-      if (OB_NOT_NULL(semi_anti_match_pair_array_)) {
-        for (int64_t i = 0; i < match_pair_array_size_; ++i) {
-          semi_anti_match_pair_ptr_array_[i] = &semi_anti_match_pair_array_[i];
+        if (OB_NOT_NULL(semi_anti_match_pair_ptr_array_)) {
+          for (int64_t i = 0; i < match_pair_array_size_; ++i) {
+            semi_anti_match_pair_ptr_array_[i] = &semi_anti_match_pair_array_[i];
+          }
         }
       }
       intermediate_cache_.reuse();
