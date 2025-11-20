@@ -5619,6 +5619,8 @@ int ObLogPlan::perform_one_distinct_pushdown(ObLogicalOperator *op)
       if (OB_ISNULL(org_agg) || OB_ISNULL(new_agg)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid null exprs", K(ret));
+      } else if (OB_FAIL(onetime_replacer_.replace(org_agg))) {
+        LOG_WARN("failed to replace expr", K(ret));
       } else if (OB_FAIL(distinct_pushdown_replacer_.add_replace_expr(org_agg, new_agg))) {
         LOG_WARN("add replace expr failed", K(ret));
       }
@@ -5634,13 +5636,27 @@ int ObLogPlan::perform_groupingsets_replacement(ObLogicalOperator *op)
 {
   int ret = OB_SUCCESS;
   ObLogGroupBy *groupby = nullptr;
+  ObLogExpand *expand = nullptr;
+  if (NULL != (expand = dynamic_cast<ObLogExpand *>(op)) && expand->get_grouping_set_info() != nullptr) {
+    const ObIArray<ObTuple<ObRawExpr *, ObRawExpr *>> &replaced_aggr_items = expand->get_grouping_set_info()->replaced_agg_pairs_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < replaced_aggr_items.count(); i++) {
+      ObRawExpr *org_agg = replaced_aggr_items.at(i).element<0>();
+      ObRawExpr *new_agg = replaced_aggr_items.at(i).element<1>();
+      if (OB_ISNULL(org_agg) || OB_ISNULL(new_agg)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid null agg exprs", K(ret));
+      } else if (OB_FAIL(onetime_replacer_.replace(org_agg))) {
+        LOG_WARN("replace expr failed", K(ret));
+      } else if (OB_FAIL(groupingset_agg_replacer_.add_replace_expr(org_agg, new_agg))) {
+        LOG_WARN("add replace expr failed", K(ret));
+      } else {
+        // do nothing
+      }
+    }
+  }
   if (NULL != (groupby = dynamic_cast<ObLogGroupBy *>(op))
-      && (groupby->get_hash_rollup_info() != nullptr
-          || groupby->get_grouping_set_info() != nullptr)) {
-    const ObIArray<ObTuple<ObRawExpr *, ObRawExpr *>> &replaced_aggr_items =
-      (groupby->get_hash_rollup_info() != nullptr ?
-         groupby->get_hash_rollup_info()->replaced_agg_pairs_ :
-         groupby->get_grouping_set_info()->replaced_agg_pairs_);
+      && (groupby->get_hash_rollup_info() != nullptr)) {
+    const ObIArray<ObTuple<ObRawExpr *, ObRawExpr *>> &replaced_aggr_items = groupby->get_hash_rollup_info()->replaced_agg_pairs_;
     for(int64_t i = 0; OB_SUCC(ret) && i < replaced_aggr_items.count(); i++) {
       ObRawExpr *org_agg = replaced_aggr_items.at(i).element<0>();
       ObRawExpr *new_agg = replaced_aggr_items.at(i).element<1>();
@@ -15067,8 +15083,6 @@ int ObLogPlan::adjust_final_plan_info(ObLogicalOperator *&op)
     if (OB_SUCC(ret)) {
       if (op->is_plan_root() && OB_FAIL(op->set_plan_root_output_exprs())) {
         LOG_WARN("failed to add plan root exprs", K(ret));
-      } else if (OB_FAIL(op->get_plan()->perform_adjust_onetime_expr(op))) {
-        LOG_WARN("failed to perform adjust onetime expr", K(ret));
       } else if (OB_FAIL(op->get_plan()->perform_groupingsets_replacement(op))) {
         LOG_WARN("failed to perform grouping set replacement", K(ret));
       } else if (OB_FAIL(op->get_plan()->perform_one_distinct_pushdown(op))) {
@@ -15079,6 +15093,8 @@ int ObLogPlan::adjust_final_plan_info(ObLogicalOperator *&op)
         LOG_WARN("failed to perform simplify win expr", K(ret));
       } else if (OB_FAIL(op->get_plan()->perform_window_function_pushdown(op))) {
         LOG_WARN("failed to perform window function push down", K(ret));
+      } else if (OB_FAIL(op->get_plan()->perform_adjust_onetime_expr(op))) {
+        LOG_WARN("failed to perform adjust onetime expr", K(ret));
       } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0 &&
                  get_optimizer_context().get_query_ctx()->get_global_hint().has_dbms_stats_hint() &&
                  OB_FAIL(op->get_plan()->perform_gather_stat_replace(op))) {
