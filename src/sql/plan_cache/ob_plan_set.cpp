@@ -572,7 +572,8 @@ int ObPlanSet::match_params_info(const Ob2DArray<ObParamInfo,
             || (params_info_.at(i).flag_.need_to_check_extend_type_
                 && infos.at(i).ext_real_type_ != params_info_.at(i).ext_real_type_)
             || (params_info_.at(i).flag_.is_boolean_ != infos.at(i).flag_.is_boolean_)
-            || !match_decint_precision(params_info_.at(i), infos.at(i).precision_)) {
+            || !match_decint_precision(params_info_.at(i), infos.at(i).precision_)
+            || (params_info_.at(i).is_oracle_null_value_ != infos.at(i).is_oracle_null_value_)) {
           is_same = false;
         }
       }
