@@ -857,15 +857,15 @@ int ObLSAttrOperator::alter_ls_group_in_trans(const ObLSAttr &ls_info,
           "UPDATE %s set ls_group_id = %lu where ls_id = %ld and ls_group_id = %lu",
           OB_ALL_LS_TNAME, new_ls_group_id, ls_info.get_ls_id().id(), ls_info.get_ls_group_id()))) {
     LOG_WARN("failed to assign sql", KR(ret), K(new_ls_group_id), K(ls_info), K(sql));
-  } else if (OB_FAIL(exec_write(tenant_id_, sql, this, trans))) {
-    LOG_WARN("failed to exec write", KR(ret), K(tenant_id_), K(sql));
   } else {
+    //目前这个接口只会在normal的状态被调用
+    ObTenantSwitchoverStatus switchover_status(ObTenantSwitchoverStatus::NORMAL_STATUS);
     ObLSAttr new_ls_info;
     if (OB_FAIL(new_ls_info.init(ls_info.get_ls_id(), new_ls_group_id, ls_info.get_ls_flag(), ls_info.get_ls_status(),
             OB_LS_OP_ALTER_LS_GROUP, ls_info.get_create_scn()))) {
       LOG_WARN("failed to init new ls info", KR(ret), K(ls_info), K(new_ls_group_id));
-    } else if (OB_FAIL(process_sub_trans_(new_ls_info, trans))) {
-      LOG_WARN("failed to process sub trans", KR(ret), K(new_ls_info));
+    } else if (OB_FAIL(operator_ls_in_trans_(new_ls_info, sql, switchover_status, trans))) {
+      LOG_WARN("failed to operator ls", KR(ret), K(new_ls_info), K(sql));
     }
   }
   ALL_LS_EVENT_ADD(tenant_id_, ls_info.get_ls_id(), "alter_ls_group", ret, sql);
