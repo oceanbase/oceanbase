@@ -132,6 +132,8 @@ public:
 
   void reset();
 
+  TO_STRING_KV(K_(micro_block_count), K_(sample_count), K_(col_idx_in_storage), K_(is_inited));
+
 private:
   int init_col_idx_in_storage(const blocksstable::ObSSTable &sstable,
                               const ObTableSchema &schema,

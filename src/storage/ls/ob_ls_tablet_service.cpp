@@ -9440,7 +9440,7 @@ int ObLSTabletService::estimate_skip_index_sortedness(
                    K(cg_idx),
                    K(i));
         } else if (OB_FAIL(calcer.sample_and_calc(tmp_sortedness))) {
-          LOG_WARN("Fail to sample and calc sortedness", KR(ret));
+          LOG_WARN("Fail to sample and calc sortedness", KR(ret), K(i), K(calcer));
         } else if (OB_FAIL(sortedness.push_back(tmp_sortedness))) {
           LOG_WARN("Fail to push back sortedness", KR(ret));
         }
@@ -9486,7 +9486,7 @@ int ObLSTabletService::estimate_skip_index_sortedness(
                  K(sample_counts),
                  K(i));
       } else if (OB_FAIL(calcer.sample_and_calc(tmp_sortedness))) {
-        LOG_WARN("Fail to sample and calc sortedness", KR(ret));
+        LOG_WARN("Fail to sample and calc sortedness", KR(ret), K(i), K(calcer));
       } else if (OB_FAIL(sortedness.push_back(tmp_sortedness))) {
         LOG_WARN("Fail to push back sortedness", KR(ret));
       }
