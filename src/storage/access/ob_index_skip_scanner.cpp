@@ -930,14 +930,15 @@ int ObIndexSkipScanner::check_disabled()
     const ObDatumRowkey &cur_prefix_key = is_reverse_scan_ ? complete_range_.start_key_ : complete_range_.end_key_;
     const ObDatumRowkey *newest_prefix_key = nullptr;
     int cmp_ret = 0;
+    int64_t ne_pos = -1;
     if (OB_FAIL(skip_scan_factory_->get_newest_prefix_key(newest_prefix_key))) {
       LOG_WARN("failed to get max prefix key", KR(ret));
     } else if (OB_ISNULL(newest_prefix_key)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("max prefix key is null", KR(ret));
-    } else if (OB_FAIL(cur_prefix_key.compare(*newest_prefix_key, datum_utils_, cmp_ret))) {
+    } else if (OB_FAIL(cur_prefix_key.compare(*newest_prefix_key, datum_utils_, cmp_ret, false/*cmp_datum_cnt*/, &ne_pos))) {
       LOG_WARN("failed to compare", KR(ret), K(cur_prefix_key), K(newest_prefix_key), K_(complete_range), KPC(this));
-    } else if ((!is_reverse_scan_ && cmp_ret > 0) || (is_reverse_scan_ && cmp_ret < 0)) {
+    } else if (((!is_reverse_scan_ && cmp_ret > 0) || (is_reverse_scan_ && cmp_ret < 0)) && ne_pos <= prefix_cnt_) {
       // current prefix is behind the max prefix, so we can disable this index skip scanner now
       is_disabled_ = true;
       is_border_after_disabled_ = true;
@@ -1094,12 +1095,13 @@ int ObIndexSkipScanFactory::set_pending_disabled(
       } else if (!skip_scanner->is_prefix_filled()) {
       } else {
         int cmp_ret = 0;
+        int64_t ne_pos = -1;
         const ObDatumRowkey &cur_prefix_key = is_reverse_scan ? skip_scanner->get_complete_range().start_key_ :
                                                                 skip_scanner->get_complete_range().end_key_;
         LOG_INFO("[INDEX SKIP SCAN] compare prefix", K(i), K(skip_scanners_.count()), K(cur_prefix_key), KPC(newest_key));
-        if (OB_FAIL(cur_prefix_key.compare(*newest_key, datum_utils, cmp_ret))) {
+        if (OB_FAIL(cur_prefix_key.compare(*newest_key, datum_utils, cmp_ret, false/*cmp_datum_cnt*/, &ne_pos))) {
           LOG_WARN("failed to compare", KR(ret), K(cur_prefix_key), K(newest_key));
-        } else if ((!is_reverse_scan && cmp_ret > 0) || (is_reverse_scan && cmp_ret < 0)) {
+        } else if (((!is_reverse_scan && cmp_ret > 0) || (is_reverse_scan && cmp_ret < 0)) && ne_pos <= prefix_cnt) {
           newest_key = &cur_prefix_key;
         }
       }
