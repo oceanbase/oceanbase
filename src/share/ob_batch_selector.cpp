@@ -64,7 +64,7 @@ void ObBatchSelector::set_active_array(const uint64_t *active_array, const int64
   cursor_ = 0;
 }
 
-int64_t ObBatchSelector::get_max() const
+int64_t ObBatchSelector::get_end() const
 {
   int64_t max = 0;
   switch (type_) {
@@ -76,17 +76,17 @@ int64_t ObBatchSelector::get_max() const
       break;
     case ACTIVE_ARRAY_U16:
       if (count_ > 0) {
-        max = u16_array_[count_ - 1];
+        max = u16_array_[count_ - 1] + 1;
       }
       break;
     case ACTIVE_ARRAY_U32:
       if (count_ > 0) {
-        max = u32_array_[count_ - 1];
+        max = u32_array_[count_ - 1] + 1;
       }
       break;
     case ACTIVE_ARRAY_U64:
       if (count_ > 0) {
-        max = u64_array_[count_ - 1];
+        max = u64_array_[count_ - 1] + 1;
       }
       break;
     default:
