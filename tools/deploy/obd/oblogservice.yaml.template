@@ -4,7 +4,7 @@ oblogservice:
   global:
     cluster_id: {{%% OBLOG_SERVERS_ID %%}}
     object_store_url: {{%% OBJECT_STORE_URL %%}}
-    use_default_object_store_url: {{%% USE_DEFAULT_OBJECT_STORE_URL %%}}
+    default_object_store_path: {{%% DEFAULT_OBJECT_STORE_PATH %%}}
 oceanbase-ce:
   depends:
   - oblogservice
