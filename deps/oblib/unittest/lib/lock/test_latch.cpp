@@ -334,7 +334,7 @@ TEST(ObLatch, diagnose)
 }
 #endif
 
-class TestSpinLock : public lib::ObjectSetV2::Lock
+class TestSpinLock : public ObSimpleLock
 {
 public:
   TestSpinLock()

@@ -138,7 +138,6 @@ struct ObMemAttr
   uint64_t tenant_id_;
   ObLabel label_;
   uint64_t ctx_id_;
-  int32_t sub_ctx_id_;
   int32_t numa_id_;
   ObAllocPrio prio_;
   explicit ObMemAttr(
@@ -149,7 +148,6 @@ struct ObMemAttr
       : tenant_id_(tenant_id),
         label_(label),
         ctx_id_(ctx_id),
-        sub_ctx_id_(ObSubCtxIds::MAX_SUB_CTX_ID),
         numa_id_(0),
         prio_(prio),
         use_500_(false),

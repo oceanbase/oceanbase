@@ -185,7 +185,7 @@ public:
     lock_.unlock();
   }
 private:
-  ObjectSetV2::Lock lock_;
+  ObSimpleLock lock_;
   void *head_;
   int64_t using_cnt_;
   int64_t free_cnt_;
@@ -444,7 +444,7 @@ struct ObjectSetList
     lock_.unlock();
     return ret;
   }
-  ObjectSetV2::Lock lock_;
+  ObSimpleLock lock_;
   ObDList<ObjectSetV3> list_;
 };
 
