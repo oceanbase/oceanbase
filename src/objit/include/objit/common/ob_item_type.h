@@ -975,10 +975,10 @@ typedef enum ObItemType
   T_FUN_SYS_AI_PROMPT = 1929,
   T_FUN_SYS_VEC_VISIBLE = 1930, // vector index table 5
   T_FUN_SYS_MAX_PT = 1931,
-  T_FUN_GROUPCONCAT = 1932,
-  T_FUN_VARSAMP = 1933,
-  T_FUN_STDDEVSAMP = 1934,
-  T_FUN_UNIQ = 1935,
+  T_FUN_CK_GROUPCONCAT = 1932,
+  T_FUN_CK_VARSAMP = 1933,
+  T_FUN_CK_STDDEVSAMP = 1934,
+  T_FUN_CK_UNIQ = 1935,
   T_FUN_SYS_EDIT_DISTANCE = 1936,
   T_FUN_SYS_EDIT_DISTANCE_UTF8 = 1937,
 
@@ -3155,7 +3155,7 @@ extern const char *get_type_name(int type);
                          (op) == T_FUN_INNER_PREFIX_MAX || \
                          (op) == T_FUN_INNER_PREFIX_MIN || \
                          ((op) >= T_FUN_ARG_MIN && (op) <= T_FUN_ARG_MAX) || \
-                         ((op) >= T_FUN_GROUPCONCAT) && ((op) <= T_FUN_UNIQ))
+                         ((op) >= T_FUN_CK_GROUPCONCAT) && ((op) <= T_FUN_CK_UNIQ))
 #define MAYBE_ROW_OP(op) ((op) >= T_OP_EQ && (op) <= T_OP_NE)
 #define IS_PSEUDO_COLUMN_TYPE(op) \
   ((op) == T_LEVEL || (op) == T_CONNECT_BY_ISLEAF || (op) == T_CONNECT_BY_ISCYCLE || (op) == T_ORA_ROWSCN)
