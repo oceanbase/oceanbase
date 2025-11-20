@@ -434,7 +434,12 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
     }
     if (OB_SUCC(ret)) {
       ObCompatibilityMode compatibility_mode = get_compatibility_mode();
-      ObCollationType collation_connection = type_ctx.get_coll_type();
+      /* Why return the collation of the parameters for the Oracle system view instead of the tenant collation here?
+       * Because the character set of the data dictionary queried by the
+       * system view does not change with the tenant character set,
+       * so to avoid lossy casting, the collation parameter must be returned here.*/
+      ObCollationType coll_type = (lib::is_oracle_mode() && CM_IS_ORA_SYS_VIEW_CAST(cast_raw_expr->get_cast_mode()))
+                                              ? type1.get_collation_type() : type_ctx.get_coll_type();
       ObCollationType collation_nation = session->get_nls_collation_nation();
       type1.set_calc_type(get_calc_cast_type(type1.get_type(), dst_type.get_type()));
       int32_t length = 0;
@@ -453,7 +458,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
         if (len > 0) { // cast(1 as char(10))
           type.set_full_length(len, length_semantics);
         } else if (OB_FAIL(get_cast_string_len(type1, dst_type, type_ctx, len, length_semantics,
-                                               collation_connection,
+                                               coll_type,
                                                cast_raw_expr->get_cast_mode()))) { // cast (1 as char)
           LOG_WARN("fail to get cast string length", K(ret));
         } else if (len < 0 && !is_called_in_sql() && lib::is_oracle_mode()) {
@@ -471,7 +476,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
         } else {
           // use collation of current session
           type.set_collation_type(ob_is_nstring_type(dst_type.get_type()) ?
-                                  collation_nation : collation_connection);
+                                  collation_nation : coll_type);
         }
       } else if (ob_is_extend(dst_type.get_type())
                  || dst_type.is_user_defined_sql_type()
@@ -490,7 +495,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
           int32_t len = 0;
           int16_t length_semantics = LS_BYTE;//unused
           if (OB_FAIL(get_cast_inttc_len(type1, dst_type, type_ctx, len, length_semantics,
-                                         collation_connection, cast_raw_expr->get_cast_mode()))) {
+                                         coll_type, cast_raw_expr->get_cast_mode()))) {
             LOG_WARN("fail to get cast inttc length", K(ret));
           } else {
             len = len > OB_LITERAL_MAX_INT_LEN ? OB_LITERAL_MAX_INT_LEN : len;
