@@ -18,6 +18,8 @@
 #include "share/rc/ob_tenant_base.h"
 #include "lib/json_type/ob_json_base.h"
 #include "common/ob_smart_call.h"
+#include "share/ob_server_struct.h"
+
 namespace oceanbase
 {
 using namespace common;
@@ -28,26 +30,35 @@ int ObJsonWrapper::get_raw_binary(ObIJsonBase *j_base, ObString &result, ObIAllo
 {
   INIT_SUCC(ret);
   uint64_t tenant_data_version = 0;
-  uint64_t tenant_id = MTL_ID();
-  if (tenant_id == 0) {
-    tenant_id = OB_SYS_TENANT_ID;
-    LOG_INFO("get tenant id zero");
-  }
+  uint64_t tenant_id = 0;
+
   if (OB_ISNULL(allocator) || OB_ISNULL(j_base)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("allocator or j_base is null", K(ret), KP(allocator), KP(j_base));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
-    LOG_WARN("get tenant data version failed", K(ret));
-  } else if (! ((DATA_VERSION_4_2_2_0 <= tenant_data_version && tenant_data_version < DATA_VERSION_4_3_0_0) || tenant_data_version >= DATA_VERSION_4_3_1_0)) {
-    if (OB_FAIL(j_base->get_raw_binary_v0(result, allocator))) {
+  } else if (GCTX.is_obcdc()) {
+    if (OB_FAIL(j_base->get_raw_binary(result, allocator))) {
       LOG_WARN("get raw binary fail", K(ret), K(tenant_data_version), K(tenant_id));
     }
-  } else if (OB_FAIL(SMART_CALL(j_base->get_raw_binary(result, allocator)))) {
-    LOG_WARN("get raw binary fail", K(ret), K(tenant_data_version), K(tenant_id));
+  } else {
+    tenant_id = MTL_ID();
+    if (tenant_id == 0) {
+      tenant_id = OB_SYS_TENANT_ID;
+      LOG_INFO("get tenant id zero");
+    }
+
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+      LOG_WARN("get tenant data version failed", K(ret));
+    } else if (! ((DATA_VERSION_4_2_2_0 <= tenant_data_version && tenant_data_version < DATA_VERSION_4_3_0_0) || tenant_data_version >= DATA_VERSION_4_3_1_0)) {
+      if (OB_FAIL(j_base->get_raw_binary_v0(result, allocator))) {
+        LOG_WARN("get raw binary fail", K(ret), K(tenant_data_version), K(tenant_id));
+      }
+    } else if (OB_FAIL(j_base->get_raw_binary(result, allocator))) {
+      LOG_WARN("get raw binary fail", K(ret), K(tenant_data_version), K(tenant_id));
+    }
   }
+
   return ret;
 }
-
 
 } // end namespace share
 } // end namespace oceanbase

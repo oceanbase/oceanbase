@@ -48,6 +48,7 @@ namespace schema
 {
 class ObColumnSchemaV2;
 class ObTableSchema;
+class ObLocalSessionVar;
 }
 }
 

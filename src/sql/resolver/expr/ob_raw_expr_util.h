@@ -437,7 +437,8 @@ public:
                             bool is_prepare_protocol/*= false*/,
                             TgTimingEvent tg_timing_event = TgTimingEvent::TG_TIMING_EVENT_INVALID,
                             bool use_def_collation = false,
-                            ObCollationType def_collation = CS_TYPE_INVALID);
+                            ObCollationType def_collation = CS_TYPE_INVALID,
+                            bool for_cdc_resolve_generated_col = false);
   static bool is_same_raw_expr(const ObRawExpr *src, const ObRawExpr *dst);
   /// replace all `from' to `to' in the raw_expr
   static int replace_all_ref_column(ObRawExpr *&raw_expr, const common::ObIArray<ObRawExpr *> &exprs, int64_t& offset);

@@ -306,7 +306,7 @@ private:
 
 void column_cast(common::ObObj &obj, const share::schema::ObColumnSchemaV2 &column_schema);
 class ColumnSchemaInfo;
-void column_cast(common::ObObj &obj, const ColumnSchemaInfo &column_schema_info);
+void column_cast(common::ObObj &obj, const ColumnSchemaInfo &column_schema_info, const bool is_out_row);
 
 inline void set_cdc_thread_name(const char* name, const int64_t thread_idx = -1)
 {

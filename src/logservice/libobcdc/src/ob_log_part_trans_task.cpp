@@ -238,7 +238,10 @@ int MutatorRow::parse_columns_(
 
               if (! is_out_row) {
                 OBLOG_FORMATTER_LOG(DEBUG, "is_lob_storage in row", K(column_id), K(is_lob_storage), K(is_parse_new_col), K(lob_common), K(obj));
-                obj.set_string(obj.get_type(), lob_common.get_inrow_data_ptr(), lob_common.get_byte_size(datum.len_));
+                // only DML needs to reserve lob header
+                if (OB_NOT_NULL(all_ddl_operation_table_schema_info)) {
+                  obj.set_string(obj.get_type(), lob_common.get_inrow_data_ptr(), lob_common.get_byte_size(datum.len_));
+                }
               } else if (OB_FAIL(parse_outrow_lob_column_(is_parse_new_col, dml_flag, column_id, lob_common))) {
                 LOG_ERROR("parse_outrow_lob_column_ failed", K(ret), K(obj), K(column_id));
               }
@@ -417,7 +420,7 @@ int MutatorRow::add_column_(
     const common::ObSqlCollectionInfo *collection_info = nullptr;
     // Set meta information and scale information if column schema is valid
     if (NULL != column_schema_info) {
-      column_cast(cv_node->value_, *column_schema_info);
+      column_cast(cv_node->value_, *column_schema_info, is_out_row);
       column_schema_info->get_extended_type_info(extended_type_info);
       collection_info = column_schema_info->get_collection_info();
       accuracy = column_schema_info->get_accuracy();

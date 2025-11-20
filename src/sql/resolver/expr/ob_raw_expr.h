@@ -1805,7 +1805,8 @@ struct ObResolveContext
     is_from_show_resolver_(false),
     is_in_system_view_(false),
     match_exprs_(NULL),
-    formalize_const_int_prec_(false)
+    formalize_const_int_prec_(false),
+    for_cdc_resolve_generated_col_(false)
   {
   }
 
@@ -1858,6 +1859,7 @@ struct ObResolveContext
   bool is_in_system_view_;
   common::ObIArray<ObMatchFunRawExpr*> *match_exprs_;
   bool formalize_const_int_prec_;
+  bool for_cdc_resolve_generated_col_;
 };
 
 typedef ObResolveContext<ObRawExprFactory> ObExprResolveContext;

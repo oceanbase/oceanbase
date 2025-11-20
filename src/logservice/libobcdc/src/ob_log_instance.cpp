@@ -57,7 +57,8 @@
 #include "ob_log_rocksdb_store_service.h" // RocksDbStoreService
 #include "ob_cdc_auto_config_mgr.h"       // CDC_CFG_MGR
 #include "ob_cdc_malloc_sample_info.h"    // ObCDCMallocSampleInfo
-#include "share/ls/ob_ls_log_stat_info.h"          // ObLogserviceModelInfo
+#include "share/ls/ob_ls_log_stat_info.h" // ObLogserviceModelInfo
+#include "observer/ob_server_struct.h"    // GCTX
 
 #include "ob_log_trace_id.h"
 #include "share/ob_simple_mem_limit_getter.h"
@@ -614,6 +615,10 @@ int ObLogInstance::init_common_(uint64_t start_tstamp_ns, ERROR_CALLBACK err_cb)
     // 2. Change the schema to WARN after the startup is complete
     OB_LOGGER.set_mod_log_levels(TCONF.init_log_level.str());
 
+    // set obcdc mode
+    GCTX.init();
+    GCTX.set_is_obcdc(true);
+
     if (OB_FAIL(common::ObClockGenerator::init())) {
       LOG_ERROR("failed to init ob clock generator", KR(ret));
     }
@@ -776,14 +781,15 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   int ret = OB_SUCCESS;
   IObLogErrHandler *err_handler = this;
   int64_t start_seq = DEFAULT_START_SEQUENCE_NUM;
-  bool skip_dirty_data = (TCONF.skip_dirty_data != 0);
-  bool skip_reversed_schema_verison = (TCONF.skip_reversed_schema_verison != 0);
-  bool enable_hbase_mode = (TCONF.enable_hbase_mode != 0);
-  bool enable_backup_mode = (TCONF.enable_backup_mode != 0);
-  bool skip_hbase_mode_put_column_count_not_consistency = (TCONF.skip_hbase_mode_put_column_count_not_consistency != 0);
-  bool enable_convert_timestamp_to_unix_timestamp = (TCONF.enable_convert_timestamp_to_unix_timestamp != 0);
-  bool enable_output_hidden_primary_key = (TCONF.enable_output_hidden_primary_key != 0);
-  bool enable_oracle_mode_match_case_sensitive = (TCONF.enable_oracle_mode_match_case_sensitive != 0);
+  const bool skip_dirty_data = (TCONF.skip_dirty_data != 0);
+  const bool skip_reversed_schema_verison = (TCONF.skip_reversed_schema_verison != 0);
+  const bool enable_hbase_mode = (TCONF.enable_hbase_mode != 0);
+  const bool enable_backup_mode = (TCONF.enable_backup_mode != 0);
+  const bool skip_hbase_mode_put_column_count_not_consistency = (TCONF.skip_hbase_mode_put_column_count_not_consistency != 0);
+  const bool enable_convert_timestamp_to_unix_timestamp = (TCONF.enable_convert_timestamp_to_unix_timestamp != 0);
+  const bool enable_output_hidden_primary_key = (TCONF.enable_output_hidden_primary_key != 0);
+  const bool enable_output_virtual_generated_column = (TCONF.enable_output_virtual_generated_column != 0);
+  const bool enable_oracle_mode_match_case_sensitive = (TCONF.enable_oracle_mode_match_case_sensitive != 0);
   const char *rs_list = TCONF.rootserver_list.str();
   const char *tg_white_list = TCONF.tablegroup_white_list.str();
   const char *tg_black_list = TCONF.tablegroup_black_list.str();
@@ -948,7 +954,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
 
   INIT(trans_ctx_mgr_, ObLogTransCtxMgr, TCONF.sort_trans_participants);
 
-  INIT(meta_manager_, ObLogMetaManager, &obj2str_helper_, enable_output_hidden_primary_key);
+  INIT(meta_manager_, ObLogMetaManager, &obj2str_helper_, enable_output_hidden_primary_key, enable_output_virtual_generated_column);
 
   INIT(resource_collector_, ObLogResourceCollector,
       TCONF.resource_collector_thread_num, TCONF.resource_collector_thread_num_for_br,
@@ -1039,7 +1045,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   INIT(formatter_, ObLogFormatter, TCONF.formatter_thread_num, CDC_CFG_MGR.get_formatter_queue_length(), working_mode_,
       &obj2str_helper_, br_pool_, meta_manager_, schema_getter_, storager_, err_handler,
       skip_dirty_data, enable_hbase_mode, hbase_util_, skip_hbase_mode_put_column_count_not_consistency,
-      enable_output_hidden_primary_key);
+      enable_output_hidden_primary_key, enable_output_virtual_generated_column);
 
   INIT(lob_data_merger_, ObCDCLobDataMerger, TCONF.lob_data_merger_thread_num,
       TCONF.lob_data_merger_queue_length, *err_handler);
@@ -1098,6 +1104,21 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   if (is_mock_fail_on_init) {
     ret = OB_ERR_UNEXPECTED;
   }
+
+  if (OB_SUCC(ret) && enable_output_virtual_generated_column) {
+    ObLogFormatter *formatter_instance = nullptr;
+    // mock sys tenant timezone info
+    if (OB_FAIL(ObCDCTimeZoneInfoGetter::get_instance().init_tenant_tz_info(OB_SYS_TENANT_ID))) {
+      LOG_ERROR("create_sys_tenant_tz_info fail", KR(ret));
+    } else if (OB_ISNULL(formatter_instance = static_cast<ObLogFormatter *>(formatter_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("formatter_instance is nullptr", KR(ret), K(formatter_), K(formatter_instance));
+    } else if (OB_FAIL(formatter_instance->init_after(TCONF.formatter_thread_num))) {
+      LOG_ERROR("formatter init after fail", KR(ret));
+    } else {
+    }
+  }
+
   if (OB_SUCC(ret)) {
     LOG_INFO("init all components done", KR(ret), K(start_tstamp_ns), K_(sys_start_schema_version),
         K_(is_schema_split_mode), K_(enable_filter_sys_tenant));
@@ -2447,7 +2468,7 @@ void ObLogInstance::run1()
 
   if (OB_SUCCESS != ret && OB_IN_STOP_STATE != ret) {
     handle_error(ret, "obcdc daemon thread[idx=%ld] exits, err=%d", lib::ThreadPool::get_thread_idx(), ret);
-    mark_stop_flag("DAEMON THEAD EXIST");
+    mark_stop_flag("DAEMON THREAD EXIST");
   }
 }
 
@@ -3270,6 +3291,7 @@ int ObLogInstance::check_observer_version_valid_()
 
   const uint64_t ob_version = GET_MIN_CLUSTER_VERSION();
   const bool skip_ob_version_compat_check = (0 != TCONF.skip_ob_version_compat_check);
+  const bool enable_output_virtual_generated_column = (0 != TCONF.enable_output_virtual_generated_column);
   uint32_t ob_major = 0;
   uint16_t ob_minor = 0;
   uint8_t  ob_major_patch = 0;
@@ -3308,6 +3330,12 @@ int ObLogInstance::check_observer_version_valid_()
     _LOG_INFO("obcdc_version(%u.%hu.%hu.%hu) in Direct Fetching Log Mode",
         oblog_major_, oblog_minor_, oblog_major_patch_, oblog_minor_patch_);
   } else {}
+
+  const bool is_ob_not_support_cdc_vir_gen_col = ob_version < MOCK_CLUSTER_VERSION_4_2_5_0 || (ob_version >= CLUSTER_VERSION_4_3_0_0 && ob_version < CLUSTER_VERSION_4_3_4_0);
+  if (OB_SUCC(ret) && enable_output_virtual_generated_column && is_ob_not_support_cdc_vir_gen_col) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("OBCDC SYNC VIRTUAL GENERATED COLUMN IS NOT SUPPORTED, REQUIRED OB VERSION: [4.2.5.0, 4.3.0.0) U [4.3.4.0, 4.4.0.0) U [4.4.2.0,), SET enable_out_virtual_generated_column=0", KR(ret), K(ob_version));
+  }
 
   return ret;
 }

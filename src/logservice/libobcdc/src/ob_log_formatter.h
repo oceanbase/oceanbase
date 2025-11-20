@@ -18,20 +18,22 @@
 #ifndef OB_USE_DRCMSG
 #include "ob_cdc_msg_convert.h"
 #else
-#include <drcmsg/binlogBuf.h>                       // binlogBuf
+#include <drcmsg/binlogBuf.h>                           // binlogBuf
 #endif
 
-#include "lib/allocator/ob_allocator.h"             // ObIAllocator
-#include "lib/thread/ob_multi_fixed_queue_thread.h" // ObMQThread
-#include "storage/blocksstable/ob_datum_row.h"      // ObDmlRowFlag
+#include "lib/allocator/ob_allocator.h"                 // ObIAllocator
+#include "lib/thread/ob_multi_fixed_queue_thread.h"     // ObMQThread
+#include "storage/blocksstable/ob_datum_row.h"          // ObDmlFlag
 
-#include "ob_log_binlog_record.h"                   // IBinlogRecord,  ObLogBR
+#include "ob_log_binlog_record.h"                       // IBinlogRecord,  ObLogBR
 
-#include "ob_log_part_trans_task.h"                 // ColValueList, PartTransTask, IStmtTask, DmlStmtTask
-#include "ob_log_schema_cache_info.h"               // TableSchemaInfo
-#include "ob_log_hbase_mode.h"                      // ObLogHbaseUtil
-#include "ob_log_schema_getter.h"                   // DBSchemaInfo
-#include "ob_log_work_mode.h"                       // WorkingMode
+#include "ob_log_part_trans_task.h"                     // ColValueList, PartTransTask, IStmtTask, DmlStmtTask
+#include "ob_log_schema_cache_info.h"                   // TableSchemaInfo
+#include "ob_log_hbase_mode.h"                          // ObLogHbaseUtil
+#include "ob_log_schema_getter.h"                       // DBSchemaInfo
+#include "ob_log_work_mode.h"                           // WorkingMode
+#include "sql/resolver/expr/ob_calc_generated_column.h" // ObCalcGeneratedColumn
+#include "lib/allocator/ob_concurrent_fifo_allocator.h" // ObConcurrentFIFOAllocator
 
 namespace oceanbase
 {
@@ -44,7 +46,6 @@ namespace datadict
 {
 class ObDictTableMeta;
 }
-
 namespace libobcdc
 {
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -120,7 +121,9 @@ public:
       const bool enable_hbase_mode,
       ObLogHbaseUtil &hbase_util,
       const bool skip_hbase_mode_put_column_count_not_consistency,
-      const bool enable_output_hidden_primary_key);
+      const bool enable_output_hidden_primary_key,
+      const bool enable_output_virtual_generated_column);
+  int init_after(const int64_t thread_num);
   void destroy();
 
 private:
@@ -134,6 +137,9 @@ private:
     common::ObString *new_columns_[common::OB_MAX_COLUMN_NUMBER];
     common::ObString *old_columns_[common::OB_MAX_COLUMN_NUMBER];
     common::ObString *orig_default_value_[common::OB_MAX_COLUMN_NUMBER];
+
+    common::ObObj *new_column_objs_[common::OB_MAX_COLUMN_NUMBER];
+    common::ObObj *old_column_objs_[common::OB_MAX_COLUMN_NUMBER];
 
     bool is_rowkey_[common::OB_MAX_COLUMN_NUMBER];
     bool is_changed_[common::OB_MAX_COLUMN_NUMBER];
@@ -161,6 +167,7 @@ private:
       DmlStmtTask &dml_stmt_task,
       RowValue *row_value,
       bool &cur_stmt_need_callback,
+      const int64_t thread_index,
       volatile bool &stop_flag);
 
   int handle_dml_stmt_with_online_schema_(
@@ -168,6 +175,7 @@ private:
       RowValue &row_value,
       ObLogBR &br,
       bool &cur_stmt_need_callback,
+      const int64_t thread_index,
       volatile bool &stop_flag);
 
   int handle_dml_stmt_with_dict_schema_(
@@ -175,6 +183,7 @@ private:
       RowValue &row_value,
       ObLogBR &br,
       bool &cur_stmt_need_callback,
+      const int64_t thread_index,
       volatile bool &stop_flag);
 
   template<class TABLE_SCHEMA>
@@ -190,6 +199,7 @@ private:
       DmlStmtTask &dml_stmt_task,
       ObLogBR &br,
       bool &cur_stmt_need_callback,
+      const int64_t thread_index,
       volatile bool &stop_flag);
 
   template<class TABLE_SCHEMA>
@@ -198,6 +208,8 @@ private:
       const TABLE_SCHEMA &table_schema);
   int init_row_value_array_(const int64_t row_value_num);
   void destroy_row_value_array_();
+  int init_calc_generated_column_array_(const int64_t calc_generated_column_num);
+  void destory_calc_generated_column_array_();
   int set_meta_info_with_online_schema_(
       const uint64_t tenant_id,
       const int64_t global_schema_version,
@@ -228,6 +240,7 @@ private:
       const TABLE_SCHEMA *simple_table_schema,
       int64_t &new_column_cnt,
       bool &cur_stmt_need_callback,
+      const int64_t thread_index,
       volatile bool &stop_flag);
   int handle_lob_ctx_cols_(
       const uint64_t tenant_id,
@@ -261,6 +274,52 @@ private:
       ColValueList &rowkey_cols,
       const TABLE_SCHEMA *simple_table_schema,
       const TableSchemaInfo &tb_schema_info);
+  int fill_virtual_generated_cols_(
+      TableSchemaInfo &tb_schema_info,
+      DmlStmtTask &stmt_task,
+      RowValue *rv,
+      const bool is_new_row,
+      const ObSimpleTableSchemaV2 *simple_table_schema,
+      const ObTimeZoneInfoWrap *tz_info_wrap,
+      const int64_t thread_index,
+      volatile bool &stop_flag);
+  int fill_virtual_generated_cols_(
+      TableSchemaInfo &tb_schema_info,
+      DmlStmtTask &stmt_task,
+      RowValue *rv,
+      const bool is_new_row,
+      const datadict::ObDictTableMeta *table_meta,
+      const ObTimeZoneInfoWrap *tz_info_wrap,
+      const int64_t thread_index,
+      volatile bool &stop_flag);
+  template<class TABLE_SCHEMA>
+  int cal_virtual_generated_columns_(
+      TableSchemaInfo &tb_schema_info,
+      DmlStmtTask &stmt_task,
+      RowValue *rv,
+      const bool is_new_row,
+      const TABLE_SCHEMA *full_table_schema,
+      const ObTimeZoneInfoWrap *tz_info_wrap,
+      const int64_t thread_index);
+  template<class TABLE_SCHEMA>
+  int cal_virtual_generated_column_value_(
+      TableSchemaInfo &tb_schema_info,
+      DmlStmtTask &stmt_task,
+      RowValue *rv,
+      const bool is_new_row,
+      const TABLE_SCHEMA *full_table_schema,
+      const ObTimeZoneInfoWrap *tz_info_wrap,
+      const int64_t thread_index,
+      const VirtualColInfo &virtual_col_info);
+  template<class TABLE_SCHEMA, class COLUMN_SCHEMA>
+  int construct_generated_column_info_(
+      const TABLE_SCHEMA *table_schema,
+      const COLUMN_SCHEMA *column_schema,
+      const ColumnSchemaInfo *column_schema_info,
+      const bool is_generated_column,
+      const common::ObSEArray<sql::ObCalcGeneratedColumnInfo *, 4> &dependcy_column_infos,
+      ObNewRow &dependcy_column_vals,
+      sql::ObCalcGeneratedColumnInfo &generated_column_info);
   template<class TABLE_SCHEMA>
   int build_binlog_record_(
       ObLogBR *br,
@@ -344,25 +403,27 @@ private:
       ColValueList &old_cols);
 
 private:
-  bool                      inited_;
-  WorkingMode               working_mode_;
-  ObObj2strHelper           *obj2str_helper_;
-  IObLogBRPool              *br_pool_;
-  IObLogErrHandler          *err_handler_;
-  IObLogMetaManager         *meta_manager_;
-  IObLogSchemaGetter        *schema_getter_;
-  IObLogStorager            *storager_;
-  RowValue                  *row_value_array_;
-  common::ObArenaAllocator  allocator_;
+  bool                               inited_;
+  WorkingMode                        working_mode_;
+  ObObj2strHelper                    *obj2str_helper_;
+  IObLogBRPool                       *br_pool_;
+  IObLogErrHandler                   *err_handler_;
+  IObLogMetaManager                  *meta_manager_;
+  IObLogSchemaGetter                 *schema_getter_;
+  IObLogStorager                     *storager_;
+  RowValue                           *row_value_array_;
+  common::ObArenaAllocator           allocator_;
   // Used to ensure that statement tasks are evenly distributed to Formatter threads
-  uint64_t                   round_value_;
-  bool                       skip_dirty_data_;
-  bool                       enable_hbase_mode_;
-  ObLogHbaseUtil             *hbase_util_;
-  bool                       skip_hbase_mode_put_column_count_not_consistency_;
-  bool                       enable_output_hidden_primary_key_;
-  int64_t                    log_entry_task_count_;
-  int64_t                    stmt_in_lob_merger_count_;
+  uint64_t                           round_value_;
+  bool                               skip_dirty_data_;
+  bool                               enable_hbase_mode_;
+  ObLogHbaseUtil                     *hbase_util_;
+  bool                               skip_hbase_mode_put_column_count_not_consistency_;
+  bool                               enable_output_hidden_primary_key_;
+  bool                               enable_output_virtual_generated_column_;
+  int64_t                            log_entry_task_count_;
+  int64_t                            stmt_in_lob_merger_count_;
+  sql::ObCalcGeneratedColumn         *calc_generated_column_array_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogFormatter);

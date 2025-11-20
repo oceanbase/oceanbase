@@ -141,6 +141,9 @@ public:
       common::ObTZMapWrap &tz_map_wrap);
   void revert_tenant_tz_info_(ObCDCTenantTimeZoneInfo *tenant_tz_info);
 
+  // Mock sys tenant tz info for virtual generated column
+  int create_sys_tenant_tz_info();
+
 private:
   ObCDCTimeZoneInfoGetter();
   static void *tz_thread_func_(void *args);

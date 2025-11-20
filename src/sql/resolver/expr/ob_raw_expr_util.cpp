@@ -3075,7 +3075,8 @@ int ObRawExprUtils::build_raw_expr(ObRawExprFactory &expr_factory,
                                    bool is_prepare_protocol/*= false*/,
                                    TgTimingEvent tg_timing_event,
                                    bool use_def_collation,
-                                   ObCollationType def_collation)
+                                   ObCollationType def_collation,
+                                   bool for_cdc_resolve_generated_col)
 {
   int ret = OB_SUCCESS;
   ObCollationType collation_connection = CS_TYPE_INVALID;
@@ -3101,6 +3102,7 @@ int ObRawExprUtils::build_raw_expr(ObRawExprFactory &expr_factory,
     ctx.session_info_ = &session_info;
     ctx.secondary_namespace_ = ns;
     ctx.tg_timing_event_ = tg_timing_event;
+    ctx.for_cdc_resolve_generated_col_ = for_cdc_resolve_generated_col;
     ObSEArray<ObUserVarIdentRawExpr*, 1> user_var_exprs;
     ObArray<ObInListInfo> inlist_infos;
     ObSEArray<ObMatchFunRawExpr*, 1> match_exprs;
