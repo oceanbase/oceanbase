@@ -560,6 +560,7 @@ int ObCompactionSuggestionMgr::analyze_merge_info(
 
     if (strlen(buf) > 0) {
       suggestion.merge_type_ = static_info.merge_type_;
+      suggestion.tenant_id_ = MTL_ID();
       suggestion.ls_id_ = static_info.ls_id_.id();
       suggestion.tablet_id_ = static_info.tablet_id_.id();
       suggestion.merge_start_time_ = running_info.merge_start_time_;
