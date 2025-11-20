@@ -1764,7 +1764,7 @@ int ObDMLService::init_fk_checker_array(ObDMLRtCtx &dml_rtctx,
           int64_t estimate_row = dml_rtctx.op_.get_spec().rows_;
           ObIAllocator *allocator = &dml_rtctx.op_.get_exec_ctx().get_allocator();
           if (OB_FAIL(fk_checker->init_foreign_key_checker(estimate_row, expr_frame_info, *fk_arg.fk_ctdef_,
-                                                           dml_ctdef.new_row_, allocator))) {
+                                                           dml_ctdef.new_row_, fk_arg.foreign_key_database_name_, fk_arg.foreign_key_name_, allocator))) {
             LOG_WARN("failed to init foreign key checker", K(ret));
           }
         }

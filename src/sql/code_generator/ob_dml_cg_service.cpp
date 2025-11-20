@@ -3593,6 +3593,8 @@ int ObDmlCgService::generate_fk_arg(ObForeignKeyArg &fk_arg,
   const ObIArray<uint64_t> &value_column_ids = check_parent_table ? fk_info.child_column_ids_ : fk_info.parent_column_ids_;
   const ObIArray<uint64_t> &name_column_ids = check_parent_table ? fk_info.parent_column_ids_ : fk_info.child_column_ids_;
   uint64_t name_table_id = check_parent_table ? fk_info.parent_table_id_ : fk_info.child_table_id_;
+  const ObTableSchema *child_table_schema = NULL;
+  const ObDatabaseSchema *foreign_key_database_schema = NULL;
 
   if (OB_FAIL(generate_dml_column_ids(op, index_dml_info.column_exprs_, column_ids))) {
     LOG_WARN("add column ids failed", K(ret));
@@ -3626,6 +3628,29 @@ int ObDmlCgService::generate_fk_arg(ObForeignKeyArg &fk_arg,
                                          fk_arg.table_name_))) {
     LOG_WARN("failed to deep copy ob string", K(fk_arg),
              K(table_schema->get_table_name()), K(ret));
+  } else if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(),
+                                                   fk_info.child_table_id_,
+                                                   child_table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret), K(fk_info.child_table_id_));
+  } else if (OB_ISNULL(child_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("child table schema is null", K(ret), K(fk_info.child_table_id_));
+  } else if (OB_FAIL(schema_guard.get_database_schema(child_table_schema->get_tenant_id(),
+                                                      child_table_schema->get_database_id(),
+                                                      foreign_key_database_schema))) {
+    LOG_WARN("failed to get database schema", K(ret), K(child_table_schema->get_database_id()));
+  } else if (OB_ISNULL(foreign_key_database_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("foreign key database schema is null", K(ret), K(child_table_schema->get_database_id()));
+  } else if (OB_FAIL(deep_copy_ob_string(allocator,
+                                         foreign_key_database_schema->get_database_name(),
+                                         fk_arg.foreign_key_database_name_))) {
+    LOG_WARN("failed to deep copy ob string", K(ret), K(fk_arg),
+             K(foreign_key_database_schema->get_database_name()));
+  } else if (OB_FAIL(deep_copy_ob_string(allocator,
+                                         fk_info.foreign_key_name_,
+                                         fk_arg.foreign_key_name_))) {
+    LOG_WARN("failed to deep copy ob string", K(ret), K(fk_arg), K(fk_info.foreign_key_name_));
   } else if (FALSE_IT(fk_arg.columns_.reset())) {
   } else if (OB_FAIL(fk_arg.columns_.reserve(name_column_ids.count()))) {
     LOG_WARN("failed to reserve foreign key columns", K(name_column_ids.count()), K(ret));
@@ -3986,14 +4011,27 @@ int ObDmlCgService::convert_foreign_keys(ObLogDelUpd &op,
           if (lib::is_mysql_mode() && fk_info.is_parent_table_mock_) {
             ObSQLSessionInfo *session = nullptr;
             int64_t foreign_key_checks = 0;
+            const ObDatabaseSchema *foreign_key_database_schema = NULL;
             if (OB_ISNULL(op.get_plan())
                 || OB_ISNULL(session = op.get_plan()->get_optimizer_context().get_session_info())) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("session is invalid", K(op.get_plan()), K(session));
             } else if (OB_FAIL(session->get_foreign_key_checks(foreign_key_checks))) {
               LOG_WARN("get foreign_key_checks failed", K(ret));
+            } else if (OB_FAIL(schema_guard->get_database_schema(table_schema->get_tenant_id(),
+                                                                 table_schema->get_database_id(),
+                                                                 foreign_key_database_schema))) {
+              LOG_WARN("failed to get database schema", K(ret), K(table_schema->get_database_id()));
+            } else if (OB_ISNULL(foreign_key_database_schema)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("foreign key database schema is null", K(ret), K(table_schema->get_database_id()));
             } else if (1 == foreign_key_checks) {
               ret = OB_ERR_NO_REFERENCED_ROW;
+              LOG_USER_ERROR(OB_ERR_NO_REFERENCED_ROW,
+                             foreign_key_database_schema->get_database_name_str().length(),
+                             foreign_key_database_schema->get_database_name_str().ptr(),
+                             fk_info.foreign_key_name_.length(),
+                             fk_info.foreign_key_name_.ptr());
               LOG_WARN("insert or update a child table with a mock parent table", K(ret));
             } else { // skip fk check while foreign_key_checks if off
               fk_arg.ref_action_ = ACTION_INVALID;

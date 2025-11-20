@@ -8448,19 +8448,42 @@ int ObDMLResolver::resolve_fk_table_partition_expr(const TableItem &table_item, 
       const uint64_t child_table_id = foreign_key_info.child_table_id_;
       if (child_table_id == table_schema.get_table_id() && !foreign_key_info.is_parent_table_mock_ && foreign_key_info.is_ref_unique_index()) {
         const ObTableSchema *parent_table_schema = nullptr;
+        const ObTableSchema *child_table_schema = NULL;
+        const ObDatabaseSchema *foreign_key_database_schema = NULL;
         bool parent_key_is_pkey = false;
         const common::ObSEArray<uint64_t, 4> &parent_column_ids = foreign_key_info.parent_column_ids_;
         const ObTableSchema *resolve_table_schema = nullptr;
         uint64_t fk_scan_tid = OB_INVALID_ID;
-        if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), parent_table_id, parent_table_schema))) { //NOTE: Can we use this function to get schema here
+        if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), child_table_id, child_table_schema))) {
+          LOG_WARN("failed to get child table schema", K(ret), K(child_table_id));
+        } else if (OB_ISNULL(child_table_schema)) {
+          ret = OB_TABLE_NOT_EXIST;
+          LOG_WARN("child table not exists", K(ret), K(child_table_id));
+        } else if (OB_FAIL(schema_checker_->get_database_schema(session_info_->get_effective_tenant_id(), child_table_schema->get_database_id(), foreign_key_database_schema))) {
+          LOG_WARN("failed to get foreign key database schema", K(ret), K(child_table_schema->get_database_id()));
+        } else if (OB_ISNULL(foreign_key_database_schema)) {
+          ret = OB_ERR_BAD_DATABASE;
+          LOG_WARN("foreign key database schema not exists", K(ret), K(child_table_schema->get_database_id()));
+        } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), parent_table_id, parent_table_schema))) { //NOTE: Can we use this function to get schema here
           if (OB_TABLE_NOT_EXIST == ret) {
             // Note: Parent table not exist, return OB_ERR_NO_REFERENCED_ROW instead of table not exist to ensure compatibility
             ret = OB_ERR_NO_REFERENCED_ROW;
+            LOG_USER_ERROR(OB_ERR_NO_REFERENCED_ROW,
+                           foreign_key_database_schema->get_database_name_str().length(),
+                           foreign_key_database_schema->get_database_name_str().ptr(),
+                           foreign_key_info.foreign_key_name_.length(),
+                           foreign_key_info.foreign_key_name_.ptr());
+            LOG_WARN("parent table not exists", K(parent_table_id));
           }
           LOG_WARN("get parent table schema from schema checker failed", K(ret), K(parent_table_id));
         } else if (OB_ISNULL(parent_table_schema)) {
           // Note: Parent table not exist, return OB_ERR_NO_REFERENCED_ROW instead of table not exist to ensure compatibility
           ret = OB_ERR_NO_REFERENCED_ROW;
+          LOG_USER_ERROR(OB_ERR_NO_REFERENCED_ROW,
+                         foreign_key_database_schema->get_database_name_str().length(),
+                         foreign_key_database_schema->get_database_name_str().ptr(),
+                         foreign_key_info.foreign_key_name_.length(),
+                         foreign_key_info.foreign_key_name_.ptr());
           LOG_WARN("parent table not exists", K(parent_table_id));
         } else if (OB_FAIL(parent_table_schema->get_fk_check_index_tid(*schema_checker_->get_schema_guard(), parent_column_ids, fk_scan_tid))) {
           LOG_WARN("failed to get table id to perform scan task for foreign key check", K(ret));
