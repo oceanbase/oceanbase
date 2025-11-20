@@ -11842,5 +11842,19 @@
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""
+  },
+  "ob_enable_pl_async_commit": {
+    "id": 10759,
+    "name": "ob_enable_pl_async_commit",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "bool",
+    "info": "Whether the PL/SQL async response is used",
+    "flags": "SESSION | GLOBAL | NEED_SERIALIZE",
+    "publish_version": "4.4.2.0",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": "",
+    "placeholder": true
   }
 }
