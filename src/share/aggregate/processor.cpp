@@ -754,6 +754,13 @@ int Processor::single_row_agg_batch(AggrRowPtr *agg_rows, const int64_t batch_si
     ret = OB_ERR_UNEXPECTED;
     SQL_LOG(WARN, "unexpected null aggregate rows", K(ret));
   } else if (FALSE_IT(MEMSET(agg_rows[0], 0, get_aggregate_row_size() * batch_size))) {
+  } else {
+    // do nothing
+  }
+  ObArenaAllocator tmp_alloc("TmpAggBypass", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ObCtxIds::WORK_AREA);
+  RuntimeContext::TmpAllocGuard tmp_alloc_guard(agg_ctx_);
+  tmp_alloc_guard.set_data_allocator(tmp_alloc);
+  if (OB_FAIL(ret)) {
   } else if (!support_fast_single_row_agg_) {
     for (int i = 0; OB_SUCC(ret) && i < batch_size; i++) {
       if (skip.at(i)) {

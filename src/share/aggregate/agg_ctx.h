@@ -223,12 +223,14 @@ struct RuntimeContext
                  const lib::ObLabel &label) :
     eval_ctx_(eval_ctx),
     aggr_infos_(aggr_infos),
-    allocator_(label, OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id, ObCtxIds::WORK_AREA),
     op_monitor_info_(nullptr), io_event_observer_(nullptr), agg_row_meta_(),
     agg_rows_(ModulePageAllocator(label, tenant_id, ObCtxIds::WORK_AREA)),
     agg_extras_(ModulePageAllocator(label, tenant_id, ObCtxIds::WORK_AREA)), removal_info_(),
     win_func_agg_(false), hp_infras_mgr_(nullptr), rollup_context_(nullptr), distinct_count_(0),
-    flag_(0), rb_allocator_(nullptr)
+    flag_(0), rb_allocator_(nullptr),
+    inner_data_allocator_(label, OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id, ObCtxIds::WORK_AREA),
+    data_alloc_wrapper_(&inner_data_allocator_),
+    allocator_(data_alloc_wrapper_)
   {}
 
   inline const AggrRowMeta &row_meta() const
@@ -365,7 +367,7 @@ struct RuntimeContext
     free_rb_allocator();
     distinct_count_ = 0;
     agg_extras_.reuse();
-    allocator_.reset_remain_one_page();
+    inner_data_allocator_.reset_remain_one_page();
     removal_info_.reset();
   }
   void destroy()
@@ -382,7 +384,7 @@ struct RuntimeContext
     free_rb_allocator();
     agg_rows_.reset();
     agg_extras_.reset();
-    allocator_.reset();
+    inner_data_allocator_.reset();
     op_monitor_info_ = nullptr;
     io_event_observer_ = nullptr;
     agg_row_meta_.reset();
@@ -425,11 +427,26 @@ struct RuntimeContext
   bool has_extra() const { return has_extra_; }
   bool need_advance_collect() const { return need_advance_collect_; }
   bool is_in_window_func() const { return in_window_func_; }
+public:
+  struct TmpAllocGuard
+  {
+    TmpAllocGuard(RuntimeContext &agg_ctx) : agg_ctx_(agg_ctx), org_allocator_ptr_(&agg_ctx_.inner_data_allocator_) {}
+
+    void set_data_allocator(ObIAllocator &allocator) {
+      agg_ctx_.data_alloc_wrapper_.set_alloc(&allocator);
+    }
+
+    ~TmpAllocGuard() {
+      agg_ctx_.data_alloc_wrapper_.set_alloc(org_allocator_ptr_);
+    }
+
+  private:
+    RuntimeContext &agg_ctx_;
+    ObIAllocator *org_allocator_ptr_;
+  };
 
   sql::ObEvalCtx &eval_ctx_;
   ObIArray<ObAggrInfo> &aggr_infos_;
-  // used to allocate runtime data memory, such as rows for distinct extra.
-  ObArenaAllocator allocator_;
   sql::ObMonitorNode *op_monitor_info_;
   sql::ObIOEventObserver *io_event_observer_;
   AggrRowMeta agg_row_meta_;
@@ -453,6 +470,12 @@ struct RuntimeContext
     };
   };
   ObRbAggAllocator *rb_allocator_;
+private:
+  // used to allocate runtime data memory, such as rows for distinct extra.
+  ObArenaAllocator inner_data_allocator_;
+  ObWrapperAllocator data_alloc_wrapper_;
+public:
+  ObIAllocator &allocator_;
 };
 
 /*

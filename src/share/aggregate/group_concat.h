@@ -326,7 +326,7 @@ protected:
   }
 
   inline int extend_string(ObString &base_string, const int32_t length,
-                           common::ObArenaAllocator &allocator)
+                           common::ObIAllocator &allocator)
   {
     int ret = OB_SUCCESS;
     int original_length = base_string.length();
@@ -348,7 +348,7 @@ protected:
 
   // If the space not enough, double the space.
   inline int ensure_string_space(ObString &base_string, const int32_t append_length,
-                                 common::ObArenaAllocator &allocator,
+                                 common::ObIAllocator &allocator,
                                  const uint64_t max_length = INT64_MAX)
   {
     int ret = OB_SUCCESS;
