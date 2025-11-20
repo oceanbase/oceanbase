@@ -34,6 +34,7 @@ ERRSIM_POINT_DEF(EN_COMPACTION_DELAY_FOLLOWER_ROWKEY_CG_MERGE);
 ERRSIM_POINT_DEF(EN_COMPACTION_TX_DATA_RECYCLED);
 ERRSIM_POINT_DEF(EN_COMPACTION_BATCH_EXE_ALLOC_MEM_FAILED);
 ERRSIM_POINT_DEF(EN_COMPACTION_CANCEL_WITH_SINGLE_FINISH_DAG);
+ERRSIM_POINT_DEF(EN_COMPACTION_ASSIGN_TABLE_HANDLES_FAILED);
 ObCOMergeDagParam::ObCOMergeDagParam()
   : ObTabletMergeDagParam(),
     start_cg_idx_(0),
@@ -416,7 +417,8 @@ int ObCOMergeScheduleTask::process()
   } else if (static_cast<ObCOMergeScheduleDag *>(get_dag())->get_swap_tablet_flag()
       && OB_FAIL(dag_net_->swap_tablet_after_minor())) {
     LOG_WARN("failed to swap tablet after minor", K(ret));
-  } else if (OB_FAIL(dag_net_->create_co_execute_dags(*get_dag()))) {
+  } else if (FALSE_IT(dag_net_->update_merge_status(ObCOMergeDagNet::PREPARE_FINISHED))) {
+  } else if (OB_FAIL(dag_net_->create_co_execute_dags(*get_dag()))) { // allow failure
     LOG_WARN("failed to create execute dags in schedule task", K(ret));
   }
 #ifdef ERRSIM
@@ -428,7 +430,6 @@ int ObCOMergeScheduleTask::process()
     }
   }
 #endif
-  dag_net_->update_merge_status(ObCOMergeDagNet::PREPARE_FINISHED);
   if (OB_FAIL(ret)) {
     dag_net_->cancel_dag_net(ret);
   }
@@ -1127,7 +1128,8 @@ ObCOMergeDagNet::ObCOMergeDagNet()
     co_merge_ctx_(nullptr),
     finish_dag_(nullptr),
     time_guard_(),
-    min_sstable_end_scn_(-1)
+    min_sstable_end_scn_(-1),
+    failed_retry_count_(0)
 {
 }
 
@@ -1224,6 +1226,20 @@ int ObCOMergeDagNet::schedule_rest_dag()
 #endif
       if (FAILEDx(inner_create_and_schedule_dags())) {
         LOG_WARN("failed to create and schedule rest dags", K(ret));
+        bool force_cancel = false;
+        if (ObCOMergeScheduleDag::can_ignore_warning(ret)) {
+          failed_retry_count_++;
+          force_cancel = failed_retry_count_ >= DEFAULT_MAX_DAG_NET_RETRY_TIMES;
+        } else {
+          force_cancel = true;
+        }
+        if (force_cancel) {
+          LOG_WARN("force cancel co dag net", K(ret), KPC(this));
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(set_cancel())) { // co merge dag net do not deal with cancel, so ignore ret
+            LOG_WARN_RET(tmp_ret, "failed to set dag net cancel", K(ret));
+          }
+        }
       }
     }
   }
@@ -1549,6 +1565,11 @@ int ObCOMergeDagNet::swap_tablet_after_minor()
   }
 #ifdef ERRSIM
   DEBUG_SYNC(MAJOR_MERGE_PREPARE);
+  if (OB_UNLIKELY(EN_COMPACTION_ASSIGN_TABLE_HANDLES_FAILED)) {
+    LOG_INFO("ERRSIM EN_COMPACTION_ASSIGN_TABLE_HANDLES_FAILED", K(ret));
+    ret = EN_COMPACTION_ASSIGN_TABLE_HANDLES_FAILED;
+    SERVER_EVENT_SYNC_ADD("merge_errsim", "assign_tables_handles_failed", "ret_code", ret);
+  }
 #endif
   if (FAILEDx(co_merge_ctx_->static_param_.tables_handle_.assign(tmp_result.handle_))) {
     LOG_WARN("failed to assign tables handle", K(ret), K(tmp_result));
