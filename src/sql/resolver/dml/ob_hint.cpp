@@ -407,6 +407,7 @@ void ObGlobalHint::reset()
   parallel_das_dml_option_ = ObParallelDASOption::NOT_SPECIFIED;
   px_node_hint_.reset();
   disable_op_rich_format_hint_.reset();
+  trigger_hint_.reset();
   has_hint_exclude_concurrent_ = false;
 }
 
@@ -453,6 +454,8 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
     LOG_WARN("failed to merge px_node_addrs", K(ret));
   } else if (OB_FAIL(disable_op_rich_format_hint_.merge_hint(other.disable_op_rich_format_hint_))) {
     LOG_WARN("merge disable op rich format hint failed", K(ret));
+  } else if (OB_FAIL(trigger_hint_.merge_trigger_hint(other.trigger_hint_))) {
+    LOG_WARN("merge trigger hint failed", K(ret));
   }
   return ret;
 }
@@ -654,6 +657,10 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
 
   if (OB_SUCC(ret) && OB_FAIL(disable_op_rich_format_hint_.print(plan_text))) {
     LOG_WARN("print disable op rich format hint failed", K(ret));
+  }
+
+if (OB_SUCC(ret) && OB_FAIL(trigger_hint_.print_trigger_hint(plan_text))) {
+    LOG_WARN("print trigger hint failed", K(ret));
   }
 
   if (OB_SUCC(ret) && UNSET_MAX_CONCURRENT != max_concurrent_ && plan_text.is_used_hint_) { // MAX_CONCURRENT
@@ -1455,6 +1462,7 @@ const char* ObHint::get_hint_name(ObItemType type, bool is_enable_hint /* defaul
     case T_INDEX_DESC_HINT:   return "INDEX_DESC";
     case T_PUSH_SUBQ:         return is_enable_hint ? "PUSH_SUBQ" : "NO_PUSH_SUBQ";
     case T_TABLE_LOCK_MODE_HINT: return "TABLE_LOCK_MODE";
+    case T_DISABLE_TRIGGER_HINT: return "DISABLE_TRIGGER";
     default:                    return NULL;
   }
 }
@@ -3816,6 +3824,46 @@ int DisableOpRichFormatHint::print(PlanText &plan_text) const
   }
   return ret;
 }
+
+int TriggerHint::print_trigger_hint(PlanText &plan_text) const
+{
+  int ret = OB_SUCCESS;
+  char *buf = plan_text.buf_;
+  int64_t &buf_len = plan_text.buf_len_;
+  int64_t &pos = plan_text.pos_;
+  const char* outline_indent = ObQueryHint::get_outline_indent(plan_text.is_oneline_);
+  if (OB_SUCC(ret)) {
+    if (disable_all_) {
+      PRINT_GLOBAL_HINT_STR("DISABLE_TRIGGER")
+    } else if (!trigger_hints_.empty()) {
+      if (OB_FAIL(BUF_PRINTF("%sDISABLE_TRIGGER(", outline_indent))) {
+        LOG_WARN("buf_printf failed", K(ret));
+      }
+      for (int i = 0; OB_SUCC(ret) && i < trigger_hints_.count(); i++) {
+        if (OB_FAIL(BUF_PRINTF("'%s'", trigger_hints_.at(i).ptr()))) {
+          LOG_WARN("buf printf failed", K(ret));
+        } else if (i == trigger_hints_.count() - 1 && OB_FAIL(BUF_PRINTF(")"))) {
+          LOG_WARN("buf printf failed", K(ret));
+        } else if (i < trigger_hints_.count() - 1 && OB_FAIL(BUF_PRINTF(", "))) {
+          LOG_WARN("BUF_PRINTF failed", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int TriggerHint::merge_trigger_hint(const TriggerHint &other)
+{
+    disable_all_ = disable_all_ || other.disable_all_;
+    int ret = OB_SUCCESS;
+    for (int64 i = 0; OB_SUCC(ret) && i < other.trigger_hints_.count(); i++) {
+      if (OB_FAIL(trigger_hints_.push_back(other.trigger_hints_.at(i)))) {
+        LOG_WARN("failed to push back trigger hint", K(ret));
+      }
+    }
+    return ret;
+  }
 
 }//end of namespace sql
 }//end of namespace oceanbase

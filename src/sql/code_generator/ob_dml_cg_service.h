@@ -303,6 +303,9 @@ private:
                               ObDMLBaseCtDef &dml_base_ctdef,
                               common::ObIArray<ObRawExpr*> &old_row,
                               common::ObIArray<ObRawExpr*> &new_row);
+  int is_disable_trigger(ObLogPlan *log_plan,
+                         ObString trigger_name,
+                         bool &is_disabled);
   int convert_normal_triggers(ObLogDelUpd &log_op,
                               const IndexDMLInfo &dml_info,
                               ObDMLBaseCtDef &dml_ctdef,

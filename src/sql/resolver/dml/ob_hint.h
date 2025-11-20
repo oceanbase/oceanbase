@@ -354,6 +354,27 @@ struct DisableOpRichFormatHint
   int64_t op_flags_;
 };
 
+struct TriggerHint
+{
+  TriggerHint(): disable_all_(false), trigger_hints_() {}
+  void set_disable_all(bool disable) { disable_all_ = disable; }
+  bool get_disable_all() const { return disable_all_; }
+
+  int print_trigger_hint(PlanText &plan_text) const;
+  int add_trigger_hint(ObString trigger_name) { return trigger_hints_.push_back(trigger_name); }
+  const ObIArray<ObString> &get_trigger_hints() const { return trigger_hints_; }
+  void reset() {
+    disable_all_ = false;
+    trigger_hints_.reset();
+  }
+  int merge_trigger_hint(const TriggerHint &other);
+
+  TO_STRING_KV(K_(disable_all),
+               K_(trigger_hints));
+  bool disable_all_;
+  common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> trigger_hints_; // holds table hints whose triggers to disable
+};
+
 struct ObGlobalHint {
   ObGlobalHint() { reset(); }
   void reset();
@@ -529,7 +550,8 @@ struct ObGlobalHint {
                K_(alloc_op_hints),
                K_(dblink_hints),
                K_(px_node_hint),
-               K_(disable_op_rich_format_hint));
+               K_(disable_op_rich_format_hint),
+               K_(trigger_hint));
 
   int64_t frozen_version_;
   int64_t topk_precision_;
@@ -565,6 +587,7 @@ struct ObGlobalHint {
   common::ObString resource_group_;
   ObPxNodeHint px_node_hint_;
   DisableOpRichFormatHint disable_op_rich_format_hint_;
+  TriggerHint trigger_hint_;
 private:
   bool has_hint_exclude_concurrent_;  // not hint, used to mark weather exists hint exclude max_concurrent
 };
@@ -723,8 +746,8 @@ public:
       HINT_JOIN_FILTER,
       HINT_TABLE_DYNAMIC_SAMPLING,
       HINT_PQ,
-      HINT_INDEX_MERGE
-    };
+      HINT_INDEX_MERGE,
+      HINT_TRIGGER    };
 
   static const int64_t MAX_EXPR_STR_LENGTH_IN_HINT = 1024;
 

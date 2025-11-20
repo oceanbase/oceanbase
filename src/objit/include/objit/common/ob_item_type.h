@@ -2950,6 +2950,7 @@ typedef enum ObItemType
   T_TABLE_VERSION_QUERY = 4918,
   T_TABLE_VERSION_QUERY_TIMESTAMP = 4919,
   T_TABLE_LOCK_MODE_HINT = 4920,  // to lock table before execute dml
+  T_DISABLE_TRIGGER_HINT = 4936, // for trigger hint
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

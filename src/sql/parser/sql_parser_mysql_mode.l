@@ -1211,6 +1211,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>PX_NODE_COUNT {return PX_NODE_COUNT; }
 <hint>DISABLE_OP_RICH_FORMAT { return DISABLE_OP_RICH_FORMAT; }
 <hint>TABLE_LOCK_MODE { return TABLE_LOCK_MODE; }
+<hint>DISABLE_TRIGGER { return DISABLE_TRIGGER; }
 <hint>{identifier} {
   if (!(IS_FAST_PARAMETERIZE)) {
     check_value(yylval);
