@@ -17810,8 +17810,8 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15534', all_def_keyword
 # 15536: __all_virtual_wr_sqlstat_v2
 # 15537: __all_virtual_lob_check_exception_result
 
-# 15538: all_sensitive_rule_real_agent
-# 15539: all_sensitive_column_real_agent
+# 15538: all_virtual_sensitive_rule_real_agent
+# 15539: all_virtual_sensitive_column_real_agent
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
