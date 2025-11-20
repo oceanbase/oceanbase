@@ -1187,6 +1187,17 @@ bool ObTableStoreUtil::ObITableEndScnCompare::operator()(
   return bret;
 }
 
+bool ObTableStoreUtil::ObITableDDLCompare::operator()(
+     const ObITable *ltable, const ObITable *rtable) const
+{
+  bool bret = false;
+  if (OB_SUCCESS != result_code_) {
+  } else if (OB_SUCCESS != (result_code_ = compare_table_by_scn_range_and_slice_range(ltable, rtable, bret))) {
+    LOG_WARN_RET(result_code_, "failed to compare table with end scn", K(result_code_), KPC(ltable), KPC(rtable));
+  }
+  return bret;
+}
+
 bool ObTableStoreUtil::ObTableHandleV2LogTsRangeCompare::operator()(
      const ObTableHandleV2 &lhandle, const ObTableHandleV2 &rhandle) const
 {
@@ -1310,6 +1321,37 @@ int ObTableStoreUtil::compare_table_by_end_scn(const ObITable *ltable, const ObI
   return ret;
 }
 
+int ObTableStoreUtil::compare_table_by_scn_range_and_slice_range(const ObITable *ltable, const ObITable *rtable, bool &bret)
+{
+  int ret = OB_SUCCESS;
+  bret = false;
+  if (OB_ISNULL(ltable)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("left store must not null", K(ret));
+  } else if (OB_ISNULL(rtable)) {
+    bret = true;
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("right store must not null", K(ret));
+  } else {
+    const ObITable::TableKey &lkey = ltable->get_key();
+    const ObITable::TableKey &rkey = rtable->get_key();
+    bret = lkey.scn_range_.start_scn_ < rkey.scn_range_.start_scn_;
+    if (lkey.scn_range_.start_scn_ == rkey.scn_range_.start_scn_) {
+      bret = lkey.scn_range_.end_scn_ < rkey.scn_range_.end_scn_;
+      if (lkey.scn_range_.end_scn_ == rkey.scn_range_.end_scn_) {
+        bret = lkey.slice_range_.start_slice_idx_ < rkey.slice_range_.start_slice_idx_;
+        if (lkey.slice_range_.start_slice_idx_ == rkey.slice_range_.start_slice_idx_) {
+          bret = lkey.slice_range_.end_slice_idx_ < rkey.slice_range_.end_slice_idx_;
+          if (lkey.slice_range_.end_slice_idx_ == rkey.slice_range_.end_slice_idx_) {
+            bret = lkey.column_group_idx_ < rkey.column_group_idx_;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTableStoreUtil::sort_major_tables(ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> &tables)
 {
   int ret = OB_SUCCESS;
@@ -1333,8 +1375,13 @@ int ObTableStoreUtil::sort_column_store_tables(ObSEArray<ObITable *, MAX_SSTABLE
   if (tables.empty()) {
     // no need sort
   } else {
-    ObITableEndScnCompare comp(ret);
-    lib::ob_sort(tables.begin(), tables.end(), comp);
+    if (tables.at(0)->is_ddl_sstable()) {
+      ObITableDDLCompare comp(ret);
+      lib::ob_sort(tables.begin(), tables.end(), comp);
+    } else {
+      ObITableEndScnCompare comp(ret);
+      lib::ob_sort(tables.begin(), tables.end(), comp);
+    }
     if (OB_FAIL(ret)) {
       LOG_ERROR("failed to sort tables", K(ret), K(tables));
     }

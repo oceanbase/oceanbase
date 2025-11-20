@@ -2506,7 +2506,7 @@ int ObStorageHATabletBuilderUtil::assemble_column_oriented_sstable_(
   // [CO_1, CO_N, CG_1_1, CG_1_2, ..., CG_N_1, CG_N_2]
   for (int64_t co_idx = 0; OB_SUCC(ret) && co_idx < co_table_cnt; ++co_idx) {
     ObCOSSTableV2 *co_sstable = static_cast<ObCOSSTableV2 *>(column_store_tables.at(co_idx));
-    const int64_t co_snapshot_version = co_sstable->get_snapshot_version();
+    const ObITable::TableKey &co_key = co_sstable->get_key();
     cur_cg_tables.reset();
 
     if (co_sstable->is_inited()) {
@@ -2515,11 +2515,15 @@ int ObStorageHATabletBuilderUtil::assemble_column_oriented_sstable_(
     } else {
       for (int64_t cg_idx = start_cg_idx; OB_SUCC(ret) && cg_idx < column_store_tables.count(); ++cg_idx) {
         ObITable *cg_table = column_store_tables.at(cg_idx);
-        if (co_snapshot_version != cg_table->get_snapshot_version()) {
+        const ObITable::TableKey &cg_key = cg_table->get_key();
+        // cg should match co by scn_range and slice_range
+        if (cg_key.scn_range_ != co_key.scn_range_
+            || cg_key.slice_range_ != co_key.slice_range_) {
           if (cur_cg_tables.empty()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("co table mismatch cg table!", K(ret), K(co_idx), K(co_table_cnt), K(start_cg_idx), K(cg_idx),
-                K(co_snapshot_version), KPC(cg_table), K(column_store_tables));
+                K(co_key.scn_range_), K(cg_key.scn_range_),
+                K(co_key.slice_range_), K(cg_key.slice_range_), K(column_store_tables));
           } else {
             start_cg_idx += cur_cg_tables.count();
           }

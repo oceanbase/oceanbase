@@ -222,6 +222,14 @@ struct ObTableStoreUtil
     int &result_code_;
   };
 
+  struct ObITableDDLCompare {
+    explicit ObITableDDLCompare(int &sort_ret)
+      : result_code_(sort_ret) {}
+    bool operator()(const ObITable *ltable, const ObITable *rtable) const;
+
+    int &result_code_;
+  };
+
   struct ObTableHandleV2LogTsRangeCompare {
     explicit ObTableHandleV2LogTsRangeCompare(int &sort_ret)
       : result_code_(sort_ret) {}
@@ -249,6 +257,7 @@ struct ObTableStoreUtil
   static int compare_table_by_scn_range(const ObITable *ltable, const ObITable *rtable, const bool is_ascend, bool &bret);
   static int compare_table_by_snapshot_version(const ObITable *ltable, const ObITable *rtable, bool &bret);
   static int compare_table_by_end_scn(const ObITable *ltable, const ObITable *rtable, bool &bret);
+  static int compare_table_by_scn_range_and_slice_range(const ObITable *ltable, const ObITable *rtable, bool &bret);
 
   static int sort_minor_tables(ObArray<ObITable *> &tables);
   static int reverse_sort_minor_table_handles(ObArray<ObTableHandleV2> &table_handles);
