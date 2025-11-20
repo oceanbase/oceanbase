@@ -96,7 +96,8 @@ int ObTransService::acquire_tx(ObTxDesc *&tx,
                                const uint64_t cluster_version)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(tx_desc_mgr_.alloc(tx))) {
+  const bool in_tenant_space = !(session_id == observer::ObInnerSQLConnection::INNER_SQL_SESS_ID);
+  if (OB_FAIL(tx_desc_mgr_.alloc(tx, in_tenant_space))) {
     TRANS_LOG(WARN, "alloc tx fail", K(ret));
   } else {
     ret = init_tx_(*tx, session_id, client_sid, cluster_version);
