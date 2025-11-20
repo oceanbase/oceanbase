@@ -39,11 +39,12 @@ bool ObDomainIdUtils::is_domain_id_index_col(const void *col_schema)
   return bret;
 }
 
-bool ObDomainIdUtils::check_table_need_column_ref_in_ddl(share::schema::ObSchemaGetterGuard &schema_guard,
+bool ObDomainIdUtils::check_table_no_need_column_ref_in_ddl(share::schema::ObSchemaGetterGuard &schema_guard,
                                                          const void *data_table_schema, const void *table_schema,
                                                          const ObColumnSchemaV2 *col_schema)
 {
-  // true: needs to generate an expression
+  // true: no need column_ref, need generate an expression
+  // false: need column_ref
   int ret = OB_SUCCESS;
   bool bret = false;
   const schema::ObTableSchema *table = reinterpret_cast<const schema::ObTableSchema *>(table_schema);
@@ -62,9 +63,8 @@ bool ObDomainIdUtils::check_table_need_column_ref_in_ddl(share::schema::ObSchema
         }
       }
     } else {
-      bret = table->is_rowkey_doc_id() || table->is_vec_rowkey_vid_type() ||
-             table->is_vec_ivfflat_rowkey_cid_index() || table->is_vec_ivfsq8_rowkey_cid_index() ||
-             table->is_vec_ivfpq_rowkey_cid_index() ||
+      // if is_vec_ivf_index but not (is_vec_ivfflat_cid_vector_index && is_vec_ivfsq8_cid_vector_index && is_vec_ivfpq_code_index), need column_ref
+      bret = table->is_rowkey_doc_id() || table->is_vec_rowkey_vid_type() || table->is_vec_ivf_index() ||
              (col_schema->is_hybrid_embedded_vec_column() && table->is_hybrid_vec_index_embedded_type());
     }
   }

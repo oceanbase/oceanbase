@@ -48,7 +48,7 @@ public:
   typedef common::ObSEArray<ObString, 2> DomainIds;
   /* DML Resolver Begin */
   static bool is_domain_id_index_col(const void *col_schema);
-  static bool check_table_need_column_ref_in_ddl(share::schema::ObSchemaGetterGuard &schema_guard,
+  static bool check_table_no_need_column_ref_in_ddl(share::schema::ObSchemaGetterGuard &schema_guard,
                                                  const void *data_table_schema, const void *table_schema,
                                                  const ObColumnSchemaV2 *col_schema);
   /* DML Resolver End */

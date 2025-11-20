@@ -21535,7 +21535,7 @@ int ObDMLResolver::check_domain_id_need_column_ref_expr(ObDMLStmt &stmt, ObSchem
       } else if (OB_ISNULL(ddl_table_schema) || OB_ISNULL(schema_guard)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ddl table schema or schema guard is nullptr", K(ret), K(insert_stmt->get_table_item(0)->ddl_table_id_), K(ddl_table_schema));
-      } else if (ObDomainIdUtils::check_table_need_column_ref_in_ddl(*schema_guard, data_table, ddl_table_schema, col_schema)) {
+      } else if (ObDomainIdUtils::check_table_no_need_column_ref_in_ddl(*schema_guard, data_table, ddl_table_schema, col_schema)) {
         need_column_ref_expr = false;
       }
     }
