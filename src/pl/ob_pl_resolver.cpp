@@ -4406,6 +4406,20 @@ int ObPLResolver::resolve_assign(const ObStmtNodeTree *parse_tree, ObPLAssignStm
                     ObDataType data_type;
                     ObPLDataType pl_type;
                     OZ (ObRawExprUtils::extract_real_result_type(*value_expr, resolve_ctx_.session_info_, data_type));
+                    sql::ObRawExprResType& res_type = const_cast<sql::ObRawExprResType&>(value_expr->get_result_type());
+                    if (OB_SUCC(ret) 
+                        && is_question_mark_value(value_expr, &(current_block_->get_namespace()))
+                        && ob_is_numeric_type(res_type.get_type())
+                        && res_type.get_scale() < 0) {
+                      ObScale default_scale =
+                        ObAccuracy::DDL_DEFAULT_ACCURACY2[lib::is_oracle_mode()][res_type.get_type()].get_scale();
+                      if (ob_is_integer_type(res_type.get_type())) {
+                        OX (res_type.set_scale(default_scale);)
+                      } else {
+                        OX (res_type.set_scale(0));
+                      }
+                    }
+                    OX (data_type.set_accuracy(res_type.get_accuracy()));
                     OX (pl_type.set_data_type(data_type));
                     OX (set_question_mark_type( into_expr, 
                                                 &(current_block_->get_namespace()), 
