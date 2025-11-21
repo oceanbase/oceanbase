@@ -4317,7 +4317,7 @@ int ObTabletTableStore::replace_ha_remote_sstables_(
     } else if (!has_backup_macro) {
       // this table does not has backup macro block, no need to be replaced.
       if (check_continue && OB_NOT_NULL(last_table)
-        && new_table->get_key().slice_range_ == last_table->get_key().slice_range_
+        && old_table->get_key().slice_range_ == last_table->get_key().slice_range_
         && old_table->get_start_scn() != last_table->get_end_scn()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table is not continue", K(ret), KPC(last_table), KPC(old_table));
