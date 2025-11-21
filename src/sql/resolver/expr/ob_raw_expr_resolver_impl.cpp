@@ -1477,6 +1477,12 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
         }
         break;
       }
+      case T_FUNC_SYS_STRING_TO_ARRAY: {
+        if (OB_FAIL(process_split_node(node, expr))) {
+          LOG_WARN("fail to process split node", K(ret));
+        }
+        break;
+      }
       default:
         ret = OB_ERR_PARSER_SYNTAX;
         LOG_WARN("Wrong type in expression", K(get_type_name(node->type_)));
@@ -1646,6 +1652,8 @@ int ObRawExprResolverImpl::process_array_contains_node(const ParseNode *node, Ob
   if (OB_ISNULL(node)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(node));
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(2 != node->num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected param num", K(node));
@@ -3806,6 +3814,37 @@ int ObRawExprResolverImpl::process_lambda_var_node(const ParseNode *node, ObRawE
   } else {
     para_expr->set_ref_index(node->reserved_);
     expr = para_expr;
+  }
+  return ret;
+}
+
+int ObRawExprResolverImpl::process_split_node(const ParseNode *node, ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObSysFunRawExpr *func_expr = NULL;
+  if (OB_ISNULL(node) || OB_UNLIKELY(node->num_child_ != 2)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(node));
+  } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(node->type_, func_expr))) {
+    LOG_WARN("fail to create raw expr", K(ret));
+  } else if (OB_FAIL(func_expr->init_param_exprs(node->num_child_))) {
+    LOG_WARN("failed to init param exprs", K(ret));
+  } else {
+    func_expr->set_func_name(N_STRING_TO_ARRAY);
+    for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
+      ObRawExpr *para_expr = NULL;
+      if (OB_ISNULL(node->children_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid expr list node children", K(ret), K(i), K(node->children_[i]));
+      } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[i], para_expr)))) {
+        LOG_WARN("fail to recursive resolve expr list item", K(ret));
+      } else if (OB_FAIL(func_expr->add_param_expr(para_expr))) {
+        LOG_WARN("fail to add param expr to expr", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+      expr = func_expr;
   }
   return ret;
 }
