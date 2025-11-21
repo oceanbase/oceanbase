@@ -1368,9 +1368,9 @@ int ObCOMergeDagNet::clear_dag_net_ctx()
   return ObIDagNet::clear_dag_net_ctx();
 }
 
-void ObCOMergeDagNet::cancel_dag_net(const int error_code)
+void ObCOMergeDagNet::cancel_dag_net(const int error_code, const bool force_cancel)
 {
-  if (!ObCOMergeScheduleDag::can_ignore_warning(error_code)) {
+  if (force_cancel || !ObCOMergeScheduleDag::can_ignore_warning(error_code)) {
     LOG_WARN_RET(error_code, "cancel co dag net");
     int tmp_ret = OB_SUCCESS;
     // avoid that the canceled dag_net_ keeps an unschedule finish_dag_, which cause the dag_net_ never finish

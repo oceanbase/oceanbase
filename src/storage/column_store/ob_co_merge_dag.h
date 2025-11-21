@@ -344,7 +344,7 @@ public:
   virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
   virtual int clear_dag_net_ctx() override;
-  void cancel_dag_net(const int error_code);
+  void cancel_dag_net(const int error_code, const bool force_cancel = false);
   int create_co_execute_dag(share::ObIDag &parent_dag);
   int prepare_co_merge_ctx();
   int get_compat_mode();
