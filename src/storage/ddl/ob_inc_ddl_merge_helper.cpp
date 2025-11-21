@@ -397,10 +397,11 @@ int ObIncMajorDDLMergeHelper::check_need_merge(
   } else if (OB_FAIL(ObDirectLoadMgrUtil::get_tablet_handle(target_ls_id, target_tablet_id, tablet_handle))) {
     LOG_WARN("failed to get tablet handle", K(ret));
   } else if (merge_param.for_major_) {
+    // do not merge inc_major during migration because data could be incomplete
     const ObTabletHAStatus &ha_status = tablet_handle.get_obj()->get_tablet_meta().ha_status_;
-    if (OB_UNLIKELY(!ha_status.is_none())) {
+    if (OB_UNLIKELY(!ha_status.is_data_status_complete())) {
       ret = OB_NO_NEED_MERGE;
-      LOG_INFO("tablet ha status is not none, no need to merge inc major", KR(ret),
+      FLOG_INFO("tablet data is incomplete, no need to merge inc major", KR(ret),
           K(target_ls_id), K(target_tablet_id), K(ha_status), K(merge_param), KPC(dag));
     }
   }
