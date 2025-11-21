@@ -304,7 +304,7 @@ int ObMultipleMerge::project2output_exprs(ObDatumRow &unprojected_row, ObDatumRo
   if (OB_FAIL(access_param_->row2exprs_projector_->project(
               *access_param_->output_exprs_, unprojected_row.storage_datums_,
               nop_pos_.nops_, nop_pos_.count_))) {
-    LOG_WARN("Fail to project row", K(unprojected_row), K(cur_row));
+    LOG_WARN("Fail to project row", K(unprojected_row));
   } else {
     LOG_DEBUG("Project row", K(unprojected_row));
   }
@@ -376,7 +376,7 @@ int ObMultipleMerge::get_next_row(ObDatumRow *&row)
     }
   }
   if (OB_SUCC(ret)) {
-    STORAGE_LOG(DEBUG, "chaser debug get next", KPC(row), K(unprojected_row_), K(ret));
+    STORAGE_LOG(DEBUG, "chaser debug get next", K(unprojected_row_), K(ret));
     if (nullptr != row && OB_FAIL(row->prepare_new_row(out_project_cols_))) {
       STORAGE_LOG(WARN, "Failed to prepare new row", K(ret));
     }
@@ -710,7 +710,7 @@ int ObMultipleMerge::process_fuse_row(const bool not_using_static_engine,
     }
     if (OB_FAIL(ret)) {
     } else if (is_filter_filtered) {
-      LOG_DEBUG("store row is filtered", K(in_row), K(cur_row_));
+      LOG_DEBUG("store row is filtered", K(in_row));
     } else if (nullptr != access_ctx_->limit_param_
                && access_ctx_->out_cnt_ < access_ctx_->limit_param_->offset_) {
       // clear evaluated flag for next row.
@@ -723,7 +723,7 @@ int ObMultipleMerge::process_fuse_row(const bool not_using_static_engine,
       ++access_ctx_->out_cnt_;
     }
   }
-  LOG_DEBUG("multiple merge process fuse row", K(ret), K(cur_row_), K(need_skip), K(is_filter_filtered));
+  LOG_DEBUG("multiple merge process fuse row", K(ret), K(need_skip), K(is_filter_filtered));
   return ret;
 }
 
