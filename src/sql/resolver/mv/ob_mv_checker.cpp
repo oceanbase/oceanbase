@@ -137,6 +137,9 @@ int ObMVChecker::check_mv_stmt_refresh_type_basic(const ObSelectStmt &stmt, bool
   } else if (stmt.has_subquery()) {
     is_valid = false;
     fast_refreshable_error_.assign_fmt("query with subquery is not supported");
+  } else if (stmt.is_distinct()) {
+    is_valid = false;
+    fast_refreshable_error_.assign_fmt("query with DISTINCT operator is not supported");
   } else if (stmt.has_order_by() || stmt.has_limit()) {
     is_valid = false;
     fast_refreshable_error_.assign_fmt("query with order by or limit operators is not supported");
