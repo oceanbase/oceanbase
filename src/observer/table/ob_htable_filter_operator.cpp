@@ -1159,39 +1159,41 @@ void ObHTableRowIterator::set_need_verify_cell_ttl(bool need_verify_cell_ttl) {
 int ObHTableRowIterator::try_record_expired_rowkey(const ObHTableCellEntity &cell)
 {
   int ret = OB_SUCCESS;
-  if (!is_cur_row_expired_) {
-    if (need_verify_cell_ttl_ && OB_NOT_NULL(matcher_) && OB_FAIL(matcher_->is_cell_ttl_expired(cell, is_cur_row_expired_))) {
-      LOG_WARN("failed to is cell ttl expired", K(ret));
-    } else if (is_cur_row_expired_ || (time_to_live_ > 0 && OB_NOT_NULL(column_tracker_) &&
-                                          column_tracker_->is_expired(cell.get_timestamp()))) {
-      is_cur_row_expired_ = true;
-      if (OB_NOT_NULL(child_op_) && OB_NOT_NULL(child_op_->get_scan_executor())) {
-        ObTableCtx &tb_ctx = child_op_->get_scan_executor()->get_table_ctx();
-        if (!tb_ctx.is_index_scan()) {
-          MTL(ObHTableRowkeyMgr *)
-              ->record_htable_rowkey(
-                  tb_ctx.get_ls_id(), tb_ctx.get_table_id(), tb_ctx.get_tablet_id(), cell.get_rowkey());
-        }
-      }
-    }
-  }
+  // disable rowkey ttl record
+  // if (!is_cur_row_expired_) {
+  //   if (need_verify_cell_ttl_ && OB_NOT_NULL(matcher_) && OB_FAIL(matcher_->is_cell_ttl_expired(cell, is_cur_row_expired_))) {
+  //     LOG_WARN("failed to is cell ttl expired", K(ret));
+  //   } else if (is_cur_row_expired_ || (time_to_live_ > 0 && OB_NOT_NULL(column_tracker_) &&
+  //                                         column_tracker_->is_expired(cell.get_timestamp()))) {
+  //     is_cur_row_expired_ = true;
+  //     if (OB_NOT_NULL(child_op_) && OB_NOT_NULL(child_op_->get_scan_executor())) {
+  //       ObTableCtx &tb_ctx = child_op_->get_scan_executor()->get_table_ctx();
+  //       if (!tb_ctx.is_index_scan()) {
+  //         MTL(ObHTableRowkeyMgr *)
+  //             ->record_htable_rowkey(
+  //                 tb_ctx.get_ls_id(), tb_ctx.get_table_id(), tb_ctx.get_tablet_id(), cell.get_rowkey());
+  //       }
+  //     }
+  //   }
+  // }
   return ret;
 }
 
 void ObHTableRowIterator::try_record_expired_rowkey(const int32_t versions, const ObString &rowkey)
 {
-  if (max_version_ > 0 && !is_cur_row_expired_ && versions > max_version_) {
-    is_cur_row_expired_ = true;
-    if (OB_NOT_NULL(child_op_) && OB_NOT_NULL(child_op_->get_scan_executor())) {
-      ObTableCtx &tb_ctx = child_op_->get_scan_executor()->get_table_ctx();
-      if (!tb_ctx.is_index_scan()) {
-        MTL(ObHTableRowkeyMgr*)->record_htable_rowkey(tb_ctx.get_ls_id(),
-                                                      tb_ctx.get_table_id(),
-                                                      tb_ctx.get_tablet_id(),
-                                                      rowkey);
-      }
-    }
-  }
+  // disable rowkey ttl
+  // if (max_version_ > 0 && !is_cur_row_expired_ && versions > max_version_) {
+  //   is_cur_row_expired_ = true;
+  //   if (OB_NOT_NULL(child_op_) && OB_NOT_NULL(child_op_->get_scan_executor())) {
+  //     ObTableCtx &tb_ctx = child_op_->get_scan_executor()->get_table_ctx();
+  //     if (!tb_ctx.is_index_scan()) {
+  //       MTL(ObHTableRowkeyMgr*)->record_htable_rowkey(tb_ctx.get_ls_id(),
+  //                                                     tb_ctx.get_table_id(),
+  //                                                     tb_ctx.get_tablet_id(),
+  //                                                     rowkey);
+  //     }
+  //   }
+  // }
 }
 
 ////////////////////////////////////////////////////////////////
