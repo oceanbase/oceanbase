@@ -300,6 +300,8 @@ protected:
   virtual int get_part_id_by_one_level_sub_ch_map(int64_t &part_id);
   virtual int get_sub_part_id_by_one_level_first_ch_map(
     const int64_t part_id, int64_t &sub_part_id);
+  int check_partition_map_and_schema_match(bool &match);
+  int check_no_partition_error();
 private:
   // for skip subpart
   typedef common::hash::ObHashMap<int64_t, int64_t,

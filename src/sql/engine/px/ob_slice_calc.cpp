@@ -15,6 +15,8 @@
 #include "sql/engine/px/ob_px_util.h"
 #include "sql/engine/px/ob_slice_calc.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
+#include "observer/ob_server_struct.h"
+#include "share/schema/ob_schema_getter_guard.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -442,6 +444,64 @@ int ObRepartSliceIdxCalc::get_previous_row_tablet_id(ObObj &tablet_id)
   return ret;
 }
 
+int ObRepartSliceIdxCalc::check_partition_map_and_schema_match(bool &match)
+{
+  int ret = OB_SUCCESS;
+  match = true;
+  // Check if all tablet_ids in the map exist in the current table_schema.
+  // If all exist, it means the map is based on the current schema (or compatible),
+  // If some don't exist, it means schema has changed (e.g., concurrent truncate),
+  const ObPxPartChMapTMArray &part_ch_array = part_ch_info_.part_ch_array_;
+  if (OB_LIKELY(part_ch_array.size() > 0)) {
+    ObSEArray<ObTabletID, 64> schema_tablet_ids;
+    hash::ObHashSet<int64_t> schema_tablet_set;
+
+    if (OB_FAIL(table_schema_.get_tablet_ids(schema_tablet_ids))) {
+      LOG_WARN("fail to get tablet ids", K(ret));
+    } else if (OB_FAIL(schema_tablet_set.create(schema_tablet_ids.count()))) {
+      LOG_WARN("fail to create schema tablet set", K(ret));
+    } else {
+      for (int64_t i = 0; i < schema_tablet_ids.count() && OB_SUCC(ret); ++i) {
+        int64_t schema_tablet_id = schema_tablet_ids.at(i).id();
+        if (OB_FAIL(schema_tablet_set.set_refactored(schema_tablet_id))) {
+          LOG_WARN("fail to set refactored", K(ret));
+        }
+      }
+    }
+    // Check if all tablet_ids in map exist in current schema
+    if (OB_SUCC(ret)) {
+      for (int64_t i = 0; i < part_ch_array.size() && match && OB_SUCC(ret); ++i) {
+        int64_t map_tablet_id = part_ch_array.at(i).first_;
+        if (map_tablet_id > 0) {
+          ret = schema_tablet_set.exist_refactored(map_tablet_id);
+          if (OB_HASH_EXIST == ret) {
+            ret = OB_SUCCESS;
+          } else if (OB_HASH_NOT_EXIST == ret) {
+            match = false;
+            ret = OB_SUCCESS;
+            LOG_WARN("tablet id not exist in schema", K(ret), K(map_tablet_id));
+          } else {
+            LOG_WARN("fail to check exist", K(ret), K(map_tablet_id));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRepartSliceIdxCalc::check_no_partition_error()
+{
+  int ret = OB_SUCCESS;
+  bool schema_match = true;
+  if (OB_FAIL(check_partition_map_and_schema_match(schema_match))) {
+    LOG_WARN("check partition map and schema match", K(ret));
+  } else {
+    ret = schema_match ? OB_NO_PARTITION_FOR_GIVEN_VALUE : OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
+  }
+  return ret;
+}
+
 int ObSlaveMapRepartIdxCalcBase::init(uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
@@ -547,15 +607,7 @@ int ObSlaveMapPkeyRandomIdxCalc::get_slice_indexes_inner(const ObIArray<ObExpr*>
         // tablet_id <= means this row matches no partition
         ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
       } else {
-        // there are two scenarios tablet_id > 0.
-        // 1. insert into t partition (p0) select * from t partition (p1).
-        //    tablet_id equals to tablet id of p1 but the map only contains tablet id of p0.
-        // 2. insert into t and truncate t concurrently. truncate t will make t maps to a new group of tablets.
-        // It's hard to distinct these two scenarios, so we report OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR.
-        // The retry policy of OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR is same as OB_SCHEMA_ERROR.
-        // As a result, if schema has changed, this query will be retried.
-        // Otherwise, an error will be reported to the client.
-        ret = OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR;
+        ret = check_no_partition_error();
       }
       LOG_WARN("can't get the right partition", K(ret), K(tablet_id), K(slice_idx_array.at(0)), K(repart_type_));
     }
@@ -588,7 +640,7 @@ int ObSlaveMapPkeyRandomIdxCalc::get_slice_idx_batch_inner(const ObIArray<ObExpr
           if (tablet_ids_[i] <= 0) {
             ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
           } else {
-            ret = OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR;
+            ret = check_no_partition_error();
           }
           LOG_WARN("can't get the right partition", K(ret), K(tablet_ids_[i]), K(repart_type_));
         }
@@ -1744,11 +1796,14 @@ int ObSlaveMapPkeyHashIdxCalc::get_slice_indexes_inner(const ObIArray<ObExpr*> &
         } else {
           slice_idx_array.at(0) = part_ch_array.at(hash_idx).second_;
         }
-      } else {
+      } else if (tablet_id <= 0) {
         // 没有找到对应的分区，返回OB_NO_PARTITION_FOR_GIVEN_VALUE
         ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
         LOG_WARN("can't get the right partition", K(ret), K(tablet_id),
                  K(unmatch_row_dist_method_));
+      } else {
+        ret = check_no_partition_error();
+        LOG_WARN("can't get the right partition", K(ret), K(tablet_id), K(unmatch_row_dist_method_));
       }
     }
   }
