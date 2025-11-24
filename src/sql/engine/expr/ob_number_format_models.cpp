@@ -1524,10 +1524,16 @@ int ObNFMBase::cast_obj_to_num_str(
       if (fmt_desc_.pre_num_count_ != 0
           && 0 == fmt_desc_.post_num_count_) {
         num_str_buf[pos++] = '0';
+      } else if (ObNFMElem::has_type(NFM_FILLMODE_FLAG, fmt_desc_.elem_flag_)
+                  && fmt_desc_.pre_num_count_ != 0 && fmt_desc_.post_num_count_ != 0) {
+        // for 0 with fill mode, if the zero is before the decimal point, it should be displayed
+        num_str_buf[pos++] = '0';
       }
       num_str_buf[pos++] = '.';
-      if (fmt_desc_.post_num_count_ != 0) {
-        num_str_buf[pos++] = '0';
+      if (fmt_desc_.post_num_count_ != 0 &&
+          !(ObNFMElem::has_type(NFM_FILLMODE_FLAG, fmt_desc_.elem_flag_) 
+            && fmt_desc_.zero_end_ < fmt_desc_.decimal_pos_)) {
+          num_str_buf[pos++] = '0';
       }
       num_str.assign_ptr(num_str_buf, pos);
     } else if (OB_FAIL(remove_leading_zero(num_str_buf, num_str_len))) {
@@ -2408,9 +2414,9 @@ int ObNFMToChar::convert_num_to_fmt_str(const common::ObObjMeta &obj_meta,
   if (OB_ISNULL(fmt_str) || OB_ISNULL(session)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(session));
-  } else if (fmt_len >= MAX_FMT_STR_LEN) {
+  } else if (fmt_len > MAX_FMT_STR_LEN) {
     ret = OB_ERR_INVALID_NUMBER_FORMAT_MODEL;
-    LOG_WARN("invalid fmt string", K(ret));
+    LOG_WARN("invalid fmt string", K(ret), K(fmt_len));
   } else if (OB_ISNULL(res_buf = static_cast<char *>(alloc.alloc(res_buf_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret));
