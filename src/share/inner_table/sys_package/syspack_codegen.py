@@ -269,7 +269,6 @@ syspack_config = [
     # MySQL
     SysPackConfig(SysPackGroup.MYSQL, "dbms_stats", "dbms_stats_mysql.sql", "dbms_stats_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_scheduler", "dbms_scheduler_mysql.sql", "dbms_scheduler_mysql_body.sql"),
-    SysPackConfig(SysPackGroup.MYSQL, "dbms_ischeduler", "dbms_ischeduler_mysql.sql", "dbms_ischeduler_mysql_body.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_application", "dbms_application_mysql.sql", "dbms_application_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_session", "dbms_session_mysql.sql", "dbms_session_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_monitor", "dbms_monitor_mysql.sql", "dbms_monitor_body_mysql.sql"),
