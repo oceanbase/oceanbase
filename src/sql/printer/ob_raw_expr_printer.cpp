@@ -3670,6 +3670,21 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         OZ(print_array_map(expr, N_ARRAY_FILTER));
         break;
       }
+      case T_FUNC_SYS_ARRAY_CONTAINS: {
+        CK(2 == expr->get_param_count());
+        if (OB_SUCC(ret)) {
+          if (expr->get_reverse_param_order() == 0) {
+            DATA_PRINTF("%s", N_ARRAY_CONTAINS);
+            OZ(inner_print_fun_params(*expr));
+          } else {
+            PRINT_EXPR(expr->get_param_expr(0));
+            DATA_PRINTF("=any(");
+            PRINT_EXPR(expr->get_param_expr(1));
+            DATA_PRINTF(")");
+          }
+        }
+        break;
+      }
       default: {
         DATA_PRINTF("%.*s", LEN_AND_PTR(func_name));
         OZ(inner_print_fun_params(*expr));
