@@ -104,6 +104,9 @@ ObMultipleMerge::~ObMultipleMerge()
     }
     skip_bit_ = nullptr;
   }
+  if (OB_UNLIKELY(nullptr != access_ctx_ && nullptr != access_ctx_->truncate_part_filter_)) {
+    access_ctx_->truncate_part_filter_->uncombined_from_pd_filter();
+  }
 }
 
 int ObMultipleMerge::init(
