@@ -1193,6 +1193,7 @@ void ObRADatumStore::Reader::reuse()
   store_.free_blk_mem(buf_.data(), buf_.capacity());
   buf_.reset();
   free_all_blks();
+  store_.free_blk_mem(idx_buf_.data(), idx_buf_.capacity());
   idx_buf_.reset();
 }
 

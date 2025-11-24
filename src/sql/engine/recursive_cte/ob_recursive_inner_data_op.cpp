@@ -787,6 +787,9 @@ void ObRecursiveInnerDataMysqlOp::destroy()
 {
   left_op_ = nullptr;
   right_op_ = nullptr;
+  if (OB_NOT_NULL(hash_value_reader_)) {
+    hash_value_reader_->reset();
+  }
   if (OB_NOT_NULL(pump_operator_)) {
     pump_operator_->destroy();
     pump_operator_ = nullptr;
