@@ -261,7 +261,7 @@ protected:
    * extend string buffer with adaptive growth strategy
    */
   inline int extend_string(ObString &base_string, const int32_t length, const int32_t concat_str_max_len,
-                           common::ObArenaAllocator &allocator) {
+                           common::ObIAllocator &allocator) {
     int ret = OB_SUCCESS;
     int original_length = base_string.length();
     int current_size = base_string.size();
@@ -274,7 +274,7 @@ protected:
         ret = OB_ALLOCATE_MEMORY_FAILED;
         SQL_LOG(WARN, "allocate memory failed", K(ret), K(original_length),
                 K(buf_len), K(current_size), K(length),
-                K(allocator.get_label()), K(allocator.used()),
+                K(allocator.used()),
                 K(allocator.total()));
       } else {
         if (original_length > 0) {
