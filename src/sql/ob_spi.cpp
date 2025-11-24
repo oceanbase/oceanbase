@@ -6285,13 +6285,16 @@ int ObSPIService::spi_add_ref_cursor_refcount(ObPLExecCtx *ctx, ObObj *cursor, i
   if (OB_NOT_NULL(cursor_info)) {
     CK (1 == addend || -1 == addend);
     CK (0 <= cursor_info->get_ref_count());
+    CK (OB_NOT_NULL(ctx));
+    CK (OB_NOT_NULL(ctx->exec_ctx_));
     if (OB_SUCC(ret)) {
       (1 == addend) ? cursor_info->inc_ref_count() : cursor_info->dec_ref_count();
       bool is_ref_cursor = cursor_info->is_ref_by_refcursor();
       if (0 == cursor_info->get_ref_count()) {
-        CK (OB_NOT_NULL(ctx));
-        CK (OB_NOT_NULL(ctx->exec_ctx_));
-        OZ (cursor_release(ctx, ctx->exec_ctx_->get_my_session(), cursor_info, is_ref_cursor, OB_INVALID_ID, OB_INVALID_ID, true));
+        int tmp_ret = cursor_release(ctx, ctx->exec_ctx_->get_my_session(), cursor_info, is_ref_cursor, OB_INVALID_ID, OB_INVALID_ID, true);
+        if (OB_SUCCESS != tmp_ret) {
+          LOG_WARN("failed to release cursor", K(tmp_ret));
+        }
       }
       (is_ref_cursor && -1 == addend) ? cursor->set_extend(0, PL_REF_CURSOR_TYPE) : (void)NULL; //addend == -1 means cursor_obj is not ref to refcursor
     }
