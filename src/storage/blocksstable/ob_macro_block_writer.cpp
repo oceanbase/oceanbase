@@ -1462,7 +1462,7 @@ int ObMacroBlockWriter::merge_micro_block(const ObMicroBlock &micro_block)
         }
       }
 
-      if (OB_SUCC(ret) && micro_writer_->get_block_size() >= data_store_desc_->micro_block_size_) {
+      if (OB_SUCC(ret) && micro_writer_->get_row_count() > 0 && micro_writer_->get_block_size() >= data_store_desc_->micro_block_size_) {
         if (OB_FAIL(build_micro_block())) {
           LOG_WARN("build_micro_block failed", K(ret));
         }
