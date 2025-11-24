@@ -1261,7 +1261,7 @@ int ObTscCgService::extract_das_access_exprs(const ObLogTableScan &op,
     }
   }
   // store group_id_expr when use group id
-  if (OB_SUCC(ret) && op.use_group_id()) {
+  if (OB_SUCC(ret) && op.use_group_id() && !op.is_scan_domain_id_table(scan_ctdef.ref_table_id_)) {
     const ObRawExpr* group_id_expr = op.get_group_id_expr();
     if (group_id_expr != nullptr &&
         OB_FAIL(add_var_to_array_no_dup(access_exprs, const_cast<ObRawExpr*>(group_id_expr)))) {
@@ -1723,7 +1723,7 @@ int ObTscCgService::generate_das_scan_ctdef(const ObLogTableScan &op,
   }
 
   //4. generate batch scan ctdef
-  if (OB_SUCC(ret) && op.use_group_id()) {
+  if (OB_SUCC(ret) && op.use_group_id() && !op.is_scan_domain_id_table(scan_ctdef.ref_table_id_)) {
     if (OB_FAIL(cg_.generate_rt_expr(*op.get_group_id_expr(), scan_ctdef.group_id_expr_))) {
       LOG_WARN("generate group id expr failed", K(ret));
     }
@@ -1867,7 +1867,7 @@ int ObTscCgService::extract_das_output_column_ids(const ObLogTableScan &op,
       LOG_WARN("unexpected nullptr to table schema", K(ret));
     } else if (OB_FAIL(table_schema->get_rowkey_column_ids(output_cids))) {
       LOG_WARN("get rowkey column ids failed", K(ret));
-    } else if (nullptr != op.get_group_id_expr() && op.use_group_id()) {
+    } else if (nullptr != op.get_group_id_expr() && op.use_group_id() && !op.is_scan_domain_id_table(scan_ctdef.ref_table_id_)) {
       if (OB_FAIL(output_cids.push_back(OB_HIDDEN_GROUP_IDX_COLUMN_ID))) {
         LOG_WARN("store group column id failed", K(ret));
       }
@@ -1931,7 +1931,7 @@ int ObTscCgService::extract_das_output_column_ids(const ObLogTableScan &op,
         LOG_WARN("store real output colum id failed", K(ret), KPC(mapping_expr));
       }
     }
-  } else if (nullptr != op.get_group_id_expr() && op.use_group_id() &&
+  } else if (nullptr != op.get_group_id_expr() && op.use_group_id() && !op.is_scan_domain_id_table(scan_ctdef.ref_table_id_) &&
       OB_FAIL(das_output_cols.push_back(const_cast<ObRawExpr*>(op.get_group_id_expr())))) {
     LOG_WARN("store group id expr failed", K(ret));
   } else if (OB_FAIL(extract_das_column_ids(das_output_cols, output_cids))) {
