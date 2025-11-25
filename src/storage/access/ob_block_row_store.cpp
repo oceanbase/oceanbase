@@ -119,14 +119,14 @@ int ObBlockRowStore::open(ObTableIterParam &iter_param)
       iter_param.disable_pd_filter();
       pd_filter_info_.is_pd_filter_ = false;
     }
-    if (iter_param.is_use_column_store()) {
+    if (OB_FAIL(iter_param.build_index_filter_for_row_store(context_.allocator_))) {
+      LOG_WARN("Failed to build skip index for row store", K(ret));
+    } else if (iter_param.is_use_column_store()) {
       if (OB_FAIL(pd_filter_info_.filter_->init_co_filter_param(iter_param, need_padding))) {
         LOG_WARN("Failed to init pushdown filter executor", K(ret));
       }
-    } else if (OB_FAIL(iter_param.build_index_filter_for_row_store(context_.allocator_))) {
-      LOG_WARN("Failed to build skip index for row store", K(ret));
     } else if (OB_FAIL(pd_filter_info_.filter_->init_filter_param(
-            *iter_param.get_col_params(), *iter_param.out_cols_project_, need_padding))) {
+                *iter_param.get_col_params(), *iter_param.out_cols_project_, need_padding))) {
       LOG_WARN("Failed to init pushdown filter executor", K(ret));
     }
   }

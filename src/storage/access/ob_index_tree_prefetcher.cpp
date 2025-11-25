@@ -1326,7 +1326,8 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::p
                       && OB_FAIL(sstable_index_filter->check_range(iter_param_->read_info_,
                                   block_info, *(access_ctx_->allocator_), iter_param_->vectorized_enabled_))) {
             LOG_WARN("Fail to check if can skip prefetch", K(ret), K(block_info));
-          } else if (block_info.is_filter_always_false()) {
+          } else if (block_info.can_skip_fetch()) {
+            access_ctx_->table_store_stat_.collect_stat_info(block_info);
             continue;
           } else if (nullptr != agg_store_ && OB_FAIL(agg_store_->can_use_index_info(block_info, can_agg))) {
             LOG_WARN("Fail to judge can aggregate micro index", K(ret));
@@ -1334,6 +1335,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::p
             if (OB_FAIL(agg_store_->fill_index_info(block_info, false))) {
               LOG_WARN("Fail to agg index info", K(ret), K(block_info), KPC_(agg_store), KPC(this));
             } else {
+              access_ctx_->table_store_stat_.collect_stat_info(block_info);
               LOG_DEBUG("Success to agg index info", K(ret), K(block_info), KPC_(agg_store));
               continue;
             }
@@ -1848,13 +1850,15 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
                                                                 *(prefetcher.access_ctx_->allocator_),
                                                                 prefetcher.iter_param_->vectorized_enabled_))) {
         LOG_WARN("Fail to check if can skip prefetch", K(ret), K(index_info));
-      } else if (index_info.is_filter_always_false()) {
+      } else if (index_info.can_skip_fetch()) {
+        prefetcher.access_ctx_->table_store_stat_.collect_stat_info(index_info);
       } else if (nullptr != prefetcher.agg_store_ && OB_FAIL(prefetcher.agg_store_->can_use_index_info(index_info, can_agg))) {
         LOG_WARN("Fail to judge can aggregate index info", K(ret), KPC(prefetcher.agg_store_));
       } else if (can_agg) {
         if (OB_FAIL(prefetcher.agg_store_->fill_index_info(index_info, false))) {
           LOG_WARN("Fail to agg index info", K(ret), K(index_info), KPC_(prefetcher.agg_store), KPC(this));
         } else {
+          prefetcher.access_ctx_->table_store_stat_.collect_stat_info(index_info);
           LOG_DEBUG("Success to agg index info", K(ret), K(index_info), KPC_(prefetcher.agg_store), KPC(this));
         }
       } else if (OB_FAIL(prefetcher.check_row_lock(index_info, is_row_lock_checked_))) {

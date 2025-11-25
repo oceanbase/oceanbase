@@ -90,7 +90,6 @@ struct ObSkipIndexColMeta
   }
 
   static int append_skip_index_meta(
-      const bool is_major,
       const share::schema::ObSkipIndexColumnAttr &skip_idx_attr,
       const int64_t col_idx,
       common::ObIArray<ObSkipIndexColMeta> &skip_idx_metas);
@@ -224,7 +223,8 @@ OB_INLINE static bool non_baseline_enabled_agg_type(const ObSkipIndexColType &co
   return ObSkipIndexColType::SK_IDX_BM25_MAX_SCORE_TOKEN_FREQ == col_type
       || ObSkipIndexColType::SK_IDX_BM25_MAX_SCORE_DOC_LEN == col_type
       || ObSkipIndexColType::SK_IDX_MIN == col_type
-      || ObSkipIndexColType::SK_IDX_MAX == col_type;
+      || ObSkipIndexColType::SK_IDX_MAX == col_type
+      || ObSkipIndexColType::SK_IDX_NULL_COUNT == col_type;
 }
 
 OB_INLINE static bool enable_skip_index_min_max_prefix(const int64_t data_version)

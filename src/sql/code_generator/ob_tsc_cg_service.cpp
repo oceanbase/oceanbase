@@ -962,7 +962,8 @@ int ObTscCgService::generate_pd_storage_flag(const ObLogPlan *log_plan,
   int ret = OB_SUCCESS;
   bool pd_blockscan = false;
   bool pd_filter = false;
-  bool enable_skip_index = false;
+  bool enable_base_skip_index = false;
+  bool enable_inc_skip_index = false;
   ObBasicSessionInfo *session_info = NULL;
   if (OB_ISNULL(log_plan)) {
     ret = OB_ERR_UNEXPECTED;
@@ -974,7 +975,8 @@ int ObTscCgService::generate_pd_storage_flag(const ObLogPlan *log_plan,
   } else {
     pd_blockscan = pd_spec.pd_storage_flag_.is_blockscan_pushdown();
     pd_filter = pd_spec.pd_storage_flag_.is_filter_pushdown();
-    enable_skip_index = pd_spec.pd_storage_flag_.is_apply_skip_index();
+    enable_base_skip_index = pd_spec.pd_storage_flag_.is_apply_base_skip_index();
+    enable_inc_skip_index = pd_spec.pd_storage_flag_.is_apply_inc_skip_index();
     // pushdown filter only support scan now
     if (pd_blockscan) {
       if (log_op_def::LOG_TABLE_SCAN == op_type) {
@@ -1004,11 +1006,14 @@ int ObTscCgService::generate_pd_storage_flag(const ObLogPlan *log_plan,
     }
   }
   if (OB_SUCC(ret)) {
-    enable_skip_index = enable_skip_index && pd_filter;
+    enable_base_skip_index = enable_base_skip_index && pd_filter;
+    enable_inc_skip_index = enable_inc_skip_index && pd_filter;
     pd_spec.pd_storage_flag_.set_blockscan_pushdown(pd_blockscan);
     pd_spec.pd_storage_flag_.set_filter_pushdown(pd_filter);
-    pd_spec.pd_storage_flag_.set_enable_skip_index(enable_skip_index);
-    LOG_DEBUG("chaser debug pd block", K(op_type), K(pd_blockscan), K(pd_filter), K(enable_skip_index));
+    pd_spec.pd_storage_flag_.set_enable_base_skip_index(enable_base_skip_index);
+    pd_spec.pd_storage_flag_.set_enable_inc_skip_index(enable_inc_skip_index);
+    LOG_DEBUG("chaser debug pd block", K(op_type), K(pd_blockscan), K(pd_filter),
+              K(enable_base_skip_index), K(enable_inc_skip_index));
   }
   return ret;
 }

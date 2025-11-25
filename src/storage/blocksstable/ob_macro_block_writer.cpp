@@ -286,24 +286,30 @@ int ObMicroBlockBufferHelper::dump_micro_block_writer_buffer(const char *buf, co
 ObMicroBlockAdaptiveSplitter::ObMicroBlockAdaptiveSplitter()
   : macro_store_size_(0),
     min_micro_row_count_(0),
-    is_use_adaptive_(false)
+    is_use_adaptive_(false),
+    need_reduce_cross_mb_multi_version_rows_(false)
 {}
 
 ObMicroBlockAdaptiveSplitter::~ObMicroBlockAdaptiveSplitter()
 {
 }
 
-int ObMicroBlockAdaptiveSplitter::init(const int64_t macro_store_size, const int64_t min_micro_row_count, const bool is_use_adaptive)
+int ObMicroBlockAdaptiveSplitter::init(const ObDataStoreDesc &store_desc, const int64_t min_micro_row_count)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(macro_store_size <= 0)) {
+  if (OB_UNLIKELY(store_desc.get_macro_store_size() <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid micro block adaptive split input argument", K(ret), K(macro_store_size));
+    STORAGE_LOG(WARN, "invalid micro block adaptive split input argument", K(ret), K(store_desc.get_macro_store_size()));
   } else {
     reset();
-    macro_store_size_ = macro_store_size;
-    is_use_adaptive_ = is_use_adaptive;
+    macro_store_size_ = store_desc.get_macro_store_size();
+    is_use_adaptive_ = store_desc.is_for_index_or_meta() ||
+                       !store_desc.is_major_merge_type() ||
+                       store_desc.get_major_working_cluster_version() >= DATA_VERSION_4_1_0_0;
     min_micro_row_count_ = MAX(min_micro_row_count, MICRO_ROW_MIN_COUNT);
+    need_reduce_cross_mb_multi_version_rows_ = store_desc.is_for_data() &&
+                                               !store_desc.is_major_or_meta_merge_type() &&
+                                               store_desc.is_delete_insert_merge_engine();
   }
 
   return ret;
@@ -322,11 +328,12 @@ int ObMicroBlockAdaptiveSplitter::check_need_split(const int64_t micro_size,
                                                    const int64_t split_size,
                                                    const int64_t current_macro_size,
                                                    const bool is_keep_space,
+                                                   const bool is_last_row_last_flag,
                                                    bool &is_split) const
 {
   int ret = OB_SUCCESS;
   is_split = false;
-  if(OB_UNLIKELY(micro_size <= 0 || split_size <= 0 || micro_row_count <= 0)) {
+  if (OB_UNLIKELY(micro_size <= 0 || split_size <= 0 || micro_row_count <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid size argument", K(ret), K(micro_size), K(split_size), K(micro_row_count));
   } else if (micro_size < split_size) {
@@ -339,6 +346,8 @@ int ObMicroBlockAdaptiveSplitter::check_need_split(const int64_t micro_size,
       compression_infos_[micro_row_count].compression_ratio_ : compression_infos_[0].compression_ratio_;
     const int64_t estimate_micro_size = micro_size * compression_ratio / 100;
     if (estimate_micro_size < split_size) {
+      is_split = false;
+    } else if (need_reduce_cross_mb_multi_version_rows_ && !is_last_row_last_flag) {  // to reduce cross-microblock multi-version rows
       is_split = false;
     } else if (micro_row_count >= adaptive_row_count ||
       (is_keep_space && current_macro_size + estimate_micro_size > macro_store_size_ /* for pct_free */)) {
@@ -585,9 +594,7 @@ int ObMacroBlockWriter::inner_init(
       STORAGE_LOG(WARN, "Failed to init pre aggregate utilities", K(ret));
     } else {
       is_cs_encoding_writer_ = data_store_desc_->encoding_enabled() && ObStoreFormat::is_row_store_type_with_cs_encoding(data_store_desc_->get_row_store_type());
-      const bool is_use_adaptive = !data_store_desc_->is_major_merge_type()
-       || data_store_desc_->get_major_working_cluster_version() >= DATA_VERSION_4_1_0_0;
-      if (OB_FAIL(micro_block_adaptive_splitter_.init(data_store_desc.get_macro_store_size(), 0/*min_micro_row_count*/, is_use_adaptive))) {
+      if (OB_FAIL(micro_block_adaptive_splitter_.init(data_store_desc, 0/*min_micro_row_count*/))) {
         STORAGE_LOG(WARN, "Failed to init micro block adaptive split", K(ret),
           "macro_store_size", data_store_desc.get_macro_store_size());
       } else if (data_store_desc_->get_major_working_cluster_version() < DATA_VERSION_4_2_0_0) {
@@ -860,7 +867,7 @@ int ObMacroBlockWriter::append_batch(const ObBatchDatumRows &datum_rows, const i
     if (OB_FAIL(append(datum_rows))) {
       STORAGE_LOG(WARN, "Fail to append row to micro block", K(ret));
     } else if (OB_FAIL(micro_block_adaptive_splitter_.check_need_split(micro_writer_->get_block_size(), micro_writer_->get_row_count(),
-          split_size, macro_blocks_[current_index_].get_data_size(), is_keep_freespace(), is_split))) {
+          split_size, macro_blocks_[current_index_].get_data_size(), is_keep_freespace(), false /*is_last_row_last_flag*/, is_split))) {
       STORAGE_LOG(WARN, "Failed to check need split", K(ret), KPC(micro_writer_));
     } else if (is_split && OB_FAIL(build_micro_block())) {
       STORAGE_LOG(WARN, "Fail to build micro block, ", K(ret));
@@ -896,7 +903,7 @@ int ObMacroBlockWriter::append_row(const ObDatumRow &row, const int64_t split_si
     } else if (need_pre_agg_evaluation && OB_FAIL(data_aggregator_->eval(*row_to_append))) {
       STORAGE_LOG(WARN, "Fail to evaluate aggregate data", K(ret));
     } else if (OB_FAIL(micro_block_adaptive_splitter_.check_need_split(micro_writer_->get_block_size(), micro_writer_->get_row_count(),
-          split_size, macro_blocks_[current_index_].get_data_size(), is_keep_freespace(), is_split))) {
+          split_size, macro_blocks_[current_index_].get_data_size(), is_keep_freespace(), row_to_append->is_last_multi_version_row(), is_split))) {
       STORAGE_LOG(WARN, "Failed to check need split", K(ret), KPC(micro_writer_));
     } else if (is_split && OB_FAIL(build_micro_block())) {
       STORAGE_LOG(WARN, "Fail to build micro block, ", K(ret));
@@ -1145,7 +1152,7 @@ int ObMacroBlockWriter::check_order(const ObDatumRow &row)
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "invalid macro block writer input argument.",
         K(row), "row_column_count", data_store_desc_->get_row_column_count(), K(ret));
-  } else if (OB_UNLIKELY(!data_store_desc_->get_is_delete_insert_table() && !row.mvcc_row_flag_.is_valid())) {
+  } else if (OB_UNLIKELY(!data_store_desc_->is_delete_insert_merge_engine() && !row.mvcc_row_flag_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "invalid mvcc_row_flag", K(ret), K(row));
   } else {
@@ -2397,9 +2404,11 @@ void ObMacroBlockWriter::dump_macro_block(ObMacroBlock &macro_block)
 int ObMacroBlockWriter::init_pre_agg_util(const ObDataStoreDesc &data_store_desc)
 {
   int ret = OB_SUCCESS;
+  bool is_delete_insert_table = data_store_desc.is_delete_insert_merge_engine();
   const ObIArray<ObSkipIndexColMeta> &full_agg_metas = data_store_desc.get_agg_meta_array();
   const bool need_pre_aggregation =
-      nullptr != data_store_desc.sstable_index_builder_
+      (data_store_desc.is_major_or_meta_merge_type() || is_delete_insert_table)
+      && nullptr != data_store_desc.sstable_index_builder_
       && full_agg_metas.count() > 0;
   bool agg_meta_valid_for_minor = true;
   for (int64_t i = 0; i < full_agg_metas.count(); ++i) {
@@ -2413,7 +2422,7 @@ int ObMacroBlockWriter::init_pre_agg_util(const ObDataStoreDesc &data_store_desc
     // Skip
   } else if (OB_UNLIKELY(!data_store_desc.is_major_or_meta_merge_type() && !agg_meta_valid_for_minor)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid agg meta for mini / minor sstable", K(ret));
+    LOG_WARN("invalid agg meta for mini / minor sstable", K(ret), K(full_agg_metas));
   } else {
     char *row_buf = nullptr;
     char *aggregator_buf = nullptr;
@@ -2427,11 +2436,11 @@ int ObMacroBlockWriter::init_pre_agg_util(const ObDataStoreDesc &data_store_desc
     } else {
       data_aggregator_ = new (aggregator_buf) ObSkipIndexDataAggregator();
       if (OB_FAIL(data_aggregator_->init(
-          data_store_desc.is_major_or_meta_merge_type(),
-          full_agg_metas,
-          data_store_desc.get_col_desc_array(),
-          data_store_desc.get_major_working_cluster_version(),
-          allocator_))) {
+                  data_store_desc.is_major_or_meta_merge_type(),
+                  full_agg_metas,
+                  data_store_desc.get_col_desc_array(),
+                  data_store_desc.get_major_working_cluster_version(),
+                  allocator_))) {
         LOG_WARN("Fail to init aggregator", K(ret), K(data_store_desc));
       }
     }

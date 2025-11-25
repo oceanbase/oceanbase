@@ -205,6 +205,11 @@
           "name": "max_partition_num",
           "value": 65536,
           "comment": "increase the maximum number of partitions per table to 65536 for AP/HTAP workloads, supporting large-scale partitioning by time range and hash subpartitioning, which is common in data warehouse and real-time analytics scenarios."
+        },
+        {
+          "name": "default_skip_index_level",
+          "value": 1,
+          "comment": "for olap workloads, set skip_index_level to 1 by default when creating table"
         }
       ]
     }

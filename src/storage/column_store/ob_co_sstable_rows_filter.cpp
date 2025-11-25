@@ -161,7 +161,7 @@ int ObCOSSTableRowsFilter::switch_context(
       } else if (OB_FAIL(switch_context_for_cg_iter(false, false, true, co_sstable_, context, iter_params, col_cnt_changed, cg_iter))) {
         LOG_WARN("Fail to switch context for cg iter", K(ret));
       } else if (ObICGIterator::OB_CG_SCANNER == cg_iter->get_type() &&
-                 param.enable_skip_index() &&
+                 param.enable_base_skip_index() &&
                  OB_FAIL(reinterpret_cast<ObCGScanner *>(cg_iter)->build_index_filter(*filter))) {
         LOG_WARN("Failed to construct skip filter", K(ret), KPC(filter));
       }
@@ -451,7 +451,7 @@ int ObCOSSTableRowsFilter::push_cg_iter(
       if (OB_FAIL(co_sstable_->cg_scan(*iter_params.at(0), *access_ctx_, cg_scanner, false, false))) {
         LOG_WARN("Failed to cg scan", K(ret));
       } else if (ObICGIterator::OB_CG_SCANNER == cg_scanner->get_type() &&
-                 iter_params.at(0)->enable_skip_index() &&
+                 iter_params.at(0)->enable_base_skip_index() &&
                  OB_FAIL(reinterpret_cast<ObCGScanner *>(cg_scanner)->build_index_filter(*filter))) {
         LOG_WARN("Failed to construct skip filter", K(ret), KPC(filter));
       } else {

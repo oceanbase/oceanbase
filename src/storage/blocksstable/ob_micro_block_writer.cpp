@@ -166,7 +166,7 @@ int ObMicroBlockWriter<EnableNewFlatFormat>::inner_init()
     if (!data_buffer_.is_inited()) {
       if (OB_FAIL(data_buffer_.init(DEFAULT_DATA_BUFFER_SIZE))) {
         STORAGE_LOG(WARN, "fail to init data buffer", K(ret), K(data_buffer_));
-         } else if (OB_FAIL(index_buffer_.init(DEFAULT_DATA_BUFFER_SIZE, DEFAULT_INDEX_BUFFER_SIZE))) {
+      } else if (OB_FAIL(index_buffer_.init(DEFAULT_DATA_BUFFER_SIZE, DEFAULT_INDEX_BUFFER_SIZE))) {
         STORAGE_LOG(WARN, "fail to init index buffer", K(ret), K(index_buffer_));
       }
     }
@@ -313,6 +313,7 @@ int ObMicroBlockWriter<EnableNewFlatFormat>::build_block(char *&buf, int64_t &si
     header->has_string_out_row_ = has_string_out_row_;
     header->all_lob_in_row_ = !has_lob_out_row_;
     header->is_last_row_last_flag_ = is_last_row_last_flag_;
+    header->is_first_row_first_flag_ = is_first_row_first_flag_;
 
     if (data_buffer_.remain() < get_index_size()) {
       ret = OB_SIZE_OVERFLOW;

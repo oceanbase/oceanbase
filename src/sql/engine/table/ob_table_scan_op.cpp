@@ -2086,11 +2086,13 @@ void ObTableScanOp::init_scan_monitor_info()
   op_monitor_info_.otherstat_2_id_ = ObSqlMonitorStatIds::SSSTORE_READ_BYTES;
   op_monitor_info_.otherstat_3_id_ = ObSqlMonitorStatIds::SSSTORE_READ_ROW_COUNT;
   op_monitor_info_.otherstat_4_id_ = ObSqlMonitorStatIds::MEMSTORE_READ_ROW_COUNT;
+  op_monitor_info_.otherstat_5_id_ = ObSqlMonitorStatIds::SKIP_INDEX_SKIP_BLOCK_CNT;
   tsc_monitor_info_.init(&(op_monitor_info_.otherstat_1_value_),
                          &(op_monitor_info_.otherstat_2_value_),
                          &(op_monitor_info_.otherstat_3_value_),
                          &(op_monitor_info_.otherstat_4_value_),
-                         &(op_monitor_info_.block_time_));
+                         &(op_monitor_info_.block_time_),
+                         &(op_monitor_info_.otherstat_5_value_));
 }
 
 int ObTableScanOp::fill_storage_feedback_info()

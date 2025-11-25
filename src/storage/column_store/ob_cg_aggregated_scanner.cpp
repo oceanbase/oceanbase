@@ -76,7 +76,7 @@ int ObCGAggregatedScanner::init(
   if (OB_SUCC(ret) && (need_access_data_ || need_get_row_ids_)) {
     if (OB_FAIL(ObCGRowScanner::init(iter_param, access_ctx, wrapper))) {
       LOG_WARN("Fail to init cg scanner", K(ret));
-    } else if (iter_param.enable_skip_index()) {
+    } else if (iter_param.enable_base_skip_index()) {
       prefetcher_.set_agg_group(agg_group_);
     }
   }

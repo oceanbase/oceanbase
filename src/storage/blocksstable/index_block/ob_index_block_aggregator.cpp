@@ -229,10 +229,7 @@ int ObColNullCountAggregator::init(
     ObSkipIndexDatumAttr &result_attr)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_major)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("null count aggregator for non-major data not supported yet", K(ret));
-  } else if (OB_FAIL(ObIColAggregator::init(is_major, col_desc, major_working_cluster_version, result, result_attr))) {
+  if (OB_FAIL(ObIColAggregator::init(is_major, col_desc, major_working_cluster_version, result, result_attr))) {
     LOG_WARN("fail to init ObIColAggregator", K(ret));
   } else {
     null_count_ = 0;
@@ -249,15 +246,17 @@ void ObColNullCountAggregator::reuse()
 int ObColNullCountAggregator::eval(const ObStorageDatum &datum, const ObSkipIndexDatumAttr &agg_datum_attr)
 {
   int ret = OB_SUCCESS;
-
-  if (!can_aggregate_) {
-    // Skip
+  if (OB_ISNULL(result_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Not init", K(ret));
   } else if (datum.is_nop()) {
     // null count on nop data not supported
     set_not_aggregate();
-  } else if (OB_UNLIKELY(datum.is_ext()) || OB_ISNULL(result_)) {
+  } else if (!can_aggregate_) {
+    // Skip
+  } else if (OB_UNLIKELY(datum.is_ext())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected aggregate status", K(ret), K(datum), KP_(result));
+    LOG_WARN("Unexpected datum", K(ret), K(datum));
   } else if (agg_datum_attr.is_raw_data_) {
     null_count_ += datum.is_null() ? 1 : 0;
   } else if (datum.is_null()) {
@@ -559,14 +558,16 @@ int ObColMinAggregator::eval(ObIDatumIter &datum_iter)
       }
     }
 
-    if (!can_aggregate_ || !data_evaluated_) {
+    if (!can_aggregate_) {
     } else if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("failed to do max aggregation", K(ret));
     } else {
       ret = OB_SUCCESS;
-      ObSkipIndexDatumAttr attr(true, false);
-      if (OB_FAIL(copy_agg_datum_for_min_max(tmp_result, attr))) {
-        LOG_WARN("failed to copy aggregated datum", K(ret));
+      if (data_evaluated_) {
+        ObSkipIndexDatumAttr attr(true, false);
+        if (OB_FAIL(copy_agg_datum_for_min_max(tmp_result, attr))) {
+          LOG_WARN("failed to copy aggregated datum", K(ret));
+        }
       }
     }
   }
@@ -1849,7 +1850,8 @@ int ObSkipIndexDataAggregator::do_col_agg(const int64_t agg_idx, const IterParam
 ObAggregateInfo::ObAggregateInfo()
   : row_count_(0), row_count_delta_(0), max_merged_trans_version_(0), macro_block_count_(0),
     micro_block_count_(0), can_mark_deletion_(true), contain_uncommitted_row_(false),
-    has_string_out_row_(false), has_lob_out_row_(false), is_last_row_last_flag_(false)
+    has_string_out_row_(false), has_lob_out_row_(false), is_last_row_last_flag_(false),
+    is_first_row_first_flag_(false)
 {
 }
 
@@ -1870,10 +1872,14 @@ void ObAggregateInfo::reset()
   has_string_out_row_ = false;
   has_lob_out_row_ = false;
   is_last_row_last_flag_ = false;
+  is_first_row_first_flag_ = false;
 }
 
 void ObAggregateInfo::eval(const ObIndexBlockRowDesc &row_desc)
 {
+  if (0 == row_count_) {
+    is_first_row_first_flag_ = row_desc.is_first_row_first_flag_;
+  }
   row_count_ += row_desc.row_count_;
   row_count_delta_ += row_desc.row_count_delta_;
   can_mark_deletion_ = can_mark_deletion_ && row_desc.is_deleted_;
@@ -1902,6 +1908,7 @@ void ObAggregateInfo::get_agg_result(ObIndexBlockRowDesc &row_desc) const
   row_desc.has_string_out_row_ = has_string_out_row_;
   row_desc.has_lob_out_row_ = has_lob_out_row_;
   row_desc.is_last_row_last_flag_ = is_last_row_last_flag_;
+  row_desc.is_first_row_first_flag_ = is_first_row_first_flag_;
 }
 
 /* ------------------------------------ObAggregateInfo-------------------------------------*/
@@ -1956,15 +1963,15 @@ int ObIndexBlockAggregator::init(const ObDataStoreDesc &store_desc, ObIAllocator
     ret = OB_INIT_TWICE;
     LOG_WARN("Already inited", K(ret));
   } else {
-    need_data_aggregate_ = store_desc.get_agg_meta_array().count() != 0
-                                           && store_desc.is_major_or_meta_merge_type();
+    need_data_aggregate_ = store_desc.get_agg_meta_array().count() != 0 &&
+        (store_desc.is_delete_insert_merge_engine() || store_desc.is_major_or_meta_merge_type());
     if (!need_data_aggregate_) {
     } else if (OB_FAIL(skip_index_aggregator_.init(
-        store_desc.is_major_or_meta_merge_type(),
-        store_desc.get_agg_meta_array(),
-        store_desc.get_full_stored_col_descs(),
-        store_desc.get_major_working_cluster_version(),
-        allocator))) {
+                store_desc.is_major_or_meta_merge_type(),
+                store_desc.get_agg_meta_array(),
+                store_desc.get_full_stored_col_descs(),
+                store_desc.get_major_working_cluster_version(),
+                allocator))) {
       LOG_WARN("Fail to init skip index aggregator", K(ret));
     }
   }

@@ -39,7 +39,7 @@ ObDataBlockMetaVal::ObDataBlockMetaVal()
     is_encrypted_(false),
     is_deleted_(false),
     contain_uncommitted_row_(false),
-    is_last_row_last_flag_(false),
+    data_flag_pack_(0),
     compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
     master_key_id_(0),
     encrypt_id_(0),
@@ -80,7 +80,7 @@ ObDataBlockMetaVal::ObDataBlockMetaVal(ObIAllocator &allocator)
     is_encrypted_(false),
     is_deleted_(false),
     contain_uncommitted_row_(false),
-    is_last_row_last_flag_(false),
+    data_flag_pack_(0),
     compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
     master_key_id_(0),
     encrypt_id_(0),
@@ -124,7 +124,7 @@ void ObDataBlockMetaVal::reset()
   is_encrypted_ = false;
   is_deleted_ = false;
   contain_uncommitted_row_ = false;
-  is_last_row_last_flag_ = false;
+  data_flag_pack_ = 0;
   compressor_type_ = ObCompressorType::INVALID_COMPRESSOR;
   master_key_id_ = 0;
   encrypt_id_ = 0;
@@ -199,7 +199,7 @@ int ObDataBlockMetaVal::assign(const ObDataBlockMetaVal &val)
     is_encrypted_ = val.is_encrypted_;
     is_deleted_ = val.is_deleted_;
     contain_uncommitted_row_ = val.contain_uncommitted_row_;
-    is_last_row_last_flag_ = val.is_last_row_last_flag_;
+    data_flag_pack_ = val.data_flag_pack_;
     compressor_type_ = val.compressor_type_;
     master_key_id_ = val.master_key_id_;
     encrypt_id_ = val.encrypt_id_;
@@ -302,7 +302,7 @@ int ObDataBlockMetaVal::serialize(char *buf,
                   original_size_,
                   has_string_out_row_,
                   all_lob_in_row_,
-                  is_last_row_last_flag_,
+                  data_flag_pack_,
                   agg_row_len_);
       if (OB_SUCC(ret)) {
         MEMCPY(buf + pos, agg_row_buf_, agg_row_len_);
@@ -379,7 +379,7 @@ int ObDataBlockMetaVal::deserialize(const char *buf, const int64_t data_len, int
                   original_size_,
                   has_string_out_row_,
                   all_lob_in_row_,
-                  is_last_row_last_flag_,
+                  data_flag_pack_,
                   agg_row_len_);
       if (OB_SUCC(ret)) {
         if (agg_row_len_ == 0) {
@@ -464,7 +464,7 @@ int64_t ObDataBlockMetaVal::get_serialize_size(const int64_t data_version) const
               original_size_,
               has_string_out_row_,
               all_lob_in_row_,
-              is_last_row_last_flag_,
+              data_flag_pack_,
               agg_row_len_);
   len += agg_row_len_;
   if (version_ >= DATA_BLOCK_META_VAL_VERSION_V2) {

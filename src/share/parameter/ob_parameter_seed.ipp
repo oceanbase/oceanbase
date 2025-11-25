@@ -2175,6 +2175,11 @@ DEF_BOOL(_enable_column_store, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_enable_skip_index, OB_TENANT_PARAMETER, "True",
         "enable the skip index in storage engine",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(default_skip_index_level, OB_TENANT_PARAMETER, "0", "[0, 1]",
+        "Specify the default skip_index_level value when creating table"
+        "0: not set skip index in inc data, 1: set skip index in inc data according to the base data",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_STR_WITH_CHECKER(_ob_ddl_temp_file_compress_func, OB_TENANT_PARAMETER, "AUTO",
         common::ObConfigTempStoreFormatChecker,
         "specific compression in ObTempBlockStore."\

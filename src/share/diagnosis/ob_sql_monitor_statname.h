@@ -78,6 +78,7 @@ SQL_MONITOR_STATNAME_DEF(SSSTORE_READ_BYTES, metric::Unit::BYTES, "total bytes p
 SQL_MONITOR_STATNAME_DEF(SSSTORE_READ_ROW_COUNT, metric::Unit::INT, "total rows processed by ssstore", "total rows processed by ssstore", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(MEMSTORE_READ_ROW_COUNT, metric::Unit::INT, "total rows processed by memstore", "total rows processed by memstore", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(TOTAL_READ_ROW_COUNT, metric::Unit::INT, "total rows processed by storage", "total rows processed by storage", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(SKIP_INDEX_SKIP_BLOCK_CNT, metric::Unit::INT, "total blocks skipped by skip index", "total blocks skipped by skip index", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)
 
 // Common Metrics
 SQL_MONITOR_STATNAME_DEF(TOTAL_IO_TIME, metric::Unit::TIME_NS, "total io time", "total io time", M_AVG | E_MIN | E_MAX, metric::Level::CRITICAL)

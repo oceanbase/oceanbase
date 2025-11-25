@@ -1040,6 +1040,7 @@ int ObTableParam::construct_columns_and_projector(
   bool need_truncate_filter = false;
   int64_t rowkey_count = 0;
   is_column_replica_table_ = false; // row store table schema does not contains cg, if true, need calculate cg idx by designed rules
+  bool is_delete_insert = table_schema.is_delete_insert_merge_engine();
 
   if (OB_FAIL(table_schema.get_is_column_store(is_cs))) {
     LOG_WARN("fail to get is table column store", K(ret), K(table_schema));
@@ -1088,6 +1089,15 @@ int ObTableParam::construct_columns_and_projector(
         tmp_col_desc.col_type_ = column->get_meta_type();
         tmp_col_desc.col_order_ = column->get_column_order();
         tmp_col_extend.skip_index_attr_ = column_schema->get_skip_index_attr();
+        int tmp_ret = OB_E(EventTable::EN_ROW_STORE_GEN_SKIP_INDEX_ADAPTIVELY) OB_SUCCESS;
+        if (!tmp_col_extend.skip_index_attr_.has_skip_index() && is_delete_insert &&
+            (column->get_meta_type().is_temporal_type() || column->get_meta_type().is_integer_type())) {
+          if (is_cs) {
+            tmp_col_extend.skip_index_attr_.set_min_max();
+          } else if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
+            tmp_col_extend.skip_index_attr_.set_min_max();
+          }
+        }
         if (tmp_col_desc.col_type_.is_lob_storage() && (!IS_CLUSTER_VERSION_BEFORE_4_1_0_0)) {
           tmp_col_desc.col_type_.set_has_lob_header();
         }
@@ -1189,6 +1199,15 @@ int ObTableParam::construct_columns_and_projector(
           }
           col_index = idx;
           tmp_col_extend.skip_index_attr_ = column_schema->get_skip_index_attr();
+          int tmp_ret = OB_E(EventTable::EN_ROW_STORE_GEN_SKIP_INDEX_ADAPTIVELY) OB_SUCCESS;
+          if (!tmp_col_extend.skip_index_attr_.has_skip_index() && is_delete_insert &&
+              (column->get_meta_type().is_temporal_type() || column->get_meta_type().is_integer_type())) {
+            if (is_cs) {
+              tmp_col_extend.skip_index_attr_.set_min_max();
+            } else if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
+              tmp_col_extend.skip_index_attr_.set_min_max();
+            }
+          }
         }
       }
 

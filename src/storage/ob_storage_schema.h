@@ -297,7 +297,7 @@ public:
   int get_stored_column_count_in_sstable(int64_t &column_count) const;
   virtual int get_multi_version_column_descs(common::ObIArray<share::schema::ObColDesc> &column_descs) const override;
   virtual int get_rowkey_column_ids(common::ObIArray<share::schema::ObColDesc> &column_ids) const override;
-  virtual int get_skip_index_col_attr(common::ObIArray<share::schema::ObSkipIndexColumnAttr> &skip_idx_metas) const override;
+  virtual int get_skip_index_col_attr(const bool is_major, common::ObIArray<share::schema::ObSkipIndexColumnAttr> &skip_idx_metas) const override;
   virtual int get_encryption_id(int64_t &encrypt_id) const override;
   virtual const common::ObString &get_encryption_str() const override { return encryption_; }
   virtual bool need_encrypt() const override;

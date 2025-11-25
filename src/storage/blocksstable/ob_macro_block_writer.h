@@ -123,13 +123,14 @@ struct ObMicroCompressionInfo{
 public:
   ObMicroBlockAdaptiveSplitter();
   ~ObMicroBlockAdaptiveSplitter();
-  int init(const int64_t macro_store_size, const int64_t min_micro_row_count, const bool is_use_adaptive);
+  int init(const ObDataStoreDesc &store_desc, const int64_t min_micro_row_count);
   void reset();
   int check_need_split(const int64_t micro_size,
                        const int64_t micro_row_count,
                        const int64_t split_size,
                        const int64_t current_macro_size,
                        const bool is_keep_space,
+                       const bool is_last_row_last_flag,
                        bool &check_need_split) const;
 int update_compression_info(const int64_t micro_row_count, const int64_t original_size, const int64_t compressed_size);
 private:
@@ -140,6 +141,7 @@ private:
   int64_t macro_store_size_;
   int64_t min_micro_row_count_;
   bool is_use_adaptive_;
+  bool need_reduce_cross_mb_multi_version_rows_;
   ObMicroCompressionInfo compression_infos_[DEFAULT_MICRO_ROW_COUNT + 1]; //compression_infos_[0] for total compression info
 };
 

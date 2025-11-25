@@ -178,14 +178,13 @@ int ObTableIterParam::get_cg_column_param(const share::schema::ObColumnParam *&c
 int ObTableIterParam::build_index_filter_for_row_store(common::ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
-  if (!is_use_column_store() && enable_pd_blockscan()
-      && enable_pd_filter() && enable_skip_index() && nullptr != pushdown_filter_) {
+  if (enable_pd_blockscan() && enable_pd_filter() && enable_base_skip_index() && nullptr != pushdown_filter_) {
     if (OB_FAIL(ObSSTableIndexFilterFactory::build_sstable_index_filter(
-                  false,
-                  get_read_info(),
-                  *pushdown_filter_,
-                  allocator,
-                  sstable_index_filter_))) {
+                false,
+                get_read_info(),
+                *pushdown_filter_,
+                allocator,
+                sstable_index_filter_))) {
       STORAGE_LOG(WARN, "Failed to build sstable index filter", K(ret), KPC(this));
     }
   }

@@ -28,7 +28,7 @@ int ObDASBaseAccessP<pcode>::init()
   ObDASTaskArg &task = RpcProcessor::arg_;
   ObDASBaseAccessP<pcode>::get_das_factory() = &das_factory_;
   memset(monitor_val_, 0, sizeof(monitor_val_));
-  tsc_monitor_info_.init(&monitor_val_[0], &monitor_val_[1], &monitor_val_[2], &monitor_val_[3], nullptr);
+  tsc_monitor_info_.init(&monitor_val_[0], &monitor_val_[1], &monitor_val_[2], &monitor_val_[3], nullptr, &monitor_val_[4]);
   das_remote_info_.tsc_monitor_info_ = &tsc_monitor_info_;
   das_remote_info_.exec_ctx_ = &exec_ctx_;
   das_remote_info_.frame_info_ = &frame_info_;
