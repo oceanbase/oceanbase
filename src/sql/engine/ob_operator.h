@@ -786,7 +786,7 @@ protected:
   char *dummy_ptr_;
   #endif
   bool check_stack_overflow_;
-  ObProfile profile_;
+  ObProfile monitor_profile_;
   DISALLOW_COPY_AND_ASSIGN(ObOperator);
 };
 
