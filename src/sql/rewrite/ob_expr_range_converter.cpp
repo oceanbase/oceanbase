@@ -4082,6 +4082,13 @@ int ObExprRangeConverter::get_orcl_spatial_relationship(const ObRawExpr *const_e
       if (OB_FAIL(add_string_equal_expr_constraint(const_expr, const_val.get_string()))) {
         LOG_WARN("failed to add string equal expr constraint", K(ret));
       }
+    } else if (nullptr != strstr(cmp_str, "CONTAINS")) {
+      // Support CONTAINS for spatial index optimization
+      real_op_type = ObDomainOpType::T_GEO_COVERS;
+      can_extract = true;
+      if (OB_FAIL(add_string_equal_expr_constraint(const_expr, const_val.get_string()))) {
+        LOG_WARN("failed to add string equal expr constraint", K(ret));
+      }
     } else {
       // other spatial relationsh is not supported yet, no need to continue
       real_op_type = ObDomainOpType::T_DOMAIN_OP_END;

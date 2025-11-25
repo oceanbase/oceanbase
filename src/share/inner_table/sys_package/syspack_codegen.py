@@ -255,6 +255,7 @@ syspack_config = [
     SysPackConfig(SysPackGroup.ORACLE, "utl_recomp", "utl_recomp.sql", "utl_recomp_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     SysPackConfig(SysPackGroup.ORACLE, "sdo_geometry", "sdo_geometry.sql", "sdo_geometry_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     SysPackConfig(SysPackGroup.ORACLE, "sdo_geom", "sdo_geom.sql", "sdo_geom_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
+    SysPackConfig(SysPackGroup.ORACLE, "sdo_util", "sdo_util.sql", "sdo_util_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     SysPackConfig(SysPackGroup.ORACLE, "dbms_external_table", "dbms_external_table.sql", "dbms_external_table_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     SysPackConfig(SysPackGroup.ORACLE, "dbms_profiler", "dbms_profiler.sql", "dbms_profiler_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     SysPackConfig(SysPackGroup.ORACLE, "dbms_ddl", "dbms_ddl.sql", "dbms_ddl_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),

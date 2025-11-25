@@ -44,6 +44,30 @@ int ObGeoVertexCollectVisitor::visit(ObIWkbPoint *geo)
     } else {
       x_max_ = std::max(x_max_, vertex.x);
     }
+    if (std::isnan(y_min_)) {
+      y_min_ = vertex.y;
+    } else {
+      y_min_ = std::min(y_min_, vertex.y);
+    }
+    if (std::isnan(y_max_)) {
+      y_max_ = vertex.y;
+    } else {
+      y_max_ = std::max(y_max_, vertex.y);
+    }
+  }
+  return ret;
+}
+
+int ObGeo3DVertexCollectVisitor::visit_pointz_inner(double x, double y, double z)
+{
+  int ret = OB_SUCCESS;
+  ObPoint3dVertex vertex;
+  vertex.x = x;
+  vertex.y = y;
+  vertex.z = z;
+
+  if (OB_FAIL(vertexes_.push_back(vertex))) {
+    LOG_WARN("failed to add 3D vertex to collection", K(ret), K(x), K(y), K(z));
   }
   return ret;
 }
