@@ -675,7 +675,7 @@ public:
   int iterate_joined_table_expr(JoinedTable *joined_table,
                                 ObStmtExprVisitor &visitor) const;
 
-  int update_stmt_table_id(ObIAllocator *allocator, const ObDMLStmt &other);
+  int update_stmt_table_id(ObIAllocator *allocator, const ObDMLStmt &other, bool need_update_qb_name = true);
   int adjust_duplicated_table_names(ObIAllocator &allocator, bool &adjusted);
   int set_table_item_qb_name();
   int adjust_qb_name(ObIAllocator *allocator,
@@ -686,6 +686,7 @@ public:
                           const ObString &src_qb_name,
                           const ObIArray<uint32_t> &src_hash_val,
                           int64_t *sub_num = NULL);
+  int recursive_set_statement_id();
   int recursive_adjust_statement_id(ObIAllocator *allocator,
                                     const ObIArray<uint32_t> &src_hash_val,
                                     int64_t sub_num);
@@ -1225,12 +1226,14 @@ protected:
                            JoinedTable &joined_table);
   int update_table_item_id_for_joined_table(const ObDMLStmt &other_stmt,
                                             const JoinedTable &other,
-                                            JoinedTable &current);
+                                            JoinedTable &current,
+                                            bool need_update_qb_name = true);
   int update_table_item_id(const ObDMLStmt &other,
                            const TableItem &old_item,
                            const bool has_bit_index,
                            TableItem &new_item,
-                           ObIAllocator *allocator);
+                           ObIAllocator *allocator,
+                           bool need_update_qb_name = true);
   int adjust_duplicated_table_name(ObIAllocator &allocator, TableItem &table_item, bool &adjusted);
   static int add_implicit_distinct_for_child_stmts(ObIArray<ObSelectStmt*> &child_stmts);
 

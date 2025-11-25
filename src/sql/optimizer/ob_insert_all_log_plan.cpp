@@ -67,7 +67,17 @@ int ObInsertAllLogPlan::generate_normal_raw_plan()
         LOG_WARN("failed to allocate subplan", K(ret));
       } else { /*do nothing*/ }
     }
-
+    if (OB_SUCC(ret)) {
+      ObSEArray<ObRawExpr *, 4> view_check_exprs;
+      if (OB_FAIL(insert_all_stmt->get_view_check_exprs(view_check_exprs))) {
+        LOG_WARN("get view check exprs", K(ret));
+      } else if (OB_FAIL(candi_allocate_subplan_filter(view_check_exprs))) {
+        LOG_WARN("failed to allocate subplan filter for view check exprs", K(ret));
+      } else if (!view_check_exprs.empty()) {
+        LOG_TRACE("succeed to allocate subplan filter for view check statement",
+            K(candidates_.candidate_plans_.count()), K(view_check_exprs.count()));
+      }
+    }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(prepare_dml_infos())) {
         LOG_WARN("failed to prepare dml infos", K(ret));

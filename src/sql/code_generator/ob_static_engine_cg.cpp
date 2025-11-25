@@ -3459,6 +3459,9 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableReplaceSpec &spec, c
       LOG_WARN("fail to append expr to array", K(ret));
     } else if (stmt_id_expr != nullptr && OB_FAIL(all_need_save_exprs.push_back(stmt_id_expr))) {
       LOG_WARN("fail to append stmt_id_expr to array", K(ret));
+    // maybe view_check_exprs can only be produced by child, such as subquery.
+    } else if (OB_FAIL(append(all_need_save_exprs, op.get_view_check_exprs()))) {
+      LOG_WARN("fail to append expr to array", K(ret));
     } else if (OB_FAIL(generate_rt_exprs(all_need_save_exprs, spec.all_saved_exprs_))) {
       LOG_WARN("fail to generate all_saved_expr", K(ret), K(all_need_save_exprs));
     } else {

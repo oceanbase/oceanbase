@@ -8905,7 +8905,7 @@ int ObResolverUtils::resolve_external_param_info(ExternalParams &param_infos,
   return ret;
 }
 
-int ObResolverUtils::uv_check_basic(ObSelectStmt &stmt, const bool is_insert)
+int ObResolverUtils::uv_check_basic(ObSelectStmt &stmt, const bool is_insert, const bool with_check_op)
 {
   int ret = OB_SUCCESS;
   if (stmt.get_table_items().count() == 0) {
@@ -8920,6 +8920,27 @@ int ObResolverUtils::uv_check_basic(ObSelectStmt &stmt, const bool is_insert)
           || stmt.has_limit()) {
         ret = is_insert ? OB_ERR_NON_INSERTABLE_TABLE : OB_ERR_NON_UPDATABLE_TABLE;
         LOG_WARN("not updatable", K(ret));
+      } else if (OB_UNLIKELY(stmt.get_table_items().count() != 1)) {
+        // do nothing.
+      } else if (OB_ISNULL(stmt.get_table_item(0))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table item is null", K(ret));
+      } else if (with_check_op && is_mysql_mode()) {
+        int64_t target_table_id = stmt.get_table_item(0)->ref_id_;
+        FOREACH_CNT_X(expr, stmt.get_condition_exprs(), OB_SUCC(ret)) {
+          if (OB_ISNULL(*expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("expr is NULL", K(ret));
+          } else if (OB_UNLIKELY((*expr)->has_flag(CNT_SUB_QUERY))) {
+            bool table_found = false;
+            if (OB_FAIL(recursive_search_table_in_ref_query(**expr, target_table_id, table_found))) {
+              LOG_WARN("recursive search table in ref query failed", K(ret));
+            } else if (table_found) {
+              ret = OB_ERR_CHECK_OPTION_ON_NONUPDATABLE_VIEW;
+              LOG_WARN("view with subquery in conditions with check option not allowed", K(ret));
+            }
+          }
+        }
       }
     //oracle mode下，含有fetch的insert/update/delete统一报错，兼容oracle行为
     } else if (stmt.has_fetch()) {
@@ -9181,6 +9202,7 @@ int ObResolverUtils::uv_check_dup_base_col(const TableItem &table_item,
         }
       }
     }
+    LOG_TRACE("uv check dup base col", K(table_item), KPC(table_item.ref_query_), K(has_dup), K(has_non_col_ref));
   }
   return ret;
 }
@@ -9303,28 +9325,31 @@ int ObResolverUtils::uv_check_oracle_distinct(const TableItem &table_item,
 }
 
 // 1. need to be updatable view in mysql mode.
-// 2. no subquery in conditions.
-// 3. only one basic table.
+// 2. only one basic table.
 int ObResolverUtils::view_with_check_option_allowed(const ObSelectStmt *stmt,
                                                     bool &with_check_option)
 {
   int ret = OB_SUCCESS;
   const ObSelectStmt *select_stmt = stmt;
   const TableItem *table_item = NULL;
+  uint64_t data_version = 0;
   if (OB_ISNULL(select_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ref query is null", K(ret));
   } else if (with_check_option || VIEW_CHECK_OPTION_NONE != select_stmt->get_check_option()) {
     with_check_option = true;
     if (!is_oracle_mode() &&
-        OB_FAIL(ObResolverUtils::uv_check_basic(const_cast<ObSelectStmt &>(*select_stmt), false))) {
+        OB_FAIL(ObResolverUtils::uv_check_basic(const_cast<ObSelectStmt &>(*select_stmt), false, true))) {
       ret = OB_ERR_CHECK_OPTION_ON_NONUPDATABLE_VIEW;
       LOG_WARN("with check option on non updatable view not allowed", K(ret));
     } else if (OB_UNLIKELY(select_stmt->get_table_items().count() > 1)) {
       ret = OB_OP_NOT_ALLOW;
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "join view with check option");
-      LOG_WARN("view on joined table with check option not allowed", K(ret));
-    } else {
+      LOG_WARN("view on joined table with check option not allowed", K(ret),
+               K(select_stmt->get_table_items()));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+      LOG_WARN("get min data version failed", K(ret));
+    } else if (!(data_version >= DATA_VERSION_4_4_2_0 || (data_version >= MOCK_DATA_VERSION_4_2_5_7 && data_version < DATA_VERSION_4_3_0_0))) {
       FOREACH_CNT_X(expr, select_stmt->get_condition_exprs(), OB_SUCC(ret)) {
         if (OB_ISNULL(*expr)) {
           ret = OB_ERR_UNEXPECTED;
@@ -9364,6 +9389,60 @@ int ObResolverUtils::view_with_check_option_allowed(const ObSelectStmt *stmt,
           } else {
             with_check_option |= sub_with_check_option;
           }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObResolverUtils::recursive_search_table_in_ref_query(const ObRawExpr &expr, int64_t table_id, bool &found)
+{
+  int ret = OB_SUCCESS;
+  if (expr.is_query_ref_expr()) {
+    const ObSelectStmt *ref_stmt = static_cast<const ObQueryRefRawExpr &>(expr).get_ref_stmt();
+    if (OB_FAIL(recursive_search_table_in_ref_query(ref_stmt, table_id, found))) {
+      LOG_WARN("recursive search table in ref query failed", K(ret));
+    }
+  } else {
+    for (int64_t i = 0; i < expr.get_param_count() && OB_SUCC(ret) && !found; i++) {
+      const ObRawExpr *child = expr.get_param_expr(i);
+      if (OB_ISNULL(child)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("child expr is null", K(ret));
+      } else if (child->has_flag(CNT_SUB_QUERY) &&
+                OB_FAIL(SMART_CALL(recursive_search_table_in_ref_query(*child, table_id, found)))) {
+        LOG_WARN("recursive search table in ref query failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObResolverUtils::recursive_search_table_in_ref_query(const ObSelectStmt *stmt, int64_t table_id, bool &found)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_table_size() && !found; ++i) {
+    const TableItem *table_item = stmt->get_table_item(i);
+    if (OB_ISNULL(table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table_item is null", K(i));
+    } else if (table_item->ref_id_ == table_id) {
+      found = true;
+    }
+  }
+  if (OB_SUCC(ret) && !found) {
+    ObArray<ObSelectStmt *> child_stmts;
+    if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
+      LOG_WARN("failed to get child stmts", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count() && !found; ++i) {
+        if (OB_FAIL(SMART_CALL(recursive_search_table_in_ref_query(child_stmts.at(i), table_id, found)))) {
+          LOG_WARN("recursive search table in ref query failed", K(ret));
         }
       }
     }

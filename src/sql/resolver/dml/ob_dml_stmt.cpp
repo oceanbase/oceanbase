@@ -1071,7 +1071,7 @@ int ObDMLStmt::construct_join_table(const ObDMLStmt &other_stmt,
  * for or-expansion transformation
  * todo: do not update semi id in semi info now
  */
-int ObDMLStmt::update_stmt_table_id(ObIAllocator *allocator, const ObDMLStmt &other)
+int ObDMLStmt::update_stmt_table_id(ObIAllocator *allocator, const ObDMLStmt &other, bool need_update_qb_name)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(other.table_items_.count() != table_items_.count())) {
@@ -1099,14 +1099,14 @@ int ObDMLStmt::update_stmt_table_id(ObIAllocator *allocator, const ObDMLStmt &ot
                NULL != table_items_.at(i)->ref_query_ &&
                NULL != other.table_items_.at(i)->ref_query_ &&
                OB_FAIL(table_items_.at(i)->ref_query_->update_stmt_table_id(allocator,
-                       *other.table_items_.at(i)->ref_query_))) {
+                       *other.table_items_.at(i)->ref_query_, need_update_qb_name))) {
       LOG_WARN("failed to update table id for generated table", K(ret));
     } else if (table_items_.at(i)->is_lateral_table() &&
                other.table_items_.at(i)->is_lateral_table() &&
                NULL != table_items_.at(i)->ref_query_ &&
                NULL != other.table_items_.at(i)->ref_query_ &&
                OB_FAIL(table_items_.at(i)->ref_query_->update_stmt_table_id(allocator,
-                       *other.table_items_.at(i)->ref_query_))) {
+                       *other.table_items_.at(i)->ref_query_, need_update_qb_name))) {
       LOG_WARN("failed to update table id for generated table", K(ret));
     } else { /*do nothing*/ }
   }
@@ -1121,7 +1121,7 @@ int ObDMLStmt::update_stmt_table_id(ObIAllocator *allocator, const ObDMLStmt &ot
           K(subquery_exprs_.at(i)->get_ref_stmt()), K(other.subquery_exprs_.at(i)->get_ref_stmt()),
           K(ret));
     } else if (OB_FAIL(subquery_exprs_.at(i)->get_ref_stmt()->update_stmt_table_id(allocator,
-                       *other.subquery_exprs_.at(i)->get_ref_stmt()))) {
+                       *other.subquery_exprs_.at(i)->get_ref_stmt(), need_update_qb_name))) {
       LOG_WARN("failed to update table id for subquery exprs", K(ret));
     } else { /*do nothing*/ }
   }
@@ -1150,7 +1150,8 @@ int ObDMLStmt::update_stmt_table_id(ObIAllocator *allocator, const ObDMLStmt &ot
                                             *other.table_items_.at(i),
                                             true,
                                             *table_items_.at(i),
-                                            allocator))) {
+                                            allocator,
+                                            need_update_qb_name))) {
       LOG_WARN("failed to update table id for table item", K(ret));
     } else { /*do nothing*/ }
   }
@@ -1163,7 +1164,8 @@ int ObDMLStmt::update_stmt_table_id(ObIAllocator *allocator, const ObDMLStmt &ot
           K(joined_tables_.at(i)), K(ret));
     } else if (OB_FAIL(update_table_item_id_for_joined_table(other,
                                                              *other.joined_tables_.at(i),
-                                                             *joined_tables_.at(i)))) {
+                                                             *joined_tables_.at(i),
+                                                             need_update_qb_name))) {
       LOG_WARN("failed to update table id for joined table", K(ret));
     } else { /*do nothing*/ }
   }
@@ -1256,6 +1258,27 @@ int ObDMLStmt::recursive_adjust_statement_id(ObIAllocator *allocator,
   return ret;
 }
 
+int ObDMLStmt::recursive_set_statement_id()
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObSelectStmt*, 4> child_stmts;
+  if (OB_FAIL(set_stmt_id())) {
+    LOG_WARN("failed to set stmt id", K(ret));
+  } else if (OB_FAIL(get_child_stmts(child_stmts))) {
+    LOG_WARN("get child stmt failed", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+      if (OB_ISNULL(child_stmts.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("sub stmt is null", K(ret));
+      } else if (OB_FAIL(SMART_CALL(child_stmts.at(i)->recursive_set_statement_id()))) {
+        LOG_WARN("fail to adjust statement id", K(ret), K(i));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDMLStmt::get_stmt_by_stmt_id(int64_t stmt_id, ObDMLStmt *&stmt)
 {
   int ret = OB_SUCCESS;
@@ -1296,7 +1319,8 @@ int ObDMLStmt::get_stmt_by_stmt_id(int64_t stmt_id, ObDMLStmt *&stmt)
 
 int ObDMLStmt::update_table_item_id_for_joined_table(const ObDMLStmt &other_stmt,
                                                      const JoinedTable &other,
-                                                     JoinedTable &current)
+                                                     JoinedTable &current,
+                                                     bool need_update_qb_name)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(other.left_table_) || OB_ISNULL(other.right_table_) ||
@@ -1304,19 +1328,21 @@ int ObDMLStmt::update_table_item_id_for_joined_table(const ObDMLStmt &other_stmt
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("null table item", K(other.left_table_), K(other.right_table_),
         K(current.left_table_), K(current.right_table_), K(ret));
-  } else if (OB_FAIL(update_table_item_id(other_stmt, other, false, current, NULL))) {
+  } else if (OB_FAIL(update_table_item_id(other_stmt, other, false, current, NULL, need_update_qb_name))) {
     LOG_WARN("failed to update table id", K(ret));
   } else if (other.left_table_->is_joined_table() &&
              current.left_table_->is_joined_table() &&
              OB_FAIL(SMART_CALL(update_table_item_id_for_joined_table(other_stmt,
                                                            static_cast<JoinedTable&>(*other.left_table_),
-                                                           static_cast<JoinedTable&>(*current.left_table_))))) {
+                                                           static_cast<JoinedTable&>(*current.left_table_),
+                                                           need_update_qb_name)))) {
     LOG_WARN("failed to update table id", K(ret));
   } else if (other.right_table_->is_joined_table() &&
              current.right_table_->is_joined_table() &&
              OB_FAIL(SMART_CALL(update_table_item_id_for_joined_table(other_stmt,
                                                            static_cast<JoinedTable&>(*other.right_table_),
-                                                           static_cast<JoinedTable&>(*current.right_table_))))) {
+                                                           static_cast<JoinedTable&>(*current.right_table_),
+                                                           need_update_qb_name)))) {
     LOG_WARN("failed to update table id", K(ret));
   } else { /*do nothing*/ }
   return ret;
@@ -1326,7 +1352,8 @@ int ObDMLStmt::update_table_item_id(const ObDMLStmt &other,
                                     const TableItem &old_item,
                                     const bool has_bit_index,
                                     TableItem &new_item,
-                                    ObIAllocator *allocator)
+                                    ObIAllocator *allocator,
+                                    bool need_update_qb_name)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(query_ctx_)) {
@@ -1343,7 +1370,7 @@ int ObDMLStmt::update_table_item_id(const ObDMLStmt &other,
       if (OB_ISNULL(allocator)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret), K(ret), K(allocator));
-      } else if (OB_FAIL(get_qb_name(new_item.qb_name_))) {
+      } else if (need_update_qb_name && OB_FAIL(get_qb_name(new_item.qb_name_))) {
         LOG_WARN("fail to get qb_name", K(ret), K(get_stmt_id()));
       } else if (OB_FAIL(adjust_duplicated_table_name(*allocator, new_item, adjusted))) {
         LOG_WARN("fail to update dup table name", K(ret), K(new_item));

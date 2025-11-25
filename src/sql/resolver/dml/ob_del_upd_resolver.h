@@ -170,7 +170,7 @@ protected:
   int resolve_check_constraints(const TableItem* table_item,
                                 common::ObIArray<ObRawExpr*> &check_exprs);
   int resolve_view_check_exprs(uint64_t table_id,
-                               const TableItem* table_item,
+                               TableItem* table_item,
                                const bool cascaded,
                                common::ObIArray<ObRawExpr*> &check_exprs);
   int get_pullup_column_map(ObDMLStmt &stmt,
@@ -178,7 +178,10 @@ protected:
                             uint64_t table_id,
                             ObIArray<ObRawExpr *> &view_columns,
                             ObIArray<ObRawExpr *> &base_columns);
-  
+  int replace_ref_query_stmt(ObIArray<ObRawExpr *> &exprs,
+                             ObRawExprCopier &copier);
+  int recursive_replace_ref_query_stmt(ObRawExpr *&expr,
+                                       ObRawExprCopier &copier);
   int view_pullup_column_ref_exprs_recursively(ObRawExpr *&expr,
                                                uint64_t view_table_id,
                                                uint64_t base_table_id,
@@ -277,7 +280,6 @@ protected:
   int get_label_se_columns(ObInsertTableInfo& table_info, ObIArray<uint64_t>& label_se_columns);
   int prune_columns_for_ddl(const TableItem &table_item,
                             ObIArray<ObColumnRefRawExpr*> &column_exprs);
-  int replace_column_ref_for_check_constraint(ObInsertTableInfo& table_info, ObRawExpr *&expr);
   int add_default_sequence_id_to_stmt(const uint64_t table_id);
   int check_need_match_all_params(const common::ObIArray<ObColumnRefRawExpr*> &value_desc, bool &need_match);
   int build_autoinc_param(

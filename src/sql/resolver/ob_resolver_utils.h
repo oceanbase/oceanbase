@@ -712,7 +712,7 @@ public:
   //   rownum
   //
   // return OB_SUCCESS, OB_ERR_NON_INSERTABLE_TABLE, OB_ERR_NON_UPDATABLE_TABLE, OB_ERR_ILLEGAL_VIEW_UPDATE
-  static int uv_check_basic(ObSelectStmt &stmt, const bool is_insert);
+  static int uv_check_basic(ObSelectStmt &stmt, const bool is_insert, const bool with_check_op = false);
 
   static int check_select_item_subquery(ObSelectStmt &stmt,
                                         bool &has_subquery,
@@ -752,6 +752,8 @@ public:
                                       bool &has_distinct);
   // check whether view is allowed to be WITH CHECK OPTION
   static int view_with_check_option_allowed(const ObSelectStmt *stmt, bool &with_check_option);
+  static int recursive_search_table_in_ref_query(const ObRawExpr &expr, int64_t table_id, bool &found);
+  static int recursive_search_table_in_ref_query(const ObSelectStmt *stmt, int64_t table_id, bool &found);
   static void set_stmt_type(const ObItemType item_type) { ObResolverUtils::item_type_ = item_type; }
 
   static common::ObString get_stmt_type_string(stmt::StmtType stmt_type);

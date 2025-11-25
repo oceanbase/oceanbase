@@ -73,6 +73,15 @@ int ObLogUpdate::get_plan_item_info(PlanText &plan_text,
     if (OB_SUCC(ret) && get_das_dop() > 0) {
       ret = BUF_PRINTF(", das_dop=%ld", this->get_das_dop());
     }
+    if (OB_SUCC(ret) && !view_check_exprs_.empty()) {
+      if(OB_FAIL(BUF_PRINTF(", "))) {
+        LOG_WARN("BUG_PRINTF fails", K(ret));
+      } else if (OB_FAIL(BUF_PRINTF("\n      "))) {
+        LOG_WARN("BUG_PRINTF fails", K(ret));
+      } else {
+        EXPLAIN_PRINT_EXPRS(view_check_exprs_, type);
+      }
+    }
     END_BUF_PRINT(plan_item.special_predicates_,
                   plan_item. special_predicates_len_);
   }

@@ -109,7 +109,16 @@ int ObLogInsert::get_plan_item_info(PlanText &plan_text,
         EXPLAIN_PRINT_EXPRS(column_values, type);
       }
     }
-
+    // print view check exprs
+    if (OB_SUCC(ret) && !view_check_exprs_.empty()) {
+      if(OB_FAIL(BUF_PRINTF(", "))) {
+        LOG_WARN("BUG_PRINTF fails", K(ret));
+      } else if (OB_FAIL(BUF_PRINTF("\n      "))) {
+        LOG_WARN("BUG_PRINTF fails", K(ret));
+      } else {
+        EXPLAIN_PRINT_EXPRS(view_check_exprs_, type);
+      }
+    }
     if (OB_SUCC(ret) && insert_up_ ) {
       const IndexDMLInfo *table_insert_info = get_insert_up_index_dml_infos().at(0);
       if (OB_ISNULL(table_insert_info)) {
