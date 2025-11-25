@@ -23,7 +23,7 @@ OMPKOK::OMPKOK()
     : field_count_(0x00),
       affected_rows_(0),
       last_insert_id_(0),
-      server_status_(0x22),
+      server_status_(0x02),
       warnings_(0),
       message_(),
       changed_schema_(),
