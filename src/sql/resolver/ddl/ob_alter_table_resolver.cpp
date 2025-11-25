@@ -6496,8 +6496,22 @@ int ObAlterTableResolver::check_alter_part_key_allowed(const ObTableSchema &tabl
       OZ (ObResolverUtils::check_column_valid_for_partition(
         *part_expr, part_type, table_schema));
     }
-    if (OB_SUCC(ret) && !is_key_part(part_type)) {
-      OZ (part_expr->preorder_accept(part_expr_checker));
+    if (OB_SUCC(ret)) {
+      ObRawExprPartExprChecker part_expr_checker(part_type);
+      //TODO ly435438: handle list columns in the future
+      if (is_range_columns_part(part_type) && T_OP_ROW == part_expr->get_expr_type()) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < part_expr->get_param_count(); ++i) {
+          ObRawExpr *param_expr = part_expr->get_param_expr(i);
+          if (OB_ISNULL(param_expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected null", K(ret));
+          } else if (OB_FAIL(param_expr->preorder_accept(part_expr_checker))) {
+            LOG_WARN("check part expr failed", K(ret));
+          }
+        }
+      } else if (!is_key_part(part_type)) {
+        OZ (part_expr->preorder_accept(part_expr_checker));
+      }
     }
   }
   return ret;
