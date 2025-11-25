@@ -784,6 +784,7 @@ public:
                                  enable_ps_parameterize_(true),
                                  enable_seq_wrap_around_flush_cache_(false),
                                  enable_sql_ccl_rule_(true),
+                                 force_unstreaming_cursor_(false),
                                  session_(session)
     {
     }
@@ -838,6 +839,7 @@ public:
     }
 
     bool enable_ps_parameterize() const { return enable_ps_parameterize_; }
+    bool force_unstreaming_cursor() const { return force_unstreaming_cursor_; }
   private:
     //租户级别配置项缓存session 上，避免每次获取都需要刷新
     bool is_external_consistent_;
@@ -876,6 +878,7 @@ public:
     bool enable_ps_parameterize_;
     bool enable_seq_wrap_around_flush_cache_;
     bool enable_sql_ccl_rule_;
+    bool force_unstreaming_cursor_;
     ObSQLSessionInfo *session_;
   };
 
@@ -1617,6 +1620,11 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.enable_enhanced_cursor_validation();
+  }
+  bool force_unstreaming_cursor()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.force_unstreaming_cursor();
   }
   bool is_enable_enum_set_with_subschema()
   {
