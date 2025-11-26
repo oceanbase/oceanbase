@@ -182,7 +182,7 @@ void ObMergeStaticInfo::shallow_copy(const ObMergeStaticInfo &other)
   co_major_merge_type_ = other.co_major_merge_type_;
   is_full_merge_ = other.is_full_merge_;
   MEMSET(mds_filter_info_str_, '\0', sizeof(mds_filter_info_str_));
-  strncpy(mds_filter_info_str_, other.mds_filter_info_str_, strlen(other.mds_filter_info_str_));
+  snprintf(mds_filter_info_str_, sizeof(mds_filter_info_str_), "%s", other.mds_filter_info_str_);
 }
 
 int64_t ObMergeStaticInfo::to_string(char* buf, const int64_t buf_len) const
@@ -256,7 +256,7 @@ void ObMergeRunningInfo::shallow_copy(const ObMergeRunningInfo &other)
   dag_id_ = other.dag_id_;
   parallel_merge_info_ = other.parallel_merge_info_;
   MEMSET(comment_, '\0', sizeof(comment_));
-  strncpy(comment_, other.comment_, strlen(other.comment_));
+  snprintf(comment_, sizeof(comment_), "%s", other.comment_);
 }
 /**
  * -------------------------------------------------------------------ObMergeBlockInfo-------------------------------------------------------------------
@@ -314,7 +314,7 @@ void ObMergeBlockInfo::shallow_copy(const ObMergeBlockInfo &other)
   new_micro_info_ = other.new_micro_info_;
   block_io_us_ = other.block_io_us_;
   MEMSET(macro_id_list_, '\0', sizeof(macro_id_list_));
-  strncpy(macro_id_list_, other.macro_id_list_, strlen(other.macro_id_list_));
+  snprintf(macro_id_list_, sizeof(macro_id_list_), "%s", other.macro_id_list_);
 }
 
 void ObMergeBlockInfo::add(const ObMergeBlockInfo &other)
