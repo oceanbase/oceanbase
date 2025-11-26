@@ -75,7 +75,7 @@ public:
   int add_pre_warm_state(const bool micro_block_need_pre_warm);
   int get_pre_warm_state(const int micro_block_idx, bool &need_pre_warm) const;
   OB_INLINE bool need_pre_warm() const { return need_pre_warm_; }
-  OB_INLINE int64_t get_pre_warm_list_count() const { return micro_block_need_pre_warm_list.count(); }
+  OB_INLINE int64_t get_pre_warm_list_count() const { return micro_block_need_pre_warm_list_.count(); }
   int flush(ObIMacroBlockFlusher &macro_block_flusher, const bool is_close_flush);
   void print_flush_log(const ObStorageObjectHandle &macro_handle) const;
   void reset();
@@ -144,7 +144,7 @@ private:
   int64_t cur_macro_seq_;
   bool is_inited_;
   bool need_pre_warm_;
-  common::ObSEArray<bool, DEFAULT_MICRO_BLOCK_COUNT> micro_block_need_pre_warm_list;
+  common::ObSEArray<bool, DEFAULT_MICRO_BLOCK_COUNT> micro_block_need_pre_warm_list_;
 };
 
 }

@@ -153,8 +153,9 @@ ObMacroBlock::ObMacroBlock()
     cur_macro_seq_(-1),
     is_inited_(false),
     need_pre_warm_(false),
-    micro_block_need_pre_warm_list()
+    micro_block_need_pre_warm_list_()
 {
+  micro_block_need_pre_warm_list_.set_attr(ObMemAttr(MTL_ID(), "MicBlkPreWarm"));
 }
 
 ObMacroBlock::~ObMacroBlock()
@@ -365,8 +366,8 @@ int ObMacroBlock::write_index_micro_block(
 int ObMacroBlock::add_pre_warm_state(const bool micro_block_need_pre_warm)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(micro_block_need_pre_warm_list.push_back(micro_block_need_pre_warm))) {
-    STORAGE_LOG(WARN, "push back failed.", K(ret), K(micro_block_need_pre_warm_list));
+  if (OB_FAIL(micro_block_need_pre_warm_list_.push_back(micro_block_need_pre_warm))) {
+    STORAGE_LOG(WARN, "push back failed.", K(ret), K_(micro_block_need_pre_warm_list));
   } else if (micro_block_need_pre_warm) {
     need_pre_warm_ = true;
   }
@@ -375,12 +376,12 @@ int ObMacroBlock::add_pre_warm_state(const bool micro_block_need_pre_warm)
 int ObMacroBlock::get_pre_warm_state(const int micro_block_idx, bool &need_pre_warm) const
 {
   int ret = OB_SUCCESS;
-  int count = micro_block_need_pre_warm_list.count();
+  int count = micro_block_need_pre_warm_list_.count();
   if(micro_block_idx < 0 || micro_block_idx >= count) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid micro_block_idx", K(ret), K(micro_block_idx), K(count));
   } else {
-    need_pre_warm = micro_block_need_pre_warm_list.at(micro_block_idx);
+    need_pre_warm = micro_block_need_pre_warm_list_.at(micro_block_idx);
   }
   return ret;
 }
@@ -436,7 +437,7 @@ void ObMacroBlock::reset()
   allocator_.reset();
   is_inited_ = false;
   need_pre_warm_ = false;
-  micro_block_need_pre_warm_list.reset();
+  micro_block_need_pre_warm_list_.reset();
 }
 
 void ObMacroBlock::reuse()
@@ -455,7 +456,7 @@ void ObMacroBlock::reuse()
   allocator_.reuse();
   is_inited_ = false;
   need_pre_warm_ = false;
-  micro_block_need_pre_warm_list.reuse();
+  micro_block_need_pre_warm_list_.reuse();
 }
 int ObMacroBlock::reserve_header(const ObDataStoreDesc &spec, const int64_t &cur_macro_seq)
 {
