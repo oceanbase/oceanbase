@@ -2077,7 +2077,9 @@ int ObSPIService::spi_check_autonomous_trans(pl::ObPLExecCtx *ctx)
       LOG_WARN("active autonomous transaction detected", K(ret));
     }
     if (OB_SUCC(ret) || OB_ERR_AUTONOMOUS_TRANSACTION_ROLLBACK == ret) {
-      int end_trans_ret = pl_context->end_autonomous(*ctx->exec_ctx_, *session_info);
+      int end_trans_ret = pl_context->end_autonomous(*ctx->exec_ctx_, 
+                                                     *session_info, 
+                                                     ret == OB_TRANS_XA_BRANCH_FAIL);
       ret = OB_SUCCESS == ret ? end_trans_ret : ret;
       pl_context->clear_autonomous();
     }
