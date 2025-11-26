@@ -91,23 +91,7 @@ void *ObParallelAllocator::alloc(const int64_t size, const ObMemAttr &attr)
 
 void ObParallelAllocator::free(void *ptr)
 {
-  SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
-  if (OB_LIKELY(nullptr != ptr)) {
-    AObject *obj = reinterpret_cast<AObject*>((char*)ptr - lib::AOBJECT_HEADER_SIZE);
-    abort_unless(obj);
-    abort_unless(obj->MAGIC_CODE_ == lib::AOBJECT_MAGIC_CODE
-                 || obj->MAGIC_CODE_ == lib::BIG_AOBJECT_MAGIC_CODE);
-    abort_unless(obj->in_use_);
-    SANITY_POISON(obj->data_, obj->alloc_bytes_);
-
-    get_mem_leak_checker().on_free(*obj);
-    lib::ABlock *block = obj->block();
-    abort_unless(block);
-    abort_unless(block->is_valid());
-    ObjectSet *os = (ObjectSet*)block->obj_set_;
-    // The locking process is driven by obj_set
-    os->free_object(obj);
-  }
+  ObTenantCtxAllocator::common_free(ptr);
 }
 
 } // end of namespace common

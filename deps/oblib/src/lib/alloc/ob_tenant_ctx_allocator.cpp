@@ -19,6 +19,7 @@
 #include "lib/alloc/memory_sanity.h"
 #include "lib/alloc/ob_malloc_callback.h"
 #include "common/ob_smart_var.h"
+#include "lib/utility/ob_hang_fatal_error.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -521,13 +522,16 @@ void ObTenantCtxAllocator::common_free(void *ptr)
     AObject *obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);
     abort_unless(obj->is_valid());
     abort_unless(obj->in_use_);
-    ABlock *block = obj->block();
-    abort_unless(block->is_valid());
-    abort_unless(block->in_use_);
-    on_free(*obj, *block);
-    abort_unless(NULL != block->obj_set_);
-    OB_LIKELY(block->is_malloc_v2_) ? block->obj_set_v2_->free_object(obj, block) :
-        block->obj_set_->free_object(obj);
-        
+    if (OB_UNLIKELY(in_exception_state)) {
+      add_capture_memory_info(ptr, obj->alloc_bytes_);
+    } else {
+      ABlock *block = obj->block();
+      abort_unless(block->is_valid());
+      abort_unless(block->in_use_);
+      on_free(*obj, *block);
+      abort_unless(NULL != block->obj_set_);
+      OB_LIKELY(block->is_malloc_v2_) ? block->obj_set_v2_->free_object(obj, block) :
+          block->obj_set_->free_object(obj);
+    } 
   }
 }

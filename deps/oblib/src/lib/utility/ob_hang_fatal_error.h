@@ -23,10 +23,13 @@ namespace common
 extern void right_to_die_or_duty_to_live();
 int64_t get_fatal_error_thread_id();
 void set_fatal_error_thread_id(int64_t thread_id);
+void add_capture_memory_info(void *mem_ptr, int64_t mem_len);
+void dump_capture_memory_info();
+void print_capture_memory_info();
 
 
 RLOCAL_EXTERN(bool, in_try_stmt);
-
+RLOCAL_EXTERN(bool, in_exception_state);
 struct OB_BASE_EXCEPTION : public std::exception
 {
   virtual const char *what() const throw() override { return nullptr; }
@@ -37,6 +40,14 @@ template <int ERRNO>
 struct OB_EXCEPTION : public OB_BASE_EXCEPTION
 {
   virtual int get_errno() { return ERRNO; }
+  OB_EXCEPTION() {}
+  ~OB_EXCEPTION() throw()
+  {
+    if (in_exception_state) {
+      in_exception_state = false;
+      dump_capture_memory_info();
+    }
+  }
 };
 
 }
