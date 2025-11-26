@@ -282,7 +282,7 @@ int ObExprTimeBase::calc(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum
         expr_datum.set_null();
       } else {
         int idx = ot.parts_[type] - 1;
-        if (0 <= idx  && idx < 7) {
+        if (OB_LIKELY(0 <= idx  && idx < 7)) {
           if (OB_FAIL(session->get_locale_name(locale_name))) {
               LOG_WARN("failed to get locale time name", K(expr), K(expr_datum));
           } else {
@@ -304,7 +304,7 @@ int ObExprTimeBase::calc(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum
         expr_datum.set_null();
       } else {
         int idx = ot.parts_[type] - 1;
-        if(0 <= idx  && idx < 12) {
+        if(OB_LIKELY(0 <= idx  && idx < 12)) {
           if (OB_FAIL(session->get_locale_name(locale_name))) {
               LOG_WARN("failed to get locale time name", K(expr), K(expr_datum));
           } else {
@@ -685,6 +685,9 @@ int vector_month_name(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &ski
 
         if (month == 0) {
           res_vec->set_null(idx);
+        } else if (OB_UNLIKELY(month < 1 || month > 12)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("the parameter month should be within a reasonable range", K(month));
         } else {
           size_t len = strlen(month_name[month-1]);
           res_vec->set_string(idx, ObString(len, month_name[month-1]));
