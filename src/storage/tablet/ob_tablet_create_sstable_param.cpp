@@ -1547,7 +1547,7 @@ int ObTabletCreateSSTableParam::init_for_inc_major_ddl_aggregate(
     is_ready_for_read_ = true;
     table_mode_ = basic_meta.table_mode_;
     index_type_ = static_cast<share::schema::ObIndexType>(basic_meta.index_type_);
-    root_row_store_type_ = basic_meta.latest_row_store_type_;
+    root_row_store_type_ = basic_meta.root_row_store_type_;
     latest_row_store_type_ = basic_meta.latest_row_store_type_;
     data_index_tree_height_ = 2;
     index_blocks_cnt_ = 0;
