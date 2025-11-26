@@ -6121,7 +6121,6 @@ int ObVectorIndexUtil::estimate_hnsw_memory(uint64_t num_vectors,
       param.type_ != VIAT_HGRAPH) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid hnsw algorithm type", K(ret), K(param));
-  } else if (VIAT_HNSW == build_type && OB_FALSE_IT(build_type = VIAT_HGRAPH)) { // vsag not support hnsw estimate now, use hgraph
   } else if (OB_FAIL(obvectorutil::create_index(index_handler,
                                                 build_type,
                                                 DATATYPE_FLOAT32,
