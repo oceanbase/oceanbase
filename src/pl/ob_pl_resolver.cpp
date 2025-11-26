@@ -7448,6 +7448,7 @@ int ObPLResolver::resolve_inout_param(ObRawExpr *param_expr, ObPLRoutineParamMod
         int64_t var_idx
           = access_idxs.at(ObObjAccessIdx::get_local_variable_idx(access_idxs)).var_index_;
         CK (var_idx >= 0 && var_idx < obj_expr->get_var_indexs().count());
+        OZ (check_update_column(current_block_->get_namespace(), obj_expr->get_var_indexs().at(var_idx), access_idxs));
         OZ (check_local_variable_read_only(
           current_block_->get_namespace(),
           obj_expr->get_var_indexs().at(var_idx),
