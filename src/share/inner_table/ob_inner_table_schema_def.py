@@ -41879,43 +41879,63 @@ def_table_schema(
   gm_columns      = [],
   view_definition = """
     SELECT
-      CASE
-        WHEN atnt.tenant_name LIKE 'META$%' THEN REPLACE(atnt.tenant_name, 'META$', '')
-        ELSE atnt.tenant_id
-      END AS TENANT_ID,
-      CASE
-        WHEN atnt.tenant_name LIKE 'META$%' THEN
-          (SELECT t.tenant_name
-          FROM oceanbase.__all_tenant t
-          WHERE t.tenant_id = REPLACE(atnt.tenant_name, 'META$', ''))
-        ELSE atnt.tenant_name
-      END AS TENANT_NAME,
-      azs.endpoint AS ENDPOINT,
-      azs.path AS PATH,
-      CASE
-        WHEN asu.file_type IN ('tenant local data',
-                              'tenant tmp data')
-                          THEN 'Local Data'
-        WHEN asu.file_type IN ('tenant shared data')
-                          THEN 'Shared Data'
-        WHEN asu.file_type IN ('tenant clog data')
-                          THEN 'Clog Data'
-      END AS SPACE_TYPE,
-      SUM(asu.used_size) AS USAGE_BYTES
-    from oceanbase.__all_space_usage asu
-    INNER JOIN oceanbase.__all_tenant atnt
-      ON atnt.tenant_id = asu.tenant_id
-    INNER JOIN oceanbase.__all_server alls
-      ON alls.svr_ip = asu.svr_ip
-        and alls.svr_port = asu.svr_port
-    LEFT JOIN oceanbase.__all_zone_storage azs
-      ON azs.zone = alls.zone
-    where asu.file_type in ('tenant shared data',
-                            'tenant local data',
-                            'tenant clog data',
-                            'tenant tmp data')
-    GROUP BY TENANT_ID, ENDPOINT, PATH, SPACE_TYPE
-    ORDER BY TENANT_ID
+        q1.TENANT_ID,
+        q1.TENANT_NAME,
+        q1.ENDPOINT,
+        q1.PATH,
+        q2.SPACE_TYPE,
+        q2.USAGE_BYTES
+    FROM (
+        SELECT
+        CASE
+          WHEN atnt.tenant_name LIKE 'META$%' THEN REPLACE(atnt.tenant_name, 'META$', '')
+          ELSE atnt.tenant_id
+        END AS TENANT_ID,
+        CASE
+          WHEN atnt.tenant_name LIKE 'META$%' THEN
+            (SELECT t.tenant_name
+            FROM oceanbase.__all_tenant t
+            WHERE t.tenant_id = REPLACE(atnt.tenant_name, 'META$', ''))
+          ELSE atnt.tenant_name
+        END AS TENANT_NAME,
+        azs.endpoint AS ENDPOINT,
+        azs.path AS PATH
+        from oceanbase.__all_space_usage asu
+        INNER JOIN oceanbase.__all_tenant atnt
+        ON atnt.tenant_id = asu.tenant_id
+        INNER JOIN oceanbase.__all_server alls
+        ON alls.svr_ip = asu.svr_ip
+            and alls.svr_port = asu.svr_port
+        LEFT JOIN oceanbase.__all_zone_storage azs
+        ON azs.zone = alls.zone
+        where asu.file_type in ('tenant shared data',
+                                'tenant local data',
+                                'tenant clog data',
+                                'tenant tmp data')
+        GROUP BY TENANT_ID, ENDPOINT, PATH
+    ) q1
+    INNER JOIN (
+        SELECT
+        asu.tenant_id AS TENANT_ID,
+        CASE
+          WHEN asu.file_type IN ('tenant local data',
+                                'tenant tmp data')
+                            THEN 'Local Data'
+          WHEN asu.file_type IN ('tenant shared data')
+                            THEN 'Shared Data'
+          WHEN asu.file_type IN ('tenant clog data')
+                            THEN 'Clog Data'
+        END AS SPACE_TYPE,
+        SUM(asu.used_size) AS USAGE_BYTES
+        FROM oceanbase.__all_space_usage asu
+        WHERE asu.file_type in ('tenant shared data',
+                                'tenant local data',
+                                'tenant clog data',
+                                'tenant tmp data')
+        GROUP BY TENANT_ID, SPACE_TYPE
+    ) q2
+    ON q1.TENANT_ID = q2.TENANT_ID
+    ORDER BY q1.TENANT_ID, q2.SPACE_TYPE
 """.replace("\n", " ")
 )
 
