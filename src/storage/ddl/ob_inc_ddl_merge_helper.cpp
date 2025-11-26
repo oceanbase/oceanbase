@@ -192,10 +192,7 @@ int ObIncMinDDLMergeHelper::merge_cg_slice(ObIDag *dag,
     tablet_ddl_param.start_scn_           = ddl_kv->get_ddl_start_scn();
     tablet_ddl_param.commit_scn_          = ddl_kv->get_ddl_start_scn();
     tablet_ddl_param.data_format_version_ = dag_merge_param.ddl_task_param_.tenant_data_version_;
-    tablet_ddl_param.table_key_.tablet_id_= dag_merge_param.table_key_.tablet_id_;
-    tablet_ddl_param.table_key_.scn_range_.start_scn_ = ddl_kv->get_start_scn();
-    tablet_ddl_param.table_key_.scn_range_.end_scn_   = ddl_kv->get_end_scn();
-    tablet_ddl_param.table_key_.table_type_           = ObITable::MINI_SSTABLE;
+    tablet_ddl_param.table_key_           = dag_merge_param.table_key_;
     tablet_ddl_param.snapshot_version_                = ddl_kv->get_snapshot_version();
     tablet_ddl_param.trans_id_                        = ddl_kv->get_trans_id();
     tablet_ddl_param.seq_no_                          = ddl_kv->get_seq_no();
