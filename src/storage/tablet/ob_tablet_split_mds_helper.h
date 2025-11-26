@@ -71,7 +71,8 @@ public:
     const ObIArray<const share::schema::ObTableSchema *> &inc_table_schemas,
     ObIArray<ObTabletID> &src_tablet_ids,
     ObIArray<ObArray<ObTabletID>> &dst_tablet_ids,
-    ObIArray<ObRowkey> &dst_high_bound_vals);
+    ObIArray<blocksstable::ObDatumRowkey> &dst_end_partkey_vals,
+    common::ObIAllocator &allocator);
 
   int init_split_start_src(
     const uint64_t tenant_id,
@@ -91,7 +92,7 @@ public:
     const ObIArray<const share::schema::ObTableSchema *> &inc_table_schemas,
     const ObIArray<ObTabletID> &src_tablet_ids,
     const ObIArray<ObArray<ObTabletID>> &dst_tablet_ids,
-    const ObIArray<ObRowkey> &dst_high_bound_vals);
+    const ObIArray<blocksstable::ObDatumRowkey> &dst_end_partkey_vals);
   int set_autoinc_seq_arg(const obrpc::ObBatchSetTabletAutoincSeqArg &arg);
   int init_split_end_src(
     const uint64_t tenant_id,
@@ -154,14 +155,19 @@ private:
 class ObTabletSplitMdsArgPrepareDstOp final
 {
 public:
-  ObTabletSplitMdsArgPrepareDstOp(const bool is_data_table, ObIArray<ObTabletID> &dst_tablet_ids, ObIArray<ObRowkey> &dst_high_bound_vals)
-    : is_data_table_(is_data_table), dst_tablet_ids_(dst_tablet_ids), dst_high_bound_vals_(dst_high_bound_vals) {}
+  ObTabletSplitMdsArgPrepareDstOp(const bool is_data_table, const ObPartitionKeyInfo &partition_key_info, ObIArray<ObTabletID> &dst_tablet_ids, ObIArray<blocksstable::ObDatumRowkey> &dst_end_partkey_vals, common::ObIAllocator &allocator)
+    : is_data_table_(is_data_table), dst_tablet_ids_(dst_tablet_ids), dst_end_partkey_vals_(dst_end_partkey_vals), allocator_(allocator), partition_key_info_(partition_key_info) {}
   ~ObTabletSplitMdsArgPrepareDstOp() = default;
   int operator()(const int64_t part_idx, share::schema::ObBasePartition &part);
+  int check_and_cast_end_partkey(const ObPartitionKeyInfo &partition_key_info,
+    blocksstable::ObDatumRowkey &end_partkey,
+    common::ObIAllocator &allocator);
 private:
   bool is_data_table_;
   ObIArray<ObTabletID> &dst_tablet_ids_;
-  ObIArray<ObRowkey> &dst_high_bound_vals_;
+  ObIArray<blocksstable::ObDatumRowkey> &dst_end_partkey_vals_;
+  common::ObIAllocator &allocator_;
+  const ObPartitionKeyInfo &partition_key_info_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletSplitMdsArgPrepareDstOp);
 };

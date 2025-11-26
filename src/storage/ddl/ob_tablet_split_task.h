@@ -307,9 +307,6 @@ private:
       const ObStorageSchema &clipped_storage_schema,
       const ObIArray<ObMacroBlockWriter *> &macro_block_writer_arr,
       const ObDatumRange &query_range);
-  int check_and_cast_high_bound(
-      const common::ObIArray<ObColDesc> &col_descs,
-      common::ObSArray<TabletBoundPair> &bound_pairs);
 private:
   static const int64_t MAP_BUCKET_NUM = 100;
   bool is_inited_;
