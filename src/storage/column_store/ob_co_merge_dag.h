@@ -311,10 +311,12 @@ public:
   int init_min_sstable_end_scn();
   int get_min_sstable_end_scn(SCN &min_end_scn); // return min_end_scn from ctx
   INHERIT_TO_STRING_KV("ObIDagNet", ObIDagNet, K_(is_inited), K_(merge_status), K_(finish_added),
-      K_(merge_batch_size), K_(batch_dag_cnt), K_(basic_param), KP_(finish_dag), K_(min_sstable_end_scn), K_(prepare_dag_running_ts));
+      K_(merge_batch_size), K_(batch_dag_cnt), K_(basic_param), KP_(finish_dag), K_(min_sstable_end_scn),
+      K_(prepare_dag_running_ts), K_(failed_retry_count));
 private:
   static const int64_t DELAY_SCHEDULE_FINISH_DAG_CG_CNT = 150;
-  static const int64_t DEFAULT_MAX_RETRY_TIMES = 2;
+  static const int64_t DEFAULT_MAX_RETRY_TIMES = 2; // dag retry count
+  static const int64_t DEFAULT_MAX_DAG_NET_RETRY_TIMES = 10; // dag net failed retry count
 
   // call this func with lock
   int inner_create_exe_dags(
@@ -363,6 +365,7 @@ private:
   ObStorageCompactionTimeGuard time_guard_;
   int64_t min_sstable_end_scn_;
   int64_t prepare_dag_running_ts_;
+  int64_t failed_retry_count_;
 };
 
 template<class T>
