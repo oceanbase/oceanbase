@@ -967,7 +967,7 @@ int ObDASDomainIdMergeIter::get_domain_id(
     // just skip it if trans info expr in ctdef isn't nullptr.
     if (OB_UNLIKELY(ctdef->result_output_.count() != expect_result_output_cnt)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected result output column count", K(ret), K(rowkey_cnt), K(ctdef->result_output_.count()));
+      LOG_WARN("unexpected result output column count", K(ret), K(rowkey_cnt), K(ctdef->result_output_.count()), K(expect_result_output_cnt), K(part_key_num));
     }
 
     int domain_id_num = (domain_type == ObDomainIdUtils::IVFPQ_CID) ? 2 : 1;
@@ -1480,9 +1480,21 @@ int ObDASDomainIdMergeIter::check_table_need_add_part_key(int64_t table_id, int6
     LOG_WARN("table schema is null", K(ret), K(table_id));
   } else if (table_schema->is_table_with_hidden_pk_column() && table_schema->is_partitioned_table()) {
     if (ctdef->result_output_.count() == (domain_table_schema->get_column_count() + trans_expr_cnt)) {
-      part_key_num += table_schema->get_part_level();
+      ObTableSchema::const_column_iterator tmp_begin = table_schema->column_begin();
+      ObTableSchema::const_column_iterator tmp_end = table_schema->column_end();
+      for (; OB_SUCC(ret) && tmp_begin != tmp_end; tmp_begin++) {
+        ObColumnSchemaV2 *col_schema = (*tmp_begin);
+        if (OB_ISNULL(col_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected nullptr", K(ret), KP(col_schema));
+        } else if (col_schema->is_tbl_part_key_column()) {
+          part_key_num++;
+        }
+      }
     }
   }
+  LOG_DEBUG("check_table_need_add_part_key", K(table_schema->is_table_with_hidden_pk_column()), K(table_schema->is_partitioned_table()),
+            K(domain_table_schema->get_table_name_str()), K(domain_table_schema->get_column_count()), K(trans_expr_cnt));
   return ret;
 }
 
@@ -1630,7 +1642,7 @@ int ObDASDomainIdMergeIter::reset_rowkey_domain_iter_scan_range(int64_t iter_idx
       if (OB_FAIL(iter->rescan())) {
         LOG_WARN("fail to rescan rowkey domain iter", K(ret), K(iter_idx));
       }
-      LOG_INFO("reset domain iter scan range", K(ret), K(iter_idx), K(is_emb_vec_domain),
+      LOG_DEBUG("reset domain iter scan range", K(ret), K(iter_idx), K(is_emb_vec_domain),
                 K(scan_param.key_ranges_), K(data_table_rowkey));
     }
   }
