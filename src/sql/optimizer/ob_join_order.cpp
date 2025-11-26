@@ -1652,7 +1652,7 @@ int ObJoinOrder::check_can_use_vec_primary_opt(const uint64_t ref_table_id,
   int ret = OB_SUCCESS;
   is_filter_all_rowkey_col = false;
   if (OB_NOT_NULL(range_info.get_query_range_provider())) {
-    is_filter_all_rowkey_col = range_info.get_query_range_provider()->get_range_exprs().count() == helper.filters_.count();
+    is_filter_all_rowkey_col = (range_info.get_query_range_provider()->get_range_exprs().count() == helper.filters_.count() && helper.filters_.count() > 0);
   }
   return ret;
 }
