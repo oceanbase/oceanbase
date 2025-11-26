@@ -753,6 +753,7 @@ OB_DEF_SERIALIZE(ObInsertUpCtDef)
   if (do_opt_path_ && lookup_ctdef_for_batch_ != nullptr) {
     OB_UNIS_ENCODE(*lookup_ctdef_for_batch_);
   }
+  OB_UNIS_ENCODE(enable_do_update_directly_);
   return ret;
 }
 
@@ -794,6 +795,7 @@ OB_DEF_DESERIALIZE(ObInsertUpCtDef)
     }
     OB_UNIS_DECODE(*lookup_ctdef_for_batch_);
   }
+  OB_UNIS_DECODE(enable_do_update_directly_);
   return ret;
 }
 
@@ -812,6 +814,7 @@ OB_DEF_SERIALIZE_SIZE(ObInsertUpCtDef)
   if (do_opt_path_ && lookup_ctdef_for_batch_ != nullptr) {
     OB_UNIS_ADD_LEN(*lookup_ctdef_for_batch_);
   }
+  OB_UNIS_ADD_LEN(enable_do_update_directly_);
   return len;
 }
 
