@@ -147,6 +147,7 @@ int ObTableInsertUpOp::inner_open()
   } else {
     const ObInsertUpCtDef *insert_up_ctdef = MY_SPEC.insert_up_ctdefs_.at(0);
     const ObDASInsCtDef &das_ins_ctdef = insert_up_ctdef->ins_ctdef_->das_ctdef_;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     is_ignore_ = das_ins_ctdef.is_ignore_;
     conflict_checker_.set_local_tablet_loc(MY_INPUT.get_tablet_loc());
   }
@@ -1261,10 +1262,16 @@ int ObTableInsertUpOp::do_update(const ObConflictValue &constraint_value)
     if (NULL != constraint_value.baseline_datum_row_ &&
         NULL != constraint_value.current_datum_row_) {
       // base_line 和 curr_row 都存在
-      OZ(constraint_value.baseline_datum_row_->to_expr(get_primary_table_upd_old_row(), eval_ctx_));
-      OZ(delete_upd_old_row_to_das());
-      OZ(constraint_value.current_datum_row_->to_expr(get_primary_table_upd_new_row(), eval_ctx_));
-      OZ(insert_upd_new_row_to_das());
+      if (MY_SPEC.insert_up_ctdefs_.at(0)->enable_do_update_directly_) {
+        OZ(constraint_value.baseline_datum_row_->to_expr(get_primary_table_upd_old_row(), eval_ctx_));
+        OZ(constraint_value.current_datum_row_->to_expr(get_primary_table_upd_new_row(), eval_ctx_));
+        OZ(update_row_to_das());
+      } else {
+        OZ(constraint_value.baseline_datum_row_->to_expr(get_primary_table_upd_old_row(), eval_ctx_));
+        OZ(delete_upd_old_row_to_das());
+        OZ(constraint_value.current_datum_row_->to_expr(get_primary_table_upd_new_row(), eval_ctx_));
+        OZ(insert_upd_new_row_to_das());
+      }
     } else if (NULL == constraint_value.baseline_datum_row_ &&
                NULL != constraint_value.current_datum_row_) {
       // base_line不存在 但是 curr_row 存在，说明curr_row是从其他行update来的
@@ -1303,6 +1310,55 @@ int ObTableInsertUpOp::do_update_with_ignore()
     LOG_WARN("fail to insert update_row to das", K(ret));
   } else if (need_after_row_process(*upd_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {
     LOG_WARN("failed to push dml modify row to modified row list", K(ret));
+  }
+  return ret;
+}
+
+int ObTableInsertUpOp::update_row_to_das()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.insert_up_ctdefs_.count(); ++i) {
+    const ObInsertUpCtDef &insert_up_ctdef = *(MY_SPEC.insert_up_ctdefs_.at(i));
+    const ObUpdCtDef *upd_ctdef = insert_up_ctdef.upd_ctdef_;
+    ObInsertUpRtDef &insert_up_rtdef = insert_up_rtdefs_.at(i);
+    ObUpdRtDef &upd_rtdef = insert_up_rtdef.upd_rtdef_;
+    ObDASTabletLoc *old_tablet_loc = nullptr;
+    ObDASTabletLoc *new_tablet_loc = nullptr;
+    // do update
+
+    if (OB_FAIL(calc_update_tablet_loc(*upd_ctdef, upd_rtdef, old_tablet_loc, new_tablet_loc))) {
+      LOG_WARN("fail to calc update_pkey", K(ret), KPC(upd_ctdef));
+    } else if (OB_UNLIKELY(i == 0 && old_tablet_loc != new_tablet_loc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected location change with primary table", K(ret));
+    } else if (OB_FAIL(ObDMLService::check_row_whether_changed(*upd_ctdef, upd_rtdef, eval_ctx_))) {
+      LOG_WARN("check row whether changed failed", K(ret), KPC(upd_ctdef));
+    } else if (OB_FAIL(update_row_to_das(*upd_ctdef, upd_rtdef, old_tablet_loc, new_tablet_loc))) {
+      LOG_WARN("fail to update row to das", K(ret), KPC(upd_ctdef));
+    }
+  }
+  return ret;
+}
+
+int ObTableInsertUpOp::update_row_to_das(const ObUpdCtDef &upd_ctdef,
+                                         ObUpdRtDef &upd_rtdef,
+                                         const ObDASTabletLoc *old_tablet_loc,
+                                         const ObDASTabletLoc *new_tablet_loc)
+{
+  int ret = OB_SUCCESS;
+  ObDMLModifyRowNode modify_row(this, &upd_ctdef, &upd_rtdef, ObDmlEventType::DE_UPDATING);
+  if (OB_ISNULL(old_tablet_loc) || OB_ISNULL(new_tablet_loc)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null tablet loc", K(ret));
+  } else if (OB_FAIL(ObDMLService::update_row(upd_ctdef, upd_rtdef, old_tablet_loc, new_tablet_loc, upd_rtctx_,
+                                       modify_row.old_row_,
+                                       modify_row.new_row_,
+                                       modify_row.full_row_))) {
+    LOG_WARN("update row with das failed", K(ret));
+  } else {
+    LOG_TRACE("update one row", KPC(old_tablet_loc), KPC(new_tablet_loc),
+                                "old row", ROWEXPR2STR(eval_ctx_, upd_ctdef.old_row_),
+                                "new row", ROWEXPR2STR(eval_ctx_, upd_ctdef.new_row_));
   }
   return ret;
 }

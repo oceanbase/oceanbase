@@ -28,7 +28,8 @@ class ObInsertLogPlan: public ObDelUpdLogPlan
 public:
   ObInsertLogPlan(ObOptimizerContext &ctx, const ObInsertStmt *insert_stmt)
       : ObDelUpdLogPlan(ctx, insert_stmt),
-        is_direct_insert_(false)
+        is_direct_insert_(false),
+        enable_insertup_do_update_directly_(false)
   { }
   virtual ~ObInsertLogPlan()
   { }
@@ -38,6 +39,9 @@ public:
   { return reinterpret_cast<const ObInsertStmt*>(stmt_); }
 
   virtual int prepare_dml_infos() override;
+
+  bool enable_insertup_do_update_directly() const
+  { return enable_insertup_do_update_directly_; }
 
   common::ObIArray<IndexDMLInfo *> &get_replace_del_index_del_infos()
   { return replace_del_index_del_infos_; }
@@ -129,12 +133,14 @@ private:
   int generate_osg_share_info(OSGShareInfo *&info);
   int check_need_online_stats_gather(bool &need_osg);
   int set_is_direct_insert();
+  int check_enable_insertup_do_update_directly();
   DISALLOW_COPY_AND_ASSIGN(ObInsertLogPlan);
 private:
   common::ObSEArray<IndexDMLInfo *, 1, common::ModulePageAllocator, true> replace_del_index_del_infos_;
   common::ObSEArray<IndexDMLInfo *, 1, common::ModulePageAllocator, true> insert_up_index_upd_infos_;
   common::ObSEArray<ObUniqueConstraintInfo, 8, common::ModulePageAllocator, true> uk_constraint_infos_;
   bool is_direct_insert_;
+  bool enable_insertup_do_update_directly_;
 };
 }
 }

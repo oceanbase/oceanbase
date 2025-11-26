@@ -192,6 +192,10 @@ int ObInsertLogPlan::generate_normal_raw_plan()
                 K(candidates_.candidate_plans_.count()));
       }
     }
+
+    if (OB_SUCC(ret) && insert_stmt->is_insert_up() && OB_FAIL(check_enable_insertup_do_update_directly())) {
+      LOG_WARN("failed to check enable insertup do update directly", K(ret));
+    }
   }
   return ret;
 }
@@ -468,6 +472,100 @@ int ObInsertLogPlan::check_need_online_stats_gather(bool &need_osg)
     }
     LOG_TRACE("online insert stat", K(online_sys_var), K(need_osg), K(need_gathering));
   }
+  return ret;
+}
+
+int ObInsertLogPlan::check_enable_insertup_do_update_directly()
+{
+  int ret = OB_SUCCESS;
+  enable_insertup_do_update_directly_ = false;
+  uint64_t tenant_id = MTL_ID();
+  uint64_t table_id = OB_INVALID_ID;
+  bool is_update_unique_key = false;
+  const ObInsertStmt *stmt = nullptr;
+  ObSchemaGetterGuard *schema_guard = nullptr;
+  const ObTableSchema *table_schema = nullptr;
+  const IndexDMLInfo *upd_index_dml_info = nullptr;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  bool enable_insertup_do_update_directly = tenant_config.is_valid() ?
+                                            tenant_config->_enable_insertup_direct_update :
+                                            false;
+  if (!enable_insertup_do_update_directly) {
+  } else if (OB_ISNULL(stmt = get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(stmt));
+  } else if (OB_UNLIKELY(insert_up_index_upd_infos_.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("insert_up_index_upd_infos_ is empty", K(ret));
+  } else if (OB_ISNULL(upd_index_dml_info = insert_up_index_upd_infos_.at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("upd_index_dml_info is null", K(ret));
+  } else if (OB_UNLIKELY(!upd_index_dml_info->is_primary_index_ ||      // is primary table
+                         upd_index_dml_info->is_update_part_key_ ||     // partition table updates part key
+                         upd_index_dml_info->is_update_unique_key_ ||   // global index table updates unique key
+                         upd_index_dml_info->is_update_primary_key_)) { // index organized table updates primary key
+    is_update_unique_key = true;
+    LOG_TRACE("update not support key", K(upd_index_dml_info->is_primary_index_),
+                                        K(upd_index_dml_info->is_update_part_key_),
+                                        K(upd_index_dml_info->is_update_unique_key_),
+                                        K(upd_index_dml_info->is_update_primary_key_));
+  } else if (FALSE_IT(table_id = upd_index_dml_info->ref_table_id_)) {
+  } else if (OB_ISNULL(schema_guard = get_optimizer_context().get_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_guard is null", K(schema_guard));
+  } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", K(ret), K(table_schema));
+  } else {
+    ObSEArray<uint64_t, 4> assignment_ids;
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < upd_index_dml_info->assignments_.count(); ++i) {
+      ObColumnRefRawExpr *column_expr = upd_index_dml_info->assignments_.at(i).column_expr_;
+      ColumnItem *column_item = nullptr;
+      if (OB_ISNULL(column_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null column expr", K(ret));
+      } else if (OB_ISNULL(column_item = stmt->get_column_item_by_id(column_expr->get_table_id(),
+                                                                     column_expr->get_column_id()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null column item", K(ret), KPC(column_expr));
+      } else {
+        assignment_ids.push_back(column_item->base_cid_);
+      }
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && !is_update_unique_key && i < table_schema->get_index_tid_count(); ++i) {
+      ObSEArray<uint64_t, 8> pk_ids;
+      const ObTableSchema *index_schema = NULL;
+      if (OB_FAIL(schema_guard->get_table_schema(tenant_id, table_schema->get_simple_index_infos().at(i).table_id_, index_schema))) {
+        LOG_WARN("fail to get index schema", K(ret));
+      } else if (OB_ISNULL(index_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("index table not exist", K(ret), K(tenant_id), "table_id", table_schema->get_simple_index_infos().at(i).table_id_);
+      } else if (index_schema->is_unique_index()) {
+        if (OB_FAIL(index_schema->get_rowkey_info().get_column_ids(pk_ids))) {
+          LOG_WARN("failed to get rowkey column ids", K(ret));
+        } else {
+          for (int64_t i = 0; !is_update_unique_key && i < pk_ids.count(); ++i) {
+            if (is_shadow_column(pk_ids.at(i))) {
+              // do noting
+            } else if (has_exist_in_array(assignment_ids, pk_ids.at(i))) {
+              is_update_unique_key = true;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (enable_insertup_do_update_directly && !is_update_unique_key) {
+    enable_insertup_do_update_directly_ = true;
+  }
+
+  LOG_TRACE("enable insertup do update directly", K(enable_insertup_do_update_directly_), K(is_update_unique_key), K(enable_insertup_do_update_directly));
   return ret;
 }
 
@@ -1218,6 +1316,10 @@ int ObInsertLogPlan::copy_index_dml_infos_for_insert_up(const ObInsertTableInfo&
         if (OB_FAIL(index_dml_info->init_assignment_info(table_info.assignments_,
                                                          optimizer_context_.get_expr_factory()))) {
           LOG_WARN("init index assignment info failed", K(ret));
+        } else if (0 != i && OB_FAIL(check_update_unique_key(index_schema, index_dml_info))) {
+          LOG_WARN("failed to check update unique key", K(ret));
+        } else if (OB_FAIL(check_update_primary_key(index_schema, index_dml_info))) {
+          LOG_WARN("failed to check update primary key", K(ret));
         } else if (!table_info.is_link_table_ &&
                   OB_FAIL(check_update_part_key(index_schema, index_dml_info))) {
           LOG_WARN("failed to check update part key", K(ret));
