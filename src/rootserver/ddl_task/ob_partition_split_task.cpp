@@ -2229,7 +2229,8 @@ int ObPartitionSplitTask::clean_splitted_tablet()
     LOG_WARN("fail to assign array", KR(ret));
   } else if (OB_FAIL(clean_arg.dest_lob_tablet_ids_.assign(partition_split_arg_.dest_lob_tablet_ids_))) {
     LOG_WARN("fail to assign array", KR(ret));
-  } else if (data_format_version_ >= DATA_VERSION_4_5_0_0) {
+  } else if ((MOCK_DATA_VERSION_4_4_2_0 <= data_format_version_ && data_format_version_ < DATA_VERSION_4_5_0_0)
+      || data_format_version_ >= DATA_VERSION_4_5_0_0) {
     ObCleanSplittedTabletDDLArg arg;
     arg.exec_tenant_id_ = tenant_id_;
     arg.task_id_ = task_id_;
