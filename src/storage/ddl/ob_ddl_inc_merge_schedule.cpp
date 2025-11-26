@@ -175,7 +175,6 @@ int ObDDLMergeScheduler::schedule_tablet_ddl_inc_major_merge_for_sn(
   SCN trans_version;
   bool can_read = false;
   bool need_merge = false;
-  int64_t snapshot_version = 0;
   ObITable::TableType table_type = ObITable::MAX_TABLE_TYPE;
   ObTabletID tablet_id;
   int64_t trans_state;
@@ -295,17 +294,17 @@ int ObDDLMergeScheduler::schedule_tablet_ddl_inc_major_merge_for_sn(
     }
 
     if (OB_SUCC(ret)) {
-      snapshot_version = can_read ? trans_version.get_val_for_tx() : user_data.snapshot_version_;
       param.direct_load_type_    = DIRECT_LOAD_INCREMENTAL_MAJOR;
       param.ls_id_               = ls->get_ls_id();
       param.tablet_id_           = tablet_id;
       param.is_commit_           = can_read;
       param.start_scn_           = user_data.start_scn_;
       param.data_format_version_ = user_data.data_format_version_;
-      param.snapshot_version_    = snapshot_version;
+      param.snapshot_version_    = user_data.snapshot_version_;
       param.trans_id_ = cur_trans_id;
       param.seq_no_ = cur_seq_no;
       param.table_type_ = table_type;
+      param.inc_major_trans_version_ = can_read ? trans_version.get_val_for_tx() : 0;
 
       if (OB_FAIL(ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
         if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {

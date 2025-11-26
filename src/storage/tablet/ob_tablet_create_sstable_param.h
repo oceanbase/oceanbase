@@ -227,7 +227,8 @@ public:
       K_(uncommitted_tx_id),
       K_(co_base_snapshot_version),
       K_(uncommit_tx_info),
-      K_(rec_scn));
+      K_(rec_scn),
+      K_(upper_trans_version));
 private:
   static const int64_t DEFAULT_MACRO_BLOCK_CNT = 64;
   int inner_init_with_merge_res(const blocksstable::ObSSTableMergeRes &res);
@@ -294,6 +295,7 @@ public:
   int64_t co_base_snapshot_version_;
   compaction::ObMemUncommitTxInfo uncommit_tx_info_;
   share::SCN rec_scn_;
+  int64_t upper_trans_version_;
 };
 
 } // namespace storage

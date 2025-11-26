@@ -404,7 +404,8 @@ ObTabletDDLParam::ObTabletDDLParam()
     snapshot_version_(0),
     trans_id_(),
     seq_no_(),
-    rec_scn_()
+    rec_scn_(),
+    inc_major_trans_version_(0)
 {
 
 }
@@ -5096,6 +5097,7 @@ int ObDDLTableMergeDagParam::assign(const ObDDLTableMergeDagParam &merge_param)
     trans_id_         = merge_param.trans_id_;
     seq_no_           = merge_param.seq_no_;
     table_type_       = merge_param.table_type_;
+    inc_major_trans_version_ = merge_param.inc_major_trans_version_;
     if (is_commit_ && is_idem_type(direct_load_type_) &&
         OB_FAIL(user_data_.assign(arena_, merge_param.user_data_))) {
       LOG_WARN("failed to assign user data", K(ret));
@@ -5112,7 +5114,8 @@ int ObDDLTabletMergeDagParamV2::init(const bool for_major,
                                      const ObDDLTaskParam &task_param,
                                      ObDDLTabletContext *tablet_ctx,
                                      const ObTransID &trans_id,
-                                     const ObTxSEQ &seq_no)
+                                     const ObTxSEQ &seq_no,
+                                     const int64_t inc_major_trans_version)
 {
   int ret = OB_SUCCESS;
   bool is_cs_replica = false;
@@ -5172,6 +5175,7 @@ int ObDDLTabletMergeDagParamV2::init(const bool for_major,
         }
         table_key_.version_range_.snapshot_version_ = task_param.snapshot_version_;
         table_key_.scn_range_.start_scn_ = start_scn;
+        inc_major_trans_version_ = inc_major_trans_version;
       } else {
         if (is_column_store && !GCTX.is_shared_storage_mode()) {
           table_key_.table_type_ = ObITable::TableType::INC_MAJOR_DDL_MERGE_CO_SSTABLE;
@@ -5308,6 +5312,7 @@ int ObDDLTabletMergeDagParamV2::assign(const ObDDLTabletMergeDagParamV2 &merge_d
     tablet_ctx_       = merge_dag_param.tablet_ctx_;
     trans_id_         = merge_dag_param.trans_id_;
     seq_no_           = merge_dag_param.seq_no_;
+    inc_major_trans_version_ = merge_dag_param.inc_major_trans_version_;
     is_inited_        = true;
   }
   return ret;

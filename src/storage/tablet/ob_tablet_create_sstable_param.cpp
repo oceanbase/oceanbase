@@ -82,7 +82,8 @@ ObTabletCreateSSTableParam::ObTabletCreateSSTableParam()
     uncommitted_tx_id_(0),
     co_base_snapshot_version_(-1),
     uncommit_tx_info_(),
-    rec_scn_()
+    rec_scn_(),
+    upper_trans_version_(0)
 {
   data_block_ids_.set_attr(ObMemAttr(MTL_ID(), "CreateSSTable"));
   other_block_ids_.set_attr(ObMemAttr(MTL_ID(), "CreateSSTable"));
@@ -739,6 +740,8 @@ int ObTabletCreateSSTableParam::init_for_ddl(blocksstable::ObSSTableIndexBuilder
       full_column_cnt_ = full_column_cnt;
       max_merged_trans_version_ = ddl_param.table_key_.is_inc_major_ddl_dump_sstable() ?
                                       INT64_MAX : ddl_param.snapshot_version_;
+      upper_trans_version_ = ddl_param.table_key_.is_inc_major_type_sstable() ?
+                                      ddl_param.inc_major_trans_version_ : 0;
       nested_size_ = res.nested_size_;
       nested_offset_ = res.nested_offset_;
       table_shared_flag_.reset();
@@ -1046,8 +1049,8 @@ int ObTabletCreateSSTableParam::init_for_ss_ddl(blocksstable::ObSSTableMergeRes 
     create_snapshot_version_ = snapshot_version;
     column_cnt_ = column_count;
     full_column_cnt_ = full_column_cnt;
-    max_merged_trans_version_ = table_key.is_inc_major_type_sstable()
-                                ? INT64_MAX : snapshot_version;
+    max_merged_trans_version_ = snapshot_version;
+    upper_trans_version_ = table_key.is_inc_major_type_sstable() ? INT64_MAX : 0;
     nested_size_ = res.nested_size_;
     nested_offset_ = res.nested_offset_;
     table_shared_flag_.set_shared_sstable();
