@@ -1880,6 +1880,7 @@ DEFINE_ERROR(OB_SEQ_NO_REORDER_UNDER_PDML, -6329, -1, "HY000", "pdml sql need re
 DEFINE_ERROR(OB_USER_OUTOF_DATA_DISK_SPACE, -6330, -1, "HY000", "user data disk is almost full")
 DEFINE_ERROR(OB_ARB_DEGRADE, -6331, -1, "HY000", "logstream has been degraded due to error")
 DEFINE_ERROR(OB_OBJ_LOCK_WRONG_WORKER, -6332, -1, "HY000", "object lock worker thread wrong")
+DEFINE_ORACLE_ERROR(OB_ERR_TEMP_TABLE_BUSY, -6333, -1, "HY000", "attempt to access a transactional temp table already in use", 14450, "attempt to access a transactional temp table already in use");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////
