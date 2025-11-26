@@ -78,8 +78,7 @@ int ObIModel::prepare(ObTableExecCtx &ctx,
   ObLSID ls_id(ObLSID::INVALID_LS_ID);
   ObTablePartClipType clip_type = req.query_.is_hot_only() ? ObTablePartClipType::HOT_ONLY : ObTablePartClipType::NONE;
   ObIArray<ObTabletID> &tablet_ids = const_cast<ObIArray<ObTabletID>&>(req.query_.get_tablet_ids());
-  ObTablePartCalculator calculator(ctx.get_allocator(),
-                                   ctx.get_sess_guard(),
+  ObTablePartCalculator calculator(ctx.get_sess_guard(),
                                    ctx.get_schema_cache_guard(),
                                    ctx.get_schema_guard(),
                                    ctx.get_table_schema(),
@@ -181,8 +180,7 @@ int ObIModel::init_tablet_id_ops_map(ObTableExecCtx &ctx,
     ObLSID first_ls_id(ObLSID::INVALID_LS_ID);
     ObLSID curr_ls_id(ObLSID::INVALID_LS_ID);
     const uint64_t table_id = req.ls_op_->get_table_id();
-    ObTablePartCalculator calculator(ctx.get_allocator(),
-                                     ctx.get_sess_guard(),
+    ObTablePartCalculator calculator(ctx.get_sess_guard(),
                                      ctx.get_schema_cache_guard(),
                                      ctx.get_schema_guard(),
                                      ctx.get_table_schema());
@@ -561,11 +559,10 @@ int ObIModel::init_request_result_for_mix_batch(ObTableExecCtx &ctx,
     bool is_same_ls = false;
     ObLSID first_ls_id(ObLSID::INVALID_LS_ID);
     const ObTableTabletOp &src_tablet_op = src_req.ls_op_->at(0);
-    ObTablePartCalculator calculator(ctx.get_allocator(),
-                                  ctx.get_sess_guard(),
-                                  ctx.get_schema_cache_guard(),
-                                  ctx.get_schema_guard(),
-                                  ctx.get_table_schema());
+    ObTablePartCalculator calculator(ctx.get_sess_guard(),
+                                     ctx.get_schema_cache_guard(),
+                                     ctx.get_schema_guard(),
+                                     ctx.get_table_schema());
     ObSEArray<ObString, 8> all_prop_name;
     all_prop_name.set_attr(ObMemAttr(MTL_ID(), "AllPropNames"));
     if (src_req.ls_op_->need_all_prop_bitmap()) {
@@ -855,8 +852,7 @@ int ObIModel::prepare(ObTableExecCtx &arg_ctx,
         ctx->set_table_name(tmp_table_name);
         ctx->set_timeout_ts(arg_ctx.get_timeout_ts());
         ObTablePartClipType clip_type = get_clip_type(arg_ctx, req.query_.is_hot_only());
-        ObTablePartCalculator calculator(arg_ctx.get_allocator(),
-                                         ctx->get_sess_guard(),
+        ObTablePartCalculator calculator(ctx->get_sess_guard(),
                                          ctx->get_schema_cache_guard(),
                                          ctx->get_schema_guard(),
                                          ctx->get_table_schema(),

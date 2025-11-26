@@ -434,8 +434,7 @@ int ObTableApiService::calc_tablet_ids(ObTableCtx &ctx,
       if (OB_NOT_NULL(ctx.get_query()) && ctx.get_query()->is_hot_only()) {
         clip_type = ObTablePartClipType::HOT_ONLY;
       }
-      ObTablePartCalculator part_calc(ctx.get_allocator(),
-                                      *ctx.get_sess_guard(),
+      ObTablePartCalculator part_calc(*ctx.get_sess_guard(),
                                       *ctx.get_schema_cache_guard(),
                                       *ctx.get_schema_guard(),
                                       clip_type);
@@ -473,8 +472,7 @@ int ObTableApiService::check_batch_args(ObTableCtx &ctx,
     if (OB_FAIL(init_tablet_ids_array(ctx, entities.count(), tmp_tablet_ids))) {
       LOG_WARN("fail to init tablet ids array", K(ret));
     } else {
-      ObTablePartCalculator part_calc(ctx.get_allocator(),
-                                      *ctx.get_sess_guard(),
+      ObTablePartCalculator part_calc(*ctx.get_sess_guard(),
                                       *ctx.get_schema_cache_guard(),
                                       *ctx.get_schema_guard());
       if (OB_FAIL(part_calc.calc(ctx.get_table_id(), entities, *tmp_tablet_ids))) {

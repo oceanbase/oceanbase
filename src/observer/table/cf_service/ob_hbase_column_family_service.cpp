@@ -509,8 +509,7 @@ int ObHbaseColumnFamilyService::delete_cell(const ObHbaseQuery &query,
   ObTableEntity entity;
   exec_ctx.set_table_id(query.get_table_id());
   ObTabletID real_tablet_id(ObTabletID::INVALID_TABLET_ID);
-  ObTablePartCalculator calculator(exec_ctx.get_allocator(),
-                                   exec_ctx.get_sess_guard(),
+  ObTablePartCalculator calculator(exec_ctx.get_sess_guard(),
                                    exec_ctx.get_schema_cache_guard(),
                                    exec_ctx.get_schema_guard(),
                                    exec_ctx.get_table_schema());
