@@ -57,7 +57,6 @@ public:
       const ObITable::TableKey &table_key,
       ObSSTable &base_table,
       ObSSTableMetaHandle &meta_handle,
-      const int64_t snapshot_version,
       const int64_t column_group_cnt,
       const int64_t rowkey_column_cnt,
       const int64_t column_cnt,
@@ -114,7 +113,6 @@ public:
       const ObITable::TableKey &table_key,
       const int64_t column_group_cnt,
       const int64_t column_cnt,
-      const int64_t snapshot_version,
       const ObCOSSTableBaseType co_base_type,
       ObIArray<ObITable *> &tables);
   virtual int get_sstable(const ObSSTable *&sstable) const override;
@@ -128,7 +126,6 @@ public:
   virtual bool is_empty() const;
   INHERIT_TO_STRING_KV("ObCOSSTableV2", ObCOSSTableV2, KP(this),
                        K_(tablet_id),
-                       K_(snapshot_version),
                        KP_(base_sstable),
                        K_(column_group_cnt),
                        K_(rowkey_column_cnt),
@@ -195,7 +192,6 @@ private:
 private:
   ObArenaAllocator allocator_;
   ObTabletID tablet_id_;
-  int64_t snapshot_version_;
   ObSSTable *base_sstable_;
   ObSSTableMetaHandle base_sstable_meta_;
   int64_t column_group_cnt_;

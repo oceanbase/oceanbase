@@ -157,7 +157,6 @@ public:
   int init_for_inc_major_ddl_aggregate(const ObITable::TableKey &table_key,
                                        blocksstable::ObSSTable &base_sstable,
                                        blocksstable::ObSSTableMetaHandle &meta_handle,
-                                       const int64_t snapshot_version,
                                        const int64_t column_group_cnt,
                                        const int64_t rowkey_column_cnt,
                                        const int64_t column_cnt,

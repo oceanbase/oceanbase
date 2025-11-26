@@ -1525,7 +1525,6 @@ int ObTabletCreateSSTableParam::init_for_inc_major_ddl_aggregate(
     const ObITable::TableKey &table_key,
     ObSSTable &base_sstable,
     ObSSTableMetaHandle &meta_handle,
-    const int64_t snapshot_version,
     const int64_t column_group_cnt,
     const int64_t rowkey_column_cnt,
     const int64_t column_cnt,
@@ -1539,7 +1538,7 @@ int ObTabletCreateSSTableParam::init_for_inc_major_ddl_aggregate(
     is_co_table_without_cgs_ = true;
     sstable_logic_seq_ = 0;
     schema_version_ = basic_meta.schema_version_;
-    create_snapshot_version_ = snapshot_version;
+    create_snapshot_version_ = basic_meta.create_snapshot_version_;
     progressive_merge_round_ = basic_meta.progressive_merge_round_;
     progressive_merge_step_ = 0;
     is_ready_for_read_ = true;
@@ -1559,7 +1558,7 @@ int ObTabletCreateSSTableParam::init_for_inc_major_ddl_aggregate(
     data_checksum_ = 0;
     occupy_size_ = 0;
     original_size_ = 0;
-    max_merged_trans_version_ = snapshot_version;
+    max_merged_trans_version_ = basic_meta.max_merged_trans_version_;
     ddl_scn_ = base_sstable.get_start_scn();
     filled_tx_scn_.set_min();
     tx_data_recycle_scn_.set_min();
@@ -1575,7 +1574,7 @@ int ObTabletCreateSSTableParam::init_for_inc_major_ddl_aggregate(
     nested_offset_ = 0;
     nested_size_ = 0;
     root_macro_seq_ = 0;
-    co_base_snapshot_version_ = snapshot_version;
+    co_base_snapshot_version_ = basic_meta.co_base_snapshot_version_;
     other_block_ids_.reset();
     table_backup_flag_.reset();
     table_shared_flag_.reset();

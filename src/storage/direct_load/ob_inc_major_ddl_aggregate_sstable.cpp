@@ -69,7 +69,6 @@ int ObIncMajorDDLAggregateCGSSTable::init(
     const ObITable::TableKey &table_key,
     ObSSTable &base_table,
     ObSSTableMetaHandle &meta_handle,
-    const int64_t snapshot_version,
     const int64_t column_group_cnt,
     const int64_t rowkey_column_cnt,
     const int64_t column_cnt,
@@ -89,14 +88,13 @@ int ObIncMajorDDLAggregateCGSSTable::init(
                                                       table_key,
                                                       base_table,
                                                       meta_handle,
-                                                      snapshot_version,
                                                       column_group_cnt,
                                                       rowkey_column_cnt,
                                                       column_cnt,
                                                       row_cnt))) {
     LOG_WARN("fail to init sstable param", KR(ret), K(table_key),
                                            K(base_table), K(meta_handle),
-                                           K(snapshot_version), K(column_group_cnt),
+                                           K(column_group_cnt),
                                            K(column_cnt), K(row_cnt));
   } else if (OB_FAIL(ObSSTable::init(sstable_param, &allocator))) {
     LOG_WARN("fail to init sstable", KR(ret), K(sstable_param));
@@ -342,7 +340,6 @@ bool ObIncMajorDDLAggregateCGSSTable::is_empty() const
 ObIncMajorDDLAggregateCOSSTable::ObIncMajorDDLAggregateCOSSTable()
  : allocator_("INC_MAJOR"),
    tablet_id_(),
-   snapshot_version_(OB_INVALID_VERSION),
    base_sstable_(nullptr),
    column_group_cnt_(0),
    rowkey_column_cnt_(0),
@@ -380,7 +377,6 @@ void ObIncMajorDDLAggregateCOSSTable::destroy()
   column_group_cnt_ = 0;
   base_sstable_meta_.reset();
   base_sstable_ = nullptr;
-  snapshot_version_ = OB_INVALID_VERSION;
   tablet_id_.reset();
   allocator_.reset();
 }
@@ -396,7 +392,6 @@ int ObIncMajorDDLAggregateCOSSTable::init(
     const ObITable::TableKey &table_key,
     const int64_t column_group_cnt,
     const int64_t column_cnt,
-    const int64_t snapshot_version,
     const ObCOSSTableBaseType co_base_type,
     ObIArray<ObITable *> &tables)
 {
@@ -422,14 +417,12 @@ int ObIncMajorDDLAggregateCOSSTable::init(
                                                       table_key,
                                                       base_sstable,
                                                       base_sstable_meta_,
-                                                      snapshot_version,
                                                       column_group_cnt,
                                                       rowkey_column_cnt_,
                                                       column_cnt,
                                                       row_cnt_))) {
     LOG_WARN("fail to init sstable param", KR(ret), K(table_key), K(base_sstable),
-                                           K(snapshot_version), K(column_group_cnt),
-                                           K(column_cnt), K(row_cnt_));
+                                           K(column_group_cnt), K(column_cnt), K(row_cnt_));
   } else if (OB_FAIL(ObSSTable::init(sstable_param, &allocator_))) {
     LOG_WARN("fail to init sstable", KR(ret), K(sstable_param));
   } else if (OB_FAIL(cg_sstables_.create(CG_SSTABLE_COUNT, attr, attr))) {
@@ -438,7 +431,6 @@ int ObIncMajorDDLAggregateCOSSTable::init(
     LOG_WARN("fail to init tx info", KR(ret), K(base_sstable), K(tx_info_));
   } else {
     tablet_id_ = table_key.tablet_id_;
-    snapshot_version_ = snapshot_version;
     base_sstable_ = &base_sstable;
     column_group_cnt_ = column_group_cnt;
     column_cnt_ = column_cnt;
@@ -812,16 +804,14 @@ int ObIncMajorDDLAggregateCOSSTable::add_cg_sstable(
                                           table_key,
                                           *base_sstable_,
                                           base_sstable_meta_,
-                                          snapshot_version_,
                                           column_group_cnt_,
                                           (0 == cg_idx) ? rowkey_column_cnt_ : 0,
                                           column_cnt_,
                                           row_cnt_,
                                           cg_idx))) {
         LOG_WARN("fail to init cg sstable", KR(ret), K(table_key), KPC(base_sstable_),
-                                            K(base_sstable_meta_), K(snapshot_version_),
-                                            K(column_group_cnt_), K(column_cnt_),
-                                            K(row_cnt_), K(cg_idx));
+                                            K(base_sstable_meta_), K(column_group_cnt_),
+                                            K(column_cnt_), K(row_cnt_), K(cg_idx));
       } else if (OB_FAIL(cg_sstables_.set_refactored(cg_idx, cg_sstable))) {
         LOG_WARN("fail to insert cgsstable to map", KR(ret), K(cg_idx));
       }

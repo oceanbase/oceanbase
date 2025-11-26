@@ -1061,7 +1061,7 @@ int ObTabletTableStore::calculate_inc_major_read_tables_for_ss(
 #endif
 
 int ObTabletTableStore::calculate_inc_ddl_read_tables(
-    const int64_t snapshot_version,
+    const int64_t base_version,
     const ObTablet &tablet,
     ObTableStoreIterator &iterator) const
 {
@@ -1073,13 +1073,19 @@ int ObTabletTableStore::calculate_inc_ddl_read_tables(
                           ? SCN::min_scn()
                           : inc_major_tables_.get_boundary_table(true /*is_last*/)->get_end_scn();
     const bool is_row_store = tablet.is_row_store();
-    if (!is_row_store) {
-      if (OB_FAIL(inner_calculate_inc_ddl_column_read_tables(tablet, snapshot_version, end_scn, iterator))) {
-        LOG_WARN("fail to inner calculate inc ddl column read tables", KR(ret), K(snapshot_version), K(end_scn));
+    ObLSHandle ls_handle;
+    if (OB_FAIL(ObIncMajorTxHelper::get_ls(tablet.get_ls_id(), ls_handle))) {
+      LOG_WARN("fail to get ls", KR(ret), "ls_id", tablet.get_ls_id());
+    } else if (OB_UNLIKELY(!ls_handle.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls handle is invalid", KR(ret), K(ls_handle));
+    } else if (!is_row_store) {
+      if (OB_FAIL(inner_calculate_inc_ddl_column_read_tables(*ls_handle.get_ls(), tablet, base_version, end_scn, iterator))) {
+        LOG_WARN("fail to inner calculate inc ddl column read tables", KR(ret), K(base_version), K(end_scn));
       }
     } else {
-      if (OB_FAIL(inner_calculate_inc_ddl_row_read_tables(snapshot_version, end_scn, iterator))) {
-        LOG_WARN("fail to inner calculate inc ddl row read tables", KR(ret), K(snapshot_version), K(end_scn));
+      if (OB_FAIL(inner_calculate_inc_ddl_row_read_tables(*ls_handle.get_ls(), base_version, end_scn, iterator))) {
+        LOG_WARN("fail to inner calculate inc ddl row read tables", KR(ret), K(base_version), K(end_scn));
       }
     }
   }
@@ -1128,13 +1134,15 @@ int ObTabletTableStore::get_inc_major_cg_info(
 }
 
 int ObTabletTableStore::inner_calculate_inc_ddl_row_read_tables(
-    const int64_t snapshot_version,
+    ObLS &ls,
+    const int64_t base_version,
     const SCN &inc_major_end_scn,
     ObTableStoreIterator &iterator) const
 {
   int ret = OB_SUCCESS;
   ObSSTable *sstable = nullptr;
   ObDDLKV *ddlkv = nullptr;
+  bool is_included = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < inc_major_ddl_sstables_.count(); ++i) {
     sstable = inc_major_ddl_sstables_.at(i);
     if (OB_ISNULL(sstable)) {
@@ -1145,6 +1153,10 @@ int ObTabletTableStore::inner_calculate_inc_ddl_row_read_tables(
     } else if (sstable->get_end_scn() <= inc_major_end_scn) {
       // inc major already merged, skip
       LOG_INFO("scn range is less than inc major right border, skip", K(inc_major_end_scn), K(sstable->get_key()));
+    } else if (OB_FAIL(ObIncMajorTxHelper::check_inc_major_included_by_major(ls, base_version, *sstable, is_included))) {
+      LOG_WARN("fail to check inc major included by major", KR(ret), K(base_version), KPC(sstable));
+    } else if (is_included) {
+      LOG_INFO("inc major ddl dump sstable is included by major, skip", K(base_version), KPC(sstable));
     } else if (OB_FAIL(iterator.add_table(sstable))) {
       LOG_WARN("fail to add table", KR(ret));
     }
@@ -1167,6 +1179,10 @@ int ObTabletTableStore::inner_calculate_inc_ddl_row_read_tables(
         if (OB_ISNULL(sstable)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("sstable is nullptr", KR(ret), K(j));
+        } else if (OB_FAIL(ObIncMajorTxHelper::check_inc_major_included_by_major(ls, base_version, *sstable, is_included))) {
+          LOG_WARN("fail to check inc major included by major", KR(ret), K(base_version), KPC(sstable));
+        } else if (is_included) {
+          LOG_INFO("inc major ddl memtable is included by major, skip", K(base_version), KPC(sstable));
         } else if (OB_FAIL(iterator.add_table(sstable))) {
           LOG_WARN("fail to add table", KR(ret));
         }
@@ -1177,8 +1193,9 @@ int ObTabletTableStore::inner_calculate_inc_ddl_row_read_tables(
 }
 
 int ObTabletTableStore::inner_calculate_inc_ddl_column_read_tables(
+    ObLS &ls,
     const ObTablet &tablet,
-    const int64_t snapshot_version,
+    const int64_t base_version,
     const SCN &inc_major_end_scn,
     ObTableStoreIterator &iterator) const
 {
@@ -1229,6 +1246,7 @@ int ObTabletTableStore::inner_calculate_inc_ddl_column_read_tables(
     int64_t column_group_cnt = 0;
     int64_t column_cnt = 0;
     ObCOSSTableBaseType co_base_type;
+    bool is_included = false;
     if (OB_FAIL(inner_calculate_inc_ddl_column_read_sstables(cur_sstable_idx,
                                                              tx_id,
                                                              read_tables))) {
@@ -1262,6 +1280,11 @@ int ObTabletTableStore::inner_calculate_inc_ddl_column_read_tables(
     } else if (OB_ISNULL(first_sstable = static_cast<ObSSTable *>(read_tables.at(0)))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("first sstable is nullptr", KR(ret));
+    } else if (OB_FAIL(ObIncMajorTxHelper::check_inc_major_included_by_major(ls, base_version, *first_sstable, is_included))) {
+      LOG_WARN("fail to check inc major included by major", KR(ret), K(base_version), KPC(first_sstable));
+    } else if (is_included) {
+      LOG_INFO("inc major ddl dump sstable is included by major, skip", K(base_version), KPC(first_sstable));
+      continue;
     } else if (OB_FAIL(get_inc_major_cg_info(first_sstable, first_ddl_kv, column_group_cnt, column_cnt, co_base_type))) {
       LOG_WARN("failed to get inc major cg info", KR(ret));
     } else if (FALSE_IT(table_key.scn_range_ = first_sstable->get_key().scn_range_)) {
@@ -1273,13 +1296,12 @@ int ObTabletTableStore::inner_calculate_inc_ddl_column_read_tables(
                                          table_key,
                                          column_group_cnt,
                                          column_cnt,
-                                         snapshot_version,
                                          co_base_type,
                                          read_tables))) {
       LOG_WARN("fail to init ddl agg co sstable",
                 KR(ret), K(first_sstable), K(table_key),
                 K(column_group_cnt), K(column_cnt),
-                K(snapshot_version), K(co_base_type));
+                K(co_base_type));
     } else if (OB_FAIL(table_handle.set_sstable(agg_sstable, ObMallocAllocator::get_instance()))) {
       LOG_WARN("fail to set sstable", KR(ret));
     }
@@ -1431,7 +1453,10 @@ int ObTabletTableStore::calculate_read_tables(
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(calculate_inc_major_read_tables(snapshot_version, tablet, iterator, base_table))) {
     LOG_WARN("fail to calculate inc major read tables", K(ret));
-  } else if (!GCTX.is_shared_storage_mode() && OB_FAIL(calculate_inc_ddl_read_tables(snapshot_version, tablet, iterator))) {
+  } else if (!GCTX.is_shared_storage_mode() && OB_FAIL(calculate_inc_ddl_read_tables(
+                                                         OB_NOT_NULL(base_table) ? base_table->get_snapshot_version() : -1,
+                                                         tablet,
+                                                         iterator))) {
     LOG_WARN("fail to calculate inc major ddl read tables", KR(ret));
   }
 

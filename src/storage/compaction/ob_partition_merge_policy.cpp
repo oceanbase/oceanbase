@@ -2524,7 +2524,7 @@ int ObIncMajorTxHelper::get_inc_major_commit_version(
   ObSSTableMetaHandle meta_hdl;
   const compaction::ObMetaUncommitTxInfo *tx_info = nullptr;
 
-  if (!inc_major_table.is_inc_major_type_sstable() && !inc_major_table.is_inc_major_ddl_dump_sstable()) {
+  if (!inc_major_table.is_inc_major_type_sstable() && !inc_major_table.is_inc_major_ddl_sstable()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid argument", K(ret), K(inc_major_table));
   } else {
@@ -2967,6 +2967,27 @@ int ObIncMajorTxHelper::check_need_gc_ddl_dump(
         break;
       }
     }
+  }
+  return ret;
+}
+
+int ObIncMajorTxHelper::check_inc_major_included_by_major(
+  ObLS &ls,
+  const int64_t major_version,
+  const blocksstable::ObSSTable &sstable,
+  bool &is_included)
+{
+  int ret = OB_SUCCESS;
+  is_included = false;
+  int64_t trans_state = ObTxData::UNKOWN;
+  int64_t commit_version = OB_INVALID_VERSION;
+  if (OB_UNLIKELY(!sstable.is_inc_major_ddl_sstable())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(sstable));
+  } else if (OB_FAIL(get_inc_major_commit_version(ls, sstable, SCN::max_scn(), trans_state, commit_version))) {
+    LOG_WARN("fail to get inc major commit version", KR(ret), K(sstable));
+  } else if (ObTxData::COMMIT == trans_state) {
+    is_included = major_version >= commit_version;
   }
   return ret;
 }

@@ -204,7 +204,7 @@ private:
       ObTableStoreIterator &iterator,
       const ObSSTable *&base_table) const;
   int calculate_inc_ddl_read_tables(
-      const int64_t snapshot_version,
+      const int64_t base_version,
       const ObTablet &tablet,
       ObTableStoreIterator &iterator) const;
   int calculate_inc_major_read_tables(
@@ -518,12 +518,14 @@ private:
                             int64_t &column_cnt,
                             ObCOSSTableBaseType &co_base_type) const;
   int inner_calculate_inc_ddl_row_read_tables(
-      const int64_t snapshot_version,
+      ObLS &ls,
+      const int64_t base_version,
       const share::SCN &inc_major_end_scn,
       ObTableStoreIterator &iterator) const;
   int inner_calculate_inc_ddl_column_read_tables(
+      ObLS &ls,
       const ObTablet &tablet,
-      const int64_t snapshot_version,
+      const int64_t base_version,
       const share::SCN &inc_major_end_scn,
       ObTableStoreIterator &iterator) const;
   int inner_calculate_inc_ddl_column_read_sstables(
