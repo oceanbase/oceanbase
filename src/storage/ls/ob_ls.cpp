@@ -174,6 +174,8 @@ int ObLS::init(const share::ObLSID &ls_id,
         LOG_WARN("ls_recovery_stat_handler_ init failed", KR(ret));
       } else if (OB_FAIL(member_list_service_.init(this, &log_handler_))) {
         LOG_WARN("failed to init member list service", K(ret));
+      } else if (OB_FAIL(logonly_ls_init_for_dup_table_())) {
+        LOG_WARN("logonly ls init for dup_table_ls_handler failed", K(ret), K(get_ls_id()));
       }
       if (OB_SUCC(ret)) {
         election_priority_.set_ls_id(ls_id);
@@ -396,6 +398,32 @@ int ObLS::ls_destory_for_dup_table_()
   int ret = OB_SUCCESS;
   UNREGISTER_FROM_LOGSERVICE(logservice::DUP_TABLE_LOG_BASE_TYPE, &dup_table_ls_handler_);
   dup_table_ls_handler_.destroy();
+  return ret;
+}
+
+int ObLS::logonly_ls_init_for_dup_table_()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!is_logonly_replica())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("only supported for logonly replica");
+  } else {
+    dup_table_ls_handler_.default_init(get_ls_id(), get_log_handler());
+  }
+  return ret;
+}
+
+int ObLS::logonly_ls_destory_for_dup_table_()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!is_logonly_replica())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("only supported for logonly replica");
+  } else {
+    dup_table_ls_handler_.destroy();
+  }
   return ret;
 }
 
@@ -856,6 +884,7 @@ void ObLS::destroy()
       MTL(transaction::ObTimestampService *)->reset_ls();
       MTL(sql::ObDASIDService *)->reset_ls();
     }
+    (void)logonly_ls_destory_for_dup_table_();
     gc_handler_.reset();
     ls_restore_handler_.destroy();
     log_handler_.reset_election_priority();

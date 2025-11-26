@@ -116,9 +116,14 @@ int ObTenantStorageCheckpointWriter::write_ls_checkpoint(MacroBlockId &ls_entry_
 
       if (OB_FAIL(ret)) {
         // do nothing
+      } else if (ls->is_logonly_replica()) {
+        // do nothing if ls is log only replica
+        ls_ckpt_member.tablet_meta_entry_ = ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK;
       } else if (OB_FAIL(write_tablet_checkpoint(*ls, ls_ckpt_member.tablet_meta_entry_))) {
         LOG_WARN("fail to write tablet checkpoint for this ls", K(ret), KPC(ls));
-      } else {
+      }
+
+      if (OB_SUCC(ret)) {
         buf_len = ls_ckpt_member.get_serialize_size();
         pos = 0;
         if (OB_ISNULL(buf = static_cast<char *>(ob_malloc(buf_len, "SlogCkptWriter")))) {
