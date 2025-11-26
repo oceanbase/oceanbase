@@ -3001,7 +3001,7 @@ size_t ObCharset::casedn(const ObCollationType collation_type, ObString &src)
   size_t size = 0;
   if (!src.empty()) {
     size = casedn(collation_type, src.ptr(), src.length(), src.ptr(), src.length());
-    src.set_length(static_cast<int32_t>(size));
+    src = ObString(src.size(), static_cast<int32_t>(size), src.ptr());
   }
   return size;
 }
@@ -3011,7 +3011,7 @@ size_t ObCharset::caseup(const ObCollationType collation_type, ObString &src)
   size_t size = 0;
   if (!src.empty()) {
     size = caseup(collation_type, src.ptr(), src.length(), src.ptr(), src.length());
-    src.set_length(static_cast<int32_t>(size));
+    src = ObString(src.size(), static_cast<int32_t>(size), src.ptr());
   }
   return size;
 }
