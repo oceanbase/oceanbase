@@ -2573,7 +2573,6 @@ int ObPL::execute(ObExecContext &ctx,
 
   bool debug_mode = false;
   ObPLFunction *routine = NULL;
-  ObPLFunction *local_routine = NULL;
   int64_t old_worker_timeout_ts = 0;
   ObCurTraceId::TraceId parent_trace_id;
   ObPLASHGuard guard(package_id, routine_id);
@@ -2676,7 +2675,8 @@ int ObPL::execute(ObExecContext &ctx,
           }
         } else {
         }
-        bool is_nested_routine = OB_NOT_NULL(local_routine) && (!subprogram_path.empty());
+        bool is_nested_routine = !subprogram_path.empty()
+                                   && (NESTED_PROCEDURE == routine->get_proc_type() || NESTED_FUNCTION == routine->get_proc_type());
         // routine default has not debug priv, if a routine is not a nested routine, we check it to see
         // if it has debug priv, and set or clear debug flag.
         if (need_check) {
