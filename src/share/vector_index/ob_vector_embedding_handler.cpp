@@ -1412,13 +1412,13 @@ void ObEmbeddingTaskHandler::handle_drop(void *task)
       }
     }
 
+    remove_task_from_tracking(embedding_task);
+
     if (embedding_task->need_callback()) {
       embedding_task->release_if_managed();
     } else {
       embedding_task->~ObEmbeddingTask();
     }
-
-    remove_task_from_tracking(embedding_task);
 
     inc_dropped_task_cnt();
     dec_task_ref();
