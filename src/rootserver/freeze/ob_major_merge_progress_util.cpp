@@ -243,6 +243,7 @@ int ObTabletLSPairCache::check_exist_new_transfer_task(
   return ret;
 }
 
+ERRSIM_POINT_DEF(EN_TRE_REFRESH_TIMEOUT);
 int ObTabletLSPairCache::try_refresh(const bool force_refresh/* = false*/)
 {
   int ret = OB_SUCCESS;
@@ -260,6 +261,13 @@ int ObTabletLSPairCache::try_refresh(const bool force_refresh/* = false*/)
       max_task_id_ = tmp_max_task_id;
     }
   }
+#ifdef ERRSIM
+  if (OB_UNLIKELY(EN_TRE_REFRESH_TIMEOUT)) {
+    ret = OB_TIMEOUT;
+    LOG_WARN("ERRSIM EN_TRE_REFRESH_TIMEOUT, timeout", KR(ret));
+    SERVER_EVENT_SYNC_ADD("merge_errsim", "try_refresh_timeout", "tenant_id", tenant_id_);
+  }
+#endif
   return ret;
 }
 

@@ -1803,6 +1803,41 @@ TEST_F(TestCompactionPolicy, check_minor_across_major2)
   ASSERT_EQ(200, result.handle_.get_table(0)->get_start_scn().get_val_for_gts());
 }
 
+TEST_F(TestCompactionPolicy, check_minor_across_major3)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFreezeInfoMgr *mgr = MTL(ObTenantFreezeInfoMgr *);
+  ASSERT_TRUE(nullptr != mgr);
+
+  common::ObArray<share::ObFreezeInfo> freeze_info;
+  share::SCN frozen_val;
+  frozen_val.val_ = 1;
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
+  
+  ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  const char *key_data =
+      "table_type    start_scn    end_scn    max_ver    upper_ver\n"
+      "10            0             1          1           1       \n"
+      "11            1            150         0          300     \n"
+      "11            150          200         0          300     \n"
+      "11            200          350         350        350     \n";
+
+  ret = prepare_tablet(key_data, 350, 350);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObGetMergeTablesParam param;
+  param.merge_type_ = ObMergeType::MINOR_MERGE;
+  ObGetMergeTablesResult result;
+  FakeLS ls;
+  ret = ObPartitionMergePolicy::get_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ASSERT_EQ(3, result.handle_.get_count());
+  ASSERT_EQ(1, result.handle_.get_table(0)->get_start_scn().get_val_for_gts());
+}
+
+
 } //unittest
 } //oceanbase
 

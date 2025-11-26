@@ -493,7 +493,6 @@ int ObPartitionMergePolicy::get_minor_merge_tables(
   } else {
     result.transfer_seq_ = tablet.get_transfer_seq();
   }
-
   return ret;
 }
 
@@ -603,7 +602,7 @@ int ObPartitionMergePolicy::find_minor_merge_tables(
         LOG_WARN("failed to get sstable from handle", K(ret), K(cur_table_handle));
       } else if (!found_greater
                  && (table->get_upper_trans_version() <= min_snapshot_version ||
-                     (1 < minor_compact_trigger && table->get_max_merged_trans_version() <= min_snapshot_version))) {
+                     (1 < minor_compact_trigger && table->get_max_merged_trans_version() <= min_snapshot_version && table->get_max_merged_trans_version() != 0))) {
         /* 1. upper trans ver <= min snapshot, should do hist minor merge
          * 2. max merged trans ver <= min snapshot < upper trans ver:
          *   2.1. no uncommited contained, upper trans ver != MAX, table crosses the snapshot, cannot merge

@@ -258,7 +258,7 @@ int ObMajorMergeProgressChecker::rebuild_table_compaction_map(const int64_t tabl
   int64_t recommend_map_bucked_cnt = 0;
   if (table_compaction_map_.size() > 0) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table_compaction_map is not empty when first loop in cur round", KR(ret), K_(tenant_id));
+    LOG_WARN("table_compaction_map is not empty when first loop in cur round", KR(ret), K_(tenant_id), K(table_compaction_map_.size()), K(table_id_count));
   } else {
     bool need_rebuild_table_map = ObScheduleBatchSizeMgr::need_rebuild_map(
       TABLE_MAP_BUCKET_CNT, table_id_count, table_compaction_map_.bucket_count(), recommend_map_bucked_cnt);
@@ -445,23 +445,24 @@ int ObMajorMergeProgressChecker::prepare_check_progress(
   table_ids_.start_looping();
   if (OB_FAIL(ls_locality_cache_.refresh_ls_locality(first_loop_in_cur_round_ /*force_refresh*/))) {
     LOG_WARN("failed to refresh ls locality", K(ret));
+  } else if (OB_FAIL(tablet_ls_pair_cache_.try_refresh(first_loop_in_cur_round_ /*force_refresh*/))) {
+    LOG_WARN("failed to refresh tablet ls pair", K(ret));
   } else if (first_loop_in_cur_round_) {
     total_time_guard_.reuse();
     if (OB_FAIL(prepare_unfinish_table_ids())) {
       LOG_WARN("fail to prepare table_id_map", KR(ret), K_(tenant_id));
       table_ids_.reset();
+      table_compaction_map_.reuse();
     } else {
+      first_loop_in_cur_round_ = false;
       total_time_guard_.click(ObRSCompactionTimeGuard::PREPARE_UNFINISH_TABLE_IDS);
       progress_.total_table_cnt_ = table_ids_.count() + 1/*SPECIAL_TABLE_ID*/;
     }
   }
   if (FAILEDx(rebuild_tablet_status_map())) {
     LOG_WARN("failed to rebuild tablet status map by tablet cnt", K(ret));
-  } else if (OB_FAIL(tablet_ls_pair_cache_.try_refresh(first_loop_in_cur_round_ /*force_refresh*/))) {
-    LOG_WARN("failed to refresh tablet ls pair", K(ret));
   } else {
     tmp_time_guard.click(ObRSCompactionTimeGuard::GET_TABLET_LS_PAIRS);
-    first_loop_in_cur_round_ = false;
     exist_uncompacted_table = progress_.exist_uncompacted_table();
     progress_.clear_before_each_loop();
     reset_uncompacted_tablets();
