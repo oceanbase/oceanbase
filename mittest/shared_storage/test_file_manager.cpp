@@ -2373,7 +2373,7 @@ TEST_F(TestFileManager, test_list_remote_macro_ids_of_user_tablet)
   int64_t seq_id = 14;
   int64_t reorganization_scn = 0;
   ObArray<blocksstable::MacroBlockId> macro_ids;
-  // test0:empty macro_ids
+  // test0: empty macro_ids
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files(
                                          false/*is_ls_inner_tablet*/, 0/*ls_id*/,
                                          tablet_id, reorganization_scn, macro_ids));
@@ -2408,7 +2408,7 @@ TEST_F(TestFileManager, test_list_remote_macro_ids_of_user_tablet)
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(file_id, 0/*ls_epoch_id*/, is_exist));
   ASSERT_EQ(true, is_exist);
 
-  // test1:write one macro file and list it
+  // test1: write one macro file and list it
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files(
                                          false/*is_ls_inner_tablet*/, 0/*ls_id*/,
                                          tablet_id, reorganization_scn, macro_ids));
@@ -2428,7 +2428,20 @@ TEST_F(TestFileManager, test_list_remote_macro_ids_of_user_tablet)
                                          tablet_id, reorganization_scn, macro_ids));
   ASSERT_EQ(2, macro_ids.count());
 
-  // test3: write no macro file and expect list old two macro files
+  // test3: write shared tablet sub meta file and list
+  file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::SHARED_TABLET_SUB_META));
+  file_id.set_third_id(seq_id + 2);
+  write_object_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(file_id));
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle));
+  is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(file_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_EQ(true, is_exist);
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files(
+                                         false/*is_ls_inner_tablet*/, 0/*ls_id*/,
+                                         tablet_id, reorganization_scn, macro_ids));
+  ASSERT_EQ(3, macro_ids.count());
+  // test4: write no macro file and expect list old three macro files
   release_macro_file_disk_size(avail_size);
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::MAJOR_PREWARM_DATA));
   write_object_handle.reset();
@@ -2440,9 +2453,9 @@ TEST_F(TestFileManager, test_list_remote_macro_ids_of_user_tablet)
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files(
                                          false/*is_ls_inner_tablet*/, 0/*ls_id*/,
                                          tablet_id, reorganization_scn, macro_ids));
-  ASSERT_EQ(2, macro_ids.count());
+  ASSERT_EQ(3, macro_ids.count());
 
-  // test4: delete two macro files and list them
+  // test5: delete three macro files and list them
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_remote_files(macro_ids));
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files(
                                          false/*is_ls_inner_tablet*/, 0/*ls_id*/,
@@ -2462,7 +2475,7 @@ TEST_F(TestFileManager, test_list_remote_macro_ids_of_ls_inner_tablet)
   int64_t third_id = 100;
   int64_t meta_ls_id = 1;
   ObArray<blocksstable::MacroBlockId> macro_ids;
-  // test0:empty macro_ids
+  // test0: empty macro_ids
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files(
                                          true/*is_ls_inner_tablet*/, meta_ls_id,
                                          tablet_id, 0/*reorganization_scn*/, macro_ids));
@@ -2497,7 +2510,7 @@ TEST_F(TestFileManager, test_list_remote_macro_ids_of_ls_inner_tablet)
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(file_id, 0/*ls_epoch_id*/, is_exist));
   ASSERT_EQ(true, is_exist);
 
-  // test1:write one macro file and list it
+  // test1: write one macro file and list it
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files(
                                          true/*is_ls_inner_tablet*/, meta_ls_id,
                                          tablet_id, 0/*reorganization_scn*/, macro_ids));
@@ -2516,8 +2529,20 @@ TEST_F(TestFileManager, test_list_remote_macro_ids_of_ls_inner_tablet)
                                          true/*is_ls_inner_tablet*/, meta_ls_id,
                                          tablet_id, 0/*reorganization_scn*/, macro_ids));
   ASSERT_EQ(2, macro_ids.count());
-
-  // test3: write no macro file and expect list old two macro files
+  // test3: write shared tablet sub meta file and list
+  file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::SHARED_TABLET_SUB_META));
+  file_id.set_third_id(third_id + 2);
+  write_object_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(file_id));
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle));
+  is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(file_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_EQ(true, is_exist);
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files(
+                                         true/*is_ls_inner_tablet*/, meta_ls_id,
+                                         tablet_id, 0/*reorganization_scn*/, macro_ids));
+  ASSERT_EQ(3, macro_ids.count());
+  // test4: write no macro file and expect list old three macro files
   release_macro_file_disk_size(avail_size);
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::MAJOR_PREWARM_DATA));
   write_object_handle.reset();
@@ -2529,9 +2554,9 @@ TEST_F(TestFileManager, test_list_remote_macro_ids_of_ls_inner_tablet)
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files(
                                          true/*is_ls_inner_tablet*/, meta_ls_id,
                                          tablet_id, 0/*reorganization_scn*/, macro_ids));
-  ASSERT_EQ(2, macro_ids.count());
+  ASSERT_EQ(3, macro_ids.count());
 
-  // test4: delete two macro files and list them
+  // test5: delete three macro files and list them
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_remote_files(macro_ids));
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files(
                                          true/*is_ls_inner_tablet*/, meta_ls_id,
