@@ -447,7 +447,7 @@ public:
   int write_backup_set_info(const ObExternBackupSetInfoDesc &backup_set_info);
   int read_backup_set_info(ObExternBackupSetInfoDesc &backup_set_info);
   int is_backup_set_info_file_exist(bool &is_exist) const;
-  int get_backup_set_array(const common::ObString &passwd_array, const share::SCN &restore_scn,
+  int get_backup_set_array(const bool check_passwd, const common::ObString &passwd_array, const share::SCN &restore_scn,
       share::SCN &restore_start_scn, common::ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list);
   int get_max_backup_set_file_info(const common::ObString &passwd_array, ObBackupSetFileDesc &output_desc);
   int get_backup_sys_time_zone_wrap(common::ObTimeZoneInfoWrap & time_zone_wrap);
@@ -494,8 +494,12 @@ public:
     }
   };
 private:
-  int do_get_backup_set_array_(const common::ObString &passwd_array, const share::SCN &restore_scn,
-      const ObBackupSetFilter &op, common::ObIArray<share::ObRestoreBackupSetBriefInfo> &tmp_backup_set_list, 
+  int do_get_backup_set_array_(
+      const bool check_passwd,
+      const common::ObString &passwd_array,
+      const share::SCN &restore_scn,
+      const ObBackupSetFilter &op,
+      common::ObIArray<share::ObRestoreBackupSetBriefInfo> &tmp_backup_set_list,
       int64_t &cur_max_backup_set_id, share::SCN &restore_start_scn);
   int get_backup_set_placeholder_path_(const bool is_inner, const bool is_start, const bool is_succeed, 
       const share::SCN &replay_scn, const share::SCN &min_restore_scn, share::ObBackupPath &path);

@@ -1106,6 +1106,7 @@ int ObBackupDataStore::get_backup_set_placeholder_path_(
 }
 
 int ObBackupDataStore::get_backup_set_array(
+    const bool check_passwd,
     const common::ObString &passwd_array,
     const SCN &restore_scn,
     SCN &restore_start_scn,
@@ -1128,7 +1129,7 @@ int ObBackupDataStore::get_backup_set_array(
       LOG_WARN("fail to get simple backup placeholder dir", K(ret));
     } else if (OB_FAIL(util.list_files(tenant_backup_placeholder_dir_path.get_obstr(), storage_info, op))) {
       LOG_WARN("fail to list files", K(ret), K(tenant_backup_placeholder_dir_path));
-    } else if (OB_FAIL(do_get_backup_set_array_(passwd_array, restore_scn, op, backup_set_list,
+    } else if (OB_FAIL(do_get_backup_set_array_(check_passwd, passwd_array, restore_scn, op, backup_set_list,
         global_max_backup_set_id, restore_start_scn))) {
       LOG_WARN("fail to do get backup set array", K(ret), K(op));
     }
@@ -1305,8 +1306,11 @@ int ObBackupDataStore::get_single_backup_set_sys_time_zone_wrap(common::ObTimeZo
   return ret;
 }
 
-int ObBackupDataStore::do_get_backup_set_array_(const common::ObString &passwd_array, 
-    const SCN &restore_scn, const ObBackupSetFilter &op,
+int ObBackupDataStore::do_get_backup_set_array_(
+    const bool check_passwd,
+    const common::ObString &passwd_array,
+    const SCN &restore_scn,
+    const ObBackupSetFilter &op,
     common::ObIArray<share::ObRestoreBackupSetBriefInfo> &tmp_backup_set_list, 
     int64_t &cur_max_backup_set_id, SCN &restore_start_scn)
 {
@@ -1342,7 +1346,7 @@ int ObBackupDataStore::do_get_backup_set_array_(const common::ObString &passwd_a
       }
     } else {
       const share::ObBackupSetFileDesc &backup_set_file = backup_set_info.backup_set_file_;
-      if (OB_FAIL(backup_set_file.check_passwd(passwd_array.ptr()))) {
+      if (check_passwd && OB_FAIL(backup_set_file.check_passwd(passwd_array.ptr()))) {
         LOG_WARN("fail to check passwd", K(ret));
       } else if (backup_set_file.min_restore_scn_ > restore_scn) {
         // backup set file's min restore log ts > restore end log ts, can not be used to restore

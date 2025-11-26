@@ -504,6 +504,12 @@ struct ObPieceKey final
     round_id_ = 0;
     piece_id_ = 0;
   }
+
+  bool is_valid() const
+  {
+    return dest_id_ > 0 && round_id_ > 0 && piece_id_ > 0;
+  }
+
   void operator=(const ObPieceKey &other)
   {
     dest_id_ = other.dest_id_;

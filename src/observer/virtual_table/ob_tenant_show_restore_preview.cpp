@@ -87,7 +87,7 @@ int ObTenantShowRestorePreview::init()
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(parse_restore_scn_from_session_(backup_passwd, tenant_path_array))) {
     SHARE_LOG(WARN, "failed to parse restore timestamp from session", KR(ret));
-  } else if (OB_FAIL(rootserver::ObRestoreUtil::get_restore_source(only_contain_backup_set_,
+  } else if (OB_FAIL(rootserver::ObRestoreUtil::get_restore_source(false/*check_passwd*/, only_contain_backup_set_,
       tenant_path_array, backup_passwd, restore_scn_, backup_set_list_, backup_piece_list_, log_path_list_))) {
     SHARE_LOG(WARN, "failed to get restore source", K(ret), K(restore_scn_), K(backup_passwd));
   } else {
@@ -291,9 +291,13 @@ int ObTenantShowRestorePreview::get_backup_path_(common::ObString &str)
     ret = OB_ERR_UNEXPECTED;
     SHARE_LOG(WARN, "idx should be less than 0", KR(ret), K(idx_));
   } else if (idx_ <= backup_set_list_.count() - 1) {
-    str = backup_set_list_.at(idx_).backup_set_path_.str();
+    if (OB_FAIL(backup_set_list_.at(idx_).get_backup_set_path_str(allocator_, str))) {
+      SHARE_LOG(WARN, "fail to get backup set path str", K(ret), K(idx_), K(backup_set_list_));
+    }
   } else if (idx_ >= backup_set_list_.count() && idx_ <= total_cnt_ - 1) {
-    str = backup_piece_list_.at(idx_ - backup_set_list_.count()).piece_path_.str();
+    if (OB_FAIL(backup_piece_list_.at(idx_ - backup_set_list_.count()).get_log_piece_path_str(allocator_, str))) {
+      SHARE_LOG(WARN, "fail to get log piece str", K(ret), K(idx_), K(backup_set_list_));
+    }
   }
   return ret;
 }

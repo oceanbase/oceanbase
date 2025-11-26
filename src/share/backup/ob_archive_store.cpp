@@ -1740,6 +1740,51 @@ int ObArchiveStore::read_single_ls_info(const ObLSID &ls_id, ObSingleLSInfoDesc 
   return ret;
 }
 
+// start_path and end_path may be empty
+int ObArchiveStore::get_specific_piece_place_holder_paths(
+      const ObPieceKey &piece_key,
+      ObBackupPath &start_path,
+      ObBackupPath &end_path)
+{
+  int ret = OB_SUCCESS;
+  ObBackupIoAdapter util;
+  ObBackupPath piece_prefix;
+  ObSpecificPieceFilter piece_op;
+  const ObBackupStorageInfo *storage_info = get_storage_info();
+  const ObBackupDest &backup_dest = get_backup_dest();
+  start_path.reset();
+  end_path.reset();
+
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchiveStore not init", K(ret));
+  } else if (!piece_key.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid piece key", K(ret), K(piece_key));
+  } else if (OB_FAIL(ObArchivePathUtil::get_pieces_dir_path(backup_dest, piece_prefix))) {
+    LOG_WARN("failed to get piece file prefix", K(ret), K(backup_dest));
+  } else if (OB_FAIL(piece_op.init(this, piece_key))) {
+    LOG_WARN("failed to init piece op", K(ret));
+  } else if (OB_FAIL(util.list_files(piece_prefix.get_ptr(), storage_info, piece_op))) {
+    LOG_WARN("failed to list files", K(ret), K(piece_prefix), K(backup_dest));
+  } else {
+    ObString start_file_name(piece_op.get_start_file_name());
+    ObString end_file_name(piece_op.get_end_file_name());
+    if (!start_file_name.empty()) {
+      start_path = piece_prefix; //deep copy
+      if OB_FAIL(start_path.join(start_file_name, ObBackupFileSuffix::ARCHIVE)) {
+        LOG_WARN("fail to join path", K(ret), K(start_path), K(start_file_name));
+      }
+    }
+    if (OB_SUCC(ret) && !end_file_name.empty()) {
+      end_path = piece_prefix;
+      if OB_FAIL(end_path.join(end_file_name, ObBackupFileSuffix::ARCHIVE)) {
+        LOG_WARN("fail to join path", K(ret), K(end_path), K(end_file_name));
+      }
+    }
+  }
+  return ret;
+}
 static int parse_piece_file_(ObString &dir_name, int64_t &dest_id, int64_t &round_id, int64_t &piece_id)
 {
   int ret = OB_SUCCESS;
@@ -2265,6 +2310,69 @@ int ObArchiveStore::ObLSFileListOp::func(const dirent *entry)
     LOG_WARN("push back failed", K(ret), K(one_file));
   } else {
     LOG_INFO("find one archive file", KCSTRING(filename), "bytes", one_file.size_bytes_);
+  }
+  return ret;
+}
+
+ObArchiveStore::ObSpecificPieceFilter::ObSpecificPieceFilter()
+  : is_inited_(false), store_(nullptr), piece_key_(),
+    start_file_name_(), end_file_name_()
+{
+  MEMSET(start_file_name_, 0, sizeof(start_file_name_));
+  MEMSET(end_file_name_, 0, sizeof(end_file_name_));
+}
+
+int ObArchiveStore::ObSpecificPieceFilter::init(
+      ObArchiveStore *store,
+      const ObPieceKey &piece_key)
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObPieceFilter init twice", K(ret));
+  } else if (OB_ISNULL(store) || !piece_key.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid store or piece_key", K(ret), K(store), K(piece_key));
+  } else {
+    store_ = store;
+    piece_key_ = piece_key;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObArchiveStore::ObSpecificPieceFilter::func(const dirent *entry)
+{
+  int ret = OB_SUCCESS;
+  ObString file_name(entry->d_name);
+  bool is_piece_start = false;
+  bool is_piece_end = false;
+  ObPieceKey key;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObSpecificPieceFilter not init", K(ret));
+  } else if (OB_FAIL(is_piece_start_file_name_(file_name, is_piece_start))) {
+    LOG_WARN("failed to check piece start file name", K(ret), K(file_name));
+  } else if (OB_FAIL(is_piece_end_file_name_(file_name, is_piece_end))) {
+    LOG_WARN("failed to check piece end file name", K(ret), K(file_name));
+  } else if (!is_piece_start && !is_piece_end) {
+    LOG_INFO("skip mismatched file", K(file_name));
+  } else if (OB_FAIL(parse_piece_file_(file_name, key.dest_id_, key.round_id_, key.piece_id_))) {
+    LOG_WARN("failed to parse piece key", K(ret), K(file_name));
+  } else if (key == piece_key_) {
+    int64_t pos = 0;
+    if (is_piece_start) {
+      if (OB_FAIL(databuff_printf(start_file_name_, sizeof(start_file_name_), pos, "%s", entry->d_name))) {
+        LOG_WARN("fail to databuff_printf", K(ret));
+      }
+    }
+    if (is_piece_end) {
+      if (OB_FAIL(databuff_printf(end_file_name_, sizeof(end_file_name_), pos, "%s", entry->d_name))) {
+        LOG_WARN("fail to databuff_printf", K(ret));
+      }
+    }
+
   }
   return ret;
 }

@@ -650,6 +650,7 @@ public:
   bool is_valid() const { return !backup_set_path_.is_empty(); }
   int assign(const ObRestoreBackupSetBriefInfo &that);
   int get_restore_backup_set_brief_info_str(common::ObIAllocator &allocator, common::ObString &str) const;
+  int get_backup_set_path_str(common::ObIAllocator &allocator, ObString &str) const; // no aksk
   TO_STRING_KV(K_(backup_set_path), K_(backup_set_desc));
   share::ObBackupSetPath backup_set_path_;
   share::ObBackupSetDesc backup_set_desc_;
@@ -663,6 +664,7 @@ public:
   void reset() { piece_path_.reset(); }
   bool is_valid() const { return !piece_path_.is_empty(); }
   int get_restore_log_piece_brief_info_str(common::ObIAllocator &allocator, common::ObString &str) const;
+  int get_log_piece_path_str(common::ObIAllocator &allocator, ObString &str) const; // no aksk
   int assign(const ObRestoreLogPieceBriefInfo &that);
   TO_STRING_KV(K_(piece_path), K_(piece_id), K_(start_scn), K_(checkpoint_scn));
   share::ObBackupPiecePath piece_path_;
