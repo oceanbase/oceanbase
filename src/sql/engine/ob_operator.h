@@ -769,6 +769,8 @@ protected:
   #ifdef ENABLE_DEBUG_LOG
   inline int init_dummy_mem_context(uint64_t tenant_id);
   #endif
+  bool is_root_operator() const { return spec_.id_ == 0; }
+  inline int init_dummy_ptr_for_root(uint64_t tenant_id);
 public:
   uint64_t cpu_begin_time_; // start of counting cpu time
   uint64_t cpu_begin_level_; // level of counting cpu time
@@ -787,6 +789,10 @@ protected:
   #endif
   bool check_stack_overflow_;
   ObProfile profile_;
+  // detect_root_closed_allocator_ is only used to alloc and free detect_root_closed_ptr_
+  // dont use it alloc other ptr
+  common::ObIAllocator *detect_root_closed_allocator_;
+  char *detect_root_closed_ptr_;
   DISALLOW_COPY_AND_ASSIGN(ObOperator);
 };
 

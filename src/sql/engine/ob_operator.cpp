@@ -577,7 +577,9 @@ ObOperator::ObOperator(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput 
     dummy_ptr_(nullptr),
     #endif
     check_stack_overflow_(false),
-    profile_(static_cast<ObProfileId>(spec.get_type()), &ctx_.get_allocator(), spec_.use_rich_format_)
+    profile_(static_cast<ObProfileId>(spec.get_type()), &ctx_.get_allocator(), spec_.use_rich_format_),
+    detect_root_closed_allocator_(nullptr),
+    detect_root_closed_ptr_(nullptr)
 {
   eval_ctx_.max_batch_size_ = spec.max_batch_size_;
   eval_ctx_.batch_size_ = spec.max_batch_size_;
@@ -879,6 +881,8 @@ int ObOperator::open()
           LOG_WARN("init evaluate flags failed", K(ret));
         } else if (OB_FAIL(init_skip_vector())) {
           LOG_WARN("init skip vector failed", K(ret));
+        } else if (is_root_operator() && OB_FAIL(init_dummy_ptr_for_root(ctx_.get_my_session()->get_effective_tenant_id()))) {
+          LOG_WARN("failed to init dummy ptr for root", K(ret), K(spec_.id_));
         }
         #ifdef ENABLE_DEBUG_LOG
         else if (OB_FAIL(init_dummy_mem_context(ctx_.get_my_session()->get_effective_tenant_id()))) {
@@ -1217,6 +1221,13 @@ int ObOperator::close()
       }
     }
   #endif
+  if (is_root_operator()) {
+    if (detect_root_closed_allocator_ != nullptr && detect_root_closed_ptr_ != nullptr) {
+      detect_root_closed_allocator_->free(detect_root_closed_ptr_);
+      detect_root_closed_ptr_ = nullptr;
+      detect_root_closed_allocator_ = nullptr;
+    }
+  }
   return ret;
 }
 
@@ -1995,6 +2006,23 @@ inline int ObOperator::init_dummy_mem_context(uint64_t tenant_id)
   return ret;
 }
 #endif
+
+inline int ObOperator::init_dummy_ptr_for_root(uint64_t tenant_id)
+{
+  int ret = common::OB_SUCCESS;
+  if (OB_LIKELY(NULL == detect_root_closed_allocator_)) {
+    ObMemAttr attr(tenant_id, "RootOpClose");
+    if (OB_ISNULL(detect_root_closed_allocator_ = &CURRENT_CONTEXT->get_malloc_allocator())) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_ENG_LOG(WARN, "malloc allocator is null", K(ret));
+    } else if (OB_ISNULL(detect_root_closed_ptr_ =
+        static_cast<char*>(detect_root_closed_allocator_->alloc(sizeof(char), attr)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      SQL_ENG_LOG(WARN, "alloc dummy ptr failed", K(ret));
+    }
+  }
+  return ret;
+}
 
 bool ObOperator::enable_get_next_row() const
 {
