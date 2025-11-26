@@ -159,9 +159,6 @@ int ObDiskUsageReportTask::report_tenant_disk_usage(const char *svr_ip,
   }
   for (int64_t i = 0; i < result_arr.count() && OB_SUCC(ret); ++i) {
     const ObDiskUsageReportMap &pair = result_arr.at(i);
-    if(ObDiskReportFileType::TENANT_SS_PUBLIC_DATA == pair.first.file_type_) {
-      disk_usage_table_operator_.delete_tenant_space_usage(pair.first.tenant_id_, svr_ip, svr_port, seq_num, ObDiskReportFileType::TENANT_SS_PUBLIC_DATA);
-    }
     if (OB_FAIL(disk_usage_table_operator_.update_tenant_space_usage(
         pair.first.tenant_id_, svr_ip, svr_port, seq_num,
         pair.first.file_type_, pair.second.first, pair.second.second))) {
@@ -546,8 +543,9 @@ int ObDiskUsageReportTask::execute_gc_disk_usage(const char *svr_ip,
         STORAGE_LOG(WARN, "failed to delete tenant all", K(ret), K(tenant_id));
       }
     }
-    if (OB_SUCC(ret) && OB_FAIL(disk_usage_table_operator_.may_delete_shared_data_row())) {
-      STORAGE_LOG(WARN, "failed to may delete shared data row", K(ret));
+    // delete residual "tenant shared_major data" and "tenant shared data"
+    if (FAILEDx(disk_usage_table_operator_.delete_residual_shared_data(svr_ip, svr_port, seq_num))) {
+      STORAGE_LOG(WARN, "fail to delete shared data rows", K(ret));
     }
   }
   return ret;
