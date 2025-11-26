@@ -457,11 +457,14 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_for_transfer_in(
   } else if (mds::TwoPhaseCommitState::ON_COMMIT == trans_state) {
     // check start transfer commit version
     // trans version is regarded as transfer in commit version
-    if (read_snapshot < trans_version) {
-      // not allow to read
-      ret = OB_TABLET_NOT_EXIST;
-      LOG_WARN("read snapshot is smaller than start transfer in transaction commit version, should retry",
-          K(ret), K(ls_id), K(tablet_id), K(trans_state), K(read_snapshot), K(trans_version));
+    if (snapshot_version < user_data.create_commit_version_) {
+      ret = OB_SNAPSHOT_DISCARDED;
+      LOG_WARN("read snapshot smaller than create commit version",
+          K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(user_data));
+    } else if (read_snapshot < trans_version) {
+      // low possibility to happen, LOG_INFO is okay
+      LOG_INFO("read snapshot is smaller than start transfer in transaction commit version, but allow to read",
+        K(ls_id), K(tablet_id), K(trans_state), K(read_snapshot), K(trans_version));
     }
   }
 
