@@ -1183,64 +1183,46 @@ int ObTxDirectLoadIncLog::ob_admin_dump_macro_block(share::ObAdminMutatorStringA
                                                     int64_t scn_val)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(arg.dir_path_) || strlen(arg.dir_path_) == 0) {
+  if (OB_ISNULL(arg.writer_ptr_) || OB_ISNULL(arg.dir_path_) || strlen(arg.dir_path_) == 0) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid dir_path", K(ret), KP(arg.dir_path_));
+    TRANS_LOG(WARN, "invalid arg writer is NULL or dir_path is NULL", K(ret), KP(arg.writer_ptr_), KP(arg.dir_path_));
   } else if (ObTxDirectLoadIncLog::DirectLoadIncLogType::DLI_REDO == ddl_log_type_) {
     storage::ObDDLRedoLog ddl_redo_log;
     if (OB_FAIL(log_buf_.deserialize_log_object(&ddl_redo_log))) {
       TRANS_LOG(WARN, "deserialize ddl redo log failed", K(ret), KPC(this));
+    } else if (arg.filter_.is_tablet_id_valid() &&
+               arg.filter_.get_tablet_id() != ddl_redo_log.get_redo_info().table_key_.tablet_id_) {
+      // filter by tablet_id
     } else {
-      storage::ObDDLMacroBlockRedoInfo redo_info = ddl_redo_log.get_redo_info();
-      // Convert scn_range to string for filename: start_scn_end_scn_
-      char file_name[128] = {0};
-      int64_t name_len = snprintf(file_name, sizeof(file_name), "%ld", scn_val);
-      if (name_len < 0 || name_len >= static_cast<int64_t>(sizeof(file_name))) {
-        ret = OB_INVALID_ARGUMENT;
-        TRANS_LOG(WARN, "failed to convert scn to string", K(ret), K(scn_val));
-      } else {
-        // Construct full file path
-        char file_path[common::MAX_PATH_SIZE] = {0};
-        int64_t path_len =
-          snprintf(file_path, sizeof(file_path), "%s/%s", arg.dir_path_, file_name);
-        if (path_len < 0 || path_len >= static_cast<int64_t>(sizeof(file_path))) {
-          ret = OB_INVALID_ARGUMENT;
-          TRANS_LOG(WARN, "file path too long", K(ret), K(arg.dir_path_), K(file_name));
-        } else {
-          // Create and write file
-          int fd =
-            ::open(file_path, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-          if (fd < 0) {
-            ret = OB_IO_ERROR;
-            TRANS_LOG(WARN, "failed to create file", K(ret), K(file_path), K(errno));
-          } else {
-            if (redo_info.data_buffer_.length() > 0 && OB_NOT_NULL(redo_info.data_buffer_.ptr())) {
-              ssize_t write_size =
-                ::write(fd, redo_info.data_buffer_.ptr(), redo_info.data_buffer_.length());
-              if (write_size < 0) {
-                ret = OB_IO_ERROR;
-                TRANS_LOG(WARN, "failed to write file", K(ret), K(file_path), K(errno));
-              } else if (static_cast<int64_t>(write_size) != redo_info.data_buffer_.length()) {
-                ret = OB_IO_ERROR;
-                TRANS_LOG(WARN, "partial write", K(ret), K(write_size),
-                          K(redo_info.data_buffer_.length()));
-              }
-            }
+      ObCStringHelper helper;
+      arg.writer_ptr_->dump_key("<TxDirectLoadIncLog>");
+      arg.writer_ptr_->start_object();
+      arg.writer_ptr_->dump_key("dli_log_type");
+      arg.writer_ptr_->dump_int64(static_cast<int64_t>(ddl_log_type_));
+      arg.writer_ptr_->dump_key("dli_buf_size");
+      arg.writer_ptr_->dump_int64(log_buf_.get_buf_size());
+      arg.writer_ptr_->dump_key("dli_batch_key");
+      arg.writer_ptr_->dump_string(helper.convert(batch_key_));
+      arg.writer_ptr_->dump_key("dli_redo_log");
+      arg.writer_ptr_->dump_string(helper.convert(ddl_redo_log));
+      arg.writer_ptr_->end_object();
 
-            if (OB_FAIL(ret)) {
-              // Error occurred, close file anyway
-              ::close(fd);
-            } else {
-              if (0 != ::close(fd)) {
-                ret = OB_IO_ERROR;
-                TRANS_LOG(WARN, "failed to close file", K(ret), K(file_path), K(errno));
-              } else {
-                TRANS_LOG(INFO, "successfully dump macro block to file", K(file_path), K(scn_val),
-                          K(redo_info.data_buffer_.length()));
-              }
-            }
-          }
-        }
+      storage::ObDDLMacroBlockRedoInfo redo_info = ddl_redo_log.get_redo_info();
+      char dump_dir_path[common::MAX_PATH_SIZE] = {0};
+      // 目录结构dir_path_ / tablet_id / trans_id / seq_no
+      if (OB_FAIL(ObAdminLogDumpBlockHelper::generate_dump_dir(
+            arg.dir_path_, redo_info.table_key_.tablet_id_.id(), redo_info.trans_id_.get_id(),
+            redo_info.seq_no_.get_seq(), dump_dir_path))) {
+        TRANS_LOG(WARN, "failed to generate dump directory", K(ret), K(redo_info));
+      } else if (OB_FAIL(ObAdminLogDumpBlockHelper::create_dir_if_not_exist(dump_dir_path))) {
+        TRANS_LOG(WARN, "failed to create dump directory", K(ret), K(redo_info));
+        // 文件名 {slice_idx}_{column_group_idx}_{data_seq}.{scn}.macro
+      } else if (OB_FAIL(ObAdminLogDumpBlockHelper::write_macro_block_file(
+                   dump_dir_path, redo_info.table_key_.slice_range_.start_slice_idx_,
+                   redo_info.table_key_.column_group_idx_,
+                   redo_info.logic_id_.data_seq_.get_data_seq(), scn_val,
+                   redo_info.data_buffer_.ptr(), redo_info.data_buffer_.length()))) {
+        TRANS_LOG(WARN, "failed to write macro block file", K(ret), K(redo_info));
       }
     }
   }

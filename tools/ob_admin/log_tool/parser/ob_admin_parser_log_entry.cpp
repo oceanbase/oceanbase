@@ -185,9 +185,20 @@ int ObAdminParserLogEntry::parse_trans_service_log_(ObTxLogBlock &tx_log_block, 
         str_arg_.log_stat_->tx_log_header_size_ += log_header.get_serialize_size();
         LOG_TRACE("ObTxLogBlock get_next_log's log_header succ", K(ret), K(log_header));
         ObTxLogType tx_log_type = log_header.get_tx_log_type();
-        if (((LogFormatFlag::FILTER_FORMAT) == str_arg_.flag_ ||
-             (LogFormatFlag::BLOCK_FORMAT) == str_arg_.flag_) &&
-            str_arg_.filter_.is_tablet_id_valid()) {
+        if ((LogFormatFlag::BLOCK_FORMAT) == str_arg_.flag_) {
+          if (transaction::ObTxLogType::TX_DIRECT_LOAD_INC_MAJOR_LOG == tx_log_type) {
+            ObTxDirectLoadIncLog::TempRef temp_ref;
+            ObTxDirectLoadIncLog::ConstructArg arg(temp_ref);
+            ObTxDirectLoadIncMajorLog dli_log(arg);
+            if (OB_FAIL(dump_tx_id_ts_(str_arg_.writer_ptr_, tx_id, has_dumped_tx_id))) {
+              LOG_WARN("failed to dump_tx_id_ts_", K(ret));
+            } else if (OB_FAIL(tx_log_block.deserialize_log_body(dli_log))) {
+              LOG_WARN("tx_log_block.deserialize_log_body failed", K(ret), K(dli_log));
+            } else if (OB_FAIL(dli_log.ob_admin_dump_macro_block(str_arg_, scn_val_))) {
+              LOG_WARN("failed to dump ObTxDirectLoadIncLog macro block", K(ret), K(dli_log), K(str_arg_));
+            } else { /*do nothing*/}
+          }
+        } else if ((LogFormatFlag::FILTER_FORMAT) == str_arg_.flag_ || str_arg_.filter_.is_tablet_id_valid()) {
           // filter_format with valid tablet_id only cares redo log
           if (tx_log_type == transaction::ObTxLogType::TX_REDO_LOG) {
             if (OB_FAIL(parse_trans_redo_log_(tx_log_block, tx_id, has_dumped_tx_id))) {
@@ -345,10 +356,6 @@ int ObAdminParserLogEntry::parse_trans_service_log_(ObTxLogBlock &tx_log_block, 
                 LOG_WARN("tx_log_block.deserialize_log_body failed", K(ret), K(dli_log));
               } else if (OB_FAIL(dli_log.ob_admin_dump(str_arg_))) {
                 LOG_WARN("failed to dump ObTxDirectLoadIncLog", K(ret), K(dli_log), K(str_arg_));
-              } else if (LogFormatFlag::BLOCK_FORMAT == str_arg_.flag_) {
-                if (OB_FAIL(dli_log.ob_admin_dump_macro_block(str_arg_, scn_val_))) {
-                  LOG_WARN("failed to dump ObTxDirectLoadIncLog", K(ret), K(dli_log), K(str_arg_));
-                }
               } else {/*do nothing*/}
               break;
             }
