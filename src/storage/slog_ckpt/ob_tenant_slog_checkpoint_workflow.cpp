@@ -84,7 +84,14 @@ int ObTenantSlogCheckpointWorkflow::execute(
   if (OB_UNLIKELY(!ckpt_handler.is_inited_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "ckpt_handler is not inited", K(ret));
-  } else {
+  }
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = OB_E(EventTable::EN_SLOG_CKPT_ERROR) ret;
+    LOG_WARN("[ERRSIM] tenant slog checkpoint workflow", K(ret));
+  }
+#endif
+  if (OB_SUCC(ret)) {
     ObTenantSlogCkptUtil::MetaBlockListApplier mbl_applier(
         &ckpt_handler.lock_,
         &ckpt_handler.ls_block_handle_,
