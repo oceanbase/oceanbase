@@ -454,9 +454,19 @@ int ObPxSQCProxy::report(int end_ret) const
       transaction::ObTxExecResult &task_tx_result = tasks.at(i).get_tx_result();
       if (OB_NOT_NULL(task_tx_desc)) {
         if (OB_NOT_NULL(sqc_tx_desc)) {
-          OZ(MTL(transaction::ObTransService*)->merge_tx_state(*sqc_tx_desc, *task_tx_desc));
-          OZ(finish_msg.get_trans_result().merge_result(task_tx_result));
-          OZ(MTL(transaction::ObTransService*)->release_tx(*task_tx_desc));
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(MTL(transaction::ObTransService*)->merge_tx_state(*sqc_tx_desc, *task_tx_desc))) {
+            LOG_WARN("merge tx state fail", K(tmp_ret));
+          }
+          ret = tmp_ret;
+          if (OB_TMP_FAIL(finish_msg.get_trans_result().merge_result(task_tx_result))) {
+            LOG_WARN("merge tx result fail", K(tmp_ret));
+          }
+          ret = COVER_SUCC(tmp_ret);
+          if (OB_TMP_FAIL(MTL(transaction::ObTransService*)->release_tx(*task_tx_desc))) {
+            LOG_ERROR("release tx fail", K(tmp_ret), KP(task_tx_desc));
+          }
+          ret = COVER_SUCC(tmp_ret);
         } else {
           sql::ObSQLSessionInfo::LockGuard guard(session->get_thread_data_lock());
           sqc_tx_desc = task_tx_desc;
