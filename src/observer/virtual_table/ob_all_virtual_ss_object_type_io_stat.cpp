@@ -60,25 +60,40 @@ int ObAllVirtualSSObjectTypeIoStat::inner_get_next_row(common::ObNewRow *&row)
   return ret;
 }
 #ifdef OB_BUILD_SHARED_STORAGE
+
+static bool is_valid_object_type(ObStorageObjectType object_type)
+{
+  // ObStorageObjectTypeInstance::get_instance returns a default instance with type_=MAX for invalid types
+  return STI(object_type).get_type() != ObStorageObjectType::MAX;
+}
+
 int ObAllVirtualSSObjectTypeIoStat::get_object_type_stat(const int64_t cur_idx_, ObStorageObjectType &object_type,
-  ObSSObjectTypeStat &ss_object_type_stat, ObSSObjectTypeCachedStat &ss_object_type_cached_stat, bool &is_remote)
+  ObSSObjectTypeStat &ss_object_type_stat, ObSSObjectTypeCachedStat &ss_object_type_cached_stat, bool &is_remote, bool &is_valid)
 {
   int ret = OB_SUCCESS;
   is_remote = false;
+  is_valid = false;
   int64_t idx = cur_idx_;
   if (idx >= SS_OBJECT_MAX_TYPE_VAL) {
     is_remote = true;
     idx -= SS_OBJECT_MAX_TYPE_VAL;
   }
   object_type = static_cast<ObStorageObjectType>(idx);
-  ObSSLocalCacheService *local_cache_service = nullptr;
-  if (OB_ISNULL(local_cache_service = MTL(ObSSLocalCacheService *))) {
-    ret = OB_ERR_UNEXPECTED;
-    SERVER_LOG(WARN, "ObSSLocalCacheService is NULL", KR(ret));
-  } else if (OB_FAIL(local_cache_service->get_object_type_stat(object_type, is_remote, ss_object_type_stat))) {
-    SERVER_LOG(WARN, "fail to get ss object type stat", KR(ret), "object_type", STI(object_type));
-  } else if (OB_FAIL(local_cache_service->get_object_type_cached_stat(object_type, is_remote, ss_object_type_cached_stat))) {
-    SERVER_LOG(WARN, "fail to get ss object type cached stat", KR(ret), "object_type", STI(object_type));
+
+  if (!is_valid_object_type(object_type)) {
+    // This is expected for gaps in the enum, so we don't log a warning
+    is_valid = false;
+  } else {
+    is_valid = true;
+    ObSSLocalCacheService *local_cache_service = nullptr;
+    if (OB_ISNULL(local_cache_service = MTL(ObSSLocalCacheService *))) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "ObSSLocalCacheService is NULL", KR(ret));
+    } else if (OB_FAIL(local_cache_service->get_object_type_stat(object_type, is_remote, ss_object_type_stat))) {
+      SERVER_LOG(WARN, "fail to get ss object type stat", KR(ret), "object_type", STI(object_type));
+    } else if (OB_FAIL(local_cache_service->get_object_type_cached_stat(object_type, is_remote, ss_object_type_cached_stat))) {
+      SERVER_LOG(WARN, "fail to get ss object type cached stat", KR(ret), "object_type", STI(object_type));
+    }
   }
   return ret;
 }
@@ -116,9 +131,23 @@ int ObAllVirtualSSObjectTypeIoStat::process_curr_tenant(common::ObNewRow *&row)
     ObSSObjectTypeStat ss_object_type_stat;
     ObSSObjectTypeCachedStat ss_object_type_cached_stat;
     bool is_remote = false;
-    if (OB_FAIL(get_object_type_stat(cur_idx_, object_type, ss_object_type_stat, ss_object_type_cached_stat, is_remote))) {
-      SERVER_LOG(WARN, "fail to get ss object type stat", KR(ret), "object_type", STI(object_type));
+    bool is_valid = false;
+
+    while (OB_SUCC(ret) && !is_valid && cur_idx_ < SS_OBJECT_MAX_TYPE_VAL * 2) {
+      if (OB_FAIL(get_object_type_stat(cur_idx_, object_type, ss_object_type_stat, ss_object_type_cached_stat, is_remote, is_valid))) {
+        SERVER_LOG(WARN, "fail to get ss object type stat", KR(ret), "object_type", STI(object_type));
+        break;  // Exit loop on real error
+      } else if (!is_valid) {
+        // Skip invalid object_type (gap in enum) and continue
+        cur_idx_++;
+      }
     }
+
+    if (cur_idx_ >= SS_OBJECT_MAX_TYPE_VAL * 2) {
+      // No more valid types found within SS_OBJECT_MAX_TYPE_VAL * 2 range
+      ret = OB_ITER_END;
+    }
+
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; i++) {
       const uint64_t col_id = output_column_ids_.at(i);
       ObSSBaseStat stat;

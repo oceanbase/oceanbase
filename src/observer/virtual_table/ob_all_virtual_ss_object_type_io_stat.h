@@ -46,7 +46,7 @@ public:
   virtual bool is_need_process(uint64_t tenant_id) override;
   #ifdef OB_BUILD_SHARED_STORAGE
   int get_object_type_stat(const int64_t cur_idx_, blocksstable::ObStorageObjectType &object_type,
-    ObSSObjectTypeStat &ss_object_type_stat, ObSSObjectTypeCachedStat &ss_object_type_cached_stat, bool &is_remote);
+    ObSSObjectTypeStat &ss_object_type_stat, ObSSObjectTypeCachedStat &ss_object_type_cached_stat, bool &is_remote, bool &is_valid);
   #endif
 
 private:
