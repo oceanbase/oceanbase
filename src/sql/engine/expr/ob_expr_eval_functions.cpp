@@ -1458,6 +1458,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprToDate::calc_to_date_with_format                     /* 879 */
   NULL, // ObExprEditDistance::calc_edit_distance,                    /* 880 */
   NULL, // ObExprEditDistanceUTF8::calc_edit_distance_utf8,           /* 881 */
+  NULL, // ObExprDateAddClickhouse::calc_date_add_ck                  /* 882 */
+  NULL, // ObExprDateSubClickhouse::calc_date_sub_ck                  /* 883 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1949,6 +1951,9 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprAesDecrypt::eval_aes_decrypt_vector,                    /* 301 */
   NULL, // ObExprEditDistance::calc_edit_distance_vector,                /* 302 */
   NULL, // ObExprEditDistanceUTF8::calc_edit_distance_utf8_vector,       /* 303 */
+  NULL, //ObExprDateAddClickhouse::calc_date_add_ck_vector,              /* 304 */
+  NULL, //ObExprDateSubClickhouse::calc_date_sub_ck_vector,              /* 305 */
+  NULL, //ObExprTime::calc_time_vector,                                  /* 306 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,

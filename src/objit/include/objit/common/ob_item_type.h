@@ -1066,7 +1066,9 @@ typedef enum ObItemType
   T_FUN_SYS_DATE_TRUNC = 2089,
   T_FUN_ANY = 2090,
   T_FUN_ARBITRARY = 2091,
-
+  // ClickHouse-compatible date functions
+  T_FUN_SYS_DATE_ADD_CLICKHOUSE = 2092,
+  T_FUN_SYS_DATE_SUB_CLICKHOUSE = 2093,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
