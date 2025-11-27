@@ -1142,52 +1142,54 @@ void ObHTableRowIterator::set_ttl(int32_t ttl_value)
   time_to_live_ = ttl_value;
 }
 
+// ========= disable record expired rowkey begin =========
 void ObHTableRowIterator::try_record_expired_rowkey(const ObHTableCellEntity &cell)
 {
-  if (time_to_live_ > 0 && !is_cur_row_expired_ && OB_NOT_NULL(column_tracker_) &&
-      column_tracker_->is_expired(cell.get_timestamp())) {
-    is_cur_row_expired_ = true;
-    if (OB_NOT_NULL(child_op_) && OB_NOT_NULL(child_op_->get_scan_executor())) {
-      ObTableCtx &tb_ctx = child_op_->get_scan_executor()->get_table_ctx();
-      if (!tb_ctx.is_index_scan()) {
-        MTL(ObHTableRowkeyMgr *)
-            ->record_htable_rowkey(tb_ctx.get_ls_id(), tb_ctx.get_table_id(), tb_ctx.get_tablet_id(), cell.get_rowkey());
-      }
-    }
-  }
+  // if (time_to_live_ > 0 && !is_cur_row_expired_ && OB_NOT_NULL(column_tracker_) &&
+  //     column_tracker_->is_expired(cell.get_timestamp())) {
+  //   is_cur_row_expired_ = true;
+  //   if (OB_NOT_NULL(child_op_) && OB_NOT_NULL(child_op_->get_scan_executor())) {
+  //     ObTableCtx &tb_ctx = child_op_->get_scan_executor()->get_table_ctx();
+  //     if (!tb_ctx.is_index_scan()) {
+  //       MTL(ObHTableRowkeyMgr *)
+  //           ->record_htable_rowkey(tb_ctx.get_ls_id(), tb_ctx.get_table_id(), tb_ctx.get_tablet_id(), cell.get_rowkey());
+  //     }
+  //   }
+  // }
 }
 
 void ObHTableRowIterator::try_record_expired_rowkey(const int32_t versions, const ObString &rowkey)
 {
-  if (max_version_ > 0 && !is_cur_row_expired_ && versions > max_version_) {
-    is_cur_row_expired_ = true;
-    if (OB_NOT_NULL(child_op_) && OB_NOT_NULL(child_op_->get_scan_executor())) {
-      ObTableCtx &tb_ctx = child_op_->get_scan_executor()->get_table_ctx();
-      if (!tb_ctx.is_index_scan()) {
-        MTL(ObHTableRowkeyMgr*)->record_htable_rowkey(tb_ctx.get_ls_id(),
-                                                      tb_ctx.get_table_id(),
-                                                      tb_ctx.get_tablet_id(),
-                                                      rowkey);
-      }
-    }
-  }
+  // if (max_version_ > 0 && !is_cur_row_expired_ && versions > max_version_) {
+  //   is_cur_row_expired_ = true;
+  //   if (OB_NOT_NULL(child_op_) && OB_NOT_NULL(child_op_->get_scan_executor())) {
+  //     ObTableCtx &tb_ctx = child_op_->get_scan_executor()->get_table_ctx();
+  //     if (!tb_ctx.is_index_scan()) {
+  //       MTL(ObHTableRowkeyMgr*)->record_htable_rowkey(tb_ctx.get_ls_id(),
+  //                                                     tb_ctx.get_table_id(),
+  //                                                     tb_ctx.get_tablet_id(),
+  //                                                     rowkey);
+  //     }
+  //   }
+  // }
 }
 
 void ObHTableRowIterator::try_record_expired_rowkey(const ObString &rowkey)
 {
-  if (!is_cur_row_expired_ && OB_NOT_NULL(column_tracker_) && column_tracker_->check_column_expired()) {
-    is_cur_row_expired_ = true;
-    if (OB_NOT_NULL(child_op_) && OB_NOT_NULL(child_op_->get_scan_executor())) {
-      ObTableCtx &tb_ctx = child_op_->get_scan_executor()->get_table_ctx();
-      if (!tb_ctx.is_index_scan()) {
-        MTL(ObHTableRowkeyMgr*)->record_htable_rowkey(tb_ctx.get_ls_id(),
-                                                      tb_ctx.get_table_id(),
-                                                      tb_ctx.get_tablet_id(),
-                                                      rowkey);
-      }
-    }
-  }
+  // if (!is_cur_row_expired_ && OB_NOT_NULL(column_tracker_) && column_tracker_->check_column_expired()) {
+  //   is_cur_row_expired_ = true;
+  //   if (OB_NOT_NULL(child_op_) && OB_NOT_NULL(child_op_->get_scan_executor())) {
+  //     ObTableCtx &tb_ctx = child_op_->get_scan_executor()->get_table_ctx();
+  //     if (!tb_ctx.is_index_scan()) {
+  //       MTL(ObHTableRowkeyMgr*)->record_htable_rowkey(tb_ctx.get_ls_id(),
+  //                                                     tb_ctx.get_table_id(),
+  //                                                     tb_ctx.get_tablet_id(),
+  //                                                     rowkey);
+  //     }
+  //   }
+  // }
 }
+// ========= disable record expired rowkey end =========
 
 ////////////////////////////////////////////////////////////////
 
