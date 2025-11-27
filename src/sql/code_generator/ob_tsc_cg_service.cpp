@@ -866,7 +866,7 @@ int ObTscCgService::generate_tsc_filter(const ObLogTableScan &op, ObTableScanSpe
     if (OB_ISNULL(attach_ctdef)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("attach ctdef is null", K(ret));
-    } else if (op.is_vec_adaptive_scan() && OB_FAIL(lookup_pushdown_filters.assign(full_filters))) {
+    } else if (op.is_vec_adaptive_scan() && OB_FAIL(lookup_pushdown_filters.assign(op.get_full_filters()))) {
       LOG_WARN("failed to assign full filter to pushdown filters", K(ret));
     } else if (attach_ctdef->op_type_ == ObDASOpType::DAS_OP_INDEX_PROJ_LOOKUP) {
       if (OB_FAIL(nonpushdown_filters.assign(full_filters))) {
@@ -5448,6 +5448,25 @@ int ObTscCgService::extract_match_columns_from_filters(const ObLogTableScan &op,
       }
     }
   }
+  // extract columns from full filter expressions
+  if (OB_SUCC(ret)) {
+    const ObIArray<ObRawExpr*> &full_filters = op.get_full_filters();
+    for (int64_t i = 0; OB_SUCC(ret) && i < full_filters.count(); ++i) {
+      ObRawExpr *full_filter_expr = full_filters.at(i);
+      if (OB_ISNULL(full_filter_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null full filter expr", K(ret), K(i));
+      } else {
+        ObArray<ObRawExpr *> filter_columns;
+        if (OB_FAIL(ObRawExprUtils::extract_column_exprs(full_filter_expr, filter_columns))) {
+          LOG_WARN("failed to extract column exprs from full filter expr", K(ret), K(i));
+        } else if (OB_FAIL(append_array_no_dup(access_exprs, filter_columns))) {
+          LOG_WARN("failed to append full filter columns to access exprs", K(ret));
+        }
+      }
+    }
+  }
+
   return ret;
 }
 
