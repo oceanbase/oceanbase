@@ -1023,6 +1023,9 @@ public:
   static int check_debug_priv(ObSchemaGetterGuard *guard,
                               sql::ObSQLSessionInfo *sess_info,
                               ObPLFunction *func);
+  int rollback_xa_trans(sql::ObSQLSessionInfo &session_info,
+                               sql::ObExecContext &ctx,
+                               bool trans_xa_branch_fail);
 
   int inc_and_check_depth(int64_t package_id, int64_t routine_id, bool is_function);
   void dec_and_check_depth(int64_t package_id, int64_t routine_id, int &ret, bool inner_call);
@@ -1065,7 +1068,7 @@ public:
   bool is_autonomous() const { return is_autonomous_; }
   void clear_autonomous() { is_autonomous_ = false; }
   bool in_autonomous() const;
-  int end_autonomous(ObExecContext &ctx, sql::ObSQLSessionInfo &session_info);
+  int end_autonomous(ObExecContext &ctx, sql::ObSQLSessionInfo &session_info, bool trans_xa_branch_fail);
   bool in_nested_sql_ctrl() const
   { return ObStmt::is_dml_stmt(my_exec_ctx_->get_sql_ctx()->stmt_type_) && !in_autonomous(); }
   pl::ObPLContext *get_parent_stack_ctx() { return parent_stack_ctx_; }
