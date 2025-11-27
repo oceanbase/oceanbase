@@ -18,6 +18,7 @@
 #include "lib/signal/ob_signal_struct.h"
 #include "lib/thread/thread_mgr.h"
 #include "lib/container/ob_vector.h"
+#include "lib/utility/ob_hang_fatal_error.h"
 
 namespace oceanbase
 {
@@ -697,6 +698,7 @@ void ObMemoryDump::handle(void *task)
       ma->print_tenant_memory_usage(tenant_id);
       ma->print_tenant_ctx_memory_usage(tenant_id, m_task->min_print_size_);
     }
+    print_capture_memory_info();
 
 #ifdef FATAL_ERROR_HANG
     print_malloc_sample_info();

@@ -19,6 +19,7 @@
 #include "rpc/frame/ob_req_translator.h"
 #include "rpc/frame/ob_req_processor.h"
 #include "observer/omt/ob_th_worker.h"
+#include "lib/utility/ob_hang_fatal_error.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::omt;
@@ -44,6 +45,7 @@ void ObWorkerProcessor::th_destroy()
 
 #ifdef ERRSIM
 ERRSIM_POINT_DEF(EN_WORKER_PROCESS_REQUEST)
+ERRSIM_POINT_DEF(EN_WORKER_PROCESS_HANG_FATAL_ERROR)
 #endif
 
 OB_NOINLINE int ObWorkerProcessor::process_err_test()
@@ -51,13 +53,12 @@ OB_NOINLINE int ObWorkerProcessor::process_err_test()
   int ret = OB_SUCCESS;
 
 #ifdef ERRSIM
-  ret = EN_WORKER_PROCESS_REQUEST;
-#endif
-
-  if(OB_FAIL(ret))
-  {
+  if (0 != (ret = EN_WORKER_PROCESS_REQUEST)) {
     LOG_WARN("process err_test", K(ret));
+  } else if (0 != (ret = EN_WORKER_PROCESS_HANG_FATAL_ERROR)) {
+    right_to_die_or_duty_to_live();
   }
+#endif
   return ret;
 }
 
@@ -159,6 +160,7 @@ int ObWorkerProcessor::process(rpc::ObRequest &req)
   // go!
   try {
     in_try_stmt = true;
+    in_exception_state = false;
     if (OB_FAIL(process_one(req))) {
       LOG_WARN("process request fail", K(ret));
     }

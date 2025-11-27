@@ -23,6 +23,7 @@
 #include "lib/oblog/ob_log.h"
 #include "common/ob_smart_var.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
+#include "lib/utility/ob_hang_fatal_error.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -459,8 +460,14 @@ void ObTenantCtxAllocator::common_free(void *ptr)
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
   if (NULL != ptr) {
     AObject *obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);
-    on_free(*obj);
-    ObjectSet *os = obj->block()->obj_set_;
-    os->free_object(obj);
+    abort_unless(obj->is_valid());
+    abort_unless(obj->in_use_);
+    if (OB_UNLIKELY(in_exception_state)) {
+      add_capture_memory_info(ptr, obj->alloc_bytes_);
+    } else {
+      on_free(*obj);
+      ObjectSet *os = obj->block()->obj_set_;
+      os->free_object(obj);
+    }
   }
 }
