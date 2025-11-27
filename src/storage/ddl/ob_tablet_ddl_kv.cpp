@@ -1075,21 +1075,22 @@ int ObDDLKV::get_ddl_memtable(const int64_t slice_idx, const int64_t cg_idx, ObD
 }
 
 ERRSIM_POINT_DEF(DDLKV_FREEZE_BLOCK_COUNT_SMALL);
-int ObDDLKV::idem_update_max_scn(const share::SCN &max_scn, const ObDirectLoadType direct_load_type)
+int ObDDLKV::idem_update_min_max_scn(const share::SCN &scn, const ObDirectLoadType direct_load_type)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(!max_scn.is_valid_and_not_min())) {
+  } else if (OB_UNLIKELY(!scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(max_scn));
+    LOG_WARN("invalid argument", K(ret), K(scn));
   } else if (OB_UNLIKELY(!is_idem_type(direct_load_type))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(direct_load_type));
   } else {
     TCWLockGuard guard(lock_);
-    max_scn_ = SCN::max(max_scn_, max_scn);
+    min_scn_ = SCN::min(min_scn_, scn);
+    max_scn_ = SCN::max(max_scn_, scn);
   }
   return ret;
 }

@@ -404,7 +404,7 @@ ObDDLKVPendingGuard::~ObDDLKVPendingGuard()
       } else if (OB_ISNULL(ddl_kv)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ddl kv is null", K(ret), KP(ddl_kv), K(guard));
-      } else if (OB_FAIL(ddl_kv->idem_update_max_scn(scn, direct_load_type))) {
+      } else if (OB_FAIL(ddl_kv->idem_update_min_max_scn(scn, direct_load_type))) {
         LOG_WARN("fail to update max scn", K(ret), K(scn), K(direct_load_type));
       } else {
         break;
