@@ -19623,6 +19623,7 @@ int ObLogPlan::try_push_topn_into_index_merge_scan(ObLogicalOperator *&top,
     LOG_WARN("get unexpected access path", K(ret), KPC(table_scan->get_access_path()));
   } else if (table_scan->get_filter_exprs().count() != 0 ||
              table_scan->get_pushdown_filter_exprs().count() != 0 ||
+             table_scan->has_func_lookup() ||
              !ObJoinOrder::is_one_layer_intersect_with_fts(static_cast<const IndexMergePath *>(ap)->root_)) {
     // do nothing, topn pushdown requires that only match filter exists on the base table.
   } else if (OB_FAIL(static_cast<const IndexMergePath*>(ap)->get_all_match_exprs(merge_match_exprs,
