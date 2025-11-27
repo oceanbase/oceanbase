@@ -347,6 +347,7 @@ int ObSqlTransControl::kill_query_session(ObSQLSessionInfo &session,
                                           const ObSQLSessionState &status)
 {
   int ret = OB_SUCCESS;
+  ObSQLSessionInfo::LockGuard data_lock_guard(session.get_thread_data_lock()); // guard for access session.tx_desc_ in async thread
   if (session.get_in_transaction()) {
     ObTxDesc *tx_desc = session.get_tx_desc();
     uint64_t tx_tenant_id = tx_desc->get_tenant_id();
