@@ -687,6 +687,8 @@ int ObEncodeBlockGetReader::locate_row(
                                                  middle, bs, row_data, row_len, cmp_result))) {
             LOG_WARN("decode and compare cell failed", K(ret), K(middle), K(i), KP(row_data),
                 K(row_len), K(datums[i]));
+          } else {
+            LOG_DEBUG("encode get reader quick compare", K(decoders_[i]), K(middle), K(row_len));
           }
         }
 

@@ -151,7 +151,7 @@ public:
   inline ObKVMemBlockHandle* get_mb_handle() const { return handle_.get_mb_handle(); }
   inline const ObMicroBlockCacheValue* get_micro_block() const { return micro_block_; }
   inline void set_micro_block(const ObMicroBlockCacheValue *micro_block) { micro_block_ = micro_block; }
-  TO_STRING_KV(K_(handle), KP_(micro_block));
+  TO_STRING_KV(K_(handle), KPC_(micro_block));
 private:
   friend class ObIMicroBlockCache;
   friend class common::ObPointerSwizzleNode;
