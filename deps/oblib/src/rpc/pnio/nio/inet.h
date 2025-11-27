@@ -24,7 +24,6 @@ extern int set_tcp_linger_on(int fd);
 extern int set_tcp_nodelay(int fd);
 extern int set_tcpopt(int fd, int option, int value);
 extern void update_socket_keepalive_params(int fd, int64_t user_timeout);
-extern int check_socket_write_ack(int fd, socket_diag_info_t* sk_diag_info, const int64_t user_timeout);
 extern int set_tcp_recv_buf(int fd, int size);
 extern int set_tcp_send_buf(int fd, int size);
 extern const char* sock_fd_str(int fd, char *buf, int buf_len);
