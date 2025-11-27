@@ -4875,7 +4875,7 @@ int ObPLCompileUnitAST::add_sql_exprs(common::ObIArray<sql::ObRawExpr*> &exprs)
   return ret;
 }
 
-int ObPLCompileUnitAST::generate_symbol_debuginfo()
+int ObPLCompileUnitAST::generate_symbol_debuginfo(bool is_anonymous)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < symbol_table_.get_count(); ++i) {
@@ -4883,6 +4883,13 @@ int ObPLCompileUnitAST::generate_symbol_debuginfo()
   }
   if (OB_NOT_NULL(body_)) {
     OZ (body_->generate_symbol_debuginfo(symbol_debuginfo_table_));
+#ifdef OB_BUILD_ORACLE_PL
+    if (OB_SUCC(ret) && !get_is_wrap() && !is_anonymous) {
+      valid_row_info_array_.reset();
+      OZ (valid_row_info_array_.push_back(CoverageData(body_->get_line() + 1, body_->get_col(), false, false)));
+      OZ (body_->collect_valid_rows(valid_row_info_array_));
+    }
+#endif
   }
   return ret;
 }
@@ -4955,6 +4962,69 @@ int ObPLStmtBlock::generate_symbol_debuginfo(
   }
   return ret;
 }
+
+#ifdef OB_BUILD_ORACLE_PL
+int ObPLStmtBlock::collect_valid_rows(common::ObIArray<CoverageData> &dst) const
+{
+  int ret = OB_SUCCESS;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < stmts_.count(); ++i) {
+    ObPLStmt *stmt = stmts_.at(i);
+    CK (OB_NOT_NULL(stmt));
+    if (OB_SUCC(ret)) {
+      int64_t norm_line = stmt->get_line() + 1;
+      int64_t norm_col = stmt->get_col();
+      ObPLStmtType stmt_type = stmt->get_type();
+      if (PL_BLOCK != stmt_type && PL_USER_TYPE != stmt_type && PL_COND != stmt_type &&
+          PL_HANDLER != stmt_type && PL_INTERFACE != stmt_type && PL_DO != stmt_type &&
+          PL_FORALL != stmt_type && INVALID_PL_STMT != stmt_type) {
+        OZ (dst.push_back(CoverageData(norm_line, norm_col, false, false)));
+      }
+    }
+  }
+  // 递归处理子Block
+  for (int64_t i = 0; OB_SUCC(ret) && i < stmts_.count(); ++i) {
+    ObPLStmt *stmt = stmts_.at(i);
+    if (OB_ISNULL(stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("current stmt is null!", K(ret), K(stmt));
+    } else if (PL_IF == stmt->get_type()) {
+      ObPLIfStmt *if_stmt = static_cast<ObPLIfStmt *>(stmt);
+      CK (OB_NOT_NULL(if_stmt));
+      CK (OB_NOT_NULL(if_stmt->get_then()));
+      OZ (SMART_CALL(if_stmt->get_then()->collect_valid_rows(dst)));
+      if (OB_SUCC(ret) && OB_NOT_NULL(if_stmt->get_else())) {
+        OZ (SMART_CALL(if_stmt->get_else()->collect_valid_rows(dst)));
+      }
+    } else if (PL_FOR_LOOP == stmt->get_type()
+               || PL_CURSOR_FOR_LOOP == stmt->get_type()
+               || PL_LOOP == stmt->get_type()
+               || PL_WHILE == stmt->get_type()
+               || PL_REPEAT == stmt->get_type()) {
+      ObPLLoop *loop_stmt = static_cast<ObPLLoop *>(stmt);
+      CK (OB_NOT_NULL(loop_stmt));
+      CK (OB_NOT_NULL(loop_stmt->get_body()));
+      if (OB_SUCC(ret) && PL_CURSOR_FOR_LOOP == stmt->get_type()) {
+        OZ (SMART_CALL(loop_stmt->get_body()->get_block()->collect_valid_rows(dst)));
+      }
+      OZ (SMART_CALL(loop_stmt->get_body()->collect_valid_rows(dst)));
+    } else if (PL_HANDLER == stmt->get_type()) {
+      ObPLDeclareHandlerStmt *handler_stmt = static_cast<ObPLDeclareHandlerStmt *>(stmt);
+      for (int64_t i = 0; OB_SUCC(ret) && i < handler_stmt->get_handlers().count(); ++i) {
+        const ObPLDeclareHandlerStmt::DeclareHandler &handler = handler_stmt->get_handler(i);
+        CK (OB_NOT_NULL(handler.get_desc()));
+        CK (OB_NOT_NULL(handler.get_desc()->get_body()));
+        OZ (SMART_CALL(handler.get_desc()->get_body()->collect_valid_rows(dst)));
+      }
+    } else if (PL_BLOCK == stmt->get_type()) {
+      ObPLStmtBlock *block = static_cast<ObPLStmtBlock*>(stmt);
+      CK (OB_NOT_NULL(block));
+      OZ (SMART_CALL(block->collect_valid_rows(dst)));
+    }
+  }
+  return ret;
+}
+#endif
 
 int ObPLFunctionAST::add_argument(const common::ObString &name,
                                   const ObPLDataType &type,

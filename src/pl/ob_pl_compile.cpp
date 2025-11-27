@@ -267,8 +267,8 @@ int ObPLCompiler::compile(
         LOG_WARN("failed to init resolver", K(block), K(ret));
       } else if (OB_FAIL(resolver.resolve_root(block, func_ast))) {
         LOG_WARN("failed to analyze pl body", K(block), K(ret));
-      } else if (session_info_.is_pl_debug_on()) {
-        if (OB_FAIL(func_ast.generate_symbol_debuginfo())) {
+      } else if (session_info_.is_pl_debug_on() || (session_info_.get_pl_code_coverage() != nullptr)) {
+        if (OB_FAIL(func_ast.generate_symbol_debuginfo(true))) {
           LOG_WARN("failed to generate symbol debuginfo", K(ret));
         }
       }
@@ -396,6 +396,9 @@ int ObPLCompiler::read_dll_from_disk(bool enable_persistent,
     OX (func.set_can_cached(func_ast.get_can_cached()));
     OX (func.set_is_all_sql_stmt(func_ast.get_is_all_sql_stmt()));
     OX (func.set_has_parallel_affect_factor(func_ast.has_parallel_affect_factor()));
+#ifdef OB_BUILD_ORACLE_PL
+    OZ (func.add_vaild_rows_info(func_ast.get_valid_row_info_array()));
+#endif
   }
   return ret;
 }
@@ -521,7 +524,8 @@ int ObPLCompiler::compile(
     OZ (resolver.init(func_ast));
     OZ (resolver.init_default_exprs(func_ast, routine.get_routine_params()));
     OZ (resolver.resolve_root(parse_tree, func_ast));
-    if (session_info_.is_pl_debug_on()) {
+    OX (func_ast.set_is_wrap(func.get_is_wrap()));
+    if (session_info_.is_pl_debug_on() || (session_info_.get_pl_code_coverage() != nullptr)) {
       OZ (func_ast.generate_symbol_debuginfo());
     }
     ObErrorInfo error_info;
