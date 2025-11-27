@@ -229,7 +229,8 @@ public:
                             const int64_t row_scanned,
                             const int64_t row_inserted,
                             const int64_t cg_row_inserted,
-                            const int64_t physical_row_count);
+                            const int64_t physical_row_count,
+                            const bool allow_retry);
   int get_progress(int64_t &physical_row_count,
                    int64_t &row_inserted,
                    int64_t &cg_row_inserted,
@@ -271,6 +272,7 @@ private:
       const int64_t row_inserted,
       const int64_t cg_row_inserted,
       const int64_t row_count,
+      const bool allow_retry,
       const bool is_rpc_request,
       const bool is_observer_report);
   int get_replica_build_ctx(

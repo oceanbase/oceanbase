@@ -15,6 +15,7 @@
 #include "rootserver/ob_ddl_service_launcher.h" // for ObDDLServiceLauncher
 #include "rootserver/ob_root_service.h"
 #include "rootserver/restore/ob_restore_util.h"  // ObRestoreUtil
+#include "rootserver/ddl_task/ob_ddl_single_replica_executor.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -131,6 +132,17 @@ int ObRecoverRestoreTableTask::obtain_snapshot(const ObDDLTaskStatus next_task_s
   return ret;
 }
 
+bool ObRecoverRestoreTableTask::is_error_need_retry(const int ret_code)
+{
+  bool bret = false;
+  if (ObDDLTaskStatus::REDEFINITION == task_status_) {
+    bret = OB_SUCCESS == ret_code;
+  } else {
+    bret = ObDDLTask::is_error_need_retry(ret_code);
+  }
+  return bret;
+}
+
 // update sstable complement status for all leaders
 int ObRecoverRestoreTableTask::update_complete_sstable_job_status(const common::ObTabletID &tablet_id,
                                                                  const ObAddr &addr,
@@ -156,7 +168,8 @@ int ObRecoverRestoreTableTask::update_complete_sstable_job_status(const common::
                                                             addition_info.row_scanned_,
                                                             addition_info.row_inserted_,
                                                             addition_info.cg_row_inserted_,
-                                                            addition_info.physical_row_count_))) {
+                                                            addition_info.physical_row_count_,
+                                                            false /* allow_retry */))) {
     LOG_WARN("fail to set partition task status", K(ret));
   }
   return ret;

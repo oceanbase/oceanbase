@@ -1082,7 +1082,8 @@ int ObDropVecIndexTask::update_drop_lob_meta_row_job_status(const common::ObTabl
                                                             addition_info.row_scanned_,
                                                             addition_info.row_inserted_,
                                                             addition_info.cg_row_inserted_,
-                                                            addition_info.physical_row_count_))) {
+                                                            addition_info.physical_row_count_,
+                                                            true /* allow_retry */))) {
     LOG_WARN("fail to set partition task status", K(ret));
   }
   return ret;

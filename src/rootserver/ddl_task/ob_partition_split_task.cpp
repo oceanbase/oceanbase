@@ -1146,7 +1146,8 @@ int ObPartitionSplitTask::update_complete_sstable_job_status(
                                                             addition_info.row_scanned_,
                                                             addition_info.row_inserted_,
                                                             addition_info.cg_row_inserted_,
-                                                            addition_info.physical_row_count_))) {
+                                                            addition_info.physical_row_count_,
+                                                            true /* allow_retry */))) {
     LOG_WARN("fail to update replica build status", K(ret));
   }
   return ret;

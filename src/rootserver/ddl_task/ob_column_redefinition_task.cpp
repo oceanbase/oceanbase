@@ -173,7 +173,8 @@ int ObColumnRedefinitionTask::update_complete_sstable_job_status(const common::O
                                                             addition_info.row_scanned_,
                                                             addition_info.row_inserted_,
                                                             addition_info.cg_row_inserted_,
-                                                            addition_info.physical_row_count_))) {
+                                                            addition_info.physical_row_count_,
+                                                            true /* allow_retry */))) {
     LOG_WARN("fail to set update replica build progress", K(ret), K(addr));
   }
   return ret;
