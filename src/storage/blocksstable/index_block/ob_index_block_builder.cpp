@@ -2291,6 +2291,8 @@ int ObBaseIndexBlockBuilder::close(ObIAllocator &allocator, ObIndexTreeInfo &tre
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected null root builder", K(ret), K(root_builder));
   } else {
+    const int64_t root_block_size_limit = GCTX.is_shared_storage_mode() ? ROOT_BLOCK_SIZE_LIMIT_FOR_SHARED_STORAGE
+                                                                        : ROOT_BLOCK_SIZE_LIMIT;
     ObMetaDiskAddr &root_addr = desc.addr_;
     desc.height_ = root_builder->level_ + 1;
     ObMicroBlockDesc micro_block_desc;
@@ -2303,8 +2305,7 @@ int ObBaseIndexBlockBuilder::close(ObIAllocator &allocator, ObIndexTreeInfo &tre
       STORAGE_LOG(WARN, "fail to build root block", K(ret));
     } else if (FALSE_IT(micro_block_desc.last_rowkey_ =
                             root_builder->last_rowkey_)) {
-    } else if (OB_UNLIKELY(micro_block_desc.get_block_size() >=
-                           ROOT_BLOCK_SIZE_LIMIT)) {
+    } else if (OB_UNLIKELY(micro_block_desc.get_block_size() >= root_block_size_limit)) {
       if (OB_FAIL(macro_writer_->append_index_micro_block(micro_block_desc))) {
         micro_writer->dump_diagnose_info(); // ignore dump error
         STORAGE_LOG(WARN, "fail to append root block", K(ret),
@@ -3689,7 +3690,8 @@ int ObMetaIndexBlockBuilder::close(
   int ret = OB_SUCCESS;
   ObIndexTreeInfo tree_info;
   ObMicroBlockDesc micro_block_desc;
-  int64_t single_root_tree_block_size_limit = ROOT_BLOCK_SIZE_LIMIT;
+  int64_t single_root_tree_block_size_limit = GCTX.is_shared_storage_mode() ? ROOT_BLOCK_SIZE_LIMIT_FOR_SHARED_STORAGE
+                                                                            : ROOT_BLOCK_SIZE_LIMIT;
   bool allow_meta_in_tail = !roots[0]->is_backup_task(); // backup can't send read io
 #ifdef ERRSIM
   int tp_ret = EN_SSTABLE_SINGLE_ROOT_TREE;
