@@ -1734,6 +1734,9 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
         if (table_ptr->is_column_store_sstable()) {
           access_ctx_->query_flag_.set_not_use_row_cache();
         }
+        if (!table_ptr->is_inc_major_type_sstable()) {
+          access_param_->iter_param_.is_delete_insert_ = false;
+        }
       }
       if (OB_FAIL(tables_.push_back(table_ptr))) {
         LOG_WARN("add table fail", K(ret), K(*table_ptr));
