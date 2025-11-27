@@ -2375,6 +2375,9 @@ int ObSelectLogPlan::get_distribute_distinct_method(ObLogicalOperator *top,
       distinct_dist_methods &= ~DistAlgo::DIST_HASH_HASH;
       OPT_TRACE("ignore hash dist distinct by hint");
     }
+    if (top->get_contains_fake_cte()) {
+      distinct_dist_methods &= (DistAlgo::DIST_BASIC_METHOD | DistAlgo::DIST_PULL_TO_LOCAL);
+    }
     can_re_parallel = top->can_re_parallel()
                       && (distinct_dist_methods & DistAlgo::DIST_HASH_HASH)
                       && !is_merge_without_sort
@@ -4063,6 +4066,9 @@ int ObSelectLogPlan::get_distributed_set_methods(const EqualSets &equal_sets,
   if (OB_SUCC(ret) && !get_optimizer_context().is_var_assign_only_in_root_stmt() &&
       get_optimizer_context().has_var_assign()) {
     set_dist_methods &= DIST_PULL_TO_LOCAL | DIST_BASIC_METHOD;
+  }
+  if (OB_SUCC(ret) && (left_child.get_contains_fake_cte() || right_child.get_contains_fake_cte())) {
+    set_dist_methods &= ~DistAlgo::DIST_HASH_HASH;
   }
   if (OB_SUCC(ret) && (set_dist_methods & DistAlgo::DIST_NONE_ALL)) {
     OPT_TRACE("check NONE ALL method");
@@ -6833,6 +6839,9 @@ int ObSelectLogPlan::get_distribute_window_method(ObLogicalOperator *top,
       win_dist_methods &= ~WinDistAlgo::WIN_DIST_NONE;
       OPT_TRACE("config disable partition wise window function");
     }
+  }
+  if (OB_SUCC(ret) && top->get_contains_fake_cte()) {
+    win_dist_methods &= DIST_PULL_TO_LOCAL | DIST_BASIC_METHOD;
   }
   if (OB_SUCC(ret)) {
     can_re_parallel = top->can_re_parallel()

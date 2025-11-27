@@ -5909,6 +5909,9 @@ int ObLogPlan::get_distribute_group_by_method(ObLogicalOperator *top,
     } else {
       group_dist_methods &= ~DistAlgo::DIST_PULL_TO_LOCAL;
     }
+    if (top->get_contains_fake_cte()) {
+      group_dist_methods &= (DistAlgo::DIST_BASIC_METHOD | DistAlgo::DIST_PULL_TO_LOCAL);
+    }
     can_re_parallel = (top->can_re_parallel()
                       && (group_dist_methods & DistAlgo::DIST_HASH_HASH)
                       && query_ctx->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP2)) ||
