@@ -393,6 +393,11 @@ private:
       bool is_empty() const { return 0 == size_; }
       void check_cross_pages(const int64_t capacity);
       bool is_cross_page(const int64_t column_id) { return cross_pages_.at(column_id); }
+      // Check if a batch will cross page boundary
+      // Returns true if the batch crosses page, false otherwise
+      bool check_if_batch_cross_page(const int64_t column_id,
+        const int64_t current_row_pos,
+        const int64_t batch_size);
 
     private:
       bool has_no_skip_bits();
@@ -408,6 +413,7 @@ private:
       ObArray<int64_t> read_ranges_;
       int64_t segment_count_;
       common::ObFixedArray<bool, common::ObIAllocator> cross_pages_;
+      common::ObArrayWrap<std::shared_ptr<parquet::OffsetIndex>> offset_indexs_;
   };
   friend class ObParquetTableRowIterator::ParquetSectorIterator;
 private:
