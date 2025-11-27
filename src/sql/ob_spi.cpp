@@ -4117,7 +4117,7 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
                                         &session_info), K(size));
           CK (OB_NOT_NULL(spi_result.get_result_set()));
           CK (OB_NOT_NULL(spi_result.get_result_set()->get_field_columns()));
-          OZ (spi_cursor->init_row_desc(*spi_result.get_result_set()->get_field_columns()));
+          OZ (spi_cursor->init_row_desc(*spi_result.get_result_set()));
           OZ (fill_cursor(
             spi_result.get_memory_ctx(),
             *spi_result.get_result_set(), spi_cursor, ObTimeUtility::current_time(), is_iter_end, orc_max_ret_rows));
@@ -7565,6 +7565,13 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
         for (int64_t i = 0; OB_SUCC(ret) && i < actual_column_count; ++i) {
           OZ (row_desc.push_back(static_cast<ObSPICursor*>(result_set)->row_desc_.at(i)));
         }
+        if (OB_SUCC(ret) && static_cast<ObSPICursor*>(result_set)->subschema_ctx_.is_inited()) {
+          ObSubSchemaCtx & subschema_ctx = exec_ctx->get_physical_plan_ctx()->get_subschema_ctx();
+          if (OB_FAIL(subschema_ctx.assgin(static_cast<ObSPICursor*>(result_set)->subschema_ctx_))) {
+            LOG_WARN("fail to assign subschema ctx", K(ret));
+          }
+        }
+
       } else {
         const common::ColumnsFieldIArray *fields = static_cast<ObResultSet*>(result_set)->get_field_columns();
         if (OB_ISNULL(fields)) {
@@ -10101,7 +10108,7 @@ int ObSPIService::ps_cursor_open(ObPLExecCtx *ctx,
     } else if (OB_ISNULL(fields = rs->get_field_columns())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fields is NULL", K(ret));
-    } else if (OB_FAIL(ps_cursor.prepare_cursor_store(*session, *fields))){
+    } else if (OB_FAIL(ps_cursor.prepare_cursor_store(*session, *rs))){
       LOG_WARN("prepare cursor store failed", K(ret));
     } else if (OB_ISNULL(rs->get_physical_plan())) {
       ret = OB_ERR_UNEXPECTED;
@@ -10492,15 +10499,31 @@ int ObSPICursor::release_complex_obj(ObObj &complex_obj)
   }
   return ret;
 }
-int ObSPICursor::init_row_desc(const common::ColumnsFieldIArray &fields)
+int ObSPICursor::init_row_desc(sql::ObResultSet &result_set)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < fields.count(); i++) {
+  bool need_subschema_ctx = false;
+  const common::ColumnsFieldIArray *fields = result_set.get_field_columns();
+  CK (OB_NOT_NULL(fields));
+  for (int64_t i = 0; OB_SUCC(ret) && i < fields->count(); i++) {
     ObDataType type;
-    type.set_meta_type(fields.at(i).type_.get_meta());
-    type.set_accuracy(fields.at(i).accuracy_);
+    type.set_meta_type(fields->at(i).type_.get_meta());
+    type.set_accuracy(fields->at(i).accuracy_);
+    if (type.get_meta_type().is_user_defined_sql_type()
+        || type.get_meta_type().is_collection_sql_type()) {
+      // need subschema ctx to convert sql udt to pl types in convert obj
+      need_subschema_ctx = true;
+    }
     if (OB_FAIL(row_desc_.push_back(type))) {
-      LOG_WARN("push back error", K(ret), K(i), K(fields.at(i)));
+      LOG_WARN("push back error", K(ret), K(i), K(fields->at(i)));
+    }
+  }
+  if (OB_SUCC(ret) && need_subschema_ctx) {
+    if (OB_ISNULL(result_set.get_physical_plan())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("physical plan is NULL", K(ret));
+    } else if (OB_FAIL(subschema_ctx_.assgin(result_set.get_physical_plan()->get_subschema_ctx()))) {
+      LOG_WARN("fail to assign subschema ctx", K(ret));
     }
   }
   return ret;
