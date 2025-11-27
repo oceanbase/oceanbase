@@ -7001,7 +7001,7 @@ int ObSQLUtils::append_obj_param(ObSqlString & reconstruct_sql, const common::Ob
     }
 
     if (ret == OB_SIZE_OVERFLOW) {
-      const int64_t need_len = reconstruct_sql.length() + 100;
+      const int64_t need_len = reconstruct_sql.capacity() + 100;
       if (OB_FAIL(reconstruct_sql.reserve(need_len))) {
         LOG_WARN("reserve data failed", K(ret), K(need_len));
       } else {
