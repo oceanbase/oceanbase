@@ -19,6 +19,7 @@
 #include "sql/engine/expr/ob_expr.h"
 #include "sql/ob_sql_context.h"
 #include "share/vector_index/ob_vector_index_util.h"
+#include "share/ob_fts_index_builder_util.h"
 
 namespace oceanbase
 {
@@ -200,40 +201,11 @@ int ObDomainIdUtils::check_column_need_domain_id_merge(
     switch (type) {
       case ObDomainIDType::DOC_ID: {
         if (expr->is_doc_id_column()) {
-          ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
-          if (OB_FAIL(table_schema.get_simple_index_infos(simple_index_infos))) {
-            LOG_WARN("fail to get simple index infos", K(ret), K(table_schema));
+          bool has_valid_index = false;
+          if (OB_FAIL(ObFtsIndexBuilderUtil::check_has_valid_fts_or_multivalue_index(table_schema, schema_guard, has_valid_index))) {
+            LOG_WARN("failed to check has valid fts or multivalue index", K(ret));
           } else {
-            for (int64_t i = 0; OB_SUCC(ret) && !res && i < simple_index_infos.count(); ++i) {
-              const ObIndexType index_type = simple_index_infos.at(i).index_type_;
-              const uint64_t index_tid = simple_index_infos.at(i).table_id_;
-              if (schema::is_fts_or_multivalue_index(index_type) && !schema::is_rowkey_doc_aux(index_type)) {
-                // has doc_id column on table with valid fulltext / multivalue index
-                const share::schema::ObTableSchema *index_schema = nullptr;
-                const share::schema::ObTableSchema *rowkey_doc_schema = nullptr;
-                uint64_t rowkey_doc_tid = OB_INVALID_ID;
-                if (OB_FAIL(schema_guard.get_table_schema(index_tid, index_schema))) {
-                  LOG_WARN("failed to get index table schema", K(ret), K(index_tid));
-                } else if (OB_ISNULL(index_schema)) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("unexpected nullptr to index schema", K(ret));
-                } else if (OB_UNLIKELY(index_schema->is_final_invalid_index())) {
-                  // skip invalid index
-                } else if (OB_FAIL(table_schema.get_rowkey_doc_tid(rowkey_doc_tid))) {
-                  LOG_WARN("failed to get rowkey doc table id", K(ret));
-                } else if (OB_FAIL(schema_guard.get_table_schema(rowkey_doc_tid, rowkey_doc_schema))) {
-                  LOG_WARN("failed to get rowkey doc table schema", K(ret), K(rowkey_doc_tid));
-                } else if (OB_ISNULL(rowkey_doc_schema)) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("unexpected nullptr to rowkey doc schema", K(ret));
-                } else if (OB_UNLIKELY(!rowkey_doc_schema->can_read_index() || !rowkey_doc_schema->is_index_visible())) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("unexpected rowkey doc table unreadable", K(ret), KPC(rowkey_doc_schema));
-                } else {
-                  res = true;
-                }
-              }
-            }
+            res = has_valid_index;
           }
         }
         break;
