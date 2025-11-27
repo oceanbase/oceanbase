@@ -457,15 +457,12 @@ int ObBackupCleanTaskMgr::get_set_ls_ids_(ObIArray<ObLSID> &ls_ids)
   int ret = OB_SUCCESS;
   ObBackupDataStore store;
   share::ObBackupSetDesc desc;
-  ObBackupDataLSAttrDesc ls_attr;
+  ObBackupDataLSIdListDesc ls_id_list;
   desc.backup_set_id_ = backup_set_info_.backup_set_id_;
   desc.backup_type_ = backup_set_info_.backup_type_;
   if (OB_FAIL(store.init(backup_dest_, desc))) {
     LOG_WARN("faield to init backup data extern mgr", K(ret));
-// TODO(lyh444845): Once the bug fix from yangyi.yyy is available, add a version check.
-// For newer versions, revert to call `read_ls_attr_info` before `get_set_ls_ids_from_traverse_`.
-/*
-  } else if (OB_FAIL(store.read_ls_attr_info(ls_attr))) {
+  } else if (OB_FAIL(store.read_ls_id_list(ls_id_list))) {
     if (OB_OBJECT_NOT_EXIST == ret) {
       if (OB_FAIL(get_set_ls_ids_from_traverse_(ls_ids))) {
         LOG_WARN("failed to get set ls ids from traverse", K(ret));
@@ -473,12 +470,12 @@ int ObBackupCleanTaskMgr::get_set_ls_ids_(ObIArray<ObLSID> &ls_ids)
     } else {
       LOG_WARN("failed to read log stream info", K(ret));
     }
-  } else if (!ls_attr.is_valid()) {
+  } else if (!ls_id_list.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid ls info", K(ret), K(ls_attr));
+    LOG_WARN("invalid ls info", K(ret), K(ls_id_list));
   } else {
-    for (int i = 0; OB_SUCC(ret) && i < ls_attr.ls_attr_array_.count(); ++i) {
-      const ObLSID &ls_id = ls_attr.ls_attr_array_.at(i).get_ls_id();
+    for (int i = 0; OB_SUCC(ret) && i < ls_id_list.ls_id_array_.count(); ++i) {
+      const ObLSID &ls_id = ls_id_list.ls_id_array_.at(i);
       if (!ls_id.is_valid()) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid ls info", K(ret), K(ls_id));
@@ -486,9 +483,6 @@ int ObBackupCleanTaskMgr::get_set_ls_ids_(ObIArray<ObLSID> &ls_ids)
         LOG_WARN("failed to push back ls_id", K(ret), K(ls_id));
       } 
     }
-*/
-  } else if (OB_FAIL(get_set_ls_ids_from_traverse_(ls_ids))) {
-    LOG_WARN("failed to get set ls ids from traverse", K(ret));
   }
   return ret;
 }
