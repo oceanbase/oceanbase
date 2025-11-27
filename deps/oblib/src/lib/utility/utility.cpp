@@ -1157,10 +1157,17 @@ static int use_daemon()
 {
   int ret = OB_SUCCESS;
   const int nochdir = 1;
-  const int noclose = 0;
+  const int noclose = 1;
   if (daemon(nochdir, noclose) < 0) {
     LOG_ERROR("create daemon process fail", K(errno));
     ret = OB_ERR_SYS;
+  } else {
+    int fd = open("/dev/null", O_RDONLY);
+    if (fd >= 0) {
+      dup2(fd, STDIN_FILENO);
+      close(fd);
+    }
+    // stdout and stderr will be redirected to file when execute OBLOGGER.set_file_name
   }
   reset_tid_cache();
   // bt("enable_preload_bt") = 1;

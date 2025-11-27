@@ -597,6 +597,7 @@ int inner_main(int argc, char *argv[])
       pos))) {
   } else if (OB_FAIL(ObEncryptionUtil::init_ssl_malloc())) {
     MPRINT("failed to init crypto malloc");
+  } else if (FALSE_IT(OB_LOGGER.set_log_level(opts.log_level_))) {
   } else if (!opts.nodaemon_ && OB_FAIL(start_daemon(PID_FILE_NAME))) {
   } else {
     ObCurTraceId::get_trace_id()->set("Y0-0000000000000001-0-0");
