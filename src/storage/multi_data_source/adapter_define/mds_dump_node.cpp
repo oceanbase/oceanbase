@@ -141,8 +141,7 @@ uint32_t MdsDumpNode::generate_hash() const
   result = murmurhash(&trans_version_, sizeof(trans_version_), result);
   result = murmurhash(&status_.union_.value_, sizeof(status_.union_.value_), result);
   if (user_data_.empty()) {
-    const int64_t ret = OB_ERR_SYS;//only used for log
-    MDS_LOG_NONE(ERROR, "user data should not be empty");
+    MDS_LOG_NONE(INFO, "user data is empty");
   } else {
     result = murmurhash(user_data_.ptr(), user_data_.length(), result);
   }
