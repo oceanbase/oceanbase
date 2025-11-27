@@ -90,7 +90,7 @@ int ObSortVecOpProvider::decide_sort_key_type(ObSortVecOpContext &ctx)
 }
 
 template <typename SORT_CLASS>
-int ObSortVecOpProvider::alloc_sort_impl_instance(ObISortVecOpImpl *&sort_op_impl)
+int ObSortVecOpProvider::alloc_sort_impl_instance(ObSortVecOpContext &ctx,ObISortVecOpImpl *&sort_op_impl)
 {
   int ret = OB_SUCCESS;
   sort_op_impl = nullptr;
@@ -99,7 +99,12 @@ int ObSortVecOpProvider::alloc_sort_impl_instance(ObISortVecOpImpl *&sort_op_imp
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to create sort impl instance", K(ret));
   } else {
-    sort_op_impl = new (buf) SORT_CLASS(op_monitor_info_, mem_context_);
+    if (ctx.part_cnt_ != 0) {
+      // Sorting with a hash table is better suited for using HASH_WORK_AREA rather than SORT_WORK_AREA
+      sort_op_impl = new (buf) SORT_CLASS(op_monitor_info_, mem_context_, ObSqlWorkAreaType::HASH_WORK_AREA);
+    } else {
+      sort_op_impl = new (buf) SORT_CLASS(op_monitor_info_, mem_context_, ObSqlWorkAreaType::SORT_WORK_AREA);
+    }
   }
   return ret;
 }
@@ -113,26 +118,26 @@ int ObSortVecOpProvider::init_sort_impl_instance(ObSortVecOpContext &ctx, ObISor
     if (is_basic_cmp_) {
       if (OB_SUCCESS
           != (ret = alloc_sort_impl_instance<RTSingleColSortImplType<sk_type, true>>(
-                sort_op_impl))) {
+                ctx, sort_op_impl))) {
         LOG_WARN("failed to alloc sort impl instance", K(ret));
       }
     } else {
       if (OB_SUCCESS
           != (ret = alloc_sort_impl_instance<RTSingleColSortImplType<sk_type, false>>(
-                sort_op_impl))) {
+                ctx, sort_op_impl))) {
         LOG_WARN("failed to alloc sort impl instance", K(ret));
       }
     }
   } else if (is_basic_cmp_) {
     if (OB_SUCCESS
         != (ret = alloc_sort_impl_instance<RTSortImplType<sort_type, true, sk_type, has_addon>>(
-              sort_op_impl))) {
+              ctx, sort_op_impl))) {
       LOG_WARN("failed to alloc sort impl instance", K(ret));
     }
   } else if (OB_SUCCESS
              != (ret =
                    alloc_sort_impl_instance<RTSortImplType<sort_type, false, sk_type, has_addon>>(
-                     sort_op_impl))) {
+                     ctx, sort_op_impl))) {
     LOG_WARN("failed to alloc sort impl instance", K(ret));
   }
   return ret;
