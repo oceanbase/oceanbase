@@ -4255,7 +4255,7 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
     bool is_server_cursor = false;
     bool use_stream = false;
     bool force_unstreaming = false;
-    if (OB_SUCC(ret) && cursor_var.is_ref_cursor_type() && ctx->func_->should_init_as_session_cursor()) {
+    if (OB_SUCC(ret) && ((cursor_var.is_ref_cursor_type() && ctx->func_->should_init_as_session_cursor()) || session_info->force_unstreaming_cursor())) {
       force_unstreaming = true;
     }
     if (OB_SUCC(ret)) {
