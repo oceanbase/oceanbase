@@ -6749,7 +6749,7 @@ int ObDDLResolver::init_empty_session(const common::ObTimeZoneInfoWrap &tz_info_
   if (OB_ISNULL(schema_checker)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null schema checker", K(ret));
-  } else if (OB_FAIL(empty_session.test_init(0, 0, 0, &allocator))) {
+  } else if (OB_FAIL(empty_session.init(0, 0, &allocator))) {
     LOG_WARN("init empty session failed", K(ret));
   } else if (OB_FAIL(schema_checker->get_tenant_info(tenant_id, tenant_schema))) {
     LOG_WARN("get tenant_schema failed", K(ret));
