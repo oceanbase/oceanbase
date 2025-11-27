@@ -109,7 +109,7 @@ int ObZoneMergeManagerBase::reload()
 
     if (OB_SUCC(ret)) {
       is_loaded_ = true;
-      LOG_INFO("succ to reload zone merge manager", K(zone_list), K_(global_merge_info),
+      FLOG_INFO("succ to reload zone merge manager", K(zone_list), K_(global_merge_info),
                "zone_merge_infos", ObArrayWrap<ObZoneMergeInfo>(zone_merge_infos_, zone_count_));
     } else {
       LOG_WARN("fail to reload zone merge manager", KR(ret));
@@ -140,6 +140,7 @@ void ObZoneMergeManagerBase::reset_merge_info_without_lock()
   zone_count_ = 0;
   global_merge_info_.reset();
   is_loaded_ = false;
+  FLOG_INFO("reset merge info without lock", K_(tenant_id), K_(global_merge_info));
 }
 
 void ObZoneMergeManagerBase::reset_merge_info()

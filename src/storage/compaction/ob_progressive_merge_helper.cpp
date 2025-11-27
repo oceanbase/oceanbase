@@ -310,6 +310,7 @@ int ObProgressiveMergeHelper::check_macro_block_op(const ObMacroBlockDesc &macro
         block_op.set_rewrite();
       } else {
         block_op.set_reorg();
+        LOG_INFO("check macro block op", K(ret), "data_zsize", macro_desc.macro_meta_->val_.data_zsize_);
       }
     }
   }

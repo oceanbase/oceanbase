@@ -336,6 +336,7 @@ int ObCOMergeWriter::replay_last_skip_major(const int64_t current_major_idx)
     } else {
       last_skip_major_idx_ = -1;
       last_skip_major_row_id_ = -1;
+      LOG_INFO("success to replay last skip major", K(ret), K(merge_log));
     }
   }
   return ret;
