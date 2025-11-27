@@ -3650,9 +3650,9 @@ int ObAlterTableResolver::resolve_alter_index_parallel_oracle(const ParseNode &n
     LOG_DEBUG("alter index table dop",
       K(ret), K(index_dop), K(index_name), K(index_schema_->get_table_name()));
     if (index_dop <= 0) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_NOT_SUPPORTED;
       LOG_WARN("the value of table dop should greater than 0", K(ret));
-      LOG_USER_ERROR(OB_ERR_UNEXPECTED, "The value of table dop should greater than 0");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "The value of table dop should greater than 0");
     } else {
       ObAlterIndexParallelArg *alter_index_parallel_arg = NULL;
       void *tmp_ptr = NULL;
@@ -3707,7 +3707,8 @@ int ObAlterTableResolver::resolve_alter_index_parallel_mysql(const ParseNode &no
       ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN, "child node is null", K(ret));
     } else if (parallel_node->children_[0]->value_ < 1) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "value for PARALLEL or DEGREE must be greater than 0!");
       SQL_RESV_LOG(WARN, "the parallel is invalid", K(ret), K(parallel_node->children_[0]->value_));
     } else {
       ObString index_name;

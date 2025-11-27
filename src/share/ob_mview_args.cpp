@@ -273,7 +273,7 @@ bool ObAlterMViewArg::is_valid() const
   bool is_valid = true;
   if (is_alter_refresh_method_ && ObMVRefreshMethod::MAX <= refresh_method_) {
     is_valid = false;
-  } else if (is_alter_refresh_dop_ && refresh_dop_ <= 0) {
+  } else if (is_alter_refresh_dop_ && refresh_dop_ < 0) {
     is_valid = false;
   } else if (is_alter_refresh_start_ && !start_time_.is_timestamp()) {
     is_valid = false;
