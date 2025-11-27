@@ -1350,7 +1350,7 @@ int ObTableLSExecuteP::execute_htable_tablet_ops(ObTableTabletOp &tablet_ops,
               single_op_result.set_affected_rows(same_type_tablet_op_result.at(0).get_affected_rows());
               single_op_result.set_type(htable_ls_iter.get_same_ctx_ops().at(0).get_op_type());
               if (OB_FAIL(tmp_tablet_result.push_back(single_op_result))) {
-                LOG_WARN("fail to push back same tyep single_op_result", K(ret), K(same_type_tablet_op_result.at(j)));
+                LOG_WARN("fail to push back same tyep single_op_result", K(ret), K(tmp_tablet_result.count()));
               }
             }
           }
@@ -1365,7 +1365,7 @@ int ObTableLSExecuteP::execute_htable_tablet_ops(ObTableTabletOp &tablet_ops,
             LOG_WARN("fail to add dictionary and bitmap", K(ret));
           } else {
             if (OB_FAIL(tmp_tablet_result.push_back(single_op_result))) {
-              LOG_WARN("fail to push back same tyep single_op_result", K(ret), K(single_op_result));
+              LOG_WARN("fail to push back same tyep single_op_result", K(ret), K(tmp_tablet_result.count()));
             }
           }
         } else {
