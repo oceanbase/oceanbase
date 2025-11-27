@@ -3588,8 +3588,7 @@ int ObTransformUtils::check_index_extract_query_range(const ObDMLStmt *stmt,
                                                    range_columns))) {
     LOG_WARN("failed to get index column items by index cols", K(ret));
   } else if (session->is_enable_new_query_range() &&
-            ObSQLUtils::is_min_cluster_version_ge_425_or_435() &&
-            ObSQLUtils::is_opt_feature_version_ge_425_or_435(query_ctx->optimizer_features_enable_version_)) {
+            ObSQLUtils::is_min_cluster_version_ge_425_or_435()) {
     ObPreRangeGraph *pre_range_graph = NULL;
     params = &ctx->exec_ctx_->get_physical_plan_ctx()->get_param_store();
     if (OB_ISNULL(tmp_ptr = alloc.alloc(sizeof(ObPreRangeGraph))) ||
