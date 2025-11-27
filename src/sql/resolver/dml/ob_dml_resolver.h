@@ -936,6 +936,9 @@ protected:
   int resolve_match_against_expr(ObMatchFunRawExpr &expr);
   int resolve_es_match_expr(ObMatchFunRawExpr &expr);
 private:
+  int get_coll_type_from_anonymous_array(ObRawExpr *table_expr,
+                                         const pl::ObCollectionType *&coll_type,
+                                         pl::ObPLPackageGuard &package_guard);
   int resolve_function_table_column_item_udf(const TableItem &table_item,
                                              common::ObIArray<ColumnItem> &col_items);
   int resolve_function_table_column_item_sys_func(const TableItem &table_item,
