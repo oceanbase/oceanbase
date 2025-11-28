@@ -48,15 +48,16 @@ public:
                                       const common::GlobalLearnerList &learner_list) = 0;
 
   virtual int get_global_learner_list(common::GlobalLearnerList &learner_list) const = 0;
-  virtual int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const = 0;
+  virtual int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num, const bool &filter_logonly_replica = false) const = 0;
   virtual int get_config_version(palf::LogConfigVersion &config_version) const = 0;
   virtual int get_paxos_member_list_and_learner_list(common::ObMemberList &member_list,
                                                      int64_t &paxos_replica_num,
-                                                     GlobalLearnerList &learner_list) const = 0;
+                                                     GlobalLearnerList &learner_list, const bool &filter_logonly_replica = false) const = 0;
   virtual int get_stable_membership(palf::LogConfigVersion &config_version,
                                     common::ObMemberList &member_list,
                                     int64_t &paxos_replica_num,
-                                    common::GlobalLearnerList &learner_list) const = 0;
+                                    common::GlobalLearnerList &learner_list,
+                                    const bool &filter_logonly_replica = false) const = 0;
 
   // @brief: a special config change interface, change replica number of paxos group
   // @param[in] common::ObMemberList: current memberlist, for pre-check

@@ -364,7 +364,7 @@ int ObLSRestoreHandler::check_in_member_or_learner_list_(bool &is_in_member_or_l
   GlobalLearnerList learner_list;
   ObAddr self_addr = GCTX.self_addr();
   is_in_member_or_learner_list = false;
-  if (OB_FAIL(ls_->get_log_handler()->get_paxos_member_list_and_learner_list(member_list, paxos_replica_num, learner_list))) {
+  if (OB_FAIL(ls_->get_log_handler()->get_paxos_member_list_and_learner_list(member_list, paxos_replica_num, learner_list, true/*filter_logonly_replica*/))) {
     LOG_WARN("failed to get paxos_member_list_and_learner_list", K(ret));
   } else {
     is_in_member_or_learner_list = member_list.contains(self_addr) || learner_list.contains(self_addr);
@@ -1188,7 +1188,7 @@ int ObILSRestoreState::get_follower_server_(ObIArray<ObStorageHASrcInfo> &follow
   if (OB_ISNULL(log_handler = ls_->get_log_handler())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log handler should not be NULL", K(ret));
-  } else if (OB_FAIL(log_handler->get_paxos_member_list_and_learner_list(member_list, paxos_replica_num, learner_list))) {
+  } else if (OB_FAIL(log_handler->get_paxos_member_list_and_learner_list(member_list, paxos_replica_num, learner_list, true/*filter_logonly_replica*/))) {
     LOG_WARN("failed to get paxos member list and learner list", K(ret));
   } else if (OB_FAIL(location_service_->get(follower_info.cluster_id_, tenant_id, ls_->get_ls_id(), expire_renew_time, is_cache_hit, location))) {
     LOG_WARN("fail to get location", K(ret), KPC(ls_));

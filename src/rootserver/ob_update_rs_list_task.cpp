@@ -240,7 +240,7 @@ int ObUpdateRsListTask::get_rs_list(
           (replica->get_server() == self_addr
            || (replica->is_in_service()
                && is_server_alive
-               && ObReplicaTypeCheck::is_paxos_replica_V2(replica->get_replica_type())))) {
+               && ObReplicaTypeCheck::is_paxos_replica(replica->get_replica_type())))) {
         if (OB_FAIL(rs.init(replica->get_server(), replica->get_role(), replica->get_sql_port()))) {
           LOG_WARN("failed to do init", KR(ret), K(replica));
         } else if (OB_FAIL(rs_list.push_back(rs))) {

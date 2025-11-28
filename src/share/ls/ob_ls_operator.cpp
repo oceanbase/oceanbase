@@ -17,6 +17,7 @@
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tablelock/ob_lock_utils.h" // ObLSObjLockUtil
 #include "rootserver/mview/ob_replica_safe_check_task.h" //ObReplicaSafeCheckTask
+#include "rootserver/ob_tenant_event_def.h" // TENANT_EVENT
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -26,6 +27,7 @@ namespace oceanbase
 using namespace transaction;
 using namespace palf;
 using namespace transaction::tablelock;
+using namespace tenant_event;
 
 namespace share
 {
@@ -351,6 +353,7 @@ int ObLSAttrOperator::insert_ls(
     const bool skip_dup_ls_check)
 {
   int ret = OB_SUCCESS;
+  int64_t begin_ts = ObTimeUtility::current_time();
   ObLSFlagStr flag_str;
   common::ObSqlString sql;
   if (OB_UNLIKELY(!ls_attr.is_valid())) {
@@ -380,7 +383,13 @@ int ObLSAttrOperator::insert_ls(
     }
   }
   LOG_INFO("[LS_OPERATOR] insert ls", KR(ret), K(ls_attr), K(sql));
+  char ls_info_buf[MAX_TENANT_EVENT_VALUE_LENGTH] = "";
+  PRINT_OBJ_INFO(ls_attr, ls_info_buf);
+  int64_t cost = ObTimeUtility::current_time() - begin_ts;
+  TENANT_EVENT(tenant_id_, LS_EVENT, INSERT_LS, begin_ts, ret, cost,
+      ls_attr.get_ls_id().id(), ObHexEscapeSqlStr(ls_info_buf), ObHexEscapeSqlStr(sql.ptr()));
   ALL_LS_EVENT_ADD(tenant_id_, ls_attr.get_ls_id(), "insert_ls", ret, sql);
+
   return ret;
 }
 
@@ -431,6 +440,7 @@ int ObLSAttrOperator::delete_ls(
       } else if (OB_FAIL(operator_ls_(new_ls_attr, sql, working_sw_status))) {
         LOG_WARN("failed to operator ls", KR(ret), K(new_ls_attr), K(sql));
       }
+      // 不加入tenant event，因为版本大于等于4.2就不delete了 直接更新日志流状态
       LOG_INFO("[LS_OPERATOR] delete ls", KR(ret), K(ls_id), K(old_status));
       ALL_LS_EVENT_ADD(tenant_id_, ls_id, "delete_ls", ret, sql);
     }
@@ -532,6 +542,7 @@ int ObLSAttrOperator::update_ls_status_in_trans(const ObLSID &id,
                                         common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
+  int64_t begin_ts = ObTimeUtility::current_time();
   if (OB_UNLIKELY(!id.is_valid()
                   || !is_valid_status_in_ls(old_status)
                   || !is_valid_status_in_ls(new_status))) {
@@ -564,6 +575,10 @@ int ObLSAttrOperator::update_ls_status_in_trans(const ObLSID &id,
       }
       LOG_INFO("[LS_OPERATOR] update ls status", KR(ret), K(ls_attr), K(new_ls_attr));
     }
+    int64_t cost = ObTimeUtility::current_time() - begin_ts;
+    TENANT_EVENT(tenant_id_, LS_EVENT, UPDATE_LS_STATUS, begin_ts, ret, cost,
+        id.id(), ObHexEscapeSqlStr(ls_status_to_str(new_status)),
+        ObHexEscapeSqlStr(ls_status_to_str(old_status)), ObHexEscapeSqlStr(sql.ptr()));
     ALL_LS_EVENT_ADD(tenant_id_, id, "update_ls_status", ret, sql);
   }
   return ret;
@@ -840,6 +855,7 @@ int ObLSAttrOperator::alter_ls_group_in_trans(const ObLSAttr &ls_info,
                               common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
+  int64_t begin_ts = ObTimeUtility::current_time();
   ObSqlString sql;
   ObLSAttr lock_ls_attr;
   ObConflictCaseWithClone case_to_check(ObConflictCaseWithClone::MODIFY_LS);
@@ -868,6 +884,9 @@ int ObLSAttrOperator::alter_ls_group_in_trans(const ObLSAttr &ls_info,
       LOG_WARN("failed to operator ls", KR(ret), K(new_ls_info), K(sql));
     }
   }
+  int64_t cost = ObTimeUtility::current_time() - begin_ts;
+  TENANT_EVENT(tenant_id_, LS_EVENT, ALTER_LS_GROUP_ID, begin_ts, ret, cost,
+      ls_info.get_ls_id().id(), new_ls_group_id, ls_info.get_ls_group_id(), ObHexEscapeSqlStr(sql.ptr()));
   ALL_LS_EVENT_ADD(tenant_id_, ls_info.get_ls_id(), "alter_ls_group", ret, sql);
   return ret;
 }
@@ -877,6 +896,7 @@ int ObLSAttrOperator::update_ls_flag_in_trans(const ObLSID &id,
     common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
+  int64_t begin_ts = ObTimeUtility::current_time();
   ObSqlString sql;
   ObLSFlagStr old_flag_str;
   ObLSFlagStr new_flag_str;
@@ -915,6 +935,9 @@ int ObLSAttrOperator::update_ls_flag_in_trans(const ObLSID &id,
       LOG_WARN("failed to exec write", KR(ret), K(tenant_id_), K(sql));
     }
   }
+  int64_t cost = ObTimeUtility::current_time() - begin_ts;
+  TENANT_EVENT(tenant_id_, LS_EVENT, UPDATE_LS_FLAG, begin_ts, ret, cost,
+      id.id(), ObHexEscapeSqlStr(new_flag_str.ptr()), ObHexEscapeSqlStr(old_flag_str.ptr()), ObHexEscapeSqlStr(sql.ptr()));
   ALL_LS_EVENT_ADD(tenant_id_, id, "update_ls_flag", ret, sql);
   return ret;
 }

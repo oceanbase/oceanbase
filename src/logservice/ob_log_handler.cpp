@@ -620,7 +620,7 @@ int ObLogHandler::get_end_scn(SCN &scn) const
   return ret;
 }
 
-int ObLogHandler::get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const
+int ObLogHandler::get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num, const bool &filter_logonly_replica) const
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
@@ -629,14 +629,15 @@ int ObLogHandler::get_paxos_member_list(common::ObMemberList &member_list, int64
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
   } else {
-    PALF_MEMBER_PROXY_WITH_RET(get_paxos_member_list, member_list, paxos_replica_num);
+    PALF_MEMBER_PROXY_WITH_RET(get_paxos_member_list, member_list, paxos_replica_num, filter_logonly_replica);
   }
   return ret;
 }
 
 int ObLogHandler::get_paxos_member_list_and_learner_list(common::ObMemberList &member_list,
                                                          int64_t &paxos_replica_num,
-                                                         common::GlobalLearnerList &learner_list) const
+                                                         common::GlobalLearnerList &learner_list,
+                                                         const bool &filter_logonly_replica) const
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
@@ -645,7 +646,7 @@ int ObLogHandler::get_paxos_member_list_and_learner_list(common::ObMemberList &m
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
   } else {
-    PALF_MEMBER_PROXY_WITH_RET(get_paxos_member_list_and_learner_list, member_list, paxos_replica_num, learner_list);
+    PALF_MEMBER_PROXY_WITH_RET(get_paxos_member_list_and_learner_list, member_list, paxos_replica_num, learner_list, filter_logonly_replica);
   }
   return ret;
 }
@@ -668,7 +669,8 @@ int ObLogHandler::get_stable_membership(
     palf::LogConfigVersion &config_version,
     common::ObMemberList &member_list,
     int64_t &paxos_replica_num,
-    common::GlobalLearnerList &learner_list) const
+    common::GlobalLearnerList &learner_list,
+    const bool &filter_logonly_replica) const
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
@@ -680,7 +682,7 @@ int ObLogHandler::get_stable_membership(
     CLOG_LOG(INFO, "loghandler is stopped", K(ret), K_(id));
   } else {
     PALF_MEMBER_PROXY_WITH_RET(get_stable_membership, config_version,
-      member_list, paxos_replica_num, learner_list);
+      member_list, paxos_replica_num, learner_list, filter_logonly_replica);
   }
   return ret;
 }
@@ -2190,14 +2192,14 @@ int ObLogHandler::diagnose_palf(palf::PalfDiagnoseInfo &diagnose_info) const
   return ret;
 }
 
-int ObLogHandler::online(const LSN &lsn, const SCN &scn)
+int ObLogHandler::online(const LSN &lsn, const SCN &scn, const bool is_logonly_replica)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (true == is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
-  } else if (OB_FAIL(enable_replay(lsn, scn))) {
+  } else if (!is_logonly_replica && OB_FAIL(enable_replay(lsn, scn))) {
     CLOG_LOG(WARN, "enable_replay failed", K(ret), KPC(this), K(lsn), K(scn));
   } else if (OB_FAIL(enable_sync())) {
     CLOG_LOG(WARN, "enable_sync failed", K(ret), KPC(this));

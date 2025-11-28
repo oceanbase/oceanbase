@@ -45,7 +45,7 @@ int ObReconfigCheckerAdapter::init(const uint64_t tenant_id,
   return ret;
 }
 
-int ObReconfigCheckerAdapter::check_can_add_member(const ObAddr &server,
+int ObReconfigCheckerAdapter::check_can_add_member(const ObMember &member,
                                                    const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
@@ -53,7 +53,7 @@ int ObReconfigCheckerAdapter::check_can_add_member(const ObAddr &server,
   const int64_t start_time = fast_current_time();
   const int64_t sleep_time = 300 * 1000; // 300ms
   do {
-    if (OB_FAIL(ObMVCheckReplicaHelper::check_can_add_member(server, tenant_id_, ls_id_, timeout_us))) {
+    if (OB_FAIL(ObMVCheckReplicaHelper::check_can_add_member(member.get_server(), tenant_id_, ls_id_, timeout_us))) {
       PALF_LOG(WARN, "check can add member failed", K(ret),
                 K(timeout_us), K(ls_id_), K(tenant_id_));
     }
@@ -69,7 +69,7 @@ int ObReconfigCheckerAdapter::check_can_add_member(const ObAddr &server,
   } while (OB_FAIL(ret) && ret != OB_TIMEOUT);
 
   if (OB_SUCC(ret)) {
-    ret = guard_.check_can_add_member(server, timeout_us);
+    ret = guard_.check_can_add_member(member, timeout_us);
   }
 
   return ret;

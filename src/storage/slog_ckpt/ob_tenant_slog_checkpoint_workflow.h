@@ -78,10 +78,7 @@ public:
   /// @param ckpt_info[optional]: should provided by ObTenantCheckpointSlogHandler if @c type is not COMPAT
   static int execute(const Type type, ObTenantCheckpointSlogHandler &ckpt_handler);
 
-  static Type normal_type() {
-      return GCTX.is_shared_storage_mode() ? Type::NORMAL_SS : Type::NORMAL_SN;
-  }
-
+  static Type normal_type() { return GCTX.is_shared_storage_mode() ? Type::NORMAL_SS : Type::NORMAL_SN; }
   int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
@@ -344,6 +341,7 @@ private:
     int do_truncate(const bool is_force);
 
   private:
+    static const int64_t FAIL_WRITE_CHECKPOINT_ALERT_INTERVAL = 1000L * 1000L * 3600LL * 6;  // 6h
     static const int64_t MAX_TRUNCATE_INTERVAL = 300L * 1000 * 1000; // 5 mins by default
     static const int64_t MIN_WRITE_CHECKPOINT_LOG_CNT = 1e5; // 100,000
 
@@ -381,6 +379,8 @@ private:
           const MacroBlockId &ls_meta_entry,
           const MacroBlockId &wait_gc_tablet_entry,
           const ObSlogCheckpointFdDispenser &fd_dispenser);
+
+    int alert_if_necessary_(const int64_t errcode);
 
   private:
     Context &ctx_;

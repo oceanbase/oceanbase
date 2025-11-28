@@ -62,41 +62,24 @@ struct PalfBaseInfo;
 }
 namespace rootserver
 {
-struct ObUnitGroupInfo
-{
-  ObUnitGroupInfo() : unit_group_id_(OB_INVALID_ID), unit_status_(share::ObUnit::UNIT_STATUS_MAX),
-                      ls_group_ids_() {}
-  virtual ~ObUnitGroupInfo() {}
-  bool is_valid() const;
-  int init(const uint64_t unit_group_id,
-           const share::ObUnit::Status &unit_status);
-  void reset();
-  int assign(const ObUnitGroupInfo &other);
-  int remove_ls_group(const uint64_t ls_group_id);
-  bool operator==(const ObUnitGroupInfo &other) const;
-
-  uint64_t unit_group_id_;
-  share::ObUnit::Status unit_status_;
-  ObArray<uint64_t> ls_group_ids_;
-  TO_STRING_KV(K_(unit_group_id), K_(unit_status), K_(ls_group_ids));
-};
-typedef ObArray<ObUnitGroupInfo> ObUnitGroupInfoArray;
-typedef ObIArray<ObUnitGroupInfo> ObUnitGroupInfoIArray;
-
 struct ObLSGroupInfo
 {
   ObLSGroupInfo() : ls_group_id_(OB_INVALID_ID), unit_group_id_(OB_INVALID_ID),
-                           ls_ids_() {}
+                    unit_list_(), ls_ids_() {}
   virtual ~ObLSGroupInfo() {}
   bool is_valid() const;
-  int init(const uint64_t unit_group_id, const uint64_t ls_group_id);
+  int init(const uint64_t unit_group_id, const uint64_t ls_group_id,
+           const ObUnitIDList &unit_list);
   int assign(const ObLSGroupInfo &other);
   void reset();
   int remove_ls(const share::ObLSID &ls_id);
+  const ObUnitIDList &get_unit_list() const { return unit_list_; }
+  uint64_t get_ls_group_id() const { return ls_group_id_; }
   uint64_t ls_group_id_;
   uint64_t unit_group_id_;
+  ObUnitIDList unit_list_;
   ObArray<share::ObLSID> ls_ids_;
-  TO_STRING_KV(K_(ls_group_id), K_(unit_group_id), K_(ls_ids));
+  TO_STRING_KV(K_(ls_group_id), K_(unit_group_id), K_(ls_ids), K_(unit_list));
 };
 
 typedef ObArray<ObLSGroupInfo> ObLSGroupInfoArray;
@@ -136,7 +119,6 @@ public:
        tenant_schema_(tenant_schema),
        status_operator_(),
        status_array_(),
-       unit_group_array_(),
        ls_group_array_(),
        primary_zone_(),
        tenant_id_(tenant_id),
@@ -153,7 +135,6 @@ public:
   //the interface must used after gather_stat();
   int get_ls_status_info(const share::ObLSID &id, share::ObLSStatusInfo &info,
                          int64_t &info_index) const;
-  int get_next_unit_group(int64_t &group_index);
   // get the primary zone not in ls group
   int get_next_primary_zone(const ObLSGroupInfo &group_info,
       ObZone &primary_zone);
@@ -163,10 +144,6 @@ public:
   {
     return tenant_schema_;
   }
-  ObUnitGroupInfoArray& get_unit_group_array()
-  {
-    return unit_group_array_;
-  }
   const ObIArray<ObZone> &get_primary_zone() const
   {
     return primary_zone_;
@@ -175,7 +152,11 @@ public:
   {
     return ls_group_array_;
   }
-  TO_STRING_KV(K_(tenant_id), K_(is_load), K_(status_array), K_(unit_group_array),
+  ObLSStatusInfoArray& get_ls_array()
+  {
+    return status_array_;
+  }
+  TO_STRING_KV(K_(tenant_id), K_(is_load), K_(status_array),
       K_(ls_group_array), K_(primary_zone));
 private:
   // get from __all_ls_status and __all_ls
@@ -184,8 +165,6 @@ private:
   // base on status_array construct ls_array
   int add_ls_to_ls_group_(const share::ObLSStatusInfo &info);
 
-  // base on ls_array construct unit_group_array and __all_unit
-  int add_ls_group_to_unit_group_(const ObLSGroupInfo &group_info);
 
   int add_ls_status_info_(const share::ObLSStatusInfo &ls_info);
 private:
@@ -195,7 +174,7 @@ private:
   bool is_load_;
   share::ObLSStatusInfoArray status_array_;
   common::hash::ObHashMap<share::ObLSID, int64_t> status_map_;
-  ObUnitGroupInfoArray unit_group_array_;
+  //TODO 这个类只处理__all_ls和__all_ls_status的异同处理
   ObLSGroupInfoArray ls_group_array_;
   ObArray<common::ObZone> primary_zone_;
   uint64_t tenant_id_;
@@ -217,13 +196,18 @@ public:
   static int fetch_new_ls_group_id(ObMySQLProxy *sql_proxy, const uint64_t tenant_id, uint64_t &ls_group_id);
   static int fetch_new_ls_id(ObMySQLProxy *sql_proxy, const uint64_t tenant_id, share::ObLSID &ls_id);
   static int get_primary_zone_unit_array(const share::schema::ObTenantSchema *tenant_schema,
-      ObIArray<ObZone> &primary_zone, ObIArray<share::ObSimpleUnitGroup> &unit_group_array);
+      ObIArray<ObZone> &primary_zone,
+      ObIArray<share::ObUnit> &unit_array,
+      ObIArray<ObZone> &locality_zone_list);
   static int process_status_to_steady(
       const bool lock_sys_ls,
       const share::ObTenantSwitchoverStatus &working_sw_status,
       const int64_t switchover_epoch,
       ObTenantLSInfo& tenant_ls_info);
   //for recovery tenant, create new ls according to ls_id and ls_group_id
+  //TODO
+  // if primary_zone is specified, it will be used as initial primary_zone.
+  // else, a primary_zone will be choosed.
   static int create_new_ls_in_trans(const share::ObLSID &ls_id,
       const uint64_t ls_group_id,
       const share::SCN &create_scn,
@@ -231,17 +215,14 @@ public:
       ObTenantLSInfo& tenant_ls_info,
       common::ObMySQLTransaction &trans,
       const share::ObLSFlag &ls_flag,
-      const uint64_t source_tenant_id);
+      const uint64_t source_tenant_id,
+      const ObZone &specified_primary_zone = ObZone());
   static int life_agent_create_new_ls_in_trans(
       const share::ObLSStatusInfo &new_info,
       const share::SCN &create_scn,
       const int64_t switchover_epoch,
       ObTenantLSInfo& tenant_ls_info,
       common::ObMySQLTransaction &trans);
-  static int balance_ls_group(
-      const bool need_execute_balance,
-      ObTenantLSInfo& tenant_ls_info,
-      bool &is_balanced);//for standby tenant
   static int update_ls_recover_in_trans(
             const share::ObLSRecoveryStat &ls_recovery_stat,
             const bool only_update_readable_scn,
@@ -253,9 +234,7 @@ public:
   static int get_ls_replica_sync_scn(const uint64_t tenant_id,
       const ObLSID &ls_id, share::SCN &create_scn);
   static int process_alter_ls(const share::ObLSID &ls_id,
-      const uint64_t &old_ls_group_id,
       const uint64_t &new_ls_group_id,
-      const uint64_t &old_unit_group_id,
       ObTenantLSInfo& tenant_ls_info,
       common::ObISQLClient &sql_proxy);
   static int wait_all_tenants_user_ls_sync_scn(common::hash::ObHashMap<uint64_t, share::SCN> &tenants_sys_ls_target_scn);
@@ -273,35 +252,29 @@ public:
       ObMySQLTransaction *trans = NULL);
 private:
   static int check_if_need_wait_user_ls_sync_scn_(const uint64_t tenant_id, const share::SCN &sys_ls_target_scn);
+  static int try_get_src_ls_primary_zone_(const uint64_t tenant_id, const share::ObLSID &ls_id, ObZone &primary_zone);
   static int revision_to_equal_status_(
       const ObLSStatusMachineParameter &status_machine,
       const share::ObTenantSwitchoverStatus &working_sw_status,
       const int64_t switchover_epoch,
       ObTenantLSInfo& tenant_ls_info);
-  static int balance_ls_group_between_unit_group_(
-     ObTenantLSInfo& tenant_ls_info,
-     const int64_t min_index, const int64_t max_index);
-  static int try_shrink_standby_unit_group_(
-      ObTenantLSInfo& tenant_ls_info,
-      int64_t &task_cnt);
-  static int try_update_ls_unit_group_(
-      ObTenantLSInfo& tenant_ls_info,
-      const uint64_t ls_group_id,
-      ObUnitGroupInfo &src_info,
-      ObUnitGroupInfo &dest_info);
   static int construct_unit_group_id_and_primary_zone_for_clone_tenant_(
       const share::ObLSID &ls_id,
       const uint64_t source_tenant_id,
       const uint64_t tenant_id,
       uint64_t &unit_group_id,
+      share::ObUnitIDList &unit_list,
       ObZone &primary_zone);
 
   static int construct_unit_group_id_and_primary_zone_(
+      common::ObMySQLTransaction &trans,
       const share::ObLSID &ls_id,
       const uint64_t ls_group_id,
       const share::ObLSFlag &ls_flag,
       ObTenantLSInfo &tenant_ls_info,
+      const ObZone &specified_primary_zone,
       uint64_t &unit_group_id,
+      share::ObUnitIDList &unit_list,
       ObZone &primary_zone);
   static int get_ls_all_replica_readable_scn_(const uint64_t tenant_id,
       const share::ObLSID &src_ls,
@@ -310,6 +283,10 @@ private:
       const share::ObLSID &ls_id,
       const share::SCN &transfer_scn,
       bool &replay_finish);
+  static int choose_new_unit_group_or_list_(const share::ObLSID &ls_id,
+      common::ObISQLClient &sql_proxy,
+      ObTenantLSInfo& tenant_ls_info, uint64_t &unit_group_id,
+      share::ObUnitIDList &unit_list);
 };
 
 

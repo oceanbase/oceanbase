@@ -774,7 +774,7 @@ int ObInnerTableSchema::gv_ob_units_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,            SVR_PORT,            UNIT_ID,            TENANT_ID,            ZONE,            ZONE_TYPE,            REGION,            MIN_CPU,            MAX_CPU,            MEMORY_SIZE,            MIN_IOPS,            MAX_IOPS,            IOPS_WEIGHT,            MAX_NET_BANDWIDTH,            NET_BANDWIDTH_WEIGHT,            LOG_DISK_SIZE,            LOG_DISK_IN_USE,            DATA_DISK_SIZE,            DATA_DISK_IN_USE,            STATUS,            CREATE_TIME     FROM SYS.ALL_VIRTUAL_UNIT )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,            SVR_PORT,            UNIT_ID,            TENANT_ID,            ZONE,            ZONE_TYPE,            REGION,            MIN_CPU,            MAX_CPU,            MEMORY_SIZE,            MIN_IOPS,            MAX_IOPS,            IOPS_WEIGHT,            MAX_NET_BANDWIDTH,            NET_BANDWIDTH_WEIGHT,            LOG_DISK_SIZE,            LOG_DISK_IN_USE,            DATA_DISK_SIZE,            DATA_DISK_IN_USE,            STATUS,            CREATE_TIME,            CASE replica_type                WHEN 0 THEN 'FULL'                WHEN 5 THEN 'LOGONLY'                ELSE NULL            END AS REPLICA_TYPE     FROM SYS.ALL_VIRTUAL_UNIT )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -825,7 +825,7 @@ int ObInnerTableSchema::v_ob_units_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,            SVR_PORT,            UNIT_ID,            TENANT_ID,            ZONE,            ZONE_TYPE,            REGION,            MIN_CPU,            MAX_CPU,            MEMORY_SIZE,            MIN_IOPS,            MAX_IOPS,            IOPS_WEIGHT,            MAX_NET_BANDWIDTH,            NET_BANDWIDTH_WEIGHT,            LOG_DISK_SIZE,            LOG_DISK_IN_USE,            DATA_DISK_SIZE,            DATA_DISK_IN_USE,            STATUS,            CREATE_TIME     FROM SYS.GV$OB_UNITS     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,            SVR_PORT,            UNIT_ID,            TENANT_ID,            ZONE,            ZONE_TYPE,            REGION,            MIN_CPU,            MAX_CPU,            MEMORY_SIZE,            MIN_IOPS,            MAX_IOPS,            IOPS_WEIGHT,            MAX_NET_BANDWIDTH,            NET_BANDWIDTH_WEIGHT,            LOG_DISK_SIZE,            LOG_DISK_IN_USE,            DATA_DISK_SIZE,            DATA_DISK_IN_USE,            STATUS,            CREATE_TIME,            REPLICA_TYPE     FROM SYS.GV$OB_UNITS     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

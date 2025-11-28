@@ -16,6 +16,7 @@
 #include "lib/container/ob_array.h"
 #include "share/ob_unit_table_operator.h"
 #include "share/ob_unit_stat.h"
+#include "share/ob_share_util.h"
 #include "share/ob_check_stop_provider.h"
 #include "share/rc/ob_tenant_base.h"
 
@@ -97,6 +98,7 @@ public:
           config_.is_valid() && mode_ != lib::Worker::CompatMode::INVALID &&
           hidden_sys_data_disk_config_size_ >= 0 &&
           actual_data_disk_size_ >= 0;
+          ObShareUtil::is_valid_replica_type_for_unit(replica_type_);
     }
 
     int64_t get_effective_actual_data_disk_size() const

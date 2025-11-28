@@ -47,6 +47,7 @@ namespace share
 class ObBalanceJobStatus;
 class ObBalanceStrategy;
 class ObDMLSqlSplicer;
+
 #define IS_BALANCE_TASK(BALANCE_TASK, BALANCE)\
   bool is_##BALANCE()const { return BALANCE_TASK == val_;}
 class ObBalanceTaskStatus
@@ -468,6 +469,24 @@ public:
   static int load_need_transfer_task(const uint64_t tenant_id,
                                        ObBalanceTaskIArray &task_array,
                                        ObISQLClient &client);
+  /**
+   * @description: get split balance task by dest_ls and status
+   *
+   * @param[in] tenant_id           user_tenant_id
+   * @param[in] dest_ls             destination ls id
+   * @param[in] client              sql client or trans
+   * @param[out] task               balance task found
+   *
+   * @return :
+   * - OB_SUCCESS   succeed to get balance task by dest_ls and status
+   * - OB_ENTRY_NOT_EXIST  task not found according to dest_ls and status
+   * - OTHER        failed
+   */
+  static int get_split_task_by_dest_ls(
+      const uint64_t tenant_id,
+      const ObLSID &dest_ls,
+      ObISQLClient &client,
+      ObBalanceTask &task);
 private:
   static int execute_task_cnt_sql_(const uint64_t tenant_id, const ObSqlString &sql,
       int64_t &task_cnt, ObISQLClient &client);

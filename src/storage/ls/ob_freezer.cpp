@@ -2031,6 +2031,8 @@ void ObFreezer::PendTenantReplayHelper::restore_tenant_replay_()
     if (OB_ISNULL(ls = ls_handle_array_.at(i).get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "[ObFreezer] invalid ls handle", KR(ret), KPC(ls));
+    } else if (ls->is_logonly_replica()) {
+      STORAGE_LOG(TRACE, "[ObFreezer] skip logonly replica", KPC(ls));
     } else if (OB_FAIL(ls->get_freezer()->restore_ls_replay())) {
       STORAGE_LOG(WARN, "[ObFreezer] restore replay failed", KR(ret), KPC(ls));
     }

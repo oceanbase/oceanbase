@@ -1491,41 +1491,14 @@ int ObLocalityCheckHelp::check_alter_single_zone_locality_valid(
       non_paxos_locality_modified = true;
     }
   }
-  // 2. check whether alter locality is legal.
+
+  // check L-replica
   if (!is_legal) {
-  } else if (new_locality.get_logonly_replica_num() < orig_locality.get_logonly_replica_num()) {
-    // L-replica must not transfrom to other replica type.
-    if (new_locality.get_full_replica_num() > orig_locality.get_full_replica_num()) {
-      is_legal = false; // maybe L->F
-    } else if (ObLocalityDistribution::ALL_SERVER_CNT == new_locality.get_readonly_replica_num()
-        || ObLocalityDistribution::ALL_SERVER_CNT == orig_locality.get_readonly_replica_num()
-        || new_locality.get_readonly_replica_num() > orig_locality.get_readonly_replica_num()) {
-      if (0 != new_locality.get_readonly_replica_num()) {
-        is_legal = false; // maybe L->R
-      }
-    } else {} // good
-  } else if (new_locality.get_logonly_replica_num() > orig_locality.get_logonly_replica_num()) {
-    // only enable F transform to L
-    if (new_locality.get_full_replica_num() < orig_locality.get_full_replica_num()) {
-      if (ObLocalityDistribution::ALL_SERVER_CNT == new_locality.get_readonly_replica_num()
-          && ObLocalityDistribution::ALL_SERVER_CNT != orig_locality.get_readonly_replica_num()) {
-        if (0 != orig_locality.get_readonly_replica_num()) {
-          is_legal = false; // maybe R->L
-        }
-      } else if (ObLocalityDistribution::ALL_SERVER_CNT != new_locality.get_readonly_replica_num()
-          && ObLocalityDistribution::ALL_SERVER_CNT == orig_locality.get_readonly_replica_num()) {
-        is_legal = false; // maybe R->L
-      } else if (new_locality.get_readonly_replica_num() < orig_locality.get_readonly_replica_num()) {
-        is_legal = false; // maybe R->L
-      }
-    } else {
-      if (ObLocalityDistribution::ALL_SERVER_CNT == new_locality.get_readonly_replica_num()
-          || ObLocalityDistribution::ALL_SERVER_CNT == orig_locality.get_readonly_replica_num()
-          || new_locality.get_readonly_replica_num() < orig_locality.get_readonly_replica_num()) {
-        if (0 != orig_locality.get_readonly_replica_num()) {
-          is_legal = false; // maybe R->L
-        }
-      } else {} // good
+  } else if (new_locality.get_logonly_replica_num() != orig_locality.get_logonly_replica_num()) {
+    if (new_locality.get_full_replica_num() != orig_locality.get_full_replica_num()
+        || new_locality.get_readonly_replica_num() != orig_locality.get_readonly_replica_num()) {
+      // transform between R/F and L is illegal
+      is_legal = false;
     }
   }
   if (!is_legal) {

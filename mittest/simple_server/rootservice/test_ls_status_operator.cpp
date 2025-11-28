@@ -139,11 +139,12 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
   share::SCN create_scn;
   ObLSStatusInfo info;
   ObZone zone_priority("z1");
+  ObUnitIDList unit_list;
   ret = ls_life.create_new_ls(info, create_scn, zone_priority.str(), ObAllTenantInfo::INITIAL_SWITCHOVER_EPOCH);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   ObZone primary_zone("z1");
   ObLSFlag flag(share::ObLSFlag::NORMAL_FLAG);
-  ret = info.init(tenant_id_, SYS_LS, 0, share::OB_LS_CREATING, 0, primary_zone, flag);
+  ret = info.init(tenant_id_, SYS_LS, 0, share::OB_LS_CREATING, 0, primary_zone, flag, unit_list);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = status_operator.get_all_ls_status_by_order(OB_SYS_TENANT_ID, ls_array,
       get_curr_simple_server().get_observer().get_mysql_proxy());
@@ -155,7 +156,7 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
 
   //创建新日志流
   ObLSID ls_id(1002);
-  ret = info.init(tenant_id_, ls_id, 0, share::OB_LS_CREATING, 0, primary_zone, flag);
+  ret = info.init(tenant_id_, ls_id, 0, share::OB_LS_CREATING, 0, primary_zone, flag, unit_list);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = ls_life.create_new_ls(info, create_scn, zone_priority.str(), ObAllTenantInfo::INITIAL_SWITCHOVER_EPOCH);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -184,7 +185,7 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
   //创建新日志流
   ObLSStatusInfo new_status_info2;
   ObLSID ls_id3(1003);
-  ret = new_status_info2.init(tenant_id_, ls_id3, 0, share::OB_LS_CREATING, 0, primary_zone, flag);
+  ret = new_status_info2.init(tenant_id_, ls_id3, 0, share::OB_LS_CREATING, 0, primary_zone, flag, unit_list);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = ls_life.create_new_ls(new_status_info2, create_scn, zone_priority.str(), ObAllTenantInfo::INITIAL_SWITCHOVER_EPOCH);
   ASSERT_EQ(OB_SUCCESS, ret);

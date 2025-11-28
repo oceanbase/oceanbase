@@ -1014,6 +1014,8 @@ int ObUpgradeForAllVersionProcessor::post_upgrade() {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(flush_ncomp_dll_job())) {
     LOG_WARN("fail to flush ncomp dll job", KR(ret));
+  } else if (OB_FAIL(replace_unit_group_id_with_unit_list_())) {
+    LOG_WARN("failed to replace unit group id with unit list", KR(ret));
   }
   return ret;
 }
@@ -1054,6 +1056,68 @@ int ObUpgradeForAllVersionProcessor::flush_ncomp_dll_job()
     LOG_INFO("post upgrade for create flush ncomp dll finished", KR(ret), K(tenant_id_));
   }
 
+  return ret;
+}
+
+int ObUpgradeForAllVersionProcessor::replace_unit_group_id_with_unit_list_()
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObLSStatusInfo> ls_status_array;
+  ObLSStatusOperator ls_status_operator;
+  ObUnitTableOperator unit_operator;
+  ObArray<ObUnit> unit_array;
+  ObUnitIDList unit_id_list;
+  const int64_t start_time = ObTimeUtility::current_time();
+  int64_t duration = 0;
+  if (OB_ISNULL(sql_proxy_) || !is_valid_tenant_id(tenant_id_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(sql_proxy_), K(tenant_id_));
+  } else if (!is_meta_tenant(tenant_id_)) {
+    LOG_INFO("not meta tenant, ignore", K(tenant_id_));
+  } else if (OB_FAIL(ls_status_operator.get_all_ls_status_by_order(
+                         gen_user_tenant_id(tenant_id_), ls_status_array, *sql_proxy_))) {
+    LOG_WARN("fail to get all ls status from table", KR(ret), K(tenant_id_));
+  } else if (OB_FAIL(unit_operator.init(*sql_proxy_))) {
+    LOG_WARN("fail to init unit table operator", KR(ret), KP(sql_proxy_));
+  } else {
+    for (int64_t index = 0; index < ls_status_array.count() && OB_SUCC(ret); ++index) {
+      const ObLSStatusInfo &ls_status_info = ls_status_array.at(index);
+      unit_array.reset();
+      unit_id_list.reset();
+      if (OB_UNLIKELY(!ls_status_info.is_valid())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", KR(ret), K(ls_status_info));
+      } else if (0 != ls_status_info.unit_group_id_) {
+        if (OB_FAIL(unit_operator.get_units_by_unit_group_id(ls_status_info.unit_group_id_, unit_array))) {
+          LOG_WARN("fail to get units by unit group id", KR(ret), K(ls_status_info));
+        } else {
+          for (int64_t unit_index = 0; unit_index < unit_array.count() && OB_SUCC(ret); ++unit_index) {
+            const uint64_t &unit_id = unit_array.at(unit_index).unit_id_;
+            if (OB_FAIL(unit_id_list.push_back(ObDisplayUnitID(unit_id)))) {
+              LOG_WARN("fail to push back unit_id into list", KR(ret),
+                       K(unit_id_list), K(unit_index), K(unit_id));
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(ls_status_operator.alter_ls_group_id(
+                                 gen_user_tenant_id(tenant_id_), ls_status_info.ls_id_,
+                                 ls_status_info.ls_group_id_/*old_one*/,
+                                 ls_status_info.ls_group_id_/*new_one*/,
+                                 ls_status_info.get_unit_list()/*old_one*/,
+                                 unit_id_list/*new_one*/, *sql_proxy_))) {
+            LOG_WARN("fail to alter unit id list", KR(ret), "user_tenant_id",
+                     gen_user_tenant_id(tenant_id_), K(ls_status_info), K(unit_id_list));
+          } else {
+            FLOG_INFO("finish adjust unit_group_id to unit_list", KR(ret), "user_tenant_id",
+                      gen_user_tenant_id(tenant_id_), K(ls_status_info), K(unit_id_list));
+          }
+        }
+      }
+    }
+  }
+  duration = ObTimeUtility::current_time() - start_time;
+  FLOG_INFO("replace_unit_group_id_with_unit_list finished",
+            KR(ret), K(tenant_id_), K(start_time), K(duration));
   return ret;
 }
 

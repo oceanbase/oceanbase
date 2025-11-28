@@ -1188,6 +1188,8 @@ int ObDumpMemtableP::process()
       } else if (OB_ISNULL(ls->get_tablet_svr())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get_tablet_svr is null", KR(ret), K(arg_.tenant_id_), K(arg_.tablet_id_));
+      } else if (ls->is_logonly_replica()) {
+        LOG_INFO("logonly replica has no mem table", K(ret), KPC(ls));
       } else if (OB_FAIL(ls->get_tablet_svr()->get_tablet(arg_.tablet_id_, tablet_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
         LOG_WARN("get tablet failed", KR(ret), K(arg_.tenant_id_), K(arg_.tablet_id_));
       } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
@@ -1246,6 +1248,8 @@ int ObDumpTxDataMemtableP::process()
       } else if (OB_ISNULL(ls->get_tablet_svr())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get_tablet_svr is null", KR(ret), K(arg_.tenant_id_));
+      } else if (ls->is_logonly_replica()) {
+        LOG_INFO("logonly replica has no tx data mem table", K(ret), KPC(ls));
       } else if (OB_FAIL(ls->get_tablet_svr()->get_tx_data_memtable_mgr(memtable_mgr_handle))) {
       } else if (OB_UNLIKELY(!memtable_mgr_handle.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
@@ -1303,6 +1307,11 @@ int ObDumpSingleTxDataP::process()
           LOG_TRACE("log stream not exist in this tenant", KR(ret), K(arg_.tenant_id_), K(arg_.ls_id_));
         }
       } else if (FALSE_IT(ls = ls_handle.get_ls())) {
+      } else if (OB_ISNULL(ls)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid pointer", KR(ret), KP(ls));
+      } else if (ls->is_logonly_replica()) {
+        LOG_INFO("logonly replica has no tx data mem table", K(ret), KPC(ls));
       } else {
         mkdir("/tmp/dump_single_tx_data/", S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
         ret = ls->dump_single_tx_data_2_text(arg_.tx_id_, "/tmp/dump_single_tx_data/single_tx_data.txt");
@@ -3614,8 +3623,9 @@ int ObRpcNotifyCloneSchedulerP::process()
 int ObRpcAlterLSP::process()
 {
   int ret = OB_SUCCESS;
+  rootserver::ObAlterLSCommand command;
   LOG_INFO("receive admin alter ls", K(arg_));
-  if (OB_FAIL(rootserver::ObAlterLSCommand::process(arg_, result_))) {
+  if (OB_FAIL(command.process(arg_, result_))) {
     LOG_WARN("fail to process", KR(ret), K(arg_));
   }
   return ret;

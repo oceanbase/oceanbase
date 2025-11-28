@@ -339,27 +339,29 @@ int PalfHandle::get_global_learner_list(common::GlobalLearnerList &learner_list)
   return palf_handle_impl_->get_global_learner_list(learner_list);
 }
 
-int PalfHandle::get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const
+int PalfHandle::get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num, const bool &filter_logonly_replica) const
 {
   CHECK_VALID;
-  return palf_handle_impl_->get_paxos_member_list(member_list, paxos_replica_num);
+  return palf_handle_impl_->get_paxos_member_list(member_list, paxos_replica_num, filter_logonly_replica);
 }
 
 int PalfHandle::get_paxos_member_list_and_learner_list(common::ObMemberList &member_list,
                                                        int64_t &paxos_replica_num,
-                                                       GlobalLearnerList &learner_list) const
+                                                       GlobalLearnerList &learner_list,
+                                                       const bool &filter_logonly_replica) const
 {
   CHECK_VALID;
-  return palf_handle_impl_->get_paxos_member_list_and_learner_list(member_list, paxos_replica_num, learner_list);
+  return palf_handle_impl_->get_paxos_member_list_and_learner_list(member_list, paxos_replica_num, learner_list, filter_logonly_replica);
 }
 
 int PalfHandle::get_stable_membership(LogConfigVersion &config_version,
                                       common::ObMemberList &member_list,
                                       int64_t &paxos_replica_num,
-                                      common::GlobalLearnerList &learner_list) const
+                                      common::GlobalLearnerList &learner_list,
+                                      const bool &filter_logonly_replica) const
 {
   CHECK_VALID;
-  return palf_handle_impl_->get_stable_membership(config_version, member_list, paxos_replica_num, learner_list);
+  return palf_handle_impl_->get_stable_membership(config_version, member_list, paxos_replica_num, learner_list, filter_logonly_replica);
 }
 
 int PalfHandle::get_election_leader(common::ObAddr &addr) const

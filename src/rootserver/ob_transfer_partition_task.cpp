@@ -117,7 +117,7 @@ int ObTransferPartitionHelper::build(bool &has_job)
     //所以先load任务，然后在获取ls_status，保证用户看到日志流存在后再去生成的任务一定不会
     //被判断称目标的不存在
   } else if (OB_FAIL(ObTenantBalanceService::gather_ls_status_stat(
-                 tenant_id_, status_info_array))) {
+                 tenant_id_, status_info_array, false))) {
     LOG_WARN("failed to gather ls status stat", KR(ret), K(tenant_id_));
   } else if (OB_FAIL(try_process_dest_not_exist_task_(status_info_array,
                                                       task_cnt))) {
@@ -454,7 +454,6 @@ int ObTransferPartitionHelper::set_task_src_ls_()
 
 int ObTransferPartitionHelper::process_in_trans(
     const share::ObLSStatusInfoIArray &status_info_array,
-    int64_t unit_num, int64_t primary_zone_num,
     ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
@@ -466,18 +465,16 @@ int ObTransferPartitionHelper::process_in_trans(
     LOG_WARN("not init", KR(ret));
   } else if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret));
-  } else if (OB_UNLIKELY(0 >= status_info_array.count()
-        || OB_INVALID_ID == unit_num || OB_INVALID_ID == primary_zone_num)) {
+  } else if (OB_UNLIKELY(0 >= status_info_array.count())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(unit_num), K(primary_zone_num),
-        K(status_info_array));
+    LOG_WARN("invalid argument", KR(ret), K(status_info_array));
   } else if (OB_FAIL(ObTransferPartitionTaskTableOperator::load_all_wait_task_in_part_info_order(
           tenant_id_, true, max_task_id_, task_array, trans))) {
     LOG_WARN("failed to load all task", KR(ret), K(tenant_id_), K(max_task_id_));
   } else if (0 == task_array.count()) {
     //no task
-  } else if (OB_FAIL(job_generator_.init(tenant_id_, primary_zone_num, unit_num, sql_proxy_))) {
-    LOG_WARN("init job_generator_ failed", KR(ret), K(tenant_id_), K(primary_zone_num), K(unit_num));
+  } else if (OB_FAIL(job_generator_.init(tenant_id_, sql_proxy_))) {
+    LOG_WARN("init job_generator_ failed", KR(ret), K(tenant_id_));
   } else if (OB_FAIL(job_generator_.prepare_ls(status_info_array))) {
     LOG_WARN("job_generator_ prepare ls failed", KR(ret), K(status_info_array), K(job_generator_));
   } else if (OB_FAIL(construct_logical_task_(task_array))) {

@@ -269,6 +269,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_without_disk)
                                                  arg.get_create_scn(),
                                                  major_mv_merge_info,
                                                  ObLSStoreFormat(ObLSStoreType::OB_LS_STORE_NORMAL),
+                                                 arg.get_replica_type(),
                                                  ls));
   ObLSLockGuard lock_ls(ls);
   const ObLSMeta &ls_meta = ls->get_ls_meta();
@@ -300,6 +301,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_disk)
                                                  arg.get_create_scn(),
                                                  major_mv_merge_info,
                                                  ObLSStoreFormat(ObLSStoreType::OB_LS_STORE_NORMAL),
+                                                 arg.get_replica_type(),
                                                  ls));
   int64_t ls_epoch = 0;
   const bool unused_allow_log_sync = true;
@@ -338,6 +340,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_inner_tablet)
                                                  arg.get_create_scn(),
                                                  major_mv_merge_info,
                                                  ObLSStoreFormat(ObLSStoreType::OB_LS_STORE_NORMAL),
+                                                 arg.get_replica_type(),
                                                  ls));
   const bool unused_allow_log_sync = true;
   int64_t ls_epoch = 0;
@@ -378,6 +381,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_commit_slog)
                                                  arg.get_create_scn(),
                                                  major_mv_merge_info,
                                                  ObLSStoreFormat(ObLSStoreType::OB_LS_STORE_NORMAL),
+                                                 arg.get_replica_type(),
                                                  ls));
   const bool unused_allow_log_sync = true;
   int64_t ls_epoch = 0;
@@ -421,6 +425,7 @@ TEST_F(ObLSBeforeRestartTest, create_restore_ls)
                                                  arg.get_create_scn(),
                                                  major_mv_merge_info,
                                                  ObLSStoreFormat(ObLSStoreType::OB_LS_STORE_NORMAL),
+                                                 REPLICA_TYPE_FULL,
                                                  ls));
   const bool unused_allow_log_sync = true;
   int64_t ls_epoch = 0;
@@ -469,6 +474,7 @@ TEST_F(ObLSBeforeRestartTest, create_rebuild_ls)
                                                  arg.get_create_scn(),
                                                  major_mv_merge_info,
                                                  ObLSStoreFormat(ObLSStoreType::OB_LS_STORE_NORMAL),
+                                                 REPLICA_TYPE_FULL,
                                                  ls));
   const bool unused_allow_log_sync = true;
   int64_t ls_epoch = 0;

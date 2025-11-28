@@ -30,8 +30,6 @@ namespace rootserver
 ObPartTransferJobGenerator::ObPartTransferJobGenerator()
     : inited_(false),
       tenant_id_(OB_INVALID_TENANT_ID),
-      primary_zone_num_(OB_INVALID_COUNT),
-      unit_group_num_(OB_INVALID_COUNT),
       sql_proxy_(NULL),
       balance_job_(),
       balance_tasks_(),
@@ -46,21 +44,15 @@ ObPartTransferJobGenerator::ObPartTransferJobGenerator()
 
 int ObPartTransferJobGenerator::init(
     const uint64_t tenant_id,
-    const int64_t primary_zone_num,
-    const int64_t unit_group_num,
     common::ObMySQLProxy *sql_proxy)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObPartTransferJobGenerator init twice", KR(ret), K(inited_));
-  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
-      || primary_zone_num < 1
-      || unit_group_num < 1)
-      || OB_ISNULL(sql_proxy)) {
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || OB_ISNULL(sql_proxy))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(primary_zone_num),
-        K(unit_group_num), KP(sql_proxy));
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), KP(sql_proxy));
   } else if (OB_FAIL(ls_group_id_map_.create(
       HASH_MAP_SIZE,
       "PartTransfLSG",
@@ -93,8 +85,6 @@ int ObPartTransferJobGenerator::init(
     LOG_WARN("normal_to_normal_part_map_ create failed", KR(ret), K(tenant_id));
   } else {
     tenant_id_ = tenant_id;
-    primary_zone_num_ = primary_zone_num;
-    unit_group_num_ = unit_group_num;
     sql_proxy_ = sql_proxy;
     balance_job_.reset();
     balance_tasks_.reset();
@@ -147,8 +137,6 @@ void ObPartTransferJobGenerator::reset()
 {
   inited_ = false;
   tenant_id_ = OB_INVALID_TENANT_ID;
-  primary_zone_num_ = OB_INVALID_COUNT;
-  unit_group_num_ = OB_INVALID_COUNT;
   sql_proxy_ = NULL;
   balance_job_.reset();
   balance_tasks_.reset();
@@ -279,13 +267,11 @@ int ObPartTransferJobGenerator::gen_balance_job_and_tasks(
       new_job_id,
       job_type,
       job_status,
-      primary_zone_num_,
-      unit_group_num_,
       comment,
       balance_strategy,
       max_end_time))) {
     LOG_WARN("job init fail", KR(ret), K(tenant_id_), K(job_id), K(new_job_id), K(job_type), K(job_status),
-        K(primary_zone_num_), K(unit_group_num_), K(comment), K(balance_strategy), K(max_end_time));
+        K(comment), K(balance_strategy), K(max_end_time));
   } else {
     if (OB_SUCC(ret) && !dup_to_normal_part_map_.empty()) {
       if (OB_FAIL(gen_transfer_tasks_from_dup_ls_to_normal_ls_())) {
@@ -311,7 +297,6 @@ int ObPartTransferJobGenerator::gen_balance_job_and_tasks(
   PB_INFO("gen balance job and tasks finished", KR(ret), KPC(this));
   return ret;
 }
-
 #define ADD_ALTER_TASK(ls_group_id, src_ls_id)                                           \
   do {                                                                                   \
     if (FAILEDx(ObLSBalanceTaskHelper::add_ls_alter_task(tenant_id_,                     \

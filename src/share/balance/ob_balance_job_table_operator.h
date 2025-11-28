@@ -19,6 +19,7 @@
 #include "lib/container/ob_array.h"//ObArray
 #include "lib/container/ob_iarray.h"//ObIArray
 #include "lib/string/ob_sql_string.h"//ObSqlString
+#include "share/ob_display_list.h"//ObDisplayList
 
 namespace oceanbase
 {
@@ -107,25 +108,113 @@ private:
   int64_t val_;
 };
 
-struct ObBalanceJob
+struct ObDisplayZoneUnitCnt final : public ObDisplayType
 {
 public:
-  ObBalanceJob() { reset(); }
-  ~ObBalanceJob() {}
-  void reset();
-  int init(const uint64_t tenant_id,
-           const ObBalanceJobID job_id,
-           const ObBalanceJobType job_type,
-           const ObBalanceJobStatus job_status,
-           const int64_t primary_zone_num,
-           const int64_t unit_group_num,
-           const ObString &comment,
-           const ObBalanceStrategy &balance_strategy,
-           const int64_t max_end_time = OB_INVALID_TIMESTAMP);
-  bool is_valid() const;
-  bool is_timeout() const;
-  TO_STRING_KV(K_(tenant_id), K_(job_id), K_(job_type), K_(job_status),
-               K_(primary_zone_num), K_(unit_group_num), K_(comment), K_(balance_strategy), K_(max_end_time));
+  ObDisplayZoneUnitCnt() : zone_(), unit_cnt_(0), replica_type_(common::ObReplicaType::REPLICA_TYPE_FULL) {}
+  ObDisplayZoneUnitCnt(
+    const ObZone &zone, int64_t unit_cnt, common::ObReplicaType replica_type = common::ObReplicaType::REPLICA_TYPE_FULL) :
+  zone_(zone), unit_cnt_(unit_cnt), replica_type_(replica_type) {}
+  ~ObDisplayZoneUnitCnt() {}
+  void reset()
+  {
+    zone_.reset();
+    unit_cnt_ = 0;
+    replica_type_ = common::ObReplicaType::REPLICA_TYPE_FULL;
+  }
+  bool is_valid() const
+  {
+    return !zone_.is_empty() && unit_cnt_ > 0 && ObReplicaTypeCheck::is_replica_type_valid(replica_type_);
+  }
+  int64_t max_display_str_len() const
+  {
+    return MAX_ZONE_LENGTH + MAX_REPLICA_TYPE_LENGTH + 17 + 2;
+  }
+  int parse_from_display_str(const common::ObString &str);
+  int to_display_str(char *buf, const int64_t len, int64_t &pos) const;
+  int64_t get_unit_cnt() const
+  {
+    return unit_cnt_;
+  }
+  const ObZone& get_zone() const
+  {
+    return zone_;
+  }
+  common::ObReplicaType get_replica_type() const
+  {
+    return replica_type_;
+  }
+  bool operator==(const ObDisplayZoneUnitCnt &other) const
+  {
+    return zone_ == other.zone_ && unit_cnt_ == other.unit_cnt_ && replica_type_ == other.replica_type_;
+  }
+  bool operator!=(const ObDisplayZoneUnitCnt &other) const { return !(other == *this); }
+  bool operator<(const ObDisplayZoneUnitCnt &other) const
+  {
+    return (zone_ == other.zone_) ? (unit_cnt_ < other.unit_cnt_) : (zone_ < other.zone_);
+  }
+
+  TO_STRING_KV(K_(zone), K_(unit_cnt), K_(replica_type));
+private:
+  ObZone zone_;
+  int64_t unit_cnt_;
+  // replica type of zone units
+  common::ObReplicaType replica_type_;
+};
+
+typedef ObDisplayList<ObDisplayZoneUnitCnt, 9> ObZoneUnitCntList;
+
+struct ObBalanceJobDesc
+{
+public:
+  ObBalanceJobDesc() { reset(); }
+  ~ObBalanceJobDesc() {}
+  void reset()
+  {
+    tenant_id_ = OB_INVALID_TENANT_ID;
+    job_id_.reset();
+    primary_zone_num_ = 0;
+    ls_scale_out_factor_ = 0;
+    enable_rebalance_ = false;
+    enable_transfer_ = false;
+    enable_gts_standalone_ = false;
+    zone_unit_num_list_.reset();
+  }
+  int init(
+      const uint64_t tenant_id,
+      const ObBalanceJobID &job_id,
+      const ObZoneUnitCntList &zone_list,
+      const int64_t primary_zone_num,
+      const int64_t ls_scale_out_factor,
+      const bool enable_rebalance,
+      const bool enable_transfer,
+      const bool enable_gts_standalone);
+  int init_without_job(
+      const uint64_t tenant_id,
+      const ObZoneUnitCntList &zone_list,
+      const int64_t primary_zone_num,
+      const int64_t ls_scale_out_factor,
+      const bool enable_rebalance,
+      const bool enable_transfer,
+      const bool enable_gts_standalone);
+  int get_unit_lcm_count(int64_t &lcm_count) const;
+  int assign(const ObBalanceJobDesc &other);
+  bool is_valid() const
+  { // job_id is invalid most of the time
+    return is_valid_tenant_id(tenant_id_)
+        && primary_zone_num_ > 0
+        && ls_scale_out_factor_ >= 1
+        && !zone_unit_num_list_.empty();
+  }
+  int get_zone_unit_num(const ObZone &zone, int64_t &unit_num) const;
+  int check_zone_in_locality(const ObZone &zone, bool &in_locality) const;
+  int compare(const ObBalanceJobDesc &other, bool &is_same, ObSqlString &diff_str);
+  const ObZoneUnitCntList &get_zone_unit_num_list() const { return zone_unit_num_list_; }
+  int64_t get_ls_cnt_in_group() const { return primary_zone_num_ * ls_scale_out_factor_; }
+
+  TO_STRING_KV(K_(tenant_id), K_(job_id), K_(primary_zone_num), K_(ls_scale_out_factor),
+      K_(enable_rebalance), K_(enable_transfer), K_(enable_gts_standalone), K_(zone_unit_num_list));
+private:
 #define Property_declare_var(variable_type, variable_name) \
  private:                                                  \
   variable_type variable_name##_;                          \
@@ -136,7 +225,41 @@ public:
   Property_declare_var(uint64_t, tenant_id)
   Property_declare_var(ObBalanceJobID, job_id)
   Property_declare_var(int64_t, primary_zone_num)
-  Property_declare_var(int64_t, unit_group_num)
+  Property_declare_var(int64_t, ls_scale_out_factor)
+  Property_declare_var(bool, enable_rebalance)
+  Property_declare_var(bool, enable_transfer)
+  Property_declare_var(bool, enable_gts_standalone)
+#undef Property_declare_var
+private:
+  ObZoneUnitCntList zone_unit_num_list_;
+};
+
+struct ObBalanceJob
+{
+public:
+  ObBalanceJob() { reset(); }
+  ~ObBalanceJob() {}
+  void reset();
+  int init(const uint64_t tenant_id,
+           const ObBalanceJobID job_id,
+           const ObBalanceJobType job_type,
+           const ObBalanceJobStatus job_status,
+           const ObString &comment,
+           const ObBalanceStrategy &balance_strategy,
+           const int64_t max_end_time = OB_INVALID_TIMESTAMP);
+  bool is_valid() const;
+  bool is_timeout() const;
+  TO_STRING_KV(K_(tenant_id), K_(job_id), K_(job_type), K_(job_status),
+      K_(comment), K_(balance_strategy), K_(max_end_time));
+#define Property_declare_var(variable_type, variable_name) \
+ private:                                                  \
+  variable_type variable_name##_;                          \
+                                                           \
+ public:                                                   \
+  variable_type get_##variable_name() const { return variable_name##_; }
+
+  Property_declare_var(uint64_t, tenant_id)
+  Property_declare_var(ObBalanceJobID, job_id)
   Property_declare_var(ObBalanceJobType, job_type)
   Property_declare_var(ObBalanceJobStatus, job_status)
   Property_declare_var(int64_t, max_end_time)
@@ -245,6 +368,52 @@ private:
       const bool for_update,
       ObSqlString &sql);
 };
+
+class ObBalanceJobDescOperator
+{
+public:
+  /**
+   * @description: insert new job to __all_balance_job_description
+   * @param[in] tenant_id : user tenant_id
+   * @param[in] job_id : balance job id
+   * @param[in] job_desc : a valid balance job desc
+   * @param[in] client: sql client or trans
+   * @return OB_SUCCESS if success, otherwise failed
+   */
+  static int insert_balance_job_desc(
+      const uint64_t tenant_id,
+      const ObBalanceJobID &job_id,
+      const ObBalanceJobDesc &job_desc,
+      ObISQLClient &client);
+  /**
+   * @description: get job_desc from __all_balance_job_description by job_id
+   * @param[in] tenant_id : user tenant_id
+   * @param[in] job_id : balance job id
+   * @param[in] client : sql client or trans
+   * @param[out] job_desc : get a valid balance job
+   * @return :
+   * OB_SUCCESS : get a valid job
+   * OB_ENTRY_NOT_EXIST : job not found
+   * OTHER : failed
+   */
+  static int get_balance_job_desc(
+      const uint64_t tenant_id,
+      const ObBalanceJobID &job_id,
+      ObISQLClient &client,
+      ObBalanceJobDesc &job_desc);
+private:
+  static int construct_parameter_list_str_(
+      const ObBalanceJobDesc &job_desc,
+      ObIAllocator &allocator,
+      ObString &parameter_list_str);
+  static int parse_parameter_from_str_(
+      const ObString &parameter_list_str,
+      int64_t &ls_scale_out_factor,
+      bool &enable_rebalance,
+      bool &enable_transfer,
+      bool &enable_gts_standalone);
+};
+
 }
 }
 

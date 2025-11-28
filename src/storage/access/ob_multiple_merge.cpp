@@ -1867,6 +1867,9 @@ int ObMultipleMerge::refresh_tablet_iter()
     } else if (OB_ISNULL(ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls is null", K(ret), K(ls_handle));
+    } else if (ls_handle.get_ls()->is_logonly_replica()) {
+      ret = OB_STATE_NOT_MATCH;
+      LOG_WARN("logonly replica do not need merge tablet", KR(ret), K(ls_id));
     } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_read_tables(
         tablet_id,
         remain_timeout,

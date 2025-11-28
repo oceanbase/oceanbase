@@ -15,6 +15,7 @@
 #include "share/ob_service_epoch_proxy.h"
 
 #include "rootserver/ob_root_utils.h"
+#include "deps/oblib/src/lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
 {

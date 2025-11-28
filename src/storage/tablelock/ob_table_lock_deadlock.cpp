@@ -54,6 +54,9 @@ int ObTxLockPartOnDetectOp::operator() (
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be null", K(ret));
+  } else if (ls->is_logonly_replica()) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("logonly replica has no tablet", KR(ret), KPC(ls));
   } else if (OB_FAIL(ls->get_tx_ctx(lock_part_id_.trans_id_,
                                     true, /* does not check leader*/
                                     ctx))) {
@@ -191,6 +194,9 @@ int ObTransLockPartBlockCallBack::operator()(
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be null", K(ret));
+  } else if (ls->is_logonly_replica()) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("logonly replica has no tablet", KR(ret), KPC(ls));
   } else if (OB_FAIL(ls->get_tx_ctx(lock_op_.create_trans_id_,
                                     true, /* does not check leader*/
                                     ctx))) {

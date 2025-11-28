@@ -991,147 +991,6 @@ int ObLSInfo::composite_with(const ObLSInfo &other)
   return ret;
 }
 
-int ObLSInfo::rectify_in_member_or_learner_list_flag_and_timestamp_(
-    ObLSReplica *&replica,
-    const ObLSReplica::MemberList *member_list,
-    const common::GlobalLearnerList *learner_list,
-    ObMember &learner,
-    bool &in_leader_member_list,
-    bool &in_leader_learner_list)
-{
-  int ret = OB_SUCCESS;
-  int64_t in_member_time_us = 0;
-  if (OB_ISNULL(replica)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), KP(replica));
-  } else {
-    if (OB_NOT_NULL(member_list)) {
-      ARRAY_FOREACH_X(*member_list, idx, cnt, !in_leader_member_list) {
-        if (replica->get_server() == member_list->at(idx)) {
-          in_leader_member_list = true;
-          in_member_time_us = member_list->at(idx).get_timestamp();
-        }
-      }
-    }
-    if (OB_NOT_NULL(learner_list) && learner_list->contains(replica->get_server())) {
-      in_leader_learner_list = true;
-      if (OB_FAIL(learner_list->get_learner_by_addr(replica->get_server(), learner))) {
-        LOG_WARN("fail to get learner by addr", KR(ret), KP(learner_list), KPC(replica));
-      } else {
-        in_member_time_us = learner.get_timestamp();
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_UNLIKELY(in_leader_member_list && in_leader_learner_list)) {
-      ret = OB_STATE_NOT_MATCH;
-      LOG_WARN("replica can not both in member_list and learner_list", KR(ret),
-               K(in_leader_member_list), K(in_leader_learner_list), KP(member_list), KP(learner_list));
-    } else {
-      replica->update_in_member_list_status(in_leader_member_list, in_member_time_us);
-      replica->update_in_learner_list_status(in_leader_learner_list, in_member_time_us);
-    }
-  }
-  return ret;
-}
-
-int ObLSInfo::rectify_replica_type_(
-    ObLSReplica *&replica,
-    const bool in_leader_learner_list)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(replica)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), KP(replica));
-  } else if (REPLICA_TYPE_COLUMNSTORE == replica->get_replica_type()) {
-    // for C-replica:
-    //   If replica tye is column store, do not change replica type,
-    //   because C-replica has different read logic with F/R-replicas.
-    //   If replica is column stored but reported as F-replica,
-    //   sql should fail and error is returned to user.
-    //   But there exists a bad case:
-    //     If replica type in meta_table is C-replica but actually
-    //     it already existed in member_list(maybe new replica type
-    //     has not reported yet), this F-replica could be wrongly
-    //     regarded as C-replica.
-    //   We can not avoid this case, because informations in meta table
-    //   is not updated immediately. We just rectify replica type according
-    //   to informations recorded in meta table at that moment.
-    LOG_TRACE("replica type is column store, do not change replica type", KPC(replica));
-  } else if (REPLICA_TYPE_FULL == replica->get_replica_type()
-             || REPLICA_TYPE_READONLY == replica->get_replica_type()) {
-    // for F/R-replica:
-    //   Both R-replica and F-replica has same F-replica type stored in ls meta.
-    //   Replica type is reported according to learner_list and member_list locally.
-    //   We should rectify replica_type according to member_list and learner_list by leader.
-    if (in_leader_learner_list) {
-      replica->set_replica_type(REPLICA_TYPE_READONLY);
-    } else {
-      replica->set_replica_type(REPLICA_TYPE_FULL);
-    }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid replica type", KR(ret), KPC(replica));
-  }
-  return ret;
-}
-
-int ObLSInfo::rectify_replica_status_(
-    ObLSReplica *&replica,
-    const bool in_leader_member_list,
-    const bool in_leader_learner_list,
-    const ObMember &learner)
-{
-  // rectify replica_status_
-  // follow these rules below:
-  // (1) paxos replicas (FULL),NORMAL when in leader's member_list otherwise offline.
-  // (2) non_paxos replicas (READONLY),NORMAL when in leader's learner_list otherwise offline
-  // (3) if non_paxos replicas are deleted by partition service, status in meta table is set to REPLICA_STATUS_OFFLINE,
-  //     then set replica_status to REPLICA_STATUS_OFFLINE
-  // (4) COLUMNSTORE replica, if not in learner list or columnstore-flag is false,
-  //     then set replica_status to REPLICA_STATUS_OFFLINE
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(replica)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), KP(replica));
-  } else if (REPLICA_STATUS_OFFLINE == replica->get_replica_status()) {
-    // do nothing
-    LOG_TRACE("replica already offline", KPC(replica));
-  } else if (REPLICA_TYPE_COLUMNSTORE == replica->get_replica_type()) {
-    if (in_leader_member_list) {
-      replica->set_replica_status(REPLICA_STATUS_OFFLINE);
-      LOG_INFO("C-replica type but in member_list, set replica status to offline",
-               KPC(replica), K(in_leader_member_list));
-    } else if (!in_leader_learner_list) {
-      replica->set_replica_status(REPLICA_STATUS_OFFLINE);
-      LOG_INFO("C-replica type but not in learner list, set replica status to offline",
-               KPC(replica), K(in_leader_learner_list));
-    } else if (!learner.is_columnstore()) {
-      replica->set_replica_status(REPLICA_STATUS_OFFLINE);
-      LOG_INFO("C-replica type but without C-flag in leanrer list, set replica status to offline",
-               KPC(replica), K(learner));
-    } else {
-      replica->set_replica_status(REPLICA_STATUS_NORMAL);
-    }
-  } else if (REPLICA_TYPE_FULL == replica->get_replica_type()
-             || REPLICA_TYPE_READONLY == replica->get_replica_type()) {
-    if (OB_UNLIKELY(learner.is_columnstore())) {
-      replica->set_replica_status(REPLICA_STATUS_OFFLINE);
-      LOG_INFO("replica type not C-replica but with C-flag in learner_list",
-               KPC(replica), K(learner));
-    } else if (in_leader_member_list || in_leader_learner_list) {
-      replica->set_replica_status(REPLICA_STATUS_NORMAL);
-    } else {
-      replica->set_replica_status(REPLICA_STATUS_OFFLINE);
-      LOG_INFO("replica not in learner or member list, set replica status to offline",
-               KPC(replica), K(in_leader_member_list), K(in_leader_learner_list));
-    }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected replica type", KR(ret), KPC(replica));
-  }
-  return ret;
-}
-
 int ObLSInfo::update_replica_status()
 {
   int ret = OB_SUCCESS;
@@ -1150,23 +1009,10 @@ int ObLSInfo::update_replica_status()
     }
     // rectify informations of every replicas
     FOREACH_CNT_X(r, replicas_, OB_SUCCESS == ret) {
-      bool in_leader_member_list = (OB_ISNULL(member_list)
-        && ObReplicaTypeCheck::is_paxos_replica_V2(r->get_replica_type()));
-      bool in_leader_learner_list = false;
-      ObMember learner;
-      if (OB_FAIL(rectify_in_member_or_learner_list_flag_and_timestamp_(
-                      r, member_list, learner_list, learner, in_leader_member_list, in_leader_learner_list))) {
-        LOG_WARN("fail to rectify in_leader or in_learner member_list and timestamp", KR(ret), KPC(r),
-                 KP(member_list), KP(learner_list), K(learner), K(in_leader_member_list), K(in_leader_learner_list));
-      } else if (OB_FAIL(rectify_replica_type_(r, in_leader_learner_list))) {
-        LOG_WARN("fail to rectify replica type", KR(ret), KPC(r), K(in_leader_learner_list));
-      } else if (OB_FAIL(rectify_replica_status_(r, in_leader_member_list, in_leader_learner_list, learner))) {
-        LOG_WARN("fail to rectify replica status", KR(ret), KPC(r), K(in_leader_learner_list), K(learner));
+      if (OB_FAIL(rectify_replica_type_and_status_(r, member_list, learner_list))) {
+        LOG_WARN("fail to rectify replica type and status", KR(ret), KPC(r), KP(member_list), KP(learner_list));
       }
     }
-  }
-  if (FAILEDx(filter_sslog_replica_())) {
-    LOG_WARN("fail to filter sslog replica", KR(ret));
   }
   return ret;
 }
@@ -1198,6 +1044,135 @@ int ObLSInfo::filter_sslog_replica_()
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObLSInfo::rectify_replica_type_and_status_(
+    ObLSReplica *&replica,
+    const ObLSReplica::MemberList *member_list,
+    const common::GlobalLearnerList *learner_list)
+{
+  int ret = OB_SUCCESS;
+  ObMember learner;
+  bool in_leader_member_list = false;
+  bool in_leader_learner_list = false;
+  int64_t in_member_time_us = 0;
+  if (OB_ISNULL(replica)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(replica));
+  } else {
+    in_leader_member_list = OB_ISNULL(member_list)
+                            && ObReplicaTypeCheck::is_paxos_replica(replica->get_replica_type());
+    in_leader_learner_list = false;
+  }
+  // 1. rectify in_leader_member_list and in_leader_learner_list
+  //    and construct learner with flag if needed
+  if (OB_FAIL(ret)) {
+  } else {
+    if (OB_NOT_NULL(member_list)) {
+      ARRAY_FOREACH_X(*member_list, idx, cnt, !in_leader_member_list) {
+        if (replica->get_server() == member_list->at(idx)) {
+          in_leader_member_list = true;
+          in_member_time_us = member_list->at(idx).get_timestamp();
+        }
+      }
+    }
+    if (OB_NOT_NULL(learner_list) && learner_list->contains(replica->get_server())) {
+      in_leader_learner_list = true;
+      if (OB_FAIL(learner_list->get_learner_by_addr(replica->get_server(), learner))) {
+        LOG_WARN("fail to get learner by addr", KR(ret), KP(learner_list), KPC(replica));
+      } else {
+        in_member_time_us = learner.get_timestamp();
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(in_leader_member_list && in_leader_learner_list)) {
+      ret = OB_STATE_NOT_MATCH;
+      LOG_WARN("replica can not both in member_list and learner_list", KR(ret),
+               K(in_leader_member_list), K(in_leader_learner_list), KP(member_list), KP(learner_list));
+    } else {
+      replica->update_in_member_list_status(in_leader_member_list, in_member_time_us);
+      replica->update_in_learner_list_status(in_leader_learner_list, in_member_time_us);
+    }
+  }
+  // 2. rectify replica type according to member_list and learner_list
+  if (OB_FAIL(ret)) {
+  } else if (REPLICA_TYPE_COLUMNSTORE == replica->get_replica_type()) {
+    // for C-replica:
+    //   If replica tye is column store, do not change replica type,
+    //   because C-replica has different read logic with F/R-replicas.
+    //   If replica is column stored but reported as F-replica,
+    //   sql should fail and error is returned to user.
+    //   But there exists a bad case:
+    //     If replica type in meta_table is C-replica but actually
+    //     it already existed in member_list(maybe new replica type
+    //     has not reported yet), this F-replica could be wrongly
+    //     regarded as C-replica.
+    //   We can not avoid this case, because informations in meta table
+    //   is not updated immediately. We just rectify replica type according
+    //   to informations recorded in meta table at that moment.
+    LOG_TRACE("replica type is column store, do not change replica type", KPC(replica));
+  } else if (REPLICA_TYPE_LOGONLY == replica->get_replica_type()) {
+    // for L-replica:
+    //   If replica tye is logonly, do not change replica type,
+    //   because L-replica type is recorded in ls_meta.
+    //   We trust this information all the time.
+    LOG_TRACE("replica type is logonly, do not change replica type", KPC(replica));
+  } else if (REPLICA_TYPE_FULL == replica->get_replica_type()
+             || REPLICA_TYPE_READONLY == replica->get_replica_type()) {
+    // for F/R-replica:
+    //   Both R-replica and F-replica has same F-replica type stored in ls meta.
+    //   Replica type is reported according to learner_list and member_list locally.
+    //   We should rectify replica_type according to member_list and learner_list by leader.
+    if (in_leader_learner_list) {
+      replica->set_replica_type(REPLICA_TYPE_READONLY);
+    } else {
+      replica->set_replica_type(REPLICA_TYPE_FULL);
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid replica type", KR(ret), KPC(replica));
+  }
+  // 3. rectify replica status according to member_list and learner_list
+  //    follow these rules below:
+  //    (1) paxos replicas (FULL/LOGONLY),NORMAL when in leader's member_list otherwise offline.
+  //    (2) non_paxos replicas (READONLY),NORMAL when in leader's learner_list otherwise offline
+  //    (3) if non_paxos replicas are deleted by partition service, status in meta table is set to REPLICA_STATUS_OFFLINE,
+  //        then set replica_status to REPLICA_STATUS_OFFLINE
+  if (OB_FAIL(ret)) {
+  } else if (REPLICA_STATUS_OFFLINE == replica->get_replica_status()) {
+    // do nothing
+    LOG_TRACE("replica already offline", KPC(replica));
+  } else if (REPLICA_TYPE_COLUMNSTORE == replica->get_replica_type()) {
+    if (in_leader_member_list) {
+      replica->set_replica_status(REPLICA_STATUS_OFFLINE);
+      LOG_INFO("C-replica type but in member_list, set replica status to offline",
+               KPC(replica), K(in_leader_member_list));
+    } else if (!in_leader_learner_list) {
+      replica->set_replica_status(REPLICA_STATUS_OFFLINE);
+      LOG_INFO("C-replica type but not in learner list, set replica status to offline",
+               KPC(replica), K(in_leader_learner_list));
+    } else if (!learner.is_columnstore()) {
+      replica->set_replica_status(REPLICA_STATUS_OFFLINE);
+      LOG_INFO("C-replica type but without C-flag in leanrer list, set replica status to offline",
+               KPC(replica), K(learner));
+    } else {
+      replica->set_replica_status(REPLICA_STATUS_NORMAL);
+    }
+  } else if (REPLICA_TYPE_FULL == replica->get_replica_type()
+             || REPLICA_TYPE_READONLY == replica->get_replica_type()
+             || REPLICA_TYPE_LOGONLY == replica->get_replica_type()) {
+    if (in_leader_member_list || in_leader_learner_list) {
+      replica->set_replica_status(REPLICA_STATUS_NORMAL);
+    } else {
+      replica->set_replica_status(REPLICA_STATUS_OFFLINE);
+      LOG_INFO("replica not in learner or member list, set replica status to offline",
+               KPC(replica), K(in_leader_member_list), K(in_leader_learner_list));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected replica type", KR(ret), KPC(replica));
   }
   return ret;
 }
@@ -1311,7 +1286,7 @@ int ObLSInfo::get_paxos_member_addrs(common::ObIArray<ObAddr> &addrs)
       if (OB_UNLIKELY(!replica.is_valid())) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid replica", KR(ret), K(replica));
-      } else if (ObReplicaTypeCheck::is_paxos_replica_V2(replica.get_replica_type())) {
+      } else if (ObReplicaTypeCheck::is_paxos_replica(replica.get_replica_type())) {
         if (OB_FAIL(addrs.push_back(replica.get_server()))) {
           LOG_WARN("fail to push back", KR(ret), K(replica), K(addrs));
         }

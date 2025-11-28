@@ -772,7 +772,6 @@ int ObMultiTenant::construct_meta_for_virtual_tenant(const uint64_t tenant_id,
   HEAP_VAR(ObTenantSuperBlock, super_block, tenant_id, true/*is_hidden*/) {
     share::ObUnitInfoGetter::ObTenantConfig unit;
     uint64_t unit_id = 1000;
-
     share::ObUnitConfig unit_config;
     const bool has_memstore = true;
     const int64_t create_timestamp = ObTimeUtility::current_time();
@@ -795,7 +794,6 @@ int ObMultiTenant::construct_meta_for_virtual_tenant(const uint64_t tenant_id,
       LOG_WARN("fail to build tenant meta", K(ret), K(tenant_id));
     }
   } // HEAP_VAR
-
   return ret;
 }
 

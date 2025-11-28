@@ -97,6 +97,11 @@ int ObGVTxLockStat::get_next_tx_ctx_(transaction::ObPartTransCtx *&tx_ctx)
       if (OB_ISNULL(ls_)) {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "ls is null", K(ret), K(ls_id_));
+      } else if (ObReplicaTypeCheck::is_log_replica(ls_->get_replica_type())) {
+        ls_tx_ctx_iter_.reset();
+        if (OB_FAIL(get_next_ls_(ls_))) {
+          SERVER_LOG(WARN, "get next ls failed", K(ret));
+        }
       } else if (OB_FAIL(ls_->iterate_tx_ctx(ls_tx_ctx_iter_))) {
         SERVER_LOG(WARN, "fail to get ls_tx_ctx_iter", K(ret), K(ls_id_));
       }

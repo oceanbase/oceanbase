@@ -25,6 +25,8 @@
 #include "share/ls/ob_ls_log_stat_info.h" //ObLSLogStatInfo
 #include "share/ls/ob_ls_recovery_stat_operator.h"  //ObLSRecoveryStat
 #include "share/ls/ob_ls_operator.h"
+#include "share/ob_display_list.h"//ObDisplayList
+#include "share/unit/ob_unit_info.h"//ObUnit
 
 namespace oceanbase
 {
@@ -84,7 +86,41 @@ private:
   // 0: has arb member
   MemberListFlag flag_;
 };
+struct ObDisplayUnitID final : public ObDisplayType
+{
+OB_UNIS_VERSION(1);
+public:
+  struct Compare {
+    bool operator() (const ObDisplayUnitID &left, const ObDisplayUnitID &right)
+    {
+      return left.id() < right.id();
+    }
+  };
+  ObDisplayUnitID() : unit_id_() {}
+  explicit ObDisplayUnitID(uint64_t unit_id) : unit_id_(unit_id) {}
+  ~ObDisplayUnitID() {}
+  bool is_valid() const
+  {
+    return 0 != unit_id_;
+  }
+  ////display string related
+  int64_t max_display_str_len() const { return 21; }
+  int parse_from_display_str(const common::ObString &str);
+  int to_display_str(char *buf, const int64_t len, int64_t &pos) const;
+  bool operator==(const ObDisplayUnitID &other) const
+  {
+    return unit_id_ == other.unit_id_;
+  }
+  uint64_t id() const
+  {
+    return unit_id_;
+  }
+  TO_STRING_KV(K_(unit_id));
+private:
+  uint64_t unit_id_;
+};
 
+typedef ObDisplayList<ObDisplayUnitID, 5> ObUnitIDList;
 struct ObLSStatusInfo
 {
   struct Compare {
@@ -94,16 +130,21 @@ struct ObLSStatusInfo
     }
   };
 
+
   ObLSStatusInfo() : tenant_id_(OB_INVALID_TENANT_ID),
                           ls_id_(), ls_group_id_(OB_INVALID_ID),
                           status_(OB_LS_EMPTY), unit_group_id_(OB_INVALID_ID),
-                          primary_zone_(), flag_(ObLSFlag::NORMAL_FLAG) {}
+                          primary_zone_(), flag_(ObLSFlag::NORMAL_FLAG),
+                          unit_id_list_() {}
   virtual ~ObLSStatusInfo() {}
+  static int to_display_unit_list_sorted_str(const ObUnitIDList &unit_list, ObIAllocator &allocator, ObString &str);
+  int to_display_unit_list_sorted_str(ObIAllocator &allocator, ObString &str) const;
   bool is_valid() const;
   int init(const uint64_t tenant_id,
            const ObLSID &id, const uint64_t ls_group_id,
            const ObLSStatus status, const uint64_t unit_group_id,
-           const ObZone &primary_zone, const ObLSFlag &flag);
+           const ObZone &primary_zone, const ObLSFlag &flag,
+           const ObUnitIDList &unit_id_list);
   bool ls_is_creating() const
   {
     return ls_is_creating_status(status_);
@@ -159,6 +200,7 @@ struct ObLSStatusInfo
   }
   uint64_t get_tenant_id() { return tenant_id_; };
   uint64_t get_ls_group_id() const { return ls_group_id_; }
+  uint64_t get_unit_group_id() const { return unit_group_id_; }
 
   ObLSFlag get_flag() const
   {
@@ -170,6 +212,11 @@ struct ObLSStatusInfo
   {
     return OB_LS_NORMAL == status_;
   }
+  const ObUnitIDList &get_unit_list() const
+  {
+    return unit_id_list_;
+  }
+  int get_unit_list(ObIArray<uint64_t> &unit_id) const;
   bool operator==(const ObLSStatusInfo &other) const
   {
     return tenant_id_ == other.tenant_id_
@@ -178,7 +225,8 @@ struct ObLSStatusInfo
       && status_ == other.status_
       && unit_group_id_ == other.unit_group_id_
       && primary_zone_ == other.primary_zone_
-      && flag_ == other.flag_;
+      && flag_ == other.flag_
+      && unit_id_list_ == other.unit_id_list_;
   }
 
   bool operator!=(const ObLSStatusInfo &other) const {
@@ -193,10 +241,12 @@ struct ObLSStatusInfo
   uint64_t unit_group_id_;
   ObZone primary_zone_;
   share::ObLSFlag flag_;
+  ObUnitIDList unit_id_list_;
+
 
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(ls_group_id),
                "status", ls_status_to_str(status_),
-               K_(unit_group_id), K_(primary_zone), K_(flag));
+               K_(unit_group_id), K_(primary_zone), K_(flag), K_(unit_id_list));
 };
 
 typedef ObArray<ObLSStatusInfo> ObLSStatusInfoArray;
@@ -258,6 +308,48 @@ private:
 typedef ObArray<ObLSPrimaryZoneInfo> ObLSPrimaryZoneInfoArray;
 typedef ObIArray<ObLSPrimaryZoneInfo> ObLSPrimaryZoneInfoIArray;
 
+struct ObLSGroupUnitListOp
+{
+  ObLSGroupUnitListOp() : ls_group_id_(0), ls_id_(), curr_unit_list_(),
+                          target_unit_list_(), ls_count_(-1) {}
+  ~ObLSGroupUnitListOp() {}
+  int init(const uint64_t ls_group_id, const ObLSID &ls_id,
+           const ObUnitIDList &curr_unit_list, const ObUnitIDList &target_unit_list,
+           const int64_t ls_count);
+  int assign(const ObLSGroupUnitListOp &other);
+  bool is_valid() const
+  {
+    return (0 != ls_group_id_ || ls_id_.is_sys_ls())
+            && ls_count_ > 0
+            && (!curr_unit_list_.empty() || !target_unit_list_.empty());
+  }
+  void reset()
+  {
+    ls_group_id_ = 0;
+    ls_id_.reset();
+    curr_unit_list_.reset();
+    target_unit_list_.reset();
+    ls_count_ = -1;
+  }
+  uint64_t get_ls_group_id() const { return ls_group_id_; }
+  ObLSID get_ls_id() const { return ls_id_; }
+  const ObUnitIDList &get_current_unit_list() const
+  {
+    return curr_unit_list_;
+  }
+  const ObUnitIDList &get_target_unit_list() const
+  {
+    return target_unit_list_;
+  }
+  int64_t get_ls_count() const { return ls_count_; }
+  TO_STRING_KV(K_(ls_group_id), K_(ls_id), K_(curr_unit_list), K_(target_unit_list), K_(ls_count));
+private:
+  uint64_t ls_group_id_;
+  ObLSID ls_id_;//系统日志流独占也需要修改unit_list
+  ObUnitIDList curr_unit_list_;
+  ObUnitIDList target_unit_list_;
+  int64_t ls_count_;
+};
 /*
  * description : read or write __all_ls_status
 */
@@ -347,7 +439,7 @@ public:
    /*
    * description: update ls's ls group id
    * @param[in] tenant_id
-  * @param[in] ls_id
+   * @param[in] ls_id
    * @param[in] old_ls_group_id
    * @param[in] new_ls_group_id
    * @param[in] old_unit_group_id : the ls group's unit group
@@ -358,6 +450,34 @@ public:
                        const uint64_t new_ls_group_id,
                        const uint64_t old_unit_group_id,
                        const uint64_t new_unit_group_id,
+                       ObISQLClient &client);
+  /*
+   * description: update ls's ls group id
+   * @param[in] tenant_id
+   * @param[in] ls_id
+   * @param[in] old_ls_group_id
+   * @param[in] new_ls_group_id
+   * @param[in] old_unit_list : the ls group's unit list
+   * @param[in] new_unit_list : the new ls group's target unit list
+   * @param[in] client*/
+  int alter_ls_group_id(const uint64_t tenant_id, const ObLSID &ls_id,
+                       const uint64_t old_ls_group_id,
+                       const uint64_t new_ls_group_id,
+                       const ObUnitIDList &old_unit_list,
+                       const ObUnitIDList &new_unit_list,
+                       ObISQLClient &client);
+  /*
+   * description: update ls's ls group id
+   * Think twice if unit_list or unit_group_id need to be update at the same time
+   *  before you use this function. If yes, use one of two other functions.
+   * @param[in] tenant_id
+   * @param[in] ls_id
+   * @param[in] old_ls_group_id
+   * @param[in] new_ls_group_id
+   * @param[in] client*/
+  int alter_ls_group_id(const uint64_t tenant_id, const ObLSID &ls_id,
+                       const uint64_t old_ls_group_id,
+                       const uint64_t new_ls_group_id,
                        ObISQLClient &client);
    /*
    * description: update ls's unit group id
@@ -372,7 +492,20 @@ public:
                        const uint64_t old_unit_group_id,
                        const uint64_t new_unit_group_id,
                        ObISQLClient &client);
-
+   /*
+   * description: update ls group's unit_list and set unit_group_id to invalid
+   * 由于一个ls_group的内的日志流的unit_list是一样的
+   * @param[in] tenant_id
+   * @param[in] ls_group_id
+   * @param[in] ls_cnt_in_group :组内日志流的个数
+   * @param[in] old_unit_list: the current unit list of ls, maybe empty
+   * @param[in] new_unit_list: the new unit list of ls
+   * @param[in] client*/
+  int alter_ls_group_unit_list(const uint64_t tenant_id, const uint64_t ls_group_id,
+                         const int64_t ls_cnt_in_group,
+                         const ObUnitIDList &old_unit_list,
+                         const ObUnitIDList &new_unit_list,
+                         ObISQLClient &client);
   int get_all_ls_status_by_order(const uint64_t tenant_id,
                                  ObLSStatusInfoIArray &ls_array,
                                  ObISQLClient &client);
@@ -525,7 +658,16 @@ public:
       const ObLSStatus &new_status,
       const ObTenantSwitchoverStatus &working_sw_status,
       ObMySQLTransaction &trans);
-
+/*
+ * description : get ls unit by unit_group or unit_list
+ * @param[in] ls_status
+ * @param[in] sql_proxy
+ * @param[out] unit_array
+ */
+  int get_ls_unit_array(
+    const ObLSStatusInfo &ls_status,
+    common::ObMySQLProxy &sql_proxy,
+    ObIArray<ObUnit> &unit_array);
 
 private:
   template<typename T> int get_list_hex_(

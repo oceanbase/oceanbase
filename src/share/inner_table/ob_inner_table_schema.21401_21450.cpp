@@ -264,7 +264,7 @@ int ObInnerTableSchema::dba_ob_balance_jobs_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT JOB_ID,          GMT_CREATE AS CREATE_TIME,          GMT_MODIFIED AS MODIFY_TIME,          BALANCE_STRATEGY_NAME AS BALANCE_STRATEGY,          JOB_TYPE,          TARGET_UNIT_NUM,          TARGET_PRIMARY_ZONE_NUM,          STATUS,          COMMENT,          MAX_END_TIME   FROM OCEANBASE.__ALL_BALANCE_JOB   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT A.JOB_ID,          A.GMT_CREATE AS CREATE_TIME,          A.GMT_MODIFIED AS MODIFY_TIME,          A.BALANCE_STRATEGY_NAME AS BALANCE_STRATEGY,          A.JOB_TYPE,          CASE WHEN A.TARGET_UNIT_NUM = -1               THEN NULL               ELSE A.TARGET_UNIT_NUM          END AS TARGET_UNIT_NUM,          CASE WHEN A.TARGET_PRIMARY_ZONE_NUM = -1               THEN B.PRIMARY_ZONE_NUM               ELSE A.TARGET_PRIMARY_ZONE_NUM          END AS TARGET_PRIMARY_ZONE_NUM,          A.STATUS,          A.COMMENT,          A.MAX_END_TIME,          B.ZONE_UNIT_NUM_LIST,          B.PARAMETER_LIST   FROM OCEANBASE.__ALL_BALANCE_JOB A   LEFT JOIN OCEANBASE.__ALL_VIRTUAL_BALANCE_JOB_DESCRIPTION B   ON A.JOB_ID = B.JOB_ID AND B.TENANT_ID = EFFECTIVE_TENANT_ID()   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -315,7 +315,7 @@ int ObInnerTableSchema::cdb_ob_balance_jobs_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT TENANT_ID,          JOB_ID,          GMT_CREATE AS CREATE_TIME,          GMT_MODIFIED AS MODIFY_TIME,          BALANCE_STRATEGY_NAME AS BALANCE_STRATEGY,          JOB_TYPE,          TARGET_UNIT_NUM,          TARGET_PRIMARY_ZONE_NUM,          STATUS,          COMMENT,          MAX_END_TIME   FROM OCEANBASE.__ALL_VIRTUAL_BALANCE_JOB   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT A.TENANT_ID,          A.JOB_ID,          A.GMT_CREATE AS CREATE_TIME,          A.GMT_MODIFIED AS MODIFY_TIME,          A.BALANCE_STRATEGY_NAME AS BALANCE_STRATEGY,          A.JOB_TYPE,          CASE WHEN A.TARGET_UNIT_NUM = -1               THEN NULL               ELSE A.TARGET_UNIT_NUM          END AS TARGET_UNIT_NUM,          CASE WHEN A.TARGET_PRIMARY_ZONE_NUM = -1               THEN B.PRIMARY_ZONE_NUM               ELSE A.TARGET_PRIMARY_ZONE_NUM          END AS TARGET_PRIMARY_ZONE_NUM,          A.STATUS,          A.COMMENT,          A.MAX_END_TIME,          B.ZONE_UNIT_NUM_LIST,          B.PARAMETER_LIST   FROM OCEANBASE.__ALL_VIRTUAL_BALANCE_JOB A   LEFT JOIN OCEANBASE.__ALL_VIRTUAL_BALANCE_JOB_DESCRIPTION B   ON A.TENANT_ID = B.TENANT_ID AND A.JOB_ID = B.JOB_ID   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -366,7 +366,7 @@ int ObInnerTableSchema::dba_ob_balance_job_history_schema(ObTableSchema &table_s
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT JOB_ID,          CREATE_TIME,          FINISH_TIME,          BALANCE_STRATEGY_NAME AS BALANCE_STRATEGY,          JOB_TYPE,          TARGET_UNIT_NUM,          TARGET_PRIMARY_ZONE_NUM,          STATUS,          COMMENT,          MAX_END_TIME   FROM OCEANBASE.__ALL_BALANCE_JOB_HISTORY   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT A.JOB_ID,          A.CREATE_TIME,          A.FINISH_TIME,          A.BALANCE_STRATEGY_NAME AS BALANCE_STRATEGY,          A.JOB_TYPE,          CASE WHEN A.TARGET_UNIT_NUM = -1               THEN NULL               ELSE A.TARGET_UNIT_NUM          END AS TARGET_UNIT_NUM,          CASE WHEN A.TARGET_PRIMARY_ZONE_NUM = -1               THEN B.PRIMARY_ZONE_NUM               ELSE A.TARGET_PRIMARY_ZONE_NUM          END AS TARGET_PRIMARY_ZONE_NUM,          A.STATUS,          A.COMMENT,          A.MAX_END_TIME,          B.ZONE_UNIT_NUM_LIST,          B.PARAMETER_LIST   FROM OCEANBASE.__ALL_BALANCE_JOB_HISTORY A   LEFT JOIN OCEANBASE.__ALL_VIRTUAL_BALANCE_JOB_DESCRIPTION B   ON A.JOB_ID = B.JOB_ID AND B.TENANT_ID = EFFECTIVE_TENANT_ID()   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -417,7 +417,7 @@ int ObInnerTableSchema::cdb_ob_balance_job_history_schema(ObTableSchema &table_s
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT TENANT_ID,          JOB_ID,          CREATE_TIME,          FINISH_TIME,          BALANCE_STRATEGY_NAME AS BALANCE_STRATEGY,          JOB_TYPE,          TARGET_UNIT_NUM,          TARGET_PRIMARY_ZONE_NUM,          STATUS,          COMMENT,          MAX_END_TIME   FROM OCEANBASE.__ALL_VIRTUAL_BALANCE_JOB_HISTORY   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT A.TENANT_ID,          A.JOB_ID,          A.CREATE_TIME,          A.FINISH_TIME,          A.BALANCE_STRATEGY_NAME AS BALANCE_STRATEGY,          A.JOB_TYPE,          CASE WHEN A.TARGET_UNIT_NUM = -1               THEN NULL               ELSE A.TARGET_UNIT_NUM          END AS TARGET_UNIT_NUM,          CASE WHEN A.TARGET_PRIMARY_ZONE_NUM = -1               THEN B.PRIMARY_ZONE_NUM               ELSE A.TARGET_PRIMARY_ZONE_NUM          END AS TARGET_PRIMARY_ZONE_NUM,          A.STATUS,          A.COMMENT,          A.MAX_END_TIME,          B.ZONE_UNIT_NUM_LIST,          B.PARAMETER_LIST   FROM OCEANBASE.__ALL_VIRTUAL_BALANCE_JOB_HISTORY A   LEFT JOIN OCEANBASE.__ALL_VIRTUAL_BALANCE_JOB_DESCRIPTION B   ON A.TENANT_ID = B.TENANT_ID AND A.JOB_ID = B.JOB_ID   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

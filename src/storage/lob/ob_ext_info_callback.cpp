@@ -639,6 +639,9 @@ int ObExtInfoCbRegister::check_is_during_freeze(bool &is_during_freeze)
                                                 ls_handle,
                                                 ObLSGetMod::STORAGE_MOD))) {
     LOG_WARN("get ls handle failed", KR(ret), K(lob_param_->ls_id_));
+  } else if (ls_handle.get_ls()->is_logonly_replica()) {
+    is_during_freeze = false;
+    LOG_TRACE("logonly replica do not need to freeze", K(lob_param_->ls_id_));
   } else {
     ObFreezer *freezer = ls_handle.get_ls()->get_freezer();
     is_during_freeze = freezer->is_freeze(freezer->get_freeze_flag());

@@ -370,7 +370,7 @@ END_P SET_VAR DELIMITER
         TABLEGROUP_ID TENANT_ID THROTTLE TIME_ZONE_INFO TOP_K_FRE_HIST TIMES TRIM_SPACE TTL
         TRANSFER TUNNEL_ENDPOINT TENANT_STS_CREDENTIAL TABLETS TIME_UNIT TIME_ZONE
 
-        UNCOMMITTED UNCONDITIONAL UNDEFINED UNDO_BUFFER_SIZE UNDOFILE UNNEST UNICODE UNINSTALL UNIT UNIT_GROUP UNIT_NUM UNLOCKED UNTIL
+        UNCOMMITTED UNCONDITIONAL UNDEFINED UNDO_BUFFER_SIZE UNDOFILE UNNEST UNICODE UNINSTALL UNIT UNIT_GROUP UNIT_LIST UNIT_NUM UNLOCKED UNTIL
         UNUSUAL UPGRADE URL USE_BLOOM_FILTER UNKNOWN USE_FRM USER USERNAME USER_RESOURCES UNBOUNDED UP UNLIMITED USER_SPECIFIED URI
 
         VALID VALUE VARIANCE VARIABLES VERBOSE VERIFY VERSION VIEW VISIBLE VIRTUAL_COLUMN_ID VALIDATE VAR_POP
@@ -402,7 +402,7 @@ END_P SET_VAR DELIMITER
 %type <node> cur_timestamp_func cur_time_func cur_date_func now_synonyms_func utc_timestamp_func utc_time_func utc_date_func sys_interval_func sysdate_func cur_user_func
 %type <node> create_dblink_stmt drop_dblink_stmt dblink tenant opt_cluster opt_dblink
 %type <node> opt_create_resource_pool_option_list create_resource_pool_option alter_resource_pool_option_list alter_resource_pool_option
-%type <node> opt_shrink_unit_option id_list opt_shrink_tenant_unit_option
+%type <node> opt_shrink_unit_option id_list opt_id_list opt_shrink_tenant_unit_option
 %type <node> opt_resource_unit_option_list resource_unit_option
 %type <node> tenant_option zone_list resource_pool_list
 %type <node> with_column_group column_group_list column_group_element
@@ -4487,6 +4487,17 @@ INTNUM
 id_list ',' INTNUM
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+opt_id_list:
+id_list
+{
+  merge_nodes($$, result, T_UNIT_ID_LIST, $1);
+}
+| /* EMPTY */
+{
+  $$ = NULL;
 }
 ;
 
@@ -25322,6 +25333,11 @@ UNIT_GROUP opt_equal_mark INTNUM
   (void)($2) ; /* make bison mute */
   malloc_non_terminal_node($$, result->malloc_pool_, T_PRIMARY_ZONE, 1, $3);
 }
+| UNIT_LIST opt_equal_mark '(' opt_id_list ')'
+{
+  (void)($2); /* make bison mute */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_UNIT_LIST, 1, $4);
+}
 ;
 /*===========================================================
  *
@@ -27326,6 +27342,7 @@ ACCESS_INFO
 |       UNINSTALL
 |       UNIT
 |       UNIT_GROUP
+|       UNIT_LIST
 |       UNIT_NUM
 |       UNLOCKED
 |       UNTIL

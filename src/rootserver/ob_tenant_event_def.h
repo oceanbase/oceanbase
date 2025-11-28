@@ -181,14 +181,74 @@
                 ARGS,
                 LS_ID,
                 LS_GROUP_ID,
-                UNIT_GROUP_ID,
+                UNIT_LIST,
                 PRIMARY_ZONE);
       DEF_EVENT(LS_COMMAND, MODIFY_LS, "MODIFY LS",
                 ARGS,
                 LS_ID,
                 LS_GROUP_ID,
-                UNIT_GROUP_ID,
+                UNIT_LIST,
                 PRIMARY_ZONE);
+  };
+  class LS_EVENT {
+    public:
+    DEF_MODULE(LS_EVENT, "LS EVENT");
+    DEF_EVENT(LS_EVENT, INSERT_LS, "INSERT LS",
+              LS_ID,
+              LS_INFO,
+              SQL);
+    DEF_EVENT(LS_EVENT, DROP_LS, "DROP LS",
+              LS_ID,
+              SQL);
+    DEF_EVENT(LS_EVENT, UPDATE_LS_PRIMARY_ZONE, "UPDATE LS PRIMARY ZONE",
+              LS_ID,
+              PRIMARY_ZONE,
+              SQL);
+    DEF_EVENT(LS_EVENT, UPDATE_LS_STATUS, "UPDATE LS STATUS",
+              LS_ID,
+              NEW_STATUS,
+              OLD_STATUS,
+              SQL);
+    DEF_EVENT(LS_EVENT, ALTER_LS_GROUP, "ALTER LS GROUP",
+              LS_ID,
+              NEW_LS_GROUP_ID,
+              NEW_UNIT_LIST,
+              OLD_LS_GROUP_ID,
+              OLD_UNIT_LIST,
+              SQL);
+    DEF_EVENT(LS_EVENT, ALTER_LS_GROUP_UNIT_LIST, "ALTER LS GROUP UNIT LIST",
+              LS_GROUP_ID,
+              NEW_UNIT_LIST,
+              OLD_UNIT_LIST,
+              SQL);
+    DEF_EVENT(LS_EVENT, UPDATE_LS_INIT_MEMBER_LIST, "UPDATE LS INIT MEMBER LIST",
+              LS_ID,
+              INIT_MEMBER_LIST,
+              INIT_LEARNER_LIST,
+              SQL);
+    DEF_EVENT(LS_EVENT, CREATE_ABORT_LS_FOR_SWICHOVER, "CREATE ABORT LS FOR SWICHOVER",
+              SQL);
+    DEF_EVENT(LS_EVENT, CREATE_LS_FINISH, "CREATE LS FINISH",
+              LS_ID,
+              PAXOS_REPLICA_NUM);
+    DEF_EVENT(LS_EVENT, CREATE_LS, "CREATE LS",
+              LS_ID,
+              PAXOS_REPLICA_NUM,
+              MEMBER_LIST);
+    DEF_EVENT(LS_EVENT, SET_LS_MEMBER_LIST, "SET LS MEMBER LIST",
+              LS_ID,
+              PAXOS_REPLICA_NUM,
+              SUCCESS_CNT);
+    DEF_EVENT(LS_EVENT, ALTER_LS_GROUP_ID, "ALTER LS GROUP ID",
+              LS_ID,
+              NEW_LS_GROUP_ID,
+              OLD_LS_GROUP_ID,
+              SQL);
+    DEF_EVENT(LS_EVENT, UPDATE_LS_FLAG, "UPDATE LS FLAG",
+              LS_ID,
+              NEW_LS_FLAG,
+              OLD_LS_FLAG,
+              SQL);
   };
 #endif
 #endif
@@ -298,6 +358,16 @@ namespace tenant_event
 #define TENANT_EVENT(tenant_id, MODULE, EVENT, event_timestamp, user_ret, cost_us, args...) \
   MODULE::MODULE##_##EVENT##_func(tenant_id, MODULE::MODULE##_STR, MODULE::EVENT##_STR, event_timestamp, user_ret, cost_us, args)
 
+#define PRINT_OBJ_INFO(obj_info, obj_info_buf) \
+    do { \
+        int64_t pos = 0; \
+        size_t obj_buf_size = sizeof(obj_info_buf) / sizeof(obj_info_buf[0]); \
+        if ((obj_info).is_valid()) { \
+            (void)databuff_print_multi_objs(obj_info_buf, obj_buf_size, pos, obj_info); \
+        } else { \
+            (void)databuff_printf(obj_info_buf, obj_buf_size, pos, "NULL"); \
+        } \
+    } while(0)
 #include "ob_tenant_event_def.h"
 #undef DEF_MODULE
 #undef DEF_EVENT

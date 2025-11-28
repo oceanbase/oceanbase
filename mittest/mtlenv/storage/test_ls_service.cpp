@@ -20,6 +20,8 @@
 #include "src/storage/slog/ob_storage_log_item.h"
 #include "mtlenv/mock_tenant_module_env.h"
 #include "storage/test_tablet_helper.h"
+#include "deps/oblib/src/lib/ob_define.h"
+#include "deps/oblib/src/lib/ob_replica_define.h"
 
 namespace oceanbase
 {
@@ -343,6 +345,29 @@ TEST_F(TestLSService, create_and_clean)
   ASSERT_FALSE(waiting);
 }
 
+// Helper function to generate create LS arg with logonly replica type
+int gen_create_logonly_ls_arg(const int64_t tenant_id,
+                              const share::ObLSID &ls_id,
+                              obrpc::ObCreateLSArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObReplicaType replica_type = REPLICA_TYPE_LOGONLY;  // L副本类型
+  ObReplicaProperty property;
+  share::ObAllTenantInfo tenant_info;
+  const share::SCN create_scn = share::SCN::base_scn();
+  arg.reset();
+  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::MYSQL;
+  palf::PalfBaseInfo palf_base_info;
+  ObMajorMVMergeInfo major_merge_info;
+
+  if (OB_FAIL(tenant_info.init(tenant_id, share::PRIMARY_TENANT_ROLE))) {
+    STORAGE_LOG(WARN, "failed to init tenant info", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(arg.init(tenant_id, ls_id, replica_type, property, tenant_info, create_scn, compat_mode, false, palf_base_info, major_merge_info))) {
+    STORAGE_LOG(WARN, "failed to init arg", KR(ret), K(tenant_id), K(ls_id), K(tenant_info), K(create_scn), K(compat_mode), K(palf_base_info), K(major_merge_info));
+  }
+  return ret;
+}
+
 TEST_F(TestLSService, test_remove_ls)
 {
   int ret = OB_SUCCESS;
@@ -391,6 +416,89 @@ TEST_F(TestLSService, test_remove_ls)
       break;
     }
   }
+}
+
+TEST_F(TestLSService, create_logonly_ls)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = MTL_ID();
+  ObCreateLSArg arg;
+  ObLSService* ls_svr = MTL(ObLSService*);
+  bool exist = false;
+  ObLSID id_200(200);  // 使用不同的LS ID避免冲突
+  ObLSHandle handle;
+  ObLS *ls = NULL;
+  handle.reset();
+  int64_t cnt = 0;
+  bool waiting = false;
+
+  LOG_INFO("create_logonly_ls begin");
+  ls_svr->break_point = 0;
+
+  // 1. create logonly LS
+  ASSERT_EQ(OB_SUCCESS, gen_create_logonly_ls_arg(tenant_id, id_200, arg));
+  LOG_INFO("create_logonly_ls", K(arg), K(id_200));
+
+  int64_t MAX_CREATE_STEP = 100;
+  for (int64_t i = 1; i < MAX_CREATE_STEP; i++) {
+    LOG_INFO("create ls break point", K(i));
+    ls_svr->break_point = i;
+    if (OB_FAIL(ls_svr->create_ls(arg)) && OB_BREAK_BY_TEST == ret) {
+      // check exist
+      ASSERT_EQ(OB_SUCCESS, ls_svr->check_ls_exist(id_200, exist));
+      ASSERT_FALSE(exist);
+      // wait safe destroy
+      cnt = 0;
+      while (cnt++ < 20) {
+        ASSERT_EQ(OB_SUCCESS, ls_svr->check_ls_waiting_safe_destroy(id_200, waiting));
+        if (waiting) {
+          ::sleep(1);
+        } else {
+          break;
+        }
+      }
+      ASSERT_FALSE(waiting);
+    } else if (OB_FAIL(ret)) {
+      LOG_WARN("create failed but not break by test", K(ret), K(id_200));
+    } else {
+      // create success and finish the break test
+      ls_svr->break_point = 0;
+      ASSERT_EQ(OB_SUCCESS, ls_svr->check_ls_exist(id_200, exist));
+      ASSERT_TRUE(exist);
+
+      EXPECT_EQ(OB_SUCCESS, ls_svr->get_ls(id_200, handle, ObLSGetMod::STORAGE_MOD));
+      EXPECT_EQ(id_200, handle.get_ls()->get_ls_id());
+
+      ObReplicaType replica_type = handle.get_ls()->get_replica_type();
+      EXPECT_EQ(REPLICA_TYPE_LOGONLY, replica_type);
+      LOG_INFO("logonly ls created successfully", K(replica_type), K(id_200));
+
+      ObReplicaType meta_replica_type = handle.get_ls()->get_ls_meta().get_replica_type();
+      EXPECT_EQ(REPLICA_TYPE_LOGONLY, meta_replica_type);
+
+      EXPECT_TRUE(ObReplicaTypeCheck::is_log_replica(replica_type));
+      EXPECT_FALSE(ObReplicaTypeCheck::is_full_replica(replica_type));
+      EXPECT_FALSE(ObReplicaTypeCheck::is_readonly_replica(replica_type));
+
+      ASSERT_EQ(OB_SUCCESS, ls_svr->remove_ls(id_200));
+      ASSERT_EQ(OB_SUCCESS, ls_svr->check_ls_exist(id_200, exist));
+      ASSERT_FALSE(exist);
+      break;
+    }
+  }
+  handle.reset();
+  cnt = 0;
+  while (cnt++ < 20) {
+    ASSERT_EQ(OB_SUCCESS, ls_svr->check_ls_waiting_safe_destroy(id_200, waiting));
+    if (waiting) {
+      ::sleep(1);
+    } else {
+      break;
+    }
+  }
+  ASSERT_FALSE(waiting);
+
+  LOG_INFO("create_logonly_ls end");
 }
 
 TEST_F(TestLSService, check_ls_iter_cnt)

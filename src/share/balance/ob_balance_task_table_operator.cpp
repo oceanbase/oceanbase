@@ -1131,6 +1131,39 @@ int ObBalanceTaskTableOperator::load_need_transfer_task(const uint64_t tenant_id
   return ret;
 }
 
+int ObBalanceTaskTableOperator::get_split_task_by_dest_ls(
+    const uint64_t tenant_id,
+    const ObLSID &dest_ls,
+    ObISQLClient &client,
+    ObBalanceTask &task)
+{
+  int ret = OB_SUCCESS;
+  task.reset();
+  ObArray<ObBalanceTask> task_array;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || !dest_ls.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(dest_ls));
+  } else {
+    ObSqlString sql;
+    if (OB_FAIL(sql.assign_fmt(
+        "select * from %s where dest_ls = %ld and task_type = '%s'",
+        OB_ALL_BALANCE_TASK_TNAME,
+        dest_ls.id(),
+        ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_SPLIT).to_str()))) {
+      LOG_WARN("failed to assign sql", KR(ret), K(sql));
+    } else if (OB_FAIL(read_tasks_(tenant_id, client, sql, task_array))) {
+      LOG_WARN("failed to read task", KR(ret), K(tenant_id), K(sql));
+    } else if (task_array.count() > 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expected one task for dest_ls", KR(ret), K(tenant_id), K(sql), K(task_array));
+    } else if (task_array.count() <= 0) {
+      ret = OB_ENTRY_NOT_EXIST;
+    } else if (OB_FAIL(task.assign(task_array.at(0)))) {
+      LOG_WARN("failed to assign task", KR(ret), K(task_array));
+    }
+  }
+  return ret;
+}
 
 
 int ObBalanceTaskMDSHelper::on_register(

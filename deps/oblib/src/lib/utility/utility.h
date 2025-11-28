@@ -754,7 +754,21 @@ static const int64_t OB_LTOA10_CHAR_LEN = 22;
 char *ltoa10(int64_t val,char *dst,const bool is_signed);
 
 int long_to_str10(int64_t val,char *dst, const int64_t buf_len, const bool is_signed, int64_t &length);
-
+template <typename T>
+T gcd(T a, T b)
+{
+  while (b != 0) {
+    T temp = b;
+    b = a % b;
+    a = temp;
+  }
+  return a;
+}
+template <typename T>
+T lcm(T a, T b)
+{
+  return (a / gcd(a, b)) * b;
+}
 template <typename T>
 bool has_exist_in_array(const ObIArray<T> &array, const T &var, int64_t *idx = NULL)
 {

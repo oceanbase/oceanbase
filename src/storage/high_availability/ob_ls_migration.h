@@ -255,6 +255,7 @@ private:
 
   int record_server_event_();
   int join_learner_list_();
+  int ls_online_();
 
 private:
   bool is_inited_;

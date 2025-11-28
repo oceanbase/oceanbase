@@ -435,6 +435,8 @@ int ObGCHandler::execute_pre_remove()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "GC handler not init");
+  } else if (ObReplicaTypeCheck::is_log_replica(ls_->get_replica_type())) {
+    CLOG_LOG(TRACE, "skip logonly replica", KPC(ls_));
   } else {
     WLockGuard wlock_guard(rwlock_);
     int64_t ls_id = ls_->get_ls_id().id();

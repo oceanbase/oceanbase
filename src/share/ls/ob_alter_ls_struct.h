@@ -13,6 +13,7 @@
 #define OCEANBASE_SHARE_OB_ALTER_LS_STRUCT_H_
 #include "share/ob_ls_id.h"                         // ObLSID
 #include "common/ob_zone.h"                         // ObZone
+
 namespace oceanbase
 {
 namespace share
@@ -52,20 +53,26 @@ public:
       : op_(INVALID_ALTER_LS_OP), tenant_id_(OB_INVALID_TENANT_ID), ls_id_(share::ObLSID::INVALID_LS_ID),
         unit_group_id_(OB_INVALID_ID), ls_primary_zone_(), unit_list_() {}
   ~ObAlterLSArg() {}
+  const char *alter_ls_op_to_str() const {
+    return alter_ls_op_to_str(op_);
+  }
   // empty ls_primary_zone means the user did not specify ls_primary_zone
   int init_create_ls(
       const uint64_t tenant_id,
       const uint64_t unit_group_id,
-      const common::ObZone &ls_primary_zone);
+      const common::ObZone &ls_primary_zone,
+      const UnitListArg &unit_list);
    // empty ls_primary_zone means the user did not specify ls_primary_zone
    // unit_group_id = -1 means the user did not specify unit_group_id
   int init_modify_ls(
       const uint64_t tenant_id,
       const ObLSID ls_id,
       const uint64_t unit_group_id,
-      const common::ObZone &ls_primary_zone);
+      const common::ObZone &ls_primary_zone,
+      const UnitListArg &unit_list);
   int init_drop_ls(const uint64_t tenant_id, const int64_t ls_id);
   bool is_valid() const;
+  bool is_valid_unit_params() const;
   int assign(const ObAlterLSArg &other);
   bool is_create_service() const { return CREATE_LS == op_; }
   bool is_modify_service() const { return MODIFY_LS == op_; }
@@ -77,7 +84,7 @@ public:
   const UnitListArg &get_unit_list_arg() const { return unit_list_; }
   const common::ObZone &get_ls_primary_zone() const { return ls_primary_zone_; }
   TO_STRING_KV(K_(op), "op str", alter_ls_op_to_str(op_),
-      K_(tenant_id), K_(ls_id), K_(unit_group_id), K_(ls_primary_zone));
+      K_(tenant_id), K_(ls_id), K_(unit_group_id), K_(ls_primary_zone), K_(unit_list));
 private:
   ObAlterLSOp op_;
   uint64_t tenant_id_;

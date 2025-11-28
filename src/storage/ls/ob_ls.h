@@ -257,6 +257,7 @@ public:
            const share::SCN &create_scn,
            const ObMajorMVMergeInfo &major_mv_merge_info,
            const ObLSStoreFormat &store_format,
+           const ObReplicaType &replica_type,
            observer::ObIMetaReport *reporter);
   // I am ready to work now.
   int start();
@@ -287,6 +288,8 @@ public:
   share::ObLSID get_ls_id() const { return ls_meta_.ls_id_; }
   bool is_sys_ls() const { return ls_meta_.ls_id_.is_sys_ls(); }
   int get_replica_status(ObReplicaStatus &replica_status);
+  ObReplicaType get_replica_type() const { return ls_meta_.get_replica_type(); }
+  bool is_logonly_replica() const { return ObReplicaTypeCheck::is_log_replica(ls_meta_.get_replica_type()); }
   uint64_t get_tenant_id() const { return ls_meta_.tenant_id_; }
   ObFreezer *get_freezer() { return &ls_freezer_; }
   common::ObMultiModRefMgr<ObLSGetMod> &get_ref_mgr() { return ref_mgr_; }
@@ -426,7 +429,6 @@ public:
 
   int flush_to_recycle_clog();
   int try_sync_reserved_snapshot(const int64_t new_reserved_snapshot, const bool update_flag);
-  int check_can_replay_clog(bool &can_replay);
   int check_ls_need_online(bool &need_online);
   int check_allow_read(bool &allow_read);
 
@@ -441,6 +443,8 @@ private:
   void update_state_seq_();
   int ls_init_for_dup_table_();
   int ls_destory_for_dup_table_();
+  int logonly_ls_init_for_dup_table_();
+  int logonly_ls_destory_for_dup_table_();
   int stop_();
   void wait_();
   int prepare_for_safe_destroy_();

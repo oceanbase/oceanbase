@@ -86,7 +86,7 @@ public:
 private:
   int get_primary_key_();
   int handle_key_range_(ObNewRange &key_range);
-  int generate_virtual_tx_data_row_(VirtualTxDataRow &tx_data_row);
+  int generate_virtual_tx_data_row_(VirtualTxDataRow &tx_data_row, bool &is_logonly_replica);
   int fill_in_row_(const VirtualTxDataRow &row_data, common::ObNewRow *&row);
 
 private:

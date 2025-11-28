@@ -163,7 +163,7 @@ public:
     if (OB_FAIL(guard.switch_to(OB_SYS_TENANT_ID))) {
       LOG_WARN("switch tenant", KR(ret));
     } else if (OB_FAIL(balance_part_job.init(OB_SYS_TENANT_ID, GCTX.schema_service_,
-        GCTX.sql_proxy_, 1, 1, ObPartitionBalance::GEN_TRANSFER_TASK))) {
+        GCTX.sql_proxy_, ObPartitionBalance::GEN_TRANSFER_TASK))) {
       LOG_WARN("balance_part_job init fail", KR(ret));
     } else if (OB_FAIL(balance_part_job.process())) {
       LOG_WARN("balance_part_job process fail", KR(ret));

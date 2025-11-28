@@ -1722,6 +1722,9 @@ OB_NOINLINE int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_
   } else if (!ls_handle.is_valid() || OB_ISNULL(ls_handle.get_ls())) {
     ret = OB_NOT_MASTER;
     TRANS_LOG(WARN, "invalid ls, acquire gts for snapshot", K(ret), K(ls_id), K(ls_handle));
+  } else if (ls_handle.get_ls()->is_logonly_replica()) {
+    ret = OB_NOT_MASTER;
+    TRANS_LOG(WARN, "logonly replica should not have read/write request", KR(ret), K(ls_id));
   } else if (OB_FAIL(ls_handle.get_ls()->get_tx_svr()->get_tx_ls_log_adapter()->get_role(leader,
                                                                                          epoch))) {
     TRANS_LOG(WARN, "get replica role fail", K(ret), K(ls_id));
@@ -2141,6 +2144,9 @@ int ObTransService::get_tx_state_from_tx_table_(const share::ObLSID &ls_id,
   ObLSHandle ls_handle;
   if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD))) {
     TRANS_LOG(WARN, "get ls handle fail", K(ret), K(ls_id));
+  } else if (ls_handle.get_ls()->is_logonly_replica()) {
+    ret = OB_STATE_NOT_MATCH;
+    TRANS_LOG(WARN, "logonly replica has no trans service", KR(ret), K(ls_id));
   } else if (OB_FAIL(ls_handle.get_ls()->get_tx_table()->get_tx_table_guard(tx_table_guard))) {
     TRANS_LOG(WARN, "get tx table guard failed", KR(ret), K(ls_id), KPC(this));
   } else if (OB_FAIL(tx_table_guard.try_get_tx_state(tx_id, state, commit_version, recycled_scn))) {
@@ -3801,7 +3807,9 @@ int ObTransService::mds_infer_standby_trx_state(const ObLS *ls_ptr,
         TRANS_LOG(WARN, "unexpected temp ls ptr", K(ret), KP(tmp_ls_ptr), K(ls_id), K(tx_id),
                   K(snapshot));
       }
-
+    } else if (tmp_ls_ptr->is_logonly_replica()) {
+      ret = OB_STATE_NOT_MATCH;
+      TRANS_LOG(WARN, "logonly replica has no trans service", KR(ret), KPC(tmp_ls_ptr));
     } else if (OB_SUCC(tmp_ls_ptr->get_tx_ctx(tx_id, true, ctx))) {
     if (GET_MIN_CLUSTER_VERSION() > CLUSTER_VERSION_4_4_1_0) {
       /* TODO: <= CLUSTER_VERSION_4_5_0_0 */
@@ -4093,6 +4101,9 @@ bool ObTransService::is_ls_dropped_(const share::ObLSID ls_id) {
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "id service log stream not exist");
+  } else if (ls->is_logonly_replica()) {
+    ret = OB_STATE_NOT_MATCH;
+    TRANS_LOG(WARN, "logonly replica has no trans service", KR(ret), KPC(ls));
   } else if (ls->is_in_gc()) {
     ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
     if (OB_FAIL(tx_ctx_mgr_.get_ls_tx_ctx_mgr(ls_id, ls_tx_ctx_mgr)) || OB_ISNULL(ls_tx_ctx_mgr)) {

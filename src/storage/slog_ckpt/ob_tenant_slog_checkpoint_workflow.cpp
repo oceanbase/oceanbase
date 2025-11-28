@@ -516,7 +516,7 @@ int ObTenantSlogCheckpointWorkflow::TabletDefragmentHelper::do_defragment(
     tracer_.record_skipped_tablet_cnt(total_skipped_cnt);
     tracer_.record_defragment_end(ret);
     if (FAILEDx(update_ckpt_info_())) {
-        STORAGE_LOG(WARN, "failed to update defragment info", K(ret));
+      STORAGE_LOG(WARN, "failed to update defragment info", K(ret));
     }
   }
   return ret;
@@ -673,7 +673,12 @@ int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::do_truncate(const bool i
         }
         tracer_.record_truncate_end(ret);
 
-        if (FAILEDx(update_ckpt_info_())) {
+        if (OB_FAIL(ret)) {
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(alert_if_necessary_(ret))) {
+            STORAGE_LOG(WARN, "failed to alert if necessary", K(tmp_ret));
+          }
+        } else if (OB_FAIL(update_ckpt_info_())) {
           STORAGE_LOG(WARN, "failed to update slog truncate info", K(ret));
         }
       }
@@ -789,9 +794,14 @@ int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::record_single_ls_meta_(
 
   if (OB_FAIL(ret)) {
     // do nothing
+  } else if (ls.is_logonly_replica()) {
+    // do nothing if ls is log only replica
+    ls_ckpt_member.tablet_meta_entry_ = ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK;
   } else if (OB_FAIL(record_ls_tablets_(ls, ls_ckpt_member.tablet_meta_entry_/*out*/, fd_dispenser))) {
     STORAGE_LOG(WARN, "failed to write checkpoint for this ls", K(ret), K(ls));
-  } else if (OB_FAIL(write_ls_item_(ls_ckpt_member))) {
+  }
+
+  if (FAILEDx(write_ls_item_(ls_ckpt_member))) {
     STORAGE_LOG(WARN, "failed to write ls item", K(ret), K(ls_ckpt_member));
   }
   return ret;
@@ -984,6 +994,36 @@ int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::apply_truncate_result_(
   return ret;
 }
 
+int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::alert_if_necessary_(const int64_t errcode)
+{
+  OB_ASSERT(OB_SUCCESS != errcode);
+  int ret = OB_SUCCESS;
+  const int64_t start_time = ObTimeUtility::current_time();
+  common::ObLogCursor cursor;
+
+  if (OB_ALLOCATE_MEMORY_FAILED == errcode
+      || OB_SERVER_OUTOF_DISK_SPACE == errcode
+      || OB_EAGAIN == errcode) {
+    // errcodes can be ignored
+  } else if (start_time - ctx_.ckpt_info_.last_truncate_time_us_ < FAIL_WRITE_CHECKPOINT_ALERT_INTERVAL) {
+    // not yet
+  } else if (OB_FAIL(get_slog_ckpt_cursor_(cursor))) {
+    STORAGE_LOG(WARN, "failed to get slog ckpt cursor", K(ret));
+  } else {
+    bool need_truncate = false;
+    HEAP_VAR(ObTenantSuperBlock, super_block, ctx_.tenant_.get_super_block()) {
+      if (OB_FAIL(check_if_required_(cursor, super_block, need_truncate))) {
+        STORAGE_LOG(WARN, "failed to check if required", K(ret));
+      } else if (need_truncate) {
+        // print alert log
+        STORAGE_LOG(ERROR, "No slog checkpoint for too long due to exception", K(ret), K(cursor),
+          K(super_block), "last_ckpt_info", ctx_.ckpt_info_);
+      }
+    }
+  }
+  return ret;
+}
+
 // ============
 //    Tracer
 // ============
@@ -1006,6 +1046,7 @@ ObTenantSlogCheckpointWorkflow::Tracer::Tracer()
 void ObTenantSlogCheckpointWorkflow::Tracer::log_defragment_only_(const int64_t total_cost_time, const ObTenantSlogCheckpointWorkflow &workflow) const
 {
   int ret = OB_SUCCESS;
+  /// NOTE: this log is required by obtest@slog_checkpoint_with_log_replica
   FLOG_INFO("tenant slog checkpoint finished(only did defragment)",
         K(workflow),
         KTIME(start_time_.get()),
@@ -1023,7 +1064,8 @@ void ObTenantSlogCheckpointWorkflow::Tracer::log_truncate_only_(const int64_t to
 {
   // only do slog truncate(NORMAL_SS)
   int ret = OB_SUCCESS;
-  FLOG_INFO("tenant slog checkpoint finished（only did slog truncate)",
+  /// NOTE: this log is required by obtest@slog_checkpoint_with_log_replica
+  FLOG_INFO("tenant slog checkpoint finished(only did slog truncate)",
     K(workflow),
     KTIME(start_time_.get()),
     K_(size_amp_before_defragment),
@@ -1037,6 +1079,7 @@ void ObTenantSlogCheckpointWorkflow::Tracer::log_truncate_only_(const int64_t to
 void ObTenantSlogCheckpointWorkflow::Tracer::log_both_(const int64_t total_cost_time, const ObTenantSlogCheckpointWorkflow &workflow) const
 {
   int ret = OB_SUCCESS;
+  /// NOTE: this log is required by obtest@slog_checkpoint_with_log_replica
   FLOG_INFO("tenant slog checkpoint finished",
         K(workflow),
         KTIME(start_time_.get()),

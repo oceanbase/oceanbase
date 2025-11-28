@@ -17,11 +17,15 @@
 #include "rootserver/ob_root_utils.h" // majority
 #include "share/ls/ob_ls_status_operator.h"
 #include "share/resource_manager/ob_cgroup_ctrl.h"//OBCG_DEFAULT
+#include "share/ob_unit_table_operator.h"//read units
+#include "rootserver/ob_tenant_event_def.h" // TENANT_EVENT
 
 using namespace oceanbase;
 using namespace oceanbase::common;
 using namespace oceanbase::rootserver;
 using namespace oceanbase::palf;
+using namespace tenant_event;
+
 namespace oceanbase
 {
 namespace share
@@ -36,15 +40,61 @@ int64_t ObMemberListFlag::to_string(char *buf, const int64_t buf_len) const
   J_OBJ_END();
   return pos;
 }
+////ObDisplayUnitID
+int ObDisplayUnitID::parse_from_display_str(const common::ObString &str)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(1 != sscanf(str.ptr(), "%lu", &unit_id_))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ObDisplayUnitID", KR(ret), K(str));
+  }
+  return ret;
+}
 
+int ObDisplayUnitID::to_display_str(char *buf, const int64_t len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf) || OB_UNLIKELY(len <= 0 || pos < 0 || pos >= len || !is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(buf), K(len), K(pos), KPC(this));
+  } else if (OB_FAIL(databuff_printf(buf, len, pos, "%lu", unit_id_))) {
+    LOG_WARN("databuff_printf failed", KR(ret), K(len), K(pos), K(buf), KPC(this));
+  }
+  return ret;
+
+}
+///ObDisplayUnitID
 //////////ObLSStatusInfo
+
+int ObLSStatusInfo::to_display_unit_list_sorted_str(const ObUnitIDList &unit_list, ObIAllocator &allocator, ObString &str)
+{
+  int ret = OB_SUCCESS;
+  ObDisplayUnitID::Compare cmp;
+  ObUnitIDList unit_list_copy;
+  if (OB_FAIL(unit_list_copy.assign(unit_list))) {
+    LOG_WARN("fail to assign unit list", KR(ret), K(unit_list));
+  } else {
+    lib::ob_sort(unit_list_copy.begin(), unit_list_copy.end(), cmp);
+    if (OB_FAIL(unit_list_copy.to_display_str(allocator, str))) {
+      LOG_WARN("fail to display str", KR(ret), K(str));
+    }
+  }
+  return ret;
+}
+
+int ObLSStatusInfo::to_display_unit_list_sorted_str(ObIAllocator &allocator, ObString &str) const
+{
+  return to_display_unit_list_sorted_str(unit_id_list_, allocator, str);
+}
+
 bool ObLSStatusInfo::is_valid() const
 {
   return ls_id_.is_valid()
          && OB_INVALID_TENANT_ID != tenant_id_
          && (ls_id_.is_sys_ls()
              || (OB_INVALID_ID != ls_group_id_
-                 && OB_INVALID_ID != unit_group_id_))
+                 && (OB_INVALID_ID != unit_group_id_
+                     || !unit_id_list_.empty())))
          && !ls_is_invalid_status(status_)
          && flag_.is_valid();
 }
@@ -57,6 +107,7 @@ void ObLSStatusInfo::reset()
   unit_group_id_ = OB_INVALID_ID;
   status_ = OB_LS_EMPTY;
   flag_.reset();
+  unit_id_list_.reset();
 }
 
 int ObLSStatusInfo::init(const uint64_t tenant_id,
@@ -65,20 +116,24 @@ int ObLSStatusInfo::init(const uint64_t tenant_id,
                          const ObLSStatus status,
                          const uint64_t unit_group_id,
                          const ObZone &primary_zone,
-                         const ObLSFlag &flag)
+                         const ObLSFlag &flag,
+                         const ObUnitIDList &unit_id_list)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!id.is_valid()
         || !flag.is_valid()
         || OB_INVALID_TENANT_ID == tenant_id
-        || ls_is_invalid_status(status))) {
+        || ls_is_invalid_status(status)
+        || (unit_id_list.empty() && OB_INVALID_ID == unit_group_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(id), K(ls_group_id),
-              K(status), K(unit_group_id), K(flag));
+              K(status), K(unit_group_id), K(flag), K(unit_id_list));
   } else if (OB_FAIL(primary_zone_.assign(primary_zone))) {
     LOG_WARN("failed to assign primary zone", KR(ret), K(primary_zone));
   } else if (OB_FAIL(flag_.assign(flag))) {
     LOG_WARN("failed to assign ls flag", KR(ret), K(flag));
+  } else if (OB_FAIL(unit_id_list_.assign(unit_id_list))) {
+    LOG_WARN("failed to assign unit id list", KR(ret), K(unit_id_list));
   } else {
     tenant_id_ = tenant_id;
     ls_id_ = id;
@@ -89,6 +144,21 @@ int ObLSStatusInfo::init(const uint64_t tenant_id,
   return ret;
 }
 
+int ObLSStatusInfo::get_unit_list(ObIArray<uint64_t> &unit_id) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", KR(ret), KPC(this));
+  } else {
+    ARRAY_FOREACH(unit_id_list_, idx) {
+      if (OB_FAIL(unit_id.push_back(unit_id_list_.at(idx).id()))) {
+        LOG_WARN("failed to push back", KR(ret), K(idx));
+      }
+    }
+  }
+  return ret;
+}
 int ObLSStatusInfo::assign(const ObLSStatusInfo &other)
 {
   int ret = OB_SUCCESS;
@@ -97,6 +167,8 @@ int ObLSStatusInfo::assign(const ObLSStatusInfo &other)
       LOG_WARN("failed to assign other primary zone", KR(ret), K(other));
     } else if (OB_FAIL(flag_.assign(other.flag_))) {
       LOG_WARN("failed to assign ls flag", KR(ret), K(other));
+    } else if (OB_FAIL(unit_id_list_.assign(other.unit_id_list_))) {
+      LOG_WARN("failed to assign unit id list", KR(ret), K(other));
     } else {
       tenant_id_ = other.tenant_id_;
       ls_id_ = other.ls_id_;
@@ -153,7 +225,47 @@ int ObLSPrimaryZoneInfo::assign(const ObLSPrimaryZoneInfo &other)
   return ret;
 
 }
+////////ObLSGroupUnitListOp
+int ObLSGroupUnitListOp::init(const uint64_t ls_group_id, const ObLSID &ls_id,
+    const ObUnitIDList &curr_unit_list, const ObUnitIDList &target_unit_list,
+    const int64_t ls_count)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  if (OB_UNLIKELY((0 == ls_group_id && !ls_id.is_sys_ls()) || 0 >= ls_count
+        || (curr_unit_list.empty() && target_unit_list.empty()))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_group_id), K(ls_id), K(ls_count),
+        K(curr_unit_list), K(target_unit_list));
+  } else if (OB_FAIL(curr_unit_list_.assign(curr_unit_list))) {
+    LOG_WARN("failed to assgin unit list", KR(ret), K(curr_unit_list));
+  } else if (OB_FAIL(target_unit_list_.assign(target_unit_list))) {
+    LOG_WARN("failed to assgin unit list", KR(ret), K(target_unit_list));
+  } else {
+    ls_group_id_ = ls_group_id;
+    ls_id_ = ls_id;
+    ls_count_ = ls_count;
+  }
+  return ret;
+}
 
+int ObLSGroupUnitListOp::assign(const ObLSGroupUnitListOp &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else if (OB_FAIL(curr_unit_list_.assign(other.curr_unit_list_))) {
+    LOG_WARN("failed to assgin unit list", KR(ret), K(other));
+  } else if (OB_FAIL(target_unit_list_.assign(other.target_unit_list_))) {
+    LOG_WARN("failed to assgin unit list", KR(ret), K(other));
+  } else {
+    ls_group_id_ = other.ls_group_id_;
+    ls_id_ = other.ls_id_;
+    ls_count_ = other.ls_count_;
+  }
+  return ret;
+}
+
+////////ObLSGroupUnitListOp
 ////////ObLSStatusOperator
 int ObLSStatusOperator::create_new_ls(const ObLSStatusInfo &ls_info,
                                       const SCN &current_tenant_scn,
@@ -163,6 +275,7 @@ int ObLSStatusOperator::create_new_ls(const ObLSStatusInfo &ls_info,
 {
   UNUSEDx(current_tenant_scn, zone_priority);
   int ret = OB_SUCCESS;
+  int64_t begin_ts = ObTimeUtility::current_time();
   ObAllTenantInfo tenant_info;
   ObLSFlagStr flag_str;
   common::ObSqlString sql;
@@ -192,6 +305,8 @@ int ObLSStatusOperator::create_new_ls(const ObLSStatusInfo &ls_info,
   if (OB_FAIL(ret)) {
   } else {
     ObDMLSqlSplicer dml_splicer;
+    common::ObArenaAllocator allocator;
+    ObString unit_list_str;
     if (OB_FAIL(dml_splicer.add_pk_column("tenant_id", ls_info.tenant_id_))
       || OB_FAIL(dml_splicer.add_pk_column("ls_id", ls_info.ls_id_.id()))
       || OB_FAIL(dml_splicer.add_column("status", ls_status_to_str(ls_info.status_)))
@@ -201,6 +316,11 @@ int ObLSStatusOperator::create_new_ls(const ObLSStatusInfo &ls_info,
       LOG_WARN("add columns failed", KR(ret), K(ls_info));
     } else if (!ls_info.get_flag().is_normal_flag() && OB_FAIL(dml_splicer.add_column("flag", flag_str.ptr()))) {
       LOG_WARN("add flag column failed", KR(ret), K(ls_info), K(flag_str));
+    } else if (OB_FAIL(ls_info.to_display_unit_list_sorted_str(allocator, unit_list_str))) {
+      LOG_WARN("failed to convert unit id list into string", KR(ret), K(ls_info));
+    } else if (!unit_list_str.empty()
+               && OB_FAIL(dml_splicer.add_column("unit_list", unit_list_str))) {
+      LOG_WARN("failed to add unit id list column", KR(ret), K(ls_info), K(unit_list_str));
     } else if (OB_FAIL(dml_splicer.splice_insert_sql(table_name, sql))) {
       LOG_WARN("fail to splice insert sql", KR(ret), K(sql), K(ls_info), K(flag_str));
     } else if (OB_FAIL(exec_write(ls_info.tenant_id_, sql, this, trans))) {
@@ -212,7 +332,12 @@ int ObLSStatusOperator::create_new_ls(const ObLSStatusInfo &ls_info,
       LOG_WARN("failed to update tenant max ls id", KR(ret), K(ls_info));
     }
   }
-
+  char ls_info_buf[MAX_TENANT_EVENT_VALUE_LENGTH] = "";
+  PRINT_OBJ_INFO(ls_info, ls_info_buf);
+  int64_t cost = ObTimeUtility::current_time() - begin_ts;
+  // 无法记录meta租户1号日志流的创建，因为1号日志流创建的时候还没有__all_tenant_event_history表
+  TENANT_EVENT(ls_info.tenant_id_, LS_EVENT, INSERT_LS, begin_ts, ret, cost,
+      ls_info.ls_id_.id(), ObHexEscapeSqlStr(ls_info_buf), ObHexEscapeSqlStr(sql.ptr()));
   ALL_LS_EVENT_ADD(ls_info.tenant_id_, ls_info.ls_id_, "create_new_ls", ret, sql);
   return ret;
 }
@@ -223,6 +348,7 @@ int ObLSStatusOperator::drop_ls(const uint64_t &tenant_id,
                       ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
+  int64_t begin_ts = ObTimeUtility::current_time();
   ObAllTenantInfo tenant_info;
   common::ObSqlString sql;
   if (OB_UNLIKELY(!ls_id.is_valid() || OB_INVALID_TENANT_ID == tenant_id
@@ -243,6 +369,9 @@ int ObLSStatusOperator::drop_ls(const uint64_t &tenant_id,
       LOG_WARN("failed to exec write", KR(ret), K(tenant_id), K(ls_id), K(sql));
     }
   }
+  int64_t cost = ObTimeUtility::current_time() - begin_ts;
+  TENANT_EVENT(tenant_id, LS_EVENT, DROP_LS, begin_ts, ret, cost,
+      ls_id.id(), ObHexEscapeSqlStr(sql.ptr()));
   ALL_LS_EVENT_ADD(tenant_id, ls_id, "drop_ls", ret, sql);
   return ret;
 }
@@ -276,6 +405,7 @@ int ObLSStatusOperator::update_ls_primary_zone(
 {
   UNUSEDx(zone_priority);
   int ret = OB_SUCCESS;
+  int64_t begin_ts = ObTimeUtility::current_time();
   common::ObSqlString sql;
   if (OB_UNLIKELY(!ls_id.is_valid()
                   || primary_zone.is_empty()
@@ -293,6 +423,9 @@ int ObLSStatusOperator::update_ls_primary_zone(
       LOG_WARN("failed to exec write", KR(ret), K(ls_id), K(sql), K(tenant_id));
     }
   }
+  int64_t cost = ObTimeUtility::current_time() - begin_ts;
+  TENANT_EVENT(tenant_id, LS_EVENT, UPDATE_LS_PRIMARY_ZONE, begin_ts, ret, cost,
+      ls_id.id(), ObHexEscapeSqlStr(primary_zone.ptr()), ObHexEscapeSqlStr(sql.ptr()));
   ALL_LS_EVENT_ADD(tenant_id, ls_id, "update_ls_primary_zone", ret, sql);
   return ret;
 }
@@ -342,6 +475,7 @@ int ObLSStatusOperator::update_ls_status_in_trans(
     ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
+  int64_t begin_ts = ObTimeUtility::current_time();
   ObAllTenantInfo tenant_info;
   if (OB_UNLIKELY(!id.is_valid()
                   || ls_is_invalid_status(new_status)
@@ -386,11 +520,102 @@ int ObLSStatusOperator::update_ls_status_in_trans(
     } else if (OB_FAIL(exec_write(tenant_id, sql, this, trans))) {
       LOG_WARN("failed to exec write", KR(ret), K(tenant_id), K(id), K(sql));
     }
+    int64_t cost = ObTimeUtility::current_time() - begin_ts;
+    TENANT_EVENT(tenant_id, LS_EVENT, UPDATE_LS_STATUS, begin_ts, ret, cost,
+        id.id(), ObHexEscapeSqlStr(ls_status_to_str(new_status)),
+        ObHexEscapeSqlStr(ls_status_to_str(old_status)), ObHexEscapeSqlStr(sql.ptr()));
     ALL_LS_EVENT_ADD(tenant_id, id, "update_ls_status", ret, sql);
   }
   return ret;
 }
 
+int ObLSStatusOperator::alter_ls_group_id(
+    const uint64_t tenant_id,
+    const ObLSID &ls_id,
+    const uint64_t old_ls_group_id,
+    const uint64_t new_ls_group_id,
+    ObISQLClient &client)
+{
+  int ret = OB_SUCCESS;
+  int64_t begin_ts = ObTimeUtility::current_time();
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+                  || !ls_id.is_valid_with_tenant(tenant_id)
+                  || OB_INVALID_ID == old_ls_group_id
+                  || OB_INVALID_ID == new_ls_group_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid_argument", KR(ret), K(tenant_id), K(ls_id), K(old_ls_group_id), K(new_ls_group_id));
+  } else {
+    common::ObSqlString sql;
+    common::ObArenaAllocator allocator;
+    if (OB_FAIL(sql.assign_fmt(
+        "UPDATE %s set ls_group_id = %lu where tenant_id = %lu and ls_id = %ld and ls_group_id = %lu",
+        OB_ALL_LS_STATUS_TNAME,
+        new_ls_group_id,
+        tenant_id,
+        ls_id.id(),
+        old_ls_group_id))) {
+      LOG_WARN("failed to assign sql", KR(ret), K(new_ls_group_id), K(tenant_id), K(old_ls_group_id), K(sql));
+    } else if (OB_FAIL(exec_write(tenant_id, sql, this, client))) {
+      LOG_WARN("failed to exec write", KR(ret), K(tenant_id), K(ls_id), K(sql));
+    }
+    int64_t cost = ObTimeUtility::current_time() - begin_ts;
+    TENANT_EVENT(tenant_id, LS_EVENT, ALTER_LS_GROUP, begin_ts, ret, cost,
+        ls_id.id(), new_ls_group_id, old_ls_group_id, "", "", ObHexEscapeSqlStr(sql.ptr()));
+    ALL_LS_EVENT_ADD(tenant_id, ls_id, "alter_ls_group", ret, sql);
+  }
+  return ret;
+}
+
+int ObLSStatusOperator::alter_ls_group_id(
+    const uint64_t tenant_id,
+    const ObLSID &ls_id,
+    const uint64_t old_ls_group_id,
+    const uint64_t new_ls_group_id,
+    const ObUnitIDList &old_unit_list,
+    const ObUnitIDList &new_unit_list,
+    ObISQLClient &client)
+{
+  int ret = OB_SUCCESS;
+  int64_t begin_ts = ObTimeUtility::current_time();
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+                  || !ls_id.is_valid_with_tenant(tenant_id)
+                  || OB_INVALID_ID == old_ls_group_id
+                  || OB_INVALID_ID == new_ls_group_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid_argument", KR(ret), K(tenant_id), K(ls_id), K(old_ls_group_id), K(new_ls_group_id),
+        K(old_unit_list), K(new_unit_list));
+  } else {
+    common::ObSqlString sql;
+    common::ObArenaAllocator allocator;
+    ObString old_unit_list_str;
+    ObString new_unit_list_str;
+    if (OB_FAIL(ObLSStatusInfo::to_display_unit_list_sorted_str(old_unit_list, allocator, old_unit_list_str))) {
+      LOG_WARN("failed to convert old unit list to string", KR(ret), K(old_unit_list));
+    } else if (OB_FAIL(ObLSStatusInfo::to_display_unit_list_sorted_str(new_unit_list, allocator, new_unit_list_str))) {
+      LOG_WARN("failed to convert new unit list to string", KR(ret), K(new_unit_list));
+    } else if (OB_FAIL(sql.assign_fmt(
+        "UPDATE %s set ls_group_id = %lu, unit_list = '%.*s', unit_group_id = 0 where"
+        " tenant_id = %lu and ls_id = %ld and ls_group_id = %lu and unit_list = '%.*s'",
+        OB_ALL_LS_STATUS_TNAME,
+        new_ls_group_id,
+        new_unit_list_str.length(), new_unit_list_str.ptr(),
+        tenant_id,
+        ls_id.id(),
+        old_ls_group_id,
+        old_unit_list_str.length(), old_unit_list_str.ptr()))) {
+      LOG_WARN("failed to assign sql", KR(ret), K(new_ls_group_id), K(new_unit_list_str),
+          K(tenant_id), K(old_ls_group_id), K(old_unit_list_str), K(new_unit_list_str), K(sql));
+    } else if (OB_FAIL(exec_write(tenant_id, sql, this, client))) {
+      LOG_WARN("failed to exec write", KR(ret), K(tenant_id), K(ls_id), K(sql));
+    }
+    int64_t cost = ObTimeUtility::current_time() - begin_ts;
+    TENANT_EVENT(tenant_id, LS_EVENT, ALTER_LS_GROUP, begin_ts, ret, cost,
+        ls_id.id(), new_ls_group_id, ObHexEscapeSqlStr(new_unit_list_str), old_ls_group_id,
+        ObHexEscapeSqlStr(old_unit_list_str), ObHexEscapeSqlStr(sql.ptr()));
+    ALL_LS_EVENT_ADD(tenant_id, ls_id, "alter_ls_group", ret, sql);
+  }
+  return ret;
+}
 
 int ObLSStatusOperator::alter_ls_group_id(const uint64_t tenant_id, const ObLSID &id,
                        const uint64_t old_ls_group_id,
@@ -423,6 +648,7 @@ int ObLSStatusOperator::alter_ls_group_id(const uint64_t tenant_id, const ObLSID
     } else if (OB_FAIL(exec_write(tenant_id, sql, this, client))) {
       LOG_WARN("failed to exec write", KR(ret), K(tenant_id), K(id), K(sql));
     }
+    // 只有4255以前用，就不加tenant event表记录了
     ALL_LS_EVENT_ADD(tenant_id, id, "alter_ls_group", ret, sql);
   }
   return ret;
@@ -461,6 +687,59 @@ int ObLSStatusOperator::alter_unit_group_id(const uint64_t tenant_id, const ObLS
   }
   return ret;
 }
+
+ERRSIM_POINT_DEF(ERRSIM_DO_NOT_ALTER_UNIT_LIST);
+int ObLSStatusOperator::alter_ls_group_unit_list(const uint64_t tenant_id,
+                         const uint64_t ls_group_id,
+                         const int64_t ls_cnt_in_group,
+                         const ObUnitIDList &old_unit_list,
+                         const ObUnitIDList &new_unit_list,
+                         ObISQLClient &client)
+{
+  int ret = OB_SUCCESS;
+  int64_t begin_ts = ObTimeUtility::current_time();
+  if (OB_UNLIKELY(0 == ls_group_id || new_unit_list.empty()
+                  || OB_INVALID_TENANT_ID == tenant_id
+                  || 0 >= ls_cnt_in_group)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid_argument", KR(ret), K(ls_group_id), K(new_unit_list),
+        K(tenant_id), K(ls_cnt_in_group));
+  } else if (OB_UNLIKELY(ERRSIM_DO_NOT_ALTER_UNIT_LIST)) {
+    LOG_INFO("errsim here, do not alter unit_list");
+  } else {
+    common::ObSqlString sql;
+    const uint64_t exec_tenant_id =
+      ObLSLifeIAgent::get_exec_tenant_id(tenant_id);
+    common::ObArenaAllocator allocator;
+    ObString old_unit_list_str;
+    ObString new_unit_list_str;
+    const uint64_t new_unit_group_id = 0;
+    if (OB_FAIL(ObLSStatusInfo::to_display_unit_list_sorted_str(old_unit_list, allocator, old_unit_list_str))) {
+      LOG_WARN("failed to convert old unit list to string", KR(ret), K(old_unit_list));
+    } else if (OB_FAIL(ObLSStatusInfo::to_display_unit_list_sorted_str(new_unit_list, allocator, new_unit_list_str))) {
+      LOG_WARN("failed to convert new unit list to string", KR(ret), K(new_unit_list));
+    } else if (OB_FAIL(sql.assign_fmt("UPDATE %s set unit_group_id = %lu, unit_list = '%.*s' where"
+                               " tenant_id = %lu and unit_list = '%.*s' and ls_group_id = %lu",
+                               OB_ALL_LS_STATUS_TNAME, new_unit_group_id,
+                               new_unit_list_str.length(), new_unit_list_str.ptr(),
+                               tenant_id,
+                               old_unit_list_str.length(), old_unit_list_str.ptr(),
+                               ls_group_id))) {
+      LOG_WARN("failed to assign sql", KR(ret), K(ls_group_id), K(old_unit_list_str), K(new_unit_list_str),
+               K(tenant_id), K(sql));
+      //由于存在waitoffline日志流，所以不能准确的判断出日志流组内有多少日志流，但是一个日志流组
+      //内的unit_list应该都是一样的
+    } else if (OB_FAIL(exec_write(tenant_id, sql, this, client, true, ls_cnt_in_group))) {
+      LOG_WARN("failed to exec write", KR(ret), K(tenant_id), K(sql));
+    }
+    int64_t cost = ObTimeUtility::current_time() - begin_ts;
+    TENANT_EVENT(tenant_id, LS_EVENT, ALTER_LS_GROUP_UNIT_LIST, begin_ts, ret, cost,
+        ls_group_id, ObHexEscapeSqlStr(new_unit_list_str), ObHexEscapeSqlStr(old_unit_list_str),
+        ObHexEscapeSqlStr(sql.ptr()));
+  }
+  return ret;
+}
+
 ERRSIM_POINT_DEF(ERRSIM_PRISIST_MEMBER_LIST_T1004_LS1002);
 int ObLSStatusOperator::update_init_member_list(
     const uint64_t tenant_id,
@@ -496,6 +775,7 @@ int ObLSStatusOperator::update_init_member_list_(
     const ObMember &arb_member, const common::GlobalLearnerList &learner_list)
 {
   int ret = OB_SUCCESS;
+  int64_t begin_ts = ObTimeUtility::current_time();
   bool is_compatible_with_readonly_replica = false;
   common::ObSqlString sql;
   if (OB_UNLIKELY(!id.is_valid() || !member_list.is_valid() || !is_valid_tenant_id(tenant_id))) {
@@ -545,6 +825,17 @@ int ObLSStatusOperator::update_init_member_list_(
       LOG_WARN("failed to assign sql", KR(ret), K(id), K(member_list), K(learner_list_sub_sql), K(sql));
     } else if (OB_FAIL(exec_write(tenant_id, sql, this, client))) {
       LOG_WARN("failed to exec write", KR(ret), K(id), K(sql));
+    }
+    int64_t cost = ObTimeUtility::current_time() - begin_ts;
+    SMART_VARS_3((char[MAX_TENANT_EVENT_VALUE_LENGTH], sql_buf, ""),
+        (char[MAX_TENANT_EVENT_VALUE_LENGTH], visible_member_list_buf, ""),
+        (char[MAX_TENANT_EVENT_VALUE_LENGTH], visible_learner_list_buf, "")) {
+      PRINT_OBJ_INFO(sql, sql_buf);
+      PRINT_OBJ_INFO(visible_member_list, visible_member_list_buf);
+      PRINT_OBJ_INFO(visible_learner_list, visible_learner_list_buf);
+      TENANT_EVENT(tenant_id, LS_EVENT, UPDATE_LS_INIT_MEMBER_LIST, begin_ts, ret, cost,
+          id.id(), ObHexEscapeSqlStr(visible_member_list_buf),
+          ObHexEscapeSqlStr(visible_learner_list_buf), ObHexEscapeSqlStr(sql_buf));
     }
   }
   ALL_LS_EVENT_ADD(tenant_id, id, "update_ls_init_member_list", ret, sql);
@@ -952,6 +1243,7 @@ int ObLSStatusOperator::fill_cell(
     ObString flag_str;
     ObString flag_str_default_value("");
     ObLSFlag flag(share::ObLSFlag::NORMAL_FLAG);
+    ObString unit_list_str;
     EXTRACT_INT_FIELD_MYSQL(*result, "tenant_id", tenant_id, uint64_t);
     EXTRACT_INT_FIELD_MYSQL(*result, "ls_id", id_value, int64_t);
     EXTRACT_INT_FIELD_MYSQL(*result, "ls_group_id", ls_group_id, uint64_t);
@@ -960,20 +1252,25 @@ int ObLSStatusOperator::fill_cell(
     EXTRACT_VARCHAR_FIELD_MYSQL(*result, "primary_zone", primary_zone_str);
     EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "flag", flag_str,
                 true /* skip_null_error */, true /* skip_column_error */, flag_str_default_value);
+    EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "unit_list", unit_list_str,
+                true /* skip_null_error */, true /* skip_column_error */, flag_str_default_value);
     if (OB_FAIL(ret)) {
       LOG_WARN("failed to get result", KR(ret), K(id_value), K(ls_group_id),
                K(unit_group_id), K(status_str), K(primary_zone_str));
     } else {
       ObLSID ls_id(id_value);
       ObZone zone(primary_zone_str);
+      ObUnitIDList unit_list;
       if (OB_FAIL(flag.str_to_flag(flag_str))) {
         // if flag_str is empty then flag is setted to normal
         LOG_WARN("fail to convert string to flag", KR(ret), K(flag_str));
+      } else if (OB_FAIL(unit_list.parse_from_display_str(unit_list_str))) {
+        LOG_WARN("fail to convert string to unit list", KR(ret), K(unit_list_str));
       } else if (OB_FAIL(status_info.init(tenant_id, ls_id, ls_group_id,
                                str_to_ls_status(status_str), unit_group_id,
-                               zone, flag))) {
+                               zone, flag, unit_list))) {
         LOG_WARN("failed to init ls operation", KR(ret), K(tenant_id), K(zone),
-                 K(ls_group_id), K(ls_id), K(status_str), K(unit_group_id), K(flag));
+                 K(ls_group_id), K(ls_id), K(status_str), K(unit_group_id), K(flag), K(unit_list));
       }
     }
   }
@@ -1721,6 +2018,7 @@ int ObLSStatusOperator::create_abort_ls_in_switch_tenant(
     ObMySQLProxy &client)
 {
   int ret = OB_SUCCESS;
+  int64_t begin_ts = ObTimeUtility::current_time();
   common::ObSqlString sql;
   if (OB_UNLIKELY(!is_user_tenant(tenant_id) || !status.is_valid() || OB_INVALID_VERSION == switchover_epoch)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1775,8 +2073,42 @@ int ObLSStatusOperator::create_abort_ls_in_switch_tenant(
     }
   }
   LOG_INFO("finish create abort ls", KR(ret), K(tenant_id), K(sql));
+  int64_t cost = ObTimeUtility::current_time() - begin_ts;
+  TENANT_EVENT(tenant_id, LS_EVENT, CREATE_ABORT_LS_FOR_SWICHOVER, begin_ts, ret, cost, ObHexEscapeSqlStr(sql.ptr()));
   ALL_LS_EVENT_ADD(tenant_id, SYS_LS, "create abort ls for switchover", ret, sql);
   return ret;
 }
+
+int ObLSStatusOperator::get_ls_unit_array(
+  const ObLSStatusInfo &ls_status,
+  common::ObMySQLProxy &sql_proxy,
+  ObIArray<ObUnit> &unit_array)
+{
+  int ret = OB_SUCCESS;
+  ObUnitTableOperator unit_operator;
+  unit_array.reset();
+  if (OB_UNLIKELY(!ls_status.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_status));
+  } else if (OB_FAIL(unit_operator.init(sql_proxy))) {
+    LOG_WARN("failed to init unit op", KR(ret), K(ls_status));
+  } else if (0 != ls_status.unit_group_id_) {
+    if (OB_FAIL(unit_operator.get_units_by_unit_group_id(ls_status.unit_group_id_,
+                              unit_array))) {
+      LOG_WARN("failed to get units by unit group", KR(ret), K(ls_status));
+    }
+  } else if (!ls_status.unit_id_list_.empty()) {
+    ObArray<uint64_t> unit_id;
+    if (OB_FAIL(ls_status.get_unit_list(unit_id))) {
+      LOG_WARN("failed to get unit list", KR(ret), K(ls_status));
+    } else if (OB_FAIL(unit_operator.get_units_by_unit_ids(unit_id, unit_array))) {
+      LOG_WARN("failed to get units", KR(ret), K(unit_id), K(ls_status));
+    }
+  } else {
+    //TODO 系统日志流随机选择
+  }
+  return ret;
+}
+
 }//end of share
 }//end of ob

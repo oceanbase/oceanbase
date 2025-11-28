@@ -1030,10 +1030,6 @@ int ObStartMigrationTask::process()
     LOG_WARN("failed to try remove member list", K(ret));
   } else if (OB_FAIL(deal_with_local_ls_())) {
     LOG_WARN("failed to deal with local ls", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(check_ls_need_copy_data_(need_copy_data))) {
-    LOG_WARN("failed to check ls need copy data", K(ret), KPC(ctx_));
-  } else if (!need_copy_data) {
-    //do nothing
   } else if (OB_FAIL(report_ls_meta_table_())) {
     LOG_WARN("failed to report ls meta table", K(ret), KPC(ctx_));
   } else if (OB_FAIL(join_learner_list_())) {
@@ -1042,6 +1038,12 @@ int ObStartMigrationTask::process()
     LOG_WARN("failed to choose src", K(ret), KPC(ctx_));
   } else if (OB_FAIL(build_ls_())) {
     LOG_WARN("failed to build ls", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(check_ls_need_copy_data_(need_copy_data))) {
+    LOG_WARN("failed to check ls need copy data", K(ret), KPC(ctx_));
+  } else if (!need_copy_data) {
+    if (OB_FAIL(ls_online_())) {
+      LOG_WARN("failed to online ls", K(ret), K(*ctx_));
+    }
   } else if (OB_FAIL(fill_restore_arg_if_needed_())) {
     LOG_WARN("failed to fill restore arg", K(ret), KPC(ctx_));
   } else {
@@ -1374,7 +1376,8 @@ int ObStartMigrationTask::update_ls_()
     if (OB_FAIL(ls->update_ls_meta(update_restore_status,
                                    ctx_->src_ls_meta_package_.ls_meta_))) {
       LOG_WARN("failed to update ls meta", K(ret), KPC(ctx_));
-    } else if (OB_FAIL(ls->set_dup_table_ls_meta(ctx_->src_ls_meta_package_.dup_ls_meta_,
+    } else if (ObReplicaTypeCheck::is_replica_with_ssstore(ctx_->arg_.dst_.get_replica_type())
+        && OB_FAIL(ls->set_dup_table_ls_meta(ctx_->src_ls_meta_package_.dup_ls_meta_,
                                                  true /*need_flush_slog*/))) {
       LOG_WARN("failed to set dup table ls meta", K(ret), KPC(ctx_));
     } else if (OB_FAIL(ls->get_end_lsn(end_lsn))) {
@@ -1522,11 +1525,9 @@ int ObStartMigrationTask::check_ls_need_copy_data_(bool &need_copy)
     LOG_WARN("start migration task do not init", K(ret));
   } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
-  } else if (ObMigrationOpType::CHANGE_LS_OP == ctx_->arg_.type_ &&
-      ObReplicaTypeCheck::is_readable_replica(ctx_->arg_.src_.get_replica_type())) {
-    //no need generate copy task, only change member
+  } else if (!ObReplicaTypeCheck::is_replica_with_ssstore(ctx_->arg_.dst_.get_replica_type())) {
     need_copy = false;
-    LOG_INFO("no need change replica no need copy task", "src_type", ctx_->arg_.src_.get_replica_type(),
+    LOG_INFO("replica without ssstore, no need copy task",
         " dest_type", ctx_->arg_.dst_.get_replica_type());
   }
   return ret;
@@ -1644,6 +1645,8 @@ int ObStartMigrationTask::create_all_tablets_(
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("start migration task do not init", K(ret));
+  } else if (!ObReplicaTypeCheck::is_replica_with_ssstore(ctx_->arg_.dst_.get_replica_type())) {
+    //do nothing
   } else if (OB_ISNULL(ob_reader)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("create all tablets get ivnalid argument", K(ret));
@@ -1878,6 +1881,26 @@ int ObStartMigrationTask::join_learner_list_()
 #endif
   return ret;
 }
+
+int ObStartMigrationTask::ls_online_()
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("data tablets migration task do not init", K(ret));
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
+    LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), KP(ls));
+  } else if (OB_FAIL(ls->online())) {
+    LOG_WARN("failed to online ls", K(ret), KPC(ls));
+  }
+  return ret;
+}
+
 /******************ObSysTabletsMigrationDag*********************/
 ObSysTabletsMigrationDag::ObSysTabletsMigrationDag()
   : ObMigrationDag(ObDagType::DAG_TYPE_SYS_TABLETS_MIGRATION),

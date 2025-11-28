@@ -33,7 +33,7 @@ public:
   {
     UNIT_STATUS_ACTIVE = 0,
     UNIT_STATUS_DELETING,
-    UNIT_STATUS_ADDING,   // only as placeholder
+    UNIT_STATUS_ADDING,
     UNIT_STATUS_MAX,
   };
 public:
@@ -56,10 +56,21 @@ public:
            const int64_t time_stamp);
   void reset();
   bool is_valid() const;
+  static bool is_valid_status(const Status status);
   bool is_manual_migrate() const { return is_manual_migrate_; }
-  bool is_active_status() const { return UNIT_STATUS_ACTIVE == status_; }
+  // unit in ADDING status is fully functional as ACTIVE status
+  bool is_active_or_adding_status() const { return UNIT_STATUS_ACTIVE == status_ || UNIT_STATUS_ADDING == status_; }
   int get_unit_status_str(const char *&status) const;
   Status get_unit_status() const { return status_; }
+  static bool compare_with_zone(const ObUnit &lu, const ObUnit &ru);
+  bool has_same_unit_group_info(const ObUnit &ohter) const
+  {
+    return unit_id_ == ohter.unit_id_
+        && unit_group_id_ == ohter.unit_group_id_
+        && zone_ == ohter.zone_
+        && resource_pool_id_ == ohter.resource_pool_id_
+        && status_ == ohter.status_;
+  }
 
   DECLARE_TO_STRING;
 
@@ -100,35 +111,6 @@ struct ObUnitInfo
   ObResourcePool pool_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObUnitInfo);
-};
-
-struct ObSimpleUnitGroup
-{
-public:
- ObSimpleUnitGroup(uint64_t unit_group_id, ObUnit::Status status) : unit_group_id_(unit_group_id), status_(status) {}
- ObSimpleUnitGroup(){reset();}
- ~ObSimpleUnitGroup() {}
- void reset()
- {
-  unit_group_id_ = OB_INVALID_ID;
-  status_ = ObUnit::UNIT_STATUS_MAX;
- }
- bool is_valid() const;
- int assign(const ObSimpleUnitGroup &other)
- {
-  unit_group_id_ = other.unit_group_id_;
-  status_ = other.status_;
-  return OB_SUCCESS;
- }
- bool is_active() const
- { return ObUnit::UNIT_STATUS_ACTIVE == status_; }
- uint64_t get_unit_group_id() const { return unit_group_id_; }
- ObUnit::Status get_status() const  { return status_; }
- TO_STRING_KV(K_(unit_group_id), K_(status));
- bool operator<(const ObSimpleUnitGroup &that) { return unit_group_id_ < that.unit_group_id_; }
-private:
-  uint64_t unit_group_id_;
-  ObUnit::Status status_;
 };
 
 class ObTenantServers

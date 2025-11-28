@@ -28,6 +28,7 @@ case OB_ALL_VIRTUAL_TENANT_SYS_AGENT_TID:
 case OB_ALL_VIRTUAL_TENANT_TRIGGER_SYS_AGENT_TID:
 case OB_ALL_VIRTUAL_TYPE_ATTR_SYS_AGENT_TID:
 case OB_ALL_VIRTUAL_TYPE_SYS_AGENT_TID:
+case OB_ALL_VIRTUAL_UNIT_SYS_AGENT_TID:
 case OB_ALL_VIRTUAL_ZONE_STORAGE_SYS_AGENT_TID:
 case OB_TENANT_VIRTUAL_ALL_TABLE_AGENT_TID:
 case OB_TENANT_VIRTUAL_CHARSET_AGENT_TID:
@@ -36,6 +37,7 @@ case OB_TENANT_VIRTUAL_OUTLINE_AGENT_TID:
 case OB_TENANT_VIRTUAL_TABLE_INDEX_AGENT_TID:
 case OB_ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT_TID:
 case OB_ALL_VIRTUAL_TENANT_MYSQL_SYS_AGENT_TID:
+case OB_ALL_VIRTUAL_UNIT_MYSQL_SYS_AGENT_TID:
 case OB_ALL_VIRTUAL_VIRTUAL_LONG_OPS_STATUS_MYSQL_SYS_AGENT_TID:
 case OB_ALL_VIRTUAL_ZONE_STORAGE_MYSQL_SYS_AGENT_TID:
 
@@ -333,6 +335,24 @@ case OB_ALL_VIRTUAL_ZONE_STORAGE_MYSQL_SYS_AGENT_TID:
       break;
     }
 
+    case OB_ALL_VIRTUAL_UNIT_SYS_AGENT_TID: {
+      ObAgentVirtualTable *agent_iter = NULL;
+      const uint64_t base_tid = OB_ALL_UNIT_TID;
+      const bool sys_tenant_base_table = true;
+      const bool only_sys_data = true;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAgentVirtualTable, agent_iter))) {
+        SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
+      } else if (OB_FAIL(agent_iter->init(base_tid, sys_tenant_base_table, index_schema, params, only_sys_data))) {
+        SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
+        agent_iter->~ObAgentVirtualTable();
+        allocator.free(agent_iter);
+        agent_iter = NULL;
+      } else {
+       vt_iter = agent_iter;
+      }
+      break;
+    }
+
     case OB_ALL_VIRTUAL_ZONE_STORAGE_SYS_AGENT_TID: {
       ObAgentVirtualTable *agent_iter = NULL;
       const uint64_t base_tid = OB_ALL_ZONE_STORAGE_TID;
@@ -386,7 +406,9 @@ case OB_ALL_VIRTUAL_ZONE_STORAGE_MYSQL_SYS_AGENT_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_TENANT_VIRTUAL_CONCURRENT_LIMIT_SQL_AGENT_TID: {
       ObAgentVirtualTable *agent_iter = NULL;
       const uint64_t base_tid = OB_TENANT_VIRTUAL_CONCURRENT_LIMIT_SQL_TID;
@@ -404,9 +426,7 @@ case OB_ALL_VIRTUAL_ZONE_STORAGE_MYSQL_SYS_AGENT_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_TENANT_VIRTUAL_OUTLINE_AGENT_TID: {
       ObAgentVirtualTable *agent_iter = NULL;
       const uint64_t base_tid = OB_TENANT_VIRTUAL_OUTLINE_TID;
@@ -464,6 +484,24 @@ case OB_ALL_VIRTUAL_ZONE_STORAGE_MYSQL_SYS_AGENT_TID:
     case OB_ALL_VIRTUAL_TENANT_MYSQL_SYS_AGENT_TID: {
       ObAgentVirtualTable *agent_iter = NULL;
       const uint64_t base_tid = OB_ALL_TENANT_TID;
+      const bool sys_tenant_base_table = true;
+      const bool only_sys_data = false;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAgentVirtualTable, agent_iter))) {
+        SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
+      } else if (OB_FAIL(agent_iter->init(base_tid, sys_tenant_base_table, index_schema, params, only_sys_data, Worker::CompatMode::MYSQL))) {
+        SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
+        agent_iter->~ObAgentVirtualTable();
+        allocator.free(agent_iter);
+        agent_iter = NULL;
+      } else {
+       vt_iter = agent_iter;
+      }
+      break;
+    }
+
+    case OB_ALL_VIRTUAL_UNIT_MYSQL_SYS_AGENT_TID: {
+      ObAgentVirtualTable *agent_iter = NULL;
+      const uint64_t base_tid = OB_ALL_UNIT_TID;
       const bool sys_tenant_base_table = true;
       const bool only_sys_data = false;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAgentVirtualTable, agent_iter))) {
@@ -546,6 +584,7 @@ case OB_ALL_VIRTUAL_BACKUP_STORAGE_INFO_HISTORY_TID:
 case OB_ALL_VIRTUAL_BACKUP_TASK_TID:
 case OB_ALL_VIRTUAL_BACKUP_TASK_HISTORY_TID:
 case OB_ALL_VIRTUAL_BALANCE_GROUP_LS_STAT_TID:
+case OB_ALL_VIRTUAL_BALANCE_JOB_DESCRIPTION_TID:
 case OB_ALL_VIRTUAL_BALANCE_TASK_HELPER_TID:
 case OB_ALL_VIRTUAL_CLONE_JOB_TID:
 case OB_ALL_VIRTUAL_CLONE_JOB_HISTORY_TID:
@@ -1008,6 +1047,22 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       break;
     }
 
+    case OB_ALL_VIRTUAL_BALANCE_JOB_DESCRIPTION_TID: {
+      ObIteratePrivateVirtualTable *iter = NULL;
+      const bool meta_record_in_sys = false;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIteratePrivateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create iterate private virtual table iterator failed", KR(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_BALANCE_JOB_DESCRIPTION_TID, meta_record_in_sys, index_schema, params))) {
+        SERVER_LOG(WARN, "iterate private virtual table iter init failed", KR(ret));
+        iter->~ObIteratePrivateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
     case OB_ALL_VIRTUAL_BALANCE_TASK_HELPER_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
@@ -1247,7 +1302,9 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_LOG_ARCHIVE_PIECE_FILES_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
@@ -1263,9 +1320,7 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_LOG_ARCHIVE_PROGRESS_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
@@ -1569,7 +1624,9 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_RESTORE_PROGRESS_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
@@ -1585,9 +1642,7 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_SERVICE_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
@@ -1891,7 +1946,9 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
@@ -1907,9 +1964,7 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY_V2_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
@@ -5624,6 +5679,9 @@ case OB_ALL_BACKUP_TASK_HISTORY_AUX_LOB_PIECE_TID:
 case OB_ALL_BALANCE_GROUP_LS_STAT_TID:
 case OB_ALL_BALANCE_GROUP_LS_STAT_AUX_LOB_META_TID:
 case OB_ALL_BALANCE_GROUP_LS_STAT_AUX_LOB_PIECE_TID:
+case OB_ALL_BALANCE_JOB_DESCRIPTION_TID:
+case OB_ALL_BALANCE_JOB_DESCRIPTION_AUX_LOB_META_TID:
+case OB_ALL_BALANCE_JOB_DESCRIPTION_AUX_LOB_PIECE_TID:
 case OB_ALL_BALANCE_TASK_HELPER_TID:
 case OB_ALL_BALANCE_TASK_HELPER_AUX_LOB_META_TID:
 case OB_ALL_BALANCE_TASK_HELPER_AUX_LOB_PIECE_TID:
@@ -8374,6 +8432,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_VECTOR_INDEX_TASK_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VECTOR_INDEX_TASK_HISTORY_SCHEMA_VERSION); break;
     case OB_ALL_CCL_RULE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CCL_RULE_SCHEMA_VERSION); break;
     case OB_ALL_CCL_RULE_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CCL_RULE_HISTORY_SCHEMA_VERSION); break;
+    case OB_ALL_BALANCE_JOB_DESCRIPTION_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_BALANCE_JOB_DESCRIPTION_SCHEMA_VERSION); break;
     case OB_ALL_TENANT_LOCATION_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TENANT_LOCATION_SCHEMA_VERSION); break;
     case OB_ALL_TENANT_LOCATION_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TENANT_LOCATION_HISTORY_SCHEMA_VERSION); break;
     case OB_ALL_TENANT_OBJAUTH_MYSQL_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TENANT_OBJAUTH_MYSQL_SCHEMA_VERSION); break;
@@ -8924,6 +8983,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_VIRTUAL_LS_MIGRATION_TASK_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_LS_MIGRATION_TASK_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_SS_NOTIFY_TASKS_STAT_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SS_NOTIFY_TASKS_STAT_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_SS_NOTIFY_TABLETS_STAT_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SS_NOTIFY_TABLETS_STAT_SCHEMA_VERSION); break;
+    case OB_ALL_VIRTUAL_BALANCE_JOB_DESCRIPTION_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_BALANCE_JOB_DESCRIPTION_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_TENANT_LOCATION_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_TENANT_LOCATION_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_TENANT_LOCATION_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_TENANT_LOCATION_HISTORY_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_OBJAUTH_MYSQL_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_OBJAUTH_MYSQL_SCHEMA_VERSION); break;
@@ -8937,6 +8997,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_VIRTUAL_LOGSERVICE_CLUSTER_INFO_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_LOGSERVICE_CLUSTER_INFO_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_SS_GC_STATUS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SS_GC_STATUS_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_SS_GC_DETECT_INFO_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SS_GC_DETECT_INFO_SCHEMA_VERSION); break;
+    case OB_ALL_VIRTUAL_UNIT_MYSQL_SYS_AGENT_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_UNIT_MYSQL_SYS_AGENT_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_SENSITIVE_RULE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SENSITIVE_RULE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_SENSITIVE_RULE_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SENSITIVE_RULE_HISTORY_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_SENSITIVE_COLUMN_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SENSITIVE_COLUMN_SCHEMA_VERSION); break;
@@ -9280,6 +9341,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_VIRTUAL_MVIEW_RUNNING_JOB_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_MVIEW_RUNNING_JOB_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_MVIEW_DEP_REAL_AGENT_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_MVIEW_DEP_REAL_AGENT_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_DYNAMIC_PARTITION_TABLE_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_DYNAMIC_PARTITION_TABLE_ORACLE_SCHEMA_VERSION); break;
+    case OB_ALL_VIRTUAL_BALANCE_JOB_DESCRIPTION_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_BALANCE_JOB_DESCRIPTION_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_TENANT_LOCATION_REAL_AGENT_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_TENANT_LOCATION_REAL_AGENT_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_TENANT_OBJAUTH_MYSQL_REAL_AGENT_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_TENANT_OBJAUTH_MYSQL_REAL_AGENT_ORACLE_SCHEMA_VERSION); break;
     case OB_TENANT_VIRTUAL_LIST_FILE_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_TENANT_VIRTUAL_LIST_FILE_ORACLE_SCHEMA_VERSION); break;
@@ -9289,6 +9351,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_VIRTUAL_SS_LS_TABLET_REORGANIZATION_INFO_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SS_LS_TABLET_REORGANIZATION_INFO_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_SS_EXISTING_TABLET_META_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SS_EXISTING_TABLET_META_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_SS_EXISTING_SSTABLE_MGR_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SS_EXISTING_SSTABLE_MGR_ORACLE_SCHEMA_VERSION); break;
+    case OB_ALL_VIRTUAL_UNIT_SYS_AGENT_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_UNIT_SYS_AGENT_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_TENANT_SS_STORAGE_STAT_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_TENANT_SS_STORAGE_STAT_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_HMS_CLIENT_POOL_STAT_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_HMS_CLIENT_POOL_STAT_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_SOURCE_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SOURCE_ORACLE_SCHEMA_VERSION); break;
@@ -10952,6 +11015,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_VECTOR_INDEX_TASK_HISTORY_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VECTOR_INDEX_TASK_HISTORY_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_CCL_RULE_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CCL_RULE_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_CCL_RULE_HISTORY_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CCL_RULE_HISTORY_AUX_LOB_META_SCHEMA_VERSION); break;
+    case OB_ALL_BALANCE_JOB_DESCRIPTION_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_BALANCE_JOB_DESCRIPTION_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_TENANT_LOCATION_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TENANT_LOCATION_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_TENANT_LOCATION_HISTORY_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TENANT_LOCATION_HISTORY_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_TENANT_OBJAUTH_MYSQL_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TENANT_OBJAUTH_MYSQL_AUX_LOB_META_SCHEMA_VERSION); break;
@@ -11306,6 +11370,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_VECTOR_INDEX_TASK_HISTORY_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VECTOR_INDEX_TASK_HISTORY_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_CCL_RULE_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CCL_RULE_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_CCL_RULE_HISTORY_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CCL_RULE_HISTORY_AUX_LOB_PIECE_SCHEMA_VERSION); break;
+    case OB_ALL_BALANCE_JOB_DESCRIPTION_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_BALANCE_JOB_DESCRIPTION_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_TENANT_LOCATION_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TENANT_LOCATION_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_TENANT_LOCATION_HISTORY_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TENANT_LOCATION_HISTORY_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_TENANT_OBJAUTH_MYSQL_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TENANT_OBJAUTH_MYSQL_AUX_LOB_PIECE_SCHEMA_VERSION); break;

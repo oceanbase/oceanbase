@@ -769,7 +769,7 @@ public:
   TO_STRING_KV(K_(learner_list), K_(leader_addr), K_(member_list));
   common::GlobalLearnerList learner_list_;
   common::ObAddr leader_addr_;
-  common::ObArray<common::ObAddr> member_list_;
+  common::ObArray<common::ObMember> member_list_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSMemberListInfo);
 };

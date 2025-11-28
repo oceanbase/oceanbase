@@ -176,6 +176,8 @@ void ObTabletGCService::ObTabletChangeTask::runTimerTask()
       if (OB_ISNULL(ls)) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "ls is NULL", KR(ret));
+      } else if (ObReplicaTypeCheck::is_log_replica(ls->get_replica_type())) {
+        STORAGE_LOG(TRACE, "skip logonly replica", KPC(ls));
       } else if (FALSE_IT(tablet_gc_handler = ls->get_tablet_gc_handler())) {
       } else if (tablet_gc_handler->check_stop()) {
         STORAGE_LOG(INFO, "[tabletchange] tablet_gc_handler is offline", K(ls->get_ls_id()));

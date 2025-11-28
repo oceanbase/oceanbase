@@ -517,11 +517,9 @@ private:
       const share::schema::ObTenantSchema &related_tenant_schema);
 
   int drop_resource_pool_pre(const uint64_t tenant_id,
-                             common::ObIArray<uint64_t> &drop_ug_id_array,
                              ObIArray<share::ObResourcePoolName> &pool_names,
                              ObMySQLTransaction &trans);
   int drop_resource_pool_final(const uint64_t tenant_id,
-                               common::ObIArray<uint64_t> &drop_ug_id_array,
                                ObIArray<share::ObResourcePoolName> &pool_names);
   int try_drop_meta_ls_(const uint64_t meta_tenant_id,
                         const share::ObLSID &ls_id,
@@ -545,7 +543,6 @@ private:
 #endif
   int modify_and_cal_resource_pool_diff(
       common::ObMySQLTransaction &trans,
-      common::ObIArray<uint64_t> &new_ug_id_array,
       share::schema::ObSchemaGetterGuard &schema_guard,
       const share::schema::ObTenantSchema &new_tenant_schema,
       const common::ObIArray<common::ObString> &new_pool_list,
@@ -627,6 +624,10 @@ private:
   int add_extra_tenant_init_config_(
       const uint64_t tenant_id,
       common::ObIArray<common::ObConfigPairs> &init_configs);
+
+  int check_locality_match_unit_type_(
+      const share::ObZoneReplicaAttrSet &zone_replica_set,
+      const ObIArray<share::ObUnitInfo> &unit_infos);
 private:
   bool inited_;
   volatile bool stopped_;
