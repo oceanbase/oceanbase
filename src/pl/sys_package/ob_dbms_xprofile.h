@@ -111,6 +111,7 @@ public:
   {
     TO_STRING_KV(K(op_id_));
     int64_t op_id_{-1};
+    int64_t last_child_op_id_{-1};
     bool last_child_processed_{false};
   };
 
@@ -118,6 +119,7 @@ public:
       : allocator_(allocator), prefix_infos_(), ancestors_stack_() {}
   int prepare_pretty_prefix(const ObIArray<ObMergedProfileItem> &merged_items);
   const ObIArray<PrefixInfo> &get_prefixs() const { return prefix_infos_; }
+  bool is_full_plan() const { return is_full_plan_; }
 private:
   int append_profile_prefix(PrefixInfo &current_profile, int64_t current_depth);
   int append_metric_prefix(PrefixInfo &current_profile, int64_t current_depth);
@@ -126,6 +128,7 @@ private:
   ObSEArray<PrefixInfo, 4> prefix_infos_;
   // each element reference to an ancestor of current operator
   ObSEArray<Ancestor, 4> ancestors_stack_;
+  bool is_full_plan_{true};
 };
 
 

@@ -577,7 +577,7 @@ ObOperator::ObOperator(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput 
     dummy_ptr_(nullptr),
     #endif
     check_stack_overflow_(false),
-    profile_(static_cast<ObProfileId>(spec.get_type()), &ctx_.get_allocator(), spec_.use_rich_format_),
+    monitor_profile_(static_cast<ObProfileId>(spec.get_type()), &ctx_.get_allocator(), spec_.use_rich_format_),
     detect_root_closed_allocator_(nullptr),
     detect_root_closed_ptr_(nullptr)
 {
@@ -855,7 +855,7 @@ int ObOperator::open()
     }
     if ((spec_.plan_->get_phy_plan_hint().monitor_ || spec_.plan_->get_px_dop() > 1)
         && spec_.plan_->extend_sql_plan_monitor_metrics()) {
-      op_monitor_info_.profile_ = &profile_;
+      op_monitor_info_.profile_ = &monitor_profile_;
     }
     ObProfileSwitcher switcher(op_monitor_info_.profile_);
     SET_METRIC_VAL(ObMetricId::OPEN_TIME, op_monitor_info_.open_time_);

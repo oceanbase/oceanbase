@@ -788,7 +788,7 @@ protected:
   char *dummy_ptr_;
   #endif
   bool check_stack_overflow_;
-  ObProfile profile_;
+  ObProfile monitor_profile_;
   // detect_root_closed_allocator_ is only used to alloc and free detect_root_closed_ptr_
   // dont use it alloc other ptr
   common::ObIAllocator *detect_root_closed_allocator_;
