@@ -875,11 +875,7 @@ int ObLogService::create_ls_(const share::ObLSID &id,
       if (OB_NOT_NULL(palf_handle)) {
         palf_env_->close(palf_handle);
       }
-      if (!enable_logservice_) {
-        palf_env_->remove(id.id());
-      } else {
-        // do nothing
-      }
+      palf_env_->remove(id.id());
     }
   }
   return ret;
