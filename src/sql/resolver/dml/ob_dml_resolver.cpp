@@ -21476,10 +21476,33 @@ int ObDMLResolver::check_domain_id_need_column_ref_expr(ObDMLStmt &stmt, ObSchem
         LOG_WARN("get simple_index_infos failed", K(ret));
       }
       for (int64_t i = 0; OB_SUCC(ret) && !need_column_ref_expr && i < simple_index_infos.count(); ++i) {
-        ObAuxTableMetaInfo &index_info = simple_index_infos.at(i);
-        if (is_doc_rowkey_aux(index_info.index_type_) || is_fts_index_aux(index_info.index_type_) ||
-            is_fts_doc_word_aux(index_info.index_type_) || is_multivalue_index_aux(index_info.index_type_)) {
-          need_column_ref_expr = true;
+        const ObIndexType index_type = simple_index_infos.at(i).index_type_;
+        const uint64_t index_tid = simple_index_infos.at(i).table_id_;
+        if (is_fts_or_multivalue_index(index_type) && !is_rowkey_doc_aux(index_type)) {
+          // has doc_id column on table with valid fulltext / multivalue index
+          const share::schema::ObTableSchema *fts_index_schema = nullptr;
+          const share::schema::ObTableSchema *rowkey_doc_schema = nullptr;
+          uint64_t rowkey_doc_tid = OB_INVALID_ID;
+          if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), index_tid, fts_index_schema))) {
+            LOG_WARN("failed to get index table schema", K(ret), K(index_tid));
+          } else if (OB_ISNULL(fts_index_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected nullptr to index schema", K(ret));
+          } else if (OB_UNLIKELY(fts_index_schema->is_final_invalid_index())) {
+            // skip invalid index
+          } else if (OB_FAIL(table->get_rowkey_doc_tid(rowkey_doc_tid))) {
+            LOG_WARN("failed to get rowkey doc table id", K(ret));
+          } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), rowkey_doc_tid, rowkey_doc_schema))) {
+            LOG_WARN("failed to get rowkey doc table schema", K(ret), K(rowkey_doc_tid));
+          } else if (OB_ISNULL(rowkey_doc_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected nullptr to rowkey doc schema", K(ret));
+          } else if (OB_UNLIKELY(!rowkey_doc_schema->can_read_index() || !rowkey_doc_schema->is_index_visible())) {
+            // rowkey doc table is not readable or not visible, skip
+            LOG_TRACE("rowkey doc table is not readable or visible, skip", K(ret), KPC(rowkey_doc_schema));
+          } else {
+            need_column_ref_expr = true;
+          }
         }
       }
     } else if (col_schema->is_vec_ivf_center_id_column() || col_schema->is_vec_ivf_pq_center_ids_column()) {
