@@ -3411,10 +3411,15 @@ bool ObLogInstance::need_pause_redo_dispatch() const
     const int64_t pause_dispatch_threshold = TCONF.pause_redo_dispatch_task_count_threshold;
     const bool touch_memory_warn_limit = (memory_hold > memory_warn_usage);
     const bool touch_memory_limit = (memory_hold > memory_limit);
+    const int64_t out_part_trans_count = get_out_part_trans_task_count_();
+    const int64_t out_dml_br_count = ATOMIC_LOAD(&output_dml_br_count_);
+    const int64_t queue_backlog_lowest_tolerance = TCONF.queue_backlog_lowest_tolerance;
     double pause_dispatch_percent = pause_dispatch_threshold / 100.0;
+
     if (touch_memory_limit) {
-      const int64_t queue_backlog_lowest_tolerance = TCONF.queue_backlog_lowest_tolerance;
-      if (user_queue_br_count > queue_backlog_lowest_tolerance || resource_collector_br_count > queue_backlog_lowest_tolerance) {
+      if (user_queue_br_count > queue_backlog_lowest_tolerance
+        || resource_collector_br_count > queue_backlog_lowest_tolerance
+        || out_dml_br_count > queue_backlog_lowest_tolerance) {
         pause_dispatch_percent = 0;
       }
       // pause redo dispatch
@@ -3439,11 +3444,14 @@ bool ObLogInstance::need_pause_redo_dispatch() const
     } else if (user_queue_br_count > (CDC_CFG_MGR.get_br_queue_length() * pause_dispatch_percent)) {
       current_need_pause = (is_redo_dispatch_over_exceed || touch_memory_warn_limit);
       reason = "SLOW_CONSUMPTION_DOWNSTREAM";
+    } else if (out_dml_br_count > queue_backlog_lowest_tolerance) {
+      current_need_pause = (is_redo_dispatch_over_exceed || touch_memory_warn_limit);
+      reason = "DOWNSTREAM_HOLDING_TOO_MUCH_BR";
     } else {
       current_need_pause = false;
     }
     bool is_state_change = (last_need_paused != current_need_pause);
-    bool need_print_state = (is_state_change || current_need_pause) && REACH_TIME_INTERVAL(PRINT_GLOBAL_FLOW_CONTROL_INTERVAL);
+    bool need_print_state = is_state_change || REACH_TIME_INTERVAL(PRINT_GLOBAL_FLOW_CONTROL_INTERVAL);
     if (need_print_state) {
       _LOG_INFO("[NEED_PAUSE_REDO_DISPATCH=%d]"
           "[REASON:%s]"
@@ -3451,6 +3459,8 @@ bool ObLogInstance::need_pause_redo_dispatch() const
           "[THRESHOLD:%.2f]"
           "[QUEUE_DML_BR:%ld]"
           "[RESOURCE_COLLECTOR:%ld]"
+          "[OUT_TRANS:%ld]"
+          "[OUT_DML_BR:%ld]"
           "[STATE_CHANGED:%d]",
           current_need_pause,
           reason,
@@ -3458,6 +3468,8 @@ bool ObLogInstance::need_pause_redo_dispatch() const
           pause_dispatch_percent,
           user_queue_br_count,
           resource_collector_br_count,
+          out_part_trans_count,
+          out_dml_br_count,
           is_state_change);
     }
     if (is_state_change) {
