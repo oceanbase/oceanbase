@@ -102,6 +102,9 @@ ObMultipleMerge::~ObMultipleMerge()
     access_ctx_->stmt_allocator_->free(di_base_sstable_row_scanner_);
     di_base_sstable_row_scanner_ = nullptr;
   }
+  if (OB_UNLIKELY(nullptr != access_ctx_ && nullptr != access_ctx_->truncate_part_filter_)) {
+    access_ctx_->truncate_part_filter_->uncombined_from_pd_filter();
+  }
 }
 
 int ObMultipleMerge::init(
