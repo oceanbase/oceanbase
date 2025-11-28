@@ -915,6 +915,18 @@ def check_direct_load_job_exist(cur, query_cur):
     fail_list.append("There are direct load task in progress")
   logging.info('check direct load task execut status success')
 
+def check_enable_insertup_direct_update(query_cur):
+  sql = """select value from GV$OB_PARAMETERS where name='_enable_insertup_direct_update'"""
+  (desc, results) = query_cur.exec_query(sql)
+  if len(results) > 0:
+    for result in results:
+      if len(result) > 0:
+        val = result[0]
+        if val is not None and str(val).lower() in ('true', '1'):
+          fail_list.append("enable_insertup_direct_update is True, please check")
+          break
+  logging.info("check enable_insertup_direct_update success")
+
 # 检查cs_encoding格式是否兼容，对小于4.3.3版本的cpu不支持avx2指令集的集群，我们要求升级前schema上不存在cs_encoding的存储格式
 # 注意：这里对混布集群 / schema上row_format进行了ddl变更的场景无法做到完全的防御
 def check_cs_encoding_arch_dependency_compatiblity(query_cur, cpu_arch):
@@ -1101,6 +1113,7 @@ def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params, cpu_
       check_cos_archive_and_backup(query_cur)
       # all check func should execute before check_fail_list
       check_direct_load_job_exist(cur, query_cur)
+      check_enable_insertup_direct_update(query_cur)
       check_fail_list()
       modify_server_permanent_offline_time(cur)
     except Exception as e:
