@@ -1,0 +1,182 @@
+[
+  {
+    "scenario": "express_oltp",
+    "comment" : "for workloads like trade, payment core system, internet high throughput application, etc. no restrictions like foreign key, no stored procedure, no long transaction, no large transaction, no complex join, no complex subquery",
+    "parameters": {
+      "cluster": [
+        {
+          "name": "syslog_level",
+          "value": "WARN",
+          "comment": "set the log level as WARN to only print logs that DBAs care about"
+        },
+        {
+          "name": "enable_syslog_recycle",
+          "value": 1,
+          "comment": "enable syslog auto recycle can prevent log files from filling up disk space"
+        },
+        {
+          "name": "max_syslog_file_count",
+          "value": 80,
+          "comment": "when enable_syslog_recycle is enabled, should set this value to a proper value. 80 is an empirical value."
+        },
+        {
+          "name": "__min_full_resource_pool_memory",
+          "value": 2147483648,
+          "comment": "the min memory value which is specified for a full resource pool."
+        }
+      ],
+      "tenant": [
+      ]
+    }
+  },
+  {
+    "scenario": "complex_oltp",
+    "comment" : "for workloads like bank, insurance system. they often have complex join, complex correlated subquery, batch jobs written in PL, have both long and large transactions. Sometimes use parallel execution for short running queries",
+    "parameters": {
+      "cluster": [
+        {
+          "name": "syslog_level",
+          "value": "WARN",
+          "comment": "set the log level as WARN to only print logs that DBAs care about"
+        },
+        {
+          "name": "enable_syslog_recycle",
+          "value": 1,
+          "comment": "enable syslog auto recycle can prevent log files from filling up disk space"
+        },
+        {
+          "name": "max_syslog_file_count",
+          "value": 80,
+          "comment": "when enable_syslog_recycle is enabled, should set this value to a proper value. 80 is an empirical value."
+        },
+        {
+          "name": "__min_full_resource_pool_memory",
+          "value": 2147483648,
+          "comment": "the min memory value which is specified for a full resource pool."
+        }
+      ],
+      "tenant": [
+      ]
+    }
+  },
+  {
+    "scenario": "olap",
+    "comment": "for real-time data warehouse analytics scenarios.",
+    "parameters": {
+      "cluster": [
+        {
+          "name": "syslog_level",
+          "value": "WARN",
+          "comment": "set the log level as WARN to only print logs that DBAs care about"
+        },
+        {
+          "name": "enable_syslog_recycle",
+          "value": 1,
+          "comment": "enable syslog auto recycle can prevent log files from filling up disk space"
+        },
+        {
+          "name": "max_syslog_file_count",
+          "value": 80,
+          "comment": "when enable_syslog_recycle is enabled, should set this value to a proper value. 80 is an empirical value."
+        },
+        {
+          "name": "__min_full_resource_pool_memory",
+          "value": 2147483648,
+          "comment": "the min memory value which is specified for a full resource pool."
+        }
+      ],
+      "tenant": [
+      ]
+    }
+  },
+  {
+    "scenario": "kv",
+    "comment": "for key-value workloads and hbase-like wide-column workloads, which commonly experience very high throughput and are sensitive to latency",
+    "parameters": {
+      "cluster": [
+        {
+          "name": "syslog_level",
+          "value": "WARN",
+          "comment": "set the log level as WARN to only print logs that DBAs care about"
+        },
+        {
+          "name": "enable_syslog_recycle",
+          "value": 1,
+          "comment": "enable syslog auto recycle can prevent log files from filling up disk space"
+        },
+        {
+          "name": "max_syslog_file_count",
+          "value": 80,
+          "comment": "when enable_syslog_recycle is enabled, should set this value to a proper value. 80 is an empirical value."
+        },
+        {
+          "name": "__min_full_resource_pool_memory",
+          "value": 2147483648,
+          "comment": "the min memory value which is specified for a full resource pool."
+        }
+      ],
+      "tenant": [
+      ]
+    }
+  },
+  {
+    "scenario": "htap",
+    "comment": "for mixed OLAP and OLTP workload. Typically utilized for obtaining instant insights from active operational data, fraud detection, and personalized recommendations",
+    "parameters": {
+      "cluster": [
+        {
+          "name": "syslog_level",
+          "value": "WARN",
+          "comment": "set the log level as WARN to only print logs that DBAs care about"
+        },
+        {
+          "name": "enable_syslog_recycle",
+          "value": 1,
+          "comment": "enable syslog auto recycle can prevent log files from filling up disk space"
+        },
+        {
+          "name": "max_syslog_file_count",
+          "value": 80,
+          "comment": "when enable_syslog_recycle is enabled, should set this value to a proper value. 80 is an empirical value."
+        },
+        {
+          "name": "__min_full_resource_pool_memory",
+          "value": 2147483648,
+          "comment": "the min memory value which is specified for a full resource pool."
+        }
+      ],
+      "tenant": [
+      ]
+    }
+  },
+  {
+    "scenario": "express_oltp_perf",
+    "comment" : "for high performance workloads like trade, payment core system, internet high throughput application, etc. no restrictions like foreign key, no stored procedure, no long transaction, no large transaction, no complex join, no complex subquery",
+    "parameters": {
+      "cluster": [
+        {
+          "name": "syslog_level",
+          "value": "WARN",
+          "comment": "set the log level as WARN to only print logs that DBAs care about"
+        },
+        {
+          "name": "enable_syslog_recycle",
+          "value": 1,
+          "comment": "enable syslog auto recycle can prevent log files from filling up disk space"
+        },
+        {
+          "name": "max_syslog_file_count",
+          "value": 80,
+          "comment": "when enable_syslog_recycle is enabled, should set this value to a proper value. 80 is an empirical value."
+        },
+        {
+          "name": "__min_full_resource_pool_memory",
+          "value": 2147483648,
+          "comment": "the min memory value which is specified for a full resource pool."
+        }
+      ],
+      "tenant": [
+      ]
+    }
+  }
+]
