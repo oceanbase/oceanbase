@@ -179,6 +179,10 @@ ObIndexBlockMacroIterator::ObIndexBlockMacroIterator()
       is_reverse_scan_(false),
       is_inited_(false)
 {
+  ObMemAttr attr(MTL_ID(), "IdxBlkMacroIter");
+  micro_index_infos_.set_attr(attr);
+  micro_endkeys_.set_attr(attr);
+  micro_endkey_allocator_.set_attr(attr);
 }
 
 ObIndexBlockMacroIterator::~ObIndexBlockMacroIterator()
