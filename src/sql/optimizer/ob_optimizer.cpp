@@ -950,9 +950,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     if (!session.is_inner() && stmt.get_query_ctx()->get_injected_random_status()) {
       ctx_.set_generate_random_plan(true);
     }
-    if (session.is_enable_new_query_range() &&
-        ObSQLUtils::is_min_cluster_version_ge_425_or_435() &&
-        ObSQLUtils::is_opt_feature_version_ge_425_or_435(query_ctx->optimizer_features_enable_version_)) {
+    if (session.is_enable_new_query_range() && ObSQLUtils::is_min_cluster_version_ge_425_or_435()) {
       ctx_.set_enable_new_query_range(true);
     }
   }
