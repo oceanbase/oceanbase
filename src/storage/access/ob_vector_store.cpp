@@ -320,7 +320,7 @@ int ObVectorStore::fill_rows(
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("Failed to fill output rows", K(ret));
     }
-  } else if (nullptr != group_by_cell_ && OB_FAIL(group_by_cell_->copy_output_rows(count_, *iter_param_))) {
+  } else if (count_ > 0 && nullptr != group_by_cell_ && OB_FAIL(group_by_cell_->copy_output_rows(count_, *iter_param_))) {
     LOG_WARN("Failed to copy output rows", K(ret));
   }
   return ret;
