@@ -479,6 +479,8 @@ private:
   inline bool check_if_can_retry() { return is_adaptive_filter() && (vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER
                                                                  || vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER)
                                                                  && vec_aux_ctdef_->relevance_col_cnt_ == 0;}
+  bool is_parallel_with_block_granule();
+  bool check_need_force_switch_run_path();
   int check_iter_filter_need_retry();
   int check_pre_filter_need_retry();
   int reset_filter_path();
