@@ -169,6 +169,9 @@ private:
   int check_can_delete_piece_();
   int insert_backup_task_attr_(common::ObISQLClient &sql_proxy, bool &is_exist);
   int get_next_task_id_(int64_t &task_id);
+  int delete_rounds_placeholders_(const ObArray<share::ObBackupCleanTaskAttr> &task_attrs);
+  int get_round_range_to_delete_(const ObArray<share::ObBackupCleanTaskAttr> &task_attrs,
+      ObIArray<int64_t> &round_ids, common::hash::ObHashMap<int64_t, share::ObBackupPathString> &piece_round_to_backup_path);
   int do_backup_clean_task_();
   int do_cleanup_();
   int cancel_();

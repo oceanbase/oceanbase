@@ -127,6 +127,8 @@ public:
   // his round operation
   int get_his_round(common::ObISQLClient &proxy, const int64_t dest_no,
       const int64_t round_id, ObTenantArchiveHisRoundAttr &his_round) const;
+  int is_all_piece_in_round_deleted(common::ObISQLClient &proxy,
+          const int64_t round_id, bool &is_piece_all_deleted) const;
   int insert_his_round(common::ObISQLClient &proxy, const ObTenantArchiveHisRoundAttr &his_round) const;
 
 
