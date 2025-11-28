@@ -981,6 +981,7 @@ typedef enum ObItemType
   T_FUN_CK_UNIQ = 1935,
   T_FUN_SYS_EDIT_DISTANCE = 1936,
   T_FUN_SYS_EDIT_DISTANCE_UTF8 = 1937,
+  T_FUN_SYS_POS_LIST = 1938, // fulltext index phrase match
 
   ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,
@@ -2984,6 +2985,11 @@ typedef enum ObItemType
   T_COLUMN_NAME_CASE_SENSITIVE = 4934,
   T_REPLACE_LS = 4935, // replace LS
   T_DISABLE_TRIGGER_HINT = 4936, // disable_trigger hint
+  T_FTS_INDEX_TYPE = 4937, // fulltext index type
+  T_FTS_INDEX_FILTER = 4938, // fulltext index filter
+  T_FTS_INDEX_MATCH = 4939, // fulltext index phrase match
+  T_FTS_INDEX_PHRASE_MATCH = 4940, // fulltext index phrase match type
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

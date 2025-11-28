@@ -331,6 +331,7 @@ all_table_def = dict(
       ('micro_block_format_version', 'int', 'false', 'ObMicroBlockFormatVersionHelper::DEFAULT_VERSION'),
       ('semistruct_properties', 'longtext', 'false', ''),
       ('mview_expand_definition', 'longtext', 'false', ''), #placeholder for mview in 4353
+      ('fts_index_type', 'int', 'false', '0'),
     ],
 )
 

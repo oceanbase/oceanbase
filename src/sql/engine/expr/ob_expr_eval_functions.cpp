@@ -1460,6 +1460,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprEditDistanceUTF8::calc_edit_distance_utf8,           /* 881 */
   NULL, // ObExprDateAddClickhouse::calc_date_add_ck                  /* 882 */
   NULL, // ObExprDateSubClickhouse::calc_date_sub_ck                  /* 883 */
+  NULL, // ObExprPosList::generate_pos_list,                          /* 884 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

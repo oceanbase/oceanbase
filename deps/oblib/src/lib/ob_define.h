@@ -755,6 +755,7 @@ const char *const OB_DOC_ID_COLUMN_NAME = "__doc_id";
 const char *const OB_WORD_SEGMENT_COLUMN_NAME_PREFIX = "__word_segment";
 const char *const OB_WORD_COUNT_COLUMN_NAME_PREFIX = "__word_count";
 const char *const OB_DOC_LENGTH_COLUMN_NAME_PREFIX = "__doc_length";
+const char *const OB_POS_LIST_COLUMN_NAME_PREFIX = "__pos_list";
 const int64_t OB_DOC_ID_COLUMN_BYTE_LENGTH = (sizeof(uint64_t) * 2);
 constexpr int64_t OB_WORD_SEGMENT_COLUMN_NAME_PREFIX_LEN = sizeof("__word_segment") - 1;
 constexpr int64_t OB_WORD_COUNT_COLUMN_NAME_PREFIX_LEN = sizeof("__word_count") - 1;

@@ -841,6 +841,7 @@
 #define N_WORD_SEGMENT "word_segment"
 #define N_WORD_COUNT "word_count"
 #define N_DOC_LENGTH "doc_length"
+#define N_POS_LIST "pos_list"
 #define N_TOKENIZE "tokenize"
 #define N_SELF_JOIN "self_join"
 #define N_DES_HEX_STR "DES_HEX_STR"
