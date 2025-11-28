@@ -314,6 +314,10 @@ void ObPartTransCtx::destroy()
     }
 #endif
 
+    cache_sby_state_info_.reset();
+    parts_sby_info_list_.reset();
+    sby_origin_list_.reset();
+
     is_inited_ = false;
   }
 }
@@ -384,6 +388,9 @@ void ObPartTransCtx::default_init_()
     new (&sslog_notify_queue_) sslog::ObSSLogNotifyTaskQueue();
   }
 #endif
+  cache_sby_state_info_.reset();
+  parts_sby_info_list_.reset();
+  sby_origin_list_.reset();
 }
 
 // thread-unsafe
@@ -4576,6 +4583,25 @@ share::SCN ObPartTransCtx::get_min_unsyncd_segment_scn_()
   return min_scn;
 }
 
+#ifdef ENABLE_DEBUG_LOG
+ERRSIM_POINT_DEF(ERRSIM_TX_COMMIT_BLOCKING)
+#endif
+bool ObPartTransCtx::is_errsim_blocking_() const
+{
+  bool errsim_blocking = false;
+
+#ifdef ENABLE_DEBUG_LOG
+  int ret = OB_SUCCESS;
+  int tmp_errsim_code = abs(ERRSIM_TX_COMMIT_BLOCKING);
+  if (static_cast<int>(exec_info_.state_) <= tmp_errsim_code / 100
+      && static_cast<int>(exec_info_.state_) >= tmp_errsim_code % 100) {
+    errsim_blocking = true;
+    TRANS_LOG(INFO, "[ERRSIM] errsim tx commit blocking", K(ret), K(ls_id_), K(trans_id_),
+              K(tmp_errsim_code), K(exec_info_.state_));
+  }
+#endif
+  return errsim_blocking;
+}
 inline
 int ObPartTransCtx::submit_log_block_out_(ObTxLogBlock &log_block,
                                           const share::SCN &base_scn,

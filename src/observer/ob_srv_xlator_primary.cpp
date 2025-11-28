@@ -154,6 +154,10 @@ void oceanbase::observer::init_srv_xlator_for_transaction(ObSrvRpcXlator *xlator
   RPC_PROCESSOR(ObTxAskStateRespP);
   RPC_PROCESSOR(ObTxCollectStateP);
   RPC_PROCESSOR(ObTxCollectStateRespP);
+  RPC_PROCESSOR(ObTxSbyAskUpstreamReqP);
+  RPC_PROCESSOR(ObTxSbyAskDownstreamReqP);
+  RPC_PROCESSOR(ObTxSbyStateResultP);
+
   // for tx free route
   RPC_PROCESSOR(ObTxFreeRouteCheckAliveP);
   RPC_PROCESSOR(ObTxFreeRouteCheckAliveRespP);
