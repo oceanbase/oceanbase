@@ -4792,6 +4792,32 @@ int ObAdminCommandArg::init(const ObString &admin_command, const ObAdminDRTaskTy
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(ObAdminSwitchReplicaRoleStr, admin_command_);
+int ObAdminSwitchReplicaRoleStr::assign(const ObAdminSwitchReplicaRoleStr &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else if (OB_FAIL(admin_command_.assign(other.get_admin_command_str()))) {
+    LOG_WARN("fail to assign obadmin command string", KR(ret), K(other));
+  }
+  return ret;
+}
+
+int ObAdminSwitchReplicaRoleStr::init(const ObString &admin_command)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(admin_command.length() > OB_MAX_ADMIN_COMMAND_LENGTH)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(admin_command));
+  } else if (OB_UNLIKELY(admin_command.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(admin_command));
+  } else if (OB_FAIL(admin_command_.assign(admin_command))) {
+    LOG_WARN("fali to assign admin command", KR(ret), K(admin_command));
+  }
+  return ret;
+}
+
 #ifdef OB_BUILD_ARBITRATION
 OB_SERIALIZE_MEMBER(ObAddArbArg,
                     tenant_id_,
@@ -5816,11 +5842,20 @@ OB_SERIALIZE_MEMBER((ObCreateRoleArg, ObDDLArg),
 
 bool ObAdminSwitchReplicaRoleArg::is_valid() const
 {
-  return ls_id_ >= 0 || server_.is_valid() || !zone_.is_empty();
+  return ls_id_ > 0 && server_.is_valid();
 }
 
 OB_SERIALIZE_MEMBER(ObAdminSwitchReplicaRoleArg,
     role_, ls_id_, server_, zone_, tenant_name_);
+
+void ObAdminSwitchReplicaRoleArg::reset()
+{
+  role_ = ObRole::FOLLOWER;
+  ls_id_ = -1;
+  server_.reset();
+  zone_.reset();
+  tenant_name_.reset();
+}
 
 bool ObAdminSwitchRSRoleArg::is_valid() const
 {
