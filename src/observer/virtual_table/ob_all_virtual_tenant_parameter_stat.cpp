@@ -290,6 +290,18 @@ int ObAllVirtualTenantParameterStat::fill_row_(common::ObNewRow *&row,
               } else {
                 cells[i].set_varchar(dv_buf);
               }
+            } else if (0 == ObString("_parallel_ddl_control").case_compare(iter->first.str())) {
+              ObParallelDDLControlMode ddl_mode;
+              if (OB_FAIL(ddl_mode.parse_from_config_string(iter->second->str()))) {
+                SERVER_LOG(WARN, "fail to parse config", KR(ret));
+              } else {
+                ObString deep_str;
+                if (OB_FAIL(ddl_mode.to_config_string(*allocator_, deep_str))) {
+                  SERVER_LOG(WARN, "fail to build string", KR(ret));
+                } else {
+                  cells[i].set_varchar(deep_str);
+                }
+              }
             } else {
               if (!is_sys_tenant(effective_tenant_id_) &&
                   (0 == ObString(SSL_EXTERNAL_KMS_INFO).case_compare(iter->first.str()) ||
