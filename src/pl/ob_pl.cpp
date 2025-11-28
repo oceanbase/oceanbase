@@ -943,6 +943,41 @@ int ObPLContext::implicit_end_trans(
   return ret;
 }
 
+#define IS_DBLINK_TRANS \
+transaction::ObTxDesc *tx_desc = session_info.get_tx_desc();  \
+const transaction::ObXATransID xid = session_info.get_xid();  \
+const transaction::ObGlobalTxType global_tx_type = tx_desc->get_global_tx_type(xid);  \
+bool is_dblink = (transaction::ObGlobalTxType::DBLINK_TRANS == global_tx_type);
+
+int ObPLContext::rollback_xa_trans(ObSQLSessionInfo &session_info, ObExecContext &ctx, bool trans_xa_branch_fail)
+{
+  int ret = OB_SUCCESS;
+  IS_DBLINK_TRANS;
+  if (is_dblink) {
+    if (in_nested_sql_ctrl()) {
+      // rollback or commit by the top sql.
+    } else {
+      transaction::ObTransID tx_id;
+      const bool force_disconnect = false;
+      DISABLE_SQL_MEMLEAK_GUARD;
+      if (OB_FAIL(ObTMService::tm_rollback(ctx, tx_id))) {
+        LOG_WARN("failed to rollback for dblink trans", K(ret), K(tx_id), K(xid), K(global_tx_type));
+      } else if (OB_FAIL(session_info.get_dblink_context().clean_dblink_conn(force_disconnect))) {
+        LOG_WARN("dblink trans failed to release dblink connections", K(ret), K(tx_id), K(xid));
+      }
+    }
+  } else if (!trans_xa_branch_fail) {
+    DISABLE_SQL_MEMLEAK_GUARD;
+    #ifdef OB_BUILD_ORACLE_PL
+    if (OB_FAIL(ObDbmsXA::xa_rollback_savepoint(ctx))) {
+      LOG_WARN("xa trans roll back to save point failed",
+              K(ret), KPC(session_info.get_tx_desc()));
+    }
+    #endif
+  }
+  return ret;
+}
+
 void ObPLContext::destory(
   ObSQLSessionInfo &session_info, ObExecContext &ctx, int &ret)
 {
@@ -997,11 +1032,6 @@ void ObPLContext::destory(
       ret = OB_SUCCESS == ret ? OB_ERR_UNEXPECTED : ret;
       LOG_ERROR("current stack ctx is top, but session info is not", K(ret));
     } else {
-#define IS_DBLINK_TRANS \
-  transaction::ObTxDesc *tx_desc = session_info.get_tx_desc();  \
-  const transaction::ObXATransID xid = session_info.get_xid();  \
-  const transaction::ObGlobalTxType global_tx_type = tx_desc->get_global_tx_type(xid);  \
-  bool is_dblink = (transaction::ObGlobalTxType::DBLINK_TRANS == global_tx_type);
 
       if (!in_nested_sql_ctrl() &&
           lib::is_mysql_mode() && is_function_or_trigger_ &&
@@ -1032,35 +1062,7 @@ void ObPLContext::destory(
           }
 #ifdef OB_BUILD_ORACLE_PL
         } else if (session_info.associated_xa()) {
-          IS_DBLINK_TRANS;
-          if (is_dblink) {
-            if (in_nested_sql_ctrl()) {
-              // rollback or commit by the top sql.
-            } else {
-              transaction::ObTransID tx_id;
-              const bool force_disconnect = false;
-              int rl_ret = OB_SUCCESS;
-              DISABLE_SQL_MEMLEAK_GUARD;
-              if (OB_SUCCESS != (rl_ret = ObTMService::tm_rollback(ctx, tx_id))) {
-                LOG_WARN("failed to rollback for dblink trans", K(ret), K(rl_ret), K(tx_id), K(xid), K(global_tx_type));
-              } else if (OB_SUCCESS != (rl_ret =
-                                        session_info.get_dblink_context().clean_dblink_conn(force_disconnect))) {
-                LOG_WARN("dblink trans failed to release dblink connections", K(ret), K(rl_ret), K(tx_id), K(xid));
-              }
-              ret = OB_SUCCESS == ret ? rl_ret : ret;
-            }
-          } else if (OB_TRANS_XA_BRANCH_FAIL != ret) {
-            if (in_nested_sql_ctrl()) {
-              // rollback or commit by the top sql.
-            } else {
-              DISABLE_SQL_MEMLEAK_GUARD;
-              tmp_ret = ObDbmsXA::xa_rollback_savepoint(ctx);
-              if (OB_SUCCESS != tmp_ret) {
-                LOG_WARN("xa trans roll back to save point failed",
-                        K(tmp_ret), KPC(session_info.get_tx_desc()));
-              }
-            }
-          }
+          tmp_ret = rollback_xa_trans(session_info, ctx, ret == OB_TRANS_XA_BRANCH_FAIL);
 #endif
         } else if (!in_nested_sql_ctrl() && session_info.get_in_transaction()) {
           // 如果没有隐式的检查点且不再嵌套事务中, 说明当前事务中仅包含该PL, 直接回滚事务
@@ -1181,7 +1183,7 @@ void ObPLContext::destory(
   }
   OX (session_info.set_use_pl_inner_info_string(false));
   if (is_autonomous_) {
-    int end_trans_ret = end_autonomous(ctx, session_info);
+    int end_trans_ret = end_autonomous(ctx, session_info, ret == OB_TRANS_XA_BRANCH_FAIL);
     ret = OB_SUCCESS == ret ? end_trans_ret : ret;
   }
   if (is_top_stack_) {
@@ -1197,12 +1199,20 @@ void ObPLContext::destory(
   }
 }
 
-int ObPLContext::end_autonomous(ObExecContext &ctx, sql::ObSQLSessionInfo &session_info)
+int ObPLContext::end_autonomous(ObExecContext &ctx,
+                                sql::ObSQLSessionInfo &session_info,
+                                bool trans_xa_branch_fail)
 {
   int ret = OB_SUCCESS;
 
-  int end_trans_ret =
-      session_info.is_in_transaction() ? implicit_end_trans(session_info, ctx, true) : OB_SUCCESS;
+  int end_trans_ret = OB_SUCCESS;
+  if (session_info.is_in_transaction()) {
+    if (session_info.associated_xa()) {
+      end_trans_ret = rollback_xa_trans(session_info, ctx, trans_xa_branch_fail);
+    } else {
+      end_trans_ret = implicit_end_trans(session_info, ctx, true);
+    }
+  }
   if (OB_SUCCESS != end_trans_ret) {
     LOG_WARN("failed to rollback trans", K(end_trans_ret));
     ret = end_trans_ret;
