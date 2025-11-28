@@ -761,7 +761,26 @@ int ObDelUpdResolver::resolve_additional_assignments(ObIArray<ObTableAssignment>
         }
       }  // end for
     }
-    if (OB_SUCC(ret)) {
+    // For INSERT ON DUPLICATE KEY UPDATE, if table has vector index column and is heap table,
+    // call build_hidden_pk_assignment regardless of whether UPDATE clause contains vector index column
+    if (OB_SUCC(ret) && T_INSERT_SCOPE == scope) {
+      bool has_vec_index = false;
+      // table_schema schema_guard table_item have beed checked not null pointer before
+      if (OB_FAIL(ObVectorIndexUtil::check_table_has_vector_index(*table_schema,
+                                                                  *schema_guard,
+                                                                  has_vec_index))) {
+        LOG_WARN("failed to check table has vector index", K(ret));
+      } else if (has_vec_index && table_schema->is_table_with_hidden_pk_column()) {
+        if (OB_FAIL(build_hidden_pk_assignment(assigns.at(i), table_item, table_schema))) {
+          LOG_WARN("fail to build hidden_pk assignment for insert on duplicate key update with vector index",
+                  K(ret), K(i), "assigns", assigns.at(i));
+        }
+      } else if (OB_FAIL(check_heap_table_update(assigns.at(i)))) {
+        LOG_WARN("fail to add assignment to heap table", K(ret), K(i),
+                 "assigns", assigns.at(i));
+      }
+    } else if (OB_SUCC(ret)) {
+      // for UPDATE
       if (OB_FAIL(check_heap_table_update(assigns.at(i)))) {
         LOG_WARN("fail to add assignment to heap table", K(ret), K(i),
                  "assigns", assigns.at(i));
