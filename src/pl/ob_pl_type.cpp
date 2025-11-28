@@ -517,6 +517,7 @@ int ObPLDataType::deep_copy(common::ObIAllocator &alloc, const ObPLDataType &oth
   int ret = OB_SUCCESS;
   type_ = other.type_;
   type_from_ = other.type_from_;
+  type_from_origin_ = other.type_from_origin_;
   user_type_id_ = other.user_type_id_;
   obj_type_ = other.obj_type_;
   pls_type_ = other.pls_type_;
@@ -533,6 +534,7 @@ int ObPLDataType::deep_copy(ObPLEnumSetCtx &enum_set_ctx, const ObPLDataType &ot
   ObIArray<ObString> *type_info = NULL;
   type_ = other.type_;
   type_from_ = other.type_from_;
+  type_from_origin_ = other.type_from_origin_;
   user_type_id_ = other.user_type_id_;
   obj_type_ = other.obj_type_;
   pls_type_ = other.pls_type_;

@@ -3275,7 +3275,7 @@ int ObPLResolver::resolve_sp_row_type(const ParseNode *sp_data_type_node,
             CK (OB_NOT_NULL(current_block_->get_namespace().get_type_table()));
             OX ((const_cast<ObRecordType*>(record_type))->set_type_from(PL_TYPE_ATTR_ROWTYPE));
             OZ (current_block_->get_namespace().get_type_table()->add_external_type(record_type));
-            OX (pl_type.set_type_from_orgin(pl_type.get_type_from()));
+            OX (pl_type.set_type_from_orgin(record_type->get_type_from_origin()));
             OX (pl_type.set_type_from(PL_TYPE_ATTR_ROWTYPE));
             OZ (pl_type.get_all_depended_user_type(resolve_ctx_, current_block_->get_namespace()));
             if (!ObObjAccessIdx::is_subprogram_cursor_variable(access_idxs)) {
@@ -6367,7 +6367,7 @@ int ObPLResolver::resolve_using(const ObStmtNodeTree *using_node,
             OX (legal_extend = user_type->is_udt_type()
                                || user_type->is_package_type()
                                || user_type->is_sys_refcursor_type()
-                               || user_type->is_rowtype_type());
+                               || (user_type->is_rowtype_type() && user_type->get_user_type_id() == extract_type_id(user_type->get_user_type_id()))); //table%rowtype is allowed, but cursor%rowtype is not allowed
           } else {
             legal_extend = true; // for anonymous collection
           }
@@ -8087,6 +8087,7 @@ int ObPLResolver::resolve_cursor_def(const ObString &cursor_name,
         record_type = new(record_type)ObRecordType();
         record_type->set_name(ObString(record_name.length(), name_buf));
         record_type->set_type_from(PL_TYPE_ATTR_ROWTYPE);
+        func.is_package() ? record_type->set_type_from_orgin(PL_TYPE_PACKAGE) : record_type->set_type_from_orgin(PL_TYPE_LOCAL);
         prepare_result.record_type_ = record_type;
         prepare_result.tg_timing_event_ =
                                 static_cast<TgTimingEvent>(resolve_ctx_.params_.tg_timing_event_);
