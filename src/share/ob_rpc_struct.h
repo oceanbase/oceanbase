@@ -1105,6 +1105,23 @@ public:
       dep_infos_(),
       mv_ainfo_()
   {}
+  explicit ObCreateTableArg(common::ObIAllocator *allocator) :
+           ObDDLArg(),
+           if_not_exist_(false),
+           schema_(allocator),
+           index_arg_list_(),
+           foreign_key_arg_list_(),
+           constraint_list_(),
+           db_name_(),
+           last_replay_log_id_(0),
+           is_inner_(false),
+           vertical_partition_arg_list_(),
+           error_info_(),
+           is_alter_view_(false),
+           sequence_ddl_arg_(),
+           dep_infos_(),
+           mv_ainfo_()
+  {}
   bool is_valid() const;
   virtual bool is_allow_when_upgrade() const;
   int assign(const ObCreateTableArg &other);
