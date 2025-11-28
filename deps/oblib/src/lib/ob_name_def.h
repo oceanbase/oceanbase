@@ -1227,6 +1227,8 @@
 #define N_PRIV_ST_MAKEPOINT                 "_st_makepoint"
 #define N_CAN_ACCESS_TRIGGER                "can_access_trigger"
 #define N_SDO_RELATE                        "sdo_relate"
+#define N_SDO_ANYINTERACT                   "sdo_anyinteract"
+#define N_SDO_CONTAINS                      "sdo_contains"
 #define N_INNER_TABLE_OPTION_PRINTER        "inner_table_option_printer"
 #define N_INNER_TABLE_SEQUENCE_GETTER       "inner_table_sequence_getter"
 #define N_RB_BUILD_EMPTY                    "rb_build_empty"

@@ -1443,8 +1443,8 @@ int ObGeoBoxUtil::get_geog_poly_box(const ObWkbGeogPolygon &poly, ObGeogBox &box
 
 bool ObGeoBoxUtil::boxes_overlaps(const ObGeogBox &box1, const ObGeogBox &box2) {
   bool bret = true;
-  if (box1.xmax < box2.xmin || box1.ymax < box2.ymin ||
-      box1.xmin > box2.xmax || box1.ymin > box2.ymax) {
+  if (is_float_lt(box1.xmax, box2.xmin) || is_float_lt(box1.ymax, box2.ymin) ||
+      is_float_gt(box1.xmin, box2.xmax) || is_float_gt(box1.ymin, box2.ymax)) {
     bret = false;
   }
   return bret;
