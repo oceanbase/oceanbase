@@ -13028,7 +13028,7 @@ int ObTransformUtils::extract_target_exprs_by_idx(const ObIArray<ObRawExpr*> &al
   return ret;
 }
 
-int ObTransformUtils::check_integer_result_type(common::ObIArray<ObRawExpr*> &exprs,
+int ObTransformUtils::check_integer_result_type(const common::ObIArray<ObRawExpr*> &exprs,
                                                 bool &is_valid_type)
 {
   int ret = OB_SUCCESS;
@@ -18177,6 +18177,126 @@ int ObTransformUtils::find_same_expr_recursively(ObRawExpr *expr,
                                                             same_exprs,
                                                             check_context)))) {
       LOG_WARN("failed to find same expr recursively", K(ret));
+    }
+  }
+  return ret;
+}
+
+/* check whether the stmt is empty set
+ * add false constraint false_constraint_exprs and
+ * add const param constraint for params in const_constraint_exprs
+ */
+int ObTransformUtils::check_stmt_empty_set(ObSelectStmt *stmt,
+                                           ObTransformerCtx *ctx,
+                                           bool &is_empty_set,
+                                           ObIArray<ObRawExpr*> &false_constraint_exprs,
+                                           ObIArray<ObRawExpr*> &const_constraint_exprs)
+{
+  int ret = OB_SUCCESS;
+  is_empty_set = false;
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  } else if (!stmt->is_scala_group_by() &&
+             OB_FAIL(check_exprs_constant_false(ctx,
+                                                stmt->get_condition_exprs(),
+                                                is_empty_set,
+                                                false_constraint_exprs))) {
+    // since select count(*) from dual where 1=0, will still output a row, we should check
+    // scalar group by here.
+    LOG_WARN("failed to check condition exprs false", K(ret), K(stmt->get_condition_exprs()));
+  } else if (!is_empty_set && OB_FAIL(check_exprs_constant_false(ctx,
+                                                                 stmt->get_having_exprs(),
+                                                                 is_empty_set,
+                                                                 false_constraint_exprs))) {
+    LOG_WARN("failed to check having exprs false", K(ret), K(stmt->get_having_exprs()));
+  } else if (!is_empty_set && OB_FAIL(check_limit_zero_in_stmt(ctx,
+                                                               stmt,
+                                                               is_empty_set,
+                                                               const_constraint_exprs))) {
+    LOG_WARN("failed to check limit zero", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformUtils::check_exprs_constant_false(ObTransformerCtx *ctx,
+                                                 const common::ObIArray<ObRawExpr*> &exprs,
+                                                 bool &is_false,
+                                                 ObIArray<ObRawExpr*> &false_constraint_exprs)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid_type = true;
+  is_false = false;
+  if (OB_FAIL(check_integer_result_type(exprs, is_valid_type))) {
+    LOG_WARN("check valid type fail", K(ret));
+  } else if (!is_valid_type) {
+    LOG_TRACE("expr list is not valid for removing dummy exprs", K(is_valid_type));
+  } else {
+    ObSEArray<int64_t, 2> true_exprs;
+    ObSEArray<int64_t, 2> false_exprs;
+    if (OB_FAIL(ObTransformUtils::extract_const_bool_expr_info(ctx,
+                                                               exprs,
+                                                               true_exprs,
+                                                               false_exprs))) {
+      LOG_WARN("fail to extract exprs info", K(ret));
+    } else if (false_exprs.count() > 0) {
+      is_false = true;
+      if (OB_FAIL(extract_target_exprs_by_idx(exprs, false_exprs, false_constraint_exprs))) {
+        LOG_WARN("fail to push back params expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+/*
+ * BACKGROUND:
+ * There are three kind of limit.
+ *  1. mysql's limit. (only positive number allowed)
+ *  2. oracle's fetch. (fetch can't coexist with set query,
+ *                      oracle's set query only support simple select)
+ *  3. limit that is converted from rownum. (could be complex expr)
+ *
+ * PRINCIPLES:
+ * There are 2 situations that the stmt returns empty:
+ *  1. limit_count_expr <= 0;
+ *  2. limit_percent_expr <= 0;
+ */
+int ObTransformUtils::check_limit_zero_in_stmt(ObTransformerCtx *ctx,
+                                               ObDMLStmt *stmt,
+                                               bool &is_zero,
+                                               ObIArray<ObRawExpr*> &const_constraint_exprs)
+{
+  int ret = OB_SUCCESS;
+  is_zero = false;
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else {
+    ObRawExpr *limit_expr = stmt->get_limit_expr();
+    ObRawExpr *percent_expr = stmt->get_limit_percent_expr();
+    ObRawExpr *target_expr = limit_expr != NULL ? limit_expr : percent_expr;
+    ObObj result;
+    bool is_valid = false;
+    if (NULL == target_expr) {
+      // do nothing
+    } else if (OB_FAIL(calc_const_expr_result(target_expr, ctx, result, is_valid))) {
+      LOG_WARN("fail to calc const expr", K(ret));
+    } else if (is_valid) {
+      if (result.is_int()) {
+        is_zero = (result.get_int() <= 0);
+      } else if (result.is_double()) {
+        is_zero = (result.get_double() <= 0);
+      } else if (result.is_float()) {
+        is_zero = (result.get_float() <= 0);
+      } else if (result.is_number()) {
+        is_zero = (result.is_zero_number() || result.is_negative_number());
+      }
+    }
+    if (OB_SUCC(ret) && is_zero) {
+      if (OB_FAIL(const_constraint_exprs.push_back(target_expr))) {
+        LOG_WARN("fail to push back const constraint expr", K(ret));
+      }
     }
   }
   return ret;
