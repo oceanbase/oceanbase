@@ -102,6 +102,7 @@ public:
   void dec_merge_filter_count() { ATOMIC_DEC(&px_bf_merge_filter_count_); }
   bool is_merge_filter_finish() const { return 0 == px_bf_merge_filter_count_; }
   int64_t get_bits_array_length() const { return bits_array_length_; }
+  bool fit_l3_cache() { return fit_l3_cache_; }
   int64_t get_bits_count() const { return bits_count_; }
   void set_begin_idx(int64_t idx) { begin_idx_ = idx; }
   void set_end_idx(int64_t idx) { end_idx_ = idx; }
@@ -145,6 +146,7 @@ private:
   int64_t true_count_;           //`1`数量
   int64_t begin_idx_;            // join filter begin position
   int64_t end_idx_;              // join filter end position
+  bool fit_l3_cache_;           // whether the bloom filter fits l3 cache
   GetFunc might_contain_;       // function pointer for might contain
 public:
   common::ObArenaAllocator allocator_;
