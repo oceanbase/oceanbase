@@ -4877,7 +4877,7 @@ int64_t ObPrintTableStore::to_string(char *buf, const int64_t buf_len) const
     J_OBJ_START();
     J_NAME("ObTabletTableStore_Pretty");
     J_COLON();
-    J_KV(KP(this), K_(major_tables), K_(minor_tables), K_(mds_sstables), K_(memtables), K_(is_ready_for_read));
+    J_KV(KP(this), K_(major_tables), K_(inc_major_tables), K_(minor_tables), K_(mds_sstables), K_(memtables), K_(is_ready_for_read));
     J_COMMA();
     BUF_PRINTF("table_array");
     J_COLON();

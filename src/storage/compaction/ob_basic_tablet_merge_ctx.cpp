@@ -1496,7 +1496,10 @@ int ObBasicTabletMergeCtx::prepare_from_medium_compaction_info(const ObMediumCom
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("merge_sstable_status_array is empty", K(ret), KPC(this));
   } else if (OB_FAIL(ObIncMajorTxHelper::check_inc_major_table_status(*medium_info, get_merge_type(), get_merge_version(), get_tables_handle(), static_param_.co_static_param_.is_cs_replica_))) {
-    LOG_WARN("failed to check inc major table status", K(ret), KPC(medium_info), K(static_param_));
+    ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
+    int tmp_ret = get_tablet()->fetch_table_store(table_store_wrapper);
+    const ObTabletTableStore *table_store = OB_SUCCESS == tmp_ret ? table_store_wrapper.get_member() : nullptr;
+    LOG_WARN("failed to check inc major table status", K(ret), KPC(medium_info), K(static_param_), KPC(table_store));
   } else if (medium_info->contain_parallel_range_
       && !parallel_merge_ctx_.is_valid()
       && OB_FAIL(parallel_merge_ctx_.init(*medium_info))) {

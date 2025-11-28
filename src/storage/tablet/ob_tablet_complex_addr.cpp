@@ -75,5 +75,25 @@ int64_t ObTabletComplexAddr<ObTabletDumpedMediumInfo>::to_string(char *buf, cons
   }
   return pos;
 }
+
+template <>
+int64_t ObTabletComplexAddr<ObTabletTableStore>::to_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+    // do nothing
+  } else if (nullptr != ptr_) {
+    J_OBJ_START();
+    J_KV(KP_(ptr), K_(addr), "majors", ptr_->get_major_sstables(), "inc_majors", ptr_->get_inc_major_sstables(), "minors", ptr_->get_minor_sstables());
+    J_OBJ_END();
+  } else {
+    J_OBJ_START();
+    J_KV(KP_(ptr), K_(addr));
+    J_OBJ_END();
+  }
+  return pos;
+}
+
 } // namespace storage
 } // namespace oceanbase
