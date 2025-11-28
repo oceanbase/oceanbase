@@ -967,13 +967,17 @@ int ObPLContext::rollback_xa_trans(ObSQLSessionInfo &session_info, ObExecContext
       }
     }
   } else if (!trans_xa_branch_fail) {
-    DISABLE_SQL_MEMLEAK_GUARD;
-    #ifdef OB_BUILD_ORACLE_PL
-    if (OB_FAIL(ObDbmsXA::xa_rollback_savepoint(ctx))) {
-      LOG_WARN("xa trans roll back to save point failed",
-              K(ret), KPC(session_info.get_tx_desc()));
+    if (in_nested_sql_ctrl()) {
+      // rollback or commit by the top sql.
+    } else {
+      #ifdef OB_BUILD_ORACLE_PL
+      DISABLE_SQL_MEMLEAK_GUARD;
+      if (OB_FAIL(ObDbmsXA::xa_rollback_savepoint(ctx))) {
+        LOG_WARN("xa trans roll back to save point failed",
+                K(ret), KPC(session_info.get_tx_desc()));
+      }
+      #endif
     }
-    #endif
   }
   return ret;
 }
