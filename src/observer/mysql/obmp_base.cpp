@@ -600,7 +600,6 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
       obmysql::OMPKRow rp(sm_row);
       rp.set_is_packed(is_packed);
       if (OB_FAIL(response_packet(rp, &session))) {
-        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("response packet fail", K(ret));
       }
     }
