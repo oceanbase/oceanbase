@@ -447,7 +447,7 @@ int ObExprTokenize::TokenizeParam::try_load_dictionary_for_ik(const uint64_t ten
   } else if (need_to_load_dic) {
     if (OB_FAIL(ObGenDicLoader::get_instance().get_dic_loader(
                     tenant_id,
-                    parser_name_,
+                    ObString::make_string(ObFTSLiteral::PARSER_NAME_IK), // currently only ik, use parser_name_ without version suffix
                     ObCharset::charset_type_by_coll(meta_.get_collation_type()),
                     dic_loader_handle))) {
       LOG_WARN("fail to get dic loader", K(ret), K(tenant_id));
