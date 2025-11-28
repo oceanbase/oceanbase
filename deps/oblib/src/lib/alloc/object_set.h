@@ -18,6 +18,7 @@
 #include "abit_set.h"
 #include "block_set.h"
 #include "lib/lock/ob_mutex.h"
+#include "lib/lock/ob_simple_lock.h"
 #include "lib/allocator/ob_mod_define.h"
 
 namespace oceanbase
@@ -194,56 +195,9 @@ public:
   void do_cleanup();
   void do_free_object(AObject *obj, ABlock *block);
   bool check_has_unfree(char *first_label, char *first_bt);
-
-  class Lock
-  {
-  public:
-    static constexpr int32_t WAIT_MASK = 1<<31;
-    static constexpr int32_t WRITE_MASK = 1<<30;
-    Lock() : v_(0)
-    {}
-    void lock()
-    {
-      if (!ATOMIC_BCAS(&v_, 0, WRITE_MASK)) {
-        wait();
-      }
-    }
-    void unlock()
-    {
-      int32_t v = ATOMIC_SET(&v_, 0);
-      if (OB_UNLIKELY(WAIT_MASK == (v & WAIT_MASK))) {
-        futex_wake(&v_, 1);
-      }
-    }
-    void wait()
-    {
-      static constexpr timespec TIMEOUT = {0, 100 * 1000 * 1000};
-      const int32_t MAX_TRY_CNT = 16;
-      bool locked = false;
-      for (int i = 0; i < MAX_TRY_CNT && !locked; ++i) {
-        sched_yield();
-        if (ATOMIC_BCAS(&v_, 0, WRITE_MASK)) {
-          locked = true;
-        }
-      }
-      while (!locked) {
-        const int32_t v = v_;
-        if (WAIT_MASK == (v & WAIT_MASK) || ATOMIC_BCAS(&v_, v | WRITE_MASK, v | WAIT_MASK)) {
-          futex_wait(&v_, v | WRITE_MASK | WAIT_MASK, &TIMEOUT);
-        }
-        if (ATOMIC_BCAS(&v_, 0, WRITE_MASK | WAIT_MASK)) {
-          locked = true;
-        }
-      }
-    }
-    bool trylock() { return false; }
-    void enable_record_stat(bool) {}
-  private:
-    int32_t v_;
-  };
   struct SizeClass
   {
-    Lock lock_;
+    common::ObSimpleLock lock_;
     AObject *local_free_;
     ABlock *avail_blist_;
     ABlock *full_blist_;

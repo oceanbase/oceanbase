@@ -41,10 +41,6 @@ CTX_ITEM_DEF(VECTOR_CTX_ID)
 CTX_ITEM_DEF(MAX_CTX_ID)
 #endif
 
-#ifdef SUB_CTX_ITEM_DEF
-SUB_CTX_ITEM_DEF(MAX_SUB_CTX_ID)
-#endif
-
 // Label does not need to be defined here, just pass char * directly in alloc,
 // It is reserved here to be compatible with the existing code of the upper layer
 #ifdef LABEL_ITEM_DEF
