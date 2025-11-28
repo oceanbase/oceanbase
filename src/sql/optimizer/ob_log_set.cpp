@@ -338,33 +338,39 @@ int ObLogSet::compute_sharding_info()
   } else if (DistAlgo::DIST_SET_PARTITION_WISE == set_dist_algo_) {
     is_partition_wise_ = false;
     strong_sharding_ = get_plan()->get_optimizer_context().get_distributed_sharding();
-  } else if (DistAlgo::DIST_NONE_HASH == set_dist_algo_) {
+  } else if (DistAlgo::DIST_NONE_HASH == set_dist_algo_
+             || DistAlgo::DIST_NONE_ALL == set_dist_algo_) {
     is_partition_wise_ = false;
     strong_sharding_ = first_child->get_strong_sharding();
     inherit_sharding_index_ = ObLogicalOperator::first_child;
-  } else if (DistAlgo::DIST_HASH_NONE == set_dist_algo_) {
-    is_partition_wise_ = false;
-    strong_sharding_ = second_child->get_strong_sharding();
-    inherit_sharding_index_ = ObLogicalOperator::second_child;
-  } else if (DistAlgo::DIST_NONE_ALL == set_dist_algo_) {
-    is_partition_wise_ = false;
-    strong_sharding_ = first_child->get_strong_sharding();
-    inherit_sharding_index_ = ObLogicalOperator::first_child;
-  } else if (DistAlgo::DIST_ALL_NONE == set_dist_algo_) {
-    is_partition_wise_ = false;
-    strong_sharding_ = second_child->get_strong_sharding();
-    inherit_sharding_index_ = ObLogicalOperator::second_child;
-  } else if (DistAlgo::DIST_PARTITION_NONE == set_dist_algo_) {
+  } else if (DistAlgo::DIST_HASH_NONE == set_dist_algo_
+             || DistAlgo::DIST_ALL_NONE == set_dist_algo_) {
     is_partition_wise_ = false;
     strong_sharding_ = second_child->get_strong_sharding();
     inherit_sharding_index_ = ObLogicalOperator::second_child;
   } else if (DistAlgo::DIST_NONE_PARTITION == set_dist_algo_) {
     is_partition_wise_ = false;
-    strong_sharding_ = first_child->get_strong_sharding();
-    inherit_sharding_index_ = ObLogicalOperator::first_child;
+    if (ObSelectStmt::INTERSECT == set_op_
+        || ObSelectStmt::EXCEPT == set_op_) {
+      strong_sharding_ = first_child->get_strong_sharding();
+      inherit_sharding_index_ = ObLogicalOperator::first_child;
+    } else {
+      strong_sharding_ = get_plan()->get_optimizer_context().get_distributed_sharding();;
+      inherit_sharding_index_ = -1;
+    }
+  } else if (DistAlgo::DIST_PARTITION_NONE == set_dist_algo_) {
+    is_partition_wise_ = false;
+    if (ObSelectStmt::INTERSECT == set_op_) {
+      strong_sharding_ = second_child->get_strong_sharding();
+      inherit_sharding_index_ = ObLogicalOperator::second_child;
+    } else {
+      strong_sharding_ = get_plan()->get_optimizer_context().get_distributed_sharding();;
+      inherit_sharding_index_ = -1;
+    }
   } else if (DistAlgo::DIST_HASH_LOCAL_PARTITION == set_dist_algo_ ||
              DistAlgo::DIST_PARTITION_HASH_LOCAL == set_dist_algo_) {
     strong_sharding_ = get_plan()->get_optimizer_context().get_distributed_sharding();
+    inherit_sharding_index_ = -1;
   } else if (OB_FAIL(ObLogicalOperator::compute_sharding_info())) {
     LOG_WARN("failed to compute sharding info", K(ret));
   } else { /*do nothing*/ }
