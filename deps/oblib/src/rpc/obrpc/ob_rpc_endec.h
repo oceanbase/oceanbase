@@ -64,18 +64,23 @@ template <typename T>
   int64_t args_len = common::serialization::encoded_length(args);
 #endif
   int64_t payload_sz = extra_payload_size + args_len;
-  // char* header_buf = (char*)pool.alloc(reserve_bytes_for_pnio + header_sz + payload_sz) + reserve_bytes_for_pnio;
-  char* header_buf = (char*)pn_send_alloc(gtid, header_sz + payload_sz);
-  char* payload_buf = header_buf + header_sz;
-  int64_t pos = 0;
-  UNIS_VERSION_GUARD(opts.unis_version_);
-  if (NULL == header_buf) {
-    ret = common::OB_ALLOCATE_MEMORY_FAILED;
-    RPC_OBRPC_LOG(WARN, "alloc buffer fail", K(payload_sz));
-  } else if (payload_sz > get_max_rpc_packet_size()) {
+  char* header_buf  = NULL;
+  char* payload_buf = NULL;
+  if (payload_sz > get_max_rpc_packet_size()) {
     ret = common::OB_RPC_PACKET_TOO_LONG;
     RPC_OBRPC_LOG(ERROR, "obrpc packet payload execced its limit",
                   K(payload_sz), "limit", get_max_rpc_packet_size(), K(ret));
+  } else {
+    header_buf = (char*)pn_send_alloc(gtid, header_sz + payload_sz);
+    payload_buf = header_buf + header_sz;
+  }
+  int64_t pos = 0;
+  UNIS_VERSION_GUARD(opts.unis_version_);
+  if (OB_FAIL(ret)) {
+    // OB_RPC_PACKET_TOO_LONG
+  } else if (NULL == header_buf) {
+    ret = common::OB_ALLOCATE_MEMORY_FAILED;
+    RPC_OBRPC_LOG(WARN, "alloc buffer fail", K(payload_sz));
   } else if (OB_FAIL(common::serialization::encode(
                          payload_buf, payload_sz, pos, args))) {
     RPC_OBRPC_LOG(WARN, "serialize argument fail", K(pos), K(payload_sz), K(ret));
