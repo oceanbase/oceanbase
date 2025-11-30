@@ -40290,24 +40290,33 @@ int ObDDLService::drop_index_to_scheduler_(ObMySQLTransaction &trans,
                                                     new_index_schemas))) {
         LOG_WARN("submit drop index arg failed", KR(ret));
       } else {
+        const int64_t NORMAL_INDEX_COUNT = 1;
+        const int64_t VEC_INDEX_COUNT = 5;
+        const int64_t VEC_INDEX_VID_OPT_COUNT = 3;
+        const int64_t FTS_INDEX_COUNT = 4;
+        const int64_t FTS_INDEX_DOCID_OPT_COUNT = 2;
+        const int64_t MULTIVALUE_INDEX_COUNT = 3;
+        const int64_t MULTIVALUE_INDEX_DOCID_OPT_COUNT = 1;
+
         // normal index has 1 index schema
-        const bool normal_index_count_invalid = (!is_fts_or_multivalue_or_vec_index && new_index_schemas.count() != 1);
+        const bool normal_index_count_invalid = (!is_fts_or_multivalue_or_vec_index && new_index_schemas.count() != NORMAL_INDEX_COUNT);
 
         // vec index aux has 5 index schemas for now
         const bool vec_index_count_invalid = (!drop_index_arg->is_inner_
                                               && index_table_schema->is_vec_delta_buffer_type()
-                                              && new_index_schemas.count() != 5);
+                                              && new_index_schemas.count() != VEC_INDEX_COUNT
+                                              && new_index_schemas.count() != VEC_INDEX_VID_OPT_COUNT);
 
         // fts index aux has 4 index schemas for now, but can be 2 index schemas when doc id optimization is enabled
         //  schemas: (docid_rowkey, rowkey_docid, doc_word, word_doc) / (doc_word, word_doc)
         const bool fts_index_count_invalid = (index_table_schema->is_fts_index_aux()
-                                              && new_index_schemas.count() != 4
-                                              && new_index_schemas.count() != 2);
+                                              && new_index_schemas.count() != FTS_INDEX_COUNT
+                                              && new_index_schemas.count() != FTS_INDEX_DOCID_OPT_COUNT);
 
         // multivalue index aux has 3 index schemas for now, but can be 1 index schemas when doc id optimization is enabled
         const bool multivalue_index_count_invalid = index_table_schema->is_multivalue_index_aux()
-                                                    && new_index_schemas.count() != 3
-                                                    && new_index_schemas.count() != 1;
+                                                    && new_index_schemas.count() != MULTIVALUE_INDEX_COUNT
+                                                    && new_index_schemas.count() != MULTIVALUE_INDEX_DOCID_OPT_COUNT;
 
         if (OB_UNLIKELY(normal_index_count_invalid || vec_index_count_invalid || fts_index_count_invalid || multivalue_index_count_invalid)) {
           ret = OB_ERR_UNEXPECTED;
