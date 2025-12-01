@@ -1955,6 +1955,8 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, //ObExprDateAddClickhouse::calc_date_add_ck_vector,              /* 304 */
   NULL, //ObExprDateSubClickhouse::calc_date_sub_ck_vector,              /* 305 */
   NULL, //ObExprTime::calc_time_vector,                                  /* 306 */
+  NULL, //ObExprQuote::eval_quote_vector,                                /* 307 */
+  NULL, //ObExprUnhex::eval_unhex_vector,                                /* 308 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
