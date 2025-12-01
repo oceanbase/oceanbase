@@ -3882,6 +3882,9 @@ bool ObHnswBitmapFilter::is_subset(roaring::api::roaring64_bitmap_t *bitmap)
   return bret;
 }
 
+// !!!!! NOTICE
+// This function will throw an exception when memory allocation fails,
+// so it can only be called within vsag and cannot be used elsewhere
 void *ObVsagSearchAlloc::Allocate(size_t size)
 {
   void *ret_ptr = nullptr;
@@ -3893,6 +3896,12 @@ void *ObVsagSearchAlloc::Allocate(size_t size)
     if (OB_NOT_NULL(ptr)) {
       *(int64_t*)ptr = actual_size;
       ret_ptr = (char*)ptr + MEM_PTR_HEAD_SIZE;
+    } else {
+      // NOTICE: ObVsagSearchAlloc is used in vsag lib. And may be used for some c++ std container.
+      // For this scenario, if memory allocation fails, an exception should be thrown instead of returning a null pointer
+      // or will access null point in std container, eg std::vector
+      LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to allocate memory", K(size), K(actual_size), K(lbt()));
+      throw std::bad_alloc();
     }
   }
 
