@@ -73,11 +73,14 @@ public:
         endpoint_(),
         adp_guard_(),
         task_started_(false),
-        part_key_num_(0)
+        part_key_num_(0),
+        batch_cnt_(BATCH_CNT)
   {}
   virtual ~ObHybridVectorRefreshTaskCtx() override {
     check_task_free();
   }
+  static const int BATCH_CNT = 2000;
+  static const int MIN_BATCH_CNT = 100;
   void check_task_free();
   void set_task_finish();
 
@@ -100,6 +103,7 @@ public:
   ObPluginVectorIndexAdapterGuard adp_guard_;
   bool task_started_;
   uint32_t part_key_num_; // is part key but rowkey
+  int batch_cnt_;
 };
 
 class ObHybridVectorRefreshTask : public ObVecIndexIAsyncTask
@@ -132,7 +136,6 @@ public:
   }
   DISALLOW_COPY_AND_ASSIGN(ObHybridVectorRefreshTask);
 private:
-  static const int BATCH_CNT = 2000;
   static const int ORA_ROWSCN_COL_ID = 3;
   int check_embedding_finish(bool &finish);
   int prepare_for_task();

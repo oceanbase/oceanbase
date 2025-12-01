@@ -564,6 +564,11 @@ int ObHybridVectorRefreshTask::prepare_for_embedding(ObPluginVectorIndexAdaptor 
       LOG_WARN("failed to get index id table column ids", K(ret), K(adaptor));
     } else if (task_ctx->embedded_table_column_ids_.empty() && OB_FAIL(get_embedded_table_column_ids(adaptor))) {
       LOG_WARN("failed to get embedded table column ids", K(ret), K(adaptor));
+    } else if (OB_TRY_LOCK_ROW_CONFLICT == task_ctx->task_status_.last_error_code_) {
+      if (task_ctx->batch_cnt_ > ObHybridVectorRefreshTaskCtx::MIN_BATCH_CNT) {
+        task_ctx->retry_time_ = 0;
+        task_ctx->batch_cnt_ = MAX(task_ctx->batch_cnt_ / 4, ObHybridVectorRefreshTaskCtx::MIN_BATCH_CNT);
+      }
     }
 
     int cur_row_count = 0;
@@ -572,7 +577,7 @@ int ObHybridVectorRefreshTask::prepare_for_embedding(ObPluginVectorIndexAdaptor 
     ObSEArray<int64_t, 4> tmp_embedding_vids;
     ObSEArray<blocksstable::ObDatumRow *, 4> tmp_embedding_rows;
     delta_delete_iter.init();
-    while (OB_SUCC(ret) && cur_row_count < BATCH_CNT) {
+    while (OB_SUCC(ret) && cur_row_count < task_ctx->batch_cnt_) {
       blocksstable::ObDatumRow *datum_row = nullptr;
       blocksstable::ObDatumRow *copied_row = nullptr;
       if (OB_FAIL(tsc_iter->get_next_row(datum_row))) {
