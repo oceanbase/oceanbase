@@ -16069,62 +16069,6 @@ int ObTransformUtils::connect_tables(const ObIArray<uint64_t> &table_ids,
   return ret;
 }
 
-int ObTransformUtils::check_contain_correlated_function_table(const ObDMLStmt *stmt, bool &is_contain)
-{
-  int ret = OB_SUCCESS;
-  is_contain = false;
-  if (OB_ISNULL(stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("stmt is null", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && !is_contain && i < stmt->get_table_items().count(); ++i) {
-      const TableItem *table = stmt->get_table_item(i);
-      if (OB_ISNULL(table)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null table item", K(ret));
-      } else if (!table->is_function_table()) {
-        // do nothing
-      } else if (OB_ISNULL(table->function_table_expr_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null expr", K(ret));
-      } else if (!table->function_table_expr_->get_relation_ids().is_empty()) {
-        is_contain = true;
-      }
-    }
-  }
-  return ret;
-}
-
-int ObTransformUtils::check_contain_correlated_json_table(const ObDMLStmt *stmt, bool &is_contain)
-{
-  int ret = OB_SUCCESS;
-  is_contain = false;
-  if (OB_ISNULL(stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("stmt is null", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && !is_contain && i < stmt->get_table_items().count(); ++i) {
-      const TableItem *table = stmt->get_table_item(i);
-      if (OB_ISNULL(table)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null table item", K(ret));
-      } else if (!table->is_json_table()) {
-        // do nothing
-      } else if (OB_ISNULL(table->json_table_def_) || table->json_table_def_->doc_exprs_.empty()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null expr", K(ret), K(table->json_table_def_));
-      } else {
-        for (int64_t j = 0; OB_SUCC(ret) && !is_contain && j < table->json_table_def_->doc_exprs_.count(); ++j) {
-          if (!table->json_table_def_->doc_exprs_.at(j)->get_relation_ids().is_empty()) {
-            is_contain = true;
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 int ObTransformUtils::check_contain_lost_deterministic_expr(const ObIArray<ObRawExpr*> &exprs,
                                                             bool &is_contain) {
   int ret = OB_SUCCESS;
@@ -16168,7 +16112,7 @@ int ObTransformUtils::get_idx_from_table_ids(const ObIArray<uint64_t> &src_table
   return ret;
 }
 
-int ObTransformUtils::check_contain_correlated_lateral_table(const TableItem *table_item, bool &is_contain)
+int ObTransformUtils::check_contain_correlated_table(const TableItem *table_item, bool &is_contain)
 {
   int ret = OB_SUCCESS;
   is_contain = false;
@@ -16177,15 +16121,33 @@ int ObTransformUtils::check_contain_correlated_lateral_table(const TableItem *ta
     LOG_WARN("get unexpected null", K(ret));
   } else if (table_item->is_joined_table()) {
     const JoinedTable *joined_table = static_cast<const JoinedTable*>(table_item);
-    if (OB_FAIL(SMART_CALL(check_contain_correlated_lateral_table(joined_table->left_table_, is_contain)))) {
-      LOG_WARN("failed to check contain correlated lateral table");
+    if (OB_FAIL(SMART_CALL(check_contain_correlated_table(joined_table->left_table_, is_contain)))) {
+      LOG_WARN("failed to check contain correlated table");
     } else if (is_contain) {
       // do nothing
-    } else if (OB_FAIL(SMART_CALL(check_contain_correlated_lateral_table(joined_table->right_table_, is_contain)))) {
-      LOG_WARN("failed to check contain correlated lateral table", K(ret));
+    } else if (OB_FAIL(SMART_CALL(check_contain_correlated_table(joined_table->right_table_, is_contain)))) {
+      LOG_WARN("failed to check contain correlated table", K(ret));
     }
-  } else if (table_item->is_lateral_table() && !table_item->exec_params_.empty()) {
-    is_contain = true;
+  } else if (table_item->is_lateral_table()) {
+    is_contain = !table_item->exec_params_.empty();
+  } else if (table_item->is_function_table()) {
+    if (OB_ISNULL(table_item->function_table_expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else if (!table_item->function_table_expr_->get_relation_ids().is_empty()) {
+      is_contain = true;
+    }
+  } else if (table_item->is_json_table()) {
+    if (OB_ISNULL(table_item->json_table_def_) || table_item->json_table_def_->doc_exprs_.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret), K(table_item->json_table_def_));
+    } else {
+      for (int64_t j = 0; OB_SUCC(ret) && !is_contain && j < table_item->json_table_def_->doc_exprs_.count(); ++j) {
+        if (!table_item->json_table_def_->doc_exprs_.at(j)->get_relation_ids().is_empty()) {
+          is_contain = true;
+        }
+      }
+    }
   }
   return ret;
 }
@@ -16260,7 +16222,7 @@ int ObTransformUtils::check_lateral_ref_outer_table(const ObDMLStmt *stmt,
   return ret;
 }
 
-int ObTransformUtils::check_contain_correlated_lateral_table(const ObDMLStmt *stmt, bool &is_contain)
+int ObTransformUtils::check_contain_correlated_table(const ObDMLStmt *stmt, bool &is_contain)
 {
   int ret = OB_SUCCESS;
   is_contain = false;
@@ -16269,8 +16231,8 @@ int ObTransformUtils::check_contain_correlated_lateral_table(const ObDMLStmt *st
     if (OB_ISNULL(table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null table item", K(ret));
-    } else if (OB_FAIL(check_contain_correlated_lateral_table(table, is_contain))) {
-      LOG_WARN("failed to check contain correlated lateral table", K(ret));
+    } else if (OB_FAIL(check_contain_correlated_table(table, is_contain))) {
+      LOG_WARN("failed to check contain correlated table", K(ret));
     }
   }
   return ret;

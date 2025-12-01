@@ -1175,7 +1175,7 @@ int ObTransformGroupByPushdown::check_push_down_into_join_validity(ObSelectStmt 
   int ret = OB_SUCCESS;
   bool has_rownum = false;
   bool contain_inner_table = false;
-  bool contain_lateral_table = false;
+  bool contain_correlated_table = false;
   bool allow_distinct = false;
   ObSEArray<ObRawExpr *, 4> group_cols;
   bool is_enabled = ctx_->is_groupby_placement_enabled_;
@@ -1231,10 +1231,9 @@ int ObTransformGroupByPushdown::check_push_down_into_join_validity(ObSelectStmt 
     LOG_WARN("failed to check collation validity", K(ret));
   } else if (!is_valid) {
     // do nothing
-  } else if (OB_FAIL(ObTransformUtils::check_contain_correlated_lateral_table(stmt,
-                                                                              contain_lateral_table))) {
-    LOG_WARN("failed to check contain correlated lateral table", K(ret));
-  } else if (contain_lateral_table) {
+  } else if (OB_FAIL(ObTransformUtils::check_contain_correlated_table(stmt, contain_correlated_table))) {
+    LOG_WARN("failed to check contain correlated table", K(ret));
+  } else if (contain_correlated_table) {
     is_valid = false;
   } else if (OB_FAIL(is_push_through_cross_join_enabled(stmt, allow_distinct))) {
     LOG_WARN("failed to check support cross joins", K(ret));
