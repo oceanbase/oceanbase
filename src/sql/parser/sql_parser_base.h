@@ -387,7 +387,7 @@ do {                                                                            
       } else if ((result->pl_parse_info_.is_pl_parse_ && NULL == result->pl_parse_info_.pl_ns_) \
                  || result->is_dynamic_sql_) { \
         if (result->no_param_sql_len_ + (start - result->pl_parse_info_.last_pl_symbol_pos_ - 1) \
-            + (int)(log10(idx)) + 3 \
+            + (0 == idx ? 0 : (int)(log10(idx))) + 3 \
             > result->no_param_sql_buf_len_) { \
           char *buf = parse_malloc(result->no_param_sql_buf_len_ * 2, result->malloc_pool_); \
           if (OB_UNLIKELY(NULL == buf)) { \
