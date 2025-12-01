@@ -79,8 +79,6 @@ public:
       const int64_t row_cap,
       storage::ObGroupByCellBase &group_by_cell) const
   { return decoder_->read_reference(*ctx_, row_ids, row_cap, group_by_cell); }
-
-  TO_STRING_KV(KPC(decoder_), KPC(ctx_));
 public:
   const ObIColumnDecoder *decoder_;
   ObColumnDecoderCtx *ctx_;

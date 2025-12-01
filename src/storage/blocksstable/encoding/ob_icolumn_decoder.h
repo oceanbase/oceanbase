@@ -159,7 +159,6 @@ public:
 public:
   ObIColumnDecoder() {}
   virtual ~ObIColumnDecoder() {}
-  VIRTUAL_TO_STRING_KV(K(this));
 
   virtual int decode(const ObColumnDecoderCtx &ctx, common::ObDatum &datum, const int64_t row_id,
      const ObBitStream &bs, const char *data, const int64_t len) const = 0;
