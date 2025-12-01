@@ -56,7 +56,7 @@ devdeps-oblogmsg-1.1-122024093010.al8.aarch64.rpm
 obdevtools-obstack-2.0.4-42024101017.al8.aarch64.rpm
 devdeps-rocksdb-6.22.1-32024123015.al8.aarch64.rpm
 obshell-4.3.1.0-12025070719.al8.aarch64.rpm target=community
-#obshell-4.3.2.0-42025091711.al8.aarch64.rpm target=community
+#obshell-4.3.2.0-52025092411.al8.aarch64.rpm target=community
 
 [test-utils]
 ob-deploy-3.0.1-1.al8.aarch64.rpm target=community
