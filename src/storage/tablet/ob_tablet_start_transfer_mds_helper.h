@@ -268,7 +268,6 @@ private:
       const share::SCN &scn,
       const ObMigrationStatus &migration_status,
       const share::ObLSRestoreStatus &ls_restore_status);
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletStartTransferInHelper);
 };
