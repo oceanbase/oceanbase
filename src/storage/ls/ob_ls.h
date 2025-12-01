@@ -376,6 +376,8 @@ public:
 private:
   int ls_init_for_dup_table_();
   int ls_destory_for_dup_table_();
+  int logonly_ls_init_for_dup_table_();
+  int logonly_ls_destory_for_dup_table_();
   int stop_();
   void wait_();
   int prepare_for_safe_destroy_();

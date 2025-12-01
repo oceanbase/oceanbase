@@ -998,7 +998,7 @@ int ObTenantCheckpointSlogHandler::write_checkpoint(bool is_force)
     if (OB_TMP_FAIL(tenant_storage_ckpt_writer.rollback())) {
       LOG_ERROR("fail to rollback checkpoint, macro blocks leak", K(tmp_ret));
     }
-
+    /// NOTE: this log is required for obtest@slog_checkpoint_with_log_replica
     FLOG_INFO("finish write tenant checkpoint", K(ret), K(last_super_block), K(tmp_super_block),
         K_(last_ckpt_time), K(start_time), K(broadcast_version),K(frozen_version), K_(last_frozen_version),
         K(is_force), K(cost_time));
