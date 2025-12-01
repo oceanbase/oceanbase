@@ -121,6 +121,7 @@ int get_coded_index_name_info_mysql(common::ObIAllocator &allocator,
                                     ObIndexSchemaInfo &index_info);
 int get_sequence_schema(const uint64_t sequence_id,
                           const ObSequenceSchema *&sequence_schema);
+int get_sys_variable_schema(const ObSysVariableSchema *&sys_var_schema);
 private:
   int check_inner_stat_() const;
 private:

@@ -63,6 +63,7 @@ int ObCreateIndexHelper::lock_objects_()
 {
   int ret = OB_SUCCESS;
   const ObDatabaseSchema *database_schema = NULL;
+  const ObSysVariableSchema *sysvar_schema = nullptr;
   DEBUG_SYNC(BEFORE_PARALLEL_DDL_LOCK);
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
@@ -92,8 +93,14 @@ int ObCreateIndexHelper::lock_objects_()
     ret = OB_ERR_PARALLEL_DDL_CONFLICT;
     LOG_WARN("database_schema's database name not equal to arg",
              KR(ret), K(database_schema->get_database_name_str()), K_(arg_.database_name));
+  } else if (OB_FAIL(schema_guard_wrapper_.get_sys_variable_schema(sysvar_schema))) {
+    LOG_WARN("fail to get sysvar schema", KR(ret), K_(tenant_id));
+  } else if (OB_ISNULL(sysvar_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sysvar_schema is null", KR(ret));
   } else if (OB_FAIL(ObCreateIndexOnEmptyTableHelper::check_create_index_on_empty_table_opt(*ddl_service_,
                                                                                             trans_,
+                                                                                            *sysvar_schema,
                                                                                             arg_.database_name_,
                                                                                             *orig_data_table_schema_,
                                                                                             arg_.index_type_,

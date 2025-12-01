@@ -631,3 +631,22 @@ int ObSchemaGuardWrapper::get_sequence_schema(const uint64_t sequence_id,
   }
   return ret;
 }
+
+int ObSchemaGuardWrapper::get_sys_variable_schema(const ObSysVariableSchema *&sys_var_schema)
+{
+  int ret = OB_SUCCESS;
+  sys_var_schema = nullptr;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("not init", KR(ret));
+  } else if (is_local_guard_) {
+    if (OB_FAIL(local_schema_guard_.get_sys_variable_schema(tenant_id_, sys_var_schema))) {
+      LOG_WARN("fail to get tenant system variable", KR(ret), K(tenant_id_));
+    }
+  } else {
+    if (OB_FAIL(latest_schema_guard_.get_sys_variable_schema(sys_var_schema))) {
+      LOG_WARN("fail to get sys variable schema", KR(ret), K(tenant_id_));
+    }
+  }
+
+  return ret;
+}
