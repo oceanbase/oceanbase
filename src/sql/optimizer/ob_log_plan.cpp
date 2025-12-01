@@ -1273,8 +1273,7 @@ int ObLogPlan::pre_process_quals(const ObIArray<TableItem*> &table_items,
           LOG_WARN("failed to add startup filter", K(ret));
         }
       }
-    } else if (qual->has_flag(CNT_RAND_FUNC) ||
-               qual->has_flag(CNT_DYNAMIC_USER_VARIABLE)) {
+    } else if (!qual->is_deterministic() && !qual->has_flag(CNT_ASSIGN_EXPR)) {
       ret = add_special_expr(qual);
     } else if (ObOptimizerUtil::has_hierarchical_expr(*qual)) {
       ret = normal_quals.push_back(qual);
@@ -1547,6 +1546,9 @@ int ObLogPlan::generate_inner_join_detectors(const ObIArray<TableItem*> &table_i
       if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null expr", K(ret));
+      } else if (!expr->is_deterministic() && !expr->has_flag(CNT_ASSIGN_EXPR)) {
+        // don't pushdown condition which is not deterministic
+        // do nothing
       } else if (!expr->get_relation_ids().is_subset(table_ids) ||
                  (expr->has_flag(CNT_SUB_QUERY) && !ObOptimizerUtil::find_item(push_subq_exprs_, expr))) {
         //do nothing
