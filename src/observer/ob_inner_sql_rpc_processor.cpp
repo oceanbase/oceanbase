@@ -469,16 +469,8 @@ int ObInnerSqlRpcP::set_session_param_to_conn(
   } else {
     conn->set_is_load_data_exec(transmit_arg.get_is_load_data_exec());
     conn->set_nls_formats(transmit_arg.get_nls_formats());
-    const bool need_update_lower_case_table_names = transmit_arg.get_name_case_mode() != OB_NAME_CASE_INVALID;
-    const bool need_enable_index_direct_select = transmit_arg.get_select_index_enabled();
     if (OB_FAIL(conn->set_ddl_info(&transmit_arg.get_ddl_info()))) {
       LOG_WARN("fail to set ddl info", K(ret), K(transmit_arg));
-    } else if (need_update_lower_case_table_names &&
-        OB_FAIL(conn->set_session_variable(share::OB_SV_LOWER_CASE_TABLE_NAMES, transmit_arg.get_name_case_mode()))) {
-      LOG_WARN("fail to set name case mode", K(ret), K(transmit_arg));
-    } else if (need_enable_index_direct_select &&
-        OB_FAIL(conn->set_session_variable(share::OB_SV_ENABLE_INDEX_DIRECT_SELECT, 1))) {
-      LOG_WARN("fail to set select index enabled", K(ret), K(transmit_arg));
     } else if (0 != transmit_arg.get_sql_mode() && OB_FAIL(conn->set_session_variable("sql_mode", transmit_arg.get_sql_mode()))) {
       LOG_WARN("fail to set sql mode", K(ret), K(transmit_arg));
     } else if (transmit_arg.get_tz_info_wrap().is_valid() && OB_FAIL(conn->set_tz_info_wrap(transmit_arg.get_tz_info_wrap()))) {

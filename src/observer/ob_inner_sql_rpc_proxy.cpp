@@ -39,9 +39,7 @@ OB_DEF_SERIALIZE(obrpc::ObInnerSQLTransmitArg)
     is_load_data_exec_,
     nls_formats_,
     use_external_session_,
-    consumer_group_id_,
-    name_case_mode_,
-    select_index_enabled_);
+    consumer_group_id_);
   return ret;
 }
 
@@ -66,9 +64,7 @@ OB_DEF_DESERIALIZE(obrpc::ObInnerSQLTransmitArg)
     is_load_data_exec_,
     nls_formats_,
     use_external_session_,
-    consumer_group_id_,
-    name_case_mode_,
-    select_index_enabled_);
+    consumer_group_id_);
   if (OB_SUCC(ret)) {
     (void)sql::ObSQLUtils::adjust_time_by_ntp_offset(worker_timeout_);
   }
@@ -96,9 +92,7 @@ OB_DEF_SERIALIZE_SIZE(obrpc::ObInnerSQLTransmitArg)
     is_load_data_exec_,
     nls_formats_,
     use_external_session_,
-    consumer_group_id_,
-    name_case_mode_,
-    select_index_enabled_);
+    consumer_group_id_);
   return len;
 }
 //

@@ -11533,7 +11533,6 @@ int ObDMLResolver::check_table_exist_or_not(const int64_t tenant_id,
                  K(tenant_id),
                  K(catalog_id),
                  K(database_id),
-                 K(select_index_enabled),
                  K(table_name),
                  KPHEX(table_name.ptr(), table_name.length()),
                  K(ret));
