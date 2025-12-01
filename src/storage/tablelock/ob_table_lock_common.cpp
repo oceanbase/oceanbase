@@ -473,6 +473,9 @@ OB_SERIALIZE_MEMBER(ObTableLockPrioOp,
                     lock_op_,
                     priority_);
 
+OB_SERIALIZE_MEMBER(ObTableLockPrioArg,
+                    priority_);
+
 } // tablelock
 } // transaction
 } // oceanbase
