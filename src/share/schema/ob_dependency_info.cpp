@@ -432,7 +432,23 @@ int ObDependencyInfo::collect_dep_infos(ObReferenceObjTable &ref_objs,
     uint64_t curr_dep_obj_id = it->first.dep_obj_id_;
     // create view path, only record directly dependency
     if (curr_dep_obj_id == dep_obj_id) {
+      bool exist = false;
       for (int64_t i = 0; OB_SUCC(ret) && i < it->second->ref_obj_versions_.count(); ++i) {
+        exist = false;
+        for (int j = 0; j < deps.count(); j++) {
+          const ObDependencyInfo& tmp_dep = deps.at(j);
+          if (tmp_dep.get_dep_obj_type() == it->first.dep_obj_type_
+              && tmp_dep.get_ref_obj_id() == it->second->ref_obj_versions_.at(i).object_id_
+              && tmp_dep.get_ref_timestamp() == it->second->ref_obj_versions_.at(i).version_
+              && tmp_dep.get_ref_obj_type()
+                 == ObSchemaObjVersion::get_schema_object_type(it->second->ref_obj_versions_.at(i).object_type_)) {
+            exist = true;
+            break;
+          }
+        }
+        if (exist) {
+          continue;
+        }
         ObDependencyInfo dep;
         max_version = std::max(it->second->ref_obj_versions_.at(i).version_, max_version);
         dep.set_dep_obj_id(OB_INVALID_ID);
