@@ -84,7 +84,7 @@ private:
   int decide_sort_key_type(ObSortVecOpContext &context);
   bool is_basic_cmp_type(VecValueTypeClass vec_tc);
   template <typename SORT_CLASS>
-  int alloc_sort_impl_instance(ObISortVecOpImpl *&sort_impl);
+  int alloc_sort_impl_instance(ObSortVecOpContext &ctx, ObISortVecOpImpl *&sort_impl);
   template <SortType sort_type, SortKeyType sk_type, bool has_addon>
   int init_sort_impl_instance(ObSortVecOpContext &context, ObISortVecOpImpl *&sort_op_impl);
   class MemEntifyFreeGuard

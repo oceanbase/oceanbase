@@ -168,7 +168,7 @@ void ObSortVecOpImpl<Compare, Store_Row, has_addon>::reuse()
   }
 
   if (use_partition_topn_sort_ && OB_NOT_NULL(partition_topn_sort_)) {
-    partition_topn_sort_->reuse();
+    partition_topn_sort_->reset();
   }
 }
 
@@ -1319,6 +1319,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::preprocess_dump(bool &dumped
         }
       }
       SQL_ENG_LOG(INFO, "trace sort need dump", K(dumped), K(mem_context_->used()), K(get_ht_bucket_size()),
+                  K(get_need_extra_mem_size()), K(sort_chunks_.get_size()), K(get_tmp_buffer_mem_bound()), K(profile_.get_global_bound_size()),
                   K(get_memory_limit()), K(profile_.get_cache_size()),
                   K(profile_.get_expect_size()), K(sql_mem_processor_.get_data_size()),
                   K(sql_mem_processor_.is_auto_mgr()));
@@ -1944,9 +1945,9 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::build_ems_heap(int64_t &merg
     }
     if (OB_SUCC(ret)) {
       int64_t tempstore_block_size =
-        max(tempstore_read_alignment_size_, ObTempBlockStore::BLOCK_CAPACITY);
-      merge_ways = get_memory_limit() / tempstore_block_size;
-      merge_ways = std::max(2L, merge_ways);
+        max(tempstore_read_alignment_size_, ObTempBlockStore::MIN_READ_BUFFER_SIZE);
+      merge_ways = (get_memory_limit() - mem_context_->used()) / tempstore_block_size;
+      merge_ways = std::max(MIN_MERGE_WAYS, merge_ways);
       if (merge_ways < max_ways) {
         bool dumped = false;
         int64_t need_size = max_ways * tempstore_block_size;
@@ -1956,11 +1957,12 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::build_ems_heap(int64_t &merg
               get_total_used_size()))) {
           SQL_ENG_LOG(WARN, "failed to extend memory size", K(ret));
         }
-        merge_ways = std::max(merge_ways, get_memory_limit() / tempstore_block_size);
+        merge_ways = std::max(merge_ways, (get_memory_limit() - mem_context_->used()) / tempstore_block_size);
       }
       merge_ways = std::min(merge_ways, max_ways);
-      LOG_TRACE("do merge sort ", K(first->level_), K(merge_ways), K(sort_chunks_.get_size()),
-                K(get_memory_limit()), K(sql_mem_processor_.get_profile()));
+      LOG_TRACE("do merge sort ", K(first->level_), K(merge_ways), K(tempstore_block_size),
+                                  K(mem_context_->used()), K(sort_chunks_.get_size()),
+                                  K(get_memory_limit()), K(sql_mem_processor_.get_profile()));
     }
 
     if (OB_SUCC(ret)) {
@@ -2108,6 +2110,7 @@ template <typename Compare, typename Store_Row, bool has_addon>
 int ObSortVecOpImpl<Compare, Store_Row, has_addon>::sort()
 {
   int ret = OB_SUCCESS;
+  bool dumped = false;
   if (!is_inited()) {
     ret = OB_NOT_INIT;
     SQL_ENG_LOG(WARN, "not init", K(ret));
@@ -2132,10 +2135,15 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::sort()
             &ObSortVecOpImpl<Compare, Store_Row, has_addon>::imms_heap_next_stored_row;
         }
       }
+    } else if (OB_FAIL(sql_mem_processor_.extend_max_memory_size(&mem_context_->get_malloc_allocator(),
+                                                                 std::bind(&ObSortVecOpImpl<Compare, Store_Row, has_addon>::need_dump, this),
+                                                                  dumped, get_total_used_size()))) {
+      SQL_ENG_LOG(WARN, "failed to extend memory size", K(ret));
     } else if (OB_FAIL(do_dump())) {
       SQL_ENG_LOG(WARN, "dump failed");
     }
   }
+
 
   if (OB_FAIL(ret)) {
     // do nothing
@@ -2149,6 +2157,10 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::sort()
         &ObSortVecOpImpl<Compare, Store_Row, has_addon>::array_next_dump_stored_row;
     }
   } else if (sort_chunks_.get_size() >= 2) {
+    // reset partition topn sort before ems sort
+    if (use_partition_topn_sort_) {
+      partition_topn_sort_->reset();
+    }
     blk_holder_.release();
     set_blk_holder(nullptr);
     // do merge sort
