@@ -3126,3 +3126,9 @@ ERRSIM_DEF_INT(errsim_backup_override_start_scn, OB_CLUSTER_PARAMETER, "0", "[0,
 DEF_INT(_fuse_row_cache_activate_threshold, OB_TENANT_PARAMETER, "6", "[0, 100]",
          "Determine if queries should use fuse_row_cache based on a configurable cache hit rate threshold.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE))
+DEF_INT(_ss_garbage_collect_concurrency, OB_TENANT_PARAMETER, "0", "[0, 100]",
+        "Controls the number of worker threads for shared-storage garbage collection (GC). "
+        "Changes take effect at the start of the next GC run. "
+        "If set to 0, the system auto-calculates the worker count as the tenant’s max_cpu divided by 4; otherwise, the worker count is set to the specified value."
+        "Range: [0, 100] in integer",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
