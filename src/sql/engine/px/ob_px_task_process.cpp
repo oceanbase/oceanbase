@@ -367,6 +367,9 @@ int ObPxTaskProcess::execute(const ObOpSpec &root_spec)
                                               OB_GOT_SIGNAL_ABORTING))) {
         LOG_WARN("interrupt_tasks failed", K(tmp_ret));
       }
+      if (OB_NOT_NULL(arg_.exec_ctx_)) {
+        arg_.exec_ctx_->set_errcode(ret);
+      }
     }
     if (OB_SUCCESS != (close_ret = root->close())) {
       LOG_WARN("fail close dfo op", K(ret), K(close_ret));
