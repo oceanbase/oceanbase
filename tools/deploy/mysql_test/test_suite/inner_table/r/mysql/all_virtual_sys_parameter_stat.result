@@ -348,6 +348,7 @@ _enable_hash_join_processor
 _enable_hgby_llc_ndv_adaptive
 _enable_hgby_skew_detection
 _enable_inner_session_mgr
+_enable_insertup_direct_update
 _enable_insertup_replace_gts_opt
 _enable_in_range_optimization
 _enable_memleak_light_backtrace

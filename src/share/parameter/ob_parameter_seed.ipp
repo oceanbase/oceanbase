@@ -2326,3 +2326,6 @@ ERRSIM_DEF_INT(errsim_backup_override_start_scn, OB_CLUSTER_PARAMETER, "0", "[0,
         "override backup start scn in errsim"
         "Range: [0,) in integer",
         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_insertup_direct_update, OB_TENANT_PARAMETER, "False",
+         "Enable or disable insert up do direct update path without splitting into delete and insert",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

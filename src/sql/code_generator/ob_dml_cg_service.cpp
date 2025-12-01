@@ -18,6 +18,7 @@
 #include "sql/optimizer/ob_log_for_update.h"
 #include "sql/optimizer/ob_log_merge.h"
 #include "sql/optimizer/ob_log_update.h"
+#include "sql/optimizer/ob_insert_log_plan.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
@@ -837,7 +838,11 @@ int ObDmlCgService::generate_insert_up_ctdef(ObLogInsert &op,
   ObUpdCtDef *upd_ctdef = NULL;
   uint64_t index_tid = ins_index_dml_info.ref_table_id_;
   ObDMLCtDefAllocator<ObInsertUpCtDef> insert_up_allocator(cg_.phy_plan_->get_allocator());
-  if (OB_ISNULL(insert_up_ctdef = insert_up_allocator.alloc())) {
+  const ObInsertLogPlan *insert_log_plan = static_cast<ObInsertLogPlan *>(op.get_plan());
+  if (OB_ISNULL(insert_log_plan)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("insert_log_plan is null", K(ret), K(op.get_plan()));
+  } else if (OB_ISNULL(insert_up_ctdef = insert_up_allocator.alloc())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate insert on duplicate key ctdef failed", K(ret));
   } else if (OB_FAIL(generate_insert_ctdef(op, ins_index_dml_info, ins_ctdef))) {
@@ -847,6 +852,7 @@ int ObDmlCgService::generate_insert_up_ctdef(ObLogInsert &op,
   } else {
     insert_up_ctdef->ins_ctdef_ = ins_ctdef;
     insert_up_ctdef->upd_ctdef_ = upd_ctdef;
+    insert_up_ctdef->enable_do_update_directly_ = insert_log_plan->enable_insertup_do_update_directly();
   }
 
   return ret;
