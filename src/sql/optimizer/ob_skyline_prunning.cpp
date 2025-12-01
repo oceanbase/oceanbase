@@ -335,7 +335,8 @@ int ObQueryRangeDim::compare(const ObSkylineDim &other, CompareStat &status) con
         // prefer ss index which has less offset column and more range column
         if (EQUAL == range_status && EQUAL == offset_status) {
           status = EQUAL;
-        } else if (range_status == offset_status) {
+        } else if (range_status == offset_status ||
+                   UNCOMPARABLE == offset_status) {
           status = UNCOMPARABLE;
         } else if (LEFT_DOMINATED == range_status ||
                    RIGHT_DOMINATED == offset_status) {
@@ -343,6 +344,9 @@ int ObQueryRangeDim::compare(const ObSkylineDim &other, CompareStat &status) con
         } else if (RIGHT_DOMINATED == range_status ||
                    LEFT_DOMINATED == offset_status) {
           status = RIGHT_DOMINATED;
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected cmp result", K(range_status), K(offset_status));
         }
       }
       if (!skip_scan_comparable &&
