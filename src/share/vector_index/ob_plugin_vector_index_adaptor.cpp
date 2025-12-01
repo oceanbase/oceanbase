@@ -2314,18 +2314,32 @@ int ObPluginVectorIndexAdaptor::renew_single_snap_index(bool mem_saving_mode)
       LOG_WARN("unexpected nullptr snap_data_", K(ret), KP(snap_data_));
     } else {
       TCWLockGuard lock_guard(snap_data_->mem_data_rwlock_);
-      if (OB_FAIL(try_free_memdata_resource(VIRT_SNAP, snap_data_, allocator_, tenant_id_))) {
+      if (OB_FAIL(renew_snapdata_in_lock())) {
         LOG_WARN("failed to free snap memdata", K(ret), KPC(this));
-      } else if (OB_FAIL(init_mem(snap_data_))) {
-        LOG_WARN("fail to init snap_data_ mem", K(ret));
-      } else if (OB_FAIL(try_init_snap_data(index_type))) {
-        LOG_WARN("failed to init snap data", K(ret), K(index_type));
       } else if (OB_FAIL(set_snapshot_key_prefix(invalid_prefix))) {
         LOG_WARN("fail to set snapshot key prefix", K(ret));
       }
     }
   } else {
     // do nothing
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexAdaptor::renew_snapdata_in_lock()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(snap_data_)) {
+    // do nothing
+  } else if (OB_ISNULL(allocator_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("allocator is null", K(ret), KPC(snap_data_), K(allocator_));
+  } else {
+    ObVectorIndexAlgorithmType index_type = get_snap_index_type();
+    free_memdata_resource(VIRT_SNAP, snap_data_, allocator_, tenant_id_);
+    if (OB_FAIL(try_init_snap_data(index_type))) {
+      LOG_WARN("failed to init snap data", K(ret), K(index_type));
+    }
   }
   return ret;
 }
