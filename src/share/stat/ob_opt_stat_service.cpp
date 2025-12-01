@@ -457,6 +457,7 @@ int ObOptStatService::get_table_rowcnt(const uint64_t tenant_id,
       } else {
         storage::ObTenantTabletStatMgr *stat_mgr = MTL(storage::ObTenantTabletStatMgr *);
         storage::ObTabletStat tablet_stat;
+        int64_t tablet_row_cnt = 0;
         //try check the latest tablet stat from stroage
         if (stat_mgr != NULL) {
           if (OB_FAIL(stat_mgr->get_latest_tablet_stat(all_ls_ids.at(i), all_tablet_ids.at(i), tablet_stat, unused_tablet_stat, unused_mode))) {
@@ -468,7 +469,9 @@ int ObOptStatService::get_table_rowcnt(const uint64_t tenant_id,
           }
         }
         LOG_TRACE("cache stat compare", KPC(handle.stat_), K(tablet_stat));
-        if (handle.stat_->get_row_count() < tablet_stat.insert_row_cnt_ - tablet_stat.delete_row_cnt_) {
+        tablet_row_cnt = tablet_stat.insert_row_cnt_ > tablet_stat.delete_row_cnt_ ?
+                          tablet_stat.insert_row_cnt_ - tablet_stat.delete_row_cnt_ : 0;
+        if (handle.stat_->get_row_count() < tablet_row_cnt) {
           if (OB_FAIL(reload_tablet_ids.push_back(all_tablet_ids.at(i))) ||
               OB_FAIL(reload_ls_ids.push_back(all_ls_ids.at(i)))) {
             LOG_WARN("failed to push back", K(ret));

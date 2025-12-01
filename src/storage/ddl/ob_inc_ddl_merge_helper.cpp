@@ -192,10 +192,7 @@ int ObIncMinDDLMergeHelper::merge_cg_slice(ObIDag *dag,
     tablet_ddl_param.start_scn_           = ddl_kv->get_ddl_start_scn();
     tablet_ddl_param.commit_scn_          = ddl_kv->get_ddl_start_scn();
     tablet_ddl_param.data_format_version_ = dag_merge_param.ddl_task_param_.tenant_data_version_;
-    tablet_ddl_param.table_key_.tablet_id_= dag_merge_param.table_key_.tablet_id_;
-    tablet_ddl_param.table_key_.scn_range_.start_scn_ = ddl_kv->get_start_scn();
-    tablet_ddl_param.table_key_.scn_range_.end_scn_   = ddl_kv->get_end_scn();
-    tablet_ddl_param.table_key_.table_type_           = ObITable::MINI_SSTABLE;
+    tablet_ddl_param.table_key_           = dag_merge_param.table_key_;
     tablet_ddl_param.snapshot_version_                = ddl_kv->get_snapshot_version();
     tablet_ddl_param.trans_id_                        = ddl_kv->get_trans_id();
     tablet_ddl_param.seq_no_                          = ddl_kv->get_seq_no();
@@ -397,10 +394,11 @@ int ObIncMajorDDLMergeHelper::check_need_merge(
   } else if (OB_FAIL(ObDirectLoadMgrUtil::get_tablet_handle(target_ls_id, target_tablet_id, tablet_handle))) {
     LOG_WARN("failed to get tablet handle", K(ret));
   } else if (merge_param.for_major_) {
+    // do not merge inc_major during migration because data could be incomplete
     const ObTabletHAStatus &ha_status = tablet_handle.get_obj()->get_tablet_meta().ha_status_;
-    if (OB_UNLIKELY(!ha_status.is_none())) {
+    if (OB_UNLIKELY(!ha_status.is_data_status_complete())) {
       ret = OB_NO_NEED_MERGE;
-      LOG_INFO("tablet ha status is not none, no need to merge inc major", KR(ret),
+      FLOG_INFO("tablet data is incomplete, no need to merge inc major", KR(ret),
           K(target_ls_id), K(target_tablet_id), K(ha_status), K(merge_param), KPC(dag));
     }
   }

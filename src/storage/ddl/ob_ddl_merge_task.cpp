@@ -251,7 +251,8 @@ int ObDDLTableMergeDag::create_first_task()
                                     task_param,
                                     tablet_ctx_,
                                     ddl_param_.trans_id_,
-                                    ddl_param_.seq_no_))) {
+                                    ddl_param_.seq_no_,
+                                    ddl_param_.inc_major_trans_version_))) {
         LOG_WARN("failed to init ddl param", K(ret));
       } else if (OB_FAIL(create_task(nullptr /* parent task */, ddl_merge_task, ddl_param_v2))) {
         LOG_WARN("failed to create task", K(ret));

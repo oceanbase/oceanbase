@@ -85,6 +85,10 @@ int ObAlterMviewUtils::resolve_mv_options(const ParseNode &node,
           OB_UNLIKELY(T_PARALLEL != parallel_node->type_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid parallel node", K(node.children_[0]), K(ret));
+      } else if (OB_UNLIKELY(parallel_node->children_[0]->value_ < 0)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("invalid refresh dop", K(parallel_node->children_[0]->value_), K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "value for PARALLEL or DEGREE must be equal to or greater than 0!");
       } else {
         const int64_t refresh_dop = parallel_node->children_[0]->value_;
         alter_mview_arg.set_refresh_dop(refresh_dop);
@@ -204,6 +208,10 @@ int ObAlterMviewUtils::resolve_mlog_options(const ParseNode &node,
           OB_UNLIKELY(T_PARALLEL != parallel_node->type_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid parallel node", K(node.children_[0]), K(ret));
+      } else if (OB_UNLIKELY(parallel_node->children_[0]->value_ < 1)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("invalid table dop", K(parallel_node->children_[0]->value_), K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "value for PARALLEL or DEGREE must be greater than 0!");
       } else {
         const int64_t table_dop = parallel_node->children_[0]->value_;
         alter_mlog_arg.set_table_dop(table_dop);

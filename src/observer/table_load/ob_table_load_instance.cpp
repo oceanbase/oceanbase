@@ -103,7 +103,7 @@ int ObTableLoadInstance::init(ObTableLoadParam &param,
                      "tenant_id", MTL_ID(),
                      "trace_id", *ObCurTraceId::get_trace_id(),
                      K(db_id),
-                     K(query_sql),
+                     "query_sql", ObHexEscapeSqlStr(query_sql),
                      K(param));
 
     if (OB_FAIL(param.normalize())) {

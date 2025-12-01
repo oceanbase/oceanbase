@@ -1105,6 +1105,23 @@ public:
       dep_infos_(),
       mv_ainfo_()
   {}
+  explicit ObCreateTableArg(common::ObIAllocator *allocator) :
+           ObDDLArg(),
+           if_not_exist_(false),
+           schema_(allocator),
+           index_arg_list_(),
+           foreign_key_arg_list_(),
+           constraint_list_(),
+           db_name_(),
+           last_replay_log_id_(0),
+           is_inner_(false),
+           vertical_partition_arg_list_(),
+           error_info_(),
+           is_alter_view_(false),
+           sequence_ddl_arg_(),
+           dep_infos_(),
+           mv_ainfo_()
+  {}
   bool is_valid() const;
   virtual bool is_allow_when_upgrade() const;
   int assign(const ObCreateTableArg &other);
@@ -5394,6 +5411,25 @@ private:
   ObAdminDRTaskType task_type_;
 };
 
+struct ObAdminSwitchReplicaRoleStr
+{
+public:
+  OB_UNIS_VERSION(1);
+public:
+  ObAdminSwitchReplicaRoleStr()
+    : admin_command_() {}
+  ~ObAdminSwitchReplicaRoleStr() {}
+public:
+  int assign(const ObAdminSwitchReplicaRoleStr &other);
+  int init(const ObString &admin_command);
+  bool is_valid() const { return !admin_command_.is_empty(); }
+  void reset() { admin_command_.reset(); }
+  const ObString get_admin_command_str() const { return admin_command_.str(); }
+  TO_STRING_KV(K(admin_command_));
+private:
+  common::ObFixedLengthString<OB_MAX_ADMIN_COMMAND_LENGTH + 1> admin_command_;
+};
+
 #ifdef OB_BUILD_ARBITRATION
 // send to leader to add A-replica for log stream
 struct ObAddArbArg
@@ -6725,6 +6761,7 @@ public:
   ~ObAdminSwitchReplicaRoleArg() {}
 
   bool is_valid() const;
+  void reset();
   TO_STRING_KV(K_(role), K_(ls_id), K_(server), K_(zone), K_(tenant_name));
 
   common::ObRole role_;
@@ -13542,19 +13579,30 @@ private:
 
 struct ObTTLRequestArg final
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   enum TTLRequestType {
     TTL_TRIGGER_TYPE = 0,
     TTL_SUSPEND_TYPE = 1,
     TTL_RESUME_TYPE = 2,
     TTL_CANCEL_TYPE = 3,
+
     TTL_MOVE_TYPE = 4,
-    TTL_INVALID_TYPE = 5
+    TTL_INVALID_TYPE = 5,
+    LOB_CHECK_TRIGGER_TYPE = 10,
+    LOB_CHECK_SUSPEND_TYPE,
+    LOB_CHECK_RESUME_TYPE,
+    LOB_CHECK_CANCEL_TYPE,
+    LOB_CHECK_INVALID_TYPE,
+    LOB_CORRECT_TRIGGER_TYPE = 20,
+    LOB_CORRECT_SUSPEND_TYPE,
+    LOB_CORRECT_RESUME_TYPE,
+    LOB_CORRECT_CANCEL_TYPE,
+    LOB_CORRECT_INVALID_TYPE,
   };
 
   ObTTLRequestArg()
-    : cmd_code_(-1), trigger_type_(-1), task_id_(OB_INVALID_ID), tenant_id_(OB_INVALID_ID)
+    : cmd_code_(-1), trigger_type_(-1), task_id_(OB_INVALID_ID), tenant_id_(OB_INVALID_ID), table_with_tablet_()
   {}
   ~ObTTLRequestArg() = default;
   bool is_valid() const {
@@ -13562,12 +13610,13 @@ public:
     return cmd_code_ != -1 && trigger_type_ != -1 && tenant_id_ != OB_INVALID_ID;
   }
   int assign(const ObTTLRequestArg &other);
-  TO_STRING_KV(K_(cmd_code), K_(trigger_type), K_(task_id), K_(tenant_id));
+  TO_STRING_KV(K_(cmd_code), K_(trigger_type), K_(task_id), K_(tenant_id), K_(table_with_tablet));
 public:
   int32_t cmd_code_; // enum TTLCmdType
   int32_t trigger_type_; // system or user
   int64_t task_id_;  // task id
   uint64_t tenant_id_; // tenand_id array
+  ObString table_with_tablet_; // {"500001":[200001, 200002, 200003], "500002":[], "500003":[200008, 200009]}
 };
 
 struct ObTTLResponseArg {

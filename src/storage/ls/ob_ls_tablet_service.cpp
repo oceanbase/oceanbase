@@ -2700,7 +2700,6 @@ int ObLSTabletService::create_transfer_in_tablet(
 {
   int ret = OB_SUCCESS;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-  ObTransService *tx_svr = MTL(ObTransService*);
   const common::ObTabletID &tablet_id = tablet_meta.tablet_id_;
   const ObTabletMapKey key(ls_id, tablet_id);
   ObTablet *tablet = nullptr;
@@ -2788,8 +2787,6 @@ int ObLSTabletService::create_transfer_in_tablet(
       LOG_WARN("failed to compare and swap tablet", K(ret), K(key), K(tablet_handle), K(param));
     } else if (OB_FAIL(tablet_id_set_.set(tablet_id))) {
       LOG_WARN("fail to insert tablet id", K(ret), K(ls_id), K(tablet_id));
-    } else if (OB_FAIL(tx_svr->create_tablet(key.tablet_id_, key.ls_id_))) {
-      LOG_WARN("fail to create tablet cache", K(ret), K(key), K(tablet_meta));
     } else {
       time_guard.click("Swap");
     }
@@ -9443,7 +9440,7 @@ int ObLSTabletService::estimate_skip_index_sortedness(
                    K(cg_idx),
                    K(i));
         } else if (OB_FAIL(calcer.sample_and_calc(tmp_sortedness))) {
-          LOG_WARN("Fail to sample and calc sortedness", KR(ret));
+          LOG_WARN("Fail to sample and calc sortedness", KR(ret), K(i), K(calcer));
         } else if (OB_FAIL(sortedness.push_back(tmp_sortedness))) {
           LOG_WARN("Fail to push back sortedness", KR(ret));
         }
@@ -9489,7 +9486,7 @@ int ObLSTabletService::estimate_skip_index_sortedness(
                  K(sample_counts),
                  K(i));
       } else if (OB_FAIL(calcer.sample_and_calc(tmp_sortedness))) {
-        LOG_WARN("Fail to sample and calc sortedness", KR(ret));
+        LOG_WARN("Fail to sample and calc sortedness", KR(ret), K(i), K(calcer));
       } else if (OB_FAIL(sortedness.push_back(tmp_sortedness))) {
         LOG_WARN("Fail to push back sortedness", KR(ret));
       }

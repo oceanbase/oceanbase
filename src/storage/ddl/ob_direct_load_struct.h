@@ -379,7 +379,8 @@ public:
                K_(snapshot_version),
                K_(trans_id),
                K_(seq_no),
-               K_(rec_scn));
+               K_(rec_scn),
+               K_(inc_major_trans_version));
 public:
   ObDirectLoadType direct_load_type_;
   share::ObLSID ls_id_;
@@ -391,6 +392,7 @@ public:
   transaction::ObTransID trans_id_; // used for incremental direct load only
   transaction::ObTxSEQ seq_no_; // for incremental direct load
   share::SCN rec_scn_;
+  int64_t inc_major_trans_version_;
 };
 
 struct ObDDLTableMergeDagParam : public share::ObIDagInitParam
@@ -410,7 +412,8 @@ public:
       user_data_(),
       trans_id_(),
       seq_no_(),
-      table_type_(ObITable::MAX_TABLE_TYPE)
+      table_type_(ObITable::MAX_TABLE_TYPE),
+      inc_major_trans_version_(0)
   { }
   bool is_valid() const
   {
@@ -425,7 +428,7 @@ public:
   int assign(const ObDDLTableMergeDagParam &merge_param);
   virtual ~ObDDLTableMergeDagParam() = default;
   VIRTUAL_TO_STRING_KV(K_(direct_load_type), K_(ls_id), K_(tablet_id), K_(rec_scn), K_(is_commit), K_(start_scn), K_(data_format_version),
-                       K_(snapshot_version), K_(table_key), K_(trans_id), K_(seq_no), K_(table_type), K_(user_data));
+                       K_(snapshot_version), K_(table_key), K_(trans_id), K_(seq_no), K_(table_type), K_(inc_major_trans_version), K_(user_data));
 public:
   ObDirectLoadType direct_load_type_;
   share::ObLSID ls_id_;
@@ -443,6 +446,7 @@ public:
   transaction::ObTransID trans_id_; // for inc-major direct load only
   transaction::ObTxSEQ seq_no_; // for inc-major direct load only
   ObITable::TableType table_type_; // only valid in inc-major direct load to decide to use row/column store schema
+  int64_t inc_major_trans_version_;
 };
 
 
@@ -452,7 +456,7 @@ struct ObDDLTabletMergeDagParamV2
 public:
   ObDDLTabletMergeDagParamV2():
     for_major_(false), for_lob_(false), for_replay_(false), merge_all_slice_(false), direct_load_type_(ObDirectLoadType::DIRECT_LOAD_INVALID), start_scn_(share::SCN::min_scn()),
-    rec_scn_(share::SCN::min_scn()),  ddl_task_param_(), tablet_ctx_(nullptr), is_inited_(false) {}
+    rec_scn_(share::SCN::min_scn()),  ddl_task_param_(), inc_major_trans_version_(0), tablet_ctx_(nullptr), is_inited_(false) {}
   int init(const bool for_major,
            const bool for_lob,
            const bool for_replay,
@@ -461,7 +465,8 @@ public:
            const ObDDLTaskParam &task_param,
            ObDDLTabletContext *tablet_ctx_,
            const transaction::ObTransID &trans_id = transaction::ObTransID(),
-           const transaction::ObTxSEQ &seq_no = transaction::ObTxSEQ());
+           const transaction::ObTxSEQ &seq_no = transaction::ObTxSEQ(),
+           const int64_t inc_major_trans_version = 0);
   bool is_valid() const;
   int assign(const ObDDLTabletMergeDagParamV2 &merge_param);
   int init_cg_sstable_array( hash::ObHashSet<int64_t> &slice_idxes);
@@ -477,7 +482,9 @@ public:
   ObDDLTabletContext *get_tablet_ctx() { return tablet_ctx_; }
   ObDDLTabletContext *get_tablet_ctx() const { return tablet_ctx_; }
   int get_merge_helper(ObIDDLMergeHelper *&merge_helper);
-  VIRTUAL_TO_STRING_KV(K(for_major_), K(for_replay_), K(for_lob_), K(merge_all_slice_), K(direct_load_type_), K(start_scn_), K(rec_scn_), K(table_key_), K(ddl_task_param_), K_(trans_id), K_(seq_no), KPC(tablet_ctx_));
+  VIRTUAL_TO_STRING_KV(K(for_major_), K(for_replay_), K(for_lob_), K(merge_all_slice_),
+      K(direct_load_type_), K(start_scn_), K(rec_scn_), K(table_key_), K(ddl_task_param_),
+      K_(trans_id), K_(seq_no), KPC(tablet_ctx_), K_(inc_major_trans_version));
 public:
   bool for_major_;
   bool for_lob_;
@@ -490,6 +497,7 @@ public:
   transaction::ObTransID trans_id_; // for inc-major direct load only
   transaction::ObTxSEQ seq_no_; // for inc-major direct load only
   ObITable::TableKey table_key_;
+  int64_t inc_major_trans_version_;
 private:
   ObDDLTabletContext *tablet_ctx_;
   bool is_inited_;

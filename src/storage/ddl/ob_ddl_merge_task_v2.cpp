@@ -52,7 +52,7 @@ int ObDDLMergeBaseTask::process()
 }
 
 
-int ObDDLMergeGuardTask::init(const bool for_replay, const ObTabletID &tablet_id)
+int ObDDLMergeGuardTask::init(const bool for_replay, const ObTabletID &tablet_id, bool retry_uitl_get)
 {
   int ret = OB_SUCCESS;
   char* buf = nullptr;
@@ -63,12 +63,25 @@ int ObDDLMergeGuardTask::init(const bool for_replay, const ObTabletID &tablet_id
   } else if (OB_ISNULL(mtl_bucket_lock)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("bucket lock should not be null", K(ret));
-  } else if (OB_FAIL(mtl_bucket_lock->lock(tablet_id))) {
-    if (OB_EAGAIN == ret && !for_replay) {
-      LOG_WARN("failed to lock tablet, but execute again", K(ret), K(tablet_id));
-      ret = OB_DAG_TASK_IS_SUSPENDED;
+  }
+
+  int64_t max_retry_times = 100;
+  while (OB_SUCC(ret)) {
+    if (OB_FAIL(mtl_bucket_lock->lock(tablet_id))) {
+      if (OB_EAGAIN == ret && !for_replay) {
+        LOG_WARN("failed to lock tablet, but execute again", K(ret), K(tablet_id));
+        if (retry_uitl_get && max_retry_times > 0) {
+          ret = OB_SUCCESS;
+          ob_usleep(1000 * 10); // 10ms
+          max_retry_times--;
+        } else {
+          ret = OB_DAG_TASK_IS_SUSPENDED;
+        }
+      } else {
+        LOG_WARN("failed to lock tablet", K(ret), K(tablet_id));
+      }
     } else {
-      LOG_WARN("failed to lock tablet", K(ret), K(tablet_id));
+      break;
     }
   }
 
@@ -180,7 +193,7 @@ ObDDLMergePrepareTask::ObDDLMergePrepareTask():
 ObDDLMergePrepareTask::~ObDDLMergePrepareTask()
 {}
 
-int ObDDLMergePrepareTask::init(const ObDDLTabletMergeDagParamV2 &merge_param, ObDDLFailCallback *fail_cb)
+int ObDDLMergePrepareTask::init(const ObDDLTabletMergeDagParamV2 &merge_param, ObDDLFailCallback *fail_cb, bool retry_uitl_get)
 {
   int ret = OB_SUCCESS;
   if (!merge_param.is_valid()) {
@@ -190,6 +203,7 @@ int ObDDLMergePrepareTask::init(const ObDDLTabletMergeDagParamV2 &merge_param, O
     merge_param_ = merge_param;
     guard_task_  = nullptr;
     set_fail_callback(fail_cb);
+    retry_uitl_get_lock_ = retry_uitl_get;
     is_inited_   = true;
   }
   FLOG_INFO("[DDL_MERGE_TASK] success to create merge prepare task", K(ret), K(merge_param_));
@@ -239,7 +253,7 @@ int ObDDLMergePrepareTask::inner_process()
   if (OB_FAIL(ret)) {
   } else if (guard_task_->is_inited_) {
     LOG_INFO("gaurd task already init", K(tablet_id));
-  } else if (OB_FAIL(guard_task_->init(merge_param_.for_replay_, tablet_id))) {
+  } else if (OB_FAIL(guard_task_->init(merge_param_.for_replay_, tablet_id, retry_uitl_get_lock_))) {
     LOG_WARN("failed to init merge guard task", K(ret));
   } else if (OB_FAIL(guard_task_->deep_copy_children(get_child_nodes()))) {
     LOG_WARN("fail to deep copy children", KR(ret));

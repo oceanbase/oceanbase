@@ -88,12 +88,26 @@ DEF_TO_STRING(ObWrUserModifySettingsArg)
   J_COLON();
   pos += ObWrSnapshotArg::to_string(buf + pos, buf_len - pos);
   J_COMMA();
-  J_KV(K_(tenant_id), K_(retention), K_(interval), K_(topnsql));
+  J_KV(K_(tenant_id), K_(retention), K_(interval), K_(topnsql), K_(sqlstat_interval));
   J_OBJ_END();
   return pos;
 }
 OB_SERIALIZE_MEMBER(
-    (ObWrUserModifySettingsArg, ObWrSnapshotArg), tenant_id_, retention_, interval_, topnsql_);
+    (ObWrUserModifySettingsArg, ObWrSnapshotArg), tenant_id_, retention_, interval_, topnsql_, sqlstat_interval_);
+
+DEF_TO_STRING(ObWrAsyncUpdateSqlStatArg)
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_NAME("WR_async_update_sqlstat_arg");
+  J_COLON();
+  pos += ObWrSnapshotArg::to_string(buf + pos, buf_len - pos);
+  J_COMMA();
+  J_KV(K_(tenant_id), K_(timeout_ts));
+  J_OBJ_END();
+  return pos;
+}
+OB_SERIALIZE_MEMBER((ObWrAsyncUpdateSqlStatArg, ObWrSnapshotArg), tenant_id_, timeout_ts_);
 
 template <obrpc::ObRpcPacketCode pcode>
 int ObWrBaseSnapshotTaskP<pcode>::init()
@@ -427,5 +441,12 @@ int ObWrSyncUserModifySettingsTaskP::process()
   }
   return ret;
 }
+
+int ObWrAsyncUpdateSqlStatTaskP::process()
+{
+  int ret = OB_SUCCESS;
+  return ret;
+}
+
 }  // end of namespace share
 }  // end of namespace oceanbase

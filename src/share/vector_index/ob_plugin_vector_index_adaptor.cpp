@@ -2318,8 +2318,10 @@ int ObPluginVectorIndexAdaptor::check_delta_buffer_table_readnext_status(ObVecto
       } else {
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIBitmapADPI"));
         if (op.ptr()[0] == sql::ObVecIndexDMLIterator::VEC_DELTA_INSERT[0]) {
-          ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(ctx->bitmaps_->insert_bitmap_, vid));
-
+          // if vid is not in delete_bitmap, add to insert_bitmap
+          if (!roaring::api::roaring64_bitmap_contains(ctx->bitmaps_->delete_bitmap_, vid)) {
+            ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(ctx->bitmaps_->insert_bitmap_, vid));
+          }
         } else if (op.ptr()[0] == sql::ObVecIndexDMLIterator::VEC_DELTA_DELETE[0]) {
           ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_remove(ctx->bitmaps_->insert_bitmap_, vid));
           ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(ctx->bitmaps_->delete_bitmap_, vid));
@@ -2370,13 +2372,6 @@ int ObPluginVectorIndexAdaptor::write_into_delta_mem(ObVectorQueryAdaptorResultC
   } else {
     TCWLockGuard lock_guard(incr_data_->mem_data_rwlock_);
     if (check_if_complete_delta(ctx->bitmaps_->insert_bitmap_, count)) {
-      if (OB_SUCC(ret)) {
-        lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIBitmapADPJ"));
-        TCWLockGuard lock_guard(incr_data_->bitmap_rwlock_);
-        for (int64_t i = 0; OB_SUCC(ret) && i < count; i++) {
-          ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(incr_data_->bitmap_->insert_bitmap_, vids[i]));
-        }
-      }
       char *extra_info_buf = nullptr;
       ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_);
       if (OB_SUCC(ret) && OB_NOT_NULL(extra_objs) && extra_column_count > 0) {
@@ -2413,7 +2408,13 @@ int ObPluginVectorIndexAdaptor::write_into_delta_mem(ObVectorQueryAdaptorResultC
           }
         }
       }
-
+      if (OB_SUCC(ret)) {
+        lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIBitmapADPJ"));
+        TCWLockGuard lock_guard(incr_data_->bitmap_rwlock_);
+        for (int64_t i = 0; OB_SUCC(ret) && i < count; i++) {
+          ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(incr_data_->bitmap_->insert_bitmap_, vids[i]));
+        }
+      }
       if (OB_SUCC(ret)) {
         incr_data_->set_vid_bound(vid_bound);
       }
@@ -3034,7 +3035,6 @@ int ObPluginVectorIndexAdaptor::merge_and_generate_bitmap(ObVectorQueryAdaptorRe
     lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIBitmapADPP"));
     ibitmap = ctx->bitmaps_->insert_bitmap_;
     dbitmap = ctx->bitmaps_->delete_bitmap_;
-    ROARING_TRY_CATCH(roaring64_bitmap_andnot_inplace(ibitmap, dbitmap));
     iFilter.set_roaring_bitmap(ibitmap);
     dFilter.set_roaring_bitmap(dbitmap);
     LOG_DEBUG("vbitmap is not inited.", K(ret));

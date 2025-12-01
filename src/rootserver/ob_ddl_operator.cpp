@@ -4196,6 +4196,7 @@ int ObDDLOperator::inner_alter_table_rename_index_(
   int ret = OB_SUCCESS;
   int64_t new_schema_version = OB_INVALID_VERSION;
   ObSchemaService *schema_service = schema_service_.get_schema_service();
+  const bool in_offline_ddl_white_list = new_index_table_schema.get_in_offline_ddl_white_list();
   if (OB_ISNULL(schema_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is NULL", K(ret));
@@ -4219,6 +4220,7 @@ int ObDDLOperator::inner_alter_table_rename_index_(
     }
     new_index_table_schema.set_is_in_deleting(is_in_deleting);
     new_index_table_schema.set_name_generated_type(GENERATED_TYPE_USER);
+    new_index_table_schema.set_in_offline_ddl_white_list(in_offline_ddl_white_list || new_index_table_schema.get_in_offline_ddl_white_list());
     if (OB_FAIL(new_index_table_schema.set_table_name(new_index_name))) {
       RS_LOG(WARN, "failed to set new table name!", K(new_index_table_schema), K(ret));
     } else if (OB_FAIL(schema_service->get_table_sql_service().update_table_options(

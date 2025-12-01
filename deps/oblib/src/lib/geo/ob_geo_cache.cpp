@@ -34,6 +34,8 @@ int ObCachedGeomBase::init()
     } else {
       x_min_ = vertex_visitor.get_x_min();
       x_max_ = vertex_visitor.get_x_max();
+      y_min_ = vertex_visitor.get_y_min();
+      y_max_ = vertex_visitor.get_y_max();
       is_inited_ = true;
     }
   }

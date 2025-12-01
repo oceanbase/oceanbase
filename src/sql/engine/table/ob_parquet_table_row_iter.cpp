@@ -1337,64 +1337,104 @@ int ObParquetTableRowIterator::DataLoader::load_string_col()
   StrDiscVec *text_vec = static_cast<StrDiscVec *>(file_col_expr_->get_vector(eval_ctx_));
   ObArrayWrap<parquet::ByteArray> values;
 
-  CK (VEC_DISCRETE == text_vec->get_format());
-  OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
+  CK(VEC_DISCRETE == text_vec->get_format());
+  OZ(values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
+
   if (OB_SUCC(ret)) {
-    row_count_ = static_cast<parquet::ByteArrayReader*>(reader_)->ReadBatch(
-          batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
-          values.get_data(), &values_cnt);
+    row_count_
+        = static_cast<parquet::ByteArrayReader *>(reader_)->ReadBatch(batch_size_,
+                                                                      def_levels_buf_.get_data(),
+                                                                      rep_levels_buf_.get_data(),
+                                                                      values.get_data(),
+                                                                      &values_cnt);
     read_progress_ += row_count_;
     if (OB_UNLIKELY(values_cnt > row_count_)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("repeated data not support");
     } else {
-      bool is_oracle_mode = lib::is_oracle_mode();
-      bool is_byte_length = is_oracle_byte_length(
-            is_oracle_mode, file_col_expr_->datum_meta_.length_semantics_);
+      // Extract loop-invariant variables (Optimization: reduce redundant computation)
+      const bool is_oracle_mode = lib::is_oracle_mode();
+      const bool is_byte_length
+          = is_oracle_byte_length(is_oracle_mode, file_col_expr_->datum_meta_.length_semantics_);
+      const int64_t max_length = file_col_expr_->max_length_;
+      const bool is_large_text = ob_is_large_text(file_col_expr_->datum_meta_.type_);
+      const int64_t row_offset = row_offset_;
+      int16_t *def_levels = def_levels_buf_.get_data();
+      parquet::ByteArray *values_data = values.get_data();
+
       int j = 0;
       stat_.cross_page_cnt_ += cross_page_;
       stat_.in_page_cnt_ += (!cross_page_);
-      for (int i = 0; OB_SUCC(ret) && i < row_count_; i++) {
-        if (IS_PARQUET_COL_VALUE_IS_NULL(def_levels_buf_.at(i))) {
-          text_vec->set_null(i + row_offset_);
-        } else {
-          parquet::ByteArray &cur_v = values.at(j++);
-          if (is_oracle_mode && 0 == cur_v.len) {
-            text_vec->set_null(i + row_offset_);
-          } else {
-            void *res_ptr = NULL;
-            if (OB_UNLIKELY(cur_v.len > file_col_expr_->max_length_
-                            && (is_byte_length || ObCharset::strlen_char(CS_TYPE_UTF8MB4_BIN,
-                                                                        pointer_cast<const char *>(cur_v.ptr),
-                                                                        cur_v.len) > file_col_expr_->max_length_))) {
+
+      const bool has_no_null = IS_PARQUET_COL_NOT_NULL && values_cnt == row_count_;
+      const bool is_fast_path = !cross_page_ && !is_large_text && !is_oracle_mode && has_no_null;
+
+      if (OB_LIKELY(is_fast_path)) {
+        for (int i = 0; OB_SUCC(ret) && i < row_count_; i++) {
+          parquet::ByteArray &cur_v = values_data[i];
+          if (OB_UNLIKELY(cur_v.len > max_length)) {
+            if (OB_UNLIKELY(!is_byte_length
+                            && ObCharset::strlen_char(CS_TYPE_UTF8MB4_BIN,
+                                                      pointer_cast<const char *>(cur_v.ptr),
+                                                      cur_v.len)
+                                   > max_length)) {
               ret = OB_ERR_DATA_TOO_LONG;
-              LOG_WARN("data too long", K(file_col_expr_->max_length_), K(cur_v.len), K(is_byte_length), K(ret));
-            } else if (ob_is_large_text(file_col_expr_->datum_meta_.type_)) {
-              if (OB_FAIL(ObTextStringHelper::string_to_templob_result(*file_col_expr_, eval_ctx_,
-                                        ObString(cur_v.len, pointer_cast<const char *>(cur_v.ptr)),
-                                                                       i + row_offset_))) {
-                LOG_WARN("fail to lob result", K(ret));
-              }
+              LOG_WARN("data too long", K(max_length), K(cur_v.len), K(ret));
+            }
+          } else {
+            text_vec->set_string(i + row_offset, pointer_cast<const char *>(cur_v.ptr), cur_v.len);
+          }
+        }
+      } else {
+        for (int i = 0; OB_SUCC(ret) && i < row_count_; i++) {
+          if (IS_PARQUET_COL_VALUE_IS_NULL(def_levels[i])) {
+            text_vec->set_null(i + row_offset);
+          } else {
+            parquet::ByteArray &cur_v = values_data[j++];
+            if (OB_UNLIKELY(is_oracle_mode && 0 == cur_v.len)) {
+              text_vec->set_null(i + row_offset);
             } else {
-              if (!cross_page_) {
-                res_ptr = (void *)(cur_v.ptr);
-              } else if (cur_v.len > 0) {
-                //when row_count_ less than batch_size_, it may reach page end and reload next page
-                //string values need deep copy
-                if (OB_ISNULL(res_ptr = str_res_mem_.alloc(cur_v.len))) {
-                  ret = OB_ALLOCATE_MEMORY_FAILED;
-                  LOG_WARN("fail to allocate memory", K(cur_v.len));
-                } else {
-                  MEMCPY(res_ptr, cur_v.ptr, cur_v.len);
+              void *res_ptr = NULL;
+
+              // Check length only when necessary (Optimization: reduce unlikely checks)
+              if (OB_UNLIKELY(cur_v.len > max_length
+                              && (is_byte_length
+                                  || ObCharset::strlen_char(CS_TYPE_UTF8MB4_BIN,
+                                                            pointer_cast<const char *>(cur_v.ptr),
+                                                            cur_v.len)
+                                         > max_length))) {
+                ret = OB_ERR_DATA_TOO_LONG;
+                LOG_WARN("data too long", K(max_length), K(cur_v.len), K(is_byte_length), K(ret));
+              } else if (OB_UNLIKELY(is_large_text)) {
+                if (OB_FAIL(ObTextStringHelper::string_to_templob_result(
+                        *file_col_expr_,
+                        eval_ctx_,
+                        ObString(cur_v.len, pointer_cast<const char *>(cur_v.ptr)),
+                        i + row_offset))) {
+                    LOG_WARN("fail to lob result", K(ret));
                 }
+              } else {
+                if (OB_LIKELY(!cross_page_)) {
+                    res_ptr = (void *)(cur_v.ptr);
+                } else if (cur_v.len > 0) {
+                    if (OB_ISNULL(res_ptr = str_res_mem_.alloc(cur_v.len))) {
+                      ret = OB_ALLOCATE_MEMORY_FAILED;
+                      LOG_WARN("fail to allocate memory", K(cur_v.len));
+                    } else {
+                      MEMCPY(res_ptr, cur_v.ptr, cur_v.len);
+                    }
+                }
+                text_vec->set_string(i + row_offset,
+                                     pointer_cast<const char *>(res_ptr),
+                                     cur_v.len);
               }
-              text_vec->set_string(i + row_offset_, pointer_cast<const char *>(res_ptr), cur_v.len);
             }
           }
         }
       }
     }
   }
+
   return ret;
 }
 
@@ -2822,14 +2862,23 @@ int ObParquetTableRowIterator::project_eager_columns(int64_t &count, int64_t cap
               ((eager_col_reader == nullptr && load_row_count < state_.cur_row_group_row_count_) ||
               (eager_col_reader != nullptr && eager_col_reader->HasNext()))) {
           int64_t temp_row_count = 0;
+          int64_t requested_batch_size = capacity - load_row_count;
+
+          // Check if this batch will cross page boundary
+          bool cross_page
+              = !sector_iter_.is_cross_page(cur_col_id_)
+                    ? false
+                    : sector_iter_.check_if_batch_cross_page(cur_col_id_,
+                                                             state_.eager_read_row_counts_[i],
+                                                             requested_batch_size);
           DataLoader loader(eval_ctx, column_expr, arr_type,
                             eager_column_readers_.at(i).get(),
                             eager_record_readers_.at(i).get(),
                             def_levels_buf_, rep_levels_buf_, str_res_mem_,
-                            capacity - load_row_count, load_row_count,
+                            requested_batch_size, load_row_count,
                             temp_row_count, state_.cur_row_group_row_count_,
                             default_value, state_.eager_read_row_counts_[i],
-                            sector_iter_.is_cross_page(cur_col_id_), stat_);
+                            cross_page, stat_);
           MEMSET(def_levels_buf_.get_data(), 0, sizeof(def_levels_buf_.at(0)) * eval_ctx.max_batch_size_);
           MEMSET(rep_levels_buf_.get_data(), 0, sizeof(rep_levels_buf_.at(0)) * eval_ctx.max_batch_size_);
           OZ (loader.load_data_for_col(load_funcs_.at(cur_col_id_)));
@@ -2896,6 +2945,8 @@ int ObParquetTableRowIterator::calc_filters(const int64_t count,
       LOG_WARN("filter is invalid", K(ret), K(curr_filter->is_logic_op_node()));
     } else if (OB_FAIL(curr_filter->init_bitmap(count, result))) {
       LOG_WARN("Failed to get filter bitmap", K(ret));
+    } else if (nullptr != parent_filter && OB_FAIL(parent_filter->prepare_skip_filter(false))) {
+      LOG_WARN("Failed to check parent skip filter", K(ret));
     } else if (curr_filter->is_filter_node()) {
       if ((OB_FAIL((static_cast<ObBlackFilterExecutor*>(curr_filter))->filter_batch(parent_filter,
           0, count, *result)))) {
@@ -2964,6 +3015,14 @@ int ObParquetTableRowIterator::project_lazy_columns(int64_t &read_count, int64_t
         OZ (ObArrayExprUtils::get_array_type_by_subschema_id(
           eval_ctx, column_expr->datum_meta_.get_subschema_id(), arr_type));
       }
+
+      // Check if this batch will cross page boundary
+      bool cross_page
+          = !sector_iter_.is_cross_page(cur_col_id_)
+                ? false
+                : sector_iter_.check_if_batch_cross_page(cur_col_id_,
+                                                         state_.read_row_counts_[cur_col_id_],
+                                                         capacity);
       for (int64_t j = 0; OB_SUCC(ret) && j < skip_range.count(); ++j) {
         int64_t skip_count = SkipRowsInColumn(cur_col_id_, skip_range.at(j),
                                               state_.logical_read_row_count_ + tmp_logical_read,
@@ -2975,14 +3034,16 @@ int ObParquetTableRowIterator::project_lazy_columns(int64_t &read_count, int64_t
         int64_t temp_row_count = 0;
         int64_t orig_load_row_count = load_row_count;
         while (OB_SUCC(ret) && orig_load_row_count + read_range.at(j) > load_row_count) {
+          int64_t requested_batch_size = orig_load_row_count + read_range.at(j) - load_row_count;
+
           DataLoader loader(eval_ctx, column_expr, arr_type,
                             column_readers_.at(cur_col_id_).get(),
                             record_readers_.at(cur_col_id_).get(),
                             def_levels_buf_, rep_levels_buf_, str_res_mem_,
-                            orig_load_row_count + read_range.at(j) - load_row_count, load_row_count,
+                            requested_batch_size, load_row_count,
                             temp_row_count, state_.cur_row_group_row_count_,
                             default_value, state_.read_row_counts_[cur_col_id_],
-                            sector_iter_.is_cross_page(cur_col_id_), stat_);
+                            cross_page, stat_);
           MEMSET(def_levels_buf_.get_data(), 0, sizeof(def_levels_buf_.at(0)) * eval_ctx.max_batch_size_);
           MEMSET(rep_levels_buf_.get_data(), 0, sizeof(rep_levels_buf_.at(0)) * eval_ctx.max_batch_size_);
           OZ (loader.load_data_for_col(load_funcs_.at(cur_col_id_)));
@@ -3102,6 +3163,7 @@ int ObParquetTableRowIterator::ParquetSectorIterator::prepare_next(const int64_t
     if (!bitmap_.is_inited()) {
       OZ (bitmap_.init(capacity_));
       OZ (cross_pages_.prepare_allocate(iter_->file_column_exprs_.count()));
+      OZ (offset_indexs_.allocate_array(alloc_, iter_->file_column_exprs_.count()));
     }
     if (OB_SUCC(ret)) {
       rewind(capacity);
@@ -3322,8 +3384,12 @@ void ObParquetTableRowIterator::ParquetSectorIterator::check_cross_pages(const i
         if (iter_->column_indexs_.at(i) < 0) {
           cross_page = false;
         } else {
-          std::shared_ptr<parquet::OffsetIndex> offset_index
-                              = iter_->rg_page_index_reader_->GetOffsetIndex(iter_->column_indexs_.at(i));
+          // Pre-load OffsetIndex into cache if not already cached
+          if (i >= offset_indexs_.count() || !offset_indexs_.at(i)) {
+            offset_indexs_.at(i) =
+                iter_->rg_page_index_reader_->GetOffsetIndex(iter_->column_indexs_.at(i));
+          }
+          std::shared_ptr<parquet::OffsetIndex> offset_index = offset_indexs_.at(i);
           for (int64_t j = 0; cross_page && j < offset_index->page_locations().size(); ++j) {
             int64_t offset = offset_index->page_locations().at(j).first_row_index;
             if (sector_start >= offset) {
@@ -3346,6 +3412,70 @@ bool ObParquetTableRowIterator::ParquetSectorIterator::has_no_skip_bits()
           || iter_->delete_bitmap_->get_cardinality() == 0)
          && !iter_->has_eager_columns();
 }
+
+bool ObParquetTableRowIterator::ParquetSectorIterator::check_if_batch_cross_page(
+    const int64_t column_id,
+    const int64_t current_row_pos,
+    const int64_t batch_size)
+{
+  bool will_cross_page = true;
+  if (nullptr == iter_->rg_page_index_reader_
+      || column_id < 0
+      || column_id >= iter_->column_indexs_.count()
+      || iter_->column_indexs_.at(column_id) < 0) {
+    // do nothing
+  } else {
+    std::shared_ptr<parquet::OffsetIndex> offset_index;
+    if (column_id < offset_indexs_.count() && nullptr != offset_indexs_.at(column_id)) {
+      offset_index = offset_indexs_.at(column_id);
+    } else {
+      // Fallback: get OffsetIndex directly if not in cache
+      offset_index = iter_->rg_page_index_reader_->GetOffsetIndex(iter_->column_indexs_.at(column_id));
+      if (column_id < offset_indexs_.count()) {
+        offset_indexs_.at(column_id) = offset_index;
+      }
+    }
+    if (nullptr == offset_index || offset_index->page_locations().empty()) {
+      // do nothing
+    } else {
+      const auto& page_locations = offset_index->page_locations();
+      int64_t batch_end = current_row_pos + batch_size;
+      size_t found_page_idx = SIZE_MAX;
+      size_t left = 0;
+      size_t right = page_locations.size();
+      // find the page containing current_row_pos
+      while (left < right) {
+        size_t mid = left + (right - left) / 2;
+        int64_t page_start = page_locations.at(mid).first_row_index;
+        if (current_row_pos < page_start) {
+          right = mid;
+        } else {
+          int64_t next_page_start = (mid + 1 < page_locations.size())
+                                    ? page_locations.at(mid + 1).first_row_index
+                                    : INT64_MAX;
+          if (current_row_pos < next_page_start) {
+            found_page_idx = mid;
+            break;
+          } else {
+            left = mid + 1;
+          }
+        }
+      }
+      if (found_page_idx != SIZE_MAX) {
+        if (found_page_idx + 1 < page_locations.size()) {
+          int64_t next_page_start = page_locations.at(found_page_idx + 1).first_row_index;
+          will_cross_page = (batch_end > next_page_start);
+        } else {
+          // Last page, no cross-page
+          will_cross_page = false;
+        }
+      }
+    }
+  }
+  return will_cross_page;
+}
+
+
 
 int64_t ObParquetTableRowIterator::SkipRowsInColumn(const int64_t column_id,
                                                     const int64_t num_rows_to_skip,

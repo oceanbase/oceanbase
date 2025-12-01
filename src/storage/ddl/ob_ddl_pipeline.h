@@ -544,7 +544,6 @@ void ObVectorIndexBuildAndWritePipeline<BuildOp, WriteOp>::postprocess(int &ret_
   if (OB_SUCCESS != ret_code && OB_NOT_NULL(get_dag())) {
     ObDDLIndependentDag *dag = static_cast<ObDDLIndependentDag *>(get_dag());
     dag->set_ret_code(ret_code);
-    ret_code = OB_SUCCESS;
   }
 }
 

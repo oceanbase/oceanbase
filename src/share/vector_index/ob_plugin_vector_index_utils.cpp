@@ -985,11 +985,11 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
             } else if (OB_FALSE_IT(index_type = new_adapter->get_snap_index_type())) {
             } else if (OB_FAIL(get_split_snapshot_prefix(index_type, row_key, target_prefix))) {
               LOG_WARN("fail to get split snapshot prefix", K(ret), K(index_type), K(row_key));
-            } else if (OB_FAIL(get_key_prefix_scn(target_prefix, key_prefix_scn))) {
+            } else if (OB_FALSE_IT(get_key_prefix_scn(target_prefix, key_prefix_scn))) {
               LOG_WARN("fail to get key prefix scn", K(ret), K(row_key), K(target_prefix));
             } else if (OB_FAIL(new_adapter->set_snapshot_key_prefix(target_prefix))) {
               LOG_WARN("failed to set snapshot key prefix", K(ret), K(index_type), K(target_prefix));
-            } else if (OB_FAIL(new_adapter->set_snapshot_key_scn(key_prefix_scn))) {
+            } else if (key_prefix_scn > 0 && OB_FAIL(new_adapter->set_snapshot_key_scn(key_prefix_scn))) {
               LOG_WARN("fail to set snapshot key scn", K(ret), K(key_prefix_scn));
             } else if (OB_FAIL(obvectorutil::get_index_number(snap_memdata->index_, index_count))) {
               ret = OB_ERR_VSAG_RETURN_ERROR;
@@ -2191,7 +2191,7 @@ int ObPluginVectorIndexUtils::get_table_key_scn(const ObString &key_str, int64_t
   return ret;
 }
 
-int ObPluginVectorIndexUtils::get_key_prefix_scn(const ObString &key_prefix, int64_t &scn)
+void ObPluginVectorIndexUtils::get_key_prefix_scn(const ObString &key_prefix, int64_t &scn)
 {
   int ret = OB_SUCCESS;
   scn = 0;
@@ -2211,7 +2211,6 @@ int ObPluginVectorIndexUtils::get_key_prefix_scn(const ObString &key_prefix, int
   } else {
     LOG_DEBUG("get key scn", K(ret), K(key_prefix), K(scn_str));
   }
-  return ret;
 }
 
 int ObPluginVectorIndexUtils::get_split_snapshot_prefix(

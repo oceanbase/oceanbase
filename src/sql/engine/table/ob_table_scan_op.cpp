@@ -3330,7 +3330,8 @@ int ObTableScanOp::get_access_tablet_loc(ObGranuleTaskInfo &info)
       //otherwise it will get a unsafe result modified by other px work thread
       LOG_WARN("get tablet loc by id failed", K(ret), KPC(info.tablet_loc_), KPC(tsc_rtdef_.scan_rtdef_.table_loc_));
     } else {
-      LOG_DEBUG("TSC consume a task", K(info), KPC(MY_INPUT.tablet_loc_), K(MY_INPUT.tablet_loc_->loc_meta_));
+      ctx_.set_granule_type(info.granule_type_);
+      LOG_DEBUG("TSC consume a task", K(info), K(info.granule_type_), KPC(MY_INPUT.tablet_loc_), K(MY_INPUT.tablet_loc_->loc_meta_));
     }
   }
   return ret;

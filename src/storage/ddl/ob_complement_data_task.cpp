@@ -799,7 +799,7 @@ int ObComplementDataDag::create_first_task()
       LOG_WARN("failed to init dag merge param", K(ret));
     } else if (OB_FAIL(alloc_task(data_merge_prepare_task))) {
       LOG_WARN("failed to alloc task", K(ret));
-    } else if (OB_FAIL(data_merge_prepare_task->init(dag_merge_param, &fail_cb_))) {
+    } else if (OB_FAIL(data_merge_prepare_task->init(dag_merge_param, &fail_cb_, true /* retry_uitl_get_lock*/))) {
       LOG_WARN("failed to init data merge prepare task", K(ret));
     } else if (OB_FAIL(write_task->add_child(*merge_task))) {
         LOG_WARN("add child failed", K(ret));
@@ -819,7 +819,7 @@ int ObComplementDataDag::create_first_task()
       LOG_WARN("failed to init lob dag merge param", K(ret), K(param_));
     } else if (OB_FAIL(alloc_task(lob_merge_prepare_task))) {
       LOG_WARN("failed to alloc task", K(ret));
-    } else if (OB_FAIL(lob_merge_prepare_task->init(lob_dag_merge_param, &fail_cb_))) {
+    } else if (OB_FAIL(lob_merge_prepare_task->init(lob_dag_merge_param, &fail_cb_, true /* retry_uitl_get_lock*/))) {
       LOG_WARN("failed to init lob merge prepare task", K(ret));
     } else if (OB_FAIL(merge_task->add_child(*lob_merge_prepare_task))) {
       LOG_WARN("failed to add child", K(ret));
@@ -1031,6 +1031,8 @@ int ObComplementFailCallback::process(int ret_code)
   if (nullptr == dag_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObComplementFailCallback has not been inited", K(ret));
+  } else if (OB_SUCCESS != (dag_->get_context().complement_data_ret_)) {
+    LOG_INFO("dag ret already set failed, do nothing", K(ret_code));
   } else if (FALSE_IT(dag_->get_context().complement_data_ret_ = ret_code)) {
   } else if (OB_FAIL(dag_->report_replica_build_status())) {
     LOG_WARN("failed to report replica build status", K(ret));
@@ -1230,6 +1232,9 @@ int ObComplementWriteTask::get_next_chunk(ObChunk *&next_chunk)
   if (OB_ISNULL(context_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("complement context is null", K(ret), KP(context_));
+  } else if (OB_SUCCESS != (context_->complement_data_ret_)) {
+    ret = context_->complement_data_ret_;
+    LOG_WARN("complement data has already failed", K(ret));
   } else if (context_->is_major_sstable_exist_) {
     ret = OB_ITER_END;
   } else if (OB_ISNULL(scan_)) {

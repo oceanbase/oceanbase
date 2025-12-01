@@ -301,7 +301,8 @@ public:
   void insert(AChunk *chunk)
   {
     uint64_t index = get_index(chunk);
-    lib::ObMutexGuard guard(slots_[index].mutex_);
+    slots_[index].lock_.lock();
+    DEFER(slots_[index].lock_.unlock());
     AChunk &head = slots_[index].head_;
     chunk->prev2_ = &head;
     chunk->next2_ = head.next2_;
@@ -311,14 +312,16 @@ public:
   void remove(AChunk *chunk)
   {
     uint64_t index = get_index(chunk);
-    lib::ObMutexGuard guard(slots_[index].mutex_);
+    slots_[index].lock_.lock();
+    DEFER(slots_[index].lock_.unlock());
     chunk->prev2_->next2_ = chunk->next2_;
     chunk->next2_->prev2_ = chunk->prev2_;
   }
   void get_chunks(AChunk **chunks, int cap, int &cnt)
   {
     for (int i = 0; i < NWAY; ++i) {
-      lib::ObMutexGuard guard(slots_[i].mutex_);
+      slots_[i].lock_.lock();
+      DEFER(slots_[i].lock_.unlock());
       AChunk &head = slots_[i].head_;
       AChunk *cur = head.next2_;
       while (cur != &head && cnt < cap) {
@@ -330,14 +333,12 @@ public:
 private:
   struct Slot {
     Slot()
-      : mutex_(common::ObLatchIds::CHUNK_USING_LIST_LOCK),
-        head_()
+      : head_()
     {
-      mutex_.enable_record_stat(false);
       head_.prev2_ = &head_;
       head_.next2_ = &head_;
     }
-    ObMutex mutex_;
+    ObSimpleLock lock_;
     AChunk head_;
   } slots_[NWAY];
 };
@@ -361,21 +362,9 @@ public:
     attr.tenant_id_  = tenant_id;
     attr.ctx_id_ = ctx_id;
     chunk_freelist_mutex_.enable_record_stat(false);
-    for (int i = 0; i < ObSubCtxIds::MAX_SUB_CTX_ID; ++i) {
-      new (obj_mgrs_ + i) ObjectMgr(*this,
-                                    CTX_ATTR(ctx_id).enable_no_log_,
-                                    INTACT_MIDDLE_AOBJECT_SIZE,
-                                    4/*parallel*/,
-                                    false/*enable_dirty_list*/,
-                                    &obj_mgr_);
-    }
   }
   virtual ~ObTenantCtxAllocator()
-  {
-    for (int i = 0; i < ObSubCtxIds::MAX_SUB_CTX_ID; ++i) {
-      obj_mgrs_[i].~ObjectMgr();
-    }
-  }
+  {}
   ObTenantCtxAllocatorV2 *get_ctx_allocator()
   {
     return &ctx_allocator_;
@@ -441,9 +430,6 @@ public:
     bool has_unfree = obj_mgr_.check_has_unfree();
     if (has_unfree) {
       bool tmp_has_unfree = obj_mgr_.check_has_unfree(first_label, first_bt);
-      for (int i = 0; i < ObSubCtxIds::MAX_SUB_CTX_ID && !tmp_has_unfree; ++i) {
-        tmp_has_unfree = obj_mgrs_[i].check_has_unfree(first_label, first_bt);
-      }
     }
     return has_unfree;
   }
@@ -553,9 +539,6 @@ private:
   int64_t chunk_cnt_;
   ObMutex chunk_freelist_mutex_;
   AChunkUsingList using_list_;
-  union {
-    ObjectMgr obj_mgrs_[ObSubCtxIds::MAX_SUB_CTX_ID];
-  };
   ChunkMgr chunk_mgr_;
   ReqChunkMgr req_chunk_mgr_;
 }; // end of class ObTenantCtxAllocator

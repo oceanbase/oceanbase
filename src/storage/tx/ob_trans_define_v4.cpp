@@ -71,12 +71,12 @@ ObTxSavePoint &ObTxSavePoint::operator=(const ObTxSavePoint &a)
 {
   type_ = a.type_;
   scn_ = a.scn_;
+  session_id_ = a.session_id_;
+  user_create_ = a.user_create_;
   switch(type_) {
   case T::SAVEPOINT:
   case T::STASH: {
     name_ = a.name_;
-    session_id_ = a.session_id_;
-    user_create_ = a.user_create_;
     break;
   }
   case T::SNAPSHOT: snapshot_ = a.snapshot_; break;

@@ -22,9 +22,9 @@ using namespace oceanbase::common;
 
 namespace oceanbase {
 namespace common {
-void allow_next_syslog(int64_t count)
+void allow_next_syslog()
 {
-  share::ObTaskController::get().allow_next_syslog(count);
+  share::ObTaskController::get().allow_next_syslog();
 }
 } // common
 
@@ -254,9 +254,11 @@ void ObTaskController::switch_task(ObTaskType task_id)
   ObLogger::set_tl_type(static_cast<int32_t>(toUType(task_id)));
 }
 
-void ObTaskController::allow_next_syslog(int64_t count)
+void ObTaskController::allow_next_syslog()
 {
-  ObLogRateLimiter::allows_ += count;
+  if (ObLogRateLimiter::allows_ < 1) {
+    ObLogRateLimiter::allows_ += 1;
+  }
 }
 
 void ObTaskController::set_log_rate_limit(int64_t limit)

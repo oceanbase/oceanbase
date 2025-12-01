@@ -94,6 +94,7 @@ public:
   // for calc ddl sice idx
   ObExpr *ddl_slice_id_expr_;
   ObExprFrameInfo *dfo_expr_frame_info_;
+  ExprFixedArray real_trans_exprs_;
 };
 
 class ObPxTransmitOp : public ObTransmitOp

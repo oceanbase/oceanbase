@@ -2183,7 +2183,7 @@ int ObDDLUtil::handle_lob_column(
         VecValueTypeClass value_tc = get_vec_value_tc(col_type.get_type(),
                                                       col_type.get_scale(),
                                                       PRECISION_UNKNOWN_YET);
-        if (OB_FAIL(new_discrete_vector(value_tc, selector.get_max(), allocator, discrete_vec))) {
+        if (OB_FAIL(new_discrete_vector(value_tc, selector.get_end(), allocator, discrete_vec))) {
           LOG_WARN("fail to new discrete vector", KR(ret));
         } else {
           ptrs = discrete_vec->get_ptrs();
@@ -2279,7 +2279,7 @@ int ObDDLUtil::handle_lob_column(
           VecValueTypeClass value_tc = get_vec_value_tc(col_type.get_type(),
                                                         col_type.get_scale(),
                                                         PRECISION_UNKNOWN_YET);
-          if (OB_FAIL(new_discrete_vector(value_tc, selector.get_max(), allocator, discrete_vec))) {
+          if (OB_FAIL(new_discrete_vector(value_tc, selector.get_end(), allocator, discrete_vec))) {
             LOG_WARN("fail to new discrete vector", KR(ret));
           } else {
             ptrs = discrete_vec->get_ptrs();

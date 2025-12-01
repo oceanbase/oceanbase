@@ -77,6 +77,7 @@ int ObPrivPacker::init_packed_array(
   OZ (array.push_back(0));
   OZ (array.push_back(0));
   OZ (array.push_back(0));
+  OZ (array.push_back(0));
   return ret;
 }
 
@@ -212,6 +213,7 @@ int ObPrivPacker::pack_raw_priv(
   if (OB_SUCC(ret)) {
     if (packed_array.count() > 0) {
       if (group_id >= packed_array.count()) {
+        // MODIFY init_packed_array() to expand packed_array if sys priv id exceeds limit
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("group id error", K(ret));
       } else {

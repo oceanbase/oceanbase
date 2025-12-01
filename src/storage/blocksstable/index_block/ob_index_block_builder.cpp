@@ -1823,6 +1823,7 @@ int ObSSTableIndexBuilder::rewrite_small_sstable(ObSSTableMergeRes &res)
   ObBlockInfo block_info;
   ObStorageObjectHandle read_handle;
   ObDataMacroBlockMeta macro_meta;
+  ObSSTableMacroBlockHeader macro_header;
   ObStorageObjectReadInfo read_info;
   read_info.offset_ = 0;
   read_info.size_ =
@@ -1849,8 +1850,13 @@ int ObSSTableIndexBuilder::rewrite_small_sstable(ObSSTableMergeRes &res)
 #ifdef ERRSIM
       SERVER_EVENT_SYNC_ADD("merge_errsim", "async_read_macro_block_failed", "ret_code", ret);
 #endif
+    } else if (OB_UNLIKELY(macro_meta.val_.macro_id_ != (roots_[0]->data_write_ctx_->macro_block_list_.at(0)))) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "macro id mismatch", K(ret), K(macro_meta.val_.macro_id_), K(roots_[0]->data_write_ctx_->macro_block_list_.at(0)));
     } else if (OB_FAIL(read_handle.wait())) {
       STORAGE_LOG(WARN, "fail to wait io finish", K(ret), K(read_info));
+    } else if (OB_FAIL(parse_macro_header(read_info.buf_, read_handle.get_data_size(), macro_header))) {
+      STORAGE_LOG(WARN, "fail to parse macro header", K(ret), K(read_info));
     } else {
       ObSharedMacroBlockMgr *shared_block_mgr = MTL(ObSharedMacroBlockMgr*);
       if (OB_FAIL(shared_block_mgr->write_block(
@@ -1919,6 +1925,9 @@ int ObSSTableIndexBuilder::do_check_and_rewrite_sstable(
   if (OB_FAIL(get_single_macro_meta_for_small_sstable(row_allocator_, index_block_loader_,
       container_store_desc_, roots_, macro_meta))) {
     STORAGE_LOG(WARN, "fail to get single macro meta", K(ret));
+  } else if (OB_UNLIKELY(macro_meta.val_.macro_id_ != (roots_[0]->data_write_ctx_->macro_block_list_.at(0)))) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "macro id mismatch", K(ret), K(macro_meta.val_.macro_id_), K(roots_[0]->data_write_ctx_->macro_block_list_.at(0)));
   } else if (OB_FAIL(load_single_macro_block(macro_meta, OB_STORAGE_OBJECT_MGR.get_macro_block_size(), 0, self_allocator_, data_buf))) {
     STORAGE_LOG(WARN, "fail to load macro block", K(ret), K(macro_meta), KPC(roots_[0]));
   } else if (OB_FAIL(parse_macro_header(data_buf, OB_STORAGE_OBJECT_MGR.get_macro_block_size(), macro_header))) {
@@ -2291,6 +2300,8 @@ int ObBaseIndexBlockBuilder::close(ObIAllocator &allocator, ObIndexTreeInfo &tre
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected null root builder", K(ret), K(root_builder));
   } else {
+    const int64_t root_block_size_limit = GCTX.is_shared_storage_mode() ? ROOT_BLOCK_SIZE_LIMIT_FOR_SHARED_STORAGE
+                                                                        : ROOT_BLOCK_SIZE_LIMIT;
     ObMetaDiskAddr &root_addr = desc.addr_;
     desc.height_ = root_builder->level_ + 1;
     ObMicroBlockDesc micro_block_desc;
@@ -2303,8 +2314,7 @@ int ObBaseIndexBlockBuilder::close(ObIAllocator &allocator, ObIndexTreeInfo &tre
       STORAGE_LOG(WARN, "fail to build root block", K(ret));
     } else if (FALSE_IT(micro_block_desc.last_rowkey_ =
                             root_builder->last_rowkey_)) {
-    } else if (OB_UNLIKELY(micro_block_desc.get_block_size() >=
-                           ROOT_BLOCK_SIZE_LIMIT)) {
+    } else if (OB_UNLIKELY(micro_block_desc.get_block_size() >= root_block_size_limit)) {
       if (OB_FAIL(macro_writer_->append_index_micro_block(micro_block_desc))) {
         micro_writer->dump_diagnose_info(); // ignore dump error
         STORAGE_LOG(WARN, "fail to append root block", K(ret),
@@ -3689,7 +3699,8 @@ int ObMetaIndexBlockBuilder::close(
   int ret = OB_SUCCESS;
   ObIndexTreeInfo tree_info;
   ObMicroBlockDesc micro_block_desc;
-  int64_t single_root_tree_block_size_limit = ROOT_BLOCK_SIZE_LIMIT;
+  int64_t single_root_tree_block_size_limit = GCTX.is_shared_storage_mode() ? ROOT_BLOCK_SIZE_LIMIT_FOR_SHARED_STORAGE
+                                                                            : ROOT_BLOCK_SIZE_LIMIT;
   bool allow_meta_in_tail = !roots[0]->is_backup_task(); // backup can't send read io
 #ifdef ERRSIM
   int tp_ret = EN_SSTABLE_SINGLE_ROOT_TREE;

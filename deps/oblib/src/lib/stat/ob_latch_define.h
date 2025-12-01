@@ -416,7 +416,8 @@ LATCH_DEF(FD_SIMULATOR_LOCK, 379, "fd simulator lock", LATCH_FIFO, 2000, 0, true
 
 LATCH_DEF(SS_ATOMIC_FILE_LOCK, 380, "atomic procotol file lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(DTL_INTERM_RESULT_INFO_LOCK, 381, "dtl interm result info lock", LATCH_FIFO, 2000, 0, true)
-LATCH_DEF(LATCH_END, 382, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(MAX_ID_CACHE_LOCK, 382, "max id cache lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(LATCH_END, 383, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 

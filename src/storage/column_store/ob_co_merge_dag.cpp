@@ -1243,7 +1243,7 @@ int ObCOMergeFinishTask::process()
       LOG_WARN("failed to update unfinish tablet", K(tmp_ret), K(ctx->get_merge_version()));
     }
     // ATTENTION! Critical diagnostic log, DO NOT CHANGE!!!
-    FLOG_INFO("sstable merge finish", K(ret), KPC(dag_), "param", ctx->get_dag_param(),
+    FLOG_INFO("sstable merge finish", K(ret), KPC(dag_), "param", ctx->get_dag_param(), "merge_info", ctx->dag_net_merge_history_,
               "mem_peak", ctx->mem_ctx_.get_total_mem_peak(), "time_guard", ctx->info_collector_.time_guard_);
   }
   if (OB_FAIL(ret)) {
@@ -1368,9 +1368,9 @@ int ObCOMergeDagNet::clear_dag_net_ctx()
   return ObIDagNet::clear_dag_net_ctx();
 }
 
-void ObCOMergeDagNet::cancel_dag_net(const int error_code)
+void ObCOMergeDagNet::cancel_dag_net(const int error_code, const bool force_cancel)
 {
-  if (!ObCOMergeScheduleDag::can_ignore_warning(error_code)) {
+  if (force_cancel || !ObCOMergeScheduleDag::can_ignore_warning(error_code)) {
     LOG_WARN_RET(error_code, "cancel co dag net");
     int tmp_ret = OB_SUCCESS;
     // avoid that the canceled dag_net_ keeps an unschedule finish_dag_, which cause the dag_net_ never finish

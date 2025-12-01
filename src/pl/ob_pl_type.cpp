@@ -517,6 +517,7 @@ int ObPLDataType::deep_copy(common::ObIAllocator &alloc, const ObPLDataType &oth
   int ret = OB_SUCCESS;
   type_ = other.type_;
   type_from_ = other.type_from_;
+  type_from_origin_ = other.type_from_origin_;
   user_type_id_ = other.user_type_id_;
   obj_type_ = other.obj_type_;
   pls_type_ = other.pls_type_;
@@ -533,6 +534,7 @@ int ObPLDataType::deep_copy(ObPLEnumSetCtx &enum_set_ctx, const ObPLDataType &ot
   ObIArray<ObString> *type_info = NULL;
   type_ = other.type_;
   type_from_ = other.type_from_;
+  type_from_origin_ = other.type_from_origin_;
   user_type_id_ = other.user_type_id_;
   obj_type_ = other.obj_type_;
   pls_type_ = other.pls_type_;
@@ -2755,14 +2757,16 @@ int ObPsCursorInfo::init_params(ParamStore &exec_params)
   return ret;
 }
 
-int ObPsCursorInfo::prepare_cursor_store(sql::ObSQLSessionInfo &session,
-                                         const common::ColumnsFieldIArray &fields)
+int ObPsCursorInfo::prepare_cursor_store(sql::ObSQLSessionInfo &session, sql::ObResultSet &result_set)
 {
   int ret = OB_SUCCESS;
   ObIAllocator *allocator = NULL;
   if (OB_ISNULL(allocator = get_allocator())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is null", K(ret));
+  } else if (OB_ISNULL(result_set.get_field_columns())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("result set field columns is null", K(ret));
   } else if (OB_ISNULL(cursor_store_)) {
     cursor_store_ = static_cast<ObSPICursor *>(allocator->alloc(sizeof(ObSPICursor)));
     if (OB_ISNULL(cursor_store_)) {
@@ -2786,11 +2790,11 @@ int ObPsCursorInfo::prepare_cursor_store(sql::ObSQLSessionInfo &session,
                                                "PSCursorRowStore"))) {
       LOG_WARN("row store init failed", K(ret));
     } else if (OB_FAIL(ObDbmsInfo::deep_copy_field_columns(*allocator,
-                                                           &fields,
+                                                           result_set.get_field_columns(),
                                                            cursor_store_->fields_))) {
       LOG_WARN("deeo copy field columns failed", K(ret));
-    } else if (OB_FAIL(cursor_store_->init_row_desc(fields))) {
-      LOG_WARN("init row desc failed", K(ret), K(fields));
+    } else if (OB_FAIL(cursor_store_->init_row_desc(result_set))) {
+      LOG_WARN("init row desc failed", K(ret), K(result_set));
     }
   }
   return ret;

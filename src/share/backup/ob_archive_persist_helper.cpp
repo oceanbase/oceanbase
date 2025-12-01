@@ -739,6 +739,37 @@ int ObArchivePersistHelper::insert_his_round(common::ObISQLClient &proxy, const 
   return ret;
 }
 
+int ObArchivePersistHelper::is_all_piece_in_round_deleted(common::ObISQLClient &proxy,
+          const int64_t round_id, bool &is_piece_all_deleted) const {
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  is_piece_all_deleted = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchivePersistHelper not init", K(ret));
+  } else if (OB_FAIL(sql.append_fmt("select count(1) as cnt from %s where %s=%lu and %s=%ld and %s!='%s'",
+          OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, OB_STR_TENANT_ID, tenant_id_,
+          OB_STR_ROUND_ID, round_id, OB_STR_FILE_STATUS, OB_STR_DELETED))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else {
+    HEAP_VAR(ObMySQLProxy::ReadResult, res) {
+      ObMySQLResult *result = NULL;
+      int64_t count = 0;
+      if (OB_FAIL(proxy.read(res, get_exec_tenant_id(), sql.ptr()))) {
+        LOG_WARN("failed to exec sql", K(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", K(ret), K(sql));
+      } else if (OB_FAIL(result->next())) {
+        LOG_WARN("failed to get next", K(ret), K_(tenant_id), K(sql));
+      } else {
+        EXTRACT_INT_FIELD_MYSQL(*result, "cnt", count, int64_t);
+        is_piece_all_deleted = (count == 0);
+      }
+    }
+  }
+  return ret;
+}
 
 int ObArchivePersistHelper::get_piece(common::ObISQLClient &proxy, const int64_t dest_id,
     const int64_t round_id, const int64_t piece_id, const bool need_lock, ObTenantArchivePieceAttr &piece) const

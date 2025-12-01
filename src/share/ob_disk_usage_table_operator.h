@@ -66,17 +66,14 @@ public:
                         const int32_t svr_port,
                         const int64_t seq_num);
 
-  int delete_tenant_space_usage(const uint64_t tenant_id,
-                                const char *svr_ip,
-                                const int32_t svr_port,
-                                const int64_t seq_num,
-                                const storage::ObDiskReportFileType file_type);
+  int delete_residual_shared_data(const char *svr_ip,
+                                  const int32_t svr_port,
+                                  const int64_t seq_num);
 
   int get_all_tenant_ids(const char *svr_ip,
                          const int32_t svr_port,
                          const int64_t seq_num,
                          common::ObIArray<uint64_t> &tenant_ids);
-  int may_delete_shared_data_row();
 private:
   bool is_inited_;
   common::ObMySQLProxy *proxy_;

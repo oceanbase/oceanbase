@@ -18,6 +18,7 @@
 #include "sql/executor/ob_task_id.h"
 #include "sql/executor/ob_slice_id.h"
 #include "sql/executor/ob_task_event.h"
+#include "sql/engine/px/ob_granule_util.h"
 #include "common/ob_range.h"
 
 namespace oceanbase
@@ -90,11 +91,12 @@ public:
       ss_ranges_(),
       scan_tasks_(),
 	    tablet_loc_(nullptr),
-	    task_id_(0)
+	    task_id_(0),
+      granule_type_(OB_GRANULE_UNINITIALIZED)
 	{ }
 	virtual ~ObGranuleTaskInfo() { }
   int assign(const ObGranuleTaskInfo &other);
-	TO_STRING_KV(K_(ranges), K_(ss_ranges), K_(task_id), "tablet_id: ",
+	TO_STRING_KV(K_(ranges), K_(ss_ranges), K_(task_id), K_(granule_type), "tablet_id: ",
                OB_ISNULL(tablet_loc_) ? OB_INVALID_ID : tablet_loc_->tablet_id_.id());
 public:
   common::ObSEArray<common::ObNewRange, 1> ranges_;
@@ -103,6 +105,7 @@ public:
   ObDASTabletLoc *tablet_loc_;
   //just for print
   int64_t task_id_;
+  ObGranuleType granule_type_;
 };
 
 // 用于 NLJ 场景下对右侧分区表扫描做 partition pruning

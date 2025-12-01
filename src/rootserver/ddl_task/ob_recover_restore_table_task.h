@@ -52,6 +52,7 @@ public:
     const int64_t execution_id,
     const int ret_code,
     const ObDDLTaskInfo &addition_info) override;
+    virtual bool is_error_need_retry(const int ret_code) override;
 protected:
   virtual int obtain_snapshot(const share::ObDDLTaskStatus next_task_status) override;
   virtual int fail() override;

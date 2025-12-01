@@ -349,7 +349,9 @@ int ObSplitPartitionHelper::prepare_start_args_(
   bool is_oracle_mode = false;
   ObLocationService *location_service = nullptr;
   ObArray<ObLSID> ls_ids;
-  ObArray<ObRowkey> dst_high_bound_vals;
+  ObArray<blocksstable::ObDatumRowkey> dst_end_partkey_vals;
+  ObArenaAllocator dst_end_partkey_allocator;
+  dst_end_partkey_allocator.set_label("SplitMds");
   ls_id.reset();
   leader_addr.reset();
   src_tablet_ids.reset();
@@ -376,7 +378,8 @@ int ObSplitPartitionHelper::prepare_start_args_(
                                                              inc_table_schemas,
                                                              src_tablet_ids,
                                                              dst_tablet_ids,
-                                                             dst_high_bound_vals))) {
+                                                             dst_end_partkey_vals,
+                                                             dst_end_partkey_allocator))) {
     LOG_WARN("failed to get all tablet ids", KR(ret));
   } else if (OB_FAIL(ObDDLUtil::batch_check_tablet_checksum(MTL_ID(), 0/*start index of tablet_arr*/, src_tablet_ids.count(), src_tablet_ids))) {
     LOG_WARN("verify tablet checksum error", K(ret), K(src_tablet_ids), K(tenant_id));
@@ -411,7 +414,7 @@ int ObSplitPartitionHelper::prepare_start_args_(
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(start_src_arg.init_split_start_src(tenant_id, is_oracle_mode, ls_id, new_table_schemas, upd_table_schemas, src_tablet_ids, dst_tablet_ids))) {
     LOG_WARN("failed to init split start src", KR(ret));
-  } else if (OB_FAIL(start_dst_arg.init_split_start_dst(tenant_id, ls_id, inc_table_schemas, src_tablet_ids, dst_tablet_ids, dst_high_bound_vals))) {
+  } else if (OB_FAIL(start_dst_arg.init_split_start_dst(tenant_id, ls_id, inc_table_schemas, src_tablet_ids, dst_tablet_ids, dst_end_partkey_vals))) {
     LOG_WARN("failed to init split start dst", KR(ret));
   }
 

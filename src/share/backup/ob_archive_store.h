@@ -462,6 +462,10 @@ public:
   int get_round_max_checkpoint_scn(const int64_t dest_id, const int64_t round_id, int64_t &piece_id, SCN &max_checkpoint_scn);
   int get_piece_max_checkpoint_scn(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, SCN &max_checkpoint_scn);
 
+  int get_specific_piece_place_holder_paths(
+      const ObPieceKey &piece_key,
+      ObBackupPath &start_path,
+      ObBackupPath &end_path);
 private:
 
   class ObPieceRangeFilter : public ObBaseDirEntryOperator
@@ -631,6 +635,24 @@ private:
 
   private:
     DISALLOW_COPY_AND_ASSIGN(ObLSFileListOp);
+  };
+
+  class ObSpecificPieceFilter : public ObBaseDirEntryOperator
+  {
+public:
+    ObSpecificPieceFilter();
+    virtual ~ObSpecificPieceFilter() {}
+    int init(ObArchiveStore *store, const ObPieceKey &piece_key);
+    int func(const dirent *entry) override;
+    const char* get_start_file_name() const { return start_file_name_; }
+    const char* get_end_file_name() const { return end_file_name_; }
+    TO_STRING_KV(K_(is_inited), KPC(store_), K(start_file_name_), K(end_file_name_));
+private:
+    bool is_inited_;
+    ObArchiveStore *store_;
+    ObPieceKey piece_key_;
+    char start_file_name_[OB_MAX_BACKUP_PATH_LENGTH];
+    char end_file_name_[OB_MAX_BACKUP_PATH_LENGTH];
   };
 
   DISALLOW_COPY_AND_ASSIGN(ObArchiveStore);

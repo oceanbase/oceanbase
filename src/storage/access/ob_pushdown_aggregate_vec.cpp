@@ -677,7 +677,8 @@ int ObAggCellVec::read_agg_datum(
         }
         break;
       }
-      case PD_SUM: {
+      case PD_SUM:
+      case PD_COUNT_SUM: {
         meta.col_type_ = blocksstable::SK_IDX_SUM;
         break;
       }

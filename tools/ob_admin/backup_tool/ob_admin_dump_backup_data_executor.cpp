@@ -18,7 +18,10 @@
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
-
+#include "share/restore/ob_restore_uri_parser.h"
+#include "lib/string/ob_sensitive_string.h" // for KS()
+#include "rootserver/restore/ob_restore_util.h"
+#include "share/backup/ob_archive_path.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -534,11 +537,14 @@ int ObAdminDumpBackupDataUtil::uncompress_and_decode_block(
 
 /* ObAdminDumpBackupDataExecutor */
 
-ObAdminDumpBackupDataExecutor::ObAdminDumpBackupDataExecutor() : offset_(), length_(), file_type_(), is_quiet_(false),
-    allocator_()
+ObAdminDumpBackupDataExecutor::ObAdminDumpBackupDataExecutor()
+  : offset_(), length_(), file_type_(), is_quiet_(false),
+    check_exist_(false), is_restore_preview_(false), show_piece_files_(false),
+    round_id_(0), piece_id_(0), allocator_()
 {
   MEMSET(backup_path_, 0, common::OB_MAX_URI_LENGTH);
   MEMSET(storage_info_, 0, common::OB_MAX_BACKUP_STORAGE_INFO_LENGTH);
+  MEMSET(restore_time_, 0, MAX_RESTORE_TIME_LENGTH);
 }
 
 ObAdminDumpBackupDataExecutor::~ObAdminDumpBackupDataExecutor()
@@ -576,6 +582,14 @@ int ObAdminDumpBackupDataExecutor::execute(int argc, char *argv[])
     // ob_admin dump_backup -d'xxxxx' -c
     if (OB_FAIL(do_check_exist_())) {
       STORAGE_LOG(WARN, "fail to do check exist", K(ret));
+    }
+  } else if (is_restore_preview_) {
+    if (OB_FAIL(do_restore_preview_())) {
+      STORAGE_LOG(WARN, "fail to do restore preview", K(ret));
+    }
+  } else if (show_piece_files_) {
+    if (OB_FAIL(do_show_piece_files_())) {
+      STORAGE_LOG(WARN, "fail to do show  piece files", K(ret), K_(round_id), K_(piece_id));
     }
   } else if (OB_FAIL(check_tenant_backup_path_type_(backup_path_, storage_info_, path_type))) {
     STORAGE_LOG(WARN, "fail to check tenant backup path type", K(ret));
@@ -615,7 +629,7 @@ int ObAdminDumpBackupDataExecutor::parse_cmd_(int argc, char *argv[])
   int ret = OB_SUCCESS;
   int opt = 0;
   int index = -1;
-  const char *opt_str = "h:d:s:o:l:qce:i:";
+  const char *opt_str = "h:d:s:o:l:qce:i:rt:pu:v:";
   struct option longopts[] = {{"help", 0, NULL, 'h'},
       {"backup_path", 1, NULL, 'd'},
       {"storage_info", 1, NULL, 's'},
@@ -626,6 +640,11 @@ int ObAdminDumpBackupDataExecutor::parse_cmd_(int argc, char *argv[])
       {"length", 1, NULL, 'l'},
       {"s3_url_encode_type", 0, NULL, 'e'},
       {"sts_credential", 0, NULL, 'i'},
+      {"restore_preview", 0, NULL, 'r'},
+      {"restore_time", 1, NULL, 't'},
+      {"show_piece_files", 0, NULL, 'p'},
+      {"round_id", 1, NULL, 'u'},
+      {"piece_id", 1, NULL, 'v'},
       {NULL, 0, NULL, 0}};
   while (OB_SUCC(ret) && -1 != (opt = getopt_long(argc, argv, opt_str, longopts, &index))) {
     switch (opt) {
@@ -679,12 +698,231 @@ int ObAdminDumpBackupDataExecutor::parse_cmd_(int argc, char *argv[])
         }
         break;
       }
+      case 'r': {
+        is_restore_preview_ = true;
+        break;
+      }
+      case 't': {
+        if (OB_FAIL(databuff_printf(restore_time_, sizeof(restore_time_), "%s", optarg))) {
+          STORAGE_LOG(WARN, "fail to get databuff printf", K(ret));
+        }
+        break;
+      }
+      case 'p': {
+        show_piece_files_ = true;
+        break;
+      }
+      case 'u': {
+        round_id_ = strtoll(optarg, NULL, 10);
+        break;
+      }
+      case 'v': {
+        piece_id_ = strtoll(optarg, NULL, 10);
+        break;
+      }
       default: {
         print_usage_();
         exit(1);
       }
     }
   }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::do_restore_preview_()
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObRestoreBackupSetBriefInfo> backup_set_list;
+  ObArray<ObRestoreLogPieceBriefInfo> backup_piece_list;
+  ObArray<ObString> backup_path_array;
+
+  if (0 == strlen(backup_path_)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "backup path can not be empty in restore preview", K(ret), K(backup_path_));
+  } else if (OB_FAIL(ObPhysicalRestoreUriParser::parse(backup_path_,
+                                                       allocator_,
+                                                       backup_path_array))) {
+    STORAGE_LOG(WARN, "fail to parse backup path array", K(ret));
+  } else if (2 != backup_path_array.count()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "restore preview only acccepts two paths",  K(ret), K(backup_path_array));
+  } else if (OB_FAIL(do_tenant_level_restore_preview_(backup_path_array,
+                                                      backup_set_list,
+                                                      backup_piece_list))) {
+    STORAGE_LOG(WARN, "fail to do_tenant_level_restore_preview_", K(ret), K(restore_time_));
+  } else if (OB_FAIL(do_print_restore_preview_(allocator_, backup_set_list, backup_piece_list))) {
+    STORAGE_LOG(WARN, "fail to do print restore preview", K(ret), K(backup_set_list), K(backup_piece_list));
+  }
+
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::do_tenant_level_restore_preview_(
+      const ObIArray<ObString> &backup_path_array,
+      ObIArray<ObRestoreBackupSetBriefInfo> &backup_set_list,
+      ObIArray<ObRestoreLogPieceBriefInfo> &backup_piece_list)
+{
+  int ret = OB_SUCCESS;
+  bool use_complement_log = false;
+  share::SCN restore_scn = SCN::min_scn();
+  ObString backup_passwd("fake_passwd"); //unused
+  ObString restore_timestamp;
+  ObArray<ObBackupPathString> log_path_list; //unused
+  backup_set_list.reset();
+  backup_piece_list.reset();
+
+  if (backup_path_array.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "backup path array is empty", K(ret));
+  } else if (OB_FALSE_IT(restore_timestamp.assign_ptr(restore_time_, static_cast<int32_t>(strlen(restore_time_))))) {
+  } else if (OB_FAIL(rootserver::ObRestoreUtil::parse_restore_timestamp_to_scn(backup_path_array,
+                                                                               restore_timestamp,
+                                                                               restore_scn))) {
+    STORAGE_LOG(WARN, "fail to parse restore time to scn", K(ret), K(backup_path_array), K(restore_timestamp));
+  } else if (OB_FAIL(rootserver::ObRestoreUtil::get_restore_source(false /*check_passwd*/,
+                                                                   use_complement_log,
+                                                                   backup_path_array,
+                                                                   backup_passwd,
+                                                                   restore_scn,
+                                                                   backup_set_list,
+                                                                   backup_piece_list,
+                                                                   log_path_list))) {
+    STORAGE_LOG(WARN, "failed to get restore source", K(ret), K(restore_scn));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::do_print_restore_preview_(
+      ObIAllocator &allocator,
+      ObArray<ObRestoreBackupSetBriefInfo> backup_set_list,
+      ObArray<ObRestoreLogPieceBriefInfo> backup_piece_list)
+{
+  int ret = OB_SUCCESS;
+  //print set
+  if (backup_set_list.empty() || backup_piece_list.empty()) {
+    PrintHelper::print_dump_title("no backup set or log archive piece meets condition");
+  } else {
+    int64_t order = 0;
+    ARRAY_FOREACH_X(backup_set_list, i, cnt, OB_SUCC(ret)) {
+      order++;
+      ObString path_str;
+      ObString desc_str;
+      const ObRestoreBackupSetBriefInfo &backup_set = backup_set_list.at(i);
+      char buf[OB_MAX_TEXT_LENGTH] = { 0 };
+      int64_t pos = 0;
+
+      if (OB_FAIL(backup_set.get_backup_set_path_str(allocator, path_str))) {
+        STORAGE_LOG(WARN, "fail to get backup set path str", K(ret), K(backup_set));
+      } else if (OB_FAIL(backup_set.get_restore_backup_set_brief_info_str(allocator, desc_str))) {
+        STORAGE_LOG(WARN, "fail to get_restore_backup_set_brief_info_str", K(ret), K(backup_set));
+      } else if (OB_FAIL(databuff_printf(buf, sizeof(buf), pos, "%s | %s", path_str.ptr(), desc_str.ptr()))) {
+        STORAGE_LOG(WARN, "fail to databuff printf", K(ret));
+      } else {
+        PrintHelper::print_dump_line("BACKUP_SET", buf);
+      }
+    }
+    //print piece
+    ARRAY_FOREACH_X(backup_piece_list, j, cnt, OB_SUCC(ret)) {
+      order++;
+      ObString path_str;
+      ObString desc_str;
+      const ObRestoreLogPieceBriefInfo &log_piece = backup_piece_list.at(j);
+      char buf[OB_MAX_TEXT_LENGTH] = { 0 };
+      int64_t pos = 0;
+
+      if (OB_FAIL(log_piece.get_log_piece_path_str(allocator, path_str))) {
+        STORAGE_LOG(WARN, "fail to get log piece path str", K(ret), K(log_piece));
+      } else if (OB_FAIL(log_piece.get_restore_log_piece_brief_info_str(allocator, desc_str))) {
+        STORAGE_LOG(WARN, "fail to get_restore_log_piece_brief_info_str", K(ret), K(log_piece));
+      } else if (OB_FAIL(databuff_printf(buf, sizeof(buf), pos, "%s | %s", path_str.ptr(), desc_str.ptr()))) {
+        STORAGE_LOG(WARN, "fail to databuff printf", K(ret));
+      } else {
+        PrintHelper::print_dump_line("BACKUP_PIECE", buf);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::do_show_piece_files_()
+{
+  int ret = OB_SUCCESS;
+  ObBackupDest dest;
+  ObArchiveStore store;
+  ObBackupIoAdapter io_util;
+  ObBackupPath piece_path;
+  ObBackupPath piece_start_path;
+  ObBackupPath piece_end_path;
+  bool is_empty_piece = true;
+  bool is_empty_dir = true;
+  ObBackupFormatDesc format_desc;
+  ObSinglePieceDesc piece_info;
+  int64_t dest_id = 0;
+  share::SCN checkpoint_scn = SCN::min_scn();
+
+  if (0 >= round_id_ || 0 >= piece_id_) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid args", K(ret), K_(round_id), K_(piece_id));
+  } else if (OB_FAIL(dest.set(backup_path_, storage_info_))) {
+    STORAGE_LOG(WARN, "fail to set backup dest", K(ret));
+  } else if (OB_FAIL(store.init(dest))) {
+    STORAGE_LOG(WARN, "fail to init archive store", K(ret), K(dest));
+  } else if (OB_FAIL(store.read_format_file(format_desc))) {
+    STORAGE_LOG(WARN, "fail to read format file", K(ret), K(store));
+  } else if (OB_FALSE_IT(dest_id = format_desc.dest_id_)) {
+  } else if (OB_FAIL(store.get_single_piece_info(dest_id, round_id_, piece_id_, is_empty_piece, piece_info))) {
+    STORAGE_LOG(WARN, "fail to get single piece info", K(ret), K(store));
+  } else if (is_empty_piece) { // need list place holdlers
+    ObPieceKey key(dest_id, round_id_, piece_id_);
+    if (OB_FAIL(store.get_specific_piece_place_holder_paths(key, piece_start_path, piece_end_path))) {
+      STORAGE_LOG(WARN, "fail to get piece place holder paths", K(ret), K(key));
+    }
+  } else { // directly get place holder paths
+    bool is_piece_start_file_exist = false;
+    bool is_piece_end_file_exist = false;
+    if (OB_FAIL(store.is_piece_start_file_exist(dest_id, round_id_, piece_id_,
+                         piece_info.piece_.start_scn_, is_piece_start_file_exist))) {
+      STORAGE_LOG(WARN, "fail to check is piece start file exist", K(ret), K(piece_info));
+    } else if (OB_FAIL(store.is_piece_end_file_exist(dest_id, round_id_, piece_id_,
+                         piece_info.piece_.end_scn_, is_piece_end_file_exist))) {
+      STORAGE_LOG(WARN, "fail to check is piece end file exist", K(ret), K(piece_info));
+    } else if (is_piece_start_file_exist && OB_FAIL(ObArchivePathUtil::get_piece_start_file_path(dest, dest_id, round_id_, piece_id_,
+                                                                         piece_info.piece_.start_scn_, piece_start_path))) {
+      STORAGE_LOG(WARN, "fail to get piece start file path", K(ret), K(dest), K(piece_info));
+    } else if (is_piece_end_file_exist && OB_FAIL(ObArchivePathUtil::get_piece_end_file_path(dest, dest_id, round_id_, piece_id_,
+                                                                         piece_info.piece_.end_scn_, piece_end_path))) {
+      STORAGE_LOG(WARN, "fail to get piece end file path", K(ret), K(dest), K(piece_info));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObArchivePathUtil::get_piece_dir_path(dest, dest_id, round_id_, piece_id_, piece_path))) {
+    STORAGE_LOG(WARN, "fail to get piece dir path", K(ret), K(dest), K(dest_id), K_(round_id), K_(piece_id));
+  } else if (!is_empty_piece) { // no need check
+  } else if (OB_FAIL(io_util.is_empty_directory(piece_path.get_obstr(), dest.get_storage_info(), is_empty_dir))) {
+    STORAGE_LOG(WARN, "fail to check is empty dir", K(ret), K(dest));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (!is_empty_piece || !is_empty_dir) {
+      PrintHelper::print_dump_line("PATH", piece_path.get_ptr());
+    } else {
+      PrintHelper::print_dump_line("PATH", "NOT EXIST OR EMPTY");
+    }
+
+    if (!piece_start_path.is_empty()) {
+      PrintHelper::print_dump_line("START_PLACE_HOLDER", piece_start_path.get_ptr());
+    } else {
+      PrintHelper::print_dump_line("START_PLACE_HOLDER", "NOT EXIST");
+    }
+
+    if (!piece_end_path.is_empty()) {
+      PrintHelper::print_dump_line("END_PLACE_HOLDER", piece_end_path.get_ptr());
+    } else {
+      PrintHelper::print_dump_line("END_PLACE_HOLDER", "NOT EXIST");
+    }
+  }
+
   return ret;
 }
 
@@ -995,6 +1233,13 @@ int ObAdminDumpBackupDataExecutor::print_usage_()
   printf(HELP_FMT, "-c,--check-exist", "check file is exist or not");
   printf(HELP_FMT, "-e,--s3_url_encode_type", "set S3 protocol url encode type");
   printf(HELP_FMT, "-i, --sts_credential", "set STS credential");
+  printf(HELP_FMT, "-r, --restore_preview", "show sets and pieces needed to restore to given time/scn");
+  printf(HELP_FMT, "-t, --restore_time", "datetime for restore_preview");
+  printf(HELP_FMT, "-p, --show_piece_files", "show paths and files related to given piece");
+  printf(HELP_FMT, "-u, --dest_id", "dest_id for show_piece_files");
+  printf(HELP_FMT, "-v, --round_id", "round_id for show_piece_files");
+  printf(HELP_FMT, "-w, --piece_id", "piece_id for show_piece_files");
+
   printf("samples:\n");
   printf("  dump meta: \n");
   printf("\tob_admin dump_backup -dfile:///home/admin/backup_info \n");
@@ -1014,6 +1259,13 @@ int ObAdminDumpBackupDataExecutor::print_usage_()
   printf("\tob_admin dump_backup -d's3://home/admin/backup_info' "
          "-s'host=xxx.com&role_arn=xxx&external_id=xxx' "
          "-i'sts_url=xxx&sts_ak=aaa&sts_sk=bbb'\n");
+  printf("\tob_admin dump_backup -r -d's3://home/admin/archive?host=xxx.com&access_id=111&access_key=222, s3://home/admin/data?host=xxx.com&access_id=111&access_key=222' "
+          "-t '2025-10-23 11:22:11' or 1761189731000000000 ");
+  printf("\tob_admin dump_backup -p -d'oss://home/admin/archive' "
+         "-s'host=xxx.com&access_id=111&access_key=222'\n"
+         "-u 1001 "
+         "-v 1 "
+         "-w 1 ");
   return ret;
 }
 

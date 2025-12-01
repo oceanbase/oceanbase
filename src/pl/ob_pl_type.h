@@ -1315,7 +1315,7 @@ public:
   inline int64_t get_ora_max_ret_rows() { return ora_max_ret_rows_; }
   int init_params(ParamStore &exec_params);
   int prepare_cursor_store(sql::ObSQLSessionInfo &session,
-                           const common::ColumnsFieldIArray &fields);
+                           sql::ObResultSet &result_set);
   virtual int close(sql::ObSQLSessionInfo &session,
                     bool is_reuse = false,
                     bool close_by_open_thread = false);

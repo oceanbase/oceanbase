@@ -666,7 +666,7 @@ public:
                        K_(iter_type), K_(cur_level), K_(index_tree_height), K_(max_rescan_height), KP_(long_life_allocator), K_(prefetch_depth),
                        K_(total_micro_data_cnt), KP_(query_range), K_(tree_handle_cap), KP_(agg_store), KP_(skip_scanner),
                        K_(can_blockscan), K_(need_check_prefetch_depth), K_(use_multi_block_prefetch), K_(need_submit_io),
-                       K_(border_rowkey), K(ObArrayWrap<ObIndexTreeLevelHandle>(tree_handles_, index_tree_height_)), K_(multi_io_params));
+                       K(ObArrayWrap<ObIndexTreeLevelHandle>(tree_handles_, index_tree_height_)), K_(multi_io_params));
 protected:
   int init_basic_info(
       const int iter_type,

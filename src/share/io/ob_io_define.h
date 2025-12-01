@@ -720,7 +720,11 @@ public:
   bool is_valid() const;
   OB_INLINE bool is_finished() const
   {
-    return nullptr != result_ && result_->is_finished_;
+    return (nullptr != result_ && result_->is_finished_);
+  }
+  bool is_limit_net_bandwidth_req() const
+  {
+    return (nullptr != result_ && result_->is_limit_net_bandwidth_req_);
   }
 
   int wait(const int64_t wait_timeout_ms = UINT64_MAX);

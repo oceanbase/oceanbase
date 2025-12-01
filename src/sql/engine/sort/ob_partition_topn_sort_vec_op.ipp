@@ -36,7 +36,6 @@ void ObPartitionTopNSort<Compare, Store_Row, has_addon>::reuse()
   pt_row_buffer_.reuse();
   row_count_ = 0;
   got_first_row_ = false;
-  pt_row_cnt_ = 0;
 }
 
 template <typename Compare, typename Store_Row, bool has_addon>
@@ -48,10 +47,6 @@ void ObPartitionTopNSort<Compare, Store_Row, has_addon>::reuse_part_topn_node() 
       PartTopnNode *hash_node = pt_buckets_->at(i);
       while (hash_node != NULL) {
         TopnNode *topn_node = &hash_node->topn_node_;
-        if (OB_NOT_NULL(topn_node)) {
-          topn_node->ties_array_.reset();
-          topn_node->rows_array_.reset();
-        }
         PartTopnNode *cur_node = hash_node;
         hash_node = hash_node->hash_node_next_;
         cur_node->~PartTopnNode();
@@ -141,7 +136,7 @@ int ObPartitionTopNSort<Compare, Store_Row, has_addon>::resize_buckets()
           TopnNode &cur_node = hash_node->topn_node_;
           if (OB_UNLIKELY(0 == cur_node.rows_array_.count())) {
             ret = OB_ERR_UNEXPECTED;
-            SQL_ENG_LOG(WARN, "get unexpected topn node rows_array", K(cur_node.rows_array_));
+            SQL_ENG_LOG(WARN, "get unexpected topn node rows_array", K(cur_node.rows_array_.count()));
           } else {
             const uint64_t hash_value = cur_node.hash_val_;
             int64_t new_pos = hash_value >> shift_right;
@@ -156,6 +151,7 @@ int ObPartitionTopNSort<Compare, Store_Row, has_addon>::resize_buckets()
         allocator_.free(pt_buckets_);
         pt_buckets_ = new_pt_buckets;
         max_bucket_cnt_ = new_bucket_cnt;
+        SQL_ENG_LOG(TRACE, "resize buckets", K(max_bucket_cnt_));
       } else {
         new_pt_buckets->reset();
         allocator_.free(new_pt_buckets);
@@ -195,8 +191,8 @@ int ObPartitionTopNSort<Compare, Store_Row, has_addon>::add_batch(const ObBatchR
     if (OB_NOT_NULL(append_row_count)) {
       *append_row_count = row_count;
     }
-    if (OB_SUCC(ret)) {
-      rows = &(topn_node_->rows_array_);
+    if (OB_SUCC(ret) && OB_FAIL(rows->push_back(nullptr))) { // mock to avoid empty batch error in sort_vec_impl
+      SQL_ENG_LOG(WARN, "failed to push back nullptr", K(ret));
     }
   }
   return ret;
@@ -230,8 +226,8 @@ int ObPartitionTopNSort<Compare, Store_Row, has_addon>::add_batch(const ObBatchR
       }
     }
   }
-  if (OB_SUCC(ret)) {
-    rows = &(topn_node_->rows_array_);
+  if (OB_SUCC(ret) && OB_FAIL(rows->push_back(nullptr))) { // mock to avoid empty batch error in sort_vec_impl
+    SQL_ENG_LOG(WARN, "failed to push back nullptr", K(ret));
   }
   return ret;
 }
@@ -246,8 +242,6 @@ int ObPartitionTopNSort<Compare, Store_Row, has_addon>::add_part_topn_sort_row(
     SQL_ENG_LOG(WARN, "failed to locate topn node", K(ret));
   } else if (OB_FAIL((this->*add_topn_row_func_)(store_row))) {
     SQL_ENG_LOG(WARN, "add topn sort row failed", K(ret));
-  } else if (OB_NOT_NULL(store_row)) {
-    pt_row_cnt_++;
   } else if (OB_UNLIKELY(part_group_cnt_ > ENLARGE_BUCKET_NUM_FACTOR * max_bucket_cnt_)
              && OB_FAIL(resize_buckets())) {
     SQL_ENG_LOG(WARN, "failed to enlarge partition topn buckets");
@@ -495,7 +489,7 @@ template <typename Compare, typename Store_Row, bool has_addon>
 int ObPartitionTopNSort<Compare, Store_Row, has_addon>::do_quick_select(TopnNode *node, int64_t k)
 {
   int ret = OB_SUCCESS;
-  common::ObIArray<Store_Row *> &rows = node->rows_array_;
+  RowArray<Store_Row *> &rows = node->rows_array_;
   int64_t size = node->reuse_idx_ == -1 ? rows.count() : node->reuse_idx_;
   int64_t res_cnt = k;
   if (OB_UNLIKELY(k <= 0)) {
@@ -548,8 +542,8 @@ template <typename Compare, typename Store_Row, bool has_addon>
 int ObPartitionTopNSort<Compare, Store_Row, has_addon>::do_quick_select_with_ties(TopnNode *node, int64_t k)
 {
   int ret = OB_SUCCESS;
-  common::ObIArray<Store_Row *> &rows = node->rows_array_;
-  common::ObIArray<Store_Row *> &ties_rows = node->ties_array_;
+  RowArray<Store_Row *> &rows = node->rows_array_;
+  RowArray<Store_Row *> &ties_rows = node->ties_array_;
   int64_t size = node->reuse_idx_ == -1 ? rows.count() : node->reuse_idx_;
   int64_t res_cnt = k;
   if (OB_UNLIKELY(k <= 0)) {
@@ -593,7 +587,7 @@ int ObPartitionTopNSort<Compare, Store_Row, has_addon>::do_quick_select_with_tie
       if (OB_FAIL(comp_.ret_) || cmp == 0) {
         // do nothing
       } else {
-        ties_rows.reset();
+        ties_rows.~RowArray();
       }
     }
 
@@ -602,8 +596,11 @@ int ObPartitionTopNSort<Compare, Store_Row, has_addon>::do_quick_select_with_tie
       if (OB_FAIL(comp_.ret_)) {
         // do nothing
       } else if (cmp == 0) {
-        ties_rows.push_back(rows.at(i));
-        rows.at(i) = nullptr;
+        if (OB_FAIL(ties_rows.push_back(rows.at(i)))) {
+          SQL_ENG_LOG(WARN, "failed to push back ties array", K(ret));
+        } else {
+          rows.at(i) = nullptr;
+        }
       }
     }
   }
@@ -654,8 +651,9 @@ int ObPartitionTopNSort<Compare, Store_Row, has_addon>::add_quick_select_row_imp
     } else if (OB_ISNULL(new_sk_row)) {
       ret = OB_ERR_UNEXPECTED;
       SQL_ENG_LOG(WARN, "new_sk_row is null", K(ret));
+    } else if (OB_FAIL(topn_node_->ties_array_.push_back(new_sk_row))) {
+        SQL_ENG_LOG(WARN, "failed to push back ties array", K(ret));
     } else {
-      topn_node_->ties_array_.push_back(new_sk_row);
       sr = new_sk_row;
     }
   } else if (need_add_rows) {
@@ -676,8 +674,8 @@ int ObPartitionTopNSort<Compare, Store_Row, has_addon>::add_quick_select_row_imp
       } else if (OB_ISNULL(new_sk_row)) {
         ret = OB_ERR_UNEXPECTED;
         SQL_ENG_LOG(WARN, "new_sk_row is null", K(ret));
-      } else {
-        topn_node_->rows_array_.push_back(new_sk_row);
+      } else if (OB_FAIL(topn_node_->rows_array_.push_back(new_sk_row))) {
+        SQL_ENG_LOG(WARN, "failed to push back rows array", K(ret));
       }
     }
     if (OB_SUCC(ret)) {
@@ -709,7 +707,7 @@ template <typename Compare, typename Store_Row, bool has_addon>
 int ObPartitionTopNSort<Compare, Store_Row, has_addon>::finish_in_quick_select(TopnNode *node)
 {
   int ret = OB_SUCCESS;
-  common::ObIArray<Store_Row *> &rows = node->rows_array_;
+  RowArray<Store_Row *> &rows = node->rows_array_;
   int64_t k = topn_cnt_ - outputted_rows_cnt_;
 
   if (is_fetch_with_ties_ && OB_FAIL(do_quick_select_with_ties(node, k))) {

@@ -1462,6 +1462,119 @@ int ObUserTenantBackupDeleteMgr::handle_backup_clean_task(
   return ret;
 }
 
+//
+
+// traverse the task_attrs to collect round IDs and check if all pieces in each round are deleted
+int ObUserTenantBackupDeleteMgr::get_round_range_to_delete_(const ObArray<ObBackupCleanTaskAttr> &task_attrs,
+                                      ObIArray<int64_t> &round_ids,
+                                      common::hash::ObHashMap<int64_t, ObBackupPathString> &piece_round_to_backup_path) {
+  int ret = OB_SUCCESS;
+  int64_t max_round_id = INT64_MIN;
+  round_ids.reset();
+  for (int64_t i = 0; OB_SUCC(ret) && i < task_attrs.count(); ++i) {
+    const ObBackupCleanTaskAttr &task_attr = task_attrs.at(i);
+    if (ObBackupCleanTaskType::BACKUP_PIECE == task_attr.task_type_) {
+      max_round_id = std::max(max_round_id, task_attr.round_id_);
+      if (OB_FAIL(piece_round_to_backup_path.set_refactored(task_attr.round_id_, task_attr.backup_path_))) {
+        if (OB_HASH_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to set refactored piece_round_to_backup_path", K(ret), K(task_attr));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !piece_round_to_backup_path.empty()) {
+    ObArchivePersistHelper archive_helper;
+    if (OB_FAIL(archive_helper.init(gen_user_tenant_id(tenant_id_)))) {
+      LOG_WARN("failed to init archive helper", K(ret), K(tenant_id_));
+    } else {
+      // check each round in the map to see if all pieces are deleted
+      for (common::hash::ObHashMap<int64_t, ObBackupPathString>::const_iterator iter = piece_round_to_backup_path.begin();
+           OB_SUCC(ret) && iter != piece_round_to_backup_path.end(); ++iter) {
+        const int64_t round_id = iter->first;
+        bool is_piece_all_deleted = false;
+        if (OB_FAIL(archive_helper.is_all_piece_in_round_deleted(*sql_proxy_, round_id, is_piece_all_deleted))) {
+          LOG_WARN("failed to check if round is cleared", K(ret), K(round_id));
+        } else if (is_piece_all_deleted) { // all pieces in the round are deleted
+          if (OB_FAIL(round_ids.push_back(round_id))) {
+            LOG_WARN("failed to push back round id", K(ret), K(round_id));
+          } else {
+            LOG_INFO("round is cleared, add to delete list", K(round_id));
+          }
+        } else { // some pieces in the round are not deleted
+          if (round_id != max_round_id) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("round is not totally deleted, but the piece after this round has been deleted",
+                       K(ret), K(round_id), K(max_round_id), K(task_attrs));
+          } else {
+            LOG_INFO("the piece in max round is not totally deleted, skip deleting placeholders of this round", K(round_id));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+// delete the rounds placeholders if all pieces in the round are deleted
+int ObUserTenantBackupDeleteMgr::delete_rounds_placeholders_(const ObArray<ObBackupCleanTaskAttr> &task_attrs)
+{
+  int ret = OB_SUCCESS;
+  common::hash::ObHashMap<int64_t, ObBackupPathString> round_id_to_backup_path;
+  ObArray<int64_t> round_ids;  // round ids to delete
+  if (OB_FAIL(round_id_to_backup_path.create(task_attrs.count(), "round_map"))) {
+    LOG_WARN("failed to create round_id_to_backup_path map", K(ret));
+  } else if (OB_FAIL(get_round_range_to_delete_(task_attrs, round_ids, round_id_to_backup_path))) {
+    LOG_WARN("failed to get round range to delete", K(ret));
+  } else if (!round_ids.empty()) {
+    ObBackupPath rounds_start_path;
+    ObBackupPath rounds_end_path;
+    ObBackupPathString backup_path;
+    ObBackupDest backup_dest;
+    for (int64_t i = 0; OB_SUCC(ret) && i < round_ids.count(); ++i) { // delete the rounds placeholders in each round
+      int64_t round_id = round_ids.at(i);
+      int64_t dest_id = OB_INVALID_DEST_ID;
+      backup_path.reset();
+      backup_dest.reset();
+      rounds_start_path.reset();
+      rounds_end_path.reset();
+      if (OB_FAIL(round_id_to_backup_path.get_refactored(round_id, backup_path))) {
+        LOG_WARN("failed to get backup path", K(ret), K(round_id));
+      } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, gen_user_tenant_id(tenant_id_), backup_path, backup_dest))) {
+        LOG_WARN("failed to get backup dest from storage info table", K(ret), K(backup_path), K(round_id));
+      } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(*sql_proxy_, gen_user_tenant_id(tenant_id_), backup_dest, dest_id))) {
+        LOG_WARN("failed to get dest id", K(ret), K(backup_dest));
+      } else {
+        const ObBackupStorageInfo *storage_info = backup_dest.get_storage_info();
+        if (OB_ISNULL(storage_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("storage info is null", K(ret), K(dest_id), K(round_id));
+        } else {
+          LOG_INFO("start deleting log archive rounds placeholders", K(ret), K(round_id), K(dest_id));
+          if (OB_FAIL(ObArchivePathUtil::get_round_start_file_path(backup_dest, dest_id, round_id, rounds_start_path))) {
+            LOG_WARN("failed to get round start file path", K(ret), K(dest_id), K(round_id));
+          } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_file(rounds_start_path, storage_info))) {
+            LOG_WARN("failed to delete round start file", K(ret), K(rounds_start_path));
+          } else if (OB_FAIL(ObArchivePathUtil::get_round_end_file_path(backup_dest, dest_id, round_id, rounds_end_path))) {
+            LOG_WARN("failed to get round end file path", K(ret), K(dest_id), K(round_id));
+          } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_file(rounds_end_path, storage_info))) {
+            LOG_WARN("failed to delete round end file", K(ret), K(rounds_end_path));
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      LOG_INFO("successfully deleted log archive rounds placeholders", K(ret), K(round_ids));
+    } else {
+      LOG_WARN("failed to delete log archive rounds placeholders", K(ret), K(round_ids));
+    }
+  } else {
+    LOG_INFO("no log archive rounds placeholders to delete in this job", K(ret), K(round_ids));
+  }
+  return ret;
+}
+
 int ObUserTenantBackupDeleteMgr::do_backup_clean_task_()
 {
   int ret = OB_SUCCESS;
@@ -1477,9 +1590,15 @@ int ObUserTenantBackupDeleteMgr::do_backup_clean_task_()
   } else if (ObBackupCleanStatus::Status::COMPLETED == next_status.status_
              || ObBackupCleanStatus::Status::FAILED == next_status.status_) {
     // If the backup all's all tasks are completed, delete the files of the upper level.
-    if (job_attr_->is_delete_backup_all() && ObBackupCleanStatus::Status::COMPLETED == next_status.status_) {
-      if (OB_FAIL(delete_backup_all_meta_info_files_())) {
-        LOG_WARN("failed to delete backup all meta info files", K(ret));
+    if (ObBackupCleanStatus::Status::COMPLETED == next_status.status_) {
+      if (job_attr_->is_delete_backup_all()) {
+        if (OB_FAIL(delete_backup_all_meta_info_files_())) {
+          LOG_WARN("failed to delete backup all meta info files", K(ret));
+        }
+      } else {
+        if (OB_FAIL(delete_rounds_placeholders_(task_attrs))) {
+          LOG_WARN("failed to delete rounds placeholders", K(ret));
+        }
       }
     }
     int64_t end_ts = ObTimeUtility::current_time(); 

@@ -861,7 +861,8 @@ int ObIMicroBlockRowScanner::filter_pushdown_filter(
 
       case ObIMicroBlockReader::Reader:
       case ObIMicroBlockReader::NewFlatReader: {
-        if (can_use_vectorize && filter->can_vectorized() && EN_FILTER_PUSHDOWN_DISABLE_FLAT_VECTORIZE == OB_SUCCESS && !filter->is_filter_dynamic_node()) {
+        // TODO: zhanghuidong.zhd, temporarily disable batch filter for flat reader
+        if (false && can_use_vectorize && filter->can_vectorized() && EN_FILTER_PUSHDOWN_DISABLE_FLAT_VECTORIZE == OB_SUCCESS && !filter->is_filter_dynamic_node()) {
           sql::ObPhysicalFilterExecutor *physical_filter = static_cast<sql::ObPhysicalFilterExecutor *>(filter);
           if (OB_FAIL(apply_filter_batch(
                       parent,

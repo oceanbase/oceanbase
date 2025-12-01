@@ -914,6 +914,8 @@ int ObMacroBlockWriter::append(const ObDataMacroBlockMeta &macro_meta,
     merge_block_info_.macro_block_count_++;
     merge_block_info_.total_row_count_ += macro_meta.val_.row_count_;
     merge_block_info_.occupy_size_ += macro_meta.val_.occupy_size_;
+    merge_block_info_.original_size_ += macro_meta.val_.original_size_;
+    merge_block_info_.compressed_size_ += macro_meta.val_.data_zsize_;
   }
 
   if (OB_SUCC(ret) && !data_store_desc_->is_cg()) {
@@ -1167,6 +1169,8 @@ int ObMacroBlockWriter::append_micro_block(const ObMicroBlock &micro_block, cons
         STORAGE_LOG(WARN, "Failed to write micro block, ", K(ret), K(micro_block_desc), KPC(data_store_desc_), K(micro_index_data));
       } else {
         merge_block_info_.multiplexed_micro_count_in_new_macro_++;
+        merge_block_info_.original_size_ += micro_block_desc.original_size_;
+        merge_block_info_.compressed_size_ += micro_block_desc.buf_size_;
       }
 
       if (OB_SUCC(ret) && nullptr != data_aggregator_) {
@@ -1695,7 +1699,7 @@ int ObMacroBlockWriter::build_micro_block()
 
   if (OB_SUCC(ret)) {
     micro_writer_->reuse();
-    merge_block_info_.original_size_ += block_size;
+    merge_block_info_.original_size_ += micro_block_desc.original_size_;
     merge_block_info_.compressed_size_ += micro_block_desc.buf_size_;
     merge_block_info_.new_micro_count_in_new_macro_++;
     if (data_store_desc_->is_for_index_or_meta()) {
@@ -2686,7 +2690,7 @@ int ObMacroBlockWriter::merge_micro_block(const ObMicroBlock &micro_block)
         }
       }
 
-      if (OB_SUCC(ret) && micro_writer_->get_block_size() >= data_store_desc_->get_micro_block_size()) {
+      if (OB_SUCC(ret) && micro_writer_->get_row_count() > 0 && micro_writer_->get_block_size() >= data_store_desc_->get_micro_block_size()) {
         if (OB_FAIL(build_micro_block())) {
           LOG_WARN("build_micro_block failed", K(ret));
         }

@@ -19,6 +19,7 @@
 #include "lib/utility/ob_tracepoint.h"
 #include "lib/alloc/ob_malloc_time_monitor.h"
 #include "lib/resource/ob_affinity_ctrl.h"
+#include "lib/utility/ob_hang_fatal_error.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -913,9 +914,13 @@ void ObMallocHook::free(void *ptr)
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
   if (NULL != ptr) {
     AObject *obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);
-    SANITY_POISON(obj->data_, obj->alloc_bytes_);
-    ABlock *block = obj->block_;
-    block->obj_set_v2_->free_object(obj, block);
+    if (OB_UNLIKELY(in_exception_state)) {
+      add_capture_memory_info(ptr, obj->alloc_bytes_);
+    } else {
+      SANITY_POISON(obj->data_, obj->alloc_bytes_);
+      ABlock *block = obj->block_;
+      block->obj_set_v2_->free_object(obj, block);
+    }
   }
 }
 } // end of namespace lib

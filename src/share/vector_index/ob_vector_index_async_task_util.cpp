@@ -368,11 +368,11 @@ int ObVecIndexAsyncTaskUtil::init_tablet_rebuild_new_adapter(ObPluginVectorIndex
   } else if (OB_FALSE_IT(index_type = new_adapter->get_snap_index_type())) {
   } else if (OB_FAIL(ObPluginVectorIndexUtils::get_split_snapshot_prefix(index_type, key_prefix, target_prefix))) {
     LOG_WARN("fail to get split snapshot prefix", K(ret), K(index_type), K(key_prefix));
-  } else if (OB_FAIL(ObPluginVectorIndexUtils::get_key_prefix_scn(key_prefix, key_prefix_scn))) {
+  } else if (OB_FALSE_IT(ObPluginVectorIndexUtils::get_key_prefix_scn(key_prefix, key_prefix_scn))) {
     LOG_WARN("fail to get key prefix scn", K(ret), K(key_prefix));
   } else if (OB_FAIL(new_adapter->set_snapshot_key_prefix(target_prefix))) {
     LOG_WARN("failed to set snapshot key prefix", K(ret), K(index_type), K(target_prefix));
-  } else if (OB_FAIL(new_adapter->set_snapshot_key_scn(key_prefix_scn))) {
+  } else if (key_prefix_scn > 0 && OB_FAIL(new_adapter->set_snapshot_key_scn(key_prefix_scn))) {
     LOG_WARN("fail to set snapshot key scn", K(ret), K(key_prefix_scn));
   }
   return ret;

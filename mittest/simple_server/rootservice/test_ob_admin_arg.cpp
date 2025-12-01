@@ -18,6 +18,8 @@
 #include <gmock/gmock.h>
 #include "env/ob_simple_cluster_test_base.h"
 #include "rootserver/ob_admin_drtask_util.h" // ObAdminDRTaskUtil
+#include "rootserver/ob_admin_switch_replica_role.h" // ObAdminSwitchReplicaRole
+#include "share/ob_rpc_struct.h"
 
 namespace oceanbase
 {
@@ -37,6 +39,156 @@ class TestObAdminArg : public unittest::ObSimpleClusterTestBase
 public:
    TestObAdminArg() : unittest::ObSimpleClusterTestBase("test_ob_admin_arg") {}
 };
+
+TEST_F(TestObAdminArg, test_switch_replica_role_arg)
+{
+  int ret = OB_SUCCESS;
+  common::ObAddr server_to_compare1(ObAddr::VER::IPV4, "100.88.107.212", 2002);
+  ObAdminSwitchReplicaRoleStr command_arg_str;
+  ObAdminSwitchReplicaRoleArg command_arg;
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  command_arg_str.init("tenant_id=1002,ls_id=1001,role=LEADER,server=100.88.107.212:2002");
+  ret = ObAdminSwitchReplicaRole::parse_params_from_obadmin_command_arg(command_arg_str, command_arg, tenant_id);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(1002, tenant_id);
+  ASSERT_EQ(1001, command_arg.ls_id_);
+  ASSERT_EQ(ObRole::LEADER, command_arg.role_);
+  ASSERT_EQ(server_to_compare1, command_arg.server_);
+  command_arg_str.reset();
+  command_arg.reset();
+  tenant_id = OB_INVALID_TENANT_ID;
+
+
+  command_arg_str.init("tenant_id=1002,ls_id=1001,role=FOLLOWER,server=100.88.107.212:2002");
+  ret = ObAdminSwitchReplicaRole::parse_params_from_obadmin_command_arg(command_arg_str, command_arg, tenant_id);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(1002, tenant_id);
+  ASSERT_EQ(1001, command_arg.ls_id_);
+  ASSERT_EQ(ObRole::FOLLOWER, command_arg.role_);
+  ASSERT_EQ(server_to_compare1, command_arg.server_);
+  command_arg_str.reset();
+  command_arg.reset();
+  tenant_id = OB_INVALID_TENANT_ID;
+
+  command_arg_str.init("tenant_id=1002,ls_id=1001,role=DEFAULT,server=100.88.107.212:2002");
+  ret = ObAdminSwitchReplicaRole::parse_params_from_obadmin_command_arg(command_arg_str, command_arg, tenant_id);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(1002, tenant_id);
+  ASSERT_EQ(1001, command_arg.ls_id_);
+  ASSERT_EQ(ObRole::INVALID_ROLE, command_arg.role_);
+  ASSERT_EQ(server_to_compare1, command_arg.server_);
+  command_arg_str.reset();
+  command_arg.reset();
+  tenant_id = OB_INVALID_TENANT_ID;
+
+  command_arg_str.init("role=DEFAULT,tenant_id=1002,ls_id=1001,server=100.88.107.212:2002");
+  ret = ObAdminSwitchReplicaRole::parse_params_from_obadmin_command_arg(command_arg_str, command_arg, tenant_id);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(1002, tenant_id);
+  ASSERT_EQ(1001, command_arg.ls_id_);
+  ASSERT_EQ(ObRole::INVALID_ROLE, command_arg.role_);
+  ASSERT_EQ(server_to_compare1, command_arg.server_);
+  command_arg_str.reset();
+  command_arg.reset();
+  tenant_id = OB_INVALID_TENANT_ID;
+
+  command_arg_str.init("role=DEFAULT,ls_id=1001,server=100.88.107.212:2002,tenant_id=1002");
+  ret = ObAdminSwitchReplicaRole::parse_params_from_obadmin_command_arg(command_arg_str, command_arg, tenant_id);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(1002, tenant_id);
+  ASSERT_EQ(1001, command_arg.ls_id_);
+  ASSERT_EQ(ObRole::INVALID_ROLE, command_arg.role_);
+  ASSERT_EQ(server_to_compare1, command_arg.server_);
+  command_arg_str.reset();
+  command_arg.reset();
+  tenant_id = OB_INVALID_TENANT_ID;
+
+  command_arg_str.init("role=DEFAULT,ls_id=1001,tenant_id=1002,server=100.88.107.212:2002");
+  ret = ObAdminSwitchReplicaRole::parse_params_from_obadmin_command_arg(command_arg_str, command_arg, tenant_id);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(1002, tenant_id);
+  ASSERT_EQ(1001, command_arg.ls_id_);
+  ASSERT_EQ(ObRole::INVALID_ROLE, command_arg.role_);
+  ASSERT_EQ(server_to_compare1, command_arg.server_);
+  command_arg_str.reset();
+  command_arg.reset();
+  tenant_id = OB_INVALID_TENANT_ID;
+
+  command_arg_str.init("role=DEFAULT,ls_id=1001,tenant_id=1002,server=100.88.107.212:2002");
+  ret = ObAdminSwitchReplicaRole::parse_params_from_obadmin_command_arg(command_arg_str, command_arg, tenant_id);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(1002, tenant_id);
+  ASSERT_EQ(1001, command_arg.ls_id_);
+  ASSERT_EQ(ObRole::INVALID_ROLE, command_arg.role_);
+  ASSERT_EQ(server_to_compare1, command_arg.server_);
+  command_arg_str.reset();
+  command_arg.reset();
+  tenant_id = OB_INVALID_TENANT_ID;
+
+  command_arg_str.init("role = DEFAULT ,ls_id =    1001,tenant_id=1002, server=100.88.107.212:2002");
+  ret = ObAdminSwitchReplicaRole::parse_params_from_obadmin_command_arg(command_arg_str, command_arg, tenant_id);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(1002, tenant_id);
+  ASSERT_EQ(1001, command_arg.ls_id_);
+  ASSERT_EQ(ObRole::INVALID_ROLE, command_arg.role_);
+  ASSERT_EQ(server_to_compare1, command_arg.server_);
+  command_arg_str.reset();
+  command_arg.reset();
+  tenant_id = OB_INVALID_TENANT_ID;
+
+  command_arg_str.init("   role = DEFAULT ,ls_id =    1001,tenant_id=1002, server = 100.88.107.212:2002   ");
+  ret = ObAdminSwitchReplicaRole::parse_params_from_obadmin_command_arg(command_arg_str, command_arg, tenant_id);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(1002, tenant_id);
+  ASSERT_EQ(1001, command_arg.ls_id_);
+  ASSERT_EQ(ObRole::INVALID_ROLE, command_arg.role_);
+  ASSERT_EQ(server_to_compare1, command_arg.server_);
+  command_arg_str.reset();
+  command_arg.reset();
+  tenant_id = OB_INVALID_TENANT_ID;
+
+// invalid command
+  command_arg_str.init("tenant_id=1002");
+  ret = ObAdminSwitchReplicaRole::parse_params_from_obadmin_command_arg(command_arg_str, command_arg, tenant_id);
+  ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
+  command_arg_str.reset();
+  command_arg.reset();
+
+  command_arg_str.init("tenant_id=1002,server=100.88.107.212:2002");
+  ret = ObAdminSwitchReplicaRole::parse_params_from_obadmin_command_arg(command_arg_str, command_arg, tenant_id);
+  ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
+  command_arg_str.reset();
+  command_arg.reset();
+
+  command_arg_str.init("tenant_id=1002,tenant_id=1001,tenant_id=1002,tenant_id=1001");
+  ret = ObAdminSwitchReplicaRole::parse_params_from_obadmin_command_arg(command_arg_str, command_arg, tenant_id);
+  ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
+  command_arg_str.reset();
+  command_arg.reset();
+  command_arg_str.init("tenant_id=1002,ls_id=1001,tenant_id=1002,tenant_id=1001");
+  ret = ObAdminSwitchReplicaRole::parse_params_from_obadmin_command_arg(command_arg_str, command_arg, tenant_id);
+  ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
+  command_arg_str.reset();
+  command_arg.reset();
+
+  command_arg_str.init("tenant_id=1002,ls_id=1001,server=1.1.1.1:1,tenant_id=1001");
+  ret = ObAdminSwitchReplicaRole::parse_params_from_obadmin_command_arg(command_arg_str, command_arg, tenant_id);
+  ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
+  command_arg_str.reset();
+  command_arg.reset();
+
+  command_arg_str.init("tenant_id=1002,ls_id=1001,server=100.88.107.212:2002,tenant_id=1001");
+  ret = ObAdminSwitchReplicaRole::parse_params_from_obadmin_command_arg(command_arg_str, command_arg, tenant_id);
+  ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
+  command_arg_str.reset();
+  command_arg.reset();
+
+  command_arg_str.init("tenant_id=1002,ls_id=1001,server=1.1.1.1:1,role=x");
+  ret = ObAdminSwitchReplicaRole::parse_params_from_obadmin_command_arg(command_arg_str, command_arg, tenant_id);
+  ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
+  command_arg_str.reset();
+  command_arg.reset();
+}
 
 TEST_F(TestObAdminArg, test_argument)
 {

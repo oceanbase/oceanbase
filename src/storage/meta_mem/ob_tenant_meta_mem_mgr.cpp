@@ -1948,7 +1948,7 @@ int ObTenantMetaMemMgr::get_current_version_for_tablet(
         tablet_fingerprint = reinterpret_cast<uintptr_t>(tablet_ptr);
         tablet_private_transfer_epoch = tablet_ptr->get_addr().block_id().meta_private_transfer_epoch();
         allow_tablet_version_gc = tablet_ptr->is_old_version_chain_empty() && !exist_in_external;
-        OB_ASSERT(tablet_private_transfer_epoch == private_transfer_epoch);
+        OB_ASSERT(!tablet_ptr->get_addr().is_disked() || tablet_private_transfer_epoch == private_transfer_epoch);
         const ObTabletStatus tablet_status = tablet_handle.get_obj()->get_tablet_meta().last_persisted_committed_tablet_status_.get_tablet_status();
         if (tablet_handle.get_obj()->is_empty_shell() && (ObTabletStatus::TRANSFER_OUT_DELETED == tablet_status)) {
           is_transfer_out_deleted = true;

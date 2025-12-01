@@ -1460,7 +1460,7 @@ int ObTableParam::convert_group_by(const ObTableSchema &table_schema,
         int32_t j = 0;
         for ( ; OB_SUCC(ret) && j < output_column_ids.count(); ++j) {
           if (aggregate_column_ids.at(i) == output_column_ids.at(j)) {
-            if (j > output_projector_.count()) {
+            if (j >= output_projector_.count()) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected index", K(ret), K(j), K(output_column_ids.count()), K(output_projector_.count()));
             } else {
@@ -1469,9 +1469,9 @@ int ObTableParam::convert_group_by(const ObTableSchema &table_schema,
           }
         }
         if (OB_SUCC(ret)) {
-          if (OB_INVALID_INDEX == output_projector_.at(j)) {
+          if (OB_UNLIKELY(OB_INVALID_INDEX == output_projector_.at(j) || j >= output_projector_.count())) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected index", K(ret), K(output_column_ids), K(aggregate_column_ids), K(i));
+            LOG_WARN("unexpected index", K(ret), K(output_column_ids), K(aggregate_column_ids), K(i), K(j));
           } else if (OB_FAIL(aggregate_projector_.push_back(output_projector_.at(j)))) {
             LOG_WARN("failed to push aggregate projector", K(ret), K(i));
           }

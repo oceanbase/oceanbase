@@ -676,8 +676,13 @@ int ObSSTableMeta::init_base_meta(
     basic_meta_.contain_uncommitted_row_ = param.contain_uncommitted_row_;
     basic_meta_.max_merged_trans_version_ = param.max_merged_trans_version_;
     basic_meta_.recycle_version_ = param.recycle_version_;
-    basic_meta_.upper_trans_version_ = contain_uncommitted_row() ?
-        INT64_MAX : basic_meta_.max_merged_trans_version_;
+    if (param.upper_trans_version_ > 0) {
+      // for inc major sstable only
+      basic_meta_.upper_trans_version_ = param.upper_trans_version_;
+    } else {
+      basic_meta_.upper_trans_version_ = contain_uncommitted_row() ?
+          INT64_MAX : basic_meta_.max_merged_trans_version_;
+    }
     basic_meta_.ddl_scn_ = param.ddl_scn_;
     basic_meta_.filled_tx_scn_ = param.filled_tx_scn_;
     basic_meta_.data_index_tree_height_ = param.data_index_tree_height_;

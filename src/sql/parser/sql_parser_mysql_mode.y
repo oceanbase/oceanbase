@@ -8492,10 +8492,6 @@ parallel_option:
 PARALLEL opt_equal_mark INTNUM
 {
   (void)($2) ; /* make bison mute */
-  if (OB_UNLIKELY($3->value_ < 1)) {
-    yyerror(&@1, result, "value for PARALLEL or DEGREE must be greater than 0!\n");
-    YYERROR;
-  }
   malloc_non_terminal_node($$, result->malloc_pool_, T_PARALLEL, 1, $3);
 }
 | NOPARALLEL

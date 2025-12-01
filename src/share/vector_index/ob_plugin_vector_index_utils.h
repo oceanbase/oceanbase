@@ -73,7 +73,7 @@ public:
   static int get_vector_index_name_prefix(const ObTableSchema &index_schema, ObString &prefix);
   static int get_prefix(const ObString &src, const ObString &item, ObString &dst);
   static int get_suffix(const ObString &src, const ObString &item, ObString &dst);
-  static int get_key_prefix_scn(const ObString &key_prefix, int64_t &scn);
+  static void get_key_prefix_scn(const ObString &key_prefix, int64_t &scn);
   static int get_table_key_scn(const ObString &key_str, int64_t &scn);
   static int get_split_snapshot_prefix(const ObVectorIndexAlgorithmType index_type,
                                        const ObString &src,

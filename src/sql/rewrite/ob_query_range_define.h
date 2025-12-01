@@ -547,7 +547,8 @@ private:
       uint32_t fast_nlj_range_         :  1;
       uint32_t general_nlj_range_      :  1;
       uint32_t enable_new_false_range_ :  1;
-      uint32_t reserved_               : 28;
+      uint32_t cnt_fake_const_udf_     :  1;
+      uint32_t reserved_               : 27;
     };
   };
 };

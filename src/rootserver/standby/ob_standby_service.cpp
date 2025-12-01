@@ -777,6 +777,7 @@ int ObStandbyService::switch_to_standby_prepare_ls_status_(
                                    switchover_epoch,
                                    tenant_stat))) {
       LOG_WARN("failed to process_ls_status_missmatch", KR(ret));
+    } else if (FALSE_IT(DEBUG_SYNC(BEFORE_SWITCHING_TO_STANDBY))) {
     } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_role(
                     tenant_id, sql_proxy_, switchover_epoch,
                     share::STANDBY_TENANT_ROLE, status,

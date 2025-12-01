@@ -673,7 +673,7 @@ int ObCOTabletMergeCtx::create_cg_sstable(const int64_t cg_idx)
     } else if (OB_FAIL(cg_merge_info_array_[cg_idx]->create_sstable(*this, table_handle, skip_to_create_empty_cg, cg_schema_ptr, cg_idx))) {
       LOG_WARN("fail to create sstable", K(ret), K(cg_idx), KPC(this));
       // index builder is non-reentrant, so cancel dag net to retry
-      (void) static_cast<ObCOMergeDagNet&>(dag_net_).cancel_dag_net(ret);
+      (void) static_cast<ObCOMergeDagNet&>(dag_net_).cancel_dag_net(ret, true/*force_cancel*/);
 #ifdef ERRSIM
     } else if (OB_FAIL(ret = OB_E(EventTable::EN_COMPACTION_CO_PUSH_TABLES_FAILED) OB_SUCCESS)) {
       if (cg_idx == -ret) {

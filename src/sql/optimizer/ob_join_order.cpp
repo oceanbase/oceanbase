@@ -1652,7 +1652,7 @@ int ObJoinOrder::check_can_use_vec_primary_opt(const uint64_t ref_table_id,
   int ret = OB_SUCCESS;
   is_filter_all_rowkey_col = false;
   if (OB_NOT_NULL(range_info.get_query_range_provider())) {
-    is_filter_all_rowkey_col = range_info.get_query_range_provider()->get_range_exprs().count() == helper.filters_.count();
+    is_filter_all_rowkey_col = (range_info.get_query_range_provider()->get_range_exprs().count() == helper.filters_.count() && helper.filters_.count() > 0);
   }
   return ret;
 }
@@ -13437,6 +13437,7 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
       can_re_parallel = (left_path.available_parallel_ > 1 || right_path.available_parallel_ > 1)
                                 && !(left_sharding->is_match_all() && right_sharding->is_match_all())
                                 && !(left_path.parent_->get_is_at_most_one_row() && right_path.parent_->get_is_at_most_one_row())
+                                && distributed_methods & (DIST_RANDOM_ALL | DIST_RANDOM_BROADCAST | DIST_HASH_HASH)
                                 && query_ctx->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP2);
     }
     if (NESTED_LOOP_JOIN == join_algo) {
@@ -13444,6 +13445,7 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
                          right_path.available_parallel_ > 1 ||
                          join_parallel > 1)
                                 && !left_path.parent_->get_is_at_most_one_row()
+                                && distributed_methods & (DIST_RANDOM_ALL | DIST_RANDOM_BROADCAST | DIST_HASH_HASH)
                                 && query_ctx->check_opt_compat_version(COMPAT_VERSION_4_4_1);
     }
   }

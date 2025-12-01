@@ -418,7 +418,7 @@ int ObDASUtils::reshape_datum_vector_value(const ObObjMeta &col_type,
   return ret;
 }
 
-static bool fast_check_vector_is_all_null(ObIVector *vector, const int64_t batch_size)
+static bool fast_check_vector_is_all_null(ObIVector *vector, const ObBatchSelector &selector)
 {
   bool is_all_null = false;
   VectorFormat format = vector->get_format();
@@ -427,7 +427,9 @@ static bool fast_check_vector_is_all_null(ObIVector *vector, const int64_t batch
     case VEC_DISCRETE:
     case VEC_CONTINUOUS: {
       ObBitmapNullVectorBase *base = static_cast<ObBitmapNullVectorBase *>(vector);
-      is_all_null = base->has_null() && base->get_nulls()->is_all_true(batch_size);
+      if (base->has_null() && selector.get_end() < selector.size() * 4) {
+        is_all_null = base->get_nulls()->is_all_true(selector.get_end());
+      }
       break;
     }
     default:
@@ -514,7 +516,7 @@ int ObDASUtils::reshape_vector_value(const ObObjMeta &col_type,
   if (OB_ISNULL(vector) || !selector.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(vector), K(selector));
-  } else if (fast_check_vector_is_all_null(vector, selector.get_max())) {
+  } else if (fast_check_vector_is_all_null(vector, selector)) {
     // do nothing
   } else if (col_type.is_binary()) {
     const int32_t binary_len = col_accuracy.get_length();
@@ -533,7 +535,7 @@ int ObDASUtils::reshape_vector_value(const ObObjMeta &col_type,
         VecValueTypeClass value_tc = get_vec_value_tc(col_type.get_type(),
                                                       col_type.get_scale(),
                                                       col_type.get_stored_precision());
-        if (OB_FAIL(new_discrete_vector(value_tc, selector.get_max(), allocator, discrete_vec))) {
+        if (OB_FAIL(new_discrete_vector(value_tc, selector.get_end(), allocator, discrete_vec))) {
           LOG_WARN("fail to new discrete vector", KR(ret));
         } else {
           ptrs = discrete_vec->get_ptrs();
@@ -667,7 +669,7 @@ int ObDASUtils::reshape_vector_value(const ObObjMeta &col_type,
         VecValueTypeClass value_tc = get_vec_value_tc(col_type.get_type(),
                                                       col_type.get_scale(),
                                                       col_type.get_stored_precision());
-        if (OB_FAIL(new_discrete_vector(value_tc, selector.get_max(), allocator, discrete_vec))) {
+        if (OB_FAIL(new_discrete_vector(value_tc, selector.get_end(), allocator, discrete_vec))) {
           LOG_WARN("fail to new discrete vector", KR(ret));
         } else {
           ptrs = discrete_vec->get_ptrs();

@@ -3254,6 +3254,21 @@ int ObInnerTableSchema::all_virtual_plan_stat_schema(ObTableSchema &table_schema
       false, //is_nullable
       false); //is_autoincrement
   }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("cg_time", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObUInt64Type, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(uint64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
   if (OB_SUCC(ret)) {
     table_schema.get_part_option().set_part_num(1);
     table_schema.set_part_level(PARTITION_LEVEL_ONE);
@@ -15255,6 +15270,25 @@ int ObInnerTableSchema::all_virtual_core_all_table_schema(ObTableSchema &table_s
       false, //is_autoincrement
       mview_expand_definition_default,
       mview_expand_definition_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj fts_index_type_default;
+    fts_index_type_default.set_int(0);
+    ADD_COLUMN_SCHEMA_T("fts_index_type", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      fts_index_type_default,
+      fts_index_type_default); //default_value
   }
   table_schema.set_index_using_type(USING_HASH);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);

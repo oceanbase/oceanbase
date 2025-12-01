@@ -313,7 +313,7 @@ public:
       const int64_t snapshot_version,
       const uint64_t data_format_version,
       const bool can_freeze);
-  int idem_update_max_scn(const share::SCN &max_scn, const ObDirectLoadType direct_load_type);
+  int idem_update_min_max_scn(const share::SCN &scn, const ObDirectLoadType direct_load_type);
 
   int freeze(const share::SCN &freeze_scn = share::SCN::min_scn());
   bool is_freezed();

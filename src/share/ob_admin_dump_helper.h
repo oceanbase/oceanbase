@@ -117,6 +117,18 @@ private:
   common::ObTabletID tablet_id_;
 };
 
+class ObAdminLogDumpBlockHelper
+{
+public:
+  static int generate_dump_dir(const char *dir_path, const int64_t tablet_id,
+                               const int64_t trans_id, const int64_t seq_no,
+                               char *dir_full_path);
+  static int create_dir_if_not_exist(const char *dir_full_path);
+  static int write_macro_block_file(const char *dir_full_path, int32_t start_slice_idx,
+                                    uint16_t column_group_idx, int64_t data_seq, int64_t scn_val,
+                                    const char *data_buf, int64_t data_len);
+};
+
 struct ObLogStat
 {
   ObLogStat() {reset();}

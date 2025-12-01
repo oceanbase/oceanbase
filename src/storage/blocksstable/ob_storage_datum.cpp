@@ -22,7 +22,7 @@ namespace blocksstable
 static int nonext_nonext_compare(const ObStorageDatum &left, const ObStorageDatum &right, const common::ObCmpFunc &cmp_func, int &cmp_ret)
 {
   int ret = cmp_func.cmp_func_(left, right, cmp_ret);
-  STORAGE_LOG(DEBUG, "chaser debug compare datum", K(ret), K(left), K(right), K(cmp_ret));
+  STORAGE_LOG(DEBUG, "chaser debug compare datum", K(ret), K(left), K(right), K(cmp_ret), K(lbt()));
   return ret;
 }
 
@@ -38,7 +38,7 @@ static int nonext_ext_compare(const ObStorageDatum &left, const ObStorageDatum &
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "Unexpected datum in rowkey to compare", K(ret), K(right));
   }
-  STORAGE_LOG(DEBUG, "chaser debug compare datum", K(ret), K(left), K(right), K(cmp_ret));
+  STORAGE_LOG(DEBUG, "chaser debug compare datum", K(ret), K(left), K(right), K(cmp_ret), K(lbt()));
   return ret;
 }
 
@@ -54,7 +54,7 @@ static int ext_nonext_compare(const ObStorageDatum &left, const ObStorageDatum &
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "Unexpected datum in rowkey to compare", K(ret), K(left));
   }
-  STORAGE_LOG(DEBUG, "chaser debug compare datum", K(ret), K(left), K(right), K(cmp_ret));
+  STORAGE_LOG(DEBUG, "chaser debug compare datum", K(ret), K(left), K(right), K(cmp_ret), K(lbt()));
   return ret;
 }
 
@@ -70,7 +70,7 @@ static int ext_ext_compare(const ObStorageDatum &left, const ObStorageDatum &rig
   } else {
     cmp_ret = lv - rv;
   }
-  STORAGE_LOG(DEBUG, "chaser debug compare datum", K(ret), K(left), K(right), K(cmp_ret));
+  STORAGE_LOG(DEBUG, "chaser debug compare datum", K(ret), K(left), K(right), K(cmp_ret), K(lbt()));
 
   return ret;
 }

@@ -1749,6 +1749,13 @@ int ObPluginVectorIndexMgr::create_ivf_cache_mgr(ObIAllocator &allocator,
       if (OB_FAIL(set_ivf_cache_mgr(key, tmp_ivf_cache_mgr))) {
         if (ret == OB_HASH_EXIST) {
           LOG_INFO("vector index ivf cache mgr may created by other threads");
+          // Release the created but unused cache_mgr, as there is already one in the map.
+          if (OB_NOT_NULL(tmp_ivf_cache_mgr)) {
+            tmp_ivf_cache_mgr->~ObIvfCacheMgr();
+            allocator.free(mgr_buff);
+            tmp_ivf_cache_mgr = nullptr;
+            mgr_buff = nullptr;
+          }
           ret = OB_SUCCESS;
         } else {
           LOG_WARN("set vector index ivf cache mgr faild", KR(ret), K(key));

@@ -1445,10 +1445,6 @@ int ObTabletSplitWriteTask::prepare_sorted_high_bound_pair(
         LOG_WARN("push back failed", K(ret), K(tablet_id), K(high_bound));
       }
     }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(check_and_cast_high_bound(rowkey_read_info_->get_columns_desc(), tablet_bound_arr))) {
-      LOG_WARN("failed to check and cast high bound", K(ret), K(tablet_bound_arr), K(rowkey_read_info_->get_columns_desc()));
-    }
   }
   if (OB_SUCC(ret)) {
     // check in ASC rowkey order.
@@ -1728,43 +1724,6 @@ int ObTabletSplitWriteTask::process_rows_for_rewrite_task(
   }
   return ret;
 }
-
-int ObTabletSplitWriteTask::check_and_cast_high_bound(
-    const common::ObIArray<ObColDesc> &col_descs,
-    common::ObSArray<TabletBoundPair> &tablet_bound_arr)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < tablet_bound_arr.count(); ++i) {
-    ObDatumRowkey &drowkey = tablet_bound_arr.at(i).second;
-    for (int64_t j = 0; OB_SUCC(ret) && j < drowkey.datum_cnt_; ++j) {
-      ObStorageDatum &storage_datum = drowkey.datums_[j];
-      if (j >= col_descs.count()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("rowkey size should equal to the size of col_parameters", K(j), K(drowkey.datums_), K(col_descs));
-      } else {
-        const ObColDesc &col_desc = col_descs.at(j);
-        void *buf = nullptr;
-        if (col_desc.col_type_.is_timestamp_ltz()) {
-          /*need to convert the high bound from timestamp_tz to timestamp_ltz*/
-          if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObObj)))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("failed to allocat memory for storage datum", K(ret));
-          } else {
-            const ObOTimestampData & ts_data = storage_datum.get_otimestamp_tz();
-            ObObj *timestamp_ltz_obj = new (buf) ObObj();
-            timestamp_ltz_obj->set_timestamp_ltz(ts_data);
-            storage_datum.reuse();
-            if (OB_FAIL(storage_datum.from_obj_enhance(*timestamp_ltz_obj))) {
-              LOG_WARN("failed to from obj", K(ret), K(*timestamp_ltz_obj));
-            }
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 
 int ObTabletSplitWriteTask::fill_tail_column_datums(const blocksstable::ObDatumRow &scan_row)
 {

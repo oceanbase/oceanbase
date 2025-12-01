@@ -520,6 +520,10 @@ public:
       ObSchemaGetterGuard &schema_guard,
       bool &has_fts_index,
       bool &has_vec_index);
+  static int check_table_has_vector_index(
+      const ObTableSchema &data_table_schema,
+      ObSchemaGetterGuard &schema_guard,
+      bool &has_vec_index);
   static int check_column_has_vector_index(
       const ObTableSchema &data_table_schema,
       ObSchemaGetterGuard &schema_guard,

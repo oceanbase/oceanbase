@@ -63,6 +63,7 @@
 #include "rootserver/ob_heartbeat_service.h"
 #include "share/tenant_snapshot/ob_tenant_snapshot_table_operator.h"
 #include "rootserver/restore/ob_tenant_clone_util.h"
+#include "rootserver/ob_admin_switch_replica_role.h" // ObAdminSwitchReplicaRole
 #include "ob_disaster_recovery_task_utils.h" // DisasterRecoveryUtils
 #include "rootserver/ob_disaster_recovery_worker.h" // ObDRWorker
 
@@ -6092,6 +6093,7 @@ int ObRootService::init_debug_database()
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_SKIP_SET_RS_STATUS_FULL_SERVICE)
 int ObRootService::do_restart()
 {
   int ret = OB_SUCCESS;
@@ -6319,7 +6321,9 @@ int ObRootService::do_restart()
   }
 #endif
 
-  if (FAILEDx(rs_status_.set_rs_status(status::FULL_SERVICE))) {
+  if (OB_UNLIKELY(ERRSIM_SKIP_SET_RS_STATUS_FULL_SERVICE)) {
+    LOG_INFO("errsim skip set rs status full service");
+  } else if (FAILEDx(rs_status_.set_rs_status(status::FULL_SERVICE))) {
     FLOG_WARN("fail to set rs status", KR(ret));
   } else {
     FLOG_INFO("full_service !!! start to work!!");
@@ -8684,16 +8688,8 @@ int ObRootService::admin_switch_replica_role(const obrpc::ObAdminSwitchReplicaRo
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
-  } else {
-    ObSystemAdminCtx ctx;
-    if (OB_FAIL(init_sys_admin_ctx(ctx))) {
-      LOG_WARN("init_sys_admin_ctx failed", K(ret));
-    } else {
-      ObAdminSwitchReplicaRole admin_util(ctx);
-      if (OB_FAIL(admin_util.execute(arg))) {
-        LOG_WARN("execute switch replica role failed", K(arg), K(ret));
-      }
-    }
+  } else if (OB_FAIL(ObAdminSwitchReplicaRole::handle_switch_replica_role_sql_command(arg))) {
+    LOG_WARN("execute switch replica role failed", K(arg), K(ret));
   }
   ROOTSERVICE_EVENT_ADD("root_service", "admin_switch_replica_role", K(ret), K(arg));
   return ret;

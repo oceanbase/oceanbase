@@ -107,7 +107,7 @@ class ObDDLMergeGuardTask: public share::ObITask
 public:
   ObDDLMergeGuardTask(): ObITask(ObITaskType::TASK_TYPE_DDL_MERGE_GUARD), tablet_id_(), is_inited_(false) {}
   ~ObDDLMergeGuardTask();
-  int init(const bool for_replay, const ObTabletID &tablet_id);
+  int init(const bool for_replay, const ObTabletID &tablet_id, bool retry_uitl_get = false);
   int process();
   virtual void task_debug_info_to_string(char *buf, const int64_t buf_len, int64_t &pos) const override;
   INHERIT_TO_STRING_KV("MergeGuardTask", share::ObITask, K(tablet_id_));
@@ -122,14 +122,15 @@ public:
   ObDDLMergePrepareTask();
   ~ObDDLMergePrepareTask();
 
-  int init(const ObDDLTabletMergeDagParamV2 &merge_param, ObDDLFailCallback *fail_cb = nullptr);
+  int init(const ObDDLTabletMergeDagParamV2 &merge_param, ObDDLFailCallback *fail_cb = nullptr, bool retry_uitl_get = false);
   virtual int inner_process() override;
   virtual void task_debug_info_to_string(char *buf, const int64_t buf_len, int64_t &pos) const override;
-  INHERIT_TO_STRING_KV("MergePrepareTask", share::ObITask, K(merge_param_), KP(guard_task_), K(is_inited_));
+  INHERIT_TO_STRING_KV("MergePrepareTask", share::ObITask, K(merge_param_), KP(guard_task_), K(retry_uitl_get_lock_), K(is_inited_));
 private:
   ObArenaAllocator allocator_;
   ObDDLTabletMergeDagParamV2 merge_param_;
   ObDDLMergeGuardTask *guard_task_;
+  bool retry_uitl_get_lock_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObDDLMergePrepareTask);
 };

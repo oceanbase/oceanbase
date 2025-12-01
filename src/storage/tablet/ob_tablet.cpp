@@ -9791,6 +9791,7 @@ int ObTablet::check_new_sstable_can_be_acccepted_(const ObTablet &old_tablet, co
   common::ObArray<ObITable *> tables;
   ObTabletRestoreStatus::STATUS restore_status = ObTabletRestoreStatus::STATUS::RESTORE_STATUS_MAX;
   bool has_backup_macro = false;
+  const bool is_tablet_split = param.tablet_split_param_.is_valid();
   if (OB_FAIL(old_tablet.get_restore_status(restore_status))) {
     LOG_WARN("fail to get tablet restore status", K(ret), K(old_tablet));
   } else if (ObTabletRestoreStatus::FULL != restore_status) {
@@ -9799,7 +9800,7 @@ int ObTablet::check_new_sstable_can_be_acccepted_(const ObTablet &old_tablet, co
     LOG_WARN("fail to get tables", K(ret), K(param));
   } else if (tables.empty()) {
     // do nothing
-  } else if (param.is_transfer_replace_) {
+  } else if (param.is_transfer_replace_ || is_tablet_split) {
     // do nothing
   } else if (OB_FAIL(sstable_array.init(allocator,tables))) {
     LOG_WARN("fail to init sstable array", K(ret), K(tables));

@@ -1880,6 +1880,7 @@ DEFINE_ERROR(OB_SEQ_NO_REORDER_UNDER_PDML, -6329, -1, "HY000", "pdml sql need re
 DEFINE_ERROR(OB_USER_OUTOF_DATA_DISK_SPACE, -6330, -1, "HY000", "user data disk is almost full")
 DEFINE_ERROR(OB_ARB_DEGRADE, -6331, -1, "HY000", "logstream has been degraded due to error")
 DEFINE_ERROR(OB_OBJ_LOCK_WRONG_WORKER, -6332, -1, "HY000", "object lock worker thread wrong")
+DEFINE_ORACLE_ERROR(OB_ERR_TEMP_TABLE_BUSY, -6333, -1, "HY000", "attempt to access a transactional temp table already in use", 14450, "attempt to access a transactional temp table already in use");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////
@@ -2951,6 +2952,7 @@ DEFINE_ERROR_EXT(OB_HTTP_UNAUTHORIZED, -11123, OB_HTTP_UNAUTHORIZED, "HY000", "U
 DEFINE_ERROR_EXT(OB_HTTP_NOT_FOUND, -11124, OB_HTTP_NOT_FOUND, "HY000", "Http request not found", "Http request not found: %s");
 DEFINE_ERROR_EXT(OB_HTTP_SERVER_ERROR, -11125, OB_HTTP_SERVER_ERROR, "HY000", "Http server error", "Http server error: %s");
 DEFINE_ERROR_EXT(OB_INVALID_DATE_TRUNC_FORMAT, -11126, -1, "HY000", "unit not recognized", "unit \'%.*s\' not recognized");
+DEFINE_ERROR(OB_ERR_INVALID_PRIVILEGE_ON_SENSITIVE_RULES, -11127, -1, "HY000", "Privilege not allowed for sensitive rules");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // SQL扩展区段1：[-11000, -12000)

@@ -217,9 +217,6 @@ public:
     global_strings_(),
     int_buffer_(allocator),
     objparam_buffer_(allocator),
-#ifdef OB_BUILD_ORACLE_PL
-    vaild_row_info_array_(allocator),
-#endif
     need_cg_(true),
     dispatch_map_()
     { }
@@ -946,9 +943,6 @@ private:
   int64_t int_buffer_idx_ = 0;
 
   ObPLSEArray<jit::ObLLVMValue> objparam_buffer_;
-#ifdef OB_BUILD_ORACLE_PL
-  ObPLSEArray<CoverageData> vaild_row_info_array_;
-#endif
   int64_t objparam_buffer_idx_ = 0;
 
   jit::ObLLVMValue char_buffer_;

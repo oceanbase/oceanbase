@@ -872,6 +872,7 @@ int ObDropVecIndexTask::create_drop_index_task(
     arg.ddl_stmt_str_        = drop_index_sql.string();
     arg.is_add_to_scheduler_ = true;
     arg.task_id_             = task_id_;
+    arg.is_hidden_           = drop_index_arg_.is_hidden_;
     if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(
             index_schema->get_all_part_num() + data_table_schema->get_all_part_num(), ddl_rpc_timeout_us))) {
       LOG_WARN("fail to get ddl rpc timeout", K(ret));
@@ -1081,7 +1082,8 @@ int ObDropVecIndexTask::update_drop_lob_meta_row_job_status(const common::ObTabl
                                                             addition_info.row_scanned_,
                                                             addition_info.row_inserted_,
                                                             addition_info.cg_row_inserted_,
-                                                            addition_info.physical_row_count_))) {
+                                                            addition_info.physical_row_count_,
+                                                            true /* allow_retry */))) {
     LOG_WARN("fail to set partition task status", K(ret));
   }
   return ret;

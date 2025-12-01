@@ -718,15 +718,15 @@ int ObTabletDDLKvMgr::get_ddl_kv_min_scn(SCN &min_scn)
     ret = OB_NOT_INIT;
     LOG_WARN("ObTabletDDLKvMgr is not inited", K(ret));
   } else {
-    for (int64_t i = head_; OB_SUCC(ret) && i < tail_; ++i) {
-      const int64_t idx = get_idx(head_);
-      ObDDLKV *kv = ddl_kv_handles_[idx].get_obj();
-      if (OB_ISNULL(kv)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ddl kv is null", K(ret), K(ls_id_), K(tablet_id_), KP(kv), K(i), K(head_), K(tail_));
-      } else {
-        min_scn = SCN::min(min_scn, kv->get_min_scn());
-      }
+    // head_ is the oldest ddl kv, so the min scn is the min of the min scn and freeze scn
+    const int64_t idx = get_idx(head_);
+    ObDDLKV *kv = ddl_kv_handles_[idx].get_obj();
+    if (OB_ISNULL(kv)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ddl kv is null", K(ret), K(ls_id_), K(tablet_id_), KP(kv), K(head_), K(tail_));
+    } else {
+      // may be empty ddl kv, so use the freeze scn as the min scn
+      min_scn = SCN::min(kv->get_min_scn(), kv->get_freeze_scn());
     }
   }
   return ret;

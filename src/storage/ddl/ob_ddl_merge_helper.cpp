@@ -539,8 +539,6 @@ int ObSNDDLMergeHelperV2::merge_cg_slice(ObIDag *dag,
     }
   } // ddl_sstable_iter
 
-  LOG_INFO("sn_ddl_merge_helper_v2 merge_cg_slice", KR(ret), K(ddl_sstables.count()), K(ddl_param));
-
   /* !!! notice !!!
    * sstable meta info rely on previous ddl dump sstable if exist
    * rember to using dump sstable instead of mem table as first ddl sstabe
@@ -589,7 +587,7 @@ int ObIDDLMergeHelper::prepare_ddl_param(const ObDDLTabletMergeDagParamV2 &merge
     ddl_param.seq_no_              = merge_param.seq_no_;
     /* set table key*/
     ddl_param.table_key_.column_group_idx_ = cg_idx;
-    LOG_INFO("prepare_ddl_param", K(ddl_param));
+    ddl_param.inc_major_trans_version_ = merge_param.inc_major_trans_version_;
     if (OB_FAIL(merge_param.get_table_type(cg_idx, ddl_param.table_key_.table_type_, merge_param.direct_load_type_))) {
       LOG_WARN("failed to get table type", K(ret));
     }

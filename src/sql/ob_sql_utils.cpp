@@ -5701,14 +5701,18 @@ int ObSQLUtils::get_one_group_params(int64_t &actual_pos, ParamStore &src, Param
         }
         OZ (ObSql::add_param_to_param_store(*(data + actual_pos), obj_params));
         if (OB_SUCC(ret)) {
-          if (SCALE_UNKNOWN_YET != coll->get_element_type().get_accuracy().get_scale()) {
-            OX (obj_params.at(obj_params.count() - 1).set_scale(coll->get_element_type().get_accuracy().get_scale()));
-          }
-          if (PRECISION_UNKNOWN_YET != coll->get_element_type().get_accuracy().get_precision()) {
-            OX (obj_params.at(obj_params.count() - 1).set_precision(coll->get_element_type().get_accuracy().get_precision()));
-          }
-          if (LENGTH_UNKNOWN_YET != coll->get_element_type().get_accuracy().get_length()) {
-            OX (obj_params.at(obj_params.count() - 1).set_length(coll->get_element_type().get_accuracy().get_length()));
+          if (obj_params.at(obj_params.count() - 1).is_numeric_type()) {
+            if (SCALE_UNKNOWN_YET != coll->get_element_type().get_accuracy().get_scale()) {
+              OX (obj_params.at(obj_params.count() - 1).set_scale(coll->get_element_type().get_accuracy().get_scale()));
+            }
+            if (PRECISION_UNKNOWN_YET != coll->get_element_type().get_accuracy().get_precision()) {
+              OX (obj_params.at(obj_params.count() - 1).set_precision(coll->get_element_type().get_accuracy().get_precision()));
+            }
+            if (LENGTH_UNKNOWN_YET != coll->get_element_type().get_accuracy().get_length()) {
+              OX (obj_params.at(obj_params.count() - 1).set_length(coll->get_element_type().get_accuracy().get_length()));
+            }
+          } else {
+            OX (obj_params.at(obj_params.count() - 1).set_accuracy(coll->get_element_type().get_accuracy()));
           }
           if (obj_params.at(obj_params.count() - 1).get_meta().is_null()) {
             OX (obj_params.at(obj_params.count() - 1).set_param_meta(coll->get_element_type().get_meta_type()));
@@ -6997,7 +7001,7 @@ int ObSQLUtils::append_obj_param(ObSqlString & reconstruct_sql, const common::Ob
     }
 
     if (ret == OB_SIZE_OVERFLOW) {
-      const int64_t need_len = reconstruct_sql.length() + 100;
+      const int64_t need_len = reconstruct_sql.capacity() + 100;
       if (OB_FAIL(reconstruct_sql.reserve(need_len))) {
         LOG_WARN("reserve data failed", K(ret), K(need_len));
       } else {

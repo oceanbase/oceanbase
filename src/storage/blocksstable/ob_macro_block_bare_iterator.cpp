@@ -321,6 +321,9 @@ int ObMicroBlockBareIterator::get_next_micro_block_desc(
     LOG_WARN("fail to deep end key", K(ret), K(rowkey));
   } else if (OB_FAIL(get_micro_block_header(micro_block.get_buf(), micro_block.get_buf_size(), header))) {
     LOG_WARN("fail to get micro header", K(ret), K(micro_block));
+  } else if (OB_UNLIKELY(!check_column_checksums(header))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected micro block column checksums", K(ret), KPC(header));
   } else {
     micro_block_desc.header_ = header;
     micro_block_desc.data_size_ = header->data_length_;
@@ -422,6 +425,9 @@ int ObMicroBlockBareIterator::get_next_micro_block_desc(
         allocator.free(header);
         header = nullptr;
       }
+    } else if (OB_UNLIKELY(!check_column_checksums(header))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected micro block column checksums", K(ret), KPC(header));
     } else {
       micro_block_desc.header_ = header;
       if (need_check_sum) {
@@ -579,6 +585,10 @@ int ObMicroBlockBareIterator::get_next_micro_block_desc(
       STORAGE_LOG(WARN, "Fail to generate uncompressed micro block", K(ret));
     } else if (OB_FAIL(generate_micro_block(rowkey, header, read_pos_, micro_buf, allocator, micro_block_desc))) {
       STORAGE_LOG(WARN, "Fail to generate uncompressed micro block", K(ret));
+    } else if (OB_UNLIKELY(!check_column_checksums(uncompressed_micro_block_desc.header_) ||
+                           !check_column_checksums(micro_block_desc.header_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected micro block column checksums", K(ret), KPC(uncompressed_micro_block_desc.header_), KPC(micro_block_desc.header_));
     }
 
     if (OB_FAIL(ret)) {

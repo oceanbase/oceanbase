@@ -767,6 +767,34 @@ DEF_COMMAND(TRANS, update_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
   return ret;
 }
 
+// switch_replica_role
+// @params [in]  ls_id, which log stream to modify
+// @params [in]  tenant_id, which tenant to modify
+// @params [in]  server, the server address of the replica to switch role
+// @params [in]  role, the role to switch to
+DEF_COMMAND(TRANS, switch_replica_role, 1, "ls_id=xxx,tenant_id=xxx,server=xxx,role=xxx] # switch_replica_role")
+{
+  int ret = OB_SUCCESS;
+  string arg_str;
+  ObAdminSwitchReplicaRoleStr arg;
+  if (cmd_ == action_name_) {
+    ret = OB_INVALID_ARGUMENT;
+    ADMIN_WARN("should provide ls_id, tenant_id, server, role");
+  } else {
+    arg_str = cmd_.substr(action_name_.length() + 1);
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(client_)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid client", KR(ret));
+  } else if (OB_FAIL(arg.init(arg_str.c_str()))) {
+    COMMON_LOG(WARN, "fail to construct admin command arg", KR(ret), K(arg_str.c_str()));
+  } else if (OB_FAIL(client_->ob_exec_switch_replica_role(arg))) {
+    COMMON_LOG(ERROR, "send req fail", KR(ret), K(arg));
+  }
+  COMMON_LOG(INFO, "switch_replica_role over", KR(ret), K(arg));
+  return ret;
+}
 
 // remove_ls_replica
 // @params [in]  tenant_id, which tenant to modify

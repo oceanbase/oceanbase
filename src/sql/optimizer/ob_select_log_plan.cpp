@@ -2375,6 +2375,9 @@ int ObSelectLogPlan::get_distribute_distinct_method(ObLogicalOperator *top,
       distinct_dist_methods &= ~DistAlgo::DIST_HASH_HASH;
       OPT_TRACE("ignore hash dist distinct by hint");
     }
+    if (top->get_contains_fake_cte()) {
+      distinct_dist_methods &= (DistAlgo::DIST_BASIC_METHOD | DistAlgo::DIST_PULL_TO_LOCAL);
+    }
     can_re_parallel = top->can_re_parallel()
                       && (distinct_dist_methods & DistAlgo::DIST_HASH_HASH)
                       && !is_merge_without_sort
@@ -4064,6 +4067,9 @@ int ObSelectLogPlan::get_distributed_set_methods(const EqualSets &equal_sets,
       get_optimizer_context().has_var_assign()) {
     set_dist_methods &= DIST_PULL_TO_LOCAL | DIST_BASIC_METHOD;
   }
+  if (OB_SUCC(ret) && (left_child.get_contains_fake_cte() || right_child.get_contains_fake_cte())) {
+    set_dist_methods &= ~DistAlgo::DIST_HASH_HASH;
+  }
   if (OB_SUCC(ret) && (set_dist_methods & DistAlgo::DIST_NONE_ALL)) {
     OPT_TRACE("check NONE ALL method");
     bool is_compatible = false;
@@ -5517,14 +5523,12 @@ int ObSelectLogPlan::compute_set_exchange_info(const EqualSets &equal_sets,
         dist_method = ObPQDistributeMethod::HASH;
       }
       if (OB_SUCC(ret)) {
-        left_exch_info.unmatch_row_dist_method_ = dist_method;
         left_exch_info.strong_sharding_ = get_optimizer_context().get_distributed_sharding();
       }
     } else {
       if (OB_FAIL(left_exch_info.weak_sharding_.assign(right_child.get_weak_sharding()))) {
         LOG_WARN("failed to assign weak sharding", K(ret));
       } else {
-        left_exch_info.unmatch_row_dist_method_ = ObPQDistributeMethod::DROP;
         left_exch_info.strong_sharding_ = right_child.get_strong_sharding();
       }
     }
@@ -5550,14 +5554,12 @@ int ObSelectLogPlan::compute_set_exchange_info(const EqualSets &equal_sets,
         dist_method = ObPQDistributeMethod::HASH;
       }
       if (OB_SUCC(ret)) {
-        right_exch_info.unmatch_row_dist_method_ = dist_method;
         right_exch_info.strong_sharding_ = get_optimizer_context().get_distributed_sharding();
       }
     } else {
       if (OB_FAIL(right_exch_info.weak_sharding_.assign(left_child.get_weak_sharding()))) {
         LOG_WARN("failed to assign weak sharding", K(ret));
       } else {
-        right_exch_info.unmatch_row_dist_method_ = ObPQDistributeMethod::DROP;
         right_exch_info.strong_sharding_ = left_child.get_strong_sharding();
       }
     }
@@ -6837,6 +6839,9 @@ int ObSelectLogPlan::get_distribute_window_method(ObLogicalOperator *top,
       win_dist_methods &= ~WinDistAlgo::WIN_DIST_NONE;
       OPT_TRACE("config disable partition wise window function");
     }
+  }
+  if (OB_SUCC(ret) && top->get_contains_fake_cte()) {
+    win_dist_methods &= DIST_PULL_TO_LOCAL | DIST_BASIC_METHOD;
   }
   if (OB_SUCC(ret)) {
     can_re_parallel = top->can_re_parallel()

@@ -58,7 +58,7 @@ public:
   int64_t size() const { return count_; }
   int64_t get_offset() const { return offset_; }
   Type get_type() const { return type_; }
-  int64_t get_max() const;
+  int64_t get_end() const;
   int get_next(int64_t &offset);
   void rescan() { cursor_ = 0; }
   DECLARE_TO_STRING;

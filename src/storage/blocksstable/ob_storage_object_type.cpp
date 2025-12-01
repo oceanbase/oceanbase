@@ -52,56 +52,56 @@ static const char *ob_storage_object_type_strs[] = {
   "SHARED_MDS_MINI_META_MACRO",
   "SHARED_MDS_MINOR_DATA_MACRO",
   "SHARED_MDS_MINOR_META_MACRO",
-  "SHARED_MINI_SSTABLE_LIST",
-  "SHARED_MINI_SSTABLE_LIST_TASK",
-  "SHARED_MINI_SSTABLE_LIST_OP_ID",
-  "SHARED_MINI_SSTABLE_LIST_CURRENT",
-  "SHARED_MINI_SSTABLE_LIST_OLDEST",
-  "SHARED_MINOR_SSTABLE_LIST",
-  "SHARED_MINOR_SSTABLE_LIST_TASK",
-  "SHARED_MINOR_SSTABLE_LIST_OP_ID",
-  "SHARED_MINOR_SSTABLE_LIST_CURRENT",
-  "SHARED_MINOR_SSTABLE_LIST_OLDEST",
-  "SHARED_LS_META",
-  "SHARED_LS_META_TASK",
-  "SHARED_LS_META_OP_ID",
-  "SHARED_LS_META_CURRENT",
-  "SHARED_LS_META_OLDEST",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
   "SHARED_TABLET_META",
-  "SHARED_TABLET_META_TASK",
-  "SHARED_TABLET_META_OP_ID",
-  "SHARED_TABLET_META_CURRENT",
-  "SHARED_TABLET_META_OLDEST",
-  "SHARED_MDS_MINI_SSTABLE_LIST",
-  "SHARED_MDS_MINI_SSTABLE_LIST_TASK",
-  "SHARED_MDS_MINI_SSTABLE_LIST_OP_ID",
-  "SHARED_MDS_MINI_SSTABLE_LIST_CURRENT",
-  "SHARED_MDS_MINI_SSTABLE_LIST_OLDEST",
-  "SHARED_MDS_MINOR_SSTABLE_LIST",
-  "SHARED_MDS_MINOR_SSTABLE_LIST_TASK",
-  "SHARED_MDS_MINOR_SSTABLE_LIST_OP_ID",
-  "SHARED_MDS_MINOR_SSTABLE_LIST_CURRENT",
-  "SHARED_MDS_MINOR_SSTABLE_LIST_OLDEST",
-  "SHARED_DDLKV_MINI_SSTABLE_LIST",
-  "SHARED_DDLKV_MINI_SSTABLE_LIST_TASK",
-  "SHARED_DDLKV_MINI_SSTABLE_LIST_OP_ID",
-  "SHARED_DDLKV_MINI_SSTABLE_LIST_CURRENT",
-  "SHARED_DDLKV_MINI_SSTABLE_LIST_OLDEST",
-  "SHARED_SPLIT_MINOR_SSTABLE",
-  "SHARED_SPLIT_MINOR_SSTABLE_TASK",
-  "SHARED_SPLIT_MINOR_SSTABLE_OP_ID",
-  "SHARED_SPLIT_MINOR_SSTABLE_CURRENT",
-  "SHARED_SPLIT_MINOR_SSTABLE_OLDEST",
-  "SHARED_SPLIT_MDS_MINOR_SSTABLE",
-  "SHARED_SPLIT_MDS_MINOR_SSTABLE_TASK",
-  "SHARED_SPLIT_MDS_MINOR_SSTABLE_OP_ID",
-  "SHARED_SPLIT_MDS_MINOR_SSTABLE_CURRENT",
-  "SHARED_SPLIT_MDS_MINOR_SSTABLE_OLDEST",
-  "SHARED_MAJOR_SSTABLE",
-  "SHARED_MAJOR_SSTABLE_TASK",
-  "SHARED_MAJOR_SSTABLE_OP_ID",
-  "SHARED_MAJOR_SSTABLE_CURRENT",
-  "SHARED_MAJOR_SSTABLE_OLDEST",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
   "SHARED_TABLET_SUB_META",
   "TENANT_ROOT_KEY",
   "EXTERNAL_TABLE_FILE",
@@ -3636,126 +3636,6 @@ int ObSharedMdsMinorMetaMacroType::get_object_id(const ObStorageObjectOpt &opt, 
   return ret;
 }
 /**
- * ---------------------------------------ObSharedMiniSstableListType----------------------------------------
- */
-
-bool ObSharedMiniSstableListType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedMiniSstableListTaskType----------------------------------------
- */
-
-bool ObSharedMiniSstableListTaskType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedMiniSstableListOpIdType----------------------------------------
- */
-
-bool ObSharedMiniSstableListOpIdType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedMiniSstableListCurrentType----------------------------------------
- */
-
-bool ObSharedMiniSstableListCurrentType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedMiniSstableListOldestType----------------------------------------
- */
-
-bool ObSharedMiniSstableListOldestType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedMinorSstableListType----------------------------------------
- */
-
-bool ObSharedMinorSstableListType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedMinorSstableListTaskType----------------------------------------
- */
-
-bool ObSharedMinorSstableListTaskType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedMinorSstableListOpIdType----------------------------------------
- */
-
-bool ObSharedMinorSstableListOpIdType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedMinorSstableListCurrentType----------------------------------------
- */
-
-bool ObSharedMinorSstableListCurrentType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedMinorSstableListOldestType----------------------------------------
- */
-
-bool ObSharedMinorSstableListOldestType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedLsMetaType----------------------------------------
- */
-
-bool ObSharedLsMetaType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedLsMetaTaskType----------------------------------------
- */
-
-bool ObSharedLsMetaTaskType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedLsMetaOpIdType----------------------------------------
- */
-
-bool ObSharedLsMetaOpIdType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedLsMetaCurrentType----------------------------------------
- */
-
-bool ObSharedLsMetaCurrentType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedLsMetaOldestType----------------------------------------
- */
-
-bool ObSharedLsMetaOldestType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
  * ---------------------------------------ObSharedTabletMetaType----------------------------------------
  */
 
@@ -3774,278 +3654,6 @@ int ObSharedTabletMetaType::get_object_id(const ObStorageObjectOpt &opt, MacroBl
   object_id.set_ss_fourth_id(opt.ss_tablet_meta_opt_.is_inner_tablet_,
   opt.ss_tablet_meta_opt_.ls_id_, opt.ss_tablet_meta_opt_.reorganization_scn_);
   return ret;
-}
-/**
- * ---------------------------------------ObSharedTabletMetaTaskType----------------------------------------
- */
-
-bool ObSharedTabletMetaTaskType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedTabletMetaOpIdType----------------------------------------
- */
-
-bool ObSharedTabletMetaOpIdType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedTabletMetaCurrentType----------------------------------------
- */
-
-bool ObSharedTabletMetaCurrentType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedTabletMetaOldestType----------------------------------------
- */
-
-bool ObSharedTabletMetaOldestType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedMdsMiniSstableListType----------------------------------------
- */
-
-bool ObSharedMdsMiniSstableListType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedMdsMiniSstableListTaskType----------------------------------------
- */
-
-bool ObSharedMdsMiniSstableListTaskType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedMdsMiniSstableListOpIdType----------------------------------------
- */
-
-bool ObSharedMdsMiniSstableListOpIdType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedMdsMiniSstableListCurrentType----------------------------------------
- */
-
-bool ObSharedMdsMiniSstableListCurrentType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedMdsMiniSstableListOldestType----------------------------------------
- */
-
-bool ObSharedMdsMiniSstableListOldestType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedMdsMinorSstableListType----------------------------------------
- */
-
-bool ObSharedMdsMinorSstableListType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedMdsMinorSstableListTaskType----------------------------------------
- */
-
-bool ObSharedMdsMinorSstableListTaskType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedMdsMinorSstableListOpIdType----------------------------------------
- */
-
-bool ObSharedMdsMinorSstableListOpIdType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedMdsMinorSstableListCurrentType----------------------------------------
- */
-
-bool ObSharedMdsMinorSstableListCurrentType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedMdsMinorSstableListOldestType----------------------------------------
- */
-
-bool ObSharedMdsMinorSstableListOldestType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedDdlkvMiniSstableListType----------------------------------------
- */
-
-bool ObSharedDdlkvMiniSstableListType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedDdlkvMiniSstableListTaskType----------------------------------------
- */
-
-bool ObSharedDdlkvMiniSstableListTaskType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedDdlkvMiniSstableListOpIdType----------------------------------------
- */
-
-bool ObSharedDdlkvMiniSstableListOpIdType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedDdlkvMiniSstableListCurrentType----------------------------------------
- */
-
-bool ObSharedDdlkvMiniSstableListCurrentType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedDdlkvMiniSstableListOldestType----------------------------------------
- */
-
-bool ObSharedDdlkvMiniSstableListOldestType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedSplitMinorSstableType----------------------------------------
- */
-
-bool ObSharedSplitMinorSstableType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedSplitMinorSstableTaskType----------------------------------------
- */
-
-bool ObSharedSplitMinorSstableTaskType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedSplitMinorSstableOpIdType----------------------------------------
- */
-
-bool ObSharedSplitMinorSstableOpIdType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedSplitMinorSstableCurrentType----------------------------------------
- */
-
-bool ObSharedSplitMinorSstableCurrentType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedSplitMinorSstableOldestType----------------------------------------
- */
-
-bool ObSharedSplitMinorSstableOldestType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedSplitMdsMinorSstableType----------------------------------------
- */
-
-bool ObSharedSplitMdsMinorSstableType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedSplitMdsMinorSstableTaskType----------------------------------------
- */
-
-bool ObSharedSplitMdsMinorSstableTaskType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedSplitMdsMinorSstableOpIdType----------------------------------------
- */
-
-bool ObSharedSplitMdsMinorSstableOpIdType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedSplitMdsMinorSstableCurrentType----------------------------------------
- */
-
-bool ObSharedSplitMdsMinorSstableCurrentType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedSplitMdsMinorSstableOldestType----------------------------------------
- */
-
-bool ObSharedSplitMdsMinorSstableOldestType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedMajorSstableType----------------------------------------
- */
-
-bool ObSharedMajorSstableType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedMajorSstableTaskType----------------------------------------
- */
-
-bool ObSharedMajorSstableTaskType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedMajorSstableOpIdType----------------------------------------
- */
-
-bool ObSharedMajorSstableOpIdType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedMajorSstableCurrentType----------------------------------------
- */
-
-bool ObSharedMajorSstableCurrentType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-/**
- * ---------------------------------------ObSharedMajorSstableOldestType----------------------------------------
- */
-
-bool ObSharedMajorSstableOldestType::is_valid(const MacroBlockId &file_id) const
-{
-  return true;
 }
 /**
  * ---------------------------------------ObSharedTabletSubMetaType----------------------------------------
@@ -4884,204 +4492,8 @@ const ObStorageObjectTypeBase &ObStorageObjectTypeInstance::get_instance(ObStora
       static const ObSharedMdsMinorMetaMacroType instance;
       return instance;
     }
-    case ObStorageObjectType::SHARED_MINI_SSTABLE_LIST: {
-      static const ObSharedMiniSstableListType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_MINI_SSTABLE_LIST_TASK: {
-      static const ObSharedMiniSstableListTaskType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_MINI_SSTABLE_LIST_OP_ID: {
-      static const ObSharedMiniSstableListOpIdType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_MINI_SSTABLE_LIST_CURRENT: {
-      static const ObSharedMiniSstableListCurrentType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_MINI_SSTABLE_LIST_OLDEST: {
-      static const ObSharedMiniSstableListOldestType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_MINOR_SSTABLE_LIST: {
-      static const ObSharedMinorSstableListType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_MINOR_SSTABLE_LIST_TASK: {
-      static const ObSharedMinorSstableListTaskType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_MINOR_SSTABLE_LIST_OP_ID: {
-      static const ObSharedMinorSstableListOpIdType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_MINOR_SSTABLE_LIST_CURRENT: {
-      static const ObSharedMinorSstableListCurrentType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_MINOR_SSTABLE_LIST_OLDEST: {
-      static const ObSharedMinorSstableListOldestType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_LS_META: {
-      static const ObSharedLsMetaType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_LS_META_TASK: {
-      static const ObSharedLsMetaTaskType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_LS_META_OP_ID: {
-      static const ObSharedLsMetaOpIdType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_LS_META_CURRENT: {
-      static const ObSharedLsMetaCurrentType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_LS_META_OLDEST: {
-      static const ObSharedLsMetaOldestType instance;
-      return instance;
-    }
     case ObStorageObjectType::SHARED_TABLET_META: {
       static const ObSharedTabletMetaType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_TABLET_META_TASK: {
-      static const ObSharedTabletMetaTaskType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_TABLET_META_OP_ID: {
-      static const ObSharedTabletMetaOpIdType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_TABLET_META_CURRENT: {
-      static const ObSharedTabletMetaCurrentType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_TABLET_META_OLDEST: {
-      static const ObSharedTabletMetaOldestType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_MDS_MINI_SSTABLE_LIST: {
-      static const ObSharedMdsMiniSstableListType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_MDS_MINI_SSTABLE_LIST_TASK: {
-      static const ObSharedMdsMiniSstableListTaskType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_MDS_MINI_SSTABLE_LIST_OP_ID: {
-      static const ObSharedMdsMiniSstableListOpIdType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_MDS_MINI_SSTABLE_LIST_CURRENT: {
-      static const ObSharedMdsMiniSstableListCurrentType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_MDS_MINI_SSTABLE_LIST_OLDEST: {
-      static const ObSharedMdsMiniSstableListOldestType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_MDS_MINOR_SSTABLE_LIST: {
-      static const ObSharedMdsMinorSstableListType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_MDS_MINOR_SSTABLE_LIST_TASK: {
-      static const ObSharedMdsMinorSstableListTaskType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_MDS_MINOR_SSTABLE_LIST_OP_ID: {
-      static const ObSharedMdsMinorSstableListOpIdType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_MDS_MINOR_SSTABLE_LIST_CURRENT: {
-      static const ObSharedMdsMinorSstableListCurrentType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_MDS_MINOR_SSTABLE_LIST_OLDEST: {
-      static const ObSharedMdsMinorSstableListOldestType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_DDLKV_MINI_SSTABLE_LIST: {
-      static const ObSharedDdlkvMiniSstableListType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_DDLKV_MINI_SSTABLE_LIST_TASK: {
-      static const ObSharedDdlkvMiniSstableListTaskType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_DDLKV_MINI_SSTABLE_LIST_OP_ID: {
-      static const ObSharedDdlkvMiniSstableListOpIdType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_DDLKV_MINI_SSTABLE_LIST_CURRENT: {
-      static const ObSharedDdlkvMiniSstableListCurrentType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_DDLKV_MINI_SSTABLE_LIST_OLDEST: {
-      static const ObSharedDdlkvMiniSstableListOldestType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_SPLIT_MINOR_SSTABLE: {
-      static const ObSharedSplitMinorSstableType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_SPLIT_MINOR_SSTABLE_TASK: {
-      static const ObSharedSplitMinorSstableTaskType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_SPLIT_MINOR_SSTABLE_OP_ID: {
-      static const ObSharedSplitMinorSstableOpIdType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_SPLIT_MINOR_SSTABLE_CURRENT: {
-      static const ObSharedSplitMinorSstableCurrentType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_SPLIT_MINOR_SSTABLE_OLDEST: {
-      static const ObSharedSplitMinorSstableOldestType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_SPLIT_MDS_MINOR_SSTABLE: {
-      static const ObSharedSplitMdsMinorSstableType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_SPLIT_MDS_MINOR_SSTABLE_TASK: {
-      static const ObSharedSplitMdsMinorSstableTaskType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_SPLIT_MDS_MINOR_SSTABLE_OP_ID: {
-      static const ObSharedSplitMdsMinorSstableOpIdType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_SPLIT_MDS_MINOR_SSTABLE_CURRENT: {
-      static const ObSharedSplitMdsMinorSstableCurrentType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_SPLIT_MDS_MINOR_SSTABLE_OLDEST: {
-      static const ObSharedSplitMdsMinorSstableOldestType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_MAJOR_SSTABLE: {
-      static const ObSharedMajorSstableType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_MAJOR_SSTABLE_TASK: {
-      static const ObSharedMajorSstableTaskType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_MAJOR_SSTABLE_OP_ID: {
-      static const ObSharedMajorSstableOpIdType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_MAJOR_SSTABLE_CURRENT: {
-      static const ObSharedMajorSstableCurrentType instance;
-      return instance;
-    }
-    case ObStorageObjectType::SHARED_MAJOR_SSTABLE_OLDEST: {
-      static const ObSharedMajorSstableOldestType instance;
       return instance;
     }
     case ObStorageObjectType::SHARED_TABLET_SUB_META: {

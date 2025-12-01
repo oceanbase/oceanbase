@@ -7916,29 +7916,44 @@ int ObTransformPreProcess::create_embedded_table_vector_col_ref(
     if (OB_ISNULL(col_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null column schema ptr", K(ret));
-    } else if (col_schema->is_hybrid_embedded_vec_column()) { // only support one semantic vector index to one table now
-      if (OB_NOT_NULL(exist_column_item = stmt->get_column_item(table_item->table_id_, col_schema->get_column_id()))) {
-        vector_col_ref = exist_column_item->expr_;
-      } else if (OB_FAIL(ObRawExprUtils::build_column_expr(*ctx_->expr_factory_, *col_schema,
-                                                    ctx_->session_info_, vector_col_ref))) {
-        LOG_WARN("failed to build target vector column expr", K(ret));
-      } else if (OB_ISNULL(vector_col_ref)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to build target vector column expr", K(ret));
+    } else if (col_schema->is_hybrid_embedded_vec_column()) {
+      // check match to chunk col
+      bool is_same_index = false;
+      ObSEArray<uint64_t, 4> embedded_cascaded_ids;
+      if (OB_FAIL(col_schema->get_cascaded_column_ids(embedded_cascaded_ids))) {
+        LOG_WARN("failed to get cascaded ids for embedded vector column", K(ret), KPC(col_schema));
       } else {
-        vector_col_ref->set_ref_id(table_item->table_id_, col_schema->get_column_id());
-        vector_col_ref->set_column_attr(data_table_schema->get_table_name(), col_schema->get_column_name_str());
-        vector_col_ref->set_database_name(chunk_col_ref->get_database_name());
-        vector_col_ref->del_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
-        ColumnItem column_item;
-        column_item.expr_ = vector_col_ref;
-        column_item.table_id_ = vector_col_ref->get_table_id();
-        column_item.column_id_ = vector_col_ref->get_column_id();
-        column_item.column_name_ = vector_col_ref->get_column_name();
-        if (OB_FAIL(stmt->add_column_item(column_item))) {
-          LOG_WARN("add column item to stmt failed", K(ret));
-        } else if (OB_FAIL(vector_col_ref->formalize(ctx_->session_info_))) {
-          LOG_WARN("formalize failed", K(ret));
+         for (int64_t j = 0; !is_same_index && j < embedded_cascaded_ids.count(); ++j) {
+            if (embedded_cascaded_ids.at(j) == chunk_col_ref->get_column_id()) {
+              is_same_index = true;
+            }
+         }
+      }
+
+      if (is_same_index) {
+        if (OB_NOT_NULL(exist_column_item = stmt->get_column_item(table_item->table_id_, col_schema->get_column_id()))) {
+          vector_col_ref = exist_column_item->expr_;
+        } else if (OB_FAIL(ObRawExprUtils::build_column_expr(*ctx_->expr_factory_, *col_schema,
+                                                      ctx_->session_info_, vector_col_ref))) {
+          LOG_WARN("failed to build target vector column expr", K(ret));
+        } else if (OB_ISNULL(vector_col_ref)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to build target vector column expr", K(ret));
+        } else {
+          vector_col_ref->set_ref_id(table_item->table_id_, col_schema->get_column_id());
+          vector_col_ref->set_column_attr(data_table_schema->get_table_name(), col_schema->get_column_name_str());
+          vector_col_ref->set_database_name(chunk_col_ref->get_database_name());
+          vector_col_ref->del_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
+          ColumnItem column_item;
+          column_item.expr_ = vector_col_ref;
+          column_item.table_id_ = vector_col_ref->get_table_id();
+          column_item.column_id_ = vector_col_ref->get_column_id();
+          column_item.column_name_ = vector_col_ref->get_column_name();
+          if (OB_FAIL(stmt->add_column_item(column_item))) {
+            LOG_WARN("add column item to stmt failed", K(ret));
+          } else if (OB_FAIL(vector_col_ref->formalize(ctx_->session_info_))) {
+            LOG_WARN("formalize failed", K(ret));
+          }
         }
       }
     }

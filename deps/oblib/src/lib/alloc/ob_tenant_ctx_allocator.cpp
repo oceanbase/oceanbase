@@ -19,6 +19,7 @@
 #include "lib/alloc/memory_sanity.h"
 #include "lib/alloc/ob_malloc_callback.h"
 #include "common/ob_smart_var.h"
+#include "lib/utility/ob_hang_fatal_error.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -92,17 +93,7 @@ void ObTenantCtxAllocatorV2::do_cleanup()
 
 void *ObTenantCtxAllocator::alloc(const int64_t size, const ObMemAttr &attr)
 {
-  abort_unless(attr.tenant_id_ == tenant_id_);
-  abort_unless(attr.ctx_id_ == ctx_id_);
-  void *ptr = NULL;
-  if (OB_LIKELY(ObSubCtxIds::MAX_SUB_CTX_ID == attr.sub_ctx_id_)) {
-    ptr = common_realloc(NULL, size, attr, *this, obj_mgr_);
-  } else if (OB_UNLIKELY(attr.sub_ctx_id_ < ObSubCtxIds::MAX_SUB_CTX_ID)) {
-    ptr = common_realloc(NULL, size, attr, *this, obj_mgrs_[attr.sub_ctx_id_]);
-  } else {
-    LIB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "allocate memory with unexpected sub_ctx_id");
-  }
-  return ptr;
+  return common_realloc(NULL, size, attr, *this, obj_mgr_);
 }
 
 int64_t ObTenantCtxAllocator::get_obj_hold(void *ptr)
@@ -521,13 +512,16 @@ void ObTenantCtxAllocator::common_free(void *ptr)
     AObject *obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);
     abort_unless(obj->is_valid());
     abort_unless(obj->in_use_);
-    ABlock *block = obj->block();
-    abort_unless(block->is_valid());
-    abort_unless(block->in_use_);
-    on_free(*obj, *block);
-    abort_unless(NULL != block->obj_set_);
-    OB_LIKELY(block->is_malloc_v2_) ? block->obj_set_v2_->free_object(obj, block) :
-        block->obj_set_->free_object(obj);
-
+    if (OB_UNLIKELY(in_exception_state)) {
+      add_capture_memory_info(ptr, obj->alloc_bytes_);
+    } else {
+      ABlock *block = obj->block();
+      abort_unless(block->is_valid());
+      abort_unless(block->in_use_);
+      on_free(*obj, *block);
+      abort_unless(NULL != block->obj_set_);
+      OB_LIKELY(block->is_malloc_v2_) ? block->obj_set_v2_->free_object(obj, block) :
+          block->obj_set_->free_object(obj);
+    }
   }
 }

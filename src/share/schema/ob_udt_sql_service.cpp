@@ -142,10 +142,12 @@ int ObUDTSqlService::drop_udt(const ObUDTTypeInfo &udt_info,
     LOG_WARN("delete from __all_type failed", K(ret), K(udt_info));
   } else {
     if (!is_object_type) {
-      // do nothing
+      if (OB_FAIL(del_udt_attrs(sql_client, udt_info, new_schema_version))) {
+        LOG_WARN("failed to del udt attrs", K(ret), K(udt_info));
+      }
     } else {
       if (!is_object_body) {
-       if ((udt_info.get_attributes() > 0 || udt_info.is_collection())
+       if ((udt_info.get_attributes() > 0)
            && OB_FAIL(del_udt_attrs(sql_client, udt_info, new_schema_version))) {
           LOG_WARN("failed to del udt attrs", K(ret), K(udt_info));
         } else if (OB_FAIL(del_udt_objects_in_udt(sql_client, udt_info, new_schema_version))) {

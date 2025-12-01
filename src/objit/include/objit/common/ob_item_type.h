@@ -975,12 +975,13 @@ typedef enum ObItemType
   T_FUN_SYS_AI_PROMPT = 1929,
   T_FUN_SYS_VEC_VISIBLE = 1930, // vector index table 5
   T_FUN_SYS_MAX_PT = 1931,
-  T_FUN_GROUPCONCAT = 1932,
-  T_FUN_VARSAMP = 1933,
-  T_FUN_STDDEVSAMP = 1934,
-  T_FUN_UNIQ = 1935,
+  T_FUN_CK_GROUPCONCAT = 1932,
+  T_FUN_CK_VARSAMP = 1933,
+  T_FUN_CK_STDDEVSAMP = 1934,
+  T_FUN_CK_UNIQ = 1935,
   T_FUN_SYS_EDIT_DISTANCE = 1936,
   T_FUN_SYS_EDIT_DISTANCE_UTF8 = 1937,
+  T_FUN_SYS_POS_LIST = 1938, // fulltext index phrase match
 
   ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,
@@ -1066,6 +1067,11 @@ typedef enum ObItemType
   T_FUN_SYS_DATE_TRUNC = 2089,
   T_FUN_ANY = 2090,
   T_FUN_ARBITRARY = 2091,
+  // ClickHouse-compatible date functions
+  T_FUN_SYS_DATE_ADD_CLICKHOUSE = 2092,
+  T_FUN_SYS_DATE_SUB_CLICKHOUSE = 2093,
+  T_FUN_SYS_FORMAT_DATE_TIME = 2094,
+  T_FUN_SYS_TO_UNIX_TIMESTAMP = 2095,
 
   T_MAX_OP = 3000,
 
@@ -2982,6 +2988,11 @@ typedef enum ObItemType
   T_COLUMN_NAME_CASE_SENSITIVE = 4934,
   T_REPLACE_LS = 4935, // replace LS
   T_DISABLE_TRIGGER_HINT = 4936, // disable_trigger hint
+  T_FTS_INDEX_TYPE = 4937, // fulltext index type
+  T_FTS_INDEX_FILTER = 4938, // fulltext index filter
+  T_FTS_INDEX_MATCH = 4939, // fulltext index phrase match
+  T_FTS_INDEX_PHRASE_MATCH = 4940, // fulltext index phrase match type
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
@@ -3155,7 +3166,7 @@ extern const char *get_type_name(int type);
                          (op) == T_FUN_INNER_PREFIX_MAX || \
                          (op) == T_FUN_INNER_PREFIX_MIN || \
                          ((op) >= T_FUN_ARG_MIN && (op) <= T_FUN_ARG_MAX) || \
-                         ((op) >= T_FUN_GROUPCONCAT) && ((op) <= T_FUN_UNIQ))
+                         ((op) >= T_FUN_CK_GROUPCONCAT) && ((op) <= T_FUN_CK_UNIQ))
 #define MAYBE_ROW_OP(op) ((op) >= T_OP_EQ && (op) <= T_OP_NE)
 #define IS_PSEUDO_COLUMN_TYPE(op) \
   ((op) == T_LEVEL || (op) == T_CONNECT_BY_ISLEAF || (op) == T_CONNECT_BY_ISCYCLE || (op) == T_ORA_ROWSCN)

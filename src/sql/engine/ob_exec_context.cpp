@@ -146,7 +146,8 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     external_py_sch_resource_cache_(nullptr),
     py_sub_inter_ctx_(nullptr),
     lake_table_file_map_(nullptr),
-    need_try_serialize_package_var_(false)
+    need_try_serialize_package_var_(false),
+    current_granule_type_(OB_GRANULE_UNINITIALIZED)
 {
 }
 

@@ -190,6 +190,135 @@ ObAdminLogDumpFilter &ObAdminLogDumpFilter::operator= (const ObAdminLogDumpFilte
   return *this;
 }
 
+// 目录结构dir_path_ / tablet_id / trans_id / seq_no
+int ObAdminLogDumpBlockHelper::generate_dump_dir(const char *dir_path,
+                                                  const int64_t tablet_id,
+                                                  const int64_t trans_id,
+                                                  const int64_t seq_no,
+                                                  char *dir_full_path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(dir_path) || strlen(dir_path) == 0) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid dir_path", K(ret), KP(dir_path));
+  } else {
+    // Construct full directory path: tablet_id/trans_id/seq_no
+    int64_t dir_path_len =
+      snprintf(dir_full_path, common::MAX_PATH_SIZE, "%s/%ld/%ld/%ld", dir_path, tablet_id, trans_id, seq_no);
+    if (dir_path_len < 0 || dir_path_len >= static_cast<int64_t>(common::MAX_PATH_SIZE)) {
+      ret = OB_INVALID_ARGUMENT;
+      TRANS_LOG(WARN, "directory path too long", K(ret), K(dir_full_path), K(tablet_id), K(trans_id),
+                K(seq_no));
+    }
+  }
+  return ret;
+}
+
+int ObAdminLogDumpBlockHelper::create_dir_if_not_exist(const char *dir_full_path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(dir_full_path) || strlen(dir_full_path) == 0) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid dir_full_path", K(ret), KP(dir_full_path));
+  } else {
+    // Create directories recursively by processing path components
+    // Expected format: base_path/tablet_id/trans_id/seq_no
+    char temp_path[common::MAX_PATH_SIZE] = {0};
+    int64_t path_len = strlen(dir_full_path);
+
+    if (path_len <= 0 || path_len >= static_cast<int64_t>(sizeof(temp_path))) {
+      ret = OB_INVALID_ARGUMENT;
+      TRANS_LOG(WARN, "dir_full_path too long", K(ret), K(dir_full_path));
+    } else {
+      // Process path character by character to create each directory level
+      for (int64_t i = 1; OB_SUCC(ret) && i <= path_len; ++i) {
+        // Check if we've reached a path separator or the end of the path
+        if (dir_full_path[i] == '/' || i == path_len) {
+          // Copy path up to current position
+          int64_t copy_len = i;
+          if (copy_len > 0 && copy_len < static_cast<int64_t>(sizeof(temp_path))) {
+            memcpy(temp_path, dir_full_path, copy_len);
+            temp_path[copy_len] = '\0';
+
+            // Create directory at this level
+            int mkdir_ret = ::mkdir(temp_path, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
+            if (0 != mkdir_ret) {
+              int saved_errno = errno;
+              // If directory already exists, it's not an error
+              if (EEXIST != saved_errno) {
+                ret = OB_IO_ERROR;
+                TRANS_LOG(WARN, "failed to create directory", K(ret), K(temp_path),
+                          K(saved_errno));
+              }
+            }
+          } else {
+            ret = OB_INVALID_ARGUMENT;
+            TRANS_LOG(WARN, "path component too long", K(ret));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+// 文件名 {slice_idx}_{column_group_idx}_{data_seq}.{scn}.macro
+int ObAdminLogDumpBlockHelper::write_macro_block_file(const char *dir_full_path,
+                                                      int32_t start_slice_idx,
+                                                      uint16_t column_group_idx, int64_t data_seq,
+                                                      int64_t scn_val, const char *data_buf,
+                                                      int64_t data_len)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(dir_full_path) || strlen(dir_full_path) == 0) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid dir_full_path", K(ret), KP(dir_full_path));
+  } else {
+    // Construct full file path
+    char file_path[common::MAX_PATH_SIZE] = {0};
+    int64_t path_len =
+      snprintf(file_path, sizeof(file_path), "%s/%d_%u_%ld.%ld.macro", dir_full_path,
+               start_slice_idx, column_group_idx, data_seq, scn_val);
+    if (path_len < 0 || path_len >= static_cast<int64_t>(sizeof(file_path))) {
+      ret = OB_INVALID_ARGUMENT;
+      TRANS_LOG(WARN, "file path too long", K(ret), K(dir_full_path), K(start_slice_idx),
+                K(column_group_idx), K(data_seq), K(scn_val));
+    } else {
+      // Create and write file
+      int fd =
+        ::open(file_path, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+      if (fd < 0) {
+        ret = OB_IO_ERROR;
+        TRANS_LOG(WARN, "failed to create file", K(ret), K(file_path), K(errno));
+      } else {
+        if (data_len > 0 && OB_NOT_NULL(data_buf)) {
+          ssize_t write_size = ::write(fd, data_buf, data_len);
+          if (write_size < 0) {
+            ret = OB_IO_ERROR;
+            TRANS_LOG(WARN, "failed to write file", K(ret), K(file_path), K(errno));
+          } else if (static_cast<int64_t>(write_size) != data_len) {
+            ret = OB_IO_ERROR;
+            TRANS_LOG(WARN, "partial write", K(ret), K(write_size), K(data_len));
+          }
+        }
+        if (OB_FAIL(ret)) {
+          // Error occurred, close file anyway
+          ::close(fd);
+        } else {
+          if (0 != ::close(fd)) {
+            ret = OB_IO_ERROR;
+            TRANS_LOG(WARN, "failed to close file", K(ret), K(file_path), K(errno));
+          } else {
+            TRANS_LOG(INFO, "successfully dump macro block to file", K(file_path), K(scn_val),
+                      K(data_len));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 void ObLogStat::reset()
 {
   group_entry_header_size_ = 0;

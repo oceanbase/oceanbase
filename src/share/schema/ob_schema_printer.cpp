@@ -2287,35 +2287,60 @@ int ObSchemaPrinter::print_table_definition_partition_options(const ObTableSchem
         is_subpart &= is_subpartition_valid_in_mysql(table_schema);
       }
     }
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n "))) {
-      SHARE_SCHEMA_LOG(WARN, "fail to print enter", K(ret));
-    } else if (OB_FAIL(print_partition_func(table_schema, buf, buf_len, pos, is_subpart, strict_compat_, tz_info))) {
-      SHARE_SCHEMA_LOG(WARN, "failed to print part func", K(ret));
-    } else if (!strict_compat_ && is_subpart && partition_schema->sub_part_template_def_valid()) {
-      if (OB_FAIL(print_template_sub_partition_elements(partition_schema, buf, buf_len, pos, tz_info, false))) {
-        SHARE_SCHEMA_LOG(WARN, "fail to print sub partition elements", K(ret));
+
+    bool has_fts_index = false;
+    if (strict_compat_ && !table_schema.is_index_table()) {
+      ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+      if (OB_FAIL(table_schema.get_simple_index_infos(simple_index_infos))) {
+        LOG_WARN("get simple_index_infos failed, ignore and continue", K(ret));
+      } else {
+        for (int64_t i = 0; !has_fts_index && i < simple_index_infos.count(); i++) {
+          const ObTableSchema *index_schema = NULL;
+          if (OB_FAIL(schema_guard_.get_table_schema(table_schema.get_tenant_id(),
+              simple_index_infos.at(i).table_id_, index_schema))) {
+            LOG_WARN("fail to get table schema, ignore and continue", K(ret));
+          } else if (NULL != index_schema && index_schema->is_fts_index()) {
+            has_fts_index = true;
+          }
+        }
       }
     }
 
-    if (OB_SUCC(ret)) {
-      bool print_sub_part_element = is_subpart &&
-                                    (strict_compat_ || !partition_schema->sub_part_template_def_valid());
-      if (table_schema.is_range_part()) {
-        if (OB_FAIL(print_range_partition_elements(partition_schema, buf, buf_len, pos,
-                                                   print_sub_part_element, agent_mode, false, tz_info))) {
-          SHARE_SCHEMA_LOG(WARN, "fail to print partition elements", K(ret));
+    if (OB_FAIL(ret)) {
+      LOG_WARN("fail to check fts index when printing partition ", K(ret));
+    } else if (strict_compat_ && has_fts_index){
+      // when in mysql_compat and with fts index, skip printing partition
+    } else {
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n "))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print enter", K(ret));
+      } else if (OB_FAIL(print_partition_func(table_schema, buf, buf_len, pos, is_subpart, strict_compat_, tz_info))) {
+        SHARE_SCHEMA_LOG(WARN, "failed to print part func", K(ret));
+      } else if (!strict_compat_ && is_subpart && partition_schema->sub_part_template_def_valid()) {
+        if (OB_FAIL(print_template_sub_partition_elements(partition_schema, buf, buf_len, pos, tz_info, false))) {
+          SHARE_SCHEMA_LOG(WARN, "fail to print sub partition elements", K(ret));
         }
-      } else if (table_schema.is_list_part()) {
-        if (OB_FAIL(print_list_partition_elements(partition_schema, buf, buf_len, pos,
-                                                  print_sub_part_element,
-                                                  agent_mode, false, tz_info,
-                                                  table_schema.is_external_table()))) {
-          SHARE_SCHEMA_LOG(WARN, "fail to print partition elements", K(ret));
-        }
-      } else if (is_hash_like_part(table_schema.get_part_option().get_part_func_type())) {
-        if (OB_FAIL(print_hash_partition_elements(partition_schema, buf, buf_len, pos,
-                                                  print_sub_part_element, agent_mode, tz_info))) {
-          SHARE_SCHEMA_LOG(WARN, "fail to print partition elements", K(ret));
+      }
+
+      if (OB_SUCC(ret)) {
+        bool print_sub_part_element = is_subpart &&
+                                      (strict_compat_ || !partition_schema->sub_part_template_def_valid());
+        if (table_schema.is_range_part()) {
+          if (OB_FAIL(print_range_partition_elements(partition_schema, buf, buf_len, pos,
+                                                    print_sub_part_element, agent_mode, false, tz_info))) {
+            SHARE_SCHEMA_LOG(WARN, "fail to print partition elements", K(ret));
+          }
+        } else if (table_schema.is_list_part()) {
+          if (OB_FAIL(print_list_partition_elements(partition_schema, buf, buf_len, pos,
+                                                    print_sub_part_element,
+                                                    agent_mode, false, tz_info,
+                                                    table_schema.is_external_table()))) {
+            SHARE_SCHEMA_LOG(WARN, "fail to print partition elements", K(ret));
+          }
+        } else if (is_hash_like_part(table_schema.get_part_option().get_part_func_type())) {
+          if (OB_FAIL(print_hash_partition_elements(partition_schema, buf, buf_len, pos,
+                                                    print_sub_part_element, agent_mode, tz_info))) {
+            SHARE_SCHEMA_LOG(WARN, "fail to print partition elements", K(ret));
+          }
         }
       }
     }

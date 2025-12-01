@@ -1222,6 +1222,7 @@ int ObInsertLogPlan::prepare_dml_infos()
           IndexDMLInfo *primary_upd_dml_info = insert_up_index_upd_infos_.at(0);
           const ObTableSchema *table_schema = nullptr;
           ObSchemaGetterGuard *schema_guard = optimizer_context_.get_schema_guard();
+          bool has_vec_index = false;
           if (OB_ISNULL(schema_guard)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("schema guard is null", K(ret));
@@ -1229,11 +1230,13 @@ int ObInsertLogPlan::prepare_dml_infos()
                                                             primary_upd_dml_info->ref_table_id_,
                                                             table_schema))) {
             LOG_WARN("failed to get table schema", K(ret), K(primary_upd_dml_info->ref_table_id_));
-          } else if (OB_NOT_NULL(table_schema) && OB_FAIL(ObDelUpdLogPlan::check_vec_hnsw_index_vid_opt(*schema_guard,
-                                                                                                        stmt,
-                                                                                                        table_schema,
-                                                                                                        primary_upd_dml_info))) {
-            LOG_WARN("failed to check vec hnsw index vid opt", K(ret));
+          } else if (OB_NOT_NULL(table_schema) && OB_FAIL(ObVectorIndexUtil::check_table_has_vector_index(*table_schema,
+                                                                                                          *schema_guard,
+                                                                                                          has_vec_index))) {
+            LOG_WARN("failed to check has vector index", K(ret));
+          } else if (has_vec_index && table_schema->is_table_with_hidden_pk_column()) {
+            primary_upd_dml_info->is_update_primary_key_ = true;
+            primary_upd_dml_info->is_vec_hnsw_index_vid_opt_ = true;
           }
         }
       }

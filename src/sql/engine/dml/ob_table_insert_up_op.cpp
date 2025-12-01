@@ -2497,6 +2497,8 @@ int ObTableInsertUpOp::add_new_row_to_conflict_map(ObChunkDatumStore::StoredRow 
 {
   int ret = OB_SUCCESS;
   ObConflictValue *value = nullptr;
+  duped = false;
+  has_null = false;
 
   if (OB_ISNULL(rowkey_info)) {
     ret = OB_INVALID_ARGUMENT;
@@ -2506,7 +2508,7 @@ int ObTableInsertUpOp::add_new_row_to_conflict_map(ObChunkDatumStore::StoredRow 
     LOG_WARN("tmp_rowkey_ is null", K(ret));
   } else if (OB_FAIL(build_tmp_conflict_rowkey(eval_ctx_, tmp_rowkey_, rowkey_info, has_null))) {
     LOG_WARN("fail to build rowkey", K(ret), KPC(tmp_rowkey_), KPC(rowkey_info));
-  } else if (has_null || OB_ISNULL(value = const_cast<ObConflictValue*>(conflict_map_.get(*tmp_rowkey_)))) {
+  } else if (OB_ISNULL(value = const_cast<ObConflictValue*>(conflict_map_.get(*tmp_rowkey_)))) {
     ObRowkey *new_rowkey = nullptr;
     ObConflictValue new_value;
     new_value.current_datum_row_ = new_row;
@@ -2522,6 +2524,9 @@ int ObTableInsertUpOp::add_new_row_to_conflict_map(ObChunkDatumStore::StoredRow 
       duped = false;
     }
   } else {
+    // if unique key has null, always not duped.
+    // 1. unique/primary key without null is duplicated
+    // 2. primary key has null, and already in conflict map
     if (OB_ISNULL(value->current_datum_row_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret), KPC(tmp_rowkey_));

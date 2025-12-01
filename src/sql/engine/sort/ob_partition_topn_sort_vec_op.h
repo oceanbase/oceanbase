@@ -29,8 +29,8 @@ namespace oceanbase {
 namespace sql {
 class ObPartTopnRowBuffer {
   public:
-    const static int64_t MAX_BUFFER_SIZE = 1024 * 1024 * 1024;
-    const static int64_t MIN_BUFFER_SIZE = 2 * 1024;
+    const static int64_t MAX_BUFFER_SIZE = 1 * 1024 * 1024; // 1MB
+    const static int64_t MIN_BUFFER_SIZE = 2 * 1024; // 2KB
     ObPartTopnRowBuffer(ObSqlWorkAreaProfile &profile,
                         common::ObIAllocator &allocator,
                         ObSqlMemMgrProcessor &sql_mem_processor,
@@ -71,6 +71,16 @@ class ObPartTopnRowBuffer {
           ret = OB_ERR_UNEXPECTED;
           SQL_ENG_LOG(WARN, "row buffer is null", K(ret));
         }
+      }
+      return ret;
+    }
+    int64_t get_next_buffer_expected_size() const {
+      int64_t ret = 0;
+      if (!row_buffers_.empty()) {
+        common::ObList<RowBuffer, ObIAllocator>::const_iterator iter = row_buffers_.last();
+        const RowBuffer &row_buf = *iter;
+        // expected size = (1.0 * used_size / buffer_size) * 2 * buffer_size
+        ret = (row_buf.buffer_offset_ * 2);
       }
       return ret;
     }
@@ -133,7 +143,6 @@ class ObPartTopnRowBuffer {
     int64_t &inmem_row_size_;
     common::ObList<RowBuffer, ObIAllocator> row_buffers_;
     int64_t est_rows_;
-
   };
 // Vectorization 2.0 partition topn sort implementation class
 template <typename Compare, typename Store_Row, bool has_addon>
@@ -180,33 +189,104 @@ public:
   void reset_row_idx() {
     row_idx_ = 0;
   }
+  int64_t get_need_extra_mem_size() const {
+    int64_t ret = 0;
+    ret += pt_row_buffer_.get_next_buffer_expected_size(); // extra mem for next buffer
+    // extra_ht_mem = (1.0 * part_group_cnt_ / (max_bucket_cnt_ * enlarge_bucket_num_factor)) * enlarge_ht_size
+    ret += (1.0 * part_group_cnt_ / (max_bucket_cnt_ * ENLARGE_BUCKET_NUM_FACTOR)) * 2 * max_bucket_cnt_ * sizeof(PartTopnNode*); // extra mem for enlarge bucket array
+    return ret;
+  }
   int64_t get_ht_bucket_size() const {
     int64_t ret = 0;
     ret += max_bucket_cnt_ * sizeof(PartTopnNode*);
     ret += part_group_cnt_ * sizeof(PartTopnNode);
-    ret += pt_row_cnt_ * sizeof(Store_Row*);
     return ret;
   }
 
 private:
+  template <typename RowType>
+  struct RowArray
+  {
+    RowArray(common::ObIAllocator *allocator) :
+      array_(nullptr),
+      count_(0),
+      capacity_(0),
+      allocator_(allocator) {
+    }
+    ~RowArray() {
+      if (OB_NOT_NULL(array_)) {
+        allocator_->free(array_);
+        array_ = nullptr;
+      }
+      count_ = 0;
+      capacity_ = 0;
+    }
+    int push_back(const RowType &row) {
+      int ret = OB_SUCCESS;
+      if (count_ >= capacity_) {
+        int64_t new_capacity = std::max(1L, capacity_ * 2);
+        RowType *new_array = nullptr;
+        if (OB_ISNULL(new_array = reinterpret_cast<RowType *>(allocator_->alloc(sizeof(RowType) * new_capacity)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          SQL_ENG_LOG(WARN, "failed to allocate memory", K(ret), K(capacity_));
+        } else {
+          if (OB_NOT_NULL(array_)) {
+            MEMCPY(new_array, array_, sizeof(RowType) * capacity_);
+            allocator_->free(array_);
+            array_ = nullptr;
+          }
+          array_ = new_array;
+          capacity_ = new_capacity;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        array_[count_] = row;
+        count_++;
+      }
+      return ret;
+    }
+    inline int pop_back(RowType &row) {
+      int ret = OB_SUCCESS;
+      if (0 < count_) {
+        row = array_[--count_];
+      } else {
+        ret = OB_ENTRY_NOT_EXIST;
+        SQL_ENG_LOG(WARN, "row array is empty", K(ret));
+      }
+      return ret;
+    }
+    inline int64_t count() const { return count_; }
+    inline const RowType &at(int64_t idx) const {
+      OB_ASSERT(idx >= 0 && idx < count_);
+      return array_[idx];
+    }
+    inline RowType &at(int64_t idx) {
+      OB_ASSERT(idx >= 0 && idx < count_);
+      return array_[idx];
+    }
+    RowType *array_;
+    int64_t count_;
+    int64_t capacity_;
+    common::ObIAllocator *allocator_;
+  };
   struct TopnNode
   {
     TopnNode(Compare &cmp, common::ObIAllocator *allocator = NULL):
       reuse_idx_(-1), top_row_(nullptr),
-      rows_array_(64, ModulePageAllocator(*allocator, "SortOpRows")),
-      ties_array_(64, ModulePageAllocator(*allocator, "SortOpRows")) {
+      rows_array_(allocator),
+      ties_array_(allocator) {
     }
     ~TopnNode() {
-      rows_array_.reset();
-      ties_array_.reset();
+      rows_array_.~RowArray();
+      ties_array_.~RowArray();
     }
     Store_Row *get_top() const { return top_row_ != nullptr ? top_row_ : rows_array_.at(0); }
     TO_STRING_EMPTY();
     uint64_t hash_val_{0};
     int64_t reuse_idx_{-1};
     Store_Row *top_row_{nullptr};
-    common::ObSEArray<Store_Row *, 16> rows_array_;
-    common::ObSEArray<Store_Row *, 8> ties_array_;
+    RowArray<Store_Row *> rows_array_;
+    RowArray<Store_Row *> ties_array_;
   };
   struct PartTopnNode
   {
@@ -363,6 +443,7 @@ private:
       } else if (FALSE_IT(array_ptr = new (buckets_buf) BucketArray(
                           *reinterpret_cast<common::ModulePageAllocator *>(page_allocator_)))) {
       } else if (OB_FAIL(array_ptr->init(bucket_num))) {
+        allocator_.free(buckets_buf);
         SQL_ENG_LOG(WARN, "failed to init bucket", K(ret), K(bucket_num));
       } else {
         array_ptr->set_all(nullptr);
@@ -381,7 +462,7 @@ private:
 private:
 
   static const int64_t MIN_BUCKET_COUNT = 1L << 14;  //16384;
-  static const int64_t MAX_BUCKET_COUNT = 1L << 21; //2097152;
+  static const int64_t MAX_BUCKET_COUNT = 1L << 18; //262144;
   static constexpr double ENLARGE_BUCKET_NUM_FACTOR = 0.75;
   common::ObIAllocator &allocator_;
   common::ObIAllocator *page_allocator_;
@@ -414,7 +495,6 @@ private:
   TopNSortFunc topn_sort_func_{nullptr};
   ObPartTopnRowBuffer pt_row_buffer_;
   bool got_first_row_{false};
-  int64_t pt_row_cnt_{0};
 };
 
 } // end namespace sql

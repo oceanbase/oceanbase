@@ -84,6 +84,11 @@ public:
   static int get_doc_id_column_id(
       const ObTableSchema *data_schema,
       uint64_t &doc_id_col_id);
+  static int check_has_valid_fts_or_multivalue_index(
+      const share::schema::ObTableSchema &table_schema,
+      sql::ObSqlSchemaGuard &schema_guard,
+     bool &has_valid_index);
+
   static int append_fts_rowkey_doc_arg(
       const obrpc::ObCreateIndexArg &index_arg,
       ObIAllocator *allocator,

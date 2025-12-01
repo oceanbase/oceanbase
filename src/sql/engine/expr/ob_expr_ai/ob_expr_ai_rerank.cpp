@@ -132,11 +132,35 @@ int ObExprAIRerank::eval_ai_rerank(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("j_base is null", K(ret));
     } else if (j_base->json_type() != ObJsonNodeType::J_ARRAY) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("j_base is not array", K(ret));
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("document_array is not array", K(ret));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_rerank, document_array is not array");
     } else if (OB_ISNULL(document_array = static_cast<ObJsonArray *>(j_base))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("document_array is null", K(ret));
+    } else if (document_array->element_count() == 0) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("document_array is empty", K(ret));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_rerank, document_array is empty");
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < document_array->element_count(); i++) {
+        ObJsonNode *doc_node = document_array->get_value(i);
+        if (OB_ISNULL(doc_node)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("doc_node is null", K(ret));
+        } else if (OB_NOT_NULL(arg_doc_key) && doc_node->json_type() != ObJsonNodeType::J_OBJECT) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("doc_node is not object", K(ret));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_rerank, document_array element is not object");
+        } else if (OB_ISNULL(arg_doc_key) && doc_node->json_type() != ObJsonNodeType::J_STRING) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("doc_node is not string", K(ret));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_rerank, document_array element is not string");
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ObAIFuncUtils::get_ai_func_info(temp_allocator, model_id, info))) {
       LOG_WARN("fail to get ai func info", K(ret));
     } else if (OB_ISNULL(ai_service)) {

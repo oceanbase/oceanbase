@@ -96,6 +96,10 @@ protected:
       const bool is_right_border);
   int set_reader(const ObRowStoreType store_type);
 private:
+  OB_INLINE bool check_column_checksums(const ObMicroBlockHeader *header) const
+  {
+    return !header->has_column_checksum_ || nullptr != header->column_checksums_;
+  }
   int generate_uncompressed_micro_block(
     const ObDatumRowkey &rowkey,
     const ObMicroBlockHeader *header,

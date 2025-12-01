@@ -47,6 +47,7 @@
   RPC_S(PR5 ls_modify_paxos_replica_number, OB_LS_MODIFY_PAXOS_REPLICA_NUMBER, (ObLSModifyPaxosReplicaNumberArg));
   RPC_S(PR5 ls_check_dr_task_exist, OB_LS_CHECK_DR_TASK_EXIST, (ObDRTaskExistArg), obrpc::Bool);
   RPC_S(PR5 ob_exec_drtask_obadmin_command, OB_EXEC_DRTASK_OBADMIN_COMMAND, (ObAdminCommandArg));
+  RPC_S(PR5 ob_exec_switch_replica_role, OB_EXEC_SWITCH_REPLICA_ROLE, (ObAdminSwitchReplicaRoleStr));
   RPC_S(PR5 trigger_partition_balance, OB_TRIGGER_PARTITION_BALANCE, (ObTriggerPartitionBalanceArg));
 #ifdef OB_BUILD_ARBITRATION
   RPC_S(PR5 add_arb, OB_ADD_ARB, (ObAddArbArg), obrpc::ObAddArbResult);

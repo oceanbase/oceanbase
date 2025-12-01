@@ -25,23 +25,25 @@ namespace sql
 
 ObCreateTableStmt::ObCreateTableStmt(ObIAllocator *name_pool)
     : ObTableStmt(name_pool, stmt::T_CREATE_TABLE),
-      create_table_arg_(),
+      create_table_arg_(&allocator_),
       is_view_stmt_(false),
       view_need_privs_(),
       sub_select_stmt_(NULL),
       view_define_(NULL),
-      insert_mode_(0)
+      insert_mode_(0),
+      is_sub_select_empty_set_(false)
 {
 }
 
 ObCreateTableStmt::ObCreateTableStmt()
     : ObTableStmt(stmt::T_CREATE_TABLE),
-      create_table_arg_(),
+      create_table_arg_(&allocator_),
       is_view_stmt_(false),
       view_need_privs_(),
       sub_select_stmt_(NULL),
       view_define_(NULL),
-      insert_mode_(0)
+      insert_mode_(0),
+      is_sub_select_empty_set_(false)
 {
 }
 

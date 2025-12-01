@@ -249,6 +249,8 @@ int ObKmeansAlgo::quick_centers(const ObIArray<float*> &input_vectors)
   } else if (PREPARE_CENTERS != status_) {
     ret = OB_STATE_NOT_MATCH;
     SHARE_LOG(WARN, "status not match", K(ret), K(status_));
+  } else if (input_vectors.count() == 0) {
+    SHARE_LOG(INFO, "input vectors is empty, skip quick centers", K(ret), K(input_vectors.count()));
   } else if (OB_FAIL(centers_[cur_idx_].init(kmeans_ctx_->dim_, input_vectors.count(), ivf_build_mem_ctx_))) {
     SHARE_LOG(WARN, "failed to init center buffer", K(ret));
   } else {
@@ -257,12 +259,12 @@ int ObKmeansAlgo::quick_centers(const ObIArray<float*> &input_vectors)
         SHARE_LOG(WARN, "failed to push back center", K(ret));
       }
     }
-    if (OB_SUCC(ret)) {
-      status_ = FINISH;
-      const int64_t center_count = centers_[cur_idx_].count();
-      const int64_t sample_count = input_vectors.count();
-      SHARE_LOG(INFO, "success to quick centers", K(ret), K(center_count), K(kmeans_ctx_->lists_), K(sample_count));
-    }
+  }
+  if (OB_SUCC(ret)) {
+    status_ = FINISH;
+    const int64_t center_count = centers_[cur_idx_].count();
+    const int64_t sample_count = input_vectors.count();
+    SHARE_LOG(INFO, "success to quick centers", K(ret), K(center_count), K(kmeans_ctx_->lists_), K(sample_count));
   }
   return ret;
 }

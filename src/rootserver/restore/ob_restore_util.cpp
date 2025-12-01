@@ -352,8 +352,8 @@ int ObRestoreUtil::fill_compat_backup_path(
       restore_using_compl_log, restore_scn))) {
     LOG_WARN("fail to fill restore scn", K(ret), K(arg));
   } else if (OB_FALSE_IT(job.set_restore_scn(restore_scn))) {
-  } else if (OB_FAIL(get_restore_source(restore_using_compl_log, tenant_path_array, arg.passwd_array_, job.get_restore_scn(),
-      backup_set_list, backup_piece_list, log_path_list))) {
+  } else if (OB_FAIL(get_restore_source(true/*check_passwd*/, restore_using_compl_log, tenant_path_array,
+            arg.passwd_array_, job.get_restore_scn(), backup_set_list, backup_piece_list, log_path_list))) {
     LOG_WARN("fail to get restore source", K(ret), K(arg));
   } else if (OB_FAIL(do_fill_backup_path_(backup_set_list, backup_piece_list, log_path_list, job))) {
     LOG_WARN("fail to do fill backup path", K(backup_set_list), K(backup_piece_list), K(log_path_list));
@@ -384,11 +384,8 @@ int ObRestoreUtil::fill_restore_scn(
     // restore scn which is specified by user
     restore_scn = src_scn;
   } else if (!timestamp.empty()) {
-    common::ObTimeZoneInfoWrap time_zone_wrap;
-    if (OB_FAIL(get_backup_sys_time_zone_(tenant_path_array, time_zone_wrap))) {
-      LOG_WARN("failed to get backup sys time zone", K(ret));
-    } else if (OB_FAIL(convert_restore_timestamp_to_scn_(timestamp, time_zone_wrap, restore_scn))) {
-      LOG_WARN("failed to convert restore timestamp to scn", K(ret));
+    if (OB_FAIL(parse_restore_timestamp_to_scn(tenant_path_array, timestamp, restore_scn))) {
+      LOG_WARN("fail to parse restore timestamp to scn", K(ret), K(tenant_path_array), K(timestamp));
     }
   } else {
     if (restore_using_compl_log) {
@@ -456,6 +453,24 @@ int ObRestoreUtil::fill_restore_scn(
       }
     }
   } 
+  return ret;
+}
+
+int ObRestoreUtil::parse_restore_timestamp_to_scn(
+  const ObIArray<ObString> &tenant_path_array,
+  const ObString &timestamp, share::SCN &restore_scn)
+{
+  int ret = OB_SUCCESS;
+  common::ObTimeZoneInfoWrap time_zone_wrap;
+
+  if (tenant_path_array.empty() || timestamp.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_path_array), K(timestamp));
+  } else if (OB_FAIL(get_backup_sys_time_zone_(tenant_path_array, time_zone_wrap))) {
+    LOG_WARN("failed to get backup sys time zone", K(ret));
+  } else if (OB_FAIL(convert_restore_timestamp_to_scn_(timestamp, time_zone_wrap, restore_scn))) {
+    LOG_WARN("failed to convert restore timestamp to scn", K(ret));
+  }
   return ret;
 }
 
@@ -611,6 +626,7 @@ int ObRestoreUtil::fill_sts_credential_(
 }
 
 int ObRestoreUtil::get_restore_source(
+    const bool check_passwd,
     const bool restore_using_compl_log,
     const ObIArray<ObString>& tenant_path_array,
     const common::ObString &passwd_array,
@@ -621,7 +637,7 @@ int ObRestoreUtil::get_restore_source(
 {
   int ret = OB_SUCCESS;
   SCN restore_start_scn = SCN::min_scn();
-  if (OB_FAIL(get_restore_backup_set_array_(tenant_path_array, passwd_array, restore_scn,
+  if (OB_FAIL(get_restore_backup_set_array_(check_passwd, tenant_path_array, passwd_array, restore_scn,
       restore_start_scn, backup_set_list))) {
     LOG_WARN("fail to get restore backup set array", K(ret), K(restore_scn));
   } else if (!restore_using_compl_log && OB_FAIL(get_restore_log_piece_array_(
@@ -796,6 +812,7 @@ int ObRestoreUtil::sort_backup_piece_array_(ObArray<share::ObSinglePieceDesc> &b
 }
 
 int ObRestoreUtil::get_restore_backup_set_array_(
+    const bool check_passwd,
     const ObIArray<ObString> &tenant_path_array,
     const common::ObString &passwd_array,
     const SCN &restore_scn,
@@ -824,7 +841,7 @@ int ObRestoreUtil::get_restore_backup_set_array_(
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("It is not support to restore from multiple tenant backup paths", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "It is not support to restore from multiple tenant backup paths.");
-      } else if (OB_FAIL(store.get_backup_set_array(passwd_array, restore_scn, restore_start_scn, backup_set_list))) {
+      } else if (OB_FAIL(store.get_backup_set_array(check_passwd, passwd_array, restore_scn, restore_start_scn, backup_set_list))) {
         LOG_WARN("fail to get backup set array", K(ret));
       }
     }

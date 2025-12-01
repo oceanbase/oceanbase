@@ -62,7 +62,7 @@ int BloomFilterIndex::assign(const BloomFilterIndex &other)
 
 ObPxBloomFilter::ObPxBloomFilter() : data_length_(0), max_bit_count_(0), bits_count_(0), fpp_(0.0),
     hash_func_count_(0), is_inited_(false), bits_array_length_(0),
-    bits_array_(NULL), true_count_(0), begin_idx_(0), end_idx_(0), allocator_(),
+    bits_array_(NULL), true_count_(0), begin_idx_(0), end_idx_(0), fit_l3_cache_(false), allocator_(),
     px_bf_recieve_count_(0), px_bf_recieve_size_(0), px_bf_merge_filter_count_(0)
 {
 
@@ -84,6 +84,7 @@ int ObPxBloomFilter::init(int64_t data_length, ObIAllocator &allocator, int64_t 
     (void)calc_num_of_bits();
     (void)calc_num_of_hash_func();
     bits_array_length_ = ceil((double)bits_count_ / 64);
+    fit_l3_cache_ = bits_array_length_ * sizeof(int64_t) < get_level3_cache_size();
     void *bits_array_buf = NULL;
     bool simd_support = blocksstable::is_avx512_valid();
     might_contain_ = simd_support ? &ObPxBloomFilter::might_contain_simd
@@ -123,6 +124,7 @@ int ObPxBloomFilter::assign(const ObPxBloomFilter &filter, int64_t tenant_id)
   void *bits_array_buf = NULL;
   begin_idx_ = filter.get_begin_idx();
   end_idx_ = filter.get_end_idx();
+  fit_l3_cache_ = filter.fit_l3_cache_;
   if (OB_ISNULL(bits_array_buf = allocator_.alloc((bits_array_length_ + CACHE_LINE_SIZE)* sizeof(int64_t)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc filter", K(bits_array_length_), K(begin_idx_), K(end_idx_), K(ret));
@@ -159,6 +161,7 @@ int ObPxBloomFilter::init(const ObPxBloomFilter *filter)
     bits_array_ = filter->bits_array_;
     true_count_ = filter->true_count_;
     might_contain_ = filter->might_contain_;
+    fit_l3_cache_ = filter->fit_l3_cache_;
   }
   return ret;
 }
@@ -181,6 +184,7 @@ void ObPxBloomFilter::reset_for_rescan()
   is_inited_ = false;
   bits_array_length_ = 0;
   bits_array_ = nullptr;
+  fit_l3_cache_ = false;
   allocator_.reset();
 }
 
@@ -260,6 +264,11 @@ int ObPxBloomFilter::put_batch(uint64_t *batch_hash_values, const EvalBound &bou
     ret = OB_NOT_INIT;
     LOG_WARN("the px bloom filter is not inited", K(ret));
   } else if (bound.get_all_rows_active()) {
+    if (!fit_l3_cache()) {
+      for (int64_t i = bound.start(); i < bound.end(); ++i) {
+        (void)prefetch_bits_block(batch_hash_values[i]);
+      }
+    }
     uint32_t hash_high = 0;
     uint8_t *block_hash_vals = (uint8_t *)&hash_high;
     for (int64_t i = bound.start(); i < bound.end(); ++i) {
@@ -274,6 +283,10 @@ int ObPxBloomFilter::put_batch(uint64_t *batch_hash_values, const EvalBound &bou
       is_empty = false;
     }
   } else {
+    if (!fit_l3_cache()) {
+      BloomFilterPrefetchOP prefetch_op(this, batch_hash_values);
+      (void)ObBitVector::flip_foreach(skip, bound, prefetch_op);
+    }
     uint32_t hash_high = 0;
     uint8_t *block_hash_vals = (uint8_t *)&hash_high;
     for (int64_t i = bound.start(); i < bound.end(); ++i) {
@@ -520,6 +533,7 @@ OB_DEF_DESERIALIZE(ObPxBloomFilter)
   }
   OB_UNIS_DECODE(max_bit_count_);
   block_mask_ = (bits_count_ >> (LOG_HASH_COUNT + 6)) - 1;
+  fit_l3_cache_ = bits_array_length_ * sizeof(int64_t) < get_level3_cache_size();
   return ret;
 }
 

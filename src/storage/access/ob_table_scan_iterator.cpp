@@ -305,7 +305,8 @@ int ObTableScanIterator::rescan(ObTableScanParam &scan_param)
     } else if (OB_FAIL(table_scan_range_.init(*scan_param_, *tablet, is_tablet_spliting))) {
       STORAGE_LOG(WARN, "Failed to init table scan range", K(ret));
     } else if (scan_param.use_index_skip_scan() &&
-        OB_FAIL(main_table_param_.check_skip_scan(scan_param, main_table_param_.iter_param_))) {
+        (OB_FAIL(main_table_ctx_.alloc_skip_scan_factory()) ||
+         OB_FAIL(main_table_param_.check_skip_scan(scan_param, main_table_param_.iter_param_)))) {
       STORAGE_LOG(WARN, "Failed to get prefix for skip scan", K(ret));
     } else if (OB_FAIL(set_skip_scan_range())) {
       STORAGE_LOG(WARN, "Failed to set skip scan range", K(ret));

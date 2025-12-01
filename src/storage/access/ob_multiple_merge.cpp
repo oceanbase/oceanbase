@@ -102,6 +102,9 @@ ObMultipleMerge::~ObMultipleMerge()
     access_ctx_->stmt_allocator_->free(di_base_sstable_row_scanner_);
     di_base_sstable_row_scanner_ = nullptr;
   }
+  if (OB_UNLIKELY(nullptr != access_ctx_ && nullptr != access_ctx_->truncate_part_filter_)) {
+    access_ctx_->truncate_part_filter_->uncombined_from_pd_filter();
+  }
 }
 
 int ObMultipleMerge::init(
@@ -1733,6 +1736,9 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
         access_ctx_->is_inc_major_query_ = true;
         if (table_ptr->is_column_store_sstable()) {
           access_ctx_->query_flag_.set_not_use_row_cache();
+        }
+        if (!table_ptr->is_inc_major_type_sstable()) {
+          access_param_->iter_param_.is_delete_insert_ = false;
         }
       }
       if (OB_FAIL(tables_.push_back(table_ptr))) {

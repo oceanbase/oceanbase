@@ -382,7 +382,8 @@ int ObDDLReplicaBuildExecutor::update_build_progress(
     const int64_t row_scanned,
     const int64_t row_inserted,
     const int64_t cg_row_inserted,
-    const int64_t physical_row_count)
+    const int64_t physical_row_count,
+    const bool allow_retry)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!tablet_id.is_valid() || !addr.is_valid())) {
@@ -401,7 +402,7 @@ int ObDDLReplicaBuildExecutor::update_build_progress(
         LOG_WARN("failed to get replica build ctx", K(ret), K(tablet_id), K(addr));
       } else if (is_found) {
         if (OB_FAIL(update_replica_build_ctx(*replica_build_ctx,
-                ret_code, row_scanned, row_inserted, cg_row_inserted, physical_row_count, false/*is_rpc_request*/,
+                ret_code, row_scanned, row_inserted, cg_row_inserted, physical_row_count, allow_retry, false/*is_rpc_request*/,
                 true/*is_observer_report*/))) {
           LOG_WARN("failed to update replica build ctx", K(ret), K(tablet_id), K(addr), K(ret_code));
         }
@@ -585,7 +586,7 @@ int ObDDLReplicaBuildExecutor::update_build_ctx(
     LOG_WARN("replica build executor not init", K(ret));
   } else if (OB_FAIL(update_replica_build_ctx(build_ctx, ret_code,
     result->row_scanned_, result->row_inserted_, result->cg_row_inserted_,
-    result->physical_row_count_, true/*is_rpc_request*/, false/*is_observer_report*/))) {
+    result->physical_row_count_, true/*allow_retry*/, true/*is_rpc_request*/, false/*is_observer_report*/))) {
     LOG_WARN("failed to update replica build ctx", K(ret));
   }
   return ret;
@@ -901,6 +902,7 @@ int ObDDLReplicaBuildExecutor::update_replica_build_ctx(
     const int64_t row_inserted,
     const int64_t cg_row_inserted,
     const int64_t physical_row_count,
+    const bool allow_retry,
     const bool is_rpc_request,
     const bool is_observer_report)
 {
@@ -927,7 +929,7 @@ int ObDDLReplicaBuildExecutor::update_replica_build_ctx(
       LOG_INFO("receive observer build success report", K(build_ctx.addr_),
           K(build_ctx.src_tablet_id_), K(build_ctx.dest_tablet_id_));
     }
-  } else if (ObIDDLTask::in_ddl_retry_white_list(ret_code)) {
+  } else if (allow_retry && ObIDDLTask::in_ddl_retry_white_list(ret_code)) {
     build_ctx.ret_code_ = OB_SUCCESS;
     build_ctx.row_inserted_ = 0;
     build_ctx.cg_row_inserted_ = 0;
