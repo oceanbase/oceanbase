@@ -920,7 +920,10 @@ int ObPLContext::implicit_end_trans(
 {
   int ret = OB_SUCCESS;
   DISABLE_SQL_MEMLEAK_GUARD;
-  can_async = can_async && (nullptr == session_info.get_pl_profiler()) && (nullptr == session_info.get_pl_code_coverage());
+  bool has_temp_table = session_info.get_has_temp_table_flag() || session_info.has_tx_level_temp_table();
+  can_async = can_async
+              && (nullptr == session_info.get_pl_profiler()) && (nullptr == session_info.get_pl_code_coverage())
+              && !has_temp_table;
   bool is_async = false;
   if (session_info.is_in_transaction()) {
     is_async = !is_rollback && ctx.is_end_trans_async() && can_async;
