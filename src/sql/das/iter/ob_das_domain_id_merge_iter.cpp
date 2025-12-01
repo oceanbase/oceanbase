@@ -346,13 +346,42 @@ int ObDASDomainIdMergeIter::inner_get_next_rows(int64_t &count, int64_t capacity
   return ret;
 }
 
+int ObDASDomainIdMergeIter::check_is_need_multi_get()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t k = 0; OB_SUCC(ret) && k < rowkey_domain_scan_params_.count(); k++) {
+      bool is_emb_vec = false;
+      ObVectorIndexSyncIntervalType sync_interval_type = ObVectorIndexSyncIntervalType::VSIT_MAX;
+      storage::ObTableScanParam& scan_param = *rowkey_domain_scan_params_.at(k);
+      if (OB_FAIL(check_is_emb_vec_domain_by_table_id(scan_param.index_id_, is_emb_vec))) {
+        LOG_WARN("fail to check is emb vec domain", K(ret), K(scan_param.index_id_));
+      } if (is_emb_vec) { // hybrid vector index mode
+        if (OB_FAIL(get_sync_interval_type(scan_param.index_id_, sync_interval_type))) {
+          LOG_WARN("fail to get sync interval type", K(ret), K(scan_param.index_id_));
+        } else if (sync_interval_type == ObVectorIndexSyncIntervalType::VSIT_MAX) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("hybrid vector index should have sync interval type", K(ret), K(scan_param.index_id_), K(sync_interval_type));
+        } else {
+          is_need_multi_get_ = is_need_multi_get_ == true ? true : sync_interval_type != ObVectorIndexSyncIntervalType::VSIT_IMMEDIATE;
+          const ObExprPtrIArray *op_filters = data_table_iter_->get_scan_param().op_filters_;
+          if (OB_NOT_NULL(op_filters) && !op_filters->empty()) {
+            is_need_multi_get_ = true;
+          }
+        }
+      }
+  }
+  return ret;
+}
+
 int ObDASDomainIdMergeIter::build_rowkey_domain_range()
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(data_table_iter_) || OB_ISNULL(data_table_ctdef_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpeted error, data table iter or ctdef is nullptr", K(ret), KP(data_table_iter_), KP(data_table_ctdef_));
-  } else {
+  } else if (OB_FAIL(check_is_need_multi_get())) {
+    LOG_WARN("faile to check is need mutil get", K(ret));
+  } else if (!is_need_multi_get_) {
     const common::ObIArray<common::ObNewRange> &key_ranges = data_table_iter_->get_scan_param().key_ranges_;
     const common::ObIArray<common::ObNewRange> &ss_key_ranges = data_table_iter_->get_scan_param().ss_key_ranges_;
     for (int64_t k = 0; OB_SUCC(ret) && k < rowkey_domain_scan_params_.count(); k++) {
@@ -368,7 +397,6 @@ int ObDASDomainIdMergeIter::build_rowkey_domain_range()
         } else if (OB_FAIL(check_use_rowkey_vid_tbl_by_table_id(data_table_iter_->get_scan_param().index_id_, use_rowkey_vid_tbl))) {
           LOG_WARN("fail to check use rowkey vid", K(ret), K(data_table_iter_->get_scan_param().index_id_));
         }
-
         for (int64_t i = 0; OB_SUCC(ret) && i < key_ranges.count(); ++i) {
           ObNewRange key_range = key_ranges.at(i);
           key_range.table_id_ = scan_param.index_id_;
@@ -421,23 +449,9 @@ int ObDASDomainIdMergeIter::build_rowkey_domain_range()
               }
             }
           }
-          ObVectorIndexSyncIntervalType sync_interval_type = ObVectorIndexSyncIntervalType::VSIT_MAX;
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(scan_param.key_ranges_.push_back(key_range))) {
             LOG_WARN("fail to push back key range for rowkey domain scan param", K(ret), K(key_range));
-          } else if (is_emb_vec) { // hybrid vector index mode
-            if (OB_FAIL(get_sync_interval_type(scan_param.index_id_, sync_interval_type))) {
-              LOG_WARN("fail to get sync interval type", K(ret), K(scan_param.index_id_));
-            } else if (sync_interval_type == ObVectorIndexSyncIntervalType::VSIT_MAX) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("hybrid vector index should have sync interval type", K(ret), K(scan_param.index_id_), K(sync_interval_type));
-            } else {
-              is_need_multi_get_ = is_need_multi_get_ == true ? true : sync_interval_type != ObVectorIndexSyncIntervalType::VSIT_IMMEDIATE;
-              const ObExprPtrIArray *op_filters = data_table_iter_->get_scan_param().op_filters_;
-              if (OB_NOT_NULL(op_filters) && !op_filters->empty()) {
-                is_need_multi_get_ = true;
-              }
-            }
           }
         }
         for (int64_t i = 0; OB_SUCC(ret) && i < ss_key_ranges.count(); ++i) {
