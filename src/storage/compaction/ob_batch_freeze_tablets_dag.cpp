@@ -34,6 +34,61 @@ int ObBatchFreezeTabletsDag::inner_init()
   return ret;
 }
 
+int64_t ObBatchFreezeTabletsParam::to_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(param_type), K_(ls_id), K_(compaction_scn), K_(batch_size), K_(loop_cnt));
+  if (tablet_info_array_.count() > 0) {
+    J_COMMA();
+    J_NAME("tablet_info_array");
+    J_COLON();
+    J_ARRAY_START();
+    int64_t last_schedule_merge_scn = -1;
+    int64_t last_co_major_merge_type = -1;
+    for (int64_t i = 0; i < tablet_info_array_.count(); ++i) {
+      const ObTabletSchedulePair &tablet_pair = tablet_info_array_.at(i);
+      if (i != 0) {
+        J_COMMA();
+      }
+      J_OBJ_START();
+      J_KV("tablet_id", tablet_pair.tablet_id_);
+      // check schedule_merge_scn and co_major_merge_type is same with last one
+      if (tablet_pair.schedule_merge_scn_ != last_schedule_merge_scn &&
+          tablet_pair.co_major_merge_type_ != last_co_major_merge_type) {
+        // if different, print full schedule_merge_scn and co_major_merge_type
+        J_COMMA();
+        J_KV("schedule_merge_scn", tablet_pair.schedule_merge_scn_, "co_major_merge_type", tablet_pair.co_major_merge_type_);
+        last_schedule_merge_scn = tablet_pair.schedule_merge_scn_;
+        last_co_major_merge_type = tablet_pair.co_major_merge_type_;
+      }
+      // else only print tablet_id
+      J_OBJ_END();
+    }
+    J_ARRAY_END();
+  }
+  J_OBJ_END();
+  return pos;
+}
+bool ObBatchFreezeTabletsDag::operator == (const ObIDag &other) const
+{
+  bool is_same = true;
+  if (this == &other) {
+    // same
+  } else if (get_type() != other.get_type()) {
+    is_same = false;
+  } else {
+    const ObBatchFreezeTabletsDag &other_dag = static_cast<const ObBatchFreezeTabletsDag &>(other);
+    if ((get_param().ls_id_ != other_dag.get_param().ls_id_)
+        || (get_param().compaction_scn_ != other_dag.get_param().compaction_scn_)) {
+      is_same = false;
+    } else {
+      // to ensure dag with same loop_cnt is not same
+      is_same = get_param().loop_cnt_ != other_dag.get_param().loop_cnt_;
+    }
+  }
+  return is_same;
+}
 /*
  *  ----------------------------------------ObBatchFreezeTabletsTask--------------------------------------------
  */

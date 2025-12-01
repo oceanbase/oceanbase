@@ -24,7 +24,8 @@ struct ObScheduleTabletFunc final : public ObBasicScheduleTabletFunc
 {
   ObScheduleTabletFunc(
     const int64_t merge_version,
-    const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason = ObAdaptiveMergePolicy::NONE);
+    const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason = ObAdaptiveMergePolicy::NONE,
+    const int64_t loop_cnt = 0);
   virtual ~ObScheduleTabletFunc() {}
   int schedule_tablet(
     storage::ObTabletHandle &tablet_handle,
@@ -35,6 +36,7 @@ struct ObScheduleTabletFunc final : public ObBasicScheduleTabletFunc
   const ObTabletStatusCache &get_tablet_status() const { return tablet_status_; }
   virtual const ObCompactionTimeGuard &get_time_guard() const override { return time_guard_; }
   int diagnose_switch_tablet(storage::ObLS &ls, const storage::ObTablet &tablet);
+  void set_loop_cnt(const int64_t loop_cnt) { loop_cnt_ = loop_cnt; }
   INHERIT_TO_STRING_KV("ObScheduleTabletFunc", ObBasicScheduleTabletFunc,
     K_(merge_reason), K_(tablet_status), K_(time_guard));
 private:
