@@ -1205,12 +1205,14 @@ int ObJsonExprHelper::find_and_add_schema_cache(ObJsonSchemaCache* schema_cache,
   return ret;
 }
 
-int ObJsonExprHelper::find_and_add_cache(ObJsonPathCache* path_cache, ObJsonPath*& res_path,
-                                         ObString& path_str, int arg_idx, bool enable_wildcard,
-                                         bool is_const)
+int ObJsonExprHelper::find_and_add_cache(
+    ObIAllocator &allocator,
+    ObJsonPathCache* path_cache, ObJsonPath*& res_path,
+    ObString& path_str, int arg_idx, bool enable_wildcard,
+    bool is_const)
 {
   INIT_SUCC(ret);
-  if (OB_FAIL(path_cache->find_and_add_cache(res_path, path_str, arg_idx, is_const))) {
+  if (OB_FAIL(path_cache->find_and_add_cache(allocator, res_path, path_str, arg_idx, is_const))) {
     ret = OB_ERR_INVALID_JSON_PATH;
     LOG_USER_ERROR(OB_ERR_INVALID_JSON_PATH);
   } else if (!enable_wildcard && res_path->can_match_many()) {
