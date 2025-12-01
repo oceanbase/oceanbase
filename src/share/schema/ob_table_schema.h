@@ -36,6 +36,7 @@
 #include "share/storage_cache_policy/ob_storage_cache_common.h"
 #include "storage/ob_micro_block_format_version_helper.h"
 #include "share/semistruct/ob_semistruct_properties.h"
+#include "storage/compaction_ttl/ob_ttl_filter_info.h"
 namespace oceanbase
 {
 
@@ -1678,6 +1679,8 @@ public:
   inline ObViewSchema &get_view_schema() { return view_schema_; }
   inline const ObViewSchema &get_view_schema() const { return view_schema_; }
   inline const common::ObString &get_ttl_definition() const { return ttl_definition_; }
+  inline ObTTLFlag get_ttl_flag() const { return ttl_flag_; }
+  inline void set_ttl_flag(const ObTTLFlag ttl_flag) { ttl_flag_ = ttl_flag; }
   inline const common::ObString &get_kv_attributes() const { return kv_attributes_; }
   inline const common::ObString &get_index_params() const { return index_params_; }
   inline const common::ObString &get_exec_env() const { return exec_env_; }
@@ -2481,6 +2484,7 @@ protected:
   common::ObString external_sub_path_;
   uint64_t tmp_mlog_tid_;
   common::ObString semistruct_properties_;
+  ObTTLFlag ttl_flag_;
 };
 
 class ObPrintableTableSchema final : public ObTableSchema

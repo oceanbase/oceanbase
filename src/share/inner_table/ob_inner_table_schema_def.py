@@ -332,6 +332,7 @@ all_table_def = dict(
       ('semistruct_properties', 'longtext', 'false', ''),
       ('mview_expand_definition', 'longtext', 'false', ''), #placeholder for mview in 4353
       ('fts_index_type', 'int', 'false', '0'),
+      ('ttl_flag', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'false', '\\x01'),
     ],
 )
 

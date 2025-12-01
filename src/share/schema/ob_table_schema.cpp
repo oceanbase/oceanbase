@@ -1789,7 +1789,8 @@ ObTableSchema::ObTableSchema(ObIAllocator *allocator)
     storage_cache_policy_(),
     semistruct_encoding_type_(),
     dynamic_partition_policy_(),
-    semistruct_properties_()
+    semistruct_properties_(),
+    ttl_flag_()
 {
   reset();
 }
@@ -7508,7 +7509,8 @@ int64_t ObTableSchema::to_string(char *buf, const int64_t buf_len) const
     K_(semistruct_encoding_type),
     K_(dynamic_partition_policy),
     K_(semistruct_properties),
-    K_(micro_block_format_version));
+    K_(micro_block_format_version),
+    K_(ttl_flag));
   J_OBJ_END();
 
   return pos;
@@ -7714,6 +7716,7 @@ OB_DEF_SERIALIZE(ObTableSchema)
   OB_UNIS_ENCODE(micro_block_format_version_);
   OB_UNIS_ENCODE(tmp_mlog_tid_);
   OB_UNIS_ENCODE(semistruct_properties_);
+  OB_UNIS_ENCODE(ttl_flag_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7965,6 +7968,7 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   OB_UNIS_DECODE(micro_block_format_version_);
   OB_UNIS_DECODE(tmp_mlog_tid_);
   OB_UNIS_DECODE_AND_FUNC(semistruct_properties_, deep_copy_str);
+  OB_UNIS_DECODE(ttl_flag_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -8116,6 +8120,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(micro_block_format_version_);
   OB_UNIS_ADD_LEN(tmp_mlog_tid_);
   OB_UNIS_ADD_LEN(semistruct_properties_);
+  OB_UNIS_ADD_LEN(ttl_flag_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
