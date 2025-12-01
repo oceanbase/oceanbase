@@ -2774,3 +2774,8 @@ DEF_BOOL(_enable_sql_ccl_rule, OB_TENANT_PARAMETER, "True",
 DEF_INT(approx_count_distinct_precision, OB_TENANT_PARAMETER, "10", "[4, 16]",
         "specify the result accuracy of approx_count_distinct",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+ERRSIM_DEF_INT(errsim_backup_override_start_scn, OB_CLUSTER_PARAMETER, "0", "[0,)",
+        "override backup start scn in errsim"
+        "Range: [0,) in integer",
+        ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
