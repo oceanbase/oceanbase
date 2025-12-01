@@ -38,13 +38,10 @@ OB_INLINE int cosine_calculate_normal(const float *a, const float *b, const int6
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < len; ++i) {
+    // if overflow, return `inf` is normal
     ip += a[i] * b[i];
     abs_dist_a += a[i] * a[i];
     abs_dist_b += b[i] * b[i];
-    if (OB_UNLIKELY(0 != ::isinf(ip) || 0 != ::isinf(abs_dist_a) || 0 != ::isinf(abs_dist_b))) {
-      ret = OB_NUMERIC_OVERFLOW;
-      LIB_LOG(WARN, "value is overflow", K(ret), K(ip), K(abs_dist_a), K(abs_dist_b));
-    }
   }
   return ret;
 }
@@ -53,13 +50,10 @@ OB_INLINE int cosine_calculate_normal(const uint8_t *a, const uint8_t *b, const 
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < len; ++i) {
+    // if overflow, return `inf` is normal
     ip += a[i] * b[i];
     abs_dist_a += a[i] * a[i];
     abs_dist_b += b[i] * b[i];
-    if (OB_UNLIKELY(0 != ::isinf(ip) || 0 != ::isinf(abs_dist_a) || 0 != ::isinf(abs_dist_b))) {
-      ret = OB_NUMERIC_OVERFLOW;
-      LIB_LOG(WARN, "value is overflow", K(ret), K(ip), K(abs_dist_a), K(abs_dist_b));
-    }
   }
   return ret;
 }
@@ -430,6 +424,135 @@ inline static int cosine_similarity(const float *a, const float *b, const int64_
   return ret;
 }
 )
+
+#if defined(__aarch64__)
+inline static int cosine_similarity_neon(const float *a, const float *b, const int64_t len, double &similarity) {
+  int ret = OB_SUCCESS;
+
+  float32x4_t sum_ip = vdupq_n_f32(0.0f);
+  float32x4_t sum_a = vdupq_n_f32(0.0f);
+  float32x4_t sum_b = vdupq_n_f32(0.0f);
+
+  int64_t dim = len;
+  int64_t d = len;
+
+  while (d >= 16) {
+    float32x4x4_t va = vld1q_f32_x4(a + dim - d);
+    float32x4x4_t vb = vld1q_f32_x4(b + dim - d);
+
+    float32x4x4_t vip;
+    vip.val[0] = vmulq_f32(va.val[0], vb.val[0]);
+    vip.val[1] = vmulq_f32(va.val[1], vb.val[1]);
+    vip.val[2] = vmulq_f32(va.val[2], vb.val[2]);
+    vip.val[3] = vmulq_f32(va.val[3], vb.val[3]);
+
+    float32x4x4_t va2;
+    va2.val[0] = vmulq_f32(va.val[0], va.val[0]);
+    va2.val[1] = vmulq_f32(va.val[1], va.val[1]);
+    va2.val[2] = vmulq_f32(va.val[2], va.val[2]);
+    va2.val[3] = vmulq_f32(va.val[3], va.val[3]);
+
+    float32x4x4_t vb2;
+    vb2.val[0] = vmulq_f32(vb.val[0], vb.val[0]);
+    vb2.val[1] = vmulq_f32(vb.val[1], vb.val[1]);
+    vb2.val[2] = vmulq_f32(vb.val[2], vb.val[2]);
+    vb2.val[3] = vmulq_f32(vb.val[3], vb.val[3]);
+
+    // 折叠4矢量
+    vip.val[0] = vaddq_f32(vip.val[0], vip.val[1]);
+    vip.val[2] = vaddq_f32(vip.val[2], vip.val[3]);
+    vip.val[0] = vaddq_f32(vip.val[0], vip.val[2]);
+
+    va2.val[0] = vaddq_f32(va2.val[0], va2.val[1]);
+    va2.val[2] = vaddq_f32(va2.val[2], va2.val[3]);
+    va2.val[0] = vaddq_f32(va2.val[0], va2.val[2]);
+
+    vb2.val[0] = vaddq_f32(vb2.val[0], vb2.val[1]);
+    vb2.val[2] = vaddq_f32(vb2.val[2], vb2.val[3]);
+    vb2.val[0] = vaddq_f32(vb2.val[0], vb2.val[2]);
+
+    sum_ip = vaddq_f32(sum_ip, vip.val[0]);
+    sum_a = vaddq_f32(sum_a, va2.val[0]);
+    sum_b = vaddq_f32(sum_b, vb2.val[0]);
+
+    d -= 16;
+  }
+
+  if (d >= 8) {
+    float32x4x2_t va = vld1q_f32_x2(a + dim - d);
+    float32x4x2_t vb = vld1q_f32_x2(b + dim - d);
+
+    float32x4x2_t vip;
+    vip.val[0] = vmulq_f32(va.val[0], vb.val[0]);
+    vip.val[1] = vmulq_f32(va.val[1], vb.val[1]);
+    vip.val[0] = vaddq_f32(vip.val[0], vip.val[1]);
+
+    float32x4x2_t va2;
+    va2.val[0] = vmulq_f32(va.val[0], va.val[0]);
+    va2.val[1] = vmulq_f32(va.val[1], va.val[1]);
+    va2.val[0] = vaddq_f32(va2.val[0], va2.val[1]);
+
+    float32x4x2_t vb2;
+    vb2.val[0] = vmulq_f32(vb.val[0], vb.val[0]);
+    vb2.val[1] = vmulq_f32(vb.val[1], vb.val[1]);
+    vb2.val[0] = vaddq_f32(vb2.val[0], vb2.val[1]);
+
+    sum_ip = vaddq_f32(sum_ip, vip.val[0]);
+    sum_a = vaddq_f32(sum_a, va2.val[0]);
+    sum_b = vaddq_f32(sum_b, vb2.val[0]);
+
+    d -= 8;
+  }
+
+  if (d >= 4) {
+    float32x4_t va = vld1q_f32(a + dim - d);
+    float32x4_t vb = vld1q_f32(b + dim - d);
+
+    float32x4_t vip = vmulq_f32(va, vb);
+    float32x4_t va2 = vmulq_f32(va, va);
+    float32x4_t vb2 = vmulq_f32(vb, vb);
+
+    sum_ip = vaddq_f32(sum_ip, vip);
+    sum_a = vaddq_f32(sum_a, va2);
+    sum_b = vaddq_f32(sum_b, vb2);
+
+    d -= 4;
+  }
+
+  float32x4_t res_a = vdupq_n_f32(0.0f);
+  float32x4_t res_b = vdupq_n_f32(0.0f);
+  if (d >= 3) {
+    res_a = vld1q_lane_f32(a + dim - d, res_a, 2);
+    res_b = vld1q_lane_f32(b + dim - d, res_b, 2);
+    d -= 1;
+  }
+  if (d >= 2) {
+    res_a = vld1q_lane_f32(a + dim - d, res_a, 1);
+    res_b = vld1q_lane_f32(b + dim - d, res_b, 1);
+    d -= 1;
+  }
+  if (d >= 1) {
+    res_a = vld1q_lane_f32(a + dim - d, res_a, 0);
+    res_b = vld1q_lane_f32(b + dim - d, res_b, 0);
+    d -= 1;
+  }
+
+  sum_ip = vaddq_f32(sum_ip, vmulq_f32(res_a, res_b));
+  sum_a = vaddq_f32(sum_a, vmulq_f32(res_a, res_a));
+  sum_b = vaddq_f32(sum_b, vmulq_f32(res_b, res_b));
+
+  double ip = vaddvq_f32(sum_ip);
+  double abs_dist_a = vaddvq_f32(sum_a);
+  double abs_dist_b = vaddvq_f32(sum_b);
+
+  if (0 == abs_dist_a || 0 == abs_dist_b) {
+    ret = OB_ERR_NULL_VALUE;
+  } else {
+    similarity = ip / (sqrt(abs_dist_a * abs_dist_b));
+  }
+  return ret;
+}
+#endif
 
 } // common
 } // oceanbase

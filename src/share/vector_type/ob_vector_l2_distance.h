@@ -78,12 +78,9 @@ OB_INLINE static int l2_square_normal(const float *a, const float *b, const int6
   double sum = 0;
   double diff = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < len; ++i) {
+    // diff and sum are both double, no need to consider overflow
     diff = a[i] - b[i];
     sum += (diff * diff);
-    if (OB_UNLIKELY(0 != ::isinf(sum))) {
-      ret = OB_NUMERIC_OVERFLOW;
-      LIB_LOG(WARN, "value is overflow", K(ret), K(diff), K(sum));
-    }
   }
   if (OB_SUCC(ret)) {
     square = sum;
