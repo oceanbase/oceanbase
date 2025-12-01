@@ -257,14 +257,16 @@ int ObCGTileScanner::get_next_rows(uint64_t &count, const uint64_t capacity)
         ret = OB_SUCCESS;
       }
     }
+    uint64_t target_row_count = count;
     for (int64_t i = 1; OB_SUCC(ret) && i < cg_scanners_.count(); ++i) {
+      uint64_t got_count = target_row_count;
       if (OB_ISNULL(cg_scanner = cg_scanners_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected null cg scanner", K(ret), K(i));
       } else if (is_valid_cg_row_scanner(cg_scanner->get_type())) {
-        ret = get_next_aligned_rows(static_cast<ObCGRowScanner*>(cg_scanner), count);
+        ret = get_next_aligned_rows(static_cast<ObCGRowScanner*>(cg_scanner), target_row_count);
       } else {
-        ret = cg_scanner->get_next_rows(count, capacity);
+        ret = cg_scanner->get_next_rows(got_count, target_row_count);
       }
       if (OB_FAIL(ret)) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
@@ -272,6 +274,10 @@ int ObCGTileScanner::get_next_rows(uint64_t &count, const uint64_t capacity)
         } else {
           ret = OB_SUCCESS;
         }
+      }
+      if (OB_SUCC(ret) && OB_UNLIKELY(got_count != target_row_count)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected row count", K(ret), K(got_count), K(target_row_count), KPC(cg_scanner));
       }
     }
     if (OB_SUCC(ret) && first_scanner_end) {
