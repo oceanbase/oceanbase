@@ -824,7 +824,7 @@ int ObSchemaPrinter::print_table_definition_indexes(const ObTableSchema &table_s
       // Do not print global index.
     } else if (index_schema->is_built_in_index()) {
       // For full-text or vector index search index, only inverted table can be printed, and others table will not be printed.
-    } else if (index_schema->is_vec_index() && index_schema->get_index_status() != INDEX_STATUS_AVAILABLE) {
+    } else if (index_schema->is_vec_index() && !ObVectorIndexUtil::check_index_is_all_ready(schema_guard_, table_schema, *index_schema)) {
       // Not show vec index which in unavaliable status
     } else if (OB_FAIL(print_single_index_definition(index_schema, table_schema, arena_allocator,
                        buf, buf_len, pos, is_unique_index, is_oracle_mode, false, sql_mode, tz_info))) {
