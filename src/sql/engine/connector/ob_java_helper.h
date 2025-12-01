@@ -23,7 +23,6 @@
 
 #include "lib/oblog/ob_log_module.h"
 #include "lib/string/ob_string.h"
-#include "lib/allocator/page_arena.h"
 #include "common/ob_common_utility.h"
 #include "ob_java_native_method.h"
 #include "lib/lock/ob_mutex.h"
@@ -312,8 +311,6 @@ private:
 private:
   bool is_inited_;
   static thread_local JNIEnv *jni_env_;
-
-  common::ObArenaAllocator allocator_;
 
   jclass object_class_;
   jclass object_array_class_;

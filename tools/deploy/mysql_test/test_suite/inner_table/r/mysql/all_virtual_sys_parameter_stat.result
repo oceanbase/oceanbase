@@ -505,6 +505,7 @@ _no_logging
 _object_storage_io_timeout
 _obkv_enable_distributed_execution
 _obkv_feature_mode
+_ob_additional_lib_path
 _ob_ash_disk_write_enable
 _ob_ash_enable
 _ob_ash_size
