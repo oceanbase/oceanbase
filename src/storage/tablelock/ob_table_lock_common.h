@@ -75,21 +75,46 @@ static const unsigned char compatibility_matrix[] = { 0x0, /* EXCLUSIVE    : 000
 static inline
 int lock_mode_to_string(const ObTableLockMode lock_mode,
                         char *str,
-                        const int64_t str_len)
+                        const int64_t str_len,
+                        const bool in_short = true)
 {
   int ret = OB_SUCCESS;
   if (NO_LOCK == lock_mode) {
-    strncpy(str ,"N", str_len);
+    if (in_short) {
+      strncpy(str, "N", str_len);
+    } else {
+      strncpy(str, "NO_LOCK", str_len);
+    }
   } else if (ROW_SHARE == lock_mode) {
-    strncpy(str ,"RS", str_len);
+    if (in_short) {
+      strncpy(str, "RS", str_len);
+    } else {
+      strncpy(str, "ROW SHARE", str_len);
+    }
   } else if (ROW_EXCLUSIVE == lock_mode) {
-    strncpy(str ,"RX", str_len);
+    if (in_short) {
+      strncpy(str, "RX", str_len);
+    } else {
+      strncpy(str, "ROW EXCLUSIVE", str_len);
+    }
   } else if (SHARE == lock_mode) {
-    strncpy(str ,"S", str_len);
+    if (in_short) {
+      strncpy(str, "S", str_len);
+    } else {
+      strncpy(str, "SHARE", str_len);
+    }
   } else if (SHARE_ROW_EXCLUSIVE == lock_mode) {
-    strncpy(str ,"SRX", str_len);
+    if (in_short) {
+      strncpy(str, "SRX", str_len);
+    } else {
+      strncpy(str, "SHARE ROW EXCLUSIVE", str_len);
+    }
   } else if (EXCLUSIVE == lock_mode) {
-    strncpy(str ,"X", str_len);
+    if (in_short) {
+      strncpy(str, "X", str_len);
+    } else {
+      strncpy(str, "EXCLUSIVE", str_len);
+    }
   } else {
     ret = OB_INVALID_ARGUMENT;
   }

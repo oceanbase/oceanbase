@@ -29,6 +29,7 @@ void ObPhyPlanHint::reset()
   log_level_.reset();
   parallel_ = -1;
   monitor_ = false;
+  table_lock_mode_ = 0;
 }
 
 OB_SERIALIZE_MEMBER(ObPhyPlanHint,
@@ -38,7 +39,8 @@ OB_SERIALIZE_MEMBER(ObPhyPlanHint,
                     force_trace_log_,
                     log_level_,
                     parallel_,
-                    monitor_);
+                    monitor_,
+                    table_lock_mode_);
 
 int ObPhyPlanHint::deep_copy(const ObPhyPlanHint &other, ObIAllocator &allocator)
 {
@@ -49,6 +51,7 @@ int ObPhyPlanHint::deep_copy(const ObPhyPlanHint &other, ObIAllocator &allocator
   force_trace_log_ = other.force_trace_log_;
   parallel_ = other.parallel_;
   monitor_ = other.monitor_;
+  table_lock_mode_ = other.table_lock_mode_;
   if (OB_FAIL(ob_write_string(allocator, other.log_level_, log_level_))) {
     LOG_WARN("Failed to deep copy log level", K(ret));
   }
@@ -310,6 +313,25 @@ void ObGlobalHint::merge_read_consistency_hint(ObConsistencyLevel read_consisten
   }
 }
 
+void ObGlobalHint::merge_table_lock_mode_hint(int64_t table_lock_mode)
+{
+  const ObTableLockMode input_table_lock_mode = static_cast<ObTableLockMode>(table_lock_mode);
+  const ObTableLockMode curr_table_lock_mode = static_cast<ObTableLockMode>(table_lock_mode_);
+
+  if (NO_LOCK != table_lock_mode) {
+    if (NO_LOCK == table_lock_mode_) {
+      table_lock_mode_ = table_lock_mode;
+    } else if (is_equal_or_greater_lock_mode(curr_table_lock_mode, input_table_lock_mode)) {
+      // do nothing
+      LOG_INFO("current table_lock_mode is equal or greater than the merge table_lock_mode, ignore it",
+               K(table_lock_mode_),
+               K(table_lock_mode));
+    } else {
+      table_lock_mode_ = table_lock_mode;
+    }
+  }
+}
+
 void ObGlobalHint::merge_opt_features_version_hint(uint64_t opt_features_version)
 {
   if (is_valid_opt_features_version(opt_features_version)) {
@@ -331,6 +353,7 @@ void ObGlobalHint::reset()
   max_concurrent_ = UNSET_MAX_CONCURRENT;
   enable_lock_early_release_ = false;
   force_refresh_lc_ = false;
+  table_lock_mode_ = 0;
   log_level_.reset();
   parallel_ = UNSET_PARALLEL;
   monitor_ = false;
@@ -381,6 +404,7 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
   merge_parallel_das_dml_hint(other.parallel_das_dml_option_);
   dblink_hints_ = other.dblink_hints_;
   merge_dynamic_sampling_hint(other.dynamic_sampling_);
+  merge_table_lock_mode_hint(other.table_lock_mode_);
   if (OB_FAIL(merge_monitor_hints(other.monitoring_ids_))) {
     LOG_WARN("failed to merge monitor hints", K(ret));
   } else if (OB_FAIL(merge_dop_hint(other.dops_))) {
@@ -578,6 +602,15 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
   }
   if (OB_SUCC(ret) && UNSET_MAX_CONCURRENT != max_concurrent_ && plan_text.is_used_hint_) { // MAX_CONCURRENT
     PRINT_GLOBAL_HINT_NUM("MAX_CONCURRENT", max_concurrent_);
+  }
+
+  if (OB_SUCC(ret) && 0 != table_lock_mode_) {  // TABLE_LOCK_MODE
+    char lock_mode_str[32];
+    if (OB_FAIL(lock_mode_to_string(table_lock_mode_, lock_mode_str, sizeof(lock_mode_str), false /*in_short*/))) {
+      LOG_WARN("get lock mode string failed", K(ret), K(table_lock_mode_));
+    } else if (OB_FAIL(BUF_PRINTF("%s%s(%s)", outline_indent, "TABLE_LOCK_MODE", lock_mode_str))) {
+      LOG_WARN("failed to print hint", K(ret), K(table_lock_mode_));
+    }
   }
   return ret;
 }
@@ -1177,6 +1210,7 @@ const char* ObHint::get_hint_name(ObItemType type, bool is_enable_hint /* defaul
     case T_PQ_GBY_HINT: return "PQ_GBY";
     case T_PQ_DISTINCT_HINT:  return "PQ_DISTINCT";
     case T_PUSH_SUBQ:         return is_enable_hint ? "PUSH_SUBQ" : "NO_PUSH_SUBQ";
+    case T_TABLE_LOCK_MODE_HINT: return "TABLE_LOCK_MODE";
     default:                    return NULL;
   }
 }

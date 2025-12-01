@@ -739,6 +739,7 @@ private:
   bool enable_replace_; // for incremental direct load
   bool insert_overwrite_; // for insert overwrite
   double online_sample_percent_; // for incremental direct load
+  bool is_online_gather_statistics_; // for incremental direct load
   bool need_switch_to_table_lock_worker_; // for table lock switch worker thread
   bool data_complement_gen_doc_id_;
 private:
@@ -748,6 +749,11 @@ private:
   common::ObSEArray<uint64_t, 1> dml_table_ids_;
   bool direct_load_need_sort_;
   uint64_t optimizer_features_enable_version_;
+  ObPxNodePolicy px_node_policy_;
+  common::ObFixedArray<common::ObAddr, common::ObIAllocator> px_node_addrs_;
+  int64_t px_node_count_;
+  int64_t px_worker_share_plan_enabled_;
+  bool extend_sql_plan_monitor_metrics_;
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

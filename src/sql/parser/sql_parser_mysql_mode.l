@@ -1010,6 +1010,9 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>WEAK  { return WEAK; }
 <hint>STRONG  { return STRONG; }
 <hint>FROZEN  { return FROZEN; }
+<hint>EXCLUSIVE { return EXCLUSIVE; }
+<hint>SHARE { return SHARE; }
+<hint>ROW { return ROW; }
 <hint>NONE  { return NONE; }
 <hint>DEFAULT  { return DEFAULT; }
 <hint>MAX_CONCURRENT { return MAX_CONCURRENT; }
@@ -1178,6 +1181,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>NO_DECORRELATE { return NO_DECORRELATE; }
 <hint>PQ_GBY { return PQ_GBY; }
 <hint>PQ_DISTINCT { return PQ_DISTINCT; }
+<hint>TABLE_LOCK_MODE { return TABLE_LOCK_MODE; }
 <hint>{identifier} {
   if (!(IS_FAST_PARAMETERIZE)) {
     check_value(yylval);

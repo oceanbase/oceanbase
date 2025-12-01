@@ -161,7 +161,7 @@ BEGIN_OUTLINE_DATA END_OUTLINE_DATA OPTIMIZER_FEATURES_ENABLE QB_NAME
 FROZEN_VERSION TOPK QUERY_TIMEOUT READ_CONSISTENCY LOG_LEVEL USE_PLAN_CACHE
 TRACE_LOG LOAD_BATCH_SIZE TRANS_PARAM OPT_PARAM OB_DDL_SCHEMA_VERSION FORCE_REFRESH_LOCATION_CACHE
 DISABLE_PARALLEL_DML ENABLE_PARALLEL_DML ENABLE_PARALLEL_DAS_DML DISABLE_PARALLEL_DAS_DML MONITOR NO_PARALLEL CURSOR_SHARING_EXACT
-MAX_CONCURRENT DOP TRACING NO_QUERY_TRANSFORMATION NO_COST_BASED_QUERY_TRANSFORMATION
+MAX_CONCURRENT DOP TRACING NO_QUERY_TRANSFORMATION NO_COST_BASED_QUERY_TRANSFORMATION TABLE_LOCK_MODE
 // transform hint
 NO_REWRITE MERGE_HINT NO_MERGE_HINT NO_EXPAND USE_CONCAT UNNEST NO_UNNEST
 PLACE_GROUP_BY NO_PLACE_GROUP_BY INLINE MATERIALIZE SEMI_TO_INNER NO_SEMI_TO_INNER
@@ -280,7 +280,7 @@ END_P SET_VAR DELIMITER
 
         EFFECTIVE EMPTY ENABLE ENABLE_ARBITRATION_SERVICE ENABLE_EXTENDED_ROWID ENCRYPT ENCRYPTED ENCRYPTION END ENDS ENFORCED ENGINE_ ENGINES ENUM ENTITY ERROR_CODE ERROR_P ERRORS ESTIMATE
         ESCAPE EVENT EVENTS EVERY EXCHANGE EXECUTE EXPANSION EXPIRE EXPIRE_INFO EXPORT OUTLINE EXTENDED
-        EXTENDED_NOADDR EXTENT_SIZE EXTRACT EXCEPT EXPIRED ENCODING EMPTY_FIELD_AS_NULL EXTERNAL EXTERNAL_STORAGE_DEST
+        EXTENDED_NOADDR EXTENT_SIZE EXTRACT EXCEPT EXPIRED ENCODING EMPTY_FIELD_AS_NULL EXTERNAL EXTERNAL_STORAGE_DEST EXCLUSIVE
 
         FAILOVER FAST FAULTS FILE_BLOCK_SIZE FIELDS FILEX FINAL_COUNT FIRST FIRST_VALUE FIXED FLUSH FOLLOWER FORMAT
         FOUND FREEZE FREQUENCY FUNCTION FOLLOWING FLASHBACK FULL FRAGMENTATION FROZEN FILE_ID
@@ -486,7 +486,7 @@ END_P SET_VAR DELIMITER
 %type <node> charset_introducer complex_string_literal literal number_literal now_or_signed_literal signed_literal
 %type <node> create_tablegroup_stmt drop_tablegroup_stmt alter_tablegroup_stmt default_tablegroup
 %type <node> set_transaction_stmt transaction_characteristics transaction_access_mode isolation_level
-%type <node> lock_tables_stmt unlock_tables_stmt lock_type lock_table_list lock_table opt_local
+%type <node> lock_tables_stmt unlock_tables_stmt lock_type lock_table_list lock_table opt_local lock_mode
 %type <node> flashback_stmt purge_stmt opt_flashback_rename_table opt_flashback_rename_database opt_flashback_rename_tenant
 %type <node> tenant_name_list opt_tenant_list tenant_list_tuple cache_type flush_scope opt_zone_list
 %type <node> into_opt into_clause field_opt field_term field_term_list line_opt line_term line_term_list into_var_list into_var
@@ -9834,6 +9834,10 @@ READ_CONSISTENCY '(' consistency_level ')'
   malloc_terminal_node($$, result->malloc_pool_, T_READ_CONSISTENCY);
   $$->value_ = $3[0];
 }
+| TABLE_LOCK_MODE '(' lock_mode ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_LOCK_MODE_HINT, 1, $3);
+}
 | QUERY_TIMEOUT '(' INTNUM ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_QUERY_TIMEOUT, 1, $3);
@@ -10763,6 +10767,44 @@ WEAK
 | FROZEN
 {
   $$[0] = 2;
+}
+;
+
+lock_mode:
+EXCLUSIVE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 1;
+}
+|
+SHARE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 2;
+}
+|
+SHARE ROW EXCLUSIVE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 6;
+}
+|
+ROW EXCLUSIVE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 4;
+}
+|
+ROW SHARE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 8;
+}
+|
+SHARE UPDATE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 8;
 }
 ;
 

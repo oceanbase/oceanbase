@@ -620,7 +620,8 @@ int ObTableLockService::unlock_tablet(const uint64_t table_id,
 
 int ObTableLockService::lock_table(ObTxDesc &tx_desc,
                                    const ObTxParam &tx_param,
-                                   const ObLockTableRequest &arg)
+                                   const ObLockTableRequest &arg,
+                                   const bool force_use_priority)
 {
   int ret = OB_SUCCESS;
 
@@ -646,6 +647,7 @@ int ObTableLockService::lock_table(ObTxDesc &tx_desc,
     ctx.lock_op_type_ = arg.op_type_;
     ctx.is_from_sql_ = arg.is_from_sql_;
     ctx.lock_priority_ = arg.lock_priority_;
+    ctx.is_enable_lock_priority_ = ctx.is_enable_lock_priority_ ? true : force_use_priority;
     ret = process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_);
     ret = rewrite_return_code_(ret, ctx.ret_code_before_end_stmt_or_tx_, ctx.is_from_sql_);
   }
@@ -700,8 +702,7 @@ int ObTableLockService::lock_tablet(ObTxDesc &tx_desc,
              K(tx_param.is_valid()), K(arg.is_valid()));
   } else {
     Thread::WaitGuard guard(Thread::WAIT);
-    ObTableLockCtx ctx(LOCK_TABLET, arg.table_id_,
-                       arg.timeout_us_, arg.timeout_us_);
+    ObTableLockCtx ctx(LOCK_TABLET, arg.table_id_, arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
     ctx.tx_desc_ = &tx_desc;
     ctx.tx_param_ = tx_param;

@@ -766,9 +766,8 @@ int ObAccessService::check_write_allowed_(
                                       // so it will lead to incorrect error
                                       lock_expired_ts))) {
       LOG_WARN("get lock param failed", K(ret), K(lock_id));
-    // When locking the table, the tablet is not detected to be deleted.
     } else if (OB_FAIL(ls->lock(ctx_guard.get_store_ctx(), lock_param))) {
-      LOG_WARN("lock tablet failed", K(ret), K(lock_param));
+        LOG_WARN("lock tablet failed", K(ret), K(lock_param), K(enable_table_lock), K(is_local_index_table));
     } else {
       // do nothing
     }
