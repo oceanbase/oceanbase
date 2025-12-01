@@ -403,20 +403,29 @@ int ObStorageObjectHandle::wait()
             get_data_size(), "expected_read_size", get_user_io_size());
   }
 
-  if (OB_SUCC(ret) && (!io_handle_.is_empty()) && (!io_handle_.is_limit_net_bandwidth_req())) { // check local io time
+  print_slow_local_io_info(ret);
+#ifdef OB_BUILD_SHARED_STORAGE
+  IGNORE_RETURN ss_update_object_type_rw_stat(macro_id_.storage_object_type(), ret, 1/*delta_cnt*/);
+#endif
+  return ret;
+}
+
+void ObStorageObjectHandle::print_slow_local_io_info(int ret_code) const
+{
+  int ret = OB_SUCCESS;
+  if ((OB_SUCCESS == ret_code) && (!io_handle_.is_empty()) && (!io_handle_.is_limit_net_bandwidth_req())) {
+    const int64_t MID_IO_TIME_US = 5 * 1000; // 5ms
     const int64_t SLOW_IO_TIME_US = 10 * 1000; // 10ms
     int tmp_ret = OB_SUCCESS;
     int64_t io_time_us = 0;
     if (OB_TMP_FAIL(io_handle_.get_io_time_us(io_time_us))) {
       LOG_WARN("fail to get io time", KR(tmp_ret));
     } else if (OB_UNLIKELY(io_time_us > SLOW_IO_TIME_US)) {
+      LOG_INFO("slow local io", K(io_time_us), KPC(this));
+    } else if (OB_UNLIKELY(io_time_us > MID_IO_TIME_US)) {
       LOG_TRACE("slow local io", K(io_time_us), KPC(this));
     }
   }
-#ifdef OB_BUILD_SHARED_STORAGE
-  IGNORE_RETURN ss_update_object_type_rw_stat(macro_id_.storage_object_type(), ret, 1/*delta_cnt*/);
-#endif
-  return ret;
 }
 
 int ObStorageObjectHandle::get_io_ret() const
