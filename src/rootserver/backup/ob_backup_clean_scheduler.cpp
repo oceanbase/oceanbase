@@ -1523,7 +1523,9 @@ int ObUserTenantBackupDeleteMgr::delete_rounds_placeholders_(const ObArray<ObBac
   int ret = OB_SUCCESS;
   common::hash::ObHashMap<int64_t, ObBackupPathString> round_id_to_backup_path;
   ObArray<int64_t> round_ids;  // round ids to delete
-  if (OB_FAIL(round_id_to_backup_path.create(task_attrs.count(), "round_map"))) {
+  if (task_attrs.empty()) {
+    // do nothing
+  } else if (OB_FAIL(round_id_to_backup_path.create(task_attrs.count(), "round_map"))) {
     LOG_WARN("failed to create round_id_to_backup_path map", K(ret));
   } else if (OB_FAIL(get_round_range_to_delete_(task_attrs, round_ids, round_id_to_backup_path))) {
     LOG_WARN("failed to get round range to delete", K(ret));
