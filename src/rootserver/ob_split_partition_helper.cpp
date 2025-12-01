@@ -147,6 +147,8 @@ int ObSplitPartitionHelper::check_allow_split(
   }
 
   if (OB_FAIL(ret)) {
+  } else if (table_schema.is_global_index_table()) {
+    // global index table doesn't have columnstore replica
   } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
     LOG_WARN("failed to get tenant schema", K(ret));
   } else if (OB_FAIL(tenant_schema->get_zone_replica_attr_array(zone_locality))) {
