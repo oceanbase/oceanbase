@@ -51,8 +51,8 @@ int ObLSGroupStat::assign(const ObLSGroupStat &other)
     reset();
     if (OB_FAIL(current_unit_list_.assign(other.current_unit_list_))) {
       LOG_WARN("failed to assign unit list", KR(ret), K(other));
-    } else if (OB_FAIL(ls_info_set_.add_members(other.ls_info_set_))) {
-      LOG_WARN("failed to add members", KR(ret), K(other));
+    } else if (OB_FAIL(ls_info_list_.assign(other.ls_info_list_))) {
+      LOG_WARN("failed to assign ls info list", KR(ret), K(other));
     } else if (OB_FAIL(ug_ids_.assign(other.ug_ids_))) {
       LOG_WARN("failed to assign ug id", KR(ret), K(other));
     } else if (OB_FAIL(target_unit_list_.assign(other.target_unit_list_))) {
@@ -64,33 +64,37 @@ int ObLSGroupStat::assign(const ObLSGroupStat &other)
   return ret;
 }
 
-int ObLSGroupStat::add_ls_status(const int64_t ls_info_index)
+int ObLSGroupStat::add_ls_status(share::ObLSStatusInfo *ls_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(0 > ls_info_index)) {
+  if (OB_ISNULL(ls_info) || !ls_info->is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("ls index is invalid", KR(ret), K(ls_info_index));
-  } else if (ls_info_set_.has_member(ls_info_index)) {
+    LOG_WARN("ls info is invalid", KR(ret), KP(ls_info));
+  } else if (has_exist_in_array(ls_info_list_, ls_info)) {
     ret = OB_ENTRY_EXIST;
-    LOG_WARN("ls already exist", KR(ret), K(ls_info_index));
-  } else if (OB_FAIL(ls_info_set_.add_member(ls_info_index))) {
-    LOG_WARN("failed to add member", KR(ret), K(ls_info_index));
+    LOG_WARN("ls already exist", KR(ret), KPC(ls_info));
+  } else if (OB_FAIL(ls_info_list_.push_back(ls_info))) {
+    LOG_WARN("failed to add member", KR(ret), KPC(ls_info));
   }
   return ret;
 }
 
-int ObLSGroupStat::find_and_remove_ls(int64_t &ls_index)
+// Try to remove the first ls from the ls_info_list_, and return the pointer to the ls.
+int ObLSGroupStat::try_remove_ls(share::ObLSStatusInfo* &ls_info)
 {
   int ret = OB_SUCCESS;
+  ls_info = nullptr;
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ls group is invalid", KR(ret), KPC(this));
+  } else if (ls_info_list_.empty()) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("no ls in group", KR(ret), KPC(this));
   } else {
-    int64_t start_pos = -1;
-    if (OB_FAIL(ls_info_set_.find_next(start_pos, ls_index))) {
-      LOG_WARN("failed to find next", KR(ret));
-    } else if (OB_FAIL(ls_info_set_.del_member(ls_index))) {
-      LOG_WARN("failed to del member", KR(ret), K(ls_index));
+    ls_info = ls_info_list_.at(0);
+    CK(OB_NOT_NULL(ls_info), ls_info->is_valid())
+    if (FAILEDx(ls_info_list_.remove(0))) {
+      LOG_WARN("failed to remove ls", KR(ret), KPC(ls_info));
     }
   }
   return ret;
@@ -132,16 +136,18 @@ int64_t ObUnitLSStat::to_string(char *buf, const int64_t buf_len) const
   J_OBJ_END();
   return pos;
 }
-int ObUnitLSStat::add_ls_group(ObLSGroupStat &ls_group_info)
+int ObUnitLSStat::add_ls_group(ObLSGroupStat *ls_group_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!ls_group_info.is_valid())) {
+  CK(OB_NOT_NULL(ls_group_info))
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(!ls_group_info->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(ls_group_info));
-  } else if (has_exist_in_array(ls_group_info_, &ls_group_info)) {
+    LOG_WARN("invalid argument", KR(ret), KPC(ls_group_info));
+  } else if (has_exist_in_array(ls_group_info_, ls_group_info)) {
     ret = OB_ENTRY_EXIST;
-    LOG_WARN("ls group already exist", KR(ret), K(ls_group_info), K(ls_group_info_));
-  } else if (OB_FAIL(ls_group_info_.push_back(&ls_group_info))) {
+    LOG_WARN("ls group already exist", KR(ret), KPC(ls_group_info), K(ls_group_info_));
+  } else if (OB_FAIL(ls_group_info_.push_back(ls_group_info))) {
     LOG_WARN("failed to push back ls group info", KR(ret), K(ls_group_info_));
   }
   return ret;
@@ -234,18 +240,20 @@ int ObUnitGroupStat::init(ObUnitLSStat &unit_info)
   return ret;
 }
 
-int ObUnitGroupStat::add_unit(ObUnitLSStat &unit)
+int ObUnitGroupStat::add_unit(ObUnitLSStat *unit)
 {
   int ret = OB_SUCCESS;
   //一个unit只会属于一个unit_group，不会变化
-  if (OB_UNLIKELY(!unit.is_valid() || ug_id_ != unit.unit_->unit_group_id_)) {
+  CK(OB_NOT_NULL(unit))
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(!unit->is_valid() || ug_id_ != unit->unit_->unit_group_id_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("unit is invalid", KR(ret), K(unit));
-  } else if (has_exist_in_array(unit_info_, &unit)) {
+    LOG_WARN("unit is invalid", KR(ret), KPC(unit));
+  } else if (has_exist_in_array(unit_info_, unit)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("unit already exist", KR(ret), K(unit), K(unit_info_));
-  } else if (OB_FAIL(unit_info_.push_back(&unit))) {
-    LOG_WARN("failed to push back unit", KR(ret), K(unit));
+    LOG_WARN("unit already exist", KR(ret), KPC(unit), K(unit_info_));
+  } else if (OB_FAIL(unit_info_.push_back(unit))) {
+    LOG_WARN("failed to push back unit", KR(ret), KPC(unit));
   }
   return ret;
 }
@@ -427,19 +435,21 @@ int64_t ObZoneLSStat::to_string(char *buf, const int64_t buf_len) const
   return pos;
 }
 
-int ObZoneLSStat::add_unit_ls_info(ObUnitLSStat &unit_ls_stat)
+int ObZoneLSStat::add_unit_ls_info(ObUnitLSStat *unit_ls_stat)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!unit_ls_stat.is_valid())) {
+  CK(OB_NOT_NULL(unit_ls_stat));
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(!unit_ls_stat->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("unit ls info is invalid", KR(ret), K(unit_ls_stat));
-  } else if (unit_ls_stat.is_deleting()) {
-    if (OB_FAIL(deleting_unit_array_.push_back(&unit_ls_stat))) {
+    LOG_WARN("unit ls info is invalid", KR(ret), KPC(unit_ls_stat));
+  } else if (unit_ls_stat->is_deleting()) {
+    if (OB_FAIL(deleting_unit_array_.push_back(unit_ls_stat))) {
       LOG_WARN("failed to push back", KR(ret));
     }
-  } else if (unit_ls_stat.is_sys_standalone_) {
-    gts_unit_ = &unit_ls_stat;
-  } else if (OB_FAIL(valid_unit_array_.push_back(&unit_ls_stat))) {
+  } else if (unit_ls_stat->is_sys_standalone_) {
+    gts_unit_ = unit_ls_stat;
+  } else if (OB_FAIL(valid_unit_array_.push_back(unit_ls_stat))) {
     LOG_WARN("failed to push back", KR(ret));
   }
   return ret;
@@ -747,6 +757,68 @@ bool ChooseUGCmp::operator()(const ObUnitLSStat *left, const ObUnitLSStat *right
 
 
 //////ObTenantLSBalanceInfo
+// ATTENTION: caller MUST ensure push the stat_info pointer to the corresponding member array after allocation.
+template <typename T, typename... Args>
+int ObTenantLSBalanceInfo::alloc_stat_info_(T *&stat_info, Args&&... args)
+{
+  int ret = OB_SUCCESS;
+  void *buf = NULL;
+  if (OB_ISNULL(buf = allocator_.alloc(sizeof(T)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc stat info", KR(ret), K(sizeof(T)));
+  } else {
+    stat_info = new(buf) T(args...);
+  }
+  return ret;
+}
+
+void ObTenantLSBalanceInfo::reset()
+{
+  // destroy and free all stat info objects allocated by allocator_
+  for (int64_t i = 0; i < ls_group_array_.count(); ++i) {
+    ObLSGroupStat *ptr = ls_group_array_.at(i);
+    if (NULL != ptr) {
+      ptr->~ObLSGroupStat();
+      allocator_.free(ptr);
+    }
+  }
+  ls_group_array_.reset();
+  for (int64_t i = 0; i < unit_array_.count(); ++i) {
+    ObUnitLSStat *ptr = unit_array_.at(i);
+    if (NULL != ptr) {
+      ptr->~ObUnitLSStat();
+      allocator_.free(ptr);
+    }
+  }
+  unit_array_.reset();
+  for (int64_t i = 0; i < ug_array_.count(); ++i) {
+    ObUnitGroupStat *ptr = ug_array_.at(i);
+    if (NULL != ptr) {
+      ptr->~ObUnitGroupStat();
+      allocator_.free(ptr);
+    }
+  }
+  ug_array_.reset();
+  for (int64_t i = 0; i < zone_array_.count(); ++i) {
+    ObZoneLSStat *ptr = zone_array_.at(i);
+    if (NULL != ptr) {
+      ptr->~ObZoneLSStat();
+      allocator_.free(ptr);
+    }
+  }
+  zone_array_.reset();
+
+  is_inited_ = false;
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  tenant_role_.reset();
+  job_desc_.reset();
+  sys_ls_info_.reset();
+  sys_ls_target_unit_list_.reset();
+  normal_ls_info_.reset();
+  duplicate_ls_info_.reset();
+  unit_info_.reset();
+}
+
 int ObTenantLSBalanceInfo::init_tenant_ls_balance_info(
     const uint64_t tenant_id,
     const share::ObLSStatusInfoArray &status_array,
@@ -826,13 +898,18 @@ int ObTenantLSBalanceInfo::build_ls_group_array_()
       if (OB_FAIL(get_ls_group_info(ls_info.ls_group_id_, lg_info))) {
         if (OB_ENTRY_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
-          ObLSGroupStat new_lg_info;
-          if (OB_FAIL(new_lg_info.init(ls_info.ls_group_id_, ls_info.unit_id_list_))) {
+          ObLSGroupStat *new_lg_info = NULL;
+          if (OB_FAIL(alloc_stat_info_(new_lg_info))) {
+            LOG_WARN("failed to alloc stat info", KR(ret));
+          } else if (OB_ISNULL(new_lg_info)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("new lg info is null", KR(ret));
+          } else if (OB_FAIL(new_lg_info->init(ls_info.ls_group_id_, ls_info.unit_id_list_))) {
             LOG_WARN("failed to init lg info", KR(ret), K(ls_info));
           } else if (OB_FAIL(ls_group_array_.push_back(new_lg_info))) {
             LOG_WARN("failed to push back ls_group array", KR(ret), K(new_lg_info));
           } else {
-            lg_info = &ls_group_array_.at(ls_group_array_.count() - 1);
+            lg_info = new_lg_info;
           }
         } else {
           LOG_WARN("failed to get ls group info", KR(ret), K(ls_info));
@@ -843,7 +920,7 @@ int ObTenantLSBalanceInfo::build_ls_group_array_()
       } else if (OB_ISNULL(lg_info)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("lg info is empty", KR(ret), K(ls_info));
-      } else if (OB_FAIL(lg_info->add_ls_status(i))) {
+      } else if (OB_FAIL(lg_info->add_ls_status(&normal_ls_info_.at(i)))) {
         LOG_WARN("failed to add ls status", KR(ret), K(i), KP(lg_info));
       }
     }
@@ -851,12 +928,15 @@ int ObTenantLSBalanceInfo::build_ls_group_array_()
   return ret;
 }
 
-#define GET_FROM_ARRAY(ARRAY, member, result)\
+#define GET_FROM_PTR_ARRAY(ARRAY, member, result)\
   do {\
     bool found = false;\
-    for (int64_t array_index = 0; OB_SUCC(ret) && array_index < ARRAY.count() && !found; ++array_index) {\
-      if (member == ARRAY.at(array_index).member##_) {\
-        result = &ARRAY.at(array_index);\
+    for (int64_t array_index = 0; OB_SUCC(ret) && array_index < (ARRAY).count() && !found; ++array_index) {\
+      if (OB_ISNULL((ARRAY).at(array_index))) {\
+        ret = OB_ERR_UNEXPECTED;\
+        LOG_WARN("array elem is null, ARRAY=" #ARRAY, KR(ret), K(array_index));\
+      } else if ((member) == (ARRAY).at(array_index)->member##_) {\
+        (result) = (ARRAY).at(array_index);\
         found = true;\
       }\
     }\
@@ -870,7 +950,7 @@ int ObTenantLSBalanceInfo::get_ls_group_info(const uint64_t lg_id,
     ObLSGroupStat* &lg_info)
 {
   int ret = OB_SUCCESS;
-  GET_FROM_ARRAY(ls_group_array_, lg_id, lg_info);
+  GET_FROM_PTR_ARRAY(ls_group_array_, lg_id, lg_info);
   return ret;
 }
 
@@ -888,30 +968,38 @@ int ObTenantLSBalanceInfo::build_unit_ls_array_()
     //构造unit_array_
     ARRAY_FOREACH(unit_info_, idx) {
       ObUnit &unit = unit_info_.at(idx);
-      ObUnitLSStat unit_ls_info;
-      if (OB_FAIL(unit_ls_info.init(unit))) {
+      ObUnitLSStat *unit_ls_info = NULL;
+      if (OB_FAIL(alloc_stat_info_(unit_ls_info))) {
+        LOG_WARN("failed to alloc unit ls stat", KR(ret));
+      } else if (OB_ISNULL(unit_ls_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unit ls info is null", KR(ret));
+      } else if (OB_FAIL(unit_ls_info->init(unit))) {
         LOG_WARN("failed to init unit", KR(ret), K(unit));
       } else if (OB_FAIL(unit_array_.push_back(unit_ls_info))) {
-        LOG_WARN("failed to push back", KR(ret), K(unit_ls_info));
+        LOG_WARN("failed to push back", KR(ret), KPC(unit_ls_info));
       }
     }
 
     ObUnitLSStat* unit_info = NULL;
     //构造ls_group和unit的关系
     ARRAY_FOREACH(ls_group_array_, ls_group_idx) {
-      ObLSGroupStat &ls_group = ls_group_array_.at(ls_group_idx);
-      ObUnitIDList &unit_list = ls_group.current_unit_list_;
-      ARRAY_FOREACH(unit_list, idx) {
-        unit_info = NULL;
-        if (OB_FAIL(get_unit_ls_info(unit_list.at(idx).id(), unit_info))) {
-          LOG_ERROR("failed to get unit ls info", KR(ret), K(idx), K(unit_list));
-        } else if (OB_ISNULL(unit_info)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unit info is empty", KR(ret), "unit_id", unit_list.at(idx));
-        } else if (OB_FAIL(unit_info->add_ls_group(ls_group))) {
-          LOG_WARN("failed to add ls status", KR(ret), K(ls_group_idx), K(idx), KPC(unit_info));
-        }
-      }//end for each unit
+      ObLSGroupStat *ls_group = ls_group_array_.at(ls_group_idx);
+      CK(OB_NOT_NULL(ls_group));
+      if (OB_SUCC(ret)) {
+        ObUnitIDList &unit_list = ls_group->current_unit_list_;
+        ARRAY_FOREACH(unit_list, idx) {
+          unit_info = NULL;
+          if (OB_FAIL(get_unit_ls_info(unit_list.at(idx).id(), unit_info))) {
+            LOG_ERROR("failed to get unit ls info", KR(ret), K(idx), K(unit_list));
+          } else if (OB_ISNULL(unit_info)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unit info is empty", KR(ret), "unit_id", unit_list.at(idx));
+          } else if (OB_FAIL(unit_info->add_ls_group(ls_group))) {
+            LOG_WARN("failed to add ls status", KR(ret), K(ls_group_idx), K(idx), KPC(unit_info));
+          }
+        }//end for each unit
+      }
     }
 
     //标记sys_ls的unit_list的unit为sys_standalone
@@ -939,48 +1027,8 @@ int ObTenantLSBalanceInfo::get_unit_ls_info(const uint64_t unit_id, ObUnitLSStat
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(unit_id));
   } else {
-    GET_FROM_ARRAY(unit_array_, unit_id, unit_ls_info);
+    GET_FROM_PTR_ARRAY(unit_array_, unit_id, unit_ls_info);
   }
-  return ret;
-}
-
-int ObTenantLSBalanceInfo::get_ls_unit_list(const share::ObLSStatusInfo &ls_info, ObArray<ObUnit*> &unit_list)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!ls_info.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("ls info is invalid", KR(ret), K(ls_info));
-  } else {
-    const ObUnitIDList &unit_id_list = ls_info.get_unit_list();
-    if (0 != unit_id_list.count()) {
-      ARRAY_FOREACH(unit_id_list, idx) {
-        ObUnit* unit = NULL;
-        uint64_t unit_id = unit_id_list.at(idx).id();
-        GET_FROM_ARRAY(unit_info_, unit_id, unit);
-        if (OB_SUCC(ret)) {
-          if (OB_ISNULL(unit)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unit is null", KR(ret), K(unit_id), K(ls_info));
-          } else if (OB_FAIL(unit_list.push_back(unit))) {
-            LOG_WARN("failed to push back unit", KR(ret));
-          }
-        }
-      }
-    } else if (0 != ls_info.unit_group_id_) {
-      //通过unit_group获取unit_list
-      ARRAY_FOREACH(unit_info_, idx) {
-        ObUnit &unit = unit_info_.at(idx);
-        if (unit.unit_group_id_ == ls_info.unit_group_id_) {
-          if (OB_FAIL(unit_list.push_back(&unit))) {
-            LOG_WARN("failed to push back unit", KR(ret));
-          }
-        }
-      }//end for array
-    } else {
-      //TODO
-    }
-  }
-  //TODO是否需要检查unit_list可能会为空
   return ret;
 }
 
@@ -996,13 +1044,18 @@ int ObTenantLSBalanceInfo::get_or_create_unit_group_info_(ObUnitLSStat &unit_ls_
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("failed to get unit group info", KR(ret), K(unit_ls_info));
     } else {
-      ObUnitGroupStat new_ug_info;
-      if (OB_FAIL(new_ug_info.init(unit_ls_info))) {
+      ObUnitGroupStat *new_ug_info = NULL;
+      if (OB_FAIL(alloc_stat_info_(new_ug_info))) {
+        LOG_WARN("failed to alloc ug info", KR(ret));
+      } else if (OB_ISNULL(new_ug_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("new ug info is null", KR(ret));
+      } else if (OB_FAIL(new_ug_info->init(unit_ls_info))) {
         LOG_WARN("failed to init ug info", KR(ret), K(unit_ls_info));
       } else if (OB_FAIL(ug_array_.push_back(new_ug_info))) {
-        LOG_WARN("failed to push back", KR(ret), K(new_ug_info));
+        LOG_WARN("failed to push back", KR(ret), KPC(new_ug_info));
       } else {
-        ug_info = &ug_array_.at(ug_array_.count() - 1);
+        ug_info = new_ug_info;
       }
     }
   }
@@ -1040,14 +1093,14 @@ int ObTenantLSBalanceInfo::get_ug_locality_unit_list(ObUnitGroupStat &ug_info,
 int ObTenantLSBalanceInfo::get_unit_group_info(const uint64_t ug_id, ObUnitGroupStat* &ug_info)
 {
   int ret = OB_SUCCESS;
-  GET_FROM_ARRAY(ug_array_, ug_id, ug_info);
+  GET_FROM_PTR_ARRAY(ug_array_, ug_id, ug_info);
   return ret;
 }
 
 int ObTenantLSBalanceInfo::get_zone_info(const ObZone &zone, ObZoneLSStat* &zone_info)
 {
   int ret = OB_SUCCESS;
-  GET_FROM_ARRAY(zone_array_, zone, zone_info);
+  GET_FROM_PTR_ARRAY(zone_array_, zone, zone_info);
   return ret;
 }
 
@@ -1065,9 +1118,14 @@ int ObTenantLSBalanceInfo::create_new_zone_info_(ObZone &zone, const common::ObR
       if (OB_FAIL(job_desc_.check_zone_in_locality(zone, in_locality))) {
         LOG_WARN("failed to check zone in locality", KR(ret), K(zone));
       } else {
-        ObZoneLSStat zone_info(zone, in_locality, replica_type);
-        if (OB_FAIL(zone_array_.push_back(zone_info))) {
-          LOG_WARN("failed to push back", KR(ret));
+        ObZoneLSStat *new_zone_info = NULL;
+        if (OB_FAIL(alloc_stat_info_(new_zone_info, zone, in_locality, replica_type))) {
+          LOG_WARN("failed to alloc zone info", KR(ret));
+        } else if (OB_ISNULL(new_zone_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("zone info is null", KR(ret));
+        } else if (OB_FAIL(zone_array_.push_back(new_zone_info))) {
+          LOG_WARN("failed to push back", KR(ret), KPC(new_zone_info));
         }
       }
     } else {
@@ -1093,46 +1151,53 @@ int ObTenantLSBalanceInfo::build_zone_ls_info_()
     ObZone last_zone;
     //unit_info是按照zone的顺序排列的
     ARRAY_FOREACH(unit_array_, idx) {
-      ObUnitLSStat &unit_info = unit_array_.at(idx);
-      CK(OB_NOT_NULL(unit_info.unit_))
-      if (OB_SUCC(ret) && last_zone != unit_info.unit_->zone_) {
-        last_zone = unit_info.unit_->zone_;
-        if (OB_FAIL(create_new_zone_info_(last_zone, unit_info.unit_->replica_type_))) {
+      ObUnitLSStat *unit_info = unit_array_.at(idx);
+      CK(OB_NOT_NULL(unit_info), OB_NOT_NULL(unit_info->unit_))
+      if (OB_SUCC(ret) && last_zone != unit_info->unit_->zone_) {
+        last_zone = unit_info->unit_->zone_;
+        if (OB_FAIL(create_new_zone_info_(last_zone, unit_info->unit_->replica_type_))) {
           LOG_WARN("failed to create new zone", KR(ret), K(last_zone));
         }
       }
       if (OB_SUCC(ret)) {
-        ObZoneLSStat &zone_info = zone_array_.at(zone_array_.count() - 1);
-        unit_info.zone_stat_ = &zone_info;
-        if (OB_FAIL(zone_info.add_unit_ls_info(unit_info))) {
-          LOG_WARN("failed to add unit", KR(ret), K(unit_info));
+        ObZoneLSStat *zone_info = zone_array_.at(zone_array_.count() - 1);
+        CK(OB_NOT_NULL(zone_info))
+        if (OB_SUCC(ret)) {
+          unit_info->zone_stat_ = zone_info;
+          if (OB_FAIL(zone_info->add_unit_ls_info(unit_info))) {
+            LOG_WARN("failed to add unit", KR(ret), KPC(unit_info));
+          }
         }
       }
-      if (OB_SUCC(ret) && unit_info.unit_->status_ != ObUnit::UNIT_STATUS_DELETING) {
+      if (OB_SUCC(ret) && unit_info->unit_->status_ != ObUnit::UNIT_STATUS_DELETING) {
         //deleting状态的unit不计入内存的unit_group的范围
         ObUnitGroupStat *ug_info;
-        if (OB_FAIL(get_or_create_unit_group_info_(unit_info, ug_info))) {
-          LOG_WARN("failed to get or create unit group info", KR(ret), K(unit_info));
+        if (OB_FAIL(get_or_create_unit_group_info_(*unit_info, ug_info))) {
+          LOG_WARN("failed to get or create unit group info", KR(ret), KPC(unit_info));
         } else if (OB_ISNULL(ug_info)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unit group is null", KR(ret), K(unit_info));
+          LOG_WARN("unit group is null", KR(ret), KPC(unit_info));
         } else if (OB_FAIL(ug_info->add_unit(unit_info))) {
-          LOG_WARN("failed to add unit", KR(ret), K(unit_info));
+          LOG_WARN("failed to add unit", KR(ret), KPC(unit_info));
         } else {
-          unit_info.unit_group_stat_ = ug_info;
+          unit_info->unit_group_stat_ = ug_info;
         }
       }
     }//end for zone array
 
     //构造unit_group
     ARRAY_FOREACH(ug_array_, idx) {
-      if (OB_FAIL(ug_array_.at(idx).construct_ls_group_info())) {
+      ObUnitGroupStat *ug = ug_array_.at(idx);
+      CK(OB_NOT_NULL(ug))
+      if (OB_SUCC(ret) && OB_FAIL(ug->construct_ls_group_info())) {
         LOG_WARN("failed to construct ls group info", KR(ret));
       }
     }
     //检查每个zone上都是active的unit，并且日志流组的个数都是均衡的，需要设置is_balance
     ARRAY_FOREACH(zone_array_, idx) {
-      if (OB_FAIL(zone_array_.at(idx).set_is_balance())) {
+      ObZoneLSStat *zone_info = zone_array_.at(idx);
+      CK(OB_NOT_NULL(zone_info))
+      if (OB_SUCC(ret) && OB_FAIL(zone_info->set_is_balance())) {
         LOG_WARN("failed to set zone is balance", KR(ret));
       }
     }
@@ -1175,8 +1240,8 @@ int ObTenantLSBalanceInfo::check_unit_list_valid(const share::ObUnitIDList &unit
     ObUnitLSStat* unit_ls_info = NULL;
     for (int64_t i = 0; OB_SUCC(ret) && i < unit_list.count() && is_valid; ++i) {
       const uint64_t unit_id = unit_list.at(i).id();
-      GET_FROM_ARRAY(unit_array_, unit_id, unit_ls_info);
-      if (OB_FAIL(ret)) {
+      if (OB_FAIL(get_unit_ls_info(unit_id, unit_ls_info))) {
+        LOG_WARN("failed to get unit ls info", KR(ret), K(unit_id));
       } else if (OB_ISNULL(unit_ls_info)) {
         ret = OB_ENTRY_NOT_EXIST;
         LOG_WARN("unit not exist", KR(ret), K(unit_list), K(unit_id));
@@ -1197,7 +1262,8 @@ int ObTenantLSBalanceInfo::split_hetero_zone_to_homo_unit_group(ObHeteroUGArray 
   } else {
     int64_t unit_num = 0;
     hetero_ug_array.reset();
-    FOREACH_CNT_X(zone_info, zone_array_, OB_SUCC(ret)) {
+    ARRAY_FOREACH(zone_array_, idx) {
+      ObZoneLSStat *zone_info = zone_array_.at(idx);
       if (OB_ISNULL(zone_info)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("zone info is empty", KR(ret));
@@ -1291,14 +1357,16 @@ int ObTenantLSBalanceInfo::get_valid_unit_list(share::ObUnitIDList &unit_list)
 
     // 补充其他无 unit_group_id 的 zone 的 unit (L副本)
     ARRAY_FOREACH(zone_array_, idx) {
-      ObZoneLSStat &zone_info = zone_array_.at(idx);
+      ObZoneLSStat *zone_info = zone_array_.at(idx);
+      CK(OB_NOT_NULL(zone_info))
       ObUnitLSStat *unit_info = NULL;
-      if (!zone_info.is_in_locality_) {
+      if (OB_FAIL(ret)) {
+      } else if (!zone_info->is_in_locality_) {
         // skip
-      } else if (zone_info.is_need_to_align_to_ug()) {
+      } else if (zone_info->is_need_to_align_to_ug()) {
         // already in unit_list, skip
-      } else if (OB_FAIL(zone_info.get_min_unit_valid_for_normal_ls(unit_info))) {
-        LOG_WARN("failed to get min unit valid for normal ls", KR(ret), K(zone_info));
+      } else if (OB_FAIL(zone_info->get_min_unit_valid_for_normal_ls(unit_info))) {
+        LOG_WARN("failed to get min unit valid for normal ls", KR(ret), KPC(zone_info));
       } else if (OB_ISNULL(unit_info)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unit ls info is null", KR(ret));
@@ -1393,30 +1461,6 @@ int ObTenantLSBalanceInfo::get_unit_zone_info(const uint64_t unit_id, ObZoneLSSt
   return ret;
 }
 
-int ObTenantLSBalanceInfo::get_next_ls_status_info(
-    const int64_t start_pos,
-    ObLSGroupStat &lg_stat,
-    int64_t &pos,
-    ObLSStatusInfo *&status_info)
-{
-  int ret = OB_SUCCESS;
-  status_info = nullptr;
-  if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("check inner stat", KR(ret));
-  } else if (OB_UNLIKELY(!lg_stat.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", KR(ret), K(lg_stat));
-  } else if (OB_FAIL(lg_stat.ls_info_set_.find_next(start_pos, pos))) {
-    LOG_WARN("fail to find next", KR(ret), K(pos), K(start_pos), K(lg_stat));
-  } else if (pos < 0 || pos >= normal_ls_info_.size()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid pos", KR(ret), K(pos), K(start_pos), K(lg_stat));
-  } else {
-    status_info = &normal_ls_info_[pos];
-  }
-  return ret;
-}
-
 int ObTenantLSBalanceInfo::get_ls_status_in_lg(ObLSGroupStat &lg_stat,
     ObArray<ObLSStatusInfo*> &ls_status_array)
 {
@@ -1428,19 +1472,12 @@ int ObTenantLSBalanceInfo::get_ls_status_in_lg(ObLSGroupStat &lg_stat,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", KR(ret), K(lg_stat));
   } else {
-    int64_t start_pos = -1, pos = 0;
-    const double src_factor = 1;
-    ObLSStatusInfo *status_info = nullptr;
-    for (int64_t i = 0; OB_SUCC(ret) && i < lg_stat.ls_count_in_group(); ++i) {
-      if (OB_FAIL(get_next_ls_status_info(start_pos, lg_stat, pos, status_info))) {
-        LOG_WARN("fail to get next ls status info", KR(ret), K(start_pos), K(lg_stat));
-      } else if (OB_ISNULL(status_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("status_info is null", KR(ret), KP(status_info), K(start_pos), K(pos), K(lg_stat));
-      } else if (OB_FAIL(ls_status_array.push_back(status_info))) {
-        LOG_WARN("failed to get next ls status", KR(ret), K(i));
+    ARRAY_FOREACH(lg_stat.ls_info_list_, idx) {
+      ObLSStatusInfo *status_info = lg_stat.ls_info_list_.at(idx);
+      CK(OB_NOT_NULL(status_info), status_info->is_valid())
+      if (FAILEDx(ls_status_array.push_back(status_info))) {
+        LOG_WARN("failed to push back", KR(ret), K(idx));
       }
-      start_pos = pos;
     }
   }
   return ret;
@@ -1454,8 +1491,9 @@ int ObTenantLSBalanceInfo::get_all_ls_group(ObArray<ObLSGroupStat*> &ls_group_ar
     LOG_WARN("inner stat error", KR(ret));
   }
   ARRAY_FOREACH(ls_group_array_, idx) {
-    ObLSGroupStat& ls_group = ls_group_array_.at(idx);
-    if (OB_FAIL(ls_group_array.push_back(&ls_group))) {
+    ObLSGroupStat *ls_group = ls_group_array_.at(idx);
+    CK(OB_NOT_NULL(ls_group))
+    if (OB_SUCC(ret) && OB_FAIL(ls_group_array.push_back(ls_group))) {
       LOG_WARN("failed to push back", KR(ret), K(idx));
     }
   }
@@ -1572,19 +1610,21 @@ int ObLSBalanceStrategy::try_construct_job_without_task(const share::ObBalanceSt
       }
     }
     // handle user ls group unit list change
-    ObArray<ObLSGroupStat> &ls_group_array = tenant_info_->ls_group_array_;
-    FOREACH_CNT_X(ls_group, ls_group_array, OB_SUCC(ret)) {
+    ObArray<ObLSGroupStat*> &ls_group_array = tenant_info_->ls_group_array_;
+    ARRAY_FOREACH(ls_group_array, idx) {
+      ObLSGroupStat *ls_group = ls_group_array.at(idx);
       CK(OB_NOT_NULL(ls_group))
-      lib::ob_sort(ls_group->target_unit_list_.begin(), ls_group->target_unit_list_.end(), cmp);
-      if (OB_FAIL(ret)) {
-      } else if (ls_group->need_change_unit_list()) {
-        ObLSGroupUnitListOp lg_op;
-        ObLSID ls_id;
-        if (OB_FAIL(lg_op.init(ls_group->lg_id_, ls_id, ls_group->current_unit_list_,
-                ls_group->target_unit_list_, ls_group->ls_count_in_group()))) {
-          LOG_WARN("failed to init ls group op", KR(ret), KPC(ls_group));
-        } else if (OB_FAIL(lg_op_array_->push_back(lg_op))) {
-          LOG_WARN("failed to push back", KR(ret), K(lg_op));
+      if (OB_SUCC(ret)) {
+        lib::ob_sort(ls_group->target_unit_list_.begin(), ls_group->target_unit_list_.end(), cmp);
+        if (ls_group->need_change_unit_list()) {
+          ObLSGroupUnitListOp lg_op;
+          ObLSID ls_id;
+          if (OB_FAIL(lg_op.init(ls_group->lg_id_, ls_id, ls_group->current_unit_list_,
+                  ls_group->target_unit_list_, ls_group->ls_count_in_group()))) {
+            LOG_WARN("failed to init ls group op", KR(ret), KPC(ls_group));
+          } else if (OB_FAIL(lg_op_array_->push_back(lg_op))) {
+            LOG_WARN("failed to push back", KR(ret), K(lg_op));
+          }
         }
       }
     }
@@ -2304,21 +2344,22 @@ int ObLSBalanceStrategy::do_reorganize_sys_ls_unit_list_(const bool need_remove_
       LOG_WARN("fail to get sys_ls info", KR(ret), "tenant_id", tenant_info_->tenant_id_);
     }
     ARRAY_FOREACH(tenant_info_->zone_array_, idx) {
-      ObZoneLSStat &zone_stat = tenant_info_->zone_array_.at(idx);
+      ObZoneLSStat *zone_stat = tenant_info_->zone_array_.at(idx);
+      CK(OB_NOT_NULL(zone_stat))
       ObUnitLSStat *unit_stat = nullptr;
-      if (!zone_stat.is_in_locality_ || has_exist_in_array(valid_zone, zone_stat.zone_)) {
+      if (OB_FAIL(ret) || !zone_stat->is_in_locality_ || has_exist_in_array(valid_zone, zone_stat->zone_)) {
         // skip
-      } else if (OB_FAIL(determine_zone_sys_ls_unit_(sys_ls_info, zone_stat, unit_stat))) {
-        LOG_WARN("failed to determine zone sys ls unit", KR(ret), K(zone_stat));
+      } else if (OB_FAIL(determine_zone_sys_ls_unit_(sys_ls_info, *zone_stat, unit_stat))) {
+        LOG_WARN("failed to determine zone sys ls unit", KR(ret), KPC(zone_stat));
       } else if (OB_ISNULL(unit_stat)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unit_stat is null", KR(ret), K(zone_stat));
+        LOG_WARN("unit_stat is null", KR(ret), KPC(zone_stat));
       } else if (OB_FAIL(target_unit_list.push_back(ObDisplayUnitID(unit_stat->unit_id_)))) {
         LOG_WARN("fail to push back", KR(ret), KPC(unit_stat));
-      } else if (enable_gts_standalone && zone_stat.is_gts_standalone_applicable()) {
+      } else if (enable_gts_standalone && zone_stat->is_gts_standalone_applicable()) {
         // update gts_unit in memory
-        if (OB_FAIL(zone_stat.set_unit_gts_standalone(*unit_stat))) {
-          LOG_WARN("fail to set unit_sys_standalone", KR(ret), K(zone_stat), KPC(unit_stat));
+        if (OB_FAIL(zone_stat->set_unit_gts_standalone(*unit_stat))) {
+          LOG_WARN("fail to set unit_sys_standalone", KR(ret), KPC(zone_stat), KPC(unit_stat));
         }
       }
     }
@@ -2596,12 +2637,13 @@ int ObLSGroupLocationBalance::balance(const bool only_job_strategy)
   } else if (!tenant_info_->job_desc_.get_enable_rebalance()) {
     LOG_INFO("enable rebalance is off, can not do ls group location balance");
   } else {
-    ObArray<ObLSGroupStat> &ls_group_array = tenant_info_->ls_group_array_;
+    ObArray<ObLSGroupStat*> &ls_group_array = tenant_info_->ls_group_array_;
     ObHeteroUGArray hetero_ug;
     if (OB_FAIL(tenant_info_->split_hetero_zone_to_homo_unit_group(hetero_ug))) {
       LOG_WARN("failed to get homo unit group", KR(ret));
     }
-    FOREACH_CNT_X(ls_group, ls_group_array, OB_SUCC(ret)) {
+    ARRAY_FOREACH(ls_group_array, idx) {
+      ObLSGroupStat *ls_group = ls_group_array.at(idx);
       CK(OB_NOT_NULL(ls_group))
       ObArray<ObUnitLSStat*> unit_stat_array;
       if (FAILEDx(convert_unit_list_to_unit_stat_(ls_group->current_unit_list_, unit_stat_array))) {
@@ -3497,8 +3539,9 @@ int ObLSGroupCountBalance::check_can_balance_ls_group_(
       //检查每个ls_group内是否有多余1条的日志流，如果有则也需要均衡，尽可能把日志流
       //平铺在各个组内. 可以证明一定能生成 alter 任务.
       ARRAY_FOREACH(tenant_info_->ls_group_array_, idx) {
-        const ObLSGroupStat &lg_stat = tenant_info_->ls_group_array_.at(idx);
-        if (lg_stat.ls_count_in_group() > 1) {
+        const ObLSGroupStat *lg_stat = tenant_info_->ls_group_array_.at(idx);
+        CK(OB_NOT_NULL(lg_stat))
+        if (OB_SUCC(ret) && lg_stat->ls_count_in_group() > 1) {
           need_balance = true;
           LOG_INFO("ls group has more than one ls, need balance", K(lg_stat));
           break;
@@ -3623,9 +3666,8 @@ int ObLSGroupCountBalance::expand_ls_group_cnt_(
       if (OB_SUCC(ret) && cell->get_expand_shrink_cnt() > 0) {
         //对于每个需要扩容出来的cell分别做下面的操作
         ObArray<ObLSGroupStat*> target_lg_array;
-        ObArray<ObLSGroupStat> expand_lg_array;
         //构造出这个cell上所有的lg_array，target_lg_array 包含了现有的和即将扩容出来的lg的指针
-        if (OB_FAIL(get_cell_expand_lg_(*cell, target_lg_array, expand_lg_array))) {
+        if (OB_FAIL(get_cell_expand_lg_(*cell, target_lg_array))) {
           LOG_WARN("failed to get cell expand lg", KR(ret), KPC(cell));
         }
         //在curr_lg_array范围内，把日志流从这个lg调整到另一个lg，保证最大最小不大于1
@@ -3808,12 +3850,10 @@ int ObLSGroupCountBalance::construct_expand_task_for_cell_emtpy_lg_(ObIArray<ObL
  * expand_lg_array：需要扩容出来的日志流组
  * */
 int ObLSGroupCountBalance::get_cell_expand_lg_(ObLSGroupMatrixCell &cell,
-    ObIArray<ObLSGroupStat*> &curr_lg_array,
-    ObArray<ObLSGroupStat> &expand_lg_array)
+    ObIArray<ObLSGroupStat*> &curr_lg_array)
 {
   int ret = OB_SUCCESS;
   curr_lg_array.reset();
-  expand_lg_array.reset();
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("inner stat error", KR(ret));
   } else if (OB_UNLIKELY(cell.get_expand_shrink_cnt() == 0)) {
@@ -3832,17 +3872,22 @@ int ObLSGroupCountBalance::get_cell_expand_lg_(ObLSGroupMatrixCell &cell,
      for (int64_t i = 0; OB_SUCC(ret) && i < expand_cnt; ++i) {
        //获取新的ls_group_id
        uint64_t ls_group_id = 0;
-       ObLSGroupStat lg_stat;
-       if (OB_FAIL(ObLSServiceHelper::fetch_new_ls_group_id(sql_proxy_,
+       ObLSGroupStat *lg_stat = NULL;
+       if (OB_FAIL(tenant_info_->alloc_stat_info_(lg_stat))) {
+         LOG_WARN("failed to alloc stat info", KR(ret));
+       } else if (OB_ISNULL(lg_stat)) {
+         ret = OB_ERR_UNEXPECTED;
+         LOG_WARN("lg stat is null", KR(ret));
+       } else if (OB_FAIL(ObLSServiceHelper::fetch_new_ls_group_id(sql_proxy_,
                tenant_info_->tenant_id_, ls_group_id))) {
          LOG_WARN("failed to fetch new ls group id", KR(ret), K(tenant_info_->tenant_id_));
          //扩容只存在于同cell内，所以扩容出来的lg和之前的lg有相同的unit_list
-       } else if (OB_FAIL(lg_stat.init(ls_group_id, curr_lg_array.at(0)->current_unit_list_))) {
+       } else if (OB_FAIL(lg_stat->init(ls_group_id, curr_lg_array.at(0)->current_unit_list_))) {
          LOG_WARN("failed to init lg stat", KR(ret), K(ls_group_id), K(curr_lg_array.at(0)));
-       } else if (OB_FAIL(expand_lg_array.push_back(lg_stat))) {
-         LOG_WARN("failed to push back", KR(ret), K(i), K(lg_stat));
-       } else if (OB_FAIL(curr_lg_array.push_back(&expand_lg_array.at(expand_lg_array.count() - 1)))) {
-         LOG_WARN("failed to push back to curr", KR(ret), K(expand_lg_array));
+       } else if (OB_FAIL(tenant_info_->ls_group_array_.push_back(lg_stat))) {
+         LOG_WARN("failed to push back to ls group array", KR(ret), KPC(lg_stat));
+       } else if (OB_FAIL(curr_lg_array.push_back(lg_stat))) {
+         LOG_WARN("failed to push back to curr", KR(ret), KPC(lg_stat));
        } else {
          LOG_INFO("new ls group id", K(ls_group_id));
        }
@@ -3985,13 +4030,17 @@ int ObLSGroupCountBalance::balance_ls_between_lgs_in_cell_(ObArray<ObLSGroupStat
           LOG_INFO("ls group is balance", KPC(max_lg), KPC(min_lg));
           break;
         } else {
-          int64_t ls_index = -1;
-          if (OB_FAIL(max_lg->find_and_remove_ls(ls_index))) {
+          share::ObLSStatusInfo *ls_status = nullptr;
+          if (OB_FAIL(max_lg->try_remove_ls(ls_status))) {
             LOG_WARN("failed to find and remove ls", KR(ret), KPC(max_lg));
-          } else if (OB_FAIL(min_lg->add_ls_status(ls_index))) {
-            LOG_WARN("failed to add ls status", KR(ret), K(ls_index));
+          } else if (OB_ISNULL(ls_status)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("ls status is null", KR(ret));
+          } else if (OB_FAIL(min_lg->add_ls_status(ls_status))) {
+            LOG_WARN("failed to add ls status", KR(ret), KPC(ls_status), KPC(min_lg));
+          } else {
+            LOG_INFO("ls migrate to new ls group", KR(ret), KPC(ls_status), KPC(max_lg), KPC(min_lg));
           }
-          LOG_INFO("ls migrate to new ls group", KR(ret), K(ls_index), KPC(max_lg), KPC(min_lg));
         }
       }
     } while (OB_SUCC(ret));
@@ -4313,15 +4362,19 @@ int ObLSGroupCountBalance::complete_missing_LS_in_lg_(
           } else if (OB_ISNULL(target_lg)) {
             is_finish = true;
           } else {
-            int64_t ls_index = -1;
+            share::ObLSStatusInfo *ls_to_migrate = nullptr;
             int64_t tmp_migrate_cnt = min(migrate_cnt, target_lg->ls_count_in_group());
             for (int64_t j = 0; OB_SUCC(ret) && j < tmp_migrate_cnt; ++j) {
-              if (OB_FAIL(target_lg->find_and_remove_ls(ls_index))) {
-                LOG_WARN("failed to find and remove ls", KR(ret), K(ls_index));
-              } else if (OB_FAIL(lg->add_ls_status(ls_index))) {
-                LOG_WARN("failed to add ls status", KR(ret), K(ls_index));
+              if (OB_FAIL(target_lg->try_remove_ls(ls_to_migrate))) {
+                LOG_WARN("failed to find and remove ls", KR(ret));
+              } else if (OB_ISNULL(ls_to_migrate)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("ls to migrate is null", KR(ret));
+              } else if (OB_FAIL(lg->add_ls_status(ls_to_migrate))) {
+                LOG_WARN("failed to add ls status", KR(ret), KPC(ls_to_migrate), KPC(lg));
+              } else {
+                LOG_INFO("ls migrate to new ls group", KR(ret), KPC(ls_to_migrate), KPC(target_lg), KPC(lg));
               }
-              LOG_INFO("ls migrate to new ls group", KR(ret), K(ls_index), KPC(target_lg), KPC(lg));
             }//end for get target lg
             migrate_cnt -= tmp_migrate_cnt;
           }
@@ -4588,15 +4641,10 @@ int ObLSGroupCountBalance::generate_shrink_lg_disable_transfer_(
       ObLSGroupStat *lg = shrink_lg.at(i);
       CK(OB_NOT_NULL(lg))
       ObLSStatusInfo* ls_status = NULL;
-      int64_t start_pos = -1, pos = -1;
-      for (int64_t j = 0; OB_SUCC(ret) && j < lg->ls_count_in_group(); ++j) {
+      ARRAY_FOREACH(lg->ls_info_list_, j) {
         ObLSGroupStat *tmp_target_lg = NULL;
-        //获取一个日志流
-        if (OB_FAIL(tenant_info_->get_next_ls_status_info(start_pos, *lg,
-                pos, ls_status))) {
-          LOG_WARN("failed to find next", KR(ret), K(start_pos));
-        }
-        CK(OB_NOT_NULL(ls_status))
+        ls_status = lg->ls_info_list_.at(j);
+        CK(OB_NOT_NULL(ls_status), ls_status->is_valid())
         //找到日志流个数最小的日志流组
         for (int64_t k = 0; OB_SUCC(ret) && k < target_lg.count(); ++k) {
           ObLSGroupStat *tmp_lg = target_lg.at(k);
@@ -4608,17 +4656,16 @@ int ObLSGroupCountBalance::generate_shrink_lg_disable_transfer_(
         }
         CK(OB_NOT_NULL(tmp_target_lg))
         //放入目标日志流组，并且生成alter任务，这里没有修改内存中的ls_group_id，考虑到这里是最后一步操作了
-        if (FAILEDx(tmp_target_lg->add_ls_status(pos))) {
-          LOG_WARN("failed to add ls status", KR(ret), K(pos), K(j), K(i));
+        if (FAILEDx(tmp_target_lg->add_ls_status(ls_status))) {
+          LOG_WARN("failed to add ls status", KR(ret), KPC(ls_status), KPC(tmp_target_lg));
         } else if (OB_FAIL(ObLSBalanceTaskHelper::add_ls_alter_task(tenant_id,
                 job_->get_job_id(), tmp_target_lg->lg_id_, ls_status->ls_id_,
                 job_->get_balance_strategy(), *task_array_))) {
           LOG_WARN("failed to add ls alter task", KR(ret), K(tenant_id), KPC(job_),
               KPC(tmp_target_lg), KPC(ls_status));
+        } else {
+          LOG_INFO("ls migrate to other ls group", KPC(ls_status), KPC(lg), KPC(tmp_target_lg));
         }
-        LOG_INFO("ls migrate to other ls group", K(pos), KPC(ls_status),
-            KPC(lg), KPC(tmp_target_lg));
-        start_pos = pos;
       }//end for each ls
     }//end for each lg
   }
@@ -4634,9 +4681,10 @@ int ObUnitListBalance::balance(const bool only_job_strategy)
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("inner stat error", KR(ret));
   } else {
-    ObArray<ObLSGroupStat> &ls_group_array = tenant_info_->ls_group_array_;
+    ObArray<ObLSGroupStat*> &ls_group_array = tenant_info_->ls_group_array_;
     if (!tenant_info_->job_desc_.get_enable_rebalance()) {
-      FOREACH_CNT_X(ls_group, ls_group_array, OB_SUCC(ret)) {
+      ARRAY_FOREACH(ls_group_array, idx) {
+        ObLSGroupStat *ls_group = ls_group_array.at(idx);
         CK(OB_NOT_NULL(ls_group))
         if (FAILEDx(reorganize_unit_list_by_locality_(*ls_group))) {
           LOG_WARN("failed to reorganize unit locality", KR(ret), KPC(ls_group));
@@ -4650,7 +4698,8 @@ int ObUnitListBalance::balance(const bool only_job_strategy)
       }
       //1. 均衡ls需要和ug绑定的zone的部分
       //检查每个ls_group的unit_list中的unit是否还满足locality,选择每个lsg的目标ug_ids
-      FOREACH_CNT_X(ls_group, ls_group_array, OB_SUCC(ret)) {
+      ARRAY_FOREACH(ls_group_array, idx) {
+        ObLSGroupStat *ls_group = ls_group_array.at(idx);
         if (OB_ISNULL(ls_group)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("ls group is null", KR(ret));
@@ -4672,10 +4721,11 @@ int ObUnitListBalance::balance(const bool only_job_strategy)
       //2. 均衡ls不和ug绑定的zone的部分
       // 此步骤补充L-zone的unit. L-zone的unit无unit group id，直接按照zone内的unit平均分配 lsg
       ARRAY_FOREACH(tenant_info_->zone_array_, idx) {
-        ObZoneLSStat &zone_stat = tenant_info_->zone_array_.at(idx);
-        if (zone_stat.is_in_locality_ && !zone_stat.is_need_to_align_to_ug()) {
-          if (OB_FAIL(balance_ls_unit_for_L_(zone_stat))) {
-            LOG_WARN("failed to balance ls unit", KR(ret), K(zone_stat));
+        ObZoneLSStat *zone_stat = tenant_info_->zone_array_.at(idx);
+        CK(OB_NOT_NULL(zone_stat))
+        if (OB_SUCC(ret) && zone_stat->is_in_locality_ && !zone_stat->is_need_to_align_to_ug()) {
+          if (OB_FAIL(balance_ls_unit_for_L_(*zone_stat))) {
+            LOG_WARN("failed to balance ls unit", KR(ret), KPC(zone_stat));
           }
         }
       }
@@ -4711,15 +4761,16 @@ int ObUnitListBalance::reorganize_unit_list_by_locality_(ObLSGroupStat &ls_group
     }
 
     ARRAY_FOREACH(tenant_info_->zone_array_, idx) {
-      ObZoneLSStat &zone_stat = tenant_info_->zone_array_.at(idx);
-      if (!zone_stat.is_in_locality_ || has_exist_in_array(valid_zone, zone_stat.zone_)) {
+      ObZoneLSStat *zone_stat = tenant_info_->zone_array_.at(idx);
+      CK(OB_NOT_NULL(zone_stat))
+      if (OB_FAIL(ret) || !zone_stat->is_in_locality_ || has_exist_in_array(valid_zone, zone_stat->zone_)) {
       } else {
         ObUnitLSStat *unit = NULL;
-        if (OB_FAIL(get_valid_unit_by_inherit_(zone_stat, ls_group.target_unit_list_, unit))) {
+        if (OB_FAIL(get_valid_unit_by_inherit_(*zone_stat, ls_group.target_unit_list_, unit))) {
           if (OB_ENTRY_NOT_EXIST != ret) {
-            LOG_WARN("failed to get valid unit", KR(ret), K(zone_stat), K(ls_group));
-          } else if (OB_FAIL(zone_stat.get_min_unit_valid_for_normal_ls(unit))) {
-            LOG_WARN("failed to get valid unit", KR(ret), K(zone_stat));
+            LOG_WARN("failed to get valid unit", KR(ret), KPC(zone_stat), K(ls_group));
+          } else if (OB_FAIL(zone_stat->get_min_unit_valid_for_normal_ls(unit))) {
+            LOG_WARN("failed to get valid unit", KR(ret), KPC(zone_stat));
           }
         }
         if (OB_FAIL(ret)) {
@@ -4728,7 +4779,7 @@ int ObUnitListBalance::reorganize_unit_list_by_locality_(ObLSGroupStat &ls_group
           LOG_WARN("unit is invalid", KR(ret), K(unit));
         } else if (OB_FAIL(ls_group.target_unit_list_.push_back(ObDisplayUnitID(unit->unit_id_)))) {
           LOG_WARN("failed to push back", KR(ret));
-        } else if (OB_FAIL(unit->add_ls_group(ls_group))) {
+        } else if (OB_FAIL(unit->add_ls_group(&ls_group))) {
           LOG_WARN("failed to add ls group", KR(ret), K(ls_group));
         }
       }
@@ -4935,15 +4986,16 @@ int ObUnitListBalance::balance_ls_unit_for_L_(ObZoneLSStat &zone_stat)
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("inner stat error", KR(ret));
   } else {
-    ObArray<ObLSGroupStat> &ls_group_array = tenant_info_->ls_group_array_;
+    ObArray<ObLSGroupStat*> &ls_group_array = tenant_info_->ls_group_array_;
     // 检查每个lsg是否有此zone的unit，如果没有则选一个lsg个数最少的unit，将lsg分配到该unit
     ARRAY_FOREACH(tenant_info_->ls_group_array_, i) {
-      ObLSGroupStat &ls_group = ls_group_array.at(i);
+      ObLSGroupStat *ls_group = ls_group_array.at(i);
+      CK(OB_NOT_NULL(ls_group))
       bool has_unit_in_zone = false;
       ARRAY_FOREACH(zone_stat.valid_unit_array_, j) {
         ObUnitLSStat *unit_stat = zone_stat.valid_unit_array_.at(j);
         CK(OB_NOT_NULL(unit_stat));
-        if (OB_SUCC(ret) && has_exist_in_array(ls_group.current_unit_list_, ObDisplayUnitID(unit_stat->unit_id_))) {
+        if (OB_SUCC(ret) && has_exist_in_array(ls_group->current_unit_list_, ObDisplayUnitID(unit_stat->unit_id_))) {
           has_unit_in_zone = true;
           break;
         }
@@ -4956,7 +5008,7 @@ int ObUnitListBalance::balance_ls_unit_for_L_(ObZoneLSStat &zone_stat)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unit stat is null", KR(ret));
         } else if (OB_FAIL(unit_stat->add_ls_group(ls_group))) {
-          LOG_WARN("failed to add ls group", KR(ret), K(ls_group));
+          LOG_WARN("failed to add ls group", KR(ret), KPC(ls_group));
         }
       }
     }
@@ -4981,7 +5033,7 @@ int ObUnitListBalance::balance_ls_unit_for_L_(ObZoneLSStat &zone_stat)
         CK(OB_NOT_NULL(ls_group));
         if (FAILEDx(max_unit_stat->ls_group_info_.remove(index))) {
           LOG_WARN("failed to remove ls group", KR(ret), K(ls_group));
-        } else if (OB_FAIL(min_unit_stat->add_ls_group(*ls_group))) {
+        } else if (OB_FAIL(min_unit_stat->add_ls_group(ls_group))) {
           LOG_WARN("failed to add ls group", KR(ret), K(ls_group));
         }
       }
@@ -4998,15 +5050,17 @@ int ObUnitListBalance::construct_lg_unit_list_()
   } else {
     // 1. construct unit list in zones that need to align to unit group
     ARRAY_FOREACH(tenant_info_->ls_group_array_, idx) {
-      ObLSGroupStat &ls_group = tenant_info_->ls_group_array_.at(idx);
-      ls_group.target_unit_list_.reset();
-      if (OB_UNLIKELY(!ls_group.is_valid() || ls_group.ug_ids_.empty())) {
+      ObLSGroupStat *ls_group = tenant_info_->ls_group_array_.at(idx);
+      CK(OB_NOT_NULL(ls_group))
+      if (OB_FAIL(ret)) {
+      } else if (FALSE_IT(ls_group->target_unit_list_.reset())) {
+      } else if (OB_UNLIKELY(!ls_group->is_valid() || ls_group->ug_ids_.empty())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ls group is invalid or ug ids is empty", KR(ret), K(ls_group));
+        LOG_WARN("ls group is invalid or ug ids is empty", KR(ret), KPC(ls_group));
       } else {
         //根据unit_group_id获取所有的unit，查看这个zone在不在locality中
-        ARRAY_FOREACH(ls_group.ug_ids_, idx) {
-          const uint64_t unit_group_id = ls_group.ug_ids_.at(idx);
+        ARRAY_FOREACH(ls_group->ug_ids_, idx) {
+          const uint64_t unit_group_id = ls_group->ug_ids_.at(idx);
           ObUnitGroupStat* ug_info = NULL;
           ObUnitIDList tmp_unit_list;
           if (OB_FAIL(tenant_info_->get_unit_group_info(unit_group_id, ug_info))) {
@@ -5016,20 +5070,21 @@ int ObUnitListBalance::construct_lg_unit_list_()
             LOG_WARN("unit group info is empty", KR(ret), K(unit_group_id));
           } else if (OB_FAIL(tenant_info_->get_ug_locality_unit_list(*ug_info, tmp_unit_list))) {
             LOG_WARN("failed to get ug locality unit list", KR(ret), KPC(ug_info));
-          } else if (OB_FAIL(append_array_no_dup(ls_group.target_unit_list_, tmp_unit_list))) {
-            LOG_WARN("failed to append", KR(ret), K(tmp_unit_list), "unit_list", ls_group.target_unit_list_);
+          } else if (OB_FAIL(append_array_no_dup(ls_group->target_unit_list_, tmp_unit_list))) {
+            LOG_WARN("failed to append", KR(ret), K(tmp_unit_list), "unit_list", ls_group->target_unit_list_);
           } else {
-            LOG_INFO("modify ls group unit list", K(ls_group), K(idx), K(unit_group_id));
+            LOG_INFO("modify ls group unit list", KPC(ls_group), K(idx), K(unit_group_id));
           }
         }
       }
     }
     // 2. construct unit list for zones that DOES NOT need to align to unit group
     ARRAY_FOREACH(tenant_info_->zone_array_, i) {
-      ObZoneLSStat &zone_stat = tenant_info_->zone_array_.at(i);
-      if (zone_stat.is_in_locality_ && !zone_stat.is_need_to_align_to_ug()) {
-        ARRAY_FOREACH(zone_stat.valid_unit_array_, j) {
-          ObUnitLSStat *unit_stat = zone_stat.valid_unit_array_.at(j);
+      ObZoneLSStat *zone_stat = tenant_info_->zone_array_.at(i);
+      CK(OB_NOT_NULL(zone_stat))
+      if (OB_SUCC(ret) && zone_stat->is_in_locality_ && !zone_stat->is_need_to_align_to_ug()) {
+        ARRAY_FOREACH(zone_stat->valid_unit_array_, j) {
+          ObUnitLSStat *unit_stat = zone_stat->valid_unit_array_.at(j);
           CK(OB_NOT_NULL(unit_stat));
           ARRAY_FOREACH(unit_stat->ls_group_info_, k) {
             ObLSGroupStat *ls_group = unit_stat->ls_group_info_.at(k);
@@ -5078,14 +5133,17 @@ int ObLSCountBalance::balance(const bool only_job_strategy)
     } else {
       const int64_t target_ls_cnt = tenant_info_->job_desc_.get_ls_cnt_in_group();
       for (int64_t i = 0; i < tenant_info_->ls_group_array_.size() && OB_SUCC(ret); ++i) {
-        ObLSGroupStat &lg_stat = tenant_info_->ls_group_array_[i];
-        const int64_t ls_cnt = lg_stat.ls_count_in_group();
-        if (ls_cnt < target_ls_cnt && OB_FAIL(generate_expand_task_(lg_stat))) {
-          LOG_WARN("fail to generate expand task", KR(ret), K(lg_stat), K(target_ls_cnt), K(lg_stat));
-        } else if (ls_cnt > target_ls_cnt && OB_FAIL(generate_shrink_task_(lg_stat))) {
-          LOG_WARN("fail to generate shrink task", KR(ret), K(ls_cnt), K(target_ls_cnt), K(lg_stat));
-        } else if (ls_cnt == target_ls_cnt) {
-          LOG_INFO("no need ls count balance", KR(ret), K(ls_cnt), K(target_ls_cnt), K(lg_stat));
+        ObLSGroupStat *lg_stat = tenant_info_->ls_group_array_[i];
+        CK(OB_NOT_NULL(lg_stat))
+        if (OB_SUCC(ret)) {
+          const int64_t ls_cnt = lg_stat->ls_count_in_group();
+          if (ls_cnt < target_ls_cnt && OB_FAIL(generate_expand_task_(*lg_stat))) {
+            LOG_WARN("fail to generate expand task", KR(ret), KPC(lg_stat), K(target_ls_cnt));
+          } else if (ls_cnt > target_ls_cnt && OB_FAIL(generate_shrink_task_(*lg_stat))) {
+            LOG_WARN("fail to generate shrink task", KR(ret), K(ls_cnt), K(target_ls_cnt), KPC(lg_stat));
+          } else if (ls_cnt == target_ls_cnt) {
+            LOG_INFO("no need ls count balance", KR(ret), K(ls_cnt), K(target_ls_cnt), KPC(lg_stat));
+          }
         }
       }
     }
@@ -5107,13 +5165,17 @@ int ObLSCountBalance::get_op_and_generate_job_(BalanceOp &op, const bool only_jo
     int64_t target_ls_cnt = tenant_info_->job_desc_.get_ls_cnt_in_group();
     int64_t ls_group_arr_size = tenant_info_->ls_group_array_.size();
 
-    for (int64_t i = 0; i < ls_group_arr_size && NO_OP == op; ++i) {
-      const int64_t ls_cnt = tenant_info_->ls_group_array_[i].ls_count_in_group();
-      if (ls_cnt != target_ls_cnt) {
-        op = TRANSFER;
+    for (int64_t i = 0; i < ls_group_arr_size && NO_OP == op && OB_SUCC(ret); ++i) {
+      ObLSGroupStat *lg = tenant_info_->ls_group_array_[i];
+      CK(OB_NOT_NULL(lg))
+      if (OB_SUCC(ret)) {
+        const int64_t ls_cnt = lg->ls_count_in_group();
+        if (ls_cnt != target_ls_cnt) {
+          op = TRANSFER;
+        }
       }
     }
-    if (NO_OP != op) {
+    if (OB_SUCC(ret) && NO_OP != op) {
       share::ObBalanceStrategy balance_strategy;
       balance_strategy = ObBalanceStrategy::LB_LS_COUNT;
       if (OB_FAIL(generate_balance_job(balance_strategy, only_job_strategy))) {
@@ -5131,9 +5193,10 @@ int ObLSCountBalance::generate_expand_task_(ObLSGroupStat &lg_stat)
   ObArray<ObSplitLSParamArray> dest_ls;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (OB_UNLIKELY(!lg_stat.is_valid())) {
+  } else if (OB_UNLIKELY(!lg_stat.is_valid() ||
+      lg_stat.ls_count_in_group() >= tenant_info_->job_desc_.get_ls_cnt_in_group())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", KR(ret), K(lg_stat));
+    LOG_WARN("invalid arg", KR(ret), K(lg_stat), K(tenant_info_->job_desc_.get_ls_cnt_in_group()));
   } else if (OB_FAIL(construct_src_split_param_array(lg_stat, src_ls))) {
     LOG_WARN("failed to construct src split param", KR(ret), K(lg_stat));
   }
@@ -5158,22 +5221,20 @@ int ObLSCountBalance::generate_shrink_task_(ObLSGroupStat &lg_stat)
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (OB_UNLIKELY(!lg_stat.is_valid())) {
+  } else if (OB_UNLIKELY(!lg_stat.is_valid() ||
+      lg_stat.ls_count_in_group() <= tenant_info_->job_desc_.get_ls_cnt_in_group())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", KR(ret), K(lg_stat));
+    LOG_WARN("invalid arg", KR(ret), K(lg_stat), K(tenant_info_->job_desc_.get_ls_cnt_in_group()));
   } else {
     ObSplitLSParamArray src_ls;
     ObArray<ObSplitLSParamArray> dest_ls;
     const int64_t target_ls_cnt = tenant_info_->job_desc_.get_ls_cnt_in_group();
-    int64_t start_pos = -1, pos = 0;
     const double src_factor = 1;
-    ObLSStatusInfo *status_info = nullptr;
-    for (int64_t i = 0; OB_SUCC(ret) && i < lg_stat.ls_count_in_group(); ++i) {
-      if (OB_FAIL(tenant_info_->get_next_ls_status_info(start_pos, lg_stat, pos, status_info))) {
-        LOG_WARN("fail to get next ls status info", KR(ret), K(start_pos), K(lg_stat));
-      } else if (OB_ISNULL(status_info)) {
+    ARRAY_FOREACH(lg_stat.ls_info_list_, i) {
+      ObLSStatusInfo *status_info = lg_stat.ls_info_list_.at(i);
+      if (OB_ISNULL(status_info) || !status_info->is_valid()) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("status_info is null", KR(ret), KP(status_info), K(start_pos), K(pos), K(lg_stat));
+        LOG_WARN("status_info is invalid", KR(ret), K(i), K(lg_stat));
       } else if (i < target_ls_cnt) { // redundant ls: i = target_ls_cnt ... end
         // skip
       } else {
@@ -5182,7 +5243,6 @@ int ObLSCountBalance::generate_shrink_task_(ObLSGroupStat &lg_stat)
           LOG_WARN("failed to push back param", KR(ret), K(param), K(i));
         }
       }
-      start_pos = pos;
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(construct_shrink_src_param(target_ls_cnt, src_ls, dest_ls))) {
@@ -5191,19 +5251,15 @@ int ObLSCountBalance::generate_shrink_task_(ObLSGroupStat &lg_stat)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("target_ls_cnt should be equal to the size of dest_ls", KR(ret), K(target_ls_cnt), K(dest_ls), K(src_ls));
       }
-      start_pos = -1;
-      pos = 0;
       for (int64_t i = 0; OB_SUCC(ret) && i < target_ls_cnt; ++i) {
-        if (OB_FAIL(tenant_info_->get_next_ls_status_info(start_pos, lg_stat, pos, status_info))) {
-          LOG_WARN("fail to get next ls status info", KR(ret), K(start_pos), K(lg_stat));
-        } else if (OB_ISNULL(status_info)) {
+        ObLSStatusInfo *status_info = lg_stat.ls_info_list_.at(i);
+        if (OB_ISNULL(status_info) || !status_info->is_valid()) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("status_info is null", KR(ret), KP(status_info), K(start_pos), K(pos), K(lg_stat));
+          LOG_WARN("status_info is invalid", KR(ret), K(i), K(lg_stat));
         } else if (OB_FAIL(generate_shrink_task_for_each_ls_(dest_ls.at(i), *status_info))) {
           LOG_WARN("fail to execute generate_task_for_shrink", KR(ret), K(i), K(lg_stat),
               "dest_ls_param", dest_ls.at(i), KPC(status_info));
         }
-        start_pos = pos;
       }
     }
   }
@@ -5828,7 +5884,7 @@ int ObLSBalanceTaskHelper::check_unit_array_same(
 
 #undef ISTAT
 #undef WSTAT
-#undef GET_FROM_ARRAY
+#undef GET_FROM_PTR_ARRAY
 
 }  // namespace rootserver
 }

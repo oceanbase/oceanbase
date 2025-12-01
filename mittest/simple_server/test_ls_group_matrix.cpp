@@ -95,18 +95,18 @@ TEST_F(TestLSGroupMatrix, ChooseZoneCmp)
 
   ObUnitLSStat unit_ls_stat1; // has 1 ls group
   ASSERT_EQ(OB_SUCCESS, unit_ls_stat1.init(unit1));
-  ASSERT_EQ(OB_SUCCESS, unit_ls_stat1.add_ls_group(ls_group_stat1));
+  ASSERT_EQ(OB_SUCCESS, unit_ls_stat1.add_ls_group(&ls_group_stat1));
 
   ObUnitLSStat unit_ls_stat2; // has 2 ls groups
   ASSERT_EQ(OB_SUCCESS, unit_ls_stat2.init(unit1));
-  ASSERT_EQ(OB_SUCCESS, unit_ls_stat2.add_ls_group(ls_group_stat1));
-  ASSERT_EQ(OB_SUCCESS, unit_ls_stat2.add_ls_group(ls_group_stat2));
+  ASSERT_EQ(OB_SUCCESS, unit_ls_stat2.add_ls_group(&ls_group_stat1));
+  ASSERT_EQ(OB_SUCCESS, unit_ls_stat2.add_ls_group(&ls_group_stat2));
 
   ObUnitLSStat unit_ls_stat3; // has 3 ls groups
   ASSERT_EQ(OB_SUCCESS, unit_ls_stat3.init(unit1));
-  ASSERT_EQ(OB_SUCCESS, unit_ls_stat3.add_ls_group(ls_group_stat1));
-  ASSERT_EQ(OB_SUCCESS, unit_ls_stat3.add_ls_group(ls_group_stat2));
-  ASSERT_EQ(OB_SUCCESS, unit_ls_stat3.add_ls_group(ls_group_stat3));
+  ASSERT_EQ(OB_SUCCESS, unit_ls_stat3.add_ls_group(&ls_group_stat1));
+  ASSERT_EQ(OB_SUCCESS, unit_ls_stat3.add_ls_group(&ls_group_stat2));
+  ASSERT_EQ(OB_SUCCESS, unit_ls_stat3.add_ls_group(&ls_group_stat3));
 
   // zone_stat1:
   //   is_balance    : true
@@ -116,7 +116,7 @@ TEST_F(TestLSGroupMatrix, ChooseZoneCmp)
   zone_stat1.zone_ = zone1;
   zone_stat1.is_balance_ = is_balance_true;
   zone_stat1.is_in_locality_ = in_locality_true;
-  ASSERT_EQ(OB_SUCCESS, zone_stat1.add_unit_ls_info(unit_ls_stat1));
+  ASSERT_EQ(OB_SUCCESS, zone_stat1.add_unit_ls_info(&unit_ls_stat1));
 
   // zone_stat2:
   //   is_balance    : false
@@ -126,7 +126,7 @@ TEST_F(TestLSGroupMatrix, ChooseZoneCmp)
   zone_stat2.zone_ = zone1;
   zone_stat2.is_balance_ = is_balance_false;
   zone_stat2.is_in_locality_ = in_locality_true;
-  ASSERT_EQ(OB_SUCCESS, zone_stat2.add_unit_ls_info(unit_ls_stat1));
+  ASSERT_EQ(OB_SUCCESS, zone_stat2.add_unit_ls_info(&unit_ls_stat1));
 
   // zone_stat3:
   //   is_balance    : true
@@ -136,7 +136,7 @@ TEST_F(TestLSGroupMatrix, ChooseZoneCmp)
   zone_stat3.zone_ = zone1;
   zone_stat3.is_balance_ = is_balance_true;
   zone_stat3.is_in_locality_ = in_locality_false;
-  ASSERT_EQ(OB_SUCCESS, zone_stat3.add_unit_ls_info(unit_ls_stat1));
+  ASSERT_EQ(OB_SUCCESS, zone_stat3.add_unit_ls_info(&unit_ls_stat1));
 
   // zone_stat4:
   //   is_balance    : true
@@ -146,8 +146,8 @@ TEST_F(TestLSGroupMatrix, ChooseZoneCmp)
   zone_stat4.zone_ = zone1;
   zone_stat4.is_balance_ = is_balance_true;
   zone_stat4.is_in_locality_ = in_locality_true;
-  ASSERT_EQ(OB_SUCCESS, zone_stat4.add_unit_ls_info(unit_ls_stat1));
-  ASSERT_EQ(OB_SUCCESS, zone_stat4.add_unit_ls_info(unit_ls_stat1));
+  ASSERT_EQ(OB_SUCCESS, zone_stat4.add_unit_ls_info(&unit_ls_stat1));
+  ASSERT_EQ(OB_SUCCESS, zone_stat4.add_unit_ls_info(&unit_ls_stat1));
 
   // zone_stat5:
   //   is_balance    : true
@@ -157,8 +157,8 @@ TEST_F(TestLSGroupMatrix, ChooseZoneCmp)
   zone_stat5.zone_ = zone1;
   zone_stat5.is_balance_ = is_balance_true;
   zone_stat5.is_in_locality_ = in_locality_true;
-  ASSERT_EQ(OB_SUCCESS, zone_stat5.add_unit_ls_info(unit_ls_stat1));
-  ASSERT_EQ(OB_SUCCESS, zone_stat5.add_unit_ls_info(unit_ls_stat3));
+  ASSERT_EQ(OB_SUCCESS, zone_stat5.add_unit_ls_info(&unit_ls_stat1));
+  ASSERT_EQ(OB_SUCCESS, zone_stat5.add_unit_ls_info(&unit_ls_stat3));
 
   ChooseZoneCmp zone_cmp;
   // test priority: is_balance true > false

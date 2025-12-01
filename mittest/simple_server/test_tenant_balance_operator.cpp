@@ -627,6 +627,105 @@ TEST_F(TestBalanceOperator, merge_task)
   ASSERT_EQ(true, all_part_transferred);
 }
 
+TEST_F(TestBalanceOperator, test_ls_group_count_balance)
+{
+  // 验证日志流组扩容场景，扩容11个以上lsg时不会发生core dump
+  // 构造如下初始形态：
+  // 1) 两个可用区：zone1 有 1 个 unit，zone2 有 12 个 unit
+  // 2) 初始只有 1 个普通 LS，落在 zone1 的唯一 unit 与 zone2 的第 1 个 unit 上
+  //    因而 zone2 其余 11 个 unit 空闲（无 LS）
+  // 期望：balance 后产生 11 个 split 任务与 11 个 alter 任务
+  uint64_t tenant_id = 1002;
+  ObArenaAllocator allocator("TntLSBalance" , OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
+  int ret = OB_SUCCESS;
+  common::ObMySQLProxy *sql_proxy = get_curr_observer().get_gctx().sql_proxy_;
+  common::ObArray<share::ObLSGroupUnitListOp> lsg_op_array;
+  common::ObArray<share::ObUnitUGOp> unit_op_array;
+  ObArray<ObUnit> unit_array;
+  ObArray<ObLSStatusInfo> ls_array;
+  ObTenantRole tenant_role(ObTenantRole::Role::PRIMARY_TENANT);
+
+  // 构造 LS 的便捷函数
+  auto construct_ls = [&ret, &ls_array, &tenant_id]
+      (const uint64_t ls_id, const int64_t ls_group_id, const std::initializer_list<int64_t> unit_ids)
+  {
+    ObUnitIDList unit_id_list;
+    for (const auto& unit_id : unit_ids) {
+      ret = unit_id_list.push_back(ObDisplayUnitID(unit_id));
+      ASSERT_EQ(OB_SUCCESS, ret);
+    }
+    ObLSStatusInfo ls_status;
+    ls_status.init(tenant_id, ObLSID(ls_id), ls_group_id, share::OB_LS_NORMAL, 0, ObZone("zone1"), share::ObLSFlag::NORMAL_FLAG, unit_id_list);
+    ret = ls_array.push_back(ls_status);
+    ASSERT_EQ(OB_SUCCESS, ret);
+  };
+
+  // zones: zone1 = 1 unit, zone2 = 12 units
+  ObDisplayZoneUnitCnt z1("zone1", 1);
+  ObDisplayZoneUnitCnt z2("zone2", 12);
+  ObZoneUnitCntList zone_list;
+  ret = zone_list.push_back(z1);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = zone_list.push_back(z2);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // 构造 unit 列表（unit_id 从 1000 连续递增）
+  ret = construct_unit_array(zone_list, unit_array);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // 构造 sys_ls + 1 个普通 LS
+  ls_array.reuse();
+  construct_ls(1, 0, {}); // sys ls
+
+  // unit_id 分布：
+  // zone1: 1000 (1 个)
+  // zone2: 1001 ~ 1012 (12 个)
+  const int64_t z1_unit = 1000;
+  const int64_t z2_first_unit = 1001;
+  // 仅 1 个普通 LS，位于 zone1 唯一 unit 与 zone2 第 1 个 unit
+  construct_ls(1001, 1001, {z1_unit, z2_first_unit});
+
+  // 目标配置：primary_zone_num = 1, ls_scale_out_factor = 1（根据单测逻辑，期望扩到其余空单元）
+  ObBalanceJobDesc job_desc;
+  ObTenantLSBalanceInfo balance_job(allocator);
+  ret = job_desc.init_without_job(1 /*tenant id not used here*/, zone_list, 1 /*primary_zone_num*/, 1 /*ls_scale_out_factor*/, true /*enable_rebalance*/, true /*enable_transfer*/, false /*enable_gts_standalone*/);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  MTL_SWITCH(tenant_id) {
+    ret = balance_job.init_tenant_ls_balance_info(tenant_id, ls_array, job_desc, unit_array, tenant_role);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    share::ObBalanceJob job;
+    common::ObArray<share::ObBalanceTask> task_array;
+    ObLSGroupCountBalance lg_cnt(&balance_job, sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
+
+    ret = lg_cnt.balance(true);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    job.reset();
+    ret = lg_cnt.balance(false);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    // 期望 11 个 split + 11 个 alter = 22 个任务
+    ASSERT_EQ(true, job.is_valid());
+    ASSERT_EQ(22, task_array.count());
+    int64_t split_cnt = 0;
+    int64_t alter_cnt = 0;
+    for (int64_t i = 0; i < task_array.count(); ++i) {
+      const ObBalanceTaskType &tt = task_array.at(i).get_task_type();
+      if (ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_SPLIT) == tt) {
+        ++split_cnt;
+      } else if (ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_ALTER) == tt) {
+        ++alter_cnt;
+      } else {
+        // 该场景不应出现其它任务类型
+        ASSERT_TRUE(false) << "unexpected task type:" << tt.to_str();
+      }
+    }
+    ASSERT_EQ(11, split_cnt);
+    ASSERT_EQ(11, alter_cnt);
+    LOG_INFO("ls group count balance expand 1->12 on zone2", K(job), K(task_array.count()), K(split_cnt), K(alter_cnt));
+  }
+}
+
 TEST_F(TestBalanceOperator, test_ls_group_count_balance_disable_transfer)
 {
   // test expand ls_group_count when enable_transfer is false

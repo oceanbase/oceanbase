@@ -28,6 +28,51 @@ using ::testing::_;
 using ::testing::Invoke;
 using ::testing::Return;
 
+// 复用校验宏：检查 ObTenantLSBalanceInfo 的关键结构及嵌套元素均有效
+#define ASSERT_BALANCE_JOB_VALID(bj)                                                       \
+  do {                                                                                     \
+    LOG_INFO("testtest", "unit_info_count", (bj).unit_info_.count(), K((bj).unit_info_));  \
+    LOG_INFO("testtest", "normal_ls_info_count", (bj).normal_ls_info_.count(), K((bj).normal_ls_info_)); \
+    LOG_INFO("testtest", "ls_group_array_count", (bj).ls_group_array_.count(), K((bj).ls_group_array_)); \
+    LOG_INFO("testtest", "unit_array_count", (bj).unit_array_.count(), K((bj).unit_array_)); \
+    LOG_INFO("testtest", "ug_array_count", (bj).ug_array_.count(), K((bj).ug_array_));     \
+    LOG_INFO("testtest", "zone_array_count", (bj).zone_array_.count(), K((bj).zone_array_)); \
+    ARRAY_FOREACH((bj).unit_array_, idx) {                                                 \
+      LOG_INFO("testtest unit_array", K(idx), KPC((bj).unit_array_.at(idx)));              \
+      ASSERT_TRUE((bj).unit_array_.at(idx)->is_valid());                                   \
+      ASSERT_TRUE((bj).unit_array_.at(idx)->unit_->is_valid());                            \
+      ASSERT_TRUE((bj).unit_array_.at(idx)->zone_stat_->is_valid());                       \
+      ASSERT_TRUE((bj).unit_array_.at(idx)->unit_group_stat_->is_valid());                 \
+      ARRAY_FOREACH((bj).unit_array_.at(idx)->ls_group_info_, ls_idx) {                    \
+        ASSERT_TRUE((bj).unit_array_.at(idx)->ls_group_info_.at(ls_idx)->is_valid());      \
+      }                                                                                    \
+    }                                                                                      \
+    ARRAY_FOREACH((bj).ls_group_array_, idx) {                                             \
+      LOG_INFO("testtest ls_group_array", K(idx), KPC((bj).ls_group_array_.at(idx)));      \
+      ASSERT_TRUE((bj).ls_group_array_.at(idx)->is_valid());                               \
+    }                                                                                      \
+    ARRAY_FOREACH((bj).ug_array_, idx) {                                                   \
+      LOG_INFO("testtest ug_array", K(idx), KPC((bj).ug_array_.at(idx)));                  \
+      ASSERT_TRUE((bj).ug_array_.at(idx)->is_valid());                                     \
+      ARRAY_FOREACH((bj).ug_array_.at(idx)->unit_info_, unit_idx) {                        \
+        ASSERT_TRUE((bj).ug_array_.at(idx)->unit_info_.at(unit_idx)->is_valid());          \
+      }                                                                                    \
+      ARRAY_FOREACH((bj).ug_array_.at(idx)->ls_group_info_, ls_idx) {                      \
+        ASSERT_TRUE((bj).ug_array_.at(idx)->ls_group_info_.at(ls_idx)->is_valid());        \
+      }                                                                                    \
+    }                                                                                      \
+    ARRAY_FOREACH((bj).zone_array_, idx) {                                                 \
+      LOG_INFO("testtest zone_array", K(idx), KPC((bj).zone_array_.at(idx)));              \
+      ASSERT_TRUE((bj).zone_array_.at(idx)->is_valid());                                   \
+      ARRAY_FOREACH((bj).zone_array_.at(idx)->valid_unit_array_, unit_idx) {               \
+        ASSERT_TRUE((bj).zone_array_.at(idx)->valid_unit_array_.at(unit_idx)->is_valid()); \
+      }                                                                                    \
+      ARRAY_FOREACH((bj).zone_array_.at(idx)->deleting_unit_array_, unit_idx) {            \
+        ASSERT_TRUE((bj).zone_array_.at(idx)->deleting_unit_array_.at(unit_idx)->is_valid()); \
+      }                                                                                    \
+    }                                                                                      \
+  } while(0)
+
 namespace rootserver{
 class TestLSBalanceHelper : public testing::Test
 {
@@ -118,7 +163,7 @@ int TestLSBalanceHelper::construct_unit_ls_array(const ObZoneUnitCntList &unit_l
     normal_ls1.init(tenant_id, ls_id2, idx + 1001, share::OB_LS_NORMAL, 0, primary_zone2, flag, unit_id_list_array.at(idx));
     ls_array.push_back(normal_ls);
     ls_array.push_back(normal_ls1);
-    if(idx > 200) {
+    if(idx >= 999) {
       break;
     }
   }
@@ -216,9 +261,9 @@ TEST_F(TestLSBalanceHelper, ls_balance1)
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = balance_job.init_tenant_ls_balance_info(tenant_id, ls_array, job_desc, unit_array, tenant_role);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(true, balance_job.zone_array_.at(0).is_in_locality_);
-  ASSERT_EQ(false, balance_job.zone_array_.at(1).is_in_locality_);
-  ASSERT_EQ(true, balance_job.zone_array_.at(2).is_in_locality_);
+  ASSERT_EQ(true, balance_job.zone_array_.at(0)->is_in_locality_);
+  ASSERT_EQ(false, balance_job.zone_array_.at(1)->is_in_locality_);
+  ASSERT_EQ(true, balance_job.zone_array_.at(2)->is_in_locality_);
 
   ls_array.reset();
   ObZone primary_zone("z1");
@@ -402,11 +447,11 @@ TEST_F(TestLSBalanceHelper, ls_balance3)
   ObTenantLSBalanceInfo balance_job(allocator);
   ret = balance_job.init_tenant_ls_balance_info(tenant_id, ls_array, job_desc, unit_array, tenant_role);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(4, balance_job.zone_array_.at(0).valid_unit_array_.count());
-  ASSERT_EQ(4, balance_job.zone_array_.at(1).valid_unit_array_.count());
-  ASSERT_EQ(4, balance_job.zone_array_.at(2).valid_unit_array_.count());
-  ASSERT_EQ(1, balance_job.zone_array_.at(2).deleting_unit_array_.count());
-  ASSERT_EQ(5, balance_job.zone_array_.at(3).valid_unit_array_.count());
+  ASSERT_EQ(4, balance_job.zone_array_.at(0)->valid_unit_array_.count());
+  ASSERT_EQ(4, balance_job.zone_array_.at(1)->valid_unit_array_.count());
+  ASSERT_EQ(4, balance_job.zone_array_.at(2)->valid_unit_array_.count());
+  ASSERT_EQ(1, balance_job.zone_array_.at(2)->deleting_unit_array_.count());
+  ASSERT_EQ(5, balance_job.zone_array_.at(3)->valid_unit_array_.count());
 
   LOG_INFO("TESTTEST", "size", sizeof(balance_job), K(balance_job.zone_array_), K(balance_job.ug_array_));
   balance_job.reset();
@@ -416,12 +461,12 @@ TEST_F(TestLSBalanceHelper, ls_balance3)
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = balance_job.init_tenant_ls_balance_info(tenant_id, ls_array, job_desc, unit_array, tenant_role);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(4, balance_job.zone_array_.at(0).valid_unit_array_.count());
-  ASSERT_EQ(4, balance_job.zone_array_.at(1).valid_unit_array_.count());
-  ASSERT_EQ(4, balance_job.zone_array_.at(2).valid_unit_array_.count());
-  ASSERT_EQ(1, balance_job.zone_array_.at(2).deleting_unit_array_.count());
-  ASSERT_EQ(4, balance_job.zone_array_.at(3).valid_unit_array_.count());
-  ASSERT_EQ(1, balance_job.zone_array_.at(3).deleting_unit_array_.count());
+  ASSERT_EQ(4, balance_job.zone_array_.at(0)->valid_unit_array_.count());
+  ASSERT_EQ(4, balance_job.zone_array_.at(1)->valid_unit_array_.count());
+  ASSERT_EQ(4, balance_job.zone_array_.at(2)->valid_unit_array_.count());
+  ASSERT_EQ(1, balance_job.zone_array_.at(2)->deleting_unit_array_.count());
+  ASSERT_EQ(4, balance_job.zone_array_.at(3)->valid_unit_array_.count());
+  ASSERT_EQ(1, balance_job.zone_array_.at(3)->deleting_unit_array_.count());
 
   LOG_INFO("TESTTEST", "size", sizeof(balance_job), K(balance_job.zone_array_), K(balance_job.ug_array_));
 
@@ -658,7 +703,7 @@ TEST_F(TestLSBalanceHelper, unit_list_balance)
       job_desc, unit_array, tenant_role);
   ASSERT_EQ(OB_SUCCESS, ret);
   ARRAY_FOREACH(balance_job.ls_group_array_, idx) {
-    ASSERT_EQ(2, balance_job.ls_group_array_.at(idx).current_unit_list_.count());
+    ASSERT_EQ(2, balance_job.ls_group_array_.at(idx)->current_unit_list_.count());
   }
   share::ObBalanceJob job;
   common::ObArray<share::ObBalanceTask> task_array;
@@ -669,7 +714,7 @@ TEST_F(TestLSBalanceHelper, unit_list_balance)
   ret = unit_list_balance.balance(true);
   ASSERT_EQ(OB_SUCCESS, ret);
   ARRAY_FOREACH(balance_job.ls_group_array_, idx) {
-    ASSERT_EQ(1, balance_job.ls_group_array_.at(idx).target_unit_list_.count());
+    ASSERT_EQ(1, balance_job.ls_group_array_.at(idx)->target_unit_list_.count());
   }
   LOG_INFO("testtest", K(lsg_op_array));
   //验证加一个zone
@@ -686,14 +731,14 @@ TEST_F(TestLSBalanceHelper, unit_list_balance)
   ret = balance_job.init_tenant_ls_balance_info(tenant_id, ls_array,job_desc, unit_array, tenant_role);
   ASSERT_EQ(OB_SUCCESS, ret);
   ARRAY_FOREACH(balance_job.ls_group_array_, idx) {
-    ASSERT_EQ(2, balance_job.ls_group_array_.at(idx).current_unit_list_.count());
+    ASSERT_EQ(2, balance_job.ls_group_array_.at(idx)->current_unit_list_.count());
   }
   lsg_op_array.reset();
   ObUnitListBalance unit_list_balance2(&balance_job, &sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
   ret = unit_list_balance2.balance(true);
   ASSERT_EQ(OB_SUCCESS, ret);
   ARRAY_FOREACH(balance_job.ls_group_array_, idx) {
-    ASSERT_EQ(3, balance_job.ls_group_array_.at(idx).target_unit_list_.count());
+    ASSERT_EQ(3, balance_job.ls_group_array_.at(idx)->target_unit_list_.count());
   }
   LOG_INFO("testtest", K(lsg_op_array));
 
@@ -721,14 +766,14 @@ TEST_F(TestLSBalanceHelper, unit_list_balance)
   ret = balance_job.init_tenant_ls_balance_info(tenant_id, ls_array,job_desc, unit_array, tenant_role);
   ASSERT_EQ(OB_SUCCESS, ret);
   ARRAY_FOREACH(balance_job.ls_group_array_, idx) {
-    ASSERT_EQ(2, balance_job.ls_group_array_.at(idx).current_unit_list_.count());
+    ASSERT_EQ(2, balance_job.ls_group_array_.at(idx)->current_unit_list_.count());
   }
   lsg_op_array.reset();
   ObUnitListBalance unit_list_balance3(&balance_job, &sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
   ret = unit_list_balance3.balance(true);
   ASSERT_EQ(OB_SUCCESS, ret);
   ARRAY_FOREACH(balance_job.ls_group_array_, idx) {
-    ASSERT_EQ(3, balance_job.ls_group_array_.at(idx).target_unit_list_.count());
+    ASSERT_EQ(3, balance_job.ls_group_array_.at(idx)->target_unit_list_.count());
   }
   LOG_INFO("testtest", K(lsg_op_array));
 
@@ -794,7 +839,7 @@ TEST_F(TestLSBalanceHelper, unit_list_balance2)
       job_desc, unit_array, tenant_role);
   ASSERT_EQ(OB_SUCCESS, ret);
   ARRAY_FOREACH(balance_job.ls_group_array_, idx) {
-    ASSERT_EQ(3, balance_job.ls_group_array_.at(idx).current_unit_list_.count());
+    ASSERT_EQ(3, balance_job.ls_group_array_.at(idx)->current_unit_list_.count());
   }
   share::ObBalanceJob job;
   common::ObArray<share::ObBalanceTask> task_array;
@@ -804,7 +849,7 @@ TEST_F(TestLSBalanceHelper, unit_list_balance2)
   ObUnitListBalance unit_list_balance(&balance_job, &sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
   ret = unit_list_balance.balance(true);
   ARRAY_FOREACH(balance_job.ls_group_array_, idx) {
-    ASSERT_EQ(4, balance_job.ls_group_array_.at(idx).target_unit_list_.count());
+    ASSERT_EQ(4, balance_job.ls_group_array_.at(idx)->target_unit_list_.count());
   }
   LOG_INFO("testtest", K(lsg_op_array));
 
@@ -855,7 +900,7 @@ TEST_F(TestLSBalanceHelper, ls_group_location_balance)
   ASSERT_EQ(OB_SUCCESS, ret);
   ARRAY_FOREACH(balance_job.ls_group_array_, idx) {
     if (0 != idx) {
-      ASSERT_EQ(2, balance_job.ls_group_array_.at(idx).current_unit_list_.count());
+      ASSERT_EQ(2, balance_job.ls_group_array_.at(idx)->current_unit_list_.count());
     }
   }
   share::ObBalanceJob job;
@@ -868,14 +913,14 @@ TEST_F(TestLSBalanceHelper, ls_group_location_balance)
   ASSERT_EQ(OB_SUCCESS, ret);
   ARRAY_FOREACH(balance_job.ls_group_array_, idx) {
     if (idx == 0) {
-      ASSERT_EQ(4, balance_job.ls_group_array_.at(idx).target_unit_list_.count());
+      ASSERT_EQ(4, balance_job.ls_group_array_.at(idx)->target_unit_list_.count());
     } else {
-      ASSERT_EQ(2, balance_job.ls_group_array_.at(idx).target_unit_list_.count());
+      ASSERT_EQ(2, balance_job.ls_group_array_.at(idx)->target_unit_list_.count());
     }
   }
-  ASSERT_EQ(1002, balance_job.ls_group_array_.at(0).target_unit_list_.at(1).id());
-  ASSERT_EQ(1005, balance_job.ls_group_array_.at(0).target_unit_list_.at(2).id());
-  ASSERT_EQ(1008, balance_job.ls_group_array_.at(0).target_unit_list_.at(3).id());
+  ASSERT_EQ(1002, balance_job.ls_group_array_.at(0)->target_unit_list_.at(1).id());
+  ASSERT_EQ(1005, balance_job.ls_group_array_.at(0)->target_unit_list_.at(2).id());
+  ASSERT_EQ(1008, balance_job.ls_group_array_.at(0)->target_unit_list_.at(3).id());
   LOG_INFO("testtest", K(lsg_op_array));
 
   //设置z2不均衡
@@ -912,20 +957,20 @@ TEST_F(TestLSBalanceHelper, ls_group_location_balance)
   LOG_INFO("testtest", K(balance_job.ls_group_array_));
   ObLSGroupLocationBalance ls_group_balance1(&balance_job, &sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
   ret = ls_group_balance1.balance(true);
-  ASSERT_EQ(1007, balance_job.ls_group_array_.at(0).target_unit_list_.at(1).id());
-  ASSERT_EQ(1010, balance_job.ls_group_array_.at(0).target_unit_list_.at(2).id());
+  ASSERT_EQ(1007, balance_job.ls_group_array_.at(0)->target_unit_list_.at(1).id());
+  ASSERT_EQ(1010, balance_job.ls_group_array_.at(0)->target_unit_list_.at(2).id());
 
-  ASSERT_EQ(1002, balance_job.ls_group_array_.at(1).target_unit_list_.at(1).id());
-  ASSERT_EQ(1005, balance_job.ls_group_array_.at(1).target_unit_list_.at(2).id());
-  ASSERT_EQ(1008, balance_job.ls_group_array_.at(1).target_unit_list_.at(3).id());
+  ASSERT_EQ(1002, balance_job.ls_group_array_.at(1)->target_unit_list_.at(1).id());
+  ASSERT_EQ(1005, balance_job.ls_group_array_.at(1)->target_unit_list_.at(2).id());
+  ASSERT_EQ(1008, balance_job.ls_group_array_.at(1)->target_unit_list_.at(3).id());
 
-  ASSERT_EQ(1003, balance_job.ls_group_array_.at(2).target_unit_list_.at(1).id());
-  ASSERT_EQ(1006, balance_job.ls_group_array_.at(2).target_unit_list_.at(2).id());
-  ASSERT_EQ(1009, balance_job.ls_group_array_.at(2).target_unit_list_.at(3).id());
+  ASSERT_EQ(1003, balance_job.ls_group_array_.at(2)->target_unit_list_.at(1).id());
+  ASSERT_EQ(1006, balance_job.ls_group_array_.at(2)->target_unit_list_.at(2).id());
+  ASSERT_EQ(1009, balance_job.ls_group_array_.at(2)->target_unit_list_.at(3).id());
 
-  ASSERT_EQ(1002, balance_job.ls_group_array_.at(3).target_unit_list_.at(1).id());
-  ASSERT_EQ(1005, balance_job.ls_group_array_.at(3).target_unit_list_.at(2).id());
-  ASSERT_EQ(1008, balance_job.ls_group_array_.at(3).target_unit_list_.at(3).id());
+  ASSERT_EQ(1002, balance_job.ls_group_array_.at(3)->target_unit_list_.at(1).id());
+  ASSERT_EQ(1005, balance_job.ls_group_array_.at(3)->target_unit_list_.at(2).id());
+  ASSERT_EQ(1008, balance_job.ls_group_array_.at(3)->target_unit_list_.at(3).id());
 
   LOG_INFO("testtest", K(lsg_op_array));
 
@@ -947,27 +992,88 @@ TEST_F(TestLSBalanceHelper, ls_group_location_balance)
   ret = ls_group_balance2.balance(true);
   ASSERT_EQ(OB_SUCCESS, ret);
   LOG_INFO("testtest", K(lsg_op_array));
-  ASSERT_EQ(1007, balance_job.ls_group_array_.at(0).target_unit_list_.at(1).id());
-  ASSERT_EQ(1010, balance_job.ls_group_array_.at(0).target_unit_list_.at(2).id());
+  ASSERT_EQ(1007, balance_job.ls_group_array_.at(0)->target_unit_list_.at(1).id());
+  ASSERT_EQ(1010, balance_job.ls_group_array_.at(0)->target_unit_list_.at(2).id());
 
-  ASSERT_EQ(1004, balance_job.ls_group_array_.at(1).target_unit_list_.at(1).id());
-  ASSERT_EQ(1005, balance_job.ls_group_array_.at(1).target_unit_list_.at(2).id());
-  ASSERT_EQ(1008, balance_job.ls_group_array_.at(1).target_unit_list_.at(3).id());
+  ASSERT_EQ(1004, balance_job.ls_group_array_.at(1)->target_unit_list_.at(1).id());
+  ASSERT_EQ(1005, balance_job.ls_group_array_.at(1)->target_unit_list_.at(2).id());
+  ASSERT_EQ(1008, balance_job.ls_group_array_.at(1)->target_unit_list_.at(3).id());
 
-  ASSERT_EQ(1004, balance_job.ls_group_array_.at(2).target_unit_list_.at(1).id());
-  ASSERT_EQ(1006, balance_job.ls_group_array_.at(2).target_unit_list_.at(2).id());
-  ASSERT_EQ(1009, balance_job.ls_group_array_.at(2).target_unit_list_.at(3).id());
+  ASSERT_EQ(1004, balance_job.ls_group_array_.at(2)->target_unit_list_.at(1).id());
+  ASSERT_EQ(1006, balance_job.ls_group_array_.at(2)->target_unit_list_.at(2).id());
+  ASSERT_EQ(1009, balance_job.ls_group_array_.at(2)->target_unit_list_.at(3).id());
 
-  ASSERT_EQ(1002, balance_job.ls_group_array_.at(3).target_unit_list_.at(1).id());
-  ASSERT_EQ(1005, balance_job.ls_group_array_.at(3).target_unit_list_.at(2).id());
-  ASSERT_EQ(1008, balance_job.ls_group_array_.at(3).target_unit_list_.at(3).id());
+  ASSERT_EQ(1002, balance_job.ls_group_array_.at(3)->target_unit_list_.at(1).id());
+  ASSERT_EQ(1005, balance_job.ls_group_array_.at(3)->target_unit_list_.at(2).id());
+  ASSERT_EQ(1008, balance_job.ls_group_array_.at(3)->target_unit_list_.at(3).id());
 
-  ASSERT_EQ(1002, balance_job.ls_group_array_.at(4).target_unit_list_.at(0).id());
+  ASSERT_EQ(1002, balance_job.ls_group_array_.at(4)->target_unit_list_.at(0).id());
 
-  ASSERT_EQ(1002, balance_job.ls_group_array_.at(5).target_unit_list_.at(1).id());
+  ASSERT_EQ(1002, balance_job.ls_group_array_.at(5)->target_unit_list_.at(1).id());
 
 
 }
+
+TEST_F(TestLSBalanceHelper, large_cluster_tenant_ls_balance_info)
+{
+  // 测试大集群(unit_num>20)的情况下,ObTenantLSBalanceInfo可以正常构造
+  uint64_t tenant_id = 500;
+  ObArenaAllocator allocator("TntLSBalance" , OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
+  int ret = OB_SUCCESS;
+  ObDisplayZoneUnitCnt z1("zone1", 49);
+  ObDisplayZoneUnitCnt z2("zone2", 50);
+  ObZoneUnitCntList zone_list;
+  ObTenantRole tenant_role(ObTenantRole::Role::PRIMARY_TENANT);
+  ret = zone_list.push_back(z1);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = zone_list.push_back(z2);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObArray<ObUnit> unit_array;
+  ObArray<ObLSStatusInfo> ls_array;
+  ret = construct_unit_ls_array(zone_list, unit_array, ls_array);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObBalanceJobDesc job_desc;
+  ret = job_desc.init_without_job(tenant_id, zone_list, 1, 1, true, true, true);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObTenantLSBalanceInfo balance_job(allocator);
+  ret = balance_job.init_tenant_ls_balance_info(tenant_id, ls_array,
+      job_desc, unit_array, tenant_role);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_BALANCE_JOB_VALID(balance_job);
+
+  // 追加用例：100个zone，每个zone的unit_num=1，能够正常构造
+  {
+    ObZoneUnitCntList zone_list2;
+    for (int i = 1; OB_SUCC(ret) && i <= 100; ++i) {
+      char buf[32];
+      snprintf(buf, sizeof(buf), "zone%d", i);
+      ObDisplayZoneUnitCnt zi(ObZone(buf), 1);
+      ret = zone_list2.push_back(zi);
+      ASSERT_EQ(OB_SUCCESS, ret);
+    }
+    ObArray<ObUnit> unit_array2;
+    ObArray<ObLSStatusInfo> ls_array2;
+    ret = construct_unit_ls_array(zone_list2, unit_array2, ls_array2);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    ObBalanceJobDesc job_desc2;
+    ret = job_desc2.init_without_job(tenant_id, zone_list2, 1, 1, true, true, true);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    ObTenantLSBalanceInfo balance_job2(allocator);
+    ret = balance_job2.init_tenant_ls_balance_info(tenant_id, ls_array2, job_desc2, unit_array2, tenant_role);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    ASSERT_EQ(100, balance_job2.zone_array_.count());
+    ARRAY_FOREACH(balance_job2.zone_array_, idx) {
+      ASSERT_TRUE(balance_job2.zone_array_.at(idx)->is_valid());
+      ASSERT_EQ(1, balance_job2.zone_array_.at(idx)->valid_unit_array_.count());
+    }
+    ASSERT_BALANCE_JOB_VALID(balance_job2);
+  }
+}
+
 }
 }
 int main(int argc, char **argv)
