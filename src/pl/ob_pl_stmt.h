@@ -385,6 +385,7 @@ enum ObPLConditionType //按照优先级顺序从高到低
 #define IDX_CONDITION_LEN 3
 #define IDX_CONDITION_STMT 4
 #define IDX_CONDITION_SIGNAL 5
+#define IDX_CONDITION_OB_ERROR_CODE 6
 
 struct ObPLConditionValue
 {
@@ -396,6 +397,7 @@ public:
       str_len_(0),
       stmt_id_(OB_INVALID_INDEX),
       signal_(false),
+      ob_error_code_(0),
       duplicate_(false) {}
   ObPLConditionValue(ObPLConditionType type, int64_t error_code)
     : type_(type),
@@ -404,6 +406,7 @@ public:
       str_len_(STRLEN(sql_state_)),
       stmt_id_(OB_INVALID_INDEX),
       signal_(false),
+      ob_error_code_(error_code),
       duplicate_(false) {}
 
   //不实现析构函数，省得LLVM映射麻烦
@@ -414,6 +417,7 @@ public:
   static uint32_t str_len_offset_bits() { return offsetof(ObPLConditionValue, str_len_) * 8; }
   static uint32_t stmt_id_offset_bits() { return offsetof(ObPLConditionValue, stmt_id_) * 8; }
   static uint32_t signal_offset_bits() { return offsetof(ObPLConditionValue, signal_) * 8; }
+  static uint32_t ob_error_code_offset_bits() { return offsetof(ObPLConditionValue, ob_error_code_) * 8; }
 
   ObPLConditionType type_;
   int64_t error_code_;
@@ -421,6 +425,7 @@ public:
   int64_t str_len_;
   int64_t stmt_id_; //FOR DEBUG，主流程不需要：作为landingpad的clause时，代表level；当作为抛出的异常时，代表stmt id
   bool signal_; //FOR DEBUG，主流程不需要：作为landingpad的clause时，无意义；当作为抛出的异常时，代表是否由signal语句抛出
+  int64_t ob_error_code_;
   bool duplicate_; // 代表是否重复声明
 
   TO_STRING_KV(
