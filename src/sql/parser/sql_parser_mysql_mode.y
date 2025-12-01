@@ -7052,7 +7052,7 @@ INTNUM
   int err_no = 0;
   uint64_t val = 0;
   val = ob_strntoull($1->raw_text_ + 2, $1->text_len_ - 2, 16, NULL, &err_no);
-  if(val > INT64_MAX || ERANGE == errno) {
+  if(val > INT64_MAX || ERANGE == err_no) {
     YYABORT;
   } else {
     $1->value_ = val;
@@ -17773,6 +17773,7 @@ text_string
   }
   malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 3, $1, $3, $5);
 }
+;
 
 opt_join_or_resume:
 /* empty */
