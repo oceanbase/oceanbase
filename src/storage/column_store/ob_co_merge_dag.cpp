@@ -1092,7 +1092,7 @@ int ObCOMergeFinishTask::process()
       LOG_WARN("failed to update unfinish tablet", K(tmp_ret), K(ctx_->get_merge_version()));
     }
     // ATTENTION! Critical diagnostic log, DO NOT CHANGE!!!
-    FLOG_INFO("sstable merge finish", K(ret), KPC(dag_), "param", ctx_->get_dag_param(),
+    FLOG_INFO("sstable merge finish", K(ret), KPC(dag_), "param", ctx_->get_dag_param(), "merge_info", ctx_->dag_net_merge_history_,
               "mem_peak", ctx_->mem_ctx_.get_total_mem_peak(), "time_guard", ctx_->info_collector_.time_guard_);
   }
 #ifdef ERRSIM

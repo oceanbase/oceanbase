@@ -166,7 +166,7 @@ public:
   void add(const ObMergeBlockInfo &block_info);
   void add_without_row_cnt(const ObMergeBlockInfo &block_info);
   void add_index_block_info(const ObMergeBlockInfo &block_info);
-  TO_STRING_KV(K_(occupy_size), K_(original_size), K_(macro_block_count), K_(multiplexed_macro_block_count),
+  TO_STRING_KV(K_(occupy_size), K_(original_size), K_(compressed_size), K_(macro_block_count), K_(multiplexed_macro_block_count),
     K_(new_micro_count_in_new_macro), K_(multiplexed_micro_count_in_new_macro),
     K_(total_row_count), K_(incremental_row_count), K_(new_micro_info), K_(block_io_us));
 
