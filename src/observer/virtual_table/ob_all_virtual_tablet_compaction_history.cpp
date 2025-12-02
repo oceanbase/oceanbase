@@ -286,6 +286,9 @@ int ObAllVirtualTabletCompactionHistory::process_curr_tenant(ObNewRow *&row)
     case EXECUTE_TIME:
       cells[i].set_int(running_info.execute_time_);
       break;
+    case FILTER_ROW_COUNT:
+      cells[i].set_int(0);
+      break;
     default:
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "invalid column id", K(ret), K(col_id));

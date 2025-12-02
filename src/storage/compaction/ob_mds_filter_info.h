@@ -12,6 +12,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "storage/truncate_info/ob_truncate_info.h"
 #include "lib/oblog/ob_log_module.h"
+#include "storage/compaction_ttl/ob_ttl_filter_info.h"
 namespace oceanbase
 {
 namespace common
@@ -29,6 +30,7 @@ public:
   enum MdsFilterInfoType : uint8_t
   {
     TRUNCATE_INFO = 0,
+    TTL_FILTER_INFO = 1,
     // add new mds filter type here
     MDS_FILTER_TYPE_MAX
   };
@@ -79,12 +81,15 @@ public:
     DISALLOW_COPY_AND_ASSIGN(ObFilterInfoArray);
   };
   typedef ObFilterInfoArray<storage::ObTruncateInfoKey, TRUNCATE_INFO> ObTruncateInfoKeyArray;
+  typedef ObFilterInfoArray<storage::ObTTLFilterInfoKey, TTL_FILTER_INFO> ObTTLFilterInfoKeyArray;
 
 public:
   ObMdsFilterInfo()
     : version_(MDS_FILTER_INFO_VERSION_LATEST),
       reserved_(0),
-      truncate_info_keys_()
+      truncate_info_keys_(),
+      ttl_filter_info_keys_(),
+      mlog_purge_scn_(0)
   {}
   ~ObMdsFilterInfo() {}
   void destroy(common::ObIAllocator &allocator);
@@ -107,10 +112,11 @@ public:
   {
     truncate_info_keys_.gene_info(buf, buf_len, pos);
   }
-  TO_STRING_KV(K_(version), K_(truncate_info_keys));
+  TO_STRING_KV(K_(version), K_(truncate_info_keys), K_(ttl_filter_info_keys), K_(mlog_purge_scn));
 private:
   static const int64_t MDS_FILTER_INFO_VERSION_V1 = 1;
-  static const int64_t MDS_FILTER_INFO_VERSION_LATEST = MDS_FILTER_INFO_VERSION_V1;
+  static const int64_t MDS_FILTER_INFO_VERSION_V2 = 2; // TTL Filter Info & Mlog Purge SCN
+  static const int64_t MDS_FILTER_INFO_VERSION_LATEST = MDS_FILTER_INFO_VERSION_V2;
 private:
   static const int32_t MFI_ONE_BYTE = 8;
   static const int32_t MFI_RESERVED_BITS = 56;
@@ -123,6 +129,8 @@ private:
     };
   };
   ObTruncateInfoKeyArray truncate_info_keys_;
+  ObTTLFilterInfoKeyArray ttl_filter_info_keys_;
+  int64_t mlog_purge_scn_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMdsFilterInfo);
 };

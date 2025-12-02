@@ -65,6 +65,8 @@ public:
     MDS_MINOR_CROSS_LS,
     MDS_IN_MEDIUM_INFO,
     REORG_INFO_MINOR,
+    ROWSCN_FILTER,
+    MLOG_PURGE_FILTER,
     FILTER_TYPE_MAX
   };
   const static char *ObFilterTypeStr[];

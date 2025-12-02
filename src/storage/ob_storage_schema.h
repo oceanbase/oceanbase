@@ -334,7 +334,7 @@ public:
   virtual inline common::ObCompressorType get_compressor_type() const override { return compressor_type_; }
   virtual inline ObMergeEngineType get_merge_engine_type() const override { return merge_engine_type_; }
   virtual inline bool is_delete_insert_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT == merge_engine_type_; }
-  virtual inline bool is_insert_only_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_INSERT_ONLY == merge_engine_type_; }
+  virtual inline bool is_append_only_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY == merge_engine_type_; }
   virtual inline bool is_column_info_simplified() const override { return column_info_simplified_; }
 
   virtual int init_column_meta_array(

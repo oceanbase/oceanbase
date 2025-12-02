@@ -71,6 +71,8 @@ enum ObTTLTaskStatus
   OB_TTL_TASK_CANCEL  = 3,
   OB_TTL_TASK_FINISH  = 4,  //inner state
   OB_TTL_TASK_MOVING  = 5, // deprecated
+  OB_TTL_TASK_SKIP    = 6,
+  OB_TTL_TASK_FAILED  = 7,
   // for rs
   OB_RS_TTL_TASK_CREATE = 15,
   OB_RS_TTL_TASK_SUSPEND = 16,
@@ -86,6 +88,7 @@ enum ObTTLType
   HBASE_ROWKEY = 1,
   LOB_CHECK = 2,
   LOB_CORRECT = 3,
+  COMPACTION_TTL = 4,
 };
 
 typedef struct ObTTLStatus {

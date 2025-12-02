@@ -392,6 +392,7 @@ int ObTabletTableOperator::construct_tablet_replica_(
   ObTabletReplica::ScnStatus status = ObTabletReplica::SCN_STATUS_IDLE;
   bool skip_null_error = false;
   bool skip_column_error = true;
+  int64_t ddl_create_snapshot = 0;
 
   (void) GET_COL_IGNORE_NULL(res.get_int, "tenant_id", tenant_id);
   (void) GET_COL_IGNORE_NULL(res.get_int, "tablet_id", tablet_id);
@@ -404,6 +405,7 @@ int ObTabletTableOperator::construct_tablet_replica_(
 
   EXTRACT_UINT_FIELD_MYSQL_WITH_DEFAULT_VALUE(res, "report_scn", uint_report_scn, uint64_t, skip_null_error, skip_column_error, 0);
   EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(res, "status", status_in_table, int64_t, skip_null_error, skip_column_error, ObTabletReplica::SCN_STATUS_IDLE);
+  EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(res, "ddl_create_snapshot", ddl_create_snapshot, int64_t, skip_null_error, skip_column_error, 0);
 
   status = (ObTabletReplica::ScnStatus)status_in_table;
   compaction_scn = static_cast<int64_t>(uint_compaction_scn);
@@ -424,7 +426,8 @@ int ObTabletTableOperator::construct_tablet_replica_(
           data_size,
           required_size,
           (int64_t)uint_report_scn,
-          status))) {
+          status,
+          ddl_create_snapshot))) {
     LOG_WARN("fail to init replica", KR(ret),
         K(tenant_id), K(tablet_id), K(server), K(ls_id), K(data_size), K(required_size));
   }

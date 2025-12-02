@@ -66,7 +66,7 @@ enum class ObMergeEngineType : uint8_t
 {
   OB_MERGE_ENGINE_PARTIAL_UPDATE = 0,
   OB_MERGE_ENGINE_DELETE_INSERT = 1,
-  OB_MERGE_ENGINE_INSERT_ONLY = 2,
+  OB_MERGE_ENGINE_APPEND_ONLY = 2, //FARM COMPAT WHITELIST
   OB_MERGE_ENGINE_MAX
 };
 
@@ -236,8 +236,8 @@ public:
         str = "DELETE_INSERT";
         break;
       }
-      case ObMergeEngineType::OB_MERGE_ENGINE_INSERT_ONLY: {
-        str = "INSERT_ONLY";
+      case ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY: {
+        str = "APPEND_ONLY";
         break;
       }
       case ObMergeEngineType::OB_MERGE_ENGINE_MAX:

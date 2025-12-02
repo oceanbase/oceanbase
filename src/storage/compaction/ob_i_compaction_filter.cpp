@@ -72,6 +72,8 @@ const char *ObICompactionFilter::ObFilterTypeStr[] =
   "MDS_MINOR_CROSS_LS",
   "MDS_IN_MEDIUM_INFO",
   "MEMBER_TABLE_MINOR",
+  "ROWSCN_FILTER",
+  "MLOG_PURGE_FILTER",
   "FILTER_TYPE_MAX"
 };
 

@@ -1019,12 +1019,6 @@ private:
     share::ObTabletReplicaChecksumItem &tablet_checksum,
     const bool need_checksums,
     const bool is_cs_replica) const;
-  int get_tablet_report_info_by_ckm_info(
-    const common::ObAddr &addr,
-    const blocksstable::ObMajorChecksumInfo &major_ckm_info,
-    ObTabletReplica &tablet_replica,
-    share::ObTabletReplicaChecksumItem &tablet_checksum,
-    const bool need_checksums) const;
 
   // mds mvs
   int build_mds_mini_sstable_for_migration(

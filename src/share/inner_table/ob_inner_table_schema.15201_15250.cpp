@@ -4718,6 +4718,21 @@ int ObInnerTableSchema::all_virtual_tablet_compaction_history_ora_schema(ObTable
       false, //is_nullable
       false); //is_autoincrement
   }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("FILTER_ROW_COUNT", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObNumberType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      38, //column_length
+      38, //column_precision
+      0, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
   if (OB_SUCC(ret)) {
     table_schema.get_part_option().set_part_num(1);
     table_schema.set_part_level(PARTITION_LEVEL_ONE);
@@ -5436,6 +5451,21 @@ int ObInnerTableSchema::all_virtual_tablet_meta_table_ora_schema(ObTableSchema &
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA("STATUS", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObNumberType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      38, //column_length
+      38, //column_precision
+      0, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("DDL_CREATE_SNAPSHOT", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id

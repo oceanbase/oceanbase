@@ -2300,6 +2300,7 @@ public:
        DYNAMIC_PARTITION_POLICY,
        MICRO_BLOCK_FORMAT_VERSION,
        SEMISTRUCT_PROPERTIES,
+       SKIP_INDEX_LEVEL,
        MAX_OPTION = 1000
   };
   enum AlterPartitionType

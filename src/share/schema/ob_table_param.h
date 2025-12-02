@@ -447,6 +447,7 @@ private:
   common::ObFixedArray<ObAggrParamProperty, common::ObIAllocator> aggregate_param_props_;
   // whether the whole plan use rich format, table scan may not use new format, but the whole plan uses new format
   bool plan_enable_rich_format_;
+  ObMergeEngineType merge_engine_type_;
 };
 } //namespace schema
 } //namespace share

@@ -102,6 +102,7 @@ public:
   int mds_deserialize(const char *, const int64_t, int64_t &) const { return OB_SUCCESS; }
   int64_t mds_get_serialize_size() const { return 0; }
   int assign(const ObTTLFilterInfoKey &other) { return OB_SUCCESS; }
+  void gene_info(char *buf, const int64_t buf_len, int64_t &pos) const {}
 };
 
 struct ObTTLFilterInfo final

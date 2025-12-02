@@ -34,6 +34,7 @@ public:
     UPDATE,
     DELETE,
     REPLAY,
+    DELETE_RANGE, // filtered by compaction_filter
     INVALID
   };
   ObMergeLog()

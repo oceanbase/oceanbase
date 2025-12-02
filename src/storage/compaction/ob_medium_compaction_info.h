@@ -333,6 +333,7 @@ public:
   uint64_t encoding_granularity_;
   ObMdsFilterInfo mds_filter_info_;
   ObIncMajorSSTableInfo inc_major_info_; // store inc major sstable checksum and end scn
+  ObCOMajorMergeStrategy co_major_merge_strategy_;
   ObIAllocator *allocator_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMediumCompactionInfo);

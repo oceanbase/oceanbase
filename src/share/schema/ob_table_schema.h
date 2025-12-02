@@ -706,7 +706,7 @@ public:
   virtual inline int64_t get_progressive_merge_num() const { return INVAID_RET; }
   virtual inline ObMergeEngineType get_merge_engine_type() const { return ObMergeEngineType::OB_MERGE_ENGINE_MAX; }
   virtual inline bool is_delete_insert_merge_engine() const { return false; }
-  virtual inline bool is_insert_only_merge_engine() const { return false; }
+  virtual inline bool is_append_only_merge_engine() const { return false; }
   virtual inline ObTableModeFlag get_table_mode_flag() const { return TABLE_MODE_MAX; }
   virtual inline ObTableType get_table_type() const { return MAX_TABLE_TYPE; }
   virtual inline ObTableMode get_table_mode_struct() const = 0;
@@ -1657,7 +1657,7 @@ public:
   inline int64_t get_storage_format_version() const { return storage_format_version_; }
   inline virtual ObMergeEngineType get_merge_engine_type() const override { return merge_engine_type_; }
   inline virtual bool is_delete_insert_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT == merge_engine_type_; }
-  inline virtual bool is_insert_only_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_INSERT_ONLY == merge_engine_type_; }
+  inline virtual bool is_append_only_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY == merge_engine_type_; }
   inline const char *get_tablegroup_name_str() const { return extract_str(tablegroup_name_); }
   inline const common::ObString &get_tablegroup_name() const { return tablegroup_name_; }
   inline const char *get_comment() const { return extract_str(comment_); }
