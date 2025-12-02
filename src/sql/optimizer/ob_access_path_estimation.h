@@ -164,6 +164,7 @@ private:
                                     common::ObIArray<AccessPath*> &paths,
                                     const ObIArray<ObRawExpr*> &filter_exprs,
                                     const ObBaseTableEstMethod &valid_methods,
+                                    const ObBaseTableEstMethod &hint_specify_methods,
                                     ObBaseTableEstMethod& method);
 
   static int do_estimate_rowcount(ObOptimizerContext &ctx,

@@ -1541,7 +1541,8 @@ struct MergeKeyInfoHelper
       inner_path_infos_(),
       cnt_rownum_(false),
       total_path_num_(0),
-      current_join_output_rows_(-1.0)
+      current_join_output_rows_(-1.0),
+      best_cost_(-1.0)
     {
     }
     virtual ~ObJoinOrder();
@@ -1651,6 +1652,7 @@ struct MergeKeyInfoHelper
      * @return
      */
     int add_path(Path* path);
+    int update_cost_and_cardinality(const Path &path);
     int add_recycled_paths(Path* path);
     int compute_vec_idx_path_relationship(const AccessPath &first_path,
                                           const AccessPath &second_path,
@@ -2916,9 +2918,9 @@ struct MergeKeyInfoHelper
                                        const ObIArray<double> &ambient_card,
                                        double &new_ambient_card,
                                        const ObJoinType assumption_type);
-    int revise_cardinality(const ObJoinOrder *left_tree,
-                           const ObJoinOrder *right_tree,
-                           const JoinInfo &join_info);
+    int calc_cardinality(const ObJoinOrder *left_tree,
+                         const ObJoinOrder *right_tree,
+                         const JoinInfo &join_info);
     inline void set_cnt_rownum(const bool cnt_rownum) { cnt_rownum_ = cnt_rownum; }
     inline bool get_cnt_rownum() const { return cnt_rownum_; }
     inline void increase_total_path_num() { total_path_num_ ++; }
@@ -3234,6 +3236,8 @@ struct MergeKeyInfoHelper
     uint64_t total_path_num_;
     common::ObSEArray<double, 8, common::ModulePageAllocator, true> ambient_card_;
     double current_join_output_rows_; // 记录对当前连接树估计的输出行数
+    ObSEArray<double, 8, common::ModulePageAllocator, true> current_join_ambient_card_;
+    double best_cost_;
   private:
     DISALLOW_COPY_AND_ASSIGN(ObJoinOrder);
   };

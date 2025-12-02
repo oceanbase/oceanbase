@@ -7243,11 +7243,38 @@ int ObJoinOrder::add_path(Path* path)
       } else if (!should_add && OB_FAIL(add_recycled_paths(path))) {
         LOG_WARN("failed to add recycled path", K(ret));
       } else if (should_add) {
+        if (OB_FAIL(update_cost_and_cardinality(*path))) {
+          LOG_WARN("failed to update cost and cardinality", K(ret));
+        }
         OPT_TRACE("this path is added, interesting path count:", interesting_paths_.count());
       } else {
         OPT_TRACE("this path is domained, interesting path count:", interesting_paths_.count());
       }
     }
+  }
+  return ret;
+}
+
+int ObJoinOrder::update_cost_and_cardinality(const Path &path)
+{
+  int ret = OB_SUCCESS;
+  if (JOIN != type_ || OB_ISNULL(OPT_CTX.get_query_ctx()) ||
+      !OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_2)) {
+    if (best_cost_ < 0 || best_cost_ > path.get_cost()) {
+      best_cost_ = path.get_cost();
+    }
+  } else if (OB_UNLIKELY(current_join_output_rows_ < 0) ||
+             OB_UNLIKELY(current_join_ambient_card_.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param", K(current_join_output_rows_));
+  } else if (best_cost_ < 0 || best_cost_ > path.get_cost()) {
+    best_cost_ = path.get_cost();
+    set_output_rows(current_join_output_rows_);
+    if (OB_FAIL(ambient_card_.assign(current_join_ambient_card_))) {
+      LOG_WARN("failed to assign", K(ret));
+    }
+    OPT_TRACE("Update revised ambient cardinality :", ambient_card_);
+    OPT_TRACE("Update revised output rows :", output_rows_);
   }
   return ret;
 }
@@ -17599,15 +17626,15 @@ int ObJoinOrder::scale_ambient_card(const double origin_rows,
   return ret;
 }
 
-int ObJoinOrder::revise_cardinality(const ObJoinOrder *left_tree,
-                                    const ObJoinOrder *right_tree,
-                                    const JoinInfo &join_info)
+int ObJoinOrder::calc_cardinality(const ObJoinOrder *left_tree,
+                                  const ObJoinOrder *right_tree,
+                                  const JoinInfo &join_info)
 {
   int ret = OB_SUCCESS;
   double sel = 1.0;
   EqualSets equal_sets;
-  ObSEArray<double, 8> cur_join_ambient_card;
   current_join_output_rows_ = 0.0;
+  current_join_ambient_card_.reuse();
   double new_rows = 0.0;
   double selectivity = 0.0;
   if (OB_ISNULL(left_tree) || OB_ISNULL(right_tree) ||
@@ -17620,7 +17647,9 @@ int ObJoinOrder::revise_cardinality(const ObJoinOrder *left_tree,
   } else if (OB_FAIL(append(equal_sets, left_tree->get_output_equal_sets())) ||
              OB_FAIL(append(equal_sets, right_tree->get_output_equal_sets()))) {
     LOG_WARN("failed to append equal sets", K(ret));
-  } else if (OB_FAIL(merge_ambient_card(left_tree->get_ambient_card(), right_tree->get_ambient_card(), cur_join_ambient_card))) {
+  } else if (OB_FAIL(merge_ambient_card(left_tree->get_ambient_card(),
+                                        right_tree->get_ambient_card(),
+                                        current_join_ambient_card_))) {
     LOG_WARN("failed to merge rowcnts", K(ret));
   } else if (OB_FAIL(calc_join_output_rows(get_plan(),
                                            left_tree->get_tables(),
@@ -17635,27 +17664,37 @@ int ObJoinOrder::revise_cardinality(const ObJoinOrder *left_tree,
                                             *right_tree,
                                             current_join_output_rows_,
                                             join_info, equal_sets,
-                                            cur_join_ambient_card))) {
+                                            current_join_ambient_card_))) {
     LOG_WARN("failed to scale base table rowcnts", K(ret));
-  } else if (OB_UNLIKELY(cur_join_ambient_card.count() != ambient_card_.count())) {
+  } else if (OB_UNLIKELY(current_join_ambient_card_.count() != ambient_card_.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected ambient card", K(left_tree->get_ambient_card()),
-      K(right_tree->get_ambient_card()), K(cur_join_ambient_card), K(ambient_card_));
+      K(right_tree->get_ambient_card()), K(current_join_ambient_card_), K(ambient_card_));
   } else {
     get_plan()->get_selectivity_ctx().clear();
 
     // choose the minimal ambient cardinality and maximum output rowcnt
-    for (int64_t i = 0; i < ambient_card_.count(); i ++) {
-      ambient_card_.at(i) = std::min(ambient_card_.at(i), cur_join_ambient_card.at(i));
+    if (!OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_2)) {
+      for (int64_t i = 0; i < ambient_card_.count(); i ++) {
+        ambient_card_.at(i) = std::min(ambient_card_.at(i), current_join_ambient_card_.at(i));
+      }
+      new_rows = std::max(current_join_output_rows_, get_output_rows());
+      set_output_rows(new_rows);
+      OPT_TRACE("Revised ambient cardinality :", ambient_card_);
+      OPT_TRACE("Revised output rows :", new_rows);
+    } else {
+      if (get_output_rows() < 0) {
+        for (int64_t i = 0; i < ambient_card_.count(); i ++) {
+          ambient_card_.at(i) = current_join_ambient_card_.at(i);
+        }
+        set_output_rows(current_join_output_rows_);
+      }
     }
-    new_rows = std::max(current_join_output_rows_, get_output_rows());
-    set_output_rows(new_rows);
+
     OPT_TRACE("left output rows :", left_tree->get_output_rows(), " ambient cardinality :", left_tree->get_ambient_card());
     OPT_TRACE("right output rows :", right_tree->get_output_rows(), " ambient cardinality :", right_tree->get_ambient_card());
-    OPT_TRACE("output rows of", left_tree, "join", right_tree, ":", current_join_output_rows_, " ambient cardinality :", cur_join_ambient_card);
-    OPT_TRACE("Revised ambient cardinality :", ambient_card_);
-    OPT_TRACE("Revised output rows :", new_rows);
-    LOG_DEBUG("estimate join ambient card", K(table_set_), K(left_tree->get_tables()), K(right_tree->get_tables()), K(cur_join_ambient_card));
+    OPT_TRACE("output rows of", left_tree, "join", right_tree, ":", current_join_output_rows_, " ambient cardinality :", current_join_ambient_card_);
+    LOG_DEBUG("estimate join ambient card", K(table_set_), K(left_tree->get_tables()), K(right_tree->get_tables()), K(current_join_ambient_card_));
   }
   return ret;
 }
@@ -17704,10 +17743,10 @@ int ObJoinOrder::calc_join_ambient_card(ObLogPlan *plan,
     if (CONNECT_BY_JOIN == join_type) {
       // todo
     } else if (IS_RIGHT_SEMI_ANTI_JOIN(join_type)) {
-      left_ambient_card_sel = 0.0;
+      left_ambient_card_sel = 1.0;
       for (int64_t i = 0; i < ambient_card_sels.count(); i ++) {
         if (left_ids.has_member(i)) {
-          ambient_card_sels.at(i) = 0.0;
+          ambient_card_sels.at(i) = 1.0;
         }
       }
     } else if (LEFT_OUTER_JOIN == join_type || FULL_OUTER_JOIN == join_type) {
@@ -17759,10 +17798,10 @@ int ObJoinOrder::calc_join_ambient_card(ObLogPlan *plan,
     if (CONNECT_BY_JOIN == join_type) {
       // todo
     } else if (IS_LEFT_SEMI_ANTI_JOIN(join_type)) {
-      right_ambient_card_sel = 0.0;
+      right_ambient_card_sel = 1.0;
       for (int64_t i = 0; i < ambient_card_sels.count(); i ++) {
         if (right_ids.has_member(i)) {
-          ambient_card_sels.at(i) = 0.0;
+          ambient_card_sels.at(i) = 1.0;
         }
       }
     } else if (RIGHT_OUTER_JOIN == join_type || FULL_OUTER_JOIN == join_type) {
