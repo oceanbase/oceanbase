@@ -1274,6 +1274,17 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       cells[i].set_uint64(cg_time);
       break;
     }
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::CACHE_NODE_ID:
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::PCV_ID:
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::PLAN_SET_ID:
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::CREATE_REASON:
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::BASE_TABLE_LOCATION_CONSTRAINT:
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::DUPLICATE_TABLE_REPLICA_CONSTRAINT:
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::STRICT_LOCATION_CONSTRAINT:
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::NON_STRICT_LOCATION_CONSTRAINT: {
+      cells[i].set_null();
+      break;
+    }
     default: {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN,
