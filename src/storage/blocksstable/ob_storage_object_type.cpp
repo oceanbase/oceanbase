@@ -110,6 +110,10 @@ static const char *ob_storage_object_type_strs[] = {
   "SHARED_INC_MAJOR_DATA_MACRO",
   "SHARED_INC_MAJOR_META_MACRO",
   "SHARED_TABLET_SUB_META_IN_TABLE",
+  "SHARED_MINI_V2_DATA_MACRO",
+  "SHARED_MINI_V2_META_MACRO",
+  "SHARED_MINOR_V2_DATA_MACRO",
+  "SHARED_MINOR_V2_META_MACRO",
   "MAX"
 };
 
@@ -4384,6 +4388,38 @@ bool ObSharedTabletSubMetaInTableType::is_valid(const MacroBlockId &file_id) con
 {
   return true;
 }
+/**
+ * ---------------------------------------ObSharedMiniV2DataMacroType----------------------------------------
+ */
+
+bool ObSharedMiniV2DataMacroType::is_valid(const MacroBlockId &file_id) const
+{
+  return true;
+}
+/**
+ * ---------------------------------------ObSharedMiniV2MetaMacroType----------------------------------------
+ */
+
+bool ObSharedMiniV2MetaMacroType::is_valid(const MacroBlockId &file_id) const
+{
+  return true;
+}
+/**
+ * ---------------------------------------ObSharedMinorV2DataMacroType----------------------------------------
+ */
+
+bool ObSharedMinorV2DataMacroType::is_valid(const MacroBlockId &file_id) const
+{
+  return true;
+}
+/**
+ * ---------------------------------------ObSharedMinorV2MetaMacroType----------------------------------------
+ */
+
+bool ObSharedMinorV2MetaMacroType::is_valid(const MacroBlockId &file_id) const
+{
+  return true;
+}
 
 const ObStorageObjectTypeBase &ObStorageObjectTypeInstance::get_instance(ObStorageObjectType type)
 {
@@ -4526,6 +4562,22 @@ const ObStorageObjectTypeBase &ObStorageObjectTypeInstance::get_instance(ObStora
     }
     case ObStorageObjectType::SHARED_TABLET_SUB_META_IN_TABLE: {
       static const ObSharedTabletSubMetaInTableType instance;
+      return instance;
+    }
+    case ObStorageObjectType::SHARED_MINI_V2_DATA_MACRO: {
+      static const ObSharedMiniV2DataMacroType instance;
+      return instance;
+    }
+    case ObStorageObjectType::SHARED_MINI_V2_META_MACRO: {
+      static const ObSharedMiniV2MetaMacroType instance;
+      return instance;
+    }
+    case ObStorageObjectType::SHARED_MINOR_V2_DATA_MACRO: {
+      static const ObSharedMinorV2DataMacroType instance;
+      return instance;
+    }
+    case ObStorageObjectType::SHARED_MINOR_V2_META_MACRO: {
+      static const ObSharedMinorV2MetaMacroType instance;
       return instance;
     }
     default: {
