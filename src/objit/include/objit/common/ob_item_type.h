@@ -2992,6 +2992,7 @@ typedef enum ObItemType
   T_FTS_INDEX_FILTER = 4938, // fulltext index filter
   T_FTS_INDEX_MATCH = 4939, // fulltext index phrase match
   T_FTS_INDEX_PHRASE_MATCH = 4940, // fulltext index phrase match type
+  T_TENANT_TABLE_MAJOR_FREEZE = 4941, // tenant table major freeze
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
