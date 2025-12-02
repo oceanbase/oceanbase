@@ -1509,6 +1509,9 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    ctx_.formalize_const_int_prec_ = false;
+  }
   if (OB_SUCC(ret) && (NULL != expr) && OB_FAIL(expr->fast_check_status())) {
     LOG_WARN("check status failed", K(ret));
   }
