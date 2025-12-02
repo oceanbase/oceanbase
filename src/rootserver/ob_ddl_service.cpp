@@ -3390,7 +3390,7 @@ int ObDDLService::set_raw_table_options(
             LOG_WARN(QUEUING_MODE_NOT_COMPAT_WARN_STR, K(ret), K(compat_version), K(alter_table_schema.get_table_mode()));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, QUEUING_MODE_NOT_COMPAT_USER_ERROR_STR);
           } else {
-            new_table_schema.set_table_mode(alter_table_schema.get_table_mode());
+            new_table_schema.set_table_mode_flag(alter_table_schema.get_table_mode_flag());
             need_update_index_table = true;
           }
           break;

@@ -2016,7 +2016,7 @@ int ObIndexBuilder::generate_schema(
       // column information of the global index is filled during the resolve stage
       const bool is_index_local_storage = share::schema::is_index_local_storage(arg.index_type_);
       const bool need_generate_index_schema_column = (is_index_local_storage || global_index_without_column_info);
-      schema.set_table_mode(data_schema.get_table_mode_flag());
+      schema.set_table_mode_flag(data_schema.get_table_mode_flag());
       schema.set_lob_inrow_threshold(data_schema.get_lob_inrow_threshold());
       schema.set_table_state_flag(data_schema.get_table_state_flag());
       schema.set_mv_mode(data_schema.get_mv_mode());
