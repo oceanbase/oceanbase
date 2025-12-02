@@ -4205,14 +4205,12 @@ int ObSelectLogPlan::compute_set_exchange_info(const EqualSets &equal_sets,
         dist_method = ObPQDistributeMethod::HASH;
       }
       if (OB_SUCC(ret)) {
-        left_exch_info.unmatch_row_dist_method_ = dist_method;
         left_exch_info.strong_sharding_ = get_optimizer_context().get_distributed_sharding();
       }
     } else {
       if (OB_FAIL(left_exch_info.weak_sharding_.assign(right_child.get_weak_sharding()))) {
         LOG_WARN("failed to assign weak sharding", K(ret));
       } else {
-        left_exch_info.unmatch_row_dist_method_ = ObPQDistributeMethod::DROP;
         left_exch_info.strong_sharding_ = right_child.get_strong_sharding();
       }
     }
@@ -4238,14 +4236,12 @@ int ObSelectLogPlan::compute_set_exchange_info(const EqualSets &equal_sets,
         dist_method = ObPQDistributeMethod::HASH;
       }
       if (OB_SUCC(ret)) {
-        right_exch_info.unmatch_row_dist_method_ = dist_method;
         right_exch_info.strong_sharding_ = get_optimizer_context().get_distributed_sharding();
       }
     } else {
       if (OB_FAIL(right_exch_info.weak_sharding_.assign(left_child.get_weak_sharding()))) {
         LOG_WARN("failed to assign weak sharding", K(ret));
       } else {
-        right_exch_info.unmatch_row_dist_method_ = ObPQDistributeMethod::DROP;
         right_exch_info.strong_sharding_ = left_child.get_strong_sharding();
       }
     }
