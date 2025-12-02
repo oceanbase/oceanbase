@@ -1004,6 +1004,7 @@ TEST_F(TestFileManager, test_tmp_file_operator)
   write_info.mtl_tenant_id_ = MTL_ID();
   write_info.set_tmp_file_valid_length(write_io_size);
   ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::append_file(write_info, write_object_handle));
+  write_object_handle.reset();
 
   // step 3: test read tmp_file
   ObStorageObjectHandle read_object_handle;
@@ -1020,6 +1021,7 @@ TEST_F(TestFileManager, test_tmp_file_operator)
   ASSERT_NE(nullptr, read_object_handle.get_buffer());
   ASSERT_EQ(read_info.size_, read_object_handle.get_data_size());
   ASSERT_EQ(0, memcmp(write_buf, read_object_handle.get_buffer(), write_io_size));
+  read_object_handle.reset();
 
   // test 4: test fsync tmp_file
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->fsync_file(file_id));
@@ -1034,7 +1036,9 @@ TEST_F(TestFileManager, test_tmp_file_operator)
   append_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
   append_info.mtl_tenant_id_ = MTL_ID();
   append_info.set_tmp_file_valid_length(write_io_size + write_io_size);
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(file_id));
   ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::append_file(append_info, write_object_handle));
+  write_object_handle.reset();
 
   // step 6: test read tmp_file
   read_object_handle.reset();
@@ -1050,6 +1054,7 @@ TEST_F(TestFileManager, test_tmp_file_operator)
   ASSERT_NE(nullptr, read_object_handle.get_buffer());
   ASSERT_EQ(read_info.size_, read_object_handle.get_data_size());
   ASSERT_EQ(0, memcmp(write_buf, read_object_handle.get_buffer(), write_io_size));
+  read_object_handle.reset();
 
   // step 7: test is exist file
   bool is_exist = false;

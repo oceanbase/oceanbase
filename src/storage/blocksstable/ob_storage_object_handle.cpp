@@ -354,7 +354,7 @@ int ObStorageObjectHandle::ss_update_object_type_rw_stat(const blocksstable::ObS
     ObSSLocalCacheService *local_cache_service = nullptr;
     if (OB_ISNULL(local_cache_service = MTL(ObSSLocalCacheService *))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("local cache service is null", KR(ret));
+      LOG_WARN("local cache service is null", KR(ret), K(MTL_ID()));
     } else {
       ObIOFlag io_flag;
       if (OB_FAIL(io_handle_.get_io_flag(io_flag))) {

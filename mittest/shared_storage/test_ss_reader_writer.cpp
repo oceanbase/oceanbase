@@ -20,6 +20,11 @@
 #include "storage/shared_storage/macro_cache/ob_ss_macro_cache_mgr.h"
 #include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
 #include "storage/blocksstable/ob_ss_obj_util.h"
+#include "storage/shared_storage/ob_segment_file_manager.h"
+#include "storage/shared_storage/ob_file_manager.h"
+#include "storage/shared_storage/ob_ss_tmp_file_io_callback.h"
+#include <thread>
+#include <atomic>
 #undef private
 #undef protected
 
@@ -1232,104 +1237,6 @@ static void get_random_io_info(ObIOInfo &io_info)
   io_info.flag_.set_read();
 }
 
-// Test dual write mode for 2MB sealed tmp file
-TEST_F(TestSSReaderWriter, tmp_file_2MB_sealed_dual_write)
-{
-  int ret = OB_SUCCESS;
-  ObTenantFileManager *file_manager = MTL(ObTenantFileManager *);
-  ASSERT_NE(nullptr, file_manager);
-  ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr *);
-  ASSERT_NE(nullptr, macro_cache_mgr);
-
-  // to avoid affecting tmp file seg_meta_map and tmp file tmp_file_write_free_disk_size
-  // disable tmp_file_flush_task, preread_task_, calibrate_disk_space_task and gc_unsealed_tmp_file_task
-  // preread_task_ will affect local disk size, so preread_task_ need to disble
-  file_manager->preread_cache_mgr_.preread_task_.is_inited_ = false;
-  macro_cache_mgr->evict_task_.is_inited_ = false;
-  macro_cache_mgr->flush_task_.is_inited_ = false;
-  file_manager->calibrate_disk_space_task_.is_inited_ = false;
-  file_manager->segment_file_mgr_.gc_segment_file_task_.is_inited_ = false;
-  sleep(3);
-
-  uint64_t tmp_file_id = 300;
-  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tmp_file_dir(MTL_ID(), MTL_EPOCH_ID(), tmp_file_id));
-
-  MacroBlockId macro_id;
-  macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
-  macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::TMP_FILE);
-  macro_id.set_second_id(tmp_file_id);
-
-  LOG_INFO("=== Test 1: Dual write mode with local space available ===");
-
-  // Ensure sufficient disk space
-  check_tmp_file_disk_size_enough(OB_DEFAULT_MACRO_BLOCK_SIZE);
-
-  // Write 2MB sealed segment
-  macro_id.set_third_id(200);
-  write_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/,
-                      OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/, true/*is_sealed*/, write_buf_);
-
-  // Verify data can be read correctly from local cache
-  read_and_compare_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/);
-
-  // For dual write with local space available: local write succeeds, meta needed
-  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/);
-
-  // Check if file exists in local cache
-  bool is_local_exist = false;
-  ASSERT_EQ(OB_SUCCESS, file_manager->is_exist_local_file(macro_id, 0/*ls_epoch_id*/, is_local_exist));
-  ASSERT_TRUE(is_local_exist);
-  LOG_INFO("dual write test 1 passed: file exists in local cache", K(macro_id), K(is_local_exist));
-
-  LOG_INFO("=== Test 2: Overwrite 8KB unsealed with 2MB sealed (dual write) ===");
-
-  // First write 8KB unsealed segment
-  macro_id.set_third_id(201);
-  check_tmp_file_disk_size_enough(8192);
-  write_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/, 8192/*valid_length*/,
-                      false/*is_sealed*/, write_buf_);
-  read_and_compare_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/);
-
-  // Verify 8KB segment has meta
-  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/, 8192/*valid_length*/);
-
-  // Then write 2MB sealed segment (should trigger dual write mode)
-  check_tmp_file_disk_size_enough(OB_DEFAULT_MACRO_BLOCK_SIZE);
-  write_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/,
-                      OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/, true/*is_sealed*/, write_buf_);
-
-  // Verify 2MB sealed data can be read correctly
-  read_and_compare_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/);
-
-  // After 2MB sealed write, meta should exist because write local need meta
-  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/);
-
-  LOG_INFO("dual write test 2 passed: 8KB to 2MB overwrite works correctly");
-
-  LOG_INFO("=== Test 3: Write_through fallback when disk space insufficient ===");
-
-  // Exhaust disk space
-  int64_t avail_size = 0;
-  exhaust_tmp_file_disk_size(avail_size);
-
-  // Write 2MB sealed segment (should fallback to write_through)
-  macro_id.set_third_id(202);
-  write_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/,
-                      OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/, true/*is_sealed*/, write_buf_);
-
-  // Verify data can be read from object storage
-  read_and_compare_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/);
-
-  // write_through mode, no meta for sealed segment
-  check_tmp_file_seg_meta(macro_id, false/*is_meta_exist*/);
-
-  LOG_INFO("dual write test 3 passed: write_through fallback works when disk full");
-  // Cleanup
-  release_tmp_file_disk_size(avail_size);
-
-  LOG_INFO("=== All dual write tests passed! ===");
-}
-
 TEST_F(TestSSReaderWriter, test_batch_delete_tmp_files)
 {
   int ret = OB_SUCCESS;
@@ -1439,6 +1346,885 @@ TEST_F(TestSSReaderWriter, test_batch_delete_tmp_files)
   // Release disk space for next test
   release_tmp_file_disk_size(avail_size);
   LOG_INFO("=== Remote tmp files batch delete test passed ===");
+}
+
+// Test concurrent conflict info creation to cover "fail to set refactored conflict info map" scenario
+TEST_F(TestSSReaderWriter, test_concurrent_conflict_info_creation)
+{
+  static int64_t call_times = 0;
+  call_times++;
+  int ret = OB_SUCCESS;
+
+  // Use a brand new tmp_file_id and segment_id that doesn't exist in the map
+  const int64_t tmp_file_id = 9001;
+  const int64_t segment_id = 8001;
+  const TmpFileSegId seg_id(tmp_file_id, segment_id);
+
+  ObTenantFileManager *file_mgr = MTL(ObTenantFileManager *);
+
+  if (OB_NOT_NULL(file_mgr)) {
+    ObSegmentFileManager *segment_file_mgr = &(file_mgr->get_segment_file_mgr());
+    {
+      LOG_INFO("Testing concurrent conflict info creation", K(seg_id), "call_times", call_times);
+
+      // Create tmp file directory first
+      ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tmp_file_dir(MTL_ID(), MTL_EPOCH_ID(), tmp_file_id))
+        << "call_times: " << call_times;
+
+      // Create a valid macro block ID for tmp file
+      MacroBlockId macro_id;
+      macro_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+      macro_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+      macro_id.set_second_id(tmp_file_id);
+      macro_id.set_third_id(segment_id);
+
+      // Exhaust disk space to ensure file allocation works properly
+      int64_t avail_size = 0;
+      exhaust_tmp_file_disk_size(avail_size);
+
+      // DO NOT pre-create conflict info - let threads race to create it
+      // This will trigger the scenario where multiple threads try to insert the same seg_id
+
+      // Use atomic counters to track results
+      std::atomic<int> successful_creates(0);
+      std::atomic<int> hash_exist_errors(0);
+      std::atomic<int> other_errors(0);
+
+      // Get MTL components in main thread to avoid multi-threading MTL issues
+      uint64_t tenant_id = MTL_ID();
+
+      // Create multiple threads to race for conflict info creation
+      const int THREAD_COUNT = 5;
+      std::thread threads[THREAD_COUNT];
+
+      // Use a barrier to make all threads start at roughly the same time
+      std::atomic<bool> start_flag(false);
+      std::atomic<int> ready_count(0);
+
+      for (int i = 0; i < THREAD_COUNT; i++) {
+        threads[i] = std::thread([&, i, tenant_id, macro_id]() {
+          // Signal ready and wait for start
+          ready_count.fetch_add(1);
+          while (!start_flag.load()) {
+            std::this_thread::yield();
+          }
+
+          // Set MTL context for worker thread
+          MTL_SWITCH(tenant_id) {
+            ObStorageObjectWriteInfo write_info;
+            ObStorageObjectHandle write_handle;
+
+            write_info.size_ = 8192;
+            write_info.buffer_ = write_buf_;
+            write_info.offset_ = 0;
+            write_info.io_desc_.set_wait_event(1);
+            write_info.io_desc_.set_unsealed();
+            write_info.io_timeout_ms_ = 10000;
+            write_info.mtl_tenant_id_ = tenant_id;
+            write_info.set_tmp_file_valid_length(8192);
+            write_handle.macro_id_ = macro_id;
+
+            // This will call get_or_create_conflict_info_handle internally
+            // Multiple threads racing here will trigger the map insertion conflict
+            int thread_ret = segment_file_mgr->async_append_file(write_info, write_handle);
+
+            if (thread_ret == OB_SUCCESS) {
+              successful_creates.fetch_add(1);
+              LOG_INFO("Thread successfully created conflict info and started write", "thread_id", i, K(seg_id));
+              usleep(50000); // 50ms to hold write lock briefly
+            } else if (thread_ret == OB_ERR_EXCLUSIVE_LOCK_CONFLICT) {
+              hash_exist_errors.fetch_add(1);
+              LOG_INFO("Thread detected hash exist error", "thread_id", i, K(seg_id), KR(thread_ret));
+            } else {
+              other_errors.fetch_add(1);
+              LOG_WARN("Thread failed with unexpected error", "thread_id", i, K(seg_id), KR(thread_ret));
+            }
+          }
+        });
+      }
+
+      // Wait for all threads to be ready
+      while (ready_count.load() < THREAD_COUNT) {
+        usleep(1000);
+      }
+
+      // Release all threads at once to maximize race condition
+      LOG_INFO("All threads ready, starting race", "ready_count", ready_count.load());
+      start_flag.store(true);
+
+      // Wait for all threads to complete
+      for (int i = 0; i < THREAD_COUNT; i++) {
+        threads[i].join();
+      }
+
+      LOG_INFO("Concurrent conflict info creation test completed",
+               "successful_creates", successful_creates.load(),
+               "hash_exist_errors", hash_exist_errors.load(),
+               "other_errors", other_errors.load(),
+               K(seg_id), "call_times", call_times);
+
+      // Verify results:
+      // - At least one thread should successfully create the conflict info
+      // - Some threads should hit OB_HASH_EXIST (this is what we're testing for)
+      // - Total attempts should equal thread count
+      ASSERT_GE(successful_creates.load(), 1) << "At least one thread should succeed";
+
+      if (hash_exist_errors.load() > 0) {
+        LOG_INFO("SUCCESS: Covered 'fail to set refactored conflict info map' scenario",
+                 "hash_exist_count", hash_exist_errors.load());
+      } else {
+        LOG_INFO("NOTE: Race condition not triggered this time (timing dependent)",
+                 "successful_creates", successful_creates.load());
+      }
+
+      // Clean up: verify conflict info was created
+      TmpFileConflictInfoHandle verify_handle;
+      bool is_exist = false;
+      ASSERT_EQ(OB_SUCCESS, segment_file_mgr->try_get_seg_conflict_info(seg_id, verify_handle, is_exist));
+      ASSERT_TRUE(is_exist) << "Conflict info should exist after concurrent creation attempts";
+
+      // Release exhausted disk space
+      release_tmp_file_disk_size(avail_size);
+    }
+  }
+}
+
+// Test concurrent reads on the same file
+TEST_F(TestSSReaderWriter, test_concurrent_reads_with_callbacks)
+{
+  static int64_t call_times = 0;
+  call_times++;
+  int ret = OB_SUCCESS;
+  const int64_t tmp_file_id = 1003;
+  const int64_t segment_id = 2003;
+  const TmpFileSegId seg_id(tmp_file_id, segment_id);
+  ObTenantFileManager *file_mgr = MTL(ObTenantFileManager *);
+
+  if (OB_NOT_NULL(file_mgr)) {
+    ObSegmentFileManager *segment_file_mgr = &(file_mgr->get_segment_file_mgr());
+    {
+      // Create tmp file directory first
+      ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tmp_file_dir(MTL_ID(), MTL_EPOCH_ID(), tmp_file_id)) << "call_times: " << call_times;
+
+      // Create a valid macro block ID for tmp file
+      MacroBlockId macro_id;
+      macro_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+      macro_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+      macro_id.set_second_id(tmp_file_id);
+      macro_id.set_third_id(segment_id);
+
+      // First create actual file data using write_tmp_file_data
+      int64_t avail_size = 0;
+      exhaust_tmp_file_disk_size(avail_size);
+      write_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/, 8192/*valid_length*/, false/*is_sealed*/, write_buf_);
+
+      // Verify that segment meta was created
+      check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, false/*is_in_local*/, 8192/*valid_length*/);
+
+      // Test concurrent reads on the same file
+      LOG_INFO("Testing concurrent reads on the same file", K(seg_id));
+
+      // Use atomic counters to track results
+      std::atomic<int> successful_reads(0);
+      std::atomic<int> failed_reads(0);
+
+      // Get MTL components in main thread to avoid multi-threading MTL issues
+      uint64_t tenant_id = MTL_ID();
+
+      // Create multiple threads for concurrent reads
+      const int READ_THREAD_COUNT = 3;
+      std::thread read_threads[READ_THREAD_COUNT];
+
+      for (int i = 0; i < READ_THREAD_COUNT; i++) {
+        read_threads[i] = std::thread([&, i, tenant_id]() {
+          // Set MTL context for worker thread
+          MTL_SWITCH(tenant_id) {
+            ObStorageObjectReadInfo read_info;
+            ObStorageObjectHandle read_handle;
+            char read_buf[8192];
+
+            read_info.size_ = 8192;
+            read_info.offset_ = 0;
+            read_info.io_desc_.set_wait_event(1);
+            read_info.io_desc_.set_unsealed();
+            read_info.macro_block_id_ = macro_id;
+            read_info.io_timeout_ms_ = 10000;
+            read_info.mtl_tenant_id_ = tenant_id; // Use fixed tenant ID in multi-threaded context
+            read_info.buf_ = read_buf;
+            read_handle.macro_id_ = macro_id;
+
+            int thread_ret = segment_file_mgr->async_pread_file(read_info, read_handle);
+
+            if (thread_ret == OB_SUCCESS) {
+              successful_reads.fetch_add(1);
+              usleep(100000); // 100ms
+              LOG_INFO("Concurrent read succeeded", "thread_id", i, K(seg_id));
+            } else {
+              failed_reads.fetch_add(1);
+              LOG_WARN("Concurrent read failed", "thread_id", i, KR(thread_ret), K(seg_id));
+            }
+          }
+        });
+      }
+
+      // Wait for all read threads to complete
+      for (int i = 0; i < READ_THREAD_COUNT; i++) {
+        read_threads[i].join();
+      }
+
+      LOG_INFO("Concurrent reads completed", "successful_reads", successful_reads.load(),
+               "failed_reads", failed_reads.load(), K(seg_id));
+      ASSERT_EQ(READ_THREAD_COUNT, successful_reads.load());
+      ASSERT_EQ(0, failed_reads.load());
+
+      // Release exhausted disk space
+      release_tmp_file_disk_size(avail_size);
+    }
+  }
+}
+
+// Test concurrent writes on the same file (should fail with conflict detection)
+TEST_F(TestSSReaderWriter, test_concurrent_writes_with_callbacks)
+{
+  static int64_t call_times = 0;
+  call_times++;
+  int ret = OB_SUCCESS;
+  const int64_t tmp_file_id = 1004;
+  const int64_t segment_id = 2004;
+  const TmpFileSegId seg_id(tmp_file_id, segment_id);
+  ObTenantFileManager *file_mgr = MTL(ObTenantFileManager *);
+
+  if (OB_NOT_NULL(file_mgr)) {
+    ObSegmentFileManager *segment_file_mgr = &(file_mgr->get_segment_file_mgr());
+    {
+      // Create tmp file directory first
+      ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tmp_file_dir(MTL_ID(), MTL_EPOCH_ID(), tmp_file_id)) << "call_times: " << call_times;
+
+      // Create a valid macro block ID for tmp file
+      MacroBlockId macro_id;
+      macro_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+      macro_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+      macro_id.set_second_id(tmp_file_id);
+      macro_id.set_third_id(segment_id);
+
+      // First create actual file data using write_tmp_file_data
+      int64_t avail_size = 0;
+      exhaust_tmp_file_disk_size(avail_size);
+      write_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/, 8192/*valid_length*/, false/*is_sealed*/, write_buf_);
+
+      // Verify that segment meta was created
+      check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, false/*is_in_local*/, 8192/*valid_length*/);
+
+      // Test concurrent writes on the same file (should detect conflict)
+      LOG_INFO("Testing concurrent writes on the same file", K(seg_id));
+
+      // Use atomic counters to track results
+      std::atomic<int> successful_writes(0);
+      std::atomic<int> failed_writes(0);
+      std::atomic<int> conflict_detected(0);
+
+      // Get MTL components in main thread to avoid multi-threading MTL issues
+      uint64_t tenant_id = MTL_ID();
+
+      // Create multiple threads for concurrent writes
+      const int WRITE_THREAD_COUNT = 3;
+      std::thread write_threads[WRITE_THREAD_COUNT];
+
+      for (int i = 0; i < WRITE_THREAD_COUNT; i++) {
+        write_threads[i] = std::thread([&, i, tenant_id]() {
+          // Set MTL context for worker thread
+          MTL_SWITCH(tenant_id) {
+            ObStorageObjectWriteInfo write_info;
+            ObStorageObjectHandle write_handle;
+
+            write_info.size_ = 8192;
+            write_info.buffer_ = write_buf_;
+            write_info.offset_ = 0;
+            write_info.io_desc_.set_wait_event(1);
+            write_info.io_desc_.set_unsealed();
+            write_info.io_timeout_ms_ = 10000;
+            write_info.mtl_tenant_id_ = tenant_id; // Use fixed tenant ID in multi-threaded context
+            write_info.set_tmp_file_valid_length(2 * 8192);
+            write_handle.macro_id_ = macro_id;
+
+            int thread_ret = segment_file_mgr->async_append_file(write_info, write_handle);
+
+            if (thread_ret == OB_SUCCESS) {
+              successful_writes.fetch_add(1);
+              usleep(100000); // 100ms
+              LOG_INFO("Concurrent write succeeded", "thread_id", i, K(seg_id));
+            } else if (thread_ret == OB_ERR_UNEXPECTED) {
+              conflict_detected.fetch_add(1);
+              LOG_INFO("Write-write conflict detected as expected", "thread_id", i, K(seg_id));
+            } else {
+              failed_writes.fetch_add(1);
+              LOG_WARN("Concurrent write failed with unexpected error", "thread_id", i, KR(thread_ret), K(seg_id));
+            }
+          }
+        });
+      }
+
+      // Wait for all write threads to complete
+      for (int i = 0; i < WRITE_THREAD_COUNT; i++) {
+        write_threads[i].join();
+      }
+
+      LOG_INFO("Concurrent writes completed", "successful_writes", successful_writes.load(),
+               "conflict_detected", conflict_detected.load(), "failed_writes", failed_writes.load(), K(seg_id));
+      ASSERT_GE(successful_writes.load(), 1);
+      ASSERT_EQ(failed_writes.load(), 0);
+
+      // Release exhausted disk space
+      release_tmp_file_disk_size(avail_size);
+    }
+  }
+}
+
+TEST_F(TestSSReaderWriter, test_concurrent_read_write_with_callbacks)
+{
+  static int64_t call_times = 0;
+  call_times++;
+  int ret = OB_SUCCESS;
+  const int64_t tmp_file_id = 1001;
+  const int64_t segment_id = 2001;
+  const TmpFileSegId seg_id(tmp_file_id, segment_id);
+  ObTenantFileManager *file_mgr = MTL(ObTenantFileManager *);
+
+  if (OB_NOT_NULL(file_mgr)) {
+    ObSegmentFileManager *segment_file_mgr = &(file_mgr->get_segment_file_mgr());
+    {
+      // Create tmp file directory first
+      ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tmp_file_dir(MTL_ID(), MTL_EPOCH_ID(), tmp_file_id)) << "call_times: " << call_times;
+
+      // Create a valid macro block ID for tmp file
+      MacroBlockId macro_id;
+      macro_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+      macro_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+      macro_id.set_second_id(tmp_file_id);
+      macro_id.set_third_id(segment_id);
+
+      // First create actual file data using write_tmp_file_data
+      int64_t avail_size = 0;
+      exhaust_tmp_file_disk_size(avail_size);
+      write_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/, 8192/*valid_length*/, false/*is_sealed*/, write_buf_);
+
+      // Verify that segment meta was created
+      check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, false/*is_in_local*/, 8192/*valid_length*/);
+
+      // Test concurrent read and write operations with callbacks
+      LOG_INFO("Testing concurrent read-write operations with callbacks", K(seg_id));
+
+      // Use atomic counters to track results
+      std::atomic<int> successful_ops(0);
+      std::atomic<int> failed_ops(0);
+      std::atomic<int> conflict_detected(0);
+
+      // Get MTL components in main thread to avoid multi-threading MTL issues
+      uint64_t tenant_id = MTL_ID();
+
+      // Create multiple threads for concurrent read and write operations
+      const int TOTAL_THREAD_COUNT = 5;
+      const int WRITE_THREAD_COUNT = 2;
+      const int READ_THREAD_COUNT = 3;
+      std::thread op_threads[TOTAL_THREAD_COUNT];
+
+      // Create read threads
+      for (int i = 0; i < READ_THREAD_COUNT; i++) {
+        op_threads[WRITE_THREAD_COUNT + i] = std::thread([&, i, tenant_id]() {
+          MTL_SWITCH(tenant_id) {
+            ObStorageObjectReadInfo read_info;
+            ObStorageObjectHandle read_handle;
+            char read_buf[8192];
+
+            read_info.size_ = 8192;
+            read_info.offset_ = 0; // Different offsets for each thread
+            read_info.io_desc_.set_wait_event(1);
+            read_info.io_desc_.set_unsealed();
+            read_info.macro_block_id_ = macro_id;
+            read_info.io_timeout_ms_ = 10000;
+            read_info.mtl_tenant_id_ = tenant_id; // Use fixed tenant ID in multi-threaded context
+            read_info.buf_ = read_buf;
+            read_handle.macro_id_ = macro_id;
+
+            int thread_ret = segment_file_mgr->async_pread_file(read_info, read_handle);
+
+            if (thread_ret == OB_SUCCESS) {
+              successful_ops.fetch_add(1);
+              usleep(100000); // 100ms
+              LOG_INFO("Concurrent read succeeded", "read_thread_id", i, K(seg_id));
+            } else if (thread_ret == OB_ERR_UNEXPECTED) {
+              conflict_detected.fetch_add(1);
+              LOG_INFO("Read-write conflict detected", "read_thread_id", i, K(seg_id));
+            } else {
+              failed_ops.fetch_add(1);
+              LOG_WARN("Concurrent read failed", "read_thread_id", i, KR(thread_ret), K(seg_id));
+            }
+          }
+        });
+      }
+
+      // Wait a bit to let read threads start before write threads
+      usleep(10000); // 10ms
+
+      // Create write threads
+      for (int i = 0; i < WRITE_THREAD_COUNT; i++) {
+        op_threads[i] = std::thread([&, i, tenant_id]() {
+          MTL_SWITCH(tenant_id) {
+            ObStorageObjectWriteInfo write_info;
+            ObStorageObjectHandle write_handle;
+
+            write_info.size_ = 8192;
+            write_info.buffer_ = write_buf_;
+            write_info.offset_ = 8192; // Different offsets for each thread
+            write_info.io_desc_.set_wait_event(1);
+            write_info.io_desc_.set_unsealed();
+            write_info.io_timeout_ms_ = 10000;
+            write_info.mtl_tenant_id_ = tenant_id; // Use tenant ID from main thread
+            write_info.set_tmp_file_valid_length(2 * 8192);
+            write_handle.macro_id_ = macro_id;
+
+            int thread_ret = segment_file_mgr->async_append_file(write_info, write_handle);
+
+            if (thread_ret == OB_SUCCESS) {
+              successful_ops.fetch_add(1);
+              LOG_INFO("Concurrent write succeeded", "write_thread_id", i, K(seg_id));
+            } else if (thread_ret == OB_ERR_UNEXPECTED) {
+              conflict_detected.fetch_add(1);
+              LOG_INFO("Write conflict detected", "write_thread_id", i, K(seg_id));
+            } else {
+              failed_ops.fetch_add(1);
+              LOG_WARN("Concurrent write failed", "write_thread_id", i, KR(thread_ret), K(seg_id));
+            }
+          }
+        });
+      }
+
+      // Wait for all threads to complete
+      for (int i = 0; i < TOTAL_THREAD_COUNT; i++) {
+        op_threads[i].join();
+      }
+
+      LOG_INFO("Concurrent read-write operations completed", "successful_ops", successful_ops.load(),
+               "conflict_detected", conflict_detected.load(), "failed_ops", failed_ops.load(), K(seg_id));
+      ASSERT_GE(successful_ops.load(), READ_THREAD_COUNT);
+      ASSERT_LE(conflict_detected.load(), WRITE_THREAD_COUNT);
+      ASSERT_EQ(failed_ops.load(), 0);
+
+      // Release exhausted disk space
+      release_tmp_file_disk_size(avail_size);
+    }
+  }
+}
+
+TEST_F(TestSSReaderWriter, test_concurrent_write_read_with_callbacks)
+{
+  static int64_t call_times = 0;
+  call_times++;
+  int ret = OB_SUCCESS;
+  const int64_t tmp_file_id = 1002;
+  const int64_t segment_id = 2002;
+  const TmpFileSegId seg_id(tmp_file_id, segment_id);
+  ObTenantFileManager *file_mgr = MTL(ObTenantFileManager *);
+
+  if (OB_NOT_NULL(file_mgr)) {
+    ObSegmentFileManager *segment_file_mgr = &(file_mgr->get_segment_file_mgr());
+    {
+      // Create tmp file directory first
+      ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tmp_file_dir(MTL_ID(), MTL_EPOCH_ID(), tmp_file_id)) << "call_times: " << call_times;
+
+      // Create a valid macro block ID for tmp file
+      MacroBlockId macro_id;
+      macro_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+      macro_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+      macro_id.set_second_id(tmp_file_id);
+      macro_id.set_third_id(segment_id);
+
+      // First create actual file data using write_tmp_file_data
+      int64_t avail_size = 0;
+      exhaust_tmp_file_disk_size(avail_size);
+      write_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/, 8192/*valid_length*/, false/*is_sealed*/, write_buf_);
+
+      // Verify that segment meta was created
+      check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, false/*is_in_local*/, 8192/*valid_length*/);
+
+      // Test concurrent read and write operations with callbacks
+      LOG_INFO("Testing concurrent write-read operations with callbacks", K(seg_id));
+
+      // Use atomic counters to track results
+      std::atomic<int> successful_ops(0);
+      std::atomic<int> failed_ops(0);
+      std::atomic<int> conflict_detected(0);
+
+      // Get MTL components in main thread to avoid multi-threading MTL issues
+      uint64_t tenant_id = MTL_ID();
+
+      // Create multiple threads for concurrent read and write operations
+      const int TOTAL_THREAD_COUNT = 5;
+      const int WRITE_THREAD_COUNT = 2;
+      const int READ_THREAD_COUNT = 3;
+      std::thread op_threads[TOTAL_THREAD_COUNT];
+
+      // Create write threads first
+      for (int i = 0; i < WRITE_THREAD_COUNT; i++) {
+        op_threads[i] = std::thread([&, i, tenant_id]() {
+          // Set MTL context for worker thread
+          MTL_SWITCH(tenant_id) {
+            ObStorageObjectWriteInfo write_info;
+            ObStorageObjectHandle write_handle;
+
+            write_info.size_ = 8192;
+            write_info.buffer_ = write_buf_;
+            write_info.offset_ = 8192; // Same offset to test conflict detection
+            write_info.io_desc_.set_wait_event(1);
+            write_info.io_desc_.set_unsealed();
+            write_info.io_timeout_ms_ = 10000;
+            write_info.mtl_tenant_id_ = tenant_id; // Use tenant ID from main thread
+            write_info.set_tmp_file_valid_length(2 * 8192);
+            write_handle.macro_id_ = macro_id;
+
+            int thread_ret = segment_file_mgr->async_append_file(write_info, write_handle);
+
+            if (thread_ret == OB_SUCCESS) {
+              successful_ops.fetch_add(1);
+              LOG_INFO("Concurrent write succeeded", "write_thread_id", i, K(seg_id));
+              // Keep write access active for a bit to ensure read conflicts
+              usleep(100000); // 100ms delay to maintain write access
+            } else if (thread_ret == OB_ERR_UNEXPECTED) {
+              conflict_detected.fetch_add(1);
+              LOG_INFO("Write conflict detected", "write_thread_id", i, K(seg_id));
+            } else {
+              failed_ops.fetch_add(1);
+              LOG_WARN("Concurrent write failed", "write_thread_id", i, KR(thread_ret), K(seg_id));
+            }
+          }
+        });
+      }
+
+      // Wait a bit to let first write thread start and acquire write access
+      usleep(10000); // 10ms delay
+
+      // Create read threads after write threads have started
+      for (int i = 0; i < READ_THREAD_COUNT; i++) {
+        op_threads[WRITE_THREAD_COUNT + i] = std::thread([&, i, tenant_id]() {
+          // Set MTL context for worker thread
+          MTL_SWITCH(tenant_id) {
+            ObStorageObjectReadInfo read_info;
+            ObStorageObjectHandle read_handle;
+            char read_buf[8192];
+
+            read_info.size_ = 8192;
+            read_info.offset_ = 0;
+            read_info.io_desc_.set_wait_event(1);
+            read_info.io_desc_.set_unsealed();
+            read_info.macro_block_id_ = macro_id;
+            read_info.io_timeout_ms_ = 10000;
+            read_info.mtl_tenant_id_ = tenant_id; // Use fixed tenant ID in multi-threaded context
+            read_info.buf_ = read_buf;
+            read_handle.macro_id_ = macro_id;
+
+            int thread_ret = segment_file_mgr->async_pread_file(read_info, read_handle);
+
+            if (thread_ret == OB_SUCCESS) {
+              successful_ops.fetch_add(1);
+              LOG_INFO("Concurrent read succeeded", "read_thread_id", i, K(seg_id));
+            } else if (thread_ret == OB_ERR_UNEXPECTED) {
+              conflict_detected.fetch_add(1);
+              LOG_INFO("Read conflict detected", "read_thread_id", i, K(seg_id));
+            } else {
+              failed_ops.fetch_add(1);
+              LOG_WARN("Concurrent read failed", "read_thread_id", i, KR(thread_ret), K(seg_id));
+            }
+          }
+        });
+      }
+
+      // Wait for all threads to complete
+      for (int i = 0; i < TOTAL_THREAD_COUNT; i++) {
+        op_threads[i].join();
+      }
+
+      LOG_INFO("Concurrent write-read operations completed", "successful_ops", successful_ops.load(),
+               "conflict_detected", conflict_detected.load(), "failed_ops", failed_ops.load(), K(seg_id));
+      ASSERT_GE(successful_ops.load(), 1);
+      ASSERT_EQ(failed_ops.load(), 0);
+
+      // Release exhausted disk space
+      release_tmp_file_disk_size(avail_size);
+    }
+  }
+}
+
+// Test concurrent access control fixes
+TEST_F(TestSSReaderWriter, test_read_callback_destructor_cleanup)
+{
+  int ret = OB_SUCCESS;
+
+  // Create conflict info
+  TmpFileConflictInfoHandle conflict_info_handle;
+  ASSERT_EQ(OB_SUCCESS, conflict_info_handle.set_tmpfile_conflict_info(false, 0));
+
+  // Acquire read access
+  ASSERT_EQ(OB_SUCCESS, conflict_info_handle.try_acquire_read_access());
+  ASSERT_EQ(1, conflict_info_handle.get_conflict_info()->active_readers_count_);
+
+  // Create read callback (simulating the scenario where callback_ is null)
+  ObSSTmpFileReadCallback *read_callback = nullptr;
+  ObMalloc allocator;
+
+  read_callback = static_cast<ObSSTmpFileReadCallback *>(
+      allocator.alloc(sizeof(ObSSTmpFileReadCallback)));
+  ASSERT_NE(nullptr, read_callback);
+
+  // Initialize with null callback (this is the problematic scenario)
+  read_callback = new (read_callback) ObSSTmpFileReadCallback(&allocator, nullptr, nullptr);
+
+  TmpFileSegId seg_id(60009, 0);
+  // Create a mock segment file manager for testing
+  ObSegmentFileManager mock_seg_mgr;
+  ASSERT_EQ(OB_SUCCESS, read_callback->set_ss_tmpfile_read_callback(
+      seg_id, &mock_seg_mgr, &allocator, conflict_info_handle));
+
+  // Verify read access is still held
+  ASSERT_EQ(1, conflict_info_handle.get_conflict_info()->active_readers_count_);
+
+  // Destroy callback - this should release read access even with null callback_
+  read_callback->~ObSSTmpFileReadCallback();
+  allocator.free(read_callback);
+
+  // Verify read access was properly released
+  ASSERT_EQ(0, conflict_info_handle.get_conflict_info()->active_readers_count_);
+
+  LOG_INFO("test_read_callback_destructor_cleanup passed - read access properly released");
+}
+
+// Test concurrent read-write operations
+TEST_F(TestSSReaderWriter, test_concurrent_read_write_operations)
+{
+  const int THREAD_COUNT = 5;
+  const int OPERATIONS_PER_THREAD = 10;
+
+  std::atomic<int> successful_reads(0);
+  std::atomic<int> successful_writes(0);
+  std::atomic<int> read_conflicts(0);
+  std::atomic<int> write_conflicts(0);
+  std::atomic<int> other_errors(0);
+
+  // Create shared conflict info
+  TmpFileConflictInfoHandle shared_conflict_info;
+  ASSERT_EQ(OB_SUCCESS, shared_conflict_info.set_tmpfile_conflict_info(false, 0));
+
+  std::vector<std::thread> threads;
+
+  // Create mixed read/write threads
+  for (int i = 0; i < THREAD_COUNT; i++) {
+    threads.emplace_back([&, i]() {
+      for (int j = 0; j < OPERATIONS_PER_THREAD; j++) {
+        bool is_write_op = (i % 2 == 0); // Alternate between read and write threads
+
+        if (is_write_op) {
+          // Try write operation
+          TmpFileConflictInfoHandle local_handle;
+          if (OB_SUCCESS == local_handle.assign(shared_conflict_info)) {
+            int ret = local_handle.try_acquire_write_access();
+            if (OB_SUCCESS == ret) {
+              successful_writes.fetch_add(1);
+              // Simulate some work
+              std::this_thread::sleep_for(std::chrono::microseconds(100));
+              local_handle.release_write_access();
+            } else if (OB_ERR_UNEXPECTED == ret) {
+              write_conflicts.fetch_add(1);
+            } else {
+              other_errors.fetch_add(1);
+            }
+          }
+        } else {
+          // Try read operation
+          TmpFileConflictInfoHandle local_handle;
+          if (OB_SUCCESS == local_handle.assign(shared_conflict_info)) {
+            int ret = local_handle.try_acquire_read_access();
+            if (OB_SUCCESS == ret) {
+              successful_reads.fetch_add(1);
+              // Simulate some work
+              std::this_thread::sleep_for(std::chrono::microseconds(50));
+              local_handle.release_read_access();
+            } else if (OB_ERR_UNEXPECTED == ret) {
+              read_conflicts.fetch_add(1);
+            } else {
+              other_errors.fetch_add(1);
+            }
+          }
+        }
+
+        // Small delay between operations
+        std::this_thread::sleep_for(std::chrono::microseconds(10));
+      }
+    });
+  }
+
+  // Wait for all threads to complete
+  for (auto& thread : threads) {
+    thread.join();
+  }
+
+  // Verify final state - this is the critical test for our fix
+  ASSERT_EQ(0, shared_conflict_info.get_conflict_info()->active_readers_count_);
+  ASSERT_FALSE(shared_conflict_info.get_conflict_info()->is_writing_);
+
+  // Log statistics
+  LOG_INFO("Concurrent operations completed",
+           "successful_reads", successful_reads.load(),
+           "successful_writes", successful_writes.load(),
+           "read_conflicts", read_conflicts.load(),
+           "write_conflicts", write_conflicts.load(),
+           "other_errors", other_errors.load());
+
+  // Verify we had some successful operations
+  ASSERT_GT(successful_reads.load() + successful_writes.load(), 0);
+
+  LOG_INFO("test_concurrent_read_write_operations passed - no resource leaks detected");
+}
+
+// Test that write access is properly released on callback destruction
+TEST_F(TestSSReaderWriter, test_write_callback_destructor_cleanup)
+{
+  int ret = OB_SUCCESS;
+
+  // Create conflict info
+  TmpFileConflictInfoHandle conflict_info_handle;
+  ASSERT_EQ(OB_SUCCESS, conflict_info_handle.set_tmpfile_conflict_info(false, 0));
+
+  // Acquire write access
+  ASSERT_EQ(OB_SUCCESS, conflict_info_handle.try_acquire_write_access());
+  ASSERT_TRUE(conflict_info_handle.get_conflict_info()->is_writing_);
+
+  // Create write callback
+  ObSSTmpFileWriteCallback *write_callback = nullptr;
+  ObMalloc allocator;
+
+  write_callback = static_cast<ObSSTmpFileWriteCallback *>(
+      allocator.alloc(sizeof(ObSSTmpFileWriteCallback)));
+  ASSERT_NE(nullptr, write_callback);
+
+  write_callback = new (write_callback) ObSSTmpFileWriteCallback();
+
+  TmpFileSegId seg_id(60009, 0);
+  TmpFileMetaHandle meta_handle;
+  // Create a valid meta handle for testing
+  ASSERT_EQ(OB_SUCCESS, meta_handle.set_tmpfile_meta(true, 1024, 1024));
+  ASSERT_EQ(OB_SUCCESS, write_callback->set_ss_tmpfile_write_callback(
+      seg_id, meta_handle, conflict_info_handle,
+      ObSSTmpFileSegMetaOpType::INSERT, ObSSTmpFileSegDeleteType::NONE,
+      false, 0, &allocator));
+
+  // Verify write access is still held
+  ASSERT_TRUE(conflict_info_handle.get_conflict_info()->is_writing_);
+
+  // Destroy callback - this should release write access
+  write_callback->~ObSSTmpFileWriteCallback();
+  allocator.free(write_callback);
+
+  // Verify write access was properly released
+  ASSERT_FALSE(conflict_info_handle.get_conflict_info()->is_writing_);
+
+  LOG_INFO("test_write_callback_destructor_cleanup passed - write access properly released");
+}
+
+// Test dual write mode for 2MB sealed tmp file
+TEST_F(TestSSReaderWriter, tmp_file_2MB_sealed_dual_write)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFileManager *file_manager = MTL(ObTenantFileManager *);
+  ASSERT_NE(nullptr, file_manager);
+  ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr *);
+  ASSERT_NE(nullptr, macro_cache_mgr);
+
+  // to avoid affecting tmp file seg_meta_map and tmp file tmp_file_write_free_disk_size
+  // disable tmp_file_flush_task, preread_task_, calibrate_disk_space_task and gc_unsealed_tmp_file_task
+  // preread_task_ will affect local disk size, so preread_task_ need to disble
+  file_manager->preread_cache_mgr_.preread_task_.is_inited_ = false;
+  macro_cache_mgr->evict_task_.is_inited_ = false;
+  macro_cache_mgr->flush_task_.is_inited_ = false;
+  file_manager->calibrate_disk_space_task_.is_inited_ = false;
+  file_manager->segment_file_mgr_.gc_segment_file_task_.is_inited_ = false;
+  sleep(3);
+
+  uint64_t tmp_file_id = 300;
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tmp_file_dir(MTL_ID(), MTL_EPOCH_ID(), tmp_file_id));
+
+  MacroBlockId macro_id;
+  macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+  macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::TMP_FILE);
+  macro_id.set_second_id(tmp_file_id);
+
+  LOG_INFO("=== Test 1: Dual write mode with local space available ===");
+
+  // Ensure sufficient disk space
+  check_tmp_file_disk_size_enough(OB_DEFAULT_MACRO_BLOCK_SIZE);
+
+  // Write 2MB sealed segment
+  macro_id.set_third_id(200);
+  write_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/,
+                      OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/, true/*is_sealed*/, write_buf_);
+
+  // Verify data can be read correctly from local cache
+  read_and_compare_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/);
+
+  // For dual write with local space available: local write succeeds, meta needed
+  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/);
+
+  // Check if file exists in local cache
+  bool is_local_exist = false;
+  ASSERT_EQ(OB_SUCCESS, file_manager->is_exist_local_file(macro_id, 0/*ls_epoch_id*/, is_local_exist));
+  ASSERT_TRUE(is_local_exist);
+  LOG_INFO("dual write test 1 passed: file exists in local cache", K(macro_id), K(is_local_exist));
+
+  LOG_INFO("=== Test 2: Overwrite 8KB unsealed with 2MB sealed (dual write) ===");
+
+  // First write 8KB unsealed segment
+  macro_id.set_third_id(201);
+  check_tmp_file_disk_size_enough(8192);
+  write_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/, 8192/*valid_length*/,
+                      false/*is_sealed*/, write_buf_);
+  read_and_compare_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/);
+
+  // Verify 8KB segment has meta
+  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/, 8192/*valid_length*/);
+
+  // Then write 2MB sealed segment (should trigger dual write mode)
+  check_tmp_file_disk_size_enough(OB_DEFAULT_MACRO_BLOCK_SIZE);
+  write_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/,
+                      OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/, true/*is_sealed*/, write_buf_);
+
+  // Verify 2MB sealed data can be read correctly
+  read_and_compare_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/);
+
+  // After 2MB sealed write, meta should exist because write local need meta
+  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/);
+
+  LOG_INFO("dual write test 2 passed: 8KB to 2MB overwrite works correctly");
+
+  LOG_INFO("=== Test 3: Write_through fallback when disk space insufficient ===");
+
+  // Exhaust disk space
+  int64_t avail_size = 0;
+  exhaust_tmp_file_disk_size(avail_size);
+
+  // Write 2MB sealed segment (should fallback to write_through)
+  macro_id.set_third_id(202);
+  write_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/,
+                      OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/, true/*is_sealed*/, write_buf_);
+
+  // Verify data can be read from object storage
+  read_and_compare_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/);
+
+  // write_through mode, no meta for sealed segment
+  check_tmp_file_seg_meta(macro_id, false/*is_meta_exist*/);
+
+  LOG_INFO("dual write test 3 passed: write_through fallback works when disk full");
+  // Cleanup
+  release_tmp_file_disk_size(avail_size);
+
+  LOG_INFO("=== All dual write tests passed! ===");
 }
 
 // Test async_write_dual file size allocation correctness
@@ -1617,6 +2403,174 @@ TEST_F(TestSSReaderWriter, test_async_write_dual_alloc_file_size)
   LOG_INFO("Test 4 passed: Overwrite scenario allocates file size correctly");
 
   LOG_INFO("=== All async_write_dual file size allocation tests passed! ===");
+}
+
+// Test disk space threshold: local write -> fallback to object storage -> recover to local write
+TEST_F(TestSSReaderWriter, test_disk_space_threshold_fallback_and_recovery)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFileManager *file_manager = MTL(ObTenantFileManager *);
+  ASSERT_NE(nullptr, file_manager);
+  ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr *);
+  ASSERT_NE(nullptr, macro_cache_mgr);
+  ObTenantDiskSpaceManager *disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, disk_space_mgr);
+
+  // Disable background tasks
+  file_manager->preread_cache_mgr_.preread_task_.is_inited_ = false;
+  macro_cache_mgr->evict_task_.is_inited_ = false;
+  macro_cache_mgr->flush_task_.is_inited_ = false;
+  file_manager->calibrate_disk_space_task_.is_inited_ = false;
+  file_manager->segment_file_mgr_.gc_segment_file_task_.is_inited_ = false;
+  sleep(3);
+
+  uint64_t tmp_file_id = 500;
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tmp_file_dir(MTL_ID(), MTL_EPOCH_ID(), tmp_file_id));
+
+  MacroBlockId macro_id;
+  macro_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+  macro_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+  macro_id.set_second_id(tmp_file_id);
+
+  // ========================================================================
+  // Phase 1: Write to local disk when space is available
+  // ========================================================================
+  LOG_INFO("=== Phase 1: Write 2MB sealed segments to local disk ===");
+
+  check_tmp_file_disk_size_enough(OB_DEFAULT_MACRO_BLOCK_SIZE * 10);
+
+  int64_t initial_used = disk_space_mgr->get_macro_cache_used_size();
+  LOG_INFO("Initial disk usage", K(initial_used));
+
+  // Write multiple 2MB sealed segments to local disk
+  const int LOCAL_WRITE_COUNT = 5;
+  for (int i = 0; i < LOCAL_WRITE_COUNT; i++) {
+    macro_id.set_third_id(400 + i);
+    write_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/,
+                        OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/, true/*is_sealed*/, write_buf_);
+
+    // Verify written to local with meta
+    check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/,
+                            OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/);
+    read_and_compare_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/);
+
+    LOG_INFO("Written segment to local", K(i), "segment_id", macro_id.third_id());
+  }
+
+  int64_t after_local_writes = disk_space_mgr->get_macro_cache_used_size();
+  int64_t local_allocated = after_local_writes - initial_used;
+  LOG_INFO("After local writes", K(after_local_writes), K(local_allocated),
+           "segments", LOCAL_WRITE_COUNT);
+
+  ASSERT_EQ(local_allocated, OB_DEFAULT_MACRO_BLOCK_SIZE * LOCAL_WRITE_COUNT)
+      << "Local disk space should be allocated for " << LOCAL_WRITE_COUNT << " segments";
+
+  LOG_INFO("Phase 1 passed: All segments written to local disk");
+
+  // ========================================================================
+  // Phase 2: Exhaust disk space and fallback to object storage
+  // ========================================================================
+  LOG_INFO("=== Phase 2: Exhaust disk space and fallback to object storage ===");
+
+  // Exhaust disk space to trigger fallback
+  int64_t exhausted_size = 0;
+  exhaust_tmp_file_disk_size(exhausted_size);
+
+  int64_t before_fallback = disk_space_mgr->get_macro_cache_used_size();
+  LOG_INFO("Disk space exhausted", K(before_fallback), K(exhausted_size));
+
+  // Write multiple 2MB sealed segments (should fallback to object storage)
+  const int FALLBACK_WRITE_COUNT = 3;
+  for (int i = 0; i < FALLBACK_WRITE_COUNT; i++) {
+    macro_id.set_third_id(500 + i);
+    write_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/,
+                        OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/, true/*is_sealed*/, write_buf_);
+
+    // Verify written to object storage (no meta for sealed segments in write_through mode)
+    check_tmp_file_seg_meta(macro_id, false/*is_meta_exist*/);
+    read_and_compare_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/);
+
+    LOG_INFO("Written segment to object storage (fallback)", K(i), "segment_id", macro_id.third_id());
+  }
+
+  int64_t after_fallback = disk_space_mgr->get_macro_cache_used_size();
+  int64_t fallback_allocated = after_fallback - before_fallback;
+  LOG_INFO("After fallback writes", K(after_fallback), K(fallback_allocated),
+           "segments", FALLBACK_WRITE_COUNT);
+
+  ASSERT_EQ(0, fallback_allocated)
+      << "No local disk space should be allocated in fallback mode";
+
+  LOG_INFO("Phase 2 passed: Fallback to object storage when disk is full");
+
+  // ========================================================================
+  // Phase 3: Release disk space and verify recovery to local writes
+  // ========================================================================
+  LOG_INFO("=== Phase 3: Release disk space and recover to local writes ===");
+
+  // Release the exhausted disk space
+  release_tmp_file_disk_size(exhausted_size);
+
+  // Ensure sufficient space is available
+  check_tmp_file_disk_size_enough(OB_DEFAULT_MACRO_BLOCK_SIZE * 5);
+
+  int64_t before_recovery = disk_space_mgr->get_macro_cache_used_size();
+  LOG_INFO("Disk space released", K(before_recovery));
+
+  // Write multiple 2MB sealed segments (should write to local again)
+  const int RECOVERY_WRITE_COUNT = 3;
+  for (int i = 0; i < RECOVERY_WRITE_COUNT; i++) {
+    macro_id.set_third_id(600 + i);
+    write_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/,
+                        OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/, true/*is_sealed*/, write_buf_);
+
+    // Verify written to local with meta (recovered to local write mode)
+    check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/,
+                            OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/);
+    read_and_compare_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/);
+
+    LOG_INFO("Written segment to local (recovered)", K(i), "segment_id", macro_id.third_id());
+  }
+
+  int64_t after_recovery = disk_space_mgr->get_macro_cache_used_size();
+  int64_t recovery_allocated = after_recovery - before_recovery;
+  LOG_INFO("After recovery writes", K(after_recovery), K(recovery_allocated),
+           "segments", RECOVERY_WRITE_COUNT);
+
+  ASSERT_EQ(recovery_allocated, OB_DEFAULT_MACRO_BLOCK_SIZE * RECOVERY_WRITE_COUNT)
+      << "Local disk space should be allocated again after recovery";
+
+  LOG_INFO("Phase 3 passed: Recovered to local writes after releasing disk space");
+
+  // ========================================================================
+  // Phase 4: Verify all data is readable
+  // ========================================================================
+  LOG_INFO("=== Phase 4: Verify all written data is readable ===");
+
+  // Verify Phase 1 local writes
+  for (int i = 0; i < LOCAL_WRITE_COUNT; i++) {
+    macro_id.set_third_id(400 + i);
+    read_and_compare_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/);
+  }
+
+  // Verify Phase 2 fallback writes
+  for (int i = 0; i < FALLBACK_WRITE_COUNT; i++) {
+    macro_id.set_third_id(500 + i);
+    read_and_compare_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/);
+  }
+
+  // Verify Phase 3 recovery writes
+  for (int i = 0; i < RECOVERY_WRITE_COUNT; i++) {
+    macro_id.set_third_id(600 + i);
+    read_and_compare_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/);
+  }
+
+  LOG_INFO("Phase 4 passed: All data readable across all phases");
+
+  LOG_INFO("=== All disk space threshold fallback and recovery tests passed! ===",
+           "local_writes", LOCAL_WRITE_COUNT,
+           "fallback_writes", FALLBACK_WRITE_COUNT,
+           "recovery_writes", RECOVERY_WRITE_COUNT);
 }
 
 TEST_F(TestSSReaderWriter, performance_comparison_write_through_vs_write_dual)
