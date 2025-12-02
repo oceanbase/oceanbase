@@ -149,7 +149,7 @@ int ObAggCell::eval_index_info(const blocksstable::ObMicroIndexInfo &index_info,
 int ObAggCell::copy_output_rows(const int32_t start_offset, const int32_t end_offset)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(end_offset <= start_offset || end_offset > group_by_result_datum_buf_->get_basic_count())) {
+  if (OB_UNLIKELY(end_offset < start_offset || end_offset > group_by_result_datum_buf_->get_basic_count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(start_offset), K(end_offset), KPC(group_by_result_datum_buf_));
   } else {
@@ -624,7 +624,7 @@ int ObCountAggCell::eval_batch_in_group_by(
 int ObCountAggCell::copy_output_rows(const int32_t start_offset, const int32_t end_offset)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(end_offset <= start_offset || end_offset > group_by_result_datum_buf_->get_basic_count())) {
+  if (OB_UNLIKELY(end_offset < start_offset || end_offset > group_by_result_datum_buf_->get_basic_count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(start_offset), K(end_offset), KPC(group_by_result_datum_buf_));
   } else {
@@ -1976,7 +1976,7 @@ bool ObSumAggCell::can_use_index_info() const
 int ObSumAggCell::copy_output_rows(const int32_t start_offset, const int32_t end_offset)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(end_offset <= start_offset || end_offset > group_by_result_datum_buf_->get_basic_count())) {
+  if (OB_UNLIKELY(end_offset < start_offset || end_offset > group_by_result_datum_buf_->get_basic_count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(start_offset), K(end_offset), KPC(group_by_result_datum_buf_));
   } else {
