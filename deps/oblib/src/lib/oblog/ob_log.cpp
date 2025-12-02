@@ -476,7 +476,7 @@ void ObLogger::print_trace_buffer(const char* mod_name,
                                   const uint64_t location_hash_val)
 {
   TraceBuffer *tb = get_trace_buffer();
-  if (tb->get_pos() > 0) {
+  if (OB_NOT_NULL(tb) && tb->get_pos() > 0) {
     auto &&log_data_func = [&](char *buf, const int64_t buf_len, int64_t &pos) {
                              int64_t len = min(buf_len - pos, tb->get_pos());
                              // overlap
