@@ -2221,17 +2221,18 @@ int ObTransformPredicateMoveAround::pushdown_through_winfunc(
   OPT_TRACE("try to pushdown", predicates, "though windown function");
   for (int64_t i = 0; OB_SUCC(ret) && !common_part_exprs.empty() && i < predicates.count(); ++i) {
     ObRawExpr *pred = NULL;
-    ObSEArray<ObRawExpr *, 4> column_exprs;
     bool pushed = false;
+    bool calculable_by_common_part_exprs = false;
     if (OB_ISNULL(pred = predicates.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("predicate is null", K(ret));
     } else if (pred->has_flag(CNT_WINDOW_FUNC)) {
       // do nothing
       OPT_TRACE(pred, "contain win func, can not pushdown");
-    } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(pred, column_exprs))) {
-      LOG_WARN("failed to extract column exprs", K(ret));
-    } else if (!ObOptimizerUtil::subset_exprs(column_exprs, common_part_exprs)) {
+    } else if (OB_FAIL(ObOptimizerUtil::expr_calculable_by_exprs(pred, common_part_exprs, true, true,
+                                                                 calculable_by_common_part_exprs))) {
+      LOG_WARN("failed to check if calculable by common parts", K(ret));
+    } else if (!calculable_by_common_part_exprs) {
       // do nothing
       OPT_TRACE(pred, "contain none partition by expr, can not pushdown");
     } else if (OB_FAIL(down_exprs.push_back(pred))) {

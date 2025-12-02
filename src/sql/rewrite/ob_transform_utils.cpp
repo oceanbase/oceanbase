@@ -15157,7 +15157,7 @@ int ObTransformUtils::check_convert_string_safely(const ObRawExpr *expr,
     LOG_WARN("get unexpected null", K(ret), K(expr));
   } else {
     const ObExprOperatorType op_type = expr->get_expr_type();
-    if (IS_COMPARISON_OP(op_type) || T_OP_LIKE == op_type) {
+    if (IS_COMPARISON_OP(op_type) || T_OP_LIKE == op_type || T_OP_IS == op_type || T_OP_IS_NOT == op_type) {
       is_safe = true;
     } else if (T_FUN_SYS_CAST == op_type || T_FUN_SYS_CONVERT == op_type) {
       if (!ob_is_string_or_lob_type(expr->get_result_type().get_type())) {
