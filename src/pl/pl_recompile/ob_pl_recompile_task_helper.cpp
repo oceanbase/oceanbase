@@ -20,12 +20,18 @@
 #include "lib/string/ob_sql_string.h"
 #include "lib/string/ob_string.h"
 #include "share/resource_manager/ob_resource_manager.h"
+#include "sql/session/ob_sql_session_info.h"
+#include "observer/ob_inner_sql_connection.h"
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/sys_package/ob_pl_dbms_utility_helper.h"
+#endif
 
 namespace oceanbase
 {
 using namespace share;
 using namespace common;
 using namespace dbms_scheduler;
+using namespace observer;
 namespace pl
 {
 
@@ -153,7 +159,7 @@ do { \
     ret = OB_SUCCESS; \
   } else { \
     ret = OB_SUCC(ret) ? OB_ERR_UNEXPECTED : ret; \
-    LOG_WARN("[PLRECOMPILE]: read ddl operation info failed", K(ret)); \
+    LOG_WARN("[PLRECOMPILE]: read from sql result set failed", K(ret)); \
   } \
 } while (0)
 
@@ -369,7 +375,7 @@ int ObPLRecompileTaskHelper::collect_delta_recompile_obj_data(common::ObMySQLPro
             cur_max_schema_version = cur_max_schema_version > schema_version ? cur_max_schema_version : schema_version;
             if (is_pl_drop_ddl_operation(operation_type) || is_sql_drop_ddl_operation(operation_type)) {
               OZ (ob_write_string(allocator, table_name, table_name_deep_copy));
-              OZ (ddl_drop_obj_map.set_refactored(table_id, std::make_pair(table_name_deep_copy, schema_version)));
+              OZ (ddl_drop_obj_map.set_refactored(table_id, std::make_pair(table_name_deep_copy, schema_version), 1));
             } else if (is_pl_create_ddl_operation(operation_type)) {
               if (operation_type == OB_DDL_CREATE_PACKAGE ||
                   operation_type == OB_DDL_ALTER_PACKAGE ) {
@@ -492,7 +498,8 @@ int ObPLRecompileTaskHelper::update_recomp_table(ObIArray<ObPLRecompileInfo>& de
                                 uint64_t tenant_id,
                                 int64_t last_max_schema_version,
                                 int64_t start,
-                                int64_t end)
+                                int64_t end,
+                                schema::ObSchemaGetterGuard *schema_guard)
 {
   int ret = OB_SUCCESS;
   if (dep_objs.count() > 0 && end > 0) {
@@ -502,10 +509,13 @@ int ObPLRecompileTaskHelper::update_recomp_table(ObIArray<ObPLRecompileInfo>& de
     int64_t affected_rows = 0;
     bool need_comma = false;
     bool update_need_comma = false;
-    common::hash::ObHashSet<int64_t> in_disk_cache_obj;
-    OZ (in_disk_cache_obj.create(32));
-    OZ (query_inner_sql.assign_fmt("select KEY_ID, MERGE_VERSION FROM %s where MERGE_VERSION >= %ld",
-                  OB_ALL_NCOMP_DLL_V2_TNAME, last_max_schema_version));
+    common::hash::ObHashMap<int64_t, bool> batch_dep_objs;
+    OZ (batch_dep_objs.create(32, "PlRecompileJob"));
+    for (int64_t i = start; OB_SUCC(ret) && i < end; ++i) {
+      OZ (batch_dep_objs.set_refactored(dep_objs.at(i).recompile_obj_id_, false, 1));
+    }
+    OZ (query_inner_sql.assign_fmt("select KEY_ID, MERGE_VERSION, EXTRA_INFO FROM %s",
+                  OB_ALL_NCOMP_DLL_V2_TNAME));
     if (OB_SUCC(ret)) {
       SMART_VAR(ObMySQLProxy::MySQLResult, res) {
         OZ (sql_proxy->read(res, tenant_id, query_inner_sql.ptr()));
@@ -513,6 +523,9 @@ int ObPLRecompileTaskHelper::update_recomp_table(ObIArray<ObPLRecompileInfo>& de
         if (OB_SUCC(ret)) {
           while (OB_SUCC(ret) && OB_SUCC(result->next())) {
             int64_t key_id = 0;
+            bool is_valid = false;
+            int64_t merge_version = 0;
+            ObString extra_info;
             EXTRACT_INT_FIELD_MYSQL(*result, "KEY_ID", key_id, int64_t);
             if (share::schema::ObTriggerInfo::is_trigger_body_package_id(key_id)) {
               key_id = share::schema::ObTriggerInfo::get_package_trigger_id(key_id);
@@ -521,8 +534,23 @@ int ObPLRecompileTaskHelper::update_recomp_table(ObIArray<ObPLRecompileInfo>& de
               coll_type = share::schema::ObUDTObjectType::clear_object_id_mask(key_id);
               OZ (find_udt_id(sql_proxy, tenant_id, coll_type, key_id));
             }
-            int tmp_ret = in_disk_cache_obj.set_refactored(key_id);
-            ret = OB_HASH_EXIST == tmp_ret ? OB_SUCCESS : tmp_ret;
+            int tmp_ret = batch_dep_objs.get_refactored(key_id, is_valid);
+            if (OB_SUCCESS == tmp_ret) {
+              EXTRACT_INT_FIELD_MYSQL(*result, "MERGE_VERSION", merge_version, int64_t);
+              EXTRACT_VARCHAR_FIELD_MYSQL(*result, "EXTRA_INFO", extra_info);
+#ifdef OB_BUILD_ORACLE_PL
+              OZ (DbmsUtilityHelper::check_disk_cache_obj_expired_inner(merge_version,
+                                                                        tenant_id,
+                                                                        key_id,
+                                                                        sql_proxy,
+                                                                        schema_guard,
+                                                                        extra_info,
+                                                                        is_valid));
+#endif
+              if (OB_SUCC(ret) && is_valid) {
+                batch_dep_objs.set_refactored(key_id, true, 1);
+              }
+            }
           }
           SET_ITERATE_END_RET;
         }
@@ -532,15 +560,15 @@ int ObPLRecompileTaskHelper::update_recomp_table(ObIArray<ObPLRecompileInfo>& de
               OB_ALL_PL_RECOMPILE_OBJINFO_TNAME));
     OZ (update_sql.assign_fmt("UPDATE %s SET fail_count = fail_count + 1 WHERE recompile_obj_id in ( ",
               OB_ALL_PL_RECOMPILE_OBJINFO_TNAME));
-    for (int64_t i = start; OB_SUCC(ret) && i < end; ++i) {
-      int tmp_ret = in_disk_cache_obj.exist_refactored(dep_objs.at(i).recompile_obj_id_);
-      if (OB_HASH_EXIST == tmp_ret) {
-        OZ (query_inner_sql.append_fmt(" %s  %ld ", need_comma ? ", " : "",
-                      dep_objs.at(i).recompile_obj_id_));
+    common::hash::ObHashMap<int64_t, bool>::iterator iter = batch_dep_objs.begin();
+    for (; OB_SUCC(ret) && iter != batch_dep_objs.end(); ++iter) {
+      if (iter->second) {
+        OZ (query_inner_sql.append_fmt(" %s %ld ", need_comma ? ", " : "",
+                      iter->first));
         OX (need_comma = true);
-      } else if (OB_HASH_NOT_EXIST == tmp_ret) {
-        OZ (update_sql.append_fmt(" %s  %ld ", update_need_comma ? ", " : "",
-                      dep_objs.at(i).recompile_obj_id_));
+      } else {
+        OZ (update_sql.append_fmt(" %s %ld ", update_need_comma ? ", " : "",
+                      iter->first));
         OX (update_need_comma = true);
       }
     }
@@ -552,8 +580,9 @@ int ObPLRecompileTaskHelper::update_recomp_table(ObIArray<ObPLRecompileInfo>& de
       OZ (update_sql.append_fmt(")"));
       OZ (sql_proxy->write(tenant_id, update_sql.ptr(), affected_rows));
     }
-    if (in_disk_cache_obj.created()) {
-      in_disk_cache_obj.destroy();
+    if (batch_dep_objs.created()) {
+      int tmp_ret = batch_dep_objs.destroy();
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
     }
   }
   return ret;
@@ -643,7 +672,8 @@ int ObPLRecompileTaskHelper::batch_recompile_obj(common::ObMySQLProxy* sql_proxy
                                               ObISQLConnection *connection,
                                               ObIArray<ObPLRecompileInfo>& dep_objs,
                                               common::hash::ObHashMap<ObString, int64_t>& dropped_ref_objs,
-                                              int64_t recompile_start)
+                                              int64_t recompile_start,
+                                              schema::ObSchemaGetterGuard *schema_guard)
 {
   int ret = OB_SUCCESS;
   int64_t batch_num = 200;
@@ -672,7 +702,7 @@ int ObPLRecompileTaskHelper::batch_recompile_obj(common::ObMySQLProxy* sql_proxy
         LOG_WARN("[PLRECOMPILE]: Unexpected error!", K(ret));
       }
     }
-    int tmp_ret = update_recomp_table(dep_objs, sql_proxy, tenant_id, max_schema_version, i, start);
+    int tmp_ret = update_recomp_table(dep_objs, sql_proxy, tenant_id, max_schema_version, i, start, schema_guard);
     ret = OB_SUCCESS == ret ? tmp_ret : ret;
   }
   return ret;
@@ -690,6 +720,7 @@ int ObPLRecompileTaskHelper::recompile_pl_objs(ObPLExecCtx &ctx, sql::ParamStore
   bool enable_pl_recompile = false;
   int64_t recompile_start = ObTimeUtility::current_time();
   uint64_t consumer_group_id = 0;
+  schema::ObSchemaGetterGuard *schema_guard = NULL;
   // prepare basic env info
   if (OB_ISNULL(ctx.exec_ctx_) ||
       OB_ISNULL(ctx.exec_ctx_->get_sql_ctx()) ||
@@ -703,6 +734,7 @@ int ObPLRecompileTaskHelper::recompile_pl_objs(ObPLExecCtx &ctx, sql::ParamStore
     sess_info = sql_ctx->session_info_;
     sql_proxy = ctx.exec_ctx_->get_sql_proxy();
     tenant_id = sess_info->get_effective_tenant_id();
+    schema_guard = sql_ctx->schema_guard_;
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
     if (tenant_config.is_valid()) {
       enable_pl_recompile = tenant_config->_enable_pl_recompile_job;
@@ -722,42 +754,149 @@ int ObPLRecompileTaskHelper::recompile_pl_objs(ObPLExecCtx &ctx, sql::ParamStore
                                           tenant_id,
                                           ctx.exec_ctx_->get_allocator(),
                                           max_schema_version,
-                                          ctx.exec_ctx_->get_sql_ctx()->schema_guard_));
+                                          schema_guard));
     if (OB_SUCC(ret)) {
       ObArray<ObPLRecompileInfo> dep_objs;
       common::hash::ObHashMap<ObString, int64_t> dropped_ref_objs;
-      ObISQLConnection *connection = nullptr;
-      ObISQLConnectionPool *pool = nullptr;
+      ObInnerSQLConnection *connection = nullptr;
+      ObInnerSQLConnectionPool *pool = nullptr;
+      ObFreeSessionCtx free_session_ctx;
+      ObSQLSessionInfo *session_info = nullptr;
       uint64_t compat_version;
       ObObj compat_obj;
+      int tmp_ret = OB_SUCCESS;
       OZ (sess_info->get_compatibility_version(compat_version));
       OX (compat_obj.set_uint64(compat_version));
-      CK (OB_NOT_NULL(pool = sql_proxy->get_pool()));
-      OZ (pool->acquire(connection, nullptr));
+      CK (OB_NOT_NULL(pool = static_cast<ObInnerSQLConnectionPool *>(sql_proxy->get_pool())));
+      OZ (create_session(tenant_id, free_session_ctx, session_info));
+      CK (OB_NOT_NULL(session_info));
+      OZ (init_session(*session_info, tenant_id, sess_info->get_tenant_name(), ObCompatibilityMode::ORACLE_MODE, compat_obj));
+      OZ (pool->acquire_spi_conn(session_info, connection));
       CK (OB_NOT_NULL(connection));
-      // must set ORACLE_MODE, otherwise can not use anonymous block to execute
-      OZ (connection->set_session_variable("ob_compatibility_mode",
-                                         ObCompatibilityMode::ORACLE_MODE));
       OX (connection->set_oracle_compat_mode());
-      OZ (static_cast<observer::ObInnerSQLConnection*>(connection)->get_session().
-                update_sys_variable_by_name("ob_compatibility_version", compat_obj));
       OZ (dropped_ref_objs.create(32, "PlRecompileJob"));
       OZ (get_recompile_pl_objs(sql_proxy, dropped_ref_objs, dep_objs, tenant_id, ctx.exec_ctx_->get_allocator()));
       OZ (update_dropped_obj(dropped_ref_objs, sql_proxy, tenant_id));
       OZ (batch_recompile_obj(sql_proxy, tenant_id, max_schema_version, connection,
-                            dep_objs, dropped_ref_objs, recompile_start));
+                            dep_objs, dropped_ref_objs, recompile_start, schema_guard));
       if (dropped_ref_objs.created()) {
-        dropped_ref_objs.destroy();
+        tmp_ret = dropped_ref_objs.destroy();
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
       }
-      int tmp_ret = OB_SUCCESS;
+      if (session_info != nullptr) {
+        tmp_ret = destroy_session(free_session_ctx, session_info);
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
+      }
       if (pool != nullptr && connection != nullptr) {
         tmp_ret = pool->release(connection, true);
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
       }
-      ret = OB_SUCCESS == ret ? tmp_ret : ret;
     }
   }
   int64_t end_time = ObTimeUtility::current_time();
   LOG_INFO("[PLRECOMPILE]: finish pl background recompile task!", K(ret), K(enable), K(end_time));
+  return ret;
+}
+
+int ObPLRecompileTaskHelper::create_session(const uint64_t tenant_id,
+                            ObFreeSessionCtx &free_session_ctx,
+                            ObSQLSessionInfo *&session_info)
+{
+  int ret = OB_SUCCESS;
+  uint32_t sid = sql::ObSQLSessionInfo::INVALID_SESSID;
+  uint64_t proxy_sid = 0;
+  if (OB_ISNULL(GCTX.session_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session_mgr_ is null");
+  } else if (OB_FAIL(GCTX.session_mgr_->create_sessid(sid))) {
+    LOG_WARN("alloc session id failed");
+  } else if (OB_FAIL(GCTX.session_mgr_->create_session(
+                 tenant_id, sid, proxy_sid, ObTimeUtility::current_time(), session_info))) {
+    LOG_WARN("create session failed", K(ret), K(sid));
+    GCTX.session_mgr_->mark_sessid_unused(sid);
+    session_info = nullptr;
+  } else if (OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected session info is null", K(ret));
+  } else {
+    free_session_ctx.sessid_ = sid;
+    free_session_ctx.proxy_sessid_ = proxy_sid;
+  }
+  return ret;
+}
+
+int ObPLRecompileTaskHelper::init_session(ObSQLSessionInfo &session,
+                                          const uint64_t tenant_id,
+                                          const ObString &tenant_name,
+                                          const ObCompatibilityMode compat_mode,
+                                          ObObj &compat_obj)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  ObPrivSet db_priv_set = OB_PRIV_SET_EMPTY;
+  const bool print_info_log = true;
+  const bool is_sys_tenant = true;
+  ObPCMemPctConf pc_mem_conf;
+  ObObj compatibility_mode;
+  ObObj sql_mode;
+  const ObUserInfo *user_info = nullptr;
+
+  CK (OB_NOT_NULL(GCTX.schema_service_));
+  OZ (GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard));
+  if (ObCompatibilityMode::ORACLE_MODE == compat_mode) {
+    compatibility_mode.set_int(1);
+    sql_mode.set_uint(ObUInt64Type, DEFAULT_ORACLE_MODE);
+  } else {
+    compatibility_mode.set_int(0);
+    sql_mode.set_uint(ObUInt64Type, DEFAULT_MYSQL_MODE);
+  }
+  OX (session.set_inner_session());
+  OZ (session.load_default_sys_variable(print_info_log, is_sys_tenant));
+  OZ (session.update_max_packet_size());
+  OZ (session.init_tenant(tenant_name.ptr(), tenant_id));
+  OZ (session.load_all_sys_vars(schema_guard));
+  OZ (session.update_sys_variable(share::SYS_VAR_SQL_MODE, sql_mode));
+  OZ (session.update_sys_variable(share::SYS_VAR_OB_COMPATIBILITY_MODE, compatibility_mode));
+  OZ (session.update_sys_variable(share::SYS_VAR_OB_COMPATIBILITY_VERSION, compat_obj));
+  OZ (session.get_pc_mem_conf(pc_mem_conf));
+  CK (OB_NOT_NULL(GCTX.sql_engine_));
+
+  if (ObCompatibilityMode::ORACLE_MODE == compat_mode) {
+    OX (session.set_database_id(OB_ORA_SYS_DATABASE_ID));
+    OZ (session.set_default_database(OB_ORA_SYS_SCHEMA_NAME));
+    OZ (schema_guard.get_user_info(tenant_id, OB_ORA_SYS_USER_ID, user_info));
+  } else {
+    OX (session.set_database_id(OB_SYS_DATABASE_ID));
+    OZ (session.set_default_database(OB_SYS_DATABASE_NAME));
+    OZ (schema_guard.get_user_info(tenant_id, OB_SYS_USER_ID, user_info));
+  }
+  CK (OB_NOT_NULL(user_info));
+  OZ (session.set_user(
+          user_info->get_user_name(), user_info->get_host_name_str(), user_info->get_user_id()));
+  OX (session.set_priv_user_id(user_info->get_user_id()));
+  OX (session.set_user_priv_set(user_info->get_priv_set()));
+  OZ (schema_guard.get_db_priv_set(
+          tenant_id, user_info->get_user_id(), OB_SYS_DATABASE_NAME, db_priv_set));
+  OX (session.set_db_priv_set(db_priv_set));
+  return ret;
+}
+
+int ObPLRecompileTaskHelper::destroy_session(ObFreeSessionCtx &free_session_ctx,
+                            ObSQLSessionInfo *session_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(GCTX.session_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session_mgr_ is null");
+  } else if (OB_ISNULL(session_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("session_info is null");
+  } else {
+    session_info->set_session_sleep();
+    GCTX.session_mgr_->revert_session(session_info);
+    GCTX.session_mgr_->free_session(free_session_ctx);
+    GCTX.session_mgr_->mark_sessid_unused(free_session_ctx.sessid_);
+  }
   return ret;
 }
 
