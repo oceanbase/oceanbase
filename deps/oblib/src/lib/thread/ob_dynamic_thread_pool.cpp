@@ -476,6 +476,9 @@ void ObSimpleDynamicThreadPool::try_expand_thread_count()
       COMMON_LOG(INFO, "expand thread count", KP(this), K_(max_thread_cnt), K(cur_thread_count), K(inc_cnt), K(queue_size));
       int64_t old_thread_count = cur_thread_count;
       for (int i = 1; OB_SUCC(ret) && i <= inc_cnt; ++i) {
+        // we need to make sure only one thread is created when executing set_thread_count_and_try_recycle,
+        // to avoid calling pthread_join when creating multiple threads fails, which could trigger a deadlock
+        cur_thread_count = get_thread_count();
         if (is_server_tenant(tenant_id_)) {
           // temporarily reset ob_get_tenant_id() and run_wrapper
           // avoid the newly created thread to use the memory or run_wrapper of user tenant
@@ -483,9 +486,9 @@ void ObSimpleDynamicThreadPool::try_expand_thread_count()
           lib::Threads::get_expect_run_wrapper() = NULL;
           DEFER(lib::Threads::get_expect_run_wrapper() = run_wrapper);
           ObResetThreadTenantIdGuard guard;
-          ret = set_thread_count_and_try_recycle(old_thread_count + i);
+          ret = set_thread_count_and_try_recycle(cur_thread_count + 1);
         } else {
-          ret = set_thread_count_and_try_recycle(old_thread_count + i);
+          ret = set_thread_count_and_try_recycle(cur_thread_count + 1);
         }
       }
       if (OB_FAIL(ret)) {
