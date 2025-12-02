@@ -946,20 +946,12 @@ int ObESQueryParser::construct_es_expr_field(ObReqColumnExpr *raw_field, ObReqEx
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("raw_field is null", K(ret));
   } else {
-    char *buf = static_cast<char *>(alloc_.alloc(OB_MAX_COLUMN_NAME_LENGTH));
-    int64_t pos = 0;
-    if (OB_ISNULL(buf)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to allocate memory for field param buffer", K(ret));
-    } else if (OB_FAIL(databuff_printf(buf, OB_MAX_COLUMN_NAME_LENGTH, pos, "%.*s", raw_field->expr_name.length(), raw_field->expr_name.ptr()))) {
-      LOG_WARN("fail to write field name", K(ret));
-    } else if (OB_FAIL(databuff_printf(buf, OB_MAX_COLUMN_NAME_LENGTH, pos, "^%.15g", (raw_field->weight_ == -1.0) ? 1.0 : raw_field->weight_))) {
-      LOG_WARN("fail to write field weight", K(ret));
+    ObReqColumnExpr *col_field = nullptr;
+    double weight = (raw_field->weight_ == -1.0) ? 1.0 : raw_field->weight_;
+    if (OB_FAIL(ObReqColumnExpr::construct_column_expr(col_field, alloc_, raw_field->expr_name, weight, true))) {
+      LOG_WARN("fail to create column expr for ES field", K(ret));
     } else {
-      ObString field_param_str(pos, buf);
-      if (OB_FAIL(ObReqExpr::construct_expr(field, alloc_, field_param_str))) {
-        LOG_WARN("fail to create field param expr", K(ret));
-      }
+      field = col_field;
     }
   }
   return ret;
