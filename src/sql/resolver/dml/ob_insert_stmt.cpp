@@ -469,7 +469,7 @@ int ObInsertStmt::check_pdml_disabled(const bool is_online_ddl,
     disable_pdml = true;
   } else if (is_online_ddl || is_normal_table_overwrite()) {
     disable_pdml = false; // keep online ddl use pdml
-  } else {
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_2_0) {
     const common::ObIArray<ObRawExpr*> &column_conv_exprs = get_column_conv_exprs();
     const common::ObIArray<ObColumnRefRawExpr*> &column_exprs = table_info_.column_exprs_;
     if (OB_UNLIKELY(column_exprs.count() != column_conv_exprs.count())) {

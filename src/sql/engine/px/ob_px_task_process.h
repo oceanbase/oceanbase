@@ -110,6 +110,7 @@ private:
   int record_exec_feedback_info();
   int record_user_error_msg(int retcode);
   void release();
+  int sync_auto_increment_values(ObPhysicalPlanCtx &plan_ctx);
   /* variables */
   const observer::ObGlobalContext &gctx_;
   ObPxRpcInitTaskArgs &arg_;

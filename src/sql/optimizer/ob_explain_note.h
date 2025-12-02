@@ -38,6 +38,11 @@ namespace sql
 #define PARALLEL_DISABLED_BY_DBLINK  "Degree of Parallelisim is %ld because stmt contain dblink which force das scan"
 #define PDML_DISABLED_BY_INSERT_PK_AUTO_INC "PDML disabled because the insert statement primary key or partition key has specified auto-increment column"
 #define PDML_DISABLED_BY_TRANSFORMATIONS "PDML disabled because transformations like or-expansion"
+#define PDML_DISABLED_BY_BATCH_PARAMS_EXECUTE "PDML disabled because of batch params execute"
+#define PDML_DISABLED_BY_UNSUPPORTED_STMT_TYPE "PDML disabled because of unsupported stmt type"
+#define PDML_DISABLED_BY_VAR_ASSIGNMENT "PDML disabled because of variable assignment"
+#define PDML_DISABLED_BY_NON_STRICT_MODE "PDML disabled because of non-strict mode"
+#define PDML_DISABLED_BY_DBLINK "PDML disabled because of dblink"
 #define INSERT_OVERWRITE_TABLE  "Overwrite table with full direct mode"
 #define PARALLEL_DISABLED_BY_LICENSE "The degree of parallelism is set to %ld because current license does not allow this operation"
 #ifdef OB_BUILD_SPM
