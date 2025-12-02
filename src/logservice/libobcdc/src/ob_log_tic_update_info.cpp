@@ -63,6 +63,10 @@ const char *TICUpdateInfo::print_tic_update_reason(const TICUpdateReason reason)
       reason_str = "DROP_DATABASE";
       break;
 
+    case RECOVER_TABLE_END:
+      reason_str = "RECOVER_TABLE_END";
+      break;
+
     default:
       reason_str = "INVALID";
       break;

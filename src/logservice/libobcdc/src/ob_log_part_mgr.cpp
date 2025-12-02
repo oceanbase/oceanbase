@@ -936,6 +936,40 @@ int ObLogPartMgr::rename_table(const uint64_t table_id,
   return ret;
 }
 
+int ObLogPartMgr::recover_table_end(const uint64_t table_id,
+    DdlStmtTask &ddl_stmt,
+    const int64_t new_schema_version,
+    const int64_t timeout)
+{
+  int ret = OB_SUCCESS;
+  const char *tenant_name = nullptr;
+  const char *database_name = nullptr;
+  const char *table_name = nullptr;
+  bool is_user_table = false;
+  bool chosen = false;
+  uint64_t database_id = OB_INVALID_ID;
+  if (OB_FAIL(table_match_(table_id, new_schema_version, tenant_name, database_name,
+      table_name, is_user_table, chosen, database_id, timeout))) {
+    LOG_ERROR("table_match_ failed", KR(ret), K(new_schema_version), K(table_id));
+  } else if (!is_user_table) {
+  } else if (!chosen) {
+    ISTAT("table is not chosen", K(new_schema_version), K(table_id), K(tenant_name),
+        K(database_name), K(table_name));
+  } else {
+    TICUpdateInfo tic_update_info(TICUpdateInfo::TICUpdateReason::RECOVER_TABLE_END,
+        database_id, table_id);
+    PartTransTask &part_trans_task = ddl_stmt.get_host();
+    if (OB_FAIL(part_trans_task.push_tic_update_info(tic_update_info))) {
+      LOG_ERROR("push tic update info failed", KR(ret), K(new_schema_version), K(tic_update_info),
+          K(tenant_name), K(database_name), K(table_name));
+    } else {
+      ISTAT("set tic update info success", K(new_schema_version), K(tic_update_info),
+          K(tenant_name), K(database_name), K(table_name));
+    }
+  }
+  return ret;
+}
+
 int ObLogPartMgr::insert_table_id_into_cache(const uint64_t table_id, const uint64_t database_id)
 {
   int ret = OB_SUCCESS;

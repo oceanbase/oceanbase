@@ -713,6 +713,7 @@ private:
   // OB_DDL_ADD_SUB_PARTITION
   // OB_DDL_DROP_SUB_PARTITION
   bool is_sub_tls_id_alter_ddl_(const int64_t ddl_operation_type);
+  bool is_table_recover_end_ddl_(const int64_t ddl_operation_type);
   int init_ddl_unique_id_(common::ObString &ddl_unique_id);
 
 private:

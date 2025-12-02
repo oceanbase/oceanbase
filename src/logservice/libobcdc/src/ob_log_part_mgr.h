@@ -196,6 +196,11 @@ public:
       const int64_t new_schema_version,
       const int64_t timeout) = 0;
 
+  virtual int recover_table_end(const uint64_t table_id,
+      DdlStmtTask &ddl_stmt,
+      const int64_t new_schema_version,
+      const int64_t timeout) = 0;
+
   /// Delete global index table, Delete index table scenario
   /// @note must be called by a single thread in order by Schema version, not concurrently in order
   ////
@@ -348,6 +353,10 @@ public:
       const int64_t old_schema_version,
       const int64_t timeout);
   virtual int rename_table(const uint64_t table_id,
+      DdlStmtTask &ddl_stmt,
+      const int64_t new_schema_version,
+      const int64_t timeout);
+  virtual int recover_table_end(const uint64_t table_id,
       DdlStmtTask &ddl_stmt,
       const int64_t new_schema_version,
       const int64_t timeout);

@@ -1669,6 +1669,16 @@ bool DdlStmtTask::is_sub_tls_id_alter_ddl_(const int64_t ddl_operation_type)
   return bool_ret;
 }
 
+bool DdlStmtTask::is_table_recover_end_ddl_(const int64_t ddl_operation_type)
+{
+  bool bool_ret = false;
+
+  ObSchemaOperationType op_type = static_cast<ObSchemaOperationType>(ddl_operation_type);
+  bool_ret = (OB_DDL_RECOVER_TABLE_END == op_type);
+
+  return bool_ret;
+}
+
 int DdlStmtTask::parse_ddl_info(
     ObLogBR *br,
     const uint64_t row_index,
@@ -1774,6 +1784,11 @@ int DdlStmtTask::parse_ddl_info(
 
       // obadmin performs dynamic add/drop operations on secondary tls_ids with null ddl_stmt_str, but not filtering
       if (is_sub_tls_id_alter_ddl_(ddl_operation_type_)) {
+        is_valid_ddl = true;
+      }
+
+      // table revoer
+      if (is_table_recover_end_ddl_(ddl_operation_type_)) {
         is_valid_ddl = true;
       }
     }

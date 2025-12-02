@@ -1401,7 +1401,8 @@ int ObLogSequencer::need_acquire_new_schema_(const PartTransTask &task, bool &ne
         LOG_ERROR("invalid DDL statement", KR(ret), KPC(stmt_task), K(ddl_stmt));
       } else if (OB_DDL_CREATE_TABLE == ddl_stmt->get_operation_type()
           || OB_DDL_ALTER_TABLE == ddl_stmt->get_operation_type()
-          || OB_DDL_TABLE_RENAME == ddl_stmt->get_operation_type()) {
+          || OB_DDL_TABLE_RENAME == ddl_stmt->get_operation_type()
+          || OB_DDL_RECOVER_TABLE_END == ddl_stmt->get_operation_type()) {
         need_new_schema = true;
         break;
       } else {
@@ -1434,7 +1435,8 @@ int ObLogSequencer::update_table_id_cache_(IObLogPartMgr &part_mgr, const PartTr
         break;
       }
       case TICUpdateInfo::TICUpdateReason::CREATE_TABLE:
-      case TICUpdateInfo::TICUpdateReason::RENAME_TABLE_ADD: {
+      case TICUpdateInfo::TICUpdateReason::RENAME_TABLE_ADD:
+      case TICUpdateInfo::TICUpdateReason::RECOVER_TABLE_END: {
         const uint64_t table_id = tic_update_info.table_id_;
         const uint64_t database_id = tic_update_info.database_id_;
         if (OB_FAIL(part_mgr.insert_table_id_into_cache(table_id, database_id))) {

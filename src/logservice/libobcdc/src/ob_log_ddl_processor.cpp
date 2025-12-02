@@ -617,6 +617,10 @@ int ObLogDDLProcessor::handle_ddl_stmt_update_tic_(
           need_update_tic, stop_flag);
       break;
     }
+    case OB_DDL_RECOVER_TABLE_END : {
+      ret = handle_ddl_stmt_recover_table_end_(tenant, ddl_stmt, new_schema_version, need_update_tic, stop_flag);
+      break;
+    }
     case OB_DDL_DEL_DATABASE : {
       ret = handle_ddl_stmt_drop_database_(tenant, ddl_stmt, old_schema_version, new_schema_version,
           need_update_tic, stop_flag);
@@ -1224,6 +1228,26 @@ int ObLogDDLProcessor::handle_ddl_stmt_rename_table_(
   } else {
     ret = handle_ddl_stmt_direct_output_(tenant, ddl_stmt, old_schema_version, stop_flag);
   }
+  return ret;
+}
+
+int ObLogDDLProcessor::handle_ddl_stmt_recover_table_end_(
+    ObLogTenant &tenant,
+    DdlStmtTask &ddl_stmt,
+    const int64_t new_schema_version,
+    const bool need_update_tic,
+    volatile bool &stop_flag)
+{
+  int ret = OB_SUCCESS;
+
+  if (need_update_tic) {
+    RETRY_FUNC(stop_flag, tenant.get_part_mgr(), recover_table_end,
+        ddl_stmt.get_op_table_id(),
+        ddl_stmt,
+        new_schema_version,
+        DATA_OP_TIMEOUT);
+  }
+
   return ret;
 }
 
