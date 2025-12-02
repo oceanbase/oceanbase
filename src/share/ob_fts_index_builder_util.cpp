@@ -969,11 +969,15 @@ int ObFtsIndexBuilderUtil::check_ft_cols(
       ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
       LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(),
                      column_name.ptr());
-    } else if (!col_schema->is_string_type()
-            || col_schema->get_meta_type().is_varbinary_or_binary()
+    } else if (!col_schema->is_string_type()) {
+      ret = OB_ERR_BAD_FT_COLUMN;
+      char err_column_type[10]="Column";
+      LOG_USER_ERROR(OB_ERR_BAD_FT_COLUMN, 6, err_column_type, column_name.length(), column_name.ptr());
+    } else if (col_schema->get_meta_type().is_varbinary_or_binary()
             || col_schema->get_meta_type().is_blob()) {
       ret = OB_ERR_BAD_FT_COLUMN;
-      LOG_USER_ERROR(OB_ERR_BAD_FT_COLUMN, column_name.length(), column_name.ptr());
+      char err_CharacterSet_Type[15]="Character Set";
+      LOG_USER_ERROR(OB_ERR_BAD_FT_COLUMN, 13, err_CharacterSet_Type,column_name.length(), column_name.ptr());
     } else {
       col_schema->add_column_flag(GENERATED_DEPS_CASCADE_FLAG);
     }
