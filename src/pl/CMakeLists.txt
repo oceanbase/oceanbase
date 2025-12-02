@@ -50,7 +50,7 @@ ob_set_subtarget(ob_pl pl_cache
 
 ob_set_subtarget(ob_pl sys_package
   sys_package/ob_dbms_stats.cpp
-  sys_package/ob_dbms_scheduler_mysql.cpp
+  sys_package/ob_dbms_scheduler.cpp
   sys_package/ob_dbms_application.cpp
   sys_package/ob_dbms_session.cpp
   sys_package/ob_dbms_monitor.cpp
