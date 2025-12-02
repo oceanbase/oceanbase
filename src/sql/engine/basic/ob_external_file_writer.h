@@ -54,7 +54,7 @@ public:
 
   int open_file();
   virtual int close_file();
-  int close_data_writer();
+  int close_data_writer(bool need_retry = false);
   virtual int write_file() = 0;
   virtual int64_t get_file_size() = 0;
   int64_t get_write_bytes() { return write_bytes_; }
