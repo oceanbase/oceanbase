@@ -447,13 +447,13 @@ TEST_F(TestFileManager, test_path_convert)
   CHECK_MACRO_ID_TO_PATH(SHARED_MAJOR_META_MACRO, false/*is_in_local*/, OB_SUCCESS, "cluster_1/tenant_1/tablet/3/5242880/major/sstable/cg_0/meta/seq2.T7");
 
   // 8.TMP_FILE
-  // tenant_id_epoch_id/tmp_data/tmp_file_id/segment_id
-  CHECK_MACRO_ID_TO_PATH(TMP_FILE, true/*is_in_local*/, OB_SUCCESS, "1_0/tmp_data/3/seg2.T8");
+  // tenant_id_epoch_id/tmp_data/scatter_id/tmp_file_id/segment_id
+  CHECK_MACRO_ID_TO_PATH(TMP_FILE, true/*is_in_local*/, OB_SUCCESS, "1_0/tmp_data/000/3/seg2.T8");
 
   expected_path[0] = '\0';
-  // tenant_id_epoch_id/tmp_data/tmp_file_id/segment_id.deleted
+  // tenant_id_epoch_id/tmp_data/scatter_id/tmp_file_id/segment_id.deleted
   ASSERT_EQ(OB_SUCCESS, ctx.set_logical_delete_ctx(file_id, ls_epoch_id));
-  ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/1_0/%s/3/seg2.T8.deleted",
+  ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/1_0/%s/000/3/seg2.T8.deleted",
                                         OB_DIR_MGR.get_local_cache_root_dir(), TMP_DATA_DIR_STR));
   ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
@@ -812,8 +812,8 @@ TEST_F(TestFileManager, test_get_file_parent_dir)
   CHECK_MACRO_ID_PARENT_DIR(SHARED_MAJOR_DATA_MACRO, OB_NOT_SUPPORTED, "");
 
   // 3.TMP_FILE
-  // tenant_id_epoch_id/tmp_data/tmp_file_id/segment_id
-  CHECK_MACRO_ID_PARENT_DIR(TMP_FILE, OB_SUCCESS, "1_0/tmp_data/3");
+  // tenant_id_epoch_id/tmp_data/scatter_id/tmp_file_id/segment_id
+  CHECK_MACRO_ID_PARENT_DIR(TMP_FILE, OB_SUCCESS, "1_0/tmp_data/000/3");
 
   // 4.SERVER_META
   // CHECK_MACRO_ID_PARENT_DIR(SERVER_META, OB_SUCCESS, "");
@@ -986,7 +986,7 @@ TEST_F(TestFileManager, test_tmp_file_operator)
 
   // step 1: create dir
   int64_t tmp_file_id = 3;
-  // ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tmp_file_dir(tmp_file_id));
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tmp_file_dir(MTL_ID(), MTL_EPOCH_ID(), tmp_file_id));
 
   // step 2: test write tmp_file
   ObStorageObjectHandle write_object_handle;
@@ -1067,13 +1067,30 @@ TEST_F(TestFileManager, test_tmp_file_operator)
   ASSERT_EQ(2 * write_io_size, file_length);
 
   // test 9: test calc_tmp_file_disk_space
+  // expected_disk_size = file_size + dir_size
+  // file_size = 8192 * 2 = 16384
+  // dir_size = scatter_dirs (only created on-demand) + tmp_file_dir
+  // Note: scan_dir_rec does NOT count the starting directory (tmp_data) itself,
+  // only its subdirectories (scatter dirs + tmp_file_dir)
   ObCalibrateDiskSpaceResult calibrate_res;
   char dir_path[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
   int64_t expected_disk_size = 2 * write_io_size;
   ObIODFileStat statbuf;
+  // Add tmp_file_dir size
   ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_local_tmp_file_dir(dir_path, sizeof(dir_path), MTL_ID(), MTL_EPOCH_ID(), tmp_file_id));
   ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::stat(dir_path, statbuf));
   expected_disk_size += statbuf.size_;
+  // Add scatter_dir size (only the one created for tmp_file_id)
+  // tmp_file_id / TMP_FILE_SCATTER_DIR_NUM % TMP_FILE_SCATTER_DIR_NUM determines which scatter dir
+  int64_t scatter_id = tmp_file_id / ObDirManager::TMP_FILE_SCATTER_DIR_NUM % ObDirManager::TMP_FILE_SCATTER_DIR_NUM;
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_local_tmp_data_scatter_dir(dir_path, sizeof(dir_path), MTL_ID(), MTL_EPOCH_ID(), tmp_file_id));
+  bool scatter_dir_exists = false;
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::exist(dir_path, scatter_dir_exists));
+  if (scatter_dir_exists) {
+    ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::stat(dir_path, statbuf));
+    expected_disk_size += statbuf.size_;
+  }
+  // Sleep to ensure file system timestamp progresses, then record timestamp to include all created files/dirs
   ob_usleep(2000*1000);
   int64_t start_calc_size_time_s = ObTimeUtility::current_time_s();
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->calc_tmp_file_disk_space(start_calc_size_time_s, calibrate_res));
@@ -1082,6 +1099,481 @@ TEST_F(TestFileManager, test_tmp_file_operator)
   // step 10: test delete file
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_tmp_file(file_id));
 
+}
+
+TEST_F(TestFileManager, test_tmp_file_scatter_dir)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFileManager* tenant_file_mgr = MTL(ObTenantFileManager*);
+  ASSERT_NE(nullptr, tenant_file_mgr);
+
+  // Test 1: Verify scatter directory path generation for different tmp_file_ids
+  char scatter_dir_path[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
+  char expected_path[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
+  char tmp_data_dir[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
+
+  // Get base tmp_data directory
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_local_tmp_data_dir(tmp_data_dir, sizeof(tmp_data_dir), MTL_ID(), MTL_EPOCH_ID()));
+
+  // Test scatter directory path for tmp_file_id = 3 (should be in scatter dir 000)
+  int64_t tmp_file_id_1 = 3;
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_local_tmp_data_scatter_dir(scatter_dir_path, sizeof(scatter_dir_path),
+                                                                  MTL_ID(), MTL_EPOCH_ID(), tmp_file_id_1));
+  ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, sizeof(expected_path), "%s/%03ld", tmp_data_dir,
+                                       tmp_file_id_1 / ObDirManager::TMP_FILE_SCATTER_DIR_NUM % ObDirManager::TMP_FILE_SCATTER_DIR_NUM));
+  ASSERT_EQ(0, STRCMP(scatter_dir_path, expected_path)) << "scatter_dir_path: " << scatter_dir_path
+                                                        << ", expected_path: " << expected_path;
+
+  // Test scatter directory path for tmp_file_id = 103 (should be in scatter dir 000, 103 / TMP_FILE_SCATTER_DIR_NUM % TMP_FILE_SCATTER_DIR_NUM = 0)
+  char scatter_dir_path_1_saved[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
+  STRNCPY(scatter_dir_path_1_saved, scatter_dir_path, sizeof(scatter_dir_path_1_saved));
+  scatter_dir_path[0] = '\0';
+  expected_path[0] = '\0';
+  int64_t tmp_file_id_2 = 103;
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_local_tmp_data_scatter_dir(scatter_dir_path, sizeof(scatter_dir_path),
+                                                                  MTL_ID(), MTL_EPOCH_ID(), tmp_file_id_2));
+  ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, sizeof(expected_path), "%s/%03ld", tmp_data_dir,
+                                       tmp_file_id_2 / ObDirManager::TMP_FILE_SCATTER_DIR_NUM % ObDirManager::TMP_FILE_SCATTER_DIR_NUM));
+  ASSERT_EQ(0, STRCMP(scatter_dir_path, expected_path)) << "scatter_dir_path: " << scatter_dir_path
+                                                        << ", expected_path: " << expected_path;
+  // Verify both tmp_file_id_1 and tmp_file_id_2 map to the same scatter directory
+  ASSERT_EQ(0, STRCMP(scatter_dir_path_1_saved, scatter_dir_path))
+      << "tmp_file_id " << tmp_file_id_1 << " and " << tmp_file_id_2
+      << " should map to the same scatter directory";
+
+  // Test scatter directory path for tmp_file_id = 2050 (should be in scatter dir 2)
+  scatter_dir_path[0] = '\0';
+  expected_path[0] = '\0';
+  int64_t tmp_file_id_3 = 2050;
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_local_tmp_data_scatter_dir(scatter_dir_path, sizeof(scatter_dir_path),
+                                                                  MTL_ID(), MTL_EPOCH_ID(), tmp_file_id_3));
+  ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, sizeof(expected_path), "%s/%03ld", tmp_data_dir,
+                                       tmp_file_id_3 / ObDirManager::TMP_FILE_SCATTER_DIR_NUM % ObDirManager::TMP_FILE_SCATTER_DIR_NUM));
+  ASSERT_EQ(0, STRCMP(scatter_dir_path, expected_path)) << "scatter_dir_path: " << scatter_dir_path
+                                                        << ", expected_path: " << expected_path;
+
+  // Test 2: Verify scatter directory creation
+  // Create tmp_file_dir for tmp_file_id_1, which should create the scatter directory
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tmp_file_dir(MTL_ID(), MTL_EPOCH_ID(), tmp_file_id_1));
+
+  // Verify scatter directory exists
+  scatter_dir_path[0] = '\0';
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_local_tmp_data_scatter_dir(scatter_dir_path, sizeof(scatter_dir_path),
+                                                                  MTL_ID(), MTL_EPOCH_ID(), tmp_file_id_1));
+  bool is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::exist(scatter_dir_path, is_exist));
+  ASSERT_TRUE(is_exist) << "scatter directory should exist: " << scatter_dir_path;
+
+  // Verify tmp_file directory exists
+  char tmp_file_dir_path[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_local_tmp_file_dir(tmp_file_dir_path, sizeof(tmp_file_dir_path),
+                                                          MTL_ID(), MTL_EPOCH_ID(), tmp_file_id_1));
+  is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::exist(tmp_file_dir_path, is_exist));
+  ASSERT_TRUE(is_exist) << "tmp_file directory should exist: " << tmp_file_dir_path;
+
+  // Test 3: Verify multiple tmp_files are scattered to different directories
+  // Create tmp_file_dir for tmp_file_id_3 (should be in scatter dir 002)
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tmp_file_dir(MTL_ID(), MTL_EPOCH_ID(), tmp_file_id_3));
+
+  // Verify scatter directory for tmp_file_id_3 exists
+  scatter_dir_path[0] = '\0';
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_local_tmp_data_scatter_dir(scatter_dir_path, sizeof(scatter_dir_path),
+                                                                  MTL_ID(), MTL_EPOCH_ID(), tmp_file_id_3));
+  is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::exist(scatter_dir_path, is_exist));
+  ASSERT_TRUE(is_exist) << "scatter directory should exist: " << scatter_dir_path;
+
+  // Test 4: Verify that tmp_file_id_2 (103) uses the same scatter directory as tmp_file_id_1 (3)
+  // Both should map to scatter dir 000 (3 / TMP_FILE_SCATTER_DIR_NUM % TMP_FILE_SCATTER_DIR_NUM = 0, 103 / TMP_FILE_SCATTER_DIR_NUM % TMP_FILE_SCATTER_DIR_NUM = 0)
+  char scatter_dir_path_1[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
+  char scatter_dir_path_2[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_local_tmp_data_scatter_dir(scatter_dir_path_1, sizeof(scatter_dir_path_1),
+                                                                  MTL_ID(), MTL_EPOCH_ID(), tmp_file_id_1));
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_local_tmp_data_scatter_dir(scatter_dir_path_2, sizeof(scatter_dir_path_2),
+                                                                  MTL_ID(), MTL_EPOCH_ID(), tmp_file_id_2));
+  ASSERT_EQ(0, STRCMP(scatter_dir_path_1, scatter_dir_path_2))
+      << "tmp_file_id " << tmp_file_id_1 << " and " << tmp_file_id_2
+      << " should map to the same scatter directory";
+
+  // Create tmp_file_dir for tmp_file_id_2, should reuse existing scatter directory
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tmp_file_dir(MTL_ID(), MTL_EPOCH_ID(), tmp_file_id_2));
+
+  // Verify tmp_file directory for tmp_file_id_2 exists
+  tmp_file_dir_path[0] = '\0';
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_local_tmp_file_dir(tmp_file_dir_path, sizeof(tmp_file_dir_path),
+                                                          MTL_ID(), MTL_EPOCH_ID(), tmp_file_id_2));
+  is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::exist(tmp_file_dir_path, is_exist));
+  ASSERT_TRUE(is_exist) << "tmp_file directory should exist: " << tmp_file_dir_path;
+
+  // Test 5: Verify scatter directory format (should be %03ld format, e.g., 000, 001, ..., 999)
+  // Test with tmp_file_id = 0 (should be in scatter dir 000, 0 / TMP_FILE_SCATTER_DIR_NUM % TMP_FILE_SCATTER_DIR_NUM = 0)
+  scatter_dir_path[0] = '\0';
+  expected_path[0] = '\0';
+  int64_t tmp_file_id_4 = 0;
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_local_tmp_data_scatter_dir(scatter_dir_path, sizeof(scatter_dir_path),
+                                                                  MTL_ID(), MTL_EPOCH_ID(), tmp_file_id_4));
+  ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, sizeof(expected_path), "%s/%03ld", tmp_data_dir,
+                                       tmp_file_id_4 / ObDirManager::TMP_FILE_SCATTER_DIR_NUM % ObDirManager::TMP_FILE_SCATTER_DIR_NUM));
+  ASSERT_EQ(0, STRCMP(scatter_dir_path, expected_path)) << "scatter_dir_path: " << scatter_dir_path
+                                                        << ", expected_path: " << expected_path;
+  // Verify the scatter directory name ends with "000"
+  const char* dir_name = STRRCHR(scatter_dir_path, '/');
+  ASSERT_NE(nullptr, dir_name);
+  dir_name++; // Skip the '/'
+  ASSERT_EQ(0, STRCMP(dir_name, "000")) << "scatter directory name should be '000' for tmp_file_id=0";
+
+  // Test with tmp_file_id = 99 (should be in scatter dir 000, 99 / TMP_FILE_SCATTER_DIR_NUM % TMP_FILE_SCATTER_DIR_NUM = 0)
+  scatter_dir_path[0] = '\0';
+  expected_path[0] = '\0';
+  int64_t tmp_file_id_5 = 99;
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_local_tmp_data_scatter_dir(scatter_dir_path, sizeof(scatter_dir_path),
+                                                                  MTL_ID(), MTL_EPOCH_ID(), tmp_file_id_5));
+  ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, sizeof(expected_path), "%s/%03ld", tmp_data_dir,
+                                       tmp_file_id_5 / ObDirManager::TMP_FILE_SCATTER_DIR_NUM % ObDirManager::TMP_FILE_SCATTER_DIR_NUM));
+  ASSERT_EQ(0, STRCMP(scatter_dir_path, expected_path)) << "scatter_dir_path: " << scatter_dir_path
+                                                        << ", expected_path: " << expected_path;
+  // Verify the scatter directory name ends with "000"
+  dir_name = STRRCHR(scatter_dir_path, '/');
+  ASSERT_NE(nullptr, dir_name);
+  dir_name++; // Skip the '/'
+  ASSERT_EQ(0, STRCMP(dir_name, "000")) << "scatter directory name should be '000' for tmp_file_id=99";
+
+  // Cleanup: Delete all created tmp_files to avoid affecting subsequent tests
+  MacroBlockId file_id;
+  file_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+  file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+
+  // Delete tmp_file_id_1
+  file_id.set_second_id(tmp_file_id_1);
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_tmp_file(file_id));
+
+  // Delete tmp_file_id_2
+  file_id.set_second_id(tmp_file_id_2);
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_tmp_file(file_id));
+
+  // Delete tmp_file_id_3
+  file_id.set_second_id(tmp_file_id_3);
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_tmp_file(file_id));
+
+  LOG_INFO("test_tmp_file_scatter_dir completed successfully");
+}
+
+TEST_F(TestFileManager, test_delete_old_version_files_in_scatter_dir)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFileManager* tenant_file_mgr = MTL(ObTenantFileManager*);
+  ASSERT_NE(nullptr, tenant_file_mgr);
+  ObSegmentFileManager &segment_file_mgr = tenant_file_mgr->get_segment_file_mgr();
+
+  char tmp_data_path[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_local_tmp_data_dir(tmp_data_path, sizeof(tmp_data_path), MTL_ID(), MTL_EPOCH_ID()));
+
+  // ==========================
+  // Scenario 1: Normal cleanup - scatter_id = 100
+  // Old version: tmp_data/100/seg_old.T8 (file_id=100, direct under scatter_dir)
+  // New version: tmp_data/100/100000/seg_new.T8 (file_id=100000)
+  // ==========================
+  LOG_INFO("=== Scenario 1: Normal cleanup with scatter_id=100 ===");
+
+  // Create old version file structure
+  char scatter_dir_100[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
+  ASSERT_EQ(OB_SUCCESS, databuff_printf(scatter_dir_100, sizeof(scatter_dir_100), "%s/100", tmp_data_path));
+  ASSERT_EQ(0, ::mkdir(scatter_dir_100, 0755)) << "Failed to create scatter_dir: " << scatter_dir_100;
+
+  char old_file_100[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
+  ASSERT_EQ(OB_SUCCESS, databuff_printf(old_file_100, sizeof(old_file_100), "%s/seg_old.T8", scatter_dir_100));
+  int fd = ::open(old_file_100, O_WRONLY | O_CREAT, 0644);
+  ASSERT_GE(fd, 0);
+  ::write(fd, "old version file", 16);
+  ::close(fd);
+
+  // Create new version file structure (file_id=100000)
+  int64_t new_file_id_100 = 100000;
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tmp_file_dir(MTL_ID(), MTL_EPOCH_ID(), new_file_id_100));
+  char new_file_dir_100[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_local_tmp_file_dir(new_file_dir_100, sizeof(new_file_dir_100),
+                                                           MTL_ID(), MTL_EPOCH_ID(), new_file_id_100));
+
+  char new_file_100[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
+  ASSERT_EQ(OB_SUCCESS, databuff_printf(new_file_100, sizeof(new_file_100), "%s/seg_new.T8", new_file_dir_100));
+  fd = ::open(new_file_100, O_WRONLY | O_CREAT, 0644);
+  ASSERT_GE(fd, 0);
+  ::write(fd, "new version file", 16);
+  ::close(fd);
+
+  // Verify files exist before cleanup
+  bool is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::exist(old_file_100, is_exist));
+  ASSERT_TRUE(is_exist) << "Old file should exist before cleanup";
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::exist(new_file_100, is_exist));
+  ASSERT_TRUE(is_exist) << "New file should exist before cleanup";
+
+  // Execute cleanup
+  int64_t delete_count_100 = 0;
+  ASSERT_EQ(OB_SUCCESS, segment_file_mgr.delete_old_version_files_in_scatter_dir(tmp_data_path, 100, delete_count_100));
+  ASSERT_EQ(1, delete_count_100) << "Should delete 1 old file";
+
+  // Verify old file deleted, new file preserved
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::exist(old_file_100, is_exist));
+  ASSERT_FALSE(is_exist) << "Old file should be deleted";
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::exist(new_file_100, is_exist));
+  ASSERT_TRUE(is_exist) << "New file should be preserved";
+
+  LOG_INFO("Scenario 1 passed", K(delete_count_100));
+
+  // ==========================
+  // Scenario 2: Multiple old files - scatter_id = 500
+  // Old version: tmp_data/500/seg1.T8, seg2.T8, seg3.T8
+  // New version: tmp_data/500/500500/seg_new.T8 (file_id=500500)
+  // ==========================
+  LOG_INFO("=== Scenario 2: Multiple old files with scatter_id=500 ===");
+
+  // Create scatter directory
+  char scatter_dir_500[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
+  ASSERT_EQ(OB_SUCCESS, databuff_printf(scatter_dir_500, sizeof(scatter_dir_500), "%s/500", tmp_data_path));
+  ASSERT_EQ(0, ::mkdir(scatter_dir_500, 0755)) << "Failed to create scatter_dir: " << scatter_dir_500;
+
+  // Create multiple old version files
+  const char* old_file_names[] = {"seg1.T8", "seg2.T8", "seg3.T8"};
+  char old_files_500[3][ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH];
+  for (int i = 0; i < 3; i++) {
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(old_files_500[i], sizeof(old_files_500[i]), "%s/%s", scatter_dir_500, old_file_names[i]));
+    fd = ::open(old_files_500[i], O_WRONLY | O_CREAT, 0644);
+    ASSERT_GE(fd, 0);
+    ::write(fd, "old file", 8);
+    ::close(fd);
+  }
+
+  // Create new version file structure (file_id=500500)
+  int64_t new_file_id_500 = 500500;
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tmp_file_dir(MTL_ID(), MTL_EPOCH_ID(), new_file_id_500));
+  char new_file_dir_500[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_local_tmp_file_dir(new_file_dir_500, sizeof(new_file_dir_500),
+                                                           MTL_ID(), MTL_EPOCH_ID(), new_file_id_500));
+
+  char new_file_500[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
+  ASSERT_EQ(OB_SUCCESS, databuff_printf(new_file_500, sizeof(new_file_500), "%s/seg_new.T8", new_file_dir_500));
+  fd = ::open(new_file_500, O_WRONLY | O_CREAT, 0644);
+  ASSERT_GE(fd, 0);
+  ::write(fd, "new file", 8);
+  ::close(fd);
+
+  // Execute cleanup
+  int64_t delete_count_500 = 0;
+  ASSERT_EQ(OB_SUCCESS, segment_file_mgr.delete_old_version_files_in_scatter_dir(tmp_data_path, 500, delete_count_500));
+  ASSERT_EQ(3, delete_count_500) << "Should delete 3 old files";
+
+  // Verify all old files deleted, new file preserved
+  for (int i = 0; i < 3; i++) {
+    ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::exist(old_files_500[i], is_exist));
+    ASSERT_FALSE(is_exist) << "Old file " << old_file_names[i] << " should be deleted";
+  }
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::exist(new_file_500, is_exist));
+  ASSERT_TRUE(is_exist) << "New file should be preserved";
+
+  LOG_INFO("Scenario 2 passed", K(delete_count_500));
+
+  // ==========================
+  // Scenario 3: Only new version files - scatter_id = 999
+  // New version: tmp_data/999/999999/seg_new.T8 (file_id=999999)
+  // ==========================
+  LOG_INFO("=== Scenario 3: Only new version files with scatter_id=999 ===");
+
+  // Create scatter directory
+  char scatter_dir_999[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
+  ASSERT_EQ(OB_SUCCESS, databuff_printf(scatter_dir_999, sizeof(scatter_dir_999), "%s/999", tmp_data_path));
+  ASSERT_EQ(0, ::mkdir(scatter_dir_999, 0755)) << "Failed to create scatter_dir: " << scatter_dir_999;
+
+  // Create only new version file (file_id=999999)
+  int64_t new_file_id_999 = 999999;
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tmp_file_dir(MTL_ID(), MTL_EPOCH_ID(), new_file_id_999));
+  char new_file_dir_999[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_local_tmp_file_dir(new_file_dir_999, sizeof(new_file_dir_999),
+                                                           MTL_ID(), MTL_EPOCH_ID(), new_file_id_999));
+
+  char new_file_999[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
+  ASSERT_EQ(OB_SUCCESS, databuff_printf(new_file_999, sizeof(new_file_999), "%s/seg_new.T8", new_file_dir_999));
+  fd = ::open(new_file_999, O_WRONLY | O_CREAT, 0644);
+  ASSERT_GE(fd, 0);
+  ::write(fd, "new file", 8);
+  ::close(fd);
+
+  // Execute cleanup
+  int64_t delete_count_999 = 0;
+  ASSERT_EQ(OB_SUCCESS, segment_file_mgr.delete_old_version_files_in_scatter_dir(tmp_data_path, 999, delete_count_999));
+  ASSERT_EQ(0, delete_count_999) << "Should delete 0 files";
+
+  // Verify new file still exists
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::exist(new_file_999, is_exist));
+  ASSERT_TRUE(is_exist) << "New file should still exist";
+
+  LOG_INFO("Scenario 3 passed", K(delete_count_999));
+
+  // ==========================
+  // Scenario 4: Directory doesn't exist - scatter_id = 200
+  // ==========================
+  LOG_INFO("=== Scenario 4: Directory doesn't exist with scatter_id=200 ===");
+
+  int64_t delete_count_200 = 0;
+  ASSERT_EQ(OB_SUCCESS, segment_file_mgr.delete_old_version_files_in_scatter_dir(tmp_data_path, 200, delete_count_200));
+  ASSERT_EQ(0, delete_count_200) << "Should delete 0 files when directory doesn't exist";
+
+  LOG_INFO("Scenario 4 passed", K(delete_count_200));
+
+  // ==========================
+  // Scenario 5: Empty directory - scatter_id = 300
+  // ==========================
+  LOG_INFO("=== Scenario 5: Empty directory with scatter_id=300 ===");
+
+  // Create empty scatter directory
+  char scatter_dir_300[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
+  ASSERT_EQ(OB_SUCCESS, databuff_printf(scatter_dir_300, sizeof(scatter_dir_300), "%s/300", tmp_data_path));
+  ASSERT_EQ(0, ::mkdir(scatter_dir_300, 0755)) << "Failed to create scatter_dir: " << scatter_dir_300;
+
+  // Execute cleanup on empty directory
+  int64_t delete_count_300 = 0;
+  ASSERT_EQ(OB_SUCCESS, segment_file_mgr.delete_old_version_files_in_scatter_dir(tmp_data_path, 300, delete_count_300));
+  ASSERT_EQ(0, delete_count_300) << "Should delete 0 files in empty directory";
+
+  LOG_INFO("Scenario 5 passed", K(delete_count_300));
+
+  // ==========================
+  // Cleanup all test resources
+  // ==========================
+  LOG_INFO("=== Cleaning up test resources ===");
+
+  // Cleanup scenario 1 resources
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::unlink(new_file_100));
+  MacroBlockId macro_id_100;
+  macro_id_100.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+  macro_id_100.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+  macro_id_100.set_second_id(new_file_id_100);
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_tmp_file(macro_id_100));
+
+  // Cleanup scenario 2 resources
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::unlink(new_file_500));
+  MacroBlockId macro_id_500;
+  macro_id_500.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+  macro_id_500.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+  macro_id_500.set_second_id(new_file_id_500);
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_tmp_file(macro_id_500));
+
+  // Cleanup scenario 3 resources
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::unlink(new_file_999));
+  MacroBlockId macro_id_999;
+  macro_id_999.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+  macro_id_999.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+  macro_id_999.set_second_id(new_file_id_999);
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_tmp_file(macro_id_999));
+
+  // Cleanup empty directory from scenario 5
+  ASSERT_EQ(0, ::rmdir(scatter_dir_300)) << "Failed to remove empty scatter_dir: " << scatter_dir_300;
+
+  LOG_INFO("test_delete_old_version_files_in_scatter_dir completed successfully");
+}
+
+TEST_F(TestFileManager, test_rm_logical_deleted_file)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFileManager* tenant_file_mgr = MTL(ObTenantFileManager*);
+  ASSERT_NE(nullptr, tenant_file_mgr);
+  ObTenantDiskSpaceManager *tenant_disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, tenant_disk_space_mgr);
+
+  // step 1: create tmp_file_dir
+  // Use tmp_file_id = 999000 to map to scatter_dir 999, avoiding conflicts with other tests
+  // scatter_id = 999000 / 1000 % 1000 = 999
+  int64_t tmp_file_id = 999000;
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tmp_file_dir(MTL_ID(), MTL_EPOCH_ID(), tmp_file_id));
+
+  // step 2: write tmp_file
+  MacroBlockId file_id;
+  file_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+  file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+  file_id.set_second_id(tmp_file_id);
+  file_id.set_third_id(2);  // segment_id
+
+  ObStorageObjectHandle write_object_handle;
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(file_id));
+  const int64_t write_io_size = 8 * 1024; // 8KB
+  char write_buf[write_io_size] = { 0 };
+  memset(write_buf, 'a', write_io_size);
+  ObStorageObjectWriteInfo write_info;
+  write_info.io_desc_.set_wait_event(1);
+  write_info.io_desc_.set_unsealed();
+  write_info.buffer_ = write_buf;
+  write_info.offset_ = 0;
+  write_info.size_ = write_io_size;
+  write_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  write_info.mtl_tenant_id_ = MTL_ID();
+  write_info.set_tmp_file_valid_length(write_io_size);
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::append_file(write_info, write_object_handle));
+
+  ObSSMacroCacheStat tmp_file_cache_stat;
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::TMP_FILE, tmp_file_cache_stat));
+  int64_t tmp_file_used_size = tmp_file_cache_stat.used_;
+
+  // step 3: logical delete tmp_file (pause gc to keep .deleted file)
+  tenant_file_mgr->set_tmp_file_cache_pause_gc();
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::delete_local_file(file_id));
+
+  // step 4: verify .deleted file exists
+  ObPathContext ctx;
+  ASSERT_EQ(OB_SUCCESS, ctx.set_logical_delete_ctx(file_id, 0/*ls_epoch_id*/));
+  bool is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::exist(ctx.get_path(), is_exist));
+  ASSERT_TRUE(is_exist);
+
+  // step 5: call rm_logical_deleted_file to clean up .deleted file
+  tenant_file_mgr->set_tmp_file_cache_allow_gc();
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->calibrate_disk_space_task_.rm_logical_deleted_file());
+
+  // step 6: verify .deleted file is removed
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::exist(ctx.get_path(), is_exist));
+  ASSERT_FALSE(is_exist);
+
+  // step 7: verify disk space is updated
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::TMP_FILE, tmp_file_cache_stat));
+  ASSERT_EQ(tmp_file_used_size - write_io_size, tmp_file_cache_stat.used_);
+
+  // step 8: verify empty tmp_file_dir is not deleted immediately (mtime check)
+  char tmp_file_dir_path[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_local_tmp_file_dir(tmp_file_dir_path, sizeof(tmp_file_dir_path),
+                                                          MTL_ID(), MTL_EPOCH_ID(), tmp_file_id));
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::exist(tmp_file_dir_path, is_exist));
+  ASSERT_TRUE(is_exist);
+
+  char scatter_dir_path[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_local_tmp_data_scatter_dir(scatter_dir_path, sizeof(scatter_dir_path),
+                                                                  MTL_ID(), MTL_EPOCH_ID(), tmp_file_id));
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::exist(scatter_dir_path, is_exist));
+  ASSERT_TRUE(is_exist);
+
+  // step 9: simulate 1 hour later by modifying mtime
+  struct timeval times[2];
+  int64_t two_hours_ago_s = ObTimeUtility::current_time_s() - 7200; // 2 hours ago
+  times[0].tv_sec = two_hours_ago_s;  // access time
+  times[0].tv_usec = 0;
+  times[1].tv_sec = two_hours_ago_s;  // modification time
+  times[1].tv_usec = 0;
+
+  // step 10: verify empty tmp_file_dir is deleted after 1 hour
+  ASSERT_EQ(OB_SUCCESS, ::utimes(tmp_file_dir_path, times));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->calibrate_disk_space_task_.rm_logical_deleted_file());
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::exist(tmp_file_dir_path, is_exist));
+  ASSERT_FALSE(is_exist);
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::exist(scatter_dir_path, is_exist));
+  ASSERT_TRUE(is_exist); // because delete tmp_file_dir_path would update scatter_dir_path's mtime to current time
+
+  ASSERT_EQ(OB_SUCCESS, ::utimes(scatter_dir_path, times));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->calibrate_disk_space_task_.rm_logical_deleted_file());
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::exist(scatter_dir_path, is_exist));
+  ASSERT_FALSE(is_exist);
+
+  // step 11: cleanup
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_tmp_file(file_id));
 }
 
 TEST_F(TestFileManager, test_meta_file_operator)

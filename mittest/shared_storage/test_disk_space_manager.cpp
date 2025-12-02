@@ -133,6 +133,7 @@ TEST_F(TestDiskSpaceManager, test_tmp_file_space_manager)
   ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->free_file_size(macro_cache_free_size, ObSSMacroCacheType::TMP_FILE,
                                                               ObDiskSpaceType::FILE));
   ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::TMP_FILE, cache_stat));
+  // After freeing: used_ becomes 0 (scatter dirs were already cleared in step 2's over-release protection)
   ASSERT_EQ(0, cache_stat.used_);
 
   // 5.resize tenant_disk_size
