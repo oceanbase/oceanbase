@@ -89,7 +89,7 @@ namespace sql
 
 class ObTablePartitionInfo;
 class ObGranulePump;
-
+class ObGranulePumpArgs;
 enum ObGranuleType
 {
   OB_GRANULE_UNINITIALIZED,
@@ -322,11 +322,12 @@ public:
                                 common::ObIArray<int64_t> &granule_idx,
                                 bool range_independent);
 
-  static bool is_partition_granule(int64_t partition_count,
-                                   int64_t parallelism,
-                                   int64_t partition_scan_hold,
-                                   int64_t hash_partition_scan_hold,
-                                   bool hash_part);
+  static int use_partition_granule(ObGranulePumpArgs &args, bool &partition_granule);
+  static bool use_partition_granule(int64_t partition_count,
+                                    int64_t parallelism,
+                                    int64_t partition_scan_hold,
+                                    int64_t hash_partition_scan_hold,
+                                    bool hash_part);
 
   static bool gi_has_attri(uint64_t bit_map, uint64_t attri) { return 0 != (bit_map & attri); }
 
@@ -372,6 +373,10 @@ public:
   {
     return gi_has_attri(gi_attri_flag, GI_FORCE_PARTITION_GRANULE);
   }
+
+  static bool slave_mapping_flag(uint64_t gi_attri_flag) {
+    return gi_has_attri(gi_attri_flag, GI_SLAVE_MAPPING);
+  }
   static bool enable_partition_pruning(uint64_t gi_attri_flag)
   {
     return gi_has_attri(gi_attri_flag, GI_ENABLE_PARTITION_PRUNING);
@@ -381,6 +386,13 @@ public:
   static int remove_empty_range(const common::ObIArray<common::ObNewRange> &in_ranges,
                                 common::ObIArray<common::ObNewRange> &ranges,
                                 bool &only_empty_range);
+
+  static bool can_resplit_gi_task(uint64_t gi_attri_flag)
+  {
+    return !is_partition_granule_flag(gi_attri_flag) && !asc_order(gi_attri_flag)
+           && !desc_order(gi_attri_flag);
+  }
+
 public:
   /**
    * split tasks by block granule method

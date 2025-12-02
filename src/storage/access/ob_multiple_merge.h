@@ -37,6 +37,14 @@ class ObMultipleMerge : public ObQueryRowIterator
 {
 public:
   typedef common::ObSEArray<ObStoreRowIterator *, 8> MergeIterators;
+protected:
+  enum ScanState
+  {
+    NONE,
+    SINGLE_ROW,
+    BATCH,
+    DI_BASE,
+  };
 public:
 
   ObMultipleMerge();
@@ -100,6 +108,9 @@ protected:
   void dump_table_statistic_for_4377();
   void set_base_version() const;
   ObStoreRowIterator *get_di_base_iter() { return di_base_iters_.count() > 0 ? di_base_iters_[0] : nullptr; }
+  int is_paused(bool& do_pause) const;
+  virtual int pause(bool& do_pause) = 0;
+  ScanState get_scan_state() const { return scan_state_; }
   int prepare_di_base_blockscan(bool di_base_only, ObDatumRow *row = nullptr);
   virtual int get_range_count() const { return 1; }
 private:
@@ -173,13 +184,6 @@ protected:
   ObStoreRowIterPool<ObStoreRowIterator> *stmt_iter_pool_;
   common::ObSEArray<share::schema::ObColDesc, 32> out_project_cols_;
   ObLobDataReader lob_reader_;
-  enum ScanState
-  {
-    NONE,
-    SINGLE_ROW,
-    BATCH,
-    DI_BASE,
-  };
   ScanState scan_state_;
 private:
   // disallow copy

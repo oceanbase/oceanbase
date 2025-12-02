@@ -3180,7 +3180,7 @@ int ObLogTableScan::allocate_granule_post(AllocGIContext &ctx)
     ctx.alloc_gi_ = true;
     ctx.partition_count_ = table_partition_info_->get_phy_tbl_location_info().get_phy_part_loc_info_list().count();
     ctx.hash_part_ = table_schema->is_hash_part() || table_schema->is_hash_subpart()
-                     || table_schema->is_key_subpart() || table_schema->is_key_subpart();
+                     || table_schema->is_key_part() || table_schema->is_key_subpart();
   } else { /*do nothing*/ }
 
   return ret;

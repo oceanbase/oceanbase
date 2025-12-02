@@ -37,7 +37,9 @@ public:
   repartition_ref_table_id_(OB_INVALID_ID),
   used_by_external_table_(false),
   used_by_lake_table_(false),
-  px_rf_info_()
+  px_rf_info_(),
+  enable_adaptive_task_splitting_(false),
+  controlled_tsc_(nullptr)
   { }
   virtual ~ObLogGranuleIterator()
   { }
@@ -48,9 +50,6 @@ public:
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
   void set_tablet_size(int64_t tablet_size) { tablet_size_ = tablet_size; };
   int64_t get_tablet_size() { return tablet_size_; }
-  uint64_t get_flag() {
-    return gi_attri_flag_;
-  }
   void add_flag(uint64_t attri);
 
   bool partition_filter() const { return ObGranuleUtil::gi_has_attri(gi_attri_flag_, GI_USE_PARTITION_FILTER); }
@@ -67,12 +66,12 @@ public:
   virtual int compute_op_ordering() override;
   int set_range_order();
 
-  inline uint64_t get_gi_flags() { return gi_attri_flag_; }
+  inline uint64_t get_gi_flags() const { return gi_attri_flag_; }
   void set_partition_count(int64_t partition_count) { partition_count_ = partition_count; }
   void set_hash_part(bool v) { hash_part_ = v; }
   bool is_hash_part() { return hash_part_; }
 
-  int is_partition_gi(bool &partition_granule) const;
+  bool is_partition_gi() const;
 
   ObPxBFStaticInfo &get_join_filter_info() { return bf_info_; }
   void set_join_filter_info(ObPxBFStaticInfo &bf_info) { bf_info_ = bf_info; }
@@ -92,6 +91,13 @@ public:
   bool is_used_by_external_table() const { return used_by_external_table_; }
   void set_used_by_lake_table() { used_by_lake_table_ = true; }
   bool is_used_by_lake_table() const { return used_by_lake_table_; }
+  bool is_rescanable();
+  void set_enable_adaptive_task_splitting(bool value) { enable_adaptive_task_splitting_ = value; }
+  bool enable_adaptive_task_splitting() const { return enable_adaptive_task_splitting_; }
+  int check_adaptive_task_splitting(ObLogTableScan *tsc);
+private:
+  int check_exist_deadlock_condition(const ObLogicalOperator *op, bool &exist);
+  int branch_has_exchange(const ObLogicalOperator *op, bool &has_exchange);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogGranuleIterator);
   int64_t tablet_size_;
@@ -104,6 +110,8 @@ private:
   bool used_by_external_table_;
   bool used_by_lake_table_;
   ObPxRFStaticInfo px_rf_info_; // for runtime filter extract query range
+  bool enable_adaptive_task_splitting_;
+  ObLogicalOperator *controlled_tsc_; // only when gi is directly add above tsc.
 };
 
 }

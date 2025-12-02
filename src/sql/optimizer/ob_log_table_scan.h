@@ -407,7 +407,8 @@ public:
         rowkey_vid_tid_(common::OB_INVALID_ID),
         index_prefix_(-1),
         mr_mv_scan_(common::ObQueryFlag::NormalMode),
-        aggr_param_mono_()
+        aggr_param_mono_(),
+        is_scan_resumable_(false)
   {
   }
 
@@ -1124,6 +1125,9 @@ public:
                                                     ObIArray<ObPCConstParamInfo> *const_param_constraints);
   static int get_filter_assist_exprs(ObIArray<ObRawFilterMonotonicity> &filter_monotonicity,
                                      ObIArray<ObRawExpr *> &assist_exprs);
+
+  bool is_scan_resumable() { return is_scan_resumable_; }
+  void set_scan_resumable(bool value) { is_scan_resumable_ = value; }
 private: // member functions
   //called when index_back_ set
   int pick_out_query_range_exprs();
@@ -1367,6 +1371,7 @@ protected: // memeber variables
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> pseudo_columnref_exprs_;
 
   common::ObSEArray<ObRawAggrParamMonotonicity, 4, common::ModulePageAllocator, true> aggr_param_mono_;
+  bool is_scan_resumable_;
 
   // disallow copy and assign
   DISALLOW_COPY_AND_ASSIGN(ObLogTableScan);

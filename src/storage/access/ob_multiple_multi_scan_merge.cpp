@@ -10,6 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define USING_LOG_PREFIX STORAGE
+
 #include "ob_multiple_multi_scan_merge.h"
 
 #if !USE_NEW_MULTIPLE_MULTI_SCAN_MERGE
@@ -274,6 +276,48 @@ int ObMultipleMultiScanMerge::inner_get_next_row(blocksstable::ObDatumRow &row)
     STORAGE_LOG(DEBUG, "multi_scan_merge: get_next_row", K(row), KPC_(ranges), KPC_(di_base_ranges));
   } else {
     STORAGE_LOG(DEBUG, "Failed to get next row from iterator", K(ret), KPC_(ranges), KPC_(di_base_ranges));
+  }
+  return ret;
+}
+
+int ObMultipleMultiScanMerge::pause(bool& do_pause)
+{
+  INIT_SUCC(ret);
+  ScanResumePoint* scan_resume_point;
+  const ObITableReadInfo* read_info;
+
+  if (OB_FAIL(ObMultipleScanMerge::pause(do_pause))) {
+    LOG_WARN("failed to pause");
+  } else if (OB_LIKELY(!do_pause)) {
+  } else {
+    read_info = access_param_->iter_param_.get_read_info();
+    scan_resume_point = access_ctx_->scan_resume_point_;
+    // current range has been added in ObMultipleScanMerge::pause
+    for (int64_t i = curr_scan_index_ + 1; i < ranges_->count(); ++i) {
+      if (OB_FAIL(scan_resume_point->add_range(*read_info, ranges_->at(i)))) {
+        STORAGE_LOG(WARN, "failed to add range");
+        break;
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      STORAGE_LOG(INFO, "success to stop scan and save remain ranges", K(curr_rowkey_));
+    } else {
+      scan_resume_point->reset_ranges();
+    }
+  }
+  return ret;
+}
+
+
+int ObMultipleMultiScanMerge::get_current_range(ObDatumRange& current_range) const
+{
+  INIT_SUCC(ret);
+  if (OB_ISNULL(ranges_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ranges_ is null!");
+  } else if (OB_FAIL(ranges_->at(curr_scan_index_, current_range))) {
+    LOG_WARN("failed to get current range", K(curr_scan_index_), K(ranges_->count()));
   }
   return ret;
 }

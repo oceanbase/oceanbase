@@ -2134,6 +2134,27 @@ void ObMultipleMerge::set_base_version() const {
   }
 }
 
+int ObMultipleMerge::is_paused(bool& do_pause) const
+{
+  INIT_SUCC(ret);
+  do_pause = false;
+  ScanResumePoint *scan_resume_point = access_ctx_->scan_resume_point_;
+  if (scan_resume_point == nullptr || !scan_resume_point->is_paused()) {
+  } else if (OB_UNLIKELY(!scan_resume_point->empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ranges is not empty", K(scan_resume_point->get_ranges()));
+  } else if (OB_UNLIKELY(!is_scan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get cannot be paused");
+  } else if (ScanState::NONE == scan_state_) {
+  } else if (ScanState::DI_BASE == scan_state_) {
+    // not supported
+  } else {
+    do_pause = true;
+  }
+  return ret;
+}
+
 int64_t ObMultipleMerge::generate_read_tables_version() const
 {
   return get_table_param_->sample_info_.is_no_sample() ?

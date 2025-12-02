@@ -8210,7 +8210,7 @@ int AccessPath::prepare_estimate_parallel(const int64_t pre_parallel,
   bool is_part_gi = false;
   const int64_t part_cnt = est_cost_info_.index_meta_info_.index_part_count_;
   const double part_cnt_double = static_cast<double>(part_cnt);
-  #define IS_PART_GI(check_dop) (ObGranuleUtil::is_partition_granule(part_cnt, check_dop, 0, px_part_gi_min_part_per_dop, true))
+  #define USE_PART_GI(check_dop) (ObGranuleUtil::use_partition_granule(part_cnt, check_dop, 0, px_part_gi_min_part_per_dop, true))
   if (ObGlobalHint::DEFAULT_PARALLEL > pre_parallel) {
     parallel = ObGlobalHint::DEFAULT_PARALLEL;
   } else if (ObGlobalHint::DEFAULT_PARALLEL == pre_parallel && 1 < server_cnt) {
@@ -8227,7 +8227,7 @@ int AccessPath::prepare_estimate_parallel(const int64_t pre_parallel,
     } else {
       cur_parallel += server_cnt;
     }
-    bool is_part_gi = IS_PART_GI(cur_parallel);
+    bool is_part_gi = USE_PART_GI(cur_parallel);
     if (is_part_gi) {
       const int64_t pre_part_cnt_per_dop = std::ceil(part_cnt_double / pre_parallel);
       if (OB_UNLIKELY(1 >= pre_part_cnt_per_dop)) {
@@ -8238,7 +8238,7 @@ int AccessPath::prepare_estimate_parallel(const int64_t pre_parallel,
         const int64_t tmp_parallel = std::ceil(part_cnt_double / (pre_part_cnt_per_dop - 1));
         while (is_part_gi && std::ceil(part_cnt_double / cur_parallel) == pre_part_cnt_per_dop) {
           cur_parallel = std::max(tmp_parallel, cur_parallel + 1);
-          is_part_gi = IS_PART_GI(cur_parallel);
+          is_part_gi = USE_PART_GI(cur_parallel);
         }
       }
     }
@@ -8257,7 +8257,7 @@ int AccessPath::prepare_estimate_parallel(const int64_t pre_parallel,
   } else {
     /* treate as use block gi, use parallel directly.
        treate as use partition gi, consider some worker may deal one more part. */
-    part_cnt_per_dop = IS_PART_GI(parallel) ? std::ceil(part_cnt_double / parallel)
+    part_cnt_per_dop = USE_PART_GI(parallel) ? std::ceil(part_cnt_double / parallel)
                                             : part_cnt_double / parallel;
     LOG_DEBUG("finish prepare estimate parallel", K(part_cnt), K(parallel), K(part_cnt_per_dop));
   }

@@ -401,7 +401,7 @@ public:
   }
   virtual bool is_precise_get() const { return is_precise_get_; }
   bool is_standard_range() const { return is_standard_range_; }
-  bool is_equal_range() const { return is_equal_range_; }
+  bool is_equal_range() const override { return is_equal_range_; }
   virtual int64_t get_column_count() const { return column_count_; }
   virtual bool has_exec_param() const { return contain_exec_param_; }
   virtual bool is_ss_range() const { return skip_scan_offset_ > -1; }

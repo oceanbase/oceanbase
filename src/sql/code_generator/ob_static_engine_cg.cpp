@@ -4445,6 +4445,11 @@ int ObStaticEngineCG::generate_spec(ObLogGranuleIterator &op, ObGranuleIteratorS
     }
   }
 
+  if (OB_SUCC(ret)) {
+    spec.enable_adaptive_task_splitting_ = op.enable_adaptive_task_splitting();
+    spec.hash_part_ = op.is_hash_part();
+  }
+
   const bool pwj_gi = ObGranuleUtil::pwj_gi(spec.gi_attri_flag_);
   const bool enable_repart_pruning = ObGranuleUtil::enable_partition_pruning(spec.gi_attri_flag_);
   if (OB_SUCC(ret) && (pwj_gi || enable_repart_pruning)) {
@@ -6086,6 +6091,9 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
         }
       }
     }
+  }
+  if (OB_SUCC(ret)) {
+    spec.is_scan_resumable_ = op.is_scan_resumable();
   }
   return ret;
 }
