@@ -12867,12 +12867,14 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
             OZ (resolve_name(q_name, current_block_->get_namespace(), expr_factory_, &resolve_ctx_.session_info_, access_idxs, unit_ast));
             if (OB_FAIL(ret)) {
               if (OB_ERR_SP_UNDECLARED_VAR == ret) {
-                // try sequence expression with brackets, such as seq.nextval() or seq.currval()
-                if (2 == q_name.access_idents_.count() && q_name.access_idents_.at(1).params_.empty()) {
-                  ObQualifiedName tmp_name = q_name;
-                  tmp_name.format_qualified_name();
-                  if (OB_FAIL(resolve_sequence_object(tmp_name, unit_ast, expr))) {
-                    LOG_WARN("failed to resolve sequence object", K(ret));
+                if(lib::is_oracle_mode()) {
+                  // try sequence expression with brackets, such as seq.nextval() or seq.currval()
+                  if (2 == q_name.access_idents_.count() && q_name.access_idents_.at(1).params_.empty()) {
+                    ObQualifiedName tmp_name = q_name;
+                    tmp_name.format_qualified_name();
+                    if (OB_FAIL(resolve_sequence_object(tmp_name, unit_ast, expr))) {
+                      LOG_WARN("failed to resolve sequence object", K(ret));
+                    }
                   }
                 }
               }
