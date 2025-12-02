@@ -3840,7 +3840,7 @@ int TriggerHint::print_trigger_hint(PlanText &plan_text) const
         LOG_WARN("buf_printf failed", K(ret));
       }
       for (int i = 0; OB_SUCC(ret) && i < trigger_hints_.count(); i++) {
-        if (OB_FAIL(BUF_PRINTF("'%s'", trigger_hints_.at(i).ptr()))) {
+        if (OB_FAIL(BUF_PRINTF("%.*s", static_cast<int>(trigger_hints_.at(i).length()), trigger_hints_.at(i).ptr()))) {
           LOG_WARN("buf printf failed", K(ret));
         } else if (i == trigger_hints_.count() - 1 && OB_FAIL(BUF_PRINTF(")"))) {
           LOG_WARN("buf printf failed", K(ret));

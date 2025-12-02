@@ -2904,7 +2904,7 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
           ret = OB_SUCCESS;
         }
         // if disable trigger, use the previous plan cache, whether trigger is enable ???
-        need_fire = trigger_info->has_event(dml_event) && trigger_info->is_enable() && !is_disabled;
+        need_fire = trigger_info->has_event(dml_event) && trigger_info->is_enable();
         if (OB_SUCC(ret) && !trigger_info->get_ref_trg_name().empty() && lib::is_oracle_mode()) {
           const ObTriggerInfo *ref_trigger_info = NULL;
           uint64_t ref_db_id = OB_INVALID_ID;
@@ -2944,7 +2944,7 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
                                     log_plan->get_optimizer_context().get_allocator(),
                                     need_fire));
         }
-        if (OB_SUCC(ret) && need_fire) {
+        if (OB_SUCC(ret) && need_fire && !is_disabled) {
           OZ (trigger_infos.push_back(trigger_info));
         }
         OX (LOG_DEBUG("TRIGGER", K(trigger_info->get_trigger_name()), K(need_fire), K(is_instead_of)));

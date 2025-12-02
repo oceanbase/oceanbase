@@ -19372,6 +19372,39 @@ int ObDMLResolver::resolve_table_dynamic_sampling_hint(const ParseNode &hint_nod
   return ret;
 }
 
+int ObDMLResolver::resolve_multi_disable_trigger_hint(const ParseNode &hint_node, ObGlobalHint &global_hint)
+{
+  int ret = OB_SUCCESS;
+  TriggerHint *trigger_hint = &global_hint.trigger_hint_;
+  ObTableInHint table_in_hint;
+  if (OB_SUCC(ret) && hint_node.num_child_ == 2 && T_LINK_NODE == hint_node.type_) {
+    ParseNode child_node = *hint_node.children_[0];
+    if (T_LINK_NODE == child_node.type_) {
+      if (OB_FAIL(SMART_CALL(resolve_multi_disable_trigger_hint(child_node, global_hint)))) {
+        LOG_WARN("failed to resolve multi disable trigger hint", K(ret));
+      }
+    } else if (T_RELATION_FACTOR_IN_HINT == child_node.type_) {
+      if (OB_FAIL(resolve_table_relation_in_hint(child_node, table_in_hint))) {
+        LOG_WARN("failed to resolve trigger name", K(ret));
+      } else if (table_in_hint.table_name_.empty()) {
+        // verify parse table is right.
+        LOG_WARN("disable_trigger hint trigger name empty, ignore", K(table_in_hint));
+      } else if (OB_FAIL(trigger_hint->add_trigger_hint(table_in_hint.table_name_))) {
+            LOG_WARN("failed to add trigger hint to trigger hint", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(resolve_table_relation_in_hint(*hint_node.children_[1], table_in_hint))) {
+      LOG_WARN("failed to resolve trigger name", K(ret));
+    } else if (OB_SUCC(ret) && table_in_hint.table_name_.empty()) {
+      // verify parse table is right.
+      LOG_WARN("disable_trigger hint trigger name empty, ignore", K(table_in_hint));
+    } else if (OB_SUCC(ret) && OB_FAIL(trigger_hint->add_trigger_hint(table_in_hint.table_name_))) {
+          LOG_WARN("failed to add trigger hint to trigger hint", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObDMLResolver::resolve_disable_trigger_hint(const ParseNode &hint_node, ObGlobalHint &global_hint)
 {
   int ret = OB_SUCCESS;
@@ -19394,17 +19427,13 @@ int ObDMLResolver::resolve_disable_trigger_hint(const ParseNode &hint_node, ObGl
             LOG_WARN("failed to add trigger hint to trigger hint", K(ret));
       }
     } else if (T_LINK_NODE == hint_node.children_[0]->type_) {
-      // Multiple trigger are mentioned in disable_trigger hint, disable all these triggers.
-      for (int64_t i = 0; OB_SUCC(ret) && i < hint_node.children_[0]->num_child_; i++) {
-        ObTableInHint table_in_hint;
-        if (OB_FAIL(resolve_table_relation_in_hint(*hint_node.children_[0]->children_[i], table_in_hint))) {
-          LOG_WARN("failed to resolve trigger name", K(ret));
-        } else if (table_in_hint.table_name_.empty()) {
-          LOG_WARN("disable_trigger hint trigger name empty (multi)", K(i));
-        } else if (OB_FAIL(trigger_hint->add_trigger_hint(table_in_hint.table_name_))) {
-            LOG_WARN("failed to add trigger hint to trigger hint", K(ret));
-          }
+      // multiple triggers are mentioned in disable_trigger hint, disable those triggers only.
+      if (OB_FAIL(resolve_multi_disable_trigger_hint(*hint_node.children_[0], global_hint))) {
+        LOG_WARN("failed to resolve multi disable trigger hint", K(ret));
       }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected disable trigger hint node", K(ret), K(hint_node.children_[0]->type_));
     }
   }
   return ret;
