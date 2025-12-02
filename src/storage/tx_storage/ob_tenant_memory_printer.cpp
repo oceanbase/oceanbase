@@ -163,6 +163,7 @@ int ObTenantMemoryPrinter::print_tenant_usage()
 #endif
         );
     ObMallocTimeMonitor::get_instance().print();
+    print_capture_memory_info(); // print capture memory in exception state
     print_mutex_.unlock();
   }
 

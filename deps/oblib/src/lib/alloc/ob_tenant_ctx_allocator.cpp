@@ -24,6 +24,7 @@
 #include "common/ob_smart_var.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
 #include "common/errsim_module/ob_errsim_module_interface.h"
+#include "lib/utility/ob_hang_fatal_error.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -562,18 +563,22 @@ void ObTenantCtxAllocator::common_free(void *ptr)
     abort_unless(obj->MAGIC_CODE_ == AOBJECT_MAGIC_CODE
                  || obj->MAGIC_CODE_ == BIG_AOBJECT_MAGIC_CODE);
     abort_unless(obj->in_use_);
-    SANITY_POISON(obj->data_, obj->alloc_bytes_);
+    if (OB_UNLIKELY(in_exception_state)) {
+      add_capture_memory_info(ptr, obj->alloc_bytes_);
+    } else {
+      SANITY_POISON(obj->data_, obj->alloc_bytes_);
 
-    get_mem_leak_checker().on_free(*obj);
-    AChunk *chunk = AChunk::ptr2chunk(obj);
-    abort_unless(chunk->is_valid());
-    ABlock *block = chunk->ptr2blk(obj);
-    abort_unless(block);
-    abort_unless(block->is_valid());
-    abort_unless(block->in_use_);
-    abort_unless(block->obj_set_ != NULL);
+      get_mem_leak_checker().on_free(*obj);
+      AChunk *chunk = AChunk::ptr2chunk(obj);
+      abort_unless(chunk->is_valid());
+      ABlock *block = chunk->ptr2blk(obj);
+      abort_unless(block);
+      abort_unless(block->is_valid());
+      abort_unless(block->in_use_);
+      abort_unless(block->obj_set_ != NULL);
 
-    ObjectSet *os = block->obj_set_;
-    os->free_object(obj);
+      ObjectSet *os = block->obj_set_;
+      os->free_object(obj);
+    }
   }
 }
