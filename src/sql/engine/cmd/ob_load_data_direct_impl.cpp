@@ -245,10 +245,14 @@ int ObLoadDataDirectImpl::Logger::log_error_line(const ObString &file_name, int6
         LOG_WARN("fail to append log", KR(tmp_ret), K(pos), K(line_no), K(err_no), K(err_msg));
       }
     }
-    if (inc_error_count() > max_error_rows_) {
+    const int64_t error_cnt = inc_error_count();
+    if (0 == max_error_rows_) {
+      ret = err_code;
+      LOG_WARN("parse error", KR(ret));
+    } else if (error_cnt > max_error_rows_) {
       ret = OB_ERR_TOO_MANY_ROWS;
       LOG_WARN("error row count reaches its maximum value", KR(ret), K(max_error_rows_),
-               K(err_cnt_));
+               K(error_cnt));
     }
   }
   return ret;

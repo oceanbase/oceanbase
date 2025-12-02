@@ -100,7 +100,15 @@ int ObTableLoadObjCaster::cast_obj(ObTableLoadCastObjCtx &cast_obj_ctx,
   const ObObj *convert_src_obj = nullptr;
   const ObObjType expect_type = column_schema->get_meta_type().get_type();
   const ObAccuracy &accuracy = column_schema->get_accuracy();
-  if (src.is_nop_value()) {
+  if (column_schema->is_unused()) {
+    // 快速删除列, 直接填充null
+    if (OB_UNLIKELY(!src.is_nop_value())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected insert specify deleted column", KR(ret), K(src), KPC(column_schema));
+    } else {
+      dst.set_null();
+    }
+  } else if (src.is_nop_value()) {
     // 默认值是表达式
     if (lib::is_mysql_mode() && column_schema->get_cur_default_value().is_ext()) {
       ret = OB_NOT_SUPPORTED;

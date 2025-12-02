@@ -262,10 +262,18 @@ int ObDirectLoadOriginTableScanner::init_table_access_param()
   } else if (OB_FAIL(table_schema->get_store_column_count(store_column_count))) {
     LOG_WARN("fail to get store column count", KR(ret));
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < store_column_count; ++i) {
-    if (OB_FAIL(col_ids_.push_back(i))) {
+  // schema_param_里面的列顺序是 get_column_ids(column_ids, false/*no_virtual*/), 与存储顺序是一致的, 只需要把虚拟生成列跳过
+  for (int64_t i = 0; OB_SUCC(ret) && i < schema_param_.get_columns().count(); ++i) {
+    if (schema_param_.get_columns().at(i)->is_virtual_gen_col()) {
+      // skip
+    } else if (OB_FAIL(col_ids_.push_back(i))) {
       LOG_WARN("fail to push back col id", KR(ret), K(i));
     }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(col_ids_.count() != store_column_count)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected col ids", KR(ret), K(schema_param_.get_columns()), K(store_column_count), K(col_ids_));
   }
   if (OB_SUCC(ret)) {
     //TODO(jianming.cjq): check init_dml_access_param

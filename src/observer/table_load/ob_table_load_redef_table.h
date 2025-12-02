@@ -139,6 +139,12 @@ public:
                                  sql::ObSQLSessionInfo &session_info,
                                  obrpc::ObCreateHiddenTableRes &create_table_res,
                                  int64_t &snapshot_version);
+private:
+  // 检查原表和隐藏表是否一致
+  static int check_table_consistency(const uint64_t tenant_id,
+                                     const uint64_t table_id,
+                                     const uint64_t dest_table_id,
+                                     const int64_t schema_version);
 };
 
 class ObTableLoadErrorMessageGuard

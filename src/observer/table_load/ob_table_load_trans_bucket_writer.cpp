@@ -244,7 +244,11 @@ int ObTableLoadTransBucketWriter::handle_partition_with_autoinc_identity(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected obj index", KR(ret), K(index_and_type), K(column_count_));
     } else if (column_schema->is_autoincrement()) {
-      if (obj.is_null() || obj.is_nop_value()) {
+      // mysql模式还不支持快速删列, 先加个拦截
+      if (OB_UNLIKELY(column_schema->is_unused())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected unused identity column", KR(ret), KPC(column_schema));
+      } else if (obj.is_null() || obj.is_nop_value()) {
         tmp_obj = obj;
       } else if (OB_FAIL(ObTableLoadObjCaster::cast_obj(cast_obj_ctx,
                                                         column_schema,
@@ -262,8 +266,13 @@ int ObTableLoadTransBucketWriter::handle_partition_with_autoinc_identity(
         }
       }
     } else if (column_schema->is_identity_column()) {
+      // identity列在快速删除的时候会抹去identity属性
+      if (OB_UNLIKELY(column_schema->is_unused())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected unused identity column", KR(ret), KPC(column_schema));
+      }
       // 生成的seq_value是number, 可能需要转换成decimal int
-      if (OB_FAIL(handle_identity_column(column_schema, obj, tmp_obj, autoinc_allocator))) {
+      else if (OB_FAIL(handle_identity_column(column_schema, obj, tmp_obj, autoinc_allocator))) {
         LOG_WARN("fail to handle identity column", KR(ret), K(obj));
       } else if (OB_FAIL(ObTableLoadObjCaster::cast_obj(cast_obj_ctx,
                                                         column_schema,

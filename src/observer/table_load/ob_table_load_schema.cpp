@@ -28,12 +28,36 @@ using namespace table;
 using namespace blocksstable;
 using namespace sql;
 
-int ObTableLoadSchema::get_schema_guard(uint64_t tenant_id, ObSchemaGetterGuard &schema_guard)
+int ObTableLoadSchema::get_schema_guard(uint64_t tenant_id,
+                                        ObSchemaGetterGuard &schema_guard,
+                                        const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id,
-                                                                                  schema_guard))) {
-    LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
+  if (OB_INVALID_VERSION == schema_version) {
+    if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id,
+                                                                                    schema_guard))) {
+      LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
+    }
+  } else {
+    const int64_t retry_interval = 100 * 1000; // us
+    int64_t tenant_schema_version = OB_INVALID_VERSION;
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(THIS_WORKER.check_status())) {
+        LOG_WARN("fail to check status", K(ret));
+      } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id,
+                                                                                             schema_guard))) {
+        LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, tenant_schema_version))) {
+        LOG_WARN("fail to get schema version", KR(ret), K(tenant_id));
+      } else if (tenant_schema_version < schema_version) {
+        if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+          LOG_INFO("tenant schema not refreshed", K(tenant_id), K(schema_version), K(tenant_schema_version));
+        }
+        ob_usleep(retry_interval);
+      } else {
+        break;
+      }
+    }
   }
   return ret;
 }
@@ -138,7 +162,7 @@ int ObTableLoadSchema::get_user_column_schemas(const ObTableSchema *table_schema
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("The column is null", KR(ret));
       } else if (column_schema->is_hidden()) {
-        // 不显示隐藏主键列
+        // 不显示隐藏列(堆表隐藏主键列,快速删除列,?)
       } else if (column_schema->is_unused()) {
         // 不显示快速删除列
       } else if (column_schema->is_invisible_column() && !contain_invisible_column) {
@@ -204,7 +228,7 @@ int ObTableLoadSchema::get_column_ids(const ObTableSchema *table_schema,
     LOG_WARN("invalid args", KR(ret), KP(table_schema));
   } else {
     ObArray<ObColDesc> column_descs;
-    if (OB_FAIL(table_schema->get_column_ids(column_descs))) {
+    if (OB_FAIL(table_schema->get_column_ids(column_descs, true/*no_virtual*/))) {
       STORAGE_LOG(WARN, "fail to get column descs", KR(ret), KPC(table_schema));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < column_descs.count(); ++i) {
@@ -213,67 +237,6 @@ int ObTableLoadSchema::get_column_ids(const ObTableSchema *table_schema,
       } else if (OB_FAIL(column_ids.push_back(col_desc.col_id_))) {
         LOG_WARN("failed to push back column id", KR(ret), K(i));
       }
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadSchema::get_column_ids(ObSchemaGetterGuard &schema_guard,
-                                      uint64_t tenant_id,
-                                      uint64_t table_id,
-                                      ObIArray<uint64_t> &column_ids,
-                                      bool contain_hidden_pk_column)
-{
-  int ret = OB_SUCCESS;
-  column_ids.reset();
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_ID == table_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(table_id));
-  } else {
-    const ObTableSchema *table_schema = nullptr;
-    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
-      LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
-    } else if (OB_ISNULL(table_schema)) {
-      ret = OB_TABLE_NOT_EXIST;
-      LOG_WARN("table not exist", KR(ret), K(tenant_id), K(table_id));
-    } else {
-      ret = get_column_ids(table_schema, column_ids, contain_hidden_pk_column);
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadSchema::check_has_udt_column(const ObTableSchema *table_schema, bool &bret)
-{
-  int ret = OB_SUCCESS;
-  bret = false;
-  for (ObTableSchema::const_column_iterator iter = table_schema->column_begin();
-       OB_SUCC(ret) && iter != table_schema->column_end(); ++iter) {
-    ObColumnSchemaV2 *column_schema = *iter;
-    if (OB_ISNULL(column_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("invalid column schema", K(column_schema));
-    } else if (column_schema->get_udt_set_id() > 0) {
-      bret = true;
-      break;
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadSchema::check_has_unused_column(const ObTableSchema *table_schema, bool &bret)
-{
-  int ret = OB_SUCCESS;
-  bret = false;
-  for (ObTableSchema::const_column_iterator iter = table_schema->column_begin();
-       OB_SUCC(ret) && iter != table_schema->column_end(); ++iter) {
-    ObColumnSchemaV2 *column_schema = *iter;
-    if (OB_ISNULL(column_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("invalid column schema", K(column_schema));
-    } else if (column_schema->is_unused()) {
-      bret = true;
-      break;
     }
   }
   return ret;
@@ -404,7 +367,7 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
       LOG_WARN("fail to deep copy table name", KR(ret));
     } else if (OB_FAIL(table_schema->get_store_column_count(store_column_count_))) {
       LOG_WARN("fail to get store column count", KR(ret));
-    } else if (OB_FAIL(table_schema->get_column_ids(column_descs_, false))) {
+    } else if (OB_FAIL(table_schema->get_column_ids(column_descs_, true/*no_virtual*/))) {
       LOG_WARN("fail to get column descs", KR(ret));
     } else if (OB_FAIL(prepare_col_desc(table_schema, column_descs_))) {
       LOG_WARN("fail to prepare column descs", KR(ret));
