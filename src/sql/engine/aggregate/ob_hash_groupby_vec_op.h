@@ -93,8 +93,8 @@ public:
   common::ObFixedArray<int64_t, common::ObIAllocator> dist_col_group_idxs_;
   ExprFixedArray distinct_exprs_; // the distinct arguments of aggregate function
   ObExpr *grouping_id_;
-  ExprFixedArray group_distinct_exprs_;
-  common::ObFixedArray<ObSortCollations, common::ObIAllocator> group_sort_collations_;
+  ObFixedArray<ExprFixedArray, common::ObIAllocator> group_distinct_exprs_;
+  ObFixedArray<ObSortCollations, common::ObIAllocator> group_sort_collations_;
 };
 
 // 输入数据已经按照groupby列排序
