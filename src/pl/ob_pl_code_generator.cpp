@@ -9461,7 +9461,7 @@ int ObPLCodeGenerator::generate_normal(ObPLFunction &pl_func)
       pl_func.set_has_incomplete_rt_dep_error(get_ast().has_incomplete_rt_dep_error());
       pl_func.set_stack_size(stack_size);
 #ifdef OB_BUILD_ORACLE_PL
-      OZ (pl_func.add_vaild_rows_info(vaild_row_info_array_));
+      OZ (pl_func.add_vaild_rows_info(get_ast().get_valid_row_info_array()));
 #endif
     }
   }
@@ -10579,13 +10579,6 @@ int ObPLCodeGenerator::generate_spi_pl_profiler_before_record(const ObPLStmt &s)
       LOG_WARN("failed to check spi_pl_profiler_before_record success", K(ret), K(line), K(level));
     }
   }
-#ifdef OB_BUILD_ORACLE_PL
-  if (OB_SUCC(ret) && OB_NOT_NULL(get_current().get_v()) && code_coverage_mode_) {
-    if (OB_FAIL(vaild_row_info_array_.push_back(CoverageData(s.get_line() + 1, s.get_col(), false, false)))) {
-      LOG_WARN("failed to push back vaild row info", K(ret), K(s.get_line() + 1), K(s.get_col()));
-    }
-  }
-#endif
   return ret;
 }
 

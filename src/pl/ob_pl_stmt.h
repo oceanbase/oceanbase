@@ -1635,6 +1635,10 @@ public:
        compile_flag_(),
        can_cached_(true),
        priv_user_(),
+       is_wrap_(false),
+#ifdef OB_BUILD_ORACLE_PL
+       valid_row_info_array_(allocator),
+#endif
        invoker_database_id_(OB_INVALID_ID),
        analyze_flag_(0)
   {
@@ -1715,6 +1719,9 @@ public:
     priv_user_ = priv_user;
   }
 
+  inline bool get_is_wrap() const { return is_wrap_; }
+  inline void set_is_wrap(bool is_wrap) { is_wrap_ = is_wrap; }
+
   inline ObIArray<ObPLSqlStmt *>& get_sql_stmts() { return sql_stmts_; }
 
   void process_default_compile_flag();
@@ -1754,11 +1761,15 @@ public:
   {
     return symbol_debuginfo_table_;
   }
-  int generate_symbol_debuginfo();
+  int generate_symbol_debuginfo(bool is_anonymous = false);
 
   static int extract_assoc_index(sql::ObRawExpr &expr, common::ObIArray<sql::ObRawExpr *> &exprs);
 
   TO_STRING_KV(K_(body), K_(symbol_table), K_(symbol_debuginfo_table), K_(condition_table));
+#ifdef OB_BUILD_ORACLE_PL
+public:
+  inline common::ObIArray<CoverageData> &get_valid_row_info_array() { return valid_row_info_array_; }
+#endif
 
 private:
   int check_simple_calc_expr(sql::ObRawExpr *&expr, bool &is_simple);
@@ -1784,6 +1795,10 @@ protected:
   ObPLCompileFlag compile_flag_;
   bool can_cached_;
   ObString priv_user_;
+  bool is_wrap_;
+#ifdef OB_BUILD_ORACLE_PL
+  ObPLSEArray<CoverageData> valid_row_info_array_;
+#endif
   char invoker_database_name_[common::OB_MAX_DATABASE_NAME_BUF_LENGTH * OB_MAX_CHAR_LEN];  //invoker database
   uint64_t invoker_database_id_; //invoker database_id
   union {  // FARM COMPAT WHITELIST
@@ -2093,6 +2108,9 @@ public:
   bool is_contain_stmt(const ObPLStmt *stmt) const;
 
   int generate_symbol_debuginfo(ObPLSymbolDebugInfoTable &symbol_debuginfo_table) const;
+#ifdef OB_BUILD_ORACLE_PL
+  int collect_valid_rows(common::ObIArray<CoverageData> &dst) const;
+#endif
 
   TO_STRING_KV(K_(type), K_(label), K_(stmts),
                K_(forloop_cursor_stmts), K_(is_contain_goto_stmt));
