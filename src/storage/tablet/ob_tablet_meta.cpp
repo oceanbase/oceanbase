@@ -606,13 +606,24 @@ int ObTabletMeta::init(
 
     ObTabletTableStoreFlag table_store_flag = old_tablet_meta.table_store_flag_;
     SCN ddl_checkpoint_scn = old_tablet_meta.ddl_checkpoint_scn_;
+    SCN ddl_commit_scn = old_tablet_meta.ddl_commit_scn_;
+    SCN ddl_start_scn = old_tablet_meta.ddl_start_scn_;
+    int64_t ddl_snapshot_version = old_tablet_meta.ddl_snapshot_version_;
+    int64_t ddl_execution_id = old_tablet_meta.ddl_execution_id_;
+    int64_t ddl_data_format_version = old_tablet_meta.ddl_data_format_version_;
     if (!table_store_flag.with_major_sstable()) {
       if (OB_ISNULL(tablet_meta)) {
         //do nothing
       } else if (tablet_meta->table_store_flag_.with_major_sstable()) {
         table_store_flag.set_with_major_sstable();
         ddl_checkpoint_scn = tablet_meta->ddl_checkpoint_scn_;
-        FLOG_INFO("update tablet table store flag with major", KPC(tablet_meta), K(table_store_flag), K(ddl_checkpoint_scn));
+        ddl_commit_scn = tablet_meta->ddl_commit_scn_;
+        ddl_start_scn = tablet_meta->ddl_start_scn_;
+        ddl_snapshot_version = tablet_meta->ddl_snapshot_version_;
+        ddl_execution_id = tablet_meta->ddl_execution_id_;
+        ddl_data_format_version = tablet_meta->ddl_data_format_version_;
+        FLOG_INFO("update tablet table store flag with major", KPC(tablet_meta), K(table_store_flag), K(ddl_checkpoint_scn), K(ddl_commit_scn),
+            K(ddl_start_scn), K(ddl_snapshot_version), K(ddl_execution_id), K(ddl_data_format_version));
       }
     }
     const SCN mds_checkpoint_scn = OB_ISNULL(tablet_meta) ?
@@ -649,15 +660,15 @@ int ObTabletMeta::init(
       ha_status_ = new_ha_status;
       report_status_ = old_tablet_meta.report_status_; //old tablet meta report status already reset
       table_store_flag_ = table_store_flag;
-      ddl_start_scn_ = old_tablet_meta.ddl_start_scn_;
-      ddl_snapshot_version_ = old_tablet_meta.ddl_snapshot_version_;
+      ddl_start_scn_ = ddl_start_scn;
+      ddl_snapshot_version_ = ddl_snapshot_version;
       max_sync_storage_schema_version_ = max_sync_storage_schema_version;
-      ddl_execution_id_ = old_tablet_meta.ddl_execution_id_;
-      ddl_data_format_version_ = old_tablet_meta.ddl_data_format_version_;
+      ddl_execution_id_ = ddl_execution_id;
+      ddl_data_format_version_ = ddl_data_format_version;
       ddl_replay_status_ = old_tablet_meta.ddl_replay_status_;
       max_serialized_medium_scn_ = MAX(old_tablet_meta.max_serialized_medium_scn_,
           OB_ISNULL(tablet_meta) ? 0 : tablet_meta->max_serialized_medium_scn_);
-      ddl_commit_scn_ = old_tablet_meta.ddl_commit_scn_;
+      ddl_commit_scn_ = ddl_commit_scn;
       mds_checkpoint_scn_ = mds_checkpoint_scn;
       transfer_info_ = transfer_info;
       extra_medium_info_ = old_tablet_meta.extra_medium_info_;
