@@ -143,6 +143,7 @@ private:
   int uk_or_heap_table_pk_add_to_index_list(ObArray<int> &index_node_position_list, const int32_t node_index);  int set_default_enable_macro_block_bloom_filter_(share::schema::ObTableSchema &table_schema);
   int check_building_domain_index_legal();
   int set_default_merge_engine_type_(share::schema::ObTableSchema &table_schema);
+  int check_stmt_is_empty_set(ObSelectStmt *select_stmt, bool &is_empty_set);
 
 private:
   // data members

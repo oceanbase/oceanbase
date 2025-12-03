@@ -319,124 +319,6 @@ int ObTransformSimplifySet::is_calc_found_rows_for_union(const common::ObIArray<
   return ret;
 }
 
-// check wether the exprs is always false.
-int ObTransformSimplifySet::check_exprs_constant_false(common::ObIArray<ObRawExpr*> &exprs,
-                                                       bool &constant_false,
-                                                       int64_t stmt_idx,
-                                                       SimplifySetHelper &helper)
-{
-  int ret = OB_SUCCESS;
-  bool is_valid_type = true;
-  constant_false |= false;
-  if (OB_FAIL(ObTransformUtils::check_integer_result_type(exprs, is_valid_type))) {
-    LOG_WARN("check valid type fail", K(ret));
-  } else if (!is_valid_type) {
-    LOG_TRACE("expr list is not valid for removing dummy exprs", K(is_valid_type));
-  } else {
-    ObSEArray<int64_t, 2> true_exprs;
-    ObSEArray<int64_t, 2> false_exprs;
-    if (OB_FAIL(ObTransformUtils::extract_const_bool_expr_info(ctx_,
-                                                               exprs,
-                                                               true_exprs,
-                                                               false_exprs))) {
-      LOG_WARN("fail to extract exprs info", K(ret));
-    } else if (false_exprs.count() > 0) {
-      /* do the check.
-       * N: exprs.count(), M:false_exprs.count(), K:true_exprs.count();
-       * M > 0; 
-       */
-      constant_false = true;
-
-      // build precalc_constraints exprs.
-      ObSEArray<ObRawExpr*, 4> ob_params;
-      ObRawExpr *op_expr = NULL;
-      if (OB_FAIL(ObTransformUtils::extract_target_exprs_by_idx(exprs, false_exprs, ob_params))) {
-        LOG_WARN("fail to push back params expr", K(ret));
-      } else {
-        ObRawExpr *tmp_expr = NULL;
-        for (int64_t i = 0; OB_SUCC(ret) && i < ob_params.count(); i++) {
-          if (OB_ISNULL(tmp_expr = ob_params.at(i))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get null pointer", K(ret));
-          } else if (OB_FAIL(helper.precalc_constraint_exprs_.push_back(
-                                    std::pair<ObRawExpr*, int64_t>(tmp_expr, stmt_idx)))) {
-            LOG_WARN("fail to push back constraint exprs", K(ret));
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-/*
- * BACKGROUND:
- * There are three kind of limit.
- *  1. mysql's limit. (only positive number allowed)
- *  2. oracle's fetch. (fetch can't coexist with set query, 
- *                      oracle's set query only support simple select)
- *  3. limit that is converted from rownum. (could be complex expr)
- * 
- * PRINCIPLES: 
- * There are three situations that the stmt returns empty:
- *  1. limit_count_expr <= 0;
- *  2. limit_percent_expr <= 0;
- *  3. limit_offset_expr > max row count. (not support).
- * When we detect the first two ruls, we consider the stmt is removable. 
- */
-int ObTransformSimplifySet::check_limit_zero_in_stmt(ObRawExpr *limit_expr,
-                                                     ObRawExpr *offset_expr,
-                                                     ObRawExpr *percent_expr,
-                                                     bool &need_remove,
-                                                     int64_t stmt_idx, 
-                                                     SimplifySetHelper &helper)
-{
-  UNUSED(offset_expr);
-  int ret = OB_SUCCESS;
-  ObObj result;
-  need_remove = false;
-  bool is_valid = false;
-  if (OB_NOT_NULL(limit_expr)) {
-    if (OB_FAIL(ObTransformUtils::calc_const_expr_result(limit_expr, ctx_, result, is_valid))) {
-      LOG_WARN("fail to calc const expr", K(ret));
-    }
-  } else if (OB_NOT_NULL(percent_expr)) {
-    if (OB_FAIL(ObTransformUtils::calc_const_expr_result(percent_expr, ctx_, result, is_valid))) {
-      LOG_WARN("fail to calc const expr", K(ret));
-    }
-  } else {}
-  
-  //check need_remove
-  if (OB_SUCC(ret) && is_valid) {
-    if (result.is_int()) {
-      need_remove = (result.get_int() <= 0);
-    } else if (result.is_double()) {
-      need_remove = (result.get_double() <= 0);
-    } else if (result.is_float()) {
-      need_remove = (result.get_float() <= 0);
-    } else if (result.is_number()) {
-      need_remove = (result.is_zero_number() || result.is_negative_number());
-    }
-  }
-
-  // only add constraint exprs here. 
-  // the real constraints should be added after all transformation have done.
-  if (OB_SUCC(ret) && need_remove) {
-    if (OB_NOT_NULL(limit_expr)) {
-      if (OB_FAIL(helper.const_constraint_exprs_.push_back(
-                      std::pair<ObRawExpr *, int64_t>(limit_expr, stmt_idx)))) {
-        LOG_WARN("fail to push back const constraints", K(ret));
-      }
-    } else if (OB_NOT_NULL(percent_expr)) {
-      if (OB_FAIL(helper.const_constraint_exprs_.push_back(
-                      std::pair<ObRawExpr *, int64_t>(percent_expr, stmt_idx)))) {
-        LOG_WARN("fail to push back const constraints", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
 /* Why we should add constraints?
  * ---- const constraint (for limit expr) ----
  * since 
@@ -465,29 +347,32 @@ int ObTransformSimplifySet::check_set_stmt_removable(ObSelectStmt *stmt,
   int ret = OB_SUCCESS;
   int has_scalar_group_by = false;
   need_remove = false;
-  if (OB_ISNULL(stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get null pointer", K(ret));
-  } else if (!stmt->is_scala_group_by() &&
-             OB_FAIL(check_exprs_constant_false(stmt->get_condition_exprs(),
-                                                need_remove,
-                                                stmt_idx,
-                                                helper))) {
-    // since select count(*) from dual where 1=0, will still output a row, we should check
-    // scalar group by here.
-    LOG_WARN("fail to check exprs constant false", K(ret), K(stmt->get_condition_exprs()));
-  } else if (!need_remove && OB_FAIL(check_exprs_constant_false(stmt->get_having_exprs(),
-                                                                need_remove,
-                                                                stmt_idx,
-                                                                helper))) {
-    LOG_WARN("fail to check exprs constant false", K(ret), K(stmt->get_having_exprs()));
-  } else if (!need_remove && OB_FAIL(check_limit_zero_in_stmt(stmt->get_limit_expr(),
-                                                              stmt->get_offset_expr(),
-                                                              stmt->get_limit_percent_expr(),
-                                                              need_remove,
-                                                              stmt_idx,
-                                                              helper))) {
-    LOG_WARN("fail to check limit", K(ret));
+  ObSEArray<ObRawExpr*, 4> false_constraint_exprs;
+  ObSEArray<ObRawExpr*, 4> const_constraint_exprs;
+  if (OB_FAIL(ObTransformUtils::check_stmt_empty_set(stmt, ctx_, need_remove,
+                                                     false_constraint_exprs,
+                                                     const_constraint_exprs))) {
+    LOG_WARN("fail to check stmt empty set", K(ret));
+  } else if (need_remove) {
+    ObRawExpr *tmp_expr = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && i < false_constraint_exprs.count(); i++) {
+      if (OB_ISNULL(tmp_expr = false_constraint_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null pointer", K(ret));
+      } else if (OB_FAIL(helper.precalc_constraint_exprs_.push_back(
+                                std::pair<ObRawExpr*, int64_t>(tmp_expr, stmt_idx)))) {
+        LOG_WARN("fail to push back constraint exprs", K(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < const_constraint_exprs.count(); i++) {
+      if (OB_ISNULL(tmp_expr = const_constraint_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null pointer", K(ret));
+      } else if (OB_FAIL(helper.const_constraint_exprs_.push_back(
+                                std::pair<ObRawExpr*, int64_t>(tmp_expr, stmt_idx)))) {
+        LOG_WARN("fail to push back constraint exprs", K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -619,13 +504,13 @@ int ObTransformSimplifySet::remove_set_query_in_stmt(ObSelectStmt *&select_stmt,
                                                 remove_list.at(0) == 1)) {
          
           child_stmt = select_stmt->get_set_query(1);
-          if (OB_FAIL(constraints_idxs.push_back(0))) {
+          if (OB_FAIL(constraints_idxs.push_back(1))) {
             LOG_WARN("fail to push back constraints", K(ret));
           }
         } else if (remove_list.count() == 1 && remove_list.at(0) == 0) {
           // remove second branch.
           child_stmt = select_stmt->get_set_query(0);
-          if (OB_FAIL(constraints_idxs.push_back(1))) {
+          if (OB_FAIL(constraints_idxs.push_back(0))) {
             LOG_WARN("fail to push back constraints", K(ret));
           }
         }

@@ -30,7 +30,8 @@ ObCreateTableStmt::ObCreateTableStmt(ObIAllocator *name_pool)
       view_need_privs_(),
       sub_select_stmt_(NULL),
       view_define_(NULL),
-      insert_mode_(0)
+      insert_mode_(0),
+      is_sub_select_empty_set_(false)
 {
 }
 
@@ -41,7 +42,8 @@ ObCreateTableStmt::ObCreateTableStmt()
       view_need_privs_(),
       sub_select_stmt_(NULL),
       view_define_(NULL),
-      insert_mode_(0)
+      insert_mode_(0),
+      is_sub_select_empty_set_(false)
 {
 }
 

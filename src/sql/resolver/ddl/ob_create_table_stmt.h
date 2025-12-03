@@ -80,7 +80,8 @@ public:
   common::ObString get_masked_sql() const { return masked_sql_; }
   void set_insert_mode(uint64_t mode) { insert_mode_ = mode; }
   uint64_t get_insert_mode() const { return insert_mode_; }
-
+  void set_is_sub_select_empty_set(bool is_empty) { is_sub_select_empty_set_ = is_empty; }
+  bool is_sub_select_empty_set() const { return is_sub_select_empty_set_; }
   ObTableType get_table_type() const { return create_table_arg_.schema_.get_table_type(); }
   INHERIT_TO_STRING_KV("ObTableStmt", ObTableStmt, K_(stmt_type), K_(create_table_arg), K_(index_arg_list));
 private:
@@ -114,6 +115,7 @@ protected:
    3. rename ctas_t1 as t1
    */
   uint64_t insert_mode_;
+  bool is_sub_select_empty_set_;
 };
 
 inline obrpc::ObCreateTableArg &ObCreateTableStmt::get_create_table_arg()

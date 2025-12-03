@@ -1713,7 +1713,7 @@ public:
                                     ObTransformerCtx *ctx,
                                     ObObj &result,
                                     bool &calc_happend);
-  static int check_integer_result_type(common::ObIArray<ObRawExpr*> &exprs,
+  static int check_integer_result_type(const common::ObIArray<ObRawExpr*> &exprs,
                                        bool &is_valid_type);
 
   static int construct_trans_table(const ObDMLStmt *stmt,
@@ -2109,6 +2109,19 @@ public:
                                             bool check_current_stmt,
                                             bool check_basic_deterministic,
                                             bool &strict_deterministic);
+  static int check_stmt_empty_set(ObSelectStmt *stmt,
+                                  ObTransformerCtx *ctx,
+                                  bool &is_empty_set,
+                                  ObIArray<ObRawExpr*> &false_constraint_exprs,
+                                  ObIArray<ObRawExpr*> &const_constraint_exprs);
+  static int check_exprs_constant_false(ObTransformerCtx *ctx,
+                                        const common::ObIArray<ObRawExpr*> &exprs,
+                                        bool &is_false,
+                                        ObIArray<ObRawExpr*> &false_constraint_exprs);
+  static int check_limit_zero_in_stmt(ObTransformerCtx *ctx,
+                                      ObDMLStmt *stmt,
+                                      bool &is_zero,
+                                      ObIArray<ObRawExpr*> &const_constraint_exprs);
 
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
