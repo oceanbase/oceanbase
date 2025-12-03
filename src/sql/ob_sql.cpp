@@ -1709,6 +1709,7 @@ int ObSql::handle_pl_prepare(const ObString &sql,
     }
   }
   sess.set_query_start_time(old_query_start_time);
+  ObThreadLogLevelUtils::clear();
   return ret;
 }
 
