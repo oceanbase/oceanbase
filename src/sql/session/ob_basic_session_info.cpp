@@ -1175,6 +1175,7 @@ int ObBasicSessionInfo::load_default_sys_variable(const bool print_info_log, con
   } else if (OB_FAIL(init_system_variables(print_info_log, is_sys_tenant, is_deserialized))) {
     LOG_WARN("Init system variables failed !", K(ret));
   }
+  release_to_pool_ = OB_SUCC(ret);
   return ret;
 }
 
@@ -4865,6 +4866,7 @@ int ObBasicSessionInfo::load_all_sys_vars(ObSchemaGetterGuard &schema_guard)
   OZ (schema_guard.get_sys_variable_schema(effective_tenant_id_, sys_var_schema));
   OV (OB_NOT_NULL(sys_var_schema));
   OZ (load_all_sys_vars(*sys_var_schema, true));
+  release_to_pool_ = OB_SUCC(ret);
   return ret;
 }
 
