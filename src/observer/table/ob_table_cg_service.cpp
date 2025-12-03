@@ -3620,6 +3620,9 @@ int ObTableTscCgService::generate_das_tsc_ctdef(const ObTableCtx &ctx,
     LOG_WARN("failed to generate text ir pushdown aggregate ctdef", K(ret));
   } else if (OB_FAIL(generate_table_param(ctx, das_tsc_ctdef, query_cs_replica))) { // init table_param_, result_output_
     LOG_WARN("fail to generate table param", K(ret));
+  } else {
+    das_tsc_ctdef.table_scan_opt_.io_read_batch_size_ = ctx.get_io_read_batch_size();
+    das_tsc_ctdef.table_scan_opt_.io_read_gap_size_ = ctx.get_io_read_gap_size();
   }
 
   return ret;
