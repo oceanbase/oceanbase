@@ -112,7 +112,7 @@ int ObScalarAggregateVecOp::inner_get_next_row()
 int ObScalarAggregateVecOp::inner_get_next_batch(const int64_t max_row_cnt)
 {
   int ret = OB_SUCCESS;
-  int64_t batch_cnt = min(max_row_cnt, MY_SPEC.max_batch_size_);
+  int64_t batch_cnt = MY_SPEC.max_batch_size_;
   const ObBatchRows *child_brs = nullptr;
 
   LOG_DEBUG("before inner get_next_batch", "aggr_hold_size", aggr_processor_.get_aggr_hold_size(),
