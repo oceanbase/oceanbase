@@ -625,7 +625,7 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
     } else if (OB_ISNULL(common_rpc_proxy)){
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("common rpc proxy should not be null", K(ret));
-    } else if (OB_ISNULL(select_stmt)) { // 普通建表的处理
+    } else if (OB_ISNULL(select_stmt) || stmt.is_sub_select_empty_set()) { // 普通建表的处理
       bool is_parallel_create = false;
       if (OB_FAIL(ctx.get_sql_ctx()->schema_guard_->reset())){
         LOG_WARN("schema_guard reset failed", KR(ret));

@@ -2242,6 +2242,15 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
           }
         }
       }
+      // check whether the select stmt is empty set, if so, we can treat it as normal create table
+      if (OB_SUCC(ret)) {
+        bool is_empty_set = false;
+        if (OB_FAIL(check_stmt_is_empty_set(select_stmt, is_empty_set))) {
+          LOG_WARN("fail to check is empty set", K(ret));
+        } else {
+          create_table_stmt->set_is_sub_select_empty_set(is_empty_set);
+        }
+      }
       for (int64_t i = 0; OB_SUCC(ret) && i < select_items.count(); ++i) {
         const SelectItem &select_item = select_items.at(i);
         ObRawExpr *expr = select_item.expr_;
@@ -4185,5 +4194,29 @@ int ObCreateTableResolver::uk_or_heap_table_pk_add_to_index_list(ObArray<int> &i
   }
   return ret;
 }
+
+int ObCreateTableResolver::check_stmt_is_empty_set(ObSelectStmt *stmt, bool &is_empty_set)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> false_constraint_exprs;
+  ObSEArray<ObRawExpr*, 4> const_constraint_exprs;
+  if (OB_ISNULL(stmt) || OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else {
+    ObTransformerCtx ctx;
+    ctx.allocator_ = allocator_;
+    ctx.session_info_ = session_info_;
+    ctx.exec_ctx_ = session_info_->get_cur_exec_ctx();
+    // other members of ctx are not used, so we don't need to set them.
+    if (OB_FAIL(ObTransformUtils::check_stmt_empty_set(stmt, &ctx, is_empty_set,
+                                                       false_constraint_exprs,
+                                                       const_constraint_exprs))) {
+      LOG_WARN("failed to check stmt empty set", K(ret));
+    }
+  }
+  return ret;
+}
+
 }//end namespace sql
 }//end namespace oceanbase
