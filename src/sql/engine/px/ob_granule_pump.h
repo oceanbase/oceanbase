@@ -151,7 +151,7 @@ public:
   struct ObGITaskInfo
   {
     ObGITaskInfo() : tablet_loc_(nullptr), range_(), ss_range_(), idx_(0), hash_value_(0),
-                     is_false_range_(false),  scan_task_() {}
+                     is_false_range_(false),  scan_task_(), granule_type_(OB_GRANULE_UNINITIALIZED) {}
     ObGITaskInfo(ObDASTabletLoc *tablet_loc,
                  const common::ObNewRange &range,
                  const common::ObNewRange &ss_range,
@@ -159,7 +159,7 @@ public:
                  bool is_false_range,
                  sql::ObIExtTblScanTask* scan_task) :
         tablet_loc_(tablet_loc), range_(range), ss_range_(ss_range), idx_(idx), hash_value_(0),
-        is_false_range_(is_false_range), scan_task_(scan_task) {}
+        is_false_range_(is_false_range), scan_task_(scan_task), granule_type_(OB_GRANULE_UNINITIALIZED) {}
     TO_STRING_KV(KPC(tablet_loc_),
                  KP(tablet_loc_),
                  K(range_),
@@ -167,7 +167,8 @@ public:
                  K(idx_),
                  K(hash_value_),
                  K(is_false_range_),
-                 KPC(scan_task_));
+                 KPC(scan_task_),
+                 K(granule_type_));
     ObDASTabletLoc *tablet_loc_;
     common::ObNewRange range_;
     common::ObNewRange ss_range_;
@@ -175,6 +176,7 @@ public:
     uint64_t hash_value_;
     bool is_false_range_;
     sql::ObIExtTblScanTask* scan_task_;
+    ObGranuleType granule_type_;; // one partition one task when OB_PARTITION_GRANULE
   };
 
   enum ObGIRandomType

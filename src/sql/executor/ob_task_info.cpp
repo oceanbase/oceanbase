@@ -104,6 +104,7 @@ int ObGranuleTaskInfo::assign(const ObGranuleTaskInfo &other)
     } else {
       tablet_loc_ = other.tablet_loc_;
       task_id_ = other.task_id_;
+      granule_type_ = other.granule_type_;
     }
   }
   return ret;

@@ -42,6 +42,7 @@ int ObGITaskSet::get_task_at_pos(ObGranuleTaskInfo &info, const int64_t &pos) co
     info.ranges_.reset();
     info.scan_tasks_.reset();
     info.ss_ranges_.reset();
+    info.granule_type_ = gi_task_set_.at(pos).granule_type_;
     for (int64_t i = pos; OB_SUCC(ret) && i < gi_task_set_.count(); i++) {
       if (cur_idx == gi_task_set_.at(i).idx_) {
         if (!gi_task_set_.at(i).is_false_range_) {
@@ -114,6 +115,7 @@ int ObGITaskSet::get_next_gi_task(ObGranuleTaskInfo &info)
     info.ranges_.reset();
     info.scan_tasks_.reset();
     info.ss_ranges_.reset();
+    info.granule_type_ = gi_task_set_.at(cur_pos_).granule_type_;
     for (int64_t i = cur_pos_; OB_SUCC(ret) && i < gi_task_set_.count(); i++) {
       if (cur_idx == gi_task_set_.at(i).idx_) {
         if (!gi_task_set_.at(i).is_false_range_) {
@@ -265,7 +267,13 @@ int ObGITaskSet::construct_taskset(const ObIArray<ObDASTabletLoc*> &taskset_tabl
     bool is_false_range = taskset_ranges.empty() && scan_tasks.empty();
     const ObNewRange &ss_range = ss_ranges.empty() ? whole_range : ss_ranges.at(0);
     int64_t max_idx = 0;
+    ObTabletID before_tablet_id(common::ObTabletID::INVALID_TABLET_ID);
+    ObTabletID after_tablet_id(common::ObTabletID::INVALID_TABLET_ID);
     for (int64_t i = 0; OB_SUCC(ret) && i < taskset_tablets.count(); i++) {
+      after_tablet_id.reset();
+      if (i + 1 < taskset_tablets.count()) {
+        after_tablet_id = taskset_tablets.at(i + 1)->tablet_id_;
+      }
       max_idx = max(max_idx, taskset_idxs.at(i));
       ObGITaskInfo task_info(taskset_tablets.at(i),
                              taskset_ranges.empty() ? false_range : taskset_ranges.at(i),
@@ -276,9 +284,15 @@ int ObGITaskSet::construct_taskset(const ObIArray<ObDASTabletLoc*> &taskset_tabl
       if (random_type != ObGITaskSet::GI_RANDOM_NONE) {
         task_info.hash_value_ = common::murmurhash(&task_info.idx_, sizeof(task_info.idx_), 0);
       }
+      if (before_tablet_id != taskset_tablets.at(i)->tablet_id_ && after_tablet_id != taskset_tablets.at(i)->tablet_id_) {
+        task_info.granule_type_ = OB_PARTITION_GRANULE;
+      } else {
+        task_info.granule_type_ = OB_BLOCK_RANGE_GRANULE;
+      }
       if (OB_FAIL(gi_task_set_.push_back(task_info))) {
         LOG_WARN("add partition key failed", K(ret));
       }
+      before_tablet_id = taskset_tablets.at(i)->tablet_id_;
     }
     task_count_ = max_idx + 1;
     if (OB_SUCC(ret) && random_type != GI_RANDOM_NONE) {
