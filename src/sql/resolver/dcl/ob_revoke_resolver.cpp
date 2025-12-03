@@ -866,6 +866,7 @@ int ObRevokeResolver::resolve_revoke_obj_priv_inner(const ParseNode *node,
   bool is_catalog = false;
   bool explicit_db = false;
   bool is_location = false;
+  bool is_sensitive_rule = false;
   CK (OB_NOT_NULL(node) && OB_NOT_NULL(revoke_stmt));
   CK (OB_NOT_NULL(params_.schema_checker_) && OB_NOT_NULL(params_.session_info_));
   CK (3 == node->num_child_
@@ -889,7 +890,8 @@ int ObRevokeResolver::resolve_revoke_obj_priv_inner(const ParseNode *node,
                                                    is_directory,
                                                    explicit_db,
                                                    is_catalog,
-                                                   is_location))) {
+                                                   is_location,
+                                                   is_sensitive_rule))) {
         LOG_WARN("Resolve priv_level node error", K(ret));
       }  else if (OB_FAIL(check_and_convert_name(db, table))) {
         LOG_WARN("Check and convert name error", K(db), K(table), K(ret));
@@ -910,7 +912,7 @@ int ObRevokeResolver::resolve_revoke_obj_priv_inner(const ParseNode *node,
             OZ (params_.schema_checker_->get_object_type(
                 tenant_id, db, table,
                 object_type, object_id, obj_db_name, is_directory, 
-                explicit_db, ObString(""), synonym_checker, is_catalog, is_location));
+                explicit_db, ObString(""), synonym_checker, is_catalog, is_location, is_sensitive_rule));
             OZ (revoke_stmt->set_database_name(obj_db_name));
           }
           revoke_stmt->set_object_type(object_type);

@@ -173,8 +173,8 @@ public:
   int get_sensitive_rule_id_name(const uint64_t tenant_id,
                                  common::ObString &sensitive_rule_name,
                                  uint64_t &sensitive_rule_id,
-                                 ObIAllocator *allocator,
-                                 bool allow_not_exist) const;
+                                 ObIAllocator *allocator = NULL,
+                                 bool allow_not_exist = false) const;
   int get_sensitive_rule_schema_by_column(const uint64_t tenant_id,
                                           const uint64_t table_id,
                                           const uint64_t column_id,
@@ -494,7 +494,8 @@ public:
                       const common::ObString &prev_table_name,
                       ObSynonymChecker &synonym_checker,
                       bool is_catalog = false,
-                      bool is_location = false);
+                      bool is_location = false,
+                      bool is_sensitive_rule = false);
   int get_object_type_with_view_info(common::ObIAllocator* allocator,
                                      void* param,
                                      const uint64_t tenant_id,
@@ -509,7 +510,8 @@ public:
                                      const common::ObString &prev_table_name,
                                      ObSynonymChecker &synonym_checker,
                                      bool is_catalog = false,
-                                     bool is_location = false);
+                                     bool is_location = false,
+                                     bool is_sensitive_rule = false);
   int check_access_to_obj(const uint64_t tenant_id,
                           const uint64_t user_id,
                           const uint64_t obj_id,

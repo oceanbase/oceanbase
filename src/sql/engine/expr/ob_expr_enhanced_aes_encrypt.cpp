@@ -125,6 +125,11 @@ int ObExprEnhancedAesEncrypt::eval_aes_encrypt(const ObExpr &expr, ObEvalCtx &ct
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null session", K(ret));
+  } else if (lib::is_oracle_mode() && !is_for_sensitive_rule) {
+    // for oracle mode, enable enhanced_aes_encrypt function only for sensitive rule scenario
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("oracle mode does not support enhanced aes encrypt", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "enhanced aes encrypt");
   } else if (OB_FAIL(eval_param(expr, ctx, func_name, op_mode, src, iv_str))) {
     LOG_WARN("failed to eval params", K(ret));
   } else if (src->is_null()) {

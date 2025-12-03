@@ -964,6 +964,10 @@ private:
   int add_ccl_rules(const common::ObIArray<ObSimpleCCLRuleSchema> &ccl_schemas);
   int add_ccl_rule(const ObSimpleCCLRuleSchema &ccl_schema);
   int del_ccl_rule(const ObTenantCCLRuleId &id);
+  // sensitive rule
+  int add_sensitive_rules(const common::ObIArray<ObSensitiveRuleSchema> &sensitive_rule_schemas);
+  int add_sensitive_rule(const ObSensitiveRuleSchema &sensitive_rule_schema);
+  int del_sensitive_rule(const ObTenantSensitiveRuleId &id);
 private:
   common::ObArenaAllocator local_allocator_;
   common::ObIAllocator &allocator_;

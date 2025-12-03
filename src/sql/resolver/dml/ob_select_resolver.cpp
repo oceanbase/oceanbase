@@ -2663,27 +2663,26 @@ int ObSelectResolver::resolve_sensitive_rule(ObSelectStmt *select_stmt)
   } else if (FALSE_IT(effective_tenant_id = session_info_->get_effective_tenant_id())) {
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(effective_tenant_id, compat_version))) {
     LOG_WARN("fail to get data version", K(ret), K(effective_tenant_id));
-  } else if (!((compat_version >= MOCK_DATA_VERSION_4_3_5_3 && compat_version < DATA_VERSION_4_4_0_0)
-               || compat_version >= DATA_VERSION_4_4_2_0)) {
+  } else if ((lib::is_mysql_mode() && !((compat_version >= MOCK_DATA_VERSION_4_3_5_3 && compat_version < DATA_VERSION_4_4_0_0)
+                                        || compat_version >= DATA_VERSION_4_4_2_0))
+             || (lib::is_oracle_mode() && !(compat_version >= DATA_VERSION_4_4_2_0))) {
     // do nothing
-  } else if (!is_mysql_mode()
-             || !((0 == current_level_ && get_parent_namespace_resolver() == NULL)
-                  || (1 == current_level_ && is_child_resolver_of_dml()))
+  } else if (!((0 == current_level_ && get_parent_namespace_resolver() == NULL)
+               || (1 == current_level_ && is_child_resolver_of_dml()))
              || (params_.is_from_create_view_ && !params_.is_from_create_mview_)
-             || params_.is_returning_
+             || params_.is_returning_ || params_.is_prepare_stage_  // uses StmtPrinter
              || params_.is_expanding_view_ || params_.is_in_view_
              || is_in_set_query()
              || is_substmt()
              || cte_ctx_.is_with_clause_resolver_) {
     // do not resolve sensitive rule if:
-    // 1. not mysql mode
-    // 2. not top-level select or not the first-level child of dml
-    // 3. is create view (except for materialized view)
-    // 4. is returning clause
-    // 5. is expanding view or is resolving view
-    // 6. is in set query
-    // 7. is subquery
-    // 8. is in with clause
+    // 1. not top-level select or not the first-level child of dml
+    // 2. is create view (except for materialized view)
+    // 3. other scenarios that use StmtPrinter
+    // 4. is expanding view or is resolving view
+    // 5. is in set query
+    // 6. is subquery
+    // 7. is in with clause
   } else if (OB_FAIL(schema_checker_->get_sensitive_rule_schema_count(
                                       effective_tenant_id, sensitive_rule_count))) {
     LOG_WARN("failed to get sensitive rule count", K(ret));
@@ -2985,17 +2984,15 @@ int ObSelectResolver::try_add_sensitive_field_expr(
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < sensitive_rules.count(); ++i) {
     ObPCPrivInfo priv_info;
+    priv_info.priv_type_ = ObPCPrivInfo::SENSITIVE_RULE_PRIV;
     priv_info.has_privilege_ = false;
-    ObStmtNeedPrivs stmt_need_privs(*allocator_);
     const ObSensitiveRuleSchema *sensitive_rule = sensitive_rules.at(i);
     if (OB_ISNULL(sensitive_rule)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret));
     } else if (FALSE_IT(priv_info.sensitive_rule_id_ = sensitive_rule->get_sensitive_rule_id())) {
-    } else if (OB_FAIL(ObPrivilegeCheck::check_sensitive_rule_plainaccess_priv(sensitive_rule,
-                                                                               *session_info_,
-                                                                               stmt_need_privs))) {
-      if (OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE != ret) {
+    } else if (OB_FAIL(ObPrivilegeCheck::check_sensitive_rule_plainaccess_priv(sensitive_rule, *session_info_))) {
+      if (OB_UNLIKELY(OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE != ret)) {
         LOG_WARN("failed to check sensitive rule priv", K(ret));
       // lacking of plainaccess priv to a sensitive rule should raise an use error for:
       // 1. create table or materialized view

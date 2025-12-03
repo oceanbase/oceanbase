@@ -104,8 +104,7 @@ public:
                              const bool has_global_variable,
                              const share::schema::ObStmtNeedPrivs &stmt_need_privs);
   static int check_sensitive_rule_plainaccess_priv(const share::schema::ObSensitiveRuleSchema *rule_schema,
-                                                   sql::ObSQLSessionInfo &session_info,
-                                                   share::schema::ObStmtNeedPrivs &stmt_need_privs);
+                                                   sql::ObSQLSessionInfo &session_info);
 private:
    ///Extract priv info needed by a single stmt, may be sub-query.
    ///called by recursive_stmt_need_priv

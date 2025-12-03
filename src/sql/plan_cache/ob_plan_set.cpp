@@ -433,7 +433,11 @@ int ObPlanSet::match_priv_cons(ObPlanCacheCtx &pc_ctx, bool &is_matched)
   for (int64_t i = 0; OB_SUCC(ret) && is_matched && i < all_priv_constraints_.count(); ++i) {
     const ObPCPrivInfo &priv_info = all_priv_constraints_.at(i);
     bool has_priv = false;
-    if (lib::is_oracle_mode()) {
+    // check sys privilege for rls policies
+    if (OB_UNLIKELY(priv_info.priv_type_ == ObPCPrivInfo::INVALID_TYPE)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid priv type", K(priv_info), K(ret));
+    } else if (lib::is_oracle_mode() && priv_info.priv_type_ == ObPCPrivInfo::SYS_PRIV) {
       if (OB_FAIL(ObOraSysChecker::check_ora_user_sys_priv(*schema_guard,
                                                            session_info->get_effective_tenant_id(),
                                                            session_info->get_priv_user_id(),
@@ -449,38 +453,31 @@ int ObPlanSet::match_priv_cons(ObPlanCacheCtx &pc_ctx, bool &is_matched)
       } else {
         has_priv = true;
       }
-    } else {
-      if (!is_valid_id(priv_info.sensitive_rule_id_)) {
-        // only check sensitive rule for mysql mode
-        has_priv = true;
-      } else {
-        uint64_t tenant_id = session_info->get_effective_tenant_id();
-        ObStmtNeedPrivs stmt_need_privs(alloc_);
-        const share::schema::ObSensitiveRuleSchema *rule_schema = NULL;
-        if (OB_FAIL(schema_guard->get_sensitive_rule_schema_by_id(tenant_id,
-                                                                   priv_info.sensitive_rule_id_,
-                                                                   rule_schema))) {
-          LOG_WARN("fail to get sensitive rule schema", K(ret), K(tenant_id),
-                                                        K(priv_info.sensitive_rule_id_));
-        } else if (OB_ISNULL(rule_schema)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("rule schema is null", K(ret));
-        } else if (OB_FAIL(ObPrivilegeCheck::check_sensitive_rule_plainaccess_priv(rule_schema,
-                                                                                   *session_info,
-                                                                                   stmt_need_privs))) {
-          if (OB_ERR_NO_PRIVILEGE == ret) {
-            ret = OB_SUCCESS;
-            LOG_DEBUG("lack plainaccess privilege", K(priv_info.sensitive_rule_id_));
-          } else {
-            LOG_WARN("failed to check plainaccess priv", K(ret));
-          }
+    } else if (priv_info.priv_type_ == ObPCPrivInfo::SENSITIVE_RULE_PRIV) {
+      // check sensitive rule plainaccess privilege
+      uint64_t tenant_id = session_info->get_effective_tenant_id();
+      const share::schema::ObSensitiveRuleSchema *rule_schema = NULL;
+      if (OB_FAIL(schema_guard->get_sensitive_rule_schema_by_id(tenant_id,
+                                                                priv_info.sensitive_rule_id_,
+                                                                rule_schema))) {
+        LOG_WARN("fail to get sensitive rule schema", K(ret), K(tenant_id), K(priv_info.sensitive_rule_id_));
+      } else if (OB_ISNULL(rule_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("rule schema is null", K(ret));
+      } else if (OB_FAIL(ObPrivilegeCheck::check_sensitive_rule_plainaccess_priv(rule_schema, *session_info))) {
+        if (OB_ERR_NO_PRIVILEGE == ret) {
+          has_priv = false;
+          ret = OB_SUCCESS;
+          LOG_DEBUG("lack plainaccess privilege", K(priv_info.sensitive_rule_id_));
         } else {
-          has_priv = true;
+          LOG_WARN("failed to check plainaccess priv", K(ret));
         }
+      } else {
+        has_priv = true;
       }
     }
     if (OB_SUCC(ret)) {
-      is_matched = priv_info.has_privilege_ == has_priv;
+      is_matched = (priv_info.has_privilege_ == has_priv);
     }
   }
   return ret;
@@ -990,10 +987,17 @@ int ObPlanSet::set_priv_constraint(common::ObIArray<ObPCPrivInfo> &priv_constrai
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < priv_constraint.count(); ++i) {
     const ObPCPrivInfo &priv_info = priv_constraint.at(i);
-    if (OB_UNLIKELY(!(priv_info.sys_priv_ > PRIV_ID_NONE && priv_info.sys_priv_ < PRIV_ID_MAX)
-                    && priv_info.sensitive_rule_id_ == OB_INVALID_ID )) {
+    if (OB_UNLIKELY(priv_info.priv_type_ == ObPCPrivInfo::INVALID_TYPE)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid priv type", K(priv_info), K(ret));
+    } else if (priv_info.priv_type_ == ObPCPrivInfo::SYS_PRIV
+               && OB_UNLIKELY(!(priv_info.sys_priv_ > PRIV_ID_NONE && priv_info.sys_priv_ < PRIV_ID_MAX))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid sys priv", K(priv_info), K(ret));
+    } else if (priv_info.priv_type_ == ObPCPrivInfo::SENSITIVE_RULE_PRIV
+               && OB_UNLIKELY(!is_valid_id(priv_info.sensitive_rule_id_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid sensitive rule id", K(priv_info), K(ret));
     } else if (OB_FAIL(all_priv_constraints_.push_back(priv_info))) {
       LOG_WARN("failed to push back priv info");
     }

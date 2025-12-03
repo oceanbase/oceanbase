@@ -2303,6 +2303,42 @@ int ObSchemaMgr::del_ccl_rule(const ObTenantCCLRuleId &id)
   return ret;
 }
 
+int ObSchemaMgr::add_sensitive_rules(const common::ObIArray<ObSensitiveRuleSchema> &sensitive_rule_schemas)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < sensitive_rule_schemas.count(); ++i) {
+    if (OB_FAIL(add_sensitive_rule(sensitive_rule_schemas.at(i)))) {
+      LOG_WARN("push schema failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSchemaMgr::add_sensitive_rule(const ObSensitiveRuleSchema &sensitive_rule_schema)
+{
+  int ret = OB_SUCCESS;
+  ObNameCaseMode mode = OB_NAME_CASE_INVALID;
+  if (is_sys_tenant(tenant_id_)) {
+    mode = OB_ORIGIN_AND_INSENSITIVE;
+  } else if (OB_FAIL(get_tenant_name_case_mode(sensitive_rule_schema.get_tenant_id(), mode))) {
+    LOG_WARN("fail to get_tenant_name_case_mode", K(ret), "tenant_id", sensitive_rule_schema.get_tenant_id());
+  } else if (OB_NAME_CASE_INVALID == mode) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid case mode", K(ret), K(mode));
+  }
+  if (OB_SUCC(ret) && OB_FAIL(sensitive_rule_mgr_.add_sensitive_rule(sensitive_rule_schema, mode))) {
+    LOG_WARN("failed to add sensitive rule", K(ret));
+  }
+  return ret;
+}
+
+int ObSchemaMgr::del_sensitive_rule(const ObTenantSensitiveRuleId &id)
+{
+  int ret = OB_SUCCESS;
+  OZ(sensitive_rule_mgr_.del_sensitive_rule(id));
+  return ret;
+}
+
 int ObSchemaMgr::add_tablegroups(const ObIArray<ObSimpleTablegroupSchema> &tablegroup_schemas)
 {
   int ret = OB_SUCCESS;

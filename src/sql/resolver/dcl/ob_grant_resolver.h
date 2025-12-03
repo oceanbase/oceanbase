@@ -130,7 +130,8 @@ public:
       bool &is_directory,
       bool &explicit_db,
       bool &is_catalog,
-      bool &is_location);
+      bool &is_location,
+      bool &is_sensitive_rule);
   int check_user_dup(
       share::schema::ObSchemaGetterGuard *guard,
       ObIArray<ObString> &user_name_array,

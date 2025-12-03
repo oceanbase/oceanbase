@@ -1360,7 +1360,7 @@ private:
   APPLY_SCHEMA_TO_CACHE(external_resource, ObExternalResourceMgr);
   APPLY_SCHEMA_TO_CACHE(ai_model, ObSchemaMgr);
   APPLY_SCHEMA_TO_CACHE(ccl_rule, ObSchemaMgr);
-  APPLY_SCHEMA_TO_CACHE(sensitive_rule, ObSensitiveRuleMgr);
+  APPLY_SCHEMA_TO_CACHE(sensitive_rule, ObSchemaMgr);
   APPLY_SCHEMA_TO_CACHE(sensitive_column, ObSensitiveRuleMgr);
   APPLY_SCHEMA_TO_CACHE(sensitive_rule_priv, ObPrivMgr);
 #undef APPLY_SCHEMA_TO_CACHE

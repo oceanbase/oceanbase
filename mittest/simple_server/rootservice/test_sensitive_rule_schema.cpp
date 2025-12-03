@@ -88,7 +88,7 @@ TEST_F(TestSensitiveRule, test_get_increment_sensitive_rule_keys_reversely)
   schema.set_method("AES-256");
   schema.set_sensitive_rule_name("test_rule");
 
-  ASSERT_EQ(OB_SUCCESS, mgr.add_sensitive_rule(schema));
+  ASSERT_EQ(OB_SUCCESS, mgr.add_sensitive_rule(schema, OB_LOWERCASE_AND_INSENSITIVE));
 
   // 2. try get from schema_guard
   {

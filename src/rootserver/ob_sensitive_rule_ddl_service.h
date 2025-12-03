@@ -45,11 +45,6 @@ public:
                                              ObSchemaGetterGuard &schema_guard,
                                              ObMySQLTransaction &trans);
 private:
-  int update_table_schema(ObSensitiveRuleSchema &schema,
-                          ObSchemaGetterGuard &schema_guard,
-                          ObMySQLTransaction &trans,
-                          const uint64_t tenant_id,
-                          const ObSensitiveRuleDDLArg &arg);
   int ddl_validation_check(ObSchemaOperationType ddl_type,
                           ObSensitiveRuleSchema &new_schema,
                            ObSchemaGetterGuard &schema_guard);

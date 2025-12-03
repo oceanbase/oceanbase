@@ -23,46 +23,6 @@ using namespace share;
 using namespace obrpc;
 namespace rootserver
 {
-int ObSensitiveRuleDDLService::update_table_schema(ObSensitiveRuleSchema &schema,
-                                                   ObSchemaGetterGuard &schema_guard,
-                                                   ObMySQLTransaction &trans,
-                                                   const uint64_t tenant_id,
-                                                   const ObSensitiveRuleDDLArg &arg)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(ddl_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ddl service is null", K(ret));
-  } else {
-    share::schema::ObMultiVersionSchemaService &schema_service = ddl_service_->get_schema_service();
-    ObDDLOperator ddl_operator(schema_service, ddl_service_->get_sql_proxy());
-    uint64_t last_table_id = OB_INVALID_ID;
-    for (int64_t i = 0; OB_SUCC(ret) && i < schema.get_sensitive_field_items().count(); ++i) {
-      ObSensitiveFieldItem item = schema.get_sensitive_field_items().at(i);
-      const ObTableSchema *orig_schema = NULL;
-      ObTableSchema new_schema;
-      if (item.table_id_ == last_table_id) {
-      } else if (FALSE_IT(last_table_id = item.table_id_)) {  // table already updated
-      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, item.table_id_, orig_schema))) {
-        LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(item.table_id_));
-      } else if (OB_ISNULL(orig_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("orig schema is null", K(ret), K(item));
-      } else if (OB_FAIL(new_schema.assign(*orig_schema))) {
-        LOG_WARN("fail to assign table schema", K(ret));
-      } else {
-        new_schema.set_schema_version(schema.get_schema_version());
-        if (OB_FAIL(ddl_operator.update_table_attribute(new_schema, trans,
-                                                        OB_DDL_ALTER_TABLE, NULL))) {
-          LOG_WARN("fail to update table schema", K(ret));
-        }
-      }
-    }
-  }
-
-  return ret;
-}
-
 int ObSensitiveRuleDDLService::sensitive_field_validation_check(const ObSensitiveRuleSchema &schema,
                                                                 ObSchemaGetterGuard &schema_guard,
                                                                 bool should_exist)
@@ -213,8 +173,6 @@ int ObSensitiveRuleDDLService::handle_sensitive_rule_ddl(const ObSensitiveRuleDD
                                                                    schema_guard,
                                                                    arg.user_id_))) {
       LOG_WARN("handle sensitive rule function failed", K(ret));
-    } else if (OB_FAIL(update_table_schema(schema, schema_guard, trans, tenant_id, arg))) {
-      LOG_WARN("update table schema failed", K(ret));
     }
 
     // 5. end DDL transaction
@@ -298,14 +256,11 @@ int ObSensitiveRuleDDLService::grant_revoke_sensitive_rule(const ObSensitiveRule
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_ora_mode))) {
     LOG_WARN("fail to check is oracle mode", K(ret));
-  } else if (is_ora_mode) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not support grant revoke sensitive rule level privilege in oracle mode", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant revoke sensitive rule level privilege in oracle mode");
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("failed to get min data version", K(ret));
-  } else if (!((data_version >= MOCK_DATA_VERSION_4_3_5_3 && data_version < DATA_VERSION_4_4_0_0)
-               || data_version >= DATA_VERSION_4_4_2_0)) {
+  } else if ((lib::is_mysql_mode() && !((data_version >= MOCK_DATA_VERSION_4_3_5_3 && data_version < DATA_VERSION_4_4_0_0)
+                                        || data_version >= DATA_VERSION_4_4_2_0))
+             || (lib::is_oracle_mode() && !(data_version >= DATA_VERSION_4_4_2_0))) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("sensitive rule not supported", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "sensitive rule");

@@ -33,6 +33,7 @@ int ObSensitiveRuleResolver::resolve_rule_name(const ParseNode *rule_name_node,
   int ret = OB_SUCCESS;
   ObString rule_name;
   ObCollationType cs_type = CS_TYPE_UTF8MB4_BIN;
+  ObNameCaseMode case_mode = OB_NAME_CASE_INVALID;
   if (OB_ISNULL(session_info_) || OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -47,9 +48,14 @@ int ObSensitiveRuleResolver::resolve_rule_name(const ParseNode *rule_name_node,
   } else if (OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(*allocator_,
                                                                         session_info_->get_dtc_params(),
                                                                         rule_name))) {
-  } else if (OB_FAIL(ObCharset::tolower(cs_type, rule_name, rule_name, *allocator_))) {
+  } else if (OB_FAIL(session_info_->get_name_case_mode(case_mode))) {
+    LOG_WARN("failed to get name case mode", K(ret));
+  } else if (is_mysql_mode() && OB_LOWERCASE_AND_INSENSITIVE == case_mode
+             && OB_FAIL(ObCharset::tolower(cs_type, rule_name, rule_name, *allocator_))) {
     LOG_WARN("failed to lower string", K(ret));
-  } else {
+  }
+
+  if (OB_SUCC(ret)) {
     stmt.set_sensitive_rule_name(rule_name);
   }
   return ret;
@@ -88,7 +94,7 @@ int ObSensitiveRuleResolver::resolve_protection_spec(const ParseNode *protection
           int64_t encryption_mode = -1;
           ObString method_str;
           bool need_encryption = false;
-          if (OB_UNLIKELY(method_node->type_ != T_VARCHAR)) {
+          if (OB_UNLIKELY(method_node->type_ != T_VARCHAR && method_node->type_ != T_CHAR)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("invalid sensitive rule method node", K(ret), K(method_node));
           } else if (FALSE_IT(method_str.assign_ptr(method_node->str_value_, static_cast<int32_t>(method_node->str_len_)))) {
@@ -216,8 +222,9 @@ int ObCreateSensitiveRuleResolver::resolve(const ParseNode &parse_tree)
   } else if (FALSE_IT(tenant_id = session_info_->get_effective_tenant_id())) {
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("failed to get data version", K(ret));
-  } else if (!((data_version >= MOCK_DATA_VERSION_4_3_5_3 && data_version < DATA_VERSION_4_4_0_0)
-               || data_version >= DATA_VERSION_4_4_2_0)) {
+  } else if ((lib::is_mysql_mode() && !((data_version >= MOCK_DATA_VERSION_4_3_5_3 && data_version < DATA_VERSION_4_4_0_0)
+                                        || data_version >= DATA_VERSION_4_4_2_0))
+             || (lib::is_oracle_mode() && !(data_version >= DATA_VERSION_4_4_2_0))) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("sensitive rule not supported", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "sensitive rule");
@@ -236,6 +243,16 @@ int ObCreateSensitiveRuleResolver::resolve(const ParseNode &parse_tree)
     LOG_WARN("fail to resolve protection policy", K(ret));
   } else if (OB_FAIL(resolve_sensitive_field(parse_tree.children_[1], *stmt))) {
     LOG_WARN("fail to resolve sensitive field", K(ret));
+  }
+
+  // Check oracle privileges
+  if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
+    CK (schema_checker_ != NULL);
+    OZ (schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
+                                            session_info_->get_priv_user_id(),
+                                            ObString(),
+                                            stmt->get_stmt_type(),
+                                            session_info_->get_enable_role_array()));
   }
 
   return ret;
@@ -277,8 +294,9 @@ int ObDropSensitiveRuleResolver::resolve(const ParseNode &parse_tree)
   } else if (FALSE_IT(tenant_id = session_info_->get_effective_tenant_id())) {
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("failed to get data version", K(ret));
-  } else if (!((data_version >= MOCK_DATA_VERSION_4_3_5_3 && data_version < DATA_VERSION_4_4_0_0)
-               || data_version >= DATA_VERSION_4_4_2_0)) {
+  } else if ((lib::is_mysql_mode() && !((data_version >= MOCK_DATA_VERSION_4_3_5_3 && data_version < DATA_VERSION_4_4_0_0)
+                                        || data_version >= DATA_VERSION_4_4_2_0))
+             || (lib::is_oracle_mode() && !(data_version >= DATA_VERSION_4_4_2_0))) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("sensitive rule not supported", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "sensitive rule");
@@ -291,6 +309,16 @@ int ObDropSensitiveRuleResolver::resolve(const ParseNode &parse_tree)
   } else if (FALSE_IT(stmt->set_user_id(session_info_->get_user_id()))) {
   } else if (FALSE_IT(stmt->set_ddl_type(OB_DDL_DROP_SENSITIVE_RULE))) {
   } else if (OB_FAIL(resolve_rule_name(parse_tree.children_[0], *stmt))) {
+  }
+
+  // Check oracle privileges
+  if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
+    CK (schema_checker_ != NULL);
+    OZ (schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
+                                            session_info_->get_priv_user_id(),
+                                            ObString(),
+                                            stmt->get_stmt_type(),
+                                            session_info_->get_enable_role_array()));
   }
 
   return ret;
@@ -334,8 +362,9 @@ int ObAlterSensitiveRuleResolver::resolve(const ParseNode &parse_tree)
   } else if (FALSE_IT(tenant_id = session_info_->get_effective_tenant_id())) {
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("failed to get data version", K(ret));
-  } else if (!((data_version >= MOCK_DATA_VERSION_4_3_5_3 && data_version < DATA_VERSION_4_4_0_0)
-               || data_version >= DATA_VERSION_4_4_2_0)) {
+  } else if ((lib::is_mysql_mode() && !((data_version >= MOCK_DATA_VERSION_4_3_5_3 && data_version < DATA_VERSION_4_4_0_0)
+                                        || data_version >= DATA_VERSION_4_4_2_0))
+             || (lib::is_oracle_mode() && !(data_version >= DATA_VERSION_4_4_2_0))) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("sensitive rule not supported", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "sensitive rule");
@@ -380,6 +409,16 @@ int ObAlterSensitiveRuleResolver::resolve(const ParseNode &parse_tree)
         LOG_WARN("invalid alter sensitive rule action type", K(ret), K(parse_tree.value_));
         break;
     }
+  }
+
+  // Check oracle privileges
+  if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
+    CK (schema_checker_ != NULL);
+    OZ (schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
+                                            session_info_->get_priv_user_id(),
+                                            ObString(),
+                                            stmt->get_stmt_type(),
+                                            session_info_->get_enable_role_array()));
   }
 
   return ret;

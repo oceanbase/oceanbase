@@ -1198,31 +1198,76 @@ int ObSchemaGetterGuard::check_sensitive_rule_priv(const ObSessionPrivInfo &sess
     LOG_WARN("fail to check lazy guard", K(ret), K(tenant_id));
   } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
     LOG_WARN("fail to get compat mode", K(ret));
-  } else if (is_oracle_mode) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "sensitive_rule level privilege in oracle mode");
-    LOG_WARN("sensitive_rule level privilege is not supported in oracle mode", K(ret));
   } else {
     const ObPrivMgr &priv_mgr = mgr->priv_mgr_;
     ObSensitiveRulePrivSortKey sensitive_rule_priv_key(session_priv.tenant_id_, session_priv.user_id_, need_priv.sensitive_rule_);
+    // get user privs
     if (OB_FAIL(priv_mgr.get_sensitive_rule_priv_set(sensitive_rule_priv_key, sensitive_rule_priv_set))) {
       LOG_WARN("get sensitive_rule priv set failed", K(sensitive_rule_priv_key), K(ret));
     }
-    /* load role privs */
-    if (OB_SUCC(ret)) {
-      ObNeedPriv collected_privs("", "", OB_PRIV_SENSITIVE_RULE_LEVEL, OB_PRIV_SET_EMPTY, false,
-                                  false, OB_PRIV_CHECK_ALL, need_priv.sensitive_rule_);
+    // get role privs
+    if (OB_FAIL(ret)) {
+    } else if (!is_oracle_mode) {
+      ObNeedPriv collected_privs("",
+                                 "",
+                                 OB_PRIV_SENSITIVE_RULE_LEVEL,
+                                 OB_PRIV_SET_EMPTY,
+                                 false,
+                                 false,
+                                 OB_PRIV_CHECK_ALL,
+                                 need_priv.sensitive_rule_);
       bool check_succ = false;
-      if (OB_FAIL(collect_priv_in_roles(mgr->priv_mgr_, session_priv, enable_role_id_array, *this, need_priv,
-                                        collect_user_sensitive_rule_level_priv_in_roles, collected_privs,
+      if (OB_FAIL(collect_priv_in_roles(mgr->priv_mgr_,
+                                        session_priv,
+                                        enable_role_id_array,
+                                        *this,
+                                        need_priv,
+                                        collect_user_sensitive_rule_level_priv_in_roles,
+                                        collected_privs,
                                         check_succ))) {
         LOG_WARN("fail to collect privs in roles", K(ret));
       } else {
         total_sensitive_rule_priv_set_role |= collected_privs.priv_set_;
       }
+    } else if (is_oracle_mode) {
+      const ObUserInfo *user_info = NULL;
+      if (OB_FAIL(get_user_info(tenant_id, session_priv.user_id_, user_info))) {
+        LOG_WARN("failed to get user info", K(ret), K(tenant_id), K(session_priv.user_id_));
+      } else if (OB_ISNULL(user_info)) {
+        ret = OB_USER_NOT_EXIST;
+        LOG_WARN("user info is null", K(ret), K(session_priv.user_id_));
+      } else {
+        const ObSEArray<uint64_t, 8> &role_id_array = user_info->get_role_id_array();
+        for (int i = 0; OB_SUCC(ret) && i < role_id_array.count(); ++i) {
+          const ObUserInfo *role_info = NULL;
+          if (OB_FAIL(get_user_info(tenant_id, role_id_array.at(i), role_info))) {
+            LOG_WARN("failed to get role info", K(ret), K(tenant_id), K(role_id_array.at(i)));
+          } else if (OB_ISNULL(role_info)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("role info is null", K(ret), K(role_id_array.at(i)));
+          } else {
+            ObPrivSet role_sensitive_rule_priv_set = OB_PRIV_SET_EMPTY;
+            ObSensitiveRulePrivSortKey role_sensitive_rule_priv_key(session_priv.tenant_id_,
+                                                                    role_info->get_user_id(),
+                                                                    need_priv.sensitive_rule_);
+            if (OB_FAIL(priv_mgr.get_sensitive_rule_priv_set(role_sensitive_rule_priv_key, role_sensitive_rule_priv_set))) {
+              if (OB_ENTRY_NOT_EXIST == ret) {
+                // Role doesn't have privileges on this sensitive rule, continue
+                ret = OB_SUCCESS;
+              } else {
+                LOG_WARN("get sensitive rule priv set failed for role", K(ret), K(role_sensitive_rule_priv_key));
+              }
+            } else {
+              total_sensitive_rule_priv_set_role |= role_sensitive_rule_priv_set;
+            }
+          }
+        }
+      }
     }
     if (OB_SUCC(ret)) {
-      user_sensitive_rule_priv_set = session_priv.user_priv_set_ | sensitive_rule_priv_set | total_sensitive_rule_priv_set_role;
+      user_sensitive_rule_priv_set = session_priv.user_priv_set_
+                                     | sensitive_rule_priv_set
+                                     | total_sensitive_rule_priv_set_role;
       if (!OB_TEST_PRIVS(user_sensitive_rule_priv_set, need_priv.priv_set_)) {
         ret = OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE;
         LOG_USER_ERROR(OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE,

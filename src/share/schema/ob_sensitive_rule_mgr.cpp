@@ -130,20 +130,9 @@ int ObSensitiveRuleMgr::deep_copy(const ObSensitiveRuleMgr &other)
       if (OB_ISNULL(schema = *iter)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("NULL ptr", KP(schema), K(ret));
-      } else if (OB_FAIL(add_sensitive_rule(*schema))) {
+      } else if (OB_FAIL(add_sensitive_rule(*schema, schema->get_name_case_mode()))) {
         LOG_WARN("add outline failed", K(*schema), K(ret));
       }
-    }
-  }
-  return ret;
-}
-
-int ObSensitiveRuleMgr::add_sensitive_rules(const common::ObIArray<ObSensitiveRuleSchema> &sensitive_rule_schemas)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; i < sensitive_rule_schemas.count() && OB_SUCC(ret); ++i) {
-    if (OB_FAIL(add_sensitive_rule(sensitive_rule_schemas.at(i)))) {
-      LOG_WARN("push schema failed", K(ret));
     }
   }
   return ret;
@@ -206,7 +195,7 @@ int ObSensitiveRuleMgr::update_column_map(ObSensitiveRuleSchema *new_schema)
   return ret;
 }
 
-int ObSensitiveRuleMgr::add_sensitive_rule(const ObSensitiveRuleSchema &schema)
+int ObSensitiveRuleMgr::add_sensitive_rule(const ObSensitiveRuleSchema &schema, const common::ObNameCaseMode mode)
 {
   int ret = OB_SUCCESS;
   ObSensitiveRuleSchema *new_schema = NULL;
@@ -225,6 +214,7 @@ int ObSensitiveRuleMgr::add_sensitive_rule(const ObSensitiveRuleSchema &schema)
   } else if (OB_ISNULL(new_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("alloc schema is a NULL ptr", K(new_schema), K(ret));
+  } else if (OB_FALSE_IT(new_schema->set_name_case_mode(mode))) {
   } else if (OB_FAIL(schema_infos_.replace(new_schema,
                                            iter,
                                            schema_cmp,
@@ -236,6 +226,7 @@ int ObSensitiveRuleMgr::add_sensitive_rule(const ObSensitiveRuleSchema &schema)
   } else {
     int overwrite = 1;
     ObSensitiveRuleNameHashKey sensitive_rule_name_hash_key(new_schema->get_tenant_id(),
+                                                            new_schema->get_name_case_mode(),
                                                             new_schema->get_sensitive_rule_name_str());
     if (OB_FAIL(name_map_.set_refactored(sensitive_rule_name_hash_key, new_schema, overwrite))) {
       LOG_WARN("build sensitive_rule hash map failed", K(ret));
@@ -285,6 +276,7 @@ int ObSensitiveRuleMgr::get_schema_by_id(const uint64_t sensitive_rule_id, const
 }
 
 int ObSensitiveRuleMgr::get_schema_by_name(const uint64_t tenant_id,
+                                           const common::ObNameCaseMode mode,
                                            const ObString &name,
                                            const ObSensitiveRuleSchema *&schema) const
 {
@@ -298,7 +290,7 @@ int ObSensitiveRuleMgr::get_schema_by_name(const uint64_t tenant_id,
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(name));
   } else {
     ObSensitiveRuleSchema *tmp_schema = NULL;
-    ObSensitiveRuleNameHashKey hash_wrap(tenant_id, name);
+    ObSensitiveRuleNameHashKey hash_wrap(tenant_id, mode, name);
     if (OB_FAIL(name_map_.get_refactored(hash_wrap, tmp_schema))) {
       if (OB_HASH_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
@@ -411,6 +403,7 @@ int ObSensitiveRuleMgr::del_sensitive_rule(const ObTenantSensitiveRuleId &id)
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(name_map_.erase_refactored(ObSensitiveRuleNameHashKey(schema->get_tenant_id(),
+                                                                      schema->get_name_case_mode(),
                                                                       schema->get_sensitive_rule_name_str())))) {
       LOG_WARN("failed delete sensitive_rule from hashmap", K(ret));
     }

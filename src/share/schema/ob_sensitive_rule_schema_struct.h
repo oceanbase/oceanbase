@@ -115,6 +115,7 @@ public:
   OB_INLINE void set_protection_policy(const uint64_t policy) { protection_policy_ = policy; }
   OB_INLINE void set_enabled(const bool enabled) { enabled_ = enabled; }
   OB_INLINE void set_schema_version(const int64_t schema_version) { schema_version_ = schema_version; }
+  OB_INLINE void set_name_case_mode(const common::ObNameCaseMode name_case_mode) { name_case_mode_ = name_case_mode; }
   OB_INLINE int set_sensitive_rule_name(const char *sensitive_rule_name) { return deep_copy_str(sensitive_rule_name, sensitive_rule_name_); }
   OB_INLINE int set_sensitive_rule_name(const common::ObString &sensitive_rule_name) { return deep_copy_str(sensitive_rule_name, sensitive_rule_name_); }
   OB_INLINE int set_method(const char *method) { return deep_copy_str(method, method_); }
@@ -132,6 +133,7 @@ public:
   OB_INLINE ObTenantSensitiveRuleId get_tenant_sensitive_rule_id() const { return ObTenantSensitiveRuleId(tenant_id_, sensitive_rule_id_); }
   OB_INLINE uint64_t get_protection_policy() const { return protection_policy_; }
   OB_INLINE uint64_t get_schema_version() const { return schema_version_; }
+  OB_INLINE common::ObNameCaseMode get_name_case_mode() const { return name_case_mode_; }
   OB_INLINE const char *get_sensitive_rule_name() const { return extract_str(sensitive_rule_name_); }
   OB_INLINE const common::ObString &get_sensitive_rule_name_str() const { return sensitive_rule_name_; }
   OB_INLINE const char *get_method() const { return extract_str(method_); }
@@ -149,6 +151,7 @@ public:
                K_(sensitive_rule_id),
                K_(protection_policy),
                K_(schema_version),
+               K_(name_case_mode),
                K_(sensitive_rule_name),
                K_(method),
                K_(enabled),
@@ -159,6 +162,7 @@ private:
   uint64_t sensitive_rule_id_;
   uint64_t protection_policy_;
   uint64_t schema_version_;
+  common::ObNameCaseMode name_case_mode_; // no need to serialize
   common::ObString sensitive_rule_name_;
   common::ObString method_;
   common::ObSArray<ObSensitiveFieldItem> sensitive_field_items_;

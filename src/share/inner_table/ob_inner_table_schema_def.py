@@ -17949,6 +17949,10 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15533', all_def_keyword
 # 15535: __all_virtual_wr_active_session_history_v2
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15535', all_def_keywords['__all_virtual_wr_active_session_history_v2'])))
 
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15538', all_def_keywords['__all_sensitive_rule']))
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15539', all_def_keywords['__all_sensitive_column']))
+
+
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
 # - 示例：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
@@ -24047,7 +24051,7 @@ def_table_schema(
         NULL AS SUBOBJECT_NAME,
         SENSITIVE_RULE_ID AS OBJECT_ID,
         NULL AS DATA_OBJECT_ID,
-        'SENSITIVE_RULE' AS OBJECT_TYPE,
+        'SENSITIVE RULE' AS OBJECT_TYPE,
         'VALID' AS STATUS,
         'N' AS TEMPORARY,
         'N' AS "GENERATED",
@@ -26310,7 +26314,7 @@ def_table_schema(
         NULL AS SUBOBJECT_NAME,
         SENSITIVE_RULE_ID AS OBJECT_ID,
         NULL AS DATA_OBJECT_ID,
-        'SENSITIVE_RULE' AS OBJECT_TYPE,
+        'SENSITIVE RULE' AS OBJECT_TYPE,
         'VALID' AS STATUS,
         'N' AS TEMPORARY,
         'N' AS "GENERATED",
@@ -26318,6 +26322,7 @@ def_table_schema(
         0 AS NAMESPACE,
         NULL AS EDITION_NAME
       FROM OCEANBASE.__ALL_SENSITIVE_RULE
+      WHERE TENANT_ID = 0
     ) A
     JOIN OCEANBASE.__ALL_DATABASE B
     ON A.TENANT_ID = B.TENANT_ID
@@ -44254,19 +44259,35 @@ def_table_schema(
   normal_columns  = [],
   gm_columns      = [],
   view_definition = """
+  (
   SELECT
-    SR.TENANT_ID as TENANT_ID,
-    SR.sensitive_rule_name as RULE_NAME,
-    U.user_name as USER_NAME,
-    CASE WHEN U.type = 0 THEN 'USER'
-         WHEN U.type = 1 THEN 'ROLE'
+    SR.TENANT_ID AS TENANT_ID,
+    SR.SENSITIVE_RULE_NAME AS RULE_NAME,
+    U.USER_ID AS USER_ID,
+    U.USER_NAME AS USER_NAME,
+    CASE WHEN U.TYPE = 0 THEN 'USER'
+         WHEN U.TYPE = 1 THEN 'ROLE'
          ELSE NULL
-         END as USER_TYPE
-  FROM oceanbase.__all_virtual_sensitive_rule_privilege SR
-  JOIN oceanbase.__all_virtual_user U
-    ON  SR.tenant_id = U.tenant_id
-    AND SR.user_id = U.user_id
-  ORDER BY SR.sensitive_rule_name, U.user_id;
+         END AS USER_TYPE
+  FROM OCEANBASE.__ALL_VIRTUAL_SENSITIVE_RULE_PRIVILEGE SR
+  JOIN OCEANBASE.__ALL_VIRTUAL_USER U
+    ON  SR.TENANT_ID = U.TENANT_ID
+    AND SR.USER_ID = U.USER_ID
+  UNION ALL
+  SELECT SR.TENANT_ID AS TENANT_ID,
+         SR.SENSITIVE_RULE_NAME AS RULE_NAME,
+         U.USER_ID AS USER_ID,
+         U.USER_NAME AS USER_NAME,
+         CASE WHEN U.TYPE = 0 THEN 'USER' WHEN U.TYPE = 1 THEN 'ROLE' ELSE NULL END AS USER_TYPE
+  FROM OCEANBASE.__ALL_VIRTUAL_SENSITIVE_RULE SR,
+       OCEANBASE.__ALL_VIRTUAL_OBJAUTH OA,
+       OCEANBASE.__ALL_VIRTUAL_USER U
+  WHERE OA.OBJTYPE = 20
+    AND OA.TENANT_ID = SR.TENANT_ID
+    AND OA.OBJ_ID = SR.SENSITIVE_RULE_ID
+    AND OA.TENANT_ID = U.TENANT_ID
+    AND OA.GRANTEE_ID = U.USER_ID
+  ) ORDER BY RULE_NAME, USER_ID
 """.replace("\n", " ")
 )
 
@@ -45319,6 +45340,27 @@ def_table_schema(
         NULL AS EDITION_NAME
       FROM SYS.ALL_VIRTUAL_CATALOG_REAL_AGENT
       WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+
+      UNION ALL
+
+      SELECT
+        TENANT_ID,
+        GMT_CREATE,
+        GMT_MODIFIED,
+        CAST(201006 AS NUMBER) AS DATABASE_ID,
+        SENSITIVE_RULE_NAME AS OBJECT_NAME,
+        NULL AS SUBOBJECT_NAME,
+        SENSITIVE_RULE_ID AS OBJECT_ID,
+        NULL AS DATA_OBJECT_ID,
+        'SENSITIVE RULE' AS OBJECT_TYPE,
+        'VALID' AS STATUS,
+        'N' AS TEMPORARY,
+        'N' AS "GENERATED",
+        'N' AS SECONDARY,
+        0 AS NAMESPACE,
+        NULL AS EDITION_NAME
+      FROM SYS.ALL_VIRTUAL_SENSITIVE_RULE_REAL_AGENT
+      WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
     ) A
     JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT B
     ON A.TENANT_ID = B.TENANT_ID
@@ -45839,6 +45881,28 @@ def_table_schema(
         0 AS NAMESPACE,
         NULL AS EDITION_NAME
       FROM SYS.ALL_VIRTUAL_CATALOG_REAL_AGENT
+      WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+
+      UNION ALL
+
+      SELECT
+        TENANT_ID,
+        GMT_CREATE,
+        GMT_MODIFIED,
+        CAST(201006 AS NUMBER) AS DATABASE_ID,
+        SENSITIVE_RULE_NAME AS OBJECT_NAME,
+        NULL AS SUBOBJECT_NAME,
+        SENSITIVE_RULE_ID AS OBJECT_ID,
+        SENSITIVE_RULE_ID AS PRIV_OBJECT_ID,
+        NULL AS DATA_OBJECT_ID,
+        'SENSITIVE RULE' AS OBJECT_TYPE,
+        'VALID' AS STATUS,
+        'N' AS TEMPORARY,
+        'N' AS "GENERATED",
+        'N' AS SECONDARY,
+        0 AS NAMESPACE,
+        NULL AS EDITION_NAME
+      FROM SYS.ALL_VIRTUAL_SENSITIVE_RULE_REAL_AGENT
       WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
     ) A
     JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT B
@@ -46363,6 +46427,27 @@ def_table_schema(
         0 AS NAMESPACE,
         NULL AS EDITION_NAME
       FROM SYS.ALL_VIRTUAL_CATALOG_REAL_AGENT
+      WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+
+      UNION ALL
+
+      SELECT
+        TENANT_ID,
+        GMT_CREATE,
+        GMT_MODIFIED,
+        CAST(201006 AS NUMBER) AS DATABASE_ID,
+        SENSITIVE_RULE_NAME AS OBJECT_NAME,
+        NULL AS SUBOBJECT_NAME,
+        SENSITIVE_RULE_ID AS OBJECT_ID,
+        NULL AS DATA_OBJECT_ID,
+        'SENSITIVE RULE' AS OBJECT_TYPE,
+        'VALID' AS STATUS,
+        'N' AS TEMPORARY,
+        'N' AS "GENERATED",
+        'N' AS SECONDARY,
+        0 AS NAMESPACE,
+        NULL AS EDITION_NAME
+      FROM SYS.ALL_VIRTUAL_SENSITIVE_RULE_REAL_AGENT
       WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
     ) A
     JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT B
@@ -57616,6 +57701,7 @@ def_table_schema(
                          17, 'WRITE',
                          18, 'DEBUG',
                          19, 'USE CATALOG',
+                         20, 'PLAINACCESS',
                          'OTHERS') AS VARCHAR(40)) AS PRIVILEGE,
        DECODE(A.PRIV_OPTION,0,'NO', 1,'YES','') AS GRANTABLE,
        CAST('NO' AS VARCHAR(10)) AS  HIERARCHY
@@ -57659,6 +57745,12 @@ def_table_schema(
                   (SELECT DATABASE_ID FROM SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT WHERE DATABASE_NAME = 'SYS'),
                   17 AS OBJ_TYPE
                   FROM SYS.ALL_VIRTUAL_CATALOG_REAL_AGENT
+                  WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+               UNION ALL
+               SELECT SENSITIVE_RULE_ID AS TABLE_ID, SENSITIVE_RULE_NAME AS TABLE_NAME,
+                  (SELECT DATABASE_ID FROM SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT WHERE DATABASE_NAME = 'SYS'),
+                  20 AS OBJ_TYPE
+                  FROM SYS.ALL_VIRTUAL_SENSITIVE_RULE_REAL_AGENT
                   WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
               ) D,
               SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT E
@@ -57711,6 +57803,7 @@ def_table_schema(
                          17, 'WRITE',
                          18, 'DEBUG',
                          19, 'USE CATALOG',
+                         20, 'PLAINACCESS',
                          'OTHERS') AS VARCHAR(40)) AS PRIVILEGE,
        DECODE(A.PRIV_OPTION,0,'NO', 1,'YES','') AS GRANTABLE,
        CAST('NO' AS VARCHAR(10)) AS  HIERARCHY
@@ -57754,6 +57847,12 @@ def_table_schema(
                   (SELECT DATABASE_ID FROM SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT WHERE DATABASE_NAME = 'SYS'),
                   17 AS OBJ_TYPE
                   FROM SYS.ALL_VIRTUAL_CATALOG_REAL_AGENT
+                  WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+               UNION ALL
+               SELECT SENSITIVE_RULE_ID AS TABLE_ID, SENSITIVE_RULE_NAME AS TABLE_NAME,
+                  (SELECT DATABASE_ID FROM SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT WHERE DATABASE_NAME = 'SYS'),
+                  20 AS OBJ_TYPE
+                  FROM SYS.ALL_VIRTUAL_SENSITIVE_RULE_REAL_AGENT
                   WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
               ) D,
               SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT E
@@ -57809,6 +57908,7 @@ def_table_schema(
                          17, 'WRITE',
                          18, 'DEBUG',
                          19, 'USE CATALOG',
+                         20, 'PLAINACCESS',
                          'OTHERS') AS VARCHAR(40)) AS PRIVILEGE,
        DECODE(A.PRIV_OPTION,0,'NO', 1,'YES','') AS GRANTABLE,
        CAST('NO' AS VARCHAR(10)) AS  HIERARCHY
@@ -57852,6 +57952,12 @@ def_table_schema(
                   (SELECT DATABASE_ID FROM SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT WHERE DATABASE_NAME = 'SYS'),
                   17 AS OBJ_TYPE
                   FROM SYS.ALL_VIRTUAL_CATALOG_REAL_AGENT
+                  WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+               UNION ALL
+               SELECT SENSITIVE_RULE_ID AS TABLE_ID, SENSITIVE_RULE_NAME AS TABLE_NAME,
+                  (SELECT DATABASE_ID FROM SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT WHERE DATABASE_NAME = 'SYS'),
+                  20 AS OBJ_TYPE
+                  FROM SYS.ALL_VIRTUAL_SENSITIVE_RULE_REAL_AGENT
                   WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
               ) D,
               SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT E
@@ -57974,6 +58080,8 @@ def_table_schema(
                 88, 'CREATE LOCATION',
                 89, 'CREATE ANY CCL RULE',
                 90, 'DROP ANY CCL RULE',
+                91, 'CREATE SENSITIVE RULE',
+                92, 'PLAINACCESS ANY SENSITIVE RULE',
                 'OTHER') AS VARCHAR(40)) AS PRIVILEGE,
         CASE PRIV_OPTION
           WHEN 0 THEN 'NO'
@@ -58090,6 +58198,8 @@ def_table_schema(
                 88, 'CREATE LOCATION',
                 89, 'CREATE ANY CCL RULE',
                 90, 'DROP ANY CCL RULE',
+                91, 'CREATE SENSITIVE RULE',
+                92, 'PLAINACCESS ANY SENSITIVE RULE',
                 'OTHER') AS VARCHAR(40)) AS PRIVILEGE,
         CASE PRIV_OPTION
           WHEN 0 THEN 'NO'
@@ -59203,6 +59313,7 @@ def_table_schema(
                              17, 'WRITE',
                              18, 'DEBUG',
                              19, 'USE CATALOG',
+                             20, 'PLAINACCESS',
                              'OTHERS') AS VARCHAR(40)) AS PRIVILEGE,
         DECODE(AUTH.PRIV_OPTION, 0, 'NO', 1, 'YES', '') AS GRANTABLE
       FROM
@@ -59248,6 +59359,12 @@ def_table_schema(
           (SELECT DATABASE_ID FROM SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT WHERE DATABASE_NAME = 'SYS'),
           17 AS OBJ_TYPE
           FROM SYS.ALL_VIRTUAL_CATALOG_REAL_AGENT
+          WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+        UNION ALL
+        SELECT SENSITIVE_RULE_ID AS TABLE_ID, SENSITIVE_RULE_NAME AS TABLE_NAME,
+          (SELECT DATABASE_ID FROM SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT WHERE DATABASE_NAME = 'SYS'),
+          20 AS OBJ_TYPE
+          FROM SYS.ALL_VIRTUAL_SENSITIVE_RULE_REAL_AGENT
           WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
         ) T,
         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB,
@@ -59368,6 +59485,8 @@ def_table_schema(
                 88, 'CREATE LOCATION',
                 89, 'CREATE ANY CCL RULE',
                 90, 'DROP ANY CCL RULE',
+                91, 'CREATE SENSITIVE RULE',
+                92, 'PLAINACCESS ANY SENSITIVE RULE',
                 'OTHER') AS VARCHAR(40)) AS PRIVILEGE ,
        	decode(auth.priv_option, 0, 'NO', 1, 'YES', '') as ADMIN_OPTION
       FROM
@@ -78998,6 +79117,92 @@ def_table_schema(
       IDLE_CLIENTS
       FROM SYS.GV$OB_HMS_CLIENT_POOL_STAT WHERE
       SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'zhuangyifeng.zyf',
+  table_name      = 'DBA_OB_SENSITIVE_RULES',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28289',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SR.SENSITIVE_RULE_NAME AS RULE_NAME,
+    DECODE(SR.PROTECTION_POLICY, 1, 'NONE', 2, 'ENCRYPTION', 3, 'MASKING', NULL) AS PROTECTION_POLICY,
+    SR.METHOD AS METHOD,
+    DECODE(SR.ENABLED, 1, 'YES', 'NO') AS ENABLED
+  FROM SYS.ALL_VIRTUAL_SENSITIVE_RULE_REAL_AGENT SR
+  ORDER BY SR.SENSITIVE_RULE_ID;
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'zhuangyifeng.zyf',
+  table_name      = 'DBA_OB_SENSITIVE_COLUMNS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28290',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SR.SENSITIVE_RULE_NAME AS RULE_NAME,
+    D.DATABASE_NAME AS DATABASE_NAME,
+    T.TABLE_NAME AS TABLE_NAME,
+    C.COLUMN_NAME AS COLUMN_NAME
+  FROM
+    SYS.ALL_VIRTUAL_SENSITIVE_COLUMN_REAL_AGENT SC
+    JOIN SYS.ALL_VIRTUAL_SENSITIVE_RULE_REAL_AGENT SR
+      ON  SC.TENANT_ID = SR.TENANT_ID
+      AND SC.SENSITIVE_RULE_ID = SR.SENSITIVE_RULE_ID
+    JOIN SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT C
+      ON  SC.TENANT_ID = C.TENANT_ID
+      AND SC.TABLE_ID  = C.TABLE_ID
+      AND SC.COLUMN_ID = C.COLUMN_ID
+    JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
+      ON  SC.TENANT_ID = T.TENANT_ID
+      AND C.TABLE_ID = T.TABLE_ID
+    JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT D
+      ON  SC.TENANT_ID = D.TENANT_ID
+      AND T.DATABASE_ID = D.DATABASE_ID
+  WHERE D.IN_RECYCLEBIN = 0
+    AND D.DATABASE_NAME != '__RECYCLEBIN'
+    AND BITAND((T.TABLE_MODE / 4096), 15) IN (0,1)
+  ORDER BY SR.SENSITIVE_RULE_ID, D.DATABASE_ID, T.TABLE_ID, C.COLUMN_ID
+  ;
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'zhuangyifeng.zyf',
+  table_name      = 'DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28291',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    TP.TABLE_NAME AS RULE_NAME,
+    TP.GRANTEE AS USER_NAME,
+    DECODE(U.TYPE, 0, 'USER', 1, 'ROLE', NULL) AS USER_TYPE
+  FROM SYS.DBA_TAB_PRIVS TP
+  JOIN SYS.ALL_VIRTUAL_USER_REAL_AGENT U
+    ON TP.GRANTEE = U.USER_NAME
+  WHERE TP.PRIVILEGE = 'PLAINACCESS'
+  ORDER BY TP.TABLE_NAME, TP.GRANTEE;
 """.replace("\n", " ")
 )
 

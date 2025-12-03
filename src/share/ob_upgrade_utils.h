@@ -398,7 +398,21 @@ private:
   int post_upgrade_for_upload_cluster_info_();
 };
 
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 4, 2, 0)
+class ObUpgradeFor4420Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor4420Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor4420Processor() {}
+  virtual int pre_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override { return common::OB_SUCCESS; }
+  virtual int finish_upgrade() override;
+private:
+  int finish_upgrade_for_grant_sys_privs();
+  int grant_priv(const ObPrivSet user_priv_set,
+                 const ObPrivSet grant_priv_set,
+                 const char *grant_sql,
+                 const lib::Worker::CompatMode compat_mode);
+};
 
 /* =========== special upgrade processor end   ============= */
 

@@ -2513,7 +2513,8 @@ int ObSchemaChecker::get_object_type_with_view_info(ObIAllocator* allocator,
     const common::ObString &prev_table_name,
     ObSynonymChecker &synonym_checker,
     bool is_catalog,
-    bool is_location)
+    bool is_location,
+    bool is_sensitive_rule)
 {
   int ret = OB_SUCCESS;
   object_type = ObObjectType::INVALID;
@@ -2530,7 +2531,7 @@ int ObSchemaChecker::get_object_type_with_view_info(ObIAllocator* allocator,
     if (lib::is_oracle_mode() && ret == OB_ERR_BAD_DATABASE) {
       ret = OB_TABLE_NOT_EXIST;
     }
-  } else if (!is_directory && !is_catalog && !is_location) {
+  } else if (!is_directory && !is_catalog && !is_location && !is_sensitive_rule) {
     ret = get_table_schema(tenant_id, database_name, table_name, false, table_schema);
     if (OB_TABLE_NOT_EXIST == ret) {
       if (lib::is_oracle_mode()) {
@@ -2718,6 +2719,12 @@ int ObSchemaChecker::get_object_type_with_view_info(ObIAllocator* allocator,
     OZ (get_location_id(tenant_id, table_name, loc_id));
     OX (object_type = ObObjectType::LOCATION);
     OX (object_id = loc_id);
+  } else if (is_sensitive_rule) {
+    uint64_t sensitive_rule_id = 0;
+    ObString sensitive_rule_name = table_name;
+    OZ (get_sensitive_rule_id_name(tenant_id, sensitive_rule_name, sensitive_rule_id));
+    OX (object_type = ObObjectType::SENSITIVE_RULE);
+    OX (object_id = sensitive_rule_id);
   } else {
     ret = OB_INVALID_ARGUMENT;
   }
@@ -2970,7 +2977,8 @@ int ObSchemaChecker::get_object_type(const uint64_t tenant_id,
                                      const common::ObString &prev_table_name,
                                      ObSynonymChecker &synonym_checker,
                                      bool is_catalog,
-                                     bool is_location)
+                                     bool is_location,
+                                     bool is_sensitive_rule)
 {
   int ret = OB_SUCCESS;
   object_type = ObObjectType::INVALID;
@@ -2984,7 +2992,7 @@ int ObSchemaChecker::get_object_type(const uint64_t tenant_id,
     if (lib::is_oracle_mode() && ret == OB_ERR_BAD_DATABASE) {
       ret = OB_TABLE_NOT_EXIST;
     }
-  } else if (!is_directory && !is_catalog && !is_location) {
+  } else if (!is_directory && !is_catalog && !is_location && !is_sensitive_rule) {
     ret = get_table_schema(tenant_id, database_name, table_name, false, table_schema);
     if (OB_TABLE_NOT_EXIST == ret) {
       if (lib::is_oracle_mode()) {
@@ -3146,6 +3154,12 @@ int ObSchemaChecker::get_object_type(const uint64_t tenant_id,
     OZ (get_location_id(tenant_id, table_name, loc_id));
     OX (object_type = ObObjectType::LOCATION);
     OX (object_id = loc_id);
+  } else if (is_sensitive_rule) {
+    uint64_t sensitive_rule_id = 0;
+    ObString sensitive_rule_name = table_name;
+    OZ (get_sensitive_rule_id_name(tenant_id, sensitive_rule_name, sensitive_rule_id));
+    OX (object_type = ObObjectType::SENSITIVE_RULE);
+    OX (object_id = sensitive_rule_id);
   } else {
     ret = OB_INVALID_ARGUMENT;
   }

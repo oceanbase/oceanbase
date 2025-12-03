@@ -48,6 +48,7 @@ ObSensitiveRuleSchema &ObSensitiveRuleSchema::operator=(const ObSensitiveRuleSch
     set_sensitive_rule_id(src_schema.sensitive_rule_id_);
     set_protection_policy(src_schema.protection_policy_);
     set_schema_version(src_schema.schema_version_);
+    set_name_case_mode(src_schema.name_case_mode_);
     if (OB_FAIL(set_sensitive_rule_name(src_schema.sensitive_rule_name_))) {
       LOG_WARN("set_sensitive_rule_name failed", K(ret));
     } else if (OB_FAIL(set_method(src_schema.method_))) {
@@ -77,6 +78,7 @@ void ObSensitiveRuleSchema::reset()
   sensitive_rule_id_ = OB_INVALID_ID;
   protection_policy_ = 0;
   schema_version_ = OB_INVALID_VERSION;
+  name_case_mode_ = OB_NAME_CASE_INVALID;
   sensitive_rule_name_.reset();
   method_.reset();
   sensitive_field_items_.reset();

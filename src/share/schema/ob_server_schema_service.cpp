@@ -5095,7 +5095,7 @@ int ObServerSchemaService::apply_increment_schema_to_cache(
              tenant_id, all_keys, simple_incre_schemas, schema_mgr))) {
     LOG_WARN("fail to apply rls_context schema to cache", KR(ret), K(tenant_id));
   } else if (OB_FAIL(apply_sensitive_rule_schema_to_cache(
-             tenant_id, all_keys, simple_incre_schemas, schema_mgr.sensitive_rule_mgr_))) {
+             tenant_id, all_keys, simple_incre_schemas, schema_mgr))) {
     LOG_WARN("fail to apply sensitive_rule schema to cache", KR(ret), K(tenant_id));
   } else if (OB_FAIL(apply_sensitive_rule_priv_schema_to_cache(
              tenant_id, all_keys, simple_incre_schemas, schema_mgr.priv_mgr_))) {
@@ -5271,7 +5271,7 @@ APPLY_SCHEMA_TO_CACHE_IMPL(ObSchemaMgr, catalog, ObCatalogSchema, CatalogKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObExternalResourceMgr, external_resource, ObSimpleExternalResourceSchema, ExternalResourceKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObSchemaMgr, ai_model, ObAiModelSchema, AiModelKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObSchemaMgr, ccl_rule, ObSimpleCCLRuleSchema, CCLRuleKeys);
-APPLY_SCHEMA_TO_CACHE_IMPL(ObSensitiveRuleMgr, sensitive_rule, ObSensitiveRuleSchema, SensitiveRuleKeys);
+APPLY_SCHEMA_TO_CACHE_IMPL(ObSchemaMgr, sensitive_rule, ObSensitiveRuleSchema, SensitiveRuleKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObPrivMgr, sensitive_rule_priv, ObSensitiveRulePriv, SensitiveRulePrivKeys);
 
 int ObServerSchemaService::update_schema_mgr(ObISQLClient &sql_client,
@@ -7719,7 +7719,7 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
         LOG_WARN("add ai_models failed", K(ret));
       } else if (OB_FAIL(schema_mgr_for_cache->add_ccl_rules(simple_ccl_rules))) {
         LOG_WARN("add ccl rules failed", K(ret));
-      } else if (OB_FAIL(schema_mgr_for_cache->sensitive_rule_mgr_.add_sensitive_rules(simple_sensitive_rules))) {
+      } else if (OB_FAIL(schema_mgr_for_cache->add_sensitive_rules(simple_sensitive_rules))) {
         LOG_WARN("add sensitive_rules failed", K(ret));
       } else if (OB_FAIL(schema_mgr_for_cache->priv_mgr_.add_sensitive_rule_privs(sensitive_rule_privs))) {
         LOG_WARN("add sensitive_rule_privs failed", K(ret));

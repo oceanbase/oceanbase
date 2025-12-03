@@ -2287,5 +2287,114 @@ int ObUpgradeFor4410Processor::post_upgrade_for_scheduled_trigger_dump_data_dict
 
 /* =========== 4410 upgrade processor end ============= */
 
+/* =========== 4420 upgrade processor start ============= */
+int ObUpgradeFor4420Processor::finish_upgrade()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(finish_upgrade_for_grant_sys_privs())) {
+    LOG_WARN("fail to post upgrade for grant sys privs", KR(ret));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4420Processor::finish_upgrade_for_grant_sys_privs()
+{
+  // grant sys privileges that not in ALL_PRIVILEGES to sys/root user
+  int ret = OB_SUCCESS;
+  bool is_primary_tenant = false;
+  ObSchemaGetterGuard schema_guard;
+  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
+  ObSqlString grant_all_sql;
+  int64_t user_id = 0;
+  int64_t affected_rows = 0;
+  if (OB_ISNULL(sql_proxy_) || OB_ISNULL(oracle_sql_proxy_) || OB_ISNULL(schema_service_) || !is_valid_tenant_id(tenant_id_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", KR(ret), KP(sql_proxy_), KP(schema_service_), K(tenant_id_));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::is_primary_tenant(sql_proxy_, tenant_id_, is_primary_tenant))) {
+    LOG_WARN("check is standby tenant failed", KR(ret), K(tenant_id_));
+  } else if (!is_primary_tenant) {
+    LOG_INFO("not primary tenant, ignore", K(tenant_id_));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    LOG_WARN("failed to get tenant schema guard", KR(ret), K(tenant_id_));
+  } else if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(tenant_id_, compat_mode))) {
+    LOG_WARN("failed to get tenant compat mode", KR(ret), K_(tenant_id));
+  } else if (lib::Worker::CompatMode::ORACLE == compat_mode) {
+    user_id = OB_ORA_SYS_USER_ID;
+    ObSysPriv *all_priv = nullptr;
+    ObPrivSet priv_set = 0;
+    if (OB_FAIL(schema_guard.get_sys_priv_with_grantee_id(tenant_id_, user_id, all_priv))) {
+      LOG_WARN("failed to get sys priv", KR(ret), K(tenant_id_), K(user_id));
+    } else if (OB_ISNULL(all_priv)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sys priv is null", KR(ret), K(tenant_id_), K(user_id));
+    } else {
+      priv_set = all_priv->get_priv_set();
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(grant_priv(priv_set, OB_PRIV_PLAINACCESS, "grant plainaccess any sensitive rule to sys", compat_mode))) {
+      LOG_WARN("fail to finish upgrade for add plainaccess sys priv", KR(ret), K(tenant_id_), K(user_id));
+    }
+  } else if (lib::Worker::CompatMode::MYSQL == compat_mode) {
+    user_id = OB_SYS_USER_ID;
+    const ObUserInfo *user_info = nullptr;
+    ObPrivSet priv_set = 0;
+    if (OB_FAIL(schema_guard.get_user_info(tenant_id_, user_id, user_info))) {
+      LOG_WARN("fail to get user info", K(ret));
+    } else if (OB_ISNULL(user_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("user info is null", KR(ret), K(tenant_id_), K(user_id));
+    } else {
+      priv_set = user_info->get_priv_set();
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(grant_priv(priv_set, OB_PRIV_ENCRYPT, "grant encrypt on *.* to root", compat_mode))) {
+      LOG_WARN("fail to finish upgrade for add encrypt user priv", KR(ret), K(tenant_id_), K(user_id));
+    } else if (OB_FAIL(grant_priv(priv_set, OB_PRIV_DECRYPT, "grant decrypt on *.* to root", compat_mode))) {
+      LOG_WARN("fail to finish upgrade for add decrypt user priv", KR(ret), K(tenant_id_), K(user_id));
+    } else if (OB_FAIL(grant_priv(priv_set, OB_PRIV_PLAINACCESS, "grant plainaccess on *.* to root", compat_mode))) {
+      LOG_WARN("fail to finish upgrade for add plainaccess user priv", KR(ret), K(tenant_id_), K(user_id));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid compat_mode", K(ret), K(tenant_id_), K(compat_mode));
+  }
+
+  if (OB_FAIL(ret)) {
+    LOG_WARN("[UPGRADE] finish upgrade for add sys failed", KR(ret), K_(tenant_id), K(user_id), K(is_primary_tenant));
+  } else {
+    LOG_INFO("[UPGRADE] finish upgrade for add sys succeed", K_(tenant_id), K(user_id), K(is_primary_tenant));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4420Processor::grant_priv(const ObPrivSet user_priv_set,
+                                          const ObPrivSet grant_priv_set,
+                                          const char *grant_sql,
+                                          const lib::Worker::CompatMode compat_mode)
+{
+  int ret = OB_SUCCESS;
+  int64_t affected_rows = 0;
+  if (OB_ISNULL(sql_proxy_) || OB_ISNULL(oracle_sql_proxy_) || OB_ISNULL(grant_sql)
+      || lib::Worker::CompatMode::INVALID == compat_mode) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", KR(ret), KP(sql_proxy_), KP(oracle_sql_proxy_), K(compat_mode), KP(grant_sql));
+  } else if (grant_priv_set == (user_priv_set & grant_priv_set)) {
+    // no need to grant
+  } else if (lib::Worker::CompatMode::MYSQL == compat_mode) {
+    if (OB_FAIL(sql_proxy_->write(tenant_id_, grant_sql, affected_rows))) {
+      LOG_WARN("fail to write sql", KR(ret), K_(tenant_id), K(grant_sql));
+    }
+  } else if (lib::Worker::CompatMode::ORACLE == compat_mode) {
+    if (OB_FAIL(oracle_sql_proxy_->write(tenant_id_, grant_sql, affected_rows))) {
+      LOG_WARN("fail to write sql", KR(ret), K_(tenant_id), K(grant_sql));
+    }
+  }
+  return ret;
+}
+
+/* =========== 4420 upgrade processor end ============= */
+
 } // end share
 } // end oceanbase

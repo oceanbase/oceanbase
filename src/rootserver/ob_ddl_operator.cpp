@@ -6698,8 +6698,10 @@ int ObDDLOperator::init_tenant_user(const uint64_t tenant_id,
     if ((!is_oracle_mode || is_user) &&
         pure_user_id != OB_ORA_LBACSYS_USER_ID &&
         pure_user_id != OB_ORA_AUDITOR_USER_ID) {
-      user.set_priv_set(OB_PRIV_ALL | OB_PRIV_GRANT | OB_PRIV_ENCRYPT | OB_PRIV_DECRYPT
-                        | OB_PRIV_CREATE_SENSITIVE_RULE | OB_PRIV_PLAINACCESS);
+      user.set_priv_set(OB_PRIV_ALL | OB_PRIV_GRANT
+                        | OB_PRIV_ENCRYPT | OB_PRIV_DECRYPT                    // for ENHANCED_AES_ENCRYPT/DECRYPT
+                        | OB_PRIV_CREATE_SENSITIVE_RULE | OB_PRIV_PLAINACCESS  // for sensitive rule
+      );
     }
     user.set_schema_version(OB_CORE_SCHEMA_VERSION);
     user.set_profile_id(OB_INVALID_ID);

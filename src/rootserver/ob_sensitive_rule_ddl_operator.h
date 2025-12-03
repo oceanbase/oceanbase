@@ -70,6 +70,10 @@ private:
                                            const ObString &ddl_stmt_str,
                                            const uint64_t tenant_id,
                                            ObSensitiveRuleSchema &new_schema);
+  int update_table_schema(ObSensitiveRuleSchema &schema,
+                          ObMySQLTransaction &trans,
+                          ObSchemaGetterGuard &schema_guard,
+                          const uint64_t tenant_id);
   share::schema::ObMultiVersionSchemaService &schema_service_;
   common::ObMySQLProxy &sql_proxy_;
 };

@@ -1580,6 +1580,8 @@ public:
   static int all_virtual_hms_client_pool_stat_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_source_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_wr_active_session_history_v2_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_sensitive_rule_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_sensitive_column_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_plan_cache_stat_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_plan_cache_plan_stat_schema(share::schema::ObTableSchema &table_schema);
   static int schemata_schema(share::schema::ObTableSchema &table_schema);
@@ -2689,6 +2691,9 @@ public:
   static int dba_ob_pl_obj_cache_status_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_hms_client_pool_stat_ora_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_hms_client_pool_stat_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_sensitive_rules_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_sensitive_columns_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_sensitive_rule_plainaccess_users_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_ddl_operation_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
@@ -4891,6 +4896,8 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_hms_client_pool_stat_ora_schema,
   ObInnerTableSchema::all_virtual_source_ora_schema,
   ObInnerTableSchema::all_virtual_wr_active_session_history_v2_ora_schema,
+  ObInnerTableSchema::all_virtual_sensitive_rule_real_agent_ora_schema,
+  ObInnerTableSchema::all_virtual_sensitive_column_real_agent_ora_schema,
   NULL,};
 
 const schema_create_func virtual_table_index_schema_creators [] = {
@@ -6115,6 +6122,9 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::dba_ob_pl_obj_cache_status_ora_schema,
   ObInnerTableSchema::gv_ob_hms_client_pool_stat_ora_schema,
   ObInnerTableSchema::v_ob_hms_client_pool_stat_ora_schema,
+  ObInnerTableSchema::dba_ob_sensitive_rules_ora_schema,
+  ObInnerTableSchema::dba_ob_sensitive_columns_ora_schema,
+  ObInnerTableSchema::dba_ob_sensitive_rule_plainaccess_users_ora_schema,
   NULL,};
 
 const schema_create_func core_index_table_schema_creators [] = {
@@ -7225,6 +7235,8 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_HMS_CLIENT_POOL_STAT_ORA_TID,
   OB_ALL_VIRTUAL_SOURCE_ORA_TID,
   OB_ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY_V2_ORA_TID,
+  OB_ALL_VIRTUAL_SENSITIVE_RULE_REAL_AGENT_ORA_TID,
+  OB_ALL_VIRTUAL_SENSITIVE_COLUMN_REAL_AGENT_ORA_TID,
   OB_GV_OB_PLAN_CACHE_STAT_TID,
   OB_GV_OB_PLAN_CACHE_PLAN_STAT_TID,
   OB_SCHEMATA_TID,
@@ -8178,6 +8190,9 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_OB_PL_OBJ_CACHE_STATUS_ORA_TID,
   OB_GV_OB_HMS_CLIENT_POOL_STAT_ORA_TID,
   OB_V_OB_HMS_CLIENT_POOL_STAT_ORA_TID,
+  OB_DBA_OB_SENSITIVE_RULES_ORA_TID,
+  OB_DBA_OB_SENSITIVE_COLUMNS_ORA_TID,
+  OB_DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS_ORA_TID,
   OB_ALL_TABLE_IDX_DATA_TABLE_ID_TID,
   OB_ALL_TABLE_IDX_DB_TB_NAME_TID,
   OB_ALL_TABLE_IDX_TB_NAME_TID,
@@ -10404,6 +10419,8 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_HMS_CLIENT_POOL_STAT_ORA_TNAME,
   OB_ALL_VIRTUAL_SOURCE_ORA_TNAME,
   OB_ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY_V2_ORA_TNAME,
+  OB_ALL_VIRTUAL_SENSITIVE_RULE_REAL_AGENT_ORA_TNAME,
+  OB_ALL_VIRTUAL_SENSITIVE_COLUMN_REAL_AGENT_ORA_TNAME,
   OB_GV_OB_PLAN_CACHE_STAT_TNAME,
   OB_GV_OB_PLAN_CACHE_PLAN_STAT_TNAME,
   OB_SCHEMATA_TNAME,
@@ -11357,6 +11374,9 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_OB_PL_OBJ_CACHE_STATUS_ORA_TNAME,
   OB_GV_OB_HMS_CLIENT_POOL_STAT_ORA_TNAME,
   OB_V_OB_HMS_CLIENT_POOL_STAT_ORA_TNAME,
+  OB_DBA_OB_SENSITIVE_RULES_ORA_TNAME,
+  OB_DBA_OB_SENSITIVE_COLUMNS_ORA_TNAME,
+  OB_DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS_ORA_TNAME,
   OB_ALL_TABLE_IDX_DATA_TABLE_ID_TNAME,
   OB_ALL_TABLE_IDX_DB_TB_NAME_TNAME,
   OB_ALL_TABLE_IDX_TB_NAME_TNAME,
@@ -15685,11 +15705,11 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 352;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 992;
-const int64_t OB_SYS_VIEW_COUNT = 1109;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 2458;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 994;
+const int64_t OB_SYS_VIEW_COUNT = 1112;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 2463;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2461;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2466;
 
 } // end namespace share
 } // end namespace oceanbase

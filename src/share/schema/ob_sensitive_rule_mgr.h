@@ -30,11 +30,14 @@ class ObSensitiveRuleNameHashKey
 public:
   ObSensitiveRuleNameHashKey()
     : tenant_id_(common::OB_INVALID_TENANT_ID),
+      name_case_mode_(common::OB_NAME_CASE_INVALID),
       name_()
   {}
   ObSensitiveRuleNameHashKey(uint64_t tenant_id,
+                             common::ObNameCaseMode mode,
                              common::ObString name)
     : tenant_id_(tenant_id),
+      name_case_mode_(mode),
       name_(name)
   {}
 
@@ -43,18 +46,20 @@ public:
   {
     uint64_t hash_ret = 0;
     hash_ret = common::murmurhash(&tenant_id_, sizeof(uint64_t), 0);
-    common::ObCollationType cs_type = ObSchema::get_cs_type_with_cmp_mode(OB_ORIGIN_AND_INSENSITIVE);
+    common::ObCollationType cs_type = ObSchema::get_cs_type_with_cmp_mode(name_case_mode_);
     hash_ret = common::ObCharset::hash(cs_type, name_, hash_ret);
     return hash_ret;
   }
   inline bool operator == (const ObSensitiveRuleNameHashKey &rv) const
   {
-    ObCompareNameWithTenantID name_cmp(tenant_id_, OB_ORIGIN_AND_INSENSITIVE);
+    ObCompareNameWithTenantID name_cmp(tenant_id_, name_case_mode_);
     return (tenant_id_ == rv.tenant_id_)
+           && (name_case_mode_ == rv.name_case_mode_)
            && (0 == name_cmp.compare(name_ ,rv.name_));
   }
 private:
   uint64_t tenant_id_;
+  common::ObNameCaseMode name_case_mode_;
   common::ObString name_;
 };
 
@@ -73,6 +78,7 @@ struct ObGetSensitiveRuleKey<ObSensitiveRuleNameHashKey, ObSensitiveRuleSchema *
     return OB_ISNULL(schema)
            ? ObSensitiveRuleNameHashKey()
            : ObSensitiveRuleNameHashKey(schema->get_tenant_id(),
+                                        schema->get_name_case_mode(),
                                         schema->get_sensitive_rule_name_str());
   }
 };
@@ -170,12 +176,12 @@ public:
   ObSensitiveRuleMgr &operator = (const ObSensitiveRuleMgr &other);
   int assign(const ObSensitiveRuleMgr &other);
   int deep_copy(const ObSensitiveRuleMgr &other);
-  int add_sensitive_rules(const common::ObIArray<ObSensitiveRuleSchema> &sensitive_rule_schemas);
-  int add_sensitive_rule(const ObSensitiveRuleSchema &schema);
+  int add_sensitive_rule(const ObSensitiveRuleSchema &schema, const common::ObNameCaseMode mode);
   int del_sensitive_rule(const ObTenantSensitiveRuleId &id);
   int get_schema_by_id(const uint64_t sensitive_rule_id,
                        const ObSensitiveRuleSchema *&schema) const;
   int get_schema_by_name(const uint64_t tenant_id,
+                         const common::ObNameCaseMode mode,
                          const common::ObString &name,
                          const ObSensitiveRuleSchema *&schema) const;
   int get_schema_by_column(const uint64_t tenant_id,

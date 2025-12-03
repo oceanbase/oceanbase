@@ -13,8 +13,9 @@
 #define USING_LOG_PREFIX RS
 #include "rootserver/ob_sensitive_rule_ddl_operator.h"
 #include "rootserver/ob_ddl_operator.h"
-#include "src/share/schema/ob_priv_sql_service.h"
-#include "src/share/schema/ob_sensitive_rule_schema_struct.h"
+#include "share/schema/ob_priv_sql_service.h"
+#include "share/schema/ob_sensitive_rule_schema_struct.h"
+#include "share/schema/ob_table_sql_service.h"
 
 namespace oceanbase
 {
@@ -30,9 +31,6 @@ int ObSensitiveRuleDDLOperator::handle_sensitive_rule_function(ObSensitiveRuleSc
                                                                uint64_t user_id)
 {
   int ret = OB_SUCCESS;
-  ObSchemaService *schema_sql_service = NULL;
-  int64_t new_schema_version = OB_INVALID_VERSION;
-  uint64_t sensitive_rule_id = OB_INVALID_ID;
   const ObSensitiveRuleSchema *exist_schema = NULL;
   ObSensitiveRuleSchema new_schema;
   if (OB_FAIL(schema_guard.get_sensitive_rule_schema_by_name(tenant_id,
@@ -44,6 +42,8 @@ int ObSensitiveRuleDDLOperator::handle_sensitive_rule_function(ObSensitiveRuleSc
     LOG_WARN("failed to handle sensitive rule function inner", K(ret));
   } else if (OB_FAIL(grant_or_revoke_after_ddl(new_schema, trans, ddl_type, schema_guard, user_id))) {
     LOG_WARN("grant or revoke sensitive rule failed", K(ret));
+  } else if (OB_FAIL(update_table_schema(new_schema, trans, schema_guard,tenant_id))) {
+    LOG_WARN("fail to update table schema", K(ret), K(tenant_id));
   }
   return ret;
 }
@@ -59,12 +59,12 @@ int ObSensitiveRuleDDLOperator::handle_sensitive_rule_function_inner(ObSensitive
   int ret = OB_SUCCESS;
   int64_t new_schema_version = OB_INVALID_VERSION;
   uint64_t sensitive_rule_id = OB_INVALID_ID;
-  ObSchemaService *schema_sql_service = NULL;
-  if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
-    LOG_WARN("fail to gen new schema version", K(ret), K(tenant_id));
-  } else if (OB_ISNULL(schema_sql_service = schema_service_.get_schema_service())) {
+  ObSchemaService *schema_sql_service = schema_service_.get_schema_service();
+  if (OB_ISNULL(schema_sql_service)) {
     ret = OB_ERR_SYS;
     LOG_ERROR("schema_sql_service must not null", K(ret));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("fail to gen new schema version", K(ret), K(tenant_id));
   } else {
     switch (ddl_type) {
       case OB_DDL_CREATE_SENSITIVE_RULE:
@@ -128,7 +128,40 @@ int ObSensitiveRuleDDLOperator::handle_sensitive_rule_function_inner(ObSensitive
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(schema_sql_service->get_sensitive_rule_sql_service().apply_new_schema(
                      new_schema, trans, ddl_type, ddl_stmt_str))) {
-    LOG_WARN("apply new sensitive rule schema failed");
+    LOG_WARN("apply new sensitive rule schema failed", K(ret), K(ddl_stmt_str));
+  }
+  return ret;
+}
+
+int ObSensitiveRuleDDLOperator::update_table_schema(ObSensitiveRuleSchema &schema,
+                                                    ObMySQLTransaction &trans,
+                                                    ObSchemaGetterGuard &schema_guard,
+                                                    const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  uint64_t last_table_id = OB_INVALID_ID;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_SYS;
+    LOG_ERROR("schema_service must not null", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < schema.get_sensitive_field_items().count(); ++i) {
+    const ObSensitiveFieldItem &item = schema.get_sensitive_field_items().at(i);
+    const ObTableSchema *table_schema = NULL;
+    if (item.table_id_ == last_table_id) {  // table already updated
+    } else if (FALSE_IT(last_table_id = item.table_id_)) {
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, item.table_id_, table_schema))) {
+      LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(item.table_id_));
+    } else if (NULL == table_schema) {
+      // do nothing, the table may be dropped, or is hidden table in offline ddl
+      LOG_INFO("skip update table schema version, table does not exist", K(tenant_id), K(item.table_id_));
+    } else if (!table_schema->check_can_do_ddl()) {
+      // Skip schema version increment if table is in offline DDL state
+      LOG_INFO("skip update table schema version, table can not do ddl", K(tenant_id), K(item.table_id_));
+    } else if (OB_FAIL(schema_service->get_table_sql_service().update_data_table_schema_version(
+               trans, tenant_id, item.table_id_, table_schema->get_in_offline_ddl_white_list()))) {
+      LOG_WARN("fail to update table schema version", K(ret), K(tenant_id), K(item.table_id_));
+    }
   }
   return ret;
 }
@@ -141,17 +174,51 @@ int ObSensitiveRuleDDLOperator::grant_or_revoke_after_ddl(ObSensitiveRuleSchema 
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = schema.get_tenant_id();
+  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
   ObSchemaService *schema_sql_service = NULL;
   ObDDLOperator ddl_operator(schema_service_, sql_proxy_);
-  ObSensitiveRulePrivSortKey sensitive_rule_priv_key(tenant_id, user_id, schema.get_sensitive_rule_name_str());
-  ObPrivSet priv_set = OB_PRIV_PLAINACCESS;
-  if (OB_ISNULL(schema_sql_service = schema_service_.get_schema_service())) {
+  if (OB_FAIL(share::ObCompatModeGetter::get_tenant_mode(tenant_id, compat_mode))) {
+    LOG_WARN("fail to get tenant mode", K(ret));
+  } else if (OB_ISNULL(schema_sql_service = schema_service_.get_schema_service())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("schema_sql_service must not null", K(ret));
   } else if (OB_DDL_CREATE_SENSITIVE_RULE == ddl_type) {
-    OZ(grant_revoke_sensitive_rule(sensitive_rule_priv_key, priv_set, true, ObString(), trans));
-  } else {
-    // do nothing for mysql mode
+    if (lib::Worker::CompatMode::MYSQL == compat_mode) {
+      ObSensitiveRulePrivSortKey sensitive_rule_priv_key(tenant_id,
+                                                         user_id,
+                                                         schema.get_sensitive_rule_name_str());
+      ObPrivSet priv_set = OB_PRIV_PLAINACCESS;
+      OZ(grant_revoke_sensitive_rule(sensitive_rule_priv_key, priv_set, true, ObString(), trans));
+    } else {
+      int64_t new_schema_version_ora = OB_INVALID_VERSION;
+      ObObjPrivSortKey obj_priv_key(tenant_id,
+                                    schema.get_sensitive_rule_id(),
+                                    static_cast<uint64_t>(ObObjectType::SENSITIVE_RULE),
+                                    OBJ_LEVEL_FOR_TAB_PRIV,
+                                    OB_ORA_SYS_USER_ID,
+                                    user_id);
+      share::ObRawObjPrivArray new_obj_priv_array;
+      share::ObRawObjPrivArray obj_priv_array;
+      OZ(obj_priv_array.push_back(OBJ_PRIV_ID_PLAINACCESS));
+      OZ(ddl_operator.set_need_flush_ora(schema_guard, obj_priv_key, 0, obj_priv_array, new_obj_priv_array));
+      if (new_obj_priv_array.count() > 0) {
+        OZ(schema_service_.gen_new_schema_version(tenant_id, new_schema_version_ora));
+        OZ(schema_sql_service->get_priv_sql_service().grant_table_ora_only(NULL,
+                                                                           trans,
+                                                                           new_obj_priv_array,
+                                                                           0,
+                                                                           obj_priv_key,
+                                                                           new_schema_version_ora,
+                                                                           false,
+                                                                           false));
+      }
+    }
+  } else if (OB_DDL_DROP_SENSITIVE_RULE == ddl_type) {
+    if (lib::Worker::CompatMode::ORACLE == compat_mode) {
+      OZ(ddl_operator.drop_obj_privs(tenant_id, schema.get_sensitive_rule_id(),
+                                     static_cast<uint64_t>(ObObjectType::SENSITIVE_RULE), trans,
+                                     schema_service_, schema_guard));
+    }
   }
   return ret;
 }
@@ -188,11 +255,8 @@ int ObSensitiveRuleDDLOperator::grant_revoke_sensitive_rule(const ObSensitiveRul
     ret = OB_ERR_NO_GRANT;
     LOG_WARN("no such grant to revoke", K(ret));
   } else {
-    if (grant) {
-      new_priv = priv_set | sensitive_rule_priv_set;
-    } else {
-      new_priv = (~priv_set) & sensitive_rule_priv_set;
-    }
+    new_priv = grant ? priv_set | sensitive_rule_priv_set
+                     : (~priv_set) & sensitive_rule_priv_set;
     need_flush = (new_priv != sensitive_rule_priv_set);
     if (need_flush) {
       if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {

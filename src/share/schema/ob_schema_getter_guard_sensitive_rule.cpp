@@ -56,6 +56,7 @@ int ObSchemaGetterGuard::get_sensitive_rule_schema_by_name(const uint64_t tenant
   int ret = OB_SUCCESS;
   schema = nullptr;
   const ObSchemaMgr *mgr = NULL;
+  ObNameCaseMode mode = OB_NAME_CASE_INVALID;
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("inner stat error", KR(ret));
@@ -66,7 +67,12 @@ int ObSchemaGetterGuard::get_sensitive_rule_schema_by_name(const uint64_t tenant
     LOG_WARN("fail to check tenant schema guard", KR(ret), K(tenant_id), K_(tenant_id));
   } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
     LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(mgr->sensitive_rule_mgr_.get_schema_by_name(tenant_id, name, schema))) {
+  } else if (OB_FAIL(get_tenant_name_case_mode(tenant_id, mode))) {
+    LOG_WARN("fail to get_tenant_name_case_mode", K(ret), K(tenant_id));
+  } else if (OB_NAME_CASE_INVALID == mode) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid case mode", K(ret), K(mode));
+  } else if (OB_FAIL(mgr->sensitive_rule_mgr_.get_schema_by_name(tenant_id, mode, name, schema))) {
     LOG_WARN("get schema failed", K(name), KR(ret));
   }
   return ret;
