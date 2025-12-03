@@ -932,6 +932,7 @@ int ObServerZoneOpService::start_or_stop_server_(
     LOG_WARN("fail to get server_info", KR(ret), K(server));
   } else if (!zone.is_empty() && zone != server_info.get_zone()) {
     ret = OB_SERVER_ZONE_NOT_MATCH;
+    LOG_USER_ERROR(OB_SERVER_ZONE_NOT_MATCH);
     LOG_WARN("zone not matches", KR(ret), K(server), K(zone), K(server_info));
   } else if (ObAdminServerArg::STOP == op || ObAdminServerArg::FORCE_STOP == op) {
     // check again, if there exists stopped servers in other zones
