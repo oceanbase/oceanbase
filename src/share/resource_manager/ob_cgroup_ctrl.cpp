@@ -35,11 +35,14 @@ int SET_GROUP_ID(uint64_t group_id, bool is_background)
 
   // to do switch group
 
+  if (GET_ORIGIN_TENANT_ID() != MTL_ID()) {
+    LOG_TRACE("thread maybe change to other tenant dir", K(group_id), K(GET_GROUP_ID()), K(MTL_ID()), K(GET_ORIGIN_TENANT_ID()), K(lbt()));
+  }
   THIS_WORKER.set_group_id_(group_id);
   int tmp_ret = OB_SUCCESS;
   if (OB_NOT_NULL(GCTX.cgroup_ctrl_) &&
-      OB_TMP_FAIL(GCTX.cgroup_ctrl_->add_self_to_cgroup_(MTL_ID(), group_id, is_background))) {
-    LOG_WARN("add self to cgroup fail", K(ret), K(MTL_ID()), K(group_id));
+      OB_TMP_FAIL(GCTX.cgroup_ctrl_->add_self_to_cgroup_(GET_ORIGIN_TENANT_ID(), group_id, is_background))) {
+    LOG_WARN("add self to cgroup fail", K(ret), K(GET_ORIGIN_TENANT_ID()), K(MTL_ID()), K(group_id));
   }
   return ret;
 }
