@@ -231,6 +231,7 @@ int Transform::get_part_expr(const Transform &transform, const share::schema::Ob
     }
     case TransformType::Void: {
       OZ (trans_str.append(VOID));
+      break;
     }
     default: {
       ret = OB_ERR_UNEXPECTED;
