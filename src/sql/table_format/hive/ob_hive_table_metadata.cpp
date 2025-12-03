@@ -21,6 +21,7 @@
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "sql/resolver/dml/ob_dml_resolver.h"
 
+#include <cctype>
 #include <orc/Common.hh>
 #include <parquet/arrow/schema.h>
 
@@ -232,6 +233,40 @@ int ObHiveTableMetadata::handle_csv_format(const Apache::Hadoop::Hive::Table &ta
                                 ObString(DEFAULT_FIELD_DELIMITER),
                                 format.csv_format_.field_term_str_,
                                 true))) {
+      LOG_WARN("failed to set default field delim", K(ret));
+    }
+  }
+
+  // Setting original field term str for schema printer.
+  if (OB_FAIL(ret)) {
+  } else {
+    ObString print_field_str = format.csv_format_.field_term_str_;
+    if (format.csv_format_.field_term_str_.length() == 1) {
+      const unsigned char c
+          = static_cast<unsigned char>(format.csv_format_.field_term_str_.ptr()[0]);
+      // Convert control characters (non-printable) to char(N) format
+      if (!std::isprint(c)) {
+        char char_format_buf[32];
+        int64_t pos = 0;
+        if (OB_FAIL(databuff_printf(char_format_buf,
+                                    sizeof(char_format_buf),
+                                    pos,
+                                    "char(%d)",
+                                    static_cast<int>(c)))) {
+          LOG_WARN("failed to format char string", K(ret), K(c));
+        } else if (OB_FAIL(ob_write_string(allocator,
+                                           ObString(static_cast<int64_t>(pos), char_format_buf),
+                                           print_field_str,
+                                           true))) {
+          LOG_WARN("failed to write field term str", K(ret));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ob_write_string(allocator,
+                                       print_field_str,
+                                       format.origin_file_format_str_.origin_field_term_str_,
+                                       true))) {
       LOG_WARN("failed to write default field delim string", K(ret));
     }
   }
