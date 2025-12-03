@@ -661,6 +661,10 @@ int ObFlushSSMicroCacheExecutor::execute(ObExecContext &ctx, ObFlushSSMicroCache
     ObArray<ObAddr> server_list;
     ObArray<ObUnit> tenant_units;
     ObUnitTableOperator unit_op;
+    if (is_meta_tenant(tenant_id)) {
+      tenant_id += 1; // handle meta tenant
+    }
+
     if (OB_FAIL(unit_op.init(*GCTX.sql_proxy_))) {
       LOG_WARN("failed to init unit op", KR(ret));
     } else if (OB_FAIL(unit_op.get_units_by_tenant(tenant_id, tenant_units))) {
@@ -732,6 +736,10 @@ int ObFlushSSLocalCacheExecutor::execute(ObExecContext &ctx, ObFlushSSLocalCache
     ObArray<ObAddr> server_list;
     ObArray<ObUnit> tenant_units;
     ObUnitTableOperator unit_op;
+    if (is_meta_tenant(tenant_id)) {
+      tenant_id += 1; // handle meta tenant
+    }
+
     if (OB_FAIL(unit_op.init(*GCTX.sql_proxy_))) {
       LOG_WARN("failed to init unit op", KR(ret));
     } else if (OB_FAIL(unit_op.get_units_by_tenant(tenant_id, tenant_units))) {
