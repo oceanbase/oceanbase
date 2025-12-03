@@ -5640,7 +5640,7 @@ int ObLogPlan::get_distribute_group_by_method(ObLogicalOperator *top,
     if (query_ctx->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP2)) {
       group_dist_methods |= DistAlgo::DIST_HASH_HASH_LOCAL;
     }
-    if (!get_optimizer_context().is_partition_wise_plan_enabled() && 
+    if (!get_optimizer_context().is_partition_wise_plan_enabled() &&
         query_ctx->check_opt_compat_version(COMPAT_VERSION_4_3_2)) {
       group_dist_methods &= ~DistAlgo::DIST_PARTITION_WISE;
       OPT_TRACE("ignore partition wise group operator by tenant config");
@@ -5676,6 +5676,9 @@ int ObLogPlan::get_distribute_group_by_method(ObLogicalOperator *top,
       }
     } else {
       group_dist_methods &= ~DistAlgo::DIST_PULL_TO_LOCAL;
+    }
+    if (top->get_contains_fake_cte()) {
+      group_dist_methods &= (DistAlgo::DIST_BASIC_METHOD | DistAlgo::DIST_PULL_TO_LOCAL);
     }
     can_re_parallel = (top->can_re_parallel()
                       && (group_dist_methods & DistAlgo::DIST_HASH_HASH)
