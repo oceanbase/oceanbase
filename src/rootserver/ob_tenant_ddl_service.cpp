@@ -3409,7 +3409,8 @@ int ObTenantDDLService::modify_and_cal_resource_pool_diff(
       } else {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid argument", K(ret), K(new_pool_name_list), K(old_pool_name_list));
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "resource pool list");
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+            "resource pool list: only one resource pool can be added or reduced at a time");
       }
     }
     LOG_INFO("cal resource pool list result",
