@@ -2882,6 +2882,8 @@ int ObParquetTableRowIterator::calc_filters(const int64_t count,
       LOG_WARN("filter is invalid", K(ret), K(curr_filter->is_logic_op_node()));
     } else if (OB_FAIL(curr_filter->init_bitmap(count, result))) {
       LOG_WARN("Failed to get filter bitmap", K(ret));
+    } else if (nullptr != parent_filter && OB_FAIL(parent_filter->prepare_skip_filter(false))) {
+      LOG_WARN("Failed to check parent skip filter", K(ret));
     } else if (curr_filter->is_filter_node()) {
       if ((OB_FAIL((static_cast<ObBlackFilterExecutor*>(curr_filter))->filter_batch(parent_filter,
           0, count, *result)))) {
