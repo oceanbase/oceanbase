@@ -7136,6 +7136,26 @@ int ObOptimizerUtil::add_cast_to_set_select_expr(ObSQLSessionInfo *session_info,
     } else {
       src_expr = new_expr;
     }
+  } else if (ob_is_bit_tc(src_expr->get_result_type().get_type()) && ob_is_string_type(res_type.get_type())) {
+    ObCastMode cast_mode = CM_NONE;
+    ObExprResType real_dst_type(res_type);
+    if (OB_FAIL(ObSQLUtils::get_default_cast_mode(session_info, cast_mode))) {
+      LOG_WARN("get default cast mode failed", K(ret));
+    } else {
+      // For bit type to string type conversion, add CM_COLUMN_CONVERT flag
+      // to ensure bit type is converted to readable string
+      cast_mode |= CM_COLUMN_CONVERT;
+      if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(&expr_factory, session_info,
+                                                         *src_expr, real_dst_type, cast_mode, new_expr))) {
+        LOG_WARN("create cast expr for stmt failed", K(ret));
+      } else if (src_expr == new_expr) {
+        /*do nothing*/
+      } else if (OB_FAIL(new_expr->add_flag(IS_INNER_ADDED_EXPR))) {
+        LOG_WARN("failed to add flag", K(ret));
+      } else {
+        src_expr = new_expr;
+      }
+    }
   } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(&expr_factory, session_info,
                                                              *src_expr, res_type, new_expr))) {
     LOG_WARN("create cast expr for stmt failed", K(ret));
