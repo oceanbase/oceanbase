@@ -17,6 +17,7 @@
 #include "sql/resolver/expr/ob_raw_expr_deduce_type.h"
 #include "sql/resolver/expr/ob_expr_relation_analyzer.h"
 #include "sql/resolver/expr/ob_raw_expr_type_demotion.h"
+#include "sql/rewrite/ob_stmt_comparer.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_logical_operator.h"
 #include "sql/engine/expr/ob_expr_autoinc_nextval.h"
@@ -858,7 +859,21 @@ bool ObRawExpr::same_as(const ObRawExpr &expr,
     }
     const ObRawExpr *l = get_same_identify(this, check_context);
     const ObRawExpr *r = get_same_identify(&expr, check_context);
-    ret = SMART_CALL(bret = l->inner_same_as(*r, check_context));
+    if (NULL != check_context && typeid(*check_context) == typeid(ObStmtCompareContext)
+        && !static_cast<ObStmtCompareContext *>(check_context)->is_in_same_stmt_  // not in same stmt
+        && (this->get_expr_type() != expr.get_expr_type()                         // different expr types
+            && (this->is_exec_param_expr() || expr.is_exec_param_expr()))) {      // one is exec param expr
+      // Two exprs in different stmts should not be considered as the same
+      // if only one of them is ObExecParamRawExpr, For example:
+      // select * from t1
+      // where t1.a in (select * from t2 where t1.a = t2.b)     -- the `t1.a` in the subquery is an ObExecParamRawExpr
+      //   and t1.a in (select * from t1, t2 where t1.a = t2.b) -- the `t1.a` in the subquery is an ObColumnRefRawExpr
+      // The two `t1.a`s in two different subqueries refer to the same table `t1` but in different levels
+      // they should not be considered as the same
+      bret = false;
+    } else {
+      ret = SMART_CALL(bret = l->inner_same_as(*r, check_context));
+    }
     if (NULL != check_context) {
       if (OB_SIZE_OVERFLOW == ret) {
         bret = false;
