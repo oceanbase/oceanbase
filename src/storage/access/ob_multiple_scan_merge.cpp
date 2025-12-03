@@ -192,6 +192,9 @@ int ObMultipleScanMerge::construct_iters()
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "iter cnt is not equal to table cnt", K(ret), "iter cnt", iters_.count(),
         "di_base_iter cnt", di_base_iters_.count(), "table cnt", tables_.count(), KP(this));
+  } else if (OB_NOT_NULL(access_param_->get_op()) && access_param_->get_op()->is_vectorized() &&
+             FALSE_IT(access_param_->get_op()->get_eval_ctx().reuse(access_param_->get_op()->get_batch_size()))) {
+    // for check_skip_by_monotonicity called by initing iters in construct_iters
   } else if (tables_.count() > 0) {
     STORAGE_LOG(TRACE, "construct iters begin", K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()),
                 K(access_param_->iter_param_.is_delete_insert_), KPC_(range), KPC_(di_base_range), K_(access_ctx_->trans_version_range), K_(tables), KPC_(access_param));
@@ -296,10 +299,6 @@ int ObMultipleScanMerge::locate_blockscan_border()
       border_key.set_max_rowkey();
     }
   } else {
-    if (OB_NOT_NULL(access_param_->get_op()) && access_param_->get_op()->is_vectorized()) {
-      access_param_->get_op()->get_eval_ctx().reuse(access_param_->get_op()->get_batch_size());
-    }
-
     ObScanMergeLoserTreeItem item;
     // 1. push iters [1, consumer_cnt_] into loser tree
     for (int64_t i = 1; OB_SUCC(ret) && i < consumer_cnt_; ++i) {
