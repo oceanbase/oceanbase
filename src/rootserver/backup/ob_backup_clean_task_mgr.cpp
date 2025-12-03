@@ -449,6 +449,9 @@ int ObBackupCleanTaskMgr::get_set_ls_ids_(ObIArray<ObLSID> &ls_ids)
   desc.backup_type_ = backup_set_info_.backup_type_;
   if (OB_FAIL(store.init(backup_dest_, desc))) {
     LOG_WARN("faield to init backup data extern mgr", K(ret));
+// TODO(lyh444845): Once the bug fix from yangyi.yyy is available, add a version check. 
+// For newer versions, revert to call `read_ls_attr_info` before `get_set_ls_ids_from_traverse_`.
+/*
   } else if (OB_FAIL(store.read_ls_attr_info(ls_attr))) {
     if (OB_OBJECT_NOT_EXIST == ret) {
       if (OB_FAIL(get_set_ls_ids_from_traverse_(ls_ids))) {
@@ -470,8 +473,10 @@ int ObBackupCleanTaskMgr::get_set_ls_ids_(ObIArray<ObLSID> &ls_ids)
         LOG_WARN("failed to push back ls_id", K(ret), K(ls_id));
       } 
     }
+*/
+  } else if (OB_FAIL(get_set_ls_ids_from_traverse_(ls_ids))) {
+    LOG_WARN("failed to get set ls ids from traverse", K(ret));
   }
-
   return ret;
 }
 
@@ -861,6 +866,47 @@ int ObBackupCleanTaskMgr::delete_backup_dir_(const share::ObBackupPath &path)
   return ret;
 }
 
+int ObBackupCleanTaskMgr::check_backup_set_dir_empty_()
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath set_path;
+  ObBackupSetDesc desc;
+  bool is_empty = true;
+  desc.backup_set_id_ = backup_set_info_.backup_set_id_;
+  desc.backup_type_ = backup_set_info_.backup_type_;
+  
+  if (OB_FAIL(ObBackupPathUtil::get_backup_set_dir_path(backup_dest_, desc, set_path))) {
+    LOG_WARN("failed to get backup set dir path", K(ret), K_(backup_dest), K_(task_attr));
+  } else if (OB_FAIL(ObBackupIoAdapter::is_empty_directory(set_path.get_ptr(), backup_dest_.get_storage_info(), is_empty))) {
+    LOG_WARN("failed to check if backup set dir is empty", K(ret), K(set_path));
+  } else if (!is_empty) {
+    LOG_ERROR("backup set dir is not empty, there are still files left", K(set_path));
+  } else {
+    LOG_INFO("backup set dir is empty, safe to delete", K(set_path));
+  }
+  return ret;
+}
+
+int ObBackupCleanTaskMgr::check_backup_piece_dir_empty_()
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath piece_path;
+  bool is_empty = true;
+  
+  if (OB_FAIL(ObArchivePathUtil::get_piece_dir_path(
+      backup_dest_, backup_piece_info_.key_.dest_id_, backup_piece_info_.key_.round_id_,
+      backup_piece_info_.key_.piece_id_, piece_path))) {
+    LOG_WARN("failed to get backup piece dir path", K(ret), K_(backup_dest), K_(backup_piece_info));
+  } else if (OB_FAIL(ObBackupIoAdapter::is_empty_directory(piece_path.get_ptr(), backup_dest_.get_storage_info(), is_empty))) {
+    LOG_WARN("failed to check if backup piece dir is empty", K(ret), K(piece_path));
+  } else if (!is_empty) {
+    LOG_ERROR("backup piece dir is not empty, there are still files left", K(piece_path));
+  } else {
+    LOG_INFO("backup piece dir is empty, safe to delete", K(piece_path));
+  }
+  return ret;
+}
+
 // file:///obbackup/backup_set_1_full/
 int ObBackupCleanTaskMgr::delete_backup_set_dir_()
 {
@@ -970,6 +1016,8 @@ int ObBackupCleanTaskMgr::delete_backup_set_meta_info_files_()
     LOG_WARN("failed to delete tenant backup set infos", K(ret)); 
   } else if (OB_FAIL(delete_backup_set_inner_placeholder_())) {
     LOG_WARN("failed to delete backup set inner placeholder", K(ret)); 
+  } else if (OB_FAIL(check_backup_set_dir_empty_())) { // check if then anyting left in the backup set dir
+    LOG_INFO("failed to check backup set dir empty", K(ret));
   } else if (OB_FAIL(delete_backup_set_dir_())) {
     LOG_WARN("failed to delete backup set dir", K(ret)); 
   } else if (OB_FAIL(delete_backup_set_start_file_())) {
@@ -1088,6 +1136,8 @@ int ObBackupCleanTaskMgr::delete_backup_piece_meta_info_files_()
       backup_dest_, backup_piece_info_.key_.dest_id_, backup_piece_info_.key_.round_id_,
       backup_piece_info_.key_.piece_id_, path))) {
     LOG_WARN("failed to get tenant backup piece dir path", K(ret));  
+  } else if (OB_FAIL(check_backup_piece_dir_empty_())) { // check if anything left in the backup piece dir
+    LOG_INFO("failed to check backup piece dir empty", K(ret));
   } else if (OB_FAIL(delete_backup_dir_(path))) {
     LOG_WARN("failed to delete backup infos dir", K(ret));
   } else if (OB_FAIL(delete_backup_piece_start_file_())) {
