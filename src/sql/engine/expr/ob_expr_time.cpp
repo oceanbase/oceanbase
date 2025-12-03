@@ -494,8 +494,12 @@ int vector_year(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, con
           LOG_WARN("get date and usec from vec failed", K(ret));
         } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == days)) {
           year = 0;
-        } else {
+        } else if (ObTimeConverter::could_calc_days_to_year_quickly(days)) {
           ObTimeConverter::days_to_year(days, year);
+        } else if (OB_FAIL(ObTimeConverter::date_to_ob_time(days, ob_time))) {
+          LOG_WARN("failed date_to_ob_time", K(ret), K(days));
+        } else {
+          year = ob_time.parts_[DT_YEAR];
         }
         res_vec->set_int(idx, year);
         eval_flags.set(idx);
@@ -591,10 +595,14 @@ int vector_month(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, co
           LOG_WARN("get date and usec from vec failed", K(ret));
         } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date)) {
           res_vec->set_int(idx, 0);
-        } else {
+        } else if (ObTimeConverter::could_calc_days_to_year_quickly(date)) {
           ObTimeConverter::days_to_year_ydays(date, year, dt_yday);
           ObTimeConverter::ydays_to_month_mdays(year, dt_yday, month, dt_mday);
           res_vec->set_int(idx, month);
+        } else if (OB_FAIL(ObTimeConverter::date_to_ob_time(date, ob_time))) {
+          LOG_WARN("failed date_to_ob_time", K(ret), K(date));
+        } else {
+          res_vec->set_int(idx, ob_time.parts_[DT_MON]);
         }
         eval_flags.set(idx);
       });
@@ -678,9 +686,13 @@ int vector_month_name(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &ski
           LOG_WARN("get date and usec from vec failed", K(ret));
         } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date)) {
           month = 0;
-        } else {
+        } else if (ObTimeConverter::could_calc_days_to_year_quickly(date)) {
           ObTimeConverter::days_to_year_ydays(date, year, dt_yday);
           ObTimeConverter::ydays_to_month_mdays(year, dt_yday, month, dt_mday);
+        } else if (OB_FAIL(ObTimeConverter::date_to_ob_time(date, ob_time))) {
+          LOG_WARN("failed date_to_ob_time", K(ret), K(date));
+        } else {
+          month = ob_time.parts_[DT_MON];
         }
 
         if (month == 0) {
