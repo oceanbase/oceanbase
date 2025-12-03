@@ -125,12 +125,19 @@ template<typename CallbackImpl>
 int ObCOMergeLogConsumer<CallbackImpl>::consume_all_merge_log(ObCOMergeLogIterator &iter, CallbackImpl &callback)
 {
   int ret = OB_SUCCESS;
+  DEBUG_SYNC(CONSUME_ALL_MERGE_LOG_PROCESS);
   bool need_consume = false;
   ObMergeLog curr_log;
   ObMergeLog compact_log;
   const blocksstable::ObDatumRow *row = nullptr;
   while (OB_SUCC(ret)) {
-    if (OB_FAIL(share::dag_yield())) {
+    if (OB_UNLIKELY(!MERGE_SCHEDULER_PTR->could_major_merge_start())) {
+      ret = OB_CANCELED;
+#ifdef ERRSIM
+      SERVER_EVENT_SYNC_ADD("merge_errsim", "cancel_merge", "reason", "co_merge_paused");
+#endif
+      LOG_WARN("major merge has been paused, cancel co merge", K(ret));
+    } else if (OB_FAIL(share::dag_yield())) {
       LOG_WARN("fail to yield", K(ret));
 #ifdef ERRSIM
     } else if (OB_FAIL(ret = OB_E(EventTable::EN_COMPACTION_CO_MERGE_PARTITION_LONG_TIME) OB_SUCCESS)) {

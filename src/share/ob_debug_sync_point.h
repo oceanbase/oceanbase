@@ -57,6 +57,8 @@ class ObString;
     ACT(MINOR_MERGE_TIMER_TASK,)                                   \
     ACT(MERGE_TASK_PROCESS,)                                       \
     ACT(MAJOR_MERGE_TASK_PROCESS,)                                 \
+    ACT(CONSUME_ALL_MERGE_LOG_PROCESS,)                            \
+    ACT(MINI_MERGE_TASK_PROCESS,)                                  \
     ACT(MAJOR_MERGE_PREPARE_TASK_PROCESS,)                         \
     ACT(COMPACTION_REPORT_PROCESS,)                                \
     ACT(MINOR_MERGE_SCHEDULE,)                                     \
