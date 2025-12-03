@@ -1837,7 +1837,7 @@ public:
   int get_sparse_vec_index_column_id(uint64_t &sparse_vec_col_id) const;
   int get_vec_index_column_id(uint64_t &with_cascaded_info_column_id) const;
   int get_vec_index_vid_col_id(uint64_t &vec_id_col_id, bool is_cid = false) const;
-  int get_hybrid_vec_chunk_column_id(uint64_t &hybrid_vec_chunk_col_id) const;
+  int get_hybrid_vec_chunk_column_id(const ObTableSchema &data_table_schema, uint64_t &hybrid_vec_chunk_col_id) const;
   int get_hybrid_vec_embedded_column_id(uint64_t &vec_id_col_id) const;
   // get columns for building rowid
   int get_column_ids_serialize_to_rowid(common::ObIArray<uint64_t> &col_ids,
