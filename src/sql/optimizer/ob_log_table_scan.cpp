@@ -3224,12 +3224,15 @@ int ObLogTableScan::allocate_granule_post(AllocGIContext &ctx)
   // set force partition GI
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (is_text_retrieval_scan() || is_vec_idx_scan_post_filter() || use_index_merge()
+  } else if (is_text_retrieval_scan()
+             || is_vec_idx_scan_post_filter()
+             || is_multivalue_index_scan()
+             || use_index_merge()
              || is_ivf_adaptive_scan()
              || (NULL != table_schema
                  && (share::is_oracle_mapping_real_virtual_table(table_schema->get_table_id())
                      || table_schema->is_spatial_index() || table_schema->is_vec_index()))) {
-    // block GI is not supported for text retrieval scan, vec idx scan post filter and index merge
+    // block GI is not supported for text retrieval scan, vec idx scan post filter, multivalue index scan and index merge
     // before GI is adapted to the real agent table, block GI cannot be assigned to it
     ctx.set_force_partition();
   }
