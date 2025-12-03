@@ -4195,6 +4195,8 @@ def_table_schema(
     ('log_mode', 'varchar:100', 'false', 'NOARCHIVELOG'),
     ('max_ls_id', 'int', 'false', '0'),
     ('restore_data_mode', 'varchar:128', 'false', 'NORMAL'),
+    ('protection_mode', 'varchar:128', 'false', 'MAXIMUM PERFORMANCE'),
+    ('protection_level', 'varchar:128', 'false', 'MAXIMUM PERFORMANCE'),
   ],
 )
 
@@ -8448,6 +8450,8 @@ def_table_schema(**all_ai_model_endpoint_def)
 # 578: __all_tiered_metadata_store
 # 579: __wr_sqlstat_v2
 # 580: __all_lob_check_exception_result
+# 581: __all_sync_standby_dest
+# 582: __all_sync_standby_status
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -13379,7 +13383,8 @@ def_table_schema(
   ('max_scn', 'uint'),
   ('arbitration_member', 'varchar:128'),
   ('degraded_list', 'varchar:1024'),
-  ('learner_list', 'longtext')
+  ('learner_list', 'longtext'),
+  ('sync_mode', 'varchar:128'),
   ],
 
   partition_columns = ['svr_ip', 'svr_port'],
@@ -17246,6 +17251,8 @@ def_table_schema(
 # 12581: __all_virtual_external_catalog_client_pool_stat
 # 12582: __all_virtual_wr_sqlstat_v2
 # 12583: __all_virtual_lob_check_exception_result
+# 12584: __all_virtual_sync_standby_dest
+# 12585: __all_virtual_sync_standby_status
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -17825,6 +17832,8 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15534', all_def_keyword
 
 # 15538: all_virtual_sensitive_rule_real_agent
 # 15539: all_virtual_sensitive_column_real_agent
+# 15540: __all_sync_standby_dest
+# 15541: __all_sync_standby_status
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -44549,6 +44558,8 @@ FROM
 # 21703: DBA_OB_TTL_TASK_HISTORY
 # 21704: CDB_OB_TTL_TASKS
 # 21705: CDB_OB_TTL_TASK_HISTORY
+# 21706: CDB_OB_SYNC_STANDBY_DEST
+# 21707: DBA_OB_SYNC_STANDBY_DEST
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -78860,6 +78871,7 @@ def_table_schema(
 
 # 28292: DBA_OB_TTL_TASKS
 # 28293: DBA_OB_TTL_TASK_HISTORY
+# 28294: DBA_OB_SYNC_STANDBY_DEST
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位

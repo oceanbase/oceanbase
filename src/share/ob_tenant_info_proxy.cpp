@@ -136,6 +136,8 @@ void ObAllTenantInfo::assign(const ObAllTenantInfo &other)
     log_mode_ = other.log_mode_;
     max_ls_id_ = other.max_ls_id_;
     restore_data_mode_ = other.restore_data_mode_;
+    protection_mode_ = other.protection_mode_;
+    protection_level_ = other.protection_level_;
   }
   return ;
 }
@@ -157,6 +159,8 @@ void ObAllTenantInfo::reset()
   // They need be reset to the VALID default value.
   // Consider serialization compatibility for old binary RPC packet.
   restore_data_mode_ = NORMAL_RESTORE_DATA_MODE;
+  protection_mode_ = MAXIMUM_PERFORMANCE_MODE;
+  protection_level_ = MAXIMUM_PERFORMANCE_LEVEL;
 }
 
 OB_SERIALIZE_MEMBER(ObAllTenantInfo, tenant_id_, tenant_role_,
@@ -164,7 +168,8 @@ OB_SERIALIZE_MEMBER(ObAllTenantInfo, tenant_id_, tenant_role_,
                     replayable_scn_,
                     readable_scn_,   // FARM COMPAT WHITELIST
                     recovery_until_scn_, log_mode_,
-                    max_ls_id_, restore_data_mode_);
+                    max_ls_id_, restore_data_mode_,
+                    protection_mode_, protection_level_);
 
 ObAllTenantInfo& ObAllTenantInfo::operator= (const ObAllTenantInfo &other)
 {

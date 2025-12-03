@@ -190,7 +190,8 @@ enum ObLogBaseType
   // for random partition
   SYS_RANDOM_PARTITION_SCHEDULER_LOG_BASE_TYPE = 61,
   TTL_SERVICE_LOG_BASE_TYPE = 62,
-
+  SYNC_MODE_LOG_BASE_TYPE = 63,
+  PROTECTION_MODE_MGR_LOG_BASE_TYPE = 64,
   // pay attention!!!
   // add log type in log_base_type_to_string
   // max value
@@ -341,6 +342,10 @@ int log_base_type_to_string(const ObLogBaseType log_type,
     strncpy(str, "RANDOM_PARTITION_SCHEDULER", str_len);
   } else if (log_type == TTL_SERVICE_LOG_BASE_TYPE) {
     strncpy(str, "TTL_SERVICE", str_len);
+  } else if (log_type == SYNC_MODE_LOG_BASE_TYPE) {
+    strncpy(str, "SYNC_MODE", str_len);
+  } else if (log_type == PROTECTION_MODE_MGR_LOG_BASE_TYPE) {
+    strncpy(str, "PROTECTION_MODE_MGR", str_len);
   } else {
     ret = OB_INVALID_ARGUMENT;
   }

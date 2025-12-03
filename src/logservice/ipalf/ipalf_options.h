@@ -37,6 +37,13 @@ enum class AccessMode {
   PREPARE_FLASHBACK = 4,
 };
 
+enum class SyncMode {
+  INVALID_SYNC_MODE = 0,
+  SYNC = 1,
+  ASYNC = 2,
+  PRE_ASYNC = 3,
+};
+
 struct PalfAppendOptions
 {
     // Palf的使用者在提交日志时，有两种不同的使用方式：

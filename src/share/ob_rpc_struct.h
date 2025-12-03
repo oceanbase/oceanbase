@@ -4208,7 +4208,8 @@ public:
                         access_mode_(palf::AccessMode::INVALID_ACCESS_MODE),
                         ref_scn_(),
                         addr_(),
-                        sys_ls_end_scn_() {}
+                        sys_ls_end_scn_(),
+                        sync_mode_(palf::SyncMode::INVALID_SYNC_MODE) {}
   ~ObLSAccessModeInfo() {}
   bool is_valid() const;
   int init(uint64_t tenant_id, const share::ObLSID &ls_idd,
@@ -4218,7 +4219,7 @@ public:
            const share::SCN &sys_ls_end_scn);
   int assign(const ObLSAccessModeInfo &other);
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(mode_version),
-               K_(access_mode), K_(ref_scn), K_(sys_ls_end_scn));
+               K_(access_mode), K_(ref_scn), K_(sys_ls_end_scn), K_(sync_mode));
   uint64_t get_tenant_id() const
   {
     return tenant_id_;
@@ -4253,6 +4254,7 @@ private:
   share::SCN ref_scn_;
   ObAddr addr_;//no used, add in 4200 RC1
   share::SCN sys_ls_end_scn_; // new arg in V4.2.0
+  palf::SyncMode sync_mode_;
 };
 
 struct ObChangeLSAccessModeRes
@@ -4260,12 +4262,14 @@ struct ObChangeLSAccessModeRes
   OB_UNIS_VERSION(1);
 public:
   ObChangeLSAccessModeRes(): tenant_id_(OB_INVALID_TENANT_ID),
-                              ls_id_(), ret_(common::OB_SUCCESS), wait_sync_scn_cost_(0), change_access_mode_cost_(0) {}
+                              ls_id_(), ret_(common::OB_SUCCESS), wait_sync_scn_cost_(0),
+                              change_access_mode_cost_(0) {}
   ~ObChangeLSAccessModeRes() {}
   bool is_valid() const;
   int init(uint64_t tenant_id, const share::ObLSID& ls_id, const int result, const int64_t wait_sync_scn_cost, const int64_t change_access_mode_cost);
   int assign(const ObChangeLSAccessModeRes &other);
-  TO_STRING_KV(K_(tenant_id), "ls_id", ls_id_.id(), K_(ret), K_(wait_sync_scn_cost), K_(change_access_mode_cost));
+  TO_STRING_KV(K_(tenant_id), "ls_id", ls_id_.id(), K_(ret), K_(wait_sync_scn_cost),
+      K_(change_access_mode_cost));
   int get_result() const
   {
     return ret_;
@@ -4345,6 +4349,9 @@ public:
     DISASTER_RECOVERY_SERVICE,
     ARBITRATION_SERVICE,
     RESTORE_SERVICE,
+    PROTECTION_MODE_MGR,
+    TENANT_INFO_LOADER,
+    COMMON_LS_SERVICE,
   };
   ObNotifyTenantThreadArg() : tenant_id_(OB_INVALID_TENANT_ID), thread_type_(INVALID_TYPE) {}
   ~ObNotifyTenantThreadArg() {}

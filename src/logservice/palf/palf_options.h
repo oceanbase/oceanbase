@@ -60,6 +60,7 @@ struct PalfDiskOptions
 
 typedef ipalf::PalfAppendOptions PalfAppendOptions;
 typedef ipalf::AccessMode AccessMode;
+typedef ipalf::SyncMode SyncMode;
 
 inline int access_mode_to_string(const AccessMode access_mode, char *str_buf_, const int64_t str_len)
 {

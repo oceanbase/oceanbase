@@ -10291,10 +10291,12 @@ int ObLSAccessModeInfo::assign(const ObLSAccessModeInfo &other)
     access_mode_ = other.access_mode_;
     ref_scn_ = other.ref_scn_;
     sys_ls_end_scn_ = other.sys_ls_end_scn_;
+    sync_mode_ = other.sync_mode_;
   }
   return ret;
 }
-OB_SERIALIZE_MEMBER(ObLSAccessModeInfo, tenant_id_, ls_id_, mode_version_, access_mode_, ref_scn_, addr_, sys_ls_end_scn_);
+OB_SERIALIZE_MEMBER(ObLSAccessModeInfo, tenant_id_, ls_id_, mode_version_, access_mode_, ref_scn_,
+    addr_, sys_ls_end_scn_, sync_mode_);
 
 bool ObChangeLSAccessModeRes::is_valid() const
 {
@@ -10334,7 +10336,8 @@ int ObChangeLSAccessModeRes::assign(const ObChangeLSAccessModeRes &other)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObChangeLSAccessModeRes, tenant_id_, ls_id_, ret_, wait_sync_scn_cost_, change_access_mode_cost_);
+OB_SERIALIZE_MEMBER(ObChangeLSAccessModeRes, tenant_id_, ls_id_, ret_, wait_sync_scn_cost_,
+    change_access_mode_cost_);
 
 int ObNotifySwitchLeaderArg::init(const uint64_t tenant_id, const share::ObLSID &ls_id,
     const common::ObAddr &leader, const SwitchLeaderComment &comment)

@@ -81,6 +81,7 @@ public:
   LogConfigVersion config_version_;
   int64_t mode_version_;
   AccessMode access_mode_;
+  SyncMode sync_mode_;
   ObMemberList paxos_member_list_;
   int64_t paxos_replica_num_;
   common::ObMember arbitration_member_;
@@ -100,7 +101,7 @@ public:
   TO_STRING_KV(K_(self), K_(palf_id), K_(role), K_(log_proposal_id), K_(config_version), K_(mode_version),
       K_(access_mode), K_(paxos_member_list), K_(paxos_replica_num), K_(learner_list), K_(allow_vote), K_(replica_type),
       K_(begin_lsn), K_(begin_scn), K_(base_lsn), K_(end_lsn), K_(end_scn), K_(max_lsn), K_(max_scn),
-      K_(is_in_sync), K_(is_need_rebuild));
+      K_(is_in_sync), K_(is_need_rebuild), K_(sync_mode));
 };
 
 struct PalfDiagnoseInfo {

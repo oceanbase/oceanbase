@@ -245,6 +245,10 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
   //                                          ::oceanbase::storage::mds::MdsCtx,\
   //                                          45,\
   //                                          TABLET_RANDOM)
+  //   GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::share::ObSyncStandbyStatusMDSHelper, \
+  //                                      ::oceanbase::storage::mds::MdsCtx, \
+  //                                      46,\
+  //                                      SYNC_STANDBY_STATUS)
   // # 余留位置（此行之前占位）
 #undef GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION
 #endif
