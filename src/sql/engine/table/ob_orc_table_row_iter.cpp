@@ -371,7 +371,7 @@ int ObOrcTableRowIterator::init_query_flag()
 {
   int ret = OB_SUCCESS;
   query_flag_ = 0;
-  if (0 == file_column_exprs_.count()) {
+  if (0 == file_column_exprs_.count() && filter_expr_rels_.size() == 0) {
     // count aggregation query, only need to read file row count
     // the query is like 'select count(*) from tbl'
     is_count_aggr_ = true;
