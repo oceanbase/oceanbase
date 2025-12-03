@@ -58,7 +58,7 @@ ObTableSchemaParam::ObTableSchemaParam(ObIAllocator &allocator)
     vec_vector_col_id_(OB_INVALID_ID),
     mv_mode_(),
     is_delete_insert_(false),
-    merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_MAX),
+    merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN),
     inc_pk_doc_id_col_id_(OB_INVALID_ID),
     vec_chunk_col_id_(OB_INVALID_ID),
     vec_embedded_col_id_(OB_INVALID_ID)
@@ -104,7 +104,7 @@ void ObTableSchemaParam::reset()
   vec_vector_col_id_ = OB_INVALID_ID;
   mv_mode_.reset();
   is_delete_insert_ = false;
-  merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_MAX;
+  merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN;
   inc_pk_doc_id_col_id_ = OB_INVALID_ID;
 }
 

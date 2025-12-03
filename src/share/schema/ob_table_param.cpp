@@ -638,7 +638,7 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     access_virtual_col_cnt_(0),
     aggregate_param_props_(allocator),
     plan_enable_rich_format_(false),
-    merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_MAX)
+    merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN)
 {
   reset();
 }
@@ -678,7 +678,7 @@ void ObTableParam::reset()
   access_virtual_col_cnt_ = 0;
   aggregate_param_props_.reset();
   plan_enable_rich_format_ = false;
-  merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_MAX;
+  merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN;
 }
 
 OB_DEF_SERIALIZE(ObTableParam)
