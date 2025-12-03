@@ -330,11 +330,12 @@ int ObSensitiveRuleMgr::get_schema_by_column(const uint64_t tenant_id,
     ObSensitiveRuleSchema *rule_schema = NULL;
     int hash_ret = column_map_.get_refactored(ObSensitiveColumnHashKey(tenant_id, table_id, column_id), col_schema);
     if (OB_SUCCESS != hash_ret) {
-      if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {
+      if (OB_LIKELY(OB_HASH_NOT_EXIST == hash_ret)) {
         ret = OB_SUCCESS;
         LOG_INFO("sensitive rule schema is not exist", K(tenant_id), K(table_id), K(column_id));
       } else {
-        LOG_WARN("get sensitive column schema failed", K(hash_ret));
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get sensitive column schema failed", K(ret), K(hash_ret));
       }
     } else if (OB_ISNULL(col_schema)) {
       ret = OB_ERR_UNEXPECTED;
