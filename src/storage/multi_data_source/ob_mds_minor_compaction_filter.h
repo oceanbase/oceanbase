@@ -29,6 +29,7 @@ public:
   ObMdsMinorFilter();
   virtual ~ObMdsMinorFilter() = default;
   int init(
+    const int64_t first_major_snapshot,
     const int64_t last_major_snapshot,
     const int64_t multi_version_start);
   void reset()

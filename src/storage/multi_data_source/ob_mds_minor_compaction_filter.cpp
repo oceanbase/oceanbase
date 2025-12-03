@@ -33,20 +33,21 @@ ObMdsMinorFilter::ObMdsMinorFilter()
 }
 
 int ObMdsMinorFilter::init(
+  const int64_t first_major_snapshot,
   const int64_t last_major_snapshot,
   const int64_t multi_version_start)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(last_major_snapshot < 0 || multi_version_start < 0)) {
+  if (OB_UNLIKELY(first_major_snapshot < 0 || last_major_snapshot < 0 || multi_version_start < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(last_major_snapshot), K(multi_version_start));
+    LOG_WARN("invalid argument", K(ret), K(first_major_snapshot), K(last_major_snapshot), K(multi_version_start));
   } else if (IS_INIT) {
     ret = OB_INIT_TWICE;
-    LOG_WARN("is inited", K(ret), K(last_major_snapshot), K(multi_version_start));
+    LOG_WARN("is inited", K(ret), K(first_major_snapshot), K(last_major_snapshot), K(multi_version_start));
   } else {
     last_major_snapshot_ = last_major_snapshot;
-    truncate_filter_snapshot_ = MIN(multi_version_start, last_major_snapshot);
-    LOG_INFO("truncate info filter snapshot", KR(ret), K(last_major_snapshot), K(multi_version_start), K_(truncate_filter_snapshot));
+    truncate_filter_snapshot_ = MIN(multi_version_start, first_major_snapshot);
+    LOG_INFO("truncate info filter snapshot", KR(ret), K(first_major_snapshot), K(multi_version_start), K_(truncate_filter_snapshot));
     is_inited_ = true;
   }
   return ret;
