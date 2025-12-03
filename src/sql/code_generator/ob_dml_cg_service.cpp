@@ -1648,6 +1648,27 @@ int ObDmlCgService::add_vec_idx_col_projector(const ObIArray<ExprType*> &cur_row
   return ret;
 }
 
+int ObDmlCgService::set_embedded_vec_ref_flag(const ObIArray<ObRawExpr*> &cur_row,
+                                              ObDASDMLBaseCtDef &das_ctdef)
+{
+  int ret = OB_SUCCESS;
+  bool is_ref_column = false;
+  const uint64_t embedded_col_id = das_ctdef.table_param_.get_data_table().get_embedded_vec_col_id();
+  for (int64_t i = 0; OB_SUCC(ret) && i < cur_row.count(); ++i) {
+    ObRawExpr *expr = cur_row.at(i);
+    if (OB_NOT_NULL(expr) && expr->is_column_ref_expr()) {
+      const ObColumnRefRawExpr *col = static_cast<ObColumnRefRawExpr *>(expr);
+      if (col->get_column_id() == embedded_col_id && col->is_hybrid_embedded_vec_column()) {
+        is_ref_column = true;
+        LOG_DEBUG("has set the is_ref_column", K(embedded_col_id));
+        break;
+      }
+    }
+  }
+  das_ctdef.is_embedded_vec_ref_column_ = is_ref_column;
+  return ret;
+}
+
 int ObDmlCgService::append_all_pk_column_id(ObSchemaGetterGuard *schema_guard,
                                             const ObTableSchema *table_schema,
                                             ObIArray<uint64_t> &minimal_column_ids)
@@ -2261,6 +2282,7 @@ int ObDmlCgService::generate_das_projector(const ObIArray<uint64_t> &dml_column_
                           && !das_ctdef.table_param_.get_data_table().is_ivf_vector_index()
                           && das_ctdef.op_type_ == DAS_OP_TABLE_UPDATE;
   bool is_spatial_index = das_ctdef.table_param_.get_data_table().is_spatial_index();
+  bool is_semantic_embedded_index = das_ctdef.table_param_.get_data_table().is_hybrid_vector_index_embedded();
   uint8_t extra_geo = (is_spatial_index) ? 1 : 0;
   //generate old row projector
   if (!old_row.empty()) {
@@ -2345,6 +2367,10 @@ int ObDmlCgService::generate_das_projector(const ObIArray<uint64_t> &dml_column_
     if (OB_SUCC(ret) && is_vec_vid_index &&
         OB_FAIL(add_vec_idx_col_projector(new_row, full_row, dml_column_ids, das_ctdef, new_row_projector))) {
       LOG_WARN("add vec idx column for new projector failed", K(ret));
+    }
+    if (OB_SUCC(ret) && is_semantic_embedded_index &&
+        OB_FAIL(set_embedded_vec_ref_flag(new_row, das_ctdef))) {
+      LOG_WARN("fail to set embedded vec ref flag", K(ret));
     }
   }
 

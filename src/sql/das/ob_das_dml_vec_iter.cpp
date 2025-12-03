@@ -736,6 +736,8 @@ int ObEmbeddedVecDMLIterator::generate_embedded_vec_row(const ObChunkDatumStore:
             ObString embedded_vector;
             if (is_old_row_) {
               obj_arr[embedded_vec_idx].set_null();
+            } else if (das_ctdef_->is_embedded_vec_ref_column_) {
+              obj_arr[embedded_vec_idx].set_string(chunk);
             } else {
               if (OB_FAIL(ObVectorIndexUtil::get_vector_from_text_by_embedding(allocator_, chunk, vec_index_param, embedded_vector))) {
                 LOG_WARN("failed to get vector from text by embedding", K(ret));
@@ -770,6 +772,7 @@ int ObEmbeddedVecDMLIterator::get_vid(const ObChunkDatumStore::StoredRow *store_
   }
   return ret;
 }
+
 int ObEmbeddedVecDMLIterator::get_chunk_data(const ObChunkDatumStore::StoredRow *store_row, const int64_t embedded_vec_idx, ObString &chunk)
 {
   int ret = OB_SUCCESS;
