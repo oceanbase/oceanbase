@@ -468,6 +468,8 @@
 #include "ob_expr_vector_similarity.h"
 #include "ob_expr_left.h"
 #include "ob_expr_right.h"
+#include "ob_expr_reverse.h"
+#include "ob_expr_operator.h"
 
 namespace oceanbase
 {
@@ -1962,6 +1964,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, //ObExprAddMonths::calc_add_months_vector,                       /* 309 */
   NULL, //ObExprAddMonths::calc_months_add_vector,                       /* 310 */
   NULL, // ObExprParseDateTime::calc_parse_date_time_vector              /* 311 */
+  NULL, // ObExprReverse::calc_reverse_expr_vector                       /* 312 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
