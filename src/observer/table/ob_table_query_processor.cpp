@@ -107,9 +107,10 @@ int ObTableQueryP::init_tb_ctx(ObTableApiCacheGuard &cache_guard)
     LOG_WARN("fail to alloc expr memory", K(ret));
   } else if (OB_FAIL(tb_ctx_.init_exec_ctx())) {
     LOG_WARN("fail to init exec ctx", K(ret), K(tb_ctx_));
+  } else if (OB_FAIL(tb_ctx_.init_expr_frame_info(expr_frame_info))) { // init expr op for scan with substring index
+    LOG_WARN("fail to init expr frame info", K(ret));
   } else {
     tb_ctx_.set_init_flag(true);
-    tb_ctx_.set_expr_info(expr_frame_info);
   }
 
   return ret;
@@ -272,7 +273,7 @@ int ObTableQueryP::old_try_process()
 
   if (OB_NOT_NULL(spec)) {
     spec->destroy_executor(executor);
-    tb_ctx_.set_expr_info(nullptr);
+    tb_ctx_.reset_expr_frame_info();
   }
 
   ObTableTransUtils::release_read_trans(trans_param_.trans_desc_);
@@ -285,8 +286,8 @@ int ObTableQueryP::new_try_process()
   int ret = OB_SUCCESS;
   ObModelGuard model_guard;
   ObIModel *model = nullptr;
-  if (OB_FAIL(init_table_schema_info(arg_.table_name_))) {
-    LOG_WARN("fail to init schema info", K(ret), K(arg_.table_name_));
+  if (OB_FAIL(init_table_schema_info(arg_.table_name_, arg_.table_id_))) {
+    LOG_WARN("fail to init schema info", K(ret), K(arg_.table_name_), K(arg_.table_id_));
   } else {
     exec_ctx_.set_table_name(arg_.table_name_);
     exec_ctx_.set_table_id(arg_.table_id_);

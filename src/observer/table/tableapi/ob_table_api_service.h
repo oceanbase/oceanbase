@@ -110,7 +110,8 @@ private:
       SERVER_LOG(WARN, "fail to get expr frame info", K(ret));
     } else if (OB_FAIL(ObTableExprCgService::alloc_exprs_memory(ctx, *expr_frame_info))) {
       SERVER_LOG(WARN, "fail to alloc exprs memory", K(ret));
-    } else if (FALSE_IT(ctx.set_expr_info(expr_frame_info))) {
+    } else if (OB_FAIL((ctx.init_expr_frame_info(expr_frame_info)))) {
+      SERVER_LOG(WARN, "fail to init expr frame info", K(ret));
     } else if (OB_FAIL(cache_guard.get_spec<SPEC_TYPE>(&ctx, spec))) {
       SERVER_LOG(WARN, "fail to get spec from cache", K(ret), K(SPEC_TYPE));
     } else if (OB_ISNULL(spec)) {
@@ -157,7 +158,7 @@ private:
         executor = nullptr;
       }
       // cache is release, avoid others to visit it
-      ctx.set_expr_info(nullptr);
+      ctx.reset_expr_frame_info();
     }
     OB_TABLE_END_AUDIT(ret_code, ret,
                        snapshot, ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
@@ -221,7 +222,7 @@ private:
       executor = nullptr;
     }
     // cache is release, avoid others to visit it
-    ctx.set_expr_info(nullptr);
+    ctx.reset_expr_frame_info();
     OB_TABLE_END_AUDIT(ret_code, ret,
                        snapshot, ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
                        stmt_type, STMT_TYPE);
@@ -289,7 +290,7 @@ private:
       } // end for
     }
     // cache is release, avoid others to visit it
-    ctx.set_expr_info(nullptr);
+    ctx.reset_expr_frame_info();
     OB_TABLE_END_AUDIT(ret_code, ret,
                        snapshot, ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
                        stmt_type, STMT_TYPE);

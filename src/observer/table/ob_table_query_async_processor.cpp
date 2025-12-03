@@ -162,9 +162,10 @@ int ObTableQueryAsyncP::init_tb_ctx(ObIAllocator* allocator,
     LOG_WARN("fail to alloc expr memory", K(ret));
   } else if (OB_FAIL(ctx.init_exec_ctx())) {
     LOG_WARN("fail to init exec ctx", K(ret), K(ctx));
+  } else if (OB_FAIL(ctx.init_expr_frame_info(expr_frame_info))) {
+    LOG_WARN("fail to init expr frame info", K(ret));
   } else {
     ctx.set_init_flag(true);
-    ctx.set_expr_info(expr_frame_info);
   }
 
   return ret;

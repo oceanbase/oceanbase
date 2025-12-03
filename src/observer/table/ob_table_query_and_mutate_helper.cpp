@@ -141,9 +141,10 @@ int QueryAndMutateHelper::init_scan_tb_ctx(ObTableApiCacheGuard &cache_guard)
     LOG_WARN("fail to alloc expr memory", K(ret));
   } else if (OB_FAIL(tb_ctx_.init_exec_ctx())) {
     LOG_WARN("fail to init exec ctx", K(ret), K(tb_ctx_));
+  } else if (OB_FAIL(tb_ctx_.init_expr_frame_info(expr_frame_info))) {
+    LOG_WARN("fail to init expr frame info", K(ret));
   } else {
     tb_ctx_.set_init_flag(true);
-    tb_ctx_.set_expr_info(expr_frame_info);
   }
 
   return ret;
@@ -939,7 +940,7 @@ int QueryAndMutateHelper::execute_query_and_mutate()
 
     if (OB_NOT_NULL(scan_spec)) {
       scan_spec->destroy_executor(executor);
-      tb_ctx_.set_expr_info(nullptr);
+      tb_ctx_.reset_expr_frame_info();
     }
     ObTableQueryUtils::destroy_result_iterator(result_iterator);
   }

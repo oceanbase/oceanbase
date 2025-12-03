@@ -694,6 +694,10 @@ public:
   int classify_scan_exprs();
   // 初始化exec_ctx_和exec_ctx_.das_ctx_
   int init_exec_ctx(bool need_das_ctx = true);
+  // init expr_info_ and exec_ctx_.expr_op_ctx_store_
+  int init_expr_frame_info(ObExprFrameInfo *expr_info);
+  // reset expr_frame_info and exec_ctx_.expr_op_ctx_store_
+  void reset_expr_frame_info();
   // init exec_ctx_.my_session_.tx_desc_
   int init_trans(transaction::ObTxDesc *trans_desc,
                  const transaction::ObTxReadSnapshot &tx_snapshot);

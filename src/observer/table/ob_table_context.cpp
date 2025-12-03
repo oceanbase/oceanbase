@@ -1989,6 +1989,29 @@ int ObTableCtx::init_exec_ctx(bool need_das_ctx/*true*/)
 }
 
 /*
+  set expr_info and init expr op for exec_ctx_ to adapt substring_index situation
+*/
+int ObTableCtx::init_expr_frame_info(ObExprFrameInfo *expr_info)
+{
+  int ret = OB_SUCCESS;
+  expr_info_ = expr_info;
+  if (OB_ISNULL(exec_ctx_.get_expr_op_ctx_store())
+      && OB_NOT_NULL(expr_info_)
+      && OB_FAIL(exec_ctx_.init_expr_op(expr_info_->need_ctx_cnt_))) {
+    LOG_WARN("fail to initialize expression operation", K(ret), K(this));
+  }
+  return ret;
+}
+
+void ObTableCtx::reset_expr_frame_info()
+{
+  expr_info_ = nullptr;
+  if (OB_NOT_NULL(exec_ctx_.get_expr_op_ctx_store())) {
+    exec_ctx_.reset_expr_op();
+  }
+}
+
+/*
   init the das context:
     - generate table loc for all the index table and add to das context
     - generate the local tablet loc and add to das context,

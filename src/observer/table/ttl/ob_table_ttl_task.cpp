@@ -351,7 +351,7 @@ int ObTableTTLDeleteTask::process_one()
 
       if (OB_NOT_NULL(scan_spec)) {
         scan_spec->destroy_executor(executor);
-        scan_ctx.set_expr_info(nullptr);
+        scan_ctx.reset_expr_frame_info();
       }
     }
   }
@@ -419,9 +419,10 @@ int ObTableTTLDeleteTask::init_scan_tb_ctx(ObKvSchemaCacheGuard &schema_cache_gu
     LOG_WARN("fail to alloc expr memory", K(ret));
   } else if (OB_FAIL(tb_ctx.init_exec_ctx())) {
     LOG_WARN("fail to init exec ctx", KR(ret), K(tb_ctx));
+  } else if (OB_FAIL(tb_ctx.init_expr_frame_info(expr_frame_info))) {
+    LOG_WARN("fail to init expr frame info", KR(ret));
   } else {
     tb_ctx.set_init_flag(true);
-    tb_ctx.set_expr_info(expr_frame_info);
   }
 
   return ret;

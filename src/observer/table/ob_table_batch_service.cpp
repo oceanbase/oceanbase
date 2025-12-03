@@ -605,7 +605,7 @@ int ObTableBatchService::htable_delete(ObTableBatchCtx &ctx,
 
   if (OB_NOT_NULL(spec)) {
     spec->destroy_executor(executor);
-    tb_ctx.set_expr_info(nullptr);
+    tb_ctx.reset_expr_frame_info();
   }
 
   if (OB_SUCC(ret)) {
@@ -744,7 +744,7 @@ int ObTableBatchService::process_htable_delete(const ObTableOperation &op,
     }
     if (OB_NOT_NULL(spec)) {
       spec->destroy_executor(executor);
-      tb_ctx.set_expr_info(nullptr);
+      tb_ctx.reset_expr_frame_info();
     }
 
     if (OB_SUCC(ret)) {
