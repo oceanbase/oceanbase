@@ -1760,7 +1760,7 @@ int ObTxDescMgr::alloc(ObTxDesc *&tx_desc, const bool in_tenant_space)
   int ret = OB_SUCCESS;
   OV(inited_, OB_NOT_INIT);
   OV(!stoped_, OB_IN_STOP_STATE);
-  OV(tx_desc, NULL);
+  OV(!tx_desc);
   if (OB_SUCC(ret)) {
     if (in_tenant_space) {
        OZ(map_.alloc_value(tx_desc));
