@@ -442,6 +442,7 @@ int ObGtsSource::wait_gts_elapse(const int64_t ts, ObTsCbTask *task, bool &need_
   return ret;
 }
 
+// if tenant has been dropped, return OB_TENANT_HAS_BEEN_DROPPED
 int ObGtsSource::wait_gts_elapse(const int64_t ts)
 {
   int ret = OB_SUCCESS;
@@ -471,6 +472,13 @@ int ObGtsSource::wait_gts_elapse(const int64_t ts)
       if (OB_SUCCESS != (tmp_ret = get_gts_leader_(leader))) {
         TRANS_LOG(WARN, "get gts leader fail", K(tmp_ret), K_(tenant_id));
         (void)refresh_gts_location_();
+        if (OB_TENANT_HAS_BEEN_DROPPED == tmp_ret) {
+          // if tenant has been dropped, return OB_TENANT_HAS_BEEN_DROPPED
+          ret = OB_TENANT_HAS_BEEN_DROPPED;
+          TRANS_LOG(WARN, "tenant has been dropped", K(ret));
+        } else {
+          // do nothing
+        }
       } else if (leader == server_) {
         // When getting gts, if the global timestamp service is locally, get gts directly
         if (OB_SUCCESS != (tmp_ret = get_gts_from_local_timestamp_service_(leader, gts))) {
