@@ -528,6 +528,17 @@ public:
   }
 
   int64_t count() const { return heap_.count(); }
+  int set_nprobe(const int64_t nprobe)
+  {
+    int ret = OB_SUCCESS;
+    if (heap_.count() > nprobe) {
+      ret = OB_INVALID_ARGUMENT;
+      SHARE_LOG(WARN, "heap count is already large than nprobe", K(ret), K(nprobe), K(heap_.count()), K(nprobe_));
+    } else {
+      nprobe_ = nprobe;
+    }
+    return ret;
+  }
 
  public:
   struct HeapCenterItemTemp

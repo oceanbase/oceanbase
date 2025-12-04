@@ -484,6 +484,7 @@ _io_read_redundant_limit_percentage
 _iut_enable
 _iut_max_entries
 _iut_stat_collection_type
+_ivf_max_scan_vectors
 _lcl_op_interval
 _load_tde_encrypt_engine
 _lob_rowsets_max_rows

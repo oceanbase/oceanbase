@@ -274,6 +274,18 @@ class ObIvfAadaptiveCtx
     is_range_prefilter_ = false;
     is_brute_force_ = false;
   }
+
+  void reuse() {
+    iter_times_ = 0;
+    iter_filter_row_cnt_ = 0;
+    iter_res_row_cnt_ = 0;
+    pre_scan_row_cnt_ = 0;
+    cid_vec_scan_rows_ = 0;
+    vec_dist_calc_cnt_ = 0;
+    is_range_prefilter_ = false;
+    is_brute_force_ = false;
+  }
+
   double selectivity_;
   int64_t row_count_;
   int64_t iter_times_;
@@ -341,7 +353,9 @@ public:
         can_retry_(false),
         tmp_main_rowkey_(),
         search_param_(),
-        similarity_threshold_(0)
+        similarity_threshold_(0),
+        scan_tablet_size_(1),
+        max_scan_vectors_(0)
   {
     dis_type_ = ObExprVectorDistance::ObVecDisType::MAX_TYPE;
     saved_rowkeys_.set_attr(ObMemAttr(MTL_ID(), "VecIdxKeyRanges"));
@@ -469,8 +483,7 @@ protected:
                       || (vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN && vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER);}
   inline bool is_adaptive_filter() { return vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN;}
   inline bool is_iter_filter() { return vec_index_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER
-                      || (vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN && vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER)
-                      || (vec_index_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER && OB_NOT_NULL(data_filter_iter_));}
+                      || (vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN && vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER);}
   inline bool check_if_can_retry() { return is_adaptive_filter() && (vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER 
                                                                  || vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER);}
   int reset_filter_path();
@@ -571,6 +584,8 @@ protected:
   // similarity threshold
   ObVectorIndexParam search_param_;
   float similarity_threshold_;
+  uint64_t scan_tablet_size_;
+  int64_t max_scan_vectors_;
 };
 
 class ObDASIvfScanIter : public ObDASIvfBaseScanIter
