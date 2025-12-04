@@ -828,6 +828,7 @@ int ObAutoincrementService::clear_autoinc_cache_all(const uint64_t tenant_id,
     arg.tenant_id_ = tenant_id;
     arg.table_id_  = table_id;
     arg.column_id_ = column_id;
+    arg.autoinc_is_order_ = autoinc_is_order;
     ObHashSet<ObAddr> server_set;
     if (OB_FAIL(server_set.create(PARTITION_LOCATION_SET_BUCKET_NUM))) {
       LOG_WARN("failed to create hash set", K(ret));
@@ -878,7 +879,8 @@ int ObAutoincrementService::clear_autoinc_cache(const obrpc::ObAutoincSyncArg &a
     // do nothing; key does not exist
     ret = OB_SUCCESS;
   }
-  if (OB_SUCC(ret) && OB_FAIL(global_autoinc_service_.clear_global_autoinc_cache(key))) {
+  if (OB_SUCC(ret) && arg.autoinc_is_order_ &&
+      OB_FAIL(global_autoinc_service_.clear_global_autoinc_cache(key))) {
     LOG_WARN("failed to clear global autoinc cache", K(ret));
   }
   return ret;

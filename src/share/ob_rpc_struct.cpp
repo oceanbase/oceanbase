@@ -6265,7 +6265,8 @@ OB_SERIALIZE_MEMBER(ObTriggerStorageCacheArg,
                     op_,
                     tenant_id_);
 OB_SERIALIZE_MEMBER(ObAutoincSyncArg,
-                    tenant_id_, table_id_, column_id_, table_part_num_, auto_increment_, sync_value_);
+                    tenant_id_, table_id_, column_id_, table_part_num_, auto_increment_,
+                    sync_value_, autoinc_is_order_);
 
 OB_SERIALIZE_MEMBER(ObAdminChangeReplicaArg, force_cmd_);
 
