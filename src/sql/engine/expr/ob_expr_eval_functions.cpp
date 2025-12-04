@@ -1465,6 +1465,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprPosList::generate_pos_list,                          /* 884 */
   NULL, // ObExprMonthsAdd::calc_months_add,                          /* 885 */
   NULL, // ObExprParseDateTime::calc_parse_date_time                  /* 886 */
+  NULL, // ObExprIsNan::eval_is_nan,                                  /* 887 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1965,6 +1966,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, //ObExprMonthsAdd::calc_months_add_vector,                       /* 310 */
   NULL, // ObExprParseDateTime::calc_parse_date_time_vector              /* 311 */
   NULL, // ObExprReverse::calc_reverse_expr_vector                       /* 312 */
+  NULL, // ObExprIsNan::eval_is_nan_vector,                              /* 313 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
