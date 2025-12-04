@@ -51,8 +51,6 @@ public:
   int get_micro_block_cache(ObArray<TestSSCommonUtil::MicroBlockInfo> &micro_block_info_arr, int idx, int thread_num);
   int add_micro_block(const int64_t macro_blk_cnt, const int64_t micro_blk_cnt, const int64_t tid,
       const int64_t thread_num, const bool is_random, ObHashMap<ObSSMicroBlockCacheKey, int64_t> &micro_key_map);
-  int batch_add_micro_block(const uint64_t tablet_id, const int64_t micro_cnt, const int64_t micro_size);
-  int batch_get_micro_block_meta(const uint64_t tablet_id, const int64_t micro_cnt, const int64_t micro_size, int64_t &get_cnt);
 };
 
 void TestSSMicroCache::SetUpTestCase()
@@ -188,91 +186,6 @@ int TestSSMicroCache::add_micro_block(
   return ret;
 }
 
-int TestSSMicroCache::batch_add_micro_block(
-  const uint64_t tablet_id,
-  const int64_t micro_cnt,
-  const int64_t micro_size)
-{
-  int ret = OB_SUCCESS;
-  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
-  ObArenaAllocator allocator;
-  char *data_buf = nullptr;
-  if (OB_UNLIKELY(micro_cnt <= 0 || micro_size <= 0 || tablet_id == 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(micro_cnt), K(micro_size), K(tablet_id));
-  } else if (OB_ISNULL(micro_cache)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("micro_cache should not be null", KR(ret), KP(micro_cache));
-  } else if (OB_ISNULL(data_buf = static_cast<char *>(allocator.alloc(micro_size)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate memory", KR(ret), K(micro_size));
-  } else {
-    const int32_t phy_blk_size = micro_cache->phy_blk_size_;
-    const int64_t payload_offset = ObSSMemBlock::get_reserved_size();
-    const int64_t offset = payload_offset;
-    int64_t add_cnt = 0;
-    for (int64_t i = 1; OB_SUCC(ret) && (i <= micro_cnt); ++i) {
-      MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(tablet_id, i);
-      ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
-      const uint32_t effective_tablet_id = macro_id.second_id();
-      char c = micro_key.hash() % 26 + 'a';
-      MEMSET(data_buf, c, micro_size);
-      const ObSSMicroCacheAccessType access_type = ObSSMicroCacheAccessType::COMMON_IO_TYPE;
-      if (OB_FAIL(micro_cache->add_micro_block_cache(micro_key, data_buf, micro_size, effective_tablet_id, access_type))) {
-        if (OB_EAGAIN == ret) { // if add too fast, sleep for a while, and retry
-          ob_usleep(1000);
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("fail to add micro_block cache", KR(ret), K(i), K(micro_key), K(tablet_id), K(access_type));
-        }
-      } else if (i % 200 == 0) {
-        ob_usleep(1000);
-        ++add_cnt;
-      } else {
-        ++add_cnt;
-      }
-    }
-    LOG_INFO("TEST: finish batch add micro_block", K(add_cnt), K(tablet_id), K(micro_cnt));
-    allocator.clear();
-  }
-  return ret;
-}
-
-int TestSSMicroCache::batch_get_micro_block_meta(
-  const uint64_t tablet_id,
-  const int64_t micro_cnt,
-  const int64_t micro_size,
-  int64_t &get_cnt)
-{
-  int ret = OB_SUCCESS;
-  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
-  ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
-  if (OB_UNLIKELY(micro_cnt <= 0 || micro_size <= 0 || tablet_id == 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(micro_cnt), K(micro_size), K(tablet_id));
-  } else {
-    get_cnt = 0;
-    const int64_t payload_offset = ObSSMemBlock::get_reserved_size();
-    const int64_t offset = payload_offset;
-    for (int64_t i = 1; OB_SUCC(ret) && (i <= micro_cnt); ++i) {
-      MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(tablet_id, i);
-      ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
-      ObSSMicroBlockMetaHandle micro_meta_handle;
-      ret = micro_meta_mgr.get_micro_block_meta(micro_key, micro_meta_handle, macro_id.second_id(), true/*update_arc*/);
-      if (OB_FAIL(ret)) {
-        if (OB_ENTRY_NOT_EXIST == ret) {
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("fail to get micro_block meta", KR(ret), K(micro_key), K(i), K(tablet_id));
-        }
-      } else {
-        ++get_cnt;
-      }
-    }
-    LOG_INFO("TEST: finish batch get micro_block", K(tablet_id), K(micro_cnt), K(get_cnt));
-  }
-  return ret;
-}
 
 /*
   Limit memory size, and add a lot of micro block to memory.
@@ -894,7 +807,8 @@ TEST_F(TestSSMicroCache, test_clear_micro_meta_by_tablet_id)
 
   // Scenario 1: only tablet_id 100 is in the micro cache, clear tablet_id 100
   {
-    ASSERT_EQ(OB_SUCCESS, batch_add_micro_block(100/* tablet_id */, micro_cnt, avg_micro_size));
+    int64_t add_cnt = 0;
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::batch_add_micro_block(100/* tablet_id */, micro_cnt, avg_micro_size, avg_micro_size, add_cnt));
     ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
 
     ASSERT_EQ(OB_SUCCESS, micro_cache->clear_micro_meta_by_tablet_id(ObTabletID(100)));
@@ -953,16 +867,18 @@ TEST_F(TestSSMicroCache, test_clear_micro_meta_by_tablet_id)
 
   // Scenario 2: exist tablet_id 100 and 200 in the micro cache, clear tablet_id 200
   {
-    ASSERT_EQ(OB_SUCCESS, batch_add_micro_block(100/* tablet_id */, micro_cnt, avg_micro_size));
-    ASSERT_EQ(OB_SUCCESS, batch_add_micro_block(200/* tablet_id */, micro_cnt, avg_micro_size));
+    int64_t add_cnt_100 = 0;
+    int64_t add_cnt_200 = 0;
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::batch_add_micro_block(100/* tablet_id */, micro_cnt, avg_micro_size, avg_micro_size, add_cnt_100));
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::batch_add_micro_block(200/* tablet_id */, micro_cnt, avg_micro_size, avg_micro_size, add_cnt_200));
     ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
 
     int64_t get_cnt_100 = 0;
-    ASSERT_EQ(OB_SUCCESS, batch_get_micro_block_meta(100/* tablet_id */, micro_cnt, avg_micro_size, get_cnt_100));
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::batch_get_micro_block_meta(100/* tablet_id */, micro_cnt, avg_micro_size, avg_micro_size, get_cnt_100));
     ASSERT_GT(get_cnt_100, 0);
     ASSERT_EQ(get_cnt_100, arc_info.seg_info_arr_[SS_ARC_T2].cnt_);
     int64_t get_cnt_200 = 0;
-    ASSERT_EQ(OB_SUCCESS, batch_get_micro_block_meta(200/* tablet_id */, micro_cnt, avg_micro_size, get_cnt_200));
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::batch_get_micro_block_meta(200/* tablet_id */, micro_cnt, avg_micro_size, avg_micro_size, get_cnt_200));
     ASSERT_GT(get_cnt_200, 0);
 
     // Perform the deletion request of tablet_id 200
@@ -1024,13 +940,15 @@ TEST_F(TestSSMicroCache, test_clear_micro_meta_by_tablet_id)
 
   // Scenario 3: exist tablet_id 100 and 300 in the micro cache, clear tablet_id 100
   {
-    ASSERT_EQ(OB_SUCCESS, batch_add_micro_block(100/* tablet_id */, micro_cnt, avg_micro_size));
-    ASSERT_EQ(OB_SUCCESS, batch_add_micro_block(300/* tablet_id */, micro_cnt, avg_micro_size));
+    int64_t add_cnt_100 = 0;
+    int64_t add_cnt_300 = 0;
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::batch_add_micro_block(100/* tablet_id */, micro_cnt, avg_micro_size, avg_micro_size, add_cnt_100));
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::batch_add_micro_block(300/* tablet_id */, micro_cnt, avg_micro_size, avg_micro_size, add_cnt_300));
     ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
 
     // Read the micro_block meta of tablet_id 100
     int64_t get_cnt_100 = 0;
-    ASSERT_EQ(OB_SUCCESS, batch_get_micro_block_meta(100/* tablet_id */, micro_cnt, avg_micro_size, get_cnt_100));
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::batch_get_micro_block_meta(100/* tablet_id */, micro_cnt, avg_micro_size, avg_micro_size, get_cnt_100));
     ASSERT_GT(get_cnt_100, 0);
     ASSERT_EQ(get_cnt_100, arc_info.seg_info_arr_[SS_ARC_T2].cnt_);
 
@@ -1063,10 +981,10 @@ TEST_F(TestSSMicroCache, test_clear_micro_meta_by_tablet_id)
     ASSERT_EQ(true, finish_ckpt);
 
     get_cnt_100 = 0;
-    ASSERT_EQ(OB_SUCCESS, batch_get_micro_block_meta(100/* tablet_id */, micro_cnt, avg_micro_size, get_cnt_100));
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::batch_get_micro_block_meta(100/* tablet_id */, micro_cnt, avg_micro_size, avg_micro_size, get_cnt_100));
     ASSERT_EQ(get_cnt_100, 0);
     int64_t get_cnt_300 = 0;
-    ASSERT_EQ(OB_SUCCESS, batch_get_micro_block_meta(300/* tablet_id */, micro_cnt, avg_micro_size, get_cnt_300));
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::batch_get_micro_block_meta(300/* tablet_id */, micro_cnt, avg_micro_size, avg_micro_size, get_cnt_300));
     ASSERT_GT(get_cnt_300, 0);
     ASSERT_EQ(get_cnt_300, arc_info.seg_info_arr_[SS_ARC_T2].cnt_);
     ASSERT_EQ(micro_stat.total_micro_cnt_, arc_info.seg_info_arr_[SS_ARC_T2].cnt_);
@@ -1103,8 +1021,8 @@ TEST_F(TestSSMicroCache, test_clear_micro_meta_by_tablet_id)
       }
     }
     int64_t get_cnt_300 = 0;
-    ASSERT_EQ(OB_SUCCESS, batch_get_micro_block_meta(300/* tablet_id */, micro_cnt, avg_micro_size, get_cnt_300));
-    ASSERT_GE(get_cnt_300, micro_cnt / 2);
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::batch_get_micro_block_meta(300/* tablet_id */, micro_cnt, avg_micro_size, avg_micro_size, get_cnt_300));
+    ASSERT_GT(get_cnt_300, 0);
 
     // Perform 1st meta ckpt to check if the ghost meta is persisted into disk
     bool finish_ckpt = false;
@@ -1126,8 +1044,7 @@ TEST_F(TestSSMicroCache, test_clear_micro_meta_by_tablet_id)
     ASSERT_LT(micro_stat.total_micro_cnt_, micro_cnt);
     ASSERT_EQ(arc_info.seg_info_arr_[SS_ARC_T1].cnt_, 0);
     ASSERT_EQ(arc_info.seg_info_arr_[SS_ARC_B1].cnt_, 0);
-    ASSERT_GE(arc_info.seg_info_arr_[SS_ARC_T2].cnt_, micro_cnt / 2);
-    ASSERT_LE(arc_info.seg_info_arr_[SS_ARC_B2].cnt_, micro_cnt / 2);
+    ASSERT_GT(arc_info.seg_info_arr_[SS_ARC_T2].cnt_, 0);
     ASSERT_GT(arc_info.seg_info_arr_[SS_ARC_B2].cnt_, 0);
     ASSERT_EQ(1, super_blk.tablet_info_list_.count());
 
@@ -1157,7 +1074,7 @@ TEST_F(TestSSMicroCache, test_clear_micro_meta_by_tablet_id)
     ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_B2].cnt_);
 
     get_cnt_300 = 0;
-    ASSERT_EQ(OB_SUCCESS, batch_get_micro_block_meta(300/* tablet_id */, micro_cnt, avg_micro_size, get_cnt_300));
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::batch_get_micro_block_meta(300/* tablet_id */, micro_cnt, avg_micro_size, avg_micro_size, get_cnt_300));
     ASSERT_EQ(get_cnt_300, 0);
   }
 

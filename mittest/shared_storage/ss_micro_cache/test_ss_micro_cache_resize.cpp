@@ -120,7 +120,7 @@ TEST_F(TestSSMicroCacheResize, test_decrease_micro_cache_size_pct)
   const uint64_t tenant_id = MTL_ID();
   {
     // 1. try to decrease micro_cache size pct
-    int64_t new_pct = 10;
+    int64_t new_pct = 3;
     bool succ_adjust = false;
     int64_t new_micro_cache_size = 0;
     ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->try_adjust_cache_file_size(new_pct, succ_adjust, new_micro_cache_size));
@@ -131,18 +131,28 @@ TEST_F(TestSSMicroCacheResize, test_decrease_micro_cache_size_pct)
   {
     // 2. try to decrease micro_cache size pct, but increase total disk size
     const int64_t micro_cache_size_pct = ObTenantDiskSpaceManager::get_micro_cache_size_pct(tenant_id);
-    const int64_t new_micro_cache_pct = 15;
+    const int64_t new_micro_cache_pct = 3;
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
     if (tenant_config.is_valid()) {
       tenant_config->_ss_micro_cache_size_max_percentage = new_micro_cache_pct;
     }
     ASSERT_EQ(new_micro_cache_pct, ObTenantDiskSpaceManager::get_micro_cache_size_pct(tenant_id));
     bool succ_resize = false;
-    const int64_t new_total_size = ori_total_disk_size * 2 - 100 * 1024 * 1024L;
+    const int64_t new_total_size = ori_total_disk_size * 1.8 - 100 * 1024 * 1024L;
+    // increase server total disk size, ensure enough space for tenant disk size expansion
+    const int64_t delta_size = new_total_size - ori_total_disk_size;
+    const int64_t server_free_disk_size = OB_SERVER_DISK_SPACE_MGR.get_free_disk_size();
+    if (delta_size > server_free_disk_size) {
+      const int64_t server_total_disk_size = OB_SERVER_DISK_SPACE_MGR.get_total_disk_size();
+      const int64_t new_server_total_disk_size = server_total_disk_size + (delta_size - server_free_disk_size) + 1024 * 1024 * 1024L;
+      ASSERT_EQ(OB_SUCCESS, OB_SERVER_DISK_SPACE_MGR.resize(new_server_total_disk_size));
+    }
+
     ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->resize_total_disk_size(new_total_size, succ_resize));
     ASSERT_EQ(true, succ_resize);
     double micro_cache_pct = tenant_config->_ss_micro_cache_size_max_percentage / static_cast<double>(100);
-    const int64_t exp_micro_cache_size = new_total_size * micro_cache_pct;
+    const int64_t calculated_micro_cache_size = new_total_size * micro_cache_pct;
+    const int64_t exp_micro_cache_size = MAX(calculated_micro_cache_size, ObTenantDiskSpaceManager::DEF_MICRO_CACHE_MIN_START_SIZE);
     ASSERT_EQ(exp_micro_cache_size, tnt_disk_space_mgr->micro_cache_file_size_);
   }
 }
@@ -236,6 +246,91 @@ TEST_F(TestSSMicroCacheResize, test_get_micro_block_and_resize_larger)
     ASSERT_LT(origin_data_blk_cnt, phy_blk_mgr.blk_cnt_info_.data_blk_.used_cnt_);
   }
 
+}
+
+TEST_F(TestSSMicroCacheResize, test_adjust_micro_cache_size_pct)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("TEST_CASE: start test_adjust_micro_cache_size_pct");
+  ObTenantDiskSpaceManager *tnt_disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, tnt_disk_space_mgr);
+  const uint64_t tenant_id = MTL_ID();
+  const int64_t ori_total_disk_size = tnt_disk_space_mgr->total_disk_size_;
+  const int64_t ori_micro_cache_size = tnt_disk_space_mgr->micro_cache_file_size_;
+
+  // 1. Adjust micro cache size pct to 20%
+  const int64_t large_pct = 20;
+  const int64_t small_pct = 5;
+  {
+    const int64_t ori_pct = ObTenantDiskSpaceManager::get_micro_cache_size_pct(tenant_id);
+    const int64_t ori_micro_cache_size = tnt_disk_space_mgr->micro_cache_file_size_;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      tenant_config->_ss_micro_cache_size_max_percentage = large_pct;
+    }
+    ASSERT_EQ(large_pct, ObTenantDiskSpaceManager::get_micro_cache_size_pct(tenant_id));
+    bool succ_adjust = false;
+    int64_t new_micro_cache_size = 0;
+    ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->try_adjust_cache_file_size(large_pct, succ_adjust, new_micro_cache_size));
+    ASSERT_EQ(true, succ_adjust);
+    ASSERT_LT(ori_micro_cache_size, new_micro_cache_size);
+    FLOG_INFO("[TEST] initial state", K(ori_micro_cache_size),
+              "current_micro_cache_size", tnt_disk_space_mgr->micro_cache_file_size_);
+  }
+
+  // 2. Directly resize micro cache size pct to 5%
+  // Because micro_cache size can't decrease for now, so the adjust result will be false.
+  {
+    const int64_t ori_micro_cache_size = tnt_disk_space_mgr->micro_cache_file_size_;
+    bool succ_adjust = false;
+    int64_t new_micro_cache_size = 0;
+    ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->try_adjust_cache_file_size(small_pct, succ_adjust, new_micro_cache_size));
+    ASSERT_EQ(false, succ_adjust);
+    ASSERT_EQ(0, new_micro_cache_size);
+    FLOG_INFO("[TEST] adjust result", K(ori_micro_cache_size),
+              "current_micro_cache_size", tnt_disk_space_mgr->micro_cache_file_size_);
+  }
+
+  // 3. Increase total disk size to ensure micro cache size can be adjusted to 5%
+  {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      tenant_config->_ss_micro_cache_size_max_percentage = small_pct;
+    }
+    ASSERT_EQ(small_pct, ObTenantDiskSpaceManager::get_micro_cache_size_pct(tenant_id));
+
+    // increase server total disk size, ensure enough space for tenant disk size expansion
+    const int64_t new_total_size = ori_total_disk_size * 4 + 100 * 1024 * 1024L;
+    const int64_t delta_size = new_total_size - ori_total_disk_size;
+    const int64_t server_free_disk_size = OB_SERVER_DISK_SPACE_MGR.get_free_disk_size();
+    if (delta_size > server_free_disk_size) {
+      const int64_t server_total_disk_size = OB_SERVER_DISK_SPACE_MGR.get_total_disk_size();
+      const int64_t new_server_total_disk_size = server_total_disk_size + (delta_size - server_free_disk_size) + 1024 * 1024 * 1024L;
+      ASSERT_EQ(OB_SUCCESS, OB_SERVER_DISK_SPACE_MGR.resize(new_server_total_disk_size));
+    }
+
+    // resize tenant disk size
+    bool succ_resize_disk_size = false;
+    const int64_t ori_micro_cache_size = tnt_disk_space_mgr->micro_cache_file_size_;
+    ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->resize_total_disk_size(new_total_size, succ_resize_disk_size));
+    ASSERT_EQ(true, succ_resize_disk_size);
+    const int64_t curr_disk_size = tnt_disk_space_mgr->get_total_disk_size();
+    const int64_t curr_micro_cache_size = tnt_disk_space_mgr->micro_cache_file_size_;
+    ASSERT_EQ(new_total_size, curr_disk_size);
+    ASSERT_GT(curr_micro_cache_size, ori_micro_cache_size);
+    FLOG_INFO("[TEST] adjust result", K(curr_disk_size),
+              "current_micro_cache_size", tnt_disk_space_mgr->micro_cache_file_size_);
+
+    // adjust micro cache size to 5%
+    int64_t new_micro_cache_size = 0;
+    bool succ_resize_micro_cache = false;
+    ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->try_adjust_cache_file_size(small_pct, succ_resize_micro_cache, new_micro_cache_size));
+    // because micro_cache_file size has already adjusted when resize_total_disk_size(), so the adjust result will be false.
+    ASSERT_EQ(false, succ_resize_micro_cache);
+    ASSERT_EQ(0, new_micro_cache_size);
+  }
+
+  LOG_INFO("TEST_CASE: finish test_adjust_micro_cache_size_pct");
 }
 
 } // namespace storage

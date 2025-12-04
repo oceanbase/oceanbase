@@ -504,6 +504,169 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
   LOG_INFO("TEST_CASE: finish test_restart_micro_cache");
 }
 
+TEST_F(TestSSMicroCacheRestart, test_restart_with_small_file)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("TEST_CASE: start test_restart_with_small_file");
+  ObArenaAllocator allocator;
+  ObTenantDiskSpaceManager *tnt_disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, tnt_disk_space_mgr);
+  const uint64_t tenant_id = MTL_ID();
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ASSERT_NE(nullptr, micro_cache);
+  // increase server total disk size, ensure enough space for start micro cache
+  {
+    const int64_t ori_total_disk_size = tnt_disk_space_mgr->total_disk_size_;
+    const int64_t new_total_size = (1L << 32); // at least 4GB
+    const int64_t delta_size = new_total_size - ori_total_disk_size;
+    const int64_t server_free_disk_size = OB_SERVER_DISK_SPACE_MGR.get_free_disk_size();
+    if (delta_size > server_free_disk_size) {
+      const int64_t server_total_disk_size = OB_SERVER_DISK_SPACE_MGR.get_total_disk_size();
+      const int64_t new_server_total_disk_size = server_total_disk_size + (delta_size - server_free_disk_size) + 1024 * 1024 * 1024L;
+      ASSERT_EQ(OB_SUCCESS, OB_SERVER_DISK_SPACE_MGR.resize(new_server_total_disk_size));
+      LOG_INFO("TEST_CASE: finish increase server total disk size", K(new_server_total_disk_size), K(tnt_disk_space_mgr->total_disk_size_));
+    }
+  }
+
+  const int64_t ori_micro_cache_size = tnt_disk_space_mgr->total_disk_size_ * 0.2;
+  ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::restart_micro_cache(micro_cache, tenant_id, ori_micro_cache_size, 1));
+  ASSERT_EQ(ori_micro_cache_size, micro_cache->cache_file_size_);
+  LOG_INFO("TEST_CASE: finish restart micro cache with 20% of disk size",
+    K(micro_cache->cache_file_size_));
+
+  ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
+  ObSSMicroCacheMicroStat &micro_stat = cache_stat.micro_stat_;
+  ASSERT_EQ(0, micro_stat.total_micro_cnt_);
+  ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
+  ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
+  ObSSMicroRangeManager &micro_range_mgr = micro_cache->micro_range_mgr_;
+  ObSSMicroCacheTaskStat &task_stat = cache_stat.task_stat_;
+  ObSSARCInfo &arc_info = micro_meta_mgr.arc_info_;
+  ObSSPersistMicroMetaTask &micro_ckpt_task = micro_cache->task_runner_.persist_meta_task_;
+  ObSSDoBlkCheckpointTask &blk_ckpt_task = micro_cache->task_runner_.blk_ckpt_task_;
+
+  const int64_t micro_size = 12 * 1024;
+  const int64_t micro_cnt = 1000;
+  const int64_t TIMEOUT_S = 30;
+  {
+    // 1.1 add some data into micro_cache
+    const uint64_t tablet_id = 100;
+    int64_t add_cnt = 0;
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::batch_add_micro_block(tablet_id, micro_cnt, micro_size, micro_size, add_cnt));
+    ASSERT_GT(add_cnt, 0);
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
+
+    // 1.2 get micro meta
+    int64_t get_cnt = 0;
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::batch_get_micro_block_meta(tablet_id, micro_cnt, micro_size, micro_size, get_cnt));
+    ASSERT_GT(get_cnt, 0);
+    ASSERT_GT(micro_stat.total_micro_cnt_, 0);
+    ASSERT_GT(micro_stat.valid_micro_cnt_, 0);
+
+    // 1.3 wait for micro_ckpt and blk_ckpt to finish
+    int64_t ori_blk_ckpt_cnt = task_stat.blk_ckpt_cnt_;
+    int64_t ori_micro_ckpt_cnt = task_stat.micro_ckpt_cnt_;
+    ASSERT_EQ(0, ori_micro_ckpt_cnt);
+    blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.prev_ckpt_us_ = TestSSCommonUtil::get_prev_blk_ckpt_time_us();
+    bool finish_ckpt = false;
+    int64_t cur_time_s = ObTimeUtility::current_time_s();
+    do {
+      if (task_stat.blk_ckpt_cnt_ > ori_blk_ckpt_cnt &&
+          (task_stat.micro_ckpt_cnt_ > ori_micro_ckpt_cnt) &&
+          (micro_ckpt_task.persist_meta_op_.micro_ckpt_ctx_.complete_full_ckpt_)) {
+        finish_ckpt = true;
+      } else if (task_stat.micro_ckpt_cnt_ == ori_micro_ckpt_cnt) {
+        ASSERT_EQ(OB_SUCCESS, micro_ckpt_task.persist_meta_op_.start_op());
+        micro_ckpt_task.persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
+        ASSERT_EQ(OB_SUCCESS, micro_ckpt_task.persist_meta_op_.gen_checkpoint());
+        ob_usleep(10 * 1000);
+      } else {
+        LOG_INFO("still waiting for blk checkpoint", K(ori_blk_ckpt_cnt), K(ori_micro_ckpt_cnt), K(task_stat));
+        ob_usleep(1000 * 1000);
+      }
+    } while (!finish_ckpt && ObTimeUtility::current_time_s() - cur_time_s <= TIMEOUT_S);
+    ASSERT_EQ(true, finish_ckpt);
+    ASSERT_GT(micro_stat.total_micro_cnt_, 0);
+    ASSERT_GT(micro_stat.valid_micro_cnt_, 0);
+
+    // 1.4 clear micro_cache
+    ASSERT_EQ(OB_SUCCESS, micro_cache->clear_micro_cache());
+    ASSERT_EQ(0, micro_stat.total_micro_cnt_);
+    ASSERT_EQ(0, micro_stat.valid_micro_cnt_);
+    ASSERT_EQ(arc_info.seg_info_arr_[SS_ARC_T1].cnt_, 0);
+    ASSERT_EQ(arc_info.seg_info_arr_[SS_ARC_T1].size_, 0);
+    ASSERT_EQ(arc_info.seg_info_arr_[SS_ARC_T2].cnt_, 0);
+    ASSERT_EQ(arc_info.seg_info_arr_[SS_ARC_T2].size_, 0);
+    ASSERT_EQ(arc_info.seg_info_arr_[SS_ARC_B1].cnt_, 0);
+    ASSERT_EQ(arc_info.seg_info_arr_[SS_ARC_B2].cnt_, 0);
+    ASSERT_EQ(arc_info.seg_info_arr_[SS_ARC_B2].size_, 0);
+    ASSERT_EQ(arc_info.seg_info_arr_[SS_ARC_B1].size_, 0);
+  }
+
+  // restart micro cache with 5% of tenant's total disk size
+  const int64_t new_macro_cache_size = tnt_disk_space_mgr->total_disk_size_ * 0.05;
+  ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::restart_micro_cache(micro_cache, tenant_id, new_macro_cache_size, 1));
+  ASSERT_EQ(new_macro_cache_size, micro_cache->cache_file_size_);
+  LOG_INFO("TEST_CASE: finish restart micro cache with 5% of disk size",
+    K(micro_cache->cache_file_size_));
+  {
+    // 2.1 add some new data into micro_cache
+    const uint64_t tablet_id = 200;
+    int64_t add_cnt = 0;
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::batch_add_micro_block(tablet_id, micro_cnt, micro_size, micro_size, add_cnt));
+    ASSERT_GT(add_cnt, 0);
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
+
+    // 2.2 get micro meta
+    int64_t get_cnt = 0;
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::batch_get_micro_block_meta(tablet_id, micro_cnt, micro_size, micro_size, get_cnt));
+    ASSERT_GT(get_cnt, 0);
+    ASSERT_GT(micro_stat.total_micro_cnt_, 0);
+    ASSERT_GT(micro_stat.valid_micro_cnt_, 0);
+
+    // 2.3 wait for micro_ckpt and blk_ckpt to finish
+    int64_t ori_blk_ckpt_cnt = task_stat.blk_ckpt_cnt_;
+    int64_t ori_micro_ckpt_cnt = task_stat.micro_ckpt_cnt_;
+    ASSERT_EQ(0, ori_micro_ckpt_cnt);
+    blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.prev_ckpt_us_ = TestSSCommonUtil::get_prev_blk_ckpt_time_us();
+    bool finish_ckpt = false;
+    int64_t cur_time_s = ObTimeUtility::current_time_s();
+    do {
+      if (task_stat.blk_ckpt_cnt_ > ori_blk_ckpt_cnt &&
+          (task_stat.micro_ckpt_cnt_ > ori_micro_ckpt_cnt) &&
+          (micro_ckpt_task.persist_meta_op_.micro_ckpt_ctx_.complete_full_ckpt_)) {
+        finish_ckpt = true;
+      } else if (task_stat.micro_ckpt_cnt_ == ori_micro_ckpt_cnt) {
+        ASSERT_EQ(OB_SUCCESS, micro_ckpt_task.persist_meta_op_.start_op());
+        micro_ckpt_task.persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
+        ASSERT_EQ(OB_SUCCESS, micro_ckpt_task.persist_meta_op_.gen_checkpoint());
+        ob_usleep(10 * 1000);
+      } else {
+        LOG_INFO("still waiting for blk checkpoint", K(ori_blk_ckpt_cnt), K(ori_micro_ckpt_cnt), K(task_stat));
+        ob_usleep(1000 * 1000);
+      }
+    } while (!finish_ckpt && ObTimeUtility::current_time_s() - cur_time_s <= TIMEOUT_S);
+    ASSERT_EQ(true, finish_ckpt);
+    ASSERT_GT(micro_stat.total_micro_cnt_, 0);
+    ASSERT_GT(micro_stat.valid_micro_cnt_, 0);
+
+    // 2.4 clear micro_cache
+    ASSERT_EQ(OB_SUCCESS, micro_cache->clear_micro_cache());
+    ASSERT_EQ(0, micro_stat.total_micro_cnt_);
+    ASSERT_EQ(0, micro_stat.valid_micro_cnt_);
+    ASSERT_EQ(arc_info.seg_info_arr_[SS_ARC_T1].cnt_, 0);
+    ASSERT_EQ(arc_info.seg_info_arr_[SS_ARC_T1].size_, 0);
+    ASSERT_EQ(arc_info.seg_info_arr_[SS_ARC_T2].cnt_, 0);
+    ASSERT_EQ(arc_info.seg_info_arr_[SS_ARC_T2].size_, 0);
+    ASSERT_EQ(arc_info.seg_info_arr_[SS_ARC_B1].cnt_, 0);
+    ASSERT_EQ(arc_info.seg_info_arr_[SS_ARC_B2].cnt_, 0);
+    ASSERT_EQ(arc_info.seg_info_arr_[SS_ARC_B2].size_, 0);
+    ASSERT_EQ(arc_info.seg_info_arr_[SS_ARC_B1].size_, 0);
+  }
+
+  LOG_INFO("TEST_CASE: finish test_restart_with_small_file");
+}
+
 } // namespace storage
 } // namespace oceanbase
 

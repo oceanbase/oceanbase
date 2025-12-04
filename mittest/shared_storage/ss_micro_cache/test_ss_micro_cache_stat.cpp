@@ -318,8 +318,11 @@ TEST_F(TestSSMicroCacheStat, test_micro_cache_stat)
   cache_stat.cache_load_.common_io_load_.write_load_.update_load_param(1, 200, 12 * 1024 * 1024);
   available_space = 0;
   ASSERT_EQ(OB_SUCCESS, micro_cache->get_available_space_for_prewarm(available_space));
-  ASSERT_EQ(available_space,
-      max_cache_data_blk_cnt * micro_cache->phy_blk_size_ * avaliable_pct / 100 - SS_CLOSE_EVICTION_DIFF_SIZE);
+  // When micro cache size is small (e.g., 5% default), the calculated value may be negative,
+  // but the actual implementation uses MAX(SS_CLOSE_EVICTION_DIFF_SIZE, calculated_value)
+  const int64_t expected_available_space = MAX(SS_CLOSE_EVICTION_DIFF_SIZE,
+    max_cache_data_blk_cnt * micro_cache->phy_blk_size_ * avaliable_pct / 100 - SS_CLOSE_EVICTION_DIFF_SIZE);
+  ASSERT_EQ(available_space, expected_available_space);
 
   // 8. make arc work_limit=0
   release_cache_task.is_inited_ = true;

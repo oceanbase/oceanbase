@@ -2501,7 +2501,7 @@ DEF_TIME(_ss_local_cache_expiration_time, OB_TENANT_PARAMETER, "0s", "[0s,)",
          "Range: [0s, )",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_INT(_ss_micro_cache_size_max_percentage, OB_TENANT_PARAMETER, "20", "[1, 99]",
+DEF_INT(_ss_micro_cache_size_max_percentage, OB_TENANT_PARAMETER, "5", "[1, 99]",
         "The percentage of tenant disk size used by ss_micro_cache in shared_storage mode,"
         "Range: [1, 99]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
