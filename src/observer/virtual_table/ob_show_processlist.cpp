@@ -256,7 +256,11 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
                 if(true == sess_info->get_use_pl_inner_info_string()) {
                   cur_row_->cells_[cell_idx].set_varchar(pl_info_string_);
                 } else {
-                  cur_row_->cells_[cell_idx].set_varchar(sess_info->get_current_query_string());
+                  ObString query_string = sess_info->get_current_query_string();
+                  if (query_string.length() > ObBasicSessionInfo::MAX_QUERY_STRING_LEN) {
+                    query_string.clip(query_string.ptr() + ObBasicSessionInfo::MAX_QUERY_STRING_LEN);
+                  }
+                  cur_row_->cells_[cell_idx].set_varchar(query_string);
                 }
               cur_row_->cells_[cell_idx].set_collation_type(default_collation);
             } else {
