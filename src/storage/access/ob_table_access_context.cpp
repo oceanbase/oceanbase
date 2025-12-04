@@ -544,7 +544,6 @@ int ObTableAccessContext::rescan_reuse(ObTableScanParam &scan_param)
     if (nullptr != sample_filter_) {
       sample_filter_->reuse();
     }
-    is_inc_major_query_ = false;
   }
   return ret;
 }
