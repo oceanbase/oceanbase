@@ -1962,7 +1962,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, //ObExprQuote::eval_quote_vector,                                /* 307 */
   NULL, //ObExprUnhex::eval_unhex_vector,                                /* 308 */
   NULL, //ObExprAddMonths::calc_add_months_vector,                       /* 309 */
-  NULL, //ObExprAddMonths::calc_months_add_vector,                       /* 310 */
+  NULL, //ObExprMonthsAdd::calc_months_add_vector,                       /* 310 */
   NULL, // ObExprParseDateTime::calc_parse_date_time_vector              /* 311 */
   NULL, // ObExprReverse::calc_reverse_expr_vector                       /* 312 */
 };
