@@ -11788,7 +11788,7 @@ int ObRootService::set_config_after_bootstrap_()
     LOG_WARN("push _ob_enable_pl_dynamic_stack_check failed", KR(ret));
   } else if (OB_FAIL(configs.push_back({"_system_trig_enabled", "false"}))) {
     LOG_WARN("push _system_trig_enabled failed", KR(ret));
-  } else if (OB_FAIL(configs.push_back({"_update_all_columns_for_trigger", "false"}))) {
+  } else if (OB_FAIL(configs.push_back({"_update_all_columns_for_trigger", "true"}))) {
     LOG_WARN("push _update_all_columns_for_trigger failed", KR(ret));
   } else if (OB_FAIL(configs.push_back({"_enable_spf_batch_rescan", "true"}))) {
     LOG_WARN("push _enable_spf_batch_rescan failed", KR(ret));
