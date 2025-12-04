@@ -641,7 +641,6 @@ int ObTableApiSessNode::get_sess_node_val(ObTableApiSessGuard &guard)
         ret = OB_SUCCESS;
       }
     }
-
     if (OB_SUCC(ret)) {
       if (OB_ISNULL(tmp_val)) { // has no session in sess_queue_, need extend
         if (OB_FAIL(extend_and_get_sess_val(guard))) {
@@ -650,7 +649,8 @@ int ObTableApiSessNode::get_sess_node_val(ObTableApiSessGuard &guard)
       } else {
         guard.sess_node_val_ = tmp_val;
       }
-    } else {
+    }
+    if (OB_FAIL(ret)) {
       ATOMIC_DEC(&sess_ref_cnt_); // dec ref cnt if failed
     }
   }
