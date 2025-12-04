@@ -205,6 +205,7 @@ int ObSimpleTableSchemaV2::assign(const ObSimpleTableSchemaV2 &other)
       truncate_version_ = other.truncate_version_;
       storage_cache_policy_type_ = other.storage_cache_policy_type_;
       with_dynamic_partition_policy_ = other.with_dynamic_partition_policy_;
+      minor_row_store_type_ = other.minor_row_store_type_;
       if (OB_FAIL(table_mode_.assign(other.table_mode_))) {
         LOG_WARN("Fail to assign table mode", K(ret), K(other.table_mode_));
       } else if (OB_FAIL(deep_copy_str(other.table_name_, table_name_))) {
@@ -267,7 +268,8 @@ bool ObSimpleTableSchemaV2::operator ==(const ObSimpleTableSchemaV2 &other) cons
      link_database_name_ == other.link_database_name_ &&
      object_status_ == other.object_status_ &&
      truncate_version_ == other.truncate_version_ &&
-     storage_cache_policy_type_ == other.storage_cache_policy_type_) {
+     storage_cache_policy_type_ == other.storage_cache_policy_type_ &&
+     minor_row_store_type_ == other.minor_row_store_type_) {
      ret = true;
      if (true == ret) {
        if (simple_foreign_key_info_array_.count() == other.simple_foreign_key_info_array_.count()) {
@@ -344,6 +346,7 @@ void ObSimpleTableSchemaV2::reset()
   master_key_id_ = OB_INVALID_ID;
   truncate_version_ = OB_INVALID_VERSION;
   with_dynamic_partition_policy_ = false;
+  minor_row_store_type_ = ObStoreFormat::DEFAULT_MINOR_ROW_STORE_TYPE;
   ObPartitionSchema::reset();
   storage_cache_policy_type_ = ObStorageCachePolicyType::MAX_POLICY;
 }
@@ -991,7 +994,8 @@ int64_t ObSimpleTableSchemaV2::to_string(char *buf, const int64_t buf_len) const
     K_(truncate_version),
     K_(duplicate_read_consistency),
     K_(storage_cache_policy_type),
-    K_(with_dynamic_partition_policy)
+    K_(with_dynamic_partition_policy),
+    K_(minor_row_store_type)
 );
   J_OBJ_END();
 
@@ -7717,6 +7721,7 @@ OB_DEF_SERIALIZE(ObTableSchema)
   OB_UNIS_ENCODE(tmp_mlog_tid_);
   OB_UNIS_ENCODE(semistruct_properties_);
   OB_UNIS_ENCODE(ttl_flag_);
+  OB_UNIS_ENCODE(minor_row_store_type_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7969,6 +7974,7 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   OB_UNIS_DECODE(tmp_mlog_tid_);
   OB_UNIS_DECODE_AND_FUNC(semistruct_properties_, deep_copy_str);
   OB_UNIS_DECODE(ttl_flag_);
+  OB_UNIS_DECODE(minor_row_store_type_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -8121,6 +8127,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(tmp_mlog_tid_);
   OB_UNIS_ADD_LEN(semistruct_properties_);
   OB_UNIS_ADD_LEN(ttl_flag_);
+  OB_UNIS_ADD_LEN(minor_row_store_type_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员

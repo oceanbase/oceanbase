@@ -483,6 +483,7 @@ ObStorageSchema::ObStorageSchema()
     merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE),
     semistruct_encoding_type_(),
     semistruct_properties_(),
+    minor_row_store_type_(ObStoreFormat::DEFAULT_MINOR_ROW_STORE_TYPE),
     is_inited_(false)
 {
 }
@@ -858,6 +859,7 @@ void ObStorageSchema::reset()
   master_key_id_ = INVALID_ID;
   compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE;
+  minor_row_store_type_ = ObStoreFormat::DEFAULT_MINOR_ROW_STORE_TYPE;
   if (nullptr != allocator_) {
     reset_string(encryption_);
     reset_string(encrypt_key_);
@@ -984,6 +986,9 @@ int ObStorageSchema::serialize(char *buf, const int64_t buf_len, int64_t &pos) c
     if (OB_SUCC(ret) && storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V6) {
       OB_UNIS_ENCODE(semistruct_properties_);
       OB_UNIS_ENCODE(micro_block_format_version_);
+    }
+    if (OB_SUCC(ret) && storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V7) {
+      OB_UNIS_ENCODE(minor_row_store_type_);
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -1112,6 +1117,9 @@ int ObStorageSchema::deserialize(
       } else {
         OB_UNIS_DECODE(micro_block_format_version_);
       }
+    }
+    if (OB_SUCC(ret) && storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V7) {
+      OB_UNIS_DECODE(minor_row_store_type_);
     }
     if (OB_SUCC(ret)) {
       is_inited_ = true;
@@ -1672,6 +1680,9 @@ int64_t ObStorageSchema::get_serialize_size() const
     OB_UNIS_ADD_LEN(semistruct_properties_);
     OB_UNIS_ADD_LEN(micro_block_format_version_);
   }
+  if (storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V7) {
+    OB_UNIS_ADD_LEN(minor_row_store_type_);
+  }
   return len;
 }
 
@@ -2190,6 +2201,7 @@ int ObStorageSchema::copy_from(const share::schema::ObMergeSchema &input_schema)
     master_key_id_ = input_schema.get_master_key_id();
     compressor_type_ = input_schema.get_compressor_type();
     merge_engine_type_ = input_schema.get_merge_engine_type();
+    minor_row_store_type_ = input_schema.get_minor_row_store_type();
   }
 
   return ret;

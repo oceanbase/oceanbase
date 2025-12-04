@@ -1225,6 +1225,15 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigDefaultMicroBlockFormatVersionChecker);
 };
 
+class ObConfigDefaultDeltaFormatChecker : public ObConfigChecker
+{
+public:
+  ObConfigDefaultDeltaFormatChecker() = default;
+  virtual ~ObConfigDefaultDeltaFormatChecker() = default;
+  bool check(const ObConfigItem &t) const;
+  DISABLE_COPY_ASSIGN(ObConfigDefaultDeltaFormatChecker);
+};
+
 } // namespace common
 } // namespace oceanbase
 

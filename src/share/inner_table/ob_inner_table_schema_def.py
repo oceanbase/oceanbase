@@ -333,6 +333,7 @@ all_table_def = dict(
       ('mview_expand_definition', 'longtext', 'false', ''), #placeholder for mview in 4353
       ('fts_index_type', 'int', 'false', '0'),
       ('ttl_flag', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'false', '\\x01'),
+      ('delta_format', 'varchar:OB_MAX_VARCHAR_LENGTH', 'false', 'flat'),
     ],
 )
 

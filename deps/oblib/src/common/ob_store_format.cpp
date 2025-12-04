@@ -28,6 +28,15 @@ const char *ObStoreFormat::row_store_name[MAX_ROW_STORE] =
   "flat_opt_row_store"
 };
 
+const char *ObStoreFormat::delta_format_name[MAX_ROW_STORE] =
+{
+  "flat",
+  nullptr,
+  nullptr,
+  "encoding",
+  "flat"
+};
+
 const ObStoreFormatItem ObStoreFormat::store_format_items[OB_STORE_FORMAT_MAX] =
 {
   {"", "", "", ENCODING_ROW_STORE},   //OB_STORE_FORMAT_INVALID
@@ -118,6 +127,25 @@ int ObStoreFormat::find_store_format_type_oracle(const ObString &store_format, O
 int ObStoreFormat::find_store_format_type(const ObString &store_format, const bool is_oracle_mode, ObStoreFormatType &store_format_type)
 {
   return is_oracle_mode ? find_store_format_type_oracle(store_format, store_format_type) : find_store_format_type_mysql(store_format, store_format_type);
+}
+
+int ObStoreFormat::resolve_delta_row_store_type(const ObString &str, ObRowStoreType &row_store_type)
+{
+  INIT_SUCC(ret);
+  int i = 0;
+  for (; i < MAX_ROW_STORE; ++i) {
+    if (0 == str.case_compare(delta_format_name[i])) {
+      break;
+    }
+  }
+  if (!is_minor_row_store_type_valid(ObRowStoreType(i))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid delta format name!", "delta format name", str, K(i));
+  } else {
+    row_store_type = ObRowStoreType(i);
+  }
+
+  return ret;
 }
 
 int ObTableStoreFormat::find_table_store_type(const ObString &table_store_format, ObTableStoreType &table_store_type)

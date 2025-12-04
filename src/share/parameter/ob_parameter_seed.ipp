@@ -3132,3 +3132,8 @@ DEF_INT(_ss_garbage_collect_concurrency, OB_TENANT_PARAMETER, "0", "[0, 100]",
         "If set to 0, the system auto-calculates the worker count as the tenant’s max_cpu divided by 4; otherwise, the worker count is set to the specified value."
         "Range: [0, 100] in integer",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(default_delta_format, OB_TENANT_PARAMETER, "flat",
+                     common::ObConfigDefaultDeltaFormatChecker,
+                     "Controls default delta format when creating table",
+                     ObParameterAttr(Section::TENANT, Source::DEFAULT,
+                                     EditLevel::DYNAMIC_EFFECTIVE));

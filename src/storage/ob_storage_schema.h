@@ -377,7 +377,7 @@ public:
       "rowkey_cnt", rowkey_array_.count(), K_(rowkey_array), "column_cnt", column_array_.count(), K_(column_array),
       "skip_index_cnt", skip_idx_attr_array_.count(), K_(skip_idx_attr_array),
       "column_group_cnt", column_group_array_.count(), K_(column_group_array), K_(has_all_column_group), K_(merge_engine_type),
-      K_(micro_block_format_version));
+      K_(micro_block_format_version), K_(minor_row_store_type));
 public:
   static int trim(const ObCollationType type, blocksstable::ObStorageDatum &storage_datum);
 private:
@@ -435,6 +435,7 @@ public:
   static const int64_t STORAGE_SCHEMA_VERSION_V4 = 4;
   static const int64_t STORAGE_SCHEMA_VERSION_V5 = 5; // add for merge_engine_type_ and semistruct encoding type in 4.3.5 bp2
   static const int64_t STORAGE_SCHEMA_VERSION_V6 = 6; // add for micro_block_format_version and semistruct properties in 4.4.1 bp1
+  static const int64_t STORAGE_SCHEMA_VERSION_V7 = 7; // add for minor_row_store_type in 4.5.1
   static const int64_t STORAGE_SCHEMA_VERSION_LATEST = STORAGE_SCHEMA_VERSION_V6;
   common::ObIAllocator *allocator_;
   int64_t storage_schema_version_;
@@ -479,6 +480,7 @@ public:
   ObMergeEngineType merge_engine_type_;
   share::schema::ObSemiStructEncodingType semistruct_encoding_type_;
   common::ObString semistruct_properties_;
+  ObRowStoreType minor_row_store_type_;
   bool is_inited_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageSchema);

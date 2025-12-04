@@ -700,6 +700,7 @@ public:
   virtual bool need_encrypt() const = 0;
   virtual inline bool is_global_index_table() const = 0;
   virtual inline common::ObRowStoreType get_row_store_type() const { return common::MAX_ROW_STORE; }
+  virtual inline common::ObRowStoreType get_minor_row_store_type() const { return common::MAX_ROW_STORE; }
   virtual inline const char *get_compress_func_name() const { return all_compressor_name[ObCompressorType::NONE_COMPRESSOR]; }
   virtual inline common::ObCompressorType get_compressor_type() const { return ObCompressorType::NONE_COMPRESSOR; }
   virtual inline int64_t get_progressive_merge_round() const { return INVAID_RET; }
@@ -1377,6 +1378,7 @@ protected:
   // storage cache policy type
   storage::ObStorageCachePolicyType storage_cache_policy_type_;
   bool with_dynamic_partition_policy_; // do not persist to disk
+  ObRowStoreType minor_row_store_type_;
 };
 
 class ObTableSchema : public ObSimpleTableSchemaV2

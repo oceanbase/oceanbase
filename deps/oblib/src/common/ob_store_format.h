@@ -85,6 +85,8 @@ public:
   static const ObStoreFormatType STORE_FORMAT_MYSQL_DEFAULT = OB_STORE_FORMAT_DYNAMIC_MYSQL;
   static const ObStoreFormatType STORE_FORMAT_ORACLE_START = OB_STORE_FORMAT_NOCOMPRESS_ORACLE;
   static const ObStoreFormatType STORE_FORMAT_ORACLE_DEFAULT = OB_STORE_FORMAT_ARCHIVE_ORACLE;
+  // originally row store type of mini / minor sstable is flat
+  static const ObRowStoreType DEFAULT_MINOR_ROW_STORE_TYPE = FLAT_ROW_STORE;
 private:
   ObStoreFormat() {};
   virtual ~ObStoreFormat() {};
@@ -117,6 +119,20 @@ public:
   static inline bool is_store_format_valid(const ObStoreFormatType store_format, bool is_oracle_mode)
   {
     return is_oracle_mode ? is_store_format_oracle(store_format) : is_store_format_mysql(store_format);
+  }
+  static inline bool is_minor_row_store_type_valid(const ObRowStoreType type)
+  {
+    return is_row_store_type_with_flat(type) || CS_ENCODING_ROW_STORE == type;
+  }
+  static int resolve_delta_row_store_type(const ObString& delta_format, ObRowStoreType& row_store_type);
+  static const char* get_delta_format_name(const ObRowStoreType row_store_type)
+  {
+    return is_minor_row_store_type_valid(row_store_type) ? delta_format_name[row_store_type] : nullptr;
+  }
+  static bool is_delta_format_valid(const ObString &delta_format)
+  {
+    ObRowStoreType row_store_type;
+    return OB_SUCCESS == resolve_delta_row_store_type(delta_format, row_store_type);
   }
   static inline const char* get_store_format_name(const ObStoreFormatType store_format)
   {
@@ -164,6 +180,7 @@ public:
 private:
   static const ObStoreFormatItem store_format_items[OB_STORE_FORMAT_MAX];
   static const char *row_store_name[MAX_ROW_STORE];
+  static const char *delta_format_name[MAX_ROW_STORE];
 };
 
 class ObTableStoreFormat {
