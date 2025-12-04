@@ -207,7 +207,7 @@ public:
   void dec_hold_size(ObMicroBlockDataHandle &handle);
   bool reach_hold_limit() const;
   OB_INLINE bool is_valid() const { return is_inited_; }
-  void add_block_io_wait_time_us(const uint64_t block_io_wait_time_us);
+  void add_block_io_wait_time(const int64_t block_io_wait_time);
   void set_effective_tablet_id(const common::ObTabletID &effective_tablet_id) { effective_tablet_id_ = effective_tablet_id; }
   const common::ObTabletID &get_effective_tablet_id() { return effective_tablet_id_; }
   TO_STRING_KV(K_(is_inited), KP_(table_store_stat), KPC_(query_flag),

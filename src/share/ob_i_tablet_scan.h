@@ -175,7 +175,7 @@ struct ObLimitParam
 
 struct ObTSCMonitorInfo
 {
-  uint64_t* block_io_wait_time_us_;
+  uint64_t* block_io_wait_time_;
   int64_t* io_read_bytes_;
   int64_t* ssstore_read_bytes_;
   int64_t* base_read_row_cnt_;
@@ -186,7 +186,7 @@ struct ObTSCMonitorInfo
   int64_t* skip_index_skip_block_cnt_;
 
   ObTSCMonitorInfo()
-    : block_io_wait_time_us_(nullptr),
+    : block_io_wait_time_(nullptr),
       io_read_bytes_(nullptr),
       ssstore_read_bytes_(nullptr),
       base_read_row_cnt_(nullptr),
@@ -196,7 +196,7 @@ struct ObTSCMonitorInfo
       storage_filtered_row_cnt_(nullptr),
       skip_index_skip_block_cnt_(nullptr) {}
 
-  ObTSCMonitorInfo(uint64_t* block_io_wait_time_us,
+  ObTSCMonitorInfo(uint64_t* block_io_wait_time,
                     int64_t* io_read_bytes,
                     int64_t* ssstore_read_bytes,
                     int64_t* base_read_row_cnt,
@@ -205,7 +205,7 @@ struct ObTSCMonitorInfo
                     int64_t* blockscan_row_cnt,
                     int64_t* storage_filtered_row_cnt,
                     int64_t* skip_index_skip_block_cnt)
-    : block_io_wait_time_us_(block_io_wait_time_us),
+    : block_io_wait_time_(block_io_wait_time),
       io_read_bytes_(io_read_bytes),
       ssstore_read_bytes_(ssstore_read_bytes),
       base_read_row_cnt_(base_read_row_cnt),
@@ -215,7 +215,7 @@ struct ObTSCMonitorInfo
       storage_filtered_row_cnt_(storage_filtered_row_cnt),
       skip_index_skip_block_cnt_(skip_index_skip_block_cnt) {}
 
-  void init(uint64_t* block_io_wait_time_us,
+  void init(uint64_t* block_io_wait_time,
             int64_t* io_read_bytes,
             int64_t* ssstore_read_bytes,
             int64_t* base_read_row_cnt,
@@ -225,7 +225,7 @@ struct ObTSCMonitorInfo
             int64_t* storage_filtered_row_cnt,
             int64_t* skip_index_skip_block_cnt)
   {
-    block_io_wait_time_us_ = block_io_wait_time_us;
+    block_io_wait_time_ = block_io_wait_time;
     io_read_bytes_ = io_read_bytes;
     ssstore_read_bytes_ = ssstore_read_bytes;
     base_read_row_cnt_ = base_read_row_cnt;
@@ -236,9 +236,9 @@ struct ObTSCMonitorInfo
     skip_index_skip_block_cnt_ = skip_index_skip_block_cnt;
   }
 
-  void add_block_io_wait_time_us(const uint64_t block_io_wait_time_us) {
-    if (OB_NOT_NULL(block_io_wait_time_us_)) {
-      *block_io_wait_time_us_ += block_io_wait_time_us;
+  void add_block_io_wait_time(const uint64_t block_io_wait_time) {
+    if (OB_NOT_NULL(block_io_wait_time_)) {
+      *block_io_wait_time_ += block_io_wait_time;
     }
   }
 
@@ -292,8 +292,8 @@ struct ObTSCMonitorInfo
 
   void reset_stat()
   {
-    if (OB_NOT_NULL(block_io_wait_time_us_)) {
-      *block_io_wait_time_us_ = 0;
+    if (OB_NOT_NULL(block_io_wait_time_)) {
+      *block_io_wait_time_ = 0;
     }
     if (OB_NOT_NULL(io_read_bytes_)) {
       *io_read_bytes_ = 0;
@@ -322,7 +322,7 @@ struct ObTSCMonitorInfo
   }
 
   DEFINE_TO_STRING(
-    OB_ISNULL(block_io_wait_time_us_) ? J_KV(K(block_io_wait_time_us_)) : J_KV(K(*block_io_wait_time_us_));
+    OB_ISNULL(block_io_wait_time_) ? J_KV(K(block_io_wait_time_)) : J_KV(K(*block_io_wait_time_));
     OB_ISNULL(io_read_bytes_) ? J_KV(K(io_read_bytes_)) : J_KV(K(*io_read_bytes_));
     OB_ISNULL(ssstore_read_bytes_) ? J_KV(K(ssstore_read_bytes_)) : J_KV(K(*ssstore_read_bytes_));
     OB_ISNULL(base_read_row_cnt_) ? J_KV(K(base_read_row_cnt_)) : J_KV(K(*base_read_row_cnt_));
