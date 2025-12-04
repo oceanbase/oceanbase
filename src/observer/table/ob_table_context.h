@@ -254,6 +254,8 @@ public:
     has_fts_index_ = false;
     fts_ctx_ = nullptr;
     is_ttl_delete_ = false;
+    io_read_batch_size_ = 0;
+    io_read_gap_size_ = 0;
   }
 
   void reset()
@@ -313,6 +315,8 @@ public:
     is_tablegroup_req_ = false;
     binlog_row_image_type_ = ObBinlogRowImage::FULL;
     is_full_table_scan_ = false;
+    io_read_batch_size_ = 0;
+    io_read_gap_size_ = 0;
     // others
     agg_cell_proj_.reset();
     is_count_all_ = false;
@@ -395,7 +399,9 @@ public:
                KPC_(credential),
                K_(has_fts_index),
                K_(fts_ctx),
-               K_(is_ttl_delete));
+               K_(is_ttl_delete),
+               K_(io_read_batch_size),
+               K_(io_read_gap_size));
 public:
   //////////////////////////////////////// getter ////////////////////////////////////////////////
   // for common
@@ -481,6 +487,8 @@ public:
   OB_INLINE const common::ObIArray<common::ObString>& get_query_col_names() const { return query_col_names_; }
   OB_INLINE bool is_total_quantity_log() const { return binlog_row_image_type_ == ObBinlogRowImage::FULL; }
   OB_INLINE bool is_full_table_scan() const { return is_full_table_scan_; }
+  OB_INLINE int64_t get_io_read_batch_size() const { return io_read_batch_size_; }
+  OB_INLINE int64_t get_io_read_gap_size() const { return io_read_gap_size_; }
   // for update
   OB_INLINE bool is_for_update() const { return is_for_update_; }
   OB_INLINE bool is_inc_or_append() const
@@ -728,6 +736,7 @@ public:
   int init_insert_when_inc_append();
   // only use for fts scan cg stage
   int prepare_text_retrieval_scan();
+  int init_scan_io_opt_params();
 public:
   // convert lob的allocator需要保证obj写入表达式后才能析构
   static int convert_lob(common::ObIAllocator &allocator, ObObj &obj);
@@ -841,6 +850,8 @@ private:
   int64_t offset_;
   int64_t limit_;
   common::ObSEArray<common::ObNewRange, 16> key_ranges_;
+  int64_t io_read_batch_size_;
+  int64_t io_read_gap_size_;
   // for update
   bool is_for_update_;
   ObTableOperationType::Type operation_type_;
