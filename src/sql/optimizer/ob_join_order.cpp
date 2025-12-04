@@ -2575,6 +2575,7 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
   int ret = OB_SUCCESS;
   ObSqlSchemaGuard *guard = NULL;
   IndexInfoEntry *index_info_entry = NULL;
+  bool has_match_expr = false;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(guard = OPT_CTX.get_sql_schema_guard()) || OB_ISNULL(stmt) || OB_ISNULL(OPT_CTX.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(get_plan()), K(guard), K(stmt));
@@ -2585,7 +2586,11 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
   } else if (OB_ISNULL(index_info_entry)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("index info entry should not be null", K(ret));
+  } else if (OB_FAIL(stmt->has_match_expr_on_table(table_id, has_match_expr))) {
+    LOG_WARN("failed to check has match expr", K(ret));
   } else {
+    // For tables with full-text search requirements, the index back dimension need not be considered due to functional lookup.
+    ignore_index_back_dim |= has_match_expr;
     bool is_index_back = ignore_index_back_dim ? false : index_info_entry->is_index_back();
     const OrderingInfo *ordering_info = &index_info_entry->get_ordering_info();
     ObSEArray<uint64_t, 8> interest_column_ids;
