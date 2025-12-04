@@ -1986,6 +1986,7 @@ int ObSql::handle_ps_prepare(const ObString &stmt,
                 && NEED_CHECK_SESS_MAX_PS_HANDLE_LIMIT(open_cursors_limit)
                 && cur_ps_handle_size >= open_cursors_limit) {
         ret = OB_ERR_OPEN_CURSORS_EXCEEDED;
+        LOG_USER_ERROR(OB_ERR_OPEN_CURSORS_EXCEEDED, "prepared statement handles");
         LOG_WARN("exceeds the maximum number of ps handles allowed to open on the session",
         K(ret), K(cur_ps_handle_size), K(open_cursors_limit));
       } else if (NULL != context.secondary_namespace_ || result.is_simple_ps_protocol()) {
