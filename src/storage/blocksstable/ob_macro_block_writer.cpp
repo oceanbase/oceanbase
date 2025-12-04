@@ -308,8 +308,7 @@ int ObMicroBlockAdaptiveSplitter::init(const ObDataStoreDesc &store_desc, const 
                        store_desc.get_major_working_cluster_version() >= DATA_VERSION_4_1_0_0;
     min_micro_row_count_ = MAX(min_micro_row_count, MICRO_ROW_MIN_COUNT);
     need_reduce_cross_mb_multi_version_rows_ = store_desc.is_for_data() &&
-                                               !store_desc.is_major_or_meta_merge_type() &&
-                                               store_desc.is_delete_insert_merge_engine();
+                                               !store_desc.is_major_or_meta_merge_type();
   }
 
   return ret;

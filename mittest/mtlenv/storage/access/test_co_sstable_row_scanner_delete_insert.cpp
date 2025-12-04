@@ -149,6 +149,7 @@ void TestCOSSTableRowScanner::prepare_co_query_param(const bool is_reverse)
   iter_param_.pd_storage_flag_.set_blockscan_pushdown(true);
   iter_param_.pd_storage_flag_.set_filter_pushdown(true);
   iter_param_.vectorized_enabled_ = true;
+  iter_param_.is_delete_insert_ = true;
 }
 
 void TestCOSSTableRowScanner::prepare_schema()
