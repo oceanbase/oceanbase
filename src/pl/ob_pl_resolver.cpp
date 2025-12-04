@@ -7439,7 +7439,8 @@ int ObPLResolver::resolve_inout_param(ObRawExpr *param_expr, ObPLRoutineParamMod
         int64_t var_idx
           = access_idxs.at(ObObjAccessIdx::get_local_variable_idx(access_idxs)).var_index_;
         CK (var_idx >= 0 && var_idx < obj_expr->get_var_indexs().count());
-        OZ (check_update_column(current_block_->get_namespace(), obj_expr->get_var_indexs().at(var_idx), access_idxs));
+        OZ (check_update_column(current_block_->get_namespace(), obj_expr->get_var_indexs().at(var_idx), access_idxs,
+                                resolve_ctx_.session_info_, resolve_ctx_.schema_guard_));
         OZ (check_local_variable_read_only(
           current_block_->get_namespace(),
           obj_expr->get_var_indexs().at(var_idx),
@@ -14317,7 +14318,8 @@ int ObPLResolver::check_variable_accessible(
   if (OB_FAIL(ret)) {
   } else if (ObObjAccessIdx::is_local_variable(access_idxs)) {
     if (for_write) {
-      OZ (check_update_column(ns, access_idxs.at(ObObjAccessIdx::get_local_variable_idx(access_idxs)).var_index_, access_idxs));
+      OZ (check_update_column(ns, access_idxs.at(ObObjAccessIdx::get_local_variable_idx(access_idxs)).var_index_,
+                              access_idxs, resolve_ctx_.session_info_, resolve_ctx_.schema_guard_));
       OZ (check_local_variable_read_only(
         ns, access_idxs.at(ObObjAccessIdx::get_local_variable_idx(access_idxs)).var_index_
         /*access_idxs.at(access_idxs.count() - 1).var_index_*/, is_inout_param), access_idxs);
@@ -14379,7 +14381,8 @@ int ObPLResolver::check_variable_accessible(
       if (T_OP_GET_SUBPROGRAM_VAR == f_expr->get_expr_type()) {
         uint64_t actual_var_idx = OB_INVALID_INDEX;
         OZ (get_const_expr_value(f_expr->get_param_expr(2), actual_var_idx));
-        OZ (check_update_column(*subprogram_ns, actual_var_idx, access_idxs));
+        OZ (check_update_column(*subprogram_ns, actual_var_idx, access_idxs,
+                                resolve_ctx_.session_info_, resolve_ctx_.schema_guard_));
         OZ (check_local_variable_read_only(*subprogram_ns, actual_var_idx));
       } else {
         OZ (check_local_variable_read_only(
@@ -14433,7 +14436,8 @@ int ObPLResolver::check_variable_accessible(ObRawExpr *expr, bool for_write)
         int64_t var_idx =
           access_idxs.at(ObObjAccessIdx::get_local_variable_idx(access_idxs)).var_index_;
         CK (var_idx >= 0 && var_idx < obj_access->get_var_indexs().count());
-        OZ (check_update_column(current_block_->get_namespace(), obj_access->get_var_indexs().at(var_idx), access_idxs));
+        OZ (check_update_column(current_block_->get_namespace(), obj_access->get_var_indexs().at(var_idx), access_idxs,
+                                resolve_ctx_.session_info_, resolve_ctx_.schema_guard_));
         OZ (check_local_variable_read_only(
           current_block_->get_namespace(), obj_access->get_var_indexs().at(var_idx)));
       }
@@ -14451,7 +14455,8 @@ int ObPLResolver::check_variable_accessible(ObRawExpr *expr, bool for_write)
       if (T_OP_GET_SUBPROGRAM_VAR == f_expr->get_expr_type()) {
         uint64_t actual_var_idx = OB_INVALID_INDEX;
         GET_CONST_EXPR_VALUE(f_expr->get_param_expr(2), actual_var_idx);
-        OZ (check_update_column(*subprogram_ns, actual_var_idx, access_idxs));
+        OZ (check_update_column(*subprogram_ns, actual_var_idx, access_idxs,
+                                resolve_ctx_.session_info_, resolve_ctx_.schema_guard_));
         OZ (check_local_variable_read_only(*subprogram_ns, actual_var_idx));
       } else {
         OZ (check_variable_accessible(current_block_->get_namespace(),
@@ -19227,7 +19232,8 @@ int ObPLResolver::check_var_type(ObString &name1, ObString &name2, uint64_t db_i
   return ret;
 }
 
-int ObPLResolver::check_update_column(const ObPLBlockNS &ns, uint64_t var_idx, const ObIArray<ObObjAccessIdx>& access_idxs)
+int ObPLResolver::check_update_column(const ObPLBlockNS &ns,uint64_t var_idx, const ObIArray<ObObjAccessIdx>& access_idxs,
+                                      ObSQLSessionInfo &session_info, ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
 #define COLLECT_ASSIGN_COLUMN \
@@ -19243,15 +19249,15 @@ int ObPLResolver::check_update_column(const ObPLBlockNS &ns, uint64_t var_idx, c
     } \
   } while (0)
 
-  if (resolve_ctx_.session_info_.is_for_trigger_package() && 2 == access_idxs.count()) {
+  if (session_info.is_for_trigger_package() && access_idxs.count() >= 2) {
     if (lib::is_oracle_mode()
         && !access_idxs.at(1).var_name_.case_compare_equal(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME)
         && access_idxs.at(0).var_name_.prefix_match(":")) {
       ObSchemaChecker schema_checker;
       const ObTriggerInfo *trg_info = NULL;
-      const uint64_t tenant_id = resolve_ctx_.session_info_.get_effective_tenant_id();
+      const uint64_t tenant_id = session_info.get_effective_tenant_id();
       COLLECT_ASSIGN_COLUMN;
-      OZ (schema_checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_server_sid()));
+      OZ (schema_checker.init(schema_guard, session_info.get_server_sid()));
       OZ (schema_checker.get_trigger_info(tenant_id,
                                           ns.get_db_name(),
                                           ns.get_package_name(),
@@ -19266,7 +19272,7 @@ int ObPLResolver::check_update_column(const ObPLBlockNS &ns, uint64_t var_idx, c
           const ObString column_name = access_idxs.at(1).var_name_;
           const ObTableSchema *table_schema = NULL;
           const ObColumnSchemaV2 *col_schema = NULL;
-          OZ (resolve_ctx_.schema_guard_.get_table_schema(tenant_id, table_id, table_schema));
+          OZ (schema_guard.get_table_schema(tenant_id, table_id, table_schema));
           CK (OB_NOT_NULL(table_schema));
           OX (col_schema = table_schema->get_column_schema(column_name));
           CK (OB_NOT_NULL(col_schema));

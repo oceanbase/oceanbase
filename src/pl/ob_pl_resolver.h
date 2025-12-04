@@ -696,6 +696,9 @@ public:
              || OB_SIZE_OVERFLOW == ret;
   }
 
+  static int check_update_column(const ObPLBlockNS &ns, uint64_t var_idx, const ObIArray<ObObjAccessIdx>& access_idxs,
+                                 sql::ObSQLSessionInfo &session_info, share::schema::ObSchemaGetterGuard &schema_guard);
+
 private:
   int resolve_declare_var(const ObStmtNodeTree *parse_tree, ObPLDeclareVarStmt *stmt, ObPLFunctionAST &func_ast);
   int resolve_declare_var(const ObStmtNodeTree *parse_tree, ObPLPackageAST &package_ast);
@@ -1206,7 +1209,6 @@ private:
                                    ObPLDataType pl_data_type,
                                    ObPLFunctionAST &func,
                                    int64_t &idx);
-  int check_update_column(const ObPLBlockNS &ns, uint64_t var_idx, const ObIArray<ObObjAccessIdx>& access_idxs);
   int get_udt_names(ObSchemaGetterGuard &schema_guard,
                     const uint64_t udt_id,
                     ObString &database_name,

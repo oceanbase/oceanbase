@@ -1157,6 +1157,21 @@ int ObRawExprUtils::resolve_udf_param_exprs(ObResolverParams &params,
               }
             }
           }
+          if (OB_SUCC(ret) && iexpr->is_obj_access_expr()
+              && nullptr != params.secondary_namespace_) {
+            ObObjAccessRawExpr *obj_access = static_cast<ObObjAccessRawExpr*>(iexpr);
+            CK (OB_NOT_NULL(obj_access));
+            if (OB_SUCC(ret) && pl::ObObjAccessIdx::is_local_variable(obj_access->get_access_idxs())) {
+              CK (OB_NOT_NULL(params.session_info_));
+              CK (OB_NOT_NULL(params.schema_checker_));
+              CK (OB_NOT_NULL(params.schema_checker_->get_schema_guard()));
+              OZ (pl::ObPLResolver::check_update_column(*params.secondary_namespace_,
+                                                        obj_access->get_var_indexs().at(0),
+                                                        obj_access->get_access_idxs(),
+                                                        *(params.session_info_),
+                                                        *(params.schema_checker_->get_schema_guard())));
+            }
+          }
 #define GET_CONST_EXPR_VALUE(expr, val)                                         \
 do {                                                                            \
   const ObConstRawExpr *c_expr = static_cast<const ObConstRawExpr*>(expr);      \
