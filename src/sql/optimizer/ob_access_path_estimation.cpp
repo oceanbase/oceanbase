@@ -2759,7 +2759,13 @@ int ObAccessPathEstimation::update_table_stat_info_by_dynamic_sampling(AccessPat
     no_ds_data = true;
   } else {
     int64_t row_count = item->stat_handle_.stat_->get_rowcount();
-    row_count = row_count != 0 ? row_count : 1;
+    for (int64_t i = 0; i < ds_result_items.count(); ++i) {
+      const ObDSResultItem &ds_item = ds_result_items.at(i);
+      if (OB_NOT_NULL(ds_item.stat_handle_.stat_)) {
+        row_count = std::max(row_count, ds_item.stat_handle_.stat_->get_rowcount());
+      }
+    }
+    row_count = std::max(row_count, 1L);
     ObCostTableScanInfo &est_cost_info = path->est_cost_info_;
     OptTableMetas &table_metas = path->parent_->get_plan()->get_basic_table_metas();
     OptTableMeta *table_meta = table_metas.get_table_meta_by_table_id(path->table_id_);

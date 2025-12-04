@@ -21,6 +21,8 @@
 #include "storage/mview/ob_mview_transaction.h"
 #include "storage/mview/ob_mview_mds.h"
 #include "rootserver/mview/ob_mview_utils.h"
+#include "share/stat/ob_opt_stat_manager.h"
+#include "sql/optimizer/ob_dynamic_sampling.h"
 
 namespace oceanbase
 {
@@ -644,6 +646,22 @@ int ObMViewRefresher::fast_refresh()
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid scn range", K(ret), K(mview_refresh_scn_range), K(base_table_scn_range));
         }
+      }
+    }
+  }
+
+  // erase mlog's dynamic sampling KV cache
+  if (OB_SUCC(ret)) {
+    ObOptDSStat::Key key;
+    key.tenant_id_ = tenant_id;
+    key.partition_hash_ = 0;
+    key.ds_level_ = ObDynamicSamplingLevel::BASIC_DYNAMIC_SAMPLING;
+    key.sample_block_ = OB_DS_BASIC_SAMPLE_MICRO_CNT;
+    key.expression_hash_ = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < mlog_infos.count(); ++i) {
+      key.table_id_ = mlog_infos.at(i).get_mlog_id();
+      if (OB_FAIL(common::ObOptStatManager::get_instance().erase_ds_stat(key))) {
+        LOG_WARN("failed to erase mlog ds stat cache before fast refresh", KR(ret), K(key), K(mlog_infos.at(i)));
       }
     }
   }
