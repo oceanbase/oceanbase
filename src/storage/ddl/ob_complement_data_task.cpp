@@ -211,6 +211,7 @@ int ObComplementDataParam::init(const ObDDLBuildSingleReplicaRequestArg &arg)
     direct_load_type_ = ObDirectLoadMgrUtil::ddl_get_direct_load_type(GCTX.is_shared_storage_mode(), data_format_version_);
     if (OB_FAIL(ObDDLTableSchema::fill_ddl_table_schema(dest_tenant_id_, dest_table_id_, allocator_, ddl_table_schema_))) {
       LOG_WARN("fill ddl table schema failed", K(ret));
+    } else if (FALSE_IT(ddl_table_schema_.src_tenant_id_ = orig_tenant_id)) {
     } else if (OB_FAIL(fill_tablet_param())) {
       LOG_WARN("fill tablet param failed", K(ret));
     } else {
