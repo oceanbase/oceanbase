@@ -221,6 +221,9 @@ public:
     if (d_.len_ > OB_MAX_DECIMAL_DIGIT) {
       ret = OB_ERR_UNEXPECTED;
       _OB_LOG(WARN, "Invalid digit len %u", d_.len_);
+    } else if (OB_UNLIKELY(0 != d_.reserved_)) {
+      ret = OB_ERR_UNEXPECTED;
+      _OB_LOG(WARN, "Invalid reserved %u", d_.reserved_);
     } else if (d_.len_ > 0 && digits_ != nullptr) {
       for (auto i = 0;  OB_SUCC(ret) && i < d_.len_; i++) {
         if (digits_[i] >= BASE) {
