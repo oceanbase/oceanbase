@@ -125,8 +125,10 @@ int ObIColumnDecoder::set_null_datums_from_fixed_column(
     if (OB_FAIL(ObBitStream::get(col_data, row_id * ctx.micro_block_header_->extend_value_bit_,
         ctx.micro_block_header_->extend_value_bit_, val))) {
       LOG_WARN("Get extend value failed", K(ret), K(ctx));
+    } else if (STORED_NOT_EXT != val) {
+      datums[i].set_null();
     } else {
-      datums[i].null_ = STORED_NOT_EXT != val;
+      datums[i].null_ = 0;
       datums[i].len_ = 0;
     }
   }
@@ -155,8 +157,10 @@ int ObIColumnDecoder::set_null_datums_from_var_column(
         ctx.micro_block_header_->extend_value_bit_,
         val))) {
       LOG_WARN("Failed to get extend value from row data", K(ret), K(ctx));
+    } else if (STORED_NOT_EXT != val) {
+      datums[i].set_null();
     } else {
-      datums[i].null_ = STORED_NOT_EXT != val;
+      datums[i].null_ = 0;
       datums[i].len_ = 0;
     }
   }
