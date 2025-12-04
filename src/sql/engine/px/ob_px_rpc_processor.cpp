@@ -77,7 +77,10 @@ int ObInitSqcP::process()
    * SQC的生命周期。
    */
   int64_t *sqc_rpc_process_cost = nullptr;
-  if (OB_NOT_NULL(sqc_handler)) {
+  if (OB_ISNULL(sqc_handler)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Sqc handler can't be nullptr", K(ret));
+  } else {
     sqc_rpc_process_cost = &arg_.sqc_handler_->get_sqc_metrics().sqc_rpc_process_cost_;
     ObPxRpcInitSqcArgs &arg = sqc_handler->get_sqc_init_arg();
     if (OB_FAIL(SET_INTERRUPTABLE(arg.sqc_.get_interrupt_id().px_interrupt_id_))) {
@@ -86,35 +89,32 @@ int ObInitSqcP::process()
       unregister_interrupt_ = true;
     }
   }
-  ScopedTimer timer(sqc_rpc_process_cost);
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(sqc_handler)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Sqc handler can't be nullptr", K(ret));
-  } else if (OB_FAIL(sqc_handler->init_env())) {
-    LOG_WARN("Failed to init sqc env", K(ret));
-  } else if (OB_FAIL(sqc_handler->pre_acquire_px_worker(result_.reserved_thread_count_))) {
-    LOG_WARN("Failed to pre acquire px worker", K(ret));
-  } else if (OB_FAIL(pre_setup_op_input(*sqc_handler))) {
-    LOG_WARN("pre setup op input failed", K(ret));
-  } else if (OB_FAIL(sqc_handler->thread_count_auto_scaling(result_.reserved_thread_count_))) {
-    LOG_WARN("fail to do thread auto scaling", K(ret), K(result_.reserved_thread_count_));
-  } else if (OB_FAIL(sqc_handler->prepare_tablets_info())) {
-    LOG_WARN("failed to prepare tablets_info");
-  } else if (result_.reserved_thread_count_ <= 0) {
-    ret = OB_ERR_INSUFFICIENT_PX_WORKER;
-    ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(dop_, sqc_handler->get_phy_plan().get_px_dop());
-    ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(required_px_workers_number_, 1);
-    ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(admitted_px_workers_number_, result_.reserved_thread_count_);
-    LOG_WARN("Worker thread res not enough", K_(result));
-  } else if (OB_FAIL(sqc_handler->link_qc_sqc_channel())) {
-    LOG_WARN("Failed to link qc sqc channel", K(ret));
-  } else if (sqc_handler->get_phy_plan().is_enable_px_fast_reclaim() &&
-      OB_FAIL(ObDetectManagerUtils::sqc_register_into_dm(sqc_handler, sqc_handler->get_sqc_init_arg().sqc_))) {
-    LOG_WARN("[DM] sqc failed to register_into_dm");
-  } else {
-    /*do nothing*/
+  if (OB_SUCC(ret)) {
+    ScopedTimer timer(sqc_rpc_process_cost);
+    if (OB_FAIL(sqc_handler->init_env())) {
+      LOG_WARN("Failed to init sqc env", K(ret));
+    } else if (OB_FAIL(sqc_handler->pre_acquire_px_worker(result_.reserved_thread_count_))) {
+      LOG_WARN("Failed to pre acquire px worker", K(ret));
+    } else if (OB_FAIL(pre_setup_op_input(*sqc_handler))) {
+      LOG_WARN("pre setup op input failed", K(ret));
+    } else if (OB_FAIL(sqc_handler->thread_count_auto_scaling(result_.reserved_thread_count_))) {
+      LOG_WARN("fail to do thread auto scaling", K(ret), K(result_.reserved_thread_count_));
+    } else if (OB_FAIL(sqc_handler->prepare_tablets_info())) {
+      LOG_WARN("failed to prepare tablets_info");
+    } else if (result_.reserved_thread_count_ <= 0) {
+      ret = OB_ERR_INSUFFICIENT_PX_WORKER;
+      ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(dop_, sqc_handler->get_phy_plan().get_px_dop());
+      ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(required_px_workers_number_, 1);
+      ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(admitted_px_workers_number_, result_.reserved_thread_count_);
+      LOG_WARN("Worker thread res not enough", K_(result));
+    } else if (OB_FAIL(sqc_handler->link_qc_sqc_channel())) {
+      LOG_WARN("Failed to link qc sqc channel", K(ret));
+    } else if (sqc_handler->get_phy_plan().is_enable_px_fast_reclaim() &&
+        OB_FAIL(ObDetectManagerUtils::sqc_register_into_dm(sqc_handler, sqc_handler->get_sqc_init_arg().sqc_))) {
+      LOG_WARN("[DM] sqc failed to register_into_dm");
+    } else {
+      /*do nothing*/
+    }
   }
 
 #ifdef ERRSIM
@@ -234,7 +234,6 @@ int ObInitSqcP::after_process(int error_code)
   if (OB_NOT_NULL(sqc_handler)) {
     sqc_rpc_after_cost = &sqc_handler->get_sqc_metrics().sqc_rpc_after_cost_;
   }
-  ScopedTimer timer(sqc_rpc_after_cost);
   bool no_need_startup_normal_sqc = (OB_SUCCESS != result_.rc_);
   if (no_need_startup_normal_sqc) {
     /**
@@ -248,6 +247,7 @@ int ObInitSqcP::after_process(int error_code)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Session can't be null", K(ret));
   } else {
+    ScopedTimer timer(sqc_rpc_after_cost);
     lib::CompatModeGuard g(session->get_compatibility_mode() == ORACLE_MODE ?
         lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
 
