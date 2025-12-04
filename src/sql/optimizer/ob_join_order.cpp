@@ -3443,25 +3443,25 @@ int ObJoinOrder::get_valid_index_merge_indexes(const uint64_t table_id,
     }
   }
   if (OB_SUCC(ret) && !use_force_hint) {
-    const ObTableSchema *table_schema = NULL;
-    ObSEArray<ObAuxTableMetaInfo, 4> simple_index_infos;
+    uint64_t can_read_tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1];
+    int64_t table_index_aux_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1;
     OPT_TRACE("valid index merge indexes:");
-    if (OB_FAIL(index_ids.push_back(ref_table_id))) {
-      LOG_WARN("failed to push back ref table id", K(ret));
-    } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema))) {
-      LOG_WARN("failed to get table schema", K(ref_table_id), K(ret));
-    } else if (OB_ISNULL(table_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null table schema", K(ret), K(ref_table_id));
-    } else if (OB_FAIL(table_schema->get_simple_index_infos(simple_index_infos))) {
-      LOG_WARN("failed to get simple index infos", K(ret));
+    if (OB_FAIL(schema_guard->get_can_read_index_array(ref_table_id,
+                                                       can_read_tids,
+                                                       table_index_aux_count,
+                                                       false, /* with_mv */
+                                                       true,  /* with_global_index */
+                                                       true,  /* with_domain_index */
+                                                       true,  /* with_spatial_index */
+                                                       true   /* with_vector_index */))) {
+      LOG_WARN("failed to get can read index", K(ret), K(ref_table_id));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
-      uint64_t index_id = simple_index_infos.at(i).table_id_;
+    for (int64_t i = -1; OB_SUCC(ret) && i < table_index_aux_count; ++i) {
+      uint64_t index_id = (-1 == i) ? ref_table_id : can_read_tids[i];
       if (ObOptimizerUtil::find_item(disabled_index_ids, index_id)) {
         // do nothing
       } else if (OB_FAIL(index_ids.push_back(index_id))) {
-        LOG_WARN("failed to push back table id", K(ret), K(i));
+        LOG_WARN("failed to push back table id", K(ret), K(i), K(index_id));
       }
     }
   }
