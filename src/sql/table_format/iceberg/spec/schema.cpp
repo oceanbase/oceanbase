@@ -112,7 +112,7 @@ int Schema::get_column_schema_by_field_id(int32_t field_id,
   }
 
   if (OB_SUCC(ret) && NULL == column_schema) {
-    ret = OB_NOT_EXIST_COLUMN_ID;
+    ret = OB_ERR_COLUMN_NOT_FOUND;
     LOG_WARN("failed to get column schema by id", K(ret), K(field_id));
   }
   return ret;
@@ -329,7 +329,7 @@ int Schema::parse_complex_type(ObIAllocator &allocator,
   int ret = OB_SUCCESS;
   ObString type_str;
   if (ObJsonNodeType::J_STRING == json_node.json_type()) {
-    ObString type_str = ObString(json_node.get_data_length(), json_node.get_data());
+    type_str = ObString(json_node.get_data_length(), json_node.get_data());
     if (OB_FAIL(Schema::parse_primitive_type_in_complex_type(allocator, type_str, return_type))) {
       LOG_WARN("failed to parse primitive type in complex type", K(ret));
     }
@@ -391,7 +391,7 @@ int Schema::parse_primitive_type_in_complex_type(ObIAllocator &allocator,
   int ret = OB_SUCCESS;
   ObColumnSchemaV2 column_schema;
   if (0 == type_str.case_compare(TYPE_BOOLEAN)) {
-    return_type = "BOOLEAN";
+    return_type = "TINYINT";
   } else if (0 == type_str.case_compare(TYPE_INT)) {
     return_type = "INT";
   } else if (0 == type_str.case_compare(TYPE_LONG)) {
@@ -401,19 +401,17 @@ int Schema::parse_primitive_type_in_complex_type(ObIAllocator &allocator,
   } else if (0 == type_str.case_compare(TYPE_DOUBLE)) {
     return_type = "DOUBLE";
   } else if (type_str.prefix_match_ci(TYPE_DECIMAL)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "decimal in complex type is");
-    // std::string tmp_type_str(type_str.ptr(), type_str.length());
-    // std::regex decimal_regex(R"(decimal\(\s*(\d+)\s*,\s*(\d+)\s*\))");
-    // std::smatch match;
-    // if (std::regex_match(tmp_type_str, match, decimal_regex)) {
-    //   ObSqlString sql_string;
-    //   sql_string.append_fmt("DECIMAL(%d, %d)",std::stoi(match[1].str()), std::stoi(match[2].str()));
-    //   OZ(ob_write_string(allocator, sql_string.string(), return_type));
-    // } else {
-    //   ret = OB_INVALID_ARGUMENT;
-    //   LOG_WARN("invalid decimal type", K(ret), K(type_str));
-    // }
+    std::string tmp_type_str(type_str.ptr(), type_str.length());
+    std::regex decimal_regex(R"(decimal\(\s*(\d+)\s*,\s*(\d+)\s*\))");
+    std::smatch match;
+    if (std::regex_match(tmp_type_str, match, decimal_regex)) {
+      ObSqlString sql_string;
+      OZ(sql_string.append_fmt("DECIMAL(%d, %d)",std::stoi(match[1].str()), std::stoi(match[2].str())));
+      OZ(ob_write_string(allocator, sql_string.string(), return_type));
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid decimal type", K(ret), K(type_str));
+    }
   } else if (0 == type_str.case_compare(TYPE_DATE)) {
     return_type = "DATE";
   } else if (0 == type_str.case_compare(TYPE_TIME)) {

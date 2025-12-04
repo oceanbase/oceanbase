@@ -65,6 +65,38 @@ TEST_F(TestSchema, parse_complex_type)
   }
 
   {
+    // array<decimal<10, 2>>
+    ObString array_json = "{\"type\": \"list\",\"element-id\": 5,\"element\": \"decimal(10,2)\",\"element-required\": false}";
+
+    ObArenaAllocator allocator;
+    iceberg::TableMetadata table_metadata(allocator);
+
+    ObJsonNode *json_node = NULL;
+    ObJsonParser::get_tree(&allocator, array_json, json_node);
+    ObString result_type;
+    ASSERT_EQ(OB_SUCCESS, iceberg::Schema::parse_complex_type(allocator, *json_node, result_type));
+    ASSERT_TRUE(0 == ObString("ARRAY(DECIMAL(10, 2))").case_compare(result_type));
+  }
+
+  {
+    // array<boolean>
+    ObString array_json = R"({
+                          "type": "list",
+                          "element-id": 5,
+                          "element": "boolean",
+                          "element-required": false})";
+
+    ObArenaAllocator allocator;
+    iceberg::TableMetadata table_metadata(allocator);
+
+    ObJsonNode *json_node = NULL;
+    ObJsonParser::get_tree(&allocator, array_json, json_node);
+    ObString result_type;
+    ASSERT_EQ(OB_SUCCESS, iceberg::Schema::parse_complex_type(allocator, *json_node, result_type));
+    ASSERT_TRUE(0 == ObString("ARRAY(TINYINT)").case_compare(result_type));
+  }
+
+  {
     // array<map<string, string>>
     ObString array_json = R"({
                           "type": "list",

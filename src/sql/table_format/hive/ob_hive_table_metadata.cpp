@@ -1357,7 +1357,7 @@ int ObHiveTableMetadata::convert_collection_type_info(const ObString &src,
     if (OB_FAIL(ob_sub_str(allocator, dst, start_index, end_index, inner_type))) {
       LOG_WARN("failed to sub str", K(ret), K(start_index), K(end_index), K(dst));
     } else if (inner_type.prefix_match("STRING")) {
-      if (OB_FAIL(concat_type_to_collection_type(dst, start_index, end_index, ObString("VARCHAR"), allocator, dst))) {
+      if (OB_FAIL(concat_type_to_collection_type(dst, start_index, end_index, ObString("VARCHAR(65535)"), allocator, dst))) {
         LOG_WARN("failed to concat string to varchar", K(ret), K(dst), K(start_index), K(end_index));
       }
     } else if (inner_type.prefix_match("BOOLEAN")) {
