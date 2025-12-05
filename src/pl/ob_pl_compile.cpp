@@ -892,10 +892,7 @@ int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &pac
       OZ (generate_package_vars(package_ast, package_ast.get_symbol_table(), package));
       OZ (generate_package_types(package_ast.get_user_type_table(), package));
       OZ (generate_package_cursors(package_ast, package_ast.get_cursor_table(), package));
-      if (OB_FAIL(ret)) {
-      } else if (PL_PACKAGE_SPEC == package_ast.get_package_type()) {
-        OZ (generate_package_routines(exec_env, package_ast.get_routine_table(), package));
-      } else {
+      if (OB_SUCC(ret)) {
         uint64_t session_database_id = package_ast.get_compile_flag().compile_with_invoker_right() ? package_ast.get_invoker_db_id() : session_info_.get_database_id();
         ObRoutinePersistentInfo routine_storage(MTL_ID(),
                                           package.get_database_id(),
