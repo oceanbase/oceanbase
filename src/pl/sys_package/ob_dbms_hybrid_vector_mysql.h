@@ -27,10 +27,8 @@ public:
 
 #define DECLARE_FUNC(func) \
   static int func(ObPLExecCtx &ctx, sql::ParamStore &params, common::ObObj &result);
-
   DECLARE_FUNC(search);
   DECLARE_FUNC(get_sql);
-
 #undef DECLARE_FUNC
 };
 

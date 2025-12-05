@@ -14,9 +14,9 @@
 
 #include "ob_query_parse.h"
 #include "pl/ob_pl.h"
-#include "storage/vector_index/cmd/ob_vector_refresh_index_executor.h"
-#include "sql/session/ob_sql_session_info.h"
+#include "share/schema/ob_schema_struct.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase {
 namespace share {

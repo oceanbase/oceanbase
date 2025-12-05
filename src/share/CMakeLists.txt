@@ -819,7 +819,7 @@ ob_set_subtarget(ob_share hybrid_search
   hybrid_search/ob_request_base.cpp
   hybrid_search/ob_query_request.cpp
   hybrid_search/ob_query_translator.cpp
-  hybrid_search/ob_hybrid_search_exector.cpp
+  hybrid_search/ob_hybrid_search_executor.cpp
 )
 
 ob_set_subtarget(ob_share domain_id
