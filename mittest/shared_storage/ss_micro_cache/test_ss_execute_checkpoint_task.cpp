@@ -1072,7 +1072,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_cache_ckpt_persist_many_meta)
   ObSSMicroRangeManager &micro_range_mgr = micro_cache_->micro_range_mgr_;
   micro_range_mgr.inner_destroy_initial_range();
   micro_range_mgr.init_range_cnt_ = 1000;
-  ASSERT_EQ(OB_SUCCESS, micro_range_mgr.inner_build_initial_range(false));
+  ASSERT_EQ(OB_SUCCESS, micro_range_mgr.inner_build_initial_range());
 
   // 2. add some micro_block into cache and record their micro_meta
   ObArray<ObSSMicroBlockMetaInfo> micro_meta_info_arr1;
