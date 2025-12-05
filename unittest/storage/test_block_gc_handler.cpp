@@ -117,7 +117,9 @@ TEST_F(TestBlockGCHandler, test_block_gc)
   for (int i = 0; i < 3; i++) {
     ASSERT_EQ(OB_SUCCESS, tablet_versions.push_back(i));
   }
-  ASSERT_EQ(OB_SUCCESS, gc_tablet_meta_versions(tablet_versions, 2));
+  ASSERT_EQ(OB_SUCCESS, gc_tablet_meta_versions(tablet_versions,
+                                                2/*min_retain_tablet_meta_version*/,
+                                                false/*is_transfer_out_deleted*/));
   ASSERT_EQ(gc_blocks_.count(), 3);
   for (int i = 0; i < gc_blocks_.count(); i++) {
     if (1 == gc_blocks_.at(i).second_id_
@@ -129,7 +131,7 @@ TEST_F(TestBlockGCHandler, test_block_gc)
 
   reset();
   macro_block_ids_ = test_array;
-  ASSERT_EQ(OB_SUCCESS, gc_tablet(tablet_versions));
+  ASSERT_EQ(OB_SUCCESS, gc_tablet(tablet_versions, GCTabletType::DropTablet));
   ASSERT_EQ(gc_blocks_.count(), 6);
   for (int i = 0; i < gc_blocks_.count(); i++) {
     if (1 == gc_blocks_.at(i).second_id_

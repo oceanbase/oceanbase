@@ -1812,7 +1812,8 @@ int ObTenantMetaMemMgr::get_current_version_for_tablet(
     int64_t &last_gc_version,
     int64_t &tablet_transfer_seq,
     uintptr_t &tablet_fingerprint,
-    bool &allow_tablet_version_gc)
+    bool &allow_tablet_version_gc,
+    bool &is_transfer_out_deleted)
 {
   int ret = OB_SUCCESS;
   const ObTabletMapKey key(ls_id, tablet_id);
@@ -1848,8 +1849,12 @@ int ObTenantMetaMemMgr::get_current_version_for_tablet(
         tablet_fingerprint = reinterpret_cast<uintptr_t>(tablet_ptr);
         tablet_transfer_seq = tablet_ptr->get_addr().block_id().meta_transfer_seq();
         allow_tablet_version_gc = tablet_ptr->is_old_version_chain_empty() && !exist_in_external;
+        const ObTabletStatus tablet_status = tablet_handle.get_obj()->get_tablet_meta().last_persisted_committed_tablet_status_.get_tablet_status();
+        if (tablet_handle.get_obj()->is_empty_shell() && (ObTabletStatus::TRANSFER_OUT_DELETED == tablet_status)) {
+          is_transfer_out_deleted = true;
+        }
         FLOG_INFO("PRINT TABLET ADDRESS", K(ret), K(tablet_ptr->get_addr()), K(tablet_handle.get_obj()->get_tablet_addr()),
-          K(tablet_version), K(last_gc_version), K(tablet_fingerprint));
+          K(tablet_version), K(last_gc_version), K(tablet_fingerprint), K(is_transfer_out_deleted));
       }
     }
   }
