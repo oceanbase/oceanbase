@@ -17255,6 +17255,7 @@ def_table_schema(
 # 12583: __all_virtual_lob_check_exception_result
 # 12584: __all_virtual_sync_standby_dest
 # 12585: __all_virtual_sync_standby_status
+# 12586: __all_virtual_window_loop_info
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
