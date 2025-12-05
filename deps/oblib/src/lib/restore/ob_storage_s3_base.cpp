@@ -1871,11 +1871,14 @@ int ObStorageS3Util::list_files_(const ObString &uri, ObBaseDirEntryOperator &op
     const int64_t full_dir_path_len = get_safe_str_len(full_dir_path);
     Aws::S3::Model::ListObjectsOutcome outcome;
     Aws::String next_marker;
+    int64_t list_count = 0;
+    int64_t vain_list_count = 0;
     do {
       if (OB_FAIL(s3_base.do_list_(OB_STORAGE_LIST_MAX_NUM, NULL/*delimiter*/,
                                    next_marker, outcome))) {
         OB_LOG(WARN, "fail to list s3 objects", K(ret), K(uri));
       } else {
+        list_count++;
         const char *request_id = outcome.GetResult().GetRequestId().c_str();
         const Aws::Vector<Aws::S3::Model::Object> &contents = outcome.GetResult().GetContents();
         for (int64_t i = 0; OB_SUCC(ret) && i < contents.size(); i++) {
@@ -1918,8 +1921,9 @@ int ObStorageS3Util::list_files_(const ObString &uri, ObBaseDirEntryOperator &op
             next_marker = contents[contents.size() - 1].GetKey();
           } else {
             // if result is truncated, contents should not be empty
-            ret = OB_ERR_UNEXPECTED;
-            OB_LOG(WARN, "listed s3 objects are empty", K(ret), K(request_id), K(contents.size()));
+            // but bos is an exception, to avoid bos errors, we don't return error here
+            vain_list_count++;
+            OB_LOG(WARN, "listed s3 objects are empty but is truncated", K(ret), K(request_id), K(contents.size()), K(vain_list_count), K(list_count));
           }
         }
       }
