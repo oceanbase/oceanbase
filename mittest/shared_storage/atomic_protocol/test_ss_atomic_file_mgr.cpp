@@ -173,6 +173,7 @@ TEST_F(TestAtomicFileMgr, test_get_ls_meta_handle)
 TEST_F(TestAtomicFileMgr, test_atomic_file_mgr_gc)
 {
   int ret = OB_SUCCESS;
+  // 1. ------------ test gc task ------------
   {
     // case 1. not gc ls/tablet that has not been deleted and has reference on it
     GET_MINI_SSTABLE_LIST_HANDLE(sstable_handle, 1, 200001, 1);
@@ -222,6 +223,13 @@ TEST_F(TestAtomicFileMgr, test_atomic_file_mgr_gc)
     ObAtomicFileKey file_key8(type2, ls_id8);
     ObAtomicFile *atomic_file8 = NULL;
     ASSERT_EQ(OB_ENTRY_NOT_EXIST, MTL(ObAtomicFileMgr*)->atomic_file_map_.get(file_key8, atomic_file8));
+  }
+  // 2. ------------ test clear atomic file map ------------
+  {
+    ASSERT_EQ(true, MTL(ObAtomicFileMgr*)->atomic_file_map_.count() > 0);
+    ObClearAtomicFileMapFunctor fun;
+    MTL(ObAtomicFileMgr*)->atomic_file_map_.remove_if(fun);
+    ASSERT_EQ(true, MTL(ObAtomicFileMgr*)->atomic_file_map_.count() == 0);
   }
 }
 
