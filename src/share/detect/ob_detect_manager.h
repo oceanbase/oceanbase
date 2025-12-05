@@ -120,7 +120,8 @@ public:
   */
   typedef hash::ObHashMap<ObDetectableId, ObDMCallbackDList,
                   hash::SpinReadWriteDefendMode, hash::hash_func<ObDetectableId>,
-                  hash::equal_to<ObDetectableId>> CHECK_MAP;
+                  hash::equal_to<ObDetectableId>,
+                  SliceAllocer<typename HashMapTypes<ObDetectableId, ObDMCallbackDList>::AllocType, ObVSliceAlloc>> CHECK_MAP;
   /* tool classes */
   // Atomic insert the first detect callback in link list
   class ObDetectCallbackSetCall
