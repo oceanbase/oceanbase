@@ -768,6 +768,7 @@ int ObPluginVectorIndexAdaptor::fill_vector_index_info(ObVectorIndexInfo &info)
   }
   if (OB_SUCC(ret) && nullptr != incr_data_) {
     int64_t incr_cnt = 0;
+    TCRLockGuard lock_guard(incr_data_->mem_data_rwlock_);
     if (OB_NOT_NULL(get_incr_index()) && OB_FAIL(obvectorutil::get_index_number(get_incr_index(), incr_cnt))) {
       LOG_WARN("failed to get inc index number.", K(ret));
     }
@@ -779,6 +780,7 @@ int ObPluginVectorIndexAdaptor::fill_vector_index_info(ObVectorIndexInfo &info)
   }
   if (OB_SUCC(ret) && nullptr != snap_data_) {
     int64_t snap_cnt = 0;
+    TCRLockGuard lock_guard(snap_data_->mem_data_rwlock_);
     if (OB_NOT_NULL(get_snap_index()) && OB_FAIL(obvectorutil::get_index_number(get_snap_index(), snap_cnt))) {
       LOG_WARN("failed to get snap index number.", K(ret));
     }
