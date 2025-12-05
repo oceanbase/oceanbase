@@ -2996,6 +2996,8 @@ typedef enum ObItemType
   T_TENANT_TABLE_MAJOR_FREEZE = 4941, // tenant table major freeze
   T_SET_PROTECTION_MODE = 4942, // set_protection_mode
   T_DELTA_FORMAT = 4943, // delta_format table option
+  T_SKIP_INDEX_LEVEL = 4944,
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

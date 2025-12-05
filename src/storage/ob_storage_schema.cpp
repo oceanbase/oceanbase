@@ -484,6 +484,7 @@ ObStorageSchema::ObStorageSchema()
     semistruct_encoding_type_(),
     semistruct_properties_(),
     minor_row_store_type_(ObStoreFormat::DEFAULT_MINOR_ROW_STORE_TYPE),
+    skip_index_level_(ObSkipIndexLevel::OB_SKIP_INDEX_LEVEL_BASE_ONLY),
     is_inited_(false)
 {
 }
@@ -877,6 +878,7 @@ void ObStorageSchema::reset()
   semistruct_encoding_type_.reset();
   semistruct_properties_.reset();
   micro_block_format_version_ = ObMicroBlockFormatVersionHelper::DEFAULT_VERSION;
+  skip_index_level_ = ObSkipIndexLevel::OB_SKIP_INDEX_LEVEL_BASE_ONLY;
   is_inited_ = false;
 }
 
@@ -989,6 +991,7 @@ int ObStorageSchema::serialize(char *buf, const int64_t buf_len, int64_t &pos) c
     }
     if (OB_SUCC(ret) && storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V7) {
       OB_UNIS_ENCODE(minor_row_store_type_);
+      OB_UNIS_ENCODE(skip_index_level_);
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -1120,6 +1123,7 @@ int ObStorageSchema::deserialize(
     }
     if (OB_SUCC(ret) && storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V7) {
       OB_UNIS_DECODE(minor_row_store_type_);
+      OB_UNIS_DECODE(skip_index_level_);
     }
     if (OB_SUCC(ret)) {
       is_inited_ = true;
@@ -1682,6 +1686,7 @@ int64_t ObStorageSchema::get_serialize_size() const
   }
   if (storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V7) {
     OB_UNIS_ADD_LEN(minor_row_store_type_);
+    OB_UNIS_ADD_LEN(skip_index_level_);
   }
   return len;
 }
@@ -2202,6 +2207,7 @@ int ObStorageSchema::copy_from(const share::schema::ObMergeSchema &input_schema)
     compressor_type_ = input_schema.get_compressor_type();
     merge_engine_type_ = input_schema.get_merge_engine_type();
     minor_row_store_type_ = input_schema.get_minor_row_store_type();
+    skip_index_level_ = input_schema.get_skip_index_level();
   }
 
   return ret;

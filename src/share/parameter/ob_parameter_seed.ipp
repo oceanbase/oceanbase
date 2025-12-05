@@ -3104,9 +3104,6 @@ DEF_TIME(_ss_macro_block_check_interval, OB_TENANT_PARAMETER, "1d", "[30s,365d]"
          "Control the period of macro block check in shared dir."
          "Range: [30s, 365d]",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(default_skip_index_level, OB_TENANT_PARAMETER, "0", "[0, 1]",
-         "Specify the default skip_index_level when creating table.",
-         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_two_phase_fts_index_merge, OB_TENANT_PARAMETER, "False",
          "Control whether to enable two-phase execution for index-merge-and with full-text index and scalar index",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -3137,3 +3134,6 @@ DEF_STR_WITH_CHECKER(default_delta_format, OB_TENANT_PARAMETER, "flat",
                      "Controls default delta format when creating table",
                      ObParameterAttr(Section::TENANT, Source::DEFAULT,
                                      EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(default_skip_index_level, OB_TENANT_PARAMETER, "0", "[0, 1]",
+        "Specify the default skip_index_level when creating table.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
