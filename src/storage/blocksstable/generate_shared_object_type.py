@@ -651,18 +651,62 @@ void ObStorageObjectTypeBase::set_ss_object_first_id_(
 def print_enum_values():
     """print enum values"""
     global h_f, all_storage_object_types
+    id = 0
+    used_ids = set()  # Track used ids to detect duplicates
     for cfg in all_storage_object_types:
         obj_type = cfg.get('obj_type')
-        h_f.write(f'    {obj_type},\n')
+        if 'id' in cfg and cfg['id'] is not None:
+            id = cfg['id']
+            if id in used_ids:
+                print(f"❌ Duplicate id {id} found for {obj_type}!")
+                sys.exit(1)
+            used_ids.add(id)
+            h_f.write(f'    {obj_type} = {id},\n')
+        else:
+            print("❌ id is not specified!")
+            sys.exit(1)
     h_f.write('    MAX')
 
 def print_string_array():
     """print string array"""
     global cpp_f, all_storage_object_types
+
+    # Find the maximum id value to determine array size
+    max_id = -1
+    for cfg in all_storage_object_types:
+        if 'id' in cfg and cfg['id'] is not None:
+            max_id = max(max_id, cfg['id'])
+
+    if max_id < 0:
+        print("❌ No valid id found in storage object types!")
+        sys.exit(1)
+
+    # MAX enum value is max_id + 1, so array size is max_id + 2 (0 to max_id+1)
+    array_size = max_id + 2
+
+    # Initialize array with empty strings for holes
+    str_array = [""] * array_size
+
+    # Fill in the actual type strings at their id positions
     for cfg in all_storage_object_types:
         obj_type = cfg.get('obj_type')
-        cpp_f.write(f'  "{obj_type}",\n')
-    cpp_f.write('  "MAX"')
+        if 'id' in cfg and cfg['id'] is not None:
+            id_val = cfg['id']
+            if id_val < 0 or id_val >= array_size - 1:  # -1 because MAX is at array_size-1
+                print(f"❌ Invalid id {id_val} for {obj_type}!")
+                sys.exit(1)
+            str_array[id_val] = obj_type
+
+    # Set MAX at the last position
+    str_array[array_size - 1] = "MAX"
+
+    # Write the array (holes are already filled with empty strings)
+    for i in range(array_size):
+        if i < array_size - 1:
+            cpp_f.write(f'  "{str_array[i]}",\n')
+        else:
+            # Last element (MAX) without trailing comma
+            cpp_f.write(f'  "{str_array[i]}"')
 
 def generate_class_name(obj_type):
     parts = obj_type.split("_")
