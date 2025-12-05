@@ -2282,7 +2282,7 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
   ObString config_name_ddl_thread_isolution("_enable_ddl_worker_isolation");
   ObString config_value_ddl_thread_isolution("false");
   ObString config_name_update_trigger("_update_all_columns_for_trigger");
-  ObString config_value_update_trigger("false");
+  ObString config_value_update_trigger("true");
   ObString config_name_server_full_schema_refresh_parallelism("_server_full_schema_refresh_parallelism");
   ObString config_value_server_full_schema_refresh_parallelism("OBJECT");
   ObString config_name_enable_mlog_auto_maintenance("enable_mlog_auto_maintenance");
