@@ -18,6 +18,7 @@
 #include "unittest/storage/sslog/test_mock_palf_kv.h"
 #include "close_modules/shared_storage/storage/incremental/sslog/ob_i_sslog_proxy.h"
 #include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_kv_proxy.h"
+#include "storage/shared_storage/ob_ss_reader_writer.h"
 
 namespace oceanbase
 {
@@ -535,6 +536,93 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_force_refresh_policy_task)
   ASSERT_EQ(PolicyStatus::HOT, policy_status);
   ASSERT_TRUE(policy_service->get_need_generate_cache_task());
   FLOG_INFO("[TEST] finish test_force_refresh_policy_task");
+}
+
+TEST_F(ObStorageCachePolicyPrewarmerTest, test_prewarm_tablet_if_hot_on_macro_miss)
+{
+  FLOG_INFO("[TEST] start test_prewarm_tablet_if_hot_on_macro_miss");
+  share::ObTenantSwitchGuard tguard;
+  OK(tguard.switch_to(run_ctx_.tenant_id_));
+  exe_prepare_sql();
+
+  int ret = OB_SUCCESS;
+
+  ObStorageCachePolicyService *policy_service = MTL(ObStorageCachePolicyService *);
+  ASSERT_NE(nullptr, policy_service);
+
+  // Prepare table and make it HOT so that tablet_status_map_ records HOT status
+  OK(exe_sql("create table test_prewarm_if_hot (a int)"));
+  set_ls_and_tablet_id_for_run_ctx("test_prewarm_if_hot");
+
+  OK(exe_sql("insert into test_prewarm_if_hot values (1)"));
+  sleep(1);
+  OK(medium_compact(run_ctx_.tablet_id_.id()));
+  OK(exe_sql("alter table test_prewarm_if_hot storage_cache_policy (global = 'hot');"));
+
+  // Wait the initial HOT prewarm task finished to make tablet_status_map_ stable
+  wait_task_finished(run_ctx_.tablet_id_.id());
+
+  // Ensure the tablet is recognized as HOT
+  bool is_hot = false;
+  OK(policy_service->is_hot_tablet(run_ctx_.tablet_id_.id(), is_hot));
+  ASSERT_TRUE(is_hot);
+  // Make sure active_tablet_ids_ contains this tablet
+  OK(policy_service->update_active_tablet_ids());
+
+  // Clear micro cache, macro cache and mem macro cache
+  ObSSLocalCacheService *local_cache_service = MTL(ObSSLocalCacheService *);
+  ASSERT_NE(nullptr, local_cache_service);
+  OK(local_cache_service->clear_ss_all_cache(10L * 1000L * 1000L));
+  const int64_t start_ts = ObTimeUtility::current_time();
+
+  // Read macro block to trigger prewarm
+  ObSEArray<MacroBlockId, 64> data_block_ids;
+  ObSEArray<MacroBlockId, 16> meta_block_ids;
+  data_block_ids.set_attr(ObMemAttr(run_ctx_.tenant_id_, "DataBlockIDs"));
+  meta_block_ids.set_attr(ObMemAttr(run_ctx_.tenant_id_, "MetaBlockIDs"));
+  OK(get_macro_blocks(run_ctx_.ls_id_, run_ctx_.tablet_id_, data_block_ids, meta_block_ids));
+  FLOG_INFO("[TEST] get macro blocks", K(run_ctx_), K(data_block_ids), K(meta_block_ids));
+  ASSERT_GT(data_block_ids.count(), 0);
+
+  //
+  const MacroBlockId macro_id = data_block_ids.at(0);
+  ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr *);
+  ASSERT_NE(nullptr, macro_cache_mgr);
+  OK(macro_cache_mgr->evict_by_macro_id(macro_id));
+  sleep(2);
+  bool is_exist = false;
+  OK(macro_cache_mgr->exist(macro_id, is_exist));
+  ASSERT_TRUE(is_exist);
+  OK(macro_cache_mgr->evict_by_macro_id(macro_id));
+  sleep(2);
+  OK(macro_cache_mgr->erase(macro_id));
+  OK(macro_cache_mgr->exist(macro_id, is_exist));
+  ASSERT_FALSE(is_exist);
+
+  blocksstable::ObStorageObjectHandle read_handle;
+  ObStorageObjectReadInfo read_info;
+  char buf[1024] = {0};
+  read_info.macro_block_id_ = macro_id;
+  read_info.size_ = sizeof(buf);
+  read_info.offset_ = 0;
+  read_info.io_timeout_ms_ = 10LL * common::S_US / 1000LL;
+  read_info.io_desc_.set_wait_event(ObWaitEventIds::OBJECT_STORAGE_READ);
+  read_info.buf_ = buf;
+  read_info.mtl_tenant_id_ = MTL_ID();
+  read_info.set_effective_tablet_id(run_ctx_.tablet_id_);
+  OK(OB_STORAGE_OBJECT_MGR.read_object(read_info, read_handle));
+
+  sleep(5);
+  wait_task_finished(run_ctx_.tablet_id_.id());
+
+  // verify that new tablet task is generated
+  ObStorageCacheTabletTaskHandle task_handle;
+  OK(policy_service->tablet_scheduler_.tablet_task_map_.get_refactored(run_ctx_.tablet_id_.id(), task_handle));
+  LOG_INFO("[TEST] task handle", K(run_ctx_), KPC(task_handle()));
+  ASSERT_NE(nullptr, task_handle());
+  ASSERT_GT(task_handle()->get_start_time(), start_ts);
+
+  FLOG_INFO("[TEST] finish test_prewarm_tablet_if_hot_on_macro_miss");
 }
 
 }
