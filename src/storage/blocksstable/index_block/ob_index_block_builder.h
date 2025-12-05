@@ -353,6 +353,7 @@ public:
   static const int64_t MIN_INDEX_MICRO_BLOCK_ROW_CNT = 10;
 protected:
   static const int64_t ROOT_BLOCK_SIZE_LIMIT = 16 << 10; // 16KB
+  static const int64_t ROOT_BLOCK_SIZE_LIMIT_FOR_SHARED_STORAGE = 32 << 10; // 32KB
   static const int64_t MAX_LEVEL_LIMIT = 20;
 
   bool is_inited_;
