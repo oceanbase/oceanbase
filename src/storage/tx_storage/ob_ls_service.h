@@ -223,7 +223,7 @@ private:
   int inner_del_ls_(ObLS *&ls);
   int add_ls_to_map_(ObLS *ls);
   int remove_ls_from_map_(const share::ObLSID &ls_id);
-  void remove_ls_(ObLS *ls, const bool remove_from_disk, const bool write_slog);
+  void remove_ls_(ObLS *ls, const bool remove_from_disk);
   int safe_remove_ls_(ObLSHandle handle, const bool remove_from_disk);
   int restore_update_ls_(const ObLSMetaPackage &meta_package);
   int replay_remove_ls_(const share::ObLSID &ls_id);
