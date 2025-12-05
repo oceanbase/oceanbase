@@ -390,11 +390,11 @@ int ObHiveMetastoreClient::setup_hive_metastore_client(const ObString &uri,
                                      hms_krb5conf_,
                                      true))) {
     LOG_WARN("failed to write krb5conf", K(ret));
-  } else if (OB_ISNULL(hive_catalog_properties.default_catalog_)
-             || hive_catalog_properties.default_catalog_.empty()) {
+  } else if (OB_ISNULL(hive_catalog_properties.hms_catalog_name_)
+             || hive_catalog_properties.hms_catalog_name_.empty()) {
     // do nothing
   } else if (OB_FAIL(ob_write_string(*allocator_,
-                                     hive_catalog_properties.default_catalog_,
+                                     hive_catalog_properties.hms_catalog_name_,
                                      hms_default_catalog_,
                                      true))) {
     LOG_WARN("failed to write default catalog", K(ret));
