@@ -2232,7 +2232,9 @@ int ObAsyncIOChannel::submit(ObIORequest &req)
     }
   } else if ((!req.get_flag().is_detect()) && (device_channel_->used_io_depth_ > device_channel_->max_io_depth_ - MAX_DETECT_DISK_HUNG_IO_CNT)) {
     ret = OB_EAGAIN;
-    FLOG_INFO("reach max io depth", K(ret), K(device_channel_->used_io_depth_), K(device_channel_->max_io_depth_));
+    if (REACH_TIME_INTERVAL(1 * 1000L * 1000L)) {
+      FLOG_INFO("reach max io depth", K(ret), K(device_channel_->used_io_depth_), K(device_channel_->max_io_depth_));
+    }
   } else {
     ATOMIC_INC(&submit_count_);
     ATOMIC_FAA(&device_channel_->used_io_depth_, get_io_depth(req.io_size_));
