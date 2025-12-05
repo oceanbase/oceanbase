@@ -20488,12 +20488,12 @@ static const _error _error_OB_ERR_OPEN_CURSORS_EXCEEDED = {
       .mysql_errno           = -1,
       .sqlstate              = "HY000",
       .str_error             = "maximum open cursors exceeded",
-      .str_user_error        = "maximum open cursors exceeded",
+      .str_user_error        = "maximum open %s exceeded",
       .oracle_errno          = 1000,
       .oracle_str_error      = "ORA-01000: maximum open cursors exceeded",
-      .oracle_str_user_error = "ORA-01000: maximum open cursors exceeded",
+      .oracle_str_user_error = "ORA-01000: maximum open %s exceeded",
       .ob_str_error          = "OBE-01000: maximum open cursors exceeded",
-      .ob_str_user_error     = "OBE-01000: maximum open cursors exceeded"
+      .ob_str_user_error     = "OBE-01000: maximum open %s exceeded"
 };
 static const _error _error_OB_ERR_FETCH_OUT_SEQUENCE = {
       .error_name            = "OB_ERR_FETCH_OUT_SEQUENCE",
