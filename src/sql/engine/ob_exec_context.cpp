@@ -145,7 +145,8 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     external_py_url_resource_cache_(nullptr),
     external_py_sch_resource_cache_(nullptr),
     py_sub_inter_ctx_(nullptr),
-    lake_table_file_map_(nullptr)
+    lake_table_file_map_(nullptr),
+    current_granule_type_(OB_GRANULE_UNINITIALIZED)
 {
 }
 
