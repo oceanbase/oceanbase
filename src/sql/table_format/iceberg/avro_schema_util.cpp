@@ -31,6 +31,20 @@ namespace sql
 namespace iceberg
 {
 
+FieldProjection::FieldProjection() = default;
+FieldProjection::FieldProjection(ObIAllocator &allocator) : children_(allocator) {};
+int FieldProjection::assign(const FieldProjection &other)
+{
+  int ret = OB_SUCCESS;
+  avro_node_ = other.avro_node_;
+  field_id_ = other.field_id_;
+  kind_ = other.kind_;
+  OZ(children_.prepare_allocate_and_keep_count(other.children_.count(),
+                                               *children_.get_allocator()));
+  OZ(children_.assign(other.children_));
+  return ret;
+}
+
 SchemaProjection::SchemaProjection(ObIAllocator &allocator) : fields_(allocator)
 {
 }
@@ -45,17 +59,17 @@ int AvroSchemaProjectionUtils::project(ObIAllocator &allocator,
 
   // 我们只需要他的 children 节点，所以这里用临时 allocator
   FieldProjection tmp_field_projection(tmp_allocator);
-  if (OB_FAIL(AvroSchemaProjectionUtils::project_nested(allocator,
+  if (OB_FAIL(AvroSchemaProjectionUtils::project_nested(tmp_allocator,
                                                         &expected_schema,
                                                         avro_node,
                                                         tmp_field_projection))) {
     LOG_WARN("AvroSchemaProjectionUtils::project failed", K(ret));
-  } else if (OB_FAIL(schema_projection.fields_.reserve(tmp_field_projection.children_.count()))) {
-    LOG_WARN("failed to reserve size", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < tmp_field_projection.children_.count(); i++) {
-      OZ(schema_projection.fields_.push_back(tmp_field_projection.children_[i]));
-    }
+  } else if (OB_FAIL(schema_projection.fields_.prepare_allocate_and_keep_count(
+                 tmp_field_projection.children_.count(),
+                 allocator))) {
+    LOG_WARN("failed to prepare allocate", K(ret));
+  } else if (OB_FAIL(schema_projection.fields_.assign(tmp_field_projection.children_))) {
+    LOG_WARN("failed to assign", K(ret));
   }
   return ret;
 }
@@ -189,7 +203,7 @@ int AvroSchemaProjectionUtils::project_struct(ObIAllocator &allocator,
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(field_projection.children_.reserve(avro_node->leaves()))) {
+    if (OB_FAIL(field_projection.children_.prepare_allocate_and_keep_count(avro_node->leaves(), allocator))) {
       LOG_WARN("fail to reserve children", K(ret));
     }
 
@@ -207,18 +221,15 @@ int AvroSchemaProjectionUtils::project_struct(ObIAllocator &allocator,
       }
 
       if (OB_SUCC(ret) || OB_HASH_NOT_EXIST == ret) {
-        FieldProjection *child_field_projection = NULL;
-        if (OB_ISNULL(child_field_projection = OB_NEWx(FieldProjection, &allocator, allocator))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fail to allocate child", K(ret));
-        } else if (OB_HASH_NOT_EXIST == ret) {
-          child_field_projection->kind_ = FieldProjection::Kind::NOT_EXISTED;
-          child_field_projection->avro_node_ = leaf_node;
+        FieldProjection child_field_projection(allocator);
+         if (OB_HASH_NOT_EXIST == ret) {
+          child_field_projection.kind_ = FieldProjection::Kind::NOT_EXISTED;
+          child_field_projection.avro_node_ = leaf_node;
           ret = OB_SUCCESS;
         } else {
-          child_field_projection->kind_ = FieldProjection::Kind::Projected;
-          child_field_projection->field_id_ = field_id;
-          child_field_projection->avro_node_ = leaf_node;
+          child_field_projection.kind_ = FieldProjection::Kind::Projected;
+          child_field_projection.field_id_ = field_id;
+          child_field_projection.avro_node_ = leaf_node;
 
           if (tmp_schema_field_info.schema_field->type()->is_nested()) {
             // 如果 schema field 是 nested，需要递归进去
@@ -229,7 +240,7 @@ int AvroSchemaProjectionUtils::project_struct(ObIAllocator &allocator,
                            allocator,
                            tmp_schema_field_info.schema_field->type(),
                            tmp_unwarp_avro_node,
-                           *child_field_projection))) {
+                           child_field_projection))) {
               LOG_WARN("fail to project nested", K(ret));
             }
           }
@@ -253,7 +264,7 @@ int AvroSchemaProjectionUtils::project_list(ObIAllocator &allocator,
   int ret = OB_SUCCESS;
   int32_t element_field_id = -1;
   const SchemaField *expected_element_schema_field = NULL;
-  FieldProjection *element_field_projection = NULL;
+  FieldProjection element_field_projection(allocator);
   if (OB_UNLIKELY(avro::AVRO_ARRAY != avro_node->type() || 1 != avro_node->leaves())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid avro array node", K(avro_node->type()));
@@ -267,12 +278,8 @@ int AvroSchemaProjectionUtils::project_list(ObIAllocator &allocator,
     LOG_WARN("unmatched element id",
              K(expected_element_schema_field->field_id()),
              K(element_field_id));
-  } else if (OB_FAIL(field_projection.children_.reserve(1))) {
+  } else if (OB_FAIL(field_projection.children_.prepare_allocate_and_keep_count(1, allocator))) {
     LOG_WARN("fail to reserve children", K(ret));
-  } else if (OB_ISNULL(element_field_projection
-                       = OB_NEWx(FieldProjection, &allocator, allocator))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate field projection", K(ret));
   } else if (expected_element_schema_field->type()->is_nested()) {
     avro::NodePtr tmp_unwarp_element_avro_node = NULL;
     if (OB_FAIL(AvroUtils::unwarp_union(avro_node->leafAt(0), tmp_unwarp_element_avro_node))) {
@@ -281,15 +288,15 @@ int AvroSchemaProjectionUtils::project_list(ObIAllocator &allocator,
                    AvroSchemaProjectionUtils::project_nested(allocator,
                                                              expected_element_schema_field->type(),
                                                              tmp_unwarp_element_avro_node,
-                                                             *element_field_projection))) {
+                                                             element_field_projection))) {
       LOG_WARN("fail to project nested", K(ret));
     }
   }
 
   if (OB_SUCC(ret)) {
-    element_field_projection->kind_ = FieldProjection::Kind::Projected;
-    element_field_projection->field_id_ = expected_element_schema_field->field_id();
-    element_field_projection->avro_node_ = avro_node->leafAt(0);
+    element_field_projection.kind_ = FieldProjection::Kind::Projected;
+    element_field_projection.field_id_ = expected_element_schema_field->field_id();
+    element_field_projection.avro_node_ = avro_node->leafAt(0);
     OZ(field_projection.children_.push_back(element_field_projection));
   }
   return ret;
@@ -308,8 +315,8 @@ int AvroSchemaProjectionUtils::project_map(ObIAllocator &allocator,
   avro::NodePtr unwarp_avro_map_value_node = NULL;
   int32_t key_field_id = -1;
   int32_t value_field_id = -1;
-  FieldProjection *key_field_projection = NULL;
-  FieldProjection *value_field_projection = NULL;
+  FieldProjection key_field_projection(allocator);
+  FieldProjection value_field_projection(allocator);
 
   if (OB_UNLIKELY(OB_ISNULL(expected_key_schema) || OB_ISNULL(expected_value_schema))) {
     ret = OB_INVALID_ARGUMENT;
@@ -340,18 +347,13 @@ int AvroSchemaProjectionUtils::project_map(ObIAllocator &allocator,
              K(expected_value_schema->field_id()),
              K(key_field_id),
              K(value_field_id));
-  } else if (OB_FAIL(field_projection.children_.reserve(2))) {
+  } else if (OB_FAIL(field_projection.children_.prepare_allocate_and_keep_count(2, allocator))) {
     LOG_WARN("fail to reserve field projection", K(ret));
   } else if (OB_FAIL(AvroUtils::unwarp_union(avro_map_node->leafAt(0), unwarp_avro_map_key_node))) {
     LOG_WARN("fail to unwarp union", K(ret));
   } else if (OB_FAIL(
                  AvroUtils::unwarp_union(avro_map_node->leafAt(1), unwarp_avro_map_value_node))) {
     LOG_WARN("fail to unwarp union", K(ret));
-  } else if (OB_ISNULL(key_field_projection = OB_NEWx(FieldProjection, &allocator, allocator))
-             || OB_ISNULL(value_field_projection
-                          = OB_NEWx(FieldProjection, &allocator, allocator))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate field projection", K(ret));
   }
 
   if (OB_SUCC(ret)) {
@@ -359,7 +361,7 @@ int AvroSchemaProjectionUtils::project_map(ObIAllocator &allocator,
       if (OB_FAIL(AvroSchemaProjectionUtils::project_nested(allocator,
                                                             expected_key_schema->type(),
                                                             unwarp_avro_map_key_node,
-                                                            *key_field_projection))) {
+                                                            key_field_projection))) {
         LOG_WARN("failed to project nested key", K(ret));
       }
     }
@@ -370,20 +372,20 @@ int AvroSchemaProjectionUtils::project_map(ObIAllocator &allocator,
       if (OB_FAIL(AvroSchemaProjectionUtils::project_nested(allocator,
                                                             expected_value_schema->type(),
                                                             unwarp_avro_map_value_node,
-                                                            *value_field_projection))) {
+                                                            value_field_projection))) {
         LOG_WARN("failed to project nested value", K(ret));
       }
     }
   }
 
   if (OB_SUCC(ret)) {
-    key_field_projection->kind_ = FieldProjection::Kind::Projected;
-    key_field_projection->field_id_ = expected_key_schema->field_id();
-    key_field_projection->avro_node_ = avro_map_node->leafAt(0);
+    key_field_projection.kind_ = FieldProjection::Kind::Projected;
+    key_field_projection.field_id_ = expected_key_schema->field_id();
+    key_field_projection.avro_node_ = avro_map_node->leafAt(0);
 
-    value_field_projection->kind_ = FieldProjection::Kind::Projected;
-    value_field_projection->field_id_ = expected_value_schema->field_id();
-    value_field_projection->avro_node_ = avro_map_node->leafAt(1);
+    value_field_projection.kind_ = FieldProjection::Kind::Projected;
+    value_field_projection.field_id_ = expected_value_schema->field_id();
+    value_field_projection.avro_node_ = avro_map_node->leafAt(1);
     OZ(field_projection.children_.push_back(key_field_projection));
     OZ(field_projection.children_.push_back(value_field_projection));
   }

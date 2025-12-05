@@ -51,8 +51,10 @@ public:
   int assign(const Transform &other);
   int get_result_type(const ObObjType source_type, ObObjType &result_type) const;
   static int get_result_type(TransformType transform_type, const ObObjType source_type, ObObjType &result_type);
-  static int get_part_expr(const Transform &transform, const share::schema::ObColumnSchemaV2 &col_schema,
-                           ObIAllocator &allocator, ObString &str);
+  static int get_part_expr(ObIAllocator &allocator,
+                           const Transform &transform,
+                           const ObString &column_name,
+                           ObString &result);
 
   static constexpr const char *IDENTITY = "identity";
   static constexpr const char *BUCKET = "bucket";
