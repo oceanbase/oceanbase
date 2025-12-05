@@ -61,7 +61,7 @@ int ObExprAIEmbed::calc_result_typeN(ObExprResType &type,
       } else {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("dimension parameter must be an integer, not a decimal or float", K(ret), K(types_stack[DIM_IDX].get_type()));
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "dimension parameter must be an integer, not a decimal or float");
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_embed, dimension parameter must be an integer, not a decimal or float");
       }
     }
     type.set_varchar();
@@ -83,7 +83,7 @@ int ObExprAIEmbed::eval_ai_embed(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
   } else if (arg_model_id->is_null() || arg_content->is_null()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("model id or content is null", K(ret));
-    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "model id or content is null");
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_embed, model id or content is null");
     res.set_null();
   } else {
     ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
@@ -99,7 +99,7 @@ int ObExprAIEmbed::eval_ai_embed(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
     if (model_id.empty() || content.empty()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("model id or input is empty", K(ret));
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "model id or input is empty");
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_embed, model id or input is empty");
       res.set_null();
     }
     int64_t dim = 0;
@@ -111,7 +111,7 @@ int ObExprAIEmbed::eval_ai_embed(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
       if (dim <= 0) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("dimension parameter must be a positive integer", K(ret), K(dim));
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "dimension parameter must be a positive integer");
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_embed, dimension parameter must be a positive integer");
         res.set_null();
       } else if (OB_FAIL(ObAIFuncJsonUtils::get_json_object(temp_allocator, config))) {
         LOG_WARN("fail to get json object", K(ret));
@@ -185,7 +185,7 @@ int ObExprAIEmbed::get_vector_params(const ObExpr &expr,
       if (dim <= 0) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("dimension parameter must be a positive integer", K(ret), K(dim));
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "dimension parameter must be a positive integer");
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_embed, dimension parameter must be a positive integer");
       }
     }
     if (OB_SUCC(ret)) {
@@ -206,7 +206,7 @@ int ObExprAIEmbed::get_vector_params(const ObExpr &expr,
         } else if (content.empty()) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("input is empty", K(ret));
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "input is empty");
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_embed, input is empty");
         } else if (OB_FAIL(contents.push_back(content))) {
           LOG_WARN("fail to push back content", K(ret), K(idx));
         }
@@ -330,7 +330,7 @@ int ObExprAIEmbed::eval_ai_embed_vector(const ObExpr &expr, ObEvalCtx &ctx,
     } else if (!ObAIFuncUtils::is_dense_embedding_type(info)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("model type must be DENSE_EMBEDDING", K(ret));
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "model type must be DENSE_EMBEDDING");
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_embed, model type must be DENSE_EMBEDDING");
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < contents.count(); ++i) {
         ObArray<ObString> contents_array;

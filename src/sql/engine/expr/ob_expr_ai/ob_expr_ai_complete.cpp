@@ -92,7 +92,7 @@ int ObExprAIComplete::eval_ai_complete(const ObExpr &expr,
   } else if (arg_model_id->is_null() || arg_prompt->is_null()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("parameters is null", K(ret));
-    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "parameters is null");
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_complete, parameters is null");
     res.set_null();
   } else {
     ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
@@ -121,7 +121,7 @@ int ObExprAIComplete::eval_ai_complete(const ObExpr &expr,
     } else if (model_id.empty() || prompt.empty()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("model id or input is empty", K(ret));
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "model id or input is empty");
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_complete, model id or input is empty");
       res.set_null();
     }
 
@@ -217,7 +217,7 @@ int ObExprAIComplete::get_vector_params(const ObExpr &expr,
           } else if (prompt.empty()) {
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("input is empty", K(ret));
-            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "input is empty");
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_complete, input is empty");
             res_vec->set_null(idx);
           } else if (OB_FAIL(prompts.push_back(prompt))) {
             LOG_WARN("fail to push back prompt", K(ret), K(idx));
