@@ -166,7 +166,7 @@ namespace unittest
 {
 
 #define SSLOG_TABLE_READ_INIT                                           \
-  sslog::ObSSLogIteratorGuard iter(true/*read_unfinish*/, true/*read_mark_delete*/); \
+  sslog::ObSSLogIteratorGuard iter(true/*read_unfinish*/, true/*read_init_value*/, true/*read_mark_delete*/); \
   sslog::ObSSLogMetaValueIterator *raw_iter = dynamic_cast<sslog::ObSSLogMetaValueIterator *>(iter.get_sslog_iterator());
 
 #define EXE_SQL(sql_str)                                            \

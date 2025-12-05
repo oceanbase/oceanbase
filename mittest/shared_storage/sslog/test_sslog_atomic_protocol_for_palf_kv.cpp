@@ -238,10 +238,10 @@ int get_sslog_table_guard(const ObSSLogTableType type,
 }
 
 #define SSLOG_TABLE_READ_INIT(a, b)                                     \
-  sslog::ObSSLogIteratorGuard iter(a/*read_unfinish*/, b/*read_mark_delete*/);
+  sslog::ObSSLogIteratorGuard iter(a/*read_unfinish*/, b/*read_init_value*/, true/*read_mark_delete*/);
 
 #define SSLOG_TABLE_MULTI_VERSION_READ_INIT(a, b)                       \
-  sslog::ObSSLogIteratorGuard multi_version_iter(a/*read_unfinish*/, b/*read_mark_delete*/);
+  sslog::ObSSLogIteratorGuard multi_version_iter(a/*read_unfinish*/, b/*read_init_value*/, true/*read_mark_delete*/);
 
 namespace unittest
 {
