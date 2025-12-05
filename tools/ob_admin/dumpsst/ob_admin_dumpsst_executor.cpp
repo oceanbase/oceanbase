@@ -15,6 +15,7 @@
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
+#include "common/ob_file_common_header.h"
 #include "share/ob_tenant_mem_limit_getter.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
 #include "storage/tablet/ob_tablet.h"
@@ -498,7 +499,8 @@ int ObAdminDumpsstExecutor::do_dump_prewarm_index(
       STORAGE_LOG(ERROR, "fail to open file", KR(ret), K(path));
     } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.pread(fd, offset, size, macro_buf, read_size))) {
       STORAGE_LOG(ERROR, "fail to read file", KR(ret), K(fd), K(offset), K(size), KP(macro_buf));
-    } else if (OB_FAIL(index.deserialize(macro_buf, read_size, pos))) {
+    } else if (OB_FAIL(ObFileCommonHeaderUtil::deserialize<ObHotTabletInfoIndex>(macro_buf,
+                       read_size, pos, index))) {
       STORAGE_LOG(ERROR, "fail to deserialize prewarm index", KR(ret), K(read_size), K(pos), KP(macro_buf));
     }
 
@@ -545,6 +547,8 @@ void ObAdminDumpsstExecutor::dump_prewarm_data(const ObDumpMacroBlockContext &ma
     fprintf(stdout, "ObHotTabletInfoIndex: %s\n\n", helper.convert(index));
     const int64_t cnt = index.sizes_.count();
     int64_t cur_offset = 0;
+    int64_t total_macro_cnt = 0;
+    int64_t total_micro_cnt = 0;
     for (int64_t i = 0; (i < cnt) && OB_SUCC(ret); ++i) {
       io_allocator_.reuse();
       char *buf = nullptr;
@@ -560,14 +564,25 @@ void ObAdminDumpsstExecutor::dump_prewarm_data(const ObDumpMacroBlockContext &ma
       } else if (OB_UNLIKELY(size != read_size)) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(ERROR, "read size is wrong", KR(ret), K(size), K(read_size));
-      } else if (OB_FAIL(hot_tablet_info.deserialize(buf, size, pos))) {
-        STORAGE_LOG(ERROR, "fail to serialize", KR(ret), K(size), K(pos));
+      } else if (OB_FAIL(ObFileCommonHeaderUtil::deserialize<ObHotTabletInfo>(buf, size, pos, hot_tablet_info))) {
+        STORAGE_LOG(ERROR, "fail to deserialize hot tablet info", KR(ret), K(size), K(pos), KP(buf));
       } else {
-        ObCStringHelper helper;
-        fprintf(stdout, "i=%ld\n ObHotTabletInfo=%s\n", i, helper.convert(hot_tablet_info));
+        const int64_t macro_cnt = hot_tablet_info.hot_macro_infos_.count();
+        for (int64_t j = 0; (j < macro_cnt) && OB_SUCC(ret); ++j) {
+          const ObHotMacroInfo &hot_macro_info = hot_tablet_info.hot_macro_infos_.at(j);
+          total_macro_cnt++;
+          fprintf(stdout, "macro_idx=%ld, macro_id=%s\n", total_macro_cnt, helper.convert(hot_macro_info.macro_id_));
+          const int64_t micro_cnt = hot_macro_info.hot_micro_infos_.count();
+          for (int64_t k = 0; (k < micro_cnt) && OB_SUCC(ret); ++k) {
+            const ObHotMicroInfo &hot_micro_info = hot_macro_info.hot_micro_infos_.at(k);
+            total_micro_cnt++;
+            fprintf(stdout, "micro_idx=%ld, micro_info=%s\n", total_micro_cnt, helper.convert(hot_micro_info));
+          }
+        }
       }
       cur_offset += size;
     }
+    fprintf(stdout, "total_macro_cnt=%ld, total_micro_cnt=%ld\n", total_macro_cnt, total_micro_cnt);
   }
   if (fd.is_valid()) {
     (void)LOCAL_DEVICE_INSTANCE.close(fd);
