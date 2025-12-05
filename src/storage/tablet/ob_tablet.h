@@ -544,6 +544,9 @@ public:
   int pre_process_cs_replica(
       const ObDirectLoadType direct_load_type,
       ObITable::TableKey &table_key);
+  int check_tablet_status_empty(bool &is_empty) const;
+  int reset_tablet_status_written();
+
 private:
   int inner_pre_process_cs_replica(
       const ObDirectLoadType direct_load_type,
