@@ -247,17 +247,23 @@ class ObESQueryParser
 public :
   ObESQueryParser(ObIAllocator &alloc, common::ObString *table_name) :
     alloc_(alloc), source_cols_(), need_json_wrap_(false), table_name_(*table_name), database_name_(), index_name_map_(),
-    user_cols_(), out_cols_(nullptr), enable_es_mode_(false), fusion_config_(), default_size_(nullptr) {}
+    user_cols_(), part_cols_(), part_aliases_(), out_cols_(nullptr), enable_es_mode_(false), fusion_config_(), default_size_(nullptr) {}
   ObESQueryParser(ObIAllocator &alloc, bool need_json_wrap,
                   const common::ObString *table_name,
                   const common::ObString *database_name = nullptr,
                   bool enable_es_mode = false) :
     alloc_(alloc), source_cols_(), need_json_wrap_(need_json_wrap), table_name_(*table_name), database_name_(*database_name), index_name_map_(),
-    user_cols_(), out_cols_(nullptr), enable_es_mode_(enable_es_mode), fusion_config_(), default_size_(nullptr) {}
+    user_cols_(), part_cols_(), part_aliases_(), out_cols_(nullptr), enable_es_mode_(enable_es_mode), fusion_config_(), default_size_(nullptr) {}
   virtual ~ObESQueryParser() {}
   int parse(const common::ObString &req_str, ObQueryReqFromJson *&query_req);
   inline ColumnIndexNameMap &get_index_name_map() { return index_name_map_; }
   inline ObIArray<ObString> &get_user_column_names() { return user_cols_; }
+  inline ObIArray<ObReqColumnExpr*> &get_partition_column_exprs() { return part_cols_; }
+  inline ObIArray<ObReqColumnExpr*> &get_partition_aliases() { return part_aliases_; }
+  inline ObIAllocator &get_allocator() { return alloc_; }
+  inline const ObString &get_table_name() const { return table_name_; }
+  inline const ObString &get_database_name() const { return database_name_; }
+  int construct_partition_cols(const ObIArray<ObString> &column_names);
 private :
   int parse_query(ObIJsonBase &req_node, ObQueryReqFromJson *&query_req);
   int parse_knn(ObIJsonBase &req_node, ObQueryReqFromJson *&query_req);
@@ -323,6 +329,8 @@ private :
   int construct_join_condition(const ObString &l_table, const ObString &r_table,
                                const ObString &l_expr_name, const ObString &r_expr_name,
                                ObItemType condition, ObReqOpExpr *&join_condition);
+  int construct_join_multi_condition(const ObString &l_table, const ObString &r_table, const ObString &rowkey, ObItemType condition, ObReqOpExpr *&join_condition);
+  int add_partition_keys_to_select(ObQueryReqFromJson *fts_base, ObQueryReqFromJson *knn_base);
   int construct_weighted_expr(ObReqExpr *base_expr, double weight, ObReqExpr *&weighted_expr);
   int construct_ip_expr(ObReqColumnExpr *vec_field, ObReqConstExpr *query_vec, ObReqCaseWhenExpr *&case_when/* score */,
                         ObReqOpExpr *&minus_expr/* distance */, ObReqExpr *&order_by_vec);
@@ -373,6 +381,8 @@ private :
   common::ObString database_name_;
   ColumnIndexNameMap index_name_map_;
   common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> user_cols_;
+  common::ObSEArray<ObReqColumnExpr*, 4, common::ModulePageAllocator, true> part_cols_;
+  common::ObSEArray<ObReqColumnExpr*, 4, common::ModulePageAllocator, true> part_aliases_;
   ObIArray<ObString> *out_cols_;
   // if enable es mode
   bool enable_es_mode_ = false;
@@ -391,6 +401,7 @@ private :
   static const ObString VS_ALIAS;
   static const ObString MSM_KEY;
   static const ObString FTS_SUB_SCORE_PREFIX;
+  static const ObString PART_COL_ALIAS_PREFIX;
   static const ObString HIDDEN_COLUMN_VISIBLE_HINT;
 };
 
