@@ -91,6 +91,20 @@ enum OB_TMP_FILE_TYPE
   COMPRESS_INDEX = 3,
 };
 
+#define REACH_TIME_INTERVAL_WITH_TS(last_ts_ptr, interval) \
+  ({ \
+    bool bret = false; \
+    int64_t cur_time = common::ObClockGenerator::getClock(); \
+    int64_t last_time = ATOMIC_LOAD(last_ts_ptr); \
+    if (OB_UNLIKELY((interval + last_time) < cur_time)) \
+    { \
+      if (last_time == ATOMIC_CAS(last_ts_ptr, last_time, cur_time)) { \
+        bret = true; \
+      } \
+    } \
+    bret; \
+  })
+
 }  // end namespace tmp_file
 }  // end namespace oceanbase
 #endif // OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_GLOBAL_H_

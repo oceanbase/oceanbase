@@ -23,6 +23,7 @@
 #include "storage/shared_storage/ob_file_manager.h"
 #include "mittest/shared_storage/clean_residual_data.h"
 #include "lib/alloc/memory_dump.h"
+#include <thread>
 
 namespace oceanbase
 {
@@ -135,6 +136,139 @@ void TestTmpFile::check_final_status()
   ASSERT_EQ(0, flush_mgr.f3_cnt_);
   ASSERT_EQ(0, flush_mgr.total_flushing_page_num_);
 }
+
+// Helper function to test tmp file deletion with optional scan gc
+void test_tmp_file_deletion_impl(const int64_t file_cnt, bool test_scan_gc)
+{
+  int ret = OB_SUCCESS;
+  const int64_t write_size = 512;
+  char *write_buf = new char [write_size];
+  for (int64_t i = 0; i < write_size;) {
+    int64_t random_length = generate_random_int(1024, 8 * 1024);
+    int64_t random_int = generate_random_int(0, 256);
+    for (int64_t j = 0; j < random_length && i + j < write_size; ++j) {
+      write_buf[i + j] = random_int;
+    }
+    i += random_length;
+  }
+
+  int64_t dir = -1;
+  ret = MTL(ObTenantTmpFileManager *)->alloc_dir(dir);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObArray<int64_t> file_ids;
+  int64_t test_start_time = ObTimeUtility::fast_current_time();
+  int64_t completed_count = 0;
+  ObSpinLock lock;
+  const int64_t THREAD_COUNT = 16;
+  std::vector<std::thread> threads;
+  int64_t files_per_thread = file_cnt / THREAD_COUNT;
+  int64_t remaining_files = file_cnt % THREAD_COUNT;
+  for (int64_t t = 0; t < THREAD_COUNT; ++t) {
+    LOG_INFO("create tmp files", K(t), K(files_per_thread), K(remaining_files));
+    int64_t start_idx = t * files_per_thread;
+    int64_t end_idx = (t + 1) * files_per_thread;
+    if (t == THREAD_COUNT - 1) {
+      end_idx += remaining_files; // Last thread handles remaining files
+    }
+
+    ObTenantBase *tenant_ctx = MTL_CTX();
+    ASSERT_NE(nullptr, tenant_ctx);
+    threads.emplace_back([&, tenant_ctx, start_idx, end_idx]() {
+      int64_t start_time = ObTimeUtility::fast_current_time();
+      ObTenantEnv::set_tenant(tenant_ctx);
+      for (int64_t i = start_idx; i < end_idx; ++i) {
+        int64_t fd = -1;
+        int ret = MTL(ObTenantTmpFileManager *)->open(fd, dir, "");
+        if (OB_SUCCESS != ret) {
+          STORAGE_LOG(ERROR, "Failed to open tmp file", K(ret), K(i));
+          continue;
+        }
+
+        {
+          ObSpinLockGuard guard(lock);
+          file_ids.push_back(fd);
+        }
+        ObTmpFileIOInfo io_info;
+        io_info.io_desc_.set_wait_event(2);
+        io_info.io_timeout_ms_ = IO_WAIT_TIME_MS;
+        io_info.size_ = write_size;
+        io_info.buf_ = write_buf;
+        io_info.fd_ = fd;
+        ret = MTL(ObTenantTmpFileManager *)->write(MTL_ID(), io_info);
+        if (OB_SUCCESS != ret) {
+          STORAGE_LOG(ERROR, "Failed to write tmp file", K(ret), K(fd));
+          continue;
+        }
+
+        ATOMIC_INC(&completed_count);
+        if (ATOMIC_LOAD(&completed_count) % 10000 == 0) {
+          printf("completed count: %ld, cost time: %ldms\n",
+              ATOMIC_LOAD(&completed_count), (ObTimeUtility::fast_current_time() - start_time)/1000);
+              start_time = ObTimeUtility::fast_current_time();
+        }
+      }
+    });
+  }
+
+  for (auto& thread : threads) {
+    thread.join();
+  }
+
+  ASSERT_EQ(file_cnt, ATOMIC_LOAD(&completed_count));
+  ASSERT_EQ(file_cnt, file_ids.count());
+  printf("All threads completed. Total files created: %ld, cost time: %ldms\n",
+      ATOMIC_LOAD(&completed_count), (ObTimeUtility::fast_current_time() - test_start_time)/100);
+  ObSSTmpFileRemoveManager &rm_mgr = MTL(ObTenantTmpFileManager *)->get_ss_file_manager().remove_mgr_;
+
+  // Stop remove manager if testing scan gc
+  if (test_scan_gc) {
+    rm_mgr.stop();
+  }
+
+  int64_t start_time = ObTimeUtility::fast_current_time();
+  for (int64_t i = 0; i < file_ids.count(); ++i) {
+    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->remove(file_ids.at(i)));
+    if (i % 10000 == 0 || i == file_ids.count() - 1) {
+      int64_t cost_time = (ObTimeUtility::fast_current_time() - start_time)/1000;
+      printf("delete tmp file, i: %ld, file_cnt: %ld, cost time: %ldms\n", i, file_cnt, cost_time);
+      start_time = ObTimeUtility::fast_current_time();
+      STORAGE_LOG(INFO, "delete tmp file", K(i), K(file_cnt), K(cost_time));
+    }
+  }
+
+  // Trigger scan gc if needed
+  if (test_scan_gc) {
+    rm_mgr.deleted_file_map_.clear(); // 模拟重启，看scan gc是否正常
+    ATOMIC_STORE(&rm_mgr.scan_invalid_files_ts_,
+      ObTimeUtility::fast_current_time() - ObSSTmpFileRemoveManager::SCAN_INVALID_FILES_INTERVAL);
+    rm_mgr.start();
+    sleep(10);
+  }
+
+  int64_t end_time = ObTimeUtility::fast_current_time();
+  LOG_INFO("sleep for remove threads");
+  int64_t count = 0;
+  while (rm_mgr.get_task_num() > 0) {
+    sleep(1);
+    printf("remove task num: %ld, sleep count: %ld\n", rm_mgr.get_task_num(), count++);
+  }
+  STORAGE_LOG(INFO, "test cost time", K((end_time - test_start_time)/1000));
+  delete [] write_buf;
+}
+TEST_F(TestTmpFile, test_delete_tmp_file)
+{
+  STORAGE_LOG(INFO, "=======================test_delete_tmp_file begin=======================");
+  test_tmp_file_deletion_impl(2 * 10000, false);
+  STORAGE_LOG(INFO, "=======================test_delete_tmp_file end=======================");
+}
+
+TEST_F(TestTmpFile, test_scan_gc)
+{
+  STORAGE_LOG(INFO, "=======================test_scan_gc begin=======================");
+  test_tmp_file_deletion_impl(2000, true);
+  STORAGE_LOG(INFO, "=======================test_scan_gc end=======================");
+}
+
 
 // generate 2MB random data (will not trigger flush and evict logic)
 // 1. test write pages and append write tail page
