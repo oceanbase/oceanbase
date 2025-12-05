@@ -404,12 +404,15 @@ int ObStorageObjectHandle::wait()
   }
 
   if (OB_SUCC(ret) && (!io_handle_.is_empty()) && (!io_handle_.is_limit_net_bandwidth_req())) { // check local io time
+    const int64_t MID_IO_TIME_US = 5 * 1000; // 5ms
     const int64_t SLOW_IO_TIME_US = 10 * 1000; // 10ms
     int tmp_ret = OB_SUCCESS;
     int64_t io_time_us = 0;
     if (OB_TMP_FAIL(io_handle_.get_io_time_us(io_time_us))) {
       LOG_WARN("fail to get io time", KR(tmp_ret));
     } else if (OB_UNLIKELY(io_time_us > SLOW_IO_TIME_US)) {
+      LOG_INFO("slow local io", K(io_time_us), KPC(this));
+    } else if (OB_UNLIKELY(io_time_us > MID_IO_TIME_US)) {
       LOG_TRACE("slow local io", K(io_time_us), KPC(this));
     }
   }
