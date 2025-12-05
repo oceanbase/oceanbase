@@ -2616,7 +2616,8 @@ OB_DEF_SERIALIZE(ObAlterTableArg)
               is_alter_mlog_attributes_,
               alter_mlog_arg_,
               part_storage_cache_policy_,
-              data_version_);
+              data_version_,
+              enable_hidden_table_partition_pruning_);
 
   return ret;
 }
@@ -2728,7 +2729,8 @@ OB_DEF_DESERIALIZE(ObAlterTableArg)
               is_alter_mlog_attributes_,
               alter_mlog_arg_,
               part_storage_cache_policy_,
-              data_version_);
+              data_version_,
+              enable_hidden_table_partition_pruning_);
   return ret;
 }
 
@@ -2787,7 +2789,8 @@ OB_DEF_SERIALIZE_SIZE(ObAlterTableArg)
                 is_alter_mlog_attributes_,
                 alter_mlog_arg_,
                 part_storage_cache_policy_,
-                data_version_);
+                data_version_,
+                enable_hidden_table_partition_pruning_);
   }
 
   if (OB_FAIL(ret)) {
