@@ -357,6 +357,8 @@ int ObPartTransCtx::on_abort()
     TRANS_LOG(WARN, "transaciton end error", KR(ret), "context", *this);
   } else if (OB_FAIL(trans_clear_(ctx_tx_data_.get_end_log_ts()))) {
     TRANS_LOG(WARN, "transaciton clear error", KR(ret), "context", *this);
+  } else {
+    (void)set_exiting_();
   }
 
   return ret;

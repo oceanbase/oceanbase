@@ -2319,6 +2319,12 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
         print_trace_log_();
         busy_cbs_.remove(log_cb);
         return_log_cb_(log_cb);
+      } else if (get_downstream_state() == ObTxState::ABORT
+                 && is_contain(log_cb->get_cb_arg_array(), ObTxLogType::TX_CLEAR_LOG)) {
+        TRANS_LOG(INFO, "ctx has been aborted in 2pc, skip the clear log", K(log_cb), KPC(this));
+        print_trace_log_();
+        busy_cbs_.remove(log_cb);
+        return_log_cb_(log_cb);
       } else {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(ERROR, "callback was missed when tx ctx exiting", K(ret), KPC(log_cb), KPC(this));

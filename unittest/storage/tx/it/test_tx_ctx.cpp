@@ -304,6 +304,89 @@ TEST_F(ObTestTxCtx, 2PC_ABORT_WITH_SWITCH_TO_FOLLOWER)
   // ASSERT_EQ(OB_SUCCESS, n1x->wait_all_tx_ctx_is_destoryed());
 }
 
+TEST_F(ObTestTxCtx, 2PC_ABORT_SET_EXITING)
+{
+
+  START_TWO_TX_NODE_WITH_LSID(n1, n2, 1001)
+
+  PREPARE_TX(n1, tx);
+  PREPARE_TX_PARAM(tx_param);
+  // GET_READ_SNAPSHOT(n1, tx, tx_param, snapshot);
+  ASSERT_EQ(OB_SUCCESS, n1->start_tx(tx, tx_param));
+  ASSERT_EQ(OB_SUCCESS, n1->write(tx, 100, 112));
+  ASSERT_EQ(OB_SUCCESS, n2->write(tx, 120, 132));
+
+  ASSERT_EQ(tx.parts_.count(), 2);
+
+  // disable keepalive msg, because switch to follower forcedly will send keepalive msg to notify
+  // scheduler abort tx
+  TRANS_LOG(INFO, "add drop KEEPALIVE msg");
+  n1->add_drop_msg_type(KEEPALIVE);
+  n2->add_drop_msg_type(KEEPALIVE);
+
+  FLUSH_REDO(n1);
+  FLUSH_REDO(n2);
+
+  n1->wait_all_redolog_applied();
+  n2->wait_all_redolog_applied();
+
+  ObPartTransCtx * ctx_n1 = nullptr;
+  ASSERT_EQ(OB_SUCCESS, n1->get_tx_ctx(n1->ls_id_, tx.tx_id_, ctx_n1));
+
+  ObPartTransCtx * ctx_n2 = nullptr;
+  ASSERT_EQ(OB_SUCCESS, n2->get_tx_ctx(n2->ls_id_, tx.tx_id_, ctx_n2));
+  // ASSERT_EQ(ctx_n2->need_force_abort_(), true);
+
+  n1->fake_tx_log_adapter_->set_pause();
+  n1->fake_tx_log_adapter_-> push_back_block_log_type(ObTxLogType::TX_COMMIT_INFO_LOG);
+  n1->fake_tx_log_adapter_-> push_back_block_log_type(ObTxLogType::TX_PREPARE_LOG);
+
+  COMMIT_TX(n1, tx, 120 * 1000 * 1000);
+  ASSERT_EQ(ctx_n1->is_root(), true);
+
+  usleep(10*1000);
+  ASSERT_EQ(ctx_n2->exec_info_.state_, ObTxState::PREPARE);
+  ASSERT_EQ(ctx_n1->exec_info_.state_, ObTxState::INIT);
+  ASSERT_EQ(ctx_n1->upstream_state_, ObTxState::PREPARE);
+
+  SWITCH_TO_FOLLOWER_FORCEDLY(n1);
+  n1->fake_tx_log_adapter_->clear_block_log_type();
+  n1->fake_tx_log_adapter_->clear_pause();
+  n2->fake_tx_log_adapter_-> push_back_block_log_type(ObTxLogType::TX_CLEAR_LOG);
+  SWITCH_TO_LEADER(n1);
+
+
+  ctx_n2->handle_timeout(1*1000);
+  usleep(100*1000);
+   TRANS_LOG(INFO,
+             "[DEBUG] print ctx_n1",
+             K(ctx_n1->trans_id_),
+             K(ctx_n1->ls_id_),
+             K(ctx_n1->upstream_state_),
+             K(ctx_n1->exec_info_.state_));
+   TRANS_LOG(INFO,
+             "[DEBUG] print ctx_n2",
+             K(ctx_n2->trans_id_),
+             K(ctx_n2->ls_id_),
+             K(ctx_n2->upstream_state_),
+             K(ctx_n2->exec_info_.state_));
+  ASSERT_EQ(ctx_n1->exec_info_.state_, ObTxState::ABORT);
+
+
+  ASSERT_EQ(ctx_n2->exec_info_.state_, ObTxState::ABORT);
+  ASSERT_EQ(ctx_n2->busy_cbs_.get_size(), 0);
+  // ASSERT_EQ(ctx_n2->is_exiting_, true);
+  SWITCH_TO_FOLLOWER_GRACEFULLY(n2);
+  ASSERT_EQ(ctx_n2->is_exiting_, true);
+  ASSERT_EQ(ctx_n2->is_follower_(), false);
+
+  n2->revert_tx_ctx(ctx_n2);
+  n1->revert_tx_ctx(ctx_n1);
+
+  n1->wait_all_redolog_applied();
+  n2->wait_all_redolog_applied();
+}
+
 } // namespace oceanbase
 
 int main(int argc, char **argv)
