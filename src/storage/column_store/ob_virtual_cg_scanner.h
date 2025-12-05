@@ -130,6 +130,10 @@ private:
 // keep this for cg iter pool
 class ObDefaultCGSingleRowScanner : public ObDefaultCGScanner{};
 
+// ObDefaultCGFilterScanner is used for filter
+// keep this for cg iter pool
+class ObDefaultCGFilterScanner : public ObDefaultCGScanner {};
+
 class ObDefaultCGGroupByScanner final : public ObDefaultCGScanner, public ObICGGroupByProcessor
 {
 public:
