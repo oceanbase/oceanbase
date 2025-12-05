@@ -12,6 +12,8 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_schema_utils.h"
+#include "share/config/ob_config.h"
+#include "share/config/ob_config_helper.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
 #include "share/ob_fts_index_builder_util.h"
@@ -1629,6 +1631,24 @@ int ObParallelDDLControlMode::string_to_ddl_type(const ObString &ddl_string, ObP
   return ret;
 }
 
+template <int64_t N>
+int ObParallelDDLControlMode::pack_bytes_to_value_(const uint8_t *bytes)
+{
+  STATIC_ASSERT(N >= 8, "pack_bytes_to_value_ requires at least 8 bytes");
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(bytes)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "bytes is null", KR(ret));
+  } else {
+    value_ = 0;
+    // Only first 8 bytes are used to pack value_
+    for (uint64_t i = 0; i < 8; ++i) {
+      value_ |= (static_cast<uint64_t>(bytes[i]) << (8 * i));
+    }
+  }
+  return ret;
+}
+
 int ObParallelDDLControlMode::set_value(const ObConfigModeItem &mode_item)
 {
   int ret = OB_SUCCESS;
@@ -1640,9 +1660,8 @@ int ObParallelDDLControlMode::set_value(const ObConfigModeItem &mode_item)
     STATIC_ASSERT(((sizeof(value_)/sizeof(uint8_t) <= ObConfigModeItem::MAX_MODE_BYTES)),
                   "value_ size overflow");
     STATIC_ASSERT( (MAX_TYPE * 2) <= (sizeof(value_) * 8), "type size overflow");
-    value_ = 0;
-    for (uint64_t i = 0; i < 8; ++i) {
-      value_ = (value_ | static_cast<uint64_t>(values[i]) << (8 * i));
+    if (OB_FAIL(pack_bytes_to_value_<common::ObConfigModeItem::MAX_MODE_BYTES>(values))) {
+      OB_LOG(WARN, "fail to pack bytes to value", KR(ret));
     }
   }
   return ret;
@@ -1667,7 +1686,7 @@ int ObParallelDDLControlMode::set_parallel_ddl_mode(const ObParallelDDLType type
   return ret;
 }
 
-int ObParallelDDLControlMode::is_parallel_ddl(const ObParallelDDLType type, bool &is_parallel)
+int ObParallelDDLControlMode::is_parallel_ddl(const ObParallelDDLType type, bool &is_parallel) const
 {
   int ret = OB_SUCCESS;
   is_parallel = true;
@@ -1746,6 +1765,75 @@ int ObParallelDDLControlMode::generate_parallel_ddl_control_config_for_create_te
   }
   if (config_value.is_valid()) {
     config_value.set_length(config_value.length()-2);
+  }
+  return ret;
+}
+
+int ObParallelDDLControlMode::to_config_string(ObSqlString &config_value) const
+{
+  int ret = OB_SUCCESS;
+  int ddl_type_size = ARRAYSIZEOF(DDLType);
+  int not_support_ddl_size = ARRAYSIZEOF(NOT_SUPPORT_DDLType);
+  config_value.reset();
+  for (int i = 0; OB_SUCC(ret) && i < ddl_type_size; ++i) {
+    ObString tmp_str = DDLType[i];
+    bool not_support = false;
+    for (int j = 0; OB_SUCC(ret) && j < not_support_ddl_size; ++j) {
+      if (tmp_str.case_compare(NOT_SUPPORT_DDLType[j]) == 0) {
+        not_support = true;
+        break;
+      }
+    }
+    if (not_support) {
+      continue;
+    } else {
+      bool is_parallel = false;
+      const char *mode_str = nullptr;
+      if (OB_FAIL(is_parallel_ddl(static_cast<ObParallelDDLType>(i), is_parallel))) {
+        LOG_WARN("fail to check is parallel ddl", KR(ret));
+      } else if (is_parallel) {
+        mode_str = "ON";
+      } else {
+        mode_str = "OFF";
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(config_value.append_fmt("%s:%s, ", DDLType[i], mode_str))) {
+        LOG_WARN("fail to append fmt", KR(ret), K(i));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && config_value.is_valid()) {
+    config_value.set_length(config_value.length() - 2);
+  }
+  return ret;
+}
+
+int ObParallelDDLControlMode::to_config_string(common::ObIAllocator &allocator, common::ObString &out_str) const
+{
+  int ret = OB_SUCCESS;
+  ObSqlString buf;
+  if (OB_FAIL(to_config_string(buf))) {
+    LOG_WARN("fail to build config string", KR(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, buf.string(), out_str))) {
+    LOG_WARN("fail to deep copy config string", KR(ret));
+  }
+  return ret;
+}
+
+int ObParallelDDLControlMode::parse_from_config_string(const char *str)
+{
+  int ret = OB_SUCCESS;
+  ObParallelDDLControlParser parser;
+  uint8_t arr[8];
+  MEMSET(arr, 0, sizeof(arr));
+  if (OB_ISNULL(str)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid null str", KR(ret));
+  } else if (!parser.parse(str, arr, common::ObConfigModeItem::MAX_MODE_BYTES)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "parse config string failed", KR(ret));
+  } else if (OB_FAIL(pack_bytes_to_value_<ARRAYSIZEOF(arr)>(arr))) {
+    OB_LOG(WARN, "fail to pack bytes to value", KR(ret));
   }
   return ret;
 }

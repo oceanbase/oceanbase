@@ -18,6 +18,7 @@
 #include "lib/allocator/page_arena.h"
 #include "lib/container/ob_iarray.h"
 #include "lib/string/ob_string.h"
+#include "lib/string/ob_sql_string.h"
 #include "share/ob_define.h"
 #include "share/ob_errno.h"
 #include "share/schema/ob_schema_struct.h"
@@ -443,12 +444,21 @@ public:
   virtual int set_value(const ObConfigModeItem &mode_item) override;
   uint64_t get_value() const { return value_; }
   int set_parallel_ddl_mode(const ObParallelDDLType type, const uint8_t mode);
-  int is_parallel_ddl(const ObParallelDDLType type, bool &is_parallel);
+  int is_parallel_ddl(const ObParallelDDLType type, bool &is_parallel) const;
   static int is_parallel_ddl_enable(const ObParallelDDLType ddl_type, const uint64_t tenant_id, bool &is_parallel);
   static int string_to_ddl_type(const ObString &ddl_string, ObParallelDDLType &ddl_type);
   static int generate_parallel_ddl_control_config_for_create_tenant(ObSqlString &config_value);
+  // Convert current value_ to a full config string like "TRUNCATE_TABLE:ON, CREATE_INDEX:OFF, ..."
+  int to_config_string(ObSqlString &config_value) const;
+  // Convert to config string and deep-copy into allocator-backed ObString
+  int to_config_string(common::ObIAllocator &allocator, common::ObString &out_str) const;
+  // Parse config string and set value_ accordingly using ObParallelDDLControlParser
+  int parse_from_config_string(const char *str);
+
 private:
   bool check_mode_valid_(uint8_t mode) { return mode > MASK ? false : true; }
+  template <int64_t N>
+  int pack_bytes_to_value_(const uint8_t *bytes);
   uint64_t value_;
   DISALLOW_COPY_AND_ASSIGN(ObParallelDDLControlMode);
 };
