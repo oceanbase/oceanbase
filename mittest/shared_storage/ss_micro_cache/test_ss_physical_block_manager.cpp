@@ -324,7 +324,7 @@ TEST_F(TestSSPhysicalBlockManager, super_block)
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.update_ss_super_block(super_blk));
   ASSERT_EQ(true, phy_blk_mgr.super_blk_.is_valid());
   ASSERT_EQ(super_blk.modify_time_us_, phy_blk_mgr.super_blk_.modify_time_us_);
-  ASSERT_EQ(false, super_blk.is_valid_checkpoint());
+  ASSERT_EQ(false, super_blk.exist_valid_checkpoint());
 }
 
 TEST_F(TestSSPhysicalBlockManager, read_write_super_block)

@@ -66,7 +66,7 @@ void TestSSBatchMicroCheckpointTask::SetUp()
   ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 32), 1/*micro_split_cnt*/));
   ObTenantFileManager *tnt_file_mgr = MTL(ObTenantFileManager*);
   ASSERT_NE(nullptr, tnt_file_mgr);
-  tnt_file_mgr->is_cache_file_exist_ = true;
+  // tnt_file_mgr->is_cache_file_exist_ = true;
   micro_cache->start();
   micro_cache_ = micro_cache;
   tenant_id_ = MTL_ID();
@@ -411,7 +411,65 @@ TEST_F(TestSSBatchMicroCheckpointTask, test_batch_micro_meta_ckpt)
     ASSERT_EQ(ckpt_split_cnt, phy_blk_mgr.super_blk_.micro_ckpt_entries().count());
     ASSERT_LT(0, cache_stat.task_stat().micro_ckpt_item_cnt_);
     ASSERT_GE(prev_persisted_micro_cnt, cache_stat.task_stat().micro_ckpt_item_cnt_);
+    LOG_INFO("TEST: finish test_batch_micro_meta_ckpt");
   }
+}
+
+TEST_F(TestSSBatchMicroCheckpointTask, test_multi_times_ckpt)
+{
+  LOG_INFO("TEST: start test_multi_times_ckpt");
+  ASSERT_NE(nullptr, micro_cache_);
+  ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache_->phy_blk_mgr_;
+  ObSSMicroRangeManager &micro_range_mgr = micro_cache_->micro_range_mgr_;
+  ObSSMicroCacheStat &cache_stat = micro_cache_->cache_stat_;
+  ObSSPersistMicroMetaTask &persist_meta_task = micro_cache_->task_runner_.persist_meta_task_;
+  ObSSDoBlkCheckpointTask &blk_ckpt_task = micro_cache_->task_runner_.blk_ckpt_task_;
+  ObSSARCInfo &arc_info = micro_cache_->micro_meta_mgr_.arc_info_;
+  const int64_t cache_file_size = micro_cache_->cache_file_size_;
+  const int64_t block_size = micro_cache_->phy_blk_size_;
+
+  const int64_t MAX_WAIT_MICRO_CKPT_TIME_S = 180;
+  int64_t start_time_s = ObTimeUtility::current_time_s();
+
+  int64_t ckpt_split_cnt = 100;
+  ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::restart_micro_cache(micro_cache_, tenant_id_, cache_file_size, ckpt_split_cnt, true));
+
+  persist_meta_task.cur_interval_us_ = 3600 * 1000 * 1000L;
+  blk_ckpt_task.cur_interval_us_ = 3600 * 1000 * 1000L;
+  ob_usleep(2 * 1000 * 1000);
+
+  // 1. add some micro_block into cache
+  ObArray<TestSSCommonUtil::MicroBlockInfo> p_micro_block_arr;
+  ObArray<TestSSCommonUtil::MicroBlockInfo> up_micro_block_arr;
+  const int64_t macro_block_cnt = 100;
+  const int32_t min_micro_size = 4 * 1024;
+  const int32_t max_micro_size = 8 * 1024;
+  ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::add_micro_blocks(macro_block_cnt, block_size, p_micro_block_arr, up_micro_block_arr,
+            1, true, min_micro_size, max_micro_size));
+  ASSERT_EQ(macro_block_cnt, phy_blk_mgr.blk_cnt_info_.data_blk_.used_cnt_);
+  ASSERT_EQ(macro_block_cnt, cache_stat.phy_blk_stat().data_blk_used_cnt_);
+  const int64_t total_add_micro_cnt = p_micro_block_arr.count() + up_micro_block_arr.count();
+  ASSERT_LT(0, total_add_micro_cnt);
+  ASSERT_EQ(total_add_micro_cnt, cache_stat.micro_stat().valid_micro_cnt_);
+
+  // 2. execute multi times checkpoint
+  const int64_t ckpt_total_cnt = 1000;
+  const int64_t blk_ckpt_interval = 10;
+  for (int64_t i = 0; i < ckpt_total_cnt; ++i) {
+    ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.start_op());
+    persist_meta_task.persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
+    persist_meta_task.persist_meta_op_.gen_checkpoint();
+    if (i % blk_ckpt_interval == 0) {
+      ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.start_op());
+      blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.need_ckpt_ = true;
+      ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.gen_checkpoint());
+    }
+  }
+  ASSERT_LT(0, cache_stat.task_stat().micro_ckpt_cnt_);
+  ASSERT_LT(0, cache_stat.task_stat().micro_ckpt_op_cnt_);
+  ASSERT_LT(0, cache_stat.task_stat().blk_ckpt_cnt_);
+
+  LOG_INFO("TEST: finish test_multi_times_ckpt", K(cache_stat), K(phy_blk_mgr.blk_cnt_info_));
 }
 
 }  // namespace storage
