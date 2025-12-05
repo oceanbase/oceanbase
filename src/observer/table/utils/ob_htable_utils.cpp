@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 #include "ob_htable_utils.h"
 #include "src/observer/table/ob_table_filter.h"
+#include "lib/random/ob_random.h"
 using namespace oceanbase::common;
 using namespace oceanbase::table;
 using namespace oceanbase::share::schema;
@@ -1386,5 +1387,54 @@ int ObHTableUtils::init_schema_info(const ObString &arg_table_name,
                                              schema_guard))) {
     LOG_WARN("fail to init schema cache guard", K(ret));
   }
+  return ret;
+}
+
+int ObHTableUtils::adjust_htable_timestamps_for_retry(common::ObIArray<ObTableOperation> &ops)
+{
+  int ret = OB_SUCCESS;
+  // Maximum random offset: 0-999 milliseconds
+  // This allows up to 1000 different timestamps within the same millisecond,
+  // significantly reducing the probability of row lock conflicts for hot keys
+  const int64_t MAX_RANDOM_OFFSET = 999;
+
+  // Iterate through all operations and adjust timestamps for HBase operations
+  for (int64_t i = 0; OB_SUCC(ret) && i < ops.count(); ++i) {
+    ObTableOperation &op = ops.at(i);
+    ObITableEntity *entity = nullptr;
+
+    if (OB_FAIL(op.get_entity(entity))) {
+      LOG_WARN("fail to get entity", K(ret), K(i));
+    } else if (OB_ISNULL(entity)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("entity is null", K(ret), K(i));
+    } else if (!entity->is_user_specific_T()) {
+      // Only adjust timestamps for operations where user didn't specify timestamp T
+      // When is_user_specific_T() returns false, it means the timestamp was auto-generated
+      // by the server (LATEST_TIMESTAMP), which may cause conflicts for hot keys.
+      // We adjust these timestamps to avoid subsequent lock conflicts.
+
+      ObRowkey rowkey = entity->get_rowkey();
+      ObObj *obj_ptr = const_cast<ObRowkey &>(rowkey).get_obj_ptr();
+      if (OB_ISNULL(obj_ptr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("obj_ptr is nullptr", K(ret), K(rowkey));
+      } else {
+        ObObj &t_obj = obj_ptr[ObHTableConstants::COL_IDX_T];
+        int64_t current_ts = t_obj.get_int();
+
+        // Generate a random offset (0-999) using ObRandom for thread safety
+        // ObRandom uses thread-local storage, avoiding lock contention in multi-threaded scenarios
+        int64_t random_offset = ObRandom::rand(0, MAX_RANDOM_OFFSET);
+        int64_t new_ts = current_ts - random_offset;
+        t_obj.set_int(new_ts);
+
+        LOG_DEBUG("adjust htable timestamp for retry", K(i), K(current_ts), K(random_offset), K(new_ts));
+      }
+    }
+    // Skip operations where user explicitly specified timestamp T (is_user_specific_T() == true)
+    // These timestamps should not be modified as they are user-defined
+  }
+
   return ret;
 }
