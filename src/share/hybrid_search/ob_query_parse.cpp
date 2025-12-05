@@ -2247,6 +2247,16 @@ int ObESQueryParser::parse_query_string(ObIJsonBase &req_node, ObEsQueryInfo &qu
     }
 
     if (OB_SUCC(ret)) {
+      if (OB_SUCC(parse_query_string_operator(req_node, query_info))) {
+        parsed_keys++;
+      } else if (ret == OB_SEARCH_NOT_FOUND) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to parse query_string operator", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
       if (OB_SUCC(parse_query_string_fields(req_node, query_info))) {
         parsed_keys++;
       } else {
@@ -2259,16 +2269,6 @@ int ObESQueryParser::parse_query_string(ObIJsonBase &req_node, ObEsQueryInfo &qu
         parsed_keys++;
       } else {
         LOG_WARN("fail to parse query_string query", K(ret));
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      if (OB_SUCC(parse_query_string_operator(req_node, query_info))) {
-        parsed_keys++;
-      } else if (ret == OB_SEARCH_NOT_FOUND) {
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("fail to parse query_string operator", K(ret));
       }
     }
 
@@ -2503,7 +2503,8 @@ int ObESQueryParser::parse_keyword_query_string(ObEsQueryInfo &query_info,
   }
 
   if (OB_FAIL(ret)) {
-  } else if (query_info.score_type_ != SCORE_TYPE_CROSS_FIELDS) {
+  } else if (query_info.score_type_ == SCORE_TYPE_PHRASE ||
+             (query_info.score_type_ != SCORE_TYPE_CROSS_FIELDS && query_info.opr_ != T_OP_AND)) {
     common::ObSEArray<ObReqConstExpr *, 4, common::ModulePageAllocator, true> current_phrase_keywords;
     for (int64_t i = 0; OB_SUCC(ret) && i < raw_keywords.count(); i++) {
       ObReqConstExpr *current_keyword = raw_keywords.at(i);
