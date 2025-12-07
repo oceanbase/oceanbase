@@ -374,7 +374,8 @@ int ObSplitPartitionHelper::prepare_start_args_(
 
   // prepare tablet ids array for mapping between src and dst tablets later
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObTabletSplitMdsArg::prepare_basic_args(upd_table_schemas,
+  } else if (OB_FAIL(ObTabletSplitMdsArg::prepare_basic_args(new_table_schemas,
+                                                             upd_table_schemas,
                                                              inc_table_schemas,
                                                              src_tablet_ids,
                                                              dst_tablet_ids,

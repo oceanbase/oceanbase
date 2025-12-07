@@ -170,6 +170,7 @@ int ObTabletSplitMdsArg::get_partkey_projector(
 }
 
 int ObTabletSplitMdsArg::prepare_basic_args(
+    const ObIArray<ObTableSchema *> &new_table_schemas,
     const ObIArray<ObTableSchema *> &upd_table_schemas,
     const ObIArray<const ObTableSchema *> &inc_table_schemas,
     ObIArray<ObTabletID> &src_tablet_ids,
@@ -181,9 +182,9 @@ int ObTabletSplitMdsArg::prepare_basic_args(
   src_tablet_ids.reset();
   dst_tablet_ids.reset();
   dst_end_partkey_vals.reset();
-  if (OB_UNLIKELY(upd_table_schemas.count() != inc_table_schemas.count())) {
+  if (OB_UNLIKELY(new_table_schemas.count() != upd_table_schemas.count() || upd_table_schemas.count() != inc_table_schemas.count())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid schema count", K(ret), K(upd_table_schemas.count()), K(inc_table_schemas.count()));
+    LOG_WARN("invalid schema count", K(ret), K(new_table_schemas.count()), K(upd_table_schemas.count()), K(inc_table_schemas.count()));
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < upd_table_schemas.count(); i++) {
@@ -213,18 +214,21 @@ int ObTabletSplitMdsArg::prepare_basic_args(
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < inc_table_schemas.count(); i++) {
-    const ObTableSchema *table_schema = nullptr;
+    const ObTableSchema *inc_table_schema = nullptr;
+    const ObTableSchema *new_table_schema = nullptr;
     const ObArray<ObTabletID> empty_array;
     const bool is_data_table = i == 0;
-    if (OB_ISNULL(table_schema = inc_table_schemas.at(i))
-        || OB_UNLIKELY(table_schema->get_table_id() != upd_table_schemas.at(i)->get_table_id())) {
+    if (OB_ISNULL(inc_table_schema = inc_table_schemas.at(i))
+        || OB_ISNULL(new_table_schema = new_table_schemas.at(i))
+        || OB_UNLIKELY(inc_table_schema->get_table_id() != upd_table_schemas.at(i)->get_table_id()
+            || new_table_schema->get_table_id() != upd_table_schemas.at(i)->get_table_id())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid table schema", K(ret), K(i), K(dst_tablet_ids));
     } else if (OB_FAIL(dst_tablet_ids.push_back(empty_array))) {
       LOG_WARN("failed to push back", K(ret));
     } else {
-      ObTabletSplitMdsArgPrepareDstOp op(is_data_table, table_schema->get_partition_key_info(), dst_tablet_ids.at(i), dst_end_partkey_vals, allocator);
-      if (OB_FAIL(foreach_part(*table_schema, PartitionType::PARTITION_TYPE_NORMAL, op))) {
+      ObTabletSplitMdsArgPrepareDstOp op(is_data_table, new_table_schema->get_partition_key_info(), dst_tablet_ids.at(i), dst_end_partkey_vals, allocator);
+      if (OB_FAIL(foreach_part(*inc_table_schema, PartitionType::PARTITION_TYPE_NORMAL, op))) {
         LOG_WARN("failed to foreach part", K(ret));
       } else if (OB_UNLIKELY(dst_tablet_ids.at(i).count() != dst_tablet_ids.at(0).count())) {
         ret = OB_ERR_UNEXPECTED;

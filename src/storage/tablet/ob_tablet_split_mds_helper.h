@@ -67,6 +67,7 @@ public:
   void reset();
 
   static int prepare_basic_args(
+    const ObIArray<share::schema::ObTableSchema *> &new_table_schemas,
     const ObIArray<share::schema::ObTableSchema *> &upd_table_schemas,
     const ObIArray<const share::schema::ObTableSchema *> &inc_table_schemas,
     ObIArray<ObTabletID> &src_tablet_ids,
