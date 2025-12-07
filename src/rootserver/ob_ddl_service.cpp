@@ -39767,7 +39767,7 @@ int ObDDLService::add_extra_tenant_init_config_(
   ObString config_name_server_full_schema_refresh_parallelism("_server_full_schema_refresh_parallelism");
   ObString config_value_server_full_schema_refresh_parallelism("OBJECT");
   ObString config_name_update_trigger("_update_all_columns_for_trigger");
-  ObString config_value_update_trigger("false");
+  ObString config_value_update_trigger("true");
   ObString config_name_prexec_prepare_with_params("_prexec_prepare_with_params");
   ObString config_value_prexec_prepare_with_params("true");
 

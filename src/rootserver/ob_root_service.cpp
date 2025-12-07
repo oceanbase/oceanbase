@@ -10724,9 +10724,9 @@ int ObRootService::set_update_all_columns_for_trigger()
 {
   int64_t affected_rows = 0;
   int ret = OB_SUCCESS;
-  if (OB_FAIL(sql_proxy_.write("ALTER SYSTEM SET _update_all_columns_for_trigger = false;", affected_rows))) {
-    LOG_WARN("update _update_all_columns_for_trigger to false failed", K(ret));
-  } else if (OB_FAIL(check_config_result("_update_all_columns_for_trigger", "false"))) {
+  if (OB_FAIL(sql_proxy_.write("ALTER SYSTEM SET _update_all_columns_for_trigger = true;", affected_rows))) {
+    LOG_WARN("update _update_all_columns_for_trigger to true failed", K(ret));
+  } else if (OB_FAIL(check_config_result("_update_all_columns_for_trigger", "true"))) {
     LOG_WARN("failed to check config same", K(ret));
   }
   return ret;
