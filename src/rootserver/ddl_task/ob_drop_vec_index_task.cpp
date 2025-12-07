@@ -14,6 +14,7 @@
 
 #include "rootserver/ddl_task/ob_drop_vec_index_task.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
+#include "storage/ddl/ob_ddl_lock.h"
 
 using namespace oceanbase::share;
 
@@ -975,7 +976,45 @@ int ObDropVecIndexTask::cleanup_impl()
     LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(report_error_code(unused_str))) {
     LOG_WARN("report error code failed", K(ret));
-  } else if (OB_FAIL(ObDDLTaskRecordOperator::delete_record(*GCTX.sql_proxy_, tenant_id_, task_id_))) {
+  } else if (OB_ISNULL(GCTX.sql_proxy_) || OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_), KP(GCTX.schema_service_));
+  } else {
+    ObSchemaGetterGuard schema_guard;
+    const ObTableSchema *data_table_schema = nullptr;
+    ObTableLockOwnerID owner_id;
+    ObMySQLTransaction trans;
+    if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_,
+                                                              schema_guard))) {
+      LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id_));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_,
+                                                     object_id_,
+                                                     data_table_schema))) {
+      LOG_WARN("fail to get data table schema", K(ret), K(object_id_));
+    } else if (OB_UNLIKELY(nullptr == data_table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("data table schema is nullptr", K(ret), KP(data_table_schema));
+    } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id_))) {
+      LOG_WARN("fail to start transaction", K(ret));
+    } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, task_id_))) {
+      LOG_WARN("fail to get owner id", K(ret), K(task_id_));
+    } else if (OB_FAIL(ObDDLLock::unlock_for_add_drop_index(*data_table_schema,
+                                                            0 /* index_table_id */, // not support global vector index
+                                                            false /* is_global_index = false */,
+                                                            owner_id,
+                                                            trans))) {
+      LOG_WARN("failed to unlock online ddl lock", K(ret));
+    }
+    if (trans.is_started()) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("fail to commit trans", KR(ret), KR(tmp_ret));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+      }
+    }
+  }
+
+  if (FAILEDx(ObDDLTaskRecordOperator::delete_record(*GCTX.sql_proxy_, tenant_id_, task_id_))) {
     LOG_WARN("delete task record failed", K(ret), K(task_id_), K(schema_version_));
   } else {
     need_retry_ = false;
