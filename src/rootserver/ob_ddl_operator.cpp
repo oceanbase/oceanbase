@@ -4529,8 +4529,8 @@ int ObDDLOperator::update_aux_table(
           new_aux_table_schema.set_store_format(new_table_schema.get_store_format());
           new_aux_table_schema.set_progressive_merge_round(new_table_schema.get_progressive_merge_round());
           new_aux_table_schema.set_storage_format_version(new_table_schema.get_storage_format_version());
-          // index table should only inherit table mode and table state flag from data table
-          new_aux_table_schema.set_table_mode(new_table_schema.get_table_mode_flag());
+          // index table should only inherit table mode flag and table state flag from data table
+          new_aux_table_schema.set_table_mode_flag(new_table_schema.get_table_mode_flag());
           new_aux_table_schema.set_table_state_flag(new_table_schema.get_table_state_flag());
           new_aux_table_schema.set_duplicate_attribute(new_table_schema.get_duplicate_scope(), new_table_schema.get_duplicate_read_consistency());
           new_aux_table_schema.set_enable_macro_block_bloom_filter(new_table_schema.get_enable_macro_block_bloom_filter());
