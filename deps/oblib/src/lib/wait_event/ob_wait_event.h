@@ -64,6 +64,7 @@ WAIT_EVENT_DEF(DTL_PROCESS_BUFFER_SEND_WAIT, 13008, "wait dtl process receive wa
 WAIT_EVENT_DEF(WAIT_DTL_TRANSMIT_RESPONSE, 13009, "wait dtl data transmit response", "address", "", "", NETWORK, true, true)
 WAIT_EVENT_DEF(WAIT_DTL_RECEIVE_RESPONSE, 13010, "wait dtl data receive response", "address", "", "", NETWORK, true, true)
 WAIT_EVENT_DEF(WAIT_SQC_PROXY, 13011, "wait sqc proxy message", "address", "", "", NETWORK, true, true)
+WAIT_EVENT_DEF(PX_TARGET_WAIT, 13012, "wait to acqurire px worker", "timeout_us", "address", "", NETWORK, true, true)
 
 // APPLICATION 14001-14999
 WAIT_EVENT_DEF(MT_READ_LOCK_WAIT,14001,"memstore read lock wait","lock","waiter","owner",APPLICATION,false, true)
