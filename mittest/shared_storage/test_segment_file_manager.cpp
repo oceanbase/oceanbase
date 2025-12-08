@@ -23,11 +23,14 @@
 #include "storage/shared_storage/ob_disk_space_manager.h"
 #include "storage/shared_storage/ob_dir_manager.h"
 #include "storage/shared_storage/ob_file_manager.h"
+#include "storage/shared_storage/ob_segment_file_manager.h"
 #include "storage/shared_storage/ob_ss_format_util.h"
+#include "storage/shared_storage/ob_ss_tmp_file_io_callback.h"
 #include "storage/blocksstable/ob_macro_block_id.h"
 #include "mittest/shared_storage/clean_residual_data.h"
 #include "storage/shared_storage/ob_ss_reader_writer.h"
 #include "storage/shared_storage/ob_ss_object_access_util.h"
+#include "storage/tmp_file/ob_tmp_file_global.h"
 #include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
 
 #undef private
@@ -47,6 +50,18 @@ public:
   virtual ~TestSegmentFileManager() = default;
   static void SetUpTestCase();
   static void TearDownTestCase();
+
+  // Helper function to setup common test environment for callback cleanup tests
+  void setup_test_file_and_meta(
+      MacroBlockId &file_id,
+      TmpFileSegId &seg_id,
+      TmpFileMetaHandle &meta_handle,
+      const int64_t tmp_file_id,
+      const int64_t segment_id,
+      const int64_t valid_length);
+
+  // Helper function to write test data to segment file
+  int write_test_segment_file(const MacroBlockId &file_id, const int64_t valid_length);
 };
 
 void TestSegmentFileManager::SetUpTestCase()
@@ -66,6 +81,65 @@ void TestSegmentFileManager::TearDownTestCase()
       LOG_WARN("failed to clean residual data", KR(ret));
   }
   MockTenantModuleEnv::get_instance().destroy();
+}
+
+void TestSegmentFileManager::setup_test_file_and_meta(
+    MacroBlockId &file_id,
+    TmpFileSegId &seg_id,
+    TmpFileMetaHandle &meta_handle,
+    const int64_t tmp_file_id,
+    const int64_t segment_id,
+    const int64_t valid_length)
+{
+  file_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+  file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+  file_id.set_second_id(tmp_file_id);
+  file_id.set_third_id(segment_id);
+
+  seg_id = TmpFileSegId(tmp_file_id, segment_id);
+  meta_handle.reset();
+  int ret = meta_handle.set_tmpfile_meta(false/*is_in_local*/, valid_length, valid_length);
+  ASSERT_EQ(OB_SUCCESS, ret);
+}
+
+int TestSegmentFileManager::write_test_segment_file(const MacroBlockId &file_id, const int64_t valid_length)
+{
+  int ret = OB_SUCCESS;
+  ObStorageObjectHandle write_object_handle;
+  const int64_t write_io_size = valid_length;
+  char *write_buf = nullptr;
+  ObIAllocator &allocator = MTL(ObTenantFileManager*)->get_io_callback_allocator();
+
+  if (OB_ISNULL(write_buf = static_cast<char *>(allocator.alloc(write_io_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc write buf", KR(ret), K(write_io_size));
+  } else {
+    memset(write_buf, 'a', write_io_size);
+    ObStorageObjectWriteInfo write_info;
+    write_info.io_desc_.set_wait_event(1);
+    write_info.io_desc_.set_unsealed();
+    write_info.buffer_ = write_buf;
+    write_info.offset_ = 0;
+    write_info.size_ = write_io_size;
+    write_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+    write_info.mtl_tenant_id_ = MTL_ID();
+    write_info.set_tmp_file_valid_length(write_io_size);
+
+    if (OB_FAIL(write_object_handle.set_macro_block_id(file_id))) {
+      LOG_WARN("fail to set macro block id", KR(ret), K(file_id));
+    } else if (OB_FAIL(ObSSObjectAccessUtil::append_file(write_info, write_object_handle))) {
+      LOG_WARN("fail to append file", KR(ret), K(write_info));
+    } else if (OB_FAIL(write_object_handle.wait())) {
+      LOG_WARN("fail to wait write", KR(ret));
+    }
+
+    if (OB_NOT_NULL(write_buf)) {
+      allocator.free(write_buf);
+      write_buf = nullptr;
+    }
+  }
+
+  return ret;
 }
 
 TEST_F(TestSegmentFileManager, test_gc_segment_file)
@@ -215,6 +289,73 @@ TEST_F(TestSegmentFileManager, test_overwrite_segment_file)
 
   // test 7: delete tmp file
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_tmp_file(file_id));
+}
+
+// Test read callback cleanup when try_acquire_read_access fails due to read-write conflict
+TEST_F(TestSegmentFileManager, test_read_callback_cleanup_on_conflict)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFileManager *tenant_file_mgr = MTL(ObTenantFileManager*);
+  ASSERT_NE(nullptr, tenant_file_mgr);
+  ObSegmentFileManager &seg_file_mgr = tenant_file_mgr->get_segment_file_mgr();
+
+  // Prepare test file
+  MacroBlockId file_id;
+  TmpFileSegId seg_id;
+  TmpFileMetaHandle meta_handle;
+  const int64_t tmp_file_id = 100;
+  const int64_t segment_id = 200;
+  const int64_t valid_length = 8 * 1024; // 8KB
+
+  setup_test_file_and_meta(file_id, seg_id, meta_handle, tmp_file_id, segment_id, valid_length);
+
+  // Create tmp file dir and write data
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tmp_file_dir(MTL_ID(), MTL_EPOCH_ID(), tmp_file_id));
+  ASSERT_EQ(OB_SUCCESS, write_test_segment_file(file_id, valid_length));
+
+  // Insert meta to make conflict detection enabled
+  ret = seg_file_mgr.insert_meta(seg_id, meta_handle);
+  if (OB_HASH_EXIST == ret) {
+    ret = OB_SUCCESS;
+    seg_file_mgr.delete_meta(seg_id);
+    ret = seg_file_mgr.insert_meta(seg_id, meta_handle);
+  }
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // Simulate write operation to trigger read-write conflict
+  TmpFileConflictInfoHandle write_conflict_handle;
+  ASSERT_EQ(OB_SUCCESS, seg_file_mgr.get_or_create_conflict_info_handle(
+      seg_id, write_conflict_handle, ObTmpFileAccessType::WRITE_ACCESS));
+  ASSERT_EQ(OB_SUCCESS, write_conflict_handle.try_acquire_write_access());
+
+  // Now try to read - should fail at try_acquire_read_access
+  ObStorageObjectReadInfo read_info;
+  ObStorageObjectHandle read_object_handle;
+  char read_buf[valid_length] = {0};
+
+  read_info.macro_block_id_ = file_id;
+  read_info.offset_ = 0;
+  read_info.size_ = valid_length;
+  read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
+  read_info.io_desc_.set_unsealed();
+  read_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  read_info.mtl_tenant_id_ = MTL_ID();
+  read_info.buf_ = read_buf;
+
+  // Expected: async_pread_file fails because of read-write conflict
+  ret = seg_file_mgr.async_pread_file(read_info, read_object_handle);
+  ASSERT_EQ(OB_ERR_UNEXPECTED, ret); // Should fail at try_acquire_read_access
+
+  // Verify: original callback should be unchanged (not wrapped)
+  ASSERT_TRUE(OB_ISNULL(read_info.io_callback_) ||
+              ObIOCallbackType::SS_TMP_FILE_READ_CALLBACK != read_info.io_callback_->get_type());
+
+  // Cleanup
+  ASSERT_EQ(OB_SUCCESS, write_conflict_handle.release_write_access());
+  ASSERT_EQ(OB_SUCCESS, seg_file_mgr.delete_meta(seg_id));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_tmp_file(file_id));
+
+  LOG_INFO("Read callback cleanup test passed: callback not wrapped when conflict detected");
 }
 
 } // namespace storage
