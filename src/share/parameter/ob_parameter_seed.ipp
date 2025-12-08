@@ -3072,7 +3072,7 @@ ERRSIM_DEF_INT(errsim_backup_clean_override_expired_time, OB_CLUSTER_PARAMETER, 
         "Range: [0,) in integer",
         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_BOOL(_enable_insertup_column_store_opt, OB_TENANT_PARAMETER, "True",
+DEF_BOOL(_enable_insertup_column_store_opt, OB_TENANT_PARAMETER, "False",
         "Enable or disable insert up optimization path for column store.",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
