@@ -165,6 +165,7 @@ public:
                                const common::ObTabletID tablet_id,
                                const ObCollationType& collation_type,
                                blocksstable::ObStorageDatum &datum,
+                               transaction::ObTxDesc *tx_desc,
                                const int64_t timeout_ts,
                                const bool has_lob_header);
   static int insert_lob_column(ObIAllocator &allocator,

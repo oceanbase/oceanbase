@@ -302,19 +302,16 @@ int ObInsertLobColumnHelper::delete_lob_column(ObIAllocator &allocator,
                                               const common::ObTabletID tablet_id,
                                               const ObCollationType& collation_type,
                                               blocksstable::ObStorageDatum &datum,
+                                              transaction::ObTxDesc *tx_desc,
                                               const int64_t timeout_ts,
                                               const bool has_lob_header)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
 
-  ObTxDesc *tx_desc = nullptr;
   ObLobManager *lob_mngr = MTL(ObLobManager*);
-  ObTransService *txs = MTL(transaction::ObTransService*);
-  ObTxReadSnapshot snapshot;
-  if (OB_ISNULL(lob_mngr)) {
+  if (OB_ISNULL(lob_mngr) || OB_ISNULL(tx_desc)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get lob manager handle.", K(ret));
+    LOG_WARN("unexpected nullptr", K(ret), KP(lob_mngr), KP(tx_desc));
   } else {
     ObString data = datum.get_string();
     // datum with null ptr and zero len should treat as no lob header
@@ -324,29 +321,19 @@ int ObInsertLobColumnHelper::delete_lob_column(ObIAllocator &allocator,
     if (lob.has_inrow_data()) {
       // delete inrow lob no need to use the lob manager
     } else {
-      if (OB_FAIL(start_trans(ls_id, false/*is_for_read*/, timeout_ts, tx_desc))) {
-        LOG_WARN("fail to get tx_desc", K(ret));
-      } else if (OB_FAIL(txs->get_ls_read_snapshot(*tx_desc, transaction::ObTxIsolationLevel::RC, ls_id, timeout_ts, snapshot))) {
-        LOG_WARN("fail to get snapshot", K(ret));
+      // 4.0 text tc compatiable
+      ObLobAccessParam lob_param;
+      lob_param.tx_desc_ = tx_desc;
+      lob_param.tablet_id_ = tablet_id;
+      if (!lob.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid src lob locator.", K(ret));
+      } else if (OB_FAIL(lob_mngr->build_lob_param(lob_param, allocator, collation_type, 0, UINT64_MAX, timeout_ts, lob))) {
+        LOG_WARN("fail to build lob param.", K(ret));
+      } else if (OB_FAIL(lob_mngr->erase(lob_param))) {
+        LOG_WARN("lob meta row delete failed.", K(ret));
       } else {
-        // 4.0 text tc compatiable
-        ObLobAccessParam lob_param;
-        lob_param.tx_desc_ = tx_desc;
-        lob_param.tablet_id_ = tablet_id;
-        if (!lob.is_valid()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid src lob locator.", K(ret));
-        } else if (OB_FAIL(lob_mngr->build_lob_param(lob_param, allocator, collation_type, 0, UINT64_MAX, timeout_ts, lob))) {
-          LOG_WARN("fail to build lob param.", K(ret));
-        } else if (OB_FAIL(lob_mngr->erase(lob_param))) {
-          LOG_WARN("lob meta row delete failed.", K(ret));
-        } else {
-          datum.set_lob_data(*lob_param.lob_common_, lob_param.handle_size_);
-        }
-      }
-      if (OB_SUCCESS != (tmp_ret = end_trans(tx_desc, OB_SUCCESS != ret, timeout_ts))) {
-        ret = tmp_ret; 
-        LOG_WARN("fail to end trans", K(ret), KPC(tx_desc));
+        datum.set_lob_data(*lob_param.lob_common_, lob_param.handle_size_);
       }
     }
   }
