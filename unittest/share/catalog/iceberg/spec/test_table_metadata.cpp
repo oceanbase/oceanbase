@@ -105,7 +105,8 @@ TEST_F(TestTableMetadata, parse_from_json)
       "owner": "smith",
       "write.update.mode": "merge-on-read",
       "write.delete.mode": "merge-on-read",
-      "write.parquet.compression-codec": "zstd"
+      "write.parquet.compression-codec": "zstd",
+      "write.format.default": "orc"
     },
     "current-snapshot-id": 4351244898079697879,
     "refs": {
@@ -247,6 +248,9 @@ TEST_F(TestTableMetadata, parse_from_json)
   ObJsonParser::get_tree(&allocator, json_metadata, json_node);
   ASSERT_EQ(ObJsonNodeType::J_OBJECT, json_node->json_type());
   ASSERT_EQ(OB_SUCCESS, table_metadata.init_from_json(*down_cast<ObJsonObject *>(json_node)));
+  iceberg::DataFileFormat data_file_format;
+  ASSERT_EQ(OB_SUCCESS, table_metadata.get_table_default_write_format(data_file_format));
+  ASSERT_EQ(iceberg::DataFileFormat::ORC, data_file_format);
 }
 
 int main(int argc, char **argv)

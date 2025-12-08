@@ -110,6 +110,10 @@ static const char *ob_storage_object_type_strs[] = {
   "SHARED_INC_MAJOR_DATA_MACRO",
   "SHARED_INC_MAJOR_META_MACRO",
   "SHARED_TABLET_SUB_META_IN_TABLE",
+  "SHARED_MINI_V2_DATA_MACRO",
+  "SHARED_MINI_V2_META_MACRO",
+  "SHARED_MINOR_V2_DATA_MACRO",
+  "SHARED_MINOR_V2_META_MACRO",
   "MAX"
 };
 
@@ -2086,9 +2090,10 @@ int ObTmpFileType::to_local_path_format(char *path, const int64_t length, int64_
   const MacroBlockId &file_id, const uint64_t tenant_id, const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const
 {
   int ret = OB_SUCCESS;
-  // tenant_id_epoch_id/tmp_data/tmp_file_id/seg%ld
-  if (OB_FAIL(databuff_printf(path, length, pos, "%s/%lu_%ld/%s/%ld/%s%ld",
+  // tenant_id_epoch_id/tmp_data/scatter_id/tmp_file_id/seg%ld
+  if (OB_FAIL(databuff_printf(path, length, pos, "%s/%lu_%ld/%s/%03ld/%ld/%s%ld",
               OB_DIR_MGR.get_local_cache_root_dir(), tenant_id, tenant_epoch_id, TMP_DATA_DIR_STR,
+                ((file_id.second_id() / ObDirManager::TMP_FILE_SCATTER_DIR_NUM) % ObDirManager::TMP_FILE_SCATTER_DIR_NUM),
               file_id.second_id(), SEG_KEY_STR, file_id.third_id()))) {
     LOG_WARN("fail to databuff printf", KR(ret));
   }
@@ -4384,6 +4389,38 @@ bool ObSharedTabletSubMetaInTableType::is_valid(const MacroBlockId &file_id) con
 {
   return true;
 }
+/**
+ * ---------------------------------------ObSharedMiniV2DataMacroType----------------------------------------
+ */
+
+bool ObSharedMiniV2DataMacroType::is_valid(const MacroBlockId &file_id) const
+{
+  return true;
+}
+/**
+ * ---------------------------------------ObSharedMiniV2MetaMacroType----------------------------------------
+ */
+
+bool ObSharedMiniV2MetaMacroType::is_valid(const MacroBlockId &file_id) const
+{
+  return true;
+}
+/**
+ * ---------------------------------------ObSharedMinorV2DataMacroType----------------------------------------
+ */
+
+bool ObSharedMinorV2DataMacroType::is_valid(const MacroBlockId &file_id) const
+{
+  return true;
+}
+/**
+ * ---------------------------------------ObSharedMinorV2MetaMacroType----------------------------------------
+ */
+
+bool ObSharedMinorV2MetaMacroType::is_valid(const MacroBlockId &file_id) const
+{
+  return true;
+}
 
 const ObStorageObjectTypeBase &ObStorageObjectTypeInstance::get_instance(ObStorageObjectType type)
 {
@@ -4526,6 +4563,22 @@ const ObStorageObjectTypeBase &ObStorageObjectTypeInstance::get_instance(ObStora
     }
     case ObStorageObjectType::SHARED_TABLET_SUB_META_IN_TABLE: {
       static const ObSharedTabletSubMetaInTableType instance;
+      return instance;
+    }
+    case ObStorageObjectType::SHARED_MINI_V2_DATA_MACRO: {
+      static const ObSharedMiniV2DataMacroType instance;
+      return instance;
+    }
+    case ObStorageObjectType::SHARED_MINI_V2_META_MACRO: {
+      static const ObSharedMiniV2MetaMacroType instance;
+      return instance;
+    }
+    case ObStorageObjectType::SHARED_MINOR_V2_DATA_MACRO: {
+      static const ObSharedMinorV2DataMacroType instance;
+      return instance;
+    }
+    case ObStorageObjectType::SHARED_MINOR_V2_META_MACRO: {
+      static const ObSharedMinorV2MetaMacroType instance;
       return instance;
     }
     default: {

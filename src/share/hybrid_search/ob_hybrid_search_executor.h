@@ -72,9 +72,12 @@ private:
   /// int do_get_sql_with_retry(ObString &sql_result);
 
   int generate_sql_from_params(const ObString &search_params_str, ObString &sql_result);
-  int construct_column_index_info(ObIAllocator &alloc, const ObString &database_name, const ObString &table_name,
-                                  ColumnIndexNameMap &column_index_info, ObIArray<ObString> &col_names);
+  int construct_column_index_info(ObIAllocator &alloc, ObESQueryParser &parser);
   int get_basic_column_names(const ObTableSchema *table_schema, ObIArray<ObString> &col_names);
+  int extract_partition_column_ids(const ObPartitionKeyInfo &part_key_info,
+                                   hash::ObPlacementHashSet<uint64_t, 32> &column_id_set,
+                                   ObIArray<uint64_t> &column_ids);
+  int get_partition_info(const ObTableSchema *table_schema, ObESQueryParser &parser);
 
 private:
   sql::ObExecContext *ctx_;

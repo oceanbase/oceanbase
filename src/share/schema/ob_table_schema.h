@@ -36,6 +36,7 @@
 #include "share/storage_cache_policy/ob_storage_cache_common.h"
 #include "storage/ob_micro_block_format_version_helper.h"
 #include "share/semistruct/ob_semistruct_properties.h"
+#include "storage/compaction_ttl/ob_ttl_filter_info.h"
 namespace oceanbase
 {
 
@@ -699,13 +700,15 @@ public:
   virtual bool need_encrypt() const = 0;
   virtual inline bool is_global_index_table() const = 0;
   virtual inline common::ObRowStoreType get_row_store_type() const { return common::MAX_ROW_STORE; }
+  virtual inline common::ObRowStoreType get_minor_row_store_type() const { return common::MAX_ROW_STORE; }
   virtual inline const char *get_compress_func_name() const { return all_compressor_name[ObCompressorType::NONE_COMPRESSOR]; }
   virtual inline common::ObCompressorType get_compressor_type() const { return ObCompressorType::NONE_COMPRESSOR; }
   virtual inline int64_t get_progressive_merge_round() const { return INVAID_RET; }
   virtual inline int64_t get_progressive_merge_num() const { return INVAID_RET; }
   virtual inline ObMergeEngineType get_merge_engine_type() const { return ObMergeEngineType::OB_MERGE_ENGINE_MAX; }
   virtual inline bool is_delete_insert_merge_engine() const { return false; }
-  virtual inline bool is_insert_only_merge_engine() const { return false; }
+  virtual inline bool is_append_only_merge_engine() const { return false; }
+  virtual inline ObSkipIndexLevel get_skip_index_level() const { return ObSkipIndexLevel::OB_SKIP_INDEX_LEVEL_BASE_ONLY; }
   virtual inline ObTableModeFlag get_table_mode_flag() const { return TABLE_MODE_MAX; }
   virtual inline ObTableType get_table_type() const { return MAX_TABLE_TYPE; }
   virtual inline ObTableMode get_table_mode_struct() const = 0;
@@ -863,7 +866,7 @@ public:
   inline common::ObNameCaseMode get_name_case_mode() const { return name_case_mode_; }
   inline void set_table_type(const ObTableType table_type) { table_type_ = table_type; }
   virtual inline ObTableType get_table_type() const override { return table_type_; }
-  inline void set_table_mode(const int32_t table_mode) { table_mode_.mode_ = table_mode; }
+  inline void assign_table_mode_from_mysql_result(const int32_t table_mode) { table_mode_.mode_ = table_mode; }
   inline int32_t get_table_mode() const { return table_mode_.mode_; }
   inline void set_table_mode_struct(const ObTableMode table_mode) { table_mode_ = table_mode; }
   virtual inline ObTableMode get_table_mode_struct() const override { return table_mode_; }
@@ -1376,6 +1379,7 @@ protected:
   // storage cache policy type
   storage::ObStorageCachePolicyType storage_cache_policy_type_;
   bool with_dynamic_partition_policy_; // do not persist to disk
+  ObRowStoreType minor_row_store_type_;
 };
 
 class ObTableSchema : public ObSimpleTableSchemaV2
@@ -1516,6 +1520,7 @@ public:
   inline void set_store_format(const common::ObStoreFormatType store_format) { store_format_ = store_format; }
   inline void set_storage_format_version(const int64_t storage_format_version) { storage_format_version_ = storage_format_version; }
   inline void set_merge_engine_type(const ObMergeEngineType merge_engine_type) { merge_engine_type_ = merge_engine_type; }
+  inline void set_skip_index_level(const ObSkipIndexLevel skip_index_level) { skip_index_level_ = skip_index_level; }
   int set_store_format(const common::ObString &store_format);
   inline void set_row_store_type(const common::ObRowStoreType row_store_type) { row_store_type_ = row_store_type; }
   int set_row_store_type(const common::ObString &row_store);
@@ -1656,7 +1661,8 @@ public:
   inline int64_t get_storage_format_version() const { return storage_format_version_; }
   inline virtual ObMergeEngineType get_merge_engine_type() const override { return merge_engine_type_; }
   inline virtual bool is_delete_insert_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT == merge_engine_type_; }
-  inline virtual bool is_insert_only_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_INSERT_ONLY == merge_engine_type_; }
+  inline virtual bool is_append_only_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY == merge_engine_type_; }
+  inline virtual ObSkipIndexLevel get_skip_index_level() const override { return skip_index_level_; }
   inline const char *get_tablegroup_name_str() const { return extract_str(tablegroup_name_); }
   inline const common::ObString &get_tablegroup_name() const { return tablegroup_name_; }
   inline const char *get_comment() const { return extract_str(comment_); }
@@ -1678,6 +1684,8 @@ public:
   inline ObViewSchema &get_view_schema() { return view_schema_; }
   inline const ObViewSchema &get_view_schema() const { return view_schema_; }
   inline const common::ObString &get_ttl_definition() const { return ttl_definition_; }
+  inline ObTTLFlag get_ttl_flag() const { return ttl_flag_; }
+  inline void set_ttl_flag(const ObTTLFlag ttl_flag) { ttl_flag_ = ttl_flag; }
   inline const common::ObString &get_kv_attributes() const { return kv_attributes_; }
   inline const common::ObString &get_index_params() const { return index_params_; }
   inline const common::ObString &get_exec_env() const { return exec_env_; }
@@ -1834,7 +1842,7 @@ public:
   int get_sparse_vec_index_column_id(uint64_t &sparse_vec_col_id) const;
   int get_vec_index_column_id(uint64_t &with_cascaded_info_column_id) const;
   int get_vec_index_vid_col_id(uint64_t &vec_id_col_id, bool is_cid = false) const;
-  int get_hybrid_vec_chunk_column_id(uint64_t &hybrid_vec_chunk_col_id) const;
+  int get_hybrid_vec_chunk_column_id(const ObTableSchema &data_table_schema, uint64_t &hybrid_vec_chunk_col_id) const;
   int get_hybrid_vec_embedded_column_id(uint64_t &vec_id_col_id) const;
   // get columns for building rowid
   int get_column_ids_serialize_to_rowid(common::ObIArray<uint64_t> &col_ids,
@@ -2481,6 +2489,8 @@ protected:
   common::ObString external_sub_path_;
   uint64_t tmp_mlog_tid_;
   common::ObString semistruct_properties_;
+  ObTTLFlag ttl_flag_;
+  ObSkipIndexLevel skip_index_level_;
 };
 
 class ObPrintableTableSchema final : public ObTableSchema

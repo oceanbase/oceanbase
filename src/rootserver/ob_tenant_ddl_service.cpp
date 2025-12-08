@@ -2284,7 +2284,7 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
   ObString config_name_partition_balance_schedule_interval("partition_balance_schedule_interval");
   ObString config_value_partition_balance_schedule_interval("0");
   ObString config_name_update_trigger("_update_all_columns_for_trigger");
-  ObString config_value_update_trigger("false");
+  ObString config_value_update_trigger("true");
   ObString config_name_ddl_thread_isolution("_enable_ddl_worker_isolation");
   ObString config_value_ddl_thread_isolution("true");
   ObString config_name_spill_compression_codec("spill_compression_codec");
@@ -3409,7 +3409,8 @@ int ObTenantDDLService::modify_and_cal_resource_pool_diff(
       } else {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid argument", K(ret), K(new_pool_name_list), K(old_pool_name_list));
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "resource pool list");
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+            "resource pool list: only one resource pool can be added or reduced at a time");
       }
     }
     LOG_INFO("cal resource pool list result",

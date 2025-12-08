@@ -312,6 +312,9 @@ STAT_EVENT_ADD_DEF(TRUNCATE_INFO_CACHE_MISS, "truncate info cache miss", ObStatC
 STAT_EVENT_ADD_DEF(EXDATA_PAGE_CACHE_MISS, "external data page cache miss", ObStatClassIds::CACHE, 50077, false, true, true, "")
 STAT_EVENT_ADD_DEF(EXDATA_PAGE_CACHE_HIT, "external data page cache hit", ObStatClassIds::CACHE, 50078, false, true, true, "")
 
+STAT_EVENT_ADD_DEF(TTL_INFO_CACHE_HIT, "ttl info cache hit", ObStatClassIds::CACHE, 50079, true, true, true, "Number of cache hits when reading ttl info. In the get_ttl_info_array function, the system checks if the ttl info is in the cache when reading. If a cache hit occurs, this count is incremented by 1.")
+STAT_EVENT_ADD_DEF(TTL_INFO_CACHE_MISS, "ttl info cache miss", ObStatClassIds::CACHE, 50080, true, true, true, "Number of cache misses when reading ttl info. In the get_ttl_info_array function, the system checks if the ttl info is in the cache when reading. If a cache miss occurs, this count is incremented by 1.")
+
 // STORAGE
 STAT_EVENT_ADD_DEF(MEMSTORE_LOGICAL_READS, "MEMSTORE_LOGICAL_READS", STORAGE, "MEMSTORE_LOGICAL_READS", true, true, false, "Deprecated since V4.4.1.")
 STAT_EVENT_ADD_DEF(MEMSTORE_LOGICAL_BYTES, "MEMSTORE_LOGICAL_BYTES", STORAGE, "MEMSTORE_LOGICAL_BYTES", true, true, false, "Deprecated since V4.4.1.")

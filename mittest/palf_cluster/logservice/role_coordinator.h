@@ -31,7 +31,8 @@ enum class RoleChangeEventType {
   INVALID_RC_EVENT_TYPE = 0,
   CHANGE_LEADER_EVENT_TYPE = 1,
   ROLE_CHANGE_CB_EVENT_TYPE = 2,
-  MAX_RC_EVENT_TYPE = 3
+  SYNC_MODE_EVENT_TYPE = 3,
+  MAX_RC_EVENT_TYPE = 4
 };
 
 struct RoleChangeEvent {

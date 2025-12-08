@@ -1785,5 +1785,13 @@ bool ObConfigServerFullSchemaRefreshParallelismChecker::check(const ObConfigItem
          || 0 == t.case_compare(SERVER_FULL_SCHEMA_REFRESH_PARALLELISM_OBJECT);
 }
 
+bool ObConfigDefaultDeltaFormatChecker::check(const ObConfigItem &t) const
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = true;
+  ObString delta_format(t.str());
+  return ObStoreFormat::is_delta_format_valid(delta_format);
+}
+
 } // end of namepace common
 } // end of namespace oceanbase

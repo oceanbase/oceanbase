@@ -71,6 +71,13 @@ static const char *ObDmlTypeStr[DF_TYPE_MAX] = {
     "I_D"
 };
 
+enum ObDmlRowUpdateType
+{
+  NOT_ORIGIN_UPDATE = 0,
+  IS_ORIGIN_UPDATE = 1,
+  ORIGIN_UPDATE_MAX,
+};
+
 const char *get_dml_str(ObDmlFlag dml_flag);
 void format_dml_str(const int32_t flag, char *str, int len);
 
@@ -219,8 +226,9 @@ private:
   union
   {
     uint8_t whole_flag_;
-    struct {
-      uint8_t flag_      : 7;  // store ObDmlFlag
+    struct {  // FARM COMPAT WHITELIST
+      uint8_t flag_      : 6;  // store ObDmlFlag
+      uint8_t is_origin_update_ : 1;  // mark is normal row or split from update
       uint8_t flag_type_ : 1;  // mark is pure_delete or insert_delete
     };
   };

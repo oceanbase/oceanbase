@@ -184,16 +184,12 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
     struct {
       // whether all/rowkey cg replay directly
       uint16_t need_replay_base_directly_ : 1;
-      // whether the output major's base cg is rowkey cg.
-      // with this flag and the old base major's base cg type,
-      // we can determine whether to use query iterator to iterate co sstable.
-      uint16_t output_rowkey_cg_ : 1;
       // whether use tmp file to save merge log
       // 0: no tmp file
       // 1: row store tmp file
       // 2: column store tmp file
       uint16_t merge_log_storage_ : 2;
-      uint16_t reserved_ : 12;
+      uint16_t reserved_ : 13;
     };
     uint16_t merge_flag_;
   };

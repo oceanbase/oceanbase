@@ -156,6 +156,7 @@ TEST_F(TestSegmentFileManager, test_overwrite_segment_file)
   ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::stat(dir_path, statbuf));
   int64_t expected_tmp_file_alloc_size = write_io_size;
   expected_tmp_file_alloc_size += ObDirManager::DEFAULT_DIR_SIZE;
+  expected_tmp_file_alloc_size += ObDirManager::DEFAULT_DIR_SIZE; // scatter_id_dir
   ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::append_file(write_info, write_object_handle));
   ObSSMacroCacheStat cache_stat;
   ASSERT_EQ(OB_SUCCESS, disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::TMP_FILE, cache_stat));

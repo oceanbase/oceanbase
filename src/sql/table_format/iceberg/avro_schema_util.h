@@ -36,20 +36,22 @@ public:
     Projected,
     NOT_EXISTED, // 意味着在 avro data schema 里面存在，但是在 ManifestEntry 里面没有对应的字段
   };
-  explicit FieldProjection(ObIAllocator &allocator) : children_(allocator) {};
+  FieldProjection(); // ObFixedArray 需要空的构造函数，不过不会被使用
+  explicit FieldProjection(ObIAllocator &allocator);
+  int assign(const FieldProjection &other);
 
   TO_STRING_KV(K_(field_id), K_(kind));
   avro::NodePtr avro_node_ = NULL;
   int32_t field_id_ = -1; // 对应 ManifestFile/ManifestEntry 里面字段的 field_id
   Kind kind_ = Kind::Invalid;
-  ObFixedArray<FieldProjection *, ObIAllocator> children_;
+  ObFixedArray<FieldProjection, ObIAllocator> children_;
 };
 
 class SchemaProjection
 {
 public:
   explicit SchemaProjection(ObIAllocator &allocator);
-  ObFixedArray<FieldProjection *, ObIAllocator> fields_;
+  ObFixedArray<FieldProjection, ObIAllocator> fields_;
 };
 
 class AvroSchemaProjectionUtils

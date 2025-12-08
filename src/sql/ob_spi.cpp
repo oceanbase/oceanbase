@@ -2047,6 +2047,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
       SET_SPI_STATUS;
     }
   }
+  ObThreadLogLevelUtils::clear();
   return ret;
 }
 
@@ -5774,9 +5775,18 @@ int ObSPIService::spi_sub_nestedtable(ObPLExecCtx *ctx,
       } else if (OB_ISNULL(coll_alloc = dynamic_cast<ObPLAllocator1 *>(dst_coll->get_allocator()))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected collection allocator", K(ret));
+        ObIAllocator *allocator = dst_coll->get_allocator();
+        if (OB_NOT_NULL(allocator)) {
+          allocator->~ObIAllocator();
+          ctx->allocator_->free(allocator);
+        }
+        ctx->allocator_->free(dst_coll);
       } else if (OB_ISNULL(dst_data = reinterpret_cast<ObObj *>(coll_alloc->alloc(count * sizeof(ObObj))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memory for collection", K(ret), K(count));
+        coll_alloc->~ObPLAllocator1();
+        ctx->allocator_->free(coll_alloc);
+        ctx->allocator_->free(dst_coll);
       }
       if (OB_SUCC(ret)) {
         int64_t i = 0;

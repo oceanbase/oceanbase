@@ -1352,6 +1352,7 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
         LOG_WARN("failed to lock online ddl lock", K(ret));
       }
     } else if (is_drop_dense_vec_index) {
+      ObTableLockOwnerID owner_id;
       ObDDLType ddl_type = DDL_INVALID;
       if (index_schema.is_vec_hnsw_index()) {
         ddl_type = ObDDLType::DDL_DROP_VEC_INDEX;
@@ -1392,6 +1393,18 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
         } else {
           LOG_WARN("submit drop vec index ddl task failed", K(ret), K(param));
         }
+      } else if (data_schema.is_user_hidden_table()) {
+        // not lock hidden data table
+      } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
+                                                     task_record.task_id_))) {
+        LOG_WARN("fail to get owner id", K(ret), K(task_record.task_id_));
+      } else if (OB_FAIL(ObDDLLock::lock_for_add_drop_index(data_schema,
+                                                            inc_data_tablet_ids,
+                                                            del_data_tablet_ids,
+                                                            index_schema,
+                                                            owner_id,
+                                                            trans))) {
+        LOG_WARN("failed to lock online ddl lock", K(ret));
       }
     } else {
       ret = OB_ERR_UNEXPECTED;
@@ -2016,7 +2029,7 @@ int ObIndexBuilder::generate_schema(
       // column information of the global index is filled during the resolve stage
       const bool is_index_local_storage = share::schema::is_index_local_storage(arg.index_type_);
       const bool need_generate_index_schema_column = (is_index_local_storage || global_index_without_column_info);
-      schema.set_table_mode(data_schema.get_table_mode_flag());
+      schema.set_table_mode_flag(data_schema.get_table_mode_flag());
       schema.set_lob_inrow_threshold(data_schema.get_lob_inrow_threshold());
       schema.set_table_state_flag(data_schema.get_table_state_flag());
       schema.set_mv_mode(data_schema.get_mv_mode());

@@ -24,13 +24,12 @@ namespace table
 class ObTablePartCalculator
 {
 public:
-  explicit ObTablePartCalculator(common::ObIAllocator &allocator,
-                                 ObTableApiSessGuard &sess_guard,
+  explicit ObTablePartCalculator(ObTableApiSessGuard &sess_guard,
                                  ObKvSchemaCacheGuard &kv_schema_guard,
                                  share::schema::ObSchemaGetterGuard &schema_guard,
                                  const share::schema::ObSimpleTableSchemaV2 *simple_schema,
                                  ObTablePartClipType clip_type = ObTablePartClipType::NONE)
-      : allocator_(allocator),
+      : allocator_("TbPartCalc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
         sess_guard_(sess_guard),
         kv_schema_guard_(kv_schema_guard),
         schema_guard_(schema_guard),
@@ -39,13 +38,12 @@ public:
         table_schema_(nullptr),
         clip_type_(clip_type)
   {}
-  explicit ObTablePartCalculator(common::ObIAllocator &allocator,
-                                 ObTableApiSessGuard &sess_guard,
+  explicit ObTablePartCalculator(ObTableApiSessGuard &sess_guard,
                                  ObKvSchemaCacheGuard &kv_schema_guard,
                                  share::schema::ObSchemaGetterGuard &schema_guard,
                                  const share::schema::ObTableSchema *table_schema,
                                  ObTablePartClipType clip_type = ObTablePartClipType::NONE)
-      : allocator_(allocator),
+      : allocator_("TbPartCalc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
         sess_guard_(sess_guard),
         kv_schema_guard_(kv_schema_guard),
         schema_guard_(schema_guard),
@@ -55,12 +53,11 @@ public:
         clip_type_(clip_type)
   {}
 
-  explicit ObTablePartCalculator(common::ObIAllocator &allocator,
-                                ObTableApiSessGuard &sess_guard,
-                                ObKvSchemaCacheGuard &kv_schema_guard,
-                                share::schema::ObSchemaGetterGuard &schema_guard,
-                                ObTablePartClipType clip_type = ObTablePartClipType::NONE)
-      : allocator_(allocator),
+  explicit ObTablePartCalculator(ObTableApiSessGuard &sess_guard,
+                                 ObKvSchemaCacheGuard &kv_schema_guard,
+                                 share::schema::ObSchemaGetterGuard &schema_guard,
+                                 ObTablePartClipType clip_type = ObTablePartClipType::NONE)
+      : allocator_("TbPartCalc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
         sess_guard_(sess_guard),
         kv_schema_guard_(kv_schema_guard),
         schema_guard_(schema_guard),
@@ -218,7 +215,7 @@ private:
   int clip(const share::schema::ObSimpleTableSchemaV2 &simple_schema,
            common::ObIArray<common::ObTabletID> &tablet_ids);
 private:
-  common::ObIAllocator &allocator_;
+  common::ObArenaAllocator allocator_;
   ObTableApiSessGuard &sess_guard_;
   ObKvSchemaCacheGuard &kv_schema_guard_;
   share::schema::ObSchemaGetterGuard &schema_guard_;

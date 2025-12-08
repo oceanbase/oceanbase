@@ -148,7 +148,7 @@ int TableMetadata::init_from_json(const ObJsonObject &json_object)
 
   if (OB_SUCC(ret)) {
     ObJsonNode *json_properties = json_object.get_value(PROPERTIES);
-    if (NULL == json_properties) {
+    if (NULL != json_properties) {
       if (ObJsonNodeType::J_OBJECT != json_properties->json_type()) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid json properties", K(ret));

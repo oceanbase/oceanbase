@@ -2501,7 +2501,7 @@ DEF_TIME(_ss_local_cache_expiration_time, OB_TENANT_PARAMETER, "0s", "[0s,)",
          "Range: [0s, )",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_INT(_ss_micro_cache_size_max_percentage, OB_TENANT_PARAMETER, "20", "[1, 99]",
+DEF_INT(_ss_micro_cache_size_max_percentage, OB_TENANT_PARAMETER, "5", "[1, 99]",
         "The percentage of tenant disk size used by ss_micro_cache in shared_storage mode,"
         "Range: [1, 99]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -3104,9 +3104,6 @@ DEF_TIME(_ss_macro_block_check_interval, OB_TENANT_PARAMETER, "1d", "[30s,365d]"
          "Control the period of macro block check in shared dir."
          "Range: [30s, 365d]",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(default_skip_index_level, OB_TENANT_PARAMETER, "0", "[0, 1]",
-         "Specify the default skip_index_level when creating table.",
-         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_two_phase_fts_index_merge, OB_TENANT_PARAMETER, "False",
          "Control whether to enable two-phase execution for index-merge-and with full-text index and scalar index",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -3126,3 +3123,17 @@ ERRSIM_DEF_INT(errsim_backup_override_start_scn, OB_CLUSTER_PARAMETER, "0", "[0,
 DEF_INT(_fuse_row_cache_activate_threshold, OB_TENANT_PARAMETER, "6", "[0, 100]",
          "Determine if queries should use fuse_row_cache based on a configurable cache hit rate threshold.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE))
+DEF_INT(_ss_garbage_collect_concurrency, OB_TENANT_PARAMETER, "0", "[0, 100]",
+        "Controls the number of worker threads for shared-storage garbage collection (GC). "
+        "Changes take effect at the start of the next GC run. "
+        "If set to 0, the system auto-calculates the worker count as the tenant’s max_cpu divided by 4; otherwise, the worker count is set to the specified value."
+        "Range: [0, 100] in integer",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(default_delta_format, OB_TENANT_PARAMETER, "flat",
+                     common::ObConfigDefaultDeltaFormatChecker,
+                     "Controls default delta format when creating table",
+                     ObParameterAttr(Section::TENANT, Source::DEFAULT,
+                                     EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(default_skip_index_level, OB_TENANT_PARAMETER, "0", "[0, 1]",
+        "Specify the default skip_index_level when creating table.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

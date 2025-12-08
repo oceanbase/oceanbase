@@ -353,6 +353,7 @@ public:
                        K_(group_by_col_offset),
                        K_(need_extract_distinct),
                        K_(is_processing),
+                       K_(need_padding),
                        K_(distinct_projector_buf),
                        K(ObArrayWrap<uint32_t>(refs_buf_, ref_cnt_)));
 protected:
@@ -376,6 +377,7 @@ protected:
   int32_t group_by_col_offset_;
   bool need_extract_distinct_;
   bool is_processing_;
+  bool need_padding_;
   bool is_inited_;
 };
 

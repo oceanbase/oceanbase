@@ -19,6 +19,7 @@
 #include "test_merge_basic.h"
 #include "storage/column_store/ob_co_merge_log_operator.h"
 #include "unittest/storage/test_schema_prepare.h"
+#include "storage/compaction/ob_compaction_schedule_util.h"
 
 namespace oceanbase
 {
@@ -288,6 +289,12 @@ void TestCOMerge::SetUpTestCase()
   frozen_val.val_ = 1;
   ASSERT_EQ(OB_SUCCESS, info_list.frozen_statuses_.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
   info_list.latest_snapshot_gc_scn_.val_ = 2;
+
+  // Enable major merge for CO merge tests
+  compaction::ObBasicMergeScheduler *merge_scheduler = compaction::ObBasicMergeScheduler::get_merge_scheduler();
+  if (nullptr != merge_scheduler) {
+    merge_scheduler->resume_major_merge();
+  }
 }
 
 void TestCOMerge::TearDownTestCase()

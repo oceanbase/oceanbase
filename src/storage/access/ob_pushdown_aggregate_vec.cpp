@@ -1734,6 +1734,7 @@ int ObGroupByCellVec::init(const ObTableAccessParam &param, const ObTableAccessC
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param.iter_param_));
   } else {
+    need_padding_ = is_pad_char_to_full_length(context.sql_mode_);
     const common::ObIArray<int32_t> &out_cols_projector = *param.iter_param_.out_cols_project_;
     const common::ObIArray<share::schema::ObColumnParam *> &out_cols_param = *param.iter_param_.get_col_params();
     group_by_col_offset_ = param.iter_param_.group_by_cols_project_->at(0);
@@ -1747,10 +1748,7 @@ int ObGroupByCellVec::init(const ObTableAccessParam &param, const ObTableAccessC
         int32_t col_offset = param.iter_param_.out_cols_project_->at(i);
         sql::ObExpr *expr = param.output_exprs_->at(i);
         if (group_by_col_offset_ == col_offset) {
-          const common::ObObjMeta &obj_meta = out_cols_param.at(out_cols_projector.at(i))->get_meta_type();
-          if (is_pad_char_to_full_length(context.sql_mode_) && obj_meta.is_fixed_len_char_type()) {
-            group_by_col_param_ = out_cols_param.at(out_cols_projector.at(i));
-          }
+          group_by_col_param_ = out_cols_param.at(out_cols_projector.at(i));
           group_by_col_expr_ = expr;
         }
       }
@@ -2048,7 +2046,7 @@ int ObGroupByCellVec::pad_column_in_group_by(const int64_t row_cap)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGroupByCellVec is not inited", K(ret), K_(is_inited));
-  } else if (nullptr != group_by_col_param_ && group_by_col_param_->get_meta_type().is_fixed_len_char_type()) {
+  } else if (need_padding_ && group_by_col_param_->get_meta_type().is_fixed_len_char_type()) {
     if (enable_rich_format_) {
       if (OB_FAIL(storage::pad_on_rich_format_columns(
               group_by_col_param_->get_accuracy(),

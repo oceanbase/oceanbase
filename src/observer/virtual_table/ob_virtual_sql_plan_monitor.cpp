@@ -211,11 +211,11 @@ int ObVirtualSqlPlanMonitor::inner_get_next_row(common::ObNewRow *&row)
 
   if (OB_SUCC(ret) && !need_rt_node_) {
     void *rec = NULL;
-    if (ref_.idx_ != -1) {
-      cur_mysql_req_mgr_->revert(&ref_);
-    }
     int64_t iter_step = is_reverse_scan() ? -1 : 1;
     do {
+      if (ref_.idx_ != -1) {
+        cur_mysql_req_mgr_->revert(&ref_);
+      }
       ref_.reset();
       if (OB_ENTRY_NOT_EXIST == (ret = cur_mysql_req_mgr_->get(cur_id_, rec, &ref_))) {
         cur_id_ += iter_step;

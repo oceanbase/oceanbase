@@ -244,6 +244,8 @@ int ObCgMacroBlockWriter::init(
                                        exec_mode,
                                        need_submit_io))) {
       LOG_WARN("fail to initialize data store desc", K(ret));
+    } else if (FALSE_IT(data_desc_.get_static_desc().schema_version_ = param.schema_version_)) {
+      /* set as a fixed schema version */
     } else if (OB_FAIL(index_builder_.init(data_desc_.get_desc(), space_opt_mode/*small sstable op*/))) {
       LOG_WARN("fail to initialize sstable index builder", K(ret), K(ls_id), K(table_key), K(data_desc_));
     } else {

@@ -359,6 +359,16 @@ int ObPxTaskProcess::execute(const ObOpSpec &root_spec)
                                               OB_GOT_SIGNAL_ABORTING))) {
         LOG_WARN("interrupt_tasks failed", K(tmp_ret));
       }
+      if (OB_NOT_NULL(arg_.exec_ctx_)) {
+        arg_.exec_ctx_->set_errcode(ret);
+      }
+    }
+    if (OB_NOT_NULL(ctx.get_physical_plan_ctx())) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = sync_auto_increment_values(*ctx.get_physical_plan_ctx()))) {
+        LOG_WARN("failed to sync auto increment values", K(ret), K(tmp_ret));
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
+      }
     }
     if (OB_SUCCESS != (close_ret = root->close())) {
       LOG_WARN("fail close dfo op", K(ret), K(close_ret));
@@ -652,6 +662,26 @@ void ObPxTaskProcess::release() {
   } else {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "Unexpected px task process", K(arg_.sqc_task_ptr_));
   }
+}
+
+int ObPxTaskProcess::sync_auto_increment_values(ObPhysicalPlanCtx &plan_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = NULL;
+  bool is_ddl = OB_NOT_NULL(arg_.exec_ctx_)
+                && OB_NOT_NULL(session = arg_.exec_ctx_->get_my_session())
+                && session->get_ddl_info().is_ddl();
+  LOG_TRACE("px task sync auto_increment values", K(plan_ctx.get_autoinc_params()), K(is_ddl));
+  // auto increment value of ddl is sync by ddl redefinition task, no need sync here.
+  if (!is_ddl && plan_ctx.get_autoinc_params().count() > 0) {
+    if (OB_FAIL(plan_ctx.sync_last_value_local())) {
+      LOG_WARN("failed to sync value local", K(ret));
+    } else if (OB_FAIL(plan_ctx.sync_last_value_global())) {
+      LOG_WARN("failed to sync value globally", K(ret));
+    }
+    NG_TRACE(sync_auto_value);
+  }
+  return ret;
 }
 
 int ObPxTaskProcess::OpPreparation::apply(ObExecContext &ctx,

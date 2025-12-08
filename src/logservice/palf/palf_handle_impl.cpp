@@ -5623,6 +5623,7 @@ PalfStat::PalfStat()
       config_version_(),
       mode_version_(INVALID_PROPOSAL_ID),
       access_mode_(AccessMode::INVALID_ACCESS_MODE),
+      sync_mode_(SyncMode::INVALID_SYNC_MODE),
       paxos_member_list_(),
       paxos_replica_num_(-1),
       arbitration_member_(),
@@ -5655,6 +5656,7 @@ void PalfStat::reset()
   config_version_.reset();
   mode_version_ = INVALID_PROPOSAL_ID;
   access_mode_ = AccessMode::INVALID_ACCESS_MODE;
+  sync_mode_ = SyncMode::INVALID_SYNC_MODE;
   paxos_member_list_.reset();
   paxos_replica_num_ = -1;
   learner_list_.reset();
@@ -5814,7 +5816,7 @@ int PalfHandleImpl::get_io_statistic_info(int64_t &last_working_time,
 OB_SERIALIZE_MEMBER(PalfStat, self_, palf_id_, role_, log_proposal_id_, config_version_,
   mode_version_, access_mode_, paxos_member_list_, paxos_replica_num_, allow_vote_,
   replica_type_, begin_lsn_, begin_scn_, base_lsn_, end_lsn_, end_scn_, max_lsn_, max_scn_,
-  arbitration_member_, degraded_list_, is_in_sync_, is_need_rebuild_, learner_list_);
+  arbitration_member_, degraded_list_, is_in_sync_, is_need_rebuild_, learner_list_, sync_mode_);
 
 template<typename LogEntryType>
 int PalfHandleImpl::alloc_iterator_from_scn_(const SCN &scn,

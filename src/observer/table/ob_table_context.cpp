@@ -1071,6 +1071,20 @@ int ObTableCtx::generate_key_range(const ObIArray<ObString> &scan_ranges_columns
   return ret;
 }
 
+int ObTableCtx::init_scan_io_opt_params()
+{
+  int ret = OB_SUCCESS;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+  if (!tenant_config.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant config is invalid", K(ret), K(tenant_id_));
+  } else {
+    io_read_batch_size_ = tenant_config->_io_read_batch_size;
+    io_read_gap_size_ = io_read_batch_size_ * tenant_config->_io_read_redundant_limit_percentage / 100;
+  }
+  return ret;
+}
+
 /*
   init scan parameters.
     1. init some common scan parameters such as is_weak_read_、scan_order_、limit_、is_index_back_ and so on.
@@ -1145,6 +1159,8 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
                                             is_cache_hit,
                                             ls_id_))) {
       LOG_WARN("fail to get ls id", K(ret), K(index_tablet_id_), K(table_name_));
+    } else if (OB_FAIL(init_scan_io_opt_params())) {
+      LOG_WARN("fail to init scan io opt params", K(ret));
     } else if (is_text_retrieval_scan() && OB_FAIL(generate_fts_search_range(query))) {
       LOG_WARN("fail to generate fts search ranges", K(ret), K(query));
     } else if (!is_text_retrieval_scan() && OB_FAIL(generate_key_range(query.get_scan_range_columns(), query.get_scan_ranges()))) {// init key_ranges_
@@ -1689,6 +1705,8 @@ int ObTableCtx::init_get()
     LOG_WARN("schema cache guard is NULL or not init", K(ret));
   } else if (OB_FAIL(init_primary_index_info())) {
     LOG_WARN("fail to init primary index info", K(ret));
+  } else if (OB_FAIL(init_scan_io_opt_params())) {
+    LOG_WARN("fail to init scan io opt params", K(ret));
   } else if (OB_FAIL(entity_->get_properties_names(query_col_names_))) {
     LOG_WARN("fail to get entity properties names", K(ret));
   } else {
@@ -1986,6 +2004,29 @@ int ObTableCtx::init_exec_ctx(bool need_das_ctx/*true*/)
     exec_ctx_.set_my_session(&get_session_info());
   }
   return ret;
+}
+
+/*
+  set expr_info and init expr op for exec_ctx_ to adapt substring_index situation
+*/
+int ObTableCtx::init_expr_frame_info(ObExprFrameInfo *expr_info)
+{
+  int ret = OB_SUCCESS;
+  expr_info_ = expr_info;
+  if (OB_ISNULL(exec_ctx_.get_expr_op_ctx_store())
+      && OB_NOT_NULL(expr_info_)
+      && OB_FAIL(exec_ctx_.init_expr_op(expr_info_->need_ctx_cnt_))) {
+    LOG_WARN("fail to initialize expression operation", K(ret), K(this));
+  }
+  return ret;
+}
+
+void ObTableCtx::reset_expr_frame_info()
+{
+  expr_info_ = nullptr;
+  if (OB_NOT_NULL(exec_ctx_.get_expr_op_ctx_store())) {
+    exec_ctx_.reset_expr_op();
+  }
 }
 
 /*

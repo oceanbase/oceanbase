@@ -982,6 +982,7 @@ typedef enum ObItemType
   T_FUN_SYS_EDIT_DISTANCE = 1936,
   T_FUN_SYS_EDIT_DISTANCE_UTF8 = 1937,
   T_FUN_SYS_POS_LIST = 1938, // fulltext index phrase match
+  T_FUN_CK_SYS_IS_NAN = 1939,
 
   ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,
@@ -2992,6 +2993,10 @@ typedef enum ObItemType
   T_FTS_INDEX_FILTER = 4938, // fulltext index filter
   T_FTS_INDEX_MATCH = 4939, // fulltext index phrase match
   T_FTS_INDEX_PHRASE_MATCH = 4940, // fulltext index phrase match type
+  T_TENANT_TABLE_MAJOR_FREEZE = 4941, // tenant table major freeze
+  T_SET_PROTECTION_MODE = 4942, // set_protection_mode
+  T_DELTA_FORMAT = 4943, // delta_format table option
+  T_SKIP_INDEX_LEVEL = 4944,
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;

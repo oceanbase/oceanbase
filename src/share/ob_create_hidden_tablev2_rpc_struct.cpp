@@ -54,6 +54,7 @@ int ObCreateHiddenTableArgV2::assign(const ObCreateHiddenTableArgV2 &other)
     ddl_type_ = other.ddl_type_;
     sql_mode_ = other.sql_mode_;
     foreign_key_checks_ = other.foreign_key_checks_;
+    enable_partition_pruning_ = other.enable_partition_pruning_;
   }
   return ret;
 }
@@ -85,6 +86,7 @@ int ObCreateHiddenTableArgV2::assign(const ObCreateHiddenTableArg &other)
       }
     }
     foreign_key_checks_ = other.get_foreign_key_checks();
+    enable_partition_pruning_ = false;
   }
   return ret;
 }
@@ -95,7 +97,7 @@ int ObCreateHiddenTableArgV2::init(const uint64_t tenant_id, const uint64_t dest
                                    const ObTimeZoneInfo &tz_info, const common::ObString &local_nls_date,
                                    const common::ObString &local_nls_timestamp, const common::ObString &local_nls_timestamp_tz,
                                    const ObTimeZoneInfoWrap &tz_info_wrap, const ObIArray<ObTabletID> &tablet_ids,
-                                   const bool foreign_key_checks)
+                                   const bool foreign_key_checks, const bool enable_partition_pruning)
 {
   int ret = OB_SUCCESS;
   reset();
@@ -122,6 +124,7 @@ int ObCreateHiddenTableArgV2::init(const uint64_t tenant_id, const uint64_t dest
     tz_info_ = tz_info;
     // load data no need to reorder column id
     foreign_key_checks_ = DATA_CURRENT_VERSION >= DATA_VERSION_4_3_5_1 ? (is_oracle_mode() || (is_mysql_mode() && foreign_key_checks)) : true;
+    enable_partition_pruning_ = enable_partition_pruning;
   }
   return ret;
 }
@@ -139,7 +142,8 @@ OB_SERIALIZE_MEMBER((ObCreateHiddenTableArgV2, ObDDLArg),
                      tz_info_wrap_,
                      nls_formats_,
                      tablet_ids_,
-                     foreign_key_checks_);
+                     foreign_key_checks_,
+                     enable_partition_pruning_);
 
 bool ObCreateHiddenTableArg::is_valid() const
 {

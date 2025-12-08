@@ -1952,11 +1952,6 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
               ret = OB_NOT_SUPPORTED;
               LOG_USER_ERROR(OB_NOT_SUPPORTED, "set vertical partition table as queuing table mode");
               SQL_RESV_LOG(WARN, "Vertical partition table cannot set queuing table mode", K(ret));
-            } else { // 暂不支持用户在alter table时变更PK_MODE
-              // 设置Table当前的PK_MODE，组装最终态TableMode
-              table_mode_.pk_mode_ = tbl_schema->get_table_mode_struct().pk_mode_;
-              table_mode_.pk_exists_ = tbl_schema->get_table_mode_struct().pk_exists_;
-              table_mode_.table_organization_mode_ = tbl_schema->get_table_mode_struct().table_organization_mode_;
             }
           }
         }
@@ -6769,7 +6764,7 @@ int ObDDLResolver::init_empty_session(const common::ObTimeZoneInfoWrap &tz_info_
   if (OB_ISNULL(schema_checker)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null schema checker", K(ret));
-  } else if (OB_FAIL(empty_session.test_init(0, 0, 0, &allocator))) {
+  } else if (OB_FAIL(empty_session.init(0, 0, &allocator))) {
     LOG_WARN("init empty session failed", K(ret));
   } else if (OB_FAIL(schema_checker->get_tenant_info(tenant_id, tenant_schema))) {
     LOG_WARN("get tenant_schema failed", K(ret));

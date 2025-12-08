@@ -116,7 +116,8 @@ int ObTableLoadRedefTable::create_hidden_table(const ObTableLoadRedefTableStartA
                                     session_info.get_local_nls_timestamp_tz_format(),
                                     session_info.get_tz_info_wrap(),
                                     arg.tablet_ids_,
-                                    foreign_key_checks))) {
+                                    foreign_key_checks,
+                                    arg.enable_hidden_table_partition_pruning_))) {
       LOG_WARN("fail to init create hidden table arg", KR(ret));
     } else if (OB_FAIL(ObDDLServerClient::create_hidden_table(create_table_argv2, create_table_res,
         res.snapshot_version_, res.data_format_version_, session_info))) {

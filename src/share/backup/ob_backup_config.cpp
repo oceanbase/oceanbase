@@ -428,7 +428,6 @@ int ObDataBackupDestConfigParser::parse_from(const common::ObSqlString &value)
   return ret;
 }
 
-
 int ObDataBackupDestConfigParser::check_before_update_inner_config(obrpc::ObSrvRpcProxy &rpc_proxy, common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
@@ -451,8 +450,15 @@ int ObDataBackupDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
     LOG_WARN("backup is in progress, can't change backup dest", K(ret), KPC(this));
   } else if (!config_items_.at(0).value_.empty()) {
     ObBackupDest backup_dest_tmp;
+    uint64_t data_version = 0;
     if (OB_FAIL(backup_dest_tmp.set(config_items_.at(0).value_.ptr()))) {
       LOG_WARN("fail to set backup dest", K(ret), K_(tenant_id), K_(config_items));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
+      LOG_WARN("fail to get data version", K(ret), K_(tenant_id));
+    } else if (data_version < DATA_VERSION_4_4_1_0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("set backup dest during upgrade is not supported", K(ret), K_(tenant_id), K_(config_items));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "set backup dest during upgrade is not supported");
     } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest_status(
                        trans, tenant_id_, backup_dest_tmp, is_cleaning))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
@@ -692,6 +698,7 @@ int ObLogArchiveDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
   ObBackupDest backup_dest;
   bool is_running = false;
   bool is_cleaning = false;
+  uint64_t data_version = 0;
   if (is_empty_) {
   } else {
     if (!type_.is_valid()) {
@@ -711,6 +718,12 @@ int ObLogArchiveDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
       LOG_WARN("fail to check dest checksum type", K(ret));
     } else if (OB_FAIL(backup_dest.set(backup_dest_))) {
       LOG_WARN("fail to set backup dest", K(ret));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
+      LOG_WARN("fail to get data version", K(ret), K_(tenant_id));
+    } else if (data_version < DATA_VERSION_4_4_1_0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("set backup dest during upgrade is not supported", K(ret), K_(tenant_id), K_(backup_dest));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "set backup dest during upgrade is not supported");
     } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest_status(
                         trans, tenant_id_, backup_dest, is_cleaning))) {
       if (OB_ENTRY_NOT_EXIST == ret) {

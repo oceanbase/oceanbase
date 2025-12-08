@@ -7050,61 +7050,6 @@ int ObTablet::get_tablet_report_info(
   return ret;
 }
 
-int ObTablet::get_tablet_report_info_by_ckm_info(
-  const common::ObAddr &addr,
-  const blocksstable::ObMajorChecksumInfo &major_ckm_info,
-  ObTabletReplica &tablet_replica,
-  ObTabletReplicaChecksumItem &tablet_checksum,
-  const bool need_checksums) const
-{
-  int ret = OB_SUCCESS;
-  ObArray<int64_t> column_checksums;
-  share::ObFreezeInfo freeze_info;
-  uint64_t compaction_data_version = 0;
-  column_checksums.set_attr(ObMemAttr(MTL_ID(), "tmpCkmArr"));
-  const int64_t report_major_snapshot = major_ckm_info.get_compaction_scn();
-  if (OB_FAIL(tablet_replica.init(
-        MTL_ID(),
-        get_tablet_id(),
-        get_ls_id(),
-        addr,
-        report_major_snapshot,
-        0/*data_size*/,
-        0/*required_size*/,
-        0/*report_scn*/,
-        ObTabletReplica::SCN_STATUS_IDLE))) {
-      LOG_WARN("fail to init a tablet replica", KR(ret), "tablet_id", get_tablet_id(), K(tablet_replica));
-  } else if (!need_checksums) {
-    // do nothing
-  } else if (OB_FAIL(major_ckm_info.get_column_checksums(column_checksums))) {
-    LOG_WARN("failed to assign column checksum", KR(ret), K(major_ckm_info), KPC(this), K(major_ckm_info));
-  } else if (OB_FAIL(tablet_checksum.set_tenant_id(MTL_ID()))) {
-    LOG_WARN("failed to set tenant id", KR(ret));
-  } else if (OB_FAIL(tablet_checksum.column_meta_.init(column_checksums))) {
-    LOG_WARN("fail to init report column meta with column_checksums", KR(ret), K(column_checksums));
-  } else if (OB_FAIL(tablet_checksum.compaction_scn_.convert_for_tx(report_major_snapshot))) {
-    LOG_WARN("failed to convert scn", KR(ret), K(major_ckm_info));
-  } else if (OB_FAIL(MTL(ObTenantFreezeInfoMgr *)->get_lower_bound_freeze_info_before_snapshot_version(report_major_snapshot, freeze_info))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      ret = OB_EAGAIN;
-    } else {
-      LOG_WARN("failed to get freeze info", K(ret), K(report_major_snapshot));
-    }
-  } else if (FALSE_IT(compaction_data_version = freeze_info.data_version_)) {
-  } else {
-    tablet_checksum.ls_id_ = get_ls_id();
-    tablet_checksum.tablet_id_ = get_tablet_id();
-    tablet_checksum.server_ = addr;
-    tablet_checksum.row_count_ = major_ckm_info.get_row_count();
-    tablet_checksum.data_checksum_ = major_ckm_info.get_data_checksum();
-    tablet_checksum.set_data_checksum_type(false/*is_cs_replica*/, compaction_data_version);
-    tablet_checksum.co_base_snapshot_version_.set_min(); // when ss support cs replica, co base snapshot version should be reported
-    LOG_INFO("success to get tablet report info", KR(ret), "tablet_id", get_tablet_id(), K(major_ckm_info), "report_status",
-      tablet_meta_.report_status_, K(tablet_checksum));
-  }
-  return ret;
-}
-
 int ObTablet::get_tablet_report_info_by_sstable(
     const common::ObAddr &addr,
     const ObTabletTableStore &table_store,
@@ -7165,7 +7110,8 @@ int ObTablet::get_tablet_report_info_by_sstable(
         data_size,
         required_size,
         0/*report_scn*/,
-        ObTabletReplica::SCN_STATUS_IDLE))) {
+        ObTabletReplica::SCN_STATUS_IDLE,
+        tablet_meta_.ddl_snapshot_version_))) {
       LOG_WARN("fail to init a tablet replica", KR(ret), "tablet_id", get_tablet_id(), K(tablet_replica));
   } else if (!need_checksums) {
     // do nothing

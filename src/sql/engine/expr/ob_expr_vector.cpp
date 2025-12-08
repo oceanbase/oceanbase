@@ -436,7 +436,7 @@ int ObExprVectorDistance::get_normal_vector_data(const ObExpr *arg, ObEvalCtx &c
             }
 
             if (OB_SUCC(ret)) {
-              if (0 >= size || ObExprVector::MAX_VECTOR_DIM < size) {
+              if (0 > size || ObExprVector::MAX_VECTOR_DIM < size) {
                 ret = OB_ERR_INVALID_VECTOR_DIM;
                 LOG_WARN("invalid vector dimension", K(ret), K(size));
               }

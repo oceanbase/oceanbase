@@ -846,6 +846,7 @@ public:
 
 void ObCheckPointService::ObSSAdvanceCkptTask::runTimerTask()
 {
+  STORAGE_LOG(INFO, "====== SS Advance Checkpoint Task ======");
   int ret = OB_SUCCESS;
   INIT_TRACE_GUARD;
 
@@ -858,14 +859,20 @@ void ObCheckPointService::ObSSAdvanceCkptTask::runTimerTask()
   }
 
   const int64_t current_ts = ObClockGenerator::getClock();
-  if (current_ts - MTL(ObCheckPointService *)->prev_ss_advance_ckpt_task_ts() > advance_checkpoint_interval) {
-    STORAGE_LOG(INFO, "====== SS Advance Checkpoint Task ======");
+  const int64_t prev_ss_advance_ckpt_task_ts = MTL(ObCheckPointService *)->prev_ss_advance_ckpt_task_ts();
+  if (current_ts - prev_ss_advance_ckpt_task_ts > advance_checkpoint_interval) {
     SSAdvanceCkptFunctorForLS advance_ckpt_func_for_ls;
     if (OB_FAIL(MTL(ObLSService *)->foreach_ls(advance_ckpt_func_for_ls))) {
       STORAGE_LOG(WARN, "for each ls functor failed", KR(ret));
     } else {
       MTL(ObCheckPointService *)->set_prev_ss_advance_ckpt_task_ts(current_ts);
     }
+  } else {
+    STORAGE_LOG(INFO,
+                "skip advance checkpoint because interval is not reached",
+                K(advance_checkpoint_interval),
+                KTIME(current_ts),
+                KTIME(prev_ss_advance_ckpt_task_ts));
   }
 }
 
@@ -891,6 +898,7 @@ public:
       }
 
       if (OB_FAIL(ret)) {
+        sche_ls_upload_task->~ScheLSUploadTask();
         mtl_free(sche_ls_upload_task);
         sche_ls_upload_task = nullptr;
       }

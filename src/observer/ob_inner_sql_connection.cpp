@@ -702,7 +702,7 @@ int ObInnerSQLConnection::process_audit_record(sql::ObResultSet &result_set,
     audit_record.try_cnt_++;
     ObPhysicalPlan *plan = result_set.get_physical_plan();
     audit_record.seq_ = 0;  //don't use now
-    audit_record.status_ = (0 == last_ret || OB_ITER_END == last_ret)
+    audit_record.status_ = (0 == last_ret || OB_ITER_END == last_ret || (OB_NOT_NULL(cursor) && OB_READ_NOTHING == last_ret))
         ? obmysql::REQUEST_SUCC : last_ret;
 
     audit_record.client_addr_ = session.get_peer_addr();

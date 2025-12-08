@@ -205,6 +205,7 @@ int ObSimpleTableSchemaV2::assign(const ObSimpleTableSchemaV2 &other)
       truncate_version_ = other.truncate_version_;
       storage_cache_policy_type_ = other.storage_cache_policy_type_;
       with_dynamic_partition_policy_ = other.with_dynamic_partition_policy_;
+      minor_row_store_type_ = other.minor_row_store_type_;
       if (OB_FAIL(table_mode_.assign(other.table_mode_))) {
         LOG_WARN("Fail to assign table mode", K(ret), K(other.table_mode_));
       } else if (OB_FAIL(deep_copy_str(other.table_name_, table_name_))) {
@@ -267,7 +268,8 @@ bool ObSimpleTableSchemaV2::operator ==(const ObSimpleTableSchemaV2 &other) cons
      link_database_name_ == other.link_database_name_ &&
      object_status_ == other.object_status_ &&
      truncate_version_ == other.truncate_version_ &&
-     storage_cache_policy_type_ == other.storage_cache_policy_type_) {
+     storage_cache_policy_type_ == other.storage_cache_policy_type_ &&
+     minor_row_store_type_ == other.minor_row_store_type_) {
      ret = true;
      if (true == ret) {
        if (simple_foreign_key_info_array_.count() == other.simple_foreign_key_info_array_.count()) {
@@ -344,6 +346,7 @@ void ObSimpleTableSchemaV2::reset()
   master_key_id_ = OB_INVALID_ID;
   truncate_version_ = OB_INVALID_VERSION;
   with_dynamic_partition_policy_ = false;
+  minor_row_store_type_ = ObStoreFormat::DEFAULT_MINOR_ROW_STORE_TYPE;
   ObPartitionSchema::reset();
   storage_cache_policy_type_ = ObStorageCachePolicyType::MAX_POLICY;
 }
@@ -991,7 +994,8 @@ int64_t ObSimpleTableSchemaV2::to_string(char *buf, const int64_t buf_len) const
     K_(truncate_version),
     K_(duplicate_read_consistency),
     K_(storage_cache_policy_type),
-    K_(with_dynamic_partition_policy)
+    K_(with_dynamic_partition_policy),
+    K_(minor_row_store_type)
 );
   J_OBJ_END();
 
@@ -1789,7 +1793,8 @@ ObTableSchema::ObTableSchema(ObIAllocator *allocator)
     storage_cache_policy_(),
     semistruct_encoding_type_(),
     dynamic_partition_policy_(),
-    semistruct_properties_()
+    semistruct_properties_(),
+    ttl_flag_()
 {
   reset();
 }
@@ -1876,6 +1881,7 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       merge_engine_type_ = src_schema.merge_engine_type_;
       external_location_id_ = src_schema.external_location_id_;
       tmp_mlog_tid_ = src_schema.tmp_mlog_tid_;
+      skip_index_level_ = src_schema.skip_index_level_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
         LOG_WARN("Fail to deep copy tablegroup_name", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.comment_, comment_))) {
@@ -3948,6 +3954,7 @@ void ObTableSchema::reset()
   aux_lob_piece_tid_ = OB_INVALID_ID;
   compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE;
+  skip_index_level_ = ObSkipIndexLevel::OB_SKIP_INDEX_LEVEL_BASE_ONLY;
   reset_string(tablegroup_name_);
   reset_string(comment_);
   reset_string(pk_comment_);
@@ -7508,7 +7515,9 @@ int64_t ObTableSchema::to_string(char *buf, const int64_t buf_len) const
     K_(semistruct_encoding_type),
     K_(dynamic_partition_policy),
     K_(semistruct_properties),
-    K_(micro_block_format_version));
+    K_(micro_block_format_version),
+    K_(ttl_flag),
+    K_(skip_index_level));
   J_OBJ_END();
 
   return pos;
@@ -7714,6 +7723,9 @@ OB_DEF_SERIALIZE(ObTableSchema)
   OB_UNIS_ENCODE(micro_block_format_version_);
   OB_UNIS_ENCODE(tmp_mlog_tid_);
   OB_UNIS_ENCODE(semistruct_properties_);
+  OB_UNIS_ENCODE(ttl_flag_);
+  OB_UNIS_ENCODE(minor_row_store_type_);
+  OB_UNIS_ENCODE(skip_index_level_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7965,6 +7977,9 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   OB_UNIS_DECODE(micro_block_format_version_);
   OB_UNIS_DECODE(tmp_mlog_tid_);
   OB_UNIS_DECODE_AND_FUNC(semistruct_properties_, deep_copy_str);
+  OB_UNIS_DECODE(ttl_flag_);
+  OB_UNIS_DECODE(minor_row_store_type_);
+  OB_UNIS_DECODE(skip_index_level_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -8116,6 +8131,9 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(micro_block_format_version_);
   OB_UNIS_ADD_LEN(tmp_mlog_tid_);
   OB_UNIS_ADD_LEN(semistruct_properties_);
+  OB_UNIS_ADD_LEN(ttl_flag_);
+  OB_UNIS_ADD_LEN(minor_row_store_type_);
+  OB_UNIS_ADD_LEN(skip_index_level_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -9928,103 +9946,6 @@ int ObTableSchema::get_fulltext_typed_col_ids(uint64_t &doc_id_col_id, ObDocIDTy
   return ret;
 }
 
-int ObTableSchema::get_vec_index_column_id(uint64_t &with_cascaded_info_column_id) const
-{
-  int ret = OB_SUCCESS;
-  with_cascaded_info_column_id = OB_INVALID_ID;
-  for (int64_t i = 0; OB_SUCC(ret) && OB_INVALID_ID == with_cascaded_info_column_id && i < get_column_count(); ++i) {
-    const ObColumnSchemaV2 *column_schema = get_column_schema_by_idx(i);
-    if (OB_ISNULL(column_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(i), KPC(this));
-    } else if (column_schema->is_vec_hnsw_vector_column() || column_schema->is_vec_ivf_center_id_column()) {
-      with_cascaded_info_column_id = column_schema->get_column_id();
-    }
-  }
-  if (OB_FAIL(ret) || OB_INVALID_ID == with_cascaded_info_column_id) {
-    ret = ret != OB_SUCCESS ? ret : OB_ERR_INDEX_KEY_NOT_FOUND;
-  }
-  return ret;
-}
-
-int ObTableSchema::get_sparse_vec_index_column_id(uint64_t &sparse_vec_col_id) const
-{
-  int ret = OB_SUCCESS;
-  sparse_vec_col_id = OB_INVALID_ID;
-  for (int64_t i = 0; OB_SUCC(ret) && OB_INVALID_ID == sparse_vec_col_id && i < get_column_count(); ++i) {
-    const ObColumnSchemaV2 *column_schema = get_column_schema_by_idx(i);
-    if (OB_ISNULL(column_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(i), KPC(this));
-    } else if (column_schema->is_collection()) {
-      sparse_vec_col_id = column_schema->get_column_id();
-    }
-  }
-  if (OB_FAIL(ret) || OB_INVALID_ID == sparse_vec_col_id) {
-    ret = ret != OB_SUCCESS ? ret : OB_ERR_INDEX_KEY_NOT_FOUND;
-  }
-  return ret;
-}
-
-int ObTableSchema::get_vec_index_vid_col_id(uint64_t &vec_id_col_id, bool is_cid) const
-{
-  int ret = OB_SUCCESS;
-  vec_id_col_id = OB_INVALID_ID;
-  for (int64_t i = 0; OB_SUCC(ret) && OB_INVALID_ID == vec_id_col_id && i < get_column_count(); ++i) {
-    const ObColumnSchemaV2 *column_schema = get_column_schema_by_idx(i);
-    if (OB_ISNULL(column_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(i), KPC(this));
-    } else if (!is_cid && column_schema->is_vec_hnsw_vid_column()) {
-      vec_id_col_id = column_schema->get_column_id();
-    } else if (is_cid && column_schema->is_vec_ivf_center_id_column()) { // table schema must be index table here
-      vec_id_col_id = column_schema->get_column_id();
-    }
-  }
-  if (OB_FAIL(ret) || OB_INVALID_ID == vec_id_col_id) {
-    ret = ret != OB_SUCCESS ? ret : OB_ERR_INDEX_KEY_NOT_FOUND;
-  }
-  return ret;
-}
-
-int ObTableSchema::get_hybrid_vec_chunk_column_id(uint64_t &hybrid_vec_chunk_col_id) const
-{
-  int ret = OB_SUCCESS;
-  hybrid_vec_chunk_col_id = OB_INVALID_ID;
-  for (int64_t i = 0; OB_SUCC(ret) && OB_INVALID_ID == hybrid_vec_chunk_col_id && i < get_column_count(); ++i) {
-    const ObColumnSchemaV2 *column_schema = get_column_schema_by_idx(i);
-    if (OB_ISNULL(column_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(i), KPC(this));
-    } else if (column_schema->is_string_type()) {
-      hybrid_vec_chunk_col_id = column_schema->get_column_id();
-    }
-  }
-  if (OB_FAIL(ret) || OB_INVALID_ID == hybrid_vec_chunk_col_id) {
-    ret = ret != OB_SUCCESS ? ret : OB_ERR_INDEX_KEY_NOT_FOUND;
-  }
-  return ret;
-}
-
-int ObTableSchema::get_hybrid_vec_embedded_column_id(uint64_t &vec_id_col_id) const
-{
-  int ret = OB_SUCCESS;
-  vec_id_col_id = OB_INVALID_ID;
-  for (int64_t i = 0; OB_SUCC(ret) && OB_INVALID_ID == vec_id_col_id && i < get_column_count(); ++i) {
-    const ObColumnSchemaV2 *column_schema = get_column_schema_by_idx(i);
-    if (OB_ISNULL(column_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(i), KPC(this));
-    } else if (column_schema->is_hybrid_embedded_vec_column()) {
-      vec_id_col_id = column_schema->get_column_id();
-    }
-  }
-  if (OB_FAIL(ret) || OB_INVALID_ID == vec_id_col_id) {
-    ret = ret != OB_SUCCESS ? ret : OB_ERR_INDEX_KEY_NOT_FOUND;
-  }
-  return ret;
-}
-
 // Get generated column's id which contains a doc_id flag
 int ObTableSchema::get_docid_col_id(uint64_t &docid_col_id) const
 {
@@ -10062,69 +9983,6 @@ int ObTableSchema::get_rowkey_doc_tid(uint64_t &index_table_id) const
   if (OB_SUCC(ret) && OB_UNLIKELY(OB_INVALID_ID == index_table_id)) {
     ret = OB_ERR_INDEX_KEY_NOT_FOUND;
     LOG_DEBUG("not found rowkey doc index", K(ret), K(simple_index_infos));
-  }
-  return ret;
-}
-
-int ObTableSchema::get_rowkey_vid_tid(uint64_t &index_table_id) const
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
-  index_table_id = OB_INVALID_ID;
-  if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
-    LOG_WARN("get simple_index_infos failed", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
-    if (share::schema::is_vec_rowkey_vid_type(simple_index_infos.at(i).index_type_)) {
-      index_table_id = simple_index_infos.at(i).table_id_;
-      break;
-    }
-  }
-  if (OB_SUCC(ret) && OB_UNLIKELY(OB_INVALID_ID == index_table_id)) {
-    ret = OB_ERR_INDEX_KEY_NOT_FOUND;
-    LOG_DEBUG("not found rowkey vid index", K(ret), K(simple_index_infos));
-  }
-  return ret;
-}
-
-int ObTableSchema::get_rowkey_cid_tid(uint64_t &index_table_id, const ObIndexType index_type) const
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
-  index_table_id = OB_INVALID_ID;
-  if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
-    LOG_WARN("get simple_index_infos failed", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
-    if (index_type == simple_index_infos.at(i).index_type_) {
-      index_table_id = simple_index_infos.at(i).table_id_;
-      break;
-    }
-  }
-  if (OB_SUCC(ret) && OB_UNLIKELY(OB_INVALID_ID == index_table_id)) {
-    ret = OB_ERR_INDEX_KEY_NOT_FOUND;
-    LOG_DEBUG("not found rowkey cid index", K(ret), K(simple_index_infos));
-  }
-  return ret;
-}
-
-int ObTableSchema::get_embedded_vec_tid(uint64_t &index_table_id) const
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
-  index_table_id = OB_INVALID_ID;
-  if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
-    LOG_WARN("get simple_index_infos failed", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
-    if (share::schema::is_hybrid_vec_index_embedded_type(simple_index_infos.at(i).index_type_)) {
-      index_table_id = simple_index_infos.at(i).table_id_;
-      break;
-    }
-  }
-  if (OB_SUCC(ret) && OB_UNLIKELY(OB_INVALID_ID == index_table_id)) {
-    ret = OB_ERR_INDEX_KEY_NOT_FOUND;
-    LOG_DEBUG("not found rowkey vid index", K(ret), K(simple_index_infos));
   }
   return ret;
 }
@@ -11038,22 +10896,6 @@ int ObTableSchema::get_rowkey_doc_id_tid(uint64_t &rowkey_doc_id_tid) const
   }
   if (OB_INVALID_ID == rowkey_doc_id_tid) {
     ret = OB_ERR_FT_COLUMN_NOT_INDEXED;
-  }
-  return ret;
-}
-
-int ObTableSchema::get_vec_id_rowkey_tid(uint64_t &vec_id_rowkey_tid) const
-{
-  int ret = OB_SUCCESS;
-  vec_id_rowkey_tid = OB_INVALID_ID;
-  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos_.count(); ++i) {
-    if (share::schema::is_vec_vid_rowkey_type(simple_index_infos_.at(i).index_type_)) {
-      vec_id_rowkey_tid = simple_index_infos_.at(i).table_id_;
-      break;
-    }
-  }
-  if (OB_SUCC(ret) && OB_INVALID_ID == vec_id_rowkey_tid) {
-    ret = OB_ERR_INDEX_KEY_NOT_FOUND;
   }
   return ret;
 }

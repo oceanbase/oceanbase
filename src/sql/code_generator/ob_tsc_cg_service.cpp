@@ -1368,7 +1368,7 @@ int ObTscCgService::extract_das_access_exprs(const ObLogTableScan &op,
   }
 
   // extract match columns for vector adaptive scan on data table
-  if (scan_ctdef.ref_table_id_ == op.get_real_ref_table_id() && op.is_vec_adaptive_scan()) {
+  if (scan_ctdef.ref_table_id_ == op.get_real_ref_table_id() && op.is_vec_adaptive_scan() && scan_ctdef.ir_scan_type_ == OB_NOT_A_SPEC_SCAN) {
     if (OB_FAIL(extract_match_columns_from_filters(op, access_exprs))) {
       LOG_WARN("failed to extract match columns from filters", K(ret));
     }

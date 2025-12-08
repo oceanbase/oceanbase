@@ -252,6 +252,8 @@ private:
                                 const ObIArray<uint64_t> &dml_column_ids,
                                 ObDASDMLBaseCtDef &das_ctdef,
                                 IntFixedArray &row_projector);
+  int set_embedded_vec_ref_flag(const ObIArray<ObRawExpr*> &cur_row,
+                                ObDASDMLBaseCtDef &das_ctdef);
   int fill_multivalue_extra_info_on_table_param(
                             share::schema::ObSchemaGetterGuard *guard,
                             const ObTableSchema *index_schema,

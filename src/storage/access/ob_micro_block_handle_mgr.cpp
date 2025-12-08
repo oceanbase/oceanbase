@@ -11,6 +11,7 @@
  */
 #include "lib/time/ob_time_utility.h"
 #include "share/io/ob_io_define.h"
+#include "observer/ob_server.h"
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_micro_block_handle_mgr.h"
@@ -171,7 +172,7 @@ int ObMicroBlockDataHandle::get_micro_block_data(
         LOG_INFO("get data block data already timeout", K(ret), K(THIS_WORKER.get_timeout_remain()));
       } else {
         //try sync io
-        int64_t start_time_us = rdtsc();
+        int64_t start_time = rdtsc();
         ObMicroBlockId micro_block_id;
         micro_block_id.macro_id_ = macro_block_id_;
         micro_block_id.offset_ = micro_info_.offset_;
@@ -190,8 +191,8 @@ int ObMicroBlockDataHandle::get_micro_block_data(
           try_release_loaded_block();
         } else {
           if (OB_NOT_NULL(handle_mgr_)) {
-            int64_t finish_time_us = rdtsc();
-            handle_mgr_->add_block_io_wait_time_us(get_io_interval(finish_time_us, start_time_us));
+            int64_t finish_time = rdtsc();
+            handle_mgr_->add_block_io_wait_time(finish_time - start_time);
           }
           io_handle_.reset();
           block_state_ = ObSSTableMicroBlockState::NEED_SYNC_IO;
@@ -247,12 +248,12 @@ int ObMicroBlockDataHandle::get_loaded_block_data(ObMicroBlockData &block_data)
       block_data = *pblock;
     }
   } else if (ObSSTableMicroBlockState::IN_BLOCK_IO == block_state_) {
-    int64_t start_time_us = rdtsc();
+    int64_t start_time = rdtsc();
     if (OB_FAIL(io_handle_.wait())) {
       LOG_WARN("Fail to wait micro block io", K(ret));
     } else if (OB_NOT_NULL(handle_mgr_)) {
-      int64_t finish_time_us = rdtsc();
-      handle_mgr_->add_block_io_wait_time_us(get_io_interval(finish_time_us, start_time_us));
+      int64_t finish_time = rdtsc();
+      handle_mgr_->add_block_io_wait_time(finish_time - start_time);
     }
     if (OB_FAIL(ret)) {
     } else if (NULL == (io_buf = io_handle_.get_buffer())) {
@@ -639,10 +640,14 @@ bool ObMicroBlockHandleMgr::reach_hold_limit() const
   return cache_mem_ctrl_.reach_hold_limit();
 }
 
-void ObMicroBlockHandleMgr::add_block_io_wait_time_us(const uint64_t block_io_wait_time_us)
+void ObMicroBlockHandleMgr::add_block_io_wait_time(const int64_t block_io_wait_time)
 {
   if (OB_NOT_NULL(table_scan_stat_) && OB_NOT_NULL(table_scan_stat_->tsc_monitor_info_)) {
-    table_scan_stat_->tsc_monitor_info_->add_block_io_wait_time_us(block_io_wait_time_us);
+    // Convert 600 seconds to CPU cycles: 600s * cpu_frequency_khz * 1000
+    static const int64_t max_io_time = 600LL * OBSERVER_FREQUENCE.get_cpu_frequency_khz() * 1000LL; // 600s in CPU cycles
+    int64_t adjusted_block_io_wait_time = max(block_io_wait_time, 0);
+    adjusted_block_io_wait_time = min(adjusted_block_io_wait_time, max_io_time);
+    table_scan_stat_->tsc_monitor_info_->add_block_io_wait_time(adjusted_block_io_wait_time);
   }
 }
 

@@ -1300,6 +1300,9 @@ int ObTabletMergeTask::process()
     if (is_major_merge_type(ctx_->get_merge_type())) {
       DEBUG_SYNC(MAJOR_MERGE_TASK_PROCESS);
     }
+    if (is_mini_merge(ctx_->get_merge_type()) || is_minor_merge(ctx_->get_merge_type())) {
+      DEBUG_SYNC(MINI_MERGE_TASK_PROCESS);
+    }
   }
   ret = SPECIFIED_SERVER_STOP_COMPACTION;
   if (OB_FAIL(ret)) {

@@ -279,7 +279,7 @@ int ManifestFile::decode_partitions_(const FieldProjection &field_projection,
 
     if (NULL != target_avro_node) {
       // 不是 optional，开始解析 array
-      const FieldProjection &element_record_projection = *field_projection.children_[0];
+      const FieldProjection &element_record_projection = field_projection.children_[0];
       ObArray<PartitionFieldSummary *> tmp_partitions;
       if (OB_UNLIKELY(avro::AVRO_ARRAY != target_avro_node->type())) {
         ret = OB_INVALID_ARGUMENT;
@@ -301,7 +301,7 @@ int ManifestFile::decode_partitions_(const FieldProjection &field_projection,
                OB_SUCC(ret) && field_idx < element_record_projection.children_.count();
                field_idx++) {
             const FieldProjection &element_record_field_projection
-                = *element_record_projection.children_[field_idx];
+                = element_record_projection.children_[field_idx];
             if (OB_FAIL(tmp_summary->decode_field(element_record_field_projection, decoder))) {
               LOG_WARN("failed to decode PartitionFieldSummary field", K(ret));
             }
@@ -453,7 +453,7 @@ void codec_traits<ManifestFileDatum>::decode(Decoder &d, ManifestFileDatum &v)
   int ret = OB_SUCCESS;
   v.manifest_file_ = NULL;
 
-  const ObFixedArray<FieldProjection *, ObIAllocator> &field_projections
+  const ObFixedArray<FieldProjection, ObIAllocator> &field_projections
       = v.schema_projection_.fields_;
 
   if (OB_ISNULL(v.manifest_file_ = OB_NEWx(ManifestFile, &v.allocator_, v.allocator_))) {
@@ -461,15 +461,15 @@ void codec_traits<ManifestFileDatum>::decode(Decoder &d, ManifestFileDatum &v)
     LOG_WARN("failed to allocate memory", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < field_projections.count(); i++) {
-    const FieldProjection *field_projection = field_projections[i];
-    if (OB_ISNULL(field_projection) || FieldProjection::Kind::Invalid == field_projection->kind_) {
+    const FieldProjection &field_projection = field_projections[i];
+    if (OB_UNLIKELY(FieldProjection::Kind::Invalid == field_projection.kind_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid field projection", K(ret));
-    } else if (FieldProjection::Kind::NOT_EXISTED == field_projection->kind_) {
-      if (OB_FAIL(AvroUtils::skip_decode(field_projection->avro_node_, d))) {
+    } else if (FieldProjection::Kind::NOT_EXISTED == field_projection.kind_) {
+      if (OB_FAIL(AvroUtils::skip_decode(field_projection.avro_node_, d))) {
         LOG_WARN("failed to skip decode", K(ret));
       }
-    } else if (OB_FAIL(v.manifest_file_->decode_field(*field_projection, d))) {
+    } else if (OB_FAIL(v.manifest_file_->decode_field(field_projection, d))) {
       LOG_WARN("failed to decode manifest entry field", K(ret));
     }
   }

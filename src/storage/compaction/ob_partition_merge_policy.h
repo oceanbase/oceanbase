@@ -432,6 +432,39 @@ private:
 };
 
 
+// Describes the strategy for this major merge
+struct ObCOMajorMergeStrategy
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCOMajorMergeStrategy() { reset(); }
+  void reset() {
+    MEMSET(this, 0, sizeof(*this));
+  }
+  // Set merge strategy
+  // @param build_all_cg_only: true = build ALL CG ONLY, false = build schema match merge
+  // @param only_use_row: true = only use row store data to build column store
+  void set(bool build_all_cg_only, bool only_use_row) {
+    is_valid_ = true;
+    build_all_cg_only_ = build_all_cg_only;
+    only_use_row_store_ = only_use_row;
+  }
+  inline bool is_valid() const { return is_valid_; }
+  inline bool is_build_all_cg_only() const { return build_all_cg_only_; }
+  inline bool only_use_row_store() const { return only_use_row_store_; }
+  void gene_info(char* buf, const int64_t buf_len, int64_t &pos) const {}
+  int64_t to_string(char *buf, const int64_t buf_len) const { return 0; }
+  ObCOMajorMergeStrategy &operator=(const ObCOMajorMergeStrategy &other) {
+    is_valid_ = other.is_valid_;
+    build_all_cg_only_ = other.build_all_cg_only_;
+    only_use_row_store_ = other.only_use_row_store_;
+    return *this;
+  }
+  bool is_valid_;
+  bool build_all_cg_only_;
+  bool only_use_row_store_;
+};
+
 class ObIncMajorTxHelper final
 {
 public:

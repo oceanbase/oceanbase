@@ -57,6 +57,8 @@ class ObString;
     ACT(MINOR_MERGE_TIMER_TASK,)                                   \
     ACT(MERGE_TASK_PROCESS,)                                       \
     ACT(MAJOR_MERGE_TASK_PROCESS,)                                 \
+    ACT(CONSUME_ALL_MERGE_LOG_PROCESS,)                            \
+    ACT(MINI_MERGE_TASK_PROCESS,)                                  \
     ACT(MAJOR_MERGE_PREPARE_TASK_PROCESS,)                         \
     ACT(COMPACTION_REPORT_PROCESS,)                                \
     ACT(MINOR_MERGE_SCHEDULE,)                                     \
@@ -779,6 +781,7 @@ class ObString;
     ACT(BEFORE_TRASNFER_TABLET_RESTORE_STAT,)\
     ACT(BEFORE_UPDATE_PIECE_TO_ACTIVE,)\
     ACT(BEFORE_INSPECTION_CHECK_CANCEL,)\
+    ACT(BEFORE_SCHEDULE_TABLET_FUNC,)\
     ACT(BEFORE_TABLET_SPLIT_MAJOR_SSTABLE,)\
     ACT(BEFORE_LOB_CHECK_SCHEDULER_RUN,)\
     ACT(BEFORE_LOB_CORRECT_SCHEDULER_RUN,)\

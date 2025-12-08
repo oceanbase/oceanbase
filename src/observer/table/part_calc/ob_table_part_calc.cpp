@@ -85,16 +85,17 @@ int ObTablePartCalculator::create_plan(const ObSimpleTableSchemaV2 &simple_schem
     LOG_WARN("fail to init cache guard", K(ret));
   } else if (OB_FAIL(cache_guard_.get_expr_info(tb_ctx_, expr_frame_info))) {
     LOG_WARN("fail to get expr frame info", K(ret), KPC_(tb_ctx));
-  } else if (OB_FAIL(cache_guard_.get_spec<TABLE_API_EXEC_INSERT>(tb_ctx_, tmp_spec))) {
-    LOG_WARN("fail to get spec from plan", K(ret));
   } else if (OB_ISNULL(expr_frame_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr_frame_info is null", K(ret));
   } else if (OB_FAIL(ObTableExprCgService::alloc_exprs_memory(*tb_ctx_, *expr_frame_info))) {
     LOG_WARN("fail to alloc exprs memory", K(ret));
+  } else if (OB_FAIL(tb_ctx_->init_expr_frame_info(expr_frame_info))) {
+    LOG_WARN("fail to init expr frame info", K(ret));
+  } else if (OB_FAIL(cache_guard_.get_spec<TABLE_API_EXEC_INSERT>(tb_ctx_, tmp_spec))) {
+    LOG_WARN("fail to get spec from plan", K(ret));
   } else {
     spec = tmp_spec;
-    tb_ctx_->set_expr_info(expr_frame_info);
   }
 
   return ret;

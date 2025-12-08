@@ -24,6 +24,7 @@
 #include "lib/mysqlclient/ob_mysql_transaction.h"  //ObMySQLTransaction
 #include "share/ls/ob_ls_i_life_manager.h" // share::OB_LS_INVALID_SCN_VALUE
 #include "share/restore/ob_restore_data_mode.h" //share::ObRestoreDataMode
+#include "src/share/ob_cluster_role.h"
 
 namespace oceanbase
 {
@@ -154,6 +155,8 @@ public:\
 private:
   ObTenantRole tenant_role_;
   ObTenantSwitchoverStatus switchover_status_;
+  ObProtectionMode protection_mode_;
+  ObProtectionLevel protection_level_;
 };
 
 class ObAllTenantInfoProxy

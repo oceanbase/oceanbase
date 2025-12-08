@@ -1639,7 +1639,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_CBY_NO_MEMORY, -5926, -1, "HY000", "Not enough memory
 DEFINE_ORACLE_ERROR(OB_ERR_ILLEGAL_PARAM_FOR_CBY_PATH, -5927, -1, "HY000", "illegal parameter in SYS_CONNECT_BY_PATH function", 30003, "illegal parameter in SYS_CONNECT_BY_PATH function");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_HOST_UNKNOWN, -5928, -1, "HY000", "host unknown", "host %.*s unknown", 29257, "host unknown", "host %.*s unknown");
 DEFINE_ERROR_EXT(OB_ERR_WINDOW_NAME_IS_NOT_DEFINE, -5929, -1, "HY000", "Window name is not defined.", "Window name '%.*s' is not defined.");
-DEFINE_ORACLE_ERROR(OB_ERR_OPEN_CURSORS_EXCEEDED, -5930, -1, "HY000", "maximum open cursors exceeded", 1000, "maximum open cursors exceeded");
+DEFINE_ORACLE_ERROR_EXT(OB_ERR_OPEN_CURSORS_EXCEEDED, -5930, -1, "HY000", "maximum open cursors exceeded", "maximum open %s exceeded", 1000, "maximum open cursors exceeded", "maximum open %s exceeded");
 DEFINE_ORACLE_ERROR(OB_ERR_FETCH_OUT_SEQUENCE, -5931, -1, "HY000", "fetch out of sequence", 1002, "fetch out of sequence");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_UNEXPECTED_NAME_STR, -5932, -1, "HY000", "unexpected name string", "unexpected name string '%.*s'", 23481, "unexpected name string", "unexpected name string '%.*s'");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_NO_PROGRAM_UNIT, -5933, -1, "HY000", "PL/SQL: could not find program unit being called", "PL/SQL: could not find program unit being called: '%.*s'", 6508, "PL/SQL: could not find program unit being called", "PL/SQL: could not find program unit being called: '%.*s'");

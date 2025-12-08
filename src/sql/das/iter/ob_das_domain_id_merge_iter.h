@@ -113,6 +113,7 @@ protected:
       transaction::ObTxReadSnapshot *snapshot,
       storage::ObTableScanParam &scan_param);
   int build_rowkey_domain_range();
+  int check_is_need_multi_get();
   int concat_row();
   int concat_rows(int64_t &count, int64_t capacity);
   int sorted_merge_join_row();

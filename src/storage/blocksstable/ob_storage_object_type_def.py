@@ -1853,9 +1853,10 @@ bool is_valid(const MacroBlockId &file_id) const
 int to_local_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id, const uint64_t tenant_id, const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const
 {
   int ret = OB_SUCCESS;
-  // tenant_id_epoch_id/tmp_data/tmp_file_id/seg%ld
-  if (OB_FAIL(databuff_printf(path, length, pos, "%s/%lu_%ld/%s/%ld/%s%ld",
+  // tenant_id_epoch_id/tmp_data/scatter_id/tmp_file_id/seg%ld
+  if (OB_FAIL(databuff_printf(path, length, pos, "%s/%lu_%ld/%s/%03ld/%ld/%s%ld",
               OB_DIR_MGR.get_local_cache_root_dir(), tenant_id, tenant_epoch_id, TMP_DATA_DIR_STR,
+              ((file_id.second_id() / ObDirManager::TMP_FILE_SCATTER_DIR_NUM) % ObDirManager::TMP_FILE_SCATTER_DIR_NUM),
               file_id.second_id(), SEG_KEY_STR, file_id.third_id()))) {
     LOG_WARN("fail to databuff printf", KR(ret));
   }
@@ -4422,6 +4423,82 @@ def_storage_object_type_cfg(
     read_odirect = True,
     write_odirect = True,
     is_overwrite = True,
+    is_path_include_inner_tablet = True,
+    is_valid = '''
+bool is_valid(const MacroBlockId &file_id) const
+{
+  return true;
+}
+''',
+)
+
+def_storage_object_type_cfg(
+    obj_type = 'SHARED_MINI_V2_DATA_MACRO',
+    id = 84,
+    owner = 'yunxing.cyx',
+    access_mode = 'shared',
+    data_type = 'macro_data',
+    read_odirect = False,
+    write_odirect = True,
+    is_support_fd_cache = True,
+    is_read_out_of_bounds = False,
+    is_path_include_inner_tablet = True,
+    is_valid = '''
+bool is_valid(const MacroBlockId &file_id) const
+{
+  return true;
+}
+''',
+)
+
+def_storage_object_type_cfg(
+    obj_type = 'SHARED_MINI_V2_META_MACRO',
+    id = 85,
+    owner = 'yunxing.cyx',
+    access_mode = 'shared',
+    data_type = 'macro_meta',
+    read_odirect = False,
+    write_odirect = True,
+    is_support_fd_cache = True,
+    is_read_out_of_bounds = False,
+    is_path_include_inner_tablet = True,
+    is_valid = '''
+bool is_valid(const MacroBlockId &file_id) const
+{
+  return true;
+}
+''',
+)
+
+def_storage_object_type_cfg(
+    obj_type = 'SHARED_MINOR_V2_DATA_MACRO',
+    id = 86,
+    owner = 'yunxing.cyx',
+    access_mode = 'shared',
+    data_type = 'macro_data',
+    read_odirect = False,
+    write_odirect = True,
+    is_support_fd_cache = True,
+    is_read_out_of_bounds = False,
+    is_path_include_inner_tablet = True,
+    is_valid = '''
+bool is_valid(const MacroBlockId &file_id) const
+{
+  return true;
+}
+''',
+)
+
+def_storage_object_type_cfg(
+    obj_type = 'SHARED_MINOR_V2_META_MACRO',
+    id = 87,
+    owner = 'yunxing.cyx',
+    access_mode = 'shared',
+    data_type = 'macro_meta',
+    read_odirect = False,
+    write_odirect = True,
+    is_support_fd_cache = True,
+    is_read_out_of_bounds = False,
     is_path_include_inner_tablet = True,
     is_valid = '''
 bool is_valid(const MacroBlockId &file_id) const

@@ -332,6 +332,9 @@ all_table_def = dict(
       ('semistruct_properties', 'longtext', 'false', ''),
       ('mview_expand_definition', 'longtext', 'false', ''), #placeholder for mview in 4353
       ('fts_index_type', 'int', 'false', '0'),
+      ('ttl_flag', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'false', '\\x01'),
+      ('delta_format', 'varchar:OB_MAX_VARCHAR_LENGTH', 'false', 'flat'),
+      ('skip_index_level', 'int', 'false', '0'),
     ],
 )
 
@@ -3566,6 +3569,7 @@ def_table_schema(
         ('required_size', 'int', 'false', '0'),
         ('report_scn', 'uint', 'false', '0'),
         ('status', 'int', 'false', '0'),
+        ('ddl_create_snapshot', 'int', 'false', '0'),
     ],
 )
 
@@ -4193,6 +4197,8 @@ def_table_schema(
     ('log_mode', 'varchar:100', 'false', 'NOARCHIVELOG'),
     ('max_ls_id', 'int', 'false', '0'),
     ('restore_data_mode', 'varchar:128', 'false', 'NORMAL'),
+    ('protection_mode', 'varchar:128', 'false', 'MAXIMUM PERFORMANCE'),
+    ('protection_level', 'varchar:128', 'false', 'MAXIMUM PERFORMANCE'),
   ],
 )
 
@@ -8446,6 +8452,8 @@ def_table_schema(**all_ai_model_endpoint_def)
 # 578: __all_tiered_metadata_store
 # 579: __wr_sqlstat_v2
 # 580: __all_lob_check_exception_result
+# 581: __all_sync_standby_dest
+# 582: __all_sync_standby_status
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -9082,6 +9090,14 @@ def_table_schema(
       ('first_exe_usec', 'int'),
       ('format_sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH'),
       ('cg_time', 'uint'),
+      ('cache_node_id', 'int'),
+      ('pcv_id', 'int'),
+      ('plan_set_id', 'int'),
+      ('create_reason', 'varchar:OB_MAX_COMMAND_LENGTH'),
+      ('base_table_location_constraint', 'longtext'),
+      ('duplicate_table_replica_constraint', 'longtext'),
+      ('strict_location_constraint', 'longtext'),
+      ('non_strict_location_constraint', 'longtext'),
   ],
   vtable_route_policy = 'distributed',
   partition_columns = ['svr_ip', 'svr_port'],
@@ -11042,7 +11058,8 @@ def_table_schema(
       ('base_major_status', 'varchar:OB_MERGE_TYPE_STR_LENGTH'),
       ('co_merge_type', 'varchar:OB_MERGE_TYPE_STR_LENGTH'),
       ('mds_filter_info', 'varchar:OB_COMPACTION_COMMENT_STR_LENGTH'),
-      ('execute_time', 'int')
+      ('execute_time', 'int'),
+      ('filter_row_count', 'int')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -13368,7 +13385,8 @@ def_table_schema(
   ('max_scn', 'uint'),
   ('arbitration_member', 'varchar:128'),
   ('degraded_list', 'varchar:1024'),
-  ('learner_list', 'longtext')
+  ('learner_list', 'longtext'),
+  ('sync_mode', 'varchar:128'),
   ],
 
   partition_columns = ['svr_ip', 'svr_port'],
@@ -17235,6 +17253,9 @@ def_table_schema(
 # 12581: __all_virtual_external_catalog_client_pool_stat
 # 12582: __all_virtual_wr_sqlstat_v2
 # 12583: __all_virtual_lob_check_exception_result
+# 12584: __all_virtual_sync_standby_dest
+# 12585: __all_virtual_sync_standby_status
+# 12586: __all_virtual_window_loop_info
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -17814,6 +17835,8 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15534', all_def_keyword
 
 # 15538: all_virtual_sensitive_rule_real_agent
 # 15539: all_virtual_sensitive_column_real_agent
+# 15540: __all_sync_standby_dest
+# 15541: __all_sync_standby_status
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -17896,7 +17919,8 @@ def_table_schema(
     TEMP_TABLES, IS_USE_JIT,OBJECT_TYPE,HINTS_INFO,HINTS_ALL_WORKED, PL_SCHEMA_ID,
     IS_BATCHED_MULTI_STMT, RULE_NAME,
     (CASE PLAN_STATUS WHEN 0 THEN 'ACTIVE' ELSE 'INACTIVE' END) AS PLAN_STATUS,
-    ADAPTIVE_FEEDBACK_TIMES, FIRST_GET_PLAN_TIME, FIRST_EXE_USEC, FORMAT_SQL_ID
+    ADAPTIVE_FEEDBACK_TIMES, FIRST_GET_PLAN_TIME, FIRST_EXE_USEC, FORMAT_SQL_ID, CACHE_NODE_ID,
+    PCV_ID, PLAN_SET_ID, CREATE_REASON
     FROM oceanbase.__all_virtual_plan_stat WHERE OBJECT_STATUS = 0 AND is_in_pc=true
 """.replace("\n", " "),
 
@@ -19658,7 +19682,8 @@ def_table_schema(
     TABLE_SCAN,EVOLUTION, EVO_EXECUTIONS, EVO_CPU_TIME, TIMEOUT_COUNT, PS_STMT_ID, SESSID,
     TEMP_TABLES, IS_USE_JIT,OBJECT_TYPE,HINTS_INFO,HINTS_ALL_WORKED, PL_SCHEMA_ID,
     IS_BATCHED_MULTI_STMT, RULE_NAME, PLAN_STATUS, ADAPTIVE_FEEDBACK_TIMES,
-    FIRST_GET_PLAN_TIME, FIRST_EXE_USEC, FORMAT_SQL_ID
+    FIRST_GET_PLAN_TIME, FIRST_EXE_USEC, FORMAT_SQL_ID, CACHE_NODE_ID, PCV_ID,
+    PLAN_SET_ID, CREATE_REASON
   FROM oceanbase.GV$OB_PLAN_CACHE_PLAN_STAT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
 
@@ -24040,7 +24065,8 @@ SELECT
   CAST(NULL AS CHAR(3)) AS DATA_LINK_DML_ENABLED,
   CAST(NULL AS CHAR(8)) AS LOGICAL_REPLICATION,
   CAST(CASE WHEN T.AUTO_PART = 1 THEN 'TRUE' ELSE 'FALSE' END AS CHAR(16)) AS AUTO_SPLIT,
-  CAST(CASE WHEN T.AUTO_PART = 1 THEN T.AUTO_PART_SIZE ELSE 0 END AS SIGNED) AS AUTO_SPLIT_TABLET_SIZE
+  CAST(CASE WHEN T.AUTO_PART = 1 THEN T.AUTO_PART_SIZE ELSE 0 END AS SIGNED) AS AUTO_SPLIT_TABLET_SIZE,
+  CAST(NULL AS SIGNED) AS SKIP_INDEX_LEVEL
 FROM
   (SELECT
      TENANT_ID,
@@ -27877,7 +27903,8 @@ def_table_schema(
       BASE_MAJOR_STATUS,
       CO_MERGE_TYPE,
       MDS_FILTER_INFO,
-      EXECUTE_TIME
+      EXECUTE_TIME,
+      FILTER_ROW_COUNT
     FROM oceanbase.__all_virtual_tablet_compaction_history
 """.replace("\n", " ")
 )
@@ -27929,7 +27956,8 @@ def_table_schema(
       BASE_MAJOR_STATUS,
       CO_MERGE_TYPE,
       MDS_FILTER_INFO,
-      EXECUTE_TIME
+      EXECUTE_TIME,
+      FILTER_ROW_COUNT
     FROM oceanbase.GV$OB_TABLET_COMPACTION_HISTORY
     WHERE
         SVR_IP=HOST_IP()
@@ -44456,7 +44484,8 @@ SELECT
   CAST(NULL AS CHAR(3)) AS DATA_LINK_DML_ENABLED,
   CAST(NULL AS CHAR(8)) AS LOGICAL_REPLICATION,
   CAST(CASE WHEN T.AUTO_PART = 1 THEN 'TRUE' ELSE 'FALSE' END AS CHAR(16)) AS AUTO_SPLIT,
-  CAST(CASE WHEN T.AUTO_PART = 1 THEN T.AUTO_PART_SIZE ELSE 0 END AS CHAR(128)) AS AUTO_SPLIT_TABLET_SIZE
+  CAST(CASE WHEN T.AUTO_PART = 1 THEN T.AUTO_PART_SIZE ELSE 0 END AS CHAR(128)) AS AUTO_SPLIT_TABLET_SIZE,
+  CAST(NULL AS SIGNED) AS SKIP_INDEX_LEVEL
 FROM
   (SELECT
      CAST(0 AS SIGNED) AS TENANT_ID,
@@ -44529,6 +44558,13 @@ FROM
 # 21699: CDB_OB_LOB_CHECK_TASKS
 # 21700: DBA_OB_LOB_CHECK_EXCEPTION_RESULT
 # 21701: CDB_OB_LOB_CHECK_EXCEPTION_RESULT
+
+# 21702: DBA_OB_TTL_TASKS
+# 21703: DBA_OB_TTL_TASK_HISTORY
+# 21704: CDB_OB_TTL_TASKS
+# 21705: CDB_OB_TTL_TASK_HISTORY
+# 21706: CDB_OB_SYNC_STANDBY_DEST
+# 21707: DBA_OB_SYNC_STANDBY_DEST
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -48805,7 +48841,8 @@ SELECT
   CAST(NULL AS VARCHAR2(3)) AS DATA_LINK_DML_ENABLED,
   CAST(NULL AS VARCHAR2(8)) AS LOGICAL_REPLICATION,
   CAST(CASE WHEN T.AUTO_PART = 1 THEN 'TRUE' ELSE 'FALSE' END AS VARCHAR2(16)) AS AUTO_SPLIT,
-  CAST(CASE WHEN T.AUTO_PART = 1 THEN T.AUTO_PART_SIZE ELSE 0 END AS VARCHAR2(128)) AS AUTO_SPLIT_TABLET_SIZE
+  CAST(CASE WHEN T.AUTO_PART = 1 THEN T.AUTO_PART_SIZE ELSE 0 END AS VARCHAR2(128)) AS AUTO_SPLIT_TABLET_SIZE,
+  CAST(NULL AS NUMBER) AS SKIP_INDEX_LEVEL
 FROM
   (SELECT
      TENANT_ID,
@@ -67400,7 +67437,11 @@ def_table_schema(
       ADAPTIVE_FEEDBACK_TIMES AS ADAPTIVE_FEEDBACK_TIMES,
       FIRST_GET_PLAN_TIME AS FIRST_GET_PLAN_TIME,
       FIRST_EXE_USEC AS FIRST_EXE_USEC,
-      FORMAT_SQL_ID AS FORMAT_SQL_ID
+      FORMAT_SQL_ID AS FORMAT_SQL_ID,
+      CACHE_NODE_ID AS CACHE_NODE_ID,
+      PCV_ID AS PCV_ID,
+      PLAN_SET_ID AS PLAN_SET_ID,
+      CREATE_REASON AS CREATE_REASON
       FROM SYS.ALL_VIRTUAL_PLAN_STAT WHERE OBJECT_STATUS = 0 AND IS_IN_PC='1'
 """.replace("\n", " ")
 )
@@ -67477,7 +67518,12 @@ PLAN_STATUS,
 ADAPTIVE_FEEDBACK_TIMES,
 FIRST_GET_PLAN_TIME,
 FIRST_EXE_USEC,
-FORMAT_SQL_ID FROM SYS.GV$OB_PLAN_CACHE_PLAN_STAT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+FORMAT_SQL_ID,
+CACHE_NODE_ID,
+PCV_ID,
+PLAN_SET_ID,
+CREATE_REASON
+FROM SYS.GV$OB_PLAN_CACHE_PLAN_STAT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
 
@@ -78642,7 +78688,8 @@ def_table_schema(
     ALLT.MERGE_VERSION AS MERGE_VERSION,
     ALLT.EXTRA_INFO AS EXTRA_INFO,
     DECODE(ALLT.COMPILE_DB_ID,
-            NULL, 'NOT IN PL CACHE',
+            NULL, DBMS_UTILITY.CHECK_PL_CACHE_OBJ_EXPIRED(ALLT.OBJECT_ID, ALLT.OBJECT_TYPE,
+              ALLT.SCHEMA_DB_ID, 'X86_0'),
             DBMS_UTILITY.CHECK_PL_CACHE_OBJ_EXPIRED(ALLT.OBJECT_ID, ALLT.OBJECT_TYPE,
               ALLT.COMPILE_DB_ID, ALLT.ARCH_TYPE)) AS PL_CACHE_STATUS
     FROM
@@ -78652,6 +78699,7 @@ def_table_schema(
             PACKAGE_ID AS OBJECT_ID,
             'PACKAGE BODY' AS OBJECT_TYPE,
             'VALID' AS STATUS,
+            PS.DATABASE_ID AS SCHEMA_DB_ID,
             D.COMPILE_DB_ID AS COMPILE_DB_ID,
             D.MERGE_VERSION AS MERGE_VERSION,
             CASE WHEN BITAND(PS.FLAG, 4) = 4
@@ -78681,6 +78729,7 @@ def_table_schema(
                         AND EB.OBJ_TYPE = 3)
                     THEN 'INVALID'
                 ELSE 'VALID' END AS STATUS,
+            P.DATABASE_ID AS SCHEMA_DB_ID,
             D.COMPILE_DB_ID AS COMPILE_DB_ID,
             D.MERGE_VERSION AS MERGE_VERSION,
             CASE WHEN BITAND(P.FLAG, 4) = 4
@@ -78706,6 +78755,7 @@ def_table_schema(
                         WHERE R.TENANT_ID = E.TENANT_ID AND R.ROUTINE_ID = E.OBJ_ID AND (E.OBJ_TYPE = 9 OR E.OBJ_TYPE = 12))
                       THEN 'INVALID'
                 ELSE 'VALID' END AS STATUS,
+            R.DATABASE_ID AS SCHEMA_DB_ID,
             D.COMPILE_DB_ID AS COMPILE_DB_ID,
             D.MERGE_VERSION AS MERGE_VERSION,
             CASE WHEN BITAND(R.FLAG, 16) = 16
@@ -78728,6 +78778,7 @@ def_table_schema(
                         WHERE TY.TENANT_ID = E.TENANT_ID AND TY.OBJECT_TYPE_ID = E.OBJ_ID AND E.OBJ_TYPE = 6)
                       THEN 'INVALID'
                 ELSE 'VALID' END AS STATUS,
+            TY.DATABASE_ID AS SCHEMA_DB_ID,
             D.COMPILE_DB_ID AS COMPILE_DB_ID,
             D.MERGE_VERSION AS MERGE_VERSION,
             CASE WHEN BITAND(TY.FLAG, 4) = 4
@@ -78750,6 +78801,7 @@ def_table_schema(
                       WHERE T.TENANT_ID = E.TENANT_ID AND T.TRIGGER_ID = E.OBJ_ID AND (E.OBJ_TYPE = 7))
                     THEN 'INVALID'
                 ELSE 'VALID' END AS STATUS,
+          T.DATABASE_ID AS SCHEMA_DB_ID,
           D.COMPILE_DB_ID AS COMPILE_DB_ID,
           D.MERGE_VERSION AS MERGE_VERSION,
           CASE WHEN BITAND(T.package_flag, 4) = 4
@@ -78828,6 +78880,10 @@ def_table_schema(
 # 28289: DBA_OB_SENSITIVE_RULES
 # 28290: DBA_OB_SENSITIVE_COLUMNS
 # 28291: DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS
+
+# 28292: DBA_OB_TTL_TASKS
+# 28293: DBA_OB_TTL_TASK_HISTORY
+# 28294: DBA_OB_SYNC_STANDBY_DEST
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位

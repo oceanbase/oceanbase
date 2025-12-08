@@ -444,13 +444,18 @@ int ObOptimizer::check_pdml_enabled(const ObDMLStmt &stmt,
     LOG_WARN("unexpected null", K(ret), K(ctx_.get_exec_ctx()));
   } else if (sql_ctx->is_batch_params_execute()) {
     can_use_pdml = false;
+    ctx_.add_plan_note(PDML_DISABLED_BY_BATCH_PARAMS_EXECUTE);
     // 当batch优化打开时，不支持pdml
   } else if (!stmt.is_pdml_supported_stmt()) {
     // pdml 支持新引擎和老引擎
     // 3.1 及之前的版本，老引擎走 dml + px。3.2 起老引擎也能走 pdml
+    if (stmt.is_dml_write_stmt()) {
+      ctx_.add_plan_note(PDML_DISABLED_BY_UNSUPPORTED_STMT_TYPE);
+    }
     can_use_pdml = false;
   } else if (ctx_.has_var_assign() && !ctx_.is_var_assign_only_in_root_stmt()) {
     can_use_pdml = false;
+    ctx_.add_plan_note(PDML_DISABLED_BY_VAR_ASSIGNMENT);
   } else if (stmt::T_INSERT == stmt.get_stmt_type() &&
       OB_FAIL(static_cast< const ObInsertStmt &>(stmt).check_pdml_disabled(ctx_.is_online_ddl(),
                                                                            disable_pdml,
@@ -469,6 +474,7 @@ int ObOptimizer::check_pdml_enabled(const ObDMLStmt &stmt,
     // do nothing
   } else if (!is_strict_mode(session.get_sql_mode())) {
     can_use_pdml = false;
+    ctx_.add_plan_note(PDML_DISABLED_BY_NON_STRICT_MODE);
     LOG_TRACE("not strict mode, can't support PDML");
   } else if (ctx_.get_global_hint().get_pdml_option() == ObPDMLOption::ENABLE) {
     // 1. enable parallel dml by hint
@@ -545,6 +551,7 @@ int ObOptimizer::check_pdml_supported_feature(const ObDelUpdStmt &pdml_stmt,
     ctx_.add_plan_note(PDML_DISABLED_BY_TRANSFORMATIONS);
   } else if (ctx_.has_dblink()) {
     is_use_pdml = false;
+    ctx_.add_plan_note(PDML_DISABLED_BY_DBLINK);
   } else if (ctx_.contain_user_nested_sql()) {
     //user nested sql can't use PDML plan, force to use DAS plan
     //if online ddl has pl udf, only this way, allow it use PDML plan

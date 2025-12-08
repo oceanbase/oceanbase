@@ -613,6 +613,7 @@ int ObSelectIntoOp::inner_get_next_row()
       }
     }
   } //end while
+  ret = OB_E(EventTable::EN_SQL_SELECT_INTO_OP_RETRY) ret;
   if (OB_ITER_END == ret || OB_SUCC(ret)) { // set affected rows
     phy_plan_ctx->set_affected_rows(row_count);
   }
@@ -735,6 +736,7 @@ int ObSelectIntoOp::inner_get_next_batch(const int64_t max_row_cnt)
       }
     }
   } //end while
+  ret = OB_E(EventTable::EN_SQL_SELECT_INTO_OP_RETRY) ret;
   if (OB_SUCC(ret)) { // set affected rows
     phy_plan_ctx->set_affected_rows(row_count);
   }
@@ -753,6 +755,11 @@ int ObSelectIntoOp::inner_rescan()
 int ObSelectIntoOp::inner_close()
 {
   int ret = OB_SUCCESS;
+  int old_errcode = ctx_.get_errcode();
+  bool need_retry = true;
+  if (OB_SUCCESS == old_errcode || OB_ITER_END == old_errcode) {
+    need_retry = false;
+  }
   ObExternalFileWriter *data_writer = NULL;
   int64_t estimated_bytes = 0;
   if (ObExternalFileFormat::FormatType::ODPS_FORMAT == format_type_) {
@@ -781,11 +788,12 @@ int ObSelectIntoOp::inner_close()
       if (OB_ISNULL(data_writer = iter->second)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("data writer is unexpected null", K(ret));
-      } else if (OB_FAIL(data_writer->close_data_writer())) {
+      } else if (OB_FAIL(data_writer->close_data_writer(need_retry))) {
         LOG_WARN("failed to close data writer", K(ret));
       }
     }
-  } else if (OB_NOT_NULL(data_writer_) && OB_FAIL(data_writer_->close_data_writer())) {
+  } else if (OB_NOT_NULL(data_writer_)
+             && OB_FAIL(data_writer_->close_data_writer(need_retry))) {
     LOG_WARN("failed to close data writer", K(ret));
   }
   for (int64_t i = 0; i < array_helpers_.count(); ++i) {

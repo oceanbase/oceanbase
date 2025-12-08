@@ -16,6 +16,7 @@ namespace compaction
 {
 const static char * MdsFilterInfoTypeStr[] = {
     "TRUNCATE_INFO",
+    "TTL_FILTER_INFO",
     "MDS_FILTER_TYPE_MAX"
 };
 

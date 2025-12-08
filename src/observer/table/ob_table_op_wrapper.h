@@ -39,7 +39,7 @@ public:
     } else if (OB_FAIL(process_op_with_spec(tb_ctx, spec, op_result))) {
       SERVER_LOG(WARN, "fail to process op with spec", K(ret), K(TYPE));
     } else {
-      tb_ctx.set_expr_info(nullptr);
+      tb_ctx.reset_expr_frame_info();
     }
 
     return ret;

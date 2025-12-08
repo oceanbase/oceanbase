@@ -136,6 +136,10 @@ int ObTabletDDLCompleteReplayExecutor::update_tablet_table_store(ObTablet &table
     param.ddl_info_.keep_old_ddl_sstable_ = true;
     if (OB_FAIL(ls_handle.get_ls()->update_tablet_table_store(user_data.table_key_.tablet_id_, param, new_tablet_handle))) {
       LOG_WARN("failed to update table store", K(ret));
+      if (OB_TIMEOUT == ret) {
+        ret = OB_EAGAIN;
+        LOG_WARN("update table store timeout, bur retry again", K(ret), K(user_data));
+      }
     }
   }
   return ret;

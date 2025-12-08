@@ -2300,6 +2300,7 @@ public:
        DYNAMIC_PARTITION_POLICY,
        MICRO_BLOCK_FORMAT_VERSION,
        SEMISTRUCT_PROPERTIES,
+       SKIP_INDEX_LEVEL,
        MAX_OPTION = 1000
   };
   enum AlterPartitionType
@@ -2386,7 +2387,8 @@ public:
       is_alter_mlog_attributes_(false),
       alter_mlog_arg_(),
       part_storage_cache_policy_(),
-      data_version_(0)
+      data_version_(0),
+      enable_hidden_table_partition_pruning_(false)
   {
   }
   virtual ~ObAlterTableArg()
@@ -2513,7 +2515,8 @@ public:
                K_(is_alter_mlog_attributes),
                K_(alter_mlog_arg),
                K_(part_storage_cache_policy),
-               K_(data_version));
+               K_(data_version),
+               K_(enable_hidden_table_partition_pruning));
 private:
   int alloc_index_arg(const ObIndexArg::IndexActionType index_action_type, ObIndexArg *&index_arg);
 public:
@@ -2561,6 +2564,7 @@ public:
   ObAlterMLogArg alter_mlog_arg_;
   common::ObString part_storage_cache_policy_;
   uint64_t data_version_;
+  bool enable_hidden_table_partition_pruning_;
   int serialize_index_args(char *buf, const int64_t data_len, int64_t &pos) const;
   int deserialize_index_args(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_index_args_serialize_size() const;
@@ -4207,7 +4211,8 @@ public:
                         access_mode_(palf::AccessMode::INVALID_ACCESS_MODE),
                         ref_scn_(),
                         addr_(),
-                        sys_ls_end_scn_() {}
+                        sys_ls_end_scn_(),
+                        sync_mode_(palf::SyncMode::INVALID_SYNC_MODE) {}
   ~ObLSAccessModeInfo() {}
   bool is_valid() const;
   int init(uint64_t tenant_id, const share::ObLSID &ls_idd,
@@ -4217,7 +4222,7 @@ public:
            const share::SCN &sys_ls_end_scn);
   int assign(const ObLSAccessModeInfo &other);
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(mode_version),
-               K_(access_mode), K_(ref_scn), K_(sys_ls_end_scn));
+               K_(access_mode), K_(ref_scn), K_(sys_ls_end_scn), K_(sync_mode));
   uint64_t get_tenant_id() const
   {
     return tenant_id_;
@@ -4252,6 +4257,7 @@ private:
   share::SCN ref_scn_;
   ObAddr addr_;//no used, add in 4200 RC1
   share::SCN sys_ls_end_scn_; // new arg in V4.2.0
+  palf::SyncMode sync_mode_;
 };
 
 struct ObChangeLSAccessModeRes
@@ -4259,12 +4265,14 @@ struct ObChangeLSAccessModeRes
   OB_UNIS_VERSION(1);
 public:
   ObChangeLSAccessModeRes(): tenant_id_(OB_INVALID_TENANT_ID),
-                              ls_id_(), ret_(common::OB_SUCCESS), wait_sync_scn_cost_(0), change_access_mode_cost_(0) {}
+                              ls_id_(), ret_(common::OB_SUCCESS), wait_sync_scn_cost_(0),
+                              change_access_mode_cost_(0) {}
   ~ObChangeLSAccessModeRes() {}
   bool is_valid() const;
   int init(uint64_t tenant_id, const share::ObLSID& ls_id, const int result, const int64_t wait_sync_scn_cost, const int64_t change_access_mode_cost);
   int assign(const ObChangeLSAccessModeRes &other);
-  TO_STRING_KV(K_(tenant_id), "ls_id", ls_id_.id(), K_(ret), K_(wait_sync_scn_cost), K_(change_access_mode_cost));
+  TO_STRING_KV(K_(tenant_id), "ls_id", ls_id_.id(), K_(ret), K_(wait_sync_scn_cost),
+      K_(change_access_mode_cost));
   int get_result() const
   {
     return ret_;
@@ -4344,6 +4352,9 @@ public:
     DISASTER_RECOVERY_SERVICE,
     ARBITRATION_SERVICE,
     RESTORE_SERVICE,
+    PROTECTION_MODE_MGR,
+    TENANT_INFO_LOADER,
+    COMMON_LS_SERVICE,
   };
   ObNotifyTenantThreadArg() : tenant_id_(OB_INVALID_TENANT_ID), thread_type_(INVALID_TYPE) {}
   ~ObNotifyTenantThreadArg() {}
@@ -7320,9 +7331,11 @@ public:
       column_id_(common::OB_INVALID_ID),
       sync_value_(0),
       table_part_num_(0),
-      auto_increment_(0)
+      auto_increment_(0),
+      autoinc_is_order_(false)
   {}
-  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(column_id), K_(sync_value), K_(table_part_num), K_(auto_increment));
+  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(column_id), K_(sync_value), K_(table_part_num),
+               K_(auto_increment), K_(autoinc_is_order));
 
   uint64_t tenant_id_;
   uint64_t table_id_;
@@ -7332,6 +7345,7 @@ public:
   //Not add first_part_num now.
   uint64_t table_part_num_;
   uint64_t auto_increment_;  // only for sync table option auto_increment
+  bool autoinc_is_order_;
 };
 
 struct ObDumpMemtableArg

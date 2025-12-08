@@ -266,6 +266,9 @@ int ObLSMemberListService::get_leader_config_version_and_transfer_scn_(
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "cnt not match", KR(ret),
                       "return_cnt", return_code_array.count());
+  } else if (OB_SUCCESS != return_code_array.at(0)) {
+    ret = return_code_array.at(0);
+    STORAGE_LOG(WARN, "rpc to leader failed", KR(ret), K(addr));
   } else if (OB_FAIL(process_result_from_async_rpc_(proxy,
                                                     addr,
                                                     return_code_array,

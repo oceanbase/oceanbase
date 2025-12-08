@@ -637,7 +637,8 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     is_safe_filter_with_di_(true),
     access_virtual_col_cnt_(0),
     aggregate_param_props_(allocator),
-    plan_enable_rich_format_(false)
+    plan_enable_rich_format_(false),
+    merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN)
 {
   reset();
 }
@@ -677,6 +678,7 @@ void ObTableParam::reset()
   access_virtual_col_cnt_ = 0;
   aggregate_param_props_.reset();
   plan_enable_rich_format_ = false;
+  merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN;
 }
 
 OB_DEF_SERIALIZE(ObTableParam)
@@ -740,6 +742,7 @@ OB_DEF_SERIALIZE(ObTableParam)
     OB_UNIS_ENCODE(access_virtual_col_cnt_);
     OB_UNIS_ENCODE(aggregate_param_props_);
     OB_UNIS_ENCODE(plan_enable_rich_format_);
+    OB_UNIS_ENCODE(merge_engine_type_);
   }
   return ret;
 }
@@ -859,6 +862,7 @@ OB_DEF_DESERIALIZE(ObTableParam)
     LST_DO_CODE(OB_UNIS_DECODE, access_virtual_col_cnt_);
     LST_DO_CODE(OB_UNIS_DECODE, aggregate_param_props_);
     LST_DO_CODE(OB_UNIS_DECODE, plan_enable_rich_format_);
+    LST_DO_CODE(OB_UNIS_DECODE, merge_engine_type_);
   }
   return ret;
 }
@@ -930,7 +934,8 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
     LST_DO_CODE(OB_UNIS_ADD_LEN,
                 access_virtual_col_cnt_,
                 aggregate_param_props_,
-                plan_enable_rich_format_);
+                plan_enable_rich_format_,
+                merge_engine_type_);
   }
   return len;
 }

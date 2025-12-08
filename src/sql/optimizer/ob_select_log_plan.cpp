@@ -9826,7 +9826,8 @@ int ObSelectLogPlan::can_transform_distinct_agg(GroupingOpHelper &groupby_helper
   bool is_trans_distinct_valid =
     distinct_agg_items.count() > 0
     && groupby_helper.optimizer_features_enable_version_ >= COMPAT_VERSION_4_4_1
-    && !groupby_helper.force_use_merge_;
+    && !groupby_helper.force_use_merge_
+    && !get_stmt()->has_concat_agg(); // if concat_agg exists, can't use hash gby algorithm, disable distinct pushdown
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(check_basic_groupby_pushdown(
                non_distinct_agg_items, groupby_helper.grouping_set_info_ != nullptr,

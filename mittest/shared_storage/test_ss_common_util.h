@@ -91,6 +91,10 @@ public:
       ObArray<MicroBlockInfo> &p_micro_block_arr, ObArray<MicroBlockInfo> &up_micro_block_arr,
       const int64_t start_macro_id = 1, const bool random_micro_size = true,
       const int32_t min_micro_size = 16 * 1024, const int32_t max_micro_size = 16 * 1024);
+  static int batch_add_micro_block(const uint64_t tablet_id, const int64_t micro_cnt, const int64_t min_micro_size,
+      const int64_t max_micro_size, int64_t &add_cnt);
+  static int batch_get_micro_block_meta(const uint64_t tablet_id, const int64_t micro_cnt,
+      const int64_t min_micro_size, const int64_t max_micro_size, int64_t &get_cnt);
   static int get_micro_block(const MicroBlockInfo &micro_info, char *read_buf);
   static int init_io_info(ObIOInfo &io_info, const ObSSMicroBlockCacheKey &micro_key, const int32_t size, char *read_buf);
   static int init_io_info(ObIOInfo &io_info, const MacroBlockId &macro_id, const int32_t offset, const int32_t size, char *read_buf);
@@ -406,6 +410,107 @@ int TestSSCommonUtil::add_micro_blocks(
     }
   }
   LOG_INFO("finish add micro_blocks", KR(ret), K(p_micro_block_arr.count()), K(up_micro_block_arr.count()));
+  return ret;
+}
+
+int TestSSCommonUtil::batch_add_micro_block(
+  const uint64_t tablet_id,
+  const int64_t micro_cnt,
+  const int64_t min_micro_size,
+  const int64_t max_micro_size,
+  int64_t &add_cnt
+)
+{
+  int ret = OB_SUCCESS;
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ObArenaAllocator allocator;
+  char *data_buf = nullptr;
+  if (OB_UNLIKELY(micro_cnt <= 0 || min_micro_size <= 0 || max_micro_size <= 0 || max_micro_size < min_micro_size ||
+                  tablet_id == 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(micro_cnt), K(min_micro_size), K(max_micro_size), K(tablet_id));
+  } else if (OB_ISNULL(micro_cache)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("micro_cache should not be null", KR(ret), KP(micro_cache));
+  } else if (OB_ISNULL(data_buf = static_cast<char *>(allocator.alloc(max_micro_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate memory", KR(ret), K(max_micro_size));
+  } else {
+    add_cnt = 0;
+    const int32_t phy_blk_size = micro_cache->phy_blk_size_;
+    const int64_t payload_offset = ObSSMemBlock::get_reserved_size();
+    const int64_t offset = payload_offset;
+    for (int64_t i = 1; OB_SUCC(ret) && (i <= micro_cnt); ++i) {
+      MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(tablet_id, i);
+      int64_t micro_size = 0;
+      if (max_micro_size == min_micro_size) {
+        micro_size = min_micro_size;
+      } else {
+        micro_size = min_micro_size + (i % 10) * (max_micro_size - min_micro_size) / 10;
+      }
+      ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+      const uint32_t effective_tablet_id = macro_id.second_id();
+      char c = micro_key.hash() % 26 + 'a';
+      MEMSET(data_buf, c, micro_size);
+      if (OB_FAIL(micro_cache->add_micro_block_cache(micro_key, data_buf, micro_size, effective_tablet_id,
+                                                     ObSSMicroCacheAccessType::COMMON_IO_TYPE))) {
+        if (OB_EAGAIN == ret) { // if add too fast, sleep for a while, and retry
+          ob_usleep(1000);
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to add micro_block cache", KR(ret), K(i), K(micro_key), K(tablet_id));
+        }
+      } else {
+        ++add_cnt;
+      }
+    }
+    allocator.clear();
+    LOG_INFO("finish batch add micro_block", K(add_cnt), K(tablet_id), K(micro_cnt));
+  }
+  return ret;
+}
+
+int TestSSCommonUtil::batch_get_micro_block_meta(
+  const uint64_t tablet_id,
+  const int64_t micro_cnt,
+  const int64_t min_micro_size,
+  const int64_t max_micro_size,
+  int64_t &get_cnt)
+{
+  int ret = OB_SUCCESS;
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
+  if (OB_UNLIKELY(micro_cnt <= 0 || min_micro_size <= 0 || max_micro_size <= 0 || max_micro_size < min_micro_size ||
+                  tablet_id == 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(micro_cnt), K(max_micro_size), K(max_micro_size), K(tablet_id));
+  } else {
+    get_cnt = 0;
+    const int64_t payload_offset = ObSSMemBlock::get_reserved_size();
+    const int64_t offset = payload_offset;
+    for (int64_t i = 1; OB_SUCC(ret) && (i <= micro_cnt); ++i) {
+      MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(tablet_id, i);
+      int64_t micro_size = 0;
+      if (max_micro_size == min_micro_size) {
+        micro_size = min_micro_size;
+      } else {
+        micro_size = min_micro_size + (i % 10) * (max_micro_size - min_micro_size) / 10;
+      }
+      ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+      ObSSMicroBlockMetaHandle micro_meta_handle;
+      ret = micro_meta_mgr.get_micro_block_meta(micro_key, micro_meta_handle, macro_id.second_id(), true/*update_arc*/);
+      if (OB_FAIL(ret)) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to get micro_block meta", KR(ret), K(micro_key), K(i), K(tablet_id));
+        }
+      } else {
+        ++get_cnt;
+      }
+    }
+    LOG_INFO("finish batch get micro_block", K(tablet_id), K(micro_cnt), K(get_cnt));
+  }
   return ret;
 }
 

@@ -96,6 +96,7 @@ private:
   static uint64_t get_tenant_id();
   int sn_async_read(const ObStorageObjectReadInfo &read_info);
   int sn_async_write(const ObStorageObjectWriteInfo &write_info);
+  void print_slow_local_io_info(int ret_code) const;
 #ifdef OB_BUILD_SHARED_STORAGE
   int ss_async_read(const ObStorageObjectReadInfo &read_info);
   int ss_async_write(const ObStorageObjectWriteInfo &write_info);

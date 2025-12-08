@@ -65,6 +65,10 @@ enum class ObStorageObjectType : uint8_t
     SHARED_INC_MAJOR_DATA_MACRO = 81,
     SHARED_INC_MAJOR_META_MACRO = 82,
     SHARED_TABLET_SUB_META_IN_TABLE = 83,
+    SHARED_MINI_V2_DATA_MACRO = 84,
+    SHARED_MINI_V2_META_MACRO = 85,
+    SHARED_MINOR_V2_DATA_MACRO = 86,
+    SHARED_MINOR_V2_META_MACRO = 87,
     MAX
 };
 static constexpr uint8_t SS_OBJECT_MAX_TYPE_VAL = static_cast<uint8_t>(ObStorageObjectType::MAX);
@@ -1190,6 +1194,74 @@ public:
   virtual bool is_direct_read() const { return true; }
   virtual bool is_direct_write() const { return true; }
   virtual bool is_overwrite() const { return true; }
+  virtual bool is_path_include_inner_tablet() const { return true; }
+  virtual bool is_valid(const MacroBlockId &file_id) const;
+};
+
+/**
+ * ---------------------------------------ObSharedMiniV2DataMacroType----------------------------------------
+ */
+class ObSharedMiniV2DataMacroType : public ObStorageObjectTypeBase
+{
+public:
+  ObSharedMiniV2DataMacroType() : ObStorageObjectTypeBase(ObStorageObjectType::SHARED_MINI_V2_DATA_MACRO) {}
+  virtual ~ObSharedMiniV2DataMacroType() {}
+  virtual bool is_macro_data() const { return true; }
+  virtual bool is_shared() const { return true; }
+  virtual bool is_direct_write() const { return true; }
+  virtual bool is_support_fd_cache() const { return true; }
+  virtual bool is_read_out_of_bounds() const { return false; }
+  virtual bool is_path_include_inner_tablet() const { return true; }
+  virtual bool is_valid(const MacroBlockId &file_id) const;
+};
+
+/**
+ * ---------------------------------------ObSharedMiniV2MetaMacroType----------------------------------------
+ */
+class ObSharedMiniV2MetaMacroType : public ObStorageObjectTypeBase
+{
+public:
+  ObSharedMiniV2MetaMacroType() : ObStorageObjectTypeBase(ObStorageObjectType::SHARED_MINI_V2_META_MACRO) {}
+  virtual ~ObSharedMiniV2MetaMacroType() {}
+  virtual bool is_macro_meta() const { return true; }
+  virtual bool is_shared() const { return true; }
+  virtual bool is_direct_write() const { return true; }
+  virtual bool is_support_fd_cache() const { return true; }
+  virtual bool is_read_out_of_bounds() const { return false; }
+  virtual bool is_path_include_inner_tablet() const { return true; }
+  virtual bool is_valid(const MacroBlockId &file_id) const;
+};
+
+/**
+ * ---------------------------------------ObSharedMinorV2DataMacroType----------------------------------------
+ */
+class ObSharedMinorV2DataMacroType : public ObStorageObjectTypeBase
+{
+public:
+  ObSharedMinorV2DataMacroType() : ObStorageObjectTypeBase(ObStorageObjectType::SHARED_MINOR_V2_DATA_MACRO) {}
+  virtual ~ObSharedMinorV2DataMacroType() {}
+  virtual bool is_macro_data() const { return true; }
+  virtual bool is_shared() const { return true; }
+  virtual bool is_direct_write() const { return true; }
+  virtual bool is_support_fd_cache() const { return true; }
+  virtual bool is_read_out_of_bounds() const { return false; }
+  virtual bool is_path_include_inner_tablet() const { return true; }
+  virtual bool is_valid(const MacroBlockId &file_id) const;
+};
+
+/**
+ * ---------------------------------------ObSharedMinorV2MetaMacroType----------------------------------------
+ */
+class ObSharedMinorV2MetaMacroType : public ObStorageObjectTypeBase
+{
+public:
+  ObSharedMinorV2MetaMacroType() : ObStorageObjectTypeBase(ObStorageObjectType::SHARED_MINOR_V2_META_MACRO) {}
+  virtual ~ObSharedMinorV2MetaMacroType() {}
+  virtual bool is_macro_meta() const { return true; }
+  virtual bool is_shared() const { return true; }
+  virtual bool is_direct_write() const { return true; }
+  virtual bool is_support_fd_cache() const { return true; }
+  virtual bool is_read_out_of_bounds() const { return false; }
   virtual bool is_path_include_inner_tablet() const { return true; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
 };

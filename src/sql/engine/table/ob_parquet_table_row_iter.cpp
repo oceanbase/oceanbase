@@ -3236,6 +3236,9 @@ void ObParquetTableRowIterator::ParquetSectorIterator::reset()
   size_ = 0;
   idx_ = 0;
   segment_count_ = 0;
+  for (int64_t i = 0; i < offset_indexs_.count(); ++i) {
+    offset_indexs_.at(i).reset();
+  }
 }
 
 int ObParquetTableRowIterator::ParquetSectorIterator::fill_ranges_one()

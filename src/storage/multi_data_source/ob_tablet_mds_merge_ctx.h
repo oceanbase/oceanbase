@@ -33,6 +33,7 @@ struct ObTabletMergeDagParam;
 
 namespace storage
 {
+class ObMdsMinorFilter;
 class ObTabletMdsMinorMergeCtx : public compaction::ObTabletExeMergeCtx
 {
 public:
@@ -45,6 +46,7 @@ protected:
   virtual void free_schema() override;
   virtual int get_merge_tables(ObGetMergeTablesResult &get_merge_table_result) override;
   virtual int update_tablet(ObTabletHandle &new_tablet_handle) override;
+  static int init_mds_minor_filter(ObIAllocator &allocator, ObTablet &tablet, const share::ObLSID &ls_id, storage::ObMdsMinorFilter &filter);
 };
 
 class ObTabletCrossLSMdsMinorMergeCtx : public compaction::ObTabletMergeCtx

@@ -30,9 +30,10 @@ public:
   ObMdsMinorFilter();
   virtual ~ObMdsMinorFilter() = default;
   int init(
+    const int64_t first_major_snapshot,
     const int64_t last_major_snapshot,
     const int64_t multi_version_start,
-    const share::ObLSID ls_id);
+    const share::ObLSID &ls_id);
   void reset()
   {
     last_major_snapshot_ = 0;

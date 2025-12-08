@@ -135,7 +135,7 @@ int ObVertialPartitionBuilder::set_basic_infos(
   }
   aux_vp_table_schema.set_autoinc_column_id(0);
   aux_vp_table_schema.set_progressive_merge_num(data_schema.get_progressive_merge_num());
-  aux_vp_table_schema.set_table_mode(data_schema.get_table_mode());
+  aux_vp_table_schema.set_table_mode_struct(data_schema.get_table_mode_struct());
   aux_vp_table_schema.set_block_size(data_schema.get_block_size());
   aux_vp_table_schema.set_pctfree(data_schema.get_pctfree());
   aux_vp_table_schema.set_storage_format_version(data_schema.get_storage_format_version());

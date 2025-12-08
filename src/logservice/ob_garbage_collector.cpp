@@ -1946,10 +1946,16 @@ int ObGarbageCollector::check_tablet_gc_(
     bool &wait_tablet_gc)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   wait_tablet_gc = true;
   common::ObArray<ObTabletID> tablet_ids;
   share::ObLSID ls_id = ls.get_ls_id();
   bool meta_tenant_has_been_dropped = false;
+  if (OB_TMP_FAIL(ls.advance_checkpoint_by_flush(SCN::max_scn(), INT64_MAX, false,
+          ObFreezeSourceFlag::GC_TABLET))) {
+    CLOG_LOG(WARN, "advance_checkpoint_by_flush failed", KR(tmp_ret), K(ls_id));
+  }
+
   if (OB_FAIL(ls.get_tablet_svr()->get_all_tablet_ids(
                  true /* except_ls_inner_tablet */, tablet_ids))) {
     CLOG_LOG(WARN, "get_all_tablet_ids failed", KR(ret), K(ls_id));

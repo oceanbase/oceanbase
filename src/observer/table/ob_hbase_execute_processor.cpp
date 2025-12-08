@@ -107,8 +107,7 @@
       LOG_WARN("fail to init schema cache guard", K(ret));
     } else {
       same_cf_rows.set_table_schema(simple_schema);
-      ObTablePartCalculator part_calc(allocator_,
-                                      sess_guard_,
+      ObTablePartCalculator part_calc(sess_guard_,
                                       schema_cache_guard_,
                                       schema_guard_,
                                       simple_schema);

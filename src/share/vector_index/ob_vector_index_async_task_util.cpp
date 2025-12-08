@@ -76,6 +76,7 @@ void ObVecIndexAsyncTaskOption::destroy()
     ObVecIndexAsyncTaskCtx *&task_ctx = iter->second;
     LOG_DEBUG("dump task_ctx_map_ info", K(tablet_id), KP(task_ctx));
     if (OB_NOT_NULL(task_ctx)) {
+      task_ctx->~ObVecIndexAsyncTaskCtx();
       allocator_.free(task_ctx);
       task_ctx = nullptr;
     }

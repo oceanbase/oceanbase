@@ -2866,6 +2866,7 @@ int ObDeviceChannel::submit(ObIORequest &req)
   } else if (req.fd_.device_handle_->is_object_device()
              && req.get_flag().is_read()
              && req.io_result_->get_user_io_size() > 0
+             && req.calc_io_buf() == nullptr
              && OB_FAIL(req.alloc_io_buf(io_buf))) {
     LOG_WARN("alloc io buffer failed", K(ret), K(req));
   } else {

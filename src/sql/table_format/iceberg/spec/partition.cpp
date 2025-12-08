@@ -188,8 +188,10 @@ int Transform::get_result_type(TransformType transform_type, const ObObjType sou
   return ret;
 }
 
-int Transform::get_part_expr(const Transform &transform, const share::schema::ObColumnSchemaV2 &col_schema,
-                             ObIAllocator &allocator, ObString &str)
+int Transform::get_part_expr(ObIAllocator &allocator,
+                             const Transform &transform,
+                             const ObString &column_name,
+                             ObString &result)
 {
   int ret = OB_SUCCESS;
   ObSqlString trans_str;
@@ -231,6 +233,7 @@ int Transform::get_part_expr(const Transform &transform, const share::schema::Ob
     }
     case TransformType::Void: {
       OZ (trans_str.append(VOID));
+      break;
     }
     default: {
       ret = OB_ERR_UNEXPECTED;
@@ -239,22 +242,31 @@ int Transform::get_part_expr(const Transform &transform, const share::schema::Ob
   }
 
   ObSqlString part_expr;
-  ObString col_name = col_schema.get_column_name_str();
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (!trunc_or_bucket) {
-    if (!trans_str.empty() && OB_FAIL(part_expr.append_fmt("%.*s(%.*s)", trans_str.length(), trans_str.ptr(),
-                                                           col_name.length(), col_name.ptr()))) {
+    if (!trans_str.empty()
+        && OB_FAIL(part_expr.append_fmt("%.*s(%.*s)",
+                                        trans_str.length(),
+                                        trans_str.ptr(),
+                                        column_name.length(),
+                                        column_name.ptr()))) {
       LOG_WARN("append fmt failed", K(ret));
-    } else if (trans_str.empty() && OB_FAIL(part_expr.append_fmt("%.*s", col_name.length(), col_name.ptr()))) {
+    } else if (trans_str.empty()
+               && OB_FAIL(part_expr.append_fmt("%.*s", column_name.length(), column_name.ptr()))) {
       LOG_WARN("append fmt failed", K(ret));
     }
-  } else if (trunc_or_bucket && OB_FAIL(part_expr.append_fmt("%.*s(%.*s, %d)", trans_str.length(), trans_str.ptr(),
-                                                        col_name.length(), col_name.ptr(), param_val))) {
+  } else if (trunc_or_bucket
+             && OB_FAIL(part_expr.append_fmt("%.*s(%.*s, %d)",
+                                             trans_str.length(),
+                                             trans_str.ptr(),
+                                             column_name.length(),
+                                             column_name.ptr(),
+                                             param_val))) {
     LOG_WARN("append fmt failed", K(ret));
   }
 
-  if (OB_SUCC(ret) && OB_FAIL(ob_write_string(allocator, part_expr.string(), str))) {
+  if (OB_SUCC(ret) && OB_FAIL(ob_write_string(allocator, part_expr.string(), result))) {
     LOG_WARN("write string failed", K(ret));
   }
   return ret;

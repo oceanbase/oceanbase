@@ -233,8 +233,7 @@ int ObHBaseModel::calc_tablets(ObTableExecCtx &ctx,
     bool is_same_ls = false;
     ObLSID ls_id(ObLSID::INVALID_LS_ID);
     ObTablePartClipType clip_type = query.is_hot_only() ? ObTablePartClipType::HOT_ONLY : ObTablePartClipType::NONE;
-    ObTablePartCalculator calculator(ctx.get_allocator(),
-                                     ctx.get_sess_guard(),
+    ObTablePartCalculator calculator(ctx.get_sess_guard(),
                                      ctx.get_schema_cache_guard(),
                                      ctx.get_schema_guard(),
                                      ctx.get_table_schema(),
@@ -377,10 +376,9 @@ int ObHBaseModel::init_put_request_result(ObTableExecCtx &ctx,
   int ret = OB_SUCCESS;
   ObLSID ls_id(ObLSID::INVALID_LS_ID);
   ObTabletID tablet_id(ObTabletID::INVALID_TABLET_ID);
-  ObTablePartCalculator calculator(ctx.get_allocator(),
-                              ctx.get_sess_guard(),
-                              ctx.get_schema_cache_guard(),
-                              ctx.get_schema_guard());
+  ObTablePartCalculator calculator(ctx.get_sess_guard(),
+                                   ctx.get_schema_cache_guard(),
+                                   ctx.get_schema_guard());
   ObTableTabletOp &tablet_op = req.ls_op_->at(0);
   ObTableSingleOp &single_op = tablet_op.at(0);
   bool is_cache_hit = false;
@@ -1279,8 +1277,7 @@ int ObHBaseModel::construct_del_query(ObHbaseTableCells &table_cells,
   const ObIArray<ObHbaseTabletCells *> &tablet_cells_arr = table_cells.get_tablet_cells_array();
   ObTableQuery &table_query = query.get_query();
   ObTablePartClipType clip_type = table_query.is_hot_only() ? ObTablePartClipType::HOT_ONLY : ObTablePartClipType::NONE;
-  ObTablePartCalculator calculator(exec_ctx.get_allocator(),
-                                   exec_ctx.get_sess_guard(),
+  ObTablePartCalculator calculator(exec_ctx.get_sess_guard(),
                                    exec_ctx.get_schema_cache_guard(),
                                    exec_ctx.get_schema_guard(),
                                    exec_ctx.get_table_schema(),
@@ -1417,8 +1414,7 @@ int ObHBaseModel::process_increment_append(ObTableExecCtx &ctx,
       LOG_WARN("failed to generate new incr append table cells", K(ret));
     } else {
       // calc tablet ids
-      ObTablePartCalculator calculator(ctx.get_allocator(),
-                                       ctx.get_sess_guard(),
+      ObTablePartCalculator calculator(ctx.get_sess_guard(),
                                        ctx.get_schema_cache_guard(),
                                        ctx.get_schema_guard(),
                                        ctx.get_table_schema());

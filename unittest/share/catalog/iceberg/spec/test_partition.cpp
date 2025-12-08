@@ -46,6 +46,15 @@ TEST_F(TestPartition, test_is_partition)
   ASSERT_TRUE(partition_spec.is_partitioned());
 }
 
+TEST_F(TestPartition, test_get_part_expr)
+{
+  iceberg::Transform transform;
+  transform.transform_type = iceberg::TransformType::Void;
+  ObString result;
+  ASSERT_EQ(OB_SUCCESS, iceberg::Transform::get_part_expr(allocator, transform, "c1", result));
+  ASSERT_EQ(ObString("void(c1)"), result);
+}
+
 int main(int argc, char **argv)
 {
   ::testing::InitGoogleTest(&argc, argv);

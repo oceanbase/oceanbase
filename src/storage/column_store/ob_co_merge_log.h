@@ -19,6 +19,7 @@
 #include "lib/utility/ob_unify_serialize.h"
 #include "storage/tmp_file/ob_tmp_file_manager.h"
 #include "storage/compaction/ob_basic_tablet_merge_ctx.h"
+#include "storage/compaction/ob_compaction_schedule_util.h"
 
 namespace oceanbase
 {
@@ -34,6 +35,7 @@ public:
     UPDATE,
     DELETE,
     REPLAY,
+    DELETE_RANGE, // filtered by compaction_filter
     INVALID
   };
   ObMergeLog()

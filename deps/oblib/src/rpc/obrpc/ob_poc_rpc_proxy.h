@@ -25,6 +25,12 @@ namespace oceanbase
 {
 namespace obrpc
 {
+
+inline bool is_interrupt_error(int ret)
+{
+  return ret == OB_ERR_SESSION_INTERRUPTED || ret == OB_ERR_QUERY_INTERRUPTED;
+}
+
 class ObSyncRespCallback
 {
 public:

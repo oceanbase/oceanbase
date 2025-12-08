@@ -1505,6 +1505,9 @@ int ObIORequest::alloc_aligned_io_buf(char *&io_buf)
     if (OB_ISNULL(tenant_io_mgr_.get_ptr())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tenant io manager is null", K(ret));
+    } else if (NULL != raw_buf_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("raw buf is not null", K(ret), K(*this));
     } else if (OB_ISNULL(raw_buf_ = tenant_io_mgr_.get_ptr()->io_allocator_.alloc(io_buffer_size))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret), K(io_size));

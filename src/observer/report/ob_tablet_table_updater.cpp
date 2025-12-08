@@ -626,7 +626,8 @@ int ObTabletTableUpdater::generate_tasks_(
                                       1/*data_size*/,
                                       1/*required_size*/,
                                       0/*report_scn*/,
-                                      ObTabletReplica::SCN_STATUS_IDLE))) {
+                                      ObTabletReplica::SCN_STATUS_IDLE,
+                                      0/*ddl_create_snapshot*/))) {
         LOG_WARN("fail to init ObTabletReplica", KR(ret), KPC(task), "server", GCONF.self_addr_);
       } else if (OB_FAIL(push_task_info_(*task, replica, remove_tablet_replicas, remove_tablet_tasks))) {
         LOG_WARN("failed to push remove task", K(ret), KPC(task));

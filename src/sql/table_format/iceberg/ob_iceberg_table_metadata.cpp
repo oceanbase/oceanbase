@@ -231,7 +231,6 @@ int ObIcebergTableMetadata::do_build_table_schema(share::schema::ObTableSchema *
         LOG_WARN("get partition spec failed", K(ret), K(table_metadata_.default_spec_id));
       } else if (OB_NOT_NULL(spec)) {
         ObSqlString part_expr;
-        ObArenaAllocator tmp_allocator;
         for (int64_t i = 0; i < spec->fields.count() && OB_SUCC(ret); ++i) {
           const PartitionField *field = spec->fields.at(i);
           if (!part_expr.empty()) {
@@ -243,7 +242,10 @@ int ObIcebergTableMetadata::do_build_table_schema(share::schema::ObTableSchema *
             // do nothing
           } else if (OB_FAIL(current_schema->get_column_schema_by_field_id(field->source_id, col_schema))) {
             LOG_WARN("get col schema failed", K(ret), K(field->source_id));
-          } else if (OB_FAIL(Transform::get_part_expr(field->transform, *col_schema, tmp_allocator, tmp_str))) {
+          } else if (OB_FAIL(Transform::get_part_expr(tmp_allocator,
+                                                      field->transform,
+                                                      col_schema->get_column_name_str(),
+                                                      tmp_str))) {
             LOG_WARN("get transform str failed", K(ret));
           } else if (OB_FAIL(part_expr.append(tmp_str))) {
             LOG_WARN("append str failed", K(ret), K(tmp_str));

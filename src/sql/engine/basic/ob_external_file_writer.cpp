@@ -82,11 +82,27 @@ int ObExternalFileWriter::close_file()
   return ret;
 }
 
-int ObExternalFileWriter::close_data_writer()
+int ObExternalFileWriter::close_data_writer(bool need_retry)
 {
   int ret = OB_SUCCESS;
-  OZ(write_file());
-  OZ(close_file());
+  if (OB_FAIL(write_file())) {
+    LOG_WARN("failed to write file", K(ret));
+  }
+
+  bool is_delete = need_retry && is_file_opened_; // write_file可能会打开文件
+  if (OB_FAIL(ret)) {
+  } else if (is_delete && IntoFileLocation::SERVER_DISK != file_location_) {
+    OZ (storage_appender_.device_handle_->unlink(url_.ptr()));
+    LOG_TRACE("delete file for retry", K(ret), K(url_));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(close_file())) {
+    LOG_WARN("failed to close file", K(ret));
+  } else if (is_delete && IntoFileLocation::SERVER_DISK == file_location_) {
+    OZ(common::FileDirectoryUtils::delete_file(url_.ptr()));
+    LOG_TRACE("delete file for retry", K(ret), K(url_));
+  }
   return ret;
 }
 

@@ -1214,7 +1214,7 @@ ObHTableReversedRowIterator::~ObHTableReversedRowIterator()
     forward_child_op_->close();
   }
   if (OB_NOT_NULL(spec_)) {
-    forward_tb_ctx_.set_expr_info(nullptr);
+    forward_tb_ctx_.reset_expr_frame_info();
     if (OB_NOT_NULL(forward_child_op_)) {
       spec_->destroy_executor(forward_child_op_->get_scan_executor());
     }

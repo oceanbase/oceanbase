@@ -503,6 +503,9 @@ int ObTabletCreateSSTableParam::init_for_small_sstable(const blocksstable::ObSST
   max_merged_trans_version_ = table_key_.is_inc_major_type_sstable()
                             ? basic_meta.max_merged_trans_version_
                             : res.max_merged_trans_version_;
+  if (table_key.is_inc_major_type_sstable()) {
+    upper_trans_version_ = basic_meta.upper_trans_version_;
+  }
   nested_offset_ = block_info.nested_offset_;
   nested_size_ = block_info.nested_size_;
   table_shared_flag_.reset();
@@ -1264,6 +1267,9 @@ int ObTabletCreateSSTableParam::init_for_ha(
   max_merged_trans_version_ = (table_key_.is_inc_major_type_sstable() || table_key_.is_inc_major_ddl_dump_sstable())
                             ? sstable_param.basic_meta_.max_merged_trans_version_
                             : res.max_merged_trans_version_;
+  if (sstable_param.table_key_.is_inc_major_type_sstable()) {
+    upper_trans_version_ = sstable_param.basic_meta_.upper_trans_version_;
+  }
   rowkey_column_cnt_ = sstable_param.basic_meta_.rowkey_column_count_;
   ddl_scn_ = sstable_param.basic_meta_.ddl_scn_;
   table_shared_flag_ = sstable_param.basic_meta_.table_shared_flag_;
@@ -1331,6 +1337,9 @@ int ObTabletCreateSSTableParam::init_for_ha(
   occupy_size_ = sstable_param.basic_meta_.occupy_size_;
   original_size_ = sstable_param.basic_meta_.original_size_;
   max_merged_trans_version_ = sstable_param.basic_meta_.max_merged_trans_version_;
+  if (sstable_param.table_key_.is_inc_major_type_sstable()) {
+    upper_trans_version_ = sstable_param.basic_meta_.upper_trans_version_;
+  }
   ddl_scn_ = sstable_param.basic_meta_.ddl_scn_;
   filled_tx_scn_ = sstable_param.basic_meta_.filled_tx_scn_;
   rec_scn_ = sstable_param.basic_meta_.rec_scn_;
@@ -1411,6 +1420,9 @@ int ObTabletCreateSSTableParam::init_for_remote(const blocksstable::ObMigrationS
   occupy_size_ = sstable_param.basic_meta_.occupy_size_;
   original_size_ = sstable_param.basic_meta_.original_size_;
   max_merged_trans_version_ = sstable_param.basic_meta_.max_merged_trans_version_;
+  if (sstable_param.table_key_.is_inc_major_type_sstable()) {
+    upper_trans_version_ = sstable_param.basic_meta_.upper_trans_version_;
+  }
   contain_uncommitted_row_ = sstable_param.basic_meta_.contain_uncommitted_row_;
   compressor_type_ = sstable_param.basic_meta_.compressor_type_;
   encrypt_id_ = sstable_param.basic_meta_.encrypt_id_;
