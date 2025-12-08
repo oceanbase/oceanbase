@@ -2054,7 +2054,15 @@ int ObWaitDataReadyTask::change_member_list_()
                       ObMigrationOpType::get_str(ctx_->arg_.type_));
   #undef SERVER_EVENT_RECORD
 
-  DEBUG_SYNC(AFTER_MEMBERLIST_CHANGED);
+  if (OB_SUCC(ret)) {
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (!is_tenant_sslog_ls(MTL_ID(), ctx_->arg_.ls_id_)) {
+      DEBUG_SYNC(AFTER_MEMBERLIST_CHANGED);
+    }
+#else
+    DEBUG_SYNC(AFTER_MEMBERLIST_CHANGED);
+#endif
+  }
 
   return ret;
 }
