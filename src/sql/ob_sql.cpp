@@ -159,14 +159,7 @@ int ObSql::stmt_query(const common::ObString &stmt, ObSqlCtx &context, ObResultS
   FLTSpanGuard(sql_compile);
   common::ObOpProfile<ObMetric> sql_compile_profile(ObProfileId::SQL_COMPILE,
                                                     &result.get_exec_context().get_allocator());
-  bool enable_monitor_profile = false;
-  if (GCONF.enable_sql_audit) {
-    int64_t tenant_id = result.get_session().get_effective_tenant_id();
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-    if (tenant_config.is_valid() && tenant_config->_extend_sql_plan_monitor_metrics) {
-      enable_monitor_profile = true;
-    }
-  }
+  bool enable_monitor_profile = result.get_session().enable_monitor_profile();
   ObProfileSwitcher switcher(enable_monitor_profile ? &sql_compile_profile : nullptr);
   {
     ScopedTimer timer(ObMetricId::ELAPSED_TIME);

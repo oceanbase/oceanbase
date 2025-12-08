@@ -549,12 +549,12 @@ ScopedTimer::~ScopedTimer()
   int ret = OB_SUCCESS;
   ObMetric *metric = nullptr;
   if (elapse_time_ != nullptr) {
-    *elapse_time_ += (ObTimeUtil::current_time_ns() - start_time_);
+    *elapse_time_ += (OB_TSC_TIMESTAMP.fast_current_time() - start_time_) * 1000LL;
   } else if (OB_ISNULL(profile_)) {
   } else if (OB_FAIL(profile_->get_or_register_metric(metric_id_, metric))) {
     COMMON_LOG(WARN, "failed to register metric", K(metric_id_));
   } else {
-    int64_t elapsed_time = ObTimeUtil::current_time_ns() - start_time_;
+    int64_t elapsed_time = (OB_TSC_TIMESTAMP.fast_current_time() - start_time_) * 1000LL;
     metric->inc(elapsed_time);
   }
 }
