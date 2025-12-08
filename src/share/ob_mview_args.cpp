@@ -30,7 +30,10 @@ bool ObMViewCompleteRefreshArg::is_valid() const
     bret = (OB_INVALID_TENANT_ID == based_info.schema_tenant_id_ ||
             tenant_id_ == based_info.schema_tenant_id_) &&
            OB_INVALID_ID != based_info.schema_id_ &&
-           ObSchemaType::TABLE_SCHEMA == based_info.schema_type_ &&
+           (ObSchemaType::TABLE_SCHEMA == based_info.schema_type_ ||
+            ObSchemaType::VIEW_SCHEMA == based_info.schema_type_  ||
+            ObSchemaType::ROUTINE_SCHEMA == based_info.schema_type_ ||
+            ObSchemaType::UDT_SCHEMA == based_info.schema_type_) &&
            OB_INVALID_VERSION != based_info.schema_version_;
   }
   return bret;
@@ -43,10 +46,10 @@ void ObMViewCompleteRefreshArg::reset()
   session_id_ = OB_INVALID_ID;
   sql_mode_ = 0;
   last_refresh_scn_.reset();
+  target_data_sync_scn_.reset();
   tz_info_.reset();
   tz_info_wrap_.reset();
   select_sql_.reset();
-  target_data_sync_scn_.reset();
   for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
     nls_formats_[i].reset();
   }
@@ -54,6 +57,7 @@ void ObMViewCompleteRefreshArg::reset()
   required_columns_infos_.reset();
   allocator_.reset();
   ObDDLArg::reset();
+  use_direct_load_for_complete_refresh_ = true;
 }
 
 int ObMViewCompleteRefreshArg::assign(const ObMViewCompleteRefreshArg &other)
@@ -71,11 +75,13 @@ int ObMViewCompleteRefreshArg::assign(const ObMViewCompleteRefreshArg &other)
       last_refresh_scn_ = other.last_refresh_scn_;
       parent_task_id_ = other.parent_task_id_;
       target_data_sync_scn_ = other.target_data_sync_scn_;
-      select_sql_ = other.select_sql_;
+      use_direct_load_for_complete_refresh_ = other.use_direct_load_for_complete_refresh_;
       if (OB_FAIL(tz_info_.assign(other.tz_info_))) {
         LOG_WARN("fail to assign tz info", KR(ret), "tz_info", other.tz_info_);
       } else if (OB_FAIL(tz_info_wrap_.deep_copy(other.tz_info_wrap_))) {
         LOG_WARN("fail to deep copy tz info wrap", KR(ret), "tz_info_wrap", other.tz_info_wrap_);
+      } else if (OB_FAIL(ob_write_string(allocator_, other.select_sql_, select_sql_))) {
+        LOG_WARN("fail to deep copy select sql", KR(ret), "select_sql", other.select_sql_);
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < ObNLSFormatEnum::NLS_MAX; i++) {
         if (OB_FAIL(ob_write_string(allocator_, other.nls_formats_[i], nls_formats_[i]))) {
@@ -114,6 +120,7 @@ OB_DEF_SERIALIZE(ObMViewCompleteRefreshArg)
     LST_DO_CODE(OB_UNIS_ENCODE, target_data_sync_scn_);
     LST_DO_CODE(OB_UNIS_ENCODE, select_sql_);
     LST_DO_CODE(OB_UNIS_ENCODE, required_columns_infos_);
+    LST_DO_CODE(OB_UNIS_ENCODE, use_direct_load_for_complete_refresh_);
   }
   return ret;
 }
@@ -151,6 +158,7 @@ OB_DEF_DESERIALIZE(ObMViewCompleteRefreshArg)
     LST_DO_CODE(OB_UNIS_DECODE, target_data_sync_scn_);
     LST_DO_CODE(OB_UNIS_DECODE, select_sql_);
     LST_DO_CODE(OB_UNIS_DECODE, required_columns_infos_);
+    LST_DO_CODE(OB_UNIS_DECODE, use_direct_load_for_complete_refresh_);
   }
   return ret;
 }
@@ -179,6 +187,7 @@ OB_DEF_SERIALIZE_SIZE(ObMViewCompleteRefreshArg)
     LST_DO_CODE(OB_UNIS_ADD_LEN, target_data_sync_scn_);
     LST_DO_CODE(OB_UNIS_ADD_LEN, select_sql_);
     LST_DO_CODE(OB_UNIS_ADD_LEN, required_columns_infos_);
+    LST_DO_CODE(OB_UNIS_ADD_LEN, use_direct_load_for_complete_refresh_);
   }
   if (OB_FAIL(ret)) {
     len = -1;
@@ -207,6 +216,7 @@ void ObMViewRefreshInfo::reset()
   is_mview_complete_refresh_ = false;
   mview_target_data_sync_scn_.reset();
   select_sql_.reset();
+  use_direct_load_for_complete_refresh_ = true;
 }
 
 int ObMViewRefreshInfo::assign(const ObMViewRefreshInfo &other)
@@ -220,6 +230,7 @@ int ObMViewRefreshInfo::assign(const ObMViewRefreshInfo &other)
     is_mview_complete_refresh_ = other.is_mview_complete_refresh_;
     mview_target_data_sync_scn_ = other.mview_target_data_sync_scn_;
     select_sql_ = other.select_sql_;
+    use_direct_load_for_complete_refresh_ = other.use_direct_load_for_complete_refresh_;
   }
   return ret;
 }
@@ -231,7 +242,18 @@ OB_SERIALIZE_MEMBER(ObMViewRefreshInfo,
                     start_time_,
                     is_mview_complete_refresh_,
                     mview_target_data_sync_scn_,
-                    select_sql_);
+                    select_sql_,
+                    use_direct_load_for_complete_refresh_);
+
+OB_SERIALIZE_MEMBER(ObMVRefreshInfo,
+    refresh_method_,
+    refresh_mode_,
+    start_time_,
+    next_time_expr_,
+    exec_env_,
+    parallel_,
+    refresh_dop_,
+    nested_refresh_mode_);
 
 OB_SERIALIZE_MEMBER(ObMVRequiredColumnsInfo,
                     base_table_id_,

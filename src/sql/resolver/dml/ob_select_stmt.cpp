@@ -1753,3 +1753,32 @@ bool ObSelectStmt::is_implicit_distinct_allowed() const
            || has_for_update()
            || has_limit());
 }
+
+int ObSelectStmt::is_contains_mv_proctime_table(bool &is_contains) const
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObSelectStmt*, 4> child_stmts;
+  is_contains = false;
+  if (OB_FAIL(get_child_stmts(child_stmts))) {
+    LOG_WARN("failed to get child stmts", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !is_contains && i < table_items_.count(); ++i) {
+    const TableItem *table_item = table_items_.at(i);
+    if (OB_ISNULL(table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null table item", K(ret), K(i));
+    } else if (table_item->is_mv_proctime_table_) {
+      is_contains = true;
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !is_contains && i < child_stmts.count(); ++i) {
+    const ObSelectStmt *child_stmt = child_stmts.at(i);
+    if (OB_ISNULL(child_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null child stmt", K(ret), K(i));
+    } else if (OB_FAIL(SMART_CALL(child_stmt->is_contains_mv_proctime_table(is_contains)))) {
+      LOG_WARN("failed to check contains mv proctime table", K(ret));
+    }
+  }
+  return ret;
+}

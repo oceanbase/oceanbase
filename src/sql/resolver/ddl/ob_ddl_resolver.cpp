@@ -4356,8 +4356,7 @@ int ObDDLResolver::resolve_normal_column_attribute(ObColumnSchemaV2 &column,
         break;
       }
       case T_ON_UPDATE:
-        if (ObDateTimeType == column.get_data_type() || ObTimestampType == column.get_data_type()
-            || ObMySQLDateTimeType == column.get_data_type()) {
+        if (ObColumnSchemaV2::can_set_on_update_column_type(column.get_meta_type())) {
           if (T_FUN_SYS_CUR_TIMESTAMP != attr_node->children_[0]->type_) {
             ret = OB_ERR_PARSER_SYNTAX;
             SQL_RESV_LOG(WARN, "on_update attribute can only be timestamp or synonyms type",

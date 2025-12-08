@@ -482,7 +482,8 @@ int ObDynamicSampling::construct_ds_stat_key(const ObDSTableParam &param,
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(print_filter_exprs(ctx_->get_session_info(),
                                         ctx_->get_sql_schema_guard()->get_schema_guard(),
-                                        allow_cache_ds_result_to_sql_ctx() ? ctx_->get_params() : NULL,
+                                        (allow_cache_ds_result_to_sql_ctx() || force_use_kv_cache_) ?
+                                        ctx_->get_params() : NULL,
                                         type == ObDSResultItemType::OB_DS_BASIC_STAT ? empty_exprs : filter_exprs,
                                         true,
                                         expr_str))) {
@@ -517,6 +518,7 @@ int ObDynamicSampling::do_estimate_table_rowcount(const ObDSTableParam &param, b
   ObString tmp_str;
   ObSEArray<ObRawExpr*, 4> tmp_filters;
   throw_ds_error = false;
+  force_use_kv_cache_ = param.force_use_kv_cache_;
   LOG_TRACE("begin estimate table rowcount", K(param));
   if (OB_FAIL(add_table_info(param.db_name_,
                              param.table_name_,
@@ -1475,12 +1477,14 @@ int ObDynamicSampling::add_table_clause(ObSqlString &table_str)
 
 bool ObDynamicSampling::allow_cache_ds_result_to_sql_ctx() const {
   return OB_NOT_NULL(ctx_) && OB_NOT_NULL(ctx_->get_query_ctx()) &&
-         ctx_->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP2);
+         ctx_->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP2) &&
+         !force_use_kv_cache_;
 }
 
 int ObDynamicSamplingUtils::get_valid_dynamic_sampling_level(const ObSQLSessionInfo *session_info,
                                                              const ObTableDynamicSamplingHint *table_ds_hint,
                                                              const int64_t global_ds_level,
+                                                             const ObTableType table_type,
                                                              int64_t &ds_level,
                                                              int64_t &sample_block_cnt,
                                                              bool &specify_ds)
@@ -1508,6 +1512,9 @@ int ObDynamicSamplingUtils::get_valid_dynamic_sampling_level(const ObSQLSessionI
     LOG_WARN("failed to get opt dynamic sampling level", K(ret));
   } else if (session_ds_level == ObDynamicSamplingLevel::BASIC_DYNAMIC_SAMPLING) {
     ds_level = session_ds_level;
+  } else if (!session_info->is_user_session() && table_type == MATERIALIZED_VIEW_LOG) {
+    ds_level = ObDynamicSamplingLevel::BASIC_DYNAMIC_SAMPLING;
+    specify_ds = true;
   }
   LOG_TRACE("get valid dynamic sampling level", KPC(table_ds_hint), K(global_ds_level), K(specify_ds),
                                                 K(session_ds_level), K(ds_level), K(sample_block_cnt));
@@ -1525,8 +1532,11 @@ int ObDynamicSamplingUtils::get_ds_table_param(ObOptimizerContext &ctx,
   bool is_valid = true;
   int64_t ds_level = ObDynamicSamplingLevel::NO_DYNAMIC_SAMPLING;
   int64_t sample_block_cnt = 0;
-  if (OB_ISNULL(log_plan) || OB_ISNULL(table_meta) ||
-      OB_ISNULL(table_item = log_plan->get_stmt()->get_table_item_by_id(table_meta->get_table_id()))) {
+  ObSQLSessionInfo *session_info = NULL;
+  ObTableType table_type = MAX_TABLE_TYPE;
+  if (OB_ISNULL(log_plan) || OB_ISNULL(table_meta) || OB_ISNULL(table_meta->get_base_meta_info()) ||
+      OB_ISNULL(table_item = log_plan->get_stmt()->get_table_item_by_id(table_meta->get_table_id()))
+      || OB_ISNULL(session_info = ctx.get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(log_plan), KPC(table_meta), KPC(table_item));
   } else if (OB_UNLIKELY(!log_plan->get_stmt()->is_select_stmt()) ||
@@ -1535,9 +1545,11 @@ int ObDynamicSamplingUtils::get_ds_table_param(ObOptimizerContext &ctx,
              OB_UNLIKELY(is_external_object_id(table_meta->get_ref_table_id()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected param", K(ret), K(log_plan), KPC(table_meta), KPC(table_item));
-  } else if (OB_FAIL(get_valid_dynamic_sampling_level(ctx.get_session_info(),
+  } else if (OB_FALSE_IT(table_type = table_meta->get_base_meta_info()->table_type_)) {
+  } else if (OB_FAIL(get_valid_dynamic_sampling_level(session_info,
                                                       log_plan->get_log_plan_hint().get_dynamic_sampling_hint(table_meta->get_table_id()),
                                                       ctx.get_global_hint().get_dynamic_sampling(),
+                                                      table_type,
                                                       ds_level,
                                                       sample_block_cnt,
                                                       specify_ds))) {
@@ -1567,6 +1579,9 @@ int ObDynamicSamplingUtils::get_ds_table_param(ObOptimizerContext &ctx,
       ds_table_param.db_name_ = table_item->database_name_;
       ds_table_param.table_name_ = table_item->table_name_;
       ds_table_param.alias_name_ = table_item->alias_name_;
+      if (!session_info->is_user_session() && table_type == MATERIALIZED_VIEW_LOG) {
+        ds_table_param.force_use_kv_cache_ = true;
+      }
     }
   } else {
     ret = OB_ERR_UNEXPECTED;

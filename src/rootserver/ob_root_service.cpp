@@ -4303,6 +4303,12 @@ int ObRootService::execute_ddl_task(const obrpc::ObAlterTableArg &arg,
         }
         break;
       }
+      case share::SWITCH_MLOG_NAME_TASK: {
+        if (OB_FAIL(ddl_service_.switch_index_name_and_status_for_mlog_table(const_cast<ObAlterTableArg &>(arg)))) {
+          LOG_WARN("failed to switch index name and status for mlog table", K(ret), K(arg));
+        }
+        break;
+      }
       default:
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unknown ddl task type", K(ret), K(arg.ddl_task_type_));
@@ -4879,7 +4885,7 @@ int ObRootService::create_mlog(const obrpc::ObCreateMLogArg &arg, obrpc::ObCreat
       LOG_WARN("check parallel ddl conflict failed", K(ret));
     } else if (OB_FAIL(mlog_builder.init())) {
       LOG_WARN("failed to init mlog builder", KR(ret));
-    } else if (OB_FAIL(mlog_builder.create_mlog(schema_guard, arg, res))) {
+    } else if (OB_FAIL(mlog_builder.create_or_replace_mlog(schema_guard, arg, res))) {
       LOG_WARN("failed to create mlog", KR(ret), K(arg));
     }
   }

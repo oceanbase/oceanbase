@@ -2912,6 +2912,7 @@ int ObSchemaPrinter::print_index_table_definition(
   const ObTableSchema *index_table_schema = NULL;
   ObStringBuf allocator;
   ObString index_name;
+  ObString base_table_name;
 
   if (OB_ISNULL(buf) || buf_len <= 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -2928,6 +2929,27 @@ int ObSchemaPrinter::print_index_table_definition(
   } else if (NULL == table_schema) {
     ret = OB_TABLE_NOT_EXIST;
     OB_LOG(WARN, "Unknow table", K(ret), K(index_table_schema->get_data_table_id()));
+  } else if (table_schema->mv_container_table()) {
+    uint64_t mview_id = OB_INVALID_ID;
+    if (OB_FAIL(ObMViewInfo::get_mview_id_from_container_id(
+            *GCTX.sql_proxy_, tenant_id, table_schema->get_table_id(), mview_id))) {
+      LOG_WARN("failed to get mview_id", KR(ret));
+    } else {
+      const ObTableSchema *mview_schema = nullptr;
+      if (OB_FAIL(schema_guard_.get_table_schema(tenant_id, mview_id, mview_schema))) {
+        LOG_WARN("failed to get table schema", KR(ret));
+      } else if (OB_ISNULL(mview_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null container table schema", KR(ret), KP(mview_schema));
+      } else {
+        base_table_name = mview_schema->get_table_name();
+      }
+    }
+  } else {
+    base_table_name = table_schema->get_table_name();
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(schema_guard_.get_database_schema(tenant_id,
              table_schema->get_database_id(), ds_schema))) {
     OB_LOG(WARN, "fail to get database schema", K(ret), K(tenant_id));
@@ -2981,7 +3003,7 @@ int ObSchemaPrinter::print_index_table_definition(
       OB_LOG(WARN, "fail to print create table prefix", K(ret), K(table_schema->get_table_name()));
     } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "."))) {
       OB_LOG(WARN, "fail to print const str", K(ret));
-    } else if (OB_FAIL(print_identifier(buf, buf_len, pos, table_schema->get_table_name(), is_oracle_mode))) {
+    } else if (OB_FAIL(print_identifier(buf, buf_len, pos, base_table_name, is_oracle_mode))) {
       OB_LOG(WARN, "fail to print create table prefix", K(ret), K(table_schema->get_table_name()));
     } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, " (\n"))) {
       OB_LOG(WARN, "fail to print const str", K(ret));
@@ -3107,7 +3129,6 @@ int ObSchemaPrinter::print_materialized_view_definition(
     uint64_t container_table_id = OB_INVALID_ID;
     ObMViewInfo mview_info;
     bool is_oracle_mode = false;
-    bool need_print_column_list = false;
     common::ObSEArray<uint64_t, 16> column_ids;
     if (OB_FAIL(schema_guard_.get_table_schema(tenant_id, table_id, table_schema))) {
       SHARE_SCHEMA_LOG(WARN, "fail to get table schema", KR(ret), K(tenant_id), K(table_id));
@@ -3130,18 +3151,14 @@ int ObSchemaPrinter::print_materialized_view_definition(
       SHARE_SCHEMA_LOG(WARN, "fail to print materialized view name", KR(ret));
     } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, " "))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print space", KR(ret));
-    } else if (FALSE_IT(need_print_column_list = (is_oracle_mode && !is_inner_table(table_id)))) {
-
-    } else if (need_print_column_list && OB_FAIL(databuff_printf(buf, buf_len, pos, "("))) {
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "("))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print view definition", K(ret));
-    } else if (need_print_column_list && OB_FAIL(table_schema->get_column_ids(column_ids))) {
+    } else if (OB_FAIL(table_schema->get_column_ids(column_ids))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print view definition", K(ret));
-    } else if (need_print_column_list
-              && OB_FAIL(print_column_list(*table_schema, column_ids, buf, buf_len, pos))) {
+    } else if (OB_FAIL(print_column_list(*table_schema, column_ids, buf, buf_len, pos))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print view definition", K(ret));
-    } else if (need_print_column_list && OB_FAIL(databuff_printf(buf, buf_len, pos, ") "))) {
-      SHARE_SCHEMA_LOG(WARN, "fail to print view definition", K(ret));
-    } else if (!strict_compat_) {
+    }
+    if (OB_SUCC(ret) && !strict_compat_) {
       const ObRowkeyInfo &rowkey_info = container_table_schema->get_rowkey_info();
       bool is_first_col = true;
       for (int64_t j = 0; OB_SUCC(ret) && j < rowkey_info.get_size(); ++j) {
@@ -3160,7 +3177,7 @@ int ObSchemaPrinter::print_materialized_view_definition(
                    && !col->is_shadow_column()
                    && !col->is_hidden()) {
           if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s%.*s%s",
-                                      is_first_col ? "(PRIMARY KEY (" : "",
+                                      is_first_col ? ", PRIMARY KEY (" : "",
                                       col->get_column_name_str().length(),
                                       col->get_column_name_str().ptr(),
                                       j < rowkey_info.get_size() - 1 ? ", " : ""))) {
@@ -3168,11 +3185,15 @@ int ObSchemaPrinter::print_materialized_view_definition(
           }
           is_first_col = false;
           if (OB_SUCC(ret) && rowkey_info.get_size() - 1 == j
-              && OB_FAIL(databuff_printf(buf, buf_len, pos, ")) "))) {
+              && OB_FAIL(databuff_printf(buf, buf_len, pos, ")"))) {
             SHARE_SCHEMA_LOG(WARN, "fail to print materialized view rowkey", KR(ret));
           }
         }
       }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, ") "))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print view definition", K(ret));
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(print_table_definition_table_options(*container_table_schema,

@@ -190,6 +190,11 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
         } else if (1 == parse_tree.value_ && OB_ISNULL(index_schema_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("table schema is NULL", K(ret));
+        } else if (OB_ISNULL(index_schema_) &&  // not index based table schema
+                   table_schema_->mv_container_table()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("alter mv container table not supported", K(ret), K(table_schema_->get_table_name_str()), K(table_name));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Alter mv container table");
         } else if (table_schema_->is_external_table() != is_external_table_) {
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table type");

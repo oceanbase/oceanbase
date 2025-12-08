@@ -14422,6 +14422,8 @@ int ObFetchArbMemberArg::init(const uint64_t tenant_id, const ObLSID &ls_id)
 
 OB_SERIALIZE_MEMBER(ObFetchArbMemberArg, tenant_id_, ls_id_);
 #endif
+OB_SERIALIZE_MEMBER(ObCheckNestedMViewMdsArg, tenant_id_, mview_id_, refresh_id_, target_data_sync_scn_);
+OB_SERIALIZE_MEMBER(ObCheckNestedMViewMdsRes, target_data_sync_scn_, ret_);
 
 OB_SERIALIZE_MEMBER((ObCreateAiModelArg, ObDDLArg), model_info_);
 OB_SERIALIZE_MEMBER((ObDropAiModelArg, ObDDLArg), ai_model_name_);

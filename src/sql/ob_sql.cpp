@@ -5232,9 +5232,12 @@ int ObSql::need_add_plan(const ObPlanCacheCtx &pc_ctx,
                          bool &need_add_plan)
 {
   int ret = OB_SUCCESS;
-  result.get_exec_context().get_stmt_factory()->get_query_ctx();
+  ObPhysicalPlan *phy_plan = NULL;
   if (false == need_add_plan) {
     // do nothing
+  } else if (OB_ISNULL(phy_plan = result.get_physical_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null phy plan", K(ret), K(phy_plan));
   } else if ((!is_enable_pc && !pc_ctx.add_with_compare_) || !pc_ctx.should_add_plan_) {
     need_add_plan = false;
   } else if (OB_ISNULL(result.get_exec_context().get_stmt_factory())
@@ -5248,6 +5251,11 @@ int ObSql::need_add_plan(const ObPlanCacheCtx &pc_ctx,
     need_add_plan = false;
   } else if (result.get_exec_context().get_stmt_factory()->get_query_ctx()->has_hybrid_search()) {
     need_add_plan = false;
+  } else if (OB_USE_PLAN_CACHE_DEFAULT != phy_plan->get_phy_plan_hint().plan_cache_policy_
+             && result.get_session().get_ddl_info().is_refreshing_mview()
+             && ObStmt::is_dml_write_stmt(result.get_stmt_type())) {
+    need_add_plan = false;
+    LOG_DEBUG("materialized view refresh plan not use plan cache");
   }
   return ret;
 }

@@ -836,6 +836,25 @@ int ObColumnSchemaV2::is_same_collection_column(const ObColumnSchemaV2 &other, b
   return ret;
 }
 
+bool ObColumnSchemaV2::can_set_on_update_column_type(const common::ObObjMeta &meta_type)
+{
+  return meta_type.is_timestamp() ||
+         meta_type.is_datetime() ||
+         meta_type.is_mysql_datetime();
+}
+
+bool ObColumnSchemaV2::is_minimal_mode_related_time_column() const
+{
+  const ObObjMeta &meta_type = get_meta_type();
+  // can_set_on_update_column_type should be enough for minimal mode,
+  // but for safety, we still consider other time types here for now
+  return can_set_on_update_column_type(meta_type) ||
+         meta_type.is_time() ||
+         meta_type.is_date() ||
+         meta_type.is_otimestamp_type() ||
+         meta_type.is_mysql_date();
+}
+
 } //end of namespace schema
 } //end of namespace share
 } //end of namespace oceanbase

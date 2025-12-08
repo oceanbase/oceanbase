@@ -1466,6 +1466,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
         }
         break;
       case DDL_REBUILD_INDEX:
+      case DDL_REPLACE_MLOG:
         rebuild_index_arg = static_cast<const obrpc::ObRebuildIndexArg *>(param.ddl_arg_);
         if (OB_FAIL(create_rebuild_index_task(proxy,
                                               param.type_,
@@ -3299,6 +3300,7 @@ int ObDDLScheduler::schedule_ddl_task(const ObDDLTaskRecord &record)
         ret = schedule_drop_fts_index_task(record);
         break;
       case ObDDLType::DDL_REBUILD_INDEX:
+      case ObDDLType::DDL_REPLACE_MLOG:
         ret = schedule_rebuild_index_task(record);
       case ObDDLType::DDL_DROP_LOB:
         ret = schedule_drop_lob_task(record);
@@ -3507,10 +3509,10 @@ int ObDDLScheduler::create_rebuild_index_task(
   } else if (OB_ISNULL(index_schema) || OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KP(index_schema), KP(GCTX.sql_proxy_));
-  } else if (!index_schema->is_vec_index()) { // current only support vector index ddl rebuild task
+  } else if (!index_schema->is_vec_index() && !index_schema->is_mlog_table()) { // current only support vector index and mlog ddl rebuild task
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("rebuild domain index is not supported", KR(ret), KPC(index_schema));
-  } else if (index_schema->is_built_in_vec_index()) { // 期望是可见性表发起的重建（hnsw delta buffer表或者ivf centroid表）
+    LOG_WARN("only vec index and mlog are supported", KR(ret), KPC(index_schema));
+  } else if (index_schema->is_vec_index() && index_schema->is_built_in_vec_index()) { // 期望是可见性表发起的重建（hnsw delta buffer表或者ivf centroid表）
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected index schema", KR(ret), KPC(index_schema));
   } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(*GCTX.sql_proxy_, index_schema->get_tenant_id(), task_id))) {
@@ -4427,6 +4429,35 @@ int ObDDLScheduler::update_ddl_task_active_time(const ObDDLTaskID &task_id)
     LOG_WARN("invalid arg", K(ret), K(task_id));
   } else if (OB_FAIL(manager_reg_heart_beat_task_.update_task_active_time(task_id))) {
     LOG_WARN("fail to set RegTaskTime map", K(ret), K(task_id));
+  }
+  return ret;
+}
+
+int ObDDLScheduler::notify_refresh_related_mviews_task_end(const ObDDLTaskKey &task_key, const int ret_code) {
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!task_key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(task_key), K(ret_code));
+  } else if (OB_FAIL(task_queue_.modify_task(task_key, [&ret_code](ObDDLTask &task) -> int {
+    int ret = OB_SUCCESS;
+    const int64_t task_type = task.get_task_type();
+    switch (task_type) {
+      case ObDDLType::DDL_REPLACE_MLOG:
+        if (OB_FAIL(static_cast<ObRebuildIndexTask *>(&task)->notify_refresh_related_mviews_task_end(ret_code))) {
+          LOG_WARN("update complete sstable job status", K(ret), K(ret_code));
+        }
+        break;
+      default:
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not supported ddl task", K(ret), K(task));
+        break;
+      }
+      return ret;
+    }))) {
+    LOG_WARN("failed to modify task", K(ret));
   }
   return ret;
 }

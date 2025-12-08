@@ -214,6 +214,7 @@ int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
   need_expand_rt_mv_ = other.need_expand_rt_mv_;
   mview_id_ = other.mview_id_;
   mr_mv_flags_ = other.mr_mv_flags_;
+  is_mv_proctime_table_ = other.is_mv_proctime_table_;
   node_ = other.node_; // should deep copy ? seems to be unnecessary
   flashback_query_type_ = other.flashback_query_type_;
   // dblink
@@ -1869,7 +1870,7 @@ int ObDMLStmt::formalize_stmt_expr_reference(ObRawExprFactory *expr_factory,
   ObSEArray<ObRawExpr*, 32> stmt_exprs;
   if (OB_FAIL(clear_sharable_expr_reference())) {
     LOG_WARN("failed to clear sharable expr reference", K(ret));
-  } else if (OB_FAIL(formalize_child_stmt_expr_reference(expr_factory, session_info))) {
+  } else if (OB_FAIL(formalize_child_stmt_expr_reference(expr_factory, session_info, explicit_for_col))) {
     LOG_WARN("failed to formalize child stmt expr reference", K(ret));
   } else if (OB_FAIL(get_relation_exprs(stmt_exprs))) {
     LOG_WARN("get relation exprs failed", K(ret));
@@ -1931,7 +1932,8 @@ int ObDMLStmt::formalize_stmt_expr_reference(ObRawExprFactory *expr_factory,
 }
 
 int ObDMLStmt::formalize_child_stmt_expr_reference(ObRawExprFactory *expr_factory,
-                                                   ObSQLSessionInfo *session_info)
+                                                   ObSQLSessionInfo *session_info,
+                                                   bool explicit_for_col)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObSelectStmt*, 32> child_stmts;
@@ -1943,7 +1945,7 @@ int ObDMLStmt::formalize_child_stmt_expr_reference(ObRawExprFactory *expr_factor
     if (OB_ISNULL(stmt)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("stmt is null", K(ret));
-    } else if (OB_FAIL(SMART_CALL(stmt->formalize_stmt_expr_reference(expr_factory, session_info)))) {
+    } else if (OB_FAIL(SMART_CALL(stmt->formalize_stmt_expr_reference(expr_factory, session_info, explicit_for_col)))) {
       LOG_WARN("failed to formalize stmt reference", K(ret));
     } else { /*do nothing*/ }
   }
@@ -3116,6 +3118,19 @@ int ObDMLStmt::get_column_ids(uint64_t table_id, ObSqlBitSet<> &column_ids)const
   return ret;
 }
 
+int ObDMLStmt::get_column_ids(uint64_t table_id, ObIArray<uint64_t> &column_ids) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_items_.count(); ++i) {
+    if (table_id == column_items_.at(i).table_id_) {
+      if (OB_FAIL(column_ids.push_back(column_items_.at(i).column_id_))) {
+        LOG_WARN("failed to push back column id", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDMLStmt::get_column_items(ObIArray<uint64_t> &table_ids,
                                 ObIArray<ColumnItem> &column_items) const
 {
@@ -3154,24 +3169,6 @@ int ObDMLStmt::append_column_items_nodup(uint64_t table_id, uint64_t column_id, 
     } else if (OB_FAIL(column_items.push_back(*column_item))) {
       LOG_WARN("Failed to add column item to partition columns", K(ret));
     }
-  }
-  return ret;
-}
-
-int ObDMLStmt::get_column_exprs(ObIArray<ObColumnRefRawExpr *> &column_exprs) const
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < column_items_.count(); ++i) {
-    ret = column_exprs.push_back(column_items_.at(i).expr_);
-  }
-  return ret;
-}
-
-int ObDMLStmt::get_column_exprs(ObIArray<ObRawExpr *> &column_exprs) const
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < column_items_.count(); ++i) {
-    ret = column_exprs.push_back(column_items_.at(i).expr_);
   }
   return ret;
 }
@@ -4055,32 +4052,6 @@ ObColumnRefRawExpr *ObDMLStmt::get_column_expr_by_id(uint64_t table_id, uint64_t
     ref_expr = column_item->expr_;
   }
   return ref_expr;
-}
-
-int ObDMLStmt::get_column_exprs(uint64_t table_id, ObIArray<ObColumnRefRawExpr *> &table_cols) const
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < column_items_.count(); ++i) {
-    if (column_items_.at(i).table_id_ == table_id) {
-      if (OB_FAIL(table_cols.push_back(column_items_.at(i).expr_))) {
-        LOG_WARN("failed to push back column exprs", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDMLStmt::get_column_exprs(uint64_t table_id, ObIArray<ObRawExpr*> &table_cols) const
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < column_items_.count(); ++i) {
-    if (column_items_.at(i).table_id_ == table_id) {
-      if (OB_FAIL(table_cols.push_back(column_items_.at(i).expr_))) {
-        LOG_WARN("failed to push back column exprs", K(ret));
-      }
-    }
-  }
-  return ret;
 }
 
 int ObDMLStmt::get_column_exprs(ObIArray<TableItem *> &table_items,

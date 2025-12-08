@@ -430,9 +430,12 @@ int ObDeleteResolver::generate_delete_table_info(const TableItem &table_item)
       LOG_WARN("failed to assign part ids", K(ret));
     } else if (!delete_stmt->has_instead_of_trigger()) {
       // todo @zimiao error logging also need all columns ?
+      bool need_all_cols = true;
       if (OB_FAIL(add_all_rowkey_columns_to_stmt(table_item, table_info->column_exprs_))) {
         LOG_WARN("add all rowkey columns to stmt failed", K(ret));
-      } else if (need_all_columns(*table_schema, binlog_row_image)) {
+      } else if (OB_FAIL(need_all_columns(*table_schema, binlog_row_image, need_all_cols))) {
+        LOG_WARN("failed to check need all columns", K(ret));
+      } else if (need_all_cols) {
         if (OB_FAIL(add_all_columns_to_stmt(table_item, table_info->column_exprs_))) {
           LOG_WARN("fail to add all column to stmt", K(ret), K(table_item));
         }
@@ -441,6 +444,26 @@ int ObDeleteResolver::generate_delete_table_info(const TableItem &table_item)
         LOG_WARN("fail to add relate column to stmt", K(ret), K(table_item));
       } else if (OB_FAIL(add_all_lob_columns_to_stmt(table_item, table_info->column_exprs_))) {
         LOG_WARN("fail to add lob column to stmt", K(ret), K(table_item));
+      } else if (table_schema->mv_container_table()) {
+        // always add following columns
+        //  1. unique key columns
+        //  2. partition key columns (only for tables without pk nor not-null uk)
+        bool has_not_null_uk = false;
+        bool need_check_part_key = false;
+        ObSchemaGetterGuard *schema_guard = NULL;
+        if (OB_ISNULL(schema_guard = schema_checker_->get_schema_guard())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (OB_FAIL(table_schema->has_not_null_unique_key(*schema_guard, has_not_null_uk))) {
+          LOG_WARN("failed to check has not null unique key", K(ret));
+        } else if (FALSE_IT(need_check_part_key = table_schema->is_table_without_pk() && !has_not_null_uk)) {
+        } else if (OB_FAIL(add_all_unique_key_columns_to_stmt(table_item, table_info->column_exprs_))) {
+          LOG_WARN("failed to add all unique key columns to stmt", K(ret));
+        } else if (OB_FAIL(add_all_mlog_columns_to_stmt(table_item, table_info->column_exprs_))) {
+          LOG_WARN("failed to add all mlog columns to stmt", K(ret));
+        } else if (need_check_part_key && OB_FAIL(add_all_partition_key_columns_to_stmt(table_item, table_info->column_exprs_))) {
+          LOG_WARN("fail to add partition key column to stmt", K(ret), K(table_item));
+        }
       }
       if (OB_SUCC(ret)) {
         table_info->table_id_ = table_item.table_id_;

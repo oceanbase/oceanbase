@@ -212,6 +212,8 @@ bool ObMViewExecutorUtil::is_mview_refresh_retry_ret_code(int ret_code)
 {
   return OB_OLD_SCHEMA_VERSION == ret_code || OB_EAGAIN == ret_code ||
          OB_INVALID_QUERY_TIMESTAMP == ret_code || OB_TASK_EXPIRED == ret_code ||
+         OB_REPLICA_NOT_READABLE == ret_code || OB_MAPPING_BETWEEN_TABLET_AND_LS_NOT_EXIST == ret_code ||
+         OB_SCHEMA_ERROR == ret_code ||
          is_master_changed_error(ret_code) || is_partition_change_error(ret_code) ||
          is_ddl_stmt_packet_retry_err(ret_code);
 }

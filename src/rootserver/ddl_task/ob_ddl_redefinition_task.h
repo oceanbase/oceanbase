@@ -38,12 +38,11 @@ public:
       const common::ObCurTraceId::TraceId &trace_id,
       const int64_t parallelism,
       const bool use_heap_table_ddl_plan,
-      const bool is_mview_complete_refresh,
-      const int64_t mview_table_id,
       ObRootService *root_service,
       const common::ObAddr &inner_sql_exec_addr,
       const int64_t data_format_version,
-      const bool is_retryable_ddl);
+      const bool is_retryable_ddl,
+      const obrpc::ObMViewRefreshInfo &mview_refresh_info);
   int init(
       const ObTableSchema &orig_table_schema,
       const ObTableSchema &hidden_table_schema,
@@ -56,6 +55,8 @@ public:
   virtual int64_t get_deep_copy_size() const override { return sizeof(*this); }
   virtual ObAsyncTask *deep_copy(char *buf, const int64_t buf_size) const override;
   void add_event_info(const int ret, const ObString &ddl_event_stmt);
+private:
+  int procress_mview_complete_refresh_(const bool oracle_mode);
 private:
   bool is_inited_;
   uint64_t tenant_id_;
@@ -72,13 +73,12 @@ private:
   common::ObCurTraceId::TraceId trace_id_;
   int64_t parallelism_;
   bool use_heap_table_ddl_plan_;
-  bool is_mview_complete_refresh_;
   bool is_retryable_ddl_;
-  int64_t mview_table_id_;
   common::ObArray<share::schema::ObBasedSchemaObjectInfo> based_schema_object_infos_;
   ObRootService *root_service_;
   common::ObAddr inner_sql_exec_addr_;
   int64_t data_format_version_;
+  obrpc::ObMViewRefreshInfo mview_refresh_info_;
 };
 
 class ObSyncTabletAutoincSeqCtx final

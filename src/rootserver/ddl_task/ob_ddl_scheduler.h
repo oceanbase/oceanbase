@@ -344,6 +344,8 @@ public:
                             obrpc::ObAutoSplitTabletBatchRes &res);
   int schedule_auto_split_task();
   inline share::ObDDLReplicaBuilder &get_ddl_builder() { return ddl_builder_; }
+  int notify_refresh_related_mviews_task_end(const ObDDLTaskKey &task_key, const int ret_code);
+
 private:
   class DDLIdling : public ObThreadIdling
   {

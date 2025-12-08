@@ -2669,7 +2669,7 @@ int ObSelectResolver::resolve_sensitive_rule(ObSelectStmt *select_stmt)
     // do nothing
   } else if (!((0 == current_level_ && get_parent_namespace_resolver() == NULL)
                || (1 == current_level_ && is_child_resolver_of_dml()))
-             || (params_.is_from_create_view_ && !params_.is_from_create_mview_)
+             || (params_.is_from_create_view_ && !params_.is_mview_definition_sql_)
              || params_.is_returning_ || params_.is_prepare_stage_  // uses StmtPrinter
              || params_.is_expanding_view_ || params_.is_in_view_
              || is_in_set_query()
@@ -2997,7 +2997,7 @@ int ObSelectResolver::try_add_sensitive_field_expr(
       // lacking of plainaccess priv to a sensitive rule should raise an use error for:
       // 1. create table or materialized view
       // 2. dml (except for delete) on a sensitive table
-      } else if (params_.is_from_create_table_ || params_.is_from_create_mview_
+      } else if (params_.is_from_create_table_ || params_.is_mview_definition_sql_
                  || NULL != upper_insert_resolver_ || is_child_resolver_of_dml()) {
         ret = OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE;
         LOG_WARN("Lack of plainaccess privilege for rule", K(sensitive_rule->get_sensitive_rule_name()));

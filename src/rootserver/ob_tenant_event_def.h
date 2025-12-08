@@ -190,6 +190,30 @@
                 UNIT_LIST,
                 PRIMARY_ZONE);
   };
+  class MVIEW {
+    public:
+      DEF_MODULE(MVIEW, "MVIEW");
+
+      DEF_EVENT(MVIEW, AUTO_BUILD_MLOG, "AUTO_BUILD_MLOG",
+                BASE_TABLE_ID,
+                BASE_TABLE_NAME,
+                OLD_MLOG_ID,
+                NEW_MLOG_ID,
+                NEW_MLOG_COLUMN_LIST,
+                RELATED_CREATE_MVIEW_DDL);
+
+      DEF_EVENT(MVIEW, AUTO_CLIP_MLOG, "AUTO_CLIP_MLOG",
+                BASE_TABLE_ID,
+                BASE_TABLE_NAME,
+                OLD_MLOG_ID,
+                NEW_MLOG_ID,
+                NEW_MLOG_COLUMN_LIST);
+
+      DEF_EVENT(MVIEW, AUTO_DROP_MLOG, "AUTO_DROP_MLOG",
+                BASE_TABLE_ID,
+                BASE_TABLE_NAME,
+                OLD_MLOG_ID);
+  };
   class LS_EVENT {
     public:
     DEF_MODULE(LS_EVENT, "LS EVENT");

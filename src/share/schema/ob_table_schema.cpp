@@ -3462,6 +3462,11 @@ int ObTableSchema::set_view_definition(const common::ObString &view_definition)
   return view_schema_.set_view_definition(view_definition);
 }
 
+int ObTableSchema::set_expand_view_definition_for_mv(const common::ObString &expand_view_definition_for_mv)
+{
+  return view_schema_.set_expand_view_definition_for_mv(expand_view_definition_for_mv);
+}
+
 int ObTableSchema::set_parser_name_and_properties(
     const common::ObString &parser_name,
     const common::ObString &parser_properties)

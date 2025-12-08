@@ -62,14 +62,20 @@ public:
 
   static int calc_mv_refresh_parallelism(int64_t explict_parallelism,
                                          sql::ObSQLSessionInfo *session_info, int64_t &final_parallelism);
+  static int collect_based_schema_object_infos(const uint64_t tenant_id,
+                                               const uint64_t data_version,
+                                               share::schema::ObSchemaGetterGuard &schema_guard,
+                                               const ObIArray<share::schema::ObDependencyInfo> &dependency_infos,
+                                               ObIArray<share::schema::ObBasedSchemaObjectInfo> &based_schema_object_infos);
 
-  TO_STRING_KV(KP_(ctx), KP_(refresh_ctx), K_(refresh_param), KP_(refresh_stats_collection));
+  TO_STRING_KV(KP_(ctx), KP_(refresh_ctx), K_(refresh_param), KP_(refresh_stats_collection), K_(data_version));
 
 private:
   int lock_mview_for_refresh();
   int prepare_for_refresh();
   int fetch_based_infos(share::schema::ObSchemaGetterGuard &schema_guard);
-  int check_fast_refreshable();
+  int check_fast_refreshable_(const ObIArray<share::schema::ObDependencyInfo> &previous_dependency_infos,
+                              share::schema::ObSchemaGetterGuard &schema_guard);
   int complete_refresh();
   int fast_refresh();
   int set_session_dml_dop_(const uint64_t tenant_id, const uint64_t data_version,
@@ -79,13 +85,20 @@ private:
   int restore_session_dml_dop_(const uint64_t tenant_id, const uint64_t data_version,
                               const bool has_updated_dml_dop, const uint64_t orig_dml_dop,
                               ObMViewTransaction &trans);
-
+  int calc_scn_range(const share::schema::ObMViewInfo &mview_info,
+                     const share::SCN &target_data_sync_scn,
+                     const share::SCN &current_scn,
+                     share::ObScnRange &mview_refresh_scn_range,
+                     share::ObScnRange &base_table_scn_range);
+  int gen_complete_refresh_sql_string_(ObString &select_string,
+                                       ObIAllocator &str_alloc);
 private:
   sql::ObExecContext *ctx_;
   ObMViewRefreshCtx *refresh_ctx_;
   ObMViewRefreshParam refresh_param_;
   ObMViewRefreshStatsCollection *refresh_stats_collection_;
   bool is_inited_;
+  uint64_t data_version_;
 };
 
 } // namespace storage

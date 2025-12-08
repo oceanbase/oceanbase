@@ -2719,12 +2719,15 @@ int ObTransformMVRewrite::create_mv_column_item(MvRewriteHelper &helper)
     }
     // 2. add column expr to copier
     for (int64_t i = 0; OB_SUCC(ret) && i < mv_info.view_stmt_->get_select_item_size(); ++i) {
+      ObRawExpr* const &mv_select_expr = mv_info.view_stmt_->get_select_item(i).expr_;
       ObColumnRefRawExpr *col_expr = NULL;
-      if (OB_ISNULL(col_expr = helper.query_stmt_->get_column_expr_by_id(helper.mv_item_->table_id_, OB_APP_MIN_COLUMN_ID + i))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("failed to get column id", K(ret), K(helper.mv_item_->table_id_), K(OB_APP_MIN_COLUMN_ID + i));
-      } else if (OB_FAIL(helper.mv_select_replacer_.add_replace_expr(mv_info.view_stmt_->get_select_item(i).expr_, col_expr))) {
-        LOG_WARN("failed to add replaced expr", K(ret), KPC(mv_info.view_stmt_->get_select_item(i).expr_), KPC(col_expr));
+      if (helper.mv_select_replacer_.is_existed(mv_select_expr)) {
+        // do nothing
+      } else if (OB_ISNULL(col_expr = helper.query_stmt_->get_column_expr_by_id(helper.mv_item_->table_id_, OB_APP_MIN_COLUMN_ID + i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get column id", K(ret), K(helper.mv_item_->table_id_), K(OB_APP_MIN_COLUMN_ID + i));
+      } else if (OB_FAIL(helper.mv_select_replacer_.add_replace_expr(mv_select_expr, col_expr))) {
+        LOG_WARN("failed to add replaced expr", K(ret), KPC(mv_select_expr), KPC(col_expr));
       }
     }
     // 3. fill part expr

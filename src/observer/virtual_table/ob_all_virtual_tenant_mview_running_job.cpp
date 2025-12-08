@@ -154,7 +154,8 @@ int ObAllVirtualTenantMviewRunningJob::FillScanner::operator()(
           break;
         }
         case TARGET_DATA_SYNC_SCN: {
-          cur_row_->cells_[cell_idx].set_uint64(0);
+          cur_row_->cells_[cell_idx].set_uint64(mview_op.target_data_sync_scn_.
+                                                get_val_for_inner_table_field());
           break;
         }
         default: {

@@ -509,7 +509,7 @@ public:
       const uint64_t tenant_id,
       const ObIArray<uint64_t> &table_ids,
       ObIArray<int64_t> &task_ids);
-  static int check_rebuild_vec_index_task_exist(
+  static int check_rebuild_index_task_exist(
       const uint64_t tenant_id,
       const uint64_t data_table_id,
       const uint64_t index_table_id,

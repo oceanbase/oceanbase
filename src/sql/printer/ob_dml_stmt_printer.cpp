@@ -268,6 +268,9 @@ int ObDMLStmtPrinter::print_table_with_subquery(const TableItem *table_item)
                                subquery_print_params))) {
       LOG_WARN("failed to print subquery", K(ret));
     } else if (!table_item->alias_name_.empty()) {
+      if (OB_FAIL(print_flashback_info(table_item))) {
+        LOG_WARN("failed to print flashback info", K(ret));
+      }
       DATA_PRINTF(" ");
       PRINT_IDENT_WITH_QUOT(table_item->alias_name_);
     } else {
@@ -620,6 +623,9 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
         } else if (table_item->is_view_table_ && !print_params_.for_dblink_) {
           PRINT_TABLE_NAME(print_params_, table_item);
           if (OB_SUCC(ret)) {
+            if (OB_FAIL(print_flashback_info(table_item))) {
+              LOG_WARN("failed to print flashback info", K(ret));
+            }
             if (table_item->alias_name_.length() > 0) {
               DATA_PRINTF(" %.*s", LEN_AND_PTR(table_item->alias_name_));
             }
@@ -1983,36 +1989,10 @@ int ObDMLStmtPrinter::print_base_table(const TableItem *table_item)
       }
 
       // flashback query
-      if (OB_SUCC(ret)) {
-        bool explain_non_extend = false;
-        if (OB_NOT_NULL(stmt_->get_query_ctx()) &&
-            OB_NOT_NULL(stmt_->get_query_ctx()->root_stmt_) &&
-            stmt_->get_query_ctx()->root_stmt_->is_explain_stmt()) {
-          explain_non_extend = !static_cast<const ObExplainStmt *>
-                                (stmt_->get_query_ctx()->root_stmt_)->is_explain_extended();
-        }
-        if (OB_NOT_NULL(table_item->flashback_query_expr_) &&
-            // do not print flashback of link table when explain [basic]
-            !(table_item->is_link_table() && explain_non_extend)) {
-          if (table_item->flashback_query_type_ == TableItem::USING_TIMESTAMP) {
-            DATA_PRINTF(" as of timestamp "); 
-            if (OB_FAIL(expr_printer_.do_print(table_item->flashback_query_expr_, T_NONE_SCOPE))) {
-              LOG_WARN("fail to print where expr", K(ret));
-            }
-          } else if (table_item->flashback_query_type_ == TableItem::USING_SCN) {
-            if (lib::is_oracle_mode()) {
-              DATA_PRINTF(" as of scn "); 
-            } else {
-              DATA_PRINTF(" as of snapshot "); 
-            }
-            if (OB_FAIL(expr_printer_.do_print(table_item->flashback_query_expr_, T_NONE_SCOPE))) {
-              LOG_WARN("fail to print where expr", K(ret));
-            }
-          } else {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected type", K(ret), K(table_item->flashback_query_type_));
-          }
-        }
+      if (OB_FAIL(ret)) {
+        // do nothing.
+      } else if (OB_FAIL(print_flashback_info(table_item))) {
+        LOG_WARN("failed to print flashback info", K(ret));
       }
     }
   }
@@ -2757,6 +2737,48 @@ bool ObDMLStmtPrinter::need_print_catalog_name(const ObString& catalog_name)
     need_print = true;
   }
   return need_print;
+}
+
+int ObDMLStmtPrinter::print_flashback_info(const TableItem *table_item)
+{
+  int ret = OB_SUCCESS;
+  bool explain_non_extend = false;
+  if (OB_ISNULL(table_item) || OB_ISNULL(stmt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null expr", K(ret), KPC(table_item), KPC(stmt_));
+  } else {
+    if (OB_NOT_NULL(stmt_->get_query_ctx()) &&
+        OB_NOT_NULL(stmt_->get_query_ctx()->root_stmt_) &&
+        stmt_->get_query_ctx()->root_stmt_->is_explain_stmt()) {
+      explain_non_extend = !static_cast<const ObExplainStmt *>
+                            (stmt_->get_query_ctx()->root_stmt_)->is_explain_extended();
+    }
+    if (OB_NOT_NULL(table_item->flashback_query_expr_) &&
+        // do not print flashback of link table when explain [basic]
+        !(table_item->is_link_table() && explain_non_extend)) {
+      if (table_item->flashback_query_type_ == TableItem::USING_TIMESTAMP) {
+        DATA_PRINTF(" as of timestamp ");
+        if (OB_FAIL(expr_printer_.do_print(table_item->flashback_query_expr_, T_NONE_SCOPE))) {
+          LOG_WARN("fail to print where expr", K(ret));
+        }
+      } else if (table_item->flashback_query_type_ == TableItem::USING_SCN) {
+        if (lib::is_oracle_mode()) {
+          DATA_PRINTF(" as of scn ");
+        } else {
+          DATA_PRINTF(" as of snapshot ");
+        }
+        if (OB_FAIL(expr_printer_.do_print(table_item->flashback_query_expr_, T_NONE_SCOPE))) {
+          LOG_WARN("fail to print where expr", K(ret));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected type", K(ret), K(table_item->flashback_query_type_));
+      }
+    } else if (table_item->is_mv_proctime_table_) {
+      DATA_PRINTF(" as of proctime()");
+    }
+  }
+  return ret;
 }
 
 } //end of namespace sql

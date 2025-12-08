@@ -854,6 +854,7 @@ int ObImportTableTaskScheduler::construct_import_table_schema_(
     target_table_schema.clear_foreign_key_infos();
     target_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_NORMAL);
     target_table_schema.set_mlog_tid(OB_INVALID_ID); // mlog (if exists) will be discarded
+    target_table_schema.set_tmp_mlog_tid(OB_INVALID_ID);
 
     uint64_t database_id = OB_INVALID_ID;
     if (OB_FAIL(target_tenant_guard.get_database_id(import_task_->get_tenant_id(),

@@ -542,7 +542,11 @@ public:
                                  const ObIArray<share::schema::ObIndexType> &index_types,
                                  const common::ObString *ddl_stmt_str,
                                  common::ObMySQLTransaction &trans);
-
+  virtual int switch_mlog_status(const share::schema::ObTableSchema &data_table_schema,
+                                 const uint64_t old_mlog_id,
+                                 const uint64_t new_mlog_id,
+                                 ObSchemaGetterGuard &schema_guard,
+                                 common::ObMySQLTransaction &trans);
   // tablespace
   virtual int create_tablespace(share::schema::ObTablespaceSchema &tablespace_schema,
                                 common::ObMySQLTransaction &trans,

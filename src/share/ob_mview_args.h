@@ -22,6 +22,62 @@ namespace oceanbase
 {
 namespace obrpc
 {
+
+struct ObMVRefreshInfo
+{
+  OB_UNIS_VERSION(1);
+public:
+  share::schema::ObMVRefreshMethod refresh_method_;
+  share::schema::ObMVRefreshMode refresh_mode_;
+  common::ObObj start_time_;
+  ObString next_time_expr_;
+  ObString exec_env_;
+  int64_t parallel_;
+  int64_t refresh_dop_;
+  share::schema::ObMVNestedRefreshMode nested_refresh_mode_;
+
+  ObMVRefreshInfo() :
+  refresh_method_(share::schema::ObMVRefreshMethod::NEVER),
+  refresh_mode_(share::schema::ObMVRefreshMode::DEMAND),
+  start_time_(),
+  next_time_expr_(),
+  exec_env_(),
+  parallel_(OB_INVALID_COUNT),
+  refresh_dop_(0),
+  nested_refresh_mode_(share::schema::ObMVNestedRefreshMode::INDIVIDUAL) {}
+
+  void reset() {
+    refresh_method_ = share::schema::ObMVRefreshMethod::NEVER;
+    refresh_mode_ = share::schema::ObMVRefreshMode::DEMAND;
+    start_time_.reset();
+    next_time_expr_.reset();
+    exec_env_.reset();
+    parallel_ = OB_INVALID_COUNT;
+    refresh_dop_ = 0;
+    nested_refresh_mode_ = share::schema::ObMVNestedRefreshMode::INDIVIDUAL;
+  }
+
+  bool operator == (const ObMVRefreshInfo &other) const {
+    return refresh_method_ == other.refresh_method_
+      && refresh_mode_ == other.refresh_mode_
+      && start_time_ == other.start_time_
+      && next_time_expr_ == other.next_time_expr_
+      && exec_env_ == other.exec_env_
+      && parallel_ == other.parallel_
+      && refresh_dop_ == other.refresh_dop_
+      && nested_refresh_mode_ == other.nested_refresh_mode_;
+  }
+
+  TO_STRING_KV(K_(refresh_mode),
+      K_(refresh_method),
+      K_(start_time),
+      K_(next_time_expr),
+      K_(exec_env),
+      K_(parallel),
+      K_(refresh_dop),
+      K_(nested_refresh_mode));
+};
+
 struct ObMVRequiredColumnsInfo {
   OB_UNIS_VERSION(1);
 
@@ -48,7 +104,7 @@ struct ObMVAdditionalInfo {
 
 public:
   share::schema::ObTableSchema container_table_schema_;
-  share::schema::ObMVRefreshInfo mv_refresh_info_;
+  ObMVRefreshInfo mv_refresh_info_;
   ObSEArray<ObMVRequiredColumnsInfo, 8> required_columns_infos_;
 
   int assign(const ObMVAdditionalInfo &other);
@@ -74,7 +130,8 @@ public:
       parent_task_id_(0),
       target_data_sync_scn_(),
       select_sql_(),
-      required_columns_infos_()
+      required_columns_infos_(),
+      use_direct_load_for_complete_refresh_(true)
   {
   }
   ~ObMViewCompleteRefreshArg() = default;
@@ -90,7 +147,10 @@ public:
                        K_(tz_info),
                        K_(tz_info_wrap),
                        "nls_formats", common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX),
-                       K_(parent_task_id));
+                       K_(parent_task_id),
+                       K_(target_data_sync_scn),
+                       K_(select_sql),
+                       K_(use_direct_load_for_complete_refresh));
 public:
   uint64_t tenant_id_;
   uint64_t table_id_; // mview table id
@@ -106,6 +166,7 @@ public:
   share::SCN target_data_sync_scn_;
   ObString select_sql_;
   ObSEArray<ObMVRequiredColumnsInfo, 8> required_columns_infos_;
+  bool use_direct_load_for_complete_refresh_;
 };
 
 struct ObMViewCompleteRefreshRes final
@@ -144,7 +205,8 @@ public:
       start_time_(OB_INVALID_TIMESTAMP),
       is_mview_complete_refresh_(false),
       mview_target_data_sync_scn_(),
-      select_sql_()
+      select_sql_(),
+      use_direct_load_for_complete_refresh_(true)
   {
   }
   ~ObMViewRefreshInfo() = default;
@@ -155,7 +217,10 @@ public:
                K_(last_refresh_scn),
                K_(refresh_scn),
                K_(start_time),
-               K_(is_mview_complete_refresh));
+               K_(is_mview_complete_refresh),
+               K_(mview_target_data_sync_scn),
+               K_(select_sql),
+               K_(use_direct_load_for_complete_refresh));
 public:
   uint64_t mview_table_id_;
   share::SCN last_refresh_scn_;
@@ -165,6 +230,7 @@ public:
   // placeholer
   share::SCN mview_target_data_sync_scn_;
   ObString select_sql_;
+  bool use_direct_load_for_complete_refresh_;
 };
 
 struct ObAlterMViewArg
@@ -206,7 +272,9 @@ public:
                K_(is_alter_refresh_start),
                K_(start_time),
                K_(is_alter_refresh_next),
-               K_(next_time_expr));
+               K_(next_time_expr),
+               K_(is_alter_nested_refresh_mode),
+               K_(nested_refresh_mode));
 public:
   void set_exec_env(const ObString &exec_env)
   {
@@ -242,6 +310,11 @@ public:
     is_alter_refresh_next_ = true;
     next_time_expr_ = next_time_expr;
   }
+  void set_alter_nested_refresh_mode(const share::schema::ObMVNestedRefreshMode nested_refresh_mode)
+  {
+    is_alter_nested_refresh_mode_ = true;
+    nested_refresh_mode_ = nested_refresh_mode;
+  }
   const ObString &get_exec_env() const { return exec_env_; }
   bool is_alter_on_query_computation() const { return is_alter_on_query_computation_; }
   bool get_enable_on_query_computation() const { return enable_on_query_computation_; }
@@ -255,6 +328,8 @@ public:
   const common::ObObj &get_start_time() const { return start_time_; }
   bool is_alter_refresh_next() const { return is_alter_refresh_next_; }
   const ObString &get_next_time_expr() const { return next_time_expr_; }
+  bool is_alter_nested_refresh_mode() const { return is_alter_nested_refresh_mode_; }
+  share::schema::ObMVNestedRefreshMode get_nested_refresh_mode() const { return nested_refresh_mode_; }
 private:
   ObString exec_env_;
   bool is_alter_on_query_computation_;

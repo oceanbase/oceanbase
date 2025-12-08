@@ -520,6 +520,8 @@
 #include "sql/engine/expr/ob_expr_ai/ob_expr_ai_rerank.h"
 #include "sql/engine/expr/ob_expr_local_dynamic_filter.h"
 #include "sql/engine/expr/ob_expr_bucket.h"
+#include "sql/engine/expr/ob_expr_md5_concat_ws.h"
+
 
 #include "sql/engine/expr/ob_expr_lock_func.h"
 #include "sql/engine/expr/ob_expr_format_profile.h"
@@ -784,6 +786,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprAggMinus);
     REG_OP(ObExprMod);
     REG_OP(ObExprMd5);
+    REG_OP(ObExprMd5ConcatWs);
     REG_OP(ObExprTime);
     REG_OP(ObExprHour);
     REG_OP(ObExprRpad);

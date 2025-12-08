@@ -162,6 +162,11 @@ public:
                         const int64_t new_schema_version,
                         const common::ObString *ddl_stmt_str,
                         common::ObISQLClient &sql_client);
+  int update_mlog_status(const ObTableSchema &data_table_schema,
+                         const uint64_t mlog_table_id,
+                         const char *new_name,
+                         const int64_t new_schema_version,
+                         common::ObISQLClient &sql_client);
 
   virtual int update_mview_status(const ObTableSchema &mview_table_schema,
                                  common::ObISQLClient &sql_client);

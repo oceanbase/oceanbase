@@ -707,6 +707,8 @@ const char *const OB_INDEX_PREFIX = "__idx_";
 // internal materialized view log prefix
 const char *const OB_MLOG_PREFIX_MYSQL = "mlog$_";
 const char *const OB_MLOG_PREFIX_ORACLE = "MLOG$_";
+const char *const OB_TMP_MLOG_PREFIX_MYSQL = "tmlog$_";
+const char *const OB_TMP_MLOG_PREFIX_ORACLE = "TMLOG$_";
 
 // internal user
 const char *const OB_INTERNAL_USER = "__ob_server";

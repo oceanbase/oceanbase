@@ -110,8 +110,9 @@ int ObMLogBuilder::MLogColumnUtils::add_sequence_column()
     rowkey_column->set_autoincrement(false);
     rowkey_column->set_is_hidden(false);
     rowkey_column->set_nullable(false);
-    rowkey_column->set_rowkey_position(0);
+    rowkey_column->set_rowkey_position(++rowkey_count_);
     rowkey_column->set_order_in_rowkey(ObOrderType::ASC);
+    rowkey_column->set_index_position(0);
     rowkey_column->set_column_id(OB_MLOG_SEQ_NO_COLUMN_ID);
     rowkey_column->set_data_type(ObIntType);
     rowkey_column->set_charset_type(CHARSET_BINARY);
@@ -135,10 +136,12 @@ int ObMLogBuilder::MLogColumnUtils::add_dmltype_column()
   } else {
     column->set_autoincrement(false);
     column->set_is_hidden(false);
+    column->set_nullable(false);
     column->set_rowkey_position(0);
     column->set_index_position(0);
     column->set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI);
     column->set_data_type(ColumnType::ObVarcharType);
+    column->set_accuracy(ObAccuracy::MAX_ACCURACY[ObVarcharType]);
     column->set_data_length(1);
     column->set_column_id(OB_MLOG_DML_TYPE_COLUMN_ID);
     if (OB_FAIL(column->set_column_name(OB_MLOG_DML_TYPE_COLUMN_NAME))) {
@@ -159,10 +162,12 @@ int ObMLogBuilder::MLogColumnUtils::add_old_new_column()
   } else {
     column->set_autoincrement(false);
     column->set_is_hidden(false);
+    column->set_nullable(false);
     column->set_rowkey_position(0);
     column->set_index_position(0);
     column->set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI);
     column->set_data_type(ColumnType::ObVarcharType);
+    column->set_accuracy(ObAccuracy::MAX_ACCURACY[ObVarcharType]);
     column->set_data_length(1);
     column->set_column_id(OB_MLOG_OLD_NEW_COLUMN_ID);
     if (OB_FAIL(column->set_column_name(OB_MLOG_OLD_NEW_COLUMN_NAME))) {
@@ -207,6 +212,7 @@ int ObMLogBuilder::MLogColumnUtils::add_base_table_pk_columns(
         // preserve the rowkey position of the column
         ref_column->set_autoincrement(false);
         ref_column->set_is_hidden(false);
+        ref_column->set_rowkey_position(++rowkey_count_);
         ref_column->set_index_position(0);
         ref_column->set_prev_column_id(UINT64_MAX);
         ref_column->set_next_column_id(UINT64_MAX);
@@ -218,8 +224,6 @@ int ObMLogBuilder::MLogColumnUtils::add_base_table_pk_columns(
         } else if (OB_FAIL(mlog_table_column_array_.push_back(ref_column))) {
           LOG_WARN("failed to push back column to mlog table column array",
               KR(ret), KP(ref_column));
-        } else {
-          ref_column->set_rowkey_position(++rowkey_count_);
         }
       }
     }
@@ -311,7 +315,6 @@ int ObMLogBuilder::MLogColumnUtils::implicit_add_base_table_part_key_columns(
         ref_column->set_is_hidden(false);
         ref_column->set_rowkey_position(0);
         ref_column->set_index_position(0);
-        ref_column->set_nullable(false);
         ref_column->set_prev_column_id(UINT64_MAX);
         ref_column->set_next_column_id(UINT64_MAX);
         ref_column->set_column_id(ObTableSchema::gen_mlog_col_id_from_ref_col_id(
@@ -363,17 +366,8 @@ int ObMLogBuilder::MLogColumnUtils::construct_mlog_table_columns(
     }
   };
   lib::ob_sort(mlog_table_column_array_.begin(), mlog_table_column_array_.end(), ColumnSchemaCmp());
-
   for (int64_t i = 0; OB_SUCC(ret) && (i < mlog_table_column_array_.count()); ++i) {
     ObColumnSchemaV2 *column = mlog_table_column_array_.at(i);
-    // columns referencing base table primary keys have already been assigned rowkey position
-    if ((column->is_part_key_column() || column->is_subpart_key_column())
-        && (0 == column->get_rowkey_position())) {
-      column->set_rowkey_position(++rowkey_count_);
-    } else if (OB_MLOG_SEQ_NO_COLUMN_ID == column->get_column_id()) {
-      // mlog seq_no column must be the last rowkey
-      column->set_rowkey_position(++rowkey_count_);
-    }
     if (OB_FAIL(mlog_schema.add_column(*column))) {
       LOG_WARN("failed to add column to mlog schema", KR(ret), KPC(column));
     }
@@ -409,14 +403,16 @@ int ObMLogBuilder::init()
   return ret;
 }
 
-int ObMLogBuilder::create_mlog(
-    ObSchemaGetterGuard &schema_guard,
-    const ObCreateMLogArg &create_mlog_arg,
-    ObCreateMLogRes &create_mlog_res)
+int ObMLogBuilder::create_or_replace_mlog(share::schema::ObSchemaGetterGuard &schema_guard,
+                                          const obrpc::ObCreateMLogArg &create_mlog_arg,
+                                          obrpc::ObCreateMLogRes &create_mlog_res)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = create_mlog_arg.tenant_id_;
   uint64_t compat_version = 0;
+  const ObTableSchema *base_table_schema = nullptr;
+  schema_guard.set_session_id(create_mlog_arg.session_id_);
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObMLogBuilder not init", KR(ret));
@@ -429,74 +425,106 @@ int ObMLogBuilder::create_mlog(
   } else if (!create_mlog_arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(create_mlog_arg));
-  } else {
-    uint64_t base_table_id = OB_INVALID_ID;
-    bool in_tenant_space = true;
-    const ObTableSchema *base_table_schema = nullptr;
-    const ObTableSchema *data_table_schema = nullptr;
-    schema_guard.set_session_id(create_mlog_arg.session_id_);
-    if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
-                                              create_mlog_arg.database_name_,
-                                              create_mlog_arg.table_name_,
-                                              false /* is_index */,
-                                              base_table_schema))) {
-      LOG_WARN("failed to get table schema", KR(ret), K(create_mlog_arg));
-    } else if (OB_ISNULL(base_table_schema)) {
-      ret = OB_TABLE_NOT_EXIST;
-      ObCStringHelper helper;
-      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(create_mlog_arg.database_name_),
-          helper.convert(create_mlog_arg.table_name_));
-      LOG_WARN("table not exist", KR(ret), K(create_mlog_arg));
-    } else if(!base_table_schema->is_user_table() && !base_table_schema->is_materialized_view()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("create materialized view log on a non-user table is not supported",
-          KR(ret), K(base_table_schema->get_table_type()));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on a non-user table is");
-    } else if (base_table_schema->is_materialized_view()) {
-      const ObTableSchema *container_table_schema = nullptr;
-      if (OB_FAIL(schema_guard.get_table_schema(
-          tenant_id, base_table_schema->get_data_table_id(), container_table_schema))) {
-        LOG_WARN("failed to get table schema", KR(ret), K(tenant_id));
-      } else if (OB_ISNULL(container_table_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null container table schema", KR(ret), KP(container_table_schema));
-      } else {
-        data_table_schema = container_table_schema;
-      }
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, create_mlog_arg.database_name_,
+                                                   create_mlog_arg.table_name_,
+                                                   false /* is_index */, base_table_schema))) {
+    LOG_WARN("failed to get table schema", KR(ret), K(create_mlog_arg));
+  } else if (OB_ISNULL(base_table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST,
+                   helper.convert(create_mlog_arg.database_name_),
+                   helper.convert(create_mlog_arg.table_name_));
+    LOG_WARN("table not exist", KR(ret), K(create_mlog_arg));
+  } else if (!base_table_schema->is_user_table() && !base_table_schema->is_materialized_view()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("create materialized view log on a non-user table is not supported", KR(ret),
+             K(base_table_schema->get_table_type()));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on a non-user table is");
+  } else if (base_table_schema->is_materialized_view()) {
+    const ObTableSchema *container_table_schema = nullptr;
+    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, base_table_schema->get_data_table_id(),
+                                              container_table_schema))) {
+      LOG_WARN("failed to get table schema", KR(ret), K(tenant_id));
+    } else if (OB_ISNULL(container_table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null container table schema", KR(ret), KP(container_table_schema));
     } else {
-      data_table_schema = base_table_schema;
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (data_table_schema->has_mlog_table()) {
-      ret = OB_ERR_MLOG_EXIST;
-      ObCStringHelper helper;
-      LOG_WARN("a materialized view log already exists on table",
-          K(create_mlog_arg.table_name_), K(data_table_schema->get_mlog_tid()));
-      LOG_USER_ERROR(OB_ERR_MLOG_EXIST, helper.convert(create_mlog_arg.table_name_));
-    } else if (FALSE_IT(base_table_id = data_table_schema->get_table_id())) {
-    } else if (OB_FAIL(ObSysTableChecker::is_tenant_space_table_id(base_table_id, in_tenant_space))) {
-      LOG_WARN("failed to check table in tenant space", KR(ret), K(base_table_id));
-    } else if (is_inner_table(base_table_id)) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("create mlog on inner table is not supported", KR(ret), K(base_table_id));
-    } else if (data_table_schema->is_in_splitting()) {
-      ret = OB_OP_NOT_ALLOW;
-      LOG_WARN("can not create mlog during splitting", KR(ret), K(create_mlog_arg));
-    } else if (OB_FAIL(ddl_service_.check_restore_point_allow(
-          tenant_id, *data_table_schema))) {
-      LOG_WARN("failed to check restore point allow", KR(ret), K(tenant_id), K(base_table_id));
-    } else if (OB_FAIL(ddl_service_.check_fk_related_table_ddl(
-          *data_table_schema, ObDDLType::DDL_CREATE_INDEX))) {
-      LOG_WARN("check whether the foreign key related table is executing ddl failed", KR(ret));
-    } else if (OB_FAIL(do_create_mlog(schema_guard,
-                                      create_mlog_arg,
-                                      *data_table_schema,
-                                      compat_version,
-                                      create_mlog_res))) {
-      LOG_WARN("failed to do create mlog", KR(ret), K(create_mlog_arg));
+      base_table_schema = container_table_schema;
     }
   }
+
+  if (OB_FAIL(ret)) {
+  } else {
+    bool is_create_mlog = false;
+    if (!create_mlog_arg.replace_if_exists_) {
+      // if the "OR REPLACE" is not specified, it must be a create mlog request
+      is_create_mlog = true;
+    } else if (create_mlog_arg.create_tmp_mlog_) {
+      // if the create tmp mlog flag is set, it must be a create mlog request
+      is_create_mlog = true;
+    } else if (!base_table_schema->has_mlog_table()) {
+      // if the base table has no mlog table, it must be a create mlog request
+      is_create_mlog = true;
+    }
+    if (is_create_mlog) {
+      ret = create_mlog(schema_guard, create_mlog_arg, create_mlog_res, base_table_schema,
+                        compat_version);
+    } else {
+      ret = replace_mlog(schema_guard, create_mlog_arg, create_mlog_res, base_table_schema,
+                         compat_version);
+    }
+  }
+
+  return ret;
+}
+
+int ObMLogBuilder::create_mlog(ObSchemaGetterGuard &schema_guard,
+                               const ObCreateMLogArg &create_mlog_arg,
+                               ObCreateMLogRes &create_mlog_res,
+                               const ObTableSchema *base_table_schema,
+                               const uint64_t data_version)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = create_mlog_arg.tenant_id_;
+  bool in_tenant_space = true;
+  uint64_t base_table_id = 0;
+
+  if (OB_ISNULL(base_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("base_table_schema is null", KR(ret), K(create_mlog_arg));
+  } else if (base_table_schema->has_mlog_table() && !create_mlog_arg.create_tmp_mlog_) {
+    ret = OB_ERR_MLOG_EXIST;
+    ObCStringHelper helper;
+    LOG_WARN("a materialized view log already exists on table",
+             K(create_mlog_arg.table_name_),
+             K(base_table_schema->get_mlog_tid()));
+    LOG_USER_ERROR(OB_ERR_MLOG_EXIST, helper.convert(create_mlog_arg.table_name_));
+  } else if (base_table_schema->has_tmp_mlog_table()) {
+    ret = OB_ERR_MLOG_EXIST;
+    ObCStringHelper helper;
+    LOG_WARN("a tmp materialized view log already exists on table", K(create_mlog_arg.table_name_),
+             K(base_table_schema->get_mlog_tid()));
+    LOG_USER_ERROR(OB_ERR_MLOG_EXIST, helper.convert(create_mlog_arg.table_name_));
+  } else if (FALSE_IT(base_table_id = base_table_schema->get_table_id())) {
+  } else if (OB_FAIL(ObSysTableChecker::is_tenant_space_table_id(base_table_id, in_tenant_space))) {
+    LOG_WARN("failed to check table in tenant space", KR(ret), K(base_table_id));
+  } else if (is_inner_table(base_table_id)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("create mlog on inner table is not supported", KR(ret), K(base_table_id));
+  } else if (base_table_schema->is_in_splitting()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("can not create mlog during splitting", KR(ret), K(create_mlog_arg));
+  } else if (OB_FAIL(ddl_service_.check_restore_point_allow(tenant_id, *base_table_schema))) {
+    LOG_WARN("failed to check restore point allow", KR(ret), K(tenant_id), K(base_table_id));
+  } else if (OB_FAIL(ddl_service_.check_fk_related_table_ddl(*base_table_schema,
+                                                             ObDDLType::DDL_CREATE_INDEX))) {
+    LOG_WARN("check whether the foreign key related table is executing ddl failed", KR(ret));
+  } else if (OB_FAIL(do_create_mlog(schema_guard, create_mlog_arg, *base_table_schema, data_version,
+                                    create_mlog_res))) {
+    LOG_WARN("failed to do create mlog", KR(ret), K(create_mlog_arg));
+  }
+
   return ret;
 }
 
@@ -569,6 +597,17 @@ int ObMLogBuilder::do_create_mlog(
         create_mlog_res.schema_version_ = mlog_schema.get_schema_version();
         create_mlog_res.task_id_ = task_record.task_id_;
       }
+
+      if (OB_FAIL(ret)) {
+      } else if (create_mlog_arg.create_tmp_mlog_ && OB_FAIL(
+                     ObDDLTaskRecordOperator::update_parent_task_message(
+                         tenant_id, create_mlog_arg.task_id_, mlog_schema,
+                         create_mlog_res.mlog_table_id_, create_mlog_res.task_id_,
+                         ObDDLUpdateParentTaskIDType::UPDATE_VEC_REBUILD_CREATE_INDEX_TASK_ID,
+                         allocator, trans))) {
+        LOG_WARN("fail to update parent task message", K(ret), K(create_index_arg.task_id_),
+                 K(create_mlog_res.task_id_));
+      }
     }
 
     if (trans.is_started()) {
@@ -587,6 +626,115 @@ int ObMLogBuilder::do_create_mlog(
       }
     }
   } // end HEAP_VAR()
+  return ret;
+}
+
+int ObMLogBuilder::replace_mlog(ObSchemaGetterGuard &schema_guard,
+                                const ObCreateMLogArg &create_mlog_arg,
+                                ObCreateMLogRes &create_mlog_res,
+                                const ObTableSchema *base_table_schema,
+                                const uint64_t data_version)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = create_mlog_arg.tenant_id_;
+  int64_t refreshed_schema_version = 0;
+  const ObTableSchema *orig_mlog_schema = nullptr;
+  const ObDatabaseSchema *database_schema = nullptr;
+  ObArenaAllocator allocator("DdlTaskTmp");
+  ObDDLTaskRecord task_record;
+  bool has_mlog_task = false;
+  ObDDLSQLTransaction trans(&ddl_service_.get_schema_service());
+
+  if (data_version < MOCK_DATA_VERSION_4_3_5_3 || (data_version >= DATA_VERSION_4_4_0_0 && data_version < DATA_VERSION_4_4_2_0)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("replace_mlog is not supported before 4.3.5.3 or between 4.4.0.0 and 4.4.2.0", KR(ret), K(data_version));
+  } else if (OB_ISNULL(base_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("base_table_schema is null", KR(ret), K(create_mlog_arg));
+  } else if (!base_table_schema->has_mlog_table()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("data table doesn't have a mlog, can't replace it", KR(ret), KPC(base_table_schema));
+  } else if (base_table_schema->has_tmp_mlog_table()) {
+    ret = OB_ERR_MLOG_EXIST;
+    LOG_WARN("a tmp materialized view log already exists on table, can't replace it",
+             K(create_mlog_arg.table_name_), K(base_table_schema->get_mlog_tid()));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, base_table_schema->get_mlog_tid(),
+                                                   orig_mlog_schema))) {
+    LOG_WARN("failed to get mlog schema", KR(ret), "mlog id", base_table_schema->get_mlog_tid());
+  } else if (OB_ISNULL(orig_mlog_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("orig_mlog_schema is null", KR(ret), "mlog id", base_table_schema->get_mlog_tid());
+  } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, base_table_schema->get_database_id(), database_schema))) {
+    LOG_WARN("get_database_schema failed", K(tenant_id), K(base_table_schema->get_database_id()), K(ret));
+  } else if (OB_ISNULL(database_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("database schema should not be null", K(ret));
+  } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+    LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(
+                 trans.start(&ddl_service_.get_sql_proxy(), tenant_id, refreshed_schema_version))) {
+    LOG_WARN("failed to start trans", KR(ret), K(tenant_id), K(refreshed_schema_version));
+  } else if (OB_FAIL(ObDDLTaskRecordOperator::check_has_index_or_mlog_task(
+                trans, *orig_mlog_schema, tenant_id, base_table_schema->get_table_id(), has_mlog_task))) {
+    LOG_WARN("fail to check has index task", KR(ret), K(tenant_id),
+            K(base_table_schema->get_table_id()), K(orig_mlog_schema->get_table_id()));
+  } else if (has_mlog_task) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("replacing a building or dropping mlog table is not supported", KR(ret), K(tenant_id),
+            K(base_table_schema->get_table_id()), K(orig_mlog_schema->get_table_id()));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "replacing a building or dropping mlog table is");
+  } else {
+    ObTableLockOwnerID owner_id;
+    const int64_t old_index_table_id = OB_INVALID_ID;
+    const int64_t new_index_table_id = OB_INVALID_ID;
+    const bool is_global_index = false;
+    ObRebuildIndexArg rebuild_index_arg;
+    rebuild_index_arg.database_name_ = database_schema->get_database_name_str();
+    rebuild_index_arg.create_mlog_arg_.assign(create_mlog_arg);
+    rebuild_index_arg.rebuild_index_type_ = obrpc::ObRebuildIndexArg::RebuildIndexType::REBUILD_INDEX_TYPE_MLOG;
+    ObCreateDDLTaskParam param(orig_mlog_schema->get_tenant_id(),
+                               ObDDLType::DDL_REPLACE_MLOG,
+                               orig_mlog_schema,
+                               nullptr,
+                               0 /*object_id*/,
+                               orig_mlog_schema->get_schema_version(),
+                               create_mlog_arg.parallelism_,
+                               create_mlog_arg.consumer_group_id_,
+                               &allocator,
+                               &rebuild_index_arg);
+    param.tenant_data_version_ = data_version;
+    if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
+      LOG_WARN("submit create index ddl task failed", K(ret));
+    } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
+                                                   task_record.task_id_))) {
+      LOG_WARN("failed to get owner id", K(ret), K(task_record.task_id_));
+    } else if (OB_FAIL(ObDDLLock::lock_for_rebuild_index(*base_table_schema, old_index_table_id,
+                                                         new_index_table_id, is_global_index,
+                                                         owner_id, trans))) {
+      LOG_WARN("failed to lock rebuild index ddl", K(ret));
+    } else {
+      create_mlog_res.mlog_table_id_ = orig_mlog_schema->get_table_id();
+      create_mlog_res.schema_version_ = orig_mlog_schema->get_schema_version();
+      create_mlog_res.task_id_ = task_record.task_id_;
+    }
+  }
+
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("failed to end trans", "is_commit", OB_SUCCESS == ret, KR(tmp_ret));
+      ret = (OB_SUCC(ret)) ? tmp_ret : ret;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ddl_service_.publish_schema(tenant_id))) {
+      LOG_WARN("failed to publish schema", KR(ret));
+    } else if (OB_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
+      LOG_WARN("failed to schedule ddl task", KR(ret), K(task_record));
+    }
+  }
+
   return ret;
 }
 
@@ -658,16 +806,19 @@ int ObMLogBuilder::set_basic_infos(
     ObString mlog_table_name;
     ObArenaAllocator allocator(ObModIds::OB_SCHEMA);
     bool is_oracle_mode = false;
+    ObTableType mlog_type = MATERIALIZED_VIEW_LOG;
     if (OB_FAIL(base_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
       LOG_WARN("failed to check if oracle compat mode", KR(ret));
-    } else if (OB_FAIL(ObTableSchema::build_mlog_table_name(allocator,
-        create_mlog_arg.table_name_, mlog_table_name, is_oracle_mode))) {
+    } else if (OB_FAIL(ObTableSchema::build_mlog_table_name(allocator, create_mlog_arg.table_name_,
+                                                            mlog_table_name, is_oracle_mode,
+                                                            create_mlog_arg.create_tmp_mlog_))) {
       LOG_WARN("failed to build mlog table name", KR(ret), K(create_mlog_arg.table_name_));
     } else if (OB_FAIL(mlog_schema.set_table_name(mlog_table_name))) {
       LOG_WARN("failed to set table name", KR(ret), K(mlog_table_name));
     } else {
       mlog_schema.set_table_mode_flag(ObTableModeFlag::TABLE_MODE_QUEUING_EXTREME);
-      mlog_schema.set_table_type(MATERIALIZED_VIEW_LOG);
+      mlog_schema.set_table_type(mlog_type);
+      mlog_schema.set_table_organization_mode(TOM_INDEX_ORGANIZED);
       mlog_schema.set_index_status(ObIndexStatus::INDEX_STATUS_UNAVAILABLE);
       mlog_schema.set_duplicate_attribute(base_table_schema.get_duplicate_scope(),
                                           base_table_schema.get_duplicate_read_consistency());

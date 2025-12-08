@@ -219,13 +219,12 @@ enum ObDDLTaskStatus { // FARM COMPAT WHITELIST
   GENERATE_PQ_CENTROID_TABLE_SCHEMA = 44,
   WAIT_PQ_CENTROID_TABLE_COMPLEMENT = 45,
   LOAD_DICTIONARY = 46,
-  PURGE_OLD_MLOG = 47,
+  REFRESH_RELATED_MVIEWS = 47,
   REGISTER_SPLIT_INFO_MDS = 48,
   PREPARE_TABLET_SPLIT_RANGES = 49,
   DROP_VID_ROWKEY_INDEX_TABLE = 50,
   DROP_ROWKEY_VID_INDEX_TABLE = 51,
   BUILD_MLOG = 52,
-
   FAIL = 99,
   SUCCESS = 100
 };
@@ -400,8 +399,8 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
     case ObDDLTaskStatus::WAIT_PQ_CENTROID_TABLE_COMPLEMENT:
       str = "WAIT_PQ_CENTROID_TABLE_COMPLEMENT";
       break;
-    case ObDDLTaskStatus::PURGE_OLD_MLOG:
-      str = "PURGE_OLD_MLOG";
+    case ObDDLTaskStatus::REFRESH_RELATED_MVIEWS:
+      str = "REFRESH_RELATED_MVIEWS";
       break;
     case ObDDLTaskStatus::REGISTER_SPLIT_INFO_MDS:
       str = "REGISTER_SPLIT_INFO_MDS";
@@ -1154,11 +1153,13 @@ public:
       const int64_t container_table_id,
       share::schema::ObSchemaGetterGuard &schema_guard,
       const int64_t snapshot_version,
+      const uint64_t mview_target_data_sync_scn,
       const int64_t execution_id,
       const int64_t task_id,
       const int64_t parallelism,
       const bool use_schema_version_hint_for_src_table,
       const common::ObIArray<share::schema::ObBasedSchemaObjectInfo> &based_schema_object_infos,
+      const ObString &mview_select_sql,
       ObSqlString &sql_string);
 
   static int get_tablet_leader_addr(

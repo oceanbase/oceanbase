@@ -386,7 +386,8 @@ int ObTransformMVRewritePrepare::quick_rewrite_check(const ObSQLSessionInfo &ses
     /* do nothing */
   } else if (!mv_schema.mv_enable_query_rewrite()) {
     is_valid = false;
-  } else if (!allow_stale && !mv_schema.mv_on_query_computation()) {
+  } else if (!allow_stale && (!mv_schema.mv_on_query_computation()
+                              || mv_schema.is_mv_cnt_proctime_table())) {
     is_valid = false;
   } else {
     is_valid = true;
@@ -454,6 +455,7 @@ int ObTransformMVRewritePrepare::resolve_temp_stmt(const ObString &sql_string,
       resolver_ctx.stmt_factory_ = ctx->stmt_factory_;
       resolver_ctx.sql_proxy_ = GCTX.sql_proxy_;
       resolver_ctx.query_ctx_ = query_ctx;
+      resolver_ctx.is_mview_definition_sql_ = true;
       resolver_ctx.is_for_rt_mv_ = true;
       resolver_ctx.expr_factory_->set_query_ctx(resolver_ctx.query_ctx_);
       trans_ctx = *ctx;

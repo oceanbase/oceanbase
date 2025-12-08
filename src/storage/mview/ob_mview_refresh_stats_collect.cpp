@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_mview_refresh_stats_collect.h"
+#include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/engine/ob_exec_context.h"
 #include "storage/mview/cmd/ob_mview_refresh_executor.h"
 #include "storage/mview/ob_mview_refresh_ctx.h"
@@ -123,16 +124,19 @@ int ObMViewRefreshStatsCollection::collect_after_refresh(ObMViewRefreshCtx &refr
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObMViewRefreshStatsCollection not init", KR(ret), KP(this));
-  } else if (OB_ISNULL(refresh_ctx.trans_)) {
+  } else if (OB_ISNULL(refresh_ctx.trans_) || OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null trans", KR(ret));
+    LOG_WARN("unexpected null trans", KR(ret), KP(refresh_ctx.trans_), KP(GCTX.schema_service_));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id_));
   } else {
     ObMViewTransaction &trans = *refresh_ctx.trans_;
     const ObIArray<ObDependencyInfo> &dependency_infos = refresh_ctx.dependency_infos_;
-    const ObIArray<ObMLogInfo> &mlog_infos = refresh_ctx.mlog_infos_;
+    const ObIArray<uint64_t> &tables_need_mlog = refresh_ctx.tables_need_mlog_;
     int64_t num_rows = 0;
     if (ObMVRefreshStatsCollectionLevel::ADVANCED == collection_level_ &&
         OB_TMP_FAIL(ObMViewRefreshHelper::get_table_row_num(trans, tenant_id_, mview_id_,
@@ -143,37 +147,55 @@ int ObMViewRefreshStatsCollection::collect_after_refresh(ObMViewRefreshCtx &refr
     if (collection_level_ >= ObMVRefreshStatsCollectionLevel::TYPICAL) {
       for (int64_t i = 0; OB_SUCC(ret) && i < dependency_infos.count(); ++i) {
         const ObDependencyInfo &dep = dependency_infos.at(i);
-        const ObMLogInfo &mlog_info = mlog_infos.at(i);
-        int64_t num_rows_ins = 0;
-        int64_t num_rows_upd = 0;
-        int64_t num_rows_del = 0;
-        int64_t num_rows = 0;
-        if (mlog_info.is_valid() &&
-            OB_TMP_FAIL(ObMViewRefreshHelper::get_mlog_dml_row_num(
-              trans, tenant_id_, mlog_info.get_mlog_id(), refresh_ctx.refresh_scn_range_,
-              num_rows_ins, num_rows_upd, num_rows_del))) {
-          LOG_WARN("fail to get mlog dml row num", KR(tmp_ret), K(mlog_info));
-        }
-        if (ObMVRefreshStatsCollectionLevel::ADVANCED == collection_level_ &&
-            OB_TMP_FAIL(ObMViewRefreshHelper::get_table_row_num(
-              trans, tenant_id_, dep.get_ref_obj_id(), refresh_ctx.refresh_scn_range_.end_scn_,
-              num_rows))) {
-          LOG_WARN("fail to get based table row num", KR(tmp_ret), K(dep));
-        }
-        if (OB_SUCC(ret)) {
-          ObMViewRefreshChangeStats change_stats;
-          change_stats.set_tenant_id(tenant_id_);
-          change_stats.set_refresh_id(refresh_id_);
-          change_stats.set_mview_id(mview_id_);
-          change_stats.set_retry_id(retry_id_);
-          change_stats.set_detail_table_id(dep.get_ref_obj_id());
-          change_stats.set_num_rows_ins(num_rows_ins);
-          change_stats.set_num_rows_upd(num_rows_upd);
-          change_stats.set_num_rows_del(num_rows_del);
-          change_stats.set_num_rows(num_rows);
-          if (OB_FAIL(change_stats_array_.push_back(change_stats))) {
-            LOG_WARN("fail to push back change stats", KR(ret), K(change_stats));
+        if (dep.get_ref_obj_type() == ObObjectType::TABLE) {
+          int64_t num_rows_ins = 0;
+          int64_t num_rows_upd = 0;
+          int64_t num_rows_del = 0;
+          int64_t num_rows = 0;
+          const ObTableSchema *table_schema = nullptr;
+          ObScnRange &tmp_scn_range = refresh_ctx.mview_refresh_scn_range_;
+          if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, dep.get_ref_obj_id(), table_schema))) {
+            LOG_WARN("fail to get table schema", KR(ret), K(tenant_id_));
+          } else if (OB_ISNULL(table_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("table schema is null", KR(ret), K(dep));
+          } else if (table_schema->is_materialized_view()) {
+            tmp_scn_range = refresh_ctx.mview_refresh_scn_range_;
+          } else {
+            tmp_scn_range = refresh_ctx.base_table_scn_range_;
           }
+          if (OB_SUCC(ret)) {
+            ObWarningBufferIgnoreScope ignore_warning_guard;
+            if (ObOptimizerUtil::find_item(tables_need_mlog, dep.get_ref_obj_id()) &&
+                OB_TMP_FAIL(ObMViewRefreshHelper::get_mlog_dml_row_num(
+                  trans, tenant_id_, table_schema->get_mlog_tid(), tmp_scn_range,
+                  num_rows_ins, num_rows_upd, num_rows_del))) {
+              LOG_WARN("fail to get mlog dml row num", KR(tmp_ret), K(table_schema->get_mlog_tid()));
+            }
+            if (ObMVRefreshStatsCollectionLevel::ADVANCED == collection_level_ &&
+                OB_TMP_FAIL(ObMViewRefreshHelper::get_table_row_num(
+                  trans, tenant_id_, dep.get_ref_obj_id(), tmp_scn_range.end_scn_,
+                  num_rows))) {
+              LOG_WARN("fail to get based table row num", KR(tmp_ret), K(dep));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            ObMViewRefreshChangeStats change_stats;
+            change_stats.set_tenant_id(tenant_id_);
+            change_stats.set_refresh_id(refresh_id_);
+            change_stats.set_mview_id(mview_id_);
+            change_stats.set_retry_id(retry_id_);
+            change_stats.set_detail_table_id(dep.get_ref_obj_id());
+            change_stats.set_num_rows_ins(num_rows_ins);
+            change_stats.set_num_rows_upd(num_rows_upd);
+            change_stats.set_num_rows_del(num_rows_del);
+            change_stats.set_num_rows(num_rows);
+            if (OB_FAIL(change_stats_array_.push_back(change_stats))) {
+              LOG_WARN("fail to push back change stats", KR(ret), K(change_stats));
+            }
+          }
+        } else {
+          LOG_INFO("skip dep obj", K(dep));
         }
       }
     }

@@ -4886,6 +4886,51 @@ int ObDDLOperator::update_indexes_type(const ObTableSchema &data_table_schema,
   return ret;
 }
 
+int ObDDLOperator::switch_mlog_status(const share::schema::ObTableSchema &data_table_schema,
+                                      const uint64_t old_mlog_id,
+                                      const uint64_t new_mlog_id,
+                                      ObSchemaGetterGuard &schema_guard,
+                                      common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  const ObTableSchema *old_mlog_schema = nullptr;
+  const ObTableSchema *new_mlog_schema = nullptr;
+  uint64_t tenant_id = data_table_schema.get_tenant_id();
+  uint64_t data_table_id = data_table_schema.get_table_id();
+
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("schema service should not be NULL");
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, old_mlog_id, old_mlog_schema))) {
+    LOG_WARN("get table schema failed", K(ret));
+  } else if (nullptr == old_mlog_schema) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpected, table schema must not be nullptr", K(ret));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, new_mlog_id, new_mlog_schema))) {
+    LOG_WARN("get table schema failed", K(ret));
+  } else if (nullptr == new_mlog_schema) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpected, table schema must not be nullptr", K(ret));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_service->get_table_sql_service().update_mlog_status(
+                 data_table_schema, new_mlog_id, old_mlog_schema->get_table_name(), new_schema_version, trans))) {
+    LOG_WARN("update mlog type failed", K(ret), K(data_table_schema));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_service->get_table_sql_service().update_mlog_status(
+                 data_table_schema, old_mlog_id, new_mlog_schema->get_table_name(), new_schema_version, trans))) {
+    LOG_WARN("update mlog type failed", K(ret), K(data_table_schema));
+  } else if (OB_FAIL(schema_service->get_table_sql_service().update_data_table_schema_version(
+                 trans, tenant_id, data_table_id,
+                 data_table_schema.get_in_offline_ddl_white_list()))) {
+    LOG_WARN("update data table schema version failed", K(ret));
+  }
+  return ret;
+}
+
 int ObDDLOperator::update_table_attribute(ObTableSchema &new_table_schema,
                                           common::ObMySQLTransaction &trans,
                                           const ObSchemaOperationType operation_type,

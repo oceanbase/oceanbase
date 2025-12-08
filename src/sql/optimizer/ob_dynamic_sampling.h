@@ -53,7 +53,8 @@ struct ObDSTableParam
     max_ds_timeout_(0),
     degree_(1),
     need_specify_partition_(false),
-    partition_infos_()
+    partition_infos_(),
+    force_use_kv_cache_(false)
  {}
 
   bool is_valid() const { return tenant_id_ != 0 &&
@@ -72,6 +73,7 @@ struct ObDSTableParam
   int64_t degree_;
   bool need_specify_partition_;
   ObSEArray<PartInfo, 4, common::ModulePageAllocator, true> partition_infos_;
+  bool force_use_kv_cache_;
 
   TO_STRING_KV(K(tenant_id_),
                K(table_id_),
@@ -84,7 +86,8 @@ struct ObDSTableParam
                K(degree_),
                K(sample_block_cnt_),
                K(need_specify_partition_),
-               K(partition_infos_));
+               K(partition_infos_),
+               K(force_use_kv_cache_));
 };
 
 enum ObDSResultItemType
@@ -266,7 +269,8 @@ public:
     results_(),
     is_big_table_(false),
     sample_big_table_rown_cnt_(0),
-    table_clause_()
+    table_clause_(),
+    force_use_kv_cache_(false)
   {}
 
   int estimate_table_rowcount(const ObDSTableParam &param,
@@ -392,6 +396,7 @@ private:
   bool is_big_table_;
   int64_t sample_big_table_rown_cnt_;
   ObString table_clause_;
+  bool force_use_kv_cache_;
   //following members will be used for dynamic sampling join in the future
   //ObString join_type_;
   //ObString join_conditions_;
@@ -405,6 +410,7 @@ public:
   static int get_valid_dynamic_sampling_level(const ObSQLSessionInfo *session_info,
                                               const ObTableDynamicSamplingHint *table_ds_hint,
                                               const int64_t global_ds_level,
+                                              const ObTableType table_type,
                                               int64_t &ds_level,
                                               int64_t &sample_block_cnt,
                                               bool &specify_ds);

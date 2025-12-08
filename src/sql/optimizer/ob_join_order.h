@@ -3169,6 +3169,13 @@ struct MergeKeyInfoHelper
     int add_deduced_expr(ObRawExpr *deduced_expr, ObRawExpr *deduce_from,
                          bool is_precise, ObIArray<ObPCConstParamInfo> &param_infos);
     int check_match_to_type(ObRawExpr *to_type, ObRawExpr *candi_expr, bool &is_same, ObExprEqualCheckContext &equal_ctx);
+    int check_can_use_global_stat_instead(const uint64_t ref_table_id,
+                                          const ObTableSchema &table_schema,
+                                          ObIArray<int64_t> &all_used_parts,
+                                          ObIArray<ObTabletID> &all_used_tablets,
+                                          bool &can_use,
+                                          ObIArray<int64_t> &global_part_ids,
+                                          double &scale_ratio);
     int is_valid_range_expr_for_oracle_agent_table(const ObRawExpr *range_expr, bool &is_valid);
     int extract_valid_range_expr_for_oracle_agent_table(const common::ObIArray<ObRawExpr *> &filters,
                                                         common::ObIArray<ObRawExpr *> &new_filters);

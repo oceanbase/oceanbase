@@ -29,6 +29,8 @@
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
 #include "close_modules/shared_storage/share/compaction/ob_shared_storage_compaction_util.h"
 #endif
+#include "storage/mview/ob_mview_refresh_helper.h"
+#include "sql/resolver/mv/ob_mv_provider.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -1387,11 +1389,13 @@ int ObDDLUtil::generate_build_mview_replica_sql(
     const int64_t container_table_id,
     ObSchemaGetterGuard &schema_guard,
     const int64_t snapshot_version,
+    const uint64_t mview_target_data_sync_scn,
     const int64_t execution_id,
     const int64_t task_id,
     const int64_t parallelism,
     const bool use_schema_version_hint_for_src_table,
     const ObIArray<ObBasedSchemaObjectInfo> &based_schema_object_infos,
+    const ObString &mview_select_sql,
     ObSqlString &sql_string)
 {
   int ret = OB_SUCCESS;
@@ -1467,8 +1471,10 @@ int ObDDLUtil::generate_build_mview_replica_sql(
           LOG_WARN("failed to generated mview ddl schema hint", KR(ret));
         }
       }
-      if (OB_SUCC(ret)) {
-        const int64_t real_parallelism = ObDDLUtil::get_real_parallelism(parallelism, true/*is mv refresh*/);
+      const bool nested_consistent_refresh = mview_target_data_sync_scn == OB_INVALID_SCN_VAL ? false : true;
+      const int64_t real_parallelism = ObDDLUtil::get_real_parallelism(parallelism, true/*is mv refresh*/);
+      if (OB_FAIL(ret)) {
+      } else if (!nested_consistent_refresh) {
         const ObString &select_sql_string = mview_table_schema->get_view_schema().get_view_definition_str();
         if (is_oracle_mode) {
           if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ append monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) opt_param('ddl_task_id', %ld) use_px */ INTO \"%.*s\".\"%.*s\""
@@ -1495,9 +1501,41 @@ int ObDDLUtil::generate_build_mview_replica_sql(
             LOG_WARN("fail to assign sql string", KR(ret));
           }
         }
+      } else if (nested_consistent_refresh) {
+        std::string select_sql(mview_select_sql.ptr());
+        std::string real_sql;
+        if (mview_select_sql.empty()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("nested sync refresh with empty sql string", K(mview_select_sql), K(mview_table_id));
+        } else if (OB_FAIL(ObMViewRefreshHelper::replace_all_snapshot_zero(
+                           select_sql, snapshot_version, real_sql, is_oracle_mode))) {
+          LOG_WARN("fail to replace snapshot", K(ret));
+        } else if (!is_oracle_mode) {
+          if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ append monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) "
+                                              " opt_param('ddl_task_id', %ld) use_px */ INTO `%.*s`.`%.*s`"
+                                              " SELECT /*+ %.*s */ * from (%.*s);",
+                                            real_parallelism, execution_id, task_id,
+                                            static_cast<int>(database_name.length()), database_name.ptr(),
+                                            static_cast<int>(container_table_name.length()), container_table_name.ptr(),
+                                            static_cast<int>(src_table_schema_version_hint.length()), src_table_schema_version_hint.ptr(),
+                                            static_cast<int>(real_sql.length()), real_sql.c_str()))) {
+            LOG_WARN("fail to assign sql string", KR(ret));
+          }
+        } else if (is_oracle_mode) {
+          if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ append monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) "
+                                            " opt_param('ddl_task_id', %ld) use_px */ INTO \"%.*s\".\"%.*s\" "
+                                            " SELECT /*+ %.*s */ * from (%.*s);",
+                                            real_parallelism, execution_id, task_id,
+                                            static_cast<int>(database_name.length()), database_name.ptr(),
+                                            static_cast<int>(container_table_name.length()), container_table_name.ptr(),
+                                            static_cast<int>(src_table_schema_version_hint.length()), src_table_schema_version_hint.ptr(),
+                                            static_cast<int>(real_sql.length()), real_sql.c_str()))) {
+            LOG_WARN("fail to assign sql string", KR(ret));
+          }
+        }
       }
-    }
     LOG_INFO("execute sql", K(sql_string));
+    }
   }
   return ret;
 }

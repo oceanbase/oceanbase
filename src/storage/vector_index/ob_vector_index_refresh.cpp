@@ -707,6 +707,7 @@ int ObVectorIndexRefresher::do_rebuild() {
     rebuild_index_arg.parallelism_ = refresh_ctx_->idx_parallel_creation_;
     rebuild_index_arg.vidx_refresh_info_.index_params_ = idx_parameters;
     rebuild_index_arg.rebuild_index_online_ = rebuild_index_online;
+    rebuild_index_arg.rebuild_index_type_ = obrpc::ObRebuildIndexArg::RebuildIndexType::REBUILD_INDEX_TYPE_VEC;
     if (OB_ISNULL(GCTX.rs_mgr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("GCTX.rs_mgr is null", K(ret));

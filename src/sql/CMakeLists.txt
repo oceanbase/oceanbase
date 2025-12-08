@@ -40,6 +40,10 @@ ob_set_subtarget(ob_sql common_mixed
   resolver/mv/ob_simple_mav_printer.cpp
   resolver/mv/ob_simple_mjv_printer.cpp
   resolver/mv/ob_simple_join_mav_printer.cpp
+  resolver/mv/ob_outer_join_mv_printer_helper.cpp
+  resolver/mv/ob_outer_join_mjv_printer.cpp
+  resolver/mv/ob_outer_join_mav_printer.cpp
+  resolver/mv/ob_union_all_mv_printer.cpp
   resolver/mv/ob_major_refresh_mjv_printer.cpp
   resolver/mv/ob_mv_dep_utils.cpp
   resolver/mv/ob_alter_mview_utils.cpp
@@ -551,6 +555,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_makedate.cpp
   engine/expr/ob_expr_maketime.cpp
   engine/expr/ob_expr_md5.cpp
+  engine/expr/ob_expr_md5_concat_ws.cpp
   engine/expr/ob_expr_merging_frozen_time.cpp
   engine/expr/ob_expr_mid.cpp
   engine/expr/ob_expr_mod.cpp
@@ -1501,6 +1506,7 @@ ob_set_subtarget(ob_sql resolver_ddl
   resolver/ddl/ob_create_ccl_rule_stmt.cpp
   resolver/ddl/ob_drop_ccl_rule_resolver.cpp
   resolver/ddl/ob_drop_ccl_rule_stmt.cpp
+  resolver/ddl/ob_mview_resolver_helper.cpp
   resolver/ddl/ob_interval_partition_resolver.cpp
   resolver/ddl/ob_sensitive_rule_resolver.cpp
   resolver/ddl/ob_sensitive_rule_stmt.cpp

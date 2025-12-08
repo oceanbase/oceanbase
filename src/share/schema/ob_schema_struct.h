@@ -73,6 +73,10 @@ namespace rootserver
 class ObRandomZoneSelector;
 class ObReplicaAddr;
 }
+namespace obrpc
+{
+struct ObMVAdditionalInfo;
+}
 namespace share
 {
 namespace schema
@@ -4145,62 +4149,6 @@ public:
   TO_STRING_KV(K_(exec_env), K_(index_params));
 };
 
-struct ObMVRefreshInfo
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObMVRefreshMethod refresh_method_;
-  ObMVRefreshMode refresh_mode_;
-  common::ObObj start_time_;
-  ObString next_time_expr_;
-  ObString exec_env_;
-  int64_t parallel_;
-  int64_t refresh_dop_;
-  ObMVNestedRefreshMode nested_refresh_mode_;
-
-  ObMVRefreshInfo() :
-  refresh_method_(ObMVRefreshMethod::NEVER),
-  refresh_mode_(ObMVRefreshMode::DEMAND),
-  start_time_(),
-  next_time_expr_(),
-  exec_env_(),
-  parallel_(OB_INVALID_COUNT),
-  refresh_dop_(0),
-  nested_refresh_mode_(ObMVNestedRefreshMode::INDIVIDUAL) {}
-
-  void reset() {
-    refresh_method_ = ObMVRefreshMethod::NEVER;
-    refresh_mode_ = ObMVRefreshMode::DEMAND;
-    start_time_.reset();
-    next_time_expr_.reset();
-    exec_env_.reset();
-    parallel_ = OB_INVALID_COUNT;
-    refresh_dop_ = 0;
-    nested_refresh_mode_ = ObMVNestedRefreshMode::INDIVIDUAL;
-  }
-
-  bool operator == (const ObMVRefreshInfo &other) const {
-    return refresh_method_ == other.refresh_method_
-      && refresh_mode_ == other.refresh_mode_
-      && start_time_ == other.start_time_
-      && next_time_expr_ == other.next_time_expr_
-      && exec_env_ == other.exec_env_
-      && parallel_ == other.parallel_
-      && refresh_dop_ == other.refresh_dop_
-      && nested_refresh_mode_ == other.nested_refresh_mode_;
-  }
-
-
-  TO_STRING_KV(K_(refresh_mode),
-      K_(refresh_method),
-      K_(start_time),
-      K_(next_time_expr),
-      K_(exec_env),
-      K_(parallel),
-      K_(refresh_dop),
-      K_(nested_refresh_mode));
-};
-
 class ObViewSchema : public ObSchema
 {
   OB_UNIS_VERSION(1);
@@ -4216,6 +4164,7 @@ public:
 
   inline int set_view_definition(const char *view_definition) { return deep_copy_str(view_definition, view_definition_); }
   inline int set_view_definition(const common::ObString &view_definition) { return deep_copy_str(view_definition, view_definition_); }
+  inline int set_expand_view_definition_for_mv(const common::ObString &expand_view_definition_for_mv) { return deep_copy_str(expand_view_definition_for_mv, expand_view_definition_for_mv_); }
   inline void set_view_check_option(const ViewCheckOption option) { view_check_option_ = option; }
   inline void set_view_is_updatable(const bool is_updatable) { view_is_updatable_ = is_updatable; }
   inline void set_materialized(const bool materialized) { materialized_ = materialized; }
@@ -4230,15 +4179,17 @@ public:
   // ObSQLUtils::generate_view_definition_for_resolve
   inline const common::ObString &get_view_definition_str() const { return view_definition_; }
   inline const char *get_view_definition() const { return extract_str(view_definition_); }
+  inline const common::ObString &get_expand_view_definition_for_mv_str() const { return expand_view_definition_for_mv_; }
+  inline const char *get_expand_view_definition_for_mv() const { return extract_str(expand_view_definition_for_mv_); }
   inline ViewCheckOption get_view_check_option() const { return view_check_option_; }
   inline bool get_view_is_updatable() const { return view_is_updatable_; }
   inline bool get_materialized() const { return materialized_; }
   inline common::ObCharsetType get_character_set_client() const { return character_set_client_; }
   inline common::ObCollationType get_collation_connection() const { return collation_connection_; }
-  inline const ObMVRefreshInfo *get_mv_refresh_info() const { return mv_refresh_info_; }
-  inline void set_mv_refresh_info(const ObMVRefreshInfo *mv_refresh_info) { mv_refresh_info_ = mv_refresh_info; }
   inline void set_container_table_id(uint64_t container_table_id) { container_table_id_ = container_table_id; }
   inline uint64_t get_container_table_id() const { return container_table_id_; }
+  inline const obrpc::ObMVAdditionalInfo *get_mv_additional_info() const { return mv_additional_info_; }
+  inline void set_mv_additional_info(const obrpc::ObMVAdditionalInfo *mv_additional_info) { mv_additional_info_ = mv_additional_info; }
 
   int64_t get_convert_size() const;
   virtual bool is_valid() const;
@@ -4248,7 +4199,8 @@ public:
                N_CHECK_OPTION, ob_view_check_option_str(view_check_option_),
                N_IS_UPDATABLE, STR_BOOL(view_is_updatable_),
                N_IS_MATERIALIZED, STR_BOOL(materialized_),
-               K_(character_set_client), K_(collation_connection));
+               K_(character_set_client), K_(collation_connection),
+               K_(expand_view_definition_for_mv));
 private:
   common::ObString view_definition_;
   ViewCheckOption view_check_option_;
@@ -4257,7 +4209,8 @@ private:
   common::ObCharsetType character_set_client_;
   common::ObCollationType collation_connection_;
   uint64_t container_table_id_;
-  const ObMVRefreshInfo *mv_refresh_info_; //only for pass write param, don't need serialize and memory is hold by caller
+  const obrpc::ObMVAdditionalInfo *mv_additional_info_; //only for pass write param, don't need serialize and memory is hold by caller
+  common::ObString expand_view_definition_for_mv_;
 };
 
 class ObColumnSchemaHashWrapper
@@ -7683,8 +7636,10 @@ struct ObAuxTableMetaInfo
   OB_UNIS_VERSION(1);
 public:
   ObAuxTableMetaInfo()
-      : table_id_(common::OB_INVALID_ID), table_type_(MAX_TABLE_TYPE), index_type_(INDEX_TYPE_MAX),
-        is_tmp_mlog_(false)
+    : table_id_(common::OB_INVALID_ID),
+      table_type_(MAX_TABLE_TYPE),
+      index_type_(INDEX_TYPE_MAX),
+      is_tmp_mlog_(false)
   {}
   ObAuxTableMetaInfo(
       const uint64_t table_id,
@@ -7707,7 +7662,7 @@ public:
     int64_t convert_size = sizeof(*this);
     return convert_size;
   }
-  TO_STRING_KV(K_(table_id), K_(table_type), K_(index_type));
+  TO_STRING_KV(K_(table_id), K_(table_type), K_(index_type), K_(is_tmp_mlog));
   uint64_t table_id_;
   ObTableType table_type_;
   ObIndexType index_type_;

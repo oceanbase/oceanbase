@@ -305,7 +305,7 @@ END_P SET_VAR DELIMITER
 
         ID IDC IDENTIFIED IGNORE_SERVER_IDS IK_MODE ILOG IMMEDIATE IMPORT INCLUDING INCR INDEXES INDEX_TABLE_ID INFO INITIAL_SIZE
         INNODB INSERT_METHOD INSTALL INSTANCE INVOKER IO IOPS_WEIGHT IO_THREAD IPC ISOLATE ISOLATION ISSUER
-        INCREMENT IS_TENANT_SYS_POOL INVISIBLE MERGE ISNULL INTERSECT INCREMENTAL INNER_PARSE ILOGCACHE INPUT INDEXED INPLACE INSTANT
+        INCREMENT IS_TENANT_SYS_POOL INVISIBLE MERGE ISNULL INTERSECT INCREMENTAL INNER_PARSE ILOGCACHE INPUT INDEXED INPLACE INSTANT INCONSISTENT INDIVIDUAL
 
         JOB JSON JSON_ARRAYAGG JSON_OBJECTAGG JSON_QUERY JSON_VALUE JSON_TABLE
 
@@ -337,7 +337,7 @@ END_P SET_VAR DELIMITER
         PACK_KEYS PAGE PARALLEL PARAMETERS PARSER PARSER_PROPERTIES PARTIAL PARTITION_ID PARTITIONING PARTITIONS PASSWORD PATH PAUSE PAXOS_REPLICA_NUM PER PERCENTAGE
         PERCENT_RANK PERCENTILE_CONT PHASE PHRASE PHYSICAL PLAN PLAINACCESS PLANREGRESS PLUGIN PLUGIN_DIR PLUGINS POINT POLYGON PERFORMANCE
         PRINCIPAL PROTECTION PROJECT_NAME PRIORITY PL POLICY POOL PORT POSITION PREPARE PRESERVE PRETTY PRETTY_COLOR PREV PRIMARY_ZONE PRIVILEGES PROCESS
-        PROCESSLIST PROFILE PROFILES PROPERTIES PROXY PRECEDING PCTFREE P_ENTITY P_CHUNK
+        PROCESSLIST PROCTIME PROFILE PROFILES PROPERTIES PROXY PRECEDING PCTFREE P_ENTITY P_CHUNK
         PUBLIC PROGRESSIVE_MERGE_NUM PREVIEW PS PLUS PATTERN PARTITION_TYPE FILES PARTIAL_UPDATE PRECREATE_TIME ON_ERROR
 
         QUANTIFIER_TABLE QUARTER QUERY QUERY_RESPONSE_TIME QUEUE_TIME QUICK QUOTA_NAME
@@ -493,7 +493,7 @@ END_P SET_VAR DELIMITER
 %type <node> /*frozen_type*/ opt_binary
 %type <node> ip_port
 %type <node> create_view_stmt view_name opt_column_list opt_mv_column_list mv_column_list opt_table_id opt_tablet_id view_select_stmt opt_check_option opt_tablet_id_no_empty
-%type <node> create_mview_stmt create_mview_opts mview_refresh_opt mv_refresh_on_clause mv_refresh_mode mv_refresh_interval mv_start_clause mv_next_clause
+%type <node> create_mview_stmt create_mview_opts mview_refresh_opt mv_refresh_on_clause mv_refresh_mode mv_refresh_interval mv_start_clause mv_next_clause mv_nested_refresh_opt mview_nested_refresh_mode
 %type <ival> mv_refresh_method mview_enable_disable
 %type <node> name_list opt_name_list
 %type <node> partition_role ls_role zone_desc opt_zone_desc server_or_zone opt_server_or_zone opt_partitions opt_subpartitions add_or_alter_zone_options alter_or_change_or_modify
@@ -10013,10 +10013,10 @@ DISABLE
 ;
 
 mview_refresh_opt:
-REFRESH mv_refresh_method mv_refresh_on_clause mv_refresh_interval
+REFRESH mv_refresh_method mv_nested_refresh_opt mv_refresh_on_clause mv_refresh_interval
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_MV_REFRESH_INFO, 2,
-                $3, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MV_REFRESH_INFO,
+                           3, $3, $4, $5);
   $$->int32_values_[0] = 0;
   $$->int32_values_[1] = $2[0];
 }
@@ -10044,6 +10044,37 @@ ON mv_refresh_mode
 $$ = NULL;
 }
 ;
+
+mv_nested_refresh_opt:
+mview_nested_refresh_mode
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MV_NESTED_REFRESH_CLAUSE, 1,
+                           $1);
+}
+|
+{
+$$ = NULL;
+}
+;
+
+mview_nested_refresh_mode:
+INDIVIDUAL
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_MV_NESTED_REFRESH_CLAUSE);
+  $$->value_ = 0;
+}
+|
+INCONSISTENT
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_MV_NESTED_REFRESH_CLAUSE);
+  $$->value_ = 1;
+}
+|
+CONSISTENT
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_MV_NESTED_REFRESH_CLAUSE);
+  $$->value_ = 2;
+};
 
 mv_refresh_method:
 FAST
@@ -10188,6 +10219,15 @@ mview_enable_disable ON QUERY COMPUTATION
   refresh_info->int32_values_[0] = 2;
   malloc_non_terminal_node($$, result->malloc_pool_, T_MV_OPTIONS, 1, refresh_info);
   $$->value_ = 0;
+}
+| REFRESH mview_nested_refresh_mode
+{
+  ParseNode *nested_refresh_node = NULL;
+  malloc_terminal_node(nested_refresh_node, result->malloc_pool_, T_MV_NESTED_REFRESH_CLAUSE);
+  nested_refresh_node->int32_values_[0] = $2->value_;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MV_OPTIONS, 1, nested_refresh_node);
+  $$->value_ = 0;
+  $$->int32_values_[0] = 4;
 }
 ;
 
@@ -10841,19 +10881,33 @@ TEMPORARY
  *
  *****************************************************************************/
 create_mlog_stmt:
-create_with_opt_hint MATERIALIZED VIEW LOG ON relation_factor
-opt_mlog_option_list opt_mlog_with opt_mlog_new_values opt_mlog_purge
+create_with_opt_hint MATERIALIZED VIEW LOG ON relation_factor opt_mlog_option_list opt_mlog_with opt_mlog_new_values opt_mlog_purge
 {
   (void)($1);
   ParseNode *mlog_options = NULL;
   merge_nodes(mlog_options, result, T_TABLE_OPTION_LIST, $7);
 	malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_MLOG, 5,
-                           $6,            /* 0. table name */
-                           mlog_options,  /* 1. mlog options */
-                           $8,            /* 2. with */
-                           $9,            /* 3. new values  */
-                           $10            /* 4. purge */
+                           $6,            /* 1. table name */
+                           mlog_options,  /* 2. mlog options */
+                           $8,            /* 3. with */
+                           $9,            /* 4. new values  */
+                           $10            /* 5. purge */
                            );
+  $$->reserved_ = 0;
+}
+| create_with_opt_hint OR REPLACE MATERIALIZED VIEW LOG ON relation_factor opt_mlog_option_list opt_mlog_with opt_mlog_new_values opt_mlog_purge
+{
+  (void)($1);
+  ParseNode *mlog_options = NULL;
+  merge_nodes(mlog_options, result, T_TABLE_OPTION_LIST, $9);
+	malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_MLOG, 5,
+                           $8,            /* 1. table name */
+                           mlog_options,  /* 2. mlog options */
+                           $10,           /* 3. with */
+                           $11,           /* 4. new values  */
+                           $12            /* 5. purge */
+                           );
+  $$->reserved_ = 1;
 }
 ;
 
@@ -14949,6 +15003,10 @@ AS OF SNAPSHOT bit_expr %prec LOWER_PARENS
   ParseNode *unname_node = NULL;
   make_name_node(unname_node, result->malloc_pool_, "");
   malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_FLASHBACK_QUERY_SCN, 2, $4, unname_node);
+}
+| AS OF PROCTIME '(' ')' %prec LOWER_PARENS
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_TABLE_FLASHBACK_PROCTIME);
 }
 ;
 
@@ -27085,6 +27143,7 @@ ACCESS_INFO
 |       PRIVILEGES
 |       PRINCIPAL
 |       PROCESSLIST
+|       PROCTIME
 |       PROFILE
 |       PROFILES
 |       PROGRESSIVE_MERGE_NUM
@@ -27443,6 +27502,8 @@ ACCESS_INFO
 |       TENANT_STS_CREDENTIAL
 |       RB_OR_CARDINALITY_AGG
 |       RB_AND_CARDINALITY_AGG
+|       INCONSISTENT
+|       INDIVIDUAL
 ;
 
 unreserved_keyword_special:

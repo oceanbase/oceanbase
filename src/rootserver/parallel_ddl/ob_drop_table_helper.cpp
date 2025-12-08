@@ -679,10 +679,9 @@ int ObDropTableHelper::prefetch_table_schemas_()
         LOG_WARN("table schema is null", KR(ret), K(table_id));
       } else if (table_schema->mv_container_table()) {
         // skip
-        LOG_WARN("this type of table should be invisable for drop table", KR(ret), KPC(table_schema));
-        if (OB_FAIL(log_table_not_exist_msg_(table_items_.at(i)))) {
-          LOG_WARN("fail to log table not exsit msg", KR(ret));
-        }
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("drop container table is not supported", KR(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop mview container table is");
       } else if (OB_FAIL(drop_table_ids_.set_refactored(table_id))) {
         LOG_WARN("fail to set table id", KR(ret), K(table_id));
       } else if (OB_FAIL(table_schemas_.push_back(table_schema))) {
