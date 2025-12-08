@@ -407,6 +407,7 @@ int ObCOMergeScheduleTask::init(ObCOMergeDagNet *dag_net)
 int ObCOMergeScheduleTask::process()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("task is not inited", K(ret), K_(is_inited));
@@ -417,9 +418,11 @@ int ObCOMergeScheduleTask::process()
   } else if (static_cast<ObCOMergeScheduleDag *>(get_dag())->get_swap_tablet_flag()
       && OB_FAIL(dag_net_->swap_tablet_after_minor())) {
     LOG_WARN("failed to swap tablet after minor", K(ret));
-  } else if (FALSE_IT(dag_net_->update_merge_status(ObCOMergeDagNet::PREPARE_FINISHED))) {
-  } else if (OB_FAIL(dag_net_->create_co_execute_dags(*get_dag()))) { // allow failure
-    LOG_WARN("failed to create execute dags in schedule task", K(ret));
+  } else if (OB_TMP_FAIL(dag_net_->create_co_execute_dags(*get_dag()))) { // allow failure
+    LOG_WARN("failed to create execute dags in schedule task", K(tmp_ret));
+  }
+  if (OB_SUCC(ret)) {
+    dag_net_->update_merge_status(ObCOMergeDagNet::PREPARE_FINISHED);
   }
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
@@ -470,10 +473,15 @@ bool ObCOMergeBatchExeDag::operator ==(const ObIDag &other) const
     const ObCOMergeBatchExeDag &other_merge_dag = static_cast<const ObCOMergeBatchExeDag&>(other);
     if (merge_type_ != other_merge_dag.merge_type_
       || ls_id_ != other_merge_dag.ls_id_
-      || tablet_id_ != other_merge_dag.tablet_id_
-      || start_cg_idx_ != other_merge_dag.start_cg_idx_
-      || end_cg_idx_ != other_merge_dag.end_cg_idx_) {
+      || tablet_id_ != other_merge_dag.tablet_id_) {
       is_same = false;
+    } else {
+      // Check if two intervals [start_cg_idx_, end_cg_idx_) intersect
+      // Two intervals intersect if: start_cg_idx_ < other.end_cg_idx_ && other.start_cg_idx_ < end_cg_idx_
+      if (end_cg_idx_ <= other_merge_dag.start_cg_idx_
+          || other_merge_dag.end_cg_idx_ <= start_cg_idx_) {
+        is_same = false;
+      }
     }
   }
   return is_same;
@@ -1408,6 +1416,10 @@ int ObCOMergeDagNet::inner_create_and_schedule_dags(ObIDag *parent_dag)
   common::ObSEArray<ObCOMergeBatchExeDag *, 8> exe_dag_array;
   ObCOMergeBatchExeDag *dag = nullptr;
 
+#ifdef ERRSIM
+  SERVER_EVENT_SYNC_ADD("merge_errsim", "create_and_schedule_dags", "has_parent_dag", parent_dag != nullptr);
+  DEBUG_SYNC(MAJOR_MERGE_TASK_PROCESS);
+#endif
   /*
    * When firstly scheduled by PrepareDag(skip minor merge) or ScheduleDag, schedule_dag is not nullptr.
    * If there are too many cgs, batch exe dags can not be created in one round, so we delay creating FinsihDag.
