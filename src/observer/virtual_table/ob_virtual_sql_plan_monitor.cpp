@@ -211,16 +211,20 @@ int ObVirtualSqlPlanMonitor::inner_get_next_row(common::ObNewRow *&row)
 
   if (OB_SUCC(ret) && !need_rt_node_) {
     void *rec = NULL;
-    if (ref_.idx_ != -1) {
-      cur_mysql_req_mgr_->revert(&ref_);
-    }
+    int64_t iter_step = is_reverse_scan() ? -1 : 1;
     do {
+      if (ref_.idx_ != -1) {
+        cur_mysql_req_mgr_->revert(&ref_);
+      }
       ref_.reset();
       if (OB_ENTRY_NOT_EXIST == (ret = cur_mysql_req_mgr_->get(cur_id_, rec, &ref_))) {
-        if (is_reverse_scan()) {
-          cur_id_ -= 1;
-        } else {
-          cur_id_ += 1;
+        cur_id_ += iter_step;
+      }
+      if (OB_SUCC(ret) && !fetch_profile_ && nullptr != rec) {
+        ObMonitorNode *node = static_cast<ObMonitorNode *>(rec);
+        if (node->op_id_ < 0) {
+          cur_id_ += iter_step;
+          ret = OB_ENTRY_NOT_EXIST;
         }
       }
     } while (OB_ENTRY_NOT_EXIST == ret && cur_id_ < end_id_ && cur_id_ >= start_id_);
@@ -240,13 +244,7 @@ int ObVirtualSqlPlanMonitor::inner_get_next_row(common::ObNewRow *&row)
 
     // move to next slot
     if (OB_SUCC(ret)) {
-      if (!is_reverse_scan()) {
-        // forwards
-        cur_id_++;
-      } else {
-        // backwards
-        cur_id_--;
-      }
+      cur_id_ += iter_step;
     }
     if (OB_ENTRY_NOT_EXIST == ret) {
       // may be all the record is flushed, call inner_get_next_row recursively
@@ -260,6 +258,7 @@ int ObVirtualSqlPlanMonitor::inner_get_next_row(common::ObNewRow *&row)
 int ObVirtualSqlPlanMonitor::report_rt_monitor_node(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
+  int64_t iter_step = is_reverse_scan() ? -1 : 1;
   if (need_rt_node_ && OB_NOT_NULL(cur_mysql_req_mgr_)) {
     if (rt_nodes_.empty()) {
       if (OB_FAIL(cur_mysql_req_mgr_->convert_node_map_2_array(rt_nodes_, &profile_allocator_,
@@ -275,6 +274,17 @@ int ObVirtualSqlPlanMonitor::report_rt_monitor_node(common::ObNewRow *&row)
         }
       }
     }
+    if (OB_SUCC(ret) && !fetch_profile_) {
+      // if not fetch profile, skip read node with op id < 0
+      while (rt_node_idx_ >= rt_start_idx_ && rt_node_idx_ < rt_end_idx_) {
+        const ObMonitorNode &node = rt_nodes_.at(rt_node_idx_);
+        if (node.op_id_ < 0) {
+          rt_node_idx_ += iter_step;
+        } else {
+          break;
+        }
+      }
+    }
     if (OB_FAIL(ret)) {
     } else if (rt_node_idx_ >= rt_end_idx_ || rt_node_idx_ < rt_start_idx_) {
       ret = OB_ITER_END;
@@ -284,10 +294,8 @@ int ObVirtualSqlPlanMonitor::report_rt_monitor_node(common::ObNewRow *&row)
     } else if (OB_ISNULL(row)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null row", K(ret));
-    } else if (!is_reverse_scan()) {
-      rt_node_idx_++;
     } else {
-      rt_node_idx_--;
+      rt_node_idx_ += iter_step;
     }
   }
   LOG_TRACE("check rt_nodes_.count()", K(rt_nodes_.count()), K(rt_node_idx_), K(ret));
