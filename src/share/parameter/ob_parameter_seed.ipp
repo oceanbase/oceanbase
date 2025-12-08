@@ -3137,3 +3137,6 @@ DEF_STR_WITH_CHECKER(default_delta_format, OB_TENANT_PARAMETER, "flat",
 DEF_INT(default_skip_index_level, OB_TENANT_PARAMETER, "0", "[0, 1]",
         "Specify the default skip_index_level when creating table.",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_ivf_max_scan_vectors, OB_TENANT_PARAMETER, "100000",
+        "The upper limit of ivf iter-filter search nums. Range: [0,)",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

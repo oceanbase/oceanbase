@@ -285,6 +285,7 @@ static const uint64_t MAX_IVF_BRUTE_FORCE_SIZE = 10000;
 static const uint64_t MAX_IVF_PRE_ROW_CNT_WITH_IDX = 500000;
 static constexpr double DEFAULT_IVF_PRE_RATE_FILTER_WITH_ROWKEY = 0.9;
 static constexpr double DEFAULT_IVF_PRE_RATE_FILTER_WITH_IDX = 0.1;
+static const uint64_t MAX_IVF_POST_DIST_CALC_CNT = 500000;
 
   ObVecIdxExtraInfo()
     : vec_idx_type_(ObVecIndexType::VEC_INDEX_INVALID),
