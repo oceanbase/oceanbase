@@ -1126,7 +1126,13 @@ int ObExternalTableFileManager::calculate_file_part_val_by_file_name(const ObTab
       }
     }
     for (int64_t j = 0; OB_SUCC(ret) && j < temp_exprs.count(); j++) {
-      OZ (temp_exprs.at(j)->eval(exec_ctx, file_name_row, list_val.get_cell(j)));
+      ObObj &res_obj = list_val.get_cell(j);
+      OZ (temp_exprs.at(j)->eval(exec_ctx, file_name_row, res_obj));
+      if (res_obj.is_signed_integer()) {
+        res_obj.set_int(res_obj.get_int());
+      } else if (res_obj.is_unsigned_integer()) {
+        res_obj.set_uint64(res_obj.get_uint64());
+      }
     }
     OZ (part_vals.push_back(list_val));
   }
