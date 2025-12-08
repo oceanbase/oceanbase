@@ -572,7 +572,7 @@ int ObPushDownTopNFilterMsg::dynamic_copy_cell(const ObDatum &src, ObDatum &targ
   int ret = OB_SUCCESS;
   int64_t need_size = src.len_;
   if (src.is_null()) {
-    target.null_ = 1;
+    target.set_null();
   } else {
     if (need_size > cell_size) {
       need_size = need_size * 2;
