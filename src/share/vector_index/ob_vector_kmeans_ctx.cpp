@@ -456,11 +456,6 @@ int ObKmeansAlgo::init_build_handle(ObKmeansBuildTaskHandler &handle)
   int ret = OB_SUCCESS;
 
   common::ObSpinLockGuard init_guard(handle.lock_);                     // lock thread pool init to avoid init twice
-  // Note: There is a bug currently: 2500100242377, cannot set the number of threads after init, temporarily change to
-  // destroy then init, delete after fix
-  if (handle.get_task_ref() == 0) {
-    handle.destroy();
-  }
   if (handle.get_tg_id() != ObKmeansBuildTaskHandler::INVALID_TG_ID) {  // no need to init twice, skip
   } else if (OB_FAIL(handle.init())) {
     LOG_WARN("fail to init vector kmeans build task handle", K(ret));
@@ -814,12 +809,7 @@ int ObMultiKmeansExecutor::init_build_handle(ObKmeansBuildTaskHandler &handle)
 {
   int ret = OB_SUCCESS;
 
-  common::ObSpinLockGuard init_guard(handle.lock_);
-   // Note: There is a bug currently: 2500100242377, cannot set the number of threads after init, temporarily change to
-  // destroy then init, delete after fix
-  if (handle.get_task_ref() == 0) {
-    handle.destroy();
-  }                     // lock thread pool init to avoid init twice
+  common::ObSpinLockGuard init_guard(handle.lock_);               // lock thread pool init to avoid init twice
   if (handle.get_tg_id() != ObKmeansBuildTaskHandler::INVALID_TG_ID) {  // no need to init twice, skip
   } else if (OB_FAIL(handle.init())) {
     LOG_WARN("fail to init vector kmeans build task handle", K(ret));
