@@ -4629,7 +4629,7 @@ int ObPartTransCtx::submit_log_block_out_(ObTxLogBlock &log_block,
     TRANS_LOG(WARN, "fail to merge intermediate participants", K(ret), KPC(this));
   } else if ((!is_contain(log_block.get_cb_arg_array(), ObTxLogType::TX_ABORT_LOG)
               && !is_contain(log_block.get_cb_arg_array(), ObTxLogType::TX_CLEAR_LOG))
-             && (is_force_abort_logging_()
+             && (need_force_abort_() || is_force_abort_logging_()
                  || get_downstream_state() == ObTxState::ABORT)) {
     ret = OB_TRANS_KILLED;
     TRANS_LOG(WARN, "tx has been aborting, can not submit other log", K(ret), KPC(this));
@@ -7596,7 +7596,7 @@ int ObPartTransCtx::submit_multi_data_source_(ObTxLogBlock &log_block)
   const int64_t replay_hint = trans_id_.get_id();
   ObTxLogCb *log_cb = nullptr;
   void *tmp_buf = nullptr;
-  if (is_force_abort_logging_()
+  if (need_force_abort_() || is_force_abort_logging_()
       || get_downstream_state() == ObTxState::ABORT) {
     ret = OB_TRANS_KILLED;
     TRANS_LOG(WARN, "tx has been aborting, can not submit prepare log", K(ret));
