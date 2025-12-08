@@ -2854,3 +2854,7 @@ DEF_CAP(_replay_pending_log_memory_limit, OB_TENANT_PARAMETER, "128M", "[1M, 102
 DEF_BOOL(_enable_randomize_redo_logging_slot, OB_CLUSTER_PARAMETER, "False",
         "specifies whether enable randomize redo logging slot when parallel logging is enabled",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_direct_load_hidden_table_partition_pruning, OB_TENANT_PARAMETER, "False",
+         "Enable or disable hidden table partition pruning for direct load.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
