@@ -1081,7 +1081,7 @@ int ObDelUpdLogPlan::candi_allocate_one_pdml_delete(bool is_index_maintain,
                      is_index_maintain ? dummy_filters : get_stmt()->get_condition_exprs(),
                      index_dml_info->loc_table_id_,
                      index_dml_info->ref_table_id_,
-                     NULL,
+                     &index_dml_info->part_ids_,
                      source_sharding,
                      source_table_partition))) {
     LOG_WARN("failed to calculate table location and sharding", K(ret));
@@ -1600,7 +1600,7 @@ int ObDelUpdLogPlan::candi_allocate_one_pdml_update(bool is_index_maintenance,
                      is_index_maintenance ? dummy_filters : get_stmt()->get_condition_exprs(),
                      index_dml_info->loc_table_id_,
                      index_dml_info->ref_table_id_,
-                     NULL,
+                     &index_dml_info->part_ids_,
                      source_sharding,
                      source_table_partition))) {
     LOG_WARN("failed to calculate table location and sharding", K(ret));

@@ -561,12 +561,7 @@ int ObOptimizer::check_pdml_supported_feature(const ObDelUpdStmt &pdml_stmt,
   } else if (stmt::T_DELETE == pdml_stmt.get_stmt_type()) {
     // 
     // if no trigger, no foreign key, delete can do pdml, even if with local unique index
-    if (!table_infos.at(0)->part_ids_.empty()) {
-      is_use_pdml = false;
-      LOG_TRACE("delete sql with partition hint", K(table_infos.at(0)->part_ids_));
-    } else {
-      is_use_pdml = true;
-    }
+    is_use_pdml = true;
   } else if (!ctx_.is_online_ddl()) {
     // check enabling parallel with local unique index
     //  1. disable parallel insert. because parallel unique check not supported
@@ -587,10 +582,6 @@ int ObOptimizer::check_pdml_supported_feature(const ObDelUpdStmt &pdml_stmt,
                 main_table_tid, with_unique_local_idx))) {
       LOG_WARN("fail check if table with local unqiue index", K(main_table_tid), K(ret));
     } else if (stmt::T_UPDATE == pdml_stmt.get_stmt_type()) {
-      if (!table_infos.at(0)->part_ids_.empty()) {
-        is_use_pdml = false;
-        LOG_TRACE("update sql with partition hint", K(table_infos.at(0)->part_ids_));
-      }
       for (int i = 0; OB_SUCC(ret) && is_use_pdml && i <
           table_infos.at(0)->column_exprs_.count(); i++) {
         ObColumnRefRawExpr* column_expr = table_infos.at(0)->column_exprs_.at(i);
