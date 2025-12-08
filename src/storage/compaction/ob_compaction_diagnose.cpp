@@ -1796,8 +1796,9 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_merge_for_ss()
 
     DiagnoseTabletArray tablet_array;
     ObTablet *tablet = nullptr;
+    ObTenantStatusCache tenant_status_for_diagnose;
     for (int64_t idx = 0; OB_SUCC(ret) && idx < diagnose_tablets.count(); ++idx) {
-      ObTabletStatusCache tablet_status;
+      ObTabletStatusCache tablet_status(tenant_status_for_diagnose);
       const ObLSID &ls_id = diagnose_tablets.at(idx).ls_id_;
       const ObTabletID &tablet_id = diagnose_tablets.at(idx).tablet_id_;
       ObLS *ls = nullptr;

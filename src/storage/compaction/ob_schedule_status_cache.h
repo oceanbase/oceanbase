@@ -12,6 +12,7 @@
 #include "share/scn.h"
 #include "storage/compaction/ob_compaction_schedule_util.h"
 #include "storage/compaction/ob_batch_freeze_tablets_dag.h"
+#include "storage/compaction/ob_tenant_status_cache.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 namespace oceanbase
 {
@@ -50,7 +51,7 @@ struct ObLSStatusCache final
   {}
   ~ObLSStatusCache() {}
   int init_for_major(const int64_t merge_version, const int64_t loop_cnt, storage::ObLSHandle &ls_handle);
-  bool can_merge() const { return CAN_MERGE == state_ || ALLOW_EMERGENCY_MERGE == state_ || LOOP_NOT_READY_LS == state_; }
+  bool can_merge() const { return CAN_MERGE == state_ || LOOP_NOT_READY_LS == state_; }
   void reset();
   static void check_ls_state(storage::ObLS &ls, LSState &state);
   static bool is_restore_ready_for_merge(storage::ObLS &ls);
@@ -108,14 +109,15 @@ public:
   {
     return state >= CAN_SCHEDULE_NEW_ROUND && state < NEW_ROUND_STATE_MAX;
   }
-  ObTabletStatusCache()
+  ObTabletStatusCache(ObTenantStatusCache &tenant_status_snapshot)
     : tablet_id_(),
       allocator_(ObMemAttr(MTL_ID(), "MediumList")),
       medium_list_(nullptr),
       tablet_merge_finish_(false),
       execute_state_(EXECUTE_STATE_MAX),
       new_round_state_(NEW_ROUND_STATE_MAX),
-      is_inited_(false)
+      is_inited_(false),
+      tenant_status_snapshot_(tenant_status_snapshot)
   {}
   virtual ~ObTabletStatusCache() { destroy(); }
   void destroy()
@@ -190,6 +192,7 @@ protected:
   TabletExecuteState execute_state_;
   TabletScheduleNewRoundState new_round_state_;
   bool is_inited_;
+  ObTenantStatusCache &tenant_status_snapshot_;
 };
 
 } // namespace compaction

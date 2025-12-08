@@ -12,6 +12,7 @@
 #include "storage/compaction/ob_compaction_schedule_util.h"
 #include "storage/compaction/ob_batch_freeze_tablets_dag.h"
 #include "storage/compaction/ob_schedule_status_cache.h"
+#include "storage/compaction/ob_tenant_status_cache.h"
 namespace oceanbase
 {
 namespace storage
@@ -31,6 +32,7 @@ struct ObBasicScheduleTabletFunc
   virtual int post_process_ls();
   void destroy();
   const ObLSStatusCache &get_ls_status() const { return ls_status_; }
+  const ObTenantStatusCache &get_tenant_status_snapshot() const { return tenant_status_snapshot_; }
   ObScheduleTabletCnt &get_schedule_tablet_cnt() { return tablet_cnt_; }
   const ObScheduleTabletCnt &get_schedule_tablet_cnt() const { return tablet_cnt_; }
   virtual const ObCompactionTimeGuard &get_time_guard() const = 0;
@@ -67,6 +69,7 @@ protected:
   static const int64_t SCHEDULE_DAG_THREHOLD = 1000;
   int64_t merge_version_;
   ObLSStatusCache ls_status_;
+  ObTenantStatusCache tenant_status_snapshot_;
   ObScheduleTabletCnt tablet_cnt_;
   ObBatchFreezeTabletsParam freeze_param_;
   bool ls_could_schedule_new_round_;

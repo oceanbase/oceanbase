@@ -311,6 +311,7 @@ int ObTabletStatusCache::inner_init_state(
   const ObTabletID &tablet_id = tablet.get_tablet_id();
   const int64_t last_major_snapshot = tablet.get_last_major_snapshot_version();
   bool is_mv_major_refresh_tablet = false;
+  const bool is_skip_merge_tenant = tenant_status_snapshot_.is_skip_merge_tenant();
 
   if (OB_UNLIKELY(!tablet.is_data_complete())) {
     execute_state_ = DATA_NOT_COMPLETE;
@@ -329,10 +330,13 @@ int ObTabletStatusCache::inner_init_state(
   } else if (is_mv_major_refresh_tablet) {
     // MV tablet should schedule merge in restore tenant
     execute_state_ = CAN_MERGE;
-  } else if (tablet.get_tablet_meta().ha_status_.is_restore_status_remote()) {
+  } else if (tablet.get_tablet_meta().ha_status_.is_restore_status_remote()
+      || (is_skip_merge_tenant && tablet.get_tablet_meta().ha_status_.is_restore_status_full())) {
     if (OB_FAIL(check_execute_state_for_remote_tablet_(ls, tablet))) {
       LOG_WARN("failed to check execute state for remote tablet", K(ret), K(ls), K(tablet));
     }
+  } else if (is_skip_merge_tenant) {
+    execute_state_ = TENANT_SKIP_MERGE;
   } else {
     execute_state_ = CAN_MERGE;
   }
