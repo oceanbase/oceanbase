@@ -72,7 +72,9 @@ public:
                K_(replaying_log_entry_no),
                K(lsn_),
                K(log_ts_ns_),
-               K(base_header_));
+               K(base_header_),
+               K(mvcc_row_count_),
+               K(table_lock_row_count_));
 
 private:
   ObTxReplayExecutor(storage::ObLS *ls,

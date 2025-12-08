@@ -433,6 +433,7 @@ _enable_px_batch_rescan
 _enable_px_fast_reclaim
 _enable_px_ordered_coord
 _enable_px_task_rebalance
+_enable_randomize_redo_logging_slot
 _enable_range_extraction_for_not_in
 _enable_reserved_user_dcl_restriction
 _enable_resource_limit_spec
@@ -581,6 +582,8 @@ _query_record_size_limit
 _rebuild_replica_log_lag_threshold
 _recyclebin_object_purge_frequency
 _regex_engine
+_replay_memory_limit
+_replay_pending_log_memory_limit
 _resource_limit_max_session_num
 _resource_limit_spec
 _restore_idle_time
