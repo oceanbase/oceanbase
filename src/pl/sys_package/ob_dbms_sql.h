@@ -24,6 +24,7 @@ class ObExecContext;
 }
 namespace pl
 {
+class ObPLExecCtx;
 
 typedef common::ParamStore ParamStore;
 
@@ -260,7 +261,7 @@ private:
 class ObPLDbmsSql
 {
 public:
-  static int open_cursor(sql::ObExecContext &exec_ctx,
+  static int open_cursor(ObPLExecCtx &ctx,
                          ParamStore &params,
                          common::ObObj &result);
   static int assemble_assoc_arr(ObIAllocator &allocator,
@@ -270,28 +271,28 @@ public:
                                 const bool linefeed,
                                 ObString &sql_stmt,
                                 ObCollationType &coll_type);
-  static int parse(sql::ObExecContext &exec_ctx,
+  static int parse(ObPLExecCtx &ctx,
                    ParamStore &params,
                    common::ObObj &result);
-  static int bind_variable(sql::ObExecContext &exec_ctx,
+  static int bind_variable(ObPLExecCtx &ctx,
                            ParamStore &params,
                            common::ObObj &result);
-  static int define_column_number(sql::ObExecContext &exec_ctx,
+  static int define_column_number(ObPLExecCtx &ctx,
                                   ParamStore &params,
                                   common::ObObj &result);
-  static int define_column_varchar(sql::ObExecContext &exec_ctx,
+  static int define_column_varchar(ObPLExecCtx &ctx,
                                    ParamStore &params,
                                    common::ObObj &result);
-  static int define_column(sql::ObExecContext &exec_ctx,
+  static int define_column(ObPLExecCtx &ctx,
                            ParamStore &params,
                            ObObj &result);
-  static int define_array(sql::ObExecContext &exec_ctx,
+  static int define_array(ObPLExecCtx &ctx,
                           ParamStore &params,
                           ObObj &result);
-  static int execute(sql::ObExecContext &exec_ctx,
+  static int execute(ObPLExecCtx &ctx,
                      ParamStore &params,
                      common::ObObj &result);
-  static int fetch_rows(sql::ObExecContext &exec_ctx,
+  static int fetch_rows(ObPLExecCtx &ctx,
                         ParamStore &params,
                         common::ObObj &result);
 //static int column_value_number(sql::ObExecContext &exec_ctx,
@@ -300,61 +301,61 @@ public:
 //static int column_value_varchar(sql::ObExecContext &exec_ctx,
 //                                ParamStore &params,
 //                                common::ObObj &result);
-  static int column_value(sql::ObExecContext &exec_ctx,
+  static int column_value(ObPLExecCtx &ctx,
                           ParamStore &params,
                           common::ObObj &result);
-  static int variable_value(sql::ObExecContext &exec_ctx,
+  static int variable_value(ObPLExecCtx &ctx,
                             ParamStore &params,
                             common::ObObj &result);
-  static int close_cursor(sql::ObExecContext &exec_ctx,
+  static int close_cursor(ObPLExecCtx &ctx,
                           ParamStore &params,
                           common::ObObj &result);
 
-  static int describe_columns(sql::ObExecContext &exec_ctx,
+  static int describe_columns(ObPLExecCtx &ctx,
                               ParamStore &params,
                               ObObj &result);
-  static int describe_columns2(sql::ObExecContext &exec_ctx,
+  static int describe_columns2(ObPLExecCtx &ctx,
                                 ParamStore &params,
                                 ObObj &result);
-  static int describe_columns3(sql::ObExecContext &exec_ctx,
+  static int describe_columns3(ObPLExecCtx &ctx,
                                 ParamStore &params,
                                 ObObj &result);
-  static int is_open(sql::ObExecContext &exec_ctx,
+  static int is_open(ObPLExecCtx &ctx,
                      ParamStore &params,
                      ObObj &result);
-  static int execute_and_fetch(sql::ObExecContext &exec_ctx,
+  static int execute_and_fetch(ObPLExecCtx &ctx,
                                ParamStore &params,
                                ObObj &result);
-  static int to_cursor_number(sql::ObExecContext &exec_ctx,
+  static int to_cursor_number(ObPLExecCtx &ctx,
                               ParamStore &params,
                               ObObj &result);
 
-  static int to_refcursor(sql::ObExecContext &exec_ctx,
+  static int to_refcursor(ObPLExecCtx &ctx,
                           ParamStore &params,
                           ObObj &result);
 
-  static int define_column_long(sql::ObExecContext &exec_ctx,
+  static int define_column_long(ObPLExecCtx &ctx,
                                 ParamStore &params,
                                 ObObj &result);
-  static int column_value_long(sql::ObExecContext &exec_ctx,
+  static int column_value_long(ObPLExecCtx &ctx,
                                ParamStore &params,
                                ObObj &result);
-  static int last_error_position(sql::ObExecContext &exec_ctx,
+  static int last_error_position(ObPLExecCtx &ctx,
                               ParamStore &params,
                               ObObj &result);
 
 private:
-  static int do_execute(sql::ObExecContext &exec_ctx,
+  static int do_execute(ObPLExecCtx &ctx,
                         ObDbmsCursorInfo &cursor);
-  static int do_execute(sql::ObExecContext &exec_ctx,
+  static int do_execute(ObPLExecCtx &ctx,
                         ObDbmsCursorInfo &cursor,
                         ParamStore &params,
                         common::ObObj &result);
-  static int do_fetch(sql::ObExecContext &exec_ctx,
+  static int do_fetch(ObPLExecCtx &ctx,
                       ParamStore &params,
                       common::ObObj &result,
                       ObDbmsCursorInfo &cursor);
-  static int get_cursor(sql::ObExecContext &exec_ctx,
+  static int get_cursor(ObPLExecCtx &ctx,
                         ParamStore &params,
                         ObDbmsCursorInfo *&cursor);
   static int check_stmt_need_to_be_executed_when_parsing(ObDbmsCursorInfo &cursor, bool &flag);
@@ -365,12 +366,12 @@ private:
     DESCRIBE3,
   };
 
-  static int do_describe(sql::ObExecContext &exec_ctx, ParamStore &params, DescribeType type);
-  static int do_parse(sql::ObExecContext &exec_ctx,
+  static int do_describe(ObPLExecCtx &ctx, ParamStore &params, DescribeType type);
+  static int do_parse(ObPLExecCtx &ctx,
                       ObDbmsCursorInfo *cursor,
                       common::ObString &sql_stmt,
                       ObCollationType coll_type);
-  static int parse_6p(sql::ObExecContext &exec_ctx,
+  static int parse_6p(ObPLExecCtx &ctx,
                    ParamStore &params,
                    common::ObObj &result);
   static int fill_dbms_cursor(sql::ObSQLSessionInfo *session,
