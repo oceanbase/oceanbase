@@ -56,6 +56,7 @@ public:
              const common::ObString &tenant_name,
              bool &has_job);
   static int get_restore_source(
+             const bool check_passwd,
              const bool restore_using_compl_log,
              const ObIArray<ObString>& tenant_path_array,
              const common::ObString &passwd_array,
@@ -96,6 +97,9 @@ public:
       const common::ObString &passwd,
       const bool restore_using_compl_log,
       share::SCN &restore_scn);
+  static int parse_restore_timestamp_to_scn(
+    const ObIArray<ObString> &tenant_path_array,
+    const ObString &timestamp, share::SCN &restore_scn);
   static int fill_multi_path_restore_scn_(
     const obrpc::ObPhysicalRestoreTenantArg &arg,
     const bool &restore_using_compl_log,
@@ -140,6 +144,7 @@ private:
              const obrpc::ObPhysicalRestoreTenantArg &arg,
              share::ObPhysicalRestoreJob &job);
   static int get_restore_backup_set_array_(
+             const bool check_passwd,
              const ObIArray<ObString> &tenant_path_array,
              const common::ObString &passwd_array,
              const share::SCN &restore_scn,

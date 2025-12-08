@@ -4834,7 +4834,9 @@ int ObRestoreBackupSetBriefInfo::get_restore_backup_set_brief_info_str(
     } else if (OB_FAIL(backup_scn_to_time_tag(backup_set_desc_.min_restore_scn_, scn_display_buf, OB_MAX_TIME_STR_LENGTH, pos))) {
       LOG_WARN("failed to backup scn to time tag", K(ret));
     } else {
-      ret = databuff_printf(str_buf, str_buf_len, pos,
+      pos = 0;
+      ret = databuff_printf(str_buf, str_buf_len, pos, "backup_set_id:%ld, ", backup_set_desc_.backup_set_id_);
+      OB_SUCCESS != ret ? : ret = databuff_printf(str_buf, str_buf_len, pos,
           "type: %s, min_restore_scn_display: %s, size: ", type_str, scn_display_buf);
       OB_SUCCESS != ret ? : ret = databuff_printf(str_buf, str_buf_len, pos,
           ObSizeLiteralPrettyPrinter(backup_set_desc_.total_bytes_));
@@ -4851,6 +4853,32 @@ int ObRestoreBackupSetBriefInfo::get_restore_backup_set_brief_info_str(
   } else {
     str.assign_ptr(str_buf, STRLEN(str_buf));
     LOG_DEBUG("get log path list str", KR(ret), K(str));
+  }
+  return ret;
+}
+
+int ObRestoreBackupSetBriefInfo::get_backup_set_path_str(common::ObIAllocator &allocator, ObString &str) const
+{
+  int ret = OB_SUCCESS;
+  str.reset();
+  ObBackupDest dest;
+  int64_t pos = 0;
+  char *buf = nullptr;
+  const int64_t buf_len = OB_MAX_BACKUP_PATH_LENGTH;
+
+  if (!is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("backup set path is empty", K(ret));
+  } else if (OB_ISNULL(buf = static_cast<char*>(allocator.alloc(buf_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc mem", KR(ret), K(buf_len));
+  } else if (OB_FALSE_IT(MEMSET(buf, '\0', buf_len))) {
+  } else if (OB_FAIL(dest.set(backup_set_path_.ptr()))) {
+    LOG_WARN("fail to set backup dest", K(ret));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s",  dest.get_root_path().ptr()))) {
+    LOG_WARN("fail to data buff print", K(ret), K(buf_len), K(dest));
+  } else {
+    str.assign_ptr(buf, STRLEN(buf));
   }
   return ret;
 }
@@ -4935,7 +4963,7 @@ int ObRestoreLogPieceBriefInfo::get_restore_log_piece_brief_info_str(
     } else if (OB_FALSE_IT(pos = 0)) {
     } else if (OB_FAIL(backup_scn_to_time_tag(checkpoint_scn_, buf2, sizeof(buf2), pos))) {
       LOG_WARN("failed to backup scn to time", K(ret), K(checkpoint_scn_));
-    } else if (OB_FAIL(databuff_printf(str_buf, str_buf_len, "start_scn_display: %s, checkpoint_scn_display: %s.", buf1, buf2))) {
+    } else if (OB_FAIL(databuff_printf(str_buf, str_buf_len, "piece_id:%ld, start_scn_display: %s, checkpoint_scn_display: %s.", piece_id_, buf1, buf2))) {
       LOG_WARN("failed to databuff print", K(ret), KPC(this));
     }
   }
@@ -4947,6 +4975,32 @@ int ObRestoreLogPieceBriefInfo::get_restore_log_piece_brief_info_str(
 
     str.assign_ptr(str_buf, STRLEN(str_buf));
     LOG_DEBUG("get log path list str", KR(ret), K(str));
+  }
+  return ret;
+}
+
+int ObRestoreLogPieceBriefInfo::get_log_piece_path_str(common::ObIAllocator &allocator, ObString &str) const
+{
+  int ret = OB_SUCCESS;
+  str.reset();
+  ObBackupDest dest;
+  int64_t pos = 0;
+  char *buf = nullptr;
+  const int64_t buf_len = OB_MAX_BACKUP_PATH_LENGTH;
+
+  if (!is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("backup set path is empty", K(ret));
+  } else if (OB_ISNULL(buf = static_cast<char*>(allocator.alloc(buf_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc mem", KR(ret), K(buf_len));
+  } else if (OB_FALSE_IT(MEMSET(buf, '\0', buf_len))) {
+  } else if (OB_FAIL(dest.set(piece_path_.ptr()))) {
+    LOG_WARN("fail to set backup dest", K(ret));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s",  dest.get_root_path().ptr()))) {
+    LOG_WARN("fail to data buff print", K(ret), K(buf_len), K(dest));
+  } else {
+    str.assign_ptr(buf, STRLEN(buf));
   }
   return ret;
 }

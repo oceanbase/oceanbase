@@ -93,6 +93,8 @@ private:
       const share::ObPieceKey &first_piece, 
       const common::ObIArray<share::ObTenantArchivePieceAttr> &pieces,
       common::ObIArray<share::ObTenantArchiveRoundAttr> &rounds);
+  int do_restore_preview_();
+  int do_show_piece_files_();
 
 private:
   int print_backup_data_file_();
@@ -215,7 +217,16 @@ private:
   int read_locality_info_file(const char *tenant_backup_path,
       share::ObBackupSetDesc latest_backup_set_desc,
       storage::ObExternTenantLocalityInfoDesc &locality_info);
+  int do_tenant_level_restore_preview_(
+      const ObIArray<ObString> &backup_path_array,
+      ObIArray<ObRestoreBackupSetBriefInfo> &backup_set_list,
+      ObIArray<ObRestoreLogPieceBriefInfo> &backup_piece_list);
+  int do_print_restore_preview_(
+      ObIAllocator &allocator,
+      ObArray<ObRestoreBackupSetBriefInfo> backup_set_list,
+      ObArray<ObRestoreLogPieceBriefInfo> backup_piece_list);
 private:
+  static const int64_t MAX_RESTORE_TIME_LENGTH = MAX(OB_MAX_TIME_STR_LENGTH, OB_MAX_INTEGER_DISPLAY_WIDTH);
   char backup_path_[common::OB_MAX_URI_LENGTH];
   char storage_info_[common::OB_MAX_BACKUP_STORAGE_INFO_LENGTH];
   int64_t offset_;
@@ -223,6 +234,11 @@ private:
   int64_t file_type_;
   bool is_quiet_;
   bool check_exist_;
+  bool is_restore_preview_;
+  bool show_piece_files_;
+  int64_t round_id_;
+  int64_t piece_id_;
+  char restore_time_[MAX_RESTORE_TIME_LENGTH];
   common::ObArenaAllocator allocator_;
 };
 
