@@ -432,7 +432,7 @@ int ObInitFastSqcP::process()
   int ret = OB_SUCCESS;
   LOG_TRACE("receive dfo", K_(arg));
   ObPxSqcHandler *sqc_handler = arg_.sqc_handler_;
-  int64_t start_time = ObTimeUtil::current_time_ns();
+  int64_t start_time = OB_TSC_TIMESTAMP.fast_current_time();
   ObSQLSessionInfo *session = nullptr;
   if (OB_ISNULL(sqc_handler)) {
     ret = OB_ERR_UNEXPECTED;
@@ -467,7 +467,8 @@ int ObInitFastSqcP::process()
                 K(arg),
                 K(session->get_compatibility_mode()),
                 K(sqc_handler->get_reserved_px_thread_count()));
-        sqc_handler->get_sqc_metrics().sqc_rpc_process_cost_ = ObTimeUtil::current_time_ns() - start_time;
+      sqc_handler->get_sqc_metrics().sqc_rpc_process_cost_ =
+          (OB_TSC_TIMESTAMP.fast_current_time() - start_time) * 1000LL;
       if (OB_FAIL(startup_normal_sqc(*sqc_handler))) {
         LOG_WARN("fail to startup normal sqc", K(ret));
       }

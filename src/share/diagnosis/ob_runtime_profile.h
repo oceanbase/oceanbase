@@ -270,20 +270,24 @@ public:
   explicit ScopedTimer(ObMetricId metric_id) : metric_id_(metric_id)
   {
     profile_ = get_current_profile();
-    start_time_ = ObTimeUtil::current_time_ns();
+    if (nullptr != profile_) {
+      start_time_ = OB_TSC_TIMESTAMP.fast_current_time();
+    }
   }
 
   // reporting elapse time to specific profile as metric after deconstructor
   ScopedTimer(ObMetricId metric_id, ObOpProfile<ObMetric> *profile)
       : metric_id_(metric_id), profile_(profile)
   {
-    start_time_ = ObTimeUtil::current_time_ns();
+    if (nullptr != profile_) {
+      start_time_ = OB_TSC_TIMESTAMP.fast_current_time();
+    }
   }
 
   // report elapse time to variable
   explicit ScopedTimer(int64_t *elapse_time) : elapse_time_(elapse_time)
   {
-    start_time_ = ObTimeUtil::current_time_ns();
+    start_time_ = OB_TSC_TIMESTAMP.fast_current_time();
   }
   ~ScopedTimer();
 

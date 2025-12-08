@@ -785,6 +785,8 @@ public:
                                  enable_seq_wrap_around_flush_cache_(false),
                                  enable_sql_ccl_rule_(true),
                                  force_unstreaming_cursor_(false),
+                                 conf_enable_sql_audit_(false),
+                                 extend_sql_plan_monitor_metrics_(false),
                                  session_(session)
     {
     }
@@ -840,6 +842,8 @@ public:
 
     bool enable_ps_parameterize() const { return enable_ps_parameterize_; }
     bool force_unstreaming_cursor() const { return force_unstreaming_cursor_; }
+    bool conf_enable_sql_audit() const { return conf_enable_sql_audit_; }
+    bool extend_sql_plan_monitor_metrics() const { return extend_sql_plan_monitor_metrics_; }
   private:
     //租户级别配置项缓存session 上，避免每次获取都需要刷新
     bool is_external_consistent_;
@@ -879,6 +883,8 @@ public:
     bool enable_seq_wrap_around_flush_cache_;
     bool enable_sql_ccl_rule_;
     bool force_unstreaming_cursor_;
+    bool conf_enable_sql_audit_;
+    bool extend_sql_plan_monitor_metrics_;
     ObSQLSessionInfo *session_;
   };
 
@@ -1672,6 +1678,14 @@ public:
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.enable_sql_ccl_rule();
   }
+
+  bool enable_monitor_profile() {
+    cached_tenant_config_info_.refresh();
+    return get_local_ob_enable_sql_audit() &&
+           cached_tenant_config_info_.conf_enable_sql_audit() &&
+           cached_tenant_config_info_.extend_sql_plan_monitor_metrics();
+  }
+
   int get_tmp_table_size(uint64_t &size);
   int ps_use_stream_result_set(bool &use_stream);
   void set_proxy_version(uint64_t v) { proxy_version_ = v; }
