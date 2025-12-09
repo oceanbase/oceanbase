@@ -178,6 +178,7 @@ int ObOpProfile<MetricType>::to_format_json_(char *buf, const int64_t buf_len, i
 template <typename MetricType>
 int ObOpProfile<MetricType>::pretty_print(ObIAllocator *alloc, const char *&result,
                                           const ObString &prefix,
+                                          const ObString &suffix,
                                           const ObString &child_prefix,
                                           metric::Level display_level) const
 
@@ -189,7 +190,9 @@ int ObOpProfile<MetricType>::pretty_print(ObIAllocator *alloc, const char *&resu
   if (OB_ISNULL(buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf");
-  } else if (OB_FAIL(pretty_print_(buf, buf_len, pos, prefix, child_prefix, display_level))) {
+  } else if (OB_FAIL(pretty_print_name(buf, buf_len, pos, prefix, suffix))) {
+    LOG_WARN("failed to pretty print");
+  } else if (OB_FAIL(pretty_print_metrics(buf, buf_len, pos, child_prefix, display_level))) {
     LOG_WARN("failed to pretty print");
   } else {
     result = buf;
@@ -198,10 +201,28 @@ int ObOpProfile<MetricType>::pretty_print(ObIAllocator *alloc, const char *&resu
 }
 
 template <typename MetricType>
-int ObOpProfile<MetricType>::pretty_print_(char *buf, const int64_t buf_len, int64_t &pos,
-                                           const ObString &prefix,
-                                           const ObString &child_prefix,
-                                           metric::Level display_level) const
+int ObOpProfile<MetricType>::pretty_print_name(char *buf, const int64_t buf_len, int64_t &pos,
+                                               const ObString &prefix,
+                                               const ObString &suffix) const
+
+{
+  int ret = OB_SUCCESS;
+  if (prefix.length() > 0) {
+    OZ(BUF_PRINTF(prefix));
+  }
+  OZ(BUF_PRINTF("%s", get_name_str()));
+  if (suffix.length() > 0) {
+    OZ(BUF_PRINTF(suffix));
+  }
+  OZ(BUF_PRINTF("\n"));
+  return ret;
+}
+
+
+template <typename MetricType>
+int ObOpProfile<MetricType>::pretty_print_metrics(char *buf, const int64_t buf_len, int64_t &pos,
+                                               const ObString &prefix,
+                                               metric::Level display_level) const
 
 {
   int ret = OB_SUCCESS;
@@ -209,10 +230,6 @@ int ObOpProfile<MetricType>::pretty_print_(char *buf, const int64_t buf_len, int
   ProfileWrap *cur_child = ATOMIC_LOAD(&child_head_);
   bool has_metric = false;
   bool has_child = (cur_child != nullptr);
-  if (prefix.length() > 0) {
-    OZ(BUF_PRINTF("%s", prefix.ptr()));
-  }
-  OZ(BUF_PRINTF("%s \n", get_name_str()));
   if (OB_SUCC(ret) && pos < buf_len) {
     while (nullptr != cur_metric && OB_SUCC(ret)) {
       if (get_metric_level(cur_metric->elem_.id_) > display_level) {
@@ -222,7 +239,7 @@ int ObOpProfile<MetricType>::pretty_print_(char *buf, const int64_t buf_len, int
       }
       if (has_metric && OB_FAIL(BUF_PRINTF("\n"))) {
         LOG_WARN("failed to buf print");
-      } else if (OB_FAIL(cur_metric->elem_.pretty_print(buf, buf_len, pos, child_prefix))) {
+      } else if (OB_FAIL(cur_metric->elem_.pretty_print(buf, buf_len, pos, prefix))) {
         LOG_WARN("failed to print metric", K(pos), K(buf_len), K(cur_metric->elem_.id_));
       } else {
         has_metric = true;
@@ -238,11 +255,13 @@ int ObOpProfile<MetricType>::pretty_print_(char *buf, const int64_t buf_len, int
     int64_t temp_buf_len = sizeof(temp_buf);
     int64_t temp_pos = 0;
     OZ(oceanbase::common::databuff_printf(temp_buf, temp_buf_len, temp_pos,
-                                          "%s  ", child_prefix.ptr()));
-    ObString sub_child_prefix(temp_pos, temp_buf);
+                                          "%s  ", prefix.ptr()));
+    ObString next_depth_prefix(temp_pos, temp_buf);
     while (nullptr != cur_child && OB_SUCC(ret)) {
-      if (OB_FAIL(cur_child->elem_->pretty_print_(
-              buf, buf_len, pos, child_prefix, sub_child_prefix, display_level))) {
+      if (OB_FAIL(cur_child->elem_->pretty_print_name(buf, buf_len, pos, prefix, ""))) {
+        LOG_WARN("failed to print child profile", K(pos), K(buf_len));
+      } else if (OB_FAIL(cur_child->elem_->pretty_print_metrics(buf, buf_len, pos,
+            next_depth_prefix, display_level))) {
         LOG_WARN("failed to print child profile", K(pos), K(buf_len));
       } else {
         cur_child = ATOMIC_LOAD(&cur_child->next_);

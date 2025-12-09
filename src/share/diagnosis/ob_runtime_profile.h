@@ -126,6 +126,7 @@ public:
   int to_format_json(ObIAllocator *alloc, const char *&result, bool with_outside_label = true,
                      metric::Level display_level = metric::Level::STANDARD);
   int pretty_print(ObIAllocator *alloc, const char *&result, const ObString &prefix,
+                   const ObString &suffix,
                    const ObString &child_prefix,
                    metric::Level display_level = metric::Level::STANDARD) const;
   ObProfileId get_id() const { return id_; }
@@ -198,8 +199,10 @@ public:
 private:
   int to_format_json_(char *buf, const int64_t buf_len, int64_t &pos,
                       metric::Level display_level) const;
-  int pretty_print_(char *buf, const int64_t buf_len, int64_t &pos, const ObString &prefix,
-                    const ObString &child_prefix, metric::Level display_level) const;
+  int pretty_print_name(char *buf, const int64_t buf_len, int64_t &pos, const ObString &prefix,
+                        const ObString &suffix) const;
+  int pretty_print_metrics(char *buf, const int64_t buf_len, int64_t &pos, const ObString &prefix,
+                        metric::Level display_level) const;
   int64_t get_persist_profile_size(int64_t metric_count, int64_t child_cnt) const;
 
   int register_metric(ObMetricId metric_id, MetricType *&metric);

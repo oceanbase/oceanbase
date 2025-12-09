@@ -97,6 +97,7 @@ struct ObMergedProfileItem
   uint64_t max_db_time_{0};
   int64_t plan_hash_value_{0};
   ObString sql_id_;
+  int64_t parallel_{0};
   ObMergedProfile *profile_{nullptr};
 };
 
