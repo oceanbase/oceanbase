@@ -188,6 +188,106 @@ int ObTabletFullMemoryMdsData::read_auto_inc_seq(
   return ret;
 }
 
+template <typename UnitKey>
+static int inner_mock_mds_node(
+    common::ObArenaAllocator &allocator,
+    const UnitKey &key,
+    const share::SCN mds_ckpt_scn,
+    mds::MdsDumpNode &node)
+{
+  int ret = OB_SUCCESS;
+  node.status_.union_.field_.node_type_ = mds::MdsNodeType::SET;
+  node.status_.union_.field_.state_ = mds::TwoPhaseCommitState::ON_COMMIT;
+  node.status_.union_.field_.is_dumped_ = true;
+  node.allocator_ = &allocator;
+  node.writer_id_ = mds::MdsWriter::DEFAULT_WRITER_ID;
+  node.seq_no_ = transaction::ObTxSEQ::MIN_VAL();
+  node.redo_scn_ = mds_ckpt_scn;
+  node.end_scn_ = mds_ckpt_scn;
+  node.trans_version_ = mds_ckpt_scn;
+
+  const int64_t user_data_size = key.get_serialize_size();
+  char *user_data_buffer = nullptr;
+  int64_t pos = 0;
+  if (OB_ISNULL(user_data_buffer = (char*)allocator.alloc(user_data_size))) {
+    ret = OB_BUF_NOT_ENOUGH;
+    LOG_WARN("fail to alloc buffer", K(ret), K(user_data_size));
+  } else if (OB_FAIL(key.serialize(user_data_buffer, user_data_size, pos))) {
+    LOG_WARN("failed to serialize auto_inc_seq", K(ret));
+  } else {
+    node.user_data_.assign(user_data_buffer, user_data_size);
+    node.crc_check_number_ = node.generate_hash();
+  }
+
+  if (OB_FAIL(ret)) {
+    if (OB_NOT_NULL(user_data_buffer)) {
+      allocator.free(user_data_buffer);
+    }
+  }
+  return ret;
+}
+
+template <typename UserData>
+static int mock_convert_to_mds_dump_kv(
+    common::ObArenaAllocator &allocator,
+    const UserData &user_data,
+    const share::SCN mds_ckpt_scn,
+    mds::MdsDumpKV &dump_kv)
+{
+  int ret = OB_SUCCESS;
+  dump_kv.reset();
+  mds::MdsDumpKey &key = dump_kv.k_;
+  mds::MdsDumpNode &node = dump_kv.v_;
+  constexpr uint8_t table_id = mds::TupleTypeIdx<mds::MdsTableTypeTuple, mds::NormalMdsTable>::value;
+  constexpr uint8_t unit_id = mds::TupleTypeIdx<mds::NormalMdsTable, mds::MdsUnit<mds::DummyKey, UserData>>::value;
+  mds::DummyKey dummy_key;
+  if (OB_FAIL(key.init(table_id, unit_id, dummy_key, allocator))) {
+    LOG_WARN("failed to init mds dump key", K(ret));
+  } else {
+    node.mds_table_id_ = table_id;
+    node.mds_unit_id_ = unit_id;
+    node.status_.union_.field_.writer_type_ = mds::WriterType::TRANSACTION;
+    if (OB_FAIL(inner_mock_mds_node(allocator, user_data, mds_ckpt_scn, node))) {
+      LOG_WARN("failed to inner mock mds node", K(ret), K(user_data), K(mds_ckpt_scn));
+    }
+  }
+  return ret;
+}
+
+template <typename UserData>
+static int compat_revise_410_mds_node_impl(
+    common::ObArenaAllocator &allocator,
+    ObMdsMiniMergeOperator &op,
+    const share::SCN mds_ckpt_scn,
+    const mds::MdsDumpKV &committed_kv)
+{
+  int ret = OB_SUCCESS;
+  constexpr uint8_t expected_unit_id = mds::TupleTypeIdx<mds::NormalMdsTable, mds::MdsUnit<mds::DummyKey, UserData>>::value;
+  const bool need_revise = (expected_unit_id != committed_kv.v_.mds_unit_id_)
+                     || (0 == committed_kv.v_.writer_id_)
+                     || (!committed_kv.v_.redo_scn_.is_valid());
+  if (!need_revise) {
+    if (OB_FAIL(op(committed_kv))) {
+      LOG_WARN("failed to dump mds node", K(ret), K(committed_kv));
+    }
+  } else {
+    int64_t pos = 0;
+    mds::MdsDumpKV tmp_mds_kv;
+    UserData user_data;
+    if (OB_FAIL(user_data.deserialize(committed_kv.v_.user_data_.ptr(),
+      committed_kv.v_.user_data_.size(), pos))) {
+      LOG_WARN("failed to deserialize user data", K(ret), K(committed_kv));
+    } else if (OB_FAIL(mock_convert_to_mds_dump_kv(allocator, user_data, mds_ckpt_scn, tmp_mds_kv))) {
+      LOG_WARN("failed to convert to mds dump kv", K(ret), K(user_data), K(mds_ckpt_scn));
+    } else if (OB_FAIL(op(tmp_mds_kv))) {
+      LOG_WARN("failed to dump mds node", K(ret), K(tmp_mds_kv), K(user_data));
+    } else {
+      FLOG_INFO("compat revise 410 mds node", K(committed_kv), K(tmp_mds_kv), K(user_data));
+    }
+  }
+  return ret;
+}
+
 int ObTabletFullMemoryMdsData::scan_all_mds_data_with_op(
     const share::SCN &mds_ckpt_scn,
     ObMdsMiniMergeOperator &op) const
@@ -212,11 +312,18 @@ int ObTabletFullMemoryMdsData::scan_all_mds_data_with_op(
     LOG_INFO("tablet status uncommitted kv is valid", K(ret), K(tablet_status_uncommitted_kv_));
   }
 
-  if (OB_FAIL(ret)) {
-  } else if (!tablet_status_committed_kv_.v_.user_data_.empty() && CLICK_FAIL(op(tablet_status_committed_kv_))) {
-    LOG_WARN("failed to dump tablet status", K(ret), K(tablet_status_committed_kv_));
-  } else if (!aux_tablet_info_committed_kv_.v_.user_data_.empty() && CLICK_FAIL(op(aux_tablet_info_committed_kv_))) {
-    LOG_WARN("failed to dump aux tablet info", K(ret), K(aux_tablet_info_committed_kv_));
+  if (OB_SUCC(ret) && !tablet_status_committed_kv_.v_.user_data_.empty()) {
+    if (CLICK_FAIL(compat_revise_410_mds_node_impl<ObTabletCreateDeleteMdsUserData>(
+        allocator, op, mds_ckpt_scn, tablet_status_committed_kv_))) {
+      LOG_WARN("failed to revise tablet status mds node", K(ret), K(tablet_status_committed_kv_));
+    }
+  }
+
+  if (OB_SUCC(ret) && !aux_tablet_info_committed_kv_.v_.user_data_.empty()) {
+    if (CLICK_FAIL(compat_revise_410_mds_node_impl<ObTabletBindingMdsUserData>(
+        allocator, op, mds_ckpt_scn, aux_tablet_info_committed_kv_))) {
+      LOG_WARN("failed to revise aux tablet info mds node", K(ret), K(aux_tablet_info_committed_kv_));
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -256,45 +363,6 @@ int ObTabletFullMemoryMdsData::scan_all_mds_data_with_op(
     LOG_WARN("failed to finish dump op", K(ret), KPC(this));
   }
 
-  return ret;
-}
-
-template <typename UnitKey>
-static int inner_mock_mds_node(
-    common::ObArenaAllocator &allocator,
-    const UnitKey &key,
-    const share::SCN mds_ckpt_scn,
-    mds::MdsDumpNode &node)
-{
-  int ret = OB_SUCCESS;
-  node.status_.union_.field_.node_type_ = mds::MdsNodeType::SET;
-  node.status_.union_.field_.state_ = mds::TwoPhaseCommitState::ON_COMMIT;
-  node.status_.union_.field_.is_dumped_ = true;
-  node.allocator_ = &allocator;
-  node.writer_id_ = mds::MdsWriter::DEFAULT_WRITER_ID;
-  node.seq_no_ = transaction::ObTxSEQ::MIN_VAL();
-  node.redo_scn_ = mds_ckpt_scn;
-  node.end_scn_ = mds_ckpt_scn;
-  node.trans_version_ = mds_ckpt_scn;
-
-  const int64_t user_data_size = key.get_serialize_size();
-  char *user_data_buffer = nullptr;
-  int64_t pos = 0;
-  if (OB_ISNULL(user_data_buffer = (char*)allocator.alloc(user_data_size))) {
-    ret = OB_BUF_NOT_ENOUGH;
-    LOG_WARN("fail to alloc buffer", K(ret), K(user_data_size));
-  } else if (OB_FAIL(key.serialize(user_data_buffer, user_data_size, pos))) {
-    LOG_WARN("failed to serialize auto_inc_seq", K(ret));
-  } else {
-    node.user_data_.assign(user_data_buffer, user_data_size);
-    node.crc_check_number_ = node.generate_hash();
-  }
-
-  if (OB_FAIL(ret)) {
-    if (OB_NOT_NULL(user_data_buffer)) {
-      allocator.free(user_data_buffer);
-    }
-  }
   return ret;
 }
 
