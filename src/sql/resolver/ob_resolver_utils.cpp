@@ -1249,6 +1249,8 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
             }
           }
           OX (match_info = (ObRoutineMatchInfo::MatchInfo(need_cast, src_type, dst_type)));
+          OX (match_info.is_anonymous_associative_array_ =
+                    pl::PL_ASSOCIATIVE_ARRAY_TYPE == dst_pl_type.get_type() );
         }
       }
     } else {
@@ -1711,6 +1713,7 @@ int ObResolverUtils::pick_routine(const pl::ObPLResolveCtx &resolve_ctx,
       OZ (match_infos.push_back(match_info));
     }
   }
+  OZ (check_anonymous_associative_array(match_infos));
   if (OB_FAIL(ret)) {
   } else if (0 == match_infos.count()) { // 没有匹配的routine直接报错
     ret = OB_ERR_SP_WRONG_ARG_NUM;
@@ -1722,6 +1725,39 @@ int ObResolverUtils::pick_routine(const pl::ObPLResolveCtx &resolve_ctx,
     OX (routine_info = match_infos.at(0).routine_info_);
   } else { // 存在多个匹配, 继续pick
     OZ (pick_routine(match_infos, routine_info));
+  }
+  return ret;
+}
+
+int ObResolverUtils::check_anonymous_associative_array(ObIArray<ObRoutineMatchInfo> &match_infos)
+{
+  //Check if there is an anonymous associative array parameter;
+  // if so, only keep matches containing the anonymous associative array parameter.
+  int ret = OB_SUCCESS;
+  if (match_infos.count() > 0) {
+    ObSEArray<ObRoutineMatchInfo, 16> valid_match_infos;
+    ObSEArray<int, 16> assoc_array_args;
+    for (int64_t i = 0; OB_SUCC(ret) && i < match_infos.at(0).match_info_.count(); ++i) {
+      for (int64_t j = 0; OB_SUCC(ret) && j < match_infos.count(); ++j) {
+        if (match_infos.at(j).is_anonymous_associative_array(i)) {
+          OZ (assoc_array_args.push_back(i));
+          break;
+        }
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < match_infos.count(); ++i) {
+      bool has_assoc_array = true;
+      for (int64_t j = 0; OB_SUCC(ret) && j < assoc_array_args.count(); ++j) {
+        if (!match_infos.at(i).is_anonymous_associative_array(assoc_array_args.at(j))) {
+          OX (has_assoc_array = false);
+          break;
+        }
+      }
+      if (has_assoc_array) {
+        OZ (valid_match_infos.push_back(match_infos.at(i)));
+      }
+    }
+    OZ (match_infos.assign(valid_match_infos));
   }
   return ret;
 }
