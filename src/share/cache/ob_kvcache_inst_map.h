@@ -17,6 +17,7 @@
 #include "lib/hash/ob_hashmap.h"
 #include "lib/allocator/ob_malloc.h"
 #include "lib/allocator/ob_lf_fifo_allocator.h"
+#include "lib/lock/ob_simple_lock.h"
 #include "lib/resource/ob_resource_mgr.h"
 #include "lib/container/ob_array.h"
 #include "lib/hash/ob_hashmap.h"
@@ -169,6 +170,9 @@ private:
   void de_inst_ref(ObKVCacheInst *inst);
   int inner_push_inst_handle(const KVCacheInstMap::iterator &iter, ObIArray<ObKVCacheInstHandle> &inst_handles);
 private:
+  static constexpr int64_t MAX_CACHE_INFO_LINE_LEN = 1000;
+  static constexpr int64_t TENANT_CACHE_INFO_BUF_LEN = MAX_CACHE_INFO_LINE_LEN * MAX_CACHE_NUM;
+
   DRWLock lock_;
   KVCacheInstMap  inst_map_;
   DRWLock list_lock_;
@@ -181,6 +185,11 @@ private:
   // used by clean garbage inst
   ObSimpleFixedArray<ObKVCacheInstKey> inst_keys_;
   const ObITenantMemLimitGetter *mem_limit_getter_;
+
+  // used by print_tenant_cache_info to avoid being not able to print cache info
+  // when there is no enough memory
+  char *tenant_cache_info_buf_;
+  ObSimpleLock cache_info_buf_lock_;
 
   // used by erase tenant cache inst
   bool is_inited_;

@@ -24,6 +24,9 @@ public:
   static constexpr int32_t WRITE_MASK = 1<<30;
   ObSimpleLock() : v_(0)
   {}
+  bool try_lock() {
+    return ATOMIC_BCAS(&v_, 0, WRITE_MASK);
+  }
   void lock()
   {
     if (!ATOMIC_BCAS(&v_, 0, WRITE_MASK)) {
