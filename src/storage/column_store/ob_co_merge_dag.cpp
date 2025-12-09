@@ -1158,7 +1158,7 @@ int ObCOMergeLogReplayTask::process()
     LOG_WARN("failed to alloc memory for persister", K(ret));
   } else if (FALSE_IT(replayer_ = new (buf) ObCOMergeLogReplayer(allocator_,
       ctx->static_param_, start_cg_idx_, end_cg_idx_,
-      ctx->prefer_reuse_macro_block_ ? false :ctx->get_is_rebuild_column_store()))) {
+      ctx->get_is_rebuild_column_store()))) {
   } else if (OB_FAIL(replayer_->init(*ctx, range_idx_))) {
     LOG_WARN("failed to init replayer", K(ret));
   } else if (OB_FAIL(replayer_->replay_merge_log())) {

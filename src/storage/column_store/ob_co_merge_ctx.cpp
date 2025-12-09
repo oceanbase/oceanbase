@@ -498,8 +498,13 @@ int ObCOTabletMergeCtx::cal_merge_param()
   } else if (OB_UNLIKELY(!ObCOMajorMergePolicy::is_valid_major_merge_type(co_major_merge_type))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid major merge type", K(ret), K(co_major_merge_type));
+  } else if (ObCOMajorMergePolicy::is_build_row_store_merge(co_major_merge_type)) {
+    force_full_merge = true;
   } else if (ObCOMajorMergePolicy::is_use_rs_build_schema_match_merge(co_major_merge_type)) {
+    force_full_merge = true;
     static_param_.co_static_param_.is_rebuild_column_store_ = true;
+  } else if (ObCOMajorMergePolicy::is_build_redundent_row_store_merge(co_major_merge_type)) {
+    force_full_merge = true;
   }
   if (FAILEDx(ObBasicTabletMergeCtx::cal_major_merge_param(force_full_merge, progressive_merge_mgr_))) {
     LOG_WARN("failed to calc major merge param", KR(ret), K(force_full_merge));
