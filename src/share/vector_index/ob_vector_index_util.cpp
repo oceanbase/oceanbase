@@ -7298,5 +7298,52 @@ int ObVectorIndexUtil::check_need_embedding_when_rebuild(const ObString &old_idx
   return ret;
 }
 
+int ObDasSemanticIndexInfo::generate(const schema::ObTableSchema *data_schema,
+                                     const schema::ObTableSchema *rowkey_domain_schema,
+                                     int64_t result_output_count,
+                                     bool has_trans_info_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(data_schema) || OB_ISNULL(rowkey_domain_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KP(data_schema), KP(rowkey_domain_schema));
+  } else {
+    is_emb_vec_tbl_ = rowkey_domain_schema->is_hybrid_vec_index_embedded_type();
+    use_rowkey_vid_tbl_ = !data_schema->is_table_with_hidden_pk_column();
+    part_key_num_ = 0;
+    ObVectorIndexParam vec_index_param;
+    if (data_schema->is_table_with_hidden_pk_column() && data_schema->is_partitioned_table()) {
+      int64_t trans_expr_cnt = has_trans_info_expr ? 1 : 0;
+      if (result_output_count == (rowkey_domain_schema->get_column_count() + trans_expr_cnt)) {
+        schema::ObTableSchema::const_column_iterator col_begin = data_schema->column_begin();
+        schema::ObTableSchema::const_column_iterator col_end = data_schema->column_end();
+        for (; OB_SUCC(ret) && col_begin != col_end; col_begin++) {
+          const schema::ObColumnSchemaV2 *col_schema = *col_begin;
+          if (OB_ISNULL(col_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected nullptr column schema", K(ret));
+          } else if (col_schema->is_tbl_part_key_column()) {
+            part_key_num_++;
+          }
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    }else if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(rowkey_domain_schema->get_index_params(), ObVectorIndexType::VIT_HNSW_INDEX, vec_index_param))) {
+      LOG_WARN("fail to parser params from string", K(ret), K(rowkey_domain_schema->get_index_params()));
+    } else {
+      sync_interval_type_ = vec_index_param.sync_interval_type_;
+    }
+  }
+  LOG_INFO("has generate semantic_index_info for das ", K(*this), K(result_output_count), K(rowkey_domain_schema->get_column_count()), K(has_trans_info_expr));
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObDasSemanticIndexInfo,
+                    is_emb_vec_tbl_,
+                    use_rowkey_vid_tbl_,
+                    part_key_num_,
+                    sync_interval_type_);
+
 }
 }

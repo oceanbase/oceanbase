@@ -4703,6 +4703,7 @@ int ObDmlCgService::generate_rowkey_domain_ctdef(
     loc_meta->is_external_table_ = rowkey_domain_schema->is_external_table();
     loc_meta->is_lake_table_ = (rowkey_domain_schema->get_lake_table_format() == share::ObLakeTableFormat::ICEBERG);
     ObString file_location;
+    share::ObDasSemanticIndexInfo &semantic_index_info = scan_ctdef->semantic_index_info_;
     OZ(ObExternalTableUtils::get_external_file_location(*rowkey_domain_schema, *schema_guard->get_schema_guard(), cg_.phy_plan_->get_allocator(), file_location));
     loc_meta->is_external_files_on_disk_ = ObSQLUtils::is_external_files_on_local_disk(file_location);
     scan_ctdef->table_param_.get_enable_lob_locator_v2()
@@ -4721,6 +4722,12 @@ int ObDmlCgService::generate_rowkey_domain_ctdef(
                                                                       *scan_ctdef,
                                                                       nullptr))) {
       LOG_WARN("fail to generate das result output", K(ret));
+    } else if (rowkey_domain_schema->is_hybrid_vec_index_embedded_type() &&
+               OB_FAIL(semantic_index_info.generate(data_schema,
+                                                    rowkey_domain_schema,
+                                                    scan_ctdef->result_output_.count(),
+                                                    OB_NOT_NULL(scan_ctdef->trans_info_expr_)))) {
+      LOG_WARN("fail to generate semantic index info", K(ret));
     } else {
       rowkey_domain_scan_ctdef = scan_ctdef;
     }

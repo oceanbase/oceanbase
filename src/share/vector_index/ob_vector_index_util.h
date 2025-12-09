@@ -1205,6 +1205,31 @@ public:
   }
 };
 
+struct ObDasSemanticIndexInfo
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDasSemanticIndexInfo()
+  : is_emb_vec_tbl_(false),
+    use_rowkey_vid_tbl_(false),
+    part_key_num_(0),
+    sync_interval_type_(ObVectorIndexSyncIntervalType::VSIT_MAX)
+    {}
+  ~ObDasSemanticIndexInfo() {}
+
+  int generate(const schema::ObTableSchema *data_schema,
+               const schema::ObTableSchema *rowkey_domain_schema,
+               int64_t result_output_count,
+               bool has_trans_info_expr);
+
+  TO_STRING_KV(K_(is_emb_vec_tbl), K_(use_rowkey_vid_tbl), K_(part_key_num), K_(sync_interval_type));
+
+  bool is_emb_vec_tbl_;
+  bool use_rowkey_vid_tbl_;
+  int8_t part_key_num_;
+  ObVectorIndexSyncIntervalType sync_interval_type_;
+};
+
 }  // namespace share
 }  // namespace oceanbase
 

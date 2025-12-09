@@ -350,25 +350,20 @@ int ObDASDomainIdMergeIter::check_is_need_multi_get()
 {
   int ret = OB_SUCCESS;
   for (int64_t k = 0; OB_SUCC(ret) && k < rowkey_domain_scan_params_.count(); k++) {
-      bool is_emb_vec = false;
-      ObVectorIndexSyncIntervalType sync_interval_type = ObVectorIndexSyncIntervalType::VSIT_MAX;
-      storage::ObTableScanParam& scan_param = *rowkey_domain_scan_params_.at(k);
-      if (OB_FAIL(check_is_emb_vec_domain_by_table_id(scan_param.index_id_, is_emb_vec))) {
-        LOG_WARN("fail to check is emb vec domain", K(ret), K(scan_param.index_id_));
-      } if (is_emb_vec) { // hybrid vector index mode
-        if (OB_FAIL(get_sync_interval_type(scan_param.index_id_, sync_interval_type))) {
-          LOG_WARN("fail to get sync interval type", K(ret), K(scan_param.index_id_));
-        } else if (sync_interval_type == ObVectorIndexSyncIntervalType::VSIT_MAX) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("hybrid vector index should have sync interval type", K(ret), K(scan_param.index_id_), K(sync_interval_type));
-        } else {
-          is_need_multi_get_ = is_need_multi_get_ == true ? true : sync_interval_type != ObVectorIndexSyncIntervalType::VSIT_IMMEDIATE;
-          const ObExprPtrIArray *op_filters = data_table_iter_->get_scan_param().op_filters_;
-          if (OB_NOT_NULL(op_filters) && !op_filters->empty()) {
-            is_need_multi_get_ = true;
-          }
+    ObVectorIndexSyncIntervalType sync_interval_type = rowkey_domain_ctdefs_.at(k)->semantic_index_info_.sync_interval_type_;
+    storage::ObTableScanParam& scan_param = *rowkey_domain_scan_params_.at(k);
+    if (rowkey_domain_ctdefs_.at(k)->semantic_index_info_.is_emb_vec_tbl_) { // hybrid vector index mode
+      if (sync_interval_type == ObVectorIndexSyncIntervalType::VSIT_MAX) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("hybrid vector index should have sync interval type", K(ret), K(scan_param.index_id_), K(rowkey_domain_ctdefs_.at(k)->semantic_index_info_));
+      } else {
+        is_need_multi_get_ = is_need_multi_get_ == true ? true : sync_interval_type != ObVectorIndexSyncIntervalType::VSIT_IMMEDIATE;
+        const ObExprPtrIArray *op_filters = data_table_iter_->get_scan_param().op_filters_;
+        if (OB_NOT_NULL(op_filters) && !op_filters->empty()) {
+          is_need_multi_get_ = true;
         }
       }
+    }
   }
   return ret;
 }
@@ -385,18 +380,13 @@ int ObDASDomainIdMergeIter::build_rowkey_domain_range()
     const common::ObIArray<common::ObNewRange> &key_ranges = data_table_iter_->get_scan_param().key_ranges_;
     const common::ObIArray<common::ObNewRange> &ss_key_ranges = data_table_iter_->get_scan_param().ss_key_ranges_;
     for (int64_t k = 0; OB_SUCC(ret) && k < rowkey_domain_scan_params_.count(); k++) {
-      bool is_emb_vec = false;
-      bool use_rowkey_vid_tbl = false;
+      bool is_emb_vec = rowkey_domain_ctdefs_.at(k)->semantic_index_info_.is_emb_vec_tbl_;
+      bool use_rowkey_vid_tbl = rowkey_domain_ctdefs_.at(k)->semantic_index_info_.use_rowkey_vid_tbl_;
       if (OB_ISNULL(rowkey_domain_scan_params_.at(k))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpeted error, rowkey domain scan param is nullptr", K(ret), K(k));
       } else {
         storage::ObTableScanParam& scan_param = *rowkey_domain_scan_params_.at(k);
-        if (OB_FAIL(check_is_emb_vec_domain_by_table_id(scan_param.index_id_, is_emb_vec))) {
-          LOG_WARN("fail to check is emb vec domain", K(ret), K(scan_param.index_id_));
-        } else if (OB_FAIL(check_use_rowkey_vid_tbl_by_table_id(data_table_iter_->get_scan_param().index_id_, use_rowkey_vid_tbl))) {
-          LOG_WARN("fail to check use rowkey vid", K(ret), K(data_table_iter_->get_scan_param().index_id_));
-        }
         for (int64_t i = 0; OB_SUCC(ret) && i < key_ranges.count(); ++i) {
           ObNewRange key_range = key_ranges.at(i);
           key_range.table_id_ = scan_param.index_id_;
@@ -961,20 +951,11 @@ int ObDASDomainIdMergeIter::get_domain_id(
   }
   if (OB_SUCC(ret)) {
     const int64_t rowkey_cnt = ctdef->table_param_.get_read_info().get_schema_rowkey_count();
-    int64_t part_key_num = 0;
+    int64_t part_key_num = ctdef->semantic_index_info_.part_key_num_;
     ObExpr *expr = nullptr;
-    int64_t expect_result_output_cnt = rowkey_cnt + 1;
+    int64_t expect_result_output_cnt = rowkey_cnt + part_key_num + 1;
     expect_result_output_cnt = OB_NOT_NULL(ctdef->trans_info_expr_) ? (expect_result_output_cnt + 1) : expect_result_output_cnt;
     expect_result_output_cnt = (domain_type == ObDomainIdUtils::IVFPQ_CID) ? (expect_result_output_cnt + 1) : expect_result_output_cnt;
-    // when partition and heap organization table, use hybrid vector index; the dml return all_columns as output, but tsc only use
-    // rowkey and embeded_vec; the dml has more columns that is partition key.
-    if (domain_type != ObDomainIdUtils::EMB_VEC) {
-      // skip, do nothing
-    } else if (OB_FAIL(check_table_need_add_part_key(data_table_iter_->get_scan_param().index_id_, part_key_num, ctdef))) {
-      LOG_WARN("fail to check embedded table add part key ", K(ret), K(data_table_iter_->get_scan_param().index_id_), K(ctdef->ref_table_id_));
-    } else {
-      expect_result_output_cnt = expect_result_output_cnt + part_key_num;
-    }
     // When the defensive check level is set to 2 (strict defensive check), the transaction information of the current
     // row is recorded for 4377 diagnosis. Then, it will add pseudo_trans_info_expr into result output of das scan.
     //
@@ -1291,12 +1272,9 @@ int ObDASDomainIdMergeIter::multi_get_rows(int64_t &count, int64_t capacity)
     if (OB_SUCC(ret)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_domain_iters_.count(); i++) {
         bool is_emb_vec_domain = false;
-        bool use_rowkey_vid_tbl = false;
         domain_ids.reset();
         if (OB_FAIL(check_is_emb_vec_domain(i, is_emb_vec_domain))) {
           LOG_WARN("fail to check is emb_vec domain", K(ret), K(i));
-        } else if (OB_FAIL(check_use_rowkey_vid_tbl_by_table_id(data_table_iter_->get_scan_param().index_id_, use_rowkey_vid_tbl))) {
-          LOG_WARN("fail to check use rowkey vid", K(ret), K(data_table_iter_->get_scan_param().index_id_));
         } else if (!is_no_sample_) {
           int64_t domain_id_count = 0;
           share::ObDomainIdUtils::DomainIds tmp_domain_id;
@@ -1334,7 +1312,7 @@ int ObDASDomainIdMergeIter::multi_get_rows(int64_t &count, int64_t capacity)
             } else if (OB_FAIL(get_rowkey(allocator, rowkey_domain_ctdefs_.at(i), rowkey_domain_rtdefs_.at(i), rowkey_domain_rowkey))) {
               LOG_WARN("fail to get rowkey domain rowkey", K(ret));
             } else {
-              if (is_emb_vec_domain && use_rowkey_vid_tbl) {
+              if (is_emb_vec_domain && rowkey_domain_ctdefs_.at(i)->semantic_index_info_.use_rowkey_vid_tbl_) {
                 // [rowkey] [vid] -> [rowkey]
                 ObObj *extend_end_key_obj_ptr = static_cast<ObObj *>(get_arena_allocator().alloc(sizeof(ObObj) * (data_table_rowkey.get_obj_cnt())));
                 if (OB_ISNULL(extend_end_key_obj_ptr)) {
@@ -1433,85 +1411,6 @@ int ObDASDomainIdMergeIter::check_is_emb_vec_domain(int64_t iter_idx, bool &is_e
   return ret;
 }
 
-int ObDASDomainIdMergeIter::check_is_emb_vec_domain_by_table_id(int64_t table_id, bool &is_emb_vec)
-{
-  int ret = OB_SUCCESS;
-  is_emb_vec = false;
-  share::schema::ObSchemaGetterGuard schema_guard;
-  const ObSimpleTableSchemaV2 *table_schema = nullptr;
-  if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(MTL_ID(), schema_guard))) {
-    LOG_WARN("fail to get schema guard", K(ret));
-  } else if (OB_FAIL(schema_guard.get_simple_table_schema(MTL_ID(), table_id, table_schema))) {
-    LOG_WARN("fail to get table schema", K(ret), K(table_id));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table schema is null", K(ret), K(table_id));
-  } else {
-    is_emb_vec = table_schema->is_hybrid_vec_index_embedded_type();
-  }
-  return ret;
-}
-
-int ObDASDomainIdMergeIter::check_use_rowkey_vid_tbl_by_table_id(int64_t table_id, bool &use_rowkey_vid_tbl)
-{
-  int ret = OB_SUCCESS;
-  use_rowkey_vid_tbl = false;
-  share::schema::ObSchemaGetterGuard schema_guard;
-  const ObSimpleTableSchemaV2 *table_schema = nullptr;
-  if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(MTL_ID(), schema_guard))) {
-    LOG_WARN("fail to get schema guard", K(ret));
-  } else if (OB_FAIL(schema_guard.get_simple_table_schema(MTL_ID(), table_id, table_schema))) {
-    LOG_WARN("fail to get table schema", K(ret), K(table_id));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table schema is null", K(ret), K(table_id));
-  } else {
-    use_rowkey_vid_tbl = !table_schema->is_table_with_hidden_pk_column();
-  }
-  return ret;
-}
-
-int ObDASDomainIdMergeIter::check_table_need_add_part_key(int64_t table_id, int64_t &part_key_num, const ObDASScanCtDef *ctdef)
-{
-  int ret = OB_SUCCESS;
-  part_key_num = 0;
-  share::schema::ObSchemaGetterGuard schema_guard;
-  ObIArray<uint64_t> *column_ids;
-  const ObTableSchema *table_schema = nullptr;
-  const ObTableSchema *domain_table_schema = nullptr;
-  int64_t trans_expr_cnt = OB_NOT_NULL(ctdef->trans_info_expr_) ? 1 : 0;
-  if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(MTL_ID(), schema_guard))) {
-    LOG_WARN("fail to get schema guard", K(ret));
-  } else if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(), table_id, table_schema))) {
-    LOG_WARN("fail to get table schema", K(ret), K(table_id));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table schema is null", K(ret), K(table_id));
-  } else if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(), ctdef->ref_table_id_, domain_table_schema))) {
-    LOG_WARN("fail to get table schema", K(ret), K(ctdef->ref_table_id_));
-  } else if (OB_ISNULL(domain_table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table schema is null", K(ret), K(table_id));
-  } else if (table_schema->is_table_with_hidden_pk_column() && table_schema->is_partitioned_table()) {
-    if (ctdef->result_output_.count() == (domain_table_schema->get_column_count() + trans_expr_cnt)) {
-      ObTableSchema::const_column_iterator tmp_begin = table_schema->column_begin();
-      ObTableSchema::const_column_iterator tmp_end = table_schema->column_end();
-      for (; OB_SUCC(ret) && tmp_begin != tmp_end; tmp_begin++) {
-        ObColumnSchemaV2 *col_schema = (*tmp_begin);
-        if (OB_ISNULL(col_schema)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected nullptr", K(ret), KP(col_schema));
-        } else if (col_schema->is_tbl_part_key_column()) {
-          part_key_num++;
-        }
-      }
-    }
-  }
-  LOG_DEBUG("check_table_need_add_part_key", K(table_schema->is_table_with_hidden_pk_column()), K(table_schema->is_partitioned_table()),
-            K(domain_table_schema->get_table_name_str()), K(domain_table_schema->get_column_count()), K(trans_expr_cnt));
-  return ret;
-}
-
 int ObDASDomainIdMergeIter::fill_null_domain_id_in_data_table(
     const ObDASScanCtDef *ctdef,
     ObDASScanRtDef *rtdef,
@@ -1560,28 +1459,6 @@ int ObDASDomainIdMergeIter::fill_null_domain_id_in_data_table(
   return ret;
 }
 
-int ObDASDomainIdMergeIter::get_sync_interval_type(int64_t table_id, ObVectorIndexSyncIntervalType &sync_interval_type)
-{
-  int ret = OB_SUCCESS;
-  share::schema::ObSchemaGetterGuard schema_guard;
-  ObVectorIndexParam vec_index_param;
-  const ObTableSchema *table_schema = nullptr;
-  if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(MTL_ID(), schema_guard))) {
-    LOG_WARN("fail to get schema guard", K(ret));
-  } else if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(), table_id, table_schema))) {
-    LOG_WARN("fail to get table schema", K(ret), K(table_id));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table schema is null", K(ret), K(table_id));
-  } else if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(table_schema->get_index_params(), ObVectorIndexType::VIT_HNSW_INDEX, vec_index_param))) {
-    LOG_WARN("fail to parser params from string", K(ret), K(table_schema->get_index_params()));
-  } else {
-    sync_interval_type = vec_index_param.sync_interval_type_;
-  }
-  return ret;
-}
-
-
 int ObDASDomainIdMergeIter::reset_rowkey_domain_iter_scan_range(int64_t iter_idx, const common::ObRowkey &data_table_rowkey)
 {
   int ret = OB_SUCCESS;
@@ -1596,20 +1473,17 @@ int ObDASDomainIdMergeIter::reset_rowkey_domain_iter_scan_range(int64_t iter_idx
     storage::ObTableScanParam& scan_param = *rowkey_domain_scan_params_.at(iter_idx);
     ObDASScanIter *iter = rowkey_domain_iters_.at(iter_idx);
     bool is_emb_vec_domain = false;
-    bool use_rowkey_vid_tbl = false;
     if (OB_FAIL(iter->reuse())) {
       LOG_WARN("fail to reuse rowkey domain iter", K(ret), K(iter_idx));
     } else if (OB_FAIL(check_is_emb_vec_domain(iter_idx, is_emb_vec_domain))) {
       LOG_WARN("fail to check is emb_vec domain", K(ret), K(iter_idx));
-    } else if (OB_FAIL(check_use_rowkey_vid_tbl_by_table_id(data_table_iter_->get_scan_param().index_id_, use_rowkey_vid_tbl))) {
-      LOG_WARN("fail to check use rowkey vid", K(ret), K(data_table_iter_->get_scan_param().index_id_));
     } else {
       ObNewRange key_range;
       key_range.table_id_ = scan_param.index_id_;
       key_range.border_flag_.set_inclusive_start();
       key_range.border_flag_.set_inclusive_end();
 
-      if (is_emb_vec_domain && use_rowkey_vid_tbl) {
+      if (is_emb_vec_domain && rowkey_domain_ctdefs_.at(iter_idx)->semantic_index_info_.use_rowkey_vid_tbl_) {
         ObObj *extend_start_key_obj_ptr = static_cast<ObObj *>(get_arena_allocator().alloc(sizeof(ObObj) * (data_table_rowkey.get_obj_cnt() + 1)));
         if (OB_ISNULL(extend_start_key_obj_ptr)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
