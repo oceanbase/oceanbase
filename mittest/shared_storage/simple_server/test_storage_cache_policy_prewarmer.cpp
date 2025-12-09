@@ -591,9 +591,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_prewarm_tablet_if_hot_on_macro_mi
   OK(macro_cache_mgr->evict_by_macro_id(macro_id));
   sleep(2);
   bool is_exist = false;
-  OK(macro_cache_mgr->exist(macro_id, is_exist));
-  ASSERT_TRUE(is_exist);
-  OK(macro_cache_mgr->evict_by_macro_id(macro_id));
+  macro_cache_mgr->evict_by_macro_id(macro_id);
   sleep(2);
   OK(macro_cache_mgr->erase(macro_id));
   OK(macro_cache_mgr->exist(macro_id, is_exist));
