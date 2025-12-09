@@ -91,6 +91,7 @@ typedef struct _ObParseCtx
     uint32_t contain_sensitive_data_ : 1; // 1 indicates whether contains sensitive data like create_ai_endpoint
     uint32_t reserved_:22;
   };
+  int json_object_depth_;
 } ObParseCtx;
 
 #ifdef __cplusplus

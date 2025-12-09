@@ -366,6 +366,7 @@ typedef struct
   int realloc_cnt_;
   bool stop_add_comment_;
 #endif
+  int json_object_depth_;
 } ParseResult;
 
 typedef struct _ObFastParseCtx
