@@ -328,6 +328,8 @@ public:
                                   const Frame &new_frame,
                                   RemovalInfo &removal_info,
                                   const uint64_t &remove_type);
+    inline bool in_frame(const int64_t row_idx) const
+    { return row_idx >= head_ && row_idx <= tail_; }
     TO_STRING_KV(K(head_), K(tail_));
 
     int64_t head_;
@@ -876,7 +878,7 @@ protected:
   int fetch_child_row();
   int input_one_row(WinFuncCell &func_ctx, bool &part_end);
   int compute(RowsReader &row_reader, WinFuncCell &wf_cell, const int64_t row_idx,
-              common::ObDatum &val);
+              const bool can_reuse_frame, common::ObDatum &val);
   int compute_push_down_by_pass(WinFuncCell &wf_cell, common::ObDatum &val);
   int check_same_partition(const ExprFixedArray &other_exprs,
                            bool &is_same_part,
