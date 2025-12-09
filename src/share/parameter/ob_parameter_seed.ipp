@@ -3124,3 +3124,14 @@ ERRSIM_DEF_INT(errsim_backup_override_start_scn, OB_CLUSTER_PARAMETER, "0", "[0,
 DEF_BOOL(enable_mv_binlog_minimal_mode, OB_TENANT_PARAMETER, "False",
          "Switch of the minimal mode for materialized view ",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_CAP(_replay_memory_limit, OB_TENANT_PARAMETER, "512M", "[1M, 1024000000M]",
+        "the size of the memory reserved for replay engine. range: [1M, 1024000000M]",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(_replay_pending_log_memory_limit, OB_TENANT_PARAMETER, "128M", "[1M, 1024000000M]",
+        "the size of the memory reserved for replay pending log. Range: [1M, 1024000000M]",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_randomize_redo_logging_slot, OB_CLUSTER_PARAMETER, "False",
+        "specifies whether enable randomize redo logging slot when parallel logging is enabled",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

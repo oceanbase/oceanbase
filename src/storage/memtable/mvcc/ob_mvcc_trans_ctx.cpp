@@ -1341,10 +1341,8 @@ int ObTransCallbackMgr::acquire_callback_list(const bool new_epoch)
   // other thread will stay in slot by its offset with first thread
   if (new_epoch) {
     ++write_epoch_;
-    write_epoch_start_tid_ = tid;
-    slot = 0;
-  } else if (tid == write_epoch_start_tid_) {
-    slot = 0;
+    slot = (is_parallel_logging_() && GCONF._enable_randomize_redo_logging_slot) ? (write_epoch_ % MAX_CALLBACK_LIST_COUNT) : 0;
+    write_epoch_start_tid_ = slot + tid;
   } else {
     // to ensure slot is positive: (m + (a - b) % m) % m
     slot =  (MAX_CALLBACK_LIST_COUNT + ((tid - write_epoch_start_tid_) % MAX_CALLBACK_LIST_COUNT)) % MAX_CALLBACK_LIST_COUNT;
