@@ -415,9 +415,12 @@ int ObCOMergeScheduleTask::process()
   } else if (static_cast<ObCOMergeScheduleDag *>(get_dag())->get_swap_tablet_flag()
       && OB_FAIL(dag_net_->swap_tablet_after_minor())) {
     LOG_WARN("failed to swap tablet after minor", K(ret));
-  } else if (FALSE_IT(dag_net_->update_merge_status(ObCOMergeDagNet::PREPARE_FINISHED))) {
   } else if (OB_FAIL(dag_net_->create_co_execute_dags(*get_dag()))) { // allow failure
     LOG_WARN("failed to create execute dags in schedule task", K(ret));
+    dag_net_->update_merge_status(ObCOMergeDagNet::PREPARE_FINISHED);
+  }
+  if (OB_SUCC(ret)) {
+    dag_net_->update_merge_status(ObCOMergeDagNet::PREPARE_FINISHED);
   }
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
@@ -1406,6 +1409,10 @@ int ObCOMergeDagNet::inner_create_and_schedule_dags(ObIDag *parent_dag)
   common::ObSEArray<ObCOMergeBatchExeDag *, 8> exe_dag_array;
   ObCOMergeBatchExeDag *dag = nullptr;
 
+#ifdef ERRSIM
+  SERVER_EVENT_SYNC_ADD("merge_errsim", "create_and_schedule_dags", "has_parent_dag", parent_dag != nullptr);
+  DEBUG_SYNC(MAJOR_MERGE_TASK_PROCESS);
+#endif
   /*
    * When firstly scheduled by PrepareDag(skip minor merge) or ScheduleDag, schedule_dag is not nullptr.
    * If there are too many cgs, batch exe dags can not be created in one round, so we delay creating FinsihDag.
