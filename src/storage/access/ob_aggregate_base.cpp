@@ -107,6 +107,7 @@ ObGroupByCellBase::ObGroupByCellBase(const int64_t batch_size, common::ObIAlloca
     group_by_col_offset_(-1),
     need_extract_distinct_(false),
     is_processing_(false),
+    need_padding_(false),
     is_inited_(false)
 {
 }
@@ -132,6 +133,7 @@ void ObGroupByCellBase::reset()
   free_group_by_buf(allocator_, distinct_projector_buf_);
   padding_allocator_.reset();
   is_processing_ = false;
+  need_padding_ = false;
   projected_cnt_ = 0;
   is_inited_ = false;
 }
