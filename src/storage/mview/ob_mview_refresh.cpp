@@ -527,8 +527,7 @@ int ObMViewRefresher::fast_refresh()
   if (OB_SUCC(ret)) {
     WITH_MVIEW_TRANS_INNER_MYSQL_GUARD(trans)
     {
-      if (OB_FAIL(ObMViewInfo::fetch_mview_info(trans, tenant_id, mview_id, mview_info,
-                                                true /*for_update*/))) {
+      if (OB_FAIL(ObMViewInfo::fetch_mview_info(trans, tenant_id, mview_id, mview_info))) {
         if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
           LOG_WARN("fail to fetch mview info", KR(ret), K(tenant_id), K(mview_id));
         } else {
