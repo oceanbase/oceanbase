@@ -34,6 +34,7 @@
 #include "unittest/storage/sslog/test_mock_palf_kv.h"
 #include "close_modules/shared_storage/storage/incremental/sslog/ob_i_sslog_proxy.h"
 #include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_kv_proxy.h"
+#include "storage/tablet/ob_tablet_macro_info_iterator.h"
 
 
 static const char *TEST_FILE_NAME = "test_sslog_atomic_protocol";
@@ -1053,9 +1054,9 @@ TEST_F(ObTestSSLogAtomicProtocol, test_tablet_meta_write_op)
 
     // read tablet meta
     tablet = nullptr;
-    ObTabletHandle tablet_handle;
     common::ObArenaAllocator allocator("TestTabletMeta",
                                        OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ObCtxIds::DEFAULT_CTX_ID);
+    ObTabletHandle tablet_handle;
     share::SCN row_scn;
     ASSERT_EQ(OB_SUCCESS, tablet_meta_file->get_tablet(allocator, tablet_handle, row_scn));
     ASSERT_EQ(tablet_id, tablet_handle.get_obj()->get_tablet_id());
@@ -1530,6 +1531,172 @@ TEST_F(ObTestSSLogAtomicProtocol, test_parallel_op)
   }
 }
 
+struct MacroIdComp final
+{
+  bool operator()(const MacroBlockId &a, const MacroBlockId &b) const
+  {
+    return MEMCMP(&a, &b, sizeof(MacroBlockId)) < 0;
+  }
+};
+
+static void build_tablet_block_set(
+  const ObTablet &tablet,
+  const std::function<bool(const ObTabletBlockInfo &block_info)> &is_needed,
+  ObArenaAllocator &allocator,
+  /* out */ std::set<MacroBlockId, MacroIdComp> &block_set)
+{
+  int ret = OB_SUCCESS;
+  bool in_memory = false;
+  ObTabletMacroInfo *macro_info = nullptr;
+  storage::ObMacroInfoIterator macro_iter;
+
+  ASSERT_TRUE(tablet.is_valid());
+  ASSERT_EQ(OB_SUCCESS, tablet.load_macro_info(0, allocator, macro_info, in_memory));
+  ASSERT_NE(nullptr, macro_info);
+  ASSERT_EQ(OB_SUCCESS, macro_iter.init(ObTabletMacroType::MAX, *macro_info));
+
+  storage::ObTabletBlockInfo block_info;
+  while (OB_SUCC(ret)) {
+    block_info.reset();
+    if (OB_FAIL(macro_iter.get_next(block_info))) {
+      if (OB_ITER_END != ret) {
+        break;
+      } else {
+        ret = OB_SUCCESS;
+        break;
+      }
+    } else if (is_needed(block_info)) {
+      block_set.insert(block_info.macro_id_);
+      // printf("insert macro id: %s\n", ObCStringHelper().convert(block_info.macro_id_));
+    }
+  }
+  // printf("\n");
+  ASSERT_EQ(OB_SUCCESS, ret);
+}
+
+TEST_F(ObTestSSLogAtomicProtocol, test_sstablet_macro_info_merge)
+{
+  int ret = OB_SUCCESS;
+
+  share::ObTenantSwitchGuard tenant_guard;
+  ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(test_tenant_id));
+
+  ObLSService *ls_svr = MTL(ObLSService*);
+  ObCreateLSArg arg;
+  ObLSHandle ls_handle;
+  ObLS *ls = NULL;
+
+  ObAtomicFileMgr* atomic_file_mgr = MTL(ObAtomicFileMgr*);
+  ASSERT_NE(nullptr, atomic_file_mgr);
+
+  const int64_t LS_ID = 1;
+  ObLSID ls_id(LS_ID);
+  const int64_t TABLET_ID0 = 200010;
+  const int64_t TABLET_ID1 = 200011;
+  ObTabletID tablet_id0(TABLET_ID0);
+  ObTabletID tablet_id1(TABLET_ID1);
+  ObTabletHandle tablet_handle0, tablet_handle1;
+  ObTablet *tablet0 = nullptr, *tablet1 = nullptr;
+
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ls = ls_handle.get_ls();
+  ASSERT_NE(nullptr, ls);
+
+  common::ObArenaAllocator allocator("TestSSTablet", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ObCtxIds::DEFAULT_CTX_ID);
+
+  // create and persist tablet0
+  {
+    GET_TABLET_META_HANLDE_DEFAULT(file_handle, 0, ls_id.id(), TABLET_ID0);
+    ObAtomicTabletMetaFile *tablet_meta_file = file_handle0.get_atomic_file();
+    ASSERT_NE(nullptr, tablet_meta_file);
+    uint64_t tablet_cur_op_id = 0;
+    share::schema::ObTableSchema table_schema;
+    uint64_t table_id = 123456;
+    ASSERT_EQ(OB_SUCCESS, build_test_schema(table_schema, table_id));
+    ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle,  tablet_id0, table_schema, allocator));
+
+    ASSERT_EQ(OB_SUCCESS, ls->get_tablet(tablet_id0, tablet_handle0));
+    tablet0 = tablet_handle0.get_obj();
+    ASSERT_NE(nullptr, tablet0);
+    ASSERT_EQ(tablet_id0, tablet0->get_tablet_id());
+
+    CREATE_TABLET_META_WRITE_OP_WITH_RECONFIRM(op_handle);
+    uint64_t op_id = 0;
+    ASSERT_EQ(OB_SUCCESS, op_handle.get_op_id(op_id));
+    ASSERT_EQ(tablet_cur_op_id, op_id);
+    const uint64_t data_version = DATA_CURRENT_VERSION;
+    // write tablet_meta and sub_tablet_meta
+    MTL(ObSSMetaService*)->persist_tablet_(data_version, tablet0, ObMetaUpdateReason::CREATE_TABLET, -1, op_handle, tablet_meta_file);
+    share::SCN row_scn;
+    tablet_handle0.reset();
+    ASSERT_EQ(OB_SUCCESS, tablet_meta_file->get_tablet(allocator, tablet_handle0, row_scn));
+    tablet0 = tablet_handle0.get_obj();
+    ASSERT_NE(nullptr, tablet0);
+  }
+
+  // create and persist tablet1
+  {
+    GET_TABLET_META_HANLDE_DEFAULT(file_handle, 1, ls_id.id(), TABLET_ID1);
+    ObAtomicTabletMetaFile *tablet_meta_file = file_handle1.get_atomic_file();
+    ASSERT_NE(nullptr, tablet_meta_file);
+    uint64_t tablet_cur_op_id = 0;
+    share::schema::ObTableSchema table_schema;
+    uint64_t table_id = 123456;
+    ASSERT_EQ(OB_SUCCESS, build_test_schema(table_schema, table_id));
+    ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle,  tablet_id1, table_schema, allocator));
+
+    ASSERT_EQ(OB_SUCCESS, ls->get_tablet(tablet_id1, tablet_handle1));
+    tablet1 = tablet_handle1.get_obj();
+    ASSERT_NE(nullptr, tablet1);
+    ASSERT_EQ(tablet_id1, tablet1->get_tablet_id());
+
+    // generate src_tablet_block_info
+    ObSSTransferSrcTabletBlockInfo src_tablet_block_info;
+    ASSERT_EQ(OB_SUCCESS, src_tablet_block_info.init(*tablet0));
+
+    CREATE_TABLET_META_WRITE_OP_WITH_RECONFIRM(op_handle);
+    uint64_t op_id = 0;
+    ASSERT_EQ(OB_SUCCESS, op_handle.get_op_id(op_id));
+    ASSERT_EQ(tablet_cur_op_id, op_id);
+    const uint64_t data_version = DATA_CURRENT_VERSION;
+    // write tablet_meta and sub_tablet_meta
+    MTL(ObSSMetaService*)->persist_tablet_(data_version,
+                                           tablet1,
+                                           ObMetaUpdateReason::TABLET_BACKFILL_REPLACE_ADD_SSTABLES,
+                                           -1,
+                                           op_handle,
+                                           tablet_meta_file,
+                                           nullptr,
+                                           nullptr,
+                                           &src_tablet_block_info);
+    share::SCN row_scn;
+    tablet_handle1.reset();
+    ASSERT_EQ(OB_SUCCESS, tablet_meta_file->get_tablet(allocator, tablet_handle1, row_scn));
+    tablet1 = tablet_handle1.get_obj();
+    ASSERT_NE(nullptr, tablet1);
+  }
+
+  auto only_need_shared_meta = [](const ObTabletBlockInfo &block_info)->bool
+    {
+      return block_info.macro_id_.is_shared_sub_meta();
+    };
+
+  auto need_all = [](const ObTabletBlockInfo &block_info)->bool
+    {
+      return true;
+    };
+
+  std::set<MacroBlockId, MacroIdComp> tablet_block_set0;
+  std::set<MacroBlockId, MacroIdComp> tablet_block_set1;
+
+  build_tablet_block_set(*tablet0, only_need_shared_meta, allocator, tablet_block_set0);
+  build_tablet_block_set(*tablet1, need_all, allocator, tablet_block_set1);
+
+  // all shared meta blocks of tablet0 must can be found in tablet_block_set1
+  for (const MacroBlockId &block_in_tablet0 : tablet_block_set0) {
+    ASSERT_TRUE(tablet_block_set1.count(block_in_tablet0) > 0);
+  }
+}
 } // unittest
 } // oceanbase
 

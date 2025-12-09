@@ -111,6 +111,32 @@ public:
   // ObTabletPersister::convert_tablet_to_disk_arg
 };
 
+/// @brief: All shared meta blocks of transfer out tablet.
+/// To prevent block leaks, the transfer in SS mode needs to
+/// MERGE the src tablet's macro info into the dest tablet.
+class ObSSTransferSrcTabletBlockInfo final
+{
+public:
+  ObSSTransferSrcTabletBlockInfo()
+    : is_inited_(false),
+      src_tablet_meta_block_set_()
+  {
+  }
+  ~ObSSTransferSrcTabletBlockInfo();
+  OB_INLINE bool is_inited() const { return is_inited_; }
+  int init(const ObTablet &src_tablet);
+  int merge_to(/* out */ ObBlockInfoSet &out_block_info_set) const;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObSSTransferSrcTabletBlockInfo);
+  /// @brief: add block if @param block_info is shared meta block
+  int add_block_info_if_need_(const ObTabletBlockInfo &block_info);
+
+private:
+  bool is_inited_;
+  ObBlockInfoSet::TabletMacroSet src_tablet_meta_block_set_;
+};
+
 class ObSSTablePersistWrapper final
 {
 public:
@@ -208,7 +234,8 @@ public:
       file_(nullptr),
       update_reason_(ObMetaUpdateReason::INVALID_META_UPDATE_REASON),
       reorganization_scn_(0),
-      meta_version_(meta_version)
+      meta_version_(meta_version),
+      src_tablet_block_info_(nullptr)
       #endif
     {}
 
@@ -236,7 +263,8 @@ public:
     file_(nullptr),
     update_reason_(ObMetaUpdateReason::INVALID_META_UPDATE_REASON),
     reorganization_scn_(0),
-    meta_version_(0)
+    meta_version_(0),
+    src_tablet_block_info_(nullptr)
     #endif
   {}
   #ifdef OB_BUILD_SHARED_STORAGE
@@ -252,7 +280,8 @@ public:
       ObAtomicTabletMetaFile *file,
       blocksstable::ObIMacroBlockFlushCallback *ddl_redo_callback,
       blocksstable::ObIMacroBlockFlushCallback *ddl_finish_callback,
-      const int64_t reorganization_scn)
+      const int64_t reorganization_scn,
+      const ObSSTransferSrcTabletBlockInfo *src_tablet_block_info)
   : data_version_(data_version),
     ls_id_(ls_id),
     ls_epoch_(0),
@@ -267,7 +296,8 @@ public:
     update_reason_(update_reason),
     sstable_op_id_(sstable_op_id),
     reorganization_scn_(reorganization_scn),
-    meta_version_(0)
+    meta_version_(0),
+    src_tablet_block_info_(src_tablet_block_info)
   {}
   #endif
 
@@ -291,7 +321,8 @@ public:
   TO_STRING_KV(K_(data_version), K_(ls_id), K_(ls_epoch), K_(tablet_id), K_(private_transfer_epoch),
    K_(snapshot_version), K_(start_macro_seq), KP_(ddl_redo_callback), KP_(ddl_finish_callback)
    #ifdef OB_BUILD_SHARED_STORAGE
-   , KPC_(op_handle), KPC_(file), K_(update_reason), K_(sstable_op_id), K_(reorganization_scn), K_(meta_version)
+   , KPC_(op_handle), KPC_(file), K_(update_reason), K_(sstable_op_id), K_(reorganization_scn),
+   K_(meta_version), KP_(src_tablet_block_info)
    #endif
    );
 
@@ -311,6 +342,7 @@ public:
   int64_t sstable_op_id_;
   int64_t reorganization_scn_;
   int64_t meta_version_;
+  const ObSSTransferSrcTabletBlockInfo *src_tablet_block_info_;
   #endif
   DISALLOW_COPY_AND_ASSIGN(ObTabletPersisterParam);
 };
@@ -439,6 +471,13 @@ private:
 #endif
   void build_async_write_start_opt_(blocksstable::ObStorageObjectOpt &start_opt) const;
   void sync_cur_macro_seq_from_opt_(const blocksstable::ObStorageObjectOpt &curr_opt);
+  static int make_tablet_macro_info(
+    const ObTabletPersisterParam &param,
+    const int64_t macro_seq,
+    common::ObArenaAllocator &allocator,
+    /* out */ ObBlockInfoSet &block_info_set,
+    /* out */ ObLinkedMacroBlockItemWriter &linked_writer,
+    /* out */ ObTabletMacroInfo &macro_info);
   static int inner_persist_and_transform(
     const ObTabletPersisterParam &param,
     const ObTablet &old_tablet,
