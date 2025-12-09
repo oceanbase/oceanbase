@@ -64,6 +64,7 @@ ERRSIM_POINT_DEF(EN_TRANSFER_DIAGNOSE_BACKFILL_FAILED);
 ERRSIM_POINT_DEF(EN_TRANSFER_ASYNC_RPC_FAILED);
 ERRSIM_POINT_DEF(EN_TRANSEFR_UNLOCK_MEMBER_LIST_FAILED);
 ERRSIM_POINT_DEF(EN_TRANSEFR_START_TRANS_TIME);
+ERRSIM_POINT_DEF(EN_GET_TABLET_INFO_HUNG);
 ObTransferHandler::ObTransferHandler()
   : is_inited_(false),
     ls_(nullptr),
@@ -1104,7 +1105,7 @@ int ObTransferHandler::do_trans_transfer_start_(
     LOG_WARN("failed to unblock tx", K(ret), K(task_info));
   } else if (OB_FAIL(wait_src_ls_replay_to_start_scn_(task_info, start_scn, timeout_ctx))) {
     LOG_WARN("failed to wait src ls replay to start scn", K(ret), K(task_info));
-  } else if (OB_FAIL(get_transfer_tablets_meta_(task_info, tablet_meta_list))) {
+  } else if (OB_FAIL(get_transfer_tablets_meta_(task_info, tablet_meta_list, timeout_ctx))) {
     LOG_WARN("failed to get transfer tablets meta", K(ret), K(task_info));
   } else if (task_info.data_version_ >= DATA_VERSION_4_2_3_0
       && OB_FAIL(update_transfer_meta_info_(task_info, start_scn, timeout_ctx))) {
@@ -1115,7 +1116,18 @@ int ObTransferHandler::do_trans_transfer_start_(
     LOG_WARN("failed to update transfer status", K(ret), K(task_info));
   }
 
-  LOG_INFO("[TRANSFER] finish do trans transfer start", K(task_info), "cost_ts", ObTimeUtil::current_time() - start_ts);
+  int64_t cost = ObTimeUtil::current_time() - start_ts;
+  LOG_INFO("[TRANSFER] finish do trans transfer start", K(task_info), "cost_ts", cost);
+
+#ifdef ERRSIM
+  SERVER_EVENT_ADD(
+    "transfer", "finish_transfer_start_trans",
+    "tenant_id", task_info.tenant_id_,
+    "src_ls_id", task_info.src_ls_id_.id(),
+    "dest_ls_id", task_info.dest_ls_id_.id(),
+    "result", ret,
+    "cost", cost);
+#endif
   return ret;
 }
 
@@ -1305,7 +1317,7 @@ int ObTransferHandler::do_trans_transfer_start_v2_(
   } else if (OB_FAIL(wait_src_ls_replay_to_start_scn_(task_info, start_scn, timeout_ctx))) {
     LOG_WARN("failed to wait src ls replay to start scn", K(ret), K(task_info));
   } else if (STEP_COST_AND_CHECK_TIMEOUT(wait_src_replay_cost)) {
-  } else if (OB_FAIL(get_transfer_tablets_meta_(task_info, tablet_meta_list))) {
+  } else if (OB_FAIL(get_transfer_tablets_meta_(task_info, tablet_meta_list, timeout_ctx))) {
     LOG_WARN("failed to get transfer tablets meta", K(ret), K(task_info));
   } else if (STEP_COST_AND_CHECK_TIMEOUT(get_tablets_meta_cost)) {
   } else if (task_info.data_version_ >= DATA_VERSION_4_2_3_0
@@ -1331,7 +1343,8 @@ int ObTransferHandler::do_trans_transfer_start_v2_(
     LOG_WARN("failed to update transfer status", K(ret), K(task_info));
   }
 
-  LOG_INFO("[TRANSFER] finish transfer start", K(ret), K(task_info), "cost", ObTimeUtil::current_time() - start_time,
+  int64_t cost = ObTimeUtil::current_time() - start_time;
+  LOG_INFO("[TRANSFER] finish transfer start", K(ret), K(task_info), "cost", cost,
                                                K(transfer_out_prepare_cost),
                                                K(wait_tablet_write_end_cost),
                                                K(filter_tx_cost),
@@ -1343,6 +1356,15 @@ int ObTransferHandler::do_trans_transfer_start_v2_(
                                                K(transfer_in_cost),
                                                K(move_tx_count),
                                                K(move_tx_ids));
+#ifdef ERRSIM
+  SERVER_EVENT_ADD(
+    "transfer", "finish_transfer_start_trans",
+    "tenant_id", task_info.tenant_id_,
+    "src_ls_id", task_info.src_ls_id_.id(),
+    "dest_ls_id", task_info.dest_ls_id_.id(),
+    "result", ret,
+    "cost", cost);
+#endif
   return ret;
 }
 
@@ -1872,7 +1894,8 @@ int ObTransferHandler::wait_ls_replay_event_(
 
 int ObTransferHandler::get_transfer_tablets_meta_(
     const share::ObTransferTaskInfo &task_info,
-    common::ObIArray<ObMigrationTabletParam> &tablet_meta_list)
+    common::ObIArray<ObMigrationTabletParam> &tablet_meta_list,
+    ObTimeoutCtx &timeout_ctx)
 {
   int ret = OB_SUCCESS;
   tablet_meta_list.reset();
@@ -1890,7 +1913,11 @@ int ObTransferHandler::get_transfer_tablets_meta_(
       const ObTransferTabletInfo &transfer_tablet_info = task_info.tablet_list_.at(i);
       ObTabletHandle tablet_handle;
       tablet_info.reset();
-      if (OB_FAIL(ls_->ha_get_tablet(transfer_tablet_info.tablet_id_, tablet_handle))) {
+      if (timeout_ctx.is_timeouted()) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("already timeout", K(ret), K(task_info));
+        break;
+      } else if (OB_FAIL(ls_->ha_get_tablet(transfer_tablet_info.tablet_id_, tablet_handle))) {
         LOG_WARN("failed to get tablet", K(ret), K(transfer_tablet_info), K(tablet_handle));
       } else if (OB_FAIL(get_next_tablet_info_(task_info.dest_ls_id_, transfer_tablet_info, tablet_handle, tablet_info))) {
         LOG_WARN("failed to get next tablet info ", K(ret), K(transfer_tablet_info), K(tablet_handle));
@@ -1971,6 +1998,23 @@ int ObTransferHandler::get_next_tablet_info_(
       }
     }
   }
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    if (OB_SUCCESS != EN_GET_TABLET_INFO_HUNG) {
+      int64_t start_time = ObTimeUtil::current_time();
+      int64_t hung_time = 1 * 1000 * 1000; //1s
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+      if (tenant_config.is_valid()) {
+        hung_time = tenant_config->_transfer_start_trans_timeout;
+      }
+      int64_t current_time = ObTimeUtil::current_time();
+      while (current_time - start_time < hung_time) {
+        ob_usleep(1000);
+        current_time = ObTimeUtil::current_time();
+      }
+    }
+  }
+#endif
   return ret;
 }
 

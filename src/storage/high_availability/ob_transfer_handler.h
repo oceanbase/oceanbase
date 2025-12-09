@@ -258,7 +258,8 @@ private:
       ObTimeoutCtx &timeout_ctx);
   int get_transfer_tablets_meta_(
       const share::ObTransferTaskInfo &task_info,
-      common::ObIArray<ObMigrationTabletParam> &params);
+      common::ObIArray<ObMigrationTabletParam> &params,
+      ObTimeoutCtx &timeout_ctx);
   int do_tx_start_transfer_in_(
       const share::ObTransferTaskInfo &task_info,
       const share::SCN &start_scn,
