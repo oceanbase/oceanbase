@@ -2301,6 +2301,7 @@ public:
        MICRO_BLOCK_FORMAT_VERSION,
        SEMISTRUCT_PROPERTIES,
        SKIP_INDEX_LEVEL,
+       DELTA_FORMAT,
        MAX_OPTION = 1000
   };
   enum AlterPartitionType
