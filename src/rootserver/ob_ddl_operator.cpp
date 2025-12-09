@@ -5405,8 +5405,6 @@ int ObDDLOperator::drop_table_for_not_dropped_schema(
     LOG_WARN("do not cascade drop obj priv", K(ret), K(is_drop_db), K(delete_priv));
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
-    LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
   } else if (OB_FAIL(cleanup_autoinc_cache(table_schema))) {
     LOG_WARN("fail cleanup auto inc global cache", K(ret));
   } else if (OB_FAIL(drop_sequence_in_drop_table(table_schema, trans, schema_guard))) {
@@ -5416,6 +5414,8 @@ int ObDDLOperator::drop_table_for_not_dropped_schema(
   } else if (OB_FAIL(sensitive_rule_ddl_operator.drop_sensitive_column_in_drop_table(
                                                    table_schema, trans, schema_guard))) {
     LOG_WARN("fail to drop sensitive column in drop table", K(ret));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
   } else if (OB_FAIL(schema_service_impl->get_table_sql_service().drop_table(
                      table_schema,
                      new_schema_version,
