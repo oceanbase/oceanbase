@@ -4446,7 +4446,7 @@ int ObStaticEngineCG::generate_dml_tsc_ids(const ObOpSpec &spec, const ObLogical
   int ret = OB_SUCCESS;
   if (IS_DML(spec.type_)) {
     const ObTableModifySpec &modify_spec = static_cast<const ObTableModifySpec &>(spec);
-    if (!modify_spec.use_dist_das()) {
+    if (!modify_spec.use_dist_das() && ObPXServerAddrUtil::check_build_dfo_with_dml(spec)) {
       if (OB_FAIL(dml_tsc_op_ids.push_back(spec.id_))) {
         LOG_WARN("push back failed", K(ret));
       // ref table id of modify operator is useless, because we will not pkey to a modify operator.

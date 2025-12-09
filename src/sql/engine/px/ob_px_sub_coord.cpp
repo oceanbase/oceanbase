@@ -1103,7 +1103,10 @@ void ObPxSubCoord::try_get_dml_op(ObOpSpec &root, ObTableModifySpec *&dml_op)
       // 这种情况下INSERT/REPLACE算子对应的Table也需要参与到GI任务的划分
       // 也存在GI算子下面是MONITOR算子, 目前只存在这两种情况.
     if (IS_DML(root.get_child(0)->get_type())) {
-      dml_op = static_cast<ObTableModifySpec*>(root.get_child(0));
+      if (!ObPXServerAddrUtil::check_build_dfo_with_dml(*root.get_child(0))) {
+      } else {
+        dml_op = static_cast<ObTableModifySpec *>(root.get_child(0));
+      }
     } else if (PHY_MONITORING_DUMP == root.get_child(0)->get_type() ||
                PHY_MATERIAL == root.get_child(0)->get_type()) {
       try_get_dml_op(*root.get_child(0), dml_op);
