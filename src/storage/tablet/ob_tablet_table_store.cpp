@@ -3828,7 +3828,9 @@ int ObTabletTableStore::replace_ha_ddl_tables_(
     if (OB_ISNULL(new_table) || (!new_table->is_ddl_sstable())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("new table is null or table type is unexpected", K(ret), KPC(new_table));
-    } else if (OB_NOT_NULL(last_ddl_table) && new_table->get_start_scn() != last_ddl_table->get_end_scn()) {
+    } else if (OB_NOT_NULL(last_ddl_table) &&
+               new_table->get_key().slice_range_ == last_ddl_table->get_key().slice_range_ &&
+               new_table->get_start_scn() != last_ddl_table->get_end_scn()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ddl table is not continue", K(ret), K(param), K(old_store));
     } else if (OB_FAIL(ddl_tables.push_back(new_table))) {
