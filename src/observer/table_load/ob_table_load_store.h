@@ -96,6 +96,8 @@ public:
 private:
   int px_flush(ObTableLoadStoreTrans *trans);
   static int px_clean_up_trans(ObTableLoadStoreTrans *trans);
+private:
+  static const int32_t PX_SESSION_ID = 1;
 
 private:
   ObTableLoadTableCtx * const ctx_;

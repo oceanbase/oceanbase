@@ -17,7 +17,6 @@
 #include "observer/table_load/ob_table_load_store_ctx.h"
 #include "observer/table_load/ob_table_load_task.h"
 #include "observer/table_load/ob_table_load_task_scheduler.h"
-#include "observer/table_load/ob_table_load_trans_ctx.h"
 #include "sql/engine/ob_des_exec_context.h"
 
 namespace oceanbase
@@ -329,15 +328,21 @@ void ObTableLoadTableCtx::free_task(ObTableLoadTask *task)
   }
 }
 
-ObTableLoadTransCtx *ObTableLoadTableCtx::alloc_trans_ctx(const ObTableLoadTransId &trans_id)
+ObTableLoadTransCtx *ObTableLoadTableCtx::alloc_trans_ctx(
+  const ObTableLoadTransCtx::TransType trans_type,
+  const ObTableLoadTransId &trans_id)
 {
   int ret = OB_SUCCESS;
   ObTableLoadTransCtx *trans_ctx = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadTableCtx not init", KR(ret));
+  } else if (OB_UNLIKELY(!ObTableLoadTransCtx::is_trans_type_valid(trans_type) ||
+                         !trans_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(trans_type), K(trans_id));
   } else {
-    trans_ctx = trans_ctx_allocator_.alloc(this, trans_id);
+    trans_ctx = trans_ctx_allocator_.alloc(this, trans_type, trans_id);
   }
   return trans_ctx;
 }

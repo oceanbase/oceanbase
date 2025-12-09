@@ -114,60 +114,6 @@ int ObTableLoadStoreTrans::set_trans_status_abort()
   return ret;
 }
 
-int ObTableLoadStoreTrans::get_store_writer(ObTableLoadTransStoreWriter *&store_writer) const
-{
-  int ret = OB_SUCCESS;
-  store_writer = nullptr;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTableLoadStoreTrans not init", KR(ret), KP(this));
-  } else {
-    obsys::ObRLockGuard<> guard(trans_ctx_->rwlock_);
-    if (OB_ISNULL(trans_store_writer_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null store writer", KR(ret));
-    } else {
-      store_writer = trans_store_writer_;
-      store_writer->inc_ref_count();
-    }
-  }
-  return ret;
-}
-
-void ObTableLoadStoreTrans::put_store_writer(ObTableLoadTransStoreWriter *store_writer)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTableLoadStoreTrans not init", KR(ret));
-  } else if (OB_ISNULL(store_writer)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid null store", KR(ret));
-  } else {
-    obsys::ObRLockGuard<> guard(trans_ctx_->rwlock_);
-    OB_ASSERT(trans_store_writer_ == store_writer);
-  }
-  if (OB_SUCC(ret)) {
-    if (0 == store_writer->dec_ref_count() && OB_FAIL(handle_write_done())) {
-      LOG_WARN("fail to handle store write done", KR(ret));
-    }
-  }
-  if (OB_FAIL(ret)) {
-    set_trans_status_error(ret);
-  }
-}
-
-int ObTableLoadStoreTrans::handle_write_done()
-{
-  int ret = OB_SUCCESS;
-  if (ObTableLoadTransStatusType::FROZEN == trans_ctx_->get_trans_status()) {
-    if (OB_FAIL(set_trans_status_commit())) {
-      LOG_WARN("fail to set trans status commit", KR(ret));
-    }
-  }
-  return ret;
-}
-
 int ObTableLoadStoreTrans::output_store(ObTableLoadTransStore *&trans_store)
 {
   int ret = OB_SUCCESS;
@@ -180,9 +126,6 @@ int ObTableLoadStoreTrans::output_store(ObTableLoadTransStore *&trans_store)
     if (OB_ISNULL(trans_store_) || OB_ISNULL(trans_store_writer_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null store", KR(ret), KP_(trans_store), KP_(trans_store_writer));
-    } else if (OB_UNLIKELY(0 != trans_store_writer_->get_ref_count())) {
-      ret = OB_STATE_NOT_MATCH;
-      LOG_WARN("store writer already be hold", KR(ret));
     } else if (OB_UNLIKELY(ObTableLoadTransStatusType::COMMIT != trans_ctx_->trans_status_)) {
       ret = OB_STATE_NOT_MATCH;
       LOG_WARN("store is not committed", KR(ret));

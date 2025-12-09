@@ -283,7 +283,7 @@ int ObTableLoadCoordinatorCtx::alloc_trans_ctx(const ObTableLoadTransId &trans_i
   int ret = OB_SUCCESS;
   trans_ctx = nullptr;
   // 分配trans_ctx
-  if (OB_ISNULL(trans_ctx = ctx_->alloc_trans_ctx(trans_id))) {
+  if (OB_ISNULL(trans_ctx = ctx_->alloc_trans_ctx(ObTableLoadTransCtx::COORDINATOR, trans_id))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc trans ctx", KR(ret), K(trans_id));
   }
