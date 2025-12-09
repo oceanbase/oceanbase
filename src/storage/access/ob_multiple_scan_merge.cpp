@@ -193,6 +193,7 @@ int ObMultipleScanMerge::construct_iters()
     STORAGE_LOG(WARN, "iter cnt is not equal to table cnt", K(ret), "iter cnt", iters_.count(),
         "di_base_iter cnt", di_base_iters_.count(), "table cnt", tables_.count(), KP(this));
   } else if (OB_NOT_NULL(access_param_->get_op()) && access_param_->get_op()->is_vectorized() &&
+             !access_param_->iter_param_.is_skip_scan() &&
              FALSE_IT(access_param_->get_op()->get_eval_ctx().reuse(access_param_->get_op()->get_batch_size()))) {
     // for check_skip_by_monotonicity called by initing iters in construct_iters
   } else if (tables_.count() > 0) {
