@@ -98,7 +98,8 @@ OB_DEF_DESERIALIZE(ObRFRangeFilterMsg)
               cmp_funcs_,
               query_range_info_,
               build_obj_metas_);
-  if (OB_FAIL(adjust_cell_size())) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(adjust_cell_size())) {
     LOG_WARN("fail do adjust cell size", K(ret));
   }
   return ret;
