@@ -372,18 +372,16 @@ int ObIDiagnoseInfoMgr::add_with_no_lock(const int64_t key, ObIDiagnoseInfo *inf
   if (OB_ISNULL(info)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret));
-  } else if (!info_list_.add_last(info)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "failed to add into info list", K(ret));
   } else if (info_map_.created()) {
     if (OB_FAIL(info_map_.set_refactored(key, info))) {
       STORAGE_LOG(WARN, "failed to set info into map", K(ret), K(key));
-      if (OB_ISNULL(info_list_.remove(info))) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(ERROR, "failed to remove info from list", K(ret));
-        // unexpected
-        ob_abort();
-      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (!info_list_.add_last(info)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "failed to add into info list", K(ret));
+      ob_abort(); // unexpected
     }
   }
 

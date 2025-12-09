@@ -316,8 +316,8 @@ void ObSSTableMergeInfo::shallow_copy(ObIDiagnoseInfo *other)
     filter_statistics_ = info->filter_statistics_;
     participant_table_info_ = info->participant_table_info_;
     MEMSET(macro_id_list_, '\0', sizeof(macro_id_list_));
-    strncpy(macro_id_list_, info->macro_id_list_, strlen(info->macro_id_list_));
+    snprintf(macro_id_list_, sizeof(macro_id_list_), "%s", info->macro_id_list_);
     MEMSET(comment_, '\0', sizeof(comment_));
-    strncpy(comment_, info->comment_, strlen(info->comment_));
+    snprintf(comment_, sizeof(comment_), "%s", info->comment_);
   }
 }
