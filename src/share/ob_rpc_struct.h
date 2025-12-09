@@ -10369,6 +10369,7 @@ public:
     CANCEL_BACKUP_BACKUPSET = 7,
     CANCEL_BACKUP_BACKUPPIECE = 8,
     CANCEL_ALL_BACKUP_FORCE = 9,
+    CANCEL_BACKUP_VALIDATE = 10,
     MAX_TYPE
   };
   int assign(const ObBackupManageArg &arg);
