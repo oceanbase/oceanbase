@@ -6309,7 +6309,8 @@ def_table_schema(
     ('last_purge_time', 'int', 'true'),
     ('last_purge_rows', 'int', 'true'),
     ('last_purge_trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true'),
-    ('schema_version', 'int')
+    ('schema_version', 'int'),
+    ('last_purge_method', 'int', 'true')
   ]
 )
 
@@ -39246,7 +39247,12 @@ def_table_schema(
       CAST('YES' AS CHAR(3)) AS COMMIT_SCN_BASED,
       CAST('NO' AS CHAR(3)) AS STAGING_LOG,
       B.DOP AS PURGE_DOP,
-      C.LAST_PURGE_TIME AS LAST_PURGE_TIME
+      C.LAST_PURGE_TIME AS LAST_PURGE_TIME,
+      CAST(CASE C.LAST_PURGE_METHOD
+            WHEN 0 THEN 'SQL'
+            WHEN 1 THEN 'COMPACTION'
+            ELSE NULL
+           END AS CHAR(16)) AS LAST_PURGE_METHOD
     FROM
       oceanbase.__all_virtual_database A,
       oceanbase.__all_virtual_table B,
@@ -39307,7 +39313,12 @@ def_table_schema(
       CAST('YES' AS CHAR(3)) AS COMMIT_SCN_BASED,
       CAST('NO' AS CHAR(3)) AS STAGING_LOG,
       B.DOP AS PURGE_DOP,
-      C.LAST_PURGE_TIME AS LAST_PURGE_TIME
+      C.LAST_PURGE_TIME AS LAST_PURGE_TIME,
+      CAST(CASE C.LAST_PURGE_METHOD
+            WHEN 0 THEN 'SQL'
+            WHEN 1 THEN 'COMPACTION'
+            ELSE NULL
+           END AS CHAR(16)) AS LAST_PURGE_METHOD
     FROM
       oceanbase.__all_database A,
       oceanbase.__all_table B,
@@ -65337,7 +65348,12 @@ def_table_schema(
       CAST('YES' AS VARCHAR2(3)) AS COMMIT_SCN_BASED,
       CAST('NO' AS VARCHAR2(3)) AS STAGING_LOG,
       B.DOP AS PURGE_DOP,
-      C.LAST_PURGE_TIME AS LAST_PURGE_TIME
+      C.LAST_PURGE_TIME AS LAST_PURGE_TIME,
+      CAST(DECODE(C.LAST_PURGE_METHOD,
+                  0, 'SQL',
+                  1, 'COMPACTION',
+                  NULL)
+           AS VARCHAR2(16)) AS LAST_PURGE_METHOD
     FROM
       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,
