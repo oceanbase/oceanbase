@@ -958,7 +958,8 @@ private:
       const ObString &new_domain_index_name,
       ObIAllocator &allocator,
       ObIArray<ObString> &old_table_names,
-      ObIArray<ObString> &new_table_names);
+      ObIArray<ObString> &new_table_names,
+      const ObIndexType index_type);
   static int generate_ivfflat_switch_index_names(
       const ObString &old_domain_index_name,
       const ObString &new_domain_index_name,

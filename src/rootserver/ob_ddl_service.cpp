@@ -7266,12 +7266,15 @@ int ObDDLService::switch_index_name_and_status_for_vec_index_table(obrpc::ObAlte
       ObArray<ObString> old_table_names;
       const int64_t unused_id = 1;    // not set OB_INVALID_ID for sava check
       const int64_t EXPECTED_HNSW_UPDATE_TABLE_CNT = 7;    // 3 old index table + 3 new index table + 1 data data
+      const int64_t EXPECTED_SEMANTIC_UPDATE_TABLE_CNT = 9;    // 4 old index table + 4 new index table + 1 data data
       const int64_t EXPECTED_IVFFLAT_UPDATE_TABLE_CNT = 7;    // 3 old index table + 3 new index table + 1 data data
       const int64_t EXPECTED_IVFSQ8_UPDATE_TABLE_CNT = 9;    // 4 old index table + 4 new index table + 1 data data
       const int64_t EXPECTED_IVFPQ_UPDATE_TABLE_CNT = 9;    // 4 old index table + 4 new index table + 1 data data
       int64_t update_table_cnt = 0;
       const ObIndexType index_type = old_table_schema->get_index_type();
-      if (share::schema::is_vec_hnsw_index(index_type)) {
+      if (share::schema::is_local_hybrid_vec_index(index_type)) {
+        update_table_cnt = EXPECTED_SEMANTIC_UPDATE_TABLE_CNT;
+      } else if (share::schema::is_vec_hnsw_index(index_type)) {
         update_table_cnt = EXPECTED_HNSW_UPDATE_TABLE_CNT;
       } else if (share::schema::is_vec_ivfflat_index(index_type)) {
         update_table_cnt = EXPECTED_IVFFLAT_UPDATE_TABLE_CNT;

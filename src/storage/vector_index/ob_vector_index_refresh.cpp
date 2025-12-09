@@ -715,10 +715,17 @@ int ObVectorIndexRefresher::do_rebuild() {
                                                                         *domain_table_schema,
                                                                         need_embedding_when_rebuild))) {
     LOG_WARN("fail to check the rebuild index different", K(ret), K(idx_parameters));
+  } else if (!triggered && need_embedding_when_rebuild) {
+    triggered = true;
   }
 
   if (OB_FAIL(ret)) {
-  } else if (triggered && (!is_hybrid_vector || need_embedding_when_rebuild)) {
+  } else if (is_hybrid_vector && !need_embedding_when_rebuild) {
+    ObVecTaskManager manager(tenant_id, domain_table_schema->get_table_id(), ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_OPTINAL);
+    if (OB_FAIL(manager.process_task())) {
+      LOG_WARN("failed to process rebuild task", K(ret), K(manager));
+    }
+  } else if (triggered) {
     LOG_INFO("start to rebuild vec index");
     const int64_t ddl_rpc_timeout = GCONF._ob_ddl_timeout;
     ObTimeoutCtx timeout_ctx;
@@ -765,11 +772,6 @@ int ObVectorIndexRefresher::do_rebuild() {
           LOG_INFO("succ to wait rebuild vec index", K(ret), K(rebuild_index_res.task_id_), K(rebuild_index_arg));
         }
       }
-    }
-  } else if (is_hybrid_vector && !need_embedding_when_rebuild) {
-    ObVecTaskManager manager(tenant_id, domain_table_schema->get_table_id(), ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_OPTINAL);
-    if (OB_FAIL(manager.process_task())) {
-      LOG_WARN("failed to process rebuild task", K(ret), K(manager));
     }
   }
   return ret;

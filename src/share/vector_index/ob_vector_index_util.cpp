@@ -4355,7 +4355,8 @@ int ObVectorIndexUtil::generate_switch_index_names(
                                                  new_domain_index_name,
                                                  allocator,
                                                  old_table_names,
-                                                 new_table_names))) {
+                                                 new_table_names,
+                                                 index_type))) {
       LOG_WARN("fail to generate hnsw swith index names", K(ret));
     }
   } else if (share::schema::is_vec_ivfflat_index(index_type)) {
@@ -4395,15 +4396,18 @@ int ObVectorIndexUtil::generate_hnsw_switch_index_names(
     const ObString &new_domain_index_name,
     ObIAllocator &allocator,
     ObIArray<ObString> &old_table_names,
-    ObIArray<ObString> &new_table_names)
+    ObIArray<ObString> &new_table_names,
+    const ObIndexType index_type)
 {
   int ret = OB_SUCCESS;
   ObString old_delta_buffer_table_name = old_domain_index_name;
   ObString new_delta_buffer_table_name = new_domain_index_name;
   ObString new_index_id_table_name;
   ObString new_snapshot_data_table_name;
+  ObString new_embedded_vec_table_name;
   ObString old_index_id_table_name;
   ObString old_snapshot_data_table_name;
+  ObString old_embedded_vec_table_name;
 
   if (OB_FAIL(new_table_names.push_back(new_delta_buffer_table_name))) {
     LOG_WARN("fail to push back new delta buffer table name", K(ret));
@@ -4437,6 +4441,22 @@ int ObVectorIndexUtil::generate_hnsw_switch_index_names(
     LOG_WARN("fail to construct old snapshot data table name", K(ret), K(old_domain_index_name));
   } else if (OB_FAIL(old_table_names.push_back(old_snapshot_data_table_name))) {
     LOG_WARN("fail to push back old snapshot data table name", K(ret));
+  } else if (share::schema::is_local_hybrid_vec_index(index_type)) {
+    if (OB_FAIL(ObVecIndexBuilderUtil::generate_vec_index_name(&allocator,
+                                                               INDEX_TYPE_HYBRID_INDEX_EMBEDDED_LOCAL,
+                                                               new_domain_index_name,
+                                                               new_embedded_vec_table_name))) {
+      LOG_WARN("fail to generate embedded vector table name", K(ret), K(new_domain_index_name));
+    } else if (OB_FAIL(new_table_names.push_back(new_embedded_vec_table_name))) {
+      LOG_WARN("fail to push back new embedded vector table name", K(ret));
+    } else if (OB_FAIL(ObVecIndexBuilderUtil::generate_vec_index_name(&allocator,
+                                                                      INDEX_TYPE_HYBRID_INDEX_EMBEDDED_LOCAL,
+                                                                      old_domain_index_name,
+                                                                      old_embedded_vec_table_name))) {
+      LOG_WARN("fail to generate embedded vector table name", K(ret), K(old_domain_index_name));
+    } else if (OB_FAIL(old_table_names.push_back(old_embedded_vec_table_name))) {
+      LOG_WARN("fail to push back old embedded vector table name", K(ret));
+    }
   }
   return ret;
 }
@@ -7276,24 +7296,40 @@ int ObVectorIndexUtil::check_need_embedding_when_rebuild(const ObString &old_idx
                                                          bool &need_embedding_when_rebuild)
 {
   int ret = OB_SUCCESS;
-  ObVectorIndexParam old_vector_index_param;
-  ObVectorIndexParam new_vector_index_param;
   need_embedding_when_rebuild = false;
-  ObVectorIndexType index_type = ObVectorIndexType::VIT_MAX;
-  if (index_table_schema.is_hybrid_vec_index_log_type()) {
-    index_type = ObVectorIndexType::VIT_HNSW_INDEX;
-    if (OB_FAIL(parser_params_from_string(old_idx_params, index_type, old_vector_index_param, false))) {
-      LOG_WARN("fail to parser params from string", K(ret), K(old_idx_params));
-    } else if (OB_FAIL(parser_params_from_string(new_idx_params, index_type, new_vector_index_param, false))) {
-      LOG_WARN("fail to parser params from string", K(ret), K(new_idx_params));
-    } else {
-      if (0 == STRCMP(old_vector_index_param.endpoint_, new_vector_index_param.endpoint_) ||
-          old_vector_index_param.dim_ != new_vector_index_param.dim_) {
-        need_embedding_when_rebuild = true;
-      }
-    }
+  ObVectorIndexParam old_param;
+  ObVectorIndexParam new_param;
+  const ObVectorIndexType index_type = ObVectorIndexType::VIT_HNSW_INDEX;
+  if (!index_table_schema.is_hybrid_vec_index_log_type()) {
+    // ignore, do nothing
+  } else if (OB_FAIL(parser_params_from_string(old_idx_params, index_type, old_param, false))) {
+    LOG_WARN("fail to parser params from string", K(ret), K(old_idx_params));
+  } else if (OB_FAIL(parser_params_from_string(new_idx_params, index_type, new_param, false))) {
+    LOG_WARN("fail to parser params from string", K(ret), K(new_idx_params));
   } else {
-    // do nothing, other type vec index.
+    const bool type_changed = (old_param.type_ != new_param.type_);
+    const bool lib_changed = (old_param.lib_ != new_param.lib_);
+    const bool dist_algorithm_changed = (old_param.dist_algorithm_ != new_param.dist_algorithm_);
+    const bool dim_changed = (old_param.dim_ != new_param.dim_);
+    const bool m_changed = (old_param.m_ != new_param.m_);
+    const bool ef_construction_changed = (old_param.ef_construction_ != new_param.ef_construction_);
+    const bool extra_info_max_changed = (old_param.extra_info_max_size_ != new_param.extra_info_max_size_);
+    const bool extra_info_actual_changed = (old_param.extra_info_actual_size_ != new_param.extra_info_actual_size_);
+    const bool endpoint_changed = (0 != STRCMP(old_param.endpoint_, new_param.endpoint_));
+    const bool sync_interval_type_changed = (old_param.sync_interval_type_ != new_param.sync_interval_type_);
+    const bool sync_interval_value_changed = (old_param.sync_interval_value_ != new_param.sync_interval_value_);
+
+    need_embedding_when_rebuild = type_changed
+                               || lib_changed
+                               || dist_algorithm_changed
+                               || dim_changed
+                               || m_changed
+                               || ef_construction_changed
+                               || extra_info_max_changed
+                               || extra_info_actual_changed
+                               || endpoint_changed
+                               || sync_interval_type_changed
+                               || sync_interval_value_changed;
   }
   return ret;
 }
