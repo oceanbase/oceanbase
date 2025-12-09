@@ -20,7 +20,6 @@ namespace oceanbase
 namespace compaction
 {
 ERRSIM_POINT_DEF(EN_COMPACTION_CO_MERGE_LOG_USE_TMP_FILE);
-ERRSIM_POINT_DEF(EN_CO_MERGE_WITH_MINOR);
 ObCOTabletMergeCtx::ObCOTabletMergeCtx(
     ObIDagNet &dag_net,
     ObTabletMergeDagParam &param,
@@ -77,60 +76,6 @@ void ObCOTabletMergeCtx::destroy()
   }
   mocked_row_store_cg_.reset();
   mocked_row_store_table_read_info_.reset();
-}
-
-int ObCOTabletMergeCtx::schedule_minor_errsim(bool &schedule_minor) const
-{
-  int ret = OB_SUCCESS;
-  // set schedule_minor
-#ifdef ERRSIM
-  #define SCHEDULE_MINOR_ERRSIM(tracepoint)                             \
-    do {                                                                \
-      if (OB_SUCC(ret)) {                                               \
-        ret = OB_E((EventTable::tracepoint)) OB_SUCCESS;                \
-        if (OB_FAIL(ret)) {                                             \
-          ret = OB_SUCCESS;                                             \
-          STORAGE_LOG(INFO, "ERRSIM " #tracepoint);                     \
-          schedule_minor = get_tables_handle().get_count() > get_major_sstable_count();         \
-        }                                                               \
-      }                                                                 \
-    } while(0);
-
-  SCHEDULE_MINOR_ERRSIM(EN_SWAP_TABLET_IN_COMPACTION);
-  SCHEDULE_MINOR_ERRSIM(EN_COMPACTION_SCHEDULE_MINOR_FAIL);
-  SCHEDULE_MINOR_ERRSIM(EN_COMPACTION_CO_MERGE_SCHEDULE_FAILED);
-
-  if (EN_CO_MERGE_WITH_MINOR) {
-    STORAGE_LOG(INFO, "ERRSIM EN_CO_MERGE_WITH_MINOR");
-    SERVER_EVENT_SYNC_ADD("merge_errsim", "co_merge_with_minor", "ret_code", ret);
-    schedule_minor = get_tables_handle().get_count() > 1;
-  }
-#endif
-  return ret;
-}
-
-int ObCOTabletMergeCtx::check_need_schedule_minor(bool &schedule_minor) const
-{
-  schedule_minor = false;
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_schema_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema is invalid", K(ret), K(static_param_));
-  } else if (get_schema()->get_column_group_count() > SCHEDULE_MINOR_CG_CNT_THREASHOLD
-      && get_tables_handle().get_count() > SCHEDULE_MINOR_TABLE_CNT_THREASHOLD) {
-    int64_t minor_table_cnt = 0;
-    for (int64_t i = get_major_sstable_count(); OB_SUCC(ret) && i < get_tables_handle().get_count(); ++i) { // skip major
-      ObSSTable *sstable = static_cast<ObSSTable *>(get_tables_handle().get_table(i));
-      if (sstable->get_row_count() >= SCHEDULE_MINOR_ROW_CNT_THREASHOLD) {
-        ++minor_table_cnt;
-      }
-    }
-    schedule_minor = (minor_table_cnt > 1);
-  }
-  if (FAILEDx(schedule_minor_errsim(schedule_minor))) {
-    LOG_WARN("failed to set schedule_minor in errsim mode", K(ret), K(schedule_minor));
-  }
-  return ret;
 }
 
 int ObCOTabletMergeCtx::init_tablet_merge_info()
