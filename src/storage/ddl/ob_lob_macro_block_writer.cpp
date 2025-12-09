@@ -29,7 +29,7 @@ using namespace oceanbase::blocksstable;
 using namespace oceanbase::sql;
 
 ObLobMacroBlockWriter::ObLobMacroBlockWriter()
-  : is_inited_(false), src_tenant_id_(0), dst_tenant_id_(0), lob_column_count_(0),
+  : is_inited_(false), lob_column_count_(0),
     lob_arena_("lob_meta_iter", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     meta_write_iter_(&lob_arena_, ObLobMetaUtil::LOB_OPER_PIECE_DATA_SIZE),
     macro_block_writer_(nullptr), total_lob_cell_count_(0), inrow_lob_cell_count_(0)
@@ -70,9 +70,6 @@ int ObLobMacroBlockWriter::init(const ObWriteMacroParam &param,
     ls_id_ = param.ls_id_;
     tablet_id_ = param.tablet_id_;
     param_ = param;
-    src_tenant_id_ = param.ddl_table_schema_.src_tenant_id_;
-    dst_tenant_id_ = param.ddl_table_schema_.dst_tenant_id_;
-
     // init lob id generator if need
     if (OB_SUCC(ret) && param.slice_count_ > 0) {
       if (slice_idx_ >= param.slice_count_) { // idem mode, for table with primary key
@@ -138,9 +135,9 @@ int ObLobMacroBlockWriter::write(const ObColumnSchemaItem &column_schema, ObIAll
                                                                   datum,
                                                                   timeout_ts,
                                                                   true/*has_lob_header*/,
-                                                                  src_tenant_id_,
+                                                                  param_.ddl_table_schema_.src_tenant_id_,
                                                                   meta_write_iter_))) {
-      LOG_WARN("insert lob column failed", K(ret));
+      LOG_WARN("insert lob column failed", K(ret), K(param_));
     }
     ObLobMetaWriteResult lob_meta_write_result;
     bool first_get_next = true;

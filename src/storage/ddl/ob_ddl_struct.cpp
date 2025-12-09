@@ -963,6 +963,8 @@ int ObDDLTableSchema::assign(const ObDDLTableSchema &other)
     table_item_ = other.table_item_;
     storage_schema_ = other.storage_schema_;
     lob_meta_storage_schema_ = other.lob_meta_storage_schema_;
+    src_tenant_id_ = other.src_tenant_id_;
+    dst_tenant_id_ = other.dst_tenant_id_;
   }
   return ret;
 }
