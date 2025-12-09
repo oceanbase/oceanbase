@@ -47,6 +47,7 @@ ObDirectLoadOptimizerCtx::ObDirectLoadOptimizerCtx()
     is_optimized_by_default_load_mode_(false),
     can_use_direct_load_(false),
     use_direct_load_(false),
+    disabled_by_transaction_(false),
     is_online_gather_statistics_(false),
     online_sample_percent_(1.0)
 {
@@ -71,6 +72,7 @@ void ObDirectLoadOptimizerCtx::reset()
   is_optimized_by_default_load_mode_ = false;
   can_use_direct_load_ = false;
   use_direct_load_ = false;
+  disabled_by_transaction_ = false;
   is_online_gather_statistics_ = false;
   online_sample_percent_ = 1.0;
   column_ids_.reset();
@@ -431,6 +433,7 @@ int ObDirectLoadOptimizerCtx::check_transaction(ObSQLSessionInfo *session_info)
   if (OB_FAIL(session_info->get_autocommit(auto_commit))) {
     LOG_WARN("failed to get auto commit", K(ret));
   } else if (!auto_commit || session_info->is_in_transaction()) {
+    disabled_by_transaction_ = true;
     if (is_insert_overwrite()) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "using insert overwrite within a transaction is");

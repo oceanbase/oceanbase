@@ -16020,7 +16020,9 @@ int ObLogPlan::add_direct_load_explain_note()
         opt_ctx.add_plan_note(DIRECT_MODE_INSERT_INTO_SELECT, "inc_replace");
       }
     } else {
-      if (direct_load_optimizer_ctx.can_use_direct_load()) {
+      if (direct_load_optimizer_ctx.is_disabled_by_transaction()) {
+        opt_ctx.add_plan_note(DIRECT_MODE_DISABLED_BY_TRANSACTION);
+      } else if (direct_load_optimizer_ctx.can_use_direct_load()) {
         opt_ctx.add_plan_note(DIRECT_MODE_DISABLED_BY_PDML);
       }
     }
