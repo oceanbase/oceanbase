@@ -339,6 +339,9 @@ int ObScheduleTabletFunc::schedule_merge_dag(
 {
   int ret = OB_SUCCESS;
   UNUSED(merge_reason);
+  if (is_major_merge(merge_type)) {
+    DEBUG_SYNC(BEFORE_SCHEDULE_TABLET_FUNC);
+  }
   if (GCTX.is_shared_storage_mode()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("this functor can not be used in shared-storage mode", K(ret));
