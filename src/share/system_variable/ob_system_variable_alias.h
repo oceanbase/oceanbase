@@ -856,6 +856,7 @@ namespace share
   static const char* const OB_SV_SPARSE_DROP_RATIO_SEARCH = "ob_sparse_drop_ratio_search";
   static const char* const OB_SV_SQL_TRANSPILER = "sql_transpiler";
   static const char* const OB_SV_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN = "plsql_can_transform_sql_to_assign";
+  static const char* const OB_SV_ENABLE_PL_ASYNC_COMMIT = "ob_enable_pl_async_commit";
 
 }
 }

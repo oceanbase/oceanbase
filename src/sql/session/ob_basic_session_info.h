@@ -1973,6 +1973,7 @@ public:
       character_set_client_ = ObCharsetType::CHARSET_INVALID;
       collation_database_ = CS_TYPE_INVALID;
       plsql_optimize_level_ = 0;
+      ob_enable_pl_async_commit_ = false;
     }
 
     inline bool operator==(const SysVarsCacheData &other) const {
@@ -2031,7 +2032,8 @@ public:
             plsql_can_transform_sql_to_assign_ == other.plsql_can_transform_sql_to_assign_ &&
             character_set_client_ == other.character_set_client_ &&
             collation_database_ == other.collation_database_ &&
-            plsql_optimize_level_ == other.plsql_optimize_level_;
+            plsql_optimize_level_ == other.plsql_optimize_level_ &&
+            ob_enable_pl_async_commit_ == other.ob_enable_pl_async_commit_;
       bool equal2 = true;
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         if (nls_formats_[i] != other.nls_formats_[i]) {
@@ -2188,7 +2190,7 @@ public:
     int64_t character_set_client_;
     int64_t collation_database_;
     int64_t plsql_optimize_level_;
-
+    bool ob_enable_pl_async_commit_;
     //==========  需要序列化  ============
     bool autocommit_;
     bool ob_enable_trace_log_;
@@ -2296,7 +2298,7 @@ private:
     DEF_SYS_VAR_BIT_ENUM(character_set_client, 60)
     DEF_SYS_VAR_BIT_ENUM(collation_database, 61)
     DEF_SYS_VAR_BIT_ENUM(plsql_optimize_level, 62)
-
+    DEF_SYS_VAR_BIT_ENUM(ob_enable_pl_async_commit, 63)
     BIT_MAX_POSITION = 128  // max position is 128 now
   };
 #undef DEF_SYS_VAR_BIT_ENUM
@@ -2451,6 +2453,7 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, character_set_client);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, collation_database);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, plsql_optimize_level);
+    DEF_SYS_VAR_CACHE_FUNCS(bool, ob_enable_pl_async_commit);
     void set_autocommit_info(bool inc_value)
     {
       inc_data_.autocommit_ = inc_value;

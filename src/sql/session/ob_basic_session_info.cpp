@@ -3081,6 +3081,12 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       OX (sys_vars_cache_.set_plsql_optimize_level(int_val));
       break;
     }
+    case SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_ob_enable_pl_async_commit(int_val != 0));
+      break;
+    }
     default: {
       //do nothing
     }
@@ -3634,6 +3640,12 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
       OX (sys_vars_cache.set_base_plsql_optimize_level(int_val));
+      break;
+    }
+    case SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_base_ob_enable_pl_async_commit(int_val != 0));
       break;
     }
     default: {
