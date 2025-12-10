@@ -381,6 +381,8 @@ int ObDirectLoadTabletMergeCtx::init(ObDirectLoadMergeCtx *merge_ctx,
       origin_table_param.tablet_id_ = tablet_id_;
       origin_table_param.tx_id_ = param_->trans_param_.tx_id_;
       origin_table_param.tx_seq_ = param_->trans_param_.tx_seq_;
+      origin_table_param.rowkey_column_num_ = param_->rowkey_column_num_;
+      origin_table_param.col_descs_ = param_->col_descs_;
       if (OB_FAIL(origin_table_.init(origin_table_param))) {
         LOG_WARN("fail to init origin table", KR(ret));
       }
