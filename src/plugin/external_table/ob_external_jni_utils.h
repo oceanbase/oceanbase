@@ -136,6 +136,11 @@ public:
   static ObJniTool &instance();
   static int init_global_instance();
   static void destroy_global_instance();
+  /**
+    * check if the environment of external table plugin is ready
+    * @details check if the configuration of java is right and if the external plugin jar package is in the right path.
+   */
+  static int is_env_ready(bool &is_ready);
 
   int init();
   void destroy(JNIEnv *jni_env = nullptr);

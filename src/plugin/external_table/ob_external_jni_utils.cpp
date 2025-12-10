@@ -579,7 +579,7 @@ int expand_classpath(ObArenaAllocator &allocator, const ObString &src_classpath,
   const char delimiter = ':';
   while (OB_SUCC(ret) && !classpath.empty()) {
     ObString item_classpath = classpath.split_on(delimiter);
-    LOG_INFO("got a class path", K(item_classpath));
+    LOG_DEBUG("got a class path", K(item_classpath));
     if (item_classpath.empty() && nullptr == classpath.find(delimiter)) {
       item_classpath = classpath;
       classpath.reset();
@@ -1250,6 +1250,43 @@ int ObJniTool::init_log_level(JNIEnv *jni_env)
 
   OBJNI_RUN(jni_env->CallStaticVoidMethod((jclass)jni_utils_class_.handle(), set_log_level_method, jlevel));
   LOG_INFO("set java log level", K(ret), KCSTRING(oblog_level));
+  return ret;
+}
+
+int ObJniTool::is_env_ready(bool &is_ready)
+{
+  int ret = OB_SUCCESS;
+  is_ready = false;
+  if (!GCONF.ob_enable_java_env ||
+      OB_ISNULL(GCONF.ob_java_opts) ||
+      OB_ISNULL(GCONF.ob_java_connector_path) ||
+      OB_ISNULL(GCONF.ob_java_home)) {
+  } else {
+    // check if the external plugin jar package is in the right path.
+    ObArenaAllocator allocator(ob_plugin_mem_attr());
+    ObString connector_path_config;
+    if (OB_FAIL(expand_classpath(allocator, GCONF.ob_java_connector_path.get_value_string(), connector_path_config))) {
+      LOG_WARN("failed to expand classpath", K(ret), K(GCONF.ob_java_connector_path.get_value_string()));
+    } else {
+      // Iterate through items in connector_path_config (':' separated), check for '.jar' suffix
+      is_ready = false;
+      const char delimiter = ':';
+      const char *jar_suffix = ".jar";
+      ObString classpath = connector_path_config;
+      while (!classpath.empty() && !is_ready) {
+        ObString item = classpath.split_on(delimiter);
+        if (item.empty()) {
+          item = classpath;
+          classpath.reset();
+        }
+        if (item.suffix_match_ci(jar_suffix)) {
+          is_ready = true;
+        }
+      }
+      LOG_INFO("check if the external plugin jar package is in the right path", K(ret), K(is_ready), K(connector_path_config));
+    }
+  }
+  LOG_INFO("check if java env is ready", K(ret), K(is_ready));
   return ret;
 }
 ////////////////////////////////////////////////////////////////////////////////
