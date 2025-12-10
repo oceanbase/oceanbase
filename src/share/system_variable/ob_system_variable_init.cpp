@@ -11492,13 +11492,26 @@ static struct VarsInit{
     ObSysVars[838].alias_ = "OB_SV_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN" ;
     }();
 
+    [&] (){
+      ObSysVars[839].default_value_ = "0" ;
+      ObSysVars[839].info_ = "Whether the PL/SQL async response is used" ;
+      ObSysVars[839].name_ = "ob_enable_pl_async_commit" ;
+      ObSysVars[839].data_type_ = ObIntType ;
+      ObSysVars[839].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[839].id_ = SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT] = 839 ;
+      ObSysVars[839].base_value_ = "0" ;
+    ObSysVars[839].alias_ = "OB_SV_ENABLE_PL_ASYNC_COMMIT" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 839;
+static int64_t var_amount = 840;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}
