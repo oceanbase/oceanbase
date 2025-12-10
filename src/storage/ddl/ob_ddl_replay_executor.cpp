@@ -497,18 +497,34 @@ int ObDDLRedoReplayExecutor::do_inc_replay_(
     const int64_t snapshot_version = table_key .get_snapshot_version();
     const uint64_t data_format_version = redo_info.data_format_version_;
     const bool force_set_macro_meta = is_incremental_minor_direct_load(direct_load_type);
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (GCTX.is_shared_storage_mode() && is_incremental_major_direct_load(direct_load_type)) {
+      if (ObDDLMacroBlockType::DDL_MB_SS_EMPTY_DATA_TYPE == macro_block.block_type_) {
+      } else if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
+      } else if (OB_FAIL(write_ss_block(object_write_info, macro_handle))) {
+        LOG_WARN("failed to write shared storage block", K(ret));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(macro_block.block_handle_.set_block_id(redo_info.macro_block_id_))) {
+        LOG_WARN("set macro block id failed", K(ret), K(redo_info.macro_block_id_));
+      }
+    } else
+#endif
     if (OB_FAIL(ObObjectManager::async_write_object(opt, object_write_info, macro_handle))) {
       LOG_WARN("fail to async write block", K(ret), K(object_write_info), K(macro_handle));
     } else if (OB_FAIL(macro_handle.wait())) {
       LOG_WARN("fail to wait macro block io finish", K(ret), K(object_write_info));
     } else if (OB_FAIL(macro_block.block_handle_.set_block_id(macro_handle.get_macro_id()))) {
       LOG_WARN("set macro block id failed", K(ret), K(macro_handle.get_macro_id()));
-    } else if (OB_FAIL(macro_block.set_data_macro_meta(macro_handle.get_macro_id(),
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(macro_block.set_data_macro_meta(macro_block.block_handle_.get_block_id(),
                                                        redo_info.data_buffer_.ptr(),
                                                        redo_info.data_buffer_.length(),
                                                        redo_info.block_type_,
                                                        force_set_macro_meta))) {
-      LOG_WARN("fail to set data macro meta", K(ret), K(macro_handle.get_macro_id()),
+      LOG_WARN("fail to set data macro meta", K(ret), K(macro_block.block_handle_.get_block_id()),
                                                       KP(redo_info.data_buffer_.ptr()),
                                                       K(redo_info.data_buffer_.length()),
                                                       K(redo_info.block_type_));

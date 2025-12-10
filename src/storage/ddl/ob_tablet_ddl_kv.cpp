@@ -1254,10 +1254,6 @@ int ObDDLKV::set_macro_block(
       } else if (OB_FAIL(ddl_memtable->insert_block_meta_tree(macro_block.block_handle_, data_macro_meta, macro_block.end_row_id_))) {
         LOG_WARN("insert block meta tree faield", K(ret));
       } else {
-        merge_slice_idx_ = MAX(merge_slice_idx_, macro_block.merge_slice_idx_);
-        min_scn_ = SCN::min(min_scn_, macro_block.scn_);
-        max_scn_ = SCN::max(max_scn_, macro_block.scn_);
-        ++macro_block_count_;
         // FIXME : @suzhi.yt support incremental direct load in ss mode
         if (is_inc_minor_ddl_kv()) {
           if (0 == data_schema_version_) {
@@ -1267,6 +1263,12 @@ int ObDDLKV::set_macro_block(
             column_count_ = data_macro_meta->val_.column_count_ - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
           }
         }
+      }
+      if (OB_SUCC(ret)) {
+        merge_slice_idx_ = MAX(merge_slice_idx_, macro_block.merge_slice_idx_);
+        min_scn_ = SCN::min(min_scn_, macro_block.scn_);
+        max_scn_ = SCN::max(max_scn_, macro_block.scn_);
+        ++macro_block_count_;
         LOG_INFO("succeed to set macro block into ddl kv", K(macro_block), K(macro_block_count_), KPC(data_macro_meta));
       }
     }

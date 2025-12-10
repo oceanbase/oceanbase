@@ -174,7 +174,7 @@ int ObWriterArgs::init(const ObWriteMacroParam &param,
         if (OB_SUCC(ret) && is_need_ddl_redo_callback_type(writer_type)) {
           const int64_t row_offset = param.row_offset_;
           SCN start_scn;
-          const ObDDLMacroBlockType block_type = param.is_no_logging_ ? DDL_MB_SS_EMPTY_DATA_TYPE : DDL_MB_DATA_TYPE;
+          const ObDDLMacroBlockType block_type = !is_inc_minor && param.is_no_logging_ ? DDL_MB_SS_EMPTY_DATA_TYPE : DDL_MB_DATA_TYPE;
           IGNORE_RETURN start_scn.convert_for_tx(SS_DDL_START_SCN_VAL);
           ObDDLRedoLogWriterCallbackInitParam init_param;
           init_param.ls_id_ = ls_id;
