@@ -37,6 +37,7 @@
 namespace oceanbase {
 namespace omt {
 thread_local int in_sys_hook = 0;
+thread_local bool count_usleep_as_blocking = true;
 }
 }
 
@@ -170,6 +171,19 @@ int ob_pthread_cond_timedwait(pthread_cond_t *__restrict __cond,
       const struct timespec *__restrict __abstime) = pthread_cond_timedwait;
   int ret = 0;
   ret = SYS_HOOK(pthread_cond_timedwait, __cond, __mutex, __abstime);
+  return ret;
+}
+
+int usleep(useconds_t v)
+{
+  static int (*real_usleep)(useconds_t v) =
+      (typeof(real_usleep))dlsym(RTLD_NEXT, "usleep");
+  int ret = 0;
+  if (v >= 50 * 1000 && count_usleep_as_blocking) {
+    ret = SYS_HOOK(usleep, v);
+  } else {
+    ret = real_usleep(v);
+  }
   return ret;
 }
 

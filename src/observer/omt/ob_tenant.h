@@ -49,6 +49,7 @@ class ObAllVirtualDumpTenantInfo;
 }
 namespace omt
 {
+extern thread_local bool count_usleep_as_blocking;
 typedef common::ObPriorityQueue2<1, QQ_MAX_PRIO - 1, RQ_MAX_PRIO - QQ_MAX_PRIO, OB_MAX_NUMA_NUM> ReqQueue;
 class ObPxPool
     : public share::ObThreadPool
@@ -382,7 +383,21 @@ class ObTenant : public share::ObTenantBase
   // How long to preserve inactive worker before free it to worker
   // pool.
   static constexpr int64_t PRESERVE_INACTIVE_WORKER_TIME = 10 * 1000L * 1000L;
-
+  class ObUsleepBlockingGuard
+  {
+  public:
+    explicit ObUsleepBlockingGuard(const bool count_as_blocking)
+      : old_value_(count_usleep_as_blocking)
+    {
+      count_usleep_as_blocking = count_as_blocking;
+    }
+    ~ObUsleepBlockingGuard()
+    {
+      count_usleep_as_blocking = old_value_;
+    }
+  private:
+    bool old_value_;
+  };
 public:
   enum { MAX_RESOURCE_GROUP = 8 };
 
