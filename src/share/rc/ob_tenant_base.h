@@ -242,6 +242,7 @@ namespace observer
   class ObTableQueryASyncMgr;
   class ObTableSessIDService;
   class ObTenantTabletCleanupService;
+  class ObTabletReplicaInfoCacheMgr;
 }
 
 // for ObTenantSwitchGuard 临时使用>>>>>>>>
@@ -537,7 +538,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       share::ObBackupDestIOPermissionMgr*,           \
       share::ObHMSClientPoolMgr*,                     \
       share::schema::ObAddIntervalPartitionController*, \
-      observer::ObTenantTabletCleanupService*        \
+      observer::ObTenantTabletCleanupService*,        \
+      observer::ObTabletReplicaInfoCacheMgr*          \
   )
 
 

@@ -17258,6 +17258,37 @@ def_table_schema(
 # 12585: __all_virtual_sync_standby_status
 # 12586: __all_virtual_window_loop_info
 
+def_table_schema(
+  owner             = 'zhaoziqian.zzq',
+  table_name        = '__all_virtual_tablet_replica_info',
+  table_id          = '12587',
+  table_type        = 'VIRTUAL_TABLE',
+  gm_columns        = [],
+  rowkey_columns    = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('ls_id', 'int'),
+    ('tablet_id', 'int'),
+  ],
+  normal_columns    = [
+    ('role', 'int'),
+    ('zone', 'varchar:MAX_ZONE_LENGTH'),
+    ('table_id', 'int'),
+    ('table_name', 'varchar:OB_MAX_TABLE_NAME_LENGTH'),
+    ('database_id', 'int'),
+    ('database_name', 'varchar:OB_MAX_DATABASE_NAME_LENGTH'),
+    ('table_type', 'int'),
+    ('tablegroup_id', 'int'),
+    ('tablegroup_name', 'varchar:OB_MAX_TABLEGROUP_NAME_LENGTH'),
+    ('data_table_id', 'int'),
+    ('occupy_size', 'int'),
+    ('required_size', 'int'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -44577,6 +44608,69 @@ FROM
 # 21705: CDB_OB_TTL_TASK_HISTORY
 # 21706: CDB_OB_SYNC_STANDBY_DEST
 # 21707: DBA_OB_SYNC_STANDBY_DEST
+
+def_table_schema(
+  owner           = 'zhaoziqian.zzq',
+  table_name      = 'GV$OB_TABLET_REPLICA_INFO',
+  table_id        = '21708',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  gm_columns      = [],
+  normal_columns  = [],
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    LS_ID,
+    TABLET_ID,
+    ROLE,
+    ZONE,
+    TABLE_ID,
+    TABLE_NAME,
+    DATABASE_ID,
+    DATABASE_NAME,
+    TABLE_TYPE,
+    TABLEGROUP_ID,
+    TABLEGROUP_NAME,
+    DATA_TABLE_ID,
+    OCCUPY_SIZE,
+    REQUIRED_SIZE
+  FROM oceanbase.__all_virtual_tablet_replica_info
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'zhaoziqian.zzq',
+  table_name      = 'V$OB_TABLET_REPLICA_INFO',
+  table_id        = '21709',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  gm_columns      = [],
+  normal_columns  = [],
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    LS_ID,
+    TABLET_ID,
+    ROLE,
+    ZONE,
+    TABLE_ID,
+    TABLE_NAME,
+    DATABASE_ID,
+    DATABASE_NAME,
+    TABLE_TYPE,
+    TABLEGROUP_ID,
+    TABLEGROUP_NAME,
+    DATA_TABLE_ID,
+    OCCUPY_SIZE,
+    REQUIRED_SIZE
+  FROM oceanbase.GV$OB_TABLET_REPLICA_INFO
+  WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
+  """.replace("\n", " ")
+)
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位

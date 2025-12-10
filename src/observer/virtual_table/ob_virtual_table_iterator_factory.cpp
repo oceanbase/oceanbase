@@ -256,6 +256,7 @@
 #include "observer/virtual_table/ob_all_virtual_tenant_vector_mem_info.h"
 #include "observer/virtual_table/ob_all_virtual_ccl_status.h"
 #include "observer/virtual_table/ob_all_virtual_ss_object_type_io_stat.h"
+#include "observer/virtual_table/ob_all_virtual_tablet_replica_info.h"
 namespace oceanbase
 {
 using namespace common;
@@ -3277,6 +3278,16 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
+          case OB_ALL_VIRTUAL_TABLET_REPLICA_INFO_TID: {
+            ObAllVirtualTabletReplicaInfo *all_virtual_tablet_replica_info = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualTabletReplicaInfo, all_virtual_tablet_replica_info))) {
+              SERVER_LOG(ERROR, "ObAllVirtualTabletReplicaInfo construct failed", K(ret));
+            } else if (OB_FAIL(all_virtual_tablet_replica_info->init(&allocator, GCTX.schema_service_, addr_))) {
+              LOG_WARN("fail to init all virtual tablet replica info", KR(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_tablet_replica_info);
+            }
+          } break;
         END_CREATE_VT_ITER_SWITCH_LAMBDA
 
 #define AGENT_VIRTUAL_TABLE_CREATE_ITER
