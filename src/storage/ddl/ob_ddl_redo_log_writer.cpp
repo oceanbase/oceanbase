@@ -1030,17 +1030,8 @@ if (OB_ISNULL(buffer = static_cast<char *>(ob_malloc(buffer_size, ObMemAttr(MTL_
     ObDDLCommitClogCb *tmp_cb = cb;
     cb = nullptr;
     lock_tid = 0;
-    bool need_retry = true;
-    while (need_retry) {
-      if (OB_FAIL(OB_TS_MGR.wait_gts_elapse(MTL_ID(), scn))) {
-        if (OB_EAGAIN != ret) {
-          LOG_WARN("fail to wait gts elapse", K(ret), K(log));
-        } else {
-          ob_usleep(1000);
-        }
-      } else {
-        need_retry = false;
-      }
+    if (OB_FAIL(ObDDLRedoLogWriter::wait_gts_elapse_with_timeout(MTL_ID(), scn, ObDDLRedoLogHandle::DDL_REDO_LOG_TIMEOUT))) {
+      LOG_WARN("fail to wait gts elapse", K(ret), K(log));
     }
     if (OB_SUCC(ret)) {
       handle.cb_ = tmp_cb;
@@ -1189,6 +1180,34 @@ template int ObDDLRedoLogWriter::write_auto_split_log(const share::ObLSID &ls_id
 bool ObDDLRedoLogWriter::need_retry(int ret_code)
 {
   return OB_NOT_MASTER == ret_code;
+}
+
+int ObDDLRedoLogWriter::wait_gts_elapse_with_timeout(
+    const uint64_t tenant_id,
+    const SCN &scn,
+    const int64_t timeout_us)
+{
+  int ret = OB_SUCCESS;
+  bool need_retry = true;
+  const int64_t start_time = ObTimeUtility::current_time();
+  while (need_retry) {
+    if (OB_FAIL(OB_TS_MGR.wait_gts_elapse(tenant_id, scn))) {
+      if (OB_EAGAIN != ret) {
+        LOG_WARN("fail to wait gts elapse", K(ret), K(tenant_id), K(scn));
+      } else {
+        const int64_t current_time = ObTimeUtility::current_time();
+        if (current_time - start_time > timeout_us) {
+          ret = OB_TIMEOUT;
+          LOG_WARN("wait gts elapse timeout", K(ret), K(current_time), K(start_time), K(tenant_id), K(scn));
+        } else {
+          ob_usleep(1000);
+        }
+      }
+    } else {
+      need_retry = false;
+    }
+  }
+  return ret;
 }
 
 ObDDLRedoLogHandle::ObDDLRedoLogHandle()
@@ -2183,17 +2202,8 @@ int ObDDLRedoLogWriter::local_write_ddl_finish_log(
   } else {
     ObDDLFinishClogCb *tmp_cb = cb;
     cb = nullptr;
-    bool need_retry = true;
-    while (need_retry) {
-      if (OB_FAIL(OB_TS_MGR.wait_gts_elapse(MTL_ID(), scn))) {
-        if (OB_EAGAIN != ret) {
-          LOG_WARN("fail to wait gts elapse", K(ret), K(log));
-        } else {
-          ob_usleep(1000);
-        }
-      } else {
-        need_retry = false;
-      }
+    if (OB_FAIL(ObDDLRedoLogWriter::wait_gts_elapse_with_timeout(MTL_ID(), scn, ObDDLRedoLogHandle::DDL_REDO_LOG_TIMEOUT))) {
+      LOG_WARN("fail to wait gts elapse", K(ret), K(log));
     }
     if (OB_SUCC(ret)) {
       handle.cb_ = tmp_cb;

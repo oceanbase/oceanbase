@@ -335,6 +335,9 @@ public:
                                   const share::ObLSID &ls_id,
                                   blocksstable::ObMacroBlockHandle &macro_handle,
                                   blocksstable::MacroBlockId &block_id);
+  static int wait_gts_elapse_with_timeout(const uint64_t tenant_id,
+                                          const share::SCN &scn,
+                                          const int64_t timeout_us);
   const share::ObLSID &get_ls_id() const { return ls_id_; }
   const ObTabletID &get_tablet_id() const { return tablet_id_; }
 
