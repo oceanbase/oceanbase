@@ -1466,6 +1466,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprMonthsAdd::calc_months_add,                          /* 885 */
   NULL, // ObExprParseDateTime::calc_parse_date_time                  /* 886 */
   NULL, // ObExprIsNan::eval_is_nan,                                  /* 887 */
+  NULL, // ObExprCollectFileList::collect_file_list                   /* 888 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
