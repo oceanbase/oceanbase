@@ -354,6 +354,7 @@ int ObTenantBase::pre_run()
 {
   int ret = OB_SUCCESS;
   ObTenantEnv::set_tenant(this);
+  ob_get_origin_tenant_id() = this->id();
   {
     ThreadListNode *node = lib::Thread::current().get_thread_list_node();
     ThreadListNode *group_node  = lib::Thread::current().get_group_thread_list_node();
@@ -394,6 +395,7 @@ int ObTenantBase::end_run()
 {
   int ret = OB_SUCCESS;
   ObTenantEnv::set_tenant(nullptr);
+  ob_get_origin_tenant_id() = 0;
   {
     ThreadListNode *node = lib::Thread::current().get_thread_list_node();
     ThreadListNode *group_node  = lib::Thread::current().get_group_thread_list_node();
