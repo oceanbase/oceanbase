@@ -111,7 +111,15 @@ int ObBackupCleanScheduler::add_delete_policy_(const ObDeletePolicyAttr &policy_
     LOG_WARN("policy already exists, cannot insert duplicate", K(ret), K(policy_attr));
     LOG_USER_ERROR(OB_ERR_POLICY_EXIST, "only one backup clean policy can be set for each tenant");
   } else {
-    if (0 == strcmp(policy_attr.policy_name_, OB_STR_BACKUP_CLEAN_POLICY_NAME_DEFAULT)) {
+    // validate recovery_window before inserting policy
+    int64_t recovery_window = 0;
+    if (OB_FAIL(get_delete_policy_parameter_(policy_attr, recovery_window))) {
+      LOG_WARN("failed to get delete policy parameter", K(ret), K(policy_attr));
+    } else if (recovery_window <= 0) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("recovery window is not valid", K(ret), K(policy_attr), K(recovery_window));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "the recovery window");
+    } else if (0 == strcmp(policy_attr.policy_name_, OB_STR_BACKUP_CLEAN_POLICY_NAME_DEFAULT)) {
       if (OB_FAIL(ObDeletePolicyOperator::insert_delete_policy(trans, policy_attr))) {
         LOG_WARN("failed to insert delete policy", K(ret), K(policy_attr));
       }
