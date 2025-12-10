@@ -9933,6 +9933,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_CDB_OB_AI_MODEL_ENDPOINTS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_CDB_OB_AI_MODEL_ENDPOINTS_SCHEMA_VERSION); break;
     case OB_GV_OB_SS_OBJECT_TYPE_IO_STAT_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_GV_OB_SS_OBJECT_TYPE_IO_STAT_SCHEMA_VERSION); break;
     case OB_V_OB_SS_OBJECT_TYPE_IO_STAT_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_V_OB_SS_OBJECT_TYPE_IO_STAT_SCHEMA_VERSION); break;
+    case OB_DBA_TABLES_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_TABLES_SCHEMA_VERSION); break;
     case OB_DBA_SYNONYMS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_SYNONYMS_ORACLE_SCHEMA_VERSION); break;
     case OB_DBA_OBJECTS_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_OBJECTS_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_OBJECTS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_OBJECTS_ORACLE_SCHEMA_VERSION); break;
@@ -9960,7 +9961,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_DBA_TAB_COLUMNS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_TAB_COLUMNS_ORACLE_SCHEMA_VERSION); break;
     case OB_USER_TAB_COLUMNS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_USER_TAB_COLUMNS_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_TABLES_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TABLES_ORACLE_SCHEMA_VERSION); break;
-    case OB_DBA_TABLES_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_TABLES_ORACLE_SCHEMA_VERSION); break;
+    case OB_DBA_TABLES_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_TABLES_ORACLE_SCHEMA_VERSION); break;
     case OB_USER_TABLES_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_USER_TABLES_ORACLE_SCHEMA_VERSION); break;
     case OB_DBA_TAB_COMMENTS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_TAB_COMMENTS_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_TAB_COMMENTS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TAB_COMMENTS_ORACLE_SCHEMA_VERSION); break;
