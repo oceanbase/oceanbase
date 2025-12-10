@@ -2390,7 +2390,7 @@ int ObPlanCache::dump_all_objs() const
   if (OB_FAIL(co_mgr_.foreach_alloc_cache_obj(get_all_objs_op))) {
     LOG_WARN("failed to traverse alloc cache obj map", K(ret));
   } else {
-    LOG_INFO("Dumping All Cache Objs", K(alloc_obj_list.count()), K(alloc_obj_list));
+    LOG_DEBUG("Dumping All Cache Objs", K(alloc_obj_list.count()), K(alloc_obj_list));
   }
   return ret;
 }
