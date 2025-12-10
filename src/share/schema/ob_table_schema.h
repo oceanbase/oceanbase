@@ -1637,8 +1637,8 @@ public:
   inline int64_t get_index_column_number() const { return index_column_num_; }
   inline uint64_t get_max_used_column_id() const { return max_used_column_id_; }
   inline int64_t get_sess_active_time() const { return sess_active_time_; }
-  // Whether it is a temporary table created by ob proxy 64bit > uint max
-  inline bool is_obproxy_create_tmp_tab() const { return is_tmp_table() && get_session_id() > 0xFFFFFFFFL;}
+  // Whether it is a temporary table created by ob proxy ssid > int32_t max
+  inline bool is_obproxy_create_tmp_tab() const { return is_tmp_table() && static_cast<uint32_t>(get_session_id()) <= 0x7FFFFFFFU;}
   inline int64_t get_rowkey_split_pos() const { return rowkey_split_pos_; }
   inline int64_t get_block_size() const { return block_size_;}
   virtual inline bool is_use_bloomfilter() const override { return is_use_bloomfilter_; }

@@ -3871,6 +3871,15 @@ int ObDDLUtil::check_table_empty(
   } else {
     const ObString &table_name = table_schema.get_table_name_str();
     ObSqlString sql_string;
+    ObSessionParam session_param;
+    int64_t new_sql_mode = static_cast<int64_t>(sql_mode);
+    session_param.sql_mode_ = &new_sql_mode;
+    session_param.tz_info_wrap_ = nullptr;
+    InnerDDLInfo ddl_info;
+    ddl_info.set_is_ddl(true);
+    ddl_info.set_retryable_ddl(true);
+    ddl_info.set_source_table_hidden(table_schema.is_user_hidden_table());
+    ddl_info.set_dest_table_hidden(false);
     ObTimeoutCtx timeout_ctx;
     const char* format_str = nullptr;
     const uint64_t tenant_id = table_schema.get_tenant_id();
@@ -3924,6 +3933,8 @@ int ObDDLUtil::check_table_empty(
                          is_oracle_mode))) {
         LOG_WARN("fail to generate new name with escape character",
                   K(ret), K(table_name));
+      } else if (OB_FAIL(session_param.ddl_info_.init(ddl_info, table_schema.get_session_id()))) {
+        LOG_WARN("fail to init ddl info", KR(ret), K(ddl_info), K(table_schema.get_session_id()));
       } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(timeout_ctx, GCONF.internal_sql_execute_timeout))) {
         LOG_WARN("failed to set default timeout ctx", K(ret), K(timeout_ctx));
       } else if (OB_FAIL(ObDDLUtil::generate_ddl_schema_hint_str(table_name, table_schema.get_schema_version(), true, ddl_schema_hint_str))) {

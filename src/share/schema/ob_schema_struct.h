@@ -4369,6 +4369,7 @@ inline uint64_t ObTableSchemaHashWrapper::hash() const
   uint64_t hash_ret = 0;
   hash_ret = common::murmurhash(&tenant_id_, sizeof(uint64_t), 0);
   hash_ret = common::murmurhash(&database_id_, sizeof(uint64_t), hash_ret);
+  hash_ret = common::murmurhash(&session_id_, sizeof(int64_t), hash_ret);
   common::ObCollationType cs_type = ObSchema::get_cs_type_with_cmp_mode(name_case_mode_);
   hash_ret = common::ObCharset::hash(cs_type, table_name_, hash_ret, true, NULL);
   return hash_ret;
@@ -4380,7 +4381,9 @@ inline bool ObTableSchemaHashWrapper::operator ==(const ObTableSchemaHashWrapper
   ObCompareNameWithTenantID name_cmp(tenant_id_, name_case_mode_, database_id_);
   return (tenant_id_ == rv.tenant_id_) && (database_id_ == rv.database_id_)
       && (name_case_mode_ == rv.name_case_mode_)
-      && (session_id_ == rv.session_id_ || common::OB_INVALID_ID == rv.session_id_)
+      && (session_id_ == rv.session_id_
+         || ((0 == session_id_ || common::OB_INVALID_ID == session_id_)
+            && (0 == rv.session_id_ || common::OB_INVALID_ID == rv.session_id_)))
       && (0 == name_cmp.compare(table_name_ ,rv.table_name_));
 }
 

@@ -67,6 +67,7 @@
   RPC_S(PR5 get_partition_count, OB_GET_PARTITION_COUNT,
         ObGetPartitionCountResult);
   RPC_AP(PR5 switch_schema, OB_SWITCH_SCHEMA, (ObSwitchSchemaArg), obrpc::ObSwitchSchemaResult);
+  RPC_AP(PR5 detect_client_session_alive, OB_DETECT_CLIENT_SESSION_ALIVE, (obrpc::UInt64), obrpc::Bool);
   RPC_S(PR5 refresh_memory_stat, OB_REFRESH_MEMORY_STAT);
   RPC_S(PR5 wash_memory_fragmentation, OB_WASH_MEMORY_FRAGMENTATION);
   RPC_S(PR5 bootstrap, OB_BOOTSTRAP, (ObBootstrapArg));

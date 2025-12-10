@@ -3863,7 +3863,7 @@ int ObSchemaMgr::get_table_schema(
 int ObSchemaMgr::get_table_schema(
   const uint64_t tenant_id,
   const uint64_t database_id,
-  // ObSchemaGetterGuard session_id, default value=0, initialized in ObSql::generate_stmt, if=OB_INVALID_ID is internal session
+  // ObSchemaGetterGuard session_id, default value=0, initialized in ObSql::generate_stmt
   const uint64_t session_id,
   const ObString &table_name,
   const ObSimpleTableSchemaV2 *&table_schema) const
@@ -3905,7 +3905,7 @@ int ObSchemaMgr::get_table_schema(
         } else {
           table_schema = tmp_schema;
         }
-      } else if (OB_HASH_NOT_EXIST == hash_ret && 0 != session_id && OB_INVALID_ID != session_id) {
+      } else if (OB_HASH_NOT_EXIST == hash_ret && 0 != session_id) {
         // If session_id != 0, the search just now is based on the possible match of the temporary table.
         // If it is not found, then it will be searched according to session_id = 0, which is the normal table.
         const ObTableSchemaHashWrapper table_name_wrapper1(tenant_id, database_id, 0, mode, table_name);
@@ -3952,6 +3952,7 @@ int ObSchemaMgr::get_table_schema(
 int ObSchemaMgr::get_hidden_table_schema(
     const uint64_t tenant_id,
     const uint64_t database_id,
+    const uint64_t session_id,
     const ObString &table_name,
     const ObSimpleTableSchemaV2 *&table_schema) const
 {
@@ -3980,7 +3981,7 @@ int ObSchemaMgr::get_hidden_table_schema(
       LOG_WARN("invalid case mode", K(ret), K(mode));
     }
     if (OB_SUCC(ret)) {
-      const ObTableSchemaHashWrapper table_name_wrapper(tenant_id, database_id, 0, mode, table_name);
+      const ObTableSchemaHashWrapper table_name_wrapper(tenant_id, database_id, session_id, mode, table_name);
       int hash_ret = hidden_table_name_map_.get_refactored(table_name_wrapper, tmp_schema);
       if (OB_SUCCESS == hash_ret) {
         if (OB_ISNULL(tmp_schema)) {
@@ -3988,6 +3989,22 @@ int ObSchemaMgr::get_hidden_table_schema(
           LOG_WARN("NULL ptr", K(ret), K(tmp_schema));
         } else {
           table_schema = tmp_schema;
+        }
+      } else if (OB_HASH_NOT_EXIST == hash_ret && 0 != session_id) {
+        // If session_id != 0, the search just now is based on the possible match of the temporary table.
+        // If it is not found, then it will be searched according to session_id = 0, which is the normal table.
+        // ex. ctas table with index do direct load will create hidden table with a valid session id and hidden index with session id 0
+        //     in this case, it needs the second search to get the index table
+        // since the hidden table name is specially encoded, it doesn't have the same name problem
+        const ObTableSchemaHashWrapper table_name_wrapper1(tenant_id, database_id, 0, mode, table_name);
+        hash_ret = hidden_table_name_map_.get_refactored(table_name_wrapper1, tmp_schema);
+        if (OB_SUCCESS == hash_ret) {
+          if (OB_ISNULL(tmp_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("NULL ptr", KR(ret), K(table_name_wrapper1));
+          } else {
+            table_schema = tmp_schema;
+          }
         }
       }
     }
@@ -4162,7 +4179,7 @@ int ObSchemaMgr::get_table_schema(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(with_hidden_flag)) {
-    ret = get_hidden_table_schema(tenant_id, database_id, table_name, table_schema);
+    ret = get_hidden_table_schema(tenant_id, database_id, session_id, table_name, table_schema);
   } else {
     if (!is_index) {
       ret = get_table_schema(tenant_id, database_id, session_id, table_name, table_schema);

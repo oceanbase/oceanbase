@@ -4950,19 +4950,25 @@ int ObTableSqlService::insert_temp_table_info(ObISQLClient &sql_client, const Ob
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
   const uint64_t table_id = table_schema.get_table_id();
   int64_t affected_rows = 0;
-  ObSqlString insert_sql_string;
+  ObDMLSqlSplicer dml;
+  ObDMLExecHelper exec(sql_client, exec_tenant_id);
+  uint64_t data_version = 0;
   if (OB_FAIL(check_ddl_allowed(table_schema))) {
     LOG_WARN("check ddl allowd failed", K(ret), K(table_schema));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("get tenant data version failed", KR(ret), K(tenant_id));
   } else if (table_schema.is_ctas_tmp_table() || table_schema.is_tmp_table()) {
-    if (OB_SUCCESS != (ret = insert_sql_string.append_fmt(
-        "INSERT INTO %s (TENANT_ID, TABLE_ID, CREATE_HOST) values(%lu, %lu, \"%.*s\")",
-        OB_ALL_TEMP_TABLE_TNAME,
-        ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
-        ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id),
-        table_schema.get_create_host_str().length(), table_schema.get_create_host_str().ptr()))) {
-      LOG_WARN("sql string append format string failed, ", K(ret));
-    } else if (OB_FAIL(sql_client.write(exec_tenant_id, insert_sql_string.ptr(), affected_rows))) {
-      LOG_WARN("execute sql failed,  ", "sql", insert_sql_string.ptr(), K(ret));
+    if (OB_FAIL(dml.add_pk_column("tenant_id",
+                ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id)))
+        || OB_FAIL(dml.add_pk_column("table_id", table_id))
+        || OB_FAIL(dml.add_column("create_host", table_schema.get_create_host_str()))
+        || OB_FAIL(!(data_version < MOCK_DATA_VERSION_4_3_5_4
+                     || (data_version < DATA_VERSION_4_4_2_0
+                         && data_version >= DATA_VERSION_4_4_0_0))
+                   && dml.add_column("table_session_id", table_schema.get_session_id()))) {
+      LOG_WARN("fail to add dml", KR(ret));
+    } else if (OB_FAIL(exec.exec_insert(OB_ALL_TEMP_TABLE_TNAME, dml, affected_rows))) {
+      LOG_WARN("execute sql failed", KR(ret));
     } else if (1 != affected_rows) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("affected_rows expect to 1, ", K(affected_rows), K(ret));

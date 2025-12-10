@@ -34,6 +34,7 @@ class ObISQLConnectionPool;
 class ObDbLinkConnectionPool;
 }
 
+
 struct InnerDDLInfo final
 {
 public:
@@ -115,17 +116,6 @@ public:
                                                 session_id_ = session_id;
                                                 return is_valid() ? OB_SUCCESS
                                                                     : OB_INVALID_ARGUMENT; }
-  void set_is_ddl(const bool is_ddl) { ddl_info_.set_is_ddl(is_ddl); }
-  void set_source_table_hidden(const bool is_hidden) { ddl_info_.set_source_table_hidden(is_hidden); }
-  void set_dest_table_hidden(const bool is_hidden) { ddl_info_.set_dest_table_hidden(is_hidden); }
-  void set_heap_table_ddl(const bool flag) { ddl_info_.set_heap_table_ddl(flag); }
-  void set_ddl_check_default_value(const bool flag) { ddl_info_.set_ddl_check_default_value(flag); }
-  void set_mview_complete_refresh(const bool flag) { ddl_info_.set_mview_complete_refresh(flag); }
-  void set_refreshing_mview(const bool flag) { ddl_info_.set_refreshing_mview(flag); }
-  void set_retryable_ddl(const bool flag) { ddl_info_.set_retryable_ddl(flag); }
-  void set_is_dummy_ddl_for_inner_visibility(const bool flag) { ddl_info_.set_is_dummy_ddl_for_inner_visibility(flag); }
-  void set_major_refreshing_mview(const bool flag) { ddl_info_.set_major_refreshing_mview(flag); }
-
   bool is_ddl() const { return ddl_info_.is_ddl(); }
   bool is_source_table_hidden() const { return ddl_info_.is_source_table_hidden(); }
   bool is_dest_table_hidden() const { return ddl_info_.is_dest_table_hidden(); }
@@ -147,6 +137,7 @@ private:
   InnerDDLInfo ddl_info_;
   uint64_t session_id_;
 };
+
 struct ObSessionParam final
 {
 public:

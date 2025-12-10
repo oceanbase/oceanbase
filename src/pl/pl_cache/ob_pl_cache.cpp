@@ -762,7 +762,7 @@ int ObPLDependencyCheck::get_synonym_schema_version(ObPLCacheBasicCtx &pc_ctx,
     ObSchemaChecker schema_checker;
     CK (SYNONYM_SCHEMA == pcv_schema.schema_type_);
     OZ (schema_guard.get_simple_synonym_info(tenant_id, pcv_schema.schema_id_, synonym_info));
-    OZ (schema_checker.init(schema_guard));
+    OZ (schema_checker.init(schema_guard, session_info->get_sessid_for_table()));
     if (OB_SUCC(ret) && OB_NOT_NULL(synonym_info)) {
       if (OB_PUBLIC_SCHEMA_ID == synonym_info->get_database_id()) {
         // in same db, no need check for objects with the same name if synonym name is same as linked object name

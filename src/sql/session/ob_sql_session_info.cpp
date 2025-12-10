@@ -18,6 +18,7 @@
 #include "storage/memtable/ob_lock_wait_mgr.h"
 #include "observer/mysql/obmp_stmt_send_piece_data.h"
 #include "observer/ob_server.h"
+#include "observer/ob_temporary_table_cleaner.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/debug/ob_pl_debugger_manager.h"
 #include "pl/sys_package/ob_pl_utl_file.h"
@@ -1012,8 +1013,14 @@ int ObSQLSessionInfo::drop_temp_tables(const bool is_disconn,
     //mysql: 1. 直连 & sess 断开时  2. reset connection
     //oracle: commit; 或者 直连时的断session;
     if (!is_oracle_mode()) {
-      if ((false == is_obproxy_mode() && is_sess_disconn) || is_reset_connection) {
-        need_drop_temp_table = true;
+      if ((is_sess_disconn) || is_reset_connection) {
+        // ignore ret
+        if (OB_ISNULL(MTL(ObSessionTmpTableCleaner*))) {
+          // do nothing
+        } else {
+          // ignore ret
+          MTL(ObSessionTmpTableCleaner*)->register_task(get_sessid_for_table());
+        }
       }
     } else {
       if (false == is_sess_disconn || false == is_obproxy_mode() || is_reset_connection) {
@@ -1051,10 +1058,7 @@ int ObSQLSessionInfo::drop_temp_tables(const bool is_disconn,
         LOG_WARN("rpc proxy is null", K(ret));
       } else if (OB_FAIL(delete_from_oracle_temp_tables(drop_table_arg))) {
         LOG_WARN("failed to delete from oracle temporary table", K(drop_table_arg), K(ret));
-      }/* else if (!is_oracle_mode() && OB_FALSE_IT(drop_table_arg.compat_mode_ = lib::Worker::CompatMode::MYSQL)) {
-      } else if (!is_oracle_mode() && OB_FAIL(common_rpc_proxy->drop_table(drop_table_arg, res))) {
-        LOG_WARN("failed to drop temporary table", K(drop_table_arg), K(ret));
-      }*/ else {
+      } else {
         LOG_INFO("temporary tables dropped due to connection disconnected", K(is_sess_disconn), K(drop_table_arg));
       }
     }
@@ -1075,7 +1079,7 @@ int ObSQLSessionInfo::drop_temp_tables(const bool is_disconn,
 //oracle临时表依赖附加的__sess_create_time判断重用并清理, 不需要更新
 void ObSQLSessionInfo::refresh_temp_tables_sess_active_time()
 {
-  int ret = OB_SUCCESS;
+  /*int ret = OB_SUCCESS;
   const int64_t REFRESH_INTERVAL = 60L * 60L * 1000L * 1000L; // 1hr
   obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
   if (get_has_temp_table_flag() && is_obproxy_mode()
@@ -1106,7 +1110,7 @@ void ObSQLSessionInfo::refresh_temp_tables_sess_active_time()
     } else {
       LOG_DEBUG("no need to refresh session active time of temporary tables", "last refresh time", get_last_refresh_temp_table_time());
     }
-  }
+  }*/
 }
 
 

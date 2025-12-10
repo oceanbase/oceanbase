@@ -190,7 +190,7 @@ int ObPLCompilerUtils::compile_package(ObExecContext &ctx,
   int64_t compatible_mode = lib::is_oracle_mode() ? COMPATIBLE_ORACLE_MODE
                                                   : COMPATIBLE_MYSQL_MODE;
   CK (OB_NOT_NULL(ctx.get_sql_ctx()->schema_guard_));
-  OZ (schema_checker.init(*ctx.get_sql_ctx()->schema_guard_, ctx.get_my_session()->get_server_sid()));
+  OZ (schema_checker.init(*ctx.get_sql_ctx()->schema_guard_, ctx.get_my_session()->get_sessid_for_table()));
   OZ (ctx.get_sql_ctx()->schema_guard_->get_package_info(tenant_id, database_id, package_name, package_type, compatible_mode, package_info));
   CK (OB_NOT_NULL(package_info));
   CK (OB_NOT_NULL(ctx.get_sql_proxy()));
@@ -320,7 +320,7 @@ int ObPLCompilerUtils::compile_udt(ObExecContext &ctx,
         bool is_valid = false;
         sql::ObResolverParams resolver_params;
         sql::ObSchemaChecker schema_checker;
-        OZ (schema_checker.init(*ctx.get_sql_ctx()->schema_guard_, ctx.get_my_session()->get_server_sid()));
+        OZ (schema_checker.init(*ctx.get_sql_ctx()->schema_guard_, ctx.get_my_session()->get_sessid_for_table()));
         OX (resolver_params.allocator_ = &ctx.get_allocator());
         OX (resolver_params.schema_checker_ = &schema_checker);
         OX (resolver_params.session_info_ = ctx.get_my_session());

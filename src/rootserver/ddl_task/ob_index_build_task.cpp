@@ -149,19 +149,6 @@ int ObIndexSSTableBuildTask::process()
       } else {
         common::ObCommonSqlProxy *user_sql_proxy = nullptr;
         int64_t affected_rows = 0;
-        ObSQLMode sql_mode = SMO_STRICT_ALL_TABLES | (need_padding ? SMO_PAD_CHAR_TO_FULL_LENGTH : 0);
-        ObSessionParam session_param;
-        session_param.sql_mode_ = (int64_t *)&sql_mode;
-        session_param.tz_info_wrap_ = nullptr;
-        session_param.ddl_info_.set_is_ddl(true);
-        session_param.ddl_info_.set_source_table_hidden(data_schema->is_user_hidden_table());
-        session_param.ddl_info_.set_dest_table_hidden(index_schema->is_user_hidden_table());
-        session_param.ddl_info_.set_retryable_ddl(is_retryable_ddl_);
-        session_param.nls_formats_[ObNLSFormatEnum::NLS_DATE] = nls_date_format_;
-        session_param.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP] = nls_timestamp_format_;
-        session_param.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP_TZ] = nls_timestamp_tz_format_;
-        session_param.use_external_session_ = true;  // means session id dispatched by session mgr
-        session_param.consumer_group_id_ = consumer_group_id_;
 
         common::ObAddr *sql_exec_addr = nullptr;
         if (inner_sql_exec_addr_.is_valid()) {
@@ -180,7 +167,23 @@ int ObIndexSSTableBuildTask::process()
         ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::RS_CREATE_INDEX_BUILD_REPLICA);
         add_event_info(ret, "index sstable build task send innersql");
         LOG_INFO("execute sql" , K(sql_string), K(data_table_id_), K(tenant_id_), K(DDL_INNER_SQL_EXECUTE_TIMEOUT), "ddl_event_info", ObDDLEventInfo());
-        if (OB_FAIL(timeout_ctx.set_trx_timeout_us(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
+        ObSQLMode sql_mode = SMO_STRICT_ALL_TABLES | (need_padding ? SMO_PAD_CHAR_TO_FULL_LENGTH : 0);
+        ObSessionParam session_param;
+        session_param.sql_mode_ = (int64_t *)&sql_mode;
+        session_param.tz_info_wrap_ = nullptr;
+        InnerDDLInfo ddl_info;
+        ddl_info.set_is_ddl(true);
+        ddl_info.set_source_table_hidden(data_schema->is_user_hidden_table());
+        ddl_info.set_dest_table_hidden(index_schema->is_user_hidden_table());
+        ddl_info.set_retryable_ddl(is_retryable_ddl_);
+        session_param.nls_formats_[ObNLSFormatEnum::NLS_DATE] = nls_date_format_;
+        session_param.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP] = nls_timestamp_format_;
+        session_param.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP_TZ] = nls_timestamp_tz_format_;
+        session_param.use_external_session_ = true;  // means session id dispatched by session mgr
+        session_param.consumer_group_id_ = consumer_group_id_;
+        if (OB_FAIL(session_param.ddl_info_.init(ddl_info, data_schema->get_session_id()))) {
+          LOG_WARN("fail to init ddl info", KR(ret), K(ddl_info), K(data_schema->get_session_id()));
+        } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
           LOG_WARN("set trx timeout failed", K(ret));
         } else if (OB_FAIL(timeout_ctx.set_timeout(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
           LOG_WARN("set timeout failed", K(ret));

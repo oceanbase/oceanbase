@@ -810,7 +810,23 @@ public:
   }
   static int get_client_sid(uint32_t server_sid, uint32_t& client_sid); // get client sid by server sid
   uint64_t get_proxy_sessid() const { return proxy_sessid_; }
-  uint64_t get_sessid_for_table() const { return is_obproxy_mode()? get_proxy_sessid() : (is_master_session() ? get_sid() : get_master_sessid()); } //用于临时表、查询建表时session id获取
+  uint64_t get_sessid_for_table() const
+  {
+    transaction::tablelock::ObTableLockOwnerID owner_id;
+    uint32_t table_sid = get_sid();
+    // master_sessid is a server sessid, however proxy can't rely on it, thus now use client_sessid.
+    // however, some inner session won't set client session id.
+    // in this case, if it's not the master session, then use master session id.
+    // ex.: submit job create table xxx as select
+    // submit job would use a dbms job to do query, which alloc a session from session_mgr without set client_session_id.
+    // when that session executes sql remotely, the remote session won't have a valid client_session_id,
+    // but have a valid master session id.
+    if (INVALID_SESSID == client_sessid_ && !is_master_session()) {
+      table_sid = get_master_sessid();
+    }
+    owner_id.convert_from_client_sessid(table_sid, get_client_create_time());
+    return owner_id.id();
+  } //用于临时表、查询建表时session id获取
   uint32_t get_master_sessid() const { return master_sessid_; }
   inline const common::ObString get_sess_bt() const { return ObString::make_string(sess_bt_buff_); }
   inline int32_t get_sess_ref_cnt() const { return sess_ref_cnt_; }

@@ -268,7 +268,7 @@ int ObResolverUtils::collect_schema_version(share::schema::ObSchemaGetterGuard &
         ObSchemaChecker schema_checker;
         ObSynonymChecker synonym_checker;
         ObString object_name;
-        OZ (schema_checker.init(schema_guard, session_info->get_server_sid()));
+        OZ (schema_checker.init(schema_guard));
         OZ (ObResolverUtils::resolve_synonym_object_recursively(schema_checker,
                                                                 synonym_checker,
                                                                 session_info->get_effective_tenant_id(),
@@ -1948,7 +1948,7 @@ int ObResolverUtils::get_routine(const pl::ObPLResolveCtx &resolve_ctx,
   ObSchemaChecker schema_checker;
   routine = NULL;
   uint64_t udt_id = OB_INVALID_ID;
-  OZ (schema_checker.init(resolve_ctx.schema_guard_, resolve_ctx.session_info_.get_server_sid()));
+  OZ (schema_checker.init(resolve_ctx.schema_guard_));
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(get_candidate_routines(schema_checker,
                                      tenant_id,

@@ -162,7 +162,8 @@ DEF_TO_STRING(ObUnit)
        K_(migrate_from_server),
        K_(is_manual_migrate),
        K_(status),
-       K_(replica_type));
+       K_(replica_type),
+       K_(time_stamp));
   return pos;
 }
 

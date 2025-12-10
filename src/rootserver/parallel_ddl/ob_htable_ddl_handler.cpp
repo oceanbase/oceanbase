@@ -780,7 +780,7 @@ int ObHTableLockHelper::lock_tablegroup_and_tables_by_name_(const ObString &tabl
   for (int64_t i = 0; OB_SUCC(ret) && i < table_names.count(); i++) {
     const ObString &table_name = table_names.at(i);
     if (OB_FAIL(add_lock_object_by_name_(database_name, table_name,
-          share::schema::TABLE_SCHEMA, transaction::tablelock::EXCLUSIVE))) {
+                share::schema::TABLE_SCHEMA, transaction::tablelock::EXCLUSIVE))) {
       LOG_WARN("fail to lock object by table name", KR(ret), K(database_name), K(table_name));
     }
   }

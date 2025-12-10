@@ -1409,7 +1409,7 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
       // do nothing
     } else if (pc_ctx.tmp_table_names_.count() > 0) {
       LOG_DEBUG("set tmp table name str", K(pc_ctx.tmp_table_names_));
-      stat_.sessid_ = pc_ctx.sql_ctx_.session_info_->get_sid();\
+      stat_.sessid_ = pc_ctx.sql_ctx_.session_info_->get_sessid_for_table();\
       int64_t pos = 0;
       // fill temporary table name
       for (int64_t i = 0; OB_SUCC(ret) && i < pc_ctx.tmp_table_names_.count(); i++) {

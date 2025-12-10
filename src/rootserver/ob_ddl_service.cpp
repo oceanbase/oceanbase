@@ -3232,6 +3232,10 @@ int ObDDLService::set_raw_table_options(
                   LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(database_name), K(table_name));
                 } else if (OB_ISNULL(tmp_schema)) {
                   LOG_INFO("table not exist, can rename to new table name", K(new_table_name));
+                } else if (new_table_schema.is_mysql_tmp_table()
+                           && !(is_inner_table(tmp_schema->get_table_id())
+                                || is_mysql_tmp_table(tmp_schema->get_table_type()))) {
+                  // mysql tmp table only conflict with mysql tmp table in the same session
                 } else {
                   ret = OB_ERR_TABLE_EXIST;
                   LOG_USER_ERROR(OB_ERR_TABLE_EXIST, table_name.length(), table_name.ptr());
@@ -6219,11 +6223,11 @@ int ObDDLService::drop_index_caused_by_drop_column_online(
     LOG_WARN("invalid arg", KR(ret), K(drop_cols_id_arr));
   } else if (OB_FAIL(origin_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("check compat mode failed", KR(ret));
-  } else if (origin_table_schema.is_tmp_table()) {
+  } else if (origin_table_schema.is_tmp_table() && !origin_table_schema.is_mysql_tmp_table()) {
     ret = OB_OP_NOT_ALLOW;
     char err_msg[OB_MAX_ERROR_MSG_LEN] = {0};
-    (void)snprintf(err_msg, sizeof(err_msg), "drop column on temporary table is");
-    LOG_WARN("drop column on temporary table is disallowed", KR(ret));
+    (void)snprintf(err_msg, sizeof(err_msg), "drop column on oracle temporary table is");
+    LOG_WARN("drop column on oracle temporary table is disallowed", KR(ret));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
   } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, origin_table_schema.get_database_id(), database_schema))) {
     LOG_WARN("get database schema failed", KR(ret), K(tenant_id), "db_id", origin_table_schema.get_database_id());
@@ -13044,13 +13048,16 @@ int ObDDLService::alter_table_auto_increment(
         ObSessionParam session_param;
         int64_t sql_mode = alter_table_arg.sql_mode_;
         session_param.sql_mode_ = reinterpret_cast<int64_t *>(&sql_mode);
-        session_param.ddl_info_.set_is_ddl(true);
+        InnerDDLInfo ddl_info;
+        ddl_info.set_is_ddl(true);
+        ddl_info.set_source_table_hidden(orig_table_schema.is_user_hidden_table());
         // if data_table_id != dest_table_id, meaning this is happening in ddl double write
-        session_param.ddl_info_.set_source_table_hidden(orig_table_schema.is_user_hidden_table());
         ObObj obj;
         const int64_t DDL_INNER_SQL_EXECUTE_TIMEOUT = ObDDLUtil::calc_inner_sql_execute_timeout();
         const bool is_unsigned_type = ob_is_unsigned_type(column_schema->get_data_type());
-        if (OB_FAIL(timeout_ctx.set_trx_timeout_us(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
+        if (OB_FAIL(session_param.ddl_info_.init(ddl_info, orig_table_schema.get_session_id()))) {
+          LOG_WARN("fail to init ddl info", KR(ret), K(ddl_info), K(orig_table_schema.get_session_id()));
+        } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
           LOG_WARN("set trx timeout failed", K(ret));
         } else if (OB_FAIL(timeout_ctx.set_timeout(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
           LOG_WARN("set timeout failed", K(ret));
@@ -21368,13 +21375,7 @@ int ObDDLService::prepare_hidden_table_schema(const ObTableSchema &orig_table_sc
     } else if (OB_FAIL(generate_object_id_for_partition_schema(hidden_table_schema))) {
       LOG_WARN("fail to generate object_id for partition schema", KR(ret), K(hidden_table_schema));
     } else if (OB_FAIL(generate_tablet_id(hidden_table_schema))) {
-      LOG_WARN("fail to generate tablet id for hidden table", K(ret), K(hidden_table_schema));
-    } else if (orig_table_schema.is_ctas_tmp_table() &&
-               OB_FAIL(clear_ctas_hidden_table_session_id_(hidden_table_schema))) {
-      // for CTAS table, clear its session id, otherwise this table schema will not be visble
-      // to the index rebuiding phase.
-      LOG_WARN("fail to clear ctas hidden table session id", K(ret), K(orig_table_schema),
-               K(hidden_table_schema));
+      LOG_WARN("fail to generate tablet id for hidden table", KR(ret), K(hidden_table_schema));
     } else {
       // offline ddl change table_id, so we need to reset truncate_version
       hidden_table_schema.set_truncate_version(OB_INVALID_VERSION);
@@ -21428,23 +21429,17 @@ int ObDDLService::prepare_hidden_table_schema(const ObTableSchema &orig_table_sc
   return ret;
 }
 
-int ObDDLService::clear_ctas_hidden_table_session_id_(share::schema::ObTableSchema &hidden_table_schema)
+int ObDDLService::clear_hidden_table_session_id_(share::schema::ObTableSchema &hidden_table_schema)
 {
   int ret = OB_SUCCESS;
-
-  if (!hidden_table_schema.is_ctas_tmp_table()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("hidden table is not a CTAS tmp table", K(ret), K(hidden_table_schema));
-  } else {
-    hidden_table_schema.set_session_id(0);
-    hidden_table_schema.set_create_host("");
-    LOG_INFO("clear session_id of hidden table copied from CTAS table", K(hidden_table_schema));
-  }
-
+  hidden_table_schema.set_session_id(0);
+  hidden_table_schema.set_create_host("");
+  hidden_table_schema.set_table_type(USER_TABLE);
+  LOG_INFO("clear session_id of hidden table", K(hidden_table_schema));
   return ret;
 }
 
-int ObDDLService::swap_ctas_hidden_table_session_id_(
+int ObDDLService::swap_hidden_table_session_id_(
     const share::schema::ObTableSchema &orig_table_schema,
     const share::schema::ObTableSchema &hidden_table_schema,
     share::schema::ObTableSchema &new_orig_table_schema,
@@ -21454,11 +21449,11 @@ int ObDDLService::swap_ctas_hidden_table_session_id_(
 {
   int ret = OB_SUCCESS;
 
-  if (!orig_table_schema.is_ctas_tmp_table() || hidden_table_schema.is_ctas_tmp_table()) {
+  if (!orig_table_schema.is_ctas_tmp_table() && !orig_table_schema.is_mysql_tmp_table()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("origin table or hidden table state is not valid", K(ret), K(orig_table_schema),
              K(hidden_table_schema));
-  } else {
+  } else if (orig_table_schema.is_ctas_tmp_table()) {
     new_orig_table_schema.set_session_id(hidden_table_schema.get_session_id());
     new_hidden_table_schema.set_session_id(orig_table_schema.get_session_id());
     new_orig_table_schema.set_create_host(hidden_table_schema.get_create_host());
@@ -21470,6 +21465,18 @@ int ObDDLService::swap_ctas_hidden_table_session_id_(
       LOG_WARN("failed to insert temp table info", K(ret), K(new_hidden_table_schema));
     }
     LOG_INFO("restore session_id of hidden table copied from CTAS table",
+             K(new_hidden_table_schema), K(new_orig_table_schema));
+  } else if (orig_table_schema.is_mysql_tmp_table()) {
+    new_hidden_table_schema.set_session_id(orig_table_schema.get_session_id());
+    new_hidden_table_schema.set_create_host(orig_table_schema.get_create_host());
+    new_hidden_table_schema.set_table_type(orig_table_schema.get_table_type());
+    // since the session id is cleared when we create the hidden table, the temp table info
+    // won't be added at the creation time, so we should add it here
+    new_hidden_table_schema.set_in_offline_ddl_white_list(true);
+    if (OB_FAIL(ddl_operator.insert_temp_table_info(trans, new_hidden_table_schema))) {
+      LOG_WARN("failed to insert temp table info", K(ret), K(new_hidden_table_schema));
+    }
+    LOG_INFO("restore session_id of new origin table copied from mysql tmp table",
              K(new_hidden_table_schema), K(new_orig_table_schema));
   }
 
@@ -24098,17 +24105,6 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
             LOG_WARN("set table name failed", K(ret));
           } else if (OB_FAIL(new_hidden_table_schema.set_table_name(orig_table_schema->get_table_name_str()))) {
             LOG_WARN("set table name failed", K(ret));
-          }
-          // in prepare_hidden_table_schema, we clear the session id for hidden table of
-          // CTAS tmp table. now, data loading stage is finished, we are ready to swap hidden table
-          // with CTAS tmp table. we should exchange the session id(and create_host) property to
-          // ensure the new CTAS tmp table has correct state.
-          if (OB_FAIL(ret)) {
-          } else if (orig_table_schema->is_ctas_tmp_table() &&
-              OB_FAIL(swap_ctas_hidden_table_session_id_(
-                  *orig_table_schema, *hidden_table_schema, new_orig_table_schema,
-                  new_hidden_table_schema, ddl_operator, trans))) {
-            LOG_WARN("failed to swap ctas hidden table session id", K(ret));
           } else if (OB_FAIL(table_schemas.push_back(new_orig_table_schema)) ||
                      OB_FAIL(table_schemas.push_back(new_hidden_table_schema))) {
             LOG_WARN("failed to add table schema!", K(ret));
@@ -25624,10 +25620,10 @@ int ObDDLService::check_db_and_table_is_exist(const obrpc::ObTruncateTableArg &a
                               "FROM %s a JOIN (SELECT session_id, database_id, table_id, table_name FROM %s "
                               "UNION ALL SELECT session_id, database_id, table_id, table_name FROM %s WHERE tenant_id = %ld) c "
                               "ON a.database_id = c.database_id WHERE a.database_name = '%s' AND table_name = '%s' "
-                              "AND (session_id = 0 or session_id = %lu) order by session_id desc",
+                              "AND (session_id = 0 or session_id = %ld) order by session_id desc",
                               OB_ALL_DATABASE_TNAME, OB_ALL_TABLE_TNAME,
                               OB_ALL_VIRTUAL_CORE_ALL_TABLE_TNAME, tenant_id,
-                              tmp_database_name, tmp_table_name, session_id))) {
+                              tmp_database_name, tmp_table_name, static_cast<int64_t>(session_id)))) {
       LOG_WARN("failed assing sql", KR(ret), K(table_name), K(database_name), K(session_id));
     } else if (OB_FAIL(trans.read(res, tenant_id, sql.ptr()))) {
       LOG_WARN("failed to execute sql", KR(ret), K(tenant_id), K(table_name), K(database_name), K(session_id), K(sql));
@@ -25658,33 +25654,28 @@ int ObDDLService::check_db_and_table_is_exist(const obrpc::ObTruncateTableArg &a
               break;
             }
           }
-        } else {
+        } else if (OB_SUCC(ret)) {
           // If it is MySQL mode, the case is not sensitive,
-          // i.e. it can be uniquely determined and the first result can be output directly
           not_find_table = false;
-          break;
+          if (0 != tmp_session_id) {
+            break;
+          }
         }
       }
-      if (OB_SUCC(ret)) {
-        if (not_find_table) {
-          ret = OB_TABLE_NOT_EXIST;
-          ObCStringHelper helper;
-          LOG_WARN("can not find table",
-                  KR(ret), K(tenant_id), K(table_name), K(database_name));
-          LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(database_name),
-                                            helper.convert(table_name));
-        } else if (0 != tmp_session_id && is_oracle_mode) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("truncate oracle tmp table not supported",
-                  KR(ret), K(tenant_id), K(table_name), K(database_name));
-        }
-      } else if (OB_FAIL(ret) && OB_ITER_END == ret) {
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+      }
+      if (not_find_table) {
         ret = OB_TABLE_NOT_EXIST;
         ObCStringHelper helper;
         LOG_WARN("can not find table",
                 KR(ret), K(tenant_id), K(table_name), K(database_name));
         LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(database_name),
-                                            helper.convert(table_name));
+                                           helper.convert(table_name));
+      } else if (0 != tmp_session_id && is_oracle_mode) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("truncate oracle tmp table not supported",
+                KR(ret), K(tenant_id), K(table_name), K(database_name));
       }
     }
   }
@@ -28780,7 +28771,7 @@ int ObDDLService::check_table_exists(const uint64_t tenant_id,
           || (TMP_TABLE_ORA_SESS == expected_table_type && tmp_table_schema->is_oracle_trx_tmp_table())) {
         //ignore
       } else if (TMP_TABLE == expected_table_type) {
-        if (!tmp_table_schema->is_tmp_table()) {
+        if (!tmp_table_schema->is_mysql_tmp_table()) {
           ret = OB_TABLE_NOT_EXIST;
           LOG_WARN("Table type not equal!", K(expected_table_type), K(table_item), K(*tmp_table_schema), K(ret));
         }

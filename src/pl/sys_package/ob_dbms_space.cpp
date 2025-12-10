@@ -103,7 +103,7 @@ int ObDbmsSpace::parse_ddl_sql(ObExecContext &ctx,
   if (OB_ISNULL(session = ctx.get_my_session())) {
     ret = OB_INVALID_ARGUMENT;
     SQL_ENG_LOG(WARN, "the args is null", K(ret), KP(session));
-  } else if (OB_FAIL(schema_checker.init(*(ctx.get_sql_ctx()->schema_guard_)))) {
+  } else if (OB_FAIL(schema_checker.init(*(ctx.get_sql_ctx()->schema_guard_), session->get_sessid_for_table()))) {
     SQL_ENG_LOG(WARN, "fail to init schema checker", K(ret));
   } else {
     ObParser parser(ctx.get_allocator(), session->get_sql_mode());

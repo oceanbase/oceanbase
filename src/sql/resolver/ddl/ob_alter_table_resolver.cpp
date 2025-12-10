@@ -2832,6 +2832,16 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("tenant data version is less than 4.3.1, multivalue index not supported", K(ret), K(tenant_data_version));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.1, multivalue index");
+        }  else if (table_schema_->is_mysql_tmp_table() && index_keyname_ == FTS_KEY) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("fulltext index on mysql temporary table is not supported", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "fulltext index on mysql temporary table is");
+        } else if (table_schema_->is_mysql_tmp_table()
+                   && ( index_keyname_ == MULTI_KEY
+                      || index_keyname_ == MULTI_UNIQUE_KEY)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("multivalue index on mysql temporary table is not supported", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "multivalue index on mysql temporary table is");
         } else if (global_) {
           if (index_keyname_ == SPATIAL_KEY) {
             type = INDEX_TYPE_SPATIAL_GLOBAL;
@@ -5075,6 +5085,9 @@ int ObAlterTableResolver::resolve_partition_options(const ParseNode &node)
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("alter partition of materialized view is not supported", KR(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter partition of materialized view is");
+    } else if (table_schema_->is_mysql_tmp_table()) {
+      ret = OB_ERR_TEMPORARY_TABLE_WITH_PARTITION;
+      LOG_WARN("alter partition of temporary is not supported", KR(ret));
     }
 
     if (OB_SUCC(ret)) {
