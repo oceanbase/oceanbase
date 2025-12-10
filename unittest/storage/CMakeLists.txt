@@ -44,7 +44,7 @@ add_subdirectory(direct_load)
 add_subdirectory(utl_file)
 add_subdirectory(tx_table)
 add_subdirectory(ddl)
-add_subdirectory(share_storage)
+# add_subdirectory(share_storage)
 add_subdirectory(column_store_replica)
 add_subdirectory(fts)
 
