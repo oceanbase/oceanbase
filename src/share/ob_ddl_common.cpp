@@ -5378,6 +5378,7 @@ int64_t ObDDLUtil::generate_idempotent_value(
 
 int ObDDLUtil::convert_to_storage_schema(
   const ObTableSchema *table_schema,
+  const uint64_t tenant_data_version,
   ObIAllocator &allocator,
   ObStorageSchema *&storage_schema)
 {
@@ -5395,7 +5396,7 @@ int ObDDLUtil::convert_to_storage_schema(
                                                      : Worker::CompatMode::MYSQL)) {
     } else if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, storage_schema))) {
       LOG_WARN("alloc and new failed", K(ret));
-    } else if (OB_FAIL(storage_schema->init(allocator, *table_schema, compat_mode))) {
+    } else if (OB_FAIL(storage_schema->init(allocator, *table_schema, compat_mode, false/*skip_column_info*/, tenant_data_version))) {
       LOG_WARN("failed to copy storage schema", K(ret));
     }
     if (OB_FAIL(ret)) {

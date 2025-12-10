@@ -1685,6 +1685,7 @@ public:
       const int64_t slice_row_idx);
   static int convert_to_storage_schema(
       const ObTableSchema *table_schema,
+      const uint64_t tenant_data_version,
       ObIAllocator &allocator,
       ObStorageSchema *&storage_schema);
   static int load_ddl_task(
