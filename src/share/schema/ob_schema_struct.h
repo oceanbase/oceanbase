@@ -4075,6 +4075,13 @@ enum class ObMLogPurgeMode : int64_t
   MAX
 };
 
+enum class ObMLogPurgeMethod : int64_t
+{
+  SQL = 0,
+  COMPACTION = 1,
+  MAX
+};
+
 enum class ObMViewBuildMode : int64_t
 {
   IMMEDIATE = 0,

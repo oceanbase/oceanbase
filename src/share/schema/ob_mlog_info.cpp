@@ -51,6 +51,7 @@ ObMLogInfo &ObMLogInfo::operator=(const ObMLogInfo &src_schema)
     last_purge_date_ = src_schema.last_purge_date_;
     last_purge_time_ = src_schema.last_purge_time_;
     last_purge_rows_ = src_schema.last_purge_rows_;
+    last_purge_method_ = src_schema.last_purge_method_;
     schema_version_ = src_schema.schema_version_;
     if (OB_FAIL(deep_copy_str(src_schema.purge_next_, purge_next_))) {
       LOG_WARN("deep copy purge next failed", KR(ret), K(src_schema.purge_next_));
@@ -94,6 +95,7 @@ void ObMLogInfo::reset()
   last_purge_time_ = OB_INVALID_COUNT;
   last_purge_rows_ = OB_INVALID_COUNT;
   reset_string(last_purge_trace_id_);
+  last_purge_method_ = ObMLogPurgeMethod::MAX;
   schema_version_ = OB_INVALID_VERSION;
   ObSchema::reset();
 }
@@ -120,7 +122,8 @@ OB_SERIALIZE_MEMBER(ObMLogInfo,
                     last_purge_time_,
                     last_purge_rows_,
                     last_purge_trace_id_,
-                    schema_version_);
+                    schema_version_,
+                    last_purge_method_);
 
 int ObMLogInfo::gen_insert_mlog_dml(const uint64_t exec_tenant_id, ObDMLSqlSplicer &dml) const
 {
