@@ -44,6 +44,7 @@ ObParquetTableRowIterator::~ObParquetTableRowIterator()
   file_prebuffer_.destroy();
   eager_file_prebuffer_.destroy();
   column_range_slices_.destroy();
+  page_skip_ranges_.destroy();
   if (nullptr != rg_bitmap_) {
     malloc_allocator_.free(rg_bitmap_);
     rg_bitmap_ = nullptr;
@@ -2393,6 +2394,7 @@ void ObParquetTableRowIterator::reset() {
   state_.reuse();
   file_prebuffer_.destroy();
   eager_file_prebuffer_.destroy();
+  page_skip_ranges_.destroy();
   if (nullptr != rg_bitmap_) {
     malloc_allocator_.free(rg_bitmap_);
     rg_bitmap_ = nullptr;
@@ -3578,7 +3580,7 @@ int ObParquetTableRowIterator::prepare_page_ranges(const int64_t num_rows)
       arrow::Status status = arrow::Status::OK();
       BEGIN_CATCH_EXCEPTIONS
         for (int64_t i = 0; OB_SUCC(ret) && i < page_skip_ranges_.count(); ++i) {
-          page_skip_ranges_.at(i)->reuse();
+          page_skip_ranges_.at(i)->reset();
           int column_idx = column_indexs_.at(i);
           if (column_idx >= 0) {
             std::shared_ptr<parquet::OffsetIndex> offset_index
