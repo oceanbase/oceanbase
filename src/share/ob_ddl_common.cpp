@@ -3856,7 +3856,6 @@ int ObDDLUtil::check_table_empty(
     bool &is_table_empty)
 {
   int ret = OB_SUCCESS;
-  UNUSED(sql_mode);
   is_table_empty = false;
   bool is_oracle_mode = false;
   uint64_t table_id = OB_INVALID_ID;
@@ -3907,6 +3906,8 @@ int ObDDLUtil::check_table_empty(
       } else if (OB_ISNULL(connection = single_conn_proxy.get_connection())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null conn", K(ret));
+      } else if (OB_FAIL(connection->set_session_variable(share::OB_SV_SQL_MODE, sql_mode))) {
+        LOG_WARN("update sql_mode for ddl inner sql failed", K(ret));
       } else if (OB_FAIL(connection->set_session_variable(share::OB_SV_LOWER_CASE_TABLE_NAMES, var_schema->get_value()))) {
         LOG_WARN("update lower_case_table_names for ddl inner sql failed", K(ret));
       } else if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
