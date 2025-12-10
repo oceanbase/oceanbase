@@ -7035,7 +7035,7 @@ static struct VarsInit{
       ObSysVars[503].name_ = "ob_hnsw_ef_search" ;
       ObSysVars[503].data_type_ = ObUInt64Type ;
       ObSysVars[503].min_val_ = "1" ;
-      ObSysVars[503].max_val_ = "1000" ;
+      ObSysVars[503].max_val_ = "160000" ;
       ObSysVars[503].flags_ = ObSysVarFlag::SESSION_SCOPE ;
       ObSysVars[503].id_ = SYS_VAR_OB_HNSW_EF_SEARCH ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_HNSW_EF_SEARCH)) ;

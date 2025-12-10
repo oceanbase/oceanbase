@@ -7280,7 +7280,7 @@
       "info": "The number of neighbor nodes considered during any HNSW vector index search on the session",
       "flags": "SESSION",
       "min_val": "1",
-      "max_val": "1000",
+      "max_val": "160000",
       "publish_version": "433",
       "info_cn": "",
       "background_cn": "",

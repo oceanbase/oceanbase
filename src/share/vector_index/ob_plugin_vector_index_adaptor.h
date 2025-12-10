@@ -977,7 +977,7 @@ private:
   constexpr static uint32_t VEC_INDEX_SNAP_DATA_SYNC_THRESHOLD = 1;
   constexpr static uint32_t VEC_INDEX_ADAPTER_MAX_IDLE_COUNT = 3;
   constexpr static uint32_t VEC_INDEX_HNSWSQ_BUILD_COUNT_THRESHOLD = 10000;
-  constexpr static int64_t  VSAG_MAX_EF_SEARCH = 1000;
+  constexpr static int64_t  VSAG_MAX_EF_SEARCH = 160000;
 };
 
 class ObPluginVectorIndexAdapterGuard
