@@ -753,6 +753,7 @@ int ObTableQueryAsyncP::query_scan_without_init(ObTableCtx &tb_ctx)
       result_.query_session_id_ = query_session_id_;
       is_full_table_scan_ = tb_ctx.is_full_table_scan();
     }
+    stat_row_count_ = result_.get_row_count();
 
     // check if need compress the result
     int tmp_ret = OB_SUCCESS;
@@ -1032,8 +1033,25 @@ int ObTableQueryAsyncP::try_process()
   int ret = OB_SUCCESS;
   // statis
   bool is_hkv = (ObTableEntityType::ET_HKV == arg_.entity_type_);
+  bool is_hbase_op_valid = (OHOperationType::INVALID != arg_.hbase_op_type_);
   if (is_hkv) {
-    stat_process_type_ = ObTableProccessType::TABLE_API_HBASE_QUERY_ASYNC;
+    if (is_hbase_op_valid) {
+      switch (arg_.hbase_op_type_) {
+        case OHOperationType::SCAN:
+          stat_process_type_ = ObTableProccessType::TABLE_API_HBASE_SCAN;
+          break;
+        case OHOperationType::GET:
+        case OHOperationType::EXISTS:
+        case OHOperationType::GET_LIST:
+        case OHOperationType::EXISTS_LIST:
+          stat_process_type_ = ObTableProccessType::TABLE_API_HBASE_GET;
+          break;
+        default:
+          break;
+      }
+    } else {
+      stat_process_type_ = ObTableProccessType::TABLE_API_HBASE_QUERY_ASYNC;
+    }
   } else {
     stat_process_type_ = ObTableProccessType::TABLE_API_TABLE_QUERY_ASYNC;
   }
@@ -1164,7 +1182,7 @@ int ObTableQueryAsyncP::new_try_process()
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(model->work(*ctx, arg_, result_))) {
+      if (OB_FAIL(model->work(*ctx, arg_, result_, exec_ctx_))) {
         LOG_WARN("model fail to work", K(ret));
       } else if (OB_FAIL(model->after_work(*ctx, arg_, result_))) {
         LOG_WARN("model fail to after work", K(ret), K_(arg));
@@ -1173,6 +1191,23 @@ int ObTableQueryAsyncP::new_try_process()
 
     if (OB_SUCC(ret) && ObQueryOperationType::QUERY_START == arg_.query_type_) {
       set_timeout(model->get_lease_timeout_period());
+    }
+    // record ob rows
+    stat_row_count_ = exec_ctx_.get_stat_row_count();
+  }
+
+  if (OB_NOT_NULL(model) && OB_NOT_NULL(model->get_query_session())) {
+    int64_t session_id = model->get_query_session()->get_session_id();
+    if (OB_FAIL(ret)) {
+      int tmp_ret = ret;
+      if (OB_FAIL(MTL(ObTableQueryASyncMgr*)->destory_query_session(model->get_query_session()))) {
+        LOG_WARN("faild to destory query session", K(ret), K(session_id));
+      }
+      ret = tmp_ret;
+    } else if (result_.is_end_) {
+      if (OB_FAIL(MTL(ObTableQueryASyncMgr*)->destory_query_session(model->get_query_session()))) {
+        LOG_WARN("fail to destory query session", K(ret), K(session_id));
+      }
     }
   }
 
@@ -1185,12 +1220,6 @@ int ObTableQueryAsyncP::new_try_process()
     LOG_TRACE("[TABLE] execute query", K(ret), K_(arg), K_(timeout_ts), K_(retry_count), K(result_.is_end_),
               "receive_ts", get_receive_timestamp(), K_(result_row_count));
   #endif
-  bool is_hkv = (ObTableEntityType::ET_HKV == arg_.entity_type_);
-  if (is_hkv) {
-    stat_process_type_ = ObTableProccessType::TABLE_API_HBASE_QUERY_ASYNC;
-  } else {
-    stat_process_type_ = ObTableProccessType::TABLE_API_TABLE_QUERY_ASYNC;
-  }
 
   if (ret == OB_ITER_END) {
     ret = OB_SUCCESS; // cover ret

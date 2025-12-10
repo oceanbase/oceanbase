@@ -9546,7 +9546,7 @@ int ObTableSchema::is_hbase_table(bool &is_h_table) const
   const int64_t HBASE_TABLE_COLUMN_COUNT = 4;
   is_h_table = false;
   ObKVAttr kv_attr;
-  if (OB_FAIL(ObTTLUtil::parse_kv_attributes(get_kv_attributes(), kv_attr))) {
+  if (OB_FAIL(ObTTLUtil::parse_kv_attributes(tenant_id_, get_kv_attributes(), kv_attr))) {
     LOG_WARN("fail to parse kv attributes", KR(ret), K(get_kv_attributes()));
   } else if (kv_attr.type_ == common::ObKVAttr::ObTTLTableType::HBASE) {
     is_h_table = true;

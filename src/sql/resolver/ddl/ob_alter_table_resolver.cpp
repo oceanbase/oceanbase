@@ -1487,6 +1487,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
     // alter hbase table with max versions to seconary partitioned table is not suppored
     if (OB_SUCC(ret) && has_alter_partition) {
       AlterTableSchema &alter_table_schema = get_alter_table_stmt()->get_alter_table_arg().alter_table_schema_;
+      const ObTableSchema *index_schema = nullptr;
       if (PARTITION_LEVEL_TWO == alter_table_schema.get_part_level()) {
         const ObTableSchema *tbl_schema = nullptr;
         if (OB_FAIL(get_table_schema_for_check(tbl_schema))) {
@@ -1494,11 +1495,13 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
         } else if (OB_ISNULL(tbl_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("table schema is NULL", K(ret));
-        } else if (!tbl_schema->get_kv_attributes().empty() &&
-            OB_FAIL(ObTTLUtil::check_kv_attributes(tbl_schema->get_kv_attributes(),
-                                                   *tbl_schema,
-                                                   PARTITION_LEVEL_TWO))) {
-          LOG_WARN("fail to check kv attributes", K(ret));
+        } else if (!tbl_schema->get_kv_attributes().empty()) {
+          ObKVAttr kv_attr;
+          if (OB_FAIL(ObTTLUtil::parse_kv_attributes(table_schema_->get_tenant_id(), tbl_schema->get_kv_attributes(), kv_attr))) {
+            LOG_WARN("failed to parse kv attributes", K(ret));
+          } else if (OB_FAIL(ObTTLUtil::check_kv_attributes(kv_attr, *tbl_schema, index_schema/* nullptr*/, PARTITION_LEVEL_TWO))) {
+            LOG_WARN("fail to check kv attributes", K(ret));
+          }
         }
       }
     }
@@ -2935,6 +2938,23 @@ int ObAlterTableResolver::resolve_drop_index(const ParseNode &node)
           } else if (!has_other_indexes_on_same_cols && lib::is_mysql_mode()) {
             if (OB_FAIL(check_index_columns_equal_foreign_key(*table_schema_, *index_table_schema))) {
               LOG_WARN("failed to check_index_columns_equal_foreign_key", K(ret), K(index_table_name));
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          ObString kv_attributes = table_schema_->get_kv_attributes();
+          if (!kv_attributes.empty()) {
+            ObKVAttr kv_attr;
+            uint64_t tenant_id = session_info_->get_effective_tenant_id();
+            if (OB_FAIL(ObTTLUtil::parse_kv_attributes(tenant_id, kv_attributes, kv_attr))) {
+              LOG_WARN("failed to parse kv attributes", K(ret));
+            } else if (!ObTTLUtil::is_default_scan_index(kv_attr.ttl_scan_index_) &&
+                       ObTTLUtil::is_index_name_match(tenant_id,
+                                                      table_schema_->get_name_case_mode(),
+                                                      kv_attr.ttl_scan_index_, drop_index_name)) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("drop index when kv_atrributes has specified it is not supported", K(ret), K(drop_index_name), K(kv_attr));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop index when kv_atrributes has specified it");
             }
           }
         }

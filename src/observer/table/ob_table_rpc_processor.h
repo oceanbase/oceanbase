@@ -176,6 +176,10 @@ protected:
                                             bool is_same_type,
                                             bool is_same_properties_names,
                                             table::ObTableOperationType::Type op_type);
+
+  ObTableProccessType get_hbase_process_type(table::OHOperationType hbase_op_type,
+                                             bool is_same_type,
+                                             table::ObTableOperationType::Type table_op_type);
   bool can_retry(const int retcode, bool &did_local_retry);
   virtual bool is_new_try_process() { return false; };
 protected:

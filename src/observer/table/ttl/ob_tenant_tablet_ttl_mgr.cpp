@@ -326,6 +326,7 @@ int ObTabletTTLScheduler::report_task_status(ObTTLTaskInfo& task_info, ObTTLTask
         ctx->task_status_ = OB_TTL_TASK_PENDING;
         LOG_INFO("pending current task", K(local_tenant_task_.state_), K(local_tenant_task_.ttl_continue_));
       }
+      ctx->failure_times_ = 0;
     } else if (OB_ITER_END == task_info.err_code_) {
       ctx->task_status_ = OB_TTL_TASK_FINISH;
       ctx->task_info_.err_code_ = OB_SUCCESS;
@@ -338,8 +339,15 @@ int ObTabletTTLScheduler::report_task_status(ObTTLTaskInfo& task_info, ObTTLTask
       LOG_INFO("cancel current task since partition state change",
               K(task_info.err_code_), K(task_info.tablet_id_));
       ctx->task_status_ = OB_TTL_TASK_CANCEL;
+    } else if (!ObTTLUtil::is_default_scan_index(task_info.scan_index_) &&
+                (OB_WRONG_NAME_FOR_INDEX == task_info.err_code_ || OB_NOT_SUPPORTED == task_info.err_code_)) {
+      LOG_INFO("cancel current task since scan index is not valid", K(task_info.err_code_), K(task_info.tablet_id_), K(task_info.scan_index_));
+      ctx->task_status_ = OB_TTL_TASK_CANCEL;
+    } else if (ctx->failure_times_ >= ObTTLTaskCtx::TTL_TASK_MAX_FAILURE_TIMES) {
+      LOG_INFO("cancel current task since failed too many times", K(task_info.err_code_), K(task_info.tablet_id_), K(ctx->failure_times_));
+      ctx->task_status_ = OB_TTL_TASK_CANCEL;
     } else {
-      LOG_WARN("task report error", K(task_info.err_code_), K(task_info.tablet_id_));
+      LOG_WARN("task report error", K(task_info.err_code_), K(task_info.tablet_id_), K(ctx->failure_times_));
       ctx->task_status_ = OB_TTL_TASK_PENDING;
       ctx->failure_times_++;
     }
@@ -493,7 +501,7 @@ int ObTabletTTLScheduler::check_and_generate_tablet_tasks()
           if (OB_FAIL(table_schema->get_tablet_ids(tablet_ids))) {
             LOG_WARN("fail to get tablet ids", KR(ret), K(table_id));
           } else if (OB_FAIL(get_ttl_para_from_schema(table_schema, ttl_param))) {
-            LOG_WARN("fail to get ttl para");
+            LOG_WARN("fail to get ttl para", K(ttl_param));
           } else if (OB_FAIL(param_map.set_refactored(table_id, ttl_param))) {
             LOG_WARN("fail to push back table ttl param pairs", KR(ret));
           } else {
@@ -608,14 +616,16 @@ ObTTLTaskCtx* ObTabletTTLScheduler::get_one_tablet_ctx(const ObTabletID& tablet_
 }
 
 /*other inner function*/
-int ObTabletTTLScheduler::deep_copy_task(ObTTLTaskCtx* ctx, ObTTLTaskInfo& task_info, const ObTTLTaskParam &task_param, bool with_rowkey_copy /*true*/)
+int ObTabletTTLScheduler::deep_copy_task(ObTTLTaskCtx* ctx, ObTTLTaskInfo& task_info, const ObTTLTaskParam &task_param, bool with_deep_copy /*true*/)
 {
   int ret = OB_SUCCESS;
+  //  scan_index in task_param is from schema and task_info.scan_index_ is from current task or previous task
+  const ObString &scan_index = task_info.scan_index_.empty() ? task_param.scan_index_ : task_info.scan_index_;
   if (OB_ISNULL(ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the ctx is null", KR(ret));
-  } else if (with_rowkey_copy && OB_FAIL(ctx->deep_copy_rowkey(task_info.row_key_)) ) {
-    LOG_WARN("fail to deep copy rowkey", KR(ret), K(task_info.row_key_));
+  } else if (with_deep_copy && OB_FAIL(ctx->deep_copy_task_info_string_fields(task_info.row_key_, scan_index))) {
+    LOG_WARN("fail to deep copy rowkey and scan index", KR(ret), K(task_info.row_key_), K(scan_index));
   } else {
     ctx->task_info_.ttl_del_cnt_ += task_info.ttl_del_cnt_;
     ctx->task_info_.max_version_del_cnt_ += task_info.max_version_del_cnt_;
@@ -815,6 +825,12 @@ int ObTabletTTLScheduler::get_ttl_para_from_schema(const schema::ObTableSchema *
     param.database_id_ = table_schema->get_database_id();
     param.user_id_ = table_schema->get_define_user_id();
     param.table_id_ = table_schema->get_table_id();
+    if (local_tenant_task_.task_type_ == common::ObTTLType::NORMAL) {
+      MEMCPY(param.scan_index_buf_, attr.ttl_scan_index_.ptr(), attr.ttl_scan_index_.length());
+      param.scan_index_.assign_ptr(param.scan_index_buf_, attr.ttl_scan_index_.length());
+    } else { // hbase rowkey ttl task
+      param.scan_index_ = ObTTLTaskConstant::TTL_SCAN_INDEX_DEFAULT_VALUE;
+    }
   }
   return ret;
 }
@@ -1039,6 +1055,7 @@ int ObTabletTTLScheduler::construct_sys_table_record(ObTTLTaskCtx* ctx, common::
     ttl_record.row_key_ = ctx->task_info_.row_key_; // shallow copy
     ttl_record.ret_code_ = common::ob_error_name(ctx->task_info_.err_code_);
     ttl_record.task_type_ = local_tenant_task_.task_type_;
+    ttl_record.scan_index_ = ctx->task_info_.scan_index_; // shallow copy
   }
   return ret;
 }
@@ -1106,9 +1123,9 @@ int ObTabletTTLScheduler::from_ttl_record(ObTabletID& tablet_id, common::ObTTLSt
     if (with_status) {
       ctx->task_status_ = static_cast<ObTTLTaskStatus>(record.status_);
     }
-    if (!record.row_key_.empty()) {
-      if (OB_FAIL(ctx->deep_copy_rowkey(record.row_key_))) {
-        LOG_WARN("fail to deep copy rowkey", KR(ret), K(record.row_key_));
+    if (!record.row_key_.empty() || !record.scan_index_.empty()) {
+      if (OB_FAIL(ctx->deep_copy_task_info_string_fields(record.row_key_, record.scan_index_))) {
+        LOG_WARN("fail to deep copy rowkey and scan index", KR(ret), K(record.row_key_), K(record.scan_index_));
       }
     }
   }
@@ -1329,12 +1346,15 @@ int ObTabletTTLScheduler::safe_to_destroy(bool &is_safe)
   return ret;
 }
 
-int ObTTLTaskCtx::deep_copy_rowkey(const ObString &rowkey)
+int ObTTLTaskCtx::deep_copy_task_info_string_fields(const ObString &rowkey, const ObString &scan_index)
 {
   int ret = OB_SUCCESS;
   task_info_.row_key_.reset();
-  rowkey_cp_allcoator_.reuse();
-  if (OB_FAIL(ob_write_string(rowkey_cp_allcoator_, rowkey, task_info_.row_key_))) {
+  task_info_.scan_index_.reset();
+  cp_allcoator_.reuse();
+  if (OB_FAIL(ob_write_string(cp_allcoator_, scan_index, task_info_.scan_index_))) {
+    LOG_WARN("fail to deep copy scan index", KR(ret), K(scan_index));
+  } else if (OB_FAIL(ob_write_string(cp_allcoator_, rowkey, task_info_.row_key_))) {
     LOG_WARN("fail to deep copy rowkey", KR(ret), K(rowkey));
   }
   return ret;

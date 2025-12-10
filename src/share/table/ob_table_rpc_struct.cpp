@@ -85,6 +85,9 @@ OB_DEF_DESERIALIZE(ObTableQueryRequest,)
   if (OB_SUCC(ret) && pos < data_len) {
     OB_UNIS_DECODE(option_flag_);
   }
+  if (OB_SUCC(ret) && pos < data_len) {
+    OB_UNIS_DECODE(hbase_op_type_);
+  }
   return ret;
 }
 
@@ -131,6 +134,9 @@ OB_DEF_DESERIALIZE(ObTableQueryAndMutateRequest,)
               binlog_row_image_type_);
   if (OB_SUCC(ret) && pos < data_len) {
     OB_UNIS_DECODE(option_flag_);
+  }
+  if (OB_SUCC(ret) && pos < data_len) {
+    OB_UNIS_DECODE(hbase_op_type_);
   }
   return ret;
 }
@@ -212,7 +218,8 @@ OB_SERIALIZE_MEMBER(ObTableLSOpRequest, // FARM COMPAT WHITELIST
                     credential_,
                     entity_type_,
                     consistency_level_,
-                    *ls_op_);
+                    *ls_op_,
+                    hbase_op_type_);
 
 OB_DEF_SERIALIZE(ObTableLSOpResult)
 {
@@ -367,6 +374,9 @@ OB_DEF_DESERIALIZE(ObHbaseRpcRequest,)
               same_cf_rows.set_keys(&keys_);
               same_cf_rows.now_ms_ = now_ms;
               OB_UNIS_DECODE(same_cf_rows);
+            }
+            if (OB_SUCC(ret)) {
+              OB_UNIS_DECODE(hbase_op_type_);
             }
           }
         }

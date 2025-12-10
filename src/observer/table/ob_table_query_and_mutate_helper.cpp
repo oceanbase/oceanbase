@@ -46,7 +46,7 @@ int QueryAndMutateHelper::init_tb_ctx(ObTableCtx &ctx,
     } else {
       switch (op_type) {
         case ObTableOperationType::GET: {
-          if (OB_FAIL(ctx.init_get())) {
+          if (OB_FAIL(ctx.init_get(false/* is_weak_read */))) {
             LOG_WARN("fail to init get ctx", K(ret), K(ctx));
           }
           break;
@@ -188,6 +188,9 @@ int QueryAndMutateHelper::execute_htable_delete(const ObTableOperation &table_op
           LOG_WARN("fail to open htable delete executor", K(ret));
         } else if (OB_FAIL(delete_executor.get_next_row_by_entity())) {
           LOG_WARN("fail to call htable delete get_next_row", K(ret));
+        } else {
+          // record hbase row count
+          stat_row_count_ += delete_executor.get_affected_rows();
         }
 
         int tmp_ret = OB_SUCCESS;
@@ -589,6 +592,8 @@ int QueryAndMutateHelper::execute_htable_mutation(ObTableQueryResultIterator *re
         LOG_WARN("fail to execute hatable increment", K(ret));
       } else {
         set_result_affected_rows(1);
+        // record hbase row count
+        stat_row_count_ += 1;
       }
     } else {
       one_result = &one_result_;  // empty result is OK for APPEND and INCREMENT
@@ -623,6 +628,9 @@ int QueryAndMutateHelper::execute_htable_mutation(ObTableQueryResultIterator *re
             case ObTableOperationType::INSERT_OR_UPDATE: {  // checkAndPut
               if (OB_FAIL(execute_htable_put(op, put_tb_ctx))) {
                 LOG_WARN("fail to execute hatable insert", K(ret), K(op), K(del_tb_ctx));
+              } else {
+                // record hbase cell count
+                stat_row_count_ += 1;
               }
               break;
             }

@@ -284,11 +284,12 @@ int ObTableBatchExecuteP::init_single_op_tb_ctx(table::ObTableCtx &ctx,
   } else if (OB_FAIL(ctx.init_common(credential_, arg_.tablet_id_, get_timeout_ts()))) {
     LOG_WARN("fail to init table ctx common part", K(ret), K(arg_.table_name_));
   } else {
+    bool is_weak_read = arg_.consistency_level_ == ObTableConsistencyLevel::EVENTUAL;
     ObTableOperationType::Type op_type = table_operation.type();
     switch (op_type) {
       case ObTableOperationType::GET: {
-        if (OB_FAIL(ctx.init_get())) {
-          LOG_WARN("fail to init get ctx", K(ret), K(ctx));
+        if (OB_FAIL(ctx.init_get(is_weak_read))) {
+          LOG_WARN("fail to init get ctx", K(ret), K(ctx), K(is_weak_read));
         }
         break;
       }

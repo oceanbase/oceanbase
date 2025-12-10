@@ -19,9 +19,15 @@
 #include "rootserver/ob_server_manager.h"
 #include "rootserver/ob_unit_manager.h"
 #include "share/table/redis/ob_redis_common.h"
+#include "observer/table/utils/ob_htable_utils.h"
 
 namespace oceanbase
 {
+using table::ObHbaseModeType;
+namespace sql
+{
+class ObSchemaChecker;
+}
 namespace common
 {
 
@@ -35,6 +41,11 @@ namespace common
 #define EVAL_TASK_RESPONSE(status) (((status) & OB_TTL_RESPONSE_MASK) >> 5)
 #define EVAL_TASK_PURE_STATUS(status) (static_cast<ObTTLTaskStatus>((status) & OB_TTL_STATUS_MASK))
 
+class ObTTLTaskConstant
+{
+public:
+  static const ObString TTL_SCAN_INDEX_DEFAULT_VALUE;
+};
 
 enum TRIGGER_TYPE
 {
@@ -96,6 +107,7 @@ typedef struct ObTTLStatus {
   ObString row_key_;
   ObString ret_code_;
   ObTTLType task_type_;
+  ObString scan_index_;
   ObTTLStatus()
   : gmt_create_(0),
     gmt_modified_(0),
@@ -112,7 +124,8 @@ typedef struct ObTTLStatus {
     scan_cnt_(0),
     row_key_(),
     ret_code_("OB_SUCCESS"),
-    task_type_(ObTTLType::NORMAL) {}
+    task_type_(ObTTLType::NORMAL),
+    scan_index_(ObTTLTaskConstant::TTL_SCAN_INDEX_DEFAULT_VALUE) {}
 
  TO_STRING_KV(K_(gmt_create),
               K_(gmt_modified),
@@ -129,7 +142,8 @@ typedef struct ObTTLStatus {
               K_(scan_cnt),
               K_(row_key),
               K_(ret_code),
-              K_(task_type));
+              K_(task_type),
+              K_(scan_index));
 } ObTTLStatus;
 
 typedef common::ObArray<ObTTLStatus> ObTTLStatusArray;
@@ -281,8 +295,11 @@ public:
       is_disable_(false),
       is_redis_ttl_(false),
       redis_model_(table::ObRedisDataModel::MODEL_MAX),
-      created_by_admin_(false)
-  {}
+      created_by_admin_(false),
+      ttl_scan_index_(ObTTLTaskConstant::TTL_SCAN_INDEX_DEFAULT_VALUE)
+  {
+    MEMSET(ttl_scan_index_buf_, 0, sizeof(ttl_scan_index_buf_));
+  }
   bool is_ttl_table() const;
   OB_INLINE bool is_max_versions_valid() const
   {
@@ -290,8 +307,11 @@ public:
   }
   OB_INLINE bool is_empty() const { return type_ == ObTTLTableType::INVALID; }
   OB_INLINE bool is_created_by_admin() const { return type_ == ObTTLTableType::HBASE && created_by_admin_; }
-  TO_STRING_KV(K_(type), K_(ttl), K_(max_version), K_(is_disable), K_(is_redis_ttl), K_(redis_model), K_(created_by_admin));
+  int deep_copy_ttl_scan_index(const ObString &ttl_scan_index);
+  TO_STRING_KV(K_(type), K_(ttl), K_(max_version), K_(is_disable), K_(is_redis_ttl), K_(redis_model), K_(created_by_admin),
+              K_(ttl_scan_index));
 
+public:
   ObTTLTableType type_;
 
   // for hbase
@@ -302,6 +322,9 @@ public:
   bool is_redis_ttl_;
   table::ObRedisDataModel redis_model_;
   bool created_by_admin_;
+  // for ttl scan index
+  char ttl_scan_index_buf_[OB_MAX_OBJECT_NAME_LENGTH];
+  ObString ttl_scan_index_;
 };
 
 class ObTTLUtil
@@ -373,6 +396,7 @@ public:
   static bool check_can_process_tenant_tasks(uint64_t tenant_id);
 
   static int parse_kv_attributes(const ObString &kv_attributes, ObKVAttr &kv_attr);
+  static int parse_kv_attributes(uint64_t tenant_id, const ObString &kv_attributes, ObKVAttr &kv_attr);
   static int format_kv_attributes_to_json_str(ObIAllocator &allocator, const ObKVAttr &kv_attr, ObString &json_str);
   static int dispatch_ttl_cmd(const ObTTLParam &param);
   static int get_ttl_info(const ObTTLParam &param, ObIArray<ObSimpleTTLInfo> &ttl_info_array);
@@ -388,14 +412,26 @@ public:
   }
   static bool is_enable_ttl(uint64_t tenant_id);
   static const char *get_ttl_tenant_status_cstr(const ObTTLTaskStatus &status);
-
+  static int get_hbase_ttl_columns(const share::schema::ObTableSchema &table_schema, ObIArray<ObString> &ttl_columns);
   static int get_ttl_columns(const ObString &ttl_definition, ObIArray<ObString> &ttl_columns);
   static bool is_ttl_column(const ObString &orig_column_name, const ObIArray<ObString> &ttl_columns);
-  static int check_kv_attributes(const share::schema::ObTableSchema &table_schema, bool by_admin = false);
-  static int check_kv_attributes(const ObString &kv_attributes,
+  static bool is_index_name_match(uint64_t tenant_id, ObNameCaseMode name_case_mode, const ObString &scan_index, const ObString &index_name);
+  static bool is_column_name_match(const ObString &col_name, const ObString &other_col_name);
+  static int check_kv_attributes(ObKVAttr &attr,
                                  const share::schema::ObTableSchema &table_schema,
+                                 const share::schema::ObTableSchema *index_schema,
                                  ObPartitionLevel part_level,
                                  bool by_admin = false);
+  static int is_ttl_suport_scan_index(ObIndexType index_type);
+  static bool is_default_scan_index(const ObString &scan_index);
+  static int check_kv_attributes(const share::schema::ObTableSchema &table_schema,
+                                 const common::ObIArray<obrpc::ObCreateIndexArg> &index_arg_list,
+                                 bool is_htable);
+  static int check_kv_attributes(ObKVAttr &kv_attr,
+                                 const share::schema::ObTableSchema &table_schema,
+                                 const sql::ObSchemaChecker *schema_checker,
+                                 obrpc::ObDDLArg *ddl_arg);
+  static int check_ttl_scan_index_name(const ObString &scan_index, const ObString &index_name, bool &is_valid);
   static int check_htable_ddl_supported(const share::schema::ObTableSchema &table_schema,
                                         bool by_admin,
                                         obrpc::ObHTableDDLType ddl_type = obrpc::ObHTableDDLType::INVALID,
@@ -403,6 +439,21 @@ public:
   static int check_htable_ddl_supported(share::schema::ObSchemaGetterGuard &schema_guard,
                                         const uint64_t tenant_id,
                                         const common::ObIArray<share::schema::ObDependencyInfo> &dep_infos);
+  static int check_ttl_scan_index_valid(const share::schema::ObTableSchema &table_schema,
+                                        share::schema::ObSchemaGetterGuard &schema_guard,
+                                        ObKVAttr::ObTTLTableType ttl_type,
+                                        const ObString &scan_index);
+  static int check_index_exists(share::schema::ObSchemaGetterGuard &schema_guard,
+                                const uint64_t tenant_id,
+                                const uint64_t table_id,
+                                const ObString &index_name,
+                                const share::schema::ObTableSchema *&index_schema);
+  static int check_index_columns(const share::schema::ObTableSchema &index_schema,
+                                 const ObIArray<ObString> &ttl_columns,
+                                 bool is_hbase = false);
+  static int check_index_columns(const obrpc::ObCreateIndexArg &index_arg,
+                                 const ObIArray<ObString> &ttl_columns,
+                                 bool is_hbase = false);
   const static uint64_t TTL_TENNAT_TASK_TABLET_ID = -1;
   const static uint64_t TTL_TENNAT_TASK_TABLE_ID = -1;
   const static uint64_t TTL_ROWKEY_TASK_TABLET_ID = -2;
@@ -411,6 +462,18 @@ public:
 private:
   static int check_is_htable_ttl_(const ObTableSchema &table_schema, bool allow_timeseries_table, bool &is_ttl_table);
   static int check_htable_ddl_supported_(const ObKVAttr &attr, bool by_admin);
+  static int check_kv_attributes_common_(ObKVAttr &attr,
+                                         share::schema::ObPartitionLevel part_level,
+                                         bool by_admin,
+                                         table::ObHbaseModeType mode_type);
+  static int check_ttl_scan_index_(ObKVAttr &attr,
+                                   const share::schema::ObTableSchema &table_schema,
+                                   table::ObHbaseModeType mode_type,
+                                   const share::schema::ObTableSchema &index_schema);
+  static int check_ttl_scan_index_(ObKVAttr &attr,
+                                   const share::schema::ObTableSchema &table_schema,
+                                   table::ObHbaseModeType mode_type,
+                                   const obrpc::ObCreateIndexArg &index_arg);
 private:
   static bool extract_val(const char* ptr, uint64_t len, int& val);
   static bool valid_digit(const char* ptr, uint64_t len);
@@ -422,6 +485,7 @@ private:
   static int parse_kv_attributes_table(json::Value *ast);
   static int parse_kv_attributes_hbase(json::Value *ast, ObKVAttr &kv_attr);
   static int parse_kv_attributes_redis(json::Value *ast, ObKVAttr &kv_attr);
+  static int parse_kv_attributes_ttl_scan_index(json::Value *ast, ObKVAttr &kv_attr);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTTLUtil);
 };
@@ -467,7 +531,7 @@ public:
   ~ObTableTTLChecker() {}
   // init ttl checker with table schema, if in_full_column_order is true, the checked row
   // should be in full column schema order, or you shoud set ttl cell ids explicitly.
-  int init(const share::schema::ObTableSchema &table_schema, bool in_full_column_order = true);
+  int init(const share::schema::ObTableSchema &index_schema, const ObString &ttl_defination, bool in_full_column_order = true);
   int check_row_expired(const common::ObNewRow &row, bool &is_expired);
   const common::ObIArray<ObTableTTLExpr> &get_ttl_definition() const { return ttl_definition_; }
   common::ObIArray<int64_t> &get_row_cell_ids() { return row_cell_ids_; }

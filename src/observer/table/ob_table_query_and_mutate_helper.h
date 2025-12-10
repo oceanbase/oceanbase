@@ -77,11 +77,13 @@ class QueryAndMutateHelper
 public:
   explicit QueryAndMutateHelper(common::ObIAllocator &allocator,
                                 ObTableQMParam &qm_param,
-                                table::ObTableAuditCtx &audit_ctx)
+                                table::ObTableAuditCtx &audit_ctx,
+                                int64_t &stat_row_count)
     : allocator_(allocator),
       query_and_mutate_(qm_param.query_and_mutate_),
       tb_ctx_(allocator_),
-      audit_ctx_(audit_ctx)
+      audit_ctx_(audit_ctx),
+      stat_row_count_(stat_row_count)
     {
       schema_guard_ = qm_param.schema_guard_;
       simple_table_schema_ = qm_param.simple_table_schema_;
@@ -261,6 +263,7 @@ private:
   table::ObTableQueryAndMutateResult *query_and_mutate_result_;
   table::ObTableSingleOpResult *single_op_result_;
   table::ObTableAuditCtx &audit_ctx_;
+  int64_t &stat_row_count_;
 };
 
 } // end namespace observer

@@ -39,6 +39,13 @@ namespace observer
         enable_response_time_stats, sql::stmt::stmt_name, process_type, elapsed_us); \
     break;
 
+#define RECORD_STAT_WITHOUT_SQL_AUDIT(process_type, stat_prefix)                     \
+  case ObTableProccessType::process_type:                                            \
+    EVENT_INC(stat_prefix##_COUNT);                                                  \
+    EVENT_ADD(stat_prefix##_TIME, elapsed_us);                                       \
+    EVENT_ADD(stat_prefix##_ROW, rows);                                              \
+    break;
+
 #define RECORD_STAT_END()                                                                         \
   default:                                                                                        \
     SERVER_LOG_RET(                                                                               \
@@ -171,7 +178,16 @@ public:
       RECORD_STAT_WITH_ROW(TABLE_API_HBASE_CHECK_AND_PUT, HBASEAPI_CHECK_PUT, T_HBASE_CHECK_AND_PUT)
       RECORD_STAT_WITH_ROW(TABLE_API_HBASE_INCREMENT, HBASEAPI_INCREMENT, T_HBASE_INCREMENT)
       RECORD_STAT_WITH_ROW(TABLE_API_HBASE_APPEND, HBASEAPI_APPEND, T_HBASE_APPEND)
-      RECORD_STAT_WITH_ROW(TABLE_API_HBASE_HYBRID, HBASEAPI_HYBRID, T_HBASE_OTHER)
+      RECORD_STAT_WITH_ROW(TABLE_API_HBASE_HYBRID, HBASEAPI_HYBRID, T_HBASE_HYBRID_BATCH)
+
+      // new hbase metrics
+      RECORD_STAT_WITH_ROW(TABLE_API_HBASE_CHECK_AND_MUTATE, HBASEAPI_CHECK_MUTATE, T_HBASE_CHECK_AND_MUTATE);
+      RECORD_STAT_WITH_ROW(TABLE_API_HBASE_SCAN, HBASEAPI_SCAN, T_HBASE_SCAN);
+      RECORD_STAT_WITH_ROW(TABLE_API_HBASE_GET, HBASEAPI_GET, T_HBASE_GET);
+      RECORD_STAT_WITH_ROW(TABLE_API_HBASE_BATCH_PUT, HBASEAPI_BATCH_PUT, T_HBASE_BATCH_PUT);
+      RECORD_STAT_WITH_ROW(TABLE_API_HBASE_BATCH_DELETE, HBASEAPI_BATCH_DELETE, T_HBASE_BATCH_DELETE);
+      RECORD_STAT_WITH_ROW(TABLE_API_HBASE_BATCH_GET, HBASEAPI_BATCH_GET, T_HBASE_BATCH_GET);
+      RECORD_STAT_WITHOUT_SQL_AUDIT(TABLE_API_FAILED_OP, TABLEAPI_FAILED_OP);
 
       // table query
       RECORD_STAT_WITH_ROW(TABLE_API_TABLE_QUERY, TABLEAPI_QUERY, T_KV_QUERY)

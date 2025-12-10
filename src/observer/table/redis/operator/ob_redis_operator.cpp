@@ -375,7 +375,7 @@ int CommandOperator::init_table_ctx(const ObTableOperation &op,
     }
     switch (op_type) {
       case ObTableOperationType::GET: {
-        if (OB_FAIL(tb_ctx.init_get())) {
+        if (OB_FAIL(tb_ctx.init_get(false/* is_weak_read */))) {
           LOG_WARN("fail to init get tb_ctx", K(ret), K(tb_ctx));
         } else {
           tb_ctx.set_read_latest(false);

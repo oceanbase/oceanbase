@@ -544,9 +544,13 @@ int ObTablePartCalculator::calc(const share::schema::ObSimpleTableSchemaV2 *simp
   bool is_secondary_table = false;
   is_same_ls = true;
   ObLSID first_ls_id(ObLSID::INVALID_LS_ID);
-  if (!simple_schema->is_partitioned_table()) {
+  if (OB_ISNULL(same_cf_rows.tablet_set_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null tabelt_set", K(ret), K(same_cf_rows));
+  } else if (!simple_schema->is_partitioned_table()) {
     tablet_id = simple_schema->get_tablet_id();
     is_partitioned_table = false;
+    same_cf_rows.tablet_set_->emplace(tablet_id.id());
   } else if (simple_schema->get_part_level() == PARTITION_LEVEL_TWO) {
     is_secondary_table = true;
   }
@@ -577,6 +581,10 @@ int ObTablePartCalculator::calc(const share::schema::ObSimpleTableSchemaV2 *simp
           tablet_id = cf_row.cells_.at(0).get_tablet_id();
         } else if (OB_FAIL(calc(*simple_schema, hcell, tablet_id))) {
           LOG_WARN("fail to calc part", K(ret), K(hcell));
+        } else {
+          // for non-partitioned table, only one tablet has been accessed
+          // for partitioned table, record tablet_id in set
+          same_cf_rows.tablet_set_->emplace(tablet_id.id());
         }
         if (OB_SUCC(ret)) {
           hcell.set_tablet_id(tablet_id);

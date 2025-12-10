@@ -4006,6 +4006,7 @@ OB_DEF_DESERIALIZE(ObHCfRows)
           for (int i = 0; OB_SUCC(ret) && i < cell_num_array_size; ++i) {
             OB_UNIS_DECODE(cell_num);
             cell_num_array.at(i) = cell_num;
+            cell_count_ += cell_num;
           }
           if (OB_SUCC(ret)) {
             // decode cell and construct ObHCfRow

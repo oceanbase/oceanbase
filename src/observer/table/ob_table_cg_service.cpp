@@ -3332,7 +3332,7 @@ int ObTableTscCgService::generate_pushdown_aggr_ctdef(const ObTableCtx &ctx,
 
 
 // 非索引扫描: access exprs = select exprs
-// 普通索引表: access exprs = [index column exprs][rowkey expr]
+// 普通索引表: access exprs = [index column exprs, including storing column exprs][rowkey expr]
 // 索引回表: access expr = [rowkey expr][select without rowkey exprs]
 // 全文索引表：access exprs = extract_text_ir_access_columns
 int ObTableTscCgService::generate_access_ctdef(const ObTableCtx &ctx,

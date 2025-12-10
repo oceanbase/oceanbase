@@ -16,6 +16,8 @@
 #include "share/ob_ls_id.h"
 #include "ob_hbase_tablet_merge_iterator.h"
 #include "share/table/ob_table_util.h"
+#include "share/ob_server_struct.h"
+#include "lib/net/ob_addr.h"
 
 namespace oceanbase
 {
@@ -342,7 +344,10 @@ ObHbaseRowIterator::ObHbaseRowIterator(const ObHbaseQuery &hbase_query, ObTableE
       is_cache_block_(true),
       scanner_context_(NULL),
       tablet_ids_(),
-      is_timeseries_table_(is_timeseries_table)
+      is_timeseries_table_(is_timeseries_table),
+      enable_get_optimization_(false),
+      is_wildcard_mode_(false),
+      current_qualifier_idx_(-1)
 {
   tablet_ids_.set_attr(ObMemAttr(MTL_ID(), "HbRowIterTbtIds"));
   if (hbase_query.get_query().get_scan_ranges().count() != 0) {
@@ -456,13 +461,23 @@ int ObHbaseRowIterator::init(ScannerContext &scanner_context, const ObHBaseParam
       LOG_WARN("fail to assign tablet ids", K(ret), K(query.get_tablet_ids()));
     } else {
       ObHbaseICellIter *tmp_cell_iter = nullptr;
-      if (OB_FAIL(get_and_init_cell_iter(exec_ctx_.get_allocator(), exec_ctx_, query, tmp_cell_iter))) {
+      // Check if we should enable Get optimization
+      bool enable_get_optimization = false;
+      bool applied = false;
+
+      if (OB_FAIL(should_enable_get_optimization(enable_get_optimization))) {
+        LOG_WARN("fail to check enable get optimization", K(ret));
+      } else if (enable_get_optimization && OB_FAIL(check_and_apply_get_optimization(applied))) {
+        LOG_WARN("fail to apply get optimization", K(ret));
+      } else if (!applied && OB_FAIL(get_and_init_cell_iter(exec_ctx_.get_allocator(), exec_ctx_, query, tmp_cell_iter))) {
         LOG_WARN("fail to scan", K(ret), K(query));
-      } else if (OB_ISNULL(tmp_cell_iter)) {
+      } else if (!applied && OB_ISNULL(tmp_cell_iter)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("cell iter is NULL", K(ret));
       } else {
-        cell_iter_ = tmp_cell_iter;
+        if (!applied) {
+          cell_iter_ = tmp_cell_iter;
+        }
         is_inited_ = true;
       }
     }
@@ -516,7 +531,7 @@ int ObHbaseRowIterator::get_next_cell_hint()
       while (OB_SUCC(ret) && !enter_hint_key) {
         if (ObHTableUtils::compare_cell(curr_cell_, *hint_cell, false) >= 0) {
           enter_hint_key = true;
-          LOG_INFO("curr_cell is bigger than hint_cell", K(ret), K(curr_cell_), K(hint_cell));
+          LOG_DEBUG("curr_cell is bigger than hint_cell", K(ret), K(curr_cell_), K(hint_cell));
         } else if (OB_FAIL(ObHTableUtils::create_last_cell_on_row_col(allocator_, curr_cell_, next_cell))) {
           LOG_WARN("failed to create last cell", K(ret));
         } else {
@@ -645,14 +660,20 @@ int ObHbaseRowIterator::get_next_row_internal(ResultType *&result)
         // filter out the current row and fetch the next row
         hfilter_->reset();
         LOG_DEBUG("filter_row_key skip the row", K(ret));
-        ret = seek_or_skip_to_next_row(curr_cell_);
+        if (OB_FAIL(seek_or_skip_to_next_row(curr_cell_))) {
+          LOG_WARN("failed to seek or skip to next row", K(ret));
+        }
       }
     }
   }
 
   if (OB_SUCC(ret)) {
     if (!is_timeseries_table_) {
-      if (OB_FAIL(get_next_row_internal_normal(result))) {
+      if (enable_get_optimization_ && OB_FAIL(get_next_row_internal_normal_with_get_optimization(result))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("fail to get next row internal normal with get optimization", K(ret));
+        }
+      } else if (!enable_get_optimization_ && OB_FAIL(get_next_row_internal_normal(result))) {
         LOG_WARN("fail to get next row internal normal", K(ret));
       }
     } else {
@@ -672,6 +693,7 @@ int ObHbaseRowIterator::get_next_row_internal_normal(ResultType *&result)
   int ret = OB_SUCCESS;
   bool loop = true;
   ObHTableMatchCode match_code = ObHTableMatchCode::DONE_SCAN;  // initialize
+
   while (OB_SUCC(ret) && loop) {
     match_code = ObHTableMatchCode::DONE_SCAN;
     curr_cell_.set_family(family_name_);
@@ -774,6 +796,7 @@ int ObHbaseRowIterator::get_next_row_internal_normal(ResultType *&result)
       }  // end switch
     }
   }  // end while
+
   if (OB_ITER_END == ret) {
     ret = OB_SUCCESS;
   }
@@ -781,6 +804,154 @@ int ObHbaseRowIterator::get_next_row_internal_normal(ResultType *&result)
   if (OB_FAIL(ret)) {
     LOG_WARN("fail to execute with match_code", K(ret), K(match_code));
   }
+  return ret;
+}
+
+template <typename ResultType>
+int ObHbaseRowIterator::get_next_row_internal_normal_with_get_optimization(ResultType *&result)
+{
+  int ret = OB_SUCCESS;
+  bool loop = true;
+  ObHTableMatchCode match_code = ObHTableMatchCode::DONE_SCAN;
+  const ObIArray<ObString> &qualifiers = htable_filter_.get_columns();
+  int64_t qualifier_count = qualifiers.count();
+
+  // For wildcard_mode, current_qualifier_idx_ is -1, so we only check loop
+  // For explicit mode, check both loop and current_qualifier_idx_ < qualifier_count
+  while (OB_SUCC(ret) && loop && (is_wildcard_mode_ || current_qualifier_idx_ < qualifier_count)) {
+    // Get cell for current qualifier if not already set
+    if (NULL == curr_cell_.get_ob_row()) {
+      if (is_wildcard_mode_) {
+        // Wildcard mode: get next cell from iterator
+        ObHbaseICellIter *child_cell_iter = get_forward_cell_iter();
+        ObNewRow *first_row = nullptr;
+        if (OB_FAIL(child_cell_iter->get_next_cell(first_row))) {
+          if (OB_ITER_END == ret) {
+            // No more data for this rowkey
+            loop = false;
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("fail to get cell in wildcard mode", K(ret));
+          }
+          continue;
+        } else {
+          curr_cell_.set_ob_row(first_row);
+        }
+      } else {
+        // Explicit qualifiers mode: rescan for current qualifier
+        ObString qualifier = hbase_query_.get_qualifier_with_family() ?
+                            qualifiers.at(current_qualifier_idx_).after('.') :
+                            qualifiers.at(current_qualifier_idx_);
+        if (OB_FAIL(rescan_for_qualifier(qualifier))) {
+          if (OB_ITER_END == ret) {
+            // No data for this qualifier, move to next
+            ret = OB_SUCCESS;
+            current_qualifier_idx_++;
+            continue;
+          } else {
+            LOG_WARN("fail to rescan for qualifier", K(ret), K(qualifier), K_(current_qualifier_idx));
+            continue;
+          }
+        }
+      }
+    }
+
+    // Validate cell with matcher
+    match_code = ObHTableMatchCode::DONE_SCAN;
+    curr_cell_.set_family(family_name_);
+
+    if (OB_FAIL(matcher_->match(curr_cell_, match_code))) {
+      LOG_WARN("failed to match cell", K(ret));
+    } else {
+      if (ObHTableMatchCode::INCLUDE == match_code ||
+          ObHTableMatchCode::INCLUDE_AND_SEEK_NEXT_ROW == match_code ||
+          ObHTableMatchCode::INCLUDE_AND_SEEK_NEXT_COL == match_code) {
+        if (NULL != hfilter_) {
+          if (OB_FAIL(hfilter_->transform_cell(allocator_, curr_cell_))) {
+            LOG_WARN("failed to transform cell", K(ret));
+          }
+        }
+
+        if (OB_SUCC(ret)) {
+          ++count_per_row_;
+
+          if (count_per_row_ > offset_per_row_per_cf_) {
+            int64_t timestamp = 0;
+            if (OB_FAIL(curr_cell_.get_ob_row()->get_cell(ObHTableConstants::COL_IDX_T).get_int(timestamp))) {
+              LOG_WARN("failed to get timestamp", K(ret));
+            } else {
+              const_cast<ObNewRow*>(curr_cell_.get_ob_row())->get_cell(ObHTableConstants::COL_IDX_T).set_int(-timestamp);
+            }
+            if (OB_SUCC(ret)) {
+              if (OB_FAIL(add_result_cell(*(curr_cell_.get_ob_row()), result))) {
+                LOG_WARN("failed to add cell to result", K(ret));
+              } else {
+                scanner_context_->increment_batch_progress(1);
+                scanner_context_->increment_size_progress(curr_cell_.get_ob_row()->get_serialize_size());
+                ++cell_count_;
+              }
+            }
+          }
+        }
+
+        // Move to next qualifier after processing current one
+        if (OB_SUCC(ret)) {
+          ObString previous_qualifier;
+          if (is_wildcard_mode_ && NULL != curr_cell_.get_ob_row()) {
+            previous_qualifier = curr_cell_.get_ob_row()->get_cell(ObHTableConstants::COL_IDX_Q).get_varbinary();
+          }
+          curr_cell_.set_ob_row(nullptr);
+          if (OB_FAIL(move_to_next_qualifier_and_rescan(loop, previous_qualifier))) {
+            if (OB_ITER_END == ret) {
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("fail to move to next qualifier", K(ret));
+            }
+          }
+        }
+      } else {
+        // For Get optimization with limit=1, other match codes indicate no data for this qualifier
+        // Move to next qualifier
+        ObString previous_qualifier;
+        if (is_wildcard_mode_ && NULL != curr_cell_.get_ob_row()) {
+          previous_qualifier = curr_cell_.get_ob_row()->get_cell(ObHTableConstants::COL_IDX_Q).get_varbinary();
+        }
+        curr_cell_.set_ob_row(nullptr);
+        if (OB_FAIL(move_to_next_qualifier_and_rescan(loop, previous_qualifier))) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("fail to move to next qualifier", K(ret));
+          }
+        }
+      }
+    }
+  }  // end while
+
+  if (OB_SUCC(ret)) {
+    if (is_wildcard_mode_) {
+      // In wildcard_mode, loop=false means no more data
+      has_more_cells_ = loop;
+      if (!loop) {
+        ret = OB_ITER_END;
+      }
+    } else {
+      // In explicit mode, check if all qualifiers are processed
+      if (current_qualifier_idx_ >= qualifier_count) {
+        has_more_cells_ = false;
+        ret = OB_ITER_END;
+      }
+    }
+  }
+
+  if (OB_ITER_END == ret) {
+    ret = OB_SUCCESS;
+  }
+
+  if (OB_FAIL(ret)) {
+    LOG_WARN("fail to execute in get optimization", K(ret), K(match_code));
+  }
+
   return ret;
 }
 
@@ -838,6 +1009,7 @@ int ObHbaseRowIterator::rescan_and_get_next_row(table::ObHbaseICellIter *cell_it
 {
   int ret = OB_SUCCESS;
   ObNewRow *tmp_next_row = nullptr;
+
   if (OB_ISNULL(cell_iter)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cell_iter is null", K(ret));
@@ -1828,6 +2000,365 @@ bool ObHbaseTSWildcardColumnTracker::is_done(int64_t timestamp) const
 {
   UNUSED(timestamp);
   return false;
+}
+
+// ---------------------------------------- ObHbaseRowIterator Get Optimization ----------------------------------------
+
+int ObHbaseRowIterator::should_enable_get_optimization(bool &bret)
+{
+  int ret = OB_SUCCESS;
+  bret = true;
+  // Only enable for normal (not timeseries)
+  if (is_timeseries_table_) {
+    bret = false;
+  } else if (scan_order_ != ObQueryFlag::Forward) {
+    // Only enable for forward scan
+    bret = false;
+  } else {
+    // Check if limit=1 or max_version=1
+    const ObTableQuery &query = hbase_query_.get_query();
+    bool has_limit_one = (query.get_limit() == 1);
+    bool has_max_version_one = (htable_filter_.get_max_versions() == 1) || (max_version_ == 1);
+
+    if (!has_limit_one && !has_max_version_one) {
+      bret = false;
+    } else if (query.get_scan_ranges().empty()) {
+      // not support scan
+      bret = false;
+    } else {
+      const ObNewRange &range = query.get_scan_ranges().at(0);
+      if (range.start_key_.get_obj_cnt() < 3 || range.end_key_.get_obj_cnt() < 3) {
+        bret = false;
+      } else if (range.start_key_.get_obj_ptr()[ObHTableConstants::COL_IDX_K].is_min_value()
+          || range.end_key_.get_obj_ptr()[ObHTableConstants::COL_IDX_K].is_max_value()
+          || !range.start_key_.get_obj_ptr()[ObHTableConstants::COL_IDX_K].get_varbinary().
+            compare_equal(range.end_key_.get_obj_ptr()[ObHTableConstants::COL_IDX_K].get_varbinary())) {
+        bret = false;
+      } else if (!htable_filter_.get_filter().empty()) {
+        bret = false;
+      } else {
+        const ObIArray<ObString> &columns = htable_filter_.get_columns();
+        is_wildcard_mode_ = (columns.count() <= 0);
+        // batch get single cf
+        if (columns.count() == 1) {
+          ObString qualifier = columns.at(0);
+          if (qualifier.after('.').empty()) {
+            is_wildcard_mode_ = true;
+          }
+        }
+
+        // TODO: no qualifier specified, disable optimization if timestamp is specified
+        if (is_wildcard_mode_ && !htable_filter_.with_all_time()) {
+          bret = false;
+        } else {
+          // 检查是否属于同一个ls, 并且ls leader是当前节点
+          ObLSID ls_id = exec_ctx_.get_ls_id();
+          // ls_id is valid means the tablet is on the same ls with the current node
+          if (!ls_id.is_valid()) {
+            bret = false;
+          } else {
+            // check if the ls leader is the current node
+            ObAddr leader;
+            if (OB_FAIL(GCTX.location_service_->get_leader(GCONF.cluster_id,
+                                                          MTL_ID(),
+                                                          ls_id,
+                                                          false,/* force_renew */
+                                                          leader))) {
+              LOG_WARN("fail to get leader", K(ret), K(ls_id));
+            } else if (leader != GCTX.self_addr()) {
+              bret = false;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObHbaseRowIterator::check_and_apply_get_optimization(bool &applied)
+{
+  int ret = OB_SUCCESS;
+  applied = false;
+
+  ObTableQuery *modified_query = nullptr;
+  if (OB_ISNULL(modified_query = OB_NEWx(ObTableQuery, &exec_ctx_.get_allocator()))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate modified query", K(ret));
+  } else if (OB_FAIL(hbase_query_.get_query().deep_copy(exec_ctx_.get_allocator(), *modified_query))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to deep copy query", K(ret));
+  } else {
+    ObIArray<ObNewRange> &scan_ranges = modified_query->get_scan_ranges();
+    if (scan_ranges.count() == 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("no scan ranges", K(ret));
+    } else {
+      ObNewRange &range = scan_ranges.at(0);
+      const ObObj *start_key_objs = range.start_key_.get_obj_ptr();
+      const ObObj *end_key_objs = range.end_key_.get_obj_ptr();
+
+      if (OB_ISNULL(start_key_objs) || OB_ISNULL(end_key_objs)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("null key objs", K(ret));
+      } else if (range.start_key_.get_obj_cnt() < 3 || range.end_key_.get_obj_cnt() < 3) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid key obj count", K(ret), K(range));
+      } else {
+        if (is_wildcard_mode_) {
+          // Wildcard mode: use [rowkey, min, min] to [rowkey, max, max] for first qualifier
+          // Keep the original range but set limit=1
+          modified_query->set_limit(1);
+        } else {
+          // Explicit qualifiers mode: [rowkey, min, min] -> [rowkey, first_qualifier, min]
+          //                         [rowkey, max, max] -> [rowkey, first_qualifier, max]
+          const ObIArray<ObString> &qualifiers = htable_filter_.get_columns();
+          ObString first_qualifier = hbase_query_.get_qualifier_with_family() ?
+                                      qualifiers.at(0).after('.') : qualifiers.at(0);
+          if (OB_FAIL(modify_scan_range_for_qualifier(exec_ctx_.get_allocator(), range, range, first_qualifier))) {
+            LOG_WARN("fail to modify scan range for first qualifier", K(ret));
+          } else {
+            modified_query->set_limit(1);
+          }
+        }
+      }
+    }
+
+    ObHbaseICellIter *tmp_cell_iter = nullptr;
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(get_and_init_cell_iter(exec_ctx_.get_allocator(), exec_ctx_, *modified_query, tmp_cell_iter))) {
+        LOG_WARN("fail to init cell iter with modified query", K(ret));
+      } else if (OB_ISNULL(tmp_cell_iter)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("cell iter is NULL", K(ret));
+      } else {
+        cell_iter_ = tmp_cell_iter;
+        enable_get_optimization_ = true;
+        current_qualifier_idx_ = is_wildcard_mode_ ? -1 : 0;  // -1 indicates wildcard mode
+        applied = true;
+      }
+    }
+  }
+
+  if (OB_NOT_NULL(modified_query)) {
+    modified_query->~ObTableQuery();
+  }
+
+  return ret;
+}
+
+int ObHbaseRowIterator::rescan_for_qualifier(const ObString &qualifier)
+{
+  int ret = OB_SUCCESS;
+
+  ObHbaseICellIter *child_cell_iter = get_forward_cell_iter();
+  ObHbaseRescanParam &rescan_param = get_rescan_param();
+  ObNewRange &scan_range = rescan_param.get_scan_range();
+
+  forward_range_alloc_.reuse();
+
+  // Build new range for this qualifier: [rowkey, qualifier, min] to [rowkey, qualifier, max]
+  const ObIArray<ObNewRange> &orig_ranges = hbase_query_.get_query().get_scan_ranges();
+  if (orig_ranges.count() == 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("no original scan ranges", K(ret));
+  } else {
+    const ObNewRange &orig_range = orig_ranges.at(0);
+    const ObObj *start_key_objs = orig_range.start_key_.get_obj_ptr();
+    const ObObj *end_key_objs = orig_range.end_key_.get_obj_ptr();
+
+    if (OB_ISNULL(start_key_objs) || OB_ISNULL(end_key_objs)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null key objs in original range", K(ret));
+    } else if (orig_range.start_key_.get_obj_cnt() < 3) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid key obj count", K(ret), K(orig_range));
+    } else {
+      if (OB_FAIL(modify_scan_range_for_qualifier(forward_range_alloc_, scan_range, orig_range, qualifier))) {
+        LOG_WARN("fail to modify scan range for qualifier", K(ret));
+      } else {
+        rescan_param.set_limit(1);
+        rescan_param.get_scan_range().border_flag_ = orig_range.border_flag_;
+        ObNewRow *first_row = nullptr;
+        if (OB_FAIL(rescan_and_get_next_row(child_cell_iter, rescan_param, first_row))) {
+          if (OB_ITER_END != ret) {
+            LOG_WARN("fail to rescan for qualifier", K(ret), K(qualifier), K_(current_qualifier_idx));
+          }
+        } else {
+          curr_cell_.set_ob_row(first_row);
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObHbaseRowIterator::rescan_for_next_qualifier_wildcard(const ObString &previous_qualifier_param)
+{
+  int ret = OB_SUCCESS;
+
+  ObHbaseICellIter *child_cell_iter = get_forward_cell_iter();
+  ObHbaseRescanParam &rescan_param = get_rescan_param();
+  ObNewRange &scan_range = rescan_param.get_scan_range();
+
+  forward_range_alloc_.reuse();
+
+  // Build range for next qualifier: [rowkey, previous_qualifier, max] to [rowkey, max, max]
+  // Left side is open interval (exclusive of previous_qualifier)
+  const ObIArray<ObNewRange> &orig_ranges = hbase_query_.get_query().get_scan_ranges();
+  if (orig_ranges.count() == 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("no original scan ranges", K(ret));
+  } else {
+    // Use a temporary copy of previous_qualifier to ensure it remains valid
+    ObString previous_qualifier;
+    if (OB_SUCC(ret)) {
+      const ObNewRange &orig_range = orig_ranges.at(0);
+      const ObObj *start_key_objs = orig_range.start_key_.get_obj_ptr();
+      const ObObj *end_key_objs = orig_range.end_key_.get_obj_ptr();
+
+      if (OB_ISNULL(start_key_objs) || OB_ISNULL(end_key_objs)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("null key objs in original range", K(ret));
+      } else if (orig_range.start_key_.get_obj_cnt() < 3) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid key obj count", K(ret), K(orig_range));
+      } else if (OB_FAIL(ob_write_string(forward_range_alloc_, previous_qualifier_param, previous_qualifier))) {
+        LOG_WARN("fail to write string", K(ret), K(previous_qualifier_param));
+      } else {
+        ObObj *new_start_objs = nullptr;
+        ObObj *new_end_objs = nullptr;
+        if (OB_ISNULL(new_start_objs = static_cast<ObObj *>(
+              forward_range_alloc_.alloc(sizeof(ObObj) * 3)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocate start objs", K(ret));
+        } else if (OB_ISNULL(new_end_objs = static_cast<ObObj *>(
+              forward_range_alloc_.alloc(sizeof(ObObj) * 3)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocate end objs", K(ret));
+        } else {
+          // Start: [rowkey, previous_qualifier, max] - open interval (exclusive)
+          new_start_objs[0].set_varbinary(start_key_objs[0].get_varbinary());
+          new_start_objs[0].set_collation_type(CS_TYPE_BINARY);
+          new_start_objs[1].set_varbinary(previous_qualifier);
+          new_start_objs[1].set_collation_type(CS_TYPE_BINARY);
+          new_start_objs[2].set_max_value();
+
+          // End: [rowkey, max, max]
+          new_end_objs[0].set_varbinary(end_key_objs[0].get_varbinary());
+          new_end_objs[0].set_collation_type(CS_TYPE_BINARY);
+          new_end_objs[1].set_max_value();
+          new_end_objs[2].set_max_value();
+
+          scan_range.start_key_.assign(new_start_objs, 3);
+          scan_range.end_key_.assign(new_end_objs, 3);
+
+          // Set border flag: left side is open (exclusive), right side is inclusive
+          scan_range.border_flag_ = orig_range.border_flag_;
+          scan_range.border_flag_.unset_inclusive_start();  // Open interval on left
+          scan_range.border_flag_.set_inclusive_end();
+
+          // For wildcard mode with limit=1 optimization:
+          // Get the next qualifier with limit=1. If OB_ITER_END is returned, it means we've scanned
+          // to [rowkey, max, max], no more qualifiers. The next iteration will naturally handle
+          // the end condition when trying to rescan for the next qualifier.
+          rescan_param.set_limit(1);
+          ObNewRow *first_row = nullptr;
+          if (OB_FAIL(rescan_and_get_next_row(child_cell_iter, rescan_param, first_row))) {
+            if (OB_ITER_END != ret) {
+              LOG_WARN("fail to rescan for next qualifier wildcard", K(ret), K(previous_qualifier));
+            }
+            // OB_ITER_END means we've scanned to [rowkey, max, max], no more qualifiers
+          } else {
+            curr_cell_.set_ob_row(first_row);
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObHbaseRowIterator::move_to_next_qualifier_and_rescan(bool &loop, const ObString &previous_qualifier)
+{
+  int ret = OB_SUCCESS;
+  if (is_wildcard_mode_) {
+    if (OB_FAIL(rescan_for_next_qualifier_wildcard(previous_qualifier))) {
+      if (OB_ITER_END == ret) {
+        // No more qualifiers
+        loop = false;
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to rescan for next qualifier wildcard", K(ret));
+      }
+    }
+  } else {
+    // Explicit qualifiers mode
+    const ObIArray<ObString> &qualifiers = htable_filter_.get_columns();
+    current_qualifier_idx_++;
+    if (current_qualifier_idx_ < qualifiers.count()) {
+      ObString next_qualifier = hbase_query_.get_qualifier_with_family() ?
+                                qualifiers.at(current_qualifier_idx_).after('.') :
+                                qualifiers.at(current_qualifier_idx_);
+      if (OB_FAIL(rescan_for_qualifier(next_qualifier))) {
+        LOG_WARN("fail to rescan for next qualifier", K(ret), K(next_qualifier), K_(current_qualifier_idx));
+      }
+    } else {
+      // All qualifiers processed
+      loop = false;
+    }
+  }
+
+  return ret;
+}
+
+int ObHbaseRowIterator::modify_scan_range_for_qualifier(ObIAllocator &allocator, ObNewRange &target_range,
+                                                       const ObNewRange &orig_range, const ObString &qualifier)
+{
+  int ret = OB_SUCCESS;
+  const ObObj *start_key_objs = orig_range.start_key_.get_obj_ptr();
+  const ObObj *end_key_objs = orig_range.end_key_.get_obj_ptr();
+
+  if (OB_ISNULL(start_key_objs) || OB_ISNULL(end_key_objs)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null key objs in original range", K(ret));
+  } else if (orig_range.start_key_.get_obj_cnt() < 3) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid key obj count", K(ret), K(orig_range));
+  } else {
+    ObObj *new_start_objs = nullptr;
+    ObObj *new_end_objs = nullptr;
+    if (OB_ISNULL(new_start_objs = static_cast<ObObj *>(
+            allocator.alloc(sizeof(ObObj) * 3)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate start objs", K(ret));
+    } else if (OB_ISNULL(new_end_objs = static_cast<ObObj *>(
+            allocator.alloc(sizeof(ObObj) * 3)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate end objs", K(ret));
+    } else {
+      new_start_objs[0].set_varbinary(start_key_objs[0].get_varbinary());
+      new_start_objs[0].set_collation_type(CS_TYPE_BINARY);
+      new_end_objs[0].set_varbinary(end_key_objs[0].get_varbinary());
+      new_end_objs[0].set_collation_type(CS_TYPE_BINARY);
+
+      new_start_objs[1].set_varbinary(qualifier);
+      new_start_objs[1].set_collation_type(CS_TYPE_BINARY);
+      new_end_objs[1].set_varbinary(qualifier);
+      new_end_objs[1].set_collation_type(CS_TYPE_BINARY);
+
+      new_start_objs[2] = start_key_objs[2];
+      new_end_objs[2] = end_key_objs[2];
+
+      target_range.start_key_.assign(new_start_objs, 3);
+      target_range.end_key_.assign(new_end_objs, 3);
+    }
+  }
+
+  return ret;
 }
 
 } // end of namespace table

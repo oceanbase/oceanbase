@@ -1627,15 +1627,11 @@ int ObTableCtx::init_delete()
   return ret;
 }
 
-int ObTableCtx::init_ttl_delete(const ObIArray<ObNewRange> &scan_ranges)
+int ObTableCtx::init_ttl_scan(ObTableQuery &query)
 {
   int ret = OB_SUCCESS;
   set_is_ttl_table(false);
-  ObTableQuery query;
-  ObIArray<ObNewRange> &query_scan_ranges = query.get_scan_ranges();
-  if (OB_FAIL(query_scan_ranges.assign(scan_ranges))) {
-    LOG_WARN("fail to assign scan ranges", KR(ret), K(query_scan_ranges));
-  } else if (OB_NOT_NULL(fts_ctx_)) {
+  if (OB_NOT_NULL(fts_ctx_)) {
     fts_ctx_->need_tsc_with_doc_id_ = true;
   }
   if (OB_FAIL(ret)) {
@@ -1683,10 +1679,11 @@ int ObTableCtx::init_insert_up(bool is_client_set_put)
     1. init scan parameters
     2. get all column when user not filled select columns.
 */
-int ObTableCtx::init_get()
+int ObTableCtx::init_get(bool is_weak_read)
 {
   int ret = OB_SUCCESS;
   // init scan
+  is_weak_read_ = is_weak_read;
   index_table_id_ = ref_table_id_;
   is_index_scan_ = false;
   is_index_back_ = false;
@@ -1950,15 +1947,26 @@ int ObTableCtx::classify_scan_exprs()
 
     // for index exprs, its order is schema define
     if (OB_SUCC(ret) && is_index_scan_ && !is_text_retrieval_scan()) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < index_col_ids_.count(); i++) {
-        const ObTableColumnItem *item = nullptr;
-        if (OB_FAIL(get_column_item_by_column_id(index_col_ids_.at(i), item))) {
-          LOG_WARN("fail to get column item", K(ret), K(index_col_ids_), K(i));
-        } else if (OB_ISNULL(item)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("column item is null", K(ret));
-        } else if (OB_FAIL(index_exprs_.push_back(item->raw_expr_))) {
-          LOG_WARN("fail to push back index expr", K(ret), K(i));
+      if (OB_ISNULL(index_schema_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("index schema is NULL", K(ret));
+      } else {
+        for (int64_t i = 0;OB_SUCC(ret) && i < index_schema_->get_column_count(); i++) {
+          const ObColumnSchemaV2 *col_schema = index_schema_->get_column_schema_by_idx(i);
+          const ObTableColumnItem *item = nullptr;
+          if (OB_ISNULL(col_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("column schema is NULL", K(ret));
+          } else if (col_schema->is_shadow_column()) {
+            // do nothing
+          } else if (OB_FAIL(get_column_item_by_column_id(col_schema->get_column_id(), item))) {
+            LOG_WARN("fail to get column item", K(ret), K(col_schema->get_column_id()), K(i));
+          } else if (OB_ISNULL(item)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("column item is null", K(ret));
+          } else if (OB_FAIL(index_exprs_.push_back(item->raw_expr_))) {
+            LOG_WARN("fail to push back index expr", K(ret), K(i));
+          }
         }
       }
     }

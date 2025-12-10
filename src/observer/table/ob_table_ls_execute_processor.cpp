@@ -21,6 +21,7 @@ using namespace oceanbase::observer;
 using namespace oceanbase::table;
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
+using namespace oceanbase::sql::stmt;
 
 
 /**
@@ -86,7 +87,8 @@ int ObTableLSExecuteP::LSExecuteIter::init()
 int ObTableLSExecuteP::LSExecuteIter::init_tb_ctx(ObTableSingleOp &single_op,
                                                   ObKvSchemaCacheGuard *shcema_cache_guard,
                                                   const ObSimpleTableSchemaV2 *table_schema,
-                                                  ObTableCtx &tb_ctx)
+                                                  ObTableCtx &tb_ctx,
+                                                  bool is_weak_read)
 {
   int ret = OB_SUCCESS;
   ObTableOperationType::Type type = single_op.get_op_type();
@@ -109,8 +111,8 @@ int ObTableLSExecuteP::LSExecuteIter::init_tb_ctx(ObTableSingleOp &single_op,
   } else {
     switch (type) {
       case ObTableOperationType::GET: {
-        if (OB_FAIL(tb_ctx.init_get())) {
-          LOG_WARN("fail to init get ctx", K(ret), K(tb_ctx));
+        if (OB_FAIL(tb_ctx.init_get(is_weak_read))) {
+          LOG_WARN("fail to init get ctx", K(ret), K(tb_ctx), K(is_weak_read));
         }
         break;
       }
@@ -191,12 +193,14 @@ int ObTableLSExecuteP::LSExecuteIter::init_batch_ctx(uint64_t table_id,
                                                      ObTableBatchCtx &batch_ctx)
 {
   int ret = OB_SUCCESS;
+  bool is_weak_read = outer_exectute_process_.arg_.consistency_level_ == ObTableConsistencyLevel::EVENTUAL;
   // construct batch operation result
   if (OB_FAIL(init_tb_ctx(single_op,
                           shcema_cache_guard,
                           simple_table_schema,
-                          batch_ctx.tb_ctx_))) {
-    LOG_WARN("fail to init table context", K(ret));
+                          batch_ctx.tb_ctx_,
+                          is_weak_read))) {
+    LOG_WARN("fail to init table context", K(ret), K(is_weak_read), K(single_op));
   }  else {
     // 构造batch_service需要的入参
     batch_ctx.trans_param_ = &outer_exectute_process_.trans_param_;
@@ -906,6 +910,12 @@ int ObTableLSExecuteP::check_arg()
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "consistency level");
     LOG_WARN("some options not supported yet", K(ret), "consistency_level", arg_.consistency_level_);
+  } else if (ObTableConsistencyLevel::EVENTUAL == arg_.consistency_level_) {
+    if (!arg_.is_readonly()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "weak read for non-readonly request");
+      LOG_WARN("weak read is not supported for non-readonly request", K(ret));
+    }
   }
   return ret;
 }
@@ -1084,11 +1094,11 @@ int ObTableLSExecuteP::old_try_process()
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(start_trans(false, /* is_readonly */
-                                    arg_.consistency_level_,
-                                    ls_id,
-                                    get_timeout_ts(),
-                                    exist_global_index))) {
-      LOG_WARN("fail to start transaction", K(ret));
+                                   arg_.consistency_level_,
+                                   ls_id,
+                                   get_timeout_ts(),
+                                   exist_global_index))) {
+      LOG_WARN("fail to start transaction", K(ret), K_(arg_.consistency_level));
     } else if (OB_FAIL(execute_table_api_ls_op(*cb_result))) {
       LOG_WARN("fail to execute ls op", K(ret));
     }
@@ -1183,6 +1193,8 @@ int ObTableLSExecuteP::new_try_process()
         LOG_WARN("fail to assign dependent results to cb", K(ret));
       }
 
+      // record stat row count
+      stat_row_count_ = exec_ctx_.get_stat_row_count();
       exec_ctx_.set_async_commit(ret == OB_SUCCESS);
       if (OB_NOT_NULL(model) && OB_SUCCESS != (model->before_response(exec_ctx_, arg_, cb_result))) { // clean up resources even if failed
         LOG_WARN("fail to before response", K(ret), K_(exec_ctx), K_(arg), K(cb_result));
@@ -1221,11 +1233,21 @@ int ObTableLSExecuteP::try_process()
   if (OB_ISNULL(arg_.ls_op_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls op is null", K(ret));
-  } else if (arg_.ls_op_->count() > 0 && arg_.ls_op_->at(0).count() > 0) {
-    stat_process_type_ = get_stat_process_type(arg_.ls_op_->at(0).is_readonly(),
-                                               arg_.ls_op_->is_same_type(),
-                                               arg_.ls_op_->is_same_properties_names(),
-                                               arg_.ls_op_->at(0).at(0).get_op_type());
+  } else {
+    bool is_hkv = ObTableEntityType::ET_HKV == get_entity_type();
+    bool is_hbase_op_valid = OHOperationType::INVALID != arg_.hbase_op_type_;
+    if (arg_.ls_op_->count() > 0 && arg_.ls_op_->at(0).count() > 0) {
+      if (is_hkv && is_hbase_op_valid) {
+        stat_process_type_ = get_hbase_process_type(arg_.hbase_op_type_,
+                                                    arg_.ls_op_->is_same_type(),
+                                                    arg_.ls_op_->at(0).at(0).get_op_type());
+      } else {
+        stat_process_type_ = get_stat_process_type(arg_.ls_op_->at(0).is_readonly(),
+                                                   arg_.ls_op_->is_same_type(),
+                                                   arg_.ls_op_->is_same_properties_names(),
+                                                   arg_.ls_op_->at(0).at(0).get_op_type());
+      }
+    }
   }
 
   if (OB_FAIL(ret)) {
@@ -1279,11 +1301,11 @@ int ObTableLSExecuteP::execute_htable_api_ls_op(ObTableLSOpResult &ls_result)
     } else if (OB_FAIL(ls_result.prepare_allocate(ls_op.count()))) {
       LOG_WARN("fail to prepare_allocate ls result", K(ret));
     } else if (OB_FAIL(start_trans(false, /* is_readonly */
-                                  arg_.consistency_level_,
-                                  ls_id,
-                                  get_timeout_ts(),
-                                  exist_global_index))) {
-      LOG_WARN("fail to start transaction", K(ret));
+                                   arg_.consistency_level_,
+                                   ls_id,
+                                   get_timeout_ts(),
+                                   exist_global_index))) {
+      LOG_WARN("fail to start transaction", K(ret), K(arg_.consistency_level_));
     } else {
       ObTableTabletOpResult tmp_tablet_result;
       for (int64_t i = 0; OB_SUCC(ret) && i < ls_op.count(); i++) {
@@ -1350,8 +1372,12 @@ int ObTableLSExecuteP::execute_htable_tablet_ops(ObTableTabletOp &tablet_ops,
               single_op_result.set_affected_rows(same_type_tablet_op_result.at(0).get_affected_rows());
               single_op_result.set_type(htable_ls_iter.get_same_ctx_ops().at(0).get_op_type());
               if (OB_FAIL(tmp_tablet_result.push_back(single_op_result))) {
-                LOG_WARN("fail to push back same tyep single_op_result", K(ret), K(same_type_tablet_op_result.at(j)));
+                LOG_WARN("fail to push back same tyep single_op_result", K(ret), K(same_type_tablet_op_result.at(0)));
               }
+            }
+            // record ob row count
+            if (0 != same_type_tablet_op_result.count()) {
+              stat_row_count_ += same_type_tablet_op_result.at(0).get_affected_rows();
             }
           }
         } else if (OB_NOT_NULL(query_ctx = dynamic_cast<ObTableQueryAsyncCtx*>(ctx))) {
@@ -1367,6 +1393,8 @@ int ObTableLSExecuteP::execute_htable_tablet_ops(ObTableTabletOp &tablet_ops,
             if (OB_FAIL(tmp_tablet_result.push_back(single_op_result))) {
               LOG_WARN("fail to push back same tyep single_op_result", K(ret), K(single_op_result));
             }
+            // record ob row count
+            stat_row_count_ += single_op_result.get_affected_rows();
           }
         } else {
           ret = OB_ERR_UNEXPECTED;
@@ -1390,8 +1418,6 @@ int ObTableLSExecuteP::execute_htable_tablet_ops(ObTableTabletOp &tablet_ops,
     }
   }
 
-  // record events
-  stat_row_count_ += tablet_ops.count();
   return ret;
 }
 
@@ -1456,6 +1482,11 @@ int ObTableLSExecuteP::execute_htable_get(ObTableQueryAsyncCtx *query_ctx,
                                     htable_ls_iter.get_allocator()))) {
     LOG_WARN("fail to init query_ctx", K(ret));
   } else {
+    OB_TABLE_START_AUDIT(credential_,
+                         sess_guard_,
+                         arg_table_name,
+                         &audit_ctx_,
+                         *single_op.get_query());
     ObTableQueryResultIterator* result_iterator = nullptr;
     ObTableQueryIterableResult *iterable_result = nullptr;
     if (OB_ISNULL(iterable_result = OB_NEWx(ObTableQueryIterableResult, &htable_ls_iter.get_allocator()))) {
@@ -1474,6 +1505,12 @@ int ObTableLSExecuteP::execute_htable_get(ObTableQueryAsyncCtx *query_ctx,
     } else if (OB_FAIL(aggregate_htable_get_result(cb_->get_allocator(), result_iterator, single_op_result))) {
       LOG_WARN("fail to get htable query result", K(ret));
     }
+    OB_TABLE_END_AUDIT(ret_code, ret,
+                       snapshot, get_tx_snapshot(),
+                       stmt_type, StmtType::T_KV_QUERY,
+                       return_rows, single_op_result.get_affected_rows(),
+                       has_table_scan, true,
+                       filter, (OB_ISNULL(result_iterator) ? nullptr : result_iterator->get_filter()));
     if (OB_NOT_NULL(iterable_result)) {
       htable_ls_iter.get_allocator().free(iterable_result);
     }
@@ -1679,7 +1716,13 @@ int ObTableLSExecuteP::execute_tablet_batch_ops(const ObTableTabletOp &tablet_op
       }
     }
     // record events
-    stat_row_count_ += tablet_op.count();
+    if (ObTableEntityType::ET_HKV == arg_.entity_type_) {
+      if (0 != tablet_result.count()) {
+        stat_row_count_ += tablet_result.at(0).get_affected_rows();
+      }
+    } else {
+      stat_row_count_ += tablet_op.count();
+    }
   }
   return ret;
 }
@@ -1693,6 +1736,7 @@ int ObTableLSExecuteP::init_batch_ctx(const table::ObTableTabletOp &tablet_op,
                                       table::ObTableBatchCtx &batch_ctx)
 {
   int ret = OB_SUCCESS;
+  bool is_weak_read = arg_.consistency_level_ == ObTableConsistencyLevel::EVENTUAL;
   // construct batch operation
   for (int64_t i = 0; OB_SUCC(ret) && i < tablet_op.count(); i++) {
     const ObTableSingleOp &single_op = tablet_op.at(i);
@@ -1717,8 +1761,9 @@ int ObTableLSExecuteP::init_batch_ctx(const table::ObTableTabletOp &tablet_op,
                                  table_operations.at(0),
                                  shcema_cache_guard,
                                  simple_table_schema,
-                                 batch_ctx.tb_ctx_))) {
-    LOG_WARN("fail to init table context", K(ret));
+                                 batch_ctx.tb_ctx_,
+                                 is_weak_read))) {
+    LOG_WARN("fail to init table context", K(ret), K(is_weak_read), K(tablet_op));
   } else if (OB_FAIL(batch_ctx.tablet_ids_.push_back(batch_ctx.tb_ctx_.get_tablet_id()))) {
     // cause tb_ctx_.tablet_id_ is the corrected version of tablet_op.tablet_id_
     LOG_WARN("fail to push back tablet id", K(ret));
@@ -1768,7 +1813,8 @@ int ObTableLSExecuteP::init_tb_ctx(const table::ObTableTabletOp &tablet_op,
                                    const table::ObTableOperation &table_operation,
                                    ObKvSchemaCacheGuard *shcema_cache_guard,
                                    const ObSimpleTableSchemaV2 *table_schema,
-                                   table::ObTableCtx &tb_ctx)
+                                   table::ObTableCtx &tb_ctx,
+                                   bool is_weak_read)
 {
   int ret = OB_SUCCESS;
   tb_ctx.set_entity(&table_operation.entity());
@@ -1786,7 +1832,7 @@ int ObTableLSExecuteP::init_tb_ctx(const table::ObTableTabletOp &tablet_op,
     ObTableOperationType::Type op_type = table_operation.type();
     switch (op_type) {
       case ObTableOperationType::GET: {
-        if (OB_FAIL(tb_ctx.init_get())) {
+        if (OB_FAIL(tb_ctx.init_get(is_weak_read))) {
           LOG_WARN("fail to init get ctx", K(ret), K(tb_ctx));
         }
         break;
@@ -1955,7 +2001,7 @@ int ObTableLSExecuteP::find_htable_get_info(ObString &arg_table_name, uint64_t &
         tmp_arg_table_name = real_table_name.string();
         for (int64_t j = 0; OB_SUCC(ret) && j < htable_iter.hbase_infos_.count(); ++j) {
           ObTableHbaseMutationInfo *info = htable_iter.hbase_infos_.at(j);
-          if (info->real_table_name_ == tmp_arg_table_name) {
+          if (info->real_table_name_.case_compare(tmp_arg_table_name) == 0) {
             if (OB_FAIL(table_schemas.push_back(info->get_simple_schema()))) {
               LOG_WARN("fail to add table schema", K(ret));
             } else {
@@ -2094,7 +2140,7 @@ int ObTableLSExecuteP::execute_single_query_and_mutate(const uint64_t table_id,
       qm_param.simple_table_schema_ = simple_table_schema_;
       qm_param.schema_cache_guard_ = &schema_cache_guard_;
       qm_param.sess_guard_ = &sess_guard_;
-      SMART_VAR(QueryAndMutateHelper, helper, cb_->get_allocator(), qm_param, audit_ctx_) {
+      SMART_VAR(QueryAndMutateHelper, helper, cb_->get_allocator(), qm_param, audit_ctx_, stat_row_count_) {
         if (OB_FAIL(helper.execute_query_and_mutate())) {
           LOG_WARN("fail to execute query and mutate", K(ret), K(single_op));
         } else {}

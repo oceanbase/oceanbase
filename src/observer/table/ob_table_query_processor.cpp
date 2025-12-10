@@ -325,6 +325,8 @@ int ObTableQueryP::new_try_process()
 
   ObTableTransUtils::release_read_trans(trans_param_.trans_desc_);
 
+  // record ob rows
+  stat_row_count_ = exec_ctx_.get_stat_row_count();
   if (ret == OB_ITER_END) {
     ret = OB_SUCCESS; // cover ret
   }
@@ -336,8 +338,22 @@ int ObTableQueryP::try_process()
   int ret = OB_SUCCESS;
   // statis
   bool is_hkv = (ObTableEntityType::ET_HKV == arg_.entity_type_);
+  bool is_hbase_op_valid = (OHOperationType::INVALID != arg_.hbase_op_type_);
   if (is_hkv) {
-    stat_process_type_ = ObTableProccessType::TABLE_API_HBASE_QUERY; // hbase query
+    if (is_hbase_op_valid) {
+      switch(arg_.hbase_op_type_) {
+        case OHOperationType::GET:
+        case OHOperationType::EXISTS:
+        case OHOperationType::GET_LIST:
+        case OHOperationType::EXISTS_LIST:
+          stat_process_type_ = ObTableProccessType::TABLE_API_HBASE_GET;
+          break;
+        default:
+          break;
+      }
+    } else {
+      stat_process_type_ = ObTableProccessType::TABLE_API_HBASE_QUERY; // hbase query
+    }
   } else {
     stat_process_type_ = ObTableProccessType::TABLE_API_TABLE_QUERY;// table query
   }

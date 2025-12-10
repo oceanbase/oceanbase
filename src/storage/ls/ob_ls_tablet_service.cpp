@@ -4821,13 +4821,24 @@ int ObLSTabletService::put_rows_to_tablet(
   const ObDMLBaseParam &dml_param = run_ctx.dml_param_;
   ObRelativeTable &data_table = run_ctx.relative_table_;
   const int64_t row_count = rows_info.get_rowkey_cnt();
-
-  for (int64_t i = 0; i < run_ctx.col_descs_->count() && OB_SUCC(ret); ++i) {
-    const ObColDesc &column = run_ctx.col_descs_->at(i);
-    if (column.col_type_.is_lob_storage()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Lob column uses put_rows interface");
-      LOG_WARN("put_rows not support lob", K(ret), K(column));
+  const ObTableSchemaParam &table_param = dml_param.table_param_->get_data_table();
+  for (int64_t i = 0; i < row_count && OB_SUCC(ret); ++i) {
+    blocksstable::ObDatumRow &datum_row = rows_info.rows_[i];
+    for (int64_t j = 0; j < run_ctx.col_descs_->count() && OB_SUCC(ret); ++j) {
+      const ObColDesc &column = run_ctx.col_descs_->at(j);
+      if (column.col_type_.is_lob_storage()) {
+        ObString raw_data = datum_row.storage_datums_[j].get_string();
+        bool has_lob_header = datum_row.storage_datums_[j].has_lob_header() && raw_data.length() > 0;
+        ObLobLocatorV2 src_data_locator(raw_data, has_lob_header);
+        int64_t new_byte_len = 0;
+        if (OB_FAIL(src_data_locator.get_lob_data_byte_len(new_byte_len))) {
+          LOG_WARN("fail to get lob byte len", K(ret));
+        } else if (new_byte_len > table_param.get_lob_inrow_threshold()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "outrow Lob column uses put_rows interface");
+          LOG_WARN("put_rows not support outrow lob", K(ret), K(column), K(new_byte_len));
+        }
+      }
     }
   }
   if (OB_FAIL(ret)) {

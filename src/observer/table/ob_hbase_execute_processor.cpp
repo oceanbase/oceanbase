@@ -79,6 +79,7 @@
   } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(credential_.tenant_id_, schema_guard_))) {
     LOG_WARN("fail to get schema guard", K(ret), K(credential_.tenant_id_));
   }
+  std::unordered_set<uint64_t> tablet_set; // only used to dedupe tablet_ids and used in sql audit partition_cnt
   for (int i = 0; OB_SUCC(ret) && i < arg_.cf_rows_.count(); ++i) {
     const ObSimpleTableSchemaV2 *simple_schema = nullptr;
     ObLSID cur_ls_id(ObLSID::INVALID_LS_ID);
@@ -106,6 +107,7 @@
                                                                                     schema_guard_))) {
       LOG_WARN("fail to init schema cache guard", K(ret));
     } else {
+      same_cf_rows.set_tablet_set(&tablet_set);
       same_cf_rows.set_table_schema(simple_schema);
       ObTablePartCalculator part_calc(sess_guard_,
                                       schema_cache_guard_,
@@ -128,12 +130,32 @@
       }
     }
   } // end for
+  // record partition count
+  audit_ctx_.partition_cnt_ = tablet_set.size();
   return ret;
  }
 
  ObTableProccessType ObHbaseExecuteP::get_stat_process_type()
  {
-  return ObTableProccessType::TABLE_API_HBASE_PUT;
+  ObTableProccessType process_type = ObTableProccessType::TABLE_API_PROCESS_TYPE_INVALID;
+  bool is_hbase_op_valid = OHOperationType::INVALID != arg_.hbase_op_type_;
+  if (is_hbase_op_valid) {
+    switch(arg_.hbase_op_type_) {
+      case OHOperationType::PUT:
+        process_type = ObTableProccessType::TABLE_API_HBASE_PUT;
+        break;
+      case OHOperationType::PUT_LIST:
+      case OHOperationType::BATCH:
+      case OHOperationType::BATCH_CALLBACK:
+        process_type = ObTableProccessType::TABLE_API_HBASE_BATCH_PUT;
+        break;
+      default:
+        break;
+    }
+  } else {
+    process_type = ObTableProccessType::TABLE_API_HBASE_PUT;
+  }
+  return process_type;
  }
 
  int ObHbaseExecuteP::try_process()
@@ -173,6 +195,8 @@
           LOG_WARN("fail to put", K(ret), K(arg_.cf_rows_.at(i)), K(i));
         }
       }
+      // record ob rows
+      stat_row_count_ += arg_.cf_rows_.at(i).cell_count_;
     }
   }
   result_.set_err(ret);

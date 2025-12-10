@@ -802,9 +802,10 @@ template<class T>
 int ObTableRpcProcessor<T>::before_response(int error_code)
 {
   const int64_t elapsed_us = ObTimeUtility::fast_current_time() - RpcProcessor::get_receive_timestamp();
-  if (OB_SUCCESS == error_code) {
-    ObTableRpcProcessorUtil::record_stat(stat_process_type_, elapsed_us, stat_row_count_, enable_query_response_time_stats_);
+  if (OB_SUCCESS != error_code) {
+    stat_process_type_ = ObTableProccessType::TABLE_API_FAILED_OP;
   }
+  ObTableRpcProcessorUtil::record_stat(stat_process_type_, elapsed_us, stat_row_count_, enable_query_response_time_stats_);
   request_finish_callback(); // clear thread local variables used to wait in queue
   return RpcProcessor::before_response(error_code);
 }
@@ -929,12 +930,21 @@ ObTableProccessType ObTableApiProcessorBase::get_stat_process_type(bool is_reado
                                                                    ObTableOperationType::Type op_type)
 {
   ObTableEntityType entity_type = get_entity_type();
+  bool is_hkv = ObTableEntityType::ET_HKV == entity_type;
   ObTableProccessType process_type = ObTableProccessType::TABLE_API_PROCESS_TYPE_INVALID;
   if (is_readonly) {
-    if (is_same_properties_names) {
-      process_type = ObTableProccessType::TABLE_API_MULTI_GET;
+    if (is_hkv) {
+      if (is_same_type) { // for batch get
+        process_type = ObTableProccessType::TABLE_API_HBASE_QUERY;
+      } else { // hybrid batch of get and other operations
+        process_type = ObTableProccessType::TABLE_API_HBASE_HYBRID;
+      }
     } else {
-      process_type = ObTableProccessType::TABLE_API_BATCH_RETRIVE;
+      if (is_same_properties_names) {
+        process_type = ObTableProccessType::TABLE_API_MULTI_GET;
+      } else {
+        process_type = ObTableProccessType::TABLE_API_BATCH_RETRIVE;
+      }
     }
   } else if (is_same_type) {
     switch(op_type) {
@@ -942,7 +952,7 @@ ObTableProccessType ObTableApiProcessorBase::get_stat_process_type(bool is_reado
         process_type = ObTableProccessType::TABLE_API_MULTI_INSERT;
         break;
       case ObTableOperationType::DEL:
-        if (ObTableEntityType::ET_HKV == entity_type) {
+        if (is_hkv) {
           process_type = ObTableProccessType::TABLE_API_HBASE_DELETE;
         } else {
           process_type = ObTableProccessType::TABLE_API_MULTI_DELETE;
@@ -952,7 +962,7 @@ ObTableProccessType ObTableApiProcessorBase::get_stat_process_type(bool is_reado
         process_type = ObTableProccessType::TABLE_API_MULTI_UPDATE;
         break;
       case ObTableOperationType::INSERT_OR_UPDATE:
-        if (ObTableEntityType::ET_HKV == entity_type) {
+        if (is_hkv) {
           process_type = ObTableProccessType::TABLE_API_HBASE_PUT;
         } else {
           process_type = ObTableProccessType::TABLE_API_MULTI_INSERT_OR_UPDATE;
@@ -985,11 +995,60 @@ ObTableProccessType ObTableApiProcessorBase::get_stat_process_type(bool is_reado
         break;
     }
   } else {
-    if (ObTableEntityType::ET_HKV == entity_type) {
+    if (is_hkv) {
       process_type = ObTableProccessType::TABLE_API_HBASE_HYBRID;
     } else {
       process_type = ObTableProccessType::TABLE_API_BATCH_HYBRID;
     }
+  }
+  return process_type;
+}
+
+// only use for lsop batch hbase operations
+ObTableProccessType ObTableApiProcessorBase::get_hbase_process_type(OHOperationType hbase_op_type,
+                                                                    bool is_same_type, /* for all lsop operations, not tablet operations */
+                                                                    ObTableOperationType::Type table_op_type) {
+  ObTableProccessType process_type = ObTableProccessType::TABLE_API_PROCESS_TYPE_INVALID;
+  switch(hbase_op_type) {
+    case OHOperationType::PUT:
+      process_type = ObTableProccessType::TABLE_API_HBASE_PUT;
+      break;
+    case OHOperationType::DELETE:
+      process_type = ObTableProccessType::TABLE_API_HBASE_DELETE;
+      break;
+    case OHOperationType::GET_LIST:
+    case OHOperationType::EXISTS_LIST:
+      process_type = ObTableProccessType::TABLE_API_HBASE_BATCH_GET;
+      break;
+    case OHOperationType::PUT_LIST:
+      process_type = ObTableProccessType::TABLE_API_HBASE_BATCH_PUT;
+      break;
+    case OHOperationType::DELETE_LIST:
+      process_type = ObTableProccessType::TABLE_API_HBASE_BATCH_DELETE;
+      break;
+    case OHOperationType::BATCH:
+    case OHOperationType::BATCH_CALLBACK:
+      if (is_same_type) {
+        switch (table_op_type) {
+          case ObTableOperationType::DEL:
+          case ObTableOperationType::QUERY_AND_MUTATE:
+            process_type = ObTableProccessType::TABLE_API_HBASE_BATCH_DELETE;
+            break;
+          case ObTableOperationType::INSERT_OR_UPDATE:
+            process_type = ObTableProccessType::TABLE_API_HBASE_BATCH_PUT;
+            break;
+          case ObTableOperationType::SCAN:
+            process_type = ObTableProccessType::TABLE_API_HBASE_BATCH_GET;
+            break;
+          default:
+            break;
+        }
+      } else {
+        process_type = ObTableProccessType::TABLE_API_HBASE_HYBRID;
+        break;
+      }
+    default:
+      break;
   }
   return process_type;
 }

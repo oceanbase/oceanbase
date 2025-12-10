@@ -104,13 +104,12 @@ int ObTableTransUtils::setup_tx_snapshot(ObTableTransParam &trans_param)
 int ObTableTransUtils::init_read_trans(ObTableTransParam &trans_param)
 {
   int ret = OB_SUCCESS;
-  bool strong_read = ObTableConsistencyLevel::STRONG == trans_param.consistency_level_;
   ObTransService *txs = MTL(ObTransService*);
 
   if (OB_FAIL(txs->acquire_tx(trans_param.trans_desc_, OB_KV_DEFAULT_SESSION_ID))) {
     LOG_WARN("failed to acquire tx desc", K(ret));
   } else if (OB_FAIL(setup_tx_snapshot(trans_param))) {
-    LOG_WARN("setup txn snapshot fail", K(ret), K(trans_param), K(strong_read));
+    LOG_WARN("setup txn snapshot fail", K(ret), K(trans_param));
     txs->release_tx(*trans_param.trans_desc_);
     trans_param.trans_desc_ = NULL;
   }
@@ -131,13 +130,6 @@ int ObTableTransUtils::start_trans(ObTableTransParam &trans_param)
 {
   int ret = OB_SUCCESS;
   NG_TRACE(T_start_trans_begin);
-  bool strong_read = ObTableConsistencyLevel::STRONG == trans_param.consistency_level_;
-
-  if ((!trans_param.is_readonly_) && (ObTableConsistencyLevel::EVENTUAL == trans_param.consistency_level_)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "consistency level");
-    LOG_WARN("unsupported consistency level", K(ret));
-  }
   ObTransService *txs = MTL(ObTransService*);
 
   // 1. start transaction

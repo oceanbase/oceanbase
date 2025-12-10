@@ -37,8 +37,62 @@ public:
     is_redis_table_(false),
     is_redis_ttl_(false),
     has_cell_ttl_(false),
-    redis_model_(ObRedisDataModel::MODEL_MAX)
-  {}
+    redis_model_(ObRedisDataModel::MODEL_MAX),
+    scan_index_()
+  {
+    MEMSET(scan_index_buf_, 0, sizeof(scan_index_buf_));
+  }
+
+  // Copy constructor
+  ObTTLTaskParam(const ObTTLTaskParam& other)
+  : ttl_(other.ttl_),
+    max_version_(other.max_version_),
+    is_htable_(other.is_htable_),
+    tenant_id_(other.tenant_id_),
+    user_id_(other.user_id_),
+    database_id_(other.database_id_),
+    table_id_(other.table_id_),
+    is_redis_table_(other.is_redis_table_),
+    is_redis_ttl_(other.is_redis_ttl_),
+    has_cell_ttl_(other.has_cell_ttl_),
+    redis_model_(other.redis_model_),
+    scan_index_()
+  {
+    MEMCPY(scan_index_buf_, other.scan_index_buf_, sizeof(scan_index_buf_));
+    // If scan_index_ points to other's buffer, point to our own buffer
+    if (other.scan_index_.ptr() == other.scan_index_buf_) {
+      scan_index_.assign_ptr(scan_index_buf_, other.scan_index_.length());
+    } else {
+      scan_index_ = other.scan_index_;
+    }
+  }
+
+  // Assignment operator
+  ObTTLTaskParam& operator=(const ObTTLTaskParam& other)
+  {
+    if (this != &other) {
+      ttl_ = other.ttl_;
+      max_version_ = other.max_version_;
+      is_htable_ = other.is_htable_;
+      tenant_id_ = other.tenant_id_;
+      user_id_ = other.user_id_;
+      database_id_ = other.database_id_;
+      table_id_ = other.table_id_;
+      is_redis_table_ = other.is_redis_table_;
+      is_redis_ttl_ = other.is_redis_ttl_;
+      has_cell_ttl_ = other.has_cell_ttl_;
+      redis_model_ = other.redis_model_;
+
+      MEMCPY(scan_index_buf_, other.scan_index_buf_, sizeof(scan_index_buf_));
+      // If scan_index_ points to other's buffer, point to our own buffer
+      if (other.scan_index_.ptr() == other.scan_index_buf_) {
+        scan_index_.assign_ptr(scan_index_buf_, other.scan_index_.length());
+      } else {
+        scan_index_ = other.scan_index_;
+      }
+    }
+    return *this;
+  }
 
   bool is_valid() const
   {
@@ -79,6 +133,9 @@ public:
   bool is_redis_ttl_;
   bool has_cell_ttl_;
   ObRedisDataModel redis_model_;
+  // for ttl scan index
+  char scan_index_buf_[OB_MAX_OBJECT_NAME_LENGTH];
+  ObString scan_index_;
 };
 
 
@@ -111,7 +168,8 @@ public:
     err_code_(OB_SUCCESS),
     tenant_id_(common::OB_INVALID_TENANT_ID),
     ls_id_(),
-    consumer_group_id_(0)
+    consumer_group_id_(0),
+    scan_index_()
   {
   }
 
@@ -139,7 +197,7 @@ public:
   TO_STRING_KV(K_(task_id), K_(tablet_id), K_(table_id), K_(is_user_trigger),
                K_(is_user_trigger), K_(row_key), K_(ttl_del_cnt),
                K_(max_version_del_cnt), K_(scan_cnt), K_(err_code),
-               K_(tenant_id), K_(ls_id), K_(consumer_group_id));
+               K_(tenant_id), K_(ls_id), K_(consumer_group_id), K_(scan_index));
 
   int64_t          task_id_;
   common::ObTabletID       tablet_id_;
@@ -153,6 +211,7 @@ public:
   int64_t          tenant_id_;
   share::ObLSID    ls_id_;
   int64_t          consumer_group_id_;
+  common::ObString scan_index_;
 };
 
 } // end namespace table

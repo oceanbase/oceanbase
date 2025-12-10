@@ -160,6 +160,33 @@ int32_t ObTableQueryAndMutateP::get_stat_process_type(bool is_hkv, bool is_check
   return process_type;
 }
 
+int32_t ObTableQueryAndMutateP::get_stat_process_type(OHOperationType hbase_op_type)
+{
+  int32_t process_type = ObTableProccessType::TABLE_API_PROCESS_TYPE_MAX;
+  switch(hbase_op_type) {
+    case OHOperationType::APPEND:
+      process_type = ObTableProccessType::TABLE_API_HBASE_APPEND;
+      break;
+    case OHOperationType::INCREMENT_COLUMN_VALUE:
+    case OHOperationType::INCREMENT:
+      process_type = ObTableProccessType::TABLE_API_HBASE_INCREMENT;
+      break;
+    case OHOperationType::CHECK_AND_DELETE:
+      process_type = ObTableProccessType::TABLE_API_HBASE_CHECK_AND_DELETE;
+      break;
+    case OHOperationType::CHECK_AND_PUT:
+      process_type = ObTableProccessType::TABLE_API_HBASE_CHECK_AND_PUT;
+      break;
+    case OHOperationType::CHECK_AND_MUTATE:
+      process_type = ObTableProccessType::TABLE_API_HBASE_CHECK_AND_MUTATE;
+      break;
+    default:
+      process_type = ObTableProccessType::TABLE_API_PROCESS_TYPE_MAX;
+      break;
+  }
+  return process_type;
+}
+
 int ObTableQueryAndMutateP::check_heap_table()
 {
   int ret = OB_SUCCESS;
@@ -230,7 +257,7 @@ int ObTableQueryAndMutateP::old_try_process()
     qm_param.simple_table_schema_ = simple_table_schema_;
     qm_param.schema_cache_guard_ = &schema_cache_guard_;
     qm_param.sess_guard_ = &sess_guard_;
-    SMART_VAR(QueryAndMutateHelper, helper, allocator_, qm_param, audit_ctx_) {
+    SMART_VAR(QueryAndMutateHelper, helper, allocator_, qm_param, audit_ctx_, stat_row_count_) {
       if (OB_FAIL(helper.execute_query_and_mutate())) {
         LOG_WARN("fail to process query and mutate", KR(ret));
       } else {
@@ -295,7 +322,7 @@ int ObTableQueryAndMutateP::new_try_process()
     } else if (OB_FAIL(model->work(exec_ctx_, arg_, result_))) {
       LOG_WARN("model fail to work", K(ret), K_(arg), K_(result));
     }
-
+    stat_row_count_ = exec_ctx_.get_stat_row_count();
     bool need_rollback_trans = (OB_SUCCESS != ret);
     int tmp_ret = ret;
     const bool use_sync = true;
@@ -314,10 +341,16 @@ int ObTableQueryAndMutateP::try_process()
   table_id_ = arg_.table_id_;
   tablet_id_ = arg_.tablet_id_;
   const bool is_hkv = (ObTableEntityType::ET_HKV == arg_.entity_type_);
+  const bool is_hbase_op_valid = (OHOperationType::INVALID != arg_.hbase_op_type_);
   // statis
-  stat_process_type_ = get_stat_process_type(is_hkv,
-                                             arg_.query_and_mutate_.is_check_and_execute(),
-                                             arg_.query_and_mutate_.get_mutations().at(0).type());
+  if (is_hbase_op_valid) {
+    stat_process_type_ = get_stat_process_type(arg_.hbase_op_type_);
+  } else {
+    stat_process_type_ = get_stat_process_type(is_hkv,
+                                               arg_.query_and_mutate_.is_check_and_execute(),
+                                               arg_.query_and_mutate_.get_mutations().at(0).type());
+  }
+
   if (ObTableProccessType::TABLE_API_HBASE_INCREMENT != stat_process_type_ &&
       ObTableProccessType::TABLE_API_HBASE_APPEND != stat_process_type_) {
     arg_.query_and_mutate_.get_query().set_batch(1);
@@ -327,9 +360,12 @@ int ObTableQueryAndMutateP::try_process()
     ret = new_try_process();
   } else {
     ret = old_try_process();
+    // record events
+    // hbase stat row count has been reocrd in QueryAndMutateHelper
+    if (!is_hkv) {
+      stat_row_count_ = 1;
+    }
   }
-  // record events
-  stat_row_count_ = 1;
 
   int64_t rpc_timeout = 0;
   if (NULL != rpc_pkt_) {

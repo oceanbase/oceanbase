@@ -71,6 +71,7 @@ int ObKvSchemaCacheObj::cons_table_info(const ObTableSchema *table_schema)
     set_is_partitioned_table(table_schema->is_partitioned_table());
     set_is_secondary_part(table_schema->get_part_level() == PARTITION_LEVEL_TWO);
     set_is_heap_table(!table_schema->is_table_with_pk());
+    lob_inrow_threshold_ = table_schema->get_lob_inrow_threshold();
     if (OB_FAIL(ObHTableUtils::get_mode_type(*table_schema, hbase_mode_type_))) {
       LOG_WARN("fail to get mode type", K(ret));
     } else if (hbase_mode_type_ == ObHbaseModeType::OB_HBASE_NORMAL_TYPE) {

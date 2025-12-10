@@ -50,7 +50,8 @@ public:
       entity_factory_(nullptr),
       simple_schema_(nullptr),
       table_schema_(nullptr),
-      is_async_commit_(false)
+      is_async_commit_(false),
+      stat_row_count_(0)
   {}
   ~ObTableExecCtx() = default;
   TO_STRING_KV(K_(sess_guard),
@@ -61,8 +62,8 @@ public:
                K_(table_name),
                K_(table_id),
                K_(ls_id),
-               K_(is_async_commit)
-               );
+               K_(is_async_commit),
+               K_(stat_row_count));
 public:
   OB_INLINE common::ObIAllocator &get_allocator() const { return alloc_; }
   OB_INLINE void set_cb_allocator(common::ObIAllocator *alloc) { cb_alloc_ = alloc; }
@@ -95,6 +96,8 @@ public:
   OB_INLINE void set_simple_schema(const share::schema::ObSimpleTableSchemaV2 *simple_schema) { simple_schema_ = simple_schema; }
   OB_INLINE void set_async_commit(bool is_async) { is_async_commit_ = is_async; }
   OB_INLINE bool is_async_commit() const { return is_async_commit_; }
+  OB_INLINE void add_stat_row_count(int64_t row_count) { stat_row_count_ += row_count; }
+  OB_INLINE int64_t get_stat_row_count() { return stat_row_count_; }
 private:
   common::ObIAllocator &alloc_;
   common::ObIAllocator *cb_alloc_;
@@ -112,6 +115,7 @@ private:
   const share::schema::ObSimpleTableSchemaV2 *simple_schema_;
   const share::schema::ObTableSchema *table_schema_;
   bool is_async_commit_;
+  int64_t stat_row_count_;
 };
 
 struct ObTableQMParam

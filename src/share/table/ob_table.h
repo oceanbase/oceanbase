@@ -287,7 +287,7 @@ public:
   OB_INLINE virtual const ObIArray<ObObj>& get_rowkey_objs() const { return rowkey_; };
   virtual common::ObTabletID get_tablet_id() const { return tablet_id_; }
   virtual void set_tablet_id(common::ObTabletID tablet_id) { tablet_id_ = tablet_id; }
-
+  int init_rowkey(int64_t rowkey_cnt) { return rowkey_.prepare_allocate(rowkey_cnt); }
   DECLARE_TO_STRING;
 private:
   bool has_exist_in_properties(const ObString &name, int64_t *idx = nullptr) const;
@@ -422,6 +422,29 @@ struct ObTableOperationType
         type == DEL || type == UPDATE || type == INSERT_OR_UPDATE ||
         type == REPLACE || type == INCREMENT || type == APPEND || type == REDIS || type == QUERY_AND_MUTATE;
   }
+};
+
+enum class OHOperationType : int
+{
+  INVALID = 0,
+  PUT = 1,
+  PUT_LIST = 2,
+  DELETE = 3,
+  DELETE_LIST = 4,
+  GET = 5,
+  GET_LIST = 6,
+  EXISTS = 7,
+  EXISTS_LIST = 8,
+  BATCH = 9,
+  BATCH_CALLBACK = 10,
+  SCAN = 11,
+  CHECK_AND_PUT = 12,
+  CHECK_AND_DELETE = 13,
+  CHECK_AND_MUTATE = 14,
+  APPEND = 15,
+  INCREMENT = 16,
+  INCREMENT_COLUMN_VALUE = 17,
+  MUTATE_ROW = 18
 };
 
 /// A table operation
@@ -1181,7 +1204,6 @@ public:
   /// @brief set ob_params for hbase or redis
   int set_ob_params(ObKVParams ob_params);
   int add_aggregation(ObTableAggregation &aggregation);
-
   const ObIArray<ObString> &get_select_columns() const { return select_columns_; }
 
   const ObIArray<common::ObNewRange> &get_scan_ranges() const { return key_ranges_; }
@@ -2325,6 +2347,8 @@ public:
   ObHCfRows()
     : deserialize_alloc_(nullptr),
       now_ms_(-1),
+      cell_count_(0),
+      tablet_set_(nullptr),
       simple_table_schema_(nullptr),
       keys_(nullptr),
       real_table_name_()
@@ -2333,6 +2357,8 @@ public:
   ObHCfRows(const ObString &real_table_name, int64_t now_ms, common::ObIAllocator &allocator)
     : deserialize_alloc_(&allocator),
       now_ms_(now_ms),
+      cell_count_(0),
+      tablet_set_(nullptr),
       simple_table_schema_(nullptr),
       keys_(nullptr),
       real_table_name_(real_table_name),
@@ -2345,6 +2371,8 @@ public:
   {
     deserialize_alloc_ = nullptr;
     now_ms_ = -1;
+    cell_count_ = 0;
+    tablet_set_ = nullptr;
     simple_table_schema_ = nullptr;
     keys_ = nullptr;
     real_table_name_.reset();
@@ -2371,10 +2399,15 @@ public:
     }
     return cell_cnt;
   }
-  TO_STRING_KV(K_(now_ms), K_(real_table_name), K_(rows));
+  OB_INLINE void set_tablet_set(std::unordered_set<uint64_t> *tablet_set) {
+    tablet_set_ = tablet_set;
+  }
+  TO_STRING_KV(K_(now_ms), K_(real_table_name), K_(cell_count), K_(rows));
 public:
   common::ObIAllocator *deserialize_alloc_; // do not serialize
   int64_t now_ms_; // used for unify timestamp, do not serialize
+  int64_t cell_count_; // total number of cells, do not serialize
+  std::unordered_set<uint64_t> *tablet_set_; // used to record the number of tablets involved in this put
   const share::schema::ObSimpleTableSchemaV2 *simple_table_schema_; // do not serialize
   common::ObFixedArray<ObObj, ObIAllocator> *keys_; // used for constructing ObHCfRow, do not serialize
   ObString real_table_name_;

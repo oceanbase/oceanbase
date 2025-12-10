@@ -36,7 +36,8 @@ public:
         req_buf_len_(0),
         retry_count_(retry_count),
         user_client_addr_(user_client_addr),
-        filter_(nullptr)
+        filter_(nullptr),
+        partition_cnt_(1)
 
   {
     need_audit_ = GCONF.enable_sql_audit && need_audit;
@@ -46,7 +47,8 @@ public:
                K(common::ObString(req_buf_len_, req_buf_)),
                K_(exec_timestamp),
                K_(retry_count),
-               K_(user_client_addr));
+               K_(user_client_addr),
+               K_(partition_cnt));
   template<typename T>
   int generate_request_string(const T &request)
   {
@@ -84,6 +86,7 @@ public:
   const int32_t &retry_count_;
   const common::ObAddr &user_client_addr_;
   hfilter::Filter *filter_;
+  int64_t partition_cnt_;
 };
 
 template<typename T>
@@ -109,6 +112,7 @@ public:
         op_stmt_ptr_(nullptr),
         op_stmt_length_(0),
         op_stmt_pos_(0),
+        partition_cnt_(1),
         sess_guard_(sess_guard)
   {
     bool is_ctx_enable_audit = OB_NOT_NULL(audit_ctx_) ? audit_ctx_->need_audit_ : true; // default enable
@@ -147,7 +151,7 @@ public:
 
       record_.sql_cs_type_ = ObCharset::get_system_collation();
       record_.plan_id_ = 0;
-      record_.partition_cnt_ = 1;
+      record_.partition_cnt_ = partition_cnt_;
       record_.plan_type_ = sql::OB_PHY_PLAN_UNINITIALIZED;
       record_.is_executor_rpc_ = false;
       record_.is_inner_sql_ = false;
@@ -306,6 +310,7 @@ public:
   char *op_stmt_ptr_;
   int64_t op_stmt_length_;
   int64_t op_stmt_pos_;
+  int64_t partition_cnt_;
   ObTableApiSessGuard &sess_guard_;
 };
 
@@ -379,6 +384,7 @@ public:
       if (lib::is_diagnose_info_enabled()) {
         audit_.record_.exec_record_.record_start();
       }
+      audit_.partition_cnt_ = audit_.audit_ctx_->partition_cnt_;
       audit_.start_audit(credential_, audit_.audit_ctx_->get_request_string());
     }
   }
@@ -487,6 +493,7 @@ The following macro definition is used to record sql audit, how to use:
       audit.record_.exec_record_.record_start();                                          \
     }                                                                                     \
     audit.audit_ctx_ = audit_ctx;                                                         \
+    audit.partition_cnt_ = (audit_ctx)->partition_cnt_;                                   \
     audit.start_audit(credential, (audit_ctx)->get_request_string());                     \
   }
 

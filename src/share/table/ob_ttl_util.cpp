@@ -18,6 +18,9 @@
 #include "share/table/ob_table_config_util.h"
 #include "observer/table/utils/ob_htable_utils.h"
 #include "share/schema/ob_dependency_info.h"
+#include "sql/resolver/ob_schema_checker.h"
+#include "sql/resolver/ddl/ob_ddl_resolver.h"
+#include "share/restore/ob_import_util.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::table;
@@ -26,6 +29,8 @@ namespace oceanbase
 {
 namespace common
 {
+
+const ObString ObTTLTaskConstant::TTL_SCAN_INDEX_DEFAULT_VALUE = ObString::make_string("PRIMARY KEY");
 
 bool ObTTLTime::is_same_day(int64_t ttl_time1, int64_t ttl_time2)
 {
@@ -50,6 +55,19 @@ bool ObKVAttr::is_ttl_table() const
     is_ttl = (ttl_ > 0 || max_version_ > 0);
   }
   return is_ttl;
+}
+
+int ObKVAttr::deep_copy_ttl_scan_index(const ObString &ttl_scan_index)
+{
+  int ret = OB_SUCCESS;
+  if (ttl_scan_index.length() > OB_MAX_OBJECT_NAME_LENGTH) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ttl scan index is too long", K(ret), K(ttl_scan_index));
+  } else {
+    MEMCPY(ttl_scan_index_buf_, ttl_scan_index.ptr(), ttl_scan_index.length());
+    ttl_scan_index_ = ObString(ttl_scan_index.length(), ttl_scan_index_buf_);
+  }
+  return ret;
 }
 
 const char* ObTTLUtil::HBASE_KV_ATTR_FORMAT_STR = "{\"Hbase\": {%s\"State\": \"%s\"}}";
@@ -199,22 +217,51 @@ int ObTTLUtil::insert_ttl_task(uint64_t tenant_id,
   int ret = OB_SUCCESS;
   ObSqlString sql;
   int64_t affect_rows = 0;
-
-  if (OB_FAIL(sql.assign_fmt("INSERT INTO %s "
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+    LOG_WARN("get data version failed", K(ret));
+  } else if (data_version < DATA_VERSION_4_4_2_0) {
+    ObCStringHelper ret_code_helper;
+    const char *ret_code_str = ret_code_helper.convert(ObHexEscapeSqlStr(task.ret_code_));
+    if (OB_FAIL(sql.assign_fmt("INSERT INTO %s "
               "(gmt_create, gmt_modified, tenant_id, table_id, tablet_id, "
               "task_id, task_start_time, task_update_time, trigger_type, status,"
               " ttl_del_cnt, max_version_del_cnt, scan_cnt, ret_code, task_type, row_key)"
               " VALUE "
               "(now(), now(), %ld, %ld, %ld,"
               " %ld, %ld, %ld, %ld, %ld, "
-              " %ld, %ld, %ld,'%.*s', %ld, ",
+              " %ld, %ld, %ld,'%s', %ld, ",
               tname,
               tenant_id, task.table_id_, task.tablet_id_,
               task.task_id_, task.task_start_time_, task.task_update_time_, task.trigger_type_,
               task.status_, task.ttl_del_cnt_, task.max_version_del_cnt_,
-              task.scan_cnt_, task.ret_code_.length(), task.ret_code_.ptr(),
+              task.scan_cnt_, ret_code_str,
               static_cast<int64_t>(task.task_type_)))) {
-    LOG_WARN("sql assign fmt failed", K(ret));
+      LOG_WARN("sql assign fmt failed", K(ret));
+    }
+  } else {
+    ObCStringHelper ret_code_helper;
+    ObCStringHelper scan_index_helper;
+    const char *ret_code_str = ret_code_helper.convert(ObHexEscapeSqlStr(task.ret_code_));
+    const char *scan_index_str = scan_index_helper.convert(ObHexEscapeSqlStr(task.scan_index_));
+    if (OB_FAIL(sql.assign_fmt("INSERT INTO %s "
+      "(gmt_create, gmt_modified, tenant_id, table_id, tablet_id, "
+      "task_id, task_start_time, task_update_time, trigger_type, status,"
+      " ttl_del_cnt, max_version_del_cnt, scan_cnt, ret_code, task_type, scan_index, row_key)"
+      " VALUE "
+      "(now(), now(), %ld, %ld, %ld,"
+      " %ld, %ld, %ld, %ld, %ld, "
+      " %ld, %ld, %ld,'%s', %ld, '%s', ",
+      tname,
+      tenant_id, task.table_id_, task.tablet_id_,
+      task.task_id_, task.task_start_time_, task.task_update_time_, task.trigger_type_,
+      task.status_, task.ttl_del_cnt_, task.max_version_del_cnt_,
+      task.scan_cnt_, ret_code_str,
+      static_cast<int64_t>(task.task_type_), scan_index_str))) {
+      LOG_WARN("sql assign fmt failed", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(sql_append_hex_escape_str(task.row_key_, sql))) {
     LOG_WARN("fail to append rowkey", K(ret));
   } else if (OB_FAIL(sql.append(")"))) {
@@ -247,8 +294,9 @@ int ObTTLUtil::update_ttl_task(uint64_t tenant_id,
   // FILED_NAME = value string construct
   for (size_t i = 0; OB_SUCC(ret) && i < update_fields.count(); ++i) {
     ObTTLStatusField& field = update_fields.at(i);
-
-    if (OB_FAIL(sql.append_fmt("%s =", field.field_name_.ptr()))) {
+    ObCStringHelper helper;
+    const char *field_name_str = helper.convert(ObHexEscapeSqlStr(field.field_name_));
+    if (OB_FAIL(sql.append_fmt("%s =", field_name_str))) {
       LOG_WARN("sql assign fmt failed", K(ret));
     } else if (field.type_ == ObTTLStatusField::INT_TYPE) {
       if (OB_FAIL(sql.append_fmt("%ld", field.data_.int_))) {
@@ -259,7 +307,9 @@ int ObTTLUtil::update_ttl_task(uint64_t tenant_id,
         LOG_WARN("sql append fmt failed", K(ret));
       }
     } else if (field.type_ == ObTTLStatusField::STRING_TYPE) {
-      if (OB_FAIL(sql.append_fmt("%s", field.data_.str_.ptr()))) {
+      ObCStringHelper helper;
+      const char *str = helper.convert(ObHexEscapeSqlStr(field.data_.str_));
+      if (OB_FAIL(sql.append_fmt("%s", str))) {
         LOG_WARN("sql append fmt failed", K(ret));
       }
     } else {
@@ -307,15 +357,35 @@ int ObTTLUtil::update_ttl_task_all_fields(uint64_t tenant_id,
   int ret = OB_SUCCESS;
   ObSqlString sql;
   int64_t affect_rows = 0;
-
-  if (OB_FAIL(sql.assign_fmt("UPDATE %s SET "
-              "task_start_time = %ld, task_update_time = %ld, trigger_type = %ld, status = %ld,"
-              " ttl_del_cnt = %ld, max_version_del_cnt = %ld, scan_cnt = %ld, ret_code = '%.*s',"
-              " row_key = ",
-              tname, task.task_start_time_, task.task_update_time_, task.trigger_type_, task.status_,
-              task.ttl_del_cnt_, task.max_version_del_cnt_, task.scan_cnt_, task.ret_code_.length(),
-              task.ret_code_.ptr()))) {
-    LOG_WARN("sql assign fmt failed", K(ret));
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+    LOG_WARN("get data version failed", K(ret));
+  } else if (data_version < DATA_VERSION_4_4_2_0) {
+    ObCStringHelper ret_code_helper;
+    const char *ret_code_str = ret_code_helper.convert(ObHexEscapeSqlStr(task.ret_code_));
+    if (OB_FAIL(sql.assign_fmt("UPDATE %s SET "
+      "task_start_time = %ld, task_update_time = %ld, trigger_type = %ld, status = %ld,"
+      " ttl_del_cnt = %ld, max_version_del_cnt = %ld, scan_cnt = %ld, ret_code = '%s', "
+      " row_key = ",
+      tname, task.task_start_time_, task.task_update_time_, task.trigger_type_, task.status_,
+      task.ttl_del_cnt_, task.max_version_del_cnt_, task.scan_cnt_, ret_code_str))) {
+      LOG_WARN("sql assign fmt failed", K(ret));
+    }
+  } else {
+    ObCStringHelper ret_code_helper;
+    ObCStringHelper scan_index_helper;
+    const char *ret_code_str = ret_code_helper.convert(ObHexEscapeSqlStr(task.ret_code_));
+    const char *scan_index_str = scan_index_helper.convert(ObHexEscapeSqlStr(task.scan_index_));
+    if (OB_FAIL(sql.assign_fmt("UPDATE %s SET "
+      "task_start_time = %ld, task_update_time = %ld, trigger_type = %ld, status = %ld,"
+      " ttl_del_cnt = %ld, max_version_del_cnt = %ld, scan_cnt = %ld, ret_code = '%s', scan_index = '%s', "
+      " row_key = ",
+      tname, task.task_start_time_, task.task_update_time_, task.trigger_type_, task.status_,
+      task.ttl_del_cnt_, task.max_version_del_cnt_, task.scan_cnt_, ret_code_str, scan_index_str))) {
+      LOG_WARN("sql assign fmt failed", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(sql_append_hex_escape_str(task.row_key_, sql))) {
     LOG_WARN("fail to append rowkey", K(ret));
   } else if (OB_FAIL(sql.append_fmt(" WHERE tenant_id = %ld AND table_id = %ld"
@@ -366,16 +436,19 @@ int ObTTLUtil::read_ttl_tasks(uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
-
-  if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s where ", tname))) {
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+    LOG_WARN("get data version failed", K(ret));
+  } else if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s where ", tname))) {
     LOG_WARN("sql assign fmt failed", K(ret));
   }
 
   // FILED_NAME = value string construct
   for (size_t i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
     ObTTLStatusField& field = filters.at(i);
-
-    if (OB_FAIL(sql.append_fmt("%s = ", field.field_name_.ptr()))) {
+    ObCStringHelper helper;
+    const char *field_name_str = helper.convert(ObHexEscapeSqlStr(field.field_name_));
+    if (OB_FAIL(sql.append_fmt("%s = ", field_name_str))) {
       LOG_WARN("sql assign fmt failed", K(ret));
     } else if (field.type_ == ObTTLStatusField::INT_TYPE) {
       if (OB_FAIL(sql.append_fmt("%ld", field.data_.int_))) {
@@ -386,7 +459,9 @@ int ObTTLUtil::read_ttl_tasks(uint64_t tenant_id,
         LOG_WARN("sql append fmt failed", K(ret));
       }
     } else if (field.type_ == ObTTLStatusField::STRING_TYPE) {
-      if (OB_FAIL(sql.append_fmt("%s", field.data_.str_.ptr()))) {
+      ObCStringHelper helper;
+      const char *str = helper.convert(ObHexEscapeSqlStr(field.data_.str_));
+      if (OB_FAIL(sql.append_fmt("%s", str))) {
         LOG_WARN("sql append fmt failed", K(ret));
       }
     } else {
@@ -474,7 +549,21 @@ int ObTTLUtil::read_ttl_tasks(uint64_t tenant_id,
                     result_arr.at(idx).ret_code_.assign(err_buf, err_msg.length());
                   }
                 }
-             }
+              }
+              if (OB_SUCC(ret) && OB_NOT_NULL(allocator) && data_version >= DATA_VERSION_4_4_2_0) {
+                ObString scan_index;
+                char *scan_index_buf = nullptr;
+                EXTRACT_VARCHAR_FIELD_MYSQL(*result, "scan_index", scan_index);
+                if (OB_SUCC(ret) && !scan_index.empty()) {
+                  if (OB_ISNULL(scan_index_buf = static_cast<char *>(allocator->alloc(scan_index.length())))) {
+                    ret = OB_ALLOCATE_MEMORY_FAILED;
+                    LOG_WARN("failt to allocate memory", K(ret), K(scan_index));
+                  } else {
+                    MEMCPY(scan_index_buf, scan_index.ptr(), scan_index.length());
+                    result_arr.at(idx).scan_index_.assign(scan_index_buf, scan_index.length());
+                  }
+                }
+              }
             }
           }
         }
@@ -494,7 +583,10 @@ int ObTTLUtil::read_tenant_ttl_task(uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
-  if (!is_valid_tenant_id(tenant_id)) {
+  uint64_t data_version;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("get data version failed", K(ret));
+  } else if (!is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
   } else if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE table_id = '%ld'%s", OB_ALL_KV_TTL_TASK_TNAME, table_id, for_update ? " FOR UPDATE" : ""))) {
@@ -549,6 +641,20 @@ int ObTTLUtil::read_tenant_ttl_task(uint64_t tenant_id,
             } else {
               MEMCPY(err_buf, err_msg.ptr(), err_msg.length());
               ttl_record.ret_code_.assign(err_buf, err_msg.length());
+            }
+          }
+        }
+        if (OB_SUCC(ret) && OB_NOT_NULL(allocator) && data_version >= DATA_VERSION_4_4_2_0) {
+          ObString scan_index;
+          char *scan_index_buf = nullptr;
+          EXTRACT_VARCHAR_FIELD_MYSQL(*result, "scan_index", scan_index);
+          if (OB_SUCC(ret) && !scan_index.empty()) {
+            if (OB_ISNULL(scan_index_buf = static_cast<char *>(allocator->alloc(scan_index.length())))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("failt to allocate memory", K(ret), K(scan_index));
+            } else {
+              MEMCPY(scan_index_buf, scan_index.ptr(), scan_index.length());
+              ttl_record.scan_index_.assign(scan_index_buf, scan_index.length());
             }
           }
         }
@@ -622,7 +728,7 @@ int ObTTLUtil::move_task_to_history_table(uint64_t tenant_id, uint64_t task_id,
   if (OB_FAIL(sql.assign_fmt("replace into %s select gmt_create, gmt_modified,"
               " tenant_id, task_id, table_id, tablet_id, task_start_time,"
               " task_update_time, trigger_type, if(status=4, 4, 3) as status,"
-              " ttl_del_cnt, max_version_del_cnt, scan_cnt, row_key, ret_code, task_type from %s"
+              " ttl_del_cnt, max_version_del_cnt, scan_cnt, row_key, ret_code, task_type, scan_index from %s"
               " where task_id = %ld and tablet_id >= 0  and table_id >= 0"
               " order by tenant_id, task_id, table_id, tablet_id LIMIT %ld",
               share::OB_ALL_KV_TTL_TASK_HISTORY_TNAME,
@@ -686,21 +792,49 @@ int ObTTLUtil::replace_ttl_task(uint64_t tenant_id,
   int ret = OB_SUCCESS;
   ObSqlString sql;
   int64_t affect_rows = 0;
-
-  if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s "
-              "(gmt_create, gmt_modified, tenant_id, table_id, tablet_id, "
-              "task_id, task_start_time, task_update_time, trigger_type, status,"
-              " ttl_del_cnt, max_version_del_cnt, scan_cnt, ret_code, row_key)"
-              " VALUE "
-              "(now(), now(), %ld, %ld, %ld,"
-              " %ld, %ld, %ld, %ld, %ld, "
-              " %ld, %ld, %ld,'%.*s', ",
-              tname, // 0
-              tenant_id, task.table_id_, task.tablet_id_,
-              task.task_id_, task.task_start_time_, task.task_update_time_, task.trigger_type_, task.status_,
-              task.ttl_del_cnt_, task.max_version_del_cnt_,
-              task.scan_cnt_, task.ret_code_.length(), task.ret_code_.ptr()))) {
-    LOG_WARN("sql assign fmt failed", K(ret));
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+    LOG_WARN("get data version failed", K(ret));
+  } else if (data_version < DATA_VERSION_4_4_2_0) {
+    ObCStringHelper helper;
+    const char *ret_code_str = helper.convert(ObHexEscapeSqlStr(task.ret_code_));
+    if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s "
+      "(gmt_create, gmt_modified, tenant_id, table_id, tablet_id, "
+      "task_id, task_start_time, task_update_time, trigger_type, status,"
+      " ttl_del_cnt, max_version_del_cnt, scan_cnt, ret_code, row_key)"
+      " VALUE "
+      "(now(), now(), %ld, %ld, %ld,"
+      " %ld, %ld, %ld, %ld, %ld, "
+      " %ld, %ld, %ld,'%s', ",
+      tname, // 0
+      tenant_id, task.table_id_, task.tablet_id_,
+      task.task_id_, task.task_start_time_, task.task_update_time_, task.trigger_type_, task.status_,
+      task.ttl_del_cnt_, task.max_version_del_cnt_,
+      task.scan_cnt_, ret_code_str))) {
+      LOG_WARN("sql assign fmt failed", K(ret));
+    }
+  } else {
+    ObCStringHelper ret_code_helper;
+    ObCStringHelper scan_index_helper;
+    const char *ret_code_str = ret_code_helper.convert(ObHexEscapeSqlStr(task.ret_code_));
+    const char *scan_index_str = scan_index_helper.convert(ObHexEscapeSqlStr(task.scan_index_));
+    if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s "
+      "(gmt_create, gmt_modified, tenant_id, table_id, tablet_id, "
+      "task_id, task_start_time, task_update_time, trigger_type, status,"
+      " ttl_del_cnt, max_version_del_cnt, scan_cnt, ret_code, scan_index, row_key)"
+      " VALUE "
+      "(now(), now(), %ld, %ld, %ld,"
+      " %ld, %ld, %ld, %ld, %ld, "
+      " %ld, %ld, %ld,'%s', '%s', ",
+      tname, // 0
+      tenant_id, task.table_id_, task.tablet_id_,
+      task.task_id_, task.task_start_time_, task.task_update_time_, task.trigger_type_, task.status_,
+      task.ttl_del_cnt_, task.max_version_del_cnt_,
+      task.scan_cnt_, ret_code_str, scan_index_str))) {
+      LOG_WARN("sql assign fmt failed", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(sql_append_hex_escape_str(task.row_key_, sql))) {
     LOG_WARN("fail to append rowkey", K(ret));
   } else if (OB_FAIL(sql.append(")"))) {
@@ -919,7 +1053,35 @@ int ObTTLUtil::parse_kv_attributes_redis(json::Value *ast, ObKVAttr &kv_attr)
   return ret;
 }
 
+int ObTTLUtil::parse_kv_attributes_ttl_scan_index(json::Value *ast, ObKVAttr &kv_attr)
+{
+  int ret = OB_SUCCESS;
+  if (NULL == ast) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ttl scan index value node is null", K(ret), KP(ast));
+  } else if (ast->get_type() == json::JT_STRING) {
+    const ObString &ttl_scan_index = ast->get_string();
+    if (ttl_scan_index.empty()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "empty ttl scan index is");
+      LOG_WARN("ttl scan index is empty", K(ret), K(ttl_scan_index));
+    } else if (OB_FAIL(kv_attr.deep_copy_ttl_scan_index(ttl_scan_index))) {
+      LOG_WARN("fail to deep copy ttl scan index", K(ret), K(ttl_scan_index), K(kv_attr));
+    }
+  }
+  return ret;
+}
+
 int ObTTLUtil::parse_kv_attributes(const ObString &kv_attributes, ObKVAttr &kv_attr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(parse_kv_attributes(MTL_ID(), kv_attributes, kv_attr))) {
+    LOG_WARN("fail to parse kv attributes", K(ret), K(kv_attributes), K(kv_attr));
+  }
+  return ret;
+}
+
+int ObTTLUtil::parse_kv_attributes(uint64_t tenant_id, const ObString &kv_attributes, ObKVAttr &kv_attr)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator;
@@ -933,25 +1095,37 @@ int ObTTLUtil::parse_kv_attributes(const ObString &kv_attributes, ObKVAttr &kv_a
     LOG_WARN("failed to parse kv attributes", K(ret), K(kv_attributes));
   } else if (NULL != ast
              && ast->get_type() == json::JT_OBJECT
-             && ast->get_object().get_size() == 1) {
-    json::Pair *kv = ast->get_object().get_first();
-    if (NULL != kv && kv != ast->get_object().get_header()) {
-      if (kv->name_.case_compare("HBASE") == 0) {
+             && (ast->get_object().get_size() == 2 || ast->get_object().get_size() == 1)) {
+    DLIST_FOREACH(kv, ast->get_object()) {
+      if (kv_attr.type_ == ObKVAttr::INVALID && kv->name_.case_compare("HBASE") == 0) {
         if (OB_FAIL(parse_kv_attributes_hbase(kv->value_, kv_attr))) {
           LOG_WARN("fail to parse hbase kv attributes", K(ret), K(kv_attributes));
         } else {
           kv_attr.type_ = ObKVAttr::HBASE;
         }
-      } else if (kv->name_.case_compare("REDIS") == 0) {
+      } else if (kv_attr.type_ == ObKVAttr::INVALID && kv->name_.case_compare("REDIS") == 0) {
         if (OB_FAIL(parse_kv_attributes_redis(kv->value_, kv_attr))) {
           LOG_WARN("fail to parse redis kv attributes", K(ret), K(kv_attributes));
         } else {
           kv_attr.type_ = ObKVAttr::REDIS;
         }
-      } else if (kv->name_.case_compare("TABLE") == 0) {
+      } else if (kv_attr.type_ == ObKVAttr::INVALID && kv->name_.case_compare("TABLE") == 0) {
         if (OB_FAIL(parse_kv_attributes_table(kv->value_))) {
           LOG_WARN("failed to parse table kv attributes", K(ret), K(kv_attributes));
         } else {
+          kv_attr.type_ = ObKVAttr::TABLE;
+        }
+      } else if (is_default_scan_index(kv_attr.ttl_scan_index_) && kv->name_.case_compare("TTLScanIndex") == 0) {
+        uint64_t data_version;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+          LOG_WARN("fail to get data version", K(ret));
+        } else if (data_version < DATA_VERSION_4_4_2_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("ttl scan index is not supported in data version less than 4.4.2", K(ret), K(data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "ttl scan index in data version less than 4.4.2");
+        } else if (OB_FAIL(parse_kv_attributes_ttl_scan_index(kv->value_, kv_attr))) {
+          LOG_WARN("fail to parse ttl scan index kv attributes", K(ret), K(kv_attributes));
+        } else if (kv_attr.type_ == ObKVAttr::INVALID) {
           kv_attr.type_ = ObKVAttr::TABLE;
         }
       } else {
@@ -1035,17 +1209,16 @@ int ObTTLUtil::dispatch_ttl_cmd(const ObTTLParam &param)
   return ret;
 }
 
-int ObTableTTLChecker::init(const schema::ObTableSchema &table_schema, bool in_full_column_order)
+int ObTableTTLChecker::init(const schema::ObTableSchema &index_schema, const ObString &ttl_definition, bool in_full_column_order)
 {
   int ret = OB_SUCCESS;
-  int64_t tenant_id = table_schema.get_tenant_id();
+  int64_t tenant_id = index_schema.get_tenant_id();
   bool has_datetime_col = false;
   if (tenant_id == OB_INVALID_TENANT_ID) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant id", K(ret), K(tenant_id));
   } else {
     tenant_id_ = tenant_id;
-    ObString ttl_definition = table_schema.get_ttl_definition();
     if (ttl_definition.empty()) {
       // do nothing
     } else {
@@ -1138,8 +1311,8 @@ int ObTableTTLChecker::init(const schema::ObTableSchema &table_schema, bool in_f
           } else if (OB_FAIL(ttl_definition_.push_back(ttl_expr))) {
             LOG_WARN("fail to add ttl expr", K(ret), K(ttl_expr));
           } else if (in_full_column_order) {
-            schema::ObTableSchema::const_column_iterator iter = table_schema.column_begin();
-            schema::ObTableSchema::const_column_iterator end = table_schema.column_end();
+            schema::ObTableSchema::const_column_iterator iter = index_schema.column_begin();
+            schema::ObTableSchema::const_column_iterator end = index_schema.column_end();
             const schema::ObColumnSchemaV2 *col_schema = nullptr;
             bool find_col = false;
             for (int idx = 0; OB_SUCC(ret) && iter != end && !find_col; ++iter, idx++) {
@@ -1414,7 +1587,7 @@ int ObTTLUtil::check_is_normal_ttl_table(const ObTableSchema &table_schema, bool
       LOG_WARN("fail to check is htable ttl", K(ret));
     } else if (!is_ttl_table && !table_schema.get_kv_attributes().empty()) {
       ObKVAttr kv_attr;  // for check validity
-      if (OB_FAIL(parse_kv_attributes(table_schema.get_kv_attributes(), kv_attr))) {
+      if (OB_FAIL(parse_kv_attributes(table_schema.get_tenant_id(), table_schema.get_kv_attributes(), kv_attr))) {
         LOG_WARN("fail to parse kv attributes", KR(ret), "kv_attributes", table_schema.get_kv_attributes());
       } else if (kv_attr.is_ttl_table()) {
         is_ttl_table = true;
@@ -1453,7 +1626,7 @@ int ObTTLUtil::check_is_htable_ttl_(const ObTableSchema &table_schema, bool allo
   } else if (!table_schema.get_kv_attributes().empty()) {
     // htable ttl table should have at least one of max_version and time_to_live
     ObKVAttr kv_attr;
-    if (OB_FAIL(parse_kv_attributes(table_schema.get_kv_attributes(), kv_attr))) {
+    if (OB_FAIL(parse_kv_attributes(table_schema.get_tenant_id(), table_schema.get_kv_attributes(), kv_attr))) {
       LOG_WARN("fail to parse kv attributes", KR(ret), "kv_attributes", table_schema.get_kv_attributes());
     } else if (kv_attr.ttl_ > 0 || kv_attr.max_version_ > 0) {
       is_ttl_table = true;
@@ -1590,40 +1763,465 @@ bool ObTTLUtil::is_ttl_column(const ObString &orig_column_name, const ObIArray<O
   return bret;
 }
 
-int ObTTLUtil::check_kv_attributes(const schema::ObTableSchema &table_schema, bool by_admin)
+// Common validation logic including htable ddl check and max_versions
+int ObTTLUtil::check_kv_attributes_common_(ObKVAttr &attr,
+                                           schema::ObPartitionLevel part_level,
+                                           bool by_admin,
+                                           table::ObHbaseModeType mode_type)
 {
-  return ObTTLUtil::check_kv_attributes(table_schema.get_kv_attributes(), table_schema,
-    table_schema.ObPartitionSchema::get_part_level(), by_admin);
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_htable_ddl_supported_(attr, by_admin))) {
+    LOG_WARN("fail to check htable ddl supported", K(ret), K(attr), K(by_admin));
+  } else if (attr.is_max_versions_valid()) {
+    if (mode_type == table::ObHbaseModeType::OB_HBASE_SERIES_TYPE) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("timeseries hbase table with max versions is not supported",
+                  K(ret), K(attr));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "timeseries hbase table with max versions");
+    } else if (mode_type == table::ObHbaseModeType::OB_HBASE_NORMAL_TYPE &&
+        schema::PARTITION_LEVEL_TWO == part_level) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("secondary partitioned hbase table with max versions is not supported",
+                  K(ret), K(attr));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "secondary partitioned hbase table with max versions");
+    }
+  }
+  if (OB_SUCC(ret) && !is_default_scan_index(attr.ttl_scan_index_)) {
+    if (attr.type_ == ObKVAttr::REDIS) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "redis model do ttl task with scan index");
+      LOG_WARN("redis model do ttl task with scan index is not supported", K(ret), K(attr.type_));
+    } else if (attr.type_ == ObKVAttr::HBASE) {
+      if (mode_type == table::ObHbaseModeType::OB_HBASE_SERIES_TYPE) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("timeseries hbase table do ttl task with scan index is not supported",
+                    K(ret), K(attr.type_));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "timeseries hbase table do ttl task with scan index");
+      }
+    }
+  }
+  return ret;
 }
 
-int ObTTLUtil::check_kv_attributes(const ObString &kv_attributes,
+// Helper function to get ttl columns for HBASE type
+int ObTTLUtil::get_hbase_ttl_columns(const schema::ObTableSchema &table_schema,
+                                     ObIArray<ObString> &ttl_columns)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; i < table_schema.get_column_count() && OB_SUCC(ret); i++) {
+    const ObColumnSchemaV2 *column_schema = table_schema.get_column_schema_by_idx(i);
+    if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column schema is null", K(ret), K(i));
+    } else if (column_schema->is_hidden() || column_schema->is_shadow_column()) {
+      // do nothing
+    } else {
+      const ObString &column_name = column_schema->get_column_name_str();
+      if (is_column_name_match(column_name, ObHTableConstants::ROWKEY_CNAME_STR) ||
+          is_column_name_match(column_name, ObHTableConstants::CQ_CNAME_STR) ||
+          is_column_name_match(column_name, ObHTableConstants::VERSION_CNAME_STR) ||
+          is_column_name_match(column_name, ObHTableConstants::TTL_CNAME)) {
+        if (OB_FAIL(ttl_columns.push_back(column_name))) {
+          LOG_WARN("failed to push back ttl column", K(ret), K(column_name));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+// Overload for ObTableSchema*
+int ObTTLUtil::check_ttl_scan_index_(ObKVAttr &attr,
+                                     const schema::ObTableSchema &table_schema,
+                                     table::ObHbaseModeType mode_type,
+                                     const schema::ObTableSchema &index_schema)
+{
+  int ret = OB_SUCCESS;
+  // 1. check if the scan index is exist
+  ObString index_name;
+  ObNameCaseMode name_case_mode = OB_NAME_CASE_INVALID;
+  if (!is_ttl_suport_scan_index(index_schema.get_index_type())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("this index type used for ttl scan is not supported", K(ret), K(index_schema.get_index_type()));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "this index type used for ttl scan is");
+  } else if (OB_FAIL(share::ObImportTableUtil::get_tenant_name_case_mode(table_schema.get_tenant_id(), name_case_mode))) {
+    LOG_WARN("failed to get tenant name case mode", K(ret), K(table_schema.get_tenant_id()));
+  } else if (OB_NAME_CASE_INVALID == name_case_mode) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected name case mode", K(ret));
+  } else if (OB_FAIL(index_schema.get_index_name(index_name))) {
+    LOG_WARN("failed to get index name", K(ret), K(index_schema));
+  } else if (!is_index_name_match(table_schema.get_tenant_id(), name_case_mode, attr.ttl_scan_index_, index_name)) {
+    ret = OB_WRONG_NAME_FOR_INDEX;
+    LOG_WARN("invalid index name", K(ret), K(attr.ttl_scan_index_), K(index_name));
+    LOG_USER_ERROR(OB_WRONG_NAME_FOR_INDEX, attr.ttl_scan_index_.length(), attr.ttl_scan_index_.ptr());
+  } else {  // 2. check the index columns if contains the ttl columns
+    ObSEArray<ObString, 4> ttl_columns;
+    if (attr.type_ == ObKVAttr::HBASE) {
+      if (OB_FAIL(get_hbase_ttl_columns(table_schema, ttl_columns))) {
+        LOG_WARN("failed to get hbase ttl columns", K(ret));
+      } else if (OB_FAIL(check_index_columns(index_schema, ttl_columns, true))) {
+        LOG_WARN("failed to check index columns", K(ret));
+      }
+    } else { // table
+      if (OB_FAIL(get_ttl_columns(table_schema.get_ttl_definition(), ttl_columns))) {
+        LOG_WARN("failed to get ttl columns", K(ret));
+      } else if (ttl_columns.empty()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("ttl columns is empty", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "ttl columns is empty");
+      } else if (OB_FAIL(check_index_columns(index_schema, ttl_columns))) {
+        LOG_WARN("failed to check index columns", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+// Overload for ObCreateIndexArg*
+int ObTTLUtil::check_ttl_scan_index_(ObKVAttr &attr,
+                                     const schema::ObTableSchema &table_schema,
+                                     table::ObHbaseModeType mode_type,
+                                     const obrpc::ObCreateIndexArg &index_arg)
+{
+  int ret = OB_SUCCESS;
+  // 1. check if the scan index is exist
+  const ObString &index_name = index_arg.index_name_;
+  ObNameCaseMode name_case_mode = OB_NAME_CASE_INVALID;
+  if (!is_ttl_suport_scan_index(index_arg.index_type_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("this index type used for ttl scan is not supported", K(ret), K(index_arg.index_type_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "this index type used for ttl scan is");
+  } else if (OB_FAIL(share::ObImportTableUtil::get_tenant_name_case_mode(table_schema.get_tenant_id(), name_case_mode))) {
+    LOG_WARN("failed to get tenant name case mode", K(ret), K(table_schema.get_tenant_id()));
+  } else if (OB_NAME_CASE_INVALID == name_case_mode) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected name case mode", K(ret));
+  } else if (!is_index_name_match(table_schema.get_tenant_id(), name_case_mode, attr.ttl_scan_index_, index_name)) {
+    ret = OB_WRONG_NAME_FOR_INDEX;
+    LOG_WARN("invalid index name", K(ret), K(attr.ttl_scan_index_), K(index_name));
+    LOG_USER_ERROR(OB_WRONG_NAME_FOR_INDEX, attr.ttl_scan_index_.length(), attr.ttl_scan_index_.ptr());
+  } else {  // 2. check the index columns if contains the ttl columns
+    ObSEArray<ObString, 4> ttl_columns;
+    if (attr.type_ == ObKVAttr::HBASE) {
+      if (OB_FAIL(get_hbase_ttl_columns(table_schema, ttl_columns))) {
+        LOG_WARN("failed to get hbase ttl columns", K(ret));
+      } else if (OB_FAIL(check_index_columns(index_arg, ttl_columns, true))) {
+        LOG_WARN("failed to check index columns", K(ret));
+      }
+    } else { // table
+      if (OB_FAIL(get_ttl_columns(table_schema.get_ttl_definition(), ttl_columns))) {
+        LOG_WARN("failed to get ttl columns", K(ret));
+      } else if (ttl_columns.empty()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("ttl columns is empty", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "ttl columns is empty");
+      } else if (OB_FAIL(check_index_columns(index_arg, ttl_columns))) {
+        LOG_WARN("failed to check index columns", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTTLUtil::check_kv_attributes(ObKVAttr &attr,
                                    const schema::ObTableSchema &table_schema,
+                                   const schema::ObTableSchema *index_schema,
                                    ObPartitionLevel part_level,
                                    bool by_admin)
 {
   int ret = OB_SUCCESS;
-  ObKVAttr attr;
-  if (OB_FAIL(ObTTLUtil::parse_kv_attributes(kv_attributes, attr))) {
-    LOG_WARN("fail to parse kv attributes", K(ret));
-  } else if (OB_FAIL(check_htable_ddl_supported_(attr, by_admin))) {
-    LOG_WARN("fail to check htable ddl supported", K(ret), K(attr), K(by_admin));
-  } else if (attr.is_max_versions_valid()) {
-    ObHbaseModeType mode_type = ObHbaseModeType::OB_INVALID_MODE_TYPE;
-    if (OB_FAIL(ObHTableUtils::get_mode_type(table_schema, mode_type))) {
-      LOG_WARN("fail to get hbase mode type", K(ret));
-    } else if (mode_type == ObHbaseModeType::OB_HBASE_SERIES_TYPE) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("timeseries hbase table with max versions is not supported",
-                  K(ret), K(kv_attributes));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "timeseries hbase table with max versions");
-    } else if (mode_type== ObHbaseModeType::OB_HBASE_NORMAL_TYPE &&
-        PARTITION_LEVEL_TWO == part_level) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("secondary partitioned hbase table with max versions is not supported",
-                  K(ret), K(kv_attributes));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "secondary partitioned hbase table with max versions");
+  table::ObHbaseModeType mode_type = table::ObHbaseModeType::OB_INVALID_MODE_TYPE;
+  if (OB_FAIL(ObHTableUtils::get_mode_type(table_schema, mode_type))) {
+    LOG_WARN("fail to get hbase mode type", K(ret));
+  } else if (OB_FAIL(check_kv_attributes_common_(attr, part_level, by_admin, mode_type))) {
+    LOG_WARN("fail to check kv attributes common", K(ret));
+  } else if (!is_default_scan_index(attr.ttl_scan_index_) && OB_NOT_NULL(index_schema)) {
+    if (OB_FAIL(check_ttl_scan_index_(attr, table_schema, mode_type, *index_schema))) {
+      LOG_WARN("fail to check ttl scan index", K(ret));
     }
   }
+
+  return ret;
+}
+
+int ObTTLUtil::check_kv_attributes(const share::schema::ObTableSchema &table_schema,
+                                   const common::ObIArray<obrpc::ObCreateIndexArg> &index_arg_list,
+                                   bool is_htable)
+{
+  int ret = OB_SUCCESS;
+  ObKVAttr kv_attr;
+  table::ObHbaseModeType mode_type = table::ObHbaseModeType::OB_INVALID_MODE_TYPE;
+  if (OB_FAIL(parse_kv_attributes(table_schema.get_tenant_id(), table_schema.get_kv_attributes(), kv_attr))) {
+    LOG_WARN("failed to parse kv attributes", K(ret));
+  } else if (OB_FAIL(ObHTableUtils::get_mode_type(table_schema, mode_type))) {
+    LOG_WARN("fail to get hbase mode type", K(ret));
+  } else if (OB_FAIL(check_kv_attributes_common_(kv_attr, table_schema.get_part_level(), is_htable, mode_type))) {
+    LOG_WARN("fail to check kv attributes common", K(ret));
+  } else if (!is_default_scan_index(kv_attr.ttl_scan_index_)) {
+    bool is_found = false;
+    ObNameCaseMode name_case_mode = OB_NAME_CASE_INVALID;
+    if (OB_FAIL(share::ObImportTableUtil::get_tenant_name_case_mode(table_schema.get_tenant_id(), name_case_mode))) {
+      LOG_WARN("failed to get tenant name case mode", K(ret), K(table_schema.get_tenant_id()));
+    } else if (OB_NAME_CASE_INVALID == name_case_mode) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected name case mode", K(ret));
+    }
+    for (int64_t i = 0; i < index_arg_list.count() && OB_SUCC(ret) && !is_found; ++i) {
+      const obrpc::ObCreateIndexArg &tmp_index_arg = index_arg_list.at(i);
+      if (is_index_name_match(table_schema.get_tenant_id(), name_case_mode, kv_attr.ttl_scan_index_, tmp_index_arg.index_name_)) {
+        is_found = true;
+        if (OB_FAIL(check_ttl_scan_index_(kv_attr, table_schema, mode_type, tmp_index_arg))) {
+          LOG_WARN("fail to check ttl scan index", K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret) && !is_found) {
+      ret = OB_WRONG_NAME_FOR_INDEX;
+      LOG_USER_ERROR(OB_WRONG_NAME_FOR_INDEX, kv_attr.ttl_scan_index_.length(), kv_attr.ttl_scan_index_.ptr());
+      LOG_WARN("invalid index name in kv_attributes", K(ret), K(kv_attr.ttl_scan_index_), K(name_case_mode));
+    }
+  }
+  return ret;
+}
+
+int ObTTLUtil::check_kv_attributes(ObKVAttr &kv_attr,
+                                   const share::schema::ObTableSchema &table_schema,
+                                   const sql::ObSchemaChecker *schema_checker,
+                                   obrpc::ObDDLArg *ddl_arg)
+{
+  int ret = OB_SUCCESS;
+
+  table::ObHbaseModeType mode_type = table::ObHbaseModeType::OB_INVALID_MODE_TYPE;
+  if (OB_FAIL(ObHTableUtils::get_mode_type(table_schema, mode_type))) {
+    LOG_WARN("fail to get hbase mode type", K(ret));
+  } else if (OB_FAIL(check_kv_attributes_common_(kv_attr, table_schema.get_part_level(), false /*by_admin*/, mode_type))) {
+    LOG_WARN("fail to check kv attributes common", K(ret));
+  } else if (!is_default_scan_index(kv_attr.ttl_scan_index_)) {
+    if (OB_ISNULL(schema_checker) || OB_ISNULL(ddl_arg)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema checker is NULL", K(ret));
+    } else {
+      ObString index_name;
+      ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+      if (OB_FAIL(table_schema.get_simple_index_infos(simple_index_infos))) {
+        LOG_WARN("get simple_index_infos failed", K(ret));
+      } else {
+        bool is_found = false;
+        ObNameCaseMode name_case_mode = OB_NAME_CASE_INVALID;
+        if (OB_FAIL(share::ObImportTableUtil::get_tenant_name_case_mode(table_schema.get_tenant_id(), name_case_mode))) {
+          LOG_WARN("failed to get tenant name case mode", K(ret), K(table_schema.get_tenant_id()));
+        } else if (OB_NAME_CASE_INVALID == name_case_mode) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected name case mode", K(ret));
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count() && !is_found; ++i) {
+          const share::schema::ObTableSchema *tmp_index_schema = NULL;
+          if (OB_FAIL(schema_checker->get_table_schema(table_schema.get_tenant_id(),
+                                                      simple_index_infos.at(i).table_id_,
+                                                      tmp_index_schema))) {
+            LOG_WARN("get_table_schema failed", K(ret), "table id", simple_index_infos.at(i).table_id_);
+          } else if (OB_ISNULL(tmp_index_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("table schema should not be null", K(ret));
+          } else if (OB_FAIL(tmp_index_schema->get_index_name(index_name))) {
+            LOG_WARN("failed to get index name", K(ret), K(*tmp_index_schema));
+          } else if (is_index_name_match(table_schema.get_tenant_id(), name_case_mode, kv_attr.ttl_scan_index_, index_name)) {
+            is_found = true;
+            if (OB_FAIL(check_ttl_scan_index_(kv_attr, table_schema, mode_type, *tmp_index_schema))) {
+              LOG_WARN("fail to check ttl scan index", K(ret));
+            } else if (OB_FAIL(ObDDLResolver::ob_add_ddl_dependency(tmp_index_schema->get_table_id(),
+                                                                    ObSchemaType::TABLE_SCHEMA,
+                                                                    tmp_index_schema->get_schema_version(),
+                                                                    tmp_index_schema->get_tenant_id(),
+                                                                    *ddl_arg))) {
+              LOG_WARN("fail to add ddl dependency", K(ret));
+            }
+          }
+        }
+        if (OB_SUCC(ret) && !is_found) {
+          ret = OB_WRONG_NAME_FOR_INDEX;
+          LOG_USER_ERROR(OB_WRONG_NAME_FOR_INDEX, kv_attr.ttl_scan_index_.length(), kv_attr.ttl_scan_index_.ptr());
+          LOG_WARN("invalid index name in kv_attributes", K(ret), K(kv_attr.ttl_scan_index_));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTTLUtil::is_ttl_suport_scan_index(ObIndexType index_type)
+{
+  return index_type == ObIndexType::INDEX_TYPE_NORMAL_LOCAL ||
+         index_type == ObIndexType::INDEX_TYPE_UNIQUE_LOCAL ||
+         index_type == ObIndexType::INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE ||
+         index_type == ObIndexType::INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE;
+}
+
+bool ObTTLUtil::is_default_scan_index(const ObString &scan_index)
+{
+  return scan_index.empty() || scan_index.case_compare(ObTTLTaskConstant::TTL_SCAN_INDEX_DEFAULT_VALUE) == 0;
+}
+
+bool ObTTLUtil::is_index_name_match(uint64_t tenant_id,
+                                    ObNameCaseMode name_case_mode,
+                                    const ObString &scan_index,
+                                    const ObString &index_name)
+{
+  uint64_t database_id = OB_INVALID_ID;
+  uint64_t session_id = OB_INVALID_ID;
+  ObTableSchemaHashWrapper index_name_wrapper(tenant_id, database_id, session_id, name_case_mode, index_name);
+  ObTableSchemaHashWrapper scan_index_wrapper(tenant_id, database_id, session_id, name_case_mode, scan_index);
+  return index_name_wrapper == scan_index_wrapper;
+}
+
+bool ObTTLUtil::is_column_name_match(const ObString &col_name, const ObString &other_col_name)
+{
+  ObColumnNameHashWrapper col_name_wrapper(col_name);
+  ObColumnNameHashWrapper other_col_name_wrapper(other_col_name);
+  return col_name_wrapper == other_col_name_wrapper;
+}
+
+int ObTTLUtil::check_index_exists(share::schema::ObSchemaGetterGuard &schema_guard,
+                                  const uint64_t tenant_id,
+                                  const uint64_t table_id,
+                                  const ObString &index_name,
+                                  const share::schema::ObTableSchema *&index_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tids[OB_MAX_INDEX_PER_TABLE];
+  int64_t index_cnt = OB_MAX_INDEX_PER_TABLE;
+  ObNameCaseMode name_case_mode = OB_NAME_CASE_INVALID;
+  if (OB_FAIL(schema_guard.get_can_read_index_array(tenant_id, table_id, tids,
+                                index_cnt, false/*with_mv*/))) {
+    LOG_WARN("failed to get can read index array", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_FAIL(share::ObImportTableUtil::get_tenant_name_case_mode(tenant_id, name_case_mode))) {
+    LOG_WARN("failed to get tenant name case mode", K(ret), K(tenant_id));
+  } else {
+    bool is_found = false;
+    for (int64_t i = 0; i < index_cnt && OB_SUCC(ret) && !is_found; i++) {
+      const share::schema::ObTableSchema *tmp_index_schema = nullptr;
+      if (OB_FAIL(schema_guard.get_table_schema(tenant_id, tids[i], tmp_index_schema))) {
+        LOG_WARN("failed to get index schema", K(ret), K(tenant_id), K(tids[i]));
+      } else if (OB_ISNULL(tmp_index_schema)) {
+        ret = OB_SCHEMA_ERROR;
+        LOG_WARN("index schema is null", K(ret), K(tenant_id), K(tids[i]));
+      } else {
+        ObString schema_index_name;
+        if (OB_FAIL(tmp_index_schema->get_index_name(schema_index_name))) {
+          LOG_WARN("failed to get index name", K(ret), K(tenant_id), K(tids[i]));
+        } else if (is_index_name_match(tenant_id, name_case_mode, index_name, schema_index_name)) {
+          ObIndexType index_type = tmp_index_schema->get_index_type();
+          if (!is_ttl_suport_scan_index(index_type)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("this index type used for ttl scan is not supported", K(ret), K(index_type));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "this index type used for ttl scan is");
+          } else {
+            is_found = true;
+            index_schema = tmp_index_schema;
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret) && !is_found) {
+      ret = OB_WRONG_NAME_FOR_INDEX;
+      LOG_WARN("invalid index name", K(ret), K(index_name));
+      LOG_USER_ERROR(OB_WRONG_NAME_FOR_INDEX, index_name.length(), index_name.ptr());
+    }
+  }
+  return ret;
+}
+
+int ObTTLUtil::check_index_columns(const obrpc::ObCreateIndexArg &index_arg,
+                                   const ObIArray<ObString> &ttl_columns,
+                                   bool is_hbase)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<obrpc::ObColumnSortItem> &index_columns = index_arg.index_columns_;
+  const ObIArray<ObString> &store_columns = index_arg.store_columns_;
+  for (int64_t i = 0; i < ttl_columns.count(); i++) {
+    bool is_index_column = false;
+    bool is_store_column = false;
+    for (int64_t j = 0; j < index_columns.count() && !is_index_column; j++) {
+      const ObString &index_column_name = index_columns.at(j).column_name_;
+      if (is_column_name_match(index_column_name, ttl_columns.at(i))) {
+        is_index_column = true;
+      }
+    }
+    if (!is_index_column) {
+      for (int64_t j = 0; j < store_columns.count() && !is_store_column; j++) {
+        const ObString &store_column_name = store_columns.at(j);
+        if (is_column_name_match(store_column_name, ttl_columns.at(i))) {
+          is_store_column = true;
+        }
+      }
+    }
+    if (!is_index_column && !is_store_column) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("index columns does not contain ttl column", K(ret), K(ttl_columns.at(i)));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "this ttl scan index does not contain ttl column is");
+    }
+  }
+  if (OB_SUCC(ret) && is_hbase) { // check hbase scan index columns order if is follow K,Q,T
+    bool is_follow_k_q_t = false;
+    if (index_columns.count() >= ObHTableConstants::HTABLE_ROWKEY_SIZE) {
+      if (is_column_name_match(index_columns.at(ObHTableConstants::COL_IDX_K).column_name_, ObHTableConstants::ROWKEY_CNAME_STR) &&
+         is_column_name_match(index_columns.at(ObHTableConstants::COL_IDX_Q).column_name_, ObHTableConstants::CQ_CNAME_STR) &&
+         is_column_name_match(index_columns.at(ObHTableConstants::COL_IDX_T).column_name_, ObHTableConstants::VERSION_CNAME_STR)) {
+        is_follow_k_q_t = true;
+      }
+    }
+    if (!is_follow_k_q_t) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("hbase scan index columns order is not followed by K,Q,T", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "hbase scan index columns order not followed by K,Q,T is");
+    }
+  }
+  return ret;
+}
+
+int ObTTLUtil::check_index_columns(const share::schema::ObTableSchema &index_schema,
+                                   const ObIArray<ObString> &index_columns,
+                                   bool is_hbase)
+{
+  int ret = OB_SUCCESS;
+  if (is_hbase && index_columns.count() < ObHTableConstants::HTABLE_ROWKEY_SIZE) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("hbase scan index columns order is not followed by K,Q,T", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "hbase scan index columns order not followed by K,Q,T is");
+  }
+  for (int64_t i = 0; i < index_columns.count() && OB_SUCC(ret); i++) {
+    const ObString &index_column_name = index_columns.at(i);
+    const ObColumnSchemaV2 *column_schema = nullptr;
+    if (OB_ISNULL(column_schema = index_schema.get_column_schema(index_column_name))) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("index columns does not contain ttl column", K(ret), K(index_column_name));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "this ttl scan index does not contain ttl column is");
+    } else if (is_hbase) {
+      if (column_schema->get_index_position() > 0) {
+        if (column_schema->get_index_position() - 1 == ObHTableConstants::COL_IDX_K) {
+          if (!is_column_name_match(index_column_name, ObHTableConstants::ROWKEY_CNAME_STR)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("hbase scan index columns order is not followed by K,Q,T", K(ret), K(index_column_name));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "hbase scan index columns order not followed by K,Q,T is");
+          }
+        } else if (column_schema->get_index_position() - 1 == ObHTableConstants::COL_IDX_Q) {
+          if (!is_column_name_match(index_column_name, ObHTableConstants::CQ_CNAME_STR)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("hbase scan index columns order is not followed by K,Q,T", K(ret), K(index_column_name));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "hbase scan index columns order not followed by K,Q,T is");
+          }
+        } else if (column_schema->get_index_position() - 1 == ObHTableConstants::COL_IDX_T) {
+          if (!is_column_name_match(index_column_name, ObHTableConstants::VERSION_CNAME_STR)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("hbase scan index columns order is not followed by K,Q,T", K(ret), K(index_column_name));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "hbase scan index columns order not followed by K,Q,T is");
+          }
+        }
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -1648,9 +2246,10 @@ int ObTTLUtil::check_htable_ddl_supported(const schema::ObTableSchema &table_sch
                                           const ObString &table_name)
 {
   int ret = OB_SUCCESS;
+  uint64_t tenant_id = table_schema.get_tenant_id();
   const ObString &kv_attributes = table_schema.get_kv_attributes();
   ObKVAttr attr;
-  if (OB_FAIL(ObTTLUtil::parse_kv_attributes(kv_attributes, attr))) {
+  if (OB_FAIL(ObTTLUtil::parse_kv_attributes(tenant_id, kv_attributes, attr))) {
     LOG_WARN("failed to parse kv attributes", K(ret));
   } else if (OB_FAIL(check_htable_ddl_supported_(attr, by_admin))) {
     LOG_WARN("failed to check htable ddl supported", K(ret));

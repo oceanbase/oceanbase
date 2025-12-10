@@ -37,26 +37,31 @@ public:
       scan_cnt_(0),
       last_row_(nullptr),
       has_cell_ttl_(false),
+      rowkey_cnt_(0),
       iter_end_ts_(0)
   {
-    rowkey_cell_ids_.set_attr(ObMemAttr(MTL_ID(), "TTLRowIter"));
-    properties_pairs_.set_attr(ObMemAttr(MTL_ID(), "TTLRowIter"));
+    column_pairs_.set_attr(ObMemAttr(MTL_ID(), "TTLRowIter"));
   }
   virtual ~ObTableTTLRowIterator() {}
   int init_common(const share::schema::ObTableSchema &table_schema);
   virtual int close() override;
-
 public:
-  struct PropertyPair
+  struct ColumnPair
   {
-    PropertyPair() = default;
-    PropertyPair(uint64_t cell_idx, const common::ObString &property_name)
+    ColumnPair() = default;
+    ColumnPair(uint64_t cell_idx, const common::ObString &col_name)
     : cell_idx_(cell_idx),
-      property_name_(property_name)
+      col_id_(OB_INVALID_ID),
+      col_name_(col_name),
+      is_rowkey_column_(false),
+      rowkey_pos_idx_(0)
     {}
     uint64_t cell_idx_;
-    common::ObString property_name_;
-    TO_STRING_KV(K_(cell_idx), K_(property_name));
+    uint64_t col_id_;
+    common::ObString col_name_;
+    bool is_rowkey_column_;
+    uint64_t rowkey_pos_idx_;
+    TO_STRING_KV(K_(cell_idx), K_(col_name), K_(is_rowkey_column), K_(col_id), K_(rowkey_pos_idx));
   };
 
 public:
@@ -68,10 +73,8 @@ public:
   uint64_t scan_cnt_;
   ObNewRow *last_row_;
   bool has_cell_ttl_;
-  // map new row -> rowkey column
-  common::ObSArray<uint64_t> rowkey_cell_ids_;
-  // map new row -> normal column
-  common::ObSArray<PropertyPair> properties_pairs_;
+  common::ObSArray<ColumnPair> column_pairs_;
+  int64_t rowkey_cnt_;
   int64_t iter_end_ts_;
 };
 
@@ -81,10 +84,12 @@ public:
   ObTableTTLDeleteRowIterator();
   ~ObTableTTLDeleteRowIterator() {}
   virtual int get_next_row(ObNewRow*& row);
-  int init(const share::schema::ObTableSchema &table_schema, const table::ObTableTTLOperation &ttl_operation);
-  int64_t get_rowkey_column_cnt() const { return rowkey_cnt_; }
+  int init(const share::schema::ObTableSchema &index_schema,
+           const ObString &ttl_definition,
+           const table::ObTableTTLOperation &ttl_operation);
   virtual int close() override;
-
+private:
+  int covert_row_to_entity(const ObNewRow &row, ObTableEntity &entity);
 public:
   common::ObArenaAllocator hbase_kq_allocator_;
   int32_t max_version_;
@@ -97,7 +102,6 @@ public:
   bool is_hbase_table_;
   bool has_cell_ttl_;
   common::ObTableTTLChecker ttl_checker_;
-  int64_t rowkey_cnt_;
   bool hbase_new_cq_;
 };
 
@@ -113,11 +117,12 @@ public:
   virtual int process() override;
 protected:
   virtual int get_scan_ranges(ObIArray<ObNewRange> &ranges, const ObKVAttr &kv_attributes);
-
+  virtual int init_ob_table_query(ObTableQuery &query, ObKVAttr &attr);
   int init_tb_ctx(ObKvSchemaCacheGuard &schema_cache_guard,
                   const table::ObITableEntity &entity,
                   table::ObTableCtx &ctx);
   int init_scan_tb_ctx(ObKvSchemaCacheGuard &schema_cache_guard,
+                       ObTableQuery &query,
                        table::ObTableCtx &tb_ctx,
                        table::ObTableApiCacheGuard &cache_guard);
   int execute_ttl_delete(ObKvSchemaCacheGuard &schema_cache_guard,
@@ -129,13 +134,19 @@ protected:
                          const table::ObITableEntity &new_entity,
                          int64_t &affected_rows,
                          transaction::ObTxDesc *trans_desc,
-                         transaction::ObTxReadSnapshot &snapshot);
+                         transaction::ObTxReadSnapshot &snapshot,
+                         bool is_skip_scan);
   common::ObIAllocator &get_allocator() { return allocator_; }
   int init_credential(const table::ObTTLTaskParam &ttl_param);
   int init_sess_info();
   int init_schema_info(int64_t tenant_id, uint64_t table_id);
   int init_kv_schema_guard(ObKvSchemaCacheGuard &schema_cache_guard);
-
+  int decide_and_check_scan_index(const share::schema::ObTableSchema &table_schema,
+                                  ObKVAttr &attr);
+  int construct_delete_entity(ObIArray<ObTableTTLRowIterator::ColumnPair> &column_pairs,
+                              const ObNewRow &row,
+                              ObTableEntity &entity);
+  int init_scan_index(const ObString &scan_index);
   common::ObTabletID get_tablet_id() const
   {
     return info_.get_tablet_id();
@@ -150,7 +161,6 @@ private:
   static const int64_t ONE_TASK_TIMEOUT = 1 * 60 * 1000 * 1000l; // 1min
 private:
   int process_one();
-
 private:
   common::ObArenaAllocator rowkey_allocator_;
   bool is_inited_;
@@ -159,13 +169,16 @@ private:
   table::ObTableApiCredential credential_;
   ObTableApiSessGuard sess_guard_;
   share::schema::ObSchemaGetterGuard schema_guard_;
-  const share::schema::ObSimpleTableSchemaV2 *simple_table_schema_;
+  const share::schema::ObTableSchema *table_schema_;
   common::ObArenaAllocator allocator_;
   common::ObRowkey rowkey_;
   table::ObTabletTTLScheduler *ttl_tablet_scheduler_;
   share::ObLSID ls_id_;
   ObTableEntity delete_entity_;
   uint64_t hbase_cur_version_;
+  const ObTableSchema* scan_index_schema_;
+  ObString scan_index_;
+  char scan_index_buf_[OB_MAX_OBJECT_NAME_LENGTH];
   DISALLOW_COPY_AND_ASSIGN(ObTableTTLDeleteTask);
 };
 
@@ -179,7 +192,7 @@ public:
                    const table::ObTTLHRowkeyTaskParam &ttl_para,
                    table::ObTTLTaskInfo &ttl_info);
 private:
-  virtual int get_scan_range(ObIArray<ObNewRange> &ranges);
+  virtual int get_scan_ranges(ObIArray<ObNewRange> &ranges, ObKVAttr &attr);
 
 private:
   common::ObArenaAllocator hrowkey_alloc_;

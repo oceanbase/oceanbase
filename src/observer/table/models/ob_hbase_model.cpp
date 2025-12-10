@@ -26,6 +26,7 @@ using namespace oceanbase::observer;
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::table;
+using namespace oceanbase::sql::stmt;
 
 int ObHBaseModel::check_mode_defense(ObTableExecCtx &ctx)
 {
@@ -79,10 +80,6 @@ int ObHBaseModel::check_mode_defense(ObTableExecCtx &ctx, const ObTableQueryRequ
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("hbase series mode is not supported batch query", K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "timeseries hbase table with batch query");
-    } else if (query.get_limit() > 0) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("hbase series mode is not supported limit query", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "timeseries hbase table with limit query");
     } else if (query.get_offset() > 0) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("hbase series mode is not supported offset query", K(ret));
@@ -225,6 +222,7 @@ int ObHBaseModel::calc_tablets(ObTableExecCtx &ctx,
   int ret = OB_SUCCESS;
   bool is_user_specific_T = req.query_and_mutate_.is_user_specific_T();
   ObIArray<ObTabletID> &tablet_ids = const_cast<ObIArray<ObTabletID>&>(req.query_and_mutate_.get_query().get_tablet_ids());
+  std::unordered_set<uint64_t> tablet_set; // only used to dedupe tablet_ids and used in sql audit partition_cnt
 
   if (is_user_specific_T) {
     // do nothing, tablet is correct when T is user specified
@@ -261,6 +259,14 @@ int ObHBaseModel::calc_tablets(ObTableExecCtx &ctx,
           LOG_WARN("fail to calc tablet_id", K(ret), K(ctx), K(entity));
         } else {
           entity->set_tablet_id(mutation_tablet_id);
+          tablet_set.emplace(mutation_tablet_id.id());
+        }
+      }
+      if (OB_NOT_NULL(ctx.get_audit_ctx())) {
+        if (tablet_set.size() == 0) { // delete op
+          ctx.get_audit_ctx()->partition_cnt_ = tablet_ids.count();
+        } else {
+          ctx.get_audit_ctx()->partition_cnt_ = tablet_set.size();
         }
       }
     }
@@ -637,6 +643,8 @@ int ObHBaseModel::work(ObTableExecCtx &ctx, const ObTableQueryRequest &req, ObTa
       LOG_WARN("failed to execute sync query", K(ret), K(query));
     }
   }
+  // record ob rows
+  ctx.add_stat_row_count(res.get_row_count());
   return ret;
 }
 
@@ -990,6 +998,8 @@ int ObHBaseModel::process_query_and_mutate_group(ObTableExecCtx &ctx,
             if (ret == OB_ITER_END && wide_row.rows_.count() > 0) {
               ret = OB_SUCCESS;
             }
+            // record ob rows
+            ctx.add_stat_row_count(wide_row.rows_.count());
             while (OB_SUCC(ret)) {
               if (OB_FAIL(wide_row.get_row(cell))) {
                 if (OB_ARRAY_OUT_OF_RANGE != ret) {
@@ -1188,6 +1198,8 @@ int ObHBaseModel::process_scan_group(ObTableExecCtx &ctx,
     } else if (OB_FAIL(aggregate_scan_result(ctx, *iter, single_op_result))) {
       LOG_WARN("failed to aggregate scan result", K(ret), KP(queries.at(i)), KP(iter));
     } else {
+      // record ob rows
+      ctx.add_stat_row_count(single_op_result.get_affected_rows());
       int tablet_idx = group.ops_.at(i).tablet_idx_;
       int single_op_idx = group.ops_.at(i).op_idx_;
       res.at(tablet_idx).at(single_op_idx) = single_op_result;

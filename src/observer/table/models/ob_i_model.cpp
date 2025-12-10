@@ -96,6 +96,9 @@ int ObIModel::prepare(ObTableExecCtx &ctx,
       ctx.set_ls_id(ls_id);
     }
   }
+  if (OB_NOT_NULL(ctx.get_audit_ctx())) {
+    ctx.get_audit_ctx()->partition_cnt_ = tablet_ids.count();
+  }
   LOG_DEBUG("ObIModel::prepare", K(ret), K(ctx), K(req.query_), K(tablet_ids));
 
   return ret;
@@ -175,6 +178,7 @@ int ObIModel::init_tablet_id_ops_map(ObTableExecCtx &ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("should only has one tablet op", K(ret), K(req.ls_op_->count()));
   } else {
+    int64_t query_tablet_cnt = 0;
     bool all_parts_are_clipped = true;
     bool only_one_ls = true;
     ObLSID first_ls_id(ObLSID::INVALID_LS_ID);
@@ -205,6 +209,7 @@ int ObIModel::init_tablet_id_ops_map(ObTableExecCtx &ctx,
             // maybe all partitions are clipped
             LOG_DEBUG("tablet ids is empty", KPC(query));
           } else {
+            query_tablet_cnt = max(query_tablet_cnt, tablet_ids.count());
             all_parts_are_clipped = false;
             tablet_id = tablet_ids.at(0);
             bool is_same_ls = false;
@@ -250,6 +255,9 @@ int ObIModel::init_tablet_id_ops_map(ObTableExecCtx &ctx,
     if (OB_SUCC(ret)) {
       if (only_one_ls && first_ls_id.is_valid()) {
         ctx.set_ls_id(first_ls_id); // local snapshot is enough
+      }
+      if (OB_NOT_NULL(ctx.get_audit_ctx())) {
+        ctx.get_audit_ctx()->partition_cnt_ = max(static_cast<int64_t>(map.size()), query_tablet_cnt);
       }
     }
 
@@ -556,6 +564,7 @@ int ObIModel::init_request_result_for_mix_batch(ObTableExecCtx &ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("new ls requests nums is not equal to single ops count", K(new_reqs.count()));
   } else {
+    std::unordered_set<uint64_t> tablet_set; // only used to dedupe tablet_ids and used in sql audit partition_cnt
     bool is_same_ls = false;
     ObLSID first_ls_id(ObLSID::INVALID_LS_ID);
     const ObTableTabletOp &src_tablet_op = src_req.ls_op_->at(0);
@@ -607,6 +616,7 @@ int ObIModel::init_request_result_for_mix_batch(ObTableExecCtx &ctx,
             LOG_WARN("fail to get ls id", K(ret), K(MTL_ID()), K(tablet_id));
           } else if (i == 0 && FALSE_IT(first_ls_id = ls_id)) {
           } else {
+            tablet_set.emplace(tablet_id.id());
             new_tablet_op.set_tablet_id(tablet_id);
             new_req->ls_op_->set_ls_id(ls_id);
             if (is_same_ls) {
@@ -624,6 +634,9 @@ int ObIModel::init_request_result_for_mix_batch(ObTableExecCtx &ctx,
     } // end for
     if (OB_SUCC(ret) && is_same_ls) {
       ctx.set_ls_id(first_ls_id);
+    }
+    if (OB_NOT_NULL(ctx.get_audit_ctx())) {
+      ctx.get_audit_ctx()->partition_cnt_ = tablet_set.size();
     }
   }
 
@@ -878,7 +891,8 @@ int ObIModel::prepare(ObTableExecCtx &arg_ctx,
 ////////////////////////////////// ObTableQueryAsyncRequest ////////////////////////////////////////
 int ObIModel::work(ObTableExecCtx &ctx,
                    const ObTableQueryAsyncRequest &req,
-                   ObTableQueryAsyncResult &res)
+                   ObTableQueryAsyncResult &res,
+                   ObTableExecCtx &arg_ctx)
 {
   int ret = OB_SUCCESS;
   ObIAsyncQueryIter *query_iter = nullptr;
@@ -902,17 +916,12 @@ int ObIModel::work(ObTableExecCtx &ctx,
       } else if (ObQueryOperationType::QUERY_END == query_type) {
         ret = query_iter->end(res);
       }
+      // record stat_row_count to processor exec_ctx to avoid use-after-free of execution ctx
+      arg_ctx.add_stat_row_count(ctx.get_stat_row_count());
       if (OB_FAIL(ret)) {
         LOG_WARN("query execution failed, need rollback", K(ret), K(query_type));
-        int tmp_ret = ret;
-        if (OB_FAIL(MTL(ObTableQueryASyncMgr*)->destory_query_session(query_session_))) {
-          LOG_WARN("faild to destory query session", K(ret), K(session_id));
-        }
-        ret = tmp_ret;
       } else if (res.is_end_) {
-        if (OB_FAIL(MTL(ObTableQueryASyncMgr*)->destory_query_session(query_session_))) {
-          LOG_WARN("fail to destory query session", K(ret), K(session_id));
-        }
+        // no more result, no need to set time info
       } else {
         if (ObQueryOperationType::QUERY_START == req.query_type_) {
           if (OB_FAIL(query_session_->alloc_req_timeinfo())) {

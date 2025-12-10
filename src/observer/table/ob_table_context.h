@@ -461,7 +461,7 @@ public:
   OB_INLINE const ObIArray<ObTableIndexInfo>& get_table_index_info() const { return table_index_info_; }
   OB_INLINE const ObTableApiCredential* get_credential() const { return credential_; }
   OB_INLINE ObTableAuditCtx* get_audit_ctx() { return audit_ctx_; }
-
+  OB_INLINE int64_t get_lob_inrow_threshold() const { return schema_cache_guard_->get_lob_inrow_threshold(); }
   // for scan
   OB_INLINE bool is_scan() const { return is_scan_; }
   OB_INLINE bool is_index_scan() const { return is_index_scan_; }
@@ -693,7 +693,7 @@ public:
   // 初始化insert_up相关
   int init_insert_up(bool is_client_set_put);
   // 初始化get相关
-  int init_get();
+  int init_get(bool is_weak_read = false);
   // 初始化increment相关
   int init_increment(bool return_affected_entity, bool return_rowkey);
   // 初始化append相关
@@ -714,7 +714,7 @@ public:
   bool is_ttl_table() const { return is_ttl_table_; }
 
   void set_is_ttl_table(bool is_ttl_table) { is_ttl_table_ = is_ttl_table; }
-  int init_ttl_delete(const ObIArray<ObNewRange> &scan_range);
+  int init_ttl_scan(ObTableQuery &query);
   int get_column_item_by_column_id(uint64_t column_id, const ObTableColumnItem *&item) const;
   int get_column_item_by_expr(sql::ObRawExpr *raw_expr, const ObTableColumnItem *&item) const;
   int get_column_item_by_expr(sql::ObColumnRefRawExpr *expr, const ObTableColumnItem *&item) const;

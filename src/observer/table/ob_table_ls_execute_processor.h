@@ -93,7 +93,8 @@ private:
                   const table::ObTableOperation &table_operation,
                   table::ObKvSchemaCacheGuard *shcema_cache_guard,
                   const ObSimpleTableSchemaV2 *table_schema,
-                  table::ObTableCtx &tb_ctx);
+                  table::ObTableCtx &tb_ctx,
+                  bool is_weak_read);
 
   int add_dict_and_bm_to_result_entity(const table::ObTableTabletOp &tablet_op,
                                        table::ObTableTabletOpResult &tablet_result);
@@ -170,7 +171,8 @@ private:
     int init_tb_ctx(table::ObTableSingleOp &single_op,
                     table::ObKvSchemaCacheGuard *shcema_cache_guard,
                     const ObSimpleTableSchemaV2 *table_schema,
-                    table::ObTableCtx &tb_ctx);
+                    table::ObTableCtx &tb_ctx,
+                    bool is_weak_read);
 
   protected:
     common::ObArenaAllocator allocator_;
