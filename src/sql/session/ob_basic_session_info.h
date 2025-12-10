@@ -2797,6 +2797,7 @@ private:
   int64_t sql_mem_used_;
   bool shadow_top_query_string_;
   bool use_pl_inner_info_string_;
+  bool route_to_column_replica_;
 public:
   bool get_enable_hyperscan_regexp_engine() const;
   int8_t get_min_const_integer_precision() const;
