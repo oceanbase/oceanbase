@@ -602,7 +602,7 @@ struct ObPlanStat
   static const int32_t MAX_SCAN_STAT_SIZE = 100;
   static const int64_t CACHE_POLICY_UPDATE_INTERVAL = 60 * 1000 * 1000; // 1 min
  // static const int64_t CACHE_POLICY_UPDATE_INTERVAL = 30L * 60 * 1000 * 1000; // 30 min
-  static const int64_t CACHE_POLICY_UDPATE_THRESHOLD = (1L << 20) - 1;
+  static const int64_t CACHE_POLICY_UDPATE_THRESHOLD = 1 << 20;
   static const int64_t CACHE_ACCESS_THRESHOLD = 3000;
   static constexpr double ENABLE_BF_CACHE_THRESHOLD = 0.10;
   static constexpr double ENABLE_ROW_CACHE_THRESHOLD = 0.06;
@@ -948,8 +948,9 @@ struct ObPlanStat
       ATOMIC_AAF(&fuse_row_cache_miss_cnt_, stat.fuse_row_cache_miss_cnt_);
       ATOMIC_AAF(&row_cache_hit_cnt_, stat.row_cache_hit_cnt_);
       ATOMIC_AAF(&row_cache_miss_cnt_, stat.row_cache_miss_cnt_);
-      SQL_PC_LOG(DEBUG, "[ROW_CACHE_ADJUST] update cache stat", K(plan_id_), K(update_times), K(fuse_row_cache_hit_cnt_), K(fuse_row_cache_miss_cnt_), K(row_cache_hit_cnt_), K(row_cache_miss_cnt_));
-      if (0 == (update_times & CACHE_POLICY_UDPATE_THRESHOLD)) {
+      SQL_PC_LOG(DEBUG, "[ROW_CACHE_ADJUST] update cache stat", K(plan_id_), K(update_times), K(fuse_row_cache_hit_cnt_),
+            K(fuse_row_cache_miss_cnt_), K(row_cache_hit_cnt_), K(row_cache_miss_cnt_));
+      if (1 == update_times % CACHE_POLICY_UDPATE_THRESHOLD) {
         if (bf_access_cnt_ > CACHE_ACCESS_THRESHOLD) {
           if (static_cast<double>(bf_filter_cnt_) / static_cast<double>(bf_access_cnt_)
               <= ENABLE_BF_CACHE_THRESHOLD) {
@@ -958,10 +959,17 @@ struct ObPlanStat
             enable_bf_cache_ = true;
           }
         }
+        int64_t tenant_id = MTL_ID();
+        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
         const int64_t row_cache_access_cnt = row_cache_miss_cnt_ + row_cache_hit_cnt_;
-        if (row_cache_access_cnt > CACHE_ACCESS_THRESHOLD) {
-          if (static_cast<double>(row_cache_hit_cnt_) / static_cast<double>(row_cache_access_cnt)
-              <= ENABLE_ROW_CACHE_THRESHOLD) {
+        int64_t row_cache_activate_threshold
+            = tenant_config.is_valid() ? tenant_config->_fuse_row_cache_activate_threshold : (ENABLE_ROW_CACHE_THRESHOLD * 100);
+        if (100 == row_cache_activate_threshold) {
+          // close row cache when tenant config is set to 100 at startup of the plan
+          enable_row_cache_ = false;
+        } else if (row_cache_access_cnt > CACHE_ACCESS_THRESHOLD) {
+          if (static_cast<double>(row_cache_hit_cnt_) / static_cast<double>(row_cache_access_cnt) * 100
+              <= row_cache_activate_threshold) {
             enable_row_cache_ = false;
           } else {
             enable_row_cache_ = true;

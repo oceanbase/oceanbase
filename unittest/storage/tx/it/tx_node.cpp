@@ -339,7 +339,13 @@ int ObTxNode::create_memtable_(const int64_t tablet_id, memtable::ObMemtable *&m
   table_key.scn_range_.end_scn_.set_max();
   ObLSHandle ls_handle;
   ls_handle.set_ls(ls_service_.ls_map_, fake_ls_, ObLSGetMod::DATA_MEMTABLE_MOD);
-  OZ (t->init(table_key, ls_handle, &fake_freezer_, &fake_memtable_mgr_, 0, 0));
+  #ifdef TX_NODE_MEMTABLE_USE_HASH_INDEX_FLAG
+    const bool use_hash_index = TX_NODE_MEMTABLE_USE_HASH_INDEX_FLAG;
+  #else
+    const bool use_hash_index = true;  // 默认值为 true
+  #endif
+  TRANS_LOG(INFO, "create_memtable_with_use_hash_index", K(use_hash_index), KPC(this));
+  OZ (t->init(table_key, ls_handle, &fake_freezer_, &fake_memtable_mgr_, 0, 0, use_hash_index));
   if (OB_SUCC(ret)) {
     mt = t;
   } else { delete t; }

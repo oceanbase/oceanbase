@@ -24,6 +24,7 @@ using namespace storage;
 class ObTestQueryRowIterator : public ObQueryRowIterator
 {
 public:
+  ObTestQueryRowIterator(const ObQRIterType type) : ObQueryRowIterator(type) {}
   virtual int get_next_row(blocksstable::ObDatumRow *&row)
   {
     return OB_SUCCESS;
@@ -83,7 +84,7 @@ TEST_F(ObGlobalIteratorPoolTest, init)
   ret = iter_pool.init();
   ASSERT_EQ(ret, OB_SUCCESS);
   const int64_t mem_limit = iter_pool.tenant_mem_user_limit_ * ObGlobalIteratorPool::ITER_POOL_MAX_MEM_PERCENT;
-  const int64_t bucket_cnt = mem_limit / (ObGlobalIteratorPool::ITER_POOL_ITER_MEM_LIMIT * (1 + ObGlobalIteratorPool::ITER_POOL_MAX_CACHED_ITER_TYPE));
+  const int64_t bucket_cnt = mem_limit / ObGlobalIteratorPool::ALL_ITER_TYPES_MEM_LIMIT;
   ASSERT_EQ(1, iter_pool.tenant_id_);
   ASSERT_EQ(bucket_cnt, iter_pool.bucket_cnt_);
   for (int64_t i = 0; i <= ObGlobalIteratorPool::ITER_POOL_MAX_CACHED_ITER_TYPE; ++i) {
@@ -127,16 +128,17 @@ TEST_F(ObGlobalIteratorPoolTest, get)
   ObArenaAllocator *iter_alloc = cached_node->get_iter_allocator();
   void *buf =iter_alloc->alloc(sizeof(ObTestQueryRowIterator));
   ASSERT_TRUE(nullptr != buf);
-  ObTestQueryRowIterator *merge = new (buf) ObTestQueryRowIterator();
+  ObTestQueryRowIterator *merge = new (buf) ObTestQueryRowIterator(type);
   cached_node->set_iter(merge);
 
   type = T_SINGLE_GET;
   CachedIteratorNode *cached_node1 = nullptr;
   ret = iter_pool.get(type, cached_node1);
   ASSERT_EQ(ret, OB_SUCCESS);
-  ASSERT_TRUE(nullptr == cached_node1);
+  ASSERT_TRUE(nullptr != cached_node1);
 
   iter_pool.release(cached_node);
+  iter_pool.release(cached_node1);
   ret = iter_pool.get(type, cached_node1);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_TRUE(nullptr != cached_node1);
@@ -144,7 +146,7 @@ TEST_F(ObGlobalIteratorPoolTest, get)
   ASSERT_TRUE(nullptr != cached_node1->iter_);
   ASSERT_TRUE(nullptr != cached_node1->stmt_iter_pool_);
   ASSERT_TRUE(merge == cached_node1->iter_);
-  iter_pool.release(cached_node);
+  iter_pool.release(cached_node1);
 
   type = T_MULTI_GET;
   CachedIteratorNode *mg_cached_node = nullptr;
@@ -192,7 +194,7 @@ TEST_F(ObGlobalIteratorPoolTest, release)
   ObArenaAllocator *iter_alloc = cached_node->get_iter_allocator();
   void *buf = iter_alloc->alloc(sizeof(ObTestQueryRowIterator));
   ASSERT_TRUE(nullptr != buf);
-  ObTestQueryRowIterator *merge = new (buf) ObTestQueryRowIterator();
+  ObTestQueryRowIterator *merge = new (buf) ObTestQueryRowIterator(type);
   cached_node->set_iter(merge);
   iter_pool.release(cached_node);
 
@@ -208,9 +210,9 @@ TEST_F(ObGlobalIteratorPoolTest, release)
   ObArenaAllocator *iter_alloc1 = cached_node1->get_iter_allocator();
   ASSERT_TRUE(iter_alloc == iter_alloc1);
   ASSERT_TRUE(iter_alloc1->total() > 0);
-  buf = iter_alloc1->alloc(ObGlobalIteratorPool::ITER_POOL_ITER_MEM_LIMIT + 1);
+  buf = iter_alloc1->alloc(ObGlobalIteratorPool::get_iter_type_mem_limit(type) + 1);
   ASSERT_TRUE(nullptr != buf);
-  ASSERT_TRUE(iter_alloc1->total() > ObGlobalIteratorPool::ITER_POOL_ITER_MEM_LIMIT);
+  ASSERT_TRUE(iter_alloc1->total() > ObGlobalIteratorPool::get_iter_type_mem_limit(type));
   iter_pool.release(cached_node1);
 
   CachedIteratorNode *cached_node2 = nullptr;
@@ -222,11 +224,11 @@ TEST_F(ObGlobalIteratorPoolTest, release)
   ASSERT_TRUE(nullptr != cached_node2->stmt_iter_pool_);
   ObArenaAllocator *iter_alloc2 = cached_node2->get_iter_allocator();
   ASSERT_TRUE(iter_alloc == iter_alloc2);
-  ASSERT_TRUE(iter_alloc2->total() < ObGlobalIteratorPool::ITER_POOL_ITER_MEM_LIMIT);
+  ASSERT_TRUE(iter_alloc2->total() < ObGlobalIteratorPool::get_iter_type_mem_limit(type));
 
   buf = iter_alloc->alloc(sizeof(ObTestQueryRowIterator));
   ASSERT_TRUE(nullptr != buf);
-  merge = new (buf) ObTestQueryRowIterator();
+  merge = new (buf) ObTestQueryRowIterator(type);
   cached_node2->set_iter(merge);
   cached_node2->set_exception_occur(true);
   iter_pool.release(cached_node2);
@@ -240,7 +242,7 @@ TEST_F(ObGlobalIteratorPoolTest, release)
   ASSERT_TRUE(nullptr != cached_node3->stmt_iter_pool_);
   ObArenaAllocator *iter_alloc3 = cached_node3->get_iter_allocator();
   ASSERT_TRUE(iter_alloc == iter_alloc3);
-  ASSERT_TRUE(iter_alloc3->total() < ObGlobalIteratorPool::ITER_POOL_ITER_MEM_LIMIT);
+  ASSERT_TRUE(iter_alloc3->total() < ObGlobalIteratorPool::get_iter_type_mem_limit(type));
 }
 
 TEST_F(ObGlobalIteratorPoolTest, destroy)
@@ -263,7 +265,7 @@ TEST_F(ObGlobalIteratorPoolTest, destroy)
   ObArenaAllocator *iter_alloc = cached_node->get_iter_allocator();
   void *buf = iter_alloc->alloc(sizeof(ObTestQueryRowIterator));
   ASSERT_TRUE(nullptr != buf);
-  ObTestQueryRowIterator *merge = new (buf) ObTestQueryRowIterator();
+  ObTestQueryRowIterator *merge = new (buf) ObTestQueryRowIterator(type);
   cached_node->set_iter(merge);
   iter_pool.release(cached_node);
 
@@ -296,7 +298,7 @@ TEST_F(ObGlobalIteratorPoolTest, wash)
   ObArenaAllocator *iter_alloc = cached_node->get_iter_allocator();
   void *buf = iter_alloc->alloc(sizeof(ObTestQueryRowIterator));
   ASSERT_TRUE(nullptr != buf);
-  ObTestQueryRowIterator *merge = new (buf) ObTestQueryRowIterator();
+  ObTestQueryRowIterator *merge = new (buf) ObTestQueryRowIterator(type);
   cached_node->set_iter(merge);
   buf = iter_alloc->alloc(256 * 1024);
   ASSERT_TRUE(nullptr != buf);

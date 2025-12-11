@@ -37,9 +37,9 @@ void CachedIteratorNode::reclaim(const bool force_release)
   if (OB_NOT_NULL(iter_)) {
     if (is_exception_occur_ ||
         force_release ||
-        iter_allocator_.total() > ObGlobalIteratorPool::ITER_POOL_ITER_MEM_LIMIT) {
+        iter_allocator_.total() > ObGlobalIteratorPool::get_iter_type_mem_limit(iter_->get_type())) {
       LOG_TRACE("[Global Iterator Pool] should release this iter", K(is_exception_occur_),
-                K(force_release), K(iter_allocator_.total()), KP(iter_));
+                K(force_release), K(iter_allocator_.total()), K(iter_->get_type()));
       destroy();
     } else {
       stmt_iter_pool_->reclaim();
@@ -206,13 +206,18 @@ int ObGlobalIteratorPool::inner_get(const ObQRIterType type, CachedIteratorNode 
   } else {
     int64_t tid = GETTID();
     CachedIteratorNode *cache_nodes = cached_node_array_[type];
-    const int64_t bucket_idx = tid % bucket_cnt_;
-    CachedIteratorNode *node_ptr = &cache_nodes[bucket_idx];
-    bool is_occupied = ATOMIC_LOAD(&node_ptr->is_occupied_);
-    if (is_occupied) {
-    } else if (is_occupied == ATOMIC_VCAS(&node_ptr->is_occupied_, is_occupied, true)) {
-      node_ptr->tid_ = tid;
-      cache_node = node_ptr;
+    int64_t bucket_idx = ((tid >> 16) ^ tid) % bucket_cnt_; // simple hash
+    const int64_t max_retry = 3;
+    for (int64_t i = 1; i <= max_retry; ++i) {
+      CachedIteratorNode *node_ptr = &cache_nodes[bucket_idx];
+      bool is_occupied = ATOMIC_LOAD(&node_ptr->is_occupied_);
+      if (is_occupied) {
+        bucket_idx = ((tid >> i) ^ tid) % bucket_cnt_;
+      } else if (is_occupied == ATOMIC_VCAS(&node_ptr->is_occupied_, is_occupied, true)) {
+        node_ptr->tid_ = tid;
+        cache_node = node_ptr;
+        break;
+      }
     }
   }
   if (0 == (++get_cnt_ % 100000)) {

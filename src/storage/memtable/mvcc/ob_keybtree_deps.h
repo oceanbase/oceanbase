@@ -15,6 +15,7 @@
 
 #include "lib/ob_abort.h"
 #include "lib/allocator/ob_retire_station.h"
+#include "lib/function/ob_function.h"
 
 #define BTREE_ASSERT(x) if (OB_UNLIKELY(!(x))) { ob_abort(); }
 
@@ -436,7 +437,7 @@ private:
 public:
   GetHandle(ObKeyBtree &tree): BaseHandle(tree.get_qclock()) { UNUSED(tree); }
   ~GetHandle() {}
-  int get(BtreeNode *root, BtreeKey key, BtreeVal &val);
+  int get(BtreeNode *root, BtreeKey key, BtreeVal &val, BtreeKey **copy_inner_key = nullptr);
 };
 
 template<typename BtreeKey, typename BtreeVal>
@@ -477,11 +478,15 @@ public:
 template<typename BtreeKey, typename BtreeVal>
 class WriteHandle: public BaseHandle<BtreeKey, BtreeVal>
 {
+public:
+  typedef ObFunction<int(const bool is_exist_key, BtreeKey &key, BtreeVal &val)> BtreeKvCreator;
+
 private:
   typedef BaseHandle<BtreeKey, BtreeVal> BaseHandle;
   typedef Path<BtreeKey, BtreeVal> Path;
   typedef BtreeNode<BtreeKey, BtreeVal> BtreeNode;
   typedef ObKeyBtree<BtreeKey, BtreeVal> ObKeyBtree;
+
 private:
   ObKeyBtree &base_;
   Path path_;
@@ -557,6 +562,10 @@ public:
   }
 public:
   int insert_and_split_upward(BtreeKey key, BtreeVal &val, BtreeNode *&new_root);
+  int insert_or_get_and_split_upward(BtreeKey key,
+                                     const BtreeKvCreator &creator,
+                                     BtreeVal &val,
+                                     BtreeNode *&new_root);
 private:
   int insert_into_node(BtreeNode *old_node, int pos, BtreeKey key, BtreeVal val, BtreeNode *&new_node_1, BtreeNode *&new_node_2);
   // judge whether it's wrlocked

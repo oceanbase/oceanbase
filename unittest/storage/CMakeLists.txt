@@ -155,6 +155,9 @@ storage_unittest(test_rebuild_src test_rebuild_src.cpp)
 
 if(OB_BUILD_CLOSE_MODULES)
 storage_dml_unittest(test_compaction_policy)
+
+storage_dml_unittest(test_compaction_policy_without_hash test_compaction_policy.cpp)
+target_compile_definitions(test_compaction_policy_without_hash PUBLIC MEMTABLE_USE_HASH_INDEX_FLAG=0)
 endif()
 
 if(OB_BUILD_CLOSE_MODULES)

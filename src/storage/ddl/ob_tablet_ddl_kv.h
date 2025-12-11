@@ -230,7 +230,8 @@ public : // derived from ObITabletMemtable
                    ObFreezer *freezer,
                    ObTabletMemtableMgr *memtable_mgr,
                    const int64_t schema_version,
-                   const uint32_t freeze_clock) override;
+                   const uint32_t freeze_clock,
+                   const bool use_hash_index) override;
   virtual void print_ready_for_flush() override;
   virtual int set_frozen() override { ATOMIC_SET(&is_independent_freezed_, true); return OB_SUCCESS; }
   virtual bool can_be_minor_merged() override;

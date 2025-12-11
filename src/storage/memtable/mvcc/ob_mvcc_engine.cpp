@@ -14,6 +14,9 @@
 #include "storage/memtable/ob_row_conflict_handler.h"
 #include "storage/access/ob_index_sstable_estimator.h"
 #include "storage/memtable/mvcc/ob_multi_version_iterator.h"
+#include "storage/memtable/mvcc/ob_query_engine.h"
+#include "storage/memtable/ob_memtable.h"
+
 
 namespace oceanbase
 {
@@ -75,7 +78,6 @@ void ObMvccEngine::destroy()
   engine_allocator_ = NULL;
   memtable_ = NULL;
 }
-
 int ObMvccEngine::try_compact_row_when_mvcc_read_(const SCN &snapshot_version,
                                                   ObMvccRow &row)
 {
@@ -117,7 +119,7 @@ int ObMvccEngine::get(ObMvccAccessCtx &ctx,
   } else if (OB_ISNULL(parameter_key)) {
     TRANS_LOG(WARN, "invalid param");
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(query_engine_->get(parameter_key, value, returned_key))) {
+  } else if (OB_FAIL(query_engine_get_(parameter_key, value, returned_key))) {
     if (OB_LIKELY(OB_ENTRY_NOT_EXIST == ret)) {
       // rewrite ret
       ret = OB_SUCCESS;
@@ -238,7 +240,7 @@ int ObMvccEngine::check_row_locked(ObMvccAccessCtx &ctx,
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "mvcc_engine not init", K(this));
-  } else if (OB_FAIL(query_engine_->get(key, value, &stored_key))) {
+  } else if (OB_FAIL(query_engine_get_(key, value, &stored_key))) {
     if (OB_LIKELY(OB_ENTRY_NOT_EXIST == ret)) {
       // rewrite ret
       ret = OB_SUCCESS;
@@ -249,102 +251,12 @@ int ObMvccEngine::check_row_locked(ObMvccAccessCtx &ctx,
 
   return ret;
 }
-
-int ObMvccEngine::create_kvs(const ObMemtableSetArg &memtable_set_arg,
-                             ObMemtableKeyGenerator &memtable_key_generator,
-                             // whether is normal insert and we can
-                             // optimize to alloc first in the case
-                             const bool is_normal_insert,
-                             ObStoredKVs &kvs)
-{
-  int ret = OB_SUCCESS;
-  const blocksstable::ObDatumRow *new_rows = memtable_set_arg.new_row_;
-  const int64_t row_count = memtable_set_arg.row_count_;
-  ObMemtableKeyGenerator::ObMemtableKeyBuffer *memtable_key_buffer =
-      memtable_key_generator.get_key_buffer();
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < row_count; i++) {
-    if (OB_FAIL(memtable_key_generator.generate_memtable_key(new_rows[i]))) {
-      TRANS_LOG(WARN, "generate memtable key fail", K(ret), K(memtable_set_arg));
-    } else if (OB_FAIL(create_kv(&memtable_key_generator.get_memtable_key(),
-                                 is_normal_insert,
-                                 &kvs.at(i).key_,
-                                 kvs.at(i).value_))) {
-      TRANS_LOG(WARN, "create kv fail", K(ret), K(memtable_set_arg));
-    } else if (nullptr != memtable_key_buffer &&
-               OB_FAIL(memtable_key_buffer->push_back(kvs[i].key_))) {
-      TRANS_LOG(WARN, "push back stored memtable key into buffer failed", K(ret));
-    }
-  }
-
-  return ret;
-}
-
-int ObMvccEngine::create_kv(const ObMemtableKey *key,
-                            const bool is_insert,
-                            ObMemtableKey *stored_key,
-                            ObMvccRow *&value)
-{
-  int64_t loop_cnt = 0;
-  int ret = OB_SUCCESS;
-  value = nullptr;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    TRANS_LOG(WARN, "mvcc_engine not init", K(this));
-  } else {
-
-    while (OB_SUCCESS == ret && NULL == value) {
-      ObStoreRowkey *tmp_key = nullptr;
-      // We optimize the create_kv operation by skipping the first hash table
-      // get for insert operation because it is unnecessary at most cases. Under
-      // the concurrent inserts, we rely on the conflict on the hash table set
-      // and the while loops for the next hash table get to maintain the origin
-      // create_kv semantic
-      if (!(0 == loop_cnt // is the first try in the loop
-            && is_insert) // is insert dml operation
-          && OB_SUCC(query_engine_->get(key, value, stored_key))) {
-        if (NULL == value) {
-          ret = OB_ERR_UNEXPECTED;
-          TRANS_LOG(WARN, "get NULL value");
-        }
-      } else if (OB_FAIL(kv_builder_->dup_key(tmp_key,
-                                              *engine_allocator_,
-                                              key->get_rowkey()))) {
-        TRANS_LOG(WARN, "key dup fail", K(ret));
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-      } else if (OB_FAIL(stored_key->encode(tmp_key))) {
-        TRANS_LOG(WARN, "key encode fail", K(ret));
-      } else if (NULL == (value = (ObMvccRow *)engine_allocator_->alloc(sizeof(*value)))) {
-        TRANS_LOG(WARN, "alloc ObMvccRow fail");
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-      } else {
-        value = new(value) ObMvccRow();
-        if (OB_SUCCESS == (ret = query_engine_->set(stored_key, value))) {
-        } else if (OB_ENTRY_EXIST == ret) {
-          ret = OB_SUCCESS;
-          value = NULL;
-        } else {
-          value = NULL;
-        }
-      }
-      loop_cnt++;
-    }
-    if (loop_cnt > 2) {
-      if (REACH_TIME_INTERVAL(10 * 1000 * 1000) || 3 == loop_cnt) {
-        TRANS_LOG(ERROR, "unexpected loop cnt when preparing kv", K(ret), K(loop_cnt), K(*key), K(*stored_key));
-      }
-    }
-  }
-
-  return ret;
-}
-
 int ObMvccEngine::mvcc_write(storage::ObStoreCtx &ctx,
-                             ObMvccRow &value,
-                             const ObTxNodeArg &arg,
-                             const bool check_exist,
-                             void *buf, // preallocted buffer for ObMvccTransNode
-                             ObMvccWriteResult &res)
+                              ObMvccRow &value,
+                              const ObTxNodeArg &arg,
+                              const bool check_exist,
+                              void *buf, // preallocted buffer for ObMvccTransNode
+                              ObMvccWriteResult &res)
 {
   int ret = OB_SUCCESS;
   ObMvccTransNode *node = (ObMvccTransNode *)buf;
@@ -394,8 +306,7 @@ int ObMvccEngine::mvcc_write(storage::ObStoreCtx &ctx,
   return ret;
 }
 
-int ObMvccEngine::mvcc_replay(const ObTxNodeArg &arg,
-                              ObMvccReplayResult &res)
+int ObMvccEngine::mvcc_replay(const ObTxNodeArg &arg, ObMvccReplayResult &res)
 {
   int ret = OB_SUCCESS;
   ObMvccTransNode *node = NULL;
@@ -498,28 +409,242 @@ void ObMvccEngine::finish_kvs(ObMvccWriteResults& results)
     }
   }
 }
+void ObMvccEngine::mvcc_undo(ObMvccRow *value)
+{
+  value->mvcc_undo();
+}
 
-int ObMvccEngine::ensure_kv(const ObMemtableKey *stored_key,
-                            ObMvccRow *value)
+int ObMvccEngine::create_kv(const ObMemtableKey *key,
+                            const bool no_get_before_set,
+                            ObMemtableKey *stored_key,
+                            ObMvccRow *&value)
 {
   int ret = OB_SUCCESS;
-
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    TRANS_LOG(WARN, "mvcc_engine not init", K(this));
+    TRANS_LOG(WARN, "not init", K(ret));
+  } else {
+    ret = create_kv_(key, no_get_before_set, stored_key, value);
+  }
+  return ret;
+}
+
+int ObMvccEngine::create_kvs(const ObMemtableSetArg &memtable_set_arg,
+                             ObMemtableKeyGenerator &memtable_key_generator,
+                             const bool no_get_before_set,
+                             ObStoredKVs &kvs)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", K(ret));
+  } else {
+    const blocksstable::ObDatumRow *new_rows = memtable_set_arg.new_row_;
+    const int64_t row_count = memtable_set_arg.row_count_;
+    ObMemtableKeyGenerator::ObMemtableKeyBuffer *memtable_key_buffer =
+        memtable_key_generator.get_key_buffer();
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < row_count; i++) {
+      if (OB_FAIL(memtable_key_generator.generate_memtable_key(new_rows[i]))) {
+        TRANS_LOG(WARN, "generate memtable key fail", K(ret), K(memtable_set_arg));
+      } else if (OB_FAIL(create_kv_(&memtable_key_generator.get_memtable_key(),
+                                    no_get_before_set,
+                                    &kvs.at(i).key_,
+                                    kvs.at(i).value_))) {
+        TRANS_LOG(WARN, "create kv fail", K(ret), K(memtable_set_arg));
+      } else if (nullptr != memtable_key_buffer &&
+                 OB_FAIL(memtable_key_buffer->push_back(kvs[i].key_))) {
+        TRANS_LOG(WARN, "push back stored memtable key into buffer failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMvccEngine::ensure_kv(const ObMemtableKey *stored_key, ObMvccRow *value)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", K(ret));
   } else {
     ObRowLatchGuard guard(value->latch_);
-    if (OB_FAIL(query_engine_->ensure(stored_key,
-                                      value))) {
+    if (OB_FAIL(query_engine_->ensure(stored_key, value))) {
       TRANS_LOG(WARN, "ensure_row fail", K(ret));
     }
   }
   return ret;
 }
 
-void ObMvccEngine::mvcc_undo(ObMvccRow *value)
+int ObMvccEngine::query_engine_get_(const ObMemtableKey *parameter_key,
+                                    ObMvccRow *&row,
+                                    ObMemtableKey *returned_key)
 {
-  value->mvcc_undo();
+  return query_engine_->get(parameter_key, row, returned_key);
 }
+
+int ObMvccEngine::create_kv_(const ObMemtableKey *key,
+                             const bool no_get_before_set,
+                             ObMemtableKey *stored_key,
+                             ObMvccRow *&value)
+{
+  int64_t loop_cnt = 0;
+  int ret = OB_SUCCESS;
+  value = nullptr;
+  while (OB_SUCCESS == ret && NULL == value) {
+    ObStoreRowkey *tmp_key = nullptr;
+    // We optimize the create_kv operation by skipping the first hash table
+    // get for insert operation because it is unnecessary at most cases. Under
+    // the concurrent inserts, we rely on the conflict on the hash table set
+    // and the while loops for the next hash table get to maintain the origin
+    // create_kv semantic
+    if (!(0 == loop_cnt // is the first try in the loop
+          && no_get_before_set)
+        && OB_SUCC(query_engine_->get(key, value, stored_key))) {
+      if (NULL == value) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "get NULL value");
+      }
+    } else if (OB_FAIL(kv_builder_->dup_key(tmp_key,
+                                            *engine_allocator_,
+                                            key->get_rowkey()))) {
+      TRANS_LOG(WARN, "key dup fail", K(ret));
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else if (OB_FAIL(stored_key->encode(tmp_key))) {
+      TRANS_LOG(WARN, "key encode fail", K(ret));
+    } else if (NULL == (value = (ObMvccRow *)engine_allocator_->alloc(sizeof(*value)))) {
+      TRANS_LOG(WARN, "alloc ObMvccRow fail");
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else {
+      value = new(value) ObMvccRow();
+      if (OB_SUCCESS == (ret = query_engine_->set(stored_key, value))) {
+      } else if (OB_ENTRY_EXIST == ret) {
+        ret = OB_SUCCESS;
+        value = NULL;
+      } else {
+        value = NULL;
+      }
+    }
+    loop_cnt++;
+  }
+
+  if (loop_cnt > 2) {
+    if (REACH_TIME_INTERVAL(10 * 1000 * 1000) || 3 == loop_cnt) {
+      TRANS_LOG(ERROR, "unexpected loop cnt when preparing kv", K(ret), K(loop_cnt), K(*key), K(*stored_key));
+    }
+  }
+  return ret;
 }
+
+
+//========================== ObMvccEngineWithoutHashIndex ==========================//
+
+ObMvccEngineWithoutHashIndex::ObMvccEngineWithoutHashIndex()
+  : ObMvccEngine()
+{
 }
+
+ObMvccEngineWithoutHashIndex::~ObMvccEngineWithoutHashIndex()
+{
+}
+int ObMvccEngineWithoutHashIndex::create_kv(const ObMemtableKey *key,
+                                            const bool no_get_before_set,
+                                            ObMemtableKey *stored_key,
+                                            ObMvccRow *&value)
+{
+  UNUSED(no_get_before_set);
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", K(ret));
+  } else {
+    ret = create_btree_kv_(key, stored_key, value);
+  }
+  return ret;
+}
+
+int ObMvccEngineWithoutHashIndex::create_kvs(const ObMemtableSetArg &memtable_set_arg,
+                                             ObMemtableKeyGenerator &memtable_key_generator,
+                                             const bool no_get_before_set,
+                                             ObStoredKVs &kvs)
+{
+  UNUSED(no_get_before_set);
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", K(ret));
+  } else {
+    const blocksstable::ObDatumRow *new_rows = memtable_set_arg.new_row_;
+    const int64_t row_count = memtable_set_arg.row_count_;
+    ObMemtableKeyGenerator::ObMemtableKeyBuffer *memtable_key_buffer = memtable_key_generator.get_key_buffer();
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < row_count; i++) {
+      if (OB_FAIL(memtable_key_generator.generate_memtable_key(new_rows[i]))) {
+        TRANS_LOG(WARN, "generate memtable key fail", K(ret), K(memtable_set_arg));
+      } else if (OB_FAIL(create_btree_kv_(&memtable_key_generator.get_memtable_key(),
+                                          &kvs.at(i).key_,
+                                          kvs.at(i).value_))) {
+        TRANS_LOG(WARN, "create kv fail", K(ret), K(memtable_set_arg));
+      } else if (nullptr != memtable_key_buffer &&
+                 OB_FAIL(memtable_key_buffer->push_back(kvs[i].key_))) {
+        TRANS_LOG(WARN, "push back stored memtable key into buffer failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMvccEngineWithoutHashIndex::ensure_kv(const ObMemtableKey *stored_key, ObMvccRow *value)
+{
+  // the kv has been inserted into btree when create_kv_ without hash index is called, no need to ensure kv
+  return OB_SUCCESS;
+}
+
+int ObMvccEngineWithoutHashIndex::query_engine_get_(const ObMemtableKey *parameter_key,
+                                                   ObMvccRow *&row,
+                                                   ObMemtableKey *returned_key)
+{
+  return query_engine_->get_from_btree(parameter_key, row, returned_key);
+}
+
+int ObMvccEngineWithoutHashIndex::create_btree_kv_(const ObMemtableKey *key,
+                                                   ObMemtableKey *stored_key,
+                                                   ObMvccRow *&value)
+{
+  int ret = OB_SUCCESS;
+  ObQueryEngine::ObMvccRowCreator row_creator = [this, key, stored_key](const bool is_exist_key,
+                                                                        ObStoreRowkeyWrapper &new_or_exist_key,
+                                                                        ObMvccRow *&new_row) {
+    int ret = OB_SUCCESS;
+    if (is_exist_key) { // the key already exists in the btree
+      stored_key->encode(new_or_exist_key.get_rowkey());
+    } else {
+      ObStoreRowkey *tmp_key = nullptr;
+      if (OB_FAIL(kv_builder_->dup_key(tmp_key, *engine_allocator_, key->get_rowkey()))) {
+        TRANS_LOG(WARN, "key dup fail", K(ret));
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else if (OB_ISNULL(new_row = (ObMvccRow *)engine_allocator_->alloc(sizeof(*new_row)))) {
+        TRANS_LOG(WARN, "alloc ObMvccRow fail", K(ret));
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        stored_key->encode(tmp_key);
+        new_or_exist_key = ObStoreRowkeyWrapper(tmp_key);
+        new_row = new(new_row) ObMvccRow();
+      }
+    }
+    return ret;
+  };
+
+  value = nullptr;
+  if (OB_FAIL(query_engine_->create_btree_kv(key, row_creator, value))) {
+    TRANS_LOG(WARN, "create btree kv fail", K(ret), K(key));
+  } else if (OB_ISNULL(value)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "get NULL value", K(ret), K(key));
+  }
+
+  return ret;
+}
+
+} // end namespace memtable
+} // end namespace oceanbase

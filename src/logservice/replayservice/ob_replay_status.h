@@ -416,7 +416,7 @@ private:
   ObReplayStatus *replay_status_;
 };
 
-class ObReplayStatus
+class ObReplayStatus : public common::LinkHashValue<palf::LSKey>
 {
 public:
   typedef common::RWLock RWLock;

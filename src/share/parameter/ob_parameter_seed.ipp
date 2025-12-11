@@ -552,6 +552,9 @@ DEF_INT(_mds_memory_limit_percentage, OB_TENANT_PARAMETER, "10", "(0, 100)",
 DEF_TIME(writing_throttling_maximum_duration, OB_TENANT_PARAMETER, "2h", "[1s, 3d]",
           "maximum duration of writting throttling(in minutes), max value is 3 days",
           ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_memtable_hash_index, OB_TENANT_PARAMETER, "True",
+         "use memtable hash index if enable",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(plan_cache_evict_interval, OB_CLUSTER_PARAMETER, "5s", "[0s,)",
          "time interval for periodic plan cache eviction. Range: [0s, +∞)",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -3131,6 +3134,10 @@ ERRSIM_DEF_INT(errsim_backup_override_start_scn, OB_CLUSTER_PARAMETER, "0", "[0,
         "override backup start scn in errsim"
         "Range: [0,) in integer",
         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(_fuse_row_cache_activate_threshold, OB_TENANT_PARAMETER, "6", "[0, 100]",
+        "Determine if queries should use fuse_row_cache based on a configurable cache hit rate threshold.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_mv_binlog_minimal_mode, OB_TENANT_PARAMETER, "False",
          "Switch of the minimal mode for materialized view ",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

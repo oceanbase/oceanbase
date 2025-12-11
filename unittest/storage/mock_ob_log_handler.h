@@ -497,6 +497,12 @@ public:
     scn.set_max();
     return OB_SUCCESS;
   }
+  int get_max_decided_scn_snapshot(share::SCN &scn, const bool is_force_refresh)
+  {
+    scn.set_max();
+    UNUSED(is_force_refresh);
+    return OB_SUCCESS;
+  }
   int get_max_decided_scn_as_leader(share::SCN &scn) const
   {
     scn.set_max();

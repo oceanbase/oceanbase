@@ -329,7 +329,7 @@ int ObIndexTreePrefetcher::check_bloom_filter(
   if (!index_info.is_valid() || !index_info.is_macro_node()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(index_info), K(read_handle));
-  } else if (!access_ctx_->query_flag_.is_index_back() && access_ctx_->enable_bf_cache()) {
+  } else if ((!access_ctx_->query_flag_.is_index_back() || !sstable_->is_major_sstable()) && access_ctx_->enable_bf_cache()) {
     if (index_info.has_macro_block_bloom_filter()) {
       read_handle.has_macro_block_bf_ = true;
     }

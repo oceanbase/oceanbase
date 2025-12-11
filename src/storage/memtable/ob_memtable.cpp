@@ -22,10 +22,8 @@
 #include "storage/access/ob_sstable_row_getter.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
-#include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/access/ob_row_sample_iterator.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
-
 #include "logservice/ob_log_service.h"
 
 namespace oceanbase
@@ -115,10 +113,11 @@ ObMemtable::ObMemtable()
       transfer_freeze_flag_(false),
       contain_hotspot_row_(false),
       is_delete_insert_table_(false),
+      use_hash_index_(false),
       ls_handle_(),
       local_allocator_(*this),
       query_engine_(local_allocator_),
-      mvcc_engine_(),
+      mvcc_engine_(nullptr),
       reported_dml_stat_(),
       max_data_schema_version_(0),
       recommend_snapshot_version_(share::SCN::invalid_scn()),
@@ -140,7 +139,8 @@ int ObMemtable::init(const ObITable::TableKey &table_key,
                      storage::ObFreezer *freezer,
                      storage::ObTabletMemtableMgr *memtable_mgr,
                      const int64_t schema_version,
-                     const uint32_t freeze_clock)
+                     const uint32_t freeze_clock,
+                     const bool use_hash_index)
 {
   int ret = OB_SUCCESS;
 
@@ -165,7 +165,9 @@ int ObMemtable::init(const ObITable::TableKey &table_key,
     TRANS_LOG(WARN, "fail to init memstore allocator", K(ret), "tenant id", MTL_ID());
   } else if (OB_FAIL(query_engine_.init())) {
     TRANS_LOG(WARN, "query_engine.init fail", K(ret), "tenant_id", MTL_ID());
-  } else if (OB_FAIL(mvcc_engine_.init(&local_allocator_,
+  } else if (use_hash_index && FALSE_IT(mvcc_engine_ = new(mvcc_engine_buffer_) ObMvccEngine())) {
+  } else if (!use_hash_index && FALSE_IT(mvcc_engine_ = new(mvcc_engine_buffer_) ObMvccEngineWithoutHashIndex())) {
+  } else if (OB_FAIL(mvcc_engine_->init(&local_allocator_,
                                        &kv_builder_,
                                        &query_engine_,
                                        this))) {
@@ -173,6 +175,7 @@ int ObMemtable::init(const ObITable::TableKey &table_key,
   } else if (OB_FAIL(ObITable::init(table_key))) {
     TRANS_LOG(WARN, "failed to set_table_key", K(ret), K(table_key));
   } else {
+    use_hash_index_ = use_hash_index;
     ls_handle_ = ls_handle;
     ls_id_ = ls_handle_.get_ls()->get_ls_id();
     if (table_key.get_tablet_id().is_sys_tablet()) {
@@ -235,7 +238,10 @@ void ObMemtable::destroy()
     time_guard.click();
   }
   is_inited_ = false;
-  mvcc_engine_.destroy();
+  if (OB_NOT_NULL(mvcc_engine_)) {
+    mvcc_engine_->destroy();
+    mvcc_engine_ = nullptr;
+  }
   time_guard.click();
   query_engine_.destroy();
   time_guard.click();
@@ -437,9 +443,9 @@ int ObMemtable::check_rows_locked(
     if (rows_info.is_row_checked(i)) {
     } else if (OB_FAIL(mtk.encode(param.get_read_info()->get_columns_desc(), &rowkey.get_store_rowkey()))) {
       TRANS_LOG(WARN, "Failed to enocde memtable key", K(ret));
-    } else if (OB_FAIL(get_mvcc_engine().check_row_locked(ctx.mvcc_acc_ctx_,
-                                                          &mtk,
-                                                          lock_state))) {
+    } else if (OB_FAIL(mvcc_engine_->check_row_locked(ctx.mvcc_acc_ctx_,
+                                                      &mtk,
+                                                      lock_state))) {
       TRANS_LOG(WARN, "Failed to check row lock in mvcc engine", K(ret), K(mtk));
     } else if (lock_state.is_row_decided()) {
       // Case1: Check row with concurrency control conflict
@@ -761,13 +767,13 @@ int ObMemtable::get(
     bool is_plain_insert_gts_opt = context.query_flag_.is_plain_insert_gts_opt();
     if (OB_FAIL(parameter_mtk.encode(out_cols, &rowkey.get_store_rowkey()))) {
       TRANS_LOG(WARN, "mtk encode fail", "ret", ret);
-    } else if (OB_FAIL(mvcc_engine_.get(context.store_ctx_->mvcc_acc_ctx_,
-                                        context.query_flag_,
-                                        &parameter_mtk,
-                                        ls_id_,
-                                        &returned_mtk,
-                                        value_iter,
-                                        lock_state))) {
+    } else if (OB_FAIL(mvcc_engine_->get(context.store_ctx_->mvcc_acc_ctx_,
+                                         context.query_flag_,
+                                         &parameter_mtk,
+                                         ls_id_,
+                                         &returned_mtk,
+                                         value_iter,
+                                         lock_state))) {
       if (OB_TRY_LOCK_ROW_CONFLICT == ret || OB_TRANSACTION_SET_VIOLATION == ret) {
         if (!context.query_flag_.is_for_foreign_key_check() && !is_plain_insert_gts_opt) {
           ret = OB_ERR_UNEXPECTED;  // to prevent retrying casued by throwing 6005
@@ -1299,7 +1305,7 @@ int ObMemtable::after_check_row_locked_on_frozen_stores_(
       if (res.has_insert()
           && lock_state.lock_trans_id_ == my_tx_id
           && blocksstable::ObDmlFlag::DF_LOCK == writer_dml_flag) {
-        (void)mvcc_engine_.mvcc_undo(value);
+        (void)mvcc_engine_->mvcc_undo(value);
         res.need_insert_ = false;
       }
 
@@ -2467,7 +2473,7 @@ int ObMemtable::multi_set_(
     // The trans_node after ObMvccRow::mvcc_write_ is incomplete, then we need
     // use finish_kvs as the final step of ObMemtable::multi_set. Therefore, it
     // is safe to make the data visible.
-    (void)mvcc_engine_.finish_kvs(mvcc_results);
+    (void)mvcc_engine_->finish_kvs(mvcc_results);
 
     /*****[for deadlock]*****/
     // recored this row is hold by this trans for deadlock detector
@@ -2632,7 +2638,7 @@ int ObMemtable::set_(
     // The trans_node after ObMvccRow::mvcc_write_ is incomplete, then we need
     // use finish_kvs as the final step of ObMemtable::set. Therefore, it is
     // safe to make the data visible.
-    (void)mvcc_engine_.finish_kv(mvcc_result);
+    (void)mvcc_engine_->finish_kv(mvcc_result);
 
     /*****[for deadlock]*****/
     // recored this row is hold by this trans for deadlock detector
@@ -2765,7 +2771,7 @@ int ObMemtable::lock_(
       // The trans_node after ObMvccRow::mvcc_write_ is incomplete, then we need
       // use finish_kvs as the final step of ObMemtable::lock. Therefore, it is
       // safe to make the data visible.
-      (void)mvcc_engine_.finish_kvs(mvcc_results);
+      (void)mvcc_engine_->finish_kvs(mvcc_results);
 
       /*****[for deadlock]*****/
       // recored this row is hold by this trans for deadlock detector
@@ -2830,16 +2836,16 @@ int ObMemtable::mvcc_replay_(storage::ObStoreCtx &ctx,
   ObMvccReplayResult res;
   common::ObTimeGuard timeguard("ObMemtable::mvcc_replay_", 5 * 1000);
 
-  if (OB_FAIL(mvcc_engine_.create_kv(key,
-                                     false, // is_insert
-                                     &stored_key,
-                                     value))) {
+  if (OB_FAIL(mvcc_engine_->create_kv(key,
+                                      false, // is_insert
+                                      &stored_key,
+                                      value))) {
     TRANS_LOG(WARN, "prepare kv before lock fail", K(ret));
   } else if (FALSE_IT(timeguard.click("mvcc_engine_.create_kv"))) {
-  } else if (OB_FAIL(mvcc_engine_.mvcc_replay(arg, res))) {
+  } else if (OB_FAIL(mvcc_engine_->mvcc_replay(arg, res))) {
     TRANS_LOG(WARN, "mvcc replay fail", K(ret));
   } else if (FALSE_IT(timeguard.click("mvcc_engine_.mvcc_replay"))) {
-  } else if (OB_FAIL(mvcc_engine_.ensure_kv(&stored_key, value))) {
+  } else if (OB_FAIL(mvcc_engine_->ensure_kv(&stored_key, value))) {
     TRANS_LOG(WARN, "prepare kv after lock fail", K(ret));
   } else if (FALSE_IT(timeguard.click("mvcc_engine_.ensure_kv"))) {
   } else if (OB_FAIL(mem_ctx->register_row_replay_cb(&stored_key,
@@ -2882,7 +2888,9 @@ int ObMemtable::batch_mvcc_write_(const storage::ObTableIterParam &param,
   const bool check_exist = memtable_set_arg.check_exist_;
   ObTxSEQ write_seq;
   int64_t write_epoch = 0;
-  bool is_insert = (blocksstable::ObDmlFlag::DF_INSERT == writer_dml_flag && !rows_info.need_find_all_duplicate_key()) ||
+  // In these scenarios, mvcc_row is highly likely to not exist.
+  //  For performance reasons, directly insert a new mvcc_row and get mvcc_row if the row exists.
+  const bool no_get_before_set = (blocksstable::ObDmlFlag::DF_INSERT == writer_dml_flag && !rows_info.need_find_all_duplicate_key()) ||
                     // in tableapi, it means the dml is a put operation, we use as insert for perf opt
                     (ctx.mvcc_acc_ctx_.write_flag_.is_table_api() &&
                      blocksstable::ObDmlFlag::DF_UPDATE == writer_dml_flag && !memtable_set_arg.has_old_row());
@@ -2892,10 +2900,10 @@ int ObMemtable::batch_mvcc_write_(const storage::ObTableIterParam &param,
     TRANS_LOG(WARN, "Fail to init row writer", K(ret));
   } else if (OB_FAIL(stored_kvs.prepare_allocate(row_count))) {
     TRANS_LOG(WARN, "reserce kvs failed", K(ret));
-  } else if (OB_FAIL(mvcc_engine_.create_kvs(memtable_set_arg,
-                                             memtable_key_generator,
-                                             is_insert,
-                                             stored_kvs))) {
+  } else if (OB_FAIL(mvcc_engine_->create_kvs(memtable_set_arg,
+                                              memtable_key_generator,
+                                              no_get_before_set,
+                                              stored_kvs))) {
     TRANS_LOG(WARN, "create kv failed", K(ret), K(tx_node_args));
   }
 
@@ -2951,7 +2959,7 @@ int ObMemtable::batch_mvcc_write_(const storage::ObTableIterParam &param,
       // Step2: write the allocated mvcc data into the memtable according to the
       // concurrency control algorithm which may report conflicts like write
       // write conflict, lost update, primary key duplication or other errors
-      } else if (OB_FAIL(mvcc_engine_.mvcc_write(ctx,
+      } else if (OB_FAIL(mvcc_engine_->mvcc_write(ctx,
                                                  *stored_kvs[i].value_,
                                                  tx_node_args[i],
                                                  check_exist,
@@ -2994,7 +3002,7 @@ int ObMemtable::batch_mvcc_write_(const storage::ObTableIterParam &param,
         // Step3: insert the stored key(pay attention to the life cycle of the
         // stored key itself) and the mvcc row into the b+tree to support a better
         // scan performance
-      } else if (OB_FAIL(mvcc_engine_.ensure_kv(&stored_kvs[i].key_,
+      } else if (OB_FAIL(mvcc_engine_->ensure_kv(&stored_kvs[i].key_,
                                                 stored_kvs[i].value_))) {
         TRANS_LOG(WARN, "prepare kv after lock fail", K(ret));
         // Step4: remember the stored key for later callback registration(pay
@@ -3015,7 +3023,7 @@ int ObMemtable::batch_mvcc_write_(const storage::ObTableIterParam &param,
     // batch_mvcc_write reports error
     if (OB_FAIL(ret)) {
       if (mvcc_results[i].has_insert()) {
-        (void)mvcc_engine_.mvcc_undo(stored_kvs[i].value_);
+        (void)mvcc_engine_->mvcc_undo(stored_kvs[i].value_);
         mvcc_results[i].is_mvcc_undo_ = true;
       }
     }
@@ -3035,25 +3043,27 @@ int ObMemtable::mvcc_write_(ObStoreCtx &ctx,
   ObMvccRow *value = NULL;
   ObMemtableCtx *mem_ctx = ctx.mvcc_acc_ctx_.get_mem_ctx();
   transaction::ObTxSnapshot &snapshot = ctx.mvcc_acc_ctx_.snapshot_;
-  bool is_insert = blocksstable::ObDmlFlag::DF_INSERT == tx_node_arg.data_->dml_flag_ ||
+  // In these scenarios, mvcc_row is highly likely to not exist.
+  //  For performance reasons, directly insert a new mvcc_row and get mvcc_row if the row exists.
+  const bool no_get_before_set = blocksstable::ObDmlFlag::DF_INSERT == tx_node_arg.data_->dml_flag_ ||
               // in tableapi, it means the dml is a put operation, we use as insert for perf opt
               (ctx.mvcc_acc_ctx_.write_flag_.is_table_api() &&
               blocksstable::ObDmlFlag::DF_UPDATE == tx_node_arg.data_->dml_flag_ && tx_node_arg.old_row_.data_ == nullptr);
   // Step1: create or get the memtable key and mvcc row from the hash table
   // which ensuring the unqiueness of the key and value
-  if (OB_FAIL(mvcc_engine_.create_kv(&memtable_key,
-                                     is_insert, /* is_normal_insert */
-                                     &stored_key,
-                                     value))) {
+  if (OB_FAIL(mvcc_engine_->create_kv(&memtable_key,
+                                      no_get_before_set,
+                                      &stored_key,
+                                      value))) {
     TRANS_LOG(WARN, "create kv failed", K(ret), K(tx_node_arg), K(memtable_key));
   // Step2: write the mvcc data into the memtable according to the concurrency
   // control algorithm which may report conflicts like write-write conflict,
   // lost-update, primary key duplication or other errors
-  } else if (OB_FAIL(mvcc_engine_.mvcc_write(ctx,
-                                             *value,
-                                             tx_node_arg,
-                                             check_exist,
-                                             res))) {
+  } else if (OB_FAIL(mvcc_engine_->mvcc_write(ctx,
+                                              *value,
+                                              tx_node_arg,
+                                              check_exist,
+                                              res))) {
     if (OB_TRY_LOCK_ROW_CONFLICT == ret) {
       mem_ctx->on_wlock_retry(memtable_key,
                               res.lock_state_.lock_trans_id_);
@@ -3078,7 +3088,7 @@ int ObMemtable::mvcc_write_(ObStoreCtx &ctx,
   // Step3: insert the stored key(pay attention to the life cycle of the
   // stored key itself) and the mvcc row into the b+tree to support a better
   // scan performance
-  } else if (OB_FAIL(mvcc_engine_.ensure_kv(&stored_key, value))) {
+  } else if (OB_FAIL(mvcc_engine_->ensure_kv(&stored_key, value))) {
     TRANS_LOG(WARN, "prepare kv after lock fail", K(ret));
   // Step4: remember the stored key for later callback registration(pay
   // attention to the life cycle between the stored key and local allocated
@@ -3094,7 +3104,7 @@ int ObMemtable::mvcc_write_(ObStoreCtx &ctx,
   // interface which ensures that no side effects will remain exist when the
   // mvcc_write reports error
   if (OB_FAIL(ret) && res.has_insert()) {
-    (void)mvcc_engine_.mvcc_undo(value);
+    (void)mvcc_engine_->mvcc_undo(value);
     res.is_mvcc_undo_ = true;
   }
 
@@ -3580,7 +3590,7 @@ void ObMemtable::mvcc_undo_(ObMvccWriteResults &mvcc_results)
   for (int64_t i = 0; i < mvcc_results.count(); ++i) {
     ObMvccWriteResult res = mvcc_results[i];
     if (res.has_insert()) {
-      (void)mvcc_engine_.mvcc_undo(res.value_);
+      (void)mvcc_engine_->mvcc_undo(res.value_);
       res.is_mvcc_undo_ = true;
     }
   }
@@ -3589,7 +3599,7 @@ void ObMemtable::mvcc_undo_(ObMvccWriteResults &mvcc_results)
 void ObMemtable::mvcc_undo_(ObMvccWriteResult &res)
 {
   if (res.has_insert()) {
-    (void)mvcc_engine_.mvcc_undo(res.value_);
+    (void)mvcc_engine_->mvcc_undo(res.value_);
     res.is_mvcc_undo_ = true;
   }
 }

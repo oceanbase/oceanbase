@@ -888,7 +888,7 @@ public:
                K(extra_free_set_alloc_count_));
 
 private:
-  SpinRWLock dup_tablets_lock_;
+  TCRWLock dup_tablets_lock_;
 
   // ObDupTableLSHandler *dup_ls_handle_ptr_;
   share::ObLSID ls_id_;

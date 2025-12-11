@@ -493,6 +493,10 @@ int TestCompactionPolicy::mock_memtable(
     LOG_WARN("failed to get_protected_memtable_mgr_handle", K(ret));
   }
   ObTabletMemtableMgr *mt_mgr = static_cast<ObTabletMemtableMgr *>(protected_handle->memtable_mgr_handle_.get_memtable_mgr());
+  bool use_hash_index = true;
+  #ifdef MEMTABLE_USE_HASH_INDEX_FLAG
+      use_hash_index = MEMTABLE_USE_HASH_INDEX_FLAG;
+  #endif
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(t3m->acquire_data_memtable(table_handle))) {
     LOG_WARN("failed to acquire memtable", K(ret));
@@ -503,7 +507,7 @@ int TestCompactionPolicy::mock_memtable(
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_FAIL(ls_svr->get_ls(mt_mgr->ls_->get_ls_id(), ls_handle, ObLSGetMod::DATA_MEMTABLE_MOD))) {
     LOG_WARN("failed to get ls handle", K(ret));
-  } else if (OB_FAIL(memtable->init(table_key, ls_handle, mt_mgr->freezer_, mt_mgr, 0, mt_mgr->freezer_->get_freeze_clock()))) {
+  } else if (OB_FAIL(memtable->init(table_key, ls_handle, mt_mgr->freezer_, mt_mgr, 0, mt_mgr->freezer_->get_freeze_clock(), use_hash_index))) {
     LOG_WARN("failed to init memtable", K(ret));
   } else if (OB_FAIL(mt_mgr->add_memtable_(table_handle))) {
     LOG_WARN("failed to add memtable to mgr", K(ret));
@@ -1841,8 +1845,12 @@ TEST_F(TestCompactionPolicy, check_minor_across_major3)
 
 int main(int argc, char **argv)
 {
-  system("rm -rf test_compaction_policy.log*");
-  OB_LOGGER.set_file_name("test_compaction_policy.log");
+  std::string log_file_name = "test_compaction_policy.log";
+  #ifdef MEMTABLE_USE_HASH_INDEX_FLAG
+      log_file_name = "test_compaction_policy_no_hash_index.log";
+  #endif
+  system(std::string("rm -rf " + log_file_name + "*").c_str());
+  OB_LOGGER.set_file_name(log_file_name.c_str());
   OB_LOGGER.set_log_level("INFO");
   CLOG_LOG(INFO, "begin unittest: test_compaction_policy");
   ::testing::InitGoogleTest(&argc, argv);

@@ -15,7 +15,7 @@
 
 #include "lib/allocator/ob_block_alloc_mgr.h"
 #include "lib/allocator/ob_slice_alloc.h"
-#include "lib/lock/ob_spin_lock.h"
+#include "lib/lock/ob_small_spin_lock.h"
 #include "lib/utility/ob_utility.h"
 
 namespace oceanbase
@@ -25,7 +25,8 @@ namespace common
 extern ObBlockAllocMgr default_blk_alloc;
 class ObBlockVSlicer
 {
-  template<int ARENA_NUM> friend class ObVSliceAllocT;
+  friend class ObVSliceAlloc;
+  friend class ObDynamicVSliceAlloc;
 public:
   enum { K = INT64_MAX };
   static const uint32_t ITEM_MAGIC_CODE = 0XCCEEDDF1;
@@ -83,13 +84,11 @@ private:
   char base_[] CACHE_ALIGNED;
 };
 
-template<int ARENA_NUM = 32>
-class ObVSliceAllocT : public ObIAllocator
+class ObVSliceAlloc : public ObIAllocator
 {
   friend class ObBlockVSlicer;
 public:
   enum { MAX_ARENA_NUM = 32, DEFAULT_BLOCK_SIZE = OB_MALLOC_NORMAL_BLOCK_SIZE };
-  static_assert(ARENA_NUM > 0 && ARENA_NUM <= MAX_ARENA_NUM, "ARENA_NUM must be in range [1, MAX_ARENA_NUM]");
   typedef ObBlockAllocMgr BlockAlloc;
   typedef ObBlockVSlicer Block;
   typedef ObSimpleSync Sync;
@@ -104,17 +103,17 @@ public:
     Block* blk_;
   } CACHE_ALIGNED;
 public:
-  ObVSliceAllocT(): nway_(0), bsize_(0), blk_alloc_(default_blk_alloc) {}
-  ObVSliceAllocT(const ObMemAttr &attr, const int64_t block_size = DEFAULT_BLOCK_SIZE,
+  ObVSliceAlloc(): nway_(0), bsize_(0), blk_alloc_(default_blk_alloc) {}
+  ObVSliceAlloc(const ObMemAttr &attr, const int64_t block_size = DEFAULT_BLOCK_SIZE,
       BlockAlloc &blk_alloc = default_blk_alloc, int nway = 1)
     : bsize_(block_size), mattr_(attr), blk_alloc_(blk_alloc)
   {
     set_nway(nway);
   }
-  virtual ~ObVSliceAllocT() override { destroy(); }
+  virtual ~ObVSliceAlloc() override { destroy(); }
   int init(int64_t block_size, BlockAlloc& block_alloc, const ObMemAttr& attr) {
     int ret = OB_SUCCESS;
-    new(this)ObVSliceAllocT(attr, block_size, block_alloc);
+    new(this)ObVSliceAlloc(attr, block_size, block_alloc);
     return ret;
   }
   void destroy() {
@@ -127,8 +126,8 @@ public:
   void set_nway(int nway) {
     if (nway <= 0) {
       nway = 1;
-    } else if (nway > ARENA_NUM) {
-      nway = ARENA_NUM;
+    } else if (nway > MAX_ARENA_NUM) {
+      nway = MAX_ARENA_NUM;
     }
     ATOMIC_STORE(&nway_,  nway);
   }
@@ -260,7 +259,7 @@ public:
     }
   }
   void purge_extra_cached_block(int keep, bool need_check = false) {
-    for(int i = ARENA_NUM - 1; i >= keep; i--) {
+    for(int i = MAX_ARENA_NUM - 1; i >= keep; i--) {
       purge_extra_cached_block(arena_[i], need_check);
     }
   }
@@ -295,11 +294,271 @@ protected:
   int nway_ CACHE_ALIGNED;
   int64_t bsize_;
   ObMemAttr mattr_;
-  Arena arena_[ARENA_NUM];
+  Arena arena_[MAX_ARENA_NUM];
   BlockAlloc &blk_alloc_;
 };
 
-using ObVSliceAlloc = ObVSliceAllocT<>; // keep compatibility
+class ObDynamicVSliceAlloc : public ObIAllocator
+{
+  friend class ObBlockVSlicer;
+public:
+  enum { MAX_ARENA_NUM = 256, DEFAULT_BLOCK_SIZE = OB_MALLOC_NORMAL_BLOCK_SIZE };
+  typedef ObBlockAllocMgr BlockAlloc;
+  typedef ObBlockVSlicer Block;
+  typedef ObSimpleSync Sync;
+  class Arena: public Sync
+  {
+  public:
+    Arena(): blk_(NULL) {}
+    Block* blk() { return ATOMIC_LOAD(&blk_); }
+    bool cas(Block* ov, Block* nv) { return ATOMIC_BCAS(&blk_, ov, nv); }
+    Block* clear() { return ATOMIC_TAS(&blk_, NULL); }
+  private:
+    Block* blk_;
+  } CACHE_ALIGNED;
+public:
+  ObDynamicVSliceAlloc(): nway_(0), bsize_(0), expand_lock_(), blk_alloc_(default_blk_alloc), arenas_count_(0) {
+    reset_arena_pointers();
+  }
+  ObDynamicVSliceAlloc(const ObMemAttr &attr, const int64_t block_size = DEFAULT_BLOCK_SIZE,
+      BlockAlloc &blk_alloc = default_blk_alloc)
+    : nway_(0), bsize_(block_size), mattr_(attr), expand_lock_(), blk_alloc_(blk_alloc), arenas_count_(0) {
+      reset_arena_pointers();
+    }
+  virtual ~ObDynamicVSliceAlloc() override { destroy(); }
+  int init(int64_t block_size, BlockAlloc& block_alloc, const ObMemAttr& attr, int nway = 1) {
+    int ret = OB_SUCCESS;
+    new(this)ObDynamicVSliceAlloc(attr, block_size, block_alloc);
+    ret = set_nway(nway);
+    return ret;
+  }
+  void destroy() {
+    purge_extra_cached_block(0, true);
+    for (int i = 0; i < arenas_count_; ++i) {
+      ob_free(arena_[i]); // Arena is POD type.
+      arena_[i] = nullptr;
+    }
+    bsize_ = 0;
+    arenas_count_ = 0;
+  }
+  void purge() {
+    purge_extra_cached_block(0);
+  }
+  int set_nway(int nway) {
+    int ret = OB_SUCCESS;
+    if (nway <= 0) {
+      nway = 1;
+    } else if (nway > MAX_ARENA_NUM) {
+      nway = MAX_ARENA_NUM;
+    }
+    ObSmallSpinLockGuard<ObByteLock> guard(expand_lock_);
+    if (arenas_count_ >= nway) {
+      if (nway_ > nway) {
+        ATOMIC_STORE(&nway_, nway);
+        purge_extra_cached_block(nway);
+      } else {
+        ATOMIC_STORE(&nway_, nway);
+      }
+    } else { // expand arenas
+      int cur_arenas_count = arenas_count_;
+      for (cur_arenas_count; OB_SUCC(ret) && cur_arenas_count < nway; ++cur_arenas_count) {
+        void *ptr = NULL;
+        if (OB_ISNULL(ptr = ob_malloc(sizeof(Arena), mattr_))) {
+          LIB_LOG(ERROR, "arena allocation failed", K(cur_arenas_count), K(arenas_count_), K(nway), K(sizeof(Arena)));
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+        } else {
+          arena_[cur_arenas_count] = new (ptr) Arena();
+        }
+      }
+      if (OB_SUCC(ret)) {
+        ATOMIC_STORE(&arenas_count_, nway);
+        ATOMIC_STORE(&nway_, nway);
+      } else {
+        // rollback
+        for (int j = arenas_count_; j < cur_arenas_count; ++j) {
+          ob_free(arena_[j]); // Arena is POD type.
+          arena_[j] = nullptr;
+        }
+      }
+    }
+    return ret;
+  }
+  bool can_alloc_block(int64_t size) const {
+    return blk_alloc_.can_alloc_block(size);
+  }
+  void set_limit(int64_t limit) { blk_alloc_.set_limit(limit); }
+  int64_t hold() const { return blk_alloc_.hold(); }
+  int64_t limit() { return blk_alloc_.limit(); }
+  int64_t used() const { return hold(); }
+  virtual void* alloc(const int64_t size, const ObMemAttr &attr)
+  {
+    UNUSED(attr);
+    return alloc(size);
+  }
+  virtual void* alloc(const int64_t size) override {
+#ifdef OB_USE_ASAN
+    return ::malloc(size);
+#else
+    Block::Item* ret = NULL;
+    int64_t aligned_size = upper_align(size, 16);
+    if (arenas_count_ == 0) {
+      LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "arena is null", K(nway_));
+    } else if (bsize_ <= aligned_size + sizeof(Block) + sizeof(Block::Item)) {
+      int64_t direct_size = aligned_size + sizeof(Block) + sizeof(Block::Item);
+      Block *blk = NULL;
+      void *buf = blk_alloc_.alloc_block(direct_size, mattr_);
+      if (NULL != buf) {
+        blk = new(buf)Block(this, direct_size);
+        int64_t leak_pos = -1;
+        ret = blk->alloc_item(aligned_size, leak_pos);
+        if (blk->freeze()) {
+          if (blk->retire()) {
+            destroy_block(blk);
+          }
+        }
+      }
+    } else {
+      int tmp_ret = OB_SUCCESS;
+      while(NULL == ret && OB_SUCCESS == tmp_ret) {
+        Block *blk2destroy = NULL;
+        int64_t leak_pos = -1;
+        Arena& arena = *arena_[get_itid() % nway_];
+        arena.ref(1);
+        Block* blk = arena.blk();
+        if (NULL != blk) {
+          if (NULL == (ret = blk->alloc_item(aligned_size, leak_pos))) {
+            arena.cas(blk, NULL);
+            if (-1 != leak_pos) {
+              blk2destroy = blk;
+            }
+          }
+          arena.ref(-1);
+        } else {
+          arena.ref(-1);
+          Block* nb = prepare_block();
+          if (NULL == nb) {
+            // alloc block fail, end
+            tmp_ret = OB_ALLOCATE_MEMORY_FAILED;
+          } else {
+            nb->arena_ = &arena;
+            if (!arena.cas(NULL, nb)) {
+              // no need wait sync
+              destroy_block(nb);
+            }
+          }
+        }
+        if (blk2destroy) {
+          arena.sync();
+          if (blk2destroy->retire()) {
+            destroy_block(blk2destroy);
+          }
+        }
+      }
+    }
+    return NULL == ret? NULL: (void*)(ret + 1);
+#endif
+  }
+  virtual void free(void* p) override {
+
+#ifdef OB_USE_ASAN
+    ::free(p);
+#else
+    if (NULL != p) {
+      Block::Item* item = (Block::Item*)p - 1;
+      abort_unless(Block::ITEM_MAGIC_CODE == item->MAGIC_CODE_);
+      Block* blk = item->host_;
+      Arena *arena = (Arena*)blk->arena_;
+#ifndef NDEBUG
+      abort_unless(blk->get_vslice_alloc() == static_cast<ObIAllocator*>(this));
+      abort_unless(bsize_ != 0);
+#else
+      if (static_cast<ObIAllocator*>(this) != blk->get_vslice_alloc()) {
+        LIB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "blk is freed or alloced by different vslice_alloc", K(this), K(blk->get_vslice_alloc()));
+        return;
+      }
+#endif
+      item->MAGIC_CODE_ = item->MAGIC_CODE_ & Block::ITEM_MAGIC_CODE_MASK;
+      bool can_purge = false;
+      if (blk->free_item(item, can_purge)) {
+        destroy_block(blk);
+      } else if (can_purge) {
+        purge_extra_cached_block(*arena);
+      }
+    }
+
+#endif
+  }
+  virtual void set_attr(const ObMemAttr &attr) override {
+    mattr_ = attr;
+  }
+
+  void purge_extra_cached_block(Arena &arena, bool need_check = false) {
+    arena.ref(1);
+    Block* old_blk = arena.clear();
+    if (NULL != old_blk) {
+      if (old_blk->freeze()) {
+        arena.ref(-1);
+        arena.sync();
+        if (old_blk->retire()) {
+          destroy_block(old_blk);
+        } else if (need_check) {
+          // can not monitor all leak !!!
+          LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "there was memory leak", K(old_blk->ref_));
+        }
+      } else {
+        arena.ref(-1);
+      }
+    } else {
+     arena.ref(-1);
+    }
+  }
+  void purge_extra_cached_block(int keep, bool need_check = false) {
+    for(int i = arenas_count_ - 1; i >= keep; i--) {
+      purge_extra_cached_block(*arena_[i], need_check);
+    }
+  }
+  double get_block_using_ratio(void* p) {
+    double ratio = 1.0;
+#ifndef OB_USE_ASAN
+    if (NULL != p) {
+      Block::Item* item = (Block::Item*)p - 1;
+      Block* blk = item->host_;
+      int64_t total_bytes = blk->get_blk_size();
+      int64_t using_bytes = blk->get_using_size();
+      if (using_bytes > 0) {
+        ratio = 1.0 * using_bytes / total_bytes;
+      }
+    }
+#endif
+    return ratio;
+  }
+private:
+  Block* prepare_block() {
+    Block *blk = NULL;
+    void *buf = NULL;
+    if (NULL != (buf = blk_alloc_.alloc_block(bsize_, mattr_))) {
+      blk = new(buf)Block(this, bsize_);
+    }
+    return blk;
+  }
+  void destroy_block(Block* blk) {
+    blk_alloc_.free_block(blk, blk->get_blk_size());
+  }
+  void reset_arena_pointers() {
+    for (int i = 0; i < MAX_ARENA_NUM; ++i) {
+        arena_[i] = nullptr;
+    }
+  }
+protected:
+  int nway_ CACHE_ALIGNED;
+  int64_t bsize_;
+  ObMemAttr mattr_;
+  Arena* arena_[MAX_ARENA_NUM];
+  mutable common::ObByteLock expand_lock_;
+  BlockAlloc &blk_alloc_;
+  int arenas_count_ CACHE_ALIGNED;
+};
+
 }; // end namespace common
 }; // end namespace oceanbase
 

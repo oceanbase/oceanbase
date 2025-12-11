@@ -85,7 +85,9 @@ public:
     return is_inited_;
   }
   static int64_t get_max_col_count() { return ITER_POOL_MAX_COL_CNT_LIMIT; }
-  static const int64_t ITER_POOL_ITER_MEM_LIMIT = 256L << 10; // 256K
+  static int64_t get_iter_type_mem_limit(const ObQRIterType iter_type) { return ITER_TYPE_POOL_MEM_LIMITS[iter_type]; }
+
+
   TO_STRING_KV(K_(is_inited), K_(is_washing), K_(is_disabled), K_(get_cnt), K_(tenant_id), K_(bucket_cnt),
                K_(tenant_mem_user_limit), K_(tenant_mem_user_hold), KP_(cached_node_array));
 private:
@@ -103,7 +105,7 @@ private:
   OB_INLINE int64_t calc_bucket_cnt() const
   {
     const int64_t mem_limit = tenant_mem_user_limit_ * ITER_POOL_MAX_MEM_PERCENT;
-    int64_t bucket_cnt = mem_limit / (ITER_POOL_ITER_MEM_LIMIT * (1 + ITER_POOL_MAX_CACHED_ITER_TYPE));
+    int64_t bucket_cnt = mem_limit / ALL_ITER_TYPES_MEM_LIMIT;
     if (bucket_cnt < 2) {
       bucket_cnt = 2;
     } else if (bucket_cnt > ITER_POOL_MAX_BUCKET_CNT) {
@@ -116,16 +118,23 @@ private:
   int inner_get(const ObQRIterType type, CachedIteratorNode *&cache_node);
   bool is_washing() const;
   bool is_disabled() const;
-  static const int64_t ITER_POOL_TENANT_MIN_MEM_THRESHOLD = 8L << 30; // 8G
-  static constexpr double ITER_POOL_MAX_MEM_PERCENT = 0.002;
+  static const int64_t ITER_POOL_TENANT_MIN_MEM_THRESHOLD = 3L << 30; // 3G
+  static constexpr double ITER_POOL_MAX_MEM_PERCENT = 0.005;
   static const int64_t ITER_POOL_MAX_TABLE_CNT_LIMIT = 6;
   static const int64_t ITER_POOL_MAX_COL_CNT_LIMIT = 32;
   static const int64_t ITER_POOL_MAX_BUCKET_CNT = 257;
-  static const int64_t ITER_POOL_WASH_HIGH_THRESHOLD = 85;
-  static const int64_t ITER_POOL_WASH_LOW_THRESHOLD = 75;
+  static const int64_t ITER_POOL_WASH_HIGH_THRESHOLD = 96;
+  static const int64_t ITER_POOL_WASH_LOW_THRESHOLD = 90;
+
   static const int64_t ITER_POOL_MAX_CACHED_ITER_TYPE = T_SINGLE_SCAN;
-  static_assert(ITER_POOL_MAX_CACHED_ITER_TYPE > T_INVALID_ITER_TYPE && ITER_POOL_MAX_CACHED_ITER_TYPE < T_MAX_ITER_TYPE,
-                "[Global Iterator Pool] invalid iter type");
+  static_assert(ITER_POOL_MAX_CACHED_ITER_TYPE > T_INVALID_ITER_TYPE && ITER_POOL_MAX_CACHED_ITER_TYPE < T_MAX_ITER_TYPE
+                 && 2 == ITER_POOL_MAX_CACHED_ITER_TYPE, "[Global Iterator Pool] invalid iter type");
+
+  static constexpr int64_t ITER_TYPE_POOL_MEM_LIMITS[1 + ITER_POOL_MAX_CACHED_ITER_TYPE] =
+      {256L << 10/*SINGLE_GET*/, 500L << 10/*MULTI_GET*/, 400L << 10/*SINGLE_SCAN*/};
+
+  static constexpr int64_t ALL_ITER_TYPES_MEM_LIMIT =
+      ITER_TYPE_POOL_MEM_LIMITS[0] + ITER_TYPE_POOL_MEM_LIMITS[1] + ITER_TYPE_POOL_MEM_LIMITS[2];
   bool is_inited_;
   bool is_washing_;
   bool is_disabled_;

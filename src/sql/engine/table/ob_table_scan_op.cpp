@@ -1337,7 +1337,9 @@ OB_INLINE int ObTableScanOp::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef
   das_rtdef.tx_lock_timeout_ = my_session->get_trx_lock_timeout();
   das_rtdef.scan_flag_ = MY_CTDEF.scan_flags_;
   LOG_DEBUG("scan flag", K(MY_CTDEF.scan_flags_));
+  das_rtdef.scan_flag_.index_back_ = is_lookup && MY_SPEC.is_index_back();
   das_rtdef.scan_flag_.is_show_seed_ = plan_ctx->get_show_seed();
+  LOG_DEBUG("scan flag", K(das_rtdef.scan_flag_));
   das_rtdef.tsc_monitor_info_ = &tsc_monitor_info_;
   das_rtdef.scan_op_id_ = MY_SPEC.get_id();
   das_rtdef.scan_rows_size_ = MY_SPEC.rows_ * MY_SPEC.width_;
