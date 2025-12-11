@@ -164,7 +164,6 @@ public:
     const common::ObString &dep_attrs,
     const common::ObString &dep_reason,
     const int64_t schema_version);
-
   int get_object_create_time(common::ObISQLClient &sql_client,
                              share::schema::ObObjectType obj_type,
                              int64_t &create_time,
@@ -220,7 +219,6 @@ public:
                               uint64_t tenant_id,
                               uint64_t dep_obj_id,
                               uint64_t schema_version, uint64_t owner_id);
-
   TO_STRING_KV(K_(tenant_id),
                K_(dep_obj_id),
                K_(dep_obj_type),
@@ -241,7 +239,37 @@ private:
                                   const common::ObIArray<std::pair<uint64_t, int64_t>>& ref_obj_infos,
                                   common::ObISQLClient &sql_proxy,
                                   common::ObIArray<CriticalDepInfo> &objs);
-
+  static bool is_duplicate_dependency(const ObIArray<ObDependencyInfo> &deps,
+                                      ObObjectType dep_obj_type,
+                                      int64_t ref_obj_id,
+                                      int64_t ref_timestamp,
+                                      ObObjectType ref_obj_type);
+  static int create_dependency_info(ObDependencyInfo &dep,
+                                   ObObjectType dep_obj_type,
+                                   int64_t ref_obj_id,
+                                   int64_t ref_timestamp,
+                                   ObObjectType ref_obj_type,
+                                   uint64_t property = 0,
+                                   const ObString &dep_attrs = ObString(),
+                                   const ObString &dep_reason = ObString(),
+                                   uint64_t order = UINT64_MAX,
+                                   uint64_t tenant_id = OB_INVALID_TENANT_ID,
+                                   uint64_t dep_obj_id = OB_INVALID_ID,
+                                   uint64_t dep_obj_owner_id = OB_INVALID_ID,
+                                   int64_t schema_version = OB_INVALID_VERSION);
+  static int add_dependency_if_not_duplicate(ObIArray<ObDependencyInfo> &deps,
+                                            ObObjectType dep_obj_type,
+                                            int64_t ref_obj_id,
+                                            int64_t ref_timestamp,
+                                            ObObjectType ref_obj_type,
+                                            uint64_t property = 0,
+                                            const ObString &dep_attrs = ObString(),
+                                            const ObString &dep_reason = ObString(),
+                                            uint64_t tenant_id = OB_INVALID_TENANT_ID,
+                                            uint64_t dep_obj_id = OB_INVALID_ID,
+                                            uint64_t dep_obj_owner_id = OB_INVALID_ID,
+                                            int64_t schema_version = OB_INVALID_VERSION,
+                                            uint64_t custom_order = UINT64_MAX);
 private:
   uint64_t tenant_id_;
   uint64_t dep_obj_id_;

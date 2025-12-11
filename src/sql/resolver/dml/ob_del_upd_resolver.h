@@ -136,8 +136,9 @@ protected:
   virtual int process_values_function(ObRawExpr *&expr);
   virtual int recursive_values_expr(ObRawExpr *&expr);
 
-  bool need_all_columns(const share::schema::ObTableSchema &table_schema,
-                        const int64_t binlog_row_image);
+  int need_all_columns(const share::schema::ObTableSchema &table_schema,
+                       const int64_t binlog_row_image,
+                       bool &need_all_columns);
 
   int add_all_columns_to_stmt(const TableItem &table_item,
                               common::ObIArray<ObColumnRefRawExpr*> &column_exprs);
@@ -157,6 +158,13 @@ protected:
   int add_all_partition_key_columns_to_stmt(const TableItem &table_item,
                                              common::ObIArray<ObColumnRefRawExpr*> &column_ids,
                                              ObDMLStmt *stmt = NULL);
+  int add_all_unique_key_columns_to_stmt(const TableItem &table_item,
+                                         common::ObIArray<ObColumnRefRawExpr*> &column_exprs);
+  int add_all_time_columns_to_stmt(const TableItem &table_item,
+                                   common::ObIArray<ObColumnRefRawExpr*> &column_exprs);
+  int add_all_mlog_columns_to_stmt(const TableItem &table_item,
+                                   common::ObIArray<ObColumnRefRawExpr*> &column_exprs);
+
   // check the update view is key preserved
   int uv_check_key_preserved(const TableItem &table_item, bool &key_preserved);
 

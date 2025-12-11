@@ -27,14 +27,24 @@ public:
   explicit ObMLogBuilder(ObDDLService &ddl_service);
   virtual ~ObMLogBuilder();
   int init();
+  int create_or_replace_mlog(share::schema::ObSchemaGetterGuard &schema_guard,
+                             const obrpc::ObCreateMLogArg &create_mlog_arg,
+                             obrpc::ObCreateMLogRes &create_mlog_res);
   int create_mlog(share::schema::ObSchemaGetterGuard &schema_guard,
                   const obrpc::ObCreateMLogArg &create_mlog_arg,
-                  obrpc::ObCreateMLogRes &create_mlog_res);
+                  obrpc::ObCreateMLogRes &create_mlog_res,
+                  const ObTableSchema *base_table_schema,
+                  const uint64_t data_version);
   int do_create_mlog(share::schema::ObSchemaGetterGuard &schema_guard,
                      const obrpc::ObCreateMLogArg &create_mlog_arg,
                      const share::schema::ObTableSchema &table_schema,
                      const uint64_t tenant_data_version,
                      obrpc::ObCreateMLogRes &create_mlog_res);
+  int replace_mlog(share::schema::ObSchemaGetterGuard &schema_guard,
+                   const obrpc::ObCreateMLogArg &create_mlog_arg,
+                   obrpc::ObCreateMLogRes &create_mlog_res,
+                   const ObTableSchema *base_table_schema,
+                   const uint64_t data_version);
   int generate_mlog_schema(share::schema::ObSchemaGetterGuard &schema_guard,
                            const obrpc::ObCreateMLogArg &create_mlog_arg,
                            const share::schema::ObTableSchema &base_table_schema,

@@ -71,34 +71,23 @@ int ObMajorRefreshMJVPrinter::set_refresh_table_scan_flag_for_mr_mv(ObSelectStmt
 int ObMajorRefreshMJVPrinter::get_rowkey_pos_in_select(ObIArray<int64_t> &rowkey_sel_pos)
 {
   int ret = OB_SUCCESS;
+  const ObRowkeyInfo &rowkey_info = mv_container_schema_.get_rowkey_info();
+  const ObRowkeyColumn *rowkey_column = NULL;
+  const int64_t sel_count = mv_def_stmt_.get_select_items().count();
+  int64_t pos = 0;
   rowkey_sel_pos.reuse();
-  const ObTableSchema *container_table = NULL;
-  if (OB_ISNULL(ctx_.stmt_factory_.get_query_ctx())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), K(ctx_.stmt_factory_.get_query_ctx()));
-  } else if (OB_FAIL(ctx_.stmt_factory_.get_query_ctx()->sql_schema_guard_.get_table_schema(mv_schema_.get_data_table_id(), container_table))) {
-    LOG_WARN("failed to get table schema", K(ret));
-  } else if (OB_ISNULL(container_table)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), K(container_table));
-  } else {
-    const ObRowkeyInfo &rowkey_info = container_table->get_rowkey_info();
-    const ObRowkeyColumn *rowkey_column = NULL;
-    const int64_t sel_count = mv_def_stmt_.get_select_items().count();
-    int64_t pos = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); ++i) {
-      if (OB_ISNULL(rowkey_column = rowkey_info.get_column(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("The rowkey column is NULL, ", K(i));
-      } else if (OB_UNLIKELY(0 > (pos = rowkey_column->column_id_ - OB_APP_MIN_COLUMN_ID) || sel_count <= pos)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected rowkey column", K(pos), K(rowkey_column->column_id_));
-      } else if (OB_FAIL(rowkey_sel_pos.push_back(pos))) {
-        LOG_WARN("failed to push back", K(ret));
-      }
+  for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); ++i) {
+    if (OB_ISNULL(rowkey_column = rowkey_info.get_column(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("The rowkey column is NULL, ", K(i));
+    } else if (OB_UNLIKELY(0 > (pos = rowkey_column->column_id_ - OB_APP_MIN_COLUMN_ID) || sel_count <= pos)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected rowkey column", K(pos), K(rowkey_column->column_id_));
+    } else if (OB_FAIL(rowkey_sel_pos.push_back(pos))) {
+      LOG_WARN("failed to push back", K(ret));
     }
-    LOG_TRACE("finish get rowkey pos in select", K(rowkey_sel_pos));
   }
+  LOG_TRACE("finish get rowkey pos in select", K(rowkey_sel_pos));
   return ret;
 }
 
@@ -485,7 +474,7 @@ int ObMajorRefreshMJVPrinter::create_mr_rt_mv_access_mv_from_table(ObSelectStmt 
   } else if (OB_FAIL(copier.copy_on_replace(all_conds, mv_join_delta_right->get_join_conditions()))) {
     LOG_WARN("failed to copy on replace exprs", K(ret), K(all_conds));
   } else if (OB_FAIL(gen_rowkey_join_conds_for_table(*orig_left_table, delta_left_table,
-                                                     mv_table, true, mv_join_delta_left->get_join_conditions()))) {
+                                                     mv_table, false, true, mv_join_delta_left->get_join_conditions()))) {
     LOG_WARN("failed to generate rowkey join conds for table", K(ret));
   }
   return ret;
@@ -580,6 +569,45 @@ int ObMajorRefreshMJVPrinter::gen_mr_rt_mv_left_delta_data_stmt(ObSelectStmt *&s
   } else if (OB_FAIL(stmt->get_condition_exprs().push_back(exists_expr))) {
     LOG_WARN("failed to push back", K(ret));
 
+  }
+  return ret;
+}
+
+int ObMajorRefreshMJVPrinter::gen_exists_cond_for_mview(const TableItem &source_table,
+                                                        const TableItem &outer_table,
+                                                        ObRawExpr *&exists_expr)
+{
+  int ret = OB_SUCCESS;
+  exists_expr = NULL;
+  ObOpRawExpr *exists_op_expr = NULL;
+  ObQueryRefRawExpr *query_ref_expr = NULL;
+  ObSelectStmt *subquery = NULL;
+  TableItem *mv_table = NULL;
+  SelectItem sel_item;
+  sel_item.expr_ = exprs_.int_one_;
+  if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_REF_QUERY, query_ref_expr))
+             || OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_OP_NOT_EXISTS, exists_op_expr))) {
+    LOG_WARN("failed to create raw expr", K(ret));
+  } else if (OB_ISNULL(query_ref_expr) || OB_ISNULL(exists_op_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected params", K(ret), K(query_ref_expr), K(exists_op_expr));
+  } else if (OB_FAIL(exists_op_expr->set_param_expr(query_ref_expr))) {
+    LOG_WARN("failed to set param expr", K(ret));
+  } else if (OB_FAIL(create_simple_stmt(subquery))) {
+    LOG_WARN("failed to create simple stmt", K(ret));
+  } else if (OB_FAIL(create_simple_table_item(subquery, mv_schema_.get_table_name(), mv_table))) {
+    LOG_WARN("failed to create simple table item", K(ret));
+  } else if (OB_FAIL(subquery->get_select_items().push_back(sel_item))) {
+    LOG_WARN("failed to push back not exists expr", K(ret));
+  } else if (OB_FAIL(gen_rowkey_join_conds_for_table(source_table, outer_table,
+                                                     *mv_table, false, true, subquery->get_condition_exprs()))) {
+    LOG_WARN("failed to generate rowkey join conds for table", K(ret));
+  } else {
+    exists_expr = exists_op_expr;
+    mv_table->database_name_ = mv_db_name_;
+    mv_table->flashback_query_expr_ = exprs_.last_refresh_scn_;
+    mv_table->flashback_query_type_ = TableItem::USING_SCN;
+    query_ref_expr->set_ref_stmt(subquery);
   }
   return ret;
 }

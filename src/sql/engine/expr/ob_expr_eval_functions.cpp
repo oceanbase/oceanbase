@@ -470,6 +470,7 @@
 #include "ob_expr_right.h"
 #include "ob_expr_reverse.h"
 #include "ob_expr_operator.h"
+#include "ob_expr_md5_concat_ws.h"
 
 namespace oceanbase
 {
@@ -1438,7 +1439,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprAIComplete::eval_ai_complete,                                 /* 857 */
   ObExprAIEmbed::eval_ai_embed,                                       /* 858 */
   ObExprAIRerank::eval_ai_rerank,                                     /* 859 */
-  NULL,//ObExprMd5ConcatWs::calc_md5_concat_ws_expr                   /* 860 */
+  ObExprMd5ConcatWs::calc_md5_concat_ws_expr,                         /* 860 */
   ObExprUDF::eval_mysql_udtf,                                         /* 861 */
   NULL, // ObExprHiddenClusteringKey::eval_hidden_clustering_key,     /* 862 */
   ObExprFormatProfile::format_profile,                                /* 863 */
@@ -1886,7 +1887,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   ObExprAIComplete::eval_ai_complete_vector,                             /* 229 */
   ObExprAIEmbed::eval_ai_embed_vector,                                   /* 230 */
   NULL, // ObExprAIRerank::eval_ai_rerank_vector,                               /* 231 */
-  NULL, // ObExprMd5ConcatWs::calc_md5_concat_ws_vector                         /* 232 */
+  ObExprMd5ConcatWs::calc_md5_concat_ws_vector,                          /* 232 */
   NULL, // ObExprHiddenClusteringKey::eval_vector_hidden_clustering_key, /* 233 */
   ObExprToPinyin::eval_to_pinyin_vector,                                 /* 234 */
   ObExprMul::mul_decint32_decint32_int32_vector,                         /* 235 */

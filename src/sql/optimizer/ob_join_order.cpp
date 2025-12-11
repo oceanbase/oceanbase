@@ -20234,72 +20234,6 @@ int ObJoinOrder::build_prefix_index_compare_expr(ObRawExpr &column_expr,
   return ret;
 }
 
-int ObJoinOrder::check_match_to_type(ObRawExpr *to_type_expr, ObRawExpr *candi_expr, bool &is_same, ObExprEqualCheckContext &equal_ctx) {
-  int ret = OB_SUCCESS;
-  bool is_valid = false;
-  is_same = false;
-  ObRawExpr *to_type_child = NULL;
-  //check expr type and param type of to_<type> expr
-  if (OB_ISNULL(to_type_expr) || OB_ISNULL(candi_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expr is unexpected null", K(ret), K(to_type_expr), K(candi_expr));
-  } else {
-    ObItemType type = to_type_expr->get_expr_type();
-    ObItemType candi_type = candi_expr->get_expr_type();
-    if (T_FUN_SYS_TO_CHAR == type
-        || T_FUN_SYS_TO_NCHAR == type
-        || T_FUN_SYS_TO_NUMBER == type
-        || T_FUN_SYS_TO_BINARY_FLOAT == type
-        || T_FUN_SYS_TO_BINARY_DOUBLE == type
-        || T_FUN_SYS_DATE == type
-        || T_FUN_SYS_TO_BINARY_DOUBLE == type) {
-      is_valid = true;
-    } else if (T_FUN_SYS_TO_CHAR == candi_type
-        || T_FUN_SYS_TO_NCHAR == candi_type
-        || T_FUN_SYS_TO_NUMBER == candi_type
-        || T_FUN_SYS_TO_BINARY_FLOAT == candi_type
-        || T_FUN_SYS_TO_BINARY_DOUBLE == candi_type
-        || T_FUN_SYS_DATE == candi_type
-        || T_FUN_SYS_TO_BINARY_DOUBLE == candi_type) {
-      std::swap(to_type_expr, candi_expr);
-      is_valid = true;
-    }
-    if (is_valid && to_type_expr->get_param_count() > 1) {
-      is_valid = false; //TODO: if the fmt param is same as session default fmt, to_date/to_char/to_timestamp/to_timestamp_tz is the same as cast expr
-    }
-  }
-  if (OB_SUCC(ret) && is_valid) {
-    if (OB_ISNULL(to_type_child = to_type_expr->get_param_expr(0))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null",K(ret));
-    } else if (ObOptimizerUtil::is_lossless_type_conv(to_type_child->get_result_type(),to_type_expr->get_result_type())) {
-      if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(to_type_child, to_type_child))) {
-        LOG_WARN("fail to get real child without lossless cast", K(ret));
-      } else if (OB_ISNULL(to_type_child) || OB_ISNULL(candi_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret), K(to_type_child), K(candi_expr));
-      } else {
-        is_same = to_type_child->same_as(*candi_expr, &equal_ctx);
-      }
-    } else if (to_type_expr->get_result_type().get_type() == candi_expr->get_result_type().get_type()
-               && T_FUN_SYS_CAST == candi_expr->get_expr_type()) {
-      if (ob_is_string_tc(to_type_expr->get_result_type().get_type())) {
-        if (to_type_expr->get_result_type().get_accuracy() == candi_expr->get_result_type().get_accuracy()
-            && to_type_expr->get_result_type().get_collation_type() == candi_expr->get_result_type().get_collation_type()) {
-          is_same = true;
-        }
-      } else if (to_type_expr->get_result_type().get_scale() == candi_expr->get_result_type().get_scale()
-                 && to_type_expr->get_result_type().get_precision() == candi_expr->get_result_type().get_precision()) {
-        is_same = true;
-      }
-      if (is_same) {
-        is_same = to_type_child->same_as(*(candi_expr->get_param_expr(0)), &equal_ctx);
-      }
-    }
-  }
-  return ret;
-}
-
 int ObJoinOrder::extract_real_join_keys(ObIArray<ObRawExpr *> &join_keys)
 {
   int ret = OB_SUCCESS;
@@ -22580,54 +22514,40 @@ int ObJoinOrder::check_simple_gen_col_cmp_expr(ObRawExpr *expr,
                                                bool &is_precise_deduced)
 {
   int ret = OB_SUCCESS;
+  matched_expr = NULL;
   is_match = false;
   ObRawExpr* depend_expr = NULL;
   bool is_lossless = false;
   ObPhysicalPlanCtx *phy_plan_ctx = NULL;
+  const bool skip_extract_real_dep_expr = true;
   if (OB_ISNULL(expr) || OB_ISNULL(gen_col_expr) || OB_ISNULL(OPT_CTX.get_exec_ctx()) ||
       OB_ISNULL(phy_plan_ctx = OPT_CTX.get_exec_ctx()->get_physical_plan_ctx())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(expr), K(gen_col_expr));
   } else if (expr->get_expr_class() != ObRawExpr::EXPR_OPERATOR) { // these can extract query range
     //do nothing
-  } else if (OB_FALSE_IT(depend_expr = gen_col_expr->get_dependant_expr())) {
-  } else if (OB_ISNULL(depend_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("depend_expr is null", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::split_lossless_convert_or_cast(depend_expr))) {
-    LOG_WARN("failed to split lossless convert or cast", K(ret));
-  }
-  // compare each param expr with depend_expr
-  if (T_FUN_SYS_CAST == depend_expr->get_expr_type() && (ObCharType == depend_expr->get_data_type() || ObNCharType == depend_expr->get_data_type())) {
+  } else if (OB_FAIL(ObOptimizerUtil::extract_real_dep_expr(gen_col_expr->get_dependant_expr(),
+                                                            depend_expr))) {
+    LOG_WARN("failed to extract real dep expr", K(ret));
+  } else if (T_FUN_SYS_CAST == depend_expr->get_expr_type() && (ObCharType == depend_expr->get_data_type() || ObNCharType == depend_expr->get_data_type())) {
+    // compare each param expr with depend_expr
     depend_expr = depend_expr->get_param_expr(0);
   }
   for (int64_t i = 0; OB_SUCC(ret) && !is_match && i < expr->get_param_count(); i++) {
     ObRawExpr *param_expr = expr->get_param_expr(i);
     ObExprEqualCheckContext equal_ctx;
-    equal_ctx.override_const_compare_ = true;
-    equal_ctx.ignore_implicit_cast_ = true;
-    equal_ctx.ignore_char_padding_ = true;
-    bool is_same = false;
-    if (OB_ISNULL(param_expr)) {
+    if (OB_FAIL(ObOptimizerUtil::check_and_extract_matched_gen_col_exprs(depend_expr,
+                                                                         param_expr,
+                                                                         is_match,
+                                                                         &equal_ctx,
+                                                                         skip_extract_real_dep_expr))) {
+      LOG_WARN("fail to check and extract matched gen col exprs", K(ret));
+    } else if (!is_match) {
+      /* do nothing */
+    } else if (OB_ISNULL(depend_expr) || OB_ISNULL(param_expr)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("param expr is null", K(ret));
-      //remove inner cast's influence.
-    } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(param_expr, param_expr))) {
-      LOG_WARN("fail to get real child without lossless cast", K(ret));
-    } else if (OB_ISNULL(param_expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("real child is null", K(ret));
-    } else if (depend_expr->same_as(*param_expr, &equal_ctx)) {
-      is_same = true;
+      LOG_WARN("param expr is null", K(ret), K(depend_expr), K(param_expr));
     } else {
-      equal_ctx.reset();
-      equal_ctx.override_const_compare_ = true;
-      if (OB_FAIL(check_match_to_type(depend_expr, param_expr, is_same, equal_ctx))) {
-        LOG_WARN("fail to check if to_<type> expr can be extracted", K(ret));
-      }
-    }
-    if (OB_SUCC(ret) && is_same) {
-      is_match = true;
       matched_expr = param_expr;
       if (depend_expr->is_multivalue_define_json_expr() && param_expr->is_domain_json_expr()) {
         ObRawExpr *expr = ObRawExprUtils::skip_inner_added_expr(param_expr);

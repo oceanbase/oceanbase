@@ -254,6 +254,11 @@ int ObMViewDependencyService::update_mview_reference_table_status(
       } else if (OB_ISNULL(ref_table_schema)) {
         // the reference table has already been dropped, ignore it
         LOG_TRACE("ref table schema is null", KR(ret), K(tenant_id), K(ref_table_id));
+      } else if (OB_FAIL(check_table_exist_(trans, tenant_id, ref_table_id))) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          LOG_INFO("ref table has already been dropped, ignore it", KR(ret), K(tenant_id), K(ref_table_id));
+          ret = OB_SUCCESS;
+        }
       } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
         LOG_WARN("fail to gen new schema_version", KR(ret), K(tenant_id));
       } else if ((update_opt.need_update_table_flag_ && ref_table_schema->get_table_mode_struct().table_referenced_by_mv_flag_ != update_opt.table_flag_) ||
@@ -282,5 +287,38 @@ int ObMViewDependencyService::update_mview_reference_table_status(
   }
   return ret;
 }
+
+int ObMViewDependencyService::check_table_exist_(
+    ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const uint64_t table_id)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  if (OB_FAIL(sql.append_fmt("SELECT 1 FROM %s.%s WHERE table_id = %ld",
+                              OB_SYS_DATABASE_NAME, OB_ALL_TABLE_TNAME, table_id))) {
+    LOG_WARN("failed to append sql", KR(ret), K(table_id), K(tenant_id));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res)
+    {
+      common::sqlclient::ObMySQLResult *result = nullptr;
+      if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", KR(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", KR(ret));
+      } else if (OB_FAIL(result->next())) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          LOG_WARN("fail to get next", KR(ret));
+        } else {
+          ret = OB_ENTRY_NOT_EXIST;
+          LOG_WARN("base table not exist", KR(ret), K(tenant_id), K(table_id), K(sql));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 } // end of sql
 } // end of oceanbase

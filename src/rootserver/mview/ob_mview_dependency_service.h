@@ -81,6 +81,10 @@ public:
       const ObIArray<uint64_t> &ref_table_ids,
       const ObUpdateMViewRefTableOpt &update_opt);
 private:
+  int check_table_exist_(ObISQLClient &sql_client,
+                         const uint64_t tenant_id,
+                         const uint64_t table_id);
+private:
   share::schema::ObMultiVersionSchemaService &schema_service_;
 };
 } // end of sql

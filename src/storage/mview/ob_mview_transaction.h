@@ -14,7 +14,7 @@
 
 #include "lib/mysqlclient/ob_single_connection_proxy.h"
 #include "sql/session/ob_sql_session_info.h"
-
+#include "sql/session/ob_local_session_var.h"
 namespace oceanbase
 {
 namespace storage
@@ -31,7 +31,8 @@ public:
   int start(sql::ObSQLSessionInfo *session_info,
             ObISQLClient *sql_client,
             const uint64_t database_id,
-            const ObString &database_name);
+            const ObString &database_name,
+            const sql::ObLocalSessionVar *mv_solidified_session_var = nullptr);
   int end(const bool commit);
   bool is_started() const { return in_trans_; }
   sql::ObSQLSessionInfo *get_session_info() const { return session_info_; }
@@ -41,6 +42,7 @@ public:
                                     : ObCompatibilityMode::OCEANBASE_MODE;
   }
   bool is_inner_session() const { return session_param_saved_.is_inner_session(); }
+  sql::ObSQLSessionInfo *get_session_info() { return session_info_; }
 
 protected:
   int connect(sql::ObSQLSessionInfo *session_info, ObISQLClient *sql_client);
@@ -59,7 +61,8 @@ protected:
     ~ObSessionParamSaved();
     DISABLE_COPY_ASSIGN(ObSessionParamSaved);
 
-    int save(sql::ObSQLSessionInfo *session_info);
+    int save(sql::ObSQLSessionInfo *session_info,
+             const sql::ObLocalSessionVar *mv_solidified_session_var = nullptr);
     int restore();
 
     bool is_inner_session() const { return is_inner_; }
@@ -71,6 +74,7 @@ protected:
     bool autocommit_;
     uint64_t database_id_;
     char *database_name_;
+    ObSEArray<sql::ObSessionSysVar, 8> cur_session_vars_; // record cur session vars for reference when refresh mview
   };
 
   class ObSessionSavedForInner

@@ -17,6 +17,8 @@
 #include "sql/engine/ob_exec_context.h"
 #include "storage/mview/ob_mview_refresh_helper.h"
 #include "storage/mview/ob_mview_mds.h"
+#include "share/stat/ob_opt_stat_manager.h"
+#include "sql/optimizer/ob_dynamic_sampling.h"
 
 namespace oceanbase
 {
@@ -193,13 +195,17 @@ int ObMLogPurger::prepare_for_purge()
             } else {
               ret = OB_SUCCESS;
             }
-          } else if (OB_INVALID_SCN_VAL == mview_info.get_last_refresh_scn()) {
+          } else if (OB_INVALID_SCN_VAL == mview_info.get_last_refresh_scn() || 0 == mview_info.get_last_refresh_scn()) {
             // do nothing
           } else if (mview_info.get_refresh_method()== ObMVRefreshMethod::FAST
               || mview_info.get_refresh_method()== ObMVRefreshMethod::FORCE
               || table_schema->mv_on_query_computation()) {
             // for fast refresh mv or real-query mv
-            min_mview_refresh_scn = MIN(min_mview_refresh_scn, mview_info.get_last_refresh_scn());
+            if (mview_info.get_is_synced()) {
+              min_mview_refresh_scn = MIN(min_mview_refresh_scn, mview_info.get_data_sync_scn());
+            } else {
+              min_mview_refresh_scn = MIN(min_mview_refresh_scn, mview_info.get_last_refresh_scn());
+            }
           }
         }
       }
@@ -255,6 +261,19 @@ int ObMLogPurger::do_purge()
       } else if (OB_FAIL(ObMLogInfo::update_mlog_last_purge_info(trans_, mlog_info_))) {
         LOG_WARN("fail to update mlog last purge info", KR(ret), K(mlog_info_));
       }
+    }
+  }
+  // 3. erase mlog's dynamic sampling KV cache
+  if (OB_SUCC(ret)) {
+    ObOptDSStat::Key key;
+    key.tenant_id_ = tenant_id;
+    key.table_id_ = mlog_info_.get_mlog_id();
+    key.partition_hash_ = 0;
+    key.ds_level_ = ObDynamicSamplingLevel::BASIC_DYNAMIC_SAMPLING;
+    key.sample_block_ = OB_DS_BASIC_SAMPLE_MICRO_CNT;
+    key.expression_hash_ = 0;
+    if (OB_FAIL(common::ObOptStatManager::get_instance().erase_ds_stat(key))) {
+      LOG_WARN("failed to erase mlog ds stat cache after mlog purge", KR(ret), K(key), K(mlog_info_));
     }
   }
   return ret;

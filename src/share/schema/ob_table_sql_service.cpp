@@ -18,6 +18,7 @@
 #include "src/share/vector_index/ob_vector_index_util.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "share/storage_cache_policy/ob_storage_cache_partition_sql_helper.h"
+#include "share/ob_mview_args.h"
 
 namespace oceanbase
 {
@@ -2793,6 +2794,75 @@ int ObTableSqlService::update_index_type(const ObTableSchema &data_table_schema,
   return ret;
 }
 
+int ObTableSqlService::update_mlog_status(const ObTableSchema &data_table_schema,
+                                          const uint64_t mlog_table_id,
+                                          const char *new_name,
+                                          const int64_t new_schema_version,
+                                          common::ObISQLClient &sql_client)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = data_table_schema.get_tenant_id();
+  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+  ObDMLSqlSplicer dml;
+  int64_t affected_rows = 0;
+  const char *table_name = NULL;
+
+  if (OB_FAIL(check_ddl_allowed(data_table_schema))) {
+    LOG_WARN("check ddl allowd failed", K(ret), K(data_table_schema));
+  } else if (OB_FAIL(ObSchemaUtils::get_all_table_name(exec_tenant_id, table_name))) {
+    LOG_WARN("fail to get all table name", K(ret), K(exec_tenant_id));
+  } else if (OB_FAIL(dml.add_pk_column(
+                 "tenant_id", ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id))) ||
+             OB_FAIL(dml.add_pk_column("table_id", ObSchemaUtils::get_extract_schema_id(
+                                                       exec_tenant_id, mlog_table_id))) ||
+             OB_FAIL(dml.add_column("schema_version", new_schema_version)) ||
+             OB_FAIL(dml.add_column("table_name", new_name))) {
+    LOG_WARN("add column failed", K(ret));
+  } else if (OB_FAIL(exec_update(sql_client, tenant_id, mlog_table_id, table_name, dml,
+                                 affected_rows))) {
+    LOG_WARN("exec update failed", K(ret));
+  } else if (affected_rows != 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(affected_rows), K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    ObTableSchema index_schema;
+    ObRefreshSchemaStatus schema_status;
+    schema_status.tenant_id_ = tenant_id;
+    if (OB_FAIL(schema_service_.get_table_schema_from_inner_table(schema_status, mlog_table_id,
+                                                                  sql_client, index_schema))) {
+      LOG_WARN("get_table_schema failed", K(mlog_table_id), K(ret));
+    } else {
+      const bool update_object_status_ignore_version = false;
+      const bool only_history = true;
+      index_schema.set_table_name(new_name);
+      index_schema.set_schema_version(new_schema_version);
+      index_schema.set_in_offline_ddl_white_list(data_table_schema.get_in_offline_ddl_white_list());
+      if (OB_FAIL(add_table(sql_client, index_schema, update_object_status_ignore_version,
+                            only_history))) {
+        LOG_WARN("add_table failed", K(index_schema), K(only_history), K(ret));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ObSchemaOperation opt;
+    opt.tenant_id_ = tenant_id;
+    opt.database_id_ = 0;
+    opt.tablegroup_id_ = 0;
+    opt.table_id_ = mlog_table_id;
+    opt.op_type_ = OB_DDL_MODIFY_MLOG_STATUS;
+    opt.schema_version_ = new_schema_version;
+    opt.ddl_stmt_str_ = ObString();
+    if (OB_FAIL(log_operation_wrapper(opt, sql_client))) {
+      LOG_WARN("log operation failed", K(opt), K(ret));
+    }
+  }
+
+  return ret;
+}
+
 int ObTableSqlService::update_mview_status(
     const ObTableSchema &mview_table_schema,
     common::ObISQLClient &sql_client)
@@ -3046,11 +3116,15 @@ int ObTableSqlService::gen_mview_dml(
     LOG_WARN("mview is not support before 4.3", KR(ret), K(table));
   } else {
     const ObViewSchema &view_schema = table.get_view_schema();
-    const ObMVRefreshInfo *mv_refresh_info = view_schema.get_mv_refresh_info();
+    const obrpc::ObMVAdditionalInfo *mv_additional_info = view_schema.get_mv_additional_info();
+    const obrpc::ObMVRefreshInfo *mv_refresh_info = nullptr;
 
-    if (mv_refresh_info == nullptr) {
+    if (OB_ISNULL(mv_additional_info)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("mv_refresh_info should not be null", KR(ret));
+      LOG_WARN("mv_additional_info is null", KR(ret));
+    } else if (OB_ISNULL(mv_refresh_info = &(mv_additional_info->mv_refresh_info_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("mv_refresh_info is null", KR(ret));
     } else if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
                                                exec_tenant_id, table.get_tenant_id())))
         || OB_FAIL(dml.add_pk_column("mview_id", ObSchemaUtils::get_extract_schema_id(
@@ -3058,8 +3132,7 @@ int ObTableSqlService::gen_mview_dml(
         || OB_FAIL(dml.add_column("refresh_mode", mv_refresh_info->refresh_mode_))
         || OB_FAIL(dml.add_column("refresh_method", mv_refresh_info->refresh_method_))
         || OB_FAIL(dml.add_column("build_mode", ObMViewBuildMode::IMMEDIATE))
-        || OB_FAIL(dml.add_column("last_refresh_scn", 0))
-        ) {
+        || OB_FAIL(dml.add_column("last_refresh_scn", 0))) {
       LOG_WARN("add column failed", KR(ret));
     }
 
@@ -3258,10 +3331,13 @@ int ObTableSqlService::gen_table_dml_without_check(
         && OB_FAIL(dml.add_column("semistruct_properties", ObHexEscapeSqlStr(semistruct_properties))))
       || (data_version >= DATA_VERSION_4_4_1_0
           && OB_FAIL(dml.add_column("micro_block_format_version", table.get_micro_block_format_version())))
-      ) {
+      || (((data_version >= MOCK_DATA_VERSION_4_3_5_5 && data_version < DATA_VERSION_4_4_0_0)
+           || (data_version >= MOCK_DATA_VERSION_4_4_2_0 && data_version < DATA_VERSION_4_5_0_0)
+           || (data_version >= DATA_VERSION_4_5_1_0))
+          && OB_FAIL(dml.add_column("mview_expand_definition", ObHexEscapeSqlStr(table.get_view_schema().get_expand_view_definition_for_mv()))))
+        ) {
         LOG_WARN("add column failed", K(ret));
       }
-
   return ret;
 }
 

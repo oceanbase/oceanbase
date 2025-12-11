@@ -993,7 +993,11 @@ int ObSchemaServiceSQLImpl::get_full_table_schema_from_inner_table(
       } else if (AUX_LOB_PIECE == aux_table_meta.table_type_) {
         tmp_table_schema->set_aux_lob_piece_tid(aux_table_meta.table_id_);
       } else if (MATERIALIZED_VIEW_LOG == aux_table_meta.table_type_) {
-        tmp_table_schema->set_mlog_tid(aux_table_meta.table_id_);
+        if (aux_table_meta.is_tmp_mlog_) {
+          tmp_table_schema->set_tmp_mlog_tid(aux_table_meta.table_id_);
+        } else {
+          tmp_table_schema->set_mlog_tid(aux_table_meta.table_id_);
+        }
       }
     }
     if (OB_SUCC(ret)) {
@@ -1945,7 +1949,8 @@ int ObSchemaServiceSQLImpl::fetch_aux_tables(
     const static char *FETCH_INDEX_SQL_FORMAT = "SELECT /*+ no_rewrite leading(l r) */ "\
                                                 "  r.table_id AS table_id, "\
                                                 "  r.table_type AS table_type, "\
-                                                "  r.index_type AS index_type "\
+                                                "  r.index_type AS index_type, "\
+                                                "  r.table_name AS table_name "\
                                                 "FROM ( "\
                                                 "  SELECT /*+ index(%s idx_data_table_id) */ DISTINCT table_id AS tid "\
                                                 "  FROM %s "\

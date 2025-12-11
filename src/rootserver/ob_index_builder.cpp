@@ -260,8 +260,8 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &const_arg, obrpc::ObDropInd
     LOG_WARN("check whether foreign key related table executes ddl failed", K(ret));
   }
   // get vector rebuild drop index table id
-  if (OB_SUCC(ret) && arg.is_add_to_scheduler_ && arg.is_vec_inner_drop_) {
-    if (OB_FAIL(ObVectorIndexUtil::get_rebuild_drop_index_id_and_name(schema_guard, arg))) {
+  if (OB_SUCC(ret) && arg.is_add_to_scheduler_ && (arg.is_vec_inner_drop_ || arg.is_drop_in_rebuild_task_)) {
+    if (OB_FAIL(get_rebuild_drop_index_id_and_name(schema_guard, arg))) {
       LOG_WARN("fail to get vector drop index id", K(ret), K(arg));
     }
   }
@@ -518,8 +518,7 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &const_arg, obrpc::ObDropInd
             res.task_id_ = task_record.task_id_;
           }
           if (OB_FAIL(ret)) {
-          } else if (index_table_schema->is_vec_index() &&
-                     arg.is_vec_inner_drop_ &&
+          } else if (((index_table_schema->is_vec_index() && arg.is_vec_inner_drop_) || (index_table_schema->is_mlog_table() && arg.is_drop_in_rebuild_task_)) &&
                      OB_FAIL(ObDDLTaskRecordOperator::update_parent_task_message(tenant_id,
                         arg.task_id_, *index_table_schema, res.task_id_, res.task_id_,
                         ObDDLUpdateParentTaskIDType::UPDATE_VEC_REBUILD_DROP_INDEX_TASK_ID, allocator, trans))) {
@@ -2547,7 +2546,6 @@ int ObIndexBuilder::set_index_table_column_store_if_need(
   return ret;
 }
 
-
 int ObIndexBuilder::check_index_for_if_not_exist_(const uint64_t tenant_id,
                                                   const ObString database_name,
                                                   const ObString index_name,
@@ -2566,6 +2564,71 @@ int ObIndexBuilder::check_index_for_if_not_exist_(const uint64_t tenant_id,
     } else if (res.task_id_ > 0) {
       res.index_table_id_ = index_id;
     }
+  }
+  return ret;
+}
+
+int ObIndexBuilder::get_rebuild_drop_index_id_and_name(share::schema::ObSchemaGetterGuard &schema_guard, obrpc::ObDropIndexArg &arg)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg.tenant_id_;
+  const uint64_t new_index_id = arg.table_id_;
+  const uint64_t old_index_id = arg.index_table_id_;
+  const ObString old_index_name = arg.index_name_;
+  const ObTableSchema *old_index_schema = nullptr;
+  const ObTableSchema *new_index_schema = nullptr;
+  const bool is_mlog_inner_drop = obrpc::ObIndexArg::DROP_MLOG == arg.index_action_type_;
+  if (!arg.is_add_to_scheduler_ || !(arg.is_vec_inner_drop_ || arg.is_drop_in_rebuild_task_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected arg", K(ret), K(arg));
+  } else if (tenant_id == OB_INVALID_TENANT_ID ||
+             old_index_id == OB_INVALID_ID || new_index_id == OB_INVALID_ID || old_index_name.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(old_index_id), K(new_index_id), K(old_index_name));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, old_index_id, old_index_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(old_index_id));
+  } else if (OB_ISNULL(old_index_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, new_index_id, new_index_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(new_index_id));
+  } else if (OB_ISNULL(new_index_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret));
+  } else {
+    // If the name of the old table has been changed, it means the rebuild was successful, otherwise, the rebuild failed. So:
+    //    1. When the rebuild is successful, the old table needs to be deleted because the name of the old table has been replaced.
+    //    2. Conversely, the new table needs to be deleted if the rebuild is unsuccessful.
+    bool rebuild_succ = false;
+    if (0 == old_index_schema->get_table_name_str().case_compare(old_index_name)) {
+      rebuild_succ = false;
+    } else if (0 == new_index_schema->get_table_name_str().case_compare(old_index_name)) {
+      rebuild_succ = true;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected rebuild old and new index table name", K(ret), K(old_index_name),
+        K(old_index_schema->get_table_name()),
+        K(new_index_schema->get_table_name()));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (rebuild_succ) { // drop old index
+      arg.index_table_id_ = old_index_id;
+      if (!is_mlog_inner_drop && OB_FAIL(old_index_schema->get_index_name(arg.index_name_))) { // index name, like: idx1, not full index name
+        LOG_WARN("fail to get index name", K(ret));
+      } else if (is_mlog_inner_drop && OB_FAIL(old_index_schema->get_mlog_name(arg.index_name_))) {
+        LOG_WARN("fail to get mlog name", K(ret));
+      }
+    } else { // drop new index
+      arg.index_table_id_ = new_index_id;
+      if (!is_mlog_inner_drop && OB_FAIL(new_index_schema->get_index_name(arg.index_name_))) { // index name, like: idx1, not full index name
+        LOG_WARN("fail to get index name", K(ret));
+      } else if (is_mlog_inner_drop && OB_FAIL(new_index_schema->get_mlog_name(arg.index_name_))) {
+        LOG_WARN("fail to get mlog name", K(ret));
+      }
+    }
+    LOG_INFO("succ to get rebuild drop index id and name", K(ret), K(rebuild_succ),
+      K(arg.index_table_id_), K(arg.index_name_),
+      K(old_index_schema->get_table_name()), K(new_index_schema->get_table_name()));
   }
   return ret;
 }

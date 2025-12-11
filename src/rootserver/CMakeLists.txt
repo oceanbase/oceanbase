@@ -248,6 +248,9 @@ ob_set_subtarget(ob_rootserver mview
   mview/ob_mview_update_cache_task.cpp
   mview/ob_mview_mds_op_task.cpp
   mview/ob_mview_alter_service.cpp
+  mview/ob_mview_update_deps_task.cpp
+  mview/ob_mview_trim_mlog_task.cpp
+  mview/ob_mview_utils.cpp
 )
 
 ob_set_subtarget(ob_rootserver direct_load

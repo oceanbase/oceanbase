@@ -1819,11 +1819,7 @@ int ObDmlCgService::append_time_type_column_id(const ObTableSchema *table_schema
     if (OB_ISNULL(column)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid column schema", K(column));
-    } else if (column->get_meta_type().is_datetime() ||
-      column->get_meta_type().is_timestamp() ||
-      column->get_meta_type().is_time() ||
-      column->get_meta_type().is_date() ||
-      column->get_meta_type().is_otimestamp_type()) {
+    } else if (column->is_minimal_mode_related_time_column()) {
       // date/datatime and time/timestamp column need to be added to old_row
       if (OB_FAIL(add_var_to_array_no_dup(minimal_column_ids, column->get_column_id()))) {
         LOG_WARN("add time type column_id failed", K(ret), K(column->get_column_id()));

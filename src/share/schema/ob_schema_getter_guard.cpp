@@ -1580,13 +1580,25 @@ int ObSchemaGetterGuard::get_can_write_index_array(
     LOG_WARN("cannot get table schema for table ", KR(ret), K(tenant_id), K(table_id));
   } else if (OB_FAIL(table_schema->get_simple_index_infos(simple_index_infos))) {
     LOG_WARN("get simple_index_infos failed", KR(ret), K(tenant_id), K(table_id));
-  } else if (with_mlog && table_schema->has_mlog_table()) {
-    ObAuxTableMetaInfo mlog_meta_info;
-    mlog_meta_info.table_id_ = table_schema->get_mlog_tid();
-    mlog_meta_info.table_type_ = MATERIALIZED_VIEW_LOG;
-    if (OB_FAIL(simple_index_infos.push_back(mlog_meta_info))) {
-      LOG_WARN("failed to push back mlog meta info to simple index infos",
-          KR(ret), K(mlog_meta_info));
+  } else if (with_mlog) {
+    if (table_schema->has_mlog_table()) {
+      ObAuxTableMetaInfo mlog_meta_info;
+      mlog_meta_info.table_id_ = table_schema->get_mlog_tid();
+      mlog_meta_info.table_type_ = MATERIALIZED_VIEW_LOG;
+      if (OB_FAIL(simple_index_infos.push_back(mlog_meta_info))) {
+        LOG_WARN("failed to push back mlog meta info to simple index infos", KR(ret),
+                 K(mlog_meta_info));
+      }
+    }
+    if (OB_SUCC(ret) && table_schema->has_tmp_mlog_table()) {
+      ObAuxTableMetaInfo mlog_meta_info;
+      mlog_meta_info.table_id_ = table_schema->get_tmp_mlog_tid();
+      mlog_meta_info.table_type_ = MATERIALIZED_VIEW_LOG;
+      mlog_meta_info.is_tmp_mlog_ = true;
+      if (OB_FAIL(simple_index_infos.push_back(mlog_meta_info))) {
+        LOG_WARN("failed to push back tmp mlog meta info to simple index infos", KR(ret),
+                 K(mlog_meta_info));
+      }
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
@@ -3981,6 +3993,7 @@ int ObSchemaGetterGuard::get_schema_version(
         GET_SCHEMA_VERSION(tablegroup, ObSimpleTablegroupSchema);
         break;
       }
+    case VIEW_SCHEMA :
     case TABLE_SCHEMA : {
         if (is_cte_table(schema_id)) {
           // fake table, we should avoid error in such situation.

@@ -696,6 +696,10 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
   } else if (tbl_schema->is_external_table()) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "operation on external table");
+  } else if (tbl_schema->mv_container_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("create index on mv container table is not supported", KR(ret), K(tbl_schema->get_table_name()));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create index on mv container table is");
   } else if (tbl_schema->is_mlog_table()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("create index on materialized view log is not supported",

@@ -48,6 +48,7 @@
 #include "sql/resolver/dml/ob_transpose_resolver.h"
 #include "share/catalog/ob_catalog_utils.h"
 #include "share/ob_license_utils.h"
+#include "rootserver/mview/ob_mview_utils.h"
 #include "share/schema/ob_external_table_column_schema_helper.h"
 #include "src/share/hybrid_search/ob_hybrid_search_executor.h"
 
@@ -2822,6 +2823,17 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
                                                  scope_name.length(), scope_name.ptr());
         }
       }
+      // special path for mview, mview would create sepcial hidden column when create,
+      // allow to access hidden column when refreshing mview or select mview table
+      if (session_info_->get_ddl_info().is_refreshing_mview() ||
+          (table_item.mview_id_ != OB_INVALID_ID &&
+           (current_scope_ != T_UPDATE_SCOPE && current_scope_ != T_INSERT_SCOPE))) {
+        if (rootserver::ObMViewUtils::is_hidden_column(column_name)) {
+          include_hidden = true;
+        }
+        LOG_INFO("include hidden column", K(include_hidden), K(current_scope_),
+                 K(table_item.mview_id_), K(session_info_->get_ddl_info().is_refreshing_mview()), K(column_name));
+      }
     }
     if (OB_FAIL(ret)) {
       //do nothing
@@ -3766,7 +3778,7 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
       } else if (params_.is_from_create_view_ && table_schema->is_mysql_tmp_table()) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "View/Table's column refers to a temporary table");
-      } else if (params_.is_from_create_mview_
+      } else if (params_.is_mview_definition_sql_
                  && OB_FAIL(check_is_table_supported_for_mview(*table_item, *table_schema))) {
         LOG_WARN("failed to check is table supported for mview", K(ret));
       } else if (OB_FAIL(resolve_table_partition_expr(*table_item, *table_schema))) {
@@ -3829,7 +3841,7 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
         if (OB_FAIL(resolve_flashback_query_node(time_node, table_item))) {
           LOG_WARN("failed to resolve flashback query node", K(ret));
         //针对view需要递归的设置view对应查询的table的flashback query属性
-        } else if (table_item->is_view_table_) {
+        } else if (time_node->type_ != T_TABLE_FLASHBACK_PROCTIME && table_item->is_view_table_) {
           if (OB_FAIL(set_flashback_info_for_view(table_item->ref_query_, table_item))) {
             LOG_WARN("failed to set flashback info for view", K(ret));
           } else {
@@ -3878,7 +3890,8 @@ int ObDMLResolver::check_is_table_supported_for_mview(const ObItemType table_nod
   if (OB_UNLIKELY(T_RELATION_FACTOR != table_node_type
                   && T_SELECT != table_node_type
                   && T_JOINED_TABLE != table_node_type
-                  && T_JSON_TABLE_EXPRESSION != table_node_type)) {
+                  && T_JSON_TABLE_EXPRESSION != table_node_type
+                  && T_TABLE_COLLECTION_EXPRESSION != table_node_type)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("unsupported table type in materialized view", K(ret), K(get_type_name(table_node_type)));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-user table in materialized view is");
@@ -4025,6 +4038,14 @@ int ObDMLResolver::resolve_flashback_query_node(const ParseNode *time_node, Tabl
           expr = dst_expr;
         }
       }
+    }
+  } else if (T_TABLE_FLASHBACK_PROCTIME == time_node->type_) {
+    if (OB_UNLIKELY(!(params_.is_mview_definition_sql_
+                      || session_info_->get_ddl_info().is_refreshing_mview()))) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Using PROCTIME() out of CREATE MATERIALIZED VIEW is");
+    } else {
+      table_item->is_mv_proctime_table_ = true;
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -5848,7 +5869,7 @@ int ObDMLResolver::resolve_table(const ParseNode &parse_tree,
     if (!stmt->is_select_stmt() && OB_NOT_NULL(time_node)) {
       ret = OB_ERR_FLASHBACK_QUERY_WITH_UPDATE;
       LOG_WARN("snapshot expression not allowed here", K(ret));
-    } else if (params_.is_from_create_mview_ &&
+    } else if (params_.is_mview_definition_sql_ &&
               OB_FAIL(check_is_table_supported_for_mview(table_node->type_))) {
       LOG_WARN("failed to check is table supported for mview", K(ret));
     } else {
@@ -5902,6 +5923,8 @@ int ObDMLResolver::resolve_table(const ParseNode &parse_tree,
           if (OB_FAIL(resolve_flashback_query_node(time_node, table_item))) {
             LOG_WARN("failed to resolve flashback query node", K(ret));
           //针对子查询的flashback属性需要递归的设置
+          } else if (time_node->type_ == T_TABLE_FLASHBACK_PROCTIME) {
+            // do nothing
           } else if (OB_FAIL(set_flashback_info_for_view(table_item->ref_query_, table_item))) {
             LOG_WARN("failed to set flashback info for view", K(ret));
           } else {
@@ -8107,7 +8130,7 @@ int ObDMLResolver::resolve_base_or_alias_table_item_dblink(uint64_t dblink_id,
   } else if (OB_FAIL(schema_checker_->get_link_table_schema(dblink_id, database_name,
                                                             table_name, table_schema, session_info_, dblink_name, is_reverse_link))) {
     LOG_WARN("get link table info failed", K(ret));
-  } else if (OB_UNLIKELY(params_.is_from_create_mview_)) {
+  } else if (OB_UNLIKELY(params_.is_mview_definition_sql_)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("unsupported link table in materialized view", K(ret), K(dblink_name), K(table_name));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "unsupported link table in materialized view");

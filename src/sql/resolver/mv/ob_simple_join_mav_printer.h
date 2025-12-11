@@ -24,32 +24,39 @@ class ObSimpleJoinMAVPrinter : public ObSimpleMAVPrinter
 public:
   explicit ObSimpleJoinMAVPrinter(ObMVPrinterCtx &ctx,
                                   const share::schema::ObTableSchema &mv_schema,
+                                  const share::schema::ObTableSchema &mv_container_schema,
                                   const ObSelectStmt &mv_def_stmt,
                                   const MlogSchemaPairIArray &mlog_tables,
                                   const ObIArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>> &expand_aggrs)
-    : ObSimpleMAVPrinter(ctx, mv_schema, mv_def_stmt, mlog_tables, expand_aggrs)
+    : ObSimpleMAVPrinter(ctx, mv_schema, mv_container_schema, mv_def_stmt, mlog_tables, expand_aggrs)
     {}
 
   ~ObSimpleJoinMAVPrinter() {}
+
+protected:
+  int gen_delta_pre_data_views();
+  int gen_inner_delta_mav_for_simple_join_mav(const int64_t inner_delta_no,
+                                              ObSelectStmt *&inner_delta_mav);
+  int gen_delete_insert_data_access_stmt(const TableItem &source_table,
+                                         const bool is_delete_data,
+                                         ObSelectStmt *&access_sel);
 
 private:
   virtual int gen_refresh_dmls(ObIArray<ObDMLStmt*> &dml_stmts) override;
   virtual int gen_inner_delta_mav_for_mav(ObIArray<ObSelectStmt*> &inner_delta_mavs) override;
   int gen_update_insert_delete_for_simple_join_mav(ObIArray<ObDMLStmt*> &dml_stmts);
   int gen_merge_for_simple_join_mav(ObIArray<ObDMLStmt *> &dml_stmts);
-  int gen_inner_delta_mav_for_simple_join_mav(ObIArray<ObSelectStmt*> &inner_delta_mavs);
-  int gen_inner_delta_mav_for_simple_join_mav(const int64_t inner_delta_no,
-                                              const ObIArray<ObSelectStmt*> &all_delta_datas,
-                                              const ObIArray<ObSelectStmt*> &all_pre_datas,
-                                              ObSelectStmt *&inner_delta_mav);
   int construct_table_items_for_simple_join_mav_delta_data(const int64_t inner_delta_no,
-                                                           const ObIArray<ObSelectStmt*> &all_delta_datas,
-                                                           const ObIArray<ObSelectStmt*> &all_pre_datas,
                                                            ObSelectStmt *&stmt);
+  virtual int get_delta_pre_view_stmt(const int64_t table_idx,
+                                      const int64_t inner_delta_no,
+                                      ObSelectStmt *&view_stmt) const;
   int gen_delta_data_access_stmt(const TableItem &source_table, ObSelectStmt *&access_sel);
   int gen_pre_data_access_stmt(const TableItem &source_table, ObSelectStmt *&access_sel);
-  int gen_unchanged_data_access_stmt(const TableItem &source_table, ObSelectStmt *&access_sel);
-  int gen_deleted_data_access_stmt(const TableItem &source_table, ObSelectStmt *&access_sel);
+
+protected:
+  ObSEArray<ObSelectStmt*, 8, common::ModulePageAllocator, true> all_delta_datas_;
+  ObSEArray<ObSelectStmt*, 8, common::ModulePageAllocator, true> all_pre_datas_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSimpleJoinMAVPrinter);
