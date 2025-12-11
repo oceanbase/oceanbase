@@ -1438,7 +1438,7 @@ int ObDDLTask::wait_trans_end(
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  int64_t tmp_snapshot_version = 0;;
+  int64_t tmp_snapshot_version = 0;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *data_table_schema = nullptr;
   ObDDLTaskStatus new_status = PREPARE;
@@ -1769,7 +1769,7 @@ int ObDDLWaitTransEndCtx::init(
   } else if (OB_FALSE_IT(tablet_ids_.reset())) {
   } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id, table_id, tablet_ids_))) {
     LOG_WARN("get table partitions failed", K(ret));
-  } else if (OB_UNLIKELY(tablet_ids_.count() <= 0)) {
+  } else if (OB_UNLIKELY(tablet_ids_.count() < 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid partition array or pg array", K(ret), K(table_id), K(tablet_ids_.count()));
   } else {

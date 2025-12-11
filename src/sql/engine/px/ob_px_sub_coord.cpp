@@ -1139,6 +1139,7 @@ int ObPxSubCoord::rebuild_sqc_access_table_locations()
         loc_uncertain = true;
         ObDASLocationRouter &loc_router = DAS_CTX(*sqc_arg_.exec_ctx_).get_location_router();
         OZ(ObTableLocation::get_full_leader_table_loc(loc_router,
+           *sqc_arg_.exec_ctx_->get_my_session(),
            sqc_arg_.exec_ctx_->get_allocator(),
            sqc_arg_.exec_ctx_->get_my_session()->get_effective_tenant_id(),
            location_keys.at(i).table_location_key_,

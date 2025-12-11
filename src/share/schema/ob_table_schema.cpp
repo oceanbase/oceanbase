@@ -466,6 +466,8 @@ bool ObSimpleTableSchemaV2::has_tablet() const
            || is_aux_vp_table()
            || is_virtual_table(get_table_id()) // virtual table index
            || is_external_table()
+           || is_oracle_tmp_table_v2()
+           || is_oracle_tmp_table_v2_index_table()
            );
 }
 
@@ -1166,7 +1168,9 @@ int ObSimpleTableSchemaV2::get_tablet_ids(common::ObIArray<ObTabletID> &tablet_i
 {
   int ret = OB_SUCCESS;
   ObPartitionLevel part_level = get_part_level();
-  if (part_level >= PARTITION_LEVEL_MAX) {
+  if (is_oracle_tmp_table_v2() || is_oracle_tmp_table_v2_index_table()) {
+    // oracle temporary table v2 has no tablet, skip
+  } else if (part_level >= PARTITION_LEVEL_MAX) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("part level is unexpected", KPC(this), KR(ret));
   } else if (OB_UNLIKELY(!has_tablet())) {

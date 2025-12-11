@@ -422,6 +422,7 @@
 # 571: __all_ai_model  # BASE_TABLE_NAME
 # 572: __all_ai_model_endpoint
 # 573: __wr_active_session_history_v2
+# 577: __all_tablet_to_global_temporary_table
 # 579: __wr_sqlstat_v2
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
@@ -1348,6 +1349,8 @@
 # 12575: __all_virtual_ss_object_type_io_stat
 # 12576: __all_virtual_wr_active_session_history_v2
 # 12576: __wr_active_session_history_v2  # BASE_TABLE_NAME
+# 12580: __all_virtual_tablet_to_global_temporary_table
+# 12580: __all_tablet_to_global_temporary_table  # BASE_TABLE_NAME
 # 12582: __all_virtual_wr_sqlstat_v2
 # 12582: __wr_sqlstat_v2  # BASE_TABLE_NAME
 # 15009: ALL_VIRTUAL_SQL_AUDIT
@@ -3679,6 +3682,12 @@
 # 101121: __idx_572_idx_ai_model_name
 # 101121: idx_ai_model_name  # INDEX_NAME
 # 101121: __all_ai_model_endpoint  # DATA_BASE_TABLE_NAME
+# 101122: __idx_577_idx_temp_table_id_session_id
+# 101122: idx_temp_table_id_session_id  # INDEX_NAME
+# 101122: __all_tablet_to_global_temporary_table  # DATA_BASE_TABLE_NAME
+# 101123: __idx_577_idx_temp_session_id_table_id
+# 101123: idx_temp_session_id_table_id  # INDEX_NAME
+# 101123: __all_tablet_to_global_temporary_table  # DATA_BASE_TABLE_NAME
 # 101104: __idx_482_idx_tablet_his_table_id_dest
 # 101104: idx_tablet_his_table_id_dest  # INDEX_NAME
 # 101104: __all_tablet_reorganize_history  # DATA_BASE_TABLE_NAME

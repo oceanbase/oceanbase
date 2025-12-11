@@ -21,6 +21,7 @@
 #include "sql/resolver/ddl/ob_flashback_stmt.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/ob_partition_pre_split.h"
+#include "storage/tablet/ob_session_tablet_helper.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -81,6 +82,8 @@ int ObCreateIndexExecutor::execute(ObExecContext &ctx, ObCreateIndexStmt &stmt)
   } else if (OB_INVALID_ID == create_index_arg.session_id_
              && FALSE_IT(create_index_arg.session_id_ = my_session->get_sessid_for_table())) {
     //impossible
+  } else if (OB_FAIL(storage::ObSessionTabletGCHelper::is_table_has_active_session(tenant_id, create_index_arg.database_name_, create_index_arg.table_name_))) {
+    LOG_WARN("table has active session or error checking", KR(ret), K(tenant_id), K(stmt));
   } else {
     create_index_arg.is_inner_ = my_session->is_inner();
     create_index_arg.parallelism_ = stmt.get_parallelism();
@@ -406,7 +409,6 @@ int ObDropIndexExecutor::execute(ObExecContext &ctx, ObDropIndexStmt &stmt)
     LOG_WARN("fail to get first stmt" , K(ret));
   } else {
     tmp_arg.ddl_stmt_str_ = first_stmt;
-
   }
   if (OB_FAIL(ret)) {
   } else if (NULL == my_session) {
@@ -424,9 +426,11 @@ int ObDropIndexExecutor::execute(ObExecContext &ctx, ObDropIndexStmt &stmt)
              && FALSE_IT(tmp_arg.session_id_ = my_session->get_sessid_for_table())) {
     //impossible
   } else if (FALSE_IT(tmp_arg.consumer_group_id_ = THIS_WORKER.get_group_id())) {
+  } else if (OB_FAIL(storage::ObSessionTabletGCHelper::is_table_has_active_session(drop_index_arg.tenant_id_, drop_index_arg.database_name_, drop_index_arg.table_name_))) {
+    LOG_WARN("table has active session or error checking", KR(ret), K(drop_index_arg), K(stmt));
   } else if (OB_FAIL(common_rpc_proxy->drop_index(drop_index_arg, res))) {
     LOG_WARN("rpc proxy drop index failed", "dst", common_rpc_proxy->get_server(), K(ret));
-  } else if (OB_FAIL(wait_drop_index_finish(res.tenant_id_, res.task_id_, *my_session))) {
+  } else if (!drop_index_arg.is_oracle_tmp_table_v2_index_table_ && OB_FAIL(wait_drop_index_finish(res.tenant_id_, res.task_id_, *my_session))) {
     LOG_WARN("wait drop index finish failed", K(ret));
   }
   SERVER_EVENT_ADD("ddl", "drop index execute finish",

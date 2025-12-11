@@ -221,7 +221,7 @@ int ObResultSet::open_result()
       ObPhysicalPlanCtx *plan_ctx = NULL;
       if (OB_ISNULL(plan_ctx = get_exec_context().get_physical_plan_ctx())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("physical plan ctx is null");
+        LOG_WARN("physical plan ctx is null", K(ret));
       } else if (plan_ctx->get_is_direct_insert_plan()) {
         // for insert /*+ append */ into select clause
         if (OB_FAIL(ObTableDirectInsertService::commit_direct_insert(get_exec_context(), *physical_plan_))) {

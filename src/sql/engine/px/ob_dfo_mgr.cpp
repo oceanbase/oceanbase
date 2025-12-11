@@ -508,6 +508,7 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
         if (OB_ISNULL(table_loc = DAS_CTX(exec_ctx).get_table_loc_by_id(
               tsc_op->get_table_loc_id(), tsc_op->get_loc_ref_table_id()))) {
           OZ(ObTableLocation::get_full_leader_table_loc(DAS_CTX(exec_ctx).get_location_router(),
+                                                        *exec_ctx.get_my_session(),
                                                         exec_ctx.get_allocator(),
                                                         exec_ctx.get_my_session()->get_effective_tenant_id(),
                                                         tsc_op->get_table_loc_id(),

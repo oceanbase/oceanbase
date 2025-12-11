@@ -26,6 +26,7 @@
 #include "storage/high_availability/ob_transfer_parallel_build_tablet_info.h"
 #include "share/schema/ob_tenant_schema_service.h"
 #include "storage/reorganization_info_table/ob_tablet_reorg_info_table_operation.h"
+#include "storage/tablet/ob_tablet_to_global_temporary_table_operator.h"
 
 using namespace oceanbase::transaction;
 using namespace oceanbase::share;
@@ -550,6 +551,8 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
       LOG_WARN("failed to build latest storage schema", K(ret), K(task_info));
     } else if (OB_FAIL(update_all_tablet_to_ls_(task_info, trans))) {
       LOG_WARN("failed to update all tablet to ls", K(ret), K(task_info));
+    } else if (OB_FAIL(update_all_session_tablet_to_temporary_table_(task_info, trans))) {
+      LOG_WARN("failed to update all session tablet to temporary table", K(ret), K(task_info));
     } else if (OB_FAIL(lock_tablet_on_dest_ls_for_table_lock_(task_info, trans))) {
       LOG_WARN("failed to lock tablet on dest ls for table lock", KR(ret), K(task_info));
     } else if (!new_transfer && OB_FAIL(block_and_kill_tx_(task_info, enable_kill_trx, timeout_ctx, succ_block_tx))) {
@@ -2077,6 +2080,57 @@ int ObTransferHandler::update_all_tablet_to_ls_(
   } else {
     diagnose_result_msg_ = share::ObStorageHACostItemName::UPDATE_ALL_TABLET_TO_LS;
   }
+  return ret;
+}
+
+int ObTransferHandler::update_all_session_tablet_to_temporary_table_(
+  const share::ObTransferTaskInfo &task_info,
+  common::ObISQLClient &trans)
+{
+  int ret = OB_SUCCESS;
+#ifdef ERRSIM
+  ObTransferEventRecorder::record_transfer_task_event(
+    task_info.task_id_, "BEFORE_TRANSFER_UPDATE_ALL_SESSION_TABLET_TO_TEMPORARY_TABLE", task_info.src_ls_id_, task_info.dest_ls_id_);
+#endif
+  DEBUG_SYNC(BEFORE_TRANSFER_UPDATE_ALL_SESSION_TABLET_TO_TEMPORARY_TABLE);
+  const int64_t start_ts = ObTimeUtil::current_time();
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("transfer handler do not init", K(ret));
+  } else if (!task_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("update all session tablet to temporary table get invalid argument", K(ret), K(task_info));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < task_info.tablet_list_.count(); ++i) {
+      const ObTransferTabletInfo &tablet_info = task_info.tablet_list_.at(i);
+      if (OB_FAIL(ObTabletToGlobalTmpTableOperator::update_ls_id_and_transfer_seq(trans, task_info.tenant_id_,
+          tablet_info.tablet_id_, tablet_info.transfer_seq_, task_info.src_ls_id_,
+          tablet_info.transfer_seq_ + 1, task_info.dest_ls_id_, share::OBCG_TRANSFER))) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+          LOG_INFO("tablet is not in global temporary table", K(ret), K(tablet_info), K(task_info));
+        } else {
+          LOG_WARN("failed to update session tablet to temporary table", K(ret), K(tablet_info), K(task_info));
+        }
+      }
+    }
+
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = EN_UPDATE_ALL_SESSION_TABLET_TO_TEMPORARY_TABLE_FAILED ? : OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        STORAGE_LOG(ERROR, "fake EN_UPDATE_ALL_SESSION_TABLET_TO_TEMPORARY_TABLE_FAILED", K(ret));
+      }
+    }
+#endif
+
+    DEBUG_SYNC(AFTER_TRANSFER_UPDATE_ALL_SESSION_TABLET_TO_TEMPORARY_TABLE);
+    if (OB_SUCC(ret)) {
+      LOG_INFO("[TRANSFER] success update all session tablet to temporary table", "cost", ObTimeUtil::current_time() - start_ts);
+    }
+  }
+
   return ret;
 }
 

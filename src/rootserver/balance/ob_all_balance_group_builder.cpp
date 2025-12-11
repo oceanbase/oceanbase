@@ -761,6 +761,9 @@ int ObAllBalanceGroupBuilder::build_bg_for_partlevel_zero_(const ObSimpleTableSc
       OB_INVALID_ID/*subpart_id*/,
       obj_weight))) {
     LOG_WARN("get obj weight failed", KR(ret), "table_id", table_schema.get_table_id());
+  } else if (table_schema.is_oracle_tmp_table_v2() || table_schema.is_oracle_tmp_table_v2_index_table()) {
+    // Exclude Oracle temporary table v2 from balance tasks
+    LOG_INFO("exclude oracle temporary table v2 from balance tasks", KR(ret), K(table_schema));
   } else {
     ObTabletID tablet_id = table_schema.get_tablet_id();
     const uint64_t part_group_uid = table_schema.get_table_id(); // each table is an independent partition group

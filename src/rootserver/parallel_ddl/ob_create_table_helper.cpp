@@ -1723,7 +1723,8 @@ int ObCreateTableHelper::generate_sequence_object_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected table cnt", KR(ret), K(new_tables_.count()));
   } else if (!(new_tables_.at(0).is_user_table()
-               || new_tables_.at(0).is_oracle_tmp_table())) {
+               || new_tables_.at(0).is_oracle_tmp_table()
+               || new_tables_.at(0).is_oracle_tmp_table_v2())) {
     // skip
   } else {
     // 1. lock object name

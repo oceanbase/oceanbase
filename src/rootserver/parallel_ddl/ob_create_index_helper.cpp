@@ -370,6 +370,7 @@ int ObCreateIndexHelper::generate_index_schema_()
   } else if (OB_ISNULL(index_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("index schema is null", KR(ret));
+  } else if (orig_data_table_schema_->is_oracle_tmp_table_v2() && FALSE_IT(index_schema->set_oracle_tmp_table_v2_index_table())) {
   } else if (OB_FAIL(index_builder_.generate_schema(*new_arg_, *new_data_table_schema_, global_index_without_column_info,
               false/*generate_id*/, *index_schema))) {
     LOG_WARN("fail to generate schema", KR(ret));

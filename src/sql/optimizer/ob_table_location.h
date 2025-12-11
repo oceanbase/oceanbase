@@ -779,6 +779,7 @@ public:
   bool has_generated_column() const { return NULL != se_gen_col_expr_ || NULL != se_sub_gen_col_expr_ ||
                                              NULL != gen_col_node_ || NULL != sub_gen_col_node_; }
   static int get_full_leader_table_loc(ObDASLocationRouter &loc_router,
+                                       ObSQLSessionInfo &session_info,
                                        ObIAllocator &allocator,
                                        uint64_t tenant_id,
                                        uint64_t table_id,
@@ -874,6 +875,11 @@ public:
                K_(part_hint_ids),
                K_(related_list));
 private:
+  static int get_tablet_id_for_temp_table(
+      ObSQLSessionInfo &session_info,
+      ObSchemaGetterGuard &schema_guard,
+      const share::schema::ObTableSchema &table_schema,
+      common::ObTabletID &tablet_id);
   int init_table_location(ObExecContext &exec_ctx,
                           ObSqlSchemaGuard &schema_guard,
                           uint64_t table_id,

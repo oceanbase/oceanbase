@@ -2768,7 +2768,7 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
     index_arg.index_option_.parser_properties_ = parser_properties_;
     if (OB_SUCC(ret)) {
       ObIndexType type = INDEX_TYPE_IS_NOT;
-      if (OB_NOT_NULL(table_schema_) && table_schema_->is_oracle_tmp_table()) {
+      if (OB_NOT_NULL(table_schema_) && (table_schema_->is_oracle_tmp_table() || table_schema_->is_oracle_tmp_table_v2())) {
         index_scope_ = LOCAL_INDEX;
       }
       if (NOT_SPECIFIED == index_scope_) {
@@ -2949,6 +2949,9 @@ int ObAlterTableResolver::resolve_drop_index(const ParseNode &node)
             if (OB_FAIL(check_index_columns_equal_foreign_key(*table_schema_, *index_table_schema))) {
               LOG_WARN("failed to check_index_columns_equal_foreign_key", K(ret), K(index_table_name));
             }
+          }
+          if (OB_SUCC(ret)) {
+            drop_index_arg->is_oracle_tmp_table_v2_index_table_ = index_table_schema->is_oracle_tmp_table_v2_index_table();
           }
         }
         if (OB_SUCC(ret)) {
@@ -5110,6 +5113,10 @@ int ObAlterTableResolver::resolve_partition_options(const ParseNode &node)
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("can't re-partitioned a partitioned table", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Re-partition a patitioned table");
+      } else if (T_ALTER_PARTITION_PARTITIONED == node.children_[0]->type_ && table_schema_->is_oracle_tmp_table_v2()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("can't re-partitioned a temporary table", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Re-partition a temporary table");
       }
     }
     if (OB_SUCC(ret)) {
@@ -5995,7 +6002,7 @@ int ObAlterTableResolver::resolve_add_column(const ParseNode &node, ObColumnName
                                                           stat,
                                                           is_modify_column_visibility,
                                                           resolved_cols,
-                                                          table_schema_->is_oracle_tmp_table()))) {
+                                                          table_schema_->is_oracle_tmp_table() || table_schema_->is_oracle_tmp_table_v2()))) {
           SQL_RESV_LOG(WARN, "resolve column definition failed", K(ret));
         } else if (OB_FAIL(fill_column_schema_according_stat(stat, alter_column_schema))) {
           SQL_RESV_LOG(WARN, "fail to fill column schema", K(alter_column_schema), K(stat), K(ret));
@@ -6908,7 +6915,7 @@ int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
         } else if (OB_FAIL(resolve_alter_table_column_definition(
                     alter_column_schema, node.children_[i], stat, is_modify_column_visibility,
                     resolved_cols,
-                    table_schema_->is_oracle_tmp_table(),
+                    table_schema_->is_oracle_tmp_table() || table_schema_->is_oracle_tmp_table_v2(),
                     allow_has_default))) {
           SQL_RESV_LOG(WARN, "resolve column definition failed", K(ret));
         } else if (!is_oracle_mode() && !stat.is_primary_key_ &&

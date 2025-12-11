@@ -293,6 +293,8 @@ public:
   bool has_nested_sql() const { return has_nested_sql_; }
   void set_session_id(uint64_t v) { session_id_ = v; }
   uint64_t get_session_id() const { return session_id_; }
+  inline void set_is_gtt_temp_table_v2(bool is_gtt_temp_table_v2) { is_gtt_temp_table_v2_ = is_gtt_temp_table_v2; }
+  inline bool is_gtt_temp_table_v2() const { return is_gtt_temp_table_v2_; }
   common::ObIArray<uint64_t> &get_gtt_trans_scope_ids() { return gtt_trans_scope_ids_; }
   common::ObIArray<uint64_t> &get_gtt_session_scope_ids() { return gtt_session_scope_ids_; }
   common::ObIArray<uint64_t> &get_immediate_refresh_external_table_ids() { return immediate_refresh_external_table_ids_; }
@@ -813,6 +815,7 @@ private:
   int64_t px_worker_share_plan_enabled_;
   bool extend_sql_plan_monitor_metrics_;
   uint64_t optimizer_features_enable_version_;
+  bool is_gtt_temp_table_v2_;
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

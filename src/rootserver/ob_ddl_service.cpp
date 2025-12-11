@@ -1164,9 +1164,12 @@ int ObDDLService::calc_table_tablet_id_cnt_(
   if (is_sys_table(table_schema.get_table_id())
       || table_schema.is_vir_table()
       || table_schema.is_view_table()
-      || table_schema.is_external_table()) {
+      || table_schema.is_external_table()
+      || table_schema.is_oracle_tmp_table_v2()
+      || table_schema.is_oracle_tmp_table_v2_index_table()) {
     // 1. sys table use table_id as tablet_id
     // 2. virtual table/view/external table don't have tablet_id
+    // 3. oracle temporary table don't have tablet_id
   } else if (OB_UNLIKELY((tablet_cnt = table_schema.get_all_part_num()) <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get tablet cnt", KR(ret), K(tablet_cnt), K(table_schema));
@@ -3716,6 +3719,10 @@ int ObDDLService::drop_primary_key(
     ObTableSchema &new_table_schema)
 {
   int ret = OB_SUCCESS;
+  if (new_table_schema.is_oracle_tmp_table_v2()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Dropping primary key of global temporary table");
+  }
   // step1: clear origin primary key.
   const ObRowkeyInfo &rowkey_info = new_table_schema.get_rowkey_info();
   for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); i++) {
@@ -3770,6 +3777,9 @@ int ObDDLService::add_primary_key(const ObIArray<ObString> &pk_column_names, ObT
     ret = OB_ERR_TOO_MANY_ROWKEY_COLUMNS;
     LOG_USER_ERROR(OB_ERR_TOO_MANY_ROWKEY_COLUMNS, OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
     LOG_WARN("too many rowkey columns", K(ret), K(pk_column_names.count()));
+  } else if (new_table_schema.is_oracle_tmp_table_v2()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Adding primary key to global temporary table");
   }
   for (; OB_SUCC(ret) && tmp_begin != tmp_end; tmp_begin++) {
     ObColumnSchemaV2 *col = (*tmp_begin);
@@ -6262,6 +6272,30 @@ int ObDDLService::drop_index_caused_by_drop_column_online(
             LOG_WARN("drop column with index should do offline ddl in mysql mode", KR(ret));
           } else if (OB_FAIL(index_schema->get_index_name(index_name))) {
             LOG_WARN("get index name without prefix failed", KR(ret), KPC(index_schema));
+          } else if (index_schema->is_oracle_tmp_table_v2_index_table()) {
+            //construct an arg for drop table
+            ObTableItem table_item;
+            table_item.database_name_ = database_schema->get_database_name_str();
+            table_item.table_name_ = index_schema->get_table_name();
+            table_item.is_hidden_ = index_schema->is_user_hidden_table();
+            table_item.table_id_ = index_schema->get_table_id();
+            obrpc::ObDDLRes ddl_res;
+            obrpc::ObDropTableArg drop_table_arg;
+            drop_table_arg.tenant_id_ = tenant_id;
+            drop_table_arg.if_exist_ = false;
+            drop_table_arg.table_type_ = index_schema->get_table_type();
+            drop_table_arg.force_drop_ = index_schema->is_in_recyclebin();
+            if (OB_FAIL(drop_table_arg.tables_.push_back(table_item))) {
+              LOG_WARN("failed to add table item!", K(table_item), K(ret));
+            } else if (OB_FAIL(drop_table(drop_table_arg, ddl_res))) {
+              if (OB_TABLE_NOT_EXIST == ret) {
+                ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
+                LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, index_name.length(), index_name.ptr());
+                LOG_WARN("index not exist, can't drop it", K(drop_table_arg), K(ret));
+              } else {
+                LOG_WARN("drop_table failed", K(drop_table_arg), K(ret));
+              }
+            }
           } else {
             ObDDLTaskRecord drop_index_task_record;
             obrpc::ObDropIndexArg drop_index_arg;
@@ -6425,7 +6459,7 @@ int ObDDLService::check_can_drop_column(
     LOG_WARN("fail to find old column schema!", K(ret), K(orig_column_name), KP(orig_column_schema),
         K(new_table_schema));
   } else if (FALSE_IT(is_last_drop_column = (last_drop_column_id == orig_column_schema->get_column_id()) ? true : false)) {
-  } else if (orig_table_schema.is_oracle_tmp_table()) {
+  } else if (orig_table_schema.is_oracle_tmp_table() || orig_table_schema.is_oracle_tmp_table_v2()) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop oracle temporary table column is");
     LOG_WARN("oracle temporary table column is not allowed to be dropped", K(ret));
@@ -8431,7 +8465,7 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
               ret = OB_NOT_SUPPORTED;
               LOG_WARN("not support to drop a building index", K(ret), K(drop_index_arg->is_inner_), KPC(index_table_schema));
               LOG_USER_ERROR(OB_NOT_SUPPORTED, "dropping a building index is");
-            } else if (drop_index_arg->is_add_to_scheduler_) {
+            } else if (drop_index_arg->is_add_to_scheduler_ && !drop_index_arg->is_oracle_tmp_table_v2_index_table_) {
               if (OB_FAIL(drop_index_to_scheduler_(trans, schema_guard, alter_table_arg.allocator_, origin_table_schema,
                                                    nullptr /*inc_tablet_ids*/, nullptr /*del_tablet_ids*/, drop_index_arg,
                                                    ddl_operator, res.ddl_res_array_, ddl_tasks))) {
@@ -12821,6 +12855,7 @@ int ObDDLService::create_aux_lob_table_if_need(ObTableSchema &data_table_schema,
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
     LOG_WARN("get min data version failed", K(ret), K(tenant_id));
   } else {
+    const bool is_orcl_tmp_table_v2 = data_table_schema.is_oracle_tmp_table_v2();
     ObTableCreator table_creator(
                    tenant_id,
                    frozen_scn,
@@ -12833,7 +12868,7 @@ int ObDDLService::create_aux_lob_table_if_need(ObTableSchema &data_table_schema,
     is_add_lob = true;
     if (OB_FAIL(get_last_schema_version(last_schema_version))) {
       LOG_WARN("fail to get last schema version", KR(ret));
-    } else if (OB_FAIL(ObDDLLock::lock_for_add_lob_in_trans(data_table_schema, trans))) {
+    } else if (!is_orcl_tmp_table_v2 && OB_FAIL(ObDDLLock::lock_for_add_lob_in_trans(data_table_schema, trans))) {
       LOG_WARN("failed to add lock online ddl lock", K(ret));
     } else if (OB_FAIL(table_creator.init(true/*need_tablet_cnt_check*/))) {
       LOG_WARN("fail to init table creator", KR(ret));
@@ -12859,7 +12894,7 @@ int ObDDLService::create_aux_lob_table_if_need(ObTableSchema &data_table_schema,
         }
       }
     }
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && !is_orcl_tmp_table_v2) {
       common::ObArray<share::ObLSID> ls_id_array;
       if(OB_FAIL(new_table_tablet_allocator.prepare_like(data_table_schema))) {
         LOG_WARN("fail to prepare like", KR(ret), K(data_table_schema));
@@ -14017,6 +14052,7 @@ int ObDDLService::prepare_drop_index_arg_(common::ObIAllocator &allocator,
     drop_index_arg->is_add_to_scheduler_ = is_add_to_scheduler;
     drop_index_arg->is_inner_ = is_inner;
     drop_index_arg->tenant_id_ = index_table_schema.get_tenant_id();
+    drop_index_arg->is_oracle_tmp_table_v2_index_table_ = index_table_schema.is_oracle_tmp_table_v2_index_table();
     if (OB_FAIL(ob_write_string(allocator, index_table_schema.get_origin_index_name_str(),drop_index_arg->index_name_))) {
       LOG_WARN("fail to write index name", KR(ret));
     }
@@ -22614,12 +22650,13 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
             } else if (OB_FAIL(generate_tablet_id(new_index_schema))) {
               LOG_WARN("fail to generate tablet id for hidden table", K(ret), K(new_index_schema));
             } else {
+              const ObIndexStatus index_status = orig_table_schema.is_oracle_tmp_table_v2() ? INDEX_STATUS_AVAILABLE : INDEX_STATUS_UNAVAILABLE;
               bool is_exist = false;
               new_index_schema.set_max_used_column_id(max(
               new_index_schema.get_max_used_column_id(), hidden_table_schema.get_max_used_column_id()));
               new_index_schema.set_table_id(new_idx_tid);
               new_index_schema.set_data_table_id(hidden_table_schema.get_table_id());
-              new_index_schema.set_index_status(INDEX_STATUS_UNAVAILABLE);
+              new_index_schema.set_index_status(index_status);
               new_index_schema.set_tenant_id(hidden_table_schema.get_tenant_id());
               new_index_schema.set_database_id(hidden_table_schema.get_database_id());
               new_index_schema.set_table_state_flag(target_flag);
@@ -23817,7 +23854,9 @@ int ObDDLService::unbind_hidden_tablets(
   uint64_t tenant_data_version = 0;
   ObArray<ObTabletID> orig_tablet_ids;
   ObArray<ObTabletID> hidden_tablet_ids;
-  if (OB_FAIL(orig_table_schema.get_tablet_ids(orig_tablet_ids))) {
+  if (orig_table_schema.is_oracle_tmp_table_v2()) {
+    LOG_INFO("oracle tmp table v2, skip unbind hidden tablets", K(orig_table_schema));
+  } else if (OB_FAIL(orig_table_schema.get_tablet_ids(orig_tablet_ids))) {
     LOG_WARN("get tablet ids failed", K(ret));
   } else if (OB_FAIL(hidden_table_schema.get_tablet_ids(hidden_tablet_ids))) {
     LOG_WARN("get tablet ids failed", K(ret));
@@ -24137,7 +24176,9 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
           }
         }
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(write_ddl_barrier(*hidden_table_schema, trans))) {
+          if (hidden_table_schema->is_oracle_tmp_table_v2() || hidden_table_schema->is_oracle_tmp_table_v2_index_table()) {
+            LOG_INFO("oracle temporary table v2 has no tablet, skip write ddl barrier", KPC(hidden_table_schema));
+          } else if (OB_FAIL(write_ddl_barrier(*hidden_table_schema, trans))) {
             LOG_WARN("failed to write ddl barrier", K(ret));
           }
         }

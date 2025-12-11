@@ -24,7 +24,7 @@ using namespace share::schema;
 namespace sql
 {
 ObCreateIndexResolver::ObCreateIndexResolver(ObResolverParams &params)
-   : ObDDLResolver(params),is_oracle_temp_table_(false), is_spec_block_size(false)
+   : ObDDLResolver(params),is_oracle_temp_table_(false), is_old_oracle_temp_table_(false), is_spec_block_size(false)
 {
 }
 
@@ -118,7 +118,7 @@ int ObCreateIndexResolver::resolve_index_table_name_node(
 int ObCreateIndexResolver::add_new_indexkey_for_oracle_temp_table()
 {
   int ret = OB_SUCCESS;
-  if (is_oracle_temp_table_) {
+  if (is_old_oracle_temp_table_) {
     ObColumnSortItem sort_item;
     sort_item.column_name_.assign_ptr(OB_HIDDEN_SESSION_ID_COLUMN_NAME,
                                       static_cast<int32_t>(strlen(OB_HIDDEN_SESSION_ID_COLUMN_NAME)));
@@ -731,7 +731,8 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
                K(tbl_schema->get_table_name()));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "create index on major refresh materialized view is");
     } else {
-      is_oracle_temp_table_ = (tbl_schema->is_oracle_tmp_table());
+      is_oracle_temp_table_ = (tbl_schema->is_oracle_tmp_table() || tbl_schema->is_oracle_tmp_table_v2());
+      is_old_oracle_temp_table_ = tbl_schema->is_oracle_tmp_table();
       ObTableSchema &index_schema = crt_idx_stmt->get_create_index_arg().index_schema_;
       index_schema.set_tenant_id(session_info_->get_effective_tenant_id());
       crt_idx_stmt->set_table_id(mv_container_table_schema->get_table_id());
@@ -739,7 +740,8 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
       data_tbl_schema = mv_container_table_schema;
     }
   } else {
-    is_oracle_temp_table_ = (tbl_schema->is_oracle_tmp_table());
+    is_oracle_temp_table_ = (tbl_schema->is_oracle_tmp_table() || tbl_schema->is_oracle_tmp_table_v2());
+    is_old_oracle_temp_table_ = tbl_schema->is_oracle_tmp_table();
     ObTableSchema &index_schema = crt_idx_stmt->get_create_index_arg().index_schema_;
     index_schema.set_tenant_id(session_info_->get_effective_tenant_id());
     crt_idx_stmt->set_table_id(tbl_schema->get_table_id());

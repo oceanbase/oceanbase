@@ -196,6 +196,10 @@ public:
   }
   OB_INLINE const RefreshMode& get_refresh_mode() const { return refresh_mode_; }
   OB_INLINE bool is_tenant_sync_mode() const { return is_tenant_sync_mode_; }
+  OB_INLINE common::ObMySQLProxy& get_sql_proxy()
+  {
+    return is_tenant_sync_mode() ? mysql_proxy_.get_ob_mysql_proxy() : tenant_sql_proxy_.get_ob_mysql_proxy();
+  }
 
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
   int init_max_syslog_file_count_with_libpalf(logservice::ObLogserviceModelInfo &logservice_model_info);

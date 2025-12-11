@@ -2004,6 +2004,7 @@ int ObTableCtx::init_exec_ctx(bool need_das_ctx/*true*/)
   2. in expr: calc_partition_id need sql_ctx.schema_guard_ to get_das_tablet_mapper
   */
   sql_ctx_.schema_guard_ = schema_guard_;
+  sql_ctx_.session_info_ = &get_session_info();
   exec_ctx_.get_das_ctx().set_sql_ctx(&sql_ctx_);
   if (need_das_ctx && OB_FAIL(init_das_context(exec_ctx_.get_das_ctx()))) {
     LOG_WARN("fail to init das context", K(ret));

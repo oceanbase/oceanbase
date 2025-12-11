@@ -2899,7 +2899,8 @@ OB_SERIALIZE_MEMBER((ObTruncateTableArg, ObDDLArg),
                     session_id_,
                     is_add_to_scheduler_,
                     compat_mode_,
-                    foreign_key_checks_);
+                    foreign_key_checks_,
+                    table_id_);
 
 DEF_TO_STRING(ObTruncateTableArg)
 {
@@ -2911,7 +2912,8 @@ DEF_TO_STRING(ObTruncateTableArg)
        K_(session_id),
        K_(is_add_to_scheduler),
        K_(compat_mode),
-       K_(foreign_key_checks));
+       K_(foreign_key_checks),
+       K_(table_id));
   J_OBJ_END();
   return pos;
 }
@@ -3408,7 +3410,8 @@ DEF_TO_STRING(ObDropIndexArg) {
        K_(only_set_status),
        K_(index_ids),
        K_(table_id),
-       K_(is_drop_in_rebuild_task));
+       K_(is_drop_in_rebuild_task),
+       K_(is_oracle_tmp_table_v2_index_table));
   J_OBJ_END();
   return pos;
 }
@@ -3430,7 +3433,8 @@ OB_SERIALIZE_MEMBER((ObDropIndexArg, ObIndexArg),
                     is_parent_task_dropping_multivalue_index_,
                     table_id_,
                     is_drop_in_rebuild_task_,
-                    is_parent_task_dropping_spiv_index_);
+                    is_parent_task_dropping_spiv_index_,
+                    is_oracle_tmp_table_v2_index_table_);
 
 OB_SERIALIZE_MEMBER(ObDropIndexRes, tenant_id_, index_table_id_, schema_version_, task_id_);
 
@@ -3454,6 +3458,7 @@ int ObDropIndexArg::assign(const ObDropIndexArg &other)
     only_set_status_ = other.only_set_status_;
     table_id_ = other.table_id_;
     is_drop_in_rebuild_task_ = other.is_drop_in_rebuild_task_;
+    is_oracle_tmp_table_v2_index_table_ = other.is_oracle_tmp_table_v2_index_table_;
   }
   return ret;
 }
@@ -14690,6 +14695,43 @@ int ObCreateTableGroupRes::assign(const ObCreateTableGroupRes &other)
 }
 
 OB_SERIALIZE_MEMBER((ObCreateTableGroupRes, ObParallelDDLRes), tablegroup_id_);
+
+OB_SERIALIZE_MEMBER(ObBatchDetectSessionAliveArg, session_id_array_);
+
+int ObBatchDetectSessionAliveArg::assign(const ObBatchDetectSessionAliveArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else if (OB_FAIL(session_id_array_.assign(other.session_id_array_))) {
+    LOG_WARN("fail to assign session_id_array", KR(ret), K(other));
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObBatchDetectSessionAliveResult, session_alive_array_);
+
+int ObBatchDetectSessionAliveResult::assign(const ObBatchDetectSessionAliveResult &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else if (OB_FAIL(session_alive_array_.assign(other.session_alive_array_))) {
+    LOG_WARN("fail to assign session_alive_array", KR(ret), K(other));
+  }
+  return ret;
+}
+
+int ObBatchDetectSessionAliveResult::init(int64_t count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(session_alive_array_.reserve(count))) {
+    LOG_WARN("fail to init session_alive_array", KR(ret), K(count));
+  } else {
+    for (int64_t i = 0; i < count; i++) {
+      session_alive_array_.push_back(false);
+    }
+  }
+  return ret;
+}
 
 OB_SERIALIZE_MEMBER((ObSensitiveRuleDDLArg, ObDDLArg),
                      ddl_type_,

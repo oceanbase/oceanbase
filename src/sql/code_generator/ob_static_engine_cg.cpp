@@ -5920,6 +5920,9 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
     //此时一定是临时表扫描, 记下session_id供计划缓存匹配时使用
     phy_plan_->set_session_id(op.get_session_id());
   }
+  if (OB_SUCC(ret) && op.is_gtt_temp_table_v2()) {
+    phy_plan_->set_is_gtt_temp_table_v2(true);
+  }
   if (OB_SUCC(ret)) {
     bool found = false;
     for (int64_t i = 0; i < op.get_output_exprs().count() && !found && OB_SUCC(ret); i++) {
@@ -9803,11 +9806,11 @@ int ObStaticEngineCG::set_properties_post(const ObLogPlan &log_plan, ObPhysicalP
             ret = OB_TABLE_NOT_EXIST;
             LOG_WARN("fail to get table schema", K(ret), K(object_id));
           } else {
-            if (table_schema->is_oracle_trx_tmp_table()) {
+            if (table_schema->is_oracle_trx_tmp_table() || table_schema->is_oracle_trx_tmp_table_v2()) {
              if (OB_FAIL(gtt_trans_scope_ids.push_back(object_id))) {
                LOG_WARN("fail to push back", K(ret));
              }
-            } else if (table_schema->is_oracle_sess_tmp_table()) {
+            } else if (table_schema->is_oracle_sess_tmp_table() || table_schema->is_oracle_sess_tmp_table_v2()) {
               if (OB_FAIL(gtt_session_scope_ids.push_back(object_id))) {
                 LOG_WARN("fail to push back", K(ret));
               }

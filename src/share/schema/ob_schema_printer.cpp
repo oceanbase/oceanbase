@@ -84,7 +84,7 @@ int ObSchemaPrinter::print_table_definition(const uint64_t tenant_id,
   } else {
     if (table_schema->is_mysql_tmp_table()) {
       prefix_idx = 1;
-    } else if (table_schema->is_oracle_tmp_table()) {
+    } else if (table_schema->is_oracle_tmp_table() || table_schema->is_oracle_tmp_table_v2()) {
       prefix_idx = 2;
     } else if (table_schema->is_external_table()) {
       prefix_idx = 3;
@@ -2273,7 +2273,8 @@ int ObSchemaPrinter::print_table_definition_partition_options(const ObTableSchem
   int ret = OB_SUCCESS;
   if ((table_schema.is_partitioned_table() || table_schema.is_auto_partitioned_table())
       && !table_schema.is_index_local_storage()
-      && !table_schema.is_oracle_tmp_table()) {
+      && !table_schema.is_oracle_tmp_table()
+      && !table_schema.is_oracle_tmp_table_v2()) {
     bool is_subpart = false;
     const ObPartitionSchema *partition_schema = &table_schema;
     if (PARTITION_LEVEL_TWO == table_schema.get_part_level()) {
@@ -2324,11 +2325,11 @@ int ObSchemaPrinter::print_table_definition_on_commit_options(const ObTableSchem
                                                               int64_t& pos) const
 {
   int ret = OB_SUCCESS;
-  if (table_schema.is_oracle_sess_tmp_table()) {
+  if (table_schema.is_oracle_sess_tmp_table() || table_schema.is_oracle_sess_tmp_table_v2()) {
     if (OB_FAIL(databuff_printf(buf, buf_len, pos, " ON COMMIT PRESERVE ROWS"))) {
       SHARE_SCHEMA_LOG(WARN, "fail to printf on commit option", K(ret));
     }
-  } else if (table_schema.is_oracle_trx_tmp_table()) {
+  } else if (table_schema.is_oracle_trx_tmp_table() || table_schema.is_oracle_trx_tmp_table_v2()) {
     if (OB_FAIL(databuff_printf(buf, buf_len, pos, " ON COMMIT DELETE ROWS"))) {
       SHARE_SCHEMA_LOG(WARN, "fail to printf on commit option", K(ret));
     }

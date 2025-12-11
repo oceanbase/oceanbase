@@ -78,6 +78,7 @@ namespace common
 DEFINE_ENCODE_ITEM(int64_t, vi64, int64_t)
 DEFINE_ENCODE_ITEM(uint64_t, vi64, int64_t)
 DEFINE_ENCODE_ITEM(int32_t, vi32, int32_t)
+DEFINE_ENCODE_ITEM(uint32_t, vi32, int32_t)
 DEFINE_ENCODE_ITEM(int16_t, i16, int16_t)
 DEFINE_ENCODE_ITEM(int8_t, i8, int8_t)
 DEFINE_ENCODE_ITEM(bool, bool, bool)

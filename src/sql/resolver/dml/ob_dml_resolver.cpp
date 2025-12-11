@@ -4102,7 +4102,7 @@ int ObDMLResolver::resolve_table_drop_oracle_temp_table(TableItem *&table_item)
     } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), table_item->ref_id_, table_schema))) {
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("get table schema failed", K_(table_item->table_name), K(ret));
-    } else if (OB_NOT_NULL(table_schema) && table_schema->is_oracle_tmp_table()) {
+    } else if (OB_NOT_NULL(table_schema) && (table_schema->is_oracle_tmp_table() || table_schema->is_oracle_tmp_table_v2())) {
       session_info_->set_has_temp_table_flag();
     }
   }

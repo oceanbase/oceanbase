@@ -242,6 +242,12 @@ public:
   int execute(ObExecContext &ctx, ObTruncateTableStmt &stmt);
 private:
   int check_use_parallel_truncate(const obrpc::ObTruncateTableArg &arg, bool &use_parallel_truncate);
+  int truncate_oracle_temp_table_v2(
+      sql::ObSQLSessionInfo &my_session,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const share::schema::ObTableSchema &table_schema,
+      const int64_t sequence,
+      const uint32_t session_id);
 
 };
 

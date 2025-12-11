@@ -408,7 +408,8 @@ public:
         index_prefix_(-1),
         mr_mv_scan_(common::ObQueryFlag::NormalMode),
         aggr_param_mono_(),
-        is_scan_resumable_(false)
+        is_scan_resumable_(false),
+        is_gtt_temp_table_v2_(false)
   {
   }
 
@@ -791,6 +792,8 @@ public:
   void set_session_id(const uint64_t  v) { session_id_ = v; }
   uint64_t get_session_id() const { return session_id_; }
 
+  inline void set_is_gtt_temp_table_v2(bool is_gtt_temp_table_v2) { is_gtt_temp_table_v2_ = is_gtt_temp_table_v2; }
+  inline bool is_gtt_temp_table_v2() const { return is_gtt_temp_table_v2_; }
   bool is_need_feedback() const;
   int set_table_scan_filters(const common::ObIArray<ObRawExpr *> &filters);
   // for index merge, we need to set range conds and filters for each index scan
@@ -1373,6 +1376,7 @@ protected: // memeber variables
   common::ObSEArray<ObRawAggrParamMonotonicity, 4, common::ModulePageAllocator, true> aggr_param_mono_;
   bool is_scan_resumable_;
 
+  bool is_gtt_temp_table_v2_;
   // disallow copy and assign
   DISALLOW_COPY_AND_ASSIGN(ObLogTableScan);
 };

@@ -40,6 +40,7 @@ ObCreateTableResolver::ObCreateTableResolver(ObResolverParams &params)
       column_name_set_(),
       if_not_exist_(false),
       is_oracle_temp_table_(false),
+      is_old_oracle_temp_table_(false),
       is_temp_table_pk_added_(false),
       index_arg_(),
       current_index_name_set_(),
@@ -279,6 +280,7 @@ int ObCreateTableResolver::add_udt_hidden_column(ObTableSchema &table_schema,
 int ObCreateTableResolver::set_temp_table_info(ObTableSchema &table_schema, ParseNode *commit_option_node)
 {
   int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
   if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is null", KR(ret));
@@ -286,7 +288,7 @@ int ObCreateTableResolver::set_temp_table_info(ObTableSchema &table_schema, Pars
   } else if (OB_FAIL(session_info_->set_session_temp_table_used(true))) {
     LOG_WARN("fail to set session temp table used", KR(ret));
   } else if (OB_FAIL(set_table_name(table_name_))) {
-      LOG_WARN("failed to set table name", K(ret), K(table_name_));
+    LOG_WARN("failed to set table name", K(ret), K(table_name_));
   } else if (session_info_->is_obproxy_mode() && 0 == session_info_->get_sess_create_time()) {
     ret = OB_NOT_SUPPORTED;
     SQL_RESV_LOG(WARN, "can't create temporary table via obproxy, upgrade obproxy first", K(ret));
@@ -302,9 +304,9 @@ int ObCreateTableResolver::set_temp_table_info(ObTableSchema &table_schema, Pars
   } else {
     if (is_oracle_mode()) {
       if (OB_ISNULL(commit_option_node) || T_TRANSACTION == commit_option_node->type_) {
-        table_schema.set_table_type(TMP_TABLE_ORA_TRX);
+        table_schema.set_table_type(is_old_oracle_temp_table_ ? TMP_TABLE_ORA_TRX : TMP_TABLE_ORA_TRX_V2);
       } else {
-        table_schema.set_table_type(TMP_TABLE_ORA_SESS);
+        table_schema.set_table_type(is_old_oracle_temp_table_ ? TMP_TABLE_ORA_SESS : TMP_TABLE_ORA_SESS_V2);
       }
     } else {
       table_schema.set_table_type(TMP_TABLE);
@@ -323,7 +325,7 @@ int ObCreateTableResolver::set_temp_table_info(ObTableSchema &table_schema, Pars
   int ret = OB_SUCCESS;
   ObColumnSchemaV2 column;
   ObColumnResolveStat stat;
-  if (is_oracle_temp_table_) {
+  if (is_old_oracle_temp_table_) {
     ObObjMeta meta_int;
     meta_int.set_int();
     meta_int.set_collation_level(CS_LEVEL_NONE);
@@ -363,7 +365,7 @@ int ObCreateTableResolver::set_temp_table_info(ObTableSchema &table_schema, Pars
 int ObCreateTableResolver::add_new_indexkey_for_oracle_temp_table(const int32_t org_key_len)
 {
   int ret = OB_SUCCESS;
-  if (is_oracle_temp_table_) {
+  if (is_old_oracle_temp_table_) {
     if (org_key_len + 1 > OB_USER_MAX_ROWKEY_COLUMN_NUMBER) {
       ret = OB_ERR_TOO_MANY_ROWKEY_COLUMNS;
       LOG_USER_ERROR(OB_ERR_TOO_MANY_ROWKEY_COLUMNS, OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
@@ -388,7 +390,7 @@ int ObCreateTableResolver::add_pk_key_for_oracle_temp_table(ObArray<ObColumnReso
                                                             int64_t &pk_data_length)
 {
   int ret = OB_SUCCESS;
-  if (is_oracle_temp_table_) {
+  if (is_old_oracle_temp_table_) {
     ObString key_name(OB_HIDDEN_SESSION_ID_COLUMN_NAME);
     if (OB_FAIL(add_primary_key_part(key_name, stats, pk_data_length))) {
       SQL_RESV_LOG(WARN, "add primary key part failed", K(ret), K(key_name));
@@ -402,7 +404,7 @@ int ObCreateTableResolver::add_pk_key_for_oracle_temp_table(ObArray<ObColumnReso
 int ObCreateTableResolver::set_partition_info_for_oracle_temp_table(share::schema::ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
-  if (is_oracle_temp_table_) {
+  if (is_old_oracle_temp_table_) {
     ObString partition_expr;
     common::ObSEArray<ObString, 2> partition_keys;
     char expr_str_buf[64] = {'\0'};
@@ -528,9 +530,13 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
     ObSEArray<ObString, 8> pk_columns_name;
     bool is_create_as_sel = (CREATE_TABLE_AS_SEL_NUM_CHILD == create_table_node->num_child_);
     const uint64_t tenant_id = session_info_->get_effective_tenant_id();
+    ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    uint64_t data_version = 0;
     if (OB_ISNULL(create_table_stmt = create_stmt<ObCreateTableStmt>())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       SQL_RESV_LOG(ERROR, "failed to create select stmt", K(ret));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+      LOG_WARN("Fail to get data version", KR(ret));
     } else {
       create_table_stmt->set_allocator(*allocator_);
       stmt_ = create_table_stmt;
@@ -546,6 +552,11 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
               } else {
                 is_temporary_table = true;
                 is_oracle_temp_table_ = (is_mysql_mode == false);
+                bool enable_new_oracle_temp_table = false;
+                if (data_version >= DATA_VERSION_4_4_2_0) {
+                  enable_new_oracle_temp_table = tenant_config.is_valid() ? tenant_config->_enable_new_oracle_temporary_table : false;
+                }
+                is_old_oracle_temp_table_ = !enable_new_oracle_temp_table && is_oracle_temp_table_;
               }
               break;
             }
@@ -679,7 +690,6 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
           SQL_RESV_LOG(WARN, "resolve_table_id_pre failed", K(ret));
         }
 
-        ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
         uint64_t data_version = 0;
 
         // resolve table organizations before resolve table elements
@@ -739,7 +749,7 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
               table_mode_.pk_exists_ = 0 == get_primary_key_size() ? TOM_TABLE_WITHOUT_PK : TOM_TABLE_WITH_PK;
               table_mode_.pk_mode_ = TPKM_TABLET_SEQ_PK;
             }
-            if (is_oracle_temp_table_) {
+            if (is_old_oracle_temp_table_) {
               //oracle global temp table default table mode is queuing
               table_mode_.mode_flag_ = TABLE_MODE_QUEUING;
             }
@@ -771,6 +781,10 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
               SQL_RESV_LOG(WARN, "set default merge engine type failed", K(ret));
             } else if (OB_FAIL(resolve_table_options(create_table_node->children_[4], false))) {
               SQL_RESV_LOG(WARN, "resolve table options failed", K(ret));
+            } else if (is_oracle_temp_table_ && !is_old_oracle_temp_table_ && !tablegroup_name_.trim().empty()) {
+              // 禁止临时表指定 TABLEGROUP
+              ret = OB_NOT_SUPPORTED;
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "Specifying tablegroup on temporary table");
             } else if (OB_FAIL(set_table_option_to_schema(table_schema))) {
               SQL_RESV_LOG(WARN, "set table option to schema failed", K(ret));
             } else if (OB_FAIL(check_max_row_data_length(table_schema))) {
@@ -1116,10 +1130,10 @@ int ObCreateTableResolver::resolve_partition_option(
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObCreateTableResolverBase::resolve_partition_option(node, table_schema, is_partition_option_node_with_opt))) {
     LOG_WARN("fail to resolve partition option", KR(ret));
-  } else if (is_oracle_temp_table_ && OB_FAIL(set_partition_info_for_oracle_temp_table(table_schema))) {
+  } else if (is_old_oracle_temp_table_ && OB_FAIL(set_partition_info_for_oracle_temp_table(table_schema))) {
     SQL_RESV_LOG(WARN, "set __sess_id as partition key failed", KR(ret));
   }
-  if (OB_SUCC(ret) && (OB_NOT_NULL(node) || table_schema.is_external_table() || is_oracle_temp_table_)) {
+  if (OB_SUCC(ret) && (OB_NOT_NULL(node) || table_schema.is_external_table() || is_old_oracle_temp_table_)) {
     if (OB_FAIL(check_generated_partition_column(table_schema))) {
       LOG_WARN("Failed to check generate partition column", KR(ret));
     } else if (OB_FAIL(table_schema.check_primary_key_cover_partition_column())) {
@@ -2241,7 +2255,7 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
         }
       }
       // oracle临时表会在subquery的基础上默认添加两列隐藏列
-      const int64_t hidden_column_num = is_oracle_temp_table_ ? 2 : 0;
+      const int64_t hidden_column_num = is_old_oracle_temp_table_ ? 2 : 0;
       if (OB_SUCC(ret) && lib::is_oracle_mode()) {
         if (create_table_column_count > 0) {
           if (create_table_column_count != select_items.count() + hidden_column_num) {
@@ -3859,7 +3873,7 @@ int ObCreateTableResolver::resolve_auto_partition(const ParseNode *partition_nod
 
 int ObCreateTableResolver::add_inner_index_for_heap_gtt() {
   int ret = OB_SUCCESS;
-  if (is_oracle_temp_table_) {
+  if (is_old_oracle_temp_table_) {
     if (OB_ISNULL(stmt_) || OB_ISNULL(allocator_)) {
       ret = OB_INVALID_ARGUMENT;
       SQL_RESV_LOG(WARN, "stmt is NULL", K(stmt_), K(ret));

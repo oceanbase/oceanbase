@@ -3190,6 +3190,7 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
     scan->set_use_column_store(ap->use_column_store_);
     if (NULL != table_schema && table_schema->is_tmp_table()) {
       scan->set_session_id(table_schema->get_session_id());
+      scan->set_is_gtt_temp_table_v2(table_schema->is_oracle_tmp_table_v2());
     }
     scan->set_pre_query_range(ap->pre_query_range_);
     scan->set_pre_range_graph(ap->pre_range_graph_);

@@ -5129,7 +5129,7 @@ int ObMultiVersionSchemaService::cal_purge_table_timeout_(
       cal_table_timeout += GCONF.rpc_timeout;
     }
     // has sequence
-    if (OB_SUCC(ret) && (orig_table_schema->is_user_table() || orig_table_schema->is_oracle_tmp_table())) {
+    if (OB_SUCC(ret) && (orig_table_schema->is_user_table() || orig_table_schema->is_oracle_tmp_table() || orig_table_schema->is_oracle_tmp_table_v2())) {
       for (ObTableSchema::const_column_iterator iter = orig_table_schema->column_begin();
           OB_SUCC(ret) && iter != orig_table_schema->column_end(); ++iter) {
         ObColumnSchemaV2 *column_schema = *iter;

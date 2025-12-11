@@ -342,7 +342,7 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &const_arg, obrpc::ObDropInd
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("drop vector index before version 4.3.3 is not supported", KR(ret), K(compat_version));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop vector index before version 4.3.3 is");
-    } else if (arg.is_add_to_scheduler_) {
+    } else if (arg.is_add_to_scheduler_ && !index_table_schema->is_oracle_tmp_table_v2_index_table()) {
       ObDDLOperator ddl_operator(ddl_service_.get_schema_service(), ddl_service_.get_sql_proxy());
       ObDDLSQLTransaction trans(&ddl_service_.get_schema_service());
       int64_t refreshed_schema_version = 0;
@@ -534,11 +534,12 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &const_arg, obrpc::ObDropInd
       }
     } else {
       //construct an arg for drop table
+      const bool is_oracle_tmp_table_v2_index_table = index_table_schema->is_oracle_tmp_table_v2_index_table();
       ObTableItem table_item;
       table_item.database_name_ = arg.database_name_;
       table_item.table_name_ = index_table_schema->get_table_name();
       table_item.is_hidden_ = index_table_schema->is_user_hidden_table();
-      table_item.table_id_ = arg.index_table_id_;
+      table_item.table_id_ = is_oracle_tmp_table_v2_index_table? index_table_schema->get_table_id() : arg.index_table_id_;
       obrpc::ObDDLRes ddl_res;
       obrpc::ObDropTableArg drop_table_arg;
       drop_table_arg.tenant_id_ = tenant_id;
@@ -2034,6 +2035,9 @@ int ObIndexBuilder::generate_schema(
     schema.set_micro_index_clustered(data_schema.get_micro_index_clustered());
     schema.set_enable_macro_block_bloom_filter(data_schema.get_enable_macro_block_bloom_filter());
     schema.set_micro_block_format_version(data_schema.get_micro_block_format_version());
+    if (data_schema.is_oracle_tmp_table_v2()) {
+      schema.set_oracle_tmp_table_v2_index_table();
+    }
   }
   if (OB_SUCC(ret) && OB_FAIL(ObDDLService::set_dbms_job_exec_env(arg, schema))) {
     LOG_WARN("fail to set dbms_job exec_env", K(ret), K(arg));

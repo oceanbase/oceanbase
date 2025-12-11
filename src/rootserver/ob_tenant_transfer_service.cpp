@@ -24,6 +24,7 @@
 #include "storage/tablelock/ob_table_lock_service.h" // ObTableLockService
 #include "storage/ddl/ob_ddl_lock.h" // ObDDLLock
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
+#include "storage/tablet/ob_tablet_to_global_temporary_table_operator.h"
 
 namespace oceanbase
 {
@@ -675,7 +676,6 @@ int ObTenantTransferService::lock_table_and_part_(
 
     ARRAY_FOREACH(ordered_part_list, idx) {
       ObLSID ls_id;
-      ObTabletID tablet_id;
       int64_t part_idx = OB_INVALID_INDEX;
       int64_t subpart_idx = OB_INVALID_INDEX;
       const ObTransferPartInfo &part_info = ordered_part_list.at(idx);
@@ -687,6 +687,7 @@ int ObTenantTransferService::lock_table_and_part_(
       ObArenaAllocator related_table_allocator;
       related_table_allocator.set_tenant_id(tenant_id_);
       ObArray<ObSimpleTableSchemaV2 *> related_table_schemas;
+      ObArray<common::ObTabletID> tablet_ids_get_by_table_id; // one temporary table v2 has multiple tablets
 
       if (OB_NOT_NULL(table_schema) && table_schema->get_table_id() == table_id) {
         // use previous table_schema
@@ -709,55 +710,75 @@ int ObTenantTransferService::lock_table_and_part_(
           part_info,
           allocator,
           table_schema,
-          tablet_id,
+          tablet_ids_get_by_table_id,
           part_idx,
           subpart_idx))) {
         // Table lock service converts some error codes that can be retried to OB_EAGAIN since 4_2_1_5
         if (OB_TRY_LOCK_ROW_CONFLICT == ret || OB_ERR_EXCLUSIVE_LOCK_CONFLICT == ret || OB_EAGAIN == ret) {
           is_lock_conflict = true;
           TTS_INFO("lock conflict when adding in_trans lock",
-              KR(ret), K(part_info), K(tablet_id), K(part_idx), K(subpart_idx), K(is_not_exist));
+              KR(ret), K(part_info), K(tablet_ids_get_by_table_id), K(part_idx), K(subpart_idx), K(is_not_exist));
           ret = OB_SUCCESS;
         } else if (OB_ENTRY_NOT_EXIST == ret
             || OB_TABLE_NOT_EXIST == ret /*|| OB_TRY_LOCK_PART_NOT_EXIST == ret*/) {
           is_not_exist = true;
           TTS_INFO("part_info not exist when adding in_trans lock",
-              KR(ret), K(part_info), K(tablet_id), K(part_idx), K(subpart_idx), K(is_not_exist));
+              KR(ret), K(part_info), K(tablet_ids_get_by_table_id), K(part_idx), K(subpart_idx), K(is_not_exist));
           ret = OB_SUCCESS;
         } else {
           LOG_WARN("add in trans lock and refresh schema failed", KR(ret),
-              K(part_info), K(tablet_id), K(part_idx), K(subpart_idx));
+              K(part_info), K(tablet_ids_get_by_table_id), K(part_idx), K(subpart_idx));
         }
-      } else if (ObTabletToLSTableOperator::get_ls_by_tablet(
-          *sql_proxy_,
-          tenant_id_,
-          tablet_id,
-          ls_id)) { // double check to make sure tablet exists on src_ls
-        if (OB_ENTRY_NOT_EXIST == ret) {
+      } else {
+        // check if tablet exists on src_ls
+        ObArray<common::ObTabletID> tablet_ids_get_by_table_id_on_src_ls;
+        ARRAY_FOREACH(tablet_ids_get_by_table_id, idx) {
+          if (OB_FAIL(ObTabletToLSTableOperator::get_ls_by_tablet(
+              *sql_proxy_,
+              tenant_id_,
+              tablet_ids_get_by_table_id.at(idx),
+              ls_id))) { // double check to make sure tablet exists on src_ls
+            if (OB_ENTRY_NOT_EXIST == ret) {
+              TTS_INFO("discard part_info because tablet not exists",
+                  KR(ret), K(part_info), K(tablet_ids_get_by_table_id), K(part_idx), K(subpart_idx), K(is_not_exist));
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("get ls by tablet failed", KR(ret), K_(tenant_id), K(tablet_ids_get_by_table_id), K(ls_id));
+            }
+          } else if (ls_id != src_ls) {
+            TTS_INFO("discard part_info because tablet is not exist on src_ls",
+                KR(ret), K_(tenant_id), K(tablet_ids_get_by_table_id), K(part_info), K(ls_id), K(src_ls));
+            ret = OB_SUCCESS;
+          } else if (OB_FAIL(tablet_ids_get_by_table_id_on_src_ls.push_back(tablet_ids_get_by_table_id.at(idx)))) {
+            LOG_WARN("push back failed", KR(ret), K(tablet_ids_get_by_table_id.at(idx)), K(tablet_ids_get_by_table_id_on_src_ls));
+          }
+        } // end ARRAY_FOREACH
+        if (FAILEDx(tablet_ids_get_by_table_id.assign(tablet_ids_get_by_table_id_on_src_ls))) {
+          LOG_WARN("assign failed", KR(ret), K(tablet_ids_get_by_table_id_on_src_ls), K(tablet_ids_get_by_table_id));
+        } else if (tablet_ids_get_by_table_id.count() == 0) {
           is_not_exist = true;
-          TTS_INFO("discard part_info because tablet not exists",
-              KR(ret), K(part_info), K(tablet_id), K(part_idx), K(subpart_idx), K(is_not_exist));
+          TTS_INFO("discard part_info because tablet not exists or not exist on src_ls",
+              KR(ret), K(part_info), K(tablet_ids_get_by_table_id), K(part_idx), K(subpart_idx), K(is_not_exist));
           ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("get ls by tablet failed", KR(ret), K_(tenant_id), K(tablet_id), K(ls_id));
         }
-      } else if (ls_id != src_ls) {
-        is_not_exist = true;
-        TTS_INFO("discard part_info because tablet is not exist on src_ls",
-            KR(ret), K_(tenant_id), K(tablet_id), K(part_info), K(ls_id), K(src_ls));
-        ret = OB_SUCCESS;
       }
 
       if (OB_FAIL(ret) || is_not_exist || is_lock_conflict) {
         // skip
       } else if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table schema should not be null", KR(ret), K(part_info), K(tablet_id));
+        LOG_WARN("table schema should not be null", KR(ret), K(part_info), K(tablet_ids_get_by_table_id));
       } else if (OB_FAIL(get_related_table_schemas_(*table_schema, related_table_allocator, related_table_schemas))) {
         LOG_WARN("get related table schemas failed", KR(ret), KPC(table_schema));
+      } else if (table_schema->is_oracle_tmp_table_v2() && OB_FAIL(get_temp_tablet_ids_can_be_transferred_for_oracle_tmp_table_v2_(
+          related_table_schemas.count() + 1/*data_table*/,
+          tablet_ids,
+          tablet_ids_get_by_table_id))) {  // tablet_ids_get_by_table_id may be cleared
+        LOG_WARN("get temp tablet ids can be transferred for oracle tmp table v2 failed", KR(ret), K(related_table_schemas.count()),
+          K(tablet_ids_get_by_table_id));
       } else if (OB_FAIL(check_tablet_count_by_threshold_(
           tablet_ids,
-          related_table_schemas.count() + 1/*data_table*/,
+          (related_table_schemas.count() + 1/*data_table*/) * OB_MAX(tablet_ids_get_by_table_id.count(), 1),
           exceed_tablet_count_threshold))) {
         LOG_WARN("check tablet count by threshold failed", KR(ret), "tablet_ids_count", tablet_ids.count(),
             "related_table_count", related_table_schemas.count());
@@ -765,16 +786,16 @@ int ObTenantTransferService::lock_table_and_part_(
         LOG_TRACE("exceed tablet count threshold", KR(ret), "tablet_ids_count", tablet_ids.count(),
             "related_table_count", related_table_schemas.count());
         break;
-      } else if (OB_FAIL(add_out_trans_lock_(trans, lock_owner_id, *table_schema, part_info, tablet_id))) {
+      } else if (OB_FAIL(add_out_trans_lock_(trans, lock_owner_id, *table_schema, part_info, tablet_ids_get_by_table_id))) {
         LOG_WARN("add out trans table and online ddl lock failed",
-            KR(ret), K(lock_owner_id), K(part_info), K(tablet_id));
+            KR(ret), K(lock_owner_id), K(part_info), K(tablet_ids_get_by_table_id));
       } else if (OB_FAIL(part_list.push_back(part_info))) { // add to part_list after lock successfully
         LOG_WARN("push back failed", KR(ret), K_(tenant_id), K(part_info), K(part_list));
-      } else if (OB_FAIL(record_need_move_table_lock_tablet_(*table_schema, tablet_id, table_lock_tablet_list))) {
-        LOG_WARN("record need move table lock tablet failed", KR(ret), K(tablet_id), K(table_lock_tablet_list));
-      } else if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
-        LOG_WARN("push back failed", KR(ret), K(tablet_id), K(tablet_ids), K(part_info));
-      } else if (OB_FAIL(generate_related_tablet_ids_(related_table_schemas, part_idx, subpart_idx, tablet_ids))) {
+      } else if (OB_FAIL(record_need_move_table_lock_tablet_(*table_schema, tablet_ids_get_by_table_id.at(0), table_lock_tablet_list))) {
+        LOG_WARN("record need move table lock tablet failed", KR(ret), K(tablet_ids_get_by_table_id), K(table_lock_tablet_list));
+      } else if (OB_FAIL(append(tablet_ids, tablet_ids_get_by_table_id))) {
+        LOG_WARN("push back failed", KR(ret), K(tablet_ids_get_by_table_id), K(tablet_ids), K(part_info));
+      } else if (OB_FAIL(generate_related_tablet_ids_(table_schema, related_table_schemas, part_idx, subpart_idx, src_ls, tablet_ids_get_by_table_id, tablet_ids))) {
         LOG_WARN("generate related tablet_ids failed", KR(ret),
             "table_id", table_schema->get_table_id(), K(part_idx), K(subpart_idx), K(tablet_ids));
       }
@@ -805,7 +826,7 @@ int ObTenantTransferService::lock_table_and_part_(
     tablet_ids.reset();
   }
   TTS_INFO("lock table and part finish", KR(ret), "cost_time", ObTimeUtility::current_time() - start_time,
-      K(part_list), K(not_exist_part_list), K(lock_conflict_part_list), K(tablet_ids), K(lock_owner_id));
+      K(part_list), K(not_exist_part_list), K(lock_conflict_part_list), K(tablet_ids), K(table_lock_tablet_list), K(lock_owner_id));
   return ret;
 }
 
@@ -887,7 +908,7 @@ int ObTenantTransferService::add_in_trans_lock_and_refresh_schema_(
     const share::ObTransferPartInfo &part_info,
     common::ObIAllocator &allocator,
     ObSimpleTableSchemaV2 *&table_schema,
-    ObTabletID &tablet_id,
+    common::ObIArray<ObTabletID> &tablet_ids_get_by_table_id,
     int64_t &part_idx,
     int64_t &subpart_idx)
 {
@@ -926,30 +947,30 @@ int ObTenantTransferService::add_in_trans_lock_and_refresh_schema_(
   if (FAILEDx(get_tablet_and_partition_idx_by_object_id_(
       *table_schema,
       part_info.part_object_id(),
-      tablet_id,
+      tablet_ids_get_by_table_id,
       part_idx,
       subpart_idx))) {
     // tablet may be deleted by online ddl (e.g. partition split) after adding table lock
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("get tablet and partition idx by object_id failed",
-          KR(ret), K(part_info), K(tablet_id), K(part_idx), K(subpart_idx));
+          KR(ret), K(part_info), K(tablet_ids_get_by_table_id), K(part_idx), K(subpart_idx));
     }
   } else if (OB_FAIL(ObOnlineDDLLock::lock_for_transfer_in_trans(
       tenant_id_,
       part_info.table_id(),
-      tablet_id,
+      tablet_ids_get_by_table_id,
       0,/*try lock*/
       trans))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_ERR_EXCLUSIVE_LOCK_CONFLICT != ret) {
       LOG_WARN("lock for transfer in trans failed", KR(ret),
-          K_(tenant_id), "table_id", part_info.table_id(), K(tablet_id));
+          K_(tenant_id), "table_id", part_info.table_id(), K(tablet_ids_get_by_table_id));
     }
   // There might be concurrent DDL that have modified the table schema during adding lock.
   // Online ddl lock can not check tablet exist, so it may lock successfully
   // while tablet not exists or tablet is swapped. So we need double check.
   } else if (OB_FAIL(refresh_schema_and_double_check_(
       part_info,
-      tablet_id,
+      tablet_ids_get_by_table_id,
       part_idx,
       subpart_idx,
       allocator,
@@ -958,19 +979,53 @@ int ObTenantTransferService::add_in_trans_lock_and_refresh_schema_(
         && OB_ENTRY_NOT_EXIST != ret
         && OB_ERR_EXCLUSIVE_LOCK_CONFLICT != ret) {
       LOG_WARN("refresh schema and double check failed", KR(ret),
-          K(part_info), K(tablet_id), K(part_idx), K(subpart_idx));
+          K(part_info), K(tablet_ids_get_by_table_id), K(part_idx), K(subpart_idx));
     }
   }
 
   TTS_INFO("add in trans lock and refresh schema finish", KR(ret),
       "cost_time", ObTimeUtility::current_time() - start_time,
-      K(part_info), K(tablet_id), K(part_idx), K(subpart_idx));
+      K(part_info), K(tablet_ids_get_by_table_id), K(part_idx), K(subpart_idx));
+  return ret;
+}
+
+int ObTenantTransferService::get_tablet_ids_for_oracle_tmp_table_v2_(
+  const common::ObIArray<common::ObTableID> &table_ids,
+  common::ObIArray<common::ObTabletID> &temporary_tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  common::ObArray<storage::ObSessionTabletInfo> session_tablet_infos;
+  if (IS_NOT_INIT || OB_ISNULL(sql_proxy_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(table_ids.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(table_ids));
+  } else if (OB_FAIL(ObTabletToGlobalTmpTableOperator::batch_get_by_table_ids(
+      *sql_proxy_,
+      tenant_id_,
+      table_ids,
+      session_tablet_infos))) {
+    LOG_WARN("get session tablet infos by table id failed", KR(ret), K(table_ids));
+  } else if (OB_FAIL(temporary_tablet_ids.reserve(session_tablet_infos.count()))) {
+    LOG_WARN("reserve failed", KR(ret), K(session_tablet_infos));
+  } else {
+    ARRAY_FOREACH(session_tablet_infos, idx) {
+      if (OB_FAIL(temporary_tablet_ids.push_back(session_tablet_infos.at(idx).get_tablet_id()))) {
+        LOG_WARN("push back failed", KR(ret), K(session_tablet_infos.at(idx)), K(temporary_tablet_ids));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && temporary_tablet_ids.empty()) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("tablet not exist", KR(ret), K(table_ids));
+  }
   return ret;
 }
 
 int ObTenantTransferService::refresh_schema_and_double_check_(
     const share::ObTransferPartInfo &part_info,
-    const ObTabletID &tablet_id,
+    const common::ObIArray<common::ObTabletID> &tablet_ids,
     int64_t &part_idx,
     int64_t &subpart_idx,
     common::ObIAllocator &allocator,
@@ -978,7 +1033,7 @@ int ObTenantTransferService::refresh_schema_and_double_check_(
 {
   int ret = OB_SUCCESS;
   ObSimpleTableSchemaV2 *new_table_schema = nullptr;
-  ObTabletID new_tablet_id;
+  common::ObArray<common::ObTabletID> new_tablet_ids;
   int64_t new_part_idx = OB_INVALID_INDEX;
   int64_t new_subpart_idx = OB_INVALID_INDEX;
   int64_t ori_schema_version = OB_INVALID_VERSION;
@@ -986,9 +1041,9 @@ int ObTenantTransferService::refresh_schema_and_double_check_(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_UNLIKELY(!part_info.is_valid() || !tablet_id.is_valid()) || OB_ISNULL(table_schema)) {
+  } else if (OB_UNLIKELY(!part_info.is_valid() || tablet_ids.empty()) || OB_ISNULL(table_schema)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(part_info), K(tablet_id), KP(table_schema));
+    LOG_WARN("invalid args", KR(ret), K(part_info), K(tablet_ids), KP(table_schema));
   } else if (FALSE_IT(ori_schema_version = table_schema->get_schema_version())) {
   } else if (OB_FAIL(get_latest_table_schema_(allocator, part_info.table_id(), new_table_schema))) {
     if (OB_TABLE_NOT_EXIST == ret) {
@@ -999,7 +1054,7 @@ int ObTenantTransferService::refresh_schema_and_double_check_(
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table not exists after locking table", KR(ret), K(part_info),
-            K(tablet_id), K(part_idx), K(subpart_idx), KPC(table_schema));
+            K(tablet_ids), K(part_idx), K(subpart_idx), KPC(table_schema));
       }
     } else {
       LOG_WARN("get latest table schema failed", KR(ret), K(part_info), KPC(table_schema));
@@ -1007,30 +1062,30 @@ int ObTenantTransferService::refresh_schema_and_double_check_(
   } else if (OB_ISNULL(new_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null new table schema", KR(ret), K(part_info),
-        K(part_info), K(tablet_id), KPC(table_schema));
+        K(part_info), K(tablet_ids), KPC(table_schema));
   } else if (FALSE_IT(new_schema_version = new_table_schema->get_schema_version())) {
   } else if (OB_FAIL(get_tablet_and_partition_idx_by_object_id_(
       *new_table_schema,
       part_info.part_object_id(),
-      new_tablet_id,
+      new_tablet_ids,
       new_part_idx,
       new_subpart_idx))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
-      LOG_INFO("tablet not exist after adding lock", KR(ret), K(part_info), K(tablet_id),
+      LOG_INFO("tablet not exist after adding lock", KR(ret), K(part_info), K(new_tablet_ids),
           K(part_idx), K(subpart_idx), K(ori_schema_version), K(new_schema_version));
     } else {
       LOG_WARN("get tablet and partition idx by object_id failed", KR(ret), K(part_info),
-          K(tablet_id), K(part_idx), K(subpart_idx), K(ori_schema_version), K(new_schema_version));
+          K(tablet_ids), K(part_idx), K(subpart_idx), K(ori_schema_version), K(new_schema_version));
     }
-  } else if (new_tablet_id != tablet_id) {
+  } else if (!is_array_equal(new_tablet_ids, tablet_ids)) {
     // This is a defense to prevent the concurrent partition-exchange changing tablet_ids.
     // In some scenarios, such as when direct-load processes hash/key partitions, or when
     // partition-exchange handles partitioned table and secondary partition, they only
     // exchange tablet_ids while object_ids remain unchanged.
     // Treat these scenarios as lock conflicts.
     ret = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;
-    LOG_INFO("tablet changed during adding lock", KR(ret), K(part_info), K(tablet_id),
-        K(new_tablet_id), K(part_idx), K(new_part_idx), K(subpart_idx), K(new_subpart_idx),
+    LOG_INFO("tablet changed during adding lock", KR(ret), K(part_info), K(tablet_ids),
+        K(new_tablet_ids), K(part_idx), K(new_part_idx), K(subpart_idx), K(new_subpart_idx),
         K(ori_schema_version), K(new_schema_version));
   } else if (new_part_idx != part_idx || new_subpart_idx != subpart_idx) {
     // The concurrent DDLs such as add/drop-partition or partition-split will change the idx.
@@ -1053,34 +1108,42 @@ int ObTenantTransferService::add_out_trans_lock_(
     const ObTableLockOwnerID &lock_owner_id,
     share::schema::ObSimpleTableSchemaV2 &table_schema,
     const share::ObTransferPartInfo &part_info,
-    const ObTabletID &tablet_id)
+    const common::ObIArray<common::ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
   const int64_t timeout_us = 0; // try lock
   const bool is_out_trans = true;
   const int64_t start_time = ObTimeUtility::current_time();
-  if (OB_UNLIKELY(!lock_owner_id.is_valid() || !part_info.is_valid() || !tablet_id.is_valid())) {
+  bool is_valid = true;
+  ARRAY_FOREACH(tablet_ids, idx) {
+    if (!tablet_ids.at(idx).is_valid()) {
+      is_valid = false;
+      break;
+    }
+  }
+  if (OB_UNLIKELY(!is_valid || !lock_owner_id.is_valid() || !part_info.is_valid() || tablet_ids.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(lock_owner_id), K(part_info), K(tablet_id));
+    LOG_WARN("invalid args", KR(ret), K(lock_owner_id), K(part_info), K(tablet_ids));
   } else if (OB_FAIL(add_table_lock_(trans, table_schema, part_info, is_out_trans, lock_owner_id))) {
     LOG_WARN("add out trans table lock failed", KR(ret), K(part_info), K(is_out_trans), K(lock_owner_id));
   } else if (OB_FAIL(ObOnlineDDLLock::lock_for_transfer(
       tenant_id_,
       part_info.table_id(),
-      tablet_id,
+      tablet_ids,
       lock_owner_id,
       timeout_us,
       trans))) {
     LOG_WARN("lock for transfer failed", KR(ret), K_(tenant_id),
-        "table_id", part_info.table_id(), K(tablet_id), K(timeout_us));
+        "table_id", part_info.table_id(), K(tablet_ids), K(timeout_us));
   }
   TTS_INFO("add out trans lock finish", "cost_time", ObTimeUtility::current_time() - start_time,
-      K(lock_owner_id), K(part_info), K(tablet_id));
+      K(lock_owner_id), K(part_info), K(tablet_ids));
   return ret;
 }
 
 // record tablet_id which adds part table lock successfully
 // table lock on this tablet will be moved from src_ls to dest_ls in the transfer process
+// oracle temporary tables v2 are not partition table, so it is not need to be moved during Tablet Transfer.
 int ObTenantTransferService::record_need_move_table_lock_tablet_(
     share::schema::ObSimpleTableSchemaV2 &table_schema,
     const ObTabletID &tablet_id,
@@ -1090,6 +1153,9 @@ int ObTenantTransferService::record_need_move_table_lock_tablet_(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
+  } else if (table_schema.is_oracle_tmp_table_v2()) {
+    // oracle temporary tables v2 only need ROW_SHARE locks at the table level, but do not need ROW_SHARE locks at the Tablet level.
+    // Therefore, it is not need to be moved during Tablet Transfer.
   } else if (OB_UNLIKELY(!tablet_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tablet_id", KR(ret), K(tablet_id));
@@ -1112,18 +1178,28 @@ int ObTenantTransferService::record_need_move_table_lock_tablet_(
 
 // part_idx and subpart_idx may be invalid for non-part table
 int ObTenantTransferService::generate_related_tablet_ids_(
+    const ObSimpleTableSchemaV2 *table_schema,
     const ObIArray<ObSimpleTableSchemaV2 *> &related_table_schemas,
     const int64_t part_idx,
     const int64_t subpart_idx,
-    common::ObIArray<ObTabletID> &tablet_ids)
+    const share::ObLSID &src_ls,
+    ObIArray<ObTabletID> &tablet_ids_get_by_data_table_id,
+    ObIArray<ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
   const int64_t start_time = ObTimeUtility::current_time();
-  if (IS_NOT_INIT || OB_ISNULL(sql_proxy_)) {
+  if (IS_NOT_INIT || OB_ISNULL(sql_proxy_) || OB_ISNULL(table_schema)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else if (related_table_schemas.empty()) {
     // skip
+  } else if (table_schema->is_oracle_tmp_table_v2()) {
+    if (OB_FAIL(generate_related_tablet_ids_for_oracle_tmp_table_v2_(table_schema, related_table_schemas, src_ls, tablet_ids_get_by_data_table_id, tablet_ids))) {
+      LOG_WARN("generate related tablet ids for oracle tmp table v2 failed", KR(ret), K(table_schema), K(related_table_schemas), K(src_ls), K(tablet_ids));
+    }
+    TTS_INFO("gen related tablet_ids of oracle tmp table v2", KR(ret), "related_table_count",
+        related_table_schemas.count(), K(tablet_ids),
+        "cost_time", ObTimeUtility::current_time() - start_time);
   } else {
     ARRAY_FOREACH(related_table_schemas, idx) {
       ObSimpleTableSchemaV2 *related_table_schema = related_table_schemas.at(idx);
@@ -1145,6 +1221,173 @@ int ObTenantTransferService::generate_related_tablet_ids_(
     TTS_INFO("gen related tablet_ids", KR(ret), "related_table_count",
         related_table_schemas.count(), K(part_idx), K(subpart_idx), K(tablet_ids),
         "cost_time", ObTimeUtility::current_time() - start_time);
+  }
+  return ret;
+}
+
+int ObTenantTransferService::generate_related_tablet_ids_for_oracle_tmp_table_v2_(
+    const ObSimpleTableSchemaV2 *table_schema,
+    const ObIArray<ObSimpleTableSchemaV2 *> &related_table_schemas,
+    const share::ObLSID &src_ls,
+    const ObIArray<ObTabletID> &tablet_ids_get_by_data_table_id,
+    ObIArray<ObTabletID> &tablet_ids /* out */)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT || OB_ISNULL(sql_proxy_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_ISNULL(table_schema) ||OB_UNLIKELY(!table_schema->is_oracle_tmp_table_v2() || !src_ls.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid table schema", KR(ret), K(table_schema), K(src_ls));
+  } else if (related_table_schemas.empty()) {
+    // skip
+  } else {
+    ObArray<ObTableID> table_ids;
+    ObArray<storage::ObSessionTabletInfo> session_tablet_infos;
+    ARRAY_FOREACH(related_table_schemas, idx) {
+      const share::schema::ObSimpleTableSchemaV2 *related_table_schema = related_table_schemas.at(idx);
+      if (OB_ISNULL(related_table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("related table schema is null", KR(ret));
+      } else {
+        if (OB_FAIL(table_ids.push_back(related_table_schema->get_table_id()))) {
+          LOG_WARN("push back table id failed", KR(ret), K(related_table_schema->get_table_id()));
+        }
+      }
+    }
+    if (FAILEDx(table_ids.push_back(table_schema->get_table_id()))) {
+      LOG_WARN("push back data table id failed", KR(ret), K(table_schema->get_tablet_id()));
+    } else if (OB_FAIL(ObTabletToGlobalTmpTableOperator::batch_get_by_table_ids(
+      *sql_proxy_,
+      tenant_id_,
+      table_ids,
+      session_tablet_infos))) {
+      LOG_WARN("get session tablet infos by table id failed", KR(ret), K(table_ids));
+    } else {
+      // Remove redundant tablets
+      //
+      // Group session_tablet_infos by session_id. If a group contains any tablet_id that exists in
+      // tablet_ids_get_by_data_table_id (data table tablets that can be transferred), then this group
+      // can be transferred and should be added to tablet_ids.
+      // Finally, verify that the number of newly added tablets equals
+      // related_table_schemas.count() * tablet_ids_get_by_data_table_id.count()
+
+      // Temporary data structures for grouping: session_id -> all tablet infos for that session
+      ObArray<uint32_t> session_ids;  // List of discovered session IDs
+      ObArray<ObArray<storage::ObSessionTabletInfo>> grouped_infos;  // Array of tablet info arrays corresponding to each session ID
+
+      // Step 1: Group by session_id
+      ARRAY_FOREACH(session_tablet_infos, i) {
+        const storage::ObSessionTabletInfo &info = session_tablet_infos.at(i);
+        uint32_t session_id = info.get_session_id();
+        int64_t group_idx = -1;
+        // only get tablet infos from src_ls
+        if (src_ls != info.get_ls_id()) {
+          continue;
+        }
+
+        // Find if this session_id already exists
+        for (int64_t j = 0; j < session_ids.count(); j++) {
+          if (session_ids.at(j) == session_id) {
+            group_idx = j;
+            break;
+          }
+        }
+
+        // If this is a new session_id, create a new group
+        if (group_idx == -1) {
+          ObArray<storage::ObSessionTabletInfo> new_group;
+          if (OB_FAIL(new_group.push_back(info))) {
+            LOG_WARN("fail to push back info to new group", KR(ret), K(info));
+          } else if (OB_FAIL(session_ids.push_back(session_id))) {
+            LOG_WARN("fail to push back session_id", KR(ret), K(session_id));
+          } else if (OB_FAIL(grouped_infos.push_back(new_group))) {
+            LOG_WARN("fail to push back new group", KR(ret));
+          }
+        } else {
+          // Add to existing group
+          if (OB_FAIL(grouped_infos.at(group_idx).push_back(info))) {
+            LOG_WARN("fail to push back info to existing group", KR(ret), K(group_idx), K(info));
+          }
+        }
+      }
+
+      // Step 2: For each group, check if it contains any data table tablet in tablet_ids_get_by_data_table_id that can be transferred
+      if (OB_SUCC(ret)) {
+        const int64_t old_tablet_ids_count = tablet_ids.count();
+
+        for (int64_t i = 0; OB_SUCC(ret) && i < grouped_infos.count(); i++) {
+          const ObArray<storage::ObSessionTabletInfo> &group = grouped_infos.at(i);
+          bool can_migrate = false;
+          ObTabletID data_table_tablet_id;
+
+          // Check if any tablet_id in this group exists in tablet_ids_get_by_data_table_id
+          for (int64_t j = 0; j < group.count(); j++) {
+            const ObTabletID &tablet_id = group.at(j).get_tablet_id();
+            // Check if it's in the transferable list
+            can_migrate = is_contain(tablet_ids_get_by_data_table_id, tablet_id);
+            if (can_migrate) {
+              data_table_tablet_id = tablet_id; // data table tablet id already added to tablet_ids, skip it
+              break;
+            }
+          }
+
+          // If this group can be transferred, add all tablet_ids to the result
+          if (can_migrate) {
+            for (int64_t j = 0; OB_SUCC(ret) && j < group.count(); j++) {
+              const ObTabletID &tablet_id = group.at(j).get_tablet_id();
+              if (tablet_id != data_table_tablet_id && OB_FAIL(tablet_ids.push_back(tablet_id))) {
+                LOG_WARN("fail to push back tablet_id", KR(ret), K(tablet_id));
+              }
+            }
+          }
+        }
+
+        // Step 3: Verify the number of newly added tablets matches expectations
+        if (OB_SUCC(ret)) {
+          const int64_t new_added_count = tablet_ids.count() - old_tablet_ids_count;
+          const int64_t expected_count = related_table_schemas.count() * tablet_ids_get_by_data_table_id.count();
+          if (new_added_count != expected_count) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("tablet count mismatch", KR(ret), K(new_added_count), K(expected_count), K(old_tablet_ids_count),
+                K(tablet_ids_get_by_data_table_id), K(tablet_ids), K(related_table_schemas));
+          } else {
+            TTS_INFO("generate related tablet_ids for oracle tmp table v2 success",
+                K(new_added_count), K(expected_count), K(tablet_ids.count()),
+                K(session_ids.count()), K(grouped_infos.count()));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+
+//
+int ObTenantTransferService::get_temp_tablet_ids_can_be_transferred_for_oracle_tmp_table_v2_(
+  const uint64_t related_table_count, // 1 data table + N related tables
+  const common::ObIArray<common::ObTabletID> &tablet_ids_will_be_transferred,
+  common::ObIArray<common::ObTabletID> &tablet_ids_get_by_table_id)
+{
+  int ret = OB_SUCCESS;
+  if (related_table_count < 1 || tablet_ids_get_by_table_id.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(related_table_count), K(tablet_ids_get_by_table_id));
+  } else {
+    int64_t drop_count = 0;
+    int64_t limit_tablet_count = get_tablet_count_threshold_(); // L
+    int64_t tablet_count_will_be_transferred = tablet_ids_will_be_transferred.count(); // K
+    // M' = MAX(0, floor((L - K) / (N + 1)))
+    int64_t tablet_count_can_be_transferred =
+      static_cast<int64_t>(floor((limit_tablet_count - tablet_count_will_be_transferred) * 1.0 / related_table_count));
+    tablet_count_can_be_transferred = OB_MAX(tablet_count_can_be_transferred, 0);
+    while (tablet_ids_get_by_table_id.count() > tablet_count_can_be_transferred) {
+      tablet_ids_get_by_table_id.pop_back();
+      drop_count++;
+    }
+    LOG_INFO("get temp tablet ids can be transferred for oracle tmp table v2 success",
+      KR(ret), K(tablet_ids_will_be_transferred.count()), K(related_table_count), K(tablet_ids_get_by_table_id.count()), K(drop_count));
   }
   return ret;
 }
@@ -1261,20 +1504,28 @@ int ObTenantTransferService::get_related_table_schemas_(
 int ObTenantTransferService::get_tablet_and_partition_idx_by_object_id_(
     ObSimpleTableSchemaV2 &table_schema,
     const ObObjectID &part_object_id,
-    ObTabletID &tablet_id,
+    common::ObIArray<common::ObTabletID> &tablet_ids,
     int64_t &part_idx,
     int64_t &subpart_idx)
 {
   int ret = OB_SUCCESS;
   part_idx = OB_INVALID_INDEX;
   subpart_idx = OB_INVALID_INDEX;
+  tablet_ids.reset();
+  common::ObArray<common::ObTableID> table_ids;
   if (OB_UNLIKELY(OB_INVALID_ID == part_object_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", KR(ret), K(part_object_id));
+  } else if (OB_FAIL(table_ids.push_back(table_schema.get_table_id()))) {
+    LOG_WARN("push back table id failed", KR(ret), K(table_schema.get_table_id()));
+  } else if (table_schema.is_oracle_tmp_table_v2()) {
+    if (OB_FAIL(get_tablet_ids_for_oracle_tmp_table_v2_(table_ids, tablet_ids))) {
+      LOG_WARN("get tablet ids for oracle tmp table v2 failed", KR(ret), K(table_ids));
+    }
   } else if (PARTITION_LEVEL_ZERO == table_schema.get_part_level()) {
-    tablet_id = table_schema.get_tablet_id();
-    part_idx = OB_INVALID_INDEX;
-    subpart_idx = OB_INVALID_INDEX;
+    if (OB_FAIL(tablet_ids.push_back(table_schema.get_tablet_id()))) {
+      LOG_WARN("push back failed", KR(ret), K(table_schema.get_tablet_id()));
+    }
   } else {
     ObCheckPartitionMode check_partition_mode = CHECK_PARTITION_MODE_NORMAL;
     ObPartitionSchemaIter iter(table_schema, check_partition_mode);
@@ -1285,14 +1536,16 @@ int ObTenantTransferService::get_tablet_and_partition_idx_by_object_id_(
           LOG_WARN("switch the src partition info failed", KR(ret));
         }
       } else if (info.object_id_ == part_object_id) {
-        tablet_id = info.tablet_id_;
+        if (OB_FAIL(tablet_ids.push_back(info.tablet_id_))) {
+          LOG_WARN("push back failed", KR(ret), K(info.tablet_id_));
+        }
         part_idx = info.part_idx_;
         subpart_idx = info.subpart_idx_;
         break;
       }
     }
     if (OB_UNLIKELY(OB_ITER_END == ret)
-        || (OB_SUCC(ret) && OB_UNLIKELY(!tablet_id.is_valid()))) {
+        || (OB_SUCC(ret) && OB_UNLIKELY(!tablet_ids.empty() && !tablet_ids.at(0).is_valid()))) {
       ret = OB_ENTRY_NOT_EXIST;
       LOG_WARN("object id not found", KR(ret), "table_id",
           table_schema.get_table_id(), K(part_object_id));
@@ -1591,6 +1844,7 @@ int ObTenantTransferService::unlock_and_clear_task_(
   } else if (OB_FAIL(unlock_table_and_part_(
       trans,
       task.get_part_list(),
+      task.get_tablet_list(),
       task.get_table_lock_owner_id()))) {
     LOG_WARN("unlock table and part failed", KR(ret), K(task));
   } else {
@@ -1623,6 +1877,7 @@ int ObTenantTransferService::unlock_and_clear_task_(
 int ObTenantTransferService::unlock_table_and_part_(
     ObMySQLTransaction &trans,
     const share::ObTransferPartList &part_list,
+    const share::ObTransferTabletList &trans_tablet_list,
     const ObTableLockOwnerID &lock_owner_id)
 {
   int ret = OB_SUCCESS;
@@ -1655,7 +1910,7 @@ int ObTenantTransferService::unlock_table_and_part_(
     lib::ob_sort(ordered_part_list.begin(), ordered_part_list.end(), cmp);
 
     ARRAY_FOREACH(ordered_part_list, idx) {
-      ObTabletID tablet_id;
+      common::ObArray<common::ObTabletID> tablet_ids_get_by_table_id;
       int64_t part_idx = OB_INVALID_INDEX;
       int64_t subpart_idx = OB_INVALID_INDEX;
       const ObTransferPartInfo &part_info = ordered_part_list.at(idx);
@@ -1675,25 +1930,58 @@ int ObTenantTransferService::unlock_table_and_part_(
       if (FAILEDx(get_tablet_and_partition_idx_by_object_id_(
           *table_schema,
           part_info.part_object_id(),
-          tablet_id,
+          tablet_ids_get_by_table_id,
           part_idx,
           subpart_idx))) {
         LOG_WARN("get tablet and partition idx by object_id failed",
-            KR(ret), K(part_info), K(tablet_id), K(part_idx));
+            KR(ret), K(part_info), K(tablet_ids_get_by_table_id), K(part_idx));
+      } else if (table_schema->is_oracle_tmp_table_v2() &&
+          OB_FAIL(get_tablet_ids_transferred_for_oracle_tmp_table_v2_(trans_tablet_list, tablet_ids_get_by_table_id))) {
+        LOG_WARN("get tablet ids transferred for oracle tmp table v2 failed", KR(ret), K(trans_tablet_list),
+          K(tablet_ids_get_by_table_id));
       } else if (OB_FAIL(ObOnlineDDLLock::unlock_for_transfer(
           tenant_id_,
           table_schema->get_table_id(),
-          tablet_id,
+          tablet_ids_get_by_table_id,
           lock_owner_id,
           timeout_us,
           trans))) {
         LOG_WARN("unlock online ddl lock for transfer failed", KR(ret), K_(tenant_id),
-            "table_id", table_schema->get_table_id(), K(tablet_id), K(lock_owner_id), K(timeout_us));
+            "table_id", table_schema->get_table_id(), K(tablet_ids_get_by_table_id), K(lock_owner_id), K(timeout_us));
       }
       if (FAILEDx(unlock_table_lock_(trans, *table_schema, part_info, lock_owner_id, timeout_us))) {
         LOG_WARN("unlock table lock failed", KR(ret), K(part_info), K(lock_owner_id), K(timeout_us));
       }
     } // end ARRAY_FOREACH
+  }
+
+  return ret;
+}
+
+int ObTenantTransferService::get_tablet_ids_transferred_for_oracle_tmp_table_v2_(
+    const share::ObTransferTabletList &trans_tablet_list,
+    common::ObIArray<common::ObTabletID> &tablet_ids_get_by_table_id)
+{
+  int ret = OB_SUCCESS;
+  // Get the intersection of trans_tablet_list and tablet_ids_get_by_table_id
+  ObArray<ObTabletID> intersection;
+
+  // Iterate through tablet_ids_get_by_table_id and keep only tablets that exist in trans_tablet_list
+  for (int64_t i = 0; OB_SUCC(ret) && i < trans_tablet_list.count(); i++) {
+    const ObTabletID &tablet_id = trans_tablet_list.at(i).tablet_id();
+    if (is_contain(tablet_ids_get_by_table_id, tablet_id)) {
+      if (OB_FAIL(intersection.push_back(tablet_id))) {
+        LOG_WARN("fail to push back tablet_id to intersection", KR(ret), K(tablet_id));
+      }
+    }
+  }
+
+  // Replace tablet_ids_get_by_table_id with the intersection result
+  if (OB_SUCC(ret)) {
+    tablet_ids_get_by_table_id.reset();
+    if (OB_FAIL(tablet_ids_get_by_table_id.assign(intersection))) {
+      LOG_WARN("fail to append intersection to tablet_ids_get_by_table_id", KR(ret), K(intersection));
+    }
   }
 
   return ret;

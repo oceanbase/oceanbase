@@ -127,7 +127,8 @@ int ObTruncateTableResolver::resolve(const ParseNode &parser_tree)
       LOG_USER_WARN(OB_NOT_SUPPORTED, "truncate external table");
       LOG_WARN("truncate external table not support", K(ret));
     } else {
-      if (orig_table_schema->is_oracle_tmp_table()) {
+      truncate_table_stmt->set_table_id(orig_table_schema->get_table_id());
+      if (orig_table_schema->is_oracle_tmp_table() || orig_table_schema->is_oracle_tmp_table_v2()) {
         truncate_table_stmt->set_truncate_oracle_temp_table();
         truncate_table_stmt->set_oracle_temp_table_type(orig_table_schema->get_table_type());
       }

@@ -346,6 +346,12 @@ int ObExprCalcPartitionBase::calc_no_partition_location(const ObExpr &expr,
   ObSEArray<ObTabletID, 1> tablet_ids;
   ObSEArray<ObObjectID, 1> partition_ids;
   CalcPartitionBaseInfo *calc_part_info = reinterpret_cast<CalcPartitionBaseInfo *>(expr.extra_info_);
+  const storage::ObGTTTabletInfo gtt_tablet_info(
+    calc_part_info->ref_table_id_,
+    ctx.exec_ctx_.get_my_session()->get_gtt_session_scope_unique_id(),
+    ctx.exec_ctx_.get_my_session()->get_gtt_trans_scope_unique_id(),
+    ctx.exec_ctx_.get_my_session()->get_sessid_for_table());
+  tablet_mapper.set_session_tablet_info(gtt_tablet_info, &(ctx.exec_ctx_.get_my_session()->get_gtt_tablet_info_map()));
   if (OB_FAIL(ctx.exec_ctx_.get_das_ctx().get_das_tablet_mapper(calc_part_info->ref_table_id_,
                                                                 tablet_mapper,
                                                                 &calc_part_info->related_table_ids_))) {

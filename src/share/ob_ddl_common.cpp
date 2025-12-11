@@ -623,6 +623,8 @@ int ObDDLUtil::get_tablets(
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(table_id));
+  } else if (table_schema->is_oracle_tmp_table_v2() || table_schema->is_oracle_tmp_table_v2_index_table()) {
+    LOG_INFO("oracle temporary table v2 has no tablet, skip get tablets", KPC(table_schema), K(common::lbt()));
   } else if (OB_FAIL(table_schema->get_tablet_ids(tablet_ids))) {
     LOG_WARN("get tablets failed", K(ret), KPC(table_schema));
   }
@@ -1801,6 +1803,9 @@ int ObDDLUtil::hold_snapshot(
     } else if (dest_table_schema->get_aux_lob_piece_tid() != OB_INVALID_ID &&
               OB_FAIL(ObDDLUtil::get_tablets(tenant_id, dest_table_schema->get_aux_lob_piece_tid(), tablet_ids))) {
       LOG_WARN("failed to get dest lob piece table snapshot", K(ret));
+    } else if (0 == tablet_ids.count()) {
+      ret = OB_SUCCESS;
+      LOG_INFO("no tablet to hold snapshot", K(ret), K(table_id), K(target_table_id));
     } else {
       rootserver::ObDDLService &ddl_service = root_service->get_ddl_service();
       if (OB_FAIL(ddl_service.get_snapshot_mgr().batch_acquire_snapshot(
@@ -1878,7 +1883,7 @@ int ObDDLUtil::release_snapshot(
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(task->batch_release_snapshot(snapshot_version, tablet_ids))) {
+    } else if (tablet_ids.count() > 0 && OB_FAIL(task->batch_release_snapshot(snapshot_version, tablet_ids))) {
       LOG_WARN("failed to release snapshot", K(ret));
     }
     task->add_event_info("release snapshot finish");
@@ -3868,6 +3873,8 @@ int ObDDLUtil::check_table_empty(
     LOG_WARN("invalid argument", K(ret), K(table_id));
   } else if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("fail to check is oracle mode", K(ret), K(table_schema));
+  } else if (table_schema.is_oracle_tmp_table_v2()) {
+    is_table_empty = true;
   } else {
     const ObString &table_name = table_schema.get_table_name_str();
     ObSqlString sql_string;
@@ -5508,18 +5515,18 @@ int ObCheckTabletDataComplementOp::check_tablet_checksum_update_status(
   int64_t tablet_count = tablet_ids.count();
 
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == index_table_id ||
-      execution_id < 0 || tablet_count <= 0 || ddl_task_id == OB_INVALID_ID)) {
+      execution_id < 0 || tablet_count < 0 || ddl_task_id == OB_INVALID_ID)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fail to check and wait complement task",
       K(ret), K(tenant_id), K(index_table_id), K(tablet_ids), K(execution_id), K(ddl_task_id));
   } else if (OB_FAIL(DDL_SIM(tenant_id, ddl_task_id, CHECK_TABLET_CHECKSUM_STATUS_FAILED))) {
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(ddl_task_id));
-  } else if (OB_FAIL(tablet_checksum_status_map.create(tablet_count, ObModIds::OB_SSTABLE_CREATE_INDEX))) {
+  } else if (tablet_count > 0 && OB_FAIL(tablet_checksum_status_map.create(tablet_count, ObModIds::OB_SSTABLE_CREATE_INDEX))) {
     LOG_WARN("fail to create column checksum map", K(ret));
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
-  } else if (OB_FAIL(ObDDLChecksumOperator::get_tablet_checksum_record(
+  } else if (tablet_count > 0 && OB_FAIL(ObDDLChecksumOperator::get_tablet_checksum_record(
       tenant_id,
       execution_id,
       index_table_id,

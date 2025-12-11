@@ -74,6 +74,101 @@ int ObTableLockDetectFuncList::detect_session_alive_for_rpc(const uint32_t sessi
   return ret;
 }
 
+int ObTableLockDetectFuncList::batch_detect_session_alive_at_least_one(const uint64_t tenant_id, const common::ObIArray<uint32_t> &session_id_array,
+      const ObIArray<ObAddr> *dest_server, common::ObIArray<bool> &session_alive_array)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<ObAddr> *server_list = nullptr;
+  ObArray<ObAddr> tmp_server;
+  if (OB_ISNULL(dest_server)){
+    if (OB_FAIL(get_tenant_servers(tenant_id, tmp_server))) {
+      LOG_WARN("fail to get tenant server", KR(ret), K(tenant_id));
+    }
+    server_list = &tmp_server;
+  } else {
+    server_list = dest_server;
+  }
+  if (OB_FAIL(ret) || server_list == nullptr || server_list->count() == 0) {
+    LOG_WARN("fail to get tenant server", KR(ret), K(tenant_id), KP(server_list));
+  } else if (OB_ISNULL(GCTX.srv_rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("server rpc proxy is null", KR(ret));
+  } else if (session_id_array.count() != session_alive_array.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session_id_array and session_alive_array count not match", KR(ret), K(session_id_array.count()), K(session_alive_array.count()));
+  } else {
+    rootserver::ObBatchDetectSessionAliveProxy proxy(*GCTX.srv_rpc_proxy_, &ObSrvRpcProxy::batch_detect_session_alive);
+    const int64_t rpc_timeout = GCONF.rpc_timeout;
+    int64_t timeout = 0;
+    int64_t cnt = server_list->count();
+    ARRAY_FOREACH_X(*server_list, idx, cnt, OB_SUCC(ret)) {
+      const ObAddr &server = server_list->at(idx);
+      if (!server.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("server is invalid", K(ret), K(server));
+      } else {
+        timeout = std::min(THIS_WORKER.get_timeout_remain(), rpc_timeout);
+        obrpc::ObBatchDetectSessionAliveArg arg;
+        if (OB_FAIL(arg.init(session_id_array))) {
+          LOG_WARN("fail to init arg", KR(ret), K(session_id_array));
+        } else if (OB_FAIL(proxy.call(server, timeout, arg))) {
+          LOG_WARN("send session alive detect rpc failed", KR(ret),
+              K(timeout), K(arg), "server", server);
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      ObArray<int> return_code_array;
+      if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
+        LOG_WARN("wait all batch result failed", KR(ret), KR(tmp_ret));
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
+      }
+      if (FAILEDx(proxy.check_return_cnt(return_code_array.count()))) {
+        LOG_WARN("fail to check return cnt", KR(ret), "return_cnt", return_code_array.count());
+      }
+      ARRAY_FOREACH_X(proxy.get_results(), idx, cnt, OB_SUCC(ret)) {
+        const obrpc::ObBatchDetectSessionAliveResult *result = proxy.get_results().at(idx);
+        const ObAddr &dest_addr = proxy.get_dests().at(idx);
+        tmp_ret = return_code_array.at(idx);
+        if (OB_SUCCESS != tmp_ret) {
+          LOG_WARN("fail to send rpc to detect alive session", KR(ret), KR(tmp_ret), K(dest_addr),
+                                                               K(session_id_array), K(idx));
+          break;
+        } else if (OB_ISNULL(result)) {
+          tmp_ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("result is null", KR(ret), KR(tmp_ret), KP(result));
+        } else if (result->is_valid()) {
+          const common::ObSArray<bool> &session_alive_array_result = result->session_alive_array_;
+          for (int64_t i = 0; i < session_alive_array_result.count(); i++) {
+            session_alive_array.at(i) |= session_alive_array_result.at(i);
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableLockDetectFuncList::batch_detect_session_alive_for_rpc(const obrpc::ObBatchDetectSessionAliveArg &arg,
+      obrpc::ObBatchDetectSessionAliveResult &result)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(result.init(arg.session_id_array_.count()))) {
+    LOG_WARN("fail to init result", KR(ret), K(arg));
+  } else {
+    ObBatchSessionAliveCheckerAtLeastOne checker(&arg.session_id_array_, &result.session_alive_array_);
+    sql::ObSQLSessionMgr *session_mgr = GCTX.session_mgr_;
+    if (OB_ISNULL(session_mgr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("there's no session mgr in GCTX", KR(ret));
+    } else if (OB_FAIL(session_mgr->for_each_session(checker))) {
+      LOG_WARN("batch check session alive failed", KR(ret), K(arg));
+    }
+  }
+  return ret;
+}
+
 int ObTableLockDetectFuncList::do_session_alive_detect()
 {
   int ret = OB_SUCCESS;
@@ -1669,6 +1764,26 @@ bool ObTableLockDetector::is_unlock_task_(const ObTableLockTaskType &task_type)
 {
   return (UNLOCK_TABLE == task_type || UNLOCK_PARTITION == task_type || UNLOCK_SUBPARTITION == task_type
           || UNLOCK_TABLET == task_type || UNLOCK_OBJECT == task_type || UNLOCK_ALONE_TABLET == task_type);
+}
+
+bool ObBatchSessionAliveCheckerAtLeastOne::operator()(sql::ObSQLSessionMgr::Key &key, sql::ObSQLSessionInfo *sess_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(sess_info) || OB_ISNULL(GCTX.session_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null pointer", KR(ret), KP(sess_info), KP(GCTX.session_mgr_));
+  } else if (!is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid pointer", KR(ret), KP(session_id_array_), KP(session_alive_array_));
+  } else {
+    uint32_t session_id = sess_info->get_sessid_for_table();
+    for (int64_t i = 0; i < session_id_array_->count(); i++) {
+      if (session_id_array_->at(i) == session_id) {
+        session_alive_array_->at(i) = true;
+      }
+    }
+  }
+  return OB_SUCCESS == ret;
 }
 
 bool ObSessionAliveChecker::operator()(sql::ObSQLSessionMgr::Key key, sql::ObSQLSessionInfo *sess_info)

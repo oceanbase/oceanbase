@@ -19,6 +19,9 @@
 
 #include "share/schema/ob_column_schema.h"
 #include "share/schema/ob_table_param.h"
+#include "storage/tablet/ob_tablet_to_global_temporary_table_operator.h"
+#include "storage/tablet/ob_session_tablet_info_map.h"
+#include "share/ob_server_struct.h"
 
 #define DEFINE_DESERIALIZE_DATA_DICT(TypeName) \
   int TypeName::deserialize(const ObDictMetaHeader &header, const char* buf, const int64_t data_len, int64_t& pos)
@@ -1093,9 +1096,31 @@ int ObDictTableMeta::init(const schema::ObTableSchema &table_schema)
       if (OB_FAIL(table_schema.get_tablet_ids(tablet_id_arr_))) {
         LOG_WARN("get_tablet_ids failed", KR(ret), KPC(this));
       }
+    } else if (table_schema.is_oracle_tmp_table_v2() || table_schema.is_oracle_tmp_table_v2_index_table()) {
+      const uint64_t tenant_id = table_schema.get_tenant_id();
+      const uint64_t table_id = table_schema.get_table_id();
+      ObArray<common::ObTableID> table_ids;
+      ObArray<storage::ObSessionTabletInfo> session_tablet_infos;
+      if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid table_id to get_session_tablet_ids_by_table_id", KR(ret), K(table_id));
+      } else if (OB_FAIL(table_ids.push_back(table_id))) {
+        LOG_WARN("push_back table_id failed", KR(ret), K(tenant_id), K(table_id));
+      } else if (OB_FAIL(share::ObTabletToGlobalTmpTableOperator::batch_get_by_table_ids(*GCTX.sql_proxy_,
+                                                                                         tenant_id,
+                                                                                         table_ids,
+                                                                                         session_tablet_infos))) {
+        LOG_WARN("batch_get_by_table_ids failed", KR(ret), K(tenant_id), K(table_ids), K(session_tablet_infos));
+      } else {
+        ARRAY_FOREACH(session_tablet_infos, idx) {
+          const common::ObTabletID &tablet_id = session_tablet_infos.at(idx).get_tablet_id();
+          if (OB_FAIL(tablet_id_arr_.push_back(tablet_id))) {
+            LOG_WARN("push_back tablet_id failed", KR(ret), K(tenant_id), K(table_id), K(idx), K(tablet_id));
+          }
+        }
+      }
     }
   }
-
   return ret;
 }
 

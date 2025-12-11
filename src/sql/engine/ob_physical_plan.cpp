@@ -142,7 +142,8 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     px_node_count_(ObPxNodeHint::UNSET_PX_NODE_COUNT),
     px_worker_share_plan_enabled_(false),
     extend_sql_plan_monitor_metrics_(false),
-    optimizer_features_enable_version_(0)
+    optimizer_features_enable_version_(0),
+    is_gtt_temp_table_v2_(false)
 {
 }
 
@@ -190,6 +191,7 @@ void ObPhysicalPlan::reset()
   contain_table_scan_ = false;
   has_nested_sql_ = false;
   session_id_ = 0;
+  is_gtt_temp_table_v2_ = false;
   contain_oracle_trx_level_temporary_table_ = false;
   contain_oracle_session_level_temporary_table_ = false;
   gtt_session_scope_ids_.reset();

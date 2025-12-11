@@ -46,6 +46,7 @@
 #include "sql/ob_optimizer_trace_impl.h"
 #include "sql/monitor/flt/ob_flt_span_mgr.h"
 #include "storage/tx/ob_tx_free_route.h"
+#include "storage/tablet/ob_session_tablet_info_map.h"
 #include "share/ob_service_name_proxy.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
 #include "sql/plan_cache/ob_plan_cache_util.h"
@@ -1015,10 +1016,17 @@ public:
                        const bool is_reset_connection = false);
   void refresh_temp_tables_sess_active_time(); //更新临时表的sess active time
   int delete_from_oracle_temp_tables(const obrpc::ObDropTableArg &const_drop_table_arg);
+  int delete_from_oracle_temp_table_v2(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const share::schema::ObTableSchema &table_schema,
+      const int64_t sequence,
+      const uint32_t session_id,
+      const bool is_index_table);
 
   //To generate an unique key for Oracle Global Temporary Table
   int64_t get_gtt_session_scope_unique_id() const { return gtt_session_scope_unique_id_; }
   int64_t get_gtt_trans_scope_unique_id() const { return gtt_trans_scope_unique_id_; }
+  storage::ObSessionTabletInfoMap &get_gtt_tablet_info_map() { return gtt_tablet_info_map_; }
   void gen_gtt_session_scope_unique_id();
   void gen_gtt_trans_scope_unique_id();
   common::ObIArray<uint64_t> &get_gtt_session_scope_ids() { return gtt_session_scope_ids_; }
@@ -2064,6 +2072,8 @@ private:
   //unique key: obs_id(16bit) + timestamp(48bit)
   int64_t gtt_session_scope_unique_id_;
   int64_t gtt_trans_scope_unique_id_;
+  //For Oracle Global Temporary Table, storing tablet info map for each session or transaction
+  storage::ObSessionTabletInfoMap gtt_tablet_info_map_;
   //storing table ids of accessed gtts in the session
   common::ObSEArray<uint64_t, 1> gtt_session_scope_ids_;
   common::ObSEArray<uint64_t, 1> gtt_trans_scope_ids_;

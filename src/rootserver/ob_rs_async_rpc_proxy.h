@@ -64,6 +64,7 @@ RPC_F(obrpc::OB_SET_MEMBER_LIST, obrpc::ObSetMemberListArgV2, obrpc::ObSetMember
 RPC_F(obrpc::OB_BATCH_BROADCAST_SCHEMA, obrpc::ObBatchBroadcastSchemaArg, obrpc::ObBatchBroadcastSchemaResult, ObBatchBroadcastSchemaProxy);
 RPC_F(obrpc::OB_DROP_TABLET, obrpc::ObBatchRemoveTabletArg, obrpc::ObRemoveTabletRes, ObTabletDropProxy);
 RPC_F(obrpc::OB_SWITCH_SCHEMA, obrpc::ObSwitchSchemaArg, obrpc::ObSwitchSchemaResult, ObSwitchSchemaProxy);
+RPC_F(obrpc::OB_BATCH_DETECT_SESSION_ALIVE, obrpc::ObBatchDetectSessionAliveArg, obrpc::ObBatchDetectSessionAliveResult, ObBatchDetectSessionAliveProxy);
 RPC_F(obrpc::OB_DETECT_CLIENT_SESSION_ALIVE, obrpc::UInt64, obrpc::Bool, ObDetectClientSessionAliveProxy);
 RPC_F(obrpc::OB_GET_LS_ACCESS_MODE, obrpc::ObGetLSAccessModeInfoArg, obrpc::ObLSAccessModeInfo, ObGetLSAccessModeProxy);
 RPC_F(obrpc::OB_CHANGE_LS_ACCESS_MODE, obrpc::ObLSAccessModeInfo, obrpc::ObChangeLSAccessModeRes, ObChangeLSAccessModeProxy);

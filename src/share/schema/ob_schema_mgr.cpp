@@ -2979,7 +2979,7 @@ int ObSchemaMgr::add_table(
           }
         }
       }
-      if (OB_SUCC(ret) && (new_table_schema->is_table() || new_table_schema->is_oracle_tmp_table())) {
+      if (OB_SUCC(ret) && (new_table_schema->is_table() || new_table_schema->is_oracle_tmp_table() || new_table_schema->is_oracle_tmp_table_v2())) {
         // In mysql mode, check constraints in non-temporary tables don't share namespace with constraints in temporary tables
         if (NULL != replaced_table) {
           if (!replaced_table->is_user_hidden_table()

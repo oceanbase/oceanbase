@@ -154,6 +154,7 @@ private:
   common::hash::ObPlacementHashSet<share::schema::ObColumnNameHashWrapper, common::OB_MAX_COLUMN_NUMBER> column_name_set_;
   bool if_not_exist_;
   bool is_oracle_temp_table_; //是否创建oracle的临时表
+  bool is_old_oracle_temp_table_;
   bool is_temp_table_pk_added_;
   obrpc::ObCreateIndexArg index_arg_;
   IndexNameSet current_index_name_set_;

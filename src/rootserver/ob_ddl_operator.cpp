@@ -1756,7 +1756,7 @@ int ObDDLOperator::create_sequence_in_create_table(ObTableSchema &table_schema,
                                                    const obrpc::ObSequenceDDLArg *sequence_ddl_arg)
 {
   int ret = OB_SUCCESS;
-  if (!(table_schema.is_user_table() || table_schema.is_oracle_tmp_table())) {
+  if (!(table_schema.is_user_table() || table_schema.is_oracle_tmp_table() || table_schema.is_oracle_tmp_table_v2())) {
     // do nothing
   } else {
     for (ObTableSchema::const_column_iterator iter = table_schema.column_begin();
@@ -1857,7 +1857,7 @@ int ObDDLOperator::drop_sequence_in_drop_table(const ObTableSchema &table_schema
                                                share::schema::ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
-  if (table_schema.is_user_table() || table_schema.is_oracle_tmp_table()) {
+  if (table_schema.is_user_table() || table_schema.is_oracle_tmp_table() || table_schema.is_oracle_tmp_table_v2()) {
     for (ObTableSchema::const_column_iterator iter = table_schema.column_begin();
          OB_SUCC(ret) && iter != table_schema.column_end(); ++iter) {
       ObColumnSchemaV2 &column_schema = (**iter);
@@ -5269,6 +5269,8 @@ int ObDDLOperator::drop_tablet_of_table(
     ObSEArray<const ObTableSchema*, 1> schemas;
     if (table_schema.is_vir_table()
         || table_schema.is_view_table()
+        || table_schema.is_oracle_tmp_table_v2()
+        || table_schema.is_oracle_tmp_table_v2_index_table()
         || is_inner_table(table_schema.get_table_id())) {
       // skip
     } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
@@ -5322,7 +5324,8 @@ int ObDDLOperator::drop_table(
 
   if (OB_FAIL(ret)) {
   } else if ((table_schema.is_aux_table() || table_schema.is_mlog_table())
-      && !is_inner_table(table_schema.get_table_id())) {
+      && !is_inner_table(table_schema.get_table_id())
+      && !table_schema.is_oracle_tmp_table_v2_index_table()) {
     ObSnapshotInfoManager snapshot_mgr;
     ObArray<ObTabletID> tablet_ids;
     SCN invalid_scn;

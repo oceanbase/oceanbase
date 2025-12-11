@@ -2356,6 +2356,7 @@ case OB_ALL_VIRTUAL_TABLE_STAT_HISTORY_TID:
 case OB_ALL_VIRTUAL_TABLEGROUP_TID:
 case OB_ALL_VIRTUAL_TABLEGROUP_HISTORY_TID:
 case OB_ALL_VIRTUAL_TABLET_REORGANIZE_HISTORY_TID:
+case OB_ALL_VIRTUAL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_TID:
 case OB_ALL_VIRTUAL_TABLET_TO_LS_TID:
 case OB_ALL_VIRTUAL_TABLET_TO_TABLE_HISTORY_TID:
 case OB_ALL_VIRTUAL_TEMP_TABLE_TID:
@@ -4831,6 +4832,21 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
   END_CREATE_VT_ITER_SWITCH_LAMBDA
 
   BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
+    case OB_ALL_VIRTUAL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_TID: {
+      ObIterateVirtualTable *iter = NULL;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_TID, index_schema, params))) {
+        SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
+        iter->~ObIterateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
     case OB_ALL_VIRTUAL_TABLET_TO_LS_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -5115,7 +5131,9 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_TENANT_PROFILE_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -5130,9 +5148,7 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_TENANT_PROFILE_HISTORY_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -5417,7 +5433,9 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_TRIGGER_HISTORY_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -5432,9 +5450,7 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_TYPE_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -6058,6 +6074,8 @@ case OB_ALL_TENANT_OBJAUTH_MYSQL_IDX_OBJAUTH_MYSQL_OBJ_NAME_TID:
 case OB_ALL_EXTERNAL_RESOURCE_IDX_NAME_DBID_EXTERNAL_RESOURCE_TID:
 case OB_ALL_AI_MODEL_ENDPOINT_IDX_ENDPOINT_NAME_TID:
 case OB_ALL_AI_MODEL_ENDPOINT_IDX_AI_MODEL_NAME_TID:
+case OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_IDX_TEMP_TABLE_ID_SESSION_ID_TID:
+case OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_IDX_TEMP_SESSION_ID_TABLE_ID_TID:
 case OB_ALL_TABLET_REORGANIZE_HISTORY_IDX_TABLET_HIS_TABLE_ID_DEST_TID:
 
 #endif
@@ -6106,6 +6124,7 @@ case OB_ALL_LOG_ARCHIVE_PIECE_FILES_TID:
 case OB_ALL_TENANT_DEPENDENCY_TID:
 case OB_ALL_CCL_RULE_TID:
 case OB_ALL_ROUTINE_TID:
+case OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_TID:
 case OB_ALL_CONSTRAINT_TID:
 case OB_ALL_SYNONYM_TID:
 case OB_ALL_PKG_TYPE_TID:
@@ -6466,6 +6485,15 @@ case OB_ALL_ROUTINE_TID: {
     LOG_WARN("fail to push back index tid", KR(ret));
   }
   if (FAILEDx(index_tids.push_back(OB_ALL_ROUTINE_IDX_ROUTINE_PKG_ID_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_IDX_TEMP_TABLE_ID_SESSION_ID_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  if (FAILEDx(index_tids.push_back(OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_IDX_TEMP_SESSION_ID_TABLE_ID_TID))) {
     LOG_WARN("fail to push back index tid", KR(ret));
   }
   break;
@@ -7313,6 +7341,21 @@ case OB_ALL_ROUTINE_TID: {
   }
   break;
 }
+case OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_tablet_to_global_temporary_table_idx_temp_table_id_session_id_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_tablet_to_global_temporary_table_idx_temp_session_id_table_id_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
 case OB_ALL_CONSTRAINT_TID: {
   index_schema.reset();
   if (FAILEDx(ObInnerTableSchema::all_constraint_idx_cst_name_schema(index_schema))) {
@@ -8108,6 +8151,10 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     LOG_WARN("add index id failed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(table_ids.push_back(OB_ALL_AI_MODEL_ENDPOINT_IDX_AI_MODEL_NAME_TID))) {
     LOG_WARN("add index id failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(table_ids.push_back(OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_IDX_TEMP_TABLE_ID_SESSION_ID_TID))) {
+    LOG_WARN("add index id failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(table_ids.push_back(OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_IDX_TEMP_SESSION_ID_TABLE_ID_TID))) {
+    LOG_WARN("add index id failed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(table_ids.push_back(OB_ALL_TABLET_REORGANIZE_HISTORY_IDX_TABLET_HIS_TABLE_ID_DEST_TID))) {
     LOG_WARN("add index id failed", KR(ret), K(tenant_id));
 
@@ -8470,6 +8517,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_AI_MODEL_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_AI_MODEL_HISTORY_SCHEMA_VERSION); break;
     case OB_ALL_AI_MODEL_ENDPOINT_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_AI_MODEL_ENDPOINT_SCHEMA_VERSION); break;
     case OB_WR_ACTIVE_SESSION_HISTORY_V2_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_WR_ACTIVE_SESSION_HISTORY_V2_SCHEMA_VERSION); break;
+    case OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_SCHEMA_VERSION); break;
     case OB_WR_SQLSTAT_V2_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_WR_SQLSTAT_V2_SCHEMA_VERSION); break;
     case OB_TENANT_VIRTUAL_ALL_TABLE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_TENANT_VIRTUAL_ALL_TABLE_SCHEMA_VERSION); break;
     case OB_TENANT_VIRTUAL_TABLE_COLUMN_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_TENANT_VIRTUAL_TABLE_COLUMN_SCHEMA_VERSION); break;
@@ -9033,6 +9081,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_VIRTUAL_AI_MODEL_ENDPOINT_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_AI_MODEL_ENDPOINT_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_SS_OBJECT_TYPE_IO_STAT_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SS_OBJECT_TYPE_IO_STAT_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY_V2_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY_V2_SCHEMA_VERSION); break;
+    case OB_ALL_VIRTUAL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_WR_SQLSTAT_V2_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_WR_SQLSTAT_V2_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SQL_AUDIT_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_IDX_15009_ALL_VIRTUAL_SQL_AUDIT_I1_ORACLE_SCHEMA_VERSION); break;
@@ -10620,6 +10669,8 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_EXTERNAL_RESOURCE_IDX_NAME_DBID_EXTERNAL_RESOURCE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_IDX_554_IDX_NAME_DBID_EXTERNAL_RESOURCE_SCHEMA_VERSION); break;
     case OB_ALL_AI_MODEL_ENDPOINT_IDX_ENDPOINT_NAME_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_IDX_572_IDX_ENDPOINT_NAME_SCHEMA_VERSION); break;
     case OB_ALL_AI_MODEL_ENDPOINT_IDX_AI_MODEL_NAME_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_IDX_572_IDX_AI_MODEL_NAME_SCHEMA_VERSION); break;
+    case OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_IDX_TEMP_TABLE_ID_SESSION_ID_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_IDX_577_IDX_TEMP_TABLE_ID_SESSION_ID_SCHEMA_VERSION); break;
+    case OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_IDX_TEMP_SESSION_ID_TABLE_ID_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_IDX_577_IDX_TEMP_SESSION_ID_TABLE_ID_SCHEMA_VERSION); break;
     case OB_ALL_TABLET_REORGANIZE_HISTORY_IDX_TABLET_HIS_TABLE_ID_DEST_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_IDX_482_IDX_TABLET_HIS_TABLE_ID_DEST_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_DATA_TABLE_ID_REAL_AGENT_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_IDX_15120_IDX_DATA_TABLE_ID_REAL_AGENT_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_DB_TB_NAME_REAL_AGENT_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_IDX_15120_IDX_DB_TB_NAME_REAL_AGENT_ORACLE_SCHEMA_VERSION); break;
@@ -11062,6 +11113,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_AI_MODEL_HISTORY_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_AI_MODEL_HISTORY_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_AI_MODEL_ENDPOINT_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_AI_MODEL_ENDPOINT_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_WR_ACTIVE_SESSION_HISTORY_V2_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_WR_ACTIVE_SESSION_HISTORY_V2_AUX_LOB_META_SCHEMA_VERSION); break;
+    case OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_WR_SQLSTAT_V2_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_WR_SQLSTAT_V2_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_TABLE_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TABLE_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_COLUMN_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_COLUMN_AUX_LOB_PIECE_SCHEMA_VERSION); break;
@@ -11418,6 +11470,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_AI_MODEL_HISTORY_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_AI_MODEL_HISTORY_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_AI_MODEL_ENDPOINT_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_AI_MODEL_ENDPOINT_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_WR_ACTIVE_SESSION_HISTORY_V2_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_WR_ACTIVE_SESSION_HISTORY_V2_AUX_LOB_PIECE_SCHEMA_VERSION); break;
+    case OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_WR_SQLSTAT_V2_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_WR_SQLSTAT_V2_AUX_LOB_PIECE_SCHEMA_VERSION); break;
 
 #endif // INNER_TABLE_HARD_CODE_SCHEMA_MAPPING_SWITCH

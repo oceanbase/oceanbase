@@ -239,6 +239,15 @@ int ObDASTabletMapper::get_tablet_and_object_id(
           tmp_part_ids.push_back(partition->get_object_id());
         }
       }
+    } else if (table_schema_->is_oracle_tmp_table_v2() || table_schema_->is_oracle_tmp_table_v2_index_table()) {
+      common::ObTabletID tablet_id;
+      if (OB_FAIL(get_tablet_id_for_temp_table(*table_schema_, related_info_ptr, tablet_id))) {
+        LOG_WARN("fail to get tablet id for temp table", KR(ret), KPC(table_schema_));
+      } else if (OB_FAIL(tmp_tablet_ids.push_back(tablet_id))) {
+        LOG_WARN("fail to push back tablet_id", KR(ret));
+      } else if (OB_FAIL(tmp_part_ids.push_back(table_schema_->get_object_id()))) {
+        LOG_WARN("fail to push back object_id", KR(ret));
+      }
     } else if (PARTITION_LEVEL_ZERO == part_level) {
       ObTabletID tablet_id;
       ObObjectID object_id;
@@ -850,6 +859,77 @@ int ObDASTabletMapper::get_partition_id_map(ObObjectID partition_id,
   return ret;
 }
 
+int ObDASTabletMapper::get_tablet_id_for_temp_table(
+    const share::schema::ObTableSchema &table_schema,
+    share::schema::RelatedTableInfo *related_info_ptr,
+    common::ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  const share::schema::ObTableSchema *data_table_schema = table_schema.is_oracle_tmp_table_v2() ? &table_schema : nullptr;
+  share::schema::ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
+  share::schema::ObSchemaGetterGuard schema_guard;
+  if (OB_ISNULL(sess_tablet_info_map_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("gtt_tablet_info_map_ is null", KR(ret));
+  } else if (OB_ISNULL(schema_service) || OB_ISNULL(schema_service->get_schema_service())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is null", KR(ret), KP(schema_service));
+  } else if (OB_FAIL(schema_service->get_tenant_schema_guard(table_schema.get_tenant_id(), schema_guard))) {
+    LOG_WARN("get tenant schema guard fail", KR(ret), K(table_schema.get_tenant_id()));
+  } else if (table_schema.is_oracle_tmp_table_v2_index_table() && OB_FAIL(schema_guard.get_table_schema(
+                                                                                       table_schema.get_tenant_id(),
+                                                                                       table_schema.get_data_table_id(),
+                                                                                       data_table_schema))) {
+    LOG_WARN("get data table schema fail", KR(ret), K(table_schema));
+  } else if (OB_ISNULL(data_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("data table schema is null", KR(ret), K(table_schema));
+  } else {
+    const bool is_trx_tmp_table = data_table_schema->is_oracle_trx_tmp_table_v2();
+    const int64_t sequence = is_trx_tmp_table ? gtt_tablet_info_.gtt_trans_scope_unique_id_
+                                              : gtt_tablet_info_.gtt_session_scope_unique_id_;
+    const ObSessionTabletInfoKey info_key(gtt_tablet_info_.table_id_, sequence, gtt_tablet_info_.session_id_);
+    ObSessionTabletInfo tablet_info;
+    if (OB_SUCC(sess_tablet_info_map_->get_session_tablet(info_key, tablet_info))) {
+      tablet_id = tablet_info.tablet_id_;
+    } else if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("fail to get session tablet info", KR(ret), K(info_key));
+    } else {
+      const bool has_lob_column = table_schema.is_oracle_tmp_table_v2_index_table() ? false : data_table_schema->has_lob_column(true/*ignore unused column*/);
+      ObSArray<uint64_t> table_ids;
+      if (OB_FAIL(table_ids.push_back(gtt_tablet_info_.table_id_))) {
+        LOG_WARN("fail to push back session tablet key", KR(ret), K(info_key));
+      } else if (has_lob_column && OB_FAIL(table_ids.push_back(data_table_schema->get_aux_lob_meta_tid()))) {
+        LOG_WARN("fail to push back session tablet key", KR(ret), K(data_table_schema->get_aux_lob_meta_tid()));
+      } else if (has_lob_column && OB_FAIL(table_ids.push_back(data_table_schema->get_aux_lob_piece_tid()))) {
+        LOG_WARN("fail to push back session tablet key", KR(ret), K(data_table_schema->get_aux_lob_piece_tid()));
+      } else if (OB_FAIL(sess_tablet_info_map_->add_session_tablet(table_ids, sequence, gtt_tablet_info_.session_id_))) {
+        LOG_WARN("fail to add session tablet", KR(ret), K(table_ids));
+      } else if (OB_FAIL(sess_tablet_info_map_->get_session_tablet(info_key, tablet_info))) {
+        LOG_WARN("fail to get session tablet", KR(ret), K(info_key));
+      } else {
+        tablet_id = tablet_info.tablet_id_;
+      }
+    }
+    if (OB_SUCC(ret) && OB_NOT_NULL(related_info_ptr)) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < related_info_ptr->related_tids_->count(); ++i) {
+        const ObTableID &related_table_id = related_info_ptr->related_tids_->at(i);
+        const ObSessionTabletInfoKey related_info_key(related_table_id, sequence, gtt_tablet_info_.session_id_);
+        ObSessionTabletInfo related_tablet_info;
+        if (OB_FAIL(sess_tablet_info_map_->get_session_tablet_if_not_exist_add(related_info_key, related_tablet_info))) {
+          LOG_WARN("fail to get related session tablet info", KR(ret), K(related_info_key));
+        } else if (OB_FAIL(related_info_ptr->related_map_->add_related_tablet_id(tablet_info.tablet_id_,
+                                                                               related_table_id,
+                                                                               related_tablet_info.tablet_id_,
+                                                                               related_tablet_info.table_id_,
+                                                                               OB_INVALID_ID))) {
+          LOG_WARN("fail to add related tablet info", KR(ret), K(tablet_info), K(related_table_id), K(related_tablet_info));
+        }
+      }
+    }
+  }
+  return ret;
+}
 
 ObDASLocationRouter::ObDASLocationRouter(ObIAllocator &allocator)
   : last_errno_(OB_SUCCESS),

@@ -1254,7 +1254,7 @@ int ObDropTableHelper::calc_schema_version_cnt_for_sequence_(
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else {
-    if (table_schema.is_user_table() || table_schema.is_oracle_tmp_table()) {
+    if (table_schema.is_user_table() || table_schema.is_oracle_tmp_table() || table_schema.is_oracle_tmp_table_v2()) {
       for (ObTableSchema::const_column_iterator iter = table_schema.column_begin();
            OB_SUCC(ret) && iter != table_schema.column_end(); ++iter) {
         ObColumnSchemaV2 &column_schema = (**iter);
@@ -1374,7 +1374,7 @@ int ObDropTableHelper::lock_sequences_by_id_(const ObTableSchema &table_schema)
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (table_schema.is_user_table() || table_schema.is_oracle_tmp_table()) {
+  } else if (table_schema.is_user_table() || table_schema.is_oracle_tmp_table() || table_schema.is_oracle_tmp_table_v2()) {
     for (ObTableSchema::const_column_iterator iter = table_schema.column_begin();
         OB_SUCC(ret) && iter != table_schema.column_end(); ++iter) {
       ObColumnSchemaV2 &column_schema = (**iter);
@@ -1605,7 +1605,7 @@ int ObDropTableHelper::drop_table_(const ObTableSchema &table_schema, const ObSt
     }
 
     if (OB_SUCC(ret)) {
-      if (table_schema.is_aux_table() && !is_inner_table(table_schema.get_table_id())) {
+      if (table_schema.is_aux_table() && !is_inner_table(table_schema.get_table_id()) && !table_schema.is_oracle_tmp_table_v2_index_table()) {
         ObSnapshotInfoManager snapshot_mgr;
         ObArray<ObTabletID> tablet_ids;
         SCN invalid_scn;
@@ -1856,7 +1856,7 @@ int ObDropTableHelper::drop_sequences_(const ObTableSchema &table_schema)
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (table_schema.is_user_table() || table_schema.is_oracle_tmp_table()) {
+  } else if (table_schema.is_user_table() || table_schema.is_oracle_tmp_table() || table_schema.is_oracle_tmp_table_v2()) {
     for (ObTableSchema::const_column_iterator iter = table_schema.column_begin(); OB_SUCC(ret) && iter != table_schema.column_end(); ++iter) {
       ObColumnSchemaV2 &column_schema = (**iter);
       if (OB_FAIL(drop_sequence_(column_schema))) {

@@ -1157,12 +1157,15 @@ public:
   inline bool is_vir_table() const { return share::schema::ObTableType::VIRTUAL_TABLE == table_type_; }
   inline bool is_view_table() const { return share::schema::is_view_table(table_type_); }
   inline bool is_index_table()  const { return share::schema::is_index_table(table_type_); }
-  inline bool is_tmp_table() const { return is_mysql_tmp_table() || share::schema::ObTableType::TMP_TABLE_ORA_SESS == table_type_ || share::schema::ObTableType::TMP_TABLE_ORA_TRX == table_type_; }
+  inline bool is_tmp_table() const { return is_mysql_tmp_table() || is_oracle_tmp_table() || is_oracle_tmp_table_v2(); }
   inline bool is_ctas_tmp_table() const { return 0 != session_id_ && !is_tmp_table(); }
   inline bool is_mysql_tmp_table() const { return share::schema::is_mysql_tmp_table(table_type_); }
   inline bool is_oracle_tmp_table() const { return share::schema::ObTableType::TMP_TABLE_ORA_SESS == table_type_ || share::schema::ObTableType::TMP_TABLE_ORA_TRX == table_type_; }
+  inline bool is_oracle_tmp_table_v2() const { return share::schema::ObTableType::TMP_TABLE_ORA_SESS_V2 == table_type_ || share::schema::ObTableType::TMP_TABLE_ORA_TRX_V2 == table_type_; }
   inline bool is_oracle_sess_tmp_table() const { return share::schema::ObTableType::TMP_TABLE_ORA_SESS == table_type_; }
+  inline bool is_oracle_sess_tmp_table_v2() const { return share::schema::ObTableType::TMP_TABLE_ORA_SESS_V2 == table_type_; }
   inline bool is_oracle_trx_tmp_table() const { return share::schema::ObTableType::TMP_TABLE_ORA_TRX == table_type_; }
+  inline bool is_oracle_trx_tmp_table_v2() const { return share::schema::ObTableType::TMP_TABLE_ORA_TRX_V2 == table_type_; }
   virtual inline bool is_aux_vp_table() const override { return share::schema::ObTableType::AUX_VERTIAL_PARTITION_TABLE == table_type_; }
   inline bool is_aux_lob_piece_table() const { return share::schema::is_aux_lob_piece_table(table_type_); }
   inline bool is_aux_lob_meta_table() const { return share::schema::is_aux_lob_meta_table(table_type_); }
@@ -1334,6 +1337,7 @@ public:
     with_dynamic_partition_policy_ = with_dynamic_partition_policy;
   }
   virtual inline bool with_dynamic_partition_policy() const { return with_dynamic_partition_policy_; }
+  virtual bool is_oracle_tmp_table_v2_index_table() const { return false; }
 
   DECLARE_VIRTUAL_TO_STRING;
 protected:
@@ -1717,6 +1721,8 @@ public:
   bool is_external_table_immediate_refresh() const { return get_external_table_auto_refresh() == 1; }
   bool is_external_table_interval_refresh() const { return get_external_table_auto_refresh() == 2; }
   bool is_external_table_auto_refresh_off() const { return get_external_table_auto_refresh() == 0; }
+  virtual bool is_oracle_tmp_table_v2_index_table() const override { return (table_flags_ & ORCL_TEMP_TABLE_V2_INDEX_TABLE_FLAG) != 0; }
+  void set_oracle_tmp_table_v2_index_table() { table_flags_ |= ORCL_TEMP_TABLE_V2_INDEX_TABLE_FLAG; }
   inline void set_name_generated_type(const ObNameGeneratedType is_sys_generated) {
     name_generated_type_ = is_sys_generated;
   }

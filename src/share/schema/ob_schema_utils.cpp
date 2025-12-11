@@ -426,6 +426,8 @@ bool ObSchemaUtils::is_support_parallel_drop(const ObTableType table_type)
          || TMP_TABLE == table_type
          || TMP_TABLE_ORA_SESS == table_type
          || TMP_TABLE_ORA_TRX == table_type
+         || TMP_TABLE_ORA_TRX_V2 == table_type
+         || TMP_TABLE_ORA_SESS_V2 == table_type
          || EXTERNAL_TABLE == table_type;
 }
 

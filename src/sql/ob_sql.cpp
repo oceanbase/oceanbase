@@ -4204,7 +4204,7 @@ int ObSql::code_generate(
           break;
         }
       }
-      if (OB_SUCC(ret) && !skip_non_partition_optimized) {
+      if (OB_SUCC(ret) && !skip_non_partition_optimized && !phy_plan->is_gtt_temp_table_v2()) {
         for (int64_t i = 0; OB_SUCC(ret) && i < tbl_part_infos.count(); i++) {
           ObTableLocation &tl = tbl_part_infos.at(i)->get_table_location();
           if (OB_FAIL(tl.calc_not_partitioned_table_ids(result.get_exec_context()))) {

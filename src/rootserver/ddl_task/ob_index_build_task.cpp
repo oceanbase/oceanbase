@@ -783,6 +783,8 @@ int ObIndexBuildTask::hold_snapshot(
     } else if (OB_ISNULL(data_table_schema) || OB_ISNULL(index_table_schema)) {
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("table not exist", K(ret), K(object_id_), K(target_object_id_), KP(data_table_schema), KP(index_table_schema));
+    } else if (data_table_schema->is_oracle_tmp_table_v2() || index_table_schema->is_oracle_tmp_table_v2_index_table()) {
+      LOG_INFO("oracle temporary table v2 has no tablet, skip get tablets", KPC(data_table_schema), KPC(index_table_schema));
     } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, object_id_, tablet_ids))) {
       LOG_WARN("failed to get data table snapshot", K(ret));
     } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, target_object_id_, tablet_ids))) {
@@ -1145,8 +1147,20 @@ int ObIndexBuildTask::wait_data_complement()
     uint64_t src_table_id = object_id_;
     bool dummy_equal = false;
     bool need_verify_checksum = true;
-    if (share::schema::is_fts_index_aux(create_index_arg_.index_type_) ||
-        share::schema::is_fts_doc_word_aux(create_index_arg_.index_type_)) {
+    const ObTableSchema *data_table_schema = nullptr;
+    ObMultiVersionSchemaService &schema_service = *GCTX.schema_service_;
+    share::schema::ObSchemaGetterGuard schema_guard;
+    if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
+      LOG_WARN("get tenant schema guard failed", KR(ret));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema))) {
+      LOG_WARN("get table schema failed", KR(ret), K(object_id_));
+    } else if (OB_ISNULL(data_table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("data table not exist", KR(ret));
+    } else if (share::schema::is_fts_index_aux(create_index_arg_.index_type_)
+               || share::schema::is_fts_doc_word_aux(create_index_arg_.index_type_)
+               || data_table_schema->is_oracle_tmp_table_v2()
+               || data_table_schema->is_oracle_tmp_table_v2_index_table()) {
       need_verify_checksum = false;
     }
 #ifdef ERRSIM
@@ -1156,20 +1170,10 @@ int ObIndexBuildTask::wait_data_complement()
     }
 #endif
     ObArray<int64_t> ignore_col_ids;
-    const ObTableSchema *data_table_schema = nullptr;
-    ObMultiVersionSchemaService &schema_service = *GCTX.schema_service_;
-    share::schema::ObSchemaGetterGuard schema_guard;
     uint64_t doc_id_col_id = OB_INVALID_ID;
     if (share::schema::is_rowkey_doc_aux(create_index_arg_.index_type_) ||
         share::schema::is_doc_rowkey_aux(create_index_arg_.index_type_)) {
-      if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
-        LOG_WARN("get tenant schema guard failed", KR(ret));
-      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema))) {
-        LOG_WARN("get table schema failed", KR(ret), K(object_id_));
-      } else if (OB_ISNULL(data_table_schema)) {
-        ret = OB_TABLE_NOT_EXIST;
-        LOG_WARN("data table not exist", KR(ret));
-      } else if (OB_FAIL(ObFtsIndexBuilderUtil::get_doc_id_column_id(data_table_schema, doc_id_col_id))) {
+      if (FAILEDx(ObFtsIndexBuilderUtil::get_doc_id_column_id(data_table_schema, doc_id_col_id))) {
         LOG_WARN("failed to get doc id column id", KR(ret));
       } else if (doc_id_col_id != OB_INVALID &&
                 OB_FAIL(ignore_col_ids.push_back(doc_id_col_id))) {

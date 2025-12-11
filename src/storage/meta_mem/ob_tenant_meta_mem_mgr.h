@@ -440,6 +440,15 @@ private:
   private:
     ObTenantMetaMemMgr *t3m_;
   };
+  class SessionTabletGCTask : public common::ObTimerTask
+  {
+  public:
+    explicit SessionTabletGCTask(): compat_mode_(lib::Worker::CompatMode::INVALID) {}
+    virtual ~SessionTabletGCTask() = default;
+    virtual void runTimerTask() override;
+  private:
+    lib::Worker::CompatMode compat_mode_;
+  };
   class TableGCTask : public common::ObTimerTask
   {
   public:
@@ -533,6 +542,7 @@ private:
   static const int64_t HOLD_LIMIT = 8 * 1024L * 1024L;
   static const int64_t TABLE_GC_INTERVAL_US = 20 * 1000L; // 20ms
   static const int64_t REFRESH_CONFIG_INTERVAL_US = 10 * 1000 * 1000L; // 10s
+  static const int64_t SESSION_TABLET_GC_INTERVAL_US = 60 * 1000 * 1000L; // 60s
   static const int64_t ONE_ROUND_RECYCLE_COUNT_THRESHOLD = 20000L;
   static const int64_t ONE_ROUND_TABLET_GC_COUNT_THRESHOLD = 200L;
   static const int64_t BATCH_MEMTABLE_GC_THRESHOLD = 100L;
@@ -600,6 +610,7 @@ private:
   TableGCTask table_gc_task_;
   RefreshConfigTask refresh_config_task_;
   TabletGCTask tablet_gc_task_;
+  SessionTabletGCTask session_tablet_gc_task_;
   TabletGCQueue tablet_gc_queue_;
   common::ObLinkQueue free_tables_queue_;
   common::ObSpinLock gc_queue_lock_;
