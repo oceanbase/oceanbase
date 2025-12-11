@@ -264,6 +264,7 @@ int ObTableLoadRedefTable::abort(const ObTableLoadRedefTableAbortArg &arg,
     //pass
   } else {
     const int64_t origin_timeout_ts = THIS_WORKER.get_timeout_ts();
+    ObTableLoadErrorMessageGuard guard;
     ObAbortRedefTableArg abort_redef_table_arg;
     abort_redef_table_arg.task_id_ = arg.task_id_;
     abort_redef_table_arg.tenant_id_ = arg.tenant_id_;
@@ -275,6 +276,33 @@ int ObTableLoadRedefTable::abort(const ObTableLoadRedefTableAbortArg &arg,
     THIS_WORKER.set_timeout_ts(origin_timeout_ts);
   }
   return ret;
+}
+
+ObTableLoadErrorMessageGuard::ObTableLoadErrorMessageGuard()
+  : allocator_("TLD_ErrMessage"),
+    error_code_(OB_SUCCESS),
+    error_message_(nullptr),
+    need_reset_(false)
+{
+  int ret = OB_SUCCESS;
+  ObWarningBuffer *buf = ob_get_tsi_warning_buffer();
+  if (nullptr != buf && buf->get_err_code() != OB_MAX_ERROR_CODE) {
+    if (OB_ISNULL(error_message_ = static_cast<char *>(allocator_.alloc(ObWarningBuffer::WarningItem::STR_LEN)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory", K(ret));
+    } else {
+      error_code_ = buf->get_err_code();
+      MEMCPY(error_message_, buf->get_err_msg(), ObWarningBuffer::WarningItem::STR_LEN);
+      need_reset_ = true;
+    }
+  }
+}
+
+ObTableLoadErrorMessageGuard::~ObTableLoadErrorMessageGuard()
+{
+  if (need_reset_) {
+    FORWARD_USER_ERROR(error_code_, error_message_);
+  }
 }
 
 }  // namespace observer

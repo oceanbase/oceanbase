@@ -107,9 +107,8 @@ void ObDirectLoadSSTableMeta::reset()
  */
 
 ObDirectLoadSSTable::ObDirectLoadSSTable()
-  : allocator_("TLD_SSTable"), is_inited_(false)
+  : is_inited_(false)
 {
-  allocator_.set_tenant_id(MTL_ID());
   fragments_.set_tenant_id(MTL_ID());
   table_type_ = ObDirectLoadTableType::SSTABLE;
 }
@@ -119,10 +118,7 @@ ObDirectLoadSSTable::~ObDirectLoadSSTable() {}
 void ObDirectLoadSSTable::reset()
 {
   meta_.reset();
-  start_key_.reset();
-  end_key_.reset();
   fragments_.reset();
-  allocator_.reset();
   is_inited_ = false;
 }
 
@@ -145,10 +141,6 @@ int ObDirectLoadSSTable::init(ObDirectLoadSSTableCreateParam &param)
       if (OB_UNLIKELY(param.fragments_.empty())) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid args", KR(ret), K(param));
-      } else if (OB_FAIL(param.start_key_.deep_copy(start_key_, allocator_))) {
-        LOG_WARN("fail to deep copy start key", KR(ret));
-      } else if (OB_FAIL(param.end_key_.deep_copy(end_key_, allocator_))) {
-        LOG_WARN("fail to deep copy start key", KR(ret));
       } else if (OB_FAIL(fragments_.assign(param.fragments_))) {
         LOG_WARN("fail to assign fragments", KR(ret));
       }
@@ -170,11 +162,7 @@ int ObDirectLoadSSTable::copy(const ObDirectLoadSSTable &other)
     reset();
     meta_ = other.meta_;
     if (meta_.row_count_ > 0) {
-      if (OB_FAIL(other.start_key_.deep_copy(start_key_, allocator_))) {
-        LOG_WARN("fail to deep copy start key", KR(ret));
-      } else if (OB_FAIL(other.end_key_.deep_copy(end_key_, allocator_))) {
-        LOG_WARN("fail to deep copy start key", KR(ret));
-      } else if (OB_FAIL(fragments_.assign(other.fragments_))) {
+      if (OB_FAIL(fragments_.assign(other.fragments_))) {
         LOG_WARN("fail to assign fragments", KR(ret));
       }
     }
@@ -251,6 +239,99 @@ int ObDirectLoadSSTable::scan(const ObDirectLoadTableDataDesc &table_data_desc,
         scanner->~ObDirectLoadSSTableScanner();
         allocator.free(scanner);
         scanner = nullptr;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadSSTable::get_start_key(ObDatumRowkey &start_key, ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), KP(this));
+  } else {
+    ObDirectLoadIndexBlockReader index_block_reader;
+    ObDirectLoadDataBlockReader2 data_block_reader;
+    ObDirectLoadTmpFileIOHandle file_io_handle_;
+    const ObDirectLoadExternalRow *item = nullptr;
+    int64_t fragment_idx = 0;
+    int64_t block_idx = 0;
+    ObDirectLoadIndexInfo info;
+    char *buf = nullptr;
+    if (OB_FAIL(index_block_reader.init(MTL_ID(), meta_.index_block_size_, fragments_[fragment_idx].index_file_handle_))) {
+      LOG_WARN("Fail to init index_block_reader", K(ret));
+    } else if (OB_FAIL(index_block_reader.get_index_info(block_idx, info))) {
+      LOG_WARN("fail to get index info", KR(ret));
+    } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(info.size_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate buffer", KR(ret), K(info));
+    } else if (OB_FAIL(file_io_handle_.open(fragments_[fragment_idx].data_file_handle_))) {
+      LOG_WARN("Fail to open file handle", K(ret));
+    } else if (OB_FAIL(file_io_handle_.pread(buf, info.size_, info.offset_))) {
+      LOG_WARN("fail to do pread from data file", KR(ret));
+    } else if (OB_FAIL(data_block_reader.init(info.size_, buf, meta_.column_count_))) {
+      LOG_WARN("fail to init data block reader", KR(ret));
+    } else if (OB_FAIL(data_block_reader.get_next_item(item))) {
+      LOG_WARN("fail to read item", KR(ret));
+    } else {
+      ObDatumRowkey key(item->rowkey_datum_array_.datums_, meta_.rowkey_column_count_);
+      if (OB_FAIL(key.deep_copy(start_key, allocator))) {
+        LOG_WARN("fail to deep copy", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadSSTable::get_end_key(ObDatumRowkey &end_key, ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), KP(this));
+  } else {
+    ObDirectLoadIndexBlockReader index_block_reader;
+    ObDirectLoadDataBlockReader2 data_block_reader;
+    ObDirectLoadTmpFileIOHandle file_io_handle_;
+    const ObDirectLoadExternalRow *item = nullptr;
+    const ObDirectLoadExternalRow *last_item = nullptr;
+    int64_t fragment_idx = fragments_.size() - 1;
+    int64_t block_idx = ObDirectLoadIndexBlock::get_item_num_per_block(meta_.index_block_size_) - 1;
+    ObDirectLoadIndexInfo info;
+    char *buf = nullptr;
+    if (OB_FAIL(index_block_reader.init(MTL_ID(), meta_.index_block_size_, fragments_[fragment_idx].index_file_handle_))) {
+      LOG_WARN("Fail to init index_block_reader", K(ret));
+    } else if (OB_FAIL(index_block_reader.get_index_info(block_idx, info))) {
+      LOG_WARN("fail to get index info", KR(ret));
+    } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(info.size_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate buffer", KR(ret), K(info));
+    } else if (OB_FAIL(file_io_handle_.open(fragments_[fragment_idx].data_file_handle_))) {
+      LOG_WARN("Fail to open file handle", K(ret));
+    } else if (OB_FAIL(file_io_handle_.pread(buf, info.size_, info.offset_))) {
+      LOG_WARN("fail to do pread from data file", KR(ret));
+    } else if (OB_FAIL(data_block_reader.init(info.size_, buf, meta_.column_count_))) {
+      LOG_WARN("fail to init data block reader", KR(ret));
+    } else {
+      while (OB_SUCC(ret)) {
+        if (OB_FAIL(data_block_reader.get_next_item(item))) {
+          if (OB_UNLIKELY(OB_ITER_END != ret)) {
+            LOG_WARN("fail to get next item", KR(ret));
+          } else {
+            ret = OB_SUCCESS;
+            break;
+          }
+        } else {
+          last_item = item;
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ObDatumRowkey key(last_item->rowkey_datum_array_.datums_, meta_.rowkey_column_count_);
+      if (OB_FAIL(key.deep_copy(end_key, allocator))) {
+        LOG_WARN("fail to deep copy", KR(ret));
       }
     }
   }

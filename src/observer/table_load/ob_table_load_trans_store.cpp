@@ -22,6 +22,8 @@
 #include "observer/table_load/ob_table_load_trans_ctx.h"
 #include "src/pl/ob_pl.h"
 #include "share/sequence/ob_sequence_cache.h"
+#include "observer/table_load/ob_table_load_utils.h"
+#include "storage/direct_load/ob_direct_load_tmp_file.h"
 #include "sql/engine/cmd/ob_load_data_utils.h"
 #include "sql/ob_sql_utils.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
@@ -339,7 +341,9 @@ int ObTableLoadTransStoreWriter::StoreWriter::new_table_builder(
     param.extra_buf_ = reinterpret_cast<char *>(1); // unuse, delete in future
     param.extra_buf_size_ = param.table_data_desc_.extra_buf_size_;
     ObDirectLoadMultipleSSTableBuilder *sstable_builder = nullptr;
-    if (OB_ISNULL(table_builder = sstable_builder =
+    if (OB_FAIL(param.file_mgr_->alloc_dir(param.dir_id_))) {
+      LOG_WARN("fail to alloc dir", KR(ret));
+    } else if (OB_ISNULL(table_builder = sstable_builder =
                     OB_NEWx(ObDirectLoadMultipleSSTableBuilder, &allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObDirectLoadMultipleSSTableBuilder", KR(ret));

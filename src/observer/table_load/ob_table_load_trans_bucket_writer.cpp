@@ -36,7 +36,7 @@ using namespace table;
 using namespace common::number;
 
 ObTableLoadTransBucketWriter::SessionContext::SessionContext()
-  : session_id_(0), allocator_("TLD_TB_SessCtx"), last_receive_sequence_no_(0)
+  : session_id_(0), allocator_("TLD_TB_SessCtx"), last_receive_sequence_no_(0), is_flush_(false)
 {
   allocator_.set_tenant_id(MTL_ID());
   load_bucket_array_.set_tenant_id(MTL_ID());
@@ -44,10 +44,10 @@ ObTableLoadTransBucketWriter::SessionContext::SessionContext()
 
 ObTableLoadTransBucketWriter::SessionContext::~SessionContext()
 {
-  reset();
+  release();
 }
 
-void ObTableLoadTransBucketWriter::SessionContext::reset()
+void ObTableLoadTransBucketWriter::SessionContext::release()
 {
   for (int64_t i = 0; i < load_bucket_array_.count(); ++i) {
     ObTableLoadBucket *load_bucket = load_bucket_array_.at(i);
@@ -67,8 +67,6 @@ ObTableLoadTransBucketWriter::ObTableLoadTransBucketWriter(ObTableLoadTransCtx *
     column_count_(0),
     cast_mode_(CM_NONE),
     session_ctx_array_(nullptr),
-    ref_count_(0),
-    is_flush_(false),
     is_inited_(false)
 {
   allocator_.set_tenant_id(MTL_ID());
@@ -190,7 +188,10 @@ int ObTableLoadTransBucketWriter::write(int32_t session_id, ObTableLoadObjRowArr
     LOG_WARN("invalid args", KR(ret), K(session_id), K(obj_rows.count()));
   } else {
     SessionContext &session_ctx = session_ctx_array_[session_id - 1];
-    if (!is_partitioned_) {
+    if (OB_UNLIKELY(session_ctx.is_flush_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("trans bucket write has been flushed", KR(ret), K(session_id));
+    } else if (!is_partitioned_) {
       if (OB_FAIL(write_for_non_partitioned(session_ctx, obj_rows))) {
         LOG_WARN("fail to write for non partitioned", KR(ret));
       }
@@ -478,7 +479,8 @@ int ObTableLoadTransBucketWriter::flush(int32_t session_id)
       }
     }
     // release memory
-    session_ctx.reset();
+    session_ctx.release();
+    session_ctx.is_flush_ = true;
   }
   return ret;
 }

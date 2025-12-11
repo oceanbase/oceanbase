@@ -12,6 +12,7 @@
 #pragma once
 
 #include "lib/allocator/page_arena.h"
+#include "lib/oblog/ob_warning_buffer.h"
 #include "observer/table_load/ob_table_load_object_allocator.h"
 #include "observer/table_load/ob_table_load_task.h"
 #include "share/table/ob_table_load_array.h"
@@ -89,6 +90,7 @@ private:
                  K_(data_mem_usage_limit),
                  K_(need_sort),
                  K_(online_opt_stat_gather),
+                 K_(is_backup),
                  K_(max_error_rows),
                  K_(ignore_row_num),
                  K_(dup_action),
@@ -113,6 +115,7 @@ private:
     int64_t data_mem_usage_limit_; // limit = data_mem_usage_limit * MAX_BUFFER_SIZE
     bool need_sort_;
     bool online_opt_stat_gather_;
+    bool is_backup_;
     int64_t max_error_rows_; // max allowed error rows
     int64_t ignore_row_num_; // number of rows to ignore per file
     sql::ObLoadDupActionType dup_action_;
@@ -472,8 +475,6 @@ private:
     int64_t get_total_line_count() const { return total_line_count_; }
     int check_status();
   private:
-    int check_support_direct_load();
-  private:
     ObArenaAllocator allocator_;
     const LoadExecuteParam *execute_param_;
     LoadExecuteContext *execute_ctx_;
@@ -489,6 +490,7 @@ private:
     int64_t next_subpart_idx_;
     int64_t total_line_count_;
     int task_error_code_;
+    char task_error_msg_[ObWarningBuffer::WarningItem::STR_LEN];
     bool is_inited_;
   };
 

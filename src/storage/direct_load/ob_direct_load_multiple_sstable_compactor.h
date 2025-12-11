@@ -54,10 +54,6 @@ private:
   int64_t row_count_;
   int64_t rowkey_count_;
   int64_t max_data_block_size_;
-  common::ObArenaAllocator start_key_allocator_;
-  common::ObArenaAllocator end_key_allocator_;
-  ObDirectLoadMultipleDatumRowkey start_key_;
-  ObDirectLoadMultipleDatumRowkey end_key_;
   common::ObArray<ObDirectLoadMultipleSSTableFragment> fragments_;
   bool is_inited_;
 };

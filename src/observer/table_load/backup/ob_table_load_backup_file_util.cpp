@@ -102,5 +102,54 @@ int ObTableLoadBackupFileUtil::read_single_file(const common::ObString &path,
   return ret;
 }
 
+int ObTableLoadBackupFileUtil::read_part_file(const common::ObString &path,
+                                              const share::ObBackupStorageInfo *storage_info,
+                                              char *buf,
+                                              const int64_t buf_size,
+                                              const int64_t offset,
+                                              int64_t &read_size)
+{
+  int ret = OB_SUCCESS;
+  int64_t retry_count = 0;
+  ObBackupIoAdapter adapter;
+  while (OB_SUCC(ret)) {
+    if (OB_FAIL(adapter.read_part_file(path, storage_info, buf, buf_size, offset, read_size, ObStorageIdMod::get_default_ddl_id_mod()))) {
+      LOG_WARN("fail to read part file", K(ret), K(retry_count), K(path));
+      if (ret == OB_OSS_ERROR) {
+        retry_count++;
+        if (retry_count <= MAX_RETRY_COUNT) {
+          ret = OB_SUCCESS;
+          usleep(RETRY_INTERVAL);
+        }
+      }
+    } else {
+      break;
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadBackupFileUtil::split_reverse(ObString &str,
+                                             const char separator,
+                                             ObIArray<ObString> &result,
+                                             int64_t limit,
+                                             bool ignore_empty)
+{
+  int ret = OB_SUCCESS;
+  int64_t count = 0;
+  while (OB_SUCC(ret) && !str.empty() && count < limit) {
+    ObString tmp_str = str.split_on(str.reverse_find('/'));
+    if (!str.empty() || !ignore_empty) {
+      if (OB_FAIL(result.push_back(str))) {
+        LOG_WARN("fail to push back", KR(ret));
+      } else {
+        count++;
+      }
+    }
+    str = tmp_str;
+  }
+  return ret;
+}
+
 } // namespace observer
 } // namespace oceanbase

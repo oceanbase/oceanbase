@@ -38,12 +38,6 @@ public:
   // 只在对应工作线程中调用, 串行执行
   int write(int32_t session_id, table::ObTableLoadObjRowArray &obj_rows);
   int flush(int32_t session_id);
-public:
-  void set_is_flush() { is_flush_ = true; }
-  bool is_flush() const { return is_flush_; }
-  int64_t get_ref_count() const { return ATOMIC_LOAD(&ref_count_); }
-  int64_t inc_ref_count() { return ATOMIC_AAF(&ref_count_, 1); }
-  int64_t dec_ref_count() { return ATOMIC_AAF(&ref_count_, -1); }
 private:
   class SessionContext;
   int init_session_ctx_array();
@@ -81,7 +75,7 @@ private:
   {
     SessionContext();
     ~SessionContext();
-    void reset();
+    void release();
     int32_t session_id_;
     // 以下参数只在对应工作线程中访问
     common::ObArenaAllocator allocator_;
@@ -94,9 +88,9 @@ private:
     // 以下参数加锁访问
     lib::ObMutex mutex_;
     uint64_t last_receive_sequence_no_;
+    bool is_flush_;
   };
   SessionContext *session_ctx_array_;
-  int64_t ref_count_ CACHE_ALIGNED;
   bool is_flush_;
   bool is_inited_;
 };

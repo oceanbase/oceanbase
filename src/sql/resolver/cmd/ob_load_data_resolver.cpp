@@ -691,10 +691,180 @@ bool ObLoadDataResolver::exist_wildcard(const ObString& str)
   return has_wildcard;
 }
 
+int ObLoadDataResolver::split_file_name_by_brace(const ObString &file_name, ObArray<ObString> &file_name_array)
+{
+  int ret = OB_SUCCESS;
+  int64_t bracket_count = 0;
+  int32_t start_idx = 0;
+  for (int32_t idx = 0; OB_SUCC(ret) && idx < file_name.length(); idx++) {
+    char c = file_name[idx];
+    if (c == '(' || c == '[' || c == '{') {
+      bracket_count++;
+    } else if (c == ')' || c == ']' || c == '}') {
+      bracket_count--;
+    } else if (c == ',') {
+      if (bracket_count == 0) {
+        if (idx > start_idx) {
+          ObString actual_file_name = ObString(idx - start_idx, file_name.ptr() + start_idx).trim_space_only();
+          ObString cstyle_file_name;
+          if (actual_file_name.empty()) {
+          } else if (OB_FAIL(ob_write_string(*allocator_, actual_file_name, cstyle_file_name, true))) {
+            LOG_WARN("fail to write string", K(ret));
+          } else if (OB_FAIL(file_name_array.push_back(cstyle_file_name))) {
+            LOG_WARN("fail to push back", K(ret));
+          }
+        }
+        start_idx = idx + 1;
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (start_idx < file_name.length()) {
+      ObString actual_file_name = ObString(file_name.length() - start_idx, file_name.ptr() + start_idx).trim_space_only();
+      ObString cstyle_file_name;
+      if (actual_file_name.empty()) {
+      } else if (OB_FAIL(ob_write_string(*allocator_, actual_file_name, cstyle_file_name, true))) {
+        LOG_WARN("fail to write string", K(ret));
+      } else if (OB_FAIL(file_name_array.push_back(cstyle_file_name))) {
+        LOG_WARN("fail to push back", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+
+int ObLoadDataResolver::resolve_filename_server_disk(ObLoadArgument &load_args, ObString &file_name, bool wildcard_check)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObString> file_array;
+  if (wildcard_check && exist_wildcard(file_name)) {
+    glob_t glob_result;
+    int return_value = glob(file_name.ptr(), 0, NULL, &glob_result);
+    if (return_value == GLOB_NOMATCH) {
+      ret = OB_FILE_NOT_EXIST;
+      LOG_WARN("No matches found for pattern", K(ret), K(file_name));
+    } else if (return_value != 0) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("fail to glob", K(file_name));
+    } else {
+      for (size_t i = 0; OB_SUCC(ret) && i < glob_result.gl_pathc; ++i) {
+        ObString match_file;
+        if (OB_FAIL(ob_write_string(*allocator_, ObString(glob_result.gl_pathv[i]), match_file, true))) {
+          LOG_WARN("fail to ob_write_string", K(ret));
+        } else if (OB_FAIL(file_array.push_back(match_file))) {
+          LOG_WARN("fail to push back", K(ret));
+        }
+      }
+      globfree(&glob_result);
+    }
+  } else {
+    if (OB_FAIL(file_array.push_back(file_name))) {
+      LOG_WARN("fail to push back", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    char *full_path_buf = nullptr;
+    char *actual_path = nullptr;
+    ObString cstyle_file_name; // ends with '\0'
+    if (OB_ISNULL(full_path_buf = static_cast<char *>(allocator_->alloc(MAX_PATH_SIZE)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory", K(ret));
+    } else {
+      for (int32_t i = 0; OB_SUCC(ret) && i < file_array.size(); i++) {
+        //security check for mysql mode
+        ObString secure_file_priv;
+        if (OB_ISNULL(actual_path = realpath(file_array[i].ptr(), full_path_buf))) {
+          ret = OB_FILE_NOT_EXIST;
+          LOG_WARN("file not exist", K(ret), K(i), K(file_array[i]));
+        } else if (OB_FAIL(session_info_->get_secure_file_priv(secure_file_priv))) {
+          LOG_WARN("failed to get secure file priv", K(ret));
+        } else if (OB_FAIL(ObResolverUtils::check_secure_path(secure_file_priv, actual_path))) {
+          LOG_WARN("failed to check secure path", K(ret), K(secure_file_priv), K(actual_path));
+        } else if (OB_FAIL(load_args.file_iter_.add_files(&file_array[i]))) {
+          LOG_WARN("fail to add files", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLoadDataResolver::resolve_filename_oss(ObLoadArgument &load_args, ObString &file_name)
+{
+  int ret = OB_SUCCESS;
+  const char *file_ptr = nullptr;
+  if (OB_ISNULL(file_ptr = file_name.reverse_find('/'))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "file name");
+  } else {
+    const char *dir_ptr = file_name.ptr();
+    int32_t dir_len = file_ptr - dir_ptr + 1;
+    ObString dir_str(dir_len, dir_ptr);
+    ObString file_str(file_name.length() - dir_len, file_ptr + 1);
+    if (exist_wildcard(dir_str)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("on oss path, directory wildcard matching is not supported", K(ret), K(file_name));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "on oss path, directory wildcard matching is");
+    } else if (!exist_wildcard(file_str)) {
+      if (OB_FAIL(load_args.file_iter_.add_files(&file_name))) {
+        LOG_WARN("fail to add files", K(ret));
+      }
+    } else {
+      ObBackupIoAdapter adapter;
+      ObArray<ObString> file_array;
+      ObFileListArrayOp op(file_array, *allocator_);
+      char *full_path_buf = nullptr;
+      int64_t pos = 0;
+      if (OB_ISNULL(full_path_buf = static_cast<char *>(allocator_->alloc(MAX_PATH_SIZE)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate memory", K(ret));
+      } else if (OB_FAIL(databuff_printf(full_path_buf, MAX_PATH_SIZE, pos, "%.*s", dir_str.length(), dir_str.ptr()))) {
+        LOG_WARN("fail to fill path", K(ret), K(dir_str));
+      } else if (OB_FAIL(adapter.list_files(ObString(pos, full_path_buf), &load_args.access_info_, op))) {
+        LOG_WARN("fail to list files", K(ret));
+      } else {
+        bool is_match = false;
+        ObString cstyle_file_name; // ends with '\0'
+        for (int32_t i = 0; OB_SUCC(ret) && i < file_array.count(); i++) {
+          int64_t dir_pos = pos;
+          if (OB_FAIL(pattern_match(file_array[i], file_str, is_match))) {
+            LOG_WARN("fail to pattern match", K(ret));
+          } else if (is_match) {
+            if (OB_FAIL(databuff_printf(full_path_buf, MAX_PATH_SIZE, dir_pos, "%.*s", file_array[i].length(), file_array[i].ptr()))) {
+              LOG_WARN("fail to fill path", K(ret));
+            } else if (OB_FAIL(ob_write_string(*allocator_, ObString(dir_pos, full_path_buf), cstyle_file_name, true))) {
+              LOG_WARN("fail to copy string", K(ret));
+            } else if (OB_FAIL(load_args.file_iter_.add_files(&cstyle_file_name))) {
+              LOG_WARN("fail to add files", K(ret));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLoadDataResolver::resolve_filename_client_disk(ObLoadArgument &load_args, ObString &file_name)
+{
+  int ret = OB_SUCCESS;
+  ObString cstyle_file_name; // ends with '\0'
+  if (exist_wildcard(file_name)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("on client disk path, wildcard matching is not supported", K(ret), K(file_name));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "on client disk path, wildcard matching is");
+  } else if (OB_FAIL(ob_write_string(*allocator_, file_name, cstyle_file_name, true))) {
+    LOG_WARN("fail to copy string", K(ret));
+  } else if (OB_FAIL(load_args.file_iter_.add_files(&cstyle_file_name))) {
+    LOG_WARN("fail to add files", K(ret));
+  }
+  return ret;
+}
+
 int ObLoadDataResolver::resolve_filename(ObLoadDataStmt *load_stmt, ParseNode *node)
 {
   int ret = OB_SUCCESS;
-
   ObLoadArgument &load_args = load_stmt->get_load_arguments();
   ParseNode *file_name_node = node->children_[ENUM_FILE_NAME];
   if (OB_ISNULL(file_name_node)
@@ -703,88 +873,49 @@ int ObLoadDataResolver::resolve_filename(ObLoadDataStmt *load_stmt, ParseNode *n
     LOG_WARN("invalid node", "child", file_name_node);
   } else {
     ObString file_name(file_name_node->str_len_, file_name_node->str_value_);
-    if (OB_UNLIKELY(file_name.empty())) {
-      if (ObLoadFileLocation::CLIENT_DISK != load_args.load_file_storage_) {
-        ret = OB_FILE_NOT_EXIST;
-        LOG_WARN("file not exist", K(ret), K(file_name));
+    ObArray<ObString> file_name_array;
+    if (OB_FAIL(split_file_name_by_brace(file_name, file_name_array))) {
+      LOG_WARN("fail to split file name by brace", K(ret), K(file_name));
+    } else if (file_name_array.empty()) {
+      ret = OB_FILE_NOT_EXIST;
+      LOG_WARN("file not exist", K(ret), K(file_name));
+    } else if (file_name_array.count() == 1) {
+      // 单文件模式，通配符匹配属于单文件模式
+      ObString storage_info_str;
+      const char *storage_info_ptr = nullptr;
+      ObString actual_file_name;
+      if (OB_NOT_NULL(storage_info_ptr = file_name_array[0].reverse_find('?'))) {
+        int32_t storage_info_len = file_name_array[0].length() - (storage_info_ptr - file_name_array[0].ptr() + 1);
+        if (OB_FAIL(ob_write_string(*allocator_, ObString(file_name_array[0].length() - storage_info_len - 1, file_name_array[0].ptr()), actual_file_name, true))) {
+          LOG_WARN("fail to copy string", K(ret));
+        } else if (OB_FAIL(ob_write_string(*allocator_, ObString(storage_info_len, storage_info_ptr + 1), storage_info_str, true))) {
+          LOG_WARN("fail to copy string", K(ret));
+        } else if (OB_FAIL(load_args.access_info_.set(actual_file_name.ptr(), storage_info_str.ptr()))) {
+          LOG_WARN("failed to set access info", K(ret), K(actual_file_name), K(storage_info_str));
+        }
       } else {
-        // do nothing
+        actual_file_name = file_name_array[0];
       }
-    } else {
-      const char *p = nullptr;
-      ObString sub_file_name;
-      ObString cstyle_file_name; // ends with '\0'
-      if (ObLoadFileLocation::SERVER_DISK == load_args.load_file_storage_) {
-        load_args.file_name_ = file_name;
-        char *full_path_buf = nullptr;
-        char *actual_path = nullptr;
-        ObArray<ObString> match_array;
-        if (OB_ISNULL(full_path_buf = static_cast<char *>(allocator_->alloc(MAX_PATH_SIZE)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fail to allocate memory", K(ret));
-        } else if (exist_wildcard(file_name)) {
-          sub_file_name = file_name.trim_space_only();
-          if (OB_FAIL(ob_write_string(*allocator_, sub_file_name, cstyle_file_name, true))) {
-            LOG_WARN("fail to write string", K(ret));
-          } else {
-            glob_t glob_result;
-            int return_value = glob(cstyle_file_name.ptr(), 0, NULL, &glob_result);
-            if (return_value == GLOB_NOMATCH) {
-              ret = OB_FILE_NOT_EXIST;
-              LOG_WARN("No matches found for pattern", K(ret), K(ObString(cstyle_file_name)));
-            } else if (return_value != 0) {
-              ret = OB_ERR_SYS;
-              LOG_WARN("fail to glob", K(ObString(cstyle_file_name)));
-            } else {
-              for (size_t i = 0; OB_SUCC(ret) && i < glob_result.gl_pathc; ++i) {
-                ObString match_file;
-                if (OB_FAIL(ob_write_string(*allocator_, ObString(glob_result.gl_pathv[i]), match_file, true))) {
-                  LOG_WARN("fail to ob_write_string", K(ret));
-                } else if (OB_FAIL(match_array.push_back(match_file))) {
-                  LOG_WARN("fail to push back", K(ret));
-                }
-              }
-              globfree(&glob_result);
-            }
+      if (OB_SUCC(ret)) {
+        load_args.file_name_ = actual_file_name;
+        if (ObLoadDataFormat::is_backup(load_args.access_info_.get_load_data_format())) {
+          if (ObLoadFileLocation::CLIENT_DISK == load_args.load_file_storage_) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("direct load backup data from client disk is not supported", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "direct load backup data from client disk is");
           }
         } else {
-          while (OB_SUCC(ret) && !file_name.empty()) {
-            p = file_name.find(',');
-            if (nullptr == p) {
-              sub_file_name = file_name.trim_space_only();
-              cstyle_file_name = sub_file_name;
-              file_name.reset();
-            } else {
-              sub_file_name = file_name.split_on(p).trim_space_only();
-              cstyle_file_name.reset();
+          if (ObLoadFileLocation::SERVER_DISK == load_args.load_file_storage_) {
+            if (OB_FAIL(resolve_filename_server_disk(load_args, actual_file_name, true/*wildcard_check*/))) {
+              LOG_WARN("failed to resolve filename from server disk", K(ret), K(load_args), K(actual_file_name));
             }
-            if (!sub_file_name.empty()) {
-              if (cstyle_file_name.empty() && OB_FAIL(ob_write_string(*allocator_, sub_file_name, cstyle_file_name, true))) {
-                LOG_WARN("fail to write string", K(ret));
-              } else if (OB_FAIL(match_array.push_back(cstyle_file_name))) {
-                LOG_WARN("fail to push back", K(ret));
-              }
+          } else if (ObLoadFileLocation::OSS == load_args.load_file_storage_) {
+            if (OB_FAIL(resolve_filename_oss(load_args, actual_file_name))) {
+              LOG_WARN("failed to resolve filename from oss", K(ret), K(load_args), K(actual_file_name));
             }
-          }
-        }
-        if (OB_SUCC(ret)) {
-          if (match_array.size() == 0) {
-            ret = OB_FILE_NOT_EXIST;
-            LOG_WARN("files not exists", K(ret));
-          } else {
-            for (int32_t i = 0; OB_SUCC(ret) && i < match_array.size(); i++) {
-              //security check for mysql mode
-              ObString secure_file_priv;
-              if (OB_ISNULL(actual_path = realpath(match_array[i].ptr(), full_path_buf))) {
-                ret = OB_FILE_NOT_EXIST;
-                LOG_WARN("file not exist", K(ret), K(i), K(match_array[i]));
-              } else if (OB_FAIL(session_info_->get_secure_file_priv(secure_file_priv))) {
-                LOG_WARN("failed to get secure file priv", K(ret));
-              } else if (!session_info_->is_inner() && OB_FAIL(ObResolverUtils::check_secure_path(secure_file_priv, actual_path))) {
-                LOG_WARN("failed to check secure path", K(ret), K(secure_file_priv), K(actual_path));
-              } else if (OB_FAIL(load_args.file_iter_.add_files(&match_array[i]))) {
-                LOG_WARN("fail to add files", K(ret));
-              }
+          } else if (ObLoadFileLocation::CLIENT_DISK == load_args.load_file_storage_) {
+            if (OB_FAIL(resolve_filename_client_disk(load_args, actual_file_name))) {
+              LOG_WARN("failed to resolve filename from client disk", K(ret), K(load_args), K(actual_file_name));
             }
           }
         }
@@ -894,27 +1025,35 @@ int ObLoadDataResolver::resolve_filename(ObLoadDataStmt *load_stmt, ParseNode *n
             }
             if (OB_SUCC(ret) && load_args.file_iter_.count() == 0) {
               ret = OB_FILE_NOT_EXIST;
-              LOG_WARN("files not exists", K(ret), K(pattern));
+              LOG_WARN("files not exists", K(ret), K(load_args.file_name_), K(storage_info_str));
             }
           }
         }
+      }
+      LOG_INFO("resolve filename result", K(ret), K(load_args.file_name_), K(load_args.load_file_storage_));
+    } else {
+      // 多文件模式，目前只有旁路导入的server disk会走到这条路径
+      // 不支持通配符和指定load_data_format
+      if (ObLoadFileLocation::SERVER_DISK != load_args.load_file_storage_) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support multi files", K(ret), K(file_name_array), K(load_args.load_file_storage_));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "load multi files is");
       } else {
-        if (!file_name.empty()) {
-          if (OB_NOT_NULL(p = file_name.find(','))) {
+        load_args.file_name_ = file_name;
+        for (int64_t i = 0; OB_SUCC(ret) && i < file_name_array.count(); i++) {
+          ObString actual_file_name = file_name_array[i];
+          if (exist_wildcard(actual_file_name)) {
             ret = OB_NOT_SUPPORTED;
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "load multi files not supported");
-          } else if (OB_FAIL(ob_write_string(*allocator_, file_name, cstyle_file_name, true))) {
-            LOG_WARN("fail to copy string", K(ret));
-          } else if (OB_FAIL(load_args.file_iter_.add_files(&cstyle_file_name))) {
-            LOG_WARN("fail to add files", K(ret));
-          } else {
-            load_args.file_name_ = file_name;
+            LOG_WARN("in multi file mode, wildcard matching or specify load_data_format is not supported", K(ret), K(i), K(actual_file_name));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "in multi file mode, wildcard matching or specify load_data_format is");
+          } else if (OB_FAIL(resolve_filename_server_disk(load_args, actual_file_name, false/*wildcard_check*/))) {
+            LOG_WARN("failed to resolve filename from server disk", K(ret), K(load_args), K(actual_file_name));
           }
         }
+        LOG_INFO("resolve filename result", K(ret), K(load_args.file_name_), K(load_args.load_file_storage_));
       }
     }
   }
-
   return ret;
 }
 

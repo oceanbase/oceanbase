@@ -63,10 +63,6 @@ void ObTableLoadStoreTransPXWriter::reset()
   can_write_ = false;
   if (nullptr != store_ctx_) {
     if (nullptr != trans_) {
-      if (nullptr != writer_) {
-        trans_->put_store_writer(writer_);
-        writer_ = nullptr;
-      }
       store_ctx_->put_trans(trans_);
       trans_ = nullptr;
     }

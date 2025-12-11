@@ -67,6 +67,10 @@ public:
 private:
   int pattern_match(const ObString& str, const ObString& pattern, bool &matched);
   bool exist_wildcard(const ObString& str);
+  int split_file_name_by_brace(const ObString &file_name, ObArray<ObString> &file_name_array);
+  int resolve_filename_server_disk(ObLoadArgument &load_args, ObString &file_name, bool wildcard_check);
+  int resolve_filename_client_disk(ObLoadArgument &load_args, ObString &file_name);
+  int resolve_filename_oss(ObLoadArgument &load_args, ObString &file_name);
 private:
   enum ParameterEnum {
     ENUM_OPT_LOCAL = 0,

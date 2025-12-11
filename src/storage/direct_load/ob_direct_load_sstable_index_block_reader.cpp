@@ -46,6 +46,7 @@ int ObDirectLoadSSTableIndexBlockReader::get_next_entry(const ObDirectLoadSSTabl
     entry_.offset_ = last_offset_;
     entry_.size_ = item->offset_ - last_offset_;
     last_offset_ = item->offset_;
+    entry = &entry_;
   }
   return ret;
 }

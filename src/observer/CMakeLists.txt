@@ -270,16 +270,52 @@ ob_set_subtarget(ob_server table
 )
 
 ob_set_subtarget(ob_server table_load
-  table_load/backup/v_1_4/ob_table_load_backup_macro_block_meta_v_1_4.cpp
-  table_load/backup/v_1_4/ob_table_load_backup_macro_block_reader_v_1_4.cpp
-  table_load/backup/v_1_4/ob_table_load_backup_macro_block_scanner_v_1_4.cpp
-  table_load/backup/v_1_4/ob_table_load_backup_micro_block_scanner_v_1_4.cpp
-  table_load/backup/v_1_4/ob_table_load_backup_partition_scanner_v_1_4.cpp
-  table_load/backup/v_1_4/ob_table_load_backup_row_reader_v_1_4.cpp
-  table_load/backup/v_1_4/ob_table_load_backup_table_v_1_4.cpp
-  table_load/backup/v_1_4/ob_table_load_backup_util_v_1_4.cpp
+  table_load/backup/encoding/ob_bit_stream.cpp
+  table_load/backup/encoding/ob_bitmap.cpp
+  table_load/backup/encoding/ob_column_equal_decoder.cpp
+  table_load/backup/encoding/ob_const_decoder.cpp
+  table_load/backup/encoding/ob_dict_decoder_simd.cpp
+  table_load/backup/encoding/ob_dict_decoder.cpp
+  table_load/backup/encoding/ob_encoding_allocator.cpp
+  table_load/backup/encoding/ob_encoding_bitset.cpp
+  table_load/backup/encoding/ob_encoding_hash_util.cpp
+  table_load/backup/encoding/ob_encoding_util.cpp
+  table_load/backup/encoding/ob_hex_string_decoder.cpp
+  table_load/backup/encoding/ob_icolumn_decoder.cpp
+  table_load/backup/encoding/ob_integer_base_diff_decoder.cpp
+  table_load/backup/encoding/ob_inter_column_substring_decoder.cpp
+  table_load/backup/encoding/ob_multi_prefix_tree.cpp
+  table_load/backup/encoding/ob_pushdown_filter.cpp
+  table_load/backup/encoding/ob_raw_decoder_simd.cpp
+  table_load/backup/encoding/ob_raw_decoder.cpp
+  table_load/backup/encoding/ob_rle_decoder.cpp
+  table_load/backup/encoding/ob_string_diff_decoder.cpp
+  table_load/backup/encoding/ob_string_prefix_decoder.cpp
+  table_load/backup/ob_table_load_backup_block_sstable_struct.cpp
+  table_load/backup/ob_table_load_backup_column_map_v1.cpp
+  table_load/backup/ob_table_load_backup_column_map_v2.cpp
   table_load/backup/ob_table_load_backup_file_util.cpp
+  table_load/backup/ob_table_load_backup_flat_row_reader_v1.cpp
+  table_load/backup/ob_table_load_backup_flat_row_reader_v2.cpp
+  table_load/backup/ob_table_load_backup_macro_block_reader.cpp
+  table_load/backup/ob_table_load_backup_macro_block_scanner.cpp
+  table_load/backup/ob_table_load_backup_micro_block_decoder.cpp
+  table_load/backup/ob_table_load_backup_micro_block_reader.cpp
+  table_load/backup/ob_table_load_backup_micro_block_scanner.cpp
+  table_load/backup/ob_table_load_backup_partition_scanner.cpp
+  table_load/backup/ob_table_load_backup_sstable_block_reader.cpp
   table_load/backup/ob_table_load_backup_table.cpp
+  table_load/backup/ob_table_load_logical_backup_partition_scanner.cpp
+  table_load/backup/ob_table_load_logical_backup_table.cpp
+  table_load/backup/ob_table_load_physical_backup_partition_scanner_v1.cpp
+  table_load/backup/ob_table_load_physical_backup_partition_scanner_v2.cpp
+  table_load/backup/ob_table_load_physical_backup_table.cpp
+  table_load/resource/ob_table_load_resource_manager.cpp
+  table_load/resource/ob_table_load_resource_processor.cpp
+  table_load/resource/ob_table_load_resource_rpc_executor.cpp
+  table_load/resource/ob_table_load_resource_rpc_proxy.cpp
+  table_load/resource/ob_table_load_resource_rpc_struct.cpp
+  table_load/resource/ob_table_load_resource_service.cpp
   table_load/client/ob_table_direct_load_rpc_executor.cpp
   table_load/client/ob_table_direct_load_rpc_proxy.cpp
   table_load/client/ob_table_direct_load_rpc_struct.cpp

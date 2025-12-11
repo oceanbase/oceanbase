@@ -46,13 +46,9 @@ ObDirectLoadSSTableCompactor::ObDirectLoadSSTableCompactor()
   : index_item_count_(0),
     index_block_count_(0),
     row_count_(0),
-    start_key_allocator_("TLD_SRowkey"),
-    end_key_allocator_("TLD_ERowkey"),
     is_inited_(false)
 {
   fragments_.set_tenant_id(MTL_ID());
-  start_key_allocator_.set_tenant_id(MTL_ID());
-  end_key_allocator_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadSSTableCompactor::~ObDirectLoadSSTableCompactor()
@@ -70,8 +66,6 @@ int ObDirectLoadSSTableCompactor::init(const ObDirectLoadSSTableCompactParam &pa
     LOG_WARN("invalid args", KR(ret), K(param));
   } else {
     param_ = param;
-    start_key_.set_min_rowkey();
-    end_key_.set_min_rowkey();
     is_inited_ = true;
   }
   return ret;
@@ -101,15 +95,6 @@ int ObDirectLoadSSTableCompactor::add_table(const ObDirectLoadTableHandle &table
           LOG_WARN("fail to push back table fragment", KR(ret), K(i));
         }
       }
-      if (OB_SUCC(ret)) {
-        end_key_allocator_.reuse();
-        if (start_key_.is_min_rowkey() &&
-            OB_FAIL(sstable->get_start_key().deep_copy(start_key_, start_key_allocator_))) {
-          LOG_WARN("fail to deep copy start key", KR(ret));
-        } else if (OB_FAIL(sstable->get_end_key().deep_copy(end_key_, end_key_allocator_))) {
-          LOG_WARN("fail to deep copy end key", KR(ret));
-        }
-      }
     }
   }
   return ret;
@@ -131,14 +116,6 @@ int ObDirectLoadSSTableCompactor::check_table_compactable(ObDirectLoadSSTable *s
           table_meta.data_block_size_ != param_.table_data_desc_.sstable_data_block_size_)) {
       ret = OB_ITEM_NOT_MATCH;
       LOG_WARN("table meta not match", KR(ret), K(param_), K(table_meta));
-    } else if (!sstable->is_empty()) {
-      int cmp_ret = 0;
-      if (OB_FAIL(end_key_.compare(sstable->get_start_key(), *param_.datum_utils_, cmp_ret))) {
-        LOG_WARN("fail to compare rowkey", KR(ret));
-      } else if (cmp_ret >= 0) {
-        ret = OB_ROWKEY_ORDER_ERROR;
-        LOG_WARN("sstable is not contiguous", KR(ret), K(end_key_), K(sstable->get_start_key()));
-      }
     }
   }
   return ret;
@@ -175,8 +152,6 @@ int ObDirectLoadSSTableCompactor::get_table(ObDirectLoadTableHandle &table_handl
     create_param.index_item_count_ = index_item_count_;
     create_param.index_block_count_ = index_block_count_;
     create_param.row_count_ = row_count_;
-    create_param.start_key_ = start_key_;
-    create_param.end_key_ = end_key_;
     if (OB_FAIL(create_param.fragments_.assign(fragments_))) {
       LOG_WARN("fail to assign fragments", KR(ret));
     } else if (OB_FAIL(table_manager->alloc_sstable(sstable_handle))) {

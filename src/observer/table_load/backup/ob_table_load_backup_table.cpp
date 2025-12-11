@@ -12,28 +12,38 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "ob_table_load_backup_table.h"
-#include "observer/table_load/backup/v_1_4/ob_table_load_backup_table_v_1_4.h"
+#include "observer/table_load/backup/ob_table_load_backup_table.h"
+#include "observer/table_load/backup/ob_table_load_physical_backup_table.h"
+#include "observer/table_load/backup/ob_table_load_logical_backup_table.h"
 
 namespace oceanbase
 {
 namespace observer
 {
+using namespace table_load_backup;
 
-int ObTableLoadBackupTable::get_table(ObTableLoadBackupVersion version,
+int ObTableLoadBackupTable::get_table(const ObTableLoadBackupVersion &backup_version,
                                       ObTableLoadBackupTable *&table,
                                       ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   table = nullptr;
-  if (OB_UNLIKELY(version <= ObTableLoadBackupVersion::INVALID ||
-                  version >= ObTableLoadBackupVersion::MAX_VERSION)) {
+  if (OB_UNLIKELY(backup_version <= ObTableLoadBackupVersion::INVALID ||
+                  backup_version >= ObTableLoadBackupVersion::MAX_VERSION)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(version));
+    LOG_WARN("invalid args", KR(ret), K(backup_version));
   } else {
-    switch (version) {
-      case ObTableLoadBackupVersion::V_1_4: {
-        if (OB_ISNULL(table = OB_NEWx(ObTableLoadBackupTable_V_1_4, &allocator))) {
+    switch (backup_version) {
+      case ObTableLoadBackupVersion::V_1_4:
+      case ObTableLoadBackupVersion::V_2_X_LOG:
+        if (OB_ISNULL(table = OB_NEWx(ObTableLoadLogicalBackupTable, &allocator))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc memory", KR(ret));
+        }
+        break;
+      case ObTableLoadBackupVersion::V_2_X_PHY:
+      case ObTableLoadBackupVersion::V_3_X: {
+        if (OB_ISNULL(table = OB_NEWx(ObTableLoadPhysicalBackupTable, &allocator))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to alloc memory", KR(ret));
         }
@@ -41,7 +51,7 @@ int ObTableLoadBackupTable::get_table(ObTableLoadBackupVersion version,
       }
       default: {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("not support version", KR(ret), K(version));
+        LOG_WARN("not support version", KR(ret), K(backup_version));
         break;
       }
     }

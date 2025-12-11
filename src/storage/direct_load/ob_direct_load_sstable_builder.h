@@ -163,12 +163,10 @@ class ObDirectLoadSSTableBuilder : public ObIDirectLoadPartitionTableBuilder
 {
 public:
   ObDirectLoadSSTableBuilder()
-    : allocator_("TLD_sstablebdr"),
-      rowkey_allocator_("TLD_Rowkey"),
+    : rowkey_allocator_("TLD_Rowkey"),
       is_closed_(false),
       is_inited_(false)
   {
-    allocator_.set_tenant_id(MTL_ID());
     rowkey_allocator_.set_tenant_id(MTL_ID());
   }
   virtual ~ObDirectLoadSSTableBuilder() = default;
@@ -187,9 +185,7 @@ private:
   ObDirectLoadSSTableBuildParam param_;
   ObDirectLoadDataBlockWriter2 data_block_writer_;
   ObDirectLoadIndexBlockWriter index_block_writer_;
-  common::ObArenaAllocator allocator_;
   common::ObArenaAllocator rowkey_allocator_;
-  blocksstable::ObDatumRowkey start_key_;
   blocksstable::ObDatumRowkey end_key_;
   ObDirectLoadTmpFileHandle data_file_handle_;
   ObDirectLoadTmpFileHandle index_file_handle_;
