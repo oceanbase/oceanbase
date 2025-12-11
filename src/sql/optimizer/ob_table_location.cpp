@@ -4264,10 +4264,11 @@ int ObTableLocation::get_all_part_ids(
   if (!is_partitioned_) {
     OZ (tablet_mapper.get_non_partition_tablet_id(tablet_ids, partition_ids));
   } else {
+    bool need_dedup = !(tablet_ids.empty() && partition_ids.empty());
     if (NULL == part_ids) {
       if (OB_FAIL(tablet_mapper.get_all_tablet_and_object_id(
                                              PARTITION_LEVEL_ONE, OB_INVALID_ID,
-                                             tablet_ids, partition_ids))) {
+                                             tablet_ids, partition_ids, need_dedup))) {
         LOG_WARN("fail to get tablet ids", K(ret));
       }
     } else {
@@ -4275,7 +4276,7 @@ int ObTableLocation::get_all_part_ids(
         ObObjectID part_id = part_ids->at(idx);
         if (OB_FAIL(tablet_mapper.get_all_tablet_and_object_id(
                                                PARTITION_LEVEL_TWO, part_id,
-                                               tablet_ids, partition_ids))) {
+                                               tablet_ids, partition_ids, need_dedup))) {
           LOG_WARN("fail to get tablet ids", K(ret));
         }
       }
