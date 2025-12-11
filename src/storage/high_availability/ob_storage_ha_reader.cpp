@@ -2583,8 +2583,7 @@ int ObCopySSTableInfoObProducer::check_need_copy_inc_major_ddl_sstable_(
   if (!inc_major_ddl_sstable_end_scn.is_valid_and_not_min()) {
     need_copy_sstable = false;
   } else if (sstable.get_key().scn_range_.start_scn_ >= inc_major_ddl_sstable_end_scn) {
-    ret = OB_DDL_SSTABLE_RANGE_CROSS; // TODO(@yuya.yu): need to be optimized
-    LOG_WARN("inc major ddl sstable version range across", K(ret), K(inc_major_ddl_sstable_end_scn), K(sstable));
+    need_copy_sstable = false;
   } else if (sstable.get_key().scn_range_.end_scn_ <= inc_major_ddl_sstable_end_scn) {
     need_copy_sstable = true;
   } else {
