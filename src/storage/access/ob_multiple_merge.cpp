@@ -1312,7 +1312,7 @@ int ObMultipleMerge::alloc_row_store(ObTableAccessContext &context, const ObTabl
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
-  if (OB_UNLIKELY((param.iter_param_.enable_pd_aggregate() || param.iter_param_.enable_pd_group_by()) &&
+  if (OB_UNLIKELY(param.iter_param_.enable_pd_group_by() &&
       (ObQRIterType::T_SINGLE_GET == get_type() || ObQRIterType::T_MULTI_GET == get_type()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected state, group by can not pushdown in get", K(ret), K(param.iter_param_), K(get_type()));
