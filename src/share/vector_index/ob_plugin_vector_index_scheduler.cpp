@@ -73,7 +73,6 @@ void ObPluginVectorIndexLoadScheduler::clean_deprecated_adapters()
   int ret = OB_SUCCESS;
   ObSEArray<ObTabletID, DEFAULT_TABLE_ARRAY_SIZE> delete_tablet_id_array;
   delete_tablet_id_array.reset();
-  bool clear_ls_follower_adapter = false;
 
   ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
   if (OB_FAIL(vector_index_service_->get_ls_index_mgr_map().get_refactored(ls_->get_ls_id(), index_ls_mgr))) {
@@ -85,16 +84,6 @@ void ObPluginVectorIndexLoadScheduler::clean_deprecated_adapters()
   } else if (OB_ISNULL(index_ls_mgr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid vector index ls mgr", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
-  }
-
-  if (OB_SUCC(ret)) {
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
-    if (!tenant_config.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail get tenant_config", KR(ret), K(tenant_id_));
-    } else {
-      clear_ls_follower_adapter = !is_leader_ && !tenant_config->load_vector_index_on_follower;
-    }
   }
 
   if (OB_SUCC(ret) && OB_NOT_NULL(index_ls_mgr)) {
@@ -131,12 +120,6 @@ void ObPluginVectorIndexLoadScheduler::clean_deprecated_adapters()
               LOG_WARN("push back table id failed",
                 K(delete_tablet_id_array.count()), K(adapter->get_inc_tablet_id()), KR(ret));
             }
-          }
-        } else if (clear_ls_follower_adapter) {
-          LOG_DEBUG("clean ls follower adapter", K(tablet_id));
-          if (OB_FAIL(delete_tablet_id_array.push_back(tablet_id))) {
-            LOG_WARN("push back table id failed",
-              K(delete_tablet_id_array.count()), K(adapter->get_inc_tablet_id()), KR(ret));
           }
         }
       }
@@ -1694,32 +1677,18 @@ int ObVectorIndexTask::process()
     LOG_INFO("vec index scheduler is stopped, memdata sync task mark finish", KR(ret), KPC(task_ctx_));
   } else {
     bool need_stop = false;
-    const uint64_t tenant_id = vec_idx_scheduler_->get_tenant_id();
-    
+
     while(!need_stop && OB_SUCC(ret)) {
       lib::ContextParam param;
       // use dag mtl id for param refer to TTLtask
       param.set_mem_attr(MTL_ID(), "VecIdxTaskCP", ObCtxIds::DEFAULT_CTX_ID)
         .set_properties(lib::USE_TL_PAGE_OPTIONAL);
       CREATE_WITH_TEMP_CONTEXT(param) {
-
-        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-        if (!tenant_config.is_valid()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("fail get tenant_config", KR(ret), K(MTL_ID()));
-        } else if (!vec_idx_scheduler_->get_ls_leader() && !tenant_config->load_vector_index_on_follower) {
-          need_stop = true;
-          common::ObSpinLockGuard ctx_guard(task_ctx_->lock_);
-          task_ctx_->task_status_ = OB_TTL_TASK_CANCEL;
-          LOG_INFO("dont not load memdata to ls follower", K(ret), K(tenant_config->load_vector_index_on_follower));
-        }
-
-        if (OB_FAIL(ret) || need_stop) {
-        } else if (OB_FAIL(process_one())) {
+        if (OB_FAIL(process_one())) {
           LOG_WARN("fail to process one", KR(ret), K(ls_id_), KPC(task_ctx_));
         }
         ret = OB_SUCCESS; // continue to try schedular remainig tasks
-        
+
         if (OB_FAIL(vec_idx_scheduler_->check_task_state(vec_idx_mgr_, task_ctx_, need_stop))) {
           LOG_WARN("fail to check task state", KR(ret), K(ls_id_), KPC(task_ctx_));
           ret = OB_SUCCESS; // cover memdata sync failure
