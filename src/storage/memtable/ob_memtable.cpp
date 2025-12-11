@@ -2326,13 +2326,30 @@ int ObMemtable::get_encrypt_meta(transaction::ObTxEncryptMeta *&encrypt_meta)
 
 bool ObMemtable::need_for_save(const share::ObEncryptMeta *encrypt_meta)
 {
+  int ret = OB_SUCCESS;
   bool need_save = true;
-  SpinRLockGuard guard(encrypt_meta_lock_);
-  if (encrypt_meta == NULL && encrypt_meta_ == NULL) {
-    need_save = false;
-  } else if (encrypt_meta != NULL && encrypt_meta_ != NULL &&
-             encrypt_meta_->is_memtable_equal(*encrypt_meta)) {
-    need_save = false;
+  {
+    SpinRLockGuard guard(encrypt_meta_lock_);
+    if (NULL == encrypt_meta && NULL == encrypt_meta_) {
+      need_save = false;
+    } else if (NULL != encrypt_meta && NULL != encrypt_meta_ &&
+                encrypt_meta_->is_memtable_equal(*encrypt_meta)) {
+      need_save = false;
+    }
+  }
+  if (need_save) {
+    uint64_t tenant_id = MTL_ID();
+    uint64_t data_version = 0;
+    ObString tde_method;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+      LOG_WARN("fail to get tenant data version", KR(ret), K(tenant_id));
+    } else if (data_version < DATA_VERSION_4_4_2_0) {
+      need_save = false;
+    } else if (OB_FAIL(ObEncryptionUtil::get_tde_method(tenant_id, tde_method))) {
+      LOG_WARN("fail to get tde_method", K(tenant_id), K(ret));
+    } else if (!ObTdeMethodUtil::is_kms(tde_method)) {
+      need_save = false;
+    }
   }
   return need_save;
 }

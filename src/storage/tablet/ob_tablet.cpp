@@ -4969,8 +4969,7 @@ int ObTablet::update_row(
     } else if (OB_FAIL(prepare_memtable(relative_table, store_ctx, write_memtable))) {
       LOG_WARN("prepare write memtable fail", K(ret), K(relative_table));
 #ifdef OB_BUILD_TDE_SECURITY
-    // XXX we do not turn on clog encryption now
-    } else if (false && NULL != encrypt_meta_arr && !encrypt_meta_arr->empty() &&
+    } else if (NULL != encrypt_meta_arr && !encrypt_meta_arr->empty() &&
         FALSE_IT(get_encrypt_meta(relative_table.get_table_id(), encrypt_meta_arr, encrypt_meta))) {
 #endif
     } else {
@@ -5027,8 +5026,7 @@ int ObTablet::update_rows(
     } else if (OB_FAIL(prepare_memtable(relative_table, store_ctx, write_memtable))) {
       LOG_WARN("Failed to prepare write memtable", K(ret), K(relative_table));
 #ifdef OB_BUILD_TDE_SECURITY
-    // XXX we do not turn on clog encryption now
-    } else if (false && NULL != encrypt_meta_arr && !encrypt_meta_arr->empty() &&
+    } else if (NULL != encrypt_meta_arr && !encrypt_meta_arr->empty() &&
         FALSE_IT(get_encrypt_meta(relative_table.get_table_id(), encrypt_meta_arr, encrypt_meta))) {
 #endif
     } else {
@@ -5086,8 +5084,7 @@ int ObTablet::insert_rows(
     } else if (OB_FAIL(prepare_memtable(relative_table, store_ctx, write_memtable))) {
       LOG_WARN("Failed to prepare write memtable", K(ret), K(relative_table));
 #ifdef OB_BUILD_TDE_SECURITY
-    // XXX we do not turn on clog encryption now
-    } else if (false && NULL != encrypt_meta_arr && !encrypt_meta_arr->empty() &&
+    } else if (NULL != encrypt_meta_arr && !encrypt_meta_arr->empty() &&
         FALSE_IT(get_encrypt_meta(relative_table.get_table_id(), encrypt_meta_arr, encrypt_meta))) {
 #endif
     } else {
@@ -5150,8 +5147,7 @@ int ObTablet::insert_row(
     } else if (OB_FAIL(prepare_memtable(relative_table, store_ctx, write_memtable))) {
       LOG_WARN("prepare write memtable fail", K(ret), K(relative_table));
 #ifdef OB_BUILD_TDE_SECURITY
-    // XXX we do not turn on clog encryption now
-    } else if (false && NULL != encrypt_meta_arr && !encrypt_meta_arr->empty() &&
+    } else if (NULL != encrypt_meta_arr && !encrypt_meta_arr->empty() &&
         FALSE_IT(get_encrypt_meta(relative_table.get_table_id(), encrypt_meta_arr, encrypt_meta))) {
 #endif
     } else {

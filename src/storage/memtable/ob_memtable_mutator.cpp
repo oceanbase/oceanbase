@@ -513,9 +513,10 @@ int ObMemtableMutatorRow::serialize(char *buf, int64_t &buf_len, int64_t &pos,
         || OB_FAIL(encode_vi32(buf, buf_len, new_pos, acc_checksum_))
         || OB_FAIL(encode_vi64(buf, buf_len, new_pos, version_))
         || OB_FAIL(encode_vi32(buf, buf_len, new_pos, flag_))
-        || OB_FAIL(seq_no_.serialize(buf, buf_len, new_pos))) {
+        || OB_FAIL(seq_no_.serialize(buf, buf_len, new_pos))
+        || OB_FAIL(encode_vi64(buf, buf_len, new_pos, column_cnt_))) {
         if (OB_BUF_NOT_ENOUGH != ret || buf_len > common::OB_MAX_LOG_ALLOWED_SIZE) {
-          TRANS_LOG(INFO, "serialize row fail", K(ret), KP(buf), K(buf_len), K(pos));
+          TRANS_LOG(INFO, "serialize row fail", K(ret), KP(buf), K(buf_len), K(pos), K(new_pos));
         }
 #ifdef OB_BUILD_TDE_SECURITY
     } else if (need_encrypt) {
@@ -526,13 +527,13 @@ int ObMemtableMutatorRow::serialize(char *buf, int64_t &buf_len, int64_t &pos,
       }
 #endif
     }
-    if (FAILEDx(encode_vi64(buf, buf_len, new_pos, column_cnt_))) {
-      TRANS_LOG(WARN, "failed to serialize column cnt", K(column_cnt_));
-    } else if (FALSE_IT(row_size_ = (uint32_t )(new_pos - pos))) {
-    } else if (OB_FAIL(encode_i32(buf, buf_len, pos, row_size_))) {
-      TRANS_LOG(WARN, "serialize row fail", K(ret), K(buf_len), K(pos), K(table_id_));
-    } else {
-      pos = new_pos;
+    if (OB_SUCC(ret)) {
+      row_size_ = (uint32_t )(new_pos - pos);
+      if (OB_FAIL(encode_i32(buf, buf_len, pos, row_size_))) {
+        TRANS_LOG(WARN, "serialize row fail", K(ret), K(buf_len), K(pos), K(table_id_));
+      } else {
+        pos = new_pos;
+      }
     }
   }
   return ret;
