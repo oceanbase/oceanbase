@@ -442,7 +442,7 @@ namespace sql
       // init trace enable
       con.print_sample_pct_ = ((double)(sess.get_tenant_print_sample_ppm()))/1000000;
       ObRandom r;
-      double rand_num = 1.0 * (r.rand(0, RAND_MAX)/RAND_MAX);
+      double rand_num = (1.0 * r.rand(0, RAND_MAX)/RAND_MAX);
       if (rand_num < con.sample_pct_) {
         sess.set_trace_enable(true);
       } else {
@@ -459,7 +459,7 @@ namespace sql
       } else if (con.rp_ == FLTControlInfo::RecordPolicy::RP_ONLY_SLOW_QUERY) {
         // do nothing, slow query will must flush
       } else if (con.rp_ == FLTControlInfo::RecordPolicy::RP_SAMPLE_AND_SLOW_QUERY) {
-        double rand_num2 = 1.0 * (r.rand(0, RAND_MAX)/RAND_MAX);
+        double rand_num2 = (1.0 * r.rand(0, RAND_MAX)/RAND_MAX);
         if (rand_num2 < con.print_sample_pct_) {
           sess.set_auto_flush_trace(true);
         } else {
