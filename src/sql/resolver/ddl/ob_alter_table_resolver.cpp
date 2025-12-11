@@ -24,6 +24,7 @@
 #include "share/table/ob_ttl_util.h"
 #include "share/vector_index/ob_vector_index_util.h"
 #include "sql/resolver/ddl/ob_interval_partition_resolver.h"
+#include "rootserver/ob_partition_exchange.h"
 
 namespace oceanbase
 {
@@ -3261,9 +3262,101 @@ int ObAlterTableResolver::resolve_exchange_partition(const ParseNode &node,
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_data_version = 0;
-  ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
-  const ObPartitionLevel part_level = orig_table_schema.get_part_level();
-  if (OB_UNLIKELY(T_ALTER_PARTITION_EXCHANGE != node.type_ || OB_ISNULL(node.children_))) {
+  ObPartitionLevel exchange_part_level = orig_table_schema.get_part_level();
+  const ObTableSchema *exchange_table_schema = nullptr;
+  ObString orig_part_name;
+  if (OB_UNLIKELY(T_ALTER_PARTITION_EXCHANGE != node.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parse tree", K(ret), K(node.type_));
+  } else if (OB_ISNULL(session_info_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("session info and alter table stmt should not be null", K(ret), KP(session_info_));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+    LOG_WARN("get data version failed", K(ret), K(session_info_->get_effective_tenant_id()));
+  } else if (OB_UNLIKELY(tenant_data_version < DATA_VERSION_4_3_1_0)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("version lower than 4.3.1.0 does not support partition exchange", KR(ret), K(tenant_data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "partition exchange of version lower than 4.3.1.0 is");
+  } else if (OB_UNLIKELY(PARTITION_LEVEL_ZERO == orig_table_schema.get_part_level())) {
+    ret = OB_ERR_PARTITION_MGMT_ON_NONPARTITIONED;
+    LOG_USER_ERROR(OB_ERR_PARTITION_MGMT_ON_NONPARTITIONED);
+    LOG_WARN("unsupport management on non partitioned table", K(ret), K(orig_table_schema.get_part_level()));
+  } else if (OB_FAIL(resolve_exchange_partition_stmt(node, orig_table_schema, exchange_table_schema, orig_part_name))) {
+    LOG_WARN("failed to resolve exchange partition stmt", KR(ret), K(orig_table_schema));
+  } else if (OB_ISNULL(exchange_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null exchange table schema", K(ret), KP(exchange_table_schema));
+  } else if (exchange_table_schema->is_partitioned_table()) {
+    exchange_part_level = ObPartitionLevel::PARTITION_LEVEL_ONE;
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(rootserver::ObPartitionExchange::check_partition_exchange_schema_for_user(
+      orig_table_schema, *exchange_table_schema, orig_part_name, tenant_data_version, exchange_part_level))) {
+    LOG_WARN("failed to check partition exchange schema for user", KR(ret), K(orig_table_schema),
+        KPC(exchange_table_schema), K(orig_part_name), K(tenant_data_version), K(exchange_part_level));
+  } else if (OB_FAIL(generate_exchange_partition_arg(orig_table_schema, *exchange_table_schema, orig_part_name, exchange_part_level))) {
+    LOG_WARN("failed to generate exchange partition arg", KR(ret), K(orig_table_schema),
+        KPC(exchange_table_schema), K(orig_part_name), K(exchange_part_level));
+  }
+  return ret;
+}
+
+int ObAlterTableResolver::resolve_exchange_subpartition(
+    const ParseNode &node,
+    const ObTableSchema &orig_table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_data_version = 0;
+  const ObPartitionLevel exchange_part_level = orig_table_schema.get_part_level();
+  const ObTableSchema *exchange_table_schema = nullptr;
+  ObString orig_part_name;
+  if (OB_UNLIKELY(T_ALTER_SUBPARTITION_EXCHANGE != node.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parse tree", K(ret), K(node.type_));
+  } else if (!lib::is_oracle_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("exchange subpartition under mysql mode is not supported", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "exchange subpartition under mysql mode is");
+  } else if (OB_ISNULL(session_info_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("session info and alter table stmt should not be null", K(ret), KP(session_info_));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+    LOG_WARN("get data version failed", K(ret), K(session_info_->get_effective_tenant_id()));
+  } else if (OB_UNLIKELY(tenant_data_version < DATA_VERSION_4_4_2_0)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("version lower than 4.4.2.0 does not support subpartition exchange", KR(ret), K(tenant_data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "subpartition exchange of version lower than 4.4.2.0 is");
+  } else if (OB_UNLIKELY(PARTITION_LEVEL_TWO != exchange_part_level)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("only support exchanging subpartition on composite-partitioned tables", K(ret), K(exchange_part_level));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Exchange subpartition except composite-partitioned table is");
+  } else if (OB_FAIL(resolve_exchange_partition_stmt(node, orig_table_schema, exchange_table_schema, orig_part_name))) {
+    LOG_WARN("failed to resolve exchange partition stmt", KR(ret), K(orig_table_schema));
+  } else if (OB_ISNULL(exchange_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null exchange table schema", K(ret), KP(exchange_table_schema));
+  } else if (OB_FAIL(rootserver::ObPartitionExchange::check_partition_exchange_schema_for_user(
+      orig_table_schema, *exchange_table_schema, orig_part_name, tenant_data_version, exchange_part_level))) {
+    LOG_WARN("failed to check partition exchange schema for user", KR(ret), K(orig_table_schema),
+        KPC(exchange_table_schema), K(orig_part_name), K(tenant_data_version), K(exchange_part_level));
+  } else if (OB_FAIL(generate_exchange_partition_arg(orig_table_schema, *exchange_table_schema, orig_part_name, exchange_part_level))) {
+    LOG_WARN("failed to generate exchange partition arg", KR(ret), K(orig_table_schema),
+        KPC(exchange_table_schema), K(orig_part_name), K(exchange_part_level));
+  }
+  return ret;
+}
+
+int ObAlterTableResolver::resolve_exchange_partition_stmt(
+    const ParseNode &node,
+    const ObTableSchema &orig_table_schema,
+    const ObTableSchema *&exchange_table_schema,
+    ObString &orig_part_name)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY((T_ALTER_PARTITION_EXCHANGE != node.type_
+                  && T_ALTER_SUBPARTITION_EXCHANGE != node.type_)
+               || OB_ISNULL(node.children_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parse tree", K(ret), K(node.type_));
   } else if (OB_UNLIKELY(2 != node.num_child_)) {
@@ -3272,30 +3365,13 @@ int ObAlterTableResolver::resolve_exchange_partition(const ParseNode &node,
   } else if (OB_ISNULL(node.children_[0]) || OB_ISNULL(node.children_[1])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parse tree", K(ret));
-  } else if (OB_ISNULL(session_info_) || OB_ISNULL(alter_table_stmt)) {
+  } else if (OB_ISNULL(session_info_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("session info and alter table stmt should not be null", K(ret), KPC(session_info_), KPC(alter_table_stmt));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
-    LOG_WARN("get data version failed", K(ret), K(session_info_->get_effective_tenant_id()), K(tenant_data_version));
-  } else if (OB_UNLIKELY(tenant_data_version < DATA_VERSION_4_3_1_0)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("data version and feature mismatch", K(ret), K(tenant_data_version));
-  } else if (OB_UNLIKELY(!orig_table_schema.is_user_table())) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table type");
-    LOG_WARN("unsupport behavior on not user table", K(ret), K(orig_table_schema));
-  } else if (OB_UNLIKELY(PARTITION_LEVEL_ZERO == part_level)) {
-    ret = OB_ERR_PARTITION_MGMT_ON_NONPARTITIONED;
-    LOG_USER_ERROR(OB_ERR_PARTITION_MGMT_ON_NONPARTITIONED);
-    LOG_WARN("unsupport management on non partitioned table", K(ret), K(part_level));
+    LOG_WARN("session info and alter table stmt should not be null", K(ret), KP(session_info_));
   } else {
-    const ObPartition *part = nullptr;
-    const ObSubPartition *subpart = nullptr;
-    const ObTableSchema *exchange_table_schema = NULL;
     ObString exchange_table_name;
     ObString exchange_db_name;
     ParseNode *second_node = node.children_[1];
-    ObString origin_partition_name(static_cast<int32_t>(node.children_[0]->str_len_), node.children_[0]->str_value_);
     ObCStringHelper helper;
     if (OB_FAIL(resolve_table_relation_node(second_node,
                                             exchange_table_name,
@@ -3323,76 +3399,43 @@ int ObAlterTableResolver::resolve_exchange_partition(const ParseNode &node,
     } else if (OB_ISNULL(exchange_table_schema)) {
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("table not found", K(ret), KPC(exchange_table_schema), K(exchange_db_name), K(exchange_table_name));
-    } else if (OB_UNLIKELY(!exchange_table_schema->is_user_table())) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table type");
-      LOG_WARN("unsupport behavior on not user table", K(ret), KPC(exchange_table_schema));
-    } else if (OB_UNLIKELY(exchange_table_schema->is_partitioned_table())) {
-      ret = OB_ERR_PARTITION_EXCHANGE_PART_TABLE;
-      LOG_USER_ERROR(OB_ERR_PARTITION_EXCHANGE_PART_TABLE, exchange_table_name.length(), exchange_table_name.ptr());
-    } else if (share::schema::ObPartitionLevel::PARTITION_LEVEL_ONE == orig_table_schema.get_part_level()) {
-      if (OB_FAIL(orig_table_schema.get_partition_by_name(origin_partition_name, part))) {
-        LOG_WARN("fail to get partition", K(ret), K(orig_table_schema), K(origin_partition_name));
-      } else if (OB_ISNULL(part)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("partition not found", K(ret), K(orig_table_schema), K(origin_partition_name));
-      } else {
-        share::schema::ObPartitionFuncType part_type = orig_table_schema.get_part_option().get_part_func_type();
-        if (OB_UNLIKELY(PARTITION_FUNC_TYPE_RANGE != part_type && PARTITION_FUNC_TYPE_RANGE_COLUMNS != part_type)) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("Only support exchanging range/range columns partitions currently", K(ret), K(part_type));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Exchange partition except range/range columns");
-        }
-      }
-    } else if (share::schema::ObPartitionLevel::PARTITION_LEVEL_TWO == orig_table_schema.get_part_level()) {
-      if (OB_FAIL(orig_table_schema.get_partition_by_name(origin_partition_name, part))) {
-        if (OB_UNKNOWN_PARTITION == ret) {
-          ret = OB_SUCCESS;
-          if (OB_FAIL(orig_table_schema.get_subpartition_by_name(origin_partition_name, part, subpart))) {
-            LOG_WARN("get subpartition by name failed", K(ret), K(orig_table_schema), K(origin_partition_name));
-          } else if (OB_ISNULL(part) || OB_ISNULL(subpart)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("partition not found", K(ret), K(OB_ISNULL(part)), K(OB_ISNULL(subpart)));
-          } else {
-            share::schema::ObPartitionFuncType subpart_type = orig_table_schema.get_sub_part_option().get_part_func_type();
-            if (OB_UNLIKELY(PARTITION_FUNC_TYPE_RANGE != subpart_type && PARTITION_FUNC_TYPE_RANGE_COLUMNS != subpart_type)) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("Only support exchanging range/range columns partitions currently", K(ret), K(subpart_type));
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "Exchange partition except range/range columns");
-            }
-          }
-        } else {
-          LOG_WARN("fail to get partition by name", K(ret), K(orig_table_schema), K(origin_partition_name));
-        }
-      } else {
-        ret = OB_ERR_EXCHANGE_COMPOSITE_PARTITION;
-        LOG_WARN("cannot EXCHANGE a composite partition with a non-partitioned table", K(ret), K(orig_table_schema), K(origin_partition_name));
-      }
     } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("partition level is invalid", K(ret), K(orig_table_schema.get_part_level()));
+      orig_part_name.assign_ptr(node.children_[0]->str_value_, static_cast<int32_t>(node.children_[0]->str_len_));
     }
-    if (OB_SUCC(ret)) {
-      obrpc::ObExchangePartitionArg exchange_partition_arg;
-      if (OB_FAIL(exchange_partition_arg.based_schema_object_infos_.assign(alter_table_stmt->get_alter_table_arg().based_schema_object_infos_))) {
-        LOG_WARN("fail to assign based_schema_object_infos", K(ret), K(alter_table_stmt->get_alter_table_arg().based_schema_object_infos_));
-      } else if (OB_FAIL(exchange_partition_arg.based_schema_object_infos_.push_back(ObBasedSchemaObjectInfo(exchange_table_schema->get_table_id(), TABLE_SCHEMA, exchange_table_schema->get_schema_version())))) {
-        LOG_WARN("failed to add exchange table info", K(ret), KPC(exchange_table_schema));
-      } else {
-        exchange_partition_arg.session_id_ = session_info_->get_server_sid();
-        exchange_partition_arg.tenant_id_  = session_info_->get_effective_tenant_id();
-        exchange_partition_arg.exchange_partition_level_ = orig_table_schema.get_part_level();
-        exchange_partition_arg.base_table_id_ = orig_table_schema.get_table_id();
-        exchange_partition_arg.base_table_part_name_ = origin_partition_name;
-        exchange_partition_arg.inc_table_id_ = exchange_table_schema->get_table_id();
-        exchange_partition_arg.including_indexes_ = true;
-        exchange_partition_arg.without_validation_ = true;
-        exchange_partition_arg.update_global_indexes_ = false;
-        exchange_partition_arg.exec_tenant_id_ = session_info_->get_effective_tenant_id();
-        if (OB_FAIL(alter_table_stmt->set_exchange_partition_arg(exchange_partition_arg))) {
-          LOG_WARN("fail to set exchange_partition_arg", K(ret), K(exchange_partition_arg));
-        }
-      }
+  }
+  return ret;
+}
+
+int ObAlterTableResolver::generate_exchange_partition_arg(
+    const ObTableSchema &orig_table_schema,
+    const ObTableSchema &exchange_table_schema,
+    const ObString &orig_part_name,
+    const ObPartitionLevel exchange_part_level)
+{
+  int ret = OB_SUCCESS;
+  ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
+  obrpc::ObExchangePartitionArg exchange_partition_arg;
+  if (OB_ISNULL(session_info_) || OB_ISNULL(alter_table_stmt)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("session info and alter table stmt should not be null", K(ret), KP(session_info_), KP(alter_table_stmt));
+  } else if (OB_FAIL(exchange_partition_arg.based_schema_object_infos_.assign(alter_table_stmt->get_alter_table_arg().based_schema_object_infos_))) {
+    LOG_WARN("fail to assign based_schema_object_infos", K(ret), K(alter_table_stmt->get_alter_table_arg().based_schema_object_infos_));
+  } else if (OB_FAIL(exchange_partition_arg.based_schema_object_infos_.push_back(
+      ObBasedSchemaObjectInfo(exchange_table_schema.get_table_id(), TABLE_SCHEMA, exchange_table_schema.get_schema_version())))) {
+    LOG_WARN("failed to add exchange table info", K(ret), K(exchange_table_schema));
+  } else {
+    exchange_partition_arg.session_id_ = session_info_->get_server_sid();
+    exchange_partition_arg.tenant_id_  = session_info_->get_effective_tenant_id();
+    exchange_partition_arg.exchange_partition_level_ = exchange_part_level;
+    exchange_partition_arg.base_table_id_ = orig_table_schema.get_table_id();
+    exchange_partition_arg.base_table_part_name_ = orig_part_name;
+    exchange_partition_arg.inc_table_id_ = exchange_table_schema.get_table_id();
+    exchange_partition_arg.including_indexes_ = true;
+    exchange_partition_arg.without_validation_ = true;
+    exchange_partition_arg.update_global_indexes_ = false;
+    exchange_partition_arg.exec_tenant_id_ = session_info_->get_effective_tenant_id();
+    if (OB_FAIL(alter_table_stmt->set_exchange_partition_arg(exchange_partition_arg))) {
+      LOG_WARN("fail to set exchange_partition_arg", K(ret), K(exchange_partition_arg));
     }
   }
   return ret;
@@ -5273,6 +5316,14 @@ int ObAlterTableResolver::resolve_partition_options(const ParseNode &node)
             LOG_WARN("failed to resolve exchange partition", K(ret));
           } else {
             alter_table_stmt->get_alter_table_arg().alter_part_type_ = ObAlterTableArg::EXCHANGE_PARTITION;
+          }
+          break;
+        }
+        case T_ALTER_SUBPARTITION_EXCHANGE: {
+          if (OB_FAIL(resolve_exchange_subpartition(*partition_node, *table_schema_))) {
+            LOG_WARN("failed to resolve exchange subpartition", K(ret));
+          } else {
+            alter_table_stmt->get_alter_table_arg().alter_part_type_ = ObAlterTableArg::EXCHANGE_SUBPARTITION;
           }
           break;
         }

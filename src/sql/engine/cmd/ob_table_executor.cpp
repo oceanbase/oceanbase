@@ -1254,7 +1254,8 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
 
         }
         if (OB_SUCC(ret)) {
-          if (obrpc::ObAlterTableArg::EXCHANGE_PARTITION == alter_table_arg.alter_part_type_) {
+          if ((obrpc::ObAlterTableArg::EXCHANGE_PARTITION == alter_table_arg.alter_part_type_)
+              || (obrpc::ObAlterTableArg::EXCHANGE_SUBPARTITION == alter_table_arg.alter_part_type_)) {
             if (OB_FAIL(alter_table_exchange_partition_rpc(exchange_partition_arg,
                                                            res,
                                                            common_rpc_proxy,
@@ -2008,7 +2009,8 @@ int ObAlterTableExecutor::check_alter_partition(ObExecContext &ctx,
                || obrpc::ObAlterTableArg::ALTER_PARTITION_STORAGE_CACHE_POLICY == arg.alter_part_type_
                || obrpc::ObAlterTableArg::ALTER_SUBPARTITION_STORAGE_CACHE_POLICY == arg.alter_part_type_) {
       // do-nothing
-    } else if (obrpc::ObAlterTableArg::EXCHANGE_PARTITION == arg.alter_part_type_) {
+    } else if ((obrpc::ObAlterTableArg::EXCHANGE_PARTITION == arg.alter_part_type_)
+        || (obrpc::ObAlterTableArg::EXCHANGE_SUBPARTITION == arg.alter_part_type_)) {
       // do-nothing
     } else {
       ret = OB_ERR_UNEXPECTED;

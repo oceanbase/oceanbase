@@ -162,6 +162,16 @@ private:
                                 const share::schema::ObTableSchema &orig_table_schema);
   int resolve_exchange_partition(const ParseNode &node,
                                  const share::schema::ObTableSchema &orig_table_schema);
+  int resolve_exchange_subpartition(const ParseNode &node,
+                                    const share::schema::ObTableSchema &orig_table_schema);
+  int resolve_exchange_partition_stmt(const ParseNode &node,
+                                      const share::schema::ObTableSchema &orig_table_schema,
+                                      const share::schema::ObTableSchema *&exchange_table_schema,
+                                      common::ObString &orig_partition_name);
+  int generate_exchange_partition_arg(const ObTableSchema &orig_table_schema,
+                                      const ObTableSchema &exchange_table_schema,
+                                      const ObString &orig_part_name,
+                                      const ObPartitionLevel exchange_part_level);
   int resolve_rename_partition(const ParseNode &node,
                              const share::schema::ObTableSchema &orig_table_schema);
   int resolve_rename_subpartition(const ParseNode &node,
