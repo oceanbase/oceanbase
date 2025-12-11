@@ -1971,6 +1971,8 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprIsNan::eval_is_nan_vector,                              /* 313 */
   NULL, // ObExprSpace::eval_space_vector,                               /* 314 */
   NULL, // ObExprIfNull::eval_ifnull_vector,                             /* 315 */
+  NULL, // ObExprQuarter::calc_quarter_vector,                           /* 316 */
+  NULL, // ObExprToDays::calc_to_days_vector,                            /* 317 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
