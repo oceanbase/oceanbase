@@ -2658,7 +2658,13 @@ int ObLSDupTabletsMgr::return_tablet_set_(DupTabletChangeMap *need_free_set)
   } else {
     if (OB_FAIL(ret)) {
     } else {
-      if (free_set_pool_.add_last(need_free_set) == false) {
+      if (OB_UNLIKELY(need_free_set->get_prev() != nullptr
+                      || need_free_set->get_next() != nullptr)) {
+        ret = OB_EAGAIN;
+        DUP_TABLE_LOG(WARN, "need_free_set is not alone, can not be freed", K(ret),
+                      KPC(need_free_set), KP(need_free_set->get_prev()),
+                      KP(need_free_set->get_next()), K(lbt()));
+      } else if (free_set_pool_.add_last(need_free_set) == false) {
         ret = OB_ERR_UNEXPECTED;
         DUP_TABLE_LOG(WARN, "insert into free set failed", K(ret), KPC(need_free_set));
       } else {
