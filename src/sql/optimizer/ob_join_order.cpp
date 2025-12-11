@@ -123,13 +123,13 @@ int ObJoinOrder::get_query_range_count(const QueryRangeInfo &range_info,
   const ObQueryRangeArray &ranges = range_info.get_ranges();
   const ObQueryRangeProvider *provider = range_info.get_query_range_provider();
   ObSEArray<uint64_t, 4> total_range_sizes;
-  bool has_exec_param = false;
+  bool has_exec_stage_param = false;
   if (OB_ISNULL(provider)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret), K(provider));
-  } else if (OB_FAIL(check_has_exec_param(*provider, has_exec_param))) {
+  } else if (OB_FAIL(check_has_exec_stage_param(*provider, has_exec_stage_param))) {
     LOG_WARN("failed to check has exec param", K(ret));
-  } else if (!has_exec_param) {
+  } else if (!has_exec_stage_param) {
     range_cnt = ranges.count();
   } else if (OB_FAIL(provider->get_total_range_sizes(total_range_sizes))) {
     LOG_WARN("failed to get range size", K(ret));
@@ -1088,7 +1088,7 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
     int64_t equal_prefix_null_count = 0;
     int64_t range_prefix_count = 0;
     bool contain_always_false = false;
-    bool has_exec_param = false;
+    bool has_exec_stage_param = false;
     int64_t out_index_prefix = -1;
     bool is_domain_index = (is_geo_index || is_multi_index || is_fts_index);
     int64_t range_cnt = 0;
@@ -1152,9 +1152,9 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
                                                                   range_prefix_count,
                                                                   contain_always_false))) {
       LOG_WARN("failed to compute query range prefix count", K(ret));
-    } else if (OB_FAIL(check_has_exec_param(*query_range_provider, has_exec_param))) {
+    } else if (OB_FAIL(check_has_exec_stage_param(*query_range_provider, has_exec_stage_param))) {
       LOG_WARN("failed to check has exec param", K(ret));
-    } else if (!has_exec_param) {
+    } else if (!has_exec_stage_param) {
       //没有exec param就使用真实query range计算equal prefix count
       //有exec param就使用query range的形状计算equal prefix count
       range_info.set_equal_prefix_count(equal_prefix_count);
@@ -1201,19 +1201,22 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
   return ret;
 }
 
-int ObJoinOrder::check_has_exec_param(const ObQueryRangeProvider &query_range,
-                                      bool &has_exec_param)
+int ObJoinOrder::check_has_exec_stage_param(const ObQueryRangeProvider &query_range,
+                                            bool &has_exec_stage_param)
 {
   int ret = OB_SUCCESS;
-  has_exec_param = false;
+  has_exec_stage_param = false;
   const ObIArray<ObRawExpr*> &range_exprs = query_range.get_range_exprs();
-  for (int64_t i = 0; OB_SUCC(ret) && !has_exec_param && i < range_exprs.count(); ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && !has_exec_stage_param && i < range_exprs.count(); ++i) {
     ObRawExpr *expr = range_exprs.at(i);
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null expr", K(ret));
-    } else if (expr->has_flag(CNT_DYNAMIC_PARAM)) {
-      has_exec_param = true;
+    } else if (expr->has_flag(CNT_DYNAMIC_PARAM) ||
+               // since CNT_FAKE_CONST_UDF is temporarily used in range converter,
+               // we combine CNT_STATE_FUNC and CNT_PL_UDF to simulate the same meaning outside.
+               (expr->has_flag(CNT_STATE_FUNC) && expr->has_flag(CNT_PL_UDF))) {
+      has_exec_stage_param = true;
     }
   }
   return ret;

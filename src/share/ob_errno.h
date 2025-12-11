@@ -1943,6 +1943,9 @@ constexpr int OB_ERR_ALTER_ATTR_DUPLICATE = -9831;
 constexpr int OB_ERR_ALTER_INVALID_UDT = -9832;
 constexpr int OB_ERR_ALTER_ATTR_TYPE_ILLEGAL = -9833;
 constexpr int OB_ERR_ALTER_HAS_DEPENDENT = -9834;
+constexpr int OB_ERR_FORALL_BULK_INDEX_IN_INTO_CLAUSE = -9836;
+constexpr int OB_ERR_FORALL_INVLIAD_IN_BIND_VARIABLE = -9837;
+constexpr int OB_ERR_BULK_SQL_ATTRS_NOT_SINGLE_INDEX = -9838;
 constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
 constexpr int OB_TTL_NOT_ENABLE = -10501;
 constexpr int OB_TTL_COLUMN_NOT_EXIST = -10502;
@@ -2061,8 +2064,8 @@ constexpr int OB_ERR_UPDATE_TWICE = -30926;
 constexpr int OB_ERR_FLASHBACK_QUERY_WITH_UPDATE = -32491;
 constexpr int OB_ERR_UPDATE_ON_EXPR = -38104;
 constexpr int OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS = -38105;
-constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
+constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 
 
 #define OB_SUCCESS__USER_ERROR_MSG "Success"
@@ -4410,6 +4413,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_ALTER_INVALID_UDT__USER_ERROR_MSG "cannot alter a type that is not valid"
 #define OB_ERR_ALTER_ATTR_TYPE_ILLEGAL__USER_ERROR_MSG "type of attribute '%.*s' does not allow modifications to the attribute"
 #define OB_ERR_ALTER_HAS_DEPENDENT__USER_ERROR_MSG "must specify either CASCADE or INVALIDATE option"
+#define OB_ERR_FORALL_BULK_INDEX_IN_INTO_CLAUSE__USER_ERROR_MSG "FORALL bulk index cannot be used in INTO clause"
+#define OB_ERR_FORALL_INVLIAD_IN_BIND_VARIABLE__USER_ERROR_MSG "FORALL bulk IN-bind variables cannot be used here"
+#define OB_ERR_BULK_SQL_ATTRS_NOT_SINGLE_INDEX__USER_ERROR_MSG "bulk SQL attributes must use a single index"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__USER_ERROR_MSG "TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__USER_ERROR_MSG "TTL column '%.*s' not exists"
@@ -4565,8 +4571,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_FLASHBACK_QUERY_WITH_UPDATE__USER_ERROR_MSG "snapshot expression not allowed here"
 #define OB_ERR_UPDATE_ON_EXPR__USER_ERROR_MSG "Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__USER_ERROR_MSG "specified row no longer exists"
-#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__USER_ERROR_MSG "Data too long for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__USER_ERROR_MSG "Data too long for column '%.*s' at row %ld"
 
 
 #define OB_SUCCESS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: 0, Success"
@@ -9259,6 +9265,12 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_ALTER_ATTR_TYPE_ILLEGAL__OBE_USER_ERROR_MSG "PLS-00718: type of attribute '%.*s' does not allow modifications to the attribute"
 #define OB_ERR_ALTER_HAS_DEPENDENT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9834, must specify either CASCADE or INVALIDATE option"
 #define OB_ERR_ALTER_HAS_DEPENDENT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9834, must specify either CASCADE or INVALIDATE option"
+#define OB_ERR_FORALL_BULK_INDEX_IN_INTO_CLAUSE__ORA_USER_ERROR_MSG "PLS-00437: FORALL bulk index cannot be used in INTO clause"
+#define OB_ERR_FORALL_BULK_INDEX_IN_INTO_CLAUSE__OBE_USER_ERROR_MSG "PLS-00437: FORALL bulk index cannot be used in INTO clause"
+#define OB_ERR_FORALL_INVLIAD_IN_BIND_VARIABLE__ORA_USER_ERROR_MSG "PLS-00440: FORALL bulk IN-bind variables cannot be used here"
+#define OB_ERR_FORALL_INVLIAD_IN_BIND_VARIABLE__OBE_USER_ERROR_MSG "PLS-00440: FORALL bulk IN-bind variables cannot be used here"
+#define OB_ERR_BULK_SQL_ATTRS_NOT_SINGLE_INDEX__ORA_USER_ERROR_MSG "PLS-00431: bulk SQL attributes must use a single index"
+#define OB_ERR_BULK_SQL_ATTRS_NOT_SINGLE_INDEX__OBE_USER_ERROR_MSG "PLS-00431: bulk SQL attributes must use a single index"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10501, TTL feature is not enabled"
@@ -9569,12 +9581,12 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_UPDATE_ON_EXPR__OBE_USER_ERROR_MSG "OBE-38104: Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__ORA_USER_ERROR_MSG "ORA-08006: specified row no longer exists"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__OBE_USER_ERROR_MSG "OBE-08006: specified row no longer exists"
-#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
-#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
+#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 
-extern int g_all_ob_errnos[2500];
+extern int g_all_ob_errnos[2503];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

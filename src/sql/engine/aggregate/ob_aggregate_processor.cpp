@@ -2215,7 +2215,7 @@ int ObAggregateProcessor::collect_result_batch(const ObIArray<ObExpr *> &group_e
         }
       }
     } // end for
-    aggr_info.expr_->get_eval_info(eval_ctx_).projected_ = true;
+    aggr_info.expr_->get_eval_info(eval_ctx_).set_projected(true);
   }
   // clear operator evaluated flags to recalc expr after rollup set_null
   clear_op_evaluated_flag();
@@ -2474,7 +2474,7 @@ void ObAggregateProcessor::set_expr_datum_null(ObExpr *expr)
   expr->set_evaluated_flag(eval_ctx_);
   datum.set_null();
   if (expr->is_batch_result()) {
-    expr->get_eval_info(eval_ctx_).notnull_ = false;
+    expr->get_eval_info(eval_ctx_).set_notnull(false);
   }
 }
 

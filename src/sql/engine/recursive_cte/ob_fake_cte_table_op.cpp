@@ -206,8 +206,8 @@ int ObFakeCTETableOp::get_next_batch_from_intermedia_table(const int64_t max_row
       ObExpr *e = MY_SPEC.column_involved_exprs_.at(i);
       e->set_evaluated_projected(eval_ctx_);
       ObEvalInfo &info = e->get_eval_info(eval_ctx_);
-      info.notnull_ = false;
-      info.point_to_frame_ = false;
+      info.set_notnull(false);
+      info.set_point_to_frame(false);
     }
     brs_.size_ = read_rows;
     brs_.end_ = (ret == OB_INDEX_OUT_OF_RANGE);
@@ -568,8 +568,8 @@ int ObFakeCTETableOp::attach_rows(
     if (OB_SUCC(ret)) {
       e->set_evaluated_projected(ctx);
       ObEvalInfo &info = e->get_eval_info(ctx);
-      info.notnull_ = false;
-      info.point_to_frame_ = false;
+      info.set_notnull(false);
+      info.set_point_to_frame(false);
     }
   }
   return ret;

@@ -266,7 +266,8 @@ struct ObQueryRangeCtx
       contail_geo_filters_(false),
       force_no_link_(false),
       unique_index_column_num_(-1),
-      constraints_expr_factory_(nullptr) {}
+      constraints_expr_factory_(nullptr),
+      ignore_fake_const_udf_(false) {}
   ~ObQueryRangeCtx() {}
   int init(ObPreRangeGraph *pre_range_graph,
            const ObIArray<ColumnItem> &range_columns,
@@ -279,7 +280,8 @@ struct ObQueryRangeCtx
            const ColumnIdInfoMap *geo_column_id_map,
            const bool force_no_link,
            const ObTableSchema *index_schema,
-           ObRawExprFactory *constraints_expr_factory);
+           ObRawExprFactory *constraints_expr_factory,
+           const bool ignore_fake_const_udf);
   int64_t column_cnt_;
   // 131 is the next prime number larger than OB_MAX_ROWKEY_COLUMN_NUMBER
   common::hash::ObPlacementHashMap<int64_t, int64_t, 131> range_column_map_;
@@ -313,6 +315,7 @@ struct ObQueryRangeCtx
   bool force_no_link_;
   int64_t unique_index_column_num_;
   ObRawExprFactory *constraints_expr_factory_;
+  bool ignore_fake_const_udf_;
 };
 
 class ObPreRangeGraph : public ObQueryRangeProvider
@@ -365,7 +368,8 @@ public:
                                       const int64_t index_prefix = -1,
                                       const ObTableSchema *index_schema = NULL,
                                       const ColumnIdInfoMap *geo_column_id_map = NULL,
-                                      ObRawExprFactory *constraint_expr_factory = NULL);
+                                      ObRawExprFactory *constraint_expr_factory = NULL,
+                                      const bool ignore_fake_const_udf = false);
   virtual int get_tablet_ranges(common::ObIAllocator &allocator,
                                 ObExecContext &exec_ctx,
                                 ObQueryRangeArray &ranges,
@@ -404,6 +408,7 @@ public:
   bool is_equal_range() const override { return is_equal_range_; }
   virtual int64_t get_column_count() const { return column_count_; }
   virtual bool has_exec_param() const { return contain_exec_param_; }
+  virtual bool has_fake_const_udf() const { return cnt_fake_const_udf_; }
   virtual bool is_ss_range() const { return skip_scan_offset_ > -1; }
   virtual int64_t get_skip_scan_offset() const { return skip_scan_offset_; }
   virtual int reset_skip_scan_range()
@@ -457,6 +462,7 @@ public:
   void set_is_equal_range(const bool v) { is_equal_range_ = v; }
   void set_is_get(const bool v) { is_get_ = v; }
   void set_contain_exec_param(const bool v) { contain_exec_param_ = v; }
+  void set_cnt_fake_const_udf(const bool v) { cnt_fake_const_udf_ = v; }
   void set_skip_scan_offset(int64_t v) { skip_scan_offset_ = v; }
   int set_range_exprs(ObIArray<ObRawExpr*> &range_exprs) { return range_exprs_.assign(range_exprs); }
   int set_ss_range_exprs(ObIArray<ObRawExpr*> &range_exprs) { return ss_range_exprs_.assign(range_exprs); }
@@ -543,7 +549,8 @@ private:
       uint32_t fast_nlj_range_         :  1;
       uint32_t general_nlj_range_      :  1;
       uint32_t enable_new_false_range_ :  1;
-      uint32_t reserved_               : 28;
+      uint32_t cnt_fake_const_udf_     :  1;
+      uint32_t reserved_               : 27;
     };
   };
 };

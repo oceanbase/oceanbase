@@ -1016,7 +1016,7 @@ void ObDASIndexMergeIter::reset_datum_ptr(const common::ObIArray<ObExpr*> *exprs
       if (OB_NOT_NULL(expr)) {
         expr->locate_datums_for_update(*eval_ctx_, size);
         ObEvalInfo &info = expr->get_eval_info(*eval_ctx_);
-        info.point_to_frame_ = true;
+        info.set_point_to_frame(true);
       }
     }
   }

@@ -655,7 +655,8 @@ int ObExprObjAccess::eval_obj_access(const ObExpr &expr,
 {
   int ret = OB_SUCCESS;
   const ExtraInfo *info = static_cast<const ExtraInfo *>(expr.extra_info_);
-  const ParamStore &param_store = ctx.exec_ctx_.get_physical_plan_ctx()->get_param_store();
+  ObPhysicalPlanCtx *plan_ctx = ctx.exec_ctx_.get_physical_plan_ctx();
+
   OZ(expr.eval_param_value(ctx));
   ObObj params[expr.arg_cnt_];
   for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; i++) {
@@ -666,17 +667,78 @@ int ObExprObjAccess::eval_obj_access(const ObExpr &expr,
 
   ObObj result;
   ObEvalCtx::TempAllocGuard alloc_guard(ctx);
-  OZ(info->calc(result,
-                alloc_guard.get_allocator(),
-                expr.obj_meta_,
-                info->extend_size_,
-                param_store,
-                params,
-                expr.arg_cnt_,
-                &ctx));
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_ISNULL(plan_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("plan ctx is null", K(ret));
+  } else {
+    ParamStore *tmp_param_store = nullptr;
+    void *tmp_param_store_buf = nullptr;
+    const ParamStore *effective_param_store_ptr = nullptr;
+    const ObPhysicalPlan *phy_plan = plan_ctx->get_phy_plan();
+    // if the param datum frame is inited and is batched multi stmt, construct param_store from param_frame.
+    if (plan_ctx->is_param_datum_frame_inited() && OB_NOT_NULL(phy_plan) && phy_plan->get_is_batched_multi_stmt()) {
+      DatumParamStore &datum_param_store = plan_ctx->get_datum_param_store();
+      if (OB_ISNULL(tmp_param_store_buf = alloc_guard.get_allocator().alloc(sizeof(ParamStore)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory for tmp param store", K(ret));
+      } else {
+        tmp_param_store = new(tmp_param_store_buf) ParamStore(ObWrapperAllocator(alloc_guard.get_allocator()));
+        OZ (tmp_param_store->reserve(datum_param_store.count()));
+      }
+
+      for (int64_t i = 0; OB_SUCC(ret) && i < datum_param_store.count(); i++) {
+        // get the latest datum from param_frame, combine it with the meta from datum_param_store, and construct param_store.
+        ObDatum *datum = nullptr;
+        ObEvalInfo *eval_info = nullptr;
+        VectorHeader *vec_header = nullptr;
+        plan_ctx->get_param_frame_info(i, datum, eval_info, vec_header);
+
+        ObDatumObjParam &datum_param = datum_param_store.at(i);
+        ObObjParam obj_param;
+        ObObjMeta meta;
+
+        if (datum_param.meta_.is_ext_sql_array()) {
+          const ObSqlDatumArray *datum_array = datum_param.get_sql_datum_array();
+          meta = datum_array->element_.get_meta_type();
+          obj_param.set_accuracy(datum_array->element_.get_accuracy());
+        } else {
+          meta.set_type(datum_param.meta_.type_);
+          meta.set_collation_type(datum_param.meta_.cs_type_);
+          meta.set_scale(datum_param.meta_.scale_);
+          obj_param.set_accuracy(datum_param.get_accuracy());
+        }
+
+        if (OB_FAIL(datum->to_obj(obj_param, meta, ObDatum::get_obj_datum_map_type(meta.get_type())))) {
+          LOG_WARN("failed to convert datum to obj", K(ret), K(i), K(*datum), K(meta));
+        } else {
+          if (OB_FAIL(tmp_param_store->push_back(obj_param))) {
+            LOG_WARN("failed to push back param", K(ret), K(i));
+          }
+        }
+      }
+      effective_param_store_ptr = tmp_param_store;
+    } else {
+      effective_param_store_ptr = &plan_ctx->get_param_store();
+    }
+
+    CK (OB_NOT_NULL(effective_param_store_ptr));
+    if (OB_SUCC(ret)) {
+      OZ(info->calc(result,
+                    alloc_guard.get_allocator(),
+                    expr.obj_meta_,
+                    info->extend_size_,
+                    *effective_param_store_ptr,
+                    params,
+                    expr.arg_cnt_,
+                    &ctx));
+    }
+  }
 
   OZ(expr_datum.from_obj(result, expr.obj_datum_map_));
-  if (is_lob_storage(result.get_type())) {
+  if (OB_SUCC(ret) && is_lob_storage(result.get_type())) {
     OZ (ob_adjust_lob_datum(result, expr.obj_meta_, ctx.exec_ctx_.get_allocator(), expr_datum));
   }
   return ret;

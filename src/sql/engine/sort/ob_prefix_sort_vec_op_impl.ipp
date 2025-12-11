@@ -312,7 +312,7 @@ int ObPrefixSortVecImpl<Compare, Store_Row, has_addon>::fetch_rows_batch()
         if (OB_FAIL(e->eval_vector(*eval_ctx_, *brs_))) {
           SQL_ENG_LOG(WARN, "eval batch failed", K(ret));
         } else {
-          e->get_eval_info(*eval_ctx_).projected_ = true;
+          e->get_eval_info(*eval_ctx_).set_projected(true);
         }
       }
       selector_size_ = 0;

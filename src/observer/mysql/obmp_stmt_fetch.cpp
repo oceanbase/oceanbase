@@ -461,7 +461,7 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
               LOG_WARN("response row fail", K(ret), K(cursor.is_packed()));
             }
           }
-          ObPLExecCtx pl_ctx(cursor.get_allocator(), exec_ctx, &params,
+          ObPLExecCtx pl_ctx(cursor.get_allocator(), cursor.get_allocator(), exec_ctx, &params,
                             NULL/*result*/, &ret, NULL/*func*/, true);
           if (OB_FAIL(ret)) {
           } else if (cursor.is_ps_cursor()) {

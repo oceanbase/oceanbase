@@ -3675,7 +3675,7 @@ int ObRelationalExprOperator::eval_compare_composite(CollectionPredRes &cmp_resu
 
   OX (rhs.set_id(c2->get_id()));
   OX (rhs.set_allocator(&tmp_coll_alloc));
-  OZ (rhs.deep_copy(c2, nullptr));
+  OZ (rhs.deep_copy(c2, nullptr, false));
   OX (c2_copy.set_extend(reinterpret_cast<int64_t>(&rhs), obj2.get_meta().get_extend_type()));
   DEFER(pl::ObUserDefinedType::destruct_obj(c2_copy));
 

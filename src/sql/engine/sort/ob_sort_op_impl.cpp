@@ -3234,7 +3234,7 @@ int ObPrefixSortImpl::fetch_rows_batch(const common::ObIArray<ObExpr *> &all_exp
         if (OB_FAIL(e->eval_batch(*eval_ctx_, *brs_->skip_, brs_->size_))) {
           LOG_WARN("eval batch failed", K(ret));
         } else {
-          e->get_eval_info(*eval_ctx_).projected_ = true;
+          e->get_eval_info(*eval_ctx_).set_projected(true);
         }
       }
       selector_size_ = 0;

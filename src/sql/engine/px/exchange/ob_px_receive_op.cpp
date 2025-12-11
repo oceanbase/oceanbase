@@ -494,7 +494,7 @@ int ObPxReceiveOp::wrap_get_next_batch(const int64_t max_row_cnt)
     // set project flag to prevent duplcated expression calculation
     if (NULL != all_exprs) {
       FOREACH_CNT(e, *(all_exprs)) {
-        (*e)->get_eval_info(eval_ctx_).projected_ = 1;
+        (*e)->get_eval_info(eval_ctx_).set_projected(true);
       }
     }
   }
@@ -765,7 +765,7 @@ void ObPxReceiveOp::do_clear_datum_eval_flag()
   FOREACH_CNT(e, spec_.calc_exprs_) {
     if ((*e)->is_batch_result()) {
       (*e)->get_evaluated_flags(eval_ctx_).unset(eval_ctx_.get_batch_idx());
-      (*e)->get_eval_info(eval_ctx_).projected_ = 0;
+      (*e)->get_eval_info(eval_ctx_).set_projected(false);
     } else {
       (*e)->get_eval_info(eval_ctx_).clear_evaluated_flag();
     }

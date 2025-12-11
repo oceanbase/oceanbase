@@ -341,6 +341,50 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
   return ret;
 }
 
+int ObQueryDriver::send_eof_packet(bool has_more_result)
+{
+  int ret = OB_SUCCESS;
+  OMPKEOF eofp;
+  if (OB_FAIL(seal_eof_packet(has_more_result, eofp))) {
+    LOG_WARN("failed to seal eof packet", K(ret), K(has_more_result));
+  } else if (OB_FAIL(sender_.response_packet(eofp, &session_))) {
+    LOG_WARN("response packet fail", K(ret), K(has_more_result));
+  }
+  return ret;
+}
+
+int ObQueryDriver::seal_eof_packet(bool has_more_result, obmysql::OMPKEOF& eofp)
+{
+  int ret = OB_SUCCESS;
+  const ObWarningBuffer *warnings_buf = common::ob_get_tsi_warning_buffer();
+  uint16_t warning_count = 0;
+  if (OB_ISNULL(warnings_buf)) {
+    // ignore ret
+    LOG_WARN("can not get thread warnings buffer", K(warnings_buf));
+  } else {
+    warning_count = static_cast<uint16_t>(warnings_buf->get_readable_warning_count());
+  }
+  eofp.set_warning_count(warning_count);
+  ObServerStatusFlags flags = eofp.get_server_status();
+  flags.status_flags_.OB_SERVER_STATUS_IN_TRANS
+    = (session_.is_server_status_in_transaction() ? 1 : 0);
+  flags.status_flags_.OB_SERVER_STATUS_AUTOCOMMIT = (session_.get_local_autocommit() ? 1 : 0);
+  flags.status_flags_.OB_SERVER_MORE_RESULTS_EXISTS = has_more_result;
+  eofp.set_server_status(flags);
+  if (!session_.is_obproxy_mode()) {
+    // in java client or others, use slow query bit to indicate partition hit or not
+    flags.status_flags_.OB_SERVER_QUERY_WAS_SLOW = !session_.partition_hit().get_bool();
+  }
+  eofp.set_server_status(flags);
+  // for proxy
+  // in multi-stmt, send extra ok packet in the last stmt(has no more result)
+  if (!is_prexecute_ && !has_more_result
+      && OB_FAIL(sender_.update_last_pkt_pos())) {
+    LOG_WARN("failed to update last packet pos", K(ret));
+  }
+  return ret;
+}
+
 int ObQueryDriver::convert_field_charset(ObIAllocator& allocator,
                                          const ObCollationType& from_collation,
                                          const ObCollationType& dest_collation,

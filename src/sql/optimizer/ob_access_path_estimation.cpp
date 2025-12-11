@@ -1209,7 +1209,8 @@ int ObAccessPathEstimation::process_storage_estimation_result(ObOptimizerContext
       AccessPath *path = result_helpers.at(i).path_;
       bool new_range_with_exec_param = (path->get_query_range_provider() != NULL &&
                                         path->get_query_range_provider()->is_new_query_range() &&
-                                        path->get_query_range_provider()->has_exec_param());
+                                        (path->get_query_range_provider()->has_exec_param() ||
+                                         path->get_query_range_provider()->has_fake_const_udf()));
       if (result_helpers.at(i).result_.logical_row_count_ >= 0 &&
           OB_FAIL(estimate_prefix_range_rowcount(result_helpers.at(i).result_.logical_row_count_,
                                                  result_helpers.at(i).result_.physical_row_count_,

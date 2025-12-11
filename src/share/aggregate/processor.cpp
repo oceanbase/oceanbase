@@ -262,7 +262,7 @@ int Processor::collect_group_results(const RowMeta &row_meta, int32_t &output_ba
         ret = OB_ERR_UNEXPECTED;
         SQL_LOG(WARN, "unexepcted output batch", K(output_size), K(cur_batch_size), K(ret));
       }
-      OX (agg_ctx_.aggr_infos_.at(i).expr_->get_eval_info(agg_ctx_.eval_ctx_).projected_ = true);
+      OX (agg_ctx_.aggr_infos_.at(i).expr_->get_eval_info(agg_ctx_.eval_ctx_).set_projected(true));
     }
     LOG_DEBUG("collect group results", K(ret), K(output_size), K(cur_group_id), K(output_brs),
               K(output_batch_size));
@@ -329,7 +329,7 @@ int Processor::collect_group_results(const RowMeta &row_meta,
         ret = OB_ERR_UNEXPECTED;
         SQL_LOG(WARN, "unexepcted output batch", K(output_size), K(cur_batch_size), K(ret));
       }
-      OX (agg_ctx_.aggr_infos_.at(i).expr_->get_eval_info(agg_ctx_.eval_ctx_).projected_ = true);
+      OX (agg_ctx_.aggr_infos_.at(i).expr_->get_eval_info(agg_ctx_.eval_ctx_).set_projected(true));
     }
 
     if (OB_SUCC(ret)) { clear_op_evaluated_flag(); }
@@ -394,7 +394,7 @@ int Processor::collect_group_results(const RowMeta &row_meta,
                    agg_ctx_, col_id, 0, batch_size, rows, row_meta))) {
         SQL_LOG(WARN, "collect batch group results", K(ret));
       } else {
-        agg_ctx_.aggr_infos_.at(col_id).expr_->get_eval_info(agg_ctx_.eval_ctx_).projected_ = true;
+        agg_ctx_.aggr_infos_.at(col_id).expr_->get_eval_info(agg_ctx_.eval_ctx_).set_projected(true);
       }
     }
     if (OB_SUCC(ret)) { clear_op_evaluated_flag(); }

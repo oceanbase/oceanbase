@@ -425,7 +425,8 @@ public:
                                       const bool phy_rowid_for_table_loc = false,
                                       const bool ignore_calc_failure = true,
                                       const bool use_in_optimization = false,
-                                      const int64_t index_prefix = -1);
+                                      const int64_t index_prefix = -1,
+                                      const bool ignore_fake_const_udf = false);
 
   //  final_extract_query_range extracts the final query range of its physical plan.
   //  It will get the real-time value of some const which are unknown during physical plan generating.
@@ -537,6 +538,7 @@ public:
                                   bool &is_inconsistent_rowid,
                                   ObIAllocator *allocator = NULL) const;
   virtual bool inline has_exec_param() const { return has_exec_param_; }
+  virtual bool inline has_fake_const_udf() const { return false; } // old query range doesn't deal with fake deterministic udf
   bool inline get_is_equal_and() const { return is_equal_and_; }
   void inline set_is_equal_and(int64_t is_equal_and) { is_equal_and_ = is_equal_and; }
   const common::ObIArray<ObEqualOff> &get_raw_equal_offs() const { return equal_offs_; }

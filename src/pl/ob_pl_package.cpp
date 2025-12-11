@@ -180,10 +180,14 @@ int ObPLPackage::instantiate_package_state(const ObPLResolveCtx &resolve_ctx,
   int ret = OB_SUCCESS;
   ObString key;
   ObObj value;
+  bool is_system_tenant = get_tenant_id_by_object_id(id_) == OB_SYS_TENANT_ID;
+  package_state.set_is_dbms_profiler(is_system_tenant && get_name().compare_equal("DBMS_PROFILER"));
+  package_state.set_is_dbms_plsql_code_coverage(is_system_tenant && get_name().compare_equal("DBMS_PLSQL_CODE_COVERAGE"));
   ARRAY_FOREACH(var_table_, var_idx) {
     const ObPLVar *var = var_table_.at(var_idx);
     const ObPLDataType &var_type = var->get_type();
-    OZ (package_state.add_package_var_val(value, var_type.get_type()));
+    ObPLPackageVarMetaInfo meta_info(var_type.get_type(), var->is_not_null(), var->get_name().case_compare_equal("RUN_STATUS"));
+    OZ (package_state.add_package_var_val(value, meta_info));
   }
   ARRAY_FOREACH(var_table_, var_idx) {
     const ObPLVar *var = var_table_.at(var_idx);
@@ -213,8 +217,7 @@ int ObPLPackage::instantiate_package_state(const ObPLResolveCtx &resolve_ctx,
       LOG_WARN("cannot assign null to var with not null attribution", K(ret));
     }
     //NOTE: do not remove package user variable! distribute plan will sync it to remote if needed!
-    //OZ (package_state.add_package_var_val(value, var_type.get_type()));
-    OZ (package_state.set_package_var_val(var_idx, value, resolve_ctx, false));
+    OZ (package_state.set_package_var_val(var_idx, value, false));
     if (OB_NOT_NULL(var) && var->get_type().is_cursor_type() && !var->get_type().is_cursor_var()) {
       // package ref cursor variable, refrence outside, do not destruct it.
     } else if (OB_FAIL(ret)) {
@@ -312,7 +315,7 @@ int ObPLPackage::instantiate_package_state(const ObPLResolveCtx &resolve_ctx,
             if (var_type.is_obj_type()) {
               OZ (ObUserDefinedType::destruct_objparam(package_state.get_pkg_allocator(), value, &(resolve_ctx.session_info_)));
               // set basic type value inside symbol table to null
-              OZ (package_state.set_package_var_val(var_idx, value, resolve_ctx, false));
+              OZ (package_state.set_package_var_val(var_idx, value, false));
             } else {
               OZ (ObUserDefinedType::reset_composite(value, &(resolve_ctx.session_info_)));
             }
@@ -326,7 +329,7 @@ int ObPLPackage::instantiate_package_state(const ObPLResolveCtx &resolve_ctx,
                                     value));
             // need set var again if var is baisc type
             if (var_type.is_obj_type()) {
-              OZ (package_state.set_package_var_val(var_idx, value, resolve_ctx, !need_deserialize));
+              OZ (package_state.set_package_var_val(var_idx, value, !need_deserialize));
             }
           }
           // record sync variable, avoid to sync tiwce!

@@ -11837,7 +11837,7 @@
     "base_value": "1",
     "data_type": "bool",
     "info": "Whether can transform the PL/SQL select into from dual statement to an assignment statement",
-    "flags": "SESSION | GLOBAL | NEED_SERIALIZE",
+    "flags": "SESSION | GLOBAL | NEED_SERIALIZE | INFLUENCE_PL",
     "publish_version": "4.4.2.0",
     "info_cn": "",
     "background_cn": "",

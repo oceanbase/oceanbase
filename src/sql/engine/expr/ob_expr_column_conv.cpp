@@ -724,8 +724,8 @@ int ObExprColumnConv::column_convert_batch(const ObExpr &expr,
   const uint64_t cast_mode = enumset_info->cast_mode_;
   bool is_strict = CM_IS_STRICT_MODE(cast_mode) && !CM_IS_IGNORE_CHARSET_CONVERT_ERR(cast_mode);
   ObEvalInfo &eval_info = expr.args_[4]->get_eval_info(ctx);
-  bool param_not_eval = !expr.args_[4]->get_eval_info(ctx).evaluated_
-                        && !expr.args_[4]->get_eval_info(ctx).projected_;
+  bool param_not_eval = !expr.args_[4]->get_eval_info(ctx).is_evaluated(ctx)
+                        && !expr.args_[4]->get_eval_info(ctx).is_projected();
   if (OB_FAIL(expr.args_[4]->eval_batch(ctx, skip, batch_size))) {
     LOG_WARN("failed to eval batch vals", K(ret));
   } else {
@@ -947,8 +947,8 @@ int ObExprColumnConv::column_convert_vector(const ObExpr &expr,
   const uint64_t cast_mode = enumset_info->cast_mode_;
   bool is_strict = CM_IS_STRICT_MODE(cast_mode) && !CM_IS_IGNORE_CHARSET_CONVERT_ERR(cast_mode);
   ObEvalInfo &eval_info = expr.args_[4]->get_eval_info(ctx);
-  bool param_not_eval = !expr.args_[4]->get_eval_info(ctx).evaluated_
-                        && !expr.args_[4]->get_eval_info(ctx).projected_;
+  bool param_not_eval = !expr.args_[4]->get_eval_info(ctx).is_evaluated(ctx)
+                        && !expr.args_[4]->get_eval_info(ctx).is_projected();
   if (OB_FAIL(expr.args_[4]->eval_vector(ctx, skip, bound))) {
     LOG_WARN("failed to eval args", K(ret));
   } else {

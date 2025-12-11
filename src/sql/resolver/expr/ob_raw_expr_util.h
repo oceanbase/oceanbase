@@ -1324,6 +1324,8 @@ public:
                                     common::ObIArray<ObRawExpr*> &params,
                                     const bool without_const_expr = false);
 
+  static int extract_udf_exprs(ObRawExpr *expr, ObIArray<ObRawExpr *> &udf_exprs);
+  static int check_all_params_const(ObRawExpr *expr, bool &all_params_const);
   static int is_contain_params(const common::ObIArray<ObRawExpr*> &exprs, bool &is_contain);
   static int is_contain_params(const ObRawExpr *expr, bool &is_contain);
   static int get_col_ref_expr_recursively(ObRawExpr *expr,

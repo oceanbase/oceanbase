@@ -93,18 +93,30 @@ public:
   virtual const char *get_type() const { return "ObEndTransAsyncCallback"; }
   virtual ObEndTransCallbackType get_callback_type() const { return ASYNC_CALLBACK_TYPE; }
   observer::ObSqlEndTransCb &get_mysql_end_trans_cb() { return mysql_end_trans_cb_; }
+  observer::ObPLEndTransCb &get_pl_end_trans_cb() { return pl_end_trans_cb_; }
   void reset()
   {
     ObExclusiveEndTransCallback::reset();
     mysql_end_trans_cb_.reset();
+    pl_end_trans_cb_.reset();
+    is_pl_async_commit_ = false;
+    has_async_query_sender_ = false;
     reset_diagnostic_info();
   }
   void set_diagnostic_info(common::ObDiagnosticInfo *diagnostic_info);
   void reset_diagnostic_info();
+  void set_is_pl_async_commit(bool is_pl_mysql_async) { is_pl_async_commit_ = is_pl_mysql_async; }
+  bool is_pl_async_commit() { return is_pl_async_commit_; }
+  void set_has_async_query_sender(bool has_async_query_sender) { has_async_query_sender_ = has_async_query_sender; }
+  bool has_async_query_sender() { return has_async_query_sender_; }
+  void dispatch_callback(int cb_param, bool need_disconnect);
 private:
   /* macro */
   observer::ObSqlEndTransCb mysql_end_trans_cb_;
   common::ObDiagnosticInfo *diagnostic_info_;
+  observer::ObPLEndTransCb pl_end_trans_cb_;
+  bool is_pl_async_commit_;
+  bool has_async_query_sender_;
   DISALLOW_COPY_AND_ASSIGN(ObEndTransAsyncCallback);
 };
 

@@ -2204,7 +2204,7 @@ int ObOrcTableRowIterator::project_column(ObEvalCtx &eval_ctx, const ObExpr *fro
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(from), K(to));
   } else {
-    if (!from->get_eval_info(eval_ctx).evaluated_) {
+    if (!from->get_eval_info(eval_ctx).is_evaluated(eval_ctx)) {
       CK (OB_NOT_NULL(bit_vector_cache_));
       OZ (from->eval_vector(eval_ctx, *bit_vector_cache_, read_count, true));
       OX (from->set_evaluated_projected(eval_ctx));

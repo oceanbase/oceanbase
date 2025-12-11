@@ -1619,7 +1619,7 @@ OB_INLINE int ObMPQuery::response_result(ObMySQLResultSet &result,
   ObSQLSessionInfo &session = result.get_session();
   CHECK_COMPATIBILITY_MODE(&session);
 
-  bool need_trans_cb  = result.need_end_trans_callback() && (!force_sync_resp);
+  bool need_trans_cb  = result.need_end_trans_callback(force_sync_resp);
 
   // 通过判断 plan 是否为 null 来确定是 plan 还是 cmd
   // 针对 plan 和 cmd 分开处理，逻辑会较为清晰。
@@ -1643,15 +1643,21 @@ OB_INLINE int ObMPQuery::response_result(ObMySQLResultSet &result,
   } else {
 
 #define CMD_EXEC \
+    if (session.is_pl_async_commit()) { \
+      ObPLEndTransCb &pl_end_trans_cb = session.get_pl_end_trans_cb(); \
+      pl_end_trans_cb.init(packet_sender_, &session); \
+    } \
     if (need_trans_cb) {\
       ObSqlEndTransCb &sql_end_cb = session.get_mysql_end_trans_cb(); \
       ObAsyncCmdDriver drv(gctx_, ctx_, session, retry_ctrl_, *this); \
+      session.set_pl_query_sender(&drv); \
       if (OB_FAIL(sql_end_cb.init(packet_sender_, &session))) { \
         LOG_WARN("failed to init sql end callback", K(ret)); \
       } else if (OB_FAIL(drv.response_result(result))) { \
         LOG_WARN("fail response async result", K(ret)); \
       } \
       async_resp_used = result.is_async_end_trans_submitted(); \
+      session.set_pl_query_sender(NULL); \
     } else { \
       ObSyncCmdDriver drv(gctx_, ctx_, session, retry_ctrl_, *this); \
       session.set_pl_query_sender(&drv); \

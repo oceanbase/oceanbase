@@ -2674,7 +2674,7 @@ int ObSQLSessionInfo::add_changed_package_info()
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator;
   if (0 != package_state_map_.size()) {
-    FOREACH(it, package_state_map_) {
+    FOREACH_X(it, package_state_map_, OB_SUCC(ret)) {
       ObPLPackageState *package_state = it->second;
       if (package_state->is_package_info_changed()) {
         ObSEArray<ObString, 4> key;
@@ -3413,6 +3413,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       // 13. enable_ps_parameterize
       ATOMIC_STORE(&enable_ps_parameterize_, tenant_config->enable_ps_parameterize);
       ATOMIC_STORE(&enable_sql_ccl_rule_, tenant_config->_enable_sql_ccl_rule);
+      ATOMIC_STORE(&enable_streaming_cursor_prefetch_, tenant_config->_enable_streaming_cursor_prefetch);
       ATOMIC_STORE(&force_unstreaming_cursor_, tenant_config->_force_unstreaming_cursor);
       extend_sql_plan_monitor_metrics_ = tenant_config->_extend_sql_plan_monitor_metrics;
     }

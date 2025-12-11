@@ -43,8 +43,6 @@ public:
                   bool is_prexecute = false);
   virtual ~ObSyncCmdDriver();
 
-  int send_eof_packet(bool has_more_result);
-  int seal_eof_packet(bool has_more_result, obmysql::OMPKEOF& eofp);
   virtual int response_query_result(sql::ObResultSet &result,
                                     bool is_ps_protocol,
                                     bool has_more_result,

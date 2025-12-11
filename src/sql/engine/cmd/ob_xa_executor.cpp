@@ -77,6 +77,15 @@ int ObXaStartExecutor::execute(ObExecContext &ctx, ObXaStartStmt &stmt)
                              stmt.get_bqual_string(),
                              stmt.get_format_id()))) {
     LOG_WARN("set xid failed", K(ret), K(stmt));
+  } else if (my_session->is_pl_async_commit()) {
+    observer::ObPLEndTransCb &pl_end_trans_cb = my_session->get_pl_end_trans_cb();
+    if (OB_NOT_NULL(pl_end_trans_cb.get_tx_desc())) {
+      if (OB_FAIL(pl_end_trans_cb.wait_tx_end(plan_ctx))) {
+        LOG_WARN("[PL_ASYNC_COMMIT] XA start failed to wait for async transaction", K(ret), K(xid));
+      }
+    }
+  }
+  if (OB_SUCCESS != ret) {
   } else if (my_session->get_in_transaction()) {
     ObTxDesc *&tx_desc = my_session->get_tx_desc();
     ret = OB_TRANS_XA_OUTSIDE;
@@ -418,6 +427,15 @@ int ObPlXaStartExecutor::execute(ObExecContext &ctx, ObXaStartStmt &stmt)
                              stmt.get_bqual_string(),
                              stmt.get_format_id()))) {
     LOG_WARN("set xid error", K(ret), K(stmt));
+  } else if (my_session->is_pl_async_commit()) {
+    observer::ObPLEndTransCb &pl_end_trans_cb = my_session->get_pl_end_trans_cb();
+    if (OB_NOT_NULL(pl_end_trans_cb.get_tx_desc())) {
+      if (OB_FAIL(pl_end_trans_cb.wait_tx_end(plan_ctx))) {
+        LOG_WARN("[PL_ASYNC_COMMIT] XA start (Oracle) failed to wait for async transaction", K(ret), K(xid));
+      }
+    }
+  }
+  if (OB_SUCCESS != ret) {
   } else if (my_session->get_in_transaction()) {
     auto tx_desc = my_session->get_tx_desc();
     ret = OB_TRANS_XA_OUTSIDE;

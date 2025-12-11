@@ -22,10 +22,59 @@ using namespace pl;
 namespace sql
 {
 
+ObExprGetPackageVar::ExtraInfo::ExtraInfo(common::ObIAllocator &alloc, ObExprOperatorType type)
+  : ObIExprExtraInfo(alloc, type),
+  package_id_(OB_INVALID_INDEX),
+  var_idx_(OB_INVALID_INDEX)
+{
+}
+
+OB_SERIALIZE_MEMBER(ObExprGetPackageVar::ExtraInfo,
+  package_id_,
+  var_idx_);
+
+void ObExprGetPackageVar::ExtraInfo::reset()
+{
+  package_id_ = OB_INVALID_INDEX;
+  var_idx_ = OB_INVALID_INDEX;
+}
+
+int ObExprGetPackageVar::ExtraInfo::deep_copy(common::ObIAllocator &allocator,
+                             const ObExprOperatorType type,
+                             ObIExprExtraInfo *&copied_info) const
+{
+  int ret = OB_SUCCESS;
+  OZ(ObExprExtraInfoFactory::alloc(allocator, type, copied_info));
+  ExtraInfo &other = *static_cast<ExtraInfo *>(copied_info);
+  if (OB_SUCC(ret)) {
+    OZ(other.assign(*this));
+  }
+  return ret;
+}
+
+int ObExprGetPackageVar::ExtraInfo::assign(const ObExprGetPackageVar::ExtraInfo &other)
+{
+  int ret = OB_SUCCESS;
+
+  package_id_ = other.package_id_;
+  var_idx_ = other.var_idx_;
+
+  return ret;
+}
+
+int ObExprGetPackageVar::ExtraInfo::from_raw_expr(const ObRawExpr &raw_expr)
+{
+  int ret = 0;
+
+  CK(3 == raw_expr.get_param_count());
+  OX (package_id_ = static_cast<const ObConstRawExpr *>(raw_expr.get_param_expr(0))->get_value().get_uint64());
+  OX (var_idx_ = static_cast<const ObConstRawExpr *>(raw_expr.get_param_expr(1))->get_value().get_int());
+
+  return ret;
+}
+
 int ObExprGetPackageVar::calc(ObObj &result,
                               uint64_t package_id,
-                              int64_t spec_version,
-                              int64_t body_version,
                               int64_t var_idx,
                               ObExecContext *exec_ctx,
                               ObSQLSessionInfo *session_info)
@@ -35,13 +84,7 @@ int ObExprGetPackageVar::calc(ObObj &result,
   ObPL *pl_engine = NULL;
   ObPLPackageGuard *package_guard = NULL;
   share::schema::ObSchemaGetterGuard *schema_guard = NULL;
-  if (OB_ISNULL(GCTX.schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("global schema service is null", K(ret));
-  } else if (OB_ISNULL(exec_ctx)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("exec ctx is null", K(ret));
-  } else if (OB_ISNULL(session_info)) {
+  if (OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is null", K(ret));
   } else if (OB_ISNULL(sql_proxy = exec_ctx->get_sql_proxy())) {
@@ -71,7 +114,7 @@ int ObExprGetPackageVar::calc(ObObj &result,
                                false);
     ObPLPackageManager &package_manager = pl_engine->get_package_manager();
     if (OB_FAIL(package_manager.get_package_var_val(
-        resolve_ctx, *exec_ctx, package_id, spec_version, body_version, var_idx, result))) {
+        resolve_ctx, *exec_ctx, package_id, var_idx, result))) {
       LOG_WARN("get package var failed", K(ret));
     }
   } 
@@ -114,40 +157,38 @@ int ObExprGetPackageVar::eval_get_package_var(const ObExpr &expr,
                                               ObDatum &res)
 {
   int ret = OB_SUCCESS;
-  ObDatum *package_id = NULL;
-  ObDatum *var_idx = NULL;
-  ObDatum *result_type = NULL;
-  ObDatum *spec_version = NULL;
-  ObDatum *body_version = NULL;
-  if (OB_FAIL(expr.eval_param_value(
-      ctx, package_id, var_idx, result_type, spec_version, body_version))) {
-    LOG_WARN("eval arg failed", K(ret));
-  } else if (package_id->is_null()
-             || var_idx->is_null()
-             || result_type->is_null()
-             || spec_version->is_null()) {
-    res.set_null();
+  ObDatum *package_id_datum = NULL;
+  ObDatum *var_idx_datum = NULL;
+  uint64_t package_id = OB_INVALID_INDEX;
+  int64_t var_idx = OB_INVALID_INDEX;
+  const ExtraInfo *info = static_cast<const ExtraInfo *>(expr.extra_info_);
+  if (OB_ISNULL(info) || info->package_id_ == OB_INVALID_INDEX || info->var_idx_ == OB_INVALID_INDEX) {
+    OZ (expr.eval_param_value(ctx, package_id_datum, var_idx_datum));
+    OX (package_id = package_id_datum->get_uint());
+    OX (var_idx = var_idx_datum->get_int());
   } else {
+    package_id = info->package_id_;
+    var_idx = info->var_idx_;
+  }
+  if(OB_SUCC(ret)) {
     ObObj res_obj;
     OZ(calc(res_obj,
-            package_id->get_uint(),
-            spec_version->get_int(),
-            body_version->is_null() ? OB_INVALID_VERSION : body_version->get_int(),
-            var_idx->get_int(),
+            package_id,
+            var_idx,
             &ctx.exec_ctx_,
             ctx.exec_ctx_.get_my_session()),
-            KPC(package_id), KPC(spec_version), KPC(body_version), KPC(var_idx));
+            K(package_id), K(var_idx));
     if (OB_SUCC(ret)) {
       if (!res_obj.is_null() && res_obj.get_type() != expr.obj_meta_.get_type()) { // todo: need collect pkg basic type var dependency info
         ret = OB_ERR_WRONG_TYPE_FOR_VAR;
         LOG_WARN("result type no match with result type", K(ret), K(res_obj), K(expr.obj_meta_));
-      } else if (ob_is_string_tc(res_obj.get_type())) {
+      } else if (expr.is_called_in_sql_ && ob_is_string_tc(res_obj.get_type())) {
         ObString res_str;
         ObExprStrResAlloc res_alloc(expr, ctx);
         OZ(res_obj.get_string(res_str));
         OZ(ObExprUtil::deep_copy_str(res_str, res_str, res_alloc));
         OX(res.set_string(res_str));
-      } else if (ob_is_text_tc(res_obj.get_type())) {
+      } else if (expr.is_called_in_sql_ && ob_is_text_tc(res_obj.get_type())) {
         if (res_obj.has_lob_header() != expr.obj_meta_.has_lob_header()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid lob header", K(ret), K(res_obj.has_lob_header()), K(expr.obj_meta_.has_lob_header()));
@@ -162,6 +203,7 @@ int ObExprGetPackageVar::eval_get_package_var(const ObExpr &expr,
         }
       } else {
         OZ(res.from_obj(res_obj));
+        OZ(expr.deep_copy_datum(ctx, res));
         if (is_lob_storage(res_obj.get_type())) {
           OZ(ob_adjust_lob_datum(res_obj, expr.obj_meta_, ctx.exec_ctx_.get_allocator(), res));
         }
@@ -176,10 +218,19 @@ int ObExprGetPackageVar::cg_expr(ObExprCGCtx &ctx,
                                  ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
-  UNUSED(ctx);
-  UNUSED(raw_expr);
-  CK(5 == rt_expr.arg_cnt_);
-  OX(rt_expr.eval_func_ = eval_get_package_var);
+
+  ObIAllocator &alloc = *ctx.allocator_;
+  ExtraInfo *info = OB_NEWx(ExtraInfo, (&alloc), alloc, T_OP_GET_PACKAGE_VAR);
+  if (NULL == info) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory failed", K(ret));
+  } else {
+    CK(3 == rt_expr.arg_cnt_);
+    OX (info->package_id_ = static_cast<const ObConstRawExpr *>(raw_expr.get_param_expr(0))->get_value().get_uint64());
+    OX (info->var_idx_ = static_cast<const ObConstRawExpr *>(raw_expr.get_param_expr(1))->get_value().get_int());
+    OX (rt_expr.extra_info_ = info);
+    OX (rt_expr.eval_func_ = eval_get_package_var);
+  }
   return ret;
 }
 } //namespace sql

@@ -2861,7 +2861,12 @@ int ObTableLocation::get_pre_range_graph_node(const ObPartitionLevel part_level,
                                                                        NULL,
                                                                        NULL,
                                                                        phy_rowid_for_table_loc,
-                                                                       false))) {
+                                                                       false,
+                                                                       -1,
+                                                                       NULL,
+                                                                       NULL,
+                                                                       NULL,
+                                                                       true))) {
       LOG_WARN("Failed to pre extract query range", K(ret));
     } else if (node->pre_range_graph_.is_precise_whole_range()) {
       //pre query range is whole range, indicate that there are no partition condition in filters,

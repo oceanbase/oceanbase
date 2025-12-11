@@ -130,7 +130,7 @@ TEST_F(TestExpr, number_add)
           "new add expr", TEST_CNT,
           [&] {
             // calc_buf_.reset_remain_one_page();
-            expr->get_eval_info(eval_ctx_).evaluated_ = false;
+            expr->get_eval_info(eval_ctx_).set_evaluated(false);
             return expr->eval(eval_ctx_, datum);
           }));
 }
@@ -166,7 +166,7 @@ TEST_F(TestExpr, int_less)
   ASSERT_EQ(OB_SUCCESS, timed_execute(
           "new less expr", TEST_CNT,
           [&] {
-            expr->get_eval_info(eval_ctx_).evaluated_ = false;
+            expr->get_eval_info(eval_ctx_).set_evaluated(false);
             return expr->eval(eval_ctx_, datum);
           }));
 }

@@ -130,6 +130,23 @@ public:
   TO_STRING_KV(K(package_id_), K(state_version_), K(var_type_), K(var_idx_));
 };
 
+class ObPLPackageVarMetaInfo
+{
+public:
+  ObPLType type_;
+  bool is_not_null_;
+  bool is_run_status_; // for profile and codecoverage
+
+  ObPLPackageVarMetaInfo()
+      : type_(PL_INVALID_TYPE), is_not_null_(false), is_run_status_(false) {}
+
+  ObPLPackageVarMetaInfo(ObPLType type, bool is_not_null, bool is_run_status)
+      : type_(type), is_not_null_(is_not_null), is_run_status_(is_run_status) {}
+  virtual ~ObPLPackageVarMetaInfo() {}
+
+  TO_STRING_KV(K(type_), K(is_not_null_), K(is_run_status_));
+};
+
 class ObPLPackageState
 {
 public:
@@ -143,32 +160,36 @@ public:
         state_version_(state_version),
         serially_reusable_(serially_reusable),
         changed_vars_(),
-        types_(),
+        meta_infos_(),
         vars_(),
         has_instantiated_(false),
-        tenant_schema_version_(OB_INVALID_VERSION) {
-        types_.set_attr(SET_IGNORE_MEM_VERSION(lib::ObMemAttr(MTL_ID(), "PLPkgTypes")));
+        tenant_schema_version_(OB_INVALID_VERSION),
+        is_dbms_profiler_(false),
+        is_dbms_plsql_code_coverage_(false) {
+        meta_infos_.set_attr(SET_IGNORE_MEM_VERSION(lib::ObMemAttr(MTL_ID(), "PLPkgMetaInfos")));
         vars_.set_attr(SET_IGNORE_MEM_VERSION(lib::ObMemAttr(MTL_ID(), "PLPkgVars")));
         }
   virtual ~ObPLPackageState()
   {
     package_id_ = common::OB_INVALID_ID;
     changed_vars_.reset();
-    types_.reset();
+    meta_infos_.reset();
     vars_.reset();
     inner_allocator_.reset();
     cursor_allocator_.reset();
     has_instantiated_ = false;
+    is_dbms_profiler_ = false;
+    is_dbms_plsql_code_coverage_ = false;
   }
   int init();
   void reset(sql::ObSQLSessionInfo *session_info);
   common::ObIAllocator &get_pkg_allocator() { return inner_allocator_; }
   common::ObIAllocator &get_pkg_cursor_allocator() { return cursor_allocator_; }
-  int add_package_var_val(const common::ObObj &value, ObPLType type);
-  int set_package_var_val(int64_t var_idx, const common::ObObj &value,
-                          const ObPLResolveCtx &resolve_ctx, bool deep_copy_complex = true);
+  int add_package_var_val(const common::ObObj &value, ObPLPackageVarMetaInfo &meta_info);
+  int set_package_var_val(int64_t var_idx, const common::ObObj &value, bool deep_copy_complex = true);
   int get_package_var_val(int64_t var_idx, common::ObObj &value);
   int update_changed_vars(int64_t var_idx);
+  int get_package_var_meta_info(int64_t var_idx, ObPLPackageVarMetaInfo &meta_info);
   inline bool is_package_info_changed()
   {
     return (!changed_vars_.is_empty() && !serially_reusable_) ? true : false;
@@ -238,6 +259,10 @@ public:
 
   int64_t get_tenant_schema_version() const { return tenant_schema_version_; }
   void set_tenant_schema_version(int64_t tenant_schema_version) { tenant_schema_version_ = tenant_schema_version; }
+  void set_is_dbms_profiler(bool is_dbms_profiler) { is_dbms_profiler_ = is_dbms_profiler; }
+  void set_is_dbms_plsql_code_coverage(bool is_dbms_plsql_code_coverage) { is_dbms_plsql_code_coverage_ = is_dbms_plsql_code_coverage; }
+  bool is_dbms_profiler() const { return is_dbms_profiler_; }
+  bool is_dbms_plsql_code_coverage() const { return is_dbms_plsql_code_coverage_; }
 
   TO_STRING_KV(K(package_id_), K(serially_reusable_), K(state_version_));
 
@@ -250,10 +275,12 @@ private:
   ObPackageStateVersion state_version_;
   bool serially_reusable_;
   common::ObBitSet<> changed_vars_;
-  common::ObSEArray<ObPLType, 64> types_;
+  common::ObSEArray<ObPLPackageVarMetaInfo, 64> meta_infos_;
   common::ObSEArray<ObObj, 64> vars_;
   bool has_instantiated_;
   int64_t tenant_schema_version_;
+  bool is_dbms_profiler_;
+  bool is_dbms_plsql_code_coverage_;
 };
 } //end namespace pl
 } //end namespace oceanbase

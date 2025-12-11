@@ -314,7 +314,22 @@ private:
   int convert_trigger_rowid(ObLogDelUpd &log_op,
                             const IndexDMLInfo &dml_info,
                             ObDMLBaseCtDef &dml_ctdef);
-  int add_trigger_arg(const ObTriggerInfo &trigger_info, ObDMLBaseCtDef &dml_ctdef);
+  int generate_trigger_arg(ObSQLSessionInfo &session_info,
+                           share::schema::ObSchemaGetterGuard &schema_guard,
+                           const ObTableSchema &table_schema,
+                           const ObTriggerInfo &trigger_info,
+                           ObTriggerArg &trigger_arg,
+                           int64_t col_cnt);
+  int generate_trigger_arg(ObTrigDMLCtDef &trig_ctdef,
+                           ObIArray<const ObTriggerInfo *> &trigger_infos,
+                           ObSQLSessionInfo &session_info,
+                           share::schema::ObSchemaGetterGuard &schema_guard,
+                           const ObTableSchema &table_schema,
+                           bool is_instead_of);
+  int merge_trigger_ref_types(ObTrigDMLCtDef &trig_ctdef,
+                              bool is_instead_of,
+                              int64_t col_cnt);
+
   int convert_triggers(ObLogDelUpd &log_op,
                        const IndexDMLInfo &dml_info,
                        ObDMLBaseCtDef &dml_ctdef,

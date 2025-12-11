@@ -124,15 +124,15 @@ int ObSubPlanScanOp::next_batch(const int64_t max_row_cnt)
         } else if (from->is_batch_result()) {
           MEMCPY(to_datums, from_datums, brs_.size_ * sizeof(ObDatum));
           to_info = from_info;
-          to_info.projected_ = true;
-          to_info.point_to_frame_ = false;
+          to_info.set_projected(true);
+          to_info.set_point_to_frame(false);
         } else {
           for (int64_t j = 0; j < brs_.size_; j++) {
             to_datums[j] = *from_datums;
           }
           to_info = from_info;
-          to_info.projected_ = true;
-          to_info.point_to_frame_ = false;
+          to_info.set_projected(true);
+          to_info.set_point_to_frame(false);
           to_info.cnt_ = brs_.size_;
         }
       }
@@ -186,7 +186,7 @@ int ObSubPlanScanOp::next_vector(const int64_t max_row_cnt)
           const ObEvalInfo &from_info = from->get_eval_info(eval_ctx_);
           ObEvalInfo &to_info = to->get_eval_info(eval_ctx_);
           to_info = from_info;
-          to_info.projected_ = true;
+          to_info.set_projected(true);
           to_info.cnt_ = brs_.size_;
         }
       }

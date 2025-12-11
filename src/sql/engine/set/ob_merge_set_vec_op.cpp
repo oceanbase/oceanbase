@@ -222,7 +222,7 @@ int ObMergeSetVecOp::convert_batch(const common::ObIArray<ObExpr*> &src_exprs,
           const ObEvalInfo &from_info = from->get_eval_info(eval_ctx_);
           ObEvalInfo &to_info = to->get_eval_info(eval_ctx_);
           to_info = from_info;
-          to_info.projected_ = true;
+          to_info.set_projected(true);
           to_info.cnt_ = brs_.size_;
         }
       }

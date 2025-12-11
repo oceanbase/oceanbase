@@ -1433,7 +1433,7 @@ int ObMultipleMerge::fuse_default(ObDatumRow &row)
                                                       lob_reader_.get_allocator(), datum))) {
             LOG_WARN("adjust lob datum failed", K(ret), K(def_cell.get_meta()), K(expr->obj_meta_));
           } else {
-            eval_info.evaluated_ = true;
+            eval_info.set_evaluated(true);
           }
         }
       }

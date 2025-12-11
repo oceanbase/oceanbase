@@ -183,7 +183,6 @@ int ObLockContext::valid_execute_context(ObExecContext &ctx)
   CK (OB_NOT_NULL(ctx.get_my_session()));
   CK (OB_NOT_NULL(ctx.get_sql_proxy()));
   CK (OB_NOT_NULL(ctx.get_sql_ctx()->schema_guard_));
-  CK (OB_NOT_NULL(ctx.get_package_guard()));
   return ret;
 }
 

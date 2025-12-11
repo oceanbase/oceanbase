@@ -262,7 +262,7 @@ int ObPluginExternalTableRowIterator::get_next_rows(int64_t &count, int64_t capa
       if (OB_ISNULL(column_expr) || OB_ISNULL(column_convert_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is null", KP(column_expr), KP(column_convert_expr));
-      } else if (!column_convert_expr->get_eval_info(*eval_ctx).evaluated_) {
+      } else if (!column_convert_expr->get_eval_info(*eval_ctx).is_evaluated(*eval_ctx)) {
         LOG_DEBUG("this column is not evaluated", K(i), K(column_exprs_.count()), KP(column_convert_expr));
         if (OB_FAIL(column_convert_expr->init_vector_default(*eval_ctx, record_batch_slice->num_rows()))) {
           LOG_WARN("failed to init column_convert_expr default vector", K(ret));

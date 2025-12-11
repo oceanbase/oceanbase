@@ -82,6 +82,18 @@ public:
   static int calc_system_trigger_logoff(ObSQLSessionInfo &session);
   static int calc_system_trigger_logon(ObSQLSessionInfo &session);
   static int set_logoff_mark(ObSQLSessionInfo &session);
+  inline static uint64_t get_when_condition_routine_id()
+  {
+    return ROUTINE_IDX_CALC_WHEN;
+  }
+  inline static uint64_t get_before_row_routine_id()
+  {
+    return lib::is_oracle_mode() ? ROUTINE_IDX_BEFORE_ROW : ROUTINE_IDX_BEFORE_ROW_MYSQL;
+  }
+  inline static uint64_t get_after_row_routine_id()
+  {
+    return lib::is_oracle_mode() ? ROUTINE_IDX_AFTER_ROW : ROUTINE_IDX_AFTER_ROW_MYSQL;
+  }
 private:
   // trigger
   static int init_trigger_row(ObIAllocator &alloc, int64_t rowtype_col_count, pl::ObPLRecord *&record);
@@ -101,18 +113,21 @@ private:
   static int calc_trigger_routine(ObExecContext &exec_ctx,
                                   uint64_t trigger_id,
                                   uint64_t routine_id,
-                                  ParamStore &params);
+                                  ParamStore &params,
+                                  bool is_system_trigger = false);
   static int calc_trigger_routine(ObExecContext &exec_ctx,
                                   uint64_t trigger_id,
                                   uint64_t routine_id,
                                   ParamStore &params,
-                                  ObObj &result);
+                                  ObObj &result,
+                                  bool is_system_trigger);
   static int check_and_update_new_row(ObTableModifyOp *self_op,
                                       const ObTriggerColumnsInfo &columns,
                                       ObEvalCtx &eval_ctx,
                                       const ObIArray<ObExpr *> &new_row_exprs,
                                       pl::ObPLRecord *new_record,
-                                      bool check);
+                                      bool check,
+                                      const ObTriggerArg &tg_arg);
   static int do_handle_rowid_before_row(ObTableModifyOp &dml_op,
                                         const ObTrigDMLCtDef &trig_ctdef,
                                         ObTrigDMLRtDef &trig_rtdef,

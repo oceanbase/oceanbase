@@ -156,7 +156,7 @@ struct ObDoArithBatchEval
       }
     }
     if (OB_SUCC(ret) && desc.is_null()) {
-      expr.get_eval_info(ctx).notnull_ = false;
+      expr.get_eval_info(ctx).set_notnull(false);
     }
     return ret;
   }

@@ -640,7 +640,7 @@ int ObDMLService::process_before_stmt_trigger(const ObDMLBaseCtDef &dml_ctdef,
 {
   int ret = OB_SUCCESS;
   dml_rtctx.get_exec_ctx().set_dml_event(dml_event);
-  if (dml_ctdef.is_primary_index_ && !dml_ctdef.trig_ctdef_.tg_args_.empty()) {
+  if (dml_ctdef.is_primary_index_ && dml_ctdef.trig_ctdef_.all_tm_points_.has_before_stmt()) {
     if (!dml_rtctx.op_.get_spec().use_dist_das()
         || dml_rtctx.get_exec_ctx().get_my_session()->is_remote_session()) {
       ret = OB_NOT_SUPPORTED;
@@ -699,7 +699,7 @@ int ObDMLService::init_heap_table_pk_for_ins(const ObInsCtDef &ins_ctdef, ObEval
     } else {
       ObDatum &datum = auto_inc_expr->locate_datum_for_write(eval_ctx);
       datum.set_null();
-      auto_inc_expr->get_eval_info(eval_ctx).evaluated_ = true;
+      auto_inc_expr->get_eval_info(eval_ctx).set_evaluated(true);
     }
   }
   return ret;
@@ -2444,7 +2444,7 @@ int ObDMLService::copy_heap_table_hidden_pk(ObEvalCtx &eval_ctx,
   } else {
     ObDatum &datum = new_hidden_pk->locate_datum_for_write(eval_ctx);
     datum.set_uint(hidden_pk_datum->get_uint());
-    new_hidden_pk->get_eval_info(eval_ctx).evaluated_ = true;
+    new_hidden_pk->get_eval_info(eval_ctx).set_evaluated(true);
   }
   return ret;
 }
@@ -2470,7 +2470,7 @@ int ObDMLService::set_update_hidden_pk(ObEvalCtx &eval_ctx,
     } else {
       ObDatum &datum = auto_inc_expr->locate_datum_for_write(eval_ctx);
       datum.set_uint(autoinc_seq);
-      auto_inc_expr->get_eval_info(eval_ctx).evaluated_ = true;
+      auto_inc_expr->get_eval_info(eval_ctx).set_evaluated(true);
     }
   }
   return ret;
@@ -2513,7 +2513,7 @@ int ObDMLService::set_heap_table_hidden_pk(const ObInsCtDef &ins_ctdef,
       } else {
         ObDatum &datum = auto_inc_expr->locate_datum_for_write(eval_ctx);
         datum.set_uint(autoinc_seq);
-        auto_inc_expr->get_eval_info(eval_ctx).evaluated_ = true;
+        auto_inc_expr->get_eval_info(eval_ctx).set_evaluated(true);
       }
     }
   }

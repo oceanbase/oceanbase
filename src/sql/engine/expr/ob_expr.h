@@ -123,42 +123,6 @@ public:
   OB_INLINE ObCollationType get_cs_type() const { return type_ == ObCollectionSQLType ? CS_TYPE_BINARY : cs_type_; }
 };
 
-// Expression evaluate result info
-struct ObEvalInfo
-{
-  OB_INLINE void clear_evaluated_flag()
-  {
-    if (evaluated_ || projected_) {
-      evaluated_ = 0;
-      projected_ = 0;
-    }
-  }
-  DECLARE_TO_STRING;
-
-  // if want to use this interface to opt in vectorization 1.0,
-  // When converting the new format to the old format in vectorization 2.0,
-  // the notnull_ and point_to_frame_ tags need to be maintained
-  inline bool in_frame_notnull() const { return false; }
-
-	union {
-		struct {
-			// is already evaluated
-			uint16_t evaluated_:1;
-			// is projected
-			uint16_t projected_:1;
-			// all datums are not null.
-			// may not set even all datums are not null,
-      // e.g.: the null values are filtered by skip bitmap.
-			uint16_t notnull_:1;
-			// pointer is point to reserved buffer in frame.
-			uint16_t point_to_frame_:1;
-		};
-		uint16_t flag_;
-	};
-	// result count (set to batch_size in batch_eval)
-	uint16_t cnt_;
-};
-
 // expression evaluate context
 struct ObEvalCtx
 {
@@ -217,7 +181,7 @@ private:
     int64_t batch_size_default_val_ = 0;
     int64_t max_batch_size_default_val_ = 0;
   };
-  explicit ObEvalCtx(ObExecContext &exec_ctx, ObIAllocator *allocator = NULL);
+  explicit ObEvalCtx(ObExecContext &exec_ctx, ObIAllocator *allocator = NULL, bool is_pl_expr_eval = false);
   explicit ObEvalCtx(ObEvalCtx &eval_ctx);
   virtual ~ObEvalCtx();
 
@@ -236,6 +200,7 @@ private:
     max_batch_size_ = max_batch_size;
   }
   int init_datum_caster();
+  bool is_pl_expr_eval() const { return is_pl_expr_eval_; }
 
   TO_STRING_KV(K_(batch_idx), K_(batch_size), K_(max_batch_size), KP(frames_));
 private:
@@ -291,8 +256,56 @@ private:
   common::ObArenaAllocator &expr_res_alloc_;
   // used in `eval_one_datum_of_batch`
   ObBitVector *pvt_skip_for_eval_row_;
+  bool is_pl_expr_eval_; // intead of by is_called_in_sql_ in ObExpr later
 };
 
+// Expression evaluate result info
+struct ObEvalInfo
+{
+  OB_INLINE void clear_evaluated_flag()
+  {
+    if (evaluated_ || projected_) {
+      evaluated_ = 0;
+      projected_ = 0;
+    }
+  }
+  DECLARE_TO_STRING;
+
+  // if want to use this interface to opt in vectorization 1.0,
+  // When converting the new format to the old format in vectorization 2.0,
+  // the notnull_ and point_to_frame_ tags need to be maintained
+  inline bool in_frame_notnull() const { return false; }
+  bool is_evaluated(const ObEvalCtx &ctx)
+  {
+    return ctx.is_pl_expr_eval() ? false : evaluated_;
+  }
+  bool is_projected() const { return projected_; }
+  bool is_notnull() const { return notnull_; }
+  bool is_point_to_frame() const { return point_to_frame_; }
+  void set_evaluated(bool value) { evaluated_ = value; }
+  void set_projected(bool value) { projected_ = value; }
+  void set_notnull(bool value) { notnull_ = value; }
+  void set_point_to_frame(bool value) { point_to_frame_ = value; }
+private:
+  union {
+    struct {
+      // is already evaluated
+      uint16_t evaluated_:1;
+      // is projected
+      uint16_t projected_:1;
+      // all datums are not null.
+      // may not set even all datums are not null,
+      // e.g.: the null values are filtered by skip bitmap.
+      uint16_t notnull_:1;
+      // pointer is point to reserved buffer in frame.
+      uint16_t point_to_frame_:1;
+    };
+    uint16_t flag_;
+  };
+public:
+  // result count (set to batch_size in batch_eval)
+  uint16_t cnt_;
+};
 
 typedef int (*ObExprHashFuncType)(const common::ObDatum &datum, const uint64_t seed, uint64_t &res);
 
@@ -753,7 +766,7 @@ public:
 
   OB_INLINE void set_evaluated_flag(ObEvalCtx &ctx) const
   {
-    get_eval_info(ctx).evaluated_ = true;
+    get_eval_info(ctx).set_evaluated(true);
     if (batch_result_) {
       get_evaluated_flags(ctx).set(ctx.get_batch_idx());
     }
@@ -761,8 +774,8 @@ public:
 
   OB_INLINE void set_evaluated_projected(ObEvalCtx &ctx) const
   {
-    get_eval_info(ctx).evaluated_ = true;
-    get_eval_info(ctx).projected_ = true;
+    get_eval_info(ctx).set_evaluated(true);
+    get_eval_info(ctx).set_projected(true);
   }
 
   typedef common::ObIArray<ObExpr> ObExprIArray;
@@ -1349,7 +1362,7 @@ OB_INLINE int ObExpr::eval(ObEvalCtx &ctx, common::ObDatum *&datum) const
 	datum = (ObDatum *)(frame + datum_off_);
   ObEvalInfo *eval_info = (ObEvalInfo *)(frame + eval_info_off_);
   if (is_batch_result()) {
-    if (NULL == eval_func_ || eval_info->projected_) {
+    if (NULL == eval_func_ || eval_info->is_projected()) {
       if (UINT32_MAX != vector_header_off_) {
         ret = cast_to_uniform(ctx.get_batch_size(), ctx);
       }
@@ -1357,7 +1370,7 @@ OB_INLINE int ObExpr::eval(ObEvalCtx &ctx, common::ObDatum *&datum) const
     } else {
       ret = eval_one_datum_of_batch(ctx, datum);
     }
-  } else if (NULL != eval_func_ && !eval_info->evaluated_) {
+  } else if (NULL != eval_func_ && !eval_info->is_evaluated(ctx)) {
 	// do nothing for const/column reference expr or already evaluated expr
     if (OB_UNLIKELY(need_stack_check_) && OB_FAIL(check_stack_overflow())) {
       SQL_LOG(WARN, "failed to check stack overflow", K(ret));
@@ -1368,7 +1381,7 @@ OB_INLINE int ObExpr::eval(ObEvalCtx &ctx, common::ObDatum *&datum) const
       ret = eval_func_(*this, ctx, *datum);
       CHECK_STRING_LENGTH((*this), (*datum));
       if (OB_LIKELY(common::OB_SUCCESS == ret)) {
-        eval_info->evaluated_ = true;
+        eval_info->set_evaluated(true);
       } else {
         datum->set_null();
       }
@@ -1392,7 +1405,7 @@ OB_INLINE int ObExpr::eval_batch(ObEvalCtx &ctx,
     } else if (OB_FAIL(ret)) {
       ret = OB_SUCCESS;
     }
-  } else if (info.projected_ || NULL == eval_batch_func_) {
+  } else if (info.is_projected() || NULL == eval_batch_func_) {
     // expr values is projected by child or has no evaluate func, do nothing.
     if (UINT32_MAX != vector_header_off_) {
       ret = cast_to_uniform(size, ctx, &skip);

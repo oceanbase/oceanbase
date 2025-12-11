@@ -325,21 +325,21 @@ int ObRecursiveInnerDataOracleOp::try_format_output_batch(int64_t batch_size, in
     if (OB_NOT_NULL(search_expr_)) {
       search_expr_->set_evaluated_projected(eval_ctx_);
       ObEvalInfo &info = search_expr_->get_eval_info(eval_ctx_);
-      info.notnull_ = false;
-      info.point_to_frame_ = false;
+      info.set_notnull(false);
+      info.set_point_to_frame(false);
     }
     if (OB_NOT_NULL(cycle_expr_)) {
       cycle_expr_->set_evaluated_projected(eval_ctx_);
       ObEvalInfo &info = cycle_expr_->get_eval_info(eval_ctx_);
-      info.notnull_ = false;
-      info.point_to_frame_ = false;
+      info.set_notnull(false);
+      info.set_point_to_frame(false);
     }
     for (int64_t i = 0; i < output_union_exprs_.count(); ++i) {
       ObExpr *expr = output_union_exprs_.at(i);
       expr->set_evaluated_projected(eval_ctx_);
       ObEvalInfo &info = expr->get_eval_info(eval_ctx_);
-      info.notnull_ = false;
-      info.point_to_frame_ = false;
+      info.set_notnull(false);
+      info.set_point_to_frame(false);
     }
   }
   return ret;

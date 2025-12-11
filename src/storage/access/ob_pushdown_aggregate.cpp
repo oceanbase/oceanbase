@@ -197,7 +197,7 @@ int ObAggCell::collect_result(sql::ObEvalCtx &ctx)
     LOG_WARN("Failed to from storage datum", K(ret), K(result_datum_), K(result), KPC(this));
   } else {
     sql::ObEvalInfo &eval_info = basic_info_.agg_expr_->get_eval_info(ctx);
-    eval_info.evaluated_ = true;
+    eval_info.set_evaluated(true);
     LOG_DEBUG("collect_result", K(result), KPC(this));
   }
   return ret;
@@ -721,11 +721,11 @@ int ObCountAggCell::collect_result(sql::ObEvalCtx &ctx)
       LOG_WARN("Failed to cons number from int", K(ret), K(row_count_));
     } else {
       result.set_number(result_num);
-      eval_info.evaluated_ = true;
+      eval_info.set_evaluated(true);
     }
   } else {
     result.set_int(row_count_);
-    eval_info.evaluated_ = true;
+    eval_info.set_evaluated(true);
   }
   LOG_DEBUG("collect_result", K(result), KPC(this));
   return ret;
@@ -1237,7 +1237,7 @@ int ObHyperLogLogAggCell::collect_result(sql::ObEvalCtx &ctx)
   ObDatum &result = basic_info_.agg_expr_->locate_datum_for_write(ctx);
   sql::ObEvalInfo &eval_info = basic_info_.agg_expr_->get_eval_info(ctx);
   result.set_string(ndv_calculator_->get_buckets(), ndv_calculator_->get_bucket_num());
-  eval_info.evaluated_ = true;
+  eval_info.set_evaluated(true);
   LOG_DEBUG("collect result", K_(ndv_calculator), K(result), KPC(this));
   return ret;
 }
@@ -1478,11 +1478,11 @@ int ObSumOpSizeAggCell::collect_result(sql::ObEvalCtx &ctx)
       LOG_WARN("Failed to cons number from uint", K(ret), K_(total_size));
     } else {
       result.set_number(result_num);
-      eval_info.evaluated_ = true;
+      eval_info.set_evaluated(true);
     }
   } else {
     result.set_uint(total_size_);
-    eval_info.evaluated_ = true;
+    eval_info.set_evaluated(true);
   }
   LOG_DEBUG("collect result", K(result), KPC(this));
  return ret;
@@ -2163,7 +2163,7 @@ int ObSumAggCell::collect_result(sql::ObEvalCtx &ctx)
     if (OB_FAIL(collect_result_to_decimal_int(right_nmb, result_datum_, result))) {
       LOG_WARN("Failed to collect result to decimal int", K(ret));
     } else {
-      eval_info.evaluated_ = true;
+      eval_info.set_evaluated(true);
     }
   } else {
     sql::ObNumStackAllocator<2> tmp_alloc;
@@ -2188,7 +2188,7 @@ int ObSumAggCell::collect_result(sql::ObEvalCtx &ctx)
           result.set_number(result_nmb);
         }
       }
-      eval_info.evaluated_ = true;
+      eval_info.set_evaluated(true);
     }
   }
   LOG_DEBUG("collect_result", K(result), KPC(this));

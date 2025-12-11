@@ -398,7 +398,8 @@ int ObRangeGenerator::generate_ranges()
       OB_ISNULL(pre_range_graph_->get_range_head())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null range graph", KPC(pre_range_graph_), K(phy_ctx));
-  } else if (pre_range_graph_->has_exec_param() && !phy_ctx->is_exec_param_readable()) {
+  } else if ((pre_range_graph_->has_exec_param() && !phy_ctx->is_exec_param_readable()) ||
+             (pre_range_graph_->has_fake_const_udf() && NULL == phy_ctx->get_phy_plan())) {
     // pre range graph has exec param and not exec stage, generate (min; max)
     if (OB_FAIL(generate_contain_exec_param_range())) {
       LOG_WARN("faield to generate contain exec param range");
@@ -1544,7 +1545,8 @@ int ObRangeGenerator::generate_ss_ranges()
     }
     if (cur_node != nullptr && cur_node->min_offset_ == pre_range_graph_->get_skip_scan_offset()) {
       ss_head = cur_node;
-      if (pre_range_graph_->has_exec_param() && !phy_ctx->is_exec_param_readable()) {
+      if ((pre_range_graph_->has_exec_param() && !phy_ctx->is_exec_param_readable()) ||
+          (pre_range_graph_->has_fake_const_udf() && NULL == phy_ctx->get_phy_plan())) {
         // pre range graph has exec param and not exec stage, generate (min; max)
         if (OB_FAIL(generate_contain_exec_param_range())) {
           LOG_WARN("faield to generate contain exec param range");

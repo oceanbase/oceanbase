@@ -1375,7 +1375,7 @@ int ObTableExprCgService::write_autoinc_datum(ObTableCtx &ctx,
   } else if (expr.arg_cnt_ != 1) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid arg count for auto inc expr", K(ret), K(expr));
-  } else if (expr.get_eval_info(eval_ctx).evaluated_ == true) {
+  } else if (expr.get_eval_info(eval_ctx).is_evaluated(eval_ctx) == true) {
     // do nothing
   } else {
     const ObExpr *conlumn_conv_expr = expr.args_[0];
@@ -1387,8 +1387,8 @@ int ObTableExprCgService::write_autoinc_datum(ObTableCtx &ctx,
       if (OB_FAIL(datum.from_obj(obj))) {
         LOG_WARN("fail to convert object from datum", K(ret), K(obj));
       } else {
-        conlumn_conv_expr->get_eval_info(eval_ctx).evaluated_ = true;
-        conlumn_conv_expr->get_eval_info(eval_ctx).projected_ = true;
+        conlumn_conv_expr->get_eval_info(eval_ctx).set_evaluated(true);
+        conlumn_conv_expr->get_eval_info(eval_ctx).set_projected(true);
       }
     }
   }
@@ -1418,8 +1418,8 @@ int ObTableExprCgService::write_datum(ObTableCtx &ctx,
     // `ob_adjust_lob_datum()` will try to adjust datum form in_meta into out_meta
     LOG_WARN("fail to adjust lob datum", K(ret), K(datum), K(obj));
   } else {
-    expr.get_eval_info(eval_ctx).evaluated_ = true;
-    expr.get_eval_info(eval_ctx).projected_ = true;
+    expr.get_eval_info(eval_ctx).set_evaluated(true);
+    expr.get_eval_info(eval_ctx).set_projected(true);
   }
 
   return ret;

@@ -1068,7 +1068,7 @@ int ObHashJoinOp::get_next_left_row_batch(bool is_from_row_store,
       // for opt, we not set evaluted flag when convert exprs,
       // and depended projected flag is true
       FOREACH_CNT_X(e, left_->get_spec().output_, OB_SUCC(ret)) {
-        (*e)->get_eval_info(eval_ctx_).projected_ = true;
+        (*e)->get_eval_info(eval_ctx_).set_projected(true);
       }
     }
   } else {
@@ -1113,7 +1113,7 @@ int ObHashJoinOp::get_next_left_row_batch_na(bool is_from_row_store, const ObBat
       // for opt, we not set evaluted flag when convert exprs,
       // and depended projected flag is true
       FOREACH_CNT_X(e, left_->get_spec().output_, OB_SUCC(ret)) {
-        (*e)->get_eval_info(eval_ctx_).projected_ = true;
+        (*e)->get_eval_info(eval_ctx_).set_projected(true);
       }
     } else if (FALSE_IT(non_preserved_side_is_not_empty_
                         |= (RIGHT_ANTI_JOIN == MY_SPEC.join_type_))) {
@@ -3734,7 +3734,7 @@ int ObHashJoinOp::get_next_right_batch_na()
     } else if (HashJoinDrainMode::RIGHT_DRAIN == drain_mode_ ||
         (read_null_in_naaj_ && is_shared_)) {
       FOREACH_CNT_X(e, right_->get_spec().output_, OB_SUCC(ret)) {
-        (*e)->get_eval_info(eval_ctx_).projected_ = true;
+        (*e)->get_eval_info(eval_ctx_).set_projected(true);
       }
       right_brs_ = &child_brs_;
       const_cast<ObBatchRows *>(right_brs_)->size_ = 0;
@@ -3748,7 +3748,7 @@ int ObHashJoinOp::get_next_right_batch_na()
       // for opt, we not set evaluted flag when convert exprs,
       // and depended projected flag is true
       FOREACH_CNT_X(e, right_->get_spec().output_, OB_SUCC(ret)) {
-        (*e)->get_eval_info(eval_ctx_).projected_ = true;
+        (*e)->get_eval_info(eval_ctx_).set_projected(true);
       }
     } else if (FALSE_IT(non_preserved_side_is_not_empty_
                         |= (LEFT_ANTI_JOIN == MY_SPEC.join_type_))) {
@@ -3824,7 +3824,7 @@ int ObHashJoinOp::get_next_right_batch()
     if (OB_FAIL(ret)) {
     } else if (HashJoinDrainMode::RIGHT_DRAIN == drain_mode_) {
       FOREACH_CNT_X(e, right_->get_spec().output_, OB_SUCC(ret)) {
-        (*e)->get_eval_info(eval_ctx_).projected_ = true;
+        (*e)->get_eval_info(eval_ctx_).set_projected(true);
       }
       right_brs_ = &child_brs_;
       const_cast<ObBatchRows *>(right_brs_)->size_ = 0;
@@ -3838,7 +3838,7 @@ int ObHashJoinOp::get_next_right_batch()
       // for opt, we not set evaluted flag when convert exprs,
       // and depended projected flag is true
       FOREACH_CNT_X(e, right_->get_spec().output_, OB_SUCC(ret)) {
-        (*e)->get_eval_info(eval_ctx_).projected_ = true;
+        (*e)->get_eval_info(eval_ctx_).set_projected(true);
       }
     }
   } else {
@@ -5310,19 +5310,19 @@ void ObHashJoinOp::set_output_eval_info() {
   for (int64_t i = 0; i < left_->get_spec().output_.count(); i++) {
     if (!left_->get_spec().output_.at(i)->is_const_expr()) {
       ObEvalInfo &info = left_->get_spec().output_.at(i)->get_eval_info(eval_ctx_);
-      info.evaluated_ = true;
-      info.projected_ = true;
-      info.notnull_ = false;
-      info.point_to_frame_ = false;
+      info.set_evaluated(true);
+      info.set_projected(true);
+      info.set_notnull(false);
+      info.set_point_to_frame(false);
     }
   }
   for (int64_t i = 0; i < right_->get_spec().output_.count(); i++) {
     if (!right_->get_spec().output_.at(i)->is_const_expr()) {
       ObEvalInfo &info = right_->get_spec().output_.at(i)->get_eval_info(eval_ctx_);
-      info.evaluated_ = true;
-      info.projected_ = true;
-      info.notnull_ = false;
-      info.point_to_frame_ = false;
+      info.set_evaluated(true);
+      info.set_projected(true);
+      info.set_notnull(false);
+      info.set_point_to_frame(false);
     }
   }
 }

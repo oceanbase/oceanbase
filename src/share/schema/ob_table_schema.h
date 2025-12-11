@@ -2276,7 +2276,7 @@ public:
 
   int check_support_interval_part() const;
   int check_identity_column_for_interval_part() const;
-
+  int get_hidden_column_count(int64_t &hidden_column_count) const;
   DECLARE_VIRTUAL_TO_STRING;
 
 protected:

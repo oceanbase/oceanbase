@@ -495,6 +495,10 @@ DEF_BOOL(_enable_seq_wrap_around_flush_cache, OB_TENANT_PARAMETER, "True",
          "Specifies whether to enable clearing cache when sequence wrap around ",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_BOOL(_force_const_udf_query_range_extraction, OB_TENANT_PARAMETER, "True",
+         "Specifies whether to force UDF with const params (regardless of deterministic or not) to extract query range under ORACLE mode",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 // tenant memtable consumption related
 DEF_INT(memstore_limit_percentage, OB_CLUSTER_PARAMETER, "0", "[0, 100)",
         "used in calculating the value of MEMSTORE_LIMIT parameter: "
@@ -3095,6 +3099,9 @@ DEF_BOOL(ob_enable_python_udf, OB_TENANT_PARAMETER, "False",
 
 DEF_BOOL(ob_enable_utl_http, OB_CLUSTER_PARAMETER, "False",
          "controls whether UTL_HTTP is enabled",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_streaming_cursor_prefetch, OB_TENANT_PARAMETER, "False",
+         "controls whether to enable streaming cursor prefetch",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_ss_garbage_collector_defensive_check, OB_TENANT_PARAMETER, "True",
          "Enable or disable defensive checks for garbage collection on shared storage.",

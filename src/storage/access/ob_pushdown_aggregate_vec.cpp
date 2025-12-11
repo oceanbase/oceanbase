@@ -441,10 +441,10 @@ int ObAggCellVec::collect_result(
       LOG_WARN("Failed to fill output expr", K(ret), K(fill_output), K(group_by_col_expr), K_(output_expr), K(batch_size));
     } else {
       sql::ObEvalInfo &eval_info = agg_info.expr_->get_eval_info(eval_ctx);
-      eval_info.evaluated_ = true;
+      eval_info.set_evaluated(true);
       if (nullptr != output_expr_) {
         sql::ObEvalInfo &output_eval_info = output_expr_->get_eval_info(eval_ctx);
-        output_eval_info.evaluated_ = true;
+        output_eval_info.set_evaluated(true);
       }
     }
   }

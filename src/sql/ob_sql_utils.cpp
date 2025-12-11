@@ -520,40 +520,13 @@ void ObSQLUtils::clear_expr_eval_flags(const ObExpr &expr, ObEvalCtx &ctx)
   }
 }
 
-int ObSQLUtils::clear_expr_eval_flags_norecursive(const ObExpr &expr, ObEvalCtx &ctx)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<const ObExpr*, 8> exprs;
-
-  if (OB_FAIL(exprs.push_back(&expr))) {
-    LOG_WARN("failed to push back", K(ret));
-  }
-
-  if (OB_SUCC(ret)) {
-    do {
-      const ObExpr *current = NULL;
-      if (OB_FAIL(exprs.pop_back(current))) {
-        LOG_WARN("failed to push back", K(ret));
-      } else {
-        if (current->eval_func_ != NULL || T_OP_ROW == current->type_) {
-          current->get_eval_info(ctx).clear_evaluated_flag();
-        }
-        for (int64_t i = 0; OB_SUCC(ret) && i < current->arg_cnt_; i++) {
-          if (OB_FAIL(exprs.push_back(current->args_[i]))) {
-            LOG_WARN("failed to push back", K(ret));
-          }
-        }
-      }
-    } while (exprs.count() > 0 && OB_SUCCESS == ret);
-  }
-  return ret;
-}
 
 int ObSQLUtils::calc_sql_expression_without_row(
   ObExecContext &exec_ctx,
   const ObISqlExpression &expr,
   ObObj &result,
-  ObIAllocator *allocator)
+  ObIAllocator *allocator,
+  bool is_pl_expr_eval)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(exec_ctx.get_physical_plan_ctx())) {
@@ -570,8 +543,7 @@ int ObSQLUtils::calc_sql_expression_without_row(
       LOG_WARN("static engine should have implement this function. unexpected null", K(ret));
     } else {
       ObDatum *datum = NULL;
-      ObEvalCtx eval_ctx(exec_ctx, allocator);
-      OZ (clear_expr_eval_flags_norecursive(*new_expr, eval_ctx));
+      ObEvalCtx eval_ctx(exec_ctx, allocator, is_pl_expr_eval);
       OZ (new_expr->eval(eval_ctx, datum)); // sql exprs called here
       OZ (datum->to_obj(result, new_expr->obj_meta_, new_expr->obj_datum_map_));
     }
@@ -5562,7 +5534,7 @@ int ObSQLUtils::get_one_group_params(int64_t &actual_pos, ParamStore &src, Param
     ObObjParam &obj = src.at(i);
     pl::ObPLCollection *coll = NULL;
     ObObj *data = NULL;
-    if (OB_UNLIKELY(!obj.is_ext())) {
+    if (OB_UNLIKELY(!obj.is_batch_parameters())) {
       OZ (ObSql::add_param_to_param_store(obj, obj_params));
     } else {
       CK (OB_NOT_NULL(coll = reinterpret_cast<pl::ObPLCollection*>(obj.get_ext())));
@@ -5579,14 +5551,18 @@ int ObSQLUtils::get_one_group_params(int64_t &actual_pos, ParamStore &src, Param
         }
         OZ (ObSql::add_param_to_param_store(*(data + actual_pos), obj_params));
         if (OB_SUCC(ret)) {
-          if (SCALE_UNKNOWN_YET != coll->get_element_type().get_accuracy().get_scale()) {
-            OX (obj_params.at(obj_params.count() - 1).set_scale(coll->get_element_type().get_accuracy().get_scale()));
-          }
-          if (PRECISION_UNKNOWN_YET != coll->get_element_type().get_accuracy().get_precision()) {
-            OX (obj_params.at(obj_params.count() - 1).set_precision(coll->get_element_type().get_accuracy().get_precision()));
-          }
-          if (LENGTH_UNKNOWN_YET != coll->get_element_type().get_accuracy().get_length()) {
-            OX (obj_params.at(obj_params.count() - 1).set_length(coll->get_element_type().get_accuracy().get_length()));
+          if (obj_params.at(obj_params.count() - 1).is_numeric_type()) {
+            if (SCALE_UNKNOWN_YET != coll->get_element_type().get_accuracy().get_scale()) {
+              OX (obj_params.at(obj_params.count() - 1).set_scale(coll->get_element_type().get_accuracy().get_scale()));
+            }
+            if (PRECISION_UNKNOWN_YET != coll->get_element_type().get_accuracy().get_precision()) {
+              OX (obj_params.at(obj_params.count() - 1).set_precision(coll->get_element_type().get_accuracy().get_precision()));
+            }
+            if (LENGTH_UNKNOWN_YET != coll->get_element_type().get_accuracy().get_length()) {
+              OX (obj_params.at(obj_params.count() - 1).set_length(coll->get_element_type().get_accuracy().get_length()));
+            }
+          } else {
+            OX (obj_params.at(obj_params.count() - 1).set_accuracy(coll->get_element_type().get_accuracy()));
           }
           if (obj_params.at(obj_params.count() - 1).get_meta().is_null()) {
             OX (obj_params.at(obj_params.count() - 1).set_param_meta(coll->get_element_type().get_meta_type()));
@@ -5615,9 +5591,14 @@ int ObSQLUtils::copy_params_to_array_params(int64_t query_pos, ParamStore &src, 
     } else {
       ObObjParam new_param = src.at(j);
       if (is_forall) {
-        OZ (deep_copy_obj(alloc, src.at(j), new_param));
+        if (src.at(j).is_pl_extend() && src.at(j).get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) {
+          new_param.set_int_value(0);
+          OZ (pl::ObUserDefinedType::deep_copy_obj(alloc, src.at(j), new_param, true));
+        } else {
+          OZ (deep_copy_obj(alloc, src.at(j), new_param));
+        }
       }
-      array_params->data_[query_pos] = new_param;
+      OX (array_params->data_[query_pos] = new_param);
     }
   }
   return ret;
@@ -5635,7 +5616,7 @@ int ObSQLUtils::init_elements_info(ParamStore &src, ParamStore &dst)
     CK (dst.at(i).is_ext_sql_array());
     CK (OB_NOT_NULL(array_params = reinterpret_cast<ObSqlArrayObj*>(dst.at(i).get_ext())));
     if (OB_FAIL(ret)) {
-    } else if (OB_UNLIKELY(!obj.is_ext())) {
+    } else if (OB_UNLIKELY(!obj.is_batch_parameters())) {
       array_params->element_.set_meta_type(obj.get_meta());
       array_params->element_.set_accuracy(obj.get_accuracy());
     } else {

@@ -137,19 +137,19 @@ public:
     int id = row_id / 2;
     int key = id * 100 + static_cast<int>(static_cast<int64_t>(hash(id)) % 91);
     expr_datum_0->set_int(key);
-    cells_.at(0)->get_eval_info(eval_ctx_).evaluated_ = true;
+    cells_.at(0)->get_eval_info(eval_ctx_).set_evaluated(true);
     /*int64_t max_size = 512;
     if (enable_big_row_ && row_id > 0 && random() % 100000 < 5) {
       max_size = 1 << 20;
     }*/
     ObDatum *expr_datum_1 = &cells_.at(1)->locate_expr_datum(eval_ctx_);
     expr_datum_1->set_null();
-    cells_.at(1)->get_eval_info(eval_ctx_).evaluated_ = true;
+    cells_.at(1)->get_eval_info(eval_ctx_).set_evaluated(true);
 
     int64_t size = 300;
     ObDatum *expr_datum_2 = &cells_.at(2)->locate_expr_datum(eval_ctx_);
     expr_datum_2->set_string(str_buf_, (int)size);
-    cells_.at(2)->get_eval_info(eval_ctx_).evaluated_ = true;
+    cells_.at(2)->get_eval_info(eval_ctx_).set_evaluated(true);
   }
 
   void gen_batch(int64_t &row_id, const int64_t batch_size)
@@ -163,14 +163,14 @@ public:
       int id = (row_id + i) / 2;
       int key = (id) * 100 + static_cast<int>(static_cast<int64_t>(hash((id))) % 91);
       datum0.at(i).set_int(key);
-      cells_.at(0)->get_eval_info(eval_ctx_).evaluated_ = true;
+      cells_.at(0)->get_eval_info(eval_ctx_).set_evaluated(true);
 
       datum1.at(i).set_null();
-      cells_.at(1)->get_eval_info(eval_ctx_).evaluated_ = true;
+      cells_.at(1)->get_eval_info(eval_ctx_).set_evaluated(true);
 
       int64_t size = 300;
       datum2.at(i).set_string(str_buf_, (int)size);
-      cells_.at(2)->get_eval_info(eval_ctx_).evaluated_ = true;
+      cells_.at(2)->get_eval_info(eval_ctx_).set_evaluated(true);
     }
     if (row_id + batch_size <= row_cnt_) {
       brs_.size_ = batch_size;

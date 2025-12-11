@@ -445,7 +445,7 @@ void ObDASMergeIter::reset_wild_datum_ptr()
     {
       (*e)->locate_datums_for_update(*eval_ctx_, wild_datum_info_.max_output_rows_);
       ObEvalInfo &info = (*e)->get_eval_info(*eval_ctx_);
-      info.point_to_frame_ = true;
+      info.set_point_to_frame(true);
     }
     wild_datum_info_.exprs_ = nullptr;
     wild_datum_info_.max_output_rows_ = 0;

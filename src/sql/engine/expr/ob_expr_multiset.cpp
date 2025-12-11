@@ -840,16 +840,16 @@ int ObExprMultiSet::eval_multiset_composite(ObExecContext &exec_ctx,
       DEDUP_COLLECTION(obj1, lhs_distinct_params, lhs_obj);
       DEDUP_COLLECTION(obj2, rhs_distinct_params, rhs_obj);
     } else {
-      if (OB_FAIL(lhs.deep_copy(c1, nullptr))) {
+      if (OB_FAIL(lhs.deep_copy(c1, nullptr, false))) {
         LOG_WARN("failed too deep copy c1", K(ret), K(lhs), KPC(c1));
-      } else if (OB_FAIL(rhs.deep_copy(c2, nullptr))) {
+      } else if (OB_FAIL(rhs.deep_copy(c2, nullptr, false))) {
         LOG_WARN("failed too deep copy c2", K(ret), K(rhs), KPC(c2));
       }
     }
 
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (OB_FAIL(buffer.deep_copy(reinterpret_cast<pl::ObPLNestedTable*>(lhs_obj.get_ext()), nullptr))) {
+    } else if (OB_FAIL(buffer.deep_copy(reinterpret_cast<pl::ObPLNestedTable*>(lhs_obj.get_ext()), nullptr, false))) {
       LOG_WARN("failed to deep copy lhs to buffer", K(lhs_obj), K(buffer));
     } else if (OB_FAIL(params.push_back(lhs_obj))) {
       LOG_WARN("failed to push back lhs_obj", K(ret), K(lhs_obj), K(params));
@@ -890,7 +890,7 @@ int ObExprMultiSet::eval_multiset_composite(ObExecContext &exec_ctx,
 
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (OB_FAIL(res_coll->deep_copy(eval_result, nullptr))) {
+    } else if (OB_FAIL(res_coll->deep_copy(eval_result, nullptr, false))) {
       LOG_WARN("failed too deep copy eval_result", K(ret), KPC(eval_result), K(res_coll));
     } else {
       result.set_extend(reinterpret_cast<int64_t>(res_coll), res_coll->get_type());

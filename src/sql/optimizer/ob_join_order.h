@@ -2663,8 +2663,8 @@ struct MergeKeyInfoHelper
                              QueryRangeInfo &range_info,
                              PathHelper &helper);
 
-    int check_has_exec_param(const ObQueryRangeProvider &query_range,
-                             bool &has_exec_param);
+    int check_has_exec_stage_param(const ObQueryRangeProvider &query_range,
+                                   bool &has_exec_stage_param);
 
     int get_preliminary_prefix_info(ObQueryRangeProvider &query_range,QueryRangeInfo &range_info);
 

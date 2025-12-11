@@ -207,7 +207,9 @@ int ObSqlTransControl::implicit_end_trans(ObExecContext &exec_ctx,
                    is_rollback,
                    false,
                    callback,
-                   reset_trans_variable);
+                   reset_trans_variable,
+                   ObString(),
+                   exec_ctx.get_physical_plan_ctx());
 }
 
 int ObSqlTransControl::explicit_end_trans(ObExecContext &exec_ctx, const bool is_rollback, const ObString hint)
@@ -224,7 +226,8 @@ int ObSqlTransControl::explicit_end_trans(ObExecContext &exec_ctx, const bool is
                    true,
                    callback,
                    true,
-                   hint);
+                   hint,
+                   exec_ctx.get_physical_plan_ctx());
 }
 
 int ObSqlTransControl::end_trans(ObSQLSessionInfo *session,
@@ -234,7 +237,8 @@ int ObSqlTransControl::end_trans(ObSQLSessionInfo *session,
                                  const bool is_explicit,
                                  ObEndTransAsyncCallback *callback,
                                  bool reset_trans_variable,
-                                 const ObString hint)
+                                 const ObString hint,
+                                 ObPhysicalPlanCtx *plan_ctx)
 {
   int ret = OB_SUCCESS;
   bool sync = false;
@@ -248,7 +252,7 @@ int ObSqlTransControl::end_trans(ObSQLSessionInfo *session,
                         KP(callback));
 #endif
   FLTSpanGuard(end_transaction);
-
+  bool pl_async_commit_need_wait = false;
   if (OB_ISNULL(session)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", K(ret), KPC(session));
@@ -258,6 +262,21 @@ int ObSqlTransControl::end_trans(ObSQLSessionInfo *session,
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("executing do end trans in xa", K(ret), K(session->get_xid()));
   } else {
+    if (session->is_pl_async_commit() && !is_rollback
+        && !session->is_inner() && session->is_user_session())  {
+      pl_async_commit_need_wait = true;
+      bool can_async_commit = !session->get_has_temp_table_flag()
+                          && !session->has_tx_level_temp_table()
+                          && session->partition_hit().get_bool()
+                          && session->is_in_transaction();
+      if (can_async_commit) {
+        callback = &session->get_end_trans_cb();
+        LOG_TRACE("[PL_ASYNC_COMMIT] Using async commit callback", K(ret));
+      } else {
+        callback = NULL;
+        LOG_TRACE("[PL_ASYNC_COMMIT] Using sync commit (NULL callback)", K(ret));
+      }
+    }
     if (OB_NOT_NULL(callback)) {
       callback->set_is_need_rollback(is_rollback);
       callback->set_end_trans_type(is_explicit ?
@@ -284,15 +303,21 @@ int ObSqlTransControl::end_trans(ObSQLSessionInfo *session,
       need_disconnect = false;
     }
   } else {
+    if (!is_rollback) {
+      // convert streaming cursor to unstreaming cursor
+      process_cursor_when_end_trans(session, session->get_tx_id().get_id());
+    }
     // add tx id to AuditRecord
     set_audit_tx_id_(session);
     int64_t expire_ts = get_stmt_expire_ts(NULL, *session);
-    if (OB_FAIL(do_end_trans_(session,
+    if (pl_async_commit_need_wait) {
+      OZ (process_pl_async_commit(session, plan_ctx, expire_ts, callback));
+    }
+    OZ (do_end_trans_(session,
                               is_rollback,
                               is_explicit,
                               expire_ts,
-                              callback))) {
-    }
+                              callback));
     ObSQLUtils::check_if_need_disconnect_after_end_trans(ret,
                                                          is_rollback,
                                                          is_explicit,
@@ -302,6 +327,13 @@ int ObSqlTransControl::end_trans(ObSQLSessionInfo *session,
         || OB_TRANS_COMMITED == ret
         || OB_TRANS_ROLLBACKED == ret;
       reset_session_tx_state(session, reuse_tx, reset_trans_variable);
+    }
+    if (OB_SUCC(ret) && pl_async_commit_need_wait) {
+      if (OB_NOT_NULL(callback)) {
+        ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
+        session->get_tx_desc() = NULL;
+        reset_session_tx_state(session, false, reset_trans_variable);
+      }
     }
   }
   if (callback && !is_rollback) {
@@ -501,6 +533,35 @@ int ObSqlTransControl::rollback_trans(ObSQLSessionInfo *session,
   return ret;
 }
 
+int ObSqlTransControl::process_pl_async_commit(ObSQLSessionInfo *session,
+                                               ObPhysicalPlanCtx *plan_ctx,
+                                               const int64_t expire_ts,
+                                               ObEndTransAsyncCallback *callback)
+{
+  int ret = OB_SUCCESS;
+  observer::ObPLEndTransCb &pl_end_trans_cb = session->get_pl_end_trans_cb();
+  if (OB_NOT_NULL(pl_end_trans_cb.get_tx_desc())) {
+    OZ (pl_end_trans_cb.wait_tx_end(plan_ctx));
+  }
+  if (OB_FAIL(ret)) {
+    // If a preceding transaction fails, the current transaction needs to be rolled back.
+    LOG_WARN("[PL_ASYNC_COMMIT] preceding transaction failed, rollback current transaction",
+              "session_id", session->get_sid(), K(ret));
+    int tmp_ret = do_end_trans_(session, true, false, expire_ts, NULL);
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("fail to do rollback current trans", K(tmp_ret));
+    }
+  }
+  ObSpinLockGuard lock_guard(pl_end_trans_cb.get_lock());
+  pl_end_trans_cb.reset();
+  if (OB_NOT_NULL(callback)) {
+    int64_t tx_id = session->get_tx_desc() ? session->get_tx_desc()->get_tx_id().get_id() : 0;
+    OX (pl_end_trans_cb.set_tx_desc(session->get_tx_desc()));
+    LOG_TRACE("[PL_ASYNC_COMMIT] Use async commit callback and set tx_desc", "tx_id", tx_id, K(ret));
+  }
+  return ret;
+}
+
 ERRSIM_POINT_DEF(SQL_DO_END_TX_FAIL)
 int ObSqlTransControl::do_end_trans_(ObSQLSessionInfo *session,
                                      const bool is_rollback,
@@ -620,6 +681,9 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
   ObTransService *txs = NULL;
   uint64_t tenant_id = 0;
   CK (OB_NOT_NULL(session), OB_NOT_NULL(plan_ctx), OB_NOT_NULL(plan));
+  if (OB_SUCC(ret) && session->is_pl_async_commit()) {
+    OZ (session->get_pl_end_trans_cb().check_dependency_has_modified_tables(plan, session));
+  }
   OX (tenant_id = session->get_effective_tenant_id());
   OX (session->get_trans_result().reset());
   OZ (get_tx_service(session, txs), tenant_id);
@@ -1513,7 +1577,8 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback, co
     OX (ObTransDeadlockDetectorAdapter::maintain_deadlock_info_when_end_stmt(exec_ctx, rollback));
 
     // if stmt is dml, record its table_id set, used by cursor verify snapshot
-    if (OB_SUCC(ret) && !rollback && plan->is_dml_write_stmt() && session->enable_enhanced_cursor_validation()) {
+    if (OB_SUCC(ret) && !rollback && plan->is_dml_write_stmt()
+      && (session->enable_enhanced_cursor_validation() || session->is_pl_async_commit())) {
       OZ (tx_desc->add_modified_tables(plan->get_dml_table_ids()), plan->get_dml_table_ids());
     }
     ObTxExecResult &tx_result = session->get_trans_result();
@@ -1734,6 +1799,15 @@ int ObSqlTransControl::reset_session_tx_state(ObBasicSessionInfo *session,
   session->get_trans_result().reset();
   session->reset_tx_variable(reset_trans_variable);
   return ret;
+}
+
+void ObSqlTransControl::process_cursor_when_end_trans(ObSQLSessionInfo *session, int64_t tx_id)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(session));
+  if (OB_SUCC(ret) && OB_NOT_NULL(session->get_pl_context())) {
+    OZ (session->get_pl_context()->process_cursor_when_end_trans(*session, tx_id));
+  }
 }
 
 int ObSqlTransControl::reset_session_tx_state(ObSQLSessionInfo *session, bool reuse_tx_desc, bool reset_trans_variable)

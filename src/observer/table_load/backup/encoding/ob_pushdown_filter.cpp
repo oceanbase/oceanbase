@@ -644,7 +644,7 @@ int ObBlackFilterExecutor::filter(ObObj *objs, int64_t col_cnt, bool &filtered)
   } else {
     ObEvalCtx &eval_ctx = op_.get_eval_ctx();
     for (int64_t i = 0; OB_SUCC(ret) && i < filter_.column_exprs_.count(); ++i) {
-      filter_.column_exprs_.at(i)->get_eval_info(eval_ctx).projected_ = true;
+      filter_.column_exprs_.at(i)->get_eval_info(eval_ctx).set_projected(true);
       ObExpr * const &expr = filter_.column_exprs_.at(i);
       ObDatum &expr_datum = expr->locate_datum_for_write(eval_ctx);
       if (OB_FAIL(expr_datum.from_obj(objs[i]))) {

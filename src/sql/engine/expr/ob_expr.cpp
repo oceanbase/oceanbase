@@ -32,7 +32,7 @@ STATIC_ASSERT(sizeof(ObPrecision) == sizeof(ObLengthSemantics),
 OB_SERIALIZE_MEMBER(ObDatumMeta, type_, cs_type_, scale_, precision_);
 
 
-ObEvalCtx::ObEvalCtx(ObExecContext &exec_ctx, ObIAllocator *allocator)
+ObEvalCtx::ObEvalCtx(ObExecContext &exec_ctx, ObIAllocator *allocator, bool is_pl_expr_eval)
   : frames_(exec_ctx.get_frames()),
     max_batch_size_(0),
     exec_ctx_(exec_ctx),
@@ -43,7 +43,8 @@ ObEvalCtx::ObEvalCtx(ObExecContext &exec_ctx, ObIAllocator *allocator)
     batch_size_(0),
     expr_res_alloc_((dynamic_cast<ObArenaAllocator*>(allocator) != NULL) ?
                       (*(dynamic_cast<ObArenaAllocator*>(allocator))) : exec_ctx.get_eval_res_allocator()),
-    pvt_skip_for_eval_row_(nullptr)
+    pvt_skip_for_eval_row_(nullptr),
+    is_pl_expr_eval_(is_pl_expr_eval)
 {
 }
 
@@ -454,17 +455,17 @@ int ObExpr::eval_enumset(ObEvalCtx &ctx,
   if (is_batch_result()) {
     // Evaluate one datum within a batch.
     bool need_evaluate = false;
-    if (eval_info->projected_) {
+    if (eval_info->is_projected()) {
       datum = datum + ctx.get_batch_idx();
     } else {
       ObBitVector* evaluated_flags = to_bit_vector(frame + eval_flags_off_);
-      if (!eval_info->evaluated_) {
+      if (!eval_info->is_evaluated(ctx)) {
         evaluated_flags->reset(ctx.get_batch_size());
         reset_datums_ptr(frame, ctx.get_batch_size());
-        eval_info->evaluated_ = true;
+        eval_info->set_evaluated(true);
         eval_info->cnt_ = ctx.get_batch_size();
-        eval_info->point_to_frame_ = true;
-        eval_info->notnull_ = true;
+        eval_info->set_point_to_frame(true);
+        eval_info->set_notnull(true);
         if (enable_rich_format()) {
           ret = init_vector(ctx, VEC_UNIFORM, ctx.get_batch_size());
         }
@@ -485,12 +486,12 @@ int ObExpr::eval_enumset(ObEvalCtx &ctx,
           datum->set_null();
         }
         if (datum->is_null()) {
-          eval_info->notnull_ = false;
+          eval_info->set_notnull(false);
         }
       }
     }
   } else {
-    if (!eval_info->evaluated_) {
+    if (!eval_info->is_evaluated(ctx)) {
       if (datum->ptr_ != frame + res_buf_off_) {
         datum->ptr_ = frame + res_buf_off_;
       }
@@ -501,7 +502,7 @@ int ObExpr::eval_enumset(ObEvalCtx &ctx,
       }
 
       if (OB_LIKELY(common::OB_SUCCESS == ret)) {
-        eval_info->evaluated_ = true;
+        eval_info->set_evaluated(true);
       } else {
         datum->set_null();
       }
@@ -807,23 +808,23 @@ int ObExpr::eval_one_datum_of_batch(ObEvalCtx &ctx, common::ObDatum *&datum) con
   ObEvalInfo *info = reinterpret_cast<ObEvalInfo *>(frame + eval_info_off_);
   bool need_evaluate = false;
 
-  if (info->projected_ || NULL == eval_func_ || info->evaluated_) {
+  if (info->is_projected() || NULL == eval_func_ || info->is_evaluated(ctx)) {
     if (UINT32_MAX != vector_header_off_) {
       ret = cast_to_uniform(INNER_BATCH_SIZE(), ctx);
     }
   }
   if (OB_FAIL(ret)) {
-  } else if ((info->projected_ || NULL == eval_func_)) {
+  } else if ((info->is_projected() || NULL == eval_func_)) {
     // do nothing
-  } else if (!info->evaluated_) {
+  } else if (!info->is_evaluated(ctx)) {
     need_evaluate = true;
     to_bit_vector(frame + eval_flags_off_)->reset(ctx.get_batch_size());
     reset_datums_ptr(frame, ctx.get_batch_size());
     reset_attrs_datums(ctx);
-    info->evaluated_ = true;
+    info->set_evaluated(true);
     info->cnt_ = ctx.get_batch_size();
-    info->point_to_frame_ = true;
-    info->notnull_ = true;
+    info->set_point_to_frame(true);
+    info->set_notnull(true);
     if (enable_rich_format()) {
       ret = init_vector(ctx, VEC_UNIFORM, INNER_BATCH_SIZE());
     } else if (UINT32_MAX != vector_header_off_) {
@@ -872,7 +873,7 @@ int ObExpr::eval_one_datum_of_batch(ObEvalCtx &ctx, common::ObDatum *&datum) con
         datum->set_null();
       }
       if (datum->is_null()) {
-        info->notnull_ = false;
+        info->set_notnull(false);
       }
     }
   }
@@ -889,9 +890,9 @@ int ObExpr::do_eval_batch(ObEvalCtx &ctx,
   char *frame = ctx.frames_[frame_idx_];
   ObEvalInfo *info = reinterpret_cast<ObEvalInfo *>(frame + eval_info_off_);
   bool need_evaluate = false;
-  if (info->projected_ || NULL == eval_batch_func_) {
+  if (info->is_projected() || NULL == eval_batch_func_) {
     // expr values is projected by child or has no evaluate func, do nothing.
-  } else if (!info->evaluated_) {
+  } else if (!info->is_evaluated(ctx)) {
     need_evaluate = true;
     to_bit_vector(frame + eval_flags_off_)->reset(size);
   } else {
@@ -905,12 +906,12 @@ int ObExpr::do_eval_batch(ObEvalCtx &ctx,
   if (need_evaluate) {
     // Set ObDatum::ptr_ point to reserved buffer in the first evaluation.
     // FIXME bin.lb: maybe we can optimize this by ObEvalInfo::point_to_frame_
-    if (!info->evaluated_) {
+    if (!info->is_evaluated(ctx)) {
       reset_datums_ptr(frame, size);
       reset_attrs_datums(ctx);
-      info->notnull_ = false;
-      info->point_to_frame_ = true;
-      info->evaluated_ = true;
+      info->set_notnull(false);
+      info->set_point_to_frame(true);
+      info->set_evaluated(true);
       info->cnt_ = size;
       if (enable_rich_format()) {
         ret = init_vector(ctx, VEC_UNIFORM, size);
@@ -1347,20 +1348,20 @@ int ObExpr::eval_vector(ObEvalCtx &ctx,
   // the param expr has been evaluated by old eval_batch interface,
   // and not init vector, here we should init vector
   if (VEC_INVALID == get_format(ctx)
-      && (info.projected_ || true == info.evaluated_ || NULL == eval_vector_func_)) {
+      && (info.is_projected() || true == info.is_evaluated(ctx) || NULL == eval_vector_func_)) {
     ret = init_vector(ctx, batch_result_ ? VEC_UNIFORM : VEC_UNIFORM_CONST, BATCH_SIZE());
   }
   if (OB_FAIL(ret)) {
-  } else if ((batch_result_ && info.projected_) || NULL == eval_batch_func_
-             || (!batch_result_ && info.evaluated_)) {
+  } else if ((batch_result_ && info.is_projected()) || NULL == eval_batch_func_
+             || (!batch_result_ && info.is_evaluated(ctx))) {
     // expr values is projected by child or has no evaluate func, do nothing.
-  } else if (!info.evaluated_) {
+  } else if (!info.is_evaluated(ctx)) {
     // if const_skip == 1, no need to evaluated expr, just `init_vector`
     need_evaluate = true;
     get_evaluated_flags(ctx).reset(BATCH_SIZE());
-    info.notnull_ = false;
-    info.point_to_frame_ = true;
-    info.evaluated_ = batch_result_ ? true : false;
+    info.set_notnull(false);
+    info.set_point_to_frame(true);
+    info.set_evaluated(batch_result_ ? true : false);
     VectorFormat format = (expr_default_eval_vector_func == eval_vector_func_ && is_batch_result())
                           ? VEC_UNIFORM
                           : get_default_res_format();
@@ -1413,7 +1414,7 @@ int ObExpr::eval_vector(ObEvalCtx &ctx,
         set_all_null(ctx, BATCH_SIZE());
       }
     } else {
-      info.evaluated_ = true;
+      info.set_evaluated(true);
     }
   }
 
@@ -1476,7 +1477,7 @@ int expr_default_eval_batch_func(const ObExpr &expr,
   }
   // reset evaluate index
   if (got_null) {
-    expr.get_eval_info(ctx).notnull_ = false;
+    expr.get_eval_info(ctx).set_notnull(false);
   }
   return ret;
 }

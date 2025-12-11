@@ -528,6 +528,8 @@ int ObPsCache::fill_ps_stmt_info(const ObResultSet &result,
   if (OB_SUCC(ret)) {
     ps_stmt_info.set_is_prexecute(sql_ctx->is_pre_execute_);
     ps_stmt_info.set_question_mark_count(param_cnt);
+    ps_stmt_info.set_parse_question_mark_count(result.get_parse_question_mark_cnt());
+    ps_stmt_info.set_external_params_count(result.get_external_params_cnt());
     // only used when returning into
     ps_stmt_info.set_num_of_returning_into(returning_into_parm_num);
   }

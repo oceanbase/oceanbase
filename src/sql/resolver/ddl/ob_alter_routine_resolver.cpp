@@ -488,7 +488,7 @@ int ObAlterRoutineResolver::register_debug_info(const share::schema::ObRoutineIn
     pl::ObPLDebuggerGuard guard(id);
     pl::debugger::ObPLDebugger *pl_debugger = nullptr;
     ObExecContext *exec_ctx = nullptr;
-
+    pl::ObPLPackageGuard *package_guard = nullptr;
     if (OB_FAIL(guard.get(pl_debugger))) {
       LOG_WARN("failed get pl debugger", K(ret));
     } else if (OB_ISNULL(pl_debugger) || !pl_debugger->is_debug_on()) {
@@ -496,7 +496,9 @@ int ObAlterRoutineResolver::register_debug_info(const share::schema::ObRoutineIn
     } else if (OB_ISNULL(exec_ctx = session_info_->get_cur_exec_ctx())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get cur exec context", K(session_info_));
-    } else if (OB_ISNULL(exec_ctx->get_package_guard())) {
+    } else if (OB_FAIL(exec_ctx->get_package_guard(package_guard))) {
+      LOG_WARN("failed to get top exec package guard", K(ret));
+    } else if (OB_ISNULL(package_guard)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get package guard", K(session_info_), K(exec_ctx));
     } else {
@@ -517,7 +519,7 @@ int ObAlterRoutineResolver::register_debug_info(const share::schema::ObRoutineIn
       if (OB_FAIL(session_info_
                     ->get_pl_engine()
                     ->get_pl_function(*exec_ctx,
-                                      *exec_ctx->get_package_guard(),
+                                      *package_guard,
                                       routine_info.get_package_id(),
                                       routine_info.get_routine_id(),
                                       subprogram_path,

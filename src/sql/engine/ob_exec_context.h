@@ -194,6 +194,7 @@ public:
    */
   int init_phy_op(uint64_t phy_op_size);
   int init_expr_op(const uint64_t expr_op_size, ObIAllocator *allocator = NULL);
+  void reset_expr_op_ctx();
   void reset_expr_op();
   inline bool is_expr_op_ctx_inited() { return expr_op_size_ > 0 && NULL != expr_op_ctx_store_; }
   int get_convert_charset_allocator(common::ObIAllocator *&allocator);
@@ -383,7 +384,6 @@ public:
   inline pl::ObPL *get_pl_engine() { return GCTX.pl_engine_; }
   inline pl::ObPLCtx *get_pl_ctx() { return pl_ctx_; }
   inline void set_pl_ctx(pl::ObPLCtx *pl_ctx) { pl_ctx_ = pl_ctx; }
-  pl::ObPLPackageGuard* get_package_guard();
   int get_package_guard(pl::ObPLPackageGuard *&package_guard);
   inline pl::ObPLPackageGuard* get_original_package_guard() { return package_guard_; }
   inline void set_package_guard(pl::ObPLPackageGuard* v) { package_guard_ = v; }
@@ -602,6 +602,7 @@ public:
   bool is_block_granule_type() { return current_granule_type_ == OB_BLOCK_RANGE_GRANULE; }
 
 private:
+  pl::ObPLPackageGuard* get_package_guard();
   int build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCtx *&temp_expr_ctx);
   int set_phy_op_ctx_ptr(uint64_t index, void *phy_op);
   int check_extra_status();

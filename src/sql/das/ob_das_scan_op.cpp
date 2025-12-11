@@ -597,23 +597,23 @@ void ObDASScanOp::reset_access_datums_ptr(const ObDASBaseCtDef *ctdef, ObEvalCtx
       FOREACH_CNT(e, scan_ctdef->pd_expr_spec_.access_exprs_) {
         (*e)->locate_datums_for_update(eval_ctx, capacity);
         ObEvalInfo &info = (*e)->get_eval_info(eval_ctx);
-        info.point_to_frame_ = true;
+        info.set_point_to_frame(true);
       }
       FOREACH_CNT(e, scan_ctdef->pd_expr_spec_.pd_storage_aggregate_output_) {
         (*e)->locate_datums_for_update(eval_ctx, capacity);
         ObEvalInfo &info = (*e)->get_eval_info(eval_ctx);
-        info.point_to_frame_ = true;
+        info.set_point_to_frame(true);
       }
       FOREACH_CNT(e, scan_ctdef->pd_expr_spec_.ext_file_column_exprs_) {
         (*e)->locate_datums_for_update(eval_ctx, capacity);
         ObEvalInfo &info = (*e)->get_eval_info(eval_ctx);
-        info.point_to_frame_ = true;
+        info.set_point_to_frame(true);
       }
       if (scan_ctdef->trans_info_expr_ != nullptr) {
         ObExpr *trans_expr = scan_ctdef->trans_info_expr_;
         trans_expr->locate_datums_for_update(eval_ctx, capacity);
         ObEvalInfo &info = trans_expr->get_eval_info(eval_ctx);
-        info.point_to_frame_ = true;
+        info.set_point_to_frame(true);
       }
     } else {
       for (int64_t i = 0; i < ctdef->children_cnt_; i++) {

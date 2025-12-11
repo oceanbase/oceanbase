@@ -3199,6 +3199,7 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
     scan->set_index_prefix(ap->index_prefix_);
     scan->set_mr_mv_scan(table_item->mr_mv_flags_);
     if (!ap->is_inner_path_ &&
+        (OB_NOT_NULL(ap->pre_range_graph_) ? !ap->pre_range_graph_->has_fake_const_udf() : true) &&
         OB_FAIL(scan->set_query_ranges(ap->get_cost_table_scan_info().ranges_,
                                        ap->get_cost_table_scan_info().ss_ranges_))) {
       LOG_WARN("failed to set query ranges", K(ret));

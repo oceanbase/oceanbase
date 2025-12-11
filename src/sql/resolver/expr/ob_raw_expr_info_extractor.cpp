@@ -153,6 +153,7 @@ int ObRawExprInfoExtractor::clear_info(ObRawExpr &expr)
   bool is_self_param = expr_info.has_member(IS_UDT_UDF_SELF_PARAM);
   bool is_auto_part_expr = expr_info.has_member(IS_AUTO_PART_EXPR);
   bool is_pl_sql_transpiled = expr_info.has_member(IS_PL_SQL_TRANSPILED);
+  bool is_fake_deterministic_udf = expr_info.has_member(IS_FAKE_CONST_UDF);
   expr.reset_flag();
   if (is_implicit_cast) {
     OZ(expr.add_flag(IS_OP_OPERAND_IMPLICIT_CAST));
@@ -163,12 +164,13 @@ int ObRawExprInfoExtractor::clear_info(ObRawExpr &expr)
   if (is_auto_part_expr) {
     OZ(expr.add_flag(IS_AUTO_PART_EXPR));
   }
-
   if (is_pl_sql_transpiled) {
     OZ(expr.add_flag(IS_PL_SQL_TRANSPILED));
     OZ(expr.add_flag(CNT_PL_UDF));
   }
-
+  if (is_fake_deterministic_udf) { // this flag is only used in range converter for non-deterministic udf filter
+    OZ(expr.add_flag(IS_FAKE_CONST_UDF));
+  }
   return ret;
 }
 

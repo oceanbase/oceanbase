@@ -10020,7 +10020,9 @@ int ObStaticEngineCG::set_properties_post(const ObLogPlan &log_plan, ObPhysicalP
 
   // remember DML's table id set for cursor validation
   // for more details refer to `phy_plan.dml_table_ids_`
-  if (OB_SUCC(ret) && log_plan.get_stmt()->is_dml_write_stmt() && my_session->enable_enhanced_cursor_validation()) {
+  if (OB_SUCC(ret)
+    && log_plan.get_stmt()->is_dml_write_stmt()
+    && (my_session->enable_enhanced_cursor_validation() || my_session->is_pl_async_commit())) {
     const ObDelUpdStmt *dml_stmt = static_cast<const ObDelUpdStmt*>(log_plan.get_stmt());
     ObSEArray<const ObDmlTableInfo*, 1> table_infos;
     if (OB_FAIL(dml_stmt->get_dml_table_infos(table_infos))) {
