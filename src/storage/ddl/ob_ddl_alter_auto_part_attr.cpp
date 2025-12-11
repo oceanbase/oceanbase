@@ -347,6 +347,7 @@ int ObAlterAutoPartAttrOp::check_and_set_table_auto_part_func(
     ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator allocator;
   if (table_schema.get_part_level() == PARTITION_LEVEL_ZERO) {
     ObString tmp_part_func_expr = alter_part_option.get_part_func_expr_str();
     ObPartitionFuncType part_func_type;
@@ -363,10 +364,10 @@ int ObAlterAutoPartAttrOp::check_and_set_table_auto_part_func(
     ObArray<ObString> old_expr_strs;
     ObArray<ObString> new_expr_strs;
     // partition by range columns(c1,c2) and partition by range columns(c1,    c2) is the same.
-    if (OB_FAIL(split_on(tmp_old_part_func_expr, ',', old_expr_strs))) {
-      LOG_WARN("fail to split func expr", K(ret), K(tmp_old_part_func_expr));
-    } else if (OB_FAIL(split_on(tmp_alter_table_part_func_expr, ',', new_expr_strs))) {
-      LOG_WARN("fail to split func expr", K(ret), K(tmp_alter_table_part_func_expr));
+    if (OB_FAIL(ObDDLResolver::get_partition_keys_by_part_func_expr(tmp_old_part_func_expr, lib::is_oracle_mode(), allocator, old_expr_strs))) {
+      LOG_WARN("failed to get partition keys", K(ret), K(tmp_old_part_func_expr), K(table_schema.get_table_id()));
+    } else if (OB_FAIL(ObDDLResolver::get_partition_keys_by_part_func_expr(tmp_alter_table_part_func_expr,lib::is_oracle_mode(), allocator, new_expr_strs))) {
+      LOG_WARN("failed to get partition keys", K(ret), K(tmp_alter_table_part_func_expr), K(table_schema.get_table_id()));
     } else if (old_expr_strs.count() != new_expr_strs.count()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("fail to alter table partition, ori table func expr is diff from alter partition func expr.",
@@ -375,7 +376,6 @@ int ObAlterAutoPartAttrOp::check_and_set_table_auto_part_func(
       // the columns in origin table part func expr must be in order with primary key (prefixed)
       // so as to the columns order of alter partition func expr. if not the same, alter partition by will
       // cause error in sql resolver.
-      ObArenaAllocator allocator;
       for (int64_t i = 0; OB_SUCC(ret) && i < new_expr_strs.count(); ++i) {
         ObString in_new_expr_str = new_expr_strs.at(i).trim();
         ObString in_old_expr_str = old_expr_strs.at(i).trim();
