@@ -1,3 +1,15 @@
+/**
+ * Copyright (c) 2025 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+
 #define USING_LOG_PREFIX  SQL_RESV
 
 #include "sql/resolver/ddl/ob_mview_resolver_helper.h"
@@ -534,7 +546,8 @@ int ObMViewResolverHelper::resolve_materialized_view(const ParseNode &parse_tree
                                           mv_ainfo->required_columns_infos_,
                                           resolver))) {
       LOG_WARN("fail to resolve mv options", K(ret));
-    } else if (OB_UNLIKELY((tenant_data_version < MOCK_DATA_VERSION_4_3_5_4) || (tenant_data_version >= DATA_VERSION_4_4_0_0 && tenant_data_version < DATA_VERSION_4_4_2_0)
+    } else if (OB_UNLIKELY((tenant_data_version < MOCK_DATA_VERSION_4_3_5_4
+                            || (tenant_data_version >= DATA_VERSION_4_4_0_0 && tenant_data_version < DATA_VERSION_4_4_2_0))
                            && table_schema.is_mv_cnt_proctime_table())) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "data version is less than 4.4.2, create materialized view with table AS OF PROCTIME() is");
