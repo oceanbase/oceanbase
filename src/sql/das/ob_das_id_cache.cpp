@@ -102,7 +102,7 @@ void ObDASIDCache::reset()
 int ObDASIDCache::update_das_id(const int64_t start_id, const int64_t end_id)
 {
   int ret = OB_SUCCESS;
-  ObLatchWGuard guard(lock_, ObLatchIds::DEFAULT_MUTEX);
+  ObLatchWGuard guard(lock_, ObLatchIds::DAS_ID_CACHE_LOCK);
   const int64_t cache_idx = ATOMIC_LOAD(&cache_idx_);
   const int64_t cur_idx = ATOMIC_LOAD(&cur_idx_);
   if (cache_idx - cur_idx >= MAX_CACHE_NUM - 1) {

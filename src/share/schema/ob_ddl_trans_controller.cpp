@@ -25,7 +25,7 @@ int ObDDLTransController::init(share::schema::ObMultiVersionSchemaService *schem
   int ret = OB_SUCCESS;
   if (!inited_) {
     for (int i=0; OB_SUCC(ret) && i < DDL_TASK_COND_SLOT; i++) {
-      if (OB_FAIL(cond_slot_[i].init(ObWaitEventIds::DEFAULT_COND_WAIT))) {
+      if (OB_FAIL(cond_slot_[i].init(ObWaitEventIds::DDL_TASK_COND_WAIT))) {
         LOG_WARN("init cond fail", KR(ret));
       }
     }

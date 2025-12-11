@@ -619,7 +619,7 @@ int ObDetectManagerThread::init(const ObAddr &self, rpc::frame::ObReqTransport *
                                      "HashNodeDmReq"))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LIB_LOG(WARN, "[DM] create hash set failed", K(ret));
-  } else if (OB_FAIL(cond_.init(common::ObWaitEventIds::DEFAULT_COND_WAIT))) {
+  } else if (OB_FAIL(cond_.init(common::ObWaitEventIds::DETECT_MANAGER_COND_WAIT))) {
     LIB_LOG(WARN, "[DM] failed to init cond_", K(ret));
   } else if (OB_FAIL(TG_SET_RUNNABLE_AND_START(lib::TGDefIDs::DetectManager, *this))) {
     LIB_LOG(WARN, "[DM] schedule detect without timer failed", K(ret));

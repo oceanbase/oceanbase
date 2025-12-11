@@ -31,6 +31,7 @@ typedef lib::ObLockGuard<lib::ObMutex> LockGuard;
 class ObActiveSessHistList
 {
 public:
+  constexpr static int64_t PREV_WRITE_NUM_ARRAY_SIZE = 3;
   ObActiveSessHistList();
   ~ObActiveSessHistList() = default;
 
@@ -67,11 +68,17 @@ public:
       // Worst case is the fixup buffer never got release because user thread's wait event never ends.
     }
   }
+  void add_item(ObActiveSessionStatItem &stat_item)// only used for wait request ash buffer
+  {
+    ash_buffer_->append_item(stat_item);
+  }
   void set_read_pos(int64_t read_pos) { ash_buffer_->set_read_pos(read_pos); }
   int64_t write_pos() const { return ash_buffer_->write_pos(); }
   inline int64_t size() const { return ash_buffer_->size(); }
   inline int64_t free_slots_num() const { return ash_buffer_->free_slots_num(); }
   inline int64_t read_pos() const { return ash_buffer_->read_pos(); }
+  double cal_expect_write_speed(double times);
+  double cal_avg_pre_write_num();
   const ObActiveSessionStatItem &get(int64_t pos) const {
     return ash_buffer_->get(pos);
   }
@@ -328,11 +335,25 @@ public:
   }
   void lock() { mutex_.lock(); };
   void unlock() { mutex_.unlock(); };
+  void check_if_need_compress();
+  void check_if_can_reset_compress_flag();
+  void set_pre_check_snapshot_time(int64_t pre_check_snapshot_time) {pre_check_snapshot_time_ = pre_check_snapshot_time;}
+  void set_current_write_num(int64_t current_write_num) {prev_write_nums_[(prev_write_array_index_++) % PREV_WRITE_NUM_ARRAY_SIZE] = current_write_num;}
+  bool need_compress() const {return is_compress_;}
+  void inc_compress_num() {last_compress_num_++;}
+  void reset_compress_num() {last_compress_num_=0;}
 private:
   int allocate_ash_buffer(int64_t ash_size, common::ObSharedGuard<common::ObAshBuffer> &ash_buffer);
   int64_t ash_size_;
   lib::ObMutex mutex_;
   common::ObSharedGuard<common::ObAshBuffer> ash_buffer_;
+  int64_t prev_write_nums_[PREV_WRITE_NUM_ARRAY_SIZE];
+  int64_t over_thread_seconds_count_;
+  int64_t below_thread_seconds_count_;
+  int64_t prev_write_array_index_;
+  int64_t last_compress_num_;
+  int64_t pre_check_snapshot_time_;
+  bool is_compress_;
 };
 
 }

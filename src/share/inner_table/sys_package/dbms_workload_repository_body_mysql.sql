@@ -14,9 +14,10 @@ CREATE OR REPLACE PACKAGE BODY dbms_workload_repository
   PRAGMA INTERFACE(C, WR_DROP_SNAPSHOT_RANGE);
 
   PROCEDURE MODIFY_SNAPSHOT_SETTINGS(
-    retention     INT    DEFAULT  NULL,
-    interval      INT    DEFAULT  NULL,
-    topnsql       INT    DEFAULT  NULL);
+    retention        INT    DEFAULT  NULL,
+    interval         INT    DEFAULT  NULL,
+    topnsql          INT    DEFAULT  NULL,
+    sqlstat_interval INT    DEFAULT  NULL);
   PRAGMA INTERFACE(C, WR_MODIFY_SNAPSHOT_SETTINGS);
 
   FUNCTION ASH_REPORT_TEXT(BTIME         TIMESTAMP,

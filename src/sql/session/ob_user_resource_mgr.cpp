@@ -124,7 +124,7 @@ int ObConnectResourceMgr::apply_for_tenant_conn_resource(const uint64_t tenant_i
       LOG_WARN("tenant resource is null", K(ret));
     } else {
       // check and update cur_connections.
-      ObLatchWGuard wr_guard(tenant_res->rwlock_, ObLatchIds::DEFAULT_MUTEX);
+      ObLatchWGuard wr_guard(tenant_res->rwlock_, ObLatchIds::CONNECT_RESOURCE_MGR_LOCK);
       if (tenant_res->cur_connections_ < max_tenant_connections
           || (max_tenant_connections == tenant_res->cur_connections_
               && OB_PRIV_HAS_ANY(priv, OB_PRIV_SUPER))) {
@@ -152,7 +152,7 @@ void ObConnectResourceMgr::release_tenant_conn_resource(const uint64_t tenant_id
   if (OB_FAIL(tenant_res_map_.get(tenant_key, tenant_res))) {
     LOG_WARN("get tenant res map failed", K(ret));
   } else {
-    ObLatchWGuard wr_guard(tenant_res->rwlock_, ObLatchIds::DEFAULT_MUTEX);
+    ObLatchWGuard wr_guard(tenant_res->rwlock_, ObLatchIds::CONNECT_RESOURCE_MGR_LOCK);
     if (OB_UNLIKELY(0 == tenant_res->cur_connections_)) {
       LOG_ERROR("tenant current connections is zero when release resource", K(tenant_id));
     } else {
@@ -250,7 +250,7 @@ int ObConnectResourceMgr::increase_user_connections_count(
   } else {
     const static int64_t usec_per_hour = static_cast<int64_t>(1000000) * 3600;
     // check and update cur_connections and connections in one hour.
-    ObLatchWGuard wr_guard(user_res->rwlock_, ObLatchIds::DEFAULT_MUTEX);
+    ObLatchWGuard wr_guard(user_res->rwlock_, ObLatchIds::CONNECT_RESOURCE_MGR_LOCK);
     if (0 != max_connections_per_hour) {
       int64_t cur_time = ObTimeUtility::current_time();
       if (cur_time - user_res->start_time_ > usec_per_hour) {
@@ -375,7 +375,7 @@ int ObConnectResourceMgr::on_user_disconnect(ObSQLSessionInfo &session)
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("user resource is null", K(ret));
       } else {
-        ObLatchWGuard wr_guard(user_res->rwlock_, ObLatchIds::DEFAULT_MUTEX);
+        ObLatchWGuard wr_guard(user_res->rwlock_, ObLatchIds::CONNECT_RESOURCE_MGR_LOCK);
         if (OB_UNLIKELY(0 == user_res->cur_connections_)) {
           LOG_ERROR("current connections is zero when disconnect", K(user_id));
         } else {

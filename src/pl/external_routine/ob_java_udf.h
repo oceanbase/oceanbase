@@ -92,7 +92,7 @@ private:
     executor_class = nullptr;
     execute = nullptr;
 
-    ObLatchMutexGuard guard(std::get<0>(cached_executor), ObLatchIds::DEFAULT_SPIN_LOCK);
+    ObLatchMutexGuard guard(std::get<0>(cached_executor), ObLatchIds::JAVA_EXECUTOR_CLASS_LOCK);
 
     if (OB_ISNULL(std::get<1>(cached_executor))) {
       jclass loader_class = nullptr;

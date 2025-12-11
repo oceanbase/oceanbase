@@ -17,6 +17,8 @@
 #include "sql/monitor/ob_sql_stat_record.h"
 #include "share/rc/ob_tenant_base.h"
 #include "sql/plan_cache/ob_plan_cache.h"
+#include "sql/monitor/ob_sql_stat_manager.h"
+#include "observer/ob_srv_network_frame.h"
 
 using namespace oceanbase::common::sqlclient;
 using namespace oceanbase::sql;
@@ -29,7 +31,6 @@ namespace share
 #define WR_INSERT_BATCH_SIZE 5000
 #define WR_ASH_INSERT_BATCH_SIZE 1000
 #define WR_INSERT_SQL_STAT_BATCH_SIZE 16
-#define WR_SNAP_ID_SEQNENCE_NAME "OB_WORKLOAD_REPOSITORY_SNAP_ID_SEQNENCE"
 
 #define WR_SQL_PLAN_BATCH_SIZE 20
 
@@ -70,6 +71,8 @@ int ObWrCollector::init()
   const uint64_t tenant_id = MTL_ID();
   if (snap_id_ == LAST_SNAPSHOT_RECORD_SNAP_ID) {
     snapshot_ahead_ = true;
+  } else if (OB_FAIL(wr_proxy_.init(GCTX.net_frame_->get_req_transport()))) {
+    LOG_WARN("failed to init wr proxy", KR(ret));
   }
   SMART_VAR(ObISQLClient::ReadResult, res)
   {
@@ -101,7 +104,7 @@ int ObWrCollector::init()
     snapshot_begin_time_ = begin_interval_time;
   }
   // read from OB_WR_SNAPSHOT_TNAME to get snap id for ahead records
-  if (OB_SUCC(ret) && snap_id_ == LAST_SNAPSHOT_RECORD_SNAP_ID) {
+  if (OB_SUCC(ret) && (snap_id_ == LAST_SNAPSHOT_RECORD_SNAP_ID || snap_id_ == SQL_STAT_SNAPSHOT_AHEAD_SNAP_ID)) {
     ret = get_cur_snapshot_id_for_ahead_snapshot(snap_id_);
   }
   return ret;
@@ -355,8 +358,10 @@ int ObWrCollector::collect_ash()
             "plsql_entry_object_id, plsql_entry_subprogram_id, plsql_entry_subprogram_name, "
             "plsql_object_id, "
             "plsql_subprogram_id, plsql_subprogram_name, tablet_id, blocking_session_id, proxy_sid, "
-            "delta_read_io_requests, delta_read_io_bytes, delta_write_io_requests, delta_write_io_bytes from "
-            "__all_virtual_ash where tenant_id=%ld and is_wr_sample=true and "
+            "delta_read_io_requests, delta_read_io_bytes, delta_write_io_requests, "
+            "delta_write_io_bytes, weight, is_wr_weight_sample from "
+            "__all_virtual_ash where tenant_id=%ld and "
+            "(is_wr_sample=true or is_wr_weight_sample=true) and "
             "sample_time between usec_to_time(%ld) and usec_to_time(%ld) and "
             "svr_ip='%s' and svr_port=%d";
         if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
@@ -458,10 +463,16 @@ int ObWrCollector::collect_ash()
                   int64_t, skip_null_error, skip_column_error, default_value);
               EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "delta_write_io_bytes", ash.delta_write_io_bytes_,
                   int64_t, skip_null_error, skip_column_error, default_value);
+              EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "weight", ash.weight_,
+                  int64_t, skip_null_error, skip_column_error, default_value);
+              EXTRACT_BOOL_FIELD_MYSQL(*result, "is_wr_weight_sample", ash.is_wr_weight_sample_);
 
               char plan_hash_char[64] = "";
               if (OB_SUCC(ret)) {
                 sprintf(plan_hash_char, "%lu", ash.plan_hash_);
+              }
+              if (ash.is_wr_weight_sample_) {
+                ash.weight_ = ash.weight_ / 10;
               }
 
               if (OB_SUCC(ret)) {
@@ -596,6 +607,8 @@ int ObWrCollector::collect_ash()
                 FILL_NULLABLE_COLUMN(delta_read_io_bytes)
                 FILL_NULLABLE_COLUMN(delta_write_io_requests)
                 FILL_NULLABLE_COLUMN(delta_write_io_bytes)
+                } else if (OB_FAIL(dml_splicer.add_column("weight", ash.weight_))) {
+                  LOG_WARN("failed to add column weight", KR(ret), K(ash));
                 } else if (OB_FAIL(dml_splicer.finish_row())) {
                   LOG_WARN("failed to finish row", KR(ret));
                 }
@@ -895,8 +908,8 @@ int ObWrCollector::collect_sqlstat()
         ret = OB_TIMEOUT;
         LOG_WARN("wr snapshot timeout", KR(ret), K_(timeout_ts));
       } else if (OB_FAIL(sql.assign_fmt(
-                  " select /*+ workload_repository_snapshot query_timeout(%ld) */ svr_ip,svr_port,tenant_id,     "
-                  "    sql_id, plan_hash, plan_type, module, action, parsing_db_id,      "
+                  " select /*+ workload_repository_snapshot query_timeout(%ld) */ svr_ip,svr_port,tenant_id,  time_to_usec(now()) as sample_time, "
+                  "    sql_id, plan_hash, plan_type, module, action, parsing_db_id, time_to_usec(max(latest_active_time)) as latest_active_time, "
                   "    parsing_db_name, parsing_user_id, cast(sum(executions_total) as SIGNED INTEGER ) as executions_total, "
                   "    cast(sum(executions_delta) as SIGNED INTEGER ) as executions_delta, cast(sum(disk_reads_total) as SIGNED INTEGER ) as disk_reads_total,     "
                   "    cast(sum(disk_reads_delta) as SIGNED INTEGER ) as disk_reads_delta, cast(sum(buffer_gets_total) as SIGNED INTEGER ) as buffer_gets_total, "
@@ -1022,7 +1035,8 @@ int ObWrCollector::collect_sqlstat()
             EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "route_miss_delta", sqlstat.route_miss_delta_, int64_t, null_error, skip_column_error, default_value);
             EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "plan_cache_hit_total", sqlstat.plan_cache_hit_total_, int64_t, null_error, skip_column_error, default_value);
             EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "plan_cache_hit_delta", sqlstat.plan_cache_hit_delta_, int64_t, null_error, skip_column_error, default_value);
-
+            EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "sample_time", sqlstat.sample_time_, int64_t, null_error, skip_column_error, default_value);
+            EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "latest_active_time", sqlstat.latest_active_time_, int64_t, null_error, skip_column_error, default_value);
             if (OB_SUCC(ret)) {
               if (OB_FAIL(result->get_timestamp("first_load_time", nullptr, sqlstat.first_load_time_))) {
                 if (OB_ERR_NULL_VALUE == ret || OB_ERR_COLUMN_NOT_FOUND == ret) {
@@ -1157,13 +1171,17 @@ int ObWrCollector::collect_sqlstat()
                 LOG_WARN("failed to add column plan_cache_hit_total", KR(ret), K(sqlstat));
               } else if (OB_FAIL(dml_splicer.add_column("plan_cache_hit_delta", sqlstat.plan_cache_hit_delta_))) {
                 LOG_WARN("failed to add column plan_cache_hit_delta", KR(ret), K(sqlstat));
+              } else if (OB_FAIL(dml_splicer.add_time_column("sample_time", sqlstat.sample_time_))) {
+                LOG_WARN("failed to add column sample_time", KR(ret), K(sqlstat.sample_time_));
+              } else if (OB_FAIL(dml_splicer.add_time_column("latest_active_time", sqlstat.latest_active_time_))) {
+                LOG_WARN("failed to add column latest_active_time", KR(ret), K(sqlstat.latest_active_time_));
               } else if (OB_FAIL(dml_splicer.finish_row())) {
                 LOG_WARN("failed to finish row", KR(ret));
               }
 
               if (OB_SUCC(ret) && dml_splicer.get_row_count() >= WR_INSERT_SQL_STAT_BATCH_SIZE) {
                 collected_sqlstat_row_count += dml_splicer.get_row_count();
-                if (OB_FAIL(write_to_wr(dml_splicer, OB_WR_SQLSTAT_TNAME, tenant_id))) {
+                if (OB_FAIL(write_to_wr(dml_splicer, OB_WR_SQLSTAT_V2_TNAME, tenant_id))) {
                   if (OB_FAIL(check_if_ignore_errorcode(ret))) {
                     LOG_WARN("failed to batch write to wr", KR(ret));
                   } else {
@@ -1178,7 +1196,7 @@ int ObWrCollector::collect_sqlstat()
         } // end while
         if (OB_SUCC(ret) && dml_splicer.get_row_count() > 0) {
           collected_sqlstat_row_count += dml_splicer.get_row_count();
-          if (OB_FAIL(write_to_wr(dml_splicer, OB_WR_SQLSTAT_TNAME, tenant_id))) {
+          if (OB_FAIL(write_to_wr(dml_splicer, OB_WR_SQLSTAT_V2_TNAME, tenant_id))) {
             if (OB_FAIL(check_if_ignore_errorcode(ret))) {
               LOG_WARN("failed to batch write remaining part to wr", KR(ret));
             } else {
@@ -1194,24 +1212,45 @@ int ObWrCollector::collect_sqlstat()
   return ret;
 }
 
-
 int ObWrCollector::update_sqlstat()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(GCTX.omt_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("omt is null", K(ret));
+  ObLSLocation ls_location;
+  const uint64_t tenant_id = MTL_ID();
+  bool is_cache_hit = false;
+  const common::ObAddr &self_addr = GCTX.self_addr();
+  //update leader sqlstat
+  sql::ObSqlStatManager *sql_stat_manager = MTL(sql::ObSqlStatManager*);
+  if (OB_ISNULL(sql_stat_manager)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql stat manager is null", K(ret));
+  } else if (OB_FAIL(sql_stat_manager->update_last_snap_record_value())) {
+    LOG_WARN("failed to update last snap record value", K(ret));
+  }
+  //ignore error
+  ret = OB_SUCCESS;
+  //update follower sqlstat
+  if (OB_FAIL(GCTX.location_service_->get(GCONF.cluster_id, tenant_id, share::SYS_LS, 0, is_cache_hit, ls_location))) {
+    LOG_WARN("fail to get ls location", KR(ret), K(tenant_id));
   } else {
-    observer::ObReqTimeGuard req_timeinfo_guard;
-    sql::ObPlanCache *plan_cache = NULL;
-    plan_cache = MTL(ObPlanCache*);
-    if (nullptr != plan_cache){
-      ObUpdateSqlStatOp op;
-      if (OB_FAIL(plan_cache->foreach_cache_obj(op))) {
-        LOG_WARN("fail to traverse tmp sql stat map", K(ret));
+    const ObIArray<ObLSReplicaLocation> &replica_locations = ls_location.get_replica_locations();
+    for (int64_t i = 0; i < replica_locations.count(); i++) {
+      const ObAddr &server = replica_locations.at(i).get_server();
+      if (server == self_addr) {
+        continue;
       }
-    } else {
-      LOG_WARN("failed to get library cache", K(ret));
+      int tmp_ret = OB_SUCCESS;
+      ObWrAsyncUpdateSqlStatArg arg(tenant_id, timeout_ts_);
+      if (OB_TMP_FAIL(wr_proxy_.to(server)
+                          .by(tenant_id)
+                          .timeout(timeout_ts_)
+                          .group_id(share::OBCG_WR)
+                          .wr_async_update_sqlstat(arg, nullptr))) {
+        LOG_WARN("failed to send async snapshot task", K(tmp_ret), K(tenant_id), K(server));
+        tmp_ret = OB_SUCCESS;
+      } else {
+        LOG_DEBUG("success to send async update sqlstat task", K(tenant_id), K(server));
+      }
     }
   }
   return ret;
@@ -1667,38 +1706,6 @@ int ObWrCollector::write_to_wr_sql_plan_and_aux(ObDMLSqlSplicer &dml_splicer, Ob
   return ret;
 }
 
-int ObWrCollector::fetch_snapshot_id_sequence_curval(int64_t &snap_id)
-{
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = OB_SYS_TENANT_ID;
-  common::ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
-  ObSqlString sql;
-  ObObj snap_id_obj;
-  SMART_VAR(ObISQLClient::ReadResult, res)
-  {
-    ObMySQLResult *result = nullptr;
-    if (OB_ISNULL(GCTX.sql_proxy_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("GCTX.sql_proxy_ is null", K(ret));
-    } else if (OB_FAIL(sql.assign_fmt(
-                   "SELECT /*+ WORKLOAD_REPOSITORY */ %s.currval as snap_id FROM DUAL", WR_SNAP_ID_SEQNENCE_NAME))) {
-      LOG_WARN("failed to assign create sequence sql string", KR(ret));
-    } else if (OB_FAIL(ObWrCollector::exec_read_sql_with_retry(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
-      LOG_WARN("failed to fetch cur snap_id sequence", KR(ret), K(sql));
-    } else if (OB_ISNULL(result = res.get_result())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail to get mysql result", KR(ret), K(tenant_id), K(sql));
-    } else if (OB_FAIL(result->next())) {
-      LOG_WARN("get next result failed", KR(ret), K(tenant_id), K(sql));
-    } else if (OB_FAIL(result->get_obj((int64_t)0, snap_id_obj))) {
-      LOG_WARN("failed to get snap_id obj", KR(ret));
-    } else if (OB_FAIL(snap_id_obj.get_number().cast_to_int64(snap_id))) {
-      LOG_WARN("failed to get snap_id value", KR(ret));
-    }
-  }
-  return ret;
-}
-
 int ObWrCollector::get_cur_snapshot_id_for_ahead_snapshot(int64_t &snap_id)
 {
   int ret = OB_SUCCESS;
@@ -1824,7 +1831,7 @@ int ObWrDeleter::do_delete()
       LOG_WARN(
           "failed to delete __wr_system_event data ", K(ret), K(tenant_id), K(cluster_id), K(snap_id));
     } else if (OB_FAIL(delete_expired_data_from_wr_table(
-                   OB_WR_SQLSTAT_TNAME, tenant_id, cluster_id, snap_id, query_timeout))) {
+                   OB_WR_SQLSTAT_V2_TNAME, tenant_id, cluster_id, snap_id, query_timeout))) {
       LOG_WARN(
           "failed to delete __wr_sqlstat data ", K(ret), K(tenant_id), K(cluster_id), K(snap_id));
     } else if (OB_FAIL(delete_expired_data_from_wr_table(
@@ -2023,42 +2030,6 @@ int ObWrDeleter::get_sample_time_by_snap_id(int64_t &min_sample_time, int64_t &m
     }
     LOG_TRACE("get wr sample time by snap id ", K(ret), K(tenant_id), K(snap_id), "time_consumed",
     ObTimeUtility::current_time() - start);
-  }
-  return ret;
-}
-
-int ObUpdateSqlStatOp::operator()(common::hash::HashMapPair<sql::ObCacheObjID, sql::ObILibCacheObject *> &entry)
-{
-  int ret = common::OB_SUCCESS;
-  if (OB_ISNULL(entry.second)) {
-    ret = common::OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid argument", K(ret));
-  } else if (entry.second->get_ns() == sql::ObLibCacheNameSpace::NS_SQLSTAT) {
-    sql::ObSqlStatRecordObj *obj = nullptr;
-    if (OB_ISNULL(entry.second)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null obj", K(ret));
-    } else if (OB_ISNULL(obj = static_cast<sql::ObSqlStatRecordObj *>(entry.second))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null obj", K(ret));
-    } else if (!obj->get_record_value()->get_key().is_valid()) {
-      // do nothing
-    } else if (OB_FAIL(obj->get_record_value()->update_last_snap_record_value())) {
-      LOG_WARN("failed to update last snap reocrd value", K(ret));
-    }
-  } else if (entry.second->get_ns() == sql::ObLibCacheNameSpace::NS_CRSR) {
-    ObPhysicalPlan *plan = nullptr;
-    if (OB_ISNULL(entry.second)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null obj", K(ret));
-    } else if (OB_ISNULL(plan = static_cast<sql::ObPhysicalPlan *>(entry.second))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null obj", K(ret));
-    } else if (!plan->sql_stat_record_value_.get_key().is_valid()) {
-      // do nothing
-    } else if (OB_FAIL(plan->sql_stat_record_value_.update_last_snap_record_value())) {
-      LOG_WARN("failed to update last snap reocrd value", K(ret));
-    }
   }
   return ret;
 }

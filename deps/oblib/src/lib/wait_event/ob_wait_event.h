@@ -153,7 +153,10 @@ WAIT_EVENT_DEF(MYSQL_CONN_GET_LOCK, 18115, "mysql conn get lock", "", "", "", CO
 WAIT_EVENT_DEF(MYSQL_CONN_DBLINK_POOL_LOCK, 18116, "mysql conn dblink pool lock", "", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(BACKUP_VALIDATE_SERVICE_COND_WAIT, 18117, "backup validate service condition wait", "address", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(HMS_CLIENT_POOL_COND_WAIT, 18118, "hms client pool condition wait", "address", "", "", CONCURRENCY, true, true)
-
+WAIT_EVENT_DEF(PARALLEL_TASK_CONTROLLER_COND_WAIT, 18122, "parallel task controller condition wait", "address", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(DETECT_MANAGER_COND_WAIT, 18123, "detect manager condition wait", "address", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(DDL_TASK_COND_WAIT, 18124, "ddl task condition wait", "address", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(SHARED_JOIN_FILTER_CONSTRUCTOR_COND_WAIT, 18125, "shared join filter constructor condition wait", "address", "", "", CONCURRENCY, true, true)
 //sleep
 WAIT_EVENT_DEF(BANDWIDTH_THROTTLE_SLEEP, 20000, "sleep: bandwidth throttle sleep wait", "sleep_interval", "", "", NETWORK, true, true)
 WAIT_EVENT_DEF(DTL_PROCESS_CHANNEL_SLEEP, 20001, "sleep: dtl process channel sleep wait", "sleep_interval", "", "", CONCURRENCY, true, true)

@@ -199,13 +199,6 @@ int ObPxTaskProcess::process()
       audit_record.exec_record_ = exec_record;
       audit_record.update_event_stage_state();
     }
-    if (enable_sqlstat && OB_NOT_NULL(arg_.exec_ctx_->get_sql_ctx())) {
-      sqlstat_record.record_sqlstat_end_value();
-      ObString sql = ObString::make_string("PX DFO EXECUTING");
-      sqlstat_record.set_is_plan_cache_hit(arg_.exec_ctx_->get_sql_ctx()->plan_cache_hit_);
-      sqlstat_record.move_to_sqlstat_cache(*session,
-                            sql, NULL, true/*is_px_remote_exec*/);
-    }
 
     if (enable_sql_audit) {
       if (OB_ISNULL(arg_.sqc_task_ptr_)){
@@ -221,7 +214,7 @@ int ObPxTaskProcess::process()
       sqlstat_record.record_sqlstat_end_value();
       const ObPhysicalPlan *phy_plan = arg_.des_phy_plan_;
       ObString sql = ObString::make_string("");
-      sqlstat_record.set_is_plan_cache_hit(arg_.exec_ctx_->get_sql_ctx()->plan_cache_hit_);
+      sqlstat_record.set_is_plan_cache_hit(true);
       sqlstat_record.set_is_muti_query(session->get_capability().cap_flags_.OB_CLIENT_MULTI_STATEMENTS);
       if (OB_NOT_NULL(arg_.exec_ctx_->get_sql_ctx()) && OB_NOT_NULL(arg_.exec_ctx_->get_sql_ctx())) {
         sqlstat_record.set_is_muti_query_batch(arg_.exec_ctx_->get_sql_ctx()->multi_stmt_item_.is_batched_multi_stmt());

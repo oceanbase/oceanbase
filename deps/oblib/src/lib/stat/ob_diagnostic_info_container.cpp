@@ -16,6 +16,7 @@
 #include "lib/stat/ob_diagnostic_info_util.h"
 #include "lib/ob_lib_config.h"
 #include "lib/stat/ob_diagnostic_info_guard.h" // ObLocalDiagnosticInfo
+#include "rpc/obrpc/ob_rpc_packet.h"
 
 namespace oceanbase
 {
@@ -71,7 +72,8 @@ ObDiagnosticInfoContainer::ObDiagnosticInfoContainer(int64_t tenant_id, int64_t 
       summarys_(DiagnosticInfoValueAlloc<ObDiagnosticInfoCollector, ObDiagnosticKey>(
           &di_collector_allocator_)),
       runnings_(tenant_id, DiagnosticInfoValueAlloc<ObDiagnosticInfo, SessionID>(&di_allocator_, di_upper_limit)),
-      cache_()
+      cache_(),
+      pcode_in_request_queue_{}
 {
   wait_event_pool_.init();
 }
@@ -751,6 +753,55 @@ int ObDiagnosticInfoContainer::for_each_and_delay_release_ref(
     }
   }
   return ret;
+}
+
+void ObDiagnosticInfoContainer::calculate_wait_in_request_queue(ObDiagnosticInfo *di)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(di)) {
+    if (di->get_ash_stat().pcode_ == 0) {// mysql request
+      pcode_in_request_queue_[obrpc::ObRpcPacketSet::THE_PCODE_COUNT]++;
+    } else {// rpc request
+      const obrpc::ObRpcPacketCode pcode =
+          static_cast<obrpc::ObRpcPacketCode>(di->get_ash_stat().pcode_);
+      int64_t idx = obrpc::ObRpcPacketSet::instance().idx_of_pcode(pcode);
+      if (idx < obrpc::ObRpcPacketSet::THE_PCODE_COUNT && idx >= 0) {
+        pcode_in_request_queue_[idx]++;
+      } else {
+        LOG_WARN("invalid pcode", K(pcode), KPC(di));
+      }
+    }
+  }
+}
+
+void ObDiagnosticInfoContainer::copy_wait_request_to_ash_buffer_and_reset(int64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  for (int i = 0; i < obrpc::ObRpcPacketSet::THE_PCODE_COUNT + 1; i++) {
+    if (pcode_in_request_queue_[i] > 0) {
+      share::ObActiveSessHistList &ash_list = share::ObActiveSessHistList::get_instance();
+      ObActiveSessionStatItem tmp_item;
+      if (i < obrpc::ObRpcPacketSet::THE_PCODE_COUNT) {
+        tmp_item.session_type_ = ObActiveSessionStatItem::SessionType::BACKGROUND;
+        snprintf(tmp_item.program_, ASH_PROGRAM_STR_LEN, "T%ld_RPC_REQUEST", tenant_id);
+        MEMCCPY(tmp_item.action_,
+          obrpc::ObRpcPacketSet::instance().name_of_idx(i),
+          '\0',
+          sizeof(tmp_item.action_) - 1);
+      } else {
+        tmp_item.session_type_ = ObActiveSessionStatItem::SessionType::FOREGROUND;
+        snprintf(tmp_item.program_, ASH_PROGRAM_STR_LEN, "T%ld_SQL_CMD", tenant_id);
+      }
+      tmp_item.tenant_id_ = tenant_id;
+      tmp_item.event_no_ = ObWaitEventIds::NETWORK_QUEUE_WAIT;
+      tmp_item.p1_ = static_cast<uint64_t>(obrpc::ObRpcPacketSet::instance().pcode_of_idx(i));
+      tmp_item.weight_ = pcode_in_request_queue_[i];
+      tmp_item.is_wr_weight_sample_ = true;
+      ash_list.add_item(tmp_item);
+      pcode_in_request_queue_[i] = 0;
+      ash_list.inc_compress_num();
+    }
+  }
 }
 
 } /* namespace common */

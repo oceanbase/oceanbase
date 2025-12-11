@@ -343,7 +343,7 @@ int ObDbmsWorkloadRepository::modify_snapshot_settings(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("tenant data version is too low for wr", K(ctx.exec_ctx_->get_my_session()->get_effective_tenant_id()), K(data_version));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.2.1, workload repository not supported");
-  } else if (OB_UNLIKELY(3 != params.count())) {
+  } else if (OB_UNLIKELY(4 != params.count())) {
     ret = OB_INVALID_ARGUMENT_NUM;
     LOG_WARN("parameters number is wrong", K(ret), K(params.count()));
   } else if (OB_FAIL(GCTX.location_service_->get_leader(
@@ -400,9 +400,24 @@ int ObDbmsWorkloadRepository::modify_snapshot_settings(
       }
     }
 
+    int64_t sqlstat_interval = 0;
+    if (OB_SUCC(ret)) {
+      if (params.at(3).is_null()) {
+        sqlstat_interval = -1;  // null
+      } else {
+        sqlstat_interval = params.at(3).get_int();
+        if (sqlstat_interval < 1) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("Invalid value range, sqlstat_interval can not be less than 1.", K(ret));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+              "Invalid value range, sqlstat_interval can not be less than 1.");
+        }
+      }
+    }
+
     if (OB_SUCC(ret)) {
       ObWrUserModifySettingsArg wr_user_modify_settings_arg(
-          ctx.exec_ctx_->get_my_session()->get_effective_tenant_id(), retention, interval, topnsql);
+          ctx.exec_ctx_->get_my_session()->get_effective_tenant_id(), retention, interval, topnsql, sqlstat_interval);
       if (OB_FAIL(wr_proxy.to(leader)
                       .by(OB_SYS_TENANT_ID)
                       .group_id(share::OBCG_WR)
@@ -680,6 +695,132 @@ const char *oracle_table = " FROM SYS.GV$ACTIVE_SESSION_HISTORY ASH";
 const char *wr_oracle_table = " FROM SYS.DBA_WR_ACTIVE_SESSION_HISTORY WR LEFT JOIN SYS.DBA_WR_EVENT_NAME WR_EVENT_NAME ON WR.EVENT_ID = WR_EVENT_NAME.EVENT_ID";
 const char *wr_oracle_table_421 = " FROM SYS.DBA_WR_ACTIVE_SESSION_HISTORY WR";
 
+const char *ASH_VIEW_SQL_442 =
+"SELECT"
+" /*+ LEADING(CDB_WR_ACTIVE_SESSION_HISTORY, CDB_WR_EVENT_NAME) USE_HASH(WR WR_EVENT_NAME) */ "
+"  ASH.TIME_MODEL AS TIME_MODEL,"
+"  ASH.SVR_IP AS SVR_IP,"
+"  ASH.SVR_PORT AS SVR_PORT,"
+"  ASH.SAMPLE_TIME AS SAMPLE_TIME,"
+"  ASH.CON_ID AS TENANT_ID,"
+"  ASH.USER_ID AS USER_ID,"
+"  ASH.SESSION_ID AS SESSION_ID,"
+"  ASH.SESSION_TYPE AS SESSION_TYPE,"
+"  ASH.SQL_ID AS SQL_ID,"
+"  ASH.PLAN_ID AS PLAN_ID,"
+"  ASH.TRACE_ID AS TRACE_ID,"
+// EVENT
+"  %s"
+"  ASH.EVENT_NO AS EVENT_NO,"
+"  ASH.EVENT_ID AS EVENT_ID,"
+"  ASH.P1 AS P1,"
+"  ASH.P1TEXT AS P1TEXT,"
+"  ASH.P2 AS P2,"
+"  ASH.P2TEXT AS P2TEXT,"
+"  ASH.P3 AS P3,"
+"  ASH.P3TEXT AS P3TEXT,"
+// WAIT_CLASS
+"  %s"
+"  ASH.WAIT_CLASS_ID AS WAIT_CLASS_ID,"
+"  ASH.TIME_WAITED AS TIME_WAITED,"
+"  ASH.SQL_PLAN_LINE_ID AS SQL_PLAN_LINE_ID,"
+"  ASH.GROUP_ID AS GROUP_ID,"
+"  ASH.PLAN_HASH AS PLAN_HASH,"
+"  ASH.THREAD_ID AS THREAD_ID,"
+"  ASH.STMT_TYPE AS STMT_TYPE,"
+"  ASH.PROGRAM AS PROGRAM,"
+"  ASH.MODULE AS MODULE,"
+"  ASH.ACTION AS ACTION,"
+"  ASH.CLIENT_ID AS CLIENT_ID,"
+"  ASH.TOP_LEVEL_SQL_ID AS TOP_LEVEL_SQL_ID,"
+"  ASH.PLSQL_ENTRY_OBJECT_ID AS PLSQL_ENTRY_OBJECT_ID,"
+"  ASH.PLSQL_ENTRY_SUBPROGRAM_ID AS PLSQL_ENTRY_SUBPROGRAM_ID,"
+"  ASH.PLSQL_ENTRY_SUBPROGRAM_NAME AS PLSQL_ENTRY_SUBPROGRAM_NAME,"
+"  ASH.PLSQL_OBJECT_ID AS PLSQL_OBJECT_ID,"
+"  ASH.PLSQL_SUBPROGRAM_ID AS PLSQL_SUBPROGRAM_ID,"
+"  ASH.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME,"
+"  ASH.BLOCKING_SESSION_ID AS BLOCKING_SESSION_ID,"
+"  ASH.TABLET_ID AS TABLET_ID,"
+"  ASH.TM_DELTA_TIME AS TM_DELTA_TIME, "
+"  ASH.TM_DELTA_CPU_TIME AS TM_DELTA_CPU_TIME, "
+"  ASH.TM_DELTA_DB_TIME AS TM_DELTA_DB_TIME, "
+"  ASH.PROXY_SID AS PROXY_SID, "
+"  ASH.TX_ID AS TX_ID, "
+"  ASH.DELTA_READ_IO_REQUESTS AS DELTA_READ_IO_REQUESTS,"
+"  ASH.DELTA_READ_IO_BYTES AS DELTA_READ_IO_BYTES,"
+"  ASH.DELTA_WRITE_IO_REQUESTS AS DELTA_WRITE_IO_REQUESTS,"
+"  ASH.DELTA_WRITE_IO_BYTES AS DELTA_WRITE_IO_BYTES,"
+"  ASH.WEIGHT AS WEIGHT,"
+"  ASH.WEIGHT AS COUNT_WEIGHT"
+// FROM which table
+" %s"
+" WHERE sample_time between '%.*s' and '%.*s'";
+
+const char *WR_VIEW_SQL_442 =
+"SELECT"
+" /*+ LEADING(CDB_WR_ACTIVE_SESSION_HISTORY, CDB_WR_EVENT_NAME) USE_HASH(WR WR_EVENT_NAME) */ "
+" WR.TIME_MODEL AS TIME_MODEL,"
+" WR.SVR_IP AS SVR_IP,"
+" WR.SVR_PORT AS SVR_PORT,"
+" WR.SAMPLE_TIME AS SAMPLE_TIME,"
+" WR.TENANT_ID AS TENANT_ID,"
+" WR.USER_ID AS USER_ID,"
+" WR.SESSION_ID AS SESSION_ID,"
+// SESSION_TYPE
+" %s"
+" WR.SQL_ID AS SQL_ID,"
+" WR.PLAN_ID AS PLAN_ID,"
+" WR.TRACE_ID AS TRACE_ID,"
+// EVENT
+" %s"
+" WR.EVENT_NO AS EVENT_NO,"
+" WR.EVENT_ID AS EVENT_ID,"
+" WR.P1 AS P1,"
+" WR_EVENT_NAME.PARAMETER1 AS P1TEXT,"
+" WR.P2 AS P2,"
+" WR_EVENT_NAME.PARAMETER2 AS P2TEXT,"
+" WR.P3 AS P3,"
+" WR_EVENT_NAME.PARAMETER3 AS P3TEXT,"
+// WAIT_CLASS
+" %s"
+" WR_EVENT_NAME.WAIT_CLASS_ID AS WAIT_CLASS_ID,"
+" WR.TIME_WAITED AS TIME_WAITED,"
+" WR.SQL_PLAN_LINE_ID AS SQL_PLAN_LINE_ID,"
+" WR.GROUP_ID AS GROUP_ID,"
+" WR.PLAN_HASH AS PLAN_HASH,"
+" WR.THREAD_ID AS THREAD_ID,"
+" WR.STMT_TYPE AS STMT_TYPE,"
+" WR.PROGRAM AS PROGRAM,"
+" WR.MODULE AS MODULE,"
+" WR.ACTION AS ACTION,"
+" WR.CLIENT_ID AS CLIENT_ID,"
+" WR.TOP_LEVEL_SQL_ID AS TOP_LEVEL_SQL_ID,"
+" WR.PLSQL_ENTRY_OBJECT_ID AS PLSQL_ENTRY_OBJECT_ID,"
+" WR.PLSQL_ENTRY_SUBPROGRAM_ID AS PLSQL_ENTRY_SUBPROGRAM_ID,"
+" WR.PLSQL_ENTRY_SUBPROGRAM_NAME AS PLSQL_ENTRY_SUBPROGRAM_NAME,"
+" WR.PLSQL_OBJECT_ID AS PLSQL_OBJECT_ID,"
+" WR.PLSQL_SUBPROGRAM_ID AS PLSQL_SUBPROGRAM_ID,"
+" WR.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME,"
+" WR.IN_SQL_EXECUTION AS IN_SQL_EXECUTION, "
+" WR.IN_PLSQL_COMPILATION AS IN_PLSQL_COMPILATION, "
+" WR.IN_PLSQL_EXECUTION AS IN_PLSQL_EXECUTION, "
+" WR.BLOCKING_SESSION_ID AS BLOCKING_SESSION_ID,"
+" WR.TABLET_ID AS TABLET_ID,"
+" WR.TM_DELTA_TIME AS TM_DELTA_TIME, "
+" WR.TM_DELTA_CPU_TIME AS TM_DELTA_CPU_TIME, "
+" WR.TM_DELTA_DB_TIME AS TM_DELTA_DB_TIME, "
+" WR.PROXY_SID AS PROXY_SID, "
+" WR.TX_ID AS TX_ID, "
+" WR.DELTA_READ_IO_REQUESTS AS DELTA_READ_IO_REQUESTS,"
+" WR.DELTA_READ_IO_BYTES AS DELTA_READ_IO_BYTES,"
+" WR.DELTA_WRITE_IO_REQUESTS AS DELTA_WRITE_IO_REQUESTS,"
+" WR.DELTA_WRITE_IO_BYTES AS DELTA_WRITE_IO_BYTES,"
+" WR.WEIGHT AS WEIGHT,"
+" WR.WEIGHT * 10 AS COUNT_WEIGHT"
+// FROM which table
+" %s"
+" WHERE sample_time between '%.*s' and '%.*s'";
+
 const char *ASH_VIEW_SQL_4352 =
  "SELECT"
  "  ASH.TIME_MODEL AS TIME_MODEL,"
@@ -734,6 +875,7 @@ const char *ASH_VIEW_SQL_4352 =
  "  ASH.DELTA_READ_IO_BYTES AS DELTA_READ_IO_BYTES,"
  "  ASH.DELTA_WRITE_IO_REQUESTS AS DELTA_WRITE_IO_REQUESTS,"
  "  ASH.DELTA_WRITE_IO_BYTES AS DELTA_WRITE_IO_BYTES,"
+ "  1 AS WEIGHT,"
  "  1 AS COUNT_WEIGHT"
  // FROM which table
  " %s"
@@ -794,6 +936,7 @@ const char *ASH_VIEW_SQL_4352 =
  " WR.DELTA_READ_IO_BYTES AS DELTA_READ_IO_BYTES,"
  " WR.DELTA_WRITE_IO_REQUESTS AS DELTA_WRITE_IO_REQUESTS,"
  " WR.DELTA_WRITE_IO_BYTES AS DELTA_WRITE_IO_BYTES,"
+ " 1 AS WEIGHT,"
  " 10 AS COUNT_WEIGHT"
  // FROM which table
  " %s"
@@ -853,6 +996,7 @@ const char *ASH_VIEW_SQL_4352 =
  "  NULL AS DELTA_READ_IO_BYTES,"
  "  NULL AS DELTA_WRITE_IO_REQUESTS,"
  "  NULL AS DELTA_WRITE_IO_BYTES,"
+ "  1 AS WEIGHT,"
  "  1 AS COUNT_WEIGHT "
  // FROM which table
  " %s "
@@ -914,6 +1058,7 @@ const char *ASH_VIEW_SQL_425 =
 "  ASH.DELTA_READ_IO_BYTES AS DELTA_READ_IO_BYTES,"
 "  ASH.DELTA_WRITE_IO_REQUESTS AS DELTA_WRITE_IO_REQUESTS,"
 "  ASH.DELTA_WRITE_IO_BYTES AS DELTA_WRITE_IO_BYTES,"
+"  1 AS WEIGHT,"
 "  1 AS COUNT_WEIGHT"
 // FROM which table
 " %s"
@@ -978,6 +1123,7 @@ const char *WR_VIEW_SQL_425 =
 " WR.DELTA_READ_IO_BYTES AS DELTA_READ_IO_BYTES,"
 " WR.DELTA_WRITE_IO_REQUESTS AS DELTA_WRITE_IO_REQUESTS,"
 " WR.DELTA_WRITE_IO_BYTES AS DELTA_WRITE_IO_BYTES,"
+" 1 AS WEIGHT,"
 " 10 AS COUNT_WEIGHT"
 // FROM which table
 " %s"
@@ -1038,6 +1184,7 @@ const char *ASH_VIEW_SQL_424 =
 "  NULL AS DELTA_READ_IO_BYTES,"
 "  NULL AS DELTA_WRITE_IO_REQUESTS,"
 "  NULL AS DELTA_WRITE_IO_BYTES,"
+"  1 AS WEIGHT,"
 "  1 AS COUNT_WEIGHT"
 // FROM which table
 " %s"
@@ -1099,6 +1246,7 @@ const char *WR_VIEW_SQL_424 =
 " NULL AS DELTA_READ_IO_BYTES,"
 " NULL AS DELTA_WRITE_IO_REQUESTS,"
 " NULL AS DELTA_WRITE_IO_BYTES,"
+" 1 AS WEIGHT,"
 " 10 AS COUNT_WEIGHT"
 // FROM which table
 " %s"
@@ -1159,6 +1307,7 @@ const char *ASH_VIEW_SQL_423 =
 "  NULL AS DELTA_READ_IO_BYTES,"
 "  NULL AS DELTA_WRITE_IO_REQUESTS,"
 "  NULL AS DELTA_WRITE_IO_BYTES,"
+"  1 AS WEIGHT,"
 "  1 AS COUNT_WEIGHT"
 // FROM which table
 " %s"
@@ -1220,6 +1369,7 @@ const char *WR_VIEW_SQL_423 =
 " NULL AS DELTA_READ_IO_BYTES,"
 " NULL AS DELTA_WRITE_IO_REQUESTS,"
 " NULL AS DELTA_WRITE_IO_BYTES,"
+" 1 AS WEIGHT,"
 " 10 AS COUNT_WEIGHT"
 // FROM which table
 " %s"
@@ -1280,6 +1430,7 @@ const char *ASH_VIEW_SQL_422 =
 "  NULL AS DELTA_READ_IO_BYTES,"
 "  NULL AS DELTA_WRITE_IO_REQUESTS,"
 "  NULL AS DELTA_WRITE_IO_BYTES,"
+"  1 AS WEIGHT,"
 "  1 AS COUNT_WEIGHT"
 // FROM which table
 " %s"
@@ -1341,6 +1492,7 @@ const char *WR_VIEW_SQL_422 =
 " NULL AS DELTA_READ_IO_BYTES,"
 " NULL AS DELTA_WRITE_IO_REQUESTS,"
 " NULL AS DELTA_WRITE_IO_BYTES,"
+" 1 AS WEIGHT,"
 " 10 AS COUNT_WEIGHT"
 // FROM which table
 " %s"
@@ -1401,6 +1553,7 @@ const char *ASH_VIEW_SQL_421 =
 "  NULL AS DELTA_READ_IO_BYTES,"
 "  NULL AS DELTA_WRITE_IO_REQUESTS,"
 "  NULL AS DELTA_WRITE_IO_BYTES,"
+"  1 AS WEIGHT,"
 "  1 AS COUNT_WEIGHT"
 // FROM which table
 " %s"
@@ -1460,6 +1613,7 @@ const char *WR_VIEW_SQL_421 =
 " NULL AS DELTA_READ_IO_BYTES,"
 " NULL AS DELTA_WRITE_IO_REQUESTS,"
 " NULL AS DELTA_WRITE_IO_BYTES,"
+" 1 AS WEIGHT,"
 " 10 AS COUNT_WEIGHT"
 // FROM which table
 " %s"
@@ -1517,6 +1671,21 @@ const char *SQLSTAT_VIEW_SQL_4256 =
       LOG_WARN("get column type from result failed", K(ret), K(column_name));    \
     } else if (_col_type.is_number() || _col_type.is_decimal_int()) {            \
       EXTRACT_INT_FIELD_FROM_NUMBER_SKIP_RET(result, column_name, field , type); \
+    } else if (_col_type.is_double() || _col_type.is_udouble() ||                \
+               _col_type.is_float() || _col_type.is_ufloat()) {                  \
+      double double_value = 0;                                                   \
+      if (OB_FAIL((result).get_double(column_name, double_value))) {             \
+        if (OB_ERR_NULL_VALUE == ret || OB_ERR_COLUMN_NOT_FOUND == ret) {        \
+          ret = OB_SUCCESS;                                                      \
+          field = static_cast<type>(0);                                          \
+        } else {                                                                 \
+          LOG_WARN("get double column from result failed", K(ret), K(column_name)); \
+        }                                                                        \
+      } else {                                                                   \
+        double_value = double_value >= 0 ? double_value + 0.5                    \
+                                         : double_value - 0.5;                   \
+        field = static_cast<type>(double_value);                                 \
+      }                                                                          \
     } else {                                                                     \
       EXTRACT_INT_FIELD_MYSQL_SKIP_RET(result, column_name, field, type);        \
     }                                                                            \
@@ -1531,6 +1700,21 @@ const char *SQLSTAT_VIEW_SQL_4256 =
       LOG_WARN("get column type from result failed", K(ret), K(column_name));   \
     } else if (col_type.is_number() || col_type.is_decimal_int()) {             \
       EXTRACT_INT_FIELD_FROM_NUMBER_SKIP_RET(result, column_name, field, type); \
+    } else if (col_type.is_double() || col_type.is_udouble() ||                 \
+               col_type.is_float() || col_type.is_ufloat()) {                   \
+      double double_value = 0;                                                  \
+      if (OB_FAIL((result).get_double(column_name, double_value))) {            \
+        if (OB_ERR_NULL_VALUE == ret || OB_ERR_COLUMN_NOT_FOUND == ret) {       \
+          ret = OB_SUCCESS;                                                     \
+          field = static_cast<type>(0);                                         \
+        } else {                                                                \
+          LOG_WARN("get double column from result failed", K(ret), K(column_name)); \
+        }                                                                       \
+      } else {                                                                  \
+        double_value = double_value >= 0 ? double_value + 0.5                   \
+                                         : double_value - 0.5;                  \
+        field = static_cast<type>(double_value);                                \
+      }                                                                         \
     } else {                                                                    \
       EXTRACT_INT_FIELD_MYSQL_SKIP_RET(result, column_name, field, type);       \
     }                                                                           \
@@ -1544,6 +1728,19 @@ const char *SQLSTAT_VIEW_SQL_4256 =
       LOG_WARN("get column type from result failed", K(ret), K(column_name));                              \
     } else if (_col_type.is_unumber() || _col_type.is_number() || _col_type.is_decimal_int()) {            \
       EXTRACT_UINT_FIELD_FROM_NUMBER_SKIP_RET(result, column_name, field , type);                          \
+    } else if (_col_type.is_double() || _col_type.is_udouble() || _col_type.is_float() ||                  \
+               _col_type.is_ufloat()) {                                                                    \
+      double double_value = 0;                                                                             \
+      if (OB_FAIL((result).get_double(column_name, double_value))) {                                       \
+        if (OB_ERR_NULL_VALUE == ret || OB_ERR_COLUMN_NOT_FOUND == ret) {                                  \
+          ret = OB_SUCCESS;                                                                                \
+          field = static_cast<type>(0);                                                                    \
+        } else {                                                                                           \
+          LOG_WARN("get double column from result failed", K(ret), K(column_name));                        \
+        }                                                                                                  \
+      } else {                                                                                             \
+        field = static_cast<type>(double_value < 0 ? 0 : (double_value + 0.5));                            \
+      }                                                                                                    \
     } else {                                                                                               \
       EXTRACT_UINT_FIELD_MYSQL_SKIP_RET(result, column_name, field, type);                                 \
     }                                                                                                      \
@@ -1558,6 +1755,19 @@ const char *SQLSTAT_VIEW_SQL_4256 =
       LOG_WARN("get column type from result failed", K(ret), K(column_name));                             \
     } else if (col_type.is_unumber() || col_type.is_number() || col_type.is_decimal_int()) {              \
       EXTRACT_UINT_FIELD_FROM_NUMBER_SKIP_RET(result, column_name, field, type);                          \
+    } else if (col_type.is_double() || col_type.is_udouble() || col_type.is_float() ||                    \
+               col_type.is_ufloat()) {                                                                    \
+      double double_value = 0;                                                                            \
+      if (OB_FAIL((result).get_double(column_name, double_value))) {                                      \
+        if (OB_ERR_NULL_VALUE == ret || OB_ERR_COLUMN_NOT_FOUND == ret) {                                 \
+          ret = OB_SUCCESS;                                                                               \
+          field = static_cast<type>(0);                                                                   \
+        } else {                                                                                          \
+          LOG_WARN("get double column from result failed", K(ret), K(column_name));                       \
+        }                                                                                                 \
+      } else {                                                                                            \
+        field = static_cast<type>(double_value < 0 ? 0 : (double_value + 0.5));                           \
+      }                                                                                                   \
     } else {                                                                                              \
       EXTRACT_UINT_FIELD_MYSQL_SKIP_RET(result, column_name, field, type);                                \
     }                                                                                                     \
@@ -1616,7 +1826,7 @@ int ObDbmsWorkloadRepository::append_fmt_ash_view_sql(
       } else {
         ash_view_ptr = ASH_VIEW_SQL_421;
       }
-    } else {
+    } else if (data_version < DATA_VERSION_4_4_0_0) {
       // v4.3
       if (data_version >= DATA_VERSION_4_3_5_2) {
         ash_view_ptr = ASH_VIEW_SQL_4352;
@@ -1624,6 +1834,13 @@ int ObDbmsWorkloadRepository::append_fmt_ash_view_sql(
         ash_view_ptr = ASH_VIEW_SQL_4350;
       } else {
         ash_view_ptr = ASH_VIEW_SQL_421;
+      }
+    } else {
+      //v4.4
+      if (data_version >= DATA_VERSION_4_4_2_0) {
+        ash_view_ptr = ASH_VIEW_SQL_442;
+      } else {
+        ash_view_ptr = ASH_VIEW_SQL_4352;
       }
     }
   }
@@ -1884,7 +2101,25 @@ int ObDbmsWorkloadRepository::append_fmt_wr_view_sql(
                  static_cast<int>(time_buf_pos),
                  wr_end_time_buf))) {
     LOG_WARN("failed to assign query string", K(ret));
-  } else if ((data_version >= DATA_VERSION_4_3_5_2) && OB_FAIL(sql_string.append_fmt(WR_VIEW_SQL_4352,
+  } else if ((data_version >= DATA_VERSION_4_3_5_2) && (data_version < DATA_VERSION_4_4_2_0) &&
+             OB_FAIL(sql_string.append_fmt(WR_VIEW_SQL_4352,
+                 lib::is_oracle_mode()
+                     ? " CAST(DECODE(SESSION_TYPE, 0, 'FOREGROUND', 'BACKGROUND') AS VARCHAR2(10)) AS SESSION_TYPE,"
+                     : " CAST(IF (SESSION_TYPE = 0, 'FOREGROUND', 'BACKGROUND') AS CHAR(10)) AS SESSION_TYPE,",
+                 lib::is_oracle_mode() ? "CAST(DECODE(EVENT_NO, 0, 'ON CPU', EVENT_NAME) AS VARCHAR2(64)) AS EVENT,"
+                                       : "CAST(IF (EVENT_NO = 0, 'ON CPU', EVENT_NAME) AS CHAR(64)) AS EVENT,",
+                 lib::is_oracle_mode() ? "CAST(DECODE(EVENT_NO, 0, 'NULL', WAIT_CLASS) AS VARCHAR2(64)) AS WAIT_CLASS,"
+                                       : "CAST(IF (EVENT_NO = 0, 'NULL', WAIT_CLASS) AS CHAR(64)) AS WAIT_CLASS,",
+                 lib::is_oracle_mode()                                 ? wr_oracle_table
+                 : ash_report_params.cur_tenant_id == OB_SYS_TENANT_ID ? wr_mysql_sys_table
+                                                                       : wr_mysql_tenant_table,
+                 static_cast<int>(time_buf_pos),
+                 wr_begin_time_buf,
+                 static_cast<int>(time_buf_pos),
+                 wr_end_time_buf))) {
+    LOG_WARN("failed to assign query string", K(ret));
+  } else if ((data_version >= DATA_VERSION_4_4_2_0) &&
+             OB_FAIL(sql_string.append_fmt(WR_VIEW_SQL_442,
                  lib::is_oracle_mode()
                      ? " CAST(DECODE(SESSION_TYPE, 0, 'FOREGROUND', 'BACKGROUND') AS VARCHAR2(10)) AS SESSION_TYPE,"
                      : " CAST(IF (SESSION_TYPE = 0, 'FOREGROUND', 'BACKGROUND') AS CHAR(10)) AS SESSION_TYPE,",
@@ -2108,7 +2343,7 @@ int ObDbmsWorkloadRepository::get_ash_num_samples(
     {
       common::sqlclient::ObMySQLResult *result = nullptr;
       if (OB_FAIL(sql_string.append_fmt(
-              "SELECT COUNT(1) AS NUM_SAMPLES FROM   ("))) {
+              "SELECT COUNT(weight) AS NUM_SAMPLES FROM   ("))) {
         LOG_WARN("append sql failed", K(ret));
       } else if (OB_FAIL(append_fmt_ash_view_sql(ash_report_params, sql_string))) {
         LOG_WARN("failed to append fmt ash view sql", K(ret));
@@ -2160,7 +2395,7 @@ int ObDbmsWorkloadRepository::get_wr_num_samples(
     {
       ObMySQLResult *result = nullptr;
       if (OB_FAIL(sql_string.append_fmt(
-              "SELECT COUNT(1) AS WR_NUM_SAMPLES FROM   ("))) {
+              "SELECT COUNT(weight) AS WR_NUM_SAMPLES FROM   ("))) {
         LOG_WARN("append sql failed", K(ret));
       } else if (OB_FAIL(append_fmt_wr_view_sql(ash_report_params, sql_string))) {
         LOG_WARN("failed to append fmt wr view sql", K(ret));

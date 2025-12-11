@@ -29,14 +29,15 @@ using namespace oceanbase::common::sqlclient;
 // refresh would consume time up to 10s
 // if refresh time is above this threshold, refresh exection is too slow
 constexpr int64_t ASH_REFESH_TIME = 10 * 1000L * 1000L;  // 10s
-// refersh task update its state and do decision making
-// every ASH_REFRESH_INTERVAL
-constexpr int64_t ASH_REFRESH_INTERVAL = 120 * 1000L * 1000L;  // 120s
 // we should snapshot ahead if current speed is SPEED_THRESHOLD times larger than expect speed
-constexpr int SPEED_THRESHOLD = 5;
+constexpr int SPEED_THRESHOLD = 3;
 // ahead snapshot will be triggered only if the time remaining until the next scheduled snapshot is greater than SNAPSHOT_THRESHOLD
 constexpr int SNAPSHOT_THRESHOLD = 180 * 1000L * 1000L;  // 180s
+// free slots threshold when snapshot cannot be triggered
 constexpr double FREE_SLOTS_THRESHOLD = 0.5;
+// free slots threshold for ash buffer must preserved
+constexpr double FREE_SLOTS_THRESHOLD_FOR_SNAPSHOT_AHEAD = 0.3;
+
 
 ObAshRefreshTask &ObAshRefreshTask::get_instance()
 {
@@ -199,6 +200,7 @@ ERRSIM_POINT_DEF(EN_FORCE_ENABLE_SNAPSHOT_AHEAD);
 bool ObAshRefreshTask::require_snapshot_ahead()
 {
   bool bret = false;
+  ObActiveSessHistList::get_instance().set_pre_check_snapshot_time(ObTimeUtility::current_time());
   int64_t write_pos = ObActiveSessHistList::get_instance().write_pos();
   int64_t free_slots_num = ObActiveSessHistList::get_instance().free_slots_num();
   int64_t scheduled_snapshot_interval = GCTX.wr_service_->get_snapshot_interval(false) * 60 * 1000L * 1000L;
@@ -217,7 +219,9 @@ bool ObAshRefreshTask::require_snapshot_ahead()
   } else {
     double cur_speed = 1.0 * (write_pos - prev_write_pos_) / ((ObTimeUtility::current_time() - prev_sched_time_) / 1000 / 1000);
     double expect_speed = 1.0 * free_slots_num / (next_scheduled_snapshot_interval / 1000 / 1000);
-    bret = (cur_speed >= SPEED_THRESHOLD * expect_speed) && (next_scheduled_snapshot_interval > SNAPSHOT_THRESHOLD);
+    bret = (cur_speed >= SPEED_THRESHOLD * expect_speed ||
+            free_slots_num < ObActiveSessHistList::get_instance().size() * FREE_SLOTS_THRESHOLD_FOR_SNAPSHOT_AHEAD) &&
+           (next_scheduled_snapshot_interval > SNAPSHOT_THRESHOLD);
   }
   if (EN_FORCE_ENABLE_SNAPSHOT_AHEAD) {
     bret = true;

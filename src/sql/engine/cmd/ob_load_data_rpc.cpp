@@ -484,7 +484,7 @@ int ObParallelTaskController::init(int64_t max_parallelism)
 {
   int ret = OB_SUCCESS;
   max_parallelism_ = max_parallelism;
-  if (OB_FAIL(vacant_cond_.init(common::ObWaitEventIds::ASYNC_RPC_PROXY_COND_WAIT))) {
+  if (OB_FAIL(vacant_cond_.init(common::ObWaitEventIds::PARALLEL_TASK_CONTROLLER_COND_WAIT))) {
     LOG_WARN("init vacant cond failed", K(ret));
   }
   return ret;

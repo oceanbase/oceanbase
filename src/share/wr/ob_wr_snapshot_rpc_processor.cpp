@@ -17,6 +17,7 @@
 #include "share/wr/ob_wr_service.h"
 #include "share/wr/ob_wr_stat_guard.h"
 #include "observer/ob_srv_network_frame.h"
+#include "sql/monitor/ob_sql_stat_manager.h"
 namespace oceanbase
 {
 namespace share
@@ -88,12 +89,26 @@ DEF_TO_STRING(ObWrUserModifySettingsArg)
   J_COLON();
   pos += ObWrSnapshotArg::to_string(buf + pos, buf_len - pos);
   J_COMMA();
-  J_KV(K_(tenant_id), K_(retention), K_(interval), K_(topnsql));
+  J_KV(K_(tenant_id), K_(retention), K_(interval), K_(topnsql), K_(sqlstat_interval));
   J_OBJ_END();
   return pos;
 }
 OB_SERIALIZE_MEMBER(
-    (ObWrUserModifySettingsArg, ObWrSnapshotArg), tenant_id_, retention_, interval_, topnsql_);
+    (ObWrUserModifySettingsArg, ObWrSnapshotArg), tenant_id_, retention_, interval_, topnsql_, sqlstat_interval_);
+
+DEF_TO_STRING(ObWrAsyncUpdateSqlStatArg)
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_NAME("WR_async_update_sqlstat_arg");
+  J_COLON();
+  pos += ObWrSnapshotArg::to_string(buf + pos, buf_len - pos);
+  J_COMMA();
+  J_KV(K_(tenant_id), K_(timeout_ts));
+  J_OBJ_END();
+  return pos;
+}
+OB_SERIALIZE_MEMBER((ObWrAsyncUpdateSqlStatArg, ObWrSnapshotArg), tenant_id_, timeout_ts_);
 
 template <obrpc::ObRpcPacketCode pcode>
 int ObWrBaseSnapshotTaskP<pcode>::init()
@@ -155,23 +170,31 @@ int ObWrAsyncSnapshotTaskP::process()
 
     // gurantee one snapshot task processing
     bool exit = true;
-    if (snapshot_arg.get_snap_id() == LAST_SNAPSHOT_RECORD_SNAP_ID || snapshot_arg.get_task_type() == WrTaskType::USER_SNAPSHOT) {
-      if (OB_FAIL(MTL(ObWorkloadRepositoryContext*)->try_lock())) {
-        if (snapshot_arg.get_snap_id() == LAST_SNAPSHOT_RECORD_SNAP_ID) {
-          LOG_WARN("snapshot ahead request failed to lock", K(arg));
-        } else {
-          LOG_WARN("manual snapshot request failed to lock", K(arg));
-          status = ObWrSnapshotStatus::FAILED;
-          int tmp_ret = OB_SUCCESS;
-          if (OB_TMP_FAIL(WorkloadRepositoryTask::modify_tenant_snapshot_status_and_startup_time(
-                  snapshot_arg.get_snap_id(), snapshot_arg.get_tenant_id(), GCONF.cluster_id,
-                  GCONF.self_addr_, GCTX.start_service_time_, status))) {
-            LOG_WARN("failed to modify snapshot info", KR(tmp_ret), K(snapshot_arg), K(status));
-          } else if (is_sys_tenant(snapshot_arg.get_tenant_id())) {
-            if (OB_TMP_FAIL(WorkloadRepositoryTask::update_snap_info_in_wr_control(snapshot_arg.get_tenant_id(),
-                    snapshot_arg.get_snap_id(), snapshot_arg.get_snapshot_end_time()))) {
-              LOG_WARN("failed to update wr control info", KR(tmp_ret), K(snapshot_arg));
-            }
+    if (snapshot_arg.get_snap_id() == LAST_SNAPSHOT_RECORD_SNAP_ID) {
+      if (OB_FAIL(MTL(ObWorkloadRepositoryContext*)->try_lock_ash_snapshot_ahead())) {
+        LOG_WARN("snapshot ahead request failed to lock", K(arg));
+      } else {
+        exit = false;
+      }
+    } else if (snapshot_arg.get_snap_id() == SQL_STAT_SNAPSHOT_AHEAD_SNAP_ID) {
+      if (OB_FAIL(MTL(ObWorkloadRepositoryContext*)->try_lock_sqlstat_snapshot_ahead())) {
+        LOG_WARN("sqlstat snapshot ahead request failed to lock", K(arg));
+      } else {
+        exit = false;
+      }
+    } else if (snapshot_arg.get_task_type() == WrTaskType::USER_SNAPSHOT) {
+      if (OB_FAIL(MTL(ObWorkloadRepositoryContext*)->try_lock_all())) {
+        LOG_WARN("manual snapshot request failed to lock", K(arg));
+        status = ObWrSnapshotStatus::FAILED;
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(WorkloadRepositoryTask::modify_tenant_snapshot_status_and_startup_time(
+                snapshot_arg.get_snap_id(), snapshot_arg.get_tenant_id(), GCONF.cluster_id,
+                GCONF.self_addr_, GCTX.start_service_time_, status))) {
+          LOG_WARN("failed to modify snapshot info", KR(tmp_ret), K(snapshot_arg), K(status));
+        } else if (is_sys_tenant(snapshot_arg.get_tenant_id())) {
+          if (OB_TMP_FAIL(WorkloadRepositoryTask::update_snap_info_in_wr_control(snapshot_arg.get_tenant_id(),
+                  snapshot_arg.get_snap_id(), snapshot_arg.get_snapshot_end_time()))) {
+            LOG_WARN("failed to update wr control info", KR(tmp_ret), K(snapshot_arg));
           }
         }
       } else {
@@ -179,7 +202,7 @@ int ObWrAsyncSnapshotTaskP::process()
       }
     } else {
       // scheduled task must be processed
-      if (OB_FAIL(MTL(ObWorkloadRepositoryContext*)->lock(snapshot_arg.get_timeout_ts()))) {
+      if (OB_FAIL(MTL(ObWorkloadRepositoryContext*)->lock_all(snapshot_arg.get_timeout_ts()))) {
         LOG_WARN("scheduled aysnc snapshot task failed", K(MTL_ID()), K(snapshot_arg), K(common::ObTimeUtility::current_time()));
         status = ObWrSnapshotStatus::FAILED;
         int tmp_ret = OB_SUCCESS;
@@ -211,11 +234,17 @@ int ObWrAsyncSnapshotTaskP::process()
         if (OB_FAIL(collector.collect_ash())) {
           LOG_WARN("failed to take wr snapshot ahead", K(ret), K(snapshot_arg), K(MTL_ID()));
         }
+      } else if (snapshot_arg.get_snap_id() == SQL_STAT_SNAPSHOT_AHEAD_SNAP_ID) {
+        if (OB_FAIL(collector.collect_sqlstat())) { //sqlstat ahead
+          LOG_WARN("failed to take wr sqlstat snapshot ahead", K(ret), K(snapshot_arg), K(MTL_ID()));
+        } else if (OB_FAIL(collector.update_sqlstat())) {
+          LOG_WARN("failed to update wr sqlstat", K(ret), K(snapshot_arg), K(MTL_ID()));
+        }
       } else if (OB_FAIL(collector.collect())) {  // scheduled snapshot
         LOG_WARN("failed to collect wr data", K(ret), K(snapshot_arg), K(MTL_ID()));
       }
       // update scheduled snapshot info
-      if (snapshot_arg.get_snap_id() != LAST_SNAPSHOT_RECORD_SNAP_ID) {
+      if (snapshot_arg.get_snap_id() != LAST_SNAPSHOT_RECORD_SNAP_ID && snapshot_arg.get_snap_id() != SQL_STAT_SNAPSHOT_AHEAD_SNAP_ID) {
         if (OB_FAIL(ret)) {
           status = ObWrSnapshotStatus::FAILED;
         } else {
@@ -234,11 +263,20 @@ int ObWrAsyncSnapshotTaskP::process()
         }
         ret = COVER_SUCC(tmp_ret);
       }
-      MTL(ObWorkloadRepositoryContext*)->release_lock();
     }
+    if (exit) {
+      //do nothing
+    } else if (snapshot_arg.get_snap_id() == SQL_STAT_SNAPSHOT_AHEAD_SNAP_ID) {
+      MTL(ObWorkloadRepositoryContext*)->release_lock_sqlstat_snapshot_ahead();
+    } else if (snapshot_arg.get_snap_id() == LAST_SNAPSHOT_RECORD_SNAP_ID) {
+      MTL(ObWorkloadRepositoryContext*)->release_lock_ash_snapshot_ahead();
+    } else {
+      MTL(ObWorkloadRepositoryContext*)->release_all();
+    }
+
     THIS_WORKER.set_timeout_ts(origin_worker_timeout);
 
-    if (OB_FAIL(ret) && LAST_SNAPSHOT_RECORD_SNAP_ID != snapshot_arg.get_snap_id()) {
+    if (OB_FAIL(ret) && LAST_SNAPSHOT_RECORD_SNAP_ID != snapshot_arg.get_snap_id() && SQL_STAT_SNAPSHOT_AHEAD_SNAP_ID != snapshot_arg.get_snap_id()) {
       LOG_WARN("failed to collect wr data", K(ret), K(MTL_ID()), K(arg));
     }
   } else {
@@ -360,6 +398,7 @@ const char *RETENTION_COLUMN_NAME = "retention";
 const char *INTERVAL_NUM_COLUMN_NAME = "snapint_num";
 const char *INTERVAL_COLUMN_NAME = "snap_interval";
 const char *TOPN_SQL_COLUMN_NAME = "topnsql";
+const char *SQLSTAT_INTERVAL_COLUMN_NAME = "sqlstat_interval";
 
 int ObWrSyncUserModifySettingsTaskP::process()
 {
@@ -421,9 +460,79 @@ int ObWrSyncUserModifySettingsTaskP::process()
         }
       }
     }
+
+    if (OB_SUCC(ret)) {
+      if (-1 == arg.get_sqlstat_interval()) {
+        // keep the value of sqlstat_interval , do nothing
+      } else {
+        ObSqlString sql;
+        int64_t affected_rows = 0;
+        if (OB_ISNULL(GCTX.sql_proxy_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("GCTX.sql_proxy_ is null", K(ret));
+        } else if (OB_FAIL(sql.assign_fmt("update /*+ WORKLOAD_REPOSITORY */ %s set %s=%ld  "
+                                          "where tenant_id=%ld",
+                      OB_WR_CONTROL_TNAME, SQLSTAT_INTERVAL_COLUMN_NAME, arg.get_sqlstat_interval(), arg.get_tenant_id()))) {
+          LOG_WARN("failed to format update snapshot info sql", KR(ret));
+        } else if (OB_FAIL(
+                      ObWrCollector::exec_write_sql_with_retry(gen_meta_tenant_id(arg.get_tenant_id()), sql.ptr(), affected_rows))) {
+          LOG_WARN("failed to write snapshot_info", KR(ret), K(sql), K(gen_meta_tenant_id( arg.get_tenant_id())));
+        } else if (affected_rows != 1) {
+          LOG_TRACE("affected rows is not 1", KR(ret), K(affected_rows), K(sql));
+        } else if (OB_FAIL(GCTX.wr_service_->get_sql_stat_dump_task().modify_sqlstat_interval(
+                     arg.get_sqlstat_interval()))) {
+          LOG_WARN("failed to modify sqlstat interval", K(ret));
+        }
+      }
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error type of task", K(ret), K(GCTX.net_frame_), K(GCTX.wr_service_));
+  }
+  return ret;
+}
+
+int ObWrAsyncUpdateSqlStatTaskP::process()
+{
+  int ret = OB_SUCCESS;
+  ObWrAsyncUpdateSqlStatArg &arg = ObWrAsyncUpdateSqlStatTaskP::arg_;
+  LOG_DEBUG("async update sqlstat task", K(MTL_ID()), K(arg));
+  bool tenant_need_upgrade = false;
+  if (OB_FAIL(TENANT_NEED_UPGRADE(MTL_ID(), tenant_need_upgrade))) {
+    LOG_WARN("failed to get tenant_need_upgrade", K(ret), K(MTL_ID()));
+  } else if (GCONF.in_upgrade_mode() || tenant_need_upgrade) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("in upgrade, can not do wr snapshot", KR(ret));
+  } else if (WrTaskType::UPDATE_SQLSTAT == arg.get_task_type()) {
+    if (OB_UNLIKELY(MTL_ID() != arg.get_tenant_id())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("wr snapshot task tenant_id mismatch!", K(MTL_ID()), K(arg));
+    } else {
+      sql::ObSqlStatManager *sql_stat_manager = MTL(sql::ObSqlStatManager*);
+      if (OB_ISNULL(sql_stat_manager)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("sql stat manager is null", K(ret));
+      } else if (OB_FAIL(sql_stat_manager->update_last_snap_record_value())) {
+        LOG_WARN("failed to update last snap record value", K(ret));
+      }
+      int64_t meta_tenant_id = gen_meta_tenant_id(arg.get_tenant_id());
+      if (OB_FAIL(ret) || meta_tenant_id == OB_SYS_TENANT_ID || meta_tenant_id == OB_INVALID_TENANT_ID) {
+        LOG_WARN("failed to get meta tenant id", K(ret), K(arg.get_tenant_id()), K(meta_tenant_id));
+      } else {
+        MTL_SWITCH(meta_tenant_id) {
+          sql_stat_manager = MTL(sql::ObSqlStatManager*);
+          if (OB_ISNULL(sql_stat_manager)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("sql stat manager is null", K(ret));
+          } else if (OB_FAIL(sql_stat_manager->update_last_snap_record_value())) {
+            LOG_WARN("failed to update last snap record value", K(ret), K(meta_tenant_id));
+          }
+        }
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("wrong op type", KR(ret), K(arg.get_task_type()));
   }
   return ret;
 }

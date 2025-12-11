@@ -337,6 +337,7 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObWrAsyncPurgeSnapshotTaskP, gctx_);
   RPC_PROCESSOR(ObWrSyncUserSubmitSnapshotTaskP, gctx_);
   RPC_PROCESSOR(ObWrSyncUserModifySettingsTaskP, gctx_);
+  RPC_PROCESSOR(ObWrAsyncUpdateSqlStatTaskP, gctx_);
 
   // share storage net throt
   RPC_PROCESSOR(ObSharedStorageNetThrotRegisterP, gctx_);

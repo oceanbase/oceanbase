@@ -97,7 +97,9 @@ public:
         proxy_sid_(0),
         client_sid_(INVALID_SESSID),
         delta_read_(0),
-        delta_write_(0)
+        delta_write_(0),
+        weight_(1),
+        is_wr_weight_sample_(false)
   {
     sql_id_[0] = '\0';
     top_level_sql_id_[0] = '\0';
@@ -189,6 +191,8 @@ public:
   uint32_t client_sid_; //client session id
   ObIOData delta_read_;
   ObIOData delta_write_;
+  int64_t weight_;
+  bool is_wr_weight_sample_;
   char program_[ASH_PROGRAM_STR_LEN];
   char module_[ASH_MODULE_STR_LEN];
   char action_[ASH_ACTION_STR_LEN];
@@ -204,7 +208,8 @@ public:
 #if !defined(NDEBUG)
       K_(bt),
 #endif
-      K_(group_id), K_(tid), K_(plan_hash), K_(tx_id), K_(stmt_type), K_(tablet_id), K_(block_sessid), K_(delta_read), K_(delta_write)) ;
+      K_(group_id), K_(tid), K_(plan_hash), K_(tx_id), K_(stmt_type), K_(tablet_id), K_(block_sessid),
+      K_(delta_read), K_(delta_write), K_(weight), K_(is_wr_weight_sample)) ;
 };
 
 // record run-time stat for each OB session
@@ -411,6 +416,7 @@ public:
   const ObActiveSessionStatItem &get(int64_t pos) const;
   int64_t copy_from_ash_buffer(const ObActiveSessionStatItem &stat);
   int64_t append(const ObActiveSessionStat &stat);
+  int64_t append_item(ObActiveSessionStatItem &stat);//only used for wait in queue
   void fixup_stat(int64_t index, const ObWaitEventDesc &desc);
   void fixup_stat(int64_t index,
                   const ObCurTraceId::TraceId &trace_id,

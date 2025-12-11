@@ -28,6 +28,7 @@ class ObWrPurgeSnapshotArg;
 class ObWrUserSubmitSnapArg;
 class ObWrUserSubmitSnapResp;
 class ObWrUserModifySettingsArg;
+class ObWrAsyncUpdateSqlStatArg;
 }  // namespace share
 
 namespace obrpc
@@ -45,6 +46,8 @@ public:
       (share::ObWrUserSubmitSnapArg), share::ObWrUserSubmitSnapResp);
   RPC_S(@PR5 wr_sync_user_modify_settings_task, obrpc::OB_WR_SYNC_USER_MODIFY_SETTINGS_TASK,
       (share::ObWrUserModifySettingsArg));
+  RPC_AP(@PR5 wr_async_update_sqlstat, obrpc::OB_WR_ASYNC_UPDATE_SQLSTAT_TASK,
+      (share::ObWrAsyncUpdateSqlStatArg));
 };
 
 }  // namespace obrpc

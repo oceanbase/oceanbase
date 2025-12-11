@@ -271,6 +271,7 @@ void ObPhysicalPlan::destroy()
   stat_.expected_worker_map_.destroy();
   stat_.minimal_worker_map_.destroy();
   subschema_ctx_.destroy();
+  sql_stat_record_value_.move_to_sqlstat_cache(sql_stat_record_value_.get_key());
 }
 
 int ObPhysicalPlan::copy_common_info(ObPhysicalPlan &src)

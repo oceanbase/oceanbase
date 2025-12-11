@@ -103,6 +103,8 @@ protected:
     DELTA_READ_IO_BYTES,
     DELTA_WRITE_IO_REQUESTS,
     DELTA_WRITE_IO_BYTES,
+    WEIGHT,
+    IS_WR_WEIGHT_SAMPLE,
   };
   DISALLOW_COPY_AND_ASSIGN(ObVirtualASH);
   // ash main table scan output rows in reverse order.
