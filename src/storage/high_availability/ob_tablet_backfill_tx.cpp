@@ -2611,14 +2611,17 @@ int ObTabletBackfillMergeCtx::get_merge_tables(ObGetMergeTablesResult &get_merge
 int ObTabletBackfillMergeCtx::prepare_schema()
 {
   int ret = OB_SUCCESS;
+  ObStorageSchema *schema = nullptr;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet backfill merge ctx do not init", K(ret));
-  } else if (OB_FAIL(get_storage_schema())) {
+  } else if (OB_FAIL(get_storage_schema(schema))) {
     LOG_WARN("failed to get storage schema from tablet", KR(ret));
   } else if (is_mini_merge(static_param_.dag_param_.merge_type_) && OB_FAIL(update_storage_schema_by_memtable(
-      *static_param_.schema_, static_param_.tables_handle_))) {
+      static_param_.tables_handle_, *schema))) {
     LOG_WARN("failed to update storage schema by memtable", KR(ret));
+  } else {
+    static_param_.schema_ = schema;
   }
   return ret;
 }

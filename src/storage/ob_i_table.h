@@ -611,6 +611,7 @@ public:
   int add_table(const ObTableHandleV2 &handle);
   int assign(const ObTablesHandleArray &other);
   int get_tables(common::ObIArray<ObITable *> &tables) const;
+  int get_table_handles(common::ObIArray<ObTableHandleV2> &table_handles) const;
   int get_first_memtable(ObIMemtable *&memtable) const;
   int get_all_minor_sstables(common::ObIArray<ObITable *> &tables) const;
   int get_all_remote_major_sstables(common::ObIArray<ObITable *> &tables) const;

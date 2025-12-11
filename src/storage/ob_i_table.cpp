@@ -784,6 +784,16 @@ int ObTablesHandleArray::get_tables(common::ObIArray<ObITable *> &tables) const
   return ret;
 }
 
+int ObTablesHandleArray::get_table_handles(common::ObIArray<ObTableHandleV2> &table_handles) const
+{
+  int ret = OB_SUCCESS;
+  table_handles.reset();
+  if (OB_FAIL(table_handles.assign(handles_array_))) {
+    STORAGE_LOG(WARN, "failed to assign table handles", K(ret));
+  }
+  return ret;
+}
+
 int ObTablesHandleArray::get_first_memtable(ObIMemtable *&memtable) const
 {
   int ret = OB_SUCCESS;

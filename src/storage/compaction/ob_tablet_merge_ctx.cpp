@@ -108,18 +108,22 @@ int ObTabletMergeCtx::update_block_info(
 int ObTabletMiniMergeCtx::prepare_schema()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(get_storage_schema())) {
+  ObStorageSchema *schema = nullptr;
+  if (OB_FAIL(get_storage_schema(schema))) {
     LOG_WARN("failed to get storage schema from tablet", KR(ret));
   } else if (get_tablet_id().is_ls_inner_tablet()) {
     // for ls_inner_tablet, schema on tablet is not changed
     if (OB_FAIL(pre_process_tx_data_table_merge())) {
       LOG_WARN("pre process tx data table for merge failed", KR(ret), "dag_param", get_dag_param());
     } else {
+      static_param_.schema_ = schema;
       static_param_.set_full_merge_and_level(true/*is_full_merge*/);
       static_param_.read_base_version_ = 0;
     }
-  } else if (OB_FAIL(update_storage_schema_by_memtable(*static_param_.schema_, get_tables_handle()))) {
-    LOG_WARN("failed to update storage schema by memtable", KR(ret));
+  } else if (OB_FAIL(update_storage_schema_by_memtable(get_tables_handle(), *schema))) {
+    LOG_WARN("failed to update storage schema by memtable", KR(ret), KPC(schema));
+  } else {
+    static_param_.schema_ = schema;
   }
 #ifdef OB_BUILD_SHARED_STORAGE
   // prepare for register mini sstable upload
@@ -302,10 +306,12 @@ int ObTabletMiniMergeCtx::update_tablet_directly(ObGetMergeTablesResult &get_mer
   int tmp_ret = OB_SUCCESS;
   ObUpdateTableStoreParam param;
   ObTabletHandle new_tablet_handle;
+  ObStorageSchema *schema = nullptr;
   if (OB_FAIL(static_param_.get_basic_info_from_result(get_merge_table_result))) {
     LOG_WARN("failed to get basic infor from result", KR(ret), K(get_merge_table_result));
-  } else if (OB_FAIL(get_storage_schema())) {
+  } else if (OB_FAIL(get_storage_schema(schema))) {
     LOG_WARN("failed to get storage schema from tablet", KR(ret));
+  } else if (FALSE_IT(static_param_.schema_ = schema)) {
   } else if (OB_FAIL(build_update_table_store_param(nullptr/*sstable*/, param))) {
     LOG_WARN("failed to build update table store param", KR(ret), K(param));
   } else if (OB_FAIL(get_ls()->update_tablet_table_store(

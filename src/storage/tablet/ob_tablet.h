@@ -682,7 +682,7 @@ public:
   int check_valid(const bool ignore_ha_status = false) const;
 
   int64_t to_string(char *buf, const int64_t buf_len) const;
-  int get_max_column_cnt_on_schema_recorder(int64_t &max_column_cnt);
+  int get_max_column_cnt_on_schema_recorder(int64_t &max_column_cnt) const;
   static int get_tablet_version(const char *buf, const int64_t len, int32_t &version);
   int get_max_schema_version(int64_t &schema_version);
   int get_ls_epoch(int64_t &ls_epoch);

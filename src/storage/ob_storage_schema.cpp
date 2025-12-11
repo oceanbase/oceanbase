@@ -2267,13 +2267,24 @@ void ObStorageSchema::reset_string(ObString &str)
   str.reset();
 }
 
-void ObStorageSchema::update_column_cnt(const int64_t input_col_cnt)
+void ObStorageSchema::update_column_cnt_and_schema_version(
+    const int64_t input_col_cnt,
+    const int64_t input_store_col_cnt,
+    const int64_t input_schema_version)
 {
+  const int64_t origin_column_cnt = column_cnt_;
+  const int64_t origin_store_column_cnt = store_column_cnt_;
+  const int64_t origin_schema_version = schema_version_;
   column_cnt_ = MAX(column_cnt_, input_col_cnt);
-  store_column_cnt_ = MAX(store_column_cnt_, input_col_cnt);
-  if (column_cnt_ != column_array_.count()) {
+  store_column_cnt_ = MAX(store_column_cnt_, input_store_col_cnt);
+  schema_version_ = MAX(schema_version_, input_schema_version);
+  if (column_cnt_ != column_array_.count() || origin_store_column_cnt != store_column_cnt_) {
     column_info_simplified_ = true;
-    STORAGE_LOG(INFO, "update column cnt", K(column_cnt_), K(store_column_cnt_), K(column_cnt_), K(column_array_.count()));
+    STORAGE_LOG(INFO, "update column cnt",
+      K(origin_column_cnt), K_(column_cnt),
+      K(origin_store_column_cnt), K_(store_column_cnt),
+      "column_array_size", column_array_.count(),
+      K(origin_schema_version), K_(schema_version));
   }
 }
 
