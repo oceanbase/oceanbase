@@ -619,7 +619,8 @@ public:
                         ObSPIOutParams &out_params,
                         bool is_forall,
                         bool is_dynamic_sql,
-                        bool is_dbms_sql);
+                        bool is_dbms_sql,
+                        ParamStore **array_params = NULL);
 
   static int prepare_static_sql_params(pl::ObPLExecCtx *ctx,
                                        ObIAllocator &param_allocator,
@@ -1115,6 +1116,7 @@ private:
                                    ObSPIOutParams &out_params,
                                    bool is_forall = false);
 
+  static void release_batch_params(pl::ObPLExecCtx *ctx, ParamStore *array_params);
   static int inner_fetch(pl::ObPLExecCtx *ctx,
                          bool &can_retry,
                          ObSPIResultSet &spi_result,
