@@ -4269,7 +4269,7 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
         routine_id, loc, formal_param_idxs, actual_param_exprs, cursor_param_count));
     }
 
-    if (OB_SUCC(ret) && DECL_SUBPROG == loc) {
+    if (OB_SUCC(ret) && DECL_SUBPROG == loc && !cursor->is_ref_by_refcursor()) {
       ParamStore *subprog_params = NULL;
       OZ (current_params.assign(*ctx->params_));
       OZ (ObPLContext::get_param_store_from_local(*session_info, package_id, routine_id, subprog_params));
