@@ -790,18 +790,23 @@ int ObDblinkCtxInSession::set_dblink_conn(common::sqlclient::ObISQLConnection *d
 {
   int ret = OB_SUCCESS;
 #ifdef OB_BUILD_DBLINK
-  uint32_t sessid = 0;
   oceanbase::common::sqlclient::ObTenantDblinkKeeper *tenant_dblink_keeper = MTL(oceanbase::common::sqlclient::ObTenantDblinkKeeper*);
   if (OB_ISNULL(session_info_) || OB_ISNULL(tenant_dblink_keeper)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexcepted null ptr", K(ret), KP(session_info_), KP(tenant_dblink_keeper));
-  } else if (FALSE_IT(sessid = session_info_->get_server_sid())) {
+  } else if (0 == sessid_) {
+    sessid_ = session_info_->get_server_sid();
+  } else if (OB_UNLIKELY(sessid_ != session_info_->get_server_sid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session id not same", K(ret), K(sessid_), K(session_info_->get_server_sid()));
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(dblink_conn)) {
     //do nothing
-  } else if (OB_FAIL(tenant_dblink_keeper->set_dblink_conn(sessid, dblink_conn))) {
-    LOG_WARN("failed to set dblink", KP(dblink_conn), K(sessid), KP(tenant_dblink_keeper), K(ret));
+  } else if (OB_FAIL(tenant_dblink_keeper->set_dblink_conn(sessid_, dblink_conn))) {
+    LOG_WARN("failed to set dblink", KP(dblink_conn), K(sessid_), KP(tenant_dblink_keeper), K(ret));
   }
-  LOG_TRACE("set_dblink_conn", K(ret), KP(dblink_conn), K(sessid), K(lbt()));
+  LOG_TRACE("set_dblink_conn", K(ret), KP(dblink_conn), K(sessid_), K(lbt()));
 #endif
   return ret;
 }
@@ -810,7 +815,6 @@ int ObDblinkCtxInSession::clean_dblink_conn(const bool force_disconnect)
 {
   int ret = OB_SUCCESS;
 #ifdef OB_BUILD_DBLINK
-  uint32_t sessid = 0;
   common::sqlclient::ObISQLConnection *dblink_conn = NULL;
   // Why do not use MTL(oceanbase::common::sqlclient::ObTenantDblinkKeeper*) ?
   // MTL(xxx) accesses the ptr in the cache, we need to access the ptr in the memory.
@@ -822,14 +826,13 @@ int ObDblinkCtxInSession::clean_dblink_conn(const bool force_disconnect)
     // do nothing
   } else {
     oceanbase::common::sqlclient::ObTenantDblinkKeeper *tenant_dblink_keeper = MTL_CTX()->get<oceanbase::common::sqlclient::ObTenantDblinkKeeper *>();
-    if (OB_ISNULL(tenant_dblink_keeper)) {
+    if (OB_ISNULL(tenant_dblink_keeper) || 0 == sessid_) {
       // do nothing
     } else if (OB_ISNULL(session_info_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexcepted null ptr", K(ret), KP(session_info_), KP(tenant_dblink_keeper));
-    } else if (FALSE_IT(sessid = session_info_->get_server_sid())) {
-    } else if (OB_FAIL(tenant_dblink_keeper->clean_dblink_conn(sessid, force_disconnect))) {
-      LOG_WARN("failed to set dblink", KP(dblink_conn), K(sessid), KP(tenant_dblink_keeper), K(force_disconnect), K(ret));
+    } else if (OB_FAIL(tenant_dblink_keeper->clean_dblink_conn(sessid_, force_disconnect))) {
+      LOG_WARN("failed to set dblink", KP(dblink_conn), K(sessid_), KP(tenant_dblink_keeper), K(force_disconnect), K(ret));
     }
     tx_id_.reset();
     arena_alloc_.reset();

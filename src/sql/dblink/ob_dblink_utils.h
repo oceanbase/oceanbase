@@ -173,7 +173,8 @@ public:
       reverse_dblink_buf_(NULL),
       sys_var_reverse_info_buf_(NULL),
       sys_var_reverse_info_buf_size_(0),
-      tx_id_()
+      tx_id_(),
+      sessid_(0)
   {}
   ~ObDblinkCtxInSession()
   {
@@ -187,6 +188,7 @@ public:
     free_dblink_conn_pool();
     // session_info_ = NULL; // do not need reset session_info_
     reverse_dblink_ = NULL;
+    sessid_ = 0;
   }
   int register_dblink_conn_pool(common::sqlclient::ObCommonServerConnectionPool *dblink_conn_pool);
   int free_dblink_conn_pool();
@@ -208,6 +210,7 @@ private:
   ObArray<int64_t> dblink_conn_holder_array_; //for dblink write to hold connection during trasaction.
   ObString last_reverse_info_values_;
   transaction::ObTransID tx_id_;
+  uint32_t sessid_;
 };
 
 struct ObParamPosIdx
