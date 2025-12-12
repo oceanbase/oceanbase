@@ -195,6 +195,8 @@ typedef int64_t DateTimeType;
 typedef int8_t  MonthType;
 typedef int8_t  WeekType;
 typedef int64_t UsecType;
+const int32_t MIN_DAYS_TO_YEAR_QUICK = -719527;
+const int32_t MAX_DAYS_TO_YEAR_QUICK = 6476114;
 
 
 struct ObIntervalLimit {
@@ -758,6 +760,9 @@ public:
 
 public:
   // without ob_time
+  // when use days_to_year, days_to_year_ydays, ydays_to_month_mdays, must ensure days is in
+  // valid range [MIN_DAYS_TO_YEAR_QUICK, MAX_DAYS_TO_YEAR_QUICK]
+  static bool could_calc_days_to_year_quickly(int32_t value);
   static void days_to_year(DateType days, YearType &year);
   static void days_to_year_ydays(DateType days, YearType &year, DateType &dt_yday);
   static void ydays_to_month_mdays(YearType year, DateType dt_yday, MonthType &month, DateType &dt_mday);
@@ -1053,6 +1058,11 @@ int ObTimeConverter::mdate_to_ob_time(ObMySQLDate value, ObTime &ob_time)
     }
   }
   return ret;
+}
+
+OB_INLINE bool ObTimeConverter::could_calc_days_to_year_quickly(int32_t value)
+{
+  return value >= MIN_DAYS_TO_YEAR_QUICK && value <= MAX_DAYS_TO_YEAR_QUICK;
 }
 /// @fn get year from days, ObTimeConverter::ZERO_DATE NOT allowed to run in this function
 /// @brief accuracy relies on 0 <= year <= 9999

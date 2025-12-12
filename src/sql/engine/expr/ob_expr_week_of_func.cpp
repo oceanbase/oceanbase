@@ -593,17 +593,27 @@ int vector_weekofyear(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &ski
           LOG_WARN("get date and usec from vec failed", K(ret));
         } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date)) {
           res_vec->set_null(idx);
-        } else {
-          DateType wday = WDAY_OFFSET[date % DAYS_PER_WEEK][EPOCH_WDAY];
+        } else if (ObTimeConverter::could_calc_days_to_year_quickly(date)) {
           ObTimeConverter::days_to_year_ydays(date, year, dt_yday);
+        } else {
+          ObTime ob_time(DT_TYPE_DATE);
+          if (OB_FAIL(ObTimeConverter::date_to_ob_time(date, ob_time))) {
+            LOG_WARN("failed to convert date to ob_time", K(ret), K(date));
+          } else {
+            year = ob_time.parts_[DT_YEAR];
+            dt_yday = ob_time.parts_[DT_YDAY];
+          }
+        }
+        if (OB_SUCC(ret)) {
           if (year <= 0) {
             res_vec->set_null(idx);
           } else {
+            DateType wday = WDAY_OFFSET[date % DAYS_PER_WEEK][EPOCH_WDAY];
             ObTimeConverter::to_week(DT_WEEK_GE_4_BEGIN, year, dt_yday, wday, week, delta);
             res_vec->set_int(idx, week);
           }
+          eval_flags.set(idx);
         }
-        eval_flags.set(idx);
       });
     }
   }
@@ -745,12 +755,22 @@ int ObExprWeek::vector_week(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVecto
             int64_t mode_value = mode_vec->get_date(idx);
             if (OB_FAIL(ObExprWeek::get_week_mode_value(mode_value, mode))) {
               LOG_WARN("invalid mode", K(mode_value), K(mode), K(ret));
-            } else {
-              wday = WDAY_OFFSET[date % DAYS_PER_WEEK][EPOCH_WDAY];
+            } else if (ObTimeConverter::could_calc_days_to_year_quickly(date)) {
               ObTimeConverter::days_to_year_ydays(date, year, dt_yday);
+            } else {
+              ObTime ob_time(DT_TYPE_DATE);
+              if (OB_FAIL(ObTimeConverter::date_to_ob_time(date, ob_time))) {
+                LOG_WARN("failed to convert date to ob_time", K(ret), K(date));
+              } else {
+                year = ob_time.parts_[DT_YEAR];
+                dt_yday = ob_time.parts_[DT_YDAY];
+              }
+            }
+            if (OB_SUCC(ret)) {
               if (year <= 0) {
                 res_vec->set_null(idx);
               } else {
+                wday = WDAY_OFFSET[date % DAYS_PER_WEEK][EPOCH_WDAY];
                 ObTimeConverter::to_week(mode, year, dt_yday, wday, week, /*unused*/delta);
                 res_vec->set_int(idx, week);
               }
@@ -765,15 +785,26 @@ int ObExprWeek::vector_week(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVecto
             LOG_WARN("get_date_usec_from_vec failed", K(ret), K(date), K(usec), K(tz_offset));
           } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date)) {
             res_vec->set_null(idx);
-          } else {
-            DateType wday = WDAY_OFFSET[date % DAYS_PER_WEEK][EPOCH_WDAY];
+          } else if (ObTimeConverter::could_calc_days_to_year_quickly(date)) {
             ObTimeConverter::days_to_year_ydays(date, year, dt_yday);
+          } else {
+            ObTime ob_time(DT_TYPE_DATE);
+            if (OB_FAIL(ObTimeConverter::date_to_ob_time(date, ob_time))) {
+              LOG_WARN("failed to convert date to ob_time", K(ret), K(date));
+            } else {
+              year = ob_time.parts_[DT_YEAR];
+              dt_yday = ob_time.parts_[DT_YDAY];
+            }
+          }
+          if (OB_SUCC(ret)) {
             if (year <= 0) {
               res_vec->set_null(idx);
             } else {
+              DateType wday = WDAY_OFFSET[date % DAYS_PER_WEEK][EPOCH_WDAY];
               ObTimeConverter::to_week(DT_WEEK_ZERO_BEGIN + DT_WEEK_SUN_BEGIN, year, dt_yday, wday, week, /*unused*/delta);
               res_vec->set_int(idx, week);
             }
+            eval_flags.set(idx);
           }
           eval_flags.set(idx);
         });
