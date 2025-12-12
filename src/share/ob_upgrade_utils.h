@@ -404,9 +404,10 @@ public:
   ObUpgradeFor4420Processor() : ObBaseUpgradeProcessor() {}
   virtual ~ObUpgradeFor4420Processor() {}
   virtual int pre_upgrade() override { return common::OB_SUCCESS; }
-  virtual int post_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override;
   virtual int finish_upgrade() override;
 private:
+  int post_upgrade_for_sys_schema_version();
   int finish_upgrade_for_grant_sys_privs();
   int grant_priv(const ObPrivSet user_priv_set,
                  const ObPrivSet grant_priv_set,

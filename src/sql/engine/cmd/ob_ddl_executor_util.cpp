@@ -355,5 +355,33 @@ int ObDDLExecutorUtil::cancel_ddl_task(const int64_t tenant_id, obrpc::ObCommonR
   return ret;
 }
 
+template<class ARG, class RES>
+int ObDDLExecutorUtil::execute_pcreate_table(obrpc::ObCommonRpcProxy &common_rpc_proxy, ObSQLSessionInfo * my_session, const char* parallel_ddl_type,
+                                            int (ObCommonRpcProxy::*rpc_func)(const ARG&, RES&, const ObRpcOpts&), const ARG &arg, RES &res,
+                                            const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtility::current_time();
+  ObTimeoutCtx ctx;
+  if (OB_FAIL(ctx.set_timeout(common_rpc_proxy.get_timeout()))) {
+    LOG_WARN("fail to set timeout ctx", KR(ret));
+  } else if (OB_FAIL((common_rpc_proxy.*rpc_func)(arg, res, ObRpcOpts()))) {
+    LOG_WARN("rpc proxy create table failed", KR(ret), "dst", common_rpc_proxy.get_server());
+  } else {
+    int64_t refresh_time = ObTimeUtility::current_time();
+    if (OB_FAIL(ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
+        ctx, my_session, tenant_id, res.schema_version_, res.do_nothing_))) {
+      LOG_WARN("fail to check paralleld ddl schema in sync", KR(ret), K(res));
+    }
+    int64_t end_time = ObTimeUtility::current_time();
+    LOG_INFO(parallel_ddl_type, KR(ret),
+            "tenant_id", tenant_id,
+            "cost", end_time - start_time,
+            "execute_time", refresh_time - start_time,
+            "wait_schema", end_time - refresh_time);
+  }
+  return ret;
+}
+
 } //end namespace sql
 } //end namespace oceanbase

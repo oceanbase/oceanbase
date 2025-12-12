@@ -118,7 +118,6 @@ int ObBuildMViewTask::init(const ObDDLTaskRecord &task_record)
   const uint64_t mview_table_id = task_record.object_id_;
   const int64_t schema_version = task_record.schema_version_;
   int64_t pos = 0;
-  const ObTableSchema *mview_schema = nullptr;
   const char *ddl_type_str = nullptr;
   const char *target_name = nullptr;
   ObSchemaGetterGuard schema_guard;
@@ -136,16 +135,6 @@ int ObBuildMViewTask::init(const ObDDLTaskRecord &task_record)
     LOG_WARN("invalid arguments", KR(ret), K(task_record));
   } else if (OB_FAIL(deserialize_params_from_message(task_record.tenant_id_, task_record.message_.ptr(), task_record.message_.length(), pos))) {
     LOG_WARN("deserialize params from message failed", KR(ret));
-  } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
-          task_record.tenant_id_, schema_guard, schema_version))) {
-    LOG_WARN("fail to get schema guard", KR(ret), K(mview_table_id), K(schema_version));
-  } else if (OB_FAIL(schema_guard.check_formal_guard())) {
-    LOG_WARN("schema_guard is not formal", KR(ret), K(mview_table_id));
-  } else if (OB_FAIL(schema_guard.get_table_schema(task_record.tenant_id_, mview_table_id, mview_schema))) {
-    LOG_WARN("fail to get table schema", KR(ret), K(mview_table_id));
-  } else if (OB_ISNULL(mview_schema)) {
-    ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("fail to get table schema", KR(ret), K(mview_schema));
   } else {
     int64_t now = ObTimeUtility::current_time();
     set_gmt_create(now);
@@ -160,7 +149,7 @@ int ObBuildMViewTask::init(const ObDDLTaskRecord &task_record)
     parent_task_id_ = task_record.parent_task_id_;
     ret_code_ = task_record.ret_code_;
     start_time_ = now;
-    if (OB_FAIL(init_ddl_task_monitor_info(mview_schema->get_table_id()))) {
+    if (OB_FAIL(init_ddl_task_monitor_info(mview_table_id))) {
       LOG_WARN("failed to init ddl task monitor info", KR(ret));
     } else {
       dst_tenant_id_ = tenant_id_;

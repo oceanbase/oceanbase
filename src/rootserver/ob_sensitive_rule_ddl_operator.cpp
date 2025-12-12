@@ -328,7 +328,7 @@ int ObSensitiveRuleDDLOperator::drop_sensitive_column_in_drop_table(const ObTabl
   uint64_t tenant_id = table_schema.get_tenant_id();
   ObString empty_str;
   ObSEArray<uint64_t, 8> drop_column_ids;
-  ObSEArray<ObSensitiveRuleSchema *, 4> sensitive_rules;
+  ObSEArray<const ObSensitiveRuleSchema *, 4> sensitive_rules;
   ObSensitiveRuleSchema new_schema; // dummy
   if (OB_FAIL(table_schema.get_column_ids(drop_column_ids))) {
     LOG_WARN("get column ids failed", KR(ret), K(table_schema));

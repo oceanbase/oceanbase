@@ -347,7 +347,7 @@ public:
 
   int get_sensitive_rule_schemas_by_table(
     const ObTableSchema &table_schema,
-    ObIArray<ObSensitiveRuleSchema *> &schemas);
+    ObIArray<const ObSensitiveRuleSchema *> &schemas);
 
 int get_table_schemas_in_tablegroup(
     const uint64_t tablegroup_id,

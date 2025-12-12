@@ -757,6 +757,7 @@ int ObInnerTableSchemaPrinter::get_core_schema_version_code_(ObSqlString &code)
 {
   int ret = OB_SUCCESS;
   int64_t core_schema_version = 0;
+  int64_t sys_schema_version = 0;
   if (!empty_file_) {
     for (int64_t i = 0; i < schema_ptrs_.count(); i++) {
       if (OB_ISNULL(schema_ptrs_[i])) {
@@ -765,9 +766,15 @@ int ObInnerTableSchemaPrinter::get_core_schema_version_code_(ObSqlString &code)
       } else if (is_core_table(schema_ptrs_[i]->get_table_id()) && schema_ptrs_[i]->get_schema_version() > core_schema_version) {
         core_schema_version = schema_ptrs_[i]->get_schema_version();
       }
+      if (OB_FAIL(ret)) {
+      } else if (is_sys_table(schema_ptrs_[i]->get_table_id()) && schema_ptrs_[i]->get_schema_version() > sys_schema_version) {
+        sys_schema_version = schema_ptrs_[i]->get_schema_version();
+      }
     }
   }
-  if (FAILEDx(code.append_fmt("const int64_t INNER_TABLE_CORE_SCHEMA_VERSION = %ld;\n", core_schema_version))) {
+  if (FAILEDx(code.append_fmt("const int64_t INNER_TABLE_SYS_SCHEMA_VERSION = %ld;\n", sys_schema_version))) {
+    LOG_WARN("failed to append sys schema version", KR(ret), K(sys_schema_version));
+  } else if (OB_FAIL(code.append_fmt("const int64_t INNER_TABLE_CORE_SCHEMA_VERSION = %ld;\n", core_schema_version))) {
     LOG_WARN("failed to append core schema version", KR(ret), K(core_schema_version));
   }
   return ret;

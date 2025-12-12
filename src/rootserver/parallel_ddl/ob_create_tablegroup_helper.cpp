@@ -87,7 +87,7 @@ int ObCreateTablegroupHelper::check_tablegroup_name_()
   int ret = OB_SUCCESS;
   const ObString &tablegroup_name = arg_.tablegroup_schema_.get_tablegroup_name();
   uint64_t tablegroup_id = OB_INVALID_ID;
-  if (OB_FAIL(latest_schema_guard_.get_tablegroup_id(tablegroup_name, tablegroup_id))) {
+  if (OB_FAIL(schema_guard_wrapper_.get_tablegroup_id(tablegroup_name, tablegroup_id))) {
     LOG_WARN("fail to get tablegroup id", KR(ret), K(tablegroup_name));
   } else if (tablegroup_id != OB_INVALID_ID) {
     // Raise error here to skip the following steps,

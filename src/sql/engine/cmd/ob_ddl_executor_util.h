@@ -68,6 +68,10 @@ public:
   static int wait_build_index_finish(const uint64_t tenant_id, const int64_t task_id, bool &is_finish);
   static int handle_session_exception(ObSQLSessionInfo &session);
   static int cancel_ddl_task(const int64_t tenant_id, obrpc::ObCommonRpcProxy *common_rpc_proxy);
+  template<class ARG, class RES>
+  static int execute_pcreate_table(obrpc::ObCommonRpcProxy &common_rpc_proxy, ObSQLSessionInfo *my_session, const char* parallel_ddl_type,
+                                  int (ObCommonRpcProxy::*rpc_func)(const ARG&, RES&, const ObRpcOpts&), const ARG &arg, RES &res,
+                                  const uint64_t tenant_id);
 private:
   static inline bool is_server_stopped() { return observer::ObServer::get_instance().is_stopped(); }
 private:

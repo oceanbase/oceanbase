@@ -3944,6 +3944,8 @@ int ObDDLUtil::check_table_empty(
         LOG_WARN("fail to init ddl info", KR(ret), K(ddl_info), K(table_schema.get_session_id()));
       } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(timeout_ctx, GCONF.internal_sql_execute_timeout))) {
         LOG_WARN("failed to set default timeout ctx", K(ret), K(timeout_ctx));
+      } else if (OB_FAIL(connection->set_ddl_info(&session_param.ddl_info_))) {
+        LOG_WARN("fail to set ddl info", K(ret), K(session_param.ddl_info_));
       } else if (OB_FAIL(ObDDLUtil::generate_ddl_schema_hint_str(table_name, table_schema.get_schema_version(), true, ddl_schema_hint_str))) {
         LOG_WARN("failed to generate ddl schema hint str", K(ret));
       } else if (OB_FAIL(sql_string.assign_fmt(

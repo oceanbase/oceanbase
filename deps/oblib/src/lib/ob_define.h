@@ -2715,6 +2715,13 @@ OB_INLINE char* ob_get_origin_thread_name()
   thread_local char ori_tname[oceanbase::OB_THREAD_NAME_BUF_LEN] = {0};
   return ori_tname;
 }
+// used to control how to generate and get schema version
+// relyed by ddl_helper
+OB_INLINE bool& ob_batch_generate_schema_version()
+{
+  thread_local bool batch_generate_schema_version = false;
+  return batch_generate_schema_version;
+}
 
 OB_INLINE char* ob_get_extended_thread_name()
 {

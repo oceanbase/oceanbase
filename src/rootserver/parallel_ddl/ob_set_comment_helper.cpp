@@ -85,7 +85,7 @@ int ObSetCommentHelper::lock_objects_()
     ret = OB_ERR_PARALLEL_DDL_CONFLICT;
     LOG_WARN("database_id_ is not equal to table schema's databse_id",
              KR(ret), K_(database_id), K(orig_table_schema_->get_database_id()));
-  } else if (OB_FAIL(latest_schema_guard_.get_database_schema(database_id_, database_schema))) {
+  } else if (OB_FAIL(schema_guard_wrapper_.get_database_schema(database_id_, database_schema))) {
     LOG_WARN("fail to get database schema", KR(ret), K_(tenant_id), K_(database_id));
   } else if (OB_ISNULL(database_schema)) {
     ret = OB_ERR_UNEXPECTED;
@@ -160,7 +160,7 @@ int ObSetCommentHelper::lock_objects_by_id_()
   } else if (OB_FAIL(add_lock_object_by_id_(database_id_,
     share::schema::DATABASE_SCHEMA, transaction::tablelock::SHARE))) {
     LOG_WARN("fail to lock database id", KR(ret), K_(database_id));
-  } else if (OB_FAIL(latest_schema_guard_.get_table_id(database_id_, arg_.session_id_, arg_.table_name_, table_id_, table_type, schema_version))) {
+  } else if (OB_FAIL(schema_guard_wrapper_.get_table_id(database_id_, arg_.session_id_, arg_.table_name_, table_id_, table_type, schema_version))) {
     LOG_WARN("fail to get table id", KR(ret), K_(database_id), K_(arg_.session_id), K_(arg_.table_name));
   } else if (OB_UNLIKELY(OB_INVALID_ID == table_id_)) {
     ret = OB_ERR_OBJECT_NOT_EXIST;
@@ -242,7 +242,7 @@ int ObSetCommentHelper::lock_for_common_ddl_()
   } else if (OB_UNLIKELY(OB_INVALID_ID == table_id_)) {
     ret = OB_ERR_OBJECT_NOT_EXIST;
     LOG_WARN("table not exist", KR(ret), K_(database_id), K_(arg_.session_id), K_(arg_.table_name));
-  } else if (OB_FAIL(latest_schema_guard_.get_table_schema(table_id_, orig_table_schema_))) {
+  } else if (OB_FAIL(schema_guard_wrapper_.get_table_schema(table_id_, orig_table_schema_))) {
     LOG_WARN("fail to get orig table schema", KR(ret), K_(table_id));
   } else if (OB_ISNULL(orig_table_schema_)) {
     ret = OB_ERR_UNEXPECTED;

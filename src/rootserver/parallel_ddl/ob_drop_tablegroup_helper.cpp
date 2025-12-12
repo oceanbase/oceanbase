@@ -81,14 +81,14 @@ int ObDropTablegroupHelper::lock_tablegroup_by_obj_id_()
 {
   int ret = OB_SUCCESS;
   const ObString &tablegroup_name = arg_.tablegroup_name_;
-  if (OB_FAIL(latest_schema_guard_.get_tablegroup_id(tablegroup_name, tablegroup_id_))) {
+  if (OB_FAIL(schema_guard_wrapper_.get_tablegroup_id(tablegroup_name, tablegroup_id_))) {
     LOG_WARN("fail to get database schema", KR(ret), K_(tenant_id), K(tablegroup_name));
   } else if (tablegroup_id_ == OB_INVALID_ID) {
     ret = OB_TABLEGROUP_NOT_EXIST;
-    LOG_INFO("tablegroup not exists", K(ret), K(tablegroup_name));
+    LOG_INFO("tablegroup not exists", KR(ret), K(tablegroup_name));
   } else if (OB_FAIL(add_lock_object_by_id_(tablegroup_id_, share::schema::TABLEGROUP_SCHEMA,
                      transaction::tablelock::EXCLUSIVE))) {
-    LOG_WARN("failed to add lock object by tablegroup id", K(ret), K_(tablegroup_id));
+    LOG_WARN("failed to add lock object by tablegroup id", KR(ret), K_(tablegroup_id));
   } else if (OB_FAIL(lock_existed_objects_by_id_())) {
     LOG_WARN("fail to lock objects by id", KR(ret));
   }
@@ -106,48 +106,48 @@ int ObDropTablegroupHelper::generate_schemas_()
   // When tablegroup is dropped, there must not be table in tablegroup
   if (tablegroup_id_ == OB_INVALID_ID) {
     ret = OB_TABLEGROUP_NOT_EXIST;
-  } else if (OB_FAIL(latest_schema_guard_.get_table_schemas_in_tablegroup(tablegroup_id_, tables))) {
-    LOG_WARN("failed to get table schemas in tablegroup", K(ret), K_(tenant_id), K_(tablegroup_id));
+  } else if (OB_FAIL(schema_guard_wrapper_.get_table_schemas_in_tablegroup(tablegroup_id_, tables))) {
+    LOG_WARN("failed to get table schemas in tablegroup", KR(ret), K_(tenant_id), K_(tablegroup_id));
   } else if (tables.count() > 0) {
     ret = OB_TABLEGROUP_NOT_EMPTY;
-    LOG_WARN("tables in tablegroup when drop tablegroup", K(ret), K_(tablegroup_id), K(tables.count()));
+    LOG_WARN("tables in tablegroup when drop tablegroup", KR(ret), K_(tablegroup_id), K(tables.count()));
   }
 
   // check databases' default_tablegroup_id
   if (OB_SUCC(ret)) {
     bool exists = false;
     uint64_t database_id = OB_INVALID_ID;
-    if (OB_FAIL(latest_schema_guard_.check_database_exists_in_tablegroup(
+    if (OB_FAIL(schema_guard_wrapper_.check_database_exists_in_tablegroup(
                 tablegroup_id_, exists))) {
       LOG_WARN("failed to check whether database exists in table group",
-                K(ret), K_(tablegroup_id));
+                KR(ret), K_(tablegroup_id));
     } else if (exists) {
       ret = OB_TABLEGROUP_NOT_EMPTY;
-      LOG_WARN("tablegroup is database's default_tablegroup_id when drop tablegroup", K(ret), K_(tablegroup_id));
+      LOG_WARN("tablegroup is database's default_tablegroup_id when drop tablegroup", KR(ret), K_(tablegroup_id));
     }
   }
 
   // check tenants' default_tablegroup_id
   if (OB_SUCC(ret)) {
     const ObTenantSchema *tenant_schema = NULL;
-    if (OB_FAIL(latest_schema_guard_.get_tenant_schema(tenant_id_, tenant_schema))) {
-      LOG_WARN("failed to get tenant schema", K(ret), K_(tenant_id));
+    if (OB_FAIL(schema_guard_wrapper_.get_tenant_schema(tenant_id_, tenant_schema))) {
+      LOG_WARN("failed to get tenant schema", KR(ret), K_(tenant_id));
     } else if (OB_ISNULL(tenant_schema)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tenant schema is null", K(ret), K_(tenant_id));
+      LOG_WARN("tenant schema is null", KR(ret), K_(tenant_id));
     } else if (tablegroup_id_ == tenant_schema->get_default_tablegroup_id()) {
       ret = OB_TABLEGROUP_NOT_EMPTY;
-      LOG_WARN("tablegroup is database's default_tablegroup_id when drop tablegroup", K(ret), K_(tablegroup_id), K_(tenant_id));
+      LOG_WARN("tablegroup is database's default_tablegroup_id when drop tablegroup", KR(ret), K_(tablegroup_id), K_(tenant_id));
     }
 
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(latest_schema_guard_.get_tablegroup_schema(tablegroup_id_, tablegroup_schema_))) {
-    LOG_WARN("failed to get tablegroup schema by tenant id", K(ret), K_(tablegroup_id));
+    if (OB_FAIL(schema_guard_wrapper_.get_tablegroup_schema(tablegroup_id_, tablegroup_schema_))) {
+    LOG_WARN("failed to get tablegroup schema by tenant id", KR(ret), K_(tablegroup_id));
     } else if (tablegroup_schema_ == NULL) {
       ret = OB_TABLEGROUP_NOT_EXIST;
-      LOG_INFO("tablegroup not exists", K(ret), K_(tablegroup_id));
+      LOG_INFO("tablegroup not exists", KR(ret), K_(tablegroup_id));
     }
   }
 
@@ -179,7 +179,7 @@ int ObDropTablegroupHelper::operate_schemas_()
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_ISNULL(tablegroup_schema_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null tablegroup schema", K(ret));
+    LOG_WARN("unexpected null tablegroup schema", KR(ret));
   } else if (OB_ISNULL(schema_service_impl = schema_service_->get_schema_service())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service impl is null", KR(ret));

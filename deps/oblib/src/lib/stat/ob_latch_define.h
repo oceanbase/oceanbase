@@ -415,6 +415,7 @@ LATCH_DEF(EXT_DISK_CACHE_LOCK, 378, "external table disk cache lock", LATCH_FIFO
 LATCH_DEF(FD_SIMULATOR_LOCK, 379, "fd simulator lock", LATCH_FIFO, 2000, 0, true)
 
 LATCH_DEF(SS_ATOMIC_FILE_LOCK, 380, "atomic procotol file lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(MAX_ID_CACHE_LOCK, 382, "max id cache", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(JAVA_CACHED_CLASS_LOCK, 383, "java cached class lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(JAVA_EXECUTOR_CLASS_LOCK, 384, "java executor class lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(DAS_ID_CACHE_LOCK, 385, "DAS ID cache lock", LATCH_FIFO, 2000, 0, true)

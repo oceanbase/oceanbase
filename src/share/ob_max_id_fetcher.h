@@ -76,7 +76,7 @@ enum ObMaxIdType
   OB_MAX_USED_RLS_GROUP_ID_TYPE,
   OB_MAX_USED_RLS_CONTEXT_ID_TYPE,
   /* the following ObMaxIdType will be persisted. */
-  OB_MAX_USED_SERVICE_NAME_ID_TYPE,
+  OB_MAX_USED_SERVICE_NAME_ID_TYPE, /*SERVICE_NAME_ID not use OBJECT_ID*/
   OB_MAX_USED_STORAGE_ID_TYPE, /* used for storage id of zone storage */
   OB_MAX_USED_STORAGE_OP_ID_TYPE, /* used for storage op id of zone storage */
   OB_MAX_USED_CATALOG_ID_TYPE,
@@ -103,7 +103,11 @@ public:
   int update_server_max_id(const uint64_t max_server_id, const uint64_t next_max_server_id);
   // For generate new tablet_ids
   int fetch_new_max_ids(const uint64_t tenant_id, ObMaxIdType id_type,
-                        uint64_t &max_id, uint64_t size);
+                        uint64_t &id, uint64_t size);
+  // For generate new tablet_ids and object_ids
+  // id range (max_id - size, max_id]
+  int batch_fetch_new_max_id_from_inner_table(const uint64_t tenant_id, ObMaxIdType id_type,
+      uint64_t &max_id, const uint64_t size);
   int update_max_id(common::ObISQLClient &sql_client, const uint64_t tenant_id,
                     ObMaxIdType max_id_type, const uint64_t max_id);
   // return OB_ENTRY_NOT_EXIST for %id_type not exist in __all_sys_table
@@ -113,15 +117,24 @@ public:
   static const char *get_max_id_info(const ObMaxIdType max_id_type);
   static int str_to_uint(const common::ObString &str, uint64_t &value);
 private:
+  // (max_id - size, max_id] is valid
+  static int fetch_max_id_from_cache_(const uint64_t tenant_id, ObMaxIdType id_type,
+      uint64_t &max_id, const uint64_t size);
+  int fetch_new_max_id_from_inner_table_(const uint64_t tenant_id, const ObMaxIdType max_id_type,
+      uint64_t &max_id, const uint64_t initial, const uint64_t size);
   static bool valid_max_id_type(const ObMaxIdType max_id_type)
   { return max_id_type >= 0 && max_id_type < OB_MAX_ID_TYPE; }
   // insert ignore into __all_sys_stat table
   int insert_initial_value(common::ObISQLClient &sql_client, uint64_t tenant_id,
       ObMaxIdType max_id_type, const uint64_t initial_value);
 
+  static int check_id_valid(const ObMaxIdType &max_id_type, const uint64_t &id);
+
+  static int check_use_max_id_cache_(const ObMaxIdType &max_id_type, bool &use_cache);
+
 private:
   static const char *max_id_name_info_[OB_MAX_ID_TYPE][2];
-  int convert_id_type(const ObMaxIdType &src, ObMaxIdType &dst);
+  static int convert_id_type(const ObMaxIdType &src, ObMaxIdType &dst);
 
   static const int64_t MAX_TENANT_MUTEX_BUCKET_CNT = 4096;
 private:

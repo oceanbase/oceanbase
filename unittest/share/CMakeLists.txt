@@ -25,6 +25,7 @@ storage_unittest(test_dag_net_in_dag_scheduler scheduler/test_dag_net_in_dag_sch
 #ob_unittest(test_kv_storecache)
 #ob_unittest(test_async_task_queue)
 #ob_unittest(test_dml_sql_splicer)
+ob_unittest(test_dml_sql_splicer_batch)
 #ob_unittest(test_inner_config_root_addr)
 #ob_unittest(test_core_table_proxy)
 #ob_unittest(test_rs_mgr)

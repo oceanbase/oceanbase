@@ -176,6 +176,7 @@ ob_unittest_observer(test_sensitive_rule_schema rootservice/test_sensitive_rule_
 ob_unittest_observer(test_bootstrap_hang rootservice/test_bootstrap_hang.cpp)
 ob_unittest_observer(test_ob_partition_balance rootservice/test_ob_partition_balance.cpp)
 ob_unittest_observer(test_object_balance_weight rootservice/test_object_balance_weight.cpp)
+ob_unittest_observer(test_max_id_cache rootservice/test_max_id_cache.cpp)
 ####### rootservice case #########
 
 

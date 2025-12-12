@@ -1209,7 +1209,8 @@ int ObBasicSessionInfo::init_system_variables(const bool print_info_log, const b
     name.assign_ptr(const_cast<char*>(ObSysVariables::get_name(i).ptr()),
                     static_cast<ObString::obstr_size_t>(strlen(ObSysVariables::get_name(i).ptr())));
     bool is_exist = false;
-    if (OB_FAIL(sys_variable_exists(name, is_exist))) {
+    ObSysVarClassType sys_var_id = ObSysVariables::get_sys_var_id(i);
+    if (OB_FAIL(sys_variable_exists(sys_var_id, is_exist))) {
       LOG_WARN("failed to check if sys variable exists", K(name), K(ret));
     } else if (!is_exist) {
       // Note: 如果已经初始化过 base value，则下面的流程不会执行
@@ -1222,13 +1223,20 @@ int ObBasicSessionInfo::init_system_variables(const bool print_info_log, const b
       max_val.set_varchar(ObSysVariables::get_max(i));
       max_val.set_collation_type(ObCharset::get_system_collation());
       type.set_type(var_type);
-      if(is_sys_tenant) {
+      if (is_sys_tenant) {
         if (OB_FAIL(process_variable_for_tenant(name, value))) {
           LOG_WARN("process system variable for tenant error",  K(name), K(value), K(ret));
         }
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(load_sys_variable(calc_buf, name, type, value, min_val, max_val, var_flag, false))) {
+        int64_t store_idx = -1;
+        if (OB_FAIL(ObSysVarFactory::calc_sys_var_store_idx(sys_var_id, store_idx))) {
+          LOG_WARN("failed to calc sys var store idx", KR(ret), K(sys_var_id));
+        } else if (store_idx < 0 || store_idx >= ObSysVarFactory::ALL_SYS_VARS_COUNT) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("store_idx invalid", KR(ret), K(sys_var_id), K(store_idx));
+        } else if (OB_FAIL(load_sys_variable(calc_buf, name, type, value, min_val, max_val,
+                var_flag, false, store_idx))) {
           LOG_WARN("fail to load default system variable", K(name), K(ret));
         } else if (OB_NOT_NULL(sys_vars_[i]) &&
                    sys_vars_[i]->is_influence_plan() &&
@@ -2369,13 +2377,25 @@ int ObBasicSessionInfo::get_sys_variable(const ObSysVarClassType sys_var_id, boo
 int ObBasicSessionInfo::sys_variable_exists(const ObString &var, bool &is_exists) const
 {
   int ret = OB_SUCCESS;
-  is_exists = false;
   ObSysVarClassType sys_var_id = SYS_VAR_INVALID;
-  int64_t store_idx = -1;
   if (SYS_VAR_INVALID == (sys_var_id = ObSysVarFactory::find_sys_var_id_by_name(var))) {
     LOG_DEBUG("sys var is not exist", K(var), K(ret));
+  } else if (OB_FAIL(sys_variable_exists(sys_var_id, is_exists))) {
+    LOG_WARN("failed to check sys variable exists", KR(ret), K(sys_var_id));
+  }
+  return ret;
+}
+
+int ObBasicSessionInfo::sys_variable_exists(const share::ObSysVarClassType sys_var_id,
+    bool &is_exists) const
+{
+  int ret = OB_SUCCESS;
+  is_exists = false;
+  int64_t store_idx = -1;
+  if (sys_var_id == SYS_VAR_INVALID) {
+    LOG_DEBUG("sys var is not exist", K(sys_var_id), K(ret));
   } else if (OB_FAIL(ObSysVarFactory::calc_sys_var_store_idx(sys_var_id, store_idx))) {
-    LOG_WARN("fail to calc sys var store idx", K(sys_var_id), K(var), K(ret));
+    LOG_WARN("fail to calc sys var store idx", K(sys_var_id), K(ret));
   } else if (store_idx < 0 || store_idx >= ObSysVarFactory::ALL_SYS_VARS_COUNT) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("got store_idx is invalid", K(store_idx), K(ret));
