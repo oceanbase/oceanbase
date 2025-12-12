@@ -105,49 +105,40 @@ public:
   {
     int ret = OB_SUCCESS;
     UNUSEDx(cur_rollup_group_idx, max_group_cnt);
-    char *cur_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, group_row);
-    char *rollup_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, rollup_row);
-    const char *cur_llc_bitmap_buf = nullptr;
-    char *rollup_llc_bitmap_buf = nullptr;
-    const NotNullBitVector &curr_not_nulls =
-      agg_ctx.locate_notnulls_bitmap(agg_col_idx, cur_agg_cell);
-    if (agg_func != T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE) {
-      cur_llc_bitmap_buf =
-        (const char *)get_tmp_res(agg_ctx, agg_col_idx, const_cast<char *>(cur_agg_cell));
-      rollup_llc_bitmap_buf =
-        (char *)get_tmp_res(agg_ctx, agg_col_idx, const_cast<char *>(rollup_agg_cell));
-      if (OB_ISNULL(cur_llc_bitmap_buf) || OB_ISNULL(rollup_llc_bitmap_buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        SQL_LOG(WARN, "allocate llc bitmap buf failed", K(ret));
-      }
+    if (agg_func == T_FUN_APPROX_COUNT_DISTINCT) {
+      ret = OB_NOT_SUPPORTED;
+      SQL_LOG(WARN, "rollup not supported for APPROX_COUNT_DISTINCT", K(ret));
     } else {
-      cur_llc_bitmap_buf =
-        reinterpret_cast<const char *>(*reinterpret_cast<const int64_t *>(cur_agg_cell));
-      rollup_llc_bitmap_buf =
-        reinterpret_cast<char *>(*reinterpret_cast<const int64_t *>(rollup_agg_cell));
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_LIKELY(curr_not_nulls.at(agg_col_idx))) {
-      NotNullBitVector &rollup_not_nulls =
-        agg_ctx.locate_notnulls_bitmap(agg_col_idx, rollup_agg_cell);
-      if (agg_func == T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE) {
-        rollup_llc_bitmap_buf = (char *)agg_ctx.allocator_.alloc(llc_num_buckets_);
+      char *cur_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, group_row);
+      char *rollup_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, rollup_row);
+      const char *cur_llc_bitmap_buf = EXTRACT_MEM_ADDR(cur_agg_cell);
+      char *rollup_llc_bitmap_buf = EXTRACT_MEM_ADDR(rollup_agg_cell);
+      const NotNullBitVector &curr_not_nulls =
+        agg_ctx.locate_notnulls_bitmap(agg_col_idx, cur_agg_cell);
+      NotNullBitVector &rollup_not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_idx, rollup_agg_cell);
+      if (OB_LIKELY(curr_not_nulls.at(agg_col_idx))) {
         if (OB_ISNULL(cur_llc_bitmap_buf)) {
           ret = OB_ERR_UNEXPECTED;
           SQL_LOG(WARN, "invalid null llc bitmap", K(ret));
-        } else if (OB_ISNULL(rollup_llc_bitmap_buf)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          SQL_LOG(WARN, "allocate memory failed", K(ret));
-        } else {
-          MEMSET(rollup_llc_bitmap_buf, 0, llc_num_buckets_);
+        } else if (!rollup_not_nulls.at(agg_col_idx)) {
+          if (OB_ISNULL(rollup_llc_bitmap_buf)) {
+            rollup_llc_bitmap_buf = (char *)agg_ctx.allocator_.alloc(llc_num_buckets_);
+            if (OB_ISNULL(rollup_llc_bitmap_buf)) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              SQL_LOG(WARN, "allocate memory failed", K(ret));
+            }
+          }
           MEMCPY(rollup_llc_bitmap_buf, cur_llc_bitmap_buf, llc_num_buckets_);
           STORE_MEM_ADDR(rollup_llc_bitmap_buf, rollup_agg_cell);
           *reinterpret_cast<int32_t *>(rollup_agg_cell + sizeof(char *)) = llc_num_buckets_;
+          rollup_not_nulls.set(agg_col_idx);
+        } else {
+          for (int i = 0; i < llc_num_buckets_; i++) {
+            rollup_llc_bitmap_buf[i] =
+              std::max(static_cast<uint8_t>(rollup_llc_bitmap_buf[i]), static_cast<uint8_t>(cur_llc_bitmap_buf[i]));
+          }
         }
-      } else {
-        MEMCPY(rollup_llc_bitmap_buf, cur_llc_bitmap_buf, llc_num_buckets_);
       }
-      rollup_not_nulls.set(agg_col_idx);
     }
     return ret;
   }

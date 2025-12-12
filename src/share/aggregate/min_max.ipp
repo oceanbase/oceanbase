@@ -323,23 +323,30 @@ public:
         if (OB_FAIL(ret)) {
           SQL_LOG(WARN, "compare failed", K(ret));
         } else if ((is_min && cmp_ret > 0) || (!is_min && cmp_ret < 0)) {
-          *reinterpret_cast<int64_t *>(rollup_agg_cell) = *reinterpret_cast<int64_t *>(curr_agg_cell);
-          *reinterpret_cast<int32_t *>(rollup_agg_cell + sizeof(char *)) = cur_agg_cell_len;
+          if (OB_FAIL(set_rollup_var_agg_data(agg_ctx, rollup_agg_cell, cur_agg_data, cur_agg_cell_len))) {
+            SQL_LOG(WARN, "set rollup variable aggregate data failed", K(ret));
+          }
         }
       }
-      rollup_calc_info.set_calculated();
-      rollup_calc_info.set_min_max_idx_changed();
+      if (OB_SUCC(ret)) {
+        rollup_calc_info.set_calculated();
+        rollup_calc_info.set_min_max_idx_changed();
+      }
     } else if (curr_not_nulls.at(agg_col_idx)) {
       int32_t curr_agg_cell_len = agg_ctx.row_meta().get_cell_len(agg_col_idx, group_row);
       if (helper::is_var_len_agg_cell(vec_tc)) {
-        *reinterpret_cast<int64_t *>(rollup_agg_cell) =
-          *reinterpret_cast<const int64_t *>(curr_agg_cell);
-        *reinterpret_cast<int32_t *>(rollup_agg_cell + sizeof(char *)) = curr_agg_cell_len;
+        const char *cur_agg_data =
+          reinterpret_cast<const char *>(*reinterpret_cast<const int64_t *>(curr_agg_cell));
+        if (OB_FAIL(set_rollup_var_agg_data(agg_ctx, rollup_agg_cell, cur_agg_data, curr_agg_cell_len))) {
+          SQL_LOG(WARN, "set rollup variable aggregate data failed", K(ret));
+        }
       } else {
         MEMCPY(rollup_agg_cell, curr_agg_cell, curr_agg_cell_len);
       }
-      rollup_calc_info.set_calculated();
-      rollup_calc_info.set_min_max_idx_changed();
+      if (OB_SUCC(ret)) {
+        rollup_calc_info.set_calculated();
+        rollup_calc_info.set_min_max_idx_changed();
+      }
     } else {
       // do nothing
     }
@@ -391,6 +398,37 @@ public:
     return ret;
   }
 private:
+  OB_INLINE int set_rollup_var_agg_data(RuntimeContext &agg_ctx, char *rollup_agg_cell,
+                                        const char *cur_agg_data, int32_t curr_agg_cell_len)
+  {
+    int ret = OB_SUCCESS;
+    char *tmp_buf =
+      reinterpret_cast<char *>(*reinterpret_cast<int64_t *>(rollup_agg_cell + sizeof(char *) + sizeof(int32_t)));
+    int32_t &cap = *reinterpret_cast<int32_t *>(rollup_agg_cell + sizeof(int32_t) + sizeof(char *) * 2);
+    if (OB_NOT_NULL(tmp_buf) && cap >= curr_agg_cell_len) {
+      // reuse tmp buffer
+      MEMCPY(tmp_buf, cur_agg_data, curr_agg_cell_len);
+      *reinterpret_cast<int64_t *>(rollup_agg_cell + sizeof(char *) + sizeof(int32_t)) =
+        reinterpret_cast<int64_t>(tmp_buf);
+      *reinterpret_cast<int64_t *>(rollup_agg_cell) = reinterpret_cast<int64_t>(tmp_buf);
+      *reinterpret_cast<int32_t *>(rollup_agg_cell + sizeof(char *)) = curr_agg_cell_len;
+    } else {
+      int32_t new_cap = ((curr_agg_cell_len + BUF_BLOCK_SIZE - 1) / BUF_BLOCK_SIZE) * BUF_BLOCK_SIZE;
+      void *new_buf = nullptr;
+      if (OB_ISNULL(new_buf = agg_ctx.allocator_.alloc(new_cap))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SQL_LOG(WARN, "allocate memory failed", K(ret), K(new_cap));
+      } else {
+        MEMCPY(new_buf, cur_agg_data, curr_agg_cell_len);
+        cap = new_cap;
+        *reinterpret_cast<int64_t *>(rollup_agg_cell + sizeof(char *) + sizeof(int32_t)) =
+          reinterpret_cast<int64_t>(new_buf);
+        *reinterpret_cast<int64_t *>(rollup_agg_cell) = reinterpret_cast<int64_t>(new_buf);
+        *reinterpret_cast<int32_t *>(rollup_agg_cell + sizeof(char *)) = curr_agg_cell_len;
+      }
+    }
+    return ret;
+  }
   int set_tmp_var_agg_data(RuntimeContext &agg_ctx, const int32_t agg_col_id, char *agg_cell)
   {
     int ret = OB_SUCCESS;
