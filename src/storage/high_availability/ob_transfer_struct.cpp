@@ -26,6 +26,8 @@ using namespace share;
 using namespace storage;
 using namespace transaction;
 
+ERRSIM_POINT_DEF(EN_GET_TABLET_INFO_HUNG)
+
 ObTXStartTransferOutInfo::ObTXStartTransferOutInfo()
   : src_ls_id_(),
     dest_ls_id_(),
@@ -1341,6 +1343,25 @@ int ObTransferBuildTabletInfoCtx::get_next_tablet_info(share::ObTransferTabletIn
     tablet_info = tablet_info_array_.at(index_);
     ++index_;
   }
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    if (OB_SUCCESS != EN_GET_TABLET_INFO_HUNG) {
+      int64_t start_time = ObTimeUtil::current_time();
+      int64_t hung_time = 1 * 1000 * 1000; //1s
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+      if (tenant_config.is_valid()) {
+        hung_time = tenant_config->_transfer_start_trans_timeout;
+      }
+      int64_t current_time = ObTimeUtil::current_time();
+      while (current_time - start_time < hung_time) {
+        ob_usleep(1000);
+        current_time = ObTimeUtil::current_time();
+      }
+    }
+  }
+#endif
+
   return ret;
 }
 
