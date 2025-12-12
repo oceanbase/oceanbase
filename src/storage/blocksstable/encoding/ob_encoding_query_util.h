@@ -13,6 +13,8 @@
 #ifndef OCEANBASE_ENCODING_OB_ENCODING_QUERY_UTIL_H_
 #define OCEANBASE_ENCODING_OB_ENCODING_QUERY_UTIL_H_
 
+#include <utility>  // for std::index_sequence, std::make_index_sequence
+
 #if defined(__AVX2__)
 #include <immintrin.h>
 #endif
@@ -244,7 +246,7 @@ struct Multiply_T<X, args...>
 };
 
 
-// Multi dimension array initializer
+// Forward declaration
 template <template <int ...> class INITER, int ...args>
 struct ObNDArrayIniterIndex;
 
@@ -258,6 +260,7 @@ struct ObNDArrayIniterIndex<INITER, ARG_CNT, IDX, CNT, X, args...>
 	}
 };
 
+// Terminal case: all indices computed, call the actual INITER
 template <template <int ...> class INITER, int IDX, int CNT, int X, int ...args>
 struct ObNDArrayIniterIndex<INITER, 0, IDX, CNT, X, args...>
 {
@@ -267,6 +270,7 @@ struct ObNDArrayIniterIndex<INITER, 0, IDX, CNT, X, args...>
 	}
 };
 
+// Boundary cases
 template <template <int ...> class INITER, int IDX, int CNT, int X, int ...args>
 struct ObNDArrayIniterIndex<INITER, -1, IDX, CNT, X, args...> { static bool apply() { return true; }};
 
@@ -274,6 +278,64 @@ template <template <int ...> class INITER, int ARG_CNT, int CNT, int X, int ...a
 struct ObNDArrayIniterIndex<INITER, ARG_CNT, -1, CNT, X, args...> { static bool apply() { return true; }};
 
 
+// Batch size for fold expression (must be < compiler's nesting limit, typically 256)
+constexpr int OB_NDARRAY_INIT_BATCH_SIZE = 128;
+
+// Helper: process a single batch of indices using fold expression
+template <template <int ...> class INITER, int CNT, int BATCH_START, int ...args>
+struct ObNDArrayIniterBatch
+{
+private:
+  template <int IDX>
+  static bool apply_one()
+  {
+    return ObNDArrayIniterIndex<INITER, sizeof...(args), BATCH_START + IDX, CNT, args...>::apply();
+  }
+
+  template <std::size_t... Is>
+  static bool apply_impl(std::index_sequence<Is...>)
+  {
+    return (... , apply_one<static_cast<int>(Is)>());
+  }
+
+public:
+  template <int BATCH_CNT>
+  static bool apply()
+  {
+    return apply_impl(std::make_index_sequence<static_cast<std::size_t>(BATCH_CNT)>{});
+  }
+};
+
+// Main initializer: process array in batches
+template <template <int ...> class INITER, int CNT, int ...args>
+struct ObNDArrayIniterFlat
+{
+private:
+  // Process batches recursively (but with O(N/BATCH_SIZE) depth, not O(N))
+  template <int REMAINING, int BATCH_START>
+  static bool apply_batches()
+  {
+    if constexpr (REMAINING <= 0) {
+      return true;
+    } else if constexpr (REMAINING <= OB_NDARRAY_INIT_BATCH_SIZE) {
+      // Last batch: process remaining elements
+      return ObNDArrayIniterBatch<INITER, CNT, BATCH_START, args...>::template apply<REMAINING>();
+    } else {
+      // Process one full batch, then continue with remaining
+      ObNDArrayIniterBatch<INITER, CNT, BATCH_START, args...>::template apply<OB_NDARRAY_INIT_BATCH_SIZE>();
+      return apply_batches<REMAINING - OB_NDARRAY_INIT_BATCH_SIZE, BATCH_START + OB_NDARRAY_INIT_BATCH_SIZE>();
+    }
+  }
+
+public:
+  static bool apply()
+  {
+    return apply_batches<CNT, 0>();
+  }
+};
+
+
+/** Original recursive version (kept for reference/comparison, can be removed)
 template <template <int ...> class INITER, int... args>
 struct ObNDArrayIniterLoop;
 
@@ -292,15 +354,17 @@ struct ObNDArrayIniterLoop<INITER, -1, CNT, args...>
 {
 	static bool apply() { return true; }
 };
+*/
 
-
+// Now uses the optimized ObNDArrayIniterFlat instead of recursive ObNDArrayIniterLoop
 template <template <int ...> class INITER, int ...args>
 struct ObNDArrayIniter
 {
 	static bool apply()
 	{
 		constexpr static int array_size = Multiply_T<args...>::value_;
-		return ObNDArrayIniterLoop<INITER, array_size - 1, array_size, args...>::apply();
+    // Use optimized non-recursive version
+    return ObNDArrayIniterFlat<INITER, array_size, args...>::apply();
 	}
 };
 
