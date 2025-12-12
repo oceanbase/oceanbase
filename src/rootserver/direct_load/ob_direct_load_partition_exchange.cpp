@@ -188,7 +188,7 @@ int ObDirectLoadPartitionExchange::check_table_conditions_in_common_(
     } else if (OB_FAIL(new_inc_table_schema.assign(inc_table_schema))) {
       LOG_WARN("failed to assign inc table schema", KR(ret), K(inc_table_schema));
     } else if (OB_FALSE_IT(new_inc_table_schema.set_in_offline_ddl_white_list(true))) {
-    } else if (OB_FALSE_IT(new_inc_table_schema.set_table_mode(new_base_table_schema.get_table_mode()))) {
+    } else if (OB_FALSE_IT(new_inc_table_schema.set_table_mode_struct(new_base_table_schema.get_table_mode_struct()))) {
       // hidden table has different table mode
     } else if (OB_FAIL(ObPartitionExchange::check_table_conditions_in_common_(
         new_base_table_schema,
