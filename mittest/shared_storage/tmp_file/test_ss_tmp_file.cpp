@@ -1879,8 +1879,14 @@ int mock_flush_wait(const int64_t succ_page_num, ObSSTmpFileAsyncFlushWaitTask& 
     if (OB_FAIL(task.flush_mgr_->notify_flush_breakdown(task.fd_, OB_IO_TIMEOUT))) {
       LOG_WARN("fail to notify flush breakdown", KR(ret), K(task));
     }
-  } else if (OB_FAIL(task.flush_mgr_->update_meta_after_flush(task))){
-    LOG_WARN("fail to update meta after flush", KR(ret), K(task));
+  } else {
+    ObSSTmpFileHandle tmp_file_handle;
+    if (OB_FAIL(MTL(ObTenantTmpFileManager *)->get_ss_file_manager().get_tmp_file(task.fd_, tmp_file_handle))) {
+      LOG_WARN("fail to get tmp file handle", KR(ret), K(task.fd_));
+    } else if (OB_NOT_NULL(tmp_file_handle.get()) &&
+        OB_FAIL(task.flush_mgr_->update_meta_after_flush(tmp_file_handle, task))){
+      LOG_WARN("fail to update meta after flush", KR(ret), K(task));
+    }
   }
   return ret;
 }
