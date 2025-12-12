@@ -78,6 +78,8 @@ int ObInfoSchemaKvCacheTable::process_curr_tenant(common::ObNewRow *&row)
   if (first_enter_) {
     if (OB_FAIL(ObKVGlobalCache::get_instance().get_cache_inst_info(MTL_ID(), inst_handles_))) {
       SERVER_LOG(WARN, "Fail to get cache info", K(ret), K(MTL_ID()));
+    } else if (OB_FAIL(share::ObDiagnosticInfoUtil::get_the_diag_info(MTL_ID(), tenant_di_info_))) {
+        SERVER_LOG(WARN, "Fail to get tenant stat event", K(ret), K(MTL_ID()));
     } else {
       first_enter_ = false;
     }
@@ -90,9 +92,7 @@ int ObInfoSchemaKvCacheTable::process_curr_tenant(common::ObNewRow *&row)
       ret = OB_ITER_END;
     } else {
       inst = inst_handles_.at(cache_iter_++).get_inst();
-      if (OB_FAIL(share::ObDiagnosticInfoUtil::get_the_diag_info(MTL_ID(), tenant_di_info_))) {
-        SERVER_LOG(WARN, "Fail to get tenant stat event", K(ret), K(MTL_ID()));
-      } else if (OB_FAIL(set_diagnose_info(inst, &tenant_di_info_))) {
+      if (OB_FAIL(set_diagnose_info(inst, &tenant_di_info_))) {
         SERVER_LOG(WARN, "Fail to set diagnose info for cache inst", K(ret));
       } else if (OB_FAIL(process_row(inst))) {
         SERVER_LOG(WARN, "Fail to process current row", K(ret));
