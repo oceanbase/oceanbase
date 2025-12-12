@@ -2861,20 +2861,19 @@ int ObHashJoinVecOp::outer_join_output()
 
 void ObHashJoinVecOp::set_output_eval_info()
 {
-  // for (int64_t i = 0; i < left_->get_spec().output_.count(); i++) {
-  //  ObEvalInfo &info = left_->get_spec().output_.at(i)->get_eval_info(eval_ctx_);
-  //  info.evaluated_ = true;
-  //  info.projected_ = true;
-  // }
   for (int64_t i = 0; i < jt_ctx_.build_output_->count(); i++) {
-    ObEvalInfo &info = jt_ctx_.build_output_->at(i)->get_eval_info(eval_ctx_);
-    info.evaluated_ = true;
-    info.projected_ = true;
+    if (VEC_UNIFORM_CONST != jt_ctx_.build_output_->at(i)->get_format(eval_ctx_)) {
+      ObEvalInfo &info = jt_ctx_.build_output_->at(i)->get_eval_info(eval_ctx_);
+      info.evaluated_ = true;
+      info.projected_ = true;
+    }
   }
   for (int64_t i = 0; i < right_->get_spec().output_.count(); i++) {
-    ObEvalInfo &info = right_->get_spec().output_.at(i)->get_eval_info(eval_ctx_);
-    info.evaluated_ = true;
-    info.projected_ = true;
+    if (VEC_UNIFORM_CONST != right_->get_spec().output_.at(i)->get_format(eval_ctx_)) {
+      ObEvalInfo &info = right_->get_spec().output_.at(i)->get_eval_info(eval_ctx_);
+      info.evaluated_ = true;
+      info.projected_ = true;
+    }
   }
 }
 

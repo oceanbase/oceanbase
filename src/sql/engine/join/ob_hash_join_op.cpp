@@ -5308,18 +5308,22 @@ int ObHashJoinOp::outer_join_read_hashrow_going_batch()
 
 void ObHashJoinOp::set_output_eval_info() {
   for (int64_t i = 0; i < left_->get_spec().output_.count(); i++) {
-    ObEvalInfo &info = left_->get_spec().output_.at(i)->get_eval_info(eval_ctx_);
-    info.evaluated_ = true;
-    info.projected_ = true;
-    info.notnull_ = false;
-    info.point_to_frame_ = false;
+    if (!left_->get_spec().output_.at(i)->is_const_expr()) {
+      ObEvalInfo &info = left_->get_spec().output_.at(i)->get_eval_info(eval_ctx_);
+      info.evaluated_ = true;
+      info.projected_ = true;
+      info.notnull_ = false;
+      info.point_to_frame_ = false;
+    }
   }
   for (int64_t i = 0; i < right_->get_spec().output_.count(); i++) {
-    ObEvalInfo &info = right_->get_spec().output_.at(i)->get_eval_info(eval_ctx_);
-    info.evaluated_ = true;
-    info.projected_ = true;
-    info.notnull_ = false;
-    info.point_to_frame_ = false;
+    if (!right_->get_spec().output_.at(i)->is_const_expr()) {
+      ObEvalInfo &info = right_->get_spec().output_.at(i)->get_eval_info(eval_ctx_);
+      info.evaluated_ = true;
+      info.projected_ = true;
+      info.notnull_ = false;
+      info.point_to_frame_ = false;
+    }
   }
 }
 
