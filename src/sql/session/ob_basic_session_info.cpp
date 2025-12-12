@@ -1831,7 +1831,6 @@ int ObBasicSessionInfo::gen_sys_var_in_pl_cache_str()
     }
   } else {
     buf = sys_var_in_pl_cache_str_.ptr();
-    sys_var_encode_max_size = sys_var_in_pl_cache_str_.length();
     MEMSET(buf, 0, sys_var_in_pl_cache_str_.length());
     sys_var_in_pl_cache_str_.set_length(0);
   }
