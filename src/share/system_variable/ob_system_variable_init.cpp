@@ -804,6 +804,7 @@ static struct VarsInit{
       ObSysVars[50].name_ = "default_authentication_plugin" ;
       ObSysVars[50].data_type_ = ObVarcharType ;
       ObSysVars[50].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[50].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_default_authentication_plugin" ;
       ObSysVars[50].id_ = SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN] = 50 ;
@@ -11519,13 +11520,29 @@ static struct VarsInit{
     ObSysVars[840].alias_ = "OB_SV_ENABLE_PL_ASYNC_COMMIT" ;
     }();
 
+    [&] (){
+      ObSysVars[841].default_value_ = "5000" ;
+      ObSysVars[841].info_ = "Number of SHA256 iterations for password hash stored to disk" ;
+      ObSysVars[841].name_ = "caching_sha2_password_digest_rounds" ;
+      ObSysVars[841].data_type_ = ObIntType ;
+      ObSysVars[841].min_val_ = "5000" ;
+      ObSysVars[841].max_val_ = "4095000" ;
+      ObSysVars[841].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[841].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_caching_sha2_password_digest_rounds" ;
+      ObSysVars[841].id_ = SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS] = 841 ;
+      ObSysVars[841].base_value_ = "5000" ;
+    ObSysVars[841].alias_ = "OB_SV_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 841;
+static int64_t var_amount = 842;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

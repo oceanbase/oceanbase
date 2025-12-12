@@ -85,6 +85,8 @@
 #include "plugin/sys/ob_plugin_mgr.h"
 #include "storage/reorganization_info_table/ob_tablet_reorg_info_table_schema_helper.h"
 #include "share/ob_license_utils.h"
+#include "lib/encrypt/ob_caching_sha2_cache_mgr.h"
+#include "lib/encrypt/ob_rsa_getter.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -440,6 +442,10 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init ObCachedCatalogSchemaMgr failed", KR(ret));
     } else if (OB_FAIL(ObVirtualTenantManager::get_instance().init())) {
       LOG_ERROR("init tenant manager failed", KR(ret));
+    } else if (OB_FAIL(ObRsaGetter::instance().init())) {
+      LOG_ERROR("failed to init RSA getter", KR(ret));
+    } else if (OB_FAIL(ObCachingSha2CacheMgr::get_instance().init())) {
+      LOG_ERROR("failed to init caching sha2 cache manager", KR(ret));
     } else if (OB_FAIL(startup_accel_handler_.init(SERVER_ACCEL))) {
       LOG_ERROR("init server startup task handler failed", KR(ret));
     } else if (OB_FAIL(SERVER_STORAGE_META_SERVICE.init(GCTX.is_shared_storage_mode()))) {
@@ -846,6 +852,14 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy virtual tenant manager");
     ObVirtualTenantManager::get_instance().destroy();
     FLOG_INFO("virtual tenant manager destroyed");
+
+    FLOG_INFO("begin to destroy caching sha2 cache manager");
+    ObCachingSha2CacheMgr::get_instance().destroy();
+    FLOG_INFO("caching sha2 cache manager destroyed");
+
+    FLOG_INFO("begin to destroy RSA getter");
+    ObRsaGetter::instance().destroy();
+    FLOG_INFO("RSA getter destroyed");
 
     FLOG_INFO("begin to destroy OB_STANDBY_SERVICE");
     OB_STANDBY_SERVICE.destroy();

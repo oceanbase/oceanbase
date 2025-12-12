@@ -637,6 +637,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "binlog_transaction_dependency_tracking",
   "block_encryption_mode",
   "bulk_insert_buffer_size",
+  "caching_sha2_password_digest_rounds",
   "cardinality_estimation_model",
   "character_set_client",
   "character_set_connection",
@@ -1481,6 +1482,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_BINLOG_TRANSACTION_DEPENDENCY_TRACKING,
   SYS_VAR_BLOCK_ENCRYPTION_MODE,
   SYS_VAR_BULK_INSERT_BUFFER_SIZE,
+  SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS,
   SYS_VAR_CARDINALITY_ESTIMATION_MODEL,
   SYS_VAR_CHARACTER_SET_CLIENT,
   SYS_VAR_CHARACTER_SET_CONNECTION,
@@ -3093,7 +3095,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "ob_sparse_drop_ratio_search",
   "sql_transpiler",
   "plsql_can_transform_sql_to_assign",
-  "ob_enable_pl_async_commit"
+  "ob_enable_pl_async_commit",
+  "caching_sha2_password_digest_rounds"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -4139,6 +4142,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarSqlTranspiler)
         + sizeof(ObSysVarPlsqlCanTransformSqlToAssign)
         + sizeof(ObSysVarObEnablePlAsyncCommit)
+        + sizeof(ObSysVarCachingSha2PasswordDigestRounds)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -11714,6 +11718,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarObEnablePlAsyncCommit));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarCachingSha2PasswordDigestRounds())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarCachingSha2PasswordDigestRounds", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarCachingSha2PasswordDigestRounds));
       }
     }
 
@@ -20974,6 +20987,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnablePlAsyncCommit())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarObEnablePlAsyncCommit", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarCachingSha2PasswordDigestRounds)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarCachingSha2PasswordDigestRounds)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarCachingSha2PasswordDigestRounds())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarCachingSha2PasswordDigestRounds", K(ret));
       }
       break;
     }

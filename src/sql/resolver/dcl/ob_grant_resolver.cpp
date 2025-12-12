@@ -16,6 +16,8 @@
 #include "sql/resolver/dcl/ob_set_password_resolver.h"
 #include "sql/engine/ob_exec_context.h"
 #include "share/ob_table_lock_compat_versions.h"
+#include "lib/encrypt/ob_encrypted_helper.h"
+#include "sql/parser/parse_node.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -117,16 +119,22 @@ int ObGrantResolver::resolve_grant_user(
         }
         if (lib::is_mysql_mode() && NULL != grant_user->children_[4]) {
           /* here code is to mock a auth plugin check. */
-          ObString auth_plugin(static_cast<int32_t>(grant_user->children_[4]->str_len_),
-                                grant_user->children_[4]->str_value_);
-          ObString default_auth_plugin;
-          if (OB_FAIL(session_info->get_sys_variable(share::SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN,
-                                                     default_auth_plugin))) {
-            LOG_WARN("fail to get block encryption variable", K(ret));
-          } else if (0 != auth_plugin.compare(default_auth_plugin)) {
+          ObString auth_plugin;
+          auth_plugin.assign_ptr(str_tolower(const_cast<char *>(grant_user->children_[4]->str_value_),
+                                             static_cast<int32_t>(grant_user->children_[4]->str_len_)),
+                                             static_cast<int32_t>(grant_user->children_[4]->str_len_));
+          if (auth_plugin.empty()) {
             ret = OB_ERR_PLUGIN_IS_NOT_LOADED;
-            LOG_USER_ERROR(OB_ERR_PLUGIN_IS_NOT_LOADED, auth_plugin.length(), auth_plugin.ptr());
-          } else {/* do nothing */}
+            LOG_WARN("invalid auth plugin", K(auth_plugin), K(ret));
+          }
+          bool is_plugin_supported = true;
+          if (FAILEDx(ObEncryptedHelper::check_data_version_for_auth_plugin(auth_plugin,
+            session_info->get_effective_tenant_id(), is_plugin_supported))) {
+            LOG_WARN("failed to check data version for auth plugin", K(ret));
+          } else if (OB_UNLIKELY(!is_plugin_supported)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("caching_sha2_password is not supported when MIN_DATA_VERSION is below 4_4_2_0", K(ret));
+          }
         }
       }
     } else {
@@ -1100,6 +1108,8 @@ int ObGrantResolver::resolve_grant_obj_privileges(
         ObString host_name;
         ObString pwd;
         ObString need_enc = ObString::make_string("NO");
+        ObString plugin;
+        bool is_plugin_supported = true;
         if (OB_ISNULL(user_node)) {
           ret = OB_ERR_PARSE_SQL;
           LOG_WARN("Parse SQL error, user node should not be NULL", K(user_node), K(ret));
@@ -1126,19 +1136,18 @@ int ObGrantResolver::resolve_grant_obj_privileges(
             host_name.assign_ptr(user_node->children_[3]->str_value_,
                 static_cast<int32_t>(user_node->children_[3]->str_len_));
           }
-          if (lib::is_mysql_mode() && NULL != user_node->children_[4]) {
-            /* here code is to mock a auth plugin check. */
-            ObString auth_plugin(static_cast<int32_t>(user_node->children_[4]->str_len_),
-                                 user_node->children_[4]->str_value_);
-            ObString default_auth_plugin;
-            if (OB_FAIL(params_.session_info_->get_sys_variable(
-                                                       share::SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN,
-                                                       default_auth_plugin))) {
-              LOG_WARN("fail to get block encryption variable", K(ret));
-            } else if (0 != auth_plugin.compare(default_auth_plugin)) {
-              ret = OB_ERR_PLUGIN_IS_NOT_LOADED;
-              LOG_USER_ERROR(OB_ERR_PLUGIN_IS_NOT_LOADED, auth_plugin.length(), auth_plugin.ptr());
-            } else {/* do nothing */}
+          if (lib::is_mysql_mode()) {
+            if (NULL != user_node->children_[4]) {
+              ObString auth_plugin(static_cast<int32_t>(user_node->children_[4]->str_len_),
+                                   user_node->children_[4]->str_value_);
+              plugin = auth_plugin;
+            } else {
+              // Use default_authentication_plugin system variable as default
+              if (OB_FAIL(session_info_->get_sys_variable(
+                      share::SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN, plugin))) {
+                LOG_WARN("fail to get default_authentication_plugin variable", K(ret));
+              }
+            }
           }
           if (OB_SUCC(ret) && user_node->children_[1] != NULL) {
             if (0 != user_name.compare(session_info_->get_user_name())) {
@@ -1150,7 +1159,7 @@ int ObGrantResolver::resolve_grant_obj_privileges(
               ret = OB_ERR_PARSE_SQL;
               LOG_WARN("The child 2 of user_node should not be NULL", K(ret));
             } else if (0 == user_node->children_[2]->value_) {
-              if (!ObSetPasswordResolver::is_valid_mysql41_passwd(pwd)) {
+              if (!ObSetPasswordResolver::is_valid_encrypted_passwd(pwd, plugin)) {
                 ret = OB_ERR_PASSWORD_FORMAT;
                 LOG_WARN("Wrong password hash format");
               }
@@ -1165,6 +1174,12 @@ int ObGrantResolver::resolve_grant_obj_privileges(
           if (user_name.length() > OB_MAX_USER_NAME_LENGTH) {
             ret = OB_WRONG_USER_NAME_LENGTH;
             LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, user_name.length(), user_name.ptr());
+          } else if (OB_FAIL(ObEncryptedHelper::check_data_version_for_auth_plugin(plugin,
+            params_.session_info_->get_effective_tenant_id(), is_plugin_supported))) {
+            LOG_WARN("failed to check data version for auth plugin", K(ret));
+          } else if (OB_UNLIKELY(!is_plugin_supported)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("caching_sha2_password is not supported when MIN_DATA_VERSION is below 4_4_2_0", K(ret));
           } else if (OB_FAIL(check_dcl_on_inner_user(node->type_,
                                                      session_info_->get_priv_user_id(),
                                                      user_name,
@@ -1173,8 +1188,8 @@ int ObGrantResolver::resolve_grant_obj_privileges(
                      K(ret), K(session_info_->get_user_name()), K(user_name));
           } else if (OB_FAIL(grant_stmt->add_grantee(user_name))) {
             LOG_WARN("Add grantee error", K(user_name), K(ret));
-          } else if (OB_FAIL(grant_stmt->add_user(user_name, host_name, pwd, need_enc))) {
-            LOG_WARN("Add user and pwd error", K(user_name), K(pwd), K(ret));
+          } else if (OB_FAIL(grant_stmt->add_user(user_name, host_name, pwd, need_enc, plugin))) {
+            LOG_WARN("Add user and pwd error", K(user_name), K(pwd), K(plugin), K(ret));
           } else {
             //do nothing
           }
@@ -1445,6 +1460,8 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
               ObString host_name;
               ObString pwd;
               ObString need_enc = ObString::make_string("NO");
+              ObString plugin;
+              bool is_plugin_supported = true;
               if (OB_ISNULL(user_node)) {
                 ret = OB_ERR_PARSE_SQL;
                 LOG_WARN("Parse SQL error, user node should not be NULL", K(user_node), K(ret));
@@ -1473,19 +1490,22 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
                   host_name.assign_ptr(user_node->children_[3]->str_value_,
                       static_cast<int32_t>(user_node->children_[3]->str_len_));
                 }
-                if (lib::is_mysql_mode() && NULL != user_node->children_[4]) {
-                  /* here code is to mock a auth plugin check. */
-                  ObString auth_plugin(static_cast<int32_t>(user_node->children_[4]->str_len_),
-                                      user_node->children_[4]->str_value_);
-                  ObString default_auth_plugin;
-                  if (OB_FAIL(params_.session_info_->get_sys_variable(
-                                                       share::SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN,
-                                                       default_auth_plugin))) {
-                    LOG_WARN("fail to get block encryption variable", K(ret));
-                  } else if (0 != auth_plugin.compare(default_auth_plugin)) {
-                    ret = OB_ERR_PLUGIN_IS_NOT_LOADED;
-                    LOG_USER_ERROR(OB_ERR_PLUGIN_IS_NOT_LOADED, auth_plugin.length(), auth_plugin.ptr());
-                  } else {/* do nothing */}
+                if (lib::is_mysql_mode()) {
+                  if (NULL != user_node->children_[4]) {
+                    plugin.assign_ptr(str_tolower(const_cast<char *>(user_node->children_[4]->str_value_),
+                                                  static_cast<int32_t>(user_node->children_[4]->str_len_)),
+                                                  static_cast<int32_t>(user_node->children_[4]->str_len_));
+                    if (plugin.empty()) {
+                      ret = OB_ERR_PLUGIN_IS_NOT_LOADED;
+                      LOG_WARN("invalid auth plugin", K(plugin), K(ret));
+                    }
+                  } else {
+                    // Use default_authentication_plugin system variable as default
+                    if (OB_FAIL(session_info_->get_sys_variable(
+                            share::SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN, plugin))) {
+                      LOG_WARN("fail to get default_authentication_plugin variable", K(ret));
+                    }
+                  }
                 }
                 if (OB_SUCC(ret) && user_node->children_[1] != NULL) {
                   if (0 != user_name.compare(session_info_->get_user_name())) {
@@ -1497,9 +1517,9 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
                     ret = OB_ERR_PARSE_SQL;
                     LOG_WARN("The child 2 of user_node should not be NULL", K(ret));
                   } else if (0 == user_node->children_[2]->value_) {
-                    if (!ObSetPasswordResolver::is_valid_mysql41_passwd(pwd)) {
+                    if (!ObSetPasswordResolver::is_valid_encrypted_passwd(pwd, plugin)) {
                       ret = OB_ERR_PASSWORD_FORMAT;
-                      LOG_WARN("Wrong password hash format");
+                      LOG_WARN("Wrong password hash format", K(pwd), K(plugin), K(ret));
                     }
                   } else if (OB_FAIL(check_password_strength(pwd))) {
                     LOG_WARN("fail to check password strength", K(ret));
@@ -1514,6 +1534,12 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
                 if (user_name.length() > OB_MAX_USER_NAME_LENGTH) {
                   ret = OB_WRONG_USER_NAME_LENGTH;
                   LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, user_name.length(), user_name.ptr());
+                } else if (OB_FAIL(ObEncryptedHelper::check_data_version_for_auth_plugin(plugin,
+                  params_.session_info_->get_effective_tenant_id(), is_plugin_supported))) {
+                  LOG_WARN("failed to check data version for auth plugin", K(ret));
+                } else if (OB_UNLIKELY(!is_plugin_supported)) {
+                  ret = OB_NOT_SUPPORTED;
+                  LOG_WARN("caching_sha2_password is not supported when MIN_DATA_VERSION is below 4_4_2_0", K(ret));
                 } else if (OB_FAIL(check_dcl_on_inner_user(node->type_,
                                                            session_info_->get_priv_user_id(),
                                                            user_name,
@@ -1522,8 +1548,8 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
                            K(ret), K(session_info_->get_user_name()), K(user_name));
                 } else if (OB_FAIL(grant_stmt->add_grantee(user_name))) {
                   LOG_WARN("Add grantee error", K(user_name), K(ret));
-                } else if (OB_FAIL(grant_stmt->add_user(user_name, host_name, pwd, need_enc))) {
-                  LOG_WARN("Add user and pwd error", K(user_name), K(pwd), K(ret));
+                } else if (OB_FAIL(grant_stmt->add_user(user_name, host_name, pwd, need_enc, plugin))) {
+                  LOG_WARN("Add user and pwd error", K(user_name), K(pwd), K(plugin), K(ret));
                 } else {
                   //do nothing
                 }

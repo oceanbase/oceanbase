@@ -195,6 +195,10 @@ ob_set_subtarget(oblib_lib common_mixed
   encode/ob_quoted_printable_encode.cpp
   encode/ob_uuencode.cpp
   encrypt/ob_encrypted_helper.cpp
+  encrypt/ob_sha256_crypt.cpp
+  encrypt/ob_caching_sha2_cache.cpp
+  encrypt/ob_caching_sha2_cache_mgr.cpp
+  encrypt/ob_rsa_getter.cpp
   file/file_directory_utils.cpp
   file/ob_file.cpp
   file/ob_string_util.cpp

@@ -456,7 +456,6 @@ public:
   ObSchemaHistoryRecycler &get_schema_history_recycler() { return schema_history_recycler_; }
   ObRootMinorFreeze &get_root_minor_freeze() { return root_minor_freeze_; }
   int admin_clear_balance_task(const obrpc::ObAdminClearBalanceTaskArg &arg);
-  int generate_user(const ObClusterRole &cluster_role, const char* usr_name, const char* user_passwd);
   int check_server_have_enough_resource_for_delete_server(
       const ObIArray<ObAddr> &servers,
       const ObZone &zone);

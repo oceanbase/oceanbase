@@ -2284,7 +2284,8 @@ private:
                           const uint64_t user_id,
                           const common::ObString &new_passwd,
                           const common::ObString *ddl_stmt_str,
-                          share::schema::ObSchemaGetterGuard &schema_guard);
+                          share::schema::ObSchemaGetterGuard &schema_guard,
+                          const common::ObString &plugin);
   int set_max_connection_in_trans(const uint64_t tenant_id,
                                   const uint64_t user_id,
                                   const uint64_t max_connections_per_hour,

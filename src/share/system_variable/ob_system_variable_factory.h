@@ -380,7 +380,7 @@ public:
 class ObSysVarDefaultAuthenticationPlugin : public ObVarcharSysVar
 {
 public:
-  ObSysVarDefaultAuthenticationPlugin() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  ObSysVarDefaultAuthenticationPlugin() : ObVarcharSysVar(ObSysVarOnCheckFuncs::check_and_convert_default_authentication_plugin, NULL, NULL, NULL, NULL) {}
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(50); }
 };
@@ -6086,6 +6086,13 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(840); }
 };
+class ObSysVarCachingSha2PasswordDigestRounds : public ObIntSysVar
+{
+public:
+  ObSysVarCachingSha2PasswordDigestRounds() : ObIntSysVar(ObSysVarOnCheckFuncs::check_and_convert_caching_sha2_password_digest_rounds, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(841); }
+};
 
 
 class ObSysVarFactory
@@ -6109,7 +6116,7 @@ private:
 
 public:
   const static int64_t MYSQL_SYS_VARS_COUNT = 99;
-  const static int64_t OB_SYS_VARS_COUNT = 742;
+  const static int64_t OB_SYS_VARS_COUNT = 743;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
   const static int64_t INVALID_MAX_READ_STALE_TIME = -1;
 

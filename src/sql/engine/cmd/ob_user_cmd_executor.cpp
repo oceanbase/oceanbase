@@ -14,6 +14,7 @@
 #include "sql/engine/cmd/ob_user_cmd_executor.h"
 
 #include "lib/encrypt/ob_encrypted_helper.h"
+#include "lib/encrypt/ob_sha256_crypt.h"
 #include "sql/resolver/dcl/ob_create_user_stmt.h"
 #include "sql/resolver/dcl/ob_drop_user_stmt.h"
 #include "sql/resolver/dcl/ob_lock_user_stmt.h"
@@ -22,6 +23,7 @@
 #include "sql/resolver/dcl/ob_alter_user_proxy_stmt.h"
 #include "sql/resolver/dcl/ob_alter_user_primary_zone_stmt.h"
 #include "sql/engine/ob_exec_context.h"
+#include "share/system_variable/ob_sys_var_class_type.h"
 
 namespace oceanbase
 {
@@ -31,21 +33,47 @@ using namespace share::schema;
 namespace sql
 {
 int ObCreateUserExecutor::encrypt_passwd(const common::ObString& pwd,
+                                         const common::ObString& plugin,
                                          common::ObString& encrypted_pwd,
                                          char *enc_buf,
-                                         int64_t buf_len)
+                                         int64_t buf_len,
+                                         ObSQLSessionInfo *session_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(enc_buf)) {
+  if (OB_ISNULL(enc_buf) || OB_ISNULL(session_info)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("enc_buf is NULL", K(ret));
   } else if (buf_len < ENC_BUF_LEN) {
     ret = OB_BUF_NOT_ENOUGH;
     LOG_WARN("Encrypt buf not enough");
   } else {
-    encrypted_pwd.assign_ptr(enc_buf, ENC_STRING_BUF_LEN);
-    if (OB_FAIL(ObEncryptedHelper::encrypt_passwd_to_stage2(pwd, encrypted_pwd))) {
-      SQL_ENG_LOG(WARN, "failed to encrypt passwd", K(ret));
+    // Select encryption method according to the plugin type
+    if (plugin.empty() || 0 == plugin.case_compare(AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD)) {
+      // Use mysql_native_password encryption
+      encrypted_pwd.assign_ptr(enc_buf, ENC_STRING_BUF_LEN);
+      if (OB_FAIL(ObEncryptedHelper::encrypt_passwd_to_stage2(pwd, encrypted_pwd))) {
+        SQL_ENG_LOG(WARN, "failed to encrypt passwd", K(ret));
+      }
+    } else if (0 == plugin.case_compare(AUTH_PLUGIN_CACHING_SHA2_PASSWORD)) {
+      // Use caching_sha2_password encryption
+      // Get digest_rounds from system variable
+      int64_t digest_rounds = OB_SHA256_ROUNDS_DEFAULT;
+      bool is_supported = true;
+      if (OB_FAIL(ObEncryptedHelper::check_data_version_for_auth_plugin(plugin,
+                                                                        session_info->get_effective_tenant_id(),
+                                                                        is_supported))) {
+        SQL_ENG_LOG(WARN, "failed to check data version for auth plugin", K(ret));
+      } else if (!is_supported) {
+        ret = OB_NOT_SUPPORTED;
+        SQL_ENG_LOG(WARN, "caching_sha2_password is not supported", K(ret));
+      } else if (OB_FAIL(session_info->get_sys_variable(SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS, digest_rounds))) {
+        SQL_ENG_LOG(WARN, "failed to get caching_sha2_password_digest_rounds, use default", K(ret));
+      } else if (OB_FAIL(ObSha256Crypt::encrypt_passwd_to_caching_sha2(pwd, encrypted_pwd, enc_buf, buf_len, digest_rounds))) {
+        SQL_ENG_LOG(WARN, "failed to encrypt passwd with caching_sha2_password", K(ret), K(plugin));
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      SQL_ENG_LOG(WARN, "unsupported authentication plugin", K(ret), K(plugin));
     }
   }
   return ret;
@@ -111,6 +139,7 @@ int ObCreateUserExecutor::execute(ObExecContext &ctx, ObCreateUserStmt &stmt)
   obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
   const uint64_t tenant_id = stmt.get_tenant_id();
   const ObStrings &users = stmt.get_users();
+  const ObStrings &plugins = stmt.get_plugins();
   const bool if_not_exist = stmt.get_if_not_exists();
   const int64_t FIX_MEMBER_CNT = 4;
   if (OB_ISNULL(GCTX.schema_service_)) {
@@ -128,11 +157,15 @@ int ObCreateUserExecutor::execute(ObExecContext &ctx, ObCreateUserStmt &stmt)
   } else if (OB_UNLIKELY(users.count() <= FIX_MEMBER_CNT) || OB_UNLIKELY(0 != users.count() % FIX_MEMBER_CNT)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Resolve create user error. Users should have user and pwd", "ObStrings count", users.count());
+  } else if (OB_UNLIKELY((users.count() - FIX_MEMBER_CNT) / FIX_MEMBER_CNT != plugins.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("User count and plugin count mismatch", "user count", (users.count() - FIX_MEMBER_CNT) / FIX_MEMBER_CNT, "plugin count", plugins.count());
   } else {
     ObString user_name;
     ObString host_name;
     ObString pwd;
     ObString need_enc;
+    ObString plugin;
     ObString ssl_type;
     ObString ssl_cipher;
     ObString x509_issuer;
@@ -158,6 +191,7 @@ int ObCreateUserExecutor::execute(ObExecContext &ctx, ObCreateUserStmt &stmt)
     }
 
     for (int64_t i = 0; OB_SUCC(ret) && i < users_cnt; i += FIX_MEMBER_CNT) {
+      const int64_t user_idx = i / FIX_MEMBER_CNT;
       if (OB_FAIL(users.get_string(i, user_name))) {
         LOG_WARN("Get string from ObStrings error",
             "count", users.count(), K(i), K(ret));
@@ -170,14 +204,18 @@ int ObCreateUserExecutor::execute(ObExecContext &ctx, ObCreateUserStmt &stmt)
       } else if (OB_FAIL(users.get_string(i + 3, need_enc))) {
         LOG_WARN("Get string from ObStrings error",
             "count", users.count(), K(i), K(ret));
+      } else if (OB_FAIL(plugins.get_string(user_idx, plugin))) {
+        LOG_WARN("Get plugin from plugins error",
+            "plugin count", plugins.count(), K(user_idx), K(ret));
       } else {
         ObUserInfo user_info;
         if (ObString::make_string("YES") == need_enc) {
           if (pwd.length() > 0) {
             ObString pwd_enc;
-            char enc_buf[ENC_BUF_LEN] = {0};
-            if (OB_FAIL(encrypt_passwd(pwd, pwd_enc, enc_buf, ENC_BUF_LEN))) {
-              LOG_WARN("Encrypt password failed", K(ret));
+            // 使用更大的缓冲区以支持 caching_sha2_password
+            char enc_buf[CACHING_SHA2_PASSWD_BUF_LEN] = {0};
+            if (OB_FAIL(encrypt_passwd(pwd, plugin, pwd_enc, enc_buf, CACHING_SHA2_PASSWD_BUF_LEN, ctx.get_my_session()))) {
+              LOG_WARN("Encrypt password failed", K(ret), K(plugin));
             } else if (OB_FAIL(user_info.set_passwd(pwd_enc))) {
               LOG_WARN("set password failed", K(ret));
             }
@@ -207,6 +245,8 @@ int ObCreateUserExecutor::execute(ObExecContext &ctx, ObCreateUserStmt &stmt)
             LOG_WARN("set x509_issuer failed", K(ret));
           } else if (OB_FAIL(user_info.set_x509_subject(x509_subject))) {
             LOG_WARN("set x509_subject failed", K(ret));
+          } else if (OB_FAIL(user_info.set_plugin(plugin))) {
+            LOG_WARN("set plugin failed", K(ret));
           } else if (FALSE_IT(user_info.set_password_last_changed(ObTimeUtility::current_time()))) {
             LOG_WARN("set set_password_last_changed failed", K(ret));
           } else {

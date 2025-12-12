@@ -3614,6 +3614,7 @@ int ObSQLSessionInfo::set_login_info(const share::schema::ObUserLoginInfo &login
   OZ (write_str_reuse_buf(get_session_allocator(), login_info.passwd_, login_info_.passwd_));
   OZ (write_str_reuse_buf(get_session_allocator(), login_info.db_, login_info_.db_));
   OZ (write_str_reuse_buf(get_session_allocator(), login_info.scramble_str_, login_info_.scramble_str_));
+  OX (login_info_.is_passwd_plaintext_ = login_info.is_passwd_plaintext_);
   return ret;
 }
 

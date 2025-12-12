@@ -39,9 +39,11 @@ public:
   virtual ~ObCreateUserExecutor() {}
   int execute(ObExecContext &ctx, ObCreateUserStmt &stmt);
   static int encrypt_passwd(const common::ObString& passwd,
+                            const common::ObString& plugin,
                             common::ObString& encrypted_passwd,
                             char *enc_buf,
-                            int64_t buf_len);
+                            int64_t buf_len,
+                            ObSQLSessionInfo *session_info);
   static int userinfo_extract_user_name(
       const common::ObIArray<share::schema::ObUserInfo> &user_infos,
       const common::ObIArray<int64_t> &index,

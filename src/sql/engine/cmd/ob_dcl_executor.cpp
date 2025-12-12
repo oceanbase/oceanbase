@@ -14,6 +14,7 @@
 #include "sql/engine/cmd/ob_dcl_executor.h"
 
 #include "lib/encrypt/ob_encrypted_helper.h"
+#include "lib/encrypt/ob_sha256_crypt.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/resolver/dcl/ob_grant_stmt.h"
 #include "sql/resolver/dcl/ob_revoke_stmt.h"
@@ -34,6 +35,7 @@ int ObGrantExecutor::execute(ObExecContext &ctx, ObGrantStmt &stmt)
   ObSQLSessionInfo *session_info = NULL;
   const uint64_t tenant_id = stmt.get_tenant_id();
   const ObStrings &users = stmt.get_users();
+  const ObStrings &plugins = stmt.get_plugins();
   ObIAllocator &allocator = ctx.get_allocator();
   obrpc::ObGrantArg &arg = static_cast<obrpc::ObGrantArg &>(stmt.get_ddl_arg());
   const bool is_role = arg.roles_.count() > 0;
@@ -57,13 +59,18 @@ int ObGrantExecutor::execute(ObExecContext &ctx, ObGrantStmt &stmt)
     ObString host_name;
     ObString pwd;
     ObString need_enc;
-    //i += 4, each with user_name, pwd, need_enc
+    ObString plugin;
+    //i += 4, each with user_name, host_name, pwd, need_enc
     if (OB_UNLIKELY(users.count() <= 0) || OB_UNLIKELY(0 != users.count() % 4)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Resolve users error. Users should have user and pwd",
                "ObStrings count", users.count(), K(ret));
+    } else if (OB_UNLIKELY(users.count() / 4 != plugins.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("User count and plugin count mismatch", "user count", users.count() / 4, "plugin count", plugins.count());
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < users.count(); i += 4) {
+      const int64_t user_idx = i / 4;
       if (OB_FAIL(users.get_string(i, user_name))) {
         LOG_WARN("Get string from ObStrings error", "count",
             users.count(), K(i), K(ret));
@@ -76,23 +83,33 @@ int ObGrantExecutor::execute(ObExecContext &ctx, ObGrantStmt &stmt)
       } else if (OB_FAIL(users.get_string(i + 3, need_enc))) {
         LOG_WARN("Get string from ObStrings error", "count",
             users.count(), K(i), K(ret));
+      } else if (OB_FAIL(plugins.get_string(user_idx, plugin))) {
+        LOG_WARN("Get plugin from plugins error", "plugin count",
+            plugins.count(), K(user_idx), K(ret));
       } else {
         if (OB_FAIL(arg.users_passwd_.push_back(user_name))) {
           LOG_WARN("failed to add user", K(ret));
         } else if (OB_FAIL(arg.hosts_.push_back(host_name))) {
           LOG_WARN("failed to add user", K(ret));
+        } else if (OB_FAIL(arg.plugins_.push_back(plugin))) {
+          LOG_WARN("failed to add plugin", K(ret));
         } else if (ObString::make_string("YES") == need_enc) {
           ObString pwd_enc;
           if (pwd.length() > 0) {
             char *enc_buf = NULL;
-            if (NULL == (enc_buf = static_cast<char *>(allocator.alloc(ENC_BUF_LEN)))) {
+            // 根据 plugin 类型选择合适的缓冲区长度
+            const int64_t buf_len = (0 == plugin.case_compare(AUTH_PLUGIN_CACHING_SHA2_PASSWORD))
+                                    ? CACHING_SHA2_PASSWD_BUF_LEN : ENC_BUF_LEN;
+            if (NULL == (enc_buf = static_cast<char *>(allocator.alloc(buf_len)))) {
               ret = OB_ALLOCATE_MEMORY_FAILED;
-              LOG_ERROR("Failed to allocate memory", K(ret), K(ENC_BUF_LEN));
+              LOG_ERROR("Failed to allocate memory", K(ret), K(buf_len));
             } else if (OB_FAIL(ObCreateUserExecutor::encrypt_passwd(pwd, 
+                                                                    plugin,
                                                                     pwd_enc, 
                                                                     enc_buf, 
-                                                                    ENC_BUF_LEN))) {
-              LOG_WARN("Encrypt password failed", K(ret));
+                                                                    buf_len,
+                                                                    session_info))) {
+              LOG_WARN("Encrypt password failed", K(ret), K(plugin));
             } else { }//do nothing
           }
           if (OB_FAIL(ret)) {
