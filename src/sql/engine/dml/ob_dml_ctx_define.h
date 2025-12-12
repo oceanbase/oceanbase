@@ -1049,6 +1049,7 @@ public:
       unique_index_rowkey_exprs_(alloc),
       das_index_scan_ctdef_(NULL),
       lookup_ctdef_for_batch_(NULL),
+      enable_do_update_directly_(false),
       alloc_(alloc)
   { }
   TO_STRING_KV(KPC_(ins_ctdef),
@@ -1065,6 +1066,8 @@ public:
   ExprFixedArray unique_index_rowkey_exprs_; // index unique rowkey exprs
   ObDASScanCtDef *das_index_scan_ctdef_;     // scan the unique index table
   ObDASScanCtDef *lookup_ctdef_for_batch_;   // lookup data table by batch
+
+  bool enable_do_update_directly_;
   common::ObIAllocator &alloc_;
 };
 
