@@ -668,7 +668,7 @@ public:
   inline common::ObNameCaseMode get_name_case_mode() const { return name_case_mode_; }
   inline void set_table_type(const ObTableType table_type) { table_type_ = table_type; }
   virtual inline ObTableType get_table_type() const override { return table_type_; }
-  inline void set_table_mode(const int32_t table_mode) { table_mode_.mode_ = table_mode; }
+  inline void assign_table_mode_from_mysql_result(const int32_t table_mode) { table_mode_.mode_ = table_mode; }
   inline int32_t get_table_mode() const { return table_mode_.mode_; }
   inline void set_table_mode_struct(const ObTableMode table_mode) { table_mode_ = table_mode; }
   virtual inline ObTableMode get_table_mode_struct() const override { return table_mode_; }

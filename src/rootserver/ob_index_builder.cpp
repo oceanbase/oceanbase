@@ -916,7 +916,7 @@ int ObIndexBuilder::generate_schema(
                                            || INDEX_TYPE_SPATIAL_LOCAL == arg.index_type_
                                            || INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == arg.index_type_);
       const bool need_generate_index_schema_column = (is_index_local_storage || global_index_without_column_info);
-      schema.set_table_mode(data_schema.get_table_mode_flag());
+      schema.set_table_mode_flag(data_schema.get_table_mode_flag());
       schema.set_table_state_flag(data_schema.get_table_state_flag());
       schema.set_duplicate_scope(data_schema.get_duplicate_scope());
       if (OB_FAIL(set_basic_infos(arg, data_schema, schema))) {

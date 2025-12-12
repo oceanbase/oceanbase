@@ -1629,10 +1629,6 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
               ret = OB_NOT_SUPPORTED;
               LOG_USER_ERROR(OB_NOT_SUPPORTED, "set vertical partition table as queuing table mode");
               SQL_RESV_LOG(WARN, "Vertical partition table cannot set queuing table mode", K(ret));
-            } else { // 暂不支持用户在alter table时变更PK_MODE
-              // 设置Table当前的PK_MODE，组装最终态TableMode
-              table_mode_.pk_mode_ = tmp_table_schema->get_table_mode_struct().pk_mode_;
-              table_mode_.organization_mode_ = tmp_table_schema->get_table_mode_struct().organization_mode_;
             }
           }
         }

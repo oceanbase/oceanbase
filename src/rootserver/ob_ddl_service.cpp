@@ -2470,7 +2470,7 @@ int ObDDLService::set_raw_table_options(
             LOG_WARN("moderate/super/extreme table mode is not supported in data version < 4.2.1.5 or 4.2.2 <= data_version < 4.2.3", K(ret), K(compat_version), K(alter_table_schema.get_table_mode()));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "moderate/super/extreme table mode in data version < 4.2.1.5 or 4.2.2 <= data_version < 4.2.3");
           } else {
-            new_table_schema.set_table_mode(alter_table_schema.get_table_mode());
+            new_table_schema.set_table_mode_flag(alter_table_schema.get_table_mode_flag());
             need_update_index_table = true;
           }
           break;

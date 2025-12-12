@@ -144,7 +144,6 @@ int ObLobMetaBuilder::set_basic_infos(
   aux_lob_meta_schema.set_autoinc_column_id(0);
   aux_lob_meta_schema.set_progressive_merge_num(data_schema.get_progressive_merge_num());
   // keep the initial value for table_mode, do not get table mode from data_schema which may be hidden table
-  // aux_lob_meta_schema.set_table_mode(data_schema.get_table_mode());
   aux_lob_meta_schema.set_block_size(data_schema.get_block_size());
   aux_lob_meta_schema.set_pctfree(data_schema.get_pctfree());
   aux_lob_meta_schema.set_storage_format_version(data_schema.get_storage_format_version());
