@@ -2353,7 +2353,8 @@ public:
       is_alter_mlog_attributes_(false),
       alter_mlog_arg_(),
       part_storage_cache_policy_(),
-      data_version_(0)
+      data_version_(0),
+      enable_hidden_table_partition_pruning_(false)
   {
   }
   virtual ~ObAlterTableArg()
@@ -2469,7 +2470,8 @@ public:
                K_(is_alter_mlog_attributes),
                K_(alter_mlog_arg),
                K_(part_storage_cache_policy),
-               K_(data_version));
+               K_(data_version),
+               K_(enable_hidden_table_partition_pruning));
 private:
   int alloc_index_arg(const ObIndexArg::IndexActionType index_action_type, ObIndexArg *&index_arg);
 public:
@@ -2517,6 +2519,7 @@ public:
   ObAlterMLogArg alter_mlog_arg_;
   common::ObString part_storage_cache_policy_;
   uint64_t data_version_;
+  bool enable_hidden_table_partition_pruning_;
   int serialize_index_args(char *buf, const int64_t data_len, int64_t &pos) const;
   int deserialize_index_args(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_index_args_serialize_size() const;

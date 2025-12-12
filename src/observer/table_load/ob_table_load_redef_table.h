@@ -30,7 +30,8 @@ struct ObTableLoadRedefTableStartArg
 public:
   ObTableLoadRedefTableStartArg()
     : tenant_id_(common::OB_INVALID_ID), table_id_(common::OB_INVALID_ID), parallelism_(0),
-      is_load_data_(false), is_insert_overwrite_(false), tablet_ids_()
+      is_load_data_(false), is_insert_overwrite_(false), tablet_ids_(),
+      enable_hidden_table_partition_pruning_(false)
   {
   }
   ~ObTableLoadRedefTableStartArg() = default;
@@ -42,6 +43,7 @@ public:
     is_load_data_ = false;
     is_insert_overwrite_ = false;
     tablet_ids_.reset();
+    enable_hidden_table_partition_pruning_ = false;
   }
   bool is_valid() const
   {
@@ -49,7 +51,8 @@ public:
            0 != parallelism_;
   }
   TO_STRING_KV(K_(tenant_id), K_(table_id), K_(parallelism),
-               K_(is_load_data), K_(is_insert_overwrite), K_(tablet_ids));
+               K_(is_load_data), K_(is_insert_overwrite), K_(tablet_ids),
+               K_(enable_hidden_table_partition_pruning));
 public:
   uint64_t tenant_id_;
   uint64_t table_id_;
@@ -57,6 +60,7 @@ public:
   bool is_load_data_;
   bool is_insert_overwrite_;
   common::ObArray<common::ObTabletID> tablet_ids_;
+  bool enable_hidden_table_partition_pruning_;
 };
 
 struct ObTableLoadRedefTableStartRes
