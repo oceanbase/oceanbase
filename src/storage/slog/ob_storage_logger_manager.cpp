@@ -337,10 +337,10 @@ int ObStorageLoggerManager::check_log_disk(
     LOG_WARN("Invalid argument", K(ret), KP(data_dir), KP(log_dir));
   } else if (OB_UNLIKELY(0 != statvfs(data_dir, &data_svfs))) {
     ret = OB_IO_ERROR;
-    LOG_WARN("fail to get sstable directory vfs", K(ret), K(data_dir));
+    LOG_WARN("fail to get sstable directory vfs", K(ret), K(errno), K(data_dir));
   } else if (OB_UNLIKELY(0 != statvfs(log_dir, &log_svfs))) {
     ret = OB_IO_ERROR;
-    LOG_WARN("fail to get slog directory vfs", K(ret), K(log_dir));
+    LOG_WARN("fail to get slog directory vfs", K(ret), K(errno), K(log_dir));
   } else if (OB_UNLIKELY(0 >= log_svfs.f_bavail)) {
     ret = OB_DISK_ERROR;
     LOG_ERROR("slog disk is full, please check", K(ret), K(log_dir), K(log_svfs.f_bavail));
