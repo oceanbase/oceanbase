@@ -7979,7 +7979,8 @@ int ObDMLResolver::resolve_foreign_key_constraint(const TableItem *table_item)
     LOG_WARN("table item is null", K(ret));
   } else if (!table_item->is_basic_table()) {
     //nothing to do, only resolve foreign key constraint for basic table
-  } else if (OB_FAIL(schema_checker_->get_table_schema(MTL_ID(), table_item->ref_id_, table_schema))) {
+  } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                                       table_item->ref_id_, table_schema))) {
     LOG_WARN("get table schema failed", K_(table_item->table_name), K(table_item->ref_id_), K(ret));
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
@@ -8133,7 +8134,8 @@ int ObDMLResolver::resolve_columns_for_fk_partition_expr(ObRawExpr *&expr,
   if (OB_ISNULL(fk_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("foreign key info is null", K(ret));
-  } else if (OB_FAIL(schema_checker_->get_table_schema(MTL_ID(),child_table_id, child_table_schema))) {
+  } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                                       child_table_id, child_table_schema))) {
     LOG_WARN("failed to get child table schema", K(ret));
   } else {
     ObArray<ObRawExpr*> real_exprs;

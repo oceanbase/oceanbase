@@ -5087,6 +5087,9 @@ int ObAlterTableResolver::resolve_partition_options(const ParseNode &node)
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("can't re-partitioned a partitioned table", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Re-partition a patitioned table");
+      } else if (OB_FAIL(ObAlterMviewUtils::check_partition_option_for_mlog_master(
+                     *table_schema_, partition_node->type_))) {
+        LOG_WARN("mlog master is not supported", KR(ret));
       }
     }
     if (OB_SUCC(ret)) {

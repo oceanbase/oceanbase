@@ -11036,10 +11036,10 @@ int ObDDLService::check_new_column_for_index(
 // if column is in
 // 1. update index if modified column is in index
 // 2. update materialized view if modified column is in materialized view
-// but 2 is disabled for now
 int ObDDLService::alter_table_update_index_and_view_column(
     const ObTableSchema &new_table_schema,
     const ObColumnSchemaV2 &new_column_schema,
+    ObSchemaGetterGuard &schema_guard,
     ObDDLOperator &ddl_operator,
     common::ObMySQLTransaction &trans,
     const ObIArray<ObTableSchema> *global_idx_schema_array/*=NULL*/)
@@ -11051,6 +11051,12 @@ int ObDDLService::alter_table_update_index_and_view_column(
   } else if (OB_FAIL(alter_table_update_aux_column(new_table_schema, new_column_schema,
             ddl_operator, trans, AUX_VERTIAL_PARTITION_TABLE))) {
     LOG_WARN("fail to update aux vp column", K(ret), K(new_table_schema), K(new_column_schema));
+  } else if (OB_FAIL(ObMviewAlterService::update_mlog_in_modify_column(
+                                  new_table_schema, schema_guard, ddl_operator, trans))) {
+    LOG_WARN("fail to update mlog column", K(ret), K(new_table_schema));
+  } else if (OB_FAIL(ObMviewAlterService::update_mview_in_modify_column(
+                                  new_table_schema, schema_guard, ddl_operator, trans))) {
+    LOG_WARN("fail to update mview column", K(ret), K(new_table_schema));
   }
   return ret;
 }
@@ -12368,6 +12374,7 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
             } else if (OB_FAIL(alter_table_update_index_and_view_column(
                                  new_table_schema,
                                  new_column_schema,
+                                 schema_guard,
                                  ddl_operator,
                                  trans,
                                  global_idx_schema_array))) {
@@ -12494,6 +12501,7 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
                 RS_LOG(WARN, "failed to alter shadow column for index", K(ret));
               } else if (OB_FAIL(alter_table_update_index_and_view_column(new_table_schema,
                                                                           new_column_schema,
+                                                                          schema_guard,
                                                                           ddl_operator,
                                                                           trans))) {
                 RS_LOG(WARN, "failed to update index column", K(ret));
@@ -12597,6 +12605,7 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
                   RS_LOG(WARN, "failed to alter column", K(alter_column_schema), K(ret));
                 } else if (OB_FAIL(alter_table_update_index_and_view_column(new_table_schema,
                                                                             new_column_schema,
+                                                                            schema_guard,
                                                                             ddl_operator,
                                                                             trans))) {
                   RS_LOG(WARN, "failed to update index column", K(ret));
@@ -16135,7 +16144,7 @@ int ObDDLService::check_long_run_ddl_table_type_(const ObTableSchema &orig_table
               KR(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED,
                     "double table long running ddl on table with materialized view log is");
-  } else if (orig_table_schema.table_referenced_by_fast_lsm_mv()) {
+  } else if (orig_table_schema.table_referenced_by_mv()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("double table long running ddl on table required by materialized view is not supported",
               KR(ret));
@@ -38178,7 +38187,7 @@ int ObDDLService::pre_rename_mysql_columns_online(
                                                                      new_col_schemas.at(i), need_del_stats))) {
         LOG_WARN("failed to update column and column group", KR(ret), K(new_col_schemas.at(i)));
       } else if (OB_FAIL(alter_table_update_index_and_view_column(
-                   new_table_schema, new_col_schemas.at(i), ddl_operator, trans,
+                   new_table_schema, new_col_schemas.at(i), schema_guard, ddl_operator, trans,
                    global_idx_schema_array))) {
         LOG_WARN("failedt o update index column", K(ret));
       } else {
@@ -38517,7 +38526,7 @@ int ObDDLService::drop_column_online(
     } else if (OB_FAIL(ddl_operator.update_column_and_column_group(trans, origin_table_schema, new_table_schema,
                                                                    *new_column_schema, true/*need_del_stats*/))) {
       LOG_WARN("failed to update column and column group", KR(ret), KPC(new_column_schema));
-    } else if (OB_FAIL(alter_table_update_index_and_view_column(new_table_schema, *new_column_schema, ddl_operator, trans))) {
+    } else if (OB_FAIL(alter_table_update_index_and_view_column(new_table_schema, *new_column_schema, schema_guard, ddl_operator, trans))) {
       LOG_WARN("update column in aux table failed", KR(ret));
     }
   }

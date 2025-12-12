@@ -13,7 +13,10 @@
 
 #include "ob_mview_alter_service.h"
 #include "share/schema/ob_mview_info.h"
+#include "sql/resolver/ddl/ob_ddl_resolver.h"
+#include "sql/resolver/mv/ob_mv_dep_utils.h"
 #include "sql/resolver/mv/ob_mv_provider.h"
+#include "sql/resolver/ob_schema_checker.h"
 #include "storage/mview/ob_mview_sched_job_utils.h"
 
 namespace oceanbase
@@ -350,6 +353,200 @@ int ObMviewAlterService::alter_mlog_attributes(const uint64_t tenant_id,
     }
   }
 
+  return ret;
+}
+
+int ObMviewAlterService::update_mlog_in_modify_column(
+    const ObTableSchema &new_table_schema,
+    ObSchemaGetterGuard &schema_guard,
+    ObDDLOperator &ddl_operator,
+    common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = new_table_schema.get_tenant_id();
+  const ObTableSchema *mlog_schema = NULL;
+  ObTableSchema new_mlog_schema;
+  if (!new_table_schema.has_mlog_table()) {
+    // do nothing
+  } else if (OB_FAIL(schema_guard.get_table_schema(new_table_schema.get_tenant_id(), new_table_schema.get_mlog_tid(), mlog_schema))) {
+    LOG_WARN("fail to get mlog schema", K(ret), K(new_table_schema));
+  } else if (OB_ISNULL(mlog_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("mlog schema is null", K(ret), K(new_table_schema));
+  } else if (OB_FAIL(new_mlog_schema.assign(*mlog_schema))) {
+    LOG_WARN("fail to assign mlog schema", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < new_mlog_schema.get_column_count(); ++i) {
+      ObColumnSchemaV2 *new_mlog_column = new_mlog_schema.get_column_schema_by_idx(i);
+      const ObColumnSchemaV2 *base_table_column = NULL;
+      if (OB_ISNULL(new_mlog_column)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null mlog column", K(ret));
+      } else if (is_mlog_special_column(new_mlog_column->get_column_id())) {
+        // do nothing
+      } else if (OB_ISNULL(base_table_column = new_table_schema.get_column_schema(new_mlog_column->get_column_id()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null base column", K(ret));
+      } else if (new_mlog_column->get_meta_type() == base_table_column->get_meta_type() &&
+                 new_mlog_column->get_accuracy() == base_table_column->get_accuracy() &&
+                 new_mlog_column->get_sub_data_type() == base_table_column->get_sub_data_type()) {
+        // do nothing
+      } else if (FALSE_IT(new_mlog_column->set_meta_type(base_table_column->get_meta_type()))) {
+      } else if (FALSE_IT(new_mlog_column->set_accuracy(base_table_column->get_accuracy()))) {
+      } else if (FALSE_IT(new_mlog_column->set_sub_data_type(base_table_column->get_sub_data_type()))) {
+      } else if (OB_FAIL(ddl_operator.update_column_and_column_group(trans, *mlog_schema, *mlog_schema,
+                                                                     *new_mlog_column, false))) {
+        LOG_WARN("fail to update mlog column", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ObSchemaOperationType operation_type = OB_DDL_ALTER_TABLE;
+      if (OB_FAIL(ddl_operator.update_table_attribute(new_mlog_schema, trans, operation_type))) {
+        LOG_WARN("fail to update mlog table schema version", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMviewAlterService::update_mview_in_modify_column(
+    const ObTableSchema &new_table_schema,
+    ObSchemaGetterGuard &schema_guard,
+    ObDDLOperator &ddl_operator,
+    common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<uint64_t, 4> mv_list;
+  bool exists_nested_mv = false;
+  if (!new_table_schema.table_referenced_by_mv()) {
+    // do nothing
+  } else if (OB_FAIL(ObMVDepUtils::get_referring_mv_of_base_table(trans, new_table_schema.get_tenant_id(), new_table_schema.get_table_id(), mv_list, exists_nested_mv))) {
+    LOG_WARN("fail to get referring mv of base table", K(ret), K(new_table_schema));
+  } else if (mv_list.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("referring mv list of base table is empty", K(ret), K(new_table_schema));
+  } else if (exists_nested_mv) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("alter table column with nested materialized view is not supported",
+             K(ret), K(new_table_schema), K(mv_list));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table column with nested materialized view");
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < mv_list.count(); ++i) {
+      uint64_t mv_id = mv_list.at(i);
+      if (OB_FAIL(update_mview_with_new_table(mv_id, new_table_schema, schema_guard, ddl_operator, trans))) {
+        LOG_WARN("fail to update mview with new column", K(ret), K(mv_id));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMviewAlterService::update_mview_with_new_table(
+    const uint64_t mv_id,
+    const ObTableSchema &new_table_schema,
+    ObSchemaGetterGuard &schema_guard,
+    ObDDLOperator &ddl_operator,
+    common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = new_table_schema.get_tenant_id();
+  const ObTableSchema *mv_schema = NULL;
+  uint64_t container_table_id = OB_INVALID_ID;
+  const ObTableSchema *container_table_schema = NULL;
+  HEAP_VARS_2((ObTableSchema, new_mv_schema), (ObTableSchema, new_container_schema)) {
+  if (OB_FAIL(schema_guard.get_table_schema(tenant_id, mv_id, mv_schema))) {
+    LOG_WARN("fail to get mview schema", K(ret), K(mv_id));
+  } else if (OB_ISNULL(mv_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("mview schema is null", K(ret), K(mv_id));
+  } else if (OB_INVALID_ID == (container_table_id = mv_schema->get_data_table_id())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get container_table_id", K(ret), K(tenant_id), K(mv_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, container_table_id, container_table_schema))) {
+    LOG_WARN("fail to get container_table_schema", K(ret), K(tenant_id), K(mv_id), K(container_table_id));
+  } else if (OB_ISNULL(container_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("container table is null", K(ret), K(tenant_id), K(mv_id), K(container_table_id));
+  } else if (OB_FAIL(rebuild_mv_schema_with_new_table(schema_guard, *mv_schema, new_table_schema, new_mv_schema))) {
+    LOG_WARN("fail to rebuild mv schema with new table", KPC(mv_schema));
+  } else if (OB_FAIL(new_container_schema.assign(*container_table_schema))) {
+    LOG_WARN("fail to assign container schema", K(ret));
+  } else if (OB_UNLIKELY(mv_schema->get_column_count() != new_mv_schema.get_column_count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("mview column count mismatch", K(ret), KPC(mv_schema), K(new_mv_schema));
+  } else {
+    bool is_offline = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < new_mv_schema.get_column_count(); ++i) {
+      const ObColumnSchemaV2 *orig_column = mv_schema->get_column_schema_by_idx(i);
+      ObColumnSchemaV2 *new_column = new_mv_schema.get_column_schema_by_idx(i);
+      if (OB_ISNULL(orig_column) || OB_ISNULL(new_column)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("mview column is null", K(ret), KPC(mv_schema), K(new_mv_schema));
+      } else if (OB_FAIL(mv_schema->check_alter_column_is_offline(orig_column, new_column, schema_guard, is_offline))) {
+        LOG_TRACE("fail to check alter column is offline", K(i), KPC(orig_column), KPC(new_column));
+      } else if (is_offline) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("cascade offline ddl on materialized view", K(ret), KPC(orig_column), KPC(new_column));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "cascade offline ddl on materialized view");
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < new_mv_schema.get_column_count(); ++i) {
+      const ObColumnSchemaV2 *orig_column = mv_schema->get_column_schema_by_idx(i);
+      ObColumnSchemaV2 *new_column = new_mv_schema.get_column_schema_by_idx(i);
+      ObColumnSchemaV2 *container_column = NULL;
+      if (OB_ISNULL(orig_column) || OB_ISNULL(new_column)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("mview column is null", K(ret), KPC(mv_schema), K(new_mv_schema));
+      } else if (orig_column->get_meta_type() == new_column->get_meta_type() &&
+                 orig_column->get_accuracy() == new_column->get_accuracy() &&
+                 orig_column->get_sub_data_type() == new_column->get_sub_data_type()) {
+        // do nothing
+      } else if (OB_FAIL(ddl_operator.update_column_and_column_group(trans, *mv_schema,
+                                                                     new_mv_schema,
+                                                                     *new_column, false))) {
+        LOG_WARN("fail to update column and column group", K(ret));
+      } else if (OB_ISNULL(container_column = new_container_schema.get_column_schema(new_column->get_column_id()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get container column", K(ret));
+      } else if (FALSE_IT(container_column->set_meta_type(new_column->get_meta_type()))) {
+      } else if (FALSE_IT(container_column->set_accuracy(new_column->get_accuracy()))) {
+      } else if (FALSE_IT(container_column->set_sub_data_type(new_column->get_sub_data_type()))) {
+      } else if (OB_FAIL(ddl_operator.update_column_and_column_group(trans, *container_table_schema,
+                                                                     new_container_schema,
+                                                                     *container_column, false))) {
+        LOG_WARN("fail to update container column", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ObSchemaOperationType operation_type = OB_DDL_ALTER_TABLE;
+      if (OB_FAIL(ddl_operator.update_table_attribute(new_mv_schema, trans, operation_type))) {
+        LOG_WARN("fail to update mview schema version", K(ret));
+      } else if (OB_FAIL(ddl_operator.update_table_attribute(new_container_schema, trans, operation_type))) {
+        LOG_WARN("fail to update container schema version", K(ret));
+      } else if (OB_FAIL(update_mlog_in_modify_column(new_container_schema, schema_guard, ddl_operator, trans))) {
+        LOG_WARN("fail to update mlog column", K(ret), K(new_container_schema));
+      }
+    }
+  }
+  }
+  return ret;
+}
+
+int ObMviewAlterService::rebuild_mv_schema_with_new_table(
+    ObSchemaGetterGuard &schema_guard,
+    const ObTableSchema &orig_mv_schema,
+    const ObTableSchema &new_table_schema,
+    ObTableSchema &mv_schema)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaChecker schema_checker;
+  if (OB_FAIL(schema_checker.init(schema_guard, orig_mv_schema.get_tenant_id()))) {
+    LOG_WARN("fail to init schema checker", K(ret));
+  } else if (OB_FAIL(schema_checker.add_ddl_tmp_schema(&new_table_schema))) {
+    LOG_WARN("fail to add ddl tmp schema", K(ret));
+  } else if (OB_FAIL(ObDDLResolver::rebuild_mv_schema(schema_checker, orig_mv_schema, mv_schema))) {
+    LOG_WARN("fail to rebuild mv schema with new table", K(ret));
+  }
   return ret;
 }
 

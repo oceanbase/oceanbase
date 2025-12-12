@@ -577,6 +577,14 @@ public:
       const bool is_oracle_mode,
       ObIAllocator &allocator,
       ObIArray<ObString> &partkey_strs);
+  static int rebuild_mv_schema(
+      ObSchemaChecker &schema_checker,
+      const share::schema::ObTableSchema &orig_mv_schema,
+      share::schema::ObTableSchema &mv_schema);
+  static int update_mv_schema_with_stmt(
+      ObSelectStmt *stmt,
+      ObSQLSessionInfo &session_info,
+      share::schema::ObTableSchema &mv_schema);
 protected:
   static int append_vec_hnsw_args(
       const ObPartitionResolveResult &resolve_result,
