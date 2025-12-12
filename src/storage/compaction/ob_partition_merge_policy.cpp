@@ -926,7 +926,7 @@ int ObPartitionMergePolicy::schedule_co_major_minor_errsim(
       if (OB_FAIL(input_tables.get_table(i, cur_table_hdl))) {
         LOG_WARN("failed to get table", K(ret), K(i));
       } else if (OB_FAIL(output_tables.push_back(cur_table_hdl))) {
-        LOG_WARN("failed to push back minor table", K(ret), K(i), KPC(cur_table_hdl));
+        LOG_WARN("failed to push back minor table", K(ret), K(i), K(cur_table_hdl));
       }
     }
   }
