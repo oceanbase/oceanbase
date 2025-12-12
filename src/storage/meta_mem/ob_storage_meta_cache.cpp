@@ -351,6 +351,9 @@ int ObStorageMetaValueHandle::new_value(common::ObIAllocator &allocator)
   } else {
     cache_value_->inc_ref();
   }
+  if (OB_FAIL(ret)) {
+    reset();
+  }
   return ret;
 }
 
