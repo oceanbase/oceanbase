@@ -10429,6 +10429,7 @@ int ObJoinOrder::generate_json_table_paths()
     json_path->table_id_ = table_id_;
     json_path->parent_ = this;
     ObSEArray<ObExecParamRawExpr *, 4> nl_params;
+    ObSEArray<ObRawExpr *, 1> json_table_exprs;
     ObRawExpr* default_expr = NULL;
     ObArray<ColumnItem> column_items;
     // magic number ? todo refine this
@@ -10445,13 +10446,15 @@ int ObJoinOrder::generate_json_table_paths()
     } else if (table_item->json_table_def_->doc_exprs_.empty()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to extract param for json table expr", K(ret));
-    } else if (OB_FAIL(param_json_table_expr(table_item->json_table_def_->doc_exprs_,
+    } else if (OB_FAIL(json_table_exprs.assign(table_item->json_table_def_->doc_exprs_))) {
+      LOG_WARN("failed to assign json table exprs", K(ret));
+    } else if (OB_FAIL(param_json_table_expr(json_table_exprs,
                                              nl_params,
                                              json_path->subquery_exprs_))) {
       LOG_WARN("failed to extract param for json table expr", K(ret));
     } else if (OB_FAIL(json_path->nl_params_.assign(nl_params))) {
       LOG_WARN("failed to assign nl params", K(ret));
-    } else if (OB_FAIL(append(json_path->value_exprs_, table_item->json_table_def_->doc_exprs_))) {
+    } else if (OB_FAIL(append(json_path->value_exprs_, json_table_exprs))) {
       LOG_WARN("failed to append value exprs", K(ret));
     }
     // deal non_const default value 
