@@ -18318,8 +18318,8 @@ int ObPLResolver::resolve_routine_block(const ObStmtNodeTree *parse_tree,
         OX (const_cast<ObPLBlockNS &>(routine_ast.get_body()->get_namespace()).set_external_ns(NULL));
       }
     }
-    if (resolve_ctx_.session_info_.is_pl_debug_on()
-        || (resolve_ctx_.session_info_.get_pl_code_coverage() != nullptr)) {
+    if (OB_SUCC(ret) &&
+        (resolve_ctx_.session_info_.is_pl_debug_on() || (resolve_ctx_.session_info_.get_pl_code_coverage() != nullptr))) {
       if (OB_FAIL(routine_ast.generate_symbol_debuginfo())) {
         LOG_WARN("failed to generate symbol debuginfo", K(ret));
       }
