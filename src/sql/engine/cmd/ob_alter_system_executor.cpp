@@ -162,7 +162,7 @@ int ObFreezeExecutor::execute(ObExecContext &ctx, ObFreezeStmt &stmt)
           LOG_WARN("minor freeze rpc failed", K(arg), K(ret), K(timeout), "dst", common_rpc_proxy->get_server());
         }
       }
-    } else if (stmt.get_tablet_id().is_valid()) {
+    } else if (stmt.get_tablet_id().is_valid()) { // tablet major freeze
       if (OB_UNLIKELY(1 != stmt.get_tenant_ids().count())) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not support schedule tablet major freeze for several tenant", K(ret), K(stmt));

@@ -18,6 +18,7 @@
 #endif
 #include "share/ob_zone_table_operation.h"
 #include "share/restore/ob_recover_table_util.h"
+#include "share/tablet/ob_tablet_to_ls_operator.h"
 #include "sql/resolver/cmd/ob_alter_system_stmt.h"
 #include "sql/resolver/cmd/ob_clear_balance_task_stmt.h"
 #include "sql/resolver/cmd/ob_switch_tenant_resolver.h"
@@ -267,6 +268,32 @@ int ObAlterSystemResolverUtil::resolve_logservice_access_point(
   return ret;
 }
 
+int ObAlterSystemResolverUtil::check_tablet_id_effective(const uint64_t tenant_id, const ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  ObLSID ls_id;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "Invalid tenant id");
+  } else if (tablet_id.is_ls_inner_tablet()) { // LS inner tablet not support
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support to specify ls inner tablet to major freeze", K(ret), K(tenant_id), K(tablet_id));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Ls inner tablet");
+  } else if (OB_UNLIKELY(nullptr == GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, sql proxy is nullptr", KR(ret));
+  } else if (OB_FAIL(ObTabletToLSTableOperator::get_ls_by_tablet(*GCTX.sql_proxy_, tenant_id, tablet_id, ls_id))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      LOG_WARN("tablet not exist in tenant", KR(ret), K(tenant_id), K(tablet_id));
+      LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "Tablet not exist");
+    } else {
+      LOG_WARN("failed to get ls by tablet", KR(ret), K(tenant_id), K(tablet_id));
+    }
+  }
+  return ret;
+}
+
 int ObAlterSystemResolverUtil::resolve_shared_storage_info(
     const ParseNode *parse_tree,
     ObString &shared_storage_info)
@@ -361,6 +388,10 @@ int ObAlterSystemResolverUtil::resolve_tablet_id(const ParseNode *opt_tablet_id,
   if (NULL == opt_tablet_id) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("opt_tablet_id should not be null");
+  } else if (OB_UNLIKELY(opt_tablet_id->children_[0]->value_ <= 0)) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "Tablet not exist");
+    LOG_WARN("invalid tablet id", KR(ret), K(opt_tablet_id->children_[0]->value_));
   } else if (OB_FAIL(sanity_check(opt_tablet_id, T_TABLET_ID))) {
     LOG_WARN("sanity check failed");
   } else {
@@ -618,6 +649,9 @@ int ObFreezeResolver::resolve_major_freeze_(ObFreezeStmt *freeze_stmt, ParseNode
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not suppport to specify several tenant ids or no tenant_id for tablet major freeze", K(ret),
         "tenant_ids", freeze_stmt->get_tenant_ids());
+    }
+    if (FAILEDx(ObAlterSystemResolverUtil::check_tablet_id_effective(freeze_stmt->get_tenant_ids().at(0), freeze_stmt->get_tablet_id()))) {
+      LOG_WARN("fail to check tablet id valid", KR(ret));
     }
   } else if (OB_SYS_TENANT_ID != cur_tenant_id && !freeze_stmt->get_tenant_ids().empty()) { // tenant major freeze
     ret = OB_ERR_NO_PRIVILEGE;
