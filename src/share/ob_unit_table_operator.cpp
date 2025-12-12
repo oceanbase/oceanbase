@@ -1856,7 +1856,7 @@ int ObUnitTableOperator::check_tenant_has_logonly_pools(
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(get_resource_pools(tenant_id, pools))) {
+  } else if (OB_FAIL(get_resource_pools(gen_user_tenant_id(tenant_id), pools))) {
     LOG_WARN("fail to get resource pools by tenant", KR(ret), K(tenant_id));
   } else if (OB_FAIL(inner_check_has_logonly_pool_(pools, has_logonly_pools))) {
     LOG_WARN("fail to inner check whether has logonly pools", KR(ret), K(pools));
