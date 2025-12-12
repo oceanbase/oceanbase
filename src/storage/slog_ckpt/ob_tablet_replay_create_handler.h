@@ -143,11 +143,6 @@ public:
   void inc_finished_tablet_cnt(const int64_t cnt) { (void)ATOMIC_FAA(&finished_tablet_cnt_, cnt); }
   void set_errcode(const int errcode) { ATOMIC_STORE(&errcode_, errcode); };
 
-  // !!!! this func is a tmp interface, should not be used. by gaishun.gs
-  static int record_ls_transfer_info_tmp(
-      const ObLSHandle &ls_handle,
-      const ObTabletID &tablet_id,
-      const ObTabletTransferInfo &tablet_transfer_info);
 private:
   static bool is_suitable_to_aggregate_(const int64_t tablet_cnt_in_block, const int64_t valid_size_in_block)
   {
@@ -158,18 +153,18 @@ private:
       const char *buf,
       const int64_t buf_len,
       ObArenaAllocator &allocator) const;
-  static int replay_create_tablet(const ObTabletReplayItem &replay_item, const char *buf, const int64_t buf_len);
+  int replay_create_tablet(const ObTabletReplayItem &replay_item, const char *buf, const int64_t buf_len) const;
   static int replay_inc_macro_ref(
       const ObTabletReplayItem &replay_item,
       const char *buf,
       const int64_t buf_len,
       ObArenaAllocator &allocator);
-  static int replay_clone_tablet(const ObTabletReplayItem &replay_item, const char *buf, const int64_t buf_len);
+  int replay_clone_tablet(const ObTabletReplayItem &replay_item, const char *buf, const int64_t buf_len) const;
   static int get_tablet_svr_(const share::ObLSID &ls_id, ObLSTabletService *&ls_tablet_svr, ObLSHandle &ls_handle);
-  static int record_ls_transfer_info_(
+  int record_ls_transfer_info_(
       const ObLSHandle &ls_handle,
       const ObTabletID &tablet_id,
-      const ObTabletTransferInfo &tablet_transfer_info);
+      const ObTabletTransferInfo &tablet_transfer_info) const;
   static int check_is_need_record_transfer_info_(
       const share::ObLSID &src_ls_id,
       const share::SCN &transfer_start_scn,
@@ -198,6 +193,10 @@ private:
   ObTabletRepalyOperationType replay_type_;
   ObTabletReplayCreateTask *aggrgate_task_;
   ObTabletReplayCreateTask *discrete_task_;
+  /// @brief ls_bucket_lock_ to protect concurrent access to ObLS::startup_transfer_info_ during tablet replay.
+  /// Since multiple threads may concurrently replay tablets from the same LS, we need to ensure. atomicity of
+  /// the check-and-set operation when initializing startup_transfer_info_.
+  mutable ObBucketLock ls_bucket_lock_;
 };
 
 
