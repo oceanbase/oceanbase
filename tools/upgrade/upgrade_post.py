@@ -852,7 +852,7 @@
 #
 #      if run_modules.MODULE_HEALTH_CHECK in my_module_set:
 #        logging.info('================begin to run health check action ===============')
-#        upgrade_health_checker.do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, True) # need_check_major_status = True
+#        upgrade_health_checker.do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, False) # need_check_major_status = False
 #        logging.info('================succeed to run health check action ===============')
 #
 #    except Exception as e:
@@ -1381,15 +1381,15 @@
 #  # when upgrade across version, disable enable_ddl/major_freeze/direct_load
 #  if current_version != target_version:
 #    actions.set_parameter(cur, 'enable_ddl', 'False', timeout)
-#    actions.set_parameter(cur, 'enable_major_freeze', 'False', timeout)
-#    actions.set_tenant_parameter(cur, '_enable_adaptive_compaction', 'False', timeout)
+#    # actions.set_parameter(cur, 'enable_major_freeze', 'False', timeout)
+#    # actions.set_tenant_parameter(cur, '_enable_adaptive_compaction', 'False', timeout)
 #    actions.set_parameter(cur, '_ob_enable_direct_load', 'False', timeout)
 #    # wait scheduler in storage to notice adaptive_compaction is switched to false
-#    time.sleep(60 * 2)
-#    query_cur = actions.QueryCursor(cur)
-#    wait_major_timeout = 600
-#    upgrade_health_checker.check_major_merge(query_cur, wait_major_timeout)
-#    actions.do_suspend_merge(cur, timeout)
+#    # time.sleep(60 * 2)
+#    # query_cur = actions.QueryCursor(cur)
+#    # wait_major_timeout = 600
+#    # upgrade_health_checker.check_major_merge(query_cur, wait_major_timeout)
+#    # actions.do_suspend_merge(cur, timeout)
 #  # When upgrading from a version prior to 4.2 to version 4.2, the bloom_filter should be disabled.
 #  # The param _bloom_filter_enabled is no longer in use as of version 4.2, there is no need to enable it again.
 #  if actions.get_version(current_version) < actions.get_version('4.2.0.0')\
@@ -2128,9 +2128,9 @@
 #  (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_MAJOR_COMPACTION where (GLOBAL_BROADCAST_SCN > LAST_SCN or STATUS != 'IDLE')""")
 #  if results[0][0] > 0 :
 #    fail_list.append('{0} tenant is merging, please check'.format(results[0][0]))
-#  (desc, results) = query_cur.exec_query("""select /*+ query_timeout(1000000000) */ count(1) from __all_virtual_tablet_compaction_info where max_received_scn > finished_scn and max_received_scn > 0""")
-#  if results[0][0] > 0 :
-#    fail_list.append('{0} tablet is merging, please check'.format(results[0][0]))
+#  # (desc, results) = query_cur.exec_query("""select /*+ query_timeout(1000000000) */ count(1) from __all_virtual_tablet_compaction_info where max_received_scn > finished_scn and max_received_scn > 0""")
+#  # if results[0][0] > 0 :
+#    # fail_list.append('{0} tablet is merging, please check'.format(results[0][0]))
 #  logging.info('check cluster status success')
 #
 ## 5. 检查是否有异常租户(creating，延迟删除，恢复中，租户unit有残留)
@@ -3461,7 +3461,7 @@
 #    enable_ddl(cur, timeout)
 #    enable_rebalance(cur, timeout)
 #    enable_rereplication(cur, timeout)
-#    enable_major_freeze(cur, timeout)
+#    # enable_major_freeze(cur, timeout)
 #    enable_direct_load(cur, timeout)
 #    disable_sys_table_ddl(cur, timeout)
 #  except Exception as e:

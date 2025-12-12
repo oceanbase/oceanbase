@@ -138,7 +138,7 @@ def do_check(conn, cur, query_cur, timeout):
     enable_ddl(cur, timeout)
     enable_rebalance(cur, timeout)
     enable_rereplication(cur, timeout)
-    enable_major_freeze(cur, timeout)
+    # enable_major_freeze(cur, timeout)
     enable_direct_load(cur, timeout)
     disable_sys_table_ddl(cur, timeout)
   except Exception as e:
