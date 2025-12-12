@@ -29,17 +29,24 @@ struct ObTabletMergeDagParam;
 
 namespace storage
 {
+class ObMdsMinorFilter;
 class ObTabletMdsMinorMergeCtx : public compaction::ObTabletExeMergeCtx
 {
 public:
   ObTabletMdsMinorMergeCtx(compaction::ObTabletMergeDagParam &param, common::ObArenaAllocator &allocator);
   virtual ~ObTabletMdsMinorMergeCtx() { free_schema(); }
+  virtual int prepare_compaction_filter() override
+  {
+    return prepare_compaction_filter(mem_ctx_.get_allocator(), *get_tablet(), filter_ctx_.compaction_filter_);
+  }
+  static int prepare_compaction_filter(ObIAllocator &allocator, ObTablet &tablet, compaction::ObICompactionFilter *&filter);
 protected:
   virtual int prepare_schema() override;
   virtual int prepare_index_tree() override;
   virtual void free_schema() override;
   virtual int get_merge_tables(ObGetMergeTablesResult &get_merge_table_result) override;
   virtual int update_tablet(ObTabletHandle &new_tablet_handle) override;
+  static int init_mds_minor_filter(ObIAllocator &allocator, ObTablet &tablet, storage::ObMdsMinorFilter &filter);
 };
 
 class ObTabletCrossLSMdsMinorMergeCtx : public compaction::ObTabletMergeCtx

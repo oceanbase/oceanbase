@@ -52,31 +52,8 @@ void ObTabletMdsMinorMergeCtx::free_schema()
 int ObTabletMdsMinorMergeCtx::get_merge_tables(ObGetMergeTablesResult &get_merge_table_result)
 {
   int ret = OB_SUCCESS;
-  void *buf = nullptr;
   if (OB_FAIL(get_tables_by_key(get_merge_table_result))) {
     LOG_WARN("failed to get tables by key", KR(ret), "param", get_dag_param(), KPC(merge_dag_));
-  } else if (OB_ISNULL(buf = mem_ctx_.alloc(sizeof(ObMdsMinorFilter)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc memory", K(ret), "size", sizeof(ObMdsMinorFilter));
-  } else {
-    // prepare mds compaction filter
-    ObMdsMinorFilter *compaction_filter = new (buf) ObMdsMinorFilter();
-    const int64_t last_major_snapshot = get_tablet()->get_last_major_snapshot_version();
-    const int64_t multi_version_start = get_tablet()->get_multi_version_start();
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(compaction_filter->init(last_major_snapshot, multi_version_start))) {
-      LOG_WARN("failed to init mds compaction_filter", K(tmp_ret), K(last_major_snapshot), K(multi_version_start));
-    } else {
-      filter_ctx_.compaction_filter_ = compaction_filter;
-      FLOG_INFO("success to init mds compaction filter", K(tmp_ret), K(last_major_snapshot), K(multi_version_start));
-    }
-
-    if (OB_TMP_FAIL(tmp_ret)) {
-      if (OB_NOT_NULL(buf)) {
-        mem_ctx_.free(buf);
-        buf = nullptr;
-      }
-    }
   }
   return ret;
 }
@@ -204,6 +181,65 @@ int ObTabletCrossLSMdsMinorMergeCtx::prepare_merge_tables(
       const ObTableHandleV2 &table_handle = table_handle_array.at(i);
       if (OB_FAIL(static_param_.tables_handle_.add_table(table_handle))) {
         LOG_WARN("failed to add table into array", K(ret), K(table_handle));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTabletMdsMinorMergeCtx::init_mds_minor_filter(
+  ObIAllocator &allocator,
+  ObTablet &tablet,
+  ObMdsMinorFilter &filter)
+{
+  int ret = OB_SUCCESS;
+  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
+  const int64_t last_major_snapshot = tablet.get_last_major_snapshot_version();
+  const int64_t multi_version_start = tablet.get_multi_version_start();
+  int64_t first_major_snapshot = 0;
+  const ObITable *first_major_sstable = nullptr;
+  if (tablet.get_major_table_count() <= 1) {
+    first_major_snapshot = last_major_snapshot;
+  } else if (OB_FAIL(tablet.fetch_table_store(table_store_wrapper))) {
+    LOG_WARN("fetch table store failed", K(tablet));
+  } else if (OB_UNLIKELY(!table_store_wrapper.get_member()->is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid argument", K(ret), KPC(table_store_wrapper.get_member()));
+  } else if (OB_ISNULL(first_major_sstable = table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(false/*last*/))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid argument", K(ret), KPC(table_store_wrapper.get_member()));
+  } else {
+    first_major_snapshot = first_major_sstable->get_snapshot_version();
+  }
+  if (FAILEDx(filter.init(first_major_snapshot, last_major_snapshot, multi_version_start))) {
+    LOG_WARN("failed to init mds compaction_filter", K(ret), K(last_major_snapshot), K(multi_version_start));
+  } else {
+    FLOG_INFO("success to init mds compaction filter", K(ret), K(first_major_snapshot), K(last_major_snapshot), K(multi_version_start));
+  }
+  return ret;
+}
+
+int ObTabletMdsMinorMergeCtx::prepare_compaction_filter(ObIAllocator &allocator, ObTablet &tablet, ObICompactionFilter *&filter)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  void* buf = NULL;
+  if (OB_ISNULL(buf = allocator.alloc(sizeof(ObMdsMinorFilter)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc memory", K(ret), "size", sizeof(ObMdsMinorFilter));
+  } else {
+    // prepare mds compaction filter
+    ObMdsMinorFilter *compaction_filter = new (buf) ObMdsMinorFilter();
+    if (OB_TMP_FAIL(init_mds_minor_filter(allocator, tablet, *compaction_filter))) {
+      LOG_WARN("failed to init mds compaction_filter", K(tmp_ret), K(tablet));
+    } else {
+      filter = compaction_filter;
+    }
+
+    if (OB_TMP_FAIL(tmp_ret)) {
+      if (OB_NOT_NULL(buf)) {
+        allocator.free(buf);
+        buf = nullptr;
       }
     }
   }
