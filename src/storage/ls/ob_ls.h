@@ -216,6 +216,7 @@ public:
   bool is_offline() const { return is_offlined_; } // mock function, TODO(@yanyuan)
   bool is_remove() const { return ATOMIC_LOAD(&is_remove_); }
   void set_is_remove() { return ATOMIC_STORE(&is_remove_, true); }
+  bool is_running() const { return !is_offline() && !is_remove() && !is_stopped(); }
 
   ObLSTxService *get_tx_svr() { return &ls_tx_svr_; }
   ObLockTable *get_lock_table() { return &lock_table_; }

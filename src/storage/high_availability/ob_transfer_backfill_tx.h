@@ -86,6 +86,9 @@ public:
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
   virtual bool is_valid() const;
   virtual DagNetCtxType get_dag_net_ctx_type() { return ObIHADagNetCtx::TRANSFER_BACKFILL_TX; }
+  int init_ls_handle();
+  int get_src_ls(ObLS *&ls);
+  const share::ObLSID &get_ls_id() const { return dest_ls_id_; }
 public:
   uint64_t tenant_id_;
 #ifdef ERRSIM
@@ -94,6 +97,8 @@ public:
   share::ObTaskId task_id_;
   share::ObLSID src_ls_id_;
   share::ObLSID dest_ls_id_;
+  ObLSHandle src_ls_handle_;
+  ObLSHandle dest_ls_handle_;
   share::SCN backfill_scn_;
   common::ObArray<ObTabletBackfillInfo> tablet_infos_;
   INHERIT_TO_STRING_KV(
@@ -101,6 +106,7 @@ public:
       K_(tenant_id),
       K_(task_id),
       K_(src_ls_id),
+      K_(dest_ls_id),
       K_(backfill_scn));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransferBackfillTXCtx);
