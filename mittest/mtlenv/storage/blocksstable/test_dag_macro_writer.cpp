@@ -288,7 +288,7 @@ void TestDagMacroWriter::generate_cg_block(ObCGBlockFile &cg_block_file,
   micro_block_cnt += current_block.get_micro_block_count();
 
   //generate cg_block
-  ASSERT_EQ(OB_SUCCESS, dag_temp_macro_writer->flush_macro_block(current_block, !is_complete_macro_block, nullptr));
+  ASSERT_EQ(OB_SUCCESS, dag_temp_macro_writer->flush_macro_block(current_block, !is_complete_macro_block));
   if (dag_temp_macro_writer->is_need_macro_buffer_) {
     ASSERT_EQ(OB_SUCCESS, dag_temp_macro_writer->wait_io_finish(dag_temp_macro_writer->macro_handles_[current_index], &current_block));
   }
@@ -353,7 +353,7 @@ void TestDagMacroWriter::generate_cg_block_without_batch(ObCGBlockFile &cg_block
   micro_block_cnt += current_block.get_micro_block_count();
 
   //generate cg_block
-  ASSERT_EQ(OB_SUCCESS, dag_temp_macro_writer->flush_macro_block(current_block, !is_complete_macro_block, nullptr));
+  ASSERT_EQ(OB_SUCCESS, dag_temp_macro_writer->flush_macro_block(current_block, !is_complete_macro_block));
   if (dag_temp_macro_writer->is_need_macro_buffer_) {
     ASSERT_EQ(OB_SUCCESS, dag_temp_macro_writer->wait_io_finish(dag_temp_macro_writer->macro_handles_[current_index], &current_block));
   }
@@ -432,7 +432,7 @@ void TestDagMacroWriter::large_batch_generate_cg_block(ObCGBlockFile &cg_block_f
   ASSERT_GT(micro_block_cnt, full_macro_block_micro_count);
 
   //generate second cg_block
-  ASSERT_EQ(OB_SUCCESS, dag_temp_macro_writer->flush_macro_block(current_next_block, true/*is_close_flush*/, nullptr));
+  ASSERT_EQ(OB_SUCCESS, dag_temp_macro_writer->flush_macro_block(current_next_block, true/*is_close_flush*/));
   if (dag_temp_macro_writer->is_need_macro_buffer_) {
     ASSERT_EQ(OB_SUCCESS, dag_temp_macro_writer->wait_io_finish(dag_temp_macro_writer->macro_handles_[current_index], &current_next_block));
   }

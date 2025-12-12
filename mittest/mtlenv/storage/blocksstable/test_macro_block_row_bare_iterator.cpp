@@ -280,7 +280,7 @@ void TestMacroBlockRowBareIterator::generate_cg_block_without_batch(ObCGBlockFil
   micro_block_cnt += current_block.get_micro_block_count();
 
   //generate cg_block
-  ASSERT_EQ(OB_SUCCESS, dag_temp_macro_writer->flush_macro_block(current_block, !is_complete_macro_block, nullptr));
+  ASSERT_EQ(OB_SUCCESS, dag_temp_macro_writer->flush_macro_block(current_block, !is_complete_macro_block));
   if (dag_temp_macro_writer->is_need_macro_buffer_) {
     ASSERT_EQ(OB_SUCCESS, dag_temp_macro_writer->wait_io_finish(dag_temp_macro_writer->macro_handles_[current_index], &current_block));
   }

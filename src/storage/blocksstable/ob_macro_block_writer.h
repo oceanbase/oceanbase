@@ -215,7 +215,7 @@ public:
   int get_estimate_meta_block_size(const ObDataMacroBlockMeta &macro_meta, int64_t &estimate_size);
   int check_data_macro_block_need_merge(const ObMacroBlockDesc &macro_desc, bool &need_merge) const;
   int check_meta_macro_block_need_rewrite(bool &need_rewrite) const;
-  int close(ObDagSliceMacroFlusher *macro_block_flusher = nullptr);
+  int close();
   void dump_block_and_writer_buffer();
   inline ObMacroBlocksWriteCtx &get_macro_block_write_ctx() { return block_write_ctx_; }
   inline int64_t get_last_macro_seq() const { return OB_ISNULL(macro_seq_generator_) ? -1 : macro_seq_generator_->get_current(); } /* save our seq num */
@@ -225,15 +225,8 @@ public:
                                 ObIAllocator &allocator,
                                 ObIMicroBlockWriter *&micro_writer,
                                 const int64_t verify_level = MICRO_BLOCK_MERGE_VERIFY_LEVEL::ENCODING_AND_COMPRESSION);
-
-  template <typename MicroBlockWriterType, typename... Args>
-  static int inner_build_micro_writer(ObIAllocator &allocator,
-                                      ObIMicroBlockWriter *&micro_writer,
-                                      const int64_t verify_level = MICRO_BLOCK_MERGE_VERIFY_LEVEL::ENCODING_AND_COMPRESSION,
-                                      Args &&... args);
   inline int64_t get_macro_data_size() const { return macro_blocks_[current_index_].get_data_size() + micro_writer_->get_block_size(); }
   const compaction::ObMergeBlockInfo& get_merge_block_info() const { return merge_block_info_; }
-  ObIMacroBlockFlushCallback *get_flush_callback() { return callback_; }
   void inc_incremental_row_count() { ++merge_block_info_.incremental_row_count_; }
 protected:
   void reset_for_open();
@@ -243,6 +236,7 @@ protected:
   virtual bool need_write_macro_meta() const { return true; }
   virtual bool is_keep_freespace() const {return false; }
   virtual int on_buffer_not_enough() { return OB_SUCCESS; }
+  virtual bool use_external_flusher() const { return false; }
   inline bool is_dirty() const { return macro_blocks_[current_index_].is_dirty() || 0 != micro_writer_->get_row_count(); }
   inline int64_t get_curr_micro_writer_row_count() const { return micro_writer_->get_row_count(); }
   int inner_init(
@@ -255,11 +249,19 @@ protected:
       ObIMacroBlockFlushCallback *callback,
       ObIMacroBlockValidator *validator,
       ObIODevice *device_handle);
-
 private:
+  template <typename MicroBlockWriterType, typename... Args>
+  static int inner_build_micro_writer(ObIAllocator &allocator,
+                                      ObIMicroBlockWriter *&micro_writer,
+                                      const int64_t verify_level = MICRO_BLOCK_MERGE_VERIFY_LEVEL::ENCODING_AND_COMPRESSION,
+                                      Args &&... args);
   void inner_reset();
   int post_flush(ObMacroBlock &macro_block);
   bool check_can_flush_small_sstable(const bool is_flush_for_last_block) const;
+  bool is_definitely_not_small_sstable() const;
+  int write_micro_block_and_prewarm(const bool dump_diag_info,
+                                    const bool need_pre_warm,
+                                    ObMicroBlockDesc &micro_block_desc);
   int prewarm_micro_blocks(const ObMacroBlock &macro_block,
                            const MacroBlockId &macro_block_id,
                            const bool need_fill_logic_id);
@@ -294,13 +296,12 @@ private:
       ObMicroBlockDesc &micro_block_desc,
       ObMicroBlockHeader &header);
   int build_micro_block_desc_with_reuse(const ObMicroBlock &micro_block, ObMicroBlockDesc &micro_block_desc);
+  int index_builder_append_row(const ObMicroBlockDesc &micro_block_desc, const ObMacroBlock &macro_block);
   int write_micro_block(ObMicroBlockDesc &micro_block_desc, const bool need_pre_warm);
   int check_micro_block_need_merge(const ObMicroBlock &micro_block, bool &need_merge);
   int merge_micro_block(const ObMicroBlock &micro_block);
-  int flush_macro_block(ObMacroBlock &macro_block, const bool is_close_flush, ObDagSliceMacroFlusher *macro_block_flusher);
-  int choose_macro_block_flusher(ObDagSliceMacroFlusher *external_block_flusher,
-                                 const bool is_close_flush,
-                                 ObIMacroBlockFlusher *&final_flusher);
+  int flush_macro_block(ObMacroBlock &macro_block, const bool is_close_flush);
+  int choose_macro_block_flusher(const bool is_close_flush, ObIMacroBlockFlusher *&final_flusher);
   int prepare_default_macro_block_flusher(const bool is_close_flush);
   int post_flush_normal_macro_block(const ObMacroBlock &macro_block,
                                     const MacroBlockId &macro_block_id);
@@ -337,12 +338,13 @@ private:
 protected:
   const ObDataStoreDesc *data_store_desc_;
   compaction::ObMergeBlockInfo merge_block_info_;
+  ObIMicroBlockWriter *micro_writer_;
   ObMacroBlock macro_blocks_[2];
   int64_t current_index_;
   volatile bool concurrent_lock_;
   ObIMacroBlockFlusher *custom_macro_flusher_;
 private:
-  ObIMicroBlockWriter *micro_writer_;
+  bool is_curr_block_pre_allocated_;
   ObMicroBlockBloomFilter micro_block_bf_;
   ObMicroBlockReaderHelper reader_helper_;
   ObMicroBlockBufferHelper micro_helper_;

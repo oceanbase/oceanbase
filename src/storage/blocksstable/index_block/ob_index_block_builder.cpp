@@ -3111,7 +3111,22 @@ bool ObDataIndexBlockBuilder::micro_index_clustered() const
   return micro_index_clustered_;
 }
 
-int ObDataIndexBlockBuilder::clustered_index_append_row(const ObMicroIndexData &micro_index_data, ObMicroBlockDesc &micro_block_desc)
+int ObDataIndexBlockBuilder::clustered_index_agg_micro_block(const ObMicroIndexData &micro_index_data, ObMicroBlockDesc &micro_block_desc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!micro_index_clustered())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "micro_index_clustered_ should be true", K(ret), K(micro_index_clustered()));
+  } else if (OB_UNLIKELY(!micro_index_data.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid micro index data", K(ret), K(micro_index_data));
+  } else if (OB_FAIL(clustered_index_writer_->process_micro_block_aggregation(micro_index_data, micro_block_desc))) {
+    STORAGE_LOG(WARN, "fail to process micro block aggregation", K(ret), K(micro_index_data), K(micro_block_desc));
+  }
+  return ret;
+}
+
+int ObDataIndexBlockBuilder::clustered_index_append_row(const ObMicroBlockDesc &micro_block_desc)
 {
   int ret = OB_SUCCESS;
   ObIndexBlockRowDesc row_desc(*data_store_desc_);
@@ -3122,8 +3137,6 @@ int ObDataIndexBlockBuilder::clustered_index_append_row(const ObMicroIndexData &
   } else if (OB_UNLIKELY(!micro_index_clustered())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "micro_index_clustered_ should be true", K(ret), K(is_inited_));
-  } else if (OB_FAIL(clustered_index_writer_->process_micro_block_aggregation(micro_index_data, micro_block_desc))) {
-    STORAGE_LOG(WARN, "fail to process micro block aggregation", K(ret), K(micro_index_data), K(micro_block_desc));
   } else if (OB_UNLIKELY(!micro_block_desc.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid micro block desc", K(ret), K(micro_block_desc));

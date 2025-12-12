@@ -878,7 +878,7 @@ TEST_F(TestIndexTree, test_macro_id_index_block)
   ASSERT_EQ(OB_SUCCESS, data_writer.append_row(multi_row));
   ASSERT_EQ(OB_SUCCESS, data_writer.build_micro_block());
   const MacroBlockId first_macro_id = data_writer.macro_handles_[0].get_macro_id();
-  ASSERT_FALSE(first_macro_id.is_valid());
+  ASSERT_TRUE(first_macro_id.is_valid());
   ASSERT_EQ(OB_SUCCESS, data_writer.close());
 
   ObDataMacroBlockMeta macro_meta;
@@ -889,8 +889,7 @@ TEST_F(TestIndexTree, test_macro_id_index_block)
   OK(meta_row.init(allocator_, sstable_builder.container_store_desc_.get_row_column_count()));
   OK(index_block_loader.get_next_row(meta_row));
   OK(macro_meta.parse_row(meta_row));
-  ASSERT_NE(macro_meta.val_.macro_id_, first_macro_id);
-  ASSERT_TRUE(macro_meta.val_.macro_id_.is_valid());
+  ASSERT_EQ(macro_meta.val_.macro_id_, first_macro_id);
 
   // read macro block
   ObMacroBlockReadInfo read_info;
@@ -2183,9 +2182,6 @@ TEST_F(TestIndexTree, test_estimate_meta_block_size)
   ObMacroBlock &macro_block = data_writer.macro_blocks_[0];
   ObStorageObjectHandle &macro_handle = data_writer.macro_handles_[0];
   OK(data_writer.build_micro_block());
-  if (!data_writer.is_pre_alloc()) {
-    OK(data_writer.alloc_block());
-  }
   OK(data_writer.builder_->generate_macro_row(macro_block, -1/*ddl_start_row_offset*/, true/*need_write_macro_meta*/));
   OK(data_writer.builder_->append_meta_row_to_dumper(macro_handle.get_macro_id()));
   const ObSSTableMacroBlockHeader &macro_header_ = macro_block.macro_header_;
