@@ -3174,7 +3174,16 @@ int ObPLResolver::resolve_sp_row_type(const ParseNode *sp_data_type_node,
                     K(ret), K(access_idxs));
           }
         } else {
-          if (ObObjAccessIdx::is_table(access_idxs)) {
+          const ObPLDataType &final_type = ObObjAccessIdx::get_final_type(access_idxs);
+          if ((ObObjAccessIdx::is_local_variable(access_idxs)
+               || ObObjAccessIdx::is_package_variable(access_idxs)
+               || ObObjAccessIdx::is_subprogram_variable(access_idxs))
+              && final_type.is_rowtype_type()) {
+            OZ (pl_type.deep_copy(*resolve_ctx_.enum_set_ctx_, final_type));
+            OX (pl_type.set_type_from_orgin(pl_type.get_type_from()));
+            OX (pl_type.set_type_from(PL_TYPE_ATTR_ROWTYPE));
+            OZ (resolve_extern_type_info(resolve_ctx_.schema_guard_, access_idxs, extern_type_info));
+          } else if (ObObjAccessIdx::is_table(access_idxs)) {
             ObSQLSessionInfo &session_info = resolve_ctx_.session_info_;
             ObSchemaGetterGuard &schema_guard = resolve_ctx_.schema_guard_;
             uint64_t db_id = OB_INVALID_ID;
