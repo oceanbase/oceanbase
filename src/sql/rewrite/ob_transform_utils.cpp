@@ -2063,16 +2063,22 @@ int ObNotNullContext::generate_stmt_context(int64_t stmt_context)
     }
   }
 
-  if (OB_SUCC(ret) && stmt_context >= NULLABLE_SCOPE::NS_TOP && stmt->is_select_stmt()) {
+  if (OB_SUCC(ret) && stmt_context > NULLABLE_SCOPE::NS_GROUPBY && stmt->is_select_stmt()) {
+    const ObSelectStmt *sel_stmt = static_cast<const ObSelectStmt *>(stmt);
+    if (sel_stmt->has_rollup() || sel_stmt->has_cube() || sel_stmt->has_grouping_sets()) {
+      // basic filters cannot provide not-null property if stmt has rollup/cube/grouping sets expr
+      // since such exprs may be padded with NULLs
+      filters_.reset();
+    }
     // Exprs in "in_group_clause" mean different things when used in basic expressions with added NULLs versus in aggregate functions without NULLs. 
     // Thus, aggregate functions with such group exprs cannot be used to infer a not-null attribute.
     // e.g. select c1, max(c2) from t1 group by rollup(c1) having max(c1) > 0 and nvl(c1, 0) is null);
     // can't deduce `c1 is not null` by `max(c1) > 0` to simplify nvl(c1, 0)
-    const ObSelectStmt *sel_stmt = static_cast<const ObSelectStmt *>(stmt);
-    if (OB_FAIL(ObTransformUtils::get_having_filters_for_deduce(sel_stmt,
-                                                                sel_stmt->get_having_exprs(),
-                                                                group_clause_exprs_,
-                                                                having_filters_))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObTransformUtils::get_having_filters_for_deduce(sel_stmt,
+                                                                       sel_stmt->get_having_exprs(),
+                                                                       group_clause_exprs_,
+                                                                       having_filters_))) {
       LOG_WARN("failed to get having filters for deduce", K(ret));
     }
   }
