@@ -33,6 +33,7 @@
 #include "storage/direct_load/ob_direct_load_insert_table_row_writer.h"
 #include "storage/direct_load/ob_direct_load_multiple_sstable_builder.h"
 #include "share/ob_tablet_autoincrement_service.h"
+#include "share/ob_heap_organized_table_util.h"
 
 namespace oceanbase
 {
@@ -1096,7 +1097,7 @@ int ObTableLoadTransStoreWriter::cast_column(
       }
     }
   } else if (column_schema->is_hidden_clustering_key_column()) {
-    if (OB_FAIL(handle_hidden_clustering_key_column(cast_allocator, column_schema, obj, tablet_id, datum))) {
+    if (OB_FAIL(share::ObHeapTableUtil::handle_hidden_clustering_key_column(cast_allocator, tablet_id, static_cast<ObDatum &>(datum)))) {
       LOG_WARN("fail to handle hidden clustering key column", KR(ret), K(obj), K(tablet_id));
     }
   } else {
@@ -1205,39 +1206,6 @@ int ObTableLoadTransStoreWriter::check_rowkey_length(const ObDirectLoadDatumRow 
       ret = OB_ERR_TOO_LONG_KEY_LENGTH;
       LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, OB_MAX_VARCHAR_LENGTH_KEY);
       OB_LOG(WARN, "rowkey is too long", KR(ret), K(rowkey_len));
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadTransStoreWriter::handle_hidden_clustering_key_column(ObArenaAllocator &cast_allocator,
-                                                                     const ObColumnSchemaV2 *column_schema,
-                                                                     const ObObj &obj,
-                                                                     const ObTabletID &tablet_id,
-                                                                     ObStorageDatum &datum)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(column_schema) || !tablet_id.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(column_schema), K(tablet_id));
-  } else {
-    share::ObTabletAutoincrementService &auto_inc = share::ObTabletAutoincrementService::get_instance();
-    uint64_t seq_id = 0;
-    uint64_t buf_len = sizeof(ObHiddenClusteringKey);
-    char *buf = reinterpret_cast<char *>(cast_allocator.alloc(buf_len));
-    ObString hidden_clustering_key_str(buf_len, 0, buf);
-    if (OB_ISNULL(buf)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to allocate memory", K(ret), KP(buf));
-    } else if (OB_FAIL(auto_inc.get_autoinc_seq(MTL_ID(), tablet_id, seq_id))) {
-      LOG_WARN("fail to get tablet autoinc seq", K(ret), K(tablet_id));
-    } else {
-      ObHiddenClusteringKey hidden_clustering_key(tablet_id.id(), seq_id);
-      if (OB_FAIL(ObHiddenClusteringKey::set_hidden_clustering_key_to_string(hidden_clustering_key, hidden_clustering_key_str))) {
-        LOG_WARN("failed to set hidden clustering key to string", KR(ret), K(hidden_clustering_key), K(hidden_clustering_key_str));
-      } else {
-        datum.set_string(hidden_clustering_key_str);
-      }
     }
   }
   return ret;

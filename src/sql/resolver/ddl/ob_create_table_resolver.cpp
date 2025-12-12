@@ -4220,8 +4220,6 @@ int ObCreateTableResolver::uk_or_heap_table_pk_add_to_index_list(ObArray<int> &i
 
 int ObCreateTableResolver::resolve_clustering_key_option(const ParseNode *node, const int64_t clustering_key_index)
 {
-  return OB_NOT_SUPPORTED;
-  /*
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_ISNULL(session_info_) || OB_ISNULL(node) || clustering_key_index < 0)){
     ret = OB_ERR_UNEXPECTED;
@@ -4322,7 +4320,6 @@ int ObCreateTableResolver::resolve_clustering_key_option(const ParseNode *node, 
     }
   }
   return ret;
-  */
 }
 
 int ObCreateTableResolver::check_stmt_is_empty_set(ObSelectStmt *stmt, bool &is_empty_set)

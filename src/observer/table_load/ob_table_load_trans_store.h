@@ -118,11 +118,6 @@ private:
                              const common::ObObj &obj,
                              common::ObObj &out_obj,
                              common::ObArenaAllocator &cast_allocator);
-  int handle_hidden_clustering_key_column(common::ObArenaAllocator &cast_allocator,
-                                          const share::schema::ObColumnSchemaV2 *column_schema,
-                                          const common::ObObj &obj,
-                                          const common::ObTabletID &tablet_id,
-                                          blocksstable::ObStorageDatum &datum);
   int check_rowkey_length(const ObDirectLoadDatumRow &datum_row,
                           const int64_t rowkey_column_count);
 

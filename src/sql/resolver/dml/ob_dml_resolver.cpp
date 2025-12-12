@@ -13594,13 +13594,14 @@ int ObDMLResolver::resolve_generated_table_column_item(const TableItem &table_it
                 col_expr->set_lob_column(col_ref->is_lob_column());
                 col_expr->set_srs_id(col_ref->get_srs_id());
                 col_expr->set_udt_set_id(col_ref->get_udt_set_id());
+                if (col_ref->is_hidden_clustering_key_column()) {
+                  col_expr->set_heap_table_clustering_key_column();
+                  col_expr->set_hidden_column(col_ref->is_hidden_column());
+                }
                 if (stmt->get_stmt_type() == stmt::T_INSERT || stmt->get_stmt_type() == stmt::T_UPDATE) {
                   col_expr->set_hidden_column(col_ref->is_hidden_column());
                   // For clustering key table, we need to propagate column_flags (including clustering key flag)
                   // through view hierarchy to correctly identify hidden clustering key columns
-                  if (col_ref->is_hidden_clustering_key_column()) {
-                    col_expr->set_heap_table_clustering_key_column();
-                  }
                 }
                 ColumnItem *item = ref_stmt->get_column_item_by_id(col_ref->get_table_id(), col_ref->get_column_id());
                 if (OB_ISNULL(item)) {

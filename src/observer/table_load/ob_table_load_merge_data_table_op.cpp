@@ -19,7 +19,6 @@
 #include "observer/table_load/ob_table_load_store_ctx.h"
 #include "observer/table_load/ob_table_load_store_table_ctx.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
-#include "share/ob_heap_organized_table_util.h"
 
 namespace oceanbase
 {

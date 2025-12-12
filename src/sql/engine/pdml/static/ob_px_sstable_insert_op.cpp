@@ -21,6 +21,7 @@
 #include "storage/ddl/ob_ddl_struct.h"
 #include "storage/ddl/ob_ddl_tablet_context.h"
 #include "storage/direct_load/ob_direct_load_vector_utils.h"
+#include "share/ob_heap_organized_table_util.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -358,7 +359,7 @@ int ObPxMultiPartSSTableInsertOp::eval_current_row(const int64_t rowkey_column_c
   return ret;
 }
 
-int ObPxMultiPartSSTableInsertOp::eval_current_row(ObIArray<ObDatum *> &datums)
+int ObPxMultiPartSSTableInsertOp::eval_current_row(ObIArray<ObDatum *> &datums, const ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
   datums.reuse();
@@ -373,8 +374,17 @@ int ObPxMultiPartSSTableInsertOp::eval_current_row(ObIArray<ObDatum *> &datums)
       LOG_WARN("expr is NULL", K(ret), K(i));
     } else if (OB_FAIL(e->eval(eval_ctx, datum))) {
       LOG_WARN("evaluate expression failed", K(ret), K(i), KPC(e));
-    } else if (OB_FAIL(datums.push_back(datum))) {
-      LOG_WARN("push back datum pointer failed", K(ret), KPC(datum));
+    } else if (e->type_ == T_PSEUDO_HIDDEN_CLUSTERING_KEY) {
+      ObDatum &datum = e->locate_datum_for_write(eval_ctx);
+      if (OB_FAIL(share::ObHeapTableUtil::handle_hidden_clustering_key_column(eval_ctx.get_expr_res_alloc(), tablet_id, datum))) {
+        LOG_WARN("set hidden clustering key column failed", K(ret), K(tablet_id), K(i));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(datums.push_back(datum))) {
+        LOG_WARN("push back datum pointer failed", K(ret), KPC(datum));
+      }
     }
   }
   return ret;
@@ -394,7 +404,59 @@ int ObPxMultiPartSSTableInsertOp::eval_current_batch(ObIArray<ObIVector *> &vect
       LOG_WARN("expr is NULL", K(ret), K(i));
     } else if (OB_FAIL(e->eval_vector(eval_ctx, brs))) {
       LOG_WARN("evaluate expression failed", K(ret), K(i), KPC(e));
-    } else {
+    } else if (e->type_ == T_PSEUDO_HIDDEN_CLUSTERING_KEY) {
+      // Handle hidden clustering key column
+      ObIVector *hidden_ck_vector = e->get_vector(eval_ctx);
+      ObIVector *tablet_id_vector = nullptr;
+
+      // Step 1: Get tablet_id_vector based on whether it's a partitioned table or not
+      if (nullptr != tablet_id_expr_) {
+        // Partitioned table: eval tablet_id_expr_ to get tablet_id_vector
+        if (OB_FAIL(tablet_id_expr_->eval_vector(eval_ctx, brs))) {
+          LOG_WARN("failed to eval tablet_id_expr vector", K(ret));
+        } else {
+          tablet_id_vector = tablet_id_expr_->get_vector(eval_ctx);
+        }
+      }
+
+      // Step 2: Iterate through each row in the batch and set datum value
+      // Only process active rows (skip filtered rows)
+      for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < brs.size_; ++row_idx) {
+        // Skip filtered rows according to skip_ bitmap
+        if (!brs.all_rows_active_ && brs.skip_->at(row_idx)) {
+          continue;  // Skip this row as it's been filtered out
+        }
+
+        // Get tablet_id for current row
+        ObTabletID tablet_id;
+        if (nullptr == tablet_id_expr_) {
+          // Non-partitioned table: use non_partitioned_tablet_id_
+          tablet_id = non_partitioned_tablet_id_;
+        } else {
+          // Partitioned table: get tablet_id from tablet_id_vector
+          if (OB_ISNULL(tablet_id_vector)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("tablet_id_vector is null", K(ret));
+          } else {
+            tablet_id = ObTabletID(tablet_id_vector->get_uint(row_idx));
+          }
+        }
+
+        if (OB_SUCC(ret)) {
+          // Get payload from hidden clustering key vector and construct datum
+          ObDatum temp_datum;
+          if (OB_FAIL(share::ObHeapTableUtil::handle_hidden_clustering_key_column(
+                       allocator_, tablet_id, temp_datum))) {
+            LOG_WARN("failed to handle hidden clustering key column", K(ret), K(tablet_id), K(row_idx));
+          } else {
+            // Set the updated datum back to the vector
+            hidden_ck_vector->set_payload_shallow(row_idx, temp_datum.ptr_, temp_datum.len_);
+          }
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
       ObIVector *cur_vector = e->get_vector(eval_ctx);
       if (OB_FAIL(vectors.push_back(cur_vector))) {
         LOG_WARN("push back current vector failed", K(ret), K(i), KPC(cur_vector));
@@ -654,10 +716,10 @@ int ObPxMultiPartSSTableInsertOp::write_heap_slice_by_row()
         is_all_partition_finished_ = true;
         ret = OB_SUCCESS;
       }
-    } else if (OB_FAIL(eval_current_row(datums))) {
-      LOG_WARN("eval current row failed", K(ret));
     } else if (OB_FAIL(get_tablet_info_from_row(child_->get_spec().output_, tablet_id))) {
       LOG_WARN("get tablet id from row failed", K(ret), K(child_->get_spec().output_));
+    } else if (OB_FAIL(eval_current_row(datums, tablet_id))) {
+      LOG_WARN("eval current row failed", K(ret));
     } else if (OB_FAIL(get_or_create_heap_writer(tablet_id, false/*is_append_batch*/, slice_writer))) {
       LOG_WARN("get or create slice writer failed", K(ret), K(tablet_id));
     } else if (OB_FAIL(slice_writer->append_current_row(datums))) {
@@ -858,7 +920,7 @@ int ObPxMultiPartSSTableInsertOp::write_ordered_slice_by_row()
                                                                      autoinc_param.slice_idx_,
                                                                      slice_writer->get_row_count(),
                                                                      autoinc_param.autoinc_range_interval_))) {
-    } else if (OB_FAIL(eval_current_row(datums))) {
+    } else if (OB_FAIL(eval_current_row(datums, tablet_id))) {
       LOG_WARN("eval current row failed", K(ret));
     } else if (OB_FAIL(slice_writer->append_current_row(datums))) {
       LOG_WARN("append current row failed", K(ret));

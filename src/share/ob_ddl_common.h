@@ -1580,6 +1580,7 @@ public:
   static int check_null_and_length(
       const bool is_index_table,
       const bool has_lob_rowkey,
+      const bool is_table_with_clustering_key,
       const int64_t rowkey_column_cnt,
       const blocksstable::ObDatumRow &row_val);
   static int report_ddl_checksum_from_major_sstable(
@@ -1645,6 +1646,7 @@ public:
   static int check_null_and_length(
       const bool is_index_table,
       const bool has_lob_rowkey,
+      const bool is_table_with_clustering_key,
       const int64_t rowkey_column_num,
       blocksstable::ObBatchDatumRows &batch_rows);
   static int convert_to_storage_row(

@@ -858,6 +858,7 @@ int ObDDLTableSchema::fill_ddl_table_schema(
     ddl_table_schema.table_id_ = table_id;
     ddl_table_schema.table_item_.is_index_table_ = table_schema->is_index_table();
     ddl_table_schema.table_item_.is_unique_index_ = table_schema->is_unique_index();
+    ddl_table_schema.table_item_.is_table_with_clustering_key_ = table_schema->is_table_with_clustering_key();
     ddl_table_schema.table_item_.rowkey_column_num_ = table_schema->get_rowkey_column_num();
     ddl_table_schema.table_item_.lob_inrow_threshold_ = table_schema->get_lob_inrow_threshold();
     ddl_table_schema.table_item_.compress_type_ = table_schema->get_compressor_type();

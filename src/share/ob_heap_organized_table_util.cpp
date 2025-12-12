@@ -13,12 +13,16 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/ob_heap_organized_table_util.h"
+#include "share/ob_tablet_autoincrement_service.h"
+#include "common/ob_tablet_id.h"
+#include "storage/direct_load/ob_direct_load_vector.h"
 
 namespace oceanbase
 {
 namespace share
 {
 using namespace schema;
+using namespace common;
 
 int ObHeapTableUtil::generate_pk_increment_column(
   schema::ObTableSchema &table_schema,
@@ -69,7 +73,7 @@ bool ObHeapTableUtil::is_table_with_clustering_key(
 }
 
 int ObHeapTableUtil::get_hidden_clustering_key_column_id(
-  const ObTableSchema &table_schema,
+  const schema::ObTableSchema &table_schema,
   uint64_t &column_id)
 {
   int ret = OB_SUCCESS;
@@ -93,6 +97,84 @@ int ObHeapTableUtil::get_hidden_clustering_key_column_id(
     if (OB_SUCC(ret) && OB_INVALID_ID == column_id) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("hidden clustering key column not found", K(ret), K(table_schema));
+    }
+  }
+  return ret;
+}
+
+int ObHeapTableUtil::handle_hidden_clustering_key_column(ObArenaAllocator &allocator,
+                                                         const ObTabletID &tablet_id,
+                                                         ObDatum &datum)
+{
+  int ret = OB_SUCCESS;
+  if (!tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tablet_id));
+  } else {
+    ObTabletAutoincrementService &auto_inc = ObTabletAutoincrementService::get_instance();
+    uint64_t seq_id = 0;
+    uint64_t buf_len = sizeof(ObHiddenClusteringKey);
+    char *buf = reinterpret_cast<char *>(allocator.alloc(buf_len));
+    ObString hidden_clustering_key_str(buf_len, 0, buf);
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory", K(ret), KP(buf));
+    } else if (OB_FAIL(auto_inc.get_autoinc_seq(MTL_ID(), tablet_id, seq_id))) {
+      LOG_WARN("fail to get tablet autoinc seq", K(ret), K(tablet_id));
+    } else {
+      ObHiddenClusteringKey hidden_clustering_key(tablet_id.id(), seq_id);
+      if (OB_FAIL(ObHiddenClusteringKey::set_hidden_clustering_key_to_string(hidden_clustering_key, hidden_clustering_key_str))) {
+        LOG_WARN("failed to set hidden clustering key to string", KR(ret), K(hidden_clustering_key), K(hidden_clustering_key_str));
+      } else {
+        datum.set_string(hidden_clustering_key_str);
+      }
+    }
+  }
+  return ret;
+}
+int ObHeapTableUtil::fill_hidden_clustering_key_for_vector(ObArenaAllocator &allocator,
+                                                           storage::ObDirectLoadVector *hidden_pk_vector,
+                                                           storage::ObDirectLoadVector *tablet_id_vector,
+                                                           const bool is_single_part,
+                                                           const ObTabletID &single_tablet_id,
+                                                           const int64_t row_start,
+                                                           const int64_t count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(hidden_pk_vector) || OB_UNLIKELY(row_start < 0 || count < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(hidden_pk_vector), K(row_start), K(count));
+  } else if (!is_single_part && OB_ISNULL(tablet_id_vector)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tablet id vector is null in multi-part scene", KR(ret));
+  } else if (is_single_part && OB_UNLIKELY(!single_tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid single tablet id", KR(ret), K(single_tablet_id));
+  } else {
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < count; ++idx) {
+      const int64_t row_idx = row_start + idx;
+      uint64_t tablet_id_value = 0;
+      if (is_single_part) {
+        tablet_id_value = single_tablet_id.id();
+      } else {
+        ObDatum tablet_id_datum;
+        if (OB_FAIL(tablet_id_vector->get_datum(row_idx, tablet_id_datum))) {
+          LOG_WARN("fail to get tablet id datum", KR(ret), K(row_idx));
+        } else {
+          tablet_id_value = tablet_id_datum.get_uint();
+        }
+      }
+      if (OB_SUCC(ret)) {
+        ObDatum hidden_pk_datum;
+        if (OB_FAIL(hidden_pk_vector->get_datum(row_idx, hidden_pk_datum))) {
+          LOG_WARN("fail to get hidden pk datum", KR(ret), K(row_idx));
+        } else if (OB_FAIL(handle_hidden_clustering_key_column(
+                     allocator, ObTabletID(tablet_id_value), hidden_pk_datum))) {
+          LOG_WARN("fail to handle hidden clustering key column", KR(ret), K(tablet_id_value), K(row_idx));
+        } else if (OB_FAIL(hidden_pk_vector->set_datum(row_idx, hidden_pk_datum))) {
+          LOG_WARN("fail to set hidden pk datum", KR(ret), K(row_idx));
+        }
+      }
     }
   }
   return ret;

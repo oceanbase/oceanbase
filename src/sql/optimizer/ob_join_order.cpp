@@ -8906,6 +8906,8 @@ int AccessPath::compute_access_path_batch_rescan()
   can_batch_rescan_ = false;
   ObLogPlan *plan = NULL;
   const TableItem *table_item = NULL;
+  ObSqlSchemaGuard *schema_guard = NULL;
+  const ObTableSchema *table_schema = NULL;
   bool has_index_scan_filter = false;
   bool has_index_lookup_filter = false;
   bool can_batch_rescan = false;
@@ -8917,6 +8919,16 @@ int AccessPath::compute_access_path_batch_rescan()
   } else if (OB_ISNULL(table_item = plan->get_stmt()->get_table_item_by_id(table_id_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Failed to get table item", K(ret));
+  } else if (OB_ISNULL(schema_guard = plan->get_optimizer_context().get_sql_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema guard is null", K(ret));
+  } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id_, table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret), K(ref_table_id_));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", K(ret), K(ref_table_id_));
+  } else if (table_schema->is_table_with_clustering_key()) {
+    can_batch_rescan = false;
   } else if (OB_FAIL(ObRawExprUtils::extract_match_against_filters(filter_,
                                                                   non_match_filters,
                                                                   match_filters))) {

@@ -4381,8 +4381,6 @@ int ObAlterTableResolver::resolve_modify_clustering_key(const ParseNode &action_
 
 int ObAlterTableResolver::resolve_add_clustering_key(const ParseNode &node)
 {
-  return OB_NOT_SUPPORTED;
-  /*
   int ret = OB_SUCCESS;
   ParseNode *cluster_key_node = nullptr;
   // go through the node, find the clustering key node
@@ -4482,7 +4480,6 @@ int ObAlterTableResolver::resolve_add_clustering_key(const ParseNode &node)
     }
   }
   return ret;
-  */
 }
 
 

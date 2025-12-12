@@ -3811,6 +3811,7 @@ int ObDDLService::add_primary_key(const ObIArray<ObString> &pk_column_names, ObT
       del_hidden_clustering_key_column = col;
     } else {
       col->set_rowkey_position(0);
+      col->del_column_flag(HEAP_TABLE_CLUSTERING_KEY_FLAG);
     }
     new_table_schema.set_table_pk_mode(ObTablePKMode::TPKM_OLD_NO_PK);
     new_table_schema.set_table_pk_exists_mode(ObTablePrimaryKeyExistsMode::TOM_TABLE_WITH_PK);
@@ -5089,7 +5090,8 @@ int ObDDLService::check_alter_table_index(const obrpc::ObAlterTableArg &alter_ta
                                           const ObTableSchema &orig_table_schema,
                                           ObDDLType &ddl_type,
                                           share::schema::ObSchemaGetterGuard &schema_guard,
-                                          bool &has_drop_and_add_index)
+                                          bool &has_drop_and_add_index,
+                                          bool &ddl_need_retry_at_executor)
 {
   int ret = OB_SUCCESS;
   char err_msg[number::ObNumber::MAX_PRINTABLE_SIZE] = {0};
@@ -5262,11 +5264,13 @@ int ObDDLService::check_alter_table_index(const obrpc::ObAlterTableArg &alter_ta
           } else if (ObDDLType::DDL_INVALID == ddl_type) {
             ddl_type = DDL_ADD_PRIMARY_KEY;
             last_type = type;
+            ddl_need_retry_at_executor = true;
           } else if (OB_FAIL(check_support_alter_pk_and_columns(alter_table_arg, type, is_support))) {
             LOG_WARN("check support column operation and add primary key in one sql failed", KR(ret), K(alter_table_arg));
           } else if (is_support) {
             ddl_type = DDL_TABLE_REDEFINITION;
             last_type = type;
+            ddl_need_retry_at_executor = true;
           } else {
             ret = OB_NOT_SUPPORTED;
             (void)snprintf(err_msg, sizeof(err_msg), "%s and %s in single statment",
@@ -5501,13 +5505,15 @@ int ObDDLService::check_is_add_identity_column(const share::schema::ObTableSchem
 int ObDDLService::check_alter_table_partition(const obrpc::ObAlterTableArg &alter_table_arg,
                                               const ObTableSchema &orig_table_schema,
                                               const bool is_oracle_mode,
-                                              ObDDLType &ddl_type)
+                                              ObDDLType &ddl_type,
+                                              bool &ddl_need_retry_at_executor)
 {
   int ret = OB_SUCCESS;
   uint64_t compat_version = OB_INVALID_VERSION;
   const uint64_t tenant_id = orig_table_schema.get_tenant_id();
   const uint64_t tablegroup_id = orig_table_schema.get_tablegroup_id();
   const ObPartitionLevel part_level = orig_table_schema.get_part_level();
+  const bool is_table_with_clustering_key = orig_table_schema.is_table_with_clustering_key();
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
     LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
   } else if (obrpc::ObAlterTableArg::REPARTITION_TABLE == alter_table_arg.alter_part_type_) {
@@ -5532,6 +5538,10 @@ int ObDDLService::check_alter_table_partition(const obrpc::ObAlterTableArg &alte
     } else {
       ddl_type = ObDDLType::DDL_NORMAL_TYPE;
     }
+  }
+
+  if (OB_SUCC(ret) && is_table_with_clustering_key) {
+    ddl_need_retry_at_executor = true;
   }
   return ret;
 }
@@ -16691,14 +16701,16 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
         && OB_FAIL(check_alter_table_index(alter_table_arg, *orig_table_schema,
                                            ddl_type,
                                            schema_guard,
-                                           has_drop_and_add_index))) {
+                                           has_drop_and_add_index,
+                                           ddl_need_retry_at_executor))) {
       LOG_WARN("fail to check alter table index", K(ret));
     }
     if (OB_SUCC(ret) && alter_table_arg.is_alter_partitions_
         && OB_FAIL(check_alter_table_partition(alter_table_arg,
                                                *orig_table_schema,
                                                is_oracle_mode,
-                                               ddl_type))) {
+                                               ddl_type,
+                                               ddl_need_retry_at_executor))) {
       LOG_WARN("fail to check alter table partition", K(ret));
     }
     if (OB_SUCC(ret) && alter_table_arg.alter_auto_partition_attr_) {

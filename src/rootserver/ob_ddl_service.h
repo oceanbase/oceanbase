@@ -1532,7 +1532,8 @@ int check_will_be_having_domain_index_operation(
                               const ObTableSchema &orig_table_schema,
                               share::ObDDLType &ddl_type,
                               share::schema::ObSchemaGetterGuard &schema_guard,
-                              bool &has_drop_and_add_index);
+                              bool &has_drop_and_add_index,
+                              bool &ddl_need_retry_at_executor);
   int check_is_change_column_order(const share::schema::ObTableSchema &table_schema,
                                    const share::schema::AlterColumnSchema &alter_column_schema,
                                    bool &is_change_column_order) const;
@@ -1602,7 +1603,8 @@ int check_will_be_having_domain_index_operation(
   int check_alter_table_partition(const obrpc::ObAlterTableArg &alter_table_arg,
                                   const share::schema::ObTableSchema &orig_table_schema,
                                   const bool is_oracle_mode,
-                                  share::ObDDLType &ddl_type);
+                                  share::ObDDLType &ddl_type,
+                                  bool &ddl_need_retry_at_executor);
   int check_convert_to_character(obrpc::ObAlterTableArg &alter_table_arg,
                                  const share::schema::ObTableSchema &orig_table_schema,
                                  share::ObDDLType &ddl_type);

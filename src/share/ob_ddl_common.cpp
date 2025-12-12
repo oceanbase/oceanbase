@@ -1674,6 +1674,7 @@ bool ObDDLUtil::need_reshape(const ObObjMeta &col_type)
 int ObDDLUtil::check_null_and_length(
     const bool is_index_table,
     const bool has_lob_rowkey,
+    const bool is_table_with_clustering_key,
     const int64_t rowkey_column_num,
     const blocksstable::ObDatumRow &row_val)
 {
@@ -1691,7 +1692,8 @@ int ObDDLUtil::check_null_and_length(
       rowkey_length += cell.len_;
       has_null |= cell.is_null();
     }
-    if (!is_index_table && has_null) {
+    // For tables with clustering key (heap tables), null values in rowkey are allowed
+    if (!is_index_table && !is_table_with_clustering_key && has_null) {
       ret = OB_ER_INVALID_USE_OF_NULL;
       LOG_WARN("invalid null cell for row key column", KR(ret), K(row_val));
     }
@@ -2432,6 +2434,7 @@ int ObDDLUtil::handle_lob_columns(
 int ObDDLUtil::check_null_and_length(
     const bool is_index_table,
     const bool has_lob_rowkey,
+    const bool is_table_with_clustering_key,
     const int64_t rowkey_column_num,
     ObBatchDatumRows &batch_rows)
 {
@@ -2510,7 +2513,8 @@ int ObDDLUtil::check_null_and_length(
           }
         }
         if (OB_SUCC(ret)) {
-          if (!is_index_table && has_null) {
+          // For tables with clustering key (heap tables), null values in rowkey are allowed
+          if (!is_index_table && !is_table_with_clustering_key && has_null) {
             ret = OB_ER_INVALID_USE_OF_NULL;
             LOG_WARN("invalid null cell for row key column", KR(ret), K(col_idx));
           }
@@ -2618,6 +2622,7 @@ int ObDDLUtil::convert_to_storage_row(
     const ObDDLTableSchema &ddl_table_schema = param.ddl_table_schema_;
     if (OB_FAIL(ObDDLUtil::check_null_and_length(ddl_table_schema.table_item_.is_index_table_,
                                                  ddl_table_schema.table_item_.has_lob_rowkey_,
+                                                 ddl_table_schema.table_item_.is_table_with_clustering_key_,
                                                  ddl_table_schema.table_item_.rowkey_column_num_,
                                                  current_row))) {
       LOG_WARN("fail to check rowkey null value and length in row", KR(ret), K(current_row));

@@ -1246,6 +1246,7 @@ int ObCsSliceWriter::flush_row_buffer()
     const ObDDLTableSchema &ddl_table_schema = writer_param_.ddl_table_schema_;
     if (OB_FAIL(ObDDLUtil::check_null_and_length(ddl_table_schema.table_item_.is_index_table_,
                                                  ddl_table_schema.table_item_.has_lob_rowkey_,
+                                                 ddl_table_schema.table_item_.is_table_with_clustering_key_,
                                                  ddl_table_schema.table_item_.rowkey_column_num_,
                                                  buffer_batch_rows_))) {
       LOG_WARN("check null and length failed", K(ret));
