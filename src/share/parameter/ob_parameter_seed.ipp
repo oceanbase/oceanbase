@@ -3120,12 +3120,6 @@ DEF_BOOL(enable_logonly_replica, OB_TENANT_PARAMETER, "False",
          "controls whether logonly replica is enabled."
          "Value:  True:turned on  False: turned off",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-ERRSIM_DEF_INT(errsim_rebuild_ls_id, OB_CLUSTER_PARAMETER, "0", "[0,)",
-               "rebuild ls id. Range: [0,) in integer",
-               ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-ERRSIM_DEF_STR(errsim_rebuild_addr, OB_CLUSTER_PARAMETER, "",
-               "rebuild addr (ip:port)",
-               ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_force_unstreaming_cursor, OB_TENANT_PARAMETER, "False",
          "control whether the cursor always is forced to open as unstreaming cursor",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
