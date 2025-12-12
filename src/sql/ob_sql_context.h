@@ -849,7 +849,9 @@ public:
       ori_question_marks_count_(0),
       type_demotion_flag_(0),
       initial_type_ctx_(),
-      has_hybrid_search_(false)
+      has_hybrid_search_(false),
+      pl_sql_transpiled_exprs_(),
+      forbid_pl_sql_transpiler_(false)
   {
   }
   TO_STRING_KV(N_PARAM_NUM, question_marks_count_,
@@ -898,6 +900,8 @@ public:
     type_demotion_flag_ = 0;
     // initial_type_ctx_.reset();
     has_hybrid_search_ = false;
+    pl_sql_transpiled_exprs_.reuse();
+    forbid_pl_sql_transpiler_ = false;
   }
 
   int64_t get_new_stmt_id() { return stmt_count_++; }
@@ -1027,6 +1031,9 @@ public:
   // For scenarios involving numerous and deeply nested expressions, frequent type context initialization is costy.
   ObExprTypeCtx initial_type_ctx_;
   bool has_hybrid_search_;
+
+  ObSEArray<ObUDFRawExpr *, 4, common::ModulePageAllocator, true> pl_sql_transpiled_exprs_;
+  bool forbid_pl_sql_transpiler_ = false;
 };
 
 template<typename... Args>

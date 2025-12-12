@@ -327,14 +327,15 @@ public:
                                      pl::ObPLBlockNS *ns,
                                      ObQualifiedName &q_name,
                                      ObIArray<ObQualifiedName> &columns,
-                                     ObIArray<ObRawExpr*> &real_exprs,
+                                     ObIArray<ObRawExpr *> &real_exprs,
                                      ObRawExpr *&expr,
                                      pl::ObPLPackageGuard *package_guard,
                                      const ParamStore *params,
                                      bool is_prepare_protocol = false,
                                      bool is_check_mode = false,
                                      bool is_sql_scope = false,
-                                     ObIArray<ObSchemaObjVersion> *dep_tbl = nullptr);
+                                     ObIArray<ObSchemaObjVersion> *dep_tbl = nullptr,
+                                     ObQueryCtx *query_ctx = nullptr);
   static int resolve_external_param_info(ExternalParams &param_info,
                                          const ObSQLSessionInfo &session_info,
                                          ObRawExprFactory &expr_factory,

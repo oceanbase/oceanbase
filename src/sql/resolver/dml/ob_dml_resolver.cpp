@@ -3124,6 +3124,8 @@ int ObDMLResolver::replace_pl_relative_expr_to_question_mark(ObRawExpr *&real_re
   if (OB_ISNULL(real_ref_expr) || OB_ISNULL(params_.session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr or params_.session_info_ is NULL", K(ret), K(real_ref_expr), K(params_.session_info_));
+  } else if (OB_UNLIKELY(real_ref_expr->has_flag(IS_PL_SQL_TRANSPILED))) {
+    // do nothing
   } else if (real_ref_expr->is_const_raw_expr() //local variable access
              || (real_ref_expr->is_obj_access_expr() && !check_expr_has_colref(real_ref_expr)) // composite variable access
              || T_OP_GET_PACKAGE_VAR == real_ref_expr->get_expr_type() //package variable access, must not (system/user variable)
@@ -14150,7 +14152,8 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
                                                          params_.is_prepare_protocol_,
                                                          false, /*is_check_mode*/
                                                          current_scope_ != T_CURRENT_OF_SCOPE /*is_sql_scope*/,
-                                                         &dependency_objects))) {
+                                                         &dependency_objects,
+                                                         params_.query_ctx_))) {
       LOG_WARN_IGNORE_COL_NOTFOUND(ret, "failed to resolve var", K(q_name), K(ret));
     } else if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
