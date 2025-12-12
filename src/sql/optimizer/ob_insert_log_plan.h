@@ -27,7 +27,8 @@ class ObInsertLogPlan: public ObDelUpdLogPlan
 {
 public:
   ObInsertLogPlan(ObOptimizerContext &ctx, const ObInsertStmt *insert_stmt)
-      : ObDelUpdLogPlan(ctx, insert_stmt)
+      : ObDelUpdLogPlan(ctx, insert_stmt),
+        is_insertup_opt_for_column_store_(false)
   { }
   virtual ~ObInsertLogPlan()
   { }
