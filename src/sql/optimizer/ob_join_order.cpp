@@ -2557,7 +2557,9 @@ int ObJoinOrder::add_access_filters(AccessPath *path,
                      ObOptimizerUtil::find_equal_expr(*range_exprs, restrict_infos.at(i))) ||
                      (OB_NOT_NULL(unprecise_range_exprs) &&
                      ObOptimizerUtil::find_equal_expr(*unprecise_range_exprs, restrict_infos.at(i)))) {
-            if (path->est_cost_info_.index_meta_info_.is_multivalue_index_ && !deduced_expr_info.is_precise_) {
+            bool is_vec_adaptive_scan = path->vec_idx_info_.vec_extra_info_.is_vec_adaptive_scan();
+            if (path->est_cost_info_.index_meta_info_.is_multivalue_index_ && (!deduced_expr_info.is_precise_ || is_vec_adaptive_scan)) {
+              // when multivalue_index as filter of vector adaptive scan, we need old query range as filter for post-filter.
               // deduced new pred for multivalue needn't add into new filter, just remain orginal filter is ok
             } else if (OB_FAIL(path->filter_.push_back(restrict_infos.at(i)))) {
               LOG_WARN("push back error", K(ret));

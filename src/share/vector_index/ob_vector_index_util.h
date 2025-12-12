@@ -325,6 +325,7 @@ static const uint64_t MAX_IVF_POST_DIST_CALC_CNT = 500000;
   int64_t get_row_count() { return row_count_; }
   bool is_pre_filter() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_PRE; }
   bool is_post_filter() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER || vec_idx_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER; }
+  bool is_vec_adaptive_scan() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN; }
   bool use_iter_filter() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN || vec_idx_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER; }
   int set_vec_param_info(const ObTableSchema *vec_index_schema);
   ObVectorIndexParam get_vector_index_param() const {return vector_index_param_;}
