@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 #include "ob_tx_callback_list.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 
 namespace oceanbase
@@ -348,10 +349,16 @@ int ObTxCallbackList::callback_(ObITxCallbackFunctor &functor,
       iter_end = end_inclusive ? iter == end : next == end;
       if (OB_FAIL(functor(iter))) {
         // don't print log, print it in functor
-      } else if (functor.need_remove_callback()) {
-        const share::SCN iter_scn = iter->get_scn();
+      } else if (OB_UNLIKELY(functor.need_remove_callback())) {
+        // if callback removed, means hash holder no need be maintained
+        if (iter->get_hash_holder_linker().is_registerd()) {
+          MTL(lockwaitmgr::ObLockWaitMgr*)->erase_hash_holder_record(iter->get_hash_holder_linker().get_hash_key(),
+                                                                     iter->get_hash_holder_linker(),
+                                                                     is_reverse);
+        }
         // sanity check before remove:
         // should not remove parallel replayed callback before serial replay finished
+        const share::SCN iter_scn = iter->get_scn();
         if (parallel_start_pos_
             && !is_skip_checksum_()
             && !callback_mgr_.is_serial_final()

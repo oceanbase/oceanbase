@@ -13,6 +13,7 @@
 #include "src/storage/tx/ob_trans_part_ctx.h"
 #include "observer/ob_server.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/memtable/ob_row_conflict_info.h"
 
 /*  interface(s)  */
 namespace oceanbase {
@@ -1340,21 +1341,22 @@ int ObTransService::create_tx_ctx_(const share::ObLSID &ls_id,
                                    bool &exist)
 { return create_tx_ctx_(ls_id, NULL, tx, ctx, false, exist); }
 
-void ObTransService::fetch_cflict_tx_ids_from_mem_ctx_to_desc_(ObMvccAccessCtx &acc_ctx)// for deadlock
+// for deadlock and lock-wait-mgr
+void ObTransService::fetch_conflict_info_from_mem_ctx_to_desc_(ObMvccAccessCtx &acc_ctx)
 {
   // merge all ctx(in every logstream)'s conflict trans ids to trans_desc
   int ret = OB_SUCCESS;
-  common::ObArray<ObTransIDAndAddr> array;
+  common::ObSEArray<ObRowConflictInfo, 5> array;
+  common::ObArray<ObTransIDAndAddr> array_old;
   if (OB_ISNULL(acc_ctx.mem_ctx_)) {
     ret = OB_BAD_NULL_ERROR;
     DETECT_LOG(ERROR, "mem_ctx_ on acc_ctx is null", KR(ret), K(array));
-  } else if (OB_FAIL(acc_ctx.mem_ctx_->get_conflict_trans_ids(array))) {
+  } else if (OB_FAIL(acc_ctx.mem_ctx_->fetch_conflict_info_array(array))) {
     DETECT_LOG(WARN, "get conflict ids from mem_ctx failed", KR(ret), K(acc_ctx));
-  } else if (FALSE_IT(acc_ctx.mem_ctx_->reset_conflict_trans_ids())) {
-  } else if (OB_FAIL(acc_ctx.tx_desc_->merge_conflict_txs(array))) {
+  } else if (OB_FAIL(acc_ctx.tx_desc_->merge_conflict_info_array(array, array_old))) {
     DETECT_LOG(WARN, "fail to merge ctx conflict trans array", KR(ret), K(acc_ctx));
   } else {
-    DETECT_LOG(DEBUG, "fetch conflict ids from mem_ctx to desc", KR(ret), K(array));
+    DETECT_LOG(TRACE, "fetch conflict ids from mem_ctx to desc", KR(ret), K(array));
   }
 }
 
@@ -1400,7 +1402,7 @@ int ObTransService::revert_store_ctx(storage::ObStoreCtx &store_ctx)
       if (OB_FAIL(tx->update_part(p))) {
         TRANS_LOG(WARN, "append part fail", K(ret), K(p), KPC(tx_ctx));
       }
-      (void) fetch_cflict_tx_ids_from_mem_ctx_to_desc_(acc_ctx);
+      (void) fetch_conflict_info_from_mem_ctx_to_desc_(acc_ctx);
       tx_ctx->end_access();
       revert_tx_ctx_(store_ctx.ls_, tx_ctx);
     }

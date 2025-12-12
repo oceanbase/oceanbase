@@ -11,13 +11,13 @@
  */
 
 #include "observer/virtual_table/ob_all_virtual_lock_wait_stat.h"
-
-#include "storage/memtable/ob_lock_wait_mgr.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "observer/ob_server_utils.h"
 
 using namespace oceanbase::rpc;
 using namespace oceanbase::common;
 using namespace oceanbase::memtable;
+using namespace oceanbase::lockwaitmgr;
 using namespace oceanbase::storage;
 namespace oceanbase
 {
@@ -69,7 +69,7 @@ int ObAllVirtualLockWaitStat::process_curr_tenant(ObNewRow *&row)
     SERVER_LOG(WARN, "allocator_ shouldn't be NULL", K(allocator_), K(ret));
   } else if (!start_to_read_ && OB_FAIL(make_this_ready_to_read())) {
     SERVER_LOG(WARN, "prepare_start_to_read_ error", K(ret), K(start_to_read_));
-  } else if (OB_ISNULL(node_iter_ = MTL(memtable::ObLockWaitMgr *)
+  } else if (OB_ISNULL(node_iter_ = MTL(lockwaitmgr::ObLockWaitMgr *)
                                         ->next(node_iter_, &cur_node_))) {
     ret = OB_ITER_END;
   } else {
@@ -161,7 +161,7 @@ int ObAllVirtualLockWaitStat::process_curr_tenant(ObNewRow *&row)
           cur_row_.cells_[i].set_int(node_iter_->lock_ts_);
           break;
         case ABS_TIMEOUT:
-          cur_row_.cells_[i].set_int(node_iter_->abs_timeout_);
+          cur_row_.cells_[i].set_int(node_iter_->lock_wait_expire_ts_);
           break;
         case TRY_LOCK_TIMES:
           cur_row_.cells_[i].set_int(node_iter_->try_lock_times_);
@@ -241,55 +241,62 @@ int ObAllVirtualLockWaitStat::process_curr_tenant(ObNewRow *&row)
           // Actually, the lock on a row, which we named it as TR lock, is a
           // part of TX. It represents a class of resources held by TX lock.
           ObTransID holder_tx_id { node_iter_->holder_tx_id_ };
+          memtable::RowHolderInfo holder_info;
+          holder_info.tx_id_ = holder_tx_id;
           // If the waiter is waitting on the row, we need to get the
           // real holder from the hash_holder, instead of the holder_tx_id
           // on the ObLockWaitNode.
           if (type == 1) {
             // TODO(yangyifei.yyf): rowkey holder is unstable now, so we use
             // tmp ret to catch error code here. We we fix it in the future.
-            if (OB_TMP_FAIL(get_rowkey_holder(node_iter_->hash_, holder_tx_id))) {
+            if (OB_TMP_FAIL(get_rowkey_holder(node_iter_->hash_, holder_info))) {
               SERVER_LOG(WARN, "can not get the hash holder from lock wait mgr",
                          K_(node_iter_->tablet_id), K_(node_iter_->key),
                          K_(node_iter_->tx_id), K_(node_iter_->hash));
             }
           }
-          cur_row_.cells_[i].set_int(holder_tx_id.get_id());
+          cur_row_.cells_[i].set_int(holder_info.tx_id_.get_id());
           break;
         }
         case HOLDER_SESSION_ID:
           cur_row_.cells_[i].set_int(node_iter_->holder_sessid_);
           break;
         case LS_ID: {
-          cur_row_.cells_[i].set_int(0);
+          cur_row_.cells_[i].set_int(node_iter_->ls_id_);
           break;
         }
         case ASSOC_SESS_ID: {
-          cur_row_.cells_[i].set_int(0);
+          cur_row_.cells_[i].set_int(node_iter_->assoc_sess_id_);
           break;
         }
         case WAIT_TIMEOUT: {
-          cur_row_.cells_[i].set_int(0);
+          cur_row_.cells_[i].set_int(node_iter_->get_wait_timeout_ts());
           break;
         }
         case TX_ACTIVE_TS: {
-          cur_row_.cells_[i].set_int(0);
+          cur_row_.cells_[i].set_int(node_iter_->tx_active_ts_);
           break;
         }
         case NODE_ID: {
-          cur_row_.cells_[i].set_int(0);
+          cur_row_.cells_[i].set_int(node_iter_->node_type_);
           break;
         }
         case NODE_TYPE: {
-          cur_row_.cells_[i].set_int(0);
+          cur_row_.cells_[i].set_int(node_iter_->node_id_);
           break;
         }
         case REMTOE_ADDR: {
-          cur_row_.cells_[i].set_varchar("0.0.0.0");
+          (void)node_iter_->ctrl_addr_.to_string(remote_addr_, sizeof(remote_addr_));
+          cur_row_.cells_[i].set_varchar(remote_addr_);
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         }
         case IS_PLACEHOLDER: {
-          cur_row_.cells_[i].set_int(0);
+          int res = 0;
+          if (node_iter_->is_placeholder_) {
+            res = 1;
+          }
+          cur_row_.cells_[i].set_int(res);
           break;
         }
         default:
@@ -319,14 +326,15 @@ int ObAllVirtualLockWaitStat::get_lock_type(int64_t hash, int &type)
   return ret;
 }
 
-int ObAllVirtualLockWaitStat::get_rowkey_holder(int64_t hash, transaction::ObTransID &holder)
+int ObAllVirtualLockWaitStat::get_rowkey_holder(int64_t hash, memtable::RowHolderInfo &holder_info)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObLockWaitMgr *lwm = NULL;
   if (OB_ISNULL(lwm = MTL(ObLockWaitMgr*))) {
-    ret = OB_ERR_UNEXPECTED;
+    tmp_ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(ERROR, "MTL(LockWaitMgr) is null");
-  } else if (OB_FAIL(lwm->get_hash_holder(hash, holder))){
+  } else if (OB_FAIL(lwm->get_hash_holder(hash, holder_info))){
     SERVER_LOG(WARN, "get rowkey holder from lock wait mgr failed", K(ret), K(hash));
   }
   return ret;

@@ -408,6 +408,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_virtual_table_tablet_iter.cpp
   virtual_table/ob_all_virtual_dag.cpp
   virtual_table/ob_all_virtual_dag_warning_history.cpp
+  virtual_table/ob_all_virtual_deadlock_detector_stat.cpp
   virtual_table/ob_all_virtual_dblink_info.cpp
   virtual_table/ob_all_virtual_diag_index_scan.cpp
   virtual_table/ob_all_virtual_dtl_channel.cpp

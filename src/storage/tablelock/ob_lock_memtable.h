@@ -326,7 +326,8 @@ private:
                               const ObLockID &lock_id,
                               const ObTableLockMode &lock_mode,
                               const ObTransID &conflict_tx_id,
-                              ObFunction<int(bool &need_wait)> &recheck_f);
+                              ObFunction<int(bool &need_wait)> &recheck_f,
+                              const ObTxSEQ &lock_seq);
   // table lock split just support in_trans dml lock,
   // table split should be failed when exist_cannot_split_lock
   int check_exist_cannot_split_lock_(const common::ObTabletID &src_tablet_id,
@@ -347,12 +348,11 @@ private:
   int register_into_deadlock_detector_(const storage::ObStoreCtx &ctx,
                                        const ObTableLockOp &lock_op);
   int unregister_from_deadlock_detector_(const ObTableLockOp &lock_op);
-
   int check_tablet_write_allow_(const ObTableLockOp &lock_op,
                                 const int64_t input_transfer_counter,
                                 int64_t &output_transfer_counter);
   int get_lock_wait_expire_ts_(const int64_t lock_wait_start_ts);
-  int check_and_set_tx_lock_timeout_(const memtable::ObMvccAccessCtx &acc_ctx);
+  int check_and_set_tx_lock_timeout_(const memtable::ObMvccAccessCtx &acc_ctx, int64_t &lock_wait_start_ts);
 private:
   typedef common::SpinRWLock RWLock;
   typedef common::SpinRLockGuard RLockGuard;

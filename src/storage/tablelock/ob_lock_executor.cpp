@@ -73,7 +73,12 @@ int ObLockContext::init(ObExecContext &ctx,
       session_info->set_has_exec_inner_dml(false);
 
       ObTransID parent_tx_id;
+      int64_t parent_tx_start_ts = 0;
       parent_tx_id = session_info->get_tx_id();
+      transaction::ObTxDesc *desc = session_info->get_tx_desc();
+      if (OB_NOT_NULL(desc)) {
+        parent_tx_start_ts = desc->get_active_ts();
+      }
       OZ (session_info->begin_autonomous_session(saved_session_));
       OX (have_saved_session_ = true);
       OZ (ObSqlTransControl::explicit_start_trans(ctx, false));
@@ -81,7 +86,7 @@ int ObLockContext::init(ObExecContext &ctx,
         has_autonomous_tx_ = true;
       }
       if (OB_SUCC(ret) && parent_tx_id.is_valid()) {
-        (void) register_for_deadlock_(*session_info, parent_tx_id);
+        (void) register_for_deadlock_(*session_info, parent_tx_id, parent_tx_start_ts);
       }
     }
     OX (my_exec_ctx_ = &ctx);
@@ -187,7 +192,8 @@ int ObLockContext::valid_execute_context(ObExecContext &ctx)
 }
 
 void ObLockContext::register_for_deadlock_(ObSQLSessionInfo &session_info,
-                                           const ObTransID &parent_tx_id)
+                                           const ObTransID &parent_tx_id,
+                                           const int64_t parent_tx_start_ts)
 {
   int ret = OB_SUCCESS;
   int64_t query_timeout = 0;
@@ -202,6 +208,7 @@ void ObLockContext::register_for_deadlock_(ObSQLSessionInfo &session_info,
       if (OB_FAIL(ObTransDeadlockDetectorAdapter::
                   autonomous_register_to_deadlock(parent_tx_id,
                                                   child_tx_id,
+                                                  parent_tx_start_ts,
                                                   query_timeout))) {
         LOG_WARN("autonomous register to deadlock failed", K(parent_tx_id),
                  K(child_tx_id), KR(ret));

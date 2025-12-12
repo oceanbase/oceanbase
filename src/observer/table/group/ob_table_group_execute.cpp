@@ -14,7 +14,7 @@
 #include "ob_table_group_execute.h"
 #include "observer/table/ob_table_move_response.h"
 #include "ob_table_tenant_group.h"
-#include "storage/memtable/ob_lock_wait_mgr.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::transaction;

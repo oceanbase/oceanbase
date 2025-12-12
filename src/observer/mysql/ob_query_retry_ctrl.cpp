@@ -14,7 +14,7 @@
 
 #include "ob_query_retry_ctrl.h"
 #include "pl/ob_pl.h"
-#include "storage/memtable/ob_lock_wait_mgr.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "observer/mysql/obmp_query.h"
 #include "observer/ob_server_event_history_table_operator.h"
 
@@ -486,9 +486,25 @@ public:
   ~ObLockRowConflictRetryPolicy() = default;
   virtual void test(ObRetryParam &v) const override
   {
+    // handle lock conflict info
+    bool is_wait_lock_timeout = false;
+    lockwaitmgr::ObLockWaitMgr *lock_wait_mgr = MTL(lockwaitmgr::ObLockWaitMgr*);
+    if (OB_ISNULL(lock_wait_mgr)) {
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "lock wait mgr should not be NULL");
+    } else {
+      lock_wait_mgr->handle_lock_conflict(v.result_.get_exec_context(),
+                                          v.err_,
+                                          v.session_,
+                                          is_wait_lock_timeout);
+    }
     // sql which in pl will local retry first. see ObInnerSQLConnection::process_retry.
     // sql which not in pl use the same strategy to avoid never getting the lock.
-    if (v.is_from_pl_) {
+    if (is_wait_lock_timeout) {
+      // wait lock timeout, no need to retry
+      v.no_more_test_ = true;
+      v.retry_type_ = RETRY_TYPE_NONE;
+      v.client_ret_ = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;
+    } else if (v.is_from_pl_) {
       if (v.local_retry_times_ <= 1 ||
           !v.session_.get_pl_can_retry() ||
           ObSQLUtils::is_in_autonomous_block(v.session_.get_cur_exec_ctx())) {
@@ -614,9 +630,25 @@ public:
   ~ObInnerLockRowConflictRetryPolicy() = default;
   virtual void test(ObRetryParam &v) const override
   {
+    // handle lock conflict info
+    bool is_wait_lock_timeout = false;
+    lockwaitmgr::ObLockWaitMgr *lock_wait_mgr = MTL(lockwaitmgr::ObLockWaitMgr*);
+    if (OB_ISNULL(lock_wait_mgr)) {
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "lock wait mgr should not be NULL");
+    } else {
+      lock_wait_mgr->handle_lock_conflict(v.result_.get_exec_context(),
+                                          v.err_,
+                                          v.session_,
+                                          is_wait_lock_timeout);
+    }
     // sql which in pl will local retry first. see ObInnerSQLConnection::process_retry.
     // sql which not in pl use the same strategy to avoid never getting the lock.
-    if (v.is_from_pl_) {
+    if (is_wait_lock_timeout) {
+      // wait lock timeout, no need to retry
+      v.no_more_test_ = true;
+      v.retry_type_ = RETRY_TYPE_NONE;
+      v.client_ret_ = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;
+    } else if (v.is_from_pl_) {
       if (v.local_retry_times_ <= 1 ||
           !v.session_.get_pl_can_retry() ||
           ObSQLUtils::is_in_autonomous_block(v.session_.get_cur_exec_ctx())) {
@@ -1095,7 +1127,7 @@ void ObQueryRetryCtrl::after_func(ObRetryParam &v)
   }
   // bug fix, reset lock_wait_mgr node before doing local retry
   if (RETRY_TYPE_LOCAL == v.retry_type_) {
-    rpc::ObLockWaitNode* node = MTL(memtable::ObLockWaitMgr*)->get_thread_node();
+    rpc::ObLockWaitNode* node = MTL(lockwaitmgr::ObLockWaitMgr*)->get_thread_node();
     if (NULL != node) {
       node->reset_need_wait();
     }

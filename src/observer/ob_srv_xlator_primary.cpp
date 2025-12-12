@@ -22,6 +22,7 @@
 #include "sql/engine/cmd/ob_load_data_rpc.h"
 #include "sql/dtl/ob_dtl_rpc_processor.h"
 #include "sql/das/ob_das_rpc_processor.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr_rpc.h"
 #include "observer/ob_inner_sql_rpc_processor.h"
 #include "logservice/palf/log_rpc_processor.h"
 #include "logservice/logrpc/ob_log_rpc_processor.h"
@@ -51,6 +52,7 @@ using namespace oceanbase::rpc;
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::transaction;
+using namespace oceanbase::memtable;
 using namespace oceanbase::obrpc;
 using namespace oceanbase::obmysql;
 
@@ -165,10 +167,10 @@ void oceanbase::observer::init_srv_xlator_for_transaction(ObSrvRpcXlator *xlator
   // for tx state check of 4377
   RPC_PROCESSOR(ObAskTxStateFor4377P);
   // for lock wait mgr
-  // RPC_PROCESSOR(ObLockWaitMgrDstEnqueueP);
-  // RPC_PROCESSOR(ObLockWaitMgrDstEnqueueRespP);
-  // RPC_PROCESSOR(ObLockWaitMgrLockReleaseP);
-  // RPC_PROCESSOR(ObLockWaitMgrWakeUpP);
+  RPC_PROCESSOR(ObLockWaitMgrDstEnqueueP);
+  RPC_PROCESSOR(ObLockWaitMgrDstEnqueueRespP);
+  RPC_PROCESSOR(ObLockWaitMgrLockReleaseP);
+  RPC_PROCESSOR(ObLockWaitMgrWakeUpP);
 #ifdef OB_BUILD_SHARED_STORAGE
   RPC_PROCESSOR(ObSSWriterGrantP);
   RPC_PROCESSOR(ObSSWriterLeaseReqP);

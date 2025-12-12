@@ -1177,6 +1177,7 @@ public:
   static int all_virtual_zone_storage_mysql_sys_agent_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_nic_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_scheduler_job_run_detail_v2_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_deadlock_detector_stat_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_spatial_reference_systems_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_log_transport_dest_stat_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ss_local_cache_info_schema(share::schema::ObTableSchema &table_schema);
@@ -4505,6 +4506,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_zone_storage_mysql_sys_agent_schema,
   ObInnerTableSchema::all_virtual_nic_info_schema,
   ObInnerTableSchema::all_virtual_scheduler_job_run_detail_v2_schema,
+  ObInnerTableSchema::all_virtual_deadlock_detector_stat_schema,
   ObInnerTableSchema::all_virtual_spatial_reference_systems_schema,
   ObInnerTableSchema::all_virtual_log_transport_dest_stat_schema,
   ObInnerTableSchema::all_virtual_ss_local_cache_info_schema,
@@ -6872,6 +6874,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_STORAGE_IO_USAGE_TID,
   OB_ALL_VIRTUAL_ZONE_STORAGE_MYSQL_SYS_AGENT_TID,
   OB_ALL_VIRTUAL_NIC_INFO_TID,
+  OB_ALL_VIRTUAL_DEADLOCK_DETECTOR_STAT_TID,
   OB_ALL_VIRTUAL_LOG_TRANSPORT_DEST_STAT_TID,
   OB_ALL_VIRTUAL_SS_LOCAL_CACHE_INFO_TID,
   OB_ALL_VIRTUAL_KV_GROUP_COMMIT_STATUS_TID,
@@ -10069,6 +10072,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_STORAGE_IO_USAGE_TNAME,
   OB_ALL_VIRTUAL_ZONE_STORAGE_MYSQL_SYS_AGENT_TNAME,
   OB_ALL_VIRTUAL_NIC_INFO_TNAME,
+  OB_ALL_VIRTUAL_DEADLOCK_DETECTOR_STAT_TNAME,
   OB_ALL_VIRTUAL_LOG_TRANSPORT_DEST_STAT_TNAME,
   OB_ALL_VIRTUAL_SS_LOCAL_CACHE_INFO_TNAME,
   OB_ALL_VIRTUAL_KV_GROUP_COMMIT_STATUS_TNAME,
@@ -12452,6 +12456,7 @@ const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_DETAIL_TID,
   OB_ALL_VIRTUAL_GROUP_IO_STAT_TID,
   OB_ALL_VIRTUAL_NIC_INFO_TID,
+  OB_ALL_VIRTUAL_DEADLOCK_DETECTOR_STAT_TID,
   OB_ALL_VIRTUAL_LOG_TRANSPORT_DEST_STAT_TID,
   OB_ALL_VIRTUAL_SS_LOCAL_CACHE_INFO_TID,
   OB_ALL_VIRTUAL_KV_GROUP_COMMIT_STATUS_TID,
@@ -15766,11 +15771,11 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 354;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 997;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 998;
 const int64_t OB_SYS_VIEW_COUNT = 1113;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 2469;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 2470;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2472;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2473;
 
 } // end namespace share
 } // end namespace oceanbase

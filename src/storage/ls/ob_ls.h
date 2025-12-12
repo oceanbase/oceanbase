@@ -920,13 +920,14 @@ public:
   // get tx scheduler in ls tx service
   // @param [in] tx_id: wish to get this tx_id scheduler
   // @param [out] scheduler: scheduler of this tx_id
-  // int get_tx_scheduler(const transaction::ObTransID &tx_id, ObAddr &scheduler) const;
-  CONST_DELEGATE_WITH_RET(ls_tx_svr_, get_tx_scheduler, int);
-  // get tx start session_id in ls tx service
+  // @param [out] sess_id: session id of this tx_id
+  // int get_tx_scheduler_and_sess_id(const transaction::ObTransID &tx_id, ObAddr &scheduler, uint32_t &sess_id) const;
+  CONST_DELEGATE_WITH_RET(ls_tx_svr_, get_tx_scheduler_and_sess_id, int);
+  // get tx start session_id and tx_start_time in ls tx service
   // @param [in] tx_id: wish to get this tx_id start session_id
   // @param [out] session_id: session_id of this tx_id
-  // int get_tx_start_session_id(const transaction::ObTransID &tx_id, uint32_t &session_id) const;
-  CONST_DELEGATE_WITH_RET(ls_tx_svr_, get_tx_start_session_id, int);
+  //   int get_tx_start_session_id_and_ts(const transaction::ObTransID &tx_id, uint32_t &session_id, int64_t trans_start_ts) const;
+  CONST_DELEGATE_WITH_RET(ls_tx_svr_, get_tx_start_session_id_and_ts, int);
   // iterate the obj lock op at tx service.
   // int iterate_tx_obj_lock_op(ObLockOpIterator &iter) const;
   CONST_DELEGATE_WITH_RET(ls_tx_svr_, iterate_tx_obj_lock_op, int);

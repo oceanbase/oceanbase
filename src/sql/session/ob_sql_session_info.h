@@ -2047,6 +2047,7 @@ public:
   inline void inc_out_bytes(int64_t out_bytes) { IGNORE_RETURN ATOMIC_FAA(&out_bytes_, out_bytes); }
   bool is_pl_prepare_stage() const;
   inline ObExecutingSqlStatRecord& get_executing_sql_stat_record() {return executing_sql_stat_record_; }
+  inline const ObExecutingSqlStatRecord& get_executing_sql_stat_record() const {return executing_sql_stat_record_; }
   int sql_sess_record_sql_stat_start_value(ObExecutingSqlStatRecord& executing_sqlstat);
   dbms_scheduler::ObDBMSSchedJobInfo *get_job_info() const { return job_info_; }
   void set_job_info(dbms_scheduler::ObDBMSSchedJobInfo *job_info) { job_info_ = job_info; }

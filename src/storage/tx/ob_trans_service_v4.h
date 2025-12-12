@@ -421,7 +421,11 @@ int ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
 void tx_post_terminate_(ObTxDesc &tx);
 int start_epoch_(ObTxDesc &tx);
 int tx_sanity_check_(ObTxDesc &tx);
-void fetch_cflict_tx_ids_from_mem_ctx_to_desc_(memtable::ObMvccAccessCtx &acc_ctx);
+bool tx_need_reset_(const int error_code) const;
+int get_tx_table_guard_(ObLS *ls,
+                        const share::ObLSID &ls_id,
+                        ObTxTableGuard &guard);
+void fetch_conflict_info_from_mem_ctx_to_desc_(memtable::ObMvccAccessCtx &acc_ctx);
 int wait_follower_readable_(ObLS &ls,
                             const int64_t expire_ts,
                             const share::SCN &snapshot,

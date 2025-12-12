@@ -15,7 +15,8 @@
 #include "ob_th_worker.h"
 #include "ob_tenant.h"
 #include "observer/ob_server.h"
-#include "storage/memtable/ob_lock_wait_mgr.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
+#include "sql/session/ob_sql_session_info.h"
 #include "sql/executor/ob_memory_tracker.h"
 #include "lib/stat/ob_diagnostic_info_container.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
@@ -236,12 +237,11 @@ inline void ObThWorker::process_request(rpc::ObRequest &req)
   reset_sql_throttle_current_priority();
   set_req_flag(&req);
 
-  MTL(memtable::ObLockWaitMgr*)->setup(req.get_lock_wait_node(), req.get_receive_timestamp());
-  memtable::advance_tlocal_request_lock_wait_stat(rpc::RequestLockWaitStat::RequestStat::EXECUTE);
+  MTL(lockwaitmgr::ObLockWaitMgr*)->setup(req.get_lock_wait_node(), req.get_receive_timestamp());
   if (OB_FAIL(procor_.process(req))) {
     LOG_WARN("process request fail", K(ret));
   }
-  bool wait_succ = MTL(memtable::ObLockWaitMgr*)->post_process(need_retry_, need_wait_lock);
+  bool wait_succ = MTL(lockwaitmgr::ObLockWaitMgr*)->post_process(need_retry_, need_wait_lock);
   if (OB_LIKELY(wait_succ)) {
     need_retry_ = false;
   }

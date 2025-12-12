@@ -1308,9 +1308,11 @@ private:
   }
   void set_my_exec_ctx(sql::ObExecContext *my_exec_ctx) { my_exec_ctx_ = my_exec_ctx; }
   static void record_tx_id_before_begin_autonomous_session_for_deadlock_(ObSQLSessionInfo &session_info,
-                                                                         transaction::ObTransID &last_trans_id);
+                                                                         transaction::ObTransID &last_trans_id,
+                                                                         int64_t &trans_active_ts);
   static void register_after_begin_autonomous_session_for_deadlock_(ObSQLSessionInfo &session_info,
-                                                                    const transaction::ObTransID last_trans_id);
+                                                                    const transaction::ObTransID last_trans_id,
+                                                                    const int64_t last_trans_active_ts);
 private:
   char cursor_info_[sizeof(ObPLCursorInfo)];
   bool is_cursor_info_initialized_ = false;

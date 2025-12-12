@@ -53,10 +53,12 @@ public:
   int set_args(const common::ObAddr &parent_addr,
                const UserBinaryKey &dest_key,
                const common::ObAddr &src_addr,
-               const UserBinaryKey &src_key);
+               const UserBinaryKey &src_key,
+               const ObStringHolder &action);
   const UserBinaryKey &get_parent_key() const { return parent_key_; }
   const common::ObAddr &get_src_addr() const { return src_addr_; }
   const UserBinaryKey &get_src_key() const { return src_key_; }
+  const ObStringHolder &get_action() const { return action_; }
   bool is_valid() const;
   TO_STRING_KV(K_(parent_addr), K_(parent_key), K_(src_addr), K_(src_key), K_(action));
 private:

@@ -16451,6 +16451,51 @@ def_table_schema(**gen_iterate_virtual_table_def(
   keywords = all_def_keywords['__all_scheduler_job_run_detail_v2']))
 
 # 12489: __all_virtual_deadlock_detector_stat
+
+def_table_schema(
+  owner = 'wx372254',
+  table_name = '__all_virtual_deadlock_detector_stat',
+  table_id = '12489',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  in_tenant_space = True,
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('detector_id', 'int'),
+  ],
+
+  normal_columns = [
+  # 定位信息
+  ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+  ('svr_port', 'int'),
+  ('module', 'longtext'),
+  ('visitor', 'longtext'),
+  # 等待关系
+  ('action', 'longtext'),
+  ('static_waiting_resource', 'longtext'),
+  ('static_block_list', 'longtext'),
+  ('dynamic_waiting_resource', 'longtext'),
+  ('dynamic_block_list', 'longtext'),
+  ('conflict_actions', 'longtext'),
+  # 时间戳信息
+  ('waiter_create_time', 'timestamp'),
+  ('create_time', 'timestamp'),
+  ('timeout_ts', 'timestamp'),
+  ('allow_detect_time', 'timestamp'),
+  # LCL信息
+  ('lclv', 'int'),
+  ('lcl_period', 'int'),
+  ('private_label', 'longtext'),
+  ('public_label', 'longtext'),
+  # 其他
+  ('count_down_allow_detect', 'int'),
+  ('parent_list', 'longtext'),
+  ],
+
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12490',
   table_name = '__all_virtual_spatial_reference_systems',

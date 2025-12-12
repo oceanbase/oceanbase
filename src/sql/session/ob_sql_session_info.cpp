@@ -15,7 +15,7 @@
 #include "ob_sql_session_info.h"
 #include "rpc/ob_rpc_define.h"
 #include "pl/ob_pl_package.h"
-#include "storage/memtable/ob_lock_wait_mgr.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "observer/mysql/obmp_stmt_send_piece_data.h"
 #include "observer/ob_server.h"
 #include "observer/ob_temporary_table_cleaner.h"
@@ -2263,8 +2263,8 @@ int ObSQLSessionInfo::kill_query()
   update_last_active_time();
   set_session_state(QUERY_KILLED);
   {
-    memtable::ObLockWaitMgr *mgr = nullptr;
-    if (OB_ISNULL(mgr = MTL(memtable::ObLockWaitMgr *))) {
+    lockwaitmgr::ObLockWaitMgr *mgr = nullptr;
+    if (OB_ISNULL(mgr = MTL(lockwaitmgr::ObLockWaitMgr *))) {
       LOG_WARN_RET(OB_ERR_UNEXPECTED, "can't get lock wait mgr", K(get_server_sid()));
     } else {
       LOG_INFO("notify lockwaitmgr killed session", K(get_server_sid()));

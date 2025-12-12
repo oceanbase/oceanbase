@@ -14,17 +14,19 @@
 
 #include "storage/tablelock/ob_lock_memtable.h"
 #include "storage/tablelock/ob_table_lock_iterator.h"
-#include "storage/memtable/ob_lock_wait_mgr.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "storage/tablelock/ob_table_lock_deadlock.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/tx/ob_trans_deadlock_adapter.h"
 
 namespace oceanbase
 {
 using namespace share;
 using namespace storage;
 using namespace memtable;
+using namespace lockwaitmgr;
 using namespace common;
 using namespace oceanbase::lib;
 
@@ -271,6 +273,7 @@ int ObLockMemtable::lock_(
   const bool is_two_phase_lock = param.is_two_phase_lock_;
   int64_t input_transfer_counter = -1;
   int64_t output_transfer_counter = -1;
+  int64_t lock_wait_start_ts = 0;
 
   // 1. record lock myself(check conflict).
   // 2. record lock at memtable ctx.
@@ -332,7 +335,7 @@ int ObLockMemtable::lock_(
         obj_lock_map_.remove_lock_record(lock_op);
       }
       if (OB_TRY_LOCK_ROW_CONFLICT == ret) {
-        if (OB_TMP_FAIL(check_and_set_tx_lock_timeout_(ctx.mvcc_acc_ctx_))) {
+        if (OB_TMP_FAIL(check_and_set_tx_lock_timeout_(ctx.mvcc_acc_ctx_, lock_wait_start_ts))) {
           ret = tmp_ret;
           LOG_WARN("tx lock timeout", K(ret));
           break;
@@ -359,7 +362,7 @@ int ObLockMemtable::lock_(
         }
       } else if (OB_SUCCESS == ret || OB_OBJ_LOCK_EXIST == ret) {
         // lock successfully, reset lock_wait_start_ts
-        ctx.mvcc_acc_ctx_.set_lock_wait_start_ts(0);
+        lock_wait_start_ts = 0;
         if (is_two_phase_lock) {
           // NOTE that if lock exists from check_lock_exist, lock of objlockmap is not called
           // in this case, we need remove info from priority queue actively
@@ -424,7 +427,8 @@ int ObLockMemtable::lock_(
                                                    lock_op.lock_id_,
                                                    lock_op.lock_mode_,
                                                    *(conflict_tx_set.begin()),
-                                                   recheck_f))) {
+                                                   recheck_f,
+                                                   lock_op.lock_seq_no_))) {
       if (OB_ERR_EXCLUSIVE_LOCK_CONFLICT == tmp_ret) {
         ret = tmp_ret;
       } else {
@@ -636,16 +640,14 @@ int ObLockMemtable::post_obj_lock_conflict_(ObMvccAccessCtx &acc_ctx,
                                             const ObLockID &lock_id,
                                             const ObTableLockMode &lock_mode,
                                             const ObTransID &conflict_tx_id,
-                                            ObFunction<int(bool &need_wait)> &recheck_f)
+                                            ObFunction<int(bool &need_wait)> &recheck_f,
+                                            const ObTxSEQ &lock_seq)
 {
   int ret = OB_TRY_LOCK_ROW_CONFLICT;
   ObLockWaitMgr *lock_wait_mgr = NULL;
   auto mem_ctx = acc_ctx.get_mem_ctx();
   int64_t current_ts = common::ObClockGenerator::getClock();
-  int64_t lock_wait_start_ts = mem_ctx->get_lock_wait_start_ts() > 0
-    ? mem_ctx->get_lock_wait_start_ts()
-    : current_ts;
-  int64_t lock_wait_expire_ts = acc_ctx.eval_lock_expire_ts(lock_wait_start_ts);
+  int64_t lock_wait_expire_ts = acc_ctx.eval_lock_expire_ts(current_ts);
   if (OB_ISNULL(lock_wait_mgr = MTL_WITH_CHECK_TENANT(ObLockWaitMgr *, mem_ctx->get_tenant_id()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("can not get tenant lock_wait_mgr MTL", K(mem_ctx->get_tenant_id()));
@@ -656,22 +658,24 @@ int ObLockMemtable::post_obj_lock_conflict_(ObMvccAccessCtx &acc_ctx,
     bool remote_tx = tx_ctx->get_scheduler() != tx_ctx->get_addr();
     // TODO: one thread only can wait at one lock now.
     // this may be not enough.
+    ObRowConflictInfo conflict_info;
     if (OB_TMP_FAIL(lock_wait_mgr->post_lock(OB_TRY_LOCK_ROW_CONFLICT,
+                                             ls_id_,
                                              LS_LOCK_TABLET,
                                              lock_id,
                                              lock_wait_expire_ts,
                                              remote_tx,
                                              -1,
-                                             -1,  // total_trans_node_cnt
-                                             acc_ctx.tx_desc_->get_assoc_session_id(),
+                                             -1, // total_trans_node_cnt
                                              tx_id,
                                              conflict_tx_id,
                                              lock_mode,
-                                             ls_id_,
+                                             conflict_info,
                                              recheck_f))) {
       LOG_WARN("post_lock after tx conflict failed",
                K(tmp_ret), K(tx_id), K(conflict_tx_id));
     }
+    mem_ctx->add_conflict_info(conflict_info);
   }
   LOG_DEBUG("ObLockMemtable::post_obj_lock_conflict_",
             K(ret),
@@ -1515,14 +1519,15 @@ int ObLockMemtable::register_into_deadlock_detector_(
   ObAddr parent_addr;
   const ObLSID &ls_id = ctx.ls_id_;
   const int64_t priority = ~(ctx.mvcc_acc_ctx_.tx_desc_->get_active_ts());
+  transaction::SessionIDPair sess_id_pair;
   tx_lock_part_id.lock_id_ = lock_op.lock_id_;
   tx_lock_part_id.trans_id_ = lock_op.create_trans_id_;
   if (OB_FAIL(ObTableLockDeadlockDetectorHelper::register_trans_lock_part(
       tx_lock_part_id, ls_id, priority))) {
     LOG_WARN("register trans lock part failed", K(ret), K(tx_lock_part_id),
              K(ls_id));
-  } else if (OB_FAIL(ObTransDeadlockDetectorAdapter::get_trans_scheduler_info_on_participant(
-      tx_lock_part_id.trans_id_, ls_id, parent_addr))) {
+  } else if (OB_FAIL(ObTransDeadlockDetectorAdapter::get_trans_info_on_participant(
+      tx_lock_part_id.trans_id_, ls_id, parent_addr, sess_id_pair))) {
     LOG_WARN("get scheduler address failed", K(tx_lock_part_id), K(ls_id));
   } else if (OB_FAIL(ObTableLockDeadlockDetectorHelper::add_parent(
       tx_lock_part_id, parent_addr, lock_op.create_trans_id_))) {
@@ -1561,15 +1566,14 @@ int ObLockMemtable::unregister_from_deadlock_detector_(const ObTableLockOp &lock
   return ret;
 }
 
-int ObLockMemtable::check_and_set_tx_lock_timeout_(const ObMvccAccessCtx &acc_ctx)
+int ObLockMemtable::check_and_set_tx_lock_timeout_(const ObMvccAccessCtx &acc_ctx,
+                                                   int64_t &lock_wait_start_ts)
 {
   int ret = OB_SUCCESS;
-  ObMemtableCtx *mem_ctx = acc_ctx.get_mem_ctx();
   int64_t current_ts = common::ObClockGenerator::getClock();
-  if (mem_ctx->get_lock_wait_start_ts() <= 0) {
-    mem_ctx->set_lock_wait_start_ts(current_ts);
+  if (lock_wait_start_ts <= 0) {
+    lock_wait_start_ts = current_ts;
   } else {
-    int64_t lock_wait_start_ts = mem_ctx->get_lock_wait_start_ts();
     int64_t lock_wait_expire_ts = acc_ctx.eval_lock_expire_ts(lock_wait_start_ts);
     if (current_ts >= lock_wait_expire_ts) {
       ret = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;

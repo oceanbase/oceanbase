@@ -13,7 +13,7 @@
 #define USING_LOG_PREFIX TABLELOCK
 
 #include "ob_obj_lock.h"
-#include "storage/memtable/ob_lock_wait_mgr.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tablelock/ob_lock_memtable.h"
 #include "storage/tablelock/ob_table_lock_deadlock.h"
@@ -25,6 +25,7 @@ namespace oceanbase
 using namespace common;
 using namespace storage;
 using namespace memtable;
+using namespace lockwaitmgr;
 using namespace share;
 using namespace palf;
 
@@ -2362,14 +2363,15 @@ int ObOBJLock::register_into_deadlock_detector_(const ObStoreCtx &ctx,
   ObAddr parent_addr;
   const ObLSID &ls_id = ctx.ls_id_;
   const int64_t priority = ~(ctx.mvcc_acc_ctx_.tx_desc_->get_active_ts());
+  transaction::SessionIDPair sess_id_pair;
   tx_lock_part_id.lock_id_ = lock_op.lock_id_;
   tx_lock_part_id.trans_id_ = lock_op.create_trans_id_;
   if (OB_FAIL(ObTableLockDeadlockDetectorHelper::register_trans_lock_part(
       tx_lock_part_id, ls_id, priority))) {
     LOG_WARN("register trans lock part failed", K(ret), K(tx_lock_part_id),
              K(ls_id));
-  } else if (OB_FAIL(ObTransDeadlockDetectorAdapter::get_trans_scheduler_info_on_participant(
-      tx_lock_part_id.trans_id_, ls_id, parent_addr))) {
+  } else if (OB_FAIL(ObTransDeadlockDetectorAdapter::get_trans_info_on_participant(
+      tx_lock_part_id.trans_id_, ls_id, parent_addr, sess_id_pair))) {
     LOG_WARN("get scheduler address failed", K(tx_lock_part_id), K(ls_id));
   } else if (OB_FAIL(ObTableLockDeadlockDetectorHelper::add_parent(
       tx_lock_part_id, parent_addr, lock_op.create_trans_id_))) {

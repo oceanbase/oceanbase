@@ -24,6 +24,7 @@ namespace memtable
 {
 
 class ObMemtableData;
+class ObMvccRowCallback;
 
 // Arguments for building tx node
 struct ObTxNodeArg
@@ -185,6 +186,8 @@ struct ObMvccWriteResult {
   bool is_mvcc_undo_;
   // lock_state_ is used for deadlock detector and lock wait mgr
   storage::ObStoreRowLockState lock_state_;
+  // tx_callback is one-to-one correspondence with tx_node
+  ObMvccRowCallback *tx_callback_;
   // tx_node_ is the node used for insert, whether it is inserted is decided by
   // has_insert()
   ObMvccTransNode *tx_node_;
@@ -206,6 +209,7 @@ struct ObMvccWriteResult {
                K_(is_mvcc_undo),
                K_(lock_state),
                K_(is_checked),
+               KP_(tx_callback),
                KPC_(tx_node),
                KPC_(value),
                K_(mtk));
@@ -216,6 +220,7 @@ struct ObMvccWriteResult {
     is_new_locked_(false),
     is_mvcc_undo_(false),
     lock_state_(),
+    tx_callback_(nullptr),
     tx_node_(nullptr),
     is_checked_(false),
     value_(nullptr),
@@ -228,6 +233,7 @@ struct ObMvccWriteResult {
     is_mvcc_undo_ = other.is_mvcc_undo_;
     lock_state_ = other.lock_state_;
     is_checked_ = other.is_checked_;
+    tx_callback_ = other.tx_callback_;
     tx_node_ = other.tx_node_;
     value_ = other.value_;
     mtk_.encode(other.mtk_);
@@ -239,6 +245,7 @@ struct ObMvccWriteResult {
     is_mvcc_undo_ = other.is_mvcc_undo_;
     lock_state_ = other.lock_state_;
     is_checked_ = other.is_checked_;
+    tx_callback_ = other.tx_callback_;
     tx_node_ = other.tx_node_;
     value_ = other.value_;
     mtk_.encode(other.mtk_);
@@ -255,6 +262,7 @@ struct ObMvccWriteResult {
     is_new_locked_ = false;
     is_mvcc_undo_ = false;
     lock_state_.reset();
+    tx_callback_ = NULL;
     tx_node_ = NULL;
     is_checked_ = false;
     value_ = NULL;

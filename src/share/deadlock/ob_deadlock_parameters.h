@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_SHARE_DEADLOCK_OB_DEADLOCK_PARAMETERS_
 #define OCEANBASE_SHARE_DEADLOCK_OB_DEADLOCK_PARAMETERS_
 #include <stdint.h>
+#include "lib/literals/ob_literals.h"
 
 namespace oceanbase
 {
@@ -44,6 +45,7 @@ constexpr const int64_t COLLECT_INFO_INTERVAL = 1000 * 1000;
 // used within ObDeadLockInnerTableServic::ObDeadLockEventHistoryTableOperator::async_delete
 // remain last 7 days event records
 constexpr const int64_t REMAIN_RECORD_DURATION = 7L * 24L * 60L * 60L * 1000L * 1000L;
+constexpr const int64_t INNER_NODE_LEASE = 10_s;
 // used when report deadlock inner info
 struct ROLE
 {

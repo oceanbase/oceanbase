@@ -9009,6 +9009,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_VIRTUAL_ZONE_STORAGE_MYSQL_SYS_AGENT_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_ZONE_STORAGE_MYSQL_SYS_AGENT_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_NIC_INFO_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_NIC_INFO_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_SCHEMA_VERSION); break;
+    case OB_ALL_VIRTUAL_DEADLOCK_DETECTOR_STAT_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_DEADLOCK_DETECTOR_STAT_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_SPATIAL_REFERENCE_SYSTEMS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SPATIAL_REFERENCE_SYSTEMS_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_LOG_TRANSPORT_DEST_STAT_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_LOG_TRANSPORT_DEST_STAT_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_SS_LOCAL_CACHE_INFO_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SS_LOCAL_CACHE_INFO_SCHEMA_VERSION); break;

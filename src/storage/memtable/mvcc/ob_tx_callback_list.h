@@ -15,6 +15,7 @@
 
 #include "storage/memtable/mvcc/ob_tx_callback_functor.h"
 #include "storage/memtable/ob_memtable_util.h"
+#include "ob_tx_callback_hash_holder_helper.h"
 namespace oceanbase
 {
 namespace memtable
