@@ -23,6 +23,7 @@
 #include "observer/omt/ob_tenant.h"
 #include "rootserver/ob_rs_rpc_processor.h"
 #include "lib/stat/ob_diagnostic_info_container.h"
+#include "share/table/ob_table_util.h"
 
 using namespace oceanbase::common;
 
@@ -32,6 +33,7 @@ using namespace oceanbase::obrpc;
 using namespace oceanbase::observer;
 using namespace oceanbase::omt;
 using namespace oceanbase::memtable;
+using namespace oceanbase::table;
 
 namespace oceanbase
 {
@@ -542,7 +544,7 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
   const bool need_update_stat =
       !req.is_retry_on_lock() && oceanbase::lib::is_diagnose_info_enabled();
   const bool is_stream = pkt.is_stream();
-  const uint64_t tenant_id = pkt.get_tenant_id();
+  uint64_t tenant_id = pkt.get_tenant_id();
   const uint64_t group_id = pkt.get_group_id();
 
   if (stop_
@@ -573,24 +575,28 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
       queue = &ddl_queue_->queue_;
     }
   } else {
-    const uint64_t priv_tenant_id = pkt.get_priv_tenant_id();
-    if (NULL != gctx_.omt_) {
-      tenant = NULL;
-      if (req.get_nio_protocol() == ObRequest::TRANSPORT_PROTO_POC) {
-        // pkt-nio has locked the omt tenants, so use `get_tenant_unsafe`
-        if (OB_FAIL(gctx_.omt_->get_tenant_unsafe(tenant_id, tenant)) || NULL == tenant) {
-          if (OB_FAIL(gctx_.omt_->get_tenant_unsafe(priv_tenant_id, tenant)) || NULL == tenant) {
+    if (OB_TABLE_API_LOGIN == pkt.get_pcode() && OB_FAIL(ObTableUtils::extract_tenant_id(pkt, tenant_id))) {
+      LOG_WARN("extract tenant_id from packet failed", K(ret));
+    } else {
+      const uint64_t priv_tenant_id = pkt.get_priv_tenant_id();
+      if (NULL != gctx_.omt_) {
+        tenant = NULL;
+        if (req.get_nio_protocol() == ObRequest::TRANSPORT_PROTO_POC) {
+          // pkt-nio has locked the omt tenants, so use `get_tenant_unsafe`
+          if (OB_FAIL(gctx_.omt_->get_tenant_unsafe(tenant_id, tenant)) || NULL == tenant) {
+            if (OB_FAIL(gctx_.omt_->get_tenant_unsafe(priv_tenant_id, tenant)) || NULL == tenant) {
+              ret = OB_TENANT_NOT_IN_SERVER;
+            }
+          }
+        } else if (OB_FAIL(gctx_.omt_->get_tenant(tenant_id, tenant)) || NULL == tenant) {
+          if (OB_FAIL(gctx_.omt_->get_tenant(priv_tenant_id, tenant)) || NULL == tenant) {
             ret = OB_TENANT_NOT_IN_SERVER;
           }
         }
-      } else if (OB_FAIL(gctx_.omt_->get_tenant(tenant_id, tenant)) || NULL == tenant) {
-        if (OB_FAIL(gctx_.omt_->get_tenant(priv_tenant_id, tenant)) || NULL == tenant) {
-          ret = OB_TENANT_NOT_IN_SERVER;
-        }
+      } else {
+        ret = OB_NOT_INIT;
+        LOG_ERROR("gctx_.omt_ is NULL", K(gctx_));
       }
-    } else {
-      ret = OB_NOT_INIT;
-      LOG_ERROR("gctx_.omt_ is NULL", K(gctx_));
     }
   }
 

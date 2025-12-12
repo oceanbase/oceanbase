@@ -12,9 +12,13 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_util.h"
+#include "rpc/obrpc/ob_rpc_packet.h"
+#include "share/table/ob_table_rpc_struct.h"
+#include "observer/ob_server_struct.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
+
 
 namespace oceanbase
 {
@@ -106,6 +110,40 @@ namespace table
                                                                      tmp_first_level_part_id,
                                                                      tablet_id))) {
       LOG_WARN("fail to get tablet by idx", K(ret));
+    }
+    return ret;
+  }
+
+  int ObTableUtils::extract_tenant_id(const obrpc::ObRpcPacket &pkt, uint64_t &tenant_id)
+  {
+    int ret = OB_SUCCESS;
+    tenant_id = OB_INVALID_TENANT_ID;
+
+    // Deserialize ObTableLoginRequest from RPC packet
+    ObTableLoginRequest login_request;
+    const char *buf = pkt.get_cdata();
+    int64_t data_len = pkt.get_clen();
+    int64_t pos = 0;
+
+    if (OB_FAIL(login_request.deserialize(buf, data_len, pos))) {
+      LOG_WARN("failed to deserialize ObTableLoginRequest", K(ret));
+    } else if (login_request.tenant_name_.empty()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("tenant_name is empty in ObTableLoginRequest", K(ret), K(login_request));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant_name is empty in ObTableLoginRequest");
+    } else {
+      // Extract tenant_id from tenant_name using schema service
+      if (OB_ISNULL(GCTX.schema_service_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid schema service", K(ret), K(GCTX.schema_service_));
+      } else {
+        ObSchemaGetterGuard guard;
+        if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
+          LOG_WARN("get_schema_guard failed", K(ret));
+        } else if (OB_FAIL(guard.get_tenant_id(login_request.tenant_name_, tenant_id))) {
+          LOG_WARN("get_tenant_id failed", K(ret), K(login_request.tenant_name_));
+        }
+      }
     }
     return ret;
   }
