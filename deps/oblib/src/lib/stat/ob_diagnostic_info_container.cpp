@@ -733,7 +733,7 @@ int ObDiagnosticInfoContainer::for_each_and_delay_release_ref(
         } else if (OB_FAIL(fn(id, di))) {
           LOG_WARN("faield to exec fn", K(ret));
         }
-        return ret;
+        return ret == OB_SUCCESS;
       };
 
   if (OB_FAIL(for_each_running_di(fn_wrapper))) {
