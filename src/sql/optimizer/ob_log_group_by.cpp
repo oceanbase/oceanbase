@@ -836,7 +836,7 @@ int ObLogGroupBy::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
     LOG_WARN("unexpected null", K(ret));
   } else {
     is_fixed = ObOptimizerUtil::find_item(aggr_exprs_, expr) ||
-        (T_FUN_SYS_REMOVE_CONST == expr->get_expr_type() && ObOptimizerUtil::find_item(rollup_exprs_, expr));
+               ObOptimizerUtil::find_item(rollup_exprs_, expr);
   }
   return ret;
 }
