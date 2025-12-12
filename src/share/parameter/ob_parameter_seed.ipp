@@ -3139,6 +3139,24 @@ DEF_INT(_ss_garbage_collect_concurrency, OB_TENANT_PARAMETER, "0", "[0, 100]",
         "If set to 0, the system auto-calculates the worker count as the tenant’s max_cpu divided by 4; otherwise, the worker count is set to the specified value."
         "Range: [0, 100] in integer",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_px_adaptive_dop, OB_CLUSTER_PARAMETER, "False",
+         "Enable control parallel query queuing and dynamical parallelism scaling according to real-time system load",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
+DEF_INT(px_target_low_watermark, OB_TENANT_PARAMETER, "60", "[0,100]",
+        "Low watermark percentage threshold of parallel task count. "
+        "Parallelism scaling(DOP) will be degraded to prevent CPU resource exhaustion when exceeded."
+        "The default value is 60. Range: [0,100]",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(px_target_high_watermark, OB_TENANT_PARAMETER, "80", "[0,100]",
+        "High watermark percentage threshold of parallel task count. "
+        "The closer the real-time load approaches this watermark, the greater the parallelism degradation. "
+        "When exceeding this watermark, parallelism is reduced to 1."
+        "The default value is 80. Range: [0,100]",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_DBL(px_target_workers_per_cpu, OB_TENANT_PARAMETER, "8", "[0,)",
+        "Target number of parallel threads per CPU quota for tenant."
+        "The default value is 8. Range: [0,)",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR_WITH_CHECKER(default_delta_format, OB_TENANT_PARAMETER, "flat",
                      common::ObConfigDefaultDeltaFormatChecker,
                      "Controls default delta format when creating table",
