@@ -453,7 +453,6 @@ private:
   storage::ObLSService *ls_service_;
   common::ObMySQLProxy *sql_proxy_;
   ObFIFOAllocator allocator_;
-  common::ObArenaAllocator alloc_;
   // do not use this memory context directly
   // use wrapped memory context in ob_tenant_vector_allocator.h and init by this memory context
   lib::MemoryContext memory_context_;
