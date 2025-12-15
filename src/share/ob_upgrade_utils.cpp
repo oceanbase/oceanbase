@@ -45,48 +45,136 @@ using namespace sql;
 
 namespace share
 {
-const uint64_t ObUpgradeChecker::UPGRADE_PATH[] = {
-  CALC_VERSION(4UL, 0UL, 0UL, 0UL),  // 4.0.0.0
-  CALC_VERSION(4UL, 1UL, 0UL, 0UL),  // 4.1.0.0
-  CALC_VERSION(4UL, 1UL, 0UL, 1UL),  // 4.1.0.1
-  CALC_VERSION(4UL, 1UL, 0UL, 2UL),  // 4.1.0.2
-  CALC_VERSION(4UL, 2UL, 0UL, 0UL),  // 4.2.0.0
-  CALC_VERSION(4UL, 2UL, 1UL, 0UL),  // 4.2.1.0
-  CALC_VERSION(4UL, 2UL, 1UL, 1UL),  // 4.2.1.1
-  CALC_VERSION(4UL, 2UL, 1UL, 2UL),  // 4.2.1.2
-  CALC_VERSION(4UL, 2UL, 2UL, 0UL),  // 4.2.2.0
-  CALC_VERSION(4UL, 2UL, 2UL, 1UL),  // 4.2.2.1
-  CALC_VERSION(4UL, 2UL, 3UL, 0UL),  // 4.2.3.0
-  CALC_VERSION(4UL, 2UL, 3UL, 1UL),  // 4.2.3.1
-  CALC_VERSION(4UL, 2UL, 4UL, 0UL),  // 4.2.4.0
-  CALC_VERSION(4UL, 2UL, 5UL, 0UL),  // 4.2.5.0
-  CALC_VERSION(4UL, 2UL, 5UL, 1UL),  // 4.2.5.1
-  CALC_VERSION(4UL, 2UL, 5UL, 2UL),  // 4.2.5.2
-  CALC_VERSION(4UL, 2UL, 5UL, 3UL),  // 4.2.5.3
-  CALC_VERSION(4UL, 2UL, 5UL, 4UL),  // 4.2.5.4
-  CALC_VERSION(4UL, 2UL, 5UL, 5UL),  // 4.2.5.5
-  CALC_VERSION(4UL, 2UL, 5UL, 6UL),  // 4.2.5.6
+
+void ObUpgradePath::reset()
+{
+  upgrade_versions_.reset();
+  update_current_version_.reset();
+}
+
+bool ObUpgradePath::is_valid() const
+{
+  bool valid = true;
+  if (upgrade_versions_.count() != update_current_version_.count()) {
+    valid = false;
+  }
+  return valid;
+}
+
+int64_t ObUpgradePath::count() const
+{
+  return upgrade_versions_.count();
+}
+
+int ObUpgradePath::add_version(const uint64_t version, const bool update)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(upgrade_versions_.push_back(version)) || OB_FAIL(update_current_version_.push_back(update))) {
+    LOG_WARN("failed to push_back", KR(ret), K(update_current_version_), K(upgrade_versions_),
+        KDV(version), K(update));
+  }
+  return ret;
+}
+
+int ObUpgradePath::get_version(const int64_t idx, uint64_t &version, bool &update) const
+{
+  int ret = OB_SUCCESS;
+  if (idx >= upgrade_versions_.count() || idx >= update_current_version_.count()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("index out of range", KR(ret), K(idx), K(upgrade_versions_), K(update_current_version_));
+  } else {
+    version = upgrade_versions_[idx];
+    update = update_current_version_[idx];
+  }
+  return ret;
+}
+
+// UPGRADE_PATH_42x 表示42x的升级路径
+// UPGRADE_PATH_43x 表示43x的升级路径
+// UPGRADE_PATH_CURRENT 表示当前序列的升级路径
+// 如果要在42x/43x/44x中新增版本或占位，就在对应数组后增加版本号
+// 如果要修改42x最后一个版本能升级到的第一个版本，就修改upgrade_versions中的版本
+// 例子：现在要在42x上新增一个4258，他能升级到的第一个版本是4430，那么就在UPGRADE_PATH_42x中新增一下4258
+// const uint64_t ObUpgradeChecker::UPGRADE_PATH_42x[] = {
+//   CALC_VERSION(4UL, 2UL, 5UL, 7UL),  // 4.2.5.7
+//   CALC_VERSION(4UL, 2UL, 5UL, 8UL),  // 4.2.5.8
+//   // !!! add new 42x versions here
+// };
+// 然后修改upgrade_versions中的版本
+// const ObUpgradeVersions ObUpgradeChecker::upgrade_versions[] = {
+//   ObUpgradeVersions(ObUpgradeChecker::UPGRADE_PATH_42x, CALC_VERSION(4UL, 4UL, 3UL, 0UL), ARRAYSIZEOF(ObUpgradeChecker::UPGRADE_PATH_42x)),
+//   ObUpgradeVersions(ObUpgradeChecker::UPGRADE_PATH_43x, CALC_VERSION(4UL, 4UL, 2UL, 0UL), ARRAYSIZEOF(ObUpgradeChecker::UPGRADE_PATH_43x)),
+//   ObUpgradeVersions(ObUpgradeChecker::UPGRADE_PATH_CURRENT, DATA_CURRENT_VERSION, ARRAYSIZEOF(ObUpgradeChecker::UPGRADE_PATH_CURRENT)),
+// };
+// 如果有问题请联系@伊平
+const uint64_t ObUpgradeChecker::UPGRADE_PATH_42x[] = {
   CALC_VERSION(4UL, 2UL, 5UL, 7UL),  // 4.2.5.7
-  CALC_VERSION(4UL, 3UL, 0UL, 0UL),  // 4.3.0.0
-  CALC_VERSION(4UL, 3UL, 0UL, 1UL),  // 4.3.0.1
-  CALC_VERSION(4UL, 3UL, 1UL, 0UL),  // 4.3.1.0
-  CALC_VERSION(4UL, 3UL, 2UL, 0UL),  // 4.3.2.0
-  CALC_VERSION(4UL, 3UL, 2UL, 1UL),  // 4.3.2.1
-  CALC_VERSION(4UL, 3UL, 3UL, 0UL),  // 4.3.3.0
-  CALC_VERSION(4UL, 3UL, 3UL, 1UL),  // 4.3.3.1
-  CALC_VERSION(4UL, 3UL, 4UL, 0UL),  // 4.3.4.0
-  CALC_VERSION(4UL, 3UL, 4UL, 1UL),  // 4.3.4.1
-  CALC_VERSION(4UL, 3UL, 5UL, 0UL),  // 4.3.5.0
-  CALC_VERSION(4UL, 3UL, 5UL, 1UL),  // 4.3.5.1
-  CALC_VERSION(4UL, 3UL, 5UL, 2UL),  // 4.3.5.2
-  CALC_VERSION(4UL, 3UL, 5UL, 3UL),  // 4.3.5.3
-  CALC_VERSION(4UL, 3UL, 5UL, 4UL),  // 4.3.5.4
-  CALC_VERSION(4UL, 3UL, 5UL, 5UL),  // 4.3.5.5
+  // !!! add new 42x versions here
+};
+const uint64_t ObUpgradeChecker::UPGRADE_PATH_43x[] = {
+  CALC_VERSION(4UL, 3UL, 0UL, 0UL),// 4.3.0.0
+  CALC_VERSION(4UL, 3UL, 0UL, 1UL),// 4.3.0.1
+  CALC_VERSION(4UL, 3UL, 1UL, 0UL),// 4.3.1.0
+  CALC_VERSION(4UL, 3UL, 2UL, 0UL),// 4.3.2.0
+  CALC_VERSION(4UL, 3UL, 2UL, 1UL),// 4.3.2.1
+  CALC_VERSION(4UL, 3UL, 3UL, 0UL),// 4.3.3.0
+  CALC_VERSION(4UL, 3UL, 3UL, 1UL),// 4.3.3.1
+  CALC_VERSION(4UL, 3UL, 4UL, 0UL),// 4.3.4.0
+  CALC_VERSION(4UL, 3UL, 4UL, 1UL),// 4.3.4.1
+  CALC_VERSION(4UL, 3UL, 5UL, 0UL),// 4.3.5.0
+  CALC_VERSION(4UL, 3UL, 5UL, 1UL),// 4.3.5.1
+  CALC_VERSION(4UL, 3UL, 5UL, 2UL),// 4.3.5.2
+  // !!! add new 43x versions here
+};
+const uint64_t ObUpgradeChecker::UPGRADE_PATH_CURRENT[] = {
   CALC_VERSION(4UL, 4UL, 0UL, 0UL),  // 4.4.0.0
   CALC_VERSION(4UL, 4UL, 0UL, 1UL),  // 4.4.0.1
   CALC_VERSION(4UL, 4UL, 1UL, 0UL),  // 4.4.1.0
   CALC_VERSION(4UL, 4UL, 2UL, 0UL),  // 4.4.2.0
+  // add 44x versions here
 };
+
+const ObUpgradeVersions ObUpgradeChecker::upgrade_versions[] = {
+  ObUpgradeVersions(ObUpgradeChecker::UPGRADE_PATH_42x, CALC_VERSION(4UL, 4UL, 2UL, 0UL), ARRAYSIZEOF(ObUpgradeChecker::UPGRADE_PATH_42x)),
+  ObUpgradeVersions(ObUpgradeChecker::UPGRADE_PATH_43x, CALC_VERSION(4UL, 4UL, 2UL, 0UL), ARRAYSIZEOF(ObUpgradeChecker::UPGRADE_PATH_43x)),
+  ObUpgradeVersions(ObUpgradeChecker::UPGRADE_PATH_CURRENT, DATA_CURRENT_VERSION, ARRAYSIZEOF(ObUpgradeChecker::UPGRADE_PATH_CURRENT)),
+};
+ObUpgradeVersions::ObUpgradeVersions(const uint64_t *upgrade_path,
+    const uint64_t next_upgrade_version, const int64_t upgrade_path_num)
+  : upgrade_path_(upgrade_path), next_upgrade_version_(next_upgrade_version),
+    upgrade_path_num_(upgrade_path_num) {}
+
+bool ObUpgradeVersions::check_version_exist(const uint64_t version) const
+{
+  bool bret = false;
+  for (int64_t i = 0; !bret && i < upgrade_path_num_; i++) {
+    bret = (version == upgrade_path_[i]);
+  }
+  return bret;
+}
+
+int ObUpgradeVersions::add_upgrade_versions(
+    const uint64_t current_version,
+    const bool force_update_current_version,
+    const uint64_t next_upgrade_version,
+    ObUpgradePath &path) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(upgrade_path_) || upgrade_path_num_ == 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(upgrade_path_), K(upgrade_path_num_));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < upgrade_path_num_; i++) {
+    const uint64_t data_version = upgrade_path_[i];
+    if (data_version > current_version) {
+      bool update = (force_update_current_version || data_version >= next_upgrade_version);
+      if (OB_FAIL(path.add_version(data_version, update))) {
+        LOG_WARN("failed to add version", KR(ret), KDV(data_version), K(update));
+      }
+    }
+  }
+  return ret;
+}
 
 int ObUpgradeChecker::get_data_version_by_cluster_version(
     const uint64_t cluster_version,
@@ -153,11 +241,47 @@ bool ObUpgradeChecker::check_data_version_exist(
      const uint64_t version)
 {
   bool bret = false;
-  STATIC_ASSERT(DATA_VERSION_NUM == ARRAYSIZEOF(UPGRADE_PATH), "data version count not match!!!");
-  for (int64_t i = 0; !bret && i < ARRAYSIZEOF(UPGRADE_PATH); i++) {
-    bret = (version == UPGRADE_PATH[i]);
+  for (int64_t i = 0; !bret && i < ARRAYSIZEOF(upgrade_versions); i++) {
+    if (upgrade_versions[i].check_version_exist(version)) {
+      bret = true;
+    }
   }
   return bret;
+}
+
+int ObUpgradeChecker::get_upgrade_path(const uint64_t version, ObUpgradePath &path)
+{
+  return get_upgrade_path_(version, upgrade_versions, ARRAYSIZEOF(upgrade_versions), path);
+}
+
+int ObUpgradeChecker::get_upgrade_path_(const uint64_t version,
+   const ObUpgradeVersions upgrade_versions[], const int64_t upgrade_versions_count, ObUpgradePath &path)
+{
+  int ret = OB_SUCCESS;
+  path.reset();
+  bool has_version = false;
+  uint64_t next_upgrade_version = OB_INVALID_VERSION;
+  for (int64_t i = 0; OB_SUCC(ret) && i < upgrade_versions_count; i++) {
+    const ObUpgradeVersions &upgrade_version = upgrade_versions[i];
+    if (upgrade_version.check_version_exist(version)) {
+      has_version = true;
+      next_upgrade_version = upgrade_version.get_next_upgrade_version();
+      if (OB_FAIL(upgrade_version.add_upgrade_versions(version, true/*force_update_current_version*/,
+          next_upgrade_version, path))) {
+        LOG_WARN("failed to add upgrade versions", KR(ret), KDV(version));
+      }
+    } else if (has_version) {
+      if (OB_FAIL(upgrade_version.add_upgrade_versions(version, false/*force_update_current_version*/,
+            next_upgrade_version, path))) {
+        LOG_WARN("failed to add upgrade versions", KR(ret), KDV(version));
+      }
+    }
+  }
+  if (!has_version) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("data version not exists in upgrade path", KR(ret), KDV(version));
+  }
+  return ret;
 }
 
 // TODO: should correspond to upgrade YML file.
@@ -772,26 +896,6 @@ int ObUpgradeProcesserSet::init(
         all_version_upgrade_processor_);
 
     // order by data version asc
-    INIT_PROCESSOR_BY_VERSION(4, 0, 0, 0);
-    INIT_PROCESSOR_BY_VERSION(4, 1, 0, 0);
-    INIT_PROCESSOR_BY_VERSION(4, 1, 0, 1);
-    INIT_PROCESSOR_BY_VERSION(4, 1, 0, 2);
-    INIT_PROCESSOR_BY_VERSION(4, 2, 0, 0);
-    INIT_PROCESSOR_BY_VERSION(4, 2, 1, 0);
-    INIT_PROCESSOR_BY_VERSION(4, 2, 1, 1);
-    INIT_PROCESSOR_BY_VERSION(4, 2, 1, 2);
-    INIT_PROCESSOR_BY_VERSION(4, 2, 2, 0);
-    INIT_PROCESSOR_BY_VERSION(4, 2, 2, 1);
-    INIT_PROCESSOR_BY_VERSION(4, 2, 3, 0);
-    INIT_PROCESSOR_BY_VERSION(4, 2, 3, 1);
-    INIT_PROCESSOR_BY_VERSION(4, 2, 4, 0);
-    INIT_PROCESSOR_BY_VERSION(4, 2, 5, 0);
-    INIT_PROCESSOR_BY_VERSION(4, 2, 5, 1);
-    INIT_PROCESSOR_BY_VERSION(4, 2, 5, 2);
-    INIT_PROCESSOR_BY_VERSION(4, 2, 5, 3);
-    INIT_PROCESSOR_BY_VERSION(4, 2, 5, 4);
-    INIT_PROCESSOR_BY_VERSION(4, 2, 5, 5);
-    INIT_PROCESSOR_BY_VERSION(4, 2, 5, 6);
     INIT_PROCESSOR_BY_VERSION(4, 2, 5, 7);
     INIT_PROCESSOR_BY_VERSION(4, 3, 0, 0);
     INIT_PROCESSOR_BY_VERSION(4, 3, 0, 1);
@@ -886,7 +990,8 @@ int ObUpgradeProcesserSet::get_all_version_processor(ObBaseUpgradeProcessor *&pr
   return ret;
 }
 
-// run upgrade processor by (start_version, end_version]
+// start_idx --> the processor of start_version in processor_set array
+// end_idx --> the processor of end_version in processor_set array
 int ObUpgradeProcesserSet::get_processor_idx_by_range(
     const int64_t start_version,
     const int64_t end_version,
@@ -1198,376 +1303,6 @@ int ObUpgradeForAllVersionProcessor::finish_upgrade_for_add_sys_priv()
   }
   return ret;
 }
-
-int ObUpgradeFor4100Processor::post_upgrade()
-{
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = get_tenant_id();
-  if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (OB_FAIL(post_upgrade_for_srs())) {
-    LOG_WARN("post upgrade for srs failed", K(ret));
-  } else if (OB_FAIL(post_upgrade_for_backup())) {
-    LOG_WARN("post upgrade for backup failed", K(ret));
-  } else if (OB_FAIL(init_rewrite_rule_version(tenant_id))) {
-    LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (OB_FAIL(recompile_all_views_and_synonyms(tenant_id))) {
-    LOG_WARN("fail to init rewrite rule version", K(ret), K(tenant_id));
-  }
-  return ret;
-}
-
-int ObUpgradeFor4100Processor::init_rewrite_rule_version(const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  ObSqlString sql;
-  int64_t affected_rows = 0;
-  OZ (sql.append_fmt(
-                  "insert ignore into %s "
-                  "(tenant_id, zone, name, data_type, value, info) values "
-                  "(%lu, '', 'ob_max_used_rewrite_rule_version', %lu, %lu, 'max used rewrite rule version')",
-                  OB_ALL_SYS_STAT_TNAME,
-                  OB_INVALID_TENANT_ID,
-                  static_cast<uint64_t>(ObIntType),
-                  OB_INIT_REWRITE_RULE_VERSION));
-  CK (sql_proxy_ != NULL);
-  OZ (sql_proxy_->write(tenant_id, sql.ptr(), affected_rows));
-  return ret;
-}
-
-int ObUpgradeFor4100Processor::post_upgrade_for_srs()
-{
-  int ret = OB_SUCCESS;
-  ObSqlString sql;
-  int64_t start = ObTimeUtility::current_time();
-  int64_t affected_rows = 0;
-  if (OB_FAIL(sql.assign_fmt("INSERT IGNORE INTO %s "
-      "(SRS_VERSION, SRS_ID, SRS_NAME, ORGANIZATION, ORGANIZATION_COORDSYS_ID, DEFINITION, minX, maxX, minY, maxY, proj4text, DESCRIPTION) VALUES"
-      R"((1, 0, '', NULL, NULL, '', -2147483648,2147483647,-2147483648,2147483647,'', NULL))",
-      OB_ALL_SPATIAL_REFERENCE_SYSTEMS_TNAME))) {
-    LOG_WARN("sql assign failed", K(ret));
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(sql_proxy_->write(tenant_id_, sql.ptr(), affected_rows))) {
-      LOG_WARN("execute sql failed", K(ret), K(sql));
-    } else if (!is_zero_row(affected_rows) && !is_single_row(affected_rows)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected affected_rows", K(affected_rows));
-    } else {
-      LOG_TRACE("execute sql", KR(ret), K(tenant_id_), K(sql), K(affected_rows));
-    }
-  }
-
-  LOG_INFO("add tenant srs finish", K(ret), K(tenant_id_), K(affected_rows), "cost", ObTimeUtility::current_time() - start);
-    return ret;
-}
-int ObUpgradeFor4100Processor::post_upgrade_for_backup()
-{
-  int ret = OB_SUCCESS;
-  ObSqlString sql;
-  int64_t start = ObTimeUtility::current_time();
-  int64_t affected_rows = 0;
-  if (is_meta_tenant(tenant_id_)) {
-    if (OB_FAIL(sql.assign_fmt("UPDATE %s SET CLUSTER_VERSION = '4.0.0.0' WHERE CLUSTER_VERSION = ''", OB_ALL_BACKUP_SET_FILES_TNAME))) {
-      LOG_WARN("sql assign failed", K(ret));
-    } else if (OB_FAIL(sql_proxy_->write(tenant_id_, sql.ptr(), affected_rows))) {
-      LOG_WARN("execute sql failed", K(ret), K(sql));
-    } else {
-      LOG_TRACE("execute sql", KR(ret), K(tenant_id_), K(sql), K(affected_rows));
-    }
-
-    LOG_INFO("update backup cluster version finish", K(ret), K(tenant_id_), K(affected_rows), "cost", ObTimeUtility::current_time() - start);
-  }
-  return ret;
-}
-
-int ObUpgradeFor4100Processor::recompile_all_views_and_synonyms(const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  CK(OB_NOT_NULL(GCTX.rs_rpc_proxy_) && OB_NOT_NULL(GCTX.schema_service_));
-  ObSchemaGetterGuard schema_guard;
-  ObArray<const ObTableSchema *> all_views;
-  ObArray<const ObSynonymInfo *> all_synonyms;
-  const int64_t batch_size = 128;
-  const int64_t timeout = GCONF.internal_sql_execute_timeout;
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
-      LOG_WARN("failed to get tenant schema guard", K(ret));
-    } else if (OB_FAIL(schema_guard.get_view_schemas_in_tenant(tenant_id, all_views))) {
-      LOG_WARN("failed to get view schemas", K(ret));
-    } else if (OB_FAIL(schema_guard.get_synonym_infos_in_tenant(tenant_id, all_synonyms))) {
-      LOG_WARN("failed to get synonym infos", K(ret));
-    } else {
-      int64_t idx = 0;
-      while (OB_SUCC(ret) && idx < all_views.count()) {
-        ObArray<uint64_t> batch_ids;
-        for (int64_t i = 0; OB_SUCC(ret) && i < batch_size && idx < all_views.count(); ++idx) {
-          if (OB_ISNULL(all_views.at(idx))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("failed to get view schema", K(ret), K(idx));
-          } else if (!all_views.at(idx)->is_view_table()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get wrong schema", K(ret), K(*all_views.at(idx)));
-          } else if (ObObjectStatus::VALID == all_views.at(idx)->get_object_status()) {
-            OZ (batch_ids.push_back(all_views.at(idx)->get_table_id()));
-            ++i;
-          }
-        }
-        if (OB_SUCC(ret)) {
-          int64_t start_time = ObTimeUtility::current_time();
-          SMART_VAR(obrpc::ObRecompileAllViewsBatchArg, recompile_arg) {
-            recompile_arg.tenant_id_ = tenant_id;
-            recompile_arg.exec_tenant_id_ = tenant_id;
-            if (batch_ids.empty()) {
-            } else if (OB_FAIL(recompile_arg.view_ids_.assign(batch_ids))) {
-              LOG_WARN("failed to assign ids", K(ret));
-            } else if (OB_FAIL(GCTX.rs_rpc_proxy_->timeout(timeout).recompile_all_views_batch(recompile_arg))) {
-              LOG_WARN("failed to recompile batch views", K(ret), K(recompile_arg));
-            } else {
-              LOG_INFO("succ reset batch view", KR(ret), K(start_time),
-                      "cost_time", ObTimeUtility::current_time() - start_time);
-            }
-          }
-        }
-      }
-      idx = 0;
-      while (OB_SUCC(ret) && idx < all_synonyms.count()) {
-        ObArray<uint64_t> batch_ids;
-        for (int64_t i = 0; OB_SUCC(ret) && i < batch_size && idx < all_synonyms.count(); ++i, ++idx) {
-          if (OB_ISNULL(all_synonyms.at(idx))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("failed to get view schema", K(ret), K(idx));
-          } else {
-            OZ (batch_ids.push_back(all_synonyms.at(idx)->get_synonym_id()));
-          }
-        }
-        if (OB_SUCC(ret)) {
-          int64_t start_time = ObTimeUtility::current_time();
-          SMART_VAR(obrpc::ObTryAddDepInofsForSynonymBatchArg, dep_info_arg) {
-            dep_info_arg.tenant_id_ = tenant_id;
-            dep_info_arg.exec_tenant_id_ = tenant_id;
-            if (batch_ids.empty()) {
-            } else if (OB_FAIL(dep_info_arg.synonym_ids_.assign(batch_ids))) {
-              LOG_WARN("failed to assign ids", K(ret));
-            } else if (OB_FAIL(GCTX.rs_rpc_proxy_->timeout(timeout).try_add_dep_infos_for_synonym_batch(dep_info_arg))) {
-              LOG_WARN("failed to add dep infos", K(ret), K(dep_info_arg));
-            } else {
-              LOG_INFO("succ add dep info batch", KR(ret), K(start_time),
-                      "cost_time", ObTimeUtility::current_time() - start_time);
-            }
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-/* =========== 4100 upgrade processor end ============= */
-
-int ObUpgradeFor4200Processor::post_upgrade()
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (OB_FAIL(post_upgrade_for_grant_create_database_link_priv())) {
-    LOG_WARN("grant create database link failed", K(ret));
-  } else if (OB_FAIL(post_upgrade_for_grant_drop_database_link_priv())) {
-    LOG_WARN("grant drop database link failed", K(ret));
-  } else if (OB_FAIL(post_upgrade_for_heartbeat_and_server_zone_op_service())) {
-    LOG_WARN("post upgrade for heartbeat and server zone op service failed", KR(ret));
-  } else if (OB_FAIL(post_upgrade_for_max_ls_id_())) {
-    LOG_WARN("failed to update max ls id", KR(ret));
-  }
-  return ret;
-}
-
-int ObUpgradeFor4200Processor::post_upgrade_for_max_ls_id_()
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(sql_proxy_) || !is_valid_tenant_id(tenant_id_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("error unexpected", KR(ret), KP(sql_proxy_), K(tenant_id_));
-  } else if (!is_meta_tenant(tenant_id_)) {
-    LOG_INFO("user and sys tenant no need to update max ls id", K(tenant_id_));
-  } else {
-    common::ObMySQLTransaction trans;
-    share::ObLSStatusOperator ls_op;
-    ObLSID max_ls_id;
-    ObAllTenantInfo tenant_info;
-    const uint64_t user_tenant_id = gen_user_tenant_id(tenant_id_);
-    if (OB_FAIL(trans.start(sql_proxy_, tenant_id_))) {
-      LOG_WARN("failed to start trans", KR(ret), K(user_tenant_id), K(tenant_id_));
-    } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(
-                  user_tenant_id, &trans, true, tenant_info))) {
-      LOG_WARN("failed to load tenant info", KR(ret), K(user_tenant_id));
-    } else if (OB_FAIL(ls_op.get_tenant_max_ls_id(user_tenant_id, max_ls_id, trans))) {
-      LOG_WARN("failed to get tenant max ls id", KR(ret), K(tenant_id_), K(user_tenant_id));
-    } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_max_ls_id(user_tenant_id, max_ls_id, trans, true))) {
-      LOG_WARN("failed to update tenant max ls id", KR(ret), K(tenant_id_), K(max_ls_id), K(user_tenant_id));
-    }
-    if (trans.is_started()) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
-        ret = OB_SUCC(ret) ? tmp_ret : ret;
-      }
-    }
-    LOG_INFO("update tenant max ls id", KR(ret), K(tenant_id_), K(max_ls_id), K(user_tenant_id));
-  }
-  return ret;
-}
-
-int ObUpgradeFor4200Processor::post_upgrade_for_grant_create_database_link_priv()
-{
-  int ret = OB_SUCCESS;
-  ObString sql("grant create database link on *.* to root");
-  int64_t start = ObTimeUtility::current_time();
-  int64_t affected_rows = 0;
-  ObSchemaGetterGuard schema_guard;
-  common::ObSEArray<const ObUserInfo *, 4, ModulePageAllocator, true> user_infos;
-  ObString root_name("root");
-  bool has_priv = true;
-  if (OB_ISNULL(schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null ptr", K(ret));
-  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
-    LOG_WARN("failed to get schema guard", K(ret));
-  } else if (OB_FAIL(schema_guard.get_user_info(tenant_id_, root_name, user_infos))) {
-    LOG_WARN("get root user failed", K(ret));
-  } else {
-    for (int64_t i = 0; has_priv && OB_SUCC(ret) && i < user_infos.count(); ++i) {
-      const ObUserInfo *user_info = user_infos.at(i);
-      if (OB_ISNULL(user_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null ptr", K(ret));
-      } else {
-        has_priv = has_priv && (OB_PRIV_CREATE_DATABASE_LINK & user_info->get_priv_set());
-      }
-    }
-    if (OB_FAIL(ret) || has_priv) {
-      // do nothing
-    } else if (OB_ISNULL(sql_proxy_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null ptr", K(ret));
-    } else if (OB_FAIL(sql_proxy_->write(tenant_id_, sql.ptr(), affected_rows))) {
-      LOG_WARN("execute sql failed", K(ret), K(sql));
-    } else {
-      LOG_TRACE("execute sql", KR(ret), K(tenant_id_), K(sql), K(affected_rows));
-    }
-  }
-  LOG_INFO("set create database link priv", K(ret), K(tenant_id_), K(affected_rows), "cost", ObTimeUtility::current_time() - start);
-  return ret;
-}
-
-int ObUpgradeFor4200Processor::post_upgrade_for_grant_drop_database_link_priv()
-{
-  int ret = OB_SUCCESS;
-  ObString sql("grant drop database link on *.* to root");
-  int64_t start = ObTimeUtility::current_time();
-  int64_t affected_rows = 0;
-  ObSchemaGetterGuard schema_guard;
-  common::ObSEArray<const ObUserInfo *, 4, ModulePageAllocator, true> user_infos;
-  ObString root_name("root");
-  bool has_priv = true;
-  if (OB_ISNULL(schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null ptr", K(ret));
-  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
-    LOG_WARN("failed to get schema guard", K(ret));
-  } else if (OB_FAIL(schema_guard.get_user_info(tenant_id_, root_name, user_infos))) {
-    LOG_WARN("get root user failed", K(ret));
-  } else {
-    for (int64_t i = 0; has_priv && OB_SUCC(ret) && i < user_infos.count(); ++i) {
-      const ObUserInfo *user_info = user_infos.at(i);
-      if (OB_ISNULL(user_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null ptr", K(ret));
-      } else {
-        has_priv = has_priv && (OB_PRIV_DROP_DATABASE_LINK & user_info->get_priv_set());
-      }
-    }
-    if (OB_FAIL(ret) || has_priv) {
-      // do nothing
-    } else if (OB_ISNULL(sql_proxy_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null ptr", K(ret));
-    } else if (OB_FAIL(sql_proxy_->write(tenant_id_, sql.ptr(), affected_rows))) {
-      LOG_WARN("execute sql failed", K(ret), K(sql));
-    } else {
-      LOG_TRACE("execute sql", KR(ret), K(tenant_id_), K(sql), K(affected_rows));
-    }
-  }
-  LOG_INFO("set drop database link priv", K(ret), K(tenant_id_), K(affected_rows), "cost", ObTimeUtility::current_time() - start);
-  return ret;
-}
-
-int ObUpgradeFor4200Processor::post_upgrade_for_heartbeat_and_server_zone_op_service()
-{
-  int ret = OB_SUCCESS;
-  int64_t affected_rows = 0;
-	if (OB_ISNULL(sql_proxy_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("error unexpected", KR(ret), KP(sql_proxy_));
-	} else if (!is_sys_tenant(tenant_id_)) {
-    LOG_INFO("only sys tenant need heartbeat and server zone op service", K(tenant_id_));
-  } else {
-    ObSqlString sql;
-    if (OB_FAIL(sql.assign_fmt("INSERT IGNORE INTO %s (tenant_id, name, value) VALUES "
-        "(%lu, '%s', 0), "
-        "(%lu, '%s', 0)",
-        OB_ALL_SERVICE_EPOCH_TNAME, OB_SYS_TENANT_ID, ObServiceEpochProxy::HEARTBEAT_SERVICE_EPOCH,
-        OB_SYS_TENANT_ID, ObServiceEpochProxy::SERVER_ZONE_OP_SERVICE_EPOCH))) {
-      LOG_WARN("fail to assign sql assign", KR(ret));
-    } else if (OB_FAIL(sql_proxy_->write(OB_SYS_TENANT_ID, sql.ptr(), affected_rows))) {
-      LOG_WARN("fail to execute sql", KR(ret), K(sql));
-    } else {}
-  }
-  FLOG_INFO("insert heartbeat and server zone op service", KR(ret), K(affected_rows));
-  return ret;
-}
-
-/* =========== 4200 upgrade processor end ============= */
-
-int ObUpgradeFor4211Processor::post_upgrade()
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (OB_FAIL(post_upgrade_for_dbms_scheduler())) {
-    LOG_WARN("post for upgrade dbms scheduler failed", K(ret));
-  }
-  return ret;
-}
-
-int ObUpgradeFor4211Processor::post_upgrade_for_dbms_scheduler()
-{
-  int ret = OB_SUCCESS;
-  ObSqlString sql;
-  int64_t affected_rows = 0;
-  bool is_tenant_standby = false;
-  if (sql_proxy_ == NULL) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql_proxy is null", K(ret), K(tenant_id_));
-  } else if (OB_FAIL(ObAllTenantInfoProxy::is_standby_tenant(sql_proxy_, tenant_id_, is_tenant_standby))) {
-    LOG_WARN("check is standby tenant failed", K(ret), K(tenant_id_));
-  } else if (is_tenant_standby) {
-    LOG_INFO("tenant is standby, ignore", K(tenant_id_));
-  } else {
-    OZ (sql.append_fmt(
-                    "insert ignore into %s "
-                    "(tenant_id,job_name,job,lowner,powner,cowner,next_date,`interval#`,flag) "
-                    "select tenant_id, job_name,0,lowner,powner,cowner,next_date,`interval#`,flag from %s where job != 0",
-                    OB_ALL_TENANT_SCHEDULER_JOB_TNAME,
-                    OB_ALL_TENANT_SCHEDULER_JOB_TNAME)); // if has new colomn, use default value
-    OZ (sql_proxy_->write(tenant_id_, sql.ptr(), affected_rows));
-    LOG_INFO("insert job_id=0 rows finished for dbms_scheduler old jobs", K(ret), K(tenant_id_), K(affected_rows));
-  }
-
-  return ret;
-}
-/* =========== 4211 upgrade processor end ============= */
 
 int ObUpgradeFor4310Processor::post_upgrade()
 {

@@ -177,11 +177,44 @@ public: \
   virtual int finish_upgrade() override { return common::OB_SUCCESS; } \
 };
 
+class ObUpgradePath
+{
+public:
+  void reset();
+  bool is_valid() const;
+  int64_t count() const;
+  int add_version(const uint64_t version, const bool update);
+  int get_version(const int64_t idx, uint64_t &version, bool &update) const;
+  TO_STRING_KV(K_(upgrade_versions), K_(update_current_version));
+private:
+  ObArray<uint64_t> upgrade_versions_;
+  ObArray<bool> update_current_version_;
+};
+
+class ObUpgradeVersions
+{
+public:
+  ObUpgradeVersions(const uint64_t *upgrade_path, const uint64_t next_upgrade_version,
+      const int64_t upgrade_path_num);
+  bool check_version_exist(const uint64_t version) const;
+  int add_upgrade_versions(
+      const uint64_t current_version,
+      const bool force_update_current_version,
+      const uint64_t next_upgrade_version,
+      ObUpgradePath &path) const;
+  uint64_t get_next_upgrade_version() const { return next_upgrade_version_; }
+private:
+  const uint64_t *upgrade_path_;
+  const uint64_t next_upgrade_version_;
+  int64_t upgrade_path_num_;
+};
+
 /*
  * NOTE: The Following code should be modified when DATA_CURRENT_VERSION changed.
- * 1. ObUpgradeChecker: DATA_VERSION_NUM, UPGRADE_PATH
+ * 1. ObUpgradeChecker: UPGRADE_PATH_42x, UPGRADE_PATH_43x, UPGRADE_PATH_CURRENT
  * 2. Implement new ObUpgradeProcessor by data_version.
  * 3. Modify int ObUpgradeProcesserSet::init().
+ * 4. fix unittest unittest/rootserver/test_upgrade_path.cpp
  */
 class ObUpgradeChecker
 {
@@ -192,9 +225,14 @@ public:
   static int get_data_version_by_cluster_version(
              const uint64_t cluster_version,
              uint64_t &data_version);
-public:
-  static const int64_t DATA_VERSION_NUM = 40;
-  static const uint64_t UPGRADE_PATH[];
+  static int get_upgrade_path(const uint64_t version, ObUpgradePath &path);
+private:
+  static int get_upgrade_path_(const uint64_t version, const ObUpgradeVersions upgrade_versions[],
+     const int64_t upgrade_versions_count, ObUpgradePath &path);
+  static const ObUpgradeVersions upgrade_versions[];
+  static const uint64_t UPGRADE_PATH_42x[];
+  static const uint64_t UPGRADE_PATH_43x[];
+  static const uint64_t UPGRADE_PATH_CURRENT[];
 };
 
 /* =========== special upgrade processor start ============= */
@@ -212,68 +250,6 @@ private:
   int replace_unit_group_id_with_unit_list_();
 };
 
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 0, 0, 0)
-
-class ObUpgradeFor4100Processor : public ObBaseUpgradeProcessor
-{
-public:
-  ObUpgradeFor4100Processor() : ObBaseUpgradeProcessor() {}
-  virtual ~ObUpgradeFor4100Processor() {}
-  virtual int pre_upgrade() override { return common::OB_SUCCESS; }
-  virtual int post_upgrade() override;
-  virtual int finish_upgrade() override { return common::OB_SUCCESS; }
-private:
-  int post_upgrade_for_srs();
-  int post_upgrade_for_backup();
-  int init_rewrite_rule_version(const uint64_t tenant_id);
-  static int recompile_all_views_and_synonyms(const uint64_t tenant_id);
-};
-
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 1, 0, 1)
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 1, 0, 2)
-
-class ObUpgradeFor4200Processor : public ObBaseUpgradeProcessor
-{
-public:
-  ObUpgradeFor4200Processor() : ObBaseUpgradeProcessor() {}
-  virtual ~ObUpgradeFor4200Processor() {}
-  virtual int pre_upgrade() override { return common::OB_SUCCESS; }
-  virtual int post_upgrade() override;
-  virtual int finish_upgrade() override { return common::OB_SUCCESS; }
-private:
-  int post_upgrade_for_grant_create_database_link_priv();
-  int post_upgrade_for_grant_drop_database_link_priv();
-  int post_upgrade_for_heartbeat_and_server_zone_op_service();
-  int post_upgrade_for_max_ls_id_();
-
-};
-
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 1, 0)
-class ObUpgradeFor4211Processor : public ObBaseUpgradeProcessor
-{
-public:
-  ObUpgradeFor4211Processor() : ObBaseUpgradeProcessor() {}
-  virtual ~ObUpgradeFor4211Processor() {}
-  virtual int pre_upgrade() override { return common::OB_SUCCESS; }
-  virtual int post_upgrade() override;
-  virtual int finish_upgrade() override { return common::OB_SUCCESS; }
-private:
-  int post_upgrade_for_dbms_scheduler();
-
-};
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 1, 2)
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 2, 0)
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 2, 1)
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 3, 0)
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 3, 1)
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 4, 0)
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 0)
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 1)
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 2)
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 3)
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 4)
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 5)
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 6)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 7)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 0, 0)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 0, 1)

@@ -1369,6 +1369,7 @@ int ObUpgradeExecutor::run_upgrade_processor_(ObUpgradeProcessorExecutor &execut
     } else if (OB_FAIL(executor.run_upgrade_processor(*processor))) {
       LOG_WARN("run post upgrade by version failed", KR(ret), K(tenant_id), KDV(version));
     }
+    LOG_INFO("run upgrade processor", KR(ret), K(tenant_id), KDV(version));
   }
   return ret;
 }
@@ -1402,39 +1403,41 @@ int ObUpgradeExecutor::run_upgrade_all_processors_(
   } else if (OB_FAIL(check_stop())) {
     LOG_WARN("executor should stopped", KR(ret));
   } else {
-    uint64_t current_data_version = 0;
-    int64_t start_idx = OB_INVALID_INDEX;
-    int64_t end_idx = OB_INVALID_INDEX;
-    uint64_t version = OB_INVALID_VERSION;
     const uint64_t tenant_id = executor.get_tenant_id();
+    uint64_t current_data_version = 0;
+    uint64_t version = OB_INVALID_VERSION;
     ObBaseUpgradeProcessor *processor  = NULL;
+    ObUpgradePath path;
     if (OB_FAIL(executor.get_data_version(current_data_version))) {
       LOG_WARN("fail to get current data version",
                KR(ret), K(tenant_id), KDV(current_data_version));
-    } else if (!ObUpgradeChecker::check_data_version_exist(current_data_version)) {
-      // current_data_version not exists in UPGRADE_PATH, maybe you should refresh master code
-      ret = OB_ERR_UNDEFINED;
-      LOG_WARN("current_data_version not exists in UPGRADE_PATH", KR(ret), KDV(current_data_version));
-    } else if (OB_FAIL(upgrade_processors_.get_processor_idx_by_range(
-                       current_data_version, DATA_CURRENT_VERSION,
-                       start_idx, end_idx))) {
-      LOG_WARN("fail to get processor by version", KR(ret), KDV(current_data_version));
-    }
-    for (int64_t i = start_idx + 1; OB_SUCC(ret) && i <= end_idx; i++) {
-      processor = NULL;
-      version = OB_INVALID_VERSION;
-      if (OB_FAIL(check_stop())) {
-        LOG_WARN("executor should stopped", KR(ret));
-      } else if (OB_FAIL(upgrade_processors_.get_processor_by_idx(i, processor))) {
-        LOG_WARN("fail to get processor", KR(ret), KDV(current_data_version), K(i));
-      } else if (OB_FAIL(run_upgrade_processor_(executor, processor, version))) {
-        LOG_WARN("failed to run upgrade processor", KR(ret), K(tenant_id), KDV(version));
-      } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
-        LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
-      } else if (OB_FAIL(executor.update_data_version(version))) {
-        LOG_WARN("fail to update current data version", KR(ret), K(tenant_id), KDV(version));
+    } else if (OB_FAIL(ObUpgradeChecker::get_upgrade_path(current_data_version, path))) {
+      LOG_WARN("failed to get upgrade path", KR(ret), KDV(current_data_version));
+    } else {
+      LOG_INFO("upgrade path for tenant", K(tenant_id), K(path));
+      const int64_t count = path.count();
+      for (int64_t i = 0; OB_SUCC(ret) && i < count; i++) {
+        bool update_current_data_version = false;
+        processor = NULL;
+        if (OB_FAIL(check_stop())) {
+          LOG_WARN("executor should stopped", KR(ret));
+        } else if (OB_FAIL(path.get_version(i, version, update_current_data_version))) {
+          LOG_WARN("failed to get version", KR(ret), K(i));
+        } else if (OB_FAIL(upgrade_processors_.get_processor_by_version(version, processor))) {
+          LOG_WARN("failed to get processor by version", KR(ret), KDV(version));
+        } else if (OB_FAIL(run_upgrade_processor_(executor, processor, version))) {
+          LOG_WARN("failed to run upgrade processor", KR(ret), K(tenant_id));
+        } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
+          LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
+        } else if (update_current_data_version) {
+          if (OB_FAIL(executor.update_data_version(version))) {
+            LOG_WARN("failed to update current_data_version", KR(ret), KDV(version));
+          } else {
+            LOG_INFO("update current_data_version", KR(ret), KDV(version));
+          }
+        }
       }
-    } // end for
+    }
     // finish to run processor for each version, begin to run processor for all version
     processor = NULL;
     version = OB_INVALID_VERSION;
