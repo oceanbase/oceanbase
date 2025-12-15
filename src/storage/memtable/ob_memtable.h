@@ -440,7 +440,7 @@ public:
   /*clog encryption related*/
   int save_encrypt_meta(const uint64_t table_id, const share::ObEncryptMeta *encrypt_meta);
   int get_encrypt_meta(transaction::ObTxEncryptMeta *&encrypt_meta);
-  bool need_for_save(const share::ObEncryptMeta *encrypt_meta);
+  int need_for_save(const share::ObEncryptMeta *encrypt_meta, bool &need_save);
 #endif
 
   // Print stat data in log.

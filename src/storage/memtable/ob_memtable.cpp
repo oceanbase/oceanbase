@@ -27,6 +27,7 @@
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 #include "logservice/ob_log_service.h"
 #include "storage/tx/ob_trans_deadlock_adapter.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 namespace oceanbase
 {
@@ -373,6 +374,7 @@ int ObMemtable::multi_set(
   const int64_t row_count = arg.row_count_;
   const bool check_exist = arg.check_exist_;
   const share::ObEncryptMeta *encrypt_meta = arg.encrypt_meta_;
+  bool need_save = true;
 
   ObMemtableKeyGenerator::ObMemtableKeyBuffer memtable_key_buffer;
   ObMemtableKeyGenerator memtable_key_generator(param.get_schema_rowkey_count(),
@@ -395,9 +397,10 @@ int ObMemtable::multi_set(
   //      parameter(table_id), we need to construct ObTxEncryptMeta in advance,
   //      and pass tx_encrypt_meta(ObTxEncryptMeta*) instead of
   //      encrypt_meta(ObEncryptMeta*) into this function(set)
-  } else if (need_for_save(encrypt_meta) &&
-             OB_FAIL(save_encrypt_meta(param.table_id_, encrypt_meta))) {
-    TRANS_LOG(WARN, "store encrypt meta to memtable failed", KPC(encrypt_meta), KR(ret));
+  } else if (OB_FAIL(need_for_save(encrypt_meta, need_save))) {
+    TRANS_LOG(WARN, "need for save failed", KR(ret));
+  } else if (need_save && OB_FAIL(save_encrypt_meta(param.table_id_, encrypt_meta))) {
+    TRANS_LOG(WARN, "store encrypt meta to memtable failed", KR(ret));
 #endif
 #ifdef ENABLE_DEBUG_LOG
   // TODO: zhanghuidong.zhd, remove defensive code later
@@ -405,7 +408,7 @@ int ObMemtable::multi_set(
     TRANS_LOG(ERROR, "get unexpected nop column in delete_insert table", K(ret), K(arg), K(param), K(context));
 #endif
   } else if (OB_FAIL(memtable_key_generator.init())) {
-    TRANS_LOG(WARN, "fail to generate memtable keys", KPC(encrypt_meta),
+    TRANS_LOG(WARN, "fail to generate memtable keys",
               KPC(context.store_ctx_), KR(ret));
   } else if (OB_FAIL(guard.write_auth(*context.store_ctx_))) {
     TRANS_LOG(WARN, "not allow to write", K(*context.store_ctx_));
@@ -558,6 +561,7 @@ int ObMemtable::set(
   const ObIArray<int64_t> *update_idx = arg.update_idx_;
   const int64_t row_count = arg.row_count_;
   const share::ObEncryptMeta *encrypt_meta = arg.encrypt_meta_;
+  bool need_save = true;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -576,10 +580,10 @@ int ObMemtable::set(
   //      parameter(table_id), we need to construct ObTxEncryptMeta in advance,
   //      and pass tx_encrypt_meta(ObTxEncryptMeta*) instead of
   //      encrypt_meta(ObEncryptMeta*) into this function(set)
-  } else if (need_for_save(encrypt_meta) &&
-             OB_FAIL(save_encrypt_meta(param.table_id_, encrypt_meta))) {
-    TRANS_LOG(WARN, "store encrypt meta to memtable failed",
-              KPC(encrypt_meta), KR(ret));
+  } else if (OB_FAIL(need_for_save(encrypt_meta, need_save))) {
+    TRANS_LOG(WARN, "need for save failed", KR(ret));
+  } else if (need_save && OB_FAIL(save_encrypt_meta(param.table_id_, encrypt_meta))) {
+    TRANS_LOG(WARN, "store encrypt meta to memtable failed", KR(ret));
 #endif
 #ifdef ENABLE_DEBUG_LOG
   // TODO: zhanghuidong.zhd, remove defensive code later
@@ -2333,10 +2337,10 @@ int ObMemtable::get_encrypt_meta(transaction::ObTxEncryptMeta *&encrypt_meta)
   return ret;
 }
 
-bool ObMemtable::need_for_save(const share::ObEncryptMeta *encrypt_meta)
+int ObMemtable::need_for_save(const share::ObEncryptMeta *encrypt_meta, bool &need_save)
 {
   int ret = OB_SUCCESS;
-  bool need_save = true;
+  need_save = true;
   {
     SpinRLockGuard guard(encrypt_meta_lock_);
     if (NULL == encrypt_meta && NULL == encrypt_meta_) {
@@ -2349,18 +2353,26 @@ bool ObMemtable::need_for_save(const share::ObEncryptMeta *encrypt_meta)
   if (need_save) {
     uint64_t tenant_id = MTL_ID();
     uint64_t data_version = 0;
-    ObString tde_method;
     if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
-      LOG_WARN("fail to get tenant data version", KR(ret), K(tenant_id));
+      TRANS_LOG(WARN, "fail to get tenant data version", KR(ret), K(tenant_id));
     } else if (data_version < DATA_VERSION_4_4_2_0) {
       need_save = false;
-    } else if (OB_FAIL(ObEncryptionUtil::get_tde_method(tenant_id, tde_method))) {
-      LOG_WARN("fail to get tde_method", K(tenant_id), K(ret));
-    } else if (!ObTdeMethodUtil::is_kms(tde_method)) {
-      need_save = false;
+    } else {
+      ObString tde_method;
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+      if (!tenant_config.is_valid()) {
+        ret = OB_INVALID_ARGUMENT;
+        TRANS_LOG(WARN, "tenant config is invalid", KR(ret), K(tenant_id));
+      } else if (!tenant_config->enable_clog_encryption) {
+        need_save = false;
+      } else if (OB_FAIL(ObEncryptionUtil::get_tde_method(tenant_id, tde_method))) {
+        TRANS_LOG(WARN, "fail to get tde_method", KR(ret), K(tenant_id));
+      } else if (!ObTdeMethodUtil::is_kms(tde_method)) {
+        need_save = false;
+      }
     }
   }
-  return need_save;
+  return ret;
 }
 #endif
 
