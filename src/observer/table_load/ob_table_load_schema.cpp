@@ -412,8 +412,9 @@ int ObTableLoadSchema::get_tablet_ids_by_part_ids(const ObTableSchema *table_sch
   return ret;
 }
 
-int ObTableLoadSchema::prepare_col_descs(const ObTableSchema *table_schema,
-                                         ObIArray<ObColDesc> &col_descs)
+int ObTableLoadSchema::prepare_col_descs_and_col_accuracys(const ObTableSchema *table_schema,
+                                                           ObIArray<ObColDesc> &col_descs,
+                                                           ObIArray<common::ObAccuracy> &col_accuracys)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(table_schema)) {
@@ -426,6 +427,8 @@ int ObTableLoadSchema::prepare_col_descs(const ObTableSchema *table_schema,
       if (OB_ISNULL(column_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("invalid column schema", K(column_schema));
+      } else if (OB_FAIL(col_accuracys.push_back(column_schema->get_accuracy()))) {
+        LOG_WARN("fail to push back column accuracy", KR(ret), KPC(column_schema));
       } else {
         col_desc.col_type_.set_scale(column_schema->get_accuracy().get_scale());
         if (column_schema->is_decimal_int()) {
@@ -563,8 +566,10 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
       LOG_WARN("fail to get store column count", KR(ret));
     } else if (OB_FAIL(table_schema->get_column_ids(column_descs_, true/*no_virtual*/))) {
       LOG_WARN("fail to get column descs", KR(ret));
-    } else if (OB_FAIL(prepare_col_descs(table_schema, column_descs_))) {
-      LOG_WARN("fail to prepare column descs", KR(ret));
+    } else if (OB_FAIL(prepare_col_descs_and_col_accuracys(table_schema,
+                                                           column_descs_,
+                                                           column_accuracys_))) {
+      LOG_WARN("fail to prepare column descs and column accuracys", KR(ret));
     } else if (OB_FAIL(datum_utils_.init(column_descs_,
                                          rowkey_column_count_,
                                          lib::is_oracle_mode(),
