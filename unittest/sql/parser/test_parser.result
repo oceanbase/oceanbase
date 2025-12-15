@@ -25471,3 +25471,1066 @@ question_mask_size: 0
     }
   ]
 }
+**************   Case 223   ***************
+select 'hello' || 'world' from dual;
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_SELECT",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         { },
+         { },
+         {
+          "type":"T_PROJECT_LIST",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_PROJECT_STRING",
+              "int_val":9223372036854775807,
+              "str_len":16,
+              "str_val":"'HELLO'||'WORLD'",
+              "children": [
+                 {
+                  "type":"T_OP_CNN",
+                  "int_val":2,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_CHAR",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"hello",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_VARCHAR",
+                          "int_val":9223372036854775807,
+                          "str_len":5,
+                          "str_val":"hello"
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_CHAR",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"world",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_VARCHAR",
+                          "int_val":9223372036854775807,
+                          "str_len":5,
+                          "str_val":"world"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+**************   Case 224   ***************
+select col1 || col2 from test_table;
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_SELECT",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         { },
+         { },
+         {
+          "type":"T_PROJECT_LIST",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_PROJECT_STRING",
+              "int_val":9223372036854775807,
+              "str_len":10,
+              "str_val":"COL1||COL2",
+              "children": [
+                 {
+                  "type":"T_OP_CNN",
+                  "int_val":2,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_OBJ_ACCESS_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":0,
+                      "str_val":"",
+                      "children": [
+                         {
+                          "type":"T_IDENT",
+                          "int_val":1,
+                          "str_len":4,
+                          "str_val":"COL1"
+                        },
+                         { }
+                      ]
+                    },
+                     {
+                      "type":"T_OBJ_ACCESS_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":0,
+                      "str_val":"",
+                      "children": [
+                         {
+                          "type":"T_IDENT",
+                          "int_val":1,
+                          "str_len":4,
+                          "str_val":"COL2"
+                        },
+                         { }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         { },
+         {
+          "type":"T_FROM_LIST",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_ORG",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_RELATION_FACTOR",
+                  "int_val":9223372036854775807,
+                  "str_len":10,
+                  "str_val":"TEST_TABLE",
+                  "children": [
+                     { },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":1,
+                      "str_len":10,
+                      "str_val":"TEST_TABLE"
+                    },
+                     { }
+                  ]
+                },
+                 { },
+                 { },
+                 { },
+                 { }
+              ]
+            }
+          ]
+        },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+**************   Case 225   ***************
+select  'prefix_' || column_name || '_suffix' from test_table;
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_SELECT",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         { },
+         { },
+         {
+          "type":"T_PROJECT_LIST",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_PROJECT_STRING",
+              "int_val":9223372036854775807,
+              "str_len":33,
+              "str_val":"'PREFIX_'||COLUMN_NAME||'_SUFFIX'",
+              "children": [
+                 {
+                  "type":"T_OP_CNN",
+                  "int_val":4,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_CHAR",
+                      "int_val":9223372036854775807,
+                      "str_len":7,
+                      "str_val":"prefix_",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_VARCHAR",
+                          "int_val":9223372036854775807,
+                          "str_len":7,
+                          "str_val":"prefix_"
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_OBJ_ACCESS_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":0,
+                      "str_val":"",
+                      "children": [
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":11,
+                          "str_val":"COLUMN_NAME"
+                        },
+                         { }
+                      ]
+                    },
+                     {
+                      "type":"T_CHAR",
+                      "int_val":9223372036854775807,
+                      "str_len":7,
+                      "str_val":"_suffix",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_VARCHAR",
+                          "int_val":9223372036854775807,
+                          "str_len":7,
+                          "str_val":"_suffix"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         { },
+         {
+          "type":"T_FROM_LIST",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_ORG",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_RELATION_FACTOR",
+                  "int_val":9223372036854775807,
+                  "str_len":10,
+                  "str_val":"TEST_TABLE",
+                  "children": [
+                     { },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":1,
+                      "str_len":10,
+                      "str_val":"TEST_TABLE"
+                    },
+                     { }
+                  ]
+                },
+                 { },
+                 { },
+                 { },
+                 { }
+              ]
+            }
+          ]
+        },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+**************   Case 226   ***************
+select  ('prefix_' || column_name) || '_suffix' from test_table;
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_SELECT",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         { },
+         { },
+         {
+          "type":"T_PROJECT_LIST",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_PROJECT_STRING",
+              "int_val":9223372036854775807,
+              "str_len":35,
+              "str_val":"('PREFIX_'||COLUMN_NAME)||'_SUFFIX'",
+              "children": [
+                 {
+                  "type":"T_OP_CNN",
+                  "int_val":2,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_EXPR_LIST",
+                      "int_val":9223372036854775807,
+                      "str_len":0,
+                      "str_val":"",
+                      "children": [
+                         {
+                          "type":"T_OP_CNN",
+                          "int_val":2,
+                          "str_len":0,
+                          "str_val":"",
+                          "children": [
+                             {
+                              "type":"T_CHAR",
+                              "int_val":9223372036854775807,
+                              "str_len":7,
+                              "str_val":"prefix_",
+                              "children": [
+                                 { },
+                                 {
+                                  "type":"T_VARCHAR",
+                                  "int_val":9223372036854775807,
+                                  "str_len":7,
+                                  "str_val":"prefix_"
+                                }
+                              ]
+                            },
+                             {
+                              "type":"T_OBJ_ACCESS_REF",
+                              "int_val":9223372036854775807,
+                              "str_len":0,
+                              "str_val":"",
+                              "children": [
+                                 {
+                                  "type":"T_IDENT",
+                                  "int_val":9223372036854775807,
+                                  "str_len":11,
+                                  "str_val":"COLUMN_NAME"
+                                },
+                                 { }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_CHAR",
+                      "int_val":9223372036854775807,
+                      "str_len":7,
+                      "str_val":"_suffix",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_VARCHAR",
+                          "int_val":9223372036854775807,
+                          "str_len":7,
+                          "str_val":"_suffix"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         { },
+         {
+          "type":"T_FROM_LIST",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_ORG",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_RELATION_FACTOR",
+                  "int_val":9223372036854775807,
+                  "str_len":10,
+                  "str_val":"TEST_TABLE",
+                  "children": [
+                     { },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":1,
+                      "str_len":10,
+                      "str_val":"TEST_TABLE"
+                    },
+                     { }
+                  ]
+                },
+                 { },
+                 { },
+                 { },
+                 { }
+              ]
+            }
+          ]
+        },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+**************   Case 227   ***************
+select 'hello' || 'world';
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_SELECT",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         { },
+         { },
+         {
+          "type":"T_PROJECT_LIST",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_PROJECT_STRING",
+              "int_val":9223372036854775807,
+              "str_len":18,
+              "str_val":"'hello' || 'world'",
+              "children": [
+                 {
+                  "type":"T_OP_CNN",
+                  "int_val":2,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_VARCHAR",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"hello",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_VARCHAR",
+                          "int_val":9223372036854775807,
+                          "str_len":5,
+                          "str_val":"hello"
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_VARCHAR",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"world",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_VARCHAR",
+                          "int_val":9223372036854775807,
+                          "str_len":5,
+                          "str_val":"world"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+**************   Case 228   ***************
+select col1 || col2 from test_table;
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_SELECT",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         { },
+         { },
+         {
+          "type":"T_PROJECT_LIST",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_PROJECT_STRING",
+              "int_val":9223372036854775807,
+              "str_len":12,
+              "str_val":"col1 || col2",
+              "children": [
+                 {
+                  "type":"T_OP_CNN",
+                  "int_val":2,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":4,
+                      "str_val":"col1",
+                      "children": [
+                         { },
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":4,
+                          "str_val":"col1"
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":4,
+                      "str_val":"col2",
+                      "children": [
+                         { },
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":4,
+                          "str_val":"col2"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         { },
+         {
+          "type":"T_FROM_LIST",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_ORG",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_RELATION_FACTOR",
+                  "int_val":9223372036854775807,
+                  "str_len":10,
+                  "str_val":"test_table",
+                  "children": [
+                     { },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":9223372036854775807,
+                      "str_len":10,
+                      "str_val":"test_table"
+                    },
+                     { }
+                  ]
+                },
+                 { },
+                 { },
+                 { }
+              ]
+            }
+          ]
+        },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+**************   Case 229   ***************
+select 'prefix_' || column_name || '_suffix' from test_table;
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_SELECT",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         { },
+         { },
+         {
+          "type":"T_PROJECT_LIST",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_PROJECT_STRING",
+              "int_val":9223372036854775807,
+              "str_len":37,
+              "str_val":"'prefix_' || column_name || '_suffix'",
+              "children": [
+                 {
+                  "type":"T_OP_CNN",
+                  "int_val":4,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_VARCHAR",
+                      "int_val":9223372036854775807,
+                      "str_len":7,
+                      "str_val":"prefix_",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_VARCHAR",
+                          "int_val":9223372036854775807,
+                          "str_len":7,
+                          "str_val":"prefix_"
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":11,
+                      "str_val":"column_name",
+                      "children": [
+                         { },
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":11,
+                          "str_val":"column_name"
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_VARCHAR",
+                      "int_val":9223372036854775807,
+                      "str_len":7,
+                      "str_val":"_suffix",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_VARCHAR",
+                          "int_val":9223372036854775807,
+                          "str_len":7,
+                          "str_val":"_suffix"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         { },
+         {
+          "type":"T_FROM_LIST",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_ORG",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_RELATION_FACTOR",
+                  "int_val":9223372036854775807,
+                  "str_len":10,
+                  "str_val":"test_table",
+                  "children": [
+                     { },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":9223372036854775807,
+                      "str_len":10,
+                      "str_val":"test_table"
+                    },
+                     { }
+                  ]
+                },
+                 { },
+                 { },
+                 { }
+              ]
+            }
+          ]
+        },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+**************   Case 230   ***************
+select  ('prefix_' || column_name) || '_suffix' from test_table;
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_SELECT",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         { },
+         { },
+         {
+          "type":"T_PROJECT_LIST",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_PROJECT_STRING",
+              "int_val":9223372036854775807,
+              "str_len":39,
+              "str_val":"('prefix_' || column_name) || '_suffix'",
+              "children": [
+                 {
+                  "type":"T_OP_CNN",
+                  "int_val":4,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_VARCHAR",
+                      "int_val":9223372036854775807,
+                      "str_len":7,
+                      "str_val":"prefix_",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_VARCHAR",
+                          "int_val":9223372036854775807,
+                          "str_len":7,
+                          "str_val":"prefix_"
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":11,
+                      "str_val":"column_name",
+                      "children": [
+                         { },
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":11,
+                          "str_val":"column_name"
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_VARCHAR",
+                      "int_val":9223372036854775807,
+                      "str_len":7,
+                      "str_val":"_suffix",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_VARCHAR",
+                          "int_val":9223372036854775807,
+                          "str_len":7,
+                          "str_val":"_suffix"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         { },
+         {
+          "type":"T_FROM_LIST",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_ORG",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_RELATION_FACTOR",
+                  "int_val":9223372036854775807,
+                  "str_len":10,
+                  "str_val":"test_table",
+                  "children": [
+                     { },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":9223372036854775807,
+                      "str_len":10,
+                      "str_val":"test_table"
+                    },
+                     { }
+                  ]
+                },
+                 { },
+                 { },
+                 { }
+              ]
+            }
+          ]
+        },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { }
+      ]
+    }
+  ]
+}

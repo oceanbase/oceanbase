@@ -1852,7 +1852,7 @@ simple_expr collation %prec NEG
 }
 | simple_expr CNNOP simple_expr
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_OP_CNN, 2, $1, $3);
+  flatten_bin_op(result->malloc_pool_, result, $$, $1, $3, T_OP_CNN);
 }
 | '+' simple_expr %prec NEG
 {
@@ -2069,28 +2069,28 @@ IN NATURAL LANGUAGE MODE
 expr:
 expr AND expr %prec AND
 {
-  flatten_and_or(result->malloc_pool_, result, $$, $1, $3, T_OP_AND);
+  flatten_bin_op(result->malloc_pool_, result, $$, $1, $3, T_OP_AND);
   if (result->pl_parse_info_.is_pl_parse_) {
     dup_expr_string($$, result, @1.first_column, @3.last_column);
   }
 }
 | expr AND_OP expr %prec AND
 {
-  flatten_and_or(result->malloc_pool_, result, $$, $1, $3, T_OP_AND);
+  flatten_bin_op(result->malloc_pool_, result, $$, $1, $3, T_OP_AND);
   if (result->pl_parse_info_.is_pl_parse_) {
     dup_expr_string($$, result, @1.first_column, @3.last_column);
   }
 }
 | expr OR expr %prec OR
 {
-  flatten_and_or(result->malloc_pool_, result, $$, $1, $3, T_OP_OR);
+  flatten_bin_op(result->malloc_pool_, result, $$, $1, $3, T_OP_OR);
   if (result->pl_parse_info_.is_pl_parse_) {
     dup_expr_string($$, result, @1.first_column, @3.last_column);
   }
 }
 | expr OR_OP expr %prec OR
 {
-  flatten_and_or(result->malloc_pool_, result, $$, $1, $3, T_OP_OR);
+  flatten_bin_op(result->malloc_pool_, result, $$, $1, $3, T_OP_OR);
   if (result->pl_parse_info_.is_pl_parse_) {
     dup_expr_string($$, result, @1.first_column, @3.last_column);
   }

@@ -687,6 +687,15 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
         }
         break;
       }
+      case T_OP_CNN: {
+        ObOpRawExpr *m_expr = NULL;
+        if (OB_FAIL(process_node_with_children(node, node->num_child_, m_expr, is_root_expr))) {
+          LOG_WARN("fail to process node with children", K(ret), K(node));
+        } else {
+          expr = m_expr;
+        }
+        break;
+      }
       case T_OP_ASSIGN:
       case T_OP_ADD:
       case T_OP_MINUS:
@@ -704,7 +713,6 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
       case T_OP_GE:
       case T_OP_GT:
       case T_OP_NE:
-      case T_OP_CNN:
       case T_OP_BIT_AND:
       case T_OP_BIT_OR:
       case T_OP_BIT_XOR:
@@ -7966,6 +7974,12 @@ int ObRawExprResolverImpl::process_sys_func_params(ObSysFunRawExpr &func_expr, i
         }
       }
       break;
+    }
+    case T_OP_CNN: {
+      if (lib::is_oracle_mode() && 2 != func_expr.get_param_count()) {
+        ret = OB_INVALID_ARGUMENT_NUM;
+        LOG_WARN("invalid argument number", K(ret), K(func_expr.get_param_count()));
+      }
     }
     default:
       break;

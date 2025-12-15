@@ -1230,10 +1230,10 @@ do {\
     } \
   } while(0); \
 
-#define flatten_and_or(malloc_pool, result, ret_node, left_node, right_node, type) \
+#define flatten_bin_op(malloc_pool, result, ret_node, left_node, right_node, type) \
   do { \
     ret_node = NULL; \
-    if (NULL == left_node || NULL == right_node || (T_OP_OR != type && T_OP_AND != type)) { \
+    if (NULL == left_node || NULL == right_node || (T_OP_OR != type && T_OP_AND != type && T_OP_CNN != type)) { \
       result->extra_errno_ = OB_PARSER_ERR_UNEXPECTED; \
       yyerror(NULL, result, "unexpected param\n"); \
       YYABORT; \
