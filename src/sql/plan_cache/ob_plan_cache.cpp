@@ -1205,6 +1205,7 @@ int ObPlanCache::add_cache_obj(ObILibCacheCtx &ctx,
     LOG_TRACE("inner add cache obj", K(key), K(cache_node));
     if (cache_node->is_invalid()) {
       ctx.need_destroy_node_ = true;
+      ret = OB_OLD_SCHEMA_VERSION;
     } else if (OB_FAIL(cache_node->add_cache_obj(ctx, key, cache_obj))) {
       SQL_PC_LOG(TRACE, "failed to add cache obj to lib cache node", K(ret));
     } else if (OB_FAIL(cache_node->update_node_stat(ctx))) {
