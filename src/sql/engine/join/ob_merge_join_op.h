@@ -241,6 +241,27 @@ private:
                              ObRADatumStore::StoredRow *&new_stored_row);
     int get_next_batch(const int64_t max_row_cnt);
     int backup_remain_rows();
+    int save(int64_t batch_size)
+    {
+      return brs_holder_.save(batch_size);
+    }
+
+    int restore()
+    {
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(brs_holder_.restore())) {
+        SQL_ENG_LOG(WARN, "failed to restore", K(ret));
+      }
+      for (int i = 0; OB_SUCC(ret) && i < all_exprs_->count(); i++) {
+        ObExpr *expr = all_exprs_->at(i);
+        if (OB_FAIL(expr->eval_batch(merge_join_op_.eval_ctx_, *(brs_.skip_),
+                                    brs_.size_))) {
+          SQL_ENG_LOG(WARN, "failed to evaluate batch", K(ret), K(expr));
+        }
+      }
+      return ret;
+    }
+
     int get_next_nonskip_row(bool &got_next_batch);
     bool iter_end() { return brs_.end_ && 0 == brs_.size_; }
     int get_list_row(int64_t idx, ObRADatumStore::StoredRow *&stored_row);
