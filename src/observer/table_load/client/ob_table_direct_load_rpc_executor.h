@@ -180,5 +180,25 @@ protected:
   int process() override;
 };
 
+// detach
+class ObTableDirectLoadDetachExecutor
+  : public ObTableDirectLoadRpcExecutor<table::ObTableDirectLoadOperationType::DETACH>
+{
+  typedef ObTableDirectLoadRpcExecutor<table::ObTableDirectLoadOperationType::DETACH> ParentType;
+
+public:
+  ObTableDirectLoadDetachExecutor(ObTableDirectLoadExecContext &ctx,
+                                  const table::ObTableDirectLoadRequest &request,
+                                  table::ObTableDirectLoadResult &result)
+    : ParentType(ctx, request, result)
+  {
+  }
+  virtual ~ObTableDirectLoadDetachExecutor() = default;
+
+protected:
+  int check_args() override;
+  int process() override;
+};
+
 } // namespace observer
 } // namespace oceanbase

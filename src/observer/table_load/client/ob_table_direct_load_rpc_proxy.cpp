@@ -38,9 +38,10 @@ int ObTableDirectLoadRpcProxy::dispatch(ObTableDirectLoadExecContext &ctx,
     OB_TABLE_DIRECT_LOAD_RPC_DISPATCH(ObTableDirectLoadOperationType::GET_STATUS);
     OB_TABLE_DIRECT_LOAD_RPC_DISPATCH(ObTableDirectLoadOperationType::INSERT);
     OB_TABLE_DIRECT_LOAD_RPC_DISPATCH(ObTableDirectLoadOperationType::HEART_BEAT);
+    OB_TABLE_DIRECT_LOAD_RPC_DISPATCH(ObTableDirectLoadOperationType::DETACH);
     default:
       ret = OB_ERR_UNEXPECTED;
-      SERVER_LOG(WARN, "unexpected command type", K(ret), K(request));
+      LOG_WARN("unexpected command type", K(ret), K(request));
       break;
   }
   return ret;

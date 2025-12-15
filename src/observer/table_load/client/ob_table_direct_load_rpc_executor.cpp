@@ -358,5 +358,48 @@ int ObTableDirectLoadHeartBeatExecutor::process()
   return ret;
 }
 
+// detach
+int ObTableDirectLoadDetachExecutor::check_args()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_ID == arg_.table_id_ || 0 == arg_.task_id_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(arg_));
+  }
+  return ret;
+}
+
+int ObTableDirectLoadDetachExecutor::process()
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("table direct load detach", K_(arg));
+  ObTableLoadClientTask *client_task = nullptr;
+  ObTableLoadClientTaskBrief *client_task_brief = nullptr;
+  ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
+  if (OB_FAIL(ObTableLoadClientService::get_task(key, client_task))) {
+    if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
+      LOG_WARN("fail to get client task", KR(ret), K(key));
+    } else {
+      ret = OB_SUCCESS;
+      if (OB_FAIL(ObTableLoadClientService::get_task_brief(key, client_task_brief))) {
+        LOG_WARN("fail to get client task brief", KR(ret), K(key));
+      } else {
+        // do nothing
+      }
+    }
+  } else {
+    client_task->detach();
+  }
+  if (nullptr != client_task) {
+    ObTableLoadClientService::revert_task(client_task);
+    client_task = nullptr;
+  }
+  if (nullptr != client_task_brief) {
+    ObTableLoadClientService::revert_task_brief(client_task_brief);
+    client_task_brief = nullptr;
+  }
+  return ret;
+}
+
 } // namespace observer
 } // namespace oceanbase

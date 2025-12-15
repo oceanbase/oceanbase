@@ -123,14 +123,15 @@ public:
   bool is_in_map() const { return is_in_map_; }
   OB_INLINE int64_t get_task_id() const { return param_.get_task_id(); }
   OB_INLINE uint64_t get_table_id() const { return 0; }
-  void heart_beat();
-  int check_status();
+  void heart_beat() { client_exec_ctx_.heart_beat(); }
+  void detach() { client_exec_ctx_.detach(); }
+  int check_status() { return client_exec_ctx_.check_status(); }
 
   int set_status_initializing();
   int set_status_waitting();
   int set_status_running();
   int set_status_commit();
-  int set_status_error(int error_code);
+  void set_status_error(int error_code);
   void set_status_abort(int error_code = OB_CANCELED);
   table::ObTableLoadClientStatus get_status() const;
   int get_error_code() const;
