@@ -185,7 +185,6 @@ public:
     COLLATION_DATABASE,
     PLSQL_CCFLAGS,
     PLSQL_OPTIMIZE_LEVEL,
-    PLSQL_CAN_TRANSFORM_TO_ASSIGN,
     MAX_ENV,
   };
 
@@ -196,7 +195,6 @@ public:
     share::SYS_VAR_COLLATION_DATABASE,
     share::SYS_VAR_PLSQL_CCFLAGS,
     share::SYS_VAR_PLSQL_OPTIMIZE_LEVEL,
-    share::SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN,
     share::SYS_VAR_INVALID
   };
 
@@ -206,8 +204,7 @@ public:
     collation_connection_(CS_TYPE_INVALID),
     collation_database_(CS_TYPE_INVALID),
     plsql_ccflags_(),
-    plsql_optimize_level_(0),  // default PLSQL_OPTIMIZE_LEVEL = 0
-    plsql_can_transform_to_assign_(1)  // default PLSQL_CAN_TRANSFORM_TO_ASSIGN = 1
+    plsql_optimize_level_(0)  // default PLSQL_OPTIMIZE_LEVEL = 0
   { }
 
   virtual ~ObExecEnv() {}
@@ -217,8 +214,7 @@ public:
                K_(collation_connection),
                K_(collation_database),
                K_(plsql_ccflags),
-               K_(plsql_optimize_level),
-               K_(plsql_can_transform_to_assign));
+               K_(plsql_optimize_level));
 
   void reset();
 
@@ -247,9 +243,6 @@ public:
   int64_t get_plsql_optimize_level() { return plsql_optimize_level_; }
   void set_plsql_optimize_level(int64_t level) { plsql_optimize_level_ = plsql_optimize_level_; }
 
-  bool get_plsql_can_transform_to_assign() { return plsql_can_transform_to_assign_; }
-  void set_plsql_can_transform_to_assign(bool can_transform) { plsql_can_transform_to_assign_ = can_transform; }
-
 private:
   ObSQLMode sql_mode_;
   ObCollationType charset_client_;
@@ -257,7 +250,6 @@ private:
   ObCollationType collation_database_;
   ObString plsql_ccflags_;
   int64_t plsql_optimize_level_;
-  bool plsql_can_transform_to_assign_;
 };
 
 enum ObSessionRetryStatus

@@ -713,7 +713,16 @@ public:
   static int get_into_expr_expected_type(ObRawExpr *into_expr,
                                          ObPLBlockNS *ns,
                                          ObPLResolveCtx *pl_resolve_ctx,
-                                         ObPLDataType &expected_type_local);
+                                         ObPLDataType &expected_type_local,
+                                         ObRawExpr *value_expr,
+                                         ObPLDependencyTable &dependency_table);
+
+  static int set_into_expr_type_from_value_expr(ObRawExpr *value_expr,
+                                                ObRawExpr *into_expr,
+                                                ObPLDataType &expected_type,
+                                                ObPLBlockNS &ns,
+                                                ObPLResolveCtx &pl_resolve_ctx,
+                                                ObPLDependencyTable &dependency_table);
 
   static int add_column_convert_expr(ObRawExpr *&expr,
                                      const ObPLDataType *expected_type,

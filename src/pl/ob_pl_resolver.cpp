@@ -4411,42 +4411,9 @@ int ObPLResolver::resolve_assign(const ObStmtNodeTree *parse_tree, ObPLAssignStm
                 }
                 // 目标是QuestionMark, 需要设置目标的类型, 因为QuestionMark默认是无类型的, 在赋值时确定类型
                 if (OB_SUCC(ret) && is_question_mark) {
-                  if (value_expr->get_result_type().is_ext()) {
-                    const ObUserDefinedType *user_type = NULL;
-                    OZ (current_block_->get_namespace().get_pl_data_type_by_id(
-                      value_expr->get_result_type().get_udt_id(), user_type));
-                    OZ (set_question_mark_type(resolve_ctx_.schema_guard_,
-                                                into_expr,
-                                                &(current_block_->get_namespace()),
-                                                user_type,
-                                                func.get_dependency_table(),
-                                                resolve_ctx_.session_info_));
-                  } else {
-                    ObDataType data_type;
-                    ObPLDataType pl_type;
-                    OZ (ObRawExprUtils::extract_real_result_type(*value_expr, resolve_ctx_.session_info_, data_type));
-                    sql::ObRawExprResType& res_type = const_cast<sql::ObRawExprResType&>(value_expr->get_result_type());
-                    if (OB_SUCC(ret)
-                        && is_question_mark_value(value_expr, &(current_block_->get_namespace()))
-                        && ob_is_numeric_type(res_type.get_type())
-                        && res_type.get_scale() < 0) {
-                      ObScale default_scale =
-                        ObAccuracy::DDL_DEFAULT_ACCURACY2[lib::is_oracle_mode()][res_type.get_type()].get_scale();
-                      if (ob_is_integer_type(res_type.get_type())) {
-                        OX (res_type.set_scale(default_scale);)
-                      } else {
-                        OX (res_type.set_scale(0));
-                      }
-                    }
-                    OX (data_type.set_accuracy(res_type.get_accuracy()));
-                    OX (pl_type.set_data_type(data_type));
-                    OX (set_question_mark_type(resolve_ctx_.schema_guard_,
-                                                into_expr,
-                                                &(current_block_->get_namespace()),
-                                                &pl_type,
-                                                func.get_dependency_table(),
-                                                resolve_ctx_.session_info_));
-                  }
+                  ObPLDataType pl_type;
+                    OZ (set_into_expr_type_from_value_expr(value_expr,
+                          into_expr, pl_type, current_block_->get_namespace(), resolve_ctx_, func.get_dependency_table()));
                 }
               } else {
                 OZ (resolve_expr(value_node, func, value_expr,
@@ -4476,6 +4443,56 @@ int ObPLResolver::resolve_assign(const ObStmtNodeTree *parse_tree, ObPLAssignStm
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObPLResolver::set_into_expr_type_from_value_expr(ObRawExpr *value_expr,
+                                                    ObRawExpr *into_expr,
+                                                    ObPLDataType &expected_type,
+                                                    ObPLBlockNS &ns,
+                                                    ObPLResolveCtx &pl_resolve_ctx,
+                                                    ObPLDependencyTable &dependency_table)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(value_expr));
+  if (OB_FAIL(ret)) {
+  } else if (value_expr->get_result_type().is_ext()) {
+    const ObUserDefinedType *user_type = NULL;
+    OZ (ns.get_pl_data_type_by_id(
+      value_expr->get_result_type().get_udt_id(), user_type));
+    CK (OB_NOT_NULL(user_type));
+    OX (expected_type = *user_type);
+    OZ (set_question_mark_type(pl_resolve_ctx.schema_guard_,
+                                into_expr,
+                                &ns,
+                                user_type,
+                                dependency_table,
+                                pl_resolve_ctx.session_info_));
+  } else {
+    ObDataType data_type;
+    OZ (ObRawExprUtils::extract_real_result_type(*value_expr, pl_resolve_ctx.session_info_, data_type));
+    sql::ObRawExprResType& res_type = const_cast<sql::ObRawExprResType&>(value_expr->get_result_type());
+    if (OB_SUCC(ret)
+        && is_question_mark_value(value_expr, &ns)
+        && ob_is_numeric_type(res_type.get_type())
+        && res_type.get_scale() < 0) {
+      ObScale default_scale =
+        ObAccuracy::DDL_DEFAULT_ACCURACY2[lib::is_oracle_mode()][res_type.get_type()].get_scale();
+      if (ob_is_integer_type(res_type.get_type())) {
+        OX (res_type.set_scale(default_scale);)
+      } else {
+        OX (res_type.set_scale(0));
+      }
+    }
+    OX (data_type.set_accuracy(res_type.get_accuracy()));
+    OX (expected_type.set_data_type(data_type));
+    OX (set_question_mark_type(pl_resolve_ctx.schema_guard_,
+                                into_expr,
+                                &ns,
+                                &expected_type,
+                                dependency_table,
+                                pl_resolve_ctx.session_info_));
   }
   return ret;
 }
@@ -6166,7 +6183,9 @@ int ObPLResolver::add_column_convert_expr(ObRawExpr *&expr,
 int ObPLResolver::get_into_expr_expected_type(ObRawExpr *into_expr,
                                               ObPLBlockNS *ns,
                                               ObPLResolveCtx *pl_resolve_ctx,
-                                              ObPLDataType &expected_type_local)
+                                              ObPLDataType &expected_type_local,
+                                              ObRawExpr *value_expr,
+                                              ObPLDependencyTable &dependency_table)
 {
   int ret = OB_SUCCESS;
   uint64_t package_id = OB_INVALID_ID;
@@ -6187,9 +6206,17 @@ int ObPLResolver::get_into_expr_expected_type(ObRawExpr *into_expr,
     if (OB_FAIL(ret)) {
       // do nothing
     } else if (var->get_name().prefix_match(ANONYMOUS_ARG)) {
-      if (!(OB_NOT_NULL(var->get_type().get_data_type())
-          && var->get_type().get_data_type()->get_obj_type() == ObNullType)) {
+      OX ((const_cast<ObPLVar*>(var))->set_readonly(false));
+      if (var->is_referenced()) {
+        OX ((const_cast<ObPLVar*>(var))->set_name(ANONYMOUS_INOUT_ARG));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (!( OB_NOT_NULL(var->get_type().get_data_type())
+          && var->get_type().get_data_type()->get_obj_type() == ObNullType) ) {
         expected_type_local = var->get_type();
+      } else {
+        OZ (set_into_expr_type_from_value_expr(value_expr,
+              into_expr, expected_type_local, *ns, *pl_resolve_ctx, dependency_table));
       }
     } else {
       expected_type_local = var->get_type();
@@ -6303,7 +6330,9 @@ int ObPLResolver::check_can_transform_to_assign_stmt(ObPLFunctionAST &func,
       OZ (get_into_expr_expected_type(into_expr,
                                       &current_block_->get_namespace(),
                                       &resolve_ctx_,
-                                      into_expr_type));
+                                      into_expr_type,
+                                      value_expr,
+                                      func.get_dependency_table()));
       OZ (into_expr_types.push_back(into_expr_type));
       if (OB_FAIL(ret)) {
         can_transform = false;
@@ -6351,8 +6380,11 @@ int ObPLResolver::replace_seq_expr_recursively(ObRawExpr *&expr)
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(expr)) {
     if (expr->get_expr_type() == T_FUN_SYS_SEQ_NEXTVAL) {
-      // modify expr type to T_FUN_SYS_PL_SEQ_NEXT_VALUE
-      OX (expr->set_expr_type(T_FUN_SYS_PL_SEQ_NEXT_VALUE));
+      ObSequenceRawExpr *seq_expr = static_cast<ObSequenceRawExpr*>(expr);
+      if (seq_expr->get_action().case_compare_equal("NEXTVAL")) {
+        // modify expr type to T_FUN_SYS_PL_SEQ_NEXT_VALUE
+        OX (expr->set_expr_type(T_FUN_SYS_PL_SEQ_NEXT_VALUE));
+      }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       OZ (SMART_CALL(replace_seq_expr_recursively(expr->get_param_expr(i))));
