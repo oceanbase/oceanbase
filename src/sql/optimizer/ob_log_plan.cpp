@@ -7979,7 +7979,10 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
     } else {
       has_allocated_range_shuffle_ = true;
     }
-  } else if (exch_info.is_pq_local() && NULL == topn_expr && get_optimizer_context().is_enable_px_ordered_coord()) {
+  } else if (exch_info.is_pq_local()
+             && NULL == topn_expr
+             && get_optimizer_context().is_enable_px_ordered_coord()
+             && !sort_keys.empty()) {
     if (OB_FAIL(allocate_dist_range_sort_as_top(top, sort_keys, need_sort, is_local_order))) {
       LOG_WARN("failed to allocate dist range sort as top", K(ret));
     } else { /*do nothing*/ }
