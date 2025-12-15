@@ -760,7 +760,7 @@ int64_t ObConfigIntParser::get(const char *str, bool &valid)
       valid = true;
     } else {
       valid = false;
-      OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "set int error", K(str), K(valid));
+      OB_LOG_RET(WARN, OB_INVALID_CONFIG, "set int error", K(str), K(valid));
     }
   }
   return value;
@@ -797,7 +797,7 @@ int64_t ObConfigReadableIntParser::get(const char *str, bool &valid)
       value *= UNIT_M;
     } else {
       valid = false;
-      OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "set readable int error", K(str), K(p_unit));
+      OB_LOG_RET(WARN, OB_INVALID_CONFIG, "set readable int error", K(str), K(p_unit));
     }
   }
 
@@ -833,7 +833,7 @@ int64_t ObConfigTimeParser::get(const char *str, bool &valid)
       value = value * TIME_DAY;
     } else {
       valid = false;
-      OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "set time error", K(str), K(p_unit));
+      OB_LOG_RET(WARN, OB_INVALID_CONFIG, "set time error", K(str), K(p_unit));
     }
   }
 
