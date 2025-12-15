@@ -4089,6 +4089,8 @@ int ObPLResolver::is_return_ref_cursor_type(const ObRawExpr *expr, bool &is_ref_
       if (udf_expr->get_is_return_sys_cursor()) {
         is_ref_cursor_type = true;
       }
+    } else if (T_OP_GET_SUBPROGRAM_VAR == expr->get_expr_type()) {
+      is_ref_cursor_type = expr->get_result_type().is_pl_extend_type() && (expr->get_result_type().get_extend_type() == pl::PL_REF_CURSOR_TYPE);
     }
   }
   return ret;
