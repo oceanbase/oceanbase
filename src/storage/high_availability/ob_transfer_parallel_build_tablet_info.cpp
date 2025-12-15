@@ -14,6 +14,7 @@
 #include "ob_transfer_parallel_build_tablet_info.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "ob_rebuild_service.h"
+#include "common/ob_timeout_ctx.h"
 
 namespace oceanbase
 {
@@ -26,7 +27,8 @@ ObTransferParallelBuildTabletDag::ObTransferParallelBuildTabletDag()
     is_inited_(false),
     ls_id_(),
     ls_handle_(),
-    ctx_(nullptr)
+    ctx_(nullptr),
+    timeout_ctx_(nullptr)
 {
 }
 
@@ -77,16 +79,17 @@ int ObTransferParallelBuildTabletDag::fill_dag_key(char *buf, const int64_t buf_
 
 int ObTransferParallelBuildTabletDag::init(
     const share::ObLSID &ls_id,
-    ObTransferBuildTabletInfoCtx *ctx)
+    ObTransferBuildTabletInfoCtx *ctx,
+    ObTimeoutCtx *timeout_ctx)
 {
   int ret = OB_SUCCESS;
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("transfer parallel build tablet init twice", K(ret));
-  } else if (!ls_id.is_valid() || OB_ISNULL(ctx)) {
+  } else if (!ls_id.is_valid() || OB_ISNULL(ctx) || OB_ISNULL(timeout_ctx)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("transfer parallel build tablet dag get invalid argument", K(ret), K(ls_id), KP(ctx));
+    LOG_WARN("transfer parallel build tablet dag get invalid argument", K(ret), K(ls_id), KP(ctx), KP(timeout_ctx));
   } else if (OB_FAIL(set_dag_id(ctx->get_task_id()))) {
     LOG_WARN("failed to set dag id", K(ret), K(ls_id), KPC(ctx));
   } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ls_id, ls_handle_))) {
@@ -94,6 +97,7 @@ int ObTransferParallelBuildTabletDag::init(
   } else {
     ls_id_ = ls_id;
     ctx_ = ctx;
+    timeout_ctx_ = timeout_ctx;
     is_inited_ = true;
   }
   return ret;
@@ -110,7 +114,7 @@ int ObTransferParallelBuildTabletDag::create_first_task()
     LOG_WARN("transfer parallel build tablet dag do not init", K(ret));
   } else if (OB_FAIL(alloc_task(task))) {
     LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init(tablet_info, ctx_))) {
+  } else if (OB_FAIL(task->init(tablet_info, ctx_, timeout_ctx_))) {
     LOG_WARN("failed to init tablet rebuild major task", K(ret), KPC(this));
   } else if (OB_FAIL(add_task(*task))) {
     LOG_WARN("Fail to add task", K(ret));
@@ -172,7 +176,8 @@ ObTransferParallelBuildTabletTask::ObTransferParallelBuildTabletTask()
     is_inited_(false),
     first_tablet_info_(),
     ctx_(nullptr),
-    ls_(nullptr)
+    ls_(nullptr),
+    timeout_ctx_(nullptr)
 {
 }
 
@@ -186,7 +191,8 @@ ObTransferParallelBuildTabletTask::~ObTransferParallelBuildTabletTask()
 
 int ObTransferParallelBuildTabletTask::init(
     const share::ObTransferTabletInfo &first_tablet_info,
-    ObTransferBuildTabletInfoCtx *ctx)
+    ObTransferBuildTabletInfoCtx *ctx,
+    ObTimeoutCtx *timeout_ctx)
 {
   int ret = OB_SUCCESS;
   ObTransferParallelBuildTabletDag *dag = nullptr;
@@ -194,9 +200,9 @@ int ObTransferParallelBuildTabletTask::init(
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("transfer parallel build tablet task init twice", K(ret));
-  } else if (OB_ISNULL(ctx)) {
+  } else if (OB_ISNULL(ctx) || OB_ISNULL(timeout_ctx)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("transfer parallel build tablet task init get invalid argument", K(ret), KP(ctx));
+    LOG_WARN("transfer parallel build tablet task init get invalid argument", K(ret), KP(ctx), KP(timeout_ctx));
   } else if (OB_ISNULL(dag = static_cast<ObTransferParallelBuildTabletDag *>(this->get_dag()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("transfer parallel build tablet dag should not be NULL", K(ret), KP(dag));
@@ -205,6 +211,7 @@ int ObTransferParallelBuildTabletTask::init(
   } else {
     first_tablet_info_ = first_tablet_info;
     ctx_ = ctx;
+    timeout_ctx_ = timeout_ctx;
     ctx_->inc_child_task_num();
     is_inited_ = true;
   }
@@ -219,6 +226,12 @@ int ObTransferParallelBuildTabletTask::process()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer parallel build tablet task do not init", K(ret), KPC(ctx_));
+  } else if (OB_ISNULL(timeout_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("timeout ctx should not be null", K(ret));
+  } else if (timeout_ctx_->is_timeouted()) {
+    ret = OB_TIMEOUT;
+    LOG_WARN("transfer parallel build tablet task already timeout", K(ret));
   } else if (ctx_->is_failed()) {
     //do nothing
   } else if (OB_FAIL(do_build_tablet_infos_())) {
@@ -251,7 +264,11 @@ int ObTransferParallelBuildTabletTask::do_build_tablet_infos_()
     }
 
     while (OB_SUCC(ret)) {
-      if (OB_FAIL(ctx_->get_next_tablet_info(tablet_info))) {
+      if (timeout_ctx_->is_timeouted()) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("transfer parallel build tablet task already timeout", K(ret));
+        break;
+      } else if (OB_FAIL(ctx_->get_next_tablet_info(tablet_info))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
           break;
@@ -331,7 +348,7 @@ int ObTransferParallelBuildTabletTask::generate_next_task(share::ObITask *&next_
       }
   } else if (OB_FAIL(dag_->alloc_task(tmp_next_task))) {
     LOG_WARN("failed to alloc task", K(ret));
-  } else if (OB_FAIL(tmp_next_task->init(tablet_info, ctx_))) {
+  } else if (OB_FAIL(tmp_next_task->init(tablet_info, ctx_, timeout_ctx_))) {
     LOG_WARN("failed to init next task", K(ret), K(tablet_info), K(index));
   } else {
     next_task = tmp_next_task;

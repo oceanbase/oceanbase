@@ -388,7 +388,8 @@ private:
       const share::ObTransferTaskInfo &task_info,
       ObTimeoutCtx &timeout_ctx);
   int generate_parallel_tablet_info_dag_(
-      const share::ObTransferTaskInfo &task_info);
+      const share::ObTransferTaskInfo &task_info,
+      ObTimeoutCtx &timeout_ctx);
   int do_build_tablet_info_(
       const share::ObTransferTaskInfo &task_info,
       ObTimeoutCtx &timeout_ctx);
@@ -397,9 +398,11 @@ private:
       ObTimeoutCtx &timeout_ctx,
       int32_t &result);
   int wait_parallel_tablet_info_dag_finish_(
-      const share::ObTransferTaskInfo &task_info);
+      const share::ObTransferTaskInfo &task_info,
+      ObTimeoutCtx &timeout_ctx);
   void finish_parallel_tablet_info_dag_(
-      const share::ObTransferTaskInfo &task_info);
+      const share::ObTransferTaskInfo &task_info,
+      ObTimeoutCtx &timeout_ctx);
 private:
   static const int64_t INTERVAL_US = 1 * 1000 * 1000; //1s
   static const int64_t KILL_TX_MAX_RETRY_TIMES = 3;
