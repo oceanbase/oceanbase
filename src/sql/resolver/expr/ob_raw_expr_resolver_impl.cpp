@@ -516,7 +516,7 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
                 ObStringBuffer buf(&allocator);
                 ParseNode tmp_node;
                 tmp_node.type_ = static_cast<ObItemType>(T_COLLECTION);
-                tmp_node.int32_values_[0] = tmp_node.int16_values_[OB_NODE_CAST_COLLECTION_TYPE_IDX]; // collection type
+                tmp_node.int32_values_[0] = node->int16_values_[OB_NODE_CAST_COLLECTION_TYPE_IDX]; // collection type
                 tmp_node.num_child_ = 1;
                 tmp_node.children_ = node->children_;
                 if (OB_FAIL(ObResolverUtils::resolve_collection_type_info(cluster_version, tmp_node, buf, depth))) {
