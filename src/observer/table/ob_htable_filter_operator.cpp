@@ -1853,6 +1853,8 @@ bool ObHTableRowIterator::should_enable_get_optimization()
     bret = false;
   } else if (query.get_scan_ranges().empty()) {
     bret = false;
+  } else if (!query.is_get_optimization()) {
+    bret = false;
   } else {
     const ObNewRange &range = query.get_scan_ranges().at(0);
     if (range.start_key_.get_obj_cnt() < 3 || range.end_key_.get_obj_cnt() < 3) {
@@ -1900,7 +1902,9 @@ bool ObHTableRowIterator::should_enable_get_optimization()
     // batch get single cf
     if (columns.count() == 1) {
       ObString qualifier = columns.at(0);
-      if (qualifier.after('.').empty()) {
+      if (qualifier.contains(".")
+          && is_legal_family_name(qualifier.split_on('.'))
+          && qualifier.after('.').empty()) {
         is_wildcard_mode_ = true;
       }
     }
@@ -2401,4 +2405,40 @@ int ObHTableRowIterator::get_next_result_internal_with_get_optimization(ResultTy
   }
 
   return ret;
+}
+
+
+bool ObHTableRowIterator::is_legal_family_name(const ObString &family_name)
+{
+  bool is_legal = true;
+  if (family_name.empty() || family_name.ptr()[0] == '.') {
+    is_legal = false;
+  } else {
+    const char *str_ptr = family_name.ptr();
+    int64_t str_len = family_name.length();
+    bool has_illegal_char = false;
+
+    for (int64_t i = 0; i < str_len && !has_illegal_char; i++) {
+      char c = str_ptr[i];
+      if (c >= 0 && c < 32) {  // Control character
+        has_illegal_char = true;
+      } else if (c == ':' || c == '\\' || c == '/') {
+        has_illegal_char = true;
+      }
+    }
+
+    if (has_illegal_char) {
+      is_legal = false;
+    } else if (family_name.case_compare("recovered.edits") == 0) {
+      // Apache Hbase not allow "recovered.edits" as family name
+      // byte[] recoveredEdit = Bytes.toBytes(HConstants.RECOVERED_EDITS_DIR);
+      // if (Bytes.equals(recoveredEdit, b)) {
+      //   throw new IllegalArgumentException(
+      //     "Column Family name cannot be: " + HConstants.RECOVERED_EDITS_DIR);
+      // }
+      is_legal = false;
+    }
+  }
+
+  return is_legal;
 }

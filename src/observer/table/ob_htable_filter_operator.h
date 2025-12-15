@@ -299,7 +299,7 @@ protected:
   int move_to_next_qualifier_and_rescan(bool &loop, const ObString &previous_qualifier = ObString::make_empty_string());
   template <typename ResultType>
   int get_next_result_internal_with_get_optimization(ResultType*& result);
-
+  static bool is_legal_family_name(const ObString &family_name);
 protected:
   // try record expired rowkey accord cell's timestamp
   virtual int try_record_expired_rowkey(const ObHTableCellEntity &cell);

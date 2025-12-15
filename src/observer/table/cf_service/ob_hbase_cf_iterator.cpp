@@ -13,6 +13,7 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_hbase_cf_iterator.h"
+#include "ob_hbase_column_family_service.h"
 #include "share/ob_ls_id.h"
 #include "ob_hbase_tablet_merge_iterator.h"
 #include "share/table/ob_table_util.h"
@@ -2019,11 +2020,11 @@ int ObHbaseRowIterator::should_enable_get_optimization(bool &bret)
     const ObTableQuery &query = hbase_query_.get_query();
     bool has_limit_one = (query.get_limit() == 1);
     bool has_max_version_one = (htable_filter_.get_max_versions() == 1) || (max_version_ == 1);
-
-    if (!has_limit_one && !has_max_version_one) {
+    if (!query.is_get_optimization()) {
+      bret = false;
+    } else if (!has_limit_one && !has_max_version_one) {
       bret = false;
     } else if (query.get_scan_ranges().empty()) {
-      // not support scan
       bret = false;
     } else {
       const ObNewRange &range = query.get_scan_ranges().at(0);
@@ -2042,7 +2043,9 @@ int ObHbaseRowIterator::should_enable_get_optimization(bool &bret)
         // batch get single cf
         if (columns.count() == 1) {
           ObString qualifier = columns.at(0);
-          if (qualifier.after('.').empty()) {
+          if (qualifier.contains(".")
+              && ObHbaseColumnFamilyService::is_legal_family_name(qualifier.split_on('.'))
+              && qualifier.after(".").empty()) {
             is_wildcard_mode_ = true;
           }
         }

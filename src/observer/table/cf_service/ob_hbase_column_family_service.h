@@ -35,10 +35,10 @@ public:
   virtual int del(const ObHbaseQuery &query, ObTableExecCtx &exec_ctx);
   int del(const ObHbaseQuery &query, ObNewRow &cell, ObTableExecCtx &exec_ctx);
   int construct_query(const ObITableEntity &cell, ObTableExecCtx &exec_ctx, ObHbaseQuery &hbase_query);
+  static bool is_legal_family_name(const ObString &family_name);
 protected:
   virtual int delete_cell(const ObHbaseQuery &query, ObTableExecCtx &exec_ctx,
                           const ObNewRow &cell, ObIHbaseAdapter &adapter);
-  static bool is_legal_family_name(const ObString &family_name);
 };
 
 class ObHbaseMultiCFService : public ObHbaseColumnFamilyService
