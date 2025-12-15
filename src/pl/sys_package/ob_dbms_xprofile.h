@@ -104,6 +104,7 @@ public:
     int64_t parent_op_id_{-1};
     int64_t last_child_op_id_{-1};
     ObString profile_prefix_;
+    ObString profile_suffix_;
     ObString metric_prefix_;
   };
 
@@ -122,6 +123,7 @@ public:
   bool is_full_plan() const { return is_full_plan_; }
 private:
   int append_profile_prefix(PrefixInfo &current_profile, int64_t current_depth);
+  int append_profile_suffix(PrefixInfo &current_profile, const ObMergedProfileItem &merged_item);
   int append_metric_prefix(PrefixInfo &current_profile, int64_t current_depth);
 private:
   ObIAllocator &allocator_;

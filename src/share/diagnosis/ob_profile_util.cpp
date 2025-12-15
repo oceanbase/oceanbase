@@ -79,6 +79,7 @@ int ObMergedProfileItem::init_from(ObIAllocator *alloc, const ObProfileItem &pro
   plan_hash_value_ = profile_item.plan_hash_value_;
   sql_id_ = profile_item.sql_id_;
   max_db_time_ = 0;
+  parallel_ = 0;
   profile_ = OB_NEWx(ObMergedProfile, alloc, profile_item.profile_->get_id(),
                                   alloc, profile_item.profile_->enable_rich_format());
   if (OB_ISNULL(profile_)) {
@@ -182,6 +183,8 @@ int ObProfileUtil::get_merged_profiles(ObIAllocator *alloc,
         // same op_id, merge
         if (OB_FAIL(merge_profile(*merged_item.profile_, cur_item.profile_, alloc))) {
           LOG_WARN("failed to merge profile");
+        } else {
+          merged_item.parallel_++;
         }
       } else {
         // different op_id, or another sql execution, save and new one
@@ -195,6 +198,8 @@ int ObProfileUtil::get_merged_profiles(ObIAllocator *alloc,
           LOG_WARN("failed to init merge profile item");
         } else if (OB_FAIL(merge_profile(*merged_item.profile_, cur_item.profile_, alloc))) {
           LOG_WARN("failed to merge profile");
+        } else {
+          merged_item.parallel_++;
         }
       }
       idx++;
@@ -412,10 +417,12 @@ int ObProfileUtil::read_profile_from_result(ObIAllocator *alloc, const ObMySQLRe
   GET_INT_VALUE(FETCH_COLUMN::RESCAN_TIMES, profile_item.rescan_times_);
   GET_INT_VALUE(FETCH_COLUMN::OUTPUT_ROWS, profile_item.output_rows_);
   GET_INT_VALUE(FETCH_COLUMN::DB_TIME, profile_item.db_time_);
-  if (OB_SUCC(ret)) {
-    profile_item.db_time_ = profile_item.db_time_ * 1000UL;
-  }
   GET_INT_VALUE(FETCH_COLUMN::IO_TIME, profile_item.io_time_);
+  if (OB_SUCC(ret)) {
+    // db time and io time are in us, convert to ns
+    profile_item.db_time_ = profile_item.db_time_ * 1000UL;
+    profile_item.io_time_ = profile_item.io_time_ * 1000UL;
+  }
   GET_INT_VALUE(FETCH_COLUMN::WORKAREA_MEM, profile_item.workarea_mem_);
   GET_INT_VALUE(FETCH_COLUMN::WORKAREA_MAX_MEM, profile_item.workarea_max_mem_);
   GET_INT_VALUE(FETCH_COLUMN::WORKAREA_TEMPSEG, profile_item.workarea_tempseg_);

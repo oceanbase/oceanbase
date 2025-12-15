@@ -168,6 +168,8 @@ int ObDbmsXprofile::flatten_op_profile(const ObIArray<ObProfileItem> &profile_it
   metric::Level display_level = profile_text.display_level_;
   const char *json = nullptr;
   ObArenaAllocator arena_alloc;
+  arena_alloc.set_tenant_id(MTL_ID());
+  arena_alloc.set_label("ObXprofile");
   for (int64_t i = 0; i < profile_items.count() && OB_SUCC(ret); ++i) {
     if (i % 32 == 0) {
       arena_alloc.reset_remain_one_page();
@@ -269,8 +271,10 @@ int ObDbmsXprofile::format_summary_info(const ObMergedProfileItem *compile_profi
   if (OB_SUCC(ret) && (OB_NOT_NULL(compile_profile))) {
     OZ(BUF_PRINTF("\nGenerate Plan Cost: "));
     ObArenaAllocator arena_alloc;
+    arena_alloc.set_tenant_id(MTL_ID());
+    arena_alloc.set_label("ObXprofile");
     const char *plan_info = nullptr;
-    OZ(compile_profile->profile_->pretty_print(&arena_alloc, plan_info, "", "  ",
+    OZ(compile_profile->profile_->pretty_print(&arena_alloc, plan_info, "", "", "  ",
                                                profile_text.display_level_));
     OZ(BUF_PRINTF("\n%s", plan_info));
   }
@@ -306,6 +310,8 @@ int ObDbmsXprofile::format_agg_profiles(const ObIArray<ObMergedProfileItem> &mer
   metric::Level display_level = profile_text.display_level_;
   const char *text = nullptr;
   ObArenaAllocator arena_alloc;
+  arena_alloc.set_tenant_id(MTL_ID());
+  arena_alloc.set_label("ObXprofile");
 
   ProfilePrefixHelper prefix_helper(arena_alloc);
   if (OB_FAIL(ret)) {
@@ -339,9 +345,12 @@ int ObDbmsXprofile::format_agg_profiles(const ObIArray<ObMergedProfileItem> &mer
         OZ(BUF_PRINTF("%s\n", text));
       }
     } else if (ProfileDisplayType::AGGREGATED_PRETTY == profile_text.type_) {
+      const ProfilePrefixHelper::PrefixInfo &prefix = prefix_helper.get_prefixs().at(i);
       if (OB_FAIL(item.profile_->pretty_print(
-              &arena_alloc, text, prefix_helper.get_prefixs().at(i).profile_prefix_,
-              prefix_helper.get_prefixs().at(i).metric_prefix_, display_level))) {
+              &arena_alloc, text, prefix.profile_prefix_,
+              prefix.profile_suffix_,
+              prefix.metric_prefix_,
+              display_level))) {
         LOG_WARN("failed to format profile", K(item.profile_->get_name_str()), K(buf_len), K(pos));
       } else {
         OZ(BUF_PRINTF("%s\n", text));
@@ -485,6 +494,8 @@ int ProfilePrefixHelper::prepare_pretty_prefix(const ObIArray<ObMergedProfileIte
       PrefixInfo &current_op = prefix_infos_.at(i);
       if (OB_FAIL(append_profile_prefix(current_op, current_op.plan_depth_))) {
         LOG_WARN("failed to append profile prefix");
+      } else if (OB_FAIL(append_profile_suffix(current_op, merged_items.at(i)))) {
+        LOG_WARN("failed to append profile suffix");
       } else if (OB_FAIL(append_metric_prefix(current_op, current_op.plan_depth_))) {
         LOG_WARN("failed to append metric prefix");
       }
@@ -531,6 +542,8 @@ int ProfilePrefixHelper::prepare_pretty_prefix(const ObIArray<ObMergedProfileIte
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(append_profile_prefix(current_op, current_depth))) {
         LOG_WARN("failed to append profile prefix");
+      } else if (OB_FAIL(append_profile_suffix(current_op, merged_items.at(i)))) {
+        LOG_WARN("failed to append profile suffix");
       } else if (OB_FAIL(append_metric_prefix(current_op, current_depth))) {
         LOG_WARN("failed to append metric prefix");
       } else if (OB_FAIL(ancestors_stack_.push_back(
@@ -603,6 +616,26 @@ int ProfilePrefixHelper::append_profile_prefix(PrefixInfo &current_profile,
       OZ(BUF_PRINTF("%d.", current_profile.op_id_));
       (void)current_profile.profile_prefix_.assign(buf, pos);
     }
+  }
+  return ret;
+}
+
+int ProfilePrefixHelper::append_profile_suffix(PrefixInfo &current_profile,
+                                               const ObMergedProfileItem &merged_item)
+
+{
+  int ret = OB_SUCCESS;
+  char *buf = NULL;
+  int64_t buf_len = 32;
+  int64_t pos = 0;
+  if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(buf_len)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocate buffer failed", K(buf_len));
+  } else {
+    OZ(BUF_PRINTF("(dop=%ld)", merged_item.parallel_));
+  }
+  if (OB_SUCC(ret)) {
+    (void)current_profile.profile_suffix_.assign(buf, pos);
   }
   return ret;
 }
