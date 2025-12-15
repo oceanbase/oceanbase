@@ -337,8 +337,18 @@ int ObTabletMiniMergeCtx::update_tablet_directly(ObGetMergeTablesResult &get_mer
       &static_param_.snapshot_info_);
 
     (void) try_schedule_compaction_after_mini(new_tablet_handle);
+    (void) record_uncommitted_sstable_cnt();
   }
   return ret;
+}
+
+void ObTabletMiniMergeCtx::record_uncommitted_sstable_cnt()
+{
+  ObSSTable *sstable = nullptr;
+  (void)merged_table_handle_.get_sstable(sstable);
+  if (OB_NOT_NULL(sstable) && sstable->contain_uncommitted_row()) {
+    EVENT_INC(ObStatEventIds::MEMSTORE_DUMP_UNCOMMITTED_SSTABLE_CNT);
+  }
 }
 
 /*
