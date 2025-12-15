@@ -65,6 +65,10 @@ namespace transaction
       TX_FREE_ROUTE_PUSH_STATE       = 80,
       TX_FREE_ROUTE_CHECK_ALIVE      = 81,
       TX_FREE_ROUTE_CHECK_ALIVE_RESP = 82,
+
+      /* for hotspot tx */
+      TX_HOTSPOT_DISPATCH_REDO = 90,
+      TX_HOTSPOT_SUBMIT_OTHER_REDO = 91,
     };
 
     struct ObTxMsg : public obrpc::ObIFill
