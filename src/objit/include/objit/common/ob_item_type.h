@@ -3000,6 +3000,7 @@ typedef enum ObItemType
   T_SKIP_INDEX_LEVEL = 4944,
   T_DSL_QUERY = 4945, // hybrid search dsl query
   T_DISABLE_PARALLEL_PARSE_SINGLE_CSV = 4946, // disable parallel parse single csv
+  T_TTL_DEFINITION_WITH_TYPE = 4947,
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;

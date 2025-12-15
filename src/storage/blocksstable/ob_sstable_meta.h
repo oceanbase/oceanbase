@@ -200,6 +200,7 @@ public:
   share::SCN tx_data_recycle_scn_;
   int64_t co_base_snapshot_version_;
   share::SCN rec_scn_;
+  int64_t min_merged_trans_version_;
   //Add new variable need consider ObSSTableMetaChecker
 };
 
