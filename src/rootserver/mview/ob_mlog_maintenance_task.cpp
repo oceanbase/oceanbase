@@ -211,7 +211,20 @@ int ObMLogMaintenanceTask::gc_mlog()
       } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, mlog_id, table_schema))) {
         LOG_WARN("fail to get table schema", KR(ret), K(tenant_id_), K(mlog_id));
       } else {
-        is_exist = (nullptr != table_schema);
+        if (OB_ISNULL(table_schema)) {
+          is_exist = false;
+          int tmp_ret = OB_SUCCESS;
+          int64_t schema_count = 0;
+          if (OB_TMP_FAIL(schema_guard.get_schema_count(tenant_id_, schema_count))) {
+            LOG_WARN("fail to get schema count", KR(tmp_ret), K(tenant_id_), K(mlog_id));
+          }
+          FLOG_INFO("get null table schema, need gc this mlog", K(ret), K(tmp_ret),
+                    K(tenant_id_), K(mlog_id), K(mlog_info),
+                    K(tenant_schema_version), KP(table_schema), K(schema_count), K(is_exist));
+        } else {
+          // get table schema
+          is_exist = true;
+        }
       }
       if (OB_SUCC(ret) && !is_exist) {
         LOG_INFO("gc one mlog", K_(tenant_id), K(mlog_id));

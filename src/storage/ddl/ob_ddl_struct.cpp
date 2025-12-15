@@ -831,6 +831,7 @@ int ObDDLTableSchema::fill_vector_index_schema_item(
 int ObDDLTableSchema::fill_ddl_table_schema(
     const uint64_t tenant_id,
     const uint64_t table_id,
+    const uint64_t tenant_data_version,
     ObArenaAllocator &allocator,
     ObDDLTableSchema &ddl_table_schema)
 {
@@ -839,9 +840,9 @@ int ObDDLTableSchema::fill_ddl_table_schema(
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = nullptr;
   bool is_vector_data_complement = false;
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_ID == table_id)) {
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_ID == table_id || tenant_data_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(table_id));
+    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(table_id), K(tenant_data_version));
   } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("get tenant schema failed", K(ret), K(tenant_id));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
@@ -857,6 +858,7 @@ int ObDDLTableSchema::fill_ddl_table_schema(
     ddl_table_schema.table_id_ = table_id;
     ddl_table_schema.table_item_.is_index_table_ = table_schema->is_index_table();
     ddl_table_schema.table_item_.is_unique_index_ = table_schema->is_unique_index();
+    ddl_table_schema.table_item_.is_table_with_clustering_key_ = table_schema->is_table_with_clustering_key();
     ddl_table_schema.table_item_.rowkey_column_num_ = table_schema->get_rowkey_column_num();
     ddl_table_schema.table_item_.lob_inrow_threshold_ = table_schema->get_lob_inrow_threshold();
     ddl_table_schema.table_item_.compress_type_ = table_schema->get_compressor_type();
@@ -865,7 +867,7 @@ int ObDDLTableSchema::fill_ddl_table_schema(
 
     if (OB_FAIL(ddl_table_schema.column_descs_.assign(column_descs))) {
       LOG_WARN("assign column descs failed", K(ret));
-    } else if (OB_FAIL(ObDDLUtil::convert_to_storage_schema(table_schema, allocator, ddl_table_schema.storage_schema_))) {
+    } else if (OB_FAIL(ObDDLUtil::convert_to_storage_schema(table_schema, tenant_data_version, allocator, ddl_table_schema.storage_schema_))) {
       LOG_WARN("fail to convert to storage schema", KR(ret), KPC(table_schema));
     } else if (OB_INVALID_ID != table_schema->get_aux_lob_meta_tid()) {
       const uint64_t lob_meta_table_id = table_schema->get_aux_lob_meta_tid();
@@ -875,7 +877,7 @@ int ObDDLTableSchema::fill_ddl_table_schema(
       } else if (OB_ISNULL(lob_meta_table_schema)) {
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("table not exist", K(ret), K(tenant_id), K(lob_meta_table_id));
-      } else if (OB_FAIL(ObDDLUtil::convert_to_storage_schema(lob_meta_table_schema, allocator, ddl_table_schema.lob_meta_storage_schema_))) {
+      } else if (OB_FAIL(ObDDLUtil::convert_to_storage_schema(lob_meta_table_schema, tenant_data_version, allocator, ddl_table_schema.lob_meta_storage_schema_))) {
         LOG_WARN("fail to convert to storage schema", KR(ret), KPC(lob_meta_table_schema));
       }
     }
@@ -963,6 +965,8 @@ int ObDDLTableSchema::assign(const ObDDLTableSchema &other)
     table_item_ = other.table_item_;
     storage_schema_ = other.storage_schema_;
     lob_meta_storage_schema_ = other.lob_meta_storage_schema_;
+    src_tenant_id_ = other.src_tenant_id_;
+    dst_tenant_id_ = other.dst_tenant_id_;
   }
   return ret;
 }

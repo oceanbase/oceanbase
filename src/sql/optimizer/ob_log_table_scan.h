@@ -287,6 +287,10 @@ struct ObVecIndexInfo
            vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ ||
            vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF;
   }
+  inline bool is_ipivf_vec_scan() const
+  {
+    return vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF;
+  }
   inline bool is_spiv_scan() const { return vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_SPIV; }
   inline bool is_ivf_vec_scan() const
   {
@@ -308,6 +312,7 @@ struct ObVecIndexInfo
   inline bool is_vec_adaptive_scan() const { return vec_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN; }
   inline bool is_vec_adaptive_iter_scan() const { return is_vec_adaptive_scan() && (adaptive_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER || adaptive_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_POST_FILTER); }
   inline bool is_ivf_adaptive_scan() const { return is_ivf_vec_scan() && is_vec_adaptive_scan(); }
+  inline bool is_ipivf_adaptive_scan() const { return is_ipivf_vec_scan() && is_vec_adaptive_scan(); }
   inline bool need_index_back() const { return is_ivf_vec_scan() || is_hnsw_vec_scan() || is_spiv_scan();}
   uint64_t get_aux_table_id(ObVectorAuxTableIdx idx) const { return idx < aux_table_id_.count() ? aux_table_id_[idx] : OB_INVALID_ID; }
   ObColumnRefRawExpr* get_aux_table_column(int idx) const { return idx < aux_table_column_.count() ? aux_table_column_[idx] : nullptr; }
@@ -1102,6 +1107,7 @@ public:
   inline bool is_vec_idx_scan() const { return is_vec_idx_scan_pre_filter() || is_vec_idx_scan_post_filter(); }
   inline bool is_vec_adaptive_scan() const { return vector_index_info_.is_vec_adaptive_scan(); }
   inline bool is_ivf_adaptive_scan() const { return vector_index_info_.is_ivf_adaptive_scan(); }
+  inline bool is_ipivf_adaptive_scan() const { return vector_index_info_.is_ipivf_adaptive_scan(); }
   inline bool is_spiv_vec_scan() const {return vector_index_info_.is_spiv_scan();}
   inline ObVecIndexInfo &get_vector_index_info() { return vector_index_info_; }
   inline const ObVecIndexInfo &get_vector_index_info() const { return vector_index_info_; }

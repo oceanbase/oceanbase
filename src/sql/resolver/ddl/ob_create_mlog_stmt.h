@@ -92,6 +92,8 @@ public:
   {
     create_mlog_arg_.purge_options_.purge_mode_ = purge_mode;
   }
+  inline bool get_replace_if_exists() const { return create_mlog_arg_.replace_if_exists_; }
+  inline void set_replace_if_exists(bool replace_if_exists) { create_mlog_arg_.replace_if_exists_ = replace_if_exists; }
 
   virtual obrpc::ObDDLArg &get_ddl_arg() { return create_mlog_arg_; }
 

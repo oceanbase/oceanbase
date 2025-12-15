@@ -981,6 +981,8 @@ int ObHNSWIndexAppendBufferOperator::append_row(
       LOG_WARN("fail to get ObMockPluginVectorIndexAdapter", K(ret), K(tablet_context->vector_index_ctx_->ls_id_), K(tablet_id_));
     } else if (OB_ISNULL(adapter = is_vec_tablet_rebuild ? tablet_context->vector_index_ctx_->adapter_ : adaptor_guard.get_adatper())) {
       LOG_WARN("error unexpected, adapter is nullptr", K(ret), K(tablet_context->vector_index_ctx_->ls_id_), K(tablet_id_));
+    } else if (is_vec_tablet_rebuild && OB_FAIL(adaptor_guard.set_adapter(tablet_context->vector_index_ctx_->adapter_))) {
+      LOG_WARN("fail to set new adapter guard", K(ret));
     } else if (OB_FAIL(adapter->get_extra_info_actual_size(extra_info_actual_size))) {
       LOG_WARN("failed to get extra info actual size", K(ret));
     } else if (extra_column_count > 0 && extra_info_actual_size > 0) { //no primary key /cluster table not support extra info right now

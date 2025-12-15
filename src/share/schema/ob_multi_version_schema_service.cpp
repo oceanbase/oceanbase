@@ -904,6 +904,8 @@ int ObMultiVersionSchemaService::add_aux_schema_from_mgr(
           table_schema.set_aux_lob_meta_tid(simple_aux_table->get_table_id());
         } else if (simple_aux_table->is_aux_lob_piece_table()) {
           table_schema.set_aux_lob_piece_tid(simple_aux_table->get_table_id());
+        } else if (simple_aux_table->is_tmp_mlog_table()) {
+          table_schema.set_tmp_mlog_tid(simple_aux_table->get_table_id());
         } else if (simple_aux_table->is_mlog_table()) {
           table_schema.set_mlog_tid(simple_aux_table->get_table_id());
         } else {

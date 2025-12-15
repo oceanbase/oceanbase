@@ -24,7 +24,7 @@ ObScheduleTabletFunc::ObScheduleTabletFunc(
   const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason,
   const int64_t loop_cnt)
   : ObBasicScheduleTabletFunc(merge_version, loop_cnt),
-    tablet_status_(),
+    tablet_status_(tenant_status_snapshot_),
     time_guard_(),
     clear_stat_tablets_(),
     merge_reason_(merge_reason)

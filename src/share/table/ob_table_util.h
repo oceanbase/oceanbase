@@ -33,7 +33,7 @@ public:
   static const ObString &get_kv_ttl_trace_info() { return KV_TTL_TRACE_INFO; }
   static bool is_kv_trace_info(const ObString &trace_info);
   static bool has_exist_in_columns(const ObIArray<ObString> &columns, const ObString &name);
-
+  static int extract_tenant_id(const obrpc::ObRpcPacket &pkt, uint64_t &tenant_id);
 public:
   static int get_tablet_id_by_part_idx(share::schema::ObSchemaGetterGuard &schema_guard,
                                        const uint64_t table_id,

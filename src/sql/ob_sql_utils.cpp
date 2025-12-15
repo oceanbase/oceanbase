@@ -5684,7 +5684,7 @@ int ObSQLUtils::get_one_group_params(int64_t &actual_pos, ParamStore &src, Param
     ObObjParam &obj = src.at(i);
     pl::ObPLCollection *coll = NULL;
     ObObj *data = NULL;
-    if (OB_UNLIKELY(!obj.is_ext())) {
+    if (OB_UNLIKELY(!obj.is_batch_parameters())) {
       OZ (ObSql::add_param_to_param_store(obj, obj_params));
     } else {
       CK (OB_NOT_NULL(coll = reinterpret_cast<pl::ObPLCollection*>(obj.get_ext())));
@@ -5741,9 +5741,14 @@ int ObSQLUtils::copy_params_to_array_params(int64_t query_pos, ParamStore &src, 
     } else {
       ObObjParam new_param = src.at(j);
       if (is_forall) {
-        OZ (deep_copy_obj(alloc, src.at(j), new_param));
+        if (src.at(j).is_pl_extend() && src.at(j).get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) {
+          new_param.set_int_value(0);
+          OZ (pl::ObUserDefinedType::deep_copy_obj(alloc, src.at(j), new_param, true));
+        } else {
+          OZ (deep_copy_obj(alloc, src.at(j), new_param));
+        }
       }
-      array_params->data_[query_pos] = new_param;
+      OX (array_params->data_[query_pos] = new_param);
     }
   }
   return ret;
@@ -5761,7 +5766,7 @@ int ObSQLUtils::init_elements_info(ParamStore &src, ParamStore &dst)
     CK (dst.at(i).is_ext_sql_array());
     CK (OB_NOT_NULL(array_params = reinterpret_cast<ObSqlArrayObj*>(dst.at(i).get_ext())));
     if (OB_FAIL(ret)) {
-    } else if (OB_UNLIKELY(!obj.is_ext())) {
+    } else if (OB_UNLIKELY(!obj.is_batch_parameters())) {
       array_params->element_.set_meta_type(obj.get_meta());
       array_params->element_.set_accuracy(obj.get_accuracy());
     } else {

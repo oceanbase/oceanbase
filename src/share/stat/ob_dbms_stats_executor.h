@@ -244,6 +244,7 @@ private:
                                         int64_t &sample_count);
 
   static int collect_executed_part_ids(const ObTableStatParam &stat_param, ObIArray<int64_t> &part_ids);
+  static int collect_executed_part_cnt(const ObTableStatParam &stat_param, int64_t &part_cnt);
   static int update_dml_modified_info(sqlclient::ObISQLConnection *conn, const ObTableStatParam &param);
 
   static int split_table_part_param(const ObTableStatParam &stat_param,

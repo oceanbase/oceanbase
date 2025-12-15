@@ -148,7 +148,7 @@ int ObVectorIndexUtil::parser_params_from_string(
           int64_t int_value = 0;
           if (OB_FAIL(ObSchemaUtils::str_to_int(new_param_value, int_value))) {
             LOG_WARN("fail to str_to_int", K(ret), K(new_param_value));
-          } else if (int_value >= 1 && int_value <= 1000) {
+          } else if (int_value >= 1 && int_value <= 160000) {
             param.ef_search_ = int_value;
           } else {
             ret = OB_NOT_SUPPORTED;
@@ -735,7 +735,7 @@ int ObVectorIndexUtil::resolve_query_param(
         } else if (value_node->type_ != T_INT && value_node->type_ != T_NUMBER) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid query param", K(ret), K(i), K(param_name), K(value_node->type_));
-        } else if (! (value_node->value_ >= 1 && value_node->value_ <= 1000)) {
+        } else if (! (value_node->value_ >= 1 && value_node->value_ <= 160000)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid query param", K(ret), K(i), K(param_name), K(value_node->type_), K(value_node->value_));
         } else {
@@ -3718,7 +3718,7 @@ int ObVectorIndexUtil::check_index_param(
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "this value of vector index ef_construction is");
           }
         } else if (last_variable == "EF_SEARCH") {
-          if (parser_value >= 1 && parser_value <= 1000 ) {
+          if (parser_value >= 1 && parser_value <= 160000 ) {
             ef_search_is_set = true;
           } else {
             ret = OB_NOT_SUPPORTED;
@@ -4355,7 +4355,8 @@ int ObVectorIndexUtil::generate_switch_index_names(
                                                  new_domain_index_name,
                                                  allocator,
                                                  old_table_names,
-                                                 new_table_names))) {
+                                                 new_table_names,
+                                                 index_type))) {
       LOG_WARN("fail to generate hnsw swith index names", K(ret));
     }
   } else if (share::schema::is_vec_ivfflat_index(index_type)) {
@@ -4395,15 +4396,18 @@ int ObVectorIndexUtil::generate_hnsw_switch_index_names(
     const ObString &new_domain_index_name,
     ObIAllocator &allocator,
     ObIArray<ObString> &old_table_names,
-    ObIArray<ObString> &new_table_names)
+    ObIArray<ObString> &new_table_names,
+    const ObIndexType index_type)
 {
   int ret = OB_SUCCESS;
   ObString old_delta_buffer_table_name = old_domain_index_name;
   ObString new_delta_buffer_table_name = new_domain_index_name;
   ObString new_index_id_table_name;
   ObString new_snapshot_data_table_name;
+  ObString new_embedded_vec_table_name;
   ObString old_index_id_table_name;
   ObString old_snapshot_data_table_name;
+  ObString old_embedded_vec_table_name;
 
   if (OB_FAIL(new_table_names.push_back(new_delta_buffer_table_name))) {
     LOG_WARN("fail to push back new delta buffer table name", K(ret));
@@ -4437,6 +4441,22 @@ int ObVectorIndexUtil::generate_hnsw_switch_index_names(
     LOG_WARN("fail to construct old snapshot data table name", K(ret), K(old_domain_index_name));
   } else if (OB_FAIL(old_table_names.push_back(old_snapshot_data_table_name))) {
     LOG_WARN("fail to push back old snapshot data table name", K(ret));
+  } else if (share::schema::is_local_hybrid_vec_index(index_type)) {
+    if (OB_FAIL(ObVecIndexBuilderUtil::generate_vec_index_name(&allocator,
+                                                               INDEX_TYPE_HYBRID_INDEX_EMBEDDED_LOCAL,
+                                                               new_domain_index_name,
+                                                               new_embedded_vec_table_name))) {
+      LOG_WARN("fail to generate embedded vector table name", K(ret), K(new_domain_index_name));
+    } else if (OB_FAIL(new_table_names.push_back(new_embedded_vec_table_name))) {
+      LOG_WARN("fail to push back new embedded vector table name", K(ret));
+    } else if (OB_FAIL(ObVecIndexBuilderUtil::generate_vec_index_name(&allocator,
+                                                                      INDEX_TYPE_HYBRID_INDEX_EMBEDDED_LOCAL,
+                                                                      old_domain_index_name,
+                                                                      old_embedded_vec_table_name))) {
+      LOG_WARN("fail to generate embedded vector table name", K(ret), K(old_domain_index_name));
+    } else if (OB_FAIL(old_table_names.push_back(old_embedded_vec_table_name))) {
+      LOG_WARN("fail to push back old embedded vector table name", K(ret));
+    }
   }
   return ret;
 }
@@ -5575,66 +5595,6 @@ bool ObVectorIndexUtil::is_match_index_column_name(
     is_match = true;
   }
   return is_match;
-}
-
-int ObVectorIndexUtil::get_rebuild_drop_index_id_and_name(share::schema::ObSchemaGetterGuard &schema_guard, obrpc::ObDropIndexArg &arg)
-{
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = arg.tenant_id_;
-  const uint64_t new_index_id = arg.table_id_;
-  const uint64_t old_index_id = arg.index_table_id_;
-  const ObString old_index_name = arg.index_name_;
-  const ObTableSchema *old_index_schema = nullptr;
-  const ObTableSchema *new_index_schema = nullptr;
-  if (!arg.is_add_to_scheduler_ || !arg.is_vec_inner_drop_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected arg", K(ret), K(arg));
-  } else if (tenant_id == OB_INVALID_TENANT_ID ||
-             old_index_id == OB_INVALID_ID || new_index_id == OB_INVALID_ID || old_index_name.empty()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(old_index_id), K(new_index_id), K(old_index_name));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, old_index_id, old_index_schema))) {
-    LOG_WARN("fail to get table schema", K(ret), K(old_index_id));
-  } else if (OB_ISNULL(old_index_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected nullptr", K(ret));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, new_index_id, new_index_schema))) {
-    LOG_WARN("fail to get table schema", K(ret), K(new_index_id));
-  } else if (OB_ISNULL(new_index_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected nullptr", K(ret));
-  } else {
-    // If the name of the old table has been changed, it means the rebuild was successful, otherwise, the rebuild failed. So:
-    //    1. When the rebuild is successful, the old table needs to be deleted because the name of the old table has been replaced.
-    //    2. Conversely, the new table needs to be deleted if the rebuild is unsuccessful.
-    bool rebuild_succ = false;
-    if (0 == old_index_schema->get_table_name_str().case_compare(old_index_name)) {
-      rebuild_succ = false;
-    } else if (0 == new_index_schema->get_table_name_str().case_compare(old_index_name)) {
-      rebuild_succ = true;
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected rebuild old and new index table name", K(ret), K(old_index_name),
-        K(old_index_schema->get_table_name()),
-        K(new_index_schema->get_table_name()));
-    }
-    if (OB_FAIL(ret)) {
-    } else if (rebuild_succ) { // drop old index
-      arg.index_table_id_ = old_index_id;
-      if (OB_FAIL(old_index_schema->get_index_name(arg.index_name_))) { // index name, like: idx1, not full index name
-        LOG_WARN("fail to get index name", K(ret));
-      }
-    } else { // drop new index
-      arg.index_table_id_ = new_index_id;
-      if (OB_FAIL(new_index_schema->get_index_name(arg.index_name_))) { // index name, like: idx1, not full index name
-        LOG_WARN("fail to get index name", K(ret));
-      }
-    }
-    LOG_INFO("succ to get rebuild drop index id and name", K(ret), K(rebuild_succ),
-      K(arg.index_table_id_), K(arg.index_name_),
-      K(old_index_schema->get_table_name()), K(new_index_schema->get_table_name()));
-  }
-  return ret;
 }
 
 bool ObVectorIndexUtil::check_is_match_index_type(const ObIndexType type1, const ObIndexType type2)
@@ -7276,27 +7236,90 @@ int ObVectorIndexUtil::check_need_embedding_when_rebuild(const ObString &old_idx
                                                          bool &need_embedding_when_rebuild)
 {
   int ret = OB_SUCCESS;
-  ObVectorIndexParam old_vector_index_param;
-  ObVectorIndexParam new_vector_index_param;
   need_embedding_when_rebuild = false;
-  ObVectorIndexType index_type = ObVectorIndexType::VIT_MAX;
-  if (index_table_schema.is_hybrid_vec_index_log_type()) {
-    index_type = ObVectorIndexType::VIT_HNSW_INDEX;
-    if (OB_FAIL(parser_params_from_string(old_idx_params, index_type, old_vector_index_param, false))) {
-      LOG_WARN("fail to parser params from string", K(ret), K(old_idx_params));
-    } else if (OB_FAIL(parser_params_from_string(new_idx_params, index_type, new_vector_index_param, false))) {
-      LOG_WARN("fail to parser params from string", K(ret), K(new_idx_params));
-    } else {
-      if (0 == STRCMP(old_vector_index_param.endpoint_, new_vector_index_param.endpoint_) ||
-          old_vector_index_param.dim_ != new_vector_index_param.dim_) {
-        need_embedding_when_rebuild = true;
-      }
-    }
+  ObVectorIndexParam old_param;
+  ObVectorIndexParam new_param;
+  const ObVectorIndexType index_type = ObVectorIndexType::VIT_HNSW_INDEX;
+  if (!index_table_schema.is_hybrid_vec_index_log_type()) {
+    // ignore, do nothing
+  } else if (OB_FAIL(parser_params_from_string(old_idx_params, index_type, old_param, false))) {
+    LOG_WARN("fail to parser params from string", K(ret), K(old_idx_params));
+  } else if (OB_FAIL(parser_params_from_string(new_idx_params, index_type, new_param, false))) {
+    LOG_WARN("fail to parser params from string", K(ret), K(new_idx_params));
   } else {
-    // do nothing, other type vec index.
+    const bool type_changed = (old_param.type_ != new_param.type_);
+    const bool lib_changed = (old_param.lib_ != new_param.lib_);
+    const bool dist_algorithm_changed = (old_param.dist_algorithm_ != new_param.dist_algorithm_);
+    const bool dim_changed = (old_param.dim_ != new_param.dim_);
+    const bool m_changed = (old_param.m_ != new_param.m_);
+    const bool ef_construction_changed = (old_param.ef_construction_ != new_param.ef_construction_);
+    const bool extra_info_max_changed = (old_param.extra_info_max_size_ != new_param.extra_info_max_size_);
+    const bool extra_info_actual_changed = (old_param.extra_info_actual_size_ != new_param.extra_info_actual_size_);
+    const bool endpoint_changed = (0 != STRCMP(old_param.endpoint_, new_param.endpoint_));
+    const bool sync_interval_type_changed = (old_param.sync_interval_type_ != new_param.sync_interval_type_);
+    const bool sync_interval_value_changed = (old_param.sync_interval_value_ != new_param.sync_interval_value_);
+
+    need_embedding_when_rebuild = type_changed
+                               || lib_changed
+                               || dist_algorithm_changed
+                               || dim_changed
+                               || m_changed
+                               || ef_construction_changed
+                               || extra_info_max_changed
+                               || extra_info_actual_changed
+                               || endpoint_changed
+                               || sync_interval_type_changed
+                               || sync_interval_value_changed;
   }
   return ret;
 }
+
+int ObDasSemanticIndexInfo::generate(const schema::ObTableSchema *data_schema,
+                                     const schema::ObTableSchema *rowkey_domain_schema,
+                                     int64_t result_output_count,
+                                     bool has_trans_info_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(data_schema) || OB_ISNULL(rowkey_domain_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KP(data_schema), KP(rowkey_domain_schema));
+  } else {
+    is_emb_vec_tbl_ = rowkey_domain_schema->is_hybrid_vec_index_embedded_type();
+    use_rowkey_vid_tbl_ = !data_schema->is_table_with_hidden_pk_column();
+    part_key_num_ = 0;
+    ObVectorIndexParam vec_index_param;
+    if (data_schema->is_table_with_hidden_pk_column() && data_schema->is_partitioned_table()) {
+      int64_t trans_expr_cnt = has_trans_info_expr ? 1 : 0;
+      if (result_output_count == (rowkey_domain_schema->get_column_count() + trans_expr_cnt)) {
+        schema::ObTableSchema::const_column_iterator col_begin = data_schema->column_begin();
+        schema::ObTableSchema::const_column_iterator col_end = data_schema->column_end();
+        for (; OB_SUCC(ret) && col_begin != col_end; col_begin++) {
+          const schema::ObColumnSchemaV2 *col_schema = *col_begin;
+          if (OB_ISNULL(col_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected nullptr column schema", K(ret));
+          } else if (col_schema->is_tbl_part_key_column()) {
+            part_key_num_++;
+          }
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    }else if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(rowkey_domain_schema->get_index_params(), ObVectorIndexType::VIT_HNSW_INDEX, vec_index_param))) {
+      LOG_WARN("fail to parser params from string", K(ret), K(rowkey_domain_schema->get_index_params()));
+    } else {
+      sync_interval_type_ = vec_index_param.sync_interval_type_;
+    }
+  }
+  LOG_INFO("has generate semantic_index_info for das ", K(*this), K(result_output_count), K(rowkey_domain_schema->get_column_count()), K(has_trans_info_expr));
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObDasSemanticIndexInfo,
+                    is_emb_vec_tbl_,
+                    use_rowkey_vid_tbl_,
+                    part_key_num_,
+                    sync_interval_type_);
 
 }
 }

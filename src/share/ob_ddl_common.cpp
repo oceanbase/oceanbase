@@ -39,6 +39,8 @@
 #include "storage/direct_load/ob_direct_load_auto_inc_seq_service.h"
 #include "storage/direct_load/ob_direct_load_auto_inc_seq_data.h"
 #endif
+#include "storage/mview/ob_mview_refresh_helper.h"
+#include "sql/resolver/mv/ob_mv_provider.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -1409,11 +1411,13 @@ int ObDDLUtil::generate_build_mview_replica_sql(
     const int64_t container_table_id,
     ObSchemaGetterGuard &schema_guard,
     const int64_t snapshot_version,
+    const uint64_t mview_target_data_sync_scn,
     const int64_t execution_id,
     const int64_t task_id,
     const int64_t parallelism,
     const bool use_schema_version_hint_for_src_table,
     const ObIArray<ObBasedSchemaObjectInfo> &based_schema_object_infos,
+    const ObString &mview_select_sql,
     ObSqlString &sql_string)
 {
   int ret = OB_SUCCESS;
@@ -1489,8 +1493,10 @@ int ObDDLUtil::generate_build_mview_replica_sql(
           LOG_WARN("failed to generated mview ddl schema hint", KR(ret));
         }
       }
-      if (OB_SUCC(ret)) {
-        const int64_t real_parallelism = ObDDLUtil::get_real_parallelism(parallelism, true/*is mv refresh*/);
+      const bool nested_consistent_refresh = mview_target_data_sync_scn == OB_INVALID_SCN_VAL ? false : true;
+      const int64_t real_parallelism = ObDDLUtil::get_real_parallelism(parallelism, true/*is mv refresh*/);
+      if (OB_FAIL(ret)) {
+      } else if (!nested_consistent_refresh) {
         const ObString &select_sql_string = mview_table_schema->get_view_schema().get_view_definition_str();
         if (is_oracle_mode) {
           if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ append monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) opt_param('ddl_task_id', %ld) use_px */ INTO \"%.*s\".\"%.*s\""
@@ -1517,9 +1523,41 @@ int ObDDLUtil::generate_build_mview_replica_sql(
             LOG_WARN("fail to assign sql string", KR(ret));
           }
         }
+      } else if (nested_consistent_refresh) {
+        std::string select_sql(mview_select_sql.ptr());
+        std::string real_sql;
+        if (mview_select_sql.empty()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("nested sync refresh with empty sql string", K(mview_select_sql), K(mview_table_id));
+        } else if (OB_FAIL(ObMViewRefreshHelper::replace_all_snapshot_zero(
+                           select_sql, snapshot_version, real_sql, is_oracle_mode))) {
+          LOG_WARN("fail to replace snapshot", K(ret));
+        } else if (!is_oracle_mode) {
+          if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ append monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) "
+                                              " opt_param('ddl_task_id', %ld) use_px */ INTO `%.*s`.`%.*s`"
+                                              " SELECT /*+ %.*s */ * from (%.*s);",
+                                            real_parallelism, execution_id, task_id,
+                                            static_cast<int>(database_name.length()), database_name.ptr(),
+                                            static_cast<int>(container_table_name.length()), container_table_name.ptr(),
+                                            static_cast<int>(src_table_schema_version_hint.length()), src_table_schema_version_hint.ptr(),
+                                            static_cast<int>(real_sql.length()), real_sql.c_str()))) {
+            LOG_WARN("fail to assign sql string", KR(ret));
+          }
+        } else if (is_oracle_mode) {
+          if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ append monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) "
+                                            " opt_param('ddl_task_id', %ld) use_px */ INTO \"%.*s\".\"%.*s\" "
+                                            " SELECT /*+ %.*s */ * from (%.*s);",
+                                            real_parallelism, execution_id, task_id,
+                                            static_cast<int>(database_name.length()), database_name.ptr(),
+                                            static_cast<int>(container_table_name.length()), container_table_name.ptr(),
+                                            static_cast<int>(src_table_schema_version_hint.length()), src_table_schema_version_hint.ptr(),
+                                            static_cast<int>(real_sql.length()), real_sql.c_str()))) {
+            LOG_WARN("fail to assign sql string", KR(ret));
+          }
+        }
       }
-    }
     LOG_INFO("execute sql", K(sql_string));
+    }
   }
   return ret;
 }
@@ -1636,6 +1674,7 @@ bool ObDDLUtil::need_reshape(const ObObjMeta &col_type)
 int ObDDLUtil::check_null_and_length(
     const bool is_index_table,
     const bool has_lob_rowkey,
+    const bool is_table_with_clustering_key,
     const int64_t rowkey_column_num,
     const blocksstable::ObDatumRow &row_val)
 {
@@ -1653,7 +1692,8 @@ int ObDDLUtil::check_null_and_length(
       rowkey_length += cell.len_;
       has_null |= cell.is_null();
     }
-    if (!is_index_table && has_null) {
+    // For tables with clustering key (heap tables), null values in rowkey are allowed
+    if (!is_index_table && !is_table_with_clustering_key && has_null) {
       ret = OB_ER_INVALID_USE_OF_NULL;
       LOG_WARN("invalid null cell for row key column", KR(ret), K(row_val));
     }
@@ -2394,6 +2434,7 @@ int ObDDLUtil::handle_lob_columns(
 int ObDDLUtil::check_null_and_length(
     const bool is_index_table,
     const bool has_lob_rowkey,
+    const bool is_table_with_clustering_key,
     const int64_t rowkey_column_num,
     ObBatchDatumRows &batch_rows)
 {
@@ -2472,7 +2513,8 @@ int ObDDLUtil::check_null_and_length(
           }
         }
         if (OB_SUCC(ret)) {
-          if (!is_index_table && has_null) {
+          // For tables with clustering key (heap tables), null values in rowkey are allowed
+          if (!is_index_table && !is_table_with_clustering_key && has_null) {
             ret = OB_ER_INVALID_USE_OF_NULL;
             LOG_WARN("invalid null cell for row key column", KR(ret), K(col_idx));
           }
@@ -2580,6 +2622,7 @@ int ObDDLUtil::convert_to_storage_row(
     const ObDDLTableSchema &ddl_table_schema = param.ddl_table_schema_;
     if (OB_FAIL(ObDDLUtil::check_null_and_length(ddl_table_schema.table_item_.is_index_table_,
                                                  ddl_table_schema.table_item_.has_lob_rowkey_,
+                                                 ddl_table_schema.table_item_.is_table_with_clustering_key_,
                                                  ddl_table_schema.table_item_.rowkey_column_num_,
                                                  current_row))) {
       LOG_WARN("fail to check rowkey null value and length in row", KR(ret), K(current_row));
@@ -5020,7 +5063,6 @@ int ObDDLUtil::check_table_empty(
     bool &is_table_empty)
 {
   int ret = OB_SUCCESS;
-  UNUSED(sql_mode);
   is_table_empty = false;
   bool is_oracle_mode = false;
   uint64_t table_id = OB_INVALID_ID;
@@ -5071,6 +5113,8 @@ int ObDDLUtil::check_table_empty(
       } else if (OB_ISNULL(connection = single_conn_proxy.get_connection())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null conn", K(ret));
+      } else if (OB_FAIL(connection->set_session_variable(share::OB_SV_SQL_MODE, sql_mode))) {
+        LOG_WARN("update sql_mode for ddl inner sql failed", K(ret));
       } else if (OB_FAIL(connection->set_session_variable(share::OB_SV_LOWER_CASE_TABLE_NAMES, var_schema->get_value()))) {
         LOG_WARN("update lower_case_table_names for ddl inner sql failed", K(ret));
       } else if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
@@ -5377,6 +5421,7 @@ int64_t ObDDLUtil::generate_idempotent_value(
 
 int ObDDLUtil::convert_to_storage_schema(
   const ObTableSchema *table_schema,
+  const uint64_t tenant_data_version,
   ObIAllocator &allocator,
   ObStorageSchema *&storage_schema)
 {
@@ -5394,7 +5439,7 @@ int ObDDLUtil::convert_to_storage_schema(
                                                      : Worker::CompatMode::MYSQL)) {
     } else if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, storage_schema))) {
       LOG_WARN("alloc and new failed", K(ret));
-    } else if (OB_FAIL(storage_schema->init(allocator, *table_schema, compat_mode))) {
+    } else if (OB_FAIL(storage_schema->init(allocator, *table_schema, compat_mode, false/*skip_column_info*/, tenant_data_version))) {
       LOG_WARN("failed to copy storage schema", K(ret));
     }
     if (OB_FAIL(ret)) {

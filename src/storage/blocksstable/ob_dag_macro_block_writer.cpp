@@ -19,6 +19,57 @@ namespace oceanbase
 namespace blocksstable
 {
 
+/**
+* ---------------------------------------ObDagSliceMacroBlockWriter-----------------------------------
+*/
+ObDagSliceMacroBlockWriter::ObDagSliceMacroBlockWriter()
+  : ObMacroBlockWriter(true/*is_need_macro_buffer*/)
+{
+}
+
+ObDagSliceMacroBlockWriter::~ObDagSliceMacroBlockWriter()
+{
+  reset();
+}
+
+void ObDagSliceMacroBlockWriter::reset()
+{
+  ObMacroBlockWriter::reset();
+}
+
+int ObDagSliceMacroBlockWriter::try_finish_last_micro_block()
+{
+  int ret = OB_SUCCESS;
+  if (micro_writer_->get_row_count() > 0) {
+    if (OB_FAIL(build_micro_block())) {
+      STORAGE_LOG(WARN, "fail to build last micro block", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDagSliceMacroBlockWriter::close(ObDagSliceMacroFlusher *macro_block_flusher)
+{
+  int ret = OB_SUCCESS;
+  if (nullptr != macro_block_flusher) {
+    if (OB_UNLIKELY(merge_block_info_.macro_block_count_ != 0 || micro_writer_->get_row_count() > 0)) {
+      // When macro_block_flusher is not null, the following checks are required:
+      // 1. merge_block_info_.macro_block_count_ != 0: ensure the macro block writer has not flushed any macro blocks before close
+      // 2. micro_writer_->get_row_count() > 0: ensure try_finish_last_micro_block has been called before close()
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected macro block count or micro writer row count", K(ret), K(merge_block_info_), K(micro_writer_->get_row_count()));
+    } else {
+      custom_macro_flusher_ = static_cast<ObIMacroBlockFlusher *>(macro_block_flusher);
+    }
+  } else {
+    // For default_flusher, it is allowed to flush more than one macro block
+    // skip
+  }
+  if (FAILEDx(ObMacroBlockWriter::close())) {
+    LOG_WARN("failed to close macro block writer", K(ret));
+  }
+  return ret;
+}
 
 /**
 * ---------------------------------------ObDagTempMacroBlockWriter-----------------------------------

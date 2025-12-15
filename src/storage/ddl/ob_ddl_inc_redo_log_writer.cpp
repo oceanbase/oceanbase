@@ -667,17 +667,8 @@ int ObDDLIncRedoLogWriter::local_write_inc_commit_log(
   } else if (OB_FAIL(trans_ctx->submit_direct_load_inc_commit_log(log, cb, scn, false /*need_free_extra_cb*/, true/*is_inc_major_log*/))) {
     LOG_WARN("fail to submit ddl inc commit log", K(ret), K(log));
   } else {
-    bool need_retry = true;
-    while (need_retry) {
-      if (OB_FAIL(OB_TS_MGR.wait_gts_elapse(MTL_ID(), scn))) {
-        if (OB_EAGAIN != ret) {
-          LOG_WARN("fail to wait gts elapse", K(ret), K(log));
-        } else {
-          ob_usleep(1000);
-        }
-      } else {
-        need_retry = false;
-      }
+    if (OB_FAIL(ObDDLRedoLogWriter::wait_gts_elapse_with_timeout(MTL_ID(), scn, ObDDLIncLogHandle::DDL_INC_LOG_TIMEOUT))) {
+      LOG_WARN("fail to wait gts elapse", K(ret), K(log));
     }
     {
       common::ObTimeGuard timeguard("write_inc_commit_log wait", 5 * 1000 * 1000); // 5s

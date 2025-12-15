@@ -3081,6 +3081,12 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       OX (sys_vars_cache_.set_plsql_optimize_level(int_val));
       break;
     }
+    case SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_ob_enable_pl_async_commit(int_val != 0));
+      break;
+    }
     default: {
       //do nothing
     }
@@ -3634,6 +3640,12 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
       OX (sys_vars_cache.set_base_plsql_optimize_level(int_val));
+      break;
+    }
+    case SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_base_ob_enable_pl_async_commit(int_val != 0));
       break;
     }
     default: {
@@ -5118,6 +5130,7 @@ int ObBasicSessionInfo::serialize_(char *buf, int64_t buf_len, int64_t &pos) con
   OB_UNIS_ENCODE(client_sessid_);
   OB_UNIS_ENCODE(diagnosis_info_);
   OB_UNIS_ENCODE(client_create_time_);
+  OB_UNIS_ENCODE(route_to_column_replica_);
   return ret;
 }
 
@@ -5432,6 +5445,7 @@ int ObBasicSessionInfo::deserialize(const char *buf, const int64_t data_len, int
     OB_UNIS_DECODE(client_sessid_);
     OB_UNIS_DECODE(diagnosis_info_);
     OB_UNIS_DECODE(client_create_time_);
+    OB_UNIS_DECODE(route_to_column_replica_);
 
     pos = pos_orig + len;
   }
@@ -5724,6 +5738,7 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
   OB_UNIS_ADD_LEN(client_sessid_);
   OB_UNIS_ADD_LEN(diagnosis_info_);
   OB_UNIS_ADD_LEN(client_create_time_);
+  OB_UNIS_ADD_LEN(route_to_column_replica_);
   return len;
 }
 
@@ -7214,7 +7229,6 @@ void ObExecEnv::reset()
 
   // default PLSQL_OPTIMIZE_LEVEL = 2
   plsql_optimize_level_ = 2;
-  plsql_can_transform_to_assign_ = 1; // later change default value to 0
 }
 
 bool ObExecEnv::operator==(const ObExecEnv &other) const
@@ -7225,8 +7239,7 @@ bool ObExecEnv::operator==(const ObExecEnv &other) const
       && (collation_connection_ == other.collation_connection_)
       && (collation_database_ == other.collation_database_)
       && (is_mysql_mode ? true : (plsql_ccflags_ == other.plsql_ccflags_))
-      && (plsql_optimize_level_ == other.plsql_optimize_level_)
-      && (plsql_can_transform_to_assign_ == other.plsql_can_transform_to_assign_);
+      && (plsql_optimize_level_ == other.plsql_optimize_level_);
 }
 
 bool ObExecEnv::operator!=(const ObExecEnv &other) const
@@ -7266,8 +7279,7 @@ int ObExecEnv::gen_exec_env(const ObBasicSessionInfo &session, char* buf, int64_
       case CHARSET_CLIENT:
       case COLLATION_CONNECTION:
       case COLLATION_DATABASE:
-      case PLSQL_OPTIMIZE_LEVEL:
-      case PLSQL_CAN_TRANSFORM_TO_ASSIGN: {
+      case PLSQL_OPTIMIZE_LEVEL: {
         int64_t size = 0;
         val.reset();
         OZ (session.get_sys_variable(ExecEnvMap[i], val));
@@ -7330,8 +7342,7 @@ int ObExecEnv::gen_exec_env(const share::schema::ObSysVariableSchema &sys_variab
       case CHARSET_CLIENT:
       case COLLATION_CONNECTION:
       case COLLATION_DATABASE:
-      case PLSQL_OPTIMIZE_LEVEL:
-      case PLSQL_CAN_TRANSFORM_TO_ASSIGN: {
+      case PLSQL_OPTIMIZE_LEVEL: {
         int64_t size = 0;
         if (OB_FAIL(sys_variable.get_sysvar_schema(ExecEnvMap[i], sysvar_schema))) {
           LOG_WARN("failed to get sysvar schema", K(ret));
@@ -7437,14 +7448,6 @@ int ObExecEnv::init(const ObString &exec_env)
         }
       }
       break;
-      case PLSQL_CAN_TRANSFORM_TO_ASSIGN: {
-        if (value_str.empty()) {
-          // do nothing, old routine object version do not have plsql_can_transform_to_assign
-        } else {
-          SET_ENV_VALUE(plsql_can_transform_to_assign_, bool);
-        }
-      }
-      break;
       default: {
         ret = common::OB_ERR_UNEXPECTED;
         LOG_WARN("Invalid env type", K(exec_env), K(i), K(ret));
@@ -7502,10 +7505,6 @@ int ObExecEnv::load(ObBasicSessionInfo &session, ObIAllocator *alloc)
         plsql_optimize_level_ = static_cast<int64_t>(val.get_int());
       }
       break;
-      case PLSQL_CAN_TRANSFORM_TO_ASSIGN: {
-        plsql_can_transform_to_assign_ = static_cast<bool>(val.get_int());
-      }
-      break;
       default: {
         ret = common::OB_ERR_UNEXPECTED;
         LOG_WARN("Invalid env type", K(i), K(ret));
@@ -7548,10 +7547,6 @@ int ObExecEnv::store(ObBasicSessionInfo &session)
     break;
     case PLSQL_OPTIMIZE_LEVEL: {
       val.set_int(plsql_optimize_level_);
-    }
-    break;
-    case PLSQL_CAN_TRANSFORM_TO_ASSIGN: {
-      val.set_int(plsql_can_transform_to_assign_);
     }
     break;
     default: {

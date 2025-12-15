@@ -14,13 +14,30 @@
 
 #include "lib/task/ob_timer.h"
 #include "rootserver/mview/ob_mview_timer_task.h"
+#include "storage/tx/ob_trans_part_ctx.h"
 
 namespace oceanbase
 {
 namespace rootserver
 {
+
 class ObMViewMdsOpTask : public ObMViewTimerTask
 {
+public:
+class CollectNeedDeleteMdsFunctor
+{
+public:
+  CollectNeedDeleteMdsFunctor(hash::ObHashSet<transaction::ObTransID> &tx_set,
+                              ObSEArray<transaction::ObTransID, 2> &del_tx_id):
+                              tx_set_(tx_set), del_tx_id_(del_tx_id)
+  {};
+  int operator()(hash::HashMapPair<transaction::ObTransID, ObMViewOpArg> &mv_mds_kv);
+  virtual ~CollectNeedDeleteMdsFunctor() {};
+private:
+  hash::ObHashSet<transaction::ObTransID> &tx_set_;
+  ObSEArray<transaction::ObTransID, 2> &del_tx_id_;
+};
+
 public:
   ObMViewMdsOpTask();
   virtual ~ObMViewMdsOpTask();
@@ -35,6 +52,7 @@ public:
   void runTimerTask() override;
   int update_mview_mds_op();
   static const int64_t MVIEW_MDS_OP_INTERVAL = 5 * 1000 * 1000; // 5s
+  static const int64_t MVIEW_MDS_OP_EXPIRE_TIME = 60 * 1000 * 1000; // 60s
 private:
   bool is_inited_;
   bool in_sched_;

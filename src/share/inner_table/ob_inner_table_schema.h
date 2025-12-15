@@ -1248,6 +1248,7 @@ public:
   static int all_virtual_ai_model_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ai_model_endpoint_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ss_object_type_io_stat_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_tablet_replica_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_stat_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_cache_plan_explain_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -2150,6 +2151,8 @@ public:
   static int gv_ob_ss_object_type_io_stat_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_ss_object_type_io_stat_schema(share::schema::ObTableSchema &table_schema);
   static int dba_tables_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_ob_tablet_replica_info_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_tablet_replica_info_schema(share::schema::ObTableSchema &table_schema);
   static int dba_synonyms_schema(share::schema::ObTableSchema &table_schema);
   static int dba_objects_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_objects_schema(share::schema::ObTableSchema &table_schema);
@@ -4520,6 +4523,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_ai_model_history_schema,
   ObInnerTableSchema::all_virtual_ai_model_endpoint_schema,
   ObInnerTableSchema::all_virtual_ss_object_type_io_stat_schema,
+  ObInnerTableSchema::all_virtual_tablet_replica_info_schema,
   ObInnerTableSchema::all_virtual_sql_audit_ora_schema,
   ObInnerTableSchema::all_virtual_plan_stat_ora_schema,
   ObInnerTableSchema::all_virtual_plan_cache_plan_explain_ora_schema,
@@ -5537,6 +5541,8 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::gv_ob_ss_object_type_io_stat_schema,
   ObInnerTableSchema::v_ob_ss_object_type_io_stat_schema,
   ObInnerTableSchema::dba_tables_schema,
+  ObInnerTableSchema::gv_ob_tablet_replica_info_schema,
+  ObInnerTableSchema::v_ob_tablet_replica_info_schema,
   ObInnerTableSchema::dba_synonyms_schema,
   ObInnerTableSchema::dba_objects_ora_schema,
   ObInnerTableSchema::all_objects_schema,
@@ -12175,7 +12181,8 @@ const uint64_t cluster_distributed_vtables [] = {
   OB_ALL_VIRTUAL_STORAGE_HA_PERF_DIAGNOSE_TID,
   OB_ALL_VIRTUAL_TENANT_SCHEDULER_RUNNING_JOB_TID,
   OB_ALL_VIRTUAL_SHARED_STORAGE_COMPACTION_INFO_TID,
-  OB_ALL_VIRTUAL_LS_MIGRATION_TASK_TID,  };
+  OB_ALL_VIRTUAL_LS_MIGRATION_TASK_TID,
+  OB_ALL_VIRTUAL_TABLET_REPLICA_INFO_TID,  };
 
 const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_PROCESSLIST_TID,
@@ -15512,13 +15519,7 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
   return ret;
 }
 
-const int64_t OB_CORE_TABLE_COUNT = 4;
-const int64_t OB_SYS_TABLE_COUNT = 344;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 982;
-const int64_t OB_SYS_VIEW_COUNT = 1104;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 2435;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2438;
 
 } // end namespace share
 } // end namespace oceanbase

@@ -1079,6 +1079,7 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
         }
         if (OB_SUCC(ret) && is_arraybinding_) {
           OZ (check_param_value_for_arraybinding(param));
+          OX (param.get_param_flag().is_batch_parameter_ = true);
         }
       }
 

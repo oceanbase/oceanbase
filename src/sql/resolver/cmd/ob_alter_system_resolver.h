@@ -91,6 +91,7 @@ public:
                                              ObString &logservice_access_point);
   static int resolve_shared_storage_info(const ParseNode *parse_tree,
                                          ObString &shared_storage_info);
+  static int check_tablet_id_effective(const uint64_t tenant_id, const common::ObTabletID &tablet_id);
 };
 
 typedef common::ObFixedLengthString<common::OB_MAX_TRACE_ID_BUFFER_SIZE + 1> Task_Id;

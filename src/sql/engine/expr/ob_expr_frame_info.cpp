@@ -690,7 +690,7 @@ int ObTempExpr::row_to_frame(const ObNewRow &row, ObTempExprCtx &temp_expr_ctx) 
     ObDatum &expr_datum = expr.locate_datum_for_write(temp_expr_ctx);
     if (v.get_type() != expr.datum_meta_.type_ && !v.is_null()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("obj type miss match", K(ret), K(v), K(idx_col), K(row));
+      LOG_WARN("obj type miss match", K(ret), K(v), K(idx_col), K(row), K(expr.datum_meta_.type_));
     } else if (OB_FAIL(expr_datum.from_obj(v, expr.obj_datum_map_))) {
       LOG_WARN("fail to from obj", K(v), K(idx_col), K(row), K(ret));
     } else if (is_lob_storage(v.get_type()) &&

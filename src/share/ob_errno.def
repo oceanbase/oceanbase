@@ -2953,6 +2953,7 @@ DEFINE_ERROR_EXT(OB_HTTP_NOT_FOUND, -11124, OB_HTTP_NOT_FOUND, "HY000", "Http re
 DEFINE_ERROR_EXT(OB_HTTP_SERVER_ERROR, -11125, OB_HTTP_SERVER_ERROR, "HY000", "Http server error", "Http server error: %s");
 DEFINE_ERROR_EXT(OB_INVALID_DATE_TRUNC_FORMAT, -11126, -1, "HY000", "unit not recognized", "unit \'%.*s\' not recognized");
 DEFINE_ERROR(OB_ERR_INVALID_PRIVILEGE_ON_SENSITIVE_RULES, -11127, -1, "HY000", "Privilege not allowed for sensitive rules");
+DEFINE_ERROR(OB_AP_QUERY_NEED_RETRY, -11128, -1, "HY000", "AP query will retry with column replica");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // SQL扩展区段1：[-11000, -12000)

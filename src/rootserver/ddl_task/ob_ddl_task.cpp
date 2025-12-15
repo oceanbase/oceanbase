@@ -920,6 +920,9 @@ int ObDDLTask::get_ddl_type_str(const int64_t ddl_type, const char *&ddl_type_st
     case DDL_PARTITION_SPLIT_RECOVERY_TABLE_REDEFINITION:
       ddl_type_str = "partition split recovery table redefinition";
       break;
+    case DDL_REPLACE_MLOG:
+      ddl_type_str = "replace materialized view log";
+      break;
     default:
       ret = OB_ERR_UNEXPECTED;
   }
@@ -3035,7 +3038,7 @@ int ObDDLTaskRecordOperator::update_parent_task_message(
       } else if (OB_FAIL(task.update_task_message(proxy))) {
         LOG_WARN("fail to update task message", K(ret), K(parent_task_id));
       }
-    } else if (task_record.ddl_type_ == DDL_REBUILD_INDEX) { // rebuild vec index
+    } else if (ObRebuildIndexTask::is_ddl_type_for_rebuild_index_task(task_record.ddl_type_)) { // rebuild vec index
       SMART_VAR(ObRebuildIndexTask, task) {
         if (OB_FAIL(task.init(task_record))) {
           LOG_WARN("fail to init ObRebuildIndexTask", K(ret), K(task_record));
@@ -3811,7 +3814,7 @@ int ObDDLTaskRecordOperator::check_has_conflict_ddl(
   return ret;
 }
 
-int ObDDLTaskRecordOperator::check_rebuild_vec_index_task_exist(
+int ObDDLTaskRecordOperator::check_rebuild_index_task_exist(
     const uint64_t tenant_id,
     const uint64_t data_table_id,
     const uint64_t index_table_id,
@@ -3827,11 +3830,11 @@ int ObDDLTaskRecordOperator::check_rebuild_vec_index_task_exist(
                   OB_INVALID_ID == index_table_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(index_table_id), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(sql_string.assign_fmt(" SELECT object_id, target_object_id, UNHEX(message) as message_unhex FROM %s WHERE ddl_type = %d",
-                                             OB_ALL_DDL_TASK_STATUS_TNAME, ObDDLType::DDL_REBUILD_INDEX))) {
+  } else if (OB_FAIL(sql_string.assign_fmt(" SELECT object_id, target_object_id, UNHEX(message) as message_unhex FROM %s WHERE ddl_type in (%d, %d)",
+                                             OB_ALL_DDL_TASK_STATUS_TNAME, ObDDLType::DDL_REBUILD_INDEX, ObDDLType::DDL_REPLACE_MLOG))) {
     LOG_WARN("assign sql string failed", K(ret));
   } else {
-    LOG_DEBUG("check_rebuild_vec_index_task_exist target id", K(data_table_id), K(index_table_id));
+    LOG_DEBUG("check_rebuild_index_task_exist target id", K(data_table_id), K(index_table_id));
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       ObDDLTaskRecord task_record;
       ObString task_message;
@@ -3898,9 +3901,9 @@ int ObDDLTaskRecordOperator::check_has_index_or_mlog_task(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(tenant_id), K(data_table_id));
   } else {
-    if (ObVecIndexBuildTask::is_rebuild_dense_vec_index_task(index_schema)) {
+    if (ObVecIndexBuildTask::is_rebuild_dense_vec_index_task(index_schema) || index_schema.is_mlog_table()) {
       ObArenaAllocator allocator(ObModIds::OB_SCHEMA);
-      if (OB_FAIL(check_rebuild_vec_index_task_exist(tenant_id, data_table_id, index_table_id, proxy, allocator, has_index_task))) {
+      if (OB_FAIL(check_rebuild_index_task_exist(tenant_id, data_table_id, index_table_id, proxy, allocator, has_index_task))) {
         LOG_WARN("fail to check rebuild vec index task", K(ret), K(data_table_id), K(index_table_id));
       }
     }

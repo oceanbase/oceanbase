@@ -1668,10 +1668,15 @@ public:
     ObIndexArg::reset();
     index_action_type_ = REBUILD_INDEX;
     vidx_refresh_info_.reset();
+    // in 4.3.5.3, we add rebuild_index_type_ field to support mlog,
+    // before that, the rebuild index task was only used for vec index.
+    // to ensure compatibility, the default value is set to vec index.
     rebuild_index_type_ = REBUILD_INDEX_TYPE_VEC;
     create_mlog_arg_.reset();
     rebuild_index_online_ = false;
   }
+  bool is_rebuild_mlog() const { return REBUILD_INDEX_TYPE_MLOG == rebuild_index_type_; }
+  bool is_rebuild_vec_index() const { return REBUILD_INDEX_TYPE_VEC == rebuild_index_type_; }
   bool is_valid() const { return ObIndexArg::is_valid(); }
   uint64_t index_table_id_;
   share::schema::ObVectorIndexRefreshInfo vidx_refresh_info_;
@@ -2301,6 +2306,7 @@ public:
        MICRO_BLOCK_FORMAT_VERSION,
        SEMISTRUCT_PROPERTIES,
        SKIP_INDEX_LEVEL,
+       DELTA_FORMAT,
        MAX_OPTION = 1000
   };
   enum AlterPartitionType
@@ -10368,6 +10374,7 @@ public:
     CANCEL_BACKUP_BACKUPSET = 7,
     CANCEL_BACKUP_BACKUPPIECE = 8,
     CANCEL_ALL_BACKUP_FORCE = 9,
+    CANCEL_BACKUP_VALIDATE = 10,
     MAX_TYPE
   };
   int assign(const ObBackupManageArg &arg);
@@ -14581,6 +14588,38 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObFetchArbMemberArg);
 };
 #endif
+struct ObCheckNestedMViewMdsArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCheckNestedMViewMdsArg() : tenant_id_(common::OB_INVALID_TENANT_ID),
+                               mview_id_(common::OB_INVALID_ID),
+                               refresh_id_(common::OB_INVALID_ID),
+                               target_data_sync_scn_()
+  {}
+  ~ObCheckNestedMViewMdsArg() {}
+  bool is_valid() {
+    return tenant_id_ != OB_INVALID_TENANT_ID && mview_id_ != OB_INVALID_ID;
+  }
+  TO_STRING_KV(K_(tenant_id), K_(mview_id), K_(refresh_id), K(target_data_sync_scn_));
+public:
+  uint64_t tenant_id_;
+  uint64_t mview_id_;
+  uint64_t refresh_id_;
+  share::SCN target_data_sync_scn_;
+};
+
+struct ObCheckNestedMViewMdsRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCheckNestedMViewMdsRes() : target_data_sync_scn_(), ret_(OB_SUCCESS) {}
+  ~ObCheckNestedMViewMdsRes() {}
+  TO_STRING_KV(K_(target_data_sync_scn), K_(ret));
+public:
+  share::SCN target_data_sync_scn_;
+  int ret_;
+};
 
 enum class ObHTableDDLType : uint8_t
 {

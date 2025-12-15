@@ -1177,6 +1177,21 @@ int ObTableQueryAsyncP::new_try_process()
     }
   }
 
+  if (OB_NOT_NULL(model) && OB_NOT_NULL(model->get_query_session())) {
+    int64_t session_id = model->get_query_session()->get_session_id();
+    if (OB_FAIL(ret)) {
+      int tmp_ret = ret;
+      if (OB_FAIL(MTL(ObTableQueryASyncMgr*)->destory_query_session(model->get_query_session()))) {
+        LOG_WARN("faild to destory query session", K(ret), K(session_id));
+      }
+      ret = tmp_ret;
+    } else if (result_.is_end_) {
+      if (OB_FAIL(MTL(ObTableQueryASyncMgr*)->destory_query_session(model->get_query_session()))) {
+        LOG_WARN("fail to destory query session", K(ret), K(session_id));
+      }
+    }
+  }
+
   #ifndef NDEBUG
     // debug mode
     LOG_INFO("[TABLE] execute query", K(ret), K_(arg), K(result_),

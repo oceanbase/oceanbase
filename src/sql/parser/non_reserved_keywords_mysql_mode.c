@@ -760,6 +760,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"procedure", PROCEDURE},
   {"process", PROCESS},
   {"processlist", PROCESSLIST},
+  {"proctime", PROCTIME},
   {"profile", PROFILE},
   {"profiles", PROFILES},
   {"progressive_merge_num", PROGRESSIVE_MERGE_NUM},
@@ -1200,6 +1201,8 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"url", URL},
   {"credential", CREDENTIAL},
   {"micro_block_format_version", MICRO_BLOCK_FORMAT_VERSION},
+  {"INCONSISTENT", INCONSISTENT},
+  {"INDIVIDUAL", INDIVIDUAL},
 };
 
 /** https://dev.mysql.com/doc/refman/5.7/en/sql-syntax-prepared-statements.html

@@ -1957,6 +1957,7 @@ public:
       character_set_client_ = ObCharsetType::CHARSET_INVALID;
       collation_database_ = CS_TYPE_INVALID;
       plsql_optimize_level_ = 0;
+      ob_enable_pl_async_commit_ = false;
     }
 
     inline bool operator==(const SysVarsCacheData &other) const {
@@ -2015,7 +2016,8 @@ public:
             plsql_can_transform_sql_to_assign_ == other.plsql_can_transform_sql_to_assign_ &&
             character_set_client_ == other.character_set_client_ &&
             collation_database_ == other.collation_database_ &&
-            plsql_optimize_level_ == other.plsql_optimize_level_;
+            plsql_optimize_level_ == other.plsql_optimize_level_ &&
+            ob_enable_pl_async_commit_ == other.ob_enable_pl_async_commit_;
       bool equal2 = true;
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         if (nls_formats_[i] != other.nls_formats_[i]) {
@@ -2172,7 +2174,7 @@ public:
     int64_t character_set_client_;
     int64_t collation_database_;
     int64_t plsql_optimize_level_;
-
+    bool ob_enable_pl_async_commit_;
     //==========  需要序列化  ============
     bool autocommit_;
     bool ob_enable_trace_log_;
@@ -2280,7 +2282,7 @@ private:
     DEF_SYS_VAR_BIT_ENUM(character_set_client, 60)
     DEF_SYS_VAR_BIT_ENUM(collation_database, 61)
     DEF_SYS_VAR_BIT_ENUM(plsql_optimize_level, 62)
-
+    DEF_SYS_VAR_BIT_ENUM(ob_enable_pl_async_commit, 63)
     BIT_MAX_POSITION = 128  // max position is 128 now
   };
 #undef DEF_SYS_VAR_BIT_ENUM
@@ -2435,6 +2437,7 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, character_set_client);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, collation_database);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, plsql_optimize_level);
+    DEF_SYS_VAR_CACHE_FUNCS(bool, ob_enable_pl_async_commit);
     void set_autocommit_info(bool inc_value)
     {
       inc_data_.autocommit_ = inc_value;
@@ -2794,6 +2797,7 @@ private:
   int64_t sql_mem_used_;
   bool shadow_top_query_string_;
   bool use_pl_inner_info_string_;
+  bool route_to_column_replica_;
 public:
   bool get_enable_hyperscan_regexp_engine() const;
   int8_t get_min_const_integer_precision() const;
@@ -2996,7 +3000,6 @@ public:
     COLLATION_DATABASE,
     PLSQL_CCFLAGS,
     PLSQL_OPTIMIZE_LEVEL,
-    PLSQL_CAN_TRANSFORM_TO_ASSIGN,
     MAX_ENV,
   };
 
@@ -3007,7 +3010,6 @@ public:
     share::SYS_VAR_COLLATION_DATABASE,
     share::SYS_VAR_PLSQL_CCFLAGS,
     share::SYS_VAR_PLSQL_OPTIMIZE_LEVEL,
-    share::SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN,
     share::SYS_VAR_INVALID
   };
 
@@ -3017,8 +3019,7 @@ public:
     collation_connection_(CS_TYPE_INVALID),
     collation_database_(CS_TYPE_INVALID),
     plsql_ccflags_(),
-    plsql_optimize_level_(0),  // default PLSQL_OPTIMIZE_LEVEL = 0
-    plsql_can_transform_to_assign_(1)  // default PLSQL_CAN_TRANSFORM_TO_ASSIGN = 1
+    plsql_optimize_level_(0)  // default PLSQL_OPTIMIZE_LEVEL = 0
   { }
 
   virtual ~ObExecEnv() {}
@@ -3028,8 +3029,7 @@ public:
                K_(collation_connection),
                K_(collation_database),
                K_(plsql_ccflags),
-               K_(plsql_optimize_level),
-               K_(plsql_can_transform_to_assign));
+               K_(plsql_optimize_level));
 
   void reset();
 
@@ -3057,9 +3057,6 @@ public:
   int64_t get_plsql_optimize_level() { return plsql_optimize_level_; }
   void set_plsql_optimize_level(int64_t level) { plsql_optimize_level_ = plsql_optimize_level_; }
 
-  bool get_plsql_can_transform_to_assign() { return plsql_can_transform_to_assign_; }
-  void set_plsql_can_transform_to_assign(bool can_transform) { plsql_can_transform_to_assign_ = can_transform; }
-
 private:
   ObSQLMode sql_mode_;
   ObCollationType charset_client_;
@@ -3067,7 +3064,6 @@ private:
   ObCollationType collation_database_;
   ObString plsql_ccflags_;
   int64_t plsql_optimize_level_;
-  bool plsql_can_transform_to_assign_;
 };
 
 

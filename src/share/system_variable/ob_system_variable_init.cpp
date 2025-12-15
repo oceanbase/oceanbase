@@ -7035,7 +7035,7 @@ static struct VarsInit{
       ObSysVars[503].name_ = "ob_hnsw_ef_search" ;
       ObSysVars[503].data_type_ = ObUInt64Type ;
       ObSysVars[503].min_val_ = "1" ;
-      ObSysVars[503].max_val_ = "1000" ;
+      ObSysVars[503].max_val_ = "160000" ;
       ObSysVars[503].flags_ = ObSysVarFlag::SESSION_SCOPE ;
       ObSysVars[503].id_ = SYS_VAR_OB_HNSW_EF_SEARCH ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_HNSW_EF_SEARCH)) ;
@@ -11480,16 +11480,43 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[838].default_value_ = "1" ;
-      ObSysVars[838].info_ = "Whether can transform the PL/SQL select into from dual statement to an assignment statement" ;
-      ObSysVars[838].name_ = "plsql_can_transform_sql_to_assign" ;
+      ObSysVars[838].default_value_ = "0" ;
+      ObSysVars[838].info_ = "control whether the sql transpiler is enabled. When enabled, PL/SQL functions are automatically transpiled into SQL expressions whenever possible, without user intervention." ;
+      ObSysVars[838].name_ = "sql_transpiler" ;
       ObSysVars[838].data_type_ = ObIntType ;
-      ObSysVars[838].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[838].id_ = SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN ;
+      ObSysVars[838].enum_names_ = "[u'OFF', u'ON', u'BASIC']" ;
+      ObSysVars[838].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[838].id_ = SYS_VAR_SQL_TRANSPILER ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SQL_TRANSPILER)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SQL_TRANSPILER] = 838 ;
+      ObSysVars[838].base_value_ = "0" ;
+    ObSysVars[838].alias_ = "OB_SV_SQL_TRANSPILER" ;
+    }();
+
+    [&] (){
+      ObSysVars[839].default_value_ = "1" ;
+      ObSysVars[839].info_ = "Whether can transform the PL/SQL select into from dual statement to an assignment statement" ;
+      ObSysVars[839].name_ = "plsql_can_transform_sql_to_assign" ;
+      ObSysVars[839].data_type_ = ObIntType ;
+      ObSysVars[839].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[839].id_ = SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN] = 838 ;
-      ObSysVars[838].base_value_ = "1" ;
-    ObSysVars[838].alias_ = "OB_SV_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN] = 839 ;
+      ObSysVars[839].base_value_ = "1" ;
+    ObSysVars[839].alias_ = "OB_SV_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN" ;
+    }();
+
+    [&] (){
+      ObSysVars[840].default_value_ = "0" ;
+      ObSysVars[840].info_ = "Whether the PL/SQL async response is used" ;
+      ObSysVars[840].name_ = "ob_enable_pl_async_commit" ;
+      ObSysVars[840].data_type_ = ObIntType ;
+      ObSysVars[840].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[840].id_ = SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT] = 840 ;
+      ObSysVars[840].base_value_ = "0" ;
+    ObSysVars[840].alias_ = "OB_SV_ENABLE_PL_ASYNC_COMMIT" ;
     }();
 
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
@@ -11498,7 +11525,7 @@ static struct VarsInit{
   }
 }vars_init;
 
-static int64_t var_amount = 839;
+static int64_t var_amount = 841;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

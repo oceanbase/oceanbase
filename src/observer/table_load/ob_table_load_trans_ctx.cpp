@@ -23,8 +23,10 @@ using namespace lib;
 using namespace table;
 
 ObTableLoadTransCtx::ObTableLoadTransCtx(ObTableLoadTableCtx *ctx,
+                                         const TransType trans_type,
                                          const ObTableLoadTransId &trans_id)
   : ctx_(ctx),
+    trans_type_(trans_type),
     trans_id_(trans_id),
     rwlock_(common::ObLatchIds::TABLE_LOAD_TRANS_LOCK),
     allocator_("TLD_TCtx"),
@@ -47,7 +49,7 @@ int ObTableLoadTransCtx::advance_trans_status(ObTableLoadTransStatusType trans_s
       ret = error_code_;
       LOG_WARN("trans has error", KR(ret));
     } else if (OB_UNLIKELY(ObTableLoadTransStatusType::ABORT == trans_status_)) {
-      ret = OB_CANCELED;
+      ret = error_code_;
       LOG_WARN("trans is abort", KR(ret));
     }
     // 正常运行阶段, 状态是一步步推进的
@@ -57,6 +59,7 @@ int ObTableLoadTransCtx::advance_trans_status(ObTableLoadTransStatusType trans_s
       LOG_WARN("unexpected trans status", KR(ret), K(trans_status), K(trans_status_));
     } else {
       trans_status_ = trans_status;
+      FLOG_INFO("LOAD DATA TRANS advance status", KPC(this), K(lbt()));
     }
   }
   return ret;
@@ -70,22 +73,30 @@ int ObTableLoadTransCtx::set_trans_status_error(int error_code)
     LOG_WARN("invalid args", KR(ret), K(error_code));
   } else {
     obsys::ObWLockGuard<> guard(rwlock_);
-    if (OB_UNLIKELY(trans_status_ == ObTableLoadTransStatusType::ABORT)) {
-      ret = OB_CANCELED;
-    } else if (trans_status_ != ObTableLoadTransStatusType::ERROR) {
+    if (static_cast<int64_t>(trans_status_) >= static_cast<int64_t>(ObTableLoadTransStatusType::ERROR)) {
+      // ignore
+    } else {
       trans_status_ = ObTableLoadTransStatusType::ERROR;
       error_code_ = error_code;
+      FLOG_INFO("LOAD DATA TRANS status error", KPC(this), K(lbt()));
     }
   }
   return ret;
 }
 
-int ObTableLoadTransCtx::set_trans_status_abort()
+int ObTableLoadTransCtx::set_trans_status_abort(int error_code)
 {
   int ret = OB_SUCCESS;
   obsys::ObWLockGuard<> guard(rwlock_);
-  trans_status_ = ObTableLoadTransStatusType::ABORT;
-  error_code_ = (error_code_ == OB_SUCCESS ? OB_CANCELED : error_code_);
+  if (ObTableLoadTransStatusType::ABORT == trans_status_) {
+    LOG_INFO("LOAD DATA TRANS already abort", KPC(this));
+  } else {
+    trans_status_ = ObTableLoadTransStatusType::ABORT;
+    if (OB_SUCCESS == error_code_) {
+      error_code_ = (error_code == OB_SUCCESS ? OB_CANCELED : error_code);
+    }
+    FLOG_INFO("LOAD DATA TRANS status abort", KPC(this), K(lbt()));
+  }
   return ret;
 }
 
@@ -96,10 +107,33 @@ int ObTableLoadTransCtx::check_trans_status(ObTableLoadTransStatusType trans_sta
   if (OB_UNLIKELY(trans_status != trans_status_)) {
     if (ObTableLoadTransStatusType::ERROR == trans_status_) {
       ret = error_code_;
+      LOG_WARN("trans has error", KR(ret), KPC(this));
     } else if (ObTableLoadTransStatusType::ABORT == trans_status_) {
-      ret = OB_CANCELED;
+      ret = error_code_;
+      LOG_WARN("trans is abort", KR(ret), KPC(this));
     } else {
       ret = OB_STATE_NOT_MATCH;
+      LOG_INFO("trans status not match", KR(ret), K(trans_status), KPC(this));
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadTransCtx::check_trans_status(ObTableLoadTransStatusType trans_status1,
+                                            ObTableLoadTransStatusType trans_status2) const
+{
+  int ret = OB_SUCCESS;
+  obsys::ObRLockGuard<> guard(rwlock_);
+  if (OB_UNLIKELY(trans_status1 != trans_status_ && trans_status2 != trans_status_)) {
+    if (ObTableLoadTransStatusType::ERROR == trans_status_) {
+      ret = error_code_;
+      LOG_WARN("trans has error", KR(ret), KPC(this));
+    } else if (ObTableLoadTransStatusType::ABORT == trans_status_) {
+      ret = error_code_;
+      LOG_WARN("trans is abort", KR(ret), KPC(this));
+    } else {
+      ret = OB_STATE_NOT_MATCH;
+      LOG_INFO("trans status not match", KR(ret), K(trans_status1), K(trans_status2), KPC(this));
     }
   }
   return ret;

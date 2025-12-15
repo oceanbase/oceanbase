@@ -1940,20 +1940,17 @@ class ObTableLoadCoordinator::WriteTaskProcessor : public ObITableLoadTaskProces
 {
 public:
   WriteTaskProcessor(ObTableLoadTask &task, ObTableLoadTableCtx *ctx, ObTableLoadCoordinatorTrans *trans,
-                     ObTableLoadTransBucketWriter *bucket_writer, int32_t session_id)
+                     int32_t session_id)
     : ObITableLoadTaskProcessor(task),
       ctx_(ctx),
       trans_(trans),
-      bucket_writer_(bucket_writer),
       session_id_(session_id)
   {
     ctx_->inc_ref_count();
     trans_->inc_ref_count();
-    bucket_writer_->inc_ref_count();
   }
   virtual ~WriteTaskProcessor()
   {
-    trans_->put_bucket_writer(bucket_writer_);
     ctx_->coordinator_ctx_->put_trans(trans_);
     ObTableLoadService::put_ctx(ctx_);
   }
@@ -1987,18 +1984,17 @@ public:
   {
     OB_TABLE_LOAD_STATISTICS_TIME_COST(INFO, coordinator_write_time_us);
     int ret = OB_SUCCESS;
-    if (OB_SUCC(trans_->check_trans_status(ObTableLoadTransStatusType::RUNNING)) ||
-        OB_SUCC(trans_->check_trans_status(ObTableLoadTransStatusType::FROZEN))) {
-      if (OB_FAIL(bucket_writer_->write(session_id_, obj_rows_))) {
-        LOG_WARN("fail to write bucket pool", KR(ret));
-      }
+    if (OB_FAIL(trans_->check_trans_status(ObTableLoadTransStatusType::RUNNING,
+                                           ObTableLoadTransStatusType::FROZEN))) {
+      LOG_WARN("fail to check trans status", KR(ret));
+    } else if (OB_FAIL(trans_->get_bucket_writer()->write(session_id_, obj_rows_))) {
+      LOG_WARN("fail to write bucket pool", KR(ret));
     }
     return ret;
   }
 private:
   ObTableLoadTableCtx * const ctx_;
   ObTableLoadCoordinatorTrans * const trans_;
-  ObTableLoadTransBucketWriter * const bucket_writer_;
   const int32_t session_id_;
   ObTableLoadObjRowArray obj_rows_;
 };
@@ -2006,17 +2002,14 @@ private:
 class ObTableLoadCoordinator::WriteTaskCallback : public ObITableLoadTaskCallback
 {
 public:
-  WriteTaskCallback(ObTableLoadTableCtx *ctx, ObTableLoadCoordinatorTrans *trans,
-                    ObTableLoadTransBucketWriter *bucket_writer)
-    : ctx_(ctx), trans_(trans), bucket_writer_(bucket_writer)
+  WriteTaskCallback(ObTableLoadTableCtx *ctx, ObTableLoadCoordinatorTrans *trans)
+    : ctx_(ctx), trans_(trans)
   {
     ctx_->inc_ref_count();
     trans_->inc_ref_count();
-    bucket_writer_->inc_ref_count();
   }
   virtual ~WriteTaskCallback()
   {
-    trans_->put_bucket_writer(bucket_writer_);
     ctx_->coordinator_ctx_->put_trans(trans_);
     ObTableLoadService::put_ctx(ctx_);
   }
@@ -2031,7 +2024,6 @@ public:
 private:
   ObTableLoadTableCtx * const ctx_;
   ObTableLoadCoordinatorTrans * const trans_;
-  ObTableLoadTransBucketWriter * const bucket_writer_; // 为了保证接收完本次写入结果之后再让bucket_writer的引用归零
 };
 
 int ObTableLoadCoordinator::write(const ObTableLoadTransId &trans_id, int32_t session_id,
@@ -2046,15 +2038,10 @@ int ObTableLoadCoordinator::write(const ObTableLoadTransId &trans_id, int32_t se
   } else {
     LOG_DEBUG("coordinator write");
     ObTableLoadCoordinatorTrans *trans = nullptr;
-    ObTableLoadTransBucketWriter *bucket_writer = nullptr;
     ObTableLoadMutexGuard guard;
     if (OB_FAIL(coordinator_ctx_->get_trans(trans_id, trans))) {
       LOG_WARN("fail to get trans", KR(ret));
     } else if (session_id == 0 && FALSE_IT(session_id = trans->get_default_session_id())) {
-    }
-    // 取出bucket_writer
-    else if (OB_FAIL(trans->get_bucket_writer_for_write(bucket_writer))) {
-      LOG_WARN("fail to get bucket writer", KR(ret));
     // } else if (OB_FAIL(bucket_writer->advance_sequence_no(session_id, sequence_no, guard))) {
     //   if (OB_UNLIKELY(OB_ENTRY_EXIST != ret)) {
     //     LOG_WARN("fail to advance sequence no", KR(ret), K(session_id));
@@ -2069,7 +2056,7 @@ int ObTableLoadCoordinator::write(const ObTableLoadTransId &trans_id, int32_t se
         LOG_WARN("fail to alloc task", KR(ret));
       }
       // 2. 设置processor
-      else if (OB_FAIL(task->set_processor<WriteTaskProcessor>(ctx_, trans, bucket_writer, session_id))) {
+      else if (OB_FAIL(task->set_processor<WriteTaskProcessor>(ctx_, trans, session_id))) {
         LOG_WARN("fail to set write task processor", KR(ret));
       } else if (OB_ISNULL(processor = dynamic_cast<WriteTaskProcessor *>(task->get_processor()))) {
         ret = OB_ERR_UNEXPECTED;
@@ -2078,7 +2065,7 @@ int ObTableLoadCoordinator::write(const ObTableLoadTransId &trans_id, int32_t se
         LOG_WARN("fail to set objs", KR(ret), K(coordinator_ctx_->idx_array_));
       }
       // 3. 设置callback
-      else if (OB_FAIL(task->set_callback<WriteTaskCallback>(ctx_, trans, bucket_writer))) {
+      else if (OB_FAIL(task->set_callback<WriteTaskCallback>(ctx_, trans))) {
         LOG_WARN("fail to set write task callback", KR(ret));
       }
       // 4. 把task放入调度器
@@ -2092,10 +2079,6 @@ int ObTableLoadCoordinator::write(const ObTableLoadTransId &trans_id, int32_t se
       }
     }
     if (OB_NOT_NULL(trans)) {
-      if (OB_NOT_NULL(bucket_writer)) {
-        trans->put_bucket_writer(bucket_writer);
-        bucket_writer = nullptr;
-      }
       coordinator_ctx_->put_trans(trans);
       trans = nullptr;
     }
@@ -2115,15 +2098,10 @@ int ObTableLoadCoordinator::write(const ObTableLoadTransId &trans_id,
   } else {
     LOG_DEBUG("coordinator write");
     ObTableLoadCoordinatorTrans *trans = nullptr;
-    ObTableLoadTransBucketWriter *bucket_writer = nullptr;
     int32_t session_id = 0;
     if (OB_FAIL(coordinator_ctx_->get_trans(trans_id, trans))) {
       LOG_WARN("fail to get trans", KR(ret));
     } else if (FALSE_IT(session_id = trans->get_default_session_id())) {
-    }
-    // 取出bucket_writer
-    else if (OB_FAIL(trans->get_bucket_writer_for_write(bucket_writer))) {
-      LOG_WARN("fail to get bucket writer", KR(ret));
     } else {
       ObTableLoadTask *task = nullptr;
       WriteTaskProcessor *processor = nullptr;
@@ -2132,8 +2110,7 @@ int ObTableLoadCoordinator::write(const ObTableLoadTransId &trans_id,
         LOG_WARN("fail to alloc task", KR(ret));
       }
       // 2. 设置processor
-      else if (OB_FAIL(
-                 task->set_processor<WriteTaskProcessor>(ctx_, trans, bucket_writer, session_id))) {
+      else if (OB_FAIL(task->set_processor<WriteTaskProcessor>(ctx_, trans, session_id))) {
         LOG_WARN("fail to set write task processor", KR(ret));
       } else if (OB_ISNULL(processor = dynamic_cast<WriteTaskProcessor *>(task->get_processor()))) {
         ret = OB_ERR_UNEXPECTED;
@@ -2142,7 +2119,7 @@ int ObTableLoadCoordinator::write(const ObTableLoadTransId &trans_id,
         LOG_WARN("fail to set objs", KR(ret), K(coordinator_ctx_->idx_array_));
       }
       // 3. 设置callback
-      else if (OB_FAIL(task->set_callback<WriteTaskCallback>(ctx_, trans, bucket_writer))) {
+      else if (OB_FAIL(task->set_callback<WriteTaskCallback>(ctx_, trans))) {
         LOG_WARN("fail to set write task callback", KR(ret));
       }
       // 4. 把task放入调度器
@@ -2156,10 +2133,6 @@ int ObTableLoadCoordinator::write(const ObTableLoadTransId &trans_id,
       }
     }
     if (OB_NOT_NULL(trans)) {
-      if (OB_NOT_NULL(bucket_writer)) {
-        trans->put_bucket_writer(bucket_writer);
-        bucket_writer = nullptr;
-      }
       coordinator_ctx_->put_trans(trans);
       trans = nullptr;
     }
@@ -2175,20 +2148,17 @@ class ObTableLoadCoordinator::FlushTaskProcessor : public ObITableLoadTaskProces
 {
 public:
   FlushTaskProcessor(ObTableLoadTask &task, ObTableLoadTableCtx *ctx, ObTableLoadCoordinatorTrans *trans,
-                     ObTableLoadTransBucketWriter *bucket_writer, int32_t session_id)
+                     int32_t session_id)
     : ObITableLoadTaskProcessor(task),
       ctx_(ctx),
       trans_(trans),
-      bucket_writer_(bucket_writer),
       session_id_(session_id)
   {
     ctx_->inc_ref_count();
     trans_->inc_ref_count();
-    bucket_writer_->inc_ref_count();
   }
   virtual ~FlushTaskProcessor()
   {
-    trans_->put_bucket_writer(bucket_writer_);
     ctx_->coordinator_ctx_->put_trans(trans_);
     ObTableLoadService::put_ctx(ctx_);
   }
@@ -2197,8 +2167,18 @@ public:
     OB_TABLE_LOAD_STATISTICS_TIME_COST(INFO, coordinator_flush_time_us);
     int ret = OB_SUCCESS;
     if (OB_SUCC(trans_->check_trans_status(ObTableLoadTransStatusType::FROZEN))) {
-      if (OB_FAIL(bucket_writer_->flush(session_id_))) {
+      bool is_finished = false;
+      if (OB_FAIL(trans_->get_bucket_writer()->flush(session_id_, is_finished))) {
         LOG_WARN("fail to flush bucket", KR(ret));
+      } else if (!is_finished) {
+        // do nothing
+      } else {
+        ObTableLoadCoordinator coordinator(ctx_);
+        if (OB_FAIL(coordinator.init())) {
+          LOG_WARN("fail to init coordinator", KR(ret));
+        } else if (OB_FAIL(coordinator.finish_trans_peers(trans_))) {
+          LOG_WARN("fail to finish trans peers", KR(ret));
+        }
       }
     }
     return ret;
@@ -2206,24 +2186,20 @@ public:
 private:
   ObTableLoadTableCtx * const ctx_;
   ObTableLoadCoordinatorTrans * const trans_;
-  ObTableLoadTransBucketWriter * const bucket_writer_;
   const int32_t session_id_;
 };
 
 class ObTableLoadCoordinator::FlushTaskCallback : public ObITableLoadTaskCallback
 {
 public:
-  FlushTaskCallback(ObTableLoadTableCtx *ctx, ObTableLoadCoordinatorTrans *trans,
-                    ObTableLoadTransBucketWriter *bucket_writer)
-    : ctx_(ctx), trans_(trans), bucket_writer_(bucket_writer)
+  FlushTaskCallback(ObTableLoadTableCtx *ctx, ObTableLoadCoordinatorTrans *trans)
+    : ctx_(ctx), trans_(trans)
   {
     ctx_->inc_ref_count();
     trans_->inc_ref_count();
-    bucket_writer_->inc_ref_count();
   }
   virtual ~FlushTaskCallback()
   {
-    trans_->put_bucket_writer(bucket_writer_);
     ctx_->coordinator_ctx_->put_trans(trans_);
     ObTableLoadService::put_ctx(ctx_);
   }
@@ -2239,7 +2215,6 @@ public:
 private:
   ObTableLoadTableCtx * const ctx_;
   ObTableLoadCoordinatorTrans * const trans_;
-  ObTableLoadTransBucketWriter * const bucket_writer_; // 为了保证接收完本次写入结果之后再让bucket_writer的引用归零
 };
 
 int ObTableLoadCoordinator::flush(ObTableLoadCoordinatorTrans *trans)
@@ -2250,11 +2225,7 @@ int ObTableLoadCoordinator::flush(ObTableLoadCoordinatorTrans *trans)
     LOG_WARN("ObTableLoadCoordinator not init", KR(ret), KP(this));
   } else {
     LOG_DEBUG("coordinator flush");
-    ObTableLoadTransBucketWriter *bucket_writer = nullptr;
-    // 取出bucket_writer
-    if (OB_FAIL(trans->get_bucket_writer_for_flush(bucket_writer))) {
-      LOG_WARN("fail to get bucket writer", KR(ret));
-    } else if (OB_FAIL(trans->set_trans_status_frozen())) {
+    if (OB_FAIL(trans->set_trans_status_frozen())) {
       LOG_WARN("fail to freeze trans", KR(ret));
     } else {
       for (int32_t session_id = 1; OB_SUCC(ret) && session_id <= param_.write_session_count_; ++session_id) {
@@ -2264,12 +2235,11 @@ int ObTableLoadCoordinator::flush(ObTableLoadCoordinatorTrans *trans)
           LOG_WARN("fail to alloc task", KR(ret));
         }
         // 2. 设置processor
-        else if (OB_FAIL(task->set_processor<FlushTaskProcessor>(ctx_, trans, bucket_writer,
-                                                                 session_id))) {
+        else if (OB_FAIL(task->set_processor<FlushTaskProcessor>(ctx_, trans, session_id))) {
           LOG_WARN("fail to set flush task processor", KR(ret));
         }
         // 3. 设置callback
-        else if (OB_FAIL(task->set_callback<FlushTaskCallback>(ctx_, trans, bucket_writer))) {
+        else if (OB_FAIL(task->set_callback<FlushTaskCallback>(ctx_, trans))) {
           LOG_WARN("fail to set flush task callback", KR(ret));
         }
         // 4. 把task放入调度器
@@ -2282,10 +2252,6 @@ int ObTableLoadCoordinator::flush(ObTableLoadCoordinatorTrans *trans)
           }
         }
       }
-    }
-    if (OB_NOT_NULL(bucket_writer)) {
-      trans->put_bucket_writer(bucket_writer);
-      bucket_writer = nullptr;
     }
   }
   return ret;

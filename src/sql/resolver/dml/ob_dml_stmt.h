@@ -164,6 +164,7 @@ struct TableItem
     need_expand_rt_mv_ = false;
     mview_id_ = common::OB_INVALID_ID;
     mr_mv_flags_ = 0;
+    is_mv_proctime_table_ = false;
     node_ = NULL;
     view_base_item_ = NULL;
     flashback_query_expr_ = nullptr;
@@ -205,7 +206,8 @@ struct TableItem
                KPC_(function_table_expr),
                K_(flashback_query_type), KPC_(flashback_query_expr), K_(table_type),
                K_(exec_params), KPC_(sample_info), K_(mview_id), K_(need_expand_rt_mv),
-               K_(external_table_partition), K_(catalog_name), K_(external_location_id));
+               K_(external_table_partition), K_(catalog_name), K_(external_location_id),
+               K_(is_mv_proctime_table));
 
   enum TableType
   {
@@ -339,6 +341,7 @@ struct TableItem
   bool need_expand_rt_mv_; // for real-time materialized view
   uint64_t mview_id_; // for materialized view, ref_id_ is mv container table id, mview_id_ is the view id
   uint64_t mr_mv_flags_; // for major refresh mview
+  bool is_mv_proctime_table_; // only for materialized view definition stmt, will not refresh the proctime table when fast refreshing mv
   const ParseNode* node_;
   // base table item for updatable view, can not access after the resolve phase
   const TableItem *view_base_item_;
@@ -800,7 +803,8 @@ public:
                                     ObSQLSessionInfo *session_info,
                                     bool explicit_for_col = false);
   int formalize_child_stmt_expr_reference(ObRawExprFactory *expr_factory,
-                                          ObSQLSessionInfo *session_info);
+                                          ObSQLSessionInfo *session_info,
+                                          bool explicit_for_col);
   int set_sharable_expr_reference(ObRawExpr &expr, ExplicitedRefType ref_type);
   int check_pseudo_column_valid();
   int check_stmt_valid();
@@ -855,11 +859,13 @@ public:
   inline common::ObIArray<ColumnItem> &get_column_items() { return column_items_; }
   inline const common::ObIArray<ColumnItem> &get_column_items() const { return column_items_; }
   int get_column_ids(uint64_t table_id, ObSqlBitSet<> &column_ids)const;
+  int get_column_ids(uint64_t table_id, ObIArray<uint64_t> &column_ids) const;
   int get_column_items(uint64_t table_id, ObIArray<ColumnItem> &column_items) const;
   int get_column_items(ObIArray<uint64_t> &table_ids, ObIArray<ColumnItem> &column_items) const;
   int append_column_items_nodup(uint64_t table_id, uint64_t column_id, ObIArray<ColumnItem> &column_items) const;
-  int get_column_exprs(ObIArray<ObColumnRefRawExpr*> &column_exprs) const;
-  int get_column_exprs(ObIArray<ObRawExpr *> &column_exprs) const;
+  template <typename T>
+  typename std::enable_if<std::is_base_of<T, ObColumnRefRawExpr>::value, int>::type
+  get_column_exprs(ObIArray<T*> &column_exprs) const;
   int get_column_exprs(ObIArray<TableItem *> &table_items,
                        ObIArray<ObRawExpr *> &column_exprs) const;
   int get_view_output(const TableItem &table,
@@ -1064,9 +1070,9 @@ public:
   ColumnItem *get_column_item_by_id(uint64_t table_id, uint64_t column_id) const;
   const ColumnItem *get_column_item_by_base_id(uint64_t table_id, uint64_t base_column_id) const;
   ObColumnRefRawExpr *get_column_expr_by_id(uint64_t table_id, uint64_t column_id) const;
-  int get_column_exprs(uint64_t table_id, ObIArray<ObColumnRefRawExpr *> &table_cols) const;
-  int get_column_exprs(uint64_t table_id, ObIArray<ObRawExpr*> &table_cols) const;
-
+  template <typename T>
+  typename std::enable_if<std::is_base_of<T, ObColumnRefRawExpr>::value, int>::type
+  get_column_exprs(uint64_t table_id, ObIArray<T*> &table_cols) const;
   int find_var_assign_in_query_ctx(bool &is_found) const;
   int check_user_vars_has_var_assign(bool &has_var_assign) const;
   int has_ref_assign_user_var(bool &has_ref_user_var, bool need_check_child = true) const;
@@ -1374,6 +1380,34 @@ int deep_copy_stmt_objects(ObIRawExprCopier &expr_copier,
       SQL_RESV_LOG(WARN, "failed to deep copy object", K(ret));
     } else if (OB_FAIL(new_objs.push_back(new_obj))) {
       SQL_RESV_LOG(WARN, "failed to push back new obj", K(ret));
+    }
+  }
+  return ret;
+}
+
+template <typename T>
+typename std::enable_if<std::is_base_of<T, ObColumnRefRawExpr>::value, int>::type
+ObDMLStmt::get_column_exprs(ObIArray<T*> &column_exprs) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_items_.count(); ++i) {
+    if (OB_FAIL(column_exprs.push_back(column_items_.at(i).expr_))) {
+      SQL_RESV_LOG(WARN, "failed to push back column exprs", K(ret));
+    }
+  }
+  return ret;
+}
+
+template <typename T>
+typename std::enable_if<std::is_base_of<T, ObColumnRefRawExpr>::value, int>::type
+ObDMLStmt::get_column_exprs(uint64_t table_id, ObIArray<T*> &table_cols) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_items_.count(); ++i) {
+    if (column_items_.at(i).table_id_ == table_id) {
+      if (OB_FAIL(table_cols.push_back(column_items_.at(i).expr_))) {
+        SQL_RESV_LOG(WARN, "failed to push back column exprs", K(ret));
+      }
     }
   }
   return ret;

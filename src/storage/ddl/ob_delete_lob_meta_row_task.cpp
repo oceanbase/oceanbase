@@ -314,7 +314,7 @@ int ObDeleteLobMetaRowTask::init_scan_param(ObTableScanParam& scan_param)
         if (OB_ISNULL(column_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(i), KPC(this));
-        } else if (!column_schema->is_vec_hnsw_key_column() && !column_schema->is_vec_hnsw_data_column() && !column_schema->is_vec_hnsw_visible_column()) {
+        } else if (column_schema->get_data_type() != ObLongTextType) {
           // do nothing
         } else if (OB_FAIL(scan_param.column_ids_.push_back(column_schema->get_column_id()))) {
           LOG_WARN("push col id failed.", K(ret), K(i));
@@ -398,7 +398,7 @@ int ObDeleteLobMetaRowTask::process()
     if (OB_ISNULL(txs) || OB_ISNULL(tsc_service) || OB_ISNULL(lob_mngr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("should not be null", K(ret), KP(txs), KP(tsc_service), KP(lob_mngr));
-    } else if (OB_FAIL(ObInsertLobColumnHelper::start_trans(param_->ls_id_, true/*is_for_read*/, timeout_us, tx_desc))) {
+    } else if (OB_FAIL(ObInsertLobColumnHelper::start_trans(param_->ls_id_, false/*is_for_read*/, timeout_us, tx_desc))) {
       LOG_WARN("fail to get tx_desc", K(ret));
     } else if (OB_FAIL(txs->get_ls_read_snapshot(*tx_desc, transaction::ObTxIsolationLevel::RC, param_->ls_id_, timeout_us, scan_param.snapshot_))) {
       LOG_WARN("fail to get snapshot", K(ret));
@@ -428,6 +428,8 @@ int ObDeleteLobMetaRowTask::process()
                                                                       param_->tablet_id_,
                                                                       collation_type_,
                                                                       datum_row->storage_datums_[0],
+                                                                      tx_desc,
+                                                                      scan_param.snapshot_,
                                                                       timeout_us,
                                                                       true))) {
           LOG_WARN("failed to delete lob column", K(ret));

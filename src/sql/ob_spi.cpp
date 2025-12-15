@@ -1871,6 +1871,24 @@ ObPLSPITraceIdGuard::~ObPLSPITraceIdGuard()
   }
 }
 
+void ObSPIService::release_batch_params(ObPLExecCtx *ctx, ParamStore *array_params)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(array_params)) {
+    for (int64_t i = 0; i < array_params->count() && array_params->at(i).is_ext_sql_array(); ++i) {
+      ObSqlArrayObj *sql_array = reinterpret_cast<ObSqlArrayObj*>(array_params->at(i).get_ext());
+      if (OB_NOT_NULL(sql_array)) {
+        for (int64_t j = 0; j < sql_array->count_; ++j) {
+          int ret = ObUserDefinedType::destruct_obj(sql_array->data_[j], ctx->exec_ctx_->get_my_session());
+          if (OB_SUCCESS != ret) {
+            LOG_WARN("failed to destruct obj", K(ret));
+          }
+        }
+      }
+    }
+  }
+}
+
 // common sql execute interface (static-sql & dynamic-sql & dbms-sql-execute)
 int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
                                     ObIAllocator &out_param_alloc,
@@ -1933,6 +1951,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
 
           bool can_retry = true;
           int64_t row_count = 0;
+          ParamStore *array_params = NULL;
           ObArenaAllocator allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_STATIC_SQL_EXEC), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
           {
             ObPLSPITraceIdGuard trace_id_guard(sql, ps_sql, *session, ret);
@@ -1959,7 +1978,8 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
                            spi_result.get_out_params(),
                            is_forall,
                            is_dynamic_sql,
-                           is_dbms_sql), K(sql), K(ps_sql));
+                           is_dbms_sql,
+                           &array_params), K(sql), K(ps_sql));
             OZ (inner_fetch(ctx,
                             can_retry,
                             spi_result,
@@ -1982,7 +2002,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
                             0,
                             is_type_record), K(ps_sql), K(sql), K(type));
 
-            if (OB_SUCC(ret) && (is_dynamic_sql || is_dbms_sql) && !is_bulk) {
+            if (OB_SUCC(ret) && (is_dynamic_sql || is_dbms_sql) && !is_bulk && !is_forall) {
               // if it is bulk into, not allow using out param, so no need deep copy
               OZ (dynamic_out_params(
                 out_param_alloc, spi_result.get_result_set(), params, param_count, is_dbms_sql));
@@ -2005,7 +2025,11 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
             }
             ret = OB_SUCCESS == ret ? close_ret : ret;
           }
-          spi_result.destruct_exec_params(*session);
+          if (!is_forall) {
+            spi_result.destruct_exec_params(*session);
+          } else {
+            release_batch_params(ctx, array_params);
+          }
 
         } while (RETRY_TYPE_NONE != retry_ctrl.get_retry_type()); //SPI只做LOCAL重试
       }
@@ -4245,7 +4269,7 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
         routine_id, loc, formal_param_idxs, actual_param_exprs, cursor_param_count));
     }
 
-    if (OB_SUCC(ret) && DECL_SUBPROG == loc) {
+    if (OB_SUCC(ret) && DECL_SUBPROG == loc && !cursor->is_ref_by_refcursor()) {
       ParamStore *subprog_params = NULL;
       OZ (current_params.assign(*ctx->params_));
       OZ (ObPLContext::get_param_store_from_local(*session_info, package_id, routine_id, subprog_params));
@@ -5842,6 +5866,7 @@ int ObSPIService::spi_sub_nestedtable(ObPLExecCtx *ctx,
           }
           dst_coll_obj.set_extend(reinterpret_cast<int64_t>(dst_coll), dst_coll->get_type());
           dst_coll_obj.set_param_meta();
+          dst_coll_obj.get_param_flag().is_batch_parameter_ = true;
         }
       }
     }
@@ -6996,7 +7021,7 @@ int ObSPIService::prepare_static_sql_params(ObPLExecCtx *ctx,
   if (OB_SUCC(ret) && is_forall && OB_NOT_NULL(exec_params)) {
 
     for (int64_t i = 0; OB_SUCC(ret) && i < exec_params->count(); ++i) {
-      if (exec_params->at(i).is_ext()) {
+      if (exec_params->at(i).is_batch_parameters()) {
         pl::ObPLCollection *coll = NULL;
         CK (OB_NOT_NULL(coll = reinterpret_cast<pl::ObPLCollection*>(exec_params->at(i).get_ext())));
         if (OB_SUCC(ret)) {
@@ -7061,7 +7086,8 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
                              ObSPIOutParams &out_params,
                              bool is_forall,
                              bool is_dynamic_sql,
-                             bool is_dbms_sql)
+                             bool is_dbms_sql,
+                             ParamStore **array_params)
 {
   int ret = OB_SUCCESS;
 
@@ -7094,12 +7120,20 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
   OZ (convert_ext_null_params(*curr_params, ctx->exec_ctx_->get_my_session()));
   OZ (inner_open(ctx, sql, ps_sql, type, *curr_params, spi_result, out_params, is_dynamic_sql));
 
+  if (is_forall && OB_NOT_NULL(array_params)) { //set array_params for forall scenario
+    *array_params = curr_params;
+  }
+
   // if failed, we need release complex parameter memory in here
   if (OB_FAIL(ret) && OB_NOT_NULL(curr_params)) {
     int ret = OB_SUCCESS; // ignore destruct obj error
-    for (int64_t i = 0; i < curr_params->count(); ++i) {
-      OZ (ObUserDefinedType::destruct_obj(curr_params->at(i), ctx->exec_ctx_->get_my_session()));
-      ret = OB_SUCCESS;
+    if (is_forall) {
+      release_batch_params(ctx, curr_params);
+    } else  {
+      for (int64_t i = 0; i < curr_params->count(); ++i) {
+        OZ (ObUserDefinedType::destruct_obj(curr_params->at(i), ctx->exec_ctx_->get_my_session()));
+        ret = OB_SUCCESS;
+      }
     }
   }
 

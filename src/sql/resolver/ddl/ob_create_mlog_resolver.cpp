@@ -26,7 +26,7 @@ using namespace obrpc;
 namespace sql
 {
 /*
-CREATE MATERIALIZED VIEW LOG ON [ schema. ] table
+CREATE [OR REPLACE] MATERIALIZED VIEW LOG ON [ schema. ] table
   [ parallel_clause ]
   [ WITH [ { PRIMARY KEY
          | ROWID
@@ -81,6 +81,23 @@ int ObCreateMLogResolver::resolve(const ParseNode &parse_tree)
     LOG_WARN("failed to create create_mlog_stmt", KR(ret));
   } else {
     stmt_ = create_mlog_stmt;
+  }
+
+  if (OB_SUCC(ret)) {
+    if (1 == parse_node.reserved_) {
+      if (OB_UNLIKELY(compat_version < MOCK_DATA_VERSION_4_3_5_3
+                      || (compat_version >= DATA_VERSION_4_4_0_0 && compat_version < MOCK_DATA_VERSION_4_4_2_0)
+                      || (compat_version >= DATA_VERSION_4_5_0_0 && compat_version < DATA_VERSION_4_5_1_0))) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("replacing materialized view log before version 4.3.5.3 or between 4.4.0.0 and 4.4.2.0 or between 4.5.0.0 and 4.5.1.0 is not supported", KR(ret),
+                 K(compat_version));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "replacing materialized view log before version 4.3.5.3 or between 4.4.0.0 and 4.4.2.0 or between 4.5.0.0 and 4.5.1.0 is");
+      } else {
+        create_mlog_stmt->set_replace_if_exists(true);
+      }
+    } else {
+      create_mlog_stmt->set_replace_if_exists(false);
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -280,35 +297,6 @@ int ObCreateMLogResolver::resolve_table_name_node(
     LOG_WARN("create materialized view log on a non-user table or mview is not supported",
         KR(ret), K(data_table_schema->get_table_type()));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on a non-user table or mview is");
-  } else if (data_table_schema->has_mlog_table()) {
-    ret = OB_ERR_MLOG_EXIST;
-    LOG_WARN("a materialized view log already exists on table",
-        K(data_table_name), K(data_table_schema->get_mlog_tid()));
-    LOG_USER_ERROR(OB_ERR_MLOG_EXIST, helper.convert(data_table_name));
-  } else if (OB_FAIL(ObTableSchema::build_mlog_table_name(
-      *allocator_, data_table_name, mlog_table_name, lib::is_oracle_mode()))) {
-    LOG_WARN("failed to build mlog table name", KR(ret), K(data_table_name));
-  } else if (OB_FAIL(session_info_->get_name_case_mode(mode))) {
-    LOG_WARN("failed to get name case mode", KR(ret));
-  } else if (OB_FAIL(session_info_->get_collation_connection(cs_type))) {
-    LOG_WARN("failed to get collation connection", KR(ret));
-  } else if (OB_FAIL(ObSQLUtils::check_and_convert_table_name(
-      cs_type,
-      lib::is_oracle_mode() ? true : (OB_LOWERCASE_AND_INSENSITIVE != mode)/*perserve_lettercase*/,
-      mlog_table_name))) {
-    LOG_WARN("failed to check and convert table name",
-        KR(ret), K(cs_type), K(mode), K(mlog_table_name));
-  } else if (OB_FAIL(schema_checker_->check_table_exists(tenant_id,
-                                                         database_name,
-                                                         mlog_table_name,
-                                                         false /*is_index*/,
-                                                         false /*is_hidden*/,
-                                                         table_exist))) {
-    LOG_WARN("failed to check table exists", KR(ret), K(database_name), K(mlog_table_name));
-  } else if (table_exist) {
-    ret = OB_ERR_TABLE_EXIST;
-    LOG_WARN("table already exist", KR(ret), K(mlog_table_name), K(table_exist));
-    LOG_USER_ERROR(OB_ERR_TABLE_EXIST, mlog_table_name.length(), mlog_table_name.ptr());
   }
 
   if (OB_SUCC(ret)) {
@@ -337,6 +325,33 @@ int ObCreateMLogResolver::resolve_table_name_node(
         }
       } else {
         real_table_schema = data_table_schema;
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObTableSchema::build_mlog_table_name(
+                     *allocator_, data_table_name, mlog_table_name, lib::is_oracle_mode(),
+                     real_table_schema->has_mlog_table()))) {
+        LOG_WARN("failed to build mlog table name", KR(ret), K(data_table_name));
+      } else if (OB_FAIL(session_info_->get_name_case_mode(mode))) {
+        LOG_WARN("failed to get name case mode", KR(ret));
+      } else if (OB_FAIL(session_info_->get_collation_connection(cs_type))) {
+        LOG_WARN("failed to get collation connection", KR(ret));
+      } else if (OB_FAIL(ObSQLUtils::check_and_convert_table_name(
+                     cs_type,
+                     lib::is_oracle_mode()
+                         ? true
+                         : (OB_LOWERCASE_AND_INSENSITIVE != mode) /*perserve_lettercase*/,
+                     mlog_table_name))) {
+        LOG_WARN("failed to check and convert table name", KR(ret), K(cs_type), K(mode),
+                 K(mlog_table_name));
+      } else if (OB_FAIL(schema_checker_->check_table_exists(tenant_id, database_name,
+                                                             mlog_table_name, false /*is_index*/,
+                                                             false /*is_hidden*/, table_exist))) {
+        LOG_WARN("failed to check table exists", KR(ret), K(database_name), K(mlog_table_name));
+      } else if (table_exist) {
+        ret = OB_ERR_TABLE_EXIST;
+        LOG_WARN("table already exist", KR(ret), K(mlog_table_name), K(table_exist));
+        LOG_USER_ERROR(OB_ERR_TABLE_EXIST, mlog_table_name.length(), mlog_table_name.ptr());
       }
 
       if (OB_SUCC(ret)) {

@@ -18,6 +18,7 @@
 #include "lib/mysqlclient/ob_mysql_result.h"
 #include "lib/mysqlclient/ob_mysql_statement.h"
 #include "lib/mysqlclient/ob_mysql_connection_pool.h"
+#include "sql/session/ob_local_session_var.h"
 #ifdef OB_BUILD_DBLINK
 #include "lib/oracleclient/ob_oracle_oci_connection.h"
 #endif
@@ -141,6 +142,7 @@ public:
   inline void reset() { session_id_ = OB_INVALID_ID;
                         ddl_info_.reset();}
   bool is_valid() { return !(is_ddl() && OB_INVALID_ID == session_id_); }
+  InnerDDLInfo &get_inner_ddl_info() { return ddl_info_; }
   TO_STRING_KV(K_(ddl_info), K_(session_id));
   OB_UNIS_VERSION(1);
 private:
@@ -153,7 +155,7 @@ public:
   ObSessionParam()
       : sql_mode_(nullptr), tz_info_wrap_(nullptr), ddl_info_(), is_load_data_exec_(false),
         use_external_session_(false), consumer_group_id_(0), nls_formats_{}, enable_pl_cache_(true),
-        secure_file_priv_() {}
+        secure_file_priv_(), mview_local_session_vars_() {}
   ~ObSessionParam() = default;
 public:
   int64_t *sql_mode_;
@@ -165,6 +167,7 @@ public:
   common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
   bool enable_pl_cache_;
   common::ObString secure_file_priv_;
+  sql::ObLocalSessionVar mview_local_session_vars_;
 };
 
 // thread safe sql proxy

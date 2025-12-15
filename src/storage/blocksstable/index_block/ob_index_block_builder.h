@@ -397,7 +397,8 @@ public:
            ObIMacroBlockFlushCallback *ddl_callback);
   int append_row(const ObMicroBlockDesc &micro_block_desc,
                  const ObMacroBlock &macro_block);
-  int clustered_index_append_row(const ObMicroIndexData &micro_index_data, ObMicroBlockDesc &micro_block_desc);
+  int clustered_index_agg_micro_block(const ObMicroIndexData &micro_index_data, ObMicroBlockDesc &micro_block_desc);
+  int clustered_index_append_row(const ObMicroBlockDesc &micro_block_desc);
   int write_clustered_index_micro_block();
   int generate_macro_row(ObMacroBlock &macro_block, const int64_t ddl_start_row_offset, const bool need_write_macro_meta);
   int append_meta_row_to_dumper(const MacroBlockId &block_id);

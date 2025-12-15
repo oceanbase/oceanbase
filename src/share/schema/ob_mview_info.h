@@ -103,6 +103,27 @@ public:
                                           const uint64_t tenant_id, bool &contains);
   static int update_mview_data_sync_scn(ObISQLClient &sql_client, uint64_t tenant_id,
                                         ObMViewInfo &mview_info, const uint64_t refresh_scn);
+  static int update_mview_data_attr(ObISQLClient &sql_client,
+                                    const uint64_t tenant_id,
+                                    const uint64_t refresh_scn,
+                                    const uint64_t target_data_sync_scn,
+                                    ObMViewInfo &mview_info);
+  static int bacth_fetch_mview_infos(ObISQLClient &sql_client,
+                                     const uint64_t tenant_id,
+                                     const uint64_t refresh_scn,
+                                     const ObIArray<uint64_t> &mview_ids,
+                                     ObIArray<ObMViewInfo> &mview_infos,
+                                     bool oracle_mode = false);
+  static int extract_mview_info(common::sqlclient::ObMySQLResult *result,
+                                const uint64_t tenant_id,
+                                ObMViewInfo &mview_info);
+  static int check_satisfy_target_data_sync_scn(const ObMViewInfo &mview_info,
+                                                const uint64_t target_data_sync_ts,
+                                                bool &satisfy);
+  static int get_mview_id_from_container_id(ObISQLClient &sql_client, const uint64_t tenant_id,
+                                            const uint64_t container_id, uint64_t &mview_id);
+  static int set_mview_purge_barrier(ObISQLClient &sql_client, const uint64_t tenant_id,
+                                     const uint64_t mview_id, const uint64_t refresh_scn);
   TO_STRING_KV(K_(tenant_id),
                K_(mview_id),
                K_(build_mode),

@@ -37,13 +37,7 @@ public:
   int advance_sequence_no(int32_t session_id, uint64_t sequence_no, ObTableLoadMutexGuard &guard);
   // 只在对应工作线程中调用, 串行执行
   int write(int32_t session_id, table::ObTableLoadObjRowArray &obj_rows);
-  int flush(int32_t session_id);
-public:
-  void set_is_flush() { is_flush_ = true; }
-  bool is_flush() const { return is_flush_; }
-  int64_t get_ref_count() const { return ATOMIC_LOAD(&ref_count_); }
-  int64_t inc_ref_count() { return ATOMIC_AAF(&ref_count_, 1); }
-  int64_t dec_ref_count() { return ATOMIC_AAF(&ref_count_, -1); }
+  int flush(int32_t session_id, bool &is_finished);
 private:
   class SessionContext;
   int init_session_ctx_array();
@@ -96,8 +90,8 @@ private:
     uint64_t last_receive_sequence_no_;
   };
   SessionContext *session_ctx_array_;
-  int64_t ref_count_ CACHE_ALIGNED;
-  bool is_flush_;
+  int64_t session_count_;
+  int64_t flush_count_ CACHE_ALIGNED;
   bool is_inited_;
 };
 

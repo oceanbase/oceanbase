@@ -330,7 +330,7 @@ all_table_def = dict(
       ('external_sub_path', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
       ('micro_block_format_version', 'int', 'false', 'ObMicroBlockFormatVersionHelper::DEFAULT_VERSION'),
       ('semistruct_properties', 'longtext', 'false', ''),
-      ('mview_expand_definition', 'longtext', 'false', ''), #placeholder for mview in 4353
+      ('mview_expand_definition', 'longtext', 'false', ''),
       ('fts_index_type', 'int', 'false', '0'),
       ('ttl_flag', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'false', '\\x01'),
       ('delta_format', 'varchar:OB_MAX_VARCHAR_LENGTH', 'false', 'flat'),
@@ -6309,7 +6309,8 @@ def_table_schema(
     ('last_purge_time', 'int', 'true'),
     ('last_purge_rows', 'int', 'true'),
     ('last_purge_trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true'),
-    ('schema_version', 'int')
+    ('schema_version', 'int'),
+    ('last_purge_method', 'int', 'true')
   ]
 )
 
@@ -17257,6 +17258,37 @@ def_table_schema(
 # 12585: __all_virtual_sync_standby_status
 # 12586: __all_virtual_window_loop_info
 
+def_table_schema(
+  owner             = 'zhaoziqian.zzq',
+  table_name        = '__all_virtual_tablet_replica_info',
+  table_id          = '12587',
+  table_type        = 'VIRTUAL_TABLE',
+  gm_columns        = [],
+  rowkey_columns    = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('ls_id', 'int'),
+    ('tablet_id', 'int'),
+  ],
+  normal_columns    = [
+    ('role', 'int'),
+    ('zone', 'varchar:MAX_ZONE_LENGTH'),
+    ('table_id', 'int'),
+    ('table_name', 'varchar:OB_MAX_TABLE_NAME_LENGTH'),
+    ('database_id', 'int'),
+    ('database_name', 'varchar:OB_MAX_DATABASE_NAME_LENGTH'),
+    ('table_type', 'int'),
+    ('tablegroup_id', 'int'),
+    ('tablegroup_name', 'varchar:OB_MAX_TABLEGROUP_NAME_LENGTH'),
+    ('data_table_id', 'int'),
+    ('occupy_size', 'int'),
+    ('required_size', 'int'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -17837,6 +17869,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15534', all_def_keyword
 # 15539: all_virtual_sensitive_column_real_agent
 # 15540: __all_sync_standby_dest
 # 15541: __all_sync_standby_status
+# 15542: __all_virtual_tablet_window_loop_info
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -39213,7 +39246,7 @@ def_table_schema(
     SELECT
       B.TENANT_ID AS TENANT_ID,
       CAST(A.DATABASE_NAME AS CHAR(128)) AS LOG_OWNER,
-      CAST(D.TABLE_NAME AS CHAR(128)) AS MASTER,
+      CAST(CASE WHEN D.TABLE_MODE >> 24 & 1 = 0 THEN D.TABLE_NAME ELSE (SELECT T1.TABLE_NAME FROM oceanbase.__all_virtual_table T1 WHERE T1.TENANT_ID = D.TENANT_ID AND T1.DATA_TABLE_ID = D.TABLE_ID and T1.TABLE_TYPE = 7) END AS CHAR(128)) AS MASTER,
       CAST(B.TABLE_NAME AS CHAR(128)) AS LOG_TABLE,
       CAST(NULL AS CHAR(128)) AS LOG_TRIGGER,
       CAST(IF(D.TABLE_MODE & 66048 = 66048, 'YES', 'NO') AS  CHAR(3)) AS ROWIDS,
@@ -39246,7 +39279,12 @@ def_table_schema(
       CAST('YES' AS CHAR(3)) AS COMMIT_SCN_BASED,
       CAST('NO' AS CHAR(3)) AS STAGING_LOG,
       B.DOP AS PURGE_DOP,
-      C.LAST_PURGE_TIME AS LAST_PURGE_TIME
+      C.LAST_PURGE_TIME AS LAST_PURGE_TIME,
+      CAST(CASE C.LAST_PURGE_METHOD
+            WHEN 0 THEN 'SQL'
+            WHEN 1 THEN 'COMPACTION'
+            ELSE NULL
+           END AS CHAR(16)) AS LAST_PURGE_METHOD
     FROM
       oceanbase.__all_virtual_database A,
       oceanbase.__all_virtual_table B,
@@ -39274,7 +39312,7 @@ def_table_schema(
     view_definition = """
     SELECT
       CAST(A.DATABASE_NAME AS CHAR(128)) AS LOG_OWNER,
-      CAST(D.TABLE_NAME AS CHAR(128)) AS MASTER,
+      CAST(CASE WHEN D.TABLE_MODE >> 24 & 1 = 0 THEN D.TABLE_NAME ELSE (SELECT T1.TABLE_NAME FROM oceanbase.__all_table T1 WHERE T1.DATA_TABLE_ID = D.TABLE_ID and T1.TABLE_TYPE = 7) END AS CHAR(128)) AS MASTER,
       CAST(B.TABLE_NAME AS CHAR(128)) AS LOG_TABLE,
       CAST(NULL AS CHAR(128)) AS LOG_TRIGGER,
       CAST(IF(D.TABLE_MODE & 66048 = 66048, 'YES', 'NO') AS  CHAR(3)) AS ROWIDS,
@@ -39307,7 +39345,12 @@ def_table_schema(
       CAST('YES' AS CHAR(3)) AS COMMIT_SCN_BASED,
       CAST('NO' AS CHAR(3)) AS STAGING_LOG,
       B.DOP AS PURGE_DOP,
-      C.LAST_PURGE_TIME AS LAST_PURGE_TIME
+      C.LAST_PURGE_TIME AS LAST_PURGE_TIME,
+      CAST(CASE C.LAST_PURGE_METHOD
+            WHEN 0 THEN 'SQL'
+            WHEN 1 THEN 'COMPACTION'
+            ELSE NULL
+           END AS CHAR(16)) AS LAST_PURGE_METHOD
     FROM
       oceanbase.__all_database A,
       oceanbase.__all_table B,
@@ -44565,6 +44608,69 @@ FROM
 # 21705: CDB_OB_TTL_TASK_HISTORY
 # 21706: CDB_OB_SYNC_STANDBY_DEST
 # 21707: DBA_OB_SYNC_STANDBY_DEST
+
+def_table_schema(
+  owner           = 'zhaoziqian.zzq',
+  table_name      = 'GV$OB_TABLET_REPLICA_INFO',
+  table_id        = '21708',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  gm_columns      = [],
+  normal_columns  = [],
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    LS_ID,
+    TABLET_ID,
+    ROLE,
+    ZONE,
+    TABLE_ID,
+    TABLE_NAME,
+    DATABASE_ID,
+    DATABASE_NAME,
+    TABLE_TYPE,
+    TABLEGROUP_ID,
+    TABLEGROUP_NAME,
+    DATA_TABLE_ID,
+    OCCUPY_SIZE,
+    REQUIRED_SIZE
+  FROM oceanbase.__all_virtual_tablet_replica_info
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'zhaoziqian.zzq',
+  table_name      = 'V$OB_TABLET_REPLICA_INFO',
+  table_id        = '21709',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  gm_columns      = [],
+  normal_columns  = [],
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    LS_ID,
+    TABLET_ID,
+    ROLE,
+    ZONE,
+    TABLE_ID,
+    TABLE_NAME,
+    DATABASE_ID,
+    DATABASE_NAME,
+    TABLE_TYPE,
+    TABLEGROUP_ID,
+    TABLEGROUP_NAME,
+    DATA_TABLE_ID,
+    OCCUPY_SIZE,
+    REQUIRED_SIZE
+  FROM oceanbase.GV$OB_TABLET_REPLICA_INFO
+  WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
+  """.replace("\n", " ")
+)
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -65304,7 +65410,7 @@ def_table_schema(
     view_definition = """
     SELECT
       CAST(A.DATABASE_NAME AS VARCHAR2(128)) AS LOG_OWNER,
-      CAST(D.TABLE_NAME AS VARCHAR2(128)) AS MASTER,
+      CAST(CASE WHEN BITAND((D.TABLE_MODE / POWER(2, 24)), 1) = 0 THEN D.TABLE_NAME ELSE (SELECT T1.TABLE_NAME FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T1 WHERE T1.DATA_TABLE_ID = D.TABLE_ID and T1.TABLE_TYPE = 7) END AS VARCHAR2(128)) AS MASTER,
       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS LOG_TABLE,
       CAST(NULL AS VARCHAR2(128)) AS LOG_TRIGGER,
       CAST(DECODE(bitand(D.TABLE_MODE, 66048), 66048, 'YES', 'NO') AS  VARCHAR2(3)) AS ROWIDS,
@@ -65337,7 +65443,12 @@ def_table_schema(
       CAST('YES' AS VARCHAR2(3)) AS COMMIT_SCN_BASED,
       CAST('NO' AS VARCHAR2(3)) AS STAGING_LOG,
       B.DOP AS PURGE_DOP,
-      C.LAST_PURGE_TIME AS LAST_PURGE_TIME
+      C.LAST_PURGE_TIME AS LAST_PURGE_TIME,
+      CAST(DECODE(C.LAST_PURGE_METHOD,
+                  0, 'SQL',
+                  1, 'COMPACTION',
+                  NULL)
+           AS VARCHAR2(16)) AS LAST_PURGE_METHOD
     FROM
       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,
@@ -65368,7 +65479,7 @@ def_table_schema(
     view_definition = """
 	SELECT
       CAST(A.DATABASE_NAME AS VARCHAR2(128)) AS LOG_OWNER,
-      CAST(D.TABLE_NAME AS VARCHAR2(128)) AS MASTER,
+      CAST(CASE WHEN BITAND((D.TABLE_MODE / POWER(2, 24)), 1) = 0 THEN D.TABLE_NAME ELSE (SELECT T1.TABLE_NAME FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T1 WHERE T1.DATA_TABLE_ID = D.TABLE_ID and T1.TABLE_TYPE = 7) END AS VARCHAR2(128)) AS MASTER,
       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS LOG_TABLE,
       CAST(NULL AS VARCHAR2(128)) AS LOG_TRIGGER,
       CAST(DECODE(bitand(D.TABLE_MODE, 66048), 66048, 'YES', 'NO') AS  VARCHAR2(3)) AS ROWIDS,
@@ -65434,7 +65545,7 @@ def_table_schema(
     view_definition = """
 	SELECT
       CAST(A.DATABASE_NAME AS VARCHAR2(128)) AS LOG_OWNER,
-      CAST(D.TABLE_NAME AS VARCHAR2(128)) AS MASTER,
+      CAST(CASE WHEN BITAND((D.TABLE_MODE / POWER(2, 24)), 1) = 0 THEN D.TABLE_NAME ELSE (SELECT T1.TABLE_NAME FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T1 WHERE T1.DATA_TABLE_ID = D.TABLE_ID and T1.TABLE_TYPE = 7) END AS VARCHAR2(128)) AS MASTER,
       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS LOG_TABLE,
       CAST(NULL AS VARCHAR2(128)) AS LOG_TRIGGER,
       CAST(DECODE(bitand(D.TABLE_MODE, 66048), 66048, 'YES', 'NO') AS  VARCHAR2(3)) AS ROWIDS,
@@ -66809,28 +66920,40 @@ def_table_schema(
     view_definition = """
     SELECT
       D.DATABASE_NAME AS MVIEW_OWNER,
-      B.TABLE_NAME AS MVIEW_NAME,
-      E.DATABASE_NAME AS DEP_OWNER,
-      C.TABLE_NAME AS DEP_NAME,
-      CAST (
-       CASE C.TABLE_TYPE
-        WHEN 3 THEN 'TABLE'
-        WHEN 4 THEN 'VIEW'
-        WHEN 7 THEN 'MV'
-        WHEN 14 THEN 'EXTERNAL TABLE'
+      B.TABLE_NAME    AS MVIEW_NAME,
+      COALESCE(EDB.DATABASE_NAME, RDB.DATABASE_NAME, TDB.DATABASE_NAME) AS DEP_OWNER,
+      COALESCE(C.TABLE_NAME, R.ROUTINE_NAME, T.TYPE_NAME) AS DEP_NAME,
+      CASE A.P_TYPE
+        WHEN 1 THEN 'TABLE'
+        WHEN 8 THEN 'VIEW'
+        WHEN 9 THEN 'FUNCTION'
+        WHEN 4 THEN 'TYPE'
         ELSE 'INVALID TYPE'
-       END AS CHAR(64)
-      ) AS DEP_TYPE
-    FROM SYS.ALL_VIRTUAL_MVIEW_DEP_REAL_AGENT A,
-         SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,
-         SYS.ALL_VIRTUAL_TABLE_REAL_AGENT C,
-         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT D,
-         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT E
-    WHERE A.mview_id = B.table_id
-    AND   A.p_obj = C.table_id
-    AND   B.database_id = D.database_id
-    AND   C.database_id = E.database_id
-    AND   bitand((C.table_mode / 16777216), 1) = 0
+      END AS DEP_TYPE
+    FROM SYS.ALL_VIRTUAL_MVIEW_DEP_REAL_AGENT A
+    JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B
+        ON A.MVIEW_ID = B.TABLE_ID
+    JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT D
+        ON B.DATABASE_ID = D.DATABASE_ID
+
+    LEFT JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT C
+        ON A.P_OBJ = C.TABLE_ID
+    LEFT JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT EDB
+        ON C.DATABASE_ID = EDB.DATABASE_ID
+
+    LEFT JOIN SYS.ALL_VIRTUAL_ROUTINE_REAL_AGENT R
+        ON A.P_OBJ = R.ROUTINE_ID
+    LEFT JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT RDB
+        ON R.DATABASE_ID = RDB.DATABASE_ID
+
+    LEFT JOIN SYS.ALL_VIRTUAL_TYPE_REAL_AGENT T
+        ON A.P_OBJ = T.TYPE_ID
+    LEFT JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT TDB
+        ON T.DATABASE_ID = TDB.DATABASE_ID
+    WHERE
+        (A.P_TYPE IN (1, 8) AND BITAND(TRUNC(C.TABLE_MODE / POWER(2,24)), 1) = 0)
+    OR (A.P_TYPE = 9)
+    OR (A.P_TYPE = 4);
 """.replace("\n", " ")
 )
 

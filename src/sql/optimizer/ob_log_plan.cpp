@@ -8061,7 +8061,10 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
     } else {
       has_allocated_range_shuffle_ = true;
     }
-  } else if (exch_info.is_pq_local() && NULL == topn_expr && get_optimizer_context().is_enable_px_ordered_coord()) {
+  } else if (exch_info.is_pq_local()
+             && NULL == topn_expr
+             && get_optimizer_context().is_enable_px_ordered_coord()
+             && !sort_keys.empty()) {
     if (OB_FAIL(allocate_dist_range_sort_as_top(top, sort_keys, need_sort, is_local_order))) {
       LOG_WARN("failed to allocate dist range sort as top", K(ret));
     } else { /*do nothing*/ }
@@ -16020,7 +16023,9 @@ int ObLogPlan::add_direct_load_explain_note()
         opt_ctx.add_plan_note(DIRECT_MODE_INSERT_INTO_SELECT, "inc_replace");
       }
     } else {
-      if (direct_load_optimizer_ctx.can_use_direct_load()) {
+      if (direct_load_optimizer_ctx.is_disabled_by_transaction()) {
+        opt_ctx.add_plan_note(DIRECT_MODE_DISABLED_BY_TRANSACTION);
+      } else if (direct_load_optimizer_ctx.can_use_direct_load()) {
         opt_ctx.add_plan_note(DIRECT_MODE_DISABLED_BY_PDML);
       }
     }

@@ -1278,11 +1278,9 @@ int ObOperator::submit_op_monitor_node()
     ObPlanMonitorNodeList *list = MTL(ObPlanMonitorNodeList*);
     if (list && spec_.plan_ && ctx_.get_physical_plan_ctx()) {
       if (spec_.plan_->get_phy_plan_hint().monitor_
-          || (ctx_.get_my_session()->is_user_session()
-              && (spec_.plan_->get_px_dop() > 1
-                  || (op_monitor_info_.close_time_
-                      - ctx_.get_plan_start_time()
-                      > MONITOR_RUNNING_TIME_THRESHOLD)))) {
+          || spec_.plan_->get_px_dop() > 1
+          || (op_monitor_info_.close_time_ - ctx_.get_plan_start_time()
+              > MONITOR_RUNNING_TIME_THRESHOLD)) {
         IGNORE_RETURN list->submit_node(op_monitor_info_);
         LOG_DEBUG("debug monitor", K(spec_.id_));
       }

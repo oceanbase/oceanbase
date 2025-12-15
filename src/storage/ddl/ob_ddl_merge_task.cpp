@@ -118,9 +118,10 @@ int ObDDLTableMergeDag::check_allow_major_merge()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet handle is invalid", K(ret), K(ddl_param_));
   } else if (ddl_param_.is_commit_) {
-    if (!tablet_handle.get_obj()->get_tablet_meta().ha_status_.check_allow_read()) {
+    const ObTabletHAStatus &ha_status = tablet_handle.get_obj()->get_tablet_meta().ha_status_;
+    if (!ha_status.check_allow_read()) {
       ddl_param_.is_commit_ = false;
-      LOG_INFO("status not full change to dump task", K(ret));
+      LOG_INFO("status not full change to dump task", K(ret), K(ha_status), K_(ddl_param));
     }
   }
   return ret;

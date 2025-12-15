@@ -2612,13 +2612,7 @@ static inline bool is_restrict_access_virtual_table(const uint64_t tid)
   sys_tenant_table_count = 1 + core_table_count + sys_table_count + virtual_table_count + sys_view_count
   core_schema_version = 1
   bootstrap_version = core_schema_version + sys_tenant_table_count + 2
-  h_f.write("const int64_t OB_CORE_TABLE_COUNT = %d;\n" % core_table_count)
-  h_f.write("const int64_t OB_SYS_TABLE_COUNT = %d;\n" % sys_table_count)
-  h_f.write("const int64_t OB_VIRTUAL_TABLE_COUNT = %d;\n" % virtual_table_count)
-  h_f.write("const int64_t OB_SYS_VIEW_COUNT = %d;\n" % sys_view_count)
-  h_f.write("const int64_t OB_SYS_TENANT_TABLE_COUNT = %d;\n" % sys_tenant_table_count)
   h_f.write("const int64_t OB_CORE_SCHEMA_VERSION = %d;\n" % core_schema_version)
-  h_f.write("const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = %d;\n" % bootstrap_version)
 
   for (table_name, table_id, base_table_name, base_table_name1, base_table_name2) in table_name_ids:
     if table_id >= max_sys_index_id:

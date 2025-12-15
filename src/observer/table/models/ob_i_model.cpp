@@ -904,15 +904,8 @@ int ObIModel::work(ObTableExecCtx &ctx,
       }
       if (OB_FAIL(ret)) {
         LOG_WARN("query execution failed, need rollback", K(ret), K(query_type));
-        int tmp_ret = ret;
-        if (OB_FAIL(MTL(ObTableQueryASyncMgr*)->destory_query_session(query_session_))) {
-          LOG_WARN("faild to destory query session", K(ret), K(session_id));
-        }
-        ret = tmp_ret;
       } else if (res.is_end_) {
-        if (OB_FAIL(MTL(ObTableQueryASyncMgr*)->destory_query_session(query_session_))) {
-          LOG_WARN("fail to destory query session", K(ret), K(session_id));
-        }
+        // no more result, no need to set time info
       } else {
         if (ObQueryOperationType::QUERY_START == req.query_type_) {
           if (OB_FAIL(query_session_->alloc_req_timeinfo())) {

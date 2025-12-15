@@ -326,9 +326,10 @@ int ObFilePreBuffer::reset()
     if (nullptr == cache_entry) {
     } else if (nullptr != cache_entry->buf_) {
       // ignore ret
+      void *cache_entry_buf = cache_entry->buf_;
       cache_entry->wait(metrics_);
-      SAFE_DELETE(cache_entry->buf_);
       cache_entry->~RangeCacheEntry();
+      SAFE_DELETE(cache_entry_buf);
       cache_entry = nullptr;
     }
   }

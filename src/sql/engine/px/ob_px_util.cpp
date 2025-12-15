@@ -890,16 +890,26 @@ int ObPXServerAddrUtil::alloc_by_temp_child_distribution_inner(ObExecContext &ex
   }
   if (OB_NOT_NULL(ctx) && !ctx->interm_result_infos_.empty()) {
     ObIArray<ObTempTableResultInfo> &interm_result_infos = ctx->interm_result_infos_;
+    ObTMArray<std::pair<ObAddr, int64_t>> addr_to_idx_map;
     ObArray<int64_t> sqc_max_task_count;
     ObArray<double> sqc_result_count;
-    if (OB_FAIL(sqc_result_count.prepare_allocate(interm_result_infos.count()))) {
+    if (OB_FAIL(addr_to_idx_map.reserve(interm_result_infos.count()))) {
+      LOG_WARN("Failed to pre allocate addr to idx map", K(interm_result_infos.count()));
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && j < interm_result_infos.count(); j++) {
+      OZ(addr_to_idx_map.push_back(std::make_pair(interm_result_infos.at(j).addr_, j)));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (FALSE_IT(lib::ob_sort(addr_to_idx_map.begin(), addr_to_idx_map.end()))) {
+    } else if (OB_FAIL(sqc_result_count.prepare_allocate(interm_result_infos.count()))) {
       LOG_WARN("Failed to pre allocate sqc part count");
     } else if (OB_FAIL(generate_dh_map_info(child))) {
       LOG_WARN("fail to generate dh map info", K(ret));
     }
     for (int64_t j = 0; OB_SUCC(ret) && j < interm_result_infos.count(); j++) {
       SMART_VAR(ObPxSqcMeta, sqc) {
-        ObTempTableResultInfo &info = interm_result_infos.at(j);
+        ObTempTableResultInfo &info = interm_result_infos.at(addr_to_idx_map.at(j).second);
         sqc.set_exec_addr(info.addr_);
         sqc.set_qc_addr(GCTX.self_addr());
         sqc.set_dfo_id(child.get_dfo_id());

@@ -6152,7 +6152,11 @@ int ObServerSchemaService::construct_aux_infos_(
           LOG_WARN("add aux vp table id failed", KR(ret), K(tenant_id), K(aux_table_meta));
         }
       } else if (MATERIALIZED_VIEW_LOG == aux_table_meta.table_type_) {
-        table_schema.set_mlog_tid(aux_table_meta.table_id_);
+        if (aux_table_meta.is_tmp_mlog_) {
+          table_schema.set_tmp_mlog_tid(aux_table_meta.table_id_);
+        } else {
+          table_schema.set_mlog_tid(aux_table_meta.table_id_);
+        }
       }
     } // end FOREACH_CNT_X
   }

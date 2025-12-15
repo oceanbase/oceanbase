@@ -2499,7 +2499,7 @@ int ObSplitDownloadSSTableTask::prewarm(
         LOG_WARN("unexpected null split sstable", K(ret), K(batch_sstables_handle));
       } else {
         bool stop = false;
-        storage::ObSSTableMacroPrewarmer prewarmer(sstable, stop);
+        storage::ObSSTableMacroPrewarmer prewarmer(sstable, stop, ObSSMicroCacheAccessType::SPLIT_PART_PREWARM_TYPE);
         if (OB_FAIL(prewarmer.do_prewarm(ss_tablet_handle))) {
           LOG_WARN("failed to do prewarm", K(ret), K(ss_tablet_handle));
         } else if (!sstable->is_mds_sstable() && OB_FAIL(prewarm_for_split(ss_tablet_handle, *sstable))) {
@@ -2557,7 +2557,7 @@ int ObSplitDownloadSSTableTask::prewarm_split_point_macro_if_need(const int64_t 
   int ret = OB_SUCCESS;
   bool stop = false;
   /*TODO: only prewarm warm macro ly435438*/
-  storage::ObSSTableMacroPrewarmer prewarmer(&dest_sstable, stop);
+  storage::ObSSTableMacroPrewarmer prewarmer(&dest_sstable, stop, ObSSMicroCacheAccessType::SPLIT_PART_PREWARM_TYPE);
   for (int64_t i = 0; i < dest_macro_ids.count(); ++i) {
     if (OB_FAIL(prewarmer.prewarm_single_macro(dest_macro_ids.at(i), dest_tablet_id))) {
       LOG_WARN("failed to prewarm macro", K(ret), K(dest_macro_ids.at(i)));

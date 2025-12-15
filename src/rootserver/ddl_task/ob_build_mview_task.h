@@ -14,6 +14,7 @@
 #define OCEANBASE_ROOTSERVER_OB_BUILD_MVIEW_TASK_H
 
 #include "rootserver/ddl_task/ob_ddl_task.h"
+#include "rootserver/mview/ob_mview_utils.h"
 
 namespace oceanbase
 {
@@ -33,7 +34,7 @@ public:
            const int64_t consumer_group_id,
            const obrpc::ObMViewCompleteRefreshArg &mview_complete_refresh_arg,
            const int64_t parent_task_id,
-           const int64_t task_status = share::ObDDLTaskStatus::START_REFRESH_MVIEW_TASK,
+           const int64_t task_status = share::ObDDLTaskStatus::BUILD_MLOG,
            const int64_t snapshot_version = 0);
   virtual int process() override;
   virtual int cleanup_impl() override;
@@ -45,10 +46,14 @@ public:
                                               const int64_t buf_size,
                                               int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;
-  virtual bool task_can_retry() const { return false; } //build mview task should not retry
+  virtual bool task_can_retry() const override { return share::ObDDLTaskStatus::BUILD_MLOG == task_status_; } //build mview task should not retry except build_mlog phase
   int on_child_task_prepare(const int64_t task_id);
 
 private:
+  int build_mlog();
+  int build_mlog_impl(const obrpc::ObMVRequiredColumnsInfo &required_columns_info);
+  int check_build_mlog_finished(bool &finished);
+  int update_based_schema_obj_info();
   int start_refresh_mview_task();
   int wait_child_task_finish();
   int enable_mview();
@@ -58,6 +63,8 @@ private:
   int mview_complete_refresh(obrpc::ObMViewCompleteRefreshRes &res);
   int update_task_message();
   int set_mview_complete_refresh_task_id(const int64_t task_id);
+  int set_mview_purge_barrier();
+  int check_mlog_valid(bool &is_valid);
 
 private:
   static const int64_t OB_BUILD_MVIEW_TASK_VERSION = 1;
@@ -65,6 +72,8 @@ private:
   ObRootService *root_service_;
   obrpc::ObMViewCompleteRefreshArg arg_;
   int64_t mview_complete_refresh_task_id_;
+  bool has_build_mlog_;
+  ObSEArray<ObMViewAutoMlogEventInfo, 8> build_mlog_events_;
 };
 } // namespace rootserver
 } // namespace oceanbase

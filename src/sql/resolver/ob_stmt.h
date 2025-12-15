@@ -100,6 +100,7 @@ public:
   }
   virtual ~ObStmt();
   int set_stmt_id();
+  inline void reset_stmt_id() { stmt_id_ = OB_INVALID_STMT_ID; }
   int64_t get_stmt_id() const { return stmt_id_; }
   virtual int get_first_stmt(common::ObString &first_stmt);
   void set_stmt_type(const stmt::StmtType stmt_type);

@@ -105,8 +105,6 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   int check_prefer_reuse_macro_block();
 
   /* EXECUTE SECTION */
-  int check_need_schedule_minor(bool &schedule_minor) const;
-  int schedule_minor_errsim(bool &schedule_minor) const;
   void update_execute_time(const int64_t cost_time);
   int do_replay_finish(const int64_t idx, const int64_t start_cg_idx, const int64_t end_cg_idx);
 
@@ -168,9 +166,6 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
       K_(merge_flag), K_(array_count), K_(retry_cnt), K_(prefer_reuse_macro_block), K_(base_rowkey_cg_idx));
 
   /* STATIC CONST */
-  static const int64_t SCHEDULE_MINOR_CG_CNT_THREASHOLD = 20;
-  static const int64_t SCHEDULE_MINOR_TABLE_CNT_THREASHOLD = 3;
-  static const int64_t SCHEDULE_MINOR_ROW_CNT_THREASHOLD = 100 * 1000L;
   // every DAG_NET_ERROR_COUNT_THREASHOLD failure we hope finished exe_dag counts grow EXE_DAG_FINISH_GROWTH_RATIO
   static const int64_t DAG_NET_ERROR_COUNT_THREASHOLD = 10;
   static constexpr double EXE_DAG_FINISH_GROWTH_RATIO = 0.1;

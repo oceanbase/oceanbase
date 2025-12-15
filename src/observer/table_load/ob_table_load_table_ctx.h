@@ -18,6 +18,7 @@
 #include "observer/table_load/ob_table_load_object_allocator.h"
 #include "observer/table_load/ob_table_load_schema.h"
 #include "observer/table_load/ob_table_load_struct.h"
+#include "observer/table_load/ob_table_load_trans_ctx.h"
 #include "share/table/ob_table_load_define.h"
 #include "sql/engine/cmd/ob_load_data_utils.h"
 #include "sql/session/ob_sql_session_info.h"
@@ -31,7 +32,6 @@ class ObITableLoadTaskScheduler;
 class ObTableLoadCoordinatorCtx;
 class ObTableLoadStoreCtx;
 class ObTableLoadTask;
-class ObTableLoadTransCtx;
 
 class ObTableLoadTableCtx : public common::ObDLinkBase<ObTableLoadTableCtx>
 {
@@ -79,7 +79,8 @@ public:
 public:
   int alloc_task(ObTableLoadTask *&task);
   void free_task(ObTableLoadTask *task);
-  ObTableLoadTransCtx *alloc_trans_ctx(const table::ObTableLoadTransId &trans_id);
+  ObTableLoadTransCtx *alloc_trans_ctx(const ObTableLoadTransCtx::TransType trans_type,
+                                       const table::ObTableLoadTransId &trans_id);
   void free_trans_ctx(ObTableLoadTransCtx *trans_ctx);
 private:
   int register_job_stat();

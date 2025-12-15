@@ -20,6 +20,9 @@
 #include "observer/omt/ob_tenant_timezone_mgr.h"               // for OTTZ_MGR
 #include "share/vector_index/ob_vector_index_util.h"
 #include "src/storage/ddl/ob_ddl_lock.h"
+#include "share/schema/ob_mlog_info.h"
+#include "share/schema/ob_mview_info.h"
+#include "sql/resolver/mv/ob_mv_dep_utils.h"
 
 using namespace oceanbase::rootserver;
 using namespace oceanbase::common;
@@ -30,7 +33,8 @@ using namespace oceanbase::share::schema;
 using namespace oceanbase::sql;
 
 ObRebuildIndexTask::ObRebuildIndexTask()
-  : ObDDLTask(DDL_REBUILD_INDEX), rebuild_index_arg_(), index_build_task_id_(-1), index_drop_task_id_(-1), new_index_id_(OB_INVALID_ID), target_object_name_()
+  : ObDDLTask(DDL_REBUILD_INDEX), rebuild_index_arg_(), index_build_task_id_(-1), index_drop_task_id_(-1), new_index_id_(OB_INVALID_ID), target_object_name_(),
+    refresh_related_mviews_ret_code_(INT64_MAX), update_refresh_related_mviews_job_time_(0)
 {
 }
 
@@ -153,6 +157,7 @@ int ObRebuildIndexTask::prepare(const ObDDLTaskStatus new_status)
 /*
   Drop new index table on failure, drop old index table on success.
 */
+ERRSIM_POINT_DEF(ERRSIM_DROP_INDEX_IMPL_ERROR);
 int ObRebuildIndexTask::drop_index_impl()
 {
   int ret = OB_SUCCESS;
@@ -162,6 +167,7 @@ int ObRebuildIndexTask::drop_index_impl()
   ObSqlString drop_index_sql;
   ObString index_name;
   const ObTableSchema *index_schema = nullptr;
+  obrpc::ObDropIndexArg drop_index_arg;
   if (OB_ISNULL(GCTX.rs_rpc_proxy_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KP(GCTX.rs_rpc_proxy_));
@@ -183,33 +189,20 @@ int ObRebuildIndexTask::drop_index_impl()
   } else if (OB_UNLIKELY(nullptr == database_schema || nullptr == data_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null schema", KR(ret), KP(database_schema), KP(data_table_schema));
+  } else if (OB_FAIL(prepare_drop_index_arg(schema_guard, index_schema, database_schema, data_table_schema, drop_index_arg))) {
+    LOG_WARN("failed to get drop index arg", KR(ret));
   } else {
-    // we set the drop_index_arg.index_name_ as index_name is following the reason:
-    // 1. In the success process, the index table and the new index table have already swapped names.
-    //    At this point, the index_name of the old index that needs to be deleted should be the new index name.
-    // 2. In the failure process, the new table needs to be deleted, and the new table and the old table have not swapped names.
-    //    At this point, the index_name is also the old table name.
     int64_t ddl_rpc_timeout = 0;
-    obrpc::ObDropIndexArg drop_index_arg;
     obrpc::ObDropIndexRes drop_index_res;
-    drop_index_arg.is_inner_          = true;                   // send to rs and set is_inner_ is true to submit drop vec index ddl task。RS need get all assistant index table to drop
-    drop_index_arg.tenant_id_         = tenant_id_;
-    drop_index_arg.exec_tenant_id_    = tenant_id_;
-    drop_index_arg.table_id_          = new_index_id_;          // The ID of new table 3
-    drop_index_arg.index_table_id_    = target_object_id_;      // The ID of old table 3
-    drop_index_arg.index_name_        = target_object_name_;    // The name of old table 3
-    drop_index_arg.session_id_        = data_table_schema->get_session_id();
-    drop_index_arg.table_name_        = data_table_schema->get_table_name();
-    drop_index_arg.database_name_     = database_schema->get_database_name_str();
-    drop_index_arg.index_action_type_ = obrpc::ObIndexArg::DROP_INDEX;
-    drop_index_arg.is_add_to_scheduler_ = true;
-    drop_index_arg.task_id_           = task_id_; // parent task id
-    drop_index_arg.is_vec_inner_drop_ = true;
     if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(index_schema->get_all_part_num() + data_table_schema->get_all_part_num(), ddl_rpc_timeout))) {
       LOG_WARN("failed to get ddl rpc timeout", KR(ret));
     } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, DROP_INDEX_RPC_FAILED))) {
       LOG_WARN("ddl sim failure", KR(ret), K(tenant_id_), K(task_id_));
-    } else if (OB_FAIL(GCTX.rs_rpc_proxy_->timeout(ddl_rpc_timeout).drop_index(drop_index_arg, drop_index_res))) {
+    } else if (OB_UNLIKELY(ERRSIM_DROP_INDEX_IMPL_ERROR)) {
+      ret = OB_EAGAIN;
+      LOG_WARN("errsim ERRSIM_DROP_INDEX_IMPL_ERROR", KR(ret));
+    } else if (OB_FAIL(GCTX.rs_rpc_proxy_->timeout(ddl_rpc_timeout)
+                           .drop_index(drop_index_arg, drop_index_res))) {
       LOG_WARN("drop index failed", KR(ret), K(ddl_rpc_timeout));
     } else {
       index_drop_task_id_ = drop_index_res.task_id_;
@@ -220,7 +213,98 @@ int ObRebuildIndexTask::drop_index_impl()
   return ret;
 }
 
-int ObRebuildIndexTask::rebuild_index_impl()
+int ObRebuildIndexTask::prepare_drop_index_arg(ObSchemaGetterGuard &schema_guard,
+                                               const ObTableSchema *index_schema,
+                                               const ObDatabaseSchema *database_schema,
+                                               const ObTableSchema *data_table_schema,
+                                               obrpc::ObDropIndexArg &drop_index_arg)
+{
+  // we set the drop_index_arg.index_name_ as index_name is following the reason:
+  // 1. In the success process, the index table and the new index table have already swapped names.
+  //    At this point, the index_name of the old index that needs to be deleted should be the new index name.
+  // 2. In the failure process, the new table needs to be deleted, and the new table and the old table have not swapped names.
+  //    At this point, the index_name is also the old table name.
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
+    LOG_WARN("failed to get data version", KR(ret), K(tenant_id_));
+  } else {
+    drop_index_arg.is_inner_ = true; // send to rs and set is_inner_ is true to submit drop vec index ddl task。RS need get all assistant index table to drop
+    drop_index_arg.tenant_id_ = tenant_id_;
+    drop_index_arg.exec_tenant_id_ = tenant_id_;
+    drop_index_arg.table_id_ = new_index_id_;           // The ID of new table 3
+    drop_index_arg.index_table_id_ = target_object_id_; // The ID of old table 3
+    drop_index_arg.index_name_ = target_object_name_;   // The name of old table 3
+    drop_index_arg.session_id_ = data_table_schema->get_session_id();
+    drop_index_arg.table_name_ = data_table_schema->get_table_name();
+    drop_index_arg.database_name_ = database_schema->get_database_name_str();
+    drop_index_arg.is_add_to_scheduler_ = true;
+    drop_index_arg.task_id_ = task_id_; // parent task id
+    drop_index_arg.is_drop_in_rebuild_task_ = true;
+
+    switch (rebuild_index_arg_.rebuild_index_type_) {
+    case ObRebuildIndexArg::RebuildIndexType::REBUILD_INDEX_TYPE_VEC:
+      drop_index_arg.index_action_type_ = obrpc::ObIndexArg::DROP_INDEX;
+      drop_index_arg.is_vec_inner_drop_ = true;
+      break;
+    case ObRebuildIndexArg::RebuildIndexType::REBUILD_INDEX_TYPE_MLOG:
+      if (OB_UNLIKELY(data_version < MOCK_DATA_VERSION_4_3_5_3
+                      || (data_version >= DATA_VERSION_4_4_0_0 && data_version < MOCK_DATA_VERSION_4_4_2_0)
+                      || (data_version >= DATA_VERSION_4_5_0_0 && data_version < DATA_VERSION_4_5_1_0))) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("rebuild mlog is not supported before 4.3.5.3 or between 4.4.0.0 and 4.4.2.0 or between 4.5.0.0 and 4.5.1.0");
+      } else {
+        drop_index_arg.index_action_type_ = obrpc::ObIndexArg::DROP_MLOG;
+        drop_index_arg.is_vec_inner_drop_ = false;
+      }
+      break;
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid rebuild index type", KR(ret), K(rebuild_index_arg_.rebuild_index_type_));
+    }
+  }
+
+
+
+  return ret;
+}
+
+int ObRebuildIndexTask::rebuild_index()
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
+    LOG_WARN("failed to get data version", KR(ret), K(tenant_id_));
+  } else {
+    switch (rebuild_index_arg_.rebuild_index_type_) {
+    case ObRebuildIndexArg::RebuildIndexType::REBUILD_INDEX_TYPE_VEC:
+      if (OB_FAIL(rebuild_vec_index_impl())) {
+        LOG_WARN("failed to rebuild vec index", KR(ret));
+      }
+      break;
+    case ObRebuildIndexArg::RebuildIndexType::REBUILD_INDEX_TYPE_MLOG:
+      if (OB_UNLIKELY(data_version < MOCK_DATA_VERSION_4_3_5_3
+                      || (data_version >= DATA_VERSION_4_4_0_0 && data_version < MOCK_DATA_VERSION_4_4_2_0)
+                      || (data_version >= DATA_VERSION_4_5_0_0 && data_version < DATA_VERSION_4_5_1_0))) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("rebuild mlog is not supported before 4.3.5.3 or between 4.4.0.0 and 4.4.2.0 or between 4.5.0.0 and 4.5.1.0");
+      } else if (OB_FAIL(rebuild_mlog_impl())) {
+        LOG_WARN("failed to rebuild mlog", KR(ret));
+      }
+      break;
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid rebuild index type", KR(ret), K(rebuild_index_arg_.rebuild_index_type_));
+    }
+  }
+
+  LOG_INFO("rebuild index finished", KR(ret), K(rebuild_index_arg_.rebuild_index_type_));
+  return ret;
+}
+
+int ObRebuildIndexTask::rebuild_vec_index_impl()
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
@@ -232,6 +316,9 @@ int ObRebuildIndexTask::rebuild_index_impl()
   if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (ObRebuildIndexArg::RebuildIndexType::REBUILD_INDEX_TYPE_VEC != rebuild_index_arg_.rebuild_index_type_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid rebuild index type", KR(ret), K(rebuild_index_arg_.rebuild_index_type_));
   } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().
                                                   get_tenant_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("get tenant schema failed", KR(ret), K(tenant_id_));
@@ -319,6 +406,44 @@ int ObRebuildIndexTask::rebuild_index_impl()
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_REBUILD_MLOG_IMPL_ERROR);
+int ObRebuildIndexTask::rebuild_mlog_impl()
+{
+  int ret = OB_SUCCESS;
+  obrpc::ObCreateMLogArg &create_mlog_arg = rebuild_index_arg_.create_mlog_arg_;
+  obrpc::ObCreateMLogRes create_mlog_res;
+  int64_t ddl_rpc_timeout = 0;
+
+  if (ObRebuildIndexArg::RebuildIndexType::REBUILD_INDEX_TYPE_MLOG != rebuild_index_arg_.rebuild_index_type_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid rebuild index type", KR(ret), K(rebuild_index_arg_.rebuild_index_type_));
+  } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, target_object_id_, ddl_rpc_timeout))) {
+    LOG_WARN("failed to get ddl rpc timeout", K(ret));
+  } else if (OB_ISNULL(GCTX.rs_rpc_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.rs_rpc_proxy_));
+  } else if (OB_UNLIKELY(ERRSIM_REBUILD_MLOG_IMPL_ERROR)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("errsim ERRSIM_REBUILD_MLOG_IMPL_ERROR", KR(ret), K(create_mlog_arg));
+  } else {
+    create_mlog_arg.task_id_ = task_id_;
+    create_mlog_arg.create_tmp_mlog_ = true;
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(GCTX.rs_rpc_proxy_->timeout(ddl_rpc_timeout)
+                         .create_mlog(create_mlog_arg, create_mlog_res))) {
+    LOG_WARN("failed to create mlog", K(ret), K(create_mlog_arg));
+  } else {
+    index_build_task_id_ = create_mlog_res.task_id_;
+    new_index_id_ = create_mlog_res.mlog_table_id_;
+    LOG_INFO("succeeded to create rebuild mlog task", K(ret), K(index_build_task_id_),
+             K(new_index_id_), K(create_mlog_arg), K(create_mlog_res));
+  }
+
+  return ret;
+}
+
 int ObRebuildIndexTask::create_and_wait_rebuild_task_finish(const ObDDLTaskStatus new_status)
 {
   int ret = OB_SUCCESS;
@@ -330,8 +455,8 @@ int ObRebuildIndexTask::create_and_wait_rebuild_task_finish(const ObDDLTaskStatu
   } else if (ObDDLTaskStatus::REBUILD_SCHEMA != task_status_) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("task status not match", KR(ret), K(task_status_));
-  } else if (-1 == index_build_task_id_ && OB_FAIL(rebuild_index_impl())) {
-    LOG_WARN("send drop index rpc failed", KR(ret));
+  } else if (-1 == index_build_task_id_ && OB_FAIL(rebuild_index())) {
+    LOG_WARN("failed to rebuild index", KR(ret));
   } else if (OB_FAIL(check_ddl_task_finish(tenant_id_, index_build_task_id_, state_finished))) {
     if (state_finished) {
       index_build_task_id_ = -1;
@@ -342,6 +467,7 @@ int ObRebuildIndexTask::create_and_wait_rebuild_task_finish(const ObDDLTaskStatu
   }
 
   if (state_finished || OB_FAIL(ret)) {
+    DEBUG_SYNC(REBUILD_INDEX_WAIT_CREATE_TASK_FINISH);
     (void)switch_status(new_status, true, ret);
     LOG_INFO("rebuild_index_task wait_child_task_finish finished", KR(ret), K(*this));
   }
@@ -426,12 +552,68 @@ int ObRebuildIndexTask::get_new_index_table_id(
   return ret;
 }
 
+/**
+ * Refresh related mviews after creating the new mlog table, to ensure that all these mviews having
+ * last_refresh_scn >= last_purge_scn of the new mlog table. In this way, the increment data in the
+ * new mlog table is enough for next refresh. So we can safely replace the old mlog table with the new one.
+ */
+ERRSIM_POINT_DEF(ERRSIM_REFRESH_RELATED_MVIEWS_ERROR);
+int ObRebuildIndexTask::refresh_related_mviews(const ObDDLTaskStatus new_status)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t old_mlog_tid = target_object_id_;
+  const uint64_t new_mlog_tid = new_index_id_;
+  uint64_t data_version = 0;
+  bool is_refresh_mviews_end = false;
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
+    LOG_WARN("failed to get data version", KR(ret), K(tenant_id_));
+  } else if (OB_UNLIKELY(data_version < MOCK_DATA_VERSION_4_3_5_3
+                         || (data_version >= DATA_VERSION_4_4_0_0 && data_version < MOCK_DATA_VERSION_4_4_2_0)
+                         || (data_version >= DATA_VERSION_4_5_0_0 && data_version < DATA_VERSION_4_5_1_0))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("rebuild mlog is not supported before 4.3.5.3 or between 4.4.0.0 and 4.4.2.0 or between 4.5.0.0 and 4.5.1.0");
+  } else if (OB_UNLIKELY(ERRSIM_REFRESH_RELATED_MVIEWS_ERROR)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("errsim ERRSIM_REFRESH_RELATED_MVIEWS_ERROR", KR(ret));
+  } else if (ObDDLTaskStatus::REFRESH_RELATED_MVIEWS != task_status_) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("task status not match", KR(ret), K(task_status_));
+  } else if (OB_FAIL(check_refresh_related_mviews_end(is_refresh_mviews_end))) {
+    refresh_related_mviews_ret_code_ = INT64_MAX;
+    update_refresh_related_mviews_job_time_ = 0;
+    LOG_WARN("failed to check purge mlog end", KR(ret));
+  } else if (!is_refresh_mviews_end && update_refresh_related_mviews_job_time_ == 0) {
+    ObRefreshRelatedMviewsTask task(tenant_id_, object_id_, old_mlog_tid, new_mlog_tid, schema_version_, trace_id_, task_id_);
+    if (OB_FAIL(root_service_->submit_ddl_single_replica_build_task(task))) {
+      LOG_WARN("failed to submit purge mlog task", KR(ret));
+    } else {
+      update_refresh_related_mviews_job_time_ = ObTimeUtility::current_time();
+      LOG_INFO("submit purge mlog task success", KR(ret));
+    }
+  }
+  if (is_refresh_mviews_end || OB_FAIL(ret)) {
+    DEBUG_SYNC(REBUILD_INDEX_WAIT_REFRESH_RELATED_MVIEWS);
+    (void)switch_status(new_status, true, ret);
+    LOG_INFO("refresh_related_mviews finished", KR(ret), K(*this));
+  }
+
+  return ret;
+}
+
+ERRSIM_POINT_DEF(ERRSIM_SWITCH_INDEX_NAME_ERROR);
 int ObRebuildIndexTask::switch_index_name(const ObDDLTaskStatus next_task_status)
 {
   int ret = OB_SUCCESS;
   bool state_finished = false;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *index_schema = nullptr;
+  const ObDatabaseSchema *database_schema = NULL;
+  ObDDLTaskType ddl_task_type = INVALID_TASK;
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -446,6 +628,13 @@ int ObRebuildIndexTask::switch_index_name(const ObDDLTaskStatus next_task_status
   } else if (OB_ISNULL(index_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("index schema is null", KR(ret), K(target_object_id_));
+  } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id_, index_schema->get_database_id(), database_schema))) {
+    LOG_WARN("get_database_schema failed", K(tenant_id_), K(index_schema->get_database_id()), K(ret));
+  } else if (OB_ISNULL(database_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("database schema should not be null", K(ret));
+  } else if (OB_FAIL(get_switch_index_name_task_type(ddl_task_type))) {
+    LOG_WARN("failed to get ddl task type", KR(ret));
   } else {
     int64_t rpc_timeout = 0;
     ObSchemaGetterGuard schema_guard;
@@ -460,7 +649,7 @@ int ObRebuildIndexTask::switch_index_name(const ObDDLTaskStatus next_task_status
       alter_table_arg.alter_table_schema_.set_tenant_id(tenant_id_);
       alter_table_arg.alter_table_schema_.set_origin_database_name(origin_database_name);
       alter_table_arg.alter_table_schema_.set_origin_table_name(origin_table_name);
-      alter_table_arg.ddl_task_type_ = share::SWITCH_VEC_INDEX_NAME_TASK;
+      alter_table_arg.ddl_task_type_ = ddl_task_type;
       alter_table_arg.table_id_ = target_object_id_; // Old index id, the id of the old table number 3.
       alter_table_arg.hidden_table_id_ = new_index_id_; // New index id, the id of the new table number 3, obtained after rebuilding the index.
       alter_table_arg.task_id_ = task_id_;  // rebuild index task id
@@ -480,8 +669,12 @@ int ObRebuildIndexTask::switch_index_name(const ObDDLTaskStatus next_task_status
       } else if (FALSE_IT(alter_table_arg.set_tz_info_map(tz_map_wrap.get_tz_map()))) {
       } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, target_object_id_, rpc_timeout))) {
         LOG_WARN("get ddl rpc timeout failed", K(ret));
-      } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
-          execute_ddl_task(alter_table_arg, unused_ids))) {
+      } else if (OB_UNLIKELY(ERRSIM_SWITCH_INDEX_NAME_ERROR)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("errsim ERRSIM_SWITCH_INDEX_NAME_ERROR", KR(ret));
+      } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(obrpc::ObRpcProxy::myaddr_)
+                             .timeout(rpc_timeout)
+                             .execute_ddl_task(alter_table_arg, unused_ids))) {
         LOG_WARN("fail to swap original and hidden table state", K(ret));
       } else {
         LOG_INFO("success to switch index name", K(ret), K(origin_table_name), K(alter_table_arg));
@@ -495,6 +688,37 @@ int ObRebuildIndexTask::switch_index_name(const ObDDLTaskStatus next_task_status
     }
     LOG_DEBUG("switch_index_name finish", K(ret), K(task_id_), K(target_object_id_), K(new_index_id_), K(alter_table_arg));
   }
+  return ret;
+}
+
+int ObRebuildIndexTask::get_switch_index_name_task_type(ObDDLTaskType &ddl_task_type)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
+    LOG_WARN("failed to get data version", KR(ret), K(tenant_id_));
+  } else {
+    switch (rebuild_index_arg_.rebuild_index_type_) {
+    case ObRebuildIndexArg::RebuildIndexType::REBUILD_INDEX_TYPE_VEC:
+      ddl_task_type = SWITCH_VEC_INDEX_NAME_TASK;
+      break;
+    case ObRebuildIndexArg::RebuildIndexType::REBUILD_INDEX_TYPE_MLOG:
+      if (OB_UNLIKELY(data_version < MOCK_DATA_VERSION_4_3_5_3
+                      || (data_version >= DATA_VERSION_4_4_0_0 && data_version < MOCK_DATA_VERSION_4_4_2_0)
+                      || (data_version >= DATA_VERSION_4_5_0_0 && data_version < DATA_VERSION_4_5_1_0))) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("rebuild mlog is not supported before 4.3.5.3 or between 4.4.0.0 and 4.4.2.0 or between 4.5.0.0 and 4.5.1.0");
+      } else {
+        ddl_task_type = SWITCH_MLOG_NAME_TASK;
+      }
+      break;
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid rebuild index type", KR(ret), K(rebuild_index_arg_.rebuild_index_type_));
+    }
+  }
+
   return ret;
 }
 
@@ -519,6 +743,7 @@ int ObRebuildIndexTask::create_and_wait_drop_task_finish(const ObDDLTaskStatus n
     LOG_WARN("check drop task finish task failed", K(ret), K(state_finished));
   }
   if (state_finished || OB_FAIL(ret)) {
+    DEBUG_SYNC(REBUILD_INDEX_WAIT_DROP_TASK_FINISH);
     (void)switch_status(new_status, true, ret);
     LOG_INFO("rebuild_index_task wait_drop_task_finish finished", KR(ret), K(*this));
   }
@@ -590,7 +815,9 @@ int ObRebuildIndexTask::fail()
   } else if (OB_FAIL(check_ddl_task_finish(tenant_id_, index_drop_task_id_, is_finished))) {
     LOG_WARN("fail to check drop index task finished", K(ret));
   }
-  if (OB_FAIL(ret) || is_finished) {
+  // we need to ensure when this rebuild task is finished, there is no duplicated indexes left
+  // on the base table, so we have to wait until the drop task succeeds.
+  if (is_finished) {
     if (OB_FAIL(cleanup())) {
       LOG_WARN("cleanup failed", KR(ret));
     }
@@ -678,8 +905,13 @@ int ObRebuildIndexTask::process()
         }
         break;
       case ObDDLTaskStatus::REBUILD_SCHEMA:
-        if (OB_FAIL(create_and_wait_rebuild_task_finish(SWITCH_INDEX_NAME))) {
+        if (OB_FAIL(create_and_wait_rebuild_task_finish((rebuild_index_arg_.is_rebuild_mlog() ? REFRESH_RELATED_MVIEWS : SWITCH_INDEX_NAME)))) {
           LOG_WARN("rebuild index failed", KR(ret));
+        }
+        break;
+      case ObDDLTaskStatus::REFRESH_RELATED_MVIEWS:
+        if (OB_FAIL(refresh_related_mviews(SWITCH_INDEX_NAME))) {
+          LOG_WARN("purge old mlog failed", KR(ret));
         }
         break;
       case ObDDLTaskStatus::SWITCH_INDEX_NAME:
@@ -793,4 +1025,173 @@ int64_t ObRebuildIndexTask::get_serialize_param_size() const
               new_index_id_,
               target_object_name_);
   return len;
+}
+
+int ObRebuildIndexTask::notify_refresh_related_mviews_task_end(const int64_t ret_code)
+{
+  int ret = OB_SUCCESS;
+  refresh_related_mviews_ret_code_ = ret_code;
+  return ret;
+}
+
+int ObRebuildIndexTask::check_refresh_related_mviews_end(bool &is_end)
+{
+  int ret = OB_SUCCESS;
+  if (INT64_MAX == refresh_related_mviews_ret_code_) {
+    // not finish
+  } else {
+    is_end = true;
+    ret_code_ = refresh_related_mviews_ret_code_;
+    ret = ret_code_;
+  }
+  return ret;
+}
+
+ERRSIM_POINT_DEF(ERRSIM_REFRESH_RELATED_MVIEWS_TASK_ERROR);
+int ObRefreshRelatedMviewsTask::process() {
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObTraceIdGuard trace_id_guard(trace_id_);
+  ObDDLTaskKey task_key(tenant_id_, old_mlog_tid_, schema_version_);
+  ObRootService *root_service = GCTX.root_service_;
+
+  if (OB_ISNULL(root_service)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  } else if (OB_UNLIKELY(tenant_id_ == OB_INVALID_ID || base_table_id_ == OB_INVALID_ID || old_mlog_tid_ == OB_INVALID_ID || new_mlog_tid_ == OB_INVALID_ID)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id_), K(base_table_id_), K(old_mlog_tid_), K(new_mlog_tid_));
+  } else if (OB_UNLIKELY(ERRSIM_REFRESH_RELATED_MVIEWS_TASK_ERROR)) {
+    ret = ERRSIM_REFRESH_RELATED_MVIEWS_TASK_ERROR;
+    LOG_WARN("errsim in refresh related mviews task", KR(ret));
+  } else {
+    ObDDLService &ddl_service = root_service->get_ddl_service();
+    ObMultiVersionSchemaService &schema_service = ddl_service.get_schema_service();
+    ObSchemaGetterGuard schema_guard;
+    const ObTableSchema *base_table_schema = nullptr;
+    const ObTableSchema *old_mlog_schema = nullptr;
+    const ObTableSchema *new_mlog_schema = nullptr;
+    common::ObCommonSqlProxy *mview_pl_proxy = nullptr;
+    ObMLogInfo new_mlog_info;
+    ObSEArray<ObDependencyInfo, 16> dependency_infos;
+    const ObSysVariableSchema *sys_variable_schema = NULL;
+    bool oracle_mode = false;
+
+    if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
+      LOG_WARN("failed to get schema guard", KR(ret), K(tenant_id_));
+    } else if (OB_FAIL(schema_guard.get_sys_variable_schema(tenant_id_, sys_variable_schema))) {
+      LOG_WARN("get sys variable schema failed", KR(ret), K(tenant_id_));
+    } else if (NULL == sys_variable_schema) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sys variable schema is NULL", KR(ret));
+    } else if (OB_FAIL(sys_variable_schema->get_oracle_mode(oracle_mode))) {
+      LOG_WARN("get oracle mode failed", KR(ret));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, base_table_id_, base_table_schema))) {
+      LOG_WARN("failed to get table schema", KR(ret), K(tenant_id_), K(base_table_id_));
+    } else if (OB_ISNULL(base_table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("base table schema is null", KR(ret), K(tenant_id_), K(base_table_id_));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, old_mlog_tid_, old_mlog_schema))) {
+      LOG_WARN("failed to get table schema", KR(ret), K(tenant_id_), K(old_mlog_tid_));
+    } else if (OB_ISNULL(old_mlog_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("mlog schema is null", KR(ret), K(tenant_id_), K(old_mlog_tid_));
+    } else if (!old_mlog_schema->is_mlog_table()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("not a mlog table", KR(ret), K(tenant_id_), K(old_mlog_tid_));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, new_mlog_tid_, new_mlog_schema))) {
+      LOG_WARN("failed to get table schema", KR(ret), K(tenant_id_), K(new_mlog_tid_));
+    } else if (OB_ISNULL(new_mlog_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("base table schema is null", KR(ret), K(tenant_id_), K(new_mlog_tid_));
+    } else if (!new_mlog_schema->is_tmp_mlog_table()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("not a tmp mlog table", KR(ret), K(tenant_id_), K(new_mlog_tid_));
+    } else if (OB_FAIL(ObMLogInfo::fetch_mlog_info(*GCTX.sql_proxy_, tenant_id_, new_mlog_tid_,
+                                                   new_mlog_info, false /*for_update*/))) {
+      LOG_WARN("failed to fetch mlog info", KR(ret), K(tenant_id_), K(new_mlog_tid_));
+    } else if (OB_FAIL(ObDependencyInfo::collect_dep_infos(tenant_id_, base_table_id_, *GCTX.sql_proxy_, dependency_infos))) {
+      LOG_WARN("failed to collect dep infos", KR(ret), K(tenant_id_), K(base_table_id_));
+    } else {
+      if (oracle_mode) {
+        mview_pl_proxy = &root_service->get_oracle_sql_proxy();
+      } else {
+        mview_pl_proxy = GCTX.sql_proxy_;
+      }
+      for (int i = 0; OB_SUCC(ret) && i < dependency_infos.count(); ++i) {
+        const ObDependencyInfo &dependency_info = dependency_infos.at(i);
+        if (ObObjectType::VIEW == dependency_info.get_dep_obj_type()) {
+          const uint64_t mv_id = dependency_info.get_dep_obj_id();
+          const ObTableSchema *mv_schema = nullptr;
+          const ObDatabaseSchema *mv_db_schema = nullptr;
+          ObMViewInfo mview_info;
+          if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, mv_id, mv_schema))) {
+            LOG_WARN("failed to get mv schema", KR(ret), K(tenant_id_), K(mv_id));
+          } else if (OB_ISNULL(mv_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("mv schema is null", KR(ret), K(tenant_id_), K(mv_id));
+          } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id_, mv_schema->get_database_id(), mv_db_schema))) {
+            LOG_WARN("failed to get mv db schema", K(ret), K(tenant_id_), K(mv_id));
+          } else if (OB_ISNULL(mv_db_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("mv db schema is null", K(ret), K(tenant_id_), K(mv_id));
+          } else if (!mv_schema->is_materialized_view()) {
+            // ignore non-mview tables
+          } else if (!mv_schema->mv_available()) {
+            // ignore mviews in creation
+          } else if (OB_FAIL(ObMViewInfo::fetch_mview_info(*GCTX.sql_proxy_, tenant_id_, mv_id, mview_info, false))) {
+            LOG_WARN("failed to get mview info", KR(ret), K(tenant_id_), K(mv_id));
+          } else if (!mview_info.is_valid()) {
+            // ignore
+          } else if (ObMVRefreshMethod::FAST != mview_info.get_refresh_method() &&
+                     ObMVRefreshMethod::FORCE != mview_info.get_refresh_method() &&
+                     !mv_schema->mv_on_query_computation()) {
+            // ignore
+          } else if (mview_info.get_last_refresh_scn() >= new_mlog_info.get_last_purge_scn()) {
+            // already refreshed
+          } else {
+            ObSqlString sql;
+            int64_t affected_rows = 0;
+            if (OB_FAIL(sql.assign_fmt("CALL DBMS_MVIEW.refresh('%s.%s', 'f')",
+                                       mv_db_schema->get_database_name_str().ptr(),
+                                       mv_schema->get_table_name_str().ptr()))) {
+              LOG_WARN("failed to assign sql", KR(ret));
+            } else if (OB_FAIL(mview_pl_proxy->write(tenant_id_, sql.ptr(), affected_rows))) {
+              if (OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH == ret && ObMVRefreshMethod::FORCE == mview_info.get_refresh_method()) {
+                ret = OB_SUCCESS;
+                LOG_INFO("ignore mview can not fast refresh for force mview", KR(ret), K(sql), K(mview_info));
+              } else {
+                LOG_WARN("failed to write sql", KR(ret), K(sql), K(mview_info));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (OB_TMP_FAIL(ObSysDDLSchedulerUtil::notify_refresh_related_mviews_task_end(task_key, ret))) {
+    LOG_WARN("failed to finish purge mlog task", KR(tmp_ret), KR(ret));
+  }
+
+  return ret;
+}
+
+ObAsyncTask *ObRefreshRelatedMviewsTask::deep_copy(char *buf, const int64_t buf_size) const
+{
+  int ret = OB_SUCCESS;
+  ObRefreshRelatedMviewsTask *new_task = nullptr;
+  if (OB_ISNULL(buf) || buf_size < get_deep_copy_size()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), KP(buf), "deep_copy_size", get_deep_copy_size(), K(buf_size));
+  } else {
+    new_task = new (buf) ObRefreshRelatedMviewsTask(tenant_id_,
+                                         base_table_id_,
+                                         old_mlog_tid_,
+                                         new_mlog_tid_,
+                                         schema_version_,
+                                         trace_id_,
+                                         task_id_);
+  }
+  return new_task;
 }

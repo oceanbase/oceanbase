@@ -515,6 +515,7 @@ struct ObDDLTableSchema
 public:
   static int fill_ddl_table_schema(const uint64_t tenant_id,
                                    const uint64_t table_id,
+                                   const uint64_t tenant_data_version,
                                    common::ObArenaAllocator &allocator,
                                    ObDDLTableSchema &ddl_table_schema);
 private:

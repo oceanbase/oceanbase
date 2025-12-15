@@ -106,6 +106,118 @@ bool ObTabletTransformArg::is_valid() const
       && tablet_macro_info_addr_.is_valid();
 }
 
+//============================= ObSSTransferSrcTabletBlockInfo ===============================//
+ObSSTransferSrcTabletBlockInfo::~ObSSTransferSrcTabletBlockInfo()
+{
+  src_tablet_meta_block_set_.reuse();
+}
+
+int ObSSTransferSrcTabletBlockInfo::init(const ObTablet &src_tablet)
+{
+  int ret = OB_SUCCESS;
+  common::ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "SrcTabletBlocks"));
+  const int64_t shared_block_bucket_num = ObBlockInfoSet::SHARED_BLOCK_BUCKET_NUM;
+  bool in_memory = true;
+  ObTabletMacroInfo *macro_info = nullptr;
+  ObMacroInfoIterator macro_iter;
+
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret), K(is_inited_));
+  } else if (OB_UNLIKELY(!src_tablet.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid src tablet", K(ret), K(src_tablet));
+  } else if (OB_FAIL(src_tablet.load_macro_info(/* ls_epoch */0,
+                                                allocator,
+                                                macro_info,
+                                                in_memory))) {
+    LOG_WARN("failed to load macro info", K(ret), K(src_tablet));
+  } else if (OB_ISNULL(macro_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null macro info", K(ret), KP(macro_info));
+  } else if (OB_FAIL(macro_iter.init(ObTabletMacroType::MAX, *macro_info))) {
+    LOG_WARN("failed to init macro iterator", K(ret),
+      KPC(macro_info));
+  } else if (OB_FAIL(src_tablet_meta_block_set_.create(shared_block_bucket_num,
+                                                       "SrcTabletBlocks",
+                                                       "ObBlockSetNode",
+                                                       MTL_ID()))) {
+    LOG_WARN("failed to create src_tablet_meta_block_set", K(ret), K(shared_block_bucket_num));
+  } else {
+    ObTabletBlockInfo block_info;
+
+    while (OB_SUCC(ret)) {
+      block_info.reset();
+
+      if (OB_FAIL(macro_iter.get_next(block_info))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("failed to get next block info", K(ret), K(block_info));
+        } else {
+          ret = OB_SUCCESS;
+          break;
+        }
+      } else if (OB_FAIL(add_block_info_if_need_(block_info))) {
+        LOG_WARN("failed to add block info if need", K(ret), K(block_info));
+      }
+    }
+  }
+
+  if (OB_NOT_NULL(macro_info) && !in_memory) {
+    macro_info->reset();
+  }
+
+  if (OB_SUCC(ret)) {
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObSSTransferSrcTabletBlockInfo::merge_to(/* out */ ObBlockInfoSet &out_block_info_set) const
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), K(is_inited_));
+  } else {
+    ObBlockInfoSet::TabletMacroSet &shared_meta_block_info_set = out_block_info_set.shared_meta_block_info_set_;
+
+    for (ObBlockInfoSet::SetIterator iter = src_tablet_meta_block_set_.begin();
+        OB_SUCC(ret) && iter != src_tablet_meta_block_set_.end();
+        ++iter) {
+      const blocksstable::MacroBlockId &block_id = iter->first;
+
+      if (OB_FAIL(shared_meta_block_info_set.set_refactored(block_id, /* overwrite */ 0))) {
+        if (OB_HASH_EXIST != ret) {
+          LOG_WARN("failed to insert block_id", K(ret), K(block_id));
+        } else {
+          ret = OB_SUCCESS;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSSTransferSrcTabletBlockInfo::add_block_info_if_need_(const ObTabletBlockInfo &block_info)
+{
+  int ret = OB_SUCCESS;
+  const blocksstable::MacroBlockId &block_id = block_info.macro_id_;
+
+  if (OB_UNLIKELY(!block_id.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected invalid block_id", K(ret), K(block_id));
+  } else if (!block_id.is_shared_sub_meta()) {
+    // do nothing
+  } else if (OB_FAIL(src_tablet_meta_block_set_.set_refactored(block_id, /* overwrite */ 0))) {
+    if (OB_HASH_EXIST != ret) {
+      LOG_WARN("failed to insert block_id", K(ret), K(block_info));
+    } else {
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
+}
 
 bool ObSSTablePersistWrapper::is_valid() const
 {
@@ -343,6 +455,47 @@ int ObTabletPersister::persist_and_transform_tablet(
   }
   return ret;
 }
+
+/* static */ int ObTabletPersister::make_tablet_macro_info(
+    const ObTabletPersisterParam &param,
+    const int64_t macro_seq,
+    common::ObArenaAllocator &allocator,
+    /* out */ ObBlockInfoSet &block_info_set,
+    /* out */ ObLinkedMacroBlockItemWriter &linked_writer,
+    /* out */ ObTabletMacroInfo &macro_info)
+{
+  int ret = OB_SUCCESS;
+  ObLinkedMacroInfoWriteParam linked_macro_info_param;
+
+  if (OB_UNLIKELY(!param.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid persister param", K(ret), K(param));
+  } else if (OB_UNLIKELY(macro_seq < 0))  {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid macro_seq", K(ret), K(macro_seq));
+  } else if (OB_FAIL(linked_macro_info_param.build_linked_marco_info_param(param, macro_seq))) {
+    LOG_WARN("failed to build linked macro info param", K(ret), K(param), K(macro_seq));
+  } else if (OB_FAIL(linked_writer.init_for_macro_info(linked_macro_info_param))) {
+    LOG_WARN("failed to init linked writer", K(ret), K(linked_macro_info_param));
+  }
+#ifdef OB_BUILD_SHARED_STORAGE
+  else if (param.is_inc_shared_object()) {
+    const ObSSTransferSrcTabletBlockInfo *src_tablet_block_info = param.src_tablet_block_info_;
+
+    if (OB_ISNULL(src_tablet_block_info)) {
+      // just do nothing
+    } else if (OB_FAIL(src_tablet_block_info->merge_to(block_info_set))) {
+      LOG_WARN("failed to merge tablet block info", K(ret), K(param));
+    }
+  }
+#endif
+
+  if (FAILEDx(macro_info.init(allocator, block_info_set, &linked_writer))) {
+    LOG_WARN("failed to init tablet macro info", K(ret));
+  }
+  return ret;
+}
+
 int ObTabletPersister::inner_persist_and_transform(
     const ObTabletPersisterParam &param,
     const ObTablet &old_tablet,
@@ -926,13 +1079,13 @@ int ObTabletPersister::persist_and_fill_tablet(
     }
   }
 
-  ObLinkedMacroInfoWriteParam linked_macro_info_param;
-  if (FAILEDx(linked_macro_info_param.build_linked_marco_info_param(param_, cur_macro_seq_))) {
-    LOG_WARN("fail to build linked macro info param");
-  } else if (OB_FAIL(linked_writer.init_for_macro_info(linked_macro_info_param))) {
-    LOG_WARN("fail to init linked writer", K(ret), K(old_tablet));
-  } else if (OB_FAIL(tablet_macro_info.init(allocator_, block_info_set, &linked_writer))) {
-    LOG_WARN("fail to init tablet block id arrary", K(ret));
+  if (FAILEDx(make_tablet_macro_info(param_,
+                                     cur_macro_seq_,
+                                     allocator_,
+                                     /* out */ block_info_set,
+                                     /* out */ linked_writer,
+                                     /* out */ tablet_macro_info))) {
+    LOG_WARN("fail to make tablet macro info", K(ret), K(param_), K(old_tablet));
   } else {
     if (param_.is_major_shared_object()) {
       ret = OB_ERR_UNEXPECTED;

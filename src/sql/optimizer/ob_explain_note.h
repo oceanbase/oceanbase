@@ -35,6 +35,7 @@ namespace sql
 #define PARALLEL_DISABLED_BY_PL_UDF_DAS  "Degree of Parallelisim is %ld because stmt contain pl_udf which force das scan"
 #define DIRECT_MODE_INSERT_INTO_SELECT  "Direct-mode %s is enabled in insert into select"
 #define DIRECT_MODE_DISABLED_BY_PDML  "Direct-mode disabled because the pdml is disabled"
+#define DIRECT_MODE_DISABLED_BY_TRANSACTION  "Direct-mode disabled because autocommit is off or session is in transaction"
 #define PARALLEL_DISABLED_BY_DBLINK  "Degree of Parallelisim is %ld because stmt contain dblink which force das scan"
 #define PDML_DISABLED_BY_INSERT_PK_AUTO_INC "PDML disabled because the insert statement primary key or partition key has specified auto-increment column"
 #define PDML_DISABLED_BY_TRANSFORMATIONS "PDML disabled because transformations like or-expansion"

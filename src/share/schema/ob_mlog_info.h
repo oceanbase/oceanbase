@@ -58,6 +58,7 @@ public:
   DEFINE_GETTER_AND_SETTER(int64_t, last_purge_time);
   DEFINE_GETTER_AND_SETTER(int64_t, last_purge_rows);
   DEFINE_STRING_GETTER_AND_SETTER(last_purge_trace_id);
+  DEFINE_GETTER_AND_SETTER(ObMLogPurgeMethod, last_purge_method);
   DEFINE_GETTER_AND_SETTER(int64_t, schema_version);
 
 #undef DEFINE_GETTER_AND_SETTER
@@ -95,6 +96,7 @@ public:
                K_(last_purge_time),
                K_(last_purge_rows),
                K_(last_purge_trace_id),
+               K_(last_purge_method),
                K_(schema_version));
 
 public:
@@ -112,6 +114,7 @@ private:
   int64_t last_purge_time_;
   int64_t last_purge_rows_;
   ObString last_purge_trace_id_;
+  ObMLogPurgeMethod last_purge_method_;
   int64_t schema_version_;
 };
 

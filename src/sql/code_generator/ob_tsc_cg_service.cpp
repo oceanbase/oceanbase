@@ -5105,6 +5105,7 @@ int ObTscCgService::generate_rowkey_domain_id_ctdef(
     scan_ctdef->ref_table_id_ = rowkey_domain_id_tid;
     ObDASTableLocMeta *scan_loc_meta =
       OB_NEWx(ObDASTableLocMeta, &cg_.phy_plan_->get_allocator(), cg_.phy_plan_->get_allocator());
+    share::ObDasSemanticIndexInfo &semantic_index_info = scan_ctdef->semantic_index_info_;
     if (OB_ISNULL(scan_loc_meta)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate scan location meta failed", K(ret));
@@ -5118,6 +5119,12 @@ int ObTscCgService::generate_rowkey_domain_id_ctdef(
       LOG_WARN("generate table loc meta failed", K(ret));
     } else if (OB_FAIL(tsc_ctdef.attach_spec_.attach_loc_metas_.push_back(scan_loc_meta))) {
       LOG_WARN("store scan loc meta failed", K(ret));
+    } else if (cur_type == ObDomainIdUtils::ObDomainIDType::EMB_VEC &&
+               OB_FAIL(semantic_index_info.generate(data_schema,
+                                                    rowkey_domain_id_schema,
+                                                    scan_ctdef->result_output_.count(),
+                                                    OB_NOT_NULL(scan_ctdef->trans_info_expr_)))) {
+      LOG_WARN("fail to generate semantic index info", K(ret));
     } else {
       rowkey_domain_scan_ctdef = scan_ctdef;
     }

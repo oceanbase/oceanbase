@@ -866,7 +866,9 @@ int ObTmpFileWriteCache::try_to_set_macro_block_idx_(ObTmpFileBlock &block)
   blocksstable::ObMacroBlockHandle mb_handle;
   bool first_flush = !block.get_macro_block_id().is_valid();
   if (first_flush) {
-    if (OB_FAIL(OB_SERVER_BLOCK_MGR.alloc_block(mb_handle))) {
+    if (OB_FAIL(LOCAL_DEVICE_INSTANCE.check_space_full(ObTmpFileGlobal::SN_BLOCK_SIZE))) {
+      LOG_WARN("fail to check space full", KR(ret), K(block));
+    } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.alloc_block(mb_handle))) {
       LOG_WARN("fail to async write block", KR(ret));
     } else if (OB_FAIL(block.set_macro_block_id(mb_handle.get_macro_id()))) {
       LOG_WARN("fail to set macro block id", KR(ret), K(block));

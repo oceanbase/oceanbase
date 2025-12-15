@@ -113,7 +113,7 @@ int ObDDLIndependentDag::init_by_param(const share::ObIDagInitParam *param)
 int ObDDLIndependentDag::init_ddl_table_schema()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObDDLTableSchema::fill_ddl_table_schema(MTL_ID(), ddl_task_param_.target_table_id_, arena_, ddl_table_schema_))) {
+  if (OB_FAIL(ObDDLTableSchema::fill_ddl_table_schema(MTL_ID(), ddl_task_param_.target_table_id_, ddl_task_param_.tenant_data_version_, arena_, ddl_table_schema_))) {
     LOG_WARN("fill ddl table schema failed", K(ret));
   }
   return ret;

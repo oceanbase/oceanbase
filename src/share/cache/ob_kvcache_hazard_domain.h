@@ -182,6 +182,7 @@ public:
   static HazardDomain& get_instance();
   void print_info() const;
   void wash();
+  int64_t get_retired_size() { return ATOMIC_LOAD_RLX(&retired_memory_size_); }
 
 private:
   friend class ObKVGlobalCache;

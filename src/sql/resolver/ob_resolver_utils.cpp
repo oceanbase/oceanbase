@@ -8687,7 +8687,8 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
                                              bool is_prepare_protocol,
                                              bool is_check_mode,
                                              bool is_sql_scope,
-                                             ObIArray<ObSchemaObjVersion> *dep_tbl)
+                                             ObIArray<ObSchemaObjVersion> *dep_tbl,
+                                             ObQueryCtx *query_ctx)
 {
   int ret = OB_SUCCESS;
   if (NULL == package_guard) {
@@ -8739,6 +8740,8 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
         pl_resolver.get_current_namespace() = *ns;
       }
 
+      OX (pl_resolver.get_resolve_ctx().params_.query_ctx_ = query_ctx);
+
       if (OB_SUCC(ret)) {
         ObPLDependencyGuard switch_guard(&pl_resolver.get_external_ns(), pl_resolver.get_current_namespace().get_external_ns());
         if (OB_FAIL(pl_resolver.resolve_qualified_name(q_name, columns, real_exprs, func_ast, expr))) {
@@ -8750,13 +8753,6 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
         } else if (OB_ISNULL(expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Invalid expr", K(expr), K(ret));
-        } else if (!expr->is_const_raw_expr()
-                    && !expr->is_obj_access_expr()
-                    && !expr->is_sys_func_expr()
-                    && !expr->is_udf_expr()
-                    && T_FUN_PL_GET_CURSOR_ATTR != expr->get_expr_type()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("expr type is invalid", K(expr->get_expr_type()));
         }
         if (OB_SUCC(ret) && OB_NOT_NULL(dep_tbl)) {
           for (int64_t i = 0; OB_SUCC(ret) && i < func_ast.get_dependency_table().count(); ++i) {

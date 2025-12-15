@@ -71,6 +71,7 @@ void ObBasicScheduleTabletFunc::update_tenant_cached_status()
 {
   const ObBasicMergeScheduler * scheduler = ObBasicMergeScheduler::get_merge_scheduler();
   if (OB_NOT_NULL(scheduler)) {
+    tenant_status_snapshot_ = scheduler->get_tenant_status();
     ls_could_schedule_merge_ = scheduler->could_major_merge_start() && ls_status_.can_merge();
 
     // can only schedule new round on ls leader

@@ -26,6 +26,25 @@ namespace oceanbase
 {
 namespace blocksstable
 {
+/**
+* ---------------------------------------ObDagSliceMacroBlockWriter-----------------------------------
+*/
+class ObDagSliceMacroBlockWriter final : public ObMacroBlockWriter
+{
+public:
+  ObDagSliceMacroBlockWriter();
+  virtual ~ObDagSliceMacroBlockWriter();
+  virtual void reset() override;
+  int try_finish_last_micro_block();
+  int close(ObDagSliceMacroFlusher *macro_block_flusher);
+protected:
+  virtual bool use_external_flusher() const override { return true; }
+};
+
+/**
+* ---------------------------------------ObDagTempMacroBlockWriter-----------------------------------
+*/
+
 // simplified macro block store struct
 //  |- ObSimplifiedSSTableMacroBlockHeader
 //  |- MicroBlock 1
@@ -33,12 +52,9 @@ namespace blocksstable
 //  |- MicroBlock N
 //  |- IndexMicroBlock
 
-/**
-* ---------------------------------------ObDagTempMacroBlockWriter-----------------------------------
-*/
-
 // ObDagTempMacroBlockWriter is used in the first stage of DAG to write a batch of rows
-// into a CgBlock and generate temporary file.
+// into a CgBlock which is a simplified macro block.
+// The CgBlock was written to a temporary file and do not need to alloc macro id.
 class ObDagTempMacroBlockWriter final : public ObMacroBlockWriter
 {
 public:
@@ -54,6 +70,7 @@ public:
 protected:
   virtual bool is_alloc_block_needed() const override { return false; }
   virtual bool need_write_macro_meta() const override { return false; }
+  virtual bool use_external_flusher() const override { return true; }
 private:
   ObDagTempMacroFlusher dag_temp_macro_flusher_;
 };

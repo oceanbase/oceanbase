@@ -515,6 +515,7 @@ typedef enum ObItemType
   T_FUN_SYS_GET_MYSQL_ROUTINE_PARAMETER_TYPE_STR = 782,
   T_FUN_SYS_MYSQL_TO_CHAR = 783,
   T_FUN_INNER_TYPE_TO_ENUMSET = 784,
+  T_FUN_SYS_MONTHS_ADD = 785,
 
   ///< @note add new mysql only function type before this line
   T_MYSQL_ONLY_SYS_MAX_OP = 800,
@@ -2997,6 +2998,8 @@ typedef enum ObItemType
   T_SET_PROTECTION_MODE = 4942, // set_protection_mode
   T_DELTA_FORMAT = 4943, // delta_format table option
   T_SKIP_INDEX_LEVEL = 4944,
+  T_DSL_QUERY = 4945, // hybrid search dsl query
+  T_DISABLE_PARALLEL_PARSE_SINGLE_CSV = 4946, // disable parallel parse single csv
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;

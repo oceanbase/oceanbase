@@ -1036,6 +1036,9 @@ public:
 
   bool has_generic_type() const;
 
+  // nested routine do not support sql transpiler
+  bool is_sql_transpiler_eligible() const override { return false; }
+
   TO_STRING_KV(K_(tenant_id),
                K_(db_id),
                K_(pkg_id),

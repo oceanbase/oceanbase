@@ -7280,7 +7280,7 @@
       "info": "The number of neighbor nodes considered during any HNSW vector index search on the session",
       "flags": "SESSION",
       "min_val": "1",
-      "max_val": "1000",
+      "max_val": "160000",
       "publish_version": "433",
       "info_cn": "",
       "background_cn": "",
@@ -11826,10 +11826,9 @@
       "BASIC"
     ],
     "publish_version": "4.3.5.5",
-    "info_cn": "",
+    "info_cn": "控制是否开启 SQL Transpiler 功能。当开启时，满足条件的 PL/SQL 函数会被自动改写成 SQL 表达式，无需用户介入。",
     "background_cn": "",
-    "ref_url": "",
-    "placeholder": true
+    "ref_url": ""
   },
   "plsql_can_transform_sql_to_assign": {
     "id": 10755,
@@ -11894,8 +11893,7 @@
     "publish_version": "4.4.2.0",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "",
-    "placeholder": true
+    "ref_url": ""
   },
   "json_float_full_precision": {
     "id": 10760,
@@ -11924,6 +11922,39 @@
     "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_caching_sha2_password_digest_rounds",
     "publish_version": "4.4.2.0",
     "info_cn": "存储到磁盘的密码哈希所使用的 SHA256 迭代次数",
+    "background_cn": "",
+    "ref_url": "",
+    "placeholder": true
+  },
+  "ap_query_route_policy": {
+    "id": 10762,
+    "name": "ap_query_route_policy",
+    "default_value": "1",
+    "base_value": "1",
+    "data_type": "enum",
+    "info": "Controls adaptive route policy for ap query. OFF: disabled, AUTO: automatically choose column replica based on query characteristics and cost analysis, FORCE: force to choose column replica.",
+    "flags": "GLOBAL | SESSION | INFLUENCE_PLAN",
+    "publish_version": "4.5.1",
+    "enum_names": [
+      "OFF",
+      "AUTO",
+      "FORCE"
+    ],
+    "info_cn": "控制 AP 查询副本自适应选择策略。OFF：关闭。AUTO：根据查询特征和代价自适应选择列存副本。FORCE：尽可能选择列存副本执行。",
+    "background_cn": "",
+    "ref_url": "",
+    "placeholder": true
+  },
+  "ap_query_cost_threshold": {
+    "id": 10763,
+    "name": "ap_query_cost_threshold",
+    "default_value": 200000,
+    "base_value": 200000,
+    "data_type": "uint",
+    "info": "Cost threshold for selecting column store replica.",
+    "flags": "GLOBAL | SESSION",
+    "publish_version": "4.5.1",
+    "info_cn": "自适应选择列存副本时的代价阈值",
     "background_cn": "",
     "ref_url": "",
     "placeholder": true

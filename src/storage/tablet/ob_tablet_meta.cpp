@@ -607,8 +607,7 @@ int ObTabletMeta::init(
     }
 
     ObTabletTableStoreFlag table_store_flag = old_tablet_meta.table_store_flag_;
-    SCN ddl_checkpoint_scn = OB_ISNULL(tablet_meta) ?
-        old_tablet_meta.ddl_checkpoint_scn_ : MAX(old_tablet_meta.ddl_checkpoint_scn_, tablet_meta->ddl_checkpoint_scn_);
+    SCN ddl_checkpoint_scn = old_tablet_meta.ddl_checkpoint_scn_;
     if (!table_store_flag.with_major_sstable()) {
       if (OB_ISNULL(tablet_meta)) {
         //do nothing

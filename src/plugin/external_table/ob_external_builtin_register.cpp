@@ -35,7 +35,11 @@ static int __plugin_init(ObPluginParamPtr plugin)
   // Plugin manager doesn't copy the plugin name. We should fix this in ther future.
   ObMalloc allocator(OB_PLUGIN_MEMORY_LABEL);
 
+  bool plugin_env_ready = false;
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObJniTool::is_env_ready(plugin_env_ready))) {
+    LOG_WARN("failed to check if the plugin env is ready", K(ret));
+  } else if (!plugin_env_ready) {
   } else if (OB_FAIL(ObJniTool::init_global_instance())) {
     LOG_WARN("failed to init jni tool", K(ret));
   } else if (OB_FAIL(ObPluginHelper::register_builtin_external<ObJavaExternalPlugin>(

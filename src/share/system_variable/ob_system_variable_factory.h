@@ -6063,12 +6063,28 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_SPARSE_DROP_RATIO_SEARCH; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(837); }
 };
+class ObSysVarSqlTranspiler : public ObEnumSysVar
+{
+public:
+  const static char * SQL_TRANSPILER_NAMES[];
+public:
+  ObSysVarSqlTranspiler() : ObEnumSysVar(SQL_TRANSPILER_NAMES, NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_SQL_TRANSPILER; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(838); }
+};
 class ObSysVarPlsqlCanTransformSqlToAssign : public ObBoolSysVar
 {
 public:
   ObSysVarPlsqlCanTransformSqlToAssign() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN; }
-  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(838); }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(839); }
+};
+class ObSysVarObEnablePlAsyncCommit : public ObBoolSysVar
+{
+public:
+  ObSysVarObEnablePlAsyncCommit() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(840); }
 };
 
 
@@ -6093,7 +6109,7 @@ private:
 
 public:
   const static int64_t MYSQL_SYS_VARS_COUNT = 99;
-  const static int64_t OB_SYS_VARS_COUNT = 740;
+  const static int64_t OB_SYS_VARS_COUNT = 742;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
   const static int64_t INVALID_MAX_READ_STALE_TIME = -1;
 

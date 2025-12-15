@@ -45,7 +45,7 @@ public:
            const blocksstable::ObMacroDataSeq &start_sequence);
   int write(const ObColumnSchemaItem &column_schema, ObIAllocator &row_allocator, blocksstable::ObStorageDatum &datum);
   int close();
-  TO_STRING_KV(K(is_inited_), K(src_tenant_id_), K(lob_meta_tablet_id_), K(slice_idx_), K(macro_seq_),
+  TO_STRING_KV(K(is_inited_), K(lob_meta_tablet_id_), K(slice_idx_), K(macro_seq_),
       K(lob_id_cache_), K(lob_column_count_), K(lob_id_generator_), K(lob_meta_row_), KP(macro_block_writer_));
 
 private:
@@ -56,8 +56,6 @@ private:
 
 private:
   bool is_inited_;
-  uint64_t src_tenant_id_;
-  uint64_t dst_tenant_id_;
   ObLSID ls_id_;
   ObTabletID tablet_id_;
 

@@ -54,6 +54,7 @@ public:
   void set_online_sample_percent(double online_sample_percent) { online_sample_percent_ = online_sample_percent; }
   bool is_backup() const { return is_backup_; }
   const ObArray<uint64_t> &get_column_ids() const { return column_ids_; }
+  bool is_disabled_by_transaction() const { return disabled_by_transaction_; }
   TO_STRING_KV(K_(table_id),
                "load_method", storage::ObDirectLoadMethod::get_type_string(load_method_),
                "insert_mode", storage::ObDirectLoadInsertMode::get_type_string(insert_mode_),
@@ -70,6 +71,7 @@ public:
                K_(is_optimized_by_default_load_mode),
                K_(can_use_direct_load),
                K_(use_direct_load),
+               K_(disabled_by_transaction),
                K_(is_online_gather_statistics),
                K_(online_sample_percent),
                K_(column_ids));
@@ -100,6 +102,7 @@ public:
   bool is_optimized_by_default_load_mode_;  // optimized by default load mode
   bool can_use_direct_load_;
   bool use_direct_load_;
+  bool disabled_by_transaction_;
   bool is_online_gather_statistics_;
   double online_sample_percent_;
   ObArray<uint64_t> column_ids_;

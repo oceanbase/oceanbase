@@ -801,6 +801,7 @@ int ObKVCacheStore::try_flush_washable_mb(const uint64_t tenant_id, ObICacheWash
   } else {
     int64_t size_washed = 0;
     const int64_t start = ObTimeUtility::current_time();
+    const bool is_flush = size_to_wash == INT64_MAX;
     if (OB_FAIL(inner_flush_washable_mb(cache_id, size_to_wash, size_washed, wash_blocks, list_handle, force_flush))) {
       COMMON_LOG(WARN,
           "failed to inner flush washable mb",
@@ -811,7 +812,7 @@ int ObKVCacheStore::try_flush_washable_mb(const uint64_t tenant_id, ObICacheWash
           K(force_flush));
       free_mbs(*list_handle.get_resource_handle(), tenant_id, wash_blocks);
       wash_blocks = nullptr;
-    } else if (size_to_wash == INT64_MAX) {
+    } else if (is_flush) {
       // flush
       free_mbs(*list_handle.get_resource_handle(), tenant_id, wash_blocks);
       wash_blocks = nullptr;
@@ -820,7 +821,7 @@ int ObKVCacheStore::try_flush_washable_mb(const uint64_t tenant_id, ObICacheWash
       if (OB_SUCC(ret) && size_washed < size_to_wash) {
         ret = OB_CACHE_FREE_BLOCK_NOT_ENOUGH;
         INIT_SUCC(tmp_ret);
-        if (TC_REACH_TIME_INTERVAL(3 * 1000 * 1000 /* 3s */)) {
+        if (REACH_TIME_INTERVAL(3 * 1000 * 1000 /* 3s */)) {
           if (OB_TMP_FAIL(print_tenant_memblock_info(head))) {
             COMMON_LOG(WARN, "Fail to print tenant memblock info", K(tmp_ret));
           }
@@ -835,6 +836,12 @@ int ObKVCacheStore::try_flush_washable_mb(const uint64_t tenant_id, ObICacheWash
       // free memory of memory blocks washed if any error occur
       free_mbs(*list_handle.get_resource_handle(), tenant_id, wash_blocks);
       wash_blocks = nullptr;
+    }
+
+    if (!is_flush && (OB_CACHE_FREE_BLOCK_NOT_ENOUGH == ret || OB_SYNC_WASH_MB_TIMEOUT == ret)) {
+      if (REACH_TIME_INTERVAL(500 * 1000 /* 500 ms */)) {
+        insts_->print_tenant_cache_info(tenant_id);
+      }
     }
 
     COMMON_LOG(INFO,
@@ -926,7 +933,7 @@ int ObKVCacheStore::inner_flush_washable_mb(const int64_t cache_id, const int64_
       }  // qclock guard
 
       if (OB_FAIL(ret) && OB_SYNC_WASH_MB_TIMEOUT != ret) {
-      } else if (size_retired >= size_to_wash - size_washed || size_to_wash == INT64_MAX) {
+      } else if (size_retired >= size_to_wash - size_washed || size_to_wash == INT64_MAX || HazardDomain::get_instance().get_retired_size() > size_to_wash - size_washed) {
         // do recliam if has retired enough memory
         int64_t start_time = ObTimeUtility::current_time();
         SyncWashCallBack callback(*this, retire_list, wash_blocks, size_washed, size_to_wash, tenant_id);

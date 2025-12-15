@@ -2846,7 +2846,9 @@ DEF_BOOL(_enable_async_load_sys_package, OB_CLUSTER_PARAMETER, "False",
 DEF_BOOL(_enable_pl_recompile_job, OB_TENANT_PARAMETER, "False",
          "Enable pl recompile task.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
+DEF_BOOL(enable_pl_rich_error_msg, OB_TENANT_PARAMETER, "False",
+         "specifies whether add ip:port, time and trace id to PLSQL sqlerrm.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_px_task_rebalance, OB_TENANT_PARAMETER, "False",
          "Enable or disable px task rebalance.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -3072,13 +3074,21 @@ ERRSIM_DEF_INT(errsim_backup_clean_override_expired_time, OB_CLUSTER_PARAMETER, 
         "Range: [0,) in integer",
         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_BOOL(_enable_insertup_column_store_opt, OB_TENANT_PARAMETER, "True",
+DEF_BOOL(_enable_insertup_column_store_opt, OB_TENANT_PARAMETER, "False",
         "Enable or disable insert up optimization path for column store.",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_enable_sql_ccl_rule, OB_TENANT_PARAMETER, "True",
          "Enable or disable sql ccl rule.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(enable_mlog_auto_maintenance, OB_TENANT_PARAMETER, "False",
+         "Switch of MLOG automated maintenance",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_TIME(mlog_trim_interval, OB_TENANT_PARAMETER, "1d", "[5s, 30d]",
+         "Control the scheduling interval of MLOG background trimming tasks. Range: [5s, 30d]",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(approx_count_distinct_precision, OB_TENANT_PARAMETER, "10", "[4, 16]",
         "specify the result accuracy of approx_count_distinct",
@@ -3129,6 +3139,24 @@ DEF_INT(_ss_garbage_collect_concurrency, OB_TENANT_PARAMETER, "0", "[0, 100]",
         "If set to 0, the system auto-calculates the worker count as the tenant’s max_cpu divided by 4; otherwise, the worker count is set to the specified value."
         "Range: [0, 100] in integer",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_px_adaptive_dop, OB_CLUSTER_PARAMETER, "False",
+         "Enable control parallel query queuing and dynamical parallelism scaling according to real-time system load",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
+DEF_INT(px_target_low_watermark, OB_TENANT_PARAMETER, "60", "[0,100]",
+        "Low watermark percentage threshold of parallel task count. "
+        "Parallelism scaling(DOP) will be degraded to prevent CPU resource exhaustion when exceeded."
+        "The default value is 60. Range: [0,100]",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(px_target_high_watermark, OB_TENANT_PARAMETER, "80", "[0,100]",
+        "High watermark percentage threshold of parallel task count. "
+        "The closer the real-time load approaches this watermark, the greater the parallelism degradation. "
+        "When exceeding this watermark, parallelism is reduced to 1."
+        "The default value is 80. Range: [0,100]",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_DBL(px_target_workers_per_cpu, OB_TENANT_PARAMETER, "8", "[0,)",
+        "Target number of parallel threads per CPU quota for tenant."
+        "The default value is 8. Range: [0,)",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR_WITH_CHECKER(default_delta_format, OB_TENANT_PARAMETER, "flat",
                      common::ObConfigDefaultDeltaFormatChecker,
                      "Controls default delta format when creating table",
@@ -3137,3 +3165,14 @@ DEF_STR_WITH_CHECKER(default_delta_format, OB_TENANT_PARAMETER, "flat",
 DEF_INT(default_skip_index_level, OB_TENANT_PARAMETER, "0", "[0, 1]",
         "Specify the default skip_index_level when creating table.",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(enable_mv_binlog_minimal_mode, OB_TENANT_PARAMETER, "False",
+         "Switch of the minimal mode for materialized view ",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_ivf_max_scan_vectors, OB_TENANT_PARAMETER, "100000",
+        "The upper limit of ivf iter-filter search nums. Range: [0,)",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_TIME(_tablet_replica_info_cache_expire_time, OB_CLUSTER_PARAMETER, "10m", "[0, 1d]",
+        "the expire time for tablet replica info cache, from 0 to 1day, "
+        "with default 10minutes. Range: [0, 1d]",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

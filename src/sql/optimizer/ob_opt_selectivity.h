@@ -524,6 +524,7 @@ public:
   void set_distinct_rows(double rows) { distinct_rows_ = rows; }
   bool is_opt_stat_expired() const { return stale_stats_; }
   void set_stale_stats(bool stale_stats) { stale_stats_ = stale_stats; }
+  const ObTableMetaInfo *get_base_meta_info() const { return base_meta_info_; }
 
 
   // The ratio of the increase in the number of rows in the system table compared to the number of rows in the statistics.

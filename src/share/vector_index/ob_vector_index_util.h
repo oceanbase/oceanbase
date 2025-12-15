@@ -285,6 +285,7 @@ static const uint64_t MAX_IVF_BRUTE_FORCE_SIZE = 10000;
 static const uint64_t MAX_IVF_PRE_ROW_CNT_WITH_IDX = 500000;
 static constexpr double DEFAULT_IVF_PRE_RATE_FILTER_WITH_ROWKEY = 0.9;
 static constexpr double DEFAULT_IVF_PRE_RATE_FILTER_WITH_IDX = 0.1;
+static const uint64_t MAX_IVF_POST_DIST_CALC_CNT = 500000;
 
   ObVecIdxExtraInfo()
     : vec_idx_type_(ObVecIndexType::VEC_INDEX_INVALID),
@@ -324,6 +325,7 @@ static constexpr double DEFAULT_IVF_PRE_RATE_FILTER_WITH_IDX = 0.1;
   int64_t get_row_count() { return row_count_; }
   bool is_pre_filter() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_PRE; }
   bool is_post_filter() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER || vec_idx_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER; }
+  bool is_vec_adaptive_scan() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN; }
   bool use_iter_filter() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN || vec_idx_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER; }
   int set_vec_param_info(const ObTableSchema *vec_index_schema);
   ObVectorIndexParam get_vector_index_param() const {return vector_index_param_;}
@@ -773,9 +775,6 @@ public:
   static int check_table_exist(
       const ObTableSchema &data_table_schema,
       const ObString &domain_index_name);
-  static int get_rebuild_drop_index_id_and_name(
-      share::schema::ObSchemaGetterGuard &schema_guard,
-      obrpc::ObDropIndexArg &arg);
   static int calc_residual_vector(
       ObIAllocator &alloc,
       int dim,
@@ -957,7 +956,8 @@ private:
       const ObString &new_domain_index_name,
       ObIAllocator &allocator,
       ObIArray<ObString> &old_table_names,
-      ObIArray<ObString> &new_table_names);
+      ObIArray<ObString> &new_table_names,
+      const ObIndexType index_type);
   static int generate_ivfflat_switch_index_names(
       const ObString &old_domain_index_name,
       const ObString &new_domain_index_name,
@@ -1202,6 +1202,31 @@ public:
   inline static uint64_t get_tablet_id(const char *ptr) {
     return *reinterpret_cast<const uint64_t*>(ptr + VERSION_SIZE);
   }
+};
+
+struct ObDasSemanticIndexInfo
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDasSemanticIndexInfo()
+  : is_emb_vec_tbl_(false),
+    use_rowkey_vid_tbl_(false),
+    part_key_num_(0),
+    sync_interval_type_(ObVectorIndexSyncIntervalType::VSIT_MAX)
+    {}
+  ~ObDasSemanticIndexInfo() {}
+
+  int generate(const schema::ObTableSchema *data_schema,
+               const schema::ObTableSchema *rowkey_domain_schema,
+               int64_t result_output_count,
+               bool has_trans_info_expr);
+
+  TO_STRING_KV(K_(is_emb_vec_tbl), K_(use_rowkey_vid_tbl), K_(part_key_num), K_(sync_interval_type));
+
+  bool is_emb_vec_tbl_;
+  bool use_rowkey_vid_tbl_;
+  int8_t part_key_num_;
+  ObVectorIndexSyncIntervalType sync_interval_type_;
 };
 
 }  // namespace share

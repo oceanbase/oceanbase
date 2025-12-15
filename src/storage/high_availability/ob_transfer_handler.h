@@ -393,7 +393,8 @@ private:
       const share::ObTransferTaskInfo &task_info,
       ObTimeoutCtx &timeout_ctx);
   int generate_parallel_tablet_info_dag_(
-      const share::ObTransferTaskInfo &task_info);
+      const share::ObTransferTaskInfo &task_info,
+      ObTimeoutCtx &timeout_ctx);
   int do_build_tablet_info_(
       const share::ObTransferTaskInfo &task_info,
       ObTimeoutCtx &timeout_ctx);
@@ -402,9 +403,11 @@ private:
       ObTimeoutCtx &timeout_ctx,
       int32_t &result);
   int wait_parallel_tablet_info_dag_finish_(
-      const share::ObTransferTaskInfo &task_info);
+      const share::ObTransferTaskInfo &task_info,
+      ObTimeoutCtx &timeout_ctx);
   void finish_parallel_tablet_info_dag_(
-      const share::ObTransferTaskInfo &task_info);
+      const share::ObTransferTaskInfo &task_info,
+      ObTimeoutCtx &timeout_ctx);
 
 #ifdef OB_BUILD_SHARED_STORAGE
   int set_reorg_info_table_(

@@ -212,7 +212,7 @@ int ObMetric::pretty_print(char *buf, const int64_t buf_len, int64_t &pos,
                            const ObString &prefix) const
 {
   int ret = OB_SUCCESS;
-  OZ(J_NAME(prefix.ptr()));
+  OZ(BUF_PRINTF(prefix));
   OZ(J_NAME(get_metric_name(id_)));
   OZ(J_COLON());
   OZ(value_print_help(buf, buf_len, pos, value(), get_metric_unit(id_)), false);
@@ -323,7 +323,7 @@ int ObMergeMetric::pretty_print(char *buf, const int64_t buf_len, int64_t &pos,
   }
   }
 
-  OZ(J_NAME(prefix.ptr()));
+  OZ(BUF_PRINTF(prefix));
   OZ(J_NAME(get_metric_name(id_)));
   OZ(J_COLON());
   OZ(value_print_help(buf, buf_len, pos, main_value, get_metric_unit(id_), false));

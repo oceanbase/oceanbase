@@ -118,6 +118,9 @@ protected:
                        ObDDLTabletMergeDagParamV2 &merge_param,
                        int64_t cg_idx);
 private:
+  int calculate_inc_major_end_scn(
+      ObDDLTabletMergeDagParamV2 &dag_merge_param,
+      ObTabletHandle &tablet_handle);
   int init_cg_sstable_array(
       ObDDLTabletMergeDagParamV2 &dag_merge_param,
       hash::ObHashSet<int64_t> &slice_idxes);
@@ -132,9 +135,7 @@ private:
   int prepare_for_dump_sstable(
       const ObTabletHandle &tablet_handle,
       ObDDLTabletMergeDagParamV2 &dag_merge_param,
-      ObDDLKvMgrHandle &ddl_kv_mgr_handle,
       ObDDLTabletContext::MergeCtx *merge_ctx,
-      ObArray<ObDDLKVHandle> &frozen_ddl_kvs,
       common::ObIArray<ObTuple<int64_t, int64_t, int64_t>> &cg_slices);
   int get_macro_id_from_sstable(
       ObTableStoreIterator &sstable_iter,
@@ -205,6 +206,19 @@ private:
       const ObSSTable *inc_major_sstable);
   int release_ddl_kv_for_major(ObDDLTabletMergeDagParamV2 &dag_merge_param,
                                ObDDLKvMgrHandle &ddl_kv_mgr_handle);
+  int get_ddl_kvs_and_ddl_dump_sstables(
+      const ObTabletHandle &tablet_handle,
+      const ObDDLTabletMergeDagParamV2 &dag_merge_param,
+      const bool frozen_only,
+      ObIArray<ObDDLKVHandle> &ddl_kvs,
+      ObTableStoreIterator &ddl_dump_sstables);
+  int get_min_max_scn(
+      const ObIArray<ObDDLKVHandle> &ddl_kvs,
+      ObTableStoreIterator &sstable_iter,
+      SCN &min_scn,
+      SCN &max_scn);
+private:
+  SCN end_scn_;
 };
 #endif
 

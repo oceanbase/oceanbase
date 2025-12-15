@@ -920,7 +920,8 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     px_worker_share_plan_enabled_,
                     extend_sql_plan_monitor_metrics_,
                     is_online_gather_statistics_,
-                    phy_hint_.table_lock_mode_);
+                    phy_hint_.table_lock_mode_,
+                    route_to_column_replica_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)

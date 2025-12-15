@@ -191,6 +191,7 @@ public:
   virtual uint64_t get_dblink_id() const { return OB_INVALID_ID; }
   virtual uint64_t get_routine_id() const = 0;
   virtual bool is_function() const = 0;
+  virtual bool is_sql_transpiler_eligible() const = 0;
   TO_STRING_EMPTY();
 };
 
@@ -632,6 +633,13 @@ public:
   OB_INLINE bool is_py_external_routine() const {
     return ObExternalRoutineType::EXTERNAL_PY_UDF_FROM_URL == external_routine_type_
            || ObExternalRoutineType::EXTERNAL_PY_UDF_FROM_RES == external_routine_type_;
+  }
+
+  OB_INLINE void set_sql_transpiler_eligible() { flag_ |= SP_FLAG_SQL_TRANSPILER_ELIGIBLE; }
+
+  bool is_sql_transpiler_eligible() const override
+  {
+    return SP_FLAG_SQL_TRANSPILER_ELIGIBLE == (flag_ & SP_FLAG_SQL_TRANSPILER_ELIGIBLE);
   }
 
   TO_STRING_KV(K_(tenant_id),

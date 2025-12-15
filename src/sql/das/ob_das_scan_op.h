@@ -25,6 +25,7 @@
 #include "share/external_table/ob_external_table_part_info.h"
 #include "share/external_table/ob_external_object_ctx.h"
 #include "share/catalog/ob_catalog_properties.h"
+#include "share/vector_index/ob_vector_index_util.h"
 
 namespace oceanbase
 {
@@ -125,7 +126,8 @@ public:
       domain_tids_(alloc),
       pre_range_graph_(alloc),
       aggregate_param_props_(alloc),
-      push_down_topn_()
+      push_down_topn_(),
+      semantic_index_info_()
   { }
   //in das scan op, column described with column expr
   virtual bool has_expr() const override { return true; }
@@ -238,6 +240,7 @@ public:
   ObFixedArray<share::ObAggrParamProperty, common::ObIAllocator> aggregate_param_props_;
   // top-n pushdown
   ObDASPushDownTopN push_down_topn_;
+  share::ObDasSemanticIndexInfo semantic_index_info_;
 };
 
 enum class ObDASScanTaskType

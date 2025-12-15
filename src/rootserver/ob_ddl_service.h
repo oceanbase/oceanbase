@@ -535,6 +535,7 @@ public:
    * All these index status and name will change in the same trans
   */
   int switch_index_name_and_status_for_vec_index_table(obrpc::ObAlterTableArg &alter_table_arg);
+  int switch_index_name_and_status_for_mlog_table(obrpc::ObAlterTableArg &alter_table_arg);
 
   /**
    * This function is called by the storage layer in the three stage of offline ddl.
@@ -1531,7 +1532,8 @@ int check_will_be_having_domain_index_operation(
                               const ObTableSchema &orig_table_schema,
                               share::ObDDLType &ddl_type,
                               share::schema::ObSchemaGetterGuard &schema_guard,
-                              bool &has_drop_and_add_index);
+                              bool &has_drop_and_add_index,
+                              bool &ddl_need_retry_at_executor);
   int check_is_change_column_order(const share::schema::ObTableSchema &table_schema,
                                    const share::schema::AlterColumnSchema &alter_column_schema,
                                    bool &is_change_column_order) const;
@@ -1601,7 +1603,8 @@ int check_will_be_having_domain_index_operation(
   int check_alter_table_partition(const obrpc::ObAlterTableArg &alter_table_arg,
                                   const share::schema::ObTableSchema &orig_table_schema,
                                   const bool is_oracle_mode,
-                                  share::ObDDLType &ddl_type);
+                                  share::ObDDLType &ddl_type,
+                                  bool &ddl_need_retry_at_executor);
   int check_convert_to_character(obrpc::ObAlterTableArg &alter_table_arg,
                                  const share::schema::ObTableSchema &orig_table_schema,
                                  share::ObDDLType &ddl_type);
@@ -2103,6 +2106,8 @@ int check_will_be_having_domain_index_operation(
       const bool is_hybrid_vector_column=false);
   int lock_tables_of_database(const share::schema::ObDatabaseSchema &database_schema,
                               ObMySQLTransaction &trans);
+  int lock_tables_of_database_for_drop(const share::schema::ObDatabaseSchema &database_schema,
+                                       ObMySQLTransaction &trans);
   int lock_tables_in_recyclebin(const share::schema::ObDatabaseSchema &database_schema,
                                 ObMySQLTransaction &trans);
   int get_dropping_domain_index_invisiable_aux_table_schema(
@@ -2214,6 +2219,16 @@ private:
       const ObSysVariableSchema &sys_variable_schema,
       share::schema::ObSysVarSchema &sysvar,
       bool &execute);
+  int validate_rename_table_args(const ObTableSchema *table_schema);
+  int construct_rename_table_items_for_mview(uint64_t tenant_id,
+                                             const ObTableSchema *table_schema,
+                                             bool is_oracle_mode,
+                                             share::schema::ObSchemaGetterGuard &schema_guard,
+                                             ObMySQLTransaction &trans,
+                                             const obrpc::ObRenameTableItem &rename_item,
+                                             common::ObArenaAllocator &allocator,
+                                             ObIArray<obrpc::ObRenameTableItem> &full_rename_items);
+
 public:
   int check_restore_point_allow(const int64_t tenant_id, const share::schema::ObTableSchema &table_schema);
   // used only by create normal tenant
@@ -2702,6 +2717,7 @@ private:
                                         common::ObIAllocator &allocator,
                                         const uint64_t tenant_data_version,
                                         const share::schema::ObMViewInfo &mview_info,
+                                        const ObString &ddl_stmt_str,
                                         ObDDLTaskRecord &task_record);
 
   bool need_modify_dep_obj_status(const obrpc::ObAlterTableArg &alter_table_arg) const;

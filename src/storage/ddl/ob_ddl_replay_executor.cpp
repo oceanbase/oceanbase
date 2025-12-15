@@ -497,18 +497,34 @@ int ObDDLRedoReplayExecutor::do_inc_replay_(
     const int64_t snapshot_version = table_key .get_snapshot_version();
     const uint64_t data_format_version = redo_info.data_format_version_;
     const bool force_set_macro_meta = is_incremental_minor_direct_load(direct_load_type);
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (GCTX.is_shared_storage_mode() && is_incremental_major_direct_load(direct_load_type)) {
+      if (ObDDLMacroBlockType::DDL_MB_SS_EMPTY_DATA_TYPE == macro_block.block_type_) {
+      } else if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
+      } else if (OB_FAIL(write_ss_block(object_write_info, macro_handle))) {
+        LOG_WARN("failed to write shared storage block", K(ret));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(macro_block.block_handle_.set_block_id(redo_info.macro_block_id_))) {
+        LOG_WARN("set macro block id failed", K(ret), K(redo_info.macro_block_id_));
+      }
+    } else
+#endif
     if (OB_FAIL(ObObjectManager::async_write_object(opt, object_write_info, macro_handle))) {
       LOG_WARN("fail to async write block", K(ret), K(object_write_info), K(macro_handle));
     } else if (OB_FAIL(macro_handle.wait())) {
       LOG_WARN("fail to wait macro block io finish", K(ret), K(object_write_info));
     } else if (OB_FAIL(macro_block.block_handle_.set_block_id(macro_handle.get_macro_id()))) {
       LOG_WARN("set macro block id failed", K(ret), K(macro_handle.get_macro_id()));
-    } else if (OB_FAIL(macro_block.set_data_macro_meta(macro_handle.get_macro_id(),
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(macro_block.set_data_macro_meta(macro_block.block_handle_.get_block_id(),
                                                        redo_info.data_buffer_.ptr(),
                                                        redo_info.data_buffer_.length(),
                                                        redo_info.block_type_,
                                                        force_set_macro_meta))) {
-      LOG_WARN("fail to set data macro meta", K(ret), K(macro_handle.get_macro_id()),
+      LOG_WARN("fail to set data macro meta", K(ret), K(macro_block.block_handle_.get_block_id()),
                                                       KP(redo_info.data_buffer_.ptr()),
                                                       K(redo_info.data_buffer_.length()),
                                                       K(redo_info.block_type_));
@@ -1800,11 +1816,14 @@ int ObDDLIncMajorStartReplayExecutor::update_storage_schema_to_tablet(ObTabletHa
     LOG_WARN("ObDDLIncMajorStartReplayExecutor has not been inited", KR(ret));
   } else if (OB_UNLIKELY(!tablet_handle.is_valid()) || OB_ISNULL(storage_schema_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", KR(ret), K(tablet_handle), KPC_(storage_schema));
+    LOG_WARN("invalid arguments", KR(ret), K(ls_->get_ls_id()), K_(tablet_id), K(tablet_handle), KPC_(storage_schema));
   } else if (OB_UNLIKELY(is_lob_)) {
-    // do nothing
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected lob tablet", KR(ret), K(ls_->get_ls_id()), K_(tablet_id), K_(is_lob));
   } else {
-    if (storage_schema_->is_row_store()) {
+    bool storage_schema_transformed_to_columnar = false;
+    const ObCSReplicaDDLReplayStatus &ddl_replay_status = tablet_handle.get_obj()->get_tablet_meta().ddl_replay_status_;
+    if (storage_schema_->is_row_store() && (CS_REPLICA_VISIBLE_AND_REPLAY_ROW != ddl_replay_status)) {
       ObArenaAllocator arena("IncMajorStart", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
       ObStorageSchema *old_storage_schema = nullptr;
       if (OB_FAIL(tablet_handle.get_obj()->load_storage_schema(arena, old_storage_schema))) {
@@ -1816,6 +1835,8 @@ int ObDDLIncMajorStartReplayExecutor::update_storage_schema_to_tablet(ObTabletHa
         if (OB_FAIL(const_cast<ObStorageSchema *>(storage_schema_)->transform_from_row_to_columnar())) {
           LOG_WARN("failed to transform storage schema from row to columnar",
               KR(ret), K(tablet_handle), KPC_(storage_schema));
+        } else {
+          storage_schema_transformed_to_columnar = true;
         }
       }
       if (OB_NOT_NULL(old_storage_schema)) {
@@ -1827,7 +1848,12 @@ int ObDDLIncMajorStartReplayExecutor::update_storage_schema_to_tablet(ObTabletHa
     } else if (OB_FAIL(ObIncDDLMergeTaskUtils::update_tablet_table_store_with_storage_schema(
         ls_, tablet_handle, storage_schema_))) {
       LOG_WARN("failed to update tablet table store with storage schema",
-          KR(ret), K_(ls), K_(is_lob), K(tablet_handle), KPC_(storage_schema));
+          KR(ret), K(ls_->get_ls_id()), K_(tablet_id), K_(has_cs_replica), K(ddl_replay_status),
+          K(storage_schema_transformed_to_columnar), KPC_(storage_schema));
+    } else {
+      FLOG_INFO("succeed to update storage schema to tablet in replaying inc major start log",
+          KR(ret), K(ls_->get_ls_id()), K_(tablet_id), K_(has_cs_replica), K(ddl_replay_status),
+          K(storage_schema_transformed_to_columnar), KPC_(storage_schema));
     }
   }
   return ret;

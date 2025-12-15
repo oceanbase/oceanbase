@@ -69,6 +69,7 @@ public:
   SYS_DDL_SCHEDULER_FUNC(schedule_ddl_task);
   SYS_DDL_SCHEDULER_FUNC(start_redef_table);
   SYS_DDL_SCHEDULER_FUNC(update_ddl_task_active_time);
+  SYS_DDL_SCHEDULER_FUNC(notify_refresh_related_mviews_task_end);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSysDDLSchedulerUtil);
 };// end ObSysDDLSchedulerUtil

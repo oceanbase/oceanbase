@@ -6261,8 +6261,7 @@ int ObTableLocation::get_list_value_node(const ObPartitionLevel part_level,
         LOG_WARN("failed to push back part column expr");
       } else if ((ObIntTC == cur_col_expr->get_type_class() && ObIntType != cur_col_expr->get_data_type()) ||
                  (ObUIntTC == cur_col_expr->get_type_class() && ObUInt64Type != cur_col_expr->get_data_type()) ||
-                 ObTimestampLTZType == cur_col_expr->get_data_type()
-                 ) {
+                 (!loc_meta_.is_external_table_ && ObTimestampLTZType == cur_col_expr->get_data_type())) {
         /*对于int类型分区键，OB内部存储的分区定义值是用INT64保存的，因此这里需要把column expr也mock成int64的，
           否则表达式计算时会出现column的预期类型与实际类型不符的问题*/
         need_replace_column = true;

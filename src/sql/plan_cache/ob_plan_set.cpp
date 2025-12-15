@@ -2552,6 +2552,13 @@ int ObSqlPlanSet::alloc_evolution_records(ObEvolutionRecords *&evolution_records
 void ObSqlPlanSet::free_evolution_records(ObEvolutionRecords *&evolution_records)
 {
   if (NULL != evolution_records) {
+    // Wait for all references to be released before freeing memory.
+    // Note: The caller must have already set the records_ pointer to NULL
+    // (via reset_evolution_stat) before calling this function, so that
+    // new references cannot be acquired.
+    while (evolution_records->is_referenced()) {
+      PAUSE();
+    }
     alloc_.free(evolution_records);
     evolution_records = NULL;
   }

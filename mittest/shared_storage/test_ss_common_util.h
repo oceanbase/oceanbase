@@ -422,6 +422,7 @@ int TestSSCommonUtil::batch_add_micro_block(
 )
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
   ObArenaAllocator allocator;
   char *data_buf = nullptr;
@@ -455,8 +456,20 @@ int TestSSCommonUtil::batch_add_micro_block(
       if (OB_FAIL(micro_cache->add_micro_block_cache(micro_key, data_buf, micro_size, effective_tablet_id,
                                                      ObSSMicroCacheAccessType::COMMON_IO_TYPE))) {
         if (OB_EAGAIN == ret) { // if add too fast, sleep for a while, and retry
-          ob_usleep(1000);
-          ret = OB_SUCCESS;
+          LOG_INFO("catch OB_EAGAIN, will retry to add micro_block", K(i), K(micro_key), K(tablet_id));
+          int retry_times = 0;
+          do {
+            ob_usleep(1000 * 1000); // 1s
+            if (OB_TMP_FAIL(micro_cache->add_micro_block_cache(
+                micro_key, data_buf, micro_size, effective_tablet_id, ObSSMicroCacheAccessType::COMMON_IO_TYPE))) {
+              LOG_WARN("fail to add micro_block cache", KR(tmp_ret), K(i), K(micro_key), K(tablet_id));
+              ++retry_times;
+            } else {
+              tmp_ret = OB_SUCCESS;
+              ++add_cnt;
+            }
+          } while ((retry_times < 3) && (OB_EAGAIN == tmp_ret));
+          ret = tmp_ret;
         } else {
           LOG_WARN("fail to add micro_block cache", KR(ret), K(i), K(micro_key), K(tablet_id));
         }

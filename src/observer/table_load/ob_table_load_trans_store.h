@@ -53,7 +53,9 @@ public:
   ~ObTableLoadTransStore() { reset(); }
   int init();
   void reset();
+  int64_t get_session_count() const { return session_store_array_.count(); }
   TO_STRING_KV(KP_(trans_ctx), K_(session_store_array));
+public:
   struct SessionStore
   {
     SessionStore() : session_id_(0)
@@ -90,12 +92,8 @@ public:
                const table::ObTableLoadObjRow &obj_row,
                const ObDirectLoadDatumRow *&datum_row,
                const common::ObTabletID &tablet_id);
-  int flush(int32_t session_id);
+  int flush(int32_t session_id, bool &is_finished);
   int clean_up(int32_t session_id);
-public:
-  int64_t get_ref_count() const { return ATOMIC_LOAD(&ref_count_); }
-  int64_t inc_ref_count() { return ATOMIC_AAF(&ref_count_, 1); }
-  int64_t dec_ref_count() { return ATOMIC_AAF(&ref_count_, -1); }
 private:
   int init_session_ctx_array();
   int init_column_schemas_and_lob_info();
@@ -120,11 +118,6 @@ private:
                              const common::ObObj &obj,
                              common::ObObj &out_obj,
                              common::ObArenaAllocator &cast_allocator);
-  int handle_hidden_clustering_key_column(common::ObArenaAllocator &cast_allocator,
-                                          const share::schema::ObColumnSchemaV2 *column_schema,
-                                          const common::ObObj &obj,
-                                          const common::ObTabletID &tablet_id,
-                                          blocksstable::ObStorageDatum &datum);
   int check_rowkey_length(const ObDirectLoadDatumRow &datum_row,
                           const int64_t rowkey_column_count);
 
@@ -253,8 +246,9 @@ private:
     int64_t processed_rows_;
   };
   SessionContext *session_ctx_array_;
+  int64_t session_count_;
   int64_t lob_inrow_threshold_; // for incremental direct load
-  int64_t ref_count_ CACHE_ALIGNED;
+  int64_t flush_count_ CACHE_ALIGNED;
   bool is_inited_;
   ObSchemaGetterGuard schema_guard_;
 };

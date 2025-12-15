@@ -35,13 +35,17 @@ public:
                K_(tablet_id),
                K_(ls_id),
                K_(tx_id),
-               K_(tx_seq));
+               K_(tx_seq),
+               K_(rowkey_column_num),
+               KP_(col_descs));
 public:
   uint64_t table_id_;
   common::ObTabletID tablet_id_;
   share::ObLSID ls_id_;
   transaction::ObTransID tx_id_;
   transaction::ObTxSEQ tx_seq_;
+  int64_t rowkey_column_num_;
+  const common::ObIArray<share::schema::ObColDesc> *col_descs_;
 };
 
 struct ObDirectLoadOriginTableMeta
@@ -54,13 +58,17 @@ public:
                K_(tablet_id),
                K_(ls_id),
                K_(tx_id),
-               K_(tx_seq));
+               K_(tx_seq),
+               K_(rowkey_column_num),
+               KP_(col_descs));
 public:
   uint64_t table_id_;
   common::ObTabletID tablet_id_;
   share::ObLSID ls_id_;
   transaction::ObTransID tx_id_;
   transaction::ObTxSEQ tx_seq_;
+  int64_t rowkey_column_num_;
+  const common::ObIArray<share::schema::ObColDesc> *col_descs_;
 };
 
 class ObDirectLoadOriginTable
@@ -81,20 +89,14 @@ public:
           bool skip_read_lob = true);
   bool is_valid() const { return is_inited_; }
   const ObDirectLoadOriginTableMeta &get_meta() const {return meta_; }
-  const ObTabletHandle &get_tablet_handle() const { return tablet_handle_; }
-  const ObTableStoreIterator &get_table_iter() const { return *(table_iter_.table_iter()); }
-  blocksstable::ObSSTable *get_major_sstable() const { return major_sstable_; }
-  const common::ObIArray<blocksstable::ObSSTable *> &get_ddl_sstables() const { return ddl_sstables_; }
-  TO_STRING_KV(K_(meta), K_(tablet_handle), K_(table_iter), KP_(major_sstable), K_(ddl_sstables));
-private:
-  int prepare_tables();
+  int get_tablet_handle(ObTabletHandle &tablet_handle) const;
+  int get_major_and_ddl_sstable(ObTabletHandle &tablet_handle,
+    blocksstable::ObSSTable *&major_sstable,
+    common::ObIArray<blocksstable::ObSSTable *> &ddl_sstables) const;
+
+  TO_STRING_KV(K_(meta));
 private:
   ObDirectLoadOriginTableMeta meta_;
-  ObTabletHandle tablet_handle_;
-  ObTabletTableIterator table_iter_;
-  // ddl sstables may not merge to major sstable
-  blocksstable::ObSSTable *major_sstable_;
-  common::ObArray<blocksstable::ObSSTable *> ddl_sstables_;
   bool is_inited_;
 };
 
@@ -103,11 +105,15 @@ class ObDirectLoadOriginTableAccessor : public ObDirectLoadIStoreRowIterator
 public:
   ObDirectLoadOriginTableAccessor();
   virtual ~ObDirectLoadOriginTableAccessor();
+  int get_next_row(const ObDirectLoadDatumRow *&datum_row) override;
 protected:
   int inner_init(ObDirectLoadOriginTable *table, bool skip_read_lob);
   int init_table_access_param();
   int init_table_access_ctx(bool skip_read_lob);
   int init_get_table_param();
+  virtual void reset();
+  virtual int inner_get_next_row(const ObDirectLoadDatumRow *&datum_row) = 0;
+  virtual int reinit_open() = 0;
 protected:
   common::ObArenaAllocator allocator_;
   common::ObArenaAllocator stmt_allocator_;
@@ -118,6 +124,10 @@ protected:
   ObStoreCtx store_ctx_;
   ObTableAccessContext table_access_ctx_;
   ObGetTableParam get_table_param_;
+  ObDirectLoadDatumRow datum_row_;
+  static const int64_t TABLET_HANDLE_REFRESH_INTERVAL = 10LL * 60LL * 1000LL * 1000LL; // 10min
+  int64_t tablet_handle_refresh_time_;
+  ObTabletHandle tablet_handle_;
   bool is_inited_;
 };
 
@@ -128,12 +138,19 @@ public:
   virtual ~ObDirectLoadOriginTableScanner() = default;
   int init(ObDirectLoadOriginTable *table, bool skip_read_lob, bool skip_del_row);
   int open(const blocksstable::ObDatumRange &query_range);
-  int get_next_row(const ObDirectLoadDatumRow *&datum_row) override;
+
+protected:
+  virtual void reset() override;
+  virtual int inner_get_next_row(const ObDirectLoadDatumRow *&datum_row) override;
+  virtual int reinit_open() override;
 private:
   ObMultipleScanMerge scan_merge_;
-  ObDirectLoadDatumRow datum_row_;
+  blocksstable::ObDatumRange query_range_;
+  bool skip_read_lob_;
+  bool skip_del_row_;
 };
 
+// UNUSED
 class ObDirectLoadOriginTableGetter final : public ObDirectLoadOriginTableAccessor
 {
 public:
@@ -141,10 +158,16 @@ public:
   virtual ~ObDirectLoadOriginTableGetter() = default;
   int init(ObDirectLoadOriginTable *table, bool skip_read_lob);
   int open(const blocksstable::ObDatumRowkey &key);
-  int get_next_row(const ObDirectLoadDatumRow *&datum_row) override;
+
+protected:
+  virtual int inner_get_next_row(const ObDirectLoadDatumRow *&datum_row) override;
+  virtual int reinit_open() override;
+  virtual void reset() override
+  {
+    single_merge_.reset();
+  }
 private:
   ObSingleMerge single_merge_;
-  ObDirectLoadDatumRow datum_row_;
 };
 
 } // namespace storage

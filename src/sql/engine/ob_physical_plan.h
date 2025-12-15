@@ -821,6 +821,7 @@ private:
   int64_t px_worker_share_plan_enabled_;
   bool extend_sql_plan_monitor_metrics_;
   uint64_t optimizer_features_enable_version_;
+  bool route_to_column_replica_;
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

@@ -1215,9 +1215,7 @@ int ObSSIncMajorDDLMergeHelper::process_prepare_task(
   ObWriteTabletParam *tablet_param = nullptr;
   ObDDLTabletContext::MergeCtx *merge_ctx = nullptr;
 
-  ObDDLKvMgrHandle ddl_kv_mgr_handle;
   hash::ObHashSet<int64_t> slice_idxes;
-  ObArray<ObDDLKVHandle> frozen_ddl_kvs;
 
   if (OB_UNLIKELY(nullptr == dag || !dag_merge_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -1238,13 +1236,14 @@ int ObSSIncMajorDDLMergeHelper::process_prepare_task(
   } else if (ObITable::is_inc_major_ddl_dump_sstable(dag_merge_param.table_key_.table_type_)) {
     if (OB_FAIL(prepare_for_dump_sstable(tablet_handle,
                                          dag_merge_param,
-                                         ddl_kv_mgr_handle,
                                          merge_ctx,
-                                         frozen_ddl_kvs,
                                          cg_slices))) {
       LOG_WARN("failed to prepare for dump sstable", K(ret));
     }
   } else if (ObITable::is_inc_major_type_sstable(dag_merge_param.table_key_.table_type_)) {
+    if (OB_FAIL(calculate_inc_major_end_scn(dag_merge_param, tablet_handle))) {
+      LOG_WARN("fail to calculate inc major end scn", KR(ret));
+    }
     /* for ss mode, inc major build from cg meta file, follower not need build inc major*/
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_param->storage_schema_->get_column_group_count(); ++i) {
       /* when build major only one slice is needed */
@@ -1252,6 +1251,30 @@ int ObSSIncMajorDDLMergeHelper::process_prepare_task(
         LOG_WARN("failed to get slice", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObSSIncMajorDDLMergeHelper::calculate_inc_major_end_scn(
+    ObDDLTabletMergeDagParamV2 &dag_merge_param,
+    ObTabletHandle &tablet_handle)
+{
+  int ret = OB_SUCCESS;
+  ObDDLKvMgrHandle ddl_kv_mgr_handle;
+  ObArray<ObDDLKVHandle> ddl_kvs;
+  ObTableStoreIterator sstable_iter;
+  SCN start_scn = SCN::max_scn(); // unused
+  if (OB_UNLIKELY(!dag_merge_param.is_valid() || !tablet_handle.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(dag_merge_param), K(tablet_handle));
+  } else if (OB_FAIL(get_ddl_kvs_and_ddl_dump_sstables(tablet_handle,
+                                                       dag_merge_param,
+                                                       false/*frozen_only*/,
+                                                       ddl_kvs,
+                                                       sstable_iter))) {
+    LOG_WARN("fail to get ddl kvs and ddl dump sstables", KR(ret), K(dag_merge_param));
+  } else if (OB_FAIL(get_min_max_scn(ddl_kvs, sstable_iter, start_scn, end_scn_))) {
+    LOG_WARN("fail to get min max scn", KR(ret));
   }
   return ret;
 }
@@ -1436,7 +1459,6 @@ int ObSSIncMajorDDLMergeHelper::merge_dump_sstable(ObDDLTabletMergeDagParamV2 &d
                                        0 /* end_slice_idx */,
                                        ddl_param))) {
     LOG_WARN("failed to prepare ddl param", KR(ret));
-  } else if (FALSE_IT(ddl_param.table_key_.scn_range_.end_scn_ = dag_merge_param.rec_scn_)) {
   } else if (OB_FAIL(ObTabletDDLUtil::create_ddl_sstable(*(tablet_handle.get_obj()),
                                                          ddl_param,
                                                          empty_meta_array,
@@ -1577,6 +1599,7 @@ int ObSSIncMajorDDLMergeHelper::merge_cg_sstable(ObIDag* dag,
       LOG_WARN("failed to rebuild index", KR(ret), K(ls_id), K(tablet_id), K(dag_merge_param),
                                                   K(tablet_param), K(macro_seq_param),
                                                   K(sorted_meta_stores), K(tmp_seq), K(res));
+    } else if (FALSE_IT(cur_cg_table_key.scn_range_.end_scn_ = end_scn_)) {
     } else if (OB_FAIL(create_sstable(dag_merge_param, *allocator, merge_ctx,
                                       res, cur_cg_table_key, storage_schema,
                                       create_schema_version_on_tablet,
@@ -1708,12 +1731,13 @@ int ObSSIncMajorDDLMergeHelper::persist_macro_id(
 int ObSSIncMajorDDLMergeHelper::prepare_for_dump_sstable(
     const ObTabletHandle &tablet_handle,
     ObDDLTabletMergeDagParamV2 &dag_merge_param,
-    ObDDLKvMgrHandle &ddl_kv_mgr_handle,
     ObDDLTabletContext::MergeCtx *merge_ctx,
-    ObArray<ObDDLKVHandle> &frozen_ddl_kvs,
     common::ObIArray<ObTuple<int64_t, int64_t, int64_t>> &cg_slices)
 {
   int ret = OB_SUCCESS;
+  ObDDLKvMgrHandle ddl_kv_mgr_handle;
+  ObArray<ObDDLKVHandle> frozen_ddl_kvs;
+  ObTableStoreIterator sstable_iter;
   ObDDLKVQueryParam ddl_kv_query_param;
   ddl_kv_query_param.ddl_kv_type_ = ObDDLKVType::DDL_KV_INC_MAJOR;
   ddl_kv_query_param.trans_id_ = dag_merge_param.trans_id_;
@@ -1746,10 +1770,15 @@ int ObSSIncMajorDDLMergeHelper::prepare_for_dump_sstable(
     LOG_WARN("failed to frozen ddl kv", KR(ret));
   } else if (OB_FAIL(ObIncDDLMergeTaskUtils::close_ddl_kvs(frozen_ddl_kvs))) {
     LOG_WARN("failed to close ddl kvs", KR(ret));
-  }
-
-  /* set in cg_slice_sstable_array*/
-  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(tablet_handle.get_obj()->get_inc_major_ddl_sstables(sstable_iter,
+                                                                         dag_merge_param.trans_id_,
+                                                                         dag_merge_param.seq_no_))) {
+    LOG_WARN("fail to get inc major ddl sstables", KR(ret), K(dag_merge_param));
+  } else if (OB_FAIL(get_min_max_scn(frozen_ddl_kvs,
+                                     sstable_iter,
+                                     dag_merge_param.table_key_.scn_range_.start_scn_,
+                                     dag_merge_param.table_key_.scn_range_.end_scn_))) {
+    LOG_WARN("fail to get min max scn", KR(ret));
   } else if (OB_FAIL(cg_slices.push_back(ObTuple<int64_t, int64_t, int64_t>(0, 0, 0)))) {
     LOG_WARN("failed to push back values", K(ret));
   }
@@ -1782,67 +1811,19 @@ int ObSSIncMajorDDLMergeHelper::prepare_cg_table_key(
     }
   }
 
-  SCN min_scn = SCN::max_scn();
-  ObDDLKvMgrHandle ddl_kv_mgr_handle;
-  ObArray<ObDDLKVHandle> ddl_kvs;
-  ObDDLKVQueryParam query_param;
-  query_param.ddl_kv_type_ = ObDDLKVType::DDL_KV_INC_MAJOR;
-  query_param.trans_id_ = dag_merge_param.trans_id_;
-  query_param.seq_no_ = dag_merge_param.seq_no_;
-  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
-  ObTableStoreIterator inc_ddl_sstables;
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      LOG_INFO("ddl kv mgr not exist", KR(ret), K(dag_merge_param));
-      ret = OB_TASK_EXPIRED;
-    } else {
-      LOG_WARN("fail to get ddl kv mgr", KR(ret));
-    }
-  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_ddl_kvs(false/*frozen_only*/, ddl_kvs, query_param))) {
-    LOG_WARN("fail to get ddl kvs", KR(ret), K(query_param));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < ddl_kvs.count(); ++i) {
-      ObDDLKVHandle &ddl_kv_handle = ddl_kvs.at(i);
-      if (OB_UNLIKELY(!ddl_kv_handle.is_valid())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ddl kv handle is invalid", KR(ret), K(ddl_kv_handle));
-      } else {
-        min_scn = SCN::min(min_scn, ddl_kv_handle.get_obj()->get_start_scn());
-      }
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(tablet_handle.get_obj()->fetch_table_store(table_store_wrapper))) {
-    LOG_WARN("fail to fetch table store", KR(ret));
-  } else if (OB_UNLIKELY(!table_store_wrapper.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table store wrapper is invalid", KR(ret), K(table_store_wrapper));
-  } else if (OB_FAIL(table_store_wrapper.get_member()->get_inc_major_ddl_sstables(inc_ddl_sstables,
-                                                                                  dag_merge_param.trans_id_,
-                                                                                  dag_merge_param.seq_no_))) {
-    LOG_WARN("fail to get inc major ddl sstables",
-             KR(ret), K(dag_merge_param.trans_id_), K(dag_merge_param.seq_no_));
-  } else if (inc_ddl_sstables.count() > 0) {
-    ObITable *table = nullptr;
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(inc_ddl_sstables.get_next(table))) {
-        if (OB_ITER_END != ret) {
-          LOG_WARN("fail to get next", KR(ret));
-        } else {
-          ret = OB_SUCCESS;
-          break;
-        }
-      } else if (OB_ISNULL(table)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table is nullptr", KR(ret));
-      } else {
-        min_scn = SCN::min(min_scn, table->get_start_scn());
-      }
-    }
-  }
   if (OB_SUCC(ret)) {
-    cur_cg_table_key.scn_range_.start_scn_ = min_scn;
+    SCN max_scn = SCN::min_scn(); // unused
+    ObArray<ObDDLKVHandle> ddl_kvs;
+    ObTableStoreIterator ddl_dump_sstables;
+    if (OB_FAIL(get_ddl_kvs_and_ddl_dump_sstables(tablet_handle,
+                                                  dag_merge_param,
+                                                  false/*frozen_only*/,
+                                                  ddl_kvs,
+                                                  ddl_dump_sstables))) {
+      LOG_WARN("failed to get ddl kvs and ddl dump sstables", KR(ret), K(tablet_handle), K(dag_merge_param));
+    } else if (OB_FAIL(get_min_max_scn(ddl_kvs, ddl_dump_sstables, cur_cg_table_key.scn_range_.start_scn_, max_scn))) {
+      LOG_WARN("failed to get min max scn", KR(ret), K(dag_merge_param));
+    }
   }
   return ret;
 }
@@ -2199,7 +2180,9 @@ int ObSSIncMajorDDLMergeHelper::update_tablet_table_store_for_inc_major(
   ObLSService *ls_service = MTL(ObLSService*);
   share::SCN transfer_scn;
   ObITable::TableKey table_key;
-  const bool for_major = dag_merge_param.for_major_;
+  ObArray<ObDDLKVHandle> ddl_kvs;
+  ObTableStoreIterator ddl_dump_sstables;
+  SCN min_scn = SCN::max_scn(); // unused
 
   if (OB_UNLIKELY(!dag_merge_param.is_valid()
                   || OB_ISNULL(inc_major_sstable)
@@ -2222,11 +2205,17 @@ int ObSSIncMajorDDLMergeHelper::update_tablet_table_store_for_inc_major(
                                                             tablet_id,
                                                             tablet_handle))) {
     LOG_WARN("failed to get tablet handle", K(ret));
+  } else if (OB_FAIL(get_ddl_kvs_and_ddl_dump_sstables(tablet_handle,
+                                                       dag_merge_param,
+                                                       true/*frozen_only*/,
+                                                       ddl_kvs,
+                                                       ddl_dump_sstables))) {
+    LOG_WARN("failed to get ddl kvs and ddl dump sstables", KR(ret), K(tablet_handle), K(dag_merge_param));
+  } else if (OB_FAIL(get_min_max_scn(ddl_kvs, ddl_dump_sstables, min_scn, dag_merge_param.rec_scn_))) {
+    LOG_WARN("failed to get min max scn", KR(ret), K(dag_merge_param));
   } else {
     rebuild_seq = ls_handle.get_ls()->get_rebuild_seq();
-    snapshot_version = for_major ? max(dag_merge_param.ddl_task_param_.snapshot_version_,
-                                       tablet_handle.get_obj()->get_snapshot_version())
-                                 : tablet_handle.get_obj()->get_snapshot_version();
+    snapshot_version = tablet_handle.get_obj()->get_snapshot_version();
     transfer_scn = tablet_handle.get_obj()->get_reorganization_scn();
     table_key = dag_merge_param.table_key_;
     allocator = &merge_ctx->arena_;
@@ -2249,9 +2238,94 @@ int ObSSIncMajorDDLMergeHelper::update_tablet_table_store_for_inc_major(
                                                     dag_merge_param.trans_id_,
                                                     dag_merge_param.seq_no_))) {
     LOG_WARN("fail to link inc major", KR(ret));
+  } else {
+    ObUpdateTableStoreParam table_store_param(snapshot_version,
+                                              ObVersionRange::MIN_VERSION/*multi_version_start*/,
+                                              tablet_param->storage_schema_,
+                                              rebuild_seq);
+    table_store_param.ddl_info_.ddl_checkpoint_scn_ = dag_merge_param.rec_scn_;
+    ObTabletHandle new_tablet_handle; // unused
+    if (OB_FAIL(ls_handle.get_ls()->update_tablet_table_store(tablet_id,
+                                                              table_store_param,
+                                                              new_tablet_handle))) {
+      LOG_WARN("failed to update tablet table store", KR(ret), K(tablet_id),
+                                                      K(table_store_param), K(dag_merge_param));
+    }
   }
-  else {
-    FLOG_INFO("[SS INC MAJOR]update table store success", K(ret), K(ls_id), K(table_key));
+  FLOG_INFO("[SS INC MAJOR]update tablet table store for inc major", KR(ret), K(tablet_id), K(dag_merge_param));
+  return ret;
+}
+
+int ObSSIncMajorDDLMergeHelper::get_ddl_kvs_and_ddl_dump_sstables(
+    const ObTabletHandle &tablet_handle,
+    const ObDDLTabletMergeDagParamV2 &dag_merge_param,
+    const bool frozen_only,
+    ObIArray<ObDDLKVHandle> &ddl_kvs,
+    ObTableStoreIterator &ddl_dump_sstables)
+{
+  int ret = OB_SUCCESS;
+  ObDDLKvMgrHandle ddl_kv_mgr_handle;
+  ObDDLKVQueryParam query_param;
+  query_param.ddl_kv_type_ = ObDDLKVType::DDL_KV_INC_MAJOR;
+  query_param.trans_id_ = dag_merge_param.trans_id_;
+  query_param.seq_no_ = dag_merge_param.seq_no_;
+  if (OB_UNLIKELY(!tablet_handle.is_valid() || !dag_merge_param.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tablet_handle), K(dag_merge_param));
+  } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      LOG_INFO("ddl kv mgr not exist", KR(ret), K(dag_merge_param));
+      ret = OB_TASK_EXPIRED;
+    } else {
+      LOG_WARN("fail to get ddl kv mgr", KR(ret));
+    }
+  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_ddl_kvs(frozen_only, ddl_kvs, query_param))) {
+    LOG_WARN("failed to get ddl kvs", K(ret));
+  } else if (OB_FAIL(tablet_handle.get_obj()->get_inc_major_ddl_sstables(ddl_dump_sstables,
+                                                                         dag_merge_param.trans_id_,
+                                                                         dag_merge_param.seq_no_))) {
+    LOG_WARN("failed to get inc major ddl sstables", K(ret));
+  }
+  return ret;
+}
+
+int ObSSIncMajorDDLMergeHelper::get_min_max_scn(
+    const ObIArray<ObDDLKVHandle> &ddl_kvs,
+    ObTableStoreIterator &sstable_iter,
+    SCN &min_scn,
+    SCN &max_scn)
+{
+  int ret = OB_SUCCESS;
+  min_scn = SCN::max_scn();
+  max_scn = SCN::min_scn();
+  for (int64_t i = 0; OB_SUCC(ret) && i < ddl_kvs.count(); ++i) {
+    const ObDDLKVHandle &ddl_kv_handle = ddl_kvs.at(i);
+    if (OB_UNLIKELY(!ddl_kv_handle.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ddl kv handle is invalid", KR(ret), K(ddl_kv_handle));
+    } else {
+      min_scn = SCN::min(min_scn, ddl_kv_handle.get_obj()->get_start_scn());
+      max_scn = SCN::max(max_scn, SCN::max(ddl_kv_handle.get_obj()->get_end_scn(),
+                                           ddl_kv_handle.get_obj()->get_max_scn()));
+    }
+  }
+
+  ObITable *table = nullptr;
+  while (OB_SUCC(ret)) {
+    if (OB_FAIL(sstable_iter.get_next(table))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("fail to get next", KR(ret));
+      } else {
+        ret = OB_SUCCESS;
+        break;
+      }
+    } else if (OB_ISNULL(table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table is nullptr", KR(ret));
+    } else {
+      min_scn = SCN::min(min_scn, table->get_start_scn());
+      max_scn = SCN::max(max_scn, table->get_end_scn());
+    }
   }
   return ret;
 }

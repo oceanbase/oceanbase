@@ -118,7 +118,7 @@ protected:
       common::ObTabletID &tablet_id,
       storage::ObTabletSliceParam *tablet_slice_param = nullptr);
   int eval_current_row(const int64_t rowkey_column_count, blocksstable::ObDatumRow &current_row);
-  int eval_current_row(ObIArray<ObDatum *> &datums);
+  int eval_current_row(ObIArray<ObDatum *> &datums, const ObTabletID &tablet_id);
   int eval_current_batch(ObIArray<ObIVector *> &vectors, const ObBatchRows &brs);
   int sync_table_level_autoinc_value();
   bool is_heap_plan() const { return MY_SPEC.regenerate_heap_table_pk_ || is_vec_gen_vid_; }

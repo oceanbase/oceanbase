@@ -178,6 +178,7 @@ inline double max(const double x, const double y)
 template <class T>
 void max(T, T) = delete;
 
+
 template <oceanbase::common::ObWaitEventIds::ObWaitEventIdEnum event_id =
               oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>
 inline void ob_usleep(const useconds_t v, int64_t call_bt=0)

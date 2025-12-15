@@ -33,7 +33,10 @@ struct ObTableLoadStoreTrans
   {
     return trans_ctx_->trans_id_;
   }
+  ObTableLoadTransStoreWriter *get_store_writer() const { return trans_store_writer_; }
   ObTableLoadTransStore *get_trans_store() { return trans_store_; }
+  // 取出store
+  int output_store(ObTableLoadTransStore *&trans_store);
   int64_t get_ref_count() const { return ATOMIC_LOAD(&ref_count_); }
   int64_t inc_ref_count() { return ATOMIC_AAF(&ref_count_, 1); }
   int64_t dec_ref_count() { return ATOMIC_AAF(&ref_count_, -1); }
@@ -44,6 +47,11 @@ public:
   OB_INLINE int check_trans_status(table::ObTableLoadTransStatusType trans_status) const
   {
     return trans_ctx_->check_trans_status(trans_status);
+  }
+  OB_INLINE int check_trans_status(table::ObTableLoadTransStatusType trans_status1,
+                                   table::ObTableLoadTransStatusType trans_status2) const
+  {
+    return trans_ctx_->check_trans_status(trans_status1, trans_status2);
   }
   OB_INLINE int set_trans_status_inited()
   {
@@ -65,13 +73,6 @@ public:
   int set_trans_status_abort();
 private:
   int advance_trans_status(table::ObTableLoadTransStatusType trans_status);
-public:
-  int get_store_writer(ObTableLoadTransStoreWriter *&store_writer) const;
-  void put_store_writer(ObTableLoadTransStoreWriter *store_writer);
-  // 取出store
-  int output_store(ObTableLoadTransStore *&trans_store);
-private:
-  int handle_write_done();
 private:
   ObTableLoadTransCtx * const trans_ctx_;
   ObTableLoadTransStore *trans_store_;
