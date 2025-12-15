@@ -1253,6 +1253,28 @@ int ObJniTool::init_log_level(JNIEnv *jni_env)
   return ret;
 }
 
+static bool is_external_plugin_jar(const ObString &path)
+{
+  bool exists = false;
+  const char *jar_prefix = "oceanbase-external-plugin-";
+  const char *jar_suffix = ".jar";
+  if (!path.suffix_match_ci(jar_suffix)) {
+  } else {
+    // Extract the filename from the path (after last '/'), and check if it starts with jar_prefix and ends with jar_suffix
+    const char *last_slash = path.reverse_find('/');
+    ObString filename;
+    if (OB_NOT_NULL(last_slash)) {
+      filename.assign_ptr(const_cast<char *>(last_slash + 1), path.ptr() + path.length() - (last_slash + 1));
+    } else {
+      filename = path;
+    }
+    if (filename.prefix_match_ci(jar_prefix)) {
+      exists = true;
+    }
+  }
+  return exists;
+}
+
 int ObJniTool::is_env_ready(bool &is_ready)
 {
   int ret = OB_SUCCESS;
@@ -1271,7 +1293,6 @@ int ObJniTool::is_env_ready(bool &is_ready)
       // Iterate through items in connector_path_config (':' separated), check for '.jar' suffix
       is_ready = false;
       const char delimiter = ':';
-      const char *jar_suffix = ".jar";
       ObString classpath = connector_path_config;
       while (!classpath.empty() && !is_ready) {
         ObString item = classpath.split_on(delimiter);
@@ -1279,7 +1300,7 @@ int ObJniTool::is_env_ready(bool &is_ready)
           item = classpath;
           classpath.reset();
         }
-        if (item.suffix_match_ci(jar_suffix)) {
+        if (is_external_plugin_jar(item)) {
           is_ready = true;
         }
       }
