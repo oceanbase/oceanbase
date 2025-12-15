@@ -550,6 +550,10 @@ public:
       const int64_t major_version,
       const blocksstable::ObSSTable &sstable,
       bool &is_included);
+  static int check_all_inc_major_included_by_major(
+      ObLS &ls,
+      const ObTablet &tablet,
+      bool &all_included);
 private:
   static void dump_inc_major_error_info(
       const int64_t merge_snapshot_version,
