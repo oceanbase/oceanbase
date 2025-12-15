@@ -15769,13 +15769,7 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
   return ret;
 }
 
-const int64_t OB_CORE_TABLE_COUNT = 4;
-const int64_t OB_SYS_TABLE_COUNT = 354;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 998;
-const int64_t OB_SYS_VIEW_COUNT = 1113;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 2470;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2473;
 
 } // end namespace share
 } // end namespace oceanbase
