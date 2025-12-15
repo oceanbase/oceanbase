@@ -29,6 +29,8 @@ int ObDASIndexMergeFTSAndIter::inner_init(ObDASIterParam &param)
   if (OB_FAIL(ObDASIndexMergeAndIter::inner_init(param))) {
     LOG_WARN("failed to init index merge and iter", K(ret));
   } else {
+    set_enable_bitmap_cursor(false);
+
     ready_to_output_ = 0;
     cur_result_item_idx_ = 0;
     result_item_size_ = 0;
