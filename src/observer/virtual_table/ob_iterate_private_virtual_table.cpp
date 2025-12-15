@@ -292,6 +292,14 @@ int ObIteratePrivateVirtualTable::next_tenant_()
   if (tenant_idx_ + 1 >= tenants_.count()) {
     ret = OB_ITER_END;
   } else {
+    ObSessionParam session_param;
+    ObTimeZoneInfoWrap tz_wrap;
+    if (OB_NOT_NULL(session_)) {
+      tz_wrap.deep_copy(session_->get_tz_info_wrap());
+      session_param.tz_info_wrap_ = &tz_wrap;
+    } else {
+      session_param.tz_info_wrap_ = nullptr;
+    }
     tenant_idx_ += 1;
     cur_tenant_id_ = tenants_.at(tenant_idx_);
     const uint64_t exec_tenant_id = get_exec_tenant_id_(cur_tenant_id_);
@@ -311,7 +319,7 @@ int ObIteratePrivateVirtualTable::next_tenant_()
       sql_res_->~ReadResult();
       inner_sql_res_ = NULL;
       new (sql_res_) ObMySQLProxy::MySQLResult();
-      if (OB_FAIL(GCTX.sql_proxy_->read(*sql_res_, exec_tenant_id, sql_.ptr()))) {
+      if (OB_FAIL(GCTX.sql_proxy_->read(*sql_res_, exec_tenant_id, sql_.ptr(), &session_param))) {
         LOG_WARN("execute sql failed", KR(ret), K(exec_tenant_id), K_(cur_tenant_id), K(sql_));
       } else if (OB_ISNULL(sql_res_->get_result())) {
         ret = OB_ERR_UNEXPECTED;
