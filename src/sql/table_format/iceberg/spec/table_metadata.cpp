@@ -31,6 +31,7 @@ TableMetadata::TableMetadata(ObIAllocator &allocator)
       partition_specs(allocator),
       properties(allocator),
       snapshots(allocator),
+      refs(allocator),
       statistics(allocator)
 {
 }
@@ -55,6 +56,7 @@ int TableMetadata::assign(const TableMetadata &other)
     OZ(ObIcebergUtils::deep_copy_map_string(allocator_, other.properties, properties));
     OZ(ObIcebergUtils::deep_copy_array_object(allocator_, other.snapshots, snapshots));
     OZ(ObIcebergUtils::deep_copy_array_object(allocator_, other.statistics, statistics));
+    OZ(ObIcebergUtils::deep_copy_array_object(allocator_, other.refs, refs));
   }
   return ret;
 }
@@ -68,7 +70,9 @@ int TableMetadata::init_from_json(const ObJsonObject &json_object)
             ObCatalogJsonUtils::get_primitive(json_object, FORMAT_VERSION, format_version_num))) {
       LOG_WARN("failed to get format-version", K(ret));
     } else if (format_version_num < static_cast<int32_t>(FormatVersion::V1)
-               || format_version_num > static_cast<int32_t>(FormatVersion::V2)) {
+               || format_version_num > static_cast<int32_t>(FormatVersion::V3)
+               || (format_version_num == static_cast<int32_t>(FormatVersion::V3)
+                   && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_1_0)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("unsupported iceberg version", K(ret), K(format_version_num));
     } else {
@@ -224,22 +228,7 @@ int TableMetadata::init_from_json(const ObJsonObject &json_object)
 
 int TableMetadata::get_current_snapshot(const Snapshot *&snapshot) const
 {
-  int ret = OB_SUCCESS;
-  for (int32_t i = 0; OB_SUCC(ret) && snapshot == NULL && i < snapshots.count(); i++) {
-    Snapshot *tmp_snapshot = snapshots.at(i);
-    if (OB_ISNULL(tmp_snapshot)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret));
-    } else if (current_snapshot_id == tmp_snapshot->snapshot_id) {
-      snapshot = tmp_snapshot;
-    }
-  }
-
-  if (OB_ISNULL(snapshot)) {
-    ret = OB_ENTRY_NOT_EXIST;
-    LOG_WARN("snapshot not existed", K(ret), K(current_snapshot_id));
-  }
-  return ret;
+  return get_snapshot_by_id(current_snapshot_id, snapshot);
 }
 
 int TableMetadata::get_current_snapshot(Snapshot *&snapshot)
@@ -250,6 +239,38 @@ int TableMetadata::get_current_snapshot(Snapshot *&snapshot)
     LOG_WARN("failed to get current snapshot", K(ret));
   } else {
     snapshot = const_cast<Snapshot *>(current_snapshot);
+  }
+  return ret;
+}
+
+int TableMetadata::get_snapshot_by_id(int64_t snapshot_id, const Snapshot *&snapshot) const
+{
+  int ret = OB_SUCCESS;
+  for (int32_t i = 0; OB_SUCC(ret) && snapshot == NULL && i < snapshots.count(); i++) {
+    Snapshot *tmp_snapshot = snapshots.at(i);
+    if (OB_ISNULL(tmp_snapshot)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (snapshot_id == tmp_snapshot->snapshot_id) {
+      snapshot = tmp_snapshot;
+    }
+  }
+
+  if (OB_ISNULL(snapshot)) {
+    ret = OB_ERR_TABLE_SNAPSHOT_NOT_EXIST;
+    LOG_WARN("snapshot not existed", K(ret), K(snapshot_id));
+  }
+  return ret;
+}
+
+int TableMetadata::get_snapshot_by_id(int64_t snapshot_id, Snapshot *&snapshot)
+{
+  int ret = OB_SUCCESS;
+  const Snapshot *tmp_snapshot = NULL;
+  if (OB_FAIL(get_snapshot_by_id(snapshot_id, tmp_snapshot))) {
+    LOG_WARN("failed to get current snapshot", K(ret));
+  } else {
+    snapshot = const_cast<Snapshot *>(tmp_snapshot);
   }
   return ret;
 }
@@ -371,8 +392,8 @@ int TableMetadata::parse_schemas_(const ObJsonObject &json_object)
           LOG_WARN("failed to alloc", K(ret));
         } else if (OB_FAIL(schema->init_from_json(*static_cast<ObJsonObject*>(json_schema)))) {
           LOG_WARN("parse schema failed", K(ret));
-        } else if (current_schema_id == schema->schema_id) {
-          OZ(schemas.push_back(schema));
+        } else if (OB_FAIL(schemas.push_back(schema))) {
+          LOG_WARN("failed to add schema", K(ret));
         }
       }
     }
@@ -472,9 +493,167 @@ int TableMetadata::parse_sort_order_(const ObJsonObject &json_object)
   return ret;
 }
 
+int SnapshotRef::assign(const SnapshotRef &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    snapshot_id = other.snapshot_id;
+    type = other.type;
+    if (OB_FAIL(ob_write_string(allocator_, other.name, name))) {
+      LOG_WARN("failed to copy ref name", K(ret));
+    }
+  }
+  return ret;
+}
+
+int SnapshotRef::init_from_json(const ObJsonObject &json_object)
+{
+  int ret = OB_SUCCESS;
+  ObString type_str;
+  if (OB_FAIL(ObCatalogJsonUtils::get_primitive(json_object, SNAPSHOT_ID, snapshot_id))) {
+    LOG_WARN("fail to get snapshot-id", K(ret));
+  } else  if (OB_FAIL(ObCatalogJsonUtils::get_string(allocator_, json_object, TYPE, type_str))) {
+    LOG_WARN("failed to get type", K(ret));
+  } else {
+    if (0 == type_str.case_compare("branch")) {
+      type = RefType::BRANCH;
+    } else if (0 == type_str.case_compare("tag")) {
+      type = RefType::TAG;
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("unknown ref type", K(ret), K(type_str));
+    }
+  }
+  return ret;
+}
+
 int TableMetadata::parse_refs_(const ObJsonObject &json_object)
 {
   int ret = OB_SUCCESS;
+  const ObJsonNode *json_refs_object = json_object.get_value(REFS);
+  if (NULL == json_refs_object) {
+    // refs 字段不存在，重置为空
+    refs.reset();
+  } else {
+    if (ObJsonNodeType::J_OBJECT != json_refs_object->json_type()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid json refs", K(ret));
+    } else {
+      const ObJsonObject *refs_obj = down_cast<const ObJsonObject *>(json_refs_object);
+      if (OB_FAIL(refs.reserve(refs_obj->element_count()))) {
+        LOG_WARN("failed to reserve refs array", K(ret));
+      } else {
+        // 遍历 refs 对象的所有键值对
+        for (int64_t i = 0; OB_SUCC(ret) && i < refs_obj->element_count(); i++) {
+          ObIJsonBase *json_ref = NULL;
+          SnapshotRef *ref = NULL;
+          ObString ref_name;
+
+          if (OB_FAIL(refs_obj->get_key(i, ref_name))) {
+            LOG_WARN("failed to get ref name", K(ret));
+          } else if (OB_FAIL(refs_obj->get_object_value(ref_name, json_ref))) {
+            LOG_WARN("failed to get ref value", K(ret), K(ref_name));
+          } else if (ObJsonNodeType::J_OBJECT != json_ref->json_type()) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid json ref", K(ret));
+          } else if (OB_ISNULL(ref = OB_NEWx(SnapshotRef, &allocator_, allocator_))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("alloc failed", K(ret));
+          } else if (OB_FAIL(ref->init_from_json(*down_cast<const ObJsonObject *>(json_ref)))) {
+            LOG_WARN("failed to parse ref", K(ret));
+          } else if (OB_FAIL(ob_write_string(allocator_, ref_name, ref->name))) {
+            LOG_WARN("failed to write ref name", K(ret), K(ref_name));
+          } else if (OB_FAIL(refs.push_back(ref))) {
+            LOG_WARN("failed to add ref", K(ret));
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int TableMetadata::get_ref_by_name(const ObString &ref_name,
+                                   const SnapshotRef *&ref) const
+{
+  int ret = OB_SUCCESS;
+  bool found = false;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < refs.count() && !found; i++) {
+    const SnapshotRef *tmp_ref = refs.at(i);
+    if (OB_ISNULL(tmp_ref)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ref is null", K(ret), K(i));
+    } else if (0 == tmp_ref->name.case_compare(ref_name)) {
+      ref = tmp_ref;
+      found = true;
+    }
+  }
+
+  if (OB_SUCC(ret) && !found) {
+    ret = OB_ERR_TABLE_SNAPSHOT_NOT_EXIST;
+    LOG_WARN("ref name not found", K(ret), K(ref_name));
+  }
+
+  return ret;
+}
+
+int TableMetadata::get_snapshot_id_by_timestamp(int64_t timestamp_ms, int64_t &snapshot_id) const
+{
+  int ret = OB_SUCCESS;
+  snapshot_id = OB_INVALID_ID;
+  int64_t closest_timestamp = 0;
+  bool found = false;
+
+  // 遍历所有快照，找到时间戳最接近且小于等于指定时间戳的快照
+  for (int64_t i = 0; OB_SUCC(ret) && i < snapshots.count(); i++) {
+    const Snapshot *snapshot = snapshots.at(i);
+    if (OB_ISNULL(snapshot)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("snapshot is null", K(ret), K(i));
+    } else if (snapshot->timestamp_ms <= timestamp_ms) {
+      if (!found || snapshot->timestamp_ms > closest_timestamp) {
+        snapshot_id = snapshot->snapshot_id;
+        closest_timestamp = snapshot->timestamp_ms;
+        found = true;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && !found) {
+    ret = OB_ERR_TABLE_SNAPSHOT_NOT_EXIST;
+    LOG_WARN("no snapshot found for timestamp", K(ret), K(timestamp_ms));
+  }
+
+  return ret;
+}
+
+int TableMetadata::get_schema_id_by_snapshot_id(int64_t snapshot_id, int32_t &schema_id) const
+{
+  int ret = OB_SUCCESS;
+  bool found = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < snapshots.count() && !found; i++) {
+    const Snapshot *snapshot = snapshots.at(i);
+    if (OB_ISNULL(snapshot)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("snapshot is null", K(ret), K(i));
+    } else if (snapshot->snapshot_id == snapshot_id) {
+      if (snapshot->schema_id.has_value()) {
+        schema_id = snapshot->schema_id.value();
+      } else {
+        ret = OB_ERR_TABLE_SNAPSHOT_NOT_EXIST;
+        LOG_WARN("snapshot schema id not found", K(ret), K(snapshot_id));
+      }
+      found = true;
+    }
+  }
+
+  if (OB_SUCC(ret) && !found) {
+    ret = OB_ERR_TABLE_SNAPSHOT_NOT_EXIST;
+    LOG_WARN("snapshot not found", K(ret), K(snapshot_id));
+  }
+
   return ret;
 }
 

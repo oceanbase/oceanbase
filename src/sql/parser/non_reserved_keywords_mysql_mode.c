@@ -1113,6 +1113,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"var_samp", VAR_SAMP},
   {"verbose", VERBOSE},
   {"verify", VERIFY},
+  {"version", VERSION},
   {"materialized", MATERIALIZED},
   {"validate", VALIDATE},
   {"values", VALUES},

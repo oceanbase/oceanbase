@@ -91,6 +91,7 @@ public:
                                      ObExecContext *exec_ctx,
                                      const uint64_t table_id,
                                      const uint64_t ref_table_id,
+                                     int64_t lake_table_snapshot_id,
                                      const ObIArray<ObRawExpr*> &filter_exprs);
 
   int select_location_for_iceberg(ObExecContext *exec_ctx,

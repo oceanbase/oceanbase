@@ -124,6 +124,8 @@ public:
   ObFixedArray<int32_t, ObIAllocator> equality_ids;
   std::optional<int32_t> sort_order_id;
   std::optional<ObString> referenced_data_file;
+  std::optional<int64_t> content_offset;
+  std::optional<int64_t> content_size_in_bytes;
 
   static int get_read_expected_schema(ObIAllocator &allocator,
                                       const ManifestMetadata &manifest_metadata,
@@ -278,6 +280,21 @@ public:
       REFERENCED_DATA_FILE,
       StringType::get_instance(),
       "Fully qualified location (URI with FS scheme) of a data file that all deletes reference");
+  static constexpr const char *CONTENT_OFFSET = "content_offset";
+  static constexpr int32_t CONTENT_OFFSET_FIELD_ID = 144;
+  inline static const SchemaField CONTENT_OFFSET_FIELD
+      = SchemaField::make_optional(CONTENT_OFFSET_FIELD_ID,
+                                   CONTENT_OFFSET,
+                                   LongType::get_instance(),
+                                   "The offset in the file where the content starts");
+  static constexpr const char *CONTENT_SIZE_IN_BYTES = "content_size_in_bytes";
+  static constexpr int32_t CONTENT_SIZE_IN_BYTES_FIELD_ID = 145;
+  inline static const SchemaField CONTENT_SIZE_IN_BYTES_FIELD
+      = SchemaField::make_optional(CONTENT_SIZE_IN_BYTES_FIELD_ID,
+                                   CONTENT_SIZE_IN_BYTES,
+                                   LongType::get_instance(),
+                                   "The length of a referenced content stored in the file; "
+                                   "required if content_offset is present");
 
 private:
   int decode_partitions_(const ManifestMetadata &manifest_metadata,

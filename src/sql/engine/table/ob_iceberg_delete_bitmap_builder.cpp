@@ -13,10 +13,15 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/table/ob_iceberg_delete_bitmap_builder.h"
-#include "sql/engine/expr/ob_expr.h"
+
+#include "lib/time/ob_time_utility.h"
+#include "roaring/roaring64map.hh"
 #include "share/external_table/ob_external_table_utils.h"
-#include <parquet/api/reader.h>
+#include "sql/engine/expr/ob_expr.h"
+#include "sql/engine/table/ob_external_file_access.h"
 #include "sql/engine/table/ob_orc_table_row_iter.h"
+
+#include <parquet/api/reader.h>
 
 // ORC 异常处理宏定义
 #define CATCH_ORC_EXCEPTIONS                                  \
@@ -90,6 +95,7 @@ int ObIcebergDeleteBitmapBuilder::init(const storage::ObTableScanParam *scan_par
     }
     OZ(orc_reader_.init());
     OZ(parquet_reader_.init());
+    OZ(puffin_reader_.init());
   }
   return ret;
 }
@@ -136,6 +142,8 @@ int ObIcebergDeleteBitmapBuilder::get_delete_file_reader(const iceberg::DataFile
     reader = &orc_reader_;
   } else if (file_format == iceberg::DataFileFormat::PARQUET) {
     reader = &parquet_reader_;
+  } else if (file_format == iceberg::DataFileFormat::PUFFIN) {
+    reader = &puffin_reader_;
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unsupported delete file format", K(file_format), K(ret));
@@ -459,6 +467,134 @@ int ObIcebergDeleteBitmapBuilder::ParquetDeleteFileReader::read_delete_file(
       }
     }
   }
+  return ret;
+}
+
+// ==================== PuffinDeleteFileReader ===================
+int ObIcebergDeleteBitmapBuilder::PuffinDeleteFileReader::open_delete_file(
+    const ObLakeDeleteFile &delete_file,
+    ObExternalFileAccess &file_access_driver,
+    ObFilePreBuffer &file_prebuffer,
+    const storage::ObTableScanParam *scan_param,
+    ObExternalTableAccessOptions *options)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(scan_param) || OB_ISNULL(options)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("scan param or options is null", K(ret));
+  } else {
+    // 保存 file_access_driver 的引用
+    file_access_driver_ = &file_access_driver;
+    file_prebuffer_ = &file_prebuffer;
+
+    ObExternalFileUrlInfo file_info(scan_param->external_file_location_,
+                                    scan_param->external_file_access_info_,
+                                    delete_file.file_url_,
+                                    ObString::make_empty_string(),
+                                    delete_file.file_size_,
+                                    delete_file.modification_time_);
+    ObExternalFileCacheOptions cache_options(options->enable_page_cache_,
+                                             options->enable_disk_cache_);
+
+    if (OB_FAIL(file_access_driver.open(file_info, cache_options))) {
+      if (OB_OBJECT_NOT_EXIST == ret || OB_HDFS_PATH_NOT_FOUND == ret) {
+        // 文件不存在，跳过处理
+        ret = OB_SUCCESS;
+        LOG_INFO("delete file not found, skip processing", K(delete_file.file_url_));
+      } else {
+        LOG_WARN("failed to open delete file", K(ret), K(delete_file.file_url_));
+      }
+    } else {
+      file_content_offset_ = delete_file.dv_content_offset_;
+      file_content_size_in_bytes_ = delete_file.dv_content_size_in_bytes_;
+    }
+  }
+
+  return ret;
+}
+
+int ObIcebergDeleteBitmapBuilder::PuffinDeleteFileReader::read_delete_file(
+    const ObString &data_file_path,
+    const storage::ObTableScanParam *scan_param,
+    ObRoaringBitmap *delete_bitmap)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator;
+
+  if (OB_ISNULL(scan_param) || OB_ISNULL(delete_bitmap) || OB_ISNULL(file_access_driver_)
+      || OB_ISNULL(file_prebuffer_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("scan param, delete bitmap, file access driver or file prebuffer is null", K(ret));
+  } else if (file_content_size_in_bytes_ > 0) {
+    // 分配缓冲区读取文件数据
+    char *file_buffer = nullptr;
+    int64_t buffer_size = file_content_size_in_bytes_;
+
+    if (OB_ISNULL(file_buffer = static_cast<char *>(allocator.alloc(buffer_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate buffer for file data", K(ret), K(buffer_size));
+    } else {
+      int64_t read_size = 0;
+      const int64_t io_timeout_ms
+          = MAX(0, (scan_param->timeout_ - ObTimeUtility::current_time()) / 1000);
+      ObExternalReadInfo read_info(file_content_offset_, file_buffer, buffer_size, io_timeout_ms);
+
+      // 读取文件的所有数据
+      bool is_hit_cache = false;
+      if (OB_FAIL(file_prebuffer_->read(file_content_offset_, buffer_size, file_buffer))) {
+        if (OB_ENTRY_NOT_EXIST != ret) {
+          LOG_WARN("failed to read from prebuffer", K(ret));
+        } else {
+          ret = OB_SUCCESS;
+        }
+      } else {
+        is_hit_cache = true;
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (!is_hit_cache && OB_FAIL(file_access_driver_->pread(read_info, read_size))) {
+        LOG_WARN("failed to read delete file data", K(ret), K(file_content_size_in_bytes_));
+      } else {
+        int32_t bitmap_data_size = 0;
+        int32_t magic_number = 0;
+
+        // 从文件缓冲区前4个字节读取bitmap大小（big-endian格式）
+        // 使用 unsigned char 避免符号扩展问题
+        bitmap_data_size = ((unsigned char)file_buffer[0] << 24)
+                           | ((unsigned char)file_buffer[1] << 16)
+                           | ((unsigned char)file_buffer[2] << 8)
+                           | (unsigned char)file_buffer[3];
+        // 从文件缓冲区第5个字节开始读取magic number（4个字节）
+        memcpy(&magic_number, file_buffer + sizeof(int32_t), sizeof(int32_t));
+
+        // 检查magic number和bitmap数据大小是否匹配
+        if (magic_number != ObIcebergDeleteBitmapBuilder::PUFFIN_MAGIC_NUMBER
+            || bitmap_data_size
+                   != (file_content_size_in_bytes_ - sizeof(int32_t) - sizeof(int32_t))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("magic number not match or bitmap data size not match",
+                   K(ret),
+                   K(magic_number),
+                   K(bitmap_data_size),
+                   K(file_content_size_in_bytes_));
+        } else {
+          // 从文件缓冲区第9个字节开始读取bitmap数据
+          char *roaring_data = file_buffer + sizeof(int32_t) + sizeof(int32_t);
+          roaring::Roaring64Map roaring_bitmap
+              = roaring::Roaring64Map::readSafe(roaring_data, bitmap_data_size);
+
+          for (roaring::Roaring64Map::const_iterator it = roaring_bitmap.begin();
+               OB_SUCC(ret) && it != roaring_bitmap.end();
+               ++it) {
+            uint64_t value = *it;
+            OZ(delete_bitmap->value_add(value));
+          }
+        }
+      }
+    }
+  }
+
   return ret;
 }
 

@@ -39,6 +39,9 @@ class ObSynonymChecker;
 }
 namespace share
 {
+
+struct ObTimeTravelInfo;
+
 namespace schema
 {
 class ObTenantSchema;
@@ -217,7 +220,8 @@ public:
                        const bool cte_table_fisrt,
                        const bool with_hidden_flag,
                        const share::schema::ObTableSchema *&table_schema,
-                       const bool is_built_in_index = false);
+                       const bool is_built_in_index = false,
+                       const share::ObTimeTravelInfo *time_travel_info = NULL);
   int get_table_schema(const uint64_t tenant_id,
                        const uint64_t database_id,
                        const common::ObString &table_name,
@@ -225,7 +229,8 @@ public:
                        const bool cte_table_fisrt,
                        const bool with_hidden_flag,
                        const share::schema::ObTableSchema *&table_schema,
-                       const bool is_built_in_index = false);
+                       const bool is_built_in_index = false,
+                       const share::ObTimeTravelInfo *time_travel_info = NULL);
   int get_table_schema(const uint64_t tenant_id, const uint64_t table_id, const share::schema::ObTableSchema *&table_schema, bool is_link = false) const;
   int get_link_table_schema(const uint64_t dblink_id,
                             const common::ObString &database_name,

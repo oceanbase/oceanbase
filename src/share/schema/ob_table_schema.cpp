@@ -1878,6 +1878,7 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       mlog_tid_ = src_schema.mlog_tid_;
       catalog_id_ = src_schema.catalog_id_;
       lake_table_format_ = src_schema.lake_table_format_;
+      lake_table_snapshot_id_ = src_schema.lake_table_snapshot_id_;
       merge_engine_type_ = src_schema.merge_engine_type_;
       external_location_id_ = src_schema.external_location_id_;
       tmp_mlog_tid_ = src_schema.tmp_mlog_tid_;
@@ -4008,6 +4009,7 @@ void ObTableSchema::reset()
 
   catalog_id_ = OB_INTERNAL_CATALOG_ID;
   lake_table_format_ = share::ObLakeTableFormat::INVALID;
+  lake_table_snapshot_id_ = OB_INVALID_ID;
   external_file_format_.reset();
   external_file_location_.reset();
   external_file_location_access_info_.reset();

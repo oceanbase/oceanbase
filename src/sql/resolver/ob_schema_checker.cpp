@@ -914,7 +914,8 @@ int ObSchemaChecker::get_table_schema(const uint64_t tenant_id,
                                       const bool cte_table_fisrt,
                                       const bool with_hidden_flag,
                                       const ObTableSchema *&table_schema,
-                                      const bool is_built_in_index /*= false*/)
+                                      const bool is_built_in_index /*= false*/,
+                                      const share::ObTimeTravelInfo *time_travel_info /*= NULL*/)
 {
   int ret = OB_SUCCESS;
   table_schema = NULL;
@@ -941,8 +942,18 @@ int ObSchemaChecker::get_table_schema(const uint64_t tenant_id,
              K(ret));
       }
     } else if (is_external_catalog_id(catalog_id)) {
-      if (OB_FAIL(sql_schema_mgr_->get_catalog_table_schema(tenant_id, catalog_id, database_id, table_name, table))) {
-        LOG_WARN("get catalog table schema failed", K(tenant_id), K(catalog_id), K(database_id), K(table_name), K(ret));
+      if (OB_FAIL(sql_schema_mgr_->get_catalog_table_schema(tenant_id,
+                                                            catalog_id,
+                                                            database_id,
+                                                            table_name,
+                                                            table,
+                                                            time_travel_info))) {
+        LOG_WARN("get catalog table schema failed",
+                 K(tenant_id),
+                 K(catalog_id),
+                 K(database_id),
+                 K(table_name),
+                 K(ret));
       }
     } else {
       ret = OB_ERR_UNEXPECTED;
@@ -1020,7 +1031,8 @@ int ObSchemaChecker::get_table_schema(const uint64_t tenant_id,
                                       const bool cte_table_fisrt,
                                       const bool with_hidden_flag,
                                       const ObTableSchema *&table_schema,
-                                      const bool is_built_in_index /*= false*/)
+                                      const bool is_built_in_index /*= false*/,
+                                      const share::ObTimeTravelInfo *time_travel_info /*= NULL*/)
 {
   return get_table_schema(tenant_id,
                           OB_INTERNAL_CATALOG_ID,
@@ -1030,7 +1042,8 @@ int ObSchemaChecker::get_table_schema(const uint64_t tenant_id,
                           cte_table_fisrt,
                           with_hidden_flag,
                           table_schema,
-                          is_built_in_index);
+                          is_built_in_index,
+                          time_travel_info);
 }
 
 // 注意：这个函数只能在 sql 层使用

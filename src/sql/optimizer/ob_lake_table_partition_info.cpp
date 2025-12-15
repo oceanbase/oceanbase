@@ -90,6 +90,7 @@ int ObLakeTablePartitionInfo::prune_file_and_select_location(ObSqlSchemaGuard &s
                                                              ObExecContext *exec_ctx,
                                                              const uint64_t table_id,
                                                              const uint64_t ref_table_id,
+                                                             int64_t lake_table_snapshot_id,
                                                              const ObIArray<ObRawExpr*> &filter_exprs)
 {
   int ret = OB_SUCCESS;
@@ -107,17 +108,16 @@ int ObLakeTablePartitionInfo::prune_file_and_select_location(ObSqlSchemaGuard &s
     ObSEArray<iceberg::ManifestFile*, 16> manifest_files;
     ObSEArray<iceberg::ManifestEntry*, 16> manifest_entries;
     hash::ObHashMap<ObLakeTablePartKey, uint64_t> part_key_map;
-    iceberg::Snapshot *current_snapshot = NULL;
-    if (OB_FAIL(iceberg_table_metadata->table_metadata_.get_current_snapshot(current_snapshot))) {
-      if (ret == OB_ENTRY_NOT_EXIST) {
-        // do nothing
-        // 空表
-        current_snapshot = NULL;
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("failed to get current snapshot", K(ret));
-      }
-    } else if (OB_ISNULL(current_snapshot)) {
+    iceberg::Snapshot *snapshot = NULL;
+    if (lake_table_snapshot_id == -1L) {
+      // do nothing 空表
+      snapshot = NULL;
+      ret = OB_SUCCESS;
+    } else if (OB_FAIL(iceberg_table_metadata->table_metadata_.get_snapshot_by_id(
+                   lake_table_snapshot_id,
+                   snapshot))) {
+      LOG_WARN("failed to get snapshot", K(ret), K(lake_table_snapshot_id));
+    } else if (OB_ISNULL(snapshot)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null snapshot");
     }
@@ -135,10 +135,10 @@ int ObLakeTablePartitionInfo::prune_file_and_select_location(ObSqlSchemaGuard &s
                                                  iceberg_table_metadata->table_metadata_.partition_specs,
                                                  filter_exprs))) {
       LOG_WARN("failed to init table location", K(ret));
-    } else if (NULL == current_snapshot) {
+    } else if (NULL == snapshot) {
       // do nothing
       // 空表
-    } else if (OB_FAIL(current_snapshot->get_manifest_files(access_info, all_manifest_files))) {
+    } else if (OB_FAIL(snapshot->get_manifest_files(access_info, all_manifest_files))) {
       LOG_WARN("failed to get manifest files");
     } else if (all_manifest_files.empty()) {
       // do nothing
@@ -552,14 +552,36 @@ int ObLakeTablePartitionInfo::add_table_file(ObCandiTabletLoc &tablet_loc,
         delete_file->file_size_ = delete_entry->data_file.file_size_in_bytes;
         delete_file->modification_time_ = delete_entry->snapshot_id;
         delete_file->file_format_ = delete_entry->data_file.file_format;
-        if (delete_entry->is_equality_delete_file() || delete_entry->is_deletion_vector_file()) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("not support equality delete file or deletion vector file");
-        } else if (delete_entry->is_position_delete_file()) {
-          delete_file->type_ = ObLakeDeleteFileType::POSITION_DELETE;
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid delete file entry");
+
+        switch (delete_entry->data_file.content) {
+          case iceberg::DataFileContent::POSITION_DELETES: {
+            if (delete_entry->is_deletion_vector_file()) {
+              if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_1_0) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("not support deletion vector file", K(ret), K(GET_MIN_CLUSTER_VERSION()));
+              } else if (!delete_entry->data_file.content_offset.has_value()
+                  || !delete_entry->data_file.content_size_in_bytes.has_value()) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("delete file content offset or size do not have value");
+              } else {
+                delete_file->dv_content_offset_ = delete_entry->data_file.content_offset.value();
+                delete_file->dv_content_size_in_bytes_
+                    = delete_entry->data_file.content_size_in_bytes.value();
+                delete_file->type_ = ObLakeDeleteFileType::DELETION_VECTOR;
+              }
+            } else {
+              delete_file->type_ = ObLakeDeleteFileType::POSITION_DELETE;
+            }
+            break;
+          }
+          case iceberg::DataFileContent::EQUALITY_DELETES: {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support equality delete file");
+            break;
+          }
+          default:
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid delete file content", K(delete_entry->data_file.content));
         }
       }
 

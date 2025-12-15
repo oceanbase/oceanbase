@@ -100,13 +100,40 @@ public:
     parquet::ReaderProperties read_props_;
   };
 
+  class PuffinDeleteFileReader : public IDeleteFileReader
+  {
+  public:
+    PuffinDeleteFileReader() : file_access_driver_(nullptr),
+                              file_prebuffer_(nullptr),
+                              file_content_offset_(0),
+                              file_content_size_in_bytes_(0) {}
+
+    int init() override { return OB_SUCCESS; };
+    int open_delete_file(const ObLakeDeleteFile &delete_file,
+                        ObExternalFileAccess &file_access_driver,
+                        ObFilePreBuffer &file_prebuffer,
+                        const storage::ObTableScanParam *scan_param,
+                        ObExternalTableAccessOptions *options) override;
+
+    int read_delete_file(const ObString &data_file_path,
+                        const storage::ObTableScanParam *scan_param,
+                        ObRoaringBitmap *delete_bitmap) override;
+
+  private:
+    ObExternalFileAccess *file_access_driver_;
+    ObFilePreBuffer *file_prebuffer_;
+    int64_t file_content_offset_;
+    int64_t file_content_size_in_bytes_;
+  };
+
 public:
   ObIcebergDeleteBitmapBuilder()
       : scan_param_(nullptr),
         options_(nullptr),
         delete_file_prebuffer_(delete_file_access_driver_),
         orc_reader_(),
-        parquet_reader_()
+        parquet_reader_(),
+        puffin_reader_()
   {}
 
   ~ObIcebergDeleteBitmapBuilder();
@@ -119,7 +146,6 @@ public:
 
 private:
   int get_delete_file_reader(const iceberg::DataFileFormat file_format, IDeleteFileReader *&reader);
-
 
   int process_single_delete_file(const ObLakeDeleteFile &delete_file,
                                 const ObString &data_file_path,
@@ -137,6 +163,9 @@ private:
 
   OrcDeleteFileReader orc_reader_;
   ParquetDeleteFileReader parquet_reader_;
+  PuffinDeleteFileReader puffin_reader_;
+
+  static const int32_t PUFFIN_MAGIC_NUMBER = 1681511377;
 };
 
 } // namespace sql

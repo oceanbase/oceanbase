@@ -97,7 +97,10 @@ int ManifestMetadata::init_from_metadata(
     } else {
       std::string tmp(it->second.begin(), it->second.end());
       int32_t format_version_num = std::stoi(tmp);
-      if (format_version_num < 1 || format_version_num > 2) {
+      if (format_version_num < static_cast<int32_t>(FormatVersion::V1)
+          || format_version_num > static_cast<int32_t>(FormatVersion::V3)
+          || (format_version_num == static_cast<int32_t>(FormatVersion::V3)
+              && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_1_0)) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("unsupported iceberg version", K(ret), K(format_version_num));
       } else {
@@ -354,6 +357,21 @@ int DataFile::decode_field(const ManifestMetadata &manifest_metadata,
                                            decoder,
                                            referenced_data_file))) {
         LOG_WARN("failed to get referenced_data_file", K(ret));
+      }
+      break;
+    }
+    case CONTENT_OFFSET_FIELD_ID: {
+      if (OB_FAIL(
+              AvroUtils::decode_primitive(field_projection.avro_node_, decoder, content_offset))) {
+        LOG_WARN("failed to get content_offset", K(ret));
+      }
+      break;
+    }
+    case CONTENT_SIZE_IN_BYTES_FIELD_ID: {
+      if (OB_FAIL(AvroUtils::decode_primitive(field_projection.avro_node_,
+                                              decoder,
+                                              content_size_in_bytes))) {
+        LOG_WARN("failed to get content_size_in_bytes", K(ret));
       }
       break;
     }
@@ -685,7 +703,9 @@ int DataFile::get_read_expected_schema(ObIAllocator &allocator,
                                          &SPLIT_OFFSETS_FIELD,
                                          &EQUALITY_IDS_FIELD,
                                          &SORT_ORDER_ID_FIELD,
-                                         &REFERENCED_DATA_FILE_FIELD}))) {
+                                         &REFERENCED_DATA_FILE_FIELD,
+                                         &CONTENT_OFFSET_FIELD,
+                                         &CONTENT_SIZE_IN_BYTES_FIELD}))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory", K(ret));
     }

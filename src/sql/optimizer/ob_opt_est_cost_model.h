@@ -65,7 +65,8 @@ struct ObTableMetaInfo
       table_type_(share::schema::MAX_TABLE_TYPE),
       is_broadcast_table_(false),
       lake_table_format_(share::ObLakeTableFormat::INVALID),
-      lake_table_file_count_(0)
+      lake_table_file_count_(0),
+      lake_table_snapshot_id_(OB_INVALID_ID)
   { }
   virtual ~ObTableMetaInfo()
   { }
@@ -97,6 +98,7 @@ struct ObTableMetaInfo
   bool is_broadcast_table_;
   share::ObLakeTableFormat lake_table_format_;
   int64_t lake_table_file_count_;
+  int64_t lake_table_snapshot_id_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableMetaInfo);
 };

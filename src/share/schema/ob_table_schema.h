@@ -1711,6 +1711,8 @@ public:
   inline uint64_t get_catalog_id() const { return catalog_id_; }
   inline void set_lake_table_format(share::ObLakeTableFormat lake_table_format) { lake_table_format_ = lake_table_format; }
   share::ObLakeTableFormat get_lake_table_format() const { return lake_table_format_; }
+  inline void set_lake_table_snapshot_id(const int64_t lake_table_snapshot_id) { lake_table_snapshot_id_ = lake_table_snapshot_id; }
+  inline int64_t get_lake_table_snapshot_id() const { return lake_table_snapshot_id_; }
   const ObString &get_external_file_location() const { return external_file_location_; }
   const ObString &get_external_file_location_access_info() const { return external_file_location_access_info_; }
   uint64_t get_external_location_id() const { return external_location_id_; }
@@ -2466,6 +2468,7 @@ protected:
   //external table
   uint64_t catalog_id_ = OB_INTERNAL_CATALOG_ID; // do not need to serialized
   share::ObLakeTableFormat lake_table_format_; // do not need to serialized
+  int64_t lake_table_snapshot_id_ = OB_INVALID_ID; // do not need to serialized
   common::ObString external_file_format_;
   common::ObString external_file_location_;
   common::ObString external_file_location_access_info_;

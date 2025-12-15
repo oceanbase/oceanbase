@@ -79,10 +79,12 @@ int ObILakeTableMetadata::assign(const ObILakeTableMetadata &other)
   return ret;
 }
 
-int ObILakeTableMetadata::build_table_schema(share::schema::ObTableSchema *&table_schema)
+int ObILakeTableMetadata::build_table_schema(std::optional<int32_t> schema_id,
+                                             std::optional<int64_t> snapshot_id,
+                                             share::schema::ObTableSchema *&table_schema)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(do_build_table_schema(table_schema))) {
+  if (OB_FAIL(do_build_table_schema(schema_id, snapshot_id, table_schema))) {
     LOG_WARN("do_build_table_schema failed", K(ret));
   } else {
     // 因为 table_schema 可能是从 ObKVCache 里面拿出来的
@@ -143,6 +145,34 @@ int ObIExternalCatalog::fetch_partitions(ObIAllocator &allocator,
 int ObIExternalCatalog::get_cache_refresh_interval_sec(int64_t &sec)
 {
   return OB_NOT_SUPPORTED;
+}
+
+int ObILakeTableMetadata::resolve_time_travel_info(const ObTimeTravelInfo *time_travel_info,
+                                                   std::optional<int32_t> &schema_id,
+                                                   std::optional<int64_t> &snapshot_id)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(time_travel_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("time_travel_info is null", K(ret));
+  } else {
+    switch (time_travel_info->type_) {
+      case ObTimeTravelInfo::TimeTravelType::NONE: {
+        // 默认行为：不支持 time travel 的表格式总是使用当前数据
+        snapshot_id = std::nullopt;
+        schema_id = std::nullopt;
+        break;
+      }
+      default: {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("unsupported time travel query type", K(ret), K(time_travel_info->type_));
+        break;
+      }
+    }
+  }
+
+  return ret;
 }
 
 } // namespace share

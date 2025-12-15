@@ -3628,6 +3628,7 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
   const ParseNode *part_node = NULL;
   const ParseNode *sample_node = NULL;
   const ParseNode *time_node = NULL;
+  const ParseNode *version_node = NULL; // time travel query
   const ParseNode *transpose_node = NULL;
   bool is_db_explicit = false;
   ObDMLStmt *stmt = get_stmt();
@@ -3657,6 +3658,9 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
     if (parse_tree.num_child_ >= 5) {
       time_node = parse_tree.children_[4];
     }
+    if (parse_tree.num_child_ >= 6) {
+      version_node = parse_tree.children_[5];
+    }
   } else if (T_ALIAS == parse_tree.type_) {
     table_node = parse_tree.children_[0];
     alias_node = parse_tree.children_[1];
@@ -3669,23 +3673,29 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
       if (parse_tree.num_child_ >= 6) {
         time_node = parse_tree.children_[5];
       }
+      if (parse_tree.num_child_ >= 7) {
+        version_node = parse_tree.children_[6];
+      }
     }
   }
-
-  if (OB_FAIL(resolve_table_relation_factor_wrapper(table_node,
-                                                    dblink_id,
-                                                    catalog_id,
-                                                    database_id,
-                                                    table_name,
-                                                    synonym_name,
-                                                    synonym_db_name,
-                                                    catalog_name,
-                                                    database_name,
-                                                    dblink_name,
-                                                    is_db_explicit,
-                                                    use_sys_tenant,
-                                                    is_reverse_link,
-                                                    ref_obj_ids))) {
+  ObTimeTravelInfo time_travel_info;
+  if (OB_NOT_NULL(version_node)
+      && OB_FAIL(resolve_time_travel_query(version_node, time_travel_info))) {
+    LOG_WARN("failed to resolve time travel query", K(ret));
+  } else if (OB_FAIL(resolve_table_relation_factor_wrapper(table_node,
+                                                           dblink_id,
+                                                           catalog_id,
+                                                           database_id,
+                                                           table_name,
+                                                           synonym_name,
+                                                           synonym_db_name,
+                                                           catalog_name,
+                                                           database_name,
+                                                           dblink_name,
+                                                           is_db_explicit,
+                                                           use_sys_tenant,
+                                                           is_reverse_link,
+                                                           ref_obj_ids))) {
     if (OB_TABLE_NOT_EXIST == ret || OB_ERR_BAD_DATABASE == ret) {
       if (is_information_schema_database_id(database_id)) {
         ret = OB_ERR_UNKNOWN_TABLE;
@@ -3748,7 +3758,8 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
                                                         synonym_db_name,
                                                         table_item,
                                                         cte_table_fisrt,
-                                                        real_dep_obj_id))) {
+                                                        real_dep_obj_id,
+                                                        &time_travel_info))) {
       LOG_WARN("resolve base or alias table item failed", K(ret));
     } else {
       //如果当前解析的表属于oracle租户,在线程局部设置上mode.
@@ -4056,6 +4067,99 @@ int ObDMLResolver::resolve_flashback_query_node(const ParseNode *time_node, Tabl
   return ret;
 }
 
+int ObDMLResolver::resolve_time_travel_query(const ParseNode *version_node,
+                                             ObTimeTravelInfo &time_travel_info)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(version_node)) {
+    time_travel_info.type_ = ObTimeTravelInfo::TimeTravelType::NONE;
+    // 没有时间旅行查询，使用当前快照
+  } else if (T_TABLE_VERSION_QUERY == version_node->type_
+             || T_TABLE_VERSION_QUERY_TIMESTAMP == version_node->type_) {
+    if (version_node->num_child_ != 1 || OB_ISNULL(version_node->children_[0])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected version query node", K(ret), K(version_node->num_child_));
+    } else {
+      ParseNode *expr_node = version_node->children_[0];
+
+      // 根据expr的类型来判断
+      switch (expr_node->type_) {
+        case T_INT: {
+          // 数字快照ID
+          time_travel_info.type_ = ObTimeTravelInfo::TimeTravelType::SNAPSHOT_ID;
+          time_travel_info.snapshot_id_ = expr_node->value_;
+          break;
+        }
+        case T_VARCHAR:
+        case T_CHAR: {
+          if (T_TABLE_VERSION_QUERY_TIMESTAMP == version_node->type_) {
+            // 时间类型
+            time_travel_info.type_ = ObTimeTravelInfo::TimeTravelType::TIMESTAMP;
+            ObString timestamp_str(expr_node->str_len_, expr_node->str_value_);
+            int64_t timestamp_ms = 0;
+            if (OB_FAIL(parse_timestamp_string_to_ms(timestamp_str, session_info_, timestamp_ms))) {
+              LOG_WARN("failed to parse timestamp string", K(ret), K(timestamp_str));
+            } else {
+              time_travel_info.timestamp_ms_ = timestamp_ms;
+            }
+          } else {
+            // 分支名或标签名
+            time_travel_info.type_ = ObTimeTravelInfo::TimeTravelType::BRANCH_TAG;
+            ObString tag_or_branch_name(expr_node->str_len_, expr_node->str_value_);
+            tag_or_branch_name = tag_or_branch_name.trim_space_only();
+            time_travel_info.branch_or_tag_name_ = tag_or_branch_name;
+          }
+          break;
+        }
+        default: {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("unsupported expression type in VERSION AS OF", K(ret), K(expr_node->type_));
+          break;
+        }
+      }
+    }
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("unsupported time travel query type", K(ret), K(version_node->type_));
+  }
+
+  return ret;
+}
+
+int ObDMLResolver::parse_timestamp_string_to_ms(const ObString &timestamp_str,
+                                                ObSQLSessionInfo *session_info,
+                                                int64_t &timestamp_ms)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(session_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("session info is null", K(ret));
+  } else if (timestamp_str.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("empty timestamp string", K(ret));
+  } else {
+    int64_t time_val = 0;
+    int16_t scale = 0;
+    ObDateSqlMode date_sql_mode;
+    date_sql_mode.init(session_info->get_sql_mode()); // 使用会话的SQL模式
+    date_sql_mode.allow_invalid_dates_ = false;
+    ObTimeConvertCtx cvrt_ctx(TZ_INFO(session_info), true); // 设置为timestamp模式，使用会话时区
+
+    if (OB_FAIL(ObTimeConverter::str_to_datetime(timestamp_str,
+                                                 cvrt_ctx,
+                                                 time_val,
+                                                 &scale,
+                                                 date_sql_mode))) {
+      LOG_WARN("failed to parse timestamp string (MySQL mode)", K(ret), K(timestamp_str));
+    } else {
+      timestamp_ms = time_val / 1000;
+    }
+  }
+
+  return ret;
+}
+
 //针对subquery或者view按照oracle的设置原则，在表已经有相关flashback属性时保持原有的，在没有相关flashback属性时，
 //设置为外层给view或者subquery的flashback属性，比如:
 // select * from ((select * from t1 as of timestamp time1, t2) as of timestamp time1;
@@ -4169,6 +4273,7 @@ int ObDMLResolver::build_mocked_external_table_item(const ObTableSchema *table_s
       item->ref_id_ = table_schema->get_table_id();
       item->table_type_ = table_schema->get_table_type();
       item->lake_table_format_ = table_schema->get_lake_table_format();
+      item->lake_table_snapshot_id_ = table_schema->get_lake_table_snapshot_id();
       item->database_name_ = session_info_->get_database_name();
       item->external_location_id_ = table_schema->get_external_location_id();
       if (!alias_name.empty()) {
@@ -7911,7 +8016,8 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(const uint64_t tenant
                                                            const ObString &synonym_db_name,
                                                            TableItem *&tbl_item,
                                                            bool cte_table_fisrt,
-                                                           uint64_t dep_obj_id)
+                                                           uint64_t dep_obj_id,
+                                                           const ObTimeTravelInfo* time_travel_info)
 {
   int ret = OB_SUCCESS;
   ObDMLStmt *stmt = get_stmt();
@@ -7944,7 +8050,9 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(const uint64_t tenant
                                                          false /*data table first*/,
                                                          cte_table_fisrt,
                                                          is_hidden,
-                                                         tschema))) {
+                                                         tschema,
+                                                         false,
+                                                         time_travel_info))) {
       if (OB_TABLE_NOT_EXIST == ret &&
           ((stmt->is_select_stmt() && select_index_enabled) ||
            session_info_->get_ddl_info().is_ddl() ||
@@ -7956,7 +8064,8 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(const uint64_t tenant
                                                       cte_table_fisrt,
                                                       is_hidden,
                                                       tschema,
-                                                      false/*is_built_in_index*/))) {
+                                                      false/*is_built_in_index*/,
+                                                      time_travel_info))) {
           if (OB_TABLE_NOT_EXIST == ret ||
                session_info_->get_ddl_info().is_ddl() ||
                session_info_->get_ddl_info().is_dummy_ddl_for_inner_visibility()) {
@@ -7967,7 +8076,8 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(const uint64_t tenant
                                                           cte_table_fisrt,
                                                           is_hidden,
                                                           tschema,
-                                                          true/*is_built_in_index*/))) {
+                                                          true/*is_built_in_index*/,
+                                                          time_travel_info))) {
               LOG_WARN("table or index doesn't exist", K(tenant_id), K(database_id), K(tbl_name), K(ret));
             }
           } else {
@@ -8011,6 +8121,7 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(const uint64_t tenant
           item->ddl_table_id_ = tschema->get_table_id();
           item->table_type_ = tschema->get_table_type();
           item->lake_table_format_ = tschema->get_lake_table_format();
+          item->lake_table_snapshot_id_ = tschema->get_lake_table_snapshot_id();
         } else {
           const ObTableSchema *tab_schema = nullptr;
           if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), tschema->get_data_table_id(), tab_schema))) {
@@ -8026,6 +8137,7 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(const uint64_t tenant
             item->ddl_table_id_ = tschema->get_table_id();
             item->table_type_ = tschema->get_table_type();
             item->lake_table_format_ = tschema->get_lake_table_format();
+            item->lake_table_snapshot_id_ = tschema->get_lake_table_snapshot_id();
           }
         }
       } else if (tschema->is_index_table() || tschema->is_materialized_view()) {
@@ -8044,6 +8156,7 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(const uint64_t tenant
             item->mview_id_ = tschema->get_table_id();
             item->table_type_ = tschema->get_table_type();
             item->lake_table_format_ = tschema->get_lake_table_format();
+            item->lake_table_snapshot_id_ = tschema->get_lake_table_snapshot_id();
             item->need_expand_rt_mv_ = !params_.is_for_rt_mv_ && tschema->mv_on_query_computation();
             item->table_name_ = tschema->get_table_name_str();
             item->alias_name_ = alias_name.empty() ? tschema->get_table_name_str() : alias_name;
@@ -8081,6 +8194,7 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(const uint64_t tenant
         item->ddl_schema_version_ = tschema->get_schema_version();
         item->table_type_ = tschema->get_table_type();
         item->lake_table_format_ = tschema->get_lake_table_format();
+        item->lake_table_snapshot_id_ = tschema->get_lake_table_snapshot_id();
       }
     }
     if (OB_SUCC(ret)) {
@@ -8156,6 +8270,7 @@ int ObDMLResolver::resolve_base_or_alias_table_item_dblink(uint64_t dblink_id,
     item->is_view_table_ = false;
     item->table_type_ = MAX_TABLE_TYPE;
     item->lake_table_format_ = share::ObLakeTableFormat::INVALID;
+    item->lake_table_snapshot_id_ = OB_INVALID_ID;
     item->synonym_name_ = synonym_name;
     item->synonym_db_name_ = synonym_db_name;
     // dblink info.
@@ -11978,7 +12093,12 @@ int ObDMLResolver::resolve_table_relation_recursively(uint64_t tenant_id,
   }
   CK (OB_NOT_NULL(schema_guard = schema_checker_->get_schema_guard()));
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(check_table_exist_or_not(tenant_id, catalog_id, database_id, table_name, db_name))) {
+  } else if (!is_external_catalog_id(catalog_id)
+             && OB_FAIL(check_table_exist_or_not(tenant_id,
+                                                 catalog_id,
+                                                 database_id,
+                                                 table_name,
+                                                 db_name))) {
     if (OB_TABLE_NOT_EXIST == ret) {      //try again, with synonym
       ret = OB_SUCCESS;
       if (OB_FAIL(schema_checker_->get_synonym_schema(tenant_id, database_id, table_name,
@@ -20712,6 +20832,7 @@ int ObDMLResolver::try_add_join_table_for_fts(const TableItem *left_table, Table
     right_table->alias_name_ = table_schema->get_table_name_str();
     right_table->table_type_ = table_schema->get_table_type();
     right_table->lake_table_format_ = table_schema->get_lake_table_format();
+    right_table->lake_table_snapshot_id_ = table_schema->get_lake_table_snapshot_id();
     right_table->qb_name_ = left_table->qb_name_;
     right_table->synonym_db_name_ = left_table->synonym_db_name_;
     right_table->database_name_ = left_table->database_name_;

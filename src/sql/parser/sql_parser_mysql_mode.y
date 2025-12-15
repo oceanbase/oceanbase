@@ -407,7 +407,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_resource_unit_option_list resource_unit_option
 %type <node> tenant_option zone_list resource_pool_list
 %type <node> with_column_group column_group_list column_group_element
-%type <node> opt_range_partition_info opt_auto_split_tablet_size_option auto_split_tablet_size_option opt_partition_option partition_option hash_partition_option key_partition_option opt_use_partition use_partition range_partition_option subpartition_option opt_range_partition_list opt_range_subpartition_list range_partition_list range_subpartition_list range_partition_element range_subpartition_element range_partition_expr range_expr_list opt_part_id sample_clause opt_block seed sample_percent opt_sample_scope modify_partition_info modify_tg_partition_info opt_partition_range_or_list auto_partition_option auto_range_type partition_size auto_partition_type use_flashback partition_options partition_num opt_subpartition_range_or_list
+%type <node> opt_range_partition_info opt_auto_split_tablet_size_option auto_split_tablet_size_option opt_partition_option partition_option hash_partition_option key_partition_option opt_use_partition use_partition range_partition_option subpartition_option opt_range_partition_list opt_range_subpartition_list range_partition_list range_subpartition_list range_partition_element range_subpartition_element range_partition_expr range_expr_list opt_part_id sample_clause opt_block seed sample_percent opt_sample_scope modify_partition_info modify_tg_partition_info opt_partition_range_or_list auto_partition_option auto_range_type partition_size auto_partition_type use_flashback use_version partition_options partition_num opt_subpartition_range_or_list
 %type <node> subpartition_template_option subpartition_individual_option opt_hash_partition_list hash_partition_list hash_partition_element opt_hash_subpartition_list hash_subpartition_list hash_subpartition_element opt_subpartition_list opt_engine_option
 %type <node> date_unit date_params timestamp_params
 %type <node> drop_table_stmt table_list drop_view_stmt table_or_tables
@@ -14343,6 +14343,10 @@ relation_factor %prec LOWER_PARENS
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ORG, 5, $1, NULL, NULL, NULL, $2);
 }
+| relation_factor use_version %prec LOWER_PARENS
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ORG, 6, $1, NULL, NULL, NULL, NULL, $2);
+}
 | relation_factor use_partition use_flashback %prec LOWER_PARENS
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ORG, 5, $1, NULL, $2, NULL, $3);
@@ -14466,6 +14470,11 @@ relation_factor %prec LOWER_PARENS
 | relation_factor use_flashback AS relation_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $4, NULL, NULL, NULL, $2);
+  $$->sql_str_off_ = @1.first_column;
+}
+| relation_factor use_version AS relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 7, $1, $4, NULL, NULL, NULL, NULL, $2);
   $$->sql_str_off_ = @1.first_column;
 }
 | relation_factor use_partition use_flashback AS relation_name
@@ -14995,6 +15004,23 @@ AS OF SNAPSHOT bit_expr %prec LOWER_PARENS
 | AS OF PROCTIME '(' ')' %prec LOWER_PARENS
 {
   malloc_terminal_node($$, result->malloc_pool_, T_TABLE_FLASHBACK_PROCTIME);
+}
+;
+
+use_version:
+VERSION AS OF expr %prec LOWER_PARENS
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_VERSION_QUERY, 1, $4);
+  if (OB_NOT_NULL($4)) {
+    $4->is_hidden_const_ = 1;
+  }
+}
+| TIMESTAMP AS OF expr %prec LOWER_PARENS
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_VERSION_QUERY_TIMESTAMP, 1, $4);
+  if (OB_NOT_NULL($4)) {
+    $4->is_hidden_const_ = 1;
+  }
 }
 ;
 
@@ -25025,6 +25051,10 @@ STATISTICS
   make_name_node($$, result->malloc_pool_, "collation");
 }
 | KEY_VERSION
+{
+  make_name_node($$, result->malloc_pool_, "version");
+}
+| VERSION
 {
   make_name_node($$, result->malloc_pool_, "version");
 }

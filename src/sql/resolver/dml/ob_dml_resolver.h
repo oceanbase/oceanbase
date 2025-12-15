@@ -20,6 +20,7 @@
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/resolver/expr/ob_shared_expr_resolver.h"
+#include "share/catalog/ob_time_travel_info.h"
 #include <orc/Common.hh>
 #include "parquet/schema.h"
 #ifdef OB_BUILD_CPP_ODPS
@@ -432,6 +433,10 @@ protected:
   int resolve_error_log_table(const ParseNode *table_node, TableItem *&table_item);
   virtual int resolve_basic_table(const ParseNode &parse_tree, TableItem *&table_item);
   int resolve_flashback_query_node(const ParseNode *time_node, TableItem *table_item);
+  int resolve_time_travel_query(const ParseNode *version_node, ObTimeTravelInfo &time_travel_info);
+  int parse_timestamp_string_to_ms(const ObString &timestamp_str,
+                                   ObSQLSessionInfo *session_info,
+                                   int64_t &timestamp_ms);
   int check_flashback_expr_validity(ObRawExpr *expr, bool &has_column);
   int set_flashback_info_for_view(ObSelectStmt *select_stmt, TableItem *table_item);
   int resolve_table_drop_oracle_temp_table(TableItem *&table_item);
@@ -447,7 +452,8 @@ protected:
                                               const common::ObString &synonym_db_name,
                                               TableItem *&tbl_item,
                                               bool cte_table_fisrt,
-                                              uint64_t real_dep_obj_id);
+                                              uint64_t real_dep_obj_id,
+                                              const ObTimeTravelInfo *time_travel_info);
   int resolve_base_or_alias_table_item_dblink(uint64_t dblink_id,
                                               const common::ObString &dblink_name,
                                               const common::ObString &database_name,

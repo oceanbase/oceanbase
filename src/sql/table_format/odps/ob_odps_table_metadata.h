@@ -41,7 +41,10 @@ public:
   // 暂时偷懒
   int get_inner_table_schema(share::schema::ObTableSchema *&table_schema);
 protected:
-  int do_build_table_schema(share::schema::ObTableSchema *&table_schema) override;
+  int do_build_table_schema(std::optional<int32_t> schema_id,
+                            std::optional<int64_t> snapshot_id,
+                            share::schema::ObTableSchema *&table_schema) override;
+
 private:
   share::schema::ObTableSchema table_schema_;
 };

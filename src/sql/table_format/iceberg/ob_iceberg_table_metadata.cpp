@@ -13,7 +13,9 @@
 #define USING_LOG_PREFIX SQL
 #include "ob_iceberg_table_metadata.h"
 
+#include "lib/timezone/ob_time_convert.h"
 #include "share/schema/ob_iceberg_table_schema.h"
+#include "sql/session/ob_sql_session_info.h"
 #include "sql/table_format/iceberg/ob_iceberg_table_metadata.h"
 #include "sql/table_format/iceberg/ob_iceberg_utils.h"
 #include "sql/table_format/iceberg/scan/task.h"
@@ -158,17 +160,24 @@ int ObIcebergTableMetadata::load_by_metadata_location(const ObString &metadata_l
   return ret;
 }
 
-int ObIcebergTableMetadata::do_build_table_schema(share::schema::ObTableSchema *&table_schema)
+int ObIcebergTableMetadata::do_build_table_schema(std::optional<int32_t> schema_id,
+                                                  std::optional<int64_t> snapshot_id,
+                                                  share::schema::ObTableSchema *&table_schema)
 {
   int ret = OB_SUCCESS;
   const Schema *current_schema = NULL;
   schema::ObIcebergTableSchema *iceberg_table_schema = NULL;
-  if (OB_ISNULL(iceberg_table_schema
-                = OB_NEWx(schema::ObIcebergTableSchema, &allocator_, &allocator_))) {
+  int64_t lake_table_snapshot_id
+      = snapshot_id.has_value() ? snapshot_id.value() : table_metadata_.current_snapshot_id;
+  int32_t query_schema_id
+      = schema_id.has_value() ? schema_id.value() : table_metadata_.current_schema_id;
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(iceberg_table_schema
+                       = OB_NEWx(schema::ObIcebergTableSchema, &allocator_, &allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret));
-  } else if (OB_FAIL(
-                 table_metadata_.get_schema(table_metadata_.current_schema_id, current_schema))) {
+  } else if (OB_FAIL(table_metadata_.get_schema(query_schema_id, current_schema))) {
     LOG_WARN("get current schema failed", K(ret));
   } else {
     // 这些 id 必须要设置，不然后面的 add column 操作会失败
@@ -176,8 +185,9 @@ int ObIcebergTableMetadata::do_build_table_schema(share::schema::ObTableSchema *
     iceberg_table_schema->set_database_id(database_id_);
     iceberg_table_schema->set_table_id(table_id_);
     iceberg_table_schema->set_table_name(table_name_);
-    iceberg_table_schema->set_schema_version(table_metadata_.current_schema_id);
+    iceberg_table_schema->set_schema_version(query_schema_id);
     iceberg_table_schema->set_lake_table_format(share::ObLakeTableFormat::ICEBERG);
+    iceberg_table_schema->set_lake_table_snapshot_id(lake_table_snapshot_id);
 
     ObExternalFileFormat format;
     DataFileFormat default_write_format = DataFileFormat::INVALID;
@@ -263,6 +273,79 @@ int ObIcebergTableMetadata::do_build_table_schema(share::schema::ObTableSchema *
     if (OB_SUCC(ret)) {
       table_schema = iceberg_table_schema;
     }
+  }
+  return ret;
+}
+
+int ObIcebergTableMetadata::resolve_time_travel_info(
+    const share::ObTimeTravelInfo *time_travel_info,
+    std::optional<int32_t> &schema_id,
+    std::optional<int64_t> &snapshot_id)
+{
+  int ret = OB_SUCCESS;
+  int64_t snapshot_id_value = OB_INVALID_ID;
+  int32_t schema_id_value;
+  switch (time_travel_info->type_) {
+    case share::ObTimeTravelInfo::TimeTravelType::NONE: {
+      snapshot_id = std::nullopt;
+      schema_id = std::nullopt;
+      break;
+    }
+    case share::ObTimeTravelInfo::TimeTravelType::SNAPSHOT_ID: {
+      snapshot_id = std::make_optional(time_travel_info->snapshot_id_);
+      if (OB_FAIL(table_metadata_.get_schema_id_by_snapshot_id(time_travel_info->snapshot_id_,
+                                                               schema_id_value))) {
+        LOG_WARN("failed to get schema id by snapshot id", K(ret));
+      } else {
+        schema_id = std::make_optional(schema_id_value);
+      }
+      break;
+    }
+    case share::ObTimeTravelInfo::TimeTravelType::TIMESTAMP: {
+      if (OB_FAIL(table_metadata_.get_snapshot_id_by_timestamp(time_travel_info->timestamp_ms_,
+                                                               snapshot_id_value))) {
+        LOG_WARN("failed to get snapshot id by timestamp", K(ret));
+      } else if (OB_FAIL(table_metadata_.get_schema_id_by_snapshot_id(snapshot_id_value,
+                                                                      schema_id_value))) {
+        LOG_WARN("failed to get schema id by snapshot id", K(ret));
+      } else {
+        snapshot_id = std::make_optional(snapshot_id_value);
+        schema_id = std::make_optional(schema_id_value);
+      }
+      break;
+    }
+    case share::ObTimeTravelInfo::TimeTravelType::BRANCH_TAG: {
+      const SnapshotRef *ref = NULL;
+      if (OB_FAIL(table_metadata_.get_ref_by_name(time_travel_info->branch_or_tag_name_, ref))) {
+        LOG_WARN("failed to get ref by name", K(ret));
+      } else if (OB_ISNULL(ref)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ref is null", K(ret));
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (ref->type == RefType::BRANCH) {
+        schema_id = std::make_optional(table_metadata_.current_schema_id);
+        snapshot_id = std::make_optional(ref->snapshot_id);
+        // for branch, snapshot id is the same as the current snapshot id
+      } else if (ref->type == RefType::TAG) {
+        snapshot_id = std::make_optional(ref->snapshot_id);
+        if (OB_FAIL(
+                table_metadata_.get_schema_id_by_snapshot_id(ref->snapshot_id, schema_id_value))) {
+          LOG_WARN("failed to get schema id by snapshot id", K(ret));
+        } else {
+          schema_id = std::make_optional(schema_id_value);
+        }
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("unsupported ref type", K(ret), K(ref->type));
+      }
+      break;
+    }
+    default:
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unsupported time travel query type", K(ret), K(time_travel_info->type_));
+      break;
   }
   return ret;
 }

@@ -131,7 +131,9 @@ int ObHiveTableMetadata::setup_tbl_schema(const uint64_t tenant_id,
   return ret;
 }
 
-int ObHiveTableMetadata::do_build_table_schema(ObTableSchema *&table_schema)
+int ObHiveTableMetadata::do_build_table_schema(std::optional<int32_t> schema_id,  /*not used*/
+                                               std::optional<int64_t> snapshot_id,  /*not used*/
+                                               ObTableSchema *&table_schema)
 {
   int ret = OB_SUCCESS;
   OZ(ObSchemaUtils::alloc_schema(allocator_, table_schema_, table_schema));
