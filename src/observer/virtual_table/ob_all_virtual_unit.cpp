@@ -293,6 +293,10 @@ int ObAllVirtualUnit::inner_get_next_row(ObNewRow *&row)
           }
           break;
         }
+        case DATA_DISK_ALLOCATED: {
+          cur_row_.cells_[i].set_null();
+          break;
+        }
         case MAX_NET_BANDWIDTH: {
           if (is_meta_tnt) {
             cur_row_.cells_[i].set_null();

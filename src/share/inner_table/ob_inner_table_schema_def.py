@@ -13528,6 +13528,7 @@ def_table_schema(
       ('max_net_bandwidth', 'int', 'true'),
       ('net_bandwidth_weight', 'int', 'true'),
       ('replica_type', 'int', 'false', '0'),
+      ('data_disk_allocated', 'int', 'true', '0'),
     ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
