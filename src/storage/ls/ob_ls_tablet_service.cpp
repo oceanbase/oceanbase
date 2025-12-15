@@ -7927,6 +7927,9 @@ int ObLSTabletService::check_real_leader_for_4377_(const ObLSID ls_id)
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid ls", KR(ret));
+  } else if (ls->is_logonly_replica()) {
+    ret = OB_NOT_MASTER;
+    LOG_WARN("get follower status with logonly replica", KPC(ls));
   } else if (OB_FAIL(ls->get_tx_svr()->get_tx_ls_log_adapter()->get_role(is_real_leader, epoch))) {
     LOG_WARN("get replica status fail", K(ret), KPC(ls));
   } else if (!is_real_leader) {

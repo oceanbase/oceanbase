@@ -421,9 +421,6 @@ int ObBalanceTaskExecuteService::get_balance_job_task_for_update_(
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_ISNULL(sql_proxy_)) {
-    ret = OB_ERR_UNDEFINED;
-    LOG_WARN("sql proxy is null", KR(ret));
   } else if (OB_UNLIKELY(!task.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("task is invalid", KR(ret), K(task));

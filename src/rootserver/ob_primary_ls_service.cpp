@@ -18,6 +18,11 @@
 #include "rootserver/ob_common_ls_service.h"
 #include "share/ob_srv_rpc_proxy.h" // ObSrvRpcProxy
 #include "share/location_cache/ob_location_service.h" //ObLocationService
+#include "observer/ob_server_struct.h"//GCTX
+#include "logservice/palf/palf_base_info.h"//PalfBaseInfo
+#include "rootserver/ob_ls_service_helper.h"//ObTenantLSInfo
+#include "rootserver/ob_tenant_info_loader.h"   //ObTenantInfoLoader
+#include "rootserver/ob_tenant_balance_service.h"//ObTenantBalanceService
 
 namespace oceanbase
 {
@@ -496,24 +501,18 @@ int ObPrimaryLSService::check_mini_mode_create_ls()
 int ObPrimaryLSService::create_ls_for_create_tenant()
 {
   int ret = OB_SUCCESS;
-  share::schema::ObTenantSchema tenant_schema;
-  ObArray<ObZone> primary_zone;
-  ObArray<share::ObSimpleUnitGroup> unit_group_array;
+  share::ObBalanceJobDesc job_desc;
+  ObArray<share::ObUnit> unit_array;//no use
   share::ObLSAttrOperator ls_operator(tenant_id_, GCTX.sql_proxy_);
-  if (OB_FAIL(get_tenant_schema(tenant_id_, tenant_schema))) {
-    LOG_WARN("failed to get tenant schema", KR(ret), K(tenant_id_));
-  } else if (!tenant_schema.is_creating()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("only creating tenant can create user ls", KR(ret), K(tenant_schema));
+  if (OB_FAIL(ObTenantBalanceService::gather_tenant_balance_desc(
+        tenant_id_, job_desc, unit_array))) {
+    LOG_WARN("failed to get primary zone unit array", KR(ret), K(tenant_id_));
 #ifndef OB_ENABLE_STANDALONE_LAUNCH
     // in standalone deployment, there's only one user ls.
     // memory is enough to create ls, so it's no need to check mini mode
   } else if (OB_FAIL(check_mini_mode_create_ls())) {
     LOG_WARN("failed to check mini mode create ls", KR(ret));
 #endif
-  } else if (OB_FAIL(ObLSServiceHelper::get_primary_zone_unit_array(&tenant_schema,
-          primary_zone, unit_group_array))) {
-    LOG_WARN("failed to get primary zone unit array", KR(ret), K(tenant_schema));
   } else {
     // ensure __all_ls is emptry
     START_TRANSACTION(GCTX.sql_proxy_, tenant_id_)
@@ -529,20 +528,23 @@ int ObPrimaryLSService::create_ls_for_create_tenant()
       uint64_t ls_group_id = OB_INVALID_ID;
       share::ObLSAttr new_ls;
       share::ObLSFlag flag;
-      for (int64_t i = 0; OB_SUCC(ret) && i < unit_group_array.count(); ++i) {
-        if (unit_group_array.at(i).is_active()) {
-          //create ls
-          if (OB_FAIL(ObLSServiceHelper::fetch_new_ls_group_id(GCTX.sql_proxy_, tenant_id_, ls_group_id))) {
-            LOG_WARN("failed to fetch new LS group id", KR(ret), K(tenant_id_));
-          }
-          for (int64_t j = 0; OB_SUCC(ret) && j < primary_zone.count(); j++) {
-            if (OB_FAIL(ObLSServiceHelper::create_ls_in_user_tenant(tenant_id_, ls_group_id, flag,
-                ls_operator, new_ls, &trans))) {
-              LOG_WARN("failed to execute create_ls_in_user_tenant", KR(ret), K(tenant_id_), K(ls_group_id));
-            }
-          }//end for each ls group
+      int64_t ls_group_cnt = 0;
+      const int64_t ls_cnt_in_group = job_desc.get_ls_cnt_in_group();
+      if (OB_FAIL(job_desc.get_unit_lcm_count(ls_group_cnt))) {
+        LOG_WARN("failed to get unit lcm count", KR(ret), K(job_desc));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < ls_group_cnt; ++i) {
+        //create ls
+        if (OB_FAIL(ObLSServiceHelper::fetch_new_ls_group_id(GCTX.sql_proxy_, tenant_id_, ls_group_id))) {
+          LOG_WARN("failed to fetch new LS group id", KR(ret), K(tenant_id_));
         }
-      }//end for each unit group
+        for (int64_t j = 0; OB_SUCC(ret) && j < ls_cnt_in_group; j++) {
+          if (OB_FAIL(ObLSServiceHelper::create_ls_in_user_tenant(tenant_id_, ls_group_id, flag,
+                  ls_operator, new_ls, &trans))) {
+            LOG_WARN("failed to execute create_ls_in_user_tenant", KR(ret), K(tenant_id_), K(ls_group_id));
+          }
+        }//end for each ls group
+      }//end for each ls group
     }
     END_TRANSACTION(trans)
   }

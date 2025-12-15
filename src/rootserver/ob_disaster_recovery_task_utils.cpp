@@ -330,6 +330,8 @@ int DisasterRecoveryUtils::get_member_in_member_list_(
   replica_member.reset();
   ObMember member;
   const ObLSReplica *leader_replica = nullptr;
+  const ObLSReplica *ls_replica_ptr = nullptr;
+  common::ObReplicaType replica_type_to_remove = REPLICA_TYPE_FULL;
   if (OB_UNLIKELY(!ls_info.is_valid()
                || !server_addr.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -352,10 +354,27 @@ int DisasterRecoveryUtils::get_member_in_member_list_(
       }
     } // end for
   }  // end else
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ls_info.find(server_addr, ls_replica_ptr))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("fail to find replica by server", KR(ret), K(server_addr), K(ls_info));
+    } else {
+      LOG_INFO("dose not have replica", KR(ret), K(server_addr), K(ls_info));
+      ret = OB_SUCCESS;
+    }
+  } else if (OB_ISNULL(ls_replica_ptr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls_replica_ptr is null", KR(ret), K(server_addr), KP(ls_replica_ptr), K(ls_info));
+  } else if (ObReplicaTypeCheck::is_log_replica(ls_replica_ptr->get_replica_type())) {
+    member.set_logonly();
+    replica_type_to_remove = REPLICA_TYPE_LOGONLY;
+  }
+
   if (OB_FAIL(ret)) {
   } else if (member.is_valid()) {
-    if (OB_FAIL(replica_member.init(member, REPLICA_TYPE_FULL))) {
-      LOG_WARN("fail to init remove_member", KR(ret), K(member));
+    if (OB_FAIL(replica_member.init(member, replica_type_to_remove))) {
+      LOG_WARN("fail to init remove_member", KR(ret), K(member), K(replica_type_to_remove));
     }
   }
   return ret;

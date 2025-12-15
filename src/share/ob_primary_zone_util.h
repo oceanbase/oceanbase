@@ -241,6 +241,9 @@ public:
   static int get_tenant_primary_zone_array(
       const share::schema::ObTenantSchema &tenant_schema,
       common::ObIArray<common::ObZone> &primary_zone_array);
+  static int get_tenant_multi_level_primary_zone_array(
+      const share::schema::ObTenantSchema &tenant_schema,
+      common::ObIArray<common::ObArray<common::ObZone>> &multi_level_primary_zone_array);
   static int get_tenant_zone_priority(
       const share::schema::ObTenantSchema &tenant_schema,
       ObSqlString &zone_priority);

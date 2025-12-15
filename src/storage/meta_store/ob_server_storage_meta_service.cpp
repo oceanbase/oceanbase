@@ -510,6 +510,8 @@ int ObServerStorageMetaService::start_complete_and_online_ls() const
           } else if (nullptr == ls) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("ls is null", K(ret));
+          } else if (ls->is_logonly_replica()) {
+            LOG_TRACE("should skip logonly replica", KPC(ls));
           } else if (OB_FAIL(ls->finish_storage_meta_replay())) {
             LOG_WARN("finish replay failed", K(ret), KPC(ls));
           }

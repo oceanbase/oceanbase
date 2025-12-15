@@ -92,6 +92,9 @@ int ObAllVirtualMinorFreezeInfo::get_next_ls(ObLS *&ls)
     } else if (OB_ISNULL(ls)) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(ERROR, "ls is null", K(ret));
+    } else if (ObReplicaTypeCheck::is_log_replica(ls->get_replica_type())) {
+      // skip logonly replica
+      SERVER_LOG(INFO, "skip logonly replica", KR(ret), KPC(ls));
     } else {
       ls_id_ = ls->get_ls_id().id();
       break;
@@ -243,6 +246,10 @@ int ObAllVirtualMinorFreezeInfo::get_next_freeze_stat(ObFreezerStat &freeze_stat
     } else if (OB_ISNULL(ls)) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "ls shouldn't NULL here", K(ret));
+    } else if (ObReplicaTypeCheck::is_log_replica(ls->get_replica_type())) {
+      // skip logonly replica
+      ret = OB_STATE_NOT_MATCH;
+      SERVER_LOG(WARN, "should skip logonly replica", KR(ret), KPC(ls));
     } else if (FALSE_IT(freezer = ls->get_freezer())) {
     } else if (OB_ISNULL(freezer)) {
       ret = OB_ERR_UNEXPECTED;

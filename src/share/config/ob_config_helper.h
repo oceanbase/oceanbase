@@ -1234,6 +1234,17 @@ public:
   DISABLE_COPY_ASSIGN(ObConfigDefaultDeltaFormatChecker);
 };
 
+class ObConfigZoneDeployModeChecker : public ObConfigChecker
+{
+public:
+  static constexpr const char *HETERO_MODE_STR = "HETERO";
+  static constexpr const char *HOMO_MODE_STR = "HOMO";
+  ObConfigZoneDeployModeChecker() {}
+  virtual ~ObConfigZoneDeployModeChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigZoneDeployModeChecker);
+};
 } // namespace common
 } // namespace oceanbase
 

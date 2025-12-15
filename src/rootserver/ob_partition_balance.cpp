@@ -44,8 +44,6 @@ int ObPartitionBalance::init(
     uint64_t tenant_id,
     schema::ObMultiVersionSchemaService *schema_service,
     common::ObMySQLProxy *sql_proxy,
-    const int64_t primary_zone_num,
-    const int64_t unit_group_num,
     TaskMode task_mode)
 {
   int ret = OB_SUCCESS;
@@ -66,9 +64,8 @@ int ObPartitionBalance::init(
     LOG_WARN("map create fail", KR(ret));
   } else if (OB_FAIL(bg_ls_stat_operator_.init(sql_proxy))) {
     LOG_WARN("init balance group ls stat operator fail", KR(ret));
-  } else if (OB_FAIL(job_generator_.init(tenant_id, primary_zone_num, unit_group_num, sql_proxy))) {
-    LOG_WARN("init job generator failed", KR(ret), K(tenant_id),
-        K(primary_zone_num), K(unit_group_num), KP(sql_proxy));
+  } else if (OB_FAIL(job_generator_.init(tenant_id, sql_proxy))) {
+    LOG_WARN("init job generator failed", KR(ret), K(tenant_id), KP(sql_proxy));
   } else {
     tenant_id_ = tenant_id;
     sql_proxy_ = sql_proxy;
@@ -187,7 +184,7 @@ int ObPartitionBalance::prepare_ls_()
   if (!inited_ || OB_ISNULL(sql_proxy_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObPartitionBalance not init", KR(ret), K(inited_), KP(sql_proxy_));
-  } else if (OB_FAIL(ObTenantBalanceService::gather_ls_status_stat(tenant_id_, ls_stat_array))) {
+  } else if (OB_FAIL(ObTenantBalanceService::gather_ls_status_stat(tenant_id_, ls_stat_array, true))) {
     LOG_WARN("failed to gather ls status", KR(ret), K(tenant_id_));
   } else if (OB_FAIL(job_generator_.prepare_ls(ls_stat_array))) {
     LOG_WARN("job_generator_ prepare ls failed", KR(ret), K(tenant_id_), K(ls_stat_array));

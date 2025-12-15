@@ -162,7 +162,8 @@ public:
   template <typename TableOperator>
   int exec_write(const uint64_t &tenant_id, const common::ObSqlString &sql,
                  TableOperator *table_operator, ObISQLClient &client,
-                 const bool ignore_row = false);
+                 const bool ignore_row = false,
+                 const int64_t target_affected_row = 1);
   /*
    * description: read the inner_table.the interface need operator has get_exec_tenant_id and fill_cell
    * param[in]: tenant_id of ls
@@ -244,7 +245,8 @@ int ObLSTemplateOperator::exec_write(const uint64_t &tenant_id,
                                       const common::ObSqlString &sql,
                                       TableOperator *table_operator, 
                                       ObISQLClient &client,
-                                      const bool ignore_row)
+                                      const bool ignore_row,
+                                      const int64_t target_affected_row)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(sql.empty() || OB_INVALID_TENANT_ID == tenant_id)
@@ -267,10 +269,13 @@ int ObLSTemplateOperator::exec_write(const uint64_t &tenant_id,
     } else if (OB_FAIL(
                    client.write(exec_tenant_id, sql.ptr(), affected_rows))) {
       SHARE_LOG(WARN, "failed to execute sql", KR(ret), K(exec_tenant_id), K(sql));
-    } else if (!is_single_row(affected_rows) && !ignore_row) {
-      ret = OB_NEED_RETRY;
-      SHARE_LOG(WARN, "expected one row, may need retry", KR(ret), K(affected_rows),
-               K(sql), K(ignore_row));
+    } else if (affected_rows != target_affected_row) {
+      //如果ignore row不修改错误码，只打印日志
+      if (!ignore_row) {
+        ret = OB_NEED_RETRY;
+      }
+      SHARE_LOG(WARN, "expected_row not equal to affected_rows", KR(ret), K(affected_rows),
+               K(target_affected_row), K(sql), K(ignore_row));
     }
   }
   return ret;

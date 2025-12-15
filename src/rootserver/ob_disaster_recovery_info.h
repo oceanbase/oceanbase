@@ -159,7 +159,9 @@ public:
       member_list_cnt_(0),
       paxos_replica_number_(0),
       has_leader_(false),
-      inited_(false) {}
+      inited_(false),
+      unit_list_(),
+      gts_unit_ids_() {}
   virtual ~DRLSInfo() {}
 public:
   // use user_tenant_id to init unit and locality
@@ -168,6 +170,7 @@ public:
       const share::ObLSInfo &ls_info,
       const share::ObLSStatusInfo &ls_status_info,
       const bool &filter_readonly_replicas_with_flag,
+      const common::ObIArray<uint64_t> &gts_unit_ids,
       const bool for_replace = false);
 public:
   const common::ObIArray<share::ObZoneReplicaAttrSet> &get_locality() const {
@@ -179,6 +182,7 @@ public:
   const ServerStatInfoMap &get_server_stat_info_map() const {
     return server_stat_info_map_;
   }
+  int check_zone_is_logonly(const common::ObZone &zone, bool &is_logonly) const;
   int64_t get_schema_replica_cnt() const { return schema_replica_cnt_; }
   int64_t get_schema_full_replica_cnt() const { return schema_full_replica_cnt_; }
   int64_t get_member_list_cnt() const { return member_list_cnt_; }
@@ -209,7 +213,14 @@ public:
       common::ObAddr &leader_addr,
       common::ObMemberList &member_list,
       GlobalLearnerList &learner_list) const;
-
+  // check and get if there is a replica on the target server
+  // @param [in] server_addr, which server the replica in
+  // @param [out] ls_replica, target replic
+  int check_replica_exist_and_get_ls_replica(
+      const common::ObAddr& server_addr,
+      share::ObLSReplica& ls_replica) const;
+  int rectify_replica_type_for_member(
+      ObMember &member) const;
   // get data_source from leader replcia
   // @param [out] data_source, leader replica
   // @param [out] data_size, leader replica data_size
@@ -217,12 +228,9 @@ public:
       ObReplicaMember &data_source,
       int64_t &data_size) const;
 
-  // check and get if there is a replica on the target server
-  // @param [in] server_addr, which server the replica in
-  // @param [out] ls_replica, target replic
-  int check_replica_exist_and_get_ls_replica(
-      const common::ObAddr& server_addr,
-      share::ObLSReplica& ls_replica) const;
+  const common::ObArray<share::ObUnit> &get_unit_list() const { return unit_list_; }
+  int get_unit_ids(common::ObIArray<uint64_t> &unit_ids) const;
+  const common::ObArray<uint64_t> &get_gts_unit_ids() const { return gts_unit_ids_; }
 private:
   int construct_filtered_ls_info_to_use_(
       const share::ObLSInfo &input_ls_info,
@@ -239,6 +247,11 @@ private:
       DRServerStatInfo *server_stat_info,
       DRUnitStatInfo *unit_stat_info,
       DRUnitStatInfo *unit_in_group_stat_info);
+  // try get unit in unit_list or unit_group
+  int construct_unit_id_in_unit_list_or_group_(
+      const share::ObLSStatusInfo &ls_status_info,
+      const share::ObLSReplica &ls_replica,
+      uint64_t &unit_id_in_group);
 public:
   TO_STRING_KV(K(resource_tenant_id_),
                K(zone_locality_array_),
@@ -251,7 +264,9 @@ public:
                K(schema_full_replica_cnt_),
                K(member_list_cnt_),
                K(paxos_replica_number_),
-               K(has_leader_));
+               K(has_leader_),
+               K(unit_list_),
+               K(gts_unit_ids_));
 private:
   const int64_t UNIT_MAP_BUCKET_NUM = 500000;
   const int64_t SERVER_MAP_BUCKET_NUM = 5000;
@@ -274,6 +289,10 @@ private:
   int64_t paxos_replica_number_;
   bool has_leader_;
   bool inited_;
+  // unit_list records units in __all_ls_stats's unit_list
+  // if unit_list in table is empty then unit_list_ is empty
+  common::ObArray<share::ObUnit> unit_list_;
+  common::ObArray<uint64_t> gts_unit_ids_; // gts units
 };
 
 } // end namespace rootserver

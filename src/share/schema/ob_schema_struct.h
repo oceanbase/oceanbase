@@ -2303,6 +2303,7 @@ public:
       int64_t &num) const;
   int64_t get_all_replica_num() const;
   int64_t get_full_replica_num() const;
+  int64_t get_logonly_replica_num() const;
 
   int get_zone_list(
       common::ObIArray<common::ObZone> &zone_list) const;

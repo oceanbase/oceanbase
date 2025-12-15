@@ -196,19 +196,6 @@ public:
 
   static int check_tenant_has_no_conflict_tasks(const uint64_t tenant_id);
 
-  // when update __all_unit, in some case we have to lock __all_unit first and then check clone
-  // called by ObUnitTableOperator::update_unit
-  static int lock_unit_for_tenant(
-             common::ObISQLClient &client,
-             const share::ObUnit &unit,
-             uint64_t &tenant_id_to_lock);
-
-  // when update __all_resource_pool, in some case we have to lock __all_resource_pool first and then check clone
-  // called by ObUnitTableOperator::update_resource_pool
-  static int lock_resource_pool_for_tenant(
-             common::ObISQLClient &client,
-             const share::ObResourcePool &resource_pool);
-
   // when update __all_tenant, inn some case we have to lock __all_tenant first and then check clone
   // called by ObTenantSqlService::delay_to_drop_tenant
   static int lock_status_for_tenant(
@@ -267,6 +254,7 @@ private:
   static int check_tenant_is_in_modify_ls_procedure_(const uint64_t tenant_id);
   static int check_tenant_is_in_modify_replica_procedure_(const uint64_t tenant_id);
   static int check_tenant_is_in_switchover_procedure_(const uint64_t tenant_id);
+  static int check_tenant_pools_unit_num_same_(const uint64_t tenant_id);
   static int check_standby_tenant_has_no_conflict_tasks_(const uint64_t tenant_id);
   static int check_standby_tenant_is_in_transfer_procedure_(const uint64_t tenant_id);
   static int check_standby_tenant_is_in_modify_ls_procedure_(const uint64_t tenant_id);

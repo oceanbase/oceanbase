@@ -72,6 +72,9 @@ int ObAllVirtualFreezeCheckpointInfo::prepare_to_read_()
   } else if (NULL == ls) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "ls shouldn't NULL here", K(ret), K(ls));
+  } else if (ObReplicaTypeCheck::is_log_replica(ls->get_replica_type())) {
+    // skip logonly replica
+    SERVER_LOG(INFO, "skip logonly replica", KR(ret), KPC(ls));
   } else if (FALSE_IT(infos.reset())) {
   } else if (OB_FAIL(ls->get_freezecheckpoint_info(infos))) {
     SERVER_LOG(WARN, "get freezecheckpoint info failed", K(ret), KPC(ls));

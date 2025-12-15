@@ -21,6 +21,7 @@ namespace share
 const char *const ObUnit::unit_status_strings[ObUnit::UNIT_STATUS_MAX] = {
   "ACTIVE",
   "DELETING",
+  "ADDING"
 };
 
 ObUnit::Status ObUnit::str_to_unit_status(const ObString &str)
@@ -124,8 +125,13 @@ bool ObUnit::is_valid() const
          && !zone_.is_empty()
          && server_.is_valid()
          && server_ != migrate_from_server_
-         && (status_ >= UNIT_STATUS_ACTIVE && status_ < UNIT_STATUS_MAX)
+         && is_valid_status(status_)
          && ObReplicaTypeCheck::is_replica_type_valid(replica_type_);
+}
+
+bool ObUnit::is_valid_status(const ObUnit::Status status)
+{
+  return status >= UNIT_STATUS_ACTIVE && status < UNIT_STATUS_MAX;
 }
 
 int ObUnit::get_unit_status_str(const char *&status_str) const
@@ -138,6 +144,11 @@ int ObUnit::get_unit_status_str(const char *&status_str) const
     status_str = unit_status_strings[status_];
   }
   return ret;
+}
+
+bool ObUnit::compare_with_zone(const ObUnit &lu, const ObUnit &ru)
+{
+  return lu.zone_ < ru.zone_;
 }
 
 DEF_TO_STRING(ObUnit)

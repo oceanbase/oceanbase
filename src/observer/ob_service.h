@@ -39,6 +39,7 @@ namespace storage
 {
 struct ObFrozenStatus;
 class ObLS;
+class ObLSMeta;
 }
 namespace observer
 {

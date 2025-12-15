@@ -85,6 +85,7 @@ int ObAlterLSResolver::resolve_create_ls_(const ParseNode &parse_tree, ObAlterLS
   uint64_t target_tenant_id = OB_INVALID_TENANT_ID;
   uint64_t ug_id = OB_INVALID_ID;
   ObZone primary_zone;
+  ObAlterLSArg::UnitListArg unit_list;
   if (OB_ISNULL(stmt) || OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt or session_info_ is null", KR(ret), KP(stmt), KP(session_info_));
@@ -103,17 +104,17 @@ int ObAlterLSResolver::resolve_create_ls_(const ParseNode &parse_tree, ObAlterLS
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("operation type is invalid", KR(ret),
           "value", parse_tree.children_[1]->value_);
-    } else if (OB_FAIL(resolve_ls_attr_(*parse_tree.children_[1], ug_id, primary_zone))) {
+    } else if (OB_FAIL(resolve_ls_attr_(*parse_tree.children_[1], ug_id, primary_zone, unit_list))) {
       LOG_WARN("failed to resolve ls attr", KR(ret));
-    } else if (OB_INVALID_ID == ug_id) {
+    } else if (OB_INVALID_ID == ug_id && !unit_list.has_unit_id_list()) {
       ret = OB_OP_NOT_ALLOW;
-      LOG_WARN("create ls must specify unit group", KR(ret));
-      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "UNIT_GROUP is not specified, CREATE LS is");
+      LOG_WARN("create ls must specify unit group/list", KR(ret));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Unit group or unit list is not set, CREATE LS is");
     } else if (OB_FAIL(Util::get_and_verify_tenant_name(parse_tree.children_[2], false, /* allow_sys_meta_tenant */
             session_info_->get_effective_tenant_id(), target_tenant_id, "CREATE LS"))) {
       LOG_WARN("fail to execute get_and_verify_tenant_name", KR(ret),
           K(session_info_->get_effective_tenant_id()), KP(parse_tree.children_[2]));
-    } else if (OB_FAIL(stmt->get_arg().init_create_ls(target_tenant_id, ug_id, primary_zone))) {
+    } else if (OB_FAIL(stmt->get_arg().init_create_ls(target_tenant_id, ug_id, primary_zone, unit_list))) {
       LOG_WARN("failed to init create ls", KR(ret), K(target_tenant_id), K(ug_id), K(primary_zone));
     }
   }
@@ -127,6 +128,8 @@ int ObAlterLSResolver::resolve_modify_ls_(const ParseNode &parse_tree, ObAlterLS
   uint64_t target_tenant_id = OB_INVALID_TENANT_ID;
   uint64_t ug_id = OB_INVALID_ID;
   ObZone primary_zone;
+  ObAlterLSArg::UnitListArg unit_list;
+  const int64_t cluster_version = GET_MIN_CLUSTER_VERSION();
   if (OB_ISNULL(stmt) || OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt or session_info_ is null", KR(ret), KP(stmt), KP(session_info_));
@@ -146,7 +149,7 @@ int ObAlterLSResolver::resolve_modify_ls_(const ParseNode &parse_tree, ObAlterLS
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("operation type is invalid", KR(ret),
           "value", parse_tree.children_[1]->value_);
-    } else if (OB_FAIL(resolve_ls_attr_(*parse_tree.children_[2], ug_id, primary_zone))) {
+    } else if (OB_FAIL(resolve_ls_attr_(*parse_tree.children_[2], ug_id, primary_zone, unit_list))) {
       LOG_WARN("failed to resolve ls attr", KR(ret));
     } else if (OB_FAIL(Util::get_and_verify_tenant_name(parse_tree.children_[3], true, /* allow_sys_meta_tenant */
             session_info_->get_effective_tenant_id(), target_tenant_id, "Modify LS"))) {
@@ -162,7 +165,7 @@ int ObAlterLSResolver::resolve_modify_ls_(const ParseNode &parse_tree, ObAlterLS
       LOG_WARN("parse node type is invalid", KR(ret), "type", parse_tree.children_[1]->children_[0]->type_);
     } else {
       ObLSID id(parse_tree.children_[1]->children_[0]->value_);
-      if (OB_FAIL(stmt->get_arg().init_modify_ls(target_tenant_id, id, ug_id, primary_zone))) {
+      if (OB_FAIL(stmt->get_arg().init_modify_ls(target_tenant_id, id, ug_id, primary_zone, unit_list))) {
         LOG_WARN("failed to init modify ls", KR(ret), K(target_tenant_id), K(id), K(ug_id), K(primary_zone));
       }
     }
@@ -211,12 +214,16 @@ int ObAlterLSResolver::resolve_drop_ls_(const ParseNode &parse_tree, ObAlterLSSt
 
 }
 
-int ObAlterLSResolver::resolve_ls_attr_(const ParseNode &parse_tree,
-    uint64_t &unit_group_id, ObZone &primary_zone)
+int ObAlterLSResolver::resolve_ls_attr_(
+    const ParseNode &parse_tree,
+    uint64_t &unit_group_id,
+    ObZone &primary_zone,
+    ObAlterLSArg::UnitListArg &unit_list)
 {
   int ret = OB_SUCCESS;
   unit_group_id = OB_INVALID_ID;
   primary_zone.reset();
+  unit_list.reset();
   if (OB_UNLIKELY(T_LS_ATTR_LIST != parse_tree.type_
         || 1 > parse_tree.num_child_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -226,29 +233,62 @@ int ObAlterLSResolver::resolve_ls_attr_(const ParseNode &parse_tree,
     int64_t num = parse_tree.num_child_;
     for (int64_t i = 0; OB_SUCC(ret) && i < num; ++i) {
       ParseNode *node = parse_tree.children_[i];
-      if (OB_ISNULL(node) || 1 != node->num_child_
-          || OB_ISNULL(node->children_[0])) {
+      if (OB_ISNULL(node)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("node is null", KR(ret), K(i), K(num), KP(node));
+        LOG_WARN("unexpected node", KR(ret), K(i), K(num), KP(node));
       } else {
-        ParseNode *attr_node = node->children_[0];
         if (T_UNIT_GROUP == node->type_) {
-          unit_group_id = attr_node->value_;
-          if (OB_USER_UNIT_GROUP_ID >= unit_group_id && 0 != unit_group_id) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("set unit group id invalid not allowed", KR(ret), K(unit_group_id));
-            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "set invalid unit group");
+          if (node->num_child_ != 1 || OB_ISNULL(node->children_[0])) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null children", KR(ret));
+          } else {
+            ParseNode *attr_node = node->children_[0];
+            unit_group_id = attr_node->value_;
+            if (OB_USER_UNIT_GROUP_ID >= unit_group_id && 0 != unit_group_id) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("set unit group id invalid not allowed", KR(ret), K(unit_group_id));
+              LOG_USER_ERROR(OB_INVALID_ARGUMENT, "set invalid unit group");
+            }
           }
         } else if (T_PRIMARY_ZONE == node->type_) {
-          common::ObString primary_zone_str;
-          primary_zone_str.assign_ptr(const_cast<char *>(attr_node->str_value_),
-                                  static_cast<int32_t>(attr_node->str_len_));
-          if (primary_zone_str.empty()) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("set primary_zone empty is not allowed now", KR(ret));
-            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "set primary_zone empty");
-          } else if (OB_FAIL(primary_zone.assign(primary_zone_str))) {
-            LOG_WARN("failed to assign primary zone", KR(ret), K(primary_zone_str));
+          if (node->num_child_ != 1 || OB_ISNULL(node->children_[0])) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null children", KR(ret), K(i), K(num));
+          } else {
+            ParseNode *attr_node = node->children_[0];
+            common::ObString primary_zone_str;
+            primary_zone_str.assign_ptr(const_cast<char *>(attr_node->str_value_),
+                static_cast<int32_t>(attr_node->str_len_));
+            if (primary_zone_str.empty()) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("set primary_zone empty is not allowed now", KR(ret));
+              LOG_USER_ERROR(OB_INVALID_ARGUMENT, "set primary_zone empty");
+            } else if (OB_FAIL(primary_zone.assign(primary_zone_str))) {
+              LOG_WARN("failed to assign primary zone", KR(ret), K(primary_zone_str));
+            }
+          }
+        } else if (T_UNIT_LIST == node->type_) {
+          ParseNode *unit_list_node = node->children_[0];
+          ObSEArray<uint64_t, 24> unit_id_list;
+          if (OB_NOT_NULL(unit_list_node)) {
+            if (T_UNIT_ID_LIST != unit_list_node->type_) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected node type, it should be T_UNIT_ID_LIST", KR(ret));
+            }
+            for (int64_t j = 0; OB_SUCC(ret) && j < unit_list_node->num_child_; ++j) {
+              if (OB_ISNULL(unit_list_node->children_[j])) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected null children", KR(ret), K(j));
+              } else {
+                const uint64_t unit_id = unit_list_node->children_[j]->value_;
+                if (OB_FAIL(unit_id_list.push_back(unit_id))) {
+                  LOG_WARN("fail to push back unit_id", KR(ret), K(unit_list));
+                }
+              }
+            }
+          }
+          if (FAILEDx(unit_list.init(unit_id_list))) {
+            LOG_WARN("fail to init unit_list", KR(ret), K(unit_id_list));
           }
         } else {
           ret = OB_ERR_UNEXPECTED;
@@ -256,6 +296,11 @@ int ObAlterLSResolver::resolve_ls_attr_(const ParseNode &parse_tree,
         }
       }
     }//end for
+    if (OB_SUCC(ret) && OB_INVALID_ID != unit_group_id && unit_list.has_unit_id_list()) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("Setting both UNIT_GROUP and UNIT_LIST simultaneously is not allowed", KR(ret), K(unit_group_id), K(unit_list));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Setting both UNIT_GROUP and UNIT_LIST simultaneously is");
+    }
   }
   return ret;
 }

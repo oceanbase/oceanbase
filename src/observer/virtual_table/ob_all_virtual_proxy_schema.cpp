@@ -1091,6 +1091,8 @@ int ObAllVirtualProxySchema::get_replica_type_from_locality_(
           replica_type = REPLICA_TYPE_READONLY;
         } else if (zone_locality->get_columnstore_replica_num() > 0) {
           replica_type = REPLICA_TYPE_COLUMNSTORE;
+        } else if (zone_locality->get_logonly_replica_num() > 0) {
+          replica_type = REPLICA_TYPE_LOGONLY;
         } else if (zone_locality->get_full_replica_num() > 0) {
           replica_type = REPLICA_TYPE_FULL;
         } else {

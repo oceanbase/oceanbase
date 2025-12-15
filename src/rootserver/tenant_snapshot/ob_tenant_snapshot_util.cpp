@@ -1393,6 +1393,8 @@ int ObTenantSnapshotUtil::check_tenant_has_no_conflict_tasks(
     LOG_WARN("fail to check tenant in modify replica procedure", KR(ret), K(tenant_id));
   } else if (OB_FAIL(check_tenant_is_in_switchover_procedure_(tenant_id))) {
     LOG_WARN("fail to check tenant in switchover procedure", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(check_tenant_pools_unit_num_same_(tenant_id))) {
+    LOG_WARN("fail to check tenant pools unit num same", KR(ret), K(tenant_id));
   } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, GCTX.sql_proxy_,
                      false/*for_update*/, all_tenant_info))) {
     LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id));
@@ -1687,19 +1689,22 @@ int ObTenantSnapshotUtil::check_tenant_is_in_modify_resource_pool_procedure_(
   int64_t check_begin_time = ObTimeUtility::current_time();
   LOG_INFO("begin to check whether tenant is transfer", K(tenant_id));
   ObSqlString sql("FetchPool");
+  ObUnitTableTransaction unit_trans;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret));
-  } else if (OB_FAIL(sql.append_fmt("SELECT * FROM %s WHERE tenant_id = %lu FOR UPDATE",
+  } else if (OB_FAIL(sql.append_fmt("SELECT * FROM %s WHERE tenant_id = %lu",
                                    OB_ALL_RESOURCE_POOL_TNAME, tenant_id))) {
     LOG_WARN("append_fmt failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(unit_trans.start(GCTX.sql_proxy_, OB_SYS_TENANT_ID))) {
+    LOG_WARN("failed to start unit trans", KR(ret));
   } else {
     SMART_VAR(ObISQLClient::ReadResult, result) {
       common::sqlclient::ObMySQLResult *res = NULL;
-      if (OB_FAIL(GCTX.sql_proxy_->read(result, GCONF.cluster_id, OB_SYS_TENANT_ID, sql.ptr()))) {
+      if (OB_FAIL(unit_trans.read(result, GCONF.cluster_id, OB_SYS_TENANT_ID, sql.ptr()))) {
         LOG_WARN("execute sql failed", KR(ret), "sql", sql.ptr());
       } else if (OB_ISNULL(res = result.get_result())) {
         ret = OB_ERR_UNEXPECTED;
@@ -1716,6 +1721,13 @@ int ObTenantSnapshotUtil::check_tenant_is_in_modify_resource_pool_procedure_(
         // good, we can acquire lock on __all_resource_pool
         // can continue clone related procedure
       }
+    }
+  }
+  if (unit_trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(unit_trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("trans end failed", KR(tmp_ret), KR(ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
     }
   }
   int64_t cost = ObTimeUtility::current_time() - check_begin_time;
@@ -1892,7 +1904,7 @@ int ObTenantSnapshotUtil::check_tenant_is_in_modify_unit_procedure_(
     const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  common::ObMySQLTransaction trans;
+  ObUnitTableTransaction unit_trans;
   ObSqlString sql("FetchUnit");
   int64_t check_begin_time = ObTimeUtility::current_time();
   LOG_INFO("begin to check whether tenant is modifing unit", K(tenant_id));
@@ -1902,15 +1914,15 @@ int ObTenantSnapshotUtil::check_tenant_is_in_modify_unit_procedure_(
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret));
-  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, OB_SYS_TENANT_ID))) {
+  } else if (OB_FAIL(unit_trans.start(GCTX.sql_proxy_, OB_SYS_TENANT_ID))) {
     LOG_WARN("failed to start trans", KR(ret), K(tenant_id));
   } else if (OB_FAIL(sql.append_fmt("SELECT * FROM %s WHERE resource_pool_id in "
-                                   "(SELECT resource_pool_id FROM %s WHERE tenant_id = %lu) FOR UPDATE",
+                                   "(SELECT resource_pool_id FROM %s WHERE tenant_id = %lu)",
                                    OB_ALL_UNIT_TNAME, OB_ALL_RESOURCE_POOL_TNAME, tenant_id))) {
     LOG_WARN("append_fmt failed", KR(ret), K(tenant_id));
   } else {
     SMART_VAR(ObISQLClient::ReadResult, result) {
-      if (OB_FAIL(trans.read(result, GCONF.cluster_id, OB_SYS_TENANT_ID, sql.ptr()))) {
+      if (OB_FAIL(unit_trans.read(result, GCONF.cluster_id, OB_SYS_TENANT_ID, sql.ptr()))) {
         LOG_WARN("execute sql failed", KR(ret), "sql", sql.ptr());
       } else if (OB_ISNULL(result.get_result())) {
         ret = OB_ERR_UNEXPECTED;
@@ -1920,9 +1932,9 @@ int ObTenantSnapshotUtil::check_tenant_is_in_modify_unit_procedure_(
       }
     }
   }
-  if (trans.is_started()) {
+  if (unit_trans.is_started()) {
     int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
+    if (OB_TMP_FAIL(unit_trans.end(OB_SUCC(ret)))) {
       LOG_WARN("trans end failed", KR(tmp_ret), KR(ret));
       ret = OB_SUCC(ret) ? tmp_ret : ret;
     }
@@ -1956,7 +1968,7 @@ int ObTenantSnapshotUtil::check_unit_infos_(
       unit_info.reset();
       if (OB_FAIL(ObUnitTableOperator::read_unit(res, unit_info))) {
         LOG_WARN("fail to construct unit info", KR(ret));
-      } else if (!unit_info.is_active_status()) {
+      } else if (ObUnit::UNIT_STATUS_ACTIVE != unit_info.get_unit_status()) {
         ret = OB_CONFLICT_WITH_CLONE;
         LOG_WARN("unit is not active, can not do clone tenant related operations", KR(ret), K(unit_info));
         LOG_USER_ERROR(OB_CONFLICT_WITH_CLONE, tenant_id, case_to_check.get_case_name_str(), CLONE_PROCEDURE_STR);
@@ -1973,91 +1985,6 @@ int ObTenantSnapshotUtil::check_unit_infos_(
     } else if (0 >= unit_count) {
       ret = OB_STATE_NOT_MATCH;
       LOG_WARN("no valid unit exists", KR(ret));
-    }
-  }
-  return ret;
-}
-
-int ObTenantSnapshotUtil::lock_unit_for_tenant(
-    common::ObISQLClient &client,
-    const ObUnit &unit,
-    uint64_t &tenant_id_to_lock)
-{
-  int ret = OB_SUCCESS;
-  tenant_id_to_lock = OB_INVALID_TENANT_ID;
-  ObMySQLTransaction trans;
-
-  if (OB_UNLIKELY(!unit.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(unit));
-  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret));
-  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, OB_SYS_TENANT_ID))) {
-    LOG_WARN("fail to start trans", KR(ret));
-  } else {
-    HEAP_VAR(ObMySQLProxy::MySQLResult, res) {
-      common::sqlclient::ObMySQLResult *result = NULL;
-      const uint64_t exec_tenant_id = OB_SYS_TENANT_ID;
-      ObSqlString lock_sql("UnitTableLoc");
-      if (OB_FAIL(lock_sql.assign_fmt("SELECT * FROM %s WHERE unit_id = %lu FOR UPDATE",
-                                      OB_ALL_UNIT_TNAME, unit.unit_id_))) {
-        LOG_WARN("fail to construct lock sql", KR(ret), K(unit));
-      } else if (OB_FAIL(trans.read(res, exec_tenant_id, lock_sql.ptr()))) {
-        LOG_WARN("failed to read", KR(ret), K(exec_tenant_id), K(lock_sql));
-      } else {
-        ObUnitTableOperator unit_table_operator;
-        ObArray<uint64_t> input_pool_ids;
-        ObArray<share::ObResourcePool> input_pools;
-        if (OB_FAIL(unit_table_operator.init(*GCTX.sql_proxy_))) {
-          LOG_WARN("failed to init unit operator", KR(ret));
-        } else if (OB_FAIL(input_pool_ids.push_back(unit.resource_pool_id_))) {
-          LOG_WARN("fail to add resource pool id into array", KR(ret), K(unit));
-        } else if (OB_FAIL(unit_table_operator.get_resource_pools(input_pool_ids, input_pools))) {
-          LOG_WARN("fail to get resource pool by input pool id", KR(ret), K(input_pool_ids));
-        } else if (OB_UNLIKELY(1 < input_pools.count())) {
-          ret = OB_STATE_NOT_MATCH;
-          LOG_WARN("expect single resource pool", KR(ret), K(unit), K(input_pool_ids), K(input_pools));
-        } else {
-          tenant_id_to_lock = input_pools.at(0).tenant_id_;
-        }
-      }
-    }
-  }
-  if (trans.is_started()) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", KR(tmp_ret), KR(ret));
-      ret = OB_SUCC(ret) ? tmp_ret : ret;
-    }
-  }
-  return ret;
-}
-
-int ObTenantSnapshotUtil::lock_resource_pool_for_tenant(
-    common::ObISQLClient &client,
-    const share::ObResourcePool &resource_pool)
-{
-  int ret = OB_SUCCESS;
-  ObSqlString lock_sql("PoolLock");
-  if (OB_UNLIKELY(!resource_pool.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(resource_pool));
-  } else if (OB_UNLIKELY(!is_valid_tenant_id(resource_pool.tenant_id_))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("resource pool tenant id is invalid", KR(ret), K(resource_pool));
-  } else if (is_sys_tenant(resource_pool.tenant_id_) || is_meta_tenant(resource_pool.tenant_id_)) {
-    // do nothing
-  } else if (OB_FAIL(lock_sql.assign_fmt("SELECT * FROM %s WHERE resource_pool_id = %lu FOR UPDATE",
-                                         OB_ALL_RESOURCE_POOL_TNAME, resource_pool.resource_pool_id_))) {
-    LOG_WARN("fail to construct lock sql", KR(ret), K(resource_pool));
-  } else {
-    HEAP_VAR(ObMySQLProxy::MySQLResult, res) {
-      common::sqlclient::ObMySQLResult *result = NULL;
-      const uint64_t exec_tenant_id = OB_SYS_TENANT_ID;
-      if (OB_FAIL(client.read(res, exec_tenant_id, lock_sql.ptr()))) {
-        LOG_WARN("failed to read", KR(ret), K(exec_tenant_id), K(lock_sql));
-      }
     }
   }
   return ret;
@@ -2159,6 +2086,37 @@ int ObTenantSnapshotUtil::check_current_and_target_data_version(
                K(tenant_id), K(current_data_version), K(data_version_in_tenant_param_table));
     } else {
       data_version = current_data_version;
+    }
+  }
+  return ret;
+}
+
+int ObTenantSnapshotUtil::check_tenant_pools_unit_num_same_(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObUnitTableOperator unit_operator;
+  common::ObArray<share::ObResourcePool> pools;
+  if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id, not user tenant", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret));
+  } else if (OB_FAIL(unit_operator.init(*GCTX.sql_proxy_))) {
+    LOG_WARN("fail to init unit operator", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(unit_operator.get_resource_pools(tenant_id, pools))) {
+    LOG_WARN("fail to get resource pools", KR(ret), K(tenant_id));
+  } else {
+    int64_t pool_unit_num = 0;
+    ARRAY_FOREACH(pools, i) {
+      const share::ObResourcePool &pool = pools.at(i);
+      if (0 == i) {
+        pool_unit_num = pool.unit_count_;
+      } else if (pool_unit_num != pool.unit_count_) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("resource pool unit num is not same", KR(ret), K(pools), K(tenant_id));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant resource pools unit num not same, create snapshot or clone tenant");
+      }
     }
   }
   return ret;

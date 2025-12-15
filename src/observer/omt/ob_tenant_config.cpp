@@ -181,7 +181,7 @@ int ObTenantConfig::publish_special_config_after_dump()
       LOG_ERROR("parse data_version failed", KR(ret), K((*pp_item)->str()));
     } else if (!value_updated && old_data_version != DATA_CURRENT_VERSION) {
       ret = OB_ERR_UNEXPECTED;
-      SHARE_LOG(ERROR, "unexpected data_version", KR(ret), K(old_data_version));
+      SHARE_LOG(ERROR, "unexpected data_version", KR(ret), KDV(old_data_version));
     } else if (value_updated && new_data_version <= old_data_version) {
       LOG_INFO("[COMPATIBLE] [DATA_VERSION] no need to update", K(tenant_id_),
                "old_data_version", DVP(old_data_version),

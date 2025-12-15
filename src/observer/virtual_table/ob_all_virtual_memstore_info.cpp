@@ -95,6 +95,8 @@ int ObAllVirtualMemstoreInfo::get_next_ls(ObLS *&ls)
     } else if (OB_ISNULL(ls)) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(ERROR, "ls is null", K(ret));
+    } else if (ObReplicaTypeCheck::is_log_replica(ls->get_replica_type())) {
+      // skip log only replica
     } else {
       ls_id_ = ls->get_ls_id().id();
       break;

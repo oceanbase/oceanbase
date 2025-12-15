@@ -22,6 +22,7 @@
 #include "storage/ddl/ob_ddl_lock.h"
 #include "src/rootserver/ob_root_service.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "rootserver/ob_ls_service_helper.h"
 
 namespace oceanbase
 {
@@ -303,14 +304,8 @@ int ObSplitPartitionHelper::check_enable_global_index_auto_split(
     if (tenant_config.is_valid()) {
       const ObString policy_str(tenant_config->global_index_auto_split_policy.str());
       if (0 == policy_str.case_compare("DISTRIBUTED")) {
-        int64_t primary_zone_num = 0;
-        int64_t unit_group_num = 0;
-        ObArray<share::ObSimpleUnitGroup> unit_group_array;
-        if (OB_FAIL(rootserver::ObTenantBalanceService::gather_stat_primary_zone_num_and_units(
-                tenant_id, primary_zone_num, unit_group_array))) {
-          LOG_WARN("failed to gather stat of primary zone and unit", KR(ret), K(tenant_id));
-        } else if (primary_zone_num > 1 || unit_group_array.count() > 1) {
-          enable_auto_split = true;
+        if (OB_FAIL(check_tenant_leader_distributed_(tenant_id, enable_auto_split))) {
+          LOG_WARN("failed to check tenant leader distributed", KR(ret), K(tenant_id));
         }
       } else if (0 == policy_str.case_compare("ALL")) {
         enable_auto_split = true;
@@ -325,6 +320,46 @@ int ObSplitPartitionHelper::check_enable_global_index_auto_split(
         auto_part_size = data_table_schema.get_part_option().is_valid_auto_part_size() ? data_auto_part_size : tenant_auto_part_size;
         LOG_INFO("enable global index auto split by tenant config", K(auto_part_size), K(data_auto_part_size), K(tenant_auto_part_size), K(errsim_auto_part_size), K(policy_str));
       }
+    }
+  }
+  return ret;
+}
+
+int ObSplitPartitionHelper::check_tenant_leader_distributed_(
+    const uint64_t tenant_id,
+    bool &is_leader_distributed)
+{
+  int ret = OB_SUCCESS;
+  is_leader_distributed = false;
+  share::schema::ObTenantSchema tenant_schema;
+  ObArray<ObZone> primary_zone_array;
+  ObArray<share::ObUnit> unit_array;
+  ObArray<ObZone> locality_zone_list; // unused
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObTenantThreadHelper::get_tenant_schema(tenant_id, tenant_schema))) {
+    LOG_WARN("failed to get tenant schema", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObLSServiceHelper::get_primary_zone_unit_array(&tenant_schema,
+            primary_zone_array, unit_array, locality_zone_list))) {
+    LOG_WARN("failed to get primary zone unit array", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(primary_zone_array.count() <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("primary zone is empty", KR(ret), K(tenant_id));
+  } else if (primary_zone_array.count() > 1) {
+    // more than one primary zone, leader is distributed
+    is_leader_distributed = true;
+  } else {
+    // only has one primary zone, check if this zone has more than one unit
+    const ObZone &primary_zone = primary_zone_array.at(0);
+    int64_t zone_unit_num = 0;
+    ARRAY_FOREACH(unit_array, i) {
+      if (primary_zone == unit_array.at(i).zone_) {
+        zone_unit_num++;
+      }
+    }
+    if (zone_unit_num > 1) {
+      is_leader_distributed = true;
     }
   }
   return ret;

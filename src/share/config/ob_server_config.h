@@ -76,6 +76,9 @@ const char* const _TRANSFER_TASK_TABLET_COUNT_THRESHOLD = "_transfer_task_tablet
 const char* const DEFAULT_TABLE_ORGANIZATION = "default_table_organization";
 const char* const LOGSERVICE_ACCESS_POINT = "logservice_access_point";
 const char* const DEFAULT_TABLE_STORE_FORMAT = "default_table_store_format";
+const char* const ZONE_DEPLOY_MODE = "zone_deploy_mode";
+const char* const ENABLE_LOGONLY_REPLICA = "enable_logonly_replica";
+const char* const ENABLE_GTS_STANDALONE = "enable_gts_standalone";
 
 class ObServerMemoryConfig;
 

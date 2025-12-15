@@ -234,15 +234,17 @@ public:
   virtual int get_palf_epoch(int64_t &palf_epoch) const override final;
 
   int get_global_learner_list(common::GlobalLearnerList &learner_list) const;
-  int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const;
+  int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num, const bool &filter_logonly_replica = false) const;
   int get_config_version(LogConfigVersion &config_version) const;
   int get_paxos_member_list_and_learner_list(common::ObMemberList &member_list,
                                                      int64_t &paxos_replica_num,
-                                                     GlobalLearnerList &learner_list) const;
+                                                     GlobalLearnerList &learner_list,
+                                                     const bool &filter_logonly_replica = false) const;
   int get_stable_membership(LogConfigVersion &config_version,
                                     common::ObMemberList &member_list,
                                     int64_t &paxos_replica_num,
-                                    common::GlobalLearnerList &learner_list) const;
+                                    common::GlobalLearnerList &learner_list,
+                                    const bool &filter_logonly_replica = false) const;
   virtual int get_election_leader(common::ObAddr &addr) const override final;
   int get_parent(common::ObAddr &parent) const;
 

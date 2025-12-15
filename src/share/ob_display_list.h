@@ -179,6 +179,28 @@ public:
   {
     return display_str_to_list(str, *this);
   }
+  //简单判断一致的时候，排序也一致，不然对于重复的元素不好处理
+  //例如一个是11122，一个是11222这种不好判断是否一样
+  bool operator==(const ObDisplayList &other) const
+  {
+    bool bret = true;
+    if (this != &other) {
+      if (this->count() != other.count()) {
+        bret = false;
+      } else {
+        for (int64_t i = 0; bret && i < this->count(); ++i) {
+          if (!has_exist_in_array(other, this->at(i))) {
+            bret = false;
+          }
+        }//end for check each id in other
+      }
+    }
+    return bret;
+  }
+  bool operator!=(const ObDisplayList &other) const
+  {
+    return !(*this == other);
+  }
 };
 
 } // end namespace share

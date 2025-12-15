@@ -113,6 +113,12 @@ void ObLSStatusCache::check_ls_state(ObLS &ls, LSState &state)
     if (REACH_THREAD_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
       LOG_INFO("ls is deleted or offline", K(ls), K(ls.is_deleted()), K(ls.is_offline()));
     }
+  } else if (ObReplicaTypeCheck::is_log_replica(ls.get_replica_type())) {
+    // skip logonly replica
+    state = OFFLINE_OR_DELETED;
+    if (REACH_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
+      LOG_INFO("ls is logonly", K(ls));
+    }
   } else if (!is_restore_ready_for_merge(ls)) {
     state = RESTORE_NOT_READY;
     if (REACH_THREAD_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {

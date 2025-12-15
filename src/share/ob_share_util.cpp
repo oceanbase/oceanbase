@@ -11,6 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SHARE
+#include "rootserver/ob_unit_manager.h" // for ObUnitManager
 #ifdef OB_BUILD_ARBITRATION
 #include "ob_share_util.h"
 #include "share/arbitration_service/ob_arbitration_service_utils.h" // ObArbitrationServiceUtils
@@ -224,6 +225,15 @@ int ObShareUtil::check_compat_version_for_columnstore_replica(
 {
   return check_compat_data_version_(DATA_VERSION_4_3_3_0, true/*check_meta*/, false/*check_user*/,
                                     tenant_id, is_compatible);
+}
+
+bool ObShareUtil::check_compat_version_for_hetero_zone(
+    const uint64_t data_version)
+{
+  // the version range that support hetero zone is [4.2.5.5, 4.3.0.0) or [4.4.2.0, 4.5.0.0) or [4.5.1.0, +infinity)
+  return (MOCK_DATA_VERSION_4_2_5_5 <= data_version && data_version < DATA_VERSION_4_3_0_0)
+      || (MOCK_DATA_VERSION_4_4_2_0 <= data_version && data_version < DATA_VERSION_4_5_0_0)
+      || (data_version >= DATA_VERSION_4_5_1_0);
 }
 
 int ObShareUtil::fetch_current_cluster_version(
@@ -525,6 +535,23 @@ int ObShareUtil::check_compat_version_for_clone_tenant_with_tenant_role(
   return ret;
 }
 
+bool ObShareUtil::is_tenant_enable_ls_leader_balance(const uint64_t tenant_id)
+{
+  bool bret = false;
+  if (is_valid_tenant_id(tenant_id)) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (OB_UNLIKELY(!tenant_config.is_valid())) {
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "tenant config is invalid", K(tenant_id));
+    } else if (!tenant_config->enable_rebalance) {
+      // if enable_rebalance is disabled, ls leader balance is not allowed
+      bret = false;
+    } else {
+      bret = tenant_config->enable_ls_leader_balance;
+    }
+  }
+  return bret;
+}
+
 int ObShareUtil::mtl_get_tenant_role(const uint64_t tenant_id, ObTenantRole::Role &tenant_role)
 {
   int ret = OB_SUCCESS;
@@ -697,6 +724,153 @@ ObReplicaType ObShareUtil::string_to_replica_type(const ObString &str)
     replica_type = REPLICA_TYPE_INVALID;
   }
   return replica_type;
+}
+
+bool ObShareUtil::check_compat_version_for_logonly_replica(
+    const uint64_t data_version)
+{
+  // the version range that support logonly replica is [4.2.5.7, 4.3.0.0) or [4.4.2.0, 4.5.0.0) or [4.5.1.0, +infinity)
+  return (MOCK_DATA_VERSION_4_2_5_7 <= data_version && data_version < DATA_VERSION_4_3_0_0)
+      || (MOCK_DATA_VERSION_4_4_2_0 <= data_version && data_version < DATA_VERSION_4_5_0_0)
+      || (data_version >= DATA_VERSION_4_5_1_0);
+}
+
+int ObShareUtil::check_compat_version_for_logonly_replica(
+    bool &is_compatible)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  is_compatible = false;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, data_version))) {
+    LOG_WARN("fail to get sys tenant data version", KR(ret));
+  } else {
+    is_compatible = check_compat_version_for_logonly_replica(data_version);
+  }
+  return ret;
+}
+
+bool ObShareUtil::is_supported_replica_type_(
+     const common::ObReplicaType &replica_type,
+     const bool &check_for_unit)
+{
+  return ObReplicaType::REPLICA_TYPE_FULL == replica_type
+         || (!check_for_unit && ObReplicaType::REPLICA_TYPE_READONLY == replica_type)
+         || ObReplicaType::REPLICA_TYPE_LOGONLY == replica_type
+         || ObReplicaType::REPLICA_TYPE_COLUMNSTORE == replica_type;
+}
+
+bool ObShareUtil::is_valid_replica_type_for_unit(
+     const common::ObReplicaType &replica_type)
+{
+  return is_supported_replica_type_(replica_type, true/*check_for_unit*/);
+}
+
+int ObShareUtil::check_replica_type_with_version(
+    const common::ObReplicaType &replica_type,
+    const bool &check_for_unit)
+{
+  int ret = OB_SUCCESS;
+  bool compatible_with_logonly_unit = false;
+  if (OB_UNLIKELY(!is_supported_replica_type_(replica_type, check_for_unit))) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("not supported replica type", KR(ret), K(replica_type), K(check_for_unit));
+  } else if (ObReplicaType::REPLICA_TYPE_LOGONLY == replica_type) {
+    if (OB_FAIL(check_compat_version_for_logonly_replica(compatible_with_logonly_unit))) {
+      LOG_WARN("fail to check compatible for logonly replica", KR(ret));
+    } else if (!compatible_with_logonly_unit) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("L-replica only support from sys version up to 4.5.1.0", KR(ret), K(compatible_with_logonly_unit));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "sys tenant data version below 4.5.1.0, LOGONLY replica type");
+    } else if (GCTX.is_shared_storage_mode()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("logonly replica not supported in shared-storage mode", KR(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "In shared-storage mode, L-replica is");
+    }
+  }
+  return ret;
+}
+
+int ObShareUtil::check_unit_type_match_replica_type(
+    const common::ObReplicaType &replica_type,
+    const share::ObUnit &unit)
+{
+  int ret = OB_SUCCESS;
+  bool replica_is_logonly = false;
+  bool unit_is_logonly = false;
+  if (OB_UNLIKELY(ObReplicaType::REPLICA_TYPE_MAX == replica_type)
+      || OB_UNLIKELY(!unit.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(replica_type), K(unit));
+  } else {
+    replica_is_logonly = ObReplicaType::REPLICA_TYPE_LOGONLY == replica_type;
+    unit_is_logonly = ObReplicaType::REPLICA_TYPE_LOGONLY == unit.replica_type_;
+    if (replica_is_logonly != unit_is_logonly) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("create replica on pool with different type not allowed", KR(ret), K(replica_type), K(unit));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "replica on different type of resource pool");
+    }
+  }
+  return ret;
+}
+
+int ObShareUtil::check_replica_type_in_locality(
+    const share::schema::ObTenantSchema &tenant_schema)
+{
+  int ret = OB_SUCCESS;
+  int64_t full_replica_num = tenant_schema.get_full_replica_num();
+  int64_t logonly_replica_num = tenant_schema.get_logonly_replica_num();
+  uint64_t tenant_id = tenant_schema.get_tenant_id();
+  bool with_arb = tenant_schema.get_arbitration_service_status().is_enable_like();
+  bool is_hetero_deploy_mode_on = false;
+  FLOG_INFO("try check replica type in locality", K(tenant_schema), K(full_replica_num), K(logonly_replica_num), K(tenant_id), K(with_arb));
+  if (with_arb) {
+    if (0 != logonly_replica_num) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "The number of logonly replicas in locality is not 0, tenant with arbitration service");
+      LOG_WARN("can not create tenant, because tenant with arb service, locality must without L-replica", KR(ret), K(logonly_replica_num));
+    } else if (full_replica_num != 2 && full_replica_num != 4) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "The number of full replicas in locality is neither 2 nor 4, tenant with arbitration service");
+      LOG_WARN("can not create tenant, because tenant with arb service, locality must be 2F or 4F", KR(ret), K(full_replica_num));
+    }
+  } else if (0 != logonly_replica_num) {
+    if (OB_FAIL(rootserver::ObUnitManager::check_tenant_in_heterogeneous_deploy_mode(
+                    tenant_id, is_hetero_deploy_mode_on))) {
+      LOG_WARN("fail to check tenant in heterogeneous deploy mode", KR(ret), K(tenant_id));
+    } else if (!is_hetero_deploy_mode_on) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "ZONE_DEPLOY_MODE is not hetero, tenant with L-replica");
+      LOG_WARN("can not create tenant with L-replica, because zone_deploy_mode must be hetero",
+               KR(ret), K(logonly_replica_num), K(is_hetero_deploy_mode_on));
+    } else if (tenant_schema.is_restore_tenant_status()) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("tenant is restore, can not add L-replica", KR(ret), K(tenant_schema));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "add LOGONLY replica in locality for restore tenant");
+    }
+  }
+  return ret;
+}
+
+int ObShareUtil::get_full_replica_number(
+    const common::ObMemberList &member_list,
+    int64_t &full_replica_number)
+{
+  int ret = OB_SUCCESS;
+  full_replica_number = 0;
+  if (OB_UNLIKELY(0 >= member_list.get_member_number())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid member list", KR(ret), K(member_list));
+  } else {
+    for (int64_t index = 0; index < member_list.get_member_number() && OB_SUCC(ret); ++index) {
+      common::ObMember member;
+      if (OB_FAIL(member_list.get_member_by_index(index, member))) {
+        LOG_WARN("fail to get member from member_list", KR(ret), K(index));
+      } else if (!member.is_logonly()) {
+        ++full_replica_number;
+      }
+    }
+  }
+  return ret;
 }
 
 } //end namespace share

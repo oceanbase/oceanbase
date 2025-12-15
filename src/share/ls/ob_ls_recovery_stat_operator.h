@@ -232,6 +232,12 @@ public:
                                SCN &sync_scn,
                                SCN &min_wrs);
 
+  int get_meta_tenant_recovery_stat(const uint64_t tenant_id,
+      ObISQLClient &client,
+      SCN &sync_scn,
+      SCN &min_wrs,
+      int64_t &ora_rowscn);
+
   /**
    * @description:
    *    get tenant min user ls create scn

@@ -75,6 +75,8 @@ void ObEmptyShellTask::runTimerTask()
         if (OB_ISNULL(ls)) {
           ret = OB_ERR_UNEXPECTED;
           STORAGE_LOG(WARN, "ls is NULL", KR(ret));
+        } else if (ObReplicaTypeCheck::is_log_replica(ls->get_replica_type())) {
+          // do nothing
         } else if (FALSE_IT(tablet_empty_shell_handler = ls->get_tablet_empty_shell_handler())) {
         } else if (tablet_empty_shell_handler->check_stop()) {
           STORAGE_LOG(INFO, "[emptytablet] tablet_gc_handler is stop", K(ls->get_ls_id()));

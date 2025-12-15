@@ -631,6 +631,8 @@ int ObTenantWeakReadService::scan_all_ls_(storage::ObLSService *ls_svr)
       } else if (OB_ISNULL(ls)) {
         ret = OB_PARTITION_NOT_EXIST;
         LOG_WARN("iterate ls fail", KP(ls));
+      } else if (ObReplicaTypeCheck::is_log_replica(ls->get_replica_type())) {
+        LOG_TRACE("skip logonly replica", KPC(ls));
       } else if (OB_FAIL(handle_ls_(*ls))) {
         LOG_WARN("handle ls fail", "ls_id", ls->get_ls_id(), K(ret));
         ret = OB_SUCCESS;

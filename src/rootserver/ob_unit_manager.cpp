@@ -22,6 +22,8 @@
 #include "rootserver/ob_disaster_recovery_task_utils.h"
 #include "rootserver/ob_server_zone_op_service.h"
 #include "rootserver/ob_heartbeat_service.h"
+#include "rootserver/ob_ls_balance_helper.h"
+#include "share/ob_cluster_version.h"
 
 namespace oceanbase
 {
@@ -33,6 +35,19 @@ using namespace share::schema;
 namespace rootserver
 {
 
+#define LOG_USER_ERROR_WITH_ARGS(errno, format_str, args...) \
+do { \
+  const int64_t BUF_LEN = 256; \
+  char buf[BUF_LEN] = {0}; \
+  int64_t n = snprintf(buf, BUF_LEN, format_str, ##args); \
+  if (n < 0 || n >= BUF_LEN) { \
+    int64_t tmp_ret = OB_BUF_NOT_ENOUGH; \
+    LOG_WARN("snprintf error or buf not enough", KR(ret), KR(tmp_ret), K(n), K(BUF_LEN)); \
+  } else { \
+    LOG_USER_ERROR(errno, buf); \
+  } \
+} while (0);
+
 int ObUnitManager::ZoneUnitPtr::assign(const ZoneUnitPtr &other)
 {
   int ret = OB_SUCCESS;
@@ -43,11 +58,64 @@ int ObUnitManager::ZoneUnitPtr::assign(const ZoneUnitPtr &other)
   return ret;
 }
 
-int ObUnitManager::ZoneUnitPtr::sort_by_unit_id_desc()
+int ObUnitManager::ZoneUnitPtr::sort_by_unit_id()
 {
-  UnitGroupIdCmp cmp;
+  UnitIdCmp cmp;
   lib::ob_sort(unit_ptrs_.begin(), unit_ptrs_.end(), cmp);
   return cmp.get_ret();
+}
+
+// Priority order of ug_id for deleting:
+// 1. non-gts units on inactive server,
+// 2. non-gts units on active server
+// 3. gts units on inactive server
+// 4. gts units on active server
+bool ObUnitManager::DeleteUnitPtrCmp::operator()(const share::ObUnit *left, const share::ObUnit *right)
+{
+  int ret = OB_SUCCESS;
+  bool bret = true;
+  bool is_left_is_gts_unit = false;
+  bool is_left_server_active = false;
+  bool is_right_gts_unit = false;
+  bool is_right_server_active = false;
+  if (OB_ISNULL(left) || OB_ISNULL(right)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unit is null ptr", KP(left), KP(right));
+  // 1. gts VS non-gts, non-gts units first
+  } else if (FALSE_IT(is_left_is_gts_unit = has_exist_in_array(gts_unit_ids_, left->unit_id_))) {
+  } else if (FALSE_IT(is_right_gts_unit = has_exist_in_array(gts_unit_ids_, right->unit_id_))) {
+  } else if (is_left_is_gts_unit != is_right_gts_unit) {
+    bret = is_right_gts_unit ? true : false;
+  // 2. active VS inactive server, inactive server first
+  } else if (OB_FAIL(check_unit_server_active(*left, is_left_server_active))) {
+    LOG_WARN("fail to check unit server active", KR(ret), KPC(left));
+  } else if (OB_FAIL(check_unit_server_active(*right, is_right_server_active))) {
+    LOG_WARN("fail to check unit server active", KR(ret), KPC(right));
+  } else if (is_left_server_active != is_right_server_active) {
+    bret = is_right_server_active ? true : false;
+  // 3. if no winner in conditions above, unit with smaller id first
+  } else if (left->unit_group_id_ != right->unit_group_id_) {
+    bret = left->unit_group_id_ < right->unit_group_id_;
+  } else {
+    bret = left->unit_id_ < right->unit_id_;
+  }
+  // update ret_ only if failed
+  if (OB_FAIL(ret)) {
+    ret_ = ret;
+  }
+  return bret;
+}
+
+int ObUnitManager::DeleteUnitPtrCmp::check_unit_server_active(const share::ObUnit &unit, bool &is_active)
+{
+  int ret = OB_SUCCESS;
+  ObServerInfoInTable server_info;
+  if (OB_FAIL(SVR_TRACER.get_server_info(unit.server_, server_info))) {
+    LOG_WARN("fail to get_server_info", KR(ret), K(unit));
+  } else {
+    is_active = server_info.is_active();
+  }
+  return ret;
 }
 
 int ObUnitManager::ZoneUnit::assign(const ZoneUnit &other)
@@ -98,6 +166,65 @@ const char *ObUnitManager::end_migrate_op_type_to_str(const ObUnitManager::EndMi
   return str;
 }
 ////////////////////////////////////////////////////////////////
+int ObUnitManager::ObUnitNumCountMap::inc_unit_num_cnt(int64_t unit_num)
+{
+  int64_t curr_cnt = 0;
+  int ret = OB_SUCCESS;
+  int tmp_ret = get_refactored(unit_num, curr_cnt);
+  if (OB_SUCCESS == tmp_ret) {
+    if (OB_FAIL(set_refactored(unit_num, curr_cnt + 1, 1/*flag*/))) {
+      LOG_WARN("fail to set refactored", KR(ret), K(unit_num), K(curr_cnt));
+    }
+  } else if (OB_HASH_NOT_EXIST == tmp_ret) {
+    if (OB_FAIL(set_refactored(unit_num, 1))) {
+      LOG_WARN("fail to set refactored", KR(ret), K(unit_num), K(curr_cnt));
+    }
+  } else {
+    ret = tmp_ret;
+    LOG_WARN("fail to get_refactored", KR(ret), K(unit_num));
+  }
+  return ret;
+}
+
+int ObUnitManager::ObUnitNumCountMap::dec_unit_num_cnt(int64_t unit_num)
+{
+  int64_t curr_cnt = 0;
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_refactored(unit_num, curr_cnt))) {
+    LOG_WARN("fail to get_refactored", KR(ret), K(unit_num));
+  } else {
+    if (curr_cnt > 1) {
+      if (OB_FAIL(set_refactored(unit_num, curr_cnt - 1, 1/*flag*/))) {
+        LOG_WARN("fail to set refactored", KR(ret), K(unit_num), K(curr_cnt));
+      }
+    } else if (1 == curr_cnt) {
+      if (OB_FAIL(erase_refactored(unit_num))) {
+        LOG_WARN("fail to erase refactored", KR(ret), K(unit_num), K(curr_cnt));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected count of unit_num, should be positive value", KR(ret), K(unit_num), K(curr_cnt));
+    }
+  }
+  return ret;
+}
+////////////////////////////////////////////////////////////////
+template<typename T>
+bool has_duplicates(const ObIArray<T> &array)
+{
+  bool result = false;
+  for (int64_t i = 0; !result && i < array.count(); ++i) {
+    for (int64_t j = i + 1; !result && j < array.count(); ++j) {
+      if (array.at(i) == array.at(j)) {
+        result = true;
+      }
+    }
+  }
+  return result;
+}
+
+////////////////////////////////////////////////////////////////
+
 ObUnitManager::ObUnitManager(ObServerManager &server_mgr, ObZoneManager &zone_mgr)
 : inited_(false), loaded_(false), proxy_(NULL), server_config_(NULL),
     srv_rpc_proxy_(NULL), server_mgr_(server_mgr),
@@ -244,6 +371,12 @@ int ObUnitManager::check_inner_stat_() const
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
+  } else if (OB_ISNULL(proxy_) || OB_ISNULL(server_config_)
+      || OB_ISNULL(srv_rpc_proxy_) || OB_ISNULL(root_service_)
+      || OB_ISNULL(schema_service_) || OB_ISNULL(root_balance_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("inner stat error", KR(ret), KP(proxy_), KP(server_config_),
+        KP(srv_rpc_proxy_), KP(root_service_), KP(schema_service_), KP(root_balance_));
   } else if (OB_UNLIKELY(!loaded_)) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("not loaded", KR(ret));
@@ -657,9 +790,9 @@ int ObUnitManager::drop_unit_config(const ObUnitConfigName &name, const bool if_
   return ret;
 }
 
-int ObUnitManager::check_tenant_pools_in_shrinking(
+int ObUnitManager::check_tenant_pools_altering_unit_num(
     const uint64_t tenant_id,
-    bool &is_shrinking)
+    bool &check_ret)
 {
   int ret = OB_SUCCESS;
   common::ObArray<share::ObResourcePool *> *pools = NULL;
@@ -675,55 +808,24 @@ int ObUnitManager::check_tenant_pools_in_shrinking(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pools ptr is null", K(ret), KP(pools));
   } else {
-    is_shrinking = false;
-    for (int64_t i = 0; !is_shrinking && OB_SUCC(ret) && i < pools->count(); ++i) {
+    check_ret = false;
+    for (int64_t i = 0; !check_ret && OB_SUCC(ret) && i < pools->count(); ++i) {
       common::ObArray<share::ObUnit *> *units = NULL;
       const share::ObResourcePool *pool = pools->at(i);
       if (NULL == pool) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("pool ptr is null", K(ret), KP(pool));
-      } else if (OB_FAIL(get_units_by_pool(pool->resource_pool_id_, units))) {
-        LOG_WARN("fail to get units by pool", K(ret), "pool_id", pool->resource_pool_id_);
-      } else if (NULL == units) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("units ptrs is null", K(ret), KP(units));
-      } else {
-        is_shrinking = false;
-        for (int64_t j = 0; !is_shrinking && OB_SUCC(ret) && j < units->count(); ++j) {
-          const ObUnit *unit = units->at(j);
-          if (OB_UNLIKELY(NULL == unit)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unit ptr si null", K(ret));
-          } else if (ObUnit::UNIT_STATUS_DELETING == unit->status_) {
-            is_shrinking = true;
-          } else if (ObUnit::UNIT_STATUS_ACTIVE == unit->status_) {
-            // a normal unit, go on and check next
-          } else {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unit status unexpected", K(ret), "unit_status", unit->status_);
-          }
-        }
+      } else if (OB_FAIL(inner_check_pool_altering_unit_num(pool->resource_pool_id_, check_ret))) {
+        LOG_WARN("fail to inner check pool in shrinking or expanding", KR(ret), KPC(pool));
       }
     }
   }
   return ret;
 }
 
-int ObUnitManager::check_pool_in_shrinking(
+int ObUnitManager::inner_check_pool_altering_unit_num(
     const uint64_t pool_id,
-    bool &is_shrinking)
-{
-  int ret = OB_SUCCESS;
-  SpinRLockGuard guard(lock_);
-  if (OB_FAIL(inner_check_pool_in_shrinking_(pool_id, is_shrinking))) {
-    LOG_WARN("inner check pool in shrinking failed", KR(ret), K(pool_id), K(is_shrinking));
-  }
-  return ret;
-}
-
-int ObUnitManager::inner_check_pool_in_shrinking_(
-    const uint64_t pool_id,
-    bool &is_shrinking)
+    bool &altering_unit_num)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat_())) {
@@ -739,14 +841,15 @@ int ObUnitManager::inner_check_pool_in_shrinking_(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("units ptr is null", K(ret), KP(units));
     } else {
-      is_shrinking = false;
-      for (int64_t i = 0; !is_shrinking && OB_SUCC(ret) && i < units->count(); ++i) {
+      altering_unit_num = false;
+      for (int64_t i = 0; !altering_unit_num && OB_SUCC(ret) && i < units->count(); ++i) {
         const ObUnit *unit = units->at(i);
         if (OB_UNLIKELY(NULL == unit)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unit ptr is null", K(ret));
-        } else if (ObUnit::UNIT_STATUS_DELETING == unit->status_) {
-          is_shrinking = true;
+        } else if (ObUnit::UNIT_STATUS_DELETING == unit->status_ ||
+                   ObUnit::UNIT_STATUS_ADDING == unit->status_) {
+          altering_unit_num = true;
         } else if (ObUnit::UNIT_STATUS_ACTIVE == unit->status_) {
           // a normal unit, go on and check next
         } else {
@@ -939,7 +1042,7 @@ int ObUnitManager::inner_create_resource_pool_(
     LOG_WARN("get resource pool by name failed", "name", resource_pool.name_, K(ret));
   } else {
     ret = OB_SUCCESS;
-    common::ObMySQLTransaction trans;
+    share::ObUnitTableTransaction trans;
     share::ObResourcePool *new_pool = NULL;
     const int64_t min_full_resource_pool_memory = GCONF.__min_full_resource_pool_memory;
     if (NULL == (new_pool = pool_allocator_.alloc())) {
@@ -1198,7 +1301,7 @@ int ObUnitManager::check_server_resources_and_persist_unit_info_(
   bool is_server_valid = false;
   bool is_resource_enough = false;
   uint64_t new_unit_id = OB_INVALID_ID;
-  ObArray<ObAddr> new_servers; // not used
+  ObArray<ObUnit> new_units; // not used
   ObArray<ObUnit> units;
   const char* module = "clone_resource_pool";
   bool for_clone_tenant = true;
@@ -1234,8 +1337,9 @@ int ObUnitManager::check_server_resources_and_persist_unit_info_(
                              pool,
                              lib::Worker::CompatMode::INVALID/*compat_mode*/,
                              0/*unit_group_id*/,
+                             ObUnit::UNIT_STATUS_ACTIVE,
                              server_resource.addr_,
-                             new_servers,
+                             new_units,
                              units))) {
         LOG_WARN("[CLONE_TENANT_UNIT] fail to persist unit info", KR(ret), K(zone), K(pool), K(server_resource));
       }
@@ -1248,8 +1352,8 @@ int ObUnitManager::check_server_resources_and_persist_unit_info_(
     if (OB_FAIL(ret)) {
       LOG_WARN("start to rollback unit persistence", KR(ret), K(units), K(pool));
       if(OB_TMP_FAIL(rollback_persistent_units_(
+          pool.tenant_id_,
           units,
-          pool,
           notify_proxy))) {
         LOG_WARN("[CLONE_TENANT_UNIT] fail to rollback unit persistence",
                  KR(ret), KR(tmp_ret), K(units), K(pool));
@@ -1428,7 +1532,7 @@ int ObUnitManager::do_split_pool_persistent_info(
     common::ObIArray<share::ObResourcePool *> &allocate_pool_ptrs)
 {
   int ret = OB_SUCCESS;
-  common::ObMySQLTransaction trans;
+  share::ObUnitTableTransaction trans;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("check_inner_stat failed", K(ret), K(inited_), K(loaded_));
   } else if (OB_FAIL(trans.start(proxy_, OB_SYS_TENANT_ID))) {
@@ -1721,7 +1825,7 @@ int ObUnitManager::split_pool_unit_persistent_info(
       } else {
         share::ObUnit new_unit = *unit;
         new_unit.resource_pool_id_ = new_pool->resource_pool_id_;
-        if (OB_FAIL(ut_operator_.update_unit(trans, new_unit, false/*need_check_conflict_with_clone*/))) {
+        if (OB_FAIL(ut_operator_.update_unit_exclude_ug_id(trans, new_unit, false/*need_check_conflict_with_clone*/))) {
           LOG_WARN("fail to update unit", K(ret), K(new_unit));
         } else {
           ROOTSERVICE_EVENT_ADD("unit", "split_pool",
@@ -1736,141 +1840,26 @@ int ObUnitManager::split_pool_unit_persistent_info(
   return ret;
 }
 
-/* current_unit_num_per_zone: pool->unit_count_
- * complete_unit_num_per_zone: pool->unit_count_ + unit_num_in_deleting
- * has_unit_num_modification: when some unit in deleting this is true, else false
- */
-int ObUnitManager::get_tenant_pools_complete_unit_num_and_status(
+int ObUnitManager::register_alter_resource_tenant_unit_num_rs_job(
     const uint64_t tenant_id,
-    const common::ObIArray<share::ObResourcePool *> &pools,
-    int64_t &complete_unit_num_per_zone,
-    int64_t &current_unit_num_per_zone,
-    bool &has_unit_num_modification)
+    const int64_t new_unit_num,
+    const common::ObString &sql_text,
+    common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
-  } else if (OB_UNLIKELY(pools.count() <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(pools));
   } else {
-    complete_unit_num_per_zone = -1;
-    current_unit_num_per_zone = -1;
-    has_unit_num_modification = false;
-    for (int64_t i = 0; OB_SUCC(ret) && i < pools.count(); ++i) {
-      int64_t my_complete_unit_num_per_zone = 0;
-      int64_t my_current_unit_num_per_zone = 0;
-      bool my_unit_num_modification = false;
-      const share::ObResourcePool *pool = pools.at(i);
-      if (OB_UNLIKELY(nullptr == pool)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("pool ptr is null", KR(ret), KP(pool), K(tenant_id));
-      } else if (tenant_id != pool->tenant_id_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tenant id not match");
-      } else if (OB_FAIL(get_pool_complete_unit_num_and_status(
-              pool, my_complete_unit_num_per_zone,
-              my_current_unit_num_per_zone, my_unit_num_modification))) {
-        LOG_WARN("fail to get pool complete unit num and status", KR(ret));
-      } else if (-1 == complete_unit_num_per_zone) {
-        complete_unit_num_per_zone = my_complete_unit_num_per_zone;
-        current_unit_num_per_zone = my_current_unit_num_per_zone;
-        has_unit_num_modification = my_unit_num_modification;
-      } else if (complete_unit_num_per_zone != my_complete_unit_num_per_zone
-          || current_unit_num_per_zone != my_current_unit_num_per_zone
-          || has_unit_num_modification != my_unit_num_modification) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tenant pools unit status unexpected", KR(ret), K(tenant_id));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObUnitManager::determine_alter_resource_tenant_unit_num_type(
-    const uint64_t tenant_id,
-    const common::ObIArray<share::ObResourcePool *> &pools,
-    const int64_t new_unit_num,
-    int64_t &old_unit_num,
-    AlterUnitNumType &alter_unit_num_type)
-{
-  int ret = OB_SUCCESS;
-  int64_t complete_unit_num_per_zone = 0;
-  old_unit_num = 0;
-  bool has_unit_num_modification = true;
-
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || new_unit_num <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(new_unit_num));
-  } else if (OB_FAIL(get_tenant_pools_complete_unit_num_and_status(
-          tenant_id, pools, complete_unit_num_per_zone,
-          old_unit_num, has_unit_num_modification))) {
-    LOG_WARN("fail to get tenant pools complete unit num and status", KR(ret), K(tenant_id));
-  } else if (OB_UNLIKELY(complete_unit_num_per_zone <= 0 || old_unit_num <= 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected complete unit num", KR(ret),
-             K(complete_unit_num_per_zone), K(old_unit_num));
-  } else if (old_unit_num == new_unit_num) {
-    // when the new unit num is equal to the current unit num, do nothing and return
-    alter_unit_num_type = AUN_NOP;
-  } else {
-    if (has_unit_num_modification) { // a unit num change is taking place
-      if (new_unit_num == complete_unit_num_per_zone) {
-        // alter unit num to previous, it is a unit num rollback operation
-        alter_unit_num_type = AUN_ROLLBACK_SHRINK;
-      } else {
-        // alter unit num to a value not equal to the previous, an illegal operation
-        alter_unit_num_type = AUN_MAX;
-      }
-    } else { // no unit num change
-      if (new_unit_num > old_unit_num) {
-        alter_unit_num_type = AUN_EXPAND;
-      } else {
-        alter_unit_num_type = AUN_SHRINK;
-      }
-    }
-  }
-  return ret;
-}
-
-int ObUnitManager::register_alter_resource_tenant_unit_num_rs_job(
-    const uint64_t tenant_id,
-    const int64_t new_unit_num,
-    const int64_t old_unit_num,
-    const AlterUnitNumType alter_unit_num_type,
-    const common::ObString &sql_text,
-    common::ObMySQLTransaction &trans)
-{
-  int ret = OB_SUCCESS;
-  uint64_t tenant_data_version = 0;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
-      || !(AUN_SHRINK == alter_unit_num_type || AUN_EXPAND == alter_unit_num_type))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(alter_unit_num_type));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
-    LOG_WARN("fail to get min data version", KR(ret), K(tenant_id));
-  } else if (tenant_data_version < DATA_VERSION_4_2_1_0) {
-    if (AUN_EXPAND == alter_unit_num_type) {
-      // skip, no rs job for expand task in version 4.1
-      // we do not need to rollback rs job, since in 4.1, there is no inprogress rs job at this step
-    } else if (OB_FAIL(register_shrink_tenant_pool_unit_num_rs_job(tenant_id,
-            new_unit_num, old_unit_num, sql_text, trans))) {
-      LOG_WARN("fail to execute register_shrink_tenant_pool_unit_num_rs_job", KR(ret),
-          K(tenant_id), K(new_unit_num));
-    }
-  } else { // tenant_data_version >= DATA_VERSION_4_2_1_0
-    // step 1: cancel rs job if exists
     int64_t job_id = 0;
     if (OB_FAIL(cancel_alter_resource_tenant_unit_num_rs_job(tenant_id, trans))) {
       LOG_WARN("fail to execute cancel_alter_resource_tenant_unit_num_rs_job",
           KR(ret), K(tenant_id), K(sql_text));
     } else {
       ret = create_alter_resource_tenant_unit_num_rs_job(tenant_id,
-          new_unit_num, old_unit_num, job_id, sql_text, trans);
-      FLOG_INFO("[ALTER_RESOURCE_TENANT_UNIT_NUM NOTICE] create a new rs job", "type",
-          AUN_EXPAND == alter_unit_num_type ? "EXPAND UNIT_NUM" : "SHRINK UNIT_NUM",
-          KR(ret), K(tenant_id), K(job_id), K(alter_unit_num_type));
+          new_unit_num, job_id, sql_text, trans);
+      FLOG_INFO("[ALTER_RESOURCE_TENANT_UNIT_NUM NOTICE] create a new rs job",
+          KR(ret), K(tenant_id), K(sql_text), K(job_id));
     }
   }
   return ret;
@@ -1887,36 +1876,7 @@ int ObUnitManager::find_alter_resource_tenant_unit_num_rs_job(
       job_id,
       sql_proxy,
       "tenant_id", tenant_id);
-  if (OB_ENTRY_NOT_EXIST == ret) {
-    ret = RS_JOB_FIND(
-        SHRINK_RESOURCE_TENANT_UNIT_NUM, // only created in version < 4.2
-        job_id,
-        sql_proxy,
-        "tenant_id", tenant_id);
-  }
   return ret;
-}
-int ObUnitManager::register_shrink_tenant_pool_unit_num_rs_job(
-    const uint64_t tenant_id,
-    const int64_t new_unit_num,
-    const int64_t old_unit_num,
-    const common::ObString &sql_text,
-    common::ObMySQLTransaction &trans)
-{
-  int ret = OB_SUCCESS;
-  int64_t pos = 0;
-  int64_t job_id = 0;
-  ret = create_alter_resource_tenant_unit_num_rs_job(
-        tenant_id,
-        new_unit_num,
-        old_unit_num,
-        job_id,
-        sql_text,
-        trans,
-        JOB_TYPE_SHRINK_RESOURCE_TENANT_UNIT_NUM);
-  FLOG_INFO("[ALTER_RESOURCE_TENANT_UNIT_NUM NOTICE] create a new rs job in Version < 4.2",
-      KR(ret), K(tenant_id), K(job_id), K(sql_text));
-  return ret ;
 }
 
 int ObUnitManager::cancel_alter_resource_tenant_unit_num_rs_job(
@@ -1946,11 +1906,9 @@ int ObUnitManager::cancel_alter_resource_tenant_unit_num_rs_job(
 int ObUnitManager::create_alter_resource_tenant_unit_num_rs_job(
     const uint64_t tenant_id,
     const int64_t new_unit_num,
-    const int64_t old_unit_num,
     int64_t &job_id,
     const common::ObString &sql_text,
-    common::ObMySQLTransaction &trans,
-    ObRsJobType job_type)
+    common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   job_id = 0;
@@ -1960,8 +1918,9 @@ int ObUnitManager::create_alter_resource_tenant_unit_num_rs_job(
     int64_t pos = 0;
     share::schema::ObSchemaGetterGuard schema_guard;
     const ObSimpleTenantSchema *tenant_schema;
+    // TODO: temp extra info
     if (OB_FAIL(databuff_printf(extra_info, extra_info_len, pos,
-            "FROM: '%ld', TO: '%ld'", old_unit_num, new_unit_num))) {
+            "new unit num: '%ld'", new_unit_num))) {
       if (OB_SIZE_OVERFLOW == ret) {
         LOG_WARN("format to buff size overflow", K(ret));
       } else {
@@ -1979,556 +1938,204 @@ int ObUnitManager::create_alter_resource_tenant_unit_num_rs_job(
       LOG_WARN("tenant schema is null", KR(ret), KP(tenant_schema));
     } else if (OB_FAIL(RS_JOB_CREATE_WITH_RET(
         job_id,
-        job_type,
+        ObRsJobType::JOB_TYPE_ALTER_RESOURCE_TENANT_UNIT_NUM,
         trans,
         "tenant_id", tenant_id,
         "tenant_name", tenant_schema->get_tenant_name(),
         "sql_text", ObHexEscapeSqlStr(sql_text),
         "extra_info", ObHexEscapeSqlStr(extra_info)))) {
-      LOG_WARN("fail to create rs job", KR(ret), K(tenant_id), K(job_type));
+      LOG_WARN("fail to create rs job", KR(ret), K(tenant_id));
     }
   }
   return ret;
 }
 
-int ObUnitManager::rollback_alter_resource_tenant_unit_num_rs_job(
+int ObUnitManager::get_to_be_deleted_units_in_homo_mode(
     const uint64_t tenant_id,
-    const int64_t new_unit_num,
-    const int64_t old_unit_num,
-    const common::ObString &sql_text,
-    common::ObMySQLTransaction &trans)
-{
-  int ret = OB_SUCCESS;
-  int64_t job_id = 0;
-  uint64_t tenant_data_version = 0;
-  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
-    LOG_WARN("fail to get min data version", KR(ret), K(tenant_id));
-  } else if (tenant_data_version < DATA_VERSION_4_2_1_0) {
-    // in v4.1, it's allowed, since this will not track the number of logstreams
-    if (OB_FAIL(cancel_alter_resource_tenant_unit_num_rs_job(tenant_id, trans))) {
-      LOG_WARN("fail to execute cancel_alter_resource_tenant_unit_num_rs_job in v4.1", KR(ret), K(tenant_id));
-    }
-  } else if (OB_FAIL(cancel_alter_resource_tenant_unit_num_rs_job(tenant_id, trans))) {
-    LOG_WARN("fail to execute cancel_alter_resource_tenant_unit_num_rs_job", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(create_alter_resource_tenant_unit_num_rs_job(tenant_id,
-          new_unit_num, old_unit_num, job_id, sql_text, trans))) {
-    LOG_WARN("fail to execute create_alter_resource_tenant_unit_num_rs_job", KR(ret),
-        K(tenant_id), K(new_unit_num), K(old_unit_num), K(sql_text));
-  }
-  FLOG_INFO("[ALTER_RESOURCE_TENANT_UNIT_NUM NOTICE] rollback a SHRINK UNIT_NUM rs job",
-      KR(ret), K(tenant_id), K(job_id), K(new_unit_num));
-  return ret;
-}
-
-int ObUnitManager::complete_shrink_tenant_pool_unit_num_rs_job_(
-    const uint64_t tenant_id,
-    const int64_t job_id,
-    const int check_ret,
-    common::ObMySQLTransaction &trans)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)) || job_id < 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id), K(job_id));
-  } else if (OB_SUCC(RS_JOB_COMPLETE(job_id, check_ret, trans))) {
-    FLOG_INFO("[ALTER_RESOURCE_TENANT_UNIT_NUM NOTICE] complete an inprogressing rs job SHRINK UNIT_NUM",
-          KR(ret), K(tenant_id), K(job_id),  K(check_ret));
-  } else {
-    LOG_WARN("fail to complete rs job", KR(ret), K(tenant_id), K(job_id), K(check_ret));
-    if (OB_EAGAIN == ret) {
-      int64_t curr_job_id = 0;
-      if (OB_FAIL(find_alter_resource_tenant_unit_num_rs_job(tenant_id, curr_job_id, trans))) {
-        LOG_WARN("fail to find rs job", KR(ret), K(tenant_id), K(job_id), K(check_ret));
-        if (OB_ENTRY_NOT_EXIST == ret) {
-          FLOG_WARN("[ALTER_RESOURCE_TENANT_UNIT_NUM NOTICE] the specified rs job SHRINK UNIT_NUM might has "
-              "been already deleted in table manually",
-              KR(ret), K(tenant_id), K(job_id), K(check_ret));
-          ret = OB_SUCCESS;
-        }
-      } else {
-        ret = OB_EAGAIN;
-        FLOG_WARN("[ALTER_RESOURCE_TENANT_UNIT_NUM NOTICE] a non-checked rs job SHRINK UNIT_NUM cannot be committed",
-            KR(ret), K(job_id), K(curr_job_id));
-      }
-    }
-  }
-  return ret ;
-}
-
-/* generate new unit group id for pools, we hold the assumption that
- * each pool of pools comes from the same tenant and has the same unit num
- */
-int ObUnitManager::generate_new_unit_group_id_array(
-    const uint64_t tenant_id,
-    const common::ObIArray<share::ObResourcePool *> &pools,
-    const int64_t new_unit_num,
-    common::ObIArray<uint64_t> &unit_group_id_array)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(pools.count() <= 0 || new_unit_num <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(pools), K(new_unit_num));
-  } else {
-    {  // defense check
-      int64_t sample_unit_num = -1;
-      for (int64_t i = 0; OB_SUCC(ret) && i < pools.count(); ++i) {
-        const share::ObResourcePool *pool = pools.at(i);
-        if (OB_UNLIKELY(nullptr == pool)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("pool ptr is null", KR(ret), K(tenant_id));
-        } else if (-1 == sample_unit_num) {
-          sample_unit_num = pool->unit_count_;
-        } else if (sample_unit_num != pool->unit_count_) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unit num not match", KR(ret), K(tenant_id), KPC(pool), K(sample_unit_num));
-        }
-      }
-    }
-    const share::ObResourcePool *pool = pools.at(0);
-    int64_t unit_group_id_num = 0;
-    if (OB_FAIL(ret)) {
-      // failed, bypass
-    } else if (OB_UNLIKELY(nullptr == pool)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("pool ptr is null", KR(ret));
-    } else if ((unit_group_id_num = new_unit_num - pool->unit_count_) <= 0) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unit_group_id_num unexpected", KR(ret), K(unit_group_id_num), K(new_unit_num));
-    } else {
-      unit_group_id_array.reset();
-      for (int64_t i = 0; OB_SUCC(ret) && i < unit_group_id_num; ++i) {
-        uint64_t unit_group_id = OB_INVALID_ID;
-        if (OB_FAIL(fetch_new_unit_group_id(unit_group_id))) {
-          LOG_WARN("fail to fetch new unit group id", KR(ret));
-        } else if (OB_FAIL(unit_group_id_array.push_back(unit_group_id))) {
-          LOG_WARN("fail to push back", KR(ret));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-/* when alter resource tenant and the new unit num is greater than the current unit num,
- * this func is invoked.
- */
-int ObUnitManager::expand_tenant_pools_unit_num_(
-    const uint64_t tenant_id,
-    common::ObIArray<share::ObResourcePool *> &pools,
-    const int64_t new_unit_num,
-    const int64_t old_unit_num,
-    const char *module,
-    const common::ObString &sql_text)
-{
-  int ret = OB_SUCCESS;
-  common::ObMySQLTransaction trans;
-  common::ObArray<uint64_t> new_unit_group_id_array;
-  ObArray<ObAddr> new_servers;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || new_unit_num <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(new_unit_num));
-  } else if (OB_FAIL(generate_new_unit_group_id_array(
-          tenant_id, pools, new_unit_num, new_unit_group_id_array))) {
-    LOG_WARN("fail to generate new unit group id array", KR(ret), K(pools), K(new_unit_num));
-  } else if (OB_FAIL(trans.start(proxy_, OB_SYS_TENANT_ID))) {
-    LOG_WARN("fail to start transaction", KR(ret));
-  } else if (OB_FAIL(register_alter_resource_tenant_unit_num_rs_job(tenant_id,
-          new_unit_num, old_unit_num, AUN_EXPAND, sql_text, trans))) {
-    LOG_WARN("fail to register shrink tenant pool unit num rs job", KR(ret),
-        K(tenant_id), K(sql_text), K(old_unit_num), K(new_unit_num));
-  } else {
-    share::ObResourcePool new_pool;
-    for (int64_t i = 0; OB_SUCC(ret) && i < pools.count(); ++i) {
-      const bool new_allocate_pool = false;
-      const share::ObResourcePool *pool = pools.at(i);
-      new_pool.reset();
-      if (OB_UNLIKELY(nullptr == pool)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected pool", KR(ret), K(tenant_id));
-      } else if (pool->tenant_id_ != tenant_id) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tenant id not match", KR(ret),
-                 K(tenant_id), "pool_tenant_id", pool->tenant_id_);
-      } else if (OB_FAIL(allocate_pool_units_(
-              trans, *pool, pool->zone_list_, &new_unit_group_id_array, new_allocate_pool,
-              new_unit_num - pool->unit_count_, module, new_servers))) {
-        LOG_WARN("fail to allocate pool units", K(module), KR(ret), K(new_unit_num), KPC(pool));
-      } else if (OB_FAIL(new_pool.assign(*pool))) {
-        LOG_WARN("fail to assign new pool", KR(ret));
-      } else if (FALSE_IT(new_pool.unit_count_ = new_unit_num)) {
-        // false it, shall never be here
-      } else if (OB_FAIL(ut_operator_.update_resource_pool(trans, new_pool, true/*need_check_conflict_with_clone*/))) {
-        LOG_WARN("fail to update resource pool", KR(ret), K(tenant_id));
-      }
-    }
-    const bool commit = (OB_SUCCESS == ret);
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = trans.end(commit))) {
-      LOG_WARN("fail to trans end", KR(tmp_ret), K(commit));
-      ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < pools.count(); ++i) {
-      share::ObResourcePool *pool = pools.at(i);
-      if (OB_UNLIKELY(nullptr == pool)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected pool", KR(ret), K(tenant_id));
-      } else {
-        pool->unit_count_ = new_unit_num;
-      }
-    }
-  }
-  return ret;
-}
-
-int ObUnitManager::get_to_be_deleted_unit_group(
-    const uint64_t tenant_id,
-    const common::ObIArray<share::ObResourcePool *> &pools,
-    const int64_t new_unit_num,
+    const PoolOperationInfo &pool_op_info,
     const common::ObIArray<uint64_t> &deleted_unit_group_id_array,
-    common::ObIArray<uint64_t> &to_be_deleted_unit_group)
+    common::ObIArray<share::ObUnit> &to_be_deleted_units)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || pools.count() <= 0)) {
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) ||
+      pool_op_info.new_unit_num_ >= pool_op_info.old_unit_num_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(pools));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(pool_op_info));
+  } else if (has_duplicates(deleted_unit_group_id_array)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("delete same unit group more than once not supported", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "delete same unit group more than once");
   } else {
+    ObArray<ObUnit> tenant_units; // get units from inner-table for accurate unit_group_id_
     common::ObArray<uint64_t> all_unit_group_id_array;
-    const share::ObResourcePool *pool = pools.at(0);
-    const bool is_active = false;
-    int64_t to_be_deleted_num = 0;
-    if (OB_UNLIKELY(nullptr == pool)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("pool ptr is null", KR(ret), KP(pool));
-    } else if ((to_be_deleted_num = pool->unit_count_ - new_unit_num) <= 0) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unit num unexpected", KR(ret), KPC(pool), K(tenant_id), K(new_unit_num));
-    } else if (OB_FAIL(inner_get_all_unit_group_id(tenant_id, is_active, all_unit_group_id_array))) {
+    common::ObArray<uint64_t> to_be_deleted_unit_group;
+    const int64_t to_be_deleted_num = pool_op_info.old_unit_num_ - pool_op_info.new_unit_num_;
+    if (OB_FAIL(get_tenant_units_and_unit_group_ids_(*proxy_, tenant_id, tenant_units, all_unit_group_id_array))) {
       LOG_WARN("fail to get all unit group id", KR(ret), K(tenant_id));
     } else if (to_be_deleted_num > all_unit_group_id_array.count()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unit num to match", KR(ret), K(tenant_id), K(new_unit_num),
-               "old_unit_num", pool->unit_count_,
+      LOG_WARN("unit num to match", KR(ret), K(tenant_id), K(pool_op_info),
                "tenant_unit_group_num", all_unit_group_id_array.count());
     } else if (deleted_unit_group_id_array.count() <= 0) {
-      // deleted unit groups not specified by the client, we choose for automatically
-      // If some servers are inactive, the related unit_group should take priority to be deleted.
-      ObArray<uint64_t> sorted_unit_group_id_array;
-      // inactive unit_group_id first
-      ObArray<ObUnitInfo> pool_unit_infos;
-      for (int64_t i = 0; OB_SUCC(ret) && i < pools.count(); ++i) {
-        if (OB_UNLIKELY(nullptr == pools.at(i))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("pool ptr is null", KR(ret), KP(pools.at(i)));
-        } else if (OB_FAIL(inner_get_unit_infos_of_pool_(pools.at(i)->resource_pool_id_, pool_unit_infos))) {
-          LOG_WARN("inner_get_unit_infos_of_pool failed", KR(ret), "resource_pool_id", pools.at(i)->resource_pool_id_);
-        } else if (pool_unit_infos.count() <= 0) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("pool_unit_infos is empty", KR(ret), "pool_id", pools.at(i)->resource_pool_id_);
-        } else {
-          ObServerInfoInTable server_info;
-          for (int64_t j = 0; OB_SUCC(ret) && j < pool_unit_infos.count(); ++j) {
-            ObUnit &unit = pool_unit_infos.at(j).unit_;
-            if (has_exist_in_array(sorted_unit_group_id_array, unit.unit_group_id_)) {
-              // skip, this unit_group_id has already been added
-            } else if (OB_FAIL(SVR_TRACER.get_server_info(unit.server_, server_info))) {
-              LOG_WARN("fail to get_server_info", KR(ret), K(unit));
-            } else if (!server_info.is_active()) {
-              if (OB_FAIL(sorted_unit_group_id_array.push_back(unit.unit_group_id_))) {
-                LOG_WARN("fail to push_back", KR(ret), K(unit));
-              }
-            } else {/*active server*/}
-          }
+      // user has not specified unit groups to delete, we choose automatically.
+      ObArray<share::ObUnit*> sorted_tenant_unit_ptrs;
+      FOREACH_CNT_X(unit, tenant_units, OB_SUCC(ret)) {
+        if (OB_FAIL(sorted_tenant_unit_ptrs.push_back(unit))) {
+          LOG_WARN("fail to push back", KR(ret), KPC(unit));
         }
       }
-      lib::ob_sort(sorted_unit_group_id_array.begin(), sorted_unit_group_id_array.end());
-      // then other active unit group id
-      for (int64_t i = 0; OB_SUCC(ret) && i < all_unit_group_id_array.count(); ++i) {
-        uint64_t ug_id = all_unit_group_id_array.at(i);
-        if (has_exist_in_array(sorted_unit_group_id_array, ug_id)) {
-          // skip, offline unit_group_id is already pushed
-        } else if (OB_FAIL(sorted_unit_group_id_array.push_back(ug_id))) {
-          LOG_WARN("fail to push back", KR(ret), K(ug_id));
+      // sort units, inactive server units and non-gts standalone units taks priority to delete.
+      ObArray<uint64_t> gts_unit_ids;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(get_tenant_gts_unit_ids(tenant_id, gts_unit_ids))) {
+        LOG_WARN("fail to get tenant gts unit ids", KR(ret), K(tenant_id));
+      } else {
+        DeleteUnitPtrCmp cmp(gts_unit_ids);
+        lib::ob_sort(sorted_tenant_unit_ptrs.begin(), sorted_tenant_unit_ptrs.end(), cmp);
+        if (OB_FAIL(cmp.ret_)) {
+          LOG_WARN("fail to sort", KR(ret));
         }
       }
-      for (int64_t i = 0; OB_SUCC(ret) && i < to_be_deleted_num; ++i) {
-        if (OB_FAIL(to_be_deleted_unit_group.push_back(sorted_unit_group_id_array.at(i)))) {
-          LOG_WARN("fail to push back", KR(ret));
+      ARRAY_FOREACH_X(sorted_tenant_unit_ptrs, i, cnt, OB_SUCC(ret)
+          && to_be_deleted_unit_group.count() < to_be_deleted_num) {
+        const share::ObUnit *unit = sorted_tenant_unit_ptrs.at(i);
+        CK(OB_NOT_NULL(unit));
+        if (FAILEDx(add_var_to_array_no_dup(to_be_deleted_unit_group, unit->unit_group_id_))) {
+          LOG_WARN("fail to push unit_group_id to to_be_deleted_unit_group", KR(ret), KPC(unit));
         }
       }
       LOG_INFO("Automatically determined on unit_group to delete for shrinking tenant unit num.",
-               KR(ret), K(tenant_id), K(new_unit_num),
-               K(to_be_deleted_unit_group), K(sorted_unit_group_id_array));
+               KR(ret), K(tenant_id), K(pool_op_info), K(to_be_deleted_unit_group));
     } else if (deleted_unit_group_id_array.count() == to_be_deleted_num) {
-      // the deleted unit groups are specified by the client
-      for (int64_t i = 0; OB_SUCC(ret) && i < deleted_unit_group_id_array.count(); ++i) {
-        const uint64_t unit_group_id = deleted_unit_group_id_array.at(i);
-        if (has_exist_in_array(all_unit_group_id_array, unit_group_id)) {
-          if (OB_FAIL(to_be_deleted_unit_group.push_back(unit_group_id))) {
-            LOG_WARN("fail to push back", KR(ret));
-          }
-        } else {
+      // the deleted unit groups are specified by the client. Check specified ug_ids belong to this tenant.
+      ARRAY_FOREACH(deleted_unit_group_id_array, i) {
+        if (!has_exist_in_array(all_unit_group_id_array, deleted_unit_group_id_array.at(i))) {
           ret = OB_OP_NOT_ALLOW;
           LOG_USER_ERROR(OB_OP_NOT_ALLOW, "delete unit group which does not belong to this tenant");
         }
+      }
+      if (FAILEDx(to_be_deleted_unit_group.assign(deleted_unit_group_id_array))) {
+        LOG_WARN("failed to assign to_be_deleted_unit_group", KR(ret));
       }
     } else {
       // deleted unit groups num is not match to the specified num.
       ret = OB_OP_NOT_ALLOW;
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "to be deleted unit num not match");
     }
+
+    // extract to_be_deleted_units by to_be_deleted_unit_group
+    FOREACH_CNT_X(unit, tenant_units, OB_SUCC(ret)) {
+      if (has_exist_in_array(to_be_deleted_unit_group, unit->unit_group_id_)) {
+        if (OB_FAIL(to_be_deleted_units.push_back(*unit))) {
+          LOG_WARN("fail to push back", KR(ret), KPC(unit));
+        }
+      }
+    }
   }
   return ret;
 }
 
-int ObUnitManager::check_shrink_tenant_pools_allowed(
-    const uint64_t tenant_id,
-    common::ObIArray<share::ObResourcePool *> &pools,
-    const int64_t unit_num,
-    bool &is_allowed)
+int ObUnitManager::determine_new_added_unit_status(
+    const share::ObResourcePool &pool,
+    share::ObUnit::Status &unit_status)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || pools.count() <= 0)) {
+  if (!pool.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(pools));
+    LOG_WARN("invalid pool", KR(ret), K(pool));
+  } else if (!pool.is_granted_to_tenant()) {
+    unit_status = share::ObUnit::UNIT_STATUS_ACTIVE;
   } else {
-    is_allowed = true;
-    for (int64_t i = 0; is_allowed && OB_SUCC(ret) && i < pools.count(); ++i) {
-      share::ObResourcePool *pool = pools.at(i);
-      bool my_is_allowed = true;
-      if (OB_UNLIKELY(nullptr == pool)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("pool ptr is null", KR(ret), KP(pool));
-      } else if (tenant_id != pool->tenant_id_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tenant_id not match", KR(ret), K(tenant_id), "pool_tenant_id", pool->tenant_id_);
-      } else if (OB_FAIL(check_shrink_granted_pool_allowed(pool, unit_num, my_is_allowed))) {
-        LOG_WARN("fail to check shrink granted pool allowed", KR(ret));
-      } else {
-        is_allowed = my_is_allowed;
-      }
-    }
-  }
-  return ret;
-}
-
-// There are two situations to consider in the shrinkage of the resource pool:
-// 1. There is no resource pool granted to tenants
-//    the specified number of units can be directly deleted when the resource pool shrinks.
-// 2. Resource pool that has been granted to tenants
-//    It is necessary to select the specified units from the resource pool,
-//    mark these units as the deleting state,
-//    and wait for all the replicas to be moved from such units before the whole process can be considered complete.
-//    The unit num of the pool that has been granted to the tenant needs to be scaled down.
-//    Preconditions:
-//    2.1 The reduced unit num cannot be less than the number of replicas of locality in the corresponding zone
-//    2.2 At present, the shrinking operation is performed when the unit is in a steady state,
-//        the shrinking is allowed when all units are not migrated.
-//        We avoid the unit being in both the migration and the deleting state, thereby reducing the complexity
-int ObUnitManager::shrink_tenant_pools_unit_num(
-    const uint64_t tenant_id,
-    common::ObIArray<share::ObResourcePool *> &pools,
-    const int64_t new_unit_num,
-    const int64_t old_unit_num,
-    const common::ObIArray<uint64_t> &delete_unit_group_id_array,
-     const common::ObString &sql_text)
-{
-  int ret = OB_SUCCESS;
-  common::ObMySQLTransaction trans;
-  bool is_allowed = false;
-  common::ObArray<uint64_t> to_be_deleted_unit_group;
-
-  if (OB_FAIL(check_shrink_tenant_pools_allowed(
-          tenant_id, pools, new_unit_num, is_allowed))) {
-    LOG_WARN("fail to check shrink tenant pools allowed", KR(ret), K(tenant_id));
-  } else if (!is_allowed) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("cannot shrink tenant pools unit num", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(get_to_be_deleted_unit_group(
-          tenant_id, pools, new_unit_num,
-          delete_unit_group_id_array, to_be_deleted_unit_group))) {
-    LOG_WARN("fail to get to be deleted unit group", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(trans.start(proxy_, OB_SYS_TENANT_ID))) {
-    LOG_WARN("fail to start transaction", KR(ret));
-  } else {
-    if (OB_FAIL(register_alter_resource_tenant_unit_num_rs_job(tenant_id,
-            new_unit_num, old_unit_num, AUN_SHRINK, sql_text, trans))) {
-      LOG_WARN("fail to register shrink tenant pool unit num rs job", KR(ret),
-          K(tenant_id), K(new_unit_num), K(sql_text), K(old_unit_num));
+    uint64_t data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, data_version))) {
+      LOG_WARN("fail to get sys tenant data version", KR(ret), K(data_version));
     } else {
-      share::ObResourcePool new_pool;
-      for (int64_t i = 0; OB_SUCC(ret) && i < pools.count(); ++i) {
-        share::ObResourcePool *pool = pools.at(i);
-        common::ObArray<share::ObUnit *> *units = nullptr;
-        new_pool.reset();
-        if (OB_UNLIKELY(nullptr == pool || tenant_id != pool->tenant_id_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("pool info unexpected", KR(ret), K(tenant_id), KPC(pool));
-        } else if (OB_FAIL(new_pool.assign(*pool))) {
-          LOG_WARN("fail to assign new pool", KR(ret), K(tenant_id), KPC(pool));
-        } else if (FALSE_IT(new_pool.unit_count_ = new_unit_num)) {
-          // shall never be here
-        } else if (OB_FAIL(ut_operator_.update_resource_pool(trans, new_pool, true/*need_check_conflict_with_clone*/))) {
-          LOG_WARN("fail to update resource pool", KR(ret), K(tenant_id), K(new_pool));
-        } else if (OB_FAIL(get_units_by_pool(pool->resource_pool_id_, units))) {
-          LOG_WARN("fail to get units by pool", KR(ret), KPC(pool), K(tenant_id));
-        } else if (OB_UNLIKELY(nullptr == units)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("units ptr is null", KR(ret), K(tenant_id), KPC(pool));
-        } else {
-          ObUnit new_unit;
-          for (int64_t j = 0; OB_SUCC(ret) && j < units->count(); ++j) {
-            new_unit.reset();
-            const ObUnit *unit = units->at(j);
-            if (OB_UNLIKELY(nullptr == unit)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unit ptr is null", KR(ret));
-            } else if (!has_exist_in_array(to_be_deleted_unit_group, unit->unit_group_id_)) {
-              // bypass
-            } else if (FALSE_IT(new_unit = *unit)) {
-              // shall never be here
-            } else if (FALSE_IT(new_unit.status_ = ObUnit::UNIT_STATUS_DELETING)) {
-              // shall never be here
-            } else if (OB_FAIL(ut_operator_.update_unit(trans, new_unit, true/*need_check_conflict_with_clone*/))) {
-              LOG_WARN("fail to update unit", KR(ret), K(new_unit));
-            }
-          }
-        }
-      }
-    }
-    // however, we need to end this transaction
-    if (trans.is_started()) {
-      const bool commit = (OB_SUCCESS == ret);
-      int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = trans.end(commit))) {
-        LOG_WARN("trans end failed", K(tmp_ret), K(commit));
-        ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
-      }
-    }
-    // modify in memory pool/unit info
-    for (int64_t i = 0; OB_SUCC(ret) && i < pools.count(); ++i) {
-      share::ObResourcePool *pool = pools.at(i);
-      common::ObArray<share::ObUnit *> *units = nullptr;
-      if (OB_UNLIKELY(nullptr == pool || tenant_id != pool->tenant_id_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("pool info unexpected", KR(ret), K(tenant_id), KPC(pool));
-      } else if (OB_FAIL(get_units_by_pool(pool->resource_pool_id_, units))) {
-        LOG_WARN("fail to get units by pool", KR(ret), KPC(pool), K(tenant_id));
-      } else if (OB_UNLIKELY(nullptr == units)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("units ptr is null", KR(ret), K(tenant_id), KPC(pool));
+      if (!ObShareUtil::check_compat_version_for_hetero_zone(data_version)) {
+        unit_status = ObUnit::UNIT_STATUS_ACTIVE;
+        LOG_INFO("sys data version below 4.2.5.5 or 4.3.0.0 <= data_version < 4.4.2.0, "
+                 "unit_status can not be ADDING yet, still ACTIVE",
+                 KR(ret), K(data_version));
       } else {
-        pool->unit_count_ = new_unit_num;
-        for (int64_t j = 0; OB_SUCC(ret) && j < units->count(); ++j) {
-          ObUnit *unit = units->at(j);
-          if (OB_UNLIKELY(nullptr == unit)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unit ptr is null", KR(ret));
-          } else if (!has_exist_in_array(to_be_deleted_unit_group, unit->unit_group_id_)) {
-            // bypass
-          } else {
-            unit->status_ = ObUnit::UNIT_STATUS_DELETING;
-          }
-        }
+        unit_status = ObUnit::UNIT_STATUS_ADDING;
       }
     }
   }
   return ret;
 }
 
-int ObUnitManager::rollback_tenant_shrink_pools_unit_num(
-    const uint64_t tenant_id,
-    common::ObIArray<share::ObResourcePool *> &pools,
-    const int64_t new_unit_num,
-    const int64_t old_unit_num,
-    const common::ObString &sql_text)
+int ObUnitManager::rollback_pool_unit_num_(
+    common::ObMySQLTransaction &trans,
+    share::ObResourcePool *pool,
+    const int64_t new_unit_num)
 {
   int ret = OB_SUCCESS;
-  common::ObMySQLTransaction trans;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || new_unit_num <= 0)) {
+  common::ObArray<share::ObUnit *> *units = nullptr;
+  if (OB_UNLIKELY(nullptr == pool)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pool ptr is null", KR(ret));
+  } else if (OB_UNLIKELY(!pool->is_granted_to_tenant() || new_unit_num <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(new_unit_num));
-  } else if (OB_FAIL(trans.start(proxy_, OB_SYS_TENANT_ID))) {
-    LOG_WARN("start transaction failed", K(ret));
+    LOG_WARN("invalid argument", KR(ret), KPC(pool), K(new_unit_num));
   } else {
-    if (OB_FAIL(rollback_alter_resource_tenant_unit_num_rs_job(tenant_id, new_unit_num,
-            old_unit_num, sql_text, trans))) {
-      LOG_WARN("rollback rs_job failed ", KR(ret), K(new_unit_num), K(old_unit_num), K(sql_text));
+    share::ObResourcePool new_pool;
+    const uint64_t tenant_id = pool->tenant_id_;
+    ObUnit::Status deleting_unit_rollback_status = ObUnit::UNIT_STATUS_MAX;
+    if (FAILEDx(new_pool.assign(*pool))) {
+      LOG_WARN("fail to assign new pool", KR(ret), KPC(pool));
+    } else if (FALSE_IT(new_pool.unit_count_ = new_unit_num)) {
+      // shall never be here
+    } else if (OB_FAIL(ut_operator_.update_resource_pool(trans, new_pool, true/*need_check_conflict_with_clone*/))) {
+      LOG_WARN("fail to update resource pool", KR(ret), K(new_pool));
+    } else if (OB_FAIL(get_units_by_pool(pool->resource_pool_id_, units))) {
+      LOG_WARN("fail to get units by pool", KR(ret), "pool_id", pool->resource_pool_id_);
+    } else if (OB_UNLIKELY(nullptr == units)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("units is null", KR(ret), K(tenant_id), "pool_id", pool->resource_pool_id_);
+    } else if (OB_FAIL(determine_new_added_unit_status(*pool, deleting_unit_rollback_status))) {
+      LOG_WARN("fail to determine new added unit status", KR(ret), KPC(pool));
     } else {
-      share::ObResourcePool new_pool;
-      for (int64_t i = 0; OB_SUCC(ret) && i < pools.count(); ++i) {
-        common::ObArray<share::ObUnit *> *units = nullptr;
-        const share::ObResourcePool *pool = pools.at(i);
-        new_pool.reset();
-        if (OB_UNLIKELY(nullptr == pool)) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < units->count(); ++i) {
+        const ObUnit *this_unit = units->at(i);
+        if (OB_UNLIKELY(NULL == this_unit)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("pool ptr is null", KR(ret), K(tenant_id));
-        } else if (OB_FAIL(new_pool.assign(*pool))) {
-          LOG_WARN("fail to assign new pool", KR(ret), KPC(pool));
-        } else if (FALSE_IT(new_pool.unit_count_ = new_unit_num)) {
-          // shall never be here
-        } else if (OB_FAIL(ut_operator_.update_resource_pool(trans, new_pool, false/*need_check_conflict_with_clone*/))) {
-          LOG_WARN("fail to update resource pool", KR(ret), K(new_pool));
-        } else if (OB_FAIL(get_units_by_pool(pool->resource_pool_id_, units))) {
-          LOG_WARN("fail to get units by pool", KR(ret), "pool_id", pool->resource_pool_id_);
-        } else if (OB_UNLIKELY(nullptr == units)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("units is null", KR(ret), K(tenant_id), "pool_id", pool->resource_pool_id_);
-        } else {
-          for (int64_t i = 0; OB_SUCC(ret) && i < units->count(); ++i) {
-            const ObUnit *this_unit = units->at(i);
-            if (OB_UNLIKELY(NULL == this_unit)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unit ptr is null", K(ret));
-            } else if (ObUnit::UNIT_STATUS_ACTIVE == this_unit->status_) {
-              // go and process the unit in deleting
-            } else if (ObUnit::UNIT_STATUS_DELETING == this_unit->status_) {
-              ObUnit new_unit = *this_unit;
-              new_unit.status_ = ObUnit::UNIT_STATUS_ACTIVE;
-              if (OB_FAIL(ut_operator_.update_unit(trans, new_unit, true/*need_check_conflict_with_clone*/))) {
-                LOG_WARN("fail to update unit", K(ret), K(new_unit), "cur_unit", *this_unit);
-              }
-            } else {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected unit status", K(ret), "unit", *this_unit);
-            }
+          LOG_WARN("unit ptr is null", KR(ret));
+        } else if (ObUnit::UNIT_STATUS_ACTIVE == this_unit->status_) {
+          // go and process the unit in deleting
+        } else if (ObUnit::UNIT_STATUS_ADDING == this_unit->status_) {
+          ObUnit new_unit = *this_unit;
+          new_unit.status_ = ObUnit::UNIT_STATUS_DELETING;
+          if (OB_FAIL(ut_operator_.update_unit_exclude_ug_id(trans, new_unit, true/*need_check_conflict_with_clone*/))) {
+            LOG_WARN("fail to update unit", K(ret), K(new_unit), "cur_unit", *this_unit);
           }
+        } else if (ObUnit::UNIT_STATUS_DELETING == this_unit->status_) {
+          ObUnit new_unit = *this_unit;
+          new_unit.status_ = deleting_unit_rollback_status;
+          if (OB_FAIL(ut_operator_.update_unit_exclude_ug_id(trans, new_unit, true/*need_check_conflict_with_clone*/))) {
+            LOG_WARN("fail to update unit", KR(ret), K(new_unit), "cur_unit", *this_unit);
+          }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected unit status", KR(ret), "unit", *this_unit);
         }
       }
     }
-    const bool commit = (OB_SUCCESS == ret);
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = trans.end(commit))) {
-      LOG_WARN("fail to trans end", KR(tmp_ret), K(commit));
-      ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
-    }
-  }
-  if (OB_SUCC(ret)) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < pools.count(); ++i) {
-      common::ObArray<share::ObUnit *> *units = nullptr;
-      share::ObResourcePool *pool = pools.at(i);
-      if (OB_UNLIKELY(nullptr == pool)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("pool ptr is null", KR(ret), K(tenant_id));
-      } else if (OB_FAIL(get_units_by_pool(pool->resource_pool_id_, units))) {
-        LOG_WARN("fail to get units by pool", KR(ret), "pool_id", pool->resource_pool_id_);
-      } else if (OB_UNLIKELY(nullptr == units)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("units is null", KR(ret), K(tenant_id), "pool_id", pool->resource_pool_id_);
-      } else {
-        pool->unit_count_ = new_unit_num;
-        for (int64_t i = 0; OB_SUCC(ret) && i < units->count(); ++i) {
-          ObUnit *this_unit = units->at(i);
-          if (OB_UNLIKELY(NULL == this_unit)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unit ptr is null", K(ret));
-          } else if (ObUnit::UNIT_STATUS_ACTIVE == this_unit->status_) {
-            // go and process the unit in deleting
-          } else if (ObUnit::UNIT_STATUS_DELETING == this_unit->status_) {
-            this_unit->status_ = ObUnit::UNIT_STATUS_ACTIVE;
-          } else {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected unit status", K(ret), "unit", *this_unit);
-          }
+    // update pool info and unit status in-memory
+    if (OB_SUCC(ret)) {
+      pool->unit_count_ = new_unit_num;
+      for (int64_t i = 0; OB_SUCC(ret) && i < units->count(); ++i) {
+        ObUnit *this_unit = units->at(i);
+        if (OB_UNLIKELY(NULL == this_unit)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unit ptr is null", KR(ret));
+        } else if (ObUnit::UNIT_STATUS_ACTIVE == this_unit->status_) {
+          // go and process the unit in deleting or adding
+        } else if (ObUnit::UNIT_STATUS_ADDING == this_unit->status_) {
+          this_unit->status_ = ObUnit::UNIT_STATUS_DELETING;
+        } else if (ObUnit::UNIT_STATUS_DELETING == this_unit->status_) {
+          this_unit->status_ = deleting_unit_rollback_status;
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected unit status", KR(ret), "unit", *this_unit);
         }
       }
     }
@@ -2547,60 +2154,257 @@ int ObUnitManager::alter_resource_tenant(
   SpinWLockGuard guard(lock_);
   // related variables
   common::ObArray<share::ObResourcePool *> *pools = nullptr;
-  const char *module = "ALTER_RESOURCE_TENANT";
-  AlterUnitNumType alter_unit_num_type = AUN_MAX;
-  int64_t old_unit_num = 0;
+  bool in_hetero_deploy_mode = false;
+  bool is_gts_standalone = false;
+  share::ObUnitTableTransaction trans;
 
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret), K(inited_), K(loaded_));
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || new_unit_num <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(new_unit_num));
-  } else if (OB_SYS_TENANT_ID == tenant_id && 1 != new_unit_num) {
+  } else if (OB_FAIL(trans.start(proxy_, OB_SYS_TENANT_ID))) {
+    LOG_WARN("fail to start transaction", KR(ret));
+  } else if (OB_FAIL(check_tenant_gts_standalone_enabled(tenant_id, is_gts_standalone))) {
+    LOG_WARN("fail to check tenant gts standalone enabled", KR(ret), K(tenant_id));
+  } else if (is_gts_standalone && new_unit_num < 2) {
     ret = OB_OP_NOT_ALLOW;
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "alter resource tenant for sys tenant");
+    LOG_WARN("tenant enabled gts_standalone, unit_num can not be less than 2", KR(ret), K(tenant_id));
+    LOG_USER_ERROR_WITH_ARGS(OB_OP_NOT_ALLOW, "Tenant %lu enabled GTS standalone, unit_num less than 2", tenant_id);
   } else if (OB_FAIL(get_pools_by_tenant_(tenant_id, pools))) {
     LOG_WARN("fail to get pools by tenant", KR(ret), K(tenant_id));
   } else if (OB_UNLIKELY(nullptr == pools)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pools ptr is null", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(determine_alter_resource_tenant_unit_num_type(
-          tenant_id, *pools, new_unit_num, old_unit_num, alter_unit_num_type))) {
-    LOG_WARN("fail to do determine alter resource tenant unit num type", KR(ret));
-  } else if (AUN_NOP == alter_unit_num_type) {
-    if (delete_unit_group_id_array.count() > 0) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "delete unit group without unit num change");
-    } else {} // good, nothing to do with unit group
-  } else if (AUN_ROLLBACK_SHRINK == alter_unit_num_type) {
-    if (delete_unit_group_id_array.count() > 0) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "rollback shrink pool unit num combined with deleting unit");
-    } else if (OB_FAIL(rollback_tenant_shrink_pools_unit_num(
-            tenant_id, *pools, new_unit_num, old_unit_num, sql_text))) {
-      LOG_WARN("fail to rollback shrink pool unit num", K(ret),
-          K(new_unit_num), K(sql_text), K(old_unit_num));
+  } else if (OB_FAIL(check_tenant_in_heterogeneous_deploy_mode(tenant_id, in_hetero_deploy_mode))) {
+    LOG_WARN("fail to check tenant in hetero deploy mode", KR(ret), K(tenant_id));
+  } else {
+    // 1. determine all pools alter info
+    ObArray<share::ObResourcePool *> altered_pools;
+    ObArray<PoolOperationInfo> pool_op_info_array;
+    if (OB_FAIL(batch_determine_altered_pools_op_info_(*pools, new_unit_num, altered_pools, pool_op_info_array))) {
+      LOG_WARN("fail to batch determine altered pools op info", KR(ret), K(new_unit_num));
+    } else if (altered_pools.count() != pool_op_info_array.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("altered pools count not match pool op info array count", KR(ret),
+               K(altered_pools.count()), K(pool_op_info_array.count()));
+    } else if (!in_hetero_deploy_mode) {
+      // if in homo mode, defense check all pool unit_num the same
+      if (altered_pools.count() != 0 && altered_pools.count() != pools->count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tenant pools unit num not expected, neither equal to all pools' count or equal to 0",
+                 KR(ret), K(altered_pools.count()), K(pools->count()), K(pool_op_info_array));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < pool_op_info_array.count(); ++i) {
+        if (OB_UNLIKELY(pool_op_info_array.at(i) != pool_op_info_array.at(0))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("alter type not same in homo mode", KR(ret), K(pool_op_info_array));
+        }
+      }
     }
-  } else if (AUN_EXPAND == alter_unit_num_type) {
-    if (delete_unit_group_id_array.count() > 0) {
+
+    // 2. process to be deleted unit group
+    ObArray<ObArray<uint64_t>> delete_unit_id_arrays;
+    if (OB_FAIL(ret)) {
+    } else if (in_hetero_deploy_mode) {
+      // in hetero mode, do not yet support user specify unit to delete in alter resource tenant command.
+      if (!delete_unit_group_id_array.empty()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("attribute delete_unit_group not supported in hetero mode", KR(ret), K(tenant_id), K(delete_unit_group_id_array));
+        LOG_USER_ERROR_WITH_ARGS(OB_NOT_SUPPORTED, "Tenant %lu zone_deploy_mode is 'hetero' , not 'homo', "
+            "delete unit_group", tenant_id);
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < altered_pools.count(); ++i) {
+          if (OB_FAIL(delete_unit_id_arrays.push_back(ObArray<uint64_t>()))) {
+            LOG_WARN("fail to push back empty array", KR(ret));
+          }
+        }
+      }
+    } else if (OB_FAIL(process_delete_unit_group_in_homo_mode_(tenant_id, altered_pools,
+        pool_op_info_array, delete_unit_group_id_array, delete_unit_id_arrays))) {
+      LOG_WARN("fail to process delete unit group", KR(ret), K(tenant_id), K(in_hetero_deploy_mode), K(altered_pools),
+              K(pool_op_info_array), K(delete_unit_group_id_array));
+    }
+
+    // 3. do alter per pool unit_num
+    if (OB_SUCC(ret) && !pool_op_info_array.empty()) {
+      if (delete_unit_id_arrays.count() != altered_pools.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("delete unit id array count not match", KR(ret), K(delete_unit_id_arrays), K(altered_pools.count()));
+      } else if (OB_FAIL(register_alter_resource_tenant_unit_num_rs_job(tenant_id, new_unit_num, sql_text, trans))) {
+        LOG_WARN("fail to register alter resource tenant unit num rs job", KR(ret),
+            K(tenant_id), K(sql_text), K(new_unit_num));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < altered_pools.count(); ++i) {
+        share::ObResourcePool *pool = altered_pools.at(i);
+        if (OB_FAIL(do_alter_pool_unit_num_(trans, pool, pool_op_info_array.at(i), delete_unit_id_arrays.at(i)))) {
+          LOG_WARN("fail to do_alter_pool_unit_num", KR(ret), KPC(pool), K(pool_op_info_array.at(i)), K(delete_unit_id_arrays));
+        }
+      }
+      // re-adjust unit group id at the end
+      if (OB_FAIL(ret)) {
+      } else if (in_hetero_deploy_mode) {
+        if (OB_FAIL(adjust_altered_pools_unit_group_id_(trans, tenant_id, altered_pools))) {
+          LOG_WARN("fail to adjust_altered_pools_unit_group_id", KR(ret), K(tenant_id), K(pool_op_info_array));
+        }
+      } else {
+        if (OB_FAIL(alter_homo_resource_tenant_adjust_ug_(trans, pool_op_info_array.at(0), *pools))) {
+          LOG_WARN("fail to adjust unit_group_id", KR(ret), K(pool_op_info_array));
+        }
+      }
+    }
+  }
+
+  if (trans.is_started()) {
+    const bool commit = (OB_SUCCESS == ret);
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(trans.end(commit))) {
+      LOG_WARN("fail to trans end", KR(tmp_ret), K(commit));
+      ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
+    }
+  }
+  return ret;
+}
+
+int ObUnitManager::batch_determine_altered_pools_op_info_(
+    common::ObArray<share::ObResourcePool *> &pools,
+    const int64_t new_unit_num,
+    ObArray<share::ObResourcePool *> &altered_pools,
+    ObArray<ObUnitManager::PoolOperationInfo> &pool_op_info_array)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(new_unit_num <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(new_unit_num));
+  } else if (OB_UNLIKELY(pools.count() <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(pools.count()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < pools.count(); ++i) {
+      share::ObResourcePool *pool = pools.at(i);
+      AlterUnitNumType alter_unit_num_type = AUN_MAX;
+      if (nullptr == pool) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("pool is null ptr", KR(ret));
+      } else if (OB_FAIL(determine_alter_unit_num_type(pool, new_unit_num, alter_unit_num_type))) {
+        LOG_WARN("fail to determine alter unit num type", KR(ret));
+      } else if (AUN_MAX == alter_unit_num_type) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "alter unit num while the previous operation is in progress");
+      } else if (AUN_NOP == alter_unit_num_type) {
+        // no change, skip
+      } else {
+        if (OB_FAIL(pool_op_info_array.push_back(PoolOperationInfo(pool->unit_count_,
+            new_unit_num, alter_unit_num_type, pool->replica_type_)))) {
+          LOG_WARN("fail to push back pool operation info", KR(ret), KPC(pool));
+        } else if (OB_FAIL(altered_pools.push_back(pool))) {
+          LOG_WARN("fail to push back altered pool", KR(ret), KPC(pool));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+// 1. if homo mode, and OP is not SHRINK, check if delete_unit_group_id_array is empty
+// 2. if homo mode, and OP is SHRINK, process delete unit group id, and convert to units
+int ObUnitManager::process_delete_unit_group_in_homo_mode_(
+    const uint64_t tenant_id,
+    const ObIArray<share::ObResourcePool *> &pools,
+    const ObIArray<ObUnitManager::PoolOperationInfo> &pool_op_info_array,
+    const ObIArray<uint64_t> &delete_unit_group_id_array,  // user specified
+    ObIArray<ObArray<uint64_t>> &delete_unit_id_arrays)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || pools.count() != pool_op_info_array.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), "pools_count", pools.count(), K(pool_op_info_array));
+  } else if (pool_op_info_array.empty() || AUN_SHRINK != pool_op_info_array.at(0).alter_type_) {
+    // not shrinking operation, can not specify unit_group to delete.
+    if (!delete_unit_group_id_array.empty()) {
       ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "expand pool unit num combined with deleting unit");
-    } else if (OB_FAIL(expand_tenant_pools_unit_num_(
-            tenant_id, *pools, new_unit_num, old_unit_num, module, sql_text))) {
-      LOG_WARN("fail to expend pool unit num", K(module), KR(ret), K(new_unit_num), K(tenant_id),
-          KPC(pools), K(sql_text), K(old_unit_num));
+      LOG_WARN("do not support deleting unit except for shrink unit num", KR(ret), K(pool_op_info_array));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "unit num is not shrinking, deleting unit");
+    } else {
+      // fill with empty arrays
+      for (int64_t i = 0; OB_SUCC(ret) && i < pools.count(); ++i) {
+        if (OB_FAIL(delete_unit_id_arrays.push_back(ObArray<uint64_t>()))) {
+          LOG_WARN("fail to push back empty array", KR(ret));
+        }
+      }
     }
-  } else if (AUN_SHRINK == alter_unit_num_type) {
-    if (OB_FAIL(shrink_tenant_pools_unit_num(tenant_id, *pools, new_unit_num,
-            old_unit_num, delete_unit_group_id_array, sql_text))) {
-      LOG_WARN("fail to shrink pool unit num", K(ret), K(new_unit_num), K(sql_text), K(old_unit_num));
+  } else {
+    const PoolOperationInfo &pool_op_info = pool_op_info_array.at(0);   // use first op info to represent all
+    ObArray<ObUnit> to_be_deleted_units;
+    if (OB_FAIL(get_to_be_deleted_units_in_homo_mode(
+          tenant_id, pool_op_info, delete_unit_group_id_array, to_be_deleted_units))) {
+      LOG_WARN("fail to get to be deleted unit group", KR(ret), K(tenant_id));
     }
-  } else if (AUN_MAX == alter_unit_num_type) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "alter unit group num while the previous operation is in progress");
+    for (int64_t i = 0; OB_SUCC(ret) && i < pools.count(); ++i) {
+      share::ObResourcePool *pool = pools.at(i);
+      ObArray<uint64_t> pool_delete_unit_id_array;
+      if (OB_ISNULL(pool)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("pool is null", KR(ret));
+      }
+      FOREACH_CNT_X(unit, to_be_deleted_units, OB_SUCC(ret)) {
+        if (unit->resource_pool_id_ == pool->resource_pool_id_
+            && OB_FAIL(pool_delete_unit_id_array.push_back(unit->unit_id_))) {
+          LOG_WARN("fail to push_back", KR(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (pool_delete_unit_id_array.count() !=
+          (pool_op_info.old_unit_num_ - pool_op_info.new_unit_num_) * pool->zone_list_.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("pool_delete_unit_id_array count unexpected", KR(ret), K(to_be_deleted_units),
+                  KPC(pool), K(pool_op_info), K(pool_delete_unit_id_array));
+      } else if (OB_FAIL(delete_unit_id_arrays.push_back(pool_delete_unit_id_array))) {
+        LOG_WARN("fail to push_back", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+// This function only used for adjusting unit_group_id_ when altering resource tenant in HOMO mode,
+// and try to keep old ug_ids, only allocate new ug_ids for new expanded units.
+int ObUnitManager::alter_homo_resource_tenant_adjust_ug_(
+    common::ObMySQLTransaction &trans,
+    const ObUnitManager::PoolOperationInfo &pool_op_info,
+    common::ObIArray<share::ObResourcePool *> &pools)
+{
+  int ret = OB_SUCCESS;
+  if (AUN_SHRINK == pool_op_info.alter_type_ || AUN_ROLLBACK == pool_op_info.alter_type_) {
+    // do nothing, no need to adjust unit group id
+  } else if (AUN_EXPAND == pool_op_info.alter_type_) {
+    // only allocate new ug_ids for new added units, ug_ids of which are currently 0
+    // We have assured that in homo mode, all pools have unit group id. So do not need to check pool align to ug.
+    ObArray<uint64_t> new_ug_ids;
+    if (OB_ISNULL(pools.at(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null pool ptr", KR(ret));
+    } else if (OB_FAIL(ut_operator_.get_pool_unit_group_ids(trans, pools.at(0)->resource_pool_id_, new_ug_ids))) {
+      LOG_WARN("fail to get pool ug_ids", KR(ret), KPC(pools.at(0)));
+    } else if (OB_UNLIKELY(new_ug_ids.count() != pool_op_info.old_unit_num_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("in homo mode, pool ug_ids does not match unit_count",
+               "pool", *pools.at(0), "pool_ug_ids", new_ug_ids);
+    } else if (OB_FAIL(batch_fetch_new_unit_group_id(
+        pool_op_info.new_unit_num_ - pool_op_info.old_unit_num_, new_ug_ids))) {
+      LOG_WARN("fail to batch fetch unit group id", KR(ret), K(pool_op_info));
+    } else {
+      const share::ObResourcePool *pool = nullptr;
+      ARRAY_FOREACH(pools, i) {
+        CK(OB_NOT_NULL(pool = pools.at(i)));
+        if (FAILEDx(reallocate_pool_unit_group_id_(trans, pool, new_ug_ids))) {
+          LOG_WARN("fail to reallocate pool unit group id", KR(ret), KPC(pool), K(new_ug_ids));
+        }
+      }
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected alter unit group num type", KR(ret), K(alter_unit_num_type));
+    LOG_WARN("unexpected pool_op_info", KR(ret), K(pool_op_info));
   }
   return ret;
 }
@@ -2824,8 +2628,8 @@ int ObUnitManager::check_old_pool_name_condition(
                 LOG_WARN("unit ptr is null", KR(ret));
               } else if (unit->status_ != ObUnit::UNIT_STATUS_ACTIVE) {
                 ret = OB_OP_NOT_ALLOW;
-                LOG_WARN("merging pools when any pool in shrinking not allowed", KR(ret), KPC(pool));
-                LOG_USER_ERROR(OB_OP_NOT_ALLOW, "merging pools when any pool in shrinking");
+                LOG_WARN("merging pools when any pool in shrinking or expanding not allowed", KR(ret), KPC(pool));
+                LOG_USER_ERROR(OB_OP_NOT_ALLOW, "merging pools when any pool in shrinking or expanding");
               }
             }
           }
@@ -2868,7 +2672,7 @@ int ObUnitManager::do_merge_pool_persistent_info(
     const common::ObIArray<share::ObResourcePool*> &old_pool)
 {
   int ret = OB_SUCCESS;
-  common::ObMySQLTransaction trans;
+  share::ObUnitTableTransaction trans;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("check_inner_stat failed", K(ret), K(inited_), K(loaded_));
   } else if (OB_FAIL(trans.start(proxy_, OB_SYS_TENANT_ID))) {
@@ -2992,7 +2796,7 @@ int ObUnitManager::merge_pool_unit_persistent_info(
       } else {
         share::ObUnit new_unit = *unit;
         new_unit.resource_pool_id_ = new_pool->resource_pool_id_;
-        if (OB_FAIL(ut_operator_.update_unit(trans, new_unit, false/*need_check_conflict_with_clone*/))) {
+        if (OB_FAIL(ut_operator_.update_unit_exclude_ug_id(trans, new_unit, false/*need_check_conflict_with_clone*/))) {
           LOG_WARN("fail to update unit", K(ret), K(new_unit));
         }
         ROOTSERVICE_EVENT_ADD("unit", "merge_pool",
@@ -3144,10 +2948,11 @@ int ObUnitManager::merge_pool_unit_inmemory_info(
 
 int ObUnitManager::alter_resource_pool(const share::ObResourcePool &alter_pool,
                                        const ObUnitConfigName &config_name,
-                                       const common::ObIArray<uint64_t> &delete_unit_id_array)
+                                       const common::ObIArray<uint64_t> &delete_unit_id_array,
+                                       const common::ObString &sql_text)
 {
   int ret = OB_SUCCESS;
-  LOG_INFO("start alter resource pool", K(alter_pool), K(config_name));
+  LOG_INFO("start alter resource pool", K(alter_pool), K(config_name), K(delete_unit_id_array));
   SpinWLockGuard guard(lock_);
   share::ObResourcePool *pool = NULL;
   share::ObResourcePool  pool_bak;
@@ -3174,10 +2979,6 @@ int ObUnitManager::alter_resource_pool(const share::ObResourcePool &alter_pool,
   } else if (NULL == pool) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pool is null", KP(pool), K(ret));
-  } else if (REPLICA_TYPE_LOGONLY == pool->replica_type_
-             && alter_pool.unit_count_ > 1) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("logonly resource pool should only have one unit on one zone", K(ret), K(alter_pool));
   } else {
     int64_t alter_count = 0;
     if (!config_name.is_empty()) {
@@ -3213,7 +3014,7 @@ int ObUnitManager::alter_resource_pool(const share::ObResourcePool &alter_pool,
     if (OB_FAIL(ret)) {
     } else if (0 == alter_pool.unit_count_) {
       // unit num not change
-    } else if (OB_FAIL(alter_pool_unit_num(pool, alter_pool.unit_count_, delete_unit_id_array))) {
+    } else if (OB_FAIL(alter_pool_unit_num(pool, alter_pool.unit_count_, delete_unit_id_array, sql_text))) {
       LOG_WARN("alter_pool_unit_num failed", "pool", *pool,
                "unit_num", alter_pool.unit_count_, K(ret));
     }
@@ -3231,7 +3032,8 @@ int ObUnitManager::alter_resource_pool(const share::ObResourcePool &alter_pool,
     ROOTSERVICE_EVENT_ADD("unit", "alter_resource_pool",
                           "name", pool_bak.name_);
   }
-  LOG_INFO("finish alter resource pool", K(alter_pool), K(config_name), K(ret));
+  LOG_INFO("finish alter resource pool", KR(ret), K(alter_pool), K(config_name),
+      K(delete_unit_id_array), K(sql_text));
   return ret;
 }
 
@@ -3459,8 +3261,8 @@ int ObUnitManager::check_server_enough(const uint64_t tenant_id,
 }
 
 /* when expand zone resource for tenant this func is invoked,
- * we need to check whether the tenant units are in deleting.
- * if any tenant unit is in deleting,
+ * we need to check whether the tenant units are in deleting or adding.
+ * if any tenant unit is in deleting or adding,
  * @is_allowed returns false
  */
 int ObUnitManager::check_expand_zone_resource_allowed_by_old_unit_stat_(
@@ -3470,7 +3272,7 @@ int ObUnitManager::check_expand_zone_resource_allowed_by_old_unit_stat_(
   int ret = OB_SUCCESS;
   ObArray<share::ObResourcePool *> *cur_pool_array = nullptr;
   if (OB_FAIL(check_inner_stat_())) {
-    LOG_WARN("fail to check inner stat", KR(ret));
+    LOG_WARN("check_inner_stat failed", K(inited_), K(loaded_), KR(ret));
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
@@ -3617,319 +3419,374 @@ int ObUnitManager::check_expand_zone_resource_allowed_by_data_disk_size_(
   return ret;
 }
 
-/* 1 when this is a tenant being created:
- *   check the input pools, each input pool unit num shall be equal, otherwise illegal
- * 2 when this is a tenant which exists:
- *   check the input pools, each input pool unit num shall be equal to the pools already granted to the tenant.
- */
-int ObUnitManager::check_tenant_pools_unit_num_legal_(
+int ObUnitManager::check_grant_pools_unit_num_legal_(
     const uint64_t tenant_id,
-    const common::ObIArray<share::ObResourcePoolName> &input_pool_names,
-    bool &unit_num_legal,
-    int64_t &sample_unit_num)
+    const common::ObIArray<share::ObResourcePoolName> &pool_names)
 {
   int ret = OB_SUCCESS;
-  ObArray<share::ObResourcePool *> *cur_pool_array = nullptr;
-  if (OB_FAIL(check_inner_stat_())) {
-    LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
-                        || input_pool_names.count() <= 0)) {
+  ObArray<PoolOperationInfo> pool_op_info_array;
+  bool in_hetero_deploy_mode = false;
+  bool is_gts_standalone = false;
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || pool_names.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(pool_names));
+  } else if (OB_FAIL(check_tenant_in_heterogeneous_deploy_mode(tenant_id, in_hetero_deploy_mode))) {
+    LOG_WARN("fail to check_tenant_in_heterogeneous_deploy_mode", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(check_tenant_gts_standalone_enabled(tenant_id, is_gts_standalone))) {
+    LOG_WARN("fail to check_tenant_gts_standalone_enabled", KR(ret), K(tenant_id));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < pool_names.count(); ++i) {
+      const share::ObResourcePoolName &pool_name = pool_names.at(i);
+      share::ObResourcePool *pool = nullptr;
+      if (OB_FAIL(inner_get_resource_pool_by_name(pool_names.at(i), pool))) {
+        LOG_WARN("get resource pool by name failed", "pool_name", pool_names.at(i), KR(ret));
+      } else if (OB_ISNULL(pool)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("pool is null", KP(pool), KR(ret));
+      } else if (OB_FAIL(pool_op_info_array.push_back(PoolOperationInfo(
+          0, pool->unit_count_, AUN_EXPAND, pool->replica_type_)))) {
+        LOG_WARN("push back pool operation info failed", KR(ret));
+      }
+    }
+    if (FAILEDx(check_unit_num_legal_after_pools_operation_(tenant_id, pool_op_info_array,
+        in_hetero_deploy_mode, is_gts_standalone))) {
+      LOG_WARN("check unit num legal after pools operation failed", KR(ret), K(tenant_id),
+               K(pool_op_info_array), K(in_hetero_deploy_mode), K(is_gts_standalone));
+    }
+  }
+  return ret;
+}
+
+int ObUnitManager::check_grant_pools_replica_type_legal_(
+    const uint64_t tenant_id,
+    const common::ObIArray<share::ObResourcePoolName> &pool_names)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || pool_names.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(pool_names));
+  } else {
+    bool has_logonly_replica = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < pool_names.count(); ++i) {
+      const share::ObResourcePoolName &pool_name = pool_names.at(i);
+      share::ObResourcePool *pool = nullptr;
+      if (OB_FAIL(inner_get_resource_pool_by_name(pool_names.at(i), pool))) {
+        LOG_WARN("get resource pool by name failed", "pool_name", pool_names.at(i), KR(ret));
+      } else if (OB_ISNULL(pool)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("pool is null", KP(pool), KR(ret));
+      } else if (REPLICA_TYPE_LOGONLY == pool->replica_type_) {
+        has_logonly_replica = true;
+      }
+    }
+    if (OB_SUCC(ret) && has_logonly_replica) {
+      bool enable_logonly_replica = false;
+      bool in_hetero_deploy_mode = false;
+      if (OB_FAIL(check_tenant_enable_logonly_replica_(tenant_id, enable_logonly_replica))) {
+        LOG_WARN("fail to check tenant enable logonly replica", KR(ret), K(tenant_id));
+      } else if (!enable_logonly_replica) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "ENABLE_LOGONLY_REPLICA is false, tenant with LOGONLY pools");
+        LOG_WARN("tenant with L-pool is not supported when enable_logonly_replica is false",
+                KR(ret), K(pool_names), K(tenant_id), K(enable_logonly_replica));
+      } else if (OB_FAIL(check_tenant_in_heterogeneous_deploy_mode(tenant_id, in_hetero_deploy_mode))) {
+        LOG_WARN("fail to check tenant in heterogeneous deploy mode", KR(ret), K(tenant_id));
+      } else if (!in_hetero_deploy_mode) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_USER_ERROR_WITH_ARGS(OB_OP_NOT_ALLOW, "Tenant %lu zone_deploy_mode is 'homo', not 'hetero', "
+            "LOGONLY pool", tenant_id);
+        LOG_WARN("can not grant logonly pool, zone_deploy_mode must be hetero", KR(ret), K(tenant_id), K(pool_names));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObUnitManager::check_tenant_exist_(
+    const uint64_t tenant_id,
+    bool &is_exist)
+{
+  int ret = OB_SUCCESS;
+  share::schema::ObSchemaGetterGuard guard;
+  is_exist = false;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is null", KP(GCTX.schema_service_), KR(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
+    LOG_WARN("fail to get schema guard", KR(ret));
+  } else if (OB_FAIL(guard.check_tenant_exist(tenant_id, is_exist))) {
+    LOG_WARN("check tenant exist failed", KR(ret), K(tenant_id));
+  }
+  return ret;
+}
+
+int ObUnitManager::read_parameter_from_seed_tenant_(
+    const char * parameter_name,
+    ObString &parameter_value)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  parameter_value.reset();
+  if (OB_ISNULL(parameter_name)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret));
+  } else if (OB_FAIL(sql.append_fmt("SELECT * FROM %s WHERE name = \"%s\"",
+                         OB_ALL_SEED_PARAMETER_TNAME, parameter_name))) {
+    LOG_WARN("fail to append sql", KR(ret));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret));
   } else {
-    unit_num_legal = true;
-    sample_unit_num = -1;
-    int tmp_ret = get_pools_by_tenant_(tenant_id, cur_pool_array);
-    if (OB_ENTRY_NOT_EXIST == tmp_ret) {
-      // when create tenant pools belong to this tenant is empty
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(GCTX.sql_proxy_->read(res, sql.ptr()))) {
+        LOG_WARN("fail to execute sql", KR(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", KR(ret));
+      } else if (OB_FAIL(result->next())) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to get next row", KR(ret));
+        }
+      } else {
+        EXTRACT_VARCHAR_FIELD_MYSQL(*result, "value", parameter_value);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObUnitManager::check_tenant_enable_logonly_replica_(
+    const uint64_t tenant_id, bool &enable_logonly_replica)
+{
+  int ret = OB_SUCCESS;
+  enable_logonly_replica = false;
+  bool is_exist = false;
+  ObString parameter_value;
+  const char * parameter_name = ENABLE_LOGONLY_REPLICA;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(check_tenant_exist_(tenant_id, is_exist))) {
+    LOG_WARN("fail to check tenant exist", KR(ret), K(tenant_id));
+  } else {
+    if (is_exist) {
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+      if (OB_UNLIKELY(!tenant_config.is_valid())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("tenant_config is not valid", KR(ret), K(tenant_id));
+      } else {
+        enable_logonly_replica = tenant_config->enable_logonly_replica;
+      }
+    } else {
+      ObSqlString param_value;
+      // tenant not exist yet, it means it's being created and value of seed tenant will be used
+      // as this tenant's initial value. So try to get value from __all_seed_parameter.
+      if (OB_FAIL(read_parameter_from_seed_tenant_(parameter_name , parameter_value))) {
+        LOG_WARN("fail to read enable_logonyl_replica from seed tenant", KR(ret));
+      } else if (parameter_value.empty()) {
+        enable_logonly_replica = false;
+        LOG_INFO("seed not set, use default value", KR(ret));
+      } else if (OB_FAIL(param_value.assign(parameter_value))) {
+        LOG_WARN("fail to assign param value", KR(ret), K(parameter_value));
+      } else {
+        bool is_valid = false;
+        enable_logonly_replica = ObConfigBoolParser::get(param_value.ptr(), is_valid);
+        if (OB_UNLIKELY(!is_valid)) {
+          // defensive check
+          enable_logonly_replica = false;
+          LOG_INFO("parameter value is not expected", K(param_value));
+        }
+        LOG_INFO("tenant does not exist yet, try to get enable_logonly_replica from seed",
+                 KR(ret), K(tenant_id), K(enable_logonly_replica), K(parameter_value), K(is_valid), K(param_value));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObUnitManager::check_tenant_in_heterogeneous_deploy_mode(
+    const uint64_t tenant_id, bool &in_hetero_deploy_mode)
+{
+  int ret = OB_SUCCESS;
+  bool is_exist = false;
+  ObString parameter_value;
+  const char * parameter_name = ZONE_DEPLOY_MODE;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(check_tenant_exist_(tenant_id, is_exist))) {
+    LOG_WARN("fail to check tenant exist", KR(ret), K(tenant_id));
+  } else {
+    if (is_exist) {
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+      if (OB_UNLIKELY(!tenant_config.is_valid())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("tenant_config is not valid", KR(ret), K(tenant_id));
+      } else {
+        ObString value = tenant_config->zone_deploy_mode.get_value_string();
+        in_hetero_deploy_mode = 0 == value.case_compare(ObConfigZoneDeployModeChecker::HETERO_MODE_STR)
+            ? true : false;
+      }
+    } else {
+      // tenant not exist yet, it means it's being created and value of seed tenant will be used
+      // as this tenant's initial value. So try to get value from __all_seed_parameter.
+      if (OB_FAIL(read_parameter_from_seed_tenant_(parameter_name, parameter_value))) {
+        LOG_WARN("fail to read zone_deploy_mode from seed tenant", KR(ret));
+      } else if (parameter_value.empty()) {
+        in_hetero_deploy_mode = false;
+        LOG_INFO("seed not set, use default value HOMO", KR(ret));
+      } else {
+        in_hetero_deploy_mode = 0 == parameter_value.case_compare(ObConfigZoneDeployModeChecker::HETERO_MODE_STR)
+            ? true : false;
+      }
+      LOG_INFO("tenant does not exist yet, try to get zone_deploy_mode from seed",
+          KR(ret), K(tenant_id), K(in_hetero_deploy_mode));
+    }
+  }
+  return ret;
+}
+
+int ObUnitManager::check_tenant_gts_standalone_enabled(
+    const uint64_t tenant_id, bool &enabled)
+{
+  int ret = OB_SUCCESS;
+  share::schema::ObSchemaGetterGuard guard;
+  bool is_exist = false;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (OB_UNLIKELY(!tenant_config.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("tenant_config is not valid", KR(ret), K(tenant_id));
+    } else {
+      enabled = tenant_config->enable_gts_standalone;
+    }
+  }
+  return ret;
+}
+
+/*
+ * Check if tenant's unit_num legal after grant pools or alter pool unit_num:
+ *    In homo_mode, tenant's resource pools must have same unit_num;
+ *    In hetero_mode, unit_num can be different, but no more than 2 distinct unit_num.
+ */
+int ObUnitManager::check_unit_num_legal_after_pools_operation_(
+    const uint64_t tenant_id,
+    const common::ObIArray<ObUnitManager::PoolOperationInfo> &pool_op_info_array,
+    const bool in_hetero_deploy_mode,
+    const bool is_gts_standalone)
+{
+  int ret = OB_SUCCESS;
+  ObUnitNumCountMap unit_num_count_map;
+  const int64_t BUCKET_SIZE = 32;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("check_inner_stat failed", K(inited_), K(loaded_), KR(ret));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || pool_op_info_array.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(pool_op_info_array));
+  } else if (OB_FAIL(unit_num_count_map.create(BUCKET_SIZE, ObModIds::OB_RS_UNIT_MANAGER))) {
+    LOG_WARN("fail to create unit_num_count_map", KR(ret), K(BUCKET_SIZE));
+  } else {
+    // stat pools unit count before operation
+    ObArray<share::ObResourcePool *> *cur_pool_array = nullptr;
+    if (OB_FAIL(get_pools_by_tenant_(tenant_id, cur_pool_array))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        // when create tenant pools belong to this tenant is empty
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to get pools by tenant", KR(ret), K(tenant_id));
+      }
     } else if (OB_UNLIKELY(nullptr == cur_pool_array)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("cur_pool is null", KR(ret), K(tenant_id));
     } else if (OB_UNLIKELY(cur_pool_array->count() <= 0)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("pool_array", KR(ret));
-    } else if (OB_UNLIKELY(nullptr == cur_pool_array->at(0))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("pool ptr is null", KR(ret));
     } else {
-      sample_unit_num = cur_pool_array->at(0)->unit_count_;
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && unit_num_legal && i < input_pool_names.count(); ++i) {
-      share::ObResourcePool *pool = NULL;
-      if (OB_FAIL(inner_get_resource_pool_by_name(input_pool_names.at(i), pool))) {
-        LOG_WARN("fail to get pool by name", KR(ret), "pool_name", input_pool_names.at(i));
-      } else if (OB_UNLIKELY(nullptr == pool)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("pool ptr is null", KR(ret), "pool_name", input_pool_names.at(i));
-      } else if (-1 == sample_unit_num) {
-        sample_unit_num = pool->unit_count_;
-      } else if (sample_unit_num == pool->unit_count_) {
-        // this is good, unit num matched
-      } else {
-        unit_num_legal = false;
+      for (int64_t i = 0; OB_SUCC(ret) && i < cur_pool_array->count(); ++i) {
+        if (OB_UNLIKELY(nullptr == cur_pool_array->at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("pool ptr is null", KR(ret));
+        } else if (!ObReplicaTypeCheck::need_to_align_to_ug(cur_pool_array->at(i)->replica_type_)) {
+          // no need to check unit_num
+        } else if (OB_FAIL(unit_num_count_map.inc_unit_num_cnt(cur_pool_array->at(i)->unit_count_))) {
+          LOG_WARN("fail to inc_unit_num_cnt", KR(ret));
+        }
       }
+    }
+    // stat pool operation diff on unit count
+    for (int64_t i = 0; OB_SUCC(ret) && i < pool_op_info_array.count(); ++i) {
+      const PoolOperationInfo &pool_op_info = pool_op_info_array.at(i);
+      if (ObReplicaTypeCheck::gts_standalone_applicable(pool_op_info.replica_type_)
+          && is_gts_standalone && pool_op_info.new_unit_num_ < 2) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_WARN("tenant enabled gts_standalone, unit_num can not be less than 2", KR(ret), K(tenant_id));
+        LOG_USER_ERROR_WITH_ARGS(OB_OP_NOT_ALLOW, "Tenant %lu enabled GTS standalone, unit_num less than 2", tenant_id);
+      } else if (!ObReplicaTypeCheck::need_to_align_to_ug(pool_op_info.replica_type_)) {
+        // no need to check unit_num
+      } else if (OB_FAIL(unit_num_count_map.inc_unit_num_cnt(pool_op_info.new_unit_num_))) {
+        LOG_WARN("fail to inc_unit_num_cnt", KR(ret), K(pool_op_info));
+      } else if (0 == pool_op_info.old_unit_num_)  {
+        // operation is grant pool, no need to dec old_unit_num
+      } else if (OB_FAIL(unit_num_count_map.dec_unit_num_cnt(pool_op_info.old_unit_num_))) {
+        LOG_WARN("fail to dec_unit_num_cnt", KR(ret), K(pool_op_info));
+      }
+    }
+    // check if stat result legal
+    if (OB_FAIL(ret)) {
+    } else if (!in_hetero_deploy_mode && unit_num_count_map.size() > 1) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("homo mode, unit_num can not be different", KR(ret), K(tenant_id));
+      LOG_USER_ERROR_WITH_ARGS(OB_OP_NOT_ALLOW, "Tenant %lu zone_deploy_mode is 'homo', not 'hetero', "
+          "resource pools with different unit_num", tenant_id);
+    } else if (in_hetero_deploy_mode && unit_num_count_map.size() > 2) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("tenant in hetero mode, unit_num count more than 2 not allowed", KR(ret), K(tenant_id));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "More than two distinct unit_num in a single tenant");
+    } else {
+      // good
     }
   }
   return ret;
 }
 
-int ObUnitManager::get_pool_unit_group_id_(
-    const share::ObResourcePool &pool,
-    common::ObIArray<uint64_t> &new_unit_group_id_array)
+// get pool units and unit group ids through one query from inner_table
+int ObUnitManager::get_tenant_units_and_unit_group_ids_(
+    ObISQLClient &client,
+    const uint64_t tenant_id,
+    common::ObIArray<share::ObUnit> &tenant_units,
+    common::ObIArray<uint64_t> &unit_group_id_array)
 {
   int ret = OB_SUCCESS;
-  if (!pool.is_granted_to_tenant()) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < pool.unit_count_; ++i) {
-      if (OB_FAIL(new_unit_group_id_array.push_back(0/*not granted to tenant*/))) {
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ut_operator_.get_units_by_tenant(tenant_id, tenant_units))) {
+    LOG_WARN("fail to get units by tenant", KR(ret), K(tenant_id));
+  } else {
+    FOREACH_CNT_X(unit, tenant_units, OB_SUCC(ret)) {
+      if (OB_FAIL(add_var_to_array_no_dup(unit_group_id_array, unit->unit_group_id_))) {
         LOG_WARN("fail to push back", KR(ret));
       }
     }
-  } else {
-    const bool is_active = false;
-    if (OB_FAIL(inner_get_all_unit_group_id(pool.tenant_id_, is_active, new_unit_group_id_array))) {
-      LOG_WARN("fail to get all unit group id", KR(ret), K(pool));
-    }
   }
   return ret;
 }
 
-/* get unit group id for a tenant
- * 1 when bootstrap:
- *   generate unit group id for sys unit group, assign 0 directly
- * 2 when revoke pools for tenant:
- *   after revokes pools, unit group id shall be set to 0 which representing these units
- *   is not belong to any unit group
- * 3 when grant pools for tenant:
- *   3.1 when this is a tenant being created: fetch unit group id from inner table
- *   3.2 when this is a tenant which exists: get unit group id from units granted to this tenant
- */
-int ObUnitManager::get_tenant_pool_unit_group_id_(
-    const bool is_bootstrap,
-    const bool grant,
-    const uint64_t tenant_id,
-    const int64_t unit_group_num,
-    common::ObIArray<uint64_t> &new_unit_group_id_array)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || unit_group_num <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(unit_group_num));
-  } else if (is_bootstrap) {
-    if (OB_FAIL(new_unit_group_id_array.push_back(OB_SYS_UNIT_GROUP_ID))) {
-      LOG_WARN("fail to push back", KR(ret));
-    }
-  } else {
-    if (!grant) {
-      // when revoke pools, unit_group_id in units shall be modified to 0
-      for (int64_t i = 0; OB_SUCC(ret) && i < unit_group_num; ++i) {
-        if (OB_FAIL(new_unit_group_id_array.push_back(
-                0/* 0 means this unit doesn't belong to any unit group*/))) {
-          LOG_WARN("fail to push back", KR(ret));
-        }
-      }
-    } else {
-      // when grant pools, an unit group id greater than 0 is needed for every unit
-      ObArray<share::ObResourcePool *> *tenant_pool_array = nullptr;
-      int tmp_ret = get_pools_by_tenant_(tenant_id, tenant_pool_array);
-      if (OB_ENTRY_NOT_EXIST == tmp_ret) {
-        // need to fetch unit group from inner table, since this is invoked by create tenant
-        for (int64_t i = 0; OB_SUCC(ret) && i < unit_group_num; ++i) {
-          uint64_t unit_group_id = OB_INVALID_ID;
-          if (OB_FAIL(fetch_new_unit_group_id(unit_group_id))) {
-            LOG_WARN("fail to fetch new unit group id", KR(ret));
-          } else if (OB_FAIL(new_unit_group_id_array.push_back(unit_group_id))) {
-            LOG_WARN("fail to push back", KR(ret));
-          }
-        }
-      } else {
-        const bool is_active = false;
-        if (OB_FAIL(inner_get_all_unit_group_id(tenant_id, is_active, new_unit_group_id_array))) {
-          LOG_WARN("fail to get all unit group id array", KR(ret), K(tenant_id));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObUnitManager::inner_get_all_unit_group_id(
-    const uint64_t tenant_id,
-    const bool is_active,
-    common::ObIArray<uint64_t> &unit_group_array)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(check_inner_stat_())) {
-    LOG_WARN("check_inner_stat failed", K(inited_), K(loaded_), K(ret));
-  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
-  } else {
-    ObArray<share::ObResourcePool *> *cur_pool_array = nullptr;
-    if (OB_FAIL(get_pools_by_tenant_(tenant_id, cur_pool_array))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
-        // bypass
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("fail to get pools by tenant", KR(ret), K(tenant_id));
-      }
-    } else if (OB_ISNULL(cur_pool_array)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cur pool array ptr is null", KR(ret), K(tenant_id));
-    } else if (cur_pool_array->count() <= 0) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cur_pool_array is empty", KR(ret), K(tenant_id));
-    } else {
-      share::ObResourcePool *cur_pool = cur_pool_array->at(0);
-      common::ObArray<ObUnit *> zone_sorted_unit_array;
-      if (OB_ISNULL(cur_pool)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("cur_pool ptr is null", KR(ret), KP(cur_pool));
-      } else if (OB_FAIL(build_zone_sorted_unit_array_(cur_pool, zone_sorted_unit_array))) {
-        LOG_WARN("fail to build zone_sorted_unit_array", KR(ret), K(cur_pool));
-      } else {
-        for (int64_t j = 0; OB_SUCC(ret) && j < zone_sorted_unit_array.count(); ++j) {
-          ObUnit *unit = zone_sorted_unit_array.at(j);
-          if (OB_ISNULL(unit)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unit ptr is null", KR(ret), K(tenant_id), KPC(cur_pool), K(j));
-          } else if (has_exist_in_array(unit_group_array, unit->unit_group_id_)) {
-            //unit_count_ is small than unit group count while some unit is in deleting
-            break;
-          } else if (is_active && ObUnit::UNIT_STATUS_ACTIVE != unit->status_) {
-            //need active unit group
-            continue;
-          } else if (OB_FAIL(unit_group_array.push_back(unit->unit_group_id_))) {
-            LOG_WARN("fail to push back", KR(ret), K(unit));
-          }
-        }
-        if (OB_SUCC(ret) && OB_UNLIKELY(unit_group_array.count() < cur_pool->unit_count_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("pool unit count unexpected", KR(ret), KPC(cur_pool),
-                   K(unit_group_array));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObUnitManager::get_unit_in_group(
-    const uint64_t tenant_id,
-    const uint64_t unit_group_id,
-    const common::ObZone &zone,
-    share::ObUnitInfo &unit_info)
-{
-  int ret = OB_SUCCESS;
-  common::ObArray<share::ObUnitInfo> unit_info_array;
-  if (OB_UNLIKELY(zone.is_empty())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret));
-  } else if (OB_FAIL(get_unit_group(
-          tenant_id,
-          unit_group_id,
-          unit_info_array))) {
-    LOG_WARN("fail to get unit group", KR(ret), K(tenant_id), K(unit_group_id));
-  } else {
-    bool found = false;
-    for (int64_t i = 0; !found && OB_SUCC(ret) && i < unit_info_array.count(); ++i) {
-      const share::ObUnitInfo &this_unit_info = unit_info_array.at(i);
-      if (this_unit_info.unit_.zone_ != zone) {
-        // bypass
-      } else if (OB_FAIL(unit_info.assign(this_unit_info))) {
-        LOG_WARN("fail to assign unit info", KR(ret));
-      } else {
-        found = true;
-      }
-    }
-    if (OB_FAIL(ret)) {
-      // failed
-    } else if (!found) {
-      ret = OB_ENTRY_NOT_EXIST;
-    } else {} // good
-  }
-  return ret;
-}
-
-int ObUnitManager::get_unit_group(
-    const uint64_t tenant_id,
-    const uint64_t unit_group_id,
-    common::ObIArray<share::ObUnitInfo> &unit_info_array)
-{
-  int ret = OB_SUCCESS;
-  SpinWLockGuard guard(lock_);
-  if (OB_FAIL(check_inner_stat_())) {
-    LOG_WARN("check_inner_stat failed", K(inited_), K(loaded_), K(ret));
-  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
-                         || 0 == unit_group_id
-                         || OB_INVALID_ID == unit_group_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(unit_group_id));
-  } else {
-    ObArray<share::ObResourcePool *> *cur_pool_array = nullptr;
-    ret = get_pools_by_tenant_(tenant_id, cur_pool_array);
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      // bypass
-    } else if (OB_SUCCESS != ret) {
-      LOG_WARN("fail to get unit group", KR(ret), K(tenant_id), K(unit_group_id));
-    } else if (OB_UNLIKELY(nullptr == cur_pool_array)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cur pool array ptr is null", KR(ret), K(tenant_id), K(unit_group_id));
-    } else {
-      ObUnitInfo unit_info;
-      for (int64_t i = 0; OB_SUCC(ret) && i < cur_pool_array->count(); ++i) {
-        share::ObResourcePool *cur_pool = cur_pool_array->at(i);
-        ObArray<share::ObUnit *> *units = nullptr;
-        ObUnitConfig *config = nullptr;
-        if (OB_UNLIKELY(nullptr == cur_pool)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("cur pool is null", KR(ret));
-        } else if (OB_FAIL(get_unit_config_by_id(cur_pool->unit_config_id_, config))) {
-          LOG_WARN("fail to get pool unit config", KR(ret), K(tenant_id), KPC(cur_pool));
-        } else if (OB_FAIL(get_units_by_pool(cur_pool->resource_pool_id_, units))) {
-          LOG_WARN("fail to get units by pool", KR(ret),
-                   "pool_id", cur_pool->resource_pool_id_);
-        } else if (OB_UNLIKELY(nullptr == units)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("units ptrs is null", KR(ret), K(tenant_id), KPC(cur_pool));
-        } else {
-          for (int64_t j = 0; OB_SUCC(ret) && j < units->count(); ++j) {
-            if (OB_UNLIKELY(nullptr == units->at(j))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("units ptrs is null", KR(ret), K(tenant_id), KPC(cur_pool));
-            } else if (units->at(j)->unit_group_id_ != unit_group_id) {
-              // unit group id not match
-            } else {
-              unit_info.reset();
-              unit_info.config_ = *config;
-              unit_info.unit_ = *(units->at(j));
-              if (OB_FAIL(unit_info.pool_.assign(*cur_pool))) {
-                LOG_WARN("fail to assign", KR(ret), KPC(cur_pool));
-              } else if (OB_FAIL(unit_info_array.push_back(unit_info))) {
-                LOG_WARN("fail to push back", K(unit_info));
-              }
-            }
-          }
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (unit_info_array.count() <= 0) {
-          ret = OB_ENTRY_NOT_EXIST;
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-// TODO(cangming.zl): need a new function to abstract the process of getting pools by pool_names
 // TODO: disable resource pools intersect for one tenant
 //       NEED to disable logics to handle resource pool intersect in server_balancer
 int ObUnitManager::grant_pools(common::ObMySQLTransaction &trans,
-                               common::ObIArray<uint64_t> &new_unit_group_id_array,
                                const lib::Worker::CompatMode compat_mode,
                                const ObIArray<ObResourcePoolName> &pool_names,
                                const uint64_t tenant_id,
-                               const bool is_bootstrap,
                                const uint64_t source_tenant_id,
                                /*arg "const bool skip_offline_server" is no longer supported*/
                                const bool check_data_version)
@@ -3939,11 +3796,12 @@ int ObUnitManager::grant_pools(common::ObMySQLTransaction &trans,
   const bool grant = true;
   bool intersect = false;
   bool server_enough = true;
+  bool enable_logonly_replica = false;
   bool is_grant_pool_allowed = false;
-  bool unit_num_legal = false;
-  int64_t legal_unit_num = -1;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("check_inner_stat failed", K(inited_), K(loaded_), KR(ret));
+  } else if (OB_FAIL(ObUnitTableTransaction::lock_service_epoch(trans))) {
+    LOG_WARN("fail to lock unit service epoch", KR(ret));
   } else if (pool_names.count() <= 0 || !is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(pool_names), K(tenant_id), K(ret));
@@ -3956,8 +3814,7 @@ int ObUnitManager::grant_pools(common::ObMySQLTransaction &trans,
     ObCStringHelper helper;
     LOG_USER_ERROR(OB_POOL_SERVER_INTERSECT, helper.convert(pool_names));
     LOG_WARN("resource pool unit server intersect", K(pool_names), KR(ret));
-  } else if (!is_bootstrap
-      && OB_FAIL(check_server_enough(tenant_id, pool_names, server_enough))) {
+  } else if (OB_FAIL(check_server_enough(tenant_id, pool_names, server_enough))) {
     LOG_WARN("fail to check server enough", KR(ret), K(tenant_id), K(pool_names));
   } else if (!server_enough) {
     ret = OB_UNIT_NUM_OVER_SERVER_COUNT;
@@ -3967,63 +3824,39 @@ int ObUnitManager::grant_pools(common::ObMySQLTransaction &trans,
     LOG_WARN("fail to check grant pools allowed by unit stat", KR(ret), K(tenant_id));
   } else if (!is_grant_pool_allowed) {
     ret = OB_OP_NOT_ALLOW;
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "grant pool when pools in shrinking");
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "grant pool when pools in shrinking or expanding");
   } else if (OB_FAIL(check_expand_zone_resource_allowed_by_new_unit_stat_(pool_names))) {
     LOG_WARN("fail to check grant pools allowed by unit stat", KR(ret));
   } else if (OB_FAIL(check_expand_zone_resource_allowed_by_data_disk_size_(tenant_id, pool_names))) {
     LOG_WARN("fail to check grant pools allowed by data_disk_size", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(check_tenant_pools_unit_num_legal_(
-          tenant_id, pool_names, unit_num_legal, legal_unit_num))) {
+  } else if (OB_FAIL(check_grant_pools_unit_num_legal_(tenant_id, pool_names))) {
     LOG_WARN("fail to check pools unit num legal", KR(ret), K(tenant_id), K(pool_names));
-  } else if (!unit_num_legal) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("pools belong to one tenant with different unit num are not allowed",
-             KR(ret), K(tenant_id), K(pool_names));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "pools belong to one tenant with different unit num are");
-  } else if (OB_FAIL(get_tenant_pool_unit_group_id_(
-          is_bootstrap, grant, tenant_id, legal_unit_num, new_unit_group_id_array))) {
-    LOG_WARN("fail to generate new unit group id", KR(ret), K(tenant_id), K(legal_unit_num));
-  } else if (OB_FAIL(do_grant_pools_(
-             trans, new_unit_group_id_array, compat_mode,
-             pool_names, tenant_id, is_bootstrap,
-             source_tenant_id, check_data_version))) {
-    LOG_WARN("do grant pools failed", KR(ret), K(grant), K(pool_names), K(tenant_id),
-                                         K(compat_mode), K(is_bootstrap), K(source_tenant_id));
+  } else if (OB_FAIL(check_grant_pools_replica_type_legal_(tenant_id, pool_names))) {
+    LOG_WARN("fail to check grant pools replica type legal", KR(ret), K(tenant_id), K(pool_names));
+  } else if (OB_FAIL(do_grant_pools_(trans, compat_mode, pool_names, tenant_id, check_data_version))) {
+    LOG_WARN("do grant pools failed", KR(ret), K(grant), K(pool_names), K(tenant_id), K(compat_mode));
   }
-  LOG_INFO("grant resource pools to tenant", KR(ret), K(pool_names), K(tenant_id), K(is_bootstrap));
+  LOG_INFO("grant resource pools to tenant", KR(ret), K(pool_names), K(tenant_id));
   return ret;
 }
 
 int ObUnitManager::revoke_pools(common::ObMySQLTransaction &trans,
-                                common::ObIArray<uint64_t> &new_unit_group_id_array,
                                 const ObIArray<ObResourcePoolName> &pool_names,
                                 const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   SpinWLockGuard guard(lock_);
-  const bool grant = false;
-  bool unit_num_legal = false;
-  int64_t legal_unit_num = -1;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("check_inner_stat failed", K(inited_), K(loaded_), K(ret));
+  } else if (OB_FAIL(ObUnitTableTransaction::lock_service_epoch(trans))) {
+    LOG_WARN("fail to lock unit service epoch", KR(ret));
   } else if (pool_names.count() <= 0 || !is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(pool_names), K(tenant_id), K(ret));
   } else if (OB_FAIL(check_pool_ownership_(tenant_id, pool_names, false/*is_grant*/))) {
     LOG_WARN("check pool ownership failed", KR(ret), K(pool_names));
-  } else if (OB_FAIL(check_tenant_pools_unit_num_legal_(
-          tenant_id, pool_names, unit_num_legal, legal_unit_num))) {
-    LOG_WARN("fail to check pools unit num legal", KR(ret), K(tenant_id), K(pool_names));
-  } else if (!unit_num_legal) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("pools belong to one tenant with different unit num are not allowed",
-             KR(ret), K(tenant_id), K(pool_names));
-  } else if (OB_FAIL(get_tenant_pool_unit_group_id_(
-          false /* is_bootstrap */, grant, tenant_id,
-          legal_unit_num, new_unit_group_id_array))) {
-    LOG_WARN("fail to generate new unit group id", KR(ret), K(tenant_id), K(legal_unit_num));
-  } else if (OB_FAIL(do_revoke_pools_(trans, new_unit_group_id_array, pool_names, tenant_id))) {
-    LOG_WARN("do revoke pools failed", KR(ret), K(grant), K(pool_names), K(tenant_id));
+  } else if (OB_FAIL(do_revoke_pools_(trans, pool_names, tenant_id))) {
+    LOG_WARN("do revoke pools failed", KR(ret), K(pool_names), K(tenant_id));
   }
   LOG_INFO("revoke resource pools from tenant", K(pool_names), K(ret));
   return ret;
@@ -4565,7 +4398,7 @@ int ObUnitManager::inner_get_zone_alive_unit_infos_by_tenant(
             LOG_WARN("check server in service failed", "server", u->unit_.server_, K(ret));
           } else if (!is_alive || !is_in_service) {
             // ignore unit on not-alive server
-          } else if (ObUnit::UNIT_STATUS_ACTIVE != u->unit_.status_) {
+          } else if (ObUnit::UNIT_STATUS_DELETING == u->unit_.status_) {
             // ignore the unit which is in deleting status
           } else if (OB_FAIL(unit_infos.push_back(*u))) {
             LOG_WARN("fail to push back", K(ret));
@@ -4573,20 +4406,6 @@ int ObUnitManager::inner_get_zone_alive_unit_infos_by_tenant(
         }
       } else {} // empty array
     }
-  }
-  return ret;
-}
-
-int ObUnitManager::get_all_unit_infos_by_tenant(const uint64_t tenant_id,
-                                                ObIArray<ObUnitInfo> &unit_infos)
-{
-  int ret = OB_SUCCESS;
-  SpinRLockGuard guard(lock_);
-  unit_infos.reset();
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(inner_get_all_unit_infos_by_tenant_(tenant_id, unit_infos))) {
-    LOG_WARN("fail to inner get unit infos of tenant", KR(ret), K(tenant_id));
   }
   return ret;
 }
@@ -4649,27 +4468,40 @@ int ObUnitManager::inner_get_all_unit_infos_by_tenant_(const uint64_t tenant_id,
   return ret;
 }
 
-int ObUnitManager::commit_shrink_tenant_resource_pool(const uint64_t tenant_id)
+int ObUnitManager::commit_alter_tenant_resource_unit_num(
+    const uint64_t tenant_id,
+    const ObIArray<share::ObUnit> &unit_array)
 {
   int ret = OB_SUCCESS;
   SpinWLockGuard guard(lock_);
-  common::ObMySQLTransaction trans;
+  share::ObUnitTableTransaction trans;
   common::ObArray<share::ObResourcePool *> *pools = nullptr;
-  common::ObArray<common::ObArray<uint64_t>> resource_units;
+  common::ObArray<uint64_t> adding_unit_ids;
+  common::ObArray<common::ObArray<uint64_t>> deleting_unit_ids_by_pool;
+  ObUnitTableOperator unit_operator;
+  ObArray<share::ObUnit> unit_array_in_trans;
 
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("check_inner_stat failed", KR(ret), K(loaded_), K(inited_));
-  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || 0 == unit_array.count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(trans.start(proxy_, OB_SYS_TENANT_ID))) {
+    LOG_WARN("start transaction failed", KR(ret));
+  //由于存在多个resource_pool同时修改，在当时判断resource_pool变更结束，不代表现在所有
+  //的resource_pool还是一样的，需要在锁内再次获取unit_array，判断unit_array没有发生任何变化才可以
+  } else if (OB_FAIL(unit_operator.init(trans))) {
+    LOG_WARN("failed to init unit operator", KR(ret));
+  } else if (OB_FAIL(unit_operator.get_units_by_tenant(tenant_id, unit_array_in_trans))) {
+    LOG_WARN("failed to get unit array", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObLSBalanceTaskHelper::check_unit_array_same(unit_array, unit_array_in_trans))) {
+    LOG_WARN("unit array not same, try again", KR(ret), K(unit_array), K(unit_array_in_trans), K(unit_array));
   } else if (OB_FAIL(get_pools_by_tenant_(tenant_id, pools))) {
     LOG_WARN("failed to get pool by tenant", KR(ret), K(tenant_id));
   } else if (OB_UNLIKELY(NULL == pools)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pool ptr is null", KR(ret), KP(pools));
-  } else if (OB_FAIL(trans.start(proxy_, OB_SYS_TENANT_ID))) {
-    LOG_WARN("start transaction failed", KR(ret));
-  } else if (OB_FAIL(commit_shrink_resource_pool_in_trans_(*pools, trans, resource_units))) {
+  } else if (OB_FAIL(commit_alter_unit_num_in_trans_(*pools, trans, adding_unit_ids, deleting_unit_ids_by_pool))) {
     LOG_WARN("failed to shrink in trans", KR(ret), KPC(pools));
   }
   const bool commit = (OB_SUCCESS == ret);
@@ -4678,28 +4510,41 @@ int ObUnitManager::commit_shrink_tenant_resource_pool(const uint64_t tenant_id)
     LOG_WARN("trans end failed", K(tmp_ret), K(commit));
     ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
   }
+  // update in-memory unit info
   if (OB_SUCC(ret)) {
-    if (OB_UNLIKELY(pools->count() != resource_units.count())) {
+    if (OB_UNLIKELY(pools->count() != deleting_unit_ids_by_pool.count())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("pools count must equal to unit count", KR(ret), KPC(pools), K(resource_units));
+      LOG_WARN("pools count must equal to unit count", KR(ret), KPC(pools), K(deleting_unit_ids_by_pool));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < pools->count(); ++i) {
       share::ObResourcePool *pool = pools->at(i);
       if (OB_ISNULL(pool)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("pool is null", KR(ret), K(i), KPC(pools));
-      } else if (OB_FAIL(delete_inmemory_units(pool->resource_pool_id_, resource_units.at(i)))) {
-        LOG_WARN("failed to delete inmemory units", KR(ret), KPC(pool), K(i), K(resource_units));
+      } else if (OB_FAIL(delete_inmemory_units(pool->resource_pool_id_, deleting_unit_ids_by_pool.at(i)))) {
+        LOG_WARN("failed to delete inmemory units", KR(ret), KPC(pool), K(i), K(deleting_unit_ids_by_pool));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < adding_unit_ids.count(); ++i) {
+      ObUnit *unit = nullptr;
+      if (OB_FAIL(get_unit_by_id(adding_unit_ids.at(i), unit))) {
+        LOG_WARN("get_unit_by_id failed", K(adding_unit_ids.at(i)), KR(ret));
+      } else if (OB_ISNULL(unit)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unit is null", KP(unit), K(ret));
+      } else {
+        unit->status_ = ObUnit::UNIT_STATUS_ACTIVE;
       }
     }
   }
   return ret;
 }
 
-int ObUnitManager::commit_shrink_resource_pool_in_trans_(
+int ObUnitManager::commit_alter_unit_num_in_trans_(
   const common::ObIArray<share::ObResourcePool *> &pools,
   common::ObMySQLTransaction &trans,
-  common::ObIArray<common::ObArray<uint64_t>> &resource_units)
+  common::ObIArray<uint64_t> &adding_unit_ids,
+  common::ObIArray<common::ObArray<uint64_t>> &pools_deleting_unit_ids)
 {
   int ret = OB_SUCCESS;
   ObArray<ObUnit *> *units = NULL;
@@ -4724,7 +4569,7 @@ int ObUnitManager::commit_shrink_resource_pool_in_trans_(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("units is null of the pool", KR(ret), KPC(pool));
       } else {
-        common::ObArray<uint64_t> unit_ids;
+        common::ObArray<uint64_t> deleting_unit_ids;
         const int64_t unit_count = pool->unit_count_;
         if (unit_count <= 0) {
           ret = OB_ERR_UNEXPECTED;
@@ -4742,13 +4587,26 @@ int ObUnitManager::commit_shrink_resource_pool_in_trans_(
             } else if (ObUnit::UNIT_STATUS_DELETING == unit->status_) {
               if (OB_FAIL(ut_operator_.remove_unit(trans, *unit))) {
                 LOG_WARN("fail to remove unit", KR(ret), "unit", *unit);
-              } else if (OB_FAIL(unit_ids.push_back(unit->unit_id_))) {
+              } else if (OB_FAIL(deleting_unit_ids.push_back(unit->unit_id_))) {
                 LOG_WARN("fail to push back", KR(ret), KPC(unit));
               } else {} // no more to do
-            } else {} // active unit, do nothing
+            } else if (ObUnit::UNIT_STATUS_ADDING == unit->status_) {
+              ObUnit new_unit = *unit;
+              new_unit.status_ = ObUnit::UNIT_STATUS_ACTIVE;
+              if (OB_FAIL(ut_operator_.update_unit_exclude_ug_id(trans, new_unit, true/*need_check_conflict_with_clone*/))) {
+                LOG_WARN("fail to update unit", KR(ret), "unit", *unit);
+              } else if (OB_FAIL(adding_unit_ids.push_back(unit->unit_id_))) {
+                LOG_WARN("fail to push back", KR(ret), KPC(unit));
+              } else {} // no more to do
+            } else if (ObUnit::UNIT_STATUS_ACTIVE == unit->status_) {
+              // active unit, do nothing
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected unit status", K(ret), KPC(unit));
+            }
           }// end for each unit
-          if (FAILEDx(resource_units.push_back(unit_ids))) {
-            LOG_WARN("failed to push back units", KR(ret), K(unit_ids));
+          if (FAILEDx(pools_deleting_unit_ids.push_back(deleting_unit_ids))) {
+            LOG_WARN("failed to push back units", KR(ret), K(deleting_unit_ids));
           }
         }
       }
@@ -4757,39 +4615,38 @@ int ObUnitManager::commit_shrink_resource_pool_in_trans_(
   return ret;
 }
 
+// NOTE: get from inner-table for accurate unit_group_id_
 int ObUnitManager::get_deleting_units_of_pool(
     const uint64_t resource_pool_id,
     ObIArray<share::ObUnit> &units) const
 {
   int ret = OB_SUCCESS;
   SpinRLockGuard guard(lock_);
-  ObArray<ObUnit *> *inner_units = NULL;
+  ObArray<uint64_t> pool_ids;
+  ObArray<ObUnit> pool_units;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("check_inner_stat failed", K(ret), K(loaded_), K(inited_));
   } else if (OB_UNLIKELY(OB_INVALID_ID == resource_pool_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(resource_pool_id));
-  } else if (OB_FAIL(get_units_by_pool(resource_pool_id, inner_units))) {
-      LOG_WARN("fail to get units by pool", K(ret), K(resource_pool_id));
-  } else if (NULL == inner_units) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("inner_units ptr is null", K(ret), KP(inner_units));
+  } else if (OB_FAIL(pool_ids.push_back(resource_pool_id))) {
+    LOG_WARN("fail to push back", KR(ret));
+  } else if (OB_FAIL(ut_operator_.get_units_by_resource_pool_ids(pool_ids, pool_units))) {
+    LOG_WARN("fail to get units by resource pool ids", KR(ret), K(resource_pool_id));
   } else {
     units.reset();
-    for (int64_t i = 0; OB_SUCC(ret) && i < inner_units->count(); ++i) {
-      const share::ObUnit *this_unit = inner_units->at(i);
-      if (NULL == this_unit) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unit ptr is null", K(ret), KP(this_unit));
-      } else if (ObUnit::UNIT_STATUS_DELETING == this_unit->status_) {
-        if (OB_FAIL(units.push_back(*this_unit))) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < pool_units.count(); ++i) {
+      const share::ObUnit &this_unit = pool_units.at(i);
+      if (ObUnit::UNIT_STATUS_DELETING == this_unit.status_) {
+        if (OB_FAIL(units.push_back(this_unit))) {
           LOG_WARN("fail to push back", K(ret));
         } else {} // no more to do
-      } else if (ObUnit::UNIT_STATUS_ACTIVE == this_unit->status_) {
-        // a normal unit, ignore
+      } else if (ObUnit::UNIT_STATUS_ACTIVE == this_unit.status_ ||
+                 ObUnit::UNIT_STATUS_ADDING == this_unit.status_) {
+        // ignore
       } else {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected unit status", K(ret), "unit_status", this_unit->status_);
+        LOG_WARN("unexpected unit status", K(ret), "unit_status", this_unit.status_);
       }
     }
     LOG_INFO("get deleting units of pool", K(ret), K(resource_pool_id), K(units));
@@ -5097,9 +4954,9 @@ int ObUnitManager::allocate_new_pool_units_(
   } else {
     const bool new_allocate_pool = true;
     const int64_t delta_unit_num = pool.unit_count_;
-    ObArray<ObAddr> new_servers;
+    ObArray<ObUnit> new_units;
     if (OB_FAIL(allocate_pool_units_(
-            client, pool, pool.zone_list_, nullptr, new_allocate_pool, delta_unit_num, module, new_servers))) {
+            client, pool, pool.zone_list_, nullptr, new_allocate_pool, delta_unit_num, ObUnit::UNIT_STATUS_ACTIVE, module, new_units))) {
       LOG_WARN("allocate pool units failed", K(module), KR(ret), K(delta_unit_num), K(pool));
     }
   }
@@ -5313,7 +5170,7 @@ int ObUnitManager::build_notify_create_unit_resource_rpc_arg_(
                                     unit.unit_id_,
                                     compat_mode,
                                     *unit_config,
-                                    ObReplicaType::REPLICA_TYPE_FULL,
+                                    unit.replica_type_,
                                     if_not_grant,
                                     is_delete
 #ifdef OB_BUILD_TDE_SECURITY
@@ -5418,9 +5275,9 @@ int ObUnitManager::do_notify_unit_resource_(
 }
 
 int ObUnitManager::rollback_persistent_units_(
-      const common::ObArray<share::ObUnit> &units,
-      const share::ObResourcePool &pool,
-      ObNotifyTenantServerResourceProxy &notify_proxy)
+    const uint64_t tenant_id,
+    const common::ObArray<share::ObUnit> &units,
+    ObNotifyTenantServerResourceProxy &notify_proxy)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -5430,14 +5287,15 @@ int ObUnitManager::rollback_persistent_units_(
   for (int64_t i = 0; i < units.count(); i++) {
     const ObUnit & unit = units.at(i);
     const lib::Worker::CompatMode dummy_mode = lib::Worker::CompatMode::INVALID;
+    const uint64_t dummy_config_id = OB_INVALID_ID;   // delete unit no need config
     if (OB_TMP_FAIL(try_notify_tenant_server_unit_resource_(
-        pool.tenant_id_, is_delete, notify_proxy,
-        pool.unit_config_id_, dummy_mode, unit,
+        tenant_id, is_delete, notify_proxy,
+        dummy_config_id, dummy_mode, unit,
         false/*if_not_grant*/, false/*skip_offline_server*/,
         false /*check_data_version*/))) {
       ret = OB_SUCC(ret) ? tmp_ret : ret;
       LOG_WARN("fail to try notify server unit resource", KR(ret), KR(tmp_ret),
-               K(is_delete), K(pool), K(dummy_mode), K(unit));
+               K(is_delete), K(tenant_id), K(dummy_mode), K(unit));
     }
   }
   if (OB_TMP_FAIL(notify_proxy.wait_all(return_ret_array))) {
@@ -5458,7 +5316,7 @@ int ObUnitManager::rollback_persistent_units_(
       }
     }
   }
-  LOG_WARN("rollback persistent unit", KR(ret), K(pool), K(units));
+  LOG_WARN("rollback persistent unit", KR(ret), K(tenant_id), K(units));
   return ret;
 }
 
@@ -5527,7 +5385,7 @@ ERRSIM_POINT_DEF(ERRSIM_UNIT_PERSISTENCE_ERROR);
 // @param [in] new_allocate_pool          whether to allocate new pool
 // @param [in] increase_delta_unit_num    unit number to be increased
 // @param [in] module                     module name for print log
-// @param [out] new_servers               allocated servers for new units
+// @param [out] new_units                 allocated new units
 //
 // @ret OB_ZONE_RESOURCE_NOT_ENOUGH   zone resource not enough to hold all units
 // @ret OB_ZONE_SERVER_NOT_ENOUGH     zone server not enough to hold all units
@@ -5539,8 +5397,9 @@ int ObUnitManager::allocate_pool_units_(
     common::ObIArray<uint64_t> *unit_group_id_array,
     const bool new_allocate_pool,
     const int64_t increase_delta_unit_num,
+    const ObUnit::Status new_unit_status,
     const char *module,
-    ObIArray<ObAddr> &new_servers)
+    ObIArray<ObUnit> &new_units)
 {
   int ret = OB_SUCCESS;
   ObUnitConfig *config = NULL;
@@ -5561,7 +5420,10 @@ int ObUnitManager::allocate_pool_units_(
       && unit_group_id_array->count() != increase_delta_unit_num) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("new unit group id array status not match",
-        KR(ret), K(increase_delta_unit_num), KP(unit_group_id_array));
+        KR(ret), K(increase_delta_unit_num), KPC(unit_group_id_array));
+  } else if (!ObUnit::is_valid_status(new_unit_status)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid new unit status", K(new_unit_status), KR(ret));
   } else if (OB_ISNULL(srv_rpc_proxy_) || OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("srv_rpc_proxy_ or GCTX.sql_proxy_ is null", KR(ret), KP(srv_rpc_proxy_), KP(GCTX.sql_proxy_));
@@ -5636,8 +5498,9 @@ int ObUnitManager::allocate_pool_units_(
                                pool,
                                compat_mode,
                                (nullptr == unit_group_id_array) ? 0 : unit_group_id_array->at(j),
+                               new_unit_status,
                                server,
-                               new_servers,
+                               new_units,
                                units))) {
           LOG_WARN("fail to persist unit info", KR(ret), K(zone), K(pool), K(compat_mode), K(server));
         }
@@ -5655,7 +5518,7 @@ int ObUnitManager::allocate_pool_units_(
     }
     if (OB_FAIL(ret)) {
       LOG_WARN("start to rollback unit persistence", KR(ret), K(units), K(pool));
-      if(OB_TMP_FAIL(rollback_persistent_units_(units, pool, notify_proxy))) {
+      if(OB_TMP_FAIL(rollback_persistent_units_(pool.tenant_id_, units, notify_proxy))) {
         LOG_WARN("fail to rollback unit persistence", KR(ret), KR(tmp_ret), K(units),
             K(pool), K(compat_mode));
       }
@@ -5671,8 +5534,9 @@ int ObUnitManager::try_persist_unit_info_(
     const share::ObResourcePool &pool,
     const lib::Worker::CompatMode &compat_mode,
     const uint64_t unit_group_id,
+    const ObUnit::Status new_unit_status,
     const ObAddr &server,
-    ObIArray<common::ObAddr> &new_servers,
+    ObIArray<share::ObUnit> &new_units,
     ObIArray<share::ObUnit> &units)
 {
   int ret = OB_SUCCESS;
@@ -5692,7 +5556,7 @@ int ObUnitManager::try_persist_unit_info_(
     unit.resource_pool_id_ = pool.resource_pool_id_;
     unit.unit_group_id_ = unit_group_id;
     unit.server_ = server;
-    unit.status_ = ObUnit::UNIT_STATUS_ACTIVE;
+    unit.status_ = new_unit_status;
     unit.replica_type_ = pool.replica_type_;
     if (OB_FAIL(unit.zone_.assign(zone))) {
       LOG_WARN("fail to assign zone", KR(ret), K(zone));
@@ -5703,8 +5567,8 @@ int ObUnitManager::try_persist_unit_info_(
       LOG_WARN("fail to try notify server unit resource", KR(ret), K(pool), K(is_delete), K(unit));
     } else if (OB_FAIL(add_unit(client, unit))) {
       LOG_WARN("add_unit failed", KR(ret), K(unit), K(unit));
-    } else if (OB_FAIL(new_servers.push_back(server))) {
-      LOG_WARN("push_back failed", KR(ret), K(server));
+    } else if (OB_FAIL(new_units.push_back(unit))) {
+      LOG_WARN("push_back failed", KR(ret), K(unit));
     } else if (OB_FAIL(units.push_back(unit))) {
       LOG_WARN("fail to push an element into units", KR(ret), K(unit));
     }
@@ -6739,8 +6603,8 @@ int ObUnitManager::add_unit(ObISQLClient &client, const ObUnit &unit)
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("alloc unit failed", K(ret));
     } else {
-      if (OB_FAIL(ut_operator_.update_unit(client, unit, false/*need_check_conflict_with_clone*/))) {
-        LOG_WARN("update_unit failed", K(unit), K(ret));
+      if (OB_FAIL(ut_operator_.insert_unit(client, unit))) {
+        LOG_WARN("insert unit failed", K(unit), KR(ret));
       } else {
         *new_unit = unit;
         if (OB_FAIL(insert_unit(new_unit))) {
@@ -6825,45 +6689,9 @@ int ObUnitManager::alter_pool_unit_config(share::ObResourcePool  *pool,
   return ret;
 }
 
-// shrink pool unit num should only work on not-granted pool.
-// routine that calls this function should ensure that.
-int ObUnitManager::shrink_pool_unit_num(
-    share::ObResourcePool *pool,
-    const int64_t alter_unit_num,
-    const common::ObIArray<uint64_t> &delete_unit_id_array)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(NULL == pool || alter_unit_num <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(pool), K(alter_unit_num));
-  } else if (pool->is_granted_to_tenant()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected pool status", KR(ret), KPC(pool));
-  } else {
-    ObArray<uint64_t> sort_unit_id_array;
-    for (int64_t i = 0; OB_SUCC(ret) && i < delete_unit_id_array.count(); ++i) {
-      if (OB_FAIL(sort_unit_id_array.push_back(delete_unit_id_array.at(i)))) {
-        LOG_WARN("fail to push back", K(ret));
-      }
-    }
-    lib::ob_sort(sort_unit_id_array.begin(), sort_unit_id_array.end());
-    for (int64_t i = 0; OB_SUCC(ret) && i < sort_unit_id_array.count() - 1; ++i) {
-      if (sort_unit_id_array.at(i) == sort_unit_id_array.at(i + 1)) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("delete same unit more than once not supported", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "delete same unit more than once");
-      }
-    }
-    if (FAILEDx(shrink_not_granted_pool(pool, alter_unit_num, delete_unit_id_array))) {
-      LOG_WARN("fail to shrink not granted pool", KR(ret));
-    }
-  }
-  return ret;
-}
-
 int ObUnitManager::build_sorted_zone_unit_ptr_array(
-    share::ObResourcePool *pool,
-    common::ObIArray<ZoneUnitPtr> &zone_unit_ptrs)
+    const share::ObResourcePool *pool,
+    common::ObIArray<ZoneUnitPtr> &zone_unit_ptrs) const
 {
   int ret = OB_SUCCESS;
   common::ObArray<share::ObUnit *> *units = NULL;
@@ -6916,7 +6744,7 @@ int ObUnitManager::build_sorted_zone_unit_ptr_array(
     for (int64_t i = 0; OB_SUCC(ret) && i < zone_unit_ptrs.count(); ++i) {
       // sort each zone unit ptr using group id
       ZoneUnitPtr &zone_unit_ptr = zone_unit_ptrs.at(i);
-      if (OB_FAIL(zone_unit_ptr.sort_by_unit_id_desc())) {
+      if (OB_FAIL(zone_unit_ptr.sort_by_unit_id())) {
         LOG_WARN("fail to sort unit", K(ret));
       } else {} // good, unit num match
     }
@@ -6926,27 +6754,37 @@ int ObUnitManager::build_sorted_zone_unit_ptr_array(
 
 int ObUnitManager::check_shrink_unit_num_zone_condition(
     share::ObResourcePool *pool,
-    const int64_t alter_unit_num,
+    const int64_t new_unit_num,
     const common::ObIArray<uint64_t> &delete_unit_id_array)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(NULL == pool || alter_unit_num <= 0)) {
+  ObArray<uint64_t> gts_unit_ids;
+  if (OB_UNLIKELY(NULL == pool || new_unit_num <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(pool), K(alter_unit_num));
+    LOG_WARN("invalid argument", K(ret), KP(pool), K(new_unit_num));
   } else if (delete_unit_id_array.count() <= 0) {
     // good, we choose deleting set all by ourselves
-  } else if (pool->unit_count_ <= alter_unit_num) {
+  } else if (pool->unit_count_ <= new_unit_num) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("should be a shrink pool operation", K(ret),
              "cur_unit_num", pool->unit_count_,
-             "new_unit_num", alter_unit_num);
+             "new_unit_num", new_unit_num);
+  } else if (pool->is_granted_to_tenant()
+      && OB_FAIL(get_tenant_gts_unit_ids(pool->tenant_id_, gts_unit_ids))) {
+    LOG_WARN("fail to get tenant gts unit ids", KR(ret), KPC(pool));
   } else {
-    int64_t delta = pool->unit_count_ - alter_unit_num;
+    int64_t delta = pool->unit_count_ - new_unit_num;
     const common::ObIArray<common::ObZone> &zone_list = pool->zone_list_;
     common::ObArray<ZoneUnitPtr> delete_zone_unit_ptrs;
     for (int64_t i = 0; OB_SUCC(ret) && i < delete_unit_id_array.count(); ++i) {
       ObUnit *this_unit = NULL;
-      if (OB_FAIL(get_unit_by_id(delete_unit_id_array.at(i), this_unit))) {
+      if (has_exist_in_array(gts_unit_ids, delete_unit_id_array.at(i))) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_WARN("deleting gts unit when shrinking pool not allowed", KR(ret),
+            "unit_id", delete_unit_id_array.at(i));
+        LOG_USER_ERROR_WITH_ARGS(OB_OP_NOT_ALLOW, "Tenant %lu GTS standalone enabled, "
+            "deleting unit where GTS located is", pool->tenant_id_);
+      } else if (OB_FAIL(get_unit_by_id(delete_unit_id_array.at(i), this_unit))) {
         LOG_WARN("fail to get unit by id", K(ret));
       } else if (OB_UNLIKELY(NULL == this_unit)) {
         ret = OB_ERR_UNEXPECTED;
@@ -7007,10 +6845,55 @@ int ObUnitManager::check_shrink_unit_num_zone_condition(
   return ret;
 }
 
+// get by sys ls unit_list. Units that not applicable for gts standalone are excluded, such as L-zone.
+int ObUnitManager::get_tenant_gts_unit_ids(
+    const uint64_t tenant_id,
+    ObIArray<uint64_t> &unit_ids)
+{
+  int ret = OB_SUCCESS;
+  bool is_gts_standalone = false;
+  unit_ids.reset();
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(check_tenant_gts_standalone_enabled(tenant_id, is_gts_standalone))) {
+    LOG_WARN("fail to check tenant gts standalone enabled", KR(ret), K(tenant_id));
+  } else if (!is_gts_standalone) {
+    // gts_standalone disabled, result should be empty
+  } else {
+    ObArray<uint64_t> unit_ids_tmp;
+    ObLSStatusOperator ls_status_op;
+    ObLSStatusInfo sys_ls_info;
+    ObUnitTableOperator ut_operator;
+    ObArray<ObUnit> units_tmp;
+    if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sql proxy is null", KR(ret), KP(GCTX.sql_proxy_));
+    } else if (OB_FAIL(ls_status_op.get_ls_status_info(tenant_id, SYS_LS, sys_ls_info, *GCTX.sql_proxy_))) {
+      LOG_WARN("failed to get ls status info", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(sys_ls_info.get_unit_list(unit_ids_tmp))) {
+      LOG_WARN("fail to get unit list ids", KR(ret), K(sys_ls_info));
+    } else if (OB_FAIL(ut_operator.init(*GCTX.sql_proxy_))) {
+      LOG_WARN("fail to init unit table operator", KR(ret));
+    } else if (OB_FAIL(ut_operator.get_units_by_unit_ids(unit_ids_tmp, units_tmp))) {
+      LOG_WARN("fail to get unit by ids", KR(ret), K(tenant_id), K(unit_ids_tmp));
+    }
+    // SYS LS L-replicas do not standalone. filter out LOGONLY units in sys ls unit_list.
+    ARRAY_FOREACH(units_tmp, idx) {
+      if (!ObReplicaTypeCheck::gts_standalone_applicable(units_tmp.at(idx).replica_type_)) {
+        // skip
+      } else if (OB_FAIL(unit_ids.push_back(units_tmp.at(idx).unit_id_))) {
+        LOG_WARN("fail to push back", KR(ret), K(units_tmp.at(idx).unit_id_));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObUnitManager::fill_delete_unit_ptr_array(
     share::ObResourcePool *pool,
     const common::ObIArray<uint64_t> &delete_unit_id_array,
-    const int64_t alter_unit_num,
+    const int64_t new_unit_num,
     common::ObIArray<ObUnit *> &output_delete_unit_ptr_array)
 {
   int ret = OB_SUCCESS;
@@ -7030,73 +6913,81 @@ int ObUnitManager::fill_delete_unit_ptr_array(
     }
   } else {
     common::ObArray<ZoneUnitPtr> zone_unit_ptrs;
+    ObArray<uint64_t> gts_unit_ids;
     if (OB_UNLIKELY(NULL == pool)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid argument", K(ret), KP(pool));
+    } else if (pool->is_granted_to_tenant()
+        && OB_FAIL(get_tenant_gts_unit_ids(pool->tenant_id_, gts_unit_ids))) {
+      LOG_WARN("fail to get tenant gts unit ids", KR(ret), KPC(pool));
     } else if (OB_FAIL(build_sorted_zone_unit_ptr_array(pool, zone_unit_ptrs))) {
       LOG_WARN("fail to build sorted zone unit ptr array", K(ret));
     } else if (zone_unit_ptrs.count() <= 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("zone unit ptrs has no element", K(ret), "zone_unit_cnt", zone_unit_ptrs.count());
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < zone_unit_ptrs.count(); ++i) {
-        const ZoneUnitPtr &zone_unit_ptr = zone_unit_ptrs.at(i);
-        for (int64_t j = alter_unit_num; OB_SUCC(ret) && j < zone_unit_ptr.unit_ptrs_.count(); ++j) {
-          ObUnit *unit = zone_unit_ptr.unit_ptrs_.at(j);
-          if (OB_UNLIKELY(NULL == unit)) {
+      FOREACH_CNT_X(zone_unit_ptr, zone_unit_ptrs, OB_SUCC(ret)) {
+        int64_t delete_unit_count = 0;
+        DeleteUnitPtrCmp cmp(gts_unit_ids);
+        lib::ob_sort(zone_unit_ptr->unit_ptrs_.begin(), zone_unit_ptr->unit_ptrs_.end(), cmp);
+        if (OB_FAIL(cmp.ret_)) {
+          LOG_WARN("sort failed", KR(ret), K(zone_unit_ptr->zone_));
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < zone_unit_ptr->unit_ptrs_.count()
+            && delete_unit_count < (pool->unit_count_ - new_unit_num); ++i) {
+          ObUnit *unit = zone_unit_ptr->unit_ptrs_.at(i);
+          if (OB_ISNULL(unit)) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unit ptr is null", K(ret), KP(unit), K(i), K(j));
+            LOG_WARN("unit ptr is null", KR(ret), KP(unit));
           } else if (OB_FAIL(output_delete_unit_ptr_array.push_back(unit))) {
             LOG_WARN("fail to push back", K(ret));
-          } else {} // no more to do
-        }
-      }
+          } else {
+            delete_unit_count++;
+          }
+        }//end for unit
+      }//end for zone
     }
   }
   return ret;
 }
 
 
-// the resource pool don't grant any tenants shrink directly.
-// step:
-// 1. clear __all_unit, change the unit num in __all_resouce_pool
-// 2. clear the unit info in memory structure, change the unit_num in memroy structure resource pool
-int ObUnitManager::shrink_not_granted_pool(
+// for granted pools, update unit to DELETING status and update unit groups.
+// for ungranted pools, remove unit directly.
+// update pool to new unit num in both situations.
+int ObUnitManager::shrink_pool_unit_num_(
+    common::ObMySQLTransaction &trans,
     share::ObResourcePool *pool,
-    const int64_t alter_unit_num,
+    const int64_t new_unit_num,
     const common::ObIArray<uint64_t> &delete_unit_id_array)
 {
   int ret = OB_SUCCESS;
-  common::ObMySQLTransaction trans;
-  if (OB_UNLIKELY(NULL == pool || alter_unit_num <= 0)) {
+  bool is_shrinking_allowed = true;
+  if (OB_UNLIKELY(NULL == pool || new_unit_num <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(pool), K(alter_unit_num));
-  } else if (is_valid_tenant_id(pool->tenant_id_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("pool already grant to some tenant", K(ret), "tenant_id", pool->tenant_id_);
-  } else if (pool->unit_count_ <= alter_unit_num) {
+    LOG_WARN("invalid argument", K(ret), KP(pool), K(new_unit_num));
+  } else if (pool->unit_count_ <= new_unit_num) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("should be a shrink pool operation", K(ret),
              "cur_unit_num", pool->unit_count_,
-             "new_unit_num", alter_unit_num);
-  } else if (OB_FAIL(trans.start(proxy_, OB_SYS_TENANT_ID))) {
-    LOG_WARN("start transaction failed", K(ret));
+             "new_unit_num", new_unit_num);
   } else {
+    const bool is_granted = pool->is_granted_to_tenant();
     common::ObArray<ObUnit *> output_delete_unit_ptr_array;
     common::ObArray<uint64_t> output_delete_unit_id_array;
     share::ObResourcePool new_pool;
     if (OB_FAIL(new_pool.assign(*pool))) {
       LOG_WARN("fail to assign new pool", K(ret));
     } else {
-      new_pool.unit_count_ = alter_unit_num;
+      new_pool.unit_count_ = new_unit_num;
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ut_operator_.update_resource_pool(trans, new_pool, false/*need_check_conflict_with_clone*/))) {
-      LOG_WARN("fail to update resource pool", K(ret));
-    } else if (OB_FAIL(check_shrink_unit_num_zone_condition(pool, alter_unit_num, delete_unit_id_array))) {
+    } else if (OB_FAIL(ut_operator_.update_resource_pool(trans, new_pool, is_granted/*need_check_conflict_with_clone*/))) {
+      LOG_WARN("fail to update resource pool", KR(ret), K(new_pool), K(is_granted));
+    } else if (OB_FAIL(check_shrink_unit_num_zone_condition(pool, new_unit_num, delete_unit_id_array))) {
       LOG_WARN("fail to check shrink unit num zone condition", K(ret));
     } else if (OB_FAIL(fill_delete_unit_ptr_array(
-            pool, delete_unit_id_array, alter_unit_num, output_delete_unit_ptr_array))) {
+            pool, delete_unit_id_array, new_unit_num, output_delete_unit_ptr_array))) {
       LOG_WARN("fail to fill delete unit id array", K(ret));
     } else if (output_delete_unit_ptr_array.count() <= 0) {
       ret = OB_ERR_UNEXPECTED;
@@ -7104,29 +6995,33 @@ int ObUnitManager::shrink_not_granted_pool(
                "zone_unit_cnt", output_delete_unit_ptr_array.count());
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < output_delete_unit_ptr_array.count(); ++i) {
-        const ObUnit *unit = output_delete_unit_ptr_array.at(i);
+        ObUnit *unit = output_delete_unit_ptr_array.at(i);
         if (OB_UNLIKELY(NULL == unit)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unit ptr is null", K(ret), KP(unit));
-        } else if (OB_FAIL(ut_operator_.remove_unit(trans, *unit))) {
-          LOG_WARN("fail to remove unit", K(ret), "unit", *unit);
         } else if (OB_FAIL(output_delete_unit_id_array.push_back(unit->unit_id_))) {
           LOG_WARN("fail to push back", K(ret));
-        } else {} // no more to do
+        } else {
+          if (is_granted) {
+            unit->status_ = ObUnit::UNIT_STATUS_DELETING;
+            if (OB_FAIL(ut_operator_.update_unit_exclude_ug_id(trans, *unit, true/*need_check_conflict_with_clone*/))) {
+              LOG_WARN("fail to update unit", KR(ret), KPC(unit));
+            }
+            FLOG_INFO("set unit deleting", KPC(unit));
+          } else {
+            if (OB_FAIL(ut_operator_.remove_unit(trans, *unit))) {
+              LOG_WARN("fail to remove unit", KR(ret), "unit", *unit);
+            }
+          }
+        } // no more to do
       }
     }
-    // however, we need to end this transaction
-    const bool commit = (OB_SUCCESS == ret);
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = trans.end(commit))) {
-      LOG_WARN("trans end failed", K(tmp_ret), K(commit));
-      ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
-    }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(delete_inmemory_units(pool->resource_pool_id_, output_delete_unit_id_array))) {
+    } else if (!is_granted
+               && OB_FAIL(delete_inmemory_units(pool->resource_pool_id_, output_delete_unit_id_array))) {
       LOG_WARN("fail to delete unit groups", K(ret));
     } else {
-      pool->unit_count_ = alter_unit_num;
+      pool->unit_count_ = new_unit_num;
     }
   }
   return ret;
@@ -7134,16 +7029,14 @@ int ObUnitManager::shrink_not_granted_pool(
 
 int ObUnitManager::check_shrink_granted_pool_allowed_by_migrate_unit(
     share::ObResourcePool *pool,
-    const int64_t alter_unit_num,
     bool &is_allowed)
 {
   int ret = OB_SUCCESS;
-  UNUSED(alter_unit_num);
   is_allowed = true;
   common::ObArray<share::ObUnit *> *units = NULL;
-  if (OB_UNLIKELY(NULL == pool || alter_unit_num <= 0)) {
+  if (OB_UNLIKELY(NULL == pool)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(pool), K(alter_unit_num));
+    LOG_WARN("invalid argument", K(ret), KP(pool));
   } else if (OB_FAIL(get_units_by_pool(pool->resource_pool_id_, units))) {
     LOG_WARN("fail to get units by pool", K(ret));
   } else if (OB_UNLIKELY(NULL == units)) {
@@ -7345,7 +7238,7 @@ int ObUnitManager::check_shrink_granted_pool_allowed_by_tenant_locality(
 //    2.3 Tables with entity partitions whose table locality is not empty are checked according to table locality
 int ObUnitManager::check_shrink_granted_pool_allowed_by_locality(
     share::ObResourcePool *pool,
-    const int64_t alter_unit_num,
+    const int64_t new_unit_num,
     bool &is_allowed)
 {
   int ret = OB_SUCCESS;
@@ -7354,9 +7247,9 @@ int ObUnitManager::check_shrink_granted_pool_allowed_by_locality(
   common::ObArray<share::ObResourcePool *> *pool_list = nullptr;
   common::ObArray<share::ObResourcePool *> new_pool_list;
   common::ObArray<int64_t> new_unit_nums;
-  if (OB_UNLIKELY(NULL == pool || alter_unit_num <= 0)) {
+  if (OB_UNLIKELY(NULL == pool || new_unit_num <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(pool), K(alter_unit_num));
+    LOG_WARN("invalid argument", K(ret), KP(pool), K(new_unit_num));
   } else if (OB_ISNULL(schema_service_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("schema service is null", K(schema_service_), KR(ret));
@@ -7382,7 +7275,7 @@ int ObUnitManager::check_shrink_granted_pool_allowed_by_locality(
         LOG_WARN("fail to to push back", K(ret));
       } else if (OB_FAIL(new_unit_nums.push_back(
               this_pool->resource_pool_id_ == pool->resource_pool_id_
-              ? alter_unit_num : this_pool->unit_count_))) {
+              ? new_unit_num : this_pool->unit_count_))) {
         LOG_WARN("fail to push back", K(ret));
       }
     }
@@ -7431,18 +7324,18 @@ int ObUnitManager::check_shrink_granted_pool_allowed_by_alter_locality(
 //  3 Locality changes and scaling under the same tenant are not allowed to be performed at the same time
 int ObUnitManager::check_shrink_granted_pool_allowed(
     share::ObResourcePool *pool,
-    const int64_t alter_unit_num,
-    bool &is_allowed)
+    const int64_t new_unit_num)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(NULL == pool || alter_unit_num <= 0)) {
+  bool is_allowed = false;
+  if (OB_UNLIKELY(NULL == pool || new_unit_num <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(pool), K(alter_unit_num));
-  } else if (OB_FAIL(check_shrink_granted_pool_allowed_by_migrate_unit(pool, alter_unit_num, is_allowed))) {
+    LOG_WARN("invalid argument", K(ret), KP(pool), K(new_unit_num));
+  } else if (OB_FAIL(check_shrink_granted_pool_allowed_by_migrate_unit(pool, is_allowed))) {
     LOG_WARN("fail to check by migrate unit", K(ret));
   } else if (!is_allowed) {
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "shrink pool unit num while unit migrating");
-  } else if (OB_FAIL(check_shrink_granted_pool_allowed_by_locality(pool, alter_unit_num, is_allowed))) {
+  } else if (OB_FAIL(check_shrink_granted_pool_allowed_by_locality(pool, new_unit_num, is_allowed))) {
     LOG_WARN("fail to check by locality", K(ret));
   } else if (!is_allowed) {
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "shrink pool unit num causing not enough locality");
@@ -7450,6 +7343,10 @@ int ObUnitManager::check_shrink_granted_pool_allowed(
     LOG_WARN("fail to check shrink granted pool allowed by alter locality", K(ret));
   } else if (!is_allowed) {
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "shrink pool unit num while altering locality");
+  }
+  if (OB_SUCC(ret) && !is_allowed) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("check shrink granted pool not allowed", KR(ret), KPC(pool));
   }
   return ret;
 }
@@ -7479,7 +7376,7 @@ int ObUnitManager::complete_migrate_unit_rs_job_in_pool(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unit should not be null", K(ret));
       } else if (unit->is_manual_migrate()) {
-        char ip_buf[common::MAX_IP_ADDR_LENGTH];
+        char ip_buf[common::MAX_IP_ADDR_LENGTH] = {"\0"};
         (void)unit->server_.ip_to_string(ip_buf, common::MAX_IP_ADDR_LENGTH);
         int64_t job_id = 0;
         int tmp_ret = RS_JOB_FIND(MIGRATE_UNIT, job_id, *proxy_,
@@ -7497,54 +7394,45 @@ int ObUnitManager::complete_migrate_unit_rs_job_in_pool(
   return ret;
 }
 
-/* the routine that calls the expand_pool_unit_num shall
- * ensure that this pool is not granted to any tenant
- */
 int ObUnitManager::expand_pool_unit_num_(
+    common::ObMySQLTransaction &trans,
     share::ObResourcePool *pool,
-    const int64_t alter_unit_num)
+    const int64_t new_unit_num)
 {
   int ret = OB_SUCCESS;
   const char *module = "ALTER_RESOURCE_POOL_UNIT_NUM";
   const bool new_allocate_pool = false;
-  common::ObMySQLTransaction trans;
-  ObArray<ObAddr> new_servers;
+  ObArray<ObUnit> new_units;
   ObArray<share::ObUnit *> *units = NULL;
   ObArray<uint64_t> bak_unit_ids;
-  if (OB_UNLIKELY(NULL == pool || alter_unit_num <= pool->unit_count_)) {
+  ObUnit::Status new_unit_status = ObUnit::UNIT_STATUS_MAX;
+  if (OB_ISNULL(pool)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("pool ptr is null", K(ret), "pre_unit_cnt", pool->unit_count_, "cur_unit_cnt", alter_unit_num);
-  } else if (pool->is_granted_to_tenant()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected pool status", KR(ret), KPC(pool));
-  } else if (OB_FAIL(trans.start(proxy_, OB_SYS_TENANT_ID))) {
-    LOG_WARN("start transaction failed", K(ret));
+    LOG_WARN("pool ptr is null", KR(ret));
+  } else if (OB_UNLIKELY(new_unit_num <= pool->unit_count_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("new_unit_num less than current unit_num", KR(ret), KPC(pool), K(new_unit_num));
   } else if (OB_FAIL(get_units_by_pool(pool->resource_pool_id_, units))) {
     LOG_WARN("fail to get units by pool", K(ret));
   } else if (OB_FAIL(extract_unit_ids(*units, bak_unit_ids))) {
     LOG_WARN("fail to extract unit ids", K(ret));
+  } else if (OB_FAIL(determine_new_added_unit_status(*pool, new_unit_status))) {
+    LOG_WARN("fail to determine new added unit status", KR(ret), KPC(pool));
   } else if (OB_FAIL(allocate_pool_units_(
           trans, *pool, pool->zone_list_, nullptr, new_allocate_pool,
-          alter_unit_num - pool->unit_count_, module, new_servers))) {
-    LOG_WARN("arrange units failed", "pool", *pool, K(new_allocate_pool), K(ret));
+          new_unit_num - pool->unit_count_, new_unit_status, module, new_units))) {
+    LOG_WARN("arrange units failed", "pool", *pool, KR(ret), KPC(pool), K(new_allocate_pool),
+             K(new_unit_status), K(new_unit_num));
   } else {
+    const bool is_granted = pool->is_granted_to_tenant();
     share::ObResourcePool new_pool;
     if (OB_FAIL(new_pool.assign(*pool))) {
       LOG_WARN("failed to assign new_poll", K(ret));
     } else {
-      new_pool.unit_count_ = alter_unit_num;
-      if (OB_FAIL(ut_operator_.update_resource_pool(trans, new_pool, false/*need_check_conflict_with_clone*/))) {
-        LOG_WARN("update_resource_pool failed", K(new_pool), K(ret));
+      new_pool.unit_count_ = new_unit_num;
+      if (OB_FAIL(ut_operator_.update_resource_pool(trans, new_pool, is_granted/*need_check_conflict_with_clone*/))) {
+        LOG_WARN("update_resource_pool failed", KR(ret), K(new_pool), K(is_granted));
       }
-    }
-  }
-
-  if (trans.is_started()) {
-    const bool commit = (OB_SUCC(ret));
-    int temp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (temp_ret = trans.end(commit))) {
-      LOG_WARN("trans end failed", K(commit), K(temp_ret));
-      ret = (OB_SUCCESS == ret) ? temp_ret : ret;
     }
   }
 
@@ -7555,110 +7443,121 @@ int ObUnitManager::expand_pool_unit_num_(
       LOG_WARN("delete unit groups failed", "resource pool id", pool->resource_pool_id_, K(temp_ret));
     }
   } else {
-    pool->unit_count_ = alter_unit_num;
+    pool->unit_count_ = new_unit_num;
   }
   return ret;
 }
 
-int ObUnitManager::get_pool_complete_unit_num_and_status(
+int ObUnitManager::get_unit_count_per_zone_by_status_(
     const share::ObResourcePool *pool,
-    int64_t &unit_num_per_zone,
-    int64_t &current_unit_num_per_zone,
-    bool &has_unit_num_modification)
+    int64_t &active_unit_cnt,
+    int64_t &adding_unit_cnt,
+    int64_t &deleting_unit_cnt)
 {
   int ret = OB_SUCCESS;
-  common::ObArray<share::ObUnit *> *units = NULL;
-  if (OB_UNLIKELY(NULL == pool)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("pool is null", K(ret));
-  } else if (OB_FAIL(get_units_by_pool(pool->resource_pool_id_, units))) {
-    LOG_WARN("fail to get units by pool", K(ret), "pool_id", pool->resource_pool_id_);
-  } else if (OB_UNLIKELY(NULL == units)) {
+  common::ObArray<ZoneUnitPtr> zone_unit_ptrs;
+  if (OB_ISNULL(pool)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("units is null", K(ret), KP(units), "pool_id", pool->resource_pool_id_);
-  } else if (units->count() <= 0) {
+    LOG_WARN("pool is nullptr", KR(ret));
+  } else if (OB_FAIL(build_sorted_zone_unit_ptr_array(pool, zone_unit_ptrs))) {
+    LOG_WARN("fail to build sorted zone_unit_ptr array", KPC(pool));
+  } else if (zone_unit_ptrs.count() <= 0) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("total unit num unexpected", K(ret), "total_unit_num", units->count());
-  } else if (pool->zone_list_.count() <= 0) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("pool zone list count unexpected", K(ret), "pool_zone_list_count", pool->zone_list_.count());
+    LOG_WARN("zone unit ptrs has no element", K(ret), "zone_unit_cnt", zone_unit_ptrs.count());
   } else {
-    int64_t total_unit_cnt = units->count();
-    int64_t zone_cnt = pool->zone_list_.count();
-    int64_t consult = total_unit_cnt / zone_cnt;
-    if (total_unit_cnt != consult * zone_cnt) {
-      // total_unit_cnt cannot be divisible by zone_cnt,
-      // the number of units in each zone of the resource pool is inconsistent
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected total unit cnt", K(ret), K(zone_cnt), K(total_unit_cnt));
-    } else {
-      unit_num_per_zone = consult;
-      current_unit_num_per_zone = pool->unit_count_;
-      has_unit_num_modification = false;
-      for (int64_t i = 0; OB_SUCC(ret) && i < units->count() && !has_unit_num_modification; ++i) {
-        const ObUnit *this_unit = units->at(i);
-        if (OB_UNLIKELY(NULL == this_unit)) {
+    int64_t unit_cnt_per_zone_by_status[ObUnit::UNIT_STATUS_MAX] = {0};
+    ARRAY_FOREACH(zone_unit_ptrs, zone_idx) {
+      const ZoneUnitPtr &zone_unit_ptr = zone_unit_ptrs.at(zone_idx);
+      int64_t curr_zone_unit_cnt_by_status[ObUnit::UNIT_STATUS_MAX] = {0};
+      ARRAY_FOREACH(zone_unit_ptr.unit_ptrs_, j) {
+        const ObUnit *unit = zone_unit_ptr.unit_ptrs_.at(j);
+        if (OB_UNLIKELY(NULL == unit)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unit ptr is null", K(ret), KP(this_unit));
-        } else if (ObUnit::UNIT_STATUS_ACTIVE == this_unit->status_) {
-          // an active unit, go and check next
-        } else if (ObUnit::UNIT_STATUS_DELETING == this_unit->status_) {
-          has_unit_num_modification = true;
+          LOG_WARN("unit ptr is null", K(ret), KP(unit), K(zone_unit_ptr));
+        } else if (!unit->is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unit is invalid", KR(ret), KPC(unit));
         } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected unit status", K(ret), "unit_status", this_unit->status_);
+          curr_zone_unit_cnt_by_status[unit->status_]++;
         }
+      } // end for unit
+      for (int64_t j = 0; OB_SUCC(ret) && j < ObUnit::UNIT_STATUS_MAX; ++j) {
+        if (0 == zone_idx) {
+          unit_cnt_per_zone_by_status[j] = curr_zone_unit_cnt_by_status[j];
+        } else if (unit_cnt_per_zone_by_status[j] != curr_zone_unit_cnt_by_status[j]) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unit cnt in each zone not match", K(unit_cnt_per_zone_by_status),
+                   "curr_zone", zone_unit_ptr.zone_, K(curr_zone_unit_cnt_by_status));
+        }
+      } // end for unit_status
+    } // end for zone
+    if (OB_SUCC(ret)) {
+      active_unit_cnt = unit_cnt_per_zone_by_status[ObUnit::UNIT_STATUS_ACTIVE];
+      deleting_unit_cnt = unit_cnt_per_zone_by_status[ObUnit::UNIT_STATUS_DELETING];
+      adding_unit_cnt = unit_cnt_per_zone_by_status[ObUnit::UNIT_STATUS_ADDING];
+      // defense check
+      if (OB_UNLIKELY(adding_unit_cnt > 0 && deleting_unit_cnt > 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("one single pool can not have deleting and adding unit simultaneously", KR(ret),
+                KPC(pool), K(active_unit_cnt), K(adding_unit_cnt), K(deleting_unit_cnt));
+      } else if (OB_UNLIKELY(active_unit_cnt + adding_unit_cnt != pool->unit_count_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected unit count", KR(ret), KPC(pool), K(active_unit_cnt), K(adding_unit_cnt));
       }
     }
   }
   return ret;
 }
 
-// According to the unit num of the current resource pool
-// and the unit_num(alter_unit_num) of the resource pool after the change,
-// the change type of the current operation is determined.
-// Let the current num be cur_unit_num, and the num after the change should be alter_unit_num.
+// Determine type of incoming operation according to current unit_num
+//   and also previous unit_num if pool is during expanding or shrinking.
+// Let:
+//   cur_unit_num: pool->unit_count_, the current unit_num of pool
+//   prev_unit_num: the previous unit_num before in-process expanding of shrinking,
+//                  equal to sum of ACTIVE and DELETING status unit per zone.
+//   new_unit_num: the num that new in-coming operation trying to set.
 // The principle is as follows:
-// 1 cur_unit_num == alter_unit_num, no change, means no operation, no modification
-// 2 cur_unit_num <alter_unit_num, and there is currently no modification operation of the resource pool and no other unit num,
-//   which is considered to be an expansion operation.
-// 3 cur_unit_num <alter_unit_num, and the resource pool is shrinking,
-//   the unit_num before shrinking is prev_unit_num,
-//   and alter_unit_num is equal to prev_unit_num,
-//   which is considered to be a shrinking rollback operation.
-// 4 cur_unit_num> alter_unit_num, and the resource pool has not performed other unit num modification operations,
-//   which is considered to be a shrinking operation
+// 1 cur_unit_num == new_unit_num, no change, no modification, new operation is NOP
+// 2 cur_unit_num <new_unit_num, and pool is not shrinking or expanding,
+//   then new operation is EXPAND.
+// 3 cur_unit_num <new_unit_num, and the resource pool is shrinking,
+//   and new_unit_num is equal to prev_unit_num, then new operation is ROLLBACK.
+// 4 cur_unit_num> new_unit_num, and pool is not shrinking or expanding,
+//   then new operation is SHRINK
+// 5 cur_unit_num >new_unit_num, and pool is expanding,
+//   and new_unit_num is equal to prev_unit_num, then new operation is ROLLBACK
+// 6 all other situation are not allowed, represented by MAX.
 int ObUnitManager::determine_alter_unit_num_type(
     share::ObResourcePool *pool,
-    const int64_t alter_unit_num,
+    const int64_t new_unit_num,
     AlterUnitNumType &alter_unit_num_type)
 {
   int ret = OB_SUCCESS;
-  int64_t complete_unit_num_per_zone = 0; // Contains the unit in the delete state
-  int64_t current_unit_num_per_zone = 0; // unit num in pool->unit_count
-  bool has_unit_num_modification = true;
+  const int64_t cur_unit_num = pool->unit_count_;
+  int64_t active_unit_cnt = 0;
+  int64_t adding_unit_cnt = 0;
+  int64_t deleting_unit_cnt = 0;
   if (OB_UNLIKELY(NULL == pool)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("pool is null", K(ret));
-  } else if (alter_unit_num == pool->unit_count_) {
+  } else if (new_unit_num == cur_unit_num) {
     alter_unit_num_type = AUN_NOP; // do nothing
-  } else if (OB_FAIL(get_pool_complete_unit_num_and_status(
-          pool, complete_unit_num_per_zone,
-          current_unit_num_per_zone, has_unit_num_modification))) {
-    LOG_WARN("fail to get pool complete unit num and status", K(ret));
-  } else if (OB_UNLIKELY(complete_unit_num_per_zone <= 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected complete_unit_num", K(ret), K(complete_unit_num_per_zone));
+  } else if (OB_FAIL(get_unit_count_per_zone_by_status_(pool, active_unit_cnt, adding_unit_cnt, deleting_unit_cnt))) {
+    LOG_WARN("fail to get unit count per zone by status", KR(ret), KPC(pool));
   } else {
-    if (has_unit_num_modification) { // A unit num change is taking place
-      // pool not granted should not has unit in DELETING status
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("pool not granted is not expected to have unit in DELETING",
-               KR(ret), K(current_unit_num_per_zone), K(complete_unit_num_per_zone));
+    if (adding_unit_cnt > 0 || deleting_unit_cnt > 0) {
+      // A unit num change is taking place, new operation can only be ROLLBACK.
+      // previous unit_num include DELETING units, exclude ADDING units
+      const int64_t prev_unit_num = active_unit_cnt + deleting_unit_cnt;
+      if (new_unit_num == prev_unit_num) {
+        alter_unit_num_type = AUN_ROLLBACK;
+      } else {
+        alter_unit_num_type = AUN_MAX;
+      }
     } else {
-      if (alter_unit_num > pool->unit_count_) {
+      if (new_unit_num > cur_unit_num) {
         alter_unit_num_type = AUN_EXPAND;
-      } else if (alter_unit_num < pool->unit_count_) {
+      } else if (new_unit_num < cur_unit_num) {
         alter_unit_num_type = AUN_SHRINK;
       } else {
         alter_unit_num_type = AUN_NOP;
@@ -7668,55 +7567,325 @@ int ObUnitManager::determine_alter_unit_num_type(
   return ret;
 }
 
-// alter_pool_unit_num changes a single pool's unit_num,
-// and only works on pool not granted to tenant.
-int ObUnitManager::alter_pool_unit_num(
+int ObUnitManager::precheck_for_alter_pool_unit_num_(
     share::ObResourcePool *pool,
-    int64_t alter_unit_num,
-    const common::ObIArray<uint64_t> &delete_unit_id_array)
+    const int64_t new_unit_num,
+    const ObIArray<ObUnitManager::PoolOperationInfo> &pool_op_info_array)
 {
   int ret = OB_SUCCESS;
-  AlterUnitNumType alter_unit_num_type = AUN_MAX;
+  if (OB_ISNULL(pool)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pool is null ptr", KR(ret));
+  } else if (new_unit_num < 0 || pool_op_info_array.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(new_unit_num), K(pool_op_info_array));
+  } else if (pool->is_granted_to_tenant()) {
+    bool in_hetero_deploy_mode = false;
+    bool is_gts_standalone = false;
+    if (OB_FAIL(check_tenant_in_heterogeneous_deploy_mode(pool->tenant_id_, in_hetero_deploy_mode))) {
+      LOG_WARN("fail to check_tenant_in_heterogeneous_deploy_mode", KR(ret), KPC(pool));
+    } else if (OB_FAIL(check_tenant_gts_standalone_enabled(pool->tenant_id_, is_gts_standalone))) {
+      LOG_WARN("fail to check_tenant_gts_standalone_enabled", KR(ret), KPC(pool));
+    } else if (!in_hetero_deploy_mode) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("zone deploy mode is homo mode, alter resource pool not allowed", KR(ret), KPC(pool));
+      LOG_USER_ERROR_WITH_ARGS(OB_OP_NOT_ALLOW, "Tenant %lu zone_deploy_mode is 'homo', not 'hetero', "
+          "alter resource pool unit_num", pool->tenant_id_);
+    } else if (OB_FAIL(check_unit_num_legal_after_pools_operation_(pool->tenant_id_, pool_op_info_array,
+        in_hetero_deploy_mode, is_gts_standalone))) {
+      LOG_WARN("fail to check tenant pools unit_num legal", KR(ret), KPC(pool),
+              K(in_hetero_deploy_mode), K(new_unit_num), K(in_hetero_deploy_mode), K(is_gts_standalone));
+    }
+  }
+  return ret;
+}
+
+// alter_pool_unit_num changes a single pool's unit_num,
+int ObUnitManager::alter_pool_unit_num(
+    share::ObResourcePool *pool,
+    int64_t new_unit_num,
+    const common::ObIArray<uint64_t> &delete_unit_id_array,
+    const common::ObString &sql_text)
+{
+  int ret = OB_SUCCESS;
+  share::ObUnitTableTransaction trans;
+  ObArray<share::ObResourcePool *> pools;
+  ObArray<share::ObResourcePool *> altered_pools;
+  ObArray<PoolOperationInfo> pool_op_info_array;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("check_inner_stat failed", K(inited_), K(loaded_), K(ret));
   } else if (NULL == pool) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("pool is null", K(ret));
-  } else if (alter_unit_num <= 0) {
+  } else if (new_unit_num <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid alter_unit_num", K(alter_unit_num), K(ret));
-  } else if (pool->is_granted_to_tenant()) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("alter pool unit num which is granted to a tenant is not allowed", KR(ret), KPC(pool));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "alter pool unit num which is granted to a tenant");
-  } else if (OB_FAIL(determine_alter_unit_num_type(pool, alter_unit_num, alter_unit_num_type))) {
-    LOG_WARN("fail to determine alter unit num type", K(ret));
-  } else if (AUN_NOP == alter_unit_num_type) {
-    // do nothing
-    if (delete_unit_id_array.count() > 0) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("do not support deleting unit without unit num changed", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "delete unit without unit num change");
-    } else {} // good
+    LOG_WARN("invalid new_unit_num", K(new_unit_num), K(ret));
+  } else if (has_duplicates(delete_unit_id_array)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("delete same unit more than once not supported", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "delete same unit more than once");
+  } else if (OB_FAIL(trans.start(proxy_, OB_SYS_TENANT_ID))) {
+    LOG_WARN("fail to start transaction", KR(ret));
+  } else if (OB_FAIL(pools.push_back(pool))) {
+    LOG_WARN("fail to push pool to pools", KR(ret), KPC(pool));
+  } else if (OB_FAIL(batch_determine_altered_pools_op_info_(pools, new_unit_num, altered_pools, pool_op_info_array))) {
+    LOG_WARN("fail to batch determine altered pools op info", KR(ret), K(new_unit_num));
+  } else if (altered_pools.count() != pool_op_info_array.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("altered pools count not match pool op info array count", KR(ret),
+              K(altered_pools.count()), K(pool_op_info_array.count()));
+  } else {
+    // 1. check argument delete_unit_id_array is valid for operation
+    if (pool_op_info_array.empty() || AUN_SHRINK != pool_op_info_array.at(0).alter_type_) {
+      if (!delete_unit_id_array.empty()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("do not support expand or rollback pool unit num combined with deleting unit", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "expand or rollback pool unit num combined with deleting unit");
+      }
+    }
+    // 2. do alter pool unit num
+    if (OB_SUCC(ret) && !pool_op_info_array.empty()) {
+      if (OB_FAIL(precheck_for_alter_pool_unit_num_(pool, new_unit_num, pool_op_info_array))) {
+        LOG_WARN("fail to precheck for alter unit num", KR(ret), KPC(pool), K(new_unit_num), K(pool_op_info_array));
+      } else if (pool->is_granted_to_tenant()
+          && OB_FAIL(register_alter_resource_tenant_unit_num_rs_job(pool->tenant_id_, new_unit_num, sql_text, trans))) {
+        LOG_WARN("fail to register alter resource tenant unit num rs job", KR(ret),
+            KPC(pool), K(sql_text), K(new_unit_num));
+      } else if (OB_FAIL(do_alter_pool_unit_num_(trans, pool, pool_op_info_array.at(0), delete_unit_id_array))) {
+        LOG_WARN("fail to do_alter_pool_unit_num_", KR(ret), KPC(pool),
+                "pool_op_info", pool_op_info_array.at(0), K(delete_unit_id_array));
+      } else if (pool->is_granted_to_tenant()
+          && ObReplicaTypeCheck::need_to_align_to_ug(pool->replica_type_)
+          && OB_FAIL(adjust_altered_pools_unit_group_id_(trans, pool->tenant_id_, altered_pools))) {
+        LOG_WARN("fail to adjust_altered_pools_unit_group_id", KR(ret), K(pool->tenant_id_), K(pool_op_info_array));
+      }
+    }
+  }
+  if (trans.is_started()) {
+    const bool commit = (OB_SUCCESS == ret);
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(trans.end(commit))) {
+      LOG_WARN("fail to trans end", KR(tmp_ret), K(commit));
+      ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
+    }
+  }
+  return ret;
+}
+
+int ObUnitManager::adjust_altered_pools_unit_group_id_(
+    common::ObMySQLTransaction &trans,
+    const uint64_t tenant_id,
+    common::ObIArray<share::ObResourcePool *> &altered_pools)
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid_tenant_id(tenant_id) || altered_pools.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id or altered_pools", KR(ret), K(tenant_id), K(altered_pools));
+  } else {
+    ObArray<ObArray<uint64_t>> ref_pools_ug_id_arrays;
+    // construct ref pools, tenant's other pools except for altered pools
+    ObArray<share::ObResourcePool *> *tenant_pools = nullptr;
+    if (OB_FAIL(get_pools_by_tenant_(tenant_id, tenant_pools))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        // tenant is in creating, granting initial resource pools
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to get tenant_pools by tenant", KR(ret), K(tenant_id));
+      }
+    } else if (OB_ISNULL(tenant_pools)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tenant_pools ptr is null", KR(ret), K(tenant_id));
+    } else {
+      // for each tenant pool, if not one of altered_pools, push to ref_pools_ug_ids
+      ObArray<uint64_t> ref_pool_ug_id_array;
+      ARRAY_FOREACH(*tenant_pools, i) {
+        share::ObResourcePool *pool = tenant_pools->at(i);
+        ref_pool_ug_id_array.reuse();
+        if (OB_ISNULL(pool)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("pool ptr is null", KR(ret), K(i));
+        } else if (!ObReplicaTypeCheck::need_to_align_to_ug(pool->replica_type_)) {
+          // skip. all ug_ids of pool are 0.
+        } else if (!has_exist_in_array(altered_pools, pool)) {
+          if (OB_FAIL(ut_operator_.get_pool_unit_group_ids(trans, pool->resource_pool_id_, ref_pool_ug_id_array))) {
+            LOG_WARN("fail to get pool unit group ids", KR(ret), K(pool));
+          } else if (OB_FAIL(ref_pools_ug_id_arrays.push_back(ref_pool_ug_id_array))) {
+            LOG_WARN("fail to push_back", KR(ret));
+          }
+        }
+      }// end of each of tenant pools
+    }
+    // for each altered pool, adjust unit group id
+    ARRAY_FOREACH(altered_pools, i) {
+      share::ObResourcePool *pool = altered_pools.at(i);
+      ObArray<uint64_t> unit_group_id_array;
+      if (OB_ISNULL(pool)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("pool is null", KR(ret));
+      } else if (!ObReplicaTypeCheck::need_to_align_to_ug(pool->replica_type_)) {
+          // skip. all ug_ids of pool are 0. No need to adjust.
+      } else if (OB_FAIL(determine_pool_unit_group_id_(trans, pool, ref_pools_ug_id_arrays, unit_group_id_array))) {
+        LOG_WARN("fail to determine pool ug_id", KR(ret), KPC(pool), K(ref_pools_ug_id_arrays));
+      } else if (OB_FAIL(reallocate_pool_unit_group_id_(trans, pool, unit_group_id_array))) {
+        LOG_WARN("fail to reallocate pool unit group id", KR(ret), KPC(pool), K(unit_group_id_array));
+      // for adjusted altered pool, make it a ref_pool as well
+      } else if (OB_FAIL(ref_pools_ug_id_arrays.push_back(unit_group_id_array))) {
+        LOG_WARN("fail to push back", KR(ret));
+      }
+    }// end for each of altered_pools
+  }
+  return ret;
+}
+
+// Determine expected unit_group_id_array for pool refer to ref_pools of same tenant.
+// In one tenant, pools with same unit_count are homo pools, else hetero pools.
+// The principle of unit_group_id is:
+// 1. homo pools must share exactly the same unit_group_ids;
+// 2. hetero pools can not have any shared unit_group_id;
+// 3. unit_group_id of DELETING units are not considered.
+int ObUnitManager::determine_pool_unit_group_id_(
+    common::ObMySQLTransaction &trans,
+    const share::ObResourcePool *pool,
+    const ObIArray<ObArray<uint64_t>> &ref_pools_ug_id_arrays,
+    ObArray<uint64_t> &unit_group_id_array)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(pool)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pool is nullptr", KR(ret));
+  } else {
+    // 1. for each ref pools, check whether homo or hetero pool
+    bool found_homo_ref_pool = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !found_homo_ref_pool && i < ref_pools_ug_id_arrays.count(); ++i) {
+      const ObArray<uint64_t> &ref_pool_ug_ids = ref_pools_ug_id_arrays.at(i);
+      if (ref_pool_ug_ids.count() == pool->unit_count_) {
+        found_homo_ref_pool = true;
+        if (OB_FAIL(unit_group_id_array.assign(ref_pool_ug_ids))) {
+          LOG_WARN("fail to assign unit group id array", KR(ret));
+        }
+      }
+    }
+    // 2. if no homo_ref_pool, fetch new unit group ids
+    if (OB_SUCC(ret) && !found_homo_ref_pool) {
+      if (OB_FAIL(batch_fetch_new_unit_group_id(pool->unit_count_, unit_group_id_array))) {
+        LOG_WARN("fail to batch fetch unit group id", KR(ret), K(unit_group_id_array), KPC(pool));
+      }
+    }
+    LOG_INFO("determined pool unit_group_id array", KR(ret), KPC(pool), K(ref_pools_ug_id_arrays),
+        K(unit_group_id_array));
+  }
+  return ret;
+}
+
+// Reallocate pool unit_group_id of units in inner_table.
+// Ensure units in each zone use exactly the same ug_ids with new_unit_group_id_array,
+//  except for DELETING units.
+// Some units may already match with new_ug_id_array, just update those units that do not match.
+int ObUnitManager::reallocate_pool_unit_group_id_(
+    common::ObMySQLTransaction &trans,
+    const share::ObResourcePool *pool,
+    const common::ObIArray<uint64_t> &new_unit_group_id_array)
+{
+  int ret = OB_SUCCESS;
+  common::ObArray<ObUnit> pool_units; // get from inner_table for accurate ug_id
+  if (OB_ISNULL(pool)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pool is null ptr", KR(ret));
+  } else if (OB_UNLIKELY(new_unit_group_id_array.count() != pool->unit_count_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("new_unit_group_id_array count does not match pool unit_count", KR(ret),
+        KPC(pool), K(new_unit_group_id_array));
+  } else if (OB_FAIL(ut_operator_.get_units_by_pool_id(trans, pool->resource_pool_id_, pool_units))) {
+    LOG_WARN("fail to get units by pool id", KR(ret), K(pool->resource_pool_id_));
+  } else {
+    ObArray<const ObUnit *> zone_unit_array;
+    common::ObArray<uint64_t> zone_ug_id_array;
+    ARRAY_FOREACH(pool->zone_list_, i) {
+      const ObZone &curr_zone = pool->zone_list_.at(i);
+      zone_unit_array.reuse();
+      if (OB_FAIL(zone_ug_id_array.assign(new_unit_group_id_array))) {
+        LOG_WARN("failed to assign new_unit_group_id_array", KR(ret), K(new_unit_group_id_array));
+      }
+      // filter units of curr zone that need to reallocate
+      ARRAY_FOREACH(pool_units, j) {
+        const ObUnit &unit = pool_units.at(j);
+        int64_t matched_idx = 0;
+        if (unit.zone_ != curr_zone || ObUnit::UNIT_STATUS_DELETING == unit.status_) {
+          // ignore DELETING unit or unit of other zone
+        } else if (has_exist_in_array(zone_ug_id_array, unit.unit_group_id_, &matched_idx)) {
+          // unit already matched with one ug_id, no need to update this unit
+          // one ug_id can only match with one unit, so remove this ug_id
+          if (OB_FAIL(zone_ug_id_array.remove(matched_idx))) {
+            LOG_WARN("fail to remove matched unit group id", KR(ret), K(matched_idx));
+          }
+        } else if (OB_FAIL(zone_unit_array.push_back(&unit))) {
+            LOG_WARN("fail to push back unit", KR(ret), K(unit));
+        }
+      }// end for each pool_unit
+      // reallocate units in curr zone
+      if (OB_FAIL(ret)) {
+      } else if (OB_UNLIKELY(zone_ug_id_array.count() != zone_unit_array.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("filtered unit count not match", KR(ret), K(zone_ug_id_array), K(zone_unit_array),
+            K(curr_zone), KPC(pool), K(pool_units), K(new_unit_group_id_array));
+      } else {
+        ARRAY_FOREACH(zone_unit_array, j) {
+          const ObUnit *unit = zone_unit_array.at(j);
+          CK(OB_NOT_NULL(unit));
+          if (OB_SUCC(ret)) {
+            ObUnitUGOp ug_op(unit->unit_id_, unit->unit_group_id_, zone_ug_id_array.at(j));
+            if (OB_FAIL(ut_operator_.update_unit_ug_id(trans, ug_op))) {
+              LOG_WARN("fail to update unit", KR(ret), K(unit), K(ug_op));
+            } else {
+              ROOTSERVICE_EVENT_ADD("unit", "reallocate_ug",
+                  "tenant_id", pool->tenant_id_,
+                  "unit_id", unit->unit_id_,
+                  "old_ug_id", ug_op.get_old_unit_group_id(),
+                  "new_ug_id", ug_op.get_new_unit_group_id());
+            }
+            LOG_INFO("update unit ug_id", KR(ret), K(curr_zone), K(unit), K(ug_op));
+          }
+        }//end for each unit to update in curr_zone
+      }
+    }//end for each zone of pool zone_list
+    LOG_INFO("reallocated pool units ug_ids", KR(ret), KPC(pool), K(pool_units), K(new_unit_group_id_array));
+  }
+  return ret;
+}
+
+int ObUnitManager::do_alter_pool_unit_num_(
+    common::ObMySQLTransaction &trans,
+    share::ObResourcePool *pool,
+    const PoolOperationInfo &pool_op_info,
+    const common::ObIArray<uint64_t> &delete_unit_id_array)
+{
+  int ret = OB_SUCCESS;
+  const char *module = "ALTER_RESOURCE_POOL_UNIT_NUM";
+  AlterUnitNumType alter_unit_num_type = pool_op_info.alter_type_;
+  const int64_t new_unit_num = pool_op_info.new_unit_num_;
+  if (OB_ISNULL(pool)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pool is null ptr", KR(ret));
+  } else if (OB_UNLIKELY(pool->unit_count_ != pool_op_info.old_unit_num_
+      || (AUN_SHRINK != alter_unit_num_type && !delete_unit_id_array.empty()))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KPC(pool), K(pool_op_info), K(delete_unit_id_array));
+  } else if (pool->is_granted_to_tenant()
+      && pool_op_info.new_unit_num_ < pool_op_info.old_unit_num_  // could be SHRINK or ROLLBACK
+      && OB_FAIL(check_shrink_granted_pool_allowed(pool, new_unit_num)))  {
+      LOG_WARN("fail to check shrink granted pool allowed", KR(ret), KPC(pool), K(new_unit_num));
   } else if (AUN_EXPAND == alter_unit_num_type) {
-    if (delete_unit_id_array.count() > 0) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("do not support expand pool unit num combined with deleting unit", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "expand pool unit num combined with deleting unit");
-    } else if (OB_FAIL(expand_pool_unit_num_(pool, alter_unit_num))) {
-      LOG_WARN("fail to expend pool unit num", K(ret), K(alter_unit_num));
+    if (OB_FAIL(expand_pool_unit_num_(trans, pool, new_unit_num))) {
+      LOG_WARN("fail to expend pool unit num", KR(ret), K(new_unit_num));
     }
   } else if (AUN_SHRINK == alter_unit_num_type) {
-    if (OB_FAIL(shrink_pool_unit_num(pool, alter_unit_num, delete_unit_id_array))) {
-      LOG_WARN("fail to shrink pool unit num", K(ret), K(alter_unit_num));
+    if (OB_FAIL(shrink_pool_unit_num_(trans, pool, new_unit_num, delete_unit_id_array))) {
+      LOG_WARN("fail to shrink pool unit num", KR(ret), K(new_unit_num));
     }
-  } else if (AUN_ROLLBACK_SHRINK == alter_unit_num_type) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected alter_unit_num_type", KR(ret), K(alter_unit_num));
-  } else if (AUN_MAX == alter_unit_num_type) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "alter unit num while the previous operation is in progress");
-    LOG_WARN("alter unit num not allowed", K(ret));
+  } else if (AUN_ROLLBACK == alter_unit_num_type) {
+    if (OB_FAIL(rollback_pool_unit_num_(trans, pool, new_unit_num))) {
+      LOG_WARN("fail to rollback shrink pool unit num", KR(ret), KPC(pool), K(new_unit_num));
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected alter unit num type", K(ret), K(alter_unit_num_type));
@@ -7983,7 +8152,7 @@ int ObUnitManager::add_pool_zone_list(
     // bypass
   } else if (!is_add_pool_zone_list_allowed) {
     ret = OB_OP_NOT_ALLOW;
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "add pool zone when granted pools of tenant in shrinking");
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "add pool zone when granted pools of tenant in shrinking or expanding");
   } else if (OB_FAIL(cal_to_be_add_pool_zone_list(
           pool->zone_list_, zone_list, zones_to_be_add))) {
     LOG_WARN("fail to calculate to be add pool zone list", K(ret));
@@ -8082,7 +8251,7 @@ int ObUnitManager::do_add_pool_zone_list(
     const common::ObIArray<common::ObZone> &to_be_add_zones)
 {
   int ret = OB_SUCCESS;
-  common::ObMySQLTransaction trans;
+  share::ObUnitTableTransaction trans;
   share::ObResourcePool new_pool;
   const char *module = "ALTER_RESOURCE_POOL_ZONE_LIST";
   if (OB_FAIL(check_inner_stat_())) {
@@ -8132,7 +8301,7 @@ int ObUnitManager::increase_units_in_zones_(
   ObArray<uint64_t> new_unit_group_id_array;
   const bool new_allocate_pool = false;   // whether to alloacate new resource pool
   const int64_t new_unit_count = pool.unit_count_;  // new unit count on every zone
-  ObArray<ObAddr> new_servers;
+  ObArray<ObUnit> new_units;
 
   for (int64_t i = 0; OB_SUCC(ret) && i < to_be_add_zones.count(); ++i) {
     bool zone_exist = false;
@@ -8145,10 +8314,19 @@ int ObUnitManager::increase_units_in_zones_(
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(get_pool_unit_group_id_(pool, new_unit_group_id_array))) {
-    LOG_WARN("fail to get pool unit group id", KR(ret), K(pool));
+  } else if (!pool.is_granted_to_tenant() || !ObReplicaTypeCheck::need_to_align_to_ug(pool.replica_type_)) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < pool.unit_count_; ++i) {
+      if (OB_FAIL(new_unit_group_id_array.push_back(0))) {
+        LOG_WARN("fail to push back", KR(ret));
+      }
+    }
+  } else if (OB_FAIL(ut_operator_.get_pool_unit_group_ids(client, pool.resource_pool_id_, new_unit_group_id_array))) {
+    LOG_WARN("fail to get pool unit group ids", KR(ret), K(pool));
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(allocate_pool_units_(client, pool, to_be_add_zones, &new_unit_group_id_array,
-      new_allocate_pool, new_unit_count, module, new_servers))) {
+      new_allocate_pool, new_unit_count, ObUnit::UNIT_STATUS_ACTIVE, module, new_units))) {
     LOG_WARN("fail to allocate new units for new added zones", K(module), KR(ret), K(to_be_add_zones), K(pool),
         K(new_unit_count), K(new_unit_group_id_array));
   }
@@ -8162,7 +8340,7 @@ int ObUnitManager::do_remove_pool_zone_list(
     const common::ObIArray<common::ObZone> &to_be_removed_zones)
 {
   int ret = OB_SUCCESS;
-  common::ObMySQLTransaction trans;
+  share::ObUnitTableTransaction trans;
   share::ObResourcePool new_pool;
   common::ObArray<common::ObZone> new_zone_list1;
   if (OB_FAIL(check_inner_stat_())) {
@@ -8710,206 +8888,11 @@ int ObUnitManager::check_pool_ownership_(const uint64_t tenant_id,
   return ret;
 }
 
-int ObUnitManager::construct_pool_units_to_grant_(
-    ObMySQLTransaction &trans,
-    const uint64_t tenant_id,
-    const share::ObResourcePool &new_pool,
-    const common::ObIArray<share::ObUnit *> &zone_sorted_unit_array,
-    const common::ObIArray<uint64_t> &new_ug_ids,
-    const lib::Worker::CompatMode &compat_mode,
-    ObNotifyTenantServerResourceProxy &notify_proxy,
-    const uint64_t source_tenant_id,
-    ObIArray<share::ObUnit> &pool_units,
-    const bool check_data_version)
-{
-  int ret = OB_SUCCESS;
-  pool_units.reset();
-  common::ObArray<share::ObUnitInfo> source_units;
-  common::ObArray<uint64_t> source_ug_ids;
-  if (OB_FAIL(check_inner_stat_())) {
-    LOG_WARN("check_inner_stat failed", KR(ret), K_(inited), K_(loaded));
-  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))
-             || OB_UNLIKELY(0 >= zone_sorted_unit_array.count())
-             || OB_UNLIKELY(0 >= new_ug_ids.count())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(zone_sorted_unit_array),
-             K(new_ug_ids));
-  } else {
-    if (OB_INVALID_TENANT_ID != source_tenant_id) {
-      if (OB_FAIL(inner_get_all_unit_infos_by_tenant_(source_tenant_id, source_units))) {
-        LOG_WARN("fail to get source units of source tenant", KR(ret), K(source_tenant_id));
-      } else if (OB_FAIL(construct_source_unit_group_ids_(source_units, source_ug_ids))) {
-        LOG_WARN("fail to construct source unit group ids", KR(ret), K(source_units));
-      }
-    }
-    ObUnit new_unit;
-    for (int64_t j = 0; OB_SUCC(ret) && j < zone_sorted_unit_array.count(); ++j) {
-      ObUnit *unit = zone_sorted_unit_array.at(j);
-      uint64_t unit_group_id_to_set = 0;
-      new_unit.reset();
-      if (OB_ISNULL(unit)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unit ptr is null", KR(ret));
-      } else if (OB_FAIL(try_notify_tenant_server_unit_resource_(
-                             tenant_id, false /*is_delete*/, notify_proxy,
-                             new_pool.unit_config_id_, compat_mode, *unit,
-                             false/*if_not_grant*/, false/*skip_offline_server*/,
-                             check_data_version))) {
-        LOG_WARN("fail to try notify server unit resource", KR(ret),
-                 K(tenant_id), K(compat_mode), KPC(unit));
-      } else if (FALSE_IT(new_unit = *unit)) {
-        // shall never be here
-      } else if (OB_FAIL(construct_unit_group_id_for_unit_(
-                             source_tenant_id,
-                             source_units,
-                             source_ug_ids,
-                             *unit,
-                             j/*unit_index*/,
-                             new_pool.unit_count_,
-                             new_ug_ids,
-                             unit_group_id_to_set))) {
-        LOG_WARN("fail to construct unit group id for unit", KR(ret), K(source_tenant_id),
-                 K(source_units), K(source_ug_ids), KPC(unit), K(j), K(new_pool), K(new_ug_ids));
-      } else if (FALSE_IT(new_unit.unit_group_id_ = unit_group_id_to_set)) {
-        // shall never be here
-      } else if (OB_FAIL(ut_operator_.update_unit(trans, new_unit, false/*need_check_conflict_with_clone*/))) {
-        LOG_WARN("fail to update unit", KR(ret), K(new_unit));
-      } else if (OB_FAIL(pool_units.push_back(*unit))) {
-        LOG_WARN("fail to push an element into pool_units", KR(ret), KPC(unit));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObUnitManager::construct_source_unit_group_ids_(
-    const common::ObIArray<share::ObUnitInfo> &source_units,
-    common::ObIArray<uint64_t> &source_unit_group_ids)
-{
-  int ret = OB_SUCCESS;
-  source_unit_group_ids.reset();
-  if (OB_UNLIKELY(0 == source_units.count())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid source units", KR(ret), K(source_units));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < source_units.count(); ++i) {
-      uint64_t source_unit_group_id = 0;
-      if (!source_units.at(i).unit_.is_active_status()) {
-        // we can ensure all unit belongs to source tenant is active status, so it is unexpected to find an inactive unit
-        ret = OB_STATE_NOT_MATCH;
-        LOG_WARN("unit status is not expected", KR(ret), K(source_units), K(i));
-      } else {
-        source_unit_group_id = source_units.at(i).unit_.unit_group_id_;
-        if (!has_exist_in_array(source_unit_group_ids, source_unit_group_id)) {
-          if (OB_FAIL(source_unit_group_ids.push_back(source_unit_group_id))) {
-            LOG_WARN("fail to add source unit group id into array", KR(ret), K(source_unit_group_id));
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObUnitManager::construct_unit_group_id_for_unit_(
-    const uint64_t source_tenant_id,
-    const common::ObIArray<share::ObUnitInfo> &source_units,
-    const common::ObIArray<uint64_t> &source_unit_group_ids,
-    const ObUnit &target_unit,
-    const int64_t unit_index,
-    const int64_t unit_num,
-    const common::ObIArray<uint64_t> &new_ug_ids,
-    uint64_t &unit_group_id)
-{
-  int ret = OB_SUCCESS;
-  unit_group_id = OB_INVALID_ID;
-  common::ObArray<uint64_t> sorted_new_ug_ids;
-  common::ObArray<uint64_t> sorted_source_ug_ids;
-
-  if (OB_FAIL(check_inner_stat_())) {
-    LOG_WARN("check_inner_stat failed", KR(ret), K_(inited), K_(loaded));
-  } else if (OB_UNLIKELY(0 >= unit_num)
-             || OB_UNLIKELY(0 > unit_index)
-             || OB_UNLIKELY(new_ug_ids.count() != unit_num)
-             || OB_UNLIKELY(0 >= new_ug_ids.count())
-             || OB_UNLIKELY((source_unit_group_ids.count() != new_ug_ids.count() && 0!= source_unit_group_ids.count()))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(unit_index), K(source_units), K(source_unit_group_ids),
-             K(unit_num), K(new_ug_ids));
-  } else if (OB_INVALID_TENANT_ID == source_tenant_id) {
-    // for tenant not clone, just allocate new unit group ids by order
-    unit_group_id = new_ug_ids.at(unit_index % (unit_num));
-  } else {
-    // for clone tenant, we have to choose new unit group id for this unit
-    if (OB_FAIL(sorted_new_ug_ids.assign(new_ug_ids))) {
-      LOG_WARN("fail to assign unit group ids", KR(ret), K(new_ug_ids));
-    } else if (OB_FAIL(sorted_source_ug_ids.assign(source_unit_group_ids))) {
-      LOG_WARN("fail to assign source unit group ids", KR(ret), K(source_unit_group_ids));
-    } else {
-      // construct sorted unit group ids first
-      lib::ob_sort(sorted_new_ug_ids.begin(), sorted_new_ug_ids.end());
-      lib::ob_sort(sorted_source_ug_ids.begin(), sorted_source_ug_ids.end());
-      // for clone tenant, we have to construct unit_group_id for its units
-      // the rule to allocate unit_group_id
-      //
-      // resume source tenant has source_units like below:
-      //     ========================================================
-      //     | server_addr |  source_unit_id | source_unit_group_id |
-      //     ========================================================
-      //     |   server A  |       1001      |         ug1          |
-      //     |------------------------------------------------------|
-      //     |   server B  |       1002      |         ug2          |
-      //     |------------------------------------------------------|
-      //     |   server C  |       1003      |         ug3          |
-      //     ========================================================
-      //
-      //  And we have 3 new unit group ids belongs to clone tenant, mark them as new_ug4, new_ug5, new_ug6.
-      //  And assume unit id for clone tenant is 1004(server B), 1005(server A), 1006(server C).
-      //  And assume ug1 > ug3 > ug2
-      //  And assume new_ug5 > new_ug6 > new_ug4
-      //
-      //  The logic to construct unit_group_id for unit(1004) is firstly to get the unit with same server(B), which is unit 1002.
-      //  Then caculate the order of source_unit_group_id(which is ug2) belongs to unit 1002 during all source_group_ids.(The smallest one)
-      //  Then get the smallest new unit_group_id which is new_ug4.
-      //  After all, the unit group id constructed for unit 1004 is new_ug4.
-      //
-      //  ATTENTION:
-      //    The main logic here is to gurantee a mapping relationship between source_ug_ids and new_ug_ids by comparing the order.
-      const common::ObAddr target_server = target_unit.server_;
-      uint64_t source_unit_group_id = 0;
-      for (int64_t i = 0; OB_SUCC(ret) && i < source_units.count(); ++i) {
-        if (target_server == source_units.at(i).unit_.server_) {
-          source_unit_group_id = source_units.at(i).unit_.unit_group_id_;
-          int64_t index = OB_INVALID_INDEX_INT64;
-          if (has_exist_in_array(sorted_source_ug_ids, source_unit_group_id, &index)) {
-            unit_group_id = sorted_new_ug_ids.at(index);
-            break;
-          } else {
-            ret = OB_ENTRY_NOT_EXIST;
-            LOG_WARN("can not find unit group id from source ug ids", KR(ret),
-                     K(sorted_source_ug_ids), K(source_unit_group_id));
-          }
-        }
-      }
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_UNLIKELY(OB_INVALID_ID == unit_group_id)) {
-    ret = OB_ENTRY_NOT_EXIST;
-    LOG_WARN("can not find a valid unit group id", KR(ret), K(source_tenant_id), K(unit_group_id),
-             K(source_units), K(target_unit), K(sorted_source_ug_ids), K(sorted_new_ug_ids));
-  }
-  return ret;
-}
-
 int ObUnitManager::do_grant_pools_(
     ObMySQLTransaction &trans,
-    const common::ObIArray<uint64_t> &new_ug_ids,
     const lib::Worker::CompatMode compat_mode,
-    const ObIArray<ObResourcePoolName> &pool_names,
+    const ObIArray<share::ObResourcePoolName> &pool_names,
     const uint64_t tenant_id,
-    const bool is_bootstrap,
-    const uint64_t source_tenant_id,
     const bool check_data_version)
 {
   int ret = OB_SUCCESS;
@@ -8926,51 +8909,51 @@ int ObUnitManager::do_grant_pools_(
                                       *srv_rpc_proxy_,
                                       &obrpc::ObSrvRpcProxy::notify_tenant_server_unit_resource);
     share::ObResourcePool new_pool;
-    ObArray<share::ObResourcePool> pools;
-    ObArray<ObArray<ObUnit>> all_pool_units;
-    ObArray<ObUnit> pool_units;
+    ObArray<share::ObResourcePool *> pool_ptrs;
+    ObArray<ObUnit> persistent_units;
     for (int64_t i = 0; OB_SUCC(ret) && i < pool_names.count(); ++i) {
-      share::ObResourcePool *pool = NULL;
-      pool_units.reset();
+      share::ObResourcePool *pool = nullptr;
       common::ObArray<ObUnit *> zone_sorted_unit_array;
       if (OB_FAIL(inner_get_resource_pool_by_name(pool_names.at(i), pool))) {
         LOG_WARN("get resource pool by name failed", "pool_name", pool_names.at(i), KR(ret));
       } else if (OB_ISNULL(pool)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("pool is null", KP(pool), KR(ret));
-      } else if (pool->unit_count_ != new_ug_ids.count()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("count not match", KR(ret), K(tenant_id),
-                 "pool", new_pool, K(new_ug_ids));
+      } else if (OB_FAIL(pool_ptrs.push_back(pool))) {
+        LOG_WARN("fail to push back", KR(ret));
       } else if (OB_FAIL(new_pool.assign(*pool))) {
         LOG_WARN("failed to assign new_pool", KR(ret));
       } else if (FALSE_IT(new_pool.tenant_id_ = tenant_id)) {
         // shall never be here
       } else if (OB_FAIL(ut_operator_.update_resource_pool(trans, new_pool,false/*need_check_conflict_with_clone*/))) {
         LOG_WARN("update_resource_pool failed", K(new_pool), KR(ret));
-      } else if (is_bootstrap) {
-        //no need to notify unit and modify unit group id
       } else if (OB_FAIL(build_zone_sorted_unit_array_(pool, zone_sorted_unit_array))) {
         LOG_WARN("failed to generate zone_sorted_unit_array", KR(ret), KPC(pool));
-      } else if (OB_FAIL(construct_pool_units_to_grant_(
-                             trans,
-                             tenant_id,
-                             new_pool,
-                             zone_sorted_unit_array,
-                             new_ug_ids,
-                             compat_mode,
-                             notify_proxy,
-                             source_tenant_id,
-                             pool_units,
-                             check_data_version))) {
-        LOG_WARN("fail to construct pool units to grant", KR(ret), K(tenant_id), K(new_pool),
-                 K(zone_sorted_unit_array), K(new_ug_ids), K(compat_mode), K(source_tenant_id));
-      } else if (OB_FAIL(all_pool_units.push_back(pool_units))) {
-        LOG_WARN("fail to push an element into all_pool_units", KR(ret), K(pool_units));
-      } else if (OB_FAIL(pools.push_back(new_pool))) {
-        LOG_WARN("fail to push an element into pools", KR(ret), K(new_pool));
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && j < zone_sorted_unit_array.count(); ++j) {
+          ObUnit *unit = zone_sorted_unit_array.at(j);
+          if (OB_ISNULL(unit)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unit ptr is null", KR(ret));
+          } else if (OB_FAIL(try_notify_tenant_server_unit_resource_(
+                  tenant_id, false /*is_delete*/, notify_proxy,
+                  new_pool.unit_config_id_, compat_mode, *unit,
+                  false/*if_not_grant*/, false/*skip_offline_server*/,
+                  check_data_version))) {
+            LOG_WARN("fail to try notify server unit resource", KR(ret));
+          } else if (OB_FAIL(persistent_units.push_back(*unit))) {
+            LOG_WARN("fail to push an element into persistent_units", KR(ret));
+          }
+        }
       }
     }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(adjust_altered_pools_unit_group_id_(trans, tenant_id, pool_ptrs))) {
+        LOG_WARN("fail to adjust_altered_pools_unit_group_id", KR(ret), K(tenant_id));
+      }
+    }
+
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(notify_proxy.wait())) {
       LOG_WARN("fail to wait notify resource", KR(ret), K(tmp_ret));
@@ -8979,13 +8962,10 @@ int ObUnitManager::do_grant_pools_(
       // arg/dest/result can be used here.
     }
     ret = ERRSIM_UNIT_PERSISTENCE_ERROR ? : ret;
-    if (OB_FAIL(ret) && pools.count() == all_pool_units.count()) {
-      LOG_WARN("start to rollback unit persistence", KR(ret), K(pools), K(tenant_id));
-      for (int64_t i = 0; i < pools.count(); ++i) {
-        if (OB_TMP_FAIL(rollback_persistent_units_(all_pool_units.at(i), pools.at(i), notify_proxy))) {
-          LOG_WARN("fail to rollback unit persistence", KR(ret), KR(tmp_ret), K(all_pool_units.at(i)),
-              K(pools.at(i)), K(compat_mode));
-        }
+    if (OB_FAIL(ret)) {
+      LOG_WARN("start to rollback unit persistence", KR(ret), K(persistent_units), K(tenant_id));
+      if (OB_TMP_FAIL(rollback_persistent_units_(tenant_id, persistent_units, notify_proxy))) {
+        LOG_WARN("fail to rollback unit persistence", KR(ret), KR(tmp_ret), K(persistent_units));
       }
     }
   }
@@ -8994,7 +8974,6 @@ int ObUnitManager::do_grant_pools_(
 
 int ObUnitManager::do_revoke_pools_(
     ObMySQLTransaction &trans,
-    const common::ObIArray<uint64_t> &new_ug_ids,
     const ObIArray<ObResourcePoolName> &pool_names,
     const uint64_t tenant_id)
 {
@@ -9013,24 +8992,20 @@ int ObUnitManager::do_revoke_pools_(
                                       *srv_rpc_proxy_,
                                       &obrpc::ObSrvRpcProxy::notify_tenant_server_unit_resource);
     share::ObResourcePool new_pool;
-    ObArray<share::ObResourcePool *> shrinking_pools;
+    ObArray<share::ObResourcePool *> shrinking_expanding_pools;
     ObArray<share::ObResourcePool> pools;
     for (int64_t i = 0; OB_SUCC(ret) && i < pool_names.count(); ++i) {
       share::ObResourcePool *pool = NULL;
-      bool is_shrinking = false;
+      bool altering_unit_num = false;
       common::ObArray<ObUnit *> zone_sorted_unit_array;
       if (OB_FAIL(inner_get_resource_pool_by_name(pool_names.at(i), pool))) {
         LOG_WARN("get resource pool by name failed", "pool_name", pool_names.at(i), KR(ret));
       } else if (OB_ISNULL(pool)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("pool is null", KP(pool), KR(ret));
-      } else if (pool->unit_count_ != new_ug_ids.count()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("count not match", KR(ret), K(tenant_id),
-                 "pool", new_pool, K(new_ug_ids));
-      } else if (OB_FAIL(inner_check_pool_in_shrinking_(pool->resource_pool_id_, is_shrinking))) {   // TODO(cangming.zl): maybe need to move ahead
-        LOG_WARN("inner check pool in shrinking failed", KR(ret), "pool", *pool, K(is_shrinking));
-      } else if (is_shrinking && OB_FAIL(shrinking_pools.push_back(pool))) {
+      } else if (OB_FAIL(inner_check_pool_altering_unit_num(pool->resource_pool_id_, altering_unit_num))) {
+        LOG_WARN("inner check pool in shrinking or expanding failed", KR(ret), "pool", *pool, K(altering_unit_num));
+      } else if (altering_unit_num && OB_FAIL(shrinking_expanding_pools.push_back(pool))) {
         LOG_WARN("fail to push back shrinking resource pool before revoked", KR(ret), K(tenant_id), "pool", *pool);
       } else if (OB_FAIL(new_pool.assign(*pool))) {
         LOG_WARN("failed to assign new_pool", KR(ret));
@@ -9041,10 +9016,8 @@ int ObUnitManager::do_revoke_pools_(
       } else if (OB_FAIL(build_zone_sorted_unit_array_(pool, zone_sorted_unit_array))) {
         LOG_WARN("failed to generate zone_sorted_unit_array", KR(ret), KPC(pool));
       } else {
-        ObUnit new_unit;
         for (int64_t j = 0; OB_SUCC(ret) && j < zone_sorted_unit_array.count(); ++j) {
           ObUnit *unit = zone_sorted_unit_array.at(j);
-          new_unit.reset();
           if (OB_ISNULL(unit)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unit ptr is null", KR(ret));
@@ -9054,19 +9027,18 @@ int ObUnitManager::do_revoke_pools_(
                   false/*if_not_grant*/, false/*skip_offline_server*/,
                   false /*check_data_version*/))) {
             LOG_WARN("fail to try notify server unit resource", KR(ret));
-          } else if (FALSE_IT(new_unit = *unit)) {
-            // shall never be here
-          } else if (FALSE_IT(new_unit.unit_group_id_ = new_ug_ids.at(j % (pool->unit_count_)))) {
-            // shall never be here
-          } else if (OB_FAIL(ut_operator_.update_unit(trans, new_unit, false/*need_check_conflict_with_clone*/))) {
-            LOG_WARN("fail to update unit", KR(ret));
+          } else if (!ObReplicaTypeCheck::need_to_align_to_ug(unit->replica_type_)) {
+            // no need to update ug_id, because it's always 0
+          } else if (OB_FAIL(ut_operator_.update_unit_ug_id(trans, ObUnitUGOp(unit->unit_id_, 0)))) {
+            LOG_WARN("fail to update unit", KR(ret), K(ObUnitUGOp(unit->unit_id_, 0)));
           }
         }
       }
     }
     // If some of the pools are shrinking, commit these shrinking pools now.
     if (OB_SUCCESS != ret) {
-    } else if (shrinking_pools.count() > 0 && OB_FAIL(inner_commit_shrink_tenant_resource_pool_(trans, tenant_id, shrinking_pools))) {
+    } else if (shrinking_expanding_pools.count() > 0 &&
+               OB_FAIL(inner_commit_alter_unit_num_(trans, tenant_id, shrinking_expanding_pools))) {
       LOG_WARN("failed to commit shrinking pools in revoking", KR(ret), K(tenant_id));
     }
     int tmp_ret = OB_SUCCESS;
@@ -9111,13 +9083,13 @@ int ObUnitManager::build_zone_sorted_unit_array_(const share::ObResourcePool *po
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unit ptr is null", KR(ret));
       } else if (0 == j || curr_unit->zone_ == prev_unit->zone_) {
-        unit_count_per_zone += ObUnit::UNIT_STATUS_ACTIVE == curr_unit->status_ ? 1 : 0;
+        unit_count_per_zone += ObUnit::UNIT_STATUS_DELETING == curr_unit->status_ ? 0 : 1;
       } else if (unit_count_per_zone != pool->unit_count_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("zone unit num doesn't match resource pool's unit_count",
                  KR(ret), "zone", prev_unit->zone_, K(unit_count_per_zone), K(pool->unit_count_));
       } else {
-        unit_count_per_zone = ObUnit::UNIT_STATUS_ACTIVE == curr_unit->status_ ? 1 : 0;
+        unit_count_per_zone = ObUnit::UNIT_STATUS_DELETING == curr_unit->status_ ? 0 : 1;
       }
     }
     if (OB_SUCC(ret) && unit_count_per_zone != pool->unit_count_) {
@@ -9129,8 +9101,9 @@ int ObUnitManager::build_zone_sorted_unit_array_(const share::ObResourcePool *po
   return ret;
 }
 
-// this function is only used to commit part of shrinking pools of a tenant when these pools are revoked.
-int ObUnitManager::inner_commit_shrink_tenant_resource_pool_(
+// NOTE: this function is only used to commit part of shrinking pools of a tenant when these pools are revoked.
+// in-memory info is not updated in this function, it's updated through unit_mgr_->load() by uplevel caller.
+int ObUnitManager::inner_commit_alter_unit_num_(
   common::ObMySQLTransaction &trans, const uint64_t tenant_id, const common::ObArray<share::ObResourcePool *> &pools)
 {
   int ret = OB_SUCCESS;
@@ -9153,12 +9126,15 @@ int ObUnitManager::inner_commit_shrink_tenant_resource_pool_(
         LOG_WARN("pool is not owned by specified tenant", KR(ret), K(tenant_id), KPC(*pool));
       }
     }
-    ObArray<ObArray<uint64_t>> resource_units;
-    if (FAILEDx(commit_shrink_resource_pool_in_trans_(pools, trans, resource_units))) {
+    ObArray<uint64_t> adding_unit_ids;
+    ObArray<ObArray<uint64_t>> deleting_unit_ids_group_by_pools;
+    if (FAILEDx(commit_alter_unit_num_in_trans_(pools, trans,
+                adding_unit_ids, deleting_unit_ids_group_by_pools))) {
       LOG_WARN("failed to shrink in trans", KR(ret), K(pools));
-    } else if (OB_UNLIKELY(resource_units.count() <= 0)) {
+    } else if (OB_UNLIKELY(deleting_unit_ids_group_by_pools.count() != pools.count())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("resource units is empty", KR(ret), K(resource_units));
+      LOG_WARN("deleting_unit_ids array count does not match pools count", KR(ret),
+               K(deleting_unit_ids_group_by_pools), K(pools.count()));
     } else {/* good */}
   }
   return ret;
@@ -9339,7 +9315,7 @@ int ObUnitManager::admin_migrate_unit(
       LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "unit_id not existed");
     }
     LOG_WARN("get unit info failed", K(unit_id), KR(ret));
-  } else if (ObUnit::UNIT_STATUS_ACTIVE != unit_info.unit_.status_) {
+  } else if (ObUnit::UNIT_STATUS_DELETING == unit_info.unit_.status_) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("migrate a unit which is in deleting status", KR(ret), K(unit_id));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "migrate a unit which is in deleting status");
@@ -9540,7 +9516,7 @@ int ObUnitManager::migrate_unit_(const uint64_t unit_id, const ObAddr &dst, cons
   } else if (OB_ISNULL(unit)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unit is null", KP(unit), K(ret));
-  } else if (ObUnit::UNIT_STATUS_ACTIVE != unit->status_) {
+  } else if (ObUnit::UNIT_STATUS_DELETING == unit->status_) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("cannot migrate unit which is in deleting", K(ret), K(unit_id));
   } else if (unit->server_ == dst) {
@@ -9656,7 +9632,7 @@ int ObUnitManager::do_migrate_unit_notify_resource_(const share::ObResourcePool 
       ObArray<ObUnit> units;
       if (OB_TMP_FAIL(units.push_back(new_unit))) {
         LOG_WARN("fail to push an element into units", KR(ret), KR(tmp_ret), K(new_unit));
-      } else if (OB_TMP_FAIL(rollback_persistent_units_(units, pool, notify_proxy))) {
+      } else if (OB_TMP_FAIL(rollback_persistent_units_(pool.tenant_id_, units, notify_proxy))) {
         LOG_WARN("fail to rollback unit persistence", KR(ret), KR(tmp_ret),
             K(units), K(pool), K(compat_mode));
       }
@@ -9671,7 +9647,7 @@ int ObUnitManager::do_migrate_unit_in_trans_(const share::ObResourcePool &pool,
                                              const bool granted)
 {
   int ret = OB_SUCCESS;
-  common::ObMySQLTransaction trans;
+  share::ObUnitTableTransaction trans;
   share::ObResourcePool real_pool;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("check_inner_stat failed", K(inited_), K(loaded_), K(ret));
@@ -9700,7 +9676,7 @@ int ObUnitManager::do_migrate_unit_in_trans_(const share::ObResourcePool &pool,
   // * If granted, the job will be completed when end_migrate_unit is called.
   if (OB_FAIL(ret)) {
   } else if (is_manual) {
-    char ip_buf[common::MAX_IP_ADDR_LENGTH];
+    char ip_buf[common::MAX_IP_ADDR_LENGTH] = {"\0"};
     const ObAddr &dst = new_unit.server_;
     (void)dst.ip_to_string(ip_buf, common::MAX_IP_ADDR_LENGTH);
     int64_t job_id = 0;
@@ -9724,8 +9700,8 @@ int ObUnitManager::do_migrate_unit_in_trans_(const share::ObResourcePool &pool,
   }
   // Update unit info
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ut_operator_.update_unit(trans, new_unit, true/*need_check_conflict_with_clone*/))) {
-    LOG_WARN("update_unit failed", K(new_unit), K(ret));
+  } else if (OB_FAIL(ut_operator_.update_unit_exclude_ug_id(trans, new_unit, true/*need_check_conflict_with_clone*/))) {
+    LOG_WARN("update_unit ignore ug_id failed", K(new_unit), K(ret));
   }
   // End this transaction
   DEBUG_SYNC(BEFORE_MIGRATE_FINISH);
@@ -9866,7 +9842,7 @@ int ObUnitManager::end_migrate_unit(const uint64_t unit_id, const EndMigrateOp e
     LOG_WARN("invalid end_migrate_op", K(end_migrate_op), K(ret));
   } else {
     ObUnit *unit = NULL;
-    common::ObMySQLTransaction trans;
+    share::ObUnitTableTransaction trans;
     if (OB_FAIL(get_unit_by_id(unit_id, unit))) {
       LOG_WARN("get_unit_by_id failed", K(unit_id), K(ret));
     } else if (NULL == unit) {
@@ -9898,7 +9874,7 @@ int ObUnitManager::end_migrate_unit(const uint64_t unit_id, const EndMigrateOp e
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(trans.start(proxy_, OB_SYS_TENANT_ID))) {
         LOG_WARN("failed to start transaction ", K(ret));
-      } else if (OB_FAIL(ut_operator_.update_unit(trans, new_unit, true/*need_check_conflict_with_clone*/))) {
+      } else if (OB_FAIL(ut_operator_.update_unit_exclude_ug_id(trans, new_unit, true/*need_check_conflict_with_clone*/))) {
         LOG_WARN("ut_operator update unit failed", K(new_unit), K(ret));
       } else {
         if (ABORT == end_migrate_op) {
@@ -9945,7 +9921,7 @@ int ObUnitManager::end_migrate_unit(const uint64_t unit_id, const EndMigrateOp e
                               "manual_migrate", is_manual ? "YES" : "NO");
 
         // complete the job if exists
-        char ip_buf[common::MAX_IP_ADDR_LENGTH];
+        char ip_buf[common::MAX_IP_ADDR_LENGTH] = {"\0"};
         (void)unit_server.ip_to_string(ip_buf, common::MAX_IP_ADDR_LENGTH);
         int64_t job_id = 0;
         tmp_ret = RS_JOB_FIND(MIGRATE_UNIT, job_id, trans, "unit_id", unit_id,
@@ -11088,7 +11064,7 @@ int ObUnitManager::inner_drop_resource_pool(share::ObResourcePool *pool)
     LOG_WARN("resource pool is granted to tenant, can't not delete it",
              "tenant_id", pool->tenant_id_, K(ret));
   } else {
-    common::ObMySQLTransaction trans;
+    share::ObUnitTableTransaction trans;
     if (OB_FAIL(trans.start(proxy_, OB_SYS_TENANT_ID))) {
       LOG_WARN("start transaction failed", K(ret));
     } else if (OB_FAIL(remove_resource_pool_unit_in_trans(pool->resource_pool_id_,
@@ -11637,6 +11613,25 @@ int ObUnitManager::fetch_new_resource_pool_id(uint64_t &resource_pool_id)
   return ret;
 }
 
+int ObUnitManager::batch_fetch_new_unit_group_id(const int64_t count, common::ObArray<uint64_t> &unit_group_ids)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(count <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(count));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+      uint64_t unit_group_id = OB_INVALID_ID;
+      if (OB_FAIL(fetch_new_unit_group_id(unit_group_id))) {
+        LOG_WARN("fail to fetch new unit group id", KR(ret));
+      } else if (OB_FAIL(unit_group_ids.push_back(unit_group_id))) {
+        LOG_WARN("fail to push back", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObUnitManager::fetch_new_unit_group_id(uint64_t &unit_group_id)
 {
   int ret = OB_SUCCESS;
@@ -12027,7 +12022,7 @@ int ObUnitManager::inner_get_active_unit_infos_of_tenant(const ObTenantSchema &t
         LOG_WARN("fail to inner get unit infos", K(ret), K(pool_id));
       } else {
         for (int64_t j = 0; j < unit_in_pool.count() && OB_SUCC(ret); j++) {
-          if (ObUnit::UNIT_STATUS_ACTIVE != unit_in_pool.at(j).unit_.status_) {
+          if (ObUnit::UNIT_STATUS_DELETING == unit_in_pool.at(j).unit_.status_) {
             //nothing todo
           } else if (!has_exist_in_array(tenant_zone_list, unit_in_pool.at(j).unit_.zone_)) {
             //nothing todo

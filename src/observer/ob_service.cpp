@@ -3934,6 +3934,7 @@ int ObService::init_tenant_config(
 }
 
 ERRSIM_POINT_DEF(ERRSIM_GET_LS_READABLE_SCN_ERROR);
+ERRSIM_POINT_DEF(ERRSIM_GET_LOW_READABLE_SCN_ERROR);
 ERRSIM_POINT_DEF(ERRSIM_GET_LS_READABLE_SCN_OLD);
 int ObService::get_ls_replayed_scn(
     const ObGetLSReplayedScnArg &arg,
@@ -4014,6 +4015,11 @@ int ObService::get_ls_replayed_scn(
       cur_readable_scn.convert_from_ts(current_time);
       LOG_WARN("set ls replica readble_scn small", K(arg), K(cur_readable_scn),
           K(current_time));
+    }
+    if (OB_SUCC(ret) && ERRSIM_GET_LOW_READABLE_SCN_ERROR) {
+      cur_readable_scn.convert_from_ts(cur_readable_scn.convert_to_ts() - 1_s * abs(ERRSIM_GET_LOW_READABLE_SCN_ERROR));
+      LOG_WARN("set low readable_scn", KR(ret), K(cur_readable_scn), K(ObTimeUtility::current_time()),
+          K(ERRSIM_GET_LOW_READABLE_SCN_ERROR));
     }
     if (FAILEDx(ls->get_offline_scn(offline_scn))) {
       LOG_WARN("failed to get offline scn", KR(ret), K(arg), KPC(ls));

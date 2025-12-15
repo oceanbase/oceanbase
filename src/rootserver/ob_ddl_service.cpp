@@ -36862,8 +36862,6 @@ int ObDDLService::create_user_in_trans(share::schema::ObUserInfo &user_info,
 }
 //----End of functions for managing privileges----
 
-
-
 int ObDDLService::drop_index_to_recyclebin(const ObTableSchema &table_schema) {
   int ret = OB_SUCCESS;
   const ObTableSchema *data_table_schema = NULL;

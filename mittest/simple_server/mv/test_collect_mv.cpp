@@ -159,7 +159,7 @@ int ObCollectMV::do_balance_inner_(uint64_t tenant_id)
     ObBalanceJob job;
     if (OB_FAIL(b_svr->gather_stat_())) {
       LOG_WARN("failed to gather stat", KR(ret));
-    } else if (OB_FAIL(b_svr->gather_ls_status_stat(tenant_id, b_svr->ls_array_))) {
+    } else if (OB_FAIL(b_svr->gather_ls_status_stat(tenant_id, b_svr->ls_array_, true))) {
       LOG_WARN("failed to gather stat", KR(ret));
     } else if (OB_FAIL(ObBalanceJobTableOperator::get_balance_job(
                    tenant_id, false, *GCTX.sql_proxy_, job, start_time, finish_time))) {

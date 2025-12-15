@@ -1077,6 +1077,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"uninstall", UNINSTALL},
   {"unit", UNIT},
   {"unit_group", UNIT_GROUP},
+  {"unit_list", UNIT_LIST},
   {"unit_num", UNIT_NUM},
   {"unknown", UNKNOWN},
   {"unlock", UNLOCK},

@@ -3214,6 +3214,9 @@ int ObMemtable::get_tx_table_guard(ObTxTableGuard &tx_table_guard)
   if (OB_UNLIKELY(!ls_handle_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "ls_handle is invalid", K(ret));
+  } else if (ls_handle_.get_ls()->is_logonly_replica()) {
+    ret = OB_STATE_NOT_MATCH;
+    TRANS_LOG(WARN, "logonly replica has no tx table guard", KR(ret));
   } else if (OB_FAIL(ls_handle_.get_ls()->get_tx_table_guard(tx_table_guard))) {
     TRANS_LOG(WARN, "Get tx table guard from ls failed.", KR(ret));
   }

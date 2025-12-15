@@ -3532,7 +3532,7 @@ int ObTransferHandler::get_local_ls_member_list_(
   } else if (OB_ISNULL(log_handler = ls_->get_log_handler())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log handler should not be NULL", K(ret));
-  } else if (OB_FAIL(log_handler->get_paxos_member_list(member_list, paxos_replica_num))) {
+  } else if (OB_FAIL(log_handler->get_paxos_member_list(member_list, paxos_replica_num, true/*filter_logonly_replica*/))) {
     LOG_WARN("failed to get paxos member list", K(ret));
   } else if (member_list.get_member_number() <= 0) {
     ret = OB_ERR_UNEXPECTED;

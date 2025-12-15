@@ -254,6 +254,9 @@ private:
   int change_member_list_with_log_service_();
   int force_set_self_as_only_member_(ObLS *ls);
 #endif
+  int check_need_wait_log_replay_(
+      ObLS *ls,
+      bool &need_wait);
 
 private:
   static const int64_t IS_REPLAY_DONE_THRESHOLD_US = 3L * 1000 * 1000L;

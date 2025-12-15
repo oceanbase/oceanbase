@@ -90,7 +90,7 @@ int ObShrinkExpandResourcePoolChecker::check()
       } else {
         ObCurTraceId::init(GCONF.self_addr_);
         LOG_INFO("start check shrink resource pool", K(tenant_id));
-        if (OB_TMP_FAIL(check_shrink_resource_pool_finished_by_tenant_(tenant_id))) {
+        if (OB_TMP_FAIL(check_alter_unit_num_finished_by_tenant_(tenant_id))) {
           LOG_WARN("fail to check shrink resource pool finish", KR(ret), KR(tmp_ret), K(tenant_id));
         } else {} // no more to do
       }
@@ -100,13 +100,18 @@ int ObShrinkExpandResourcePoolChecker::check()
   return ret;
 }
 
-int ObShrinkExpandResourcePoolChecker::check_shrink_resource_pool_finished_by_tenant_(
+int ObShrinkExpandResourcePoolChecker::check_alter_unit_num_finished_by_tenant_(
     const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  ObArray<uint64_t> pool_ids;
-  bool in_shrinking = true;
-  bool is_finished = true;
+  bool altering_unit_num = true;
+  ObArray<share::ObUnit> unit_array;
+  ObUnitTableOperator unit_operator;
+  ObArray<common::ObAddr> delete_servers;
+  ObArray<uint64_t> delete_unit_ids;
+  ObArray<uint64_t> delete_unit_group_ids;
+  ObArray<uint64_t> adding_unit_ids;
+
   int64_t rs_job_id = 0;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -119,11 +124,13 @@ int ObShrinkExpandResourcePoolChecker::check_shrink_resource_pool_finished_by_te
   } else if (OB_ISNULL(sql_proxy_) || OB_ISNULL(unit_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ptr is null", KR(ret), KP(sql_proxy_), KP(unit_mgr_));
-  } else if (OB_FAIL(unit_mgr_->get_pool_ids_of_tenant(tenant_id, pool_ids))) {
-    LOG_WARN("fail to get resource pools", KR(ret), K(tenant_id));
-  } else if (OB_UNLIKELY(0 == pool_ids.count())) {
+  } else if (OB_FAIL(OB_FAIL(unit_operator.init(*sql_proxy_)))) {
+    LOG_WARN("failed to init unit operator", KR(ret));
+  } else if (OB_FAIL(unit_operator.get_units_by_tenant(tenant_id, unit_array))) {
+    LOG_WARN("failed to get unit array", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(0 == unit_array.count())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get tenant resource pool", KR(ret), K(tenant_id));
+    LOG_WARN("failed to get tenant unit", KR(ret), K(tenant_id));
   } else if (OB_FAIL(unit_mgr_->find_alter_resource_tenant_unit_num_rs_job(tenant_id, rs_job_id, *sql_proxy_))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
@@ -132,72 +139,87 @@ int ObShrinkExpandResourcePoolChecker::check_shrink_resource_pool_finished_by_te
       LOG_WARN("fail to find rs job", KR(ret), K(tenant_id), K(rs_job_id));
     }
   }
-  if (FAILEDx(unit_mgr_->check_pool_in_shrinking(pool_ids.at(0), in_shrinking))) {
-    LOG_WARN("failed to check resource pool in shrink", KR(ret), K(pool_ids));
-  } else if (!in_shrinking) {
-    // not in_shrinking means that the rs job created by a EXPAND task
-    // or a SHRINK task which has cleared deleting units in __all_unit table
+  if (FAILEDx(get_tenant_alter_unit_(unit_array, delete_servers, delete_unit_ids,
+          delete_unit_group_ids, adding_unit_ids))) {
+    LOG_WARN("failed to get tenant alter unit", KR(ret), K(unit_array));
+  } else if (delete_servers.count() != delete_unit_ids.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("delete server count is not expected", KR(ret), K(delete_servers), K(delete_unit_ids), K(unit_array));
+  } else if (adding_unit_ids.count() == 0 && delete_unit_ids.count() == 0) {
+    // not altering_unit_num means no DELETING or ADDING unit
     // check whether this task can be committed (i.e. ls is balanced)
     // if not exists, return OB_SUCCESS
     if (0 != rs_job_id
-            && OB_FAIL(ObRootUtils::check_ls_balance_and_commit_rs_job(
+        && OB_FAIL(ObRootUtils::check_ls_balance_and_commit_rs_job(
         tenant_id,
         rs_job_id,
         ObRsJobType::JOB_TYPE_ALTER_RESOURCE_TENANT_UNIT_NUM))) {
       LOG_WARN("fail to execute check_ls_balance_and_commit_rs_job", KR(ret), K(tenant_id));
     }
   } else {
-    //check shrink finish
-    //get all unit and server
-    ObArray<share::ObUnit> units;
-    ObArray<common::ObAddr> servers;
-    ObArray<uint64_t> unit_ids;
-    ObArray<uint64_t> unit_group_ids;
-    int tmp_ret = OB_SUCCESS;
-    int64_t job_id = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < pool_ids.count(); ++i) {
-      units.reset();
-      if (OB_FAIL(unit_mgr_->get_deleting_units_of_pool(pool_ids.at(i), units))) {
-        LOG_WARN("failed to get deleting unit", KR(ret), K(i), K(pool_ids));
-      } else if (OB_FAIL(extract_units_servers_and_ids_(units, servers, unit_ids, unit_group_ids))) {
-        LOG_WARN("failed to extract units server and ids", KR(ret), K(units));
+    LOG_INFO("has alter unit, need check ls balance finish", K(adding_unit_ids), K(delete_unit_ids));
+    // STEP 1. check if DELETING units have ls
+    bool is_finished = true;  // no ls on DELETING units
+    if (OB_SUCC(ret) && !delete_servers.empty()) {
+      if (OB_FAIL(check_shrink_resource_pool_finished_by_ls_(tenant_id,
+                delete_servers, delete_unit_ids, delete_unit_group_ids, is_finished))) {
+        LOG_WARN("failed to check shrink by ls", KR(ret), K(delete_servers), K(delete_unit_ids),
+            K(delete_unit_group_ids));
       }
-    }//end for get all unit group, units, server
-    if (FAILEDx(check_shrink_resource_pool_finished_by_ls_(tenant_id,
-                servers, unit_ids, unit_group_ids, is_finished))) {
-      LOG_WARN("failed to check shrink by ls", KR(ret), K(servers), K(unit_ids), K(unit_group_ids));
     }
-    if (OB_SUCC(ret) && is_finished) {
+    // STEP 2. check if ls is balanced
+    int check_ret = OB_SUCCESS;
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ObRootUtils::check_tenant_ls_balance(tenant_id, check_ret))) {
+        LOG_WARN("fail to execute check_tenant_ls_balance", KR(ret), K(tenant_id));
+      }
+    }
+    // STEP 3. commit shrink and expand IF no ls related to DELETING units and all ls is balanced
+    if (OB_SUCC(ret) && is_finished && OB_NEED_WAIT != check_ret) {
       // commit finish of the tenant
-      if (OB_FAIL(commit_tenant_shrink_resource_pool_(tenant_id))) { // shrink
-        LOG_WARN("failed to shrink tenant resource pool", KR(ret), K(tenant_id));
+      if (OB_FAIL(commit_tenant_alter_resource_pool_(tenant_id, unit_array))) { // shrink
+        LOG_WARN("failed to shrink tenant resource pool", KR(ret), K(tenant_id), K(unit_array));
       }
     }
   }
   return ret;
 }
 
-int ObShrinkExpandResourcePoolChecker::extract_units_servers_and_ids_(
-    const ObIArray<share::ObUnit> &units,
-    ObIArray<common::ObAddr> &servers,
-    ObIArray<uint64_t> &unit_ids,
-    ObIArray<uint64_t> &unit_group_ids)
+int ObShrinkExpandResourcePoolChecker::get_tenant_alter_unit_(
+      const ObIArray<share::ObUnit> &unit_array,
+      ObIArray<common::ObAddr> &delete_unit_servers,
+      ObIArray<uint64_t> &delete_unit_ids,
+      ObIArray<uint64_t> &delete_unit_group_ids,
+      ObIArray<uint64_t> &adding_unit_ids)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(0 == units.count())) {
+  delete_unit_servers.reset();
+  delete_unit_ids.reset();
+  delete_unit_group_ids.reset();
+  adding_unit_ids.reset();
+  if (OB_UNLIKELY(0 == unit_array.count())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("units is empty", KR(ret), K(units));
+    LOG_WARN("units is empty", KR(ret), K(unit_array));
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < units.count(); ++i) {
-    if (OB_FAIL(servers.push_back(units.at(i).server_))) {
-      LOG_WARN("fail to push back server", KR(ret), "server", units.at(i).server_);
-    } else if (OB_FAIL(unit_ids.push_back(units.at(i).unit_id_))) {
-      LOG_WARN("fail to push back unit id", KR(ret), "unit", units.at(i).unit_id_);
-    } else if (!has_exist_in_array(unit_group_ids, units.at(i).unit_group_id_)) {
-      if (OB_FAIL(unit_group_ids.push_back(units.at(i).unit_group_id_))) {
-        LOG_WARN("failed to push back unit group id", KR(ret), K(i), K(units));
+  for (int64_t i = 0; OB_SUCC(ret) && i < unit_array.count(); ++i) {
+    const ObUnit &unit = unit_array.at(i);
+    if (ObUnit::UNIT_STATUS_DELETING == unit.status_) {
+      if (OB_FAIL(delete_unit_servers.push_back(unit.server_))) {
+        LOG_WARN("failed to push back", KR(ret), K(i), K(unit));
+      } else if (OB_FAIL(delete_unit_ids.push_back(unit.unit_id_))) {
+        LOG_WARN("failed to push back", KR(ret), K(i), K(unit));
+      } else if (common::ObReplicaType::REPLICA_TYPE_LOGONLY == unit.replica_type_) {
+        // no unit group id, skip
+      } else if (!has_exist_in_array(delete_unit_group_ids, unit.unit_group_id_)) {
+        if (OB_FAIL(delete_unit_group_ids.push_back(unit.unit_group_id_))) {
+          LOG_WARN("failed to push back", KR(ret), K(i), K(unit));
+        }
       }
-    } else {} // no more to do
+    } else if (ObUnit::UNIT_STATUS_ADDING == unit.status_) {
+      if (OB_FAIL(adding_unit_ids.push_back(unit.unit_id_))) {
+        LOG_WARN("failed to push back", KR(ret), K(i), K(unit));
+      }
+    }
   }
   return ret;
 }
@@ -206,7 +228,7 @@ int ObShrinkExpandResourcePoolChecker::check_shrink_resource_pool_finished_by_ls
     const uint64_t tenant_id,
     const ObIArray<common::ObAddr> &servers,
     const ObIArray<uint64_t> &unit_ids,
-    const ObIArray<uint64_t> &unit_group_ids,
+    const ObIArray<uint64_t> &unit_group_ids,   // only for compatibility
     bool &is_finished)
 {
   int ret = OB_SUCCESS;
@@ -215,10 +237,9 @@ int ObShrinkExpandResourcePoolChecker::check_shrink_resource_pool_finished_by_ls
     ret = OB_NOT_INIT;
     LOG_WARN("ObShrinkExpandResourcePoolChecker not init", KR(ret));
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
-             || 0 == servers.count() || 0 == unit_ids.count()
-             || 0 == unit_group_ids.count())) {
+             || 0 == servers.count() || 0 == unit_ids.count())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(servers), K(unit_ids), K(unit_group_ids));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(servers), K(unit_ids));
   } else if (OB_FAIL(check_stop())) {
     LOG_WARN("ObShrinkExpandResourcePoolChecker stop", KR(ret));
   } else if (OB_ISNULL(sql_proxy_) || OB_ISNULL(unit_mgr_) || OB_ISNULL(lst_operator_)) {
@@ -239,7 +260,9 @@ int ObShrinkExpandResourcePoolChecker::check_shrink_resource_pool_finished_by_ls
       int64_t ls_replica_cnt = 0;
       if (OB_FAIL(check_stop())) {
         LOG_WARN("ObShrinkExpandResourcePoolChecker stopped", KR(ret));
-      } else if (has_exist_in_array(unit_group_ids, ls_status_info.unit_group_id_)) {
+      } else if (ls_status_info.unit_group_id_ != 0
+                 && has_exist_in_array(unit_group_ids, ls_status_info.unit_group_id_)) {
+        // only for compatibility
         is_finished = false;
         LOG_INFO("has ls in the unit group", KR(ret), K(ls_status_info));
       } else if (OB_FAIL(lst_operator_->get(
@@ -250,6 +273,16 @@ int ObShrinkExpandResourcePoolChecker::check_shrink_resource_pool_finished_by_ls
                 ls_info))) {
           LOG_WARN("fail to get ls info", KR(ret), K(ls_status_info));
       } else {
+        //检查日志流的unit_list是否还在unit_id里面
+        const ObUnitIDList &id_list = ls_status_info.get_unit_list();
+        ARRAY_FOREACH_X(id_list, idx, cnt, OB_SUCC(ret) && is_finished) {
+          const uint64_t unit_id = id_list.at(idx).id();
+          if (has_exist_in_array(unit_ids, unit_id)) {
+            is_finished = false;
+            LOG_INFO("the unit is on ls unit_list", K(ls_status_info), K(unit_id));
+          }
+        }
+        //检查实际上是否存在日志流分布
         for (int64_t j = 0; OB_SUCC(ret) && j < ls_info.get_replicas_cnt() && is_finished; ++j) {
           const share::ObLSReplica &ls_replica = ls_info.get_replicas().at(j);
           if (has_exist_in_array(servers, ls_replica.get_server())) {
@@ -257,7 +290,7 @@ int ObShrinkExpandResourcePoolChecker::check_shrink_resource_pool_finished_by_ls
             LOG_INFO("has ls in the server", KR(ret), K(ls_replica));
           } else if (has_exist_in_array(unit_ids, ls_replica.get_unit_id())) {
             is_finished = false;
-            LOG_INFO("has ls in the unit", KR(ret), K(ls_replica));
+            LOG_INFO("has ls replica in the unit", KR(ret), K(ls_replica));
           }
         }//end for each ls replica
       }
@@ -266,7 +299,9 @@ int ObShrinkExpandResourcePoolChecker::check_shrink_resource_pool_finished_by_ls
   return ret;
 }
 
-int ObShrinkExpandResourcePoolChecker::commit_tenant_shrink_resource_pool_(const uint64_t tenant_id)
+int ObShrinkExpandResourcePoolChecker::commit_tenant_alter_resource_pool_(
+    const uint64_t tenant_id,
+    const ObIArray<share::ObUnit> &unit_array)
 {
   int ret = OB_SUCCESS;
   DEBUG_SYNC(BEFORE_FINISH_UNIT_NUM);
@@ -281,8 +316,8 @@ int ObShrinkExpandResourcePoolChecker::commit_tenant_shrink_resource_pool_(const
   } else if (OB_ISNULL(unit_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ptr is null", KR(ret), KP(unit_mgr_));
-  } else if (OB_FAIL(unit_mgr_->commit_shrink_tenant_resource_pool(tenant_id))) {
-    LOG_WARN("fail to shrink resource pool", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(unit_mgr_->commit_alter_tenant_resource_unit_num(tenant_id, unit_array))) {
+    LOG_WARN("fail to shrink resource pool", KR(ret), K(tenant_id), K(unit_array));
   } else {} // no more to do
   return ret;
 }

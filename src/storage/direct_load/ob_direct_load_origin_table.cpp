@@ -132,6 +132,9 @@ int ObDirectLoadOriginTable::get_tablet_handle(ObTabletHandle &tablet_handle) co
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected ls is nullptr", KR(ret));
+    } else if (ls->is_logonly_replica()) {
+      ret = OB_STATE_NOT_MATCH;
+      LOG_WARN("logonly replica has no tablet", KR(ret), KPC(ls));
     } else if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle))) {
       LOG_WARN("fail to get tablet", KR(ret), K(tablet_id));
     }

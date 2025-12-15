@@ -209,6 +209,7 @@ public:
 private:
   int flush_ncomp_dll_job();
   int finish_upgrade_for_add_sys_priv();
+  int replace_unit_group_id_with_unit_list_();
 };
 
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 0, 0, 0)

@@ -213,7 +213,7 @@ int ObGlobalStatProxy::get_ddl_epoch(int64_t &ddl_epoch)
   return ret;
 }
 
-int ObGlobalStatProxy::get_current_data_version(uint64_t &current_data_version)
+int ObGlobalStatProxy::get_current_data_version(uint64_t &current_data_version, bool for_update)
 {
   int ret = OB_SUCCESS;
   current_data_version = 0;
@@ -222,8 +222,8 @@ int ObGlobalStatProxy::get_current_data_version(uint64_t &current_data_version)
   if (!is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), "self valid", is_valid());
-  } else if (OB_FAIL(get(list))) {
-    LOG_WARN("get failed", KR(ret));
+  } else if (OB_FAIL(get(list, for_update))) {
+    LOG_WARN("get failed", KR(ret), K(for_update));
   } else {
     current_data_version = static_cast<uint64_t>(item.value_);
   }

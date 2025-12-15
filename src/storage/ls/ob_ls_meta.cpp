@@ -37,7 +37,7 @@ ObLSMeta::ObLSMeta()
     update_lock_(),
     tenant_id_(OB_INVALID_TENANT_ID),
     ls_id_(),
-    unused_replica_type_(REPLICA_TYPE_FULL),
+    replica_type_(REPLICA_TYPE_FULL),
     ls_persistent_state_(),
     clog_checkpoint_scn_(ObScnRange::MIN_SCN),
     clog_base_lsn_(PALF_INITIAL_LSN_VAL),
@@ -64,7 +64,7 @@ ObLSMeta::ObLSMeta(const ObLSMeta &ls_meta)
     update_lock_(),
     tenant_id_(ls_meta.tenant_id_),
     ls_id_(ls_meta.ls_id_),
-    unused_replica_type_(ls_meta.unused_replica_type_),
+    replica_type_(ls_meta.replica_type_),
     ls_persistent_state_(ls_meta.ls_persistent_state_),
     clog_checkpoint_scn_(ls_meta.clog_checkpoint_scn_),
     clog_base_lsn_(ls_meta.clog_base_lsn_),
@@ -140,7 +140,7 @@ ObLSMeta &ObLSMeta::operator=(const ObLSMeta &other)
   if (this != &other) {
     tenant_id_ = other.tenant_id_;
     ls_id_ = other.ls_id_;
-    unused_replica_type_ = other.unused_replica_type_;
+    replica_type_ = other.replica_type_;
     ls_persistent_state_ = other.ls_persistent_state_;
     rebuild_seq_ = other.rebuild_seq_;
     migration_status_ = other.migration_status_;
@@ -170,7 +170,7 @@ void ObLSMeta::reset()
   tenant_id_ = OB_INVALID_TENANT_ID;
   ls_id_.reset();
   ls_epoch_ = 0;
-  unused_replica_type_ = REPLICA_TYPE_FULL;
+  replica_type_ = REPLICA_TYPE_FULL;
   clog_base_lsn_.reset();
   clog_checkpoint_scn_ = ObScnRange::MIN_SCN;
   rebuild_seq_ = -1;
@@ -803,7 +803,8 @@ int ObLSMeta::init(
     const share::ObLSRestoreStatus &restore_status,
     const SCN &create_scn,
     const ObMajorMVMergeInfo &major_mv_merge_info,
-    const ObLSStoreFormat &store_format)
+    const ObLSStoreFormat &store_format,
+    const ObReplicaType &replica_type)
 {
   int ret = OB_SUCCESS;
   if (OB_INVALID_ID == tenant_id || !ls_id.is_valid()
@@ -826,6 +827,7 @@ int ObLSMeta::init(
     transfer_scn_ = SCN::min_scn();
     major_mv_merge_info_ = major_mv_merge_info;
     store_format_ = store_format;
+    replica_type_ = replica_type;
   }
   return ret;
 }
@@ -1204,7 +1206,7 @@ ObLSMeta::ObReentrantRLockGuard::~ObReentrantRLockGuard()
 OB_SERIALIZE_MEMBER(ObLSMeta,
                     tenant_id_,
                     ls_id_,
-                    unused_replica_type_,
+                    replica_type_,          // FARM COMPAT WHITELIST
                     ls_persistent_state_,   // FARM COMPAT WHITELIST
                     clog_checkpoint_scn_,
                     clog_base_lsn_,

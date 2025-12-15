@@ -164,6 +164,9 @@ int ObTabletReplayExecutor::replay_get_tablet_(
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "log stream should not be NULL", KR(ret), K(scn));
+  } else if (ls->is_logonly_replica()) {
+    ret = OB_STATE_NOT_MATCH;
+    CLOG_LOG(WARN, "logonly replica do not need to replay", KR(ret), KPC(ls));
   } else {
     const share::ObLSID &ls_id = ls->get_ls_id();
     if (is_replay_update_tablet_status_() || is_replay_ddl_control_log_()) {
@@ -236,6 +239,9 @@ int ObTabletReplayExecutor::check_can_skip_replay_(
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "log stream should not be NULL", KR(ret), K(scn));
+  } else if (ls->is_logonly_replica()) {
+    can_skip = true;
+    CLOG_LOG(INFO, "logonly replica do not need to replay", KPC(ls));
   } else if (FALSE_IT(tablet_change_scn = ls->get_tablet_change_checkpoint_scn())) {
   } else if (scn <= tablet_change_scn) {
     can_skip = true;
@@ -274,6 +280,9 @@ int ObTabletReplayExecutor::replay_to_mds_table_(
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(WARN, "ls is null", K(ret), K(ls_id), KP(ls));
+    } else if (ls->is_logonly_replica()) {
+      ret = OB_STATE_NOT_MATCH;
+      CLOG_LOG(WARN, "logonly replica do not need to replay", KR(ret), KPC(ls));
     } else if (for_old_mds) {
       if (OB_FAIL(ls->get_tablet_svr()->set_tablet_status(tablet_id, mds, ctx))) {
         CLOG_LOG(WARN, "failed to set mds data", K(ret), K(ls_id), K(tablet_id), K(scn), K(mds));
@@ -316,6 +325,9 @@ int ObTabletReplayExecutor::replay_to_mds_table_(
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(WARN, "ls is null", K(ret), K(ls_id), KP(ls));
+    } else if (ls->is_logonly_replica()) {
+      ret = OB_STATE_NOT_MATCH;
+      CLOG_LOG(WARN, "logonly replica do not need to replay", KR(ret), KPC(ls));
     } else if (for_old_mds) {
       if (OB_FAIL(ls->get_tablet_svr()->set_ddl_info(tablet_id, mds, ctx, 0))) {
         CLOG_LOG(WARN, "failed to save tablet binding info", K(ret), K(ls_id), K(tablet_id), K(scn), K(mds));

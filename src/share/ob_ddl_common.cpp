@@ -3691,6 +3691,9 @@ int ObDDLUtil::ddl_get_tablet(
   if (OB_ISNULL(ls)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls should not be null", K(ret));
+  } else if (ls->is_logonly_replica()) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("should not be logonly replica", KR(ret), KPC(ls));
   } else if (OB_FAIL(ls->get_tablet_svr()->get_tablet_with_timeout(tablet_id,
                                                                    tablet_handle,
                                                                    timeout_ts,
