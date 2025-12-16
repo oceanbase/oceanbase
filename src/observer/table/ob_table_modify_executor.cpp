@@ -546,6 +546,7 @@ int ObTableApiModifyExecutor::modify_htable_timestamp(const ObITableEntity *enti
       LOG_WARN("invalid argument for htable put", K(ret), K(row_is_null), K(timestamp_is_null));
     } else if (ObHTableConstants::LATEST_TIMESTAMP == timestamp) { // update timestamp iff LATEST_TIMESTAMP
       t_obj.set_int(now_ms);
+      const_cast<ObITableEntity*>(entity)->set_user_specific_T(false);
     }
   }
 

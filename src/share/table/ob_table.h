@@ -224,6 +224,8 @@ public:
   common::ObIAllocator *get_allocator() { return alloc_; }
   virtual common::ObTabletID get_tablet_id() const { return common::ObTabletID(ObTabletID::INVALID_TABLET_ID); }
   virtual void set_tablet_id(common::ObTabletID tablet_id) { UNUSED(tablet_id); }
+  virtual bool is_user_specific_T() const { return true; }
+  virtual void set_user_specific_T(bool is_user_specific_T) { UNUSED(is_user_specific_T); }
   VIRTUAL_TO_STRING_KV("ITableEntity", "");
 protected:
   common::ObIAllocator *alloc_;  // for deep copy in deserialize
@@ -281,7 +283,8 @@ public:
   OB_INLINE virtual const ObIArray<ObObj>& get_rowkey_objs() const { return rowkey_; };
   virtual common::ObTabletID get_tablet_id() const { return tablet_id_; }
   virtual void set_tablet_id(common::ObTabletID tablet_id) { tablet_id_ = tablet_id; }
-
+  virtual bool is_user_specific_T() const { return is_user_specific_T_; }
+  virtual void set_user_specific_T(bool is_user_specific_T) { is_user_specific_T_ = is_user_specific_T; }
   DECLARE_TO_STRING;
 private:
   bool has_exist_in_properties(const ObString &name, int64_t *idx = nullptr) const;
@@ -291,6 +294,7 @@ protected:
   ObSEArray<ObObj, 32> properties_values_;
   ObSEArray<ObString, 8> rowkey_names_;
   common::ObTabletID tablet_id_; // no need serialization
+  bool is_user_specific_T_; // no need serialization
 };
 
 // @note not thread-safe

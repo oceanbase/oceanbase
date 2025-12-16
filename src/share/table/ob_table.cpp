@@ -278,6 +278,7 @@ int ObITableEntity::add_retrieve_property(const ObString &prop_name)
 
 ////////////////////////////////////////////////////////////////
 ObTableEntity::ObTableEntity()
+    : is_user_specific_T_(true)
 {
   rowkey_.set_attr(ObMemAttr(MTL_ID(), "TblEntRk"));
   properties_names_.set_attr(ObMemAttr(MTL_ID(), "TblEntPropN"));
@@ -293,6 +294,7 @@ void ObTableEntity::reset()
   properties_names_.reset();
   properties_values_.reset();
   tablet_id_.reset();
+  is_user_specific_T_ = true;
 }
 
 int ObTableEntity::construct_names_bitmap(const ObITableEntity &req_entity)

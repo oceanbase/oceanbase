@@ -664,23 +664,9 @@ int ObTableApiProcessorBase::process_with_retry(const ObString &credential, cons
           LOG_WARN("process timeout", K(ret), K(now), K(timeout_ts));
           did_local_retry = false;
         } else {
-          if (OB_TRY_LOCK_ROW_CONFLICT == ret) {
-            // throw to queue and retry
-            if (retry_policy_.allow_rpc_retry() && THIS_WORKER.can_retry()) {
-              THIS_WORKER.set_need_retry();
-              LOG_DEBUG("set retry flag and retry later when lock available");
-              need_retry_in_queue_ = true;
-            } else {
-              // retry in current thread
-              did_local_retry = true;
-            }
-          } else if (OB_TRANSACTION_SET_VIOLATION == ret) {
+          did_local_retry = true;
+          if (OB_TRANSACTION_SET_VIOLATION == ret) {
             EVENT_INC(TABLEAPI_TSC_VIOLATE_COUNT);
-            did_local_retry = true;
-            // @todo sleep for is_master_changed_error(ret) etc. ?
-          } else if (OB_SCHEMA_EAGAIN == ret) {
-            // retry in current thread
-            did_local_retry = true;
           }
         }
       }

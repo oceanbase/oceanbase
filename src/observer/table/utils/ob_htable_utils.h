@@ -452,6 +452,9 @@ public:
   static int64_t current_time_millis() { return common::ObTimeUtility::current_time() / 1000; }
   static int java_bytes_to_int64(const ObString &bytes, int64_t &val);
   static int int64_to_java_bytes(int64_t val, char bytes[8]);
+  // Adjust HBase operation timestamps by adding random offset (0-999) to avoid lock conflicts
+  // This function should be called when OB_TRY_LOCK_ROW_CONFLICT is encountered
+  static int adjust_htable_timestamps_for_retry(common::ObIArray<ObTableOperation> &ops);
   // lock all rows of mutations in the given lock mode with the given lock handle,
   // for put, delete, mutations in check_and_xxx
   static int lock_htable_rows(uint64_t table_id, const ObIArray<table::ObTableOperation> &ops, ObHTableLockHandle &handle, ObHTableLockMode lock_mode);

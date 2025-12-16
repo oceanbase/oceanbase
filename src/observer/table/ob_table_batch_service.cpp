@@ -658,7 +658,16 @@ int ObTableBatchService::htable_put(ObTableBatchCtx &ctx,
       LOG_WARN("fail to get insert spec", K(ret));
     } else {
       if (OB_FAIL(multi_op_in_executor(ctx, *spec, ops, results))) {
-        LOG_WARN("fail to do multi operarion in executor", K(ret));
+        if (OB_TRY_LOCK_ROW_CONFLICT == ret || OB_TRANSACTION_SET_VIOLATION == ret) {
+          // Adjust timestamps directly on ops to avoid lock conflicts
+          int tmp_ret = OB_SUCCESS;
+          ObIArray<ObTableOperation> &mutable_ops = const_cast<ObIArray<ObTableOperation> &>(ops);
+          if (OB_TMP_FAIL(ObHTableUtils::adjust_htable_timestamps_for_retry(mutable_ops))) {
+            LOG_WARN("fail to adjust htable timestamps for retry", K(ret), K(tmp_ret));
+          }
+        } else {
+          LOG_WARN("fail to do multi operarion in executor", K(ret));
+        }
       } else {
         for (int64_t i = 0; i < results.count(); ++i) {
           const ObTableOperationResult &op_result = results.at(i);

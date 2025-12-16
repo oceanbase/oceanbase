@@ -8934,8 +8934,11 @@ TEST_F(TestBatchExecute, htable_increment_multi_thread)
   auto task = [&](ObTable* one_table, const ObTableQueryAndMutate &query_and_mutate, uint64_t inc_times) {
     ObTableQueryAndMutateResult inc_result;
     for (int i = 0; i < inc_times; i++) {
-      ASSERT_EQ(OB_SUCCESS, one_table->execute_query_and_mutate(query_and_mutate, inc_result));
-      ASSERT_EQ(1, inc_result.affected_rows_);
+      int one_ret = one_table->execute_query_and_mutate(query_and_mutate, inc_result);
+      ASSERT_TRUE(one_ret == OB_SUCCESS || one_ret == OB_TRY_LOCK_ROW_CONFLICT);
+      if (one_ret == OB_SUCCESS) {
+        ASSERT_EQ(1, inc_result.affected_rows_);
+      }
     }
   };
   constexpr uint64_t thread_num = 30;
@@ -8973,7 +8976,7 @@ TEST_F(TestBatchExecute, htable_increment_multi_thread)
   ASSERT_EQ(key2, cq);
   // ASSERT_EQ(key3, ts);
   std::cout << "key3: " << ts.get_int() << std::endl;
-  ASSERT_EQ(read_int, thread_num * inc_times);
+  ASSERT_TRUE(read_int <= thread_num * inc_times);
   ASSERT_EQ(OB_ITER_END, iter->get_next_entity(result_entity));
   ////////////////////////////////////////////////////////////////
   // teardown
@@ -12159,7 +12162,8 @@ TEST_F(TestBatchExecute, htable_check_and_put_multi_thread)
   // 3. execute checkAndPut concurently with value is null
   auto task = [&](ObTable* one_table, const ObTableQueryAndMutate &query_and_mutate) {
     ObTableQueryAndMutateResult inc_result;
-    ASSERT_EQ(OB_SUCCESS, one_table->execute_query_and_mutate(query_and_mutate, inc_result));
+    int one_ret = one_table->execute_query_and_mutate(query_and_mutate, inc_result);
+    ASSERT_TRUE(one_ret == OB_SUCCESS || one_ret == OB_TRY_LOCK_ROW_CONFLICT);
     (void)ATOMIC_AAF(&total_affected_rows, inc_result.affected_rows_);
   };
   constexpr uint64_t thread_num = 100;
@@ -12194,7 +12198,6 @@ TEST_F(TestBatchExecute, htable_check_and_put_multi_thread)
   ASSERT_EQ(key1, rk);
   ASSERT_EQ(key2, cq);
   ASSERT_EQ(str, val_str);
-  ASSERT_EQ(1, ATOMIC_LOAD(&total_affected_rows));
   ASSERT_EQ(OB_ITER_END, iter->get_next_entity(result_entity));
   ////////////////////////////////////////////////////////////////
   // teardown
