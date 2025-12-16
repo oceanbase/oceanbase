@@ -7609,7 +7609,7 @@ int ObSelectLogPlan::create_range_list_dist_win_func(ObLogicalOperator *top,
                                                      ObIArray<CandidatePlan> &all_plans)
 {
   int ret = OB_SUCCESS;
-  bool need_sort = false;
+  bool need_sort = true;
   int64_t prefix_pos = 0;
   ObSEArray<OrderItem, 8> range_dist_keys;
   int64_t pby_prefix = 0;
@@ -7626,16 +7626,6 @@ int ObSelectLogPlan::create_range_list_dist_win_func(ObLogicalOperator *top,
   } else if (OB_FAIL(get_range_dist_keys(win_func_helper, win_func_exprs.at(0),
                                          range_dist_keys, pby_prefix))) {
     LOG_WARN("failed to get range list keys", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::check_need_sort(range_dist_keys,
-                                                      top->get_op_ordering(),
-                                                      top->get_fd_item_set(),
-                                                      top->get_output_equal_sets(),
-                                                      top->get_output_const_exprs(),
-                                                      get_onetime_query_refs(),
-                                                      top->get_is_at_most_one_row(),
-                                                      need_sort,
-                                                      prefix_pos))) {
-    LOG_WARN("failed to check if need sort", K(ret));
   } else if (OB_FAIL(get_range_list_win_func_exchange_info(win_func_helper.win_dist_method_,
                                                            range_dist_keys,
                                                            exch_info,
