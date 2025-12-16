@@ -773,12 +773,12 @@ int ObTenantTransferService::lock_table_and_part_(
       } else if (table_schema->is_oracle_tmp_table_v2() && OB_FAIL(get_temp_tablet_ids_can_be_transferred_for_oracle_tmp_table_v2_(
           related_table_schemas.count() + 1/*data_table*/,
           tablet_ids,
-          tablet_ids_get_by_table_id))) {  // tablet_ids_get_by_table_id may be cleared
+          tablet_ids_get_by_table_id))) {  // tablet_ids_get_by_table_id can not be empty, contain at least one temporary tablet
         LOG_WARN("get temp tablet ids can be transferred for oracle tmp table v2 failed", KR(ret), K(related_table_schemas.count()),
           K(tablet_ids_get_by_table_id));
       } else if (OB_FAIL(check_tablet_count_by_threshold_(
           tablet_ids,
-          (related_table_schemas.count() + 1/*data_table*/) * OB_MAX(tablet_ids_get_by_table_id.count(), 1),
+          (related_table_schemas.count() + 1/*data_table*/) * tablet_ids_get_by_table_id.count(),
           exceed_tablet_count_threshold))) {
         LOG_WARN("check tablet count by threshold failed", KR(ret), "tablet_ids_count", tablet_ids.count(),
             "related_table_count", related_table_schemas.count());
@@ -1381,7 +1381,7 @@ int ObTenantTransferService::get_temp_tablet_ids_can_be_transferred_for_oracle_t
     // M' = MAX(0, floor((L - K) / (N + 1)))
     int64_t tablet_count_can_be_transferred =
       static_cast<int64_t>(floor((limit_tablet_count - tablet_count_will_be_transferred) * 1.0 / related_table_count));
-    tablet_count_can_be_transferred = OB_MAX(tablet_count_can_be_transferred, 0);
+    tablet_count_can_be_transferred = OB_MAX(tablet_count_can_be_transferred, 1); // at least 1 session can be transferred
     while (tablet_ids_get_by_table_id.count() > tablet_count_can_be_transferred) {
       tablet_ids_get_by_table_id.pop_back();
       drop_count++;
