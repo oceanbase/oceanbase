@@ -11,6 +11,7 @@
  */
 
 #include "lib/atomic/ob_atomic.h"
+#include "common/ob_clock_generator.h"
 
 namespace oceanbase
 {
@@ -34,7 +35,9 @@ ObPool<BlockAllocatorT, LockT>::ObPool(int64_t obj_size, int64_t block_size,
     LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "obj_size_ < size of FreeNode");
   } else {}
   if (block_size_ < (obj_size_ + static_cast<int64_t>(sizeof(BlockHeader)))) {
-    LIB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "obj size larger than block size", K(obj_size_), K(block_size_));
+    if (REACH_TIME_INTERVAL(1 * 1000 * 1000L)) { // 1s
+      LIB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "obj size larger than block size", K(obj_size_), K(block_size_));
+    }
     block_size_ = obj_size_ + sizeof(BlockHeader);
   } else {}
 }
