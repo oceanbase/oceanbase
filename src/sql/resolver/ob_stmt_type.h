@@ -405,6 +405,7 @@ OB_STMT_TYPE_DEF_UNKNOWN_AT(T_HBASE_BATCH_PUT, err_stmt_type_priv, 399)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_HBASE_BATCH_DELETE, err_stmt_type_priv, 400)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_HBASE_BATCH_GET, err_stmt_type_priv, 401)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_SET_PROTECTION_MODE, get_sys_tenant_super_priv, 402)
+OB_STMT_TYPE_DEF_UNKNOWN_AT(T_PREWARM_SS_LOCAL_CACHE, get_sys_tenant_alter_system_priv, 403)
 
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_MAX, err_stmt_type_priv, 500)
 #endif

@@ -3001,6 +3001,8 @@ typedef enum ObItemType
   T_DSL_QUERY = 4945, // hybrid search dsl query
   T_DISABLE_PARALLEL_PARSE_SINGLE_CSV = 4946, // disable parallel parse single csv
   T_TTL_DEFINITION_WITH_TYPE = 4947,
+  T_WITH_INDEX = 4948, // prewarm data table with index table
+  T_PREWARM_SS_LOCAL_CACHE = 4949, // prewarm data into ss_local_cache
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
