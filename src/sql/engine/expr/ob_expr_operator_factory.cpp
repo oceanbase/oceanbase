@@ -525,6 +525,7 @@
 #include "sql/engine/expr/ob_expr_local_dynamic_filter.h"
 #include "sql/engine/expr/ob_expr_semantic_distance.h"
 #include "sql/engine/expr/ob_expr_bucket.h"
+#include "sql/engine/expr/ob_expr_void.h"
 #include "sql/engine/expr/ob_expr_ai/ob_expr_ai_prompt.h"
 #include "sql/engine/expr/ob_expr_vector_similarity.h"
 #include "sql/engine/expr/ob_expr_md5_concat_ws.h"
@@ -1329,6 +1330,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprBucket);
     REG_OP(ObExprVectorL2Squared);
     REG_OP(ObExprAIPrompt);
+    REG_OP(ObExprVoid);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
