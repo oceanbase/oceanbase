@@ -26,6 +26,7 @@
 #include "share/ob_tablet_reorganize_history_table_operator.h"
 #include "lib/wait_event/ob_wait_event.h"
 #include "share/backup/ob_backup_helper.h"
+#include "storage/compaction/ob_partition_merge_policy.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -33,6 +34,7 @@ using namespace oceanbase::share;
 using namespace oceanbase::storage;
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::palf;
+using namespace oceanbase::transaction;
 
 namespace oceanbase {
 namespace backup {
@@ -540,38 +542,62 @@ int ObBackupUtils::check_tablet_inc_major_ddl_sstable_validity_(
     const common::ObIArray<storage::ObSSTableWrapper> &ddl_sstable_array)
 {
   int ret = OB_SUCCESS;
-  ObTablet *tablet = NULL;
-  ObITable *last_table_ptr = NULL;
-  SCN compact_start_scn = SCN::min_scn();
-  SCN compact_end_scn = SCN::min_scn();
-  SCN rec_scn = SCN::min_scn();
-  ObTableStoreIterator ddl_table_iter;
-  bool is_data_complete = false;
+  ObTablet *tablet = nullptr;
   if (ddl_sstable_array.empty()) {
     // do nothing
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid tablet handle", K(ret), K(tablet_handle));
-  } else if (OB_ISNULL(last_table_ptr = ddl_sstable_array.at(ddl_sstable_array.count() - 1).get_sstable())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get invalid table ptr", K(ret), K(ddl_sstable_array));
-  } else if (!last_table_ptr->is_inc_major_ddl_dump_sstable()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table ptr not correct", K(ret), KPC(last_table_ptr));
-  } else if (OB_FAIL(tablet_handle.get_obj()->get_inc_major_ddl_sstables(ddl_table_iter))) {
-    LOG_WARN("failed to get inc major ddl sstables", K(ret), K(tablet_handle));
-  } else if (OB_FAIL(ObTabletDDLUtil::check_data_continue(ddl_table_iter,
-                                                          is_data_complete,
-                                                          compact_start_scn,
-                                                          compact_end_scn,
-                                                          rec_scn))) {
-    LOG_WARN("failed to check data integrity", K(ret), K(ddl_table_iter));
-  } else if (!is_data_complete) {
-    ret = OB_INVALID_TABLE_STORE;
-    LOG_WARN("get invalid ddl table store", K(ret), K(tablet_handle), K(ddl_sstable_array), K(ddl_table_iter));
+    LOG_WARN("invalid tablet handle", KR(ret), K(tablet_handle));
   } else {
-    LOG_INFO("check data intergirty", K(tablet_handle), K(compact_start_scn),
-        K(compact_end_scn), K(ddl_table_iter), K(is_data_complete));
+    // The inc_major_ddl_dump_sstable array may contain sstables from multiple transactions,
+    // and data continuity check can only be done within the same transaction.
+    // So we need to group sstables by trans_id & seq_no and check data continuity for each group.
+    const ObTabletID &tablet_id = tablet->get_tablet_id();
+    ObTransID prev_trans_id;
+    ObTxSEQ prev_seq_no;
+    ObTransID cur_trans_id;
+    ObTxSEQ cur_seq_no;
+    for (int64_t i = 0; OB_SUCC(ret) && i < ddl_sstable_array.count(); ++i) {
+      const ObSSTable *sstable = ddl_sstable_array.at(i).get_sstable();
+      if (OB_ISNULL(sstable)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("sstable is null", KR(ret), K(i));
+      } else if (OB_UNLIKELY(!sstable->is_inc_major_ddl_dump_sstable())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected sstable type", KR(ret), KPC(sstable));
+      } else if (OB_FAIL(compaction::ObIncMajorTxHelper::get_trans_id_and_seq_no_from_sstable(
+          sstable, cur_trans_id, cur_seq_no))) {
+        LOG_WARN("failed to get trans id and seq no from sstable", KR(ret), KPC(sstable));
+      } else if ((cur_trans_id == prev_trans_id) && (cur_seq_no == prev_seq_no)) {
+        // same transaction, already checked
+        continue;
+      } else {
+        prev_trans_id = cur_trans_id;
+        prev_seq_no = cur_seq_no;
+        // check data continuity for this transaction
+        ObTableStoreIterator ddl_table_iter;
+        SCN compact_start_scn = SCN::min_scn();
+        SCN compact_end_scn = SCN::min_scn();
+        SCN rec_scn = SCN::min_scn();
+        bool is_data_complete = false;
+        if (OB_FAIL(tablet->get_inc_major_ddl_sstables(ddl_table_iter, cur_trans_id, cur_seq_no))) {
+          LOG_WARN("failed to get inc major ddl sstables", KR(ret), K(tablet_id), K(cur_trans_id), K(cur_seq_no));
+        } else if (OB_FAIL(ObTabletDDLUtil::check_data_continue(ddl_table_iter,
+                                                                is_data_complete,
+                                                                compact_start_scn,
+                                                                compact_end_scn,
+                                                                rec_scn))) {
+          LOG_WARN("failed to check data integrity", KR(ret), K(tablet_id), K(ddl_table_iter), K(cur_trans_id), K(cur_seq_no));
+        } else if (OB_UNLIKELY(!is_data_complete)) {
+          ret = OB_INVALID_TABLE_STORE;
+          LOG_WARN("get invalid ddl table store", KR(ret), K(tablet_id), K(ddl_sstable_array),
+              K(ddl_table_iter), K(cur_trans_id), K(cur_seq_no));
+        } else {
+          LOG_INFO("check data integrity for inc_major_ddl_dump_sstable", K(tablet_id), K(compact_start_scn),
+              K(compact_end_scn), K(ddl_table_iter), K(is_data_complete), K(cur_trans_id), K(cur_seq_no));
+        }
+      }
+    }
   }
   return ret;
 }
