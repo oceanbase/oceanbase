@@ -243,10 +243,7 @@ int ObAllVirtualDbaSource::split_text_into_lines(const ObString &text, ObArray<O
   for (const char *p = start; p < end; ++p) {
     if (*p == '\n' || *p == '\r') {
       if (p > line_start) {
-        ObString line;
-        line.assign_ptr(line_start, static_cast<int32_t>(p - line_start));
-        if (OB_FAIL(lines.push_back(line))) {
-          SERVER_LOG(WARN, "fail to push back line", K(ret));
+        if (OB_FAIL(push_line_segments(line_start, p - line_start, lines))) {
           break;
         }
       }
@@ -259,13 +256,42 @@ int ObAllVirtualDbaSource::split_text_into_lines(const ObString &text, ObArray<O
   }
 
   if (OB_SUCC(ret) && line_start < end) {
-    ObString line;
-    line.assign_ptr(line_start, static_cast<int32_t>(end - line_start));
-    if (OB_FAIL(lines.push_back(line))) {
+    if (OB_FAIL(push_line_segments(line_start, end - line_start, lines))) {
       SERVER_LOG(WARN, "fail to push back last line", K(ret));
     }
   }
 
+  return ret;
+}
+
+int ObAllVirtualDbaSource::push_line_segments(const char *seg_start,
+                         int64_t seg_len,
+                         common::ObArray<common::ObString> &lines)
+{
+  int ret = OB_SUCCESS;
+  const int64_t text_col_limit = 4000;
+  const bool need_chunk = (lib::is_oracle_mode()) && (seg_len > text_col_limit);
+  if (!need_chunk) {
+    ObString line;
+    line.assign_ptr(seg_start, static_cast<int32_t>(seg_len));
+    if (OB_FAIL(lines.push_back(line))) {
+      SERVER_LOG(WARN, "fail to push back line", K(ret));
+    }
+  } else {
+    while (OB_SUCC(ret) && seg_len > 0) {
+      const int64_t chunk_len = seg_len > text_col_limit
+                                  ? text_col_limit
+                                  : seg_len;
+      ObString line;
+      line.assign_ptr(seg_start, static_cast<int32_t>(chunk_len));
+      if (OB_FAIL(lines.push_back(line))) {
+        SERVER_LOG(WARN, "fail to push back line", K(ret));
+        break;
+      }
+      seg_start += chunk_len;
+      seg_len -= chunk_len;
+    }
+  }
   return ret;
 }
 
