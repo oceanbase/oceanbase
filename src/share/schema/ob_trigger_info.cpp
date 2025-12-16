@@ -387,7 +387,8 @@ int ObTriggerInfo::gen_package_source(const uint64_t tenant_id,
                                       common::ObString &source,
                                       bool is_header,
                                       share::schema::ObSchemaGetterGuard &schema_guard,
-                                      common::ObIAllocator &alloc)
+                                      common::ObIAllocator &alloc,
+                                      sql::ObSQLSessionInfo *session)
 {
   int ret = OB_SUCCESS;
   ParseResult parse_result;
@@ -419,7 +420,7 @@ int ObTriggerInfo::gen_package_source(const uint64_t tenant_id,
       ObString body_source;
       if (OB_SUCC(ret) && T_SP_PRE_STMTS == trigger_source_node->type_) {
         OZ (pl::ObPLResolver::resolve_condition_compile(alloc,
-                                                        NULL,
+                                                        session,
                                                         &schema_guard,
                                                         NULL,
                                                         NULL,

@@ -774,7 +774,8 @@ if (OB_SUCC(ret)) {                                                             
                                           source,                                             \
                                           PL_PACKAGE_SPEC == package_type,                    \
                                           resolve_ctx.schema_guard_,                          \
-                                          local_alloc));                                      \
+                                          local_alloc,                                        \
+                                          &resolve_ctx.session_info_));                       \
   } else {                                                                                    \
     source = package_info->get_source();                                                      \
   }                                                                                           \
@@ -1259,7 +1260,8 @@ int ObPLPackageManager::load_package_body(const ObPLResolveCtx &resolve_ctx,
                                             source,
                                             share::schema::PACKAGE_TYPE,
                                             resolve_ctx.schema_guard_,
-                                            tmp_alloc));
+                                            tmp_alloc,
+                                            &resolve_ctx.session_info_));
     } else {
       source = package_spec_info.get_source();
     }

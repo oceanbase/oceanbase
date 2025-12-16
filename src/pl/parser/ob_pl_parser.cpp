@@ -332,7 +332,8 @@ int ObPLParser::parse_package(const ObString &package,
                               bool is_for_trigger,
                               bool & is_wrap,
                               const ObTriggerInfo *trg_info,
-                              bool need_unwrap)
+                              bool need_unwrap,
+                              sql::ObSQLSessionInfo *session)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_pl_parse);
   int ret = OB_SUCCESS;
@@ -374,14 +375,15 @@ int ObPLParser::parse_package(const ObString &package,
                                        is_for_trigger,
                                        is_wrap,
                                        trg_info,
-                                       false))) {
+                                       false,
+                                       session))) {
         LOG_WARN("failed to parse unwrapped type or package", K(ret));
       }
     }
     is_wrap = true;
 #endif
   } else if (is_for_trigger && OB_NOT_NULL(trg_info) && lib::is_oracle_mode()) {
-    OZ (reconstruct_trigger_package(package_stmt, trg_info, dtc_params, schema_guard));
+    OZ (reconstruct_trigger_package(package_stmt, trg_info, dtc_params, schema_guard, session));
   }
   return ret;
 }
@@ -450,7 +452,8 @@ int ObPLParser::parse_stmt_block(ObParseCtx &parse_ctx, ObStmtNodeTree *&multi_s
 int ObPLParser::reconstruct_trigger_package(ObStmtNodeTree *&package_stmt,
                                             const ObTriggerInfo *trg_info,
                                             const ObDataTypeCastParams &dtc_params,
-                                            share::schema::ObSchemaGetterGuard *schema_guard)
+                                            share::schema::ObSchemaGetterGuard *schema_guard,
+                                            sql::ObSQLSessionInfo *session)
 {
   int ret = OB_SUCCESS;
   ObString trg_define;
@@ -495,7 +498,7 @@ int ObPLParser::reconstruct_trigger_package(ObStmtNodeTree *&package_stmt,
       if (OB_SUCC(ret) && T_SP_PRE_STMTS == trigger_source_node->type_) {
         OV (OB_NOT_NULL(schema_guard));
         OZ (pl::ObPLResolver::resolve_condition_compile(allocator_, 
-                                                        NULL,
+                                                        session,
                                                         schema_guard,
                                                         NULL,
                                                         NULL,
