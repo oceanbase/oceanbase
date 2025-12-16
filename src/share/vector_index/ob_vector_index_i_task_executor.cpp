@@ -387,7 +387,7 @@ int ObVecITaskExecutor::clear_old_task_ctx_if_need()
           K(ls_->get_ls_id()), K(all_task_is_finish));
       }
     } else {
-      LOG_DEBUG("not reset vector async task ctx memory",
+      LOG_INFO("not reset vector async task ctx memory",
         K(ret), K(all_task_is_finish), K(task_opt.get_ls_processing_task_cnt()));
     }
   }

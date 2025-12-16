@@ -1565,6 +1565,7 @@ void ObVecIndexAsyncTaskHandler::handle(void *task)
   int ret = OB_SUCCESS;
   ObVecIndexIAsyncTask *async_task = nullptr;
   bool is_cancel = false;
+  bool error_code_set = true;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("handler is not init", KR(ret));
@@ -1594,7 +1595,9 @@ void ObVecIndexAsyncTaskHandler::handle(void *task)
         }
       }
       if (OB_FAIL(ret)) {
+        error_code_set = false;
       } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::check_task_is_cancel(task_ctx, is_cancel))) {
+        error_code_set = false;
         LOG_WARN("fail to check task is cancel", K(task_ctx));
       } else if (is_cancel || (OB_NOT_NULL(vector_index_service) && vector_index_service->get_vec_async_task_handle().is_stopped())) {
         async_task->check_task_free();
@@ -1607,8 +1610,17 @@ void ObVecIndexAsyncTaskHandler::handle(void *task)
       LOG_WARN("unexpected task type", K(ret), KPC(async_task));
     }
   }
-  if (OB_NOT_NULL(async_task)
-      && (async_task->get_task_type() != ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_HYBRID_VECTOR_EMBEDDING || async_task->all_finished())) {
+  if (OB_FAIL(ret)) {
+    ObVecIndexAsyncTaskCtx *task_ctx = async_task->get_task_ctx();
+    if (OB_NOT_NULL(task_ctx) && !error_code_set) {
+      common::ObSpinLockGuard ctx_guard(task_ctx->lock_);
+      if ( task_ctx->task_status_.ret_code_ == VEC_ASYNC_TASK_DEFAULT_ERR_CODE) {
+        task_ctx->task_status_.ret_code_ = ret;
+      }
+    }
+  }
+  if (OB_FAIL(ret) || (OB_NOT_NULL(async_task)
+      && (async_task->get_task_type() != ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_HYBRID_VECTOR_EMBEDDING || async_task->all_finished()))) {
     handle_ls_process_task_cnt(async_task->get_ls_id(), false);
     dec_async_task_ref();
   }
