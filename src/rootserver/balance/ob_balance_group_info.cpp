@@ -205,38 +205,79 @@ int ObBalanceGroupInfo::inner_transfer_out_(
   return ret;
 }
 
+int ObBalanceGroupInfo::swap_for_smallest_pg(
+    ObPartGroupInfo *const inner_pg,
+    ObBalanceGroupInfo &dest_bg_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(inner_pg)
+      || OB_UNLIKELY(!is_valid()
+      || !inner_pg->is_valid()
+      || !dest_bg_info.is_valid()
+      || bg_id_ != dest_bg_info.bg_id_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(inner_pg), K(*this), K(dest_bg_info));
+  } else if (OB_FAIL(inner_swap_for_smallest_pg_(inner_pg, dest_bg_info))) {
+    LOG_WARN("swap for smallest pg failed", KR(ret), KPC(inner_pg), K(dest_bg_info));
+  }
+  return ret;
+}
+
 int ObBalanceGroupInfo::swap_largest_for_smallest_pg(ObBalanceGroupInfo &dest_bg_info)
 {
   int ret = OB_SUCCESS;
   ObPartGroupInfo *largest_pg = nullptr;
-  ObPartGroupInfo *smallest_pg = nullptr;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret), K(inited_));
-  } else if (OB_UNLIKELY(!dest_bg_info.is_valid()
+  if (OB_UNLIKELY(!is_valid()
+      || !dest_bg_info.is_valid()
       || bg_id_ != dest_bg_info.bg_id_
       || ls_id_ == dest_bg_info.ls_id_)) {
     // dest_bg_info must have different ls id from this
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("dest_bg_info is invalid", KR(ret), K(*this), K(dest_bg_info));
+  } else if (OB_ISNULL(pg_container_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("part group container is null", KR(ret), KP(pg_container_));
+  } else if (OB_FAIL(pg_container_->get_largest_part_group(largest_pg))) {
+    LOG_WARN("get largest pg info failed", KR(ret), KPC(pg_container_));
+  } else if (OB_ISNULL(largest_pg)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null pg info", KR(ret), KPC(pg_container_), KP(largest_pg));
+  } else if (OB_FAIL(inner_swap_for_smallest_pg_(largest_pg, dest_bg_info))) {
+    LOG_WARN("swap largest for smallest pg failed", KR(ret), KPC(largest_pg), K(dest_bg_info));
+  }
+  return ret;
+}
+
+// the inner_pg must be in this balance group info
+int ObBalanceGroupInfo::inner_swap_for_smallest_pg_(
+    ObPartGroupInfo *const inner_pg,
+    ObBalanceGroupInfo &dest_bg_info)
+{
+  int ret = OB_SUCCESS;
+  ObPartGroupInfo *smallest_pg = nullptr;
+  if (OB_ISNULL(inner_pg)
+      || OB_UNLIKELY(!is_valid()
+      || !inner_pg->is_valid()
+      || !dest_bg_info.is_valid()
+      || bg_id_ != dest_bg_info.bg_id_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(inner_pg), K(*this), K(dest_bg_info));
   } else if (OB_ISNULL(pg_container_) || OB_ISNULL(dest_bg_info.pg_container_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("part group container is null", KR(ret), KP(pg_container_), KP(dest_bg_info.pg_container_));
-  } else if (OB_FAIL(pg_container_->get_largest_part_group(largest_pg))) {
-    LOG_WARN("get largest pg info failed", KR(ret), KPC(pg_container_));
   } else if (OB_FAIL(dest_bg_info.pg_container_->get_smallest_part_group(smallest_pg))) {
     LOG_WARN("get smallest pg info failed", KR(ret), K(dest_bg_info));
-  } else if (OB_ISNULL(largest_pg) || OB_ISNULL(smallest_pg)) {
+  } else if (OB_ISNULL(smallest_pg)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("null pg info", KR(ret), KPC(pg_container_), KP(largest_pg), KP(smallest_pg));
-  } else if (OB_UNLIKELY(largest_pg->get_data_size() <= smallest_pg->get_data_size())) {
+    LOG_WARN("null pg info", KR(ret), KPC(pg_container_), KP(smallest_pg));
+  } else if (OB_UNLIKELY(inner_pg->get_data_size() <= smallest_pg->get_data_size())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("largest pg can not smaller than smallest", KR(ret),
-        KPC(pg_container_), KPC(largest_pg), KPC(smallest_pg));
-  } else if (OB_FAIL(pg_container_->remove_part_group(largest_pg))) {
-    LOG_WARN("remove failed", KR(ret), KPC(pg_container_), K(largest_pg));
-  } else if (OB_FAIL(dest_bg_info.pg_container_->append_part_group(largest_pg))) {
-    LOG_WARN("append failed", KR(ret), K(dest_bg_info), K(largest_pg));
+    LOG_WARN("swap pg can not be smaller than smallest", KR(ret),
+        KPC(pg_container_), KPC(inner_pg), KPC(smallest_pg));
+  } else if (OB_FAIL(pg_container_->remove_part_group(inner_pg))) {
+    LOG_WARN("remove failed", KR(ret), KPC(pg_container_), K(inner_pg));
+  } else if (OB_FAIL(dest_bg_info.pg_container_->append_part_group(inner_pg))) {
+    LOG_WARN("append failed", KR(ret), K(dest_bg_info), K(inner_pg));
   } else if (OB_FAIL(dest_bg_info.pg_container_->remove_part_group(smallest_pg))) {
     LOG_WARN("remove failed", KR(ret), K(dest_bg_info), K(smallest_pg));
   } else if (OB_FAIL(pg_container_->append_part_group(smallest_pg))) {

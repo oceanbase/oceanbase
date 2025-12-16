@@ -174,14 +174,21 @@ int ObLSBalanceGroupInfo::transfer_out_by_factor(
         const int64_t can_remove_count_upper_bound = avail_count - left_count_lower_bound;
 
         const int64_t remove_count = std::min(can_remove_count_upper_bound, expected_remove_count);
+        // Get data size threshold
+        const float data_size_ratio = static_cast<float>(remove_count) / total_count;
+        const int64_t data_size_threshold = ceil(src_bg_info->get_part_groups_data_size() * data_size_ratio);
 
         int64_t removed_part_count = 0;
+        int64_t selected_data_size = 0;
+        ObArray<ObPartGroupInfo *> selected_part_groups;
 
         if (OB_UNLIKELY(remove_count >= avail_count)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("remove count should be greater than avail count", K(avail_count), K(remove_count));
           // transfer out part only when remove count > 0
         } else {
+          // Step 1: Use round-robin to select part groups (for even distribution by count)
+          // Collect selected part groups temporarily to check data size
           for (int64_t i = 0; OB_SUCC(ret) && i < remove_count; i++) {
             ObPartGroupInfo *part_group = nullptr;
             if (OB_FAIL(src_bg_info->transfer_out_by_round_robin(*dst_bg_info, part_group))) {
@@ -189,18 +196,135 @@ int ObLSBalanceGroupInfo::transfer_out_by_factor(
             } else if (OB_ISNULL(part_group)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("part group is null", KR(ret), KP(part_group));
+            } else if (OB_FAIL(selected_part_groups.push_back(part_group))) {
+              LOG_WARN("fail to push back part group", KR(ret), KPC(part_group));
+            }
+          }
+
+          // Step 2: If selected data size is too large, replace large part groups with smaller ones
+          if (FAILEDx(try_reduce_selected_data_size_by_swap_(
+              data_size_threshold,
+              src_bg_info,
+              dst_bg_info,
+              selected_part_groups))) {
+            LOG_WARN("fail to reduce selected data size by swap", KR(ret),
+                K(data_size_threshold), K(selected_part_groups));
+          }
+
+          // Step 3: Append all selected part groups to part_list
+          ARRAY_FOREACH(selected_part_groups, j) {
+            ObPartGroupInfo *part_group = selected_part_groups.at(j);
+            if (OB_ISNULL(part_group)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("part group is null", KR(ret), KP(part_group));
             } else if (OB_FAIL(append(part_list, part_group->get_part_list()))) {
               LOG_WARN("fail to append part list", KR(ret), K(part_list), KPC(part_group));
             } else {
               removed_part_count += part_group->get_part_list().count();
+              selected_data_size += part_group->get_data_size();
             }
           }
         }
         FLOG_INFO("transfer out partition groups from LS one balance group by factor", KR(ret),
             K(factor), K_(ls_id), K(bg_id),
             "removed_part_group_count", remove_count,
-            K(removed_part_count),
+            K(removed_part_count), K(data_size_threshold), K(selected_data_size),
             K(total_count), K(avail_count), K(expected_remove_count));
+      }
+    }
+  }
+  return ret;
+}
+
+// Use swap strategy: swap large part groups in dst with small ones in src
+int ObLSBalanceGroupInfo::try_reduce_selected_data_size_by_swap_(
+    const int64_t data_size_threshold,
+    ObBalanceGroupInfo *src_bg_info,
+    ObBalanceGroupInfo *dst_bg_info,
+    common::ObArray<ObPartGroupInfo *> &selected_part_groups)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(src_bg_info) || OB_ISNULL(dst_bg_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("src_bg_info or dst_bg_info is null", KR(ret), KP(src_bg_info), KP(dst_bg_info));
+  } else if (selected_part_groups.empty()
+      || sum_pg_data_size_(selected_part_groups) <= data_size_threshold) {
+    // No need to reduce, skip
+  } else { // Try multiple swaps to reduce total data size
+    int64_t total_data_size = sum_pg_data_size_(selected_part_groups);
+    const int64_t original_total_data_size = total_data_size;
+    const int64_t max_swap_attempts = selected_part_groups.count(); // avoid an infinite loop
+    int64_t swap_count = 0;
+    while (OB_SUCC(ret)
+        && swap_count < max_swap_attempts
+        && total_data_size > data_size_threshold) {
+      ObPartGroupInfo *selected_largest_pg = nullptr;
+      ObPartGroupInfo *src_smallest_pg = nullptr;
+      int64_t largest_pg_idx = OB_INVALID_INDEX;
+      // Get largest from selected_part_groups and smallest from src_bg_info
+      // selected_largest_pg must be in dst_bg_info
+      if (OB_FAIL(get_largest_part_group_from_array_(
+          selected_part_groups,
+          selected_largest_pg,
+          largest_pg_idx))) {
+        LOG_WARN("fail to get largest part group from array", KR(ret), K(selected_part_groups));
+      } else if (OB_FAIL(src_bg_info->get_smallest_part_group(src_smallest_pg))) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          ret = OB_SUCCESS; // No more part groups in src
+          break;
+        } else {
+          LOG_WARN("fail to get smallest part group from src", KR(ret), KPC(src_bg_info));
+        }
+      } else if (OB_ISNULL(selected_largest_pg) || OB_ISNULL(src_smallest_pg)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("null part group", KR(ret), KP(selected_largest_pg), KP(src_smallest_pg));
+      } else if (src_smallest_pg->get_data_size() >= selected_largest_pg->get_data_size()) {
+        // No benefit to swap, break early
+        break;
+      } else if (OB_FAIL(dst_bg_info->swap_for_smallest_pg(selected_largest_pg, *src_bg_info))) {
+        LOG_WARN("swap for smallest pg failed", KR(ret), KPC(dst_bg_info),
+            KPC(src_bg_info), KPC(selected_largest_pg), KPC(src_smallest_pg));
+      } else if (OB_UNLIKELY(largest_pg_idx < 0 || largest_pg_idx >= selected_part_groups.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid largest pg index", KR(ret), K(largest_pg_idx),
+            K(selected_part_groups), KPC(selected_largest_pg));
+      } else {
+        // replace dst_largest_pg with src_smallest_pg
+        selected_part_groups.at(largest_pg_idx) = src_smallest_pg;
+        total_data_size -= selected_largest_pg->get_data_size();
+        total_data_size += src_smallest_pg->get_data_size();
+        swap_count++;
+        LOG_TRACE("swap part group successfully", KR(ret), K(data_size_threshold),
+            KPC(selected_largest_pg), KPC(src_smallest_pg), K(total_data_size), K(swap_count));
+      }
+    }
+    LOG_INFO("reduce selected data size by swap finished",
+        KR(ret), K(swap_count), K(max_swap_attempts), K(data_size_threshold),
+        K(original_total_data_size), K(total_data_size));
+  }
+  return ret;
+}
+
+int ObLSBalanceGroupInfo::get_largest_part_group_from_array_(
+    const common::ObArray<ObPartGroupInfo *> &selected_part_groups,
+    ObPartGroupInfo *&largest_part_group,
+    int64_t &index)
+{
+  int ret = OB_SUCCESS;
+  largest_part_group = nullptr;
+  index = OB_INVALID_INDEX;
+  if (OB_UNLIKELY(selected_part_groups.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("selected part groups is empty", KR(ret), K(selected_part_groups));
+  } else {
+    int64_t max_data_size = OB_INVALID_SIZE; // -1
+    ARRAY_FOREACH(selected_part_groups, i) {
+      if (OB_NOT_NULL(selected_part_groups.at(i))) {
+        if (selected_part_groups.at(i)->get_data_size() > max_data_size) {
+          max_data_size = selected_part_groups.at(i)->get_data_size();
+          largest_part_group = selected_part_groups.at(i);
+          index = i;
+        }
       }
     }
   }
