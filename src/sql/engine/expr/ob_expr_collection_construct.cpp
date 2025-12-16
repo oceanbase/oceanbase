@@ -413,7 +413,7 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
                   CK (OB_NOT_NULL(assoc_array->get_key()));
                   OZ (deep_copy_obj(*coll->get_allocator(),
                                     v,
-                                    static_cast<ObObj*>(assoc_array->get_key())[i / 2]));
+                                    static_cast<ObObj*>(assoc_array->get_key())[assoc_array->get_count() - 1]));
                 }
               } else {
                 OZ (ObSPIService::spi_pad_char_or_varchar(session,
@@ -428,7 +428,7 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
                   OZ (collection_type->get_element_type().newx(*coll->get_allocator(), ns, ptr));
                   OZ (collection_type->get_element_type().get_size(pl::PL_TYPE_INIT_SIZE, init_size));
                   OX (new_composite.set_extend(ptr, collection_type->get_element_type().get_type(), init_size));
-                  int64_t pos = is_repeated_key ? index : i / 2;
+                  int64_t pos = is_repeated_key ? index : (assoc_array->get_count() - 1);
                   if (is_repeated_key) {
                     OZ (pl::ObUserDefinedType::destruct_objparam(*coll->get_allocator(),
                                                                  static_cast<ObObj&>(static_cast<ObObj*>(coll->get_data())[pos]),
@@ -436,7 +436,7 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
                   }
                   OX (static_cast<ObObj*>(coll->get_data())[pos] = new_composite);
                 } else {
-                  int64_t pos = is_repeated_key ? index : i / 2;
+                  int64_t pos = is_repeated_key ? index : (assoc_array->get_count() - 1);
                   if (is_repeated_key) {
                     OZ (pl::ObUserDefinedType::destruct_objparam(*coll->get_allocator(),
                                                                  static_cast<ObObj&>(static_cast<ObObj*>(assoc_array->get_data())[pos]),
@@ -534,7 +534,7 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
               CK (OB_NOT_NULL(assoc_array->get_key()));
               OZ (deep_copy_obj(*coll->get_allocator(),
                                 key,
-                                static_cast<ObObj*>(assoc_array->get_key())[i / 2]));
+                                static_cast<ObObj*>(assoc_array->get_key())[assoc_array->get_count() - 1]));
               
               OZ(d_for_data.to_obj(v, expr.args_[i + 1]->obj_meta_, expr.args_[i + 1]->obj_datum_map_));
               if (OB_SUCC(ret) && !v.is_null()) {
@@ -548,7 +548,7 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
               CK (OB_NOT_NULL(assoc_array->get_data()));
               OZ (deep_copy_obj(*coll->get_allocator(),
                                 v,
-                                static_cast<ObObj*>(assoc_array->get_data())[i / 2]));
+                                static_cast<ObObj*>(assoc_array->get_data())[assoc_array->get_count() - 1]));
             }
           }
         } else {
