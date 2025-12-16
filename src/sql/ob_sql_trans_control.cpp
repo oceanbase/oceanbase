@@ -1569,6 +1569,12 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback, co
       ret = save_ret != OB_SUCCESS ? save_ret : ret;
     }
 
+    if (ObSQLSessionState::QUERY_DEADLOCKED == session->get_session_state()
+     && lib::is_oracle_mode()) {
+      LOG_WARN_RET(OB_DEAD_LOCK, "query is deadlocked", K(ret), K(tx_id_before_rollback));
+      session->set_session_state(ObSQLSessionState::QUERY_ACTIVE);
+    }
+
     if (!session->is_real_inner_session()) {
       int tmp_ret = OB_SUCCESS;
       lockwaitmgr::ObLockWaitMgr *lock_wait_mgr = MTL(lockwaitmgr::ObLockWaitMgr*);
