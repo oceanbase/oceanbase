@@ -156,19 +156,26 @@ private:
       std::vector<const ApacheHive::ColumnStatisticsObj *>
           &arranged_column_stats);
 
-  int merge_partition_column_stats(
-      int64_t total_rows,
-      const std::vector<ApacheHive::ColumnStatisticsObj>
-          &partition_column_stats,
-      ObIArray<const ObColumnSchemaV2 *> &column_schemas,
-      ObIArray<ObOptExternalColumnStatBuilder *> &column_builders);
+  int merge_part_column_stat(const ObTableSchema &table_schema,
+                             std::vector<ApacheHive::Partition> &partitions,
+                             std::vector<ObHiveBasicStats> &basic_stats,
+                             ObIArray<const ObColumnSchemaV2 *> &column_schemas,
+                             ObIArray<ObOptExternalColumnStatBuilder *> &column_builders);
+
+  int merge_non_part_column_stats(int64_t total_rows,
+                                  const std::vector<ApacheHive::ColumnStatisticsObj> &column_stats,
+                                  ObIArray<const ObColumnSchemaV2 *> &column_schemas,
+                                  ObIArray<ObOptExternalColumnStatBuilder *> &column_builders);
 
   int prepare_column_builders_and_schemas(
       ObIAllocator &allocator, const ObString &partition_value,
       const ObILakeTableMetadata *table_metadata,
       const ObIArray<ObString> &column_names,
-      ObIArray<ObOptExternalColumnStatBuilder *> &column_builders,
-      ObIArray<const ObColumnSchemaV2 *> &column_schemas);
+      ObIArray<ObOptExternalColumnStatBuilder *> &part_column_builders,
+      ObIArray<ObOptExternalColumnStatBuilder *> &non_part_column_builders,
+      const ObTableSchema *&table_schema,
+      ObIArray<const ObColumnSchemaV2 *> &part_column_schemas,
+      ObIArray<const ObColumnSchemaV2 *> &non_part_column_schemas);
 
   int collect_column_stats_from_builders(
       ObIArray<ObOptExternalColumnStatBuilder *> &column_builders,
@@ -207,6 +214,11 @@ private:
       const ApacheHive::TimestampColumnStatsData &timestamp_column_stat,
       int64_t total_rows, const ObColumnSchemaV2 &column_schema,
       ObOptExternalColumnStatBuilder &builder);
+
+  int merge_part_column_data_to_builder(const ObObj &part_val,
+                                        int64_t total_rows,
+                                        const ObColumnSchemaV2 &column_schema,
+                                        ObOptExternalColumnStatBuilder &builder);
   int convert_hive_value_to_obobj(ObIAllocator &allocator,
                                   const ObColumnSchemaV2 &column_schema,
                                   int64_t &stats_data,
