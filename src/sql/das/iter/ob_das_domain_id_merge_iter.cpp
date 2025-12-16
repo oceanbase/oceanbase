@@ -376,7 +376,7 @@ int ObDASDomainIdMergeIter::build_rowkey_domain_range()
     LOG_WARN("unexpeted error, data table iter or ctdef is nullptr", K(ret), KP(data_table_iter_), KP(data_table_ctdef_));
   } else if (OB_FAIL(check_is_need_multi_get())) {
     LOG_WARN("faile to check is need mutil get", K(ret));
-  } else if (!is_need_multi_get_) {
+  } else {
     const common::ObIArray<common::ObNewRange> &key_ranges = data_table_iter_->get_scan_param().key_ranges_;
     const common::ObIArray<common::ObNewRange> &ss_key_ranges = data_table_iter_->get_scan_param().ss_key_ranges_;
     for (int64_t k = 0; OB_SUCC(ret) && k < rowkey_domain_scan_params_.count(); k++) {
@@ -387,68 +387,70 @@ int ObDASDomainIdMergeIter::build_rowkey_domain_range()
         LOG_WARN("unexpeted error, rowkey domain scan param is nullptr", K(ret), K(k));
       } else {
         storage::ObTableScanParam& scan_param = *rowkey_domain_scan_params_.at(k);
-        for (int64_t i = 0; OB_SUCC(ret) && i < key_ranges.count(); ++i) {
-          ObNewRange key_range = key_ranges.at(i);
-          key_range.table_id_ = scan_param.index_id_;
-          if (is_emb_vec && use_rowkey_vid_tbl) {
-            // range [rowkey][vid]
-            for (int64_t j = 0; OB_SUCCESS == ret && j < 2; ++j) {
-              const ObRowkey *p_key = nullptr;
-              if (0 == j) {
-                p_key = &key_range.get_start_key();
-              } else {
-                p_key = &key_range.get_end_key();
-              }
-              if (p_key->is_min_row() || p_key->is_max_row()) {
-                // do nothing
-              } else {
-                int64_t padding_num = 1; // add vid col
-                const int64_t old_objs_num = p_key->get_obj_cnt();
-                const int64_t new_objs_num = old_objs_num + padding_num;
-                ObObj *new_objs = static_cast<ObObj*>(get_arena_allocator().alloc(sizeof(ObObj)*new_objs_num));
-                if (OB_ISNULL(new_objs)) {
-                  ret = OB_ALLOCATE_MEMORY_FAILED;
-                  LOG_WARN("fail to alloc new objs", K(ret));
+        if (!is_need_multi_get_) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < key_ranges.count(); ++i) {
+            ObNewRange key_range = key_ranges.at(i);
+            key_range.table_id_ = scan_param.index_id_;
+            if (is_emb_vec && use_rowkey_vid_tbl) {
+              // range [rowkey][vid]
+              for (int64_t j = 0; OB_SUCCESS == ret && j < 2; ++j) {
+                const ObRowkey *p_key = nullptr;
+                if (0 == j) {
+                  p_key = &key_range.get_start_key();
                 } else {
-                  const ObObj *old_objs = p_key->get_obj_ptr();
-                  for (int64_t k = 0; k < old_objs_num; ++k) {
-                    new_objs[k] = old_objs[k];  // shallow copy
-                  }
-                  if (0 == j) {  // padding for startkey
-                    for (int64_t k = 0; k < padding_num; ++k) {
-                      // if inclusive start, should padding min value. else padding max value
-                      if (key_range.border_flag_.inclusive_start()) {
-                        new_objs[k+old_objs_num] = ObObj::make_min_obj();
-                      } else {
-                        new_objs[k+old_objs_num] = ObObj::make_max_obj();
-                      }
+                  p_key = &key_range.get_end_key();
+                }
+                if (p_key->is_min_row() || p_key->is_max_row()) {
+                  // do nothing
+                } else {
+                  int64_t padding_num = 1; // add vid col
+                  const int64_t old_objs_num = p_key->get_obj_cnt();
+                  const int64_t new_objs_num = old_objs_num + padding_num;
+                  ObObj *new_objs = static_cast<ObObj*>(get_arena_allocator().alloc(sizeof(ObObj)*new_objs_num));
+                  if (OB_ISNULL(new_objs)) {
+                    ret = OB_ALLOCATE_MEMORY_FAILED;
+                    LOG_WARN("fail to alloc new objs", K(ret));
+                  } else {
+                    const ObObj *old_objs = p_key->get_obj_ptr();
+                    for (int64_t k = 0; k < old_objs_num; ++k) {
+                      new_objs[k] = old_objs[k];  // shallow copy
                     }
-                    key_range.start_key_.assign(new_objs, new_objs_num);
-                  } else {  // padding for endkey
-                    for (int64_t k = 0; k < padding_num; ++k) {
-                      // if inclusive end, should padding max value. else padding min value
-                      if (key_range.border_flag_.inclusive_end()) {
-                        new_objs[k+old_objs_num] = ObObj::make_max_obj();
-                      } else {
-                        new_objs[k+old_objs_num] = ObObj::make_min_obj();
+                    if (0 == j) {  // padding for startkey
+                      for (int64_t k = 0; k < padding_num; ++k) {
+                        // if inclusive start, should padding min value. else padding max value
+                        if (key_range.border_flag_.inclusive_start()) {
+                          new_objs[k+old_objs_num] = ObObj::make_min_obj();
+                        } else {
+                          new_objs[k+old_objs_num] = ObObj::make_max_obj();
+                        }
                       }
+                      key_range.start_key_.assign(new_objs, new_objs_num);
+                    } else {  // padding for endkey
+                      for (int64_t k = 0; k < padding_num; ++k) {
+                        // if inclusive end, should padding max value. else padding min value
+                        if (key_range.border_flag_.inclusive_end()) {
+                          new_objs[k+old_objs_num] = ObObj::make_max_obj();
+                        } else {
+                          new_objs[k+old_objs_num] = ObObj::make_min_obj();
+                        }
+                      }
+                      key_range.end_key_.assign(new_objs, new_objs_num);
                     }
-                    key_range.end_key_.assign(new_objs, new_objs_num);
                   }
                 }
               }
             }
+            if (OB_FAIL(ret)) {
+            } else if (OB_FAIL(scan_param.key_ranges_.push_back(key_range))) {
+              LOG_WARN("fail to push back key range for rowkey domain scan param", K(ret), K(key_range));
+            }
           }
-          if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(scan_param.key_ranges_.push_back(key_range))) {
-            LOG_WARN("fail to push back key range for rowkey domain scan param", K(ret), K(key_range));
-          }
-        }
-        for (int64_t i = 0; OB_SUCC(ret) && i < ss_key_ranges.count(); ++i) {
-          ObNewRange ss_key_range = ss_key_ranges.at(i);
-          ss_key_range.table_id_ = scan_param.index_id_;
-          if (OB_FAIL(scan_param.ss_key_ranges_.push_back(ss_key_range))) {
-            LOG_WARN("fail to push back ss key range for rowkey domain scan param", K(ret), K(ss_key_range));
+          for (int64_t i = 0; OB_SUCC(ret) && i < ss_key_ranges.count(); ++i) {
+            ObNewRange ss_key_range = ss_key_ranges.at(i);
+            ss_key_range.table_id_ = scan_param.index_id_;
+            if (OB_FAIL(scan_param.ss_key_ranges_.push_back(ss_key_range))) {
+              LOG_WARN("fail to push back ss key range for rowkey domain scan param", K(ret), K(ss_key_range));
+            }
           }
         }
         if (OB_SUCC(ret)) {
