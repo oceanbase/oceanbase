@@ -32,10 +32,15 @@ void ObAllVirtualPalfStat::destroy()
 {
 }
 
+ERRSIM_POINT_DEF(ERRSIM_VIRTUAL_LOG_STAT_ERROR);
 int ObAllVirtualPalfStat::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  if (false == start_to_read_) {
+  // use for debug
+  if (OB_FAIL(ERRSIM_VIRTUAL_LOG_STAT_ERROR)) {
+    SERVER_LOG(WARN, "ERRSIM_VIRTUAL_LOG_STAT_ERROR is opened, returning OB_SIZE_OVERFLOW");
+  }
+  if (OB_SUCC(ret) && false == start_to_read_) {
     auto func_iterate_tenant = [&]() -> int
     {
       int ret = OB_SUCCESS;
