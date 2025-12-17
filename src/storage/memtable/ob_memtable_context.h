@@ -19,6 +19,7 @@
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/lock/ob_small_spin_lock.h"
 #include "lib/utility/ob_macro_utils.h"
+#include "lib/alloc/alloc_struct.h"
 #include "ob_clock_generator.h"
 #include "share/ob_define.h"
 #include "storage/ob_memtable_ctx_obj_pool.h"
@@ -253,7 +254,7 @@ public:
     if (IS_NOT_INIT) {
       if (OB_FAIL(allocator_.init(common::OB_MALLOC_NORMAL_BLOCK_SIZE,
                                   ctx_cb_mem_limiter_,
-                                  attr))) {
+                                  SET_IGNORE_MEM_VERSION(attr)))) {
         TRANS_LOG(ERROR, "callback allocator init failed", K(ret), K(lbt()), K(tenant_id));
       } else {
         ATOMIC_STORE(&is_inited_, true);
