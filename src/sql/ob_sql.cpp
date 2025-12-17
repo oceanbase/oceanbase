@@ -5223,11 +5223,6 @@ int ObSql::need_add_plan(const ObPlanCacheCtx &pc_ctx,
     need_add_plan = false;
   } else if (result.get_exec_context().get_stmt_factory()->get_query_ctx()->has_hybrid_search()) {
     need_add_plan = false;
-  } else if (OB_USE_PLAN_CACHE_DEFAULT != phy_plan->get_phy_plan_hint().plan_cache_policy_
-             && result.get_session().get_ddl_info().is_refreshing_mview()
-             && ObStmt::is_dml_write_stmt(result.get_stmt_type())) {
-    need_add_plan = false;
-    LOG_DEBUG("materialized view refresh plan not use plan cache");
   }
   return ret;
 }
