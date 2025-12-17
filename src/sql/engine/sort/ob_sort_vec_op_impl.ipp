@@ -1948,9 +1948,11 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::build_ems_heap(int64_t &merg
         max(tempstore_read_alignment_size_, ObTempBlockStore::MIN_READ_BUFFER_SIZE);
       merge_ways = (get_memory_limit() - mem_context_->used()) / tempstore_block_size;
       merge_ways = std::max(MIN_MERGE_WAYS, merge_ways);
+      bool dumped = false;
       if (merge_ways < max_ways) {
-        bool dumped = false;
-        int64_t need_size = max_ways * tempstore_block_size;
+        // extra extend one tempstore_block_size
+        // to prevent situations where sufficient memory exists but merge_ways not equal to max_ways.
+        int64_t need_size = (max_ways + 1) * tempstore_block_size + mem_context_->used();
         if (OB_FAIL(sql_mem_processor_.extend_max_memory_size(
               &mem_context_->get_malloc_allocator(),
               [&](int64_t max_memory_size) { return max_memory_size < need_size; }, dumped,
@@ -1962,7 +1964,8 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::build_ems_heap(int64_t &merg
       merge_ways = std::min(merge_ways, max_ways);
       LOG_TRACE("do merge sort ", K(first->level_), K(merge_ways), K(tempstore_block_size),
                                   K(mem_context_->used()), K(sort_chunks_.get_size()),
-                                  K(get_memory_limit()), K(sql_mem_processor_.get_profile()));
+                                  K(get_memory_limit()), K(profile_.get_global_bound_size()),
+                                  K(sql_mem_processor_.get_profile()));
     }
 
     if (OB_SUCC(ret)) {
