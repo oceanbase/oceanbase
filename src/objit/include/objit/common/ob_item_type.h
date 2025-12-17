@@ -984,6 +984,7 @@ typedef enum ObItemType
   T_FUN_SYS_EDIT_DISTANCE_UTF8 = 1937,
   T_FUN_SYS_POS_LIST = 1938, // fulltext index phrase match
   T_FUN_CK_SYS_IS_NAN = 1939,
+  T_FUN_CK_RAND_CANONICAL = 1940,
 
   ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,
