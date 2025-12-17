@@ -472,7 +472,7 @@ int ObLogService::remove_ls(const ObLSID &id,
     // In abnormal case(create ls failed, need remove ls directlly), there is no possibility for dead lock.
     log_handler.stop();
     restore_handler.stop();
-    if (!enable_logservice_ && OB_FAIL(palf_env_->remove(id.id()))) {
+    if (OB_FAIL(palf_env_->remove(id.id()))) {
       CLOG_LOG(WARN, "failed to remove from palf_env_", K(ret), K(id));
     } else {
       FLOG_INFO("ObLogService remove_ls success", K(ret), K(id));
@@ -875,11 +875,7 @@ int ObLogService::create_ls_(const share::ObLSID &id,
       if (OB_NOT_NULL(palf_handle)) {
         palf_env_->close(palf_handle);
       }
-      if (!enable_logservice_) {
-        palf_env_->remove(id.id());
-      } else {
-        // do nothing
-      }
+      palf_env_->remove(id.id());
     }
   }
   return ret;
