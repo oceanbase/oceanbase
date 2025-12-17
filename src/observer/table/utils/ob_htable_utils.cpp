@@ -1423,10 +1423,10 @@ int ObHTableUtils::adjust_htable_timestamps_for_retry(common::ObIArray<ObTableOp
         ObObj &t_obj = obj_ptr[ObHTableConstants::COL_IDX_T];
         int64_t current_ts = t_obj.get_int();
 
-        // Generate a random offset (0-999) using ObRandom for thread safety
-        // ObRandom uses thread-local storage, avoiding lock contention in multi-threaded scenarios
+        // Decrease the timestamp by a random offset to avoid lock conflicts (current_ts is negative here)
+        // We believe that the conflicting version should be the old version rather than the new one
         int64_t random_offset = ObRandom::rand(0, MAX_RANDOM_OFFSET);
-        int64_t new_ts = current_ts - random_offset;
+        int64_t new_ts = current_ts + random_offset;
         t_obj.set_int(new_ts);
 
         LOG_DEBUG("adjust htable timestamp for retry", K(i), K(current_ts), K(random_offset), K(new_ts));
