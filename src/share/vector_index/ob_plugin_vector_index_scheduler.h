@@ -244,6 +244,7 @@ public:
                                   bool &is_vector_index_table,
                                   bool &is_shared_index_table);
   void clean_deprecated_adapters();
+  int check_need_maintence_ls_follower();
   int check_index_adpter_exist(ObPluginVectorIndexMgr *mgr);
 
   int log_tablets_need_memdata_sync(ObPluginVectorIndexMgr *mgr);
@@ -283,6 +284,8 @@ public:
   void inc_dag_ref() { ATOMIC_INC(&dag_ref_cnt_); }
   void dec_dag_ref() { ATOMIC_DEC(&dag_ref_cnt_); }
   int64_t get_dag_ref() const { return ATOMIC_LOAD(&dag_ref_cnt_); }
+  bool get_ls_leader() { return is_leader_; }
+  uint64_t get_tenant_id() { return tenant_id_; }
 
   int safe_to_destroy(bool &is_safe);
 
