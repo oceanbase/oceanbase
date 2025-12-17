@@ -180,7 +180,7 @@ int ObHybridSearchExecutor::parse_search_params(
     LOG_WARN("No database selected", KR(ret));
   } else {
     ObESQueryParser parser(allocator_, need_wrap_result, &table_name, &database_name);
-    if (OB_FAIL(construct_column_index_info(allocator_, database_name, table_name, parser.get_index_name_map(), parser.get_user_column_names()))) {
+    if (OB_FAIL(construct_column_index_info(allocator_, parser))) {
       LOG_WARN("fail to construnct column index info", KR(ret), K(search_params_str));
     } else if (OB_FAIL(parser.parse(search_params_str, query_req))) {
       LOG_WARN("fail to parse search params", KR(ret), K(search_params_str));
@@ -189,14 +189,17 @@ int ObHybridSearchExecutor::parse_search_params(
   return ret;
 }
 
-int ObHybridSearchExecutor::construct_column_index_info(ObIAllocator &alloc, const ObString &database_name, const ObString &table_name,
-                                                        ColumnIndexNameMap &column_index_info, ObIArray<ObString> &col_names)
+int ObHybridSearchExecutor::construct_column_index_info(ObIAllocator &alloc, ObESQueryParser &parser)
 {
   int ret = OB_SUCCESS;
   share::schema::ObSchemaGetterGuard *schema_guard = NULL;
   const ObTableSchema *data_table_schema = NULL;
   ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
   ObCStringHelper helper;
+  const ObString &database_name = parser.get_database_name();
+  const ObString &table_name = parser.get_table_name();
+  ColumnIndexNameMap &column_index_info = parser.get_index_name_map();
+  ObIArray<ObString> &col_names = parser.get_user_column_names();
 
   if (OB_ISNULL(schema_guard = ctx_->get_virtual_table_ctx().schema_guard_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -215,6 +218,8 @@ int ObHybridSearchExecutor::construct_column_index_info(ObIAllocator &alloc, con
     LOG_WARN("fail to get simple index infos failed", K(ret));
   } else if (OB_FAIL(get_basic_column_names(data_table_schema, col_names))) {
     LOG_WARN("fail to get all column names", K(ret));
+  } else if (OB_FAIL(get_partition_info(data_table_schema, parser))) {
+    LOG_WARN("fail to get partition column names and init alias exprs", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
       const ObTableSchema *index_table_schema = nullptr;
@@ -341,6 +346,68 @@ int ObHybridSearchExecutor::get_basic_column_names(const ObTableSchema *table_sc
     LOG_WARN("Failed to iterate all table columns. iter quit. ", K(ret));
   } else {
     ret = OB_SUCCESS;
+  }
+  return ret;
+}
+
+int ObHybridSearchExecutor::extract_partition_column_ids(const ObPartitionKeyInfo &part_key_info,
+                                                         hash::ObPlacementHashSet<uint64_t, 32> &column_id_set,
+                                                         ObIArray<uint64_t> &column_ids)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_INVALID_ID;
+  for (int64_t i = 0; OB_SUCC(ret) && i < part_key_info.get_size(); i++) {
+    if (OB_FAIL(part_key_info.get_column_id(i, column_id))) {
+      LOG_WARN("failed to get column id from partition key info", K(ret), K(i));
+    } else {
+      int hash_ret = column_id_set.exist_refactored(column_id);
+      if (OB_HASH_EXIST == hash_ret) {
+      } else if (OB_HASH_NOT_EXIST == hash_ret) {
+        if (OB_FAIL(column_id_set.set_refactored(column_id))) {
+          LOG_WARN("failed to set column id in hash set", K(ret), K(column_id));
+        } else if (OB_FAIL(column_ids.push_back(column_id))) {
+          LOG_WARN("failed to push back column id", K(ret), K(column_id));
+        }
+      } else {
+        ret = hash_ret;
+        LOG_WARN("failed to check column id existence", K(ret), K(column_id));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObHybridSearchExecutor::get_partition_info(const ObTableSchema *table_schema, ObESQueryParser &parser)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(table_schema));
+  } else if (table_schema->get_part_level() != PARTITION_LEVEL_ZERO) {
+    hash::ObPlacementHashSet<uint64_t, 32> column_id_set; // to deduplicate column ids
+    ObSEArray<uint64_t, 4> column_ids;
+    ObSEArray<ObString, 4> column_names;
+    const ObPartitionKeyInfo &part_key_info = table_schema->get_partition_key_info();
+    const ObPartitionKeyInfo &subpart_key_info = table_schema->get_subpartition_key_info();
+    if (OB_FAIL(extract_partition_column_ids(part_key_info, column_id_set, column_ids))) {
+      LOG_WARN("failed to extract column ids from partition key info", K(ret));
+    } else if (table_schema->get_part_level() == PARTITION_LEVEL_TWO && OB_FAIL(extract_partition_column_ids(subpart_key_info, column_id_set, column_ids))) {
+      LOG_WARN("failed to extract column ids from subpartition key info", K(ret));
+    } else if (column_ids.count() > 0) {
+      lib::ob_sort(column_ids.begin(), column_ids.end());
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); i++) {
+      const ObColumnSchemaV2 *column_schema = table_schema->get_column_schema(column_ids.at(i));
+      if (OB_ISNULL(column_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected column schema", K(ret), K(column_ids.at(i)));
+      } else if (OB_FAIL(column_names.push_back(column_schema->get_column_name_str()))) {
+        LOG_WARN("failed to push back column name", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(parser.construct_partition_cols(column_names))) {
+      LOG_WARN("failed to construct partition column and alias exprs", K(ret));
+    }
   }
   return ret;
 }
