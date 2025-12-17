@@ -471,23 +471,26 @@ int ObTenantFreezeInfoMgr::get_min_reserved_snapshot(
       LOG_WARN("ObSSGarbageCollectorService should not be null", KR(ret));
     } else if (OB_FAIL(ss_gc_srv->get_min_ss_gc_last_succ_scn(false /*is_for_sslog_table */, last_succ_scn))) {
       LOG_WARN("get last_succ_scns from ObSSGarbageCollectorService failed", KR(ret));
-    }
-    // get last_succ_scn from user_tenant
-    uint64_t user_tenant_id = gen_user_tenant_id(MTL_ID());
-    SCN user_last_succ_scn;
-    ss_gc_srv = nullptr;
-    MTL_SWITCH(user_tenant_id) {
-      if (OB_ISNULL(ss_gc_srv = MTL(ObSSGarbageCollectorService *))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ObSSGarbageCollectorService should not be null", KR(ret));
-      } else if (OB_FAIL(ss_gc_srv->get_min_ss_gc_last_succ_scn(false /*is_for_sslog_table */, user_last_succ_scn))) {
-        LOG_WARN("get last_succ_scns from ObSSGarbageCollectorService failed", KR(ret));
+    } else {
+      // get last_succ_scn from user_tenant
+      uint64_t user_tenant_id = gen_user_tenant_id(MTL_ID());
+      SCN user_last_succ_scn = SCN::min_scn();
+      // Use the new interface with tenant_id parameter, which will handle the case
+      // where the tenant is not in the current server by forwarding the request to sswriter
+      if (OB_FAIL(ss_gc_srv->get_min_ss_gc_last_succ_scn(
+            user_tenant_id, false /*is_for_sslog_table */, user_last_succ_scn))) {
+        LOG_WARN("get last_succ_scns from ObSSGarbageCollectorService failed", KR(ret), K(user_tenant_id));
       } else {
         last_succ_scn = SCN::min(last_succ_scn, user_last_succ_scn);
       }
     }
+    if (OB_FAIL(ret)) {
+      LOG_WARN(
+        "meet fail during get_min_ss_gc_last_succ_scn, reset multi_version_start to min", KR(ret), K(last_succ_scn));
+      last_succ_scn.set_min();
+    }
     snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_SS_GC, last_succ_scn.get_val_for_tx());
-    LOG_TRACE("set multi_start_version for sslog_table", KR(ret), K(user_tenant_id), K(snapshot_info));
+    LOG_TRACE("set multi_start_version for sslog_table", KR(ret), K(snapshot_info));
 #endif
   }
   if (OB_FAIL(ret)) {
