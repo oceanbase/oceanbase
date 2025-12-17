@@ -143,7 +143,7 @@ int ObVectorIndexUtil::parser_params_from_string(
           int64_t int_value = 0;
           if (OB_FAIL(ObSchemaUtils::str_to_int(new_param_value, int_value))) {
             LOG_WARN("fail to str_to_int", K(ret), K(new_param_value));
-          } else if (int_value >= 1 && int_value <= 1000) {
+          } else if (int_value >= 1 && int_value <= 160000) {
             param.ef_search_ = int_value;
           } else {
             ret = OB_NOT_SUPPORTED;
@@ -401,7 +401,7 @@ int ObVectorIndexUtil::resolve_query_param(
         } else if (value_node->type_ != T_INT && value_node->type_ != T_NUMBER) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid query param", K(ret), K(i), K(param_name), K(value_node->type_));
-        } else if (! (value_node->value_ >= 1 && value_node->value_ <= 1000)) {
+        } else if (! (value_node->value_ >= 1 && value_node->value_ <= 160000)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid query param", K(ret), K(i), K(param_name), K(value_node->type_), K(value_node->value_));
         } else {
@@ -2523,7 +2523,7 @@ int ObVectorIndexUtil::check_index_param(
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "this value of vector index ef_construction is");
           }
         } else if (last_variable == "EF_SEARCH") {
-          if (parser_value >= 1 && parser_value <= 1000 ) {
+          if (parser_value >= 1 && parser_value <= 160000 ) {
             ef_search_is_set = true;
           } else {
             ret = OB_NOT_SUPPORTED;
