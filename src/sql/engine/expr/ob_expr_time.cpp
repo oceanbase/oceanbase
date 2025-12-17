@@ -282,7 +282,7 @@ int ObExprTimeBase::calc(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum
         expr_datum.set_null();
       } else {
         int idx = ot.parts_[type] - 1;
-        if (0 <= idx  && idx < 7) {
+        if (OB_LIKELY(0 <= idx  && idx < 7)) {
           if (OB_FAIL(session->get_locale_name(locale_name))) {
               LOG_WARN("failed to get locale time name", K(expr), K(expr_datum));
           } else {
@@ -304,7 +304,7 @@ int ObExprTimeBase::calc(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum
         expr_datum.set_null();
       } else {
         int idx = ot.parts_[type] - 1;
-        if(0 <= idx  && idx < 12) {
+        if(OB_LIKELY(0 <= idx  && idx < 12)) {
           if (OB_FAIL(session->get_locale_name(locale_name))) {
               LOG_WARN("failed to get locale time name", K(expr), K(expr_datum));
           } else {
@@ -494,8 +494,12 @@ int vector_year(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, con
           LOG_WARN("get date and usec from vec failed", K(ret));
         } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == days)) {
           year = 0;
-        } else {
+        } else if (ObTimeConverter::could_calc_days_to_year_quickly(days)) {
           ObTimeConverter::days_to_year(days, year);
+        } else if (OB_FAIL(ObTimeConverter::date_to_ob_time(days, ob_time))) {
+          LOG_WARN("failed date_to_ob_time", K(ret), K(days));
+        } else {
+          year = ob_time.parts_[DT_YEAR];
         }
         res_vec->set_int(idx, year);
         eval_flags.set(idx);
@@ -591,10 +595,14 @@ int vector_month(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, co
           LOG_WARN("get date and usec from vec failed", K(ret));
         } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date)) {
           res_vec->set_int(idx, 0);
-        } else {
+        } else if (ObTimeConverter::could_calc_days_to_year_quickly(date)) {
           ObTimeConverter::days_to_year_ydays(date, year, dt_yday);
           ObTimeConverter::ydays_to_month_mdays(year, dt_yday, month, dt_mday);
           res_vec->set_int(idx, month);
+        } else if (OB_FAIL(ObTimeConverter::date_to_ob_time(date, ob_time))) {
+          LOG_WARN("failed date_to_ob_time", K(ret), K(date));
+        } else {
+          res_vec->set_int(idx, ob_time.parts_[DT_MON]);
         }
         eval_flags.set(idx);
       });
@@ -678,13 +686,20 @@ int vector_month_name(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &ski
           LOG_WARN("get date and usec from vec failed", K(ret));
         } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date)) {
           month = 0;
-        } else {
+        } else if (ObTimeConverter::could_calc_days_to_year_quickly(date)) {
           ObTimeConverter::days_to_year_ydays(date, year, dt_yday);
           ObTimeConverter::ydays_to_month_mdays(year, dt_yday, month, dt_mday);
+        } else if (OB_FAIL(ObTimeConverter::date_to_ob_time(date, ob_time))) {
+          LOG_WARN("failed date_to_ob_time", K(ret), K(date));
+        } else {
+          month = ob_time.parts_[DT_MON];
         }
 
         if (month == 0) {
           res_vec->set_null(idx);
+        } else if (OB_UNLIKELY(month < 1 || month > 12)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("the parameter month should be within a reasonable range", K(month));
         } else {
           size_t len = strlen(month_name[month-1]);
           res_vec->set_string(idx, ObString(len, month_name[month-1]));
