@@ -35,6 +35,10 @@ namespace mds
 class MdsCtx;
 }
 }
+namespace rootserver
+{
+struct ObTruncateTabletArg;
+}
 
 namespace logservice
 {
@@ -121,6 +125,11 @@ protected:
       storage::mds::MdsCtx &ctx,
       const share::SCN &scn,
       const bool for_old_mds = false);
+  int replay_to_mds_table_(
+      storage::ObTabletHandle &tablet_handle,
+      const rootserver::ObTruncateTabletArg &mds,
+      storage::mds::MdsCtx &ctx,
+      const share::SCN &scn);
   template <typename K, typename V>
   int replay_to_mds_table_(
       storage::ObTabletHandle &tablet_handle,

@@ -49,6 +49,7 @@
 #include "storage/meta_mem/ob_tablet_pointer.h"
 #include "storage/truncate_info/ob_truncate_partition_filter.h"
 #include "storage/lob/ob_lob_tablet_dml.h"
+#include "rootserver/truncate_info/ob_truncate_info_service.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -3011,6 +3012,48 @@ int ObLSTabletService::set_ddl_info(
   return ret;
 }
 
+ERRSIM_POINT_DEF(EN_SET_TRUNCATE_INFO_HANG);
+int ObLSTabletService::set_truncate_info(
+  const rootserver::ObTruncateTabletArg &arg,
+  mds::MdsCtx &ctx,
+  const int64_t timeout_us)
+{
+  int ret = OB_SUCCESS;
+  const ObTabletID &tablet_id = arg.index_tablet_id_;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_UNLIKELY(!tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(tablet_id), K(arg));
+  } else {
+    ObTabletHandle tablet_handle;
+    ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
+    if (OB_FAIL(lock_guard.get_ret())) {
+      LOG_WARN("fail to get lock", K(ret));
+    } else if (OB_FAIL(direct_get_tablet(tablet_id, tablet_handle))) {
+      if (OB_TABLET_NOT_EXIST == ret) {
+        ret = OB_EAGAIN;
+        LOG_WARN("this tablet has been deleted, skip it", K(ret), K(tablet_id));
+      } else {
+        LOG_WARN("fail to get tablet", K(ret));
+      }
+    } else {
+      while (EN_SET_TRUNCATE_INFO_HANG) {
+        ob_usleep(1000 * 1000);
+        LOG_INFO("Errsim: set truncate info hang", K(ret), K(tablet_id), K(arg), K(timeout_us));
+      }
+
+      if (OB_FAIL(tablet_handle.get_obj()->set_truncate_info(arg.truncate_info_.key_, arg.truncate_info_, ctx, timeout_us))) {
+        LOG_WARN("fail to set truncate info", K(ret), K(tablet_id), K(arg), K(timeout_us));
+      } else {
+        LOG_INFO("succeeded to set truncate info", K(ret), "ls_id", ls_->get_ls_id(), K(tablet_id), K(arg), K(timeout_us));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLSTabletService::replay_set_ddl_info(
     const common::ObTabletID &tablet_id,
     const share::SCN &scn,
@@ -3038,6 +3081,40 @@ int ObLSTabletService::replay_set_ddl_info(
       LOG_WARN("fail to set ddl info", K(ret), K(tablet_id), K(ddl_data), K(scn));
     } else {
       LOG_INFO("succeeded to set ddl info", K(ret), "ls_id", ls_->get_ls_id(), K(tablet_id), K(ddl_data), K(scn));
+    }
+  }
+  return ret;
+}
+
+int ObLSTabletService::replay_set_truncate_info(
+  const share::SCN &scn,
+  const rootserver::ObTruncateTabletArg &arg,
+  mds::MdsCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  const ObTabletID &tablet_id = arg.index_tablet_id_;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_UNLIKELY(!tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(tablet_id), K(arg));
+  } else {
+    ObTabletHandle tablet_handle;
+    ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
+    if (OB_FAIL(lock_guard.get_ret())) {
+      LOG_WARN("fail to get lock", K(ret));
+    } else if (OB_FAIL(direct_get_tablet(tablet_id, tablet_handle))) {
+      if (OB_TABLET_NOT_EXIST == ret) {
+        ret = OB_EAGAIN;
+        LOG_WARN("this tablet has been deleted, skip it", K(ret), K(tablet_id));
+      } else {
+        LOG_WARN("fail to get tablet", K(ret));
+      }
+    } else if (OB_FAIL(tablet_handle.get_obj()->replay_set_truncate_info(scn, arg.truncate_info_.key_, arg.truncate_info_, ctx))) {
+      LOG_WARN("fail to set truncate info", K(ret), K(tablet_id), K(arg), K(scn));
+    } else {
+      LOG_INFO("succeeded to set truncate info", K(ret), "ls_id", ls_->get_ls_id(), K(tablet_id), K(arg), K(scn));
     }
   }
   return ret;

@@ -74,6 +74,10 @@ namespace sql
 class ObDASDMLIterator;
 class ObDASUpdIterator;
 }
+namespace rootserver
+{
+struct ObTruncateTabletArg;
+}
 
 namespace storage
 {
@@ -327,6 +331,15 @@ public:
       const common::ObTabletID &tablet_id,
       const share::SCN &scn,
       const ObTabletBindingMdsUserData &ddl_info,
+      mds::MdsCtx &ctx);
+
+  int set_truncate_info(
+      const rootserver::ObTruncateTabletArg &arg,
+      mds::MdsCtx &ctx,
+      const int64_t timeout_us);
+  int replay_set_truncate_info(
+      const share::SCN &scn,
+      const rootserver::ObTruncateTabletArg &arg,
       mds::MdsCtx &ctx);
 
   // DAS interface
