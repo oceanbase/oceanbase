@@ -1609,12 +1609,13 @@ int ObVecIndexAsyncTask::optimize_vector_index(ObPluginVectorIndexAdaptor &adapt
   * Therefore, the order of these two locks must not be reversed;
   * otherwise, a deadlock could occur between the query and asynchronous tasks. */
   RWLock::WLockGuard query_lock_guard(old_adapter_->get_query_lock()); // lock for query before end trans
-  RWLock::WLockGuard lock_guard(vec_idx_mgr_->get_adapter_map_lock());
   int tmp_ret = OB_SUCCESS;
   if (trans_start && OB_SUCCESS != (tmp_ret = ObInsertLobColumnHelper::end_trans(tx_desc, OB_SUCCESS != ret, timeout_us))) {
     ret = tmp_ret;
     LOG_WARN("fail to end trans", K(ret), KPC(tx_desc));
   }
+
+  RWLock::WLockGuard lock_guard(vec_idx_mgr_->get_adapter_map_lock());
   if (OB_SUCC(ret)) {
     ctx_->task_status_.progress_info_.vec_opt_status_ = OB_VECTOR_ASYNC_OPT_REPLACE;
     if (OB_FAIL(vec_idx_mgr_->replace_old_adapter(&adaptor))) {
