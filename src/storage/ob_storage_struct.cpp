@@ -613,7 +613,8 @@ ObBatchUpdateTableStoreParam::ObBatchUpdateTableStoreParam()
     tablet_split_param_(),
     need_replace_remote_sstable_(false),
     release_mds_scn_(),
-    reorg_scn_()
+    reorg_scn_(),
+    src_tablet_block_info_(nullptr)
 {
 }
 
@@ -629,6 +630,7 @@ void ObBatchUpdateTableStoreParam::reset()
   need_replace_remote_sstable_ = false;
   release_mds_scn_.reset();
   reorg_scn_.reset();
+  src_tablet_block_info_ = nullptr;
 }
 
 bool ObBatchUpdateTableStoreParam::is_valid() const
@@ -657,6 +659,7 @@ int ObBatchUpdateTableStoreParam::assign(
     need_replace_remote_sstable_ = param.need_replace_remote_sstable_;
     release_mds_scn_ = param.release_mds_scn_;
     reorg_scn_ = param.reorg_scn_;
+    src_tablet_block_info_ = param.src_tablet_block_info_;
 #ifdef ERRSIM
     errsim_point_info_ = param.errsim_point_info_;
 #endif

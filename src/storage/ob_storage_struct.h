@@ -48,6 +48,7 @@ namespace storage
 {
 class ObStorageSchema;
 struct ObMigrationTabletParam;
+class ObSSTransferSrcTabletBlockInfo;
 
 typedef common::ObSEArray<common::ObStoreRowkey, common::OB_DEFAULT_MULTI_GET_ROWKEY_NUM> GetRowkeyArray;
 typedef common::ObSEArray<common::ObStoreRange, common::OB_DEFAULT_MULTI_GET_ROWKEY_NUM> ScanRangeArray;
@@ -541,6 +542,7 @@ struct ObBatchUpdateTableStoreParam final
   bool need_replace_remote_sstable_;
   share::SCN release_mds_scn_;
   share::SCN reorg_scn_;
+  const ObSSTransferSrcTabletBlockInfo *src_tablet_block_info_;
 
   DISALLOW_COPY_AND_ASSIGN(ObBatchUpdateTableStoreParam);
 };
