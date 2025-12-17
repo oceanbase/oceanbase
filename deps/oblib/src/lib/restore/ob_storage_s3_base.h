@@ -67,6 +67,9 @@ void fin_s3_env();
 static constexpr int64_t S3_CONNECT_TIMEOUT_MS = 10 * 1000;
 static constexpr int64_t S3_REQUEST_TIMEOUT_MS = 10 * 1000;
 static constexpr int64_t MAX_S3_CONNECTIONS_PER_CLIENT = 128;
+// Max retry times for S3 requests. The underlying AWS DefaultRetryStrategy
+// uses exponential backoff with jitter, so we only need to control max retries here.
+static constexpr int64_t S3_MAX_RETRY_COUNT = 10;
 static constexpr int64_t STOP_S3_TIMEOUT_US = 10 * 1000L;   // 10ms
 
 // TODO: check length
@@ -217,6 +220,20 @@ private:
   int64_t ref_cnt_;
   int64_t last_modified_ts_;
   Aws::S3::S3Client *client_;
+};
+
+class ObS3RetryStrategy : public Aws::Client::DefaultRetryStrategy
+{
+public:
+  ObS3RetryStrategy(long maxRetries = 10, long scaleFactor = 25);
+  virtual ~ObS3RetryStrategy() {}
+
+  virtual long CalculateDelayBeforeNextRetry(const Aws::Client::AWSError<Aws::Client::CoreErrors>& error, long attemptedRetries) const override;
+
+private:
+  static const int64_t JITTER_MIN = 50;  // 50ms
+  static const int64_t JITTER_MAX = 500; // 500ms
+  static const int64_t MAX_DELAY_MS = 20 * 1000; // 20s
 };
 
 class ObS3Env

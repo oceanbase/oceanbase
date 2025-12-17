@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "lib/random/ob_random.h"
 #include "lib/restore/ob_storage.h"
 #include "ob_storage_s3_base.h"
 #include "lib/utility/ob_tracepoint.h"
@@ -154,9 +155,8 @@ int ObS3Client::init_s3_client_configuration_(const ObS3Account &account,
       config.useVirtualAddressing = false;
     }
 
-    // Default maxRetries is 10
     std::shared_ptr<Aws::Client::DefaultRetryStrategy> retryStrategy =
-        Aws::MakeShared<Aws::Client::DefaultRetryStrategy>(S3_SDK, 1/*maxRetries*/);
+        Aws::MakeShared<ObS3RetryStrategy>(S3_SDK, static_cast<long>(S3_MAX_RETRY_COUNT), 25/*scaleFactor*/);
     config.retryStrategy = retryStrategy;
   }
   return ret;
@@ -884,6 +884,32 @@ static int validate_response_checksum(
     OB_LOG(WARN, "failed to check sha256", K(ret));
   }
   return ret;
+}
+
+/*--------------------------------ObS3RetryStrategy--------------------------------*/
+ObS3RetryStrategy::ObS3RetryStrategy(long maxRetries, long scaleFactor)
+  : Aws::Client::DefaultRetryStrategy(maxRetries, scaleFactor)
+{
+}
+
+long ObS3RetryStrategy::CalculateDelayBeforeNextRetry(const Aws::Client::AWSError<Aws::Client::CoreErrors>& error, long attemptedRetries) const
+{
+  int ret = OB_SUCCESS;
+  int64_t delay_ms = m_scaleFactor * (1 << min(attemptedRetries, 10L));
+
+  if (attemptedRetries >= 3) {
+    delay_ms += ObRandom::rand(JITTER_MIN, JITTER_MAX);
+  }
+  delay_ms = min(delay_ms, MAX_DELAY_MS);
+
+  convert_io_error(error, ret);
+
+  const char *request_id = error.GetRequestId().c_str();
+  const char *excpetion = error.GetExceptionName().c_str();
+  const char *err_msg = error.GetMessage().c_str();
+  OB_LOG(WARN, "[S3 RETRY]", KR(ret), K(request_id), K(excpetion), K(err_msg), K(attemptedRetries), K(delay_ms));
+
+  return delay_ms;
 }
 
 /*--------------------------------ObS3Account--------------------------------*/
