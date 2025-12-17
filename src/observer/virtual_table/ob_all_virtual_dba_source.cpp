@@ -246,8 +246,11 @@ int ObAllVirtualDbaSource::split_text_into_lines(const ObString &text, ObArray<O
         if (OB_FAIL(push_line_segments(line_start, p - line_start, lines))) {
           break;
         }
+      } else if (p == line_start) {
+        if (OB_FAIL(push_line_segments(line_start, 1, lines))) {
+          break;
+        }
       }
-
       if (p + 1 < end && ((*p == '\r' && *(p + 1) == '\n') || (*p == '\n' && *(p + 1) == '\r'))) {
         p++;
       }
