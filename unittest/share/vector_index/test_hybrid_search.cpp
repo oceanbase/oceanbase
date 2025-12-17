@@ -82,7 +82,7 @@ TEST_F(TestHybridSearch, basic_match)
       }
     })";
 
-  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (match(query) against('database or oceanBase' in natural language mode) + match(content) against('Elasticsearch' in natural language mode)) as _score FROM doc_table WHERE match(query) against('database or oceanBase' in natural language mode) AND match(content) against('Elasticsearch' in natural language mode) ORDER BY _score DESC, __pk_increment LIMIT 10");
+  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (match(`query`) against('database or oceanBase' in natural language mode) + match(`content`) against('Elasticsearch' in natural language mode)) as `_score` FROM `doc_table` WHERE match(`query`) against('database or oceanBase' in natural language mode) AND match(`content`) against('Elasticsearch' in natural language mode) ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
   ObString table_name("doc_table");
   ObQueryReqFromJson *req = nullptr;
   TestHybridSearchHelp::runtest(table_name, req_str, result);
@@ -102,7 +102,7 @@ TEST_F(TestHybridSearch, basic_term)
       }
     }
   })";
-  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, ((book_name = 'c ++ programming') + match(content) against('Elasticsearch' in natural language mode)) as _score FROM doc_table WHERE book_name = 'c ++ programming' AND match(content) against('Elasticsearch' in natural language mode) ORDER BY _score DESC, __pk_increment LIMIT 10");
+  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, ((`book_name` = 'c ++ programming') + match(`content`) against('Elasticsearch' in natural language mode)) as `_score` FROM `doc_table` WHERE `book_name` = 'c ++ programming' AND match(`content`) against('Elasticsearch' in natural language mode) ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result);
 }
@@ -119,7 +119,7 @@ TEST_F(TestHybridSearch, must_not_single_match)
       }
     }
   })";
-  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, 0 as _score FROM doc_table WHERE NOT match(query) against('database or oceanBase' in natural language mode) ORDER BY __pk_increment LIMIT 10");
+  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, 0 as `_score` FROM `doc_table` WHERE NOT match(`query`) against('database or oceanBase' in natural language mode) ORDER BY `__pk_increment` LIMIT 10");
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result);
 }
@@ -137,7 +137,7 @@ TEST_F(TestHybridSearch, must_not_multiple_conditions)
       }
     }
   })";
-  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, 0 as _score FROM doc_table WHERE NOT (match(query) against('database or oceanBase' in natural language mode) OR match(content) against('Elasticsearch' in natural language mode) OR price >= 100) ORDER BY __pk_increment LIMIT 10");
+  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, 0 as `_score` FROM `doc_table` WHERE NOT (match(`query`) against('database or oceanBase' in natural language mode) OR match(`content`) against('Elasticsearch' in natural language mode) OR `price` >= 100) ORDER BY `__pk_increment` LIMIT 10");
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result);
 }
@@ -158,7 +158,7 @@ TEST_F(TestHybridSearch, must_not_with_must)
       }
     }
   })";
-  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, match(book_name) against('c ++ programming' in natural language mode) as _score FROM doc_table WHERE match(book_name) against('c ++ programming' in natural language mode) AND NOT (match(query) against('database or oceanBase' in natural language mode) OR match(content) against('Elasticsearch' in natural language mode) OR price >= 100) ORDER BY _score DESC, __pk_increment LIMIT 10");
+  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, match(`book_name`) against('c ++ programming' in natural language mode) as `_score` FROM `doc_table` WHERE match(`book_name`) against('c ++ programming' in natural language mode) AND NOT (match(`query`) against('database or oceanBase' in natural language mode) OR match(`content`) against('Elasticsearch' in natural language mode) OR `price` >= 100) ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result);
 }
@@ -187,11 +187,11 @@ TEST_F(TestHybridSearch, must_not_with_bool_query)
     }
   })";
   common::ObString result(
-    "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, match(book_name) against('c ++ programming' in natural language mode) as _score "
-    "FROM doc_table WHERE match(book_name) against('c ++ programming' in natural language mode) AND "
-    "NOT (match(query) against('database or oceanBase' in natural language mode) OR "
-    "match(content) against('Elasticsearch' in natural language mode) OR "
-    "book_id = '1' OR age = '2') ORDER BY _score DESC, __pk_increment LIMIT 10");
+    "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, match(`book_name`) against('c ++ programming' in natural language mode) as `_score` "
+    "FROM `doc_table` WHERE match(`book_name`) against('c ++ programming' in natural language mode) AND "
+    "NOT (match(`query`) against('database or oceanBase' in natural language mode) OR "
+    "match(`content`) against('Elasticsearch' in natural language mode) OR "
+    "`book_id` = '1' OR `age` = '2') ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result);
 }
@@ -211,7 +211,7 @@ TEST_F(TestHybridSearch, basic_filter)
       }
     }
   })";
-  common::ObString result1("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, 0 as _score FROM doc_table WHERE book_name = 'c ++ programming' ORDER BY __pk_increment LIMIT 10");
+  common::ObString result1("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, 0 as `_score` FROM `doc_table` WHERE `book_name` = 'c ++ programming' ORDER BY `__pk_increment` LIMIT 10");
 
   common::ObString req_str2 = R"({
       "query": {
@@ -235,7 +235,7 @@ TEST_F(TestHybridSearch, basic_filter)
         }
       }
     })";
-  common::ObString result2("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (match(query) against('database or oceanBase' in natural language mode) + match(content) against('Elasticsearch' in natural language mode)) as _score FROM doc_table WHERE match(query) against('database or oceanBase' in natural language mode) AND match(content) against('Elasticsearch' in natural language mode) AND match(book_id) against('1' in natural language mode) AND match(age) against('2' in natural language mode) AND book_name = 'c ++ programming' ORDER BY _score DESC, __pk_increment LIMIT 10");
+  common::ObString result2("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (match(`query`) against('database or oceanBase' in natural language mode) + match(`content`) against('Elasticsearch' in natural language mode)) as `_score` FROM `doc_table` WHERE match(`query`) against('database or oceanBase' in natural language mode) AND match(`content`) against('Elasticsearch' in natural language mode) AND match(`book_id`) against('1' in natural language mode) AND match(`age`) against('2' in natural language mode) AND `book_name` = 'c ++ programming' ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
 
   common::ObString req_str3 = R"({
     "query": {
@@ -248,7 +248,7 @@ TEST_F(TestHybridSearch, basic_filter)
       }
     }
   })";
-  common::ObString result3("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, 0 as _score FROM doc_table WHERE book_name = 'c ++ programming' AND book_id = 1 AND price = 2.35 ORDER BY __pk_increment LIMIT 10");
+  common::ObString result3("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, 0 as `_score` FROM `doc_table` WHERE `book_name` = 'c ++ programming' AND `book_id` = 1 AND `price` = 2.35 ORDER BY `__pk_increment` LIMIT 10");
   TestHybridSearchHelp::runtest(table_name, req_str1, result1);
   TestHybridSearchHelp::runtest(table_name, req_str2, result2);
   TestHybridSearchHelp::runtest(table_name, req_str3, result3);
@@ -270,22 +270,22 @@ TEST_F(TestHybridSearch, should_with_minimum_should_match)
     }
   })";
   common::ObString result(
-    "SELECT *, (_fts_sub_score_0 + _fts_sub_score_1 + _fts_sub_score_2 + _fts_sub_score_3) as _score FROM "
+    "SELECT *, (`_fts_sub_score_0` + `_fts_sub_score_1` + `_fts_sub_score_2` + `_fts_sub_score_3`) as `_score` FROM "
     "(SELECT /*+ opt_param('hidden_column_visible', 'true') */*, "
-    "match(query) against('database or oceanBase' in natural language mode) as _fts_sub_score_0, "
-    "match(content) against('Elasticsearch' in natural language mode) as _fts_sub_score_1, "
-    "book_id = '1' as _fts_sub_score_2, "
-    "age = '2' as _fts_sub_score_3, "
-    "__pk_increment "
-    "FROM doc_table "
+    "match(`query`) against('database or oceanBase' in natural language mode) as `_fts_sub_score_0`, "
+    "match(`content`) against('Elasticsearch' in natural language mode) as `_fts_sub_score_1`, "
+    "`book_id` = '1' as `_fts_sub_score_2`, "
+    "`age` = '2' as `_fts_sub_score_3`, "
+    "`__pk_increment` "
+    "FROM `doc_table` "
     "WHERE "
-    "match(query) against('database or oceanBase' in natural language mode) OR "
-    "match(content) against('Elasticsearch' in natural language mode) OR "
-    "book_id = '1' "
-    "OR age = '2'"
-    ") _fts_sub "
-    "WHERE (_fts_sub_score_0 > 0) + (_fts_sub_score_1 > 0) + (_fts_sub_score_2 > 0) + (_fts_sub_score_3 > 0) >= 3 "
-    "ORDER BY _score DESC, __pk_increment "
+    "match(`query`) against('database or oceanBase' in natural language mode) OR "
+    "match(`content`) against('Elasticsearch' in natural language mode) OR "
+    "`book_id` = '1' "
+    "OR `age` = '2'"
+    ") `_fts_sub` "
+    "WHERE (`_fts_sub_score_0` > 0) + (`_fts_sub_score_1` > 0) + (`_fts_sub_score_2` > 0) + (`_fts_sub_score_3` > 0) >= 3 "
+    "ORDER BY `_score` DESC, `__pk_increment` "
     "LIMIT 10");
 
   ObString table_name("doc_table");
@@ -310,15 +310,15 @@ TEST_F(TestHybridSearch, should_with_must_and_minimum_should_match)
     }
   })";
   common::ObString result(
-    "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (match(book_id) against('1' in natural language mode) + match(age) against('2' in natural language mode) + "
-    "match(query) against('database or oceanBase' in natural language mode) + match(content) against('Elasticsearch' in natural language mode)) as _score "
-    "FROM doc_table "
+    "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (match(`book_id`) against('1' in natural language mode) + match(`age`) against('2' in natural language mode) + "
+    "match(`query`) against('database or oceanBase' in natural language mode) + match(`content`) against('Elasticsearch' in natural language mode)) as `_score` "
+    "FROM `doc_table` "
     "WHERE "
-    "match(book_id) against('1' in natural language mode) AND "
-    "match(age) against('2' in natural language mode) AND "
-    "match(query) against('database or oceanBase' in natural language mode) AND "
-    "match(content) against('Elasticsearch' in natural language mode) "
-    "ORDER BY _score DESC, __pk_increment LIMIT 10");
+    "match(`book_id`) against('1' in natural language mode) AND "
+    "match(`age`) against('2' in natural language mode) AND "
+    "match(`query`) against('database or oceanBase' in natural language mode) AND "
+    "match(`content`) against('Elasticsearch' in natural language mode) "
+    "ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
 
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result);
@@ -342,14 +342,14 @@ TEST_F(TestHybridSearch, should_with_must_and_minimum_should_match_one)
     }
   })";
   common::ObString result(
-    "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (match(book_name) against('c ++ programming' in natural language mode) + "
-    "match(query) against('database or oceanBase' in natural language mode) + "
-    "match(content) against('Elasticsearch' in natural language mode) + (book_id = '1')) as _score "
-    "FROM doc_table WHERE match(book_name) against('c ++ programming' in natural language mode) AND "
-    "(match(query) against('database or oceanBase' in natural language mode) OR "
-    "match(content) against('Elasticsearch' in natural language mode) OR "
-    "book_id = '1') "
-    "ORDER BY _score DESC, __pk_increment LIMIT 10");
+    "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (match(`book_name`) against('c ++ programming' in natural language mode) + "
+    "match(`query`) against('database or oceanBase' in natural language mode) + "
+    "match(`content`) against('Elasticsearch' in natural language mode) + (`book_id` = '1')) as `_score` "
+    "FROM `doc_table` WHERE match(`book_name`) against('c ++ programming' in natural language mode) AND "
+    "(match(`query`) against('database or oceanBase' in natural language mode) OR "
+    "match(`content`) against('Elasticsearch' in natural language mode) OR "
+    "`book_id` = '1') "
+    "ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
 
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result);
@@ -371,7 +371,7 @@ TEST_F(TestHybridSearch, should_with_must_no_minimum_should_match)
       }
     }
   })";
-  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (match(book_id) against('1' in natural language mode) + match(age) against('2' in natural language mode) + match(query) against('database or oceanBase' in natural language mode) + match(content) against('Elasticsearch' in natural language mode)) as _score FROM doc_table WHERE match(book_id) against('1' in natural language mode) AND match(age) against('2' in natural language mode) AND (match(query) against('database or oceanBase' in natural language mode) OR match(content) against('Elasticsearch' in natural language mode)) ORDER BY _score DESC, __pk_increment LIMIT 10");
+  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (match(`book_id`) against('1' in natural language mode) + match(`age`) against('2' in natural language mode) + match(`query`) against('database or oceanBase' in natural language mode) + match(`content`) against('Elasticsearch' in natural language mode)) as `_score` FROM `doc_table` WHERE match(`book_id`) against('1' in natural language mode) AND match(`age`) against('2' in natural language mode) AND (match(`query`) against('database or oceanBase' in natural language mode) OR match(`content`) against('Elasticsearch' in natural language mode)) ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
 
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result);
@@ -398,14 +398,14 @@ TEST_F(TestHybridSearch, should_with_nested_bool)
     }
   })";
   common::ObString result(
-    "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (match(query) against('database or oceanBase' in natural language mode) + "
-    "match(content) against('Elasticsearch' in natural language mode) + "
-    "match(book_id) against('1' in natural language mode) + match(age) against('2' in natural language mode)) as _score "
-    "FROM doc_table WHERE "
-    "match(query) against('database or oceanBase' in natural language mode) OR "
-    "match(content) against('Elasticsearch' in natural language mode) OR "
-    "(match(book_id) against('1' in natural language mode) AND match(age) against('2' in natural language mode)) "
-    "ORDER BY _score DESC, __pk_increment LIMIT 10");
+    "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (match(`query`) against('database or oceanBase' in natural language mode) + "
+    "match(`content`) against('Elasticsearch' in natural language mode) + "
+    "match(`book_id`) against('1' in natural language mode) + match(`age`) against('2' in natural language mode)) as `_score` "
+    "FROM `doc_table` WHERE "
+    "match(`query`) against('database or oceanBase' in natural language mode) OR "
+    "match(`content`) against('Elasticsearch' in natural language mode) OR "
+    "(match(`book_id`) against('1' in natural language mode) AND match(`age`) against('2' in natural language mode)) "
+    "ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
 
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result);
@@ -433,14 +433,14 @@ TEST_F(TestHybridSearch, should_with_nested_bool_and_minimum_should_match)
     }
   })";
   common::ObString result(
-    "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (match(query) against('database or oceanBase' in natural language mode) + "
-    "match(content) against('Elasticsearch' in natural language mode) + "
-    "match(book_id) against('1' in natural language mode) + match(age) against('2' in natural language mode)) as _score "
-    "FROM doc_table WHERE "
-    "(match(query) against('database or oceanBase' in natural language mode) AND match(content) against('Elasticsearch' in natural language mode)) OR "
-    "(match(query) against('database or oceanBase' in natural language mode) AND match(book_id) against('1' in natural language mode) AND match(age) against('2' in natural language mode)) OR "
-    "(match(content) against('Elasticsearch' in natural language mode) AND match(book_id) against('1' in natural language mode) AND match(age) against('2' in natural language mode)) "
-    "ORDER BY _score DESC, __pk_increment LIMIT 10");
+    "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (match(`query`) against('database or oceanBase' in natural language mode) + "
+    "match(`content`) against('Elasticsearch' in natural language mode) + "
+    "match(`book_id`) against('1' in natural language mode) + match(`age`) against('2' in natural language mode)) as `_score` "
+    "FROM `doc_table` WHERE "
+    "(match(`query`) against('database or oceanBase' in natural language mode) AND match(`content`) against('Elasticsearch' in natural language mode)) OR "
+    "(match(`query`) against('database or oceanBase' in natural language mode) AND match(`book_id`) against('1' in natural language mode) AND match(`age`) against('2' in natural language mode)) OR "
+    "(match(`content`) against('Elasticsearch' in natural language mode) AND match(`book_id`) against('1' in natural language mode) AND match(`age`) against('2' in natural language mode)) "
+    "ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
 
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result);
@@ -459,7 +459,7 @@ TEST_F(TestHybridSearch, basic_range)
       }
     })";
   ObString table_name("doc_table");
-  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (c1 >= 2 AND c1 <= 5) as _score FROM doc_table WHERE c1 >= 2 AND c1 <= 5 ORDER BY _score DESC, __pk_increment LIMIT 10");
+  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (`c1` >= 2 AND `c1` <= 5) as `_score` FROM `doc_table` WHERE `c1` >= 2 AND `c1` <= 5 ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
   TestHybridSearchHelp::runtest(table_name, req_str, result);
 
   common::ObString req_str1 = R"({
@@ -478,7 +478,7 @@ TEST_F(TestHybridSearch, basic_range)
       }
     }
   })";
-  common::ObString result1("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (c1 >= 2 AND c1 <= 5) as _score FROM doc_table WHERE c1 >= 2 AND c1 <= 5 ORDER BY _score DESC, __pk_increment LIMIT 10");
+  common::ObString result1("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (`c1` >= 2 AND `c1` <= 5) as `_score` FROM `doc_table` WHERE `c1` >= 2 AND `c1` <= 5 ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
   TestHybridSearchHelp::runtest(table_name, req_str1, result1);
 }
 
@@ -535,7 +535,7 @@ TEST_F(TestHybridSearch, basic_knn)
   })";
   ObArenaAllocator allocator(ObModIds::TEST);
   ObString table_name("doc_table");
-  common::ObString result("SELECT *, l2_distance(vector, '[1, 2, 3]') as _distance, (round(1 / (1 + l2_distance(vector, '[1, 2, 3]')), 8) * 0.7) as _score FROM doc_table ORDER BY _distance APPROXIMATE LIMIT 5");
+  common::ObString result("SELECT *, l2_distance(`vector`, '[1, 2, 3]') as `_distance`, (round(1 / (1 + l2_distance(`vector`, '[1, 2, 3]')), 8) * 0.7) as `_score` FROM `doc_table` ORDER BY `_distance` APPROXIMATE LIMIT 5");
   ObQueryReqFromJson *req = nullptr;
   ObESQueryParser parser(allocator, &table_name);
   SMART_VAR(char[OB_MAX_SQL_LENGTH], buf) {
@@ -553,7 +553,7 @@ TEST_F(TestHybridSearch, basic_knn)
 
     MEMSET(buf, 0, sizeof(buf));
     res_len = 0;
-    common::ObString res1("SELECT * FROM (SELECT *, l2_distance(text, '[1, 2, 3]') as _distance, (round(1 / (1 + l2_distance(text, '[1, 2, 3]')), 8) * 0.7) as _score FROM doc_table ORDER BY _distance APPROXIMATE LIMIT 10) _vs0 WHERE _vs0._distance <= 0.5 LIMIT 10");
+    common::ObString res1("SELECT * FROM (SELECT *, l2_distance(`text`, '[1, 2, 3]') as `_distance`, (round(1 / (1 + l2_distance(`text`, '[1, 2, 3]')), 8) * 0.7) as `_score` FROM `doc_table` ORDER BY `_distance` APPROXIMATE LIMIT 10) `_vs0` WHERE `_vs0`.`_distance` <= 0.5 LIMIT 10");
     start_ts = ObClockGenerator::getClock();
 
     ASSERT_EQ(OB_SUCCESS, parser.parse(req_str1, req));
@@ -601,9 +601,9 @@ TEST_F(TestHybridSearch, knn_filter)
     }
   })";
   ObString table_name("doc_table");
-  common::ObString result("SELECT *, l2_distance(vector, '[1, 2, 3]') as _distance, (round(1 / (1 + l2_distance(vector, '[1, 2, 3]')), 8) * 0.7) as _score FROM doc_table WHERE c1 >= 2 ORDER BY _distance APPROXIMATE LIMIT 5");
+  common::ObString result("SELECT *, l2_distance(`vector`, '[1, 2, 3]') as `_distance`, (round(1 / (1 + l2_distance(`vector`, '[1, 2, 3]')), 8) * 0.7) as `_score` FROM `doc_table` WHERE `c1` >= 2 ORDER BY `_distance` APPROXIMATE LIMIT 5");
   TestHybridSearchHelp::runtest(table_name, req_str, result);
-  common::ObString res1("SELECT * FROM (SELECT *, l2_distance(text, '[1, 2, 3]') as _distance, (round(1 / (1 + l2_distance(text, '[1, 2, 3]')), 8) * 0.7) as _score FROM doc_table WHERE c1 >= 2 ORDER BY _distance APPROXIMATE LIMIT 10) _vs0 WHERE _vs0._distance <= 0.5 LIMIT 10");
+  common::ObString res1("SELECT * FROM (SELECT *, l2_distance(`text`, '[1, 2, 3]') as `_distance`, (round(1 / (1 + l2_distance(`text`, '[1, 2, 3]')), 8) * 0.7) as `_score` FROM `doc_table` WHERE `c1` >= 2 ORDER BY `_distance` APPROXIMATE LIMIT 10) `_vs0` WHERE `_vs0`.`_distance` <= 0.5 LIMIT 10");
   TestHybridSearchHelp::runtest(table_name, req_str1, res1);
 }
 
@@ -630,7 +630,7 @@ TEST_F(TestHybridSearch, multi_knn)
       ]
     })";
   ObString table_name("doc_table");
-  common::ObString result("SELECT *, sum(_score) as _score FROM ((SELECT /*+ opt_param('hidden_column_visible', 'true') */*, l2_distance(vector, '[1, 2, 3]') as _distance, __pk_increment, (round(1 / (1 + l2_distance(vector, '[1, 2, 3]')), 8) * 0.7) as _score FROM doc_table WHERE c1 >= 2 ORDER BY _distance APPROXIMATE LIMIT 5)  UNION ALL (SELECT /*+ opt_param('hidden_column_visible', 'true') */*, l2_distance(semantic_text, '[1, 2, 3]') as _distance, __pk_increment, round(1 / (1 + l2_distance(semantic_text, '[1, 2, 3]')), 8) as _score FROM doc_table ORDER BY _distance APPROXIMATE LIMIT 5) ) GROUP BY __pk_increment ORDER BY _score DESC LIMIT 10");
+  common::ObString result("SELECT *, sum(`_score`) as `_score` FROM ((SELECT /*+ opt_param('hidden_column_visible', 'true') */*, l2_distance(`vector`, '[1, 2, 3]') as `_distance`, `__pk_increment`, (round(1 / (1 + l2_distance(`vector`, '[1, 2, 3]')), 8) * 0.7) as `_score` FROM `doc_table` WHERE `c1` >= 2 ORDER BY `_distance` APPROXIMATE LIMIT 5) UNION ALL (SELECT /*+ opt_param('hidden_column_visible', 'true') */*, l2_distance(`semantic_text`, '[1, 2, 3]') as `_distance`, `__pk_increment`, round(1 / (1 + l2_distance(`semantic_text`, '[1, 2, 3]')), 8) as `_score` FROM `doc_table` ORDER BY `_distance` APPROXIMATE LIMIT 5)) GROUP BY `__pk_increment` ORDER BY `_score` DESC LIMIT 10");
   TestHybridSearchHelp::runtest(table_name, req_str, result);
 }
 
@@ -645,7 +645,7 @@ TEST_F(TestHybridSearch, rank_feature)
         }
       }
     })";
-  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (pow(pagerank, 0.6) / (pow(pagerank, 0.6) + pow(40, 0.6))) as _score FROM doc_table WHERE pagerank IS NOT NULL ORDER BY _score DESC, __pk_increment LIMIT 10");
+  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (pow(`pagerank`, 0.6) / (pow(`pagerank`, 0.6) + pow(40, 0.6))) as `_score` FROM `doc_table` WHERE `pagerank` IS NOT NULL ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result);
 
@@ -657,7 +657,7 @@ TEST_F(TestHybridSearch, rank_feature)
       }
     }
   })";
-  common::ObString result1("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (40 / (pagerank + 40)) as _score FROM doc_table WHERE pagerank IS NOT NULL ORDER BY _score DESC, __pk_increment LIMIT 10");
+  common::ObString result1("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (40 / (`pagerank` + 40)) as `_score` FROM `doc_table` WHERE `pagerank` IS NOT NULL ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
   TestHybridSearchHelp::runtest(table_name, req_str1, result1);
 
     common::ObString req_str2 = R"({
@@ -668,7 +668,7 @@ TEST_F(TestHybridSearch, rank_feature)
       }
     }
   })";
-  common::ObString result2("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (pagerank / (pagerank + 40)) as _score FROM doc_table WHERE pagerank IS NOT NULL ORDER BY _score DESC, __pk_increment LIMIT 10");
+  common::ObString result2("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (`pagerank` / (`pagerank` + 40)) as `_score` FROM `doc_table` WHERE `pagerank` IS NOT NULL ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
   TestHybridSearchHelp::runtest(table_name, req_str2, result2);
 
   common::ObString req_str3 = R"({
@@ -679,7 +679,7 @@ TEST_F(TestHybridSearch, rank_feature)
       }
     }
   })";
-  common::ObString result3("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, pagerank as _score FROM doc_table WHERE pagerank IS NOT NULL ORDER BY _score DESC, __pk_increment LIMIT 10");
+  common::ObString result3("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, `pagerank` as `_score` FROM `doc_table` WHERE `pagerank` IS NOT NULL ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
   TestHybridSearchHelp::runtest(table_name, req_str3, result3);
 
   common::ObString req_str4 = R"({
@@ -690,7 +690,7 @@ TEST_F(TestHybridSearch, rank_feature)
       }
     }
   })";
-  common::ObString result4("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (1 / pagerank) as _score FROM doc_table WHERE pagerank IS NOT NULL ORDER BY _score DESC, __pk_increment LIMIT 10");
+  common::ObString result4("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (1 / `pagerank`) as `_score` FROM `doc_table` WHERE `pagerank` IS NOT NULL ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
   TestHybridSearchHelp::runtest(table_name, req_str4, result4);
 
   common::ObString req_str5 = R"({
@@ -701,7 +701,7 @@ TEST_F(TestHybridSearch, rank_feature)
         }
       }
     })";
-  common::ObString result5("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (pow(40, 0.6) / (pow(pagerank, 0.6) + pow(40, 0.6))) as _score FROM doc_table WHERE pagerank IS NOT NULL ORDER BY _score DESC, __pk_increment LIMIT 10");
+  common::ObString result5("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (pow(40, 0.6) / (pow(`pagerank`, 0.6) + pow(40, 0.6))) as `_score` FROM `doc_table` WHERE `pagerank` IS NOT NULL ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
   TestHybridSearchHelp::runtest(table_name, req_str5, result5);
 
   common::ObString req_str6 = R"({
@@ -712,7 +712,7 @@ TEST_F(TestHybridSearch, rank_feature)
       }
     }
   })";
-  common::ObString result6("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, ln(pagerank + 4) as _score FROM doc_table WHERE pagerank IS NOT NULL ORDER BY _score DESC, __pk_increment LIMIT 10");
+  common::ObString result6("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, ln(`pagerank` + 4) as `_score` FROM `doc_table` WHERE `pagerank` IS NOT NULL ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
   TestHybridSearchHelp::runtest(table_name, req_str6, result6);
 
   // only positive score impact supported
@@ -724,7 +724,7 @@ TEST_F(TestHybridSearch, rank_feature)
       }
     }
   })";
-  common::ObString result7("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, ln(pagerank + 4) as _score FROM doc_table WHERE pagerank IS NOT NULL ORDER BY _score DESC, __pk_increment LIMIT 10");
+  common::ObString result7("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, ln(`pagerank` + 4) as `_score` FROM `doc_table` WHERE `pagerank` IS NOT NULL ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
   TestHybridSearchHelp::runtest(table_name, req_str7, result7);
 
 }
@@ -749,7 +749,7 @@ TEST_F(TestHybridSearch, match_knn)
           "boost": 0.7
       }
     })";
-  common::ObString result("SELECT *, (ifnull(_fts._keyword_score, 0) + ifnull(_vs._semantic_score, 0)) as _score FROM ((SELECT /*+ opt_param('hidden_column_visible', 'true') */__pk_increment, (match(query) against('database or oceanBase' in natural language mode) + match(content) against('Elasticsearch' in natural language mode)) as _keyword_score FROM doc_table WHERE match(query) against('database or oceanBase' in natural language mode) AND match(content) against('Elasticsearch' in natural language mode) ORDER BY _keyword_score DESC LIMIT 200) _fts full join (SELECT /*+ opt_param('hidden_column_visible', 'true') */*, l2_distance(vector, '[1, 2, 3]') as _distance, __pk_increment, (round(1 / (1 + l2_distance(vector, '[1, 2, 3]')), 8) * 0.7) as _semantic_score FROM doc_table ORDER BY _distance APPROXIMATE LIMIT 5) _vs on _fts.__pk_increment = _vs.__pk_increment) ORDER BY _score DESC, ifnull(_vs.__pk_increment, _fts.__pk_increment) LIMIT 10");
+  common::ObString result("SELECT *, (ifnull(`_fts`.`_keyword_score`, 0) + ifnull(`_vs`.`_semantic_score`, 0)) as `_score` FROM ((SELECT /*+ opt_param('hidden_column_visible', 'true') */`__pk_increment`, (match(`query`) against('database or oceanBase' in natural language mode) + match(`content`) against('Elasticsearch' in natural language mode)) as `_keyword_score` FROM `doc_table` WHERE match(`query`) against('database or oceanBase' in natural language mode) AND match(`content`) against('Elasticsearch' in natural language mode) ORDER BY `_keyword_score` DESC LIMIT 200) `_fts` full join (SELECT /*+ opt_param('hidden_column_visible', 'true') */*, l2_distance(`vector`, '[1, 2, 3]') as `_distance`, `__pk_increment`, (round(1 / (1 + l2_distance(`vector`, '[1, 2, 3]')), 8) * 0.7) as `_semantic_score` FROM `doc_table` ORDER BY `_distance` APPROXIMATE LIMIT 5) `_vs` on `_fts`.`__pk_increment` = `_vs`.`__pk_increment`) ORDER BY `_score` DESC, ifnull(`_vs`.`__pk_increment`, `_fts`.`__pk_increment`) LIMIT 10");
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result);
 }
@@ -775,7 +775,7 @@ TEST_F(TestHybridSearch, match_knn_output)
       },
       "_source" : ["query", "content", "vector", "_keyword_score", "_semantic_score"]
     })";
-  common::ObString result("SELECT ifnull(_fts.query, _vs.query) as query, ifnull(_fts.content, _vs.content) as content, ifnull(_fts.vector, _vs.vector) as vector, _keyword_score, _semantic_score, (ifnull(_fts._keyword_score, 0) + ifnull(_vs._semantic_score, 0)) as _score FROM ((SELECT /*+ opt_param('hidden_column_visible', 'true') */__pk_increment, query, content, vector, (match(query) against('database or oceanBase' in natural language mode) + match(content) against('Elasticsearch' in natural language mode)) as _keyword_score FROM doc_table WHERE match(query) against('database or oceanBase' in natural language mode) AND match(content) against('Elasticsearch' in natural language mode) ORDER BY _keyword_score DESC LIMIT 200) _fts full join (SELECT /*+ opt_param('hidden_column_visible', 'true') */l2_distance(vector, '[1, 2, 3]') as _distance, __pk_increment, query, content, vector, (round(1 / (1 + l2_distance(vector, '[1, 2, 3]')), 8) * 0.7) as _semantic_score FROM doc_table ORDER BY _distance APPROXIMATE LIMIT 5) _vs on _fts.__pk_increment = _vs.__pk_increment) ORDER BY _score DESC, ifnull(_vs.__pk_increment, _fts.__pk_increment) LIMIT 10");
+  common::ObString result("SELECT ifnull(`_fts`.`query`, `_vs`.`query`) as `query`, ifnull(`_fts`.`content`, `_vs`.`content`) as `content`, ifnull(`_fts`.`vector`, `_vs`.`vector`) as `vector`, `_keyword_score`, `_semantic_score`, (ifnull(`_fts`.`_keyword_score`, 0) + ifnull(`_vs`.`_semantic_score`, 0)) as `_score` FROM ((SELECT /*+ opt_param('hidden_column_visible', 'true') */`__pk_increment`, `query`, `content`, `vector`, (match(`query`) against('database or oceanBase' in natural language mode) + match(`content`) against('Elasticsearch' in natural language mode)) as `_keyword_score` FROM `doc_table` WHERE match(`query`) against('database or oceanBase' in natural language mode) AND match(`content`) against('Elasticsearch' in natural language mode) ORDER BY `_keyword_score` DESC LIMIT 200) `_fts` full join (SELECT /*+ opt_param('hidden_column_visible', 'true') */l2_distance(`vector`, '[1, 2, 3]') as `_distance`, `__pk_increment`, `query`, `content`, `vector`, (round(1 / (1 + l2_distance(`vector`, '[1, 2, 3]')), 8) * 0.7) as `_semantic_score` FROM `doc_table` ORDER BY `_distance` APPROXIMATE LIMIT 5) `_vs` on `_fts`.`__pk_increment` = `_vs`.`__pk_increment`) ORDER BY `_score` DESC, ifnull(`_vs`.`__pk_increment`, `_fts`.`__pk_increment`) LIMIT 10");
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result);
 }
@@ -801,7 +801,7 @@ TEST_F(TestHybridSearch, match_knn_output_wrap)
       },
       "_source" : ["query", "content", "_keyword_score", "_semantic_score"]
     })";
-  common::ObString result("SELECT json_arrayagg(json_object('query', query, 'content', content, '_keyword_score', _keyword_score, '_semantic_score', _semantic_score, '_score', _score)) as hits FROM (SELECT ifnull(_fts.query, _vs.query) as query, ifnull(_fts.content, _vs.content) as content, _keyword_score, _semantic_score, (ifnull(_fts._keyword_score, 0) + ifnull(_vs._semantic_score, 0)) as _score FROM ((SELECT /*+ opt_param('hidden_column_visible', 'true') */__pk_increment, query, content, (match(query) against('database or oceanBase' in natural language mode) + match(content) against('Elasticsearch' in natural language mode)) as _keyword_score FROM test.doc_table WHERE match(query) against('database or oceanBase' in natural language mode) AND match(content) against('Elasticsearch' in natural language mode) ORDER BY _keyword_score DESC LIMIT 200) _fts full join (SELECT /*+ opt_param('hidden_column_visible', 'true') */l2_distance(vector, '[1, 2, 3]') as _distance, __pk_increment, query, content, (round(1 / (1 + l2_distance(vector, '[1, 2, 3]')), 8) * 0.7) as _semantic_score FROM test.doc_table ORDER BY _distance APPROXIMATE LIMIT 5) _vs on _fts.__pk_increment = _vs.__pk_increment) ORDER BY _score DESC, ifnull(_vs.__pk_increment, _fts.__pk_increment) LIMIT 10) ");
+  common::ObString result("SELECT json_arrayagg(json_object('query', `query`, 'content', `content`, '_keyword_score', `_keyword_score`, '_semantic_score', `_semantic_score`, '_score', `_score`)) as `hits` FROM (SELECT ifnull(`_fts`.`query`, `_vs`.`query`) as `query`, ifnull(`_fts`.`content`, `_vs`.`content`) as `content`, `_keyword_score`, `_semantic_score`, (ifnull(`_fts`.`_keyword_score`, 0) + ifnull(`_vs`.`_semantic_score`, 0)) as `_score` FROM ((SELECT /*+ opt_param('hidden_column_visible', 'true') */`__pk_increment`, `query`, `content`, (match(`query`) against('database or oceanBase' in natural language mode) + match(`content`) against('Elasticsearch' in natural language mode)) as `_keyword_score` FROM `test`.`doc_table` WHERE match(`query`) against('database or oceanBase' in natural language mode) AND match(`content`) against('Elasticsearch' in natural language mode) ORDER BY `_keyword_score` DESC LIMIT 200) `_fts` full join (SELECT /*+ opt_param('hidden_column_visible', 'true') */l2_distance(`vector`, '[1, 2, 3]') as `_distance`, `__pk_increment`, `query`, `content`, (round(1 / (1 + l2_distance(`vector`, '[1, 2, 3]')), 8) * 0.7) as `_semantic_score` FROM `test`.`doc_table` ORDER BY `_distance` APPROXIMATE LIMIT 5) `_vs` on `_fts`.`__pk_increment` = `_vs`.`__pk_increment`) ORDER BY `_score` DESC, ifnull(`_vs`.`__pk_increment`, `_fts`.`__pk_increment`) LIMIT 10)");
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result, true, "test");
 }
@@ -820,13 +820,13 @@ TEST_F(TestHybridSearch, query_string_without_type)
 
   common::ObString result(
     "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, "
-    "(GREATEST(match(title) against('elasticsearch' in natural language mode) * 3, match(content) against('elasticsearch' in natural language mode) * 2.5, match(tags) against('elasticsearch' in natural language mode)) * 2 +"
-    " GREATEST(match(title) against('database' in natural language mode) * 3, match(content) against('database' in natural language mode) * 2.5, match(tags) against('database' in natural language mode)) * 0.8)"
-    " as _score FROM doc_table WHERE"
-    " match(title) against('elasticsearch database' in natural language mode) OR"
-    " match(content) against('elasticsearch database' in natural language mode) OR"
-    " match(tags) against('elasticsearch database' in natural language mode)"
-    " ORDER BY _score DESC, __pk_increment LIMIT 10");
+    "(GREATEST(match(`title`) against('elasticsearch' in natural language mode) * 3, match(`content`) against('elasticsearch' in natural language mode) * 2.5, match(`tags`) against('elasticsearch' in natural language mode)) * 2 +"
+    " GREATEST(match(`title`) against('database' in natural language mode) * 3, match(`content`) against('database' in natural language mode) * 2.5, match(`tags`) against('database' in natural language mode)) * 0.8)"
+    " as `_score` FROM `doc_table` WHERE"
+    " match(`title`) against('elasticsearch database' in natural language mode) OR"
+    " match(`content`) against('elasticsearch database' in natural language mode) OR"
+    " match(`tags`) against('elasticsearch database' in natural language mode)"
+    " ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
 
   ObArenaAllocator tmp_allocator;
   ObString table_name("doc_table");
@@ -864,14 +864,14 @@ TEST_F(TestHybridSearch, query_string_best_fields)
 
   common::ObString result(
     "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, "
-    "((GREATEST(match(title) against('elasticsearch' in natural language mode) * 3, match(content) against('elasticsearch' in natural language mode) * 2.5, match(tags) against('elasticsearch' in natural language mode) * 1.5) * 2 +"
-    " GREATEST(match(title) against('database' in natural language mode) * 3, match(content) against('database' in natural language mode) * 2.5, match(tags) against('database' in natural language mode) * 1.5) * 0.8 +"
-    " GREATEST(match(title) against('tutorial' in natural language mode) * 3, match(content) against('tutorial' in natural language mode) * 2.5, match(tags) against('tutorial' in natural language mode) * 1.5) * 1.2) * 1.5)"
-    " as _score FROM doc_table WHERE"
-    " match(title) against('elasticsearch database tutorial' in natural language mode) OR"
-    " match(content) against('elasticsearch database tutorial' in natural language mode) OR"
-    " match(tags) against('elasticsearch database tutorial' in natural language mode)"
-    " ORDER BY _score DESC, __pk_increment LIMIT 10");
+    "((GREATEST(match(`title`) against('elasticsearch' in natural language mode) * 3, match(`content`) against('elasticsearch' in natural language mode) * 2.5, match(`tags`) against('elasticsearch' in natural language mode) * 1.5) * 2 +"
+    " GREATEST(match(`title`) against('database' in natural language mode) * 3, match(`content`) against('database' in natural language mode) * 2.5, match(`tags`) against('database' in natural language mode) * 1.5) * 0.8 +"
+    " GREATEST(match(`title`) against('tutorial' in natural language mode) * 3, match(`content`) against('tutorial' in natural language mode) * 2.5, match(`tags`) against('tutorial' in natural language mode) * 1.5) * 1.2) * 1.5)"
+    " as `_score` FROM `doc_table` WHERE"
+    " match(`title`) against('elasticsearch database tutorial' in natural language mode) OR"
+    " match(`content`) against('elasticsearch database tutorial' in natural language mode) OR"
+    " match(`tags`) against('elasticsearch database tutorial' in natural language mode)"
+    " ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
 
   ObArenaAllocator tmp_allocator;
   ObString table_name("doc_table");
@@ -909,24 +909,24 @@ TEST_F(TestHybridSearch, query_string_best_fields_with_minimum_should_match)
   })";
 
   common::ObString result(
-    "SELECT *, ((_fts_sub_score_0 + _fts_sub_score_1 + _fts_sub_score_2) * 1.5) as _score "
+    "SELECT *, ((`_fts_sub_score_0` + `_fts_sub_score_1` + `_fts_sub_score_2`) * 1.5) as `_score` "
     "FROM (SELECT /*+ opt_param('hidden_column_visible', 'true') */*, "
-    "GREATEST(match(title) against('elasticsearch' in natural language mode) * 3, "
-    "match(content) against('elasticsearch' in natural language mode) * 2.5, "
-    "match(tags) against('elasticsearch' in natural language mode) * 1.5) * 2 as _fts_sub_score_0, "
-    "GREATEST(match(title) against('database' in natural language mode) * 3, "
-    "match(content) against('database' in natural language mode) * 2.5, "
-    "match(tags) against('database' in natural language mode) * 1.5) * 0.8 as _fts_sub_score_1, "
-    "GREATEST(match(title) against('tutorial' in natural language mode) * 3, "
-    "match(content) against('tutorial' in natural language mode) * 2.5, "
-    "match(tags) against('tutorial' in natural language mode) * 1.5) * 1.2 as _fts_sub_score_2, "
-    "__pk_increment "
-    "FROM doc_table WHERE "
-    "match(title) against('elasticsearch database tutorial' in natural language mode) OR "
-    "match(content) against('elasticsearch database tutorial' in natural language mode) OR "
-    "match(tags) against('elasticsearch database tutorial' in natural language mode)) _fts_sub "
-    "WHERE (_fts_sub_score_0 > 0) + (_fts_sub_score_1 > 0) + (_fts_sub_score_2 > 0) >= 2 "
-    "ORDER BY _score DESC, __pk_increment LIMIT 10");
+    "GREATEST(match(`title`) against('elasticsearch' in natural language mode) * 3, "
+    "match(`content`) against('elasticsearch' in natural language mode) * 2.5, "
+    "match(`tags`) against('elasticsearch' in natural language mode) * 1.5) * 2 as `_fts_sub_score_0`, "
+    "GREATEST(match(`title`) against('database' in natural language mode) * 3, "
+    "match(`content`) against('database' in natural language mode) * 2.5, "
+    "match(`tags`) against('database' in natural language mode) * 1.5) * 0.8 as `_fts_sub_score_1`, "
+    "GREATEST(match(`title`) against('tutorial' in natural language mode) * 3, "
+    "match(`content`) against('tutorial' in natural language mode) * 2.5, "
+    "match(`tags`) against('tutorial' in natural language mode) * 1.5) * 1.2 as `_fts_sub_score_2`, "
+    "`__pk_increment` "
+    "FROM `doc_table` WHERE "
+    "match(`title`) against('elasticsearch database tutorial' in natural language mode) OR "
+    "match(`content`) against('elasticsearch database tutorial' in natural language mode) OR "
+    "match(`tags`) against('elasticsearch database tutorial' in natural language mode)) `_fts_sub` "
+    "WHERE (`_fts_sub_score_0` > 0) + (`_fts_sub_score_1` > 0) + (`_fts_sub_score_2` > 0) >= 2 "
+    "ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
 
   ObArenaAllocator tmp_allocator;
   ObString table_name("doc_table");
@@ -949,10 +949,10 @@ TEST_F(TestHybridSearch, query_string_best_fields_simple)
 
   common::ObString result(
     "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, "
-    "(match(title) against('elasticsearch' in natural language mode) * 3 * 2.89 * 3.1415926)"
-    " as _score FROM doc_table WHERE"
-    " match(title) against('elasticsearch' in natural language mode)"
-    " ORDER BY _score DESC, __pk_increment LIMIT 10");
+    "(match(`title`) against('elasticsearch' in natural language mode) * 3 * 2.89 * 3.1415926)"
+    " as `_score` FROM `doc_table` WHERE"
+    " match(`title`) against('elasticsearch' in natural language mode)"
+    " ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
 
   ObArenaAllocator tmp_allocator;
   ObString table_name("doc_table");
@@ -990,14 +990,14 @@ TEST_F(TestHybridSearch, query_string_most_fields)
 
   common::ObString result(
     "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, "
-    "(((match(title) against('elasticsearch' in natural language mode) * 3 + match(content) against('elasticsearch' in natural language mode) * 2.5 + match(tags) against('elasticsearch' in natural language mode) * 1.5) * 2 +"
-    " (match(title) against('database' in natural language mode) * 3 + match(content) against('database' in natural language mode) * 2.5 + match(tags) against('database' in natural language mode) * 1.5) * 0.8 +"
-    " (match(title) against('tutorial' in natural language mode) * 3 + match(content) against('tutorial' in natural language mode) * 2.5 + match(tags) against('tutorial' in natural language mode) * 1.5) * 1.2) * 0.8)"
-    " as _score FROM doc_table WHERE"
-    " match(title) against('elasticsearch database tutorial' in natural language mode) OR"
-    " match(content) against('elasticsearch database tutorial' in natural language mode) OR"
-    " match(tags) against('elasticsearch database tutorial' in natural language mode)"
-    " ORDER BY _score DESC, __pk_increment LIMIT 10");
+    "(((match(`title`) against('elasticsearch' in natural language mode) * 3 + match(`content`) against('elasticsearch' in natural language mode) * 2.5 + match(`tags`) against('elasticsearch' in natural language mode) * 1.5) * 2 +"
+    " (match(`title`) against('database' in natural language mode) * 3 + match(`content`) against('database' in natural language mode) * 2.5 + match(`tags`) against('database' in natural language mode) * 1.5) * 0.8 +"
+    " (match(`title`) against('tutorial' in natural language mode) * 3 + match(`content`) against('tutorial' in natural language mode) * 2.5 + match(`tags`) against('tutorial' in natural language mode) * 1.5) * 1.2) * 0.8)"
+    " as `_score` FROM `doc_table` WHERE"
+    " match(`title`) against('elasticsearch database tutorial' in natural language mode) OR"
+    " match(`content`) against('elasticsearch database tutorial' in natural language mode) OR"
+    " match(`tags`) against('elasticsearch database tutorial' in natural language mode)"
+    " ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
 
   ObArenaAllocator tmp_allocator;
   ObString table_name("doc_table");
@@ -1035,22 +1035,22 @@ TEST_F(TestHybridSearch, query_string_most_fields_with_minimum_should_match)
   })";
 
   common::ObString result(
-    "SELECT *, ((_fts_sub_score_0 + _fts_sub_score_1 + _fts_sub_score_2) * 0.8) as _score "
+    "SELECT *, ((`_fts_sub_score_0` + `_fts_sub_score_1` + `_fts_sub_score_2`) * 0.8) as `_score` "
     "FROM "
     "(SELECT /*+ opt_param('hidden_column_visible', 'true') */*, "
-    "(match(title) against('elasticsearch' in natural language mode) * 3 + match(content) against('elasticsearch' in natural language mode) * 2.5 + "
-    "match(tags) against('elasticsearch' in natural language mode) * 1.5) * 2 as _fts_sub_score_0, "
-    "(match(title) against('database' in natural language mode) * 3 + match(content) against('database' in natural language mode) * 2.5 + "
-    "match(tags) against('database' in natural language mode) * 1.5) * 0.8 as _fts_sub_score_1, "
-    "(match(title) against('tutorial' in natural language mode) * 3 + match(content) against('tutorial' in natural language mode) * 2.5 + "
-    "match(tags) against('tutorial' in natural language mode) * 1.5) * 1.2 as _fts_sub_score_2, "
-    "__pk_increment "
-    "FROM doc_table "
-    "WHERE match(title) against('elasticsearch database tutorial' in natural language mode) OR "
-    "match(content) against('elasticsearch database tutorial' in natural language mode) OR "
-    "match(tags) against('elasticsearch database tutorial' in natural language mode)) _fts_sub "
-    "WHERE (_fts_sub_score_0 > 0) + (_fts_sub_score_1 > 0) + (_fts_sub_score_2 > 0) >= 2 "
-    "ORDER BY _score DESC, __pk_increment LIMIT 10");
+    "(match(`title`) against('elasticsearch' in natural language mode) * 3 + match(`content`) against('elasticsearch' in natural language mode) * 2.5 + "
+    "match(`tags`) against('elasticsearch' in natural language mode) * 1.5) * 2 as `_fts_sub_score_0`, "
+    "(match(`title`) against('database' in natural language mode) * 3 + match(`content`) against('database' in natural language mode) * 2.5 + "
+    "match(`tags`) against('database' in natural language mode) * 1.5) * 0.8 as `_fts_sub_score_1`, "
+    "(match(`title`) against('tutorial' in natural language mode) * 3 + match(`content`) against('tutorial' in natural language mode) * 2.5 + "
+    "match(`tags`) against('tutorial' in natural language mode) * 1.5) * 1.2 as `_fts_sub_score_2`, "
+    "`__pk_increment` "
+    "FROM `doc_table` "
+    "WHERE match(`title`) against('elasticsearch database tutorial' in natural language mode) OR "
+    "match(`content`) against('elasticsearch database tutorial' in natural language mode) OR "
+    "match(`tags`) against('elasticsearch database tutorial' in natural language mode)) `_fts_sub` "
+    "WHERE (`_fts_sub_score_0` > 0) + (`_fts_sub_score_1` > 0) + (`_fts_sub_score_2` > 0) >= 2 "
+    "ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
 
   ObArenaAllocator tmp_allocator;
   ObString table_name("doc_table");
@@ -1073,14 +1073,14 @@ TEST_F(TestHybridSearch, query_string_phrase_no_weight)
 
   common::ObString result(
     "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, "
-    "(GREATEST(match(title) against('elasticsearch database tutorial' in match phrase mode) * 3, "
-    "match(content) against('elasticsearch database tutorial' in match phrase mode) * 2.5, "
-    "match(tags) against('elasticsearch database tutorial' in match phrase mode) * 1.5) * 1.2)"
-    " as _score FROM doc_table WHERE"
-    " match(title) against('elasticsearch database tutorial' in match phrase mode) OR"
-    " match(content) against('elasticsearch database tutorial' in match phrase mode) OR"
-    " match(tags) against('elasticsearch database tutorial' in match phrase mode)"
-    " ORDER BY _score DESC, __pk_increment LIMIT 10");
+    "(GREATEST(match(`title`) against('elasticsearch database tutorial' in match phrase mode) * 3, "
+    "match(`content`) against('elasticsearch database tutorial' in match phrase mode) * 2.5, "
+    "match(`tags`) against('elasticsearch database tutorial' in match phrase mode) * 1.5) * 1.2)"
+    " as `_score` FROM `doc_table` WHERE"
+    " match(`title`) against('elasticsearch database tutorial' in match phrase mode) OR"
+    " match(`content`) against('elasticsearch database tutorial' in match phrase mode) OR"
+    " match(`tags`) against('elasticsearch database tutorial' in match phrase mode)"
+    " ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
 
   ObArenaAllocator tmp_allocator;
   ObString table_name("doc_table");
@@ -1118,14 +1118,14 @@ TEST_F(TestHybridSearch, query_string_phrase_no_weight_with_minimum_should_match
   })";
   common::ObString result(
     "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, "
-    "(GREATEST(match(title) against('elasticsearch database tutorial' in match phrase mode) * 3, "
-    "match(content) against('elasticsearch database tutorial' in match phrase mode) * 2.5, "
-    "match(tags) against('elasticsearch database tutorial' in match phrase mode) * 1.5) * 1.2)"
-    " as _score FROM doc_table WHERE"
-    " match(title) against('elasticsearch database tutorial' in match phrase mode) OR"
-    " match(content) against('elasticsearch database tutorial' in match phrase mode) OR"
-    " match(tags) against('elasticsearch database tutorial' in match phrase mode)"
-    " ORDER BY _score DESC, __pk_increment LIMIT 10");
+    "(GREATEST(match(`title`) against('elasticsearch database tutorial' in match phrase mode) * 3, "
+    "match(`content`) against('elasticsearch database tutorial' in match phrase mode) * 2.5, "
+    "match(`tags`) against('elasticsearch database tutorial' in match phrase mode) * 1.5) * 1.2)"
+    " as `_score` FROM `doc_table` WHERE"
+    " match(`title`) against('elasticsearch database tutorial' in match phrase mode) OR"
+    " match(`content`) against('elasticsearch database tutorial' in match phrase mode) OR"
+    " match(`tags`) against('elasticsearch database tutorial' in match phrase mode)"
+    " ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
   ObArenaAllocator tmp_allocator;
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result);
@@ -1148,14 +1148,14 @@ TEST_F(TestHybridSearch, query_string_phrase_with_weight)
 
   common::ObString result(
     "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, "
-    "((GREATEST(match(title) against('elasticsearch' in natural language mode) * 3, match(content) against('elasticsearch' in natural language mode) * 2.5, match(tags) against('elasticsearch' in natural language mode) * 1.5) * 2 +"
-    " GREATEST(match(title) against('database' in natural language mode) * 3, match(content) against('database' in natural language mode) * 2.5, match(tags) against('database' in natural language mode) * 1.5) * 0.8 +"
-    " GREATEST(match(title) against('tutorial' in natural language mode) * 3, match(content) against('tutorial' in natural language mode) * 2.5, match(tags) against('tutorial' in natural language mode) * 1.5) * 1.2) * 0.9)"
-    " as _score FROM doc_table WHERE"
-    " match(title) against('elasticsearch database tutorial' in natural language mode) OR"
-    " match(content) against('elasticsearch database tutorial' in natural language mode) OR"
-    " match(tags) against('elasticsearch database tutorial' in natural language mode)"
-    " ORDER BY _score DESC, __pk_increment LIMIT 10");
+    "((GREATEST(match(`title`) against('elasticsearch' in natural language mode) * 3, match(`content`) against('elasticsearch' in natural language mode) * 2.5, match(`tags`) against('elasticsearch' in natural language mode) * 1.5) * 2 +"
+    " GREATEST(match(`title`) against('database' in natural language mode) * 3, match(`content`) against('database' in natural language mode) * 2.5, match(`tags`) against('database' in natural language mode) * 1.5) * 0.8 +"
+    " GREATEST(match(`title`) against('tutorial' in natural language mode) * 3, match(`content`) against('tutorial' in natural language mode) * 2.5, match(`tags`) against('tutorial' in natural language mode) * 1.5) * 1.2) * 0.9)"
+    " as `_score` FROM `doc_table` WHERE"
+    " match(`title`) against('elasticsearch database tutorial' in natural language mode) OR"
+    " match(`content`) against('elasticsearch database tutorial' in natural language mode) OR"
+    " match(`tags`) against('elasticsearch database tutorial' in natural language mode)"
+    " ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
 
   ObArenaAllocator tmp_allocator;
   ObString table_name("doc_table");
@@ -1192,14 +1192,14 @@ TEST_F(TestHybridSearch, query_string_cross_fields_no_default_operator)
 
   common::ObString result(
     "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, "
-    "(GREATEST(match(title) against('elasticsearch' in natural language mode) * 3, match(content) against('elasticsearch' in natural language mode) * 2.5, match(tags) against('elasticsearch' in natural language mode) * 1.5) +"
-    " GREATEST(match(title) against('database' in natural language mode) * 3, match(content) against('database' in natural language mode) * 2.5, match(tags) against('database' in natural language mode) * 1.5) +"
-    " GREATEST(match(title) against('tutorial' in natural language mode) * 3, match(content) against('tutorial' in natural language mode) * 2.5, match(tags) against('tutorial' in natural language mode) * 1.5))"
-    " as _score FROM doc_table WHERE"
-    " match(title) against('elasticsearch database tutorial' in natural language mode) OR"
-    " match(content) against('elasticsearch database tutorial' in natural language mode) OR"
-    " match(tags) against('elasticsearch database tutorial' in natural language mode)"
-    " ORDER BY _score DESC, __pk_increment LIMIT 10");
+    "(GREATEST(match(`title`) against('elasticsearch' in natural language mode) * 3, match(`content`) against('elasticsearch' in natural language mode) * 2.5, match(`tags`) against('elasticsearch' in natural language mode) * 1.5) +"
+    " GREATEST(match(`title`) against('database' in natural language mode) * 3, match(`content`) against('database' in natural language mode) * 2.5, match(`tags`) against('database' in natural language mode) * 1.5) +"
+    " GREATEST(match(`title`) against('tutorial' in natural language mode) * 3, match(`content`) against('tutorial' in natural language mode) * 2.5, match(`tags`) against('tutorial' in natural language mode) * 1.5))"
+    " as `_score` FROM `doc_table` WHERE"
+    " match(`title`) against('elasticsearch database tutorial' in natural language mode) OR"
+    " match(`content`) against('elasticsearch database tutorial' in natural language mode) OR"
+    " match(`tags`) against('elasticsearch database tutorial' in natural language mode)"
+    " ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
 
   ObArenaAllocator tmp_allocator;
   ObString table_name("doc_table");
@@ -1237,13 +1237,13 @@ TEST_F(TestHybridSearch, query_string_best_fields_with_and_operator)
 
   common::ObString result(
     "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, "
-    "(GREATEST(match(title) against('elasticsearch' in natural language mode) * 3, match(content) against('elasticsearch' in natural language mode) * 2.5) +"
-    " GREATEST(match(title) against('database' in natural language mode) * 3, match(content) against('database' in natural language mode) * 2.5) +"
-    " GREATEST(match(title) against('tutorial' in natural language mode) * 3, match(content) against('tutorial' in natural language mode) * 2.5))"
-    " as _score FROM doc_table WHERE"
-    " (match(title) against('elasticsearch' in natural language mode) AND match(title) against('database' in natural language mode) AND match(title) against('tutorial' in natural language mode)) OR"
-    " (match(content) against('elasticsearch' in natural language mode) AND match(content) against('database' in natural language mode) AND match(content) against('tutorial' in natural language mode))"
-    " ORDER BY _score DESC, __pk_increment LIMIT 10");
+    "(GREATEST(match(`title`) against('elasticsearch' in natural language mode) * 3, match(`content`) against('elasticsearch' in natural language mode) * 2.5) +"
+    " GREATEST(match(`title`) against('database' in natural language mode) * 3, match(`content`) against('database' in natural language mode) * 2.5) +"
+    " GREATEST(match(`title`) against('tutorial' in natural language mode) * 3, match(`content`) against('tutorial' in natural language mode) * 2.5))"
+    " as `_score` FROM `doc_table` WHERE"
+    " (match(`title`) against('elasticsearch' in natural language mode) AND match(`title`) against('database' in natural language mode) AND match(`title`) against('tutorial' in natural language mode)) OR"
+    " (match(`content`) against('elasticsearch' in natural language mode) AND match(`content`) against('database' in natural language mode) AND match(`content`) against('tutorial' in natural language mode))"
+    " ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
 
   ObArenaAllocator tmp_allocator;
   ObString table_name("doc_table");
@@ -1281,14 +1281,14 @@ TEST_F(TestHybridSearch, query_string_cross_fields_with_and_operator)
 
   common::ObString result(
     "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, "
-    "(GREATEST(match(title) against('elasticsearch' in natural language mode) * 3, match(content) against('elasticsearch' in natural language mode) * 2.5, match(tags) against('elasticsearch' in natural language mode) * 1.5) +"
-    " GREATEST(match(title) against('database' in natural language mode) * 3, match(content) against('database' in natural language mode) * 2.5, match(tags) against('database' in natural language mode) * 1.5) +"
-    " GREATEST(match(title) against('tutorial' in natural language mode) * 3, match(content) against('tutorial' in natural language mode) * 2.5, match(tags) against('tutorial' in natural language mode) * 1.5))"
-    " as _score FROM doc_table WHERE"
-    " (match(title) against('elasticsearch' in natural language mode) OR match(content) against('elasticsearch' in natural language mode) OR match(tags) against('elasticsearch' in natural language mode)) AND"
-    " (match(title) against('database' in natural language mode) OR match(content) against('database' in natural language mode) OR match(tags) against('database' in natural language mode)) AND"
-    " (match(title) against('tutorial' in natural language mode) OR match(content) against('tutorial' in natural language mode) OR match(tags) against('tutorial' in natural language mode))"
-    " ORDER BY _score DESC, __pk_increment LIMIT 10");
+    "(GREATEST(match(`title`) against('elasticsearch' in natural language mode) * 3, match(`content`) against('elasticsearch' in natural language mode) * 2.5, match(`tags`) against('elasticsearch' in natural language mode) * 1.5) +"
+    " GREATEST(match(`title`) against('database' in natural language mode) * 3, match(`content`) against('database' in natural language mode) * 2.5, match(`tags`) against('database' in natural language mode) * 1.5) +"
+    " GREATEST(match(`title`) against('tutorial' in natural language mode) * 3, match(`content`) against('tutorial' in natural language mode) * 2.5, match(`tags`) against('tutorial' in natural language mode) * 1.5))"
+    " as `_score` FROM `doc_table` WHERE"
+    " (match(`title`) against('elasticsearch' in natural language mode) OR match(`content`) against('elasticsearch' in natural language mode) OR match(`tags`) against('elasticsearch' in natural language mode)) AND"
+    " (match(`title`) against('database' in natural language mode) OR match(`content`) against('database' in natural language mode) OR match(`tags`) against('database' in natural language mode)) AND"
+    " (match(`title`) against('tutorial' in natural language mode) OR match(`content`) against('tutorial' in natural language mode) OR match(`tags`) against('tutorial' in natural language mode))"
+    " ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
 
   ObArenaAllocator tmp_allocator;
   ObString table_name("doc_table");
@@ -1327,20 +1327,20 @@ TEST_F(TestHybridSearch, query_string_phrase_with_weight_and_minimum_should_matc
   })";
 
   common::ObString result(
-    "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, ((GREATEST(match(title) against('elasticsearch database' in match phrase mode) * 3, "
-    "match(content) against('elasticsearch database' in match phrase mode) * 2.5, "
-    "match(tags) against('elasticsearch database' in match phrase mode) * 1.5) + "
-    "GREATEST(match(title) against('tutorial' in natural language mode) * 3, "
-    "match(content) against('tutorial' in natural language mode) * 2.5, "
-    "match(tags) against('tutorial' in natural language mode) * 1.5) * 1.2) * 0.77) as _score "
-    "FROM doc_table WHERE "
-    "(match(title) against('elasticsearch database' in match phrase mode) AND "
-    "match(title) against('tutorial' in natural language mode)) OR "
-    "(match(content) against('elasticsearch database' in match phrase mode) AND "
-    "match(content) against('tutorial' in natural language mode)) OR "
-    "(match(tags) against('elasticsearch database' in match phrase mode) AND "
-    "match(tags) against('tutorial' in natural language mode)) "
-    "ORDER BY _score DESC, __pk_increment LIMIT 10");
+    "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, ((GREATEST(match(`title`) against('elasticsearch database' in match phrase mode) * 3, "
+    "match(`content`) against('elasticsearch database' in match phrase mode) * 2.5, "
+    "match(`tags`) against('elasticsearch database' in match phrase mode) * 1.5) + "
+    "GREATEST(match(`title`) against('tutorial' in natural language mode) * 3, "
+    "match(`content`) against('tutorial' in natural language mode) * 2.5, "
+    "match(`tags`) against('tutorial' in natural language mode) * 1.5) * 1.2) * 0.77) as `_score` "
+    "FROM `doc_table` WHERE "
+    "(match(`title`) against('elasticsearch database' in match phrase mode) AND "
+    "match(`title`) against('tutorial' in natural language mode)) OR "
+    "(match(`content`) against('elasticsearch database' in match phrase mode) AND "
+    "match(`content`) against('tutorial' in natural language mode)) OR "
+    "(match(`tags`) against('elasticsearch database' in match phrase mode) AND "
+    "match(`tags`) against('tutorial' in natural language mode)) "
+    "ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
 
   ObArenaAllocator tmp_allocator;
   ObString table_name("doc_table");
@@ -1400,9 +1400,9 @@ TEST_F(TestHybridSearch, offset_size)
       "size" : 7
     })";
   ObString table_name("doc_table");
-  common::ObString result("SELECT *, l2_distance(vector, '[1, 2, 3]') as _distance, (round(1 / (1 + l2_distance(vector, '[1, 2, 3]')), 8) * 0.7) as _score FROM doc_table WHERE c1 >= 2 ORDER BY _distance APPROXIMATE LIMIT 1, 4");
+  common::ObString result("SELECT *, l2_distance(`vector`, '[1, 2, 3]') as `_distance`, (round(1 / (1 + l2_distance(`vector`, '[1, 2, 3]')), 8) * 0.7) as `_score` FROM `doc_table` WHERE `c1` >= 2 ORDER BY `_distance` APPROXIMATE LIMIT 1, 4");
   TestHybridSearchHelp::runtest(table_name, req_str, result);
-  common::ObString res1("SELECT *, l2_distance(vector, '[1, 2, 3]') as _distance, (round(1 / (1 + l2_distance(vector, '[1, 2, 3]')), 8) * 0.7) as _score FROM doc_table WHERE c1 >= 2 ORDER BY _distance APPROXIMATE LIMIT 2, 5");
+  common::ObString res1("SELECT *, l2_distance(`vector`, '[1, 2, 3]') as `_distance`, (round(1 / (1 + l2_distance(`vector`, '[1, 2, 3]')), 8) * 0.7) as `_score` FROM `doc_table` WHERE `c1` >= 2 ORDER BY `_distance` APPROXIMATE LIMIT 2, 5");
   TestHybridSearchHelp::runtest(table_name, req_str1, res1);
 
   common::ObString req_str2 = R"({
@@ -1417,7 +1417,7 @@ TEST_F(TestHybridSearch, offset_size)
       "from" : 2,
       "size" : 7
     })";
-  common::ObString res2("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (match(query) against('database or oceanBase' in natural language mode) + match(content) against('Elasticsearch' in natural language mode)) as _score FROM doc_table WHERE match(query) against('database or oceanBase' in natural language mode) AND match(content) against('Elasticsearch' in natural language mode) ORDER BY _score DESC, __pk_increment LIMIT 2, 7");
+  common::ObString res2("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (match(`query`) against('database or oceanBase' in natural language mode) + match(`content`) against('Elasticsearch' in natural language mode)) as `_score` FROM `doc_table` WHERE match(`query`) against('database or oceanBase' in natural language mode) AND match(`content`) against('Elasticsearch' in natural language mode) ORDER BY `_score` DESC, `__pk_increment` LIMIT 2, 7");
   TestHybridSearchHelp::runtest(table_name, req_str2, res2);
 }
 
@@ -1443,14 +1443,14 @@ TEST_F(TestHybridSearch, bool_with_minimum_should_match_in_must)
   })";
 
   common::ObString result(
-    "SELECT *, (_fts_sub_score_0 + _fts_sub_score_1 + _fts_sub_score_2 + _fts_sub_score_3) as _score FROM ("
-    "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, match(product_name) against('Aura' in natural language mode) as _fts_sub_score_0, "
-    "match(title) against('elasticsearch' in natural language mode) * 3 + match(content) against('elasticsearch' in natural language mode) * 2.5 + match(tags) against('elasticsearch' in natural language mode) * 1.5 as _fts_sub_score_1, "
-    "(match(title) against('db' in natural language mode) * 3 + match(content) against('db' in natural language mode) * 2.5 + match(tags) against('db' in natural language mode) * 1.5) * 2 as _fts_sub_score_2, "
-    "(match(title) against('tutorial' in natural language mode) * 3 + match(content) against('tutorial' in natural language mode) * 2.5 + match(tags) against('tutorial' in natural language mode) * 1.5) * 1.2 as _fts_sub_score_3, __pk_increment FROM doc_table WHERE "
-    "match(product_name) against('Aura' in natural language mode) AND (match(title) against('elasticsearch db tutorial' in natural language mode) OR match(content) against('elasticsearch db tutorial' in natural language mode) OR match(tags) against('elasticsearch db tutorial' in natural language mode))"
-    ") _fts_sub WHERE (_fts_sub_score_1 > 0) + (_fts_sub_score_2 > 0) + (_fts_sub_score_3 > 0) >= 2 "
-    "ORDER BY _score DESC, __pk_increment LIMIT 10");
+    "SELECT *, (`_fts_sub_score_0` + `_fts_sub_score_1` + `_fts_sub_score_2` + `_fts_sub_score_3`) as `_score` FROM ("
+    "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, match(`product_name`) against('Aura' in natural language mode) as `_fts_sub_score_0`, "
+    "match(`title`) against('elasticsearch' in natural language mode) * 3 + match(`content`) against('elasticsearch' in natural language mode) * 2.5 + match(`tags`) against('elasticsearch' in natural language mode) * 1.5 as `_fts_sub_score_1`, "
+    "(match(`title`) against('db' in natural language mode) * 3 + match(`content`) against('db' in natural language mode) * 2.5 + match(`tags`) against('db' in natural language mode) * 1.5) * 2 as `_fts_sub_score_2`, "
+    "(match(`title`) against('tutorial' in natural language mode) * 3 + match(`content`) against('tutorial' in natural language mode) * 2.5 + match(`tags`) against('tutorial' in natural language mode) * 1.5) * 1.2 as `_fts_sub_score_3`, `__pk_increment` FROM `doc_table` WHERE "
+    "match(`product_name`) against('Aura' in natural language mode) AND (match(`title`) against('elasticsearch db tutorial' in natural language mode) OR match(`content`) against('elasticsearch db tutorial' in natural language mode) OR match(`tags`) against('elasticsearch db tutorial' in natural language mode))"
+    ") `_fts_sub` WHERE (`_fts_sub_score_1` > 0) + (`_fts_sub_score_2` > 0) + (`_fts_sub_score_3` > 0) >= 2 "
+    "ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
 
   ObArenaAllocator tmp_allocator;
   ObString table_name("doc_table");
@@ -1490,26 +1490,26 @@ TEST_F(TestHybridSearch, hybrid_search_with_minimum_should_match)
   ObString table_name("products");
   common::ObString result = (
     "SELECT *, "
-    "(ifnull(_fts._keyword_score, 0) + ifnull(_vs._semantic_score, 0)) as _score "
+    "(ifnull(`_fts`.`_keyword_score`, 0) + ifnull(`_vs`.`_semantic_score`, 0)) as `_score` "
     "FROM "
-    "((SELECT /*+ opt_param('hidden_column_visible', 'true') */__pk_increment, "
-    "(match(product_name) against('Aura' in natural language mode) + match(description) against('sound' in natural language mode) + "
-    "match(product_name) against('System' in natural language mode) + match(description) against('Electronics' in natural language mode)) as _keyword_score "
-    "FROM products "
-    "WHERE match(product_name) against('Aura' in natural language mode) AND "
-    "match(description) against('sound' in natural language mode) AND "
-    "brand = 'AudioPhile' AND "
-    "match(product_name) against('System' in natural language mode) AND "
-    "match(description) against('Electronics' in natural language mode) AND NOT "
-    "match(tags) against('premium' in natural language mode) "
-    "ORDER BY _keyword_score DESC LIMIT 200) _fts full join "
-    "(SELECT *, _score as _semantic_score FROM "
+    "((SELECT /*+ opt_param('hidden_column_visible', 'true') */`__pk_increment`, "
+    "(match(`product_name`) against('Aura' in natural language mode) + match(`description`) against('sound' in natural language mode) + "
+    "match(`product_name`) against('System' in natural language mode) + match(`description`) against('Electronics' in natural language mode)) as `_keyword_score` "
+    "FROM `products` "
+    "WHERE match(`product_name`) against('Aura' in natural language mode) AND "
+    "match(`description`) against('sound' in natural language mode) AND "
+    "`brand` = 'AudioPhile' AND "
+    "match(`product_name`) against('System' in natural language mode) AND "
+    "match(`description`) against('Electronics' in natural language mode) AND NOT "
+    "match(`tags`) against('premium' in natural language mode) "
+    "ORDER BY `_keyword_score` DESC LIMIT 200) `_fts` full join "
+    "(SELECT *, `_score` as `_semantic_score` FROM "
     "(SELECT /*+ opt_param('hidden_column_visible', 'true') */*, "
-    "l2_distance(vec, '[0.8, 0.1, 0.8, 0.2]') as _distance, "
-    "__pk_increment, round(1 / (1 + l2_distance(vec, '[0.8, 0.1, 0.8, 0.2]')), 8) as _score "
-    "FROM products "
-    "ORDER BY _distance APPROXIMATE LIMIT 5) _vs0 WHERE _vs0._distance <= 0.5) _vs "
-    "on _fts.__pk_increment = _vs.__pk_increment) ORDER BY _score DESC, ifnull(_vs.__pk_increment, _fts.__pk_increment) LIMIT 10");
+    "l2_distance(`vec`, '[0.8, 0.1, 0.8, 0.2]') as `_distance`, "
+    "`__pk_increment`, round(1 / (1 + l2_distance(`vec`, '[0.8, 0.1, 0.8, 0.2]')), 8) as `_score` "
+    "FROM `products` "
+    "ORDER BY `_distance` APPROXIMATE LIMIT 5) `_vs0` WHERE `_vs0`.`_distance` <= 0.5) `_vs` "
+    "on `_fts`.`__pk_increment` = `_vs`.`__pk_increment`) ORDER BY `_score` DESC, ifnull(`_vs`.`__pk_increment`, `_fts`.`__pk_increment`) LIMIT 10");
 
   TestHybridSearchHelp::runtest(table_name, req_str, result);
 
@@ -1522,7 +1522,7 @@ TEST_F(TestHybridSearch, hybrid_search_with_minimum_should_match)
     }
   })";
 
-  common::ObString result2("SELECT * FROM (SELECT *, l2_distance(vec, '[0.8, 0.1, 0.8, 0.2]') as _distance, round(1 / (1 + l2_distance(vec, '[0.8, 0.1, 0.8, 0.2]')), 8) as _score FROM products ORDER BY _distance APPROXIMATE LIMIT 5) _vs0 WHERE _vs0._distance <= 0.5 LIMIT 10");
+  common::ObString result2("SELECT * FROM (SELECT *, l2_distance(`vec`, '[0.8, 0.1, 0.8, 0.2]') as `_distance`, round(1 / (1 + l2_distance(`vec`, '[0.8, 0.1, 0.8, 0.2]')), 8) as `_score` FROM `products` ORDER BY `_distance` APPROXIMATE LIMIT 5) `_vs0` WHERE `_vs0`.`_distance` <= 0.5 LIMIT 10");
   TestHybridSearchHelp::runtest(table_name, req_str2, result2);
 }
 
@@ -1544,21 +1544,21 @@ TEST_F(TestHybridSearch, should_with_minimum_should_match_es_mode)
   })";
 
   common::ObString result(
-    "SELECT *, (_fts_sub_score_0 + _fts_sub_score_1 + _fts_sub_score_2 + _fts_sub_score_3) as _score "
+    "SELECT *, (`_fts_sub_score_0` + `_fts_sub_score_1` + `_fts_sub_score_2` + `_fts_sub_score_3`) as `_score` "
     "FROM "
     "(SELECT /*+ opt_param('hidden_column_visible', 'true') */*, "
-    "match(query) against('database or oceanBase' in natural language mode) as _fts_sub_score_0, "
-    "match(content) against('Elasticsearch' in natural language mode) as _fts_sub_score_1, "
-    "book_id = '1' as _fts_sub_score_2, "
-    "age = '2' as _fts_sub_score_3, "
-    "__pk_increment "
-    "FROM doc_table "
-    "WHERE match(query) against('database or oceanBase' in natural language mode) OR "
-    "match(content) against('Elasticsearch' in natural language mode) "
-    "OR book_id = '1' "
-    "OR age = '2') _fts_sub "
-    "WHERE (_fts_sub_score_0 > 0) + (_fts_sub_score_1 > 0) + (_fts_sub_score_2 > 0) + (_fts_sub_score_3 > 0) >= 3 "
-    "ORDER BY _score DESC, __pk_increment LIMIT 10");
+    "match(`query`) against('database or oceanBase' in natural language mode) as `_fts_sub_score_0`, "
+    "match(`content`) against('Elasticsearch' in natural language mode) as `_fts_sub_score_1`, "
+    "`book_id` = '1' as `_fts_sub_score_2`, "
+    "`age` = '2' as `_fts_sub_score_3`, "
+    "`__pk_increment` "
+    "FROM `doc_table` "
+    "WHERE match(`query`) against('database or oceanBase' in natural language mode) OR "
+    "match(`content`) against('Elasticsearch' in natural language mode) "
+    "OR `book_id` = '1' "
+    "OR `age` = '2') `_fts_sub` "
+    "WHERE (`_fts_sub_score_0` > 0) + (`_fts_sub_score_1` > 0) + (`_fts_sub_score_2` > 0) + (`_fts_sub_score_3` > 0) >= 3 "
+    "ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
 
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result, false, "", true);
@@ -1583,16 +1583,16 @@ TEST_F(TestHybridSearch, should_with_must_and_minimum_should_match_es_mode)
   })";
 
   common::ObString result(
-    "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (match(query) against('database or oceanBase' in natural language mode) + "
-    "match(content) against('Elasticsearch' in natural language mode) + "
-    "match(book_name) against('c ++ programming' in natural language mode) + "
-    "match(content) against('Elasticsearch' in natural language mode)) as _score "
-    "FROM doc_table WHERE "
-    "match(query) against('database or oceanBase' in natural language mode) AND "
-    "match(content) against('Elasticsearch' in natural language mode) AND "
-    "(match(book_name) against('c ++ programming' in natural language mode) OR "
-    "match(content) against('Elasticsearch' in natural language mode)) "
-    "ORDER BY _score DESC, __pk_increment LIMIT 10");
+    "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (match(`query`) against('database or oceanBase' in natural language mode) + "
+    "match(`content`) against('Elasticsearch' in natural language mode) + "
+    "match(`book_name`) against('c ++ programming' in natural language mode) + "
+    "match(`content`) against('Elasticsearch' in natural language mode)) as `_score` "
+    "FROM `doc_table` WHERE "
+    "match(`query`) against('database or oceanBase' in natural language mode) AND "
+    "match(`content`) against('Elasticsearch' in natural language mode) AND "
+    "(match(`book_name`) against('c ++ programming' in natural language mode) OR "
+    "match(`content`) against('Elasticsearch' in natural language mode)) "
+    "ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
 
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result, false, "", true);
@@ -1609,7 +1609,7 @@ TEST_F(TestHybridSearch, query_string_without_type_es_mode)
     }
   })";
 
-  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, score() as _score FROM doc_table WHERE MATCH(query^1, content^1, 'database or oceanBase', 'operator=or;boost=1;minimum_should_match=1;type=best_fields') ORDER BY _score DESC, __pk_increment LIMIT 10");
+  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, score() as `_score` FROM `doc_table` WHERE MATCH(`query`^1, `content`^1, 'database or oceanBase', 'operator=or;boost=1;minimum_should_match=1;type=best_fields') ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result, false, "", true);
 }
@@ -1626,7 +1626,7 @@ TEST_F(TestHybridSearch, query_string_best_fields_es_mode)
     }
   })";
 
-  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, score() as _score FROM doc_table WHERE MATCH(query^1, content^1, 'database or oceanBase', 'operator=or;boost=1;minimum_should_match=1;type=best_fields') ORDER BY _score DESC, __pk_increment LIMIT 10");
+  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, score() as `_score` FROM `doc_table` WHERE MATCH(`query`^1, `content`^1, 'database or oceanBase', 'operator=or;boost=1;minimum_should_match=1;type=best_fields') ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result, false, "", true);
 }
@@ -1643,7 +1643,7 @@ TEST_F(TestHybridSearch, query_string_most_fields_es_mode)
     }
   })";
 
-  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, score() as _score FROM doc_table WHERE MATCH(query^12.663798, content^1, tags^0, 'database or oceanBase', 'operator=or;boost=1;minimum_should_match=1;type=most_fields') ORDER BY _score DESC, __pk_increment LIMIT 10");
+  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, score() as `_score` FROM `doc_table` WHERE MATCH(`query`^12.663798, `content`^1, `tags`^0, 'database or oceanBase', 'operator=or;boost=1;minimum_should_match=1;type=most_fields') ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result, false, "", true);
 }
@@ -1660,7 +1660,7 @@ TEST_F(TestHybridSearch, query_string_cross_fields_es_mode)
     }
   })";
 
-  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (GREATEST(match(query) against('database' in natural language mode), match(content) against('database' in natural language mode)) + GREATEST(match(query) against('or' in natural language mode), match(content) against('or' in natural language mode)) + GREATEST(match(query) against('oceanBase' in natural language mode), match(content) against('oceanBase' in natural language mode))) as _score FROM doc_table WHERE match(query) against('database or oceanBase' in natural language mode) OR match(content) against('database or oceanBase' in natural language mode) ORDER BY _score DESC, __pk_increment LIMIT 10");
+  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (GREATEST(match(`query`) against('database' in natural language mode), match(`content`) against('database' in natural language mode)) + GREATEST(match(`query`) against('or' in natural language mode), match(`content`) against('or' in natural language mode)) + GREATEST(match(`query`) against('oceanBase' in natural language mode), match(`content`) against('oceanBase' in natural language mode))) as `_score` FROM `doc_table` WHERE match(`query`) against('database or oceanBase' in natural language mode) OR match(`content`) against('database or oceanBase' in natural language mode) ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result, false, "", true);
 }
@@ -1677,7 +1677,7 @@ TEST_F(TestHybridSearch, query_string_phrase_es_mode)
     }
   })";
 
-  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, GREATEST(match(query) against('database or oceanBase' in match phrase mode), match(content) against('database or oceanBase' in match phrase mode)) as _score FROM doc_table WHERE match(query) against('database or oceanBase' in match phrase mode) OR match(content) against('database or oceanBase' in match phrase mode) ORDER BY _score DESC, __pk_increment LIMIT 10");
+  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, GREATEST(match(`query`) against('database or oceanBase' in match phrase mode), match(`content`) against('database or oceanBase' in match phrase mode)) as `_score` FROM `doc_table` WHERE match(`query`) against('database or oceanBase' in match phrase mode) OR match(`content`) against('database or oceanBase' in match phrase mode) ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result, false, "", true);
 }
@@ -1695,7 +1695,7 @@ TEST_F(TestHybridSearch, query_string_best_fields_with_minimum_should_match_es_m
     }
   })";
 
-  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, score() as _score FROM doc_table WHERE MATCH(query^1, content^1, 'database or oceanBase', 'operator=or;boost=1;minimum_should_match=2;type=best_fields') ORDER BY _score DESC, __pk_increment LIMIT 10");
+  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, score() as `_score` FROM `doc_table` WHERE MATCH(`query`^1, `content`^1, 'database or oceanBase', 'operator=or;boost=1;minimum_should_match=2;type=best_fields') ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result, false, "", true);
 }
@@ -1712,7 +1712,7 @@ TEST_F(TestHybridSearch, query_string_best_fields_simple_es_mode)
     }
   })";
 
-  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, score() as _score FROM doc_table WHERE MATCH(query^1, content^1, 'database or oceanBase', 'operator=or;boost=1;minimum_should_match=1;type=best_fields') ORDER BY _score DESC, __pk_increment LIMIT 10");
+  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, score() as `_score` FROM `doc_table` WHERE MATCH(`query`^1, `content`^1, 'database or oceanBase', 'operator=or;boost=1;minimum_should_match=1;type=best_fields') ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result, false, "", true);
 }
@@ -1730,7 +1730,7 @@ TEST_F(TestHybridSearch, query_string_most_fields_with_minimum_should_match_es_m
     }
   })";
 
-  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, score() as _score FROM doc_table WHERE MATCH(query^1, content^1, 'database or oceanBase', 'operator=or;boost=1;minimum_should_match=2;type=most_fields') ORDER BY _score DESC, __pk_increment LIMIT 10");
+  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, score() as `_score` FROM `doc_table` WHERE MATCH(`query`^1, `content`^1, 'database or oceanBase', 'operator=or;boost=1;minimum_should_match=2;type=most_fields') ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result, false, "", true);
 }
@@ -1748,7 +1748,7 @@ TEST_F(TestHybridSearch, query_string_phrase_no_weight_with_minimum_should_match
     }
   })";
 
-  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, GREATEST(match(query) against('database or oceanBase' in match phrase mode), match(content) against('database or oceanBase' in match phrase mode)) as _score FROM doc_table WHERE match(query) against('database or oceanBase' in match phrase mode) OR match(content) against('database or oceanBase' in match phrase mode) ORDER BY _score DESC, __pk_increment LIMIT 10");
+  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, GREATEST(match(`query`) against('database or oceanBase' in match phrase mode), match(`content`) against('database or oceanBase' in match phrase mode)) as `_score` FROM `doc_table` WHERE match(`query`) against('database or oceanBase' in match phrase mode) OR match(`content`) against('database or oceanBase' in match phrase mode) ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result, false, "", true);
 }
@@ -1767,7 +1767,7 @@ TEST_F(TestHybridSearch, query_string_phrase_with_weight_and_minimum_should_matc
     }
   })";
 
-  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, GREATEST(match(query) against('database or oceanBase' in match phrase mode) * 2, match(content) against('database or oceanBase' in match phrase mode) * 1.5) as _score FROM doc_table WHERE match(query) against('database or oceanBase' in match phrase mode) OR match(content) against('database or oceanBase' in match phrase mode) ORDER BY _score DESC, __pk_increment LIMIT 10");
+  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, GREATEST(match(`query`) against('database or oceanBase' in match phrase mode) * 2, match(`content`) against('database or oceanBase' in match phrase mode) * 1.5) as `_score` FROM `doc_table` WHERE match(`query`) against('database or oceanBase' in match phrase mode) OR match(`content`) against('database or oceanBase' in match phrase mode) ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result, false, "", true);
 }
@@ -1807,14 +1807,14 @@ TEST_F(TestHybridSearch, query_string_cross_fields_no_default_operator_es_mode)
 
   common::ObString result(
     "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, "
-    "(GREATEST(match(title) against('elasticsearch' in natural language mode) * 3, match(content) against('elasticsearch' in natural language mode) * 2.5, match(tags) against('elasticsearch' in natural language mode) * 1.5) +"
-    " GREATEST(match(title) against('database' in natural language mode) * 3, match(content) against('database' in natural language mode) * 2.5, match(tags) against('database' in natural language mode) * 1.5) +"
-    " GREATEST(match(title) against('tutorial' in natural language mode) * 3, match(content) against('tutorial' in natural language mode) * 2.5, match(tags) against('tutorial' in natural language mode) * 1.5))"
-    " as _score FROM doc_table WHERE"
-    " match(title) against('elasticsearch database tutorial' in natural language mode) OR"
-    " match(content) against('elasticsearch database tutorial' in natural language mode) OR"
-    " match(tags) against('elasticsearch database tutorial' in natural language mode)"
-    " ORDER BY _score DESC, __pk_increment LIMIT 10");
+    "(GREATEST(match(`title`) against('elasticsearch' in natural language mode) * 3, match(`content`) against('elasticsearch' in natural language mode) * 2.5, match(`tags`) against('elasticsearch' in natural language mode) * 1.5) +"
+    " GREATEST(match(`title`) against('database' in natural language mode) * 3, match(`content`) against('database' in natural language mode) * 2.5, match(`tags`) against('database' in natural language mode) * 1.5) +"
+    " GREATEST(match(`title`) against('tutorial' in natural language mode) * 3, match(`content`) against('tutorial' in natural language mode) * 2.5, match(`tags`) against('tutorial' in natural language mode) * 1.5))"
+    " as `_score` FROM `doc_table` WHERE"
+    " match(`title`) against('elasticsearch database tutorial' in natural language mode) OR"
+    " match(`content`) against('elasticsearch database tutorial' in natural language mode) OR"
+    " match(`tags`) against('elasticsearch database tutorial' in natural language mode)"
+    " ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
 
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result, false, "", true);
@@ -1835,14 +1835,14 @@ TEST_F(TestHybridSearch, query_string_cross_fields_with_and_operator_es_mode)
 
   common::ObString result(
     "SELECT /*+ opt_param('hidden_column_visible', 'true') */*, "
-    "(GREATEST(match(title) against('elasticsearch' in natural language mode) * 3, match(content) against('elasticsearch' in natural language mode) * 2.5, match(tags) against('elasticsearch' in natural language mode) * 1.5) +"
-    " GREATEST(match(title) against('database' in natural language mode) * 3, match(content) against('database' in natural language mode) * 2.5, match(tags) against('database' in natural language mode) * 1.5) +"
-    " GREATEST(match(title) against('tutorial' in natural language mode) * 3, match(content) against('tutorial' in natural language mode) * 2.5, match(tags) against('tutorial' in natural language mode) * 1.5))"
-    " as _score FROM doc_table WHERE"
-    " (match(title) against('elasticsearch' in natural language mode) OR match(content) against('elasticsearch' in natural language mode) OR match(tags) against('elasticsearch' in natural language mode)) AND"
-    " (match(title) against('database' in natural language mode) OR match(content) against('database' in natural language mode) OR match(tags) against('database' in natural language mode)) AND"
-    " (match(title) against('tutorial' in natural language mode) OR match(content) against('tutorial' in natural language mode) OR match(tags) against('tutorial' in natural language mode))"
-    " ORDER BY _score DESC, __pk_increment LIMIT 10");
+    "(GREATEST(match(`title`) against('elasticsearch' in natural language mode) * 3, match(`content`) against('elasticsearch' in natural language mode) * 2.5, match(`tags`) against('elasticsearch' in natural language mode) * 1.5) +"
+    " GREATEST(match(`title`) against('database' in natural language mode) * 3, match(`content`) against('database' in natural language mode) * 2.5, match(`tags`) against('database' in natural language mode) * 1.5) +"
+    " GREATEST(match(`title`) against('tutorial' in natural language mode) * 3, match(`content`) against('tutorial' in natural language mode) * 2.5, match(`tags`) against('tutorial' in natural language mode) * 1.5))"
+    " as `_score` FROM `doc_table` WHERE"
+    " (match(`title`) against('elasticsearch' in natural language mode) OR match(`content`) against('elasticsearch' in natural language mode) OR match(`tags`) against('elasticsearch' in natural language mode)) AND"
+    " (match(`title`) against('database' in natural language mode) OR match(`content`) against('database' in natural language mode) OR match(`tags`) against('database' in natural language mode)) AND"
+    " (match(`title`) against('tutorial' in natural language mode) OR match(`content`) against('tutorial' in natural language mode) OR match(`tags`) against('tutorial' in natural language mode))"
+    " ORDER BY `_score` DESC, `__pk_increment` LIMIT 10");
 
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result, false, "", true);
