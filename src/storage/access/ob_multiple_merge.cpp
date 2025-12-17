@@ -487,16 +487,16 @@ int ObMultipleMerge::get_next_row(ObDatumRow *&row)
       }
     }
 
-    if (NULL != access_ctx_->table_scan_stat_) {
-      access_ctx_->table_scan_stat_->out_row_cnt_++;
+    if (OB_SUCC(ret)) {
+      if (NULL != access_ctx_->table_scan_stat_) {
+        access_ctx_->table_scan_stat_->out_row_cnt_++;
+      }
+      LOG_DEBUG("chaser debug get next", K(ret), K(unprojected_row_));
     }
     if (OB_ITER_END == ret) {
       update_and_report_tablet_stat();
       scan_state_ = ScanState::NONE;
     }
-  }
-  if (OB_SUCC(ret)) {
-    STORAGE_LOG(DEBUG, "chaser debug get next", K(unprojected_row_), K(ret));
   }
   return ret;
 }
@@ -901,6 +901,8 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
                   LOG_WARN("fail to deep copy row", K(ret));
                 } else if (OB_FAIL(batch_row_store->fill_row(unprojected_row_))) {
                   LOG_WARN("fail to aggregate row", K(ret));
+                } else {
+                  LOG_DEBUG("aggregate next row", K(ret), K(unprojected_row_));
                 }
               }
               if (OB_SUCC(ret)) {
