@@ -850,29 +850,29 @@ int ObTransService::calc_txn_free_route(ObTxDesc *tx, ObTxnFreeRouteCtx &ctx)
   // 3) other TCLs caused txn into active
   // actions:
   // a. decide txn_free_route is allowed
-  //    via proxy's passthorugh flag, tenant's config and the txn's state will not cause fallback
+  //    via proxy's passthrough flag, tenant's config and the txn's state will not cause fallback
   // b. remember the decision on `ctx`
   //
   // [2] ACTIVE -> ACTIVE
   // eg.
-  // 1) DML stmt after txn has been actived
-  // 2) SELECT stmt after txn has been actived
+  // 1) DML stmt after txn has been activated
+  // 2) SELECT stmt after txn has been activated
   // 3) other queries which don't change data
   // 4) BEGIN stmt, which cause current txn commit and start a new txn
   //    * this will caused txn state transform : ACTIVE -> TERMINATE -> IDLE ->ACTIVE
   //      and the final state is ACTIVE, which fall into this category
-  //      because start txn will caused the trueth of all state changed, it is also covered here
+  //      because start txn will caused the truth of all state changed, it is also covered here
   // actions:
   // a. if on txn-start-node, and txn-free-route's decision is on and has not been fallbacked
   //    if so, check whether txn's current state is too large and need to fallback
-  //    1) if need fallback, just remember the falllback decision on `ctx`
-  //    2) otherwise, txn continiue to return normal changed state
+  //    1) if need fallback, just remember the fallback decision on `ctx`
+  //    2) otherwise, txn continue to return normal changed state
   // b. if on txn-start-node, but txn-free-route is disabled or it has been fallbacked
   //    further decision is not required, just return
   // c. if on temporary-txn-node, it must be the txn-free-route is enabled
   //    1) check whether txn's current state is too large and need to fallback
   //       if so, distinguish to two cases:
-  //       i) the txn's total size is over the proxy's max recieveable size
+  //       i) the txn's total size is over the proxy's max receivable size
   //          in such case, it's required to push current txn's state to txn-start-node directly
   //          if push is timeouted or some other errors, we will try to return the state to proxy
   //            and the proxy will try its best to handle it, otherwise it will shutdown the session
