@@ -170,6 +170,8 @@ int ObSessionTabletCreateHelper::do_work()
             LOG_WARN("failed to batch insert tablet info", KR(ret));
           } else if (OB_FAIL(share::ObTabletToTableHistoryOperator::create_tablet_to_table_history(trans_, tenant_id_, table_schema->get_schema_version(), tablet_table_pairs))) {
             LOG_WARN("failed to create tablet to table history", KR(ret));
+          } else {
+            FLOG_INFO("session tablet created", KR(ret), K(table_ids_), K(ls_id_), K(tablet_ids_), K(session_tablet_infos), K(tablet_table_pairs));
           }
         }
       }
@@ -645,10 +647,16 @@ int ObSessionTabletGCHelper::is_table_has_active_session(
 {
   int ret = OB_SUCCESS;
   bool has_active_session = false;
+  uint64_t data_version = 0;
   if (OB_ISNULL(table_schema)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("table schema is null", KR(ret));
-  } else if (!table_schema->is_oracle_tmp_table_v2() && !table_schema->is_oracle_tmp_table_v2_index_table()) {
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema->get_tenant_id(), data_version))) {
+    LOG_WARN("failed to get tenant data version", KR(ret));
+  } else if (OB_UNLIKELY(data_version < DATA_VERSION_4_4_2_0)) {
+    ret = OB_SUCCESS;
+    LOG_INFO("tenant data version is less than 4.4.2.0, skip check", KR(ret), K(data_version));
+  } else if (table_schema->is_hidden_schema() || table_schema->get_session_id() != 0 || (!table_schema->is_oracle_tmp_table_v2() && !table_schema->is_oracle_tmp_table_v2_index_table())) {
     ret = OB_SUCCESS;
     LOG_INFO("table is not oracle tmp table v2 or oracle tmp table v2 index table", KR(ret), KPC(table_schema));
   } else {
@@ -673,9 +681,19 @@ int ObSessionTabletGCHelper::is_table_has_active_session(const uint64_t tenant_i
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = NULL;
   const ObColumnSchemaV2 *col_schema = NULL;
+  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
+
   if (OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema service is null");
+  } else if (tenant_id == OB_INVALID_ID) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(tenant_id, compat_mode))) {
+    LOG_WARN("failed to get tenant mode", KR(ret), K(tenant_id));
+  } else if (compat_mode != lib::Worker::CompatMode::ORACLE) {
+    ret = OB_SUCCESS;
+    LOG_INFO("not oracle mode, skip check", KR(ret), K(tenant_id), K(db_name), K(table_name));
   } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("get schema guard failed", K(ret));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, db_name, table_name, false, table_schema))) {

@@ -111,7 +111,8 @@ int ObDropTableHelper::lock_tables_()
       if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema is null", KR(ret));
-      } else if (!table_schema->has_tablet()) {
+      } else if (!table_schema->has_tablet() && !table_schema->is_oracle_tmp_table_v2() &&
+          !table_schema->is_oracle_tmp_table_v2_index_table()) {
         // skip
       } else if (OB_FAIL(sorted_table_ids.push_back(table_schema->get_table_id()))) {
         LOG_WARN("fail to push back table id", KR(ret), K(table_schema->get_table_id()));

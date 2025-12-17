@@ -6645,7 +6645,7 @@ int ObDDLService::lock_table(ObMySQLTransaction &trans,
   const int64_t tenant_id = table_schema.get_tenant_id();
   observer::ObInnerSQLConnection *conn = NULL;
   // skip those type table for lock table
-  if (!table_schema.has_tablet()
+  if ((!table_schema.has_tablet() && !table_schema.is_oracle_tmp_table_v2() && !table_schema.is_oracle_tmp_table_v2_index_table())
       || table_schema.is_aux_table()
       || table_schema.is_mlog_table()
       || table_schema.is_sys_table()) {
