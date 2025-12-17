@@ -47,8 +47,8 @@ class ObSortVecOpImpl : public ObISortVecOpImpl
   using SortVecOpChunk = ObSortVecOpChunk<Store_Row, has_addon>;
 
 public:
-  explicit ObSortVecOpImpl(ObMonitorNode &op_monitor_info, lib::MemoryContext &mem_context) :
-    ObISortVecOpImpl(op_monitor_info, mem_context), flag_(0), tenant_id_(OB_INVALID_ID),
+  explicit ObSortVecOpImpl(ObMonitorNode &op_monitor_info, lib::MemoryContext &mem_context, ObSqlWorkAreaType profile_type) :
+    ObISortVecOpImpl(op_monitor_info, mem_context, profile_type), flag_(0), tenant_id_(OB_INVALID_ID),
     allocator_(mem_context->get_malloc_allocator()),
     page_allocator_("PartSortBucket", MTL_ID(), ObCtxIds::WORK_AREA), sk_collations_(nullptr),
     addon_collations_(nullptr), cmp_sort_collations_(nullptr), sk_row_meta_(nullptr),
@@ -146,7 +146,7 @@ public:
 
   OB_INLINE bool is_topn_filter_enabled()
   {
-    return is_topn_filter_enabled_;
+    return is_topn_filter_enabled_ && !use_partition_topn_sort_;
   }
 
   class CopyableComparer
@@ -207,8 +207,18 @@ protected:
                 const int64_t row_size, ObEvalCtx &ctx, ObCompactRow *&stored_row);
   bool need_dump()
   {
-    return sql_mem_processor_.get_data_size() + get_ht_bucket_size() > get_tmp_buffer_mem_bound()
-           || get_total_used_size() >= profile_.get_global_bound_size();
+    return (mem_context_->used() + get_need_extra_mem_size() > get_tmp_buffer_mem_bound())
+            || (get_total_used_size() >= profile_.get_global_bound_size());
+  }
+
+  int64_t get_need_extra_mem_size() {
+    int64_t ret = 0;
+    if (use_partition_topn_sort_) {
+      ret = partition_topn_sort_->get_need_extra_mem_size();
+    } else {
+      ret = get_partition_sort_ht_bucket_size();
+    }
+    return ret;
   }
 
   int64_t get_ht_bucket_size() // calculate hash table needed size
@@ -226,7 +236,7 @@ protected:
 
   int64_t get_total_used_size()
   {
-    return mem_context_->used() + get_partition_sort_ht_bucket_size();
+    return mem_context_->used() + get_need_extra_mem_size();
   }
   int64_t get_partition_topn_ht_bucket_size() // calculate partition topn sort hash table needed size
   {
@@ -446,6 +456,7 @@ protected:
   static const int64_t MAX_ROW_CNT = 268435456; // (2G / 8)
   static const int64_t EXTEND_MULTIPLE = 2;
   static const int64_t MAX_MERGE_WAYS = 256;
+  static constexpr int64_t MIN_MERGE_WAYS = 8;
   static const int64_t INMEMORY_MERGE_SORT_WARN_WAYS = 10000;
   typedef common::ObBinaryHeap<Store_Row **, Compare, 16> IMMSHeap;
   typedef common::ObBinaryHeap<SortVecOpChunk *, Compare, MAX_MERGE_WAYS> EMSHeap;

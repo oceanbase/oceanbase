@@ -373,6 +373,7 @@ public:
   const static int64_t BLOCK_CAPACITY = BLOCK_SIZE - sizeof(LinkNode);
   const static int64_t BIG_BLOCK_SIZE = (256L << 10) - sizeof(LinkNode);
   const static int64_t DEFAULT_BLOCK_CNT = (1L << 20) / BLOCK_CAPACITY;
+  const static int64_t MIN_READ_BUFFER_SIZE = 2L * BLOCK_SIZE + IndexBlock::INDEX_BLOCK_SIZE;
 
   explicit ObTempBlockStore(common::ObIAllocator *alloc = NULL);
   virtual ~ObTempBlockStore() { reset(); }
