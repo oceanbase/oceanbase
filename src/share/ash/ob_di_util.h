@@ -31,6 +31,7 @@ public:
   static int get_group_diag_info(uint64_t tenant_id,
       ObArray<std::pair<int64_t, common::ObDiagnoseTenantInfo>> &diag_infos,
       common::ObIAllocator *alloc);
+  static int release_diag_info_array(ObArray<ObDiagnosticInfo *> &running_di_array, ObArray<ObDiagnosticInfo *> &global_di_array, int64_t tenant_id);
 
 private:
   ObDiagnosticInfoUtil() = default;

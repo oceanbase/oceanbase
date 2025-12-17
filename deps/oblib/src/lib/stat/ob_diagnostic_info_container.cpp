@@ -710,10 +710,9 @@ bool ObDiagnosticInfoContainer::check_element_all_freed() const
 }
 
 int ObDiagnosticInfoContainer::for_each_and_delay_release_ref(
-    std::function<bool(const SessionID &, ObDiagnosticInfo *)> &fn)
+    std::function<bool(const SessionID &, ObDiagnosticInfo *)> &fn, ObArray<ObDiagnosticInfo *> &di_array)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObDiagnosticInfo *> di_array;
   ObRunningDiagnosticInfoContainer &runnings = runnings_;
   std::function<bool(const SessionID &, ObDiagnosticInfo *)> fn_wrapper =
       [&di_array, &runnings, &fn](const SessionID &id, ObDiagnosticInfo *di) {
@@ -741,18 +740,22 @@ int ObDiagnosticInfoContainer::for_each_and_delay_release_ref(
   if (OB_FAIL(for_each_running_di(fn_wrapper))) {
     LOG_WARN("failed to for each running di", K(ret));
   }
+  return ret;
+}
 
+int ObDiagnosticInfoContainer::release_diagnostic_info(ObArray<ObDiagnosticInfo *>&di_array)
+{
+  int ret = OB_SUCCESS;
+  int save_ret = OB_SUCCESS;
   for (int i = 0; i < di_array.count(); i++) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(runnings.dec_ref(di_array[i]))) {
-      LOG_ERROR("failed to dec ref", K(tmp_ret));
-    }
-
-    if (tmp_ret != OB_SUCCESS) {
-      ret = tmp_ret;
+    if (OB_FAIL(runnings_.dec_ref(di_array[i]))) {
+      LOG_ERROR("failed to dec ref", K(ret), KPC(di_array[i]));
+      save_ret = ret;
+      //continue to release other diagnostic info
+      ret = OB_SUCCESS;
     }
   }
-  return ret;
+  return ret == OB_SUCCESS ? save_ret : ret;
 }
 
 } /* namespace common */
