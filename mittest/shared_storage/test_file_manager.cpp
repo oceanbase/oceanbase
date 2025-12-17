@@ -281,7 +281,7 @@ TEST_F(TestFileManager, test_check_micro_cache_file_size)
 
   bool succ_adjust = false;
   int64_t new_micro_cache_size = 0;
-  ret = tnt_disk_mgr->try_adjust_cache_file_size(10, succ_adjust, new_micro_cache_size);
+  ret = tnt_disk_mgr->try_adjust_cache_file_size(3, succ_adjust, new_micro_cache_size);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(false, succ_adjust);
 
