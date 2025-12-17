@@ -3004,7 +3004,7 @@ typedef enum ObItemType
   T_TTL_DEFINITION_WITH_TYPE = 4947,
   T_WITH_INDEX = 4948, // prewarm data table with index table
   T_PREWARM_SS_LOCAL_CACHE = 4949, // prewarm data into ss_local_cache
-
+  T_MIXED_RETENTION = 4950,  // mixed retention
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

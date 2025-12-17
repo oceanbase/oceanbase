@@ -398,6 +398,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"host", HOST},
   {"hosts", HOSTS},
   {"hot_retention", HOT_RETENTION},
+  {"mixed_retention", MIXED_RETENTION},
   {"hour", HOUR},
   {"hour_microsecond", HOUR_MICROSECOND},
   {"hour_minute", HOUR_MINUTE},
