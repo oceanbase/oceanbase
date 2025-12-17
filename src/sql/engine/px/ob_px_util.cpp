@@ -4923,6 +4923,7 @@ bool ObVirtualTableErrorWhitelist::should_ignore_vtable_error(int error_code)
     CASE_IGNORE_ERR_HELPER(OB_RPC_SEND_ERROR)
     CASE_IGNORE_ERR_HELPER(OB_RPC_POST_ERROR)
     CASE_IGNORE_ERR_HELPER(OB_TENANT_NOT_IN_SERVER)
+    CASE_IGNORE_ERR_HELPER(OB_SIZE_OVERFLOW)
     default: {
       if (is_schema_error(error_code)) {
         should_ignore = true;

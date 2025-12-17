@@ -19,6 +19,8 @@
 #include "share/resource_manager/ob_cgroup_ctrl.h"//OBCG_DEFAULT
 #include "share/ob_unit_table_operator.h"//read units
 #include "rootserver/ob_tenant_event_def.h" // TENANT_EVENT
+#include "share/ls/ob_ls_table_iterator.h" // ObAllLSTableIterator
+#include "share/ob_all_server_tracer.h" // ObAllServerTracer
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -1494,24 +1496,49 @@ int ObLSStatusOperator::get_ls_primary_zone_info_by_order_ls_group(const uint64_
 
 }
 
-int ObLSStatusOperator::construct_ls_log_stat_info_sql_(common::ObSqlString &sql)
+int ObLSStatusOperator::construct_ls_log_stat_info_sql_(
+    const common::ObIArray<ObAddr> &valid_servers,
+    common::ObSqlString &sql)
 {
   int ret = OB_SUCCESS;
   const char *excluded_status = ls_status_to_str(OB_LS_CREATE_ABORT);
-  if (OB_FAIL(sql.assign_fmt(
+  if (OB_UNLIKELY(valid_servers.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("empty valid_servers", KR(ret), K(valid_servers));
+  } else if (OB_FAIL(sql.assign_fmt(
       "SELECT a.tenant_id, a.ls_id, b.svr_ip, b.svr_port, b.role, b.proposal_id, "
       "b.paxos_member_list, b.paxos_replica_num, b.in_sync "
       "FROM %s AS a LEFT JOIN %s AS b ON a.tenant_id = b.tenant_id AND a.ls_id = b.ls_id "
-      "WHERE a.status != '%s' "
-      "ORDER BY a.tenant_id, a.ls_id, b.role",
+      "WHERE a.status != '%s' AND (b.svr_ip, b.svr_port) IN (",
       OB_ALL_VIRTUAL_LS_STATUS_TNAME,
       OB_ALL_VIRTUAL_LOG_STAT_TNAME,
       excluded_status))) {
     LOG_WARN("failed to assign sql", KR(ret), K(sql));
+  } else {
+    ARRAY_FOREACH(valid_servers, i) {
+      const ObAddr &addr = valid_servers.at(i);
+      char ip_str[MAX_IP_PORT_LENGTH] = {0};
+      if (0 != i) {
+        if (OB_FAIL(sql.append(","))) {
+          LOG_WARN("failed to append fmt sql", KR(ret), K(i), K(sql));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (!addr.ip_to_string(ip_str, MAX_IP_PORT_LENGTH)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to ip to string", KR(ret), K(ip_str), K(addr));
+      } else if (OB_FAIL(sql.append_fmt("(\"%s\", %d)", ip_str, addr.get_port()))) {
+        LOG_WARN("failed to append fmt sql", KR(ret), K(i), K(ip_str), K(addr), K(sql));
+      }
+    }
+    if (FAILEDx(sql.append(") ORDER BY a.tenant_id, a.ls_id, b.role"))) {
+      LOG_WARN("failed to append fmt sql", KR(ret), K(sql));
+    }
   }
   return ret;
 }
 
+// only check the paxos members
 int ObLSStatusOperator::check_all_ls_has_majority_and_log_sync(
     const common::ObIArray<ObAddr> &to_stop_servers,
     const bool skip_log_sync_check,
@@ -1522,7 +1549,24 @@ int ObLSStatusOperator::check_all_ls_has_majority_and_log_sync(
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
-  if (OB_FAIL(construct_ls_log_stat_info_sql_(sql))) {
+  ObArray<ObAddr> dest_server_array;
+  ObArray<ObLSInfo> ls_info_array;
+  char err_msg[MAX_ERROR_LOG_PRINT_SIZE] = {0};
+  if (OB_FAIL(generate_alive_dest_server_array_(
+      to_stop_servers,
+      dest_server_array))) {
+    LOG_WARN("failed to generate alive dest server array", KR(ret), K(to_stop_servers));
+  } else if (OB_UNLIKELY(dest_server_array.empty())) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("Not enough active servers available", KR(ret));
+    (void)snprintf(err_msg, sizeof(err_msg), "Not enough active servers available, %s", print_str);
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
+  } else if (OB_FAIL(get_all_ls_info_(ls_info_array))) {
+    LOG_WARN("fail to get all ls info", KR(ret), K(ls_info_array));
+  } else if (OB_UNLIKELY(ls_info_array.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls meta table is empty", KR(ret), K(ls_info_array));
+  } else if (OB_FAIL(construct_ls_log_stat_info_sql_(dest_server_array, sql))) {
     LOG_WARN("failed to construct ls paxos info sql", KR(ret), K(sql));
   } else {
     HEAP_VAR(ObMySQLProxy::MySQLResult, res) {
@@ -1536,11 +1580,12 @@ int ObLSStatusOperator::check_all_ls_has_majority_and_log_sync(
           *result,
           schema_service,
           to_stop_servers,
+          ls_info_array,
           skip_log_sync_check,
           print_str,
           need_retry))) {
-        LOG_WARN("fail to parse result and check paxos", KR(ret),
-            K(to_stop_servers), K(skip_log_sync_check), K(print_str), K(need_retry));
+        LOG_WARN("fail to parse result and check paxos", KR(ret), K(to_stop_servers),
+            K(ls_info_array), K(skip_log_sync_check), K(print_str), K(need_retry));
       }
     } // end HEAP_VAR
   }
@@ -1551,6 +1596,7 @@ int ObLSStatusOperator::parse_result_and_check_paxos_(
     common::sqlclient::ObMySQLResult &result,
     schema::ObMultiVersionSchemaService &schema_service,
     const common::ObIArray<ObAddr> &to_stop_servers,
+    const common::ObIArray<ObLSInfo> &ls_info_array,
     const bool skip_log_sync_check,
     const char *print_str,
     bool &need_retry)
@@ -1571,7 +1617,7 @@ int ObLSStatusOperator::parse_result_and_check_paxos_(
     if (FAILEDx(construct_ls_log_stat_replica_(result, replica, tmp_tenant_id, tmp_ls_id))) {
       if (OB_ERR_NULL_VALUE == ret) {
         need_retry = true;
-        char err_msg[MAX_ERROR_LOG_PRINT_SIZE];
+        char err_msg[MAX_ERROR_LOG_PRINT_SIZE] = {0};
         ret = OB_OP_NOT_ALLOW;
         LOG_WARN("fail to get ls log stat info when checking ls_log_stat_info", KR(ret),
             K(tmp_tenant_id), K(tmp_ls_id), K(ls_log_stat_info));
@@ -1591,6 +1637,7 @@ int ObLSStatusOperator::parse_result_and_check_paxos_(
             schema_service,
             ls_log_stat_info,
             to_stop_servers,
+            ls_info_array,
             skip_log_sync_check,
             print_str,
             need_retry))) {
@@ -1618,6 +1665,7 @@ int ObLSStatusOperator::parse_result_and_check_paxos_(
           schema_service,
           ls_log_stat_info,
           to_stop_servers,
+          ls_info_array,
           skip_log_sync_check,
           print_str,
           need_retry))) {
@@ -1695,15 +1743,16 @@ int ObLSStatusOperator::construct_ls_log_stat_replica_(
 }
 
 // Check following items:
-// 1. check each ls has leader;
+// 1. check leader exists;
 // 2. check leader's paxos_replica_num is equal to paxos_replica_num from schema;
-// 3. check member_list of each ls has enough valid members;
+// 3. check member_list of each ls which involves the to_stop_servers has enough valid members;
 // 4. check ls_log_stat_info has majority filtered by valid_members;
 // 5. (can skip) check each ls' majority is in log sync filtered by valid_members;
 int ObLSStatusOperator::check_ls_log_stat_info_(
     schema::ObMultiVersionSchemaService &schema_service,
     const ObLSLogStatInfo &ls_log_stat_info,
     const common::ObIArray<ObAddr> &to_stop_servers,
+    const common::ObIArray<ObLSInfo> &ls_info_array,
     const bool skip_log_sync_check,
     const char *print_str,
     bool &need_retry)
@@ -1711,17 +1760,18 @@ int ObLSStatusOperator::check_ls_log_stat_info_(
   int ret = OB_SUCCESS;
   need_retry = false;
   bool is_passed = true;
-  ObArray<ObAddr> valid_servers;
-  ObLSLogStatReplica leader;
-  char err_msg[MAX_ERROR_LOG_PRINT_SIZE];
+  bool skip_sync_check = skip_log_sync_check;
+  ObArray<ObAddr> valid_servers_in_member_list;
+  char err_msg[MAX_ERROR_LOG_PRINT_SIZE] = {0};
   ObSchemaGetterGuard schema_guard;
   const ObTenantSchema *tenant_schema = NULL;
   int64_t paxos_replica_num = OB_INVALID_COUNT;
   int64_t arb_replica_num = 0;
-
-  if (OB_UNLIKELY(!ls_log_stat_info.is_valid())) {
+  ObLSReplica::MemberList member_list;
+  int64_t paxos_replica_num_in_table = OB_INVALID_COUNT;
+  if (OB_UNLIKELY(!ls_log_stat_info.is_valid() || ls_info_array.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(ls_log_stat_info));
+    LOG_WARN("invalid argument", KR(ret), K(ls_log_stat_info), K(ls_info_array));
   } else if (OB_FAIL(schema_service.get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
     LOG_WARN("fail get schema guard", KR(ret));
   } else if (OB_FAIL(schema_guard.get_tenant_info(ls_log_stat_info.get_tenant_id(), tenant_schema))) {
@@ -1729,51 +1779,59 @@ int ObLSStatusOperator::check_ls_log_stat_info_(
   } else if (OB_ISNULL(tenant_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null tenant_schema ptr", KR(ret));
-  } else if (OB_FAIL(tenant_schema->get_paxos_replica_num(schema_guard, paxos_replica_num))) {
-    LOG_WARN("failed to get paxos replica num", KR(ret), K(ls_log_stat_info));
-  } else if (OB_FAIL(ls_log_stat_info.get_leader_replica(leader))) {
-    if (OB_LEADER_NOT_EXIST == ret) {
-      need_retry = true;
-      ret = OB_OP_NOT_ALLOW;
-      LOG_WARN("ls has no leader when checking ls_log_stat_info", KR(ret), K(ls_log_stat_info));
-      (void)snprintf(err_msg, sizeof(err_msg), "Tenant(%lu) LS(%ld) has no leader, %s",
-          ls_log_stat_info.get_tenant_id(), ls_log_stat_info.get_ls_id().id(), print_str);
-      LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
-    } else {
-      LOG_WARN("fail to get leader replica", KR(ret), K(ls_log_stat_info));
-    }
   } else if (!tenant_schema->get_previous_locality_str().empty()) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("locality is changing, can't stop server or zone",
-        KR(ret), K(ls_log_stat_info), K(leader), K(paxos_replica_num), K(to_stop_servers),
+        KR(ret), K(ls_log_stat_info), K(to_stop_servers),
         "previous_locality", tenant_schema->get_previous_locality_str());
     (void)snprintf(err_msg, sizeof(err_msg), "Tenant(%lu) locality is changing, %s",
         ls_log_stat_info.get_tenant_id(), print_str);
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
-  } else if (leader.get_paxos_replica_num() != paxos_replica_num) {
+  } else if (OB_FAIL(tenant_schema->get_paxos_replica_num(schema_guard, paxos_replica_num))) {
+    LOG_WARN("failed to get paxos replica num", KR(ret), K(ls_log_stat_info));
+  } else if (OB_FAIL(get_ls_leader_info_(
+      ls_log_stat_info.get_tenant_id(),
+      ls_log_stat_info.get_ls_id(),
+      ls_info_array,
+      member_list,
+      paxos_replica_num_in_table))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      need_retry = true;
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("get leader replica failed when checking ls_log_stat_info", KR(ret), K(ls_log_stat_info));
+      (void)snprintf(err_msg, sizeof(err_msg), "Tenant(%lu) LS(%ld) has no valid leader, %s",
+          ls_log_stat_info.get_tenant_id(), ls_log_stat_info.get_ls_id().id(), print_str);
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
+    } else {
+      LOG_WARN("fail to get ls leader info", KR(ret), K(ls_log_stat_info));
+    }
+  } else if (paxos_replica_num_in_table != paxos_replica_num) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("paxos replica number is incorrect, can't stop server or zone",
-        KR(ret), K(ls_log_stat_info), K(leader), K(paxos_replica_num), K(to_stop_servers));
+        KR(ret), K(ls_log_stat_info), K(paxos_replica_num_in_table), K(paxos_replica_num), K(to_stop_servers));
     (void)snprintf(err_msg, sizeof(err_msg), "Tenant(%lu) LS(%ld) paxos replica number does not match with tenant. It should be %ld. %s",
-        ls_log_stat_info.get_tenant_id(), leader.get_ls_id().id(), paxos_replica_num, print_str);
+        ls_log_stat_info.get_tenant_id(), ls_log_stat_info.get_ls_id().id(), paxos_replica_num, print_str);
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
-  } else if (OB_FAIL(generate_valid_servers_(
-      leader.get_member_list(),
+  } else if (has_no_member_in_servers_(member_list, to_stop_servers)) {
+    // do not involve to_stop_servers, skip the check
+    skip_sync_check = true;
+  } else if (OB_FAIL(gen_valid_servers_in_member_list_(
+      member_list,
       to_stop_servers,
-      valid_servers))) {
+      valid_servers_in_member_list))) {
     LOG_WARN("fail to generate valid member_list", KR(ret),
-        K(to_stop_servers), K(leader), K(ls_log_stat_info));
+        K(to_stop_servers), K(member_list), K(ls_log_stat_info));
   } else if (GCTX.is_shared_storage_mode()) {
-    if (valid_servers.count() >= 1) {
-      LOG_INFO("do not check majority in ss mode", K(valid_servers));
+    if (valid_servers_in_member_list.count() >= 1) {
+      LOG_INFO("do not check majority in ss mode", K(valid_servers_in_member_list));
     } else {
       ret = OB_OP_NOT_ALLOW;
-      LOG_WARN("no available server in ss mode", KR(ret), K(valid_servers));
+      LOG_WARN("no available server in ss mode", KR(ret), K(valid_servers_in_member_list));
       (void)snprintf(err_msg, sizeof(err_msg), "Tenant(%lu) LS(%ld) has no available server in ss mode, %s",
           ls_log_stat_info.get_tenant_id(), ls_log_stat_info.get_ls_id().id(), print_str);
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
     }
-  } else if (2 == paxos_replica_num
+  } else if (2 == paxos_replica_num_in_table
              && OB_FAIL(ObShareUtil::generate_arb_replica_num(
                           ls_log_stat_info.get_tenant_id(),
                           ls_log_stat_info.get_ls_id(),
@@ -1783,34 +1841,42 @@ int ObLSStatusOperator::check_ls_log_stat_info_(
     LOG_WARN("fail to generate arb replica num", KR(ret), KPC(tenant_schema), K(ls_log_stat_info));
     ret = OB_OP_NOT_ALLOW;
     //must be OB_OP_NOT_ALLOW && need_retry can retry
-  } else if (valid_servers.count() + arb_replica_num < rootserver::majority(leader.get_paxos_replica_num())) {
+  } else if (valid_servers_in_member_list.count() + arb_replica_num < rootserver::majority(paxos_replica_num_in_table)) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("ls doesn't have enough valid paxos member when checking ls_log_stat_info",
-        KR(ret), K(ls_log_stat_info), K(leader), K(to_stop_servers), K(valid_servers), K(arb_replica_num));
+        KR(ret), K(ls_log_stat_info), K(to_stop_servers), K(valid_servers_in_member_list), K(arb_replica_num));
     (void)snprintf(err_msg, sizeof(err_msg), "Tenant(%lu) LS(%ld) has no enough valid paxos member after %s, %s",
         ls_log_stat_info.get_tenant_id(), ls_log_stat_info.get_ls_id().id(), print_str, print_str);
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
-  } else if (OB_FAIL(ls_log_stat_info.check_has_majority(valid_servers, arb_replica_num, is_passed))) {
+  } else if (OB_FAIL(ls_log_stat_info.check_has_majority(
+      valid_servers_in_member_list,
+      arb_replica_num,
+      paxos_replica_num_in_table,
+      is_passed))) {
     LOG_WARN("fail to check has majority", KR(ret), K(ls_log_stat_info));
   } else if (!is_passed) {
     need_retry = true; // Query returned data does not match valid_servers
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("can't get enough member by __all_virtual_log_stat",
-        KR(ret), K(ls_log_stat_info), K(leader), K(to_stop_servers), K(valid_servers));
+        KR(ret), K(ls_log_stat_info), K(to_stop_servers), K(valid_servers_in_member_list));
     (void)snprintf(err_msg, sizeof(err_msg), "Tenant(%lu) LS(%ld) has no enough valid paxos member after %s, %s",
         ls_log_stat_info.get_tenant_id(), ls_log_stat_info.get_ls_id().id(), print_str, print_str);
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
   }
   if (OB_FAIL(ret)) {
-  } else if (skip_log_sync_check) {
+  } else if (skip_sync_check) {
     // skip check_log_in_sync
-  } else if (OB_FAIL(ls_log_stat_info.check_log_sync(valid_servers, arb_replica_num, is_passed))) {
+  } else if (OB_FAIL(ls_log_stat_info.check_log_sync(
+      valid_servers_in_member_list,
+      arb_replica_num,
+      paxos_replica_num_in_table,
+      is_passed))) {
     LOG_WARN("fail to check log in sync", KR(ret), K(ls_log_stat_info));
   } else if (!is_passed) {
     need_retry = true;
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("log not sync when checking ls_log_stat_info",
-        KR(ret), K(ls_log_stat_info), K(leader), K(to_stop_servers), K(valid_servers));
+        KR(ret), K(ls_log_stat_info), K(to_stop_servers), K(valid_servers_in_member_list));
     (void)snprintf(err_msg, sizeof(err_msg), "Tenant(%lu) LS(%ld) log not sync, %s",
         ls_log_stat_info.get_tenant_id(), ls_log_stat_info.get_ls_id().id(), print_str);
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
@@ -1818,9 +1884,22 @@ int ObLSStatusOperator::check_ls_log_stat_info_(
   return ret;
 }
 
+bool ObLSStatusOperator::has_no_member_in_servers_(
+    const ObLSReplica::MemberList &member_list,
+    const common::ObIArray<ObAddr> &servers)
+{
+  bool has_no_member = true;
+  ARRAY_FOREACH_X(member_list, idx, cnt, has_no_member) {
+    if (common::has_exist_in_array(servers, member_list.at(idx).get_server())) {
+      has_no_member = false;
+    }
+  }
+  return has_no_member;
+}
+
 // valid_servers = member_list - deleted_servers - skip_servers
 // (skip_servers include to_stop_servers, servers_in_stopped_zone, stopped_servers, not_alive_servers, not_in_service_servers)
-int ObLSStatusOperator::generate_valid_servers_(
+int ObLSStatusOperator::gen_valid_servers_in_member_list_(
     const ObLSReplica::MemberList &member_list,
     const common::ObIArray<ObAddr> &to_stop_servers,
     common::ObIArray<ObAddr> &valid_servers)
@@ -1840,7 +1919,7 @@ int ObLSStatusOperator::generate_valid_servers_(
   } else if (OB_FAIL(ObRootUtils::get_invalid_server_list(servers_info, invalid_servers))) {
     LOG_WARN("fail to get invalid server list", KR(ret), K(servers_info));
   } else {
-    ARRAY_FOREACH_N(member_list, idx, cnt) {
+    ARRAY_FOREACH(member_list, idx) {
       const ObAddr &server = member_list.at(idx).get_server();
       bool is_alive = false;
       // filter deleted server which is only in member_list
@@ -2106,6 +2185,96 @@ int ObLSStatusOperator::get_ls_unit_array(
     }
   } else {
     //TODO 系统日志流随机选择
+  }
+  return ret;
+}
+
+int ObLSStatusOperator::generate_alive_dest_server_array_(
+  const ObIArray<ObAddr> &excluded_server_array,
+  ObIArray<ObAddr> &dest_server_array)
+{
+  int ret = OB_SUCCESS;
+  dest_server_array.reset();
+  ObArray<ObAddr> alive_server_array;
+  common::ObZone zone; // empty zone
+  if (OB_FAIL(SVR_TRACER.get_alive_servers(zone, alive_server_array))) {
+    LOG_WARN("failed to get alive servers", KR(ret));
+  } else {
+    ARRAY_FOREACH(alive_server_array, i) {
+      const ObAddr &server = alive_server_array.at(i);
+      if (has_exist_in_array(excluded_server_array, server)) {
+        // in this excluded server array
+      } else if (OB_FAIL(dest_server_array.push_back(server))) {
+        LOG_WARN("fail to push back", KR(ret), K(server));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLSStatusOperator::get_all_ls_info_(
+    common::ObIArray<ObLSInfo> &ls_info_array)
+{
+  int ret = OB_SUCCESS;
+  ls_info_array.reset();
+  if (OB_ISNULL(GCTX.lst_operator_) || OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null ptr", KR(ret), KP(GCTX.lst_operator_), KP(GCTX.schema_service_));
+  } else {
+    ObAllLSTableIterator all_ls_iter;
+    ObLSInfo ls_info;
+    if (OB_FAIL(all_ls_iter.init(*GCTX.lst_operator_, *GCTX.schema_service_))) {
+      LOG_WARN("failed to init all ls table iterator", KR(ret));
+    } else {
+      while (OB_SUCC(ret)) {
+        if (OB_FAIL(all_ls_iter.next(ls_info))) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+            break;
+          } else {
+            LOG_WARN("failed to get next ls info", KR(ret));
+          }
+        } else if (OB_FAIL(ls_info_array.push_back(ls_info))) {
+          LOG_WARN("failed to push back ls info", KR(ret), K(ls_info));
+        }
+      }
+    }
+  }
+  LOG_INFO("get all ls info finished", KR(ret), K(ls_info_array.count()));
+  return ret;
+}
+
+int ObLSStatusOperator::get_ls_leader_info_(
+    const uint64_t tenant_id,
+    const ObLSID &ls_id,
+    const common::ObIArray<ObLSInfo> &ls_info_array,
+    ObLSReplica::MemberList &member_list,
+    int64_t &paxos_replica_number)
+{
+  int ret = OB_SUCCESS;
+  member_list.reset();
+  paxos_replica_number = OB_INVALID_COUNT;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !ls_id.is_valid() || ls_info_array.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(ls_id), K(ls_info_array));
+  } else {
+    ARRAY_FOREACH(ls_info_array, i) {
+      const ObLSInfo &ls_info = ls_info_array.at(i);
+      if (ls_info.get_tenant_id() == tenant_id && ls_info.get_ls_id() == ls_id) {
+        const ObLSReplica *leader_replica = NULL;
+        if (OB_FAIL(ls_info.find_leader(leader_replica))) {
+          LOG_WARN("failed to find leader", KR(ret), K(ls_info));
+        } else if (OB_ISNULL(leader_replica)) {
+          ret = OB_ENTRY_NOT_EXIST;
+          LOG_WARN("ls has no leader", KR(ret), K(tenant_id), K(ls_id));
+        } else if (OB_FAIL(member_list.assign(leader_replica->get_member_list()))) {
+          LOG_WARN("fail to assign member list", KR(ret), K(tenant_id), K(ls_id), K(leader_replica));
+        } else {
+          paxos_replica_number = leader_replica->get_paxos_replica_number();
+          break;
+        }
+      }
+    }
   }
   return ret;
 }
