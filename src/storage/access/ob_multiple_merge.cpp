@@ -373,10 +373,10 @@ int ObMultipleMerge::get_next_row(ObDatumRow *&row)
       if (NULL != access_ctx_->table_scan_stat_) {
         access_ctx_->table_scan_stat_->out_row_cnt_++;
       }
+      STORAGE_LOG(DEBUG, "chaser debug get next", K(unprojected_row_), K(ret));
     }
   }
   if (OB_SUCC(ret)) {
-    STORAGE_LOG(DEBUG, "chaser debug get next", K(unprojected_row_), K(ret));
     if (nullptr != row && OB_FAIL(row->prepare_new_row(out_project_cols_))) {
       STORAGE_LOG(WARN, "Failed to prepare new row", K(ret));
     }
@@ -615,6 +615,8 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
           } else if (nullptr != out_row) {
             if (OB_FAIL(agg_row_store->fill_row(unprojected_row_))) {
               LOG_WARN("fail to aggregate row", K(ret));
+            } else {
+              LOG_DEBUG("aggregate next row", K(ret), K(unprojected_row_));
             }
           }
         }
