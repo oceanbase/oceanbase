@@ -751,6 +751,7 @@ int ObCOMergeRowWriter::init(
   bool add_column = false;
   bool major_need_project = false;
   bool need_full_merge = false;
+  bool table_need_full_merge = false;
   ObITable *table = nullptr;
   ObSSTable *sstable = nullptr;
   is_using_column_tmp_file_ = co_ctx->is_using_column_tmp_file() && !is_base_cg_writer();
@@ -767,8 +768,11 @@ int ObCOMergeRowWriter::init(
     // Note: The order of 'tables' here is the reverse of 'merge_sstable_status_array_'
     for (int64_t i = 0, sstable_idx = tables.count() - 1; OB_SUCC(ret) && i < tables.count(); i++, sstable_idx--) {
       sstable = static_cast<ObSSTable *>(tables.at(i));
+      table_need_full_merge = false;
       if (OB_FAIL(get_writer_param(merge_param, cg_schema, cg_idx, sstable, table, add_column))) {
         LOG_WARN("failed to get writer param", K(ret));
+      } else if (OB_FAIL(merge_param.static_param_.get_sstable_need_full_merge(sstable_idx, table_need_full_merge))) {
+        LOG_WARN("failed to get sstable need_full_merge", K(ret), K(sstable_idx), KPC(table));
       } else if (nullptr != table && OB_FAIL(cg_tables.push_back(table))) {
         LOG_WARN("failed to push back table", K(ret), KPC(table));
       } else {
@@ -780,9 +784,11 @@ int ObCOMergeRowWriter::init(
           LOG_WARN("read info is unexpected null", KR(ret), KP(read_info));
         }
         major_need_project = !add_column && table != nullptr &&
-          (!table->is_column_store_sstable() || static_cast<ObCOSSTableV2*>(table)->is_row_store_only_co_table()) &&
+          (!table->is_column_store_sstable() ||
+          (table->is_co_sstable() && static_cast<ObCOSSTableV2*>(table)->is_row_store_only_co_table())) &&
           !cg_schema->is_all_column_group();
         need_full_merge = major_need_project ||
+                          table_need_full_merge ||
                           (cg_schema == &co_ctx->mocked_row_store_cg_) ||
                           (table != nullptr && !table->is_column_store_sstable());
         if (OB_FAIL(ret)) {

@@ -225,7 +225,7 @@ protected:
   ObPartitionMergeIter *alloc_merge_iter(const ObMergeParameter &merge_param, const int64_t sstable_idx, const ObITable *table) override;
 private:
   virtual bool need_all_column_from_rowkey_co_sstable(const ObITable &table, const ObMergeParameter &merge_param) const { return false; }
-  virtual bool table_need_full_merge(const ObITable &table, const ObMergeParameter &merge_param) const
+  virtual bool table_need_full_merge(const int64_t sstable_idx, const ObITable &table, const ObMergeParameter &merge_param) const
   {
     return !table.is_major_type_sstable();
   }
@@ -253,7 +253,7 @@ public:
 private:
   virtual int check_unique_champion() override;
   virtual bool need_all_column_from_rowkey_co_sstable(const ObITable &table, const ObMergeParameter &merge_param) const override;
-  virtual bool table_need_full_merge(const ObITable &table, const ObMergeParameter &merge_param) const override;
+  virtual bool table_need_full_merge(const int64_t sstable_idx, const ObITable &table, const ObMergeParameter &merge_param) const override;
 private:
   ObPartitionMergeIter *row_store_iter_;
   MERGE_ITER_ARRAY minimum_iters_;
