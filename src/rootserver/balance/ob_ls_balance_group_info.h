@@ -78,6 +78,28 @@ public:
 private:
   int get_or_create_(const ObBalanceGroupID &bg_id, ObBalanceGroupInfo *&bg);
 
+  int try_reduce_selected_data_size_by_swap_(
+      const int64_t data_size_threshold,
+      ObBalanceGroupInfo *src_bg_info,
+      ObBalanceGroupInfo *dst_bg_info,
+      common::ObArray<ObPartGroupInfo *> &selected_part_groups);
+
+  int get_largest_part_group_from_array_(
+      const common::ObArray<ObPartGroupInfo *> &selected_part_groups,
+      ObPartGroupInfo *&largest_part_group,
+      int64_t &index);
+
+  int64_t sum_pg_data_size_(const common::ObArray<ObPartGroupInfo *> &part_groups) const
+  {
+    int64_t total_data_size = 0;
+    for (int64_t i = 0; i < part_groups.count(); ++i) {
+      if (OB_NOT_NULL(part_groups.at(i))) {
+        total_data_size += part_groups.at(i)->get_data_size();
+      }
+    }
+    return total_data_size;
+  }
+
 private:
   static const int64_t MAP_BUCKET_NUM = 4096;
 
