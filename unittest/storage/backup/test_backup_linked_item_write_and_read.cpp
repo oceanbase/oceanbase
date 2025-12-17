@@ -290,7 +290,7 @@ int sort_and_compare_block_list(
 }
 
 TestBackupLinkedReaderWriter::TestBackupLinkedReaderWriter()
-  : TestDataFilePrepare(&getter, "TestBackupIndexMerger", OB_DEFAULT_MACRO_BLOCK_SIZE, 800),
+  : TestDataFilePrepare(&getter, "TestBackupLinkedReaderWriter", OB_DEFAULT_MACRO_BLOCK_SIZE, 800),
     tenant_base_(500)
 {}
 
