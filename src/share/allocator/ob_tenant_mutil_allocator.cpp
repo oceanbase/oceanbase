@@ -356,9 +356,14 @@ void ObTenantMutilAllocator::set_nway(const int32_t nway)
 void ObTenantMutilAllocator::set_limit(const int64_t total_limit)
 {
   if (total_limit > 0 && total_limit != ATOMIC_LOAD(&total_limit_)) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+    int64_t upper_limit = REPLAY_MEM_LIMIT_THRESHOLD;
+    if (tenant_config.is_valid()) {
+      upper_limit = tenant_config->_replay_memory_limit;
+    }
     ATOMIC_STORE(&total_limit_, total_limit);
     const int64_t clog_limit = total_limit / 100 * CLOG_MEM_LIMIT_PERCENT;
-    const int64_t replay_limit = std::min(total_limit / 100 * REPLAY_MEM_LIMIT_PERCENT, REPLAY_MEM_LIMIT_THRESHOLD);
+    const int64_t replay_limit = std::min(total_limit / 100 * REPLAY_MEM_LIMIT_PERCENT, upper_limit);
     const int64_t clog_compress_limit = std::min(total_limit / 100 * CLOG_COMPRESSION_MEM_LIMIT_PERCENT, CLOG_COMPRESSION_MEM_LIMIT_THRESHOLD);
     clog_blk_alloc_.set_limit(clog_limit);
     replay_log_task_alloc_.set_limit(replay_limit);
