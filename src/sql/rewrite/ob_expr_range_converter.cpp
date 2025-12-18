@@ -2712,24 +2712,20 @@ int ObExprRangeConverter::try_wrap_lob_with_substr(const ObRawExpr *expr,
                                                    const ObRawExpr *&out_expr)
 {
   int ret = OB_SUCCESS;
-  ObOpRawExpr *substr_expr = NULL;
+  ObSysFunRawExpr *substr_expr = NULL;
   ObConstRawExpr *pos_expr = NULL;
   ObConstRawExpr *truncated_len_expr = NULL;
   int64_t truncated_str_len = 0;
   out_expr = expr;
   if (OB_ISNULL(expr) ||
-      OB_ISNULL(column_meta)) {
+      OB_ISNULL(column_meta) ||
+      OB_ISNULL(ctx_.expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(expr), K(column_meta));
+    LOG_WARN("get unexpected null", K(ret), K(expr), K(column_meta), K(ctx_.expr_factory_));
   } else if (!expr->get_result_type().is_lob_storage() ||
              !column_meta->column_type_.is_string_type() ||
              column_meta->column_type_.get_accuracy().get_length() < 0) {
     // do nothing
-  } else if (OB_FAIL(ctx_.expr_factory_->create_raw_expr(T_FUN_SYS_SUBSTR, substr_expr))) {
-    LOG_WARN("failed to create a new expr", K(ret));
-  } else if (OB_ISNULL(substr_expr)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate expr", K(substr_expr));
   } else if (OB_FALSE_IT(truncated_str_len =
                          column_meta->column_type_.get_accuracy().get_length() + 1)) {
   } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*ctx_.expr_factory_,
@@ -2742,12 +2738,13 @@ int ObExprRangeConverter::try_wrap_lob_with_substr(const ObRawExpr *expr,
                                                           truncated_str_len,
                                                           truncated_len_expr))) {
     LOG_WARN("failed to build const int expr", K(ret));
-  } else if (OB_FAIL(substr_expr->set_param_exprs(const_cast<ObRawExpr*>(expr),
-                                                  pos_expr,
-                                                  truncated_len_expr))) {
-    LOG_WARN("failed to set param for substr", KPC(expr));
-  } else if (OB_FAIL(substr_expr->formalize(ctx_.session_info_))) {
-    LOG_WARN("failed to formalize expr");
+  } else if (OB_FAIL(ObRawExprUtils::create_substr_expr(*ctx_.expr_factory_,
+                                                        ctx_.session_info_,
+                                                        const_cast<ObRawExpr*>(expr),
+                                                        pos_expr,
+                                                        truncated_len_expr,
+                                                        substr_expr))) {
+    LOG_WARN("failed to create substr expr", K(ret), KPC(expr), KPC(pos_expr), KPC(truncated_len_expr));
   } else {
     out_expr = substr_expr;
     ctx_.cur_is_precise_ = false;
