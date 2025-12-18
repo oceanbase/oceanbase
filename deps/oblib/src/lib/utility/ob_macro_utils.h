@@ -13,7 +13,7 @@
 #ifndef _OB_MACRO_UTILS_H_
 #define _OB_MACRO_UTILS_H_
 
-#define SELECT170_(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9,           \
+#define SELECT174_(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9,           \
                    _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, \
                    _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, \
                    _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, \
@@ -30,15 +30,16 @@
                    _140, _141, _142, _143, _144, _145, _146, _147, _148, _149, \
                    _150, _151, _152, _153, _154, _155, _156, _157, _158, _159, \
                    _160, _161, _162, _163, _164, _165, _166, _167, _168, _169, \
-                   _170, ...) _170
+                   _170, _171, _172, _173, _174, ...) _174
 
 // These two macros do same work that select the 120th argument from
 // argument list.
-#define SELECT170(...) SELECT170_(__VA_ARGS__)
+#define SELECT174(...) SELECT174_(__VA_ARGS__)
 
 // Expand to the number of arguments
 #define ARGS_NUM(args...)                               \
-  SELECT170(, ##args,                                   \
+  SELECT174(, ##args,                                   \
+            173, 172, 171, 170,                          \
             169, 168, 167, 166, 165, 164, 163, 162, 161, 160, \
             159, 158, 157, 156, 155, 154, 153, 152, 151, 150, \
             149, 148, 147, 146, 145, 144, 143, 142, 141, 140, \
@@ -249,6 +250,10 @@
 #define APPLY168(f, ...) APPLY_VARGS(f, APPLY167(f, ##__VA_ARGS__))
 #define APPLY169(f, ...) APPLY_VARGS(f, APPLY168(f, ##__VA_ARGS__))
 #define APPLY170(f, ...) APPLY_VARGS(f, APPLY169(f, ##__VA_ARGS__))
+#define APPLY171(f, ...) APPLY_VARGS(f, APPLY170(f, ##__VA_ARGS__))
+#define APPLY172(f, ...) APPLY_VARGS(f, APPLY171(f, ##__VA_ARGS__))
+#define APPLY173(f, ...) APPLY_VARGS(f, APPLY172(f, ##__VA_ARGS__))
+#define APPLY174(f, ...) APPLY_VARGS(f, APPLY173(f, ##__VA_ARGS__))
 #define APPLY(n, f, ...) APPLY ## n (f, ##__VA_ARGS__)
 
 // select nth argument
@@ -430,6 +435,10 @@
 #define LST_DO_168(M, s, P, ...) LST_DO_167(M, s, P, ##__VA_ARGS__)SELF s P(M, 168, ##__VA_ARGS__)
 #define LST_DO_169(M, s, P, ...) LST_DO_168(M, s, P, ##__VA_ARGS__)SELF s P(M, 169, ##__VA_ARGS__)
 #define LST_DO_170(M, s, P, ...) LST_DO_169(M, s, P, ##__VA_ARGS__)SELF s P(M, 170, ##__VA_ARGS__)
+#define LST_DO_171(M, s, P, ...) LST_DO_170(M, s, P, ##__VA_ARGS__)SELF s P(M, 171, ##__VA_ARGS__)
+#define LST_DO_172(M, s, P, ...) LST_DO_171(M, s, P, ##__VA_ARGS__)SELF s P(M, 172, ##__VA_ARGS__)
+#define LST_DO_173(M, s, P, ...) LST_DO_172(M, s, P, ##__VA_ARGS__)SELF s P(M, 173, ##__VA_ARGS__)
+#define LST_DO_174(M, s, P, ...) LST_DO_173(M, s, P, ##__VA_ARGS__)SELF s P(M, 174, ##__VA_ARGS__)
 
 #define LST_DO__(N, M, s, P, ...) LST_DO_ ## N(M, s, P, ##__VA_ARGS__)
 #define LST_DO_(...) LST_DO__(__VA_ARGS__)
@@ -479,7 +488,7 @@
     140, 141, 142, 143, 144, 145, 146, 147, 148, 149, \
     150, 151, 152, 153, 154, 155, 156, 157, 158, 159, \
     160, 161, 162, 163, 164, 165, 166, 167, 168, 169, \
-    170
+    170, 171, 172, 173, 174
 
 #define MSTR(X) #X
 
