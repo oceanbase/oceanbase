@@ -384,7 +384,7 @@ public:
   // @param [out] new_table_schemas, the first is new_table_schema, others are its local indexes schema
   // @param [in] orig_table_schema, orig table schema for ddl
   // @param [in] new_table_schema, new table schema for ddl
-  int generate_tables_array(const obrpc::ObAlterTableArg::AlterPartitionType op_type,
+  int generate_tables_array(const obrpc::ObAlterTableArg &alter_table_arg,
                             common::ObIArray<const ObTableSchema*> &orig_table_schemas,
                             common::ObIArray<ObTableSchema*> &new_table_schemas,
                             common::ObIArray<AlterTableSchema*> &inc_table_schemas,
