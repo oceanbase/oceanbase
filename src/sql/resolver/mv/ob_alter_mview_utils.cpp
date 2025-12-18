@@ -290,7 +290,7 @@ int ObAlterMviewUtils::check_column_option_for_mlog_master(const ObTableSchema &
 {
   int ret = OB_SUCCESS;
   if (table_schema.required_by_mview_refresh()) {
-    if (T_COLUMN_ADD == type) {
+    if (T_COLUMN_ADD == type || T_COLUMN_MODIFY == type || T_COLUMN_ALTER == type) {
     } else {
       if (table_schema.has_mlog_table()) {
         ret = OB_NOT_SUPPORTED;
@@ -298,7 +298,7 @@ int ObAlterMviewUtils::check_column_option_for_mlog_master(const ObTableSchema &
                        "modify column to table with materialized view log is");
         LOG_WARN("modify column to table with materialized view log is not supported",
                  KR(ret), K(table_schema.get_table_name()));
-      } else if (table_schema.table_referenced_by_fast_lsm_mv()) {
+      } else if (table_schema.table_referenced_by_mv()) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED,
                        "modify column to table required by materialized view is");
@@ -326,7 +326,8 @@ int ObAlterMviewUtils::check_action_node_for_mlog_master(const ObTableSchema &ta
         || T_DROP_CONSTRAINT == type
         || T_ALTER_FOREIGN_KEY_OPTION == type
         || T_ALTER_INDEX_OPTION == type
-        || T_ALTER_MLOG_OPTIONS == type) {
+        || T_ALTER_MLOG_OPTIONS == type
+        || T_ALTER_PARTITION_OPTION == type) {
     } else {
       if (table_schema.has_mlog_table()) {
         ret = OB_NOT_SUPPORTED;
@@ -334,7 +335,38 @@ int ObAlterMviewUtils::check_action_node_for_mlog_master(const ObTableSchema &ta
                        "this alter table to table with materialized view log is");
         LOG_WARN("this alter table to table with materialized view log is not supported", KR(ret),
                  K(table_schema.get_table_name()));
-      } else if (table_schema.table_referenced_by_fast_lsm_mv()) {
+      } else if (table_schema.table_referenced_by_mv()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                       "this alter table to table required by materialized view is");
+        LOG_WARN("this alter table to table required by materialized view is not supported",
+                 KR(ret), K(table_schema.get_table_name()));
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected table type", KR(ret), K(table_schema), K(type));
+      }
+    }
+    SQL_RESV_LOG(INFO, "resolve the master of mlog for alter table", K(ret), K(type), K(table_schema));
+  }
+  return ret;
+}
+
+int ObAlterMviewUtils::check_partition_option_for_mlog_master(const ObTableSchema &table_schema,
+                                                              const ObItemType type)
+{
+  int ret = OB_SUCCESS;
+  if (table_schema.required_by_mview_refresh()) {
+    if (false) {
+      // todo: T_ALTER_PARTITION_ADD, it makes refresh failed because
+      // the mlog query begin version is less than tablet create commit version
+    } else {
+      if (table_schema.has_mlog_table()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                       "this alter table to table with materialized view log is");
+        LOG_WARN("this alter table to table with materialized view log is not supported", KR(ret),
+                 K(table_schema.get_table_name()));
+      } else if (table_schema.table_referenced_by_mv()) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED,
                        "this alter table to table required by materialized view is");

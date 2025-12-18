@@ -374,16 +374,18 @@ int ObMVDepUtils::get_table_ids_only_referenced_by_given_fast_lsm_mv(
 }
 int ObMVDepUtils::get_referring_mv_of_base_table(ObISQLClient &sql_client, const uint64_t tenant_id,
                                                  const uint64_t base_table_id,
-                                                 ObIArray<uint64_t> &mview_ids)
+                                                 ObIArray<uint64_t> &mview_ids,
+                                                 bool &exists_nested_mv)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
+  exists_nested_mv = false;
 
   SMART_VAR(ObMySQLProxy::MySQLResult, res)
   {
     ObMySQLResult *result = nullptr;
-    if (OB_FAIL(sql.assign_fmt("SELECT mview_id FROM %s WHERE p_obj = %ld",
-                               share::OB_ALL_MVIEW_DEP_TNAME, base_table_id))) {
+    if (OB_FAIL(sql.assign_fmt("SELECT mview_id, (SELECT COUNT(*) FROM %s WHERE p_obj = A.mview_id) AS cnt FROM %s A WHERE p_obj = %ld",
+                               share::OB_ALL_MVIEW_DEP_TNAME, share::OB_ALL_MVIEW_DEP_TNAME, base_table_id))) {
       LOG_WARN("fail to assign sql", KR(ret));
     } else if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
       LOG_WARN("execute sql failed", KR(ret), K(sql));
@@ -401,10 +403,14 @@ int ObMVDepUtils::get_referring_mv_of_base_table(ObISQLClient &sql_client, const
           }
         } else {
           uint64_t mview_id = 0;
+          int64_t cnt = 0;
           EXTRACT_INT_FIELD_MYSQL(*result, "mview_id", mview_id, uint64_t);
+          EXTRACT_INT_FIELD_MYSQL(*result, "cnt", cnt, int64_t);
           if (OB_SUCC(ret)) {
             if (OB_FAIL(mview_ids.push_back(mview_id))) {
               LOG_WARN("failed to add ref table id to array", KR(ret), K(mview_id));
+            } else if (cnt > 0) {
+              exists_nested_mv = true;
             }
           }
         }

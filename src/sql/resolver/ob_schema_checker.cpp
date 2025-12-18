@@ -579,6 +579,7 @@ int ObSchemaChecker::get_column_schema(
     bool is_link /* = false */)
 {
   int ret = OB_SUCCESS;
+  bool is_ddl_tmp = false;
   column_schema = NULL;
 
   const ObColumnSchemaV2 *column = NULL;
@@ -589,7 +590,9 @@ int ObSchemaChecker::get_column_schema(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(table_id), K(column_name), K(ret));
   } else {
-    if (OB_FAIL(get_column_schema_inner(tenant_id, table_id, column_name, column, is_link))) {
+    if (OB_FAIL(get_ddl_tmp_column_schema(tenant_id, table_id, column_name, is_ddl_tmp, column))) {
+      LOG_WARN("fail to get ddl tmp column schema", K(ret));
+    } else if (!is_ddl_tmp && OB_FAIL(get_column_schema_inner(tenant_id, table_id, column_name, column, is_link))) {
       LOG_WARN("get column schema failed", K(tenant_id), K(table_id), K(column_name), K(ret));
     } else if (NULL == column) {
       for (int64_t i = 0; i < tmp_cte_schemas_.count(); i++) {
@@ -3669,6 +3672,43 @@ int ObSchemaChecker::check_set_default_role_priv(
     }
   }
 
+  return ret;
+}
+
+int ObSchemaChecker::add_ddl_tmp_schema(const share::schema::ObTableSchema* tbl_schema)
+{
+  int ret = OB_SUCCESS;
+  bool dup_schame = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < ddl_tmp_schemas_.count(); i++) {
+    if (tbl_schema->get_table_id() == ddl_tmp_schemas_.at(i)->get_table_id()) {
+      dup_schame = true;
+    }
+  }
+  if (!dup_schame) {
+    if (OB_FAIL(ddl_tmp_schemas_.push_back(tbl_schema))) {
+      LOG_WARN("fail to push back ddl tmp schema", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSchemaChecker::get_ddl_tmp_column_schema(const uint64_t tenant_id, uint64_t table_id,
+                                                const common::ObString &column_name,
+                                                bool &is_ddl_tmp,
+                                                const share::schema::ObColumnSchemaV2 *&column_schema) const
+{
+  int ret = OB_SUCCESS;
+  is_ddl_tmp = false;
+  for (int64_t i = 0; OB_SUCC(ret) && NULL == column_schema && i < ddl_tmp_schemas_.count(); i++) {
+    if (OB_ISNULL(ddl_tmp_schemas_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ddl tmp schema is null", K(ret));
+    } else if (ddl_tmp_schemas_.at(i)->get_tenant_id() == tenant_id &&
+               ddl_tmp_schemas_.at(i)->get_table_id() == table_id) {
+      is_ddl_tmp = true;
+      column_schema = ddl_tmp_schemas_.at(i)->get_column_schema(column_name);
+    }
+  }
   return ret;
 }
 

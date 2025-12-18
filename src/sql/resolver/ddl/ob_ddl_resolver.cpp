@@ -31,6 +31,8 @@
 #include "plugin/sys/ob_plugin_helper.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
 #include "sql/resolver/ddl/ob_interval_partition_resolver.h"
+#include "sql/resolver/mv/ob_mv_provider.h"
+#include "sql/resolver/ddl/ob_create_view_resolver.h"
 
 namespace oceanbase
 {
@@ -14306,6 +14308,97 @@ int ObDDLResolver::formalize_part_str(ObIArray<ObRawExpr*> &part_exprs, ObString
       if (OB_SUCC(ret)) {
         part_str.assign_ptr(part_str_buf, pos);
       }
+    }
+  }
+  return ret;
+}
+
+int ObDDLResolver::rebuild_mv_schema(
+    ObSchemaChecker &schema_checker,
+    const ObTableSchema &orig_mv_schema,
+    ObTableSchema &mv_schema)
+{
+  int ret = OB_SUCCESS;
+  lib::ContextParam param;
+  const uint64_t tenant_id = orig_mv_schema.get_tenant_id();
+  param.set_mem_attr(tenant_id, "DDLResolver", ObCtxIds::DEFAULT_CTX_ID)
+        .set_properties(lib::USE_TL_PAGE_OPTIONAL)
+        .set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE);
+  CREATE_WITH_TEMP_CONTEXT(param) {
+    ObIAllocator &alloc = CURRENT_CONTEXT->get_arena_allocator();
+    ObSelectStmt *view_stmt = NULL;
+    ObStmtFactory stmt_factory(alloc);
+    ObRawExprFactory expr_factory(alloc);
+    ObQueryCtx *query_ctx = NULL;
+    const ObTenantSchema *tenant_schema = NULL;
+    SMART_VARS_3((ObSQLSessionInfo, session_info), (ObExecContext, exec_ctx, alloc),
+                  (ObPhysicalPlanCtx, phy_plan_ctx, alloc)) {
+      LinkExecCtxGuard link_guard(session_info, exec_ctx);
+      if (OB_FAIL(session_info.init(0, 0, &alloc))) {
+        LOG_WARN("failed to init session", K(ret));
+      } else if (OB_FAIL(schema_checker.get_tenant_info(tenant_id, tenant_schema))) {
+        LOG_WARN("failed to get tenant_schema", K(ret));
+      } else if (OB_ISNULL(tenant_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (OB_FAIL(session_info.init_tenant(tenant_schema->get_tenant_name_str(), tenant_id))) {
+        LOG_WARN("failed to init tenant", K(ret));
+      } else if (OB_FAIL(session_info.load_all_sys_vars(*(schema_checker.get_schema_guard())))) {
+        LOG_WARN("failed to load system variable", K(ret));
+      } else if (OB_FAIL(session_info.load_default_configs_in_pc())) {
+        LOG_WARN("failed to load default configs", K(ret));
+      } else if (OB_FAIL(orig_mv_schema.get_local_session_var().update_session_vars_with_local(session_info))) {
+        LOG_WARN("failed to update session_info vars", K(ret));
+      } else if (OB_FALSE_IT(exec_ctx.set_my_session(&session_info))) {
+      } else if (OB_FALSE_IT(exec_ctx.set_physical_plan_ctx(&phy_plan_ctx))) {
+      } else if (OB_ISNULL(query_ctx = stmt_factory.get_query_ctx())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), K(query_ctx));
+      } else if (OB_FALSE_IT(query_ctx->sql_schema_guard_.set_schema_guard(schema_checker.get_schema_guard()))) {
+      } else if (OB_FALSE_IT(expr_factory.set_query_ctx(query_ctx))) {
+      } else if (OB_FAIL(ObMVProvider::generate_mv_stmt(alloc,
+                                                        stmt_factory,
+                                                        expr_factory,
+                                                        schema_checker,
+                                                        session_info,
+                                                        orig_mv_schema,
+                                                        view_stmt))) {
+        LOG_WARN("failed to generate mv stmt", K(ret));
+      } else if (OB_FAIL(mv_schema.assign(orig_mv_schema))) {
+        LOG_WARN("failed to assign mv schema", K(ret));
+      } else if (OB_FAIL(update_mv_schema_with_stmt(view_stmt, session_info, mv_schema))) {
+        LOG_WARN("failed to update mv schema with stmt", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLResolver::update_mv_schema_with_stmt(
+    ObSelectStmt *stmt,
+    ObSQLSessionInfo &session_info,
+    share::schema::ObTableSchema &mv_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_select_item_size(); i++) {
+    ObRawExpr *select_expr = stmt->get_select_item(i).expr_;
+    ObColumnSchemaV2 *col_schema = mv_schema.get_column_schema(i + OB_APP_MIN_COLUMN_ID);
+    if (OB_ISNULL(select_expr) || OB_ISNULL(col_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(ObCreateViewResolver::fill_column_meta_infos(*select_expr,
+                                                                    mv_schema.get_charset_type(),
+                                                                    mv_schema.get_table_id(),
+                                                                    session_info,
+                                                                    *col_schema,
+                                                                    true))) {
+      LOG_WARN("failed to fill column meta infos", K(ret));
+    } else {
+      col_schema->set_charset_type(ObCharset::charset_type_by_coll(col_schema->get_collation_type()));
     }
   }
   return ret;

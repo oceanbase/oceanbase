@@ -41,6 +41,8 @@ public:
                                                  const ObItemType type);
   static int check_action_node_for_mlog_master(const ObTableSchema &table_schema,
                                                const ObItemType type);
+  static int check_partition_option_for_mlog_master(const ObTableSchema &table_schema,
+                                                    const ObItemType type);
 private:
   template<typename T>
   static int resolve_interval_node(const ParseNode &node,
