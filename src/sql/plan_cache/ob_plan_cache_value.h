@@ -223,6 +223,11 @@ public:
   int add_plan(ObPlanCacheObject &cache_obj,
                const common::ObIArray<PCVSchemaObj> &schema_array,
                ObPlanCacheCtx &pc_ctx);
+  int add_to_plan_set(ObPlanCacheCtx &pc_ctx,
+                      ObPlanCacheObject &plan,
+                      int64_t outline_param_idx,
+                      bool is_multi_stmt_batch,
+                      bool add_last = true);
 
   int match_and_generate_ext_params(ObPlanSet *batch_plan_set,
                                     ObPlanCacheCtx &pc_ctx,

@@ -128,7 +128,7 @@ public:
                                   const bool is_verified,
                                   ObPlanBaselineItem *item);
   int force_accept_new_plan_baseline(ObSpmCacheCtx& spm_ctx, uint64_t plan_hash, const bool with_plan_hash);
-  int sync_baseline_from_inner_table();
+  int sync_baseline_from_inner_table(ObSpmCacheCtx& spm_ctx);
   int sync_baseline_from_server();
 
   int alter_plan_baseline(const uint64_t tenant_id,

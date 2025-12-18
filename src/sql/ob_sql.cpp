@@ -3276,7 +3276,6 @@ int ObSql::generate_stmt(ParseResult &parse_result,
 
       // set const param constraint after resolving
       context.all_plan_const_param_constraints_ = &(resolver_ctx.query_ctx_->all_plan_const_param_constraints_);
-      context.all_possible_const_param_constraints_ = &(resolver_ctx.query_ctx_->all_possible_const_param_constraints_);
       context.all_equal_param_constraints_ = &(resolver_ctx.query_ctx_->all_equal_param_constraints_);
       context.all_pre_calc_constraints_ = &(resolver_ctx.query_ctx_->all_pre_calc_constraints_);
       context.all_expr_constraints_ = &(resolver_ctx.query_ctx_->all_expr_constraints_);
@@ -3289,7 +3288,6 @@ int ObSql::generate_stmt(ParseResult &parse_result,
           result.get_session().get_effective_tenant_id());
       context.resource_map_rule_.shadow_copy(resource_map_rule);
       LOG_DEBUG("got plan const param constraints", K(resolver_ctx.query_ctx_->all_plan_const_param_constraints_));
-      LOG_DEBUG("got all const param constraints", K(resolver_ctx.query_ctx_->all_possible_const_param_constraints_));
       LOG_TRACE("set sql context rule id", K(ret), K(context.resource_map_rule_), K(&context),
                 K(&resolver_ctx), K(context.is_prepare_stage_), K(context.is_prepare_protocol_),
                 K(NULL != GCTX.cgroup_ctrl_ && GCTX.cgroup_ctrl_->is_valid()),
@@ -4168,9 +4166,7 @@ int ObSql::code_generate(
     } else {
       if (OB_FAIL(logical_plan->get_global_table_partition_info(tbl_part_infos))) {
         LOG_WARN("get_global_table_partition_info fails", K(ret));
-      } else if (OB_FAIL(sql_ctx.set_partition_infos(
-              tbl_part_infos,
-              result.get_exec_context().get_allocator()))) {
+      } else if (OB_FAIL(sql_ctx.set_partition_infos(tbl_part_infos, result.get_exec_context().get_allocator()))) {
         LOG_WARN("Failed to set table location in sql ctx", K(ret));
       } else {
         ObDASCtx &das_ctx = DAS_CTX(result.get_exec_context());

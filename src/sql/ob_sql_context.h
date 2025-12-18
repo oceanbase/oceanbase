@@ -752,15 +752,13 @@ public:
   bool need_late_compile_;
 
   // 从resolver传递过来的常量约束
-  // all_possible_const_param_constraints_ 表示该sql中可能的全部常量约束
   // all_plan_const_param_constraints_ 表示该sql中存在的全部常量约束
   // 比如：create table t (a bigint, b bigint as (a + 1 + 2), c bigint as (a + 2 + 3), index idx_b(b), index idx_c(c));
   // 对于：select * from t where a + 1 + 2 > 0;
-  // 有：all_plan_const_param_constraints_ = {[1, 2]}, all_possible_const_param_constraints_ = {[1, 2], [2, 3]}
+  // 有：all_plan_const_param_constraints_ = {[1, 2]}
   // 对于：select * from t where a + 3 + 4 > 0;
-  // 有：all_plan_const_param_constraints_ = {}, all_possible_const_param_constraints_ = {[1, 2], [2, 3]}
+  // 有：all_plan_const_param_constraints_ = {}
   common::ObIArray<ObPCConstParamInfo> *all_plan_const_param_constraints_;
-  common::ObIArray<ObPCConstParamInfo> *all_possible_const_param_constraints_;
   common::ObIArray<ObPCParamEqualInfo> *all_equal_param_constraints_;
   common::ObDList<ObPreCalcExprConstraint> *all_pre_calc_constraints_;
   common::ObIArray<ObExprConstraint> *all_expr_constraints_;
@@ -979,7 +977,6 @@ public:
   // record all system variables or user variables in this statement
   common::ObSArray<ObVarInfo, common::ModulePageAllocator, true> variables_;
   common::ObSArray<ObPCConstParamInfo, common::ModulePageAllocator, true> all_plan_const_param_constraints_;
-  common::ObSArray<ObPCConstParamInfo, common::ModulePageAllocator, true> all_possible_const_param_constraints_;
   common::ObSArray<ObPCParamEqualInfo, common::ModulePageAllocator, true> all_equal_param_constraints_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> var_init_exprs_;
   common::ObDList<ObPreCalcExprConstraint> all_pre_calc_constraints_;

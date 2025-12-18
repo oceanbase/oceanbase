@@ -126,7 +126,6 @@ TEST_F(TestPlanCacheValue, basic)
     sql_ctx[i].schema_guard_ = &(test_sql->get_schema_guard());
     sql_ctx[i].session_info_ = &(session[i]);
     sql_ctx[i].all_plan_const_param_constraints_ = &plan_const_param_constraints;
-    sql_ctx[i].all_possible_const_param_constraints_ = &all_const_param_constraints;
   }
   for (int i = 0; i < TEST_PLAN_NUM; i++) {
     ASSERT_EQ(OB_SUCCESS, session[i].init_tenant(ObString(OB_SYS_TENANT_NAME), OB_SYS_TENANT_ID));

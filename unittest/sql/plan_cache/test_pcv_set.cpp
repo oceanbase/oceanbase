@@ -121,7 +121,6 @@ TEST_F(TestPCVSet, basic)
   sql_ctx.schema_guard_ = &(test_sql->get_schema_guard());
   sql_ctx.session_info_ = &session;
   sql_ctx.all_plan_const_param_constraints_ = &const_params_constraints;
-  sql_ctx.all_possible_const_param_constraints_ = &const_params_constraints;
   sql_ctx.all_equal_param_constraints_ = &equal_param_constraints;
   sql_ctx.all_precise_param_constraints_ = &precise_param_constraints;
   sql_ctx.all_pre_calc_constraints_ = &all_pre_calc_constraints_;

@@ -1280,6 +1280,7 @@ struct ObPreCalcExprConstraint : public common::ObDLinkBase<ObPreCalcExprConstra
     virtual int check_is_match(ObDatumObjParam &datum_param,
                                ObExecContext &exec_ctx,
                                bool &is_match) const;
+    TO_STRING_KV(K(expect_result_));
     ObPreCalcExprFrameInfo pre_calc_expr_info_;
     PreCalcExprExpectResult expect_result_;
 };
