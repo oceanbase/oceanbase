@@ -3005,6 +3005,15 @@ typedef enum ObItemType
   T_WITH_INDEX = 4948, // prewarm data table with index table
   T_PREWARM_SS_LOCAL_CACHE = 4949, // prewarm data into ss_local_cache
   T_MIXED_RETENTION = 4950,  // mixed retention
+
+  //direct load kafka
+  T_CREATE_ROUTINE_LOAD = 4951,
+  T_LOAD_PROPERTIES = 4952,
+  T_KAFKA_CUSTOM_PROPERTY = 4953,
+  T_PAUSE_ROUTINE_LOAD = 4954,
+  T_RESUME_ROUTINE_LOAD = 4955,
+  T_STOP_ROUTINE_LOAD = 4956,
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
