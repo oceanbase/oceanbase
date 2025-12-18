@@ -39,11 +39,10 @@ namespace observer
         enable_response_time_stats, sql::stmt::stmt_name, process_type, elapsed_us); \
     break;
 
-#define RECORD_STAT_WITHOUT_SQL_AUDIT(process_type, stat_prefix)                     \
+#define RECORD_FAILED_OP_STAT(process_type, stat_prefix)                     \
   case ObTableProccessType::process_type:                                            \
     EVENT_INC(stat_prefix##_COUNT);                                                  \
     EVENT_ADD(stat_prefix##_TIME, elapsed_us);                                       \
-    EVENT_ADD(stat_prefix##_ROW, rows);                                              \
     break;
 
 #define RECORD_STAT_END()                                                                         \
@@ -187,7 +186,7 @@ public:
       RECORD_STAT_WITH_ROW(TABLE_API_HBASE_BATCH_PUT, HBASEAPI_BATCH_PUT, T_HBASE_BATCH_PUT);
       RECORD_STAT_WITH_ROW(TABLE_API_HBASE_BATCH_DELETE, HBASEAPI_BATCH_DELETE, T_HBASE_BATCH_DELETE);
       RECORD_STAT_WITH_ROW(TABLE_API_HBASE_BATCH_GET, HBASEAPI_BATCH_GET, T_HBASE_BATCH_GET);
-      RECORD_STAT_WITHOUT_SQL_AUDIT(TABLE_API_FAILED_OP, TABLEAPI_FAILED_OP);
+      RECORD_FAILED_OP_STAT(TABLE_API_FAILED_OP, TABLEAPI_FAILED_OP);
 
       // table query
       RECORD_STAT_WITH_ROW(TABLE_API_TABLE_QUERY, TABLEAPI_QUERY, T_KV_QUERY)
