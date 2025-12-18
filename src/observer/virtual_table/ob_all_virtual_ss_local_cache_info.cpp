@@ -287,10 +287,14 @@ int ObAllVirtualSSLocalCacheInfo::add_macro_block_inst_(const ObSSMacroBlockType
       }
     }
     ObSSLocalCacheService *local_cache_service = nullptr;
+    ObSSMacroCacheMgr *macro_cache_mgr = nullptr;
     if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(local_cache_service = MTL(ObSSLocalCacheService *))) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "local_cache_service is null", KR(ret));
+    } else if (OB_ISNULL(macro_cache_mgr = MTL(ObSSMacroCacheMgr *))) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "macro_cache_mgr is null", KR(ret));
     } else if (OB_FAIL(tenant_di_info_.get_stat(ObStatEventIds::SS_MACRO_CACHE_ALLOC_DISK_SIZE,
       inst.alloc_disk_size_))) {
       SERVER_LOG(WARN, "fail to get macro cache alloc disk size",
@@ -300,8 +304,12 @@ int ObAllVirtualSSLocalCacheInfo::add_macro_block_inst_(const ObSSMacroBlockType
       ObSSLocalCacheStat &local_cache_stat = local_cache_service->get_local_cache_stat();
       ObStorageCacheHitStat &hit_stat = local_cache_stat.macro_cache_stat_.macro_block_stat_[static_cast<uint8_t>(macro_block_type)].hit_stat_;
       get_hit_stat_(hit_stat, inst);
-      inst.used_disk_size_ = local_cache_stat.macro_cache_stat_.macro_block_stat_[static_cast<uint8_t>(macro_block_type)].get_used_disk_size();
-      if (FAILEDx(inst_list_.push_back(inst))) {
+
+      ObSSCacheStatInfo cache_stat_info;
+      if (OB_FAIL(macro_cache_mgr->get_macro_blocks_stat(macro_block_type, cache_stat_info))) {
+        SERVER_LOG(WARN, "fail to get macro block stat", KR(ret), K(macro_block_type));
+      } else if (FALSE_IT(inst.used_disk_size_ = cache_stat_info.get_used_disk_size())) {
+      } else if (OB_FAIL(inst_list_.push_back(inst))) {
         SERVER_LOG(WARN, "fail to push back shared macro cache inst", KR(ret), K(inst), K(inst_list_.count()));
       }
     }
