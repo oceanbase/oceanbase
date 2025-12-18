@@ -3016,6 +3016,7 @@ typedef enum ObItemType
 
   T_CSV_LARGE_FILE_SIZE_THRESHOLD = 4957,
   T_MAX_CSV_ROW_LENGTH = 4958,
+  T_HYBRID_SEARCH_SCORE = 4959, // hybrid search score
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
