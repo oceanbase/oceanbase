@@ -1576,6 +1576,7 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
       transaction::ObTransService *tx_service = nullptr;
       uint32_t holder_session_id = sql::ObSQLSessionInfo::INVALID_SESSID;
       uint32_t client_sid = sql::ObSQLSessionInfo::INVALID_SESSID;
+      uint32_t holder_client_sid = sql::ObSQLSessionInfo::INVALID_SESSID;
       int64_t holder_tx_start_time = 0;
       int tmp_ret = OB_SUCCESS;
       if (OB_ISNULL(tx_service = MTL(transaction::ObTransService *))) {
@@ -1585,6 +1586,8 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
           TRANS_LOG(ERROR, "get client_sid failed", K(ret));
       } else if (OB_TMP_FAIL(tx_service->get_trans_start_session_id_and_ts(ls_id, holder_tx_id, holder_session_id, holder_tx_start_time))) {
         TRANS_LOG(WARN, "get transaction start session_id failed", K(tx_id), K(holder_tx_id), K(ls_id));
+      } else if (OB_TMP_FAIL(sql::ObBasicSessionInfo::get_client_sid(holder_session_id, holder_client_sid))) {
+        TRANS_LOG(ERROR, "get holder client_sid failed", K(ret));
       }
       uint64_t hash = wait_on_row ? row_hash : tx_hash;
       char buffer[rpc::ObLockWaitNode::KEY_BUFFER_SIZE] = {0};// if str length less than ObStringHolder::TINY_STR_SIZE, no heap memory llocated
@@ -1613,7 +1616,7 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
                       sess_id_pair.assoc_sess_id_,
                       holder_session_id,
                       holder_tx_start_time,
-                      client_sid);
+                      holder_client_sid);
       if (OB_SUCCESS != ObTransDeadlockDetectorAdapter::
                   get_trans_info_on_participant(cflict_info.conflict_tx_id_,
                                                 cflict_info.conflict_ls_,
@@ -1697,12 +1700,12 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
                                                 cflict_info.conflict_sess_id_pair_)) {
         TRANS_LOG(WARN, "get transaction info fail", K(ret), K(cflict_info));
       }
-      uint32_t client_sid = sql::ObSQLSessionInfo::INVALID_SESSID;
+      uint32_t holder_client_sid = sql::ObSQLSessionInfo::INVALID_SESSID;
       if (OB_TMP_FAIL(sql::ObBasicSessionInfo::get_client_sid(
-                      cflict_info.conflict_sess_id_pair_.get_valid_sess_id(), client_sid))) {
+                      cflict_info.conflict_sess_id_pair_.get_valid_sess_id(), holder_client_sid))) {
         TRANS_LOG(ERROR, "get client_sid failed", K(ret));
       } else {
-        cflict_info.client_session_id_ = client_sid;
+        cflict_info.client_session_id_ = holder_client_sid;
       }
     }
     TRANS_LOG(LOG_LEVEL_FOR_LWM, "post_lock", K(ret), K(tablet_id),
