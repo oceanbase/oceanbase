@@ -311,6 +311,7 @@ int ObIvfAsyncTaskExector::check_and_set_thread_pool()
     ObVecIndexAsyncTaskHandler &thread_pool_handle =
         vector_index_service_->get_vec_async_task_handle();
     bool has_ivf_index = false;
+    common::ObSpinLockGuard init_guard(thread_pool_handle.lock_); // lock thread pool init to avoid init twice
     if (thread_pool_handle.get_tg_id() != INVALID_TG_ID) {  // no need to init twice, skip
     } else if (OB_FAIL(check_has_ivf_index(has_ivf_index))) {
       LOG_WARN("fail to check has ivf index", K(ret));
