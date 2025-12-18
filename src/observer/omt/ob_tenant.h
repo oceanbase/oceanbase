@@ -443,6 +443,7 @@ public:
   int64_t min_active_worker_cnt() const;
   int64_t min_worker_cnt() const;
   int64_t max_worker_cnt() const;
+  int64_t priority_worker_cnt() const;
   int64_t cur_ddl_thread_count() {return ATOMIC_LOAD(&total_ddl_thread_cnt_);}
   void inc_ddl_thread_count() { ATOMIC_INC(&total_ddl_thread_cnt_); };
   void dec_ddl_thread_count() { ATOMIC_DEC(&total_ddl_thread_cnt_); };
