@@ -30,8 +30,10 @@ void __attribute__((constructor(0))) init_malloc_hook()
 {
   // The aim of calling memset is to initialize certain states in memset,
   // and to avoid nested deadlock of memset after malloc_hook inited.
-  memset(&memset_ptr, 0, sizeof(memset_ptr));
-  memset_ptr = memset;
+  static void *(*real_func)(void *, int, size_t)
+    = (__typeof__(real_func)) dlsym(RTLD_NEXT, "memset");
+  real_func(&memset_ptr, 0, sizeof(memset_ptr));
+  memset_ptr = real_func;
   g_malloc_hook_inited = true;
 }
 uint64_t up_align(uint64_t x, uint64_t align)
@@ -88,8 +90,9 @@ enum AllocMode {
 
 struct SizeClass
 {
+  static const int64_t SC_MAGIC_CODE = 0x3A3A2B2BB2B2A3A3;
   SizeClass()
-    : alloc_(NULL), partitial_list_(NULL)
+    : MAGIC_CODE_(SC_MAGIC_CODE), alloc_(NULL), partitial_list_(NULL)
   {}
   //尾插头取，保证block积累到更多的local free
   void push_partitial(ABlock *block)
@@ -126,6 +129,7 @@ struct SizeClass
     pop_partitial(block);
     return block;
   }
+  int64_t MAGIC_CODE_;
   AObject *alloc_;
   ABlock *partitial_list_; // use ABlock::next_
   //ABlock *deferred_list_; // use ABlock::next2_
@@ -308,6 +312,7 @@ public:
 
   void *alloc(const uint64_t size, uint32_t &alloc_from)
   {
+    SANITY_DISABLE_CHECK_RANGE();
     void *ptr = NULL;
     const int sc_idx = calc_sc_idx(size + AOBJECT_META_SIZE);
     SizeClass &sc = scs_[sc_idx];
@@ -330,15 +335,18 @@ public:
         }
       } while (OB_ISNULL(ptr) && 0 != size);
     }
+    SANITY_UNPOISON(ptr, size);
     return ptr;
   }
 
   void free(void *ptr)
   {
+    SANITY_DISABLE_CHECK_RANGE();
     AObject *obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);
     ABlock *block = obj->block_;
     ObjectSetV3 *os = block->obj_set_v3_;
     obj->in_use_ = false;
+    SANITY_POISON(obj->data_, obj->alloc_bytes_);
     // TODO: check AOBJECT_TAIL_MAGIC_CODE
     if (OB_UNLIKELY(obj->is_large_)) {
       os->free_block(block);
@@ -409,6 +417,7 @@ public:
     if (OB_LIKELY(NULL != block)) {
       block->obj_set_v3_ = this;
       block->ablock_size_ = size;
+      SANITY_POISON(block->data(), size);
     }
     return block;
   }

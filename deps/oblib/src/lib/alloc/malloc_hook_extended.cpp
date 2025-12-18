@@ -76,7 +76,7 @@ calloc(size_t nmemb, size_t size)
     if (nullptr != memset_ptr) {
       memset_ptr(ptr, 0, real_size);
     } else {
-      char *tmp_ptr = (char *)ptr;
+      volatile char *tmp_ptr = (char *)ptr;
       for (size_t i = 0; i < real_size; ++i) {
         tmp_ptr[i] = 0;
       }
