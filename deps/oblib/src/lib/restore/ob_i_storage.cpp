@@ -923,6 +923,13 @@ static void try_refresh_device_credential(
   }
 }
 
+bool ObObjectStorageGuard::is_connectivity_check_file(const ObString &uri)
+{
+  static const int64_t needle_len = STRLEN(OB_STR_CONNECTIVITY_CHECK);
+  return !uri.empty() && OB_NOT_NULL(uri.ptr())
+      && OB_NOT_NULL(memmem(uri.ptr(), uri.length(), OB_STR_CONNECTIVITY_CHECK, needle_len));
+}
+
 void ObObjectStorageGuard::print_access_storage_log_() const
 {
   const int64_t cost_time_us = ObTimeUtility::current_time() - start_time_us_;
@@ -930,7 +937,8 @@ void ObObjectStorageGuard::print_access_storage_log_() const
   const double speed = ((double)handled_size_ / 1024 / 1024)
                      / ((double)cost_time_us / 1000 / 1000);
   const bool is_slow = is_slow_io_(cost_time_us);
-  if (is_slow) {
+  const bool need_log_for_connectivity_check_file = (is_slow || is_connectivity_check_file(uri_));
+  if (is_slow || need_log_for_connectivity_check_file) {
     _STORAGE_LOG_RET(WARN, ob_errcode_,
         "access object storage cost too much time: %s (%s:%ld), "
         "uri=%.*s, size=%ld byte, start_time=%ld, cost_ts=%ld us, speed=%.2f MB/s, is_slow=%d",

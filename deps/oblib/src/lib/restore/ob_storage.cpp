@@ -1397,6 +1397,10 @@ int ObStorageUtil::batch_del_files(
               K(object_start), K(cur_deleted_pos), K(files_to_delete_map.size()));
         } else {
           cur_deleted_pos++;
+
+          if (ObObjectStorageGuard::is_connectivity_check_file(cur_uri)) {
+            STORAGE_LOG(ERROR, "batch delete connectivity check file", K(cur_uri));
+          }
         }
       }
 
