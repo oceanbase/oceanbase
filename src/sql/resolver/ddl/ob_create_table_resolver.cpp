@@ -553,10 +553,16 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
                 is_temporary_table = true;
                 is_oracle_temp_table_ = (is_mysql_mode == false);
                 bool enable_new_oracle_temp_table = false;
-                if (data_version >= DATA_VERSION_4_4_2_0) {
+                if (data_version >= DATA_VERSION_4_4_2_0 && is_oracle_mode()) {
+                  ParseNode *commit_option_node = create_table_node->children_[7];
                   enable_new_oracle_temp_table = tenant_config.is_valid() ? tenant_config->_enable_new_oracle_temporary_table : false;
+                  if (enable_new_oracle_temp_table && (OB_ISNULL(commit_option_node) || T_TRANSACTION == commit_option_node->type_)) {
+                    enable_new_oracle_temp_table = tenant_config->_enable_new_oracle_trx_temporary_table;
+                  }
                 }
-                is_old_oracle_temp_table_ = !enable_new_oracle_temp_table && is_oracle_temp_table_;
+                if (OB_SUCC(ret)) {
+                  is_old_oracle_temp_table_ = !enable_new_oracle_temp_table && is_oracle_temp_table_;
+                }
               }
               break;
             }

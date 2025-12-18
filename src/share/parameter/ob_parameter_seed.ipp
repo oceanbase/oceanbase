@@ -2349,6 +2349,9 @@ DEF_BOOL(_enable_new_query_range_extraction, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_enable_new_oracle_temporary_table, OB_TENANT_PARAMETER, "True",
     "Decide whether to use the new Oracle global temporary table.",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_new_oracle_trx_temporary_table, OB_TENANT_PARAMETER, "True",
+    "Decide whether to use the new Oracle transaction temporary table.",
+    ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(_ha_diagnose_history_recycle_interval, OB_CLUSTER_PARAMETER, "7d", "[2m, 180d]",
          "The recycle interval time of diagnostic history data. Range: [2m, 180d]",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
