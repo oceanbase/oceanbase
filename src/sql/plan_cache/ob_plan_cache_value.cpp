@@ -172,7 +172,8 @@ ObPlanCacheValue::ObPlanCacheValue()
     stored_schema_objs_(pc_alloc_),
     stmt_type_(stmt::T_MAX),
     enable_rich_vector_format_(false),
-    switchover_epoch_(OB_INVALID_VERSION)
+    switchover_epoch_(OB_INVALID_VERSION),
+    force_miss_match_(false)
 {
   MEMSET(sql_id_, 0, sizeof(sql_id_));
   MEMSET(format_sql_id_, 0, sizeof(format_sql_id_));
@@ -278,8 +279,10 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
       LOG_WARN("failed to add bitset members", K(ret));
     } else if (OB_FAIL(fmt_int_or_ch_decint_idx_.add_members2(pc_ctx.fmt_int_or_ch_decint_idx_))) {
       LOG_WARN("failed to add bitset members", K(ret));
-    } else if (OB_FAIL(set_stored_schema_objs(plan->get_dependency_table(),
-                                              pc_ctx.sql_ctx_.schema_guard_))) {
+    } else if (OB_FAIL(check_need_force_miss_match(*plan))) {
+      LOG_WARN("failed to check need force miss match", K(ret));
+    } else if (!force_miss_match_ && OB_FAIL(set_stored_schema_objs(plan->get_dependency_table(),
+                                                                    pc_ctx.sql_ctx_.schema_guard_))) {
       LOG_WARN("failed to set stored schema objs",
                K(ret), K(plan->get_dependency_table()), K(pc_ctx.sql_ctx_.schema_guard_));
     } else if (OB_FAIL(assign_udr_infos(pc_ctx))) {
@@ -498,6 +501,8 @@ int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
   if (OB_ISNULL(session = pc_ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     SQL_PC_LOG(ERROR, "got session is NULL", K(ret));
+  } else if (OB_UNLIKELY(force_miss_match_)) {
+    ret = OB_OLD_SCHEMA_VERSION;
   } else if (FALSE_IT(orig_rich_format_status = session->get_force_rich_format_status())) {
   } else if (FALSE_IT(session->set_stmt_type(stmt_type_))) {
   } else if (OB_FAIL(session->get_spm_mode(spm_mode))) {
@@ -1569,6 +1574,7 @@ void ObPlanCacheValue::reset()
   }
   stored_schema_objs_.reset();
   enable_rich_vector_format_ = false;
+  force_miss_match_ = false;
   pcv_set_ = NULL; //放最后，前面可能存在需要pcv_set
 }
 
@@ -2470,6 +2476,15 @@ int ObPlanCacheValue::get_evolving_evolution_task(EvolutionPlanList &evo_task_li
   return ret;
 }
 #endif
+
+int ObPlanCacheValue::check_need_force_miss_match(const ObPlanCacheObject &plan)
+{
+  int ret = OB_SUCCESS;
+  if (ObPlanCache::is_contains_external_object(plan.get_dependency_table())) {
+    force_miss_match_ = true;
+  }
+  return ret;
+}
 
 }//end of namespace sql
 }//end of namespace oceanbase

@@ -373,6 +373,7 @@ private:
   int cmp_not_param_info(const NotParamInfoList &l_param_info_list,
                          const NotParamInfoList &r_param_info_list,
                          bool &is_equal);
+  int check_need_force_miss_match(const ObPlanCacheObject &plan);
 
   friend class ::test::TestPlanSet_basic_Test;
   friend class ::test::TestPlanCacheValue_basic_Test;
@@ -463,6 +464,8 @@ private:
   bool enable_rich_vector_format_;
   common::ObBitSet<> fmt_int_or_ch_decint_idx_;
   int64_t switchover_epoch_;
+  // Force miss match plan cache. e.g. contain lake table or mview
+  bool force_miss_match_;
 
   DISALLOW_COPY_AND_ASSIGN(ObPlanCacheValue);
 };
