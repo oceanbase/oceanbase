@@ -40,7 +40,8 @@ public:
       const uint64_t tenant_data_version,
       const int64_t parent_task_id = 0,
       const int64_t task_status = share::ObDDLTaskStatus::PREPARE,
-      const int64_t snapshot_version = 0);
+      const int64_t snapshot_version = 0,
+      const bool is_retryable_ddl = true);
   int init(const ObDDLTaskRecord &task_record);
   virtual int process() override;
   virtual int cleanup_impl() override;
@@ -60,6 +61,13 @@ public:
   virtual int on_child_task_finish(
     const uint64_t child_task_key,
     const int ret_code) override;
+  virtual bool task_can_retry() const override
+  {
+    return share::ObDDLTaskStatus::WAIT_ROWKEY_VID_TABLE_COMPLEMENT == task_status_
+           ? is_retryable_ddl_
+           : true;
+  }
+  virtual bool is_ddl_retryable() const override { return is_retryable_ddl_; }
   TO_STRING_KV(K(index_table_id_), K(rowkey_vid_aux_table_id_),
       K(vid_rowkey_aux_table_id_), K(delta_buffer_table_id_),
       K(index_id_table_id_), K(index_snapshot_data_table_id_),
@@ -70,7 +78,7 @@ public:
       K(index_id_task_id_), K(index_snapshot_task_id_), K(drop_index_task_id_), K(is_rebuild_index_),
       K(drop_index_task_submitted_), K(schema_version_), K(execution_id_), K(is_offline_rebuild_),
       K(hybrid_vector_embedded_vec_table_id_), K(hybrid_vector_embedded_vec_task_submitted_), K(hybrid_vector_embedded_vec_task_id_),
-      K(is_post_create_hybrid_vector_), K(consumer_group_id_), K(trace_id_), K(parallelism_), K(create_index_arg_), K(use_vid_));
+      K(is_post_create_hybrid_vector_), K(consumer_group_id_), K(trace_id_), K(parallelism_), K(create_index_arg_), K(use_vid_), K(is_retryable_ddl_));
 
 public:
   static bool is_rebuild_dense_vec_index_task(const share::schema::ObTableSchema &index_schema);
@@ -219,6 +227,7 @@ private:
   obrpc::ObCreateIndexArg create_index_arg_;
   common::hash::ObHashMap<uint64_t, share::ObDomainDependTaskStatus> dependent_task_result_map_;
   bool use_vid_;
+  bool is_retryable_ddl_;
 };
 
 } // end namespace rootserver

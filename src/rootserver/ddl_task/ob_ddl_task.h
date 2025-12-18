@@ -14,6 +14,7 @@
 #define OCEANBASE_ROOTSERVER_OB_DDL_TASK_H_
 
 #include "lib/container/ob_array.h"
+#include "lib/hash/ob_hashmap.h"
 #include "lib/thread/ob_async_task_queue.h"
 #include "lib/trace/ob_trace.h"
 #include "share/ob_ddl_common.h"
@@ -195,6 +196,21 @@ public:
   int64_t task_id_;
 };
 
+// for tablet execution id map serialization
+struct ObTabletExecutionIdPair
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTabletExecutionIdPair() : tablet_id_(), execution_id_(0) {}
+  ObTabletExecutionIdPair(const common::ObTabletID &tablet_id, int64_t execution_id)
+      : tablet_id_(tablet_id), execution_id_(execution_id) {}
+
+public:
+  common::ObTabletID tablet_id_;
+  int64_t execution_id_;
+
+  TO_STRING_KV(K_(tablet_id), K_(execution_id));
+};
 
 struct ObDDLTaskSerializeField final
 {
@@ -783,13 +799,19 @@ public:
   bool need_schedule() { return next_schedule_ts_ <= ObTimeUtility::current_time(); }
   bool is_replica_build_need_retry(const int ret_code);
   int64_t get_execution_id() const;
-  static int push_execution_id(
+  static int calc_next_execution_id(
+      int64_t execution_id,
+      const share::ObDDLType ddl_type,
+      const bool ddl_can_retry,
+      const int64_t data_format_version,
+      int64_t &next_execution_id);
+  static int push_task_execution_id(
       const uint64_t tenant_id,
       const int64_t task_id,
       const share::ObDDLType ddl_type,
       const bool ddl_can_retry,
       const int64_t data_format_version,
-      int64_t &new_execution_id);
+      int64_t &new_task_execution_id);
   void check_ddl_task_execute_too_long();
   static bool check_is_load_data(share::ObDDLType task_type);
   virtual bool support_longops_monitoring() const { return false; }

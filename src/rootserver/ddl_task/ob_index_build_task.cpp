@@ -92,6 +92,14 @@ int ObIndexSSTableBuildTask::process()
     }
   }
 #endif
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = OB_E(EventTable::EN_POST_VEC_INDEX_BUILD_ROWKEY_VID_TBL_ERR) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      LOG_WARN("errsim ddl execute building the subtask of vector index failed", KR(ret));
+    }
+  }
+#endif
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
       tenant_id_, schema_guard))) {
@@ -932,10 +940,10 @@ int ObIndexBuildTask::reap_old_replica_build_task(bool &need_exec_new_inner_sql)
 }
 
 // construct ObIndexSSTableBuildTask build task
-int ObIndexBuildTask::send_build_single_replica_request(const bool &is_partitioned_local_index_task, const int64_t &parallelism, const int64_t &execution_id, const share::ObLSID &ls_id, const common::ObAddr &leader_addr, const ObIArray<ObTabletID> &index_partition_ids)
+int ObIndexBuildTask::send_build_single_replica_request(const bool &is_partitioned_local_index_task, const int64_t &parallelism, const int64_t &task_execution_id, const share::ObLSID &ls_id, const common::ObAddr &leader_addr, const ObIArray<ObTabletID> &index_partition_ids)
 {
   int ret = OB_SUCCESS;
-  int64_t new_execution_id = execution_id;
+  int64_t new_task_execution_id = task_execution_id;
   common::ObAddr ls_leader_addr = leader_addr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -951,8 +959,8 @@ int ObIndexBuildTask::send_build_single_replica_request(const bool &is_partition
       ret = OB_SUCCESS; // ingore ret
     }
     if (!is_partitioned_local_index_task) {
-      if (OB_FAIL(ObDDLTask::push_execution_id(tenant_id_, task_id_, task_type_, is_retryable_ddl_, data_format_version_, new_execution_id))) {
-        LOG_WARN("failed to fetch new execution id", K(ret), K(tenant_id_), K(task_id_), K(task_type_), K(data_format_version_), K(new_execution_id));
+      if (OB_FAIL(ObDDLTask::push_task_execution_id(tenant_id_, task_id_, task_type_, is_retryable_ddl_, data_format_version_, new_task_execution_id))) {
+        LOG_WARN("failed to fetch new execution id", K(ret), K(tenant_id_), K(task_id_), K(task_type_), K(data_format_version_), K(new_task_execution_id));
       } else {
         ls_leader_addr = create_index_arg_.inner_sql_exec_addr_;
       }
@@ -960,7 +968,7 @@ int ObIndexBuildTask::send_build_single_replica_request(const bool &is_partition
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("array size less than 1", K(ret), K(index_partition_ids));
     }
-    execution_id_ = new_execution_id;
+    execution_id_ = new_task_execution_id;
     if (OB_SUCC(ret)) {
       ObIndexSSTableBuildTask task(
           task_id_,
@@ -969,7 +977,7 @@ int ObIndexBuildTask::send_build_single_replica_request(const bool &is_partition
           target_object_id_,
           schema_version_,
           snapshot_version_,
-          new_execution_id,
+          new_task_execution_id,
           consumer_group_id_,
           trace_id_,
           parallelism,
@@ -1022,6 +1030,8 @@ int ObIndexBuildTask::wait_and_send_single_partition_replica_task(bool &state_fi
       LOG_WARN("fail to get next batch tablets", K(ret), K(parallelism), K(execution_id), K(tablets));
       state_finished = true;
     }
+  } else if (OB_FAIL(serialize_and_update_message())) {
+    LOG_WARN("fail to serialize and update message", K(ret));
   } else if (OB_FAIL(send_build_single_replica_request(true, parallelism, execution_id, ls_id, leader_addr, tablets))) {
     LOG_WARN("fail to send build single partition replica request", K(ret), K(parallelism), K(execution_id), K(tablets));
   }
@@ -1998,6 +2008,12 @@ int ObIndexBuildTask::serialize_params_to_message(char *buf, const int64_t buf_l
   } else {
     LST_DO_CODE(OB_UNIS_ENCODE, check_unique_snapshot_, target_cg_cnt_, is_retryable_ddl_);
   }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(tablet_scheduler_.serialize(buf, buf_len, pos))) {
+      LOG_WARN("serialize tablet execution id map failed", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -2019,6 +2035,12 @@ int ObIndexBuildTask::deserialize_params_from_message(const uint64_t tenant_id, 
   } else {
     LST_DO_CODE(OB_UNIS_DECODE, check_unique_snapshot_, target_cg_cnt_, is_retryable_ddl_);
   }
+
+  if (OB_SUCC(ret) && data_len - pos > 0) {
+    if (OB_FAIL(tablet_scheduler_.deserialize(buf, data_len, pos))) {
+      LOG_WARN("deserialize tablet execution id map failed", K(ret));
+    }
+  }
   } // end smart var
   return ret;
 }
@@ -2029,7 +2051,8 @@ int64_t ObIndexBuildTask::get_serialize_param_size() const
       + serialization::encoded_length_i64(check_unique_snapshot_)
       + ObDDLTask::get_serialize_param_size()
       + serialization::encoded_length_i64(target_cg_cnt_)
-      + serialization::encoded_length_i8(is_retryable_ddl_);
+      + serialization::encoded_length_i8(is_retryable_ddl_)
+      + tablet_scheduler_.get_serialize_size();
 }
 
 int ObIndexBuildTask::update_mlog_last_purge_scn()
@@ -2063,6 +2086,43 @@ int ObIndexBuildTask::update_mlog_last_purge_scn()
       if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
         LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
         ret = OB_SUCC(ret) ? tmp_ret : ret;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObIndexBuildTask::serialize_and_update_message()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+  } else {
+    int64_t serialize_size = get_serialize_param_size();
+    if (serialize_size <= 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid serialize size", K(ret), K(serialize_size));
+    } else {
+      ObArenaAllocator allocator("IndexBuildTask");
+      char *buf = static_cast<char*>(allocator.alloc(serialize_size));
+      if (OB_ISNULL(buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(ret), K(serialize_size));
+      } else {
+        int64_t pos = 0;
+        if (OB_FAIL(serialize_params_to_message(buf, serialize_size, pos))) {
+          LOG_WARN("serialize params to message failed", K(ret), K(serialize_size), K(pos));
+        } else {
+          ObString new_message;
+          new_message.assign(buf, static_cast<int32_t>(serialize_size));
+          if (OB_FAIL(ObDDLTaskRecordOperator::update_message(*GCTX.sql_proxy_, tenant_id_, task_id_, new_message))) {
+            LOG_WARN("update message failed", K(ret), K(tenant_id_), K(task_id_), K(serialize_size));
+          }
+        }
       }
     }
   }

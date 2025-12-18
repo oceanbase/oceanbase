@@ -58,7 +58,8 @@ ObVecIndexBuildTask::ObVecIndexBuildTask()
     root_service_(nullptr),
     create_index_arg_(),
     dependent_task_result_map_(),
-    use_vid_(true)
+    use_vid_(true),
+    is_retryable_ddl_(true)
 {
 }
 
@@ -78,7 +79,8 @@ int ObVecIndexBuildTask::init(
     const uint64_t tenant_data_version,
     const int64_t parent_task_id /* = 0 */,
     const int64_t task_status /* PREPARE */,
-    const int64_t snapshot_version)
+    const int64_t snapshot_version,
+    const bool is_retryable_ddl)
 {
   int ret = OB_SUCCESS;
   const bool is_rebuild_index = create_index_arg.is_rebuild_index_;
@@ -149,6 +151,7 @@ int ObVecIndexBuildTask::init(
     task_version_ = OB_VEC_INDEX_BUILD_TASK_VERSION;
     start_time_ = ObTimeUtility::current_time();
     data_format_version_ = tenant_data_version;
+    is_retryable_ddl_ = is_retryable_ddl;
     is_rebuild_index_ = is_rebuild_index;
     is_offline_rebuild_ = is_offline_rebuild;
     if (OB_FAIL(ret)) {
@@ -1214,6 +1217,7 @@ int ObVecIndexBuildTask::serialize_params_to_message(
   int8_t is_rebuild_index = static_cast<int8_t>(is_rebuild_index_);
   int8_t is_offline_rebuild = static_cast<int8_t>(is_offline_rebuild_);
   int8_t is_post_create_hybrid_vector = static_cast<int8_t>(is_post_create_hybrid_vector_);
+  int8_t is_retryable_ddl = static_cast<int8_t>(is_retryable_ddl_);
 
   if (OB_UNLIKELY(nullptr == buf || buf_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1343,6 +1347,11 @@ int ObVecIndexBuildTask::serialize_params_to_message(
                                               pos,
                                               is_post_create_hybrid_vector))) {
     LOG_WARN("serialize is_post_create_hybrid_vector failed", K(ret));
+  } else if (OB_FAIL(serialization::encode_i8(buf,
+                                              buf_len,
+                                              pos,
+                                              is_retryable_ddl))) {
+    LOG_WARN("serialize is_retryable_ddl failed", K(ret));
   }
   return ret;
 }
@@ -1366,6 +1375,7 @@ int ObVecIndexBuildTask::deserialize_params_from_message(
   int8_t use_vid = true;
   int8_t is_post_create_hybrid_vector = 0;
   int64_t map_num = 0;
+  int8_t is_retryable_ddl = true;
 
   SMART_VAR(obrpc::ObCreateIndexArg, tmp_arg) {
     if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) ||
@@ -1510,6 +1520,11 @@ int ObVecIndexBuildTask::deserialize_params_from_message(
                                                 pos,
                                                 &is_post_create_hybrid_vector))) {
       LOG_WARN("serialize hybrid_vector_embedded_vec_task_submitted failed", K(ret));
+    } else if ((data_len - pos) > 0 && OB_FAIL(serialization::decode_i8(buf,
+                                                data_len,
+                                                pos,
+                                                &is_retryable_ddl))) {
+      LOG_WARN("fail to deserialize is_retryable_ddl", K(ret));
     } else if (FALSE_IT(map_num = is_post_create_hybrid_vector ? OB_HYBRID_VEC_INDEX_BUILD_CHILD_TASK_NUM : OB_VEC_INDEX_BUILD_CHILD_TASK_NUM)) {
     } else if (!dependent_task_result_map_.created() &&
               OB_FAIL(dependent_task_result_map_.create(map_num, lib::ObLabel("DepTasMap")))) {
@@ -1526,6 +1541,7 @@ int ObVecIndexBuildTask::deserialize_params_from_message(
       is_offline_rebuild_ = is_offline_rebuild;
       use_vid_ = use_vid;
       is_post_create_hybrid_vector_ = is_post_create_hybrid_vector;
+      is_retryable_ddl_ = is_retryable_ddl;
       if (rowkey_vid_task_id_ > 0) {
         share::ObDomainDependTaskStatus rowkey_vid_status;
         rowkey_vid_status.task_id_ = rowkey_vid_task_id_;
@@ -1598,6 +1614,7 @@ int64_t ObVecIndexBuildTask::get_serialize_param_size() const
   int8_t use_vid = static_cast<int8_t>(use_vid_);
   int8_t is_post_create_hybrid_vector = static_cast<int8_t>(is_post_create_hybrid_vector_);
   int8_t hybrid_vector_embedded_vec_task_submitted = static_cast<int8_t>(hybrid_vector_embedded_vec_task_submitted_);
+  int8_t is_retryable_ddl = static_cast<int8_t>(is_retryable_ddl_);
   return create_index_arg_.get_serialize_size()
       + ObDDLTask::get_serialize_param_size()
       + serialization::encoded_length(rowkey_vid_aux_table_id_)
@@ -1624,7 +1641,8 @@ int64_t ObVecIndexBuildTask::get_serialize_param_size() const
       + serialization::encoded_length(hybrid_vector_embedded_vec_table_id_)
       + serialization::encoded_length_i8(hybrid_vector_embedded_vec_task_submitted)
       + serialization::encoded_length_i64(hybrid_vector_embedded_vec_task_id_)
-      + serialization::encoded_length_i8(is_post_create_hybrid_vector);
+      + serialization::encoded_length_i8(is_post_create_hybrid_vector)
+      + serialization::encoded_length_i8(is_retryable_ddl);
 }
 
 int ObVecIndexBuildTask::print_child_task_ids(char *buf, int64_t len)

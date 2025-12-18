@@ -7933,8 +7933,9 @@ int ObDDLService::create_aux_index_task_(
                                parent_task_id);
     param.tenant_data_version_ = tenant_data_version;
     const bool is_rowkey_doc_aux = share::schema::is_rowkey_doc_aux(create_index_arg.index_type_);
+    const bool is_vec_rowkey_vid_aux = share::schema::is_vec_rowkey_vid_type(create_index_arg.index_type_);
     if (tenant_data_version >= DATA_VERSION_4_4_0_0) {
-      param.ddl_need_retry_at_executor_ = is_rowkey_doc_aux && !create_index_arg.is_offline_rebuild_;
+      param.ddl_need_retry_at_executor_ = (is_vec_rowkey_vid_aux || is_rowkey_doc_aux) && !create_index_arg.is_offline_rebuild_;
     } else if (tenant_data_version >= DATA_VERSION_4_3_5_2) {
       param.ddl_need_retry_at_executor_ = is_rowkey_doc_aux && GCTX.is_shared_storage_mode();
     }
