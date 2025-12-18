@@ -8135,6 +8135,11 @@ int ObDDLResolver::resolve_vec_index_constraint(
     LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS,
                    column_name.length(),
                    column_name.ptr());
+  } else if (table_schema.is_table_with_clustering_key()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("vector index is not supported on table with clustering key",
+        K(ret), K(column_name), K(table_schema.get_table_name_str()));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index on clustering key table is");
   } else if (OB_FAIL(ObVectorIndexUtil::check_column_has_vector_index(table_schema,
                                                                       *schema_checker.get_schema_guard(),
                                                                       column_schema->get_column_id(),

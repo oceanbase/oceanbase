@@ -1729,6 +1729,13 @@ int ObIndexBuilder::do_create_index(
     if (OB_EAGAIN != ret) {
       LOG_WARN("failed to check vec index ", K(ret), K(arg));
     }
+  } else if (!arg.is_inner_ && share::schema::is_vec_index(arg.index_type_)
+             && table_schema->is_table_with_clustering_key()) {
+    // Prohibit creating vector index on table with clustering key (sorting key table)
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create vector index on table with clustering key");
+    LOG_WARN("vector index is not supported on table with clustering key",
+             K(ret), K(arg), K(table_id), "table_name", table_schema->get_table_name());
   } else if (OB_FAIL(ObSysTableChecker::is_tenant_space_table_id(table_id, in_tenant_space))) {
     LOG_WARN("fail to check table in tenant space", K(ret), K(table_id));
   } else if (is_inner_table(table_id)) {

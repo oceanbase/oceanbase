@@ -62,6 +62,7 @@
 #include "storage/compaction/ob_compaction_schedule_util.h"
 #include "share/schema/ob_mview_info.h"
 #include "storage/vector_index/ob_vector_index_sched_job_utils.h"
+#include "share/vector_index/ob_vector_index_util.h"
 #include "rootserver/restore/ob_tenant_clone_util.h"
 #include "rootserver/ob_split_partition_helper.h"
 #include "ob_disaster_recovery_task_utils.h" // DisasterRecoveryUtils
@@ -5256,6 +5257,18 @@ int ObDDLService::check_alter_table_index(const obrpc::ObAlterTableArg &alter_ta
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("version lower than 4.4.1.0 does not support clustering key operation", KR(ret), K(compat_version), K(type));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant's data version is lower than 4.4.1.0; clustering key operations are ");
+          } else {
+            bool has_vec_index = false;
+            if (OB_FAIL(ObVectorIndexUtil::check_table_has_vector_index(orig_table_schema, schema_guard, has_vec_index))) {
+              LOG_WARN("failed to check whether table has vector index", KR(ret), K(orig_table_schema.get_table_id()));
+            } else if (has_vec_index) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("cluster by table is not supported on table with vector index", KR(ret),
+                       K(orig_table_schema.get_table_id()));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "can't ADD 'CLUSTERING KEY', clustering key on tables with vector indexes is");
+            }
+          }
+          if (OB_FAIL(ret)) {
           } else if (orig_table_schema.is_index_organized_table()) {
             ret = OB_NOT_SUPPORTED;
             (void)snprintf(err_msg, sizeof(err_msg), "%s in heap organized table",

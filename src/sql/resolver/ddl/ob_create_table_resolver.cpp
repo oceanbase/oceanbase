@@ -3446,26 +3446,33 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
         }
         if (OB_SUCC(ret)) {
           if (is_vec_index(index_arg_.index_type_)) {
-            // refresh vector index type
-            if (!is_vec_index(vec_index_type_)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected index type", KR(ret), K(vec_index_type_));
-            } else if (FALSE_IT(create_index_arg.index_type_ = vec_index_type_)) {
-            } else if (FALSE_IT(create_index_arg.index_schema_.set_index_params(index_params_))) {
-            } else if (OB_FAIL(ObVecIndexBuilderUtil::append_vec_args(tbl_schema,
-                                                                      resolve_result,
-                                                                      create_index_arg,
-                                                                      have_generate_vec_arg_,
-                                                                      have_generate_fts_arg_,
-                                                                      resolve_results,
-                                                                      index_arg_list,
-                                                                      allocator_,
-                                                                      session_info_))) {
-              LOG_WARN("failed to append vec args", K(ret));
-            } else if (OB_FAIL(vec_index_col_ids_.push_back(vec_index_col_id))) {
-              LOG_WARN("fail to push back vec index col id", K(ret));
+            if (tbl_schema.is_table_with_clustering_key()) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("vector index is not supported on table with clustering key",
+                  K(ret), K(tbl_schema.get_table_name()));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index on clustering key table is");
             } else {
-              has_vec_index_ = true;
+              // refresh vector index type
+              if (!is_vec_index(vec_index_type_)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected index type", KR(ret), K(vec_index_type_));
+              } else if (FALSE_IT(create_index_arg.index_type_ = vec_index_type_)) {
+              } else if (FALSE_IT(create_index_arg.index_schema_.set_index_params(index_params_))) {
+              } else if (OB_FAIL(ObVecIndexBuilderUtil::append_vec_args(tbl_schema,
+                                                                        resolve_result,
+                                                                        create_index_arg,
+                                                                        have_generate_vec_arg_,
+                                                                        have_generate_fts_arg_,
+                                                                        resolve_results,
+                                                                        index_arg_list,
+                                                                        allocator_,
+                                                                        session_info_))) {
+                LOG_WARN("failed to append vec args", K(ret));
+              } else if (OB_FAIL(vec_index_col_ids_.push_back(vec_index_col_id))) {
+                LOG_WARN("fail to push back vec index col id", K(ret));
+              } else {
+                has_vec_index_ = true;
+              }
             }
           } else if (is_fts_index(index_arg_.index_type_)) {
             if (OB_FAIL(ObDDLResolver::append_fts_args(tbl_schema,
