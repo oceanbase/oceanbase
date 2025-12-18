@@ -15710,12 +15710,7 @@ relation_name opt_column_alias_name_list AS '(' select_no_parens ')'
 }
 | relation_name opt_column_alias_name_list AS '(' select_with_parens ')'
 {
-  if ($5->children_[PARSE_SELECT_ORDER] != NULL && $5->children_[PARSE_SELECT_FETCH] == NULL) {
-    yyerror(NULL, result, "only order by clause can't occur subquery\n");
-    YYABORT_PARSE_SQL_ERROR;
-  } else {
-    malloc_non_terminal_node($$, result->malloc_pool_, T_WITH_CLAUSE_AS, 5, $1, $2, $5, NULL, NULL);
-  }
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WITH_CLAUSE_AS, 5, $1, $2, $5, NULL, NULL);
 }
 ;
 
