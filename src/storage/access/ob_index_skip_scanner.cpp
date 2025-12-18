@@ -1112,7 +1112,12 @@ int ObIndexSkipScanFactory::set_pending_disabled(
       LOG_WARN("invalid state to set pending disabled", KR(ret), KPC(newest_key), KPC(this), K(lbt()));
     } else if (OB_FAIL(newest_key->deep_copy(newest_prefix_key_, alloc_))) {
       LOG_WARN("failed to deep copy newest prefix key", KR(ret), KPC(newest_key));
-    } else if (OB_FAIL(newest_prefix_key_.prepare_memtable_readable(col_descs, alloc_))) {
+    } else {
+      for (int64_t i = prefix_cnt; i < newest_prefix_key_.get_datum_cnt(); ++i) {
+        is_reverse_scan ? newest_prefix_key_.datums_[i].set_min() : newest_prefix_key_.datums_[i].set_max();
+      }
+    }
+    if (FAILEDx(newest_prefix_key_.prepare_memtable_readable(col_descs, alloc_))) {
       LOG_WARN("Failed to prepare start key", K(ret), K(newest_prefix_key_), K(col_descs));
     }
   }
