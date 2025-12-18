@@ -730,7 +730,10 @@ public:
   ExecType exec_type_;
   bool is_prepare_protocol_;
   bool is_pre_execute_;
+  bool is_prepare_with_params_;
   bool is_prepare_stage_;
+  ParseResult *parse_result_;
+  ParamStore *prepare_params_;
   bool is_dynamic_sql_;
   bool is_dbms_sql_;
   bool is_cursor_;

@@ -212,6 +212,24 @@ public:
                                             ObPlanCacheCtx &phy_ctx);
 
 public:
+  /* @brief: parse sql and get stmt_type and input_param_cnt,
+   *         designed for prexecute protocol
+   * @param session_info [in] sql session info
+   * @param context [in] sql context
+   * @param sql [in] sql string to be parsed
+   * @param parse_result [out] parse result, contains syntax tree and other info
+   * @param stmt_type [out] stmt type
+   * @param input_param_cnt [out] input param count
+   * @return oceanbase error code defined in lib/ob_errno.def
+   */
+  int handle_prexec_parse_sql(ObSQLSessionInfo &session_info,
+                              ObSqlCtx &context,
+                              const ObString &sql,
+                              ParseResult &parse_result,
+                              stmt::StmtType &stmt_type,
+                              int64_t &input_param_cnt);
+
+public:
   //for sql test only
   friend bool compare_stmt(const char *schema_file,  const char *str1, const char *str2);
   int fill_result_set(const ObPsStmtId stmt_id,
