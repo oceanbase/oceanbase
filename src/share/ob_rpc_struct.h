@@ -506,6 +506,127 @@ public:
   common::ObString value_;
 };
 
+#ifdef OB_BUILD_TDE_SECURITY
+enum RootKeyType
+{
+  INVALID = 0,
+  DEFAULT,
+  NORMAL
+};
+
+struct ObGetMasterKeyResultArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObGetMasterKeyResultArg() : str_(share::OB_CLOG_ENCRYPT_MASTER_KEY_LEN, 0, buf_) {}
+  ~ObGetMasterKeyResultArg() {}
+  bool is_valid() const { return true; }
+  TO_STRING_KV(K_(str));
+  char buf_[share::OB_CLOG_ENCRYPT_MASTER_KEY_LEN];
+  common::ObString str_;
+};
+
+struct ObRestoreKeyArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObRestoreKeyArg()
+    : tenant_id_(OB_INVALID_ID),
+      backup_dest_(),
+      encrypt_key_()
+  {}
+  ~ObRestoreKeyArg() {}
+  bool is_valid() const { return OB_INVALID_ID != tenant_id_ && !backup_dest_.empty(); }
+  int assign(const ObRestoreKeyArg &other);
+  TO_STRING_KV(K_(tenant_id), K_(backup_dest), K_(encrypt_key));
+  uint64_t tenant_id_;
+  common::ObString backup_dest_;
+  common::ObString encrypt_key_;
+};
+
+struct ObRestoreKeyResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObRestoreKeyResult() : ret_(common::OB_ERROR) {}
+  ~ObRestoreKeyResult() {}
+  int assign(const ObRestoreKeyResult &other);
+  void set_ret(int ret) { ret_ = ret; }
+  int64_t get_ret() const { return ret_; }
+  TO_STRING_KV(K_(ret));
+private:
+  int ret_;
+};
+
+struct ObRootKeyArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObRootKeyArg()
+    : tenant_id_(OB_INVALID_ID),
+      is_set_(false),
+      key_type_(RootKeyType::INVALID),
+      root_key_()
+  {}
+  ~ObRootKeyArg() {}
+  bool is_valid() const { return OB_INVALID_ID != tenant_id_; }
+  int assign(const ObRootKeyArg &other);
+  int init_for_get(const uint64_t tenant_id);
+  int init(const uint64_t tenant_id, RootKeyType key_type,
+            ObString &root_key);
+  TO_STRING_KV(K_(tenant_id), K_(is_set), K_(key_type), K_(root_key));
+  uint64_t tenant_id_;
+  bool is_set_;
+  enum RootKeyType key_type_;
+  common::ObString root_key_;
+};
+
+struct ObRootKeyResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObRootKeyResult()
+    : key_type_(RootKeyType::INVALID),
+      root_key_(),
+      allocator_()
+  {}
+  ~ObRootKeyResult() {}
+  int assign(const ObRootKeyResult &other);
+  void reset();
+  TO_STRING_KV(K_(key_type), K_(root_key));
+  enum RootKeyType key_type_;
+  common::ObString root_key_;
+private:
+  common::ObArenaAllocator allocator_;
+};
+
+struct ObReloadMasterKeyArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObReloadMasterKeyArg(): tenant_id_(OB_INVALID_ID)
+  {}
+  ~ObReloadMasterKeyArg() {}
+  int assign(const ObReloadMasterKeyArg &other);
+  bool is_valid() const { return OB_INVALID_ID != tenant_id_; }
+  TO_STRING_KV(K_(tenant_id));
+  uint64_t tenant_id_;
+};
+
+struct ObReloadMasterKeyResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObReloadMasterKeyResult(): tenant_id_(OB_INVALID_ID), master_key_id_(OB_INVALID_ID)
+  {}
+  ~ObReloadMasterKeyResult() {}
+  int assign(const ObReloadMasterKeyResult &other);
+  TO_STRING_KV(K_(tenant_id), K_(master_key_id));
+  uint64_t tenant_id_;
+  uint64_t master_key_id_;
+};
+#endif
+
 struct ObCreateTenantArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
@@ -516,7 +637,11 @@ public:
       sys_var_list_(), name_case_mode_(common::OB_NAME_CASE_INVALID), is_restore_(false),
       palf_base_info_(), compatible_version_(0), recovery_until_scn_(share::SCN::min_scn()),
       is_creating_standby_(false), log_restore_source_(), is_tmp_tenant_for_recover_(false),
-      source_tenant_id_(OB_INVALID_TENANT_ID)  {}
+      source_tenant_id_(OB_INVALID_TENANT_ID)
+#ifdef OB_BUILD_TDE_SECURITY
+      , root_key_type_(INVALID), root_key_()
+#endif
+      {}
   virtual ~ObCreateTenantArg() {};
   bool is_valid() const;
   bool is_clone_tenant() const { return OB_INVALID_TENANT_ID != source_tenant_id_; }
@@ -551,6 +676,10 @@ public:
   common::ObString log_restore_source_; // for create standby tenant
   bool is_tmp_tenant_for_recover_; //tmp tenant for recover table
   uint64_t source_tenant_id_;           // for create clone tenant
+#ifdef OB_BUILD_TDE_SECURITY
+  RootKeyType root_key_type_; // for restore create tenant
+  ObString root_key_;
+#endif
 };
 
 struct ObCreateTenantSchemaResult
@@ -10182,15 +10311,6 @@ private:
   ObZone zone_;
 };
 
-#ifdef OB_BUILD_TDE_SECURITY
-enum RootKeyType
-{
-  INVALID = 0,
-  DEFAULT,
-  NORMAL
-};
-#endif
-
 struct ObPrepareServerForAddingServerArg
 {
   OB_UNIS_VERSION(1);
@@ -10635,120 +10755,6 @@ public:
 private:
   share::ObVtableLocationType vtable_type_;
 };
-
-#ifdef OB_BUILD_TDE_SECURITY
-struct ObGetMasterKeyResultArg
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObGetMasterKeyResultArg() : str_(share::OB_CLOG_ENCRYPT_MASTER_KEY_LEN, 0, buf_) {}
-  ~ObGetMasterKeyResultArg() {}
-  bool is_valid() const { return true; }
-  TO_STRING_KV(K_(str));
-  char buf_[share::OB_CLOG_ENCRYPT_MASTER_KEY_LEN];
-  common::ObString str_;
-};
-
-struct ObRestoreKeyArg
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObRestoreKeyArg()
-    : tenant_id_(OB_INVALID_ID),
-      backup_dest_(),
-      encrypt_key_()
-  {}
-  ~ObRestoreKeyArg() {}
-  bool is_valid() const { return OB_INVALID_ID != tenant_id_ && !backup_dest_.empty(); }
-  int assign(const ObRestoreKeyArg &other);
-  TO_STRING_KV(K_(tenant_id), K_(backup_dest), K_(encrypt_key));
-  uint64_t tenant_id_;
-  common::ObString backup_dest_;
-  common::ObString encrypt_key_;
-};
-
-struct ObRestoreKeyResult
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObRestoreKeyResult() : ret_(common::OB_ERROR) {}
-  ~ObRestoreKeyResult() {}
-  int assign(const ObRestoreKeyResult &other);
-  void set_ret(int ret) { ret_ = ret; }
-  int64_t get_ret() const { return ret_; }
-  TO_STRING_KV(K_(ret));
-private:
-  int ret_;
-};
-
-struct ObRootKeyArg
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObRootKeyArg()
-    : tenant_id_(OB_INVALID_ID),
-      is_set_(false),
-      key_type_(RootKeyType::INVALID),
-      root_key_()
-  {}
-  ~ObRootKeyArg() {}
-  bool is_valid() const { return OB_INVALID_ID != tenant_id_; }
-  int assign(const ObRootKeyArg &other);
-  int init_for_get(const uint64_t tenant_id);
-  int init(const uint64_t tenant_id, RootKeyType key_type,
-            ObString &root_key);
-  TO_STRING_KV(K_(tenant_id), K_(is_set), K_(key_type), K_(root_key));
-  uint64_t tenant_id_;
-  bool is_set_;
-  enum RootKeyType key_type_;
-  common::ObString root_key_;
-};
-
-struct ObRootKeyResult
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObRootKeyResult()
-    : key_type_(RootKeyType::INVALID),
-      root_key_(),
-      allocator_()
-  {}
-  ~ObRootKeyResult() {}
-  int assign(const ObRootKeyResult &other);
-  void reset();
-  TO_STRING_KV(K_(key_type), K_(root_key));
-  enum RootKeyType key_type_;
-  common::ObString root_key_;
-private:
-  common::ObArenaAllocator allocator_;
-};
-
-struct ObReloadMasterKeyArg
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObReloadMasterKeyArg(): tenant_id_(OB_INVALID_ID)
-  {}
-  ~ObReloadMasterKeyArg() {}
-  int assign(const ObReloadMasterKeyArg &other);
-  bool is_valid() const { return OB_INVALID_ID != tenant_id_; }
-  TO_STRING_KV(K_(tenant_id));
-  uint64_t tenant_id_;
-};
-
-struct ObReloadMasterKeyResult
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObReloadMasterKeyResult(): tenant_id_(OB_INVALID_ID), master_key_id_(OB_INVALID_ID)
-  {}
-  ~ObReloadMasterKeyResult() {}
-  int assign(const ObReloadMasterKeyResult &other);
-  TO_STRING_KV(K_(tenant_id), K_(master_key_id));
-  uint64_t tenant_id_;
-  uint64_t master_key_id_;
-};
-#endif
 
 struct ObAlterUserProxyRes
 {
