@@ -97,6 +97,8 @@ public:
       const common::ObString &partition_name,
       const uint64_t compat_version,
       const share::schema::ObPartitionLevel exchange_part_level);
+  static bool is_subpart_exchange_supported(const uint64_t data_version);
+  static bool is_list_part_exchange_supported(const uint64_t data_version);
 
 protected:
   int check_partition_exchange_conditions_(const obrpc::ObExchangePartitionArg &arg,

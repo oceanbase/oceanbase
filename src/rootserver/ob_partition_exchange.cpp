@@ -228,7 +228,7 @@ int ObPartitionExchange::check_partition_exchange_schema_for_user(
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table type");
     LOG_WARN("unsupported behavior on non-user table", KR(ret), K(base_table_schema), K(inc_table_schema));
-  } else if ((compat_version < DATA_VERSION_4_4_2_0) && inc_table_schema.is_partitioned_table()) {
+  } else if (!is_subpart_exchange_supported(compat_version) && inc_table_schema.is_partitioned_table()) {
     const ObString &exchange_table_name = inc_table_schema.get_table_name_str();
     ret = OB_ERR_PARTITION_EXCHANGE_PART_TABLE;
     LOG_USER_ERROR(OB_ERR_PARTITION_EXCHANGE_PART_TABLE, exchange_table_name.length(), exchange_table_name.ptr());
@@ -246,13 +246,13 @@ int ObPartitionExchange::check_partition_exchange_schema_for_user(
         LOG_WARN("partition not found", K(ret), K(base_table_schema), K(partition_name));
       } else {
         share::schema::ObPartitionFuncType part_type = base_table_schema.get_part_option().get_part_func_type();
-        if (OB_UNLIKELY(compat_version < DATA_VERSION_4_4_2_0 &&
+        if (OB_UNLIKELY(!is_list_part_exchange_supported(compat_version) &&
                         PARTITION_FUNC_TYPE_RANGE != part_type &&
                         PARTITION_FUNC_TYPE_RANGE_COLUMNS != part_type)) {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("Version lower than 4.4.2.0 only support exchanging range/range columns partitions "
+          LOG_WARN("Version lower than 4.3.5.3 or between 4.4.0.0 and 4.4.2.0 only support exchanging range/range columns partitions "
             "currently", K(ret), K(part_type));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Version lower than 4.4.2.0 exchange partition except range/range columns");
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Version lower than 4.3.5.3 or between 4.4.0.0 and 4.4.2.0 exchange partition except range/range columns");
         } else if (OB_UNLIKELY(PARTITION_FUNC_TYPE_RANGE != part_type &&
                                 PARTITION_FUNC_TYPE_RANGE_COLUMNS != part_type &&
                                 PARTITION_FUNC_TYPE_LIST != part_type &&
@@ -273,17 +273,17 @@ int ObPartitionExchange::check_partition_exchange_schema_for_user(
             LOG_WARN("partition not found", K(ret), K(OB_ISNULL(part)), K(OB_ISNULL(subpart)));
           } else {
             share::schema::ObPartitionFuncType subpart_type = base_table_schema.get_sub_part_option().get_part_func_type();
-            if (OB_UNLIKELY(compat_version < DATA_VERSION_4_4_2_0 &&
+            if (OB_UNLIKELY(!is_list_part_exchange_supported(compat_version) &&
                             PARTITION_FUNC_TYPE_RANGE != subpart_type &&
                             PARTITION_FUNC_TYPE_RANGE_COLUMNS != subpart_type)) {
               ret = OB_NOT_SUPPORTED;
               LOG_WARN(
-                "version lower than 4.4.2.0 Only support exchanging range/range columns partitions "
+                "version lower than 4.3.5.3 or between 4.4.0.0 and 4.4.2.0 Only support exchanging range/range columns partitions "
                 "currently",
                 K(ret), K(subpart_type));
               LOG_USER_ERROR(
                 OB_NOT_SUPPORTED,
-                "Version lower than 4.4.2.0 exchange partition except range/range columns");
+                "Version lower than 4.3.5.3 or between 4.4.0.0 and 4.4.2.0 exchange partition except range/range columns");
             } else if (OB_UNLIKELY(PARTITION_FUNC_TYPE_RANGE != subpart_type &&
                                    PARTITION_FUNC_TYPE_RANGE_COLUMNS != subpart_type &&
                                    PARTITION_FUNC_TYPE_LIST != subpart_type &&
@@ -304,7 +304,7 @@ int ObPartitionExchange::check_partition_exchange_schema_for_user(
         LOG_WARN("cannot EXCHANGE a composite partition with a non-partitioned table", K(ret), K(base_table_schema), K(partition_name));
       }
     }
-  } else { // (compat_version >= DATA_VERSION_4_4_2_0) && inc_table_schema.is_partition_table()
+  } else { // is_subpart_exchange_supported(compat_version) && inc_table_schema.is_partition_table()
     if ((ObPartitionLevel::PARTITION_LEVEL_TWO == base_table_schema.get_part_level())
         && (ObPartitionLevel::PARTITION_LEVEL_ONE == inc_table_schema.get_part_level())
         && (ObPartitionLevel::PARTITION_LEVEL_ONE == exchange_part_level)) {
@@ -393,6 +393,18 @@ int ObPartitionExchange::check_partition_exchange_schema_for_user(
   }
 
   return ret;
+}
+
+bool ObPartitionExchange::is_subpart_exchange_supported(const uint64_t data_version)
+{
+  return (data_version >= MOCK_DATA_VERSION_4_3_5_3 && data_version < DATA_VERSION_4_4_0_0)
+         || (data_version >= DATA_VERSION_4_4_2_0);
+}
+
+bool ObPartitionExchange::is_list_part_exchange_supported(const uint64_t data_version)
+{
+  return (data_version >= MOCK_DATA_VERSION_4_3_5_3 && data_version < DATA_VERSION_4_4_0_0)
+         || (data_version >= DATA_VERSION_4_4_2_0);
 }
 
 int ObPartitionExchange::inner_init(

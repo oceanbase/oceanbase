@@ -3323,10 +3323,10 @@ int ObAlterTableResolver::resolve_exchange_subpartition(
     LOG_WARN("session info and alter table stmt should not be null", K(ret), KP(session_info_));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
     LOG_WARN("get data version failed", K(ret), K(session_info_->get_effective_tenant_id()));
-  } else if (OB_UNLIKELY(tenant_data_version < DATA_VERSION_4_4_2_0)) {
+  } else if (OB_UNLIKELY(!rootserver::ObPartitionExchange::is_subpart_exchange_supported(tenant_data_version))) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("version lower than 4.4.2.0 does not support subpartition exchange", KR(ret), K(tenant_data_version));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "subpartition exchange of version lower than 4.4.2.0 is");
+    LOG_WARN("version lower than 4.3.5.3 or between 4.4.0.0 and 4.4.2.0 does not support subpartition exchange", KR(ret), K(tenant_data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "subpartition exchange of version lower than 4.3.5.3 or between 4.4.0.0 and 4.4.2.0 is");
   } else if (OB_UNLIKELY(PARTITION_LEVEL_TWO != exchange_part_level)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("only support exchanging subpartition on composite-partitioned tables", K(ret), K(exchange_part_level));
