@@ -3073,7 +3073,8 @@ int ObDRWorker::check_clone_status_and_insert_task_(
   const int64_t timeout = GCONF.internal_sql_execute_timeout;
   if (ObDRTaskType::LS_REPLACE_REPLICA == task.get_disaster_recovery_task_type()) {
     // replace replace task no need check clone status
-  } else {
+  } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0) {
+    // for cluster version >= 4.3.0.0, check clone status
     ObConflictCaseWithClone case_to_check(ObConflictCaseWithClone::MODIFY_REPLICA);
     if (OB_ISNULL(conn = static_cast<observer::ObInnerSQLConnection *>(trans.get_connection()))) {
       ret = OB_ERR_UNEXPECTED;
@@ -3087,6 +3088,8 @@ int ObDRWorker::check_clone_status_and_insert_task_(
     } else if (OB_FAIL(ObTenantSnapshotUtil::check_tenant_not_in_cloning_procedure(task.get_tenant_id(), case_to_check))) {
       LOG_WARN("fail to check whether tenant is in cloning procedure", KR(ret));
     }
+  } else {
+    LOG_INFO("cluster version < 4.3.0.0, no need check clone status", K(task));
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(table_operator_.insert_task(trans, persistent_tenant, task, false/*record_history*/))) {
