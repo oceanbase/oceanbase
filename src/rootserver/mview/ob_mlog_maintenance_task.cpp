@@ -194,7 +194,21 @@ int ObMLogMaintenanceTask::gc_mlog()
   } else { // gc current batch
     ObSchemaGetterGuard schema_guard;
     int64_t tenant_schema_version = OB_INVALID_VERSION;
-    if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    // We must check tenant schema is refreshed first. Because tenant schema may not be fully refreshed when observer restarts.
+    //
+    // For example, latest tenant schema version is 200, and MLOG schema version is 100.
+    // When observer restarts, tenant schema refresh progress is as follows:
+    // core schema refreshed(version=198) -> system schema refreshed(version=199) -> all user table schema refreshed(version=200)
+    // Only when all user table schema are refreshed, schema version is formal, and tenant schema is fully refreshed.
+    //
+    // Here is the bad case:
+    // 1. When observer restarts, only system schema is refreshed, tenant schema version is 199, and MLOG schema is not refreshed.
+    // 2. Now, we check tenant_schema_version(199) > MLOG schema version(100),
+    //    and we can not get MLOG schema from schema guard. So we GC the MLOG wrongly.
+    if (!GCTX.schema_service_->is_tenant_refreshed(tenant_id_)) {
+      ret = OB_EAGAIN;
+      LOG_INFO("tenant schema is not refreshed, need retry", K(tenant_id_));
+    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
       LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id_));
     } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id_, tenant_schema_version))) {
       LOG_WARN("fail to get schema version", KR(ret), K(tenant_id_));
