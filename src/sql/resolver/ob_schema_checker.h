@@ -604,6 +604,7 @@ int flatten_udt_attributes(const uint64_t tenant_id,
 
 
   int remove_tmp_cte_schemas(const ObString& cte_table_name);
+  int add_ddl_tmp_schema(const share::schema::ObTableSchema *schema);
 private:
 
 int construct_udt_qualified_name(const share::schema::ObUDTTypeInfo &udt_info, ObIAllocator &allocator,
@@ -621,6 +622,10 @@ int construct_udt_qualified_name(const share::schema::ObUDTTypeInfo &udt_info, O
   int get_column_schema_inner(const uint64_t tenant_id, uint64_t table_id, const uint64_t column_id,
                               const share::schema::ObColumnSchemaV2 *&column_schema,
                               bool is_link = false) const;
+  int get_ddl_tmp_column_schema(const uint64_t tenant_id, uint64_t table_id,
+                                const common::ObString &column_name,
+                                bool &is_ddl_tmp,
+                                const share::schema::ObColumnSchemaV2 *&column_schema) const;
 private:
   bool is_inited_;
   share::schema::ObSchemaGetterGuard *schema_mgr_;
@@ -628,6 +633,9 @@ private:
   // cte tmp schema，用于递归的cte服务，生命周期仅在本次查询有效
   common::ObArray<share::schema::ObTableSchema*,
                   common::ModulePageAllocator, true> tmp_cte_schemas_;
+  // when resolve stmt during ddl procedure, the latest schema is not available in schema guard
+  common::ObArray<const share::schema::ObTableSchema*,
+                  common::ModulePageAllocator, true> ddl_tmp_schemas_;
   // 记录checker的额外信息，例如安全员的操作等
   int flag_;
   // disallow copy

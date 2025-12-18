@@ -1965,6 +1965,7 @@ int check_will_be_having_domain_index_operation(
   int alter_table_update_index_and_view_column(
       const share::schema::ObTableSchema &new_table_schema,
       const share::schema::ObColumnSchemaV2 &new_column_schema,
+      share::schema::ObSchemaGetterGuard &schema_guard,
       ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
       const common::ObIArray<share::schema::ObTableSchema> *global_idx_schema_array = NULL);
