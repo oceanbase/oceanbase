@@ -3014,6 +3014,8 @@ typedef enum ObItemType
   T_RESUME_ROUTINE_LOAD = 4955,
   T_STOP_ROUTINE_LOAD = 4956,
 
+  T_CSV_LARGE_FILE_SIZE_THRESHOLD = 4957,
+  T_MAX_CSV_ROW_LENGTH = 4958,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
