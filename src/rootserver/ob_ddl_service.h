@@ -2351,6 +2351,13 @@ private:
                               const common::ObString &index_name,
                               share::schema::ObSchemaGetterGuard &schema_guard,
                               bool &is_exist);
+  int check_index_table_exist_include_builtin(
+      const uint64_t tenant_id,
+      const uint64_t database_id,
+      const uint64_t table_id,
+      const common::ObString &index_name,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      bool &is_exist);
   int check_hidden_index_exist(
       const uint64 tenant_id,
       const uint64_t database_id,

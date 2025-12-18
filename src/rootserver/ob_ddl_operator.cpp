@@ -4293,9 +4293,25 @@ int ObDDLOperator::alter_index_table_tablespace(const uint64_t data_table_id,
       LOG_WARN("fail to get table schema",
         K(ret), K(tenant_id), K(database_id), K(index_table_schema));
     } else if (OB_ISNULL(index_table_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      RS_LOG(WARN, "get index table schema failed",
-        K(tenant_id), K(database_id), K(index_table_name), K(ret));
+      // try to get builtin index table schema
+      const bool is_builtin_index = true;
+      const bool no_hidden_flag = false;
+      if (OB_FAIL(schema_guard.get_table_schema(
+              tenant_id,
+              database_id,
+              index_table_name,
+              true,
+              index_table_schema,
+              no_hidden_flag,
+              is_builtin_index))) {
+        LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(database_id), K(index_table_name), K(ret));
+      } else if (OB_ISNULL(index_table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        RS_LOG(WARN, "get index table schema failed", K(tenant_id), K(database_id), K(index_table_name), K(ret));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (index_table_schema->is_in_recyclebin()) {
       ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
       LOG_WARN("index table is in recyclebin", K(ret));

@@ -2824,6 +2824,44 @@ int ObDDLService::check_index_table_exist(const uint64_t tenant_id,
   return ret;
 }
 
+int ObDDLService::check_index_table_exist_include_builtin(
+    const uint64_t tenant_id,
+    const uint64_t database_id,
+    const uint64_t table_id,
+    const ObString &index_name,
+    ObSchemaGetterGuard &schema_guard,
+    bool &is_exist)
+{
+  int ret = OB_SUCCESS;
+  is_exist = false;
+  ObString index_table_name;
+  const ObTableSchema *index_schema = NULL;
+  bool is_index = true;
+  ObArenaAllocator allocator(ObModIds::OB_RS_PARTITION_TABLE_TEMP);
+  constexpr bool is_builtin_index = true;
+  constexpr bool no_hidden_flag = false;
+  if (OB_FAIL(ObTableSchema::build_index_table_name(allocator, table_id, index_name, index_table_name))) {
+    LOG_WARN("failed to build index table name", K(index_name), K(index_table_name), K(ret));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, database_id, index_table_name, is_index, index_schema))) {
+    LOG_WARN("failed to check table schema", K(database_id), K(tenant_id), K(index_name), K(index_table_name), K(ret));
+  } else if (NULL != index_schema) {
+    is_exist = true;
+  } else if (OB_FAIL(schema_guard.get_table_schema(
+                 tenant_id,
+                 database_id,
+                 index_table_name,
+                 is_index,
+                 index_schema,
+                 no_hidden_flag,
+                 is_builtin_index))) {
+    LOG_WARN("failed to check table schema", K(database_id), K(tenant_id), K(index_name), K(index_table_name), K(ret));
+  } else if (NULL != index_schema) {
+    is_exist = true;
+  }
+  allocator.clear();
+  return ret;
+}
+
 int ObDDLService::check_hidden_index_exist(
     const uint64 tenant_id,
     const uint64_t database_id,
@@ -7826,12 +7864,14 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
           ObAlterIndexTablespaceArg *alter_index_tablespace_arg =
             static_cast<ObAlterIndexTablespaceArg *>(index_arg);
           bool is_exist = false;
-          if (OB_FAIL(check_index_table_exist(origin_table_schema.get_tenant_id(),
-                                              origin_table_schema.get_database_id(),
-                                              origin_table_schema.get_table_id(),
-                                              alter_index_tablespace_arg->index_name_,
-                                              schema_guard,
-                                              is_exist))) {
+          // alter tablespace option for all index tables, including builtin index tables
+          if (OB_FAIL(check_index_table_exist_include_builtin(
+                  origin_table_schema.get_tenant_id(),
+                  origin_table_schema.get_database_id(),
+                  origin_table_schema.get_table_id(),
+                  alter_index_tablespace_arg->index_name_,
+                  schema_guard,
+                  is_exist))) {
             LOG_WARN("failed to check index table", K(ret));
           } else if (!is_exist) {
             ret = OB_ERR_KEY_DOES_NOT_EXISTS;
