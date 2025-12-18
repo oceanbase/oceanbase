@@ -166,7 +166,7 @@ int ObExprAuditLogFunc::parse_user_name(const ObString &str,
       error_info = "User name is too long";
     } else if (OB_UNLIKELY(0 == user_name.compare("%"))) {
       // do nothing
-    } else if (OB_NOT_NULL(user_name.find('_')) || OB_NOT_NULL(user_name.find('%'))) {
+    } else if (OB_NOT_NULL(user_name.find('%'))) {
       is_valid = false;
       error_info = "Invalid character in the user name";
       LOG_WARN("invalid user name", K(user_name));
