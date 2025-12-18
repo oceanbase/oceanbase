@@ -10747,7 +10747,7 @@ int ObDDLService::fill_interval_info_for_offline(const ObTableSchema &orig_table
 
 //For truncate part/subpart, inc_table_schema and del_table_schema should be different in the later process.
 //For other situations, del_table_schema is useless and equal to inc_table_schema.
-int ObDDLService::generate_tables_array(const ObAlterTableArg::AlterPartitionType op_type,
+int ObDDLService::generate_tables_array(const obrpc::ObAlterTableArg &alter_table_arg,
                                         ObIArray<const ObTableSchema*> &orig_table_schemas,
                                         ObIArray<ObTableSchema*> &new_table_schemas,
                                         ObIArray<AlterTableSchema*> &inc_table_schemas,
@@ -10759,21 +10759,24 @@ int ObDDLService::generate_tables_array(const ObAlterTableArg::AlterPartitionTyp
                                         ObArenaAllocator &allocator)
 {
   int ret = OB_SUCCESS;
+  const ObAlterTableArg::AlterPartitionType op_type = alter_table_arg.alter_part_type_;
+  const AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
   const uint64_t tenant_id = orig_table_schema.get_tenant_id();
   ObSEArray<uint64_t, 20> aux_table_ids;
   ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
   AlterTableSchema tmp_inc_table_schema;
   bool modify_sub_part_template_flags = false;
   if (PARTITION_LEVEL_TWO == orig_table_schema.get_part_level()
-      && orig_table_schema.sub_part_template_def_valid()
-      && (obrpc::ObAlterTableArg::ADD_PARTITION == op_type
-          || obrpc::ObAlterTableArg::ADD_SUB_PARTITION == op_type
-          || obrpc::ObAlterTableArg::DROP_SUB_PARTITION == op_type)) {
+      && orig_table_schema.sub_part_template_def_valid()) {
     // sub_part_template_def_valid() is only used for schema printer.
     // To simplify relate logic, we consider that add partition/subpartition or add subpartition
     // make cause partitions different.
-    modify_sub_part_template_flags = true;
-    new_table_schema.unset_sub_part_template_def_valid();
+    if (obrpc::ObAlterTableArg::ADD_SUB_PARTITION == op_type
+        || obrpc::ObAlterTableArg::DROP_SUB_PARTITION == op_type
+        || (obrpc::ObAlterTableArg::ADD_PARTITION == op_type && !alter_table_schema.sub_part_template_def_valid())) {
+      modify_sub_part_template_flags = true;
+      new_table_schema.unset_sub_part_template_def_valid();
+    }
   }
   const ObString new_part_name = inc_table_schema.get_new_part_name();
   if (!orig_table_schema.has_tablet() || orig_table_schema.is_index_local_storage() || orig_table_schema.is_aux_lob_table()) {
@@ -11582,7 +11585,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                                  res,
                                                  ddl_tasks))) {
             LOG_WARN("update_global_index failed", K(ret));
-          } else if (OB_FAIL(generate_tables_array(alter_table_arg.alter_part_type_,
+          } else if (OB_FAIL(generate_tables_array(alter_table_arg,
                                                    orig_table_schemas,
                                                    new_table_schemas,
                                                    inc_table_schemas,

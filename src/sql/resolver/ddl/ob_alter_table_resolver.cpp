@@ -1745,6 +1745,15 @@ int ObAlterTableResolver::resolve_add_partition(const ParseNode &node,
       }
     }
 
+    // In ddl_service, we will use alter_table_schema.sub_part_template_def_valid()
+    // to determine whether to set new_table_schema sub_part_template_def as valid.
+    if (OB_FAIL(ret)) {
+    } else if (orig_table_schema.sub_part_template_def_valid()) {
+      alter_table_schema.set_sub_part_template_def_valid();
+    } else {
+      alter_table_schema.unset_sub_part_template_def_valid();
+    }
+
     if (OB_FAIL(ret)) {
     } else if (no_subpart) {
       bool generated = false;
@@ -1765,6 +1774,11 @@ int ObAlterTableResolver::resolve_add_partition(const ParseNode &node,
       }
       alter_stmt->set_use_def_sub_part(false);
     } else {
+      if (!no_subpart && orig_table_schema.has_sub_part_template_def()) {
+        // add partition to subpartition template table with subpartition info specified by clause
+        // set sub_part_template_def to invalid, which is only used for schema printer
+        alter_table_schema.unset_sub_part_template_def_valid();
+      }
       const ObPartitionOption &subpart_option = orig_table_schema.get_sub_part_option();
       const ObPartitionFuncType subpart_type = subpart_option.get_part_func_type();
       ParseNode *subpart_func_node = NULL;
