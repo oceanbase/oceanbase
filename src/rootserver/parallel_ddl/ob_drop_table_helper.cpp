@@ -1204,12 +1204,13 @@ int ObDropTableHelper::calc_schema_version_cnt_for_table_(
       }
 
       // sensitive rule
-      if (OB_SUCC(ret) && (table_schema.is_user_table() || table_schema.is_user_view())) {
+      if (OB_SUCC(ret)) {
         ObArray<ObSensitiveRuleSchema *> sensitive_rules;
-        if (OB_FAIL(latest_schema_guard_.get_sensitive_rule_schemas_by_table(table_schema, sensitive_rules))) {
-          LOG_WARN("get sensitive rule schemas failed", KR(ret), K(table_schema));
+        if (OB_FAIL(get_sensitive_rule_schemas_by_table_(table_schema, sensitive_rules))) {
+          LOG_WARN("fail to get sensitive rule schemas by table", KR(ret), K(table_schema));
+        } else {
+          schema_version_cnt_ += sensitive_rules.count();
         }
-        schema_version_cnt_ += sensitive_rules.count();
       }
     }
   } 
@@ -1462,10 +1463,9 @@ int ObDropTableHelper::lock_sensitive_rules_by_id_(const ObTableSchema &table_sc
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
-  } else if ((table_schema.is_user_table() || table_schema.is_user_view())) {
-    const uint64_t table_id = table_schema.get_table_id();
+  } else {
     ObArray<ObSensitiveRuleSchema *> sensitive_rules;
-    if (OB_FAIL(latest_schema_guard_.get_sensitive_rule_schemas_by_table(table_schema, sensitive_rules))) {
+    if (OB_FAIL(get_sensitive_rule_schemas_by_table_(table_schema, sensitive_rules))) {
       LOG_WARN("fail to get sensitive rule schemas by table", KR(ret), K(table_schema));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < sensitive_rules.count(); i++) {
@@ -1933,12 +1933,17 @@ int ObDropTableHelper::drop_rls_object_(const ObTableSchema &table_schema)
 int ObDropTableHelper::drop_sensitive_column_(const ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
+  ObArray<ObSensitiveRuleSchema *> sensitive_rules;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(get_sensitive_rule_schemas_by_table_(table_schema, sensitive_rules))) {
+    LOG_WARN("fail to get sensitive rule schemas by table", KR(ret), K(table_schema));
+  } else if (0 == sensitive_rules.count()) {
+    // do nothing
   } else {
     ObSensitiveRuleDDLOperator sensitive_rule_ddl_operator(*schema_service_, *sql_proxy_);
     if (OB_FAIL(sensitive_rule_ddl_operator.drop_sensitive_column_in_drop_table(table_schema, get_trans_(), 
-                                                                                latest_schema_guard_))) {
+                                                                                sensitive_rules))) {
       LOG_WARN("fail to drop sensitive column in drop table", KR(ret), K(table_schema));
     }
   }
@@ -2254,5 +2259,22 @@ int ObDropTableHelper::log_table_not_exist_msg_(const obrpc::ObTableItem &table_
     }
   }
 
+  return ret;
+}
+
+int ObDropTableHelper::get_sensitive_rule_schemas_by_table_(const ObTableSchema &table_schema,
+                                                            ObIArray<ObSensitiveRuleSchema *> &sensitive_rules)
+{
+  int ret = OB_SUCCESS;
+  uint64_t compat_version = 0;
+  if (!(table_schema.is_user_table() || table_schema.is_user_view())) {
+    // do nothing
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, compat_version))) {
+    LOG_WARN("fail to get min data version", KR(ret), K_(tenant_id));
+  } else if (!(compat_version >= DATA_VERSION_4_3_5_3)) {
+    // not supported sensitive rule yet, do nothing
+  } else if (OB_FAIL(latest_schema_guard_.get_sensitive_rule_schemas_by_table(table_schema, sensitive_rules))) {
+    LOG_WARN("get sensitive rule schemas failed", KR(ret), K(table_schema));
+  }
   return ret;
 }

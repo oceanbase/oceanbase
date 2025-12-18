@@ -258,18 +258,15 @@ int ObSensitiveRuleDDLOperator::drop_sensitive_column_in_drop_table(const ObTabl
 // for parallel drop table
 int ObSensitiveRuleDDLOperator::drop_sensitive_column_in_drop_table(const ObTableSchema &table_schema,
                                                                     ObMySQLTransaction &trans,
-                                                                    ObLatestSchemaGuard &latest_schema_guard_)
+                                                                    ObIArray<ObSensitiveRuleSchema *> &sensitive_rules)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = table_schema.get_tenant_id();
   ObString empty_str;
   ObSEArray<uint64_t, 8> drop_column_ids;
-  ObSEArray<ObSensitiveRuleSchema *, 4> sensitive_rules;
   ObSensitiveRuleSchema new_schema; // dummy
   if (OB_FAIL(table_schema.get_column_ids(drop_column_ids))) {
     LOG_WARN("get column ids failed", KR(ret), K(table_schema));
-  } else if (OB_FAIL(latest_schema_guard_.get_sensitive_rule_schemas_by_table(table_schema, sensitive_rules))) {
-    LOG_WARN("get sensitive rule schemas failed", KR(ret), K(table_schema));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < sensitive_rules.count(); i++) {
     const ObSensitiveRuleSchema *sensitive_rule = sensitive_rules.at(i);
