@@ -3057,3 +3057,7 @@ DEF_INT(_ss_garbage_collect_concurrency, OB_TENANT_PARAMETER, "0", "[0, 100]",
         "If set to 0, the system auto-calculates the worker count as the tenant’s max_cpu divided by 4; otherwise, the worker count is set to the specified value."
         "Range: [0, 100] in integer",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(_max_access_entries_for_external_table_partition, OB_TENANT_PARAMETER, "1000000", "[1,)",
+        "max number of entries accessed in a single partition for external table, including directories and files.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

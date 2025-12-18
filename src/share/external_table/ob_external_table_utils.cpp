@@ -2360,13 +2360,17 @@ int ObExternalFileInfoCollector::get_file_list(const common::ObString &path,
                                                common::ObIArray<ObString> &content_digests)
 {
   int ret = OB_SUCCESS;
-  const int64_t MAX_VISIT_COUNT = 100000;
   ObExprRegexContext regexp_ctx;
   ObExternalPathFilter filter(regexp_ctx, allocator_);
   ObString path_cstring;
   ObSEArray<ObString, 16> temp_file_urls;
   CONSUMER_GROUP_FUNC_GUARD(PRIO_IMPORT);
 
+  int max_visit_count = 1000000;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    max_visit_count = tenant_config->_max_access_entries_for_external_table_partition;
+  }
   if (OB_UNLIKELY(!storage_info_->is_valid())) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K_(storage_info));
@@ -2405,7 +2409,7 @@ int ObExternalFileInfoCollector::get_file_list(const common::ObString &path,
       }
     }
     ObArray<int64_t> useless_size;
-    for (int64_t i = 0; OB_SUCC(ret) && i < file_dirs.count(); i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && OB_SUCC(THIS_WORKER.check_status()) && i < file_dirs.count(); i++) {
       ObString file_dir = file_dirs.at(i);
       ObLocalFileListArrayOpWithFilter dir_op(file_dirs, useless_size, file_dir, path_cstring, NULL,
                                               allocator_);
@@ -2416,7 +2420,7 @@ int ObExternalFileInfoCollector::get_file_list(const common::ObString &path,
         LOG_WARN("fail to list files", KR(ret), K(file_dir), KPC(storage_info_));
       } else if (OB_FAIL(ObExternalIoAdapter::list_directories(file_dir, storage_info_, dir_op))) {
         LOG_WARN("fail to list dirs", KR(ret), K(file_dir), KPC(storage_info_));
-      } else if (file_dirs.count() + file_urls.count() > MAX_VISIT_COUNT) {
+      } else if (file_dirs.count() + file_urls.count() > max_visit_count) {
         ret = OB_SIZE_OVERFLOW;
         LOG_WARN("too many files and dirs to visit", K(ret));
       }
