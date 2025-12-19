@@ -3342,6 +3342,39 @@ int ObOptimizerUtil::get_non_const_expr_size(const ObIArray<ObRawExpr *> &exprs,
   return ret;
 }
 
+int ObOptimizerUtil::check_has_risky_state_func(const ObRawExpr *qual, bool &has_risky_state_func)
+{
+  int ret = OB_SUCCESS;
+  has_risky_state_func = false;
+  if (OB_ISNULL(qual)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("qual expr is null", K(ret));
+  } else if (qual->is_deterministic()) {
+    // do nothing
+  } else if (qual->has_flag(CNT_ASSIGN_EXPR)) {
+    // do nothing
+  } else if (qual->has_flag(CNT_OR) && qual->get_relation_ids().num_members() > 1) {
+    has_risky_state_func = true;
+    // An OR expression involving columns from two different tables may be split into separate sub-expressions on each base table.
+    // In such cases, a state func could be shared across both branches, potentially leading to errors.
+  } else if (qual->has_flag(IS_PL_UDF)) {
+    has_risky_state_func = qual->is_shared_reference();
+  } else if (qual->has_flag(CNT_PL_UDF)) {
+    bool child_is_risky = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !has_risky_state_func && i < qual->get_param_count(); ++i) {
+      if (SMART_CALL(OB_FAIL(check_has_risky_state_func(qual->get_param_expr(i), child_is_risky)))) {
+        LOG_WARN("failed to check child expr", K(ret));
+      } else {
+        has_risky_state_func |= child_is_risky;
+      }
+    }
+  } else {
+    // By default, non-deterministic expressions are marked as risky; assign and UDF expressions are specially handled.
+    has_risky_state_func = true;
+  }
+  return ret;
+}
+
 int ObOptimizerUtil::classify_get_scan_ranges(const common::ObIArray<ObNewRange> &input_ranges,
                                               common::ObIArray<ObNewRange> &get_ranges,
                                               common::ObIArray<ObNewRange> &scan_ranges)

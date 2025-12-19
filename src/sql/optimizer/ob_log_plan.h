@@ -1000,8 +1000,6 @@ public:
                                 ObLogicalOperator &top,
                                 ObIArray<ObGroupbyExpr> &groupset_exprs);
 
-
-
   int compute_groupby_dop_by_auto_dop(const ObIArray<ObRawExpr*> &group_exprs,
                                       const ObIArray<ObRawExpr*> &rollup_exprs,
                                       const GroupingOpHelper &groupby_helper,

@@ -197,6 +197,7 @@ public:
                                      const ObIArray<ObRawExpr *> &exec_ref_exprs,
                                      int64_t &number);
 
+  static int check_has_risky_state_func(const ObRawExpr *qual, bool &has_risky_state_func);
 
   static int get_expr_monotonicity(const ObRawExpr *expr,
                                    const ObRawExpr *var,
