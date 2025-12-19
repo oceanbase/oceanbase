@@ -983,6 +983,13 @@ int ObVecIndexAsyncTaskUtil::resume_task_from_inner_table(
                   ret = OB_SUCCESS; // continue
                 }
               }
+
+              if (OB_FAIL(ret)) {
+              } else if (task_result.task_type_ == ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_IVF_LOAD ||
+                         task_result.task_type_ == ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_IVF_CLEAN) {
+                need_resumed = false;
+              }
+
               LOG_INFO("resume task", K(ret), K(need_resumed), K(ls->get_ls_id()), K(task_result));
               if (OB_FAIL(ret) || !need_resumed) {  // skip
               } else if (task_result.status_ != ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH) { // resume not finish task
@@ -2410,6 +2417,8 @@ int ObVecIndexAsyncTask::execute_exchange()
       LOG_WARN("fail to get snapshot", K(ret));
     } else if (OB_FAIL(exchange_snap_index_rows(*data_schema, *snapshot_schema, tx_desc, snapshot, timeout_us))) {
       LOG_WARN("fail to exchange snap index rows", K(ret), K(ctx_));
+    } else if (OB_FAIL(new_adapter_->renew_single_snap_index(new_adapter_->get_snap_index_type() == VIAT_HNSW_BQ))) {
+      LOG_WARN("fail to renew single snap index", K(ret));
     }
     /* Warning!!!
     * In the process of loading data for a query, the query_lock is acquired first, followed by the adapter_map_lock.
