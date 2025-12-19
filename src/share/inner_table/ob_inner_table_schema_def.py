@@ -79335,8 +79335,9 @@ def_table_schema(
     ALLT.MERGE_VERSION AS MERGE_VERSION,
     ALLT.EXTRA_INFO AS EXTRA_INFO,
     DECODE(ALLT.COMPILE_DB_ID,
-            NULL, 'NOT IN PL CACHE',
-            oceanbase.DBMS_UTILITY.CHECK_PL_CACHE_OBJ_EXPIRED(ALLT.OBJECT_ID, ALLT.OBJECT_TYPE,
+            NULL, DBMS_UTILITY.CHECK_PL_CACHE_OBJ_EXPIRED(ALLT.OBJECT_ID, ALLT.OBJECT_TYPE,
+              ALLT.SCHEMA_DB_ID, 'X86_0'),
+            DBMS_UTILITY.CHECK_PL_CACHE_OBJ_EXPIRED(ALLT.OBJECT_ID, ALLT.OBJECT_TYPE,
               ALLT.COMPILE_DB_ID, ALLT.ARCH_TYPE)) AS PL_CACHE_STATUS
     FROM
     (
@@ -79345,6 +79346,7 @@ def_table_schema(
             PACKAGE_ID AS OBJECT_ID,
             'PACKAGE BODY' AS OBJECT_TYPE,
             'VALID' AS STATUS,
+            PS.DATABASE_ID AS SCHEMA_DB_ID,
             D.COMPILE_DB_ID AS COMPILE_DB_ID,
             D.MERGE_VERSION AS MERGE_VERSION,
             CASE WHEN BITAND(PS.FLAG, 4) = 4
@@ -79374,6 +79376,7 @@ def_table_schema(
                         AND EB.OBJ_TYPE = 3)
                     THEN 'INVALID'
                 ELSE 'VALID' END AS STATUS,
+            P.DATABASE_ID AS SCHEMA_DB_ID,
             D.COMPILE_DB_ID AS COMPILE_DB_ID,
             D.MERGE_VERSION AS MERGE_VERSION,
             CASE WHEN BITAND(P.FLAG, 4) = 4
@@ -79399,6 +79402,7 @@ def_table_schema(
                         WHERE R.TENANT_ID = E.TENANT_ID AND R.ROUTINE_ID = E.OBJ_ID AND (E.OBJ_TYPE = 9 OR E.OBJ_TYPE = 12))
                       THEN 'INVALID'
                 ELSE 'VALID' END AS STATUS,
+            R.DATABASE_ID AS SCHEMA_DB_ID,
             D.COMPILE_DB_ID AS COMPILE_DB_ID,
             D.MERGE_VERSION AS MERGE_VERSION,
             CASE WHEN BITAND(R.FLAG, 16) = 16
@@ -79421,6 +79425,7 @@ def_table_schema(
                         WHERE TY.TENANT_ID = E.TENANT_ID AND TY.OBJECT_TYPE_ID = E.OBJ_ID AND E.OBJ_TYPE = 6)
                       THEN 'INVALID'
                 ELSE 'VALID' END AS STATUS,
+            TY.DATABASE_ID AS SCHEMA_DB_ID,
             D.COMPILE_DB_ID AS COMPILE_DB_ID,
             D.MERGE_VERSION AS MERGE_VERSION,
             CASE WHEN BITAND(TY.FLAG, 4) = 4
@@ -79443,6 +79448,7 @@ def_table_schema(
                       WHERE T.TENANT_ID = E.TENANT_ID AND T.TRIGGER_ID = E.OBJ_ID AND (E.OBJ_TYPE = 7))
                     THEN 'INVALID'
                 ELSE 'VALID' END AS STATUS,
+          T.DATABASE_ID AS SCHEMA_DB_ID,
           D.COMPILE_DB_ID AS COMPILE_DB_ID,
           D.MERGE_VERSION AS MERGE_VERSION,
           CASE WHEN BITAND(T.package_flag, 4) = 4
