@@ -26,7 +26,8 @@ ObMicroBlockRowLockChecker::ObMicroBlockRowLockChecker(common::ObIAllocator &all
     : ObMicroBlockRowScanner(allocator),
     check_exist_(false),
     snapshot_version_(),
-    lock_state_(nullptr)
+    lock_state_(nullptr),
+    base_version_(0)
 {
 }
 
@@ -120,9 +121,9 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
     int64_t current;
     row = &row_;
     ObStoreRowLockState *lock_state = nullptr;
-    bool filtered_by_truncate = false;
+    bool is_filtered = false;
     while (OB_SUCC(ret)) {
-      filtered_by_truncate = false;
+      is_filtered = false;
       if (OB_FAIL(inner_get_next_row(current, lock_state))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("Failed to get next row", K(ret), K_(macro_id), K(is_major_sstable));
@@ -156,31 +157,33 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
                      OB_FAIL(check_truncate_part_filter(current,
                                                         trans_version,
                                                         row_header->get_row_multi_version_flag().is_ghost_row(),
-                                                        filtered_by_truncate))) {
+                                                        is_filtered))) {
             LOG_WARN("failed to check truncate part filter", K(ret), K(current), K(trans_version), K(is_major_sstable));
-          } else if (filtered_by_truncate) {
+          } else if (!is_filtered && FALSE_IT(check_base_version(trans_version, is_filtered))) {
+          } else if (is_filtered) {
           } else if (FALSE_IT(*lock_state = uncommited_lock_state)) {
           } else if (lock_state->is_lock_decided()) {
             lock_state->lock_dml_flag_ = row_header->get_row_flag().get_dml_flag();
           }
         } else if (OB_UNLIKELY(nullptr != context_->truncate_part_filter_) &&
-                   OB_FAIL(check_truncate_part_filter(current, 0/*trans_version*/, row_header->get_row_multi_version_flag().is_ghost_row(), filtered_by_truncate))) {
+                   OB_FAIL(check_truncate_part_filter(current, 0/*trans_version*/, row_header->get_row_multi_version_flag().is_ghost_row(), is_filtered))) {
           LOG_WARN("failed to check truncate part filter", K(ret), K(current), K(trans_version), K(is_major_sstable));
-        } else if (filtered_by_truncate) {
+        } else if (!is_filtered && FALSE_IT(check_base_version(trans_version, is_filtered))) {
+        } else if (is_filtered) {
         } else if (OB_FAIL(lock_state->trans_version_.convert_for_tx(trans_version))) {
           LOG_ERROR("convert failed", K(ret), K(trans_version));
         } else {
           lock_state->lock_dml_flag_ = row_header->get_row_flag().get_dml_flag();
         }
       } else if (OB_UNLIKELY(nullptr != context_->truncate_part_filter_) &&
-                 OB_FAIL(check_truncate_part_filter(current, 0/*trans_version*/, false, filtered_by_truncate))) {
+                 OB_FAIL(check_truncate_part_filter(current, 0/*trans_version*/, false, is_filtered))) {
         LOG_WARN("failed to check truncate part filter", K(ret), K(current), K(trans_version), K(is_major_sstable));
-      } else if (filtered_by_truncate) {
+      } else if (is_filtered) {
       } else {
         lock_state->trans_version_ = sstable_->get_end_scn();
         lock_state->lock_dml_flag_ = blocksstable::ObDmlFlag::DF_INSERT;
       }
-      if (OB_SUCC(ret) && !filtered_by_truncate) {
+      if (OB_SUCC(ret) && !is_filtered) {
         bool need_stop = false;
         if (is_major_sstable) {
           check_row_in_major_sstable(need_stop);
@@ -221,6 +224,15 @@ int ObMicroBlockRowLockChecker::check_truncate_part_filter(const int64_t current
     }
   }
   return ret;
+}
+
+void ObMicroBlockRowLockChecker::check_base_version(const int64_t trans_version, bool &is_filtered)
+{
+  if (OB_UNLIKELY(base_version_ > 0 &&
+                  transaction::is_effective_trans_version(trans_version) &&
+                  trans_version <= base_version_)) {
+    is_filtered = true;
+  }
 }
 
 /************************* ObMicroBlockRowLockMultiChecker *************************/

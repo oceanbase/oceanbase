@@ -904,6 +904,7 @@ int ObMvccRow::mvcc_write_(ObStoreCtx &ctx,
   ObTransID writer_tx_id = ctx.mvcc_acc_ctx_.get_tx_id();
   transaction::ObTxSnapshot &snapshot = ctx.mvcc_acc_ctx_.snapshot_;
   const SCN snapshot_version = snapshot.version_;
+  const int64_t base_version = ctx.mvcc_acc_ctx_.major_snapshot_;
   const ObTxSEQ reader_seq_no = snapshot.scn_;
   bool &can_insert = res.can_insert_;
   bool &need_insert = res.need_insert_;
@@ -955,6 +956,17 @@ int ObMvccRow::mvcc_write_(ObStoreCtx &ctx,
           iter = iter->prev_;
           need_retry = true;
         } else {
+          /* mvcc write check exist should skip rows with tx_version <= base_version,
+          *  rows in memtable which have tx_version <= base_version may overwrite rows in inc major sstables with greater version
+          *  MAJOR      EMPTY    (version 100)
+          *  INC_MAJOR  INSERT 1 (version 110)
+          *  MEMTABLE   DELETE 1 (version 90)
+          */
+          if (OB_UNLIKELY(iter->is_committed() &&
+                          base_version > 0 &&
+                          iter->get_tx_version().get_val_for_tx() <= base_version)) {
+            filtered = true;
+          }
           can_insert = true;
           need_insert = true;
           is_new_locked = true;
@@ -1196,6 +1208,7 @@ int ObMvccRow::check_row_locked(ObMvccAccessCtx &ctx,
   ObRowLatchGuard guard(latch_);
   transaction::ObTxSnapshot &snapshot = ctx.snapshot_;
   const SCN snapshot_version = snapshot.version_;
+  const int64_t base_version = ctx.major_snapshot_;
   const ObTransID checker_tx_id = ctx.get_tx_id();
   ObMvccTransNode *iter = ATOMIC_LOAD(&list_head_);
   bool need_retry = true;
@@ -1232,6 +1245,17 @@ int ObMvccRow::check_row_locked(ObMvccAccessCtx &ctx,
           iter = iter->prev_;
           need_retry = true;
         } else {
+          /* check lock should skip rows with tx_version <= base_version,
+          *  rows in memtable which have tx_version <= base_version may overwrite rows in inc major sstables with greater version
+          *  MAJOR      EMPTY    (version 100)
+          *  INC_MAJOR  INSERT 1 (version 110)
+          *  MEMTABLE   DELETE 1 (version 90)
+          */
+          if (OB_UNLIKELY(iter->is_committed() &&
+                          base_version > 0 &&
+                          iter->get_tx_version().get_val_for_tx() <= base_version)) {
+            filtered = true;
+          }
           lock_state.is_locked_ = false;
           lock_state.lock_trans_id_.reset();
           need_retry = false;

@@ -41,6 +41,10 @@ public:
   {
     check_exist_ = check_eixst;
   }
+  inline void set_base_version(const int64_t base_version)
+  {
+    base_version_ = base_version;
+  }
   void inc_empty_read(ObSSTableReadHandle &read_handle);
 protected:
   virtual int inner_get_next_row(
@@ -53,11 +57,13 @@ protected:
       bool &need_stop);
   virtual void check_row_in_major_sstable(bool &need_stop);
   int check_truncate_part_filter(const int64_t current, const int64_t trans_version, const bool is_ghost_row, bool &fitered);
+  inline void check_base_version(const int64_t trans_version, bool &is_filtered);
 protected:
   bool check_exist_;
   share::SCN snapshot_version_;
   ObStoreRowLockState *lock_state_;
   ObStoreRowLockState tmp_lock_state_;
+  int64_t base_version_;
 };
 
 class ObMicroBlockRowLockMultiChecker : public ObMicroBlockRowLockChecker {
