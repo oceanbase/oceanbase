@@ -232,6 +232,12 @@ int ObRevokeExecutor::execute(ObExecContext &ctx, ObRevokeStmt &stmt)
         }
         break;
       }
+      case OB_PRIV_SENSITIVE_RULE_LEVEL: {
+        if (OB_FAIL(revoke_sensitive_rule(common_rpc_proxy, stmt))) {
+          LOG_WARN("grant_revoke_sensitive_rule error", K(ret));
+        }
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Resolver may be error, invalid grant_level",
@@ -297,6 +303,33 @@ int ObRevokeExecutor::revoke_catalog(obrpc::ObCommonRpcProxy *rpc_proxy, ObRevok
       for (int i = 0; OB_SUCC(ret) && i < user_ids.count(); i++) {
         arg.user_id_ = user_ids.at(i);
         if (OB_FAIL(rpc_proxy->revoke_catalog(arg))) {
+          LOG_WARN("revoke user error", K(arg), K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRevokeExecutor::revoke_sensitive_rule(obrpc::ObCommonRpcProxy *rpc_proxy, ObRevokeStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(rpc_proxy)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Input argument error", K(rpc_proxy), K(ret));
+  } else {
+    obrpc::ObRevokeSensitiveRuleArg &arg = static_cast<obrpc::ObRevokeSensitiveRuleArg &>(stmt.get_ddl_arg());
+    arg.tenant_id_ = stmt.get_tenant_id();
+    arg.priv_set_ = stmt.get_priv_set();
+    arg.sensitive_rule_ = stmt.get_sensitive_rule_name();
+    const ObIArray<uint64_t> &user_ids = stmt.get_users();
+    if (0 == user_ids.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("User ids is empty, resolver may be error", K(ret));
+    } else {
+      for (int i = 0; OB_SUCC(ret) && i < user_ids.count(); i++) {
+        arg.user_id_ = user_ids.at(i);
+        if (OB_FAIL(rpc_proxy->revoke_sensitive_rule(arg))) {
           LOG_WARN("revoke user error", K(arg), K(ret));
         }
       }

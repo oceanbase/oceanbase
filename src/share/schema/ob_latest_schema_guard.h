@@ -30,6 +30,7 @@ namespace schema
 class ObMultiVersionSchemaService;
 class ObSchemaService;
 struct SchemaObj;
+class ObSensitiveRuleSchema;
 
 // NOTICE:
 // 1. Not thread safety.
@@ -343,6 +344,10 @@ public:
   GET_RLS_SCHEMA(rls_context, ObRlsContextSchema);
 #undef GET_RLS_SCHEMA
 #endif
+
+  int get_sensitive_rule_schemas_by_table(
+    const ObTableSchema &table_schema,
+    ObIArray<ObSensitiveRuleSchema *> &schemas);
 
 int get_table_schemas_in_tablegroup(
     const uint64_t tablegroup_id,

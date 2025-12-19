@@ -704,6 +704,12 @@ public:
   static int all_tenant_objauth_mysql_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_external_resource_schema(share::schema::ObTableSchema &table_schema);
   static int all_external_resource_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_sensitive_rule_schema(share::schema::ObTableSchema &table_schema);
+  static int all_sensitive_rule_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_sensitive_column_schema(share::schema::ObTableSchema &table_schema);
+  static int all_sensitive_column_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_sensitive_rule_privilege_schema(share::schema::ObTableSchema &table_schema);
+  static int all_sensitive_rule_privilege_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_tenant_ss_storage_stat_schema(share::schema::ObTableSchema &table_schema);
   static int all_ai_model_schema(share::schema::ObTableSchema &table_schema);
   static int all_ai_model_history_schema(share::schema::ObTableSchema &table_schema);
@@ -1244,6 +1250,12 @@ public:
   static int all_virtual_ss_gc_status_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ss_gc_detect_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_unit_mysql_sys_agent_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_sensitive_rule_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_sensitive_rule_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_sensitive_column_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_sensitive_column_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_sensitive_rule_privilege_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_sensitive_rule_privilege_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tenant_ss_storage_stat_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_hms_client_pool_stat_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_source_schema(share::schema::ObTableSchema &table_schema);
@@ -1586,6 +1598,8 @@ public:
   static int all_virtual_hms_client_pool_stat_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_source_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ss_diagnose_info_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_sensitive_rule_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_sensitive_column_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_plan_cache_stat_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_plan_cache_plan_stat_schema(share::schema::ObTableSchema &table_schema);
   static int schemata_schema(share::schema::ObTableSchema &table_schema);
@@ -2141,6 +2155,12 @@ public:
   static int v_ob_ss_sstables_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_vector_memory_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_vector_memory_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_sensitive_rules_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_ob_sensitive_rules_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_sensitive_columns_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_ob_sensitive_columns_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_sensitive_rule_plainaccess_users_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_ob_sensitive_rule_plainaccess_users_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_hnsw_index_info_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_hnsw_index_info_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_ivf_index_info_schema(share::schema::ObTableSchema &table_schema);
@@ -2692,6 +2712,9 @@ public:
   static int dba_ob_pl_obj_cache_status_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_hms_client_pool_stat_ora_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_hms_client_pool_stat_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_sensitive_rules_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_sensitive_columns_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_sensitive_rule_plainaccess_users_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_ddl_operation_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
@@ -3036,6 +3059,12 @@ public:
   static int all_tenant_objauth_mysql_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_external_resource_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_external_resource_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_sensitive_rule_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_sensitive_rule_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_sensitive_column_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_sensitive_column_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_sensitive_rule_privilege_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_sensitive_rule_privilege_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_tenant_ss_storage_stat_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_ai_model_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_ai_model_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
@@ -3384,6 +3413,12 @@ public:
   static int all_tenant_objauth_mysql_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_external_resource_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_external_resource_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_sensitive_rule_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_sensitive_rule_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_sensitive_column_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_sensitive_column_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_sensitive_rule_privilege_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_sensitive_rule_privilege_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_tenant_ss_storage_stat_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_ai_model_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_ai_model_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
@@ -3983,6 +4018,12 @@ const schema_create_func sys_table_schema_creators [] = {
   ObInnerTableSchema::all_tenant_objauth_mysql_history_schema,
   ObInnerTableSchema::all_external_resource_schema,
   ObInnerTableSchema::all_external_resource_history_schema,
+  ObInnerTableSchema::all_sensitive_rule_schema,
+  ObInnerTableSchema::all_sensitive_rule_history_schema,
+  ObInnerTableSchema::all_sensitive_column_schema,
+  ObInnerTableSchema::all_sensitive_column_history_schema,
+  ObInnerTableSchema::all_sensitive_rule_privilege_schema,
+  ObInnerTableSchema::all_sensitive_rule_privilege_history_schema,
   ObInnerTableSchema::all_tenant_ss_storage_stat_schema,
   ObInnerTableSchema::all_ai_model_schema,
   ObInnerTableSchema::all_ai_model_history_schema,
@@ -4526,6 +4567,12 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_ss_gc_status_schema,
   ObInnerTableSchema::all_virtual_ss_gc_detect_info_schema,
   ObInnerTableSchema::all_virtual_unit_mysql_sys_agent_schema,
+  ObInnerTableSchema::all_virtual_sensitive_rule_schema,
+  ObInnerTableSchema::all_virtual_sensitive_rule_history_schema,
+  ObInnerTableSchema::all_virtual_sensitive_column_schema,
+  ObInnerTableSchema::all_virtual_sensitive_column_history_schema,
+  ObInnerTableSchema::all_virtual_sensitive_rule_privilege_schema,
+  ObInnerTableSchema::all_virtual_sensitive_rule_privilege_history_schema,
   ObInnerTableSchema::all_virtual_tenant_ss_storage_stat_schema,
   ObInnerTableSchema::all_virtual_hms_client_pool_stat_schema,
   ObInnerTableSchema::all_virtual_source_schema,
@@ -4868,6 +4915,8 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_hms_client_pool_stat_ora_schema,
   ObInnerTableSchema::all_virtual_source_ora_schema,
   ObInnerTableSchema::all_virtual_ss_diagnose_info_ora_schema,
+  ObInnerTableSchema::all_virtual_sensitive_rule_real_agent_ora_schema,
+  ObInnerTableSchema::all_virtual_sensitive_column_real_agent_ora_schema,
   NULL,};
 
 const schema_create_func virtual_table_index_schema_creators [] = {
@@ -5538,6 +5587,12 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::v_ob_ss_sstables_schema,
   ObInnerTableSchema::gv_ob_vector_memory_schema,
   ObInnerTableSchema::v_ob_vector_memory_schema,
+  ObInnerTableSchema::dba_ob_sensitive_rules_schema,
+  ObInnerTableSchema::cdb_ob_sensitive_rules_schema,
+  ObInnerTableSchema::dba_ob_sensitive_columns_schema,
+  ObInnerTableSchema::cdb_ob_sensitive_columns_schema,
+  ObInnerTableSchema::dba_ob_sensitive_rule_plainaccess_users_schema,
+  ObInnerTableSchema::cdb_ob_sensitive_rule_plainaccess_users_schema,
   ObInnerTableSchema::gv_ob_hnsw_index_info_schema,
   ObInnerTableSchema::v_ob_hnsw_index_info_schema,
   ObInnerTableSchema::gv_ob_ivf_index_info_schema,
@@ -6089,6 +6144,9 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::dba_ob_pl_obj_cache_status_ora_schema,
   ObInnerTableSchema::gv_ob_hms_client_pool_stat_ora_schema,
   ObInnerTableSchema::v_ob_hms_client_pool_stat_ora_schema,
+  ObInnerTableSchema::dba_ob_sensitive_rules_ora_schema,
+  ObInnerTableSchema::dba_ob_sensitive_columns_ora_schema,
+  ObInnerTableSchema::dba_ob_sensitive_rule_plainaccess_users_ora_schema,
   NULL,};
 
 const schema_create_func core_index_table_schema_creators [] = {
@@ -6549,6 +6607,12 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_TENANT_OBJAUTH_MYSQL_HISTORY_TID,
   OB_ALL_EXTERNAL_RESOURCE_TID,
   OB_ALL_EXTERNAL_RESOURCE_HISTORY_TID,
+  OB_ALL_SENSITIVE_RULE_TID,
+  OB_ALL_SENSITIVE_RULE_HISTORY_TID,
+  OB_ALL_SENSITIVE_COLUMN_TID,
+  OB_ALL_SENSITIVE_COLUMN_HISTORY_TID,
+  OB_ALL_SENSITIVE_RULE_PRIVILEGE_TID,
+  OB_ALL_SENSITIVE_RULE_PRIVILEGE_HISTORY_TID,
   OB_ALL_TENANT_SS_STORAGE_STAT_TID,
   OB_ALL_AI_MODEL_TID,
   OB_ALL_AI_MODEL_HISTORY_TID,
@@ -7192,6 +7256,8 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_HMS_CLIENT_POOL_STAT_ORA_TID,
   OB_ALL_VIRTUAL_SOURCE_ORA_TID,
   OB_ALL_VIRTUAL_SS_DIAGNOSE_INFO_ORA_TID,
+  OB_ALL_VIRTUAL_SENSITIVE_RULE_REAL_AGENT_ORA_TID,
+  OB_ALL_VIRTUAL_SENSITIVE_COLUMN_REAL_AGENT_ORA_TID,
   OB_GV_OB_PLAN_CACHE_STAT_TID,
   OB_GV_OB_PLAN_CACHE_PLAN_STAT_TID,
   OB_SCHEMATA_TID,
@@ -7597,6 +7663,9 @@ const uint64_t tenant_space_tables [] = {
   OB_V_OB_SS_SSTABLES_TID,
   OB_GV_OB_VECTOR_MEMORY_TID,
   OB_V_OB_VECTOR_MEMORY_TID,
+  OB_DBA_OB_SENSITIVE_RULES_TID,
+  OB_DBA_OB_SENSITIVE_COLUMNS_TID,
+  OB_DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS_TID,
   OB_GV_OB_HNSW_INDEX_INFO_TID,
   OB_V_OB_HNSW_INDEX_INFO_TID,
   OB_GV_OB_IVF_INDEX_INFO_TID,
@@ -8143,6 +8212,9 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_OB_PL_OBJ_CACHE_STATUS_ORA_TID,
   OB_GV_OB_HMS_CLIENT_POOL_STAT_ORA_TID,
   OB_V_OB_HMS_CLIENT_POOL_STAT_ORA_TID,
+  OB_DBA_OB_SENSITIVE_RULES_ORA_TID,
+  OB_DBA_OB_SENSITIVE_COLUMNS_ORA_TID,
+  OB_DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS_ORA_TID,
   OB_ALL_TABLE_IDX_DATA_TABLE_ID_TID,
   OB_ALL_TABLE_IDX_DB_TB_NAME_TID,
   OB_ALL_TABLE_IDX_TB_NAME_TID,
@@ -8667,6 +8739,12 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_TENANT_OBJAUTH_MYSQL_HISTORY_AUX_LOB_META_TID,
   OB_ALL_EXTERNAL_RESOURCE_AUX_LOB_META_TID,
   OB_ALL_EXTERNAL_RESOURCE_HISTORY_AUX_LOB_META_TID,
+  OB_ALL_SENSITIVE_RULE_AUX_LOB_META_TID,
+  OB_ALL_SENSITIVE_RULE_HISTORY_AUX_LOB_META_TID,
+  OB_ALL_SENSITIVE_COLUMN_AUX_LOB_META_TID,
+  OB_ALL_SENSITIVE_COLUMN_HISTORY_AUX_LOB_META_TID,
+  OB_ALL_SENSITIVE_RULE_PRIVILEGE_AUX_LOB_META_TID,
+  OB_ALL_SENSITIVE_RULE_PRIVILEGE_HISTORY_AUX_LOB_META_TID,
   OB_ALL_TENANT_SS_STORAGE_STAT_AUX_LOB_META_TID,
   OB_ALL_AI_MODEL_AUX_LOB_META_TID,
   OB_ALL_AI_MODEL_HISTORY_AUX_LOB_META_TID,
@@ -8988,6 +9066,12 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_TENANT_OBJAUTH_MYSQL_HISTORY_AUX_LOB_PIECE_TID,
   OB_ALL_EXTERNAL_RESOURCE_AUX_LOB_PIECE_TID,
   OB_ALL_EXTERNAL_RESOURCE_HISTORY_AUX_LOB_PIECE_TID,
+  OB_ALL_SENSITIVE_RULE_AUX_LOB_PIECE_TID,
+  OB_ALL_SENSITIVE_RULE_HISTORY_AUX_LOB_PIECE_TID,
+  OB_ALL_SENSITIVE_COLUMN_AUX_LOB_PIECE_TID,
+  OB_ALL_SENSITIVE_COLUMN_HISTORY_AUX_LOB_PIECE_TID,
+  OB_ALL_SENSITIVE_RULE_PRIVILEGE_AUX_LOB_PIECE_TID,
+  OB_ALL_SENSITIVE_RULE_PRIVILEGE_HISTORY_AUX_LOB_PIECE_TID,
   OB_ALL_TENANT_SS_STORAGE_STAT_AUX_LOB_PIECE_TID,
   OB_ALL_AI_MODEL_AUX_LOB_PIECE_TID,
   OB_ALL_AI_MODEL_HISTORY_AUX_LOB_PIECE_TID,
@@ -9705,6 +9789,12 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_TENANT_OBJAUTH_MYSQL_HISTORY_TNAME,
   OB_ALL_EXTERNAL_RESOURCE_TNAME,
   OB_ALL_EXTERNAL_RESOURCE_HISTORY_TNAME,
+  OB_ALL_SENSITIVE_RULE_TNAME,
+  OB_ALL_SENSITIVE_RULE_HISTORY_TNAME,
+  OB_ALL_SENSITIVE_COLUMN_TNAME,
+  OB_ALL_SENSITIVE_COLUMN_HISTORY_TNAME,
+  OB_ALL_SENSITIVE_RULE_PRIVILEGE_TNAME,
+  OB_ALL_SENSITIVE_RULE_PRIVILEGE_HISTORY_TNAME,
   OB_ALL_TENANT_SS_STORAGE_STAT_TNAME,
   OB_ALL_AI_MODEL_TNAME,
   OB_ALL_AI_MODEL_HISTORY_TNAME,
@@ -10348,6 +10438,8 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_HMS_CLIENT_POOL_STAT_ORA_TNAME,
   OB_ALL_VIRTUAL_SOURCE_ORA_TNAME,
   OB_ALL_VIRTUAL_SS_DIAGNOSE_INFO_ORA_TNAME,
+  OB_ALL_VIRTUAL_SENSITIVE_RULE_REAL_AGENT_ORA_TNAME,
+  OB_ALL_VIRTUAL_SENSITIVE_COLUMN_REAL_AGENT_ORA_TNAME,
   OB_GV_OB_PLAN_CACHE_STAT_TNAME,
   OB_GV_OB_PLAN_CACHE_PLAN_STAT_TNAME,
   OB_SCHEMATA_TNAME,
@@ -10753,6 +10845,9 @@ const char* const tenant_space_table_names [] = {
   OB_V_OB_SS_SSTABLES_TNAME,
   OB_GV_OB_VECTOR_MEMORY_TNAME,
   OB_V_OB_VECTOR_MEMORY_TNAME,
+  OB_DBA_OB_SENSITIVE_RULES_TNAME,
+  OB_DBA_OB_SENSITIVE_COLUMNS_TNAME,
+  OB_DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS_TNAME,
   OB_GV_OB_HNSW_INDEX_INFO_TNAME,
   OB_V_OB_HNSW_INDEX_INFO_TNAME,
   OB_GV_OB_IVF_INDEX_INFO_TNAME,
@@ -11299,6 +11394,9 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_OB_PL_OBJ_CACHE_STATUS_ORA_TNAME,
   OB_GV_OB_HMS_CLIENT_POOL_STAT_ORA_TNAME,
   OB_V_OB_HMS_CLIENT_POOL_STAT_ORA_TNAME,
+  OB_DBA_OB_SENSITIVE_RULES_ORA_TNAME,
+  OB_DBA_OB_SENSITIVE_COLUMNS_ORA_TNAME,
+  OB_DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS_ORA_TNAME,
   OB_ALL_TABLE_IDX_DATA_TABLE_ID_TNAME,
   OB_ALL_TABLE_IDX_DB_TB_NAME_TNAME,
   OB_ALL_TABLE_IDX_TB_NAME_TNAME,
@@ -11823,6 +11921,12 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_TENANT_OBJAUTH_MYSQL_HISTORY_AUX_LOB_META_TNAME,
   OB_ALL_EXTERNAL_RESOURCE_AUX_LOB_META_TNAME,
   OB_ALL_EXTERNAL_RESOURCE_HISTORY_AUX_LOB_META_TNAME,
+  OB_ALL_SENSITIVE_RULE_AUX_LOB_META_TNAME,
+  OB_ALL_SENSITIVE_RULE_HISTORY_AUX_LOB_META_TNAME,
+  OB_ALL_SENSITIVE_COLUMN_AUX_LOB_META_TNAME,
+  OB_ALL_SENSITIVE_COLUMN_HISTORY_AUX_LOB_META_TNAME,
+  OB_ALL_SENSITIVE_RULE_PRIVILEGE_AUX_LOB_META_TNAME,
+  OB_ALL_SENSITIVE_RULE_PRIVILEGE_HISTORY_AUX_LOB_META_TNAME,
   OB_ALL_TENANT_SS_STORAGE_STAT_AUX_LOB_META_TNAME,
   OB_ALL_AI_MODEL_AUX_LOB_META_TNAME,
   OB_ALL_AI_MODEL_HISTORY_AUX_LOB_META_TNAME,
@@ -12144,6 +12248,12 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_TENANT_OBJAUTH_MYSQL_HISTORY_AUX_LOB_PIECE_TNAME,
   OB_ALL_EXTERNAL_RESOURCE_AUX_LOB_PIECE_TNAME,
   OB_ALL_EXTERNAL_RESOURCE_HISTORY_AUX_LOB_PIECE_TNAME,
+  OB_ALL_SENSITIVE_RULE_AUX_LOB_PIECE_TNAME,
+  OB_ALL_SENSITIVE_RULE_HISTORY_AUX_LOB_PIECE_TNAME,
+  OB_ALL_SENSITIVE_COLUMN_AUX_LOB_PIECE_TNAME,
+  OB_ALL_SENSITIVE_COLUMN_HISTORY_AUX_LOB_PIECE_TNAME,
+  OB_ALL_SENSITIVE_RULE_PRIVILEGE_AUX_LOB_PIECE_TNAME,
+  OB_ALL_SENSITIVE_RULE_PRIVILEGE_HISTORY_AUX_LOB_PIECE_TNAME,
   OB_ALL_TENANT_SS_STORAGE_STAT_AUX_LOB_PIECE_TNAME,
   OB_ALL_AI_MODEL_AUX_LOB_PIECE_TNAME,
   OB_ALL_AI_MODEL_HISTORY_AUX_LOB_PIECE_TNAME,
@@ -15487,6 +15597,54 @@ LOBMapping const lob_aux_table_mappings [] = {
     OB_ALL_EXTERNAL_RESOURCE_HISTORY_AUX_LOB_PIECE_TID,
     ObInnerTableSchema::all_external_resource_history_aux_lob_meta_schema,
     ObInnerTableSchema::all_external_resource_history_aux_lob_piece_schema
+  },
+
+  {
+    OB_ALL_SENSITIVE_RULE_TID,
+    OB_ALL_SENSITIVE_RULE_AUX_LOB_META_TID,
+    OB_ALL_SENSITIVE_RULE_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_sensitive_rule_aux_lob_meta_schema,
+    ObInnerTableSchema::all_sensitive_rule_aux_lob_piece_schema
+  },
+
+  {
+    OB_ALL_SENSITIVE_RULE_HISTORY_TID,
+    OB_ALL_SENSITIVE_RULE_HISTORY_AUX_LOB_META_TID,
+    OB_ALL_SENSITIVE_RULE_HISTORY_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_sensitive_rule_history_aux_lob_meta_schema,
+    ObInnerTableSchema::all_sensitive_rule_history_aux_lob_piece_schema
+  },
+
+  {
+    OB_ALL_SENSITIVE_COLUMN_TID,
+    OB_ALL_SENSITIVE_COLUMN_AUX_LOB_META_TID,
+    OB_ALL_SENSITIVE_COLUMN_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_sensitive_column_aux_lob_meta_schema,
+    ObInnerTableSchema::all_sensitive_column_aux_lob_piece_schema
+  },
+
+  {
+    OB_ALL_SENSITIVE_COLUMN_HISTORY_TID,
+    OB_ALL_SENSITIVE_COLUMN_HISTORY_AUX_LOB_META_TID,
+    OB_ALL_SENSITIVE_COLUMN_HISTORY_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_sensitive_column_history_aux_lob_meta_schema,
+    ObInnerTableSchema::all_sensitive_column_history_aux_lob_piece_schema
+  },
+
+  {
+    OB_ALL_SENSITIVE_RULE_PRIVILEGE_TID,
+    OB_ALL_SENSITIVE_RULE_PRIVILEGE_AUX_LOB_META_TID,
+    OB_ALL_SENSITIVE_RULE_PRIVILEGE_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_sensitive_rule_privilege_aux_lob_meta_schema,
+    ObInnerTableSchema::all_sensitive_rule_privilege_aux_lob_piece_schema
+  },
+
+  {
+    OB_ALL_SENSITIVE_RULE_PRIVILEGE_HISTORY_TID,
+    OB_ALL_SENSITIVE_RULE_PRIVILEGE_HISTORY_AUX_LOB_META_TID,
+    OB_ALL_SENSITIVE_RULE_PRIVILEGE_HISTORY_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_sensitive_rule_privilege_history_aux_lob_meta_schema,
+    ObInnerTableSchema::all_sensitive_rule_privilege_history_aux_lob_piece_schema
   },
 
   {

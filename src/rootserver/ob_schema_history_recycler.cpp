@@ -992,6 +992,13 @@ int ObSchemaHistoryRecycler::try_recycle_schema_history(
                          ccl_rule_id);
     ret = OB_SUCCESS; // overwrite ret
 
+    // --------------------------- sensitive_rule --------------------------------------------
+    RECYCLE_FIRST_SCHEMA(RECYCLE_AND_COMPRESS, sensitive_rule, OB_ALL_SENSITIVE_RULE_HISTORY_TNAME,
+                         sensitive_rule_id);
+    RECYCLE_THIRD_SCHEMA(sensitive_column, OB_ALL_SENSITIVE_COLUMN_HISTORY_TNAME,
+                         sensitive_rule_id, table_id, column_id);
+    ret = OB_SUCCESS; // overwrite ret
+
 #undef RECYCLE_FIRST_SCHEMA
     int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
     ROOTSERVICE_EVENT_ADD("schema_recycler", "batch_recycle_by_tenant",

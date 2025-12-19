@@ -97,6 +97,10 @@ ObInfoSchemaUserPrivilegesTable::StaticInit::StaticInit()
                                                    "DROP AI MODEL";
   ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_ACCESS_AI_MODEL_SHIFT] =
                                                    "ACCESS AI MODEL";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_SENSITIVE_RULE_SHIFT] =
+                                                   "CREATE SENSITIVE RULE";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_PLAINACCESS_SHIFT] =
+                                                   "PLAINACCESS";
 }
 
 ObInfoSchemaUserPrivilegesTable::ObInfoSchemaUserPrivilegesTable()

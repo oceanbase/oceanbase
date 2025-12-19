@@ -33,6 +33,7 @@
 #include "rootserver/ob_vertical_partition_builder.h"
 #include "rootserver/freeze/ob_major_freeze_helper.h"
 #include "rootserver/ob_tenant_thread_helper.h"//get_zone_priority
+#include "rootserver/ob_sensitive_rule_ddl_operator.h"
 #include "src/sql/engine/px/ob_dfo.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "rootserver/ob_table_creator.h"
@@ -3958,6 +3959,7 @@ int ObDDLService::create_hidden_table_with_pk_changed(
     LOG_WARN("fail to rename hidden table's pk constraint", K(ret));
   } else if (OB_FAIL(create_user_hidden_table(origin_table_schema,
                                               new_table_schema,
+                                              alter_table_arg.alter_table_schema_,
                                               &alter_table_arg.sequence_ddl_arg_,
                                               bind_tablets,
                                               schema_guard,
@@ -5937,6 +5939,7 @@ int ObDDLService::alter_table_partition_by(
   }
   OZ (create_user_hidden_table(orig_table_schema,
                               new_table_schema,
+                              alter_table_arg.alter_table_schema_,
                               &alter_table_arg.sequence_ddl_arg_,
                               bind_tablets,
                               schema_guard,
@@ -6098,6 +6101,7 @@ int ObDDLService::convert_to_character(
     }
     OZ (create_user_hidden_table(orig_table_schema,
                                 new_table_schema,
+                                alter_table_arg.alter_table_schema_,
                                 &alter_table_arg.sequence_ddl_arg_,
                                 bind_tablets,
                                 schema_guard,
@@ -16314,6 +16318,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
         if (OB_SUCC(ret) && ObDDLType::DDL_DROP_COLUMN_INSTANT == ddl_type) {
           // to drop invalid index here is to avoid index being renamed to normal one when updating table options above.
           ObArray<uint64_t> drop_cols_id_arr;
+          ObSensitiveRuleDDLService sensitive_rule_ddl_service(this);
           if (OB_FAIL(get_all_dropped_column_ids(alter_table_arg, *orig_table_schema, drop_cols_id_arr))) {
             LOG_WARN("fail to prefetch all drop columns id", KR(ret), K(alter_table_arg));
           } else if (OB_FAIL(drop_rls_policy_caused_by_drop_column_online(schema_guard, *orig_table_schema,
@@ -16325,6 +16330,10 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
           } else if (OB_FAIL(drop_index_caused_by_drop_column_online(schema_guard, *orig_table_schema, drop_cols_id_arr,
               alter_table_arg.allocator_, ddl_operator, trans, ddl_tasks))) {
             LOG_WARN("drop index caused by drop column failed", KR(ret), K(drop_cols_id_arr));
+          } else if (OB_FAIL(sensitive_rule_ddl_service.drop_sensitive_column_caused_by_drop_column_online(
+                                                          schema_guard, *orig_table_schema,
+                                                          drop_cols_id_arr, trans))) {
+            LOG_WARN("drop sensitive column caused by drop column failed", KR(ret));
           }
         }
 
@@ -17351,6 +17360,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
             LOG_WARN("fail to adjust cg  after alter column", KR(ret));
           } else if (FAILEDx(create_user_hidden_table(*orig_table_schema,
                                                       new_table_schema,
+                                                      alter_table_arg.alter_table_schema_,
                                                       &alter_table_arg.sequence_ddl_arg_,
                                                       bind_tablets,
                                                       schema_guard,
@@ -17392,6 +17402,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
           LOG_WARN("failed to alter table partition by", K(ret));
         } else if (OB_FAIL(create_user_hidden_table(*orig_table_schema,
                                                     new_table_schema,
+                                                    alter_table_arg.alter_table_schema_,
                                                     &alter_table_arg.sequence_ddl_arg_,
                                                     bind_tablets,
                                                     schema_guard,
@@ -17452,6 +17463,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
           LOG_WARN("failed to alter table column group", K(ret));
         } else if (OB_FAIL(create_user_hidden_table(*orig_table_schema,
                                                     new_table_schema,
+                                                    alter_table_arg.alter_table_schema_,
                                                     &alter_table_arg.sequence_ddl_arg_,
                                                     bind_tablets,
                                                     schema_guard,
@@ -17469,6 +17481,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
         new_table_schema.set_lob_inrow_threshold(alter_table_schema.get_lob_inrow_threshold());
         OZ (create_user_hidden_table(*orig_table_schema,
                                     new_table_schema,
+                                    alter_table_arg.alter_table_schema_,
                                     &alter_table_arg.sequence_ddl_arg_,
                                     false/*bind_tablets*/,
                                     schema_guard,
@@ -17882,7 +17895,8 @@ int ObDDLService::create_hidden_table(
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
     LOG_WARN("get min data version failed", K(ret), K(tenant_id));
   } else {
-    HEAP_VAR(ObTableSchema, new_table_schema) {
+    HEAP_VARS_2((ObTableSchema, new_table_schema),
+                (AlterTableSchema, alter_table_schema)) {
       ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
       if (OB_FAIL(new_table_schema.assign(*orig_table_schema))) {
         LOG_WARN("fail to assign schema", K(ret));
@@ -17912,9 +17926,12 @@ int ObDDLService::create_hidden_table(
         } else if (OB_UNLIKELY(orig_table_schema->is_offline_ddl_table())) {
           ret = OB_SCHEMA_EAGAIN;
           LOG_WARN("table in offline ddl or direct load, retry", K(ret), K(orig_table_schema->get_table_id()), K(orig_table_schema->get_table_mode()));
+        } else if (OB_FAIL(alter_table_schema.assign(new_table_schema))) {
+          LOG_WARN("fail to assign schema", K(ret));
         } else if (OB_FAIL(create_user_hidden_table(
                   *orig_table_schema,
                   new_table_schema,
+                  alter_table_schema,
                   nullptr,
                   bind_tablets,
                   schema_guard,
@@ -18123,6 +18140,7 @@ int ObDDLService::mview_complete_refresh_in_trans(
         ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
         new_container_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_OFFLINE_DDL);
         ObTableLockOwnerID owner_id;
+        AlterTableSchema alter_table_schema;
         if (OB_FAIL(ObDDLTask::fetch_new_task_id(*GCTX.sql_proxy_, tenant_id, task_id))) {
           LOG_WARN("fetch new task id failed", KR(ret), K(tenant_id));
         } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
@@ -18133,8 +18151,11 @@ int ObDDLService::mview_complete_refresh_in_trans(
                                                             owner_id,
                                                             trans))) {
           LOG_WARN("failed to lock ddl lock", KR(ret));
+        } else if (OB_FAIL(alter_table_schema.assign(new_container_table_schema))) {
+          LOG_WARN("fail to assign schema", KR(ret));
         } else if (OB_FAIL(create_user_hidden_table(*container_table_schema,
                                                     new_container_table_schema,
+                                                    alter_table_schema,
                                                     nullptr/*sequence_ddl_arg*/,
                                                     bind_tablets,
                                                     schema_guard,
@@ -18238,8 +18259,9 @@ int ObDDLService::recover_restore_table_ddl_task(
     ObDDLSQLTransaction dst_tenant_trans(schema_service_); // for dst tenant only.
     bool has_fts_index = false;
     bool has_mv_index = false;
-    HEAP_VARS_2((ObTableSchema, dst_table_schema),
-                (obrpc::ObAlterTableArg, alter_table_arg)) {
+    HEAP_VARS_3((ObTableSchema, dst_table_schema),
+                (obrpc::ObAlterTableArg, alter_table_arg),
+                (AlterTableSchema, alter_table_schema)) {
       if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(
                                       src_tenant_id, dst_tenant_id,
                                       hold_buf_src_tenant_schema_guard, hold_buf_dst_tenant_schema_guard,
@@ -18284,7 +18306,9 @@ int ObDDLService::recover_restore_table_ddl_task(
         } else if (is_src_table_column_store && tenant_data_version < DATA_VERSION_4_3_5_2) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("recover table with column store not support in current version", K(ret), K(is_src_table_column_store), K(tenant_data_version));
-        } else if (OB_FAIL(create_user_hidden_table(*src_table_schema, dst_table_schema, nullptr/*sequence_ddl_arg*/,
+        } else if (OB_FAIL(alter_table_schema.assign(dst_table_schema))) {
+          LOG_WARN("assign failed", K(ret), K(session_id), K(arg));
+        } else if (OB_FAIL(create_user_hidden_table(*src_table_schema, dst_table_schema, alter_table_schema, nullptr/*sequence_ddl_arg*/,
           false/*bind_tablets*/, *src_tenant_schema_guard, *dst_tenant_schema_guard, ddl_operator,
           dst_tenant_trans, allocator, tenant_data_version, index_name, true /*ignore_cs_replica*/))) {
           LOG_WARN("create user hidden table failed", K(ret), K(arg), K(tenant_data_version));
@@ -21785,6 +21809,7 @@ int ObDDLService::rebuild_hidden_table_rls_objects(
 
 int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schema,
                                            ObTableSchema &hidden_table_schema,
+                                           const share::schema::AlterTableSchema &alter_table_schema,
                                            const obrpc::ObSequenceDDLArg *sequence_ddl_arg,
                                            const bool bind_tablets,
                                            share::schema::ObSchemaGetterGuard &src_tenant_schema_guard,
@@ -21808,6 +21833,7 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
     true : orig_table_schema.check_can_do_ddl();
   hidden_table_schema.set_in_offline_ddl_white_list(in_offline_ddl_white_list); // allow offline ddl execute if there's no offline ddl doing
   bool have_spatial_generated_column = false;
+  ObSensitiveRuleDDLService sensitive_rule_ddl_service(this);
   if (OB_UNLIKELY(tenant_data_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(tenant_data_version));
@@ -21843,6 +21869,10 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
                                                       ddl_operator,
                                                       trans))) {
     LOG_WARN("failed to rebuild hidden table rls objects", K(ret));
+  } else if (OB_FAIL(sensitive_rule_ddl_service.rebuild_hidden_table_sensitive_columns(
+                                                  orig_table_schema, hidden_table_schema, alter_table_schema,
+                                                  src_tenant_schema_guard, trans))) {
+    LOG_WARN("failed to rebuild hidden table sensitive columns", K(ret));
   // to prevent other action to effect table partition info in tablegroup
   } else if (OB_FAIL(check_alter_partition_with_tablegroup(&orig_table_schema, hidden_table_schema, dst_tenant_schema_guard))) {
     LOG_WARN("fail to check alter partition with tablegroup", KR(ret));
@@ -25521,6 +25551,7 @@ int ObDDLService::restore_the_table_to_split_completed_state(obrpc::ObAlterTable
           if (OB_FAIL(create_user_hidden_table(
                               *orig_data_table_schema,
                               new_table_schema,
+                              alter_table_arg.alter_table_schema_,
                               nullptr,
                               bind_tablets,
                               schema_guard,
@@ -33718,7 +33749,7 @@ int ObDDLService::grant(const ObGrantArg &arg)
 
           if (OB_SUCC(ret) && is_user_exist) {
             ObNeedPriv need_priv(arg.db_, arg.table_, arg.priv_level_, arg.priv_set_, false,
-                                 arg.object_type_, false, OB_PRIV_CHECK_ALL, arg.catalog_);
+                                 arg.object_type_, false, OB_PRIV_CHECK_ALL, arg.catalog_, arg.sensitive_rule_);
             bool is_owner = false;
             // In oracle mode, if it is oracle syntax, it need to determine grantee is obj owner,
             // if yes, return success directly
@@ -33998,6 +34029,19 @@ int ObDDLService::grant_priv_to_user(const uint64_t tenant_id,
                                                      grantor,
                                                      grantor_host))) {
           LOG_WARN("Grant object error", K(ret));
+        }
+        break;
+      }
+      case OB_PRIV_SENSITIVE_RULE_LEVEL: {
+        ObSensitiveRulePrivSortKey sensitive_rule_key(tenant_id, user_id, need_priv.sensitive_rule_);
+        ObSensitiveRuleDDLService sensitive_rule_ddl_service(this);
+        if (OB_FAIL(sensitive_rule_ddl_service.grant_revoke_sensitive_rule(sensitive_rule_key,
+                                                                           user_name,
+                                                                           host_name,
+                                                                           need_priv,
+                                                                           true,
+                                                                           schema_guard))) {
+          LOG_WARN("Grant sensitive_rule error", KR(ret), K(tenant_id), K(user_id), K(ddl_sql), K(need_priv));
         }
         break;
       }
@@ -34283,6 +34327,15 @@ int ObDDLService::grant_revoke_user(
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_4_1_0", K(ret), K(priv_set));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant or revoke create/alter/drop/access ai model privilege");
+    } else if (!((compat_version >= MOCK_DATA_VERSION_4_3_5_3 && compat_version < DATA_VERSION_4_4_0_0) ||
+                 (compat_version >= MOCK_DATA_VERSION_4_4_2_0 && compat_version < DATA_VERSION_4_5_0_0) ||
+                 (compat_version >= DATA_VERSION_4_5_1_0))
+               && !is_ora_mode
+               && (0 != (priv_set & OB_PRIV_CREATE_SENSITIVE_RULE) ||
+                   0 != (priv_set & OB_PRIV_PLAINACCESS))) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below MOCK_DATA_VERSION_4_3_5_3 or MOCK_DATA_VERSION_4_4_2_0 or DATA_VERSION_4_5_1_0", K(ret), K(priv_set));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant or revoke create sensitive rule/plainaccess privilege");
     } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("Start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
     } else {

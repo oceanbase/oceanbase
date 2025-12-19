@@ -58,6 +58,7 @@ class ObSchemaGetterGuard;
 class ObUDF;
 class ObUDTTypeInfo;
 class ObKeystoreSchema;
+class ObSensitiveRuleSchema;
 }
 }
 namespace sql
@@ -171,6 +172,17 @@ public:
                           uint64_t &catalog_id,
                           ObIAllocator *allocator = NULL,
                           bool allow_not_exist = false) const;
+  int get_sensitive_rule_schema_count(const uint64_t tenant_id, int64_t &count) const;
+  int get_sensitive_rule_id_name(const uint64_t tenant_id,
+                                 common::ObString &sensitive_rule_name,
+                                 uint64_t &sensitive_rule_id,
+                                 ObIAllocator *allocator = NULL,
+                                 bool allow_not_exist = false) const;
+  int get_sensitive_rule_schema_by_column(const uint64_t tenant_id,
+                                          const uint64_t table_id,
+                                          const uint64_t column_id,
+                                          bool allow_not_exist,
+                                          const share::schema::ObSensitiveRuleSchema *&schema) const;
   //int get_local_table_id(const uint64_t tenant_id,
   //                       const uint64_t database_id,
   //                       const common::ObString &table_name,
@@ -487,7 +499,8 @@ public:
                       const common::ObString &prev_table_name,
                       ObSynonymChecker &synonym_checker,
                       bool is_catalog = false,
-                      bool is_location = false);
+                      bool is_location = false,
+                      bool is_sensitive_rule = false);
   int get_object_type_with_view_info(common::ObIAllocator* allocator,
                                      void* param,
                                      const uint64_t tenant_id,
@@ -502,7 +515,8 @@ public:
                                      const common::ObString &prev_table_name,
                                      ObSynonymChecker &synonym_checker,
                                      bool is_catalog = false,
-                                     bool is_location = false);
+                                     bool is_location = false,
+                                     bool is_sensitive_rule = false);
   int check_access_to_obj(const uint64_t tenant_id,
                           const uint64_t user_id,
                           const uint64_t obj_id,

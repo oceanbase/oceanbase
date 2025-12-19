@@ -407,6 +407,15 @@
 # 554: __all_external_resource
 # 555: __all_external_resource_history
 # 555: __all_external_resource  # BASE_TABLE_NAME
+# 556: __all_sensitive_rule
+# 557: __all_sensitive_rule_history
+# 557: __all_sensitive_rule  # BASE_TABLE_NAME
+# 558: __all_sensitive_column
+# 559: __all_sensitive_column_history
+# 559: __all_sensitive_column  # BASE_TABLE_NAME
+# 560: __all_sensitive_rule_privilege
+# 561: __all_sensitive_rule_privilege_history
+# 561: __all_sensitive_rule_privilege  # BASE_TABLE_NAME
 # 569: __all_tenant_ss_storage_stat
 # 570: __all_ai_model
 # 571: __all_ai_model_history
@@ -1309,6 +1318,21 @@
 # 12553: __all_virtual_ss_gc_detect_info
 # 12554: __all_virtual_unit_mysql_sys_agent
 # 12554: __all_unit  # BASE_TABLE_NAME
+# 12555: __all_virtual_sensitive_rule
+# 12555: __all_sensitive_rule  # BASE_TABLE_NAME
+# 12556: __all_virtual_sensitive_rule_history
+# 12556: __all_sensitive_rule  # BASE_TABLE_NAME
+# 12556: __all_sensitive_rule_history  # BASE_TABLE_NAME1
+# 12557: __all_virtual_sensitive_column
+# 12557: __all_sensitive_column  # BASE_TABLE_NAME
+# 12558: __all_virtual_sensitive_column_history
+# 12558: __all_sensitive_column  # BASE_TABLE_NAME
+# 12558: __all_sensitive_column_history  # BASE_TABLE_NAME1
+# 12559: __all_virtual_sensitive_rule_privilege
+# 12559: __all_sensitive_rule_privilege  # BASE_TABLE_NAME
+# 12560: __all_virtual_sensitive_rule_privilege_history
+# 12560: __all_sensitive_rule_privilege  # BASE_TABLE_NAME
+# 12560: __all_sensitive_rule_privilege_history  # BASE_TABLE_NAME1
 # 12569: __all_virtual_tenant_ss_storage_stat
 # 12569: __all_tenant_ss_storage_stat  # BASE_TABLE_NAME
 # 12570: __all_virtual_hms_client_pool_stat
@@ -2061,6 +2085,10 @@
 # 15533: __all_virtual_source  # BASE_TABLE_NAME
 # 15534: ALL_VIRTUAL_SS_DIAGNOSE_INFO
 # 15534: __all_virtual_ss_diagnose_info  # BASE_TABLE_NAME
+# 15538: ALL_VIRTUAL_SENSITIVE_RULE_REAL_AGENT
+# 15538: __all_sensitive_rule  # BASE_TABLE_NAME
+# 15539: ALL_VIRTUAL_SENSITIVE_COLUMN_REAL_AGENT
+# 15539: __all_sensitive_column  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA
@@ -2616,6 +2644,12 @@
 # 21660: V$OB_SS_SSTABLES
 # 21661: GV$OB_VECTOR_MEMORY
 # 21662: V$OB_VECTOR_MEMORY
+# 21663: DBA_OB_SENSITIVE_RULES
+# 21664: CDB_OB_SENSITIVE_RULES
+# 21665: DBA_OB_SENSITIVE_COLUMNS
+# 21666: CDB_OB_SENSITIVE_COLUMNS
+# 21667: DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS
+# 21668: CDB_OB_SENSITIVE_RULE_PLAINACCESS_USERS
 # 21681: GV$OB_HNSW_INDEX_INFO
 # 21682: V$OB_HNSW_INDEX_INFO
 # 21683: GV$OB_IVF_INDEX_INFO
@@ -3167,6 +3201,9 @@
 # 28279: DBA_OB_PL_OBJ_CACHE_STATUS
 # 28283: GV$OB_HMS_CLIENT_POOL_STAT
 # 28284: V$OB_HMS_CLIENT_POOL_STAT
+# 28289: DBA_OB_SENSITIVE_RULES
+# 28290: DBA_OB_SENSITIVE_COLUMNS
+# 28291: DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS
 # 14999: __idx_11003_all_virtual_plan_cache_stat_i1
 # 14999: all_virtual_plan_cache_stat_i1  # INDEX_NAME
 # 14999: __all_virtual_plan_cache_stat  # DATA_BASE_TABLE_NAME

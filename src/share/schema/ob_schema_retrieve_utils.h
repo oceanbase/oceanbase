@@ -424,6 +424,7 @@ public:
   RETRIEVE_SCHEMA_FUNC_DECLARE(table_priv);
   RETRIEVE_SCHEMA_FUNC_DECLARE(routine_priv);
   RETRIEVE_SCHEMA_FUNC_DECLARE(obj_mysql_priv);
+  RETRIEVE_SCHEMA_FUNC_DECLARE(sensitive_rule_priv);
 
   RETRIEVE_SCHEMA_FUNC_DECLARE(column_priv);
   RETRIEVE_SCHEMA_FUNC_DECLARE(package);
@@ -471,6 +472,8 @@ public:
   template <typename T>
   static int retrieve_external_resource_schema(const uint64_t tenant_id, T &result, ObIArray<ObSimpleExternalResourceSchema> &schema_array);
 
+  RETRIEVE_SCHEMA_FUNC_DECLARE(sensitive_rule);
+  RETRIEVE_SCHEMA_FUNC_DECLARE(sensitive_column);
   template<typename T>
   static int retrieve_object_list(const uint64_t tenant_id, T &result, common::ObIArray<uint64_t> &trigger_list);
   template<typename T>
@@ -544,6 +547,8 @@ public:
   FILL_SCHEMA_FUNC_DECLARE(rls_column, ObRlsSecColumnSchema);
   FILL_SCHEMA_FUNC_DECLARE(catalog, ObCatalogSchema);
   FILL_SCHEMA_FUNC_DECLARE(ccl_rule, ObSimpleCCLRuleSchema);
+  FILL_SCHEMA_FUNC_DECLARE(sensitive_rule, ObSensitiveRuleSchema);
+  FILL_SCHEMA_FUNC_DECLARE(sensitive_column, ObSensitiveColumnSchema);
 
   //for full schema
   template<typename T>
@@ -555,6 +560,7 @@ public:
   FILL_SCHEMA_FUNC_DECLARE(tablegroup, ObTablegroupSchema);
   FILL_SCHEMA_FUNC_DECLARE(outline, ObOutlineInfo);
   FILL_SCHEMA_FUNC_DECLARE(catalog_priv, ObCatalogPriv);
+  FILL_SCHEMA_FUNC_DECLARE(sensitive_rule_priv, ObSensitiveRulePriv);
   FILL_SCHEMA_FUNC_DECLARE(db_priv, ObDBPriv);
   FILL_SCHEMA_FUNC_DECLARE(table_priv, ObTablePriv);
   FILL_SCHEMA_FUNC_DECLARE(routine_priv, ObRoutinePriv);
@@ -724,6 +730,12 @@ public:
   template<typename T>
   static int fill_object_id(const uint64_t tenant_id, T &result,
                             uint64_t &object_id, bool &is_deleted);
+  template<typename T>
+  static int find_sensitive_rule_schema(const uint64_t sensitive_rule_id,
+                                        ObArray<T *> sensitive_rule_schema_array,
+                                        T *&sensitive_rule_schema);
+  template<typename T>
+  static bool compare_sensitive_rule_id(const T *sensitive_rule_schema,const uint64_t sensitive_rule_id);
 
   // template<typename T>
   // static bool compare_proxy_id(const T *proxy_schema, const uint64_t proxy_id);

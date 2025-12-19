@@ -2559,7 +2559,8 @@ int ObSchemaGetterGuard::verify_read_only(const uint64_t tenant_id,
           //we do not check user priv level only check table and db
           break;
         }
-        case OB_PRIV_CATALOG_LEVEL: {
+        case OB_PRIV_CATALOG_LEVEL:
+        case OB_PRIV_SENSITIVE_RULE_LEVEL: {
           break;
         }
         case OB_PRIV_DB_LEVEL: {

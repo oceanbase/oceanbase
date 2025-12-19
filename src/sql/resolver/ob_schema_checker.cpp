@@ -16,6 +16,7 @@
 #include "observer/virtual_table/ob_table_columns.h"
 #include "pl/ob_pl_stmt.h"
 #include "share/catalog/ob_external_catalog.h"
+#include "share/schema/ob_sensitive_rule_schema_struct.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
 #include "sql/privilege_check/ob_privilege_check.h"
 #include "sql/resolver/ob_stmt_resolver.h"
@@ -565,6 +566,92 @@ int ObSchemaChecker::get_catalog_id_name(const uint64_t tenant_id,
     catalog_name = catalog_schema->get_catalog_name_str();
     if (allocator != NULL && OB_FAIL(ob_write_string(*allocator, catalog_name, catalog_name))) {
       LOG_WARN("failed to deep copy str", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSchemaChecker::get_sensitive_rule_schema_count(const uint64_t tenant_id, int64_t &count) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("schema checker is not inited", K(is_inited_), K(ret));
+  } else if (OB_ISNULL(schema_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(tenant_id), K(ret));
+  } else if (OB_FAIL(schema_mgr_->get_sensitive_rule_schema_count(tenant_id, count))) {
+    LOG_WARN("failed to get sensitive rule schema count", K(ret));
+  }
+  return ret;
+}
+
+int ObSchemaChecker::get_sensitive_rule_id_name(const uint64_t tenant_id,
+                                                common::ObString &sensitive_rule_name,
+                                                uint64_t &sensitive_rule_id,
+                                                ObIAllocator *allocator,
+                                                bool allow_not_exist) const
+{
+  int ret = OB_SUCCESS;
+  sensitive_rule_id = OB_INVALID_ID;
+  const ObSensitiveRuleSchema *sensitive_rule_schema = NULL;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("schema checker is not inited", K(is_inited_), K(ret));
+  } else if (OB_ISNULL(schema_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || sensitive_rule_name.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(tenant_id), K(sensitive_rule_name), K(ret));
+  } else if (OB_FAIL(schema_mgr_->get_sensitive_rule_schema_by_name(tenant_id, sensitive_rule_name, sensitive_rule_schema))) {
+    LOG_WARN("failed to get sensitive rule schema", K(ret));
+  } else if (OB_ISNULL(sensitive_rule_schema)) {
+    if (allow_not_exist) {
+      // do nothing
+    } else {
+      ret = OB_SENSITIVE_RULE_NOT_EXIST;
+      LOG_WARN("sensitive rule not exist", K(ret), K(sensitive_rule_name));
+      LOG_USER_ERROR(OB_SENSITIVE_RULE_NOT_EXIST, sensitive_rule_name.length(), sensitive_rule_name.ptr());
+    }
+  } else {
+    sensitive_rule_id = sensitive_rule_schema->get_sensitive_rule_id();
+    sensitive_rule_name = sensitive_rule_schema->get_sensitive_rule_name_str();
+    if (allocator != NULL && OB_FAIL(ob_write_string(*allocator, sensitive_rule_name, sensitive_rule_name))) {
+      LOG_WARN("failed to deep copy str", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSchemaChecker::get_sensitive_rule_schema_by_column(const uint64_t tenant_id,
+                                                         const uint64_t table_id,
+                                                         const uint64_t column_id,
+                                                         bool allow_not_exist,
+                                                         const ObSensitiveRuleSchema *&schema) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("schema checker is not inited", K(is_inited_), K(ret));
+  } else if (OB_ISNULL(schema_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !is_valid_id(table_id) || !is_valid_id(column_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(tenant_id), K(table_id), K(column_id), K(ret));
+  } else if (OB_FAIL(schema_mgr_->get_sensitive_rule_schema_by_column(tenant_id, table_id, column_id, schema))) {
+    LOG_WARN("failed to get sensitive rule schema", K(ret));
+  } else if (OB_ISNULL(schema)) {
+    if (allow_not_exist) {
+      // do nothing
+    } else {
+      ret = OB_SENSITIVE_RULE_NOT_EXIST;
+      LOG_WARN("sensitive rule not exist", K(ret), K(table_id), K(column_id));
+      LOG_USER_ERROR(OB_SENSITIVE_RULE_NOT_EXIST, 0, "");
     }
   }
   return ret;
@@ -2442,7 +2529,8 @@ int ObSchemaChecker::get_object_type_with_view_info(ObIAllocator* allocator,
     const common::ObString &prev_table_name,
     ObSynonymChecker &synonym_checker,
     bool is_catalog,
-    bool is_location)
+    bool is_location,
+    bool is_sensitive_rule)
 {
   int ret = OB_SUCCESS;
   object_type = ObObjectType::INVALID;
@@ -2459,7 +2547,7 @@ int ObSchemaChecker::get_object_type_with_view_info(ObIAllocator* allocator,
     if (lib::is_oracle_mode() && ret == OB_ERR_BAD_DATABASE) {
       ret = OB_TABLE_NOT_EXIST;
     }
-  } else if (!is_directory && !is_catalog && !is_location) {
+  } else if (!is_directory && !is_catalog && !is_location && !is_sensitive_rule) {
     ret = get_table_schema(tenant_id, database_name, table_name, false, table_schema);
     if (OB_TABLE_NOT_EXIST == ret) {
       if (lib::is_oracle_mode()) {
@@ -2647,6 +2735,12 @@ int ObSchemaChecker::get_object_type_with_view_info(ObIAllocator* allocator,
     OZ (get_location_id(tenant_id, table_name, loc_id));
     OX (object_type = ObObjectType::LOCATION);
     OX (object_id = loc_id);
+  } else if (is_sensitive_rule) {
+    uint64_t sensitive_rule_id = 0;
+    ObString sensitive_rule_name = table_name;
+    OZ (get_sensitive_rule_id_name(tenant_id, sensitive_rule_name, sensitive_rule_id));
+    OX (object_type = ObObjectType::SENSITIVE_RULE);
+    OX (object_id = sensitive_rule_id);
   } else {
     ret = OB_INVALID_ARGUMENT;
   }
@@ -2899,7 +2993,8 @@ int ObSchemaChecker::get_object_type(const uint64_t tenant_id,
                                      const common::ObString &prev_table_name,
                                      ObSynonymChecker &synonym_checker,
                                      bool is_catalog,
-                                     bool is_location)
+                                     bool is_location,
+                                     bool is_sensitive_rule)
 {
   int ret = OB_SUCCESS;
   object_type = ObObjectType::INVALID;
@@ -2913,7 +3008,7 @@ int ObSchemaChecker::get_object_type(const uint64_t tenant_id,
     if (lib::is_oracle_mode() && ret == OB_ERR_BAD_DATABASE) {
       ret = OB_TABLE_NOT_EXIST;
     }
-  } else if (!is_directory && !is_catalog && !is_location) {
+  } else if (!is_directory && !is_catalog && !is_location && !is_sensitive_rule) {
     ret = get_table_schema(tenant_id, database_name, table_name, false, table_schema);
     if (OB_TABLE_NOT_EXIST == ret) {
       if (lib::is_oracle_mode()) {
@@ -3075,6 +3170,12 @@ int ObSchemaChecker::get_object_type(const uint64_t tenant_id,
     OZ (get_location_id(tenant_id, table_name, loc_id));
     OX (object_type = ObObjectType::LOCATION);
     OX (object_id = loc_id);
+  } else if (is_sensitive_rule) {
+    uint64_t sensitive_rule_id = 0;
+    ObString sensitive_rule_name = table_name;
+    OZ (get_sensitive_rule_id_name(tenant_id, sensitive_rule_name, sensitive_rule_id));
+    OX (object_type = ObObjectType::SENSITIVE_RULE);
+    OX (object_id = sensitive_rule_id);
   } else {
     ret = OB_INVALID_ARGUMENT;
   }

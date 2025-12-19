@@ -20,6 +20,7 @@
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_catalog_schema_struct.h"
 #include "share/schema/ob_objpriv_mysql_schema_struct.h"
+#include "share/schema/ob_sensitive_rule_schema_struct.h"
 
 namespace oceanbase
 {
@@ -144,12 +145,14 @@ class ObPrivMgr
   typedef common::ObSortedVector<ObSysPriv *>SysPrivInfos;
   typedef common::ObSortedVector<ObCatalogPriv *> CatalogPrivInfos;
   typedef common::ObSortedVector<ObObjMysqlPriv *> ObjMysqlPrivInfos;
+  typedef common::ObSortedVector<ObSensitiveRulePriv *> SensitiveRulePrivInfos;
   typedef common::hash::ObPointerHashMap<ObTablePrivSortKey, ObTablePriv *, ObGetTablePrivKeyV3, 128> TablePrivMap;
   typedef common::hash::ObPointerHashMap<ObRoutinePrivSortKey, ObRoutinePriv *, ObGetRoutinePrivKeyV3, 128> RoutinePrivMap;
   typedef common::hash::ObPointerHashMap<ObColumnPrivSortKey, ObColumnPriv *, ObGetColumnPrivKeyV3, 128> ColumnPrivMap;
   typedef common::hash::ObPointerHashMap<ObObjPrivSortKey, ObObjPriv *, ObGetObjPrivKey, 128> ObjPrivMap;
   typedef common::hash::ObPointerHashMap<ObCatalogPrivSortKey, ObCatalogPriv *, ObGetCatalogPrivKey, 128> CatalogPrivMap;
   typedef common::hash::ObPointerHashMap<ObObjMysqlPrivSortKey, ObObjMysqlPriv *, ObGetObjMysqlPrivKey, 128> ObjMysqlPrivMap;
+  typedef common::hash::ObPointerHashMap<ObSensitiveRulePrivSortKey, ObSensitiveRulePriv *, ObGetSensitiveRulePrivKey, 128> SensitiveRulePrivMap;
   typedef DBPrivInfos::iterator DBPrivIter;
   typedef DBPrivInfos::const_iterator ConstDBPrivIter;
   typedef TablePrivInfos::iterator TablePrivIter;
@@ -167,6 +170,8 @@ class ObPrivMgr
   typedef CatalogPrivInfos::const_iterator ConstCatalogPrivIter;
   typedef ObjMysqlPrivInfos::iterator ObjMysqlPrivIter;
   typedef ObjMysqlPrivInfos::const_iterator ConstObjMysqlPrivIter;
+  typedef SensitiveRulePrivInfos::iterator SensitiveRulePrivIter;
+  typedef SensitiveRulePrivInfos::const_iterator ConstSensitiveRulePrivIter;
 public:
   ObPrivMgr();
   explicit ObPrivMgr(common::ObIAllocator &allocator);
@@ -299,6 +304,18 @@ public:
                         const ObObjMysqlPriv *&obj_mysql_priv) const;
   int get_obj_mysql_priv_set(const ObObjMysqlPrivSortKey &obj_mysql_priv_key,
                             ObPrivSet &priv_set) const;
+  // sensitive rule
+  int add_sensitive_rule_privs(const common::ObIArray<ObSensitiveRulePriv> &sensitive_rule_privs);
+  int del_sensitive_rule_privs(const common::ObIArray<ObSensitiveRulePrivSortKey> &sensitive_rule_priv_keys);
+  int add_sensitive_rule_priv(const ObSensitiveRulePriv &sensitive_rule_priv);
+  int del_sensitive_rule_priv(const ObSensitiveRulePrivSortKey &sensitive_rule_priv_key);
+  int get_sensitive_rule_priv(const ObSensitiveRulePrivSortKey &sensitive_rule_priv_key,
+                              const ObSensitiveRulePriv *&sensitive_rule_priv) const;
+  int get_sensitive_rule_priv_set(const ObSensitiveRulePrivSortKey &sensitive_rule_priv_key,
+                                  ObPrivSet &priv_set) const;
+  int get_sensitive_rule_privs_in_user(const uint64_t tenant_id,
+                                       const uint64_t user_id,
+                                       common::ObIArray<const ObSensitiveRulePriv *> &sensitive_rule_privs) const;
   // other
   int get_db_privs_in_tenant(const uint64_t tenant_id,
                              common::ObIArray<const ObDBPriv *> &db_privs) const;
@@ -376,6 +393,8 @@ private:
   SysPrivInfos sys_privs_;
   CatalogPrivInfos catalog_privs_;
   CatalogPrivMap catalog_priv_map_;
+  SensitiveRulePrivInfos sensitive_rule_privs_;
+  SensitiveRulePrivMap sensitive_rule_priv_map_;
   static const char *priv_names_[];
 };
 

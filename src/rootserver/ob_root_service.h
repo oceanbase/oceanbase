@@ -66,6 +66,7 @@
 #include "rootserver/ob_location_ddl_service.h"
 #include "rootserver/ob_objpriv_mysql_ddl_service.h"
 #include "rootserver/ob_ccl_ddl_service.h"
+#include "rootserver/ob_sensitive_rule_ddl_service.h"
 
 namespace oceanbase
 {
@@ -602,6 +603,7 @@ public:
   int revoke_user(const obrpc::ObRevokeUserArg &arg);
   int lock_user(const obrpc::ObLockUserArg &arg, common::ObSArray<int64_t> &failed_index);
   int revoke_catalog(const obrpc::ObRevokeCatalogArg &arg);
+  int revoke_sensitive_rule(const obrpc::ObRevokeSensitiveRuleArg &arg);
   int revoke_database(const obrpc::ObRevokeDBArg &arg);
   int revoke_table(const obrpc::ObRevokeTableArg &arg);
   int revoke_routine(const obrpc::ObRevokeRoutineArg &arg);
@@ -751,6 +753,10 @@ public:
   int create_ccl_rule_ddl(const obrpc::ObCreateCCLRuleArg &arg);
   int drop_ccl_rule_ddl(const obrpc::ObDropCCLRuleArg &arg);
   //----End of functions for managing CCL rules----
+
+  //----Functions for managing sensitive rule----
+  int handle_sensitive_rule_ddl(const obrpc::ObSensitiveRuleDDLArg &arg);
+  //----End of functions for managing sensitive rule----
 
   // server related
   int load_server_manager();

@@ -537,6 +537,7 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_LOCK_USER, ObRpcLockUserP, lock_user(arg_,
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_ALTER_USER_PROFILE, ObRpcAlterUserProfileP, alter_user_profile(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_SECURITY_AUDIT, ObRpcSecurityAuditP, handle_security_audit(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REVOKE_CATALOG, ObRpcRevokeCatalogP, revoke_catalog(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REVOKE_SENSITIVE_RULE, ObRpcRevokeSensitiveRuleP, revoke_sensitive_rule(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REVOKE_DB, ObRpcRevokeDBP, revoke_database(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REVOKE_TABLE, ObRpcRevokeTableP, revoke_table(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REVOKE_ROUTINE, ObRpcRevokeRoutineP, revoke_routine(arg_));
@@ -786,6 +787,9 @@ DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_PARALLEL_HTABLE_DDL, ObRpcParallelHTa
 // ai endpoint ddl
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_AI_MODEL, ObRpcCreateAiModelP, create_ai_model(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_AI_MODEL, ObRpcDropAiModelP, drop_ai_model(arg_));
+
+// sensitive rule
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_SENSITIVE_RULE_DDL, ObRpcHandleSensitiveRuleDDLP, handle_sensitive_rule_ddl(arg_));
 
 #undef DEFINE_RS_RPC_PROCESSOR_
 #undef DEFINE_RS_RPC_PROCESSOR

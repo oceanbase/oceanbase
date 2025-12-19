@@ -385,6 +385,35 @@ private:
   int check_union_leaf_to_values_table_valid(const ParseNode &parse_node, bool &is_valid);
   int resolve_values_table_from_union(const ObIArray<int64_t> &values_nodes,
                                       ObValuesTableDef *&table_def);
+  // sensitive rule related functions
+  int resolve_sensitive_rule(ObSelectStmt *select_stmt);
+  int get_sensitive_rules(ObSelectStmt *select_stmt,
+                          ObRawExpr *expr,
+                          ObIArray<const ObSensitiveRuleSchema *> &sensitive_rules);
+  int get_sensitive_rules_in_column_ref_exprs(ObSelectStmt *select_stmt,
+                                              ObRawExpr *expr,
+                                              ObIArray<const ObSensitiveRuleSchema *> &sensitive_rules);
+  int get_sensitive_rules_in_query_ref_exprs(ObSelectStmt *select_stmt,
+                                             ObRawExpr *expr,
+                                             ObIArray<const ObSensitiveRuleSchema *> &sensitive_rules);
+  int get_sensitive_rules_in_ref_query(ObSelectStmt *ref_query,
+                                       ObRawExpr *outer_column_expr,
+                                       ObIArray<const ObSensitiveRuleSchema *> &sensitive_rules);
+  int get_sensitive_rules_in_cte_generated_col(ObSelectStmt *select_stmt,
+                                               ObColumnRefRawExpr *fake_cte_col_expr,
+                                               ObIArray<const ObSensitiveRuleSchema *> &sensitive_rules);
+  int get_real_cte_column_expr(ObColumnRefRawExpr *fake_cte_col_expr,
+                               TableItem *fake_cte_table_item,
+                               ObSelectStmt *select_stmt,
+                               ObColumnRefRawExpr *&real_cte_col_expr,
+                               ObSelectStmt *&real_cte_stmt);
+  int try_add_sensitive_field_expr(SelectItem &select_item,
+                                   ObIArray<const ObSensitiveRuleSchema *> &sensitive_rules);
+  int add_sensitive_field_expr(SelectItem &select_item,
+                               const ObSensitiveRuleSchema &sensitive_rule,
+                               ObSysFunRawExpr *&sensitive_field_expr);
+  bool is_child_resolver_of_dml();
+  // end of sensitive rule related functions
 protected:
   // data members
   /*these member is only for with clause*/

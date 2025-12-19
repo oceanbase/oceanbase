@@ -1682,6 +1682,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprLocalDynamicFilter);
   REG_OP_ORCL(ObExprFormatProfile);
   REG_OP_ORCL(ObExprCheckLocationAccess);
+  REG_OP_ORCL(ObExprEnhancedAesEncrypt);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

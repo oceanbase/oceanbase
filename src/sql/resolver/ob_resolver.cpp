@@ -158,6 +158,7 @@
 #include "sql/resolver/ddl/ob_alter_udt_resolver.h"
 #include "sql/resolver/ddl/ob_audit_resolver.h"
 #include "sql/resolver/ddl/ob_create_wrapped_resolver.h"
+#include "sql/resolver/ddl/ob_sensitive_rule_resolver.h"
 #endif
 #include "sql/resolver/ddl/ob_catalog_resolver.h"
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -823,7 +824,8 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       case T_SHOW_CREATE_CATALOG:
       case T_SHOW_LOCATIONS:
       case T_SHOW_CREATE_LOCATION:
-      case T_LOCATION_UTILS_LIST: {
+      case T_LOCATION_UTILS_LIST:
+      case T_SHOW_SENSITIVE_RULES: {
         REGISTER_STMT_RESOLVER(Show);
         break;
       }
@@ -1426,6 +1428,18 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_CREATE_WRAPPED_PROCEDURE: {
         REGISTER_STMT_RESOLVER(CreateWrappedProcedure);
+        break;
+      }
+      case T_CREATE_SENSITIVE_RULE: {
+        REGISTER_STMT_RESOLVER(CreateSensitiveRule);
+        break;
+      }
+      case T_DROP_SENSITIVE_RULE: {
+        REGISTER_STMT_RESOLVER(DropSensitiveRule);
+        break;
+      }
+      case T_ALTER_SENSITIVE_RULE: {
+        REGISTER_STMT_RESOLVER(AlterSensitiveRule);
         break;
       }
 #endif
