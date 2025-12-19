@@ -7787,12 +7787,21 @@ int ObDMLResolver::resolve_function_table_item(const ParseNode &parse_tree,
         CK (OB_NOT_NULL(session_info_->get_cur_exec_ctx()));
         OZ (session_info_->get_cur_exec_ctx()->get_package_guard(package_guard));
         CK (OB_NOT_NULL(package_guard));
-        OZ (ObResolverUtils::get_user_type(
-          params_.allocator_, params_.session_info_, params_.sql_proxy_,
-          params_.schema_checker_->get_schema_guard(),
-          *package_guard,
-          function_table_expr->get_udt_id(),
-          user_type));
+        if (OB_FAIL(ret)) {
+        } else if (parse_tree.children_[0]->type_ == T_QUESTIONMARK
+          && function_table_expr->get_result_type().is_ext()
+          && is_mocked_anonymous_array_id(function_table_expr->get_udt_id())) {
+            const ObCollectionType *coll_type = NULL;
+            OZ (get_coll_type_from_anonymous_array(function_table_expr, coll_type, *package_guard));
+            OX (user_type = static_cast<const ObUserDefinedType*>(coll_type));
+        } else {
+          OZ (ObResolverUtils::get_user_type(
+            params_.allocator_, params_.session_info_, params_.sql_proxy_,
+            params_.schema_checker_->get_schema_guard(),
+            *package_guard,
+            function_table_expr->get_udt_id(),
+            user_type));
+        }
         if (OB_FAIL(ret)) {
         } else if (OB_UNLIKELY(NULL == user_type)) {
           ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
@@ -13143,6 +13152,53 @@ int ObDMLResolver::resolve_function_table_column_item(const TableItem &table_ite
   return ret;
 }
 
+int ObDMLResolver::get_coll_type_from_anonymous_array(ObRawExpr *table_expr,
+                                                      const pl::ObCollectionType *&coll_type,
+                                                      pl::ObPLPackageGuard &package_guard)
+{
+  int ret = OB_SUCCESS;
+  int64_t param_idx = OB_INVALID_INDEX;
+  ObPLDataType element_type;
+#ifdef OB_BUILD_ORACLE_PL
+  ObNestedTableType *nested_type = NULL;
+  const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr*>(table_expr);
+  CK (OB_NOT_NULL(const_expr));
+  if (OB_SUCC(const_expr->get_value().get_unknown(param_idx))) {
+    CK (OB_NOT_NULL(params_.param_list_));
+    CK (param_idx >= 0 && param_idx < params_.param_list_->count());
+    if (OB_SUCC(ret)) {
+      const ObObjParam &param = params_.param_list_->at(param_idx);
+      ObPLCollection *coll = reinterpret_cast<ObPLCollection *>(param.get_ext());
+      CK (OB_NOT_NULL(coll));
+      if (OB_SUCC(ret) && OB_ISNULL(nested_type =
+        reinterpret_cast<ObNestedTableType*>(params_.allocator_->alloc(sizeof(ObNestedTableType))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc memory for ObNestedTableType", K(ret));
+      }
+      OX (new(nested_type)ObNestedTableType());
+      OX (element_type.reset());
+      OX (element_type.set_data_type(coll->get_element_type()));
+      if (OB_FAIL(ret)) {
+      } else if (coll->get_element_desc().is_obj_type()) {
+        // do nothing
+      } else {
+        const ObUserDefinedType *user_type = nullptr;
+        OZ (ObResolverUtils::get_user_type(
+          params_.allocator_, params_.session_info_, params_.sql_proxy_,
+          schema_checker_->get_schema_guard(),
+          package_guard,
+          coll->get_element_type().get_udt_id(), user_type));
+        CK (OB_NOT_NULL(user_type));
+        OX (element_type = *user_type);
+      }
+      OX (nested_type->set_element_type(element_type));
+      OX (coll_type = static_cast<ObCollectionType*>(nested_type));
+    }
+  }
+#endif
+  return ret;
+}
+
 int ObDMLResolver::resolve_function_table_column_item_udf(const TableItem &table_item,
                                                           ObIArray<ColumnItem> &col_items)
 {
@@ -13151,30 +13207,36 @@ int ObDMLResolver::resolve_function_table_column_item_udf(const TableItem &table
   ColumnItem *col_item = NULL;
   ObDMLStmt *stmt = get_stmt();
   const ObUserDefinedType *user_type = NULL;
+  const ObCollectionType *coll_type = NULL;
 
   CK (OB_NOT_NULL(stmt));
 
   CK (OB_LIKELY(table_item.is_function_table()));
   CK (OB_NOT_NULL(table_expr = table_item.function_table_expr_));
   OZ (table_expr->deduce_type(session_info_));
-  CK (table_expr->get_udt_id() != OB_INVALID_ID);
-
   CK (OB_NOT_NULL(schema_checker_))
   ObPLPackageGuard package_guard(params_.session_info_->get_effective_tenant_id());
-  OZ (ObResolverUtils::get_user_type(
-    params_.allocator_, params_.session_info_, params_.sql_proxy_,
-    schema_checker_->get_schema_guard(),
-    package_guard,
-    table_expr->get_udt_id(), user_type));
-  CK (OB_NOT_NULL(user_type));
-  if (OB_SUCC(ret) && !user_type->is_collection_type()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("function table get udf with return type is not table type",
-             K(ret), K(user_type->is_collection_type()));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "udf return type is not table type in function table");
+  if (OB_FAIL(ret)) {
+  } else if (T_QUESTIONMARK == table_expr->get_expr_type()
+            && table_expr->get_result_type().is_ext()
+            && is_mocked_anonymous_array_id(table_expr->get_udt_id())) {
+    OZ (get_coll_type_from_anonymous_array(table_expr, coll_type, package_guard));
+  } else {
+    CK (table_expr->get_udt_id() != OB_INVALID_ID);
+    OZ (ObResolverUtils::get_user_type(
+      params_.allocator_, params_.session_info_, params_.sql_proxy_,
+      schema_checker_->get_schema_guard(),
+      package_guard,
+      table_expr->get_udt_id(), user_type));
+    CK (OB_NOT_NULL(user_type));
+    if (OB_SUCC(ret) && !user_type->is_collection_type()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("function table get udf with return type is not table type",
+              K(ret), K(user_type->is_collection_type()));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "udf return type is not table type in function table");
+    }
+    CK (OB_NOT_NULL(coll_type = static_cast<const ObCollectionType*>(user_type)));
   }
-  const ObCollectionType *coll_type = NULL;
-  CK (OB_NOT_NULL(coll_type = static_cast<const ObCollectionType*>(user_type)));
   if (OB_SUCC(ret)
       && !coll_type->get_element_type().is_obj_type()
       && !coll_type->get_element_type().is_record_type()
@@ -21301,9 +21363,6 @@ int ObDMLResolver::add_udt_dependency(const pl::ObUserDefinedType &udt_type)
   if (OB_ISNULL(stmt) || OB_ISNULL(allocator_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("resolver isn't init", K(ret), K(stmt), K(allocator_));
-  } else if (udt_id == OB_INVALID_ID) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected invalid udt id", K(udt_type));
   } else if (OB_ISNULL(params_.schema_checker_) || OB_ISNULL(params_.schema_checker_->get_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null schema checker or schema guard", K(params_.schema_checker_));
