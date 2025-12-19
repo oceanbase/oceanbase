@@ -687,7 +687,8 @@ int ObDelUpdResolver::resolve_additional_assignments(ObIArray<ObTableAssignment>
           LOG_WARN("fail to check assignment exist", KPC(table_item), K(column_id));
         } else if (FALSE_IT(need_assigned = need_assigned ||
                                             ((column_schema->is_vec_hnsw_vid_column() ||
-                                              column_schema->is_vec_ivf_center_id_column()) &&
+                                              column_schema->is_vec_ivf_center_id_column() ||
+                                              column_schema->is_hybrid_embedded_vec_column()) &&
                                              (update_with_vector_index || T_INSERT_SCOPE == scope)))) {
         } else if (need_assigned) {
           // for insert scope, on duplicate key update column list already
