@@ -1245,6 +1245,17 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigZoneDeployModeChecker);
 };
+
+class ObConfigEvictOldSSTablePolicyChecker: public ObConfigChecker
+{
+public:
+  ObConfigEvictOldSSTablePolicyChecker() {}
+  virtual ~ObConfigEvictOldSSTablePolicyChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigEvictOldSSTablePolicyChecker);
+};
+
 } // namespace common
 } // namespace oceanbase
 

@@ -2534,6 +2534,15 @@ DEF_TIME(_ss_disk_space_calibration_time_interval, OB_TENANT_PARAMETER, "1h", "[
          "Range: [1s, )",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_STR_WITH_CHECKER(_ss_local_cache_evict_old_sstable_policy, OB_TENANT_PARAMETER, "OFF",
+        common::ObConfigEvictOldSSTablePolicyChecker,
+        "The policy of local cache eviction of old sstable data in shared storage mode. "
+        "Values: OFF, MAJOR_SSTABLE. "
+        "OFF: evict none of old sstable data, "
+        "MAJOR_SSTABLE: evict old major sstable data.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+        "OFF, MAJOR_SSTABLE");
+
 // obkv feature switch
 DEF_BOOL(_enable_kv_feature, OB_CLUSTER_PARAMETER, "True",
          "Enable or disable OBKV feature.",

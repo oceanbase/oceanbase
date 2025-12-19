@@ -1799,5 +1799,14 @@ bool ObConfigDefaultDeltaFormatChecker::check(const ObConfigItem &t) const
   return ObStoreFormat::is_delta_format_valid(delta_format);
 }
 
+bool ObConfigEvictOldSSTablePolicyChecker::check(const ObConfigItem &t) const
+{
+  bool bret = true;
+  const ObString tmp_str(t.str());
+  bret = (0 == tmp_str.case_compare("OFF")) ||
+         (0 == tmp_str.case_compare("MAJOR_SSTABLE"));
+  return bret;
+}
+
 } // end of namepace common
 } // end of namespace oceanbase
