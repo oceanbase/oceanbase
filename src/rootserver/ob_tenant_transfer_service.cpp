@@ -1347,7 +1347,10 @@ int ObTenantTransferService::generate_related_tablet_ids_for_oracle_tmp_table_v2
         if (OB_SUCC(ret)) {
           const int64_t new_added_count = tablet_ids.count() - old_tablet_ids_count;
           const int64_t expected_count = related_table_schemas.count() * tablet_ids_get_by_data_table_id.count();
-          if (new_added_count != expected_count) {
+          // Since the tablet for a temporary table is only created upon its first access,
+          // and the query plan may not necessarily access the temporary table’s data table or index table,
+          // the actual number of temporary table tablets created may be less than expected.
+          if (new_added_count > expected_count) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("tablet count mismatch", KR(ret), K(new_added_count), K(expected_count), K(old_tablet_ids_count),
                 K(tablet_ids_get_by_data_table_id), K(tablet_ids), K(related_table_schemas));
