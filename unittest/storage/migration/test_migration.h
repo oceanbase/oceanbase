@@ -128,10 +128,10 @@ static int mock_learner_list(const common::ObAddr &addr, common::GlobalLearnerLi
   return ret;
 }
 
-static int mock_addr_list(const int addr_count, common::ObIArray<ObMember> &member_list)
+static int mock_addr_list(const int addr_count, common::ObMemberList &addr_list)
 {
   int ret = OB_SUCCESS;
-  member_list.reset();
+  addr_list.reset();
   const int64_t addr_num = 6;
   const char * addr_array[addr_num] = {"192.168.1.1:1234", "192.168.1.2:1234", "192.168.1.3:1234", "192.168.1.4:1234", "192.168.1.5:1234", "192.168.1.6:1234"};
   if (addr_count < 0 || addr_count > 6) {
@@ -144,7 +144,7 @@ static int mock_addr_list(const int addr_count, common::ObIArray<ObMember> &memb
         LOG_WARN("failed to mock addr", K(ret));
       } else {
         common::ObMember member(addr, 0);
-        if (OB_FAIL(member_list.push_back(member))) {
+        if (OB_FAIL(addr_list.add_member(member))) {
           LOG_WARN("failed to add member", K(ret), K(addr));
         }
       }
@@ -165,7 +165,7 @@ static int mock_dst_addr(common::ObAddr &addr)
 static int mock_locality_manager(const MOCKLOCALITY mode, MockLocalityManager &locality_manager)
 {
   int ret = OB_SUCCESS;
-  common::ObArray<ObMember> member_list;
+  common::ObMemberList member_list;
   common::ObArray<ObAddr> addr_list;
   common::ObAddr addr;
 
@@ -173,7 +173,7 @@ static int mock_locality_manager(const MOCKLOCALITY mode, MockLocalityManager &l
   case MOCKLOCALITY::IDC_MODE_IDC_LEADER: {
     if (OB_FAIL(mock_addr_list(5/*addr_count*/, member_list))) {
       LOG_WARN("failed to mock addr list", K(ret));
-    } else if (OB_FAIL(ObStorageHAMemberUtils::get_addr_array(member_list, addr_list))) {
+    } else if (OB_FAIL(member_list.get_addr_array(addr_list))) {
       LOG_WARN("failed to get addr array", K(ret), K(member_list));
     } else if (OB_FAIL(locality_manager.record_server_idc(addr_list.at(0), "idc1"))) {
       LOG_WARN("failed to record server region", K(ret), K(addr_list.at(0)));
@@ -201,7 +201,7 @@ static int mock_locality_manager(const MOCKLOCALITY mode, MockLocalityManager &l
   case MOCKLOCALITY::IDC_MODE_IDC_FOLLOWER: {
     if (OB_FAIL(mock_addr_list(5/*addr_count*/, member_list))) {
       LOG_WARN("failed to mock addr list", K(ret));
-    } else if (OB_FAIL(ObStorageHAMemberUtils::get_addr_array(member_list, addr_list))) {
+    } else if (OB_FAIL(member_list.get_addr_array(addr_list))) {
       LOG_WARN("failed to get addr array", K(ret), K(member_list));
     } else if (OB_FAIL(locality_manager.record_server_idc(addr_list.at(0), "idc1"))) {
       LOG_WARN("failed to record server region", K(ret), K(addr_list.at(0)));
@@ -229,7 +229,7 @@ static int mock_locality_manager(const MOCKLOCALITY mode, MockLocalityManager &l
   case MOCKLOCALITY::IDC_MODE_REGION_LEADER: {
     if (OB_FAIL(mock_addr_list(3/*addr_count*/, member_list))) {
       LOG_WARN("failed to mock addr list", K(ret));
-    } else if (OB_FAIL(ObStorageHAMemberUtils::get_addr_array(member_list, addr_list))) {
+    } else if (OB_FAIL(member_list.get_addr_array(addr_list))) {
       LOG_WARN("failed to get addr array", K(ret), K(member_list));
     } else if (OB_FAIL(locality_manager.record_server_idc(addr_list.at(0), "idc2"))) {
       LOG_WARN("failed to record server region", K(ret), K(addr_list.at(0)));
@@ -249,7 +249,7 @@ static int mock_locality_manager(const MOCKLOCALITY mode, MockLocalityManager &l
   case MOCKLOCALITY::IDC_MODE_REGION_FOLLOWER: {
     if (OB_FAIL(mock_addr_list(3/*addr_count*/, member_list))) {
       LOG_WARN("failed to mock addr list", K(ret));
-    } else if (OB_FAIL(ObStorageHAMemberUtils::get_addr_array(member_list, addr_list))) {
+    } else if (OB_FAIL(member_list.get_addr_array(addr_list))) {
       LOG_WARN("failed to get addr array", K(ret), K(member_list));
     } else if (OB_FAIL(locality_manager.record_server_idc(addr_list.at(0), "idc2"))) {
       LOG_WARN("failed to record server region", K(ret), K(addr_list.at(0)));
@@ -269,7 +269,7 @@ static int mock_locality_manager(const MOCKLOCALITY mode, MockLocalityManager &l
   case MOCKLOCALITY::IDC_MODE_DIFF_REGION_LEADER: {
     if (OB_FAIL(mock_addr_list(1/*addr_count*/, member_list))) {
       LOG_WARN("failed to mock addr list", K(ret));
-    } else if (OB_FAIL(ObStorageHAMemberUtils::get_addr_array(member_list, addr_list))) {
+    } else if (OB_FAIL(member_list.get_addr_array(addr_list))) {
       LOG_WARN("failed to get addr array", K(ret), K(member_list));
     } else if (OB_FAIL(locality_manager.record_server_idc(addr_list.at(0), "idc1"))) {
       LOG_WARN("failed to record server region", K(ret), K(addr_list.at(0)));
@@ -281,7 +281,7 @@ static int mock_locality_manager(const MOCKLOCALITY mode, MockLocalityManager &l
   case MOCKLOCALITY::IDC_MODE_DIFF_REGION_FOLLOWER: {
     if (OB_FAIL(mock_addr_list(2/*addr_count*/, member_list))) {
       LOG_WARN("failed to mock addr list", K(ret));
-    } else if (OB_FAIL(ObStorageHAMemberUtils::get_addr_array(member_list, addr_list))) {
+    } else if (OB_FAIL(member_list.get_addr_array(addr_list))) {
       LOG_WARN("failed to get addr array", K(ret), K(member_list));
     } else if (OB_FAIL(locality_manager.record_server_idc(addr_list.at(0), "idc1"))) {
       LOG_WARN("failed to record server region", K(ret), K(addr_list.at(0)));
@@ -297,7 +297,7 @@ static int mock_locality_manager(const MOCKLOCALITY mode, MockLocalityManager &l
   case MOCKLOCALITY::REGION_MODE_REGION_FOLLOWER: {
     if (OB_FAIL(mock_addr_list(4/*addr_count*/, member_list))) {
       LOG_WARN("failed to mock addr list", K(ret));
-    } else if (OB_FAIL(ObStorageHAMemberUtils::get_addr_array(member_list, addr_list))) {
+    } else if (OB_FAIL(member_list.get_addr_array(addr_list))) {
       LOG_WARN("failed to get addr array", K(ret), K(member_list));
     } else if (OB_FAIL(locality_manager.record_server_idc(addr_list.at(0), "idc1"))) {
       LOG_WARN("failed to record server region", K(ret), K(addr_list.at(0)));
@@ -321,7 +321,7 @@ static int mock_locality_manager(const MOCKLOCALITY mode, MockLocalityManager &l
   case MOCKLOCALITY::REGION_MODE_REGION_LEADER: {
     if (OB_FAIL(mock_addr_list(3/*addr_count*/, member_list))) {
       LOG_WARN("failed to mock addr list", K(ret));
-    } else if (OB_FAIL(ObStorageHAMemberUtils::get_addr_array(member_list, addr_list))) {
+    } else if (OB_FAIL(member_list.get_addr_array(addr_list))) {
       LOG_WARN("failed to get addr array", K(ret), K(member_list));
     } else if (OB_FAIL(locality_manager.record_server_idc(addr_list.at(0), "idc1"))) {
       LOG_WARN("failed to record server region", K(ret), K(addr_list.at(0)));
@@ -341,7 +341,7 @@ static int mock_locality_manager(const MOCKLOCALITY mode, MockLocalityManager &l
   case MOCKLOCALITY::REGION_MODE_DIFF_REGION_LEADER: {
     if (OB_FAIL(mock_addr_list(1/*addr_count*/, member_list))) {
       LOG_WARN("failed to mock addr list", K(ret));
-    } else if (OB_FAIL(ObStorageHAMemberUtils::get_addr_array(member_list, addr_list))) {
+    } else if (OB_FAIL(member_list.get_addr_array(addr_list))) {
       LOG_WARN("failed to get addr array", K(ret), K(member_list));
     } else if (OB_FAIL(locality_manager.record_server_idc(addr_list.at(0), "idc1"))) {
       LOG_WARN("failed to record server region", K(ret), K(addr_list.at(0)));
@@ -353,7 +353,7 @@ static int mock_locality_manager(const MOCKLOCALITY mode, MockLocalityManager &l
   case MOCKLOCALITY::REGION_MODE_DIFF_REGION_FOLLOWER: {
     if (OB_FAIL(mock_addr_list(2/*addr_count*/, member_list))) {
       LOG_WARN("failed to mock addr list", K(ret));
-    } else if (OB_FAIL(ObStorageHAMemberUtils::get_addr_array(member_list, addr_list))) {
+    } else if (OB_FAIL(member_list.get_addr_array(addr_list))) {
       LOG_WARN("failed to get addr array", K(ret), K(member_list));
     } else if (OB_FAIL(locality_manager.record_server_idc(addr_list.at(0), "idc1"))) {
       LOG_WARN("failed to record server region", K(ret), K(addr_list.at(0)));

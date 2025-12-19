@@ -94,7 +94,7 @@ int ObStorageHAGetMemberHelper::init(storage::ObStorageRpc *storage_rpc)
 }
 
 int ObStorageHAGetMemberHelper::get_ls_member_list(const uint64_t tenant_id,
-    const share::ObLSID &ls_id, common::ObIArray<common::ObMember> &member_list)
+    const share::ObLSID &ls_id, common::ObMemberList &member_list)
 {
   int ret = OB_SUCCESS;
   member_list.reset();
@@ -118,7 +118,7 @@ int ObStorageHAGetMemberHelper::get_ls_member_list(const uint64_t tenant_id,
 int ObStorageHAGetMemberHelper::get_ls_member_list_and_learner_list(
     const uint64_t tenant_id, const share::ObLSID &ls_id, const bool need_learner_list,
     common::ObAddr &leader_addr, common::GlobalLearnerList &learner_list,
-    common::ObIArray<common::ObMember> &member_list)
+    common::ObMemberList &member_list)
 {
   int ret = OB_SUCCESS;
   leader_addr.reset();
@@ -147,7 +147,7 @@ int ObStorageHAGetMemberHelper::get_ls_member_list_and_learner_list_(
     const bool need_learner_list,
     common::ObAddr &leader_addr,
     common::GlobalLearnerList &learner_list,
-    common::ObIArray<common::ObMember> &member_list)
+    common::ObMemberList &member_list)
 {
   int ret = OB_SUCCESS;
   member_list.reset();
@@ -179,26 +179,10 @@ int ObStorageHAGetMemberHelper::get_ls_member_list_and_learner_list_(
         }
       }
     }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(member_and_learner_info.learner_list_.deep_copy_to(learner_list))) {
-      LOG_WARN("failed to get learner addr array", K(ret), K(member_and_learner_info));
-    } else {
-      common::ObMember tmp_member;
-      for (int64_t i = 0; OB_SUCC(ret) && i < member_and_learner_info.member_list_.get_member_number(); ++i) {
-        tmp_member.reset();
-        if (OB_FAIL(member_and_learner_info.member_list_.get_member_by_index(i, tmp_member))) {
-          LOG_WARN("failed to get member by index", K(ret), K(member_and_learner_info));
-        } else if (OB_FAIL(member_list.push_back(tmp_member))) {
-          LOG_WARN("failed to push member into array", K(ret), K(tmp_member));
-        }
-      }
-
-      for (int64_t i = 0; OB_SUCC(ret) && i < learner_list.get_member_number(); ++i) {
-        const ObMember &member = learner_list.get_learner(i);
-        if (OB_FAIL(member_list.push_back(member))) {
-          LOG_WARN("failed to push member into array", K(ret), K(member));
-        }
-      }
+    if (FAILEDx(member_list.deep_copy(member_and_learner_info.member_list_))) {
+      LOG_WARN("failed to deep copy member list", K(ret), K(member_and_learner_info));
+    } else if (OB_FAIL(learner_list.deep_copy(member_and_learner_info.learner_list_))) {
+      LOG_WARN("failed to deep copy learner list", K(ret), K(member_and_learner_info));
     }
   } else {
     if (OB_FAIL(storage_rpc_->post_ls_member_list_request(tenant_id, src_info, ls_id, member_info))) {
@@ -214,18 +198,8 @@ int ObStorageHAGetMemberHelper::get_ls_member_list_and_learner_list_(
         }
       }
     }
-
-    common::ObMember tmp_member;
-    for (int64_t i = 0; OB_SUCC(ret) && i < member_info.member_list_.get_member_number(); ++i) {
-      tmp_member.reset();
-      if (OB_FAIL(member_info.member_list_.get_member_by_index(i, tmp_member))) {
-        LOG_WARN("failed to get member by index", K(ret), K(member_info));
-      } else if (OB_FAIL(member_list.push_back(tmp_member))) {
-        LOG_WARN("failed to push member into array", K(ret), K(tmp_member));
-      }
-    }
-
-    if (OB_FAIL(ret)) {
+    if (FAILEDx(member_list.deep_copy(member_info.member_list_))) {
+      LOG_WARN("failed to get member list", K(ret), K(member_info));
     } else {
       FLOG_INFO("fetch ls member list", K(tenant_id), K(ls_id), K(src_info), K(member_and_learner_info),
           K(member_info), K(member_list), K(learner_list));
@@ -253,7 +227,7 @@ int ObStorageHAGetMemberHelper::get_ls_leader(const uint64_t tenant_id, const sh
 int ObStorageHAGetMemberHelper::fetch_ls_member_list_and_learner_list_(const uint64_t tenant_id, const share::ObLSID &ls_id,
     const bool need_learner_list, common::ObAddr &leader_addr,
     common::GlobalLearnerList &learner_list,
-    common::ObIArray<common::ObMember> &member_list)
+    common::ObMemberList &member_list)
 {
   int ret = OB_SUCCESS;
   member_list.reset();
@@ -356,6 +330,8 @@ int ObStorageHAGetMemberHelper::get_member_list_by_replica_type(
   int ret = OB_SUCCESS;
   bool need_learner_list = false;
   info.reset();
+  common::ObMemberList paxos_member_list;
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObStorageHAGetMemberHelper do not init", K(ret));
@@ -374,24 +350,36 @@ int ObStorageHAGetMemberHelper::get_member_list_by_replica_type(
       LOG_WARN("unexpected replica type", K(ret), "replica_type", dst.get_replica_type());
     }
     if (FAILEDx(get_ls_member_list_and_learner_list(tenant_id, ls_id, need_learner_list,
-        info.leader_addr_, info.learner_list_, info.member_list_))) {
+        info.leader_addr_, info.learner_list_, paxos_member_list))) {
       LOG_WARN("failed to fetch ls leader member list and learner list", K(ret), K(tenant_id), K(ls_id),
           K(need_learner_list));
     } else if (OB_FAIL(check_is_first_c_replica_(dst, info.learner_list_, need_learner_list, is_first_c_replica))) {
       LOG_WARN("failed to check is first c replica", K(ret), K(dst), K(need_learner_list), K(info));
     } else if (need_learner_list && OB_FAIL(filter_dest_replica_(dst, info.learner_list_))) {
       LOG_WARN("failed to filter dest replica", K(ret), K(info), K(dst), K(is_first_c_replica));
-    } else if (info.learner_list_.is_valid()) {
-      ObMember member;
-      for (int64_t index = 0; index < info.learner_list_.get_member_number(); ++index) {
+    } else {
+      common::ObMember member;
+      for (int64_t i = 0; OB_SUCC(ret) && i < paxos_member_list.get_member_number(); ++i) {
         member.reset();
-        if (OB_FAIL(info.learner_list_.get_member_by_index(index, member))) {
-          LOG_WARN("fail to get learner by index", KR(ret), K(index));
-	} else if (OB_FAIL(info.member_list_.push_back(member))) {
-          LOG_WARN("failed to append addr list", K(ret), K(info), K(member));
+        if (OB_FAIL(paxos_member_list.get_member_by_index(i, member))) {
+          LOG_WARN("failed to get member by index", K(ret), K(i), K(paxos_member_list));
+        } else if (OB_FAIL(info.member_list_.push_back(member))) {
+          LOG_WARN("failed to push member into array", K(ret), K(member));
+        }
+      }
+
+      if (info.learner_list_.is_valid()) {
+        for (int64_t index = 0; OB_SUCC(ret) && index < info.learner_list_.get_member_number(); ++index) {
+          member.reset();
+          if (OB_FAIL(info.learner_list_.get_member_by_index(index, member))) {
+            LOG_WARN("fail to get learner by index", KR(ret), K(index));
+          } else if (OB_FAIL(info.member_list_.push_back(member))) {
+            LOG_WARN("failed to append addr list", K(ret), K(info), K(member));
+          }
         }
       }
     }
+
     LOG_INFO("get member info", K(ret), K(info), K(is_first_c_replica));
   }
   return ret;

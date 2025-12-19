@@ -42,11 +42,11 @@ public:
   virtual ~ObStorageHAGetMemberHelper();
   int init(storage::ObStorageRpc *storage_rpc);
   int get_ls_member_list(const uint64_t tenant_id, const share::ObLSID &ls_id,
-      common::ObIArray<common::ObMember> &member_list);
+      common::ObMemberList &member_list);
   int get_ls_member_list_and_learner_list(
       const uint64_t tenant_id, const share::ObLSID &ls_id, const bool need_learner_list,
       common::ObAddr &leader_addr, common::GlobalLearnerList &learner_list,
-      common::ObIArray<common::ObMember> &member_list);
+      common::ObMemberList &member_list);
   virtual int get_ls_leader(const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObAddr &addr);
   virtual int get_ls(const share::ObLSID &ls_id, ObLSHandle &ls_handle);
   virtual bool check_tenant_primary();
@@ -58,10 +58,10 @@ public:
 
 private:
   int fetch_ls_member_list_and_learner_list_(const uint64_t tenant_id, const share::ObLSID &ls_id, const bool need_learner_list,
-      common::ObAddr &addr, common::GlobalLearnerList &learner_list, common::ObIArray<common::ObMember> &member_list);
+      common::ObAddr &addr, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list);
   virtual int get_ls_member_list_and_learner_list_(const uint64_t tenant_id, const share::ObLSID &ls_id,
       const bool need_learner_list, common::ObAddr &leader_addr,
-      common::GlobalLearnerList &learner_list, common::ObIArray<common::ObMember> &member_list);
+      common::GlobalLearnerList &learner_list, common::ObMemberList &member_list);
   int filter_dest_replica_(
       const common::ObReplicaMember &dst,
       common::GlobalLearnerList &learner_list);
