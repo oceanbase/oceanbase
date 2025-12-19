@@ -91,6 +91,7 @@
 #include "share/ob_mview_args.h"
 #include "storage/mview/ob_mview_refresh.h"
 #include "rootserver/mview/ob_mview_utils.h"
+#include "storage/tablet/ob_session_tablet_helper.h"
 
 namespace oceanbase
 {
@@ -15574,6 +15575,9 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
             }
           }
         }
+        if (FAILEDx(storage::ObSessionTabletGCHelper::is_table_has_active_session(orig_table_schema, &alter_table_arg))) {
+          LOG_WARN("table has active session or error checking", KR(ret), K(alter_table_arg), KPC(orig_table_schema));
+        }
         const bool is_commit = OB_SUCC(ret);
         if (trans.is_started()) {
           int temp_ret = OB_SUCCESS;
@@ -16583,6 +16587,9 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
         LOG_WARN("fail to identify long running ddl type", K(ret), K(ddl_type));
       }
 
+      if (FAILEDx(storage::ObSessionTabletGCHelper::is_table_has_active_session(orig_table_schema, &alter_table_arg))) {
+        LOG_WARN("table has active session or error checking", KR(ret), K(alter_table_arg), KPC(orig_table_schema));
+      }
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
@@ -16697,7 +16704,7 @@ int ObDDLService::add_not_null_column_to_table_schema(
       ObArray<ObTabletID> new_tablet_ids;
       if (OB_FAIL(new_table_schema.get_tablet_ids(new_tablet_ids))) {
         LOG_WARN("failed to get tablet ids", K(ret));
-      } else if (OB_FAIL(build_single_table_rw_defensive_(tenant_id, tenant_data_version, new_tablet_ids, new_table_schema.get_schema_version(), trans))) {
+      } else if (!new_table_schema.is_oracle_tmp_table_v2() && OB_FAIL(build_single_table_rw_defensive_(tenant_id, tenant_data_version, new_tablet_ids, new_table_schema.get_schema_version(), trans))) {
         LOG_WARN("failed to build rw defensive", K(ret));
       }
     }
@@ -16836,6 +16843,9 @@ int ObDDLService::do_oracle_add_column_not_null_in_trans(obrpc::ObAlterTableArg 
               }
             }
           }
+        }
+        if (FAILEDx(storage::ObSessionTabletGCHelper::is_table_has_active_session(origin_table_schema, &alter_table_arg))) {
+          LOG_WARN("table has active session or error checking", KR(ret), KPC(origin_table_schema));
         }
         if (trans.is_started()) {
           int temp_ret = OB_SUCCESS;
@@ -26359,6 +26369,9 @@ int ObDDLService::drop_table_in_trans(
       if (OB_FAIL(ddl_operator.deal_with_mock_fk_parent_tables(trans, schema_guard, mock_fk_parent_table_schema_array))) {
         LOG_WARN("failed to deal_with_mock_fk_parent_table", K(ret), K(mock_fk_parent_table_schema_array));
       }
+    }
+    if (FAILEDx(storage::ObSessionTabletGCHelper::is_table_has_active_session(&table_schema))) {
+      LOG_WARN("table has active session or error checking", KR(ret), K(table_schema));
     }
     // deal with mock_fk_parent_table_schema in drop_table end
     if (OB_ISNULL(sql_trans) && trans.is_started()) {

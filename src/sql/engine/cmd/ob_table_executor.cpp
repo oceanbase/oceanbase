@@ -1160,7 +1160,7 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
     if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
       LOG_WARN("get first statement failed", K(ret));
     } else if (OB_FAIL(storage::ObSessionTabletGCHelper::is_table_has_active_session(tenant_id,
-        alter_table_arg.alter_table_schema_.get_origin_database_name(), alter_table_arg.alter_table_schema_.get_origin_table_name()))) {
+        alter_table_arg.alter_table_schema_.get_origin_database_name(), alter_table_arg.alter_table_schema_.get_origin_table_name(), &alter_table_arg))) {
       LOG_WARN("table has active session or error checking", KR(ret), K(alter_table_arg.alter_table_schema_));
     } else {
       alter_table_arg.ddl_stmt_str_ = first_stmt;

@@ -26,6 +26,8 @@
 #include "sql/resolver/ob_resolver_utils.h"
 #include "share/table/ob_ttl_util.h"
 #include "rootserver/ob_create_index_on_empty_table_helper.h"
+#include "storage/tablet/ob_session_tablet_helper.h"
+
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -337,6 +339,8 @@ int ObCreateIndexHelper::generate_index_schema_()
   } else if (OB_ISNULL(orig_data_table_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("data table schema is nullptr", KR(ret));
+  } else if (OB_FAIL(storage::ObSessionTabletGCHelper::is_table_has_active_session(orig_data_table_schema_))) {
+    LOG_WARN("table has active session or error checking", KR(ret), KPC(orig_data_table_schema_));
   } else if (OB_FAIL(ObSchemaUtils::alloc_schema(allocator_, *orig_data_table_schema_, new_data_table_schema_))) {
     LOG_WARN("fail to allocate new table schema", KR(ret), K_(tenant_id));
   } else if (OB_ISNULL(new_data_table_schema_)) {

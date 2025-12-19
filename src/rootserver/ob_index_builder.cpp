@@ -24,6 +24,7 @@
 #include "rootserver/ob_split_partition_helper.h"
 #include "share/table/ob_ttl_util.h"
 #include "rootserver/ob_create_index_on_empty_table_helper.h"
+#include "storage/tablet/ob_session_tablet_helper.h"
 
 namespace oceanbase
 {
@@ -1603,6 +1604,9 @@ int ObIndexBuilder::do_create_local_index(
                         ObDDLUpdateParentTaskIDType::UPDATE_VEC_REBUILD_CREATE_INDEX_TASK_ID, allocator, trans))) {
         LOG_WARN("fail to update parent task message", K(ret), K(create_index_arg.task_id_), K(res.task_id_));
       }
+    }
+    if (FAILEDx(storage::ObSessionTabletGCHelper::is_table_has_active_session(&table_schema))) {
+      LOG_WARN("table has active session or error checking", KR(ret), K(table_schema));
     }
     DEBUG_SYNC(CREATE_INDEX_ON_EMPTY_TABLE);
     if (trans.is_started()) {

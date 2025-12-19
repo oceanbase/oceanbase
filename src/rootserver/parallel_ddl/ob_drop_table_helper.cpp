@@ -22,6 +22,7 @@
 #include "share/schema/ob_schema_service_sql_impl.h"
 #include "share/schema/ob_sensitive_rule_schema_struct.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
+#include "storage/tablet/ob_session_tablet_helper.h"
 
 using namespace oceanbase::rootserver;
 using namespace oceanbase::obrpc;
@@ -316,6 +317,8 @@ int ObDropTableHelper::generate_schemas_()
       if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema is null", KR(ret));
+      } else if (OB_FAIL(storage::ObSessionTabletGCHelper::is_table_has_active_session(table_schema))) { // The Oracle mode does not support dropping multiple tables at once.
+        LOG_WARN("table has active session or error checking", KR(ret), KPC(table_schema));
       } else {
         // 1. gen mock fk parent tables when dropped table has mock parent table
         if (table_schema->get_foreign_key_real_count() > 0) {

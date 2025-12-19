@@ -643,10 +643,10 @@ int ObSessionTabletGCHelper::is_table_has_active_session(
 }
 
 int ObSessionTabletGCHelper::is_table_has_active_session(
-  const share::schema::ObSimpleTableSchemaV2 *table_schema)
+  const share::schema::ObSimpleTableSchemaV2 *table_schema,
+  const obrpc::ObAlterTableArg *alter_table_arg)
 {
   int ret = OB_SUCCESS;
-  bool has_active_session = false;
   uint64_t data_version = 0;
   if (OB_ISNULL(table_schema)) {
     ret = OB_INVALID_ARGUMENT;
@@ -661,7 +661,20 @@ int ObSessionTabletGCHelper::is_table_has_active_session(
     LOG_INFO("table is not oracle tmp table v2 or oracle tmp table v2 index table", KR(ret), KPC(table_schema));
   } else {
     uint64_t table_id = table_schema->is_oracle_tmp_table_v2_index_table() ? table_schema->get_data_table_id() : table_schema->get_table_id();
-    if (OB_FAIL(is_table_has_active_session(table_schema->get_tenant_id(), table_id, has_active_session))) {
+    bool need_check = true;
+    bool has_active_session = false;
+    if (nullptr != alter_table_arg) {
+      int64_t num_members = alter_table_arg->alter_table_schema_.alter_option_bitset_.num_members();
+      if (num_members == 1) {
+        // only rename and comment need not to check if table has active session
+        need_check = !alter_table_arg->alter_table_schema_.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::TABLE_NAME) &&
+                     !alter_table_arg->alter_table_schema_.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::COMMENT);
+      }
+    }
+    if (false == need_check) {
+      ret = OB_SUCCESS;
+      LOG_INFO("not need to check if table has active session", KR(ret), K(table_id), KPC(table_schema));
+    } else if (OB_FAIL(is_table_has_active_session(table_schema->get_tenant_id(), table_id, has_active_session))) {
       LOG_WARN("failed to check if table has active session", KR(ret), K(table_id), KPC(table_schema));
     } else if (has_active_session) {
       ret = OB_ERR_TEMP_TABLE_BUSY;
@@ -675,7 +688,8 @@ int ObSessionTabletGCHelper::is_table_has_active_session(
 }
 
 int ObSessionTabletGCHelper::is_table_has_active_session(const uint64_t tenant_id,
-    const ObString &db_name, const ObString &table_name)
+    const ObString &db_name, const ObString &table_name,
+    const obrpc::ObAlterTableArg *alter_table_arg)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
@@ -701,7 +715,7 @@ int ObSessionTabletGCHelper::is_table_has_active_session(const uint64_t tenant_i
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table not exist", K(ret), K(tenant_id), K(db_name), K(table_name));
-  } else if (OB_FAIL(is_table_has_active_session(table_schema))) {
+  } else if (OB_FAIL(is_table_has_active_session(table_schema, alter_table_arg))) {
     LOG_WARN("failed to check if table has active session", KR(ret), KPC(table_schema));
   }
   return ret;

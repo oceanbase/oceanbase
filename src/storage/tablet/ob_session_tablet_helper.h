@@ -18,6 +18,7 @@
 #include "share/schema/ob_latest_schema_guard.h"
 #include "rootserver/ob_tablet_creator.h"
 #include "storage/tablet/ob_session_tablet_info_map.h"
+#include "share/ob_rpc_struct.h"
 
 namespace oceanbase
 {
@@ -138,11 +139,13 @@ public:
   int do_work();
   int is_sys_ls_leader(bool &is_leader) const;
   static int is_table_has_active_session(
-    const share::schema::ObSimpleTableSchemaV2 *table_schema);
+    const share::schema::ObSimpleTableSchemaV2 *table_schema,
+    const obrpc::ObAlterTableArg *alter_table_arg = nullptr);
   static int is_table_has_active_session(
     const uint64_t tenant_id,
     const ObString &db_name,
-    const ObString &table_name);
+    const ObString &table_name,
+    const obrpc::ObAlterTableArg *alter_table_arg = nullptr);
   TO_STRING_KV(K_(tenant_id));
 private:
   static int is_table_has_active_session(
