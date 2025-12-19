@@ -985,6 +985,8 @@ typedef enum ObItemType
   T_FUN_SYS_POS_LIST = 1938, // fulltext index phrase match
   T_FUN_CK_SYS_IS_NAN = 1939,
   T_FUN_CK_RAND_CANONICAL = 1940,
+  T_FUN_SYS_LOAD_FILE = 1941,
+  T_FUN_SYS_AI_PARSE_DOCUMENT = 1942,
 
   ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,
@@ -3017,6 +3019,7 @@ typedef enum ObItemType
   T_CSV_LARGE_FILE_SIZE_THRESHOLD = 4957,
   T_MAX_CSV_ROW_LENGTH = 4958,
   T_HYBRID_SEARCH_SCORE = 4959, // hybrid search score
+  T_AI_SPLIT_DOCUMENT_EXPRESSION = 4960, // ai_split_document
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
