@@ -658,7 +658,7 @@ int ObTabletReplayCreateHandler::record_ls_transfer_info_(
       // do nothing
     } else {
       // wlock scope
-      ObBucketWLockGuard wlock_guard(ls_bucket_lock_, ls_id.hash());
+      ObBucketHashWLockGuard wlock_guard(ls_bucket_lock_, ls_id.hash());
       ObLSTransferInfo &ls_startup_transfer_info = ls->get_ls_startup_transfer_info();
       if (OB_FAIL(wlock_guard.get_ret())) {
         LOG_WARN("failed to hold bucket wlock", K(ret), K(ls_id), K(ls_id.hash()));
