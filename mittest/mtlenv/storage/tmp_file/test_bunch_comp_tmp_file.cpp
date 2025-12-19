@@ -156,7 +156,6 @@ int main(int argc, char **argv)
 {
   int ret = 0;
   system("rm -f ./test_bunch_comp_tmp_file.log*");
-  system("rm -rf ./run*");
   OB_LOGGER.set_file_name("test_bunch_comp_tmp_file.log", true);
   OB_LOGGER.set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
