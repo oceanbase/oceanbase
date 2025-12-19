@@ -97,6 +97,7 @@ struct PLCacheObjStat
   common::ObString param_infos_;
   ObSchemaObjVersion out_of_date_dependcy_version_; // out_of_date dependcy version
   ObSchemaObjVersion outline_version_;
+  int64_t cg_time_; // pl object cost time of code gen
 
   PLCacheObjStat()
     : pl_schema_id_(OB_INVALID_ID),
@@ -120,7 +121,8 @@ struct PLCacheObjStat
       sys_vars_str_(),
       param_infos_(),
       out_of_date_dependcy_version_(),
-      outline_version_()
+      outline_version_(),
+      cg_time_(0)
   {
     sql_id_[0] = '\0';
   }
@@ -154,6 +156,7 @@ struct PLCacheObjStat
     param_infos_.reset();
     out_of_date_dependcy_version_.reset();
     outline_version_.reset();
+    cg_time_ = 0;
   }
 
   TO_STRING_KV(K_(pl_schema_id),
@@ -171,7 +174,8 @@ struct PLCacheObjStat
                K_(sys_vars_str),
                K_(param_infos),
                K_(out_of_date_dependcy_version),
-               K_(outline_version));
+               K_(outline_version),
+               K_(cg_time));
 };
 
 class ObPLCacheObject : public sql::ObILibCacheObject

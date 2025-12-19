@@ -9323,6 +9323,7 @@ def_table_schema(
       ('first_get_plan_time', 'int'),
       ('first_exe_usec', 'int'),
       ('format_sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH'),
+      ('cg_time', 'uint'),
   ],
   vtable_route_policy = 'distributed',
   partition_columns = ['svr_ip', 'svr_port'],
@@ -37189,7 +37190,8 @@ def_table_schema(
            SQL_ID,
            OUTLINE_VERSION,
            OUTLINE_ID,
-           OUTLINE_DATA AS CONCURRENT_DATA
+           OUTLINE_DATA AS CONCURRENT_DATA,
+           CG_TIME AS CG_TIME
     FROM oceanbase.__all_virtual_plan_stat WHERE OBJECT_STATUS = 0 AND TYPE > 5 AND TYPE < 11 AND is_in_pc=true
 """.replace("\n", " "),
     normal_columns = [
@@ -37233,7 +37235,8 @@ def_table_schema(
            SQL_ID,
            OUTLINE_VERSION,
            OUTLINE_ID,
-           CONCURRENT_DATA
+           CONCURRENT_DATA,
+           CG_TIME AS CG_TIME
     FROM oceanbase.GV$OB_PL_CACHE_OBJECT WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " "),
 
@@ -75102,7 +75105,8 @@ def_table_schema(
            SQL_ID AS SQL_ID,
            OUTLINE_VERSION AS OUTLINE_VERSION,
            OUTLINE_ID AS OUTLINE_ID,
-           OUTLINE_DATA AS CONCURRENT_DATA
+           OUTLINE_DATA AS CONCURRENT_DATA,
+           CG_TIME AS CG_TIME
     FROM SYS.ALL_VIRTUAL_PLAN_STAT WHERE OBJECT_STATUS = 0 AND TYPE > 5 AND TYPE < 11 AND is_in_pc='1'
 """.replace("\n", " "),
     normal_columns = [
@@ -75147,7 +75151,8 @@ def_table_schema(
            SQL_ID AS SQL_ID,
            OUTLINE_VERSION AS OUTLINE_VERSION,
            OUTLINE_ID AS OUTLINE_ID,
-           CONCURRENT_DATA AS CONCURRENT_DATA
+           CONCURRENT_DATA AS CONCURRENT_DATA,
+           CG_TIME AS CG_TIME
     FROM SYS.GV$OB_PL_CACHE_OBJECT WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " "),
     normal_columns = [
