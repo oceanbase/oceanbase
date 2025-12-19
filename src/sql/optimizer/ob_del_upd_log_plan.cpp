@@ -1011,15 +1011,18 @@ int ObDelUpdLogPlan::compute_hash_dist_exprs_for_pdml_insert(ObExchangeInfo &exc
           LOG_WARN("logic pk column not found in dml info", K(ret), K(pk_id));
         }
       }
-      if (OB_SUCC(ret) && share::schema::PARTITION_LEVEL_ZERO == table_schema->get_part_level()) {
-        for (int64_t i = 0; OB_SUCC(ret) && i < dml_info.column_convert_exprs_.count(); ++i) {
+      // For heap tables with logical primary key, also need to set hidden_pk_expr_
+      // to ensure exchange passes it to the upper INSERT operator.
+      // This is needed for both partitioned and non-partitioned tables in PDML scenario.
+      // We use hidden_pk_expr_ instead of hash_dist_exprs_ to avoid affecting hash calculation.
+      if (OB_SUCC(ret)) {
+        for (int64_t i = 0; i < dml_info.column_convert_exprs_.count(); ++i) {
           ObRawExpr *expr = dml_info.column_convert_exprs_.at(i);
           if (OB_NOT_NULL(expr) &&
               (expr->get_expr_type() == T_TABLET_AUTOINC_NEXTVAL ||
                expr->get_expr_type() == T_PSEUDO_HIDDEN_CLUSTERING_KEY)) {
-            if (OB_FAIL(exch_info.repartition_keys_.push_back(expr))) {
-              LOG_WARN("failed to push back hidden pk expr", K(ret));
-            }
+            exch_info.hidden_pk_expr_ = expr;
+            break;
           }
         }
       }

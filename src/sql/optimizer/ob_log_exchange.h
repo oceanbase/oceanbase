@@ -63,7 +63,8 @@ public:
       is_old_unblock_mode_(true),
       sample_type_(NOT_INIT_SAMPLE_TYPE),
       in_server_cnt_(0),
-      px_info_(NULL)
+      px_info_(NULL),
+      hidden_pk_expr_(NULL)
   {
     repartition_table_id_ = 0;
   }
@@ -175,6 +176,8 @@ public:
   ObOpPseudoColumnRawExpr *get_partition_id_expr() { return partition_id_expr_; }
   void set_ddl_slice_id_expr(ObRawExpr *expr) { ddl_slice_id_expr_ = expr; }
   ObRawExpr *get_ddl_slice_id_expr() { return ddl_slice_id_expr_; }
+  void set_hidden_pk_expr(ObRawExpr *expr) { hidden_pk_expr_ = expr; }
+  ObRawExpr *get_hidden_pk_expr() { return hidden_pk_expr_; }
   bool need_null_aware_shuffle() const { return need_null_aware_shuffle_; }
   void set_need_null_aware_shuffle(const bool need_null_aware_shuffle)
                     { need_null_aware_shuffle_ = need_null_aware_shuffle; }
@@ -281,6 +284,9 @@ private:
   // -end pkey range/range
   int64_t in_server_cnt_; // for producer, need use exchange in server cnt to compute cost
   ObPxResourceAnalyzer::PxInfo *px_info_;
+  // Hidden primary key expression for PDML heap table insert scenario.
+  // Needs to be passed through exchange but not used for hash calculation.
+  ObRawExpr *hidden_pk_expr_;
   DISALLOW_COPY_AND_ASSIGN(ObLogExchange);
 };
 } // end of namespace sql

@@ -588,6 +588,7 @@ int ObLogExchange::set_exchange_info(const ObExchangeInfo &exch_info)
       LOG_WARN("array assign failed", K(ret));
     } else if (OB_FAIL(popular_values_.assign(exch_info.popular_values_))) {
       LOG_WARN("array assign failed", K(ret));
+    } else if (OB_FALSE_IT(hidden_pk_expr_ = exch_info.hidden_pk_expr_)) {
     } else if ((dist_method_ == ObPQDistributeMethod::RANGE ||
                 dist_method_ == ObPQDistributeMethod::PARTITION_RANGE) &&
                 OB_FAIL(sort_keys_.assign(exch_info.sort_keys_))) {
@@ -665,6 +666,11 @@ int ObLogExchange::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
           LOG_WARN("failed to push back exprs", K(ret));
         } else { /*do nothing*/ }
       }
+    }
+    // Add hidden pk expression for PDML heap table insert
+    if (OB_SUCC(ret) && nullptr != hidden_pk_expr_ &&
+        OB_FAIL(all_exprs.push_back(hidden_pk_expr_))) {
+      LOG_WARN("failed to push back hidden pk expr", K(ret));
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
