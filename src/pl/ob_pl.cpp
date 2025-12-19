@@ -5315,11 +5315,8 @@ int ObPLExecState::check_pl_priv(
 
 void ObPLExecState::try_clear_complex_obj()
 {
-  int ret = OB_SUCCESS;
   if (OB_NOT_NULL(ctx_.exec_ctx_) && OB_NOT_NULL(ctx_.exec_ctx_->get_pl_ctx())) {
     ctx_.exec_ctx_->get_pl_ctx()->reset_obj_range_to_end(cur_complex_obj_count_);
-  } else {
-    LOG_ERROR("pl ctx is null, unexpected error");
   }
 }
 
