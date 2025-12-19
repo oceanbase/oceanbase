@@ -1810,6 +1810,53 @@ TEST_F(TestTmpFile, test_tmp_file_sync)
   ObTmpFileManager::get_instance().remove(fd);
 }
 
+TEST_F(TestTmpFile, test_dir_map_cleanup_removes_stale_dirs)
+{
+  int ret = OB_SUCCESS;
+  const int64_t timeout_ms = 5000;
+  const int64_t file_cnt = 512;
+  char write_buf[32];
+  MEMSET(write_buf, 'a', sizeof(write_buf));
+
+  ObTmpTenantFileStoreHandle store_handle;
+  OB_TMP_FILE_STORE.get_store(1, store_handle);
+  ObTmpTenantMemBlockManager &mgr = store_handle.get_tenant_store()->tmp_mem_block_manager_;
+  const int64_t base_dir_size = mgr.dir_to_blk_map_.size();
+
+  common::ObSEArray<int64_t, 16> dirs;
+  common::ObSEArray<int64_t, 16> fds;
+  ObTmpFileIOInfo io_info;
+  io_info.tenant_id_ = 1;
+  io_info.io_desc_.set_wait_event(2);
+  io_info.buf_ = write_buf;
+  io_info.size_ = sizeof(write_buf);
+
+  for (int64_t i = 0; i < file_cnt; ++i) {
+    int64_t dir = -1;
+    int64_t fd = -1;
+    ret = ObTmpFileManager::get_instance().alloc_dir(dir);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ret = ObTmpFileManager::get_instance().open(fd, dir);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    io_info.fd_ = fd;
+    ret = ObTmpFileManager::get_instance().write(io_info, timeout_ms);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_EQ(OB_SUCCESS, dirs.push_back(dir));
+    ASSERT_EQ(OB_SUCCESS, fds.push_back(fd));
+  }
+
+  const int64_t dir_size_before_clean = mgr.dir_to_blk_map_.size();
+  ASSERT_GT(dir_size_before_clean, base_dir_size);
+
+  for (int64_t i = 0; i < fds.count(); ++i) {
+    ASSERT_EQ(OB_SUCCESS, ObTmpFileManager::get_instance().remove(fds.at(i)));
+  }
+
+  ret = mgr.clean_dir_to_blk_map();
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_LE(mgr.dir_to_blk_map_.size(), base_dir_size);
+}
+
 TEST_F(TestTmpFile, test_tmp_file_sync_same_block)
 {
   int ret = OB_SUCCESS;

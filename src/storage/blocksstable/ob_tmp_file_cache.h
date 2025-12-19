@@ -18,6 +18,7 @@
 #include "share/io/ob_io_manager.h"
 #include "share/cache/ob_kv_storecache.h"
 #include "storage/ob_i_store.h"
+#include "lib/container/ob_heap.h"
 
 namespace oceanbase
 {
@@ -345,6 +346,7 @@ public:
 
   int exec_wait();
   int change_mem();
+  int try_clean_dir_to_blk_map();
   OB_INLINE int64_t get_mem_block_num() const { return t_mblk_map_.size(); }
 private:
   // 1/256, only one free block each 256 block.
@@ -352,12 +354,35 @@ private:
   static const uint64_t DEFAULT_BUCKET_NUM = 1543L;
   static const uint64_t MBLK_HASH_BUCKET_NUM = 10243L;
   static const int64_t TENANT_MEM_BLOCK_NUM = 64L;
+  // default 10 minutes, avoid frequent scanning.
+  static const int64_t DIR_MAP_CLEAN_INTERVAL = 30 * 1000 * 1000L;
+  static const int64_t DIR_MAP_CLEAN_BATCH = 1024;
   const int64_t TASK_INTERVAL = 10 * 1000; // 10 ms
   const int64_t MEMORY_TASK_INTERVAL = 10 * 1000 * 1000; // 10 s
   typedef common::hash::ObHashMap<int64_t, ObTmpMacroBlock*, common::hash::SpinReadWriteDefendMode>
       TmpMacroBlockMap;
   typedef common::hash::ObHashMap<int64_t, int64_t, common::hash::SpinReadWriteDefendMode> Map;
   typedef common::hash::ObHashMap<int64_t, ObIOWaitInfoHandle, common::hash::SpinReadWriteDefendMode> WaitHandleMap;
+  struct DirEntry final
+  {
+    int64_t dir_id_;
+    int64_t block_id_;
+    TO_STRING_KV(K_(dir_id), K_(block_id));
+  };
+  struct DirEntryMaxCompare final
+  {
+    bool operator()(const DirEntry &a, const DirEntry &b) { return a.dir_id_ < b.dir_id_; }
+    int get_error_code() { return OB_SUCCESS; }
+  };
+  typedef common::ObBinaryHeap<DirEntry, DirEntryMaxCompare> DirEntryHeap;
+  struct CollectSmallestDirOp final
+  {
+  public:
+    CollectSmallestDirOp(DirEntryHeap &heap) : heap_(heap) {}
+    int operator()(oceanbase::common::hash::HashMapPair<int64_t, int64_t> &entry);
+  private:
+    DirEntryHeap &heap_;
+  };
 
   struct BlockInfo final
   {
@@ -427,12 +452,14 @@ private:
                                const int64_t page_nums, ObTmpMacroBlock *&t_mblk);
   int get_block_and_set_washing(int64_t block_id, ObTmpMacroBlock *&m_blk);
   int check_disk_usage_limit(const int64_t on_disk_block_num, const int64_t disk_usage_limit);
+  int clean_dir_to_blk_map();
 
   ObTmpTenantFileStore &tenant_store_;
   ObSpLinkQueue wait_info_queue_;
   WaitHandleMap wait_handles_map_;
   TmpMacroBlockMap t_mblk_map_;  // <block id, tmp macro block>
   Map dir_to_blk_map_;           // <dir id, block id>
+  int64_t last_dir_map_clean_ts_;
   double blk_nums_threshold_;    // free_page_nums / total_page_nums
   ObTmpBlockCache *block_cache_;
   common::ObConcurrentFIFOAllocator *allocator_;
