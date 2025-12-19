@@ -9,20 +9,17 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
 #define USING_LOG_PREFIX COMMON
 #include "ob_tenant_dag_scheduler.h"
 #include "lib/thread/thread_mgr.h"
 #include "storage/compaction/ob_tenant_compaction_progress.h"
 #include "storage/compaction/ob_compaction_dag_ranker.h"
-#include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/column_store/ob_co_merge_dag.h"
 #include "storage/compaction/ob_batch_freeze_tablets_dag.h"
 #include "share/compaction/ob_batch_exec_dag.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/incremental/ob_inc_sstable_upload_task.h"
-#include "storage/compaction_v2/ob_ss_skip_major_merge_dag.h"
+#include "storage/compaction_v2/ob_ss_compact_helper.h"
 #endif
 
 
@@ -483,6 +480,7 @@ const char *ObITask::ObITaskTypeStr[] = {
   "DIRECT_LOAD_INC_WAIT_DUMP_TASK",
   "COMPLEMENT_REPORT_REPLICA_TASK",
   "LOB_CHECK_TASK",
+  "ATTACH_SHARED_MAJOR_SSTABLE",
   "MAX"
 };
 
@@ -3389,12 +3387,7 @@ int ObDagPrioScheduler::check_ls_compaction_dag_exist_with_cancel(
       } else if (ObDagType::DAG_TYPE_BATCH_FREEZE_TABLETS == cur->get_type()) {
         cancel_flag = (ls_id == static_cast<compaction::ObBatchFreezeTabletsDag *>(cur)->get_param().ls_id_);
 #ifdef OB_BUILD_SHARED_STORAGE
-      } else if (GCTX.is_shared_storage_mode()
-                 && ObDagType::DAG_TYPE_INC_SSTABLE_UPLOAD == cur->get_type()) {
-        cancel_flag = ls_id == static_cast<storage::ObIncSSTableUploadDag *>(cur)->get_param().ls_id_;
-      } else if (GCTX.is_shared_storage_mode()
-                 && ObDagType::DAG_TYPE_UPDATE_SKIP_MAJOR == cur->get_type()) {
-        cancel_flag = ls_id == static_cast<compaction::ObSSSkipMajorMergeDag *>(cur)->get_param().ls_id_;
+      } else if (GCTX.is_shared_storage_mode() && SSCompactHelper::check_ls_dag_need_cancel(*cur, ls_id, cancel_flag)) {
 #endif
       } else {
         cancel_flag = (ls_id == static_cast<compaction::ObTabletMergeDag *>(cur)->get_ls_id());

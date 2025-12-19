@@ -55,6 +55,8 @@ SUSPECT_INFO_TYPE_DEF(SUSPECT_SS_TABLET_CANT_MAJOR_MERGE, ObDiagnoseInfoPrio::DI
     5, {"compaction_scn", "ss_tablet_snapshot_version", "ss_checkpoint_scn", "local_tablet_clog_checkpoint_scn", "ss_tablet_clog_checkpoint_scn"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_SS_TABLET_REORG_SKIP_MAJOR_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, false,
     "shared tablet can't schedule major merge because it is reorganizing", 3, {"compaction_scn", "ss_tablet_snapshot_version", "ss_checkpoint_scn"})
+SUSPECT_INFO_TYPE_DEF(SUSPECT_SS_TABLET_MAJOR_ATTACH_WAIT_SS_MAJOR_READY, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, false, "local tablet attach major waiting for shared major finish",
+    2, {"compaction_scn", "ss_tablet_last_major"})
 #endif
 SUSPECT_INFO_TYPE_DEF(SUSPECT_MV_IN_CREATION, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false,
                       "materialized view creation has not finished", 2, {"schedule_scn", "is_row_store"})
