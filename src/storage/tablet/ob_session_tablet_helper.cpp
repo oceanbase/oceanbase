@@ -126,7 +126,7 @@ int ObSessionTabletCreateHelper::do_work()
       const uint64_t table_id = table_schema->is_oracle_tmp_table_v2_index_table() ? table_schema->get_data_table_id() : table_schema->get_table_id();
       transaction::tablelock::ObLockTableRequest table_lock_arg;
       table_lock_arg.lock_mode_ = transaction::tablelock::ROW_EXCLUSIVE;
-      table_lock_arg.timeout_us_ = conn->get_ob_query_timeout();
+      table_lock_arg.timeout_us_ = MIN(THIS_WORKER.get_timeout_remain(), 10000000/* us */);
       table_lock_arg.table_id_ = table_id;
       table_lock_arg.op_type_ = transaction::tablelock::IN_TRANS_COMMON_LOCK;
       if (OB_FAIL(transaction::tablelock::ObInnerConnectionLockUtil::lock_table(tenant_id_, table_lock_arg, conn))) {
@@ -254,16 +254,21 @@ int ObSessionTabletCreateHelper::choose_log_stream(
       } else {
         const bool has_lob_column = data_table_schema->has_lob_column(true/*ignore unused column*/);
         common::ObSArray<uint64_t> table_ids;
-        if (OB_FAIL(table_ids.push_back(data_table_id))) {
-          LOG_WARN("failed to push back session tablet key", KR(ret), K(data_table_key));
+        if (OB_FAIL(table_ids.assign(table_ids_))) {
+          LOG_WARN("failed to assign table ids", KR(ret), K(table_ids_));
         } else if (has_lob_column && OB_FAIL(table_ids.push_back(data_table_schema->get_aux_lob_meta_tid()))) {
           LOG_WARN("failed to push back session tablet key", KR(ret), K(data_table_schema->get_aux_lob_meta_tid()));
         } else if (has_lob_column && OB_FAIL(table_ids.push_back(data_table_schema->get_aux_lob_piece_tid()))) {
           LOG_WARN("failed to push back session tablet key", KR(ret), K(data_table_schema->get_aux_lob_piece_tid()));
-        } else if (OB_FAIL(session_tablet_map_.add_session_tablet(table_ids, sequence_, session_id_))) {
-          LOG_WARN("fail to add session tablet", KR(ret), K(table_ids));
-        } else if (OB_FAIL(session_tablet_map_.get_session_tablet(data_table_key, data_table_info))) {
-          LOG_WARN("fail to get session tablet", KR(ret), K(data_table_key));
+        } else if (FALSE_IT(table_ids_.reset())) {
+        } else if (OB_FAIL(table_ids_.push_back(data_table_id))) {
+          LOG_WARN("failed to push back data table id", KR(ret), K(data_table_id));
+        } else {
+          ARRAY_FOREACH(table_ids, idx) {
+            if (!is_contain(table_ids_, table_ids.at(idx)) && OB_FAIL(table_ids_.push_back(table_ids.at(idx)))) {
+              LOG_WARN("failed to push back table id", KR(ret), K(table_ids.at(idx)));
+            }
+          }
         }
       }
     }
@@ -636,6 +641,7 @@ int ObSessionTabletGCHelper::is_table_has_active_session(
         LOG_WARN("failed to batch detect session alive", KR(ret));
       } else if (is_contain(session_alive_array, true)) {
         has_active_session = true;
+        LOG_INFO("table has active session", KR(ret), K(session_tablet_infos), K(session_id_array), K(session_alive_array));
       }
     }
   }
