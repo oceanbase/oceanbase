@@ -1484,17 +1484,19 @@ int ObDynamicSamplingUtils::get_valid_dynamic_sampling_level(const ObSQLSessionI
   } else if (global_ds_level != ObGlobalHint::UNSET_DYNAMIC_SAMPLING) {
     ds_level = global_ds_level;
     specify_ds = true;
+  //force use dynamic sampling for mlog in mview refreshing
+  } else if (!session_info->is_user_session() && table_type == MATERIALIZED_VIEW_LOG) {
+    ds_level = ObDynamicSamplingLevel::BASIC_DYNAMIC_SAMPLING;
+    specify_ds = true;
   //last see user session variable.
   } else if (OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(session_info));
-  } else if (session_info->is_user_session() && OB_FAIL(session_info->get_opt_dynamic_sampling(session_ds_level))) {
+  } else if ((session_info->is_user_session() || session_info->get_ddl_info().is_refreshing_mview())
+             && OB_FAIL(session_info->get_opt_dynamic_sampling(session_ds_level))) {
     LOG_WARN("failed to get opt dynamic sampling level", K(ret));
   } else if (session_ds_level == ObDynamicSamplingLevel::BASIC_DYNAMIC_SAMPLING) {
     ds_level = session_ds_level;
-  } else if (!session_info->is_user_session() && table_type == MATERIALIZED_VIEW_LOG) {
-    ds_level = ObDynamicSamplingLevel::BASIC_DYNAMIC_SAMPLING;
-    specify_ds = true;
   }
   LOG_TRACE("get valid dynamic sampling level", KPC(table_ds_hint), K(global_ds_level), K(specify_ds),
                                                 K(session_ds_level), K(ds_level), K(sample_block_cnt));

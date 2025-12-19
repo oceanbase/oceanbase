@@ -847,7 +847,9 @@ int ObOperator::open()
       eval_ctx_.set_batch_size(1);
       eval_ctx_.set_batch_idx(0);
     }
-    if (ctx_.get_my_session()->is_user_session() || spec_.plan_->get_phy_plan_hint().monitor_) {
+    if (ctx_.get_my_session()->is_user_session()
+        || ctx_.get_my_session()->get_ddl_info().is_refreshing_mview()
+        || spec_.plan_->get_phy_plan_hint().monitor_) {
       IGNORE_RETURN try_register_rt_monitor_node(0);
     }
     while (OB_SUCC(ret) && open_order != OPEN_EXIT) {
