@@ -899,6 +899,7 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
     case ENABLE_GROUPING_SETS_EXPANSION:
     case EXTENDED_SQL_PLAN_MONITOR_METRICS:
     case ENABLE_DELETE_INSERT_SCAN:
+    case ENABLE_FAST_REFRESH_WITH_CUR_TIME:
     case PRESERVE_ORDER_FOR_GROUPBY: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
                                       || 0 == val.get_varchar().case_compare("false"));
