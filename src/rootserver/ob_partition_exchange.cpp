@@ -18,6 +18,8 @@
 #include "share/tablet/ob_tablet_to_table_history_operator.h" // ObTabletToTableHistoryOperator
 #include "share/tablet/ob_tablet_to_ls_operator.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
+#include "share/ob_lob_access_utils.h" // ObTextStringIter
+#include "lib/roaringbitmap/ob_rb_utils.h" // ObRbUtils
 
 namespace oceanbase
 {
@@ -949,10 +951,45 @@ int ObPartitionExchange::compare_default_value_(ObObj &l_value, ObObj &r_value, 
     }
   } else if (CS_TYPE_INVALID == l_value.get_collation_type()) {
     is_equal = true;
+  } else if (l_value.is_roaringbitmap()) {
+    if (OB_FAIL(compare_roaringbitmap_value_(l_value, r_value, is_equal))) {
+      LOG_WARN("fail to compare roaringbitmap default value", K(ret), K(l_value), K(r_value));
+    }
   } else if (OB_FAIL(l_value.compare(r_value, cmp))) {
     LOG_WARN("default value are not equal", K(ret), K(l_value), K(r_value), K(cmp));
   } else if (OB_UNLIKELY(0 != cmp)) {
     LOG_WARN("default value are not equal", K(ret), K(l_value), K(r_value), K(cmp));
+  } else {
+    is_equal = true;
+  }
+  return ret;
+}
+
+int ObPartitionExchange::compare_roaringbitmap_value_(
+    const ObObj &l_value,
+    const ObObj &r_value,
+    bool &is_equal)
+{
+  int ret = OB_SUCCESS;
+  is_equal = false;
+  ObString l_data;
+  ObString r_data;
+  uint64_t xor_cardinality = 0;
+  common::ObArenaAllocator allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObTextStringIter l_instr_iter(l_value);
+  ObTextStringIter r_instr_iter(r_value);
+  if (OB_FAIL(l_instr_iter.init(0, NULL, &allocator))) {
+    LOG_WARN("fail to init left roaringbitmap str iter", K(ret), K(l_value));
+  } else if (OB_FAIL(l_instr_iter.get_full_data(l_data))) {
+    LOG_WARN("fail to get left roaringbitmap full data", K(ret), K(l_value));
+  } else if (OB_FAIL(r_instr_iter.init(0, NULL, &allocator))) {
+    LOG_WARN("fail to init right roaringbitmap str iter", K(ret), K(r_value));
+  } else if (OB_FAIL(r_instr_iter.get_full_data(r_data))) {
+    LOG_WARN("fail to get right roaringbitmap full data", K(ret), K(r_value));
+  } else if (OB_FAIL(ObRbUtils::get_calc_cardinality(allocator, l_data, r_data, xor_cardinality, ObRbOperation::XOR))) {
+    LOG_WARN("fail to calculate roaringbitmap xor cardinality", K(ret), K(l_value), K(r_value));
+  } else if (OB_UNLIKELY(0 != xor_cardinality)) {
+    LOG_WARN("roaringbitmap default value are not equal", K(ret), K(l_value), K(r_value), K(xor_cardinality));
   } else {
     is_equal = true;
   }
