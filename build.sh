@@ -1,12 +1,21 @@
 #!/bin/bash
+#
+# OceanBase Database Build Script
+# This script provides a convenient way to build OceanBase Database with various configurations.
+# It supports multiple build types including debug, release, and package builds.
+#
 
+# Get the top-level directory of the project
 TOPDIR=$(cd "$(dirname "$0")" && pwd)
 BUILD_SH=$TOPDIR/build.sh
 
+# Set up dependency and tools directories
 DEP_DIR=${TOPDIR}/deps/3rd/usr/local/oceanbase/deps/devel
 TOOLS_DIR=${TOPDIR}/deps/3rd/usr/local/oceanbase/devtools
+# Configure cmake to export compile commands for IDE support
 CMAKE_COMMAND="${TOOLS_DIR}/bin/cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=1"
 
+# Detect system capabilities
 CPU_CORES=`grep -c ^processor /proc/cpuinfo`
 KERNEL_RELEASE=`grep -Po 'release [0-9]{1}' /etc/issue 2>/dev/null`
 
@@ -54,28 +63,35 @@ function usage
     echo -e "\t./build.sh rpm --make"
 }
 
-# parse arguments
+# Parse command line arguments
+# Handles --init, --make flags and build type arguments
 function parse_args
 {
     for i in "${ALL_ARGS[@]}"; do
         if [[ "$i" == "--init" ]]
         then
+            # Flag to initialize dependencies before building
             NEED_INIT=true
         elif [[ "$i" == "--make" ]]
         then
+            # Flag to run make after cmake configuration
             NEED_MAKE=make
         elif [[ "$i" == "-DBUILD_CDC_ONLY=ON" ]]
         then
+            # Disable BOLT optimization for CDC-only builds
             ENABLE_BOLT_OPTION=OFF
             BUILD_ARGS+=("$i")
         elif [[ $NEED_MAKE == false ]]
         then
+            # Collect build arguments (passed to cmake)
             BUILD_ARGS+=("$i")
         else
+            # Collect make arguments (passed to make command)
             MAKE_ARGS+=("$i")
         fi
     done
 
+    # Disable lld linker on kernel release 6 due to compatibility issues
     if [[ "$KERNEL_RELEASE" == "release 6" ]]; then
         echo_log '[NOTICE] lld is disabled in kernel release 6'
         LLD_OPTION="OFF"
