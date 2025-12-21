@@ -1108,6 +1108,9 @@ DEF_INT(_ss_micro_cache_memory_percentage, OB_TENANT_PARAMETER, "20", "[1,50]",
 DEF_INT(_ss_mem_macro_cache_memory_limit_percentage, OB_TENANT_PARAMETER, "5", "[0,50]",
         "the maximum percentage of tenant memory size used by mem_macro_cache in shared_stoarge mode, Range: [0, 50]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_ss_allow_discard_hot_data_during_migration, OB_TENANT_PARAMETER, "False",
+        "Controls whether hot data may be discarded during LS migration in shared storage mode when the destination does not have sufficient disk space to hold all hot data.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 //background limit config
 DEF_TIME(_data_storage_io_timeout, OB_CLUSTER_PARAMETER, "10s", "[1s,600s]",
         "io timeout for data storage, Range [1s,600s]. "
