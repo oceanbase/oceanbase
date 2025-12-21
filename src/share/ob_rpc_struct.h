@@ -3019,7 +3019,8 @@ public:
         is_index_scope_specified_(false),
         is_offline_rebuild_(false),
         index_key_(-1),
-        data_version_(0)
+        data_version_(0),
+        generated_column_names_()
   {
     index_action_type_ = ADD_INDEX;
     index_using_type_ = share::schema::USING_BTREE;
@@ -3057,6 +3058,7 @@ public:
     is_offline_rebuild_ = false;
     index_key_ = -1;
     data_version_ = 0;
+    generated_column_names_.reset();
   }
   void set_index_action_type(const IndexActionType type) { index_action_type_  = type; }
   bool is_valid() const;
@@ -3078,6 +3080,8 @@ public:
       SHARE_LOG(WARN, "fail to assign index schema", K(ret));
     } else if (OB_FAIL(local_session_var_.deep_copy(other.local_session_var_))){
       SHARE_LOG(WARN, "fail to copy local session vars", K(ret));
+    } else if (OB_FAIL(generated_column_names_.assign(other.generated_column_names_))) {
+      SHARE_LOG(WARN, "fail to assign generated column names", K(ret));
     } else {
       index_type_ = other.index_type_;
       index_option_ = other.index_option_;
@@ -3174,6 +3178,7 @@ public:
   bool is_offline_rebuild_;
   int64_t index_key_;
   uint64_t data_version_;
+  common::ObSEArray<ObString, common::OB_PREALLOCATED_NUM> generated_column_names_;
 };
 
 struct ObIndexOfflineDdlArg : ObDDLArg

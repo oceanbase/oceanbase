@@ -3020,6 +3020,13 @@ typedef enum ObItemType
   T_MAX_CSV_ROW_LENGTH = 4958,
   T_HYBRID_SEARCH_SCORE = 4959, // hybrid search score
   T_AI_SPLIT_DOCUMENT_EXPRESSION = 4960, // ai_split_document
+
+  // vector index query
+  T_VECTOR_INDEX_HINT = 4961,
+  T_FILTER_ADAPTIVE = 4962,
+  T_PRE_FILTER = 4963,
+  T_POST_FILTER = 4964,
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

@@ -3338,7 +3338,8 @@ DEF_TO_STRING(ObCreateIndexArg)
        K_(is_index_scope_specified),
        K_(is_offline_rebuild),
        K_(index_key),
-       K_(data_version));
+       K_(data_version),
+       K_(generated_column_names));
   J_OBJ_END();
   return pos;
 }
@@ -3370,7 +3371,8 @@ OB_SERIALIZE_MEMBER((ObCreateIndexArg, ObIndexArg),
                     is_index_scope_specified_,
                     is_offline_rebuild_,
                     index_key_,
-                    data_version_);
+                    data_version_,
+                    generated_column_names_);
 
 OB_SERIALIZE_MEMBER((ObIndexOfflineDdlArg, ObDDLArg),
                     arg_,
