@@ -507,7 +507,7 @@ int ObHeapSliceInfo::init_autoinc_interval(const ObTabletID &tablet_id, const in
   autoinc_interval_.tablet_id_ = tablet_id;
   if (use_idempotent_autoinc_) {
     const int64_t pk_start = slice_idx * AUTO_INC_CACHE_INTERVAL;
-    autoinc_interval_.set(pk_start, pk_start + AUTO_INC_CACHE_INTERVAL);
+    autoinc_interval_.set(pk_start, pk_start + AUTO_INC_CACHE_INTERVAL - 1);
   } else {
     ObTabletAutoincrementService &auto_inc = ObTabletAutoincrementService::get_instance();
     autoinc_interval_.cache_size_ = AUTO_INC_CACHE_INTERVAL;
