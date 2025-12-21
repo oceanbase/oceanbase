@@ -347,15 +347,27 @@ public:
     ObMySQLTransaction &trans);
 
   int get_external_file_list_on_device_with_cache(
-      const common::ObString &location,
+    const common::ObString &location,
+    const uint64_t tenant_id,
+    const uint64_t ts,
+    const common::ObString &pattern,
+    const sql::ObExprRegexpSessionVariables &regexp_vars,
+    ObExternalTableFiles &external_table_files,
+    const common::ObString &access_info,
+    common::ObIAllocator &allocator,
+    int64_t refresh_interval_ms);
+
+  int get_external_file_list_on_device_with_cache(
+      const ObIArray<common::ObString> &location,
       const uint64_t tenant_id,
-      const uint64_t ts,
+      const ObIArray<int64_t> &part_id,
+      const ObIArray<int64_t> &part_modify_ts,
       const common::ObString &pattern,
-      const sql::ObExprRegexpSessionVariables &regexp_vars,
-      ObExternalTableFiles &external_table_files,
       const common::ObString &access_info,
       common::ObIAllocator &allocator,
-      int64_t refresh_interval_ms);
+      int64_t refresh_interval_ms,
+      ObIArray<ObExternalTableFiles *> &external_table_files,
+      ObIArray<int64_t> &reorder_part_id);
 
   int get_external_file_list_on_device(const ObString &location,
                                        const uint64_t modify_ts,
@@ -535,6 +547,33 @@ private:
   int add_partition_for_alter_stmt(ObAlterTableStmt *&alter_table_stmt,
                                   const ObString &part_name,
                                   ObNewRow &part_val);
+
+  int collect_file_list_by_expr_parallel(uint64_t tenant_id,
+                                         const ObIArray<ObString> &location,
+                                         const ObString &pattern,
+                                         const ObString &access_info,
+                                         ObIAllocator &allocator,
+                                         ObIArray<ObExternalTableFiles *> &files,
+                                         ObFixedArray<ObString, ObIAllocator> *files_location);
+
+  int calculate_dop(int64_t task_count, uint64_t tenant_id, int64_t &dop);
+
+  int convert_to_external_table_files(const char *buf,
+                                      const int64_t buf_len,
+                                      const ObString location,
+                                      ObIAllocator &allocator,
+                                      ObExternalTableFiles &file_list);
+
+  int get_one_location_from_cache(const common::ObString &location,
+                                  const uint64_t tenant_id,
+                                  const int64_t &modify_ts,
+                                  ObIAllocator &allocator,
+                                  ObIArray<ObExternalTableFiles *> &external_table_files,
+                                  int64_t refresh_interval_ms);
+
+  int insert_one_location_to_cache(int64_t tenant_id,
+                                   ObString location,
+                                   ObExternalTableFiles &file_list);
 
 private:
   common::ObSpinLock fill_cache_locks_[LOAD_CACHE_LOCK_CNT];

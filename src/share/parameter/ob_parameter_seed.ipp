@@ -2674,6 +2674,11 @@ DEF_INT(_dop_of_collect_external_table_statistics, OB_TENANT_PARAMETER, "0", "[0
 DEF_INT(_max_partition_count_to_collect_statistic, OB_TENANT_PARAMETER, "5", "[0,)",
         "force odps external table to using block granule iterator when count of partition is under this config",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(_max_dop_for_external_table_file_listing, OB_TENANT_PARAMETER, "0", "[0,)",
+        "max parallelism of file listing for external table",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_INT(inc_sstable_upload_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
         "the current work thread score of upload incremental sstable to shared storage"
         " Range: [0,100] in integer. Especially, 0 means default value",
