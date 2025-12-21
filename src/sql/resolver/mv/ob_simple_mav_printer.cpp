@@ -1238,16 +1238,10 @@ int ObSimpleMAVPrinter::get_inner_sel_name_for_aggr(const ObAggFunRawExpr &aggr,
     LOG_WARN("unexpected aggr", K(ret), K(aggr));
   } else {
     const ObString &param_name = static_cast<const ObColumnRefRawExpr*>(aggr_param)->get_column_name();
-    char buf[OB_MAX_COLUMN_NAME_BUF_LENGTH] = { 0 };
-    int64_t buf_len = OB_MAX_COLUMN_NAME_BUF_LENGTH;
-    int64_t pos = 0;
     const char* name_fmt = T_FUN_MIN == aggr.get_expr_type()
                            ? "MIN_%.*s$$" : "MAX_%.*s$$";
-
-    if (OB_FAIL(BUF_PRINTF(name_fmt, param_name.length(), param_name.ptr()))) {
-      LOG_WARN("failed to print buff", K(ret));
-    } else if (OB_FAIL(ob_write_string(ctx_.alloc_, ObString(pos, buf), sel_name))) {
-      LOG_WARN("Write string error", K(ret));
+    if (OB_FAIL(gen_format_string_name(name_fmt, param_name, sel_name, OB_MAX_COLUMN_NAME_BUF_LENGTH))) {
+      LOG_WARN("failed to generate format string name", K(ret));
     }
   }
   return ret;

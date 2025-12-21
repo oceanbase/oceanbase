@@ -337,6 +337,7 @@ int ObOuterJoinMJVPrinter::gen_select_for_left_join_first_delete(const TableItem
   ObSelectStmt *dlt_t_mlog_stmt = NULL;
   TableItem *mv_table = NULL;
   TableItem *dlt_t_mlog_table = NULL;
+  ObString dlt_t_mlog_table_name;
   JoinedTable *mv_stat_from_table = NULL;
   ObSEArray<ObRawExpr*, 4> dlt_t_mlog_rowkeys;
   ObSEArray<int64_t, 4> other_join_table_idxs; // useless for the first delete
@@ -344,6 +345,8 @@ int ObOuterJoinMJVPrinter::gen_select_for_left_join_first_delete(const TableItem
   ObSEArray<ObRawExpr*, 16> win_func_partition_key;
   ObRawExpr *mv_stat_cond_expr = NULL;
   ObSelectStmt *in_sel_stmt = NULL;
+  TableItem *in_sel_mv_table = NULL; // should use different table name from mv_table
+  ObSEArray<ObRawExpr*, 16> in_sel_other_join_table_rowkeys; // should use different table name from other_join_table_rowkeys
   ObRawExpr *in_sel_cond_expr = NULL;
   cond_sel_stmt = NULL;
   // build mv_stat subquery
@@ -360,7 +363,9 @@ int ObOuterJoinMJVPrinter::gen_select_for_left_join_first_delete(const TableItem
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(mv_stat_stmt), K(mv_table), K(dlt_t_mlog_stmt));
   } else if (OB_FALSE_IT(dlt_t_mlog_stmt->assign_distinct())) {
-  } else if (OB_FAIL(create_simple_table_item(mv_stat_stmt, DELTA_TABLE_VIEW_NAME, dlt_t_mlog_table, dlt_t_mlog_stmt, false))) {
+  } else if (OB_FAIL(gen_format_string_name(DELTA_TABLE_FORMAT_NAME, delta_table->get_object_name(), dlt_t_mlog_table_name))) {
+    LOG_WARN("failed to generate dlt_t_mlog table name", K(ret));
+  } else if (OB_FAIL(create_simple_table_item(mv_stat_stmt, dlt_t_mlog_table_name, dlt_t_mlog_table, dlt_t_mlog_stmt, false))) {
     LOG_WARN("failed to create simple table item", K(ret));
   } else if (OB_ISNULL(dlt_t_mlog_table)) {
     ret = OB_ERR_UNEXPECTED;
@@ -406,17 +411,25 @@ int ObOuterJoinMJVPrinter::gen_select_for_left_join_first_delete(const TableItem
   } else if (OB_ISNULL(in_sel_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("select stmt is null", K(ret));
-  } else if (OB_FAIL(in_sel_stmt->get_table_items().push_back(mv_table))) {
-    LOG_WARN("failed to push back table item", K(ret));
-  } else if (OB_FAIL(in_sel_stmt->add_from_item(mv_table->table_id_))) {
-    LOG_WARN("failed to add from item", K(ret));
-  } else if (OB_FAIL(gen_exists_cond_for_table(delta_table, mv_table, true, true, in_sel_cond_expr))) {
+  } else if (OB_FAIL(create_simple_table_item(in_sel_stmt, mv_schema_.get_table_name(), in_sel_mv_table, NULL, true))) {
+    LOG_WARN("failed to create simple table item", K(ret));
+  } else if (OB_ISNULL(in_sel_mv_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null table item", K(ret), K(in_sel_mv_table));
+  } else if (OB_FAIL(gen_format_string_name(INNER_TABLE_FORMAT_NAME, mv_schema_.get_table_name(), in_sel_mv_table->alias_name_))) {
+    LOG_WARN("failed to generate format table name", K(ret));
+  } else if (OB_FAIL(gen_exists_cond_for_table(delta_table, in_sel_mv_table, true, true, in_sel_cond_expr))) {
     LOG_WARN("failed to generate exists cond for mv_stat cond", K(ret));
   } else if (OB_FAIL(in_sel_stmt->add_condition_expr(in_sel_cond_expr))) {
     LOG_WARN("failed to push back semi filter", K(ret));
   } else if (OB_FAIL(add_semi_to_inner_hint(in_sel_stmt))) {
     LOG_WARN("failed to add semi to inner hint", K(ret));
-  } else if (OB_FAIL(add_col_exprs_into_select(in_sel_stmt->get_select_items(), other_join_table_rowkeys))) {
+  } else if (OB_FAIL(copy_and_replace_column_exprs(other_join_table_rowkeys,
+                                                   in_sel_mv_table->get_table_name(),
+                                                   in_sel_mv_table->table_id_,
+                                                   in_sel_other_join_table_rowkeys))) {
+    LOG_WARN("failed to copy and replace column exprs", K(ret));
+  } else if (OB_FAIL(add_col_exprs_into_select(in_sel_stmt->get_select_items(), in_sel_other_join_table_rowkeys))) {
     LOG_WARN("failed to add col exprs into select", K(ret));
   } else if (OB_FAIL(build_exists_equal_expr(in_sel_stmt, other_join_table_rowkeys, mv_stat_cond_expr))) {
     LOG_WARN("failed to build exists equal expr", K(ret));
