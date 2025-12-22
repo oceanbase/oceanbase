@@ -2823,9 +2823,12 @@ struct MergeKeyInfoHelper
 
     int generate_lake_table_paths();
     int generate_lake_table_paths(PathHelper &helper);
-    int compute_lake_table_property(uint64_t table_id, uint64_t ref_table_id);
+    int compute_lake_table_property(uint64_t table_id,
+                                    uint64_t ref_table_id,
+                                    int64_t lake_table_snapshot_id);
     int compute_lake_table_location_and_meta(const uint64_t table_id,
                                              const uint64_t ref_table_id,
+                                             int64_t lake_table_snapshot_id,
                                              ObTablePartitionInfo *&table_partition_info);
     int compute_lake_table_meta_info(const uint64_t table_id,
                                      const uint64_t ref_table_id);

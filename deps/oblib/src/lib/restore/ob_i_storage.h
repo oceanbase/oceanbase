@@ -491,10 +491,14 @@ public:
       const ObString &uri,
       const int64_t &handled_size);
   ~ObObjectStorageGuard();
+  static bool is_connectivity_check_file(const ObString &uri);
 
 private:
   void print_access_storage_log_() const;
   bool is_slow_io_(const int64_t cost_time_us) const;
+
+public:
+  static constexpr char OB_STR_CONNECTIVITY_CHECK[] = "connectivity_check";
 
 private:
   static constexpr int64_t SMALL_IO_SIZE = 128LL * 1024LL;             // 128KB

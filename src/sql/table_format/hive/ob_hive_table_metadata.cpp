@@ -131,7 +131,9 @@ int ObHiveTableMetadata::setup_tbl_schema(const uint64_t tenant_id,
   return ret;
 }
 
-int ObHiveTableMetadata::do_build_table_schema(ObTableSchema *&table_schema)
+int ObHiveTableMetadata::do_build_table_schema(std::optional<int32_t> schema_id,  /*not used*/
+                                               std::optional<int64_t> snapshot_id,  /*not used*/
+                                               ObTableSchema *&table_schema)
 {
   int ret = OB_SUCCESS;
   OZ(ObSchemaUtils::alloc_schema(allocator_, table_schema_, table_schema));
@@ -962,7 +964,7 @@ int ObHiveTableMetadata::set_partition_expr(const FieldSchemas &par_cols,
 
 int ObHiveTableMetadata::calculate_part_val_from_string(const ObTableSchema &table_schema,
                                                         const bool &is_part_table,
-                                                        ObArray<ObString> &one_part_vals,
+                                                        ObIArray<ObString> &one_part_vals,
                                                         ObIAllocator &allocator,
                                                         ObNewRow &ob_part_row)
 {
@@ -987,7 +989,7 @@ int ObHiveTableMetadata::calculate_part_val_from_string(const ObTableSchema &tab
       ob_part_row.assign(obj_array, part_size);
     }
 
-    for (int j = 0; OB_SUCC(ret) && j < one_part_vals.size(); j++) {
+    for (int j = 0; OB_SUCC(ret) && j < one_part_vals.count(); j++) {
       const ObRowkeyColumn *part_col = part_key_info.get_column(j);
       ObObjType part_key_type = ObUnknownType;
       ObString part_val(one_part_vals.at(j));

@@ -892,9 +892,19 @@ int ObLogReplayService::get_replay_status_(const share::ObLSID &id,
 bool ObLogReplayService::is_tenant_out_of_memory_() const
 {
   bool bool_ret = true;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  int64_t pending_task_memory_limit = PENDING_TASK_MEMORY_LIMIT;
+  if (tenant_config.is_valid()) {
+    pending_task_memory_limit = tenant_config->_replay_pending_log_memory_limit;
+  } else {
+    if (REACH_TIME_INTERVAL(100L* 1000 * 1000)) {
+      int ret = OB_ERR_UNEXPECTED;
+      CLOG_LOG(WARN, "tenant config is not valid, use default pending task memory limit", KR(ret));
+    }
+  }
   int64_t pending_size = get_pending_task_size();
   bool is_pending_too_large = MTL(ObTenantFreezer *)->is_replay_pending_log_too_large(pending_size);
-  bool_ret = (pending_size >= PENDING_TASK_MEMORY_LIMIT || is_pending_too_large);
+  bool_ret = (pending_size >= pending_task_memory_limit || is_pending_too_large);
   return bool_ret;
 }
 

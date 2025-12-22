@@ -12,6 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
+#include "rootserver/ob_ls_service_helper.h" // ObLSServiceHelper
+#include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "storage/tx_storage/ob_checkpoint_service.h"
 #include "logservice/ob_log_service.h"
 #include "logservice/archiveservice/ob_archive_service.h"
@@ -240,21 +242,61 @@ public:
     const ObLSID ls_id = ls.get_ls_id();
     ObCheckpointExecutor *checkpoint_executor = nullptr;
     ObDataCheckpoint *data_checkpoint = nullptr;
-    if (OB_ISNULL(data_checkpoint = ls.get_data_checkpoint())) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "data_checkpoint should not be null", K(ret), K(ls_id));
-    } else if (OB_FAIL(data_checkpoint->check_can_move_to_active_in_newcreate())) {
-      STORAGE_LOG(WARN, "check can move to active failed", K(ret), K(ls_id));
-    } else if (OB_ISNULL(checkpoint_executor = ls.get_checkpoint_executor())) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "checkpoint_executor should not be null", K(ls_id));
-    } else if (OB_FAIL(checkpoint_executor->update_clog_checkpoint())) {
-      STORAGE_LOG(WARN, "update_clog_checkpoint failed", K(ret), K(ls_id));
-    } else if (GCONF.enable_logservice) {
-      succ_ls_cnt_++;
-      STORAGE_LOG(DEBUG, "skip advance_local_clog_base_lsn_ in logservice mode", K(ls_id));
-    } else if (OB_FAIL(advance_local_clog_base_lsn_(ls))) {
-      STORAGE_LOG(WARN, "advance_local_clog_base_lsn_ failed", K(ret), K(ls_id));
+
+    if (ObReplicaTypeCheck::is_log_replica(ls.get_replica_type())) {
+      rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
+      share::SCN checkpoint_scn;
+      palf::LSN checkpoint_lsn;
+      // When clog recycle mode is strict (which is default value), we set clog recycle
+      // point at pure_readable_scn. But pure_readable_scn can not promoted when
+      // majority of F-replicas are down, thus making clog can not be recycled
+      // In this case, we can set clog strict recycle mode to false.
+      // When clog recycle mode is not strict, we set clog recycle point at sync_scn
+      // sync_scn can promoted when majority of F-replicas are down
+      bool is_strict_clog_recycle_mode = ObServerConfig::get_instance()._ob_enable_log_replica_strict_recycle_mode;
+      if (OB_ISNULL(tenant_info_loader)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tenant_info_loader is null", KR(ret), KP(tenant_info_loader));
+      } else if (!is_strict_clog_recycle_mode) {
+        // not strict recycle mode, recycle clog based on sync_scn
+        if (OB_FAIL(tenant_info_loader->get_sync_scn(checkpoint_scn))) {
+          LOG_WARN("fail to get tenant sync scn", KR(ret));
+        }
+      } else {
+        // is strict recycle mode, recycle clog based on pure_readable_scn
+        if (OB_FAIL(tenant_info_loader->get_pure_readable_scn(checkpoint_scn))) {
+          LOG_WARN("fail to get tenant readable scn", KR(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ls.get_log_handler()->locate_by_scn_coarsely(checkpoint_scn, checkpoint_lsn))) {
+        LOG_WARN("fail to convert scn to lsn", KR(ret), K(checkpoint_scn));
+      } else if (OB_FAIL(ls.set_clog_checkpoint(checkpoint_lsn, checkpoint_scn, true/*write_slog*/))) {
+        LOG_WARN("fail to set clog checkpoint", KR(ret), K(checkpoint_lsn), K(checkpoint_scn));
+      } else if (OB_FAIL(ls.get_log_handler()->advance_base_lsn(checkpoint_lsn))) {
+        LOG_WARN("fail to advance base lsn", KR(ret), K(checkpoint_lsn));
+      } else {
+        succ_ls_cnt_++;
+      }
+      FLOG_INFO("[CHECKPOINT] log replica update checkpoint", KR(ret), "tenant_id", MTL_ID(), K(ls.get_ls_id()),
+                K(checkpoint_lsn), K(checkpoint_scn), K(is_strict_clog_recycle_mode));
+    } else {
+      if (OB_ISNULL(data_checkpoint = ls.get_data_checkpoint())) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "data_checkpoint should not be null", K(ret), K(ls_id));
+      } else if (OB_FAIL(data_checkpoint->check_can_move_to_active_in_newcreate())) {
+        STORAGE_LOG(WARN, "check can move to active failed", K(ret), K(ls_id));
+      } else if (OB_ISNULL(checkpoint_executor = ls.get_checkpoint_executor())) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "checkpoint_executor should not be null", K(ls_id));
+      } else if (OB_FAIL(checkpoint_executor->update_clog_checkpoint())) {
+        STORAGE_LOG(WARN, "update_clog_checkpoint failed", K(ret), K(ls_id));
+      } else if (GCONF.enable_logservice) {
+        succ_ls_cnt_++;
+        STORAGE_LOG(DEBUG, "skip advance_local_clog_base_lsn_ in logservice mode", K(ls_id));
+      } else if (OB_FAIL(advance_local_clog_base_lsn_(ls))) {
+        STORAGE_LOG(WARN, "advance_local_clog_base_lsn_ failed", K(ret), K(ls_id));
+      }
     }
 
     iterated_ls_cnt_++;
@@ -325,7 +367,10 @@ public:
   {
     int ret = OB_SUCCESS;
     ObCheckpointExecutor *checkpoint_executor = nullptr;
-    if (OB_ISNULL(checkpoint_executor = ls.get_checkpoint_executor())) {
+
+    if (ObReplicaTypeCheck::is_log_replica(ls.get_replica_type())) {
+        // do nothing
+    } else if (OB_ISNULL(checkpoint_executor = ls.get_checkpoint_executor())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "checkpoint_executor should not be null", K(ls.get_ls_id()));
     } else if (OB_FAIL(checkpoint_executor->traversal_flush())) {
@@ -356,7 +401,10 @@ public:
     int ret = OB_SUCCESS;
     ObCheckpointExecutor *checkpoint_executor = ls.get_checkpoint_executor();
     ObDataCheckpoint *data_checkpoint = ls.get_data_checkpoint();
-    if (OB_ISNULL(checkpoint_executor) || OB_ISNULL(data_checkpoint)) {
+    if (ObReplicaTypeCheck::is_log_replica(ls.get_replica_type())) {
+      // do nothing
+      ++succ_ls_cnt_;
+    } else if (OB_ISNULL(checkpoint_executor) || OB_ISNULL(data_checkpoint)) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN,
                   "checkpoint_executor or data_checkpoint should not be null",
@@ -496,6 +544,8 @@ public:
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "log stream not exist", K(ret), K(ls_id_));
+    } else if (ObReplicaTypeCheck::is_log_replica(ls->get_replica_type())) {
+      // do nothing
     } else {
       SCN prev_ss_checkpoint_scn(ObScnRange::MAX_SCN);
       LSN prev_ss_checkpoint_lsn;

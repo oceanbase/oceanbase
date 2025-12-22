@@ -123,7 +123,9 @@ ObPrivMgr::ObPrivMgr(ObIAllocator &allocator)
     obj_mysql_priv_map_(SET_USE_500("PRIV_OBJ_MYSQL", ObCtxIds::SCHEMA_SERVICE)),
     sys_privs_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_PRIV_SYS_PRIVS, ObCtxIds::SCHEMA_SERVICE)),
     catalog_privs_(0, NULL, SET_USE_500("PRIV_CATALOG", ObCtxIds::SCHEMA_SERVICE)),
-    catalog_priv_map_(SET_USE_500("PRIV_CATALOG", ObCtxIds::SCHEMA_SERVICE))
+    catalog_priv_map_(SET_USE_500("PRIV_CATALOG", ObCtxIds::SCHEMA_SERVICE)),
+    sensitive_rule_privs_(0, NULL, SET_USE_500("PRIV_SENS_RULE", ObCtxIds::SCHEMA_SERVICE)),
+    sensitive_rule_priv_map_(SET_USE_500("PRI_SENSRUL_MAP", ObCtxIds::SCHEMA_SERVICE))
 {}
 
 ObPrivMgr::~ObPrivMgr()
@@ -144,6 +146,8 @@ int ObPrivMgr::init()
     LOG_WARN("init catalog priv map failed", K(ret));
   } else if (OB_FAIL(obj_mysql_priv_map_.init())) {
     LOG_WARN("init obj mysql priv map failed", K(ret));
+  } else if (OB_FAIL(sensitive_rule_priv_map_.init())) {
+    LOG_WARN("init sensitive rule priv map failed", K(ret));
   }
 
   return ret;
@@ -166,6 +170,8 @@ void ObPrivMgr::reset()
   catalog_priv_map_.clear();
   obj_mysql_privs_.clear();
   obj_mysql_priv_map_.clear();
+  sensitive_rule_privs_.clear();
+  sensitive_rule_priv_map_.clear();
 }
 
 int ObPrivMgr::assign(const ObPrivMgr &other)
@@ -194,6 +200,8 @@ int ObPrivMgr::assign(const ObPrivMgr &other)
     ASSIGN_FIELD(catalog_priv_map_);
     ASSIGN_FIELD(obj_mysql_privs_);
     ASSIGN_FIELD(obj_mysql_priv_map_);
+    ASSIGN_FIELD(sensitive_rule_privs_);
+    ASSIGN_FIELD(sensitive_rule_priv_map_);
     #undef ASSIGN_FIELD
   }
 
@@ -284,6 +292,16 @@ int ObPrivMgr::deep_copy(const ObPrivMgr &other)
         LOG_WARN("NULL ptr", K(obj_mysql_priv), K(ret));
       } else if (OB_FAIL(add_obj_mysql_priv(*obj_mysql_priv))) {
         LOG_WARN("add obj mysql priv failed", K(*obj_mysql_priv), K(ret));
+      }
+    }
+    for (SensitiveRulePrivIter iter = other.sensitive_rule_privs_.begin();
+       OB_SUCC(ret) && iter != other.sensitive_rule_privs_.end(); iter++) {
+      ObSensitiveRulePriv *sensitive_rule_priv = *iter;
+      if (OB_ISNULL(sensitive_rule_priv)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("NULL ptr", K(sensitive_rule_priv), K(ret));
+      } else if (OB_FAIL(add_sensitive_rule_priv(*sensitive_rule_priv))) {
+        LOG_WARN("add sensitive_rule priv failed", K(*sensitive_rule_priv), K(ret));
       }
     }
   }
@@ -2106,6 +2124,16 @@ void ObPrivMgr::dump() const
       LOG_INFO("ObjMysqlPriv", K(*obj_mysql_priv));
     }
   }
+
+  for (SensitiveRulePrivIter iter = sensitive_rule_privs_.begin();
+       iter != sensitive_rule_privs_.end(); ++iter) {
+    const ObSensitiveRulePriv *sensitive_rule_priv = *iter;
+    if (NULL == sensitive_rule_priv) {
+      LOG_INFO("NULL ptr", K(sensitive_rule_priv));
+    } else {
+      LOG_INFO("SensitiveRulePriv", K(*sensitive_rule_priv));
+    }
+  }
 }
 
 int ObPrivMgr::get_schema_statistics(const ObSchemaType schema_type, ObSchemaStatisticsInfo &schema_info) const
@@ -2373,6 +2401,159 @@ int ObPrivMgr::get_obj_mysql_privs_in_obj(const uint64_t tenant_id,
         LOG_WARN("push back obj priv failed", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+
+int ObPrivMgr::get_sensitive_rule_priv(const ObSensitiveRulePrivSortKey &sensitive_rule_priv_key,
+                                       const ObSensitiveRulePriv *&sensitive_rule_priv) const
+{
+  int ret = OB_SUCCESS;
+  sensitive_rule_priv = NULL;
+  ObSensitiveRulePriv *tmp_sensitive_rule_priv = NULL;
+  int hash_ret = sensitive_rule_priv_map_.get_refactored(sensitive_rule_priv_key, tmp_sensitive_rule_priv);
+  if (OB_SUCCESS == hash_ret) {
+    if (OB_ISNULL(tmp_sensitive_rule_priv)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get sensitive_rule priv return NULL", K(sensitive_rule_priv_key));
+    } else {
+      sensitive_rule_priv = tmp_sensitive_rule_priv;
+    }
+  } else if (OB_HASH_NOT_EXIST != hash_ret) {
+    ret = hash_ret;
+    LOG_WARN("failed to get sensitive_rule priv", K(ret));
+  }
+  return ret;
+}
+
+int ObPrivMgr::get_sensitive_rule_priv_set(const ObSensitiveRulePrivSortKey &sensitive_rule_priv_key,
+                                           ObPrivSet &priv_set) const
+{
+  int ret = OB_SUCCESS;
+  priv_set = OB_PRIV_SET_EMPTY;
+  const ObSensitiveRulePriv *sensitive_rule_priv = NULL;
+  if (OB_FAIL(get_sensitive_rule_priv(sensitive_rule_priv_key, sensitive_rule_priv))) {
+    LOG_WARN("get sensitive_rule priv failed", K(ret), K(sensitive_rule_priv_key));
+  } else if (NULL != sensitive_rule_priv) {
+    priv_set = sensitive_rule_priv->get_priv_set();
+  }
+  return ret;
+}
+
+int ObPrivMgr::get_sensitive_rule_privs_in_user(const uint64_t tenant_id,
+                                                const uint64_t user_id,
+                                                ObIArray<const ObSensitiveRulePriv *> &sensitive_rule_privs) const
+{
+  int ret = OB_SUCCESS;
+  sensitive_rule_privs.reset();
+  ObTenantUserId tenant_user_id(tenant_id, user_id);
+  ConstSensitiveRulePrivIter tenant_sensitive_rule_priv_begin =
+      sensitive_rule_privs_.lower_bound(tenant_user_id, ObSensitiveRulePriv::cmp_tenant_user_id);
+  bool is_stop = false;
+  for (ConstSensitiveRulePrivIter iter = tenant_sensitive_rule_priv_begin;
+       OB_SUCC(ret) && iter != sensitive_rule_privs_.end() && !is_stop; ++iter) {
+    const ObSensitiveRulePriv *sensitive_rule_priv = NULL;
+    if (OB_ISNULL(sensitive_rule_priv = *iter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null ptr", K(ret), K(sensitive_rule_priv));
+    } else if (tenant_id != sensitive_rule_priv->get_tenant_id()
+               || user_id != sensitive_rule_priv->get_user_id()) {
+      is_stop = true;
+    } else if (OB_FAIL(sensitive_rule_privs.push_back(sensitive_rule_priv))) {
+      LOG_WARN("push back sensitive_rule priv failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObPrivMgr::add_sensitive_rule_privs(const common::ObIArray<ObSensitiveRulePriv> &sensitive_rule_privs)
+{
+  int ret = OB_SUCCESS;
+  FOREACH_CNT_X(sensitive_rule_priv, sensitive_rule_privs, OB_SUCC(ret)) {
+    if (OB_FAIL(add_sensitive_rule_priv(*sensitive_rule_priv))) {
+      LOG_WARN("add sensitive_rule priv failed", K(ret), K(*sensitive_rule_priv));
+    }
+  }
+  return ret;
+}
+
+int ObPrivMgr::del_sensitive_rule_privs(const common::ObIArray<ObSensitiveRulePrivSortKey> &sensitive_rule_priv_keys)
+{
+  int ret = OB_SUCCESS;
+  FOREACH_CNT_X(sensitive_rule_priv_key, sensitive_rule_priv_keys, OB_SUCC(ret)) {
+    if (OB_FAIL(del_sensitive_rule_priv(*sensitive_rule_priv_key))) {
+      LOG_WARN("del sensitive_rule priv failed", K(ret), K(*sensitive_rule_priv_key));
+    }
+  }
+  return ret;
+}
+
+int ObPrivMgr::add_sensitive_rule_priv(const ObSensitiveRulePriv &sensitive_rule_priv)
+{
+  int ret = OB_SUCCESS;
+  ObSensitiveRulePriv *new_sensitive_rule_priv = NULL;
+  SensitiveRulePrivIter iter = NULL;
+  ObSensitiveRulePriv *replaced_sensitive_rule_priv = NULL;
+
+  if (OB_FAIL(ObSchemaUtils::alloc_schema(allocator_,
+                                          sensitive_rule_priv,
+                                          new_sensitive_rule_priv))) {
+    LOG_WARN("alloc schema failed", K(ret));
+  } else if (OB_ISNULL(new_sensitive_rule_priv)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null ptr", K(ret), K(new_sensitive_rule_priv));
+  } else if (OB_FAIL(sensitive_rule_privs_.replace(new_sensitive_rule_priv,
+                                                   iter,
+                                                   ObSensitiveRulePriv::cmp,
+                                                   ObSensitiveRulePriv::equal,
+                                                   replaced_sensitive_rule_priv))) {
+    LOG_WARN("failed to put sensitive_rule_priv into sensitive_rule_priv vector", K(ret));
+  } else {
+    int hash_ret = sensitive_rule_priv_map_.set_refactored(new_sensitive_rule_priv->get_sort_key(), new_sensitive_rule_priv, 1);
+    if (OB_SUCCESS != hash_ret && OB_HASH_EXIST != hash_ret) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to build sensitive_rule_priv hashmap",
+               "sensitive_rule_priv_key", new_sensitive_rule_priv->get_sort_key(),
+               K(ret), K(hash_ret));
+    }
+  }
+
+  // ignore ret
+  if (sensitive_rule_privs_.count() != sensitive_rule_priv_map_.item_count()) {
+      LOG_WARN("sensitive_rule priv is non-consistent between map and vector",
+               "sensitive_rule_privs vector count", sensitive_rule_privs_.count(),
+               "sensitive_rule_privs map size", sensitive_rule_priv_map_.item_count());
+  }
+
+  return ret;
+}
+
+int ObPrivMgr::del_sensitive_rule_priv(const ObSensitiveRulePrivSortKey &sensitive_rule_priv_key)
+{
+  int ret = OB_SUCCESS;
+  ObSensitiveRulePriv *sensitive_rule_priv = NULL;
+  if (OB_FAIL(sensitive_rule_privs_.remove_if(sensitive_rule_priv_key,
+                                              ObSensitiveRulePriv::cmp_sort_key,
+                                              ObSensitiveRulePriv::equal_sort_key,
+                                              sensitive_rule_priv))) {
+    LOG_WARN("failed to remove sensitive_rule priv",K(sensitive_rule_priv_key), K(ret));
+  } else if (OB_ISNULL(sensitive_rule_priv)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("removed sensitive_rule_priv return null", K(sensitive_rule_priv));
+  } else {
+    int hash_ret = sensitive_rule_priv_map_.erase_refactored(sensitive_rule_priv_key);
+    if (OB_SUCCESS != hash_ret) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to delete sensitive_rule priv from sensitive_rule priv map", K(ret), K(hash_ret));
+    }
+  }
+
+  // ignore ret
+  if (sensitive_rule_privs_.count() != sensitive_rule_priv_map_.item_count()) {
+      LOG_WARN("sensitive_rule priv is non-consistent between map and vector",
+              "sensitive_rule_privs vector count", sensitive_rule_privs_.count(),
+              "sensitive_rule_privs map size", sensitive_rule_priv_map_.item_count());
   }
   return ret;
 }

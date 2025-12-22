@@ -236,6 +236,33 @@ int ObStaticMergeParam::init_sstable_logic_seq()
   return ret;
 }
 
+int ObStaticMergeParam::init_sstable_need_full_merge(
+    const int64_t sstable_idx,
+    const ObSSTable &sstable,
+    const bool need_calc_progressive_merge)
+{
+  int ret = OB_SUCCESS;
+  if (data_version_ >= DATA_VERSION_4_5_0_0) {
+    if (OB_UNLIKELY(sstable_idx < 0 || sstable_idx >= merge_sstable_status_array_.count())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid sstable idx", K(ret), K(sstable_idx), K(merge_sstable_status_array_));
+    } else if (sstable.is_co_sstable() &&
+        static_cast<const ObCOSSTableV2 &>(sstable).is_all_cg_base() &&
+        !schema_->has_all_column_group() &&
+        is_build_row_store() &&
+        !need_calc_progressive_merge) {
+      int64_t full_stored_col_cnt = 0;
+      if (OB_FAIL(schema_->get_stored_column_count_in_sstable(full_stored_col_cnt))) {
+        LOG_WARN("failed to get stored column count in sstable", K(ret), KPC(schema_));
+      } else {
+        const int64_t major_column_count = static_cast<const ObCOSSTableV2 &>(sstable).get_cs_meta().full_column_cnt_;
+        merge_sstable_status_array_.at(sstable_idx).need_full_merge_ = major_column_count != full_stored_col_cnt;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObStaticMergeParam::init_sstable_schema_changed(
     const int64_t sstable_idx,
     const ObSSTable &sstable,
@@ -447,6 +474,8 @@ int ObStaticMergeParam::cal_major_merge_param(
             }
           }
           if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(init_sstable_need_full_merge(i, *sstable, progressive_mgr.need_calc_progressive_merge()))) {
+            LOG_WARN("failed to init sstable need full merge", KR(ret), K(i), K(sstable), K(progressive_mgr));
           } else if (is_full_merge_
             || (merge_sstable_status_array_.at(i).merge_level_ != MACRO_BLOCK_MERGE_LEVEL && merge_sstable_status_array_.at(i).is_schema_changed_)
             || (data_version_ >= DATA_VERSION_4_3_3_0 && progressive_mgr.need_calc_progressive_merge())
@@ -516,6 +545,21 @@ int ObStaticMergeParam::get_sstable_merge_level(
     LOG_WARN("unexpected index", K(index), K(merge_sstable_status_array_.count()), K(lbt()));
   } else {
     level = merge_sstable_status_array_.at(index).merge_level_;
+  }
+  return ret;
+}
+
+int ObStaticMergeParam::get_sstable_need_full_merge(
+  const int64_t index,
+  bool &need_full_merge) const
+{
+  int ret = OB_SUCCESS;
+  need_full_merge = false;
+  if (index < 0 || index >= merge_sstable_status_array_.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected index", K(index), K(merge_sstable_status_array_.count()), K(lbt()));
+  } else {
+    need_full_merge = merge_sstable_status_array_.at(index).need_full_merge_;
   }
   return ret;
 }

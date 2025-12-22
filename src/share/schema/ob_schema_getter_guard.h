@@ -30,6 +30,7 @@
 #include "share/schema/ob_ai_model_mgr.h"
 #include "share/schema/ob_ccl_schema_struct.h"
 #include "share/schema/ob_ccl_rule_mgr.h"
+#include "share/schema/ob_sensitive_rule_schema_struct.h"
 
 namespace oceanbase
 {
@@ -502,6 +503,24 @@ public:
                          const common::ObIArray<uint64_t> &enable_role_id_array,
                          const common::ObString &catalog_name,
                          bool &allow_show);
+  int check_sensitive_rule_access(const ObSessionPrivInfo &session_priv,
+                                  const common::ObIArray<uint64_t> &enable_role_id_array,
+                                  const common::ObString &sensitive_rule_name);
+  int check_sensitive_rule_access(const ObSessionPrivInfo &session_priv,
+                                  const common::ObIArray<uint64_t> &enable_role_id_array,
+                                  const uint64_t sensitive_rule_id);
+  int check_sensitive_rule_db_access(const ObSessionPrivInfo &session_priv,
+                                     const common::ObIArray<uint64_t> &enable_role_id_array,
+                                     const common::ObString &sensitive_rule_name,
+                                     const common::ObString &database_name);
+  int check_sensitive_rule_db_access(const ObSessionPrivInfo &session_priv,
+                                     const common::ObIArray<uint64_t> &enable_role_id_array,
+                                     const uint64_t sensitive_rule_id,
+                                     const common::ObString &database_name);
+  int check_sensitive_rule_show(const ObSessionPrivInfo &session_priv,
+                                const common::ObIArray<uint64_t> &enable_role_id_array,
+                                const common::ObString &sensitive_rule_name,
+                                bool &allow_show);
   int check_db_access(ObSessionPrivInfo &s_priv,
                       const common::ObIArray<uint64_t> &enable_role_id_array,
                       const uint64_t catalog_id,
@@ -600,6 +619,11 @@ public:
   int get_catalog_priv_with_user_id(const uint64_t tenant_id,
                                     const uint64_t user_id,
                                     common::ObIArray<const ObCatalogPriv *> &catalog_privs);
+  int get_sensitive_rule_priv_set(const ObSensitiveRulePrivSortKey &sensitive_rule_priv_key,
+                                  ObPrivSet &priv_set);
+  int get_sensitive_rule_priv_with_user_id(const uint64_t tenant_id,
+                                           const uint64_t user_id,
+                                           common::ObIArray<const ObSensitiveRulePriv *> &sensitive_rule_privs);
   int get_db_priv_with_user_id(const uint64_t tenant_id,
                                const uint64_t user_id,
                                common::ObIArray<const ObDBPriv*> &db_privs);
@@ -1121,6 +1145,25 @@ public:
                                     bool &is_exist);
   // external resource function end
 
+  // sensitive rule function begin
+  int get_sensitive_rule_schema_count(const uint64_t tenant_id, int64_t &count);
+  int get_sensitive_rule_schema_by_name(const uint64_t tenant_id,
+                                        const common::ObString &name,
+                                        const ObSensitiveRuleSchema *&schema);
+  int get_sensitive_rule_schema_by_id(const uint64_t tenant_id,
+                                      const uint64_t sensitive_rule_id,
+                                      const ObSensitiveRuleSchema *&schema);
+  int get_sensitive_column_schemas_by_id(const uint64_t tenant_id,
+                                         const uint64_t sensitive_rule_id,
+                                         common::ObIArray<const ObSensitiveColumnSchema *> &schemas);
+  int get_sensitive_rule_schema_by_column(const uint64_t tenant_id,
+                                          const uint64_t table_id,
+                                          const uint64_t column_id,
+                                          const ObSensitiveRuleSchema *&schema);
+  int get_sensitive_rule_schemas_by_table(const ObTableSchema &table_schema,
+                                          ObIArray<const ObSensitiveRuleSchema *> &schemas);
+  // sensitive rule function end
+
   int check_user_exist(const uint64_t tenant_id,
                        const common::ObString &user_name,
                        const common::ObString &host_name,
@@ -1256,6 +1299,13 @@ private:
                          const common::ObIArray<uint64_t> &enable_role_id_array,
                          const ObNeedPriv &need_priv,
                          ObPrivSet &user_catalog_priv_set);
+  int check_sensitive_rule_priv(const ObSessionPrivInfo &session_priv,
+                                const common::ObIArray<uint64_t> &enable_role_id_array,
+                                const ObNeedPriv &need_priv);
+  int check_sensitive_rule_priv(const ObSessionPrivInfo &session_priv,
+                                const common::ObIArray<uint64_t> &enable_role_id_array,
+                                const ObNeedPriv &need_priv,
+                                ObPrivSet &user_sensitive_rule_priv_set);
   int check_db_priv(const ObSessionPrivInfo &session_priv,
                     const common::ObIArray<uint64_t> &enable_role_id_array,
                     const common::ObString &db,

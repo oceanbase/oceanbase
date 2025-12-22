@@ -175,7 +175,7 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   static const int64_t PREFER_REUSE_MACRO_BLOCKS_RAITO = 2;
 
   /* MEMBER VARIABLE */
-  union {
+  union { //FARM COMPAT WHITELIST
     struct {
       // whether all/rowkey cg replay directly
       uint16_t need_replay_base_directly_ : 1;

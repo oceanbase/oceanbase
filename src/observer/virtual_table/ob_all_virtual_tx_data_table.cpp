@@ -170,6 +170,8 @@ int ObAllVirtualTxDataTable::get_next_tx_data_table_(ObITable *&tx_data_table)
         SERVER_LOG(WARN, "fail to get next logstream", KR(ret));
       }
     } else if (FALSE_IT(ls_id_ = ls->get_ls_id().id())) {
+    } else if (ObReplicaTypeCheck::is_log_replica(ls->get_replica_type())) {
+      // skip logonly replica
     } else if (OB_FAIL(ls->get_tablet_svr()->get_tx_data_memtable_mgr(mgr_handle_))) {
       SERVER_LOG(WARN, "fail to get tx data memtable mgr.", KR(ret));
     } else if (FALSE_IT(memtable_mgr = mgr_handle_.get_memtable_mgr())) {

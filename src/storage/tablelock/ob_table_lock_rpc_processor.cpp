@@ -64,6 +64,9 @@ int check_exist(const ObLockTaskBatchRequest<T> &arg,
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(ls));
+  } else if (ls->is_logonly_replica()) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("logonly replica has no tablet", KR(ret), KPC(ls));
   } else if (OB_FAIL(ls->get_tablet(tablet_id,
                                     tablet_handle,
                                     0,
@@ -536,6 +539,9 @@ int ObAdminRemoveLockP::process()
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls should not be NULL", K(ret), K(arg_));
+    } else if (ls->is_logonly_replica()) {
+      ret = OB_STATE_NOT_MATCH;
+      LOG_WARN("logonly replica should not has lock on memtable", KR(ret), KPC(ls));
     } else if (OB_FAIL(ls->admin_remove_lock_op(arg_.lock_op_))) {
       LOG_WARN("admin remove lock op failed", KR(ret), K(arg_));
     }
@@ -567,6 +573,9 @@ int ObAdminUpdateLockP::process()
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls should not be NULL", K(ret), K(arg_));
+    } else if (ls->is_logonly_replica()) {
+      ret = OB_STATE_NOT_MATCH;
+      LOG_WARN("logonly replica should not has lock on memtable", KR(ret), KPC(ls));
     } else if (OB_FAIL(ls->admin_update_lock_op(arg_.lock_op_,
                                                 arg_.commit_version_,
                                                 arg_.commit_scn_,
@@ -577,6 +586,38 @@ int ObAdminUpdateLockP::process()
   return ret;
 }
 
-
+int ObAdminRemoveLockPriorityP::process()
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("ObAdminRemoveLockP::process", K(arg_));
+  uint64_t tenant_id = arg_.tenant_id_;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  ObLSService *ls_service = nullptr;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  if (tenant_id != MTL_ID()) {
+    ret = guard.switch_to(tenant_id);
+  }
+  if (OB_SUCC(ret)) {
+    ls_service = MTL(ObLSService*);
+    if (OB_ISNULL(ls_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("mtl ObLSService should not be null", K(ret));
+    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_,
+                                          ls_handle,
+                                          ObLSGetMod::TABLELOCK_MOD))) {
+      LOG_WARN("failed to get ls", K(ret), K(arg_));
+    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls should not be NULL", K(ret), K(arg_));
+    } else if (ls->is_logonly_replica()) {
+      ret = OB_STATE_NOT_MATCH;
+      LOG_WARN("logonly replica should not has lock on memtable", KR(ret), KPC(ls));
+    } else if (OB_FAIL(ls->admin_remove_lock_priority(arg_.lock_op_, arg_.prio_arg_))) {
+      LOG_WARN("admin remove lock op failed", KR(ret), K(arg_));
+    }
+  }
+  return ret;
+}
 } // observer
 } // oceanbase

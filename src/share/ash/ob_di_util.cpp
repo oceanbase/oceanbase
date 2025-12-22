@@ -77,6 +77,8 @@ int ObDiagnosticInfoUtil::get_all_diag_info(
     ObIArray<std::pair<uint64_t, ObDISessionCollect>> &diag_infos, int64_t tenant_id)
 {
   int ret = OB_SUCCESS;
+  ObArray<ObDiagnosticInfo *> running_di_array;
+  ObArray<ObDiagnosticInfo *> global_di_array;
   std::function<bool(const SessionID &, ObDiagnosticInfo *)> fn =
       [&diag_infos, tenant_id](const SessionID &session_id, ObDiagnosticInfo *di) {
         int ret = OB_SUCCESS;
@@ -102,23 +104,29 @@ int ObDiagnosticInfoUtil::get_all_diag_info(
   if (!is_virtual_tenant_id(tenant_id)) {
     MTL_SWITCH(tenant_id)
     {
-      if (OB_FAIL(MTL(ObDiagnosticInfoContainer *)->for_each_and_delay_release_ref(fn))) {
+      if (OB_FAIL(MTL(ObDiagnosticInfoContainer *)->for_each_and_delay_release_ref(fn, running_di_array))) {
         LOG_WARN("failed to get all diag info", K(ret));
       }
     }
   }
   if (OB_SUCC(ret)) {
     ObDiagnosticInfoContainer *c = ObDiagnosticInfoContainer::get_global_di_container();
-    if (OB_FAIL(c->for_each_and_delay_release_ref(fn))) {
+    if (OB_FAIL(c->for_each_and_delay_release_ref(fn, global_di_array))) {
       LOG_WARN("failed to get all diag info from global di", K(ret), K(tenant_id));
     }
   }
-  return ret;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_TMP_FAIL(release_diag_info_array(running_di_array, global_di_array, tenant_id))) {
+    LOG_ERROR("failed to release running diagnostic info", K(tmp_ret));
+  }
+  return ret == OB_SUCCESS ? tmp_ret : ret;
 }
 
 int ObDiagnosticInfoUtil::get_the_diag_info(uint64_t tenant_id, ObDiagnoseTenantInfo &diag_info)
 {
   int ret = OB_SUCCESS;
+  ObArray<ObDiagnosticInfo *> running_di_array;
+  ObArray<ObDiagnosticInfo *> global_di_array;
   std::function<bool(const SessionID &, ObDiagnosticInfo *)> fn =
       [&diag_info, tenant_id](const SessionID &session_id, ObDiagnosticInfo *di) {
         const uint64_t cur_tenant_id = di->get_tenant_id();
@@ -132,7 +140,7 @@ int ObDiagnosticInfoUtil::get_the_diag_info(uint64_t tenant_id, ObDiagnoseTenant
   MTL_SWITCH(tenant_id)
   {
     ObDiagnosticInfoContainer *c = MTL(ObDiagnosticInfoContainer *);
-    if (OB_FAIL(c->for_each_and_delay_release_ref(fn))) {
+    if (OB_FAIL(c->for_each_and_delay_release_ref(fn, running_di_array))) {
       LOG_WARN("failed to get tenant diagnostic info", K(ret), KPC(c));
     }
     if (OB_SUCC(ret)) {
@@ -150,7 +158,7 @@ int ObDiagnosticInfoUtil::get_the_diag_info(uint64_t tenant_id, ObDiagnoseTenant
   }
   if (OB_SUCC(ret)) {
     ObDiagnosticInfoContainer *c = ObDiagnosticInfoContainer::get_global_di_container();
-    if (OB_FAIL(c->for_each_and_delay_release_ref(fn))) {
+    if (OB_FAIL(c->for_each_and_delay_release_ref(fn, global_di_array))) {
       LOG_WARN("failed to get tenant diagnostic info", K(ret), KPC(c));
     }
 
@@ -166,7 +174,11 @@ int ObDiagnosticInfoUtil::get_the_diag_info(uint64_t tenant_id, ObDiagnoseTenant
       }
     }
   }
-  return ret;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_TMP_FAIL(release_diag_info_array(running_di_array, global_di_array, tenant_id))) {
+    LOG_ERROR("failed to release running diagnostic info", K(tmp_ret));
+  }
+  return ret == OB_SUCCESS ? tmp_ret : ret;
 }
 
 inline int get_group_di(int64_t group_id,
@@ -201,6 +213,8 @@ int ObDiagnosticInfoUtil::get_group_diag_info(uint64_t tenant_id,
     common::ObIAllocator *alloc)
 {
   int ret = OB_SUCCESS;
+  ObArray<ObDiagnosticInfo *> running_di_array;
+  ObArray<ObDiagnosticInfo *> global_di_array;
   std::function<bool(const SessionID &, ObDiagnosticInfo *)> fn = [&diag_infos, &alloc, tenant_id](
                                                                       const SessionID &session_id,
                                                                       ObDiagnosticInfo *di) {
@@ -235,7 +249,7 @@ int ObDiagnosticInfoUtil::get_group_diag_info(uint64_t tenant_id,
   MTL_SWITCH(tenant_id)
   {
     ObDiagnosticInfoContainer *c = MTL(ObDiagnosticInfoContainer *);
-    if (OB_FAIL(c->for_each_and_delay_release_ref(fn))) {
+    if (OB_FAIL(c->for_each_and_delay_release_ref(fn, running_di_array))) {
       LOG_WARN("failed to get tenant diagnostic info", K(ret), KPC(c));
     }
     if (OB_SUCC(ret)) {
@@ -246,7 +260,7 @@ int ObDiagnosticInfoUtil::get_group_diag_info(uint64_t tenant_id,
   }
   if (OB_SUCC(ret)) {
     ObDiagnosticInfoContainer *c = ObDiagnosticInfoContainer::get_global_di_container();
-    if (OB_FAIL(c->for_each_and_delay_release_ref(fn))) {
+    if (OB_FAIL(c->for_each_and_delay_release_ref(fn, global_di_array))) {
       LOG_WARN("failed to get tenant diagnostic info", K(ret), KPC(c));
     }
     if (OB_SUCC(ret)) {
@@ -255,7 +269,32 @@ int ObDiagnosticInfoUtil::get_group_diag_info(uint64_t tenant_id,
       }
     }
   }
-  return ret;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_TMP_FAIL(release_diag_info_array(running_di_array, global_di_array, tenant_id))) {
+    LOG_ERROR("failed to release running diagnostic info", K(tmp_ret));
+  }
+  return ret == OB_SUCCESS ? tmp_ret : ret;
+}
+
+int ObDiagnosticInfoUtil::release_diag_info_array(ObArray<ObDiagnosticInfo *> &running_di_array, ObArray<ObDiagnosticInfo *> &global_di_array, int64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  int save_ret = OB_SUCCESS;
+  if (!is_virtual_tenant_id(tenant_id)) {
+    MTL_SWITCH(tenant_id)
+    {
+      if (OB_FAIL(MTL(ObDiagnosticInfoContainer *)->release_diagnostic_info(running_di_array))) {
+        LOG_ERROR("failed to release running diagnostic info", K(ret));
+        save_ret = ret;
+        //continue to release global diagnostic info
+        ret = OB_SUCCESS;
+      }
+    }
+  }
+  if (OB_FAIL(ObDiagnosticInfoContainer::get_global_di_container()->release_diagnostic_info(global_di_array))) {
+    LOG_ERROR("failed to release running diagnostic info", K(ret));
+  }
+  return ret == OB_SUCCESS ? save_ret : ret;
 }
 
 } /* namespace share */

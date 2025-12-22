@@ -990,6 +990,79 @@ int ObLatestSchemaGuard::get_obj_privs(const uint64_t obj_id,
 #undef GET_RLS_SCHEMA
 #endif
 
+int ObLatestSchemaGuard::get_sensitive_rule_schemas_by_table(
+  const ObTableSchema &table_schema,
+  ObIArray<ObSensitiveRuleSchema *> &schemas)
+{
+  int ret = OB_SUCCESS;
+  int64_t schema_version = INT64_MAX;
+  ObSchemaService *schema_service_impl = NULL;
+  ObISQLClient *sql_client = NULL;
+  ObRefreshSchemaStatus schema_status;
+  schema_status.tenant_id_ = tenant_id_;
+  ObSEArray<uint64_t, 8> column_ids;
+  ObArray<SchemaKey> sensitive_column_schema_keys;
+  ObArray<ObSensitiveColumnSchema> sensitive_column_schema_array;
+  ObArray<SchemaKey> sensitive_rule_schema_keys;
+  ObArray<ObSensitiveRuleSchema> sensitive_rule_schema_array;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
+    LOG_WARN("fail to check and get service", KR(ret));
+  } else if (OB_FAIL(table_schema.get_column_ids(column_ids))) {
+    LOG_WARN("get column ids failed", KR(ret), K(table_schema));
+  }
+  // get sensitive columns from table
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
+    SchemaKey sensitive_column_schema_key;
+    sensitive_column_schema_key.tenant_id_ = tenant_id_;
+    sensitive_column_schema_key.table_id_ = table_schema.get_table_id();
+    sensitive_column_schema_key.col_id_ = column_ids.at(i);
+    if (OB_FAIL(sensitive_column_schema_keys.push_back(sensitive_column_schema_key))) {
+      LOG_WARN("fail to push back sensitive column schema key", KR(ret), K(sensitive_column_schema_key));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (sensitive_column_schema_keys.count() == 0) {
+  } else if (FAILEDx(schema_service_impl->get_batch_sensitive_columns(schema_status,
+                                                                      *sql_client,
+                                                                      schema_version,
+                                                                      sensitive_column_schema_keys,
+                                                                      sensitive_column_schema_array))) {
+    LOG_WARN("fail to get batch sensitive column", KR(ret), K(schema_status), K(sensitive_column_schema_keys));
+  }
+  // get corresponding sensitive rules of sensitive columns
+  for (int64_t i = 0; OB_SUCC(ret) && i < sensitive_column_schema_array.count(); ++i) {
+    SchemaKey sensitive_rule_schema_key;
+    sensitive_rule_schema_key.tenant_id_ = tenant_id_;
+    sensitive_rule_schema_key.sensitive_rule_id_ = sensitive_column_schema_array.at(i).get_sensitive_rule_id();
+    if (OB_FAIL(sensitive_rule_schema_keys.push_back(sensitive_rule_schema_key))) {
+      LOG_WARN("fail to push back sensitive rule schema key", KR(ret), K(sensitive_rule_schema_key));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (sensitive_rule_schema_keys.count() == 0) { // no sensitive rule, do nothing
+  } else if (FAILEDx(schema_service_impl->get_batch_sensitive_rules(schema_status,
+                                                                    *sql_client,
+                                                                    schema_version,
+                                                                    sensitive_rule_schema_keys,
+                                                                    sensitive_rule_schema_array))) {
+    LOG_WARN("fail to get batch sensitive rule", KR(ret), K(schema_status), K(sensitive_rule_schema_keys));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < sensitive_rule_schema_array.count(); ++i) {
+    ObSensitiveRuleSchema *rule_schema = NULL;
+    if (OB_FAIL(ObSchemaUtils::alloc_schema(local_allocator_, sensitive_rule_schema_array.at(i), rule_schema))) {
+      LOG_WARN("fail to alloc new var", KR(ret));
+    } else if (OB_ISNULL(rule_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("rule_schema is NULL", KR(ret));
+    } else if (OB_FAIL(schemas.push_back(rule_schema))) {
+      LOG_WARN("push back schema failed", KR(ret), K(rule_schema));
+    }
+  }
+  return ret;
+}
+
 int ObLatestSchemaGuard::get_sequence_schema(const uint64_t sequence_id,
                                              const ObSequenceSchema *&sequence_schema)
 {

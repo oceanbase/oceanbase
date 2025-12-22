@@ -125,7 +125,6 @@ int ObBalanceGroupUnit::get_transfer_out_part_group(
 {
   int ret = OB_SUCCESS;
   int64_t bucket_idx = OB_INVALID_INDEX;
-  int64_t pg_idx = OB_INVALID_INDEX;
   part_group = nullptr;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -145,10 +144,22 @@ int ObBalanceGroupUnit::get_transfer_out_part_group(
   } else if (OB_UNLIKELY(pg_buckets_.at(bucket_idx).empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("part group bucket is empty", KR(ret), K(pg_buckets_.at(bucket_idx)));
-  } else if (FALSE_IT(pg_idx = pg_buckets_.at(bucket_idx).count() - 1)) {
-  } else if (OB_ISNULL(part_group = pg_buckets_.at(bucket_idx).at(pg_idx))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("part group is null", KR(ret), K(part_group), K(pg_buckets_));
+  } else { // Select the smallest data size part group from the bucket
+    const ObPartGroupBucket &src_pg_bucket = pg_buckets_.at(bucket_idx);
+    int64_t min_data_size = INT64_MAX;
+    // Iterate from back to front because removing part group from the back is more efficient
+    for (int64_t i = src_pg_bucket.count() - 1; i >= 0 && OB_SUCC(ret); --i) {
+      ObPartGroupInfo *pg = src_pg_bucket.at(i);
+      if (OB_NOT_NULL(pg) && (pg->get_data_size() < min_data_size)) {
+        min_data_size = pg->get_data_size();
+        part_group = pg;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(part_group)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("part group is null", KR(ret), KP(part_group), K(min_data_size), K(src_pg_bucket));
+    }
   }
   return ret;
 }

@@ -87,6 +87,21 @@ void ObMember::reset_migrating()
   flag_ &= ~(1UL << MIGRATING_FLAG_BIT);
 }
 
+bool ObMember::is_logonly() const
+{
+  return (flag_ >> LOGONLY_FLAG_BIT) & 1U;
+}
+
+void ObMember::set_logonly()
+{
+  flag_ |= (1UL << LOGONLY_FLAG_BIT);
+}
+
+void ObMember::reset_logonly()
+{
+  flag_ &= ~(1UL << LOGONLY_FLAG_BIT);
+}
+
 bool ObMember::is_columnstore() const
 {
   return (flag_ >> COLUMNSTORE_FLAG_BIT) & 1U;
@@ -126,6 +141,8 @@ int ObReplicaMember::init(
     replica_type_ = replica_type;
     if (REPLICA_TYPE_COLUMNSTORE == replica_type) {
       ObMember::set_columnstore();
+    } else if (REPLICA_TYPE_LOGONLY == replica_type) {
+      ObMember::set_logonly();
     }
   }
   return ret;
@@ -162,7 +179,8 @@ void ObReplicaMember::reset()
 bool ObReplicaMember::is_valid() const
 {
   // columnstore bit is 1 if and only if replica_type is C
-  bool is_flag_valid = (is_columnstore() == (REPLICA_TYPE_COLUMNSTORE == replica_type_));
+  bool is_flag_valid = (is_columnstore() == (REPLICA_TYPE_COLUMNSTORE == replica_type_))
+                        && (is_logonly() == (REPLICA_TYPE_LOGONLY == replica_type_));
   return ObMember::is_valid()
          && ObReplicaTypeCheck::is_replica_type_valid(replica_type_)
          && is_flag_valid

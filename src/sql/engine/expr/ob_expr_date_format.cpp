@@ -806,9 +806,17 @@ OB_INLINE int ObExprDateFormat::calc_year_only(COMMON_PART_FORMAT_FUNC_ARG_DECL)
     LOG_WARN("get date and usec from vec failed", K(ret));
   } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date)) {
     year = dt_yday = usec = hour = minute = sec = fsec = 0; // USEC_ONLY, YEAR_ONLY
-  } else {
+  } else if (ObTimeConverter::could_calc_days_to_year_quickly(date)) {
     ObTimeConverter::days_to_year(date, year);
     calc_time_parts(usec);
+  } else {
+    ObTime ob_time(DT_TYPE_DATE);
+    if (OB_FAIL(ObTimeConverter::date_to_ob_time(date, ob_time))) {
+      LOG_WARN("failed to convert date to ob_time", K(ret), K(date));
+    } else {
+      year = ob_time.parts_[DT_YEAR];
+      calc_time_parts(usec);
+    }
   }
   return ret;
 }
@@ -824,9 +832,18 @@ OB_INLINE int ObExprDateFormat::calc_yday_only(COMMON_PART_FORMAT_FUNC_ARG_DECL)
     LOG_WARN("get date and usec from vec failed", K(ret));
   } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date)) {
     year = dt_yday = usec = hour = minute = sec = fsec =  0; // USEC_ONLY, YEAR_ONLY, YDAY_ONLY
-  } else {
+  } else if (ObTimeConverter::could_calc_days_to_year_quickly(date)) {
     ObTimeConverter::days_to_year_ydays(date, year, dt_yday);
     calc_time_parts(usec);
+  } else {
+    ObTime ob_time_tmp(DT_TYPE_DATE);
+    if (OB_FAIL(ObTimeConverter::date_to_ob_time(date, ob_time_tmp))) {
+      LOG_WARN("failed to convert date to ob_time", K(ret), K(date));
+    } else {
+      year = ob_time_tmp.parts_[DT_YEAR];
+      dt_yday = ob_time_tmp.parts_[DT_YDAY];
+      calc_time_parts(usec);
+    }
   }
   return ret;
 }
@@ -858,10 +875,21 @@ OB_INLINE int ObExprDateFormat::calc_year_month(COMMON_PART_FORMAT_FUNC_ARG_DECL
     LOG_WARN("get date and usec from vec failed", K(ret));
   } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date)) {
     year = month = usec = dt_yday = dt_mday = hour = minute = sec = fsec = 0;  // USEC_ONLY, YEAR_ONLY, YEAR_MONTH
-  } else {
+  } else if (ObTimeConverter::could_calc_days_to_year_quickly(date)) {
     ObTimeConverter::days_to_year_ydays(date, year, dt_yday);
     ObTimeConverter::ydays_to_month_mdays(year, dt_yday, month, dt_mday);
     calc_time_parts(usec);
+  } else {
+    ObTime ob_time_tmp(DT_TYPE_DATE);
+    if (OB_FAIL(ObTimeConverter::date_to_ob_time(date, ob_time_tmp))) {
+      LOG_WARN("failed to convert date to ob_time", K(ret), K(date));
+    } else {
+      year = ob_time_tmp.parts_[DT_YEAR];
+      dt_yday = ob_time_tmp.parts_[DT_YDAY];
+      month = ob_time_tmp.parts_[DT_MON];
+      dt_mday = ob_time_tmp.parts_[DT_MDAY];
+      calc_time_parts(usec);
+    }
   }
   return ret;
 }
@@ -876,10 +904,20 @@ OB_INLINE int ObExprDateFormat::calc_year_week(COMMON_PART_FORMAT_FUNC_ARG_DECL)
     LOG_WARN("get date and usec from vec failed", K(ret));
   } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date)) {
     year = date = usec = dt_yday = dt_wday = hour = minute = sec = fsec = 0; // USEC_ONLY, YEAR_ONLY, WEEK_ONLY, YEAR_WEEK
-  } else {
+  } else if (ObTimeConverter::could_calc_days_to_year_quickly(date)) {
     dt_wday = WDAY_OFFSET[date % DAYS_PER_WEEK][4];
     ObTimeConverter::days_to_year_ydays(date, year, dt_yday);
     calc_time_parts(usec);
+  } else {
+    ObTime ob_time_tmp(DT_TYPE_DATE);
+    if (OB_FAIL(ObTimeConverter::date_to_ob_time(date, ob_time_tmp))) {
+      LOG_WARN("failed to convert date to ob_time", K(ret), K(date));
+    } else {
+      dt_wday = WDAY_OFFSET[date % DAYS_PER_WEEK][4];
+      year = ob_time_tmp.parts_[DT_YEAR];
+      dt_yday = ob_time_tmp.parts_[DT_YDAY];
+      calc_time_parts(usec);
+    }
   }
   return ret;
 }
@@ -895,11 +933,23 @@ OB_INLINE int ObExprDateFormat::calc_year_month_week(COMMON_PART_FORMAT_FUNC_ARG
   } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date)) {
     // USEC_ONLY, YEAR_ONLY, YEAR_MONTH, WEEK_ONLY, YEAR_WEEK, YEAR_MONTH_WEEK
     year = month = date = usec = dt_yday = dt_mday = dt_wday = hour = minute = sec = fsec = 0;
-  } else {
+  } else if (ObTimeConverter::could_calc_days_to_year_quickly(date)) {
     dt_wday = WDAY_OFFSET[date % DAYS_PER_WEEK][4];
     ObTimeConverter::days_to_year_ydays(date, year, dt_yday);
     ObTimeConverter::ydays_to_month_mdays(year, dt_yday, month, dt_mday);
     calc_time_parts(usec);
+  } else {
+    ObTime ob_time_tmp(DT_TYPE_DATE);
+    if (OB_FAIL(ObTimeConverter::date_to_ob_time(date, ob_time_tmp))) {
+      LOG_WARN("failed to convert date to ob_time", K(ret), K(date));
+    } else {
+      dt_wday = WDAY_OFFSET[date % DAYS_PER_WEEK][4];
+      year = ob_time_tmp.parts_[DT_YEAR];
+      dt_yday = ob_time_tmp.parts_[DT_YDAY];
+      month = ob_time_tmp.parts_[DT_MON];
+      dt_mday = ob_time_tmp.parts_[DT_MDAY];
+      calc_time_parts(usec);
+    }
   }
   return ret;
 }

@@ -73,6 +73,9 @@ int ObMdsTableHandler::get_mds_table_handle(mds::MdsTableHandle &handle,
         } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
           ret = OB_ERR_UNEXPECTED;
           MDS_LOG_INIT(WARN, "ls should not be NULL");
+        } else if (ls->is_logonly_replica()) {
+          ret = OB_STATE_NOT_MATCH;
+          MDS_LOG_INIT(WARN, "logonly replica has no mds table", KR(ret), KPC(ls));
         } else if (MDS_FAIL(ls->get_tablet_svr()->get_mds_table_mgr(mds_table_mgr_handle_))) {
           MDS_LOG_INIT(WARN, "get mds table mgr failed");
         } else if (OB_ISNULL(mds_table_mgr = mds_table_mgr_handle_.get_mds_table_mgr())) {

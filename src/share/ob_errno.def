@@ -1846,6 +1846,7 @@ DEFINE_ERROR(INCORRECT_ARGUMENTS_TO_URL_DECODE, -6286, ER_WRONG_ARGUMENTS, "HY00
 
 // for tx pending log
 DEFINE_ERROR(OB_TX_PENDING_LOG_OVERFLOW, -6288, -1, "HY000", "too many pending log in the trx");
+DEFINE_ERROR(OB_TX_NOT_SUPPORT_AGGREGATION, -6289, -1, "HY000", "This transaction is not eligible for aggregation");
 
 // for clog
 DEFINE_ERROR(OB_LOG_ID_NOT_FOUND, -6301, -1, "HY000", "log id not found");
@@ -2954,6 +2955,8 @@ DEFINE_ERROR_EXT(OB_HTTP_SERVER_ERROR, -11125, OB_HTTP_SERVER_ERROR, "HY000", "H
 DEFINE_ERROR_EXT(OB_INVALID_DATE_TRUNC_FORMAT, -11126, -1, "HY000", "unit not recognized", "unit \'%.*s\' not recognized");
 DEFINE_ERROR(OB_ERR_INVALID_PRIVILEGE_ON_SENSITIVE_RULES, -11127, -1, "HY000", "Privilege not allowed for sensitive rules");
 DEFINE_ERROR(OB_AP_QUERY_NEED_RETRY, -11128, -1, "HY000", "AP query will retry with column replica");
+
+DEFINE_ERROR_EXT(OB_KAFKA_ERROR, -11129, -1, "HY000", "kafka server throw error", "kafka server throw error: ErrorMsg=%s");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // SQL扩展区段1：[-11000, -12000)

@@ -142,6 +142,11 @@ public:
   {
     return flag_ == other.flag_;
   }
+  bool operator!=(const ObLSFlag &other) const
+  {
+    return flag_ != other.flag_;
+  }
+
   bool is_valid() const { return flag_ >= 0; }
   void set_block_tablet_in() { flag_ |= BLOCK_TABLET_IN_FLAG; }
   void clear_block_tablet_in() { flag_ &= (~BLOCK_TABLET_IN_FLAG); }

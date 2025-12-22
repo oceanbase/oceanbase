@@ -68,11 +68,12 @@ int ObLogFlashbackService::get_ls_list_(const uint64_t tenant_id,
   [&](const ipalf::IPalfHandle &palf_handle)
   {
     int ret = OB_SUCCESS;
+    ObUnitIDList unit_list;
     share::ObLSStatusInfo ls_status;
     int64_t palf_id = -1;
     palf_handle.get_palf_id(palf_id);
     share::ObLSFlag flag(share::ObLSFlag::NORMAL_FLAG);
-    if (OB_FAIL(ls_status.init(tenant_id, share::ObLSID(palf_id), 1, share::ObLSStatus::OB_LS_NORMAL, 1, "z1", flag))) {
+    if (OB_FAIL(ls_status.init(tenant_id, share::ObLSID(palf_id), 1, share::ObLSStatus::OB_LS_NORMAL, 1, "z1", flag, unit_list))) {
       CLOG_LOG(WARN, "ls_status init failed", K(ret), K(palf_id));
     } else if (OB_FAIL(ls_array.push_back(ls_status))) {
       CLOG_LOG(WARN, "ls_array push_back failed", K(ret), K(palf_id));

@@ -330,38 +330,85 @@ int ObHiveCatalogStatHelper::arrange_partition_column_stats_by_schema_order(
   return ret;
 }
 
-int ObHiveCatalogStatHelper::merge_partition_column_stats(
+int ObHiveCatalogStatHelper::merge_part_column_stat(const ObTableSchema &table_schema,
+                                                    std::vector<ApacheHive::Partition> &partitions,
+                                                    std::vector<ObHiveBasicStats> &basic_stats,
+                                                    ObIArray<const ObColumnSchemaV2 *> &column_schemas,
+                                                    ObIArray<ObOptExternalColumnStatBuilder *> &column_builders)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator tmp_allocator("HivePartRow", OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID());
+  ObSEArray<ObString, 4> partition_values;
+  ObNewRow part_row;
+  if (OB_UNLIKELY(column_schemas.count() != column_builders.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema and builders size mismatch", K(column_schemas.count()), K(column_builders.count()));
+  } else if (OB_UNLIKELY(partitions.size() != basic_stats.size())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("partitions and basic_stats size mismatch", K(partitions.size()), K(basic_stats.size()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < partitions.size(); ++i) {
+      partition_values.reuse();
+      part_row.reset();
+      tmp_allocator.reuse();
+      for (int64_t j = 0; OB_SUCC(ret) && j < partitions[i].values.size(); ++j) {
+        if (OB_FAIL(partition_values.push_back(ObString(partitions[i].values[j].c_str())))) {
+          LOG_WARN("failed to push back partition values");
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(hive::ObHiveTableMetadata::calculate_part_val_from_string(table_schema,
+                                                                                   true,
+                                                                                   partition_values,
+                                                                                   tmp_allocator,
+                                                                                   part_row))) {
+        LOG_WARN("failed to calculate partition value", K(partition_values));
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < column_schemas.count(); ++j) {
+        const ObColumnSchemaV2 *column_schema = column_schemas.at(j);
+        ObOptExternalColumnStatBuilder *builder = column_builders.at(j);
+        if (OB_ISNULL(column_schema) || OB_ISNULL(builder)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(column_schema), K(builder));
+        } else if (OB_UNLIKELY(column_schema->get_part_key_pos() > part_row.get_count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected part key", K(column_schema->get_part_key_pos()), K(part_row));
+        } else if (OB_FAIL(merge_part_column_data_to_builder(part_row.get_cell(column_schema->get_part_key_pos() - 1),
+                                                             basic_stats[i].num_rows_,
+                                                             *column_schema, *builder))) {
+          LOG_WARN("failed to merge partition column data to builder");
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObHiveCatalogStatHelper::merge_non_part_column_stats(
     int64_t total_rows,
-    const std::vector<ApacheHive::ColumnStatisticsObj> &partition_column_stats,
+    const std::vector<ApacheHive::ColumnStatisticsObj> &column_stats,
     ObIArray<const ObColumnSchemaV2 *> &column_schemas,
-    ObIArray<ObOptExternalColumnStatBuilder *> &column_builders) {
+    ObIArray<ObOptExternalColumnStatBuilder *> &column_builders)
+{
   int ret = OB_SUCCESS;
   std::vector<const ApacheHive::ColumnStatisticsObj *> arranged_column_stats;
   if (OB_UNLIKELY(column_schemas.count() != column_builders.count())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("column_schemas and column_builders size mismatch", K(ret),
-             K(column_schemas.count()), K(column_builders.count()));
-  } else if (OB_FAIL(arrange_partition_column_stats_by_schema_order(
-                 partition_column_stats, column_schemas,
-                 arranged_column_stats))) {
-    LOG_WARN("failed to arrange partition column stats by schema order",
-             K(ret));
+    LOG_WARN("schema and builders size mismatch", K(column_schemas.count()), K(column_builders.count()));
+  } else if (OB_FAIL(arrange_partition_column_stats_by_schema_order(column_stats, column_schemas,
+                                                                    arranged_column_stats))) {
+    LOG_WARN("failed to arrange partition column stats by schema order");
   } else {
     // Process each column according to schema order
     for (int64_t i = 0; OB_SUCC(ret) && i < column_schemas.count(); ++i) {
       const ObColumnSchemaV2 *column_schema = column_schemas.at(i);
       ObOptExternalColumnStatBuilder *builder = column_builders.at(i);
-      const ApacheHive::ColumnStatisticsObj *column_stat_obj =
-          arranged_column_stats.at(i);
-
+      const ApacheHive::ColumnStatisticsObj *column_stat_obj = arranged_column_stats.at(i);
       if (OB_ISNULL(column_schema) || OB_ISNULL(builder)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(column_schema), K(builder));
       } else if (OB_ISNULL(column_stat_obj)) {
-        if (column_schema->is_part_key_column() ||
-            column_schema->is_subpart_key_column()) {
-          builder->inc_partition_key_num_distinct();
-        }
+        // do nothing
       } else {
         const ApacheHive::ColumnStatisticsData &partition_column_stat =
             column_stat_obj->statsData;
@@ -430,8 +477,12 @@ int ObHiveCatalogStatHelper::prepare_column_builders_and_schemas(
     ObIAllocator &allocator, const ObString &partition_value,
     const ObILakeTableMetadata *table_metadata,
     const ObIArray<ObString> &column_names,
-    ObIArray<ObOptExternalColumnStatBuilder *> &column_builders,
-    ObIArray<const ObColumnSchemaV2 *> &column_schemas) {
+    ObIArray<ObOptExternalColumnStatBuilder *> &part_column_builders,
+    ObIArray<ObOptExternalColumnStatBuilder *> &non_part_column_builders,
+    const ObTableSchema *&table_schema,
+    ObIArray<const ObColumnSchemaV2 *> &part_column_schemas,
+    ObIArray<const ObColumnSchemaV2 *> &non_part_column_schemas)
+{
   int ret = OB_SUCCESS;
   if (OB_ISNULL(table_metadata)) {
     ret = OB_ERR_UNEXPECTED;
@@ -444,7 +495,7 @@ int ObHiveCatalogStatHelper::prepare_column_builders_and_schemas(
   } else {
     const sql::hive::ObHiveTableMetadata *hive_table_metadata =
         static_cast<const sql::hive::ObHiveTableMetadata *>(table_metadata);
-    const ObTableSchema &table_schema = hive_table_metadata->get_table_schema();
+    table_schema = &(hive_table_metadata->get_table_schema());
     for (int64_t i = 0; OB_SUCC(ret) && i < column_names.count(); ++i) {
       const ObString &column_name = column_names.at(i);
       const ObColumnSchemaV2 *column_schema = nullptr;
@@ -453,30 +504,31 @@ int ObHiveCatalogStatHelper::prepare_column_builders_and_schemas(
       if (OB_ISNULL(builder)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate column stat builder", K(ret), K(i));
-      } else if (OB_FAIL(builder->set_basic_info(
-                     table_metadata->tenant_id_, table_metadata->catalog_id_,
-                     table_metadata->namespace_name_,
-                     table_metadata->table_name_, partition_value,
-                     column_name))) {
-        LOG_WARN("failed to set basic info for column stat builder", K(ret),
-                 K(i));
-      } else if (OB_FAIL(builder->set_stat_info(
-                     0, 0, 0, 0, ObTimeUtility::current_time(),
-                     common::ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI))) {
-        LOG_WARN("failed to set stat info for column stat builder", K(ret),
-                 K(i));
-      } else if (OB_FAIL(builder->set_bitmap_type(
-                     ObExternalBitmapType::HIVE_AUTO_DETECT))) {
-        LOG_WARN("failed to set bitmap type for hive column stat builder",
-                 K(ret), K(i));
-      } else if (OB_FAIL(column_builders.push_back(builder))) {
-        LOG_WARN("failed to push back column stat builder", K(ret), K(i));
-      } else if (OB_ISNULL(column_schema =
-                               table_schema.get_column_schema(column_name))) {
+      } else if (OB_FAIL(builder->set_basic_info(table_metadata->tenant_id_,
+                                                 table_metadata->catalog_id_,
+                                                 table_metadata->namespace_name_,
+                                                 table_metadata->table_name_,
+                                                 partition_value,
+                                                 column_name))) {
+        LOG_WARN("failed to set basic info for column stat builder", K(ret), K(i));
+      } else if (OB_FAIL(builder->set_stat_info(0, 0, 0, 0, ObTimeUtility::current_time(),
+                                                common::ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI))) {
+        LOG_WARN("failed to set stat info for column stat builder", K(ret), K(i));
+      } else if (OB_FAIL(builder->set_bitmap_type(ObExternalBitmapType::HIVE_AUTO_DETECT))) {
+        LOG_WARN("failed to set bitmap type for hive column stat builder", K(ret), K(i));
+      } else if (OB_ISNULL(column_schema = table_schema->get_column_schema(column_name))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get column schema", K(ret), K(i), K(column_name));
-      } else if (OB_FAIL(column_schemas.push_back(column_schema))) {
-        LOG_WARN("failed to push back column schema", K(ret), K(i));
+      } else if (column_schema->is_part_key_column()) {
+        if (OB_FAIL(part_column_builders.push_back(builder))) {
+          LOG_WARN("failed to push back part column stat builder");
+        } else if (OB_FAIL(part_column_schemas.push_back(column_schema))) {
+          LOG_WARN("failed to push back part column schema");
+        }
+      } else if (OB_FAIL(non_part_column_builders.push_back(builder))) {
+        LOG_WARN("failed to push back non part column stat builder");
+      } else if (OB_FAIL(non_part_column_schemas.push_back(column_schema))) {
+        LOG_WARN("failed to push back non part column schema");
       }
     }
   }
@@ -546,15 +598,28 @@ int ObHiveCatalogStatHelper::fetch_partitions_statistics_batch(
     std::vector<std::string> std_column_names;
     std::vector<std::string> batch_partition_names;
     std::vector<ObHiveBasicStats> batch_basic_stats;
+    std::vector<ApacheHive::Partition> partitions;
     // Prepare column builders for merging
-    ObSEArray<ObOptExternalColumnStatBuilder *, 16> column_builders;
-    ObSEArray<const ObColumnSchemaV2 *, 16> column_schemas;
+    ObSEArray<ObOptExternalColumnStatBuilder *, 16> part_column_builders;
+    ObSEArray<ObOptExternalColumnStatBuilder *, 16> non_part_column_builders;
+    const ObTableSchema *table_schema = nullptr;
+    ObSEArray<const ObColumnSchemaV2 *, 16> part_column_schemas;
+    ObSEArray<const ObColumnSchemaV2 *, 16> non_part_column_schemas;
     if (OB_FAIL(convert_to_std_vector(column_names, std_column_names))) {
       LOG_WARN("failed to convert column names to std vector", K(ret));
-    } else if (OB_FAIL(prepare_column_builders_and_schemas(
-                   arena_allocator, global_partition_value, table_metadata,
-                   column_names, column_builders, column_schemas))) {
+    } else if (OB_FAIL(prepare_column_builders_and_schemas(arena_allocator,
+                                                           global_partition_value,
+                                                           table_metadata,
+                                                           column_names,
+                                                           part_column_builders,
+                                                           non_part_column_builders,
+                                                           table_schema,
+                                                           part_column_schemas,
+                                                           non_part_column_schemas))) {
       LOG_WARN("failed to prepare column builders and schemas", K(ret));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null table schema");
     }
 
     for (int64_t batch_start = 0;
@@ -567,6 +632,7 @@ int ObHiveCatalogStatHelper::fetch_partitions_statistics_batch(
       ApacheHive::PartitionsStatsResult batch_stats_result;
       batch_basic_stats.clear();
       batch_partition_names.clear();
+      partitions.clear();
 
       // Create batch partition list
       for (int64_t i = batch_start; i < batch_end; ++i) {
@@ -582,36 +648,37 @@ int ObHiveCatalogStatHelper::fetch_partitions_statistics_batch(
       // Get basic statistics for this batch
       if (batch_partition_names.empty()) {
         // do nothing
-      } else if (OB_FAIL(client->get_partition_basic_stats(
-              ns_name, table_name, case_mode, batch_partition_names,
-              batch_basic_stats))) {
+      } else if (OB_FAIL(client->get_partition_basic_stats(ns_name, table_name, case_mode,
+                                                           batch_partition_names, partitions,
+                                                           batch_basic_stats))) {
         LOG_WARN("failed to get partition basic stats for batch", K(ret),
                  K(ns_name), K(table_name), K(batch_start), K(batch_end));
-      } else if (OB_UNLIKELY(batch_partition_names.size() !=
-                             batch_basic_stats.size())) {
+      } else if (OB_UNLIKELY(batch_partition_names.size() != batch_basic_stats.size())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected size", K(ret), K(batch_partition_names.size()),
                  K(batch_basic_stats.size()));
-      } else if (OB_FAIL(merge_table_stats(batch_basic_stats,
-                                           merged_basic_stats))) {
+      } else if (OB_FAIL(merge_table_stats(batch_basic_stats, merged_basic_stats))) {
         LOG_WARN("failed to merge table stats", K(ret));
-      } else if (OB_FAIL(client->get_partition_statistics(
-                     ns_name, table_name, case_mode, std_column_names,
-                     batch_partition_names, found, batch_stats_result))) {
+      } else if (OB_FAIL(merge_part_column_stat(*table_schema, partitions, batch_basic_stats,
+                                                part_column_schemas, part_column_builders))) {
+        LOG_WARN("failed to merge part column stat");
+      } else if (OB_FAIL(client->get_partition_statistics(ns_name, table_name, case_mode,
+                                                          std_column_names, batch_partition_names,
+                                                          found, batch_stats_result))) {
         LOG_WARN("failed to get partition statistics for batch", K(ret),
                  K(ns_name), K(table_name), K(batch_start), K(batch_end));
       } else if (found && !batch_stats_result.partStats.empty()) {
-        for (int64_t i = 0; OB_SUCC(ret) && i < batch_partition_names.size();
-             ++i) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < batch_partition_names.size(); ++i) {
           const std::string &partition_name = batch_partition_names[i];
           const ObHiveBasicStats &partition_basic_stats = batch_basic_stats[i];
           std::map<std::string, std::vector<ApacheHive::ColumnStatisticsObj> >::const_iterator itr = batch_stats_result.partStats.find(partition_name);
           if (itr != batch_stats_result.partStats.end()) {
             const std::vector<ApacheHive::ColumnStatisticsObj>
                 &partition_column_stats = itr->second;
-            if (OB_FAIL(merge_partition_column_stats(
-                    partition_basic_stats.num_rows_, partition_column_stats,
-                    column_schemas, column_builders))) {
+            if (OB_FAIL(merge_non_part_column_stats(partition_basic_stats.num_rows_,
+                                                    partition_column_stats,
+                                                    non_part_column_schemas,
+                                                    non_part_column_builders))) {
               LOG_WARN("failed to merge partition column stats", K(ret),
                        K(ns_name), K(table_name), K(batch_start), K(batch_end),
                        K(partition_name.c_str()));
@@ -621,29 +688,32 @@ int ObHiveCatalogStatHelper::fetch_partitions_statistics_batch(
       }
     }
 
-    // Create final table statistics
+    // Create final table statistics and column statistics
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(create_external_table_stat(
-              table_metadata, merged_basic_stats, ObString(""),
-              partition_names.size(), external_table_stat))) {
+      if (OB_FAIL(create_external_table_stat(table_metadata, merged_basic_stats, ObString(""),
+                                             partition_names.size(), external_table_stat))) {
         LOG_WARN("failed to create external table stat", K(ret));
-      }
-    }
-
-    // Build final column statistics from builders
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(collect_column_stats_from_builders(column_builders,
-                                                     external_column_stats))) {
+      } else if (OB_FAIL(collect_column_stats_from_builders(part_column_builders,
+                                                            external_column_stats))) {
+        LOG_WARN("failed to collect column stats from builders", K(ret));
+      } else if (OB_FAIL(collect_column_stats_from_builders(non_part_column_builders,
+                                                            external_column_stats))) {
         LOG_WARN("failed to collect column stats from builders", K(ret));
       }
     }
 
     // Clean up builders
-    for (int64_t i = 0; i < column_builders.count(); ++i) {
-      if (OB_NOT_NULL(column_builders.at(i))) {
-        column_builders.at(i)->~ObOptExternalColumnStatBuilder();
+    for (int64_t i = 0; i < part_column_builders.count(); ++i) {
+      if (OB_NOT_NULL(part_column_builders.at(i))) {
+        part_column_builders.at(i)->~ObOptExternalColumnStatBuilder();
       }
     }
+    for (int64_t i = 0; i < non_part_column_builders.count(); ++i) {
+      if (OB_NOT_NULL(non_part_column_builders.at(i))) {
+        non_part_column_builders.at(i)->~ObOptExternalColumnStatBuilder();
+      }
+    }
+
 
     LOG_TRACE("Completed batch processing of partition statistics",
               "total_partitions", partition_names.size(), "batch_size",
@@ -715,29 +785,37 @@ int ObHiveCatalogStatHelper::create_external_column_stats(
     const std::vector<ApacheHive::ColumnStatisticsObj> &hive_column_stats,
     const ObIArray<ObString> &column_names, const ObString &partition_value,
     int64_t total_rows,
-    ObIArray<ObOptExternalColumnStat *> &external_column_stats) {
+    ObIArray<ObOptExternalColumnStat *> &external_column_stats)
+{
   int ret = OB_SUCCESS;
-  ObArenaAllocator arena_allocator("HiveStatBatch", OB_MALLOC_NORMAL_BLOCK_SIZE,
-                                   MTL_ID());
-  ObSEArray<ObOptExternalColumnStatBuilder *, 16> column_stat_builders;
-  ObSEArray<const ObColumnSchemaV2 *, 16> column_schemas;
+  ObArenaAllocator arena_allocator("HiveStatBatch", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObSEArray<ObOptExternalColumnStatBuilder *, 16> part_column_stat_builders;
+  ObSEArray<ObOptExternalColumnStatBuilder *, 16> non_part_column_stat_builders;
+  const ObTableSchema *table_schema = nullptr;
+  ObSEArray<const ObColumnSchemaV2 *, 16> part_column_schemas;
+  ObSEArray<const ObColumnSchemaV2 *, 16> non_part_column_schemas;
 
-  if (OB_FAIL(prepare_column_builders_and_schemas(
-          arena_allocator, partition_value, table_metadata, column_names,
-          column_stat_builders, column_schemas))) {
+  if (OB_FAIL(prepare_column_builders_and_schemas(arena_allocator, partition_value, table_metadata, column_names,
+                                                  part_column_stat_builders, non_part_column_stat_builders,
+                                                  table_schema, part_column_schemas, non_part_column_schemas))) {
     LOG_WARN("failed to prepare column builders and schemas", K(ret));
-  } else if (OB_FAIL(merge_partition_column_stats(total_rows, hive_column_stats,
-                                                  column_schemas,
-                                                  column_stat_builders))) {
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null table schema");
+  } else if (OB_UNLIKELY(!part_column_stat_builders.empty() || !part_column_schemas.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("part column info should be empty", K(part_column_schemas));
+  } else if (OB_FAIL(merge_non_part_column_stats(total_rows, hive_column_stats,
+                                                 non_part_column_schemas,
+                                                 non_part_column_stat_builders))) {
     LOG_WARN("failed to merge hive column stats", K(ret));
-  } else if (OB_FAIL(collect_column_stats_from_builders(
-                 column_stat_builders, external_column_stats))) {
+  } else if (OB_FAIL(collect_column_stats_from_builders(non_part_column_stat_builders, external_column_stats))) {
     LOG_WARN("failed to collect column stats from builders", K(ret));
   }
 
-  for (int64_t i = 0; OB_SUCC(ret) && i < column_stat_builders.count(); ++i) {
-    if (OB_NOT_NULL(column_stat_builders.at(i))) {
-      column_stat_builders.at(i)->~ObOptExternalColumnStatBuilder();
+  for (int64_t i = 0; OB_SUCC(ret) && i < non_part_column_stat_builders.count(); ++i) {
+    if (OB_NOT_NULL(non_part_column_stat_builders.at(i))) {
+      non_part_column_stat_builders.at(i)->~ObOptExternalColumnStatBuilder();
     }
   }
   return ret;
@@ -1132,6 +1210,41 @@ int ObHiveCatalogStatHelper::merge_hive_column_data_to_builder(
     }
   }
 
+  return ret;
+}
+
+int ObHiveCatalogStatHelper::merge_part_column_data_to_builder(const ObObj &part_val,
+                                                               int64_t total_rows,
+                                                               const ObColumnSchemaV2 &column_schema,
+                                                               ObOptExternalColumnStatBuilder &builder)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(part_val.is_null())) {
+    int64_t num_nulls = total_rows;
+    int64_t num_not_nulls = 0;
+    int64_t num_distinct = 1;
+    int64_t avg_length = 1;
+    if (OB_FAIL(builder.merge_stat_values(num_nulls, num_not_nulls, num_distinct, avg_length))) {
+      LOG_WARN("failed to merge stat values");
+    }
+  } else {
+    int64_t num_nulls = 0;
+    int64_t num_not_nulls = total_rows;
+    int64_t num_distinct = 1;
+    int64_t avg_length = part_val.get_data_length();
+    uint64_t hash_value = 0;
+    if (OB_FAIL(builder.merge_stat_values(num_nulls, num_not_nulls, num_distinct, avg_length))) {
+      LOG_WARN("failed to merge stat values");
+    } else if (OB_FAIL(builder.merge_min_value(part_val))) {
+      LOG_WARN("failed to merge min value", K(part_val));
+    } else if (OB_FAIL(builder.merge_max_value(part_val))) {
+      LOG_WARN("failed to merge max value", K(part_val));
+    } else if (OB_FAIL(part_val.hash_murmur(hash_value, hash_value))) {
+      LOG_WARN("failed to calc hash partition value", K(part_val));
+    } else if (OB_FAIL(builder.add_hhl_value(hash_value))) {
+      LOG_WARN("failed to add hhl value");
+    }
+  }
   return ret;
 }
 

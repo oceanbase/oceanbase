@@ -86,6 +86,7 @@ private:
   int lock_sequences_by_id_(const ObTableSchema &table_schema);
   int lock_rls_by_id_(const ObTableSchema &table_schema);
   int lock_audits_by_id_(const ObTableSchema &table_schema);
+  int lock_sensitive_rules_by_id_(const ObTableSchema &table_schema);
   int add_table_to_tablet_autoinc_cleaner_(const ObTableSchema &table_schema);
   int construct_drop_table_sql_(const ObTableSchema &table_schema, const obrpc::ObTableItem &table_item);
   int drop_table_(const ObTableSchema &table_schema, const ObString *ddl_stmt_str);
@@ -97,6 +98,7 @@ private:
   int drop_sequences_(const ObTableSchema &table_schema);
   int drop_sequence_(const ObColumnSchemaV2 &column_schema);
   int drop_rls_object_(const ObTableSchema &table_schema);
+  int drop_sensitive_column_(const ObTableSchema &table_schema);
   int modify_dep_obj_status_(const int64_t idx);
   int deal_with_mock_fk_parent_tables_(const int64_t idx);
   int deal_with_mock_fk_parent_table_(ObMockFKParentTableSchema &mock_fk_parent_table_schema);
@@ -106,6 +108,8 @@ private:
   int sync_version_for_cascade_mock_fk_parent_table_(const ObIArray<uint64_t> &mock_fk_parent_table_ids);
   bool is_to_recyclebin_(const ObTableSchema &table_schema);
   int log_table_not_exist_msg_(const obrpc::ObTableItem &table_item);
+  int get_sensitive_rule_schemas_by_table_(const ObTableSchema &table_schema,
+                                           ObIArray<ObSensitiveRuleSchema *> &sensitive_rules);
 private:
   const obrpc::ObDropTableArg &arg_;
   obrpc::ObDropTableRes &res_;

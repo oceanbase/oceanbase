@@ -487,16 +487,16 @@ int ObMultipleMerge::get_next_row(ObDatumRow *&row)
       }
     }
 
-    if (NULL != access_ctx_->table_scan_stat_) {
-      access_ctx_->table_scan_stat_->out_row_cnt_++;
+    if (OB_SUCC(ret)) {
+      if (NULL != access_ctx_->table_scan_stat_) {
+        access_ctx_->table_scan_stat_->out_row_cnt_++;
+      }
+      LOG_DEBUG("chaser debug get next", K(ret), K(unprojected_row_));
     }
     if (OB_ITER_END == ret) {
       update_and_report_tablet_stat();
       scan_state_ = ScanState::NONE;
     }
-  }
-  if (OB_SUCC(ret)) {
-    STORAGE_LOG(DEBUG, "chaser debug get next", K(unprojected_row_), K(ret));
   }
   return ret;
 }
@@ -901,6 +901,8 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
                   LOG_WARN("fail to deep copy row", K(ret));
                 } else if (OB_FAIL(batch_row_store->fill_row(unprojected_row_))) {
                   LOG_WARN("fail to aggregate row", K(ret));
+                } else {
+                  LOG_DEBUG("aggregate next row", K(ret), K(unprojected_row_));
                 }
               }
               if (OB_SUCC(ret)) {
@@ -1845,6 +1847,9 @@ int ObMultipleMerge::refresh_tablet_iter()
     } else if (OB_ISNULL(ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls is null", K(ret), K(ls_handle));
+    } else if (ls_handle.get_ls()->is_logonly_replica()) {
+      ret = OB_STATE_NOT_MATCH;
+      LOG_WARN("logonly replica do not need merge tablet", KR(ret), K(ls_id));
     } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_read_tables(
         tablet_id,
         remain_timeout,

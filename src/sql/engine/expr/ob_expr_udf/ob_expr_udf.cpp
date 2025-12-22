@@ -767,10 +767,8 @@ int ObExprUDF::eval_udf_single(const ObExpr &expr, ObEvalCtx &eval_ctx, ObExprUD
       }
       env_guard.restore_exec_ctx();
       // Out Params will rewrite to Parent ParamStore, so this function must called after ~ObExprUDFEnvGuard
-      int tmp_ret = OB_SUCCESS;
-      if ((tmp_ret = process_out_params(udf_ctx, eval_ctx)) != OB_SUCCESS) {
-        LOG_WARN("failed to process out params", K(ret), K(tmp_ret));
-        ret = OB_SUCCESS == ret ? tmp_ret : ret;
+      if (OB_SUCC(ret) && OB_FAIL(process_out_params(udf_ctx, eval_ctx))) {
+        LOG_WARN("failed to process out params", K(ret));
       }
       if (OB_SUCC(ret) && OB_FAIL(process_return_value(result, tmp_result, eval_ctx, udf_ctx, env_guard))) {
         LOG_WARN("failed to process return value", K(ret), K(result), K(tmp_result));

@@ -74,6 +74,9 @@ protected:
 
   virtual int get_next_source_line(common::ObNewRow *&row);
   int split_text_into_lines(const common::ObString &text, common::ObArray<common::ObString> &lines);
+  int push_line_segments(const char *seg_start,
+                         int64_t seg_len,
+                         common::ObArray<common::ObString> &lines);
   int fill_row_from_package(const share::schema::ObPackageInfo *package_info,
                            const common::ObString &line_text,
                            int64_t line_num);

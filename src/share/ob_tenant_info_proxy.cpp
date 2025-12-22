@@ -363,7 +363,6 @@ int ObAllTenantInfoProxy::load_tenant_info(const uint64_t tenant_id,
   return ret;
 }
 
-
 int ObAllTenantInfoProxy::load_tenant_info(const uint64_t tenant_id,
                                            ObISQLClient *proxy,
                                            const bool for_update,
@@ -381,8 +380,24 @@ int ObAllTenantInfoProxy::load_tenant_info(const uint64_t tenant_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
   } else if (!is_user_tenant(tenant_id)) {
+    int tmp_ret = OB_SUCCESS;
     //sys and meta tenant is primary
-    if (OB_FAIL(tenant_info.init(tenant_id, share::PRIMARY_TENANT_ROLE))) {
+    ObLSRecoveryStatOperator ls_recovery_op;
+    SCN sync_scn;
+    SCN readable_scn;
+    SCN recovery_until_scn;
+    recovery_until_scn.set_max();
+    if (OB_TMP_FAIL(ls_recovery_op.get_meta_tenant_recovery_stat(tenant_id, *proxy, sync_scn,
+            readable_scn, ora_rowscn))) {
+      // when creating ls in creating tenant, ls_recovery_stat is not initialized
+      LOG_WARN("failed to get tenant sync_scn and readable_scn, use default", KR(ret), K(tenant_id));
+      sync_scn.set_base();
+      readable_scn.set_base();
+      ora_rowscn = 1;
+    }
+    if (OB_FAIL(tenant_info.init(tenant_id, share::PRIMARY_TENANT_ROLE, NORMAL_SWITCHOVER_STATUS,
+            ObAllTenantInfo::INITIAL_SWITCHOVER_EPOCH, sync_scn,
+            sync_scn/*replayable_scn*/, readable_scn, recovery_until_scn))) {
       LOG_WARN("failed to init tenant info", KR(ret), K(tenant_id));
     }
   } else {

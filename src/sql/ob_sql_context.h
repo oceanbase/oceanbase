@@ -490,14 +490,23 @@ public:
                                const uint64_t database_id,
                                const ObString &database_name,
                                const ObString &tbl_name,
-                               const ObTableSchema *&table_schema);
+                               const ObTableSchema *&table_schema,
+                               const share::ObTimeTravelInfo* time_travel_info = NULL);
   int get_catalog_table_schema(const uint64_t tenant_id,
                                const uint64_t catalog_id,
                                const uint64_t database_id,
                                const ObString &tbl_name,
-                               const ObTableSchema *&table_schema);
+                               const ObTableSchema *&table_schema,
+                               const share::ObTimeTravelInfo* time_travel_info = NULL);
   int get_lake_table_metadata(const uint64_t table_id,
                               share::ObILakeTableMetadata *&lake_table_metadata) const;
+  int get_lake_table_metadata(const uint64_t tenant_id,
+                              const uint64_t catalog_id,
+                              const uint64_t database_id,
+                              const ObString &database_name,
+                              const ObString &tbl_name,
+                              const ObNameCaseMode case_mode,
+                              share::ObILakeTableMetadata *&lake_table_metadata);
   int get_catalog_table_id(const uint64_t tenant_id,
                            const uint64_t catalog_id,
                            const uint64_t database_id,
@@ -721,7 +730,10 @@ public:
   ExecType exec_type_;
   bool is_prepare_protocol_;
   bool is_pre_execute_;
+  bool is_prepare_with_params_;
   bool is_prepare_stage_;
+  ParseResult *parse_result_;
+  ParamStore *prepare_params_;
   bool is_dynamic_sql_;
   bool is_dbms_sql_;
   bool is_cursor_;

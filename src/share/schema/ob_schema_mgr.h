@@ -45,6 +45,7 @@
 #include "share/schema/ob_external_resource_mgr.h"
 #include "share/schema/ob_ai_model_mgr.h"
 #include "share/schema/ob_ccl_rule_mgr.h"
+#include "share/schema/ob_sensitive_rule_mgr.h"
 
 namespace oceanbase
 {
@@ -963,6 +964,10 @@ private:
   int add_ccl_rules(const common::ObIArray<ObSimpleCCLRuleSchema> &ccl_schemas);
   int add_ccl_rule(const ObSimpleCCLRuleSchema &ccl_schema);
   int del_ccl_rule(const ObTenantCCLRuleId &id);
+  // sensitive rule
+  int add_sensitive_rules(const common::ObIArray<ObSensitiveRuleSchema> &sensitive_rule_schemas);
+  int add_sensitive_rule(const ObSensitiveRuleSchema &sensitive_rule_schema);
+  int del_sensitive_rule(const ObTenantSensitiveRuleId &id);
 private:
   common::ObArenaAllocator local_allocator_;
   common::ObIAllocator &allocator_;
@@ -1022,6 +1027,7 @@ private:
   ObRlsContextMgr rls_context_mgr_;
   ObCatalogMgr catalog_mgr_;
   ObCCLRuleMgr ccl_rule_mgr_;
+  ObSensitiveRuleMgr sensitive_rule_mgr_;
   int64_t timestamp_in_slot_; // when schema mgr put in slot, we will set the timestamp
   int64_t allocator_idx_;
   TableInfos mlog_infos_;

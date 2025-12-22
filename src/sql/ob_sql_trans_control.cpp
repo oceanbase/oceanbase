@@ -1242,6 +1242,8 @@ bool ObSqlTransControl::has_same_lsid(const ObDASCtx &das_ctx,
         ObLSTabletService *ls_tablet_service = NULL;
         if (OB_ISNULL(ls = ls_handle.get_ls())) {
           bret = false;
+        } else if (ls->is_logonly_replica()) {
+          bret = false;
         } else if (OB_ISNULL(ls_tablet_service = ls->get_tablet_svr())) {
           bret = false;
         } else {
@@ -1265,6 +1267,8 @@ bool ObSqlTransControl::has_same_lsid(const ObDASCtx &das_ctx,
         if (OB_ISNULL(ls = ls_handle.get_ls())) {
           bret = false;
           LOG_WARN("invalid ls", K(bret), K(first_lsid), K(snapshot));
+        } else if (ls->is_logonly_replica()) {
+          bret = false;
         } else if (!(ls->get_dup_table_ls_handler()->is_dup_tablet(tablet_id))) {
           bret = false;
           LOG_WARN("There is a normal tablet, retry to acquire snapshot with gts", K(bret), K(first_lsid),
@@ -1832,6 +1836,8 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
     } else if (OB_ISNULL(ls = handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls handle is null", K(ret));
+    } else if (ls->is_logonly_replica()) {
+      can_read = false;
     } else if (ObTimeUtility::current_time() - max_stale_time_us
          < ls->get_ls_wrs_handler()->get_ls_weak_read_ts().convert_to_ts()) {
       can_read = true;

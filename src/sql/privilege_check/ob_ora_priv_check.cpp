@@ -1901,6 +1901,9 @@ int ObOraSysChecker::map_obj_priv_to_sys_priv(
       case OBJ_PRIV_ID_ALTER:
         /* no sys priv */
         break;
+      case OBJ_PRIV_ID_PLAINACCESS:
+        sys_priv = PRIV_ID_PLAINACCESS_ANY_SENSITIVE_RULE;
+        break;
       default:
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("raw obj priv is invalid", K(raw_obj_priv), K(ret));
@@ -2007,8 +2010,9 @@ int ObOraSysChecker::check_ora_obj_privs_or(
           }
         } 
       } else if (obj_type == static_cast<uint64_t>(ObObjectType::DIRECTORY)
-                 || obj_type == static_cast<uint64_t>(ObObjectType::CATALOG)) {
-        /* directory, catalog对象的owner是sys */
+                 || obj_type == static_cast<uint64_t>(ObObjectType::CATALOG)
+                 || obj_type == static_cast<uint64_t>(ObObjectType::SENSITIVE_RULE)) {
+        /* directory, catalog, sensitive rule object owner is sys */
         OZ (check_obj_plist_or(guard, tenant_id, user_id, obj_type, obj_id,
                                   col_id, raw_obj_priv_array, role_id_array),
             tenant_id, user_id, obj_type, obj_id, col_id, raw_obj_priv_array, NO_OPTION);
@@ -2017,7 +2021,9 @@ int ObOraSysChecker::check_ora_obj_privs_or(
         if (!OB_SUCC(ret)) {
           ret = (obj_type == static_cast<uint64_t>(ObObjectType::DIRECTORY))
                 ? OB_ERR_DIRECTORY_ACCESS_DENIED
-                : OB_ERR_NO_CATALOG_PRIVILEGE;
+                : (obj_type == static_cast<uint64_t>(ObObjectType::CATALOG)
+                   ? OB_ERR_NO_CATALOG_PRIVILEGE
+                   : OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE);
         }
       } else {
         ret = OB_ERR_NO_PRIVILEGE;
@@ -2081,7 +2087,8 @@ int ObOraSysChecker::check_ora_obj_priv(
             || obj_type == static_cast<uint64_t>(ObObjectType::SYS_PACKAGE)
             || obj_type == static_cast<uint64_t>(ObObjectType::SYS_PACKAGE_ONLY_OBJ_PRIV)
             || obj_type == static_cast<uint64_t>(ObObjectType::TYPE)
-            || obj_type == static_cast<uint64_t>(ObObjectType::SEQUENCE)) {
+            || obj_type == static_cast<uint64_t>(ObObjectType::SEQUENCE)
+            || obj_type == static_cast<uint64_t>(ObObjectType::SENSITIVE_RULE)) {
           /* 1. check owner*/
           if (!is_owner) {
             ObRawPriv sys_priv = PRIV_ID_NONE;
@@ -2167,7 +2174,7 @@ int ObOraSysChecker::check_ora_obj_priv(
         } else if (obj_type == static_cast<uint64_t>(ObObjectType::DIRECTORY)
                    || obj_type == static_cast<uint64_t>(ObObjectType::CATALOG)
                    || obj_type == static_cast<uint64_t>(ObObjectType::LOCATION)) {
-          /* directory, catalog和location对象的owner是sys */
+          /* directory, catalog, location, sensitive rule object owner is sys */
           OZ (check_obj_p1(guard, tenant_id, user_id, obj_type,
                           obj_id, col_id, raw_obj_priv, NO_OPTION, role_id_array),
               tenant_id, user_id, obj_type, obj_id, col_id, raw_obj_priv, NO_OPTION);
@@ -2465,6 +2472,12 @@ int ObOraSysChecker::check_ora_ddl_priv(
       }
       case stmt::T_DROP_CCL_RULE: {
         DEFINE_PUB_CHECK_CMD(PRIV_ID_DROP_ANY_CCL_RULE);
+        break;
+      }
+      case stmt::T_CREATE_SENSITIVE_RULE:
+      case stmt::T_DROP_SENSITIVE_RULE:
+      case stmt::T_ALTER_SENSITIVE_RULE: {
+        DEFINE_PUB_CHECK_CMD(PRIV_ID_CREATE_SENSITIVE_RULE);
         break;
       }
       default: {

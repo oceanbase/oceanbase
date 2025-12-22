@@ -204,43 +204,28 @@ int ObLSLogStatInfo::add_replica(const ObLSLogStatReplica &replica)
 int ObLSLogStatInfo::check_has_majority(
     const common::ObIArray<ObAddr> &valid_servers, 
     const int64_t arb_replica_num,
+    const int64_t paxos_replica_num,
     bool &has) const
 {
   int ret = OB_SUCCESS;
   has = false;
   if (OB_UNLIKELY(!is_valid()
-                  || (0 != arb_replica_num && 1 != arb_replica_num))) {
+      || (0 != arb_replica_num && 1 != arb_replica_num)
+      || paxos_replica_num <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(arb_replica_num), KPC(this));
+    LOG_WARN("invalid args", KR(ret), K(arb_replica_num), K(paxos_replica_num), KPC(this));
   } else {
     int64_t paxos_count = 0;
-    int64_t leader_idx = get_leader_index_();
-    if (OB_INVALID_INDEX == leader_idx) {
-      ret = OB_LEADER_NOT_EXIST;
-      has = false;
-      LOG_WARN("ls has no leader", KR(ret), KPC(this));
-    } else if (OB_UNLIKELY(leader_idx < 0 || leader_idx >= replicas_.count())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid leader index", KR(ret), K(leader_idx), KPC(this));
-    } else {
-      int64_t paxos_replica_num = replicas_.at(leader_idx).get_paxos_replica_num();
-      if (OB_UNLIKELY(paxos_replica_num <= 0)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("paxos_replica_num can't be smaller than or equal to 0",
-            KR(ret), K(paxos_replica_num), KPC(this));
-      } else {
-        ARRAY_FOREACH_N(replicas_, idx, cnt) {
-          const ObAddr &server = replicas_.at(idx).get_server();
-          if (common::has_exist_in_array(valid_servers, server)) {
-            ++paxos_count;
-          }
-        }
-        has = paxos_count + arb_replica_num >= rootserver::majority(paxos_replica_num);
-        LOG_INFO("check has majority finished", KR(ret), K_(tenant_id), K_(ls_id),
-            "has_majority", has, "leader_replica", replicas_.at(leader_idx),
-            "paxos_count_in_valid_server", paxos_count, K(arb_replica_num), K(valid_servers), KPC(this));
+    ARRAY_FOREACH(replicas_, idx) {
+      const ObAddr &server = replicas_.at(idx).get_server();
+      if (common::has_exist_in_array(valid_servers, server)) {
+        ++paxos_count;
       }
     }
+    has = paxos_count + arb_replica_num >= rootserver::majority(paxos_replica_num);
+    LOG_INFO("check has majority finished", KR(ret), K_(tenant_id), K_(ls_id),
+        "has_majority", has, "paxos_count_in_valid_server", paxos_count,
+        K(arb_replica_num), K(paxos_replica_num), K(valid_servers), KPC(this));
   }
   return ret;
 }
@@ -248,25 +233,19 @@ int ObLSLogStatInfo::check_has_majority(
 int ObLSLogStatInfo::check_log_sync(
     const common::ObIArray<ObAddr> &valid_servers, 
     const int64_t arb_replica_num,
+    const int64_t paxos_replica_num,
     bool &is_log_sync) const
 {
   int ret = OB_SUCCESS;
   is_log_sync = false;
-  const int64_t leader_idx = get_leader_index_();
   if (OB_UNLIKELY(!is_valid()
-                  || (0 != arb_replica_num && 1 != arb_replica_num))) {
+      || (0 != arb_replica_num && 1 != arb_replica_num)
+      || paxos_replica_num <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(arb_replica_num), KPC(this));
-  } else if (OB_INVALID_INDEX == leader_idx) {
-    ret = OB_LEADER_NOT_EXIST;
-    is_log_sync = false;
-    LOG_WARN("ls has no leader", KR(ret), KPC(this));
-  } else if (OB_UNLIKELY(leader_idx < 0 || leader_idx >= replicas_.count())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid leader index", KR(ret), K(leader_idx), KPC(this));
+    LOG_WARN("invalid args", KR(ret), K(arb_replica_num), K(paxos_replica_num), KPC(this));
   } else {
     int64_t in_sync_count = 0;
-    ARRAY_FOREACH_N(replicas_, idx, cnt) {
+    ARRAY_FOREACH(replicas_, idx) {
       const ObAddr &server = replicas_.at(idx).get_server();
       if (common::has_exist_in_array(valid_servers, server)) {
         if (replicas_.at(idx).get_in_sync()) {
@@ -284,10 +263,9 @@ int ObLSLogStatInfo::check_log_sync(
       }
       LOG_INFO("check log sync finished in ss mode", K(in_sync_count), K(is_log_sync), K(valid_servers));
     } else {
-      int64_t paxos_replica_num = replicas_.at(leader_idx).get_paxos_replica_num();
       is_log_sync = (in_sync_count + arb_replica_num >= rootserver::majority(paxos_replica_num));
       LOG_INFO("check log sync finished", KR(ret), K(is_log_sync), K(in_sync_count), K(arb_replica_num),
-          K(paxos_replica_num), K(valid_servers), "leader_replica", replicas_.at(leader_idx), KPC(this));
+          K(paxos_replica_num), K(valid_servers), KPC(this));
     }
   }
   return ret;

@@ -135,10 +135,10 @@ const int64_t MAX_DISK_ALIAS_NAME = 128;
 const int64_t MAX_DISKGROUP_NAME = 128;
 const int64_t DEFAULT_BUF_LENGTH = 4096;
 const int64_t MAX_SINGLE_MEMBER_LENGTH = (MAX_IP_PORT_LENGTH + 17 /* timestamp length*/  + 1);
-const int64_t MAX_MEMBER_LIST_LENGTH = MAX_ZONE_NUM * (MAX_IP_PORT_LENGTH + 17 /* timestamp length*/  + 1);
+const int64_t MAX_MEMBER_LIST_LENGTH = MAX_ZONE_NUM * MAX_SINGLE_MEMBER_LENGTH;
 const int64_t OB_MAX_MEMBER_NUMBER = 7;
 const int64_t OB_MAX_GLOBAL_LEARNER_NUMBER = 2000;
-const int64_t MAX_LEARNER_LIST_LENGTH = OB_MAX_GLOBAL_LEARNER_NUMBER * (MAX_IP_PORT_LENGTH + 17 /* timestamp length*/  + 1);
+const int64_t MAX_LEARNER_LIST_LENGTH = OB_MAX_GLOBAL_LEARNER_NUMBER * MAX_SINGLE_MEMBER_LENGTH;
 const int64_t MAX_UNIT_LIST_LENGTH = MAX_ZONE_NUM * (17 + 2);//UINT64 + comma + space
 const int64_t OB_MAX_CHILD_MEMBER_NUMBER = 15;
 const int64_t OB_MAX_CHILD_MEMBER_NUMBER_IN_FOLLOWER = 5;
@@ -1024,8 +1024,6 @@ const uint64_t OB_USER_UNIT_CONFIG_ID = 1000;
 const uint64_t OB_USER_RESOURCE_POOL_ID = 1000;
 const uint64_t OB_USER_UNIT_ID = 1000;
 const uint64_t OB_USER_UNIT_GROUP_ID = 1000;
-//standby unit config tmplate
-const char * const OB_STANDBY_UNIT_CONFIG_TEMPLATE_NAME = "standby_unit_config_template";
 const char* const OB_MYSQL50_TABLE_NAME_PREFIX = "#mysql50#";
 
 const int64_t OB_SCHEMA_CODE_VERSION = 1;
@@ -2321,11 +2319,12 @@ public:
   {
     return REPLICA_TYPE_FULL == replica_type
            || REPLICA_TYPE_READONLY == replica_type
-           || REPLICA_TYPE_COLUMNSTORE == replica_type;
+           || REPLICA_TYPE_COLUMNSTORE == replica_type
+           || REPLICA_TYPE_LOGONLY == replica_type;
   }
   static bool is_can_elected_replica(const int32_t replica_type)
   {
-    return is_paxos_replica_V2(replica_type);
+    return is_paxos_replica(replica_type);
   }
   static bool is_full_replica(const int32_t replica_type)
   {
@@ -2342,11 +2341,6 @@ public:
   static bool is_log_replica(const int32_t replica_type)
   {
     return (REPLICA_TYPE_LOGONLY == replica_type || REPLICA_TYPE_ENCRYPTION_LOGONLY == replica_type);
-  }
-  static bool is_paxos_replica_V2(const int32_t replica_type)
-  {
-    return (replica_type >= REPLICA_TYPE_FULL && replica_type <= REPLICA_TYPE_LOGONLY)
-           || (REPLICA_TYPE_ENCRYPTION_LOGONLY == replica_type);
   }
   static bool is_paxos_replica(const int32_t replica_type)
   {
@@ -2399,6 +2393,19 @@ public:
       bool_ret = true;
     }
     return bool_ret;
+  }
+
+  // For replica type of resource pool, whether gts standalone applicable
+  static bool gts_standalone_applicable(const ObReplicaType replica_type)
+  {
+    return REPLICA_TYPE_LOGONLY != replica_type;
+  }
+
+  // For replica type of resource pool, whether ls unit_list need to
+  // align to and be organized by unit groups
+  static bool need_to_align_to_ug(const ObReplicaType replica_type)
+  {
+    return REPLICA_TYPE_LOGONLY != replica_type;
   }
 };
 

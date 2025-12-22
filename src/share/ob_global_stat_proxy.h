@@ -75,7 +75,7 @@ public:
   virtual int get_rootservice_epoch(int64_t &rootservice_epoch);
 
   int update_current_data_version(const uint64_t current_data_version);
-  int get_current_data_version(uint64_t &current_data_version);
+  int get_current_data_version(uint64_t &current_data_version, bool for_update = false);
   static int get_target_data_version_ora_rowscn(
     const uint64_t tenant_id,
     share::SCN &target_data_version_ora_rowscn);

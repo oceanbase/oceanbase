@@ -450,8 +450,6 @@ private:
                                  uint64_t child_column_id, uint64_t parent_column_id,
                                  int64_t position, share::ObDMLSqlSplicer &dml);
   static int check_table_options(const share::schema::ObTableSchema &table_schema);
-  int add_single_column(common::ObISQLClient &sql_client, const ObColumnSchemaV2 &column,
-                        const bool only_history = false);
 
   int delete_from_all_column_usage(ObISQLClient &sql_client,
                                    const uint64_t tenant_id,
@@ -491,16 +489,18 @@ public:
                                                  const int64_t insert_schema_version,
                                                  const ObTableSchema &orig_table_schema,
                                                  const ObTableSchema &new_table_schema);
-private:
-  int log_operation_wrapper(
-      ObSchemaOperation &opt,
-      common::ObISQLClient &sql_client);
   int exec_update(common::ObISQLClient &sql_client,
                   const uint64_t tenant_id,
                   const uint64_t table_id,
                   const char *table_name,
                   share::ObDMLSqlSplicer &dml,
                   int64_t &affected_rows);
+  int add_single_column(common::ObISQLClient &sql_client, const ObColumnSchemaV2 &column,
+                        const bool only_history = false);
+private:
+  int log_operation_wrapper(
+      ObSchemaOperation &opt,
+      common::ObISQLClient &sql_client);
   int exec_insert(common::ObISQLClient &sql_client,
                   const uint64_t tenant_id,
                   const uint64_t table_id,

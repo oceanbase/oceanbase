@@ -47,8 +47,8 @@ ObTableDirectInsertOp::ObTableDirectInsertOp(
     allocator_("DirectInsertOp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     px_task_id_(0),
     ddl_task_id_(0),
+    row_projector_(nullptr),
     table_ctx_(nullptr),
-    datum_row_(nullptr),
     px_writer_(nullptr),
     tablet_id_(),
     is_partitioned_table_(false)
@@ -69,6 +69,8 @@ int ObTableDirectInsertOp::inner_open()
   } else if (OB_UNLIKELY(!MY_SPEC.row_desc_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table or row desc is invalid", K(ret), K(MY_SPEC.row_desc_));
+  } else if (OB_FAIL(init_project_info())) {
+    LOG_WARN("failed to init project info", KR(ret));
   } else if (OB_FAIL(init_px_writer())) {
     LOG_WARN("failed to init px writer", KR(ret));
   }
@@ -113,10 +115,7 @@ void ObTableDirectInsertOp::destroy()
     px_writer_->~ObTableLoadStoreTransPXWriter();
     px_writer_ = nullptr;
   }
-  if (OB_NOT_NULL(datum_row_)) {
-    datum_row_->~ObDatumRow();
-    datum_row_ = nullptr;
-  }
+  datum_row_.reset();
   allocator_.reset();
   ObTableModifyOp::destroy();
 }
@@ -182,17 +181,9 @@ int ObTableDirectInsertOp::next_vector(const int64_t max_row_cnt)
         const ExprFixedArray &dml_expr_array = MY_SPEC.ins_ctdef_.new_row_;
         const ExprFixedArray &expr_array = child_->get_spec().output_;
         ObIVector *tablet_id_vector = is_partitioned_table_ ? expr_array.at(0)->get_vector(eval_ctx) : nullptr;
-        ObArray<ObIVector *> vectors;
-        int64_t affected_rows = 0;
-        if (OB_FAIL(vectors.prepare_allocate(dml_expr_array.count()))) {
-          LOG_WARN("fail to prepare allocate", KR(ret), K(dml_expr_array.count()));
-        } else {
-          for (int64_t i = 0; i < dml_expr_array.count(); ++i) {
-            vectors.at(i) = dml_expr_array.at(i)->get_vector(eval_ctx);
-          }
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(write_vectors(tablet_id_vector, vectors, brs_))) {
+        if (OB_FAIL(project_vector(dml_expr_array))) {
+          LOG_WARN("failed to project vector", KR(ret));
+        } else if (OB_FAIL(write_vectors(tablet_id_vector, vectors_, brs_))) {
           LOG_WARN("failed to write vectors", KR(ret));
         }
       }
@@ -229,20 +220,12 @@ int ObTableDirectInsertOp::next_batch(const int64_t max_row_cnt)
         const ExprFixedArray &dml_expr_array = MY_SPEC.ins_ctdef_.new_row_;
         const ExprFixedArray &expr_array = child_->get_spec().output_;
         ObDatumVector tablet_id_datum_vector;
-        ObArray<ObDatumVector> datum_vectors;
-        int64_t affected_rows = 0;
         if (is_partitioned_table_) {
           tablet_id_datum_vector = expr_array.at(0)->locate_expr_datumvector(eval_ctx);
         }
-        if (OB_FAIL(datum_vectors.prepare_allocate(dml_expr_array.count()))) {
-          LOG_WARN("fail to prepare allocate", KR(ret), K(dml_expr_array.count()));
-        } else {
-          for (int64_t i = 0; i < dml_expr_array.count(); ++i) {
-            datum_vectors.at(i) = dml_expr_array.at(i)->locate_expr_datumvector(eval_ctx);
-          }
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(write_batch(tablet_id_datum_vector, datum_vectors, brs_))) {
+        if (OB_FAIL(project_batch(dml_expr_array))) {
+          LOG_WARN("failed to project batch", KR(ret));
+        } else if (OB_FAIL(write_batch(tablet_id_datum_vector, datum_vectors_, brs_))) {
           LOG_WARN("failed to write batch", KR(ret));
         }
       }
@@ -259,23 +242,77 @@ int ObTableDirectInsertOp::next_row()
   if (OB_FAIL(ObDMLService::process_insert_row(MY_SPEC.ins_ctdef_, ins_rtdef_, *this, is_skipped))) {
     LOG_WARN("failed to process insert row", KR(ret), K(ins_rtdef_.cur_row_num_));
   } else if (!is_skipped) {
-    ObEvalCtx &eval_ctx = get_eval_ctx();
     const ExprFixedArray &dml_expr_array = MY_SPEC.ins_ctdef_.new_row_;
     const ObTabletID *tablet_id_ptr = nullptr;
     ObTabletID tablet_id;
     if (is_partitioned_table_) {
+      ObEvalCtx &eval_ctx = get_eval_ctx();
       const ExprFixedArray &expr_array = child_->get_spec().output_;
-      ObExpr *expr = expr_array.at(0);
-      ObDatum &expr_datum = expr->locate_expr_datum(eval_ctx);
+      ObDatum &expr_datum = expr_array.at(0)->locate_expr_datum(eval_ctx);
       tablet_id = expr_datum.get_int();
       tablet_id_ptr = &tablet_id;
+    } else {
+      tablet_id_ptr = &tablet_id_;
     }
-    if (OB_FAIL(write_row(tablet_id_ptr, dml_expr_array))) {
+    if (OB_FAIL(project_row(dml_expr_array))) {
+      LOG_WARN("failed to project row", KR(ret));
+    } else if (OB_FAIL(write_row(*tablet_id_ptr, datum_row_))) {
       LOG_WARN("failed to write row", KR(ret));
     }
   }
   if (OB_SUCC(ret)) {
     ins_rtdef_.cur_row_num_++;
+  }
+  return ret;
+}
+
+int ObTableDirectInsertOp::project_vector(const ExprFixedArray &input_row)
+{
+  int ret = OB_SUCCESS;
+  ObEvalCtx &eval_ctx = get_eval_ctx();
+  if (nullptr == row_projector_) {
+    for (int64_t i = 0; i < input_row.count(); ++i) {
+      vectors_.at(i) = input_row.at(i)->get_vector(eval_ctx);
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < row_projector_->count(); ++i) {
+      const int64_t idx = row_projector_->at(i);
+      vectors_.at(i) = input_row.at(idx)->get_vector(eval_ctx);
+    }
+  }
+  return ret;
+}
+
+int ObTableDirectInsertOp::project_batch(const ExprFixedArray &input_row)
+{
+  int ret = OB_SUCCESS;
+  ObEvalCtx &eval_ctx = get_eval_ctx();
+  if (nullptr == row_projector_) {
+    for (int64_t i = 0; i < input_row.count(); ++i) {
+      datum_vectors_.at(i) = input_row.at(i)->locate_expr_datumvector(eval_ctx);
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < row_projector_->count(); ++i) {
+      const int64_t idx = row_projector_->at(i);
+      datum_vectors_.at(i) = input_row.at(idx)->locate_expr_datumvector(eval_ctx);
+    }
+  }
+  return ret;
+}
+
+int ObTableDirectInsertOp::project_row(const ExprFixedArray &input_row)
+{
+  int ret = OB_SUCCESS;
+  ObEvalCtx &eval_ctx = get_eval_ctx();
+  if (nullptr == row_projector_) {
+    for (int64_t i = 0; i < input_row.count(); ++i) {
+      datum_row_.storage_datums_[i].shallow_copy_from_datum(input_row.at(i)->locate_expr_datum(eval_ctx));
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < row_projector_->count(); ++i) {
+      const int64_t idx = row_projector_->at(i);
+      datum_row_.storage_datums_[i].shallow_copy_from_datum(input_row.at(idx)->locate_expr_datum(eval_ctx));
+    }
   }
   return ret;
 }
@@ -313,42 +350,53 @@ int ObTableDirectInsertOp::write_batch(
 }
 
 int ObTableDirectInsertOp::write_row(
-    const ObTabletID *tablet_id_ptr,
-    const ExprFixedArray &expr_array)
+    const ObTabletID &tablet_id,
+    const ObDatumRow &datum_row)
 {
   int ret = OB_SUCCESS;
-  int64_t affected_rows = 0;
-  ObEvalCtx &eval_ctx = get_eval_ctx();
-  if (OB_ISNULL(datum_row_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null datum row", KR(ret), KP(datum_row_));
-  } else if (is_partitioned_table_ && OB_ISNULL(tablet_id_ptr)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tablet_id_expr should not be null if partitioned table", KR(ret));
+  if (OB_FAIL(px_writer_->write_row(tablet_id, datum_row))) {
+    LOG_WARN("failed to write row", KR(ret), K(tablet_id), K(datum_row));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && (i < expr_array.count()); ++i) {
-      ObExpr *expr = expr_array.at(i);
-      ObDatum &expr_datum = expr->locate_expr_datum(eval_ctx);
-      datum_row_->storage_datums_[i].shallow_copy_from_datum(expr_datum);
-    }
+    GET_PHY_PLAN_CTX(ctx_)->add_row_matched_count(1);
+    GET_PHY_PLAN_CTX(ctx_)->add_affected_rows(1);
+  }
+  return ret;
+}
 
-    if (OB_SUCC(ret)) {
-      if (is_partitioned_table_) {
-        if (OB_FAIL(px_writer_->write_row(*tablet_id_ptr, *datum_row_))) {
-          LOG_WARN("failed to write row", KR(ret), KPC(datum_row_));
-        }
-      } else if (OB_FAIL(px_writer_->write_row(tablet_id_, *datum_row_))) {
-        LOG_WARN("failed to write row", KR(ret), K(tablet_id_), KPC(datum_row_));
-      }
-      if (OB_SUCC(ret)) {
-        affected_rows++;
-      }
+int ObTableDirectInsertOp::init_project_info()
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<uint64_t> &column_ids = MY_SPEC.ins_ctdef_.column_ids_;
+  const IntFixedArray &row_projector = !MY_SPEC.ins_ctdef_.das_ctdef_.old_row_projector_.empty()
+                                       ? MY_SPEC.ins_ctdef_.das_ctdef_.old_row_projector_
+                                       : MY_SPEC.ins_ctdef_.das_ctdef_.new_row_projector_;
+  bool need_project = row_projector.count() != column_ids.count();
+  for (int64_t i = 0; OB_SUCC(ret) && i < row_projector.count(); ++i) {
+    const int64_t idx = row_projector.at(i);
+    if (idx < 0 || idx >= column_ids.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("index out of range", KR(ret), K(idx), K(column_ids), K(i), K(row_projector));
+    } else if (OB_FAIL(column_ids_.push_back(column_ids.at(idx)))) {
+      LOG_WARN("fail to push back column id", KR(ret), K(idx), K(column_ids), K(i), K(row_projector));
+    } else if (!need_project && idx != i) {
+      need_project = true;
     }
-  } // end if
+  }
 
-  if (OB_SUCC(ret)) {
-    GET_PHY_PLAN_CTX(ctx_)->add_row_matched_count(affected_rows);
-    GET_PHY_PLAN_CTX(ctx_)->add_affected_rows(affected_rows);
+  const int64_t column_count = need_project ? row_projector.count() : column_ids.count();
+  if (OB_FAIL(ret)) {
+  } else if (MY_SPEC.is_vectorized()
+             && MY_SPEC.use_rich_format_
+             && OB_FAIL(vectors_.prepare_allocate(column_count))) {
+    LOG_WARN("fail to prepare allocate", KR(ret), K(column_count));
+  } else if (MY_SPEC.is_vectorized()
+             && !MY_SPEC.use_rich_format_
+             && OB_FAIL(datum_vectors_.prepare_allocate(column_count))) {
+    LOG_WARN("fail to prepare allocate", KR(ret), K(column_count));
+  } else if (!MY_SPEC.is_vectorized() && OB_FAIL(datum_row_.init(allocator_, column_count))) {
+    LOG_WARN("fail to init datum row", KR(ret), K(column_count));
+  } else if (need_project) {
+    row_projector_ = &row_projector;
   }
   return ret;
 }
@@ -357,7 +405,6 @@ int ObTableDirectInsertOp::init_px_writer()
 {
   int ret = OB_SUCCESS;
   const ObPhysicalPlan *plan = GET_PHY_PLAN_CTX(ctx_)->get_phy_plan();
-  const ObIArray<uint64_t> &column_ids = MY_SPEC.ins_ctdef_.column_ids_;
   px_task_id_ = ctx_.get_px_task_id() + 1;
   ddl_task_id_ = plan->get_ddl_task_id();
   is_partitioned_table_ = !(NO_PARTITION_ID_FLAG == MY_SPEC.row_desc_.get_part_id_index());
@@ -365,9 +412,6 @@ int ObTableDirectInsertOp::init_px_writer()
       plan->get_append_table_id(), px_task_id_, ddl_task_id_, table_ctx_))) {
     LOG_WARN("failed to open table direct insert task", KR(ret),
         K(plan->get_append_table_id()), K(px_task_id_), K(ddl_task_id_));
-  } else if (!MY_SPEC.is_vectorized() && OB_FAIL(blocksstable::ObDatumRowUtils::ob_create_row(
-      allocator_, column_ids.count(), datum_row_))) {
-    LOG_WARN("failed to create datum row", KR(ret), K(column_ids.count()));
   } else if (OB_ISNULL(px_writer_ = OB_NEWx(ObTableLoadStoreTransPXWriter, (&allocator_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to new ObTableLoadStoreTransPXWriter", KR(ret));
@@ -391,10 +435,10 @@ int ObTableDirectInsertOp::init_px_writer()
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(px_writer_->prepare_write(column_ids,
+      if (OB_FAIL(px_writer_->prepare_write(column_ids_,
                                            MY_SPEC.is_vectorized(),
                                            MY_SPEC.use_rich_format_))) {
-        LOG_WARN("failed to prepare write", KR(ret), K(column_ids),
+        LOG_WARN("failed to prepare write", KR(ret), K(column_ids_),
                  K(MY_SPEC.is_vectorized()), K(MY_SPEC.use_rich_format_));
       }
     }

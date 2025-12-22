@@ -139,7 +139,7 @@ public:
 
   static int calculate_part_val_from_string(const share::schema::ObTableSchema &table_schema,
                                             const bool &is_part_table,
-                                            ObArray<ObString> &one_part_vals,
+                                            ObIArray<ObString> &one_part_vals,
                                             ObIAllocator &allocator,
                                             ObNewRow &ob_part_row);
 
@@ -150,7 +150,9 @@ public:
 
 protected:
   // hive format does not need to build table schema again, it already set up in `setup_tbl_schema`.
-  int do_build_table_schema(share::schema::ObTableSchema *&table_schema) override;
+  int do_build_table_schema(std::optional<int32_t> schema_id,
+                            std::optional<int64_t> snapshot_id,
+                            share::schema::ObTableSchema *&table_schema) override;
 
 private:
   static int setup_external_format(const Apache::Hadoop::Hive::Table &table,

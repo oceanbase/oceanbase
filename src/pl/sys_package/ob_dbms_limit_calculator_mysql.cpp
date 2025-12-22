@@ -320,7 +320,7 @@ int ObDBMSLimitCalculator::get_tenant_resource_server_for_calc_(
       int64_t trace_time = 0;//no use
       for (int64_t i = 0; OB_SUCC(ret) && i < units.count(); ++i) {
         const ObUnit &unit = units.at(i);
-        if (!unit.is_active_status()) {
+        if (!unit.is_active_or_adding_status()) {
           ret = OB_OP_NOT_ALLOW;
           LOG_WARN("unit is deleting, can not calculate resource", KR(ret), K(unit));
           LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Tenant is shrinking units. Operation is");
@@ -482,17 +482,17 @@ int ObDBMSLimitCalculator::get_max_ls_count_of_server_(
     int64_t &ls_count)
 {
   int ret = OB_SUCCESS;
-  int64_t primary_zone_num = 0;
+  ObArray<share::ObUnit> unit_array;
+  ObBalanceJobDesc job_desc;
   int64_t unit_group_num = 0;
-  ObArray<share::ObSimpleUnitGroup> unit_group_array;
   if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(rootserver::ObTenantBalanceService::gather_stat_primary_zone_num_and_units(
-          tenant_id, primary_zone_num, unit_group_array))) {
+  } else if (OB_FAIL(rootserver::ObTenantBalanceService::gather_tenant_balance_desc(
+          tenant_id, job_desc, unit_array))) {
     LOG_WARN("failed to gather stat of primary zone and unit", KR(ret), K(tenant_id));
-  } else {
-    unit_group_num = unit_group_array.count();
+  } else if (OB_FAIL(job_desc.get_unit_lcm_count(unit_group_num))) {
+    LOG_WARN("failed to get unit lcm count", KR(ret), K(job_desc));
   }
   if (OB_SUCC(ret)) {
     //假如Unit个数为N，Primary Zone个数为P
@@ -511,6 +511,7 @@ int ObDBMSLimitCalculator::get_max_ls_count_of_server_(
     //U + 1 + 用户日志流膨胀个数 + 广播日志流膨胀个数 = U + 2 + U*U - U*P + U = U*U - U*(P-2) + 1
     //由于广播日志流实际上是在每台机器上都存在的资源，所以最终每台机器上日志流的个数为
     //NPP-PP+2P+1
+    int64_t primary_zone_num = job_desc.get_ls_cnt_in_group();
     ls_count = (unit_group_num - 1) * primary_zone_num * primary_zone_num + 2 * primary_zone_num + 1;
   }
   return ret;

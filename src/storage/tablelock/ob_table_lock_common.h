@@ -743,6 +743,7 @@ typedef common::ObSEArray<ObTableLockPrioOp, 10, TransModulePageAllocator> ObTab
 
 struct ObTableLockPrioArg
 {
+  OB_UNIS_VERSION(1);
 public:
   ObTableLockPrioArg()
     : priority_(ObTableLockPriority::INVALID) {}

@@ -2608,6 +2608,16 @@
 #    fail_list.append("There are direct load task in progress")
 #  logging.info('check direct load task execut status success')
 #
+## 检查是否开启了日志副本，如果开启了日志副本不允许升级到44x版本
+#def check_enable_logonly_replica(cur, query_cur):
+#  sql = """select count(1) from __all_virtual_tenant_parameter_stat where name like '%enable_logonly_replica%' and (tenant_id = 1 or tenant_id % 2 = 0) and value like '%true%'"""
+#  (desc, results) = query_cur.exec_query(sql)
+#  if 0 != results[0][0]:
+#    fail_list.append("enable_logonly_replica should be false")
+#    logging.info('check enable_logonly_replica failed, can not upgrade because enable_logonly_replica should be false')
+#  else:
+#    logging.info('check enable_logonly_replica success')
+#
 ## 检查cs_encoding格式是否兼容，对小于4.3.3版本的cpu不支持avx2指令集的集群，我们要求升级前schema上不存在cs_encoding的存储格式
 ## 注意：这里对混布集群 / schema上row_format进行了ddl变更的场景无法做到完全的防御
 #def check_cs_encoding_arch_dependency_compatiblity(query_cur, cpu_arch):
@@ -2794,6 +2804,7 @@
 #      check_cos_archive_and_backup(query_cur)
 #      # all check func should execute before check_fail_list
 #      check_direct_load_job_exist(cur, query_cur)
+#      check_enable_logonly_replica(cur, query_cur)
 #      check_fail_list()
 #      modify_server_permanent_offline_time(cur)
 #    except Exception as e:

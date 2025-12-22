@@ -138,6 +138,9 @@ private:
   static int check_mem_usage_for_split_(
       const uint64_t tenant_id,
       const int64_t dst_tablets_number);
+  static int check_tenant_leader_distributed_(
+      const uint64_t tenant_id,
+      bool &is_leader_distributed);
 
 private:
   ObDDLSQLTransaction &trans_;

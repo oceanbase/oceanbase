@@ -20,6 +20,7 @@
 #include "logservice/ob_log_service.h"//get_palf_role
 #include "rootserver/ob_tenant_thread_helper.h"
 #include "lib/utility/ob_tracepoint.h" // ERRSIM_POINT_DEF
+#include "storage/ls/ob_ls.h"
 
 namespace oceanbase
 {
@@ -45,8 +46,7 @@ int ObLSRecoveryReportor::init()
   } else {
     sql_proxy_ = GCTX.sql_proxy_;
     tenant_id_ = MTL_ID();
-    if (!is_user_tenant(tenant_id_)) {
-    } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    if (OB_ISNULL(GCTX.sql_proxy_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("sql proxy is null", KR(ret));
     } else if (OB_FAIL(create(thread_cnt, "TeRec"))) {
@@ -75,8 +75,6 @@ int ObLSRecoveryReportor::start()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (!is_user_tenant(tenant_id_)) {
-    LOG_INFO("not user tenant no need reported", K(tenant_id_));
   } else if (OB_FAIL(logical_start())) {
     LOG_WARN("failed to start", KR(ret));
   } else {
@@ -96,13 +94,53 @@ void ObLSRecoveryReportor::wait()
 
 void ObLSRecoveryReportor::wakeup()
 {
-   if (IS_NOT_INIT) {
-     LOG_WARN_RET(OB_NOT_INIT, "not init no need wakeup");
-   } else {
-     ObThreadCondGuard guard(get_cond());
-     get_cond().broadcast();
-   }
- }
+  if (IS_NOT_INIT) {
+    LOG_WARN_RET(OB_NOT_INIT, "not init no need wakeup");
+  } else {
+    ObThreadCondGuard guard(get_cond());
+    get_cond().broadcast();
+  }
+}
+
+int ObLSRecoveryReportor::check_tenant_enable_logonly_replica(const uint64_t tenant_id,
+    bool &enabled)
+{
+  int ret = OB_SUCCESS;
+  uint64_t user_data_version = OB_INVALID_VERSION;
+  enabled = false;
+  const uint64_t user_tenant_id = gen_user_tenant_id(tenant_id);
+  if (OB_FAIL(GET_MIN_DATA_VERSION(user_tenant_id, user_data_version))) {
+    LOG_WARN("failed to get user data version", KR(ret), K(user_tenant_id));
+  } else if (!ObShareUtil::check_compat_version_for_logonly_replica(user_data_version)) {
+    enabled = false;
+  } else {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(user_tenant_id));
+    if (!tenant_config.is_valid()) {
+      ret = OB_EAGAIN;
+      LOG_WARN("tenant config is invalid", KR(ret), K(user_tenant_id));
+    } else {
+      enabled = tenant_config->enable_logonly_replica;
+    }
+  }
+  return ret;
+}
+
+int ObLSRecoveryReportor::check_tenant_need_update_ls_recovery_stat(
+    const uint64_t tenant_id,
+    bool &need_update)
+{
+  int ret = OB_SUCCESS;
+  need_update = false;
+  if (is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id)) {
+    if (OB_FAIL(check_tenant_enable_logonly_replica(tenant_id, need_update))) {
+      need_update = true;
+      LOG_WARN("failed to check tenant enable l replica", KR(ret), K(tenant_id));
+    }
+  } else {
+    need_update = true;
+  }
+  return ret;
+}
 
 void ObLSRecoveryReportor::run2()
 {
@@ -120,6 +158,7 @@ void ObLSRecoveryReportor::run2()
     while (!stop_) {
       DEBUG_SYNC(STOP_LS_RECOVERY_THREAD);
       ObCurTraceId::init(GCONF.self_addr_);
+      bool need_update_ls_recovery_stat = false;
       if (!meta_tenant_schema_normal) {
         ObTenantSchema tenant_schema;
         if (OB_FAIL(ObTenantThreadHelper::get_tenant_schema(meta_tenant_id, tenant_schema))) {
@@ -132,20 +171,36 @@ void ObLSRecoveryReportor::run2()
         }
       }
       if (meta_tenant_schema_normal) {
-        ObDIActionGuard ag1("LS Stat");
-        if (OB_SUCCESS != (tmp_ret = update_ls_recovery_stat_())) {
-          ret = OB_SUCC(ret) ? tmp_ret : ret;
-          LOG_WARN("failed to update ls recovery stat", KR(ret), KR(tmp_ret));
-        }
-        if (OB_ITER_END == ret) {
-          ret = OB_SUCCESS;
+        if (OB_ISNULL(GCTX.schema_service_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("schema service is empty", KR(ret));
+        } else if (!GCTX.schema_service_->is_tenant_full_schema(meta_tenant_id)) {
+          //need wait
+          LOG_INFO("tenant schema not ready", KR(ret), K(meta_tenant_id));
+        } else if (OB_FAIL(check_tenant_need_update_ls_recovery_stat(tenant_id_, need_update_ls_recovery_stat))) {
+          LOG_WARN("failed to check tenant need update ls recovery stat", KR(ret), K(tenant_id_));
+        } else if (!need_update_ls_recovery_stat) {
+          if (REACH_TIME_INTERVAL(1_min)) {
+            LOG_INFO("tenant no need to update ls recovery stat", KR(ret), K(tenant_id_), K(need_update_ls_recovery_stat));
+          }
+        } else {
+          ObDIActionGuard ag1("LS Stat");
+          if (OB_SUCCESS != (tmp_ret = update_ls_recovery_stat_())) {
+            ret = OB_SUCC(ret) ? tmp_ret : ret;
+            LOG_WARN("failed to update ls recovery stat", KR(ret), KR(tmp_ret));
+          }
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+          }
         }
       }
 
-      //更新受控回放位点到replayservice
-      ObDIActionGuard ag1("Replayable Point");
-      if (OB_SUCCESS != (tmp_ret = update_replayable_point_())) {
-        LOG_WARN("failed to update_replayable_point", KR(tmp_ret));
+      if (is_user_tenant(tenant_id_)) {
+        //更新受控回放位点到replayservice
+        ObDIActionGuard ag1("Replayable Point");
+        if (OB_SUCCESS != (tmp_ret = update_replayable_point_())) {
+          LOG_WARN("failed to update_replayable_point", KR(tmp_ret));
+        }
       }
 
       if (!stop_) {
@@ -155,41 +210,104 @@ void ObLSRecoveryReportor::run2()
   }
 }
 
+int ObLSRecoveryReportor::check_ls_change_member_list_(bool &is_changing)
+{
+  int ret = OB_SUCCESS;
+  is_changing = false;
+  ObLSIterator *iter = NULL;
+  common::ObSharedGuard<ObLSIterator> guard;
+  ObLSService *ls_svr = MTL(ObLSService *);
+  if (OB_ISNULL(ls_svr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pointer is null", KR(ret), KP(ls_svr));
+  } else if (OB_FAIL(ls_svr->get_ls_iter(guard, storage::ObLSGetMod::RS_MOD))) {
+    LOG_WARN("get log stream iter failed", KR(ret));
+  } else if (OB_ISNULL(iter = guard.get_ptr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("iter is NULL", KR(ret));
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    ObLS *ls = nullptr;
+    ObLSRecoveryStatHandler *handler = nullptr;
+    while (!is_changing && OB_SUCC(iter->get_next(ls))) {
+      if (OB_ISNULL(ls) || OB_ISNULL(handler = ls->get_ls_recovery_stat_handler())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("ls is null", KR(ret), KP(ls), KP(handler));
+      } else if (handler->get_ref_cnt() != 0) {
+        is_changing = true;
+        if (REACH_TIME_INTERVAL(2_s)) {
+          LOG_INFO("ls is changing member list", KR(ret), KPC(ls));
+        }
+      }
+    }
+    if (is_changing) {
+    } else if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
+    } else if (OB_FAIL(ret)) {
+      LOG_WARN("failed to get next ls", KR(ret));
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("return code not expected", KR(ret));
+    }
+  }
+  return ret;
+}
+
+ERRSIM_POINT_DEF(ERRSIM_SPEED_UP_LS_RECOVERY_REPORTOR);
 void ObLSRecoveryReportor::idle_some_time_()
 {
   int ret = OB_SUCCESS;
   rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
-  const int64_t IDLE_TIME = ObTenantRoleTransitionConstants::STANDBY_UPDATE_LS_RECOVERY_STAT_TIME_US;
   int idle_count = 0;
-  int idle_target_cnt = 10; // primary_normal: 10, others: 1
+  // meta/sys without member_list change: 100, primary_normal: 10, others: 1
+  int idle_target_cnt = is_user_tenant(tenant_id_) ? 10 : 100;
+  bool need_update_ls_recovery_stat = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else if (OB_ISNULL(tenant_info_loader)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("pointer is null", KR(ret), KP(tenant_info_loader));
-  }
-
-  // We use _keepalive_interval here to control report interval;
-  // To minimize the latency, the keepalive_interval in the primary database would be lower down;
-  // And the report interval should also be the same to improve efficiency,
-  // hence we need to concern about only one configuration item in both the primary database
-  // and the standby database, even after switch over, we don't need to adjust the configuration;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-  const int64_t STANDBY_IDLE_TIME = tenant_config.is_valid() ?
-      tenant_config->_keepalive_interval : IDLE_TIME;
-  while (idle_count < idle_target_cnt && !stop_) {
-    bool is_primary_normal_status = true;
-    idle_count++;
-    if (OB_FAIL(ret)) {
-      idle_target_cnt = 1;
-    } else if (OB_FAIL(tenant_info_loader->check_is_primary_normal_status(is_primary_normal_status))) {
-      idle_target_cnt = 1;
-      LOG_WARN("fail to get tenant status", KR(ret), K_(tenant_id));
-    } else if (!is_primary_normal_status) {
-      idle_target_cnt = 1;
+  } else {
+    const int64_t MEMBER_LIST_CHANGING_CHECK_COUNT = 10; // check per second
+    // avoid hold tenant config guard for too long time
+    while (idle_count < idle_target_cnt && !stop_) {
+      int64_t idle_time = ObTenantRoleTransitionConstants::STANDBY_UPDATE_LS_RECOVERY_STAT_TIME_US;
+      bool is_primary_normal_status = true;
+      bool is_changing_member_list = false;
+      idle_count++;
+      if (OB_FAIL(ret)) {
+        idle_target_cnt = 1;
+      } else if (OB_FAIL(tenant_info_loader->check_is_primary_normal_status(is_primary_normal_status))) {
+        idle_target_cnt = 1;
+        LOG_WARN("fail to get tenant status", KR(ret), K_(tenant_id));
+      } else if (!is_primary_normal_status) {
+        // We use _keepalive_interval here to control report interval;
+        // To minimize the latency, the keepalive_interval in the primary database would be lower down;
+        // And the report interval should also be the same to improve efficiency,
+        // hence we need to concern about only one configuration item in both the primary database
+        // and the standby database, even after switch over, we don't need to adjust the configuration;
+        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+        if (tenant_config.is_valid()) {
+          idle_time = tenant_config->_keepalive_interval;
+        }
+        idle_target_cnt = 1;
+      } else if (!is_user_tenant(tenant_id_) && idle_count % MEMBER_LIST_CHANGING_CHECK_COUNT == 1) {
+        if (OB_FAIL(check_ls_change_member_list_(is_changing_member_list)) || is_changing_member_list) {
+          idle_target_cnt = 1;
+          if (REACH_TIME_INTERVAL(1_s)) {
+            LOG_INFO("is changing member list, speed up gather_replica_readable_scn", KR(ret), K(is_changing_member_list));
+          }
+        }
+      } else if (ERRSIM_SPEED_UP_LS_RECOVERY_REPORTOR) {
+        // speed up ls recovery reportor to 100ms * ERRSIM_SPEED_UP_LS_RECOVERY_REPORTOR
+        // just for test
+        if (idle_count >= abs(ERRSIM_SPEED_UP_LS_RECOVERY_REPORTOR)) {
+          idle_target_cnt = 1;
+        }
+      }
+      idle_wait_us(idle_time);
     }
-    idle_wait_us(is_primary_normal_status ? IDLE_TIME : STANDBY_IDLE_TIME);
   }
 }
 
@@ -268,7 +386,8 @@ int ObLSRecoveryReportor::update_ls_recovery_stat_()
           LOG_ERROR("ls is null", KR(ret), KP(ls));
         } else {
           share::SCN replayable_scn = SCN::base_scn();
-          if (OB_TMP_FAIL(tenant_info_loader->get_local_replayable_scn(replayable_scn))) {
+          if (!is_user_tenant(tenant_id_)) {
+          } else if (OB_TMP_FAIL(tenant_info_loader->get_local_replayable_scn(replayable_scn))) {
             LOG_WARN("failed to get replayable_scn", KR(ret), KPC(ls));
           } else if (OB_TMP_FAIL(ls->update_ls_replayable_point(replayable_scn))) {
             LOG_WARN("failed to update_ls_replayable_point", KR(tmp_ret), KPC(ls), K(replayable_scn));
@@ -336,8 +455,10 @@ int ObLSRecoveryReportor::update_ls_recovery(
     }
   } else if (OB_FAIL(trans.start(sql_proxy, exec_tenant_id))) {
     LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id), K(ls_recovery_stat));
-  } else if (ls->is_sys_ls()) {
-    //only primary tenant
+  } else if (ls->is_sys_ls() && is_user_tenant(tenant_id_)) {
+    // only primary user tenant
+    // standby tenant is updated in ls_recovery_service
+    // meta and sys tenant's tenant info calculated by ls_recovery_stat when necessary
     if (OB_FAIL(update_sys_ls_recovery_stat_and_tenant_info(ls_recovery_stat, share::PRIMARY_TENANT_ROLE, false, false, trans))) {
       LOG_WARN("failed to update sys ls recovery stat", KR(ret), K(ls_recovery_stat));
     }

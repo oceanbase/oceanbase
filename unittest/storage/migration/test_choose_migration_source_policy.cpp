@@ -49,7 +49,7 @@ public:
   virtual ~MockGetMemberHelper() {}
 
   MOCK_METHOD6(get_ls_member_list_and_learner_list_, int(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &, common::GlobalLearnerList &, common::ObIArray<common::ObAddr> &));
+      const bool, common::ObAddr &, common::GlobalLearnerList &, common::ObMemberList &));
   MOCK_METHOD3(get_ls_leader, int(const uint64_t, const share::ObLSID &, common::ObAddr &));
   MOCK_METHOD2(get_ls, int(const share::ObLSID &, ObLSHandle &));
   MOCK_METHOD0(check_tenant_primary, bool());
@@ -65,13 +65,13 @@ public:
   }
 
   int get_ls_member_list_for_checkpoint(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<common::ObAddr> &addr_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr dst;
     if (OB_FAIL(mock_leader_addr(leader))) {
       LOG_WARN("failed to mock addr", K(ret));
-    } else if (OB_FAIL(mock_addr_list(4/*addr_count*/, addr_list))) {
+    } else if (OB_FAIL(mock_addr_list(4/*addr_count*/, member_list))) {
       LOG_WARN("failed to mock addr list", K(ret));
     } else if (OB_FAIL(mock_dst_addr(dst))) {
       LOG_WARN("failed to mock addr", K(ret));
@@ -82,14 +82,14 @@ public:
   }
 
   int get_ls_member_list_for_rs_recommand(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<common::ObAddr> &addr_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr rs_recommand_addr;
     common::ObAddr dst;
     if (OB_FAIL(mock_leader_addr(leader))) {
       LOG_WARN("failed to mock addr", K(ret));
-    } else if (OB_FAIL(mock_addr_list(3/*addr_count*/, addr_list))) {
+    } else if (OB_FAIL(mock_addr_list(3/*addr_count*/, member_list))) {
       LOG_WARN("failed to mock addr list", K(ret));
     } else if (OB_FAIL(mock_rs_recommand_addr(rs_recommand_addr))) {
       LOG_WARN("failed to mock rs recommand addr", K(ret));
@@ -104,13 +104,13 @@ public:
   }
 
   int get_ls_member_list_for_idc_mode_idc_leader(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<common::ObAddr> &addr_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr dst;
     if (OB_FAIL(mock_leader_addr(leader))) {
       LOG_WARN("failed to mock leader addr", K(ret));
-    } else if (OB_FAIL(mock_addr_list(5/*addr_count*/, addr_list))) {
+    } else if (OB_FAIL(mock_addr_list(5/*addr_count*/, member_list))) {
       LOG_WARN("failed to mock addr list", K(ret));
     } else if (OB_FAIL(mock_dst_addr(dst))) {
       LOG_WARN("failed to mock addr", K(ret));
@@ -121,13 +121,13 @@ public:
   }
 
   int get_ls_member_list_for_idc_mode_idc_follower(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<common::ObAddr> &addr_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr dst;
     if (OB_FAIL(mock_leader_addr(leader))) {
       LOG_WARN("failed to mock leader addr", K(ret));
-    } else if (OB_FAIL(mock_addr_list(5/*addr_count*/, addr_list))) {
+    } else if (OB_FAIL(mock_addr_list(5/*addr_count*/, member_list))) {
       LOG_WARN("failed to mock addr list", K(ret));
     } else if (OB_FAIL(mock_dst_addr(dst))) {
       LOG_WARN("failed to mock addr", K(ret));
@@ -138,13 +138,13 @@ public:
   }
 
   int get_ls_member_list_for_idc_mode_region_leader(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<common::ObAddr> &addr_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr dst;
     if (OB_FAIL(mock_leader_addr(leader))) {
       LOG_WARN("failed to mock leader addr", K(ret));
-    } else if (OB_FAIL(mock_addr_list(3/*addr_count*/, addr_list))) {
+    } else if (OB_FAIL(mock_addr_list(3/*addr_count*/, member_list))) {
       LOG_WARN("failed to mock addr list", K(ret));
     } else if (OB_FAIL(mock_dst_addr(dst))) {
       LOG_WARN("failed to mock addr", K(ret));
@@ -155,13 +155,13 @@ public:
   }
 
   int get_ls_member_list_for_idc_mode_region_follower(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<common::ObAddr> &addr_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr dst;
     if (OB_FAIL(mock_leader_addr(leader))) {
       LOG_WARN("failed to mock leader addr", K(ret));
-    } else if (OB_FAIL(mock_addr_list(3/*addr_count*/, addr_list))) {
+    } else if (OB_FAIL(mock_addr_list(3/*addr_count*/, member_list))) {
       LOG_WARN("failed to mock addr list", K(ret));
     } else if (OB_FAIL(mock_dst_addr(dst))) {
       LOG_WARN("failed to mock addr", K(ret));
@@ -172,13 +172,13 @@ public:
   }
 
   int get_ls_member_list_for_idc_mode_diff_region_leader(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<common::ObAddr> &addr_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr dst;
     if (OB_FAIL(mock_leader_addr(leader))) {
       LOG_WARN("failed to mock leader addr", K(ret));
-    } else if (OB_FAIL(mock_addr_list(1/*addr_count*/, addr_list))) {
+    } else if (OB_FAIL(mock_addr_list(1/*addr_count*/, member_list))) {
       LOG_WARN("failed to mock addr list", K(ret));
     } else if (OB_FAIL(mock_dst_addr(dst))) {
       LOG_WARN("failed to mock addr", K(ret));
@@ -189,13 +189,13 @@ public:
   }
 
   int get_ls_member_list_for_idc_mode_diff_region_follower(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<common::ObAddr> &addr_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr dst;
     if (OB_FAIL(mock_leader_addr(leader))) {
       LOG_WARN("failed to mock leader addr", K(ret));
-    } else if (OB_FAIL(mock_addr_list(2/*addr_count*/, addr_list))) {
+    } else if (OB_FAIL(mock_addr_list(2/*addr_count*/, member_list))) {
       LOG_WARN("failed to mock addr list", K(ret));
     } else if (OB_FAIL(mock_dst_addr(dst))) {
       LOG_WARN("failed to mock addr", K(ret));
@@ -206,13 +206,13 @@ public:
   }
 
   int get_ls_member_list_for_region_mode_region_follower(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<common::ObAddr> &addr_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr dst;
     if (OB_FAIL(mock_leader_addr(leader))) {
       LOG_WARN("failed to mock leader addr", K(ret));
-    } else if (OB_FAIL(mock_addr_list(4/*addr_count*/, addr_list))) {
+    } else if (OB_FAIL(mock_addr_list(4/*addr_count*/, member_list))) {
       LOG_WARN("failed to mock addr list", K(ret));
     } else if (OB_FAIL(mock_dst_addr(dst))) {
       LOG_WARN("failed to mock addr", K(ret));
@@ -223,13 +223,13 @@ public:
   }
 
   int get_ls_member_list_for_region_mode_region_leader(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<common::ObAddr> &addr_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr dst;
     if (OB_FAIL(mock_leader_addr(leader))) {
       LOG_WARN("failed to mock leader addr", K(ret));
-    } else if (OB_FAIL(mock_addr_list(3/*addr_count*/, addr_list))) {
+    } else if (OB_FAIL(mock_addr_list(3/*addr_count*/, member_list))) {
       LOG_WARN("failed to mock addr list", K(ret));
     } else if (OB_FAIL(mock_dst_addr(dst))) {
       LOG_WARN("failed to mock addr", K(ret));
@@ -240,13 +240,13 @@ public:
   }
 
   int get_ls_member_list_for_region_mode_diff_region_follower(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<common::ObAddr> &addr_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr dst;
     if (OB_FAIL(mock_leader_addr(leader))) {
       LOG_WARN("failed to mock leader addr", K(ret));
-    } else if (OB_FAIL(mock_addr_list(2/*addr_count*/, addr_list))) {
+    } else if (OB_FAIL(mock_addr_list(2/*addr_count*/, member_list))) {
       LOG_WARN("failed to mock addr list", K(ret));
     } else if (OB_FAIL(mock_dst_addr(dst))) {
       LOG_WARN("failed to mock addr", K(ret));
@@ -257,13 +257,13 @@ public:
   }
 
   int get_ls_member_list_for_region_mode_diff_region_leader(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<common::ObAddr> &addr_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr dst;
     if (OB_FAIL(mock_leader_addr(leader))) {
       LOG_WARN("failed to mock leader addr", K(ret));
-    } else if (OB_FAIL(mock_addr_list(1/*addr_count*/, addr_list))) {
+    } else if (OB_FAIL(mock_addr_list(1/*addr_count*/, member_list))) {
       LOG_WARN("failed to mock addr list", K(ret));
     } else if (OB_FAIL(mock_dst_addr(dst))) {
       LOG_WARN("failed to mock addr", K(ret));
@@ -274,11 +274,11 @@ public:
   }
 
   int get_ls_member_list_for_member_helper(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<common::ObAddr> &addr_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr dst;
-    if (OB_FAIL(mock_addr_list(5/*addr_count*/, addr_list))) {
+    if (OB_FAIL(mock_addr_list(5/*addr_count*/, member_list))) {
       LOG_WARN("failed to mock addr list", K(ret));
     } else if (OB_FAIL(mock_dst_addr(dst))) {
       LOG_WARN("failed to mock addr", K(ret));
@@ -289,11 +289,11 @@ public:
   }
 
   int get_ls_member_list_for_rebuild_mode(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<common::ObAddr> &addr_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr dst;
-    if (OB_FAIL(mock_addr_list(5/*addr_count*/, addr_list))) {
+    if (OB_FAIL(mock_addr_list(5/*addr_count*/, member_list))) {
       LOG_WARN("failed to mock addr list", K(ret));
     } else if (OB_FAIL(mock_dst_addr(dst))) {
       LOG_WARN("failed to mock addr", K(ret));
@@ -304,14 +304,14 @@ public:
   }
 
   int get_ls_member_list_for_replica_type_failed(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<common::ObAddr> &addr_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr addr;
     common::ObAddr dst;
     if (OB_FAIL(mock_leader_addr(leader))) {
       LOG_WARN("failed to mock addr", K(ret));
-    } else if (OB_FAIL(mock_addr_list(4/*addr_count*/, addr_list))) {
+    } else if (OB_FAIL(mock_addr_list(4/*addr_count*/, member_list))) {
       LOG_WARN("failed to mock addr list", K(ret));
     } else if (OB_FAIL(mock_check_replica_type_addr(addr))) {
       LOG_WARN("failed to mock rs recommand addr", K(ret));
@@ -326,7 +326,7 @@ public:
   }
 
   int get_ls_member_list_for_c_replica(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<common::ObAddr> &addr_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr dst;
@@ -336,7 +336,7 @@ public:
     common::ObAddr r_addr_5;
     if (OB_FAIL(mock_leader_addr(leader))) {
       LOG_WARN("failed to mock leader addr", K(ret));
-    } else if (OB_FAIL(mock_addr_list(1/*addr_count*/, addr_list))) {
+    } else if (OB_FAIL(mock_addr_list(1/*addr_count*/, member_list))) {
       LOG_WARN("failed to mock addr list", K(ret));
     } else if (OB_FAIL(mock_dst_addr(dst))) {
       LOG_WARN("failed to mock addr", K(ret));
@@ -595,10 +595,13 @@ TEST_F(TestChooseMigrationSourcePolicy, get_available_src_with_rs_recommend)
   local_ls_checkpoint_scn.set_base();
   ObMigrationOpArg mock_arg;
   EXPECT_EQ(OB_SUCCESS, mock_migrate_arg_for_rs_recommand(mock_arg));
+  EXPECT_EQ(true, mock_arg.is_valid());
   ObMigrationChooseSrcHelperInitParam param;
   EXPECT_EQ(OB_SUCCESS, mock_migrate_choose_helper_param(tenant_id, ls_id, local_ls_checkpoint_scn, mock_arg, param));
   EXPECT_EQ(OB_SUCCESS, member_helper_.get_member_list_by_replica_type(tenant_id, ls_id,
-        mock_arg.dst_, param.info_, param.is_first_c_replica_));  EXPECT_EQ(OB_SUCCESS, get_recommand_policy(mock_arg, tenant_id, param.info_.learner_list_, param.policy_, param.use_c_replica_policy_));
+        mock_arg.dst_, param.info_, param.is_first_c_replica_));
+  EXPECT_EQ(OB_SUCCESS, get_recommand_policy(mock_arg, tenant_id, param.info_.learner_list_, param.policy_, param.use_c_replica_policy_));
+
   ObStorageHASrcInfo src_info;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.init(param, &storage_rpc_, &member_helper_));
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.get_available_src(mock_arg, src_info));
@@ -1038,7 +1041,7 @@ TEST_F(TestChooseMigrationSourcePolicy, member_helper_get_member_list)
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_leader_succ));
   const uint64_t tenant_id = 1001;
   const share::ObLSID ls_id(1);
-  common::ObArray<common::ObAddr> addr_list;
+  common::ObMemberList addr_list;
   EXPECT_EQ(OB_SUCCESS, member_helper_.get_ls_member_list(tenant_id, ls_id, addr_list));
 }
 // test ObMigrationSrcByLocationProvider init fail

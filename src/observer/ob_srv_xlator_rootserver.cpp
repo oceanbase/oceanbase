@@ -180,6 +180,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcRevokeSysPrivP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAlterRoleP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcRevokeObjP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcRevokeSensitiveRuleP, *gctx_.root_service_);
 
     //profile
     RPC_PROCESSOR(rootserver::ObRpcAlterUserProfileP, *gctx_.root_service_);
@@ -311,4 +312,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
 
     // htable ddl
     RPC_PROCESSOR(rootserver::ObRpcParallelHTableDDLP, *gctx_.root_service_);
+
+    // sensitive rule
+    RPC_PROCESSOR(rootserver::ObRpcHandleSensitiveRuleDDLP, *gctx_.root_service_);
 }

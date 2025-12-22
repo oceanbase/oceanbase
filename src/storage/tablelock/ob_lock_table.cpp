@@ -775,6 +775,25 @@ int ObLockTable::admin_update_lock_op(const ObTableLockOp &op_info,
   return ret;
 }
 
+int ObLockTable::admin_remove_lock_priority(const ObTableLockOp &op_info, const ObTableLockPrioArg &prio_arg)
+{
+  int ret = OB_SUCCESS;
+  ObTableHandleV2 handle;
+  ObLockMemtable *memtable = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    TABLELOCK_LOG(WARN, "ObLockTable not inited", K(ret));
+  } else if (OB_FAIL(get_lock_memtable(handle))) {
+    TABLELOCK_LOG(WARN, "get lock memtable failed", K(ret));
+  } else if (OB_FAIL(handle.get_lock_memtable(memtable))) {
+    TABLELOCK_LOG(ERROR, "get lock memtable from lock handle failed", K(ret));
+  } else {
+    memtable->remove_priority_task(prio_arg, op_info);
+  }
+  TABLELOCK_LOG(INFO, "ObLockTable::admin_remove_lock_priority", K(ret), K(op_info), K(prio_arg));
+  return ret;
+}
+
 int ObLockTable::check_and_clear_obj_lock(const bool force_compact)
 {
   int ret = OB_SUCCESS;

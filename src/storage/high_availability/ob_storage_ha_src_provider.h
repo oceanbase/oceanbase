@@ -23,6 +23,18 @@ namespace oceanbase {
 namespace storage {
 struct ObMigrationChooseSrcHelperInitParam;
 
+class ObStorageHAMemberUtils final
+{
+public:
+  static int get_addr_array(
+      const common::ObIArray<common::ObMember> &member_list,
+      common::ObIArray<common::ObAddr> &addr_array);
+  static int get_member_by_addr(
+      const common::ObAddr &addr,
+      const common::ObIArray<common::ObMember> &member_list,
+      common::ObMember &member);
+};
+
 class ObStorageHAGetMemberHelper
 {
 public:
@@ -30,11 +42,11 @@ public:
   virtual ~ObStorageHAGetMemberHelper();
   int init(storage::ObStorageRpc *storage_rpc);
   int get_ls_member_list(const uint64_t tenant_id, const share::ObLSID &ls_id,
-      common::ObIArray<common::ObAddr> &addr_list);
+      common::ObMemberList &member_list);
   int get_ls_member_list_and_learner_list(
       const uint64_t tenant_id, const share::ObLSID &ls_id, const bool need_learner_list,
       common::ObAddr &leader_addr, common::GlobalLearnerList &learner_list,
-      common::ObIArray<common::ObAddr> &member_list);
+      common::ObMemberList &member_list);
   virtual int get_ls_leader(const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObAddr &addr);
   virtual int get_ls(const share::ObLSID &ls_id, ObLSHandle &ls_handle);
   virtual bool check_tenant_primary();
@@ -46,10 +58,10 @@ public:
 
 private:
   int fetch_ls_member_list_and_learner_list_(const uint64_t tenant_id, const share::ObLSID &ls_id, const bool need_learner_list,
-      common::ObAddr &addr, common::GlobalLearnerList &learner_list, common::ObIArray<common::ObAddr> &member_list);
+      common::ObAddr &addr, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list);
   virtual int get_ls_member_list_and_learner_list_(const uint64_t tenant_id, const share::ObLSID &ls_id,
       const bool need_learner_list, common::ObAddr &leader_addr,
-      common::GlobalLearnerList &learner_list, common::ObIArray<common::ObAddr> &member_list);
+      common::GlobalLearnerList &learner_list, common::ObMemberList &member_list);
   int filter_dest_replica_(
       const common::ObReplicaMember &dst,
       common::GlobalLearnerList &learner_list);
@@ -76,6 +88,7 @@ public:
     // above policies are used for choosing source by location
     CHECKPOINT = 4,
     RECOMMEND = 5,
+    LOG_ONLY = 6,
     MAX_POLICY
   };
 
@@ -140,13 +153,13 @@ protected:
    * If must_choose_c_replica is true, the source must be C replica.
    */
   int check_replica_validity(
-      const common::ObAddr &addr, const common::ObReplicaMember &dst,
+      const common::ObMember &member, const common::ObReplicaMember &dst,
       const common::GlobalLearnerList &learner_list, const bool &must_choose_c_replica,
       obrpc::ObFetchLSMetaInfoResp &ls_info);
 
   virtual int inner_choose_ob_src(
     const common::ObAddr &leader_addr, const common::GlobalLearnerList &learner_list,
-    const common::ObIArray<common::ObAddr> &addr_list, const ObMigrationOpArg &arg, const bool &must_choose_c_replica,
+    const common::ObIArray<common::ObMember> &member_list, const ObMigrationOpArg &arg, const bool &must_choose_c_replica,
     common::ObAddr &chosen_src_addr) = 0;
 protected:
   bool is_inited_;
@@ -158,7 +171,7 @@ private:
   int fetch_ls_meta_info_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObAddr &member_addr,
       obrpc::ObFetchLSMetaInfoResp &ls_meta_info);
   int check_replica_type_(
-      const common::ObAddr &addr,
+      const common::ObMember &member,
       const common::ObReplicaMember &dst,
       const common::GlobalLearnerList &learner_list,
       const bool &must_choose_c_replica,
@@ -171,12 +184,12 @@ private:
   int get_palf_parent_addr_(const uint64_t tenant_id, const share::ObLSID &ls_id,
       const common::ObReplicaType replica_type, const ObMigrationOpType::TYPE op_type, common::ObAddr &parent_addr);
   int check_replica_type_for_normal_replica_(
-      const common::ObAddr &addr,
+      const common::ObMember &member,
       const common::ObReplicaMember &dst,
       const common::GlobalLearnerList &learner_list,
       bool &is_replica_type_valid);
   int check_replica_type_for_c_replica_(
-      const common::ObAddr &addr,
+      const common::ObMember &member,
       const common::ObReplicaMember &dst,
       const common::GlobalLearnerList &learner_list,
       bool &is_replica_type_valid);
@@ -205,7 +218,7 @@ public:
 protected:
   virtual int inner_choose_ob_src(
       const common::ObAddr &leader_addr, const common::GlobalLearnerList &learner_list,
-      const common::ObIArray<common::ObAddr> &addr_list, const ObMigrationOpArg &arg, const bool &must_choose_c_replica,
+      const common::ObIArray<common::ObMember> &member_list, const ObMigrationOpArg &arg, const bool &must_choose_c_replica,
       common::ObAddr &chosen_src_addr) override;
 private:
   void set_locality_manager_(ObLocalityManager *locality_manager);
@@ -238,6 +251,7 @@ private:
       const common::ObAddr &leader_addr,
       const common::ObReplicaMember &dst,
       const bool &must_choose_c_replica,
+      const common::ObIArray<common::ObMember> &member_list,
       common::ObAddr &chosen_src_addr);
 
 
@@ -259,7 +273,7 @@ public:
 protected:
   virtual int inner_choose_ob_src(
       const common::ObAddr &leader_addr, const common::GlobalLearnerList &learner_list,
-      const common::ObIArray<common::ObAddr> &addr_list, const ObMigrationOpArg &arg, const bool &must_choose_c_replica,
+      const common::ObIArray<common::ObMember> &member_list, const ObMigrationOpArg &arg, const bool &must_choose_c_replica,
       common::ObAddr &chosen_src_addr) override;
 
   DISALLOW_COPY_AND_ASSIGN(ObMigrationSrcByCheckpointProvider);
@@ -281,14 +295,38 @@ public:
 protected:
   virtual int inner_choose_ob_src(
       const common::ObAddr &leader_addr, const common::GlobalLearnerList &learner_list,
-      const common::ObIArray<common::ObAddr> &addr_list, const ObMigrationOpArg &arg, const bool &must_choose_c_replica,
+      const common::ObIArray<common::ObMember> &member_list, const ObMigrationOpArg &arg, const bool &must_choose_c_replica,
       common::ObAddr &chosen_src_addr) override;
 private:
-  int check_replica_validity_(const int64_t cluster_id, const common::ObIArray<common::ObAddr> &addr_list,
+  int check_replica_validity_(const int64_t cluster_id, const common::ObIArray<common::ObMember> &member_list,
       const common::ObAddr &addr, const common::ObReplicaMember &dst,
       const common::GlobalLearnerList &learner_list, const bool &must_choose_c_replica);
   DISALLOW_COPY_AND_ASSIGN(ObRSRecommendSrcProvider);
 };
+
+class ObMigrationLogOnlyProvider : public ObStorageHASrcProvider
+{
+public:
+  ObMigrationLogOnlyProvider();
+  virtual ~ObMigrationLogOnlyProvider();
+  int init(
+      const ObMigrationChooseSrcHelperInitParam &param,
+      storage::ObStorageRpc *storage_rpc,
+      ObStorageHAGetMemberHelper *member_helper);
+  virtual int choose_ob_src(
+      const ObMigrationOpArg &arg, common::ObAddr &chosen_src_addr) override;
+protected:
+  virtual int inner_choose_ob_src(
+      const common::ObAddr &leader_addr, const common::GlobalLearnerList &learner_list,
+      const common::ObIArray<common::ObMember> &member_list, const ObMigrationOpArg &arg, const bool &must_choose_c_replica,
+      common::ObAddr &choosen_src_addr) override;
+private:
+  int check_replica_validity_(const int64_t cluster_id, const common::ObIArray<common::ObMember> &member_list,
+      const common::ObAddr &addr, const common::ObReplicaMember &dst,
+      const common::GlobalLearnerList &learner_list);
+  DISALLOW_COPY_AND_ASSIGN(ObMigrationLogOnlyProvider);
+};
+
 
 class ObStorageHAChooseSrcHelper final
 {
@@ -322,6 +360,9 @@ private:
       const ObMigrationChooseSrcHelperInitParam &param,
       storage::ObStorageRpc *storage_rpc,
       ObStorageHAGetMemberHelper *member_helper);
+  int init_choose_source_by_log_only_provider_(
+      const ObMigrationChooseSrcHelperInitParam &param,
+      storage::ObStorageRpc *storage_rpc, ObStorageHAGetMemberHelper *member_helper);
 
   void errsim_test_(const ObMigrationOpArg &arg, ObStorageHASrcInfo &src_info);
   ObStorageHASrcProvider * get_provider() const { return provider_; }

@@ -1137,6 +1137,10 @@ int ObCreateTenantArg::assign(const ObCreateTenantArg &other)
     log_restore_source_ = other.log_restore_source_;
     is_tmp_tenant_for_recover_ = other.is_tmp_tenant_for_recover_;
     source_tenant_id_ = other.source_tenant_id_;
+#ifdef OB_BUILD_TDE_SECURITY
+    root_key_type_ = other.root_key_type_;
+    root_key_= other.root_key_;
+#endif
   }
   return ret;
 }
@@ -1156,6 +1160,10 @@ void ObCreateTenantArg::reset()
   log_restore_source_.reset();
   is_tmp_tenant_for_recover_ = false;
   source_tenant_id_ = OB_INVALID_TENANT_ID;
+#ifdef OB_BUILD_TDE_SECURITY
+  root_key_type_ = INVALID;
+  root_key_.reset();
+#endif
 }
 
 int ObCreateTenantArg::init(const share::schema::ObTenantSchema &tenant_schema,
@@ -1385,7 +1393,12 @@ DEF_TO_STRING(ObCreateTenantArg)
        K_(is_creating_standby),
        K_(log_restore_source),
        K_(is_tmp_tenant_for_recover),
-       K_(source_tenant_id));
+       K_(source_tenant_id)
+#ifdef OB_BUILD_TDE_SECURITY
+       , K_(root_key_type)
+       , K_(root_key)
+#endif
+      );
   return pos;
 }
 
@@ -1402,7 +1415,12 @@ OB_SERIALIZE_MEMBER((ObCreateTenantArg, ObDDLArg),
                     is_creating_standby_,
                     log_restore_source_,
                     is_tmp_tenant_for_recover_,
-                    source_tenant_id_);
+                    source_tenant_id_
+#ifdef OB_BUILD_TDE_SECURITY
+                    , root_key_type_
+                    , root_key_
+#endif
+                    );
 
 int ObCreateTenantEndArg::init(const uint64_t tenant_id)
 {
@@ -3320,7 +3338,8 @@ DEF_TO_STRING(ObCreateIndexArg)
        K_(is_index_scope_specified),
        K_(is_offline_rebuild),
        K_(index_key),
-       K_(data_version));
+       K_(data_version),
+       K_(generated_column_names));
   J_OBJ_END();
   return pos;
 }
@@ -3352,7 +3371,8 @@ OB_SERIALIZE_MEMBER((ObCreateIndexArg, ObIndexArg),
                     is_index_scope_specified_,
                     is_offline_rebuild_,
                     index_key_,
-                    data_version_);
+                    data_version_,
+                    generated_column_names_);
 
 OB_SERIALIZE_MEMBER((ObIndexOfflineDdlArg, ObDDLArg),
                     arg_,
@@ -5659,6 +5679,18 @@ OB_SERIALIZE_MEMBER((ObRevokeCatalogArg, ObDDLArg),
                     user_id_,
                     catalog_,
                     priv_set_);
+
+bool ObRevokeSensitiveRuleArg::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_ && OB_INVALID_ID != user_id_
+      && !sensitive_rule_.empty();
+}
+
+OB_SERIALIZE_MEMBER((ObRevokeSensitiveRuleArg, ObDDLArg),
+                     tenant_id_,
+                     user_id_,
+                     sensitive_rule_,
+                     priv_set_);
 
 bool ObRevokeDBArg::is_valid() const
 {
@@ -14726,6 +14758,11 @@ int ObCreateTableGroupRes::assign(const ObCreateTableGroupRes &other)
 }
 
 OB_SERIALIZE_MEMBER((ObCreateTableGroupRes, ObParallelDDLRes), tablegroup_id_);
+
+OB_SERIALIZE_MEMBER((ObSensitiveRuleDDLArg, ObDDLArg),
+                     ddl_type_,
+                     schema_,
+                     user_id_);
 
 }//end namespace obrpc
 }//end namespace oceanbase

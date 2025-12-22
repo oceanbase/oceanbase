@@ -107,10 +107,6 @@ int ObResourcePoolOptionResolver<T>::resolve_option(T *stmt, ParseNode *option_n
           SQL_RESV_LOG(WARN, "invalid replica type option_node", K(ret), K(option_node));
         } else if (OB_FAIL(ObAlterSystemResolverUtil::resolve_replica_type(option_node->children_[0], type))) {
           SQL_RESV_LOG(WARN, "fail to resove repilca type", K(ret));
-        } else if (REPLICA_TYPE_FULL != type) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("replica_type of resource pool other than FULL not supported.", KR(ret), K(type));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "replica_type of resource pool other than FULL replica");
         } else {
           stmt->set_replica_type(type);
         }

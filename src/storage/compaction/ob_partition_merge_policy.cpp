@@ -3064,13 +3064,61 @@ int ObIncMajorTxHelper::check_inc_major_included_by_major(
   is_included = false;
   int64_t trans_state = ObTxData::UNKOWN;
   int64_t commit_version = OB_INVALID_VERSION;
-  if (OB_UNLIKELY(!sstable.is_inc_major_ddl_sstable())) {
+  if (OB_UNLIKELY(!sstable.is_inc_major_ddl_sstable() && !sstable.is_inc_major_type_sstable())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(sstable));
   } else if (OB_FAIL(get_inc_major_commit_version(ls, sstable, SCN::max_scn(), trans_state, commit_version))) {
     LOG_WARN("fail to get inc major commit version", KR(ret), K(sstable));
   } else if (ObTxData::COMMIT == trans_state) {
     is_included = major_version >= commit_version;
+  } else if (ObTxData::ABORT == trans_state && sstable.is_inc_major_type_sstable()) {
+    is_included = true;
+  } else {
+    is_included = false;
+  }
+  return ret;
+}
+
+int ObIncMajorTxHelper::check_all_inc_major_included_by_major(
+  ObLS &ls,
+  const ObTablet &tablet,
+  bool &all_included)
+{
+  int ret = OB_SUCCESS;
+  all_included = false;
+  const ObTabletID &tablet_id = tablet.get_tablet_id();
+  storage::ObTabletMemberWrapper<storage::ObTabletTableStore> table_store_wrapper;
+  if (OB_FAIL(tablet.fetch_table_store(table_store_wrapper))) {
+    LOG_WARN("failed to fetch table store", K(ret), K(tablet_id));
+  } else {
+    const storage::ObTabletTableStore *table_store = table_store_wrapper.get_member();
+    if (OB_ISNULL(table_store)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table store should not be null", K(ret), K(tablet_id));
+    } else {
+      const ObSSTableArray &inc_major_sstables = table_store->get_inc_major_sstables();
+      const ObSSTableArray &major_sstables = table_store->get_major_sstables();
+      if (inc_major_sstables.empty()) {
+        all_included = true;
+      } else if (major_sstables.empty()) {
+        all_included = false;
+      } else {
+        const int64_t major_snapshot_version = major_sstables.at(major_sstables.count() - 1)->get_snapshot_version();
+        all_included = true;
+        for (int64_t i = 0; OB_SUCC(ret) && all_included && i < inc_major_sstables.count(); ++i) {
+          ObSSTable *inc_major_sstable = inc_major_sstables.at(i);
+          bool is_included = false;
+          if (OB_ISNULL(inc_major_sstable)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("inc major sstable is null", KR(ret), K(i), K(tablet_id));
+          } else if (OB_FAIL(check_inc_major_included_by_major(ls, major_snapshot_version, *inc_major_sstable, is_included))) {
+            LOG_WARN("fail to check inc major included by major", KR(ret), K(tablet_id), K(major_snapshot_version), KPC(inc_major_sstable));
+          } else if (!is_included) {
+            all_included = false;
+          }
+        }
+      }
+    }
   }
   return ret;
 }

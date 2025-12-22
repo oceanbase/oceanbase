@@ -108,6 +108,13 @@ public:
                                    ObSQLSessionInfo *session_info,
                                    ObSchemaGetterGuard *schema_guard,
                                    common::hash::ObHashSet<uint64_t> &table_referenced_columns);
+  static int generate_mv_stmt(ObIAllocator &alloc,
+                              ObStmtFactory &stmt_factory,
+                              ObRawExprFactory &expr_factory,
+                              ObSchemaChecker &schema_checker,
+                              ObSQLSessionInfo &session_info,
+                              const ObTableSchema &mv_schema,
+                              ObSelectStmt *&view_stmt);
 private:
   int init_mv_provider(ObSQLSessionInfo *session_info,
                        ObSchemaGetterGuard *schema_guard,
@@ -120,13 +127,6 @@ private:
   int check_column_type_and_accuracy(const ObColumnSchemaV2 &org_column,
                                      const ObColumnSchemaV2 &cur_column,
                                      bool &is_match);
-  static int generate_mv_stmt(ObIAllocator &alloc,
-                              ObStmtFactory &stmt_factory,
-                              ObRawExprFactory &expr_factory,
-                              ObSchemaChecker &schema_checker,
-                              ObSQLSessionInfo &session_info,
-                              const ObTableSchema &mv_schema,
-                              ObSelectStmt *&view_stmt);
   static int collect_tables_need_mlog(const ObSelectStmt* stmt,
                                       ObIArray<uint64_t> &tables_need_mlog);
   int print_mv_operators(ObMVPrinterCtx &mv_printer_ctx,

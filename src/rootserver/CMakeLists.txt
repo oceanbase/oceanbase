@@ -89,6 +89,7 @@ ob_set_subtarget(ob_rootserver common
   ob_standby_schema_refresh_trigger.cpp
   ob_tenant_info_loader.cpp
   ob_create_standby_from_net_actor.cpp
+  ob_ls_balance_helper.cpp
   ob_primary_ls_service.cpp
   ob_balance_ls_primary_zone.cpp
   ob_common_ls_service.cpp
@@ -96,7 +97,6 @@ ob_set_subtarget(ob_rootserver common
   ob_tenant_transfer_service.cpp
   ob_transfer_partition_task.cpp
   ob_tenant_balance_service.cpp
-  ob_ls_balance_helper.cpp
   ob_balance_task_execute_service.cpp
   ob_server_balancer.cpp
   ob_system_admin_util.cpp
@@ -131,6 +131,8 @@ ob_set_subtarget(ob_rootserver common
   ob_create_index_on_empty_table_helper.cpp
   ob_ccl_ddl_service.cpp
   ob_ccl_ddl_operator.cpp
+  ob_sensitive_rule_ddl_operator.cpp
+  ob_sensitive_rule_ddl_service.cpp
 )
 
 ob_set_subtarget(ob_rootserver balance

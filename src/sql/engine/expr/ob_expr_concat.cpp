@@ -196,8 +196,7 @@ int ObExprConcat::calc_result_typeN(ObExprResType &type,
                                     ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(param_num <= 0
-                  || (lib::is_oracle_mode() && param_num != 2))) {
+  if (OB_UNLIKELY(param_num <= 0)) {
     ret = OB_INVALID_ARGUMENT_NUM;
     LOG_WARN("invalid argument number", K(ret), K(param_num));
   }
@@ -206,7 +205,7 @@ int ObExprConcat::calc_result_typeN(ObExprResType &type,
 
   //类型 + 字符集推导
   if (lib::is_oracle_mode()) {
-    ObSEArray<ObExprResType*, 2, ObNullAllocator> params;
+    ObSEArray<ObExprResType*, 2> params;
     for (int64_t i = 0; i < param_num; ++i) {
       OZ (params.push_back(&types[i]));
     }
@@ -350,9 +349,6 @@ int ObExprConcat::cg_expr(ObExprCGCtx &, const ObRawExpr &, ObExpr &expr) const
 {
   int ret = OB_SUCCESS;
   CK(expr.arg_cnt_ > 0);
-  if (lib::is_oracle_mode()) {
-    CK(2 == expr.arg_cnt_);
-  }
   if (OB_SUCC(ret)) {
     expr.eval_func_ = &eval_concat;
   }

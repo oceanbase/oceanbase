@@ -14,10 +14,10 @@
 #define __SHARE_OB_EXTERNAL_CATALOG_H__
 #include "lib/allocator/ob_allocator.h"
 #include "share/catalog/ob_catalog_properties.h"
+#include "share/catalog/ob_time_travel_info.h"
 #include "share/schema/ob_table_schema.h"
 
-
-
+#include <optional>
 #include <share/catalog/hive/thrift/gen_cpp/ThriftHiveMetastore.h>
 
 namespace oceanbase
@@ -51,8 +51,12 @@ public:
            const ObString &table_name,
            const ObNameCaseMode case_mode);
   int assign(const ObILakeTableMetadata &other);
-  int build_table_schema(share::schema::ObTableSchema *&table_schema);
-
+  int build_table_schema(std::optional<int32_t> schema_id,
+                         std::optional<int64_t> snapshot_id,
+                         share::schema::ObTableSchema *&table_schema);
+  virtual int resolve_time_travel_info(const ObTimeTravelInfo *time_travel_info,
+                                       std::optional<int32_t> &schema_id,
+                                       std::optional<int64_t> &snapshot_id);
   TO_STRING_KV(K_(tenant_id),
                K_(catalog_id),
                K_(database_id),
@@ -70,7 +74,9 @@ public:
   ObNameCaseMode case_mode_;
   int64_t lake_table_metadata_version_ = 0; // used to identify cached lake table metadata version
 protected:
-  virtual int do_build_table_schema(share::schema::ObTableSchema *&table_schema) = 0;
+  virtual int do_build_table_schema(std::optional<int32_t> schema_id,
+                                    std::optional<int64_t> snapshot_id,
+                                    share::schema::ObTableSchema *&table_schema) = 0;
   ObIAllocator &allocator_;
 };
 

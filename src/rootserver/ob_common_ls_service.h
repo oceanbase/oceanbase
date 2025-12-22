@@ -92,7 +92,7 @@ private:
       const share::schema::ObTenantSchema &tenant_schema);
   int try_create_ls_(const share::schema::ObTenantSchema &tenant_schema);
   //ls group maybe has more than one unit group, need fix
-  int try_modify_ls_unit_group_(const share::schema::ObTenantSchema &tenant_schema);
+  int try_modify_ls_unit_group_or_unit_list_(const share::schema::ObTenantSchema &tenant_schema);
   void try_update_primary_ip_list();
   bool need_update_ip_list_(share::ObLogRestoreSourceItem &item);
   int get_restore_source_value_(ObLogRestoreSourceItem &item, ObSqlString &standby_source_value);

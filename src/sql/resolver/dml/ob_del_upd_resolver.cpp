@@ -687,7 +687,8 @@ int ObDelUpdResolver::resolve_additional_assignments(ObIArray<ObTableAssignment>
           LOG_WARN("fail to check assignment exist", KPC(table_item), K(column_id));
         } else if (FALSE_IT(need_assigned = need_assigned ||
                                             ((column_schema->is_vec_hnsw_vid_column() ||
-                                              column_schema->is_vec_ivf_center_id_column()) &&
+                                              column_schema->is_vec_ivf_center_id_column() ||
+                                              column_schema->is_hybrid_embedded_vec_column()) &&
                                              (update_with_vector_index || T_INSERT_SCOPE == scope)))) {
         } else if (need_assigned) {
           // for insert scope, on duplicate key update column list already
@@ -2527,9 +2528,14 @@ int ObDelUpdResolver::check_need_fired_trigger(const TableItem* table_item)
 {
   int ret = OB_SUCCESS;
   bool has = false;
+  bool has_trigger_hint = false;
   const ObTableSchema *table_schema = NULL;
   ObSchemaGetterGuard *schema_guard = NULL;
   uint64_t table_id = OB_INVALID_ID;
+  const ObQueryCtx *query_ctx = nullptr;
+  const ObGlobalHint *global_hint = nullptr;
+  const TriggerHint* disable_trigger_hint = nullptr;
+
   CK (OB_NOT_NULL(table_item));
   if (OB_SUCC(ret)
       && !session_info_->get_ddl_info().is_ddl()
@@ -2583,11 +2589,27 @@ int ObDelUpdResolver::check_need_fired_trigger(const TableItem* table_item)
         LOG_WARN("stmt type is error", K(stmt_->get_stmt_type()), K(ret));
         break;
       }
+      if (!OB_ISNULL(query_ctx = stmt_->get_query_ctx()) &&
+          !OB_ISNULL(global_hint = &(query_ctx->get_global_hint())) &&
+          !OB_ISNULL(disable_trigger_hint = &(global_hint->trigger_hint_))) {
+            has_trigger_hint = true;
+      }
       for (int64_t i = 0; OB_SUCC(ret) && !has && i < tg_list.count(); i++) {
         OX (tg_id = tg_list.at(i));
         OZ (schema_guard->get_trigger_info(tenant_id, tg_id, tg_info));
         OV (OB_NOT_NULL(tg_info));
         OX (has = (tg_info->is_enable() && tg_info->has_event(dml_event)));
+        if (has && has_trigger_hint) {
+          if (disable_trigger_hint->get_disable_all()) {
+            has = false;
+          } else {
+            for (int64_t j = 0; has && j < disable_trigger_hint->trigger_hints_.count(); ++j) {
+              if (0 == tg_info->get_trigger_name().case_compare(disable_trigger_hint->trigger_hints_.at(j))) {
+                has = false;
+              }
+            }
+          }
+        }
       }
       OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= has);
       if (OB_SUCC(ret) && has && table_schema->is_user_view()) {

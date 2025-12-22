@@ -128,16 +128,18 @@ public:
 
   virtual int get_max_scn(share::SCN &scn) const = 0;
   virtual int get_end_scn(share::SCN &scn) const = 0;
-  virtual int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const = 0;
+  virtual int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num, const bool &filter_logonly_replica = false) const = 0;
   virtual int get_paxos_member_list_and_learner_list(common::ObMemberList &member_list,
                                                      int64_t &paxos_replica_num,
-                                                     common::GlobalLearnerList &learner_list) const = 0;
+                                                     common::GlobalLearnerList &learner_list,
+                                                     const bool &filter_logonly_replica = false) const = 0;
   virtual int get_global_learner_list(common::GlobalLearnerList &learner_list) const = 0;
   virtual int get_leader_config_version(palf::LogConfigVersion &config_version) const = 0;
   virtual int get_stable_membership(palf::LogConfigVersion &config_version,
                                     common::ObMemberList &member_list,
                                     int64_t &paxos_replica_num,
-                                    common::GlobalLearnerList &learner_list) const = 0;
+                                    common::GlobalLearnerList &learner_list,
+                                    const bool &filter_logonly_replica = false) const = 0;
   //  get leader from election, used only for non_palf_leader rebuilding.
   virtual int get_election_leader(common::ObAddr &addr) const = 0;
   virtual int get_parent(common::ObAddr &parent) const = 0;
@@ -208,7 +210,7 @@ public:
   virtual int register_rebuild_cb(palf::PalfRebuildCb *rebuild_cb) = 0;
   virtual int unregister_rebuild_cb() = 0;
   virtual int offline() = 0;
-  virtual int online(const palf::LSN &lsn, const share::SCN &scn) = 0;
+  virtual int online(const palf::LSN &lsn, const share::SCN &scn, const bool is_logonly_replica = false) = 0;
   virtual bool is_offline() const = 0;
   virtual int is_replay_fatal_error(bool &has_fatal_error) = 0;
 };
@@ -477,14 +479,15 @@ public:
   // @brief, get paxos member list of this paxos group
   // @param[out] common::ObMemberList&
   // @param[out] int64_t&
-  int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const override final;
+  int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num, const bool &filter_logonly_replica = false) const override final;
   // @brief, get paxos member list and global list of this paxos group atomically
   // @param[out] common::ObMemberList&
   // @param[out] int64_t&
   // @param[out] common::GlobalLearnerList&
   int get_paxos_member_list_and_learner_list(common::ObMemberList &member_list,
                                              int64_t &paxos_replica_num,
-                                             common::GlobalLearnerList &learner_list) const override final;
+                                             common::GlobalLearnerList &learner_list,
+                                             const bool &filter_logonly_replica = false) const override final;
   // @brief, get global learner list of this paxos group
   // @param[out] common::GlobalLearnerList&
   int get_global_learner_list(common::GlobalLearnerList &learner_list) const override final;
@@ -501,7 +504,8 @@ public:
   int get_stable_membership(palf::LogConfigVersion &config_version,
                             common::ObMemberList &member_list,
                             int64_t &paxos_replica_num,
-                            common::GlobalLearnerList &learner_list) const override final;
+                            common::GlobalLearnerList &learner_list,
+                            const bool &filter_logonly_replica = false) const override final;
   // @brief, get leader from election, used only for non_palf_leader rebuilding
   // @param[out] addr: address of leader
   // retval:
@@ -844,7 +848,7 @@ public:
   int diagnose_palf(palf::PalfDiagnoseInfo &diagnose_info) const;
   TO_STRING_KV(K_(role), K_(proposal_id), KP(palf_handle_), KP(palf_env_), K(is_in_stop_state_), K(is_inited_), K(id_));
   int offline() override final;
-  int online(const palf::LSN &lsn, const share::SCN &scn) override final;
+  int online(const palf::LSN &lsn, const share::SCN &scn, const bool is_logonly_replica = false) override final;
   bool is_offline() const override final;
   // @brief: check there's a fatal error in replay service.
   // @param[out] has_fatal_error.

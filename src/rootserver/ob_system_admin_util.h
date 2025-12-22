@@ -551,8 +551,8 @@ public:
             : ObSystemAdminUtil(ctx)
   {}
 
-  int get_all_servers(common::ObIArray<ObAddr> &servers);
-  int get_tenant_servers(const uint64_t tenant_id, common::ObIArray<ObAddr> &servers);
+  static int get_all_servers(common::ObIArray<ObAddr> &servers);
+  static int get_tenant_servers(const uint64_t tenant_id, common::ObIArray<ObAddr> &servers);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantServerAdminUtil);

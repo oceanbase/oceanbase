@@ -330,6 +330,7 @@ ob_set_subtarget(ob_sql engine_cmd
   engine/cmd/ob_flashback_standby_log_executor.cpp
   engine/cmd/ob_ccl_rule_executor.cpp
   engine/cmd/ob_interval_partition_utils.cpp
+  engine/cmd/ob_sensitive_rule_executor.cpp
 )
 
 ob_set_subtarget(ob_sql engine_connector
@@ -929,7 +930,9 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_semantic_distance.cpp
   engine/expr/ob_expr_format_profile.cpp
   engine/expr/ob_expr_bucket.cpp
+  engine/expr/ob_expr_void.cpp
   engine/expr/ob_expr_ai/ob_expr_ai_prompt.cpp
+  engine/expr/ob_expr_collect_file_list.cpp
 )
 
 ob_set_subtarget(ob_sql_extra ALONE
@@ -1515,6 +1518,8 @@ ob_set_subtarget(ob_sql resolver_ddl
   resolver/ddl/ob_drop_ccl_rule_stmt.cpp
   resolver/ddl/ob_mview_resolver_helper.cpp
   resolver/ddl/ob_interval_partition_resolver.cpp
+  resolver/ddl/ob_sensitive_rule_resolver.cpp
+  resolver/ddl/ob_sensitive_rule_stmt.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_dml

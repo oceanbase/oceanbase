@@ -943,27 +943,105 @@ int ObDelUpdLogPlan::compute_hash_dist_exprs_for_pdml_insert(ObExchangeInfo &exc
   int ret = OB_SUCCESS;
   const ObDMLStmt *stmt;
   ObSEArray<ObRawExpr *, 8> rowkey_exprs;
-  if (OB_ISNULL(stmt = get_stmt()) ||
+  bool use_logic_pk = false;
+  ObArray<uint64_t> logic_pk_ids;
+  ObSQLSessionInfo *session = NULL;
+  share::schema::ObSchemaGetterGuard *schema_guard = NULL;
+  const share::schema::ObTableSchema *table_schema = NULL;
+  if (OB_ISNULL(stmt = get_stmt()) || OB_ISNULL(session = get_optimizer_context().get_session_info()) ||
+      OB_ISNULL(schema_guard = get_optimizer_context().get_schema_guard()) ||
       OB_UNLIKELY(dml_info.get_real_uk_cnt() > dml_info.column_convert_exprs_.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(dml_info.get_real_uk_cnt()),
              K(dml_info.column_convert_exprs_.count()), K(ret));
-  } else if (stmt->is_merge_stmt()) {
-    if (OB_FAIL(build_merge_stmt_hash_dist_exprs(dml_info,
-                                                 rowkey_exprs))) {
-      LOG_WARN("failed to build merge stmt hash dist exprs", K(ret));
-    }
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < dml_info.get_real_uk_cnt(); i++) {
-      ObRawExpr *raw_expr = NULL;
-      if (OB_ISNULL(raw_expr = dml_info.column_convert_exprs_.at(i))) {
+    // 当目标表为带逻辑主键的堆表时，优先使用逻辑主键列进行哈希分发，
+    // 避免使用物理 rowkey（隐藏列）导致同一逻辑主键无法落在同一 worker。
+    if (!stmt->is_merge_stmt()) {
+      if (OB_FAIL(schema_guard->get_table_schema(session->get_effective_tenant_id(),
+                                                 dml_info.ref_table_id_,
+                                                 table_schema))) {
+        LOG_WARN("failed to get table schema", K(ret), K(dml_info.ref_table_id_));
+      } else if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(rowkey_exprs.push_back(raw_expr))) {
-        LOG_WARN("failed to push back expr", K(ret));
-      } else { /*do nothing*/ }
+        LOG_WARN("get unexpected null table schema", K(ret), K(dml_info.ref_table_id_));
+      } else {
+        bool has_logic_pk = false;
+        if (OB_FAIL(table_schema->is_table_with_logic_pk(*schema_guard, has_logic_pk))) {
+          LOG_WARN("failed to check logic pk", K(ret), K(dml_info.ref_table_id_));
+        } else if (has_logic_pk && table_schema->is_heap_organized_table()) {
+          if (OB_FAIL(table_schema->get_logic_pk_column_ids(schema_guard, logic_pk_ids))) {
+            LOG_WARN("failed to get logic pk column ids", K(ret), K(dml_info.ref_table_id_));
+          } else if (OB_UNLIKELY(logic_pk_ids.empty())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("logic pk column ids is empty", K(ret), K(dml_info.ref_table_id_));
+          } else {
+            use_logic_pk = true;
+          }
+        }
+      }
     }
-    
+
+    if (OB_FAIL(ret)) {
+    } else if (use_logic_pk) {
+      // 根据逻辑主键列 ID 在 column_convert_exprs_ 中定位对应的转换表达式
+      for (int64_t i = 0; OB_SUCC(ret) && i < logic_pk_ids.count(); ++i) {
+        const uint64_t pk_id = logic_pk_ids.at(i);
+        bool found = false;
+        for (int64_t j = 0; OB_SUCC(ret) && j < dml_info.column_exprs_.count(); ++j) {
+          ObColumnRefRawExpr *col_expr = dml_info.column_exprs_.at(j);
+          if (OB_ISNULL(col_expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected null column expr", K(ret), K(j));
+          } else if (col_expr->get_column_id() == pk_id) {
+            if (OB_UNLIKELY(j >= dml_info.column_convert_exprs_.count())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("convert expr not found for logic pk", K(ret), K(j), K(pk_id),
+                       K(dml_info.column_convert_exprs_.count()));
+            } else if (OB_FAIL(rowkey_exprs.push_back(dml_info.column_convert_exprs_.at(j)))) {
+              LOG_WARN("failed to push back logic pk expr", K(ret), K(pk_id));
+            } else {
+              found = true;
+            }
+            break;
+          }
+        }
+        if (OB_SUCC(ret) && !found) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("logic pk column not found in dml info", K(ret), K(pk_id));
+        }
+      }
+      // For heap tables with logical primary key, also need to set hidden_pk_expr_
+      // to ensure exchange passes it to the upper INSERT operator.
+      // This is needed for both partitioned and non-partitioned tables in PDML scenario.
+      // We use hidden_pk_expr_ instead of hash_dist_exprs_ to avoid affecting hash calculation.
+      if (OB_SUCC(ret)) {
+        for (int64_t i = 0; i < dml_info.column_convert_exprs_.count(); ++i) {
+          ObRawExpr *expr = dml_info.column_convert_exprs_.at(i);
+          if (OB_NOT_NULL(expr) &&
+              (expr->get_expr_type() == T_TABLET_AUTOINC_NEXTVAL ||
+               expr->get_expr_type() == T_PSEUDO_HIDDEN_CLUSTERING_KEY)) {
+            exch_info.hidden_pk_expr_ = expr;
+            break;
+          }
+        }
+      }
+    } else if (stmt->is_merge_stmt()) {
+      if (OB_FAIL(build_merge_stmt_hash_dist_exprs(dml_info,
+                                                   rowkey_exprs))) {
+        LOG_WARN("failed to build merge stmt hash dist exprs", K(ret));
+      }
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < dml_info.get_real_uk_cnt(); i++) {
+        ObRawExpr *raw_expr = NULL;
+        if (OB_ISNULL(raw_expr = dml_info.column_convert_exprs_.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (OB_FAIL(rowkey_exprs.push_back(raw_expr))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        } else { /*do nothing*/ }
+      }
+    }
   }
   if (OB_SUCC(ret) &&
       OB_FAIL(exch_info.append_hash_dist_expr(rowkey_exprs))) {

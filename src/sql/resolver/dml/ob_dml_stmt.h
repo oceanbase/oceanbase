@@ -177,6 +177,7 @@ struct TableItem
     json_table_def_ = nullptr;
     table_type_ = MAX_TABLE_TYPE;
     lake_table_format_ = share::ObLakeTableFormat::INVALID;
+    lake_table_snapshot_id_ = OB_INVALID_ID;
     values_table_def_ = NULL;
     sample_info_ = nullptr;
     transpose_table_def_ = NULL;
@@ -207,7 +208,7 @@ struct TableItem
                K_(flashback_query_type), KPC_(flashback_query_expr), K_(table_type),
                K_(exec_params), KPC_(sample_info), K_(mview_id), K_(need_expand_rt_mv),
                K_(external_table_partition), K_(catalog_name), K_(external_location_id),
-               K_(is_mv_proctime_table));
+               K_(is_mv_proctime_table), K_(lake_table_snapshot_id));
 
   enum TableType
   {
@@ -332,6 +333,7 @@ struct TableItem
   bool is_recursive_union_fake_table_; //mark whether this table is a tmp fake table for resolve the recursive cte table
   share::schema::ObTableType table_type_;
   share::ObLakeTableFormat lake_table_format_;
+  int64_t lake_table_snapshot_id_;
   CTEType cte_type_;
   common::ObString database_name_;
   /* FOR UPDATE clause */

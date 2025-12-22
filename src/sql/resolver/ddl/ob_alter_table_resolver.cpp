@@ -4416,7 +4416,21 @@ int ObAlterTableResolver::resolve_add_clustering_key(const ParseNode &node)
       ret = OB_NOT_SUPPORTED;
       SQL_RESV_LOG(WARN, "can't ADD Clustering Key, clustering key is not supported on tables with fulltext indexes", K(ret), KPC(table_schema_));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "can't ADD 'CLUSTERING KEY', clustering key is not supported on tables with fulltext indexes");
-    } else {
+    }
+
+    // Check if table has vector indexes - clustering key is not allowed on tables with vector indexes
+    if (OB_SUCC(ret)) {
+      bool has_vec_index = false;
+      if (OB_FAIL(ObVectorIndexUtil::check_table_has_vector_index(*table_schema_, *params_.schema_checker_->get_schema_guard(), has_vec_index))) {
+        SQL_RESV_LOG(WARN, "failed to check if table has vector indexes", KR(ret));
+      } else if (has_vec_index) {
+        ret = OB_NOT_SUPPORTED;
+        SQL_RESV_LOG(WARN, "can't ADD Clustering Key, clustering key is not supported on tables with vector indexes", K(ret), KPC(table_schema_));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "can't ADD 'CLUSTERING KEY', clustering key on tables with vector indexes is");
+      }
+    }
+
+    if (OB_SUCC(ret)) {
       obrpc::ObCreateIndexArg *create_index_arg = NULL;
       void *tmp_ptr = NULL;
       if (NULL == (tmp_ptr = (ObCreateIndexArg *)allocator_->alloc(sizeof(obrpc::ObCreateIndexArg)))) {
@@ -5429,6 +5443,9 @@ int ObAlterTableResolver::resolve_partition_options(const ParseNode &node)
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("can't re-partitioned a partitioned table", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Re-partition a patitioned table");
+      } else if (OB_FAIL(ObAlterMviewUtils::check_partition_option_for_mlog_master(
+                     *table_schema_, partition_node->type_))) {
+        LOG_WARN("mlog master is not supported", KR(ret));
       }
     }
     if (OB_SUCC(ret)) {

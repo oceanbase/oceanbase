@@ -167,6 +167,7 @@ int ObExchangeInfo::assign(const ObExchangeInfo &other)
   } else if (OB_FAIL(server_list_.assign(other.server_list_))) {
     LOG_WARN("failed to assign server list", K(ret));
   } else {
+    hidden_pk_expr_ = other.hidden_pk_expr_;
     is_remote_ = other.is_remote_;
     is_task_order_ = other.is_task_order_;
     is_merge_sort_ = other.is_merge_sort_;

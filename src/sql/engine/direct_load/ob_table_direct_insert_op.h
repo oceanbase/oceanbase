@@ -92,25 +92,34 @@ public:
   virtual int inner_get_next_batch(const int64_t max_row_cnt) override;
   virtual void destroy() override;
 private:
+  int init_project_info();
   int init_px_writer();
   int next_vector(const int64_t max_row_cnt);
   int next_batch(const int64_t max_row_cnt);
   int next_row();
+  int project_vector(const ExprFixedArray &input_row);
+  int project_batch(const ExprFixedArray &input_row);
+  int project_row(const ExprFixedArray &input_row);
+
   int write_vectors(common::ObIVector *tablet_id_vector,
                     const common::IVectorPtrs &vectors,
                     const sql::ObBatchRows &batch_rows);
   int write_batch(const common::ObDatumVector &tablet_id_datum_vector,
                   const common::ObIArray<common::ObDatumVector> &datum_vectors,
                   const sql::ObBatchRows &batch_rows);
-  int write_row(const common::ObTabletID *tablet_id_ptr,
-                const sql::ExprFixedArray &expr_array);
+  int write_row(const common::ObTabletID &tablet_id,
+                const ObDatumRow &datum_row);
 protected:
   ObInsRtDef ins_rtdef_;
   common::ObArenaAllocator allocator_;
   int64_t px_task_id_;
   int64_t ddl_task_id_;
+  const IntFixedArray *row_projector_;
+  ObArray<uint64_t> column_ids_;
+  blocksstable::ObDatumRow datum_row_;
+  ObArray<common::ObDatumVector> datum_vectors_;
+  ObArray<common::ObIVector *> vectors_;
   observer::ObTableLoadTableCtx *table_ctx_;
-  blocksstable::ObDatumRow *datum_row_;
   observer::ObTableLoadStoreTransPXWriter *px_writer_;
   ObTabletID tablet_id_;
   bool is_partitioned_table_;

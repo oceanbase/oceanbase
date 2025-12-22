@@ -164,6 +164,7 @@ int ObMigrateUnitFinishChecker::try_check_migrate_unit_finish_by_tenant(
     DRLSInfo dr_ls_info(gen_user_tenant_id(tenant_id), schema_service_);
     ObLSStatusInfoArray ls_status_info_array;
     share::ObLSStatusOperator ls_status_operator;
+    common::ObArray<uint64_t> gts_unit_ids; // not used
     if (OB_FAIL(ls_status_operator.get_all_tenant_related_ls_status_info(
       *sql_proxy_, tenant_id, ls_status_info_array))) {
       LOG_WARN("fail to get all ls status", KR(ret), K(tenant_id));
@@ -185,8 +186,10 @@ int ObMigrateUnitFinishChecker::try_check_migrate_unit_finish_by_tenant(
         } else if (OB_FAIL(dr_ls_info.build_disaster_ls_info(
                 ls_info,
                 ls_status_info,
-                true/*filter_readonly_replicas_with_flag*/))) {
-          LOG_WARN("fail to generate dr log stream info", KR(ret));
+                true/*filter_readonly_replicas_with_flag*/,
+                gts_unit_ids))) {
+          LOG_WARN("fail to generate dr log stream info", KR(ret), K(ls_info),
+                   K(ls_status_info), K(gts_unit_ids));
         } else if (OB_FAIL(statistic_migrate_unit_by_ls(
                 dr_ls_info,
                 ls_status_info))) {

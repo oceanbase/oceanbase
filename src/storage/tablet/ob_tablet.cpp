@@ -5220,6 +5220,16 @@ int ObTablet::prepare_memtable(
   } else {
     write_memtable = reinterpret_cast<ObMemtable*>(last_table);
   }
+
+  ObITable *first_table = nullptr;
+  if (FAILEDx(relative_table.tablet_iter_.table_iter()->get_boundary_table(false, first_table))) {
+    LOG_WARN("fail to get first table", K(ret));
+  } else if (OB_ISNULL(first_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("first table is null", K(ret));
+  } else if (OB_LIKELY(first_table->is_major_sstable())) {
+    store_ctx.mvcc_acc_ctx_.major_snapshot_ = first_table->get_snapshot_version();
+  }
   return ret;
 }
 

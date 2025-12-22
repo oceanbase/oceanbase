@@ -381,6 +381,19 @@ int ObPluginVectorIndexLoadScheduler::check_index_adpter_exist(ObPluginVectorInd
   return ret;
 }
 
+int ObPluginVectorIndexLoadScheduler::check_need_maintence_ls_follower()
+{
+  int ret = OB_SUCCESS;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+  if (!tenant_config.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail get tenant_config", KR(ret), K(MTL_ID()));
+  } else if ((!is_leader_ && tenant_config->load_vector_index_on_follower) || need_refresh_) {
+    mark_tenant_need_check();
+  }
+  return ret;
+}
+
 void ObPluginVectorIndexLoadScheduler::mark_tenant_need_check()
 {
   int ret = OB_SUCCESS;
@@ -588,10 +601,22 @@ int ObPluginVectorIndexLoadScheduler::execute_adapter_maintenance()
       LOG_WARN("fail to create param map", KR(ret));
     }
 
+    bool need_maintenance = true;
+    if (OB_SUCC(ret)) {
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+      if (!tenant_config.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail get tenant_config", KR(ret), K(MTL_ID()));
+      } else if (!is_leader_ && !tenant_config->load_vector_index_on_follower) {
+        need_maintenance = false;
+        LOG_INFO("dont not need maintenance ls follower", K(ret), K(tenant_config->load_vector_index_on_follower));
+      }
+    }
+
     int64_t start_idx = 0;
     int64_t end_idx = 0;
 
-    while (OB_SUCC(ret) && start_idx < table_id_array.count()) {
+    while (OB_SUCC(ret) && need_maintenance && start_idx < table_id_array.count()) {
       ObSchemaGetterGuard schema_guard;
       start_idx = end_idx;
       end_idx = MIN(table_id_array.count(), start_idx + TBALE_GENERATE_BATCH_SIZE);
@@ -1057,6 +1082,8 @@ int ObPluginVectorIndexLoadScheduler::check_and_execute_adapter_maintenance_task
     LOG_WARN("fail to check schema version", KR(ret));
   } else if (OB_NOT_NULL(mgr) && OB_FAIL(check_index_adpter_exist(mgr))) {
     LOG_WARN("fail to check exist paritial index adapter", KR(ret));
+  } else if (OB_FAIL(check_need_maintence_ls_follower())) {
+    LOG_WARN("fail to check need maintence ls follower", KR(ret));
   } else if (local_tenant_task_.need_check_) {
     if (OB_FAIL(execute_adapter_maintenance())) {
       LOG_WARN("fail to generate tablet tasks", K_(tenant_id));
@@ -1570,6 +1597,7 @@ int ObPluginVectorIndexLoadScheduler::switch_to_leader()
   } else {
     ATOMIC_STORE(&is_leader_, true);
     ATOMIC_STORE(&need_do_for_switch_, true);
+    ATOMIC_STORE(&need_refresh_, true);
   }
   if (OB_SUCC(ret) && check_can_do_work()) {
     (void) ObPluginVectorIndexUtils::set_ls_leader_flag(ls_->get_ls_id(), is_leader_);

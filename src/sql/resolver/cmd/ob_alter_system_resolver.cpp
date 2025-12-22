@@ -123,6 +123,7 @@ int ObAlterSystemResolverUtil::resolve_replica_type(const ParseNode *parse_tree,
                                                     ObReplicaType &replica_type)
 {
   int ret = OB_SUCCESS;
+  bool compatible_with_logonly_replica = false;
   if (OB_UNLIKELY(NULL == parse_tree)) {
     replica_type = REPLICA_TYPE_FULL; // 为了兼容早期命令，不指定replica_type时默认为FULL类型
     LOG_INFO("resolve_replica_type without any value. default to FULL.");
@@ -147,6 +148,8 @@ int ObAlterSystemResolverUtil::resolve_replica_type(const ParseNode *parse_tree,
         char err_msg[64] = {0};
         (void)snprintf(err_msg, sizeof(err_msg), "%s replica", ObShareUtil::replica_type_to_string(replica_type));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
+      } else if (OB_FAIL(ObShareUtil::check_replica_type_with_version(replica_type, false/*check_for_unit*/))) {
+        LOG_WARN("fail to check replica type", KR(ret), K(replica_type));
       } else {
         // good, valid replica_type
       }
@@ -3890,6 +3893,10 @@ int ObModifyLSReplicaResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("resolve server failed", KR(ret), KP(server_addr_node));
     } else if (OB_FAIL(Util::resolve_replica_type(replica_type_node, replica_type))) {
       LOG_WARN("resolve replica type failed", KR(ret), KP(replica_type_node));
+    } else if (ObReplicaType::REPLICA_TYPE_LOGONLY == replica_type) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("type transform between L-replica and other types not allowed", KR(ret), K(replica_type));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Type transform between LOGONLY replica and other types");
     } else if (OB_FAIL(Util::check_compatibility_for_replica_type(replica_type, tenant_id))) {
       LOG_WARN("check compatibility for replica_type failed", KR(ret), K(replica_type), K(tenant_id));
     } else if (OB_FAIL(Util::check_and_get_paxos_replica_num(paxos_replica_num_node, paxos_replica_num))) {

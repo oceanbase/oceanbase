@@ -41,11 +41,17 @@ public:
   // used by filesystem catalog only
   int load_by_table_location(const ObString &table_location);
   int load_by_metadata_location(const ObString &metadata_location);
+  int resolve_time_travel_info(const share::ObTimeTravelInfo *time_travel_info,
+                               std::optional<int32_t> &schema_id,
+                               std::optional<int64_t> &snapshot_id) override;
 
   ObString access_info_;
   TableMetadata table_metadata_;
+
 protected:
-  int do_build_table_schema(share::schema::ObTableSchema *&table_schema) override;
+  int do_build_table_schema(std::optional<int32_t> schema_id,
+                            std::optional<int64_t> snapshot_id,
+                            share::schema::ObTableSchema *&table_schema) override;
 };
 
 } // namespace iceberg

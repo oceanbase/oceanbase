@@ -24,6 +24,7 @@
 #include "sql/engine/expr/ob_json_param_type.h"
 #include "sql/parser/ob_parser_utils.h"
 #include "sql/resolver/mv/ob_major_refresh_mjv_printer.h"
+#include "sql/privilege_check/ob_privilege_check.h"
 
 #include "sql/executor/ob_memory_tracker.h"
 namespace oceanbase
@@ -87,6 +88,12 @@ int ObSelectResolver::resolve_set_query(const ParseNode &parse_tree)
     OPT_TRACE(get_stmt());
   } else if (OB_FAIL(do_resolve_set_query_in_normal(parse_tree))) {
     LOG_WARN("failed to do resolve set query", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+    // need to resolve sensitive rule if set stmt is the root stmt, e.g.
+    // select a from t1 union select b from t2;
+  } else if (OB_FAIL(resolve_sensitive_rule(get_select_stmt()))) {
+    LOG_WARN("failed to resolve sensitive rule", K(ret));
   }
   return ret;
 }
@@ -2608,8 +2615,478 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
       LOG_WARN("star can't be used with other expression", K(ret));
     }
   }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(resolve_sensitive_rule(get_select_stmt()))) {
+      LOG_WARN("failed to resolve sensitive rule", K(ret));
+    }
+  }
   return ret;
 }
+
+bool ObSelectResolver::is_child_resolver_of_dml()
+{
+  bool bret = false;
+  ObDMLResolver * parent_resolver = NULL;
+  ObStmtScope parent_scope = T_NONE_SCOPE;
+  if (current_level_ == 0) { // is top level resolver
+  } else if (NULL == (parent_resolver = get_parent_namespace_resolver())) {
+  } else if (FALSE_IT(parent_scope = parent_resolver->get_current_scope())) {
+  } else {
+    switch (parent_scope) {
+      case T_INSERT_SCOPE:
+      case T_UPDATE_SCOPE:
+        bret = true;
+        break;
+      default:
+        break;
+    }
+  }
+  return bret;
+}
+
+#ifdef OB_BUILD_TDE_SECURITY
+int ObSelectResolver::resolve_sensitive_rule(ObSelectStmt *select_stmt)
+{
+  int ret = OB_SUCCESS;
+  uint64_t compat_version = 0;
+  uint64_t effective_tenant_id = OB_INVALID_ID;
+  int64_t sensitive_rule_count = 0;
+  if (OB_ISNULL(select_stmt) || OB_ISNULL(session_info_) || OB_ISNULL(schema_checker_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(select_stmt), K(session_info_), K(schema_checker_));
+  } else if (!session_info_->is_user_session()) {
+  } else if (FALSE_IT(effective_tenant_id = session_info_->get_effective_tenant_id())) {
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(effective_tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", K(ret), K(effective_tenant_id));
+  } else if ((lib::is_mysql_mode() && !((compat_version >= MOCK_DATA_VERSION_4_3_5_3 && compat_version < DATA_VERSION_4_4_0_0) ||
+                                        (compat_version >= MOCK_DATA_VERSION_4_4_2_0 && compat_version < DATA_VERSION_4_5_0_0) ||
+                                        (compat_version >= DATA_VERSION_4_5_1_0)))
+             || (lib::is_oracle_mode() && !((compat_version >= MOCK_DATA_VERSION_4_4_2_0 && compat_version < DATA_VERSION_4_5_0_0) ||
+                                            (compat_version >= DATA_VERSION_4_5_1_0)))) {
+    // do nothing
+  } else if (!((0 == current_level_ && get_parent_namespace_resolver() == NULL)
+               || (1 == current_level_ && is_child_resolver_of_dml()))
+             || (params_.is_from_create_view_ && !params_.is_mview_definition_sql_)
+             || params_.is_returning_ || params_.is_prepare_stage_  // uses StmtPrinter
+             || params_.is_expanding_view_ || params_.is_in_view_
+             || is_in_set_query()
+             || is_substmt()
+             || cte_ctx_.is_with_clause_resolver_) {
+    // do not resolve sensitive rule if:
+    // 1. not top-level select or not the first-level child of dml
+    // 2. is create view (except for materialized view)
+    // 3. other scenarios that use StmtPrinter
+    // 4. is expanding view or is resolving view
+    // 5. is in set query
+    // 6. is subquery
+    // 7. is in with clause
+  } else if (OB_FAIL(schema_checker_->get_sensitive_rule_schema_count(
+                                      effective_tenant_id, sensitive_rule_count))) {
+    LOG_WARN("failed to get sensitive rule count", K(ret));
+  } else if (OB_LIKELY(0 == sensitive_rule_count)) {
+    // no sensitive rule in this tenant, early exit
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_select_items().count(); ++i) {
+      ObSEArray<ObRawExpr *, 8> col_ref_exprs;
+      ObSEArray<const ObSensitiveRuleSchema *, 4> sensitive_rules;
+      if (OB_FAIL(SMART_CALL(get_sensitive_rules(select_stmt,
+                                                 select_stmt->get_select_item(i).expr_,
+                                                 sensitive_rules)))) {
+        LOG_WARN("failed to get sensitive rules", K(ret));
+      } else if (OB_FAIL(try_add_sensitive_field_expr(select_stmt->get_select_item(i),
+                                                      sensitive_rules))) {
+        LOG_WARN("failed to add sensitive field expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSelectResolver::get_sensitive_rules(
+  ObSelectStmt *select_stmt,
+  ObRawExpr *expr,
+  ObIArray<const ObSensitiveRuleSchema *> &sensitive_rules)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 4> col_ref_exprs;
+  ObSEArray<ObQueryRefRawExpr *, 4> query_ref_exprs;
+  if (OB_ISNULL(select_stmt) || OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (expr->is_set_op_expr()) {
+    ObSetOpRawExpr *set_op_expr = static_cast<ObSetOpRawExpr *>(expr);
+    int64_t idx = set_op_expr->get_idx();
+    if (OB_UNLIKELY(idx < 0 || idx >= select_stmt->get_select_items().count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected idx", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_set_query().count(); ++i) {
+      ObSelectStmt *set_query = select_stmt->get_set_query().at(i);
+      if (OB_ISNULL(set_query)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (OB_FAIL(SMART_CALL(get_sensitive_rules(set_query,
+                                                        set_query->get_select_item(idx).expr_,
+                                                        sensitive_rules)))) {
+        LOG_WARN("failed to get sensitive rules", K(ret));
+      }
+    }
+  } else if (OB_FAIL(SMART_CALL(get_sensitive_rules_in_column_ref_exprs(select_stmt, expr, sensitive_rules)))) {
+    LOG_WARN("failed to get sensitive rules in columns", K(ret));
+  } else if (OB_FAIL(SMART_CALL(get_sensitive_rules_in_query_ref_exprs(select_stmt, expr, sensitive_rules)))) {
+    LOG_WARN("failed to get sensitive rules in query ref", K(ret));
+  }
+  return ret;
+}
+
+
+int ObSelectResolver::get_sensitive_rules_in_column_ref_exprs(
+  ObSelectStmt *select_stmt,
+  ObRawExpr *expr,
+  ObIArray<const ObSensitiveRuleSchema *> &sensitive_rules)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 4> col_ref_exprs;
+  ObSEArray<ObQueryRefRawExpr *, 4> query_ref_exprs;
+  if (OB_ISNULL(session_info_) || OB_ISNULL(select_stmt) || OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(session_info_), K(select_stmt), K(expr));
+  } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr, col_ref_exprs))) {
+    LOG_WARN("failed to extract column exprs", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < col_ref_exprs.count(); i++) {
+    ObColumnRefRawExpr *col_expr = NULL;
+    TableItem *table_item = NULL;
+    const ObSensitiveRuleSchema *sensitive_rule = NULL;
+    if (OB_ISNULL(col_ref_exprs.at(i)) || !col_ref_exprs.at(i)->is_column_ref_expr()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected raw expr", K(ret));
+    } else if (FALSE_IT(col_expr = static_cast<ObColumnRefRawExpr *>(col_ref_exprs.at(i)))) {
+    } else if (OB_UNLIKELY(col_expr->is_cte_generated_column())) {
+      // column of a fake cte table, check sensitive rules for the corresponding real cte table column
+      if (OB_FAIL(SMART_CALL(get_sensitive_rules_in_cte_generated_col(
+                             select_stmt, col_expr, sensitive_rules)))) {
+        LOG_WARN("failed to get sensitive rules in cte generated column", K(ret));
+      }
+    } else if (OB_ISNULL(table_item = select_stmt->get_table_item_by_id(col_expr->get_table_id()))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null table item", K(ret));
+    // do not check columns of inner table, function table, values table, json table
+    } else if (is_inner_table(table_item->ref_id_)
+               || table_item->is_function_table()
+               || table_item->is_values_table()
+               || table_item->is_json_table()) {
+    // for table item with ref query, check sensitive rules in the query recursively
+    } else if (NULL != table_item->ref_query_ && OB_FAIL(SMART_CALL(get_sensitive_rules_in_ref_query(
+                                                                    table_item->ref_query_, col_expr,
+                                                                    sensitive_rules)))) {
+      LOG_WARN("failed to get sensitive rules in generated table", K(ret));
+    // do not check sensitive rule for tables that has no valid ref_id_, e.g. inline view, lateral table
+    } else if (!is_valid_id(table_item->ref_id_)) {
+    } else if (OB_FAIL(schema_checker_->get_sensitive_rule_schema_by_column(
+                                        session_info_->get_effective_tenant_id(),
+                                        table_item->ref_id_, col_expr->get_column_id(),
+                                        true, sensitive_rule))) {
+      LOG_WARN("failed to get sensitive rule by column", K(ret));
+    } else if (NULL == sensitive_rule || !sensitive_rule->get_enabled()) {
+      // no enabled sensitive rule attached to this column, do nothing
+    } else if (OB_FAIL(add_var_to_array_no_dup(sensitive_rules, sensitive_rule))) {
+      LOG_WARN("failed to add var array no dup", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSelectResolver::get_sensitive_rules_in_query_ref_exprs(
+  ObSelectStmt *select_stmt,
+  ObRawExpr *expr,
+  ObIArray<const ObSensitiveRuleSchema *> &sensitive_rules)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObQueryRefRawExpr *, 4> query_ref_exprs;
+  if (OB_ISNULL(select_stmt) || OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(expr, query_ref_exprs))) {
+    LOG_WARN("failed to extract query ref exprs", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < query_ref_exprs.count(); ++i) {
+    ObQueryRefRawExpr *query_ref_expr = NULL;
+    ObSelectStmt *sub_stmt = NULL;
+    ObSEArray<ObRawExpr *, 4> sub_select_exprs;
+    if (OB_ISNULL(query_ref_exprs.at(i)) || !query_ref_exprs.at(i)->is_query_ref_expr()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected raw expr", K(ret));
+    } else if (FALSE_IT(query_ref_expr = static_cast<ObQueryRefRawExpr *>(query_ref_exprs.at(i)))) {
+    } else if (OB_ISNULL(sub_stmt = query_ref_expr->get_ref_stmt())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null sub stmt", K(ret));
+    } else if (OB_FAIL(sub_stmt->get_select_exprs(sub_select_exprs))) {
+      LOG_WARN("failed to get select exprs", K(ret));
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && j < sub_select_exprs.count(); ++j) {
+      if (OB_FAIL(SMART_CALL(get_sensitive_rules(sub_stmt, sub_select_exprs.at(j), sensitive_rules)))) {
+        LOG_WARN("failed to get sensitive rules", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSelectResolver::get_sensitive_rules_in_ref_query(
+  ObSelectStmt *ref_query,
+  ObRawExpr *outer_column_expr,
+  ObIArray<const ObSensitiveRuleSchema *> &sensitive_rules)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 1> col_ref_exprs;
+  ObSEArray<ObRawExpr *, 1> select_exprs;
+  if (OB_ISNULL(ref_query) || OB_ISNULL(outer_column_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(col_ref_exprs.push_back(outer_column_expr))) {
+    LOG_WARN("failed to push back col ref expr", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::convert_column_expr_to_select_expr(
+                                       col_ref_exprs, *ref_query, select_exprs))) {
+    LOG_WARN("failed to convert column expr to select expr", K(ret));
+  } else if (select_exprs.count() != 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected select expr count", K(ret));
+  } else if (OB_FAIL(get_sensitive_rules(ref_query, select_exprs.at(0), sensitive_rules))) {
+    LOG_WARN("failed to get sensitive rules", K(ret));
+  }
+  return ret;
+}
+
+/* for column of fake cte table, covert it to its corresponding real cte table column
+ * and extract sensitive rules for the real cte column
+ */
+int ObSelectResolver::get_sensitive_rules_in_cte_generated_col(
+  ObSelectStmt *select_stmt,
+  ObColumnRefRawExpr *fake_cte_col_expr,
+  ObIArray<const ObSensitiveRuleSchema *> &sensitive_rules)
+{
+  int ret = OB_SUCCESS;
+  TableItem *fake_cte_table_item = NULL;
+  ObSEArray<TableItem *, 4> cte_table_items;
+  ObColumnRefRawExpr *real_cte_col_expr = NULL;
+  ObSelectStmt *stmt_containing_real_cte_column = NULL;
+  if (OB_ISNULL(session_info_) || OB_ISNULL(fake_cte_col_expr)
+      || OB_ISNULL(schema_checker_) || OB_ISNULL(select_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(session_info_), K(fake_cte_col_expr),
+                                K(schema_checker_), K(select_stmt));
+  } else if (!fake_cte_col_expr->is_cte_generated_column()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected not cte generated column", K(ret));
+  } else if (fake_cte_col_expr->has_flag(BE_USED)) {
+    // this column is already under processing, do nothing
+  } else if (OB_ISNULL(fake_cte_table_item = select_stmt->get_table_item_by_id(fake_cte_col_expr->get_table_id()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null fake cte table item", K(ret));
+  } else if (!fake_cte_table_item->is_fake_cte_table()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected not fake cte table", K(ret));
+  } else if (OB_FAIL(fake_cte_col_expr->add_flag(BE_USED))) {
+    // mark the fake cte column as BE_USED to avoid infinite loop
+    LOG_WARN("failed to add flag", K(ret));
+  } else if (OB_FAIL(get_real_cte_column_expr(
+                     fake_cte_col_expr, fake_cte_table_item, get_select_stmt(), // begin search from root stmt
+                     real_cte_col_expr, stmt_containing_real_cte_column))) {
+    LOG_WARN("failed to get real cte column expr", K(ret));
+  } else if (OB_ISNULL(real_cte_col_expr) || OB_ISNULL(stmt_containing_real_cte_column)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(real_cte_col_expr), K(stmt_containing_real_cte_column));
+  } else if (OB_FAIL(SMART_CALL(get_sensitive_rules_in_column_ref_exprs(
+                                stmt_containing_real_cte_column, real_cte_col_expr, sensitive_rules)))) {
+    LOG_WARN("failed to get sensitive rules", K(ret));
+  } else if (OB_FAIL(fake_cte_col_expr->clear_flag(BE_USED))) {
+    // clear the flag after the recursive checking is done
+    LOG_WARN("failed to clear flag", K(ret));
+  }
+  return ret;
+}
+
+// recursively find the corresponding real cte table column expr of the fake cte column expr
+// return both the column expr of the real cte table, and the stmt containing it
+int ObSelectResolver::get_real_cte_column_expr(
+  ObColumnRefRawExpr *fake_cte_col_expr,
+  TableItem *fake_cte_table_item,
+  ObSelectStmt *select_stmt,
+  ObColumnRefRawExpr *&real_cte_col_expr,
+  ObSelectStmt *&real_cte_stmt)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<TableItem *, 4> cte_table_items;
+  if (OB_ISNULL(select_stmt) || OB_ISNULL(fake_cte_col_expr) || OB_ISNULL(fake_cte_table_item)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(select_stmt), K(fake_cte_col_expr), K(fake_cte_table_item));
+  } else if (OB_FAIL(select_stmt->get_CTE_table_items(cte_table_items))) {
+    LOG_WARN("failed to get cte table items", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && NULL == real_cte_col_expr && i < cte_table_items.count(); ++i) {
+    TableItem *cte_table_item = cte_table_items.at(i);
+    bool is_table_name_equal = false;
+    if (OB_ISNULL(cte_table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(check_table_name_equal(cte_table_item->table_name_,
+                                              fake_cte_table_item->table_name_,
+                                              is_table_name_equal))) {
+      LOG_WARN("failed to check table name equal", K(ret));
+    } else if (is_table_name_equal) { // table name is equal, found the real cte table
+      if (OB_ISNULL(real_cte_stmt = select_stmt)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (OB_ISNULL(real_cte_col_expr = select_stmt->get_column_expr_by_id(
+                                                            cte_table_item->table_id_,
+                                                            fake_cte_col_expr->get_column_id()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), K(fake_cte_col_expr->get_column_id()),
+                                    K(real_cte_stmt->get_column_size()));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (NULL == real_cte_col_expr) {
+    // not found, check child stmts recursively
+    ObSEArray<ObSelectStmt *, 4> child_stmts;
+    if (OB_FAIL(select_stmt->get_child_stmts(child_stmts))) {
+      LOG_WARN("failed to get child stmts", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && NULL == real_cte_col_expr && i < child_stmts.count(); ++i) {
+      ObSelectStmt *child_stmt = child_stmts.at(i);
+      if (OB_ISNULL(child_stmt)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (OB_FAIL(SMART_CALL(get_real_cte_column_expr(
+                                    fake_cte_col_expr, fake_cte_table_item, child_stmt,
+                                    real_cte_col_expr, real_cte_stmt)))) {
+        LOG_WARN("failed to get real cte column expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSelectResolver::try_add_sensitive_field_expr(
+  SelectItem &select_item,
+  ObIArray<const ObSensitiveRuleSchema *> &sensitive_rules)
+{
+  int ret = OB_SUCCESS;
+  ObSysFunRawExpr *sensitive_field_expr = NULL;
+  if (OB_ISNULL(session_info_) || OB_ISNULL(allocator_) || OB_ISNULL(select_item.expr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(session_info_), K(allocator_), K(select_item.expr_));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < sensitive_rules.count(); ++i) {
+    ObPCPrivInfo priv_info;
+    priv_info.priv_type_ = ObPCPrivInfo::SENSITIVE_RULE_PRIV;
+    priv_info.has_privilege_ = false;
+    const ObSensitiveRuleSchema *sensitive_rule = sensitive_rules.at(i);
+    if (OB_ISNULL(sensitive_rule)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (FALSE_IT(priv_info.sensitive_rule_id_ = sensitive_rule->get_sensitive_rule_id())) {
+    } else if (OB_FAIL(ObPrivilegeCheck::check_sensitive_rule_plainaccess_priv(sensitive_rule, *session_info_))) {
+      if (OB_UNLIKELY(OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE != ret)) {
+        LOG_WARN("failed to check sensitive rule priv", K(ret));
+      // lacking of plainaccess priv to a sensitive rule should raise an use error for:
+      // 1. create table or materialized view
+      // 2. dml (except for delete) on a sensitive table
+      } else if (params_.is_from_create_table_ || params_.is_mview_definition_sql_
+                 || NULL != upper_insert_resolver_ || is_child_resolver_of_dml()) {
+        ret = OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE;
+        LOG_WARN("Lack of plainaccess privilege for rule", K(sensitive_rule->get_sensitive_rule_name()));
+        LOG_USER_ERROR(OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE,
+                       sensitive_rule->get_sensitive_rule_name_str().length(),
+                       sensitive_rule->get_sensitive_rule_name(),
+                       session_info_->get_user_name().length(), session_info_->get_user_name().ptr(),
+                       session_info_->get_host_name().length(), session_info_->get_host_name().ptr());
+      // otherwise, apply sensitive field expr to this field
+      } else if (OB_FAIL(add_sensitive_field_expr(select_item, *sensitive_rule, sensitive_field_expr))) {
+        LOG_WARN("failed to add sensitive field expr", K(ret));
+      }
+    } else {
+      priv_info.has_privilege_ = true;
+    }
+    if (OB_SUCC(ret) && OB_FAIL(stmt_->get_query_ctx()->all_priv_constraints_.push_back(priv_info))) {
+      LOG_WARN("failed to add sensitive rule priv constraint", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (NULL == sensitive_field_expr) {
+  } else if (OB_FAIL(sensitive_field_expr->formalize(session_info_))) {
+    LOG_WARN("failed to formalize expr", K(ret));
+  }
+  return ret;
+}
+
+// create a sensitive field expr to the select item according to the sensitive rule
+// if a sensitive field expr is already created,
+// update its encryption mode if the new new sensitive rule has a higher safety level
+int ObSelectResolver::add_sensitive_field_expr(SelectItem &select_item,
+                                               const ObSensitiveRuleSchema &sensitive_rule,
+                                               ObSysFunRawExpr *&sensitive_field_expr)
+{
+  int ret = OB_SUCCESS;
+  if (NULL == sensitive_field_expr) { // create a new sensitive field expr
+    int64_t encryption_mode = 0;
+    if (OB_FAIL(params_.expr_factory_->create_raw_expr(T_FUN_SYS_ENHANCED_AES_ENCRYPT,sensitive_field_expr))) {
+      LOG_WARN("failed to create raw expr", K(ret));
+    } else if (OB_ISNULL(sensitive_field_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(ObEncryptionUtil::parse_encryption_id(sensitive_rule.get_method(), encryption_mode))) {
+      // should not fail
+      LOG_WARN("fail to parse encryption id", K(ret), K(sensitive_rule.get_method()));
+    } else if (FALSE_IT(sensitive_field_expr->set_encryption_mode(encryption_mode))) {
+    } else if (OB_FAIL(sensitive_field_expr->init_param_exprs(1))) {
+      // the `IV` param would be generated in execution time, no need to initialize it here
+      LOG_WARN("failed to init param exprs", K(ret));
+    } else if (T_OP_ASSIGN == select_item.expr_->get_expr_type()) {
+      // for T_OP_ASSIGN, sensitive rule must be applied to its second parameter
+      if (OB_FAIL(sensitive_field_expr->add_param_expr(select_item.expr_->get_param_expr(1)))) {
+        LOG_WARN("failed to add param expr", K(ret));
+      }
+    } else if (OB_FAIL(sensitive_field_expr->add_param_expr(select_item.expr_))) {
+      LOG_WARN("failed to add param expr", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      sensitive_field_expr->set_func_name(ObString::make_string("SENSITIVE_FIELD"));
+      if (T_OP_ASSIGN == select_item.expr_->get_expr_type()) {
+        // for T_OP_ASSIGN, sensitive rule must be applied to its second parameter
+        select_item.expr_->get_param_expr(1) = sensitive_field_expr;
+      } else {
+        select_item.expr_ = sensitive_field_expr;
+      }
+    }
+  } else { // update the encryption mode of the existing sensitive field expr
+    int64_t encryption_mode = 0;
+    if (OB_ISNULL(sensitive_field_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(ObEncryptionUtil::parse_encryption_id(sensitive_rule.get_method(),
+                                                             encryption_mode))) {
+      LOG_WARN("fail to parse encryption id", K(ret), K(sensitive_rule.get_method()));
+    } else if (ObBlockCipher::compare_aes_mod_safety(
+                              static_cast<ObCipherOpMode>(sensitive_field_expr->get_encryption_mode()),
+                              static_cast<ObCipherOpMode>(encryption_mode))) {
+      // true if the new encryption mode has higher safety level
+      sensitive_field_expr->set_encryption_mode(encryption_mode);
+    }
+  }
+  return ret;
+}
+
+#else
+int ObSelectResolver::resolve_sensitive_rule(ObSelectStmt *select_stmt)
+{
+  int ret = OB_SUCCESS;
+  return ret;
+}
+#endif //OB_BUILD_TDE_SECURITY
 
 int ObSelectResolver::transfer_rb_iterate_items()
 {

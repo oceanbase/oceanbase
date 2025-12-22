@@ -343,6 +343,28 @@ int ObOptExternalColumnStatBuilder::merge_bitmap(const char *bitmap,
   return ret;
 }
 
+int ObOptExternalColumnStatBuilder::add_hhl_value(uint64_t hash_value)
+{
+  int ret = OB_SUCCESS;
+  if (!is_bitmap_set_) {
+    ObHiveHLL::Builder hll_builder;
+    if (OB_FAIL(hll_builder.build(allocator_, hive_hll_))) {
+      LOG_WARN("failed to build temp HLL", K(ret));
+    } else if (OB_FAIL(hive_hll_->add(hash_value))) {
+      LOG_WARN("failed to add hash to temp HLL", K(ret));
+    } else {
+      is_bitmap_set_ = true;
+      bitmap_type_ = ObExternalBitmapType::HIVE_HLL;
+    }
+  } else if (ObExternalBitmapType::HIVE_HLL != bitmap_type_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected bitmap type", K(bitmap_type_));
+  } else if (OB_FAIL(hive_hll_->add(hash_value))) {
+    LOG_WARN("failed to add hash to temp HLL", K(ret));
+  }
+  return ret;
+}
+
 int ObOptExternalColumnStatBuilder::finalize_bitmap() {
   int ret = OB_SUCCESS;
   // Initialize with current num_distinct_ in case no bitmap objects exist

@@ -344,7 +344,7 @@ int ObWrCollector::collect_ash()
                       "svr_ip='%s' and svr_port=%d";
         const char *ASH_VIEW_SQL_422 =
             "select /*+ WORKLOAD_REPOSITORY_SNAPSHOT QUERY_TIMEOUT(%ld) */ svr_ip, svr_port, "
-            "sample_id, session_id, "
+            "sample_id, session_id, tenant_id, "
             "time_to_usec(sample_time) as sample_time, "
             "user_id, session_type, sql_id, top_level_sql_id, trace_id, event_no, event_id, "
             "time_waited, "
@@ -356,7 +356,7 @@ int ObWrCollector::collect_ash()
             "plsql_object_id, "
             "plsql_subprogram_id, plsql_subprogram_name, tablet_id, blocking_session_id, proxy_sid, "
             "delta_read_io_requests, delta_read_io_bytes, delta_write_io_requests, delta_write_io_bytes from "
-            "__all_virtual_ash where tenant_id=%ld and is_wr_sample=true and "
+            "__all_virtual_ash where (tenant_id=%ld  or tenant_id= %ld -1) and is_wr_sample=true and "
             "sample_time between usec_to_time(%ld) and usec_to_time(%ld) and "
             "svr_ip='%s' and svr_port=%d";
         if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
@@ -366,7 +366,7 @@ int ObWrCollector::collect_ash()
           LOG_WARN("wr snapshot timeout", KR(ret), K_(timeout_ts));
         } else if (OB_FAIL(sql.assign_fmt(
                       data_version >= DATA_VERSION_4_2_2_0 ? ASH_VIEW_SQL_422 : ASH_VIEW_SQL,
-                      query_timeout, tenant_id, snapshot_begin_time_, snapshot_end_time_,
+                      query_timeout, tenant_id, tenant_id, snapshot_begin_time_, snapshot_end_time_,
                       svr_ip, svr_port))) {
           LOG_WARN("failed to assign ash query string", KR(ret));
         } else if (OB_FAIL(ObWrCollector::exec_read_sql_with_retry(res, tenant_id, sql.ptr()))) {
@@ -458,6 +458,8 @@ int ObWrCollector::collect_ash()
                   int64_t, skip_null_error, skip_column_error, default_value);
               EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "delta_write_io_bytes", ash.delta_write_io_bytes_,
                   int64_t, skip_null_error, skip_column_error, default_value);
+              EXTRACT_INT_FIELD_MYSQL(*result, "tenant_id", ash.tenant_id_, int64_t);
+
 
               char plan_hash_char[64] = "";
               if (OB_SUCC(ret)) {
@@ -465,8 +467,8 @@ int ObWrCollector::collect_ash()
               }
 
               if (OB_SUCC(ret)) {
-                if (OB_FAIL(dml_splicer.add_pk_column(K(tenant_id)))) {
-                  LOG_WARN("failed to add tenant_id", KR(ret), K(tenant_id));
+                if (OB_FAIL(dml_splicer.add_pk_column("tenant_id", ash.tenant_id_))) {
+                  LOG_WARN("failed to add tenant_id", KR(ret), K(ash.tenant_id_));
                 } else if (OB_FAIL(dml_splicer.add_pk_column(K(cluster_id)))) {
                   LOG_WARN("failed to add column cluster_id", KR(ret), K(cluster_id));
                 } else if (OB_FAIL(dml_splicer.add_pk_column("SNAP_ID", snap_id_))) {

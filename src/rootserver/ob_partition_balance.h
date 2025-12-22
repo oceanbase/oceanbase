@@ -61,8 +61,6 @@ public:
       uint64_t tenant_id,
       schema::ObMultiVersionSchemaService *schema_service,
       common::ObMySQLProxy *sql_proxy,
-      const int64_t primary_zone_num,
-      const int64_t unit_group_num,
       TaskMode mode = GEN_BG_STAT);
   void destroy();
   int process(const ObBalanceJobID &job_id = ObBalanceJobID(), const int64_t timeout = 0);

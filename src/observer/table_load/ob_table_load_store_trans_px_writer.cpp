@@ -108,7 +108,7 @@ int ObTableLoadStoreTransPXWriter::init(ObTableLoadStoreCtx *store_ctx,
     trans_->inc_ref_count();
     ATOMIC_AAF(&store_ctx_->write_ctx_.px_writer_cnt_, 1);
 
-    column_count_ = store_ctx_->write_ctx_.px_column_descs_.count();
+    column_count_ = store_ctx_->ctx_->schema_.column_descs_.count();
     is_single_part_ = store_ctx_->write_ctx_.is_single_part_;
     if (is_single_part_) {
       single_tablet_id_ = store_ctx_->write_ctx_.single_tablet_id_;
@@ -170,7 +170,7 @@ int ObTableLoadStoreTransPXWriter::check_columns(const ObIArray<uint64_t> &colum
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(column_ids));
   } else {
-    const ObIArray<ObColDesc> &col_descs = store_ctx_->write_ctx_.px_column_descs_;
+    const ObIArray<ObColDesc> &col_descs = store_ctx_->ctx_->schema_.column_descs_;
     if (OB_UNLIKELY(col_descs.count() != column_ids.count())) {
       ret = OB_SCHEMA_NOT_UPTODATE;
       LOG_WARN("column count not match", KR(ret), K(col_descs), K(column_ids));
@@ -212,10 +212,8 @@ int ObTableLoadStoreTransPXWriter::init_batch_ctx(const bool is_vectorized,
                                                   allocator_,
                                                   batch_ctx_->tablet_id_vector_))) {
       LOG_WARN("fail to create tablet id fixed vector", KR(ret));
-   } else if (OB_FAIL(batch_ctx_->batch_rows_.init(store_ctx_->write_ctx_.px_column_descs_,
-                                                   store_ctx_->write_ctx_.px_column_accuracys_,
-                                                   store_ctx_->write_ctx_.px_column_project_idxs_,
-                                                   store_ctx_->ctx_->schema_.column_descs_,
+   } else if (OB_FAIL(batch_ctx_->batch_rows_.init(store_ctx_->ctx_->schema_.column_descs_,
+                                                   store_ctx_->ctx_->schema_.column_accuracys_,
                                                    store_ctx_->ctx_->schema_.col_nullables_,
                                                    row_flag,
                                                    max_batch_size,

@@ -1574,14 +1574,37 @@ int64_t ObDDLTask::get_execution_id() const
   return execution_id_;
 }
 
-int ObDDLTask::push_execution_id(const uint64_t tenant_id, const int64_t task_id, const ObDDLType ddl_type, const bool ddl_can_retry, const int64_t data_format_version, int64_t &new_execution_id)
+// calculate task execution id or tablet execution id
+// @param execution_id: task execution id or tablet execution id
+// @param next_execution_id: next task execution id or next tablet execution id
+int ObDDLTask::calc_next_execution_id(int64_t execution_id, const ObDDLType ddl_type, const bool ddl_can_retry, const int64_t data_format_version, int64_t &next_execution_id)
 {
   int ret = OB_SUCCESS;
-  new_execution_id = DEFAULT_EXECUTION_ID;
+  if (ObDDLUtil::use_idempotent_mode(data_format_version) || ObDDLUtil::is_mview_not_retryable(data_format_version, ddl_type)) {
+    if (1 == execution_id && !ddl_can_retry) {
+      ret = OB_TASK_EXPIRED;
+    } else {
+      if (-1 == execution_id) {
+        execution_id = 0;
+      }
+      next_execution_id = execution_id + 1;
+    }
+  } else {
+    if (-1 == execution_id && data_format_version >= DATA_VERSION_4_3_3_0) {
+      execution_id = 0;
+    }
+    next_execution_id = execution_id + 1;
+  }
+  return ret;
+}
+
+int ObDDLTask::push_task_execution_id(const uint64_t tenant_id, const int64_t task_id, const ObDDLType ddl_type, const bool ddl_can_retry, const int64_t data_format_version, int64_t &new_task_execution_id)
+{
+  int ret = OB_SUCCESS;
+  new_task_execution_id = DEFAULT_EXECUTION_ID;
   ObMySQLTransaction trans;
   int64_t task_status = 0;
-  int64_t execution_id = 0;
-  new_execution_id = 0;
+  int64_t task_execution_id = 0;
   int64_t ret_code = OB_SUCCESS;
   int64_t unused_snapshot_ver = OB_INVALID_VERSION;
   if (OB_ISNULL(GCTX.sql_proxy_)) {
@@ -1590,36 +1613,17 @@ int ObDDLTask::push_execution_id(const uint64_t tenant_id, const int64_t task_id
   } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id))) {
     LOG_WARN("start transaction failed", K(ret));
   } else {
-    if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id, task_id, task_status, execution_id, ret_code, unused_snapshot_ver))) {
+    if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id, task_id, task_status, task_execution_id, ret_code, unused_snapshot_ver))) {
       LOG_WARN("select for update failed", K(ret), K(task_id));
     } else {
-      if (ObDDLUtil::use_idempotent_mode(data_format_version) || ObDDLUtil::is_mview_not_retryable(data_format_version, ddl_type)) {
-        if (1 == execution_id && !ddl_can_retry) {
-            // has been executed before
-            ret = OB_TASK_EXPIRED; //task can not be retry
-            LOG_WARN("do not retry for heap table ddl plan", K(ret_code), K(task_status), K(tenant_id), K(task_id), K(ddl_can_retry));
-        } else {
-          if ( -1 == execution_id) {
-            execution_id = 0;
-          }
-          if (OB_FAIL(ObDDLTaskRecordOperator::update_execution_id(trans, tenant_id, task_id, execution_id  + 1 /*execution id*/))) {
-            LOG_WARN("update task status failed", K(ret));
-          } else {
-            new_execution_id = execution_id + 1 ;
-          }
-        }
-      } else {
-        if (-1 == execution_id && data_format_version >= DATA_VERSION_4_3_3_0) {
-          execution_id = 0;
-        }
-        if (OB_FAIL(ObDDLTaskRecordOperator::update_execution_id(trans, tenant_id, task_id, execution_id + 1))) {
-          LOG_WARN("update task status failed", K(ret));
-        } else {
-          new_execution_id = execution_id + 1;
-        }
+      if (OB_FAIL(calc_next_execution_id(task_execution_id, ddl_type, ddl_can_retry, data_format_version, new_task_execution_id))) {
+        LOG_WARN("calc next execution id failed", K(ret), K(task_execution_id), K(ddl_type), K(ddl_can_retry), K(data_format_version));
+      } else if (OB_FAIL(ObDDLTaskRecordOperator::update_execution_id(trans, tenant_id, task_id, new_task_execution_id))) {
+        LOG_WARN("update execution id failed", K(ret));
       }
     }
-    LOG_INFO("push execution id", K(ret), K(tenant_id), K(task_id), K(ddl_type), K(task_status), K(execution_id), K(ret_code), K(new_execution_id));
+
+    LOG_INFO("push execution id", K(ret), K(tenant_id), K(task_id), K(ddl_type), K(task_status), K(task_execution_id), K(ret_code), K(new_task_execution_id));
     bool commit = (OB_SUCCESS == ret);
     int tmp_ret = trans.end(commit);
     if (OB_SUCCESS != tmp_ret) {
@@ -4771,6 +4775,7 @@ int ObDDLTask::remove_sql_exec_addr(const common::ObAddr &addr)
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(ObTabletExecutionIdPair, tablet_id_, execution_id_);
 void ObDDLTask::clear_old_status_context()
 {
   wait_trans_ctx_.reset();

@@ -668,62 +668,6 @@ int ObTableLoadStoreCtx::init_write_ctx()
         }
       }
     }
-    // px mode
-    if (OB_SUCC(ret) && ctx_->param_.px_mode_) {
-      ObSchemaGetterGuard schema_guard;
-      const ObTableSchema *table_schema = nullptr;
-      ObArray<ObColDesc> col_descs;
-      if (OB_FAIL(ObTableLoadSchema::get_table_schema(ctx_->param_.tenant_id_,
-                                                      ctx_->param_.table_id_,
-                                                      schema_guard,
-                                                      table_schema))) {
-        LOG_WARN("fail to get table schema", KR(ret), K(ctx_->param_));
-      }
-      // mysql模式下SQL执行计划会包含虚拟生成列
-      else if (OB_FAIL(table_schema->get_column_ids(col_descs, lib::is_oracle_mode()/*no_virtual*/))) {
-        LOG_WARN("fail to get column ids", KR(ret));
-      } else if (OB_FAIL(ObTableLoadSchema::prepare_col_descs(table_schema, col_descs))) {
-        LOG_WARN("fail to prepare col descs", KR(ret), KPC(table_schema), K(col_descs));
-      } else {
-        const bool is_table_without_pk = data_store_table_ctx_->schema_->is_table_without_pk_;
-        const ObColumnSchemaV2 *col_schema = nullptr;
-        write_ctx_.px_column_descs_.set_block_allocator(ModulePageAllocator(allocator_));
-        write_ctx_.px_column_accuracys_.set_block_allocator(ModulePageAllocator(allocator_));
-        write_ctx_.px_column_project_idxs_.set_block_allocator(ModulePageAllocator(allocator_));
-        int64_t project_idx = 0;
-        for (int64_t i = 0; OB_SUCC(ret) && i < col_descs.count(); ++i) {
-          const ObColDesc &col_desc = col_descs.at(i);
-          if (OB_ISNULL(col_schema = table_schema->get_column_schema(col_desc.col_id_))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected col schema is null", KR(ret), K(col_desc));
-          }
-          // SQL执行计划包含隐藏主键列、虚拟生成列以及其他普通列
-          else if (OB_FAIL(write_ctx_.px_column_descs_.push_back(col_desc))) {
-            LOG_WARN("fail to push back", KR(ret));
-          } else if (OB_FAIL(write_ctx_.px_column_accuracys_.push_back(col_schema->get_accuracy()))) {
-            LOG_WARN("fail to push back", KR(ret));
-          }
-          // 存储层不写虚拟生成列
-          else if (col_schema->is_virtual_generated_column()) {
-            if (OB_FAIL(write_ctx_.px_column_project_idxs_.push_back(-1))) {
-              LOG_WARN("fail to push back", KR(ret));
-            }
-          } else {
-            // 旁路不接收隐藏主键列
-            if (ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_)) {
-              if (OB_FAIL(write_ctx_.px_column_project_idxs_.push_back(-1))) {
-                LOG_WARN("fail to push back", KR(ret));
-              }
-            } else {
-              if (OB_FAIL(write_ctx_.px_column_project_idxs_.push_back(project_idx))) {
-                LOG_WARN("fail to push back", KR(ret));
-              }
-            }
-            ++project_idx;
-          }
-        }
-      }
-    }
     if (OB_SUCC(ret) && ctx_->param_.px_mode_) {
       const ObArray<ObTableLoadLSIdAndPartitionId> &ls_partition_ids =
         data_store_table_ctx_->ls_partition_ids_;
@@ -839,61 +783,6 @@ int ObTableLoadStoreCtx::init_write_ctx_for_dag()
   if (OB_SUCC(ret)) {
     write_ctx_.enable_pre_sort_ =
       (write_ctx_.is_multiple_mode_ && !data_store_table_ctx_->schema_->is_table_without_pk_);
-  }
-  // px mode
-  if (OB_SUCC(ret) && ctx_->param_.px_mode_) {
-    ObSchemaGetterGuard schema_guard;
-    const ObTableSchema *table_schema = nullptr;
-    ObArray<ObColDesc> col_descs;
-    if (OB_FAIL(ObTableLoadSchema::get_table_schema(ctx_->param_.tenant_id_, ctx_->param_.table_id_,
-                                                    schema_guard, table_schema))) {
-      LOG_WARN("fail to get table schema", KR(ret), K(ctx_->param_));
-    }
-    // mysql模式下SQL执行计划会包含虚拟生成列
-    else if (OB_FAIL(
-               table_schema->get_column_ids(col_descs, lib::is_oracle_mode() /*no_virtual*/))) {
-      LOG_WARN("fail to get column ids", KR(ret));
-    } else if (OB_FAIL(ObTableLoadSchema::prepare_col_descs(table_schema, col_descs))) {
-      LOG_WARN("fail to prepare col descs", KR(ret), KPC(table_schema), K(col_descs));
-   } else {
-      const bool is_table_without_pk = data_store_table_ctx_->schema_->is_table_without_pk_;
-      const ObColumnSchemaV2 *col_schema = nullptr;
-      write_ctx_.px_column_descs_.set_block_allocator(ModulePageAllocator(allocator_));
-      write_ctx_.px_column_accuracys_.set_block_allocator(ModulePageAllocator(allocator_));
-      write_ctx_.px_column_project_idxs_.set_block_allocator(ModulePageAllocator(allocator_));
-      int64_t project_idx = 0;
-      for (int64_t i = 0; OB_SUCC(ret) && i < col_descs.count(); ++i) {
-        const ObColDesc &col_desc = col_descs.at(i);
-        if (OB_ISNULL(col_schema = table_schema->get_column_schema(col_desc.col_id_))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected col schema is null", KR(ret), K(col_desc));
-        }
-        // SQL执行计划包含隐藏主键列、虚拟生成列以及其他普通列
-        else if (OB_FAIL(write_ctx_.px_column_descs_.push_back(col_desc))) {
-          LOG_WARN("fail to push back", KR(ret));
-        } else if (OB_FAIL(write_ctx_.px_column_accuracys_.push_back(col_schema->get_accuracy()))) {
-          LOG_WARN("fail to push back", KR(ret));
-        }
-        // 存储层不写虚拟生成列
-        else if (col_schema->is_virtual_generated_column()) {
-          if (OB_FAIL(write_ctx_.px_column_project_idxs_.push_back(-1))) {
-            LOG_WARN("fail to push back", KR(ret));
-          }
-        } else {
-          // 旁路不接收隐藏主键列
-          if (ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_)) {
-            if (OB_FAIL(write_ctx_.px_column_project_idxs_.push_back(-1))) {
-              LOG_WARN("fail to push back", KR(ret));
-            }
-          } else {
-            if (OB_FAIL(write_ctx_.px_column_project_idxs_.push_back(project_idx))) {
-              LOG_WARN("fail to push back", KR(ret));
-            }
-          }
-          ++project_idx;
-        }
-      }
-    }
   }
   if (OB_SUCC(ret) && ctx_->param_.px_mode_) {
     const ObArray<ObTableLoadLSIdAndPartitionId> &ls_partition_ids =

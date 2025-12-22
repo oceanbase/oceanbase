@@ -3354,8 +3354,7 @@ int ObDataIndexBlockBuilder::write_clustered_index_micro_block()
 
 void ObDataIndexBlockBuilder::update_macro_meta_with_offset(
     const int64_t macro_block_row_count, const int64_t ddl_start_row_offset) {
-  if (leaf_store_desc_->get_major_working_cluster_version() >=
-      DATA_VERSION_4_3_1_0) {
+  if (leaf_store_desc_->get_major_working_cluster_version() >= DATA_VERSION_4_3_1_0) {
     if (ddl_start_row_offset >= 0) {
       macro_meta_.val_.ddl_end_row_offset_ =
           ddl_start_row_offset + macro_block_row_count - 1;

@@ -3952,3 +3952,148 @@ question_mask_size: 0
 		|--[1],[T_LS], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_INT], str_value_=[1001], value=[1001]
 
+**************   Case 223   ***************
+select 'hello' || 'world' from dual;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_SELECT], str_value_=[], value=[0]
+		|--[2],[T_PROJECT_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_PROJECT_STRING], str_value_=['HELLO'||'WORLD'], value=[9223372036854775807]
+				|--[0],[T_OP_CNN], str_value_=[], value=[2]
+					|--[0],[T_CHAR], str_value_=[hello], value=[9223372036854775807]
+						|--[1],[T_VARCHAR], str_value_=[hello], value=[9223372036854775807]
+					|--[1],[T_CHAR], str_value_=[world], value=[9223372036854775807]
+						|--[1],[T_VARCHAR], str_value_=[world], value=[9223372036854775807]
+
+**************   Case 224   ***************
+select col1 || col2 from test_table;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_SELECT], str_value_=[], value=[0]
+		|--[2],[T_PROJECT_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_PROJECT_STRING], str_value_=[COL1||COL2], value=[9223372036854775807]
+				|--[0],[T_OP_CNN], str_value_=[], value=[2]
+					|--[0],[T_OBJ_ACCESS_REF], str_value_=[], value=[9223372036854775807]
+						|--[0],[T_IDENT], str_value_=[COL1], value=[1]
+					|--[1],[T_OBJ_ACCESS_REF], str_value_=[], value=[9223372036854775807]
+						|--[0],[T_IDENT], str_value_=[COL2], value=[1]
+		|--[4],[T_FROM_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_RELATION_FACTOR], str_value_=[TEST_TABLE], value=[9223372036854775807]
+					|--[1],[T_IDENT], str_value_=[TEST_TABLE], value=[1]
+
+**************   Case 225   ***************
+select  'prefix_' || column_name || '_suffix' from test_table;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_SELECT], str_value_=[], value=[0]
+		|--[2],[T_PROJECT_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_PROJECT_STRING], str_value_=['PREFIX_'||COLUMN_NAME||'_SUFFIX'], value=[9223372036854775807]
+				|--[0],[T_OP_CNN], str_value_=[], value=[4]
+					|--[0],[T_CHAR], str_value_=[prefix_], value=[9223372036854775807]
+						|--[1],[T_VARCHAR], str_value_=[prefix_], value=[9223372036854775807]
+					|--[1],[T_OBJ_ACCESS_REF], str_value_=[], value=[9223372036854775807]
+						|--[0],[T_IDENT], str_value_=[COLUMN_NAME], value=[9223372036854775807]
+					|--[2],[T_CHAR], str_value_=[_suffix], value=[9223372036854775807]
+						|--[1],[T_VARCHAR], str_value_=[_suffix], value=[9223372036854775807]
+		|--[4],[T_FROM_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_RELATION_FACTOR], str_value_=[TEST_TABLE], value=[9223372036854775807]
+					|--[1],[T_IDENT], str_value_=[TEST_TABLE], value=[1]
+
+**************   Case 226   ***************
+select  ('prefix_' || column_name) || '_suffix' from test_table;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_SELECT], str_value_=[], value=[0]
+		|--[2],[T_PROJECT_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_PROJECT_STRING], str_value_=[('PREFIX_'||COLUMN_NAME)||'_SUFFIX'], value=[9223372036854775807]
+				|--[0],[T_OP_CNN], str_value_=[], value=[2]
+					|--[0],[T_EXPR_LIST], str_value_=[], value=[9223372036854775807]
+						|--[0],[T_OP_CNN], str_value_=[], value=[2]
+							|--[0],[T_CHAR], str_value_=[prefix_], value=[9223372036854775807]
+								|--[1],[T_VARCHAR], str_value_=[prefix_], value=[9223372036854775807]
+							|--[1],[T_OBJ_ACCESS_REF], str_value_=[], value=[9223372036854775807]
+								|--[0],[T_IDENT], str_value_=[COLUMN_NAME], value=[9223372036854775807]
+					|--[1],[T_CHAR], str_value_=[_suffix], value=[9223372036854775807]
+						|--[1],[T_VARCHAR], str_value_=[_suffix], value=[9223372036854775807]
+		|--[4],[T_FROM_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_RELATION_FACTOR], str_value_=[TEST_TABLE], value=[9223372036854775807]
+					|--[1],[T_IDENT], str_value_=[TEST_TABLE], value=[1]
+
+**************   Case 227   ***************
+select 'hello' || 'world';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_SELECT], str_value_=[], value=[0]
+		|--[2],[T_PROJECT_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_PROJECT_STRING], str_value_=['hello' || 'world'], value=[9223372036854775807]
+				|--[0],[T_OP_CNN], str_value_=[], value=[2]
+					|--[0],[T_VARCHAR], str_value_=[hello], value=[9223372036854775807]
+						|--[1],[T_VARCHAR], str_value_=[hello], value=[9223372036854775807]
+					|--[1],[T_VARCHAR], str_value_=[world], value=[9223372036854775807]
+						|--[1],[T_VARCHAR], str_value_=[world], value=[9223372036854775807]
+
+**************   Case 228   ***************
+select col1 || col2 from test_table;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_SELECT], str_value_=[], value=[0]
+		|--[2],[T_PROJECT_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_PROJECT_STRING], str_value_=[col1 || col2], value=[9223372036854775807]
+				|--[0],[T_OP_CNN], str_value_=[], value=[2]
+					|--[0],[T_COLUMN_REF], str_value_=[col1], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[col1], value=[9223372036854775807]
+					|--[1],[T_COLUMN_REF], str_value_=[col2], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[col2], value=[9223372036854775807]
+		|--[4],[T_FROM_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_RELATION_FACTOR], str_value_=[test_table], value=[9223372036854775807]
+					|--[1],[T_IDENT], str_value_=[test_table], value=[9223372036854775807]
+
+**************   Case 229   ***************
+select 'prefix_' || column_name || '_suffix' from test_table;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_SELECT], str_value_=[], value=[0]
+		|--[2],[T_PROJECT_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_PROJECT_STRING], str_value_=['prefix_' || column_name || '_suffix'], value=[9223372036854775807]
+				|--[0],[T_OP_CNN], str_value_=[], value=[4]
+					|--[0],[T_VARCHAR], str_value_=[prefix_], value=[9223372036854775807]
+						|--[1],[T_VARCHAR], str_value_=[prefix_], value=[9223372036854775807]
+					|--[1],[T_COLUMN_REF], str_value_=[column_name], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[column_name], value=[9223372036854775807]
+					|--[2],[T_VARCHAR], str_value_=[_suffix], value=[9223372036854775807]
+						|--[1],[T_VARCHAR], str_value_=[_suffix], value=[9223372036854775807]
+		|--[4],[T_FROM_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_RELATION_FACTOR], str_value_=[test_table], value=[9223372036854775807]
+					|--[1],[T_IDENT], str_value_=[test_table], value=[9223372036854775807]
+
+**************   Case 230   ***************
+select  ('prefix_' || column_name) || '_suffix' from test_table;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_SELECT], str_value_=[], value=[0]
+		|--[2],[T_PROJECT_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_PROJECT_STRING], str_value_=[('prefix_' || column_name) || '_suffix'], value=[9223372036854775807]
+				|--[0],[T_OP_CNN], str_value_=[], value=[4]
+					|--[0],[T_VARCHAR], str_value_=[prefix_], value=[9223372036854775807]
+						|--[1],[T_VARCHAR], str_value_=[prefix_], value=[9223372036854775807]
+					|--[1],[T_COLUMN_REF], str_value_=[column_name], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[column_name], value=[9223372036854775807]
+					|--[2],[T_VARCHAR], str_value_=[_suffix], value=[9223372036854775807]
+						|--[1],[T_VARCHAR], str_value_=[_suffix], value=[9223372036854775807]
+		|--[4],[T_FROM_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_RELATION_FACTOR], str_value_=[test_table], value=[9223372036854775807]
+					|--[1],[T_IDENT], str_value_=[test_table], value=[9223372036854775807]

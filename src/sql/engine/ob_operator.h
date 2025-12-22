@@ -455,6 +455,8 @@ public:
   const static int64_t REAL_TIME_MONITOR_THRESHOLD = 1000000; //1s
   const static uint64_t REAL_TIME_MONITOR_TRY_TIMES = 256;
   const static uint64_t SMART_CALL_CLOSE_RETRY_TIMES = 10;
+  // Threshold for enabling dummy ptr check based on optimizer cost (only for root operator)
+  const static int64_t DUMMY_PTR_CHECK_COST_THRESHOLD = 1000000;
   typedef ObOpProfile<ObMetric> ObProfile;
 public:
   ObOperator(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input);
@@ -766,11 +768,8 @@ protected:
       }
     }
   }
-  #ifdef ENABLE_DEBUG_LOG
-  inline int init_dummy_mem_context(uint64_t tenant_id);
-  #endif
-  bool is_root_operator() const { return spec_.id_ == 0; }
-  inline int init_dummy_ptr_for_root(uint64_t tenant_id);
+  inline int init_dummy_ptr(uint64_t tenant_id);
+  bool use_dummp_ptr_check_close() const;
 public:
   uint64_t cpu_begin_time_; // start of counting cpu time
   uint64_t cpu_begin_level_; // level of counting cpu time
@@ -783,16 +782,13 @@ protected:
   //has been closed && destroyed in test mode. We apply for a small
   //memory for each operator in open. If there is
   //no close, mem_context will release it and give an alarm
-  #ifdef ENABLE_DEBUG_LOG
-  lib::MemoryContext dummy_mem_context_;
+  //Controlled by tracepoint EN_ENABLE_OPERATOR_DUMMY_MEM_CHECK (default: disabled)
+  //dummy_allocator_ is only used to alloc and free dummy_ptr_
+  //don't use it to alloc other ptr
+  common::ObIAllocator *dummy_allocator_;
   char *dummy_ptr_;
-  #endif
   bool check_stack_overflow_;
   ObProfile monitor_profile_;
-  // detect_root_closed_allocator_ is only used to alloc and free detect_root_closed_ptr_
-  // dont use it alloc other ptr
-  common::ObIAllocator *detect_root_closed_allocator_;
-  char *detect_root_closed_ptr_;
   DISALLOW_COPY_AND_ASSIGN(ObOperator);
 };
 
@@ -847,12 +843,11 @@ int ObOpSpec::find_target_specs(T &spec, const FILTER &f, common::ObIArray<T *> 
 
 inline void ObOperator::destroy()
 {
-  #ifdef ENABLE_DEBUG_LOG
-   if (OB_LIKELY(nullptr != dummy_mem_context_)) {
-    DESTROY_CONTEXT(dummy_mem_context_);
-    dummy_mem_context_ = nullptr;
+  if (nullptr != dummy_allocator_ && nullptr != dummy_ptr_) {
+    dummy_allocator_->free(dummy_ptr_);
+    dummy_ptr_ = nullptr;
+    dummy_allocator_ = nullptr;
   }
-  #endif
 }
 
 OB_INLINE void ObOperator::clear_evaluated_flag()

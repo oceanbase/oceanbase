@@ -574,8 +574,7 @@ int ObTmpFileBlock::insert_page_into_flushing_list_(ObTmpFilePageHandle &page_ha
     } else if (OB_FAIL(alloc_page_bitmap_.get_value(page_id.page_index_in_block_, is_allocated))) {
       LOG_WARN("fail to get value from bitmap", KR(ret), KPC(this));
     } else if (OB_UNLIKELY(!is_allocated)) {
-      ret = OB_RESOURCE_RELEASED;
-      LOG_WARN("page is not allocated", KR(ret), KPC(this));
+      LOG_INFO("page is not allocated, owner file may be deleted", KR(ret), K(page_handle), KPC(this));
     } else if (OB_UNLIKELY(!flushing_page_list_.add_first(&page->get_list_node()))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("fail to push back page into list", KR(ret), KPC(page), KPC(this));

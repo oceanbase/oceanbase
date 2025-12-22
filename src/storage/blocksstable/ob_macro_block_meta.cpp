@@ -94,6 +94,7 @@ ObDataBlockMetaVal::ObDataBlockMetaVal(ObIAllocator &allocator)
     all_lob_in_row_(false),
     agg_row_len_(0),
     agg_row_buf_(nullptr),
+    ddl_end_row_offset_(-1),
     macro_block_bf_size_(0),
     macro_block_bf_buf_()
 {
@@ -165,7 +166,7 @@ return (DATA_BLOCK_META_VAL_VERSION == version_ || DATA_BLOCK_META_VAL_VERSION_V
     && macro_id_.is_valid()
     && agg_row_len_ >= 0
     && ((0 == agg_row_len_ && nullptr == agg_row_buf_) || (0 < agg_row_len_ && nullptr != agg_row_buf_))
-    && (ddl_end_row_offset_ == -1 || (version_ >= DATA_BLOCK_META_VAL_VERSION_V2 && ddl_end_row_offset_ >= 0))
+    && ddl_end_row_offset_ >= -1
     && macro_block_bf_size_ >= 0
     && (0 == macro_block_bf_size_ || nullptr != macro_block_bf_buf_);
 }
@@ -307,7 +308,7 @@ int ObDataBlockMetaVal::serialize(char *buf,
       if (OB_SUCC(ret)) {
         MEMCPY(buf + pos, agg_row_buf_, agg_row_len_);
         pos += agg_row_len_;
-        if (version_ >= DATA_BLOCK_META_VAL_VERSION_V2) {
+        if (DATA_VERSION_4_3_1_0 <= data_version) {
           LST_DO_CODE(OB_UNIS_ENCODE, ddl_end_row_offset_);
         }
         // Determine whether to serialize the macro block bloom filter based on the current cluster's data version.
@@ -388,11 +389,7 @@ int ObDataBlockMetaVal::deserialize(const char *buf, const int64_t data_len, int
           agg_row_buf_ = buf + pos;
           pos += agg_row_len_;
         }
-        if (version_ >= DATA_BLOCK_META_VAL_VERSION_V2) {
-          LST_DO_CODE(OB_UNIS_DECODE, ddl_end_row_offset_);
-        } else {
-          ddl_end_row_offset_ = -1;
-        }
+        LST_DO_CODE(OB_UNIS_DECODE, ddl_end_row_offset_);
         // Deserialize macro block bloom filter.
         LST_DO_CODE(OB_UNIS_DECODE, macro_block_bf_size_);
         if (macro_block_bf_size_ > 0) {
@@ -418,7 +415,7 @@ int64_t ObDataBlockMetaVal::get_max_serialize_size(const int64_t data_version) c
   len += sizeof(int64_t); // serialize column count
   len += sizeof(int64_t) * column_count_; // serialize each checksum
   len += agg_row_len_;
-  if (version_ >= DATA_BLOCK_META_VAL_VERSION_V2) {
+  if (DATA_VERSION_4_3_1_0 <= data_version) {
     len += sizeof(int64_t);
   }
   // Get macro block bloom filter max serialize size.
@@ -467,7 +464,7 @@ int64_t ObDataBlockMetaVal::get_serialize_size(const int64_t data_version) const
               data_flag_pack_,
               agg_row_len_);
   len += agg_row_len_;
-  if (version_ >= DATA_BLOCK_META_VAL_VERSION_V2) {
+  if (DATA_VERSION_4_3_1_0 <= data_version) {
     LST_DO_CODE(OB_UNIS_ADD_LEN, ddl_end_row_offset_);
   }
   // Get macro block bloom filter serialize size.

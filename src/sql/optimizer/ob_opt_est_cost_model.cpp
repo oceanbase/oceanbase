@@ -129,6 +129,7 @@ void ObTableMetaInfo::assign(const ObTableMetaInfo &table_meta_info)
   table_type_ = table_meta_info.table_type_;
   lake_table_format_ = table_meta_info.lake_table_format_;
   lake_table_file_count_ = table_meta_info.lake_table_file_count_;
+  lake_table_snapshot_id_ = table_meta_info.lake_table_snapshot_id_;
 }
 
 int ObCostTableScanInfo::has_exec_param(const ObIArray<ObRawExpr *> &exprs, bool &bool_ret) const

@@ -22,6 +22,11 @@
 #include "rootserver/ob_disaster_recovery_task_utils.h"//DisasterRecoveryUtils
 #include "src/share/balance/ob_balance_task_helper_operator.h"//insert_new_ls
 #include "share/ls/ob_ls_life_manager.h"            //ObLSLifeManger
+#include "share/ls/ob_ls_operator.h"                //ObLSAttr
+#include "share/ob_share_util.h"                           //ObShareUtil
+#include "rootserver/ob_tenant_balance_service.h" // ObTenantBalanceService
+#include "rootserver/ob_ls_balance_helper.h" // ObLSBalanceHelper
+#include "share/ob_standby_upgrade.h"  // ObStandbyUpgrade
 #include "share/ob_upgrade_utils.h"  // ObUpgradeChecker
 #include "share/ob_global_stat_proxy.h" // ObGlobalStatProxy
 #include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h" // ObTenantSnapshotUtil
@@ -1242,26 +1247,61 @@ ERRSIM_POINT_DEF(ERRSIM_STANDBY_BALANCE);
 int ObRecoveryLSService::do_standby_balance_()
 {
   int ret = OB_SUCCESS;
-  ObTenantSchema tenant_schema;
+  uint64_t meta_data_version = 0;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(inited_));
   } else if (OB_ISNULL(proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql can't null", K(ret), K(proxy_));
-  } else if (OB_FAIL(get_tenant_schema(tenant_id_, tenant_schema))) {
-    LOG_WARN("failed to get tenant schema", KR(ret), K(tenant_id_));
   } else if (OB_UNLIKELY(ERRSIM_STANDBY_BALANCE)) {
     LOG_WARN("ERRSIM_STANDBY_BALANCE opened, do nothing", KR(ret), K(tenant_id_));
-  } else if (ObShareUtil::is_tenant_enable_rebalance(tenant_id_)
-      && OB_FAIL(ObBalanceLSPrimaryZone::try_adjust_user_ls_primary_zone(tenant_schema))) {
-    LOG_WARN("failed to adjust user ls primary zone", KR(ret), K(tenant_schema));
+  } else if (ObShareUtil::is_tenant_enable_ls_leader_balance(tenant_id_)
+      && OB_FAIL(ObBalanceLSPrimaryZone::try_adjust_user_ls_primary_zone(tenant_id_))) {
+    LOG_WARN("failed to adjust user ls primary zone", KR(ret), K(tenant_id_));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(tenant_id_), meta_data_version))) {
+    LOG_WARN("failed to get min data version", KR(ret), K(tenant_id_));
+  } else if (!ObShareUtil::check_compat_version_for_hetero_zone(meta_data_version)) {
+    LOG_INFO("can not do standby balance, need wait meta tenant upgrade to 4420",
+        KR(ret), KDV(meta_data_version));
   } else {
-    ObTenantLSInfo tenant_info(proxy_, &tenant_schema, tenant_id_);
-    bool is_balanced = false;
-    bool need_execute_balance = true;
-    if (OB_FAIL(ObLSServiceHelper::balance_ls_group(need_execute_balance, tenant_info, is_balanced))) {
-      LOG_WARN("failed to balance ls group", KR(ret));
+    ObArenaAllocator allocator("StandbyBala", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_);
+    ObLSBalanceTaskHelper ls_balance_helper(allocator);
+    share::ObLSStatusInfoArray ls_array;
+    share::ObBalanceJobDesc job_desc;
+    ObArray<share::ObUnit> unit_array;
+    share::ObLSAttrOperator ls_operator(tenant_id_, GCTX.sql_proxy_);
+    bool need_ls_balance = false;
+    ObTenantRole tenant_role(MTL_GET_TENANT_ROLE_CACHE());
+    if (OB_FAIL(ObTenantBalanceService::gather_ls_status_stat(tenant_id_, ls_array, false))) {
+      LOG_WARN("gather ls status failed", KR(ret), K(tenant_id_));
+    } else if (OB_FAIL(ObTenantBalanceService::gather_tenant_balance_desc(
+        tenant_id_,
+        job_desc,
+        unit_array))) {
+      LOG_WARN("fail to execute gather_tenant_balance_desc", KR(ret), K(tenant_id_));
+    } else if (OB_FAIL(ls_balance_helper.init(
+        tenant_id_,
+        ls_array,
+        job_desc,
+        unit_array,
+        tenant_role,
+        proxy_))) {
+      LOG_WARN("failed to init ls balance helper", KR(ret), K(ls_array), K(tenant_id_));
+    } else if (OB_FAIL(ls_balance_helper.generate_ls_balance_task(
+        false/*only_job*/,
+        ObBalanceJobID()))) {
+      LOG_WARN("failed to generate task", KR(ret));
+    } else if (!ls_balance_helper.need_ls_balance()) {
+      // do nothing
+    } else if (OB_UNLIKELY(ls_balance_helper.get_balance_job().get_balance_strategy().has_balance_task())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("standby balance should not have balance task",
+          KR(ret), "job", ls_balance_helper.get_balance_job());
+    } else if (OB_FAIL(ls_balance_helper.execute_job_without_task())) {
+      LOG_WARN("execute balance job without task failed", KR(ret), K(ls_balance_helper));
+    } else {
+      LOG_INFO("do standby ls balance finished", KR(ret), K(tenant_id_), K(ls_balance_helper));
     }
   }
   return ret;
@@ -1468,8 +1508,8 @@ int ObRecoveryLSService::do_ls_balance_alter_task_(const share::ObBalanceTaskHel
       LOG_WARN("failed to get tenant schema", KR(ret), K(tenant_id_));
     } else {
       ObTenantLSInfo tenant_info(proxy_, &tenant_schema, tenant_id_);
-      if (OB_FAIL(ObLSServiceHelper::process_alter_ls(ls_balance_task.get_src_ls(), status_info.ls_group_id_,
-              ls_balance_task.get_ls_group_id(), status_info.unit_group_id_, tenant_info, trans))) {
+      if (OB_FAIL(ObLSServiceHelper::process_alter_ls(ls_balance_task.get_src_ls(),
+              ls_balance_task.get_ls_group_id(), tenant_info, trans))) {
         LOG_WARN("failed to process alter ls", KR(ret), K(ls_balance_task), K(status_info));
       }
     }

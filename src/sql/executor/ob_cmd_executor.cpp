@@ -176,6 +176,8 @@
 #include "sql/resolver/cmd/ob_trigger_storage_cache_stmt.h"
 #include "sql/engine/cmd/ob_trigger_storage_cache_executor.h"
 #endif
+#include "sql/resolver/ddl/ob_sensitive_rule_stmt.h"
+#include "sql/engine/cmd/ob_sensitive_rule_executor.h"
 #include "sql/resolver/cmd/ob_sys_dispatch_call_stmt.h"
 #include "sql/engine/cmd/ob_sys_dispatch_call_executor.h"
 
@@ -1245,6 +1247,12 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
       case stmt::T_DROP_CCL_RULE: {
         DEFINE_EXECUTE_CMD(ObDropCCLRuleStmt, ObDropCCLRuleExecutor);
+        break;
+      }
+      case stmt::T_CREATE_SENSITIVE_RULE:
+      case stmt::T_DROP_SENSITIVE_RULE:
+      case stmt::T_ALTER_SENSITIVE_RULE: {
+        DEFINE_EXECUTE_CMD(ObSensitiveRuleStmt, ObSensitiveRuleExecutor);
         break;
       }
       case stmt::T_CS_DISKMAINTAIN:

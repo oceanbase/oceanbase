@@ -146,6 +146,7 @@ void ObMViewCleanSnapshotTask::runTimerTask()
         ObSEArray<uint64_t, 4> relevent_mv_tables;
         bool is_container_table = false;
         bool need_remove_snapshot = false;
+        bool exists_nested_mv = false;
         if (OB_UNLIKELY(!snapshot.is_valid())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("snapshot is invalid", KR(ret), K(snapshot));
@@ -168,7 +169,7 @@ void ObMViewCleanSnapshotTask::runTimerTask()
         } else if (is_container_table) {
           // do nothing
         } else if (OB_FAIL(sql::ObMVDepUtils::get_referring_mv_of_base_table(
-                       trans, tenant_id_, table_id, relevent_mv_tables))) {
+                       trans, tenant_id_, table_id, relevent_mv_tables, exists_nested_mv))) {
           LOG_WARN("fail to get referring mv of base table", KR(ret), K(tenant_id_), K(table_id));
         } else if (relevent_mv_tables.empty()) {
           need_remove_snapshot = true;

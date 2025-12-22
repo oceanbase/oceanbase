@@ -876,6 +876,10 @@ DEF_INT(ls_scale_out_factor, OB_TENANT_PARAMETER, "1", "[1, 10]",
         "Default value 1. "
         "Range: [1, +∞)]",
         ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(enable_gts_standalone, OB_TENANT_PARAMETER, "False",
+        "Parameters can allow sys LS occupy unit list standalone. "
+        "Value: True: turned on; False: turned off. ",
+        ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(balancer_tolerance_percentage, OB_CLUSTER_PARAMETER, "10", "[1, 100)",
         "specifies the tolerance (in percentage) of the unbalance of the disk space utilization "
         "among all units. The average disk space utilization is calculated by dividing "
@@ -1003,6 +1007,8 @@ DEF_BOOL(_enable_mock_stmt_flush_table, OB_TENANT_PARAMETER, "False",
         "Enable the mock MySQL statement FLUSH TABLE. When enabled, the mock SQL statement will do nothing. "
         "If disabled, executing the mock SQL statement will return the 'NOT_SUPPORTED' error code.",
         ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_ob_enable_log_replica_strict_recycle_mode, OB_CLUSTER_PARAMETER, "True", "enable log replica strict recycle mode",
+         ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_TIME(_keepalive_interval, OB_TENANT_PARAMETER, "100ms", "[10ms, 10s]",
         "This configuration item is used to control the write interval of the keepalive log, "
@@ -1101,6 +1107,9 @@ DEF_INT(_ss_micro_cache_memory_percentage, OB_TENANT_PARAMETER, "20", "[1,50]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_ss_mem_macro_cache_memory_limit_percentage, OB_TENANT_PARAMETER, "5", "[0,50]",
         "the maximum percentage of tenant memory size used by mem_macro_cache in shared_stoarge mode, Range: [0, 50]",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_ss_allow_discard_hot_data_during_migration, OB_TENANT_PARAMETER, "False",
+        "Controls whether hot data may be discarded during LS migration in shared storage mode when the destination does not have sufficient disk space to hold all hot data.",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 //background limit config
 DEF_TIME(_data_storage_io_timeout, OB_CLUSTER_PARAMETER, "10s", "[1s,600s]",
@@ -2528,6 +2537,15 @@ DEF_TIME(_ss_disk_space_calibration_time_interval, OB_TENANT_PARAMETER, "1h", "[
          "Range: [1s, )",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_STR_WITH_CHECKER(_ss_local_cache_evict_old_sstable_policy, OB_TENANT_PARAMETER, "OFF",
+        common::ObConfigEvictOldSSTablePolicyChecker,
+        "The policy of local cache eviction of old sstable data in shared storage mode. "
+        "Values: OFF, MAJOR_SSTABLE. "
+        "OFF: evict none of old sstable data, "
+        "MAJOR_SSTABLE: evict old major sstable data.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+        "OFF, MAJOR_SSTABLE");
+
 // obkv feature switch
 DEF_BOOL(_enable_kv_feature, OB_CLUSTER_PARAMETER, "True",
          "Enable or disable OBKV feature.",
@@ -2656,6 +2674,11 @@ DEF_INT(_dop_of_collect_external_table_statistics, OB_TENANT_PARAMETER, "0", "[0
 DEF_INT(_max_partition_count_to_collect_statistic, OB_TENANT_PARAMETER, "5", "[0,)",
         "force odps external table to using block granule iterator when count of partition is under this config",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(_max_dop_for_external_table_file_listing, OB_TENANT_PARAMETER, "0", "[0,)",
+        "max parallelism of file listing for external table",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_INT(inc_sstable_upload_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
         "the current work thread score of upload incremental sstable to shared storage"
         " Range: [0,100] in integer. Especially, 0 means default value",
@@ -2903,6 +2926,19 @@ DEF_BOOL(_obkv_enable_distributed_execution, OB_TENANT_PARAMETER, "True",
     "Specifies whether to enable distributed execution in OBKV. The default value is true.",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_STR_WITH_CHECKER(zone_deploy_mode, OB_TENANT_PARAMETER, "homo",
+        common::ObConfigZoneDeployModeChecker,
+        "control the zone deploy mode. Can be 'homo' or 'hetero'. "
+        "homo: all zones of tenant resource pools must have the same unit count. "
+        "hetero: the unit count in each zone of tenant resource pools can be different.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+        "homo, hetero");
+DEF_BOOL(_standby_readable_scn_all, OB_TENANT_PARAMETER, "False",
+    "Controls whether the readable SCN of log stream is calculated using all replicas. Can be 'True' or 'False'. "
+    "'False': set the log stream's readable SCN to the minimum readable SCN among a majority of replicas. "
+    "'True': set the log stream's readable SCN to the minimum readable SCN among all replicas that satisfy the constraint: replica_readable_scn >= (majority_readable_scn − max_stale_time_for_weak_consistency).",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_BOOL(_ob_enable_pl_dynamic_stack_check, OB_CLUSTER_PARAMETER, "False",
          "Enable or disable dynamic stack check when executing PL.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -2996,7 +3032,7 @@ DEF_CAP(load_data_diagnosis_log_max_size, OB_TENANT_PARAMETER, "256M", "[0,)"
          "it will be renamed and a new diagnosis log file using is opened, range: [0,)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_STR_WITH_CHECKER(_server_full_schema_refresh_parallelism, OB_TENANT_PARAMETER, "REQUEST",
+DEF_STR_WITH_CHECKER(_server_full_schema_refresh_parallelism, OB_TENANT_PARAMETER, "OBJECT",
                      common::ObConfigServerFullSchemaRefreshParallelismChecker,
                      "specifies whether observer's full schema refresh is request-level parallelism or object-level parallelism."
                      "values: REQUEST, OBJECT",
@@ -3120,7 +3156,14 @@ DEF_BOOL(_enable_two_phase_fts_index_merge, OB_TENANT_PARAMETER, "False",
 DEF_BOOL(_enable_sql_audit_filter_pushdown, OB_TENANT_PARAMETER, "True",
          "Enable or disable sql audit filter pushdown.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
+DEF_BOOL(enable_ls_leader_balance, OB_TENANT_PARAMETER, "True",
+         "controls whether LS leaders balance is turned on."
+         "Value:  True:turned on  False: turned off",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(enable_logonly_replica, OB_TENANT_PARAMETER, "False",
+         "controls whether logonly replica is enabled."
+         "Value:  True:turned on  False: turned off",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_force_unstreaming_cursor, OB_TENANT_PARAMETER, "False",
          "control whether the cursor always is forced to open as unstreaming cursor",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -3172,7 +3215,25 @@ DEF_INT(_ivf_max_scan_vectors, OB_TENANT_PARAMETER, "100000",
         "The upper limit of ivf iter-filter search nums. Range: [0,)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_INT(_max_access_entries_for_external_table_partition, OB_TENANT_PARAMETER, "1000000", "[1,)",
+        "max number of entries accessed in a single partition for external table, including directories and files.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_TIME(_tablet_replica_info_cache_expire_time, OB_CLUSTER_PARAMETER, "10m", "[0, 1d]",
         "the expire time for tablet replica info cache, from 0 to 1day, "
         "with default 10minutes. Range: [0, 1d]",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_mv_adaptive_complete_refresh_threshold, OB_TENANT_PARAMETER, "0", "[0, 100]",
+        "adaptive complete refresh percentage threshold, set to 0 to disable adaptive complete refresh",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_CAP(_replay_memory_limit, OB_TENANT_PARAMETER, "512M", "[1M, 1024000000M]",
+        "the size of the memory reserved for replay engine. range: [1M, 1024000000M]",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(_replay_pending_log_memory_limit, OB_TENANT_PARAMETER, "128M", "[1M, 1024000000M]",
+        "the size of the memory reserved for replay pending log. Range: [1M, 1024000000M]",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_randomize_redo_logging_slot, OB_CLUSTER_PARAMETER, "False",
+        "specifies whether enable randomize redo logging slot when parallel logging is enabled",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

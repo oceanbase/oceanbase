@@ -11037,6 +11037,7 @@ int ObJoinOrder::init_base_join_order(const TableItem *table_item)
     table_meta_info_.ref_table_id_ = table_item->ref_id_;
     table_meta_info_.table_type_ = table_item->table_type_;
     table_meta_info_.lake_table_format_ = table_item->lake_table_format_;
+    table_meta_info_.lake_table_snapshot_id_ = table_item->lake_table_snapshot_id_;
     table_bit_index = stmt->get_table_bit_index(table_item->table_id_);
 
     if (OB_FAIL(get_tables().add_member(table_bit_index)) ||
@@ -22722,8 +22723,10 @@ int ObJoinOrder::generate_lake_table_paths(PathHelper &helper)
   ObSEArray<AccessPath *, 8> access_paths;
   uint64_t table_id = table_id_;
   uint64_t ref_table_id = table_meta_info_.ref_table_id_;
+  int64_t lake_table_snapshot_id = table_meta_info_.lake_table_snapshot_id_;
   ObIndexInfoCache index_info_cache;
-  if (OB_FAIL(compute_lake_table_property(table_id, ref_table_id))) {
+
+  if (OB_FAIL(compute_lake_table_property(table_id, ref_table_id, lake_table_snapshot_id))) {
     LOG_WARN("failed to compute base path property", K(ret));
   } else if (OB_FAIL(create_lake_table_access_paths(table_id,
                                                     ref_table_id,
@@ -22750,7 +22753,8 @@ int ObJoinOrder::generate_lake_table_paths(PathHelper &helper)
 }
 
 int ObJoinOrder::compute_lake_table_property(uint64_t table_id,
-                                             uint64_t ref_table_id)
+                                             uint64_t ref_table_id,
+                                             int64_t lake_table_snapshot_id)
 {
   int ret = OB_SUCCESS;
   // 相比 base table, lake table不需要
@@ -22766,6 +22770,7 @@ int ObJoinOrder::compute_lake_table_property(uint64_t table_id,
     LOG_WARN("failed to compute equal set for lake table");
   } else if (OB_FAIL(compute_lake_table_location_and_meta(table_id,
                                                           ref_table_id,
+                                                          lake_table_snapshot_id,
                                                           table_partition_info_))) {
     LOG_WARN("failed to calc table location", K(ret));
   } else if (OB_FAIL(compute_lake_table_meta_info(table_id, ref_table_id))) {
@@ -22785,6 +22790,7 @@ int ObJoinOrder::compute_lake_table_property(uint64_t table_id,
 
 int ObJoinOrder::compute_lake_table_location_and_meta(const uint64_t table_id,
                                                       const uint64_t ref_table_id,
+                                                      int64_t lake_table_snapshot_id,
                                                       ObTablePartitionInfo *&table_partition_info)
 {
   int ret = OB_SUCCESS;
@@ -22812,12 +22818,14 @@ int ObJoinOrder::compute_lake_table_location_and_meta(const uint64_t table_id,
                                                                                correlated_filters,
                                                                                uncorrelated_filters))) {
     LOG_WARN("Failed to extract correlated filters", K(ret));
-  } else if (OB_FAIL(lake_table_partition_info->prune_file_and_select_location(*sql_schema_guard,
-                                                                               *stmt,
-                                                                               exec_ctx,
-                                                                               table_id,
-                                                                               ref_table_id,
-                                                                               uncorrelated_filters))) {
+  } else if (OB_FAIL(
+                 lake_table_partition_info->prune_file_and_select_location(*sql_schema_guard,
+                                                                           *stmt,
+                                                                           exec_ctx,
+                                                                           table_id,
+                                                                           ref_table_id,
+                                                                           lake_table_snapshot_id,
+                                                                           uncorrelated_filters))) {
     LOG_WARN("failed to prune file and select location");
   } else {
     table_partition_info = lake_table_partition_info;

@@ -155,7 +155,7 @@ private:
   int reap_old_replica_build_task(bool &need_exec_new_inner_sql);
   int send_build_single_replica_request(const bool &is_partitioned_local_index_task,
                                         const int64_t &parallelism,
-                                        const int64_t &execution_id,
+                                        const int64_t &task_execution_id,
                                         const share::ObLSID &ls_id,
                                         const common::ObAddr &leader_addr,
                                         const ObIArray<ObTabletID> &index_partition_ids);
@@ -167,6 +167,7 @@ private:
   int check_target_cg_cnt();
   int update_mlog_last_purge_scn();
   bool is_create_partitioned_local_index();
+  int serialize_and_update_message();
 private:
   static const int64_t OB_INDEX_BUILD_TASK_VERSION = 1;
   using ObDDLTask::is_inited_;

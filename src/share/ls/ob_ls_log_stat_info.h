@@ -89,22 +89,26 @@ public:
   //
   // @param [in] valid_servers: valid servers used to filter replica
   // @param [in] arb_replica_num: the number of arb replica
+  // @param [in] paxos_replica_num: paxos replica number from __all_virtual_ls_meta_table
   // @param [out] has: if ls has enough members to satisfy majority
   // @return: OB_LEADER_NOT_EXIST if no leader
   int check_has_majority(
       const common::ObIArray<ObAddr> &valid_servers,
       const int64_t arb_replica_num,
+      const int64_t paxos_replica_num,
       bool &has) const;
   // check if ls' majority is log sync
   //
   // @param [in] valid_servers: valid servers used to filter replica
   // @param [in] arb_replica_num: the number of arb replica
+  // @param [in] paxos_replica_num: paxos replica number from __all_virtual_ls_meta_table
   // @param [out] is_log_sync: if majority's log is in sync
   // @return: OB_LEADER_NOT_EXIST if no leader
   int check_log_sync(
       const common::ObIArray<ObAddr> &valid_servers,
       const int64_t arb_replica_number,
-       bool &is_log_sync) const;
+      const int64_t paxos_replica_num,
+      bool &is_log_sync) const;
 
   uint64_t get_tenant_id() const { return tenant_id_; }
   const ObLSID &get_ls_id() const { return ls_id_; }

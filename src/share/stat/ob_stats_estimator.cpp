@@ -300,14 +300,20 @@ int ObStatsEstimator::fill_partition_info(ObIAllocator &allocator,
     LOG_WARN("get unexpected error", K(ret), K(partition_infos));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < partition_infos.count(); ++i) {
+      ObString new_part_name;
       if (OB_UNLIKELY(partition_infos.at(i).part_name_.empty())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("partition name is empty", K(ret), K(partition_infos), K(i));
+      } else if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(allocator,
+                                                                                  partition_infos.at(i).part_name_,
+                                                                                  new_part_name,
+                                                                                  lib::is_oracle_mode()))) {
+        LOG_WARN("failed to generate new name with escape character", K(ret), K(partition_infos.at(i).part_name_));
       } else if (OB_FAIL(tmp_part_str.append_fmt(lib::is_oracle_mode() ? "%s\"%.*s\"%s" : "%s`%.*s`%s",
-                                                i == 0 ? "PARTITION(" : " ",
-                                                partition_infos.at(i).part_name_.length(),
-                                                partition_infos.at(i).part_name_.ptr(),
-                                                i == partition_infos.count() - 1 ? ")" : ", "))) {
+                                                 i == 0 ? "PARTITION(" : " ",
+                                                 new_part_name.length(),
+                                                 new_part_name.ptr(),
+                                                 i == partition_infos.count() - 1 ? ")" : ", "))) {
         LOG_WARN("failed to append", K(ret));
       } else {/*do nothing*/}
     }
@@ -330,19 +336,25 @@ int ObStatsEstimator::fill_partition_info(ObIAllocator &allocator,
                                           const ObString &part_name)
 {
   int ret = OB_SUCCESS;
+  ObString new_part_name;
   if (OB_UNLIKELY(part_name.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("partition name is empty", K(ret), K(part_name));
+  } else if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(allocator,
+                                                                              part_name,
+                                                                              new_part_name,
+                                                                              lib::is_oracle_mode()))) {
+    LOG_WARN("failed to generate new name with escape character", K(ret), K(part_name));
   } else {
     const char *fmt_str = lib::is_oracle_mode() ? "PARTITION (\"%.*s\")" : "PARTITION (`%.*s`)";
     char *buf = NULL;
-    const int64_t len = strlen(fmt_str) + part_name.length();
+    const int64_t len = strlen(fmt_str) + new_part_name.length();
     int32_t real_len = -1;
     if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory", K(ret), K(len));
     } else {
-      real_len = sprintf(buf, fmt_str, part_name.length(), part_name.ptr());
+      real_len = sprintf(buf, fmt_str, new_part_name.length(), new_part_name.ptr());
       if (OB_UNLIKELY(real_len < 0 || real_len >= len)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to print partition hint", K(ret), K(real_len), K(len));

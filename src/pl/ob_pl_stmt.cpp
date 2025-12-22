@@ -5016,6 +5016,18 @@ int ObPLStmtBlock::collect_valid_rows(common::ObIArray<CoverageData> &dst) const
         CK (OB_NOT_NULL(handler.get_desc()->get_body()));
         OZ (SMART_CALL(handler.get_desc()->get_body()->collect_valid_rows(dst)));
       }
+    } else if (PL_CASE == stmt->get_type()) {
+      ObPLCaseStmt *case_stmt = static_cast<ObPLCaseStmt *>(stmt);
+      CK (OB_NOT_NULL(case_stmt));
+      for (int64_t i = 0; OB_SUCC(ret) && i < case_stmt->get_when_clauses().count(); ++i) {
+        const ObPLCaseStmt::WhenClause &when_clause = case_stmt->get_when_clauses().at(i);
+        if (OB_NOT_NULL(when_clause.body_)) {
+          OZ (SMART_CALL(when_clause.body_->collect_valid_rows(dst)));
+        }
+      }
+      if (OB_SUCC(ret) && OB_NOT_NULL(case_stmt->get_else_clause())) {
+        OZ (SMART_CALL(case_stmt->get_else_clause()->collect_valid_rows(dst)));
+      }
     } else if (PL_BLOCK == stmt->get_type()) {
       ObPLStmtBlock *block = static_cast<ObPLStmtBlock*>(stmt);
       CK (OB_NOT_NULL(block));

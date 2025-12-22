@@ -1034,24 +1034,41 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
                                       ObPLDataType &dst_pl_type,
                                       bool is_sys_package)
 {
+#define IS_LOB_TYPE(type) (ObLobType == (type) || ObLongTextType == (type))
+
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(expr));
   if (OB_FAIL(ret)) {
     // do nothing ...
-  } else if (T_QUESTIONMARK == expr->get_expr_type()
-             && (resolve_ctx.is_prepare_protocol_
-                 || !resolve_ctx.is_sql_scope_
+  } else if (!resolve_ctx.params_.is_prepare_with_params_
+             && T_QUESTIONMARK == expr->get_expr_type()
+             && (resolve_ctx.is_prepare_protocol_ || !resolve_ctx.is_sql_scope_
                  || resolve_ctx.session_info_.get_pl_context() != NULL)
              && (ObUnknownType == expr->get_result_type().get_type()
                  || ObNullType == expr->get_result_type().get_type()
                  || (is_oracle_mode() ? expr->get_result_type().is_oracle_question_mark_type()
                                       : expr->get_result_type().is_mysql_question_mark_type()))) {
     OX (match_info =
-      (ObRoutineMatchInfo::MatchInfo(false,
-                                     ObUnknownType,
-                                     dst_pl_type.get_obj_type())));
-  } else if (T_NULL == expr->get_expr_type()
-            || ObNullTC == ob_obj_type_class(src_type)) {
+            (ObRoutineMatchInfo::MatchInfo(false, ObUnknownType, dst_pl_type.get_obj_type())));
+  } else if (resolve_ctx.params_.is_prepare_with_params_
+             && resolve_ctx.is_prepare_protocol_
+             && (IS_LOB_TYPE(dst_pl_type.get_obj_type())
+                 && CS_TYPE_BINARY == dst_pl_type.get_meta_type()->get_collation_type())
+             && expr->get_result_type().is_oracle_question_mark_type()) {
+    // JDBC sends blob params with MYSQL_TYPE_STRING type, which observer would parse as ObCharType.
+    //   => expr result type here is deduced to ObCharType + length == 2000.
+    //   => blob params would branch to ObUnknownType branch above, because it's recognized as a
+    //      oracle question mark.
+    // for blob formal type in prepare with params scenario, keep it compatible with that in prepare
+    // without params scenario.
+    OX (match_info =
+            (ObRoutineMatchInfo::MatchInfo(false, ObUnknownType, dst_pl_type.get_obj_type())));
+  } else if (resolve_ctx.params_.is_prepare_with_params_
+             && resolve_ctx.is_prepare_protocol_
+             && ObNullType == expr->get_result_type().get_type()) {
+    OX (match_info =
+            (ObRoutineMatchInfo::MatchInfo(false, ObNullType, dst_pl_type.get_obj_type())));
+  } else if (T_NULL == expr->get_expr_type() || ObNullTC == ob_obj_type_class(src_type)) {
     // NULL可以匹配任何类型
     OX (match_info =
       (ObRoutineMatchInfo::MatchInfo(false,
@@ -1078,11 +1095,8 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
                KPC(expr));
     }
     if (OB_FAIL(ret)) {
-    } else if ((ObLobType == src_type || ObLongTextType == src_type)
-               && (ObLobType == dst_pl_type.get_obj_type()
-                  || ObLongTextType == dst_pl_type.get_obj_type())) {
-      if (src_coll_type
-            == dst_pl_type.get_meta_type()->get_collation_type()
+    } else if (IS_LOB_TYPE(src_type) && IS_LOB_TYPE(dst_pl_type.get_obj_type())) {
+      if (src_coll_type == dst_pl_type.get_meta_type()->get_collation_type()
           || (src_coll_type != CS_TYPE_BINARY
               && dst_pl_type.get_meta_type()->get_collation_type() != CS_TYPE_BINARY)) {
         OX (match_info =
@@ -1095,11 +1109,9 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
                  K(ret), K(src_type_id), K(dst_pl_type), K(src_type));
       }
     } else if (lib::is_oracle_mode()
-              && (((ObLobType == src_type || ObLongTextType == src_type)\
-                 && CS_TYPE_BINARY == src_coll_type)
-              || ((ObLobType == dst_pl_type.get_obj_type()
-                   || ObLongTextType == dst_pl_type.get_obj_type())
-                  && CS_TYPE_BINARY == dst_pl_type.get_meta_type()->get_collation_type()))) {
+               && ((IS_LOB_TYPE(src_type) && CS_TYPE_BINARY == src_coll_type)
+                   || (IS_LOB_TYPE(dst_pl_type.get_obj_type())
+                       && CS_TYPE_BINARY == dst_pl_type.get_meta_type()->get_collation_type()))) {
       if (ObRawType == src_type || ObRawType == dst_pl_type.get_obj_type()) {
         // Raw and Blob can matched!
         OX (match_info =
@@ -1118,6 +1130,8 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
                K(src_type), K(src_type_id), K(dst_pl_type), K(match_info), KPC(expr));
   }
   return ret;
+
+#undef IS_LOB_TYPE
 }
 
 int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
@@ -1550,10 +1564,11 @@ int ObResolverUtils::pick_routine(ObIArray<ObRoutineMatchInfo> &match_infos,
   routine_info = NULL;
   CK (match_infos.count() > 1);
   CK (OB_NOT_NULL(match_infos.at(0).routine_info_));
-  // TODO: 处理Prepare协议下的选择, 因为Prepare时没有参数类型, 如果存在多个匹配, 随机选择一个
+  LOG_DEBUG("match information for pick routine", K(match_infos));
+  // TODO: 处理Prepare协议下的选择, 因为Prepare时没有参数类型, 如果存在多个匹配, 选择第一个
   for (int64_t i = 0; OB_SUCC(ret) && i < match_infos.count(); ++i) {
     if (match_infos.at(i).has_unknow_type()) {
-      routine_info = match_infos.at(i).routine_info_;
+      routine_info = match_infos.at(0).routine_info_;  // pick first
       break;
     }
   }
@@ -1658,6 +1673,19 @@ int ObResolverUtils::pick_routine(ObIArray<ObRoutineMatchInfo> &match_infos,
     LOG_WARN("PLS-00307: too many declarations of 'string' match this call",
               K(ret), K(match_infos));
   }
+
+  if (OB_ERR_FUNC_DUP == ret && OB_ISNULL(routine_info)) {
+    for (int64_t i = 0; i < match_infos.count(); ++i) {
+      if (match_infos.at(i).has_null_actual_params()) {
+        routine_info = match_infos.at(0).routine_info_;
+        ret = OB_SUCCESS;
+        break;
+      }
+    }
+    LOG_DEBUG("prepare with params fails back to old behavior for null params at abnormal case",
+              K(ret), KPC(routine_info));
+  }
+
   return ret;
 }
 
@@ -1764,6 +1792,7 @@ int ObResolverUtils::get_routine(pl::ObPLPackageGuard &package_guard,
     resolve_ctx.params_.secondary_namespace_ = params.secondary_namespace_;
     resolve_ctx.params_.param_list_ = params.param_list_;
     resolve_ctx.params_.is_execute_call_stmt_ = params.is_execute_call_stmt_;
+    resolve_ctx.params_.is_prepare_with_params_ = params.is_prepare_with_params_;
     if (dblink_name.empty()) {
       OZ (get_routine(resolve_ctx,
                       tenant_id,
@@ -11140,10 +11169,11 @@ int ObResolverUtils::check_allowed_alter_operations_for_mlog(
     }
 
     if (OB_FAIL(ret)) {
-    } else if (arg.is_alter_columns_) {
+    } else if (arg.is_alter_columns_ || arg.is_alter_partitions_) {
       // add colunm is supported
       // ObAlterTableResolver::check_action_node_for_mlog_master allow alter column
-      // ObAlterTableResolver::check_column_option_for_mlog_master allow add column
+      // ObAlterTableResolver::check_column_option_for_mlog_master allow add/modify/alter column
+      // ObAlterTableResolver::check_partition_option_for_mlog_master allow add partition
     } else if ((arg.is_alter_indexs_ && !is_alter_pk)
         || (arg.is_update_global_indexes_ && !arg.is_alter_partitions_)
         || (arg.is_alter_options_ // the following allowed options change does not affect mlog
@@ -11161,8 +11191,10 @@ int ObResolverUtils::check_allowed_alter_operations_for_mlog(
                 || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::SESSION_ACTIVE_TIME)
                 || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::ENABLE_ROW_MOVEMENT)
                 || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::FORCE_LOCALITY)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TABLE_MODE)
                 || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::ENCRYPTION)
                 || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TABLESPACE_ID)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::INCREMENT_MODE)
                 || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TTL_DEFINITION)
                 || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::KV_ATTRIBUTES)))
         || (lib::is_oracle_mode() // for "comment on table" command in oracle mode
@@ -11548,6 +11580,67 @@ int ObResolverUtils::check_whether_assigned_for_before_update_trigger(ObResolver
     }
   }
 
+  return ret;
+}
+
+int ObResolverUtils::calc_returning_param_count(const ParseNode &parse_tree,
+                                                int64_t &returning_param_count)
+{
+  int ret = OB_SUCCESS;
+  bool returning_stmt_found = false;
+  returning_param_count = 0;
+  if (FAILEDx(calc_returning_param_count_recursive(
+          parse_tree, returning_param_count, returning_stmt_found))) {
+    LOG_WARN(
+        "failed to calc returning param count", K(returning_param_count), K(returning_stmt_found));
+  }
+  LOG_DEBUG(
+      "calc returning param count", K(ret), K(returning_param_count), K(returning_stmt_found));
+  return ret;
+}
+
+int ObResolverUtils::calc_returning_param_count_recursive(const ParseNode &parse_tree,
+                                                          int64_t &returning_param_count,
+                                                          bool &returning_stmt_found)
+{
+  int ret = OB_SUCCESS;
+  if (parse_tree.type_ == T_RETURNING) {
+    const ParseNode *into_variables = nullptr;
+    const ParseNode *into_vars_list = nullptr;
+    returning_stmt_found = true;
+    returning_param_count = 0;
+    CK (OB_LIKELY(parse_tree.num_child_ == 2));
+    CK (OB_NOT_NULL(parse_tree.children_));
+    CK (OB_NOT_NULL(parse_tree.children_[0]));
+    CK (OB_LIKELY(T_PROJECT_LIST == parse_tree.children_[0]->type_));
+    if (OB_NOT_NULL(into_variables = parse_tree.children_[1])) {
+      CK (OB_LIKELY(T_INTO_VARIABLES == into_variables->type_));
+      CK (OB_NOT_NULL(into_variables->children_));
+      CK (OB_NOT_NULL(into_vars_list = into_variables->children_[0]));
+      CK (OB_LIKELY(T_INTO_VARS_LIST == into_vars_list->type_));
+      for (int64_t i = 0; OB_SUCC(ret) && i < into_vars_list->num_child_; ++i) {
+        const ParseNode *into_var = into_vars_list->children_[i];
+        CK (OB_NOT_NULL(into_var));
+        if (OB_SUCC(ret) && OB_NOT_NULL(into_var) && T_QUESTIONMARK == into_var->type_) {
+          ++returning_param_count;
+        }
+      }
+    }
+  } else if (parse_tree.num_child_ > 0) {
+    CK (OB_NOT_NULL(parse_tree.children_));
+    for (int64_t i = 0; OB_SUCC(ret) && !returning_stmt_found && i < parse_tree.num_child_; ++i) {
+      if (OB_NOT_NULL(parse_tree.children_[i])
+          && OB_FAIL(calc_returning_param_count_recursive(
+              *parse_tree.children_[i], returning_param_count, returning_stmt_found))) {
+        LOG_WARN("failed to calc returning param count inner",
+                 K(returning_param_count),
+                 K(returning_stmt_found),
+                 K(parse_tree.children_[i]->type_));
+      }
+    }
+  } else {
+    // pass leaf node
+  }
   return ret;
 }
 

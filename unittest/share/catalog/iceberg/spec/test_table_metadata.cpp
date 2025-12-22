@@ -253,6 +253,181 @@ TEST_F(TestTableMetadata, parse_from_json)
   ASSERT_EQ(iceberg::DataFileFormat::ORC, data_file_format);
 }
 
+TEST_F(TestTableMetadata, parse_from_json_with_ref)
+{
+  ObString json_metadata = R"(
+  {
+      "format-version": 2,
+      "table-uuid": "09df4302-b6ab-4d60-b205-c6bc816bc2e7",
+      "location": "oss://antsys-ob-sql-bucket-prod/zhengjin/default/test_time_travel",
+      "last-sequence-number": 2,
+      "last-updated-ms": 1759132297897,
+      "last-column-id": 3,
+      "current-schema-id": 0,
+      "schemas":
+      [
+          {
+              "type": "struct",
+              "schema-id": 0,
+              "fields":
+              [
+                  {
+                      "id": 1,
+                      "name": "dt",
+                      "required": false,
+                      "type": "date"
+                  },
+                  {
+                      "id": 2,
+                      "name": "number",
+                      "required": false,
+                      "type": "int"
+                  },
+                  {
+                      "id": 3,
+                      "name": "letter",
+                      "required": false,
+                      "type": "string"
+                  }
+              ]
+          }
+      ],
+      "default-spec-id": 0,
+      "partition-specs":
+      [
+          {
+              "spec-id": 0,
+              "fields":
+              []
+          }
+      ],
+      "last-partition-id": 999,
+      "default-sort-order-id": 0,
+      "sort-orders":
+      [
+          {
+              "order-id": 0,
+              "fields":
+              []
+          }
+      ],
+      "properties":
+      {
+          "owner": "root",
+          "write.parquet.compression-codec": "zstd"
+      },
+      "current-snapshot-id": 6811305257257310519,
+      "refs":
+      {
+          "main":
+          {
+              "snapshot-id": 6811305257257310519,
+              "type": "branch"
+          },
+          "before_tag":
+          {
+              "snapshot-id": 4208412434246510602,
+              "type": "tag"
+          }
+      },
+      "snapshots":
+      [
+          {
+              "sequence-number": 1,
+              "snapshot-id": 4208412434246510602,
+              "timestamp-ms": 1759132170812,
+              "summary":
+              {
+                  "operation": "append",
+                  "spark.app.id": "local-1759131857600",
+                  "added-data-files": "6",
+                  "added-records": "6",
+                  "added-files-size": "5153",
+                  "changed-partition-count": "1",
+                  "total-records": "6",
+                  "total-files-size": "5153",
+                  "total-data-files": "6",
+                  "total-delete-files": "0",
+                  "total-position-deletes": "0",
+                  "total-equality-deletes": "0",
+                  "engine-version": "3.5.5",
+                  "app-id": "local-1759131857600",
+                  "engine-name": "spark",
+                  "iceberg-version": "Apache Iceberg 1.10.0"
+              },
+              "manifest-list": "oss://antsys-ob-sql-bucket-prod/zhengjin/default/test_time_travel/metadata/snap-4208412434246510602-1-a0f0d0fb-c5ec-491b-a0a8-5877667626d1.avro",
+              "schema-id": 0
+          },
+          {
+              "sequence-number": 2,
+              "snapshot-id": 6811305257257310519,
+              "parent-snapshot-id": 4208412434246510602,
+              "timestamp-ms": 1759132208513,
+              "summary":
+              {
+                  "operation": "append",
+                  "spark.app.id": "local-1759131857600",
+                  "added-data-files": "6",
+                  "added-records": "6",
+                  "added-files-size": "5154",
+                  "changed-partition-count": "1",
+                  "total-records": "12",
+                  "total-files-size": "10307",
+                  "total-data-files": "12",
+                  "total-delete-files": "0",
+                  "total-position-deletes": "0",
+                  "total-equality-deletes": "0",
+                  "engine-version": "3.5.5",
+                  "app-id": "local-1759131857600",
+                  "engine-name": "spark",
+                  "iceberg-version": "Apache Iceberg 1.10.0"
+              },
+              "manifest-list": "oss://antsys-ob-sql-bucket-prod/zhengjin/default/test_time_travel/metadata/snap-6811305257257310519-1-f82846c4-a6ea-41c2-8b68-1c9a32a4c699.avro",
+              "schema-id": 0
+          }
+      ],
+      "statistics":
+      [],
+      "partition-statistics":
+      [],
+      "snapshot-log":
+      [
+          {
+              "timestamp-ms": 1759132170812,
+              "snapshot-id": 4208412434246510602
+          },
+          {
+              "timestamp-ms": 1759132208513,
+              "snapshot-id": 6811305257257310519
+          }
+      ],
+      "metadata-log":
+      [
+          {
+              "timestamp-ms": 1759132149744,
+              "metadata-file": "oss://antsys-ob-sql-bucket-prod/zhengjin/default/test_time_travel/metadata/v1.metadata.json"
+          },
+          {
+              "timestamp-ms": 1759132170812,
+              "metadata-file": "oss://antsys-ob-sql-bucket-prod/zhengjin/default/test_time_travel/metadata/v2.metadata.json"
+          },
+          {
+              "timestamp-ms": 1759132208513,
+              "metadata-file": "oss://antsys-ob-sql-bucket-prod/zhengjin/default/test_time_travel/metadata/v3.metadata.json"
+          }
+      ]
+  }
+  )";
+
+  ObArenaAllocator allocator;
+  iceberg::TableMetadata table_metadata(allocator);
+
+  ObJsonNode *json_node = NULL;
+  ObJsonParser::get_tree(&allocator, json_metadata, json_node);
+  ASSERT_EQ(ObJsonNodeType::J_OBJECT, json_node->json_type());
+  ASSERT_EQ(OB_SUCCESS, table_metadata.init_from_json(*down_cast<ObJsonObject *>(json_node)));
+}
+
 int main(int argc, char **argv)
 {
   ::testing::InitGoogleTest(&argc, argv);

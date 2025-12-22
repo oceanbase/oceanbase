@@ -61,9 +61,10 @@ int ObAlterResourcePoolExecutor::execute(ObExecContext &ctx, ObAlterResourcePool
   int ret = OB_SUCCESS;
   ObTaskExecutorCtx *task_exec_ctx = NULL;
   obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
-  const obrpc::ObAlterResourcePoolArg &alter_resource_pool_arg = stmt.get_arg();
-
-  if (NULL == (task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
+  obrpc::ObAlterResourcePoolArg &alter_resource_pool_arg = stmt.get_arg();
+  if (OB_FAIL(stmt.get_first_stmt(alter_resource_pool_arg.ddl_stmt_str_))) {
+    SQL_ENG_LOG(WARN, "fail to get first stmt" , KR(ret));
+  } else if (NULL == (task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
     SQL_ENG_LOG(WARN, "get task executor context failed");
   } else if (NULL == (common_rpc_proxy = task_exec_ctx->get_common_rpc())) {

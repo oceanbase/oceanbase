@@ -776,7 +776,7 @@ int MockTenantModuleEnv::init_before_start_mtl()
   const int64_t ts_ns = ObTimeUtility::current_time_ns();
   srand(ts_ns);
   std::string rand_val = std::to_string(rand());
-  run_dir_ = "run_" + std::to_string(rpc_port_) + "_" + rand_val;
+  run_dir_ = "run_" + std::to_string(getpid()) + "_" + std::to_string(rpc_port_) + "_" + rand_val;
   env_dir_ = run_dir_ + "/env";
   GCONF.cpu_count = 2;
   uint64_t start_time = 10000000;

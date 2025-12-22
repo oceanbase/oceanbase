@@ -984,6 +984,9 @@ typedef enum ObItemType
   T_FUN_SYS_EDIT_DISTANCE_UTF8 = 1937,
   T_FUN_SYS_POS_LIST = 1938, // fulltext index phrase match
   T_FUN_CK_SYS_IS_NAN = 1939,
+  T_FUN_CK_RAND_CANONICAL = 1940,
+  T_FUN_SYS_LOAD_FILE = 1941,
+  T_FUN_SYS_AI_PARSE_DOCUMENT = 1942,
 
   ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,
@@ -1074,7 +1077,8 @@ typedef enum ObItemType
   T_FUN_SYS_DATE_SUB_CLICKHOUSE = 2093,
   T_FUN_SYS_FORMAT_DATE_TIME = 2094,
   T_FUN_SYS_TO_UNIX_TIMESTAMP = 2095,
-
+  T_FUN_SYS_VOID = 2096,
+  T_FUN_COLLECT_FILE_LIST = 2097,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
@@ -3000,6 +3004,29 @@ typedef enum ObItemType
   T_SKIP_INDEX_LEVEL = 4944,
   T_DSL_QUERY = 4945, // hybrid search dsl query
   T_DISABLE_PARALLEL_PARSE_SINGLE_CSV = 4946, // disable parallel parse single csv
+  T_TTL_DEFINITION_WITH_TYPE = 4947,
+  T_WITH_INDEX = 4948, // prewarm data table with index table
+  T_PREWARM_SS_LOCAL_CACHE = 4949, // prewarm data into ss_local_cache
+  T_MIXED_RETENTION = 4950,  // mixed retention
+
+  //direct load kafka
+  T_CREATE_ROUTINE_LOAD = 4951,
+  T_LOAD_PROPERTIES = 4952,
+  T_KAFKA_CUSTOM_PROPERTY = 4953,
+  T_PAUSE_ROUTINE_LOAD = 4954,
+  T_RESUME_ROUTINE_LOAD = 4955,
+  T_STOP_ROUTINE_LOAD = 4956,
+
+  T_CSV_LARGE_FILE_SIZE_THRESHOLD = 4957,
+  T_MAX_CSV_ROW_LENGTH = 4958,
+  T_HYBRID_SEARCH_SCORE = 4959, // hybrid search score
+  T_AI_SPLIT_DOCUMENT_EXPRESSION = 4960, // ai_split_document
+
+  // vector index query
+  T_VECTOR_INDEX_HINT = 4961,
+  T_FILTER_ADAPTIVE = 4962,
+  T_PRE_FILTER = 4963,
+  T_POST_FILTER = 4964,
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;

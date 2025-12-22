@@ -1019,6 +1019,10 @@ int ObTenantMetaMemMgr::get_min_end_scn_for_ls(
   ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "GetMinScn"));
   ObTabletPointerHandle ptr_handle(tablet_map_);
   ObTabletHandle handle;
+  mds::MdsWriter writer;
+  mds::TwoPhaseCommitState trans_stat;
+  share::SCN trans_version;
+  ObTabletCreateDeleteMdsUserData user_data;
   min_end_scn_from_latest.set_max();
   min_end_scn_from_old.set_max();
   if (OB_UNLIKELY(!is_inited_)) {
@@ -1034,6 +1038,32 @@ int ObTenantMetaMemMgr::get_min_end_scn_for_ls(
   } else if (!handle.is_valid() || !ptr_handle.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected invalid handle", K(ret), K(handle), K(ptr_handle));
+  } else if (OB_FAIL(handle.get_obj()->ObITabletMdsInterface::get_latest_tablet_status(user_data, writer, trans_stat, trans_version))) {
+    if (OB_EMPTY_RESULT == ret) {
+      // When OB_EMPTY_RESULT is returned, there are two situations that need to be eaten, as follows:
+      // - The one is that transfer transaction is aborted.
+      // - The second is that the tablet is just been created and the tablet status has been also written.
+      //
+      // In the above two cases, the old version tablet is not allowed and will not exist, and it
+      // is not allowed to be read without being queried, so it is safe to return max scn here.
+      min_end_scn_from_latest.set_max();
+      min_end_scn_from_old.set_max();
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("get tablet status failed", KR(ret), KPC(handle.get_obj()));
+    }
+  } else if (ObTabletStatus::TRANSFER_IN == user_data.tablet_status_) {
+    /* when tablet transfer with active tx, dest_ls may recycle active transaction tx_data
+     * because no uncommitted data depend it, but src_ls's tablet may has uncommitted data depend this tx_data
+     * so we must concern src_ls's tablet boundary to stop recycle tx_data
+     */
+    if (!user_data.transfer_scn_.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("transfer_scn is invalid", K(ret), K(user_data));
+    } else {
+      min_end_scn_from_latest = SCN::scn_dec(user_data.transfer_scn_);
+      min_end_scn_from_old = SCN::scn_dec(user_data.transfer_scn_);
+    }
   } else if (OB_FAIL(get_min_end_scn_from_single_tablet(
       handle.get_obj(), false/*is_old*/, ls_checkpoint, min_end_scn_from_latest))) {
     LOG_WARN("fail to get min end scn from latest tablet", K(ret), K(key), K(handle));
@@ -1066,40 +1096,13 @@ int ObTenantMetaMemMgr::get_min_end_scn_from_single_tablet(ObTablet *tablet,
                                                            SCN &min_end_scn)
 {
   int ret = OB_SUCCESS;
-  mds::MdsWriter writer;
-  mds::TwoPhaseCommitState trans_stat;
-  share::SCN trans_version;
-  ObTabletCreateDeleteMdsUserData user_data;
+
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   if (OB_ISNULL(tablet)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "tablet is nullptr.", K(ret), KP(this));
   } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
-  } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, writer, trans_stat, trans_version))) {
-    if (OB_EMPTY_RESULT == ret) {
-      // When OB_EMPTY_RESULT is returned, there are two situations that need to be eaten, as follows:
-      // - The one is that transfer transaction is aborted.
-      // - The second is that the tablet is just been created and the tablet status has been also written.
-      //
-      // In the above two cases, the old version tablet is not allowed and will not exist, and it
-      // is not allowed to be read without being queried, so it is safe to return max scn here.
-      min_end_scn.set_max();
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("get tablet status failed", KR(ret), KP(tablet));
-    }
-  } else if (ObTabletStatus::TRANSFER_IN == user_data.tablet_status_) {
-    /* when tablet transfer with active tx, dest_ls may recycle active transaction tx_data
-     * because no uncommitted data depend it, but src_ls's tablet may has uncommitted data depend this tx_data
-     * so we must concern src_ls's tablet boundary to stop recycle tx_data
-     */
-    if (!user_data.transfer_scn_.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("transfer_scn is invalid", K(ret), K(user_data));
-    } else {
-      min_end_scn = SCN::scn_dec(user_data.transfer_scn_);
-    }
   } else {
     SCN cur_recycle_end_scn = SCN::max_scn();
     bool contain_uncommitted_row = false;

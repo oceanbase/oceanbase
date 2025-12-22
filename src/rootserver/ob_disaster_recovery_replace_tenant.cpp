@@ -961,6 +961,8 @@ int ObDRReplaceTenant::correct_unit_related_table_(common::ObMySQLTransaction &t
     LOG_WARN("sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(unit_operator.init(*GCTX.sql_proxy_))) {
     LOG_WARN("unit operator init failed", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(ObUnitTableTransaction::lock_service_epoch(trans))) {
+    LOG_WARN("fail to lock unit service epoch", KR(ret));
   } else if (OB_FAIL(create_new_unit_config_(trans, unit_operator))) {
     LOG_WARN("fail to create new unit config", KR(ret));
   } else if (OB_FAIL(create_new_resource_pool_(trans, unit_operator))) {
@@ -1064,8 +1066,8 @@ int ObDRReplaceTenant::create_new_unit_(
                             common::ObReplicaType::REPLICA_TYPE_FULL,
                             OB_INVALID_TIMESTAMP))) {
     LOG_WARN("fail to init unit", KR(ret), K_(new_unit_id), K_(new_resource_pool_id), K(stmt_.get_zone()), K(stmt_.get_server()));
-  } else if (OB_FAIL(unit_operator.update_unit(trans, new_unit, false/*need_check_conflict_with_clone*/))) {
-    LOG_WARN("failed to update unit", KR(ret), K(new_unit));
+  } else if (OB_FAIL(unit_operator.insert_unit(trans, new_unit))) {
+    LOG_WARN("failed to insert unit", KR(ret), K(new_unit));
   }
   DRRT_LOG_INFO("create new unit", KR(ret), K(new_unit));
   return ret;

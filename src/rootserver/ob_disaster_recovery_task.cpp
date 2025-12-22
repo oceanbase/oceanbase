@@ -1250,7 +1250,7 @@ int ObAddLSReplicaTask::check_paxos_member(
 {
   int ret = OB_SUCCESS;
   ObZone dst_zone;
-  if (!ObReplicaTypeCheck::is_paxos_replica_V2(dst_member_.get_replica_type())) {
+  if (!ObReplicaTypeCheck::is_paxos_replica(dst_member_.get_replica_type())) {
     // no need to check non paxos replica
   } else if (OB_FAIL(SVR_TRACER.get_server_zone(dst_member_.get_server(), dst_zone))) {
     LOG_WARN("fail to get server zone", KR(ret), K(dst_member_));
@@ -1264,8 +1264,8 @@ int ObAddLSReplicaTask::check_paxos_member(
       } else if ((!is_manual_task() && r->get_zone() == dst_zone)
                  // manual operation allowed mutiple replica in same zone
                  && r->is_in_service()
-                 && ObReplicaTypeCheck::is_paxos_replica_V2(r->get_replica_type())
-                 && ObReplicaTypeCheck::is_paxos_replica_V2(dst_member_.get_replica_type())) {
+                 && ObReplicaTypeCheck::is_paxos_replica(r->get_replica_type())
+                 && ObReplicaTypeCheck::is_paxos_replica(dst_member_.get_replica_type())) {
         ret = OB_REBALANCE_TASK_CANT_EXEC;
         LOG_WARN("only one paxos member allowed in a single zone", K(ret),
                  "zone", dst_zone, "task", *this);
@@ -1727,7 +1727,7 @@ int ObRemoveLSReplicaTask::execute(
     LOG_WARN("fail to get member for dr task", KR(ret));
   } else if (ObDRTaskType::LS_REMOVE_PAXOS_REPLICA == get_disaster_recovery_task_type()) {
     ObLSDropPaxosReplicaArg arg;
-    if (!ObReplicaTypeCheck::is_paxos_replica_V2(remove_member.get_replica_type())) {
+    if (!ObReplicaTypeCheck::is_paxos_replica(remove_member.get_replica_type())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("replica type not match", KR(ret));
     } else if (OB_FAIL(arg.init(
@@ -1747,7 +1747,7 @@ int ObRemoveLSReplicaTask::execute(
     }
   } else if (ObDRTaskType::LS_REMOVE_NON_PAXOS_REPLICA == get_disaster_recovery_task_type()) {
     ObLSDropNonPaxosReplicaArg arg;
-    if (ObReplicaTypeCheck::is_paxos_replica_V2(remove_member.get_replica_type())) {
+    if (ObReplicaTypeCheck::is_paxos_replica(remove_member.get_replica_type())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("replica type not match", KR(ret));
     } else if (OB_FAIL(arg.init(

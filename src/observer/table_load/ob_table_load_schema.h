@@ -70,8 +70,9 @@ public:
   static int get_tablet_ids_by_part_ids(const ObTableSchema *table_schema,
                                         const ObIArray<ObObjectID> &part_ids,
                                         ObIArray<ObTabletID> &tablet_ids);
-  static int prepare_col_descs(const ObTableSchema *table_schema,
-                               common::ObIArray<share::schema::ObColDesc> &col_descs);
+  static int prepare_col_descs_and_col_accuracys(const ObTableSchema *table_schema,
+                                                 common::ObIArray<share::schema::ObColDesc> &col_descs,
+                                                 common::ObIArray<common::ObAccuracy> &col_accuracys);
 public:
   ObTableLoadSchema();
   ~ObTableLoadSchema();
@@ -121,6 +122,7 @@ public:
   // if it is a heap table, it contains hidden primary key column
   // does not contain virtual generated columns
   common::ObArray<share::schema::ObColDesc> column_descs_;
+  common::ObArray<common::ObAccuracy> column_accuracys_;
   blocksstable::ObStorageDatumUtils datum_utils_;
   common::ObArray<share::schema::ObColDesc> lob_meta_column_descs_;
   blocksstable::ObStorageDatumUtils lob_meta_datum_utils_;

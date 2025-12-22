@@ -475,7 +475,8 @@ struct ObExchangeInfo
     sample_type_(NOT_INIT_SAMPLE_TYPE),
     parallel_(ObGlobalHint::UNSET_PARALLEL),
     server_cnt_(0),
-    server_list_()
+    server_list_(),
+    hidden_pk_expr_(NULL)
   {
     repartition_table_id_ = 0;
   }
@@ -538,6 +539,9 @@ struct ObExchangeInfo
   int64_t parallel_;
   int64_t server_cnt_;
   common::ObSEArray<common::ObAddr, 4> server_list_;
+  // Hidden primary key expression for PDML heap table insert scenario.
+  // Needs to be passed through exchange but not used for hash calculation.
+  ObRawExpr *hidden_pk_expr_;
 
   TO_STRING_KV(K_(is_remote),
                K_(is_task_order),
@@ -564,7 +568,8 @@ struct ObExchangeInfo
                K_(sample_type),
                K_(parallel),
                K_(server_cnt),
-               K_(server_list));
+               K_(server_list),
+               K_(hidden_pk_expr));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExchangeInfo);
 };

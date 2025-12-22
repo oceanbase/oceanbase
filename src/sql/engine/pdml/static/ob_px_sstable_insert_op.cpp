@@ -234,8 +234,14 @@ int ObPxMultiPartSSTableInsertOp::finish_dag()
       LOG_WARN("set px finished failed", K(ret));
     } else if (OB_FAIL(ddl_dag_->process())) {
       LOG_WARN("dag process failed", K(ret), K(ddl_dag_->get_dag_ret()), KPC(ddl_dag_));
-    } else {
+    }
+
+    if (OB_SUCC(ret)) {
       ret = ddl_dag_->get_dag_ret();
+    } else if (ddl_dag_->is_dag_failed()) {
+      int tmp_ret = ret;
+      ret = ddl_dag_->get_dag_ret();
+      LOG_WARN("dag failed, return first failed task's error code", K(ret), K(tmp_ret));
     }
   }
   return ret;

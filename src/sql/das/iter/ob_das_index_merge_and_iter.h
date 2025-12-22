@@ -113,6 +113,7 @@ public:
   virtual ~ObDASIndexMergeAndIter() {}
 
   OB_INLINE ObTableScanParam *get_main_scan_param() const { return main_scan_param_; }
+  OB_INLINE void set_enable_bitmap_cursor(bool enable) { enable_bitmap_cursor_ = enable; }
 
 protected:
   virtual int inner_init(ObDASIterParam &param) override;

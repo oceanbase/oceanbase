@@ -77,6 +77,7 @@ public:
       ObBalanceGroupInfo &dest_bg_info,
       ObPartGroupInfo *&part_group);
   int swap_largest_for_smallest_pg(ObBalanceGroupInfo &dest_bg_info);
+  int swap_for_smallest_pg(ObPartGroupInfo *const inner_pg, ObBalanceGroupInfo &dest_bg_info);
   int get_largest_part_group(ObPartGroupInfo *&part_group) const;
   int get_smallest_part_group(ObPartGroupInfo *&part_group) const;
   int get_balance_weight_array(ObIArray<int64_t> &weight_arr);
@@ -129,6 +130,9 @@ private:
       const int64_t balance_weight,
       ObBalanceGroupInfo &dest_bg_info,
       ObPartGroupInfo *&part_group);
+  int inner_swap_for_smallest_pg_(
+      ObPartGroupInfo *const inner_pg,
+      ObBalanceGroupInfo &dest_bg_info);
 
 private:
   bool inited_;

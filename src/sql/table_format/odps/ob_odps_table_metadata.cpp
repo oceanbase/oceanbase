@@ -48,7 +48,9 @@ int ObODPSTableMetadata::assign(const ObODPSTableMetadata &other)
   return ret;
 }
 
-int ObODPSTableMetadata::do_build_table_schema(share::schema::ObTableSchema *&table_schema)
+int ObODPSTableMetadata::do_build_table_schema(std::optional<int32_t> schema_id, /*not used*/
+                                               std::optional<int64_t> snapshot_id, /*not used*/
+                                               share::schema::ObTableSchema *&table_schema)
 {
   int ret = OB_SUCCESS;
   OZ(share::schema::ObSchemaUtils::alloc_schema(allocator_, table_schema_, table_schema));

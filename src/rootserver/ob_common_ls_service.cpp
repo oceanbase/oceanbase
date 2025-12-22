@@ -107,7 +107,7 @@ void ObCommonLSService::do_work()
           LOG_WARN("failed to create ls", KR(ret), KR(tmp_ret), K(user_tenant_schema));
         }
         if (OB_SUCC(ret) && !user_tenant_schema.is_dropping()) {
-          if (OB_TMP_FAIL(try_modify_ls_unit_group_(user_tenant_schema))) {
+          if (OB_TMP_FAIL(try_modify_ls_unit_group_or_unit_list_(user_tenant_schema))) {
             LOG_WARN("failed to modify ls unit group", KR(ret), KR(tmp_ret), K(user_tenant_schema));
           }
         }
@@ -173,11 +173,12 @@ int ObCommonLSService::try_create_ls_(const share::schema::ObTenantSchema &tenan
 }
 //不管是主库还是备库都有概率存在一个日志流组内的日志流记录的unit_group不一致的情况
 //所有的日志流都对齐日志流id最小的日志流,虽然不是最优，但是可以保证最终一致性
-int ObCommonLSService::try_modify_ls_unit_group_(
+int ObCommonLSService::try_modify_ls_unit_group_or_unit_list_(
     const share::schema::ObTenantSchema &tenant_schema)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = tenant_schema.get_tenant_id();
+  uint64_t meta_tenant_data_version = 0;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -188,6 +189,8 @@ int ObCommonLSService::try_modify_ls_unit_group_(
              || tenant_schema.is_dropping()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant is invalid", KR(ret), K(tenant_id), K(tenant_schema));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(tenant_id), meta_tenant_data_version))) {
+    LOG_WARN("fail to get min data version", KR(ret), K(tenant_id));
   } else {
     ObTenantLSInfo tenant_info(GCTX.sql_proxy_, &tenant_schema, tenant_id);
     share::ObLSStatusOperator status_op;
@@ -205,13 +208,30 @@ int ObCommonLSService::try_modify_ls_unit_group_(
           const share::ObLSID ls_id = ls_ids.at(j);
           if (OB_FAIL(tenant_info.get_ls_status_info(ls_id, ls_status, index))) {
             LOG_WARN("failed to get ls status info", KR(ret), K(ls_id));
-          } else if (ls_status.unit_group_id_ != unit_group_id) {
-            FLOG_INFO("ls group has different unit group id, need process", K(ls_status), K(unit_group_id));
-            if (OB_FAIL(status_op.alter_unit_group_id(tenant_id, ls_id, ls_group_id,
-                    ls_status.unit_group_id_, unit_group_id, *GCTX.sql_proxy_))) {
-              LOG_WARN("failed to alter unit group", KR(ret), K(tenant_id), K(ls_id),
-                  K(ls_group_id), K(unit_group_id), K(ls_status));
-
+          } else if (!ObShareUtil::check_compat_version_for_hetero_zone(meta_tenant_data_version)) {
+            // dat version below 4.4.2.0
+            // check and update unit_group_id
+            if (ls_status.unit_group_id_ != unit_group_id) {
+              FLOG_INFO("ls group has different unit group id, need process", K(ls_status), K(unit_group_id));
+              if (OB_FAIL(status_op.alter_unit_group_id(tenant_id, ls_id, ls_group_id,
+                      ls_status.unit_group_id_, unit_group_id, *GCTX.sql_proxy_))) {
+                LOG_WARN("failed to alter unit group", KR(ret), K(tenant_id), K(ls_id),
+                    K(ls_group_id), K(unit_group_id), K(ls_status));
+              }
+            }
+          } else {
+            // data version up to 4.4.2.0
+            // check and update unit_list
+            if (ls_status.get_unit_list() != ls_group_array.at(i).unit_list_) {
+              FLOG_INFO("ls group has different unit id list, need process",
+                        K(ls_status), K(ls_group_array.at(i)));
+              // use this function to update unit_list, not ls group id
+              if (OB_FAIL(status_op.alter_ls_group_id(tenant_id, ls_id, ls_group_id/*old_one*/,
+                              ls_group_id/*new_one*/, ls_status.get_unit_list()/*old_one*/,
+                              ls_group_array.at(i).unit_list_/*new_one*/, *GCTX.sql_proxy_))) {
+                LOG_WARN("fail to alter unit list", KR(ret), K(tenant_id), K(ls_id), K(ls_group_id),
+                         K(ls_status), K(ls_group_array.at(i)));
+              }
             }
           }
         }//end for j
@@ -239,18 +259,18 @@ int ObCommonLSService::do_create_user_ls(
   } else {
     CK(OB_NOT_NULL(GCTX.sql_proxy_), OB_NOT_NULL(GCTX.srv_rpc_proxy_))
     common::ObArray<share::ObZoneReplicaAttrSet> locality_array;
-    int64_t paxos_replica_num = 0;
+    //由于日志流只能根据unit_list创建，所以paxos_replica_num设置为unit_list
+    //内的paxos_replica_num的个数
+    //unit_list可能不能和locality匹配，依赖后续的容灾操作把副本补完
+
     ObSchemaGetterGuard guard;//nothing
     if (FAILEDx(tenant_schema.get_zone_replica_attr_array(
                    locality_array))) {
       LOG_WARN("failed to get zone locality array", KR(ret));
-    } else if (OB_FAIL(tenant_schema.get_paxos_replica_num(
-                   guard, paxos_replica_num))) {
-      LOG_WARN("failed to get paxos replica num", KR(ret));
     } else {
       ObLSCreator creator(*GCTX.srv_rpc_proxy_, info.tenant_id_,
                           info.ls_id_, GCTX.sql_proxy_);
-      if (OB_FAIL(creator.create_user_ls(info, paxos_replica_num,
+      if (OB_FAIL(creator.create_user_ls(info,
                                          locality_array, create_scn,
                                          tenant_schema.get_compatibility_mode(),
                                          create_with_palf,

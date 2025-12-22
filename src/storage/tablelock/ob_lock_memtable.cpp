@@ -466,6 +466,9 @@ int ObLockMemtable::check_tablet_write_allow_(const ObTableLockOp &lock_op,
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(ls));
+  } else if (ls->is_logonly_replica()) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("logonly replica has no tablet", KR(ret), KPC(ls));
   } else if (OB_FAIL(ls->get_tablet(tablet_id,
                                     tablet_handle,
                                     0,

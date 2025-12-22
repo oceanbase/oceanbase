@@ -11,6 +11,7 @@
 #include "ob_schedule_status_cache.h"
 #include "src/storage/compaction/ob_basic_schedule_tablet_func.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
+#include "storage/compaction/ob_partition_merge_policy.h"
 #include "storage/ddl/ob_inc_ddl_merge_task_utils.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "share/restore/ob_ls_restore_status.h"
@@ -112,6 +113,12 @@ void ObLSStatusCache::check_ls_state(ObLS &ls, LSState &state)
     state = OFFLINE_OR_DELETED;
     if (REACH_THREAD_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
       LOG_INFO("ls is deleted or offline", K(ls), K(ls.is_deleted()), K(ls.is_offline()));
+    }
+  } else if (ObReplicaTypeCheck::is_log_replica(ls.get_replica_type())) {
+    // skip logonly replica
+    state = OFFLINE_OR_DELETED;
+    if (REACH_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
+      LOG_INFO("ls is logonly", K(ls));
     }
   } else if (!is_restore_ready_for_merge(ls)) {
     state = RESTORE_NOT_READY;
@@ -575,7 +582,6 @@ int ObTabletStatusCache::check_execute_state_for_remote_tablet_(
     const ObTablet &tablet)
 {
   int ret = OB_SUCCESS;
-  int64_t inc_major_sstable_count = 0;
   int64_t threshold = 0;
   const ObTabletID &tablet_id = tablet.get_tablet_id();
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
@@ -585,24 +591,38 @@ int ObTabletStatusCache::check_execute_state_for_remote_tablet_(
     threshold = ObTabletTableStore::EMERGENCY_SSTABLE_CNT;
   }
 
+  int64_t inc_major_sstable_count = 0;
   if (OB_FAIL(get_tablet_inc_major_sstable_count(tablet, inc_major_sstable_count))) {
-    LOG_WARN("failed to get tablet inc major sstable count", K(ret), K(tablet));
+    LOG_WARN("failed to get tablet inc major sstable count", K(ret), K(tablet_id));
   } else if (inc_major_sstable_count >= threshold) {
-    execute_state_ = EMERGENCY_MERGE_REQUIRED;
-    if (REACH_THREAD_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
+    // check if the latest major sstable has covered all inc major sstables
+    bool all_included = false;
+    if (OB_FAIL(ObIncMajorTxHelper::check_all_inc_major_included_by_major(ls, tablet, all_included))) {
+      LOG_WARN("failed to check all inc major included by major", K(ret), K(tablet_id));
+    } else if (all_included) {
+      // last major sstable has covered all inc major sstables, no need to trigger merge
+      execute_state_ = RESTORE_STATUS_NOT_READY;
+      LOG_INFO("all inc major sstables are included by major, skip emergency merge",
+          K(tablet_id), K(inc_major_sstable_count));
+    } else {
+      execute_state_ = EMERGENCY_MERGE_REQUIRED;
+      if (REACH_THREAD_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
 #ifdef ERRSIM
-    SERVER_EVENT_SYNC_ADD("storage_ha", "tablet_need_emergency_merge",
-                          "tenant_id", MTL_ID(),
-                          "ls_id", ls.get_ls_id().id(),
-                          "tablet_id", tablet_id.id(),
-                          "inc_major_sstable_count", inc_major_sstable_count,
-                          "threshold", threshold);
+        SERVER_EVENT_SYNC_ADD("storage_ha", "tablet_need_emergency_merge",
+                              "tenant_id", MTL_ID(),
+                              "ls_id", ls.get_ls_id().id(),
+                              "tablet_id", tablet_id.id(),
+                              "inc_major_sstable_count", inc_major_sstable_count,
+                              "threshold", threshold);
 #endif
-      LOG_INFO("tablet requires emergency merge due to sstable threshold", K(tablet_id), K(inc_major_sstable_count), K(threshold));
+        LOG_INFO("tablet requires emergency merge due to sstable threshold",
+            K(tablet_id), K(inc_major_sstable_count), K(threshold));
+      }
     }
   } else {
     execute_state_ = RESTORE_STATUS_NOT_READY;
-    LOG_INFO("tablet has not reach sstable threshold, can not merge", K(tablet_id), "restore_status", tablet.get_tablet_meta().ha_status_);
+    LOG_INFO("tablet has not reach sstable threshold, can not merge",
+        K(tablet_id), "restore_status", tablet.get_tablet_meta().ha_status_);
   }
   return ret;
 }

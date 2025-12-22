@@ -152,7 +152,6 @@ int main(int argc, char **argv)
 {
   int ret = 1;
   system("rm -f test_direct_load_plus_offline.log*");
-  system("rm -fr run_*");
   ObLogger &logger = ObLogger::get_logger();
   logger.set_file_name("test_direct_load_plus_offline.log", true);
   logger.set_log_level(OB_LOG_LEVEL_INFO);

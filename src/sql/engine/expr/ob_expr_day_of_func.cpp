@@ -815,9 +815,17 @@ int vector_dayofyear(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip
           LOG_WARN("get date and usec from vec failed", K(ret));
         } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date)) {
           res_vec->set_null(idx);
-        } else {
+        } else if (ObTimeConverter::could_calc_days_to_year_quickly(date)) {
           ObTimeConverter::days_to_year_ydays(date, year, dt_yday);
           res_vec->set_int(idx, dt_yday);
+        } else {
+          ObTime ob_time(DT_TYPE_DATE);
+          if (OB_FAIL(ObTimeConverter::date_to_ob_time(date, ob_time))) {
+            LOG_WARN("failed to convert date to ob_time", K(ret), K(date));
+          } else {
+            dt_yday = ob_time.parts_[DT_YDAY];
+            res_vec->set_int(idx, dt_yday);
+          }
         }
         eval_flags.set(idx);
       });
@@ -909,9 +917,16 @@ int vector_dayofmonth(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &ski
           LOG_WARN("get date and usec from vec failed", K(ret));
         } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date)) {
           dt_mday = 0;
-        } else {
+        } else if (ObTimeConverter::could_calc_days_to_year_quickly(date)) {
           ObTimeConverter::days_to_year_ydays(date, year, dt_yday);
           ObTimeConverter::ydays_to_month_mdays(year, dt_yday, month, dt_mday);
+        } else {
+          ObTime ob_time_tmp(DT_TYPE_DATE);
+          if (OB_FAIL(ObTimeConverter::date_to_ob_time(date, ob_time_tmp))) {
+            LOG_WARN("failed to convert date to ob_time", K(ret), K(date));
+          } else {
+            dt_mday = ob_time_tmp.parts_[DT_MDAY];
+          }
         }
         res_vec->set_int(idx, dt_mday);
         eval_flags.set(idx);

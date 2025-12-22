@@ -200,6 +200,11 @@
           "name": "_object_storage_io_timeout",
           "value": "300s",
           "comment": "default value of object storage io timeout"
+        },
+        {
+          "name": "_ss_local_cache_evict_old_sstable_policy",
+          "value": "MAJOR_SSTABLE",
+          "comment": "The policy of local cache eviction of old sstable data in shared storage mode."
         }
       ]
     }

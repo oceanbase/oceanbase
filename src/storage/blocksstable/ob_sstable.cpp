@@ -852,6 +852,7 @@ int ObSSTable::check_rows_locked(
   bool may_exist = true;
   const bool is_inc_major_or_major = is_inc_major_related_sstable() || is_major_sstable();
   const share::SCN snapshot_version = context.store_ctx_->mvcc_acc_ctx_.get_snapshot_version();
+  const int64_t base_version = context.store_ctx_->mvcc_acc_ctx_.major_snapshot_;
   if (OB_UNLIKELY(rows_info.all_rows_found())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected state", K(ret), K(rows_info));
@@ -888,7 +889,7 @@ int ObSSTable::check_rows_locked(
     } else if (OB_FAIL(build_multi_row_lock_checker(rows_info, multi_checker))) {
       LOG_WARN("Failed to build multi row lock checker", K(ret), K(rows_info));
     } else {
-      if (OB_FAIL(multi_checker->check_row_locked(check_exist, snapshot_version))) {
+      if (OB_FAIL(multi_checker->check_row_locked(check_exist, snapshot_version, base_version))) {
         LOG_WARN("Failed to check row lock", K(ret), K(rows_info));
       }
     }
@@ -941,9 +942,10 @@ int ObSSTable::check_row_locked(
     ObSSTableRowLockChecker row_checker;
     row_checker.set_iter_type(check_exist);
     share::SCN snapshot_version = context.store_ctx_->mvcc_acc_ctx_.get_snapshot_version();
+    const int64_t base_version = context.store_ctx_->mvcc_acc_ctx_.major_snapshot_;
     if (OB_FAIL(row_checker.init(param, context, this, &rowkey))) {
       LOG_WARN("failed to open row locker", K(ret), K(param), K(context), K(rowkey));
-    } else if (OB_FAIL(row_checker.check_row_locked(check_exist, snapshot_version, lock_state))) {
+    } else if (OB_FAIL(row_checker.check_row_locked(check_exist, snapshot_version, base_version, lock_state))) {
       LOG_WARN("failed to check row lock checker", KR(ret), K(lock_state), K(snapshot_version));
     }
   }

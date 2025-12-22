@@ -315,6 +315,9 @@ int ObLSMemberListService::check_ls_transfer_scn_(const share::SCN &transfer_scn
   if (OB_ISNULL(ls_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "ls should not be null", K(ret), KP_(ls));
+  } else if (!ObReplicaTypeCheck::is_replica_with_ssstore(ls_->get_ls_meta().get_replica_type())) {
+    check_pass = true;
+    STORAGE_LOG(INFO, "replica without ssstore, no need check", KPC_(ls));
   } else if (OB_FAIL(ls_->get_transfer_scn(local_transfer_scn))) {
     STORAGE_LOG(WARN, "failed to get transfer scn", K(ret), KP_(ls));
   } else if (transfer_scn > local_transfer_scn) {
@@ -333,6 +336,8 @@ int ObLSMemberListService::get_ls_member_list_(common::ObIArray<common::ObAddr> 
   ObStorageHAGetMemberHelper get_member_helper;
   ObLSService *ls_svr = NULL;
   ObStorageRpc *storage_rpc = NULL;
+  common::ObMemberList member_list;
+  addr_list.reset();
   if (OB_ISNULL(ls_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "ls should not be null", K(ret), KP_(ls));
@@ -344,8 +349,19 @@ int ObLSMemberListService::get_ls_member_list_(common::ObIArray<common::ObAddr> 
     STORAGE_LOG(WARN, "storage rpc should not be NULL", K(ret), KP(storage_rpc));
   } else if (OB_FAIL(get_member_helper.init(storage_rpc))) {
     STORAGE_LOG(WARN, "failed to init palf helper", K(ret), KP_(ls));
-  } else if (OB_FAIL(get_member_helper.get_ls_member_list(ls_->get_tenant_id(), ls_->get_ls_id(), addr_list))) {
+  } else if (OB_FAIL(get_member_helper.get_ls_member_list(ls_->get_tenant_id(), ls_->get_ls_id(), member_list))) {
     STORAGE_LOG(WARN, "failed to get ls member list", K(ret), KP_(ls));
+  } else { //filter L replica
+    for (int64_t i = 0; OB_SUCC(ret) && i < member_list.get_member_number(); ++i) {
+      common::ObMember member;
+      if (OB_FAIL(member_list.get_member_by_index(i, member))) {
+        STORAGE_LOG(WARN, "failed to get member by index", K(ret), K(i), K(member_list));
+      } else if (member.is_logonly()) {
+        //do nothing
+      } else if (OB_FAIL(addr_list.push_back(member.get_server()))) {
+        STORAGE_LOG(WARN, "failed to push addr into array", K(ret), K(member));
+      }
+    }
   }
   return ret;
 }

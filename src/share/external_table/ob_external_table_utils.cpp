@@ -1958,45 +1958,56 @@ int ObLocalFileListArrayOpWithFilter::func(const dirent *entry)
 
 int ObExternalTableUtils::collect_external_file_list_with_cache(
     const uint64_t tenant_id,
-    const uint64_t ts,
-    const ObString &location,
+    const ObIArray<ObString> &part_path,
+    const ObIArray<int64_t> &part_id,
+    const ObIArray<int64_t> &part_modify_ts,
     const ObString &access_info,
     const ObString &pattern,
-    const sql::ObExprRegexpSessionVariables &regexp_vars,
     ObIAllocator &allocator,
     int64_t refresh_interval_ms,
-    ObIArray<ObHiveFileDesc> &hive_file_desc,
-    int64_t part_id)
+    ObIArray<ObHiveFileDesc> &hive_file_desc)
 {
   int ret = OB_SUCCESS;
 
-  ObExternalTableFiles tmp_table_files;
+  ObArenaAllocator tmp_allocator;
+  ObSEArray<ObExternalTableFiles *, 4> tmp_external_table_files;
+  ObSEArray<int64_t, 4> reorder_part_id;
   if (OB_FAIL(
           ObExternalTableFileManager::get_instance().get_external_file_list_on_device_with_cache(
-              location,
+              part_path,
               tenant_id,
-              ts,
+              part_id,
+              part_modify_ts,
               pattern,
-              regexp_vars,
-              tmp_table_files,
               access_info,
-              allocator,
-              refresh_interval_ms))) {
-    LOG_WARN("fail to get file list with cache", K(ret), K(location));
+              tmp_allocator,
+              refresh_interval_ms,
+              tmp_external_table_files,
+              reorder_part_id))) {
+    LOG_WARN("fail to get file list with cache", K(ret), K(part_path));
   }
 
   ObHiveFileDesc *desc = NULL;
-  for (int64_t i = 0; OB_SUCC(ret) && i < tmp_table_files.file_urls_.count(); i++) {
-    if (OB_ISNULL(desc = hive_file_desc.alloc_place_holder())) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to alloc memory for hive file", K(ret), K(location));
-    } else {
-      OZ(ob_write_string(allocator, tmp_table_files.file_urls_.at(i), desc->file_path_));
-      desc->file_size_ = tmp_table_files.file_sizes_.at(i);
-      desc->modify_ts_ = tmp_table_files.modify_times_.at(i);
-      desc->part_id_ = part_id;
+  if (reorder_part_id.count() != tmp_external_table_files.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to check count", K(reorder_part_id.count()), K(tmp_external_table_files.count()));
+  }
+  for (int64_t k = 0; OB_SUCC(ret) && k < tmp_external_table_files.count(); ++k) {
+    ObExternalTableFiles *tmp_table_files = tmp_external_table_files.at(k);
+    int64_t tmp_part_id = reorder_part_id.at(k);
+    for (int64_t i = 0; OB_SUCC(ret) && i < tmp_table_files->file_urls_.count(); i++) {
+      if (OB_ISNULL(desc = hive_file_desc.alloc_place_holder())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc memory for hive file", K(ret), K(tmp_table_files));
+      } else {
+        OZ(ob_write_string(allocator, tmp_table_files->file_urls_.at(i), desc->file_path_));
+        desc->file_size_ = tmp_table_files->file_sizes_.at(i);
+        desc->modify_ts_ = tmp_table_files->modify_times_.at(i);
+        desc->part_id_ = tmp_part_id;
+      }
     }
   }
+
   return ret;
 }
 
@@ -2375,13 +2386,17 @@ int ObExternalFileInfoCollector::get_file_list(const common::ObString &path,
                                                common::ObIArray<ObString> &content_digests)
 {
   int ret = OB_SUCCESS;
-  const int64_t MAX_VISIT_COUNT = 100000;
   ObExprRegexContext regexp_ctx;
   ObExternalPathFilter filter(regexp_ctx, allocator_);
   ObString path_cstring;
   ObSEArray<ObString, 16> temp_file_urls;
   CONSUMER_GROUP_FUNC_GUARD(PRIO_IMPORT);
 
+  int max_visit_count = 1000000;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    max_visit_count = tenant_config->_max_access_entries_for_external_table_partition;
+  }
   if (OB_UNLIKELY(!storage_info_->is_valid())) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K_(storage_info));
@@ -2420,7 +2435,7 @@ int ObExternalFileInfoCollector::get_file_list(const common::ObString &path,
       }
     }
     ObArray<int64_t> useless_size;
-    for (int64_t i = 0; OB_SUCC(ret) && i < file_dirs.count(); i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && OB_SUCC(THIS_WORKER.check_status()) && i < file_dirs.count(); i++) {
       ObString file_dir = file_dirs.at(i);
       ObLocalFileListArrayOpWithFilter dir_op(file_dirs, useless_size, file_dir, path_cstring, NULL,
                                               allocator_);
@@ -2431,7 +2446,7 @@ int ObExternalFileInfoCollector::get_file_list(const common::ObString &path,
         LOG_WARN("fail to list files", KR(ret), K(file_dir), KPC(storage_info_));
       } else if (OB_FAIL(ObExternalIoAdapter::list_directories(file_dir, storage_info_, dir_op))) {
         LOG_WARN("fail to list dirs", KR(ret), K(file_dir), KPC(storage_info_));
-      } else if (file_dirs.count() + file_urls.count() > MAX_VISIT_COUNT) {
+      } else if (file_dirs.count() + file_urls.count() > max_visit_count) {
         ret = OB_SIZE_OVERFLOW;
         LOG_WARN("too many files and dirs to visit", K(ret));
       }

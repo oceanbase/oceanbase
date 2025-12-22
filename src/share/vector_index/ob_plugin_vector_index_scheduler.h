@@ -265,6 +265,7 @@ public:
                                   bool &is_shared_index_table);
   void clean_deprecated_adapters();
   void clean_deprecated_ivf_caches();
+  int check_need_maintence_ls_follower();
   int check_index_adpter_exist(ObPluginVectorIndexMgr *mgr);
   int check_and_execute_ivf_cache_maintenance_task(ObPluginVectorIndexMgr *&mgr);
 

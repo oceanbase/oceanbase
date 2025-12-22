@@ -68,8 +68,6 @@ public:
       enable_pre_sort_(false),
       pre_sorter_(nullptr),
       px_writer_cnt_(0),
-      px_column_descs_(),
-      px_column_project_idxs_(),
       single_tablet_id_(),
       single_tablet_id_vector_(nullptr),
       tablet_idx_map_(),
@@ -86,8 +84,6 @@ public:
                K_(enable_pre_sort),
                KP_(pre_sorter),
                K_(px_writer_cnt),
-               K_(px_column_descs),
-               K_(px_column_project_idxs),
                K_(single_tablet_id),
                KP_(single_tablet_id_vector),
                KP_(write_channel),
@@ -103,11 +99,6 @@ public:
   bool enable_pre_sort_;
   ObTableLoadPreSorter *pre_sorter_;
   int64_t px_writer_cnt_;
-  // px写入的列(包含隐藏主键列)
-  ObArray<share::schema::ObColDesc> px_column_descs_;
-  ObArray<common::ObAccuracy> px_column_accuracys_;
-  // px写入的列到写入旁路导入列的映射
-  ObArray<int64_t> px_column_project_idxs_;
   ObTabletID single_tablet_id_;
   ObIVector *single_tablet_id_vector_;
   TabletIdxMap tablet_idx_map_;

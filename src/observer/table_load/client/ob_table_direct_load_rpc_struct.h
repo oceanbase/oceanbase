@@ -165,5 +165,16 @@ public:
   int32_t error_code_;
 };
 
+struct ObTableDirectLoadDetachArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTableDirectLoadDetachArg() : table_id_(common::OB_INVALID_ID), task_id_(0) {}
+  TO_STRING_KV(K_(table_id), K_(task_id));
+public:
+  uint64_t table_id_;
+  int64_t task_id_;
+};
+
 } // namespace observer
 } // namespace oceanbase

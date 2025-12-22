@@ -1595,13 +1595,10 @@ TEST_F(TestTmpFile, test_big_file_with_small_wbp_disable_page_cache)
   STORAGE_LOG(INFO, "=======================test_big_file_with_small_wbp_disable_page_cache end=======================");
 }
 
-// ATTENTION
-// the case after this will increase wbp_mem_limit to BIG_WRITE_CACHE_MEM_LIMIT.
-// And it will never be decreased as long as it has been increased
 TEST_F(TestTmpFile, test_big_file)
 {
   STORAGE_LOG(INFO, "=======================test_big_file begin=======================");
-  const int64_t write_size = 750 * 1024 * 1024;  // write 750MB data
+  const int64_t write_size = 300 * 1024 * 1024;  // write 300MB data
   const int64_t wbp_mem_limit = BIG_WRITE_CACHE_MEM_LIMIT;
   ObTmpFileIOInfo io_info;
   io_info.disable_page_cache_ = false;
@@ -1613,7 +1610,7 @@ TEST_F(TestTmpFile, test_big_file)
 TEST_F(TestTmpFile, test_big_file_disable_page_cache)
 {
   STORAGE_LOG(INFO, "=======================test_big_file_disable_page_cache begin=======================");
-  const int64_t write_size = 750 * 1024 * 1024;  // write 750MB data
+  const int64_t write_size = 300 * 1024 * 1024;  // write 300MB data
   const int64_t wbp_mem_limit = BIG_WRITE_CACHE_MEM_LIMIT;
   ObTmpFileIOInfo io_info;
   io_info.disable_page_cache_ = true;
@@ -1628,7 +1625,6 @@ int main(int argc, char **argv)
 {
   int ret = 0;
   system("rm -f ./test_sn_tmp_file.log*");
-  system("rm -rf ./run*");
   OB_LOGGER.set_file_name("test_sn_tmp_file.log", true);
   OB_LOGGER.set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);

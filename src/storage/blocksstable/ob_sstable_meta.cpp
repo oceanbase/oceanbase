@@ -65,7 +65,8 @@ ObSSTableBasicMeta::ObSSTableBasicMeta()
     root_macro_seq_(0),
     tx_data_recycle_scn_(SCN::min_scn()),
     co_base_snapshot_version_(0),
-    rec_scn_()
+    rec_scn_(),
+    min_merged_trans_version_(0)
 {
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
 }
@@ -202,6 +203,7 @@ void ObSSTableBasicMeta::reset()
   tx_data_recycle_scn_.set_min();
   co_base_snapshot_version_ = 0;
   rec_scn_.reset();
+  min_merged_trans_version_ = 0;
 }
 
 DEFINE_SERIALIZE(ObSSTableBasicMeta)
@@ -263,7 +265,8 @@ DEFINE_SERIALIZE(ObSSTableBasicMeta)
                   root_macro_seq_,
                   tx_data_recycle_scn_,
                   co_base_snapshot_version_,
-                  rec_scn_);
+                  rec_scn_,
+                  min_merged_trans_version_);
       if (OB_FAIL(ret)) {
       } else if (OB_UNLIKELY(length_ != pos - start_pos)) {
         ret = OB_ERR_UNEXPECTED;
@@ -352,7 +355,8 @@ int ObSSTableBasicMeta::decode_for_compat(const char *buf, const int64_t data_le
               root_macro_seq_,
               tx_data_recycle_scn_,
               co_base_snapshot_version_,
-              rec_scn_);
+              rec_scn_,
+              min_merged_trans_version_);
   if (!rec_scn_.is_valid()) {
     rec_scn_.set_min();
     LOG_WARN("the sstable may be an old version sstable and with no rec_scn, set it to min", KPC(this));
@@ -403,7 +407,8 @@ DEFINE_GET_SERIALIZE_SIZE(ObSSTableBasicMeta)
               root_macro_seq_,
               tx_data_recycle_scn_,
               co_base_snapshot_version_,
-              rec_scn_);
+              rec_scn_,
+              min_merged_trans_version_);
   return len;
 }
 

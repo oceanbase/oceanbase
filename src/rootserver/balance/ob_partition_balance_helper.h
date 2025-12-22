@@ -76,8 +76,6 @@ public:
   virtual ~ObPartTransferJobGenerator() {}
   int init(
       const uint64_t tenant_id,
-      const int64_t primary_zone_num,
-      const int64_t unit_group_num,
       common::ObMySQLProxy *sql_proxy);
   int prepare_ls(const share::ObLSStatusInfoIArray &ls_stat_array);
   void reset();
@@ -103,8 +101,7 @@ public:
       const share::ObBalanceJobID &job_id = share::ObBalanceJobID(),
       const int64_t balance_timeout = 0);
 
-  TO_STRING_KV(K_(tenant_id), K_(primary_zone_num), K_(unit_group_num),
-      K_(dup_ls_ids), K_(balance_job), K_(balance_tasks));
+  TO_STRING_KV(K_(tenant_id), K_(dup_ls_ids), K_(balance_job), K_(balance_tasks));
 
 private:
   int check_inner_stat_() const;
@@ -134,8 +131,6 @@ private:
 private:
   bool inited_;
   uint64_t tenant_id_;
-  int64_t primary_zone_num_; // for balance job
-  int64_t unit_group_num_; // for balance job
   common::ObMySQLProxy *sql_proxy_;
   share::ObBalanceJob balance_job_;
   common::ObArray<share::ObBalanceTask> balance_tasks_;

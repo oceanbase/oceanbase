@@ -3104,6 +3104,38 @@ int ObDmlCgService::need_fire_update_event(const ObTableSchema &table_schema,
   return ret;
 }
 
+int ObDmlCgService::is_disable_trigger(ObLogPlan *log_plan,
+                                       ObString trigger_name,
+                                       bool &is_disabled)
+{
+  const ObQueryCtx *query_ctx = nullptr;
+  const ObGlobalHint *global_hint = nullptr;
+  const TriggerHint* disable_trigger_hint = nullptr;
+  int ret = OB_SUCCESS;
+  // default not disabled
+  is_disabled = false;
+  if (OB_ISNULL(log_plan) ||
+      OB_ISNULL(query_ctx = log_plan->get_optimizer_context().get_query_ctx()) ||
+      OB_ISNULL(global_hint = &(query_ctx->get_global_hint())) ||
+      OB_ISNULL(disable_trigger_hint = &(global_hint->trigger_hint_)) ||
+      OB_ISNULL(trigger_name)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected status", K(ret));
+  } else if (disable_trigger_hint->get_disable_all()) {
+      is_disabled = true;
+  } else if (disable_trigger_hint->trigger_hints_.empty()) {
+      // do nothing
+  } else {
+      const ObIArray<ObString> &hint_triggers = disable_trigger_hint->get_trigger_hints();
+      for (int64_t i = 0; OB_SUCC(ret) && !is_disabled && i < hint_triggers.count(); ++i) {
+        if (trigger_name.case_compare(hint_triggers.at(i)) == 0) {
+          is_disabled = true;
+        }
+      }
+  }
+  return ret;
+}
+
 // for table
 int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
                                             const IndexDMLInfo &dml_info,
@@ -3118,6 +3150,7 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
   ObDASDMLBaseCtDef &das_ctdef = dml_ctdef.das_base_ctdef_;
   ObTrigDMLCtDef &trig_ctdef = dml_ctdef.trig_ctdef_;
   const ObDelUpdStmt *dml_stmt = NULL;
+  bool is_disabled = false;
   if (OB_ISNULL(log_plan) ||
       OB_ISNULL(schema_guard = log_plan->get_optimizer_context().get_schema_guard()) ||
       OB_ISNULL(dml_stmt = static_cast<const ObDelUpdStmt*>(log_plan->get_stmt()))) {
@@ -3155,6 +3188,10 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("trigger info is null", K(tenant_id), K(trigger_id), K(ret));
       } else {
+        if (OB_FAIL(is_disable_trigger(log_plan, trigger_info->get_trigger_name(), is_disabled))) {
+          LOG_WARN("failed to check is disable trigger", K(ret));
+          ret = OB_SUCCESS;
+        }
         // if disable trigger, use the previous plan cache, whether trigger is enable ???
         need_fire = trigger_info->has_event(dml_event) && trigger_info->is_enable();
         if (OB_SUCC(ret) && !trigger_info->get_ref_trg_name().empty() && lib::is_oracle_mode()) {
@@ -3196,7 +3233,7 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
                                     log_plan->get_optimizer_context().get_allocator(),
                                     need_fire));
         }
-        if (OB_SUCC(ret) && need_fire) {
+        if (OB_SUCC(ret) && need_fire && !is_disabled) {
           OZ (trigger_infos.push_back(trigger_info));
         }
         OX (LOG_DEBUG("TRIGGER", K(trigger_info->get_trigger_name()), K(need_fire), K(is_instead_of)));

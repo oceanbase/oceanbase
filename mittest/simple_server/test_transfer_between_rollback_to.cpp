@@ -220,7 +220,7 @@ public:
       ObBalanceJob job;
       if (OB_FAIL(b_svr->gather_stat_())) {
         TRANS_LOG(WARN, "failed to gather stat", KR(ret));
-      } else if (OB_FAIL(b_svr->gather_ls_status_stat(tenant_id, b_svr->ls_array_))) {
+      } else if (OB_FAIL(b_svr->gather_ls_status_stat(tenant_id, b_svr->ls_array_, true))) {
         TRANS_LOG(WARN, "failed to gather ls stat", KR(ret));
       } else if (OB_FAIL(ObBalanceJobTableOperator::get_balance_job(
                            tenant_id, false, *GCTX.sql_proxy_, job, start_time, finish_time))) {

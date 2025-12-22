@@ -97,6 +97,8 @@ public:
    */
   int merge_bitmap(const char *bitmap, int64_t bitmap_size);
 
+  int add_hhl_value(uint64_t hash_value);
+
   /**
    * @brief Set bitmap type (should be called before any bitmap operations)
    */

@@ -376,15 +376,18 @@ ObExternalIOCounterGuard::~ObExternalIOCounterGuard()
  * ------------------------------ObStorageUtil------------------------------
  */
 ObStorageUtil::ObStorageUtil()
-  : file_util_(),
-    oss_util_(),
-    s3_util_(),
-    hdfs_util_(),
+  : util_union_(),
     util_(NULL),
     storage_info_(NULL),
     init_state(false),
-    device_type_(ObStorageType::OB_STORAGE_MAX_TYPE)
+    device_type_(ObStorageType::OB_STORAGE_MAX_TYPE),
+    handle_type_(OB_STORAGE_HANDLE_MAX_TYPE)
 {
+}
+
+ObStorageUtil::~ObStorageUtil()
+{
+  reset();
 }
 
 /*this fun just like the get_util*/
@@ -401,20 +404,30 @@ int ObStorageUtil::open(common::ObObjectStorageInfo *storage_info)
     STORAGE_LOG(WARN, "invalid arguments", K(ret), KPC(storage_info));
   } else if (OB_FALSE_IT(device_type_ = storage_info->get_type())) {
   } else if (OB_STORAGE_FILE == device_type_) {
-    util_ = &file_util_;
+    new (&util_union_.file_util_) ObStorageFileUtil();
+    util_ = &util_union_.file_util_;
+    handle_type_ = OB_STORAGE_HANDLE_FILE;
   } else if (OB_STORAGE_HDFS == device_type_) {
-    util_ = &hdfs_util_;
+    new (&util_union_.hdfs_util_) ObStorageHdfsJniUtil();
+    util_ = &util_union_.hdfs_util_;
+    handle_type_ = OB_STORAGE_HANDLE_HDFS;
   } else if (is_use_obdal() || OB_STORAGE_AZBLOB == device_type_) {
     if (OB_UNLIKELY(storage_info->is_enable_worm())) {
       ret = OB_NOT_SUPPORTED;
       STORAGE_LOG(WARN, "obdal do not support worm", K(ret), KPC(storage_info));
     } else {
-      util_ = &obdal_util_;
+      new (&util_union_.obdal_util_) ObStorageObDalUtil();
+      util_ = &util_union_.obdal_util_;
+      handle_type_ = OB_STORAGE_HANDLE_OBDAL;
     }
   } else if (OB_STORAGE_OSS == device_type_) {
-    util_ = &oss_util_;
+    new (&util_union_.oss_util_) ObStorageOssUtil();
+    util_ = &util_union_.oss_util_;
+    handle_type_ = OB_STORAGE_HANDLE_OSS;
   } else if (OB_STORAGE_S3 == device_type_) {
-    util_ = &s3_util_;
+    new (&util_union_.s3_util_) ObStorageS3Util();
+    util_ = &util_union_.s3_util_;
+    handle_type_ = OB_STORAGE_HANDLE_S3;
   } else {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid device type", K(ret), K_(device_type));
@@ -438,11 +451,38 @@ void ObStorageUtil::close()
   OBJECT_STORAGE_GUARD(storage_info_, "", IO_HANDLED_SIZE_ZERO);
   if (NULL != util_) {
     util_->close();
-    util_ = NULL;
-    storage_info_ = NULL;
-    init_state = false;
-    device_type_ = OB_STORAGE_MAX_TYPE;
   }
+  reset();
+}
+
+void ObStorageUtil::reset()
+{
+  switch (handle_type_) {
+    case OB_STORAGE_HANDLE_FILE:
+      util_union_.file_util_.~ObStorageFileUtil();
+      break;
+    case OB_STORAGE_HANDLE_OSS:
+      util_union_.oss_util_.~ObStorageOssUtil();
+      break;
+    case OB_STORAGE_HANDLE_S3:
+      util_union_.s3_util_.~ObStorageS3Util();
+      break;
+    case OB_STORAGE_HANDLE_HDFS:
+      util_union_.hdfs_util_.~ObStorageHdfsJniUtil();
+      break;
+    case OB_STORAGE_HANDLE_OBDAL:
+      util_union_.obdal_util_.~ObStorageObDalUtil();
+      break;
+    case OB_STORAGE_HANDLE_MAX_TYPE:
+    default:
+      break;
+  }
+
+  util_ = nullptr;
+  storage_info_ = nullptr;
+  init_state = false;
+  device_type_ = OB_STORAGE_MAX_TYPE;
+  handle_type_ = OB_STORAGE_HANDLE_MAX_TYPE;
 }
 
 // inner func
@@ -1397,6 +1437,10 @@ int ObStorageUtil::batch_del_files(
               K(object_start), K(cur_deleted_pos), K(files_to_delete_map.size()));
         } else {
           cur_deleted_pos++;
+
+          if (ObObjectStorageGuard::is_connectivity_check_file(cur_uri)) {
+            STORAGE_LOG(ERROR, "batch delete connectivity check file", K(cur_uri));
+          }
         }
       }
 
@@ -1731,9 +1775,8 @@ void ObStorageAccesser::dec_ref()
 ObStorageReader::ObStorageReader()
   : file_length_(-1),
     reader_(NULL),
-    file_reader_(),
-    oss_reader_(),
-    s3_reader_(),
+    reader_union_(),
+    handle_type_(OB_STORAGE_HANDLE_MAX_TYPE),
     start_ts_(0),
     has_meta_(false),
     storage_info_(nullptr)
@@ -1746,6 +1789,7 @@ ObStorageReader::~ObStorageReader()
   if (NULL != reader_) {
     STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "reader not closed", KCSTRING(uri_));
   }
+  reset();
 }
 
 int ObStorageReader::open(const common::ObString &uri,
@@ -1779,20 +1823,30 @@ int ObStorageReader::open(const common::ObString &uri,
     STORAGE_LOG(WARN, "failed to fill uri", K(ret), K(uri));
   } else if (FALSE_IT(storage_info_ = storage_info)) {
   } else if (OB_STORAGE_FILE == type) {
-    reader_ = &file_reader_;
+    new (&reader_union_.file_reader_) ObStorageFileReader();
+    reader_ = &reader_union_.file_reader_;
+    handle_type_ = OB_STORAGE_HANDLE_FILE;
   } else if (OB_STORAGE_HDFS == type) {
-    reader_ = &hdfs_reader_;
+    new (&reader_union_.hdfs_reader_) ObStorageHdfsReader();
+    reader_ = &reader_union_.hdfs_reader_;
+    handle_type_ = OB_STORAGE_HANDLE_HDFS;
   } else if (is_use_obdal() || OB_STORAGE_AZBLOB == type) {
     if (OB_UNLIKELY(storage_info->is_enable_worm())) {
       ret = OB_NOT_SUPPORTED;
       STORAGE_LOG(WARN, "obdal do not support worm", K(ret), KPC(storage_info));
     } else {
-      reader_ = &obdal_reader_;
+      new (&reader_union_.obdal_reader_) ObStorageObDalReader();
+      reader_ = &reader_union_.obdal_reader_;
+      handle_type_ = OB_STORAGE_HANDLE_OBDAL;
     }
   } else if (OB_STORAGE_OSS == type) {
-    reader_ = &oss_reader_;
+    new (&reader_union_.oss_reader_) ObStorageOssReader();
+    reader_ = &reader_union_.oss_reader_;
+    handle_type_ = OB_STORAGE_HANDLE_OSS;
   } else if (OB_STORAGE_S3 == type) {
-    reader_ = &s3_reader_;
+    new (&reader_union_.s3_reader_) ObStorageS3Reader();
+    reader_ = &reader_union_.s3_reader_;
+    handle_type_ = OB_STORAGE_HANDLE_S3;
   } else {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "unkown storage type", K(ret), K(uri));
@@ -1879,13 +1933,40 @@ int ObStorageReader::close()
   } else if (OB_FAIL(reader_->close())) {
     STORAGE_LOG(WARN, "failed to close reader", K(ret));
   }
+  reset();
+  return ret;
+}
+
+void ObStorageReader::reset()
+{
+  switch (handle_type_) {
+    case OB_STORAGE_HANDLE_FILE:
+      reader_union_.file_reader_.~ObStorageFileReader();
+      break;
+    case OB_STORAGE_HANDLE_OSS:
+      reader_union_.oss_reader_.~ObStorageOssReader();
+      break;
+    case OB_STORAGE_HANDLE_S3:
+      reader_union_.s3_reader_.~ObStorageS3Reader();
+      break;
+    case OB_STORAGE_HANDLE_HDFS:
+      reader_union_.hdfs_reader_.~ObStorageHdfsReader();
+      break;
+    case OB_STORAGE_HANDLE_OBDAL:
+      reader_union_.obdal_reader_.~ObStorageObDalReader();
+      break;
+    case OB_STORAGE_HANDLE_MAX_TYPE:
+    default:
+      break;
+  }
+
   reader_  = NULL;
+  handle_type_ = OB_STORAGE_HANDLE_MAX_TYPE;
   file_length_ = -1;
   start_ts_ = 0;
   uri_[0] = '\0';
   has_meta_ = false;
   storage_info_ = nullptr;
-  return ret;
 }
 
 ObStorageAdaptiveReader::ObStorageAdaptiveReader()
@@ -1894,10 +1975,8 @@ ObStorageAdaptiveReader::ObStorageAdaptiveReader()
       bucket_(),
       object_(),
       reader_(NULL),
-      file_reader_(),
-      oss_reader_(),
-      s3_reader_(),
-      hdfs_reader_(),
+      reader_union_(),
+      handle_type_(OB_STORAGE_HANDLE_MAX_TYPE),
       start_ts_(0),
       storage_info_(NULL)
 {
@@ -1909,6 +1988,7 @@ ObStorageAdaptiveReader::~ObStorageAdaptiveReader()
   if (NULL != reader_) {
     STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "adaptive reader not closed", KCSTRING(uri_));
   }
+  reset();
 }
 
 template<typename ReaderType>
@@ -1983,20 +2063,30 @@ int ObStorageAdaptiveReader::open(const common::ObString &uri,
     STORAGE_LOG(WARN, "failed to fill uri", K(ret), K(uri));
   } else if (FALSE_IT(storage_info_ = storage_info)) {
   } else if (OB_STORAGE_FILE == type) {
-    reader_ = &file_reader_;
+    new (&reader_union_.file_reader_) ObStorageFileReader();
+    reader_ = &reader_union_.file_reader_;
+    handle_type_ = OB_STORAGE_HANDLE_FILE;
   } else if (OB_STORAGE_HDFS == type) {
-    reader_ = &hdfs_reader_;
+    new (&reader_union_.hdfs_reader_) ObStorageHdfsReader();
+    reader_ = &reader_union_.hdfs_reader_;
+    handle_type_ = OB_STORAGE_HANDLE_HDFS;
   } else if (is_use_obdal() || OB_STORAGE_AZBLOB == type) {
     if (OB_UNLIKELY(storage_info->is_enable_worm())) {
       ret = OB_NOT_SUPPORTED;
       STORAGE_LOG(WARN, "obdal do not support worm", K(ret), KPC(storage_info));
     } else {
-      reader_ = &obdal_reader_;
+      new (&reader_union_.obdal_reader_) ObStorageObDalReader();
+      reader_ = &reader_union_.obdal_reader_;
+      handle_type_ = OB_STORAGE_HANDLE_OBDAL;
     }
   } else if (OB_STORAGE_OSS == type) {
-    reader_ = &oss_reader_;
+    new (&reader_union_.oss_reader_) ObStorageOssReader();
+    reader_ = &reader_union_.oss_reader_;
+    handle_type_ = OB_STORAGE_HANDLE_OSS;
   } else if (OB_STORAGE_S3 == type) {
-    reader_ = &s3_reader_;
+    new (&reader_union_.s3_reader_) ObStorageS3Reader();
+    reader_ = &reader_union_.s3_reader_;
+    handle_type_ = OB_STORAGE_HANDLE_S3;
   } else {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "unkown storage type", K(ret), K(uri));
@@ -2155,21 +2245,46 @@ int ObStorageAdaptiveReader::close()
   } else if (OB_FAIL(reader_->close())) {
     STORAGE_LOG(WARN, "failed to close reader", K(ret));
   }
+  reset();
+  return ret;
+}
+
+void ObStorageAdaptiveReader::reset()
+{
+  switch (handle_type_) {
+    case OB_STORAGE_HANDLE_FILE:
+      reader_union_.file_reader_.~ObStorageFileReader();
+      break;
+    case OB_STORAGE_HANDLE_OSS:
+      reader_union_.oss_reader_.~ObStorageOssReader();
+      break;
+    case OB_STORAGE_HANDLE_S3:
+      reader_union_.s3_reader_.~ObStorageS3Reader();
+      break;
+    case OB_STORAGE_HANDLE_HDFS:
+      reader_union_.hdfs_reader_.~ObStorageHdfsReader();
+      break;
+    case OB_STORAGE_HANDLE_OBDAL:
+      reader_union_.obdal_reader_.~ObStorageObDalReader();
+      break;
+    case OB_STORAGE_HANDLE_MAX_TYPE:
+    default:
+      break;
+  }
+
   reader_  = NULL;
+  handle_type_ = OB_STORAGE_HANDLE_MAX_TYPE;
   start_ts_ = 0;
   uri_[0] = '\0';
   allocator_.clear();
   meta_.reset();
   storage_info_ = NULL;
-  return ret;
 }
 
 ObStorageWriter::ObStorageWriter()
   : writer_(NULL),
-    file_writer_(),
-    oss_writer_(),
-    s3_writer_(),
-    hdfs_writer_(),
+    writer_union_(),
+    handle_type_(OB_STORAGE_HANDLE_MAX_TYPE),
     start_ts_(0),
     storage_info_(nullptr)
 {
@@ -2181,6 +2296,7 @@ ObStorageWriter::~ObStorageWriter()
   if (NULL != writer_) {
     STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "writer not close");
   }
+  reset();
 }
 
 int ObStorageWriter::open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info)
@@ -2213,20 +2329,30 @@ int ObStorageWriter::open(const common::ObString &uri, common::ObObjectStorageIn
     STORAGE_LOG(WARN, "failed to fill uri", K(ret), K(uri));
   } else if (FALSE_IT(storage_info_ = storage_info)) {
   } else if (OB_STORAGE_FILE == type) {
-    writer_ = &file_writer_;
+    new (&writer_union_.file_writer_) ObStorageFileSingleWriter();
+    writer_ = &writer_union_.file_writer_;
+    handle_type_ = OB_STORAGE_HANDLE_FILE;
   } else if (OB_STORAGE_HDFS == type) {
-    writer_ = &hdfs_writer_;
+    new (&writer_union_.hdfs_writer_) ObStorageHdfsWriter();
+    writer_ = &writer_union_.hdfs_writer_;
+    handle_type_ = OB_STORAGE_HANDLE_HDFS;
   } else if (is_use_obdal() || OB_STORAGE_AZBLOB == type) {
     if (OB_UNLIKELY(storage_info->is_enable_worm())) {
       ret = OB_NOT_SUPPORTED;
       STORAGE_LOG(WARN, "obdal do not support worm", K(ret), KPC(storage_info));
     } else {
-      writer_ = &obdal_writer_;
+      new (&writer_union_.obdal_writer_) ObStorageObDalWriter();
+      writer_ = &writer_union_.obdal_writer_;
+      handle_type_ = OB_STORAGE_HANDLE_OBDAL;
     }
   } else if (OB_STORAGE_OSS == type) {
-    writer_ = &oss_writer_;
+    new (&writer_union_.oss_writer_) ObStorageOssWriter();
+    writer_ = &writer_union_.oss_writer_;
+    handle_type_ = OB_STORAGE_HANDLE_OSS;
   } else if (OB_STORAGE_S3 == type) {
-    writer_ = &s3_writer_;
+    new (&writer_union_.s3_writer_) ObStorageS3Writer();
+    writer_ = &writer_union_.s3_writer_;
+    handle_type_ = OB_STORAGE_HANDLE_S3;
   } else {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "unkown storage type", K(ret), K(uri));
@@ -2292,39 +2418,64 @@ int ObStorageWriter::close()
   } else if (OB_FAIL(writer_->close())) {
     STORAGE_LOG(WARN, "failed to close writer", K(ret));
   }
+  reset();
+  return ret;
+}
+
+void ObStorageWriter::reset()
+{
+  switch (handle_type_) {
+    case OB_STORAGE_HANDLE_FILE:
+      writer_union_.file_writer_.~ObStorageFileSingleWriter();
+      break;
+    case OB_STORAGE_HANDLE_OSS:
+      writer_union_.oss_writer_.~ObStorageOssWriter();
+      break;
+    case OB_STORAGE_HANDLE_S3:
+      writer_union_.s3_writer_.~ObStorageS3Writer();
+      break;
+    case OB_STORAGE_HANDLE_HDFS:
+      writer_union_.hdfs_writer_.~ObStorageHdfsWriter();
+      break;
+    case OB_STORAGE_HANDLE_OBDAL:
+      writer_union_.obdal_writer_.~ObStorageObDalWriter();
+      break;
+    case OB_STORAGE_HANDLE_MAX_TYPE:
+    default:
+      break;
+  }
+
   writer_  = NULL;
+  handle_type_ = OB_STORAGE_HANDLE_MAX_TYPE;
   start_ts_ = 0;
   uri_[0] = '\0';
   storage_info_ = nullptr;
-  return ret;
 }
 
 ObStorageAppender::ObStorageAppender()
   : appender_(NULL),
-    file_appender_(),
-    oss_appender_(),
-    s3_appender_(),
-    hdfs_appender_(),
+    appender_union_(),
+    handle_type_(OB_STORAGE_HANDLE_MAX_TYPE),
     start_ts_(0),
     is_opened_(false),
-    storage_info_(),
+    storage_info_(nullptr),
     allocator_(APPENDABLE_OBJECT_ALLOCATOR),
-    type_(OB_STORAGE_MAX_TYPE)
+    type_(OB_STORAGE_MAX_TYPE),
+    open_mode_(StorageOpenMode::CREATE_OPEN_LOCK)
 {
     uri_[0] = '\0';
 }
 
 ObStorageAppender::ObStorageAppender(StorageOpenMode mode)
   : appender_(NULL),
-    file_appender_(mode),
-    oss_appender_(),
-    s3_appender_(),
-    hdfs_appender_(),
+    appender_union_(),
+    handle_type_(OB_STORAGE_HANDLE_MAX_TYPE),
     start_ts_(0),
     is_opened_(false),
     storage_info_(nullptr),
     allocator_(APPENDABLE_OBJECT_ALLOCATOR),
-    type_(OB_STORAGE_MAX_TYPE)
+    type_(OB_STORAGE_MAX_TYPE),
+    open_mode_(mode)
 {
     uri_[0] = '\0';
 }
@@ -2334,6 +2485,7 @@ ObStorageAppender::~ObStorageAppender()
   if (is_opened_ && NULL != appender_) {
     STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "appender not close");
   }
+  reset();
 }
 
 int ObStorageAppender::open(
@@ -2367,22 +2519,32 @@ int ObStorageAppender::open(
     STORAGE_LOG(WARN, "failed to fill uri", K(ret), K(uri));
   } else if (FALSE_IT(storage_info_ = storage_info)) {
   } else if (OB_STORAGE_FILE == type_) {
-    appender_ = &file_appender_;
+    new (&appender_union_.file_appender_) ObStorageFileAppender(open_mode_);
+    appender_ = &appender_union_.file_appender_;
+    handle_type_ = OB_STORAGE_HANDLE_FILE;
   } else if (OB_STORAGE_HDFS == type_) {
-    appender_ = &hdfs_appender_;
+    new (&appender_union_.hdfs_appender_) ObStorageHdfsAppendWriter();
+    appender_ = &appender_union_.hdfs_appender_;
+    handle_type_ = OB_STORAGE_HANDLE_HDFS;
   } else if (is_use_obdal() || OB_STORAGE_AZBLOB == type_) {
     if (OB_UNLIKELY(storage_info->is_enable_worm())) {
       ret = OB_NOT_SUPPORTED;
       STORAGE_LOG(WARN, "obdal do not support worm", K(ret), KPC(storage_info));
     } else {
-      appender_ = &obdal_appender_;
+      new (&appender_union_.obdal_appender_) ObStorageObDalAppendWriter();
+      appender_ = &appender_union_.obdal_appender_;
+      handle_type_ = OB_STORAGE_HANDLE_OBDAL;
     }
   } else if (OB_STORAGE_OSS == type_ ||
              OB_STORAGE_S3 == type_) {
     if (OB_STORAGE_OSS == type_) {
-      appender_ = &oss_appender_;
+      new (&appender_union_.oss_appender_) ObStorageOssAppendWriter();
+      appender_ = &appender_union_.oss_appender_;
+      handle_type_ = OB_STORAGE_HANDLE_OSS;
     } else if (OB_STORAGE_S3 == type_) {
-      appender_ = &s3_appender_;
+      new (&appender_union_.s3_appender_) ObStorageS3AppendWriter();
+      appender_ = &appender_union_.s3_appender_;
+      handle_type_ = OB_STORAGE_HANDLE_S3;
     }
   } else {
     ret = OB_ERR_SYS;
@@ -2486,7 +2648,7 @@ int ObStorageAppender::pwrite(const char *buf, const int64_t size, const int64_t
 
   // no need to adjust the function repeatable_pwrite_
   // because S3 will not return OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH
-  if (OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH == ret && appender_ != &s3_appender_) {
+  if (OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH == ret && handle_type_ != OB_STORAGE_HANDLE_S3) {
     if (OB_FAIL(repeatable_pwrite_(buf, size, offset))) {
       STORAGE_LOG(WARN, "failed to repeatable_pwrite", K(ret));
     } else {
@@ -2549,12 +2711,39 @@ int ObStorageAppender::close()
   } else if (OB_FAIL(appender_->close())) {
     STORAGE_LOG(WARN, "failed to close writer", K(ret));
   }
+  reset();
+  return ret;
+}
+
+void ObStorageAppender::reset()
+{
+  switch (handle_type_) {
+    case OB_STORAGE_HANDLE_FILE:
+      appender_union_.file_appender_.~ObStorageFileAppender();
+      break;
+    case OB_STORAGE_HANDLE_OSS:
+      appender_union_.oss_appender_.~ObStorageOssAppendWriter();
+      break;
+    case OB_STORAGE_HANDLE_S3:
+      appender_union_.s3_appender_.~ObStorageS3AppendWriter();
+      break;
+    case OB_STORAGE_HANDLE_HDFS:
+      appender_union_.hdfs_appender_.~ObStorageHdfsAppendWriter();
+      break;
+    case OB_STORAGE_HANDLE_OBDAL:
+      appender_union_.obdal_appender_.~ObStorageObDalAppendWriter();
+      break;
+    case OB_STORAGE_HANDLE_MAX_TYPE:
+    default:
+      break;
+  }
+
   appender_  = NULL;
+  handle_type_ = OB_STORAGE_HANDLE_MAX_TYPE;
   start_ts_ = 0;
   uri_[0] = '\0';
   is_opened_ = false;
   storage_info_ = nullptr;
-  return ret;
 }
 
 int ObStorageAppender::seal_for_adaptive()
@@ -2621,9 +2810,8 @@ int ObStorageAppender::seal_for_adaptive()
 
 ObStorageMultiPartWriter::ObStorageMultiPartWriter()
     : multipart_writer_(NULL),
-      file_multipart_writer_(),
-      oss_multipart_writer_(),
-      s3_multipart_writer_(),
+      multipart_writer_union_(),
+      handle_type_(OB_STORAGE_HANDLE_MAX_TYPE),
       start_ts_(0),
       is_opened_(false),
       storage_info_(nullptr),
@@ -2637,6 +2825,7 @@ ObStorageMultiPartWriter::~ObStorageMultiPartWriter()
   if (is_opened_ && NULL != multipart_writer_) {
     STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "multipart_writer not close");
   }
+  reset();
 }
 
 int ObStorageMultiPartWriter::open(
@@ -2667,20 +2856,28 @@ int ObStorageMultiPartWriter::open(
     STORAGE_LOG(WARN, "failed to fill uri", K(ret), K(uri));
   } else if (FALSE_IT(storage_info_ = storage_info)) {
   } else if (OB_STORAGE_FILE == type) {
-    multipart_writer_ = &file_multipart_writer_;
+    new (&multipart_writer_union_.file_multipart_writer_) ObStorageFileMultiPartWriter();
+    multipart_writer_ = &multipart_writer_union_.file_multipart_writer_;
+    handle_type_ = OB_STORAGE_HANDLE_FILE;
   } else if (is_use_obdal() || OB_STORAGE_AZBLOB == type) {
     if (OB_UNLIKELY(storage_info->is_enable_worm())) {
       ret = OB_NOT_SUPPORTED;
       STORAGE_LOG(WARN, "obdal do not support worm", K(ret), KPC(storage_info));
     } else {
-      multipart_writer_ = &obdal_multipart_writer_;
+      new (&multipart_writer_union_.obdal_multipart_writer_) ObStorageObDalMultiPartWriter();
+      multipart_writer_ = &multipart_writer_union_.obdal_multipart_writer_;
+      handle_type_ = OB_STORAGE_HANDLE_OBDAL;
     }
   } else if (OB_STORAGE_OSS == type ||
              OB_STORAGE_S3 == type) {
     if (OB_STORAGE_OSS == type) {
-      multipart_writer_ = &oss_multipart_writer_;
+      new (&multipart_writer_union_.oss_multipart_writer_) ObStorageOssMultiPartWriter();
+      multipart_writer_ = &multipart_writer_union_.oss_multipart_writer_;
+      handle_type_ = OB_STORAGE_HANDLE_OSS;
     } else if (OB_STORAGE_S3 == type) {
-      multipart_writer_ = &s3_multipart_writer_;
+      new (&multipart_writer_union_.s3_multipart_writer_) ObStorageS3MultiPartWriter();
+      multipart_writer_ = &multipart_writer_union_.s3_multipart_writer_;
+      handle_type_ = OB_STORAGE_HANDLE_S3;
     }
   } else {
     ret = OB_ERR_SYS;
@@ -2839,13 +3036,37 @@ int ObStorageMultiPartWriter::close()
   } else if (OB_FAIL(multipart_writer_->close())) {
     STORAGE_LOG(WARN, "failed to close multipart writer", K(ret));
   }
+  reset();
+  return ret;
+}
+
+void ObStorageMultiPartWriter::reset()
+{
+  switch (handle_type_) {
+    case OB_STORAGE_HANDLE_FILE:
+      multipart_writer_union_.file_multipart_writer_.~ObStorageFileMultiPartWriter();
+      break;
+    case OB_STORAGE_HANDLE_OSS:
+      multipart_writer_union_.oss_multipart_writer_.~ObStorageOssMultiPartWriter();
+      break;
+    case OB_STORAGE_HANDLE_S3:
+      multipart_writer_union_.s3_multipart_writer_.~ObStorageS3MultiPartWriter();
+      break;
+    case OB_STORAGE_HANDLE_OBDAL:
+      multipart_writer_union_.obdal_multipart_writer_.~ObStorageObDalMultiPartWriter();
+      break;
+    case OB_STORAGE_HANDLE_MAX_TYPE:
+    default:
+      break;
+  }
+
   multipart_writer_  = NULL;
+  handle_type_ = OB_STORAGE_HANDLE_MAX_TYPE;
   start_ts_ = 0;
   uri_[0] = '\0';
   is_opened_ = false;
   cur_max_offset_ = 0;
   storage_info_ = nullptr;
-  return ret;
 }
 
 /**
@@ -2853,9 +3074,8 @@ int ObStorageMultiPartWriter::close()
  */
 ObStorageParallelMultiPartWriterBase::ObStorageParallelMultiPartWriterBase()
     : multipart_writer_(nullptr),
-      file_multipart_writer_(),
-      oss_multipart_writer_(),
-      s3_multipart_writer_(),
+      multipart_writer_union_(),
+      handle_type_(OB_STORAGE_HANDLE_MAX_TYPE),
       start_ts_(0),
       is_opened_(false),
       storage_info_(nullptr)
@@ -2869,8 +3089,27 @@ ObStorageParallelMultiPartWriterBase::~ObStorageParallelMultiPartWriterBase()
 
 void ObStorageParallelMultiPartWriterBase::reset()
 {
+  switch (handle_type_) {
+    case OB_STORAGE_HANDLE_FILE:
+      multipart_writer_union_.file_multipart_writer_.~ObStorageParallelFileMultiPartWriter();
+      break;
+    case OB_STORAGE_HANDLE_OSS:
+      multipart_writer_union_.oss_multipart_writer_.~ObStorageParallelOssMultiPartWriter();
+      break;
+    case OB_STORAGE_HANDLE_S3:
+      multipart_writer_union_.s3_multipart_writer_.~ObStorageParallelS3MultiPartWriter();
+      break;
+    case OB_STORAGE_HANDLE_OBDAL:
+      multipart_writer_union_.obdal_multipart_writer_.~ObStorageParallelObDalMultiPartWriter();
+      break;
+    case OB_STORAGE_HANDLE_MAX_TYPE:
+    default:
+      break;
+  }
+
   is_opened_ = false;
   multipart_writer_ = nullptr;
+  handle_type_ = OB_STORAGE_HANDLE_MAX_TYPE;
   start_ts_ = 0;
   uri_[0] = '\0';
   storage_info_ = nullptr;
@@ -2901,18 +3140,26 @@ int ObStorageParallelMultiPartWriterBase::open(
   } else if (OB_FAIL(databuff_printf(uri_, sizeof(uri_), "%.*s", uri.length(), uri.ptr()))) {
     STORAGE_LOG(WARN, "failed to fill uri", K(ret), K(uri));
   } else if (OB_STORAGE_FILE == type) {
-    multipart_writer_ = &file_multipart_writer_;
+    new (&multipart_writer_union_.file_multipart_writer_) ObStorageParallelFileMultiPartWriter();
+    multipart_writer_ = &multipart_writer_union_.file_multipart_writer_;
+    handle_type_ = OB_STORAGE_HANDLE_FILE;
   } else if (is_use_obdal() || OB_STORAGE_AZBLOB == type) {
     if (OB_UNLIKELY(storage_info->is_enable_worm())) {
       ret = OB_NOT_SUPPORTED;
       STORAGE_LOG(WARN, "obdal do not support worm", K(ret), KPC(storage_info));
     } else {
-      multipart_writer_ = &obdal_multipart_writer_;
+      new (&multipart_writer_union_.obdal_multipart_writer_) ObStorageParallelObDalMultiPartWriter();
+      multipart_writer_ = &multipart_writer_union_.obdal_multipart_writer_;
+      handle_type_ = OB_STORAGE_HANDLE_OBDAL;
     }
   } else if (OB_STORAGE_OSS == type) {
-    multipart_writer_ = &oss_multipart_writer_;
+    new (&multipart_writer_union_.oss_multipart_writer_) ObStorageParallelOssMultiPartWriter();
+    multipart_writer_ = &multipart_writer_union_.oss_multipart_writer_;
+    handle_type_ = OB_STORAGE_HANDLE_OSS;
   } else if (OB_STORAGE_S3 == type) {
-    multipart_writer_ = &s3_multipart_writer_;
+    new (&multipart_writer_union_.s3_multipart_writer_) ObStorageParallelS3MultiPartWriter();
+    multipart_writer_ = &multipart_writer_union_.s3_multipart_writer_;
+    handle_type_ = OB_STORAGE_HANDLE_S3;
   } else {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "unkown storage type", K(ret), K(uri), K(type));

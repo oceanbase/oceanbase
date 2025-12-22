@@ -1388,6 +1388,7 @@ typedef enum {
   EXTERNAL_RESOURCE_SCHEMA = 47,
   AI_MODEL_SCHEMA = 48,
   ICEBERG_TABLE_SCHEMA = 49,
+  SENSITIVE_RULE_SCHEMA = 50,
   ///<<< add schema type before this line
   OB_MAX_SCHEMA
 } ObSchemaType;
@@ -1580,6 +1581,7 @@ enum class ObObjectType {
   CATALOG         = 17,
   LOCATION        = 18,
   AI_MODEL        = 19,
+  SENSITIVE_RULE  = 20,
   MAX_TYPE,
 };
 struct ObSchemaObjVersion
@@ -2303,6 +2305,7 @@ public:
       int64_t &num) const;
   int64_t get_all_replica_num() const;
   int64_t get_full_replica_num() const;
+  int64_t get_logonly_replica_num() const;
 
   int get_zone_list(
       common::ObIArray<common::ObZone> &zone_list) const;
@@ -6052,6 +6055,7 @@ enum ObPrivLevel
   OB_PRIV_ROUTINE_LEVEL,
   OB_PRIV_CATALOG_LEVEL,
   OB_PRIV_OBJECT_LEVEL,
+  OB_PRIV_SENSITIVE_RULE_LEVEL,
   OB_PRIV_MAX_LEVEL,
 };
 
@@ -6073,11 +6077,13 @@ struct ObNeedPriv
              const bool is_sys_table,
              const bool is_for_update = false,
              ObPrivCheckType priv_check_type = OB_PRIV_CHECK_ALL,
-             const common::ObString &catalog = ObString())
+             const common::ObString &catalog = ObString(),
+             const common::ObString &sensitive_rule = ObString())
       : db_(db), table_(table), priv_level_(priv_level), priv_set_(priv_set),
         is_sys_table_(is_sys_table), obj_type_(share::schema::ObObjectType::INVALID),
         is_for_update_(is_for_update), priv_check_type_(priv_check_type),
-        columns_(), check_any_column_priv_(false), catalog_(catalog)
+        columns_(), check_any_column_priv_(false), catalog_(catalog),
+        sensitive_rule_(sensitive_rule)
   { }
 
   ObNeedPriv(const common::ObString &db,
@@ -6088,18 +6094,20 @@ struct ObNeedPriv
             const share::schema::ObObjectType obj_type,
             const bool is_for_update = false,
             ObPrivCheckType priv_check_type = OB_PRIV_CHECK_ALL,
-            const common::ObString &catalog = ObString())
+            const common::ObString &catalog = ObString(),
+            const common::ObString &sensitive_rule = ObString())
     : db_(db), table_(table), priv_level_(priv_level), priv_set_(priv_set),
       is_sys_table_(is_sys_table), obj_type_(obj_type),
       is_for_update_(is_for_update), priv_check_type_(priv_check_type),
-      columns_(), check_any_column_priv_(false), catalog_(catalog)
+      columns_(), check_any_column_priv_(false), catalog_(catalog),
+      sensitive_rule_(sensitive_rule)
   { }
 
   ObNeedPriv()
       : db_(), table_(), priv_level_(OB_PRIV_INVALID_LEVEL), priv_set_(0), is_sys_table_(false),
         obj_type_(share::schema::ObObjectType::INVALID), is_for_update_(false),
         priv_check_type_(OB_PRIV_CHECK_ALL), columns_(), check_any_column_priv_(false),
-        catalog_()
+        catalog_(), sensitive_rule_()
   { }
   int deep_copy(const ObNeedPriv &other, common::ObIAllocator &allocator);
   common::ObString db_;
@@ -6116,8 +6124,9 @@ struct ObNeedPriv
   bool check_any_column_priv_; //used under table level.
   // If check_any_column_priv_ true, then check the table has any column with the priv_set.
   common::ObString catalog_;
+  common::ObString sensitive_rule_;
   TO_STRING_KV(K_(db), K_(table), K_(columns), K_(priv_set), K_(priv_level), K_(is_sys_table), K_(is_for_update),
-               K_(priv_check_type), K_(catalog));
+               K_(priv_check_type), K_(catalog), K_(sensitive_rule));
 };
 
 struct ObStmtNeedPrivs

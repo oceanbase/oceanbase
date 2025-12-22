@@ -28,6 +28,7 @@ struct ObMergeSSTableStatus final
 {
   ObMergeSSTableStatus()
     : is_schema_changed_(false),
+      need_full_merge_(false),
       merge_level_(MICRO_BLOCK_MERGE_LEVEL),
       co_major_sstable_status_()
   {}
@@ -35,15 +36,18 @@ struct ObMergeSSTableStatus final
   void reset()
   {
     is_schema_changed_ = false;
+    need_full_merge_ = false;
     merge_level_ = MICRO_BLOCK_MERGE_LEVEL;
     co_major_sstable_status_ = ObCOMajorSSTableStatus::INVALID_CO_MAJOR_SSTABLE_STATUS;
   }
 
   bool is_schema_changed_;
+  // schema rowkey cg + normal cg, all cg merge to build all cg, no progressive merge, and column cnt mismatch
+  bool need_full_merge_;
   ObMergeLevel merge_level_;
   // The type of co major sstable, may mismatch with table schema (such as no normal col cg)
   ObCOMajorSSTableStatus co_major_sstable_status_; // only for column store major sstable
-  TO_STRING_KV(K_(is_schema_changed), K_(merge_level), K_(co_major_sstable_status));
+  TO_STRING_KV(K_(is_schema_changed), K_(need_full_merge), K_(merge_level), K_(co_major_sstable_status));
 };
 
 struct ObCOStaticMergeParam final
@@ -91,6 +95,10 @@ struct ObStaticMergeParam final
       const int64_t sstable_idx,
       const ObSSTable &sstable,
       const ObSSTableMeta &sstable_meta);
+  int init_sstable_need_full_merge(
+      const int64_t sstable_idx,
+      const ObSSTable &sstable,
+      const bool need_calc_progressive_merge);
   int get_basic_info_from_result(const ObGetMergeTablesResult &get_merge_table_result);
   int64_t get_compaction_scn() const {
     return is_multi_version_merge(get_merge_type()) ?
@@ -117,6 +125,7 @@ struct ObStaticMergeParam final
   ObMergeLevel get_merge_level_for_sstable(const ObSSTable &sstable) const; // unused
   int get_co_major_sstable_status(const int64_t index, ObCOMajorSSTableStatus &status) const;
   int get_sstable_merge_level(const int64_t index, ObMergeLevel &level) const;
+  int get_sstable_need_full_merge(const int64_t index, bool &need_full_merge) const;
 
 private:
   int init_multi_version_column_descs();

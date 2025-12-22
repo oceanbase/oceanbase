@@ -4223,6 +4223,7 @@ int ObTransformPreProcess::transform_for_rls_table(ObDMLStmt *stmt, bool &trans_
     }
     if (OB_SUCC(ret) && contain_rls_table) {
       ObPCPrivInfo priv_info;
+      priv_info.priv_type_ = ObPCPrivInfo::SYS_PRIV;
       priv_info.sys_priv_ = PRIV_ID_EXEMPT_ACCESS_POLICY;
       priv_info.has_privilege_ = exempt_rls_policy;
       if (OB_FAIL(stmt->get_query_ctx()->all_priv_constraints_.push_back(priv_info))) {

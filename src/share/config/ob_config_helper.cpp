@@ -760,7 +760,7 @@ int64_t ObConfigIntParser::get(const char *str, bool &valid)
       valid = true;
     } else {
       valid = false;
-      OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "set int error", K(str), K(valid));
+      OB_LOG_RET(WARN, OB_INVALID_CONFIG, "set int error", K(str), K(valid));
     }
   }
   return value;
@@ -797,7 +797,7 @@ int64_t ObConfigReadableIntParser::get(const char *str, bool &valid)
       value *= UNIT_M;
     } else {
       valid = false;
-      OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "set readable int error", K(str), K(p_unit));
+      OB_LOG_RET(WARN, OB_INVALID_CONFIG, "set readable int error", K(str), K(p_unit));
     }
   }
 
@@ -833,7 +833,7 @@ int64_t ObConfigTimeParser::get(const char *str, bool &valid)
       value = value * TIME_DAY;
     } else {
       valid = false;
-      OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "set time error", K(str), K(p_unit));
+      OB_LOG_RET(WARN, OB_INVALID_CONFIG, "set time error", K(str), K(p_unit));
     }
   }
 
@@ -1779,6 +1779,12 @@ bool ObConfigDefaultMicroBlockFormatVersionChecker::check(const ObConfigItem &t)
   return is_valid;
 }
 
+bool ObConfigZoneDeployModeChecker::check(const ObConfigItem &t) const
+{
+  common::ObString tmp_str(t.str());
+  return 0 == tmp_str.case_compare(HOMO_MODE_STR) || 0 == tmp_str.case_compare(HETERO_MODE_STR);
+}
+
 bool ObConfigServerFullSchemaRefreshParallelismChecker::check(const ObConfigItem& t) const
 {
   return 0 == t.case_compare(SERVER_FULL_SCHEMA_REFRESH_PARALLELISM_REQUEST)
@@ -1791,6 +1797,15 @@ bool ObConfigDefaultDeltaFormatChecker::check(const ObConfigItem &t) const
   bool is_valid = true;
   ObString delta_format(t.str());
   return ObStoreFormat::is_delta_format_valid(delta_format);
+}
+
+bool ObConfigEvictOldSSTablePolicyChecker::check(const ObConfigItem &t) const
+{
+  bool bret = true;
+  const ObString tmp_str(t.str());
+  bret = (0 == tmp_str.case_compare("OFF")) ||
+         (0 == tmp_str.case_compare("MAJOR_SSTABLE"));
+  return bret;
 }
 
 } // end of namepace common

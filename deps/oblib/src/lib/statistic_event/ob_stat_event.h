@@ -1094,6 +1094,7 @@ STAT_EVENT_SET_DEF(EXTERNAL_TABLE_DISK_CACHE_HIT_BYTES, "external table disk cac
 STAT_EVENT_SET_DEF(EXTERNAL_TABLE_DISK_CACHE_MISS_BYTES, "external table disk cache miss bytes", ObStatClassIds::CACHE, 245057, false, true, true, "Total size (in bytes) of external table data disk cache misses (supported in both SN and SS modes). Each time an external table is queried, if disk cache is enabled (enabled by default), this value is incremented by the size read for each macro block miss.")
 
 STAT_EVENT_SET_DEF(SS_MACRO_CACHE_ALLOC_DISK_SIZE, "ss_macro_cache total alloc disk size", ObStatClassIds::CACHE, 245058, false, true, true, "Disk space (in bytes) allocated to the local macro block cache in shared storage mode. When the tenant's local macro block cache module is initialized, a disk space size is calculated and allocated to the local macro block cache.")
+STAT_EVENT_SET_DEF(SS_MACRO_CACHE_WRITE_CACHE_SIZE, "ss_macro_cache write cache size", ObStatClassIds::CACHE, 245059, false, true, true, "Disk space (in bytes) used by the write cache in the macro block cache in shared storage mode.")
 // END
 STAT_EVENT_SET_DEF(STAT_EVENT_SET_END, "event set end", ObStatClassIds::DEBUG, 300000, false, false, true, "")
 

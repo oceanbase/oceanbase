@@ -994,7 +994,7 @@ ObPartitionMergeIter *ObPartitionMajorMergeHelper::alloc_merge_iter(
     // do nothing
   } else if (need_check_major_sstable() && !table->is_major_type_sstable()) {
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected alloc iter for minor sstable", KPC(table));
-  } else if (merge_param.is_full_merge() || table_need_full_merge(*table, merge_param)) {
+  } else if (merge_param.is_full_merge() || table_need_full_merge(sstable_idx, *table, merge_param)) {
     const bool need_co_sstable_scan = need_all_column_from_rowkey_co_sstable(*table, merge_param);
     merge_iter = alloc_helper<ObPartitionRowMergeIter>(allocator_, allocator_, need_co_sstable_scan);
   } else {
@@ -1056,12 +1056,18 @@ bool ObMultiMajorMergeIter::need_all_column_from_rowkey_co_sstable(const ObITabl
   return bret;
 }
 
-bool ObMultiMajorMergeIter::table_need_full_merge(const ObITable &table, const ObMergeParameter &merge_param) const
+bool ObMultiMajorMergeIter::table_need_full_merge(
+    const int64_t sstable_idx,
+    const ObITable &table,
+    const ObMergeParameter &merge_param) const
 {
   bool bret = false;
   if (!table.is_major_type_sstable() || !table.is_co_sstable()) {
     bret = true;
   } else if (!replay_base_directly_) {
+  } else if (OB_SUCCESS != (merge_param.static_param_.get_sstable_need_full_merge(sstable_idx, bret))) {
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "failed to get sstable need_full_merge", K(sstable_idx), K(table), K(merge_param));
+  } else if (bret) {
   } else if (merge_param.get_schema()->has_all_column_group() || merge_param.static_param_.is_build_row_store()) {
     // rowkey base cg output all column
     bret = static_cast<const ObCOSSTableV2 &>(table).is_rowkey_cg_base();

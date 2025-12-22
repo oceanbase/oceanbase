@@ -444,6 +444,8 @@ int ObMigrationStatusHelper::check_ls_transfer_tablet_(
     LOG_WARN("failed to set ls gc status", KR(ret));
   } else if (!allow_gc) {
     //do nothing
+  }  else if (!ObReplicaTypeCheck::is_replica_with_ssstore(ls->get_ls_meta().get_replica_type())) {
+    //do nothing
   } else if (OB_FAIL(ls->get_restore_status(restore_status))) {
     LOG_WARN("failed to get restore status", K(ret), KPC(ls));
   } else if (restore_status.is_in_restoring_or_failed()) {
@@ -959,6 +961,8 @@ int ObMigrationStatusHelper::check_ls_transfer_tablet_v1_(
   } else if (OB_FAIL(set_ls_migrate_gc_status_(*ls, allow_gc))) {
     LOG_WARN("failed to set ls gc status", KR(ret));
   } else if (!allow_gc) {
+    //do nothing
+  } else if (!ObReplicaTypeCheck::is_replica_with_ssstore(ls->get_ls_meta().get_replica_type())) {
     //do nothing
   } else if (OB_FAIL(ls->get_restore_status(restore_status))) {
     LOG_WARN("failed to get restore status", K(ret), KPC(ls));

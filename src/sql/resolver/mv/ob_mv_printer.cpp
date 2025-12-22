@@ -608,6 +608,34 @@ int ObMVPrinter::gen_max_min_seq_window_func_exprs(const TableItem &table,
   return ret;
 }
 
+// deep copy and replace the table name and table id of source_exprs
+int ObMVPrinter::copy_and_replace_column_exprs(const ObIArray<ObRawExpr*> &source_exprs,
+                                               const ObString &target_table_name,
+                                               const uint64_t target_table_id,
+                                               ObIArray<ObRawExpr*> &target_exprs)
+{
+  int ret = OB_SUCCESS;
+  const ObColumnRefRawExpr *src_column_ref = NULL;
+  ObRawExpr *target_expr = NULL;
+  for (int64_t i = 0; OB_SUCC(ret) && i < source_exprs.count(); ++i) {
+    if (OB_ISNULL(source_exprs.at(i)) || OB_UNLIKELY(!source_exprs.at(i)->is_column_ref_expr())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("source_expr is NULL or is not a column ref expr", K(ret), K(i), KPC(source_exprs.at(i)));
+    } else {
+      src_column_ref = static_cast<const ObColumnRefRawExpr*>(source_exprs.at(i));
+      if (OB_FAIL(create_simple_column_expr(target_table_name,
+                                            src_column_ref->get_column_name(),
+                                            target_table_id,
+                                            target_expr))) {
+        LOG_WARN("failed to create simple column expr", K(ret));
+      } else if (OB_FAIL(target_exprs.push_back(target_expr))) {
+        LOG_WARN("failed to push back target expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObMVPrinter::create_simple_column_expr(const ObString &table_name,
                                            const ObString &column_name,
                                            const uint64_t table_id,
@@ -661,6 +689,28 @@ int ObMVPrinter::create_simple_table_item(ObDMLStmt *stmt,
   return ret;
 }
 
+int ObMVPrinter::gen_format_string_name(const char *name_format_string,
+                                        const ObString &ori_name,
+                                        ObString &format_name,
+                                        const int64_t buf_len /* = 64 (OB_MAX_SUBQUERY_NAME_LENGTH) */)
+{
+  int ret = OB_SUCCESS;
+  char buf[buf_len];
+  int64_t pos = 0;
+  MEMSET(buf, 0, buf_len);
+  if (OB_ISNULL(name_format_string)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("name format string is null", K(ret));
+  } else if (OB_FAIL(BUF_PRINTF(name_format_string,
+                                ori_name.length(),
+                                ori_name.ptr()))) {
+    LOG_WARN("failed to buf print format table name", K(ret));
+  } else if (OB_FAIL(ob_write_string(ctx_.alloc_, ObString(pos, buf), format_name))) {
+    LOG_WARN("failed to write string", K(ret), K(pos));
+  }
+  return ret;
+}
+
 int ObMVPrinter::create_table_item_with_infos(ObDMLStmt *stmt,
                                               const TableItem *ori_table,
                                               TableItem *&new_table,
@@ -669,10 +719,6 @@ int ObMVPrinter::create_table_item_with_infos(ObDMLStmt *stmt,
                                               const bool add_to_from /* default true */)
 {
   int ret = OB_SUCCESS;
-  const uint64_t OB_MAX_SUBQUERY_NAME_LENGTH = 64;
-  char buf[OB_MAX_SUBQUERY_NAME_LENGTH];
-  int64_t buf_len = OB_MAX_SUBQUERY_NAME_LENGTH;
-  int64_t pos = 0;
   new_table = NULL;
   if (OB_ISNULL(ori_table)) {
     ret = OB_ERR_UNEXPECTED;
@@ -691,12 +737,10 @@ int ObMVPrinter::create_table_item_with_infos(ObDMLStmt *stmt,
     set_info_for_simple_table_item(*new_table, *ori_table);
   } else if (NULL == view_name_fmt) {
     // do nothing
-  } else if (OB_FAIL(BUF_PRINTF(view_name_fmt,
-                                ori_table->get_object_name().length(),
-                                ori_table->get_object_name().ptr()))) {
-    LOG_WARN("failed to buf print for delta/pre view name", K(ret));
-  } else if (OB_FAIL(ob_write_string(ctx_.alloc_, ObString(pos, buf), new_table->alias_name_))) {
-    LOG_WARN("failed to write string", K(ret));
+  } else if (OB_FAIL(gen_format_string_name(view_name_fmt,
+                                            ori_table->get_object_name(),
+                                            new_table->alias_name_))) {
+    LOG_WARN("failed to generate format table name", K(ret));
   }
   return ret;
 }

@@ -206,11 +206,27 @@ int ObMViewMaintenanceTask::gc_mview()
     int64_t gc_mview_num = 0;
     int64_t gc_stats_num = 0;
     int64_t affected_rows = 0;
-    if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+
+    // We must check tenant schema is refreshed first. Because tenant schema may not be fully refreshed when observer restarts.
+    //
+    // For example, latest tenant schema version is 200, and MVIEW schema version is 100.
+    // When observer restarts, tenant schema refresh progress is as follows:
+    // core schema refreshed(version=198) -> system schema refreshed(version=199) -> all user table schema refreshed(version=200)
+    // Only when all user table schema are refreshed, schema version is formal, and tenant schema is fully refreshed.
+    //
+    // Here is the bad case:
+    // 1. When observer restarts, only system schema is refreshed, tenant schema version is 199, and MVIEW schema is not refreshed.
+    // 2. Now, we check tenant_schema_version(199) > MVIEW schema version(100),
+    //    and we can not get MVIEW schema from schema guard. So we GC the MVIEW wrongly.
+    if (!GCTX.schema_service_->is_tenant_refreshed(tenant_id_)) {
+      ret = OB_EAGAIN;
+      LOG_INFO("tenant schema is not refreshed, need retry", K(tenant_id_));
+    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
       LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id_));
     } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id_, tenant_schema_version))) {
       LOG_WARN("fail to get schema version", KR(ret), K(tenant_id_));
     }
+
     while (OB_SUCC(ret) && (mview_idx_ < mview_ids_.count() || OB_INVALID_ID != gc_mview_id_) &&
            gc_stats_num < MVREF_STATS_NUM_PURGE_PER_SCHED) {
       const int64_t limit = MVREF_STATS_NUM_PURGE_PER_SCHED - gc_stats_num;

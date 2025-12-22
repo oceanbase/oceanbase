@@ -49,9 +49,36 @@ struct SortOrder
   TO_STRING_EMPTY();
 };
 
-struct SnapshotRef
+enum class RefType
 {
-  TO_STRING_EMPTY();
+  UNKNOWN = 0,
+  BRANCH = 1,
+  TAG = 2
+};
+
+struct SnapshotRef : public SpecWithAllocator
+{
+  ObString name;
+  int64_t snapshot_id;
+  RefType type;
+
+  explicit SnapshotRef(ObIAllocator &allocator)
+      : SpecWithAllocator(allocator), snapshot_id(OB_INVALID_ID), type(RefType::UNKNOWN)
+  {
+  }
+
+  int assign(const SnapshotRef &other);
+  int init_from_json(const ObJsonObject &json_object);
+
+  TO_STRING_KV(K(name),
+               K(snapshot_id),
+               "type",
+               (type == RefType::BRANCH) ? "branch"
+               : (type == RefType::TAG)  ? "tag"
+                                         : "unknown");
+
+  static constexpr const char *TYPE = "type";
+  static constexpr const char *SNAPSHOT_ID = "snapshot-id";
 };
 
 struct PartitionStatisticsFile
@@ -132,7 +159,7 @@ public:
   // int32_t default_sort_order_id;
 
   // A map of snapshot references.
-  // ObArray<SnapshotRef> refs;
+  ObFixedArray<SnapshotRef *, ObIAllocator> refs;
 
   // Mapping of snapshot ids to statistics files.
   ObFixedArray<StatisticsFile *, ObIAllocator> statistics;
@@ -143,6 +170,11 @@ public:
   int init_from_json(const ObJsonObject &json_object);
   int get_current_snapshot(const Snapshot *&snapshot) const;
   int get_current_snapshot(Snapshot *&snapshot);
+  int get_ref_by_name(const ObString &ref_name, const SnapshotRef *&ref) const;
+  int get_snapshot_id_by_timestamp(int64_t timestamp_ms, int64_t &snapshot_id) const;
+  int get_schema_id_by_snapshot_id(int64_t snapshot_id, int32_t &schema_id) const;
+  int get_snapshot_by_id(int64_t snapshot_id, const Snapshot *&snapshot) const;
+  int get_snapshot_by_id(int64_t snapshot_id, Snapshot *&snapshot);
   int get_schema(int32_t schema_id, const Schema *&schema) const;
   int get_partition_spec(int32_t partition_spec_id, const PartitionSpec *&partition_spec) const;
   int get_table_property(const char *table_property_key, ObString &value) const;

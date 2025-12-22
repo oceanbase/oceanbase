@@ -306,6 +306,8 @@ protected:
       ObTableScanParam &param,
       ObNewRowIterator *&result);
 
+  int check_replica_type_accessible_(
+      const common::ObReplicaType &replica_type);
 private:
   bool is_inited_;
   ObLSService *ls_svr_;

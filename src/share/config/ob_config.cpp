@@ -527,7 +527,7 @@ void ObConfigIntegralItem::init(Scope::ScopeInfo scope_info,
   if (OB_ISNULL(range)) {
     OB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "Range is NULL");
   } else if (!parse_range(range)) {
-    OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Parse check range fail", K(range));
+    OB_LOG_RET(ERROR, common::OB_INVALID_CONFIG, "Parse check range fail", K(range));
   }
 }
 
@@ -665,7 +665,7 @@ void ObConfigDoubleItem::init(Scope::ScopeInfo scope_info,
   if (OB_ISNULL(range)) {
     OB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "Range is NULL");
   } else if (!parse_range(range)) {
-    OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Parse check range fail", K(range));
+    OB_LOG_RET(ERROR, common::OB_INVALID_CONFIG, "Parse check range fail", K(range));
   }
 }
 
@@ -800,7 +800,7 @@ int64_t ObConfigCapacityItem::parse(const char *str, bool &valid) const
 {
   int64_t value = ObConfigCapacityParser::get(str, valid, false);
   if (!valid) {
-      OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "set capacity error", "name", name(), K(str), K(valid));
+      OB_LOG_RET(ERROR, OB_INVALID_CONFIG, "set capacity error", "name", name(), K(str), K(valid));
   }
   return value;
 }
@@ -841,7 +841,7 @@ int64_t ObConfigTimeItem::parse(const char *str, bool &valid) const
 {
   int64_t value = ObConfigTimeParser::get(str, valid);
   if (!valid) {
-      OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "set time error", "name", name(), K(str), K(valid));
+      OB_LOG_RET(ERROR, common::OB_INVALID_CONFIG, "set time error", "name", name(), K(str), K(valid));
   }
   return value;
 }
@@ -882,7 +882,7 @@ int64_t ObConfigIntItem::parse(const char *str, bool &valid) const
 {
   int64_t value = ObConfigIntParser::get(str, valid);
   if (!valid) {
-    OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "set int error", "name", name(), K(str), K(valid));
+    OB_LOG_RET(ERROR, OB_INVALID_CONFIG, "set int error", "name", name(), K(str), K(valid));
   }
   return value;
 }
@@ -961,7 +961,7 @@ bool ObConfigBoolItem::parse(const char *str, bool &valid) const
   } else {
     value = ObConfigBoolParser::get(str, valid);
     if (!valid) {
-      OB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "Get bool config item fail", K(valid), K(str));
+      OB_LOG_RET(WARN, common::OB_INVALID_CONFIG, "Get bool config item fail", K(valid), K(str));
     }
   }
   return value;

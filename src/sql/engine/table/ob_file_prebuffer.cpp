@@ -24,6 +24,11 @@ namespace sql {
     p = nullptr;                                                                                   \
   } while (0)
 
+bool ObFilePreBuffer::ReadRange::contains(const ReadRange &other) const
+{
+  return (offset_ <= other.offset_ && offset_ + length_ >= other.offset_ + other.length_);
+}
+
 ObFilePreBuffer::CacheOptions ObFilePreBuffer::CacheOptions::defaults()
 {
   ObFilePreBuffer::CacheOptions options;

@@ -365,17 +365,15 @@ class ObExternalTableUtils {
                                      common::ObIAllocator &allocator, int64_t &file_size,
                                      int64_t &modify_time, ObString &content_digest);
 
-  static int collect_external_file_list_with_cache(
-    const uint64_t tenant_id,
-    const uint64_t ts,
-    const ObString &location,
-    const ObString &access_info,
-    const ObString &pattern,
-    const sql::ObExprRegexpSessionVariables &regexp_vars,
-    ObIAllocator &allocator,
-    int64_t refresh_interval_ms,
-    ObIArray<ObHiveFileDesc> &hive_file_desc,
-    int64_t part_id);
+  static int collect_external_file_list_with_cache(const uint64_t tenant_id,
+                                                   const ObIArray<ObString> &part_path,
+                                                   const ObIArray<int64_t> &part_id,
+                                                   const ObIArray<int64_t> &part_modify_ts,
+                                                   const ObString &access_info,
+                                                   const ObString &pattern,
+                                                   ObIAllocator &allocator,
+                                                   int64_t refresh_interval_ms,
+                                                   ObIArray<ObHiveFileDesc> &hive_file_desc);
 
   static int collect_partitions_info_with_cache(const ObTableSchema &table_schema,
                                                 ObSqlSchemaGuard &sql_schema_guard,

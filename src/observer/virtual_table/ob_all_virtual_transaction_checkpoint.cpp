@@ -72,6 +72,9 @@ int ObAllVirtualTransCheckpointInfo::prepare_to_read_()
   } else if (NULL == ls) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "ls shouldn't NULL here", K(ret), K(ls));
+  } else if (ObReplicaTypeCheck::is_log_replica(ls->get_replica_type())) {
+    // skip logonly replica
+    SERVER_LOG(INFO, "should skip logonly replica", KR(ret), KPC(ls));
   } else if (FALSE_IT(infos.reset())) {
   } else if (OB_FAIL(ls->get_common_checkpoint_info(infos))) {
     SERVER_LOG(WARN, "get commoncheckpoint info failed", K(ret), KPC(ls));
