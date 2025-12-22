@@ -61,7 +61,9 @@ ObTableSchemaParam::ObTableSchemaParam(ObIAllocator &allocator)
     merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN),
     inc_pk_doc_id_col_id_(OB_INVALID_ID),
     vec_chunk_col_id_(OB_INVALID_ID),
-    vec_embedded_col_id_(OB_INVALID_ID)
+    vec_embedded_col_id_(OB_INVALID_ID),
+    search_idx_included_cids_(allocator),
+    search_idx_included_cid_idxes_(allocator)
 {
 }
 
@@ -106,6 +108,8 @@ void ObTableSchemaParam::reset()
   is_delete_insert_ = false;
   merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN;
   inc_pk_doc_id_col_id_ = OB_INVALID_ID;
+  search_idx_included_cids_.reset();
+  search_idx_included_cid_idxes_.reset();
 }
 
 int ObTableSchemaParam::convert(const ObTableSchema *schema)
@@ -671,6 +675,8 @@ OB_DEF_SERIALIZE(ObTableSchemaParam)
   OB_UNIS_ENCODE(inc_pk_doc_id_col_id_);
   OB_UNIS_ENCODE(vec_chunk_col_id_);
   OB_UNIS_ENCODE(vec_embedded_col_id_);
+  OB_UNIS_ENCODE(search_idx_included_cids_);
+  OB_UNIS_ENCODE(search_idx_included_cid_idxes_);
   return ret;
 }
 
@@ -834,6 +840,8 @@ OB_DEF_DESERIALIZE(ObTableSchemaParam)
   OB_UNIS_DECODE(inc_pk_doc_id_col_id_);
   OB_UNIS_DECODE(vec_chunk_col_id_);
   OB_UNIS_DECODE(vec_embedded_col_id_);
+  OB_UNIS_DECODE(search_idx_included_cids_);
+  OB_UNIS_DECODE(search_idx_included_cid_idxes_);
   return ret;
 }
 
@@ -891,6 +899,8 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchemaParam)
   OB_UNIS_ADD_LEN(inc_pk_doc_id_col_id_);
   OB_UNIS_ADD_LEN(vec_chunk_col_id_);
   OB_UNIS_ADD_LEN(vec_embedded_col_id_);
+  OB_UNIS_ADD_LEN(search_idx_included_cids_);
+  OB_UNIS_ADD_LEN(search_idx_included_cid_idxes_);
   return len;
 }
 

@@ -447,12 +447,14 @@ enum ObIndexType
   // hybrid vec hnsw
   INDEX_TYPE_HYBRID_INDEX_LOG_LOCAL = 43,
   INDEX_TYPE_HYBRID_INDEX_EMBEDDED_LOCAL = 44,
+  INDEX_TYPE_SEARCH_DEF_INDEX_LOCAL = 45,
+  INDEX_TYPE_SEARCH_DATA_INDEX_LOCAL = 46,
 
   /*
   * Attention!!! when add new index type,
   * need update func ObSimpleTableSchemaV2::should_not_validate_data_index_ckm()
   */
-  INDEX_TYPE_MAX = 45,
+  INDEX_TYPE_MAX = 47,
 };
 
 bool is_support_split_index_type(const ObIndexType index_type);

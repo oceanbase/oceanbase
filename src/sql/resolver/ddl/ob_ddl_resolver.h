@@ -127,6 +127,7 @@ public:
     MULTI_KEY = 4,
     MULTI_UNIQUE_KEY = 5,
     VEC_KEY = 6,
+    SEARCH_KEY = 7,
   };
   enum COLUMN_NODE {
     COLUMN_REF_NODE = 0,
