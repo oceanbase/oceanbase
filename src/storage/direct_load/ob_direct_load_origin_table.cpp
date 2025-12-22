@@ -497,6 +497,8 @@ int ObDirectLoadOriginTableScanner::open(const ObDatumRange &query_range)
   } else {
     scan_merge_.reuse();
     allocator_.reuse();
+    datum_row_.reset();
+    datum_row_.seq_no_ = 0;
     if (OB_FAIL(query_range.deep_copy(query_range_, allocator_))) {
       LOG_WARN("fail to deep copy query range", KR(ret), K(query_range));
     } else if (OB_FAIL(query_range_.prepare_memtable_readable(*(origin_table_->get_meta().col_descs_), allocator_))) {
@@ -552,11 +554,12 @@ int ObDirectLoadOriginTableScanner::reinit_open()
     if (OB_FAIL(
           ObTableLoadUtils::deep_copy(datum_row_key, query_range.start_key_, tmp_allocator))) {
       LOG_WARN("fail to deep copy datum row key", KR(ret));
+    } else {
+      query_range.set_left_open();
     }
   }
 
   if (OB_FAIL(ret)) {
-  } else if (FALSE_IT(query_range.set_left_open())) {
   } else if (FALSE_IT(reset())) {
   } else if (OB_FAIL(init(origin_table, skip_read_lob, skip_del_row))) {
     LOG_WARN("fail to init", KR(ret));
