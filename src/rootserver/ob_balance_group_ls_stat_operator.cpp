@@ -957,13 +957,15 @@ int ObNewTableTabletAllocator::alloc_tablet_for_add_balance_group(
     } else {
       lib::ob_sort(final_ls_stat_array.begin(), final_ls_stat_array.end());
       for (int64_t alloc_seq = 0; OB_SUCC(ret) && alloc_seq < total_alloc_num; alloc_seq++) {
-        int64_t min_ls_tg_idx = 0;
-        int64_t min_ls_tg_cnt = final_ls_stat_array.at(0).get_tablet_group_count();
-        // find min
+        const int64_t start_idx = fetch_ls_offset() % final_ls_stat_array.count();
+        int64_t min_ls_tg_idx = start_idx;
+        int64_t min_ls_tg_cnt = final_ls_stat_array.at(start_idx).get_tablet_group_count();
+        // find min with rotation to avoid always choosing the same ls when multiple values are the same
         for (int64_t i = 1; OB_SUCC(ret) && i < final_ls_stat_array.count(); ++i) {
-          ObBalanceGroupLSStat &bg_ls_stat = final_ls_stat_array.at(i);
+          const int64_t idx = (start_idx + i) % final_ls_stat_array.count();
+          ObBalanceGroupLSStat &bg_ls_stat = final_ls_stat_array.at(idx);
           if (bg_ls_stat.get_tablet_group_count() < min_ls_tg_cnt) {
-            min_ls_tg_idx = i;
+            min_ls_tg_idx = idx;
             min_ls_tg_cnt = bg_ls_stat.get_tablet_group_count();
           }
         }
