@@ -83,7 +83,6 @@ public:
                                   bool &is_same,
                                   ObObj *diff_val = NULL) const;
   int deep_copy(const ObLocalSessionVar &other);
-  int deep_copy_self();
   int assign(const ObLocalSessionVar &other);
   bool operator == (const ObLocalSessionVar& other) const;
   int64_t get_deep_copy_size() const ;

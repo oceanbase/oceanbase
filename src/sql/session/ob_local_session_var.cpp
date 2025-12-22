@@ -264,31 +264,8 @@ int ObLocalSessionVar::deep_copy(const ObLocalSessionVar &other)
   local_session_vars_.reset();
   if (this == &other) {
     //do nothing
-  } else if (NULL != other.alloc_) {
-    if (NULL == alloc_) {
-      alloc_ = other.alloc_;
-      local_session_vars_.set_allocator(other.alloc_);
-    }
-  }
-  if (OB_FAIL(set_local_vars(other.local_session_vars_))) {
+  } else if (OB_FAIL(set_local_vars(other.local_session_vars_))) {
     LOG_WARN("fail to add session var", K(ret));
-  }
-  return ret;
-}
-
-int ObLocalSessionVar::deep_copy_self()
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(alloc_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null allocator", K(ret));
-  } else {
-    ObSEArray<const ObSessionSysVar*, 4> var_array;
-    if (OB_FAIL(get_local_vars(var_array))) {
-      LOG_WARN("get local vars failed", K(ret));
-    } else if (OB_FAIL(set_local_vars(var_array))) {
-      LOG_WARN("set local vars failed", K(ret));
-    }
   }
   return ret;
 }
@@ -315,6 +292,19 @@ int ObLocalSessionVar::assign(const ObLocalSessionVar &other)
 
 void ObLocalSessionVar::reset()
 {
+  if (OB_NOT_NULL(alloc_)) {
+    ObSessionSysVar *var = NULL;
+    void *deep_copy_ptr = NULL;
+    for (int64_t i = 0; i < local_session_vars_.count(); ++i) {
+      if (OB_ISNULL(var = local_session_vars_.at(i))
+          || OB_ISNULL(deep_copy_ptr = var->val_.get_deep_copy_obj_ptr())) {
+        /* do nothing */
+      } else {
+        alloc_->free(deep_copy_ptr);
+        var->val_.reset();
+      }
+    }
+  }
   local_session_vars_.reset();
 }
 
