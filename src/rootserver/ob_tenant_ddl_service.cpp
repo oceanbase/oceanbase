@@ -2282,8 +2282,6 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
   ObString config_value_ddl_thread_isolution("true");
   ObString config_name_spill_compression_codec("spill_compression_codec");
   ObString config_value_spill_compression_codec("LZ4");
-  ObString config_name_server_full_schema_refresh_parallelism("_server_full_schema_refresh_parallelism");
-  ObString config_value_server_full_schema_refresh_parallelism("OBJECT");
   ObString config_name_spf_batch_rescan("_enable_spf_batch_rescan");
   ObString config_value_spf_batch_rescan("true");
   ObString config_name_batch_rescan_flag("_enable_das_batch_rescan_flag");
@@ -2316,8 +2314,6 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
         LOG_WARN("fail to add config", KR(ret), K(config_name_partition_balance_schedule_interval), K(config_value_partition_balance_schedule_interval));
       } else if (OB_FAIL(tenant_init_config.add_config(config_name_update_trigger, config_value_update_trigger))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name_update_trigger), K(config_value_update_trigger));
-      } else if (OB_FAIL(tenant_init_config.add_config(config_name_server_full_schema_refresh_parallelism, config_value_server_full_schema_refresh_parallelism))) {
-        LOG_WARN("fail to add config", KR(ret), K(config_name_server_full_schema_refresh_parallelism), K(config_value_server_full_schema_refresh_parallelism));
       } else if (OB_FAIL(tenant_init_config.add_config(config_name_ddl_thread_isolution, config_value_ddl_thread_isolution))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name_ddl_thread_isolution), K(config_value_ddl_thread_isolution));
       } else if (OB_FAIL(tenant_init_config.add_config(config_name_spill_compression_codec, config_value_spill_compression_codec))) {

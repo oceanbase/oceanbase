@@ -3016,7 +3016,7 @@ DEF_CAP(load_data_diagnosis_log_max_size, OB_TENANT_PARAMETER, "256M", "[0,)"
          "it will be renamed and a new diagnosis log file using is opened, range: [0,)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_STR_WITH_CHECKER(_server_full_schema_refresh_parallelism, OB_TENANT_PARAMETER, "REQUEST",
+DEF_STR_WITH_CHECKER(_server_full_schema_refresh_parallelism, OB_TENANT_PARAMETER, "OBJECT",
                      common::ObConfigServerFullSchemaRefreshParallelismChecker,
                      "specifies whether observer's full schema refresh is request-level parallelism or object-level parallelism."
                      "values: REQUEST, OBJECT",
