@@ -149,6 +149,7 @@ ObTableCkmItems::VALIDATE_CKM_FUNC ObTableCkmItems::validate_ckm_func[FUNC_CNT] 
 ObTableCkmItems::ObTableCkmItems(const uint64_t tenant_id)
   : is_inited_(false),
     is_fts_index_(false),
+    should_skip_verify_ckm_(false),
     tenant_id_(tenant_id),
     table_id_(0),
     row_count_(0),
@@ -168,6 +169,7 @@ ObTableCkmItems::~ObTableCkmItems()
 
 int ObTableCkmItems::build(
     share::schema::ObSchemaGetterGuard &schema_guard,
+    const share::SCN &compaction_scn,
     const schema::ObSimpleTableSchemaV2 &simple_schema,
     const ObArray<share::ObTabletLSPair> &input_tablet_pairs,
     const ObReplicaCkmArray &input_ckm_items)
@@ -189,6 +191,13 @@ int ObTableCkmItems::build(
   } else {
     table_id_ = simple_schema.get_table_id();
     is_inited_ = true;
+
+    for (int64_t idx = 0; idx < ckm_items_.count(); ++idx) {
+      if (ckm_items_.at(idx).compaction_scn_ > compaction_scn) {
+        should_skip_verify_ckm_ = true;
+        break;
+      }
+    }
   }
   if (OB_FAIL(ret)) {
     reset();
@@ -227,7 +236,8 @@ int ObTableCkmItems::build(
     const share::SCN &compaction_scn,
     common::ObMySQLProxy &sql_proxy,
     schema::ObSchemaGetterGuard &schema_guard,
-    const compaction::ObTabletLSPairCache &tablet_ls_pair_cache)
+    const compaction::ObTabletLSPairCache &tablet_ls_pair_cache,
+    const bool include_greater_scn)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObTabletID, 64> tablet_id_array;
@@ -236,10 +246,12 @@ int ObTableCkmItems::build(
     LOG_WARN("failed to prepare build ckm items", K(ret));
   } else if (OB_FAIL(ckm_items_.init(tenant_id_, tablet_pairs_.count()))) {
     STORAGE_LOG(WARN, "failed to init ckm array", K(ret), K_(tenant_id), K(tablet_pairs_.count()));
-  } else if (OB_FAIL(ObTabletReplicaChecksumOperator::get_tablet_replica_checksum_items(
-                             tenant_id_, sql_proxy,
-                             compaction_scn, tablet_pairs_,
-                             ckm_items_))) {
+  } else if (OB_FAIL(ObTabletReplicaChecksumOperator::get_tablet_replica_checksum_items(tenant_id_,
+                                                                                        sql_proxy,
+                                                                                        compaction_scn,
+                                                                                        tablet_pairs_,
+                                                                                        include_greater_scn,
+                                                                                        ckm_items_))) {
     LOG_WARN("failed to get table column checksum items", KR(ret));
   } else if ((!table_schema_->is_index_table() || table_schema_->is_fts_or_multivalue_index())
       && OB_FAIL(sort_col_id_array_.build(tenant_id_, *table_schema_))) {
@@ -247,6 +259,13 @@ int ObTableCkmItems::build(
   } else {
     table_id_ = table_id;
     is_inited_ = true;
+
+    for (int64_t idx = 0; idx < ckm_items_.count(); ++idx) {
+      if (ckm_items_.at(idx).compaction_scn_ > compaction_scn) {
+        should_skip_verify_ckm_ = true;
+        break;
+      }
+    }
   }
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
@@ -261,7 +280,6 @@ int ObTableCkmItems::build(
   }
   return ret;
 }
-
 
 // For partition split ddl, the scenario will generate major sstables with more columns expectedly.
 // 1. multi parts compact with columns cnt A.

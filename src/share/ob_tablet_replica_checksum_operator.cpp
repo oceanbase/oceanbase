@@ -1204,6 +1204,7 @@ int ObTabletReplicaChecksumOperator::get_tablet_replica_checksum_items(
     ObMySQLProxy &sql_proxy,
     const SCN &compaction_scn,
     const ObIArray<ObTabletLSPair> &tablet_pairs,
+    const bool include_greater_scn,
     ObReplicaCkmArray &items)
 {
   int ret = OB_SUCCESS;
@@ -1211,14 +1212,11 @@ int ObTabletReplicaChecksumOperator::get_tablet_replica_checksum_items(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
   } else if (OB_FAIL(batch_get(tenant_id, tablet_pairs, compaction_scn,
-        sql_proxy, items, false/*include_larger_than*/,
-        share::OBCG_DEFAULT))) {
-    LOG_WARN("fail to batch get tablet checksum item", KR(ret), K(tenant_id), K(compaction_scn),
-      "pairs_count", tablet_pairs.count());
+        sql_proxy, items, include_greater_scn, share::OBCG_DEFAULT))) {
+    LOG_WARN("fail to batch get tablet checksum item", KR(ret), K(tenant_id), K(compaction_scn), "pairs_count", tablet_pairs.count());
   } else if (items.get_tablet_cnt() < tablet_pairs.count()) {
     ret = OB_ITEM_NOT_MATCH;
-    LOG_WARN("fail to get tablet replica checksum items", KR(ret), K(tenant_id), K(compaction_scn),
-      K(items));
+    LOG_WARN("fail to get tablet replica checksum items", KR(ret), K(tenant_id), K(compaction_scn), K(items));
   }
   return ret;
 }

@@ -21,10 +21,6 @@
 
 namespace oceanbase
 {
-namespace storage
-{
-struct ObUpdateTableStoreParam;
-}
 
 namespace compaction
 {
