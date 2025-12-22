@@ -77,9 +77,9 @@ int ObMViewRefresher::refresh()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObMViewRefresher not init", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(OB_ISNULL(refresh_ctx_)) ||
-             (OB_UNLIKELY(OB_ISNULL(refresh_ctx_->trans_)) ||
-              OB_UNLIKELY(OB_ISNULL(refresh_ctx_->trans_->get_session_info())))) {
+  } else if (OB_ISNULL(refresh_ctx_)||
+             OB_ISNULL(refresh_ctx_->trans_) ||
+             OB_ISNULL(refresh_ctx_->trans_->get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("refresh ctx is not valid", KR(ret));
   } else {
@@ -89,15 +89,9 @@ int ObMViewRefresher::refresh()
       LOG_WARN("fail to lock mview for refresh", KR(ret));
     } else if (OB_FAIL(prepare_for_refresh())) {
       LOG_WARN("fail to prepare for refresh", KR(ret));
-    }
-    // collect stats before refresh
-    if (OB_SUCC(ret) && nullptr != refresh_stats_collection_) {
-      if (OB_FAIL(refresh_stats_collection_->collect_before_refresh(*refresh_ctx_))) {
-        LOG_WARN("fail to collect refresh stats before refresh", KR(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
+    } else {
       const ObMVRefreshType refresh_type = refresh_ctx_->refresh_type_;
+      LOG_INFO("mview refresh begin", K(refresh_param_), K(refresh_type));
       if (ObMVRefreshType::FAST == refresh_type) {
         ObMViewOpArg arg;
         arg.table_id_ =  mview_id;
@@ -296,6 +290,18 @@ int ObMViewRefresher::prepare_for_refresh()
       base_table_scn_range.end_scn_ = mview_refresh_scn_range.end_scn_;
     }
   }
+  // calculate refresh parallelism
+  if (OB_SUCC(ret) && data_version_ >= DATA_VERSION_4_3_5_1) {
+    int64_t final_parallelism = 0;
+    int64_t explict_parallelism = trans.is_inner_session() ? mview_info.get_refresh_dop() : refresh_param_.parallelism_;
+    if (OB_FAIL(calc_mv_refresh_parallelism(explict_parallelism, ctx_->get_my_session(),
+                                            final_parallelism))) {
+      LOG_WARN("fail to calculate mv refresh parallelism", KR(ret), K(refresh_param_));
+    } else {
+      refresh_param_.parallelism_ = final_parallelism;
+      refresh_ctx_->refresh_parallelism_ = final_parallelism;
+    }
+  }
   // check refresh type
   if (OB_SUCC(ret)) {
     ObMVRefreshMethod refresh_method = ObMVRefreshMethod::MAX == refresh_param_.refresh_method_
@@ -321,6 +327,15 @@ int ObMViewRefresher::prepare_for_refresh()
       LOG_WARN("fail to get mlog mv refresh infos", KR(ret), K(tenant_id));
     } else if (OB_FAIL(fetch_based_infos(schema_guard))) {
       LOG_WARN("fail to fetch based infos", KR(ret));
+    } else if (!can_fast_refresh || ObMVRefreshMethod::COMPLETE == refresh_method) {
+      tables_need_mlog.reset();
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_NOT_NULL(refresh_stats_collection_)
+               && OB_FAIL(refresh_stats_collection_->collect_before_refresh(*refresh_ctx_))) {
+      LOG_WARN("fail to collect refresh stats before refresh", KR(ret));
+    }
+    if (OB_FAIL(ret)) {
     } else if (ObMVRefreshMethod::COMPLETE == refresh_method ||
                (!can_fast_refresh && ObMVRefreshMethod::FORCE == refresh_method)) {
       refresh_type = ObMVRefreshType::COMPLETE;
@@ -363,19 +378,6 @@ int ObMViewRefresher::prepare_for_refresh()
         }
         LOG_INFO("print fast refresh sql", K(fast_refresh_sql));
       }
-    }
-  }
-
-  // calculate refresh parallelism
-  if (OB_SUCC(ret) && data_version_ >= DATA_VERSION_4_3_5_1) {
-    int64_t final_parallelism = 0;
-    int64_t explict_parallelism = trans.is_inner_session() ? mview_info.get_refresh_dop() : refresh_param_.parallelism_;
-    if (OB_FAIL(calc_mv_refresh_parallelism(explict_parallelism, ctx_->get_my_session(),
-                                            final_parallelism))) {
-      LOG_WARN("fail to calculate mv refresh parallelism", KR(ret), K(refresh_param_));
-    } else {
-      refresh_param_.parallelism_ = final_parallelism;
-      refresh_ctx_->refresh_parallelism_ = final_parallelism;
     }
   }
   return ret;

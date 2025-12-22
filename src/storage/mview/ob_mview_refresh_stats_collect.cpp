@@ -97,34 +97,7 @@ int ObMViewRefreshStatsCollection::collect_before_refresh(ObMViewRefreshCtx &ref
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObMViewRefreshStatsCollection not init", KR(ret), KP(this));
-  } else if (OB_ISNULL(refresh_ctx.trans_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null trans", KR(ret));
-  } else {
-    ObMViewTransaction &trans = *refresh_ctx.trans_;
-    int64_t num_rows = 0;
-    collection_level_ = refresh_ctx.refresh_stats_params_.get_collection_level();
-    refresh_stats_.set_refresh_type(refresh_ctx.refresh_type_);
-    refresh_stats_.set_num_steps(refresh_ctx.refresh_sqls_.count());
-    if (ObMVRefreshStatsCollectionLevel::ADVANCED == collection_level_) {
-      if (OB_TMP_FAIL(ObMViewRefreshHelper::get_table_row_num(trans, tenant_id_, mview_id_,
-                                                              SCN::invalid_scn(), num_rows))) {
-        LOG_WARN("fail to get mview row num before refresh", KR(tmp_ret), K(mview_id_));
-      }
-    }
-    refresh_stats_.set_initial_num_rows(num_rows);
-  }
-  return ret;
-}
-
-int ObMViewRefreshStatsCollection::collect_after_refresh(ObMViewRefreshCtx &refresh_ctx)
-{
-  int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  ObSchemaGetterGuard schema_guard; 
+  ObSchemaGetterGuard schema_guard;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObMViewRefreshStatsCollection not init", KR(ret), KP(this));
@@ -134,26 +107,29 @@ int ObMViewRefreshStatsCollection::collect_after_refresh(ObMViewRefreshCtx &refr
   } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id_));
   } else {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    const bool enable_adaptive_refresh = false;
     ObMViewTransaction &trans = *refresh_ctx.trans_;
-    const ObIArray<ObDependencyInfo> &dependency_infos = refresh_ctx.dependency_infos_;
-    const ObIArray<uint64_t> &tables_need_mlog = refresh_ctx.tables_need_mlog_;
     int64_t num_rows = 0;
-    if (ObMVRefreshStatsCollectionLevel::ADVANCED == collection_level_ &&
-        OB_TMP_FAIL(ObMViewRefreshHelper::get_table_row_num(trans, tenant_id_, mview_id_,
-                                                            SCN::invalid_scn(), num_rows))) {
-      LOG_WARN("fail to get mview row num after refresh", KR(tmp_ret), K(mview_id_));
+    collection_level_ = refresh_ctx.refresh_stats_params_.get_collection_level();
+    if (ObMVRefreshStatsCollectionLevel::ADVANCED == collection_level_) {
+      if (OB_TMP_FAIL(ObMViewRefreshHelper::get_table_row_num(trans, tenant_id_, mview_id_,
+                                                              SCN::invalid_scn(), refresh_ctx.refresh_parallelism_,
+                                                              num_rows))) {
+        LOG_WARN("fail to get mview row num before refresh", KR(tmp_ret), K(mview_id_));
+      }
     }
-    refresh_stats_.set_final_num_rows(num_rows);
-    if (collection_level_ >= ObMVRefreshStatsCollectionLevel::TYPICAL) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < dependency_infos.count(); ++i) {
-        const ObDependencyInfo &dep = dependency_infos.at(i);
+    refresh_stats_.set_initial_num_rows(num_rows);
+    if (collection_level_ >= ObMVRefreshStatsCollectionLevel::TYPICAL || enable_adaptive_refresh) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < refresh_ctx.dependency_infos_.count(); ++i) {
+        const ObDependencyInfo &dep = refresh_ctx.dependency_infos_.at(i);
         if (dep.get_ref_obj_type() == ObObjectType::TABLE) {
           int64_t num_rows_ins = 0;
           int64_t num_rows_upd = 0;
           int64_t num_rows_del = 0;
           int64_t num_rows = 0;
           const ObTableSchema *table_schema = nullptr;
-          ObScnRange &tmp_scn_range = refresh_ctx.mview_refresh_scn_range_;
+          ObScnRange tmp_scn_range;
           if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, dep.get_ref_obj_id(), table_schema))) {
             LOG_WARN("fail to get table schema", KR(ret), K(tenant_id_));
           } else if (OB_ISNULL(table_schema)) {
@@ -166,16 +142,17 @@ int ObMViewRefreshStatsCollection::collect_after_refresh(ObMViewRefreshCtx &refr
           }
           if (OB_SUCC(ret)) {
             ObWarningBufferIgnoreScope ignore_warning_guard;
-            if (ObOptimizerUtil::find_item(tables_need_mlog, dep.get_ref_obj_id()) &&
+            if (ObOptimizerUtil::find_item(refresh_ctx.tables_need_mlog_, dep.get_ref_obj_id()) &&
                 OB_TMP_FAIL(ObMViewRefreshHelper::get_mlog_dml_row_num(
-                  trans, tenant_id_, table_schema->get_mlog_tid(), tmp_scn_range,
+                  trans, tenant_id_, table_schema->get_mlog_tid(), tmp_scn_range, refresh_ctx.refresh_parallelism_,
                   num_rows_ins, num_rows_upd, num_rows_del))) {
               LOG_WARN("fail to get mlog dml row num", KR(tmp_ret), K(table_schema->get_mlog_tid()));
             }
-            if (ObMVRefreshStatsCollectionLevel::ADVANCED == collection_level_ &&
-                OB_TMP_FAIL(ObMViewRefreshHelper::get_table_row_num(
-                  trans, tenant_id_, dep.get_ref_obj_id(), tmp_scn_range.end_scn_,
-                  num_rows))) {
+            if ((ObMVRefreshStatsCollectionLevel::ADVANCED == collection_level_)
+                && OB_TMP_FAIL(ObMViewRefreshHelper::get_table_row_num(
+                               trans, tenant_id_, dep.get_ref_obj_id(), tmp_scn_range.end_scn_,
+                               refresh_ctx.refresh_parallelism_,
+                               num_rows))) {
               LOG_WARN("fail to get based table row num", KR(tmp_ret), K(dep));
             }
           }
@@ -194,11 +171,35 @@ int ObMViewRefreshStatsCollection::collect_after_refresh(ObMViewRefreshCtx &refr
               LOG_WARN("fail to push back change stats", KR(ret), K(change_stats));
             }
           }
-        } else {
-          LOG_INFO("skip dep obj", K(dep));
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObMViewRefreshStatsCollection::collect_after_refresh(ObMViewRefreshCtx &refresh_ctx)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObMViewRefreshStatsCollection not init", KR(ret), KP(this));
+  } else if (OB_ISNULL(refresh_ctx.trans_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null trans", KR(ret), KP(refresh_ctx.trans_));
+  } else {
+    refresh_stats_.set_refresh_type(refresh_ctx.refresh_type_);
+    refresh_stats_.set_num_steps(refresh_ctx.refresh_sqls_.count());
+    ObMViewTransaction &trans = *refresh_ctx.trans_;
+    int64_t num_rows = 0;
+    if (ObMVRefreshStatsCollectionLevel::ADVANCED == collection_level_ &&
+        OB_TMP_FAIL(ObMViewRefreshHelper::get_table_row_num(trans, tenant_id_, mview_id_,
+                                                            SCN::invalid_scn(), refresh_ctx.refresh_parallelism_,
+                                                            num_rows))) {
+      LOG_WARN("fail to get mview row num after refresh", KR(tmp_ret), K(mview_id_));
+    }
+    refresh_stats_.set_final_num_rows(num_rows);
   }
   return ret;
 }
