@@ -1498,7 +1498,6 @@ TEST_F(TestVectorIndexAdaptor, test_hnsw_bq_ser_deser)
 int main(int argc, char** argv)
 {
   system("rm -f test_vector_index_adaptor.log*");
-  system("rm -fr run_*");
   ObLogger &logger = ObLogger::get_logger();
   logger.set_file_name("test_vector_index_adaptor.log", true);
   logger.set_log_level(OB_LOG_LEVEL_INFO);

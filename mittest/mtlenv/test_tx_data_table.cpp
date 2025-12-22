@@ -783,7 +783,6 @@ int main(int argc, char **argv)
 {
   int ret = 1;
   system("rm -f test_tx_data_table.log*");
-  system("rm -fr run_*");
   ObLogger &logger = ObLogger::get_logger();
   logger.set_file_name("test_tx_data_table.log", true);
   logger.set_log_level(OB_LOG_LEVEL_DEBUG);
