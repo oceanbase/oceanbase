@@ -6808,12 +6808,10 @@ int ObDbmsStats::resovle_granularity(ObGranularityType granu_type,
 {
   int ret = OB_SUCCESS;
   uint64_t data_version = 0;
-  bool is_specify_sample = param.is_specify_sample();
   if (ObGranularityType::GRANULARITY_AUTO == granu_type) {
-    param.global_stat_param_.set_gather_stat(param.part_name_.empty() && !is_specify_sample);
+    param.global_stat_param_.set_gather_stat(param.part_name_.empty());
     param.part_stat_param_.set_gather_stat(param.part_name_.empty() &&
-                                           param.part_level_ == share::schema::ObPartitionLevel::PARTITION_LEVEL_TWO &&
-                                           !is_specify_sample);
+                                           param.part_level_ == share::schema::ObPartitionLevel::PARTITION_LEVEL_TWO);
     param.subpart_stat_param_.set_gather_stat();
     // refine auto granularity based on subpart type
     if (ObPartitionLevel::PARTITION_LEVEL_TWO == param.part_level_ &&
@@ -6830,7 +6828,7 @@ int ObDbmsStats::resovle_granularity(ObGranularityType granu_type,
     param.subpart_stat_param_.reset_gather_stat();
   } else if (ObGranularityType::GRANULARITY_APPROX_GLOBAL_AND_PARTITION == granu_type) {
     bool gather_approx = param.part_level_ != ObPartitionLevel::PARTITION_LEVEL_ZERO && !param.is_subpart_name_;
-    param.global_stat_param_.set_gather_stat(gather_approx && !is_specify_sample);
+    param.global_stat_param_.set_gather_stat(gather_approx);
     param.part_stat_param_.set_gather_stat();
     param.subpart_stat_param_.reset_gather_stat();
   } else if (ObGranularityType::GRANULARITY_GLOBAL == granu_type) {
@@ -6858,7 +6856,7 @@ int ObDbmsStats::resovle_granularity(ObGranularityType granu_type,
       param.subpart_stat_param_.reset_gather_stat();
     }
   } else if (ObGranularityType::GRANULARITY_PARTITION == granu_type) {
-    if (param.part_name_.empty() && param.part_level_ != share::schema::ObPartitionLevel::PARTITION_LEVEL_ZERO && !is_specify_sample) {
+    if (param.part_name_.empty() && param.part_level_ != share::schema::ObPartitionLevel::PARTITION_LEVEL_ZERO) {
       param.global_stat_param_.set_gather_stat(true);
     } else {
       param.global_stat_param_.reset_gather_stat();
@@ -6868,7 +6866,7 @@ int ObDbmsStats::resovle_granularity(ObGranularityType granu_type,
   } else if (ObGranularityType::GRANULARITY_SUBPARTITION == granu_type) {
     param.global_stat_param_.reset_gather_stat();
     param.part_stat_param_.reset_gather_stat();
-    if (param.part_name_.empty() && param.part_level_ == share::schema::ObPartitionLevel::PARTITION_LEVEL_TWO && !is_specify_sample) {
+    if (param.part_name_.empty() && param.part_level_ == share::schema::ObPartitionLevel::PARTITION_LEVEL_TWO) {
       param.global_stat_param_.set_gather_stat(true);
       param.part_stat_param_.set_gather_stat(true);
     } else if (!param.part_name_.empty() &&
