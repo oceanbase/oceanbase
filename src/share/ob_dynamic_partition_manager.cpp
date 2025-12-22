@@ -261,11 +261,34 @@ int ObDynamicPartitionManager::build_drop_partition_sql_(
                                  static_cast<int32_t>(part_name_list.length()),
                                  part_name_list.ptr()))) {
         LOG_WARN("fail to append sql", KR(ret));
+      } else if (enable_update_global_indexes_() && OB_FAIL(sql.append_fmt(" UPDATE GLOBAL INDEXES"))) {
+        LOG_WARN("fail to append update global indexes sql", KR(ret));
       }
     }
   }
 
   return ret;
+}
+
+bool ObDynamicPartitionManager::enable_update_global_indexes_()
+{
+  bool enable_update_global_indexes = false;
+  if (!is_oracle_mode_) {
+    // mysql mode, never enable update global indexes
+  } else {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+    if (tenant_config.is_valid()) {
+      if (0 == tenant_config->_append_update_global_indexes_for_dynamic_partition.case_compare("AUTO")) {
+        enable_update_global_indexes = tenant_config->_ob_enable_truncate_partition_preserve_global_index;
+      } else if (0 == tenant_config->_append_update_global_indexes_for_dynamic_partition.case_compare("ON")) {
+        enable_update_global_indexes = true;
+      } else {
+        enable_update_global_indexes = false;
+      }
+    }
+  }
+
+  return enable_update_global_indexes;
 }
 
 int ObDynamicPartitionManager::build_precreate_partition_definition_list_(

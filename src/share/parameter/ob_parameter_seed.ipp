@@ -3227,6 +3227,14 @@ DEF_INT(_mv_adaptive_complete_refresh_threshold, OB_TENANT_PARAMETER, "0", "[0, 
         "adaptive complete refresh percentage threshold, set to 0 to disable adaptive complete refresh",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+// for upgraded tenant, default _append_update_global_indexes_for_dynamic_partition will be OFF
+// for new created tenant, default _append_update_global_indexes_for_dynamic_partition will be AUTO
+DEF_STR_WITH_CHECKER(_append_update_global_indexes_for_dynamic_partition, OB_TENANT_PARAMETER, "OFF",
+                     common::ObConfigAppendUpdateGlobalIndexesForDynamicPartitionChecker,
+                     "specify whether to enable update global indexes for dynamic partition when dropping expired partitions."
+                     "values: AUTO(follow _ob_enable_truncate_partition_preserve_global_index), ON, OFF",
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+                     "AUTO, ON, OFF");
 DEF_CAP(_replay_memory_limit, OB_TENANT_PARAMETER, "512M", "[1M, 1024000000M]",
         "the size of the memory reserved for replay engine. range: [1M, 1024000000M]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

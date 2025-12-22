@@ -1808,5 +1808,12 @@ bool ObConfigEvictOldSSTablePolicyChecker::check(const ObConfigItem &t) const
   return bret;
 }
 
+bool ObConfigAppendUpdateGlobalIndexesForDynamicPartitionChecker::check(const ObConfigItem& t) const
+{
+  return 0 == t.case_compare("AUTO")
+         || 0 == t.case_compare("ON")
+         || 0 == t.case_compare("OFF");
+}
+
 } // end of namepace common
 } // end of namespace oceanbase
