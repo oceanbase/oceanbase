@@ -7098,9 +7098,11 @@ public:
       column_id_(common::OB_INVALID_ID),
       sync_value_(0),
       table_part_num_(0),
-      auto_increment_(0)
+      auto_increment_(0),
+      autoinc_is_order_(false)
   {}
-  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(column_id), K_(sync_value), K_(table_part_num), K_(auto_increment));
+  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(column_id), K_(sync_value), K_(table_part_num),
+               K_(auto_increment), K_(autoinc_is_order));
 
   uint64_t tenant_id_;
   uint64_t table_id_;
@@ -7110,6 +7112,7 @@ public:
   //Not add first_part_num now.
   uint64_t table_part_num_;
   uint64_t auto_increment_;  // only for sync table option auto_increment
+  bool autoinc_is_order_;
 };
 
 struct ObDumpMemtableArg
