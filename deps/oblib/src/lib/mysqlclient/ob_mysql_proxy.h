@@ -139,7 +139,7 @@ public:
   ObSessionParam()
       : sql_mode_(nullptr), tz_info_wrap_(nullptr), ddl_info_(), is_load_data_exec_(false),
         use_external_session_(false), consumer_group_id_(0), nls_formats_{}, enable_pl_cache_(true),
-        secure_file_priv_(), mview_local_session_vars_() {}
+        secure_file_priv_(), mview_local_session_vars_(nullptr) {}
   ~ObSessionParam() = default;
 public:
   int64_t *sql_mode_;
@@ -151,7 +151,7 @@ public:
   common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
   bool enable_pl_cache_;
   common::ObString secure_file_priv_;
-  sql::ObLocalSessionVar mview_local_session_vars_;
+  const sql::ObLocalSessionVar *mview_local_session_vars_;
 };
 
 // thread safe sql proxy

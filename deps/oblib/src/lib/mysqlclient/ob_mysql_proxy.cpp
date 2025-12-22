@@ -243,11 +243,11 @@ int ObCommonSqlProxy::write(const uint64_t tenant_id, const ObString sql,
       LOG_WARN("fail to set time zone info wrap", K(ret));
     }
   }
-  if (OB_SUCC(ret) && nullptr != param && param->mview_local_session_vars_.get_var_count() != 0) {
+  if (OB_SUCC(ret) && nullptr != param && NULL != param->mview_local_session_vars_
+      && param->mview_local_session_vars_->get_var_count() != 0) {
     using namespace oceanbase::sql;
-    const ObLocalSessionVar &mview_local_session_vars = param->mview_local_session_vars_;
     ObSEArray<const ObSessionSysVar *, 10> mv_session_vars;
-    if (OB_FAIL(mview_local_session_vars.get_local_vars(mv_session_vars))) {
+    if (OB_FAIL(param->mview_local_session_vars_->get_local_vars(mv_session_vars))) {
       LOG_WARN("fail to get local session vars", K(ret));
     } else {
       ARRAY_FOREACH(mv_session_vars, i) {

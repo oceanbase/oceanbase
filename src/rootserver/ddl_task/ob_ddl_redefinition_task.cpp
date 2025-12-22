@@ -327,6 +327,8 @@ int ObDDLRedefinitionSSTableBuildTask::procress_mview_complete_refresh_(
       user_sql_proxy = GCTX.ddl_sql_proxy_;
       sql_mode_ = SMO_STRICT_ALL_TABLES;
     }
+    ObArenaAllocator tmp_alloc;
+    sql::ObLocalSessionVar local_session_vars(&tmp_alloc);
     ObSessionParam session_param;
     InnerDDLInfo ddl_info;
     session_param.sql_mode_ = reinterpret_cast<int64_t *>(&sql_mode_);
@@ -340,9 +342,10 @@ int ObDDLRedefinitionSSTableBuildTask::procress_mview_complete_refresh_(
     ddl_info.set_refreshing_mview(true);
     session_param.use_external_session_ = true;  // means session id dispatched by session mgr
     session_param.consumer_group_id_ = consumer_group_id_;
+    session_param.mview_local_session_vars_ = &local_session_vars;
     if (OB_FAIL(session_param.ddl_info_.init(ddl_info, 0))) {
       LOG_WARN("fail to init ddl info", KR(ret), K(ddl_info), K(0));
-    } else if (OB_FAIL(session_param.mview_local_session_vars_.deep_copy(mview_table_schema->get_local_session_var()))) {
+    } else if (OB_FAIL(local_session_vars.deep_copy(mview_table_schema->get_local_session_var()))) {
       LOG_WARN("fail to copy mview local session vars", K(ret));
     } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
       LOG_WARN("set trx timeout failed", K(ret));
