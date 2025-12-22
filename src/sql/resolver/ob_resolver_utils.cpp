@@ -1576,7 +1576,9 @@ int ObResolverUtils::pick_routine(const pl::ObPLResolveCtx &resolve_ctx,
       OZ (match_infos.push_back(match_info));
     }
   }
-  OZ (check_anonymous_associative_array(match_infos));
+  if (common::OB_OCI_CLIENT_MODE == resolve_ctx.session_info_.get_client_mode()) {
+    OZ (check_anonymous_associative_array(match_infos));
+  }
   if (OB_FAIL(ret)) {
   } else if (0 == match_infos.count()) { // 没有匹配的routine直接报错
     ret = OB_ERR_SP_WRONG_ARG_NUM;
