@@ -27,7 +27,7 @@ typedef uint32_t ObFTWordStateIndex;
 
 /**
  * @class ObFTSingleWord
- * @brief sturct to store a single character of a charset;
+ * @brief struct to store a single character of a charset;
  */
 struct ObFTSingleWord
 {
