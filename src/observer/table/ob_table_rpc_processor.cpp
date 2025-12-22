@@ -431,8 +431,22 @@ int ObTableApiProcessorBase::check_user_access(const ObString &credential_str)
   } else if (OB_FAIL(check_mode())) {
     LOG_WARN("fail to check mode", K(ret));
   } else {
-    enable_query_response_time_stats_ = TABLEAPI_OBJECT_POOL_MGR->is_enable_query_response_time_stats();
-    LOG_DEBUG("user can access", K_(credential));
+    // 使用session中缓存的用户锁定状态，避免每次都访问schema
+    ObTableApiSessNodeVal* sess_node_val = sess_guard_.get_sess_node_val();
+    if (OB_ISNULL(sess_node_val)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session node val is null", K(ret));
+    } else if (OB_ISNULL(sess_node_val->get_owner_node())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session owner node is null", K(ret));
+    } else if (sess_node_val->get_owner_node()->is_user_locked()) {
+      ret = OB_ERR_USER_IS_LOCKED;
+      LOG_WARN("user is locked", K(ret), K(credential_.tenant_id_));
+      LOG_USER_ERROR(OB_ERR_USER_IS_LOCKED);
+    } else {
+      enable_query_response_time_stats_ = TABLEAPI_OBJECT_POOL_MGR->is_enable_query_response_time_stats();
+      LOG_DEBUG("user can access", K_(credential));
+    }
   }
   return ret;
 }

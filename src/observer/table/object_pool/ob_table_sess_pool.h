@@ -54,6 +54,7 @@ public:
   int evict_retired_sess();
   int create_node_safe(ObTableApiCredential &credential, ObTableApiSessNode *&node);
   int move_node_to_retired_list(ObTableApiSessNode *node);
+  int refresh_all_user_locked_status();
 private:
   int replace_sess_node_safe(ObTableApiCredential &credential);
   int create_and_add_node_safe(ObTableApiCredential &credential);
@@ -69,7 +70,9 @@ private:
   int64_t last_update_ts_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableApiSessPool);
-};
+};  // ObTableApiSessPool
+
+// User state management methods
 
 class ObTableApiSessNodeVal : public common::ObDLinkBase<ObTableApiSessNodeVal>
 {
@@ -87,6 +90,7 @@ public:
 public:
   void destroy();
   sql::ObSQLSessionInfo& get_sess_info() { return sess_info_; }
+  ObTableApiSessNode* get_owner_node() { return owner_node_; }
   int init_sess_info();
   void reset_tx_desc() { // 防止异步提交场景在 session 析构的时候 rollback 事务
     sql::ObSQLSessionInfo::LockGuard guard(sess_info_.get_thread_data_lock());
@@ -149,6 +153,37 @@ public:
     }
   }
   OB_INLINE void dec_ref_cnt() { ATOMIC_DEC(&sess_ref_cnt_); }
+  
+  // User state management
+  struct UserState {
+    UserState() : last_refresh_ts_(0), last_schema_version_(0), is_user_locked_(false) {}
+    
+    int64_t last_refresh_ts_;
+    int64_t last_schema_version_;
+    bool is_user_locked_;
+    
+    void reset() {
+      last_refresh_ts_ = 0;
+      last_schema_version_ = 0;
+      ATOMIC_STORE(&is_user_locked_, false);
+    }
+    
+    TO_STRING_KV(K_(last_refresh_ts), K_(last_schema_version), K_(is_user_locked));
+  };
+  
+  // Thread-safe methods for accessing user state
+  OB_INLINE UserState& get_user_state() { return user_state_; }
+  OB_INLINE const UserState& get_user_state() const { return user_state_; }
+  
+  // High-performance atomic read for external use
+  OB_INLINE bool is_user_locked() const { 
+    return ATOMIC_LOAD(&user_state_.is_user_locked_); 
+  }
+
+  void update_user_state_atomic(bool is_locked, int64_t schema_version);
+  
+  int refresh_user_locked_status(share::schema::ObSchemaGetterGuard &schema_guard);
+  
 private:
   int extend_and_get_sess_val(ObTableApiSessGuard &guard);
 private:
@@ -162,6 +197,7 @@ private:
   ObString user_name_;
   common::ObFixedQueue<ObTableApiSessNodeVal> sess_queue_;
   int64_t sess_ref_cnt_;
+  UserState user_state_;  // 用户状态，包含锁定状态
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableApiSessNode);
 };
