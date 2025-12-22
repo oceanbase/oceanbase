@@ -165,6 +165,7 @@ public:
     page_index_reader_(nullptr),
     rg_page_index_reader_(nullptr),
     page_skip_ranges_(allocator_),
+    page_selected_read_ranges_(allocator_),
     stat_(),
     mode_(FilterCalcMode::DYNAMIC_EAGER_CALC),
     reader_metrics_(),
@@ -495,7 +496,10 @@ private:
   ParquetSectorIterator sector_iter_;
   std::shared_ptr<parquet::PageIndexReader> page_index_reader_;
   std::shared_ptr<parquet::RowGroupPageIndexReader> rg_page_index_reader_;
+  // place each skiped page's [page_start_row, page_rows]
   common::ObFixedArray<ObArray<std::pair<int64_t, int64_t>> *, ObIAllocator> page_skip_ranges_;
+  // place each selected page's [page_offset, page_size]
+  common::ObFixedArray<ObArray<std::pair<int64_t, int64_t>> *, ObIAllocator> page_selected_read_ranges_;
   ParquetStatInfo stat_;
   FilterCalcMode mode_;
   ObLakeTableParquetReaderMetrics reader_metrics_;

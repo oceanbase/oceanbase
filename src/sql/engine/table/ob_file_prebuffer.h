@@ -90,9 +90,7 @@ public:
       }
       return *this;
     }
-    bool contains(const ReadRange& other) const {
-      return (offset_ <= other.offset_ && offset_ + length_ >= other.offset_ + other.length_);
-    }
+    bool contains(const ReadRange& other) const;
     static bool compare(const ReadRange &l, const ReadRange &r)
     {
       return l.offset_ < r.offset_;
