@@ -809,6 +809,7 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
     // pl debug 功能, pl debug不支持分布式调试，但调用也不会有副作用
     reset_pl_debugger_resource();
     reset_pl_profiler_resource();
+    cur_exec_ctx_ = nullptr;
     reset_pl_code_coverage_resource();
 #endif
     // 非分布式需要的话，分布式也需要，用于清理package的全局变量值
