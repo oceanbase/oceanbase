@@ -27,6 +27,7 @@
 #define PRE_TABLE_FORMAT_NAME "PRE_%.*s$$"
 #define DELETE_TABLE_FORMAT_NAME "DEL_%.*s$$"
 #define INSERT_TABLE_FORMAT_NAME "INS_%.*s$$"
+#define INNER_TABLE_FORMAT_NAME "INR_%.*s$$"
 
 namespace oceanbase
 {
@@ -238,6 +239,10 @@ protected:
                                         ObRawExpr *sequence_expr,
                                         ObRawExpr *&win_max_expr,
                                         ObRawExpr *&win_min_expr);
+  int copy_and_replace_column_exprs(const ObIArray<ObRawExpr*> &source_exprs,
+                                    const ObString &target_table_name,
+                                    const uint64_t target_table_id,
+                                    ObIArray<ObRawExpr*> &target_exprs);
   int create_simple_column_expr(const ObString &table_name,
                                 const ObString &column_name,
                                 const uint64_t table_id,
@@ -248,6 +253,10 @@ protected:
                                ObSelectStmt *view_stmt = NULL,
                                const bool add_to_from = true,
                                const TableItem *source_table = NULL);
+  int gen_format_string_name(const char *name_format_string,
+                             const ObString &ori_name,
+                             ObString &format_name,
+                             const int64_t buf_len = 64 /* OB_MAX_SUBQUERY_NAME_LENGTH */);
   int create_table_item_with_infos(ObDMLStmt *stmt,
                                    const TableItem *ori_table,
                                    TableItem *&new_table,
