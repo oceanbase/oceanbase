@@ -2085,6 +2085,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
       SET_SPI_STATUS;
     }
   }
+  ObThreadLogLevelUtils::clear();
   return ret;
 }
 
