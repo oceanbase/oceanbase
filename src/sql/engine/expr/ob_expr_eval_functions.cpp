@@ -1445,6 +1445,20 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprVectorIPSimilarity::calc_ip_similarity               /* 873 */
   NULL, // ObExprVectorSimilarity::calc_similarity                    /* 874 */
   NULL, // ObExprVecVisible::generate_vec_visible                     /* 875 */
+  NULL, // ObExprArrayContains::eval_array_contains_int32_t           /* 876 */
+  NULL, // ObExprMaxPt::eval_max_pt,                                  /* 877 */
+  NULL, // ObExprDateTrunc::eval_date_trunc,                          /* 878 */
+  NULL, // ObExprToDate::calc_to_date_with_format                     /* 879 */
+  NULL, // ObExprEditDistance::calc_edit_distance,                    /* 880 */
+  NULL, // ObExprEditDistanceUTF8::calc_edit_distance_utf8,           /* 881 */
+  NULL, // ObExprDateAddClickhouse::calc_date_add_ck                  /* 882 */
+  NULL, // ObExprDateSubClickhouse::calc_date_sub_ck                  /* 883 */
+  NULL, // ObExprPosList::generate_pos_list,                          /* 884 */
+  NULL, // ObExprMonthsAdd::calc_months_add,                          /* 885 */
+  NULL, // ObExprParseDateTime::calc_parse_date_time                  /* 886 */
+  NULL, // ObExprIsNan::eval_is_nan,                                  /* 887 */
+  NULL, // ObExprCollectFileList::collect_file_list                   /* 888 */
+  NULL, // ObExprVoid::calc_void_expr                                 /* 889 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
