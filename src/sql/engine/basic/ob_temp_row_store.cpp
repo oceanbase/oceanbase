@@ -398,6 +398,9 @@ int ObTempRowStoreBase<RA>::ReaderBase::get_next_batch(const ObExprPtrIArray &ex
   for (int64_t i = 0; i < exprs.count() && OB_SUCC(ret); i++) {
     ObExpr *e = exprs.at(i);
     ObIVector *vec = NULL;
+    if (e->is_const_expr()) {
+      continue;
+    }
     if (OB_FAIL(e->init_vector_default(ctx, max_rows))) {
       LOG_WARN("fail to init vector", K(ret));
     } else {
@@ -514,14 +517,15 @@ int ObTempRowStoreBase<false>::Iterator::attach_rows(const ObExprPtrIArray &expr
 {
   int ret = OB_SUCCESS;
   for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < exprs.count(); col_idx ++) {
+    if (exprs.at(col_idx)->is_const_expr()) {
+      continue;
+    }
     if (OB_FAIL(exprs.at(col_idx)->init_vector_default(ctx, read_rows))) {
       LOG_WARN("fail to init vector", K(ret));
     } else {
       ObIVector *vec = exprs.at(col_idx)->get_vector(ctx);
-      if (VEC_UNIFORM_CONST != vec->get_format()) {
-        ret = vec->from_rows(row_meta, srows, read_rows, col_idx);
-        exprs.at(col_idx)->set_evaluated_projected(ctx);
-      }
+      ret = vec->from_rows(row_meta, srows, read_rows, col_idx);
+      exprs.at(col_idx)->set_evaluated_projected(ctx);
     }
   }
   return ret;

@@ -910,7 +910,8 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::attach_rows(const ObExprPtrI
 {
   int ret = OB_SUCCESS;
   for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < exprs.count(); col_idx++) {
-    if (T_FUN_SYS_ENCODE_SORTKEY == exprs.at(col_idx)->type_) {
+    if (T_FUN_SYS_ENCODE_SORTKEY == exprs.at(col_idx)->type_
+        || exprs.at(col_idx)->is_const_expr()) {
       // skip, do nothing
       continue;
     } else if (OB_FAIL(exprs.at(col_idx)->init_vector_default(ctx, read_rows))) {
@@ -918,10 +919,8 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::attach_rows(const ObExprPtrI
     } else {
       ObExpr *e = exprs.at(col_idx);
       ObIVector *vec = exprs.at(col_idx)->get_vector(ctx);
-      if (VEC_UNIFORM_CONST != vec->get_format()) {
-        ret = vec->from_rows(row_meta, srows, read_rows, col_idx);
-        exprs.at(col_idx)->set_evaluated_projected(ctx);
-      }
+      ret = vec->from_rows(row_meta, srows, read_rows, col_idx);
+      exprs.at(col_idx)->set_evaluated_projected(ctx);
     }
   }
   return ret;
