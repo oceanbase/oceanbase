@@ -891,7 +891,7 @@ bool ObRawExpr::same_as(const ObRawExpr &expr,
 #ifdef ENABLE_DEBUG_LOG
     if (bret && is_hash_different(expr, check_context)) {
       const ObFatalErrExtraInfoGuard *info = ObFatalErrExtraInfoGuard::get_thd_local_val_ptr();
-      LOG_WARN("expr hash should not be different", K(bret), KPC(this), K(expr), KPC(info));
+      LOG_ERROR("expr hash should not be different", K(bret), KPC(this), K(expr), KPC(info));
     }
 #endif
   }
@@ -1979,11 +1979,26 @@ bool ObQueryRefRawExpr::inner_same_as(
 
 void ObQueryRefRawExpr::inner_calc_hash()
 {
-  expr_hash_ = common::do_hash(get_expr_type(), expr_hash_);
-  expr_hash_ = common::do_hash(is_set_, expr_hash_);
-  expr_hash_ = common::do_hash(is_multiset_, expr_hash_);
-  expr_hash_ = common::do_hash(get_ref_id(), expr_hash_);
-  expr_hash_ = common::do_hash(ref_stmt_, expr_hash_);
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; i < exec_params_.count(); ++i) {
+    if (NULL != exec_params_.at(i)) {
+      exec_params_.at(i)->inner_calc_hash();
+    }
+  }
+  if (NULL != ref_stmt_) {
+    if (OB_FAIL(ref_stmt_->calc_relation_expr_hash())) {
+      LOG_WARN("failed to calc relation expr hash", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    expr_hash_ = 0;
+  } else {
+    expr_hash_ = common::do_hash(get_expr_type(), expr_hash_);
+    expr_hash_ = common::do_hash(is_set_, expr_hash_);
+    expr_hash_ = common::do_hash(is_multiset_, expr_hash_);
+    expr_hash_ = common::do_hash(get_ref_id(), expr_hash_);
+    expr_hash_ = common::do_hash(ref_stmt_, expr_hash_);
+  }
 }
 
 bool ObExprEqualCheckContext::compare_query(const ObQueryRefRawExpr &left,

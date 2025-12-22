@@ -573,6 +573,7 @@ int ObTransformJoinElimination::create_missing_select_items(ObSelectStmt *source
                                                         new_exprs,
                                                         miss_select_items.at(i)->expr_))) {
         LOG_WARN("failed to replace expr", K(ret));
+      } else if (OB_FALSE_IT(miss_select_items.at(i)->expr_->calc_hash())) {
       } else if (OB_FAIL(ObTransformUtils::adjust_agg_and_win_expr(source_stmt,
                                                                    miss_select_items.at(i)->expr_))) {
         LOG_WARN("failed to remove duplicated agg expr", K(ret));

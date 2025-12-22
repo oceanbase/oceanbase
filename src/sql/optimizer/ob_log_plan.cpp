@@ -19733,6 +19733,14 @@ int ObLogPlan::remove_duplicate_constraints()
         LOG_WARN("failed to remove a element from array", K(ret));
       }
     }
+    for (int64_t i = 0; OB_SUCC(ret) && i < query_ctx->all_expr_constraints_.count(); i++) {
+      if (OB_ISNULL(query_ctx->all_expr_constraints_.at(i).pre_calc_expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(query_ctx->all_expr_constraints_.at(i).pre_calc_expr_->calc_hash())) {
+        LOG_WARN("failed to calc hash", K(ret));
+      }
+    }
     for (int64_t i = query_ctx->all_expr_constraints_.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
       bool find_duplicate = false;
       for (int64_t j = 0; OB_SUCC(ret) && !find_duplicate && j < i; j++) {

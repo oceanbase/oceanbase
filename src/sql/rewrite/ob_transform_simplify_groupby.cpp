@@ -913,6 +913,7 @@ int ObTransformSimplifyGroupby::remove_aggr_distinct(ObDMLStmt *stmt, bool &tran
                  T_FUN_MIN == aggr_expr->get_expr_type()) {
         // max/min(distinct) 可以直接消掉distinct
         aggr_expr->set_param_distinct(false);
+        aggr_expr->calc_hash();
         trans_happened = true;
       } else if (T_FUN_SUM == aggr_expr->get_expr_type() ||
                  T_FUN_COUNT == aggr_expr->get_expr_type() ||
@@ -950,6 +951,7 @@ int ObTransformSimplifyGroupby::remove_aggr_distinct(ObDMLStmt *stmt, bool &tran
           LOG_WARN("failed to check stmt unique", K(ret));
         } else if (is_unique) {
           aggr_expr->set_param_distinct(false);
+          aggr_expr->calc_hash();
           trans_happened = true;
         }
       } else {
@@ -976,6 +978,7 @@ int ObTransformSimplifyGroupby::remove_aggr_distinct(ObDMLStmt *stmt, bool &tran
                  T_FUN_MIN == aggr_expr->get_expr_type()) {
         // max/min(distinct) 可以直接消掉distinct
         aggr_expr->set_param_distinct(false);
+        win_expr->calc_hash();
         trans_happened = true;
         win_happened = true;
       } else if (T_FUN_SUM == aggr_expr->get_expr_type() ||
@@ -994,6 +997,7 @@ int ObTransformSimplifyGroupby::remove_aggr_distinct(ObDMLStmt *stmt, bool &tran
           LOG_WARN("failed to check stmt unique", K(ret));
         } else if (is_unique) {
           aggr_expr->set_param_distinct(false);
+          win_expr->calc_hash();
           trans_happened = true;
           win_happened = true;
         }
@@ -1202,6 +1206,7 @@ int ObTransformSimplifyGroupby::convert_valid_count_aggr(ObSelectStmt *select_st
         LOG_WARN("failed to add param not null constraint", K(ret));
       } else {
         aggr->get_real_param_exprs_for_update().reuse();
+        aggr->calc_hash();
       }
     }
     if (OB_FAIL(ret)) {

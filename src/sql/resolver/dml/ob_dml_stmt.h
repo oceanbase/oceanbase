@@ -808,6 +808,7 @@ public:
                                           ObSQLSessionInfo *session_info,
                                           bool explicit_for_col);
   int set_sharable_expr_reference(ObRawExpr &expr, ExplicitedRefType ref_type);
+  int calc_relation_expr_hash();
   int check_pseudo_column_valid();
   int check_stmt_valid();
   int recursively_check_stmt_valid();

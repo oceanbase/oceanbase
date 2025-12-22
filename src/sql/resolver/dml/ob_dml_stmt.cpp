@@ -558,6 +558,11 @@ int ObDMLStmt::deep_copy(ObStmtFactory &stmt_factory,
       LOG_WARN("failed to set child stmt", K(ret));
     }
   }
+  if (OB_SUCC(ret) && !orgi_child_stmts.empty()) {
+    if (OB_FAIL(calc_relation_expr_hash())) {
+      LOG_WARN("failed to calc relation expr hash", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -1168,6 +1173,11 @@ int ObDMLStmt::update_stmt_table_id(ObIAllocator *allocator, const ObDMLStmt &ot
                                                              *joined_tables_.at(i)))) {
       LOG_WARN("failed to update table id for joined table", K(ret));
     } else { /*do nothing*/ }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(calc_relation_expr_hash())) {
+      LOG_WARN("failed to calc relation expr hash", K(ret));
+    }
   }
   return ret;
 }
@@ -1832,6 +1842,38 @@ int ObDMLStmt::formalize_relation_exprs(ObSQLSessionInfo *session_info, bool nee
       } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(expr, subquery_exprs_, true))) {
         LOG_WARN("failed to extract query ref expr", K(ret));
       }
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::calc_relation_expr_hash()
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 4> relation_exprs;
+  if (OB_FAIL(get_relation_exprs(relation_exprs))) {
+    LOG_WARN("get relation exprs failed", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_items_.count(); i++) {
+    ObColumnRefRawExpr *column_expr = NULL;
+    if (OB_ISNULL(column_expr = column_items_.at(i).expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpecteded null", K(ret));
+    } else if (column_expr->is_virtual_generated_column()) {
+      ObRawExpr *dependant_expr = static_cast<ObColumnRefRawExpr *>(
+                                  column_expr)->get_dependant_expr();
+      if (OB_FAIL(dependant_expr->calc_hash())) {
+        LOG_WARN("failed to calc expr hash", K(ret));
+      }
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < relation_exprs.count(); ++i) {
+    ObRawExpr *expr = relation_exprs.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpecteded null", K(ret));
+    } else if (OB_FAIL(expr->calc_hash())) {
+      LOG_WARN("failed to calc expr hash", K(ret));
     }
   }
   return ret;

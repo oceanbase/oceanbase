@@ -10351,6 +10351,7 @@ int ObTransformUtils::add_param_not_null_constraint(ObIArray<ObExprConstraint> &
     LOG_WARN("pre calculable expr is expected here", K(ret));
   } else {
     ObExprConstraint cons(not_null_expr, PRE_CALC_RESULT_NOT_NULL);
+    not_null_expr->calc_hash();
     if (OB_FAIL(add_var_to_array_no_dup(constraints, cons))) {
       LOG_WARN("failed to push back pre calc constraints", K(ret));
     }
@@ -10388,6 +10389,7 @@ int ObTransformUtils::add_param_null_constraint(ObTransformerCtx &ctx,
     LOG_WARN("pre calculable expr is expected here", K(ret));
   } else {
     ObExprConstraint cons(null_expr, PRE_CALC_RESULT_NULL);
+    null_expr->calc_hash();
     if (OB_FAIL(add_var_to_array_no_dup(ctx.expr_constraints_, cons))) {
       LOG_WARN("failed to push back pre calc constraints", K(ret));
     }
@@ -11211,6 +11213,7 @@ int ObTransformUtils::add_param_bool_constraint(ObTransformerCtx *ctx,
         ? PreCalcExprExpectResult::PRE_CALC_RESULT_TRUE
         : PreCalcExprExpectResult::PRE_CALC_RESULT_FALSE;
     ObExprConstraint cons(bool_expr, expect_result);
+    bool_expr->calc_hash();
     cons.ignore_const_check_ = ignore_const_check;
     if (OB_FAIL(add_var_to_array_no_dup(ctx->expr_constraints_, cons))) {
       LOG_WARN("failed to push back pre calc constraints", K(ret));
