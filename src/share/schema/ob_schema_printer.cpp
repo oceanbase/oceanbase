@@ -4210,7 +4210,13 @@ int ObSchemaPrinter::print_routine_definition(
         true /*inner_parse*/));
     }
     CK (OB_NOT_NULL(routine_tree));
-    LOG_INFO("print routine define", K(routine_tree->type_), K(routine_info->is_function()), K(routine_body));
+
+    if (OB_SUCC(ret)) {
+      LOG_INFO("print routine define", K(routine_tree->type_), K(routine_info->is_function()), K(routine_body));
+    } else {
+      LOG_INFO("print routine define", K(routine_tree), K(routine_info->is_function()), K(routine_body));
+    }
+
     CK (routine_info->is_function() ? T_SF_SOURCE == routine_tree->type_
                                       || T_SF_AGGREGATE_SOURCE == routine_tree->type_
                                     : T_SP_SOURCE == routine_tree->type_);
