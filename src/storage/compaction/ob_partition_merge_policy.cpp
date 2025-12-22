@@ -31,6 +31,7 @@ using namespace share::schema;
 namespace compaction
 {
 ERRSIM_POINT_DEF(EN_COMPACTION_DISABLE_ROW_COL_SWITCH);
+ERRSIM_POINT_DEF(EN_CO_MERGE_WITH_MINOR);
 
 // keep order with ObMergeType
 ObPartitionMergePolicy::GetMergeTables ObPartitionMergePolicy::get_merge_tables[]
@@ -868,6 +869,93 @@ int ObPartitionMergePolicy::deal_hist_minor_merge(
       max_snapshot_version = min_snapshot;
     }
   }
+  return ret;
+}
+
+int ObPartitionMergePolicy::get_co_major_minor_merge_tables(
+    const ObStorageSchema *storage_schema,
+    const int64_t merge_version,
+    const ObTablesHandleArray &input_tables,
+    ObIArray<ObTableHandleV2> &output_tables)
+{
+  int ret = OB_SUCCESS;
+  output_tables.reset();
+
+  if (OB_UNLIKELY(nullptr == storage_schema || !storage_schema->is_valid() || input_tables.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid argument", K(ret), KPC(storage_schema), K(input_tables));
+  } else if (storage_schema->get_column_group_count() > SCHEDULE_CO_MAJOR_MINOR_CG_CNT_THREASHOLD
+          && input_tables.get_count() - 1 > SCHEDULE_CO_MAJOR_MINOR_TRIGGER) {
+    int64_t big_minor_table_cnt = 0;
+    for (int64_t idx = 1; OB_SUCC(ret) && idx < input_tables.get_count(); ++idx) {
+      ObTableHandleV2 cur_table_hdl;
+      ObSSTable *sstable = nullptr;
+
+      if (OB_FAIL(input_tables.get_table(idx, cur_table_hdl))) {
+        LOG_WARN("failed to get table", K(ret), K(idx));
+      } else if (OB_ISNULL(sstable = static_cast<ObSSTable *>(cur_table_hdl.get_table()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null sstable", K(ret), K(idx), K(cur_table_hdl));
+      } else if (sstable->get_upper_trans_version() > merge_version) {
+        break;
+      } else if (OB_FAIL(output_tables.push_back(cur_table_hdl))) {
+        LOG_WARN("failed to push back minor table", K(ret), K(idx), KPC(sstable));
+      } else if (sstable->get_row_count() >= SCHEDULE_CO_MAJOR_MINOR_ROW_CNT_THREASHOLD) {
+        ++big_minor_table_cnt;
+      }
+    }
+
+    if (OB_FAIL(ret) || big_minor_table_cnt <= 1) {
+      output_tables.reset();
+    }
+  }
+
+  if (FAILEDx(schedule_co_major_minor_errsim(input_tables, output_tables))) {
+    LOG_WARN("failed to schedule co major minor errsim", K(ret));
+  }
+  return ret;
+}
+
+int ObPartitionMergePolicy::schedule_co_major_minor_errsim(
+    const ObTablesHandleArray &input_tables,
+    ObIArray<ObTableHandleV2> &output_tables)
+{
+int ret = OB_SUCCESS;
+#ifdef ERRSIM
+  bool schedule_minor = false;
+  #define SCHEDULE_MINOR_ERRSIM(tracepoint)               \
+    do {                                                  \
+      if (OB_SUCC(ret)) {                                 \
+        ret = OB_E((EventTable::tracepoint)) OB_SUCCESS;  \
+        if (OB_FAIL(ret)) {                               \
+          ret = OB_SUCCESS;                               \
+          STORAGE_LOG(INFO, "ERRSIM " #tracepoint);       \
+          schedule_minor = input_tables.get_count() > 1;  \
+        }                                                 \
+      }                                                   \
+    } while(0);
+
+  SCHEDULE_MINOR_ERRSIM(EN_SWAP_TABLET_IN_COMPACTION);
+  SCHEDULE_MINOR_ERRSIM(EN_COMPACTION_SCHEDULE_MINOR_FAIL);
+  SCHEDULE_MINOR_ERRSIM(EN_COMPACTION_CO_MERGE_SCHEDULE_FAILED);
+
+  if (EN_CO_MERGE_WITH_MINOR) {
+    STORAGE_LOG(INFO, "ERRSIM EN_CO_MERGE_WITH_MINOR");
+    SERVER_EVENT_SYNC_ADD("merge_errsim", "co_merge_with_minor", "ret_code", ret);
+    schedule_minor = input_tables.get_count() > 1;
+  }
+
+  if (schedule_minor && output_tables.empty()) {
+    for (int64_t i = 1; OB_SUCC(ret) && i < input_tables.get_count(); ++i) {
+      ObTableHandleV2 cur_table_hdl;
+      if (OB_FAIL(input_tables.get_table(i, cur_table_hdl))) {
+        LOG_WARN("failed to get table", K(ret), K(i));
+      } else if (OB_FAIL(output_tables.push_back(cur_table_hdl))) {
+        LOG_WARN("failed to push back minor table", K(ret), K(i), K(cur_table_hdl));
+      }
+    }
+  }
+#endif
   return ret;
 }
 

@@ -126,14 +126,12 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
       const uint32_t start_cg_idx,
       const uint32_t end_cg_idx,
       const bool release_mem_flag);
-  int check_need_schedule_minor(bool &schedule_minor) const;
   int collect_running_info(
     const uint32_t start_cg_idx,
     const uint32_t end_cg_idx,
     const int64_t hash,
     const share::ObDagId &dag_id,
     const ObCompactionTimeGuard &time_guard);
-  int schedule_minor_errsim(bool &schedule_minor) const;
   // only used for ObCOMergeBatchExeDag
   bool is_cg_merge_infos_valid(
     const uint32_t start_cg_idx,
@@ -163,9 +161,6 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   INHERIT_TO_STRING_KV("ObCOTabletMergeCtx", ObBasicTabletMergeCtx,
       K_(array_count), K_(exe_stat), K_(base_rowkey_cg_idx));
   virtual int mark_cg_finish(const int64_t start_cg_idx, const int64_t end_cg_idx) { return OB_SUCCESS; }
-  static const int64_t SCHEDULE_MINOR_CG_CNT_THREASHOLD = 20;
-  static const int64_t SCHEDULE_MINOR_TABLE_CNT_THREASHOLD = 3;
-  static const int64_t SCHEDULE_MINOR_ROW_CNT_THREASHOLD = 100 * 1000L;
   // every DAG_NET_ERROR_COUNT_THREASHOLD failure we hope finished exe_dag counts grow EXE_DAG_FINISH_GROWTH_RATIO
   static const int64_t DAG_NET_ERROR_COUNT_THREASHOLD = 10;
   static constexpr double EXE_DAG_FINISH_GROWTH_RATIO = 0.1;

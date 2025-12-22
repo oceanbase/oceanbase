@@ -178,38 +178,38 @@ int ObCOMergePrepareTask::init(ObCOMergeDagNet *dag_net)
 int ObCOMergePrepareTask::create_schedule_dag(ObCOTabletMergeCtx &ctx)
 {
   int ret = OB_SUCCESS;
-  ObGetMergeTablesResult result;
-  bool schedule_minor = false;
+  ObGetMergeTablesResult minor_result;
+  ObSEArray<ObTableHandleV2, 4> minor_tables;
 
   if (is_convert_co_major_merge(ctx.get_merge_type())) {
     // convert co major merge only rely on major sstable
   } else if (!MTL(ObTenantTabletScheduler *)->enable_adaptive_merge_schedule()) {
     // don't schedule minor dag if enable_adaptive_merge_schedule=false
-  } else if (OB_FAIL(ctx.check_need_schedule_minor(schedule_minor))) {
-    LOG_WARN("failed to check need chedule minor", K(ret), K(schedule_minor));
-  } else if (schedule_minor) {
-    ObTableHandleV2 tmp_table_handle;
+  } else if (OB_FAIL(ObPartitionMergePolicy::get_co_major_minor_merge_tables(ctx.get_schema(),
+                                                                             ctx.get_merge_version(),
+                                                                             ctx.get_tables_handle(),
+                                                                             minor_tables))) {
+  LOG_WARN("failed to get co major minor merge tables", K(ret));
+  } else if (!minor_tables.empty()) {
     ObMinorExecuteRangeMgr minor_range_mgr;
     if (OB_FAIL(minor_range_mgr.get_merge_ranges(ctx.get_ls_id(), ctx.get_tablet_id()))) {
       LOG_WARN("failed to get merge range", K(ret), "param", ctx.get_dag_param());
     }
-    for (int64_t i = 1; OB_SUCC(ret) && i < ctx.get_tables_handle().get_count(); ++i) { // skip major sstable
-      if (OB_FAIL(ctx.get_tables_handle().get_table(i, tmp_table_handle))) {
-        LOG_WARN("failed to get table", K(ret), K(i));
-      } else if (minor_range_mgr.in_execute_range(tmp_table_handle.get_table())) {
-        // in execute range
-        schedule_minor = false; // TODO(lixia.yq) need wait minor dag finish?
-        LOG_INFO("table in execute range", K(ret), K(i), K(tmp_table_handle), K(minor_range_mgr.exe_range_array_));
+
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < minor_tables.count(); ++idx) {
+      if (minor_range_mgr.in_execute_range(minor_tables.at(idx).get_table())) {
+        minor_result.reset();
+        LOG_INFO("table in execute range", K(ret), K(idx), K(minor_tables), K(minor_range_mgr.exe_range_array_));
         break;
-      } else if (OB_FAIL(ObPartitionMergePolicy::add_table_with_check(result, tmp_table_handle))) {
-        LOG_WARN("failed to add table", K(ret), K(i), K(tmp_table_handle));
+      } else if (OB_FAIL(ObPartitionMergePolicy::add_table_with_check(minor_result, minor_tables.at(idx)))) {
+        LOG_WARN("failed to add table", K(ret), K(idx), K(minor_tables.at(idx)));
       }
-    } // end of for
+    }
   }
 
   if (OB_FAIL(ret)) {
-  } else if (schedule_minor) {
-    if (OB_FAIL(schedule_minor_exec_dag(ctx, result))) {
+  } else if (minor_result.handle_.get_count() > 0) {
+    if (OB_FAIL(schedule_minor_exec_dag(ctx, minor_result))) {
       LOG_WARN("failed to schedule minor exec dag", K(ret));
     }
   } else {
