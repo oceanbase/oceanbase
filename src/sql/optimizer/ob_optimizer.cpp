@@ -271,7 +271,8 @@ int ObOptimizer::get_session_parallel_info(int64_t &force_parallel_dop,
     LOG_WARN("get unexpected null", K(session_info), K(ret));
   } else if (!allowed_get_session_parallel_param(*session_info)) {
     /* do nothing */
-  } else if (OB_FAIL(session_info->get_parallel_degree_policy_enable_auto_dop(enable_auto_dop))) {
+  } else if (!session_info->get_ddl_info().is_refreshing_mview() &&
+             OB_FAIL(session_info->get_parallel_degree_policy_enable_auto_dop(enable_auto_dop))) {
     LOG_WARN("failed to get sys variable for parallel degree policy", K(ret));
   } else if (enable_auto_dop) {
     /* do nothing */
