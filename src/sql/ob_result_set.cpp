@@ -1554,6 +1554,12 @@ int ObResultSet::ExternalRetrieveInfo::build_value_exprs(ObStmt &stmt,
       // Save the original value expressions for potential optimization in execute phase
       // DO NOT modify stmt here to avoid breaking code generation
       OZ (value_exprs_.reserve(select_exprs_count));
+      for (int64_t j = 0; OB_SUCC(ret) && j < param_info.count(); ++j) {
+        ObRawExpr *new_expr = param_info.at(j).element<1>();
+        ObRawExpr *old_expr = param_info.at(j).element<0>();
+        CK (OB_NOT_NULL(old_expr) && OB_NOT_NULL(new_expr));
+        OX (old_expr->set_result_type(new_expr->get_result_type()));
+      }
       for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs_count; ++i) {
         ObRawExpr *value_expr = select_stmt.get_select_item(i).expr_;
         ObRawExpr *new_value_expr = NULL;

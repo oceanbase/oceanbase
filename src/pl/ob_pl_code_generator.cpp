@@ -425,6 +425,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLTransformedAssignStmt &s)
     //控制流已断，后面的语句不再处理
   } else {
     ObSEArray<ObLLVMValue, 1> args;
+    OZ (generator_.generate_update_location(s));
     // save sqlcode
     OZ (args.push_back(generator_.get_vars().at(generator_.CTX_IDX)));
     OZ (generator_.get_helper().create_call(ObString("spi_save_sqlcode"),

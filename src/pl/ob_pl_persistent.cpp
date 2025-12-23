@@ -845,7 +845,7 @@ int ObRoutinePersistentInfo::get_pl_extra_info(const DependencyTable &dep_table,
     }
     //in normal resolve phase,we will collect body itself in dependency table for body obj which is
     // different with dependency table (not collect body itself), so we do not collect body itself in extra_info
-    if (!found && key_id != dep_table.at(i).object_id_) {
+    if (!found) {
       OZ (dep_table_objs.push_back(dep_table.at(i)));
     }
   }
