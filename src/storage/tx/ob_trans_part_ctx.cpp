@@ -3207,6 +3207,7 @@ int ObPartTransCtx::submit_parallel_redo_before_commit_() {
   int cnt = 0;
   bool has_set_commit = false;
   do {
+    ret = OB_SUCCESS;
     if (get_pending_log_size() > GCONF._private_buffer_size) {
       CtxLockGuard guard(lock_);
       if (sub_state_.is_commit_submitting_redo() && !has_set_commit) {
