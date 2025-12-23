@@ -545,6 +545,45 @@ int ObTabletToGlobalTmpTableOperator::get_tablet_ids_by_table_id_with_schema_ver
   return ret;
 }
 
+int ObTabletToGlobalTmpTableOperator::check_tablet_exist(
+    common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
+    const common::ObTableID &table_id,
+    const common::ObTabletID &tablet_id,
+    bool &exist)
+{
+  int ret = OB_SUCCESS;
+  exist = false;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || table_id == OB_INVALID_ID || !tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(table_id), K(tablet_id));
+  } else {
+    SMART_VAR(ObISQLClient::ReadResult, result) {
+      ObSqlString sql;
+      if (FAILEDx(sql.append_fmt(
+        "SELECT 1 FROM %s WHERE table_id = %lu AND tablet_id = %lu",
+        OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_TNAME, table_id, tablet_id.id()))) {
+        LOG_WARN("fail to assign sql", KR(ret), K(sql));
+      } else if (OB_FAIL(sql_proxy.read(result, tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql));
+      } else if (OB_ISNULL(result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get mysql result failed", KR(ret), K(sql));
+      } else if (OB_FAIL(result.get_result()->next())) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          LOG_WARN("fail to get next row", KR(ret));
+        } else {
+          ret = OB_SUCCESS;
+          exist = false;
+        }
+      } else {
+        exist = true;
+      }
+    }
+  }
+  return ret;
+}
+
 } // end namespace share
 } // end namespace oceanbase
 

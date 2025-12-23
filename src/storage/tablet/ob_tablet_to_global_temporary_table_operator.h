@@ -126,6 +126,12 @@ public:
     const uint64_t tenant_id,
     const common::ObTableID &table_id,
     common::ObIArray<common::ObTabletID> &tablet_ids);
+  static int check_tablet_exist(
+    common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
+    const common::ObTableID &table_id,
+    const common::ObTabletID &tablet_id,
+    bool &exist);
   const static int64_t MAX_BATCH_COUNT = 200;
 private:
   static int inner_batch_insert_by_sql(
