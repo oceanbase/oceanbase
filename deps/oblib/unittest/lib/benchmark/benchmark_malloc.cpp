@@ -22,7 +22,7 @@ int benchmark_initialize(void)
 #elif defined(OB_MALLOC)
 #elif defined(HOOK_MALLOC)
 #endif
-  enable_malloc_v2(true);
+  //enable_malloc_v2(true);
   return 0;
 }
 

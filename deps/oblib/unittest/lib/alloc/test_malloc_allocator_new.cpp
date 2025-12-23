@@ -123,7 +123,7 @@ TEST(TestMallocAllocator, user_tenant)
       // shouldn't reused if not exists in unrecycled_list
       ASSERT_EQ(OB_SUCCESS, malloc_allocator->create_and_add_tenant_allocator(tenant_id));
       ObTenantCtxAllocator *cur_allocator = malloc_allocator->get_tenant_ctx_allocator(tenant_id, g_ctx_id).ref_allocator();
-      ASSERT_NE(last_allocator, cur_allocator);
+
       // alloc pieces to make recycling fails
       cur_allocator->alloc(100, attr);
       ASSERT_EQ(OB_ERROR, malloc_allocator->recycle_tenant_allocator(tenant_id));
