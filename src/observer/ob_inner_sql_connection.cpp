@@ -863,6 +863,7 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
 {
   int ret = OB_SUCCESS;
   lib::CompatModeGuard g(get_compat_mode());
+  ObInterruptCheckerGuard interrupt_guard(res.interrupt_checker_);
   ObExecRecord exec_record;
   ObExecTimestamp exec_timestamp;
   ObExecutingSqlStatRecord sqlstat_record;
