@@ -1403,6 +1403,8 @@ PCODE_DEF(OB_GET_UNIT_INFO, 0x1684)
 #ifdef OB_BUILD_SHARED_STORAGE
 PCODE_DEF(OB_PREWARM_SS_LOCAL_CACHE, 0x1685)
 #endif
+// for drop database and purge database
+// PCODE_DEF(OB_NON_ATOMIC_DROP_TABLE_IN_DATABASE, 0x1686)
 
 //**** 注意：在此行之前增加新的RPC ID ******
 //
