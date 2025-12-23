@@ -2331,12 +2331,9 @@ int ObStaticEngineCG::check_not_support_cmp_type(
 
 bool ObStaticEngineCG::use_single_col_compare(ObSortVecSpec &spec)
 {
-  bool enable_single_col_compare = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_2
-                               && false == spec.has_addon_
+  bool enable_single_col_compare = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0
                                && 1 == spec.sk_collations_.count()
-                               && 1 == spec.sk_exprs_.count()
-                               && spec.sk_collations_.at(0).is_ascending_
-                               && spec.sk_collations_.at(0).is_not_null_;
+                               && 1 == spec.sk_exprs_.count();
   return enable_single_col_compare;
 }
 
@@ -2750,7 +2747,7 @@ int ObStaticEngineCG::generate_spec(ObLogSort &op, ObSortVecSpec &spec, const bo
         spec.has_addon_ = (spec.addon_exprs_.count() != 0);
         spec.enable_encode_sortkey_opt_ = enable_encode_sortkey_opt;
         spec.part_cnt_ = op.get_part_cnt();
-        spec.enable_single_col_compare_opt_ = false;
+        spec.enable_single_col_compare_opt_ = use_single_col_compare(spec);
         LOG_TRACE("trace order by", K(spec.sk_exprs_.count()), K(spec.addon_exprs_.count()),
                   K(spec.sk_exprs_), K(spec.addon_exprs_),
                   K(spec.sk_collations_), K(spec.addon_collations_), K(spec.enable_single_col_compare_opt_),
@@ -10112,17 +10109,10 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
     }
     case log_op_def::LOG_SORT: {
       int tmp_ret = OB_SUCCESS;
-      bool use_vec_sort = true;
-      const ObLogSort &sort_op = static_cast<const ObLogSort &>(log_op);
-      // sortkey count == 1 && no topn filter && no partition use vec2.0 sort
-      if (1 == sort_op.get_sort_keys().count() && !sort_op.enable_pd_topn_filter()
-          && sort_op.get_part_cnt() == 0) {
-        use_vec_sort = false;
-      }
       tmp_ret = OB_E(EventTable::EN_DISABLE_VEC_SORT) OB_SUCCESS;
       if (OB_SUCCESS != tmp_ret || !enable_rich_format.check(PHY_SORT)) {
         type = PHY_SORT;
-      } else if (use_vec_sort && enable_rich_format.check(PHY_SORT)) {
+      } else if (enable_rich_format.check(PHY_SORT)) {
         type = PHY_VEC_SORT;
       } else {
         type = PHY_SORT;

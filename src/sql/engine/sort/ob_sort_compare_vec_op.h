@@ -96,6 +96,12 @@ public:
   {
     encode_sk_state_ = CompareBase::FALLBACK_TO_DISABLE;
   }
+  int check_sort_key_has_null(ObEvalCtx &eval_ctx, const ObBatchRows &input_brs)
+  {
+    UNUSED(eval_ctx);
+    UNUSED(input_brs);
+    return OB_SUCCESS;
+  }
 
 protected:
   int init_cmp_sort_key(const ObIArray<ObExpr *> *cmp_sk_exprs,
@@ -140,18 +146,23 @@ protected:
   int compare(const Store_Row *r, ObEvalCtx &eval_ctx, const RowMeta *row_meta);
 };
 
-template <typename Store_Row, bool is_basic_cmp, bool is_topn_sort = false>
+// for sort / topn sort, sort key only has one column, no addon column
+template <typename Store_Row, bool has_addon, bool is_basic_cmp, bool is_topn_sort = false>
 class SingleColCompare : public CompareBase
 {
-  typedef int (*CmpFunc) (const void*, const void*);
+  typedef int (*BasicNotNullCmpFunc) (const void*, const void*);
+  typedef int (*BasicCmpFunc) (const void*, const bool, const void*, const bool);
+  typedef int (SingleColCompare::*CmpFunc) (const Store_Row*, const Store_Row*, const RowMeta*);
+  typedef int (SingleColCompare::*TopNCmpFunc) (const Store_Row*, ObEvalCtx&, const RowMeta*);
 public:
-  using SortVecOpChunk = ObSortVecOpChunk<Store_Row, false>;
+  using SortVecOpChunk = ObSortVecOpChunk<Store_Row, has_addon>;
   SingleColCompare(ObIAllocator &allocator) : CompareBase(allocator)
   {}
   int init(const ObIArray<ObExpr *> *cmp_sk_exprs, const RowMeta *sk_row_meta,
            const RowMeta *addon_row_meta, const ObIArray<ObSortFieldCollation> *cmp_sort_collations,
            ObExecContext *exec_ctx, bool enable_encode_sortkey);
   int init_cmp_func(const ObIArray<ObExpr *> &cmp_sk_exprs);
+  int check_sort_key_has_null(ObEvalCtx &eval_ctx, const ObBatchRows &input_brs);
   // compare function for quick sort.
   OB_INLINE bool operator()(const Store_Row *l, const Store_Row *r);
   // compare function for in-memory merge sort
@@ -164,16 +175,28 @@ public:
 
 protected:
   OB_INLINE int compare(const Store_Row *l, const Store_Row *r, const RowMeta *row_meta);
+  template <bool is_ascending>
+  OB_INLINE int default_compare(const Store_Row *l, const Store_Row *r, const RowMeta *row_meta);
+  template <bool is_ascending>
+  OB_INLINE int not_null_compare(const Store_Row *l, const Store_Row *r, const RowMeta *row_meta);
   OB_INLINE int compare(const Store_Row *r, ObEvalCtx &eval_ctx, const RowMeta *row_meta);
+  template <bool is_ascending>
+  OB_INLINE int default_topn_compare(const Store_Row *r, ObEvalCtx &eval_ctx, const RowMeta *row_meta);
+  template <bool is_ascending>
+  OB_INLINE int not_null_topn_compare(const Store_Row *r, ObEvalCtx &eval_ctx, const RowMeta *row_meta);
 
 private:
-  // only for fast compare in one column sort
+  // only for fast compare in single-column sort
   static constexpr uint16_t LEN_OFFSET = 13;
-  static constexpr uint16_t DATA_OFFSET = 17 + (is_topn_sort ? 8 : 0);
-  static constexpr uint16_t FIXED_DATA_OFFSET = 9 + (is_topn_sort ? 8 : 0);
+  static constexpr uint16_t DATA_OFFSET = 17 + (is_topn_sort ? 8 : 0) + (has_addon ? 8 : 0);
+  static constexpr uint16_t FIXED_DATA_OFFSET = 9 + (is_topn_sort ? 8 : 0) + (has_addon ? 8 : 0);
   common::ObObjMeta cmp_obj_meta_;
-  CmpFunc cmp_func_;
-  const ObCharsetInfo *cs_;
+  const ObCharsetInfo *cs_{nullptr};
+  BasicCmpFunc basic_cmp_func_{nullptr};
+  BasicNotNullCmpFunc basic_not_null_cmp_func_{nullptr};
+  NullSafeRowCmpFunc str_cmp_func_{nullptr};
+  CmpFunc cmp_func_{nullptr};
+  TopNCmpFunc topn_cmp_func_{nullptr};
 };
 
 template<VecValueTypeClass vec_tc, bool null_first>
