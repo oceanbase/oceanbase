@@ -398,10 +398,7 @@ int ObTempRowStoreBase<RA>::ReaderBase::get_next_batch(const ObExprPtrIArray &ex
   for (int64_t i = 0; i < exprs.count() && OB_SUCC(ret); i++) {
     ObExpr *e = exprs.at(i);
     ObIVector *vec = NULL;
-    if (e->is_const_expr()) {
-      continue;
-    }
-    if (OB_FAIL(e->init_vector_default(ctx, max_rows))) {
+    if (!e->is_const_expr() && OB_FAIL(e->init_vector_default(ctx, max_rows))) {
       LOG_WARN("fail to init vector", K(ret));
     } else {
       vec = e->get_vector(ctx);
