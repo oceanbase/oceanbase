@@ -33,7 +33,8 @@ public:
   ObSchemaGuardWrapper() = delete;
   ObSchemaGuardWrapper(const uint64_t tenant_id,
                        share::schema::ObMultiVersionSchemaService *schema_service,
-                       const bool is_local_guard);
+                       const bool is_local_guard,
+                       rootserver::ObDDLSQLTransaction *external_trans);
   ~ObSchemaGuardWrapper();
   int init(rootserver::ObDDLService *ddl_service);
   int get_local_schema_version(int64_t &schema_version) const;

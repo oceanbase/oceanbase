@@ -254,7 +254,7 @@ ObDDLHelper::ObDDLHelper(
     lock_object_id_map_(),
     allocator_(),
     parallel_ddl_type_(parallel_ddl_type),
-    schema_guard_wrapper_(tenant_id, schema_service, !enable_ddl_parallel),
+    schema_guard_wrapper_(tenant_id, schema_service, !enable_ddl_parallel, external_trans),
     enable_ddl_parallel_(enable_ddl_parallel),
     trans_(schema_service_,
            false, /*need_end_signal*/

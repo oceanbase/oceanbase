@@ -23,9 +23,10 @@ using namespace oceanbase::share::schema;
 
 ObSchemaGuardWrapper::ObSchemaGuardWrapper(const uint64_t tenant_id,
                                            share::schema::ObMultiVersionSchemaService *schema_service,
-                                           const bool is_local_guard)
+                                           const bool is_local_guard,
+                                           rootserver::ObDDLSQLTransaction *external_trans)
     : tenant_id_(tenant_id), schema_service_(schema_service),
-      latest_schema_guard_(schema_service, tenant_id), local_schema_guard_(), is_local_guard_(is_local_guard) {}
+      latest_schema_guard_(schema_service, tenant_id, external_trans), local_schema_guard_(), is_local_guard_(is_local_guard) {}
 
 ObSchemaGuardWrapper::~ObSchemaGuardWrapper() {}
 

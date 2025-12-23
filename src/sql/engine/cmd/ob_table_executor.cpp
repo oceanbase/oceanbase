@@ -708,7 +708,10 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
         const uint64_t part_id = -1;
         bool collect_statistics_on_create = false;
         bool is_odps_external_table = false;
-        if (OB_FAIL(ObSQLUtils::is_odps_external_table(&table_schema, is_odps_external_table))) {
+        if (OB_FAIL(GCTX.schema_service_->async_refresh_schema(tenant_id,
+                                                               res.schema_version_))) {
+                    LOG_WARN("failed to async refresh schema", KR(ret));
+        } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(&table_schema, is_odps_external_table))) {
           LOG_WARN("failed to check is odps external table or not", K(ret));
         } else if (is_odps_external_table) {
           sql::ObExternalFileFormat ex_format;
