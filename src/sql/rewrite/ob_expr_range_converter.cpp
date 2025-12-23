@@ -1842,7 +1842,7 @@ int ObExprRangeConverter::get_calculable_expr_val(const ObRawExpr *expr,
                                           const bool ignore_error/*default true*/)
 {
   int ret = OB_SUCCESS;
-  if (expr->has_flag(CNT_DYNAMIC_PARAM)) {
+  if (expr->has_flag(CNT_DYNAMIC_PARAM) || expr->has_flag(CNT_FAKE_CONST_UDF)) {
     is_valid = true;
   } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx_.exec_ctx_,
                                                                expr,
@@ -1863,7 +1863,7 @@ int ObExprRangeConverter::check_calculable_expr_valid(const ObRawExpr *expr,
   int ret = OB_SUCCESS;
   ObObj val;
   bool can_ignore_check = false;
-  if (expr->has_flag(CNT_DYNAMIC_PARAM)) {
+  if (expr->has_flag(CNT_DYNAMIC_PARAM) || expr->has_flag(CNT_FAKE_CONST_UDF)) {
     is_valid = true;
   } else if (OB_FAIL(ignore_inner_generate_expr(expr, can_ignore_check))) {
     LOG_WARN("failedto check can ignore inner generate expr", K(ret));
@@ -3844,7 +3844,7 @@ int ObExprRangeConverter::check_decimal_int_range_cmp_valid(const ObRawExpr *con
   if (OB_ISNULL(const_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null const expr", KP(const_expr));
-  } else if (const_expr->has_flag(CNT_DYNAMIC_PARAM)) {
+  } else if (const_expr->has_flag(CNT_DYNAMIC_PARAM) || const_expr->has_flag(CNT_FAKE_CONST_UDF)) {
     // do nothing
   } else if (T_FUN_SYS_INNER_ROW_CMP_VALUE == const_expr->get_expr_type()) {
     ObObj const_val;

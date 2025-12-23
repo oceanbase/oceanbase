@@ -20,6 +20,7 @@
 #endif
 #include "pl/ob_pl_dependency_util.h"
 #include "pl/ob_pl_resolve_cache.h"
+#include "sql/engine/dml/ob_trigger_handler.h"
 
 namespace oceanbase {
 using namespace common;
@@ -2642,24 +2643,31 @@ int ObPLBlockNS::find_sub_attr_by_name(const ObUserDefinedType &user_type,
         if (get_block_type() == BLOCK_ROUTINE && access_idxs.count() > 0) {
           ObObjAccessIdx &parent_access_idx = access_idxs.at(access_idxs.count() - 1);
           if ((0 == parent_access_idx.var_index_ || 1 == parent_access_idx.var_index_)
-              && ObTriggerInfo::is_trigger_body_package_id(package_id_)
-              && ((lib::is_oracle_mode() && parent_access_idx.var_name_.prefix_match(":"))
-                  || (lib::is_mysql_mode() && parent_access_idx.var_name_.case_compare_equal("NEW")))) {
-            const ObPLVar *var = NULL;
-            const ObPLBlockNS *ns = (parent_access_idx.is_subprogram_var() ? parent_access_idx.var_ns_ : this);
-            if (OB_ISNULL(ns) || OB_ISNULL(ns->get_symbol_table())) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("symbol table is NULL", K(ret));
-            } else if (OB_ISNULL(var = ns->get_symbol_table()->get_symbol(parent_access_idx.var_index_))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("failed to get var", K(ret), K(parent_access_idx), K(attr_name));
-            } else {
-              ObString copy_attr;
-              if (OB_FAIL(ob_write_string(ns->get_symbol_table()->get_allocator(), attr_name, copy_attr))) {
-                LOG_WARN("failed to write string", K(ret), K(attr_name));
-              } else if (OB_FAIL((const_cast<ObPLVar*>(var))->get_trigger_ref_cols().push_back(
-                         std::make_pair(copy_attr, false)))) {
-                LOG_WARN("failed to add attr_name", K(ret), K(copy_attr));
+              && TriggerHandle::is_trigger_body_routine(package_id_, routine_id_,
+                                                           pl::ObProcType::PACKAGE_PROCEDURE)) {
+            bool is_mysql_trg = lib::is_mysql_mode()
+                                && (parent_access_idx.var_name_.case_compare_equal("NEW")
+                                    || parent_access_idx.var_name_.case_compare_equal("OLD"));
+            bool is_oracle_trg = lib::is_oracle_mode()
+                                  && (parent_access_idx.var_name_.prefix_match(":")
+                                      || routine_id_ == TriggerHandle::get_when_condition_routine_id());
+            if (is_mysql_trg || is_oracle_trg) {
+              const ObPLVar *var = NULL;
+              const ObPLBlockNS *ns = (parent_access_idx.is_subprogram_var() ? parent_access_idx.var_ns_ : this);
+              if (OB_ISNULL(ns) || OB_ISNULL(ns->get_symbol_table())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("symbol table is NULL", K(ret));
+              } else if (OB_ISNULL(var = ns->get_symbol_table()->get_symbol(parent_access_idx.var_index_))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("failed to get var", K(ret), K(parent_access_idx), K(attr_name));
+              } else {
+                ObString copy_attr;
+                if (OB_FAIL(ob_write_string(ns->get_symbol_table()->get_allocator(), attr_name, copy_attr))) {
+                  LOG_WARN("failed to write string", K(ret), K(attr_name));
+                } else if (OB_FAIL((const_cast<ObPLVar*>(var))->get_trigger_ref_cols().push_back(
+                          std::make_pair(copy_attr, false)))) {
+                  LOG_WARN("failed to add attr_name", K(ret), K(copy_attr));
+                }
               }
             }
           }
@@ -3407,12 +3415,12 @@ int ObPLBlockNS::resolve_routine(const ObPLResolveCtx &resolve_ctx,
       if (OB_NOT_NULL(external_ns_)) {
         bool need_restore = false;
         pl::ObPLBlockNS *second_ns = nullptr;
-        if (OB_NOT_NULL(resolve_ctx.params_.secondary_namespace_) &&
-            external_ns_->get_resolve_ctx().params_.secondary_namespace_ != resolve_ctx.params_.secondary_namespace_) {
+        if (OB_NOT_NULL(resolve_ctx.secondary_namespace_) &&
+            external_ns_->get_resolve_ctx().secondary_namespace_ != resolve_ctx.secondary_namespace_) {
           need_restore = true;
-          second_ns = external_ns_->get_resolve_ctx().params_.secondary_namespace_;
-          (const_cast<ObPLResolveCtx &>(external_ns_->get_resolve_ctx())).params_.secondary_namespace_
-          = resolve_ctx.params_.secondary_namespace_;
+          second_ns = external_ns_->get_resolve_ctx().secondary_namespace_;
+          (const_cast<ObPLResolveCtx &>(external_ns_->get_resolve_ctx())).secondary_namespace_
+          = resolve_ctx.secondary_namespace_;
         }
         if (OB_FAIL(SMART_CALL(external_ns_->resolve_external_routine(
                                                         db_name,
@@ -3425,7 +3433,7 @@ int ObPLBlockNS::resolve_routine(const ObPLResolveCtx &resolve_ctx,
                    K(expr_params), K(ret));
         }
         if (need_restore) {
-          (const_cast<ObPLResolveCtx &>(external_ns_->get_resolve_ctx())).params_.secondary_namespace_ = second_ns;
+          (const_cast<ObPLResolveCtx &>(external_ns_->get_resolve_ctx())).secondary_namespace_ = second_ns;
         }
       }
     }
@@ -4853,6 +4861,13 @@ int ObPLCompileUnitAST::set_exprs(common::ObIArray<sql::ObRawExpr*> &exprs)
   return add_exprs(exprs);
 }
 
+void ObPLCompileUnitAST::pop_value_exprs(int64_t remain_count)
+{
+  while (exprs_.count() > remain_count) {
+    exprs_.pop_back();
+  }
+}
+
 int ObPLCompileUnitAST::add_exprs(common::ObIArray<sql::ObRawExpr*> &exprs)
 {
   int ret = OB_SUCCESS;
@@ -5164,6 +5179,13 @@ int ObPLStmtFactory::allocate(ObPLStmtType type, const ObPLStmtBlock *block, ObP
     }
   }
     break;
+  case PL_TRANSFORMED_ASSIGN: {
+    stmt = static_cast<ObPLStmt*>(allocator_.alloc(sizeof(ObPLTransformedAssignStmt)));
+    if (NULL != stmt) {
+      stmt = new(stmt)ObPLTransformedAssignStmt(allocator_);
+    }
+  }
+    break;
   case PL_IF: {
     stmt = static_cast<ObPLStmt*>(allocator_.alloc(sizeof(ObPLIfStmt)));
     if (NULL != stmt) {
@@ -5421,6 +5443,10 @@ int ObPLDeclareVarStmt::accept(ObPLStmtVisitor &visitor) const
   return visitor.visit(*this);
 }
 int ObPLDeclareUserTypeStmt::accept(ObPLStmtVisitor &visitor) const
+{
+  return visitor.visit(*this);
+}
+int ObPLTransformedAssignStmt::accept(ObPLStmtVisitor &visitor) const
 {
   return visitor.visit(*this);
 }

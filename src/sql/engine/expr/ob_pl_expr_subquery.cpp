@@ -179,7 +179,7 @@ int ObExprOpSubQueryInPl::eval_subquery(const ObExpr &expr,
   } else if (OB_FAIL(fill_param_store(objs, expr.arg_cnt_, *params))) {
     LOG_WARN("failed to process in params", K(ret));
   } else {
-    pl::ObPLExecCtx pl_exec_ctx(&alloc, &ctx.exec_ctx_, params, nullptr, &ret, nullptr);
+    pl::ObPLExecCtx pl_exec_ctx(&alloc, &alloc, &ctx.exec_ctx_, params, nullptr, &ret, nullptr);
 
     SMART_VAR(ObSPIResultSet, spi_result) {
       OZ (spi_result.init(*session));

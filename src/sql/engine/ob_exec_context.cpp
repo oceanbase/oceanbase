@@ -359,7 +359,7 @@ int ObExecContext::init_expr_op(uint64_t expr_op_size, ObIAllocator *allocator)
   return ret;
 }
 
-void ObExecContext::reset_expr_op()
+void ObExecContext::reset_expr_op_ctx()
 {
   if (expr_op_ctx_store_ != NULL) {
     int64_t ctx_store_size = expr_op_size_ * sizeof(ObExprOperatorCtx *);
@@ -371,6 +371,13 @@ void ObExecContext::reset_expr_op()
       }
     }
     MEMSET(expr_op_ctx_store_, 0, ctx_store_size);
+  }
+}
+
+void ObExecContext::reset_expr_op()
+{
+  if (expr_op_ctx_store_ != NULL) {
+    reset_expr_op_ctx();
     has_non_trivial_expr_op_ctx_ = false;
     expr_op_ctx_store_ = NULL;
     expr_op_size_ = 0;
@@ -1060,7 +1067,7 @@ int ObExecContext::fill_px_batch_info(ObBatchRescanParams &params,
               LOG_WARN("adjust lob datum failed", K(ret), K(i),
                        K(one_params.at(i).get_meta()), K(expr->obj_meta_));
             } else {
-              expr->get_eval_info(eval_ctx).evaluated_ = true;
+              expr->get_eval_info(eval_ctx).set_evaluated(true);
             }
           }
         }
@@ -1118,10 +1125,22 @@ pl::ObPLPackageGuard* ObExecContext::get_package_guard()
 int ObExecContext::get_package_guard(pl::ObPLPackageGuard *&package_guard)
 {
   int ret = OB_SUCCESS;
-  package_guard = get_package_guard();
-  if (OB_ISNULL(package_guard)) {
+  ObExecContext *top_ctx = this;
+
+  if (OB_NOT_NULL(my_session_) &&
+      OB_NOT_NULL(my_session_->get_pl_context()) &&
+      !my_session_->get_pl_context()->get_disable_pl_exec_cache()) {
+    top_ctx = my_session_->get_pl_context()->get_my_exec_ctx();
+  }
+  if (OB_ISNULL(top_ctx)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get package guard failed", K(ret));
+    LOG_WARN("top context is null", K(ret));
+  } else {
+    package_guard = top_ctx->get_package_guard();
+    if (OB_ISNULL(package_guard)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get package guard failed", K(ret));
+    }
   }
   return ret;
 }

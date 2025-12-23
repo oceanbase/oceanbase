@@ -92,7 +92,7 @@ int ObDynamicParamSetter::set_dynamic_param_vec2(ObEvalCtx &eval_ctx, const sql:
       ObDatum &param_datum = dst_->locate_expr_datum(eval_ctx);
       OZ(dst_->init_vector(eval_ctx, VEC_UNIFORM_CONST, 1));
       clear_parent_evaluated_flag(eval_ctx, *dst_);
-      dst_->get_eval_info(eval_ctx).evaluated_ = true;
+      dst_->get_eval_info(eval_ctx).set_evaluated(true);
       if (0 == dst_->res_buf_off_) {
         // for compat, old server don't have ref buf for dynamic expr,
         // so keep shallow copy
@@ -135,7 +135,7 @@ int ObDynamicParamSetter::update_dynamic_param(ObEvalCtx &eval_ctx, ObDatum &dat
   } else {
     clear_parent_evaluated_flag(eval_ctx, *dst_);
     ObDatum &param_datum = dst_->locate_expr_datum(eval_ctx);
-    dst_->get_eval_info(eval_ctx).evaluated_ = true;
+    dst_->get_eval_info(eval_ctx).set_evaluated(true);
     if (0 == dst_->res_buf_off_) {
       // for compat, old server don't have ref buf for dynamic expr,
       // so keep shallow copy
@@ -1384,7 +1384,7 @@ int ObOperator::get_next_row()
           if (OB_FAIL((*e)->eval(eval_ctx_, res))) {
             LOG_WARN("expr evaluate failed", K(ret), KPC(*e), K_(eval_ctx));
           } else {
-            (*e)->get_eval_info(eval_ctx_).projected_ = true;
+            (*e)->get_eval_info(eval_ctx_).set_projected(true);
           }
         }
       }
@@ -1556,7 +1556,7 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
         FOREACH_CNT_X(e, spec_.output_, OB_SUCC(ret)) {
           ret = spec_.use_rich_format_ ? (*e)->eval_vector(eval_ctx_, brs_)
                                        : (*e)->eval_batch(eval_ctx_, *brs_.skip_, brs_.size_);
-          (*e)->get_eval_info(eval_ctx_).projected_ = true;
+          (*e)->get_eval_info(eval_ctx_).set_projected(true);
         }
       }
 

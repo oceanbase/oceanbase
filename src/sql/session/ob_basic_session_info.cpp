@@ -107,6 +107,7 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       diagnosis_limit_num_(0),
       diagnosis_info_(),
       log_id_level_map_valid_(false),
+      exec_env_(),
       cur_phy_plan_(NULL),
       plan_id_(0),
       last_plan_id_(0),
@@ -156,7 +157,9 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       is_real_inner_session_(false),
       sql_mem_used_(0),
       shadow_top_query_string_(false),
-      use_pl_inner_info_string_(false)
+      use_pl_inner_info_string_(false),
+      is_first_gen_pl_cache_str_(true),
+      influence_pl_cache_var_indexs_()
 {
   thread_data_.reset();
   MEMSET(sys_vars_, 0, sizeof(sys_vars_));
@@ -171,6 +174,7 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
   inc_sys_var_alloc_[1] = &inc_sys_var_alloc2_;
   influence_plan_var_indexs_.set_attr(SET_IGNORE_MEM_VERSION(ObMemAttr(orig_tenant_id_, "PlanVaIdx")));
   thread_name_[0] = '\0';
+  influence_pl_cache_var_indexs_.set_attr(SET_IGNORE_MEM_VERSION(ObMemAttr(orig_tenant_id_, "PlCacheVaIdx")));
 }
 
 ObBasicSessionInfo::~ObBasicSessionInfo()
@@ -365,6 +369,11 @@ int ObBasicSessionInfo::reset_sys_vars()
   inc_sys_var_alloc2_.reset();
   base_sys_var_alloc_.reset();
   sys_var_fac_.destroy();
+  exec_env_.reset();
+  influence_pl_cache_var_indexs_.reset();
+  if (!sys_var_in_pl_cache_str_.empty()) {
+    sys_var_in_pl_cache_str_.set_length(0);
+  }
 
   // load 系统租户变量
   OZ (load_default_sys_variable(print_info_log, is_sys_tenant));
@@ -445,6 +454,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   if (!skip_sys_var) {
     memset(sys_vars_, 0, sizeof(sys_vars_));
     influence_plan_var_indexs_.reset();
+    influence_pl_cache_var_indexs_.reset();
   } else {
     const SysVarIds &all_sys_var_ids = sys_var_inc_info_.get_all_sys_var_ids();
     for (int i = 0; i < all_sys_var_ids.count(); i++) {
@@ -476,6 +486,8 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   is_diagnosis_enabled_ = false;
   diagnosis_limit_num_ = 0;
   diagnosis_info_.reset();
+  exec_env_.reset();
+  exec_env_inited_ = false;
   log_id_level_map_valid_ = false;
   log_id_level_map_.reset_level();
   cur_phy_plan_ = NULL;
@@ -550,6 +562,8 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   is_real_inner_session_ = false;
   sql_mem_used_ = 0;
   use_pl_inner_info_string_ = false;
+  sys_var_in_pl_cache_str_.reset();
+  is_first_gen_pl_cache_str_ = true;
 }
 
 int ObBasicSessionInfo::reset_timezone()
@@ -1220,6 +1234,10 @@ int ObBasicSessionInfo::init_system_variables(const bool print_info_log, const b
                    sys_vars_[i]->is_influence_plan() &&
                    OB_FAIL(influence_plan_var_indexs_.push_back(i))) {
           LOG_WARN("fail to add influence plan sys var", K(name), K(ret));
+        } else if (OB_NOT_NULL(sys_vars_[i]) &&
+                   sys_vars_[i]->is_influence_pl() &&
+                   OB_FAIL(influence_pl_cache_var_indexs_.push_back(i))) {
+          LOG_WARN("fail to add influence pl cache sys var", K(name), K(ret));
         } else if(print_info_log) {
           LOG_INFO("load default system variable", name.ptr(), value.get_string().ptr());
         }
@@ -1233,6 +1251,7 @@ int ObBasicSessionInfo::init_system_variables(const bool print_info_log, const b
       LOG_INFO("fail to generate system variables in pc str");
     } else if (OB_FAIL(gen_configs_in_pc_str())) {
       LOG_INFO("fail to generate system config in pc str");
+    } else if (OB_FALSE_IT(exec_env_inited_ = false)) { //reset exec_env_inited_
     } else {
       global_vars_version_ = 0;
     }
@@ -1767,6 +1786,100 @@ int ObBasicSessionInfo::gen_sys_var_in_pc_str()
   return ret;
 }
 
+int ObBasicSessionInfo::get_influence_pl_sys_var(ObSysVarInPC &sys_vars) const
+{
+  int ret = OB_SUCCESS;
+  int64_t index = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < get_influence_pl_var_count(); ++i) {
+    index = influence_pl_cache_var_indexs_.at(i);
+    if (index >= ObSysVarFactory::ALL_SYS_VARS_COUNT) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("influence pl system var indexs out of range", K(i), K(ret));
+    } else if (NULL == sys_vars_[index]) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("influence pl system var is NULL", K(i), K(ret));
+    } else if (OB_FAIL(sys_vars.push_back(sys_vars_[index]->get_value()))) {
+      LOG_WARN("influence pl system variables push failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObBasicSessionInfo::gen_sys_var_in_pl_cache_str()
+{
+  int ret = OB_SUCCESS;
+  const int64_t MAX_SYS_VARS_STR_SIZE = 256;
+  ObSysVarInPC sys_vars;
+  char *buf = NULL;
+  int64_t pos = 0;
+  int64_t sys_var_encode_max_size = MAX_SYS_VARS_STR_SIZE;
+
+  if (is_first_gen_pl_cache_str_) {
+    if (NULL == (buf = (char *)sess_level_name_pool_.alloc(MAX_SYS_VARS_STR_SIZE))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocator memory", K(ret), K(MAX_SYS_VARS_STR_SIZE));
+    } else {
+      is_first_gen_pl_cache_str_ = false;
+    }
+  } else {
+    buf = sys_var_in_pl_cache_str_.ptr();
+    sys_var_encode_max_size = sys_var_in_pl_cache_str_.length();
+    MEMSET(buf, 0, sys_var_in_pl_cache_str_.length());
+    sys_var_in_pl_cache_str_.set_length(0);
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(get_influence_pl_sys_var(sys_vars))) {
+    LOG_WARN("fail to get influence pl system variables", K(ret));
+  } else if (OB_FAIL(sys_vars.serialize_sys_vars(buf, sys_var_encode_max_size, pos))) {
+    if (OB_BUF_NOT_ENOUGH == ret || OB_SIZE_OVERFLOW ==ret) {
+      ret = OB_SUCCESS;
+      for (int64_t i = 0; OB_SUCC(ret) && i < 3; ++i) {
+        sys_var_encode_max_size = 2 * sys_var_encode_max_size;
+        if (NULL == (buf = (char *)sess_level_name_pool_.alloc(sys_var_encode_max_size))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocator memory", K(ret), K(sys_var_encode_max_size));
+        } else if (OB_FAIL(sys_vars.serialize_sys_vars(buf, sys_var_encode_max_size, pos))) {
+          if (i != 2 && (OB_BUF_NOT_ENOUGH == ret || OB_SIZE_OVERFLOW ==ret)) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("fail to serialize system vars", K(ret));
+          }
+        } else {
+          break;
+        }
+      }
+    } else {
+      LOG_WARN("fail to serialize system vars", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      (void)sys_var_in_pl_cache_str_.assign(buf, int32_t(pos));
+    }
+  } else {
+    (void)sys_var_in_pl_cache_str_.assign(buf, int32_t(pos));
+  }
+
+  return ret;
+}
+
+int ObBasicSessionInfo::gen_exec_env(ObSysVarClassType sys_var_id)
+{
+  int ret = OB_SUCCESS;
+  OZ (exec_env_.load(*this, NULL, sys_var_id));
+  OX (exec_env_inited_ = true);
+  return ret;
+}
+
+int ObBasicSessionInfo::get_exec_env(ObExecEnv *&exec_env)
+{
+  int ret = OB_SUCCESS;
+  if (!exec_env_inited_) {
+    OZ (gen_exec_env());
+  }
+  OX (exec_env = &exec_env_);
+  return ret;
+}
+
 int ObBasicSessionInfo::update_sys_variable_by_name(const ObString &var, const ObObj &val)
 {
   int ret = OB_SUCCESS;
@@ -1922,6 +2035,19 @@ int ObBasicSessionInfo::update_sys_variable(const ObSysVarClassType sys_var_id, 
       && sys_var->is_influence_plan()
       && OB_FAIL(gen_sys_var_in_pc_str())) {
     LOG_ERROR("fail to gen sys var in pc str", K(ret));
+  }
+  // process exec_env related variables
+  if (OB_SUCC(ret)
+      && !is_deserialized_
+      && ObBasicSysVar::is_influence_exec_env(sys_var_id)
+      && OB_FAIL(gen_exec_env(sys_var_id))) {
+    LOG_ERROR("fail to gen exec env", K(ret));
+  }
+  if (OB_SUCC(ret)
+      && !is_deserialized_
+      && sys_var->is_influence_pl()
+      && OB_FAIL(gen_sys_var_in_pl_cache_str())) {
+    LOG_ERROR("fail to gen sys var in pl cache str", K(ret));
   }
   return ret;
 }
@@ -4591,6 +4717,8 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
     const bool check_timezone_valid = false;
     SysVarIncInfo tmp_sys_var_inc_info;
     bool is_influence_plan_cache_sys_var = false;
+    bool is_influence_exec_env_sys_var = false;
+    bool is_influence_pl_cache_sys_var = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < deserialize_sys_var_count; ++i) {
       ObObj tmp_val;
       ObBasicSysVar *sys_var = NULL;
@@ -4633,7 +4761,11 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
         LOG_ERROR("process system variable error",  K(ret), K(*sys_var));
       } else if (sys_var->is_influence_plan()
                 && FALSE_IT(is_influence_plan_cache_sys_var = true)) {
+      } else if (sys_var->is_influence_pl()
+                && FALSE_IT(is_influence_pl_cache_sys_var = true)) {
         // add all deserialize sys_var id.
+      } else if (ObBasicSysVar::is_influence_exec_env(sys_var_id)
+                && FALSE_IT(is_influence_exec_env_sys_var = true)) {
       } else if (!is_error_sync && OB_FAIL(tmp_sys_var_inc_info.add_sys_var_id(sys_var_id))) {
         LOG_WARN("fail to add sys var id", K(sys_var_id), K(ret));
       } else {
@@ -4643,7 +4775,8 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
     }
     if (OB_SUCC(ret) && !is_error_sync) {
       if (OB_FAIL(sync_default_sys_vars(tmp_sys_var_inc_info,
-                                        is_influence_plan_cache_sys_var))) {
+                                        is_influence_plan_cache_sys_var,
+                                        is_influence_pl_cache_sys_var))) {
         LOG_WARN("fail to sync default sys vars",K(ret));
       } else if (OB_FAIL(sys_var_inc_info_.assign(tmp_sys_var_inc_info))) {
         LOG_WARN("fail to assign sys var delta info",K(ret));
@@ -4654,7 +4787,12 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
   if (OB_SUCC(ret)) {
     if (is_influence_plan_cache_sys_var && OB_FAIL(gen_sys_var_in_pc_str())) {
       LOG_ERROR("fail to gen sys var in pc str", K(ret));
+    } else if (is_influence_pl_cache_sys_var && OB_FAIL(gen_sys_var_in_pl_cache_str())) {
+      LOG_ERROR("fail to gen sys var in pl cache str", K(ret));
     }
+  }
+  if (OB_SUCC(ret) && is_influence_exec_env_sys_var && OB_FAIL(gen_exec_env())) {
+    LOG_ERROR("fail to gen exec env", K(ret));
   }
 
     LOG_TRACE("after deserialize sync sys vars", "inc var ids",
@@ -4666,7 +4804,8 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
 
 // Deserialization scenario, synchronization of default system variables
 int ObBasicSessionInfo::sync_default_sys_vars(SysVarIncInfo &tmp_sys_var_inc_info,
-                                              bool &is_influence_plan_cache_sys_var)
+                                              bool &is_influence_plan_cache_sys_var,
+                                              bool &is_influence_pl_cache_sys_var)
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObSysVarClassType> &ids = sys_var_inc_info_.get_all_sys_var_ids();
@@ -4693,6 +4832,9 @@ int ObBasicSessionInfo::sync_default_sys_vars(SysVarIncInfo &tmp_sys_var_inc_inf
         LOG_WARN("process system variable error", K(ret), K(sys_var_id));
       } else if (sys_var->is_influence_plan()
                 && FALSE_IT(is_influence_plan_cache_sys_var = true)) {
+        // do nothing.
+      } else if (sys_var->is_influence_pl()
+                && FALSE_IT(is_influence_pl_cache_sys_var = true)) {
         // do nothing.
       } else {
         LOG_TRACE("sync sys var set default value", K(sys_var_id),
@@ -5131,6 +5273,7 @@ int ObBasicSessionInfo::serialize_(char *buf, int64_t buf_len, int64_t &pos) con
   OB_UNIS_ENCODE(diagnosis_info_);
   OB_UNIS_ENCODE(client_create_time_);
   OB_UNIS_ENCODE(route_to_column_replica_);
+  OB_UNIS_ENCODE(sys_var_in_pl_cache_str_);
   return ret;
 }
 
@@ -5320,6 +5463,8 @@ int ObBasicSessionInfo::deserialize(const char *buf, const int64_t data_len, int
 
     sys_var_in_pc_str_.reset(); //sys_var_in_pc_str_在反序列化系统变量阶段可能会被污染，需要reset掉
     config_in_pc_str_.reset();
+    exec_env_inited_ = false;
+    sys_var_in_pl_cache_str_.reset();
     flt_vars_.last_flt_trace_id_.reset();
     flt_vars_.last_flt_span_id_.reset();
     const ObTZInfoMap *tz_info_map = tz_info_wrap_.get_tz_info_offset().get_tz_info_map();
@@ -5447,6 +5592,18 @@ int ObBasicSessionInfo::deserialize(const char *buf, const int64_t data_len, int
     OB_UNIS_DECODE(client_create_time_);
     OB_UNIS_DECODE(route_to_column_replica_);
 
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(gen_exec_env())) {
+        LOG_WARN("fail to regenerate exec_env", K(ret));
+      }
+    }
+
+    OB_UNIS_DECODE(sys_var_in_pl_cache_str_);
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(sess_level_name_pool_.write_string(sys_var_in_pl_cache_str_, &sys_var_in_pl_cache_str_))) {
+        LOG_WARN("fail to write sys_var_in_pl_cache_str to string_buf_", K(sys_var_in_pl_cache_str_), K(ret));
+      }
+    }
     pos = pos_orig + len;
   }
   return ret;
@@ -5570,6 +5727,7 @@ int ObBasicSessionInfo::load_all_sys_vars(const ObSysVariableSchema &sys_var_sch
     OZ (sys_var_fac_.create_all_sys_vars());
   }
   OX (influence_plan_var_indexs_.reset());
+  OX (influence_pl_cache_var_indexs_.reset());
   ObArenaAllocator calc_buf(ObModIds::OB_SQL_SESSION);
   for (int64_t i = 0; OB_SUCC(ret) && i < get_sys_var_count(); i++) {
     ObSysVarClassType sys_var_id = ObSysVariables::get_sys_var_id(i);
@@ -5583,6 +5741,9 @@ int ObBasicSessionInfo::load_all_sys_vars(const ObSysVariableSchema &sys_var_sch
       if (sys_vars_[i]->is_influence_plan()) {
         OZ (influence_plan_var_indexs_.push_back(i));
       }
+      if (sys_vars_[i]->is_influence_pl()) {
+        OZ (influence_pl_cache_var_indexs_.push_back(i));
+      }
       if (ObSysVariables::get_base_value(i) != sys_vars_[i]->get_value()) {
         OZ (sys_var_inc_info_.add_sys_var_id(sys_var_id));
         LOG_DEBUG("schema and def not identical", K(sys_var_id), "val", sys_vars_[i]->get_value(),
@@ -5594,9 +5755,11 @@ int ObBasicSessionInfo::load_all_sys_vars(const ObSysVariableSchema &sys_var_sch
   if (!is_deserialized_) {
     OZ (gen_sys_var_in_pc_str());
     OZ (gen_configs_in_pc_str());
+    OZ (gen_exec_env());
+    OZ (gen_sys_var_in_pl_cache_str());
   }
   return ret;
-}
+};
 
 OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
 {
@@ -5739,6 +5902,7 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
   OB_UNIS_ADD_LEN(diagnosis_info_);
   OB_UNIS_ADD_LEN(client_create_time_);
   OB_UNIS_ADD_LEN(route_to_column_replica_);
+  OB_UNIS_ADD_LEN(sys_var_in_pl_cache_str_);
   return len;
 }
 
@@ -6018,7 +6182,16 @@ int ObBasicSessionInfo::save_trans_status()
 
 int ObBasicSessionInfo::get_character_set_client(ObCharsetType &character_set_client) const
 {
-  return get_charset_sys_var(SYS_VAR_CHARACTER_SET_CLIENT, character_set_client);
+  int ret = OB_SUCCESS;
+  if (CHARSET_INVALID == (character_set_client = ObCharset::charset_type_by_coll(static_cast<ObCollationType>(sys_vars_cache_.get_character_set_client())))) {
+    ret = get_charset_sys_var(SYS_VAR_CHARACTER_SET_CLIENT, character_set_client);
+  }
+  return ret;
+}
+
+ObCollationType ObBasicSessionInfo::get_local_character_set_client()
+{
+  return static_cast<ObCollationType>(sys_vars_cache_.get_character_set_client());
 }
 
 int ObBasicSessionInfo::get_character_set_connection(ObCharsetType &character_set_connection) const
@@ -6068,7 +6241,11 @@ int ObBasicSessionInfo::get_character_set_filesystem(ObCharsetType &character_se
 
 int ObBasicSessionInfo::get_collation_database(ObCollationType &collation_database) const
 {
-  return get_collation_sys_var(SYS_VAR_COLLATION_DATABASE, collation_database);
+  int ret = OB_SUCCESS;
+  if (ObCollationType::CS_TYPE_INVALID == (collation_database = static_cast<ObCollationType>(sys_vars_cache_.get_collation_database()))) {
+    ret = get_collation_sys_var(SYS_VAR_COLLATION_DATABASE, collation_database);
+  }
+  return ret;
 }
 
 int ObBasicSessionInfo::get_collation_server(ObCollationType &collation_server) const
@@ -7482,47 +7659,55 @@ int ObExecEnv::init(const ObString &exec_env)
 #undef SET_ENV_VALUE
 #undef GET_ENV_VALUE
 
-int ObExecEnv::load(ObBasicSessionInfo &session, ObIAllocator *alloc)
+int ObExecEnv::load(ObBasicSessionInfo &session, ObIAllocator *alloc, ObSysVarClassType sys_var_id)
 {
   int ret = OB_SUCCESS;
-  ObObj val;
   bool is_mysql = lib::is_mysql_mode();
   for (int64_t i = 0; OB_SUCC(ret) && i < MAX_ENV; ++i) {
-    val.reset();
     if (is_mysql && PLSQL_CCFLAGS == i) {
       // do nothing ...
     } else if (!is_mysql && SQL_MODE == i) {
       // do nothing ...
-    } else if (OB_FAIL(session.get_sys_variable(ExecEnvMap[i], val))) {
-      LOG_WARN("failed to get sys_variable", K(ExecEnvMap[i]), K(ret));
     } else {
       switch (i) {
       case SQL_MODE: {
-        sql_mode_ = static_cast<ObSQLMode>(val.get_int());
+        if (sys_var_id == share::SYS_VAR_SQL_MODE || sys_var_id == share::SYS_VAR_INVALID) {
+          sql_mode_ = session.get_sql_mode();
+        }
       }
       break;
       case CHARSET_CLIENT: {
-        charset_client_ = static_cast<ObCollationType>(val.get_int());
+        if (sys_var_id == share::SYS_VAR_CHARACTER_SET_CLIENT || sys_var_id == share::SYS_VAR_INVALID) {
+          charset_client_ = session.get_local_character_set_client();
+        }
       }
       break;
       case COLLATION_CONNECTION: {
-        collation_connection_ = static_cast<ObCollationType>(val.get_int());
+        if (sys_var_id == share::SYS_VAR_COLLATION_CONNECTION || sys_var_id == share::SYS_VAR_INVALID) {
+          collation_connection_ = session.get_local_collation_connection();
+        }
       }
       break;
       case COLLATION_DATABASE: {
-        collation_database_ = static_cast<ObCollationType>(val.get_int());
+        if (sys_var_id == share::SYS_VAR_COLLATION_DATABASE || sys_var_id == share::SYS_VAR_INVALID) {
+          OZ (session.get_collation_database(collation_database_));
+        }
       }
       break;
       case PLSQL_CCFLAGS: {
-        if (OB_NOT_NULL(alloc)) {
-          OZ (ob_write_string(*alloc, val.get_varchar(), plsql_ccflags_));
-        } else {
-          plsql_ccflags_ = val.get_varchar();
+        if (sys_var_id == share::SYS_VAR_PLSQL_CCFLAGS || sys_var_id == share::SYS_VAR_INVALID) {
+          if (OB_NOT_NULL(alloc)) {
+            OZ (ob_write_string(*alloc, session.get_plsql_ccflags(), plsql_ccflags_));
+          } else {
+            plsql_ccflags_ = session.get_plsql_ccflags();
+          }
         }
       }
       break;
       case PLSQL_OPTIMIZE_LEVEL: {
-        plsql_optimize_level_ = static_cast<int64_t>(val.get_int());
+        if (sys_var_id == share::SYS_VAR_PLSQL_OPTIMIZE_LEVEL || sys_var_id == share::SYS_VAR_INVALID) {
+          plsql_optimize_level_ = session.get_plsql_optimize_level();
+        }
       }
       break;
       case PLSQL_CAN_TRANSFORM_TO_ASSIGN: {
@@ -7545,54 +7730,99 @@ int ObExecEnv::store(ObBasicSessionInfo &session)
   int ret = OB_SUCCESS;
   ObObj val;
   bool is_mysql = lib::is_mysql_mode();
-  for (int64_t i = 0; OB_SUCC(ret) && i < MAX_ENV; ++i) {
-    val.reset();
-    switch (i) {
-    case SQL_MODE: {
-      val.set_uint64(sql_mode_);
+  bool need_update = false;
+  ObExecEnv *session_exec_env = NULL;
+  if (OB_FAIL(session.get_exec_env(session_exec_env))) {
+    LOG_WARN("failed to get exec env", K(ret));
+  }
+  OX (OB_NOT_NULL(session_exec_env));
+  if (OB_FAIL(ret)) {
+  } else if (*this != *session_exec_env) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < MAX_ENV; ++i) {
+      need_update = false;
+      val.reset();
+      switch (i) {
+      case SQL_MODE: {
+        need_update = get_sql_mode() != session_exec_env->get_sql_mode();
+        if (need_update) {
+          val.set_uint64(sql_mode_);
+        }
+      }
+      break;
+      case CHARSET_CLIENT: {
+        need_update = get_charset_client() != session_exec_env->get_charset_client();
+        if (need_update) {
+          val.set_int(charset_client_);
+        }
+      }
+      break;
+      case COLLATION_CONNECTION: {
+        need_update = get_collation_connection() != session_exec_env->get_collation_connection();
+        if (need_update) {
+          val.set_int(collation_connection_);
+        }
+      }
+      break;
+      case COLLATION_DATABASE: {
+        need_update = get_collation_database() != session_exec_env->get_collation_database();
+        if (need_update) {
+          val.set_int(collation_database_);
+        }
+      }
+      break;
+      case PLSQL_CCFLAGS: {
+        need_update = get_plsql_ccflags() != session_exec_env->get_plsql_ccflags();
+        if (need_update) {
+          val.set_varchar(plsql_ccflags_);
+          val.set_collation_type(ObCharset::get_system_collation());
+        }
+      }
+      break;
+      case PLSQL_OPTIMIZE_LEVEL: {
+        need_update = get_plsql_optimize_level() != session_exec_env->get_plsql_optimize_level();
+        if (need_update) {
+          val.set_int(plsql_optimize_level_);
+        }
+      }
+      break;
+      case PLSQL_CAN_TRANSFORM_TO_ASSIGN: {
+        val.set_int(1);
+      }
+      break;
+      default: {
+        ret = common::OB_ERR_UNEXPECTED;
+        LOG_WARN("Invalid env type", K(i), K(ret));
+      }
+      break;
+      }
+      if (OB_FAIL(ret)) {
+      } else if (!need_update) {
+        // do nothing ...
+      } else if (is_mysql && PLSQL_CCFLAGS == i) {
+        // do nothing ...
+      } else if (!is_mysql && SQL_MODE == i) {
+        // do nothing ...
+      } else if (PLSQL_CAN_TRANSFORM_TO_ASSIGN == i) {
+        // do nothing ...
+      } else if (OB_FAIL(session.update_sys_variable(ExecEnvMap[i], val))) {
+        LOG_WARN("failed to get sys_variable", K(ExecEnvMap[i]), K(ret));
+      }
     }
-    break;
-    case CHARSET_CLIENT: {
-      val.set_int(charset_client_);
-    }
-    break;
-    case COLLATION_CONNECTION: {
-      val.set_int(collation_connection_);
-    }
-    break;
-    case COLLATION_DATABASE: {
-      val.set_int(collation_database_);
-    }
-    break;
-    case PLSQL_CCFLAGS: {
-      val.set_varchar(plsql_ccflags_);
-      val.set_collation_type(ObCharset::get_system_collation());
-    }
-    break;
-    case PLSQL_OPTIMIZE_LEVEL: {
-      val.set_int(plsql_optimize_level_);
-    }
-    break;
-    case PLSQL_CAN_TRANSFORM_TO_ASSIGN: {
-      val.set_int(1);
-    }
-    break;
-    default: {
-      ret = common::OB_ERR_UNEXPECTED;
-      LOG_WARN("Invalid env type", K(i), K(ret));
-    }
-    break;
-    }
-    if (OB_FAIL(ret)) {
-    } else if (is_mysql && PLSQL_CCFLAGS == i) {
-      // do nothing ...
-    } else if (!is_mysql && SQL_MODE == i) {
-      // do nothing ...
-    } else if (PLSQL_CAN_TRANSFORM_TO_ASSIGN == i) {
-      // do nothing ...
-    } else if (OB_FAIL(session.update_sys_variable(ExecEnvMap[i], val))) {
-      LOG_WARN("failed to get sys_variable", K(ExecEnvMap[i]), K(ret));
-    }
+  }
+  return ret;
+}
+
+int ObExecEnv::deep_copy(const ObExecEnv &other, ObIAllocator &alloc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ob_write_string(alloc, other.plsql_ccflags_, plsql_ccflags_))) {
+    LOG_WARN("failed to deep copy plsql_ccflags", K(ret));
+  } else {
+    sql_mode_ = other.sql_mode_;
+    charset_client_ = other.charset_client_;
+    collation_connection_ = other.collation_connection_;
+    collation_database_ = other.collation_database_;
+    plsql_optimize_level_ = other.plsql_optimize_level_;
   }
   return ret;
 }

@@ -90,7 +90,7 @@ int ObPLExprCopier::do_copy_expr(const ObRawExpr *old_expr,
     if (OB_FAIL(ret)) {
     } else if (T_OP_GET_PACKAGE_VAR == new_expr->get_expr_type()
                || T_OP_GET_SUBPROGRAM_VAR == new_expr->get_expr_type()) {
-      if ((T_OP_GET_PACKAGE_VAR == new_expr->get_expr_type() && new_expr->get_param_count() != 5)
+      if ((T_OP_GET_PACKAGE_VAR == new_expr->get_expr_type() && new_expr->get_param_count() != 3)
           || (T_OP_GET_SUBPROGRAM_VAR == new_expr->get_expr_type() && new_expr->get_param_count() != 4)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected param count for get package variables", K(ret), KPC(new_expr));

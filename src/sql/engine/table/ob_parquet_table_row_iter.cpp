@@ -3929,7 +3929,7 @@ int ObParquetTableRowIterator::calc_column_convert(const int64_t read_count,
     if (cur_col_id == OB_INVALID_ID || column_need_conv_.at(cur_col_id)) {
       //column_conv_exprs is 1-1 mapped to column_exprs
       //calc gen column exprs
-      if (!column_conv_exprs.at(cur_col_id)->get_eval_info(eval_ctx).evaluated_) {
+      if (!column_conv_exprs.at(cur_col_id)->get_eval_info(eval_ctx).is_evaluated(eval_ctx)) {
         OZ (column_conv_exprs.at(cur_col_id)->init_vector_default(eval_ctx, read_count));
         OZ (column_conv_exprs.at(cur_col_id)->eval_vector(eval_ctx, *bit_vector_cache_, read_count, true));
         column_conv_exprs.at(cur_col_id)->set_evaluated_projected(eval_ctx);

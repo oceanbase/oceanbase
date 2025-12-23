@@ -49,9 +49,9 @@ public:
   ObSqlEndTransCb();
   virtual ~ObSqlEndTransCb();
 
-  void callback(int cb_param);
-  void callback(int cb_param, const transaction::ObTransID &trans_id);
-  int init(ObMPPacketSender& packet_sender, 
+  virtual void callback(int cb_param);
+  virtual void callback(int cb_param, const transaction::ObTransID &trans_id);
+  virtual int init(ObMPPacketSender& packet_sender,
            sql::ObSQLSessionInfo *sess_info, 
            int32_t stmt_id = 0,
            uint64_t params_num = 0,
@@ -63,6 +63,14 @@ public:
   void set_stmt_id(int32_t id) { stmt_id_ = id; }
   void set_param_num(uint64_t num) { params_num_ = num; }
   sql::ObSQLSessionInfo* get_sess_info_ptr() { return sess_info_; }
+  ObMPPacketSender& get_packet_sender() { return packet_sender_; }
+  sql::ObEndTransCbPacketParam& get_pkt_param() { return pkt_param_; }
+  int32_t get_stmt_id() { return stmt_id_; }
+  uint64_t get_params_num() { return params_num_; }
+  int send_response_packet(int cb_param, sql::ObSQLSessionInfo *session_info);
+  int send_ok_packet(sql::ObSQLSessionInfo *session_info);
+  int send_error_packet(int cb_param, sql::ObSQLSessionInfo *session_info);
+  int clear_session_state(sql::ObSQLSessionInfo *session_info);
 
 protected:
   ObMPPacketSender packet_sender_;
@@ -74,6 +82,51 @@ protected:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSqlEndTransCb);
 };
+
+class ObPLEndTransCb : public ObSqlEndTransCb
+{
+public:
+  ObPLEndTransCb() :
+    ObSqlEndTransCb(),
+    tx_desc_(NULL),
+    err_(OB_SUCCESS),
+    need_response_packet_(false),
+    lock_() {}
+
+  ~ObPLEndTransCb() override { reset(); }
+
+  int init(ObMPPacketSender& packet_sender,
+    sql::ObSQLSessionInfo *sess_info,
+    int32_t stmt_id = 0,
+    uint64_t params_num = 0,
+    int64_t com_offset = 0) override;
+
+  void callback(int cb_param) override;
+  void callback(int cb_param, const transaction::ObTransID &trans_id) override;
+
+  void reset();
+  void destroy();
+  // getter and setter
+  void set_tx_desc(transaction::ObTxDesc *tx_desc) { ATOMIC_STORE(&tx_desc_, tx_desc); }
+  transaction::ObTxDesc *get_tx_desc() { return ATOMIC_LOAD(&tx_desc_); }
+  void set_err(int err) { ATOMIC_STORE(&err_, err); }
+  int get_err() { return ATOMIC_LOAD(&err_); }
+  void set_need_response_packet(bool v) { ATOMIC_STORE(&need_response_packet_, v); }
+  bool get_need_response_packet() { return ATOMIC_LOAD(&need_response_packet_); }
+  ObSpinLock &get_lock() { return lock_; }
+
+  int wait_tx_end(sql::ObPhysicalPlanCtx *plan_ctx = NULL, bool force_wait = false);
+  int check_dependency_has_modified_tables(const sql::ObPhysicalPlan *plan, sql::ObSQLSessionInfo *session_info);
+
+protected:
+  transaction::ObTxDesc *tx_desc_;
+  int err_;
+  bool need_response_packet_;
+  ObSpinLock lock_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObPLEndTransCb);
+};
+
 } //end of namespace obmysql
 } //end of namespace oceanbase
 

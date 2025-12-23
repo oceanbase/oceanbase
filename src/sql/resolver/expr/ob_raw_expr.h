@@ -1594,6 +1594,7 @@ struct ObExprEqualCheckContext
     param_expr_(),
     need_check_deterministic_(false),
     ignore_param_(false),
+    ignore_for_write_(false),
     error_code_(0)
   { }
   ObExprEqualCheckContext(bool need_check_deterministic)
@@ -1608,6 +1609,7 @@ struct ObExprEqualCheckContext
     param_expr_(),
     need_check_deterministic_(need_check_deterministic),
     ignore_param_(false),
+    ignore_for_write_(false),
     error_code_(0)
   { }
   virtual ~ObExprEqualCheckContext() {}
@@ -1652,6 +1654,7 @@ struct ObExprEqualCheckContext
     param_expr_.reset();
     need_check_deterministic_ = false;
     ignore_param_ = false;
+    ignore_for_write_ = false;
     error_code_ = 0;
   }
   bool override_const_compare_;
@@ -1666,6 +1669,7 @@ struct ObExprEqualCheckContext
   common::ObSEArray<ParamExprPair, 3, common::ModulePageAllocator, true> param_expr_;
   bool need_check_deterministic_;
   bool ignore_param_; // only compare structure of expr
+  bool ignore_for_write_; // ignore for_write_ field in ObObjAccessRawExpr comparison
   int64_t error_code_; //error code to return
 
 private:

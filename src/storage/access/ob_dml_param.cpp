@@ -176,11 +176,11 @@ int ObRow2ExprsProjector::project(const sql::ObExprPtrIArray &exprs,
       if (OB_UNLIKELY(item.obj_idx_ < 0
                       || (datum = &datums[item.obj_idx_])->is_nop())) {
         nop_pos[nop_cnt++] = item.expr_idx_;
-        item.eval_info_->evaluated_ = false;
+        item.eval_info_->set_evaluated(false);
       } else if (OB_UNLIKELY(datum->is_null())) {
         item.datum_->set_null();
-        item.eval_info_->evaluated_ = true;
-        item.eval_info_->projected_ = true;
+        item.eval_info_->set_evaluated(true);
+        item.eval_info_->set_projected(true);
       } else {
         if (OB_UNLIKELY(item.datum_->ptr_ != item.data_)) {
           item.datum_->ptr_ = item.data_;
@@ -189,8 +189,8 @@ int ObRow2ExprsProjector::project(const sql::ObExprPtrIArray &exprs,
           LOG_WARN("convert obj to datum failed", K(ret), K(i), K(item), KPC(datum));
         } else {
           // the other items may contain virtual columns, set evaluated flag.
-          item.eval_info_->evaluated_ = true;
-          item.eval_info_->projected_ = true;
+          item.eval_info_->set_evaluated(true);
+          item.eval_info_->set_projected(true);
         }
       }
     }
@@ -203,7 +203,7 @@ int ObRow2ExprsProjector::project(const sql::ObExprPtrIArray &exprs,
     for (int64_t i = other_idx_; OB_SUCC(ret) && i < outputs_.count(); i++) {
       const Item &item = outputs_.at(i);
       const blocksstable::ObStorageDatum *datum = NULL;
-      item.eval_info_->evaluated_ = true;
+      item.eval_info_->set_evaluated(true);
       if (OB_UNLIKELY(item.obj_idx_ < 0
                       || (datum = &datums[item.obj_idx_])->is_nop())) {
         nop_pos[nop_cnt++] = item.expr_idx_;

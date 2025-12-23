@@ -1507,7 +1507,7 @@ int ObTableInsertUpOp::build_index_table_check_exist_task()
   } else {
     ObDatum &datum = auto_inc_expr->locate_datum_for_write(eval_ctx_);
     datum.set_uint(0);
-    auto_inc_expr->get_eval_info(eval_ctx_).evaluated_ = true;
+    auto_inc_expr->get_eval_info(eval_ctx_).set_evaluated(true);
   }
 
   ++ ins_rtdef.cur_row_num_;
@@ -1545,7 +1545,7 @@ int ObTableInsertUpOp::build_index_table_check_exist_task()
       } else {
         ObDatum &unique_datum = insert_up_ctdef->unique_index_rowkey_exprs_.at(i)->locate_datum_for_write(eval_ctx_);
         unique_datum.set_datum(*datum);
-        insert_up_ctdef->unique_index_rowkey_exprs_.at(i)->get_eval_info(eval_ctx_).evaluated_ = true;
+        insert_up_ctdef->unique_index_rowkey_exprs_.at(i)->get_eval_info(eval_ctx_).set_evaluated(true);
       }
     }
   }

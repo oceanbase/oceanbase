@@ -2158,7 +2158,7 @@ int ObPhysicalFilterExecutor::eval_exprs_batch(ObBitVector &skip, const int64_t 
   ObEvalCtx &eval_ctx = op_.get_eval_ctx();
 
   FOREACH_CNT_X(e, *get_cg_col_exprs(), OB_SUCC(ret)) {
-    (*e)->get_eval_info(eval_ctx).projected_ = true;
+    (*e)->get_eval_info(eval_ctx).set_projected(true);
   }
 
   if (is_filter_black_node()) {
@@ -2218,7 +2218,7 @@ int ObPhysicalFilterExecutor::inner_eval_exprs_batch(ObExpr *expr, ObBitVector &
     } else {
       const ObDatum *datums = expr->locate_batch_datums(eval_ctx);
       if (mark_filtered_datums_simd == mark_filtered_datums_func
-          && expr->get_eval_info(eval_ctx).point_to_frame_) {
+          && expr->get_eval_info(eval_ctx).is_point_to_frame()) {
         char bit_vec_mem[ObBitVector::memory_size(bsize)];
         ObBitVector *tmp_vec = to_bit_vector(bit_vec_mem);
         mark_filtered_datums_func(datums,

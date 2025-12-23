@@ -390,6 +390,7 @@ int ObPLCompiler::read_dll_from_disk(bool enable_persistent,
     OZ (cg.codegen_expression(func));
     OZ (func.get_enum_set_ctx().assgin(func_ast.get_enum_set_ctx()));
     OZ (func.set_variables(func_ast.get_symbol_table()));
+    OZ (func.pre_calc_default_values(session_info_, func_ast));
     OZ (func.set_types(func_ast.get_user_type_table()));
     OZ (func.get_dependency_table().assign(func_ast.get_dependency_table()));
     OZ (func.add_members(func_ast.get_flag()));
@@ -1270,6 +1271,9 @@ int ObPLCompiler::init_function(share::schema::ObSchemaGetterGuard &schema_guard
   }
   if (routine_info.is_invoker_right()) {
     routine.set_invoker_right();
+  }
+  if (routine_info.get_compile_flag().compile_with_intf()) {
+    routine.set_is_pragma_interface();
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < routine_info.get_params().count(); ++i) {
     const ObPLRoutineParam *param = routine_info.get_params().at(i);

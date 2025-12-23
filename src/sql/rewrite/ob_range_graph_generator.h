@@ -207,6 +207,7 @@ private:
   int formalize_in_param_exprs(int64_t in_idx,
                                ObSqlBitSet<> &exprs_bitset,
                                ObSqlBitSet<> &in_params_bitset);
+  int process_filter_with_udf_const(ObRawExpr *&filter_expr);
 private:
   ObRangeGraphGenerator();
 private:

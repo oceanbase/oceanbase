@@ -4632,7 +4632,7 @@ int ObDMLStmt::get_udf_exprs(common::ObIArray<ObRawExpr *> &exprs) const
     if (OB_ISNULL(cur_expr = relation_exprs.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null expr", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::extract_udf_exprs(cur_expr, exprs))) {
+    } else if (OB_FAIL(ObRawExprUtils::extract_udf_exprs(cur_expr, exprs))) {
       LOG_WARN("failed to extract udf exprs", K(ret));
     }
   }

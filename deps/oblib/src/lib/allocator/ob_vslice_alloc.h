@@ -131,7 +131,6 @@ public:
       nway = ARENA_NUM;
     }
     ATOMIC_STORE(&nway_,  nway);
-    purge_extra_cached_block(nway);
   }
   bool can_alloc_block(int64_t size) const {
     return blk_alloc_.can_alloc_block(size);

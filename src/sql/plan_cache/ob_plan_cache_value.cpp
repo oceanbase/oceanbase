@@ -2411,7 +2411,6 @@ int ObPlanCacheValue::need_check_schema_version(ObPlanCacheCtx &pc_ctx,
         Therefore, if there is a temporary table, you need to recheck the schema .
      */
     need_check = ((new_schema_version != cached_tenant_schema_version)
-                  || is_contain_synonym()
                   || is_contain_tmp_tbl()
                   || is_contain_sys_pl_object()
                   || contain_sys_name_table_);

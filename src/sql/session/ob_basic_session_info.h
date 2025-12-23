@@ -172,6 +172,93 @@ enum ObTransSpecfiedStatus
   TRANS_SPEC_COMMIT,
 };
 
+//对象（目前仅用于PL，后续expr也照此处理）执行环境
+class ObExecEnv
+{
+public:
+  //序列化顺序
+  enum ExecEnvType
+  {
+    SQL_MODE = 0,
+    CHARSET_CLIENT,
+    COLLATION_CONNECTION,
+    COLLATION_DATABASE,
+    PLSQL_CCFLAGS,
+    PLSQL_OPTIMIZE_LEVEL,
+    PLSQL_CAN_TRANSFORM_TO_ASSIGN,
+    MAX_ENV,
+  };
+
+  static constexpr share::ObSysVarClassType ExecEnvMap[MAX_ENV + 1] = {
+    share::SYS_VAR_SQL_MODE,
+    share::SYS_VAR_CHARACTER_SET_CLIENT,
+    share::SYS_VAR_COLLATION_CONNECTION,
+    share::SYS_VAR_COLLATION_DATABASE,
+    share::SYS_VAR_PLSQL_CCFLAGS,
+    share::SYS_VAR_PLSQL_OPTIMIZE_LEVEL,
+    share::SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN,
+    share::SYS_VAR_INVALID
+  };
+
+  ObExecEnv() :
+    sql_mode_(DEFAULT_OCEANBASE_MODE),
+    charset_client_(CS_TYPE_INVALID),
+    collation_connection_(CS_TYPE_INVALID),
+    collation_database_(CS_TYPE_INVALID),
+    plsql_ccflags_(),
+    plsql_optimize_level_(0),  // default PLSQL_OPTIMIZE_LEVEL = 0
+    plsql_can_transform_to_assign_(1) // just place holder, useless when replace session sys var
+  { }
+
+  virtual ~ObExecEnv() {}
+
+  TO_STRING_KV(K_(sql_mode),
+               K_(charset_client),
+               K_(collation_connection),
+               K_(collation_database),
+               K_(plsql_ccflags),
+               K_(plsql_optimize_level),
+               K_(plsql_can_transform_to_assign));
+
+  void reset();
+
+  bool operator==(const ObExecEnv &other) const;
+  bool operator!=(const ObExecEnv &other) const;
+
+  static int gen_exec_env(const ObBasicSessionInfo &session, char* buf, int64_t len, int64_t &pos);
+  static int gen_exec_env(const share::schema::ObSysVariableSchema &sys_variable,
+                          char* buf,
+                          int64_t len,
+                          int64_t &pos);
+
+  int init(const ObString &exec_env);
+  int load(ObBasicSessionInfo &session, ObIAllocator *alloc = NULL, share::ObSysVarClassType sys_var_id = share::SYS_VAR_INVALID);
+  int store(ObBasicSessionInfo &session);
+  int deep_copy(const ObExecEnv &other, ObIAllocator &alloc);
+
+  ObSQLMode get_sql_mode() const { return sql_mode_; }
+  ObCharsetType get_charset_client() { return ObCharset::charset_type_by_coll(charset_client_); }
+  ObCollationType get_collation_connection() { return collation_connection_; }
+  ObCollationType get_collation_database() { return collation_database_; }
+  ObString& get_plsql_ccflags() { return plsql_ccflags_; }
+
+  void set_plsql_ccflags(ObString &plsql_ccflags) { plsql_ccflags_ = plsql_ccflags; }
+
+  int64_t get_plsql_optimize_level() { return plsql_optimize_level_; }
+  void set_plsql_optimize_level(int64_t level) { plsql_optimize_level_ = plsql_optimize_level_; }
+  bool get_plsql_can_transform_to_assign() { return plsql_can_transform_to_assign_; }
+  void set_plsql_can_transform_to_assign(bool can_transform) { plsql_can_transform_to_assign_ = can_transform; }
+
+private:
+  ObSQLMode sql_mode_;
+  ObCollationType charset_client_;
+  ObCollationType collation_connection_;
+  ObCollationType collation_database_;
+  ObString plsql_ccflags_;
+  int64_t plsql_optimize_level_;
+  bool plsql_can_transform_to_assign_;
+};
+
 enum ObSessionRetryStatus
 {
   SESS_NOT_IN_RETRY,  //session没有在retry
@@ -518,6 +605,7 @@ public:
   inline ObCollationType get_nls_collation_nation() const;
   inline const ObString &get_ob_trace_info() const;
   inline const ObString &get_plsql_ccflags() const;
+  inline int64_t get_plsql_optimize_level() const;
   inline const ObString &get_iso_nls_currency() const;
   inline const ObString &get_log_row_value_option() const;
   int64_t get_default_lob_inrow_threshold() const;
@@ -540,6 +628,7 @@ public:
   const common::ObString get_local_nls_timestamp_format() const;
   const common::ObString get_local_nls_timestamp_tz_format() const;
   bool get_local_plsql_can_transform_sql_to_assign() const;
+  bool get_local_ob_enable_pl_async_commit() const;
   int get_local_nls_format(const ObObjType type, ObString &format_str) const;
   int set_time_zone(const common::ObString &str_val, const bool is_oralce_mode,
                     const bool need_check_valid /* true */);
@@ -723,6 +812,7 @@ public:
   ObSQLMode get_sql_mode() const { return sys_vars_cache_.get_sql_mode(); }
   int get_div_precision_increment(int64_t &div_precision_increment) const;
   int get_character_set_client(common::ObCharsetType &character_set_client) const;
+  ObCollationType get_local_character_set_client();
   int get_character_set_connection(common::ObCharsetType &character_set_connection) const;
   int get_ncharacter_set_connection(common::ObCharsetType &ncharacter_set_connection) const;
   int get_character_set_database(common::ObCharsetType &character_set_database) const;
@@ -788,10 +878,16 @@ public:
   int get_influence_plan_sys_var(ObSysVarInPC &sys_vars) const;
   const common::ObString &get_sys_var_in_pc_str() const { return sys_var_in_pc_str_; }
   const common::ObString &get_config_in_pc_str() const { return config_in_pc_str_; }
+  int get_exec_env(ObExecEnv *&exec_env);
   uint64_t get_sys_var_config_hash_val() const { return sys_var_config_hash_val_; }
   void eval_sys_var_config_hash_val();
   int gen_sys_var_in_pc_str();
+  int64_t get_influence_pl_var_count() const { return influence_pl_cache_var_indexs_.count(); }
+  int gen_sys_var_in_pl_cache_str();
+  int get_influence_pl_sys_var(ObSysVarInPC &sys_vars) const;
+  const common::ObString &get_sys_var_in_pl_cache_str() const { return sys_var_in_pl_cache_str_; }
   int gen_configs_in_pc_str();
+  int gen_exec_env(share::ObSysVarClassType sys_var_id = share::SYS_VAR_INVALID);
   uint32_t get_server_sid() const { return sessid_; }
   // Used for view or function compatibility display.
   uint32_t get_sid() const
@@ -1484,7 +1580,7 @@ public:
   int serialize_sync_sys_vars(common::ObIArray<share::ObSysVarClassType> &sys_var_delta_ids, char *buf, const int64_t &buf_len, int64_t &pos);
   int deserialize_sync_sys_vars(int64_t &deserialize_sys_var_count, const char *buf, const int64_t &data_len, int64_t &pos, bool is_error_sync = false);
   int deserialize_sync_error_sys_vars(int64_t &deserialize_sys_var_count, const char *buf, const int64_t &data_len, int64_t &pos);
-  int sync_default_sys_vars(SysVarIncInfo &tmp_sys_var_inc_info, bool &is_influence_plan_cache_sys_var);
+  int sync_default_sys_vars(SysVarIncInfo &tmp_sys_var_inc_info, bool &is_influence_plan_cache_sys_var, bool &is_influence_pl_cache_sys_var);
   int get_sync_sys_vars(common::ObIArray<share::ObSysVarClassType> &sys_var_delta_ids) const;
   int get_error_sync_sys_vars(ObIArray<share::ObSysVarClassType> &sys_var_delta_ids) const;
   int get_sync_sys_vars_size(common::ObIArray<share::ObSysVarClassType> &sys_var_delta_ids, int64_t &len) const;
@@ -1882,7 +1978,8 @@ public:
         current_default_catalog_(0),
         security_version_(0),
         ob_enable_ps_parameter_anonymous_block_(false),
-        plsql_can_transform_sql_to_assign_(true)
+        plsql_can_transform_sql_to_assign_(true),
+        ob_enable_pl_async_commit_(false)
     {
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         MEMSET(nls_formats_buf_[i], 0, MAX_NLS_FORMAT_STR_LEN);
@@ -2174,7 +2271,7 @@ public:
     int64_t character_set_client_;
     int64_t collation_database_;
     int64_t plsql_optimize_level_;
-    bool ob_enable_pl_async_commit_;
+
     //==========  需要序列化  ============
     bool autocommit_;
     bool ob_enable_trace_log_;
@@ -2210,6 +2307,7 @@ public:
     uint64_t security_version_;
     bool ob_enable_ps_parameter_anonymous_block_;
     bool plsql_can_transform_sql_to_assign_;
+    bool ob_enable_pl_async_commit_;
   private:
     char nls_formats_buf_[ObNLSFormatEnum::NLS_MAX][MAX_NLS_FORMAT_STR_LEN];
   };
@@ -2283,6 +2381,7 @@ private:
     DEF_SYS_VAR_BIT_ENUM(collation_database, 61)
     DEF_SYS_VAR_BIT_ENUM(plsql_optimize_level, 62)
     DEF_SYS_VAR_BIT_ENUM(ob_enable_pl_async_commit, 63)
+
     BIT_MAX_POSITION = 128  // max position is 128 now
   };
 #undef DEF_SYS_VAR_BIT_ENUM
@@ -2433,11 +2532,11 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(uint64_t, security_version);
     DEF_SYS_VAR_CACHE_FUNCS(bool, ob_enable_ps_parameter_anonymous_block);
     DEF_SYS_VAR_CACHE_FUNCS(bool, plsql_can_transform_sql_to_assign);
+    DEF_SYS_VAR_CACHE_FUNCS(bool, ob_enable_pl_async_commit);
     DEF_SYS_VAR_CACHE_FUNCS(uint64_t, current_default_catalog);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, character_set_client);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, collation_database);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, plsql_optimize_level);
-    DEF_SYS_VAR_CACHE_FUNCS(bool, ob_enable_pl_async_commit);
     void set_autocommit_info(bool inc_value)
     {
       inc_data_.autocommit_ = inc_value;
@@ -2647,6 +2746,8 @@ private:
   //==============系统变量相关的变量，不需序列化到远端==============
   bool log_id_level_map_valid_;
   common::ObLogIdLevelMap log_id_level_map_;
+  ObExecEnv exec_env_;
+  bool exec_env_inited_;
   //===============================================================
 
   // 生命周期不保证，谨慎使用该指针
@@ -2798,6 +2899,9 @@ private:
   bool shadow_top_query_string_;
   bool use_pl_inner_info_string_;
   bool route_to_column_replica_;
+  bool is_first_gen_pl_cache_str_; // whether is first time t o generate sys_var_in_pl_cache_str_
+  common::ObString sys_var_in_pl_cache_str_;
+  common::ObSEArray<int64_t, 8> influence_pl_cache_var_indexs_;
 public:
   bool get_enable_hyperscan_regexp_engine() const;
   int8_t get_min_const_integer_precision() const;
@@ -2844,6 +2948,11 @@ inline const ObString &ObBasicSessionInfo::get_ob_trace_info() const
 inline const ObString &ObBasicSessionInfo::get_plsql_ccflags() const
 {
   return sys_vars_cache_.get_plsql_ccflags();
+}
+
+inline int64_t ObBasicSessionInfo::get_plsql_optimize_level() const
+{
+  return sys_vars_cache_.get_plsql_optimize_level();
 }
 
 inline const ObString &ObBasicSessionInfo::get_iso_nls_currency() const
@@ -2943,6 +3052,10 @@ inline bool ObBasicSessionInfo::get_local_plsql_can_transform_sql_to_assign() co
 {
   return sys_vars_cache_.get_plsql_can_transform_sql_to_assign();
 }
+inline bool ObBasicSessionInfo::get_local_ob_enable_pl_async_commit() const
+{
+  return sys_vars_cache_.get_ob_enable_pl_async_commit();
+}
 inline int ObBasicSessionInfo::get_local_nls_format(const ObObjType type, ObString &format_str) const
 {
   int ret = common::OB_SUCCESS;
@@ -2986,93 +3099,6 @@ inline int ObBasicSessionInfo::set_partition_location_feedback(const share::ObFB
   }
   return ret;
 }
-
-//对象（目前仅用于PL，后续expr也照此处理）执行环境
-class ObExecEnv
-{
-public:
-  //序列化顺序
-  enum ExecEnvType
-  {
-    SQL_MODE = 0,
-    CHARSET_CLIENT,
-    COLLATION_CONNECTION,
-    COLLATION_DATABASE,
-    PLSQL_CCFLAGS,
-    PLSQL_OPTIMIZE_LEVEL,
-    PLSQL_CAN_TRANSFORM_TO_ASSIGN,
-    MAX_ENV,
-  };
-
-  static constexpr share::ObSysVarClassType ExecEnvMap[MAX_ENV + 1] = {
-    share::SYS_VAR_SQL_MODE,
-    share::SYS_VAR_CHARACTER_SET_CLIENT,
-    share::SYS_VAR_COLLATION_CONNECTION,
-    share::SYS_VAR_COLLATION_DATABASE,
-    share::SYS_VAR_PLSQL_CCFLAGS,
-    share::SYS_VAR_PLSQL_OPTIMIZE_LEVEL,
-    share::SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN,
-    share::SYS_VAR_INVALID
-  };
-
-  ObExecEnv() :
-    sql_mode_(DEFAULT_OCEANBASE_MODE),
-    charset_client_(CS_TYPE_INVALID),
-    collation_connection_(CS_TYPE_INVALID),
-    collation_database_(CS_TYPE_INVALID),
-    plsql_ccflags_(),
-    plsql_optimize_level_(0),  // default PLSQL_OPTIMIZE_LEVEL = 0
-    plsql_can_transform_to_assign_(1) // just place holder, useless when replace session sys var
-  { }
-
-  virtual ~ObExecEnv() {}
-
-  TO_STRING_KV(K_(sql_mode),
-               K_(charset_client),
-               K_(collation_connection),
-               K_(collation_database),
-               K_(plsql_ccflags),
-               K_(plsql_optimize_level),
-               K_(plsql_can_transform_to_assign));
-
-  void reset();
-
-  bool operator==(const ObExecEnv &other) const;
-  bool operator!=(const ObExecEnv &other) const;
-
-  static int gen_exec_env(const ObBasicSessionInfo &session, char* buf, int64_t len, int64_t &pos);
-  static int gen_exec_env(const share::schema::ObSysVariableSchema &sys_variable,
-                          char* buf,
-                          int64_t len,
-                          int64_t &pos);
-
-  int init(const ObString &exec_env);
-  int load(ObBasicSessionInfo &session, ObIAllocator *alloc = NULL);
-  int store(ObBasicSessionInfo &session);
-
-  ObSQLMode get_sql_mode() const { return sql_mode_; }
-  ObCharsetType get_charset_client() { return ObCharset::charset_type_by_coll(charset_client_); }
-  ObCollationType get_collation_connection() { return collation_connection_; }
-  ObCollationType get_collation_database() { return collation_database_; }
-  ObString& get_plsql_ccflags() { return plsql_ccflags_; }
-
-  void set_plsql_ccflags(ObString &plsql_ccflags) { plsql_ccflags_ = plsql_ccflags; }
-
-  int64_t get_plsql_optimize_level() { return plsql_optimize_level_; }
-  void set_plsql_optimize_level(int64_t level) { plsql_optimize_level_ = plsql_optimize_level_; }
-  bool get_plsql_can_transform_to_assign() { return plsql_can_transform_to_assign_; }
-  void set_plsql_can_transform_to_assign(bool can_transform) { plsql_can_transform_to_assign_ = can_transform; }
-
-private:
-  ObSQLMode sql_mode_;
-  ObCollationType charset_client_;
-  ObCollationType collation_connection_;
-  ObCollationType collation_database_;
-  ObString plsql_ccflags_;
-  int64_t plsql_optimize_level_;
-  bool plsql_can_transform_to_assign_;
-};
-
 
 }//end of namespace sql
 }//end of namespace oceanbase

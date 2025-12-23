@@ -489,6 +489,7 @@ public:
     sql_(),
     params_(allocator),
     array_binding_params_(allocator),
+    values_(allocator),
     stmt_type_(sql::stmt::T_NONE),
     ref_objects_(allocator),
     row_desc_(NULL),
@@ -503,6 +504,8 @@ public:
   inline const common::ObIArray<int64_t> &get_params() const { return params_; }
   inline int64_t get_param(int64_t i) const { return params_.at(i); }
   inline int set_params(const common::ObIArray<int64_t> &params) { return append(params_, params); }
+  inline const common::ObIArray<int64_t> &get_value() const { return values_; }
+  inline int set_value(const common::ObIArray<int64_t> &value_ids) { return append(values_, value_ids); }
   inline int add_param(int64_t expr) { return params_.push_back(expr); }
   inline void set_forall_sql(bool forall_sql) { forall_sql_ = forall_sql; }
   inline bool is_forall_sql() const { return forall_sql_; }
@@ -538,6 +541,7 @@ protected:
   common::ObString sql_;
   ObPLSEArray<int64_t> params_;
   ObPLSEArray<int64_t> array_binding_params_;
+  ObPLSEArray<int64_t> values_;
   sql::stmt::StmtType stmt_type_;
   ObPLSEArray<share::schema::ObSchemaObjVersion> ref_objects_;
   const ObRecordType *row_desc_;
@@ -1755,6 +1759,7 @@ public:
   virtual bool is_external_state() const { return is_external_state_; }
   virtual void set_has_continue_handler(bool has_continue_handler) { has_continue_handler_ = has_continue_handler; }
   virtual bool has_continue_handler() { return has_continue_handler_; }
+  void pop_value_exprs(int64_t remain_count);
 
 
   ObPLSymbolDebugInfoTable &get_symbol_debuginfo_table()
@@ -2192,6 +2197,18 @@ public:
 private:
   ObPLSEArray<int64_t> into_;
   ObPLSEArray<int64_t> value_;
+};
+
+class ObPLTransformedAssignStmt : public ObPLAssignStmt
+{
+public:
+  ObPLTransformedAssignStmt(common::ObIAllocator &allocator)
+    : ObPLAssignStmt(allocator) {
+      type_ = PL_TRANSFORMED_ASSIGN;
+    }
+  virtual ~ObPLTransformedAssignStmt() {}
+
+  int accept(ObPLStmtVisitor &visitor) const;
 };
 
 class ObPLIfStmt : public ObPLStmt
@@ -2645,6 +2662,7 @@ private:
 };
 
 class ObPLSqlStmt;
+class ObPLExecuteStmt;
 class ObPLForAllStmt : public ObPLForLoopStmt
 {
 public:
@@ -2652,7 +2670,7 @@ public:
     : ObPLForLoopStmt(PL_FORALL),
       save_exception_(false),
       binding_array_(false),
-      sql_stmt_(NULL),
+      stmt_(NULL),
       tab_to_subtab_()
   {
     set_is_forall(true);
@@ -2666,8 +2684,8 @@ public:
   inline void set_binding_array(bool binding_array) { binding_array_ = binding_array; }
   inline bool get_binding_array() { return binding_array_; }
 
-  inline void set_sql_stmt(const ObPLSqlStmt *sql_stmt) { sql_stmt_ = sql_stmt; }
-  inline const ObPLSqlStmt* get_sql_stmt() const { return sql_stmt_; }
+  inline void set_stmt(const ObPLStmt *stmt) { stmt_ = stmt; }
+  const ObPLStmt* get_stmt() const { return stmt_; }
 
   inline const hash::ObHashMap<int64_t, int64_t>& get_tab_to_subtab_map() const { return tab_to_subtab_; }
   inline hash::ObHashMap<int64_t, int64_t>& get_tab_to_subtab_map() { return tab_to_subtab_; }
@@ -2682,7 +2700,7 @@ public:
 private:
   bool save_exception_;
   bool binding_array_;
-  const ObPLSqlStmt *sql_stmt_;
+  const ObPLStmt *stmt_; //static or dynamic sql stmt
   hash::ObHashMap<int64_t, int64_t> tab_to_subtab_;
 };
 
@@ -2806,7 +2824,7 @@ public:
     : ObPLStmt(PL_EXECUTE),
       ObPLInto(allocator),
       ObPLUsing(allocator),
-      sql_(OB_INVALID_INDEX), is_returning_(false) {}
+      sql_(OB_INVALID_INDEX), is_returning_(false), forall_sql_(false), array_binding_params_(allocator) {}
   virtual ~ObPLExecuteStmt() {}
 
   int accept(ObPLStmtVisitor &visitor) const;
@@ -2816,11 +2834,17 @@ public:
   inline void set_sql(int64_t idx) { sql_ = idx; }
   inline void set_is_returning(bool is_returning) { is_returning_ = is_returning; }
   inline bool get_is_returning() const { return is_returning_; }
+  inline void set_forall_sql(bool forall_sql) { forall_sql_ = forall_sql; }
+  inline bool is_forall_sql() const { return forall_sql_; }
+  inline const common::ObIArray<int64_t> &get_array_binding_params() const { return array_binding_params_; }
+  inline common::ObIArray<int64_t> &get_array_binding_params() { return array_binding_params_; }
   const sql::ObRawExpr *get_using_expr(int64_t i) const { return get_expr(using_.at(i).param_); }
   TO_STRING_KV(K_(type), K_(label), K_(sql), K_(into), K_(bulk), K_(using), K_(is_returning));
 private:
   int64_t sql_;
   bool is_returning_;
+  bool forall_sql_;
+  ObPLSEArray<int64_t> array_binding_params_;
 };
 
 class ObPLExtendStmt : public ObPLStmt
@@ -3537,6 +3561,7 @@ public:
   virtual ~ObPLStmtVisitor() {}
   virtual int visit(const ObPLStmtBlock &s) = 0;
   virtual int visit(const ObPLDeclareVarStmt &s) = 0;
+  virtual int visit(const ObPLTransformedAssignStmt &s) = 0;
   virtual int visit(const ObPLAssignStmt &s) = 0;
   virtual int visit(const ObPLIfStmt &s) = 0;
   virtual int visit(const ObPLLeaveStmt &s) = 0;

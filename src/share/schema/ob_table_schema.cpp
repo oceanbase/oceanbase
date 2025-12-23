@@ -10973,6 +10973,26 @@ int ObTableSchema::check_identity_column_for_interval_part() const
   return ret;
 }
 
+int ObTableSchema::get_hidden_column_count(int64_t &hidden_column_count) const
+{
+  int ret = OB_SUCCESS;
+  hidden_column_count = 0;
+  for (ObTableSchema::const_column_iterator iter = column_begin();
+       OB_SUCC(ret) && iter != column_end();
+       ++iter) {
+    const ObColumnSchemaV2 *column_schema = *iter;
+    if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Column schema is NULL", K(ret));
+    } else if (column_schema->is_unused()) {
+      // do nothing
+    } else if (column_schema->is_hidden()) {
+      hidden_column_count++;
+    }
+  }
+  return ret;
+}
+
 int64_t ObPrintableTableSchema::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;

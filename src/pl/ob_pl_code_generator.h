@@ -85,6 +85,8 @@ public:
     jit::ObLLVMFunction spi_cast_enum_set_to_string_;
     jit::ObLLVMFunction spi_destruct_obj_;
     jit::ObLLVMFunction spi_sub_nestedtable_;
+    jit::ObLLVMFunction spi_sub_nestedtable_indices_of_collection_;
+    jit::ObLLVMFunction spi_sub_nestedtable_values_of_index_collection_;
     jit::ObLLVMFunction spi_alloc_complex_var_;
     jit::ObLLVMFunction spi_construct_collection_;
     jit::ObLLVMFunction spi_clear_diagnostic_area_;
@@ -116,6 +118,9 @@ public:
     jit::ObLLVMFunction spi_convert_anonymous_array_;
     jit::ObLLVMFunction spi_internal_error_;
     jit::ObLLVMFunction spi_reset_allocator_;
+    jit::ObLLVMFunction spi_restore_sqlcode_;
+    jit::ObLLVMFunction spi_save_sqlcode_;
+    jit::ObLLVMFunction spi_set_rowcount_;
   };
 
   struct EHStack
@@ -350,6 +355,8 @@ public:
 
   int generate_sql(const ObPLSqlStmt &s, jit::ObLLVMValue &ret_err);
   int generate_after_sql(const ObPLSqlStmt &s, jit::ObLLVMValue &ret_err);
+  int generate_dynamic_sql(const ObPLExecuteStmt &s, ObPLCGBufferGuard &out_param_guard, jit::ObLLVMValue &params, jit::ObLLVMValue &ret_err);
+  int generate_after_dynamic_sql(const ObPLExecuteStmt &s, jit::ObLLVMValue &params, jit::ObLLVMValue &ret_err);
   int generate_reset_objparam(jit::ObLLVMValue &result, int64_t udt_id = OB_INVALID_ID, int8_t actual_type = 0, int8_t extend_type = -1);
   int check_success(jit::ObLLVMValue &ret_err,
                     int64_t stmt_id = OB_INVALID_ID,
@@ -622,6 +629,7 @@ public:
   int extract_pl_ctx_from_context(jit::ObLLVMValue &p_pl_exex_ctx, jit::ObLLVMValue &result);
   int extract_pl_function_from_context(jit::ObLLVMValue &p_pl_exex_ctx, jit::ObLLVMValue &result);
   int extract_tmp_allocator_from_context(jit::ObLLVMValue &p_pl_exex_ctx, jit::ObLLVMValue &result);
+  int extract_result_allocator_from_context(jit::ObLLVMValue &p_pl_exex_ctx, jit::ObLLVMValue &result);
   int extract_arg_from_argv(jit::ObLLVMValue &p_argv, int64_t idx, jit::ObLLVMValue &result);
   int extract_objparam_from_argv(jit::ObLLVMValue &p_argv, const int64_t idx, jit::ObLLVMValue &result);
   int extract_datum_from_argv(jit::ObLLVMValue &p_argv, const int64_t idx, common::ObObjType type, jit::ObLLVMValue &result);
@@ -980,6 +988,7 @@ public:
 
   virtual int visit(const ObPLStmtBlock &s);
   virtual int visit(const ObPLDeclareVarStmt &s);
+  virtual int visit(const ObPLTransformedAssignStmt &s);
   virtual int visit(const ObPLAssignStmt &s);
   virtual int visit(const ObPLIfStmt &s);
   virtual int visit(const ObPLLeaveStmt &s);

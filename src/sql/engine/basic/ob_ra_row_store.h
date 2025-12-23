@@ -253,6 +253,7 @@ public:
   inline int64_t get_mem_hold() const { return mem_hold_; }
   inline int64_t get_file_size() const { return file_size_; }
 
+  bool need_dump();
   TO_STRING_KV(K_(tenant_id), K_(label), K_(ctx_id),  K_(mem_limit),
       K_(save_row_cnt), K_(row_cnt), K_(fd), K_(file_size));
 
@@ -280,7 +281,6 @@ private:
   int write_file(BlockIndex &bi, void *buf, int64_t size);
   int read_file(void *buf, const int64_t size, const int64_t offset);
 
-  bool need_dump();
 
 private:
   bool inited_;

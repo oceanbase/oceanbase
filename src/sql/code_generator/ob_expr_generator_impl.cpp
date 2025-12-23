@@ -1338,6 +1338,7 @@ int ObExprGeneratorImpl::visit_udf_expr(ObOpRawExpr &expr, ObExprUDF *udf)
     OZ (udf->set_params_type(udf_expr.get_params_type()));
     OZ (udf->set_params_desc(udf_expr.get_params_desc()));
     OZ (udf->set_nocopy_params(udf_expr.get_nocopy_params()));
+    OZ (udf->set_out_params_type(udf_expr.get_out_params_type()));
   }
   return ret;
 }

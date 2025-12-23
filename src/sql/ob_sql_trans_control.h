@@ -172,6 +172,8 @@ public:
                                     bool reuse_tx_desc = false,
                                     bool active_tx_end = true,
                                     const uint64_t data_version = 0);
+
+  static void process_cursor_when_end_trans(ObSQLSessionInfo *session, int64_t tx_id);
   static int create_stash_savepoint(ObExecContext &exec_ctx, const ObString &name);
   static int release_stash_savepoint(ObExecContext &exec_ctx, const ObString &name);
   static int explicit_start_trans(ObExecContext &exec_ctx, const bool read_only, const ObString hint = ObString());
@@ -192,7 +194,8 @@ public:
                        const bool is_explicit,
                        ObEndTransAsyncCallback *callback = NULL,
                        bool reset_trans_variable = true,
-                       const ObString hint = ObString());
+                       const ObString hint = ObString(),
+                       ObPhysicalPlanCtx *plan_ctx = NULL);
   static int end_trans_before_cmd_execute(ObSQLSessionInfo &session,
                                           bool &need_disconnect,
                                           TransState &trans_state,
@@ -349,6 +352,7 @@ public:
   static transaction::ObTxCleanPolicy
   decide_stmt_rollback_tx_clean_policy_(const int error_code, const bool will_retry);
   static int set_audit_tx_id_(ObSQLSessionInfo *session);
+  static int process_pl_async_commit(ObSQLSessionInfo *session, ObPhysicalPlanCtx *plan_ctx, const int64_t expire_ts, ObEndTransAsyncCallback *callback);
 };
 
 inline int ObSqlTransControl::get_trans_expire_ts(const ObSQLSessionInfo &my_session,

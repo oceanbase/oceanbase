@@ -920,6 +920,7 @@ public:
   static int copy_element(const ObObj &src,
                           ObObj &dest,
                           ObIAllocator &allocator,
+                          bool need_convert_basic_type,
                           const ObPLINS *ns = NULL,
                           sql::ObSQLSessionInfo *session = NULL,
                           const ObDataType *dest_type = NULL,
@@ -983,6 +984,7 @@ public:
 
   int assign(ObPLRecord *src, ObIAllocator *allocator);
   int deep_copy(ObPLRecord &src, ObIAllocator &allocator,
+                bool need_convert_basic_type,
                 const ObPLINS *ns = NULL, sql::ObSQLSessionInfo *session = NULL,
                 bool ignore_del_element = false);
 
@@ -1130,6 +1132,7 @@ public:
   void print() const;
   int deep_copy(ObPLCollection *src,
                 common::ObIAllocator *allocator,
+                bool need_convert_basic_type,
                 bool ignore_del_element = false);
   int assign(ObPLCollection *src, ObIAllocator *allocator);
   int64_t get_init_size() const
@@ -1221,7 +1224,7 @@ public:
     return ret;
   }
 
-  int deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool ignore_del_element = false);
+  int deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool need_convert_basic_type, bool ignore_del_element = false);
   int64_t get_init_size() const
   {
     return sizeof(ObPLAssocArray);
@@ -1275,7 +1278,7 @@ public:
 
   static uint32_t key_offset_bits() { return offsetof(ObPLVArray, capacity_) * 8; }
 
-  int deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool ignore_del_element = false);
+  int deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool need_convert_basic_type, bool ignore_del_element = false);
   int64_t get_init_size() const
   {
     return sizeof(ObPLVArray);

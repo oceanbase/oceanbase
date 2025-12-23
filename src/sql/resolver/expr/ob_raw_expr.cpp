@@ -3518,11 +3518,12 @@ bool ObObjAccessRawExpr::inner_same_as(const ObRawExpr &expr,
   if (get_expr_type() != expr.get_expr_type()) {
   } else if (ObOpRawExpr::inner_same_as(expr, check_context)) {
     const ObObjAccessRawExpr &obj_access_expr = static_cast<const ObObjAccessRawExpr &>(expr);
+    bool ignore_for_write = (check_context != NULL && check_context->ignore_for_write_);
     bool_ret = get_attr_func_ == obj_access_expr.get_attr_func_
-        && 0 == func_name_.case_compare(obj_access_expr.func_name_)
+        && (ignore_for_write || 0 == func_name_.case_compare(obj_access_expr.func_name_)) // "get_attr_for_write_var_name_A_0" / "get_attr_var_name_A_0"
         && is_array_equal(access_indexs_, obj_access_expr.access_indexs_)
         && is_array_equal(var_indexs_, obj_access_expr.var_indexs_)
-        && for_write_ == obj_access_expr.for_write_
+        && (ignore_for_write || for_write_ == obj_access_expr.for_write_)
         && property_type_ == obj_access_expr.property_type_
         && is_array_equal(orig_access_indexs_, obj_access_expr.orig_access_indexs_);
   } else { /*do nothing*/ }
@@ -5703,6 +5704,7 @@ ObExprOperator *ObUDFRawExpr::get_op()
       OZ (udf_op->set_params_type(params_type_));
       OZ (udf_op->set_params_desc(params_desc_v2_));
       OZ (udf_op->set_nocopy_params(nocopy_params_));
+      OZ (udf_op->set_out_params_type(out_params_type_));
     }
   }
   return OB_SUCCESS == ret ? expr_op : NULL;

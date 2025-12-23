@@ -2984,18 +2984,120 @@ int ObDmlCgService::convert_triggers(ObLogDelUpd &log_op,
   return ret;
 }
 
-int ObDmlCgService::add_trigger_arg(const ObTriggerInfo &trigger_info, ObDMLBaseCtDef &dml_ctdef)
+int ObDmlCgService::generate_trigger_arg(ObTrigDMLCtDef &trig_ctdef,
+                                         ObIArray<const ObTriggerInfo *> &trigger_infos,
+                                         ObSQLSessionInfo &session_info,
+                                         share::schema::ObSchemaGetterGuard &schema_guard,
+                                         const ObTableSchema &table_schema,
+                                         bool is_instead_of)
 {
   int ret = OB_SUCCESS;
-  ObTriggerArg trigger_arg;
+  int64_t col_cnt = table_schema.get_column_count();
+  int64_t hidden_column_count = 0;
+  OZ (table_schema.get_hidden_column_count(hidden_column_count));
+  if (OB_SUCC(ret)) {
+    col_cnt -= hidden_column_count;
+    if (lib::is_oracle_mode() && !is_instead_of) {
+      col_cnt += 1; // rowid
+    }
+  }
+  OZ (trig_ctdef.tg_args_.init(trigger_infos.count()));
+  for (int64_t i = 0; OB_SUCC(ret) && i < trigger_infos.count(); i++) {
+    ObTriggerArg trigger_arg(cg_.phy_plan_->get_allocator());
+    CK (OB_NOT_NULL(trigger_infos.at(i)));
+    OZ (generate_trigger_arg(session_info, schema_guard, table_schema, *trigger_infos.at(i), trigger_arg, col_cnt));
+    OZ (trig_ctdef.tg_args_.push_back(trigger_arg));
+    OX (trig_ctdef.all_tm_points_.merge(trigger_arg.get_timing_points()));
+    OX (LOG_DEBUG("TRIGGER", K(trigger_infos.at(i)->get_trigger_name())));
+  }
+  OZ (merge_trigger_ref_types(trig_ctdef, is_instead_of, col_cnt));
+  return ret;
+}
+
+int ObDmlCgService::generate_trigger_arg(ObSQLSessionInfo &session_info,
+                                         share::schema::ObSchemaGetterGuard &schema_guard,
+                                         const ObTableSchema &table_schema,
+                                         const ObTriggerInfo &trigger_info,
+                                         ObTriggerArg &trigger_arg,
+                                         int64_t col_cnt)
+{
+  int ret = OB_SUCCESS;
+
   trigger_arg.set_trigger_id(trigger_info.get_trigger_id());
   trigger_arg.set_trigger_events(trigger_info.get_trigger_events());
   trigger_arg.set_timing_points(trigger_info.get_timing_points());
   trigger_arg.set_analyze_flag(trigger_info.get_analyze_flag());
-  if (OB_FAIL(dml_ctdef.trig_ctdef_.tg_args_.push_back(trigger_arg))) {
-    LOG_WARN("failed to add trigger arg", K(ret));
-  } else {
-    dml_ctdef.trig_ctdef_.all_tm_points_.merge(trigger_arg.get_timing_points());
+  trigger_arg.set_trigger_type(static_cast<int64_t>(trigger_info.get_trigger_type()));
+  if (trigger_info.has_row_point()) {
+    ObFixedArray<ObTriggerRowRefType, ObIAllocator> &ref_types = trigger_arg.get_ref_types();
+    OZ (ref_types.init(col_cnt));
+    for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; ++i) {
+      ObTriggerRowRefType ref_type;
+      OZ (ref_types.push_back(ref_type));
+    }
+    OZ (ObResolverUtils::collect_trigger_ref_column(session_info,
+                                                    schema_guard,
+                                                    trigger_info,
+                                                    table_schema,
+                                                    col_cnt,
+                                                    ref_types));
+
+  }
+  return ret;
+}
+
+int ObDmlCgService::merge_trigger_ref_types(ObTrigDMLCtDef &trig_ctdef,
+                                            bool is_instead_of,
+                                            int64_t col_cnt)
+{
+  int ret = OB_SUCCESS;
+  if (trig_ctdef.all_tm_points_.has_row_point()) {
+    OZ (trig_ctdef.ref_types_.init(col_cnt));
+    for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < col_cnt; ++col_idx) {
+      ObTriggerRowRefType ref_type;
+      OZ (trig_ctdef.ref_types_.push_back(ref_type));
+    }
+
+    for (int64_t arg_idx = 0; OB_SUCC(ret) && arg_idx < trig_ctdef.tg_args_.count(); ++arg_idx) {
+      ObTriggerArg &trigger_arg = trig_ctdef.tg_args_.at(arg_idx);
+      ObIArray<ObTriggerRowRefType> &arg_ref_types = trigger_arg.get_ref_types();
+
+      for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < arg_ref_types.count(); ++col_idx) {
+        if (col_idx < arg_ref_types.count()) {
+          const ObTriggerRowRefType &arg_ref_type = arg_ref_types.at(col_idx);
+          ObTriggerRowRefType &merged_ref_type = trig_ctdef.ref_types_.at(col_idx);
+
+          if (arg_ref_type.is_write_old_column()) {
+            merged_ref_type.set_write_old_column();
+            trig_ctdef.is_ref_old_row_ = true;
+          } else if (arg_ref_type.is_read_old_column() &&
+                     !merged_ref_type.is_write_old_column()) {
+            merged_ref_type.set_read_old_column();
+            trig_ctdef.is_ref_old_row_ = true;
+          }
+
+          if (arg_ref_type.is_write_new_column()) {
+            merged_ref_type.set_write_new_column();
+            trig_ctdef.is_ref_new_row_ = true;
+          } else if (arg_ref_type.is_read_new_column() &&
+                    !merged_ref_type.is_write_new_column()) {
+            merged_ref_type.set_read_new_column();
+            trig_ctdef.is_ref_new_row_ = true;
+          }
+        }
+      }
+
+      if (lib::is_oracle_mode()
+          && !is_instead_of
+          && trig_ctdef.ref_types_.count() > 0) {
+        if (!trig_ctdef.ref_types_.at(trig_ctdef.ref_types_.count() - 1).is_none_old_column()) {
+          trig_ctdef.is_ref_old_rowid_ = true;
+        }
+        if (!trig_ctdef.ref_types_.at(trig_ctdef.ref_types_.count() - 1).is_none_new_column()) {
+          trig_ctdef.is_ref_new_rowid_ = true;
+        }
+      }
+    }
   }
   return ret;
 }
@@ -3166,7 +3268,7 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
     ObSEArray<const ObTriggerInfo *, 2> trigger_infos;
     uint64_t trigger_id = OB_INVALID_ID;
     bool need_fire = false;
-    const ObSQLSessionInfo *session = NULL;
+    ObSQLSessionInfo *session = NULL;
     ObPhyOperatorType op_type = PHY_INVALID;
     if (OB_ISNULL(session = log_plan->get_optimizer_context().get_session_info())) {
       ret = OB_ERR_UNEXPECTED;
@@ -3255,11 +3357,8 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
         LOG_WARN("sort error", K(ret));
       }
       OZ (trig_ctdef.trig_col_info_.init(expectd_col_cnt));
-      OZ (trig_ctdef.tg_args_.init(trigger_infos.count()));
-      for (int64_t i = 0; OB_SUCC(ret) && i < trigger_infos.count(); i++) {
-        OZ (add_trigger_arg(*trigger_infos.at(i), dml_ctdef));
-        OX (LOG_DEBUG("TRIGGER", K(trigger_infos.at(i)->get_trigger_name())));
-      }
+      OZ (generate_trigger_arg(trig_ctdef, trigger_infos, *session, *schema_guard, *table_schema, is_instead_of));
+
       // need skip all hidden columns, see build_record_type_by_table_schema().
       bool is_hidden = false;
       bool is_update = false;
@@ -3286,9 +3385,7 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected status: not supported", K(ret), K(op_type));
       }
-      if (OB_SUCC(ret) && OB_FAIL(trig_ctdef.trig_col_info_.init(expectd_col_cnt))) {
-        LOG_WARN("failed to init trigger column info", K(ret));
-      }
+
       ObTableSchema::const_column_iterator cs_iter = table_schema->column_begin();
       ObTableSchema::const_column_iterator cs_iter_end = table_schema->column_end();
       int64_t i = 0;

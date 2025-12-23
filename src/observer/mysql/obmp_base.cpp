@@ -229,6 +229,8 @@ int ObMPBase::load_system_variables(const ObSysVariableSchema &sys_variable_sche
       LOG_WARN("fail to gen sys var in pc str", K(ret));
     } else if (OB_FAIL(session.gen_configs_in_pc_str())) {
       LOG_WARN("fail to gen configs in pc string", K(ret));
+    } else if (OB_FAIL(session.gen_exec_env())) {
+      LOG_WARN("fail to gen exec env", K(ret));
     }
   }
   return ret;

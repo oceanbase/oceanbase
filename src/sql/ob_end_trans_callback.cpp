@@ -43,7 +43,10 @@ ObExclusiveEndTransCallback::~ObExclusiveEndTransCallback()
 ObEndTransAsyncCallback::ObEndTransAsyncCallback() :
     ObExclusiveEndTransCallback(),
     mysql_end_trans_cb_(),
-    diagnostic_info_(nullptr)
+    diagnostic_info_(nullptr),
+    pl_end_trans_cb_(),
+    is_pl_async_commit_(false),
+    has_async_query_sender_(false)
 {
 }
 
@@ -84,15 +87,15 @@ void ObEndTransAsyncCallback::callback(int cb_param)
         ObExclusiveEndTransCallback::END_TRANS_TYPE_EXPLICIT == end_trans_type_,
         need_disconnect);
   }
-  mysql_end_trans_cb_.set_need_disconnect(need_disconnect);
+
   this->handin();
   CHECK_BALANCE("[async callback]");
 
   if (OB_SUCCESS == this->last_err_) {
-    mysql_end_trans_cb_.callback(cb_param);
+    dispatch_callback(cb_param, need_disconnect);
   } else {
     cb_param = this->last_err_;
-    mysql_end_trans_cb_.callback(cb_param);
+    dispatch_callback(cb_param, need_disconnect);
   }
 }
 
@@ -103,12 +106,31 @@ void ObEndTransAsyncCallback::set_diagnostic_info(common::ObDiagnosticInfo *diag
     common::ObLocalDiagnosticInfo::inc_ref(diagnostic_info_);
   }
 
-};
+}
+
 void ObEndTransAsyncCallback::reset_diagnostic_info()
 {
   if (nullptr != diagnostic_info_) {
     common::ObLocalDiagnosticInfo::dec_ref(diagnostic_info_);
     diagnostic_info_ = nullptr;
+  }
+}
+
+void ObEndTransAsyncCallback::dispatch_callback(int cb_param, bool need_disconnect)
+{
+  ObSpinLockGuard lock_guard(pl_end_trans_cb_.get_lock());
+  if (is_pl_async_commit_ && OB_NOT_NULL(pl_end_trans_cb_.get_tx_desc())) {
+    if (pl_end_trans_cb_.get_need_response_packet()) {
+      is_pl_async_commit_ = false;
+      has_async_query_sender_ = false;
+    }
+    pl_end_trans_cb_.set_need_disconnect(need_disconnect);
+    pl_end_trans_cb_.callback(cb_param);
+  } else if (is_pl_async_commit_) {
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "[PL_ASYNC_COMMIT] PL async commit but tx_desc is null");
+  } else {
+    mysql_end_trans_cb_.set_need_disconnect(need_disconnect);
+    mysql_end_trans_cb_.callback(cb_param);
   }
 }
 

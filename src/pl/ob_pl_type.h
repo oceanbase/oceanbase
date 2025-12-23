@@ -536,7 +536,8 @@ public:
                             uint64_t location,
                             bool in_notfound,
                             bool in_warning,
-                            uint64_t package_id = OB_INVALID_ID) const;
+                            uint64_t package_id = OB_INVALID_ID,
+                            bool need_convert = true) const;
   virtual int generate_construct(ObPLCodeGenerator &generator,
                                  const ObPLINS &ns,
                                  jit::ObLLVMValue &value,
@@ -1029,6 +1030,8 @@ public:
     sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
     cursor_total_exec_time_ = 0;
     cursor_total_elapsed_time_ = 0;
+    in_tx_cursor_ = false;
+    tx_cursor_idx_ = std::make_tuple(OB_INVALID_ID, OB_INVALID_ID, OB_INVALID_INDEX);
   }
 
   void reset()
@@ -1107,6 +1110,10 @@ public:
 
   void set_need_check_snapshot(bool is_need_check_snapshot) { is_need_check_snapshot_ = is_need_check_snapshot; }
   bool is_need_check_snapshot() { return is_need_check_snapshot_; }
+  void set_is_in_tx_cursor(bool is_in_tx_cursor) { in_tx_cursor_ = is_in_tx_cursor; }
+  bool is_in_tx_cursor() { return in_tx_cursor_; }
+  void set_tx_cursor_idx(uint64_t package_id, uint64_t routine_id, int64_t cursor_index) { tx_cursor_idx_ = std::make_tuple(package_id, routine_id, cursor_index); }
+  std::tuple<uint64_t, uint64_t, int64_t> get_tx_cursor_idx() const { return tx_cursor_idx_; }
   int set_and_register_snapshot(const transaction::ObTxReadSnapshot &snapshot);
 
   int set_current_position(int64_t position);
@@ -1186,6 +1193,7 @@ public:
                           uint64_t mem_limit,
                           bool is_local_for_update = false,
                           sql::ObSQLSessionInfo* session_info = nullptr);
+  int convert_to_unstreaming(sql::ObSQLSessionInfo &session);
   ObCurTraceId::TraceId *get_sql_trace_id() { return &sql_trace_id_; }
   virtual int get_field_count(int64_t &field_count)
   {
@@ -1269,6 +1277,8 @@ protected:
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1]; //保存非流式游标的sql id
   int64_t cursor_total_exec_time_;
   int64_t cursor_total_elapsed_time_;
+  bool in_tx_cursor_; // 是否是流式游标，且读取未提交事务的数据
+  std::tuple<uint64_t, uint64_t, int64_t> tx_cursor_idx_; // 读取未提交事务的数据的流式游标的idx<package_id, routine_id, cursor_index>
 };
 
 class ObPsCursorInfo : public ObPLCursorInfo

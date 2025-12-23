@@ -285,7 +285,9 @@ ObPsStmtInfo::ObPsStmtInfo(ObIAllocator *inner_allocator)
     raw_params_(inner_allocator),
     raw_params_idx_(inner_allocator),
     literal_stmt_type_(stmt::T_NONE),
-    ps_need_parameterization_(true)
+    ps_need_parameterization_(true),
+    parse_question_mark_count_(0),
+    external_params_count_(0)
 
 {
 }
@@ -316,7 +318,9 @@ ObPsStmtInfo::ObPsStmtInfo(ObIAllocator *inner_allocator,
     raw_params_(inner_allocator),
     raw_params_idx_(inner_allocator),
     literal_stmt_type_(stmt::T_NONE),
-    ps_need_parameterization_(true)
+    ps_need_parameterization_(true),
+    parse_question_mark_count_(0),
+    external_params_count_(0)
 {
 }
 
@@ -464,6 +468,8 @@ int ObPsStmtInfo::deep_copy(const ObPsStmtInfo &other)
     is_expired_evicted_ = other.is_expired_evicted_;
     literal_stmt_type_ = other.literal_stmt_type_;
     ps_need_parameterization_ = other.ps_need_parameterization_;
+    parse_question_mark_count_ = other.parse_question_mark_count_;
+    external_params_count_ = other.external_params_count_;
     if (other.get_dep_objs_cnt() > 0) {
       dep_objs_cnt_ = other.get_dep_objs_cnt();
       if (NULL == (dep_objs_ = reinterpret_cast<ObSchemaObjVersion *>

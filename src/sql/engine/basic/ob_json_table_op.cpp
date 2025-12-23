@@ -813,7 +813,7 @@ void ObJsonTableOp::reset_columns()
     ObExpr* col_expr = jt_ctx_.spec_ptr_->column_exprs_.at(i);
     col_expr->locate_datum_for_write(*jt_ctx_.eval_ctx_).reset();
     col_expr->locate_datum_for_write(*jt_ctx_.eval_ctx_).set_null();
-    col_expr->get_eval_info(*jt_ctx_.eval_ctx_).evaluated_ = true;
+    col_expr->get_eval_info(*jt_ctx_.eval_ctx_).set_evaluated(true);
   }
 }
 
@@ -823,7 +823,7 @@ void ScanNode::reset_reg_columns(JtScanCtx* ctx)
     ObExpr* col_expr = ctx->spec_ptr_->column_exprs_.at(reg_col_node(i)->col_info_.output_column_idx_);
     col_expr->locate_datum_for_write(*ctx->eval_ctx_).reset();
     col_expr->locate_datum_for_write(*ctx->eval_ctx_).set_null();
-    col_expr->get_eval_info(*ctx->eval_ctx_).evaluated_ = true;
+    col_expr->get_eval_info(*ctx->eval_ctx_).set_evaluated(true);
   }
 }
 
@@ -2073,7 +2073,7 @@ int ObRegCol::eval_regular_col(void *in, JtScanCtx* ctx, bool& is_null_value)
     } else {
       col_expr->locate_datum_for_write(*ctx->eval_ctx_).set_int(ctx->ord_val_);
     }
-    col_expr->get_eval_info(*ctx->eval_ctx_).evaluated_ = true;
+    col_expr->get_eval_info(*ctx->eval_ctx_).set_evaluated(true);
   } else {
     if (OB_FAIL(ctx->table_func_->col_res_type_check(*this, ctx))) {
       LOG_WARN("check column res type failed", K(ret), K(col_info_.data_type_), K(col_info_.col_type_));
@@ -2163,7 +2163,7 @@ int ObRegCol::eval_regular_col(void *in, JtScanCtx* ctx, bool& is_null_value)
   }
   if (OB_SUCC(ret)) {
     res_flag_ = NOT_DATUM;
-    col_expr->get_eval_info(*ctx->eval_ctx_).evaluated_ = true;
+    col_expr->get_eval_info(*ctx->eval_ctx_).set_evaluated(true);
   }
 
   return ret;

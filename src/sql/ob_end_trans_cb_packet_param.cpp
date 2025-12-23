@@ -37,6 +37,10 @@ const ObEndTransCbPacketParam &ObEndTransCbPacketParam::fill(ObResultSet &rs,
   // oracle ANONYMOUS_BLOCK affect rows always return 1
   affected_rows_ = stmt::T_ANONYMOUS_BLOCK == rs.get_stmt_type() 
                     ? 1 : rs.get_affected_rows();
+  if (stmt::T_CALL_PROCEDURE == rs.get_stmt_type() && is_oracle_mode()) {
+    // oracle CALL_PROCEDURE affect rows always return 0
+    affected_rows_ = 0;
+  }
   // The commit asynchronous callback logic needs
   // to trigger the update logic of affected row first.
   if (session.is_session_sync_support()) {

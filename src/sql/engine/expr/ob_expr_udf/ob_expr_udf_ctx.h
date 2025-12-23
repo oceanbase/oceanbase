@@ -96,7 +96,6 @@ public:
     has_out_param_(false),
     package_id_(OB_INVALID_ID),
     cacheobj_guard_(PL_ROUTINE_HANDLE),
-    phy_plan_ctx_(nullptr),
     allocator_("UDFRowAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     ctx_allocator_("UDFCtxAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     arg_count_(0),
@@ -122,8 +121,6 @@ public:
   inline ObSQLSessionInfo *get_session_info() { return session_info_; }
   inline ObExprUDFInfo *get_info() { return info_; }
   inline ObCacheObjGuard &get_cacheobj_guard() { return cacheobj_guard_; }
-  inline sql::ObPhysicalPlanCtx *get_phy_plan_ctx() { return phy_plan_ctx_; }
-  inline pl::ExecCtxBak &get_exec_ctx_bak() { return exec_ctx_bak_; }
 
   inline ObIAllocator &get_allocator() { return alloc_ != nullptr ? *alloc_ : allocator_; }
   inline int64_t get_arg_count() { return arg_count_; }
@@ -192,7 +189,6 @@ private:
   bool has_out_param_;
   uint64_t package_id_;
   ObCacheObjGuard cacheobj_guard_;
-  sql::ObPhysicalPlanCtx *phy_plan_ctx_;
   pl::ExecCtxBak exec_ctx_bak_;
   ObArenaAllocator allocator_; // row level allocator
   ObArenaAllocator ctx_allocator_; // ctx level allocator

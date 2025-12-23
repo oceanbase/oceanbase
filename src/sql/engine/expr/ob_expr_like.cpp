@@ -1346,12 +1346,12 @@ int ObExprLike::like_text_vectorized_inner(const ObExpr &expr, ObEvalCtx &ctx,
         eval_flags.set(i);
       }
     }
-    expr.get_eval_info(ctx).notnull_ = false;
+    expr.get_eval_info(ctx).set_notnull(false);
   } else {
     ObString pattern_val = pattern_datum->get_string();
     ObString escape_val;
     // check pattern is not null already, so result is null if and only if text is null.
-    bool null_check = !expr.args_[0]->get_eval_info(ctx).notnull_;
+    bool null_check = !expr.args_[0]->get_eval_info(ctx).is_notnull();
     if (escape_datum->is_null() || escape_datum->get_string().empty()) {
       bool is_no_backslash_escapes = false;
       IS_NO_BACKSLASH_ESCAPES(ctx.exec_ctx_.get_my_session()->get_sql_mode(),
@@ -1432,7 +1432,7 @@ int ObExprLike::like_text_vectorized_inner(const ObExpr &expr, ObEvalCtx &ctx,
       if (OB_FAIL(ret)) {
         LOG_WARN("match text batch failed", K(ret), K(instr_mode), K(null_check));
       } else {
-        expr.get_eval_info(ctx).notnull_ = !null_check;
+        expr.get_eval_info(ctx).set_notnull(!null_check);
       }
       #undef MATCH_TEXT_BATCH_ARG_LIST
       #undef CALL_MATCH_TEXT_BATCH
@@ -1466,12 +1466,12 @@ int ObExprLike::like_text_vectorized_inner_vec2(const ObExpr &expr, ObEvalCtx &c
         eval_flags.set(i);
       }
     }
-    expr.get_eval_info(ctx).notnull_ = false;
+    expr.get_eval_info(ctx).set_notnull(false);
   } else {
     ObString pattern_val = pattern_inrow->get_string();
     ObString escape_val;
     // check pattern is not null already, so result is null if and only if text is null.
-    bool null_check = !expr.args_[0]->get_eval_info(ctx).notnull_;
+    bool null_check = !expr.args_[0]->get_eval_info(ctx).is_notnull();
     if (escape_vector->is_null(0) || escape_vector->get_string(0).empty()) {
       bool is_no_backslash_escapes = false;
       IS_NO_BACKSLASH_ESCAPES(ctx.exec_ctx_.get_my_session()->get_sql_mode(),
@@ -1552,7 +1552,7 @@ int ObExprLike::like_text_vectorized_inner_vec2(const ObExpr &expr, ObEvalCtx &c
       if (OB_FAIL(ret)) {
         LOG_WARN("match text batch failed", K(ret), K(instr_mode), K(null_check));
       } else {
-        expr.get_eval_info(ctx).notnull_ = !null_check;
+        expr.get_eval_info(ctx).set_notnull(!null_check);
       }
       #undef MATCH_TEXT_VECTOR_ARG_LIST
       #undef CALL_MATCH_TEXT_VECTOR

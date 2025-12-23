@@ -1088,7 +1088,7 @@ int ObConflictChecker::get_next_rows_from_data_table(DASOpResultIter &result_ite
     // table_column_exprs_ are always ref column, no need to eval
     // Please refer to ObOperator::get_next_row_vectorizely()
     FOREACH_CNT(e, storage_output) {
-      (*e)->get_eval_info(eval_ctx_).projected_ = true;
+      (*e)->get_eval_info(eval_ctx_).set_projected(true);
     }
 
     // just for print log

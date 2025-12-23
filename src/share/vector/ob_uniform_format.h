@@ -54,7 +54,7 @@ public:
   OB_INLINE bool is_null(const int64_t idx) const override final { return get_datum(idx).is_null(); }
   OB_INLINE void set_null(const int64_t idx) override final {
     get_datum(idx).set_null();
-    eval_info_->notnull_ = false;
+    eval_info_->set_notnull(false);
   };
   OB_INLINE void unset_null(const int64_t idx) override final {
     get_datum(idx).set_none();
@@ -63,7 +63,7 @@ public:
     for (int64_t idx = 0; idx < size; ++idx) {
       get_datum(idx).set_null();
     }
-    eval_info_->notnull_ = false;
+    eval_info_->set_notnull(false);
   }
 
   OB_INLINE void get_payload(const int64_t idx,

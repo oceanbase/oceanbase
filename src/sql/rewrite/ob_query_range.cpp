@@ -754,9 +754,11 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
                                                   const bool phy_rowid_for_table_loc /* = false*/,
                                                   const bool ignore_calc_failure /* = true*/,
                                                   const bool use_in_optimization /* = false */,
-                                                  const int64_t index_prefix/* = -1*/)
+                                                  const int64_t index_prefix/* = -1*/,
+                                                  const bool ignore_fake_const_udf /* = false*/)
 {
   int ret = OB_SUCCESS;
+  UNUSED(ignore_fake_const_udf);
   ObKeyPartList and_ranges;
   ObKeyPart *temp_result = NULL;
   has_exec_param_ = false;
