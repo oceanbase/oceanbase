@@ -7420,8 +7420,9 @@ void ObExecEnv::reset()
   collation_database_ = CS_TYPE_INVALID;
   plsql_ccflags_.reset();
 
-  // default PLSQL_OPTIMIZE_LEVEL = 2
-  plsql_optimize_level_ = 2;
+  // default PLSQL_OPTIMIZE_LEVEL = 0
+  plsql_optimize_level_ = 0;
+  plsql_can_transform_to_assign_ = 1;
 }
 
 bool ObExecEnv::operator==(const ObExecEnv &other) const
@@ -7478,6 +7479,14 @@ int ObExecEnv::gen_exec_env(const ObBasicSessionInfo &session, char* buf, int64_
         OZ (session.get_sys_variable(ExecEnvMap[i], val));
         OZ (val.print_plain_str_literal(buf + pos, len - pos, size));
         //输出间隔符
+        OX (pos += size);
+        CK (pos < len);
+        OX (buf[pos++] = ',');
+      } break;
+      case PLSQL_CAN_TRANSFORM_TO_ASSIGN: {
+        // mock dummy value
+        int64_t size = 0;
+        OZ (databuff_printf(buf + pos, len - pos, size, "%d", 1));
         OX (pos += size);
         CK (pos < len);
         OX (buf[pos++] = ',');
@@ -7551,6 +7560,14 @@ int ObExecEnv::gen_exec_env(const share::schema::ObSysVariableSchema &sys_variab
           CK (pos < len);
           OX (buf[pos++] = ',');
         }
+      } break;
+      case PLSQL_CAN_TRANSFORM_TO_ASSIGN: {
+        // mock dummy value
+        int64_t size = 0;
+        OZ (databuff_printf(buf + pos, len - pos, size, "%d", 1));
+        OX (pos += size);
+        CK (pos < len);
+        OX (buf[pos++] = ',');
       } break;
       default: {
         ret = OB_ERR_UNEXPECTED;
@@ -7640,6 +7657,9 @@ int ObExecEnv::init(const ObString &exec_env)
           SET_ENV_VALUE(plsql_optimize_level_, int64_t);
         }
       }
+      case PLSQL_CAN_TRANSFORM_TO_ASSIGN: {
+        plsql_can_transform_to_assign_ = 1;
+      }
       break;
       default: {
         ret = common::OB_ERR_UNEXPECTED;
@@ -7704,6 +7724,10 @@ int ObExecEnv::load(ObBasicSessionInfo &session, ObIAllocator *alloc, ObSysVarCl
         if (sys_var_id == share::SYS_VAR_PLSQL_OPTIMIZE_LEVEL || sys_var_id == share::SYS_VAR_INVALID) {
           plsql_optimize_level_ = session.get_plsql_optimize_level();
         }
+      }
+      break;
+      case PLSQL_CAN_TRANSFORM_TO_ASSIGN: {
+        plsql_can_transform_to_assign_ = 1;
       }
       break;
       default: {
@@ -7777,6 +7801,10 @@ int ObExecEnv::store(ObBasicSessionInfo &session)
         }
       }
       break;
+      case PLSQL_CAN_TRANSFORM_TO_ASSIGN: {
+        val.set_int(1);
+      }
+      break;
       default: {
         ret = common::OB_ERR_UNEXPECTED;
         LOG_WARN("Invalid env type", K(i), K(ret));
@@ -7789,6 +7817,8 @@ int ObExecEnv::store(ObBasicSessionInfo &session)
       } else if (is_mysql && PLSQL_CCFLAGS == i) {
         // do nothing ...
       } else if (!is_mysql && SQL_MODE == i) {
+        // do nothing ...
+      } else if (PLSQL_CAN_TRANSFORM_TO_ASSIGN == i) {
         // do nothing ...
       } else if (OB_FAIL(session.update_sys_variable(ExecEnvMap[i], val))) {
         LOG_WARN("failed to get sys_variable", K(ExecEnvMap[i]), K(ret));
