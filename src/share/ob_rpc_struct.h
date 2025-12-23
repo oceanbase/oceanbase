@@ -12286,6 +12286,23 @@ public:
   bool is_for_sslog_table_;
 };
 
+struct ObSSGCPushLastSuccScnArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObSSGCPushLastSuccScnArg() : tenant_id_(OB_INVALID_TENANT_ID), succ_scn_ns_(0) {}
+  ObSSGCPushLastSuccScnArg(const uint64_t tenant_id, const int64_t succ_scn_ns)
+      : tenant_id_(tenant_id), succ_scn_ns_(succ_scn_ns)
+  {}
+  ~ObSSGCPushLastSuccScnArg() {}
+  bool is_valid() const { return OB_INVALID_TENANT_ID != tenant_id_ && succ_scn_ns_ > 0; }
+  TO_STRING_KV(K_(tenant_id), K_(succ_scn_ns));
+
+public:
+  uint64_t tenant_id_;
+  int64_t succ_scn_ns_;
+};
+
 struct ObSSGCLastSuccSCNsRes final
 {
   OB_UNIS_VERSION(1);
