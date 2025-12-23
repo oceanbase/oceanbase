@@ -49,7 +49,7 @@ public:
   virtual ~MockGetMemberHelper() {}
 
   MOCK_METHOD6(get_ls_member_list_and_learner_list_, int(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &, common::GlobalLearnerList &, common::ObIArray<ObMember> &));
+      const bool, common::ObAddr &, common::GlobalLearnerList &, common::ObMemberList &));
   MOCK_METHOD3(get_ls_leader, int(const uint64_t, const share::ObLSID &, common::ObAddr &));
   MOCK_METHOD2(get_ls, int(const share::ObLSID &, ObLSHandle &));
   MOCK_METHOD0(check_tenant_primary, bool());
@@ -65,7 +65,7 @@ public:
   }
 
   int get_ls_member_list_for_checkpoint(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<ObMember> &member_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr dst;
@@ -82,7 +82,7 @@ public:
   }
 
   int get_ls_member_list_for_rs_recommand(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<ObMember> &member_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr rs_recommand_addr;
@@ -104,7 +104,7 @@ public:
   }
 
   int get_ls_member_list_for_idc_mode_idc_leader(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<ObMember> &member_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr dst;
@@ -121,7 +121,7 @@ public:
   }
 
   int get_ls_member_list_for_idc_mode_idc_follower(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<ObMember> &member_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr dst;
@@ -138,7 +138,7 @@ public:
   }
 
   int get_ls_member_list_for_idc_mode_region_leader(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<ObMember> &member_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr dst;
@@ -155,7 +155,7 @@ public:
   }
 
   int get_ls_member_list_for_idc_mode_region_follower(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<ObMember> &member_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr dst;
@@ -172,7 +172,7 @@ public:
   }
 
   int get_ls_member_list_for_idc_mode_diff_region_leader(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<ObMember> &member_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr dst;
@@ -189,7 +189,7 @@ public:
   }
 
   int get_ls_member_list_for_idc_mode_diff_region_follower(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<ObMember> &member_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr dst;
@@ -206,7 +206,7 @@ public:
   }
 
   int get_ls_member_list_for_region_mode_region_follower(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<ObMember> &member_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr dst;
@@ -223,7 +223,7 @@ public:
   }
 
   int get_ls_member_list_for_region_mode_region_leader(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<ObMember> &member_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr dst;
@@ -240,7 +240,7 @@ public:
   }
 
   int get_ls_member_list_for_region_mode_diff_region_follower(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<ObMember> &member_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr dst;
@@ -257,7 +257,7 @@ public:
   }
 
   int get_ls_member_list_for_region_mode_diff_region_leader(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<ObMember> &member_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr dst;
@@ -274,7 +274,7 @@ public:
   }
 
   int get_ls_member_list_for_member_helper(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<ObMember> &member_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr dst;
@@ -289,7 +289,7 @@ public:
   }
 
   int get_ls_member_list_for_rebuild_mode(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<ObMember> &member_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr dst;
@@ -304,7 +304,7 @@ public:
   }
 
   int get_ls_member_list_for_replica_type_failed(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<ObMember> &member_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr addr;
@@ -326,7 +326,7 @@ public:
   }
 
   int get_ls_member_list_for_c_replica(const uint64_t, const share::ObLSID &,
-      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<ObMember> &member_list)
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObMemberList &member_list)
   {
     int ret = OB_SUCCESS;
     common::ObAddr dst;
@@ -1041,7 +1041,7 @@ TEST_F(TestChooseMigrationSourcePolicy, member_helper_get_member_list)
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_leader_succ));
   const uint64_t tenant_id = 1001;
   const share::ObLSID ls_id(1);
-  common::ObArray<common::ObMember> addr_list;
+  common::ObMemberList addr_list;
   EXPECT_EQ(OB_SUCCESS, member_helper_.get_ls_member_list(tenant_id, ls_id, addr_list));
 }
 // test ObMigrationSrcByLocationProvider init fail
