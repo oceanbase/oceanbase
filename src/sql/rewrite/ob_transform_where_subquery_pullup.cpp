@@ -712,6 +712,8 @@ int ObWhereSubQueryPullup::fill_semi_left_table_ids(ObDMLStmt *stmt,
         LOG_WARN("unexpected null", K(ret));
       } else if (OB_FAIL(cond_expr->pull_relation_id())) {
         LOG_WARN("pull expr relation ids failed", K(ret), K(*cond_expr));
+      } else if (OB_FAIL(cond_expr->formalize(ctx_->session_info_))) {
+        LOG_WARN("failed to formalize expr", K(ret));
       } else if (OB_FAIL(left_rel_ids.add_members(cond_expr->get_relation_ids()))) {
         LOG_WARN("failed to add members", K(ret));
       }
