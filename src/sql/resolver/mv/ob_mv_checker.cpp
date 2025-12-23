@@ -1356,9 +1356,13 @@ int ObMVChecker::get_table_rowkey_ids(const ObTableSchema *table_schema,
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t, 4> ori_rowkey_ids;
   bool has_logic_pk = false;
-  if (OB_ISNULL(table_schema) || OB_ISNULL(schema_guard)) {
+  if (OB_ISNULL(table_schema) || OB_ISNULL(schema_guard)
+      || OB_UNLIKELY(table_schema->is_mlog_table())) {
+    // For the partition table without primary key, the PK (M_ROW$$, SEQUENCE$$)
+    // of its mlog table is not unique (missing the partition key, only partition
+    // level unique). So should NOT use this function to get the PK of an mlog table.
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(table_schema), K(schema_guard));
+    LOG_WARN("get unexpected null", K(ret), KPC(table_schema), K(schema_guard));
   } else if (OB_FAIL(table_schema->is_table_with_logic_pk(*schema_guard, has_logic_pk))) {
     LOG_WARN("failed to check table with logic pk", K(ret), KPC(table_schema));
   } else if (has_logic_pk) {

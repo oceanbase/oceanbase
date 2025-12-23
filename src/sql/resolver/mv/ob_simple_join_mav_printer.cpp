@@ -201,7 +201,9 @@ int ObSimpleJoinMAVPrinter::construct_table_items_for_simple_join_mav_delta_data
                                                       orig_table,
                                                       table,
                                                       view_stmt,
-                                                      inner_delta_no == i ? "DLT_%.*s" : "PRE_%.*s",
+                                                      inner_delta_no == i ?
+                                                      DELTA_TABLE_FORMAT_NAME :
+                                                      PRE_TABLE_FORMAT_NAME,
                                                       false))) {
         LOG_WARN("failed to create simple table item", K(ret));
       }
@@ -267,7 +269,7 @@ int ObSimpleJoinMAVPrinter::gen_pre_data_access_stmt(const TableItem &source_tab
   ObSelectStmt *unchanged_data_stmt = NULL;
   ObSelectStmt *deleted_data_stmt = NULL;
   access_sel = NULL;
-  if (OB_FAIL(gen_delta_pre_table_view(&source_table, unchanged_data_stmt, false))) {
+  if (OB_FAIL(gen_pre_table_view(source_table, unchanged_data_stmt))) {
     LOG_WARN("failed to unchanged deleted data access stmt ", K(ret));
   } else if (is_table_skip_refresh(source_table)) {
     // only unchanged data for skip refresh table
@@ -289,31 +291,6 @@ int ObSimpleJoinMAVPrinter::gen_pre_data_access_stmt(const TableItem &source_tab
     union_stmt->assign_set_all();
     union_stmt->assign_set_op(ObSelectStmt::UNION);
     access_sel = union_stmt;
-  }
-  return ret;
-}
-
-int ObSimpleJoinMAVPrinter::gen_delete_insert_data_access_stmt(const TableItem &source_table,
-                                                               const bool is_delete_data,
-                                                               ObSelectStmt *&access_sel)
-{
-  int ret = OB_SUCCESS;
-  access_sel = NULL;
-  const uint64_t mlog_sel_flags = MLOG_EXT_COL_OLD_NEW | MLOG_EXT_COL_SEQ | MLOG_EXT_COL_ALL_NORMAL_COL
-                                  | (is_delete_data ? MLOG_EXT_COL_WIN_MIN_SEQ : MLOG_EXT_COL_WIN_MAX_SEQ);
-  const uint64_t access_sel_flags = MLOG_EXT_COL_ALL_NORMAL_COL;
-  ObSelectStmt *mlog_delta_sel = NULL;
-  TableItem *cur_table = NULL;
-  if (OB_FAIL(gen_delta_mlog_table_view(source_table, mlog_delta_sel, mlog_sel_flags))) {
-    LOG_WARN("failed to gen delta table view", K(ret));
-  } else if (OB_FAIL(create_simple_stmt(access_sel))) {
-    LOG_WARN("failed to create simple stmt", K(ret));
-  } else if (OB_FAIL(create_simple_table_item(access_sel, DELTA_TABLE_VIEW_NAME, cur_table, mlog_delta_sel))) {
-    LOG_WARN("failed to create simple table item", K(ret));
-  } else if (OB_FAIL(gen_delta_table_view_select_list(*cur_table, source_table, *access_sel, access_sel_flags))) {
-    LOG_WARN("failed to generate delta table view select lists", K(ret));
-  } else if (OB_FAIL(append_old_new_row_filter(*cur_table, access_sel->get_condition_exprs(), is_delete_data, !is_delete_data))) {
-    LOG_WARN("failed to append old new row filter ", K(ret));
   }
   return ret;
 }
