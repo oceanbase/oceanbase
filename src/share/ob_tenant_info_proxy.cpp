@@ -1050,7 +1050,7 @@ int ObAllTenantInfoProxy::update_tenant_restore_data_mode(
   if (OB_UNLIKELY(!is_user_tenant(tenant_id) || !new_restore_data_mode.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(new_restore_data_mode));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(exec_tenant_id, compat_version))) {
     LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
   } else if (compat_version < DATA_VERSION_4_3_3_0) {
     ret = OB_NOT_SUPPORTED;
