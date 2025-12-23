@@ -77,6 +77,7 @@ public:
   // Because hashmap does not support serialization, so that it is transform to array
   ObSEArray<ObPxRpcAddrTarget, 100> addr_target_array_;
   bool need_refresh_all_;
+  ObAddr addr_;
 };
 
 
