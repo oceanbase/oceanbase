@@ -94,7 +94,8 @@ public:
       profile_(ObSqlWorkAreaType::HASH_WORK_AREA),
       sql_mem_processor_(profile_),
       ref_count_(0), row_count_(0),
-      mutex_(common::ObLatchIds::SQL_MEMORY_MGR_MUTEX_LOCK) {}
+      mutex_(common::ObLatchIds::SQL_MEMORY_MGR_MUTEX_LOCK),
+      total_alloc_size_(0) {}
   ~ObDTLMemProfileInfo() {}
 
   // The local channel and the rpc channel may modify the interm results concurrently,
@@ -105,12 +106,17 @@ public:
   {
     lib::ObMutexGuard guard(mutex_);
     sql_mem_processor_.alloc(size);
+    total_alloc_size_ += size;
   }
 
   void free(int64_t size)
   {
     lib::ObMutexGuard guard(mutex_);
     sql_mem_processor_.free(size);
+    total_alloc_size_ -= size;
+    if (total_alloc_size_ < 0) {
+      SQL_DTL_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "total_alloc_size_ is less than 0", K(total_alloc_size_));
+    }
   }
 
   void dumped(int64_t size)
@@ -139,6 +145,7 @@ public:
 
   static const int64_t CACHE_SIZE = 16 * 1024 * 1024; // 16M
   lib::ObMutex mutex_;
+  int64_t total_alloc_size_;
 
   TO_STRING_KV(K(ref_count_), K(row_count_));
 };

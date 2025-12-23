@@ -461,6 +461,7 @@ public:
   void reset() { total_alloc_size_ = 0; total_dump_size_ = 0; }
   int64_t get_total_alloc_size() const { return total_alloc_size_; }
   int64_t get_total_dump_size() const { return total_dump_size_; }
+  void reset_total_alloc_size_if_negative();
 private:
   int64_t total_alloc_size_;
   int64_t total_dump_size_;
@@ -828,6 +829,15 @@ OB_INLINE void ObTenantSqlMemoryCallback::free(int64_t size)
 OB_INLINE void ObTenantSqlMemoryCallback::dumped(int64_t size)
 {
   (ATOMIC_AAF(&total_dump_size_, size));
+}
+
+OB_INLINE void ObTenantSqlMemoryCallback::reset_total_alloc_size_if_negative()
+{
+  // try to reset total_alloc_size_ if it is negative, only once
+  int64_t old_val = ATOMIC_LOAD(&total_alloc_size_);
+  if (old_val < 0) {
+    ATOMIC_CAS(&total_alloc_size_, old_val, 0);
+  }
 }
 
 } // sql
