@@ -4615,6 +4615,7 @@ int ObOptimizerUtil::convert_rownum_filter_as_offset(ObRawExprFactory &expr_fact
                                                      ObRawExpr *const_expr,
                                                      ObRawExpr *&offset_int_expr,
                                                      ObRawExpr *zero_expr,
+                                                     ObItemType &cons_cmp_type,
                                                      bool &offset_is_not_neg,
                                                      ObTransformerCtx *ctx)
 {
@@ -4626,8 +4627,9 @@ int ObOptimizerUtil::convert_rownum_filter_as_offset(ObRawExprFactory &expr_fact
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(const_expr), K(session_info), K(filter_type));
   } else if (T_OP_GT == filter_type) {
-    if (OB_FAIL(ObTransformUtils::compare_const_expr_result(ctx, const_expr, T_OP_GE,
-                                                                    0, offset_is_not_neg))) {
+    cons_cmp_type = T_OP_GE;
+    if (OB_FAIL(ObTransformUtils::compare_const_expr_result(ctx, const_expr, cons_cmp_type,
+                                                            0, offset_is_not_neg))) {
       LOG_WARN("offset value is negative calc failed", K(ret));
     } else if (!offset_is_not_neg) {
       offset_int_expr = zero_expr;
@@ -4636,14 +4638,9 @@ int ObOptimizerUtil::convert_rownum_filter_as_offset(ObRawExprFactory &expr_fact
       LOG_WARN("failed to floor number as offset value", K(ret));
     }
   } else if (T_OP_GE == filter_type) {
-    bool offset_is_zero = false;
-    if (OB_FAIL(ObTransformUtils::compare_const_expr_result(ctx, const_expr, T_OP_EQ, 0, offset_is_zero))) {
-      LOG_WARN("offset value is zero calc failed", K(ret));
-    } else if (offset_is_zero) {
-      offset_int_expr = zero_expr;
-      offset_is_not_neg = true;
-    } else if (OB_FAIL(ObTransformUtils::compare_const_expr_result(ctx, const_expr, T_OP_GT,
-                                                                    0, offset_is_not_neg))) {
+    cons_cmp_type = T_OP_GT;
+    if (OB_FAIL(ObTransformUtils::compare_const_expr_result(ctx, const_expr, cons_cmp_type,
+                                                            0, offset_is_not_neg))) {
       LOG_WARN("offset value is negative calc failed", K(ret));
     } else if (!offset_is_not_neg) {
       offset_int_expr = zero_expr;
