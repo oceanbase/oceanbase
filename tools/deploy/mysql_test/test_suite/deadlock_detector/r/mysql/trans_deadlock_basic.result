@@ -29,7 +29,7 @@ a
 2
 select * from t1 where a = 1 order by a for update;
 select * from t1 where a = 2 order by a for update;
-ERROR HY000: Deadlock
+ERROR HY000: Deadlock found when trying to get lock
 rollback;
 a
 2
@@ -50,7 +50,7 @@ a
 3
 select * from t2 where a in (1,2) order by a for update;
 select * from t2 where a in (3,4) order by a for update;
-ERROR HY000: Deadlock
+ERROR HY000: Deadlock found when trying to get lock
 rollback;
 a
 3

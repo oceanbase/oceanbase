@@ -2090,7 +2090,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TERM_NOT_MATCH__USER_ERROR_MSG "Term not match"
 #define OB_START_LOG_CURSOR_INVALID__USER_ERROR_MSG "Invalid log cursor"
 #define OB_LOCK_NOT_MATCH__USER_ERROR_MSG "Lock not match"
-#define OB_DEAD_LOCK__USER_ERROR_MSG "Deadlock"
+#define OB_DEAD_LOCK__USER_ERROR_MSG "Deadlock found when trying to get lock"
 #define OB_PARTIAL_LOG__USER_ERROR_MSG "Incomplete log entry"
 #define OB_CHECKSUM_ERROR__USER_ERROR_MSG "Data checksum error"
 #define OB_INIT_FAIL__USER_ERROR_MSG "Initialize error"

@@ -192,7 +192,7 @@ DEFINE_ERROR(OB_TERM_LAGGED, -4097, -1, "HY000", "Term lagged");
 DEFINE_ERROR(OB_TERM_NOT_MATCH, -4098, -1, "HY000", "Term not match");
 DEFINE_ERROR_DEP(OB_START_LOG_CURSOR_INVALID, -4099, -1, "HY000", "Invalid log cursor");
 DEFINE_ERROR_DEP(OB_LOCK_NOT_MATCH, -4100, -1, "HY000", "Lock not match");
-DEFINE_ORACLE_ERROR_DEP(OB_DEAD_LOCK, -4101, ER_LOCK_DEADLOCK, "HY000", "Deadlock", 60, "deadlock detected while waiting for resource");
+DEFINE_ORACLE_ERROR_DEP(OB_DEAD_LOCK, -4101, ER_LOCK_DEADLOCK, "HY000", "Deadlock found when trying to get lock", 60, "deadlock detected while waiting for resource");
 DEFINE_ERROR(OB_PARTIAL_LOG, -4102, -1, "HY000", "Incomplete log entry");
 DEFINE_ERROR_DEP(OB_CHECKSUM_ERROR, -4103, -1, "42000", "Data checksum error");
 DEFINE_ERROR_DEP(OB_INIT_FAIL, -4104, -1, "HY000", "Initialize error");
