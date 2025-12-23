@@ -1001,9 +1001,17 @@ struct ObPlanStat
   inline void get_evo_records(ObEvoRecordsGuard &guard)
   {
     guard.reset();
-    ObEvolutionRecords *evo_records = ATOMIC_LOAD(&(evolution_stat_.records_));
     if (ATOMIC_LOAD(&is_evolution_)) {
-      guard.set_evo_records(evo_records);
+      ObEvolutionRecords *evo_records = ATOMIC_LOAD(&(evolution_stat_.records_));
+      if (NULL != evo_records) {
+        guard.set_evo_records(evo_records);
+        // Double-check: after incrementing ref_count, verify the pointer is still valid.
+        // If records_ has been set to NULL (by reset_evolution_stat), abandon this reference
+        // to avoid use-after-free when free_evolution_records is subsequently called.
+        if (evo_records != ATOMIC_LOAD(&(evolution_stat_.records_))) {
+          guard.reset();
+        }
+      }
     }
   }
 
