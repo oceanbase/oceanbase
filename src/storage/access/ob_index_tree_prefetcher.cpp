@@ -20,6 +20,7 @@ using namespace common;
 using namespace blocksstable;
 namespace storage
 {
+ERRSIM_POINT_DEF(EN_DISABLE_SKIP_FETCH_BY_BASE_VERSION);
 
 void ObIndexTreePrefetcher::reset()
 {
@@ -1321,6 +1322,8 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::p
                       && OB_FAIL(sample_executor->check_sample_block(block_info, cur_level_ + 1, tree_handles_[cur_level_].fetch_idx_,
                                                                    micro_data_prefetch_idx_))) {
             LOG_WARN("Failed to check if can skip micro block in sample", K(ret), K_(cur_level), K(block_info), KPC(sample_executor));
+          } else if (EN_DISABLE_SKIP_FETCH_BY_BASE_VERSION == OB_SUCCESS && can_skip_fetch_by_base_version(block_info)) {
+            continue;
           } else if (nullptr != sstable_index_filter
                       && can_index_filter_skip(block_info, sample_executor)
                       && OB_FAIL(sstable_index_filter->check_range(iter_param_->read_info_,
@@ -1844,6 +1847,8 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
                   && OB_FAIL(sample_executor->check_sample_block(index_info, level, parent.fetch_idx_,
                                                                prefetch_idx_ + 1))) {
         LOG_WARN("Failed to check if can skip perfetch micro block in sample", K(ret), K(level), K(index_info), KPC(sample_executor));
+      } else if (EN_DISABLE_SKIP_FETCH_BY_BASE_VERSION == OB_SUCCESS && prefetcher.can_skip_fetch_by_base_version(index_info)) {
+        //skip fetch by base version
       } else if (nullptr != sstable_index_filter
                   && prefetcher.can_index_filter_skip(index_info, sample_executor)
                   && OB_FAIL(sstable_index_filter->check_range(prefetcher.iter_param_->read_info_, index_info,
