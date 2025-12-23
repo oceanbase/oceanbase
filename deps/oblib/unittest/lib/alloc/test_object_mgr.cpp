@@ -168,9 +168,8 @@ TEST_F(TestObjectMgr, TestFragmentWash)
 
   vector<pair<AChunk*, vector<void*> > > chunk_ptrs;
   int chunk_cnt = 1000;
-  int alloc_size = ABLOCK_SIZE - 256;
+  int alloc_size = ABLOCK_SIZE * BLOCKS_PER_CHUNK/2 - 256;
   ObMemAttr attr(OB_SERVER_TENANT_ID, "mod");
-  attr.use_malloc_v2_ = false;
   do {
     void *ptr = ob_malloc(alloc_size, attr);
     abort_unless(ptr != nullptr);
@@ -183,6 +182,7 @@ TEST_F(TestObjectMgr, TestFragmentWash)
         ob_free(ptr);
         break;
       }
+      memset(ptr, 0xAA, alloc_size);
       ptrs.push_back(ptr);
     } while (true);
     chunk_ptrs.push_back(make_pair(cur_chunk, ptrs));
@@ -238,12 +238,8 @@ TEST_F(TestObjectMgr, TestSubObjectMgr)
   int64_t ctx_id = ObCtxIds::DEFAULT_CTX_ID;
   auto ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(
     tenant_id, ctx_id);
-  ObjectMgr som(*ta.ref_allocator(), false, INTACT_NORMAL_AOBJECT_SIZE, 1, false, NULL);
-  ObMemAttr attr;
-  attr.use_malloc_v2_ = false;
-  ObTenantResourceMgrHandle resource_handle;
-  ObResourceMgr::get_instance().get_tenant_resource_mgr(
-		  tenant_id, resource_handle);
+  ObjectMgr som(*ta.ref_allocator(), false, 1);
+  ObMemAttr attr(tenant_id, "mod", ctx_id);
   map<int64_t, AObject*> allocs;
   int i = total_size/sizeof(Record);
   auto *rec = (Record*)ptr;
@@ -255,14 +251,15 @@ TEST_F(TestObjectMgr, TestSubObjectMgr)
       abort_unless(object != nullptr);
       allocs.insert(pair<int64_t, AObject*>(addr, object));
       memset(object->data_, 0xAA, size);
+
     } else {
       auto it = allocs.find(addr);
       abort_unless(it != allocs.end());
       AObject *obj = it->second;
       ABlock *block = obj->block();
       abort_unless(block->is_valid());
-      ObjectSet *set = (ObjectSet *)block->obj_set_;
-      set->free_object(obj);
+      ObjectSet *set = block->obj_set_;
+      set->free_object(obj, block);
       allocs.erase(it->first);
     }
     rec++;

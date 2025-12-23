@@ -449,7 +449,6 @@ ob_set_subtarget(ob_malloc_object_list common_alloc
   allocator/ob_malloc.cpp
   allocator/ob_mem_leak_checker.cpp
   allocator/ob_mod_define.cpp
-  allocator/ob_page_manager.cpp
   allocator/ob_slice_alloc.cpp
   allocator/ob_sql_mem_leak_checker.cpp
   allocator/ob_tc_malloc.cpp

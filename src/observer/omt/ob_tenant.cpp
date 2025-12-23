@@ -264,10 +264,6 @@ void ObPxPool::run1()
   common::ObBackGroundSessionGuard backgroud_session_guard(tenant_id_, group_id_);
   ObDIActionGuard action_guard("PxPool", "PxWorker", "");
   set_px_thread_name();
-  auto *pm = common::ObPageManager::thread_local_instance();
-  if (OB_LIKELY(nullptr != pm)) {
-    pm->set_tenant_ctx(tenant_id_, common::ObCtxIds::DEFAULT_CTX_ID);
-  }
   //ObTaTLCacheGuard ta_guard(tenant_id_);
   CLEAR_INTERRUPTABLE();
   ObCgroupCtrl *cgroup_ctrl = GCTX.cgroup_ctrl_;

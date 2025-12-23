@@ -25,7 +25,6 @@
 #include "lib/utility/utility.h"
 #include "lib/alloc/alloc_struct.h"
 #include "lib/allocator/ob_allocator_v2.h"
-#include "lib/allocator/ob_page_manager.h"
 #include "lib/allocator/page_arena.h"
 #include "lib/thread_local/ob_tsi_factory.h"
 #include "lib/list/ob_dlist.h"
@@ -430,14 +429,14 @@ public:
     if (use_asan_allocator_) {
       ret = init_asan_alloc(asan_alloc_, thread_safe);
     } else {
-      ret = init_alloc(alloc_, thread_safe, ablock_size);
+      ret = init_alloc(thread_safe, ablock_size);
     }
 #else
-    ret = init_alloc(alloc_, thread_safe, ablock_size);
+    ret = init_alloc(thread_safe, ablock_size);
 #endif
     if (OB_SUCC(ret)) {
       // init arena allocator
-      p_arena_alloc_ = new (&arena_alloc_) common::ObArenaAllocator(*p_alloc_, param_.page_size_,
+      p_arena_alloc_ = new (&arena_alloc_) common::ObArenaAllocator(*freeable_alloc_, param_.page_size_,
                                                                     true/*enable_sanity*/);
       arena_alloc_.set_attr(attr_);
       p_safe_arena_alloc_ = new (&safe_arena_alloc_) common::ObSafeArenaAllocator(arena_alloc_);
@@ -449,26 +448,13 @@ public:
     }
     return ret;
   }
-  int init_alloc(common::ObAllocator& allocator, const bool thread_safe, uint32_t ablock_size)
+  int init_alloc(const bool thread_safe, uint32_t ablock_size)
   {
     int ret = common::OB_SUCCESS;
     if (OB_UNLIKELY(thread_safe)) {
-      p_alloc_ = new (&allocator) common::ObAllocator(this, attr_, false/*use_pm*/, ablock_size);
-      void *ptr = allocator.alloc(sizeof(common::ObParallelAllocator));
-      if (OB_UNLIKELY(nullptr == ptr)) {
-        ret = common::OB_ALLOCATE_MEMORY_FAILED;
-      } else {
-        parallel_alloc_ = new (ptr) common::ObParallelAllocator(allocator, this, attr_, param_.parallel_, ablock_size);
-        freeable_alloc_ = parallel_alloc_;
-      }
+      freeable_alloc_ = new (pa_alloc_) common::ObParallelAllocator(this, attr_);
     } else {
-      bool use_pm = false;
-      if ((param_.properties_ & USE_TL_PAGE_OPTIONAL)
-          && ContextTLOptGuard::enable_tl_opt) {
-        use_pm = true;
-      }
-      p_alloc_ = new (&allocator) common::ObAllocator(this, attr_, use_pm, ablock_size);
-      freeable_alloc_ = p_alloc_;
+      freeable_alloc_ = new (alloc_) common::ObAllocator(this, attr_);
     }
     return ret;
   }
@@ -496,7 +482,6 @@ public:
   void deinit()
   {
     default_allocator_ = nullptr;
-    freeable_alloc_ =  nullptr;
     if (p_safe_arena_alloc_ != nullptr) {
       p_safe_arena_alloc_->~ObSafeArenaAllocator();
       p_safe_arena_alloc_ = nullptr;
@@ -511,9 +496,9 @@ public:
       p_alloc_->free(parallel_alloc_);
       parallel_alloc_ = nullptr;
     }
-    if (p_alloc_ != nullptr) {
-      p_alloc_->~ObIAllocator();
-      p_alloc_ = nullptr;
+    if (freeable_alloc_ != nullptr) {
+      freeable_alloc_->~ObIAllocator();
+      freeable_alloc_ = nullptr;
     }
     tree_node_.deinit();
   }
@@ -656,7 +641,8 @@ public:
 
   // Delayed member
   union {
-    common::ObAllocator alloc_;
+    char alloc_[sizeof(ObAllocator)];
+    char pa_alloc_[sizeof(ObParallelAllocator)];
 #ifdef OB_USE_ASAN
     common::ObAsanAllocator asan_alloc_;
 #endif

@@ -1341,7 +1341,6 @@ int ObMultiTenant::update_tenant_unit_no_lock(const ObUnitInfoGetter::ObTenantCo
   } else {
     if (tenant->unit_min_cpu() != min_cpu) {
       tenant->set_unit_min_cpu(min_cpu);
-      set_req_chunkmgr_parallel(tenant_id, ObCtxIds::DEFAULT_CTX_ID, min_cpu * 8);
     }
     if (tenant->unit_max_cpu() != max_cpu) {
       tenant->set_unit_max_cpu(max_cpu);

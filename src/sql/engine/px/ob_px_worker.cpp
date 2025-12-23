@@ -231,12 +231,6 @@ void PxWorkerFunctor::operator ()(bool need_exec)
         DESTROY_CONTEXT(mem_context);
         mem_context = NULL;
       }
-      auto *pm = common::ObPageManager::thread_local_instance();
-      if (OB_LIKELY(nullptr != pm)) {
-        if (pm->get_used() != 0) {
-          LOG_ERROR("page manager's used should be 0, unexpected!!!", KP(pm));
-        }
-      }
     }
     ObThreadLogLevelUtils::clear();
   } else if (OB_ISNULL(sqc_handler)) {

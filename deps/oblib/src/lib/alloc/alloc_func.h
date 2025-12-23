@@ -63,7 +63,6 @@ int set_rpc_limit(uint64_t tenant_id, int64_t rpc_pct_lmt);
 
 bool errsim_alloc(const ObMemAttr &attr);
 
-int set_req_chunkmgr_parallel(uint64_t tenant_id, uint64_t ctx_id, int32_t parallel);
 } // end of namespace lib
 } // end of namespace oceanbase
 

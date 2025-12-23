@@ -120,7 +120,7 @@ void *ObMallocAllocator::alloc(const int64_t size, const oceanbase::lib::ObMemAt
       attr.use_500() && !attr.expect_500()) {
     attr.ctx_id_ = ObCtxIds::UNEXPECTED_IN_500;
   }
-  attr.numa_id_ = AFFINITY_CTRL.get_numa_id();
+  attr.numa_id_ = attr.tenant_id_ != OB_SYS_TENANT_ID ? AFFINITY_CTRL.get_numa_id() : 0;
   lib::ObMemAttr inner_attr = attr;
   bool do_not_use_me = false;
   if (FORCE_EXPLICT_500_MALLOC()) {
@@ -129,6 +129,7 @@ void *ObMallocAllocator::alloc(const int64_t size, const oceanbase::lib::ObMemAt
     if (do_not_use_me) {
       inner_attr.tenant_id_ = ob_thread_tenant_id();
       inner_attr.ctx_id_ = ObCtxIds::DO_NOT_USE_ME;
+      inner_attr.numa_id_ = inner_attr.tenant_id_ != OB_SYS_TENANT_ID ? AFFINITY_CTRL.get_numa_id() : 0;
     }
   }
   if (OB_SUCCESS != ret) {
@@ -139,7 +140,7 @@ void *ObMallocAllocator::alloc(const int64_t size, const oceanbase::lib::ObMemAt
   } else if (OB_NOT_NULL(allocator = get_tenant_ctx_allocator(inner_attr.tenant_id_, inner_attr.ctx_id_, inner_attr.numa_id_))) {
     // do nothing
   } else if (inner_attr.tenant_id_ <= OB_USER_TENANT_ID || OB_UNLIKELY(create_on_demand_)) {
-    if (OB_FAIL(create_and_add_tenant_allocator(inner_attr.tenant_id_, OB_MAX_NUMA_NUM))) {
+    if (OB_FAIL(create_and_add_tenant_allocator(inner_attr.tenant_id_, 1))) {
       LOG_ERROR("create and add tenant allocator failed", K(ret), K(inner_attr.tenant_id_));
     } else {
       allocator = get_tenant_ctx_allocator(inner_attr.tenant_id_, inner_attr.ctx_id_, inner_attr.numa_id_);
@@ -691,7 +692,6 @@ int ObMallocAllocator::recycle_tenant_allocator(uint64_t tenant_id)
     // wash idle chunks
     for (int64_t ctx_id = 0; ctx_id < ObCtxIds::MAX_CTX_ID; ctx_id++) {
       ta[ctx_id].reset_idle();
-      ta[ctx_id].reset_req_chunk_mgr();
     }
 
     ObTenantCtxAllocatorV2 *tas[ObCtxIds::MAX_CTX_ID] = {NULL};

@@ -317,12 +317,9 @@ void* Thread::__th_start(void *arg)
     // pm析构逻辑上会访问其它pthread_key绑定的对象，为了避免析构顺序的影响
     // pm不用TSI而是自己做线程局部(__thread)
     // create page manager
-    ObPageManager pm;
-    ret = pm.set_tenant_ctx(common::OB_SERVER_TENANT_ID, common::ObCtxIds::GLIBC);
     if (OB_FAIL(ret)) {
       LOG_ERROR("set tenant ctx failed", K(ret));
     } else {
-      ObPageManager::set_thread_local_instance(pm);
       MemoryContext *mem_context = GET_TSI0(MemoryContext);
       if (OB_ISNULL(mem_context)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;

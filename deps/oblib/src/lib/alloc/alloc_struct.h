@@ -29,7 +29,7 @@
 #ifndef NDEBUG
 #define MEMCHK_LEVEL 1
 #endif
-class ObjectSetV3;
+class ObjectSetV2;
 namespace oceanbase
 {
 namespace lib
@@ -61,7 +61,6 @@ static ssize_t get_page_size()
 
 class BlockSet;
 class ObjectSet;
-class ObjectSetV2;
 
 enum ObAllocPrio
 {
@@ -153,7 +152,6 @@ struct ObMemAttr
         use_500_(false),
         expect_500_(true),
         ignore_version_(ObMemVersionNode::tl_ignore_node),
-        use_malloc_v2_(true),
         enable_malloc_hang_(false),
         extra_size_(0)
   {}
@@ -169,7 +167,6 @@ public:
         uint8_t use_500_ : 1;
         uint8_t expect_500_ : 1;
         uint8_t ignore_version_ : 1;
-        uint8_t use_malloc_v2_ : 1;
         uint8_t enable_malloc_hang_ : 1;
       };
       uint16_t extra_size_;
@@ -389,7 +386,6 @@ struct ABlock {
         uint8_t is_large_ : 1;
         uint8_t is_washed_ : 1;
         uint8_t status_ : 2;
-        uint8_t is_malloc_v2_ : 1;
       };
     };
   };
@@ -400,9 +396,9 @@ struct ABlock {
   uint16_t max_cnt_;
 
   union { //FARM COMPAT WHITELIST
-    // for malloc_v2
+    // for malloc
     AObjectList freelist_;
-    // for malloc_v3
+    // for malloc_v2
     struct {
       AObjectListUnsafe local_free_;
       AObjectListSafe remote_free_;
@@ -411,7 +407,6 @@ struct ABlock {
   union { //FARM COMPAT WHITELIST
     ObjectSet *obj_set_;
     ObjectSetV2 *obj_set_v2_;
-    ObjectSetV3 *obj_set_v3_;
   };
   ABlock *prev_, *next_;
   ABlock *next2_;

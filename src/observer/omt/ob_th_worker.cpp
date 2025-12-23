@@ -325,7 +325,6 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
   ObMemVersionNodeGuard mem_version_node_guard;
   // Avoid adding and deleting entities from the root node for every request, the parameters are meaningless
   CREATE_WITH_TEMP_ENTITY(RESOURCE_OWNER, OB_SERVER_TENANT_ID) {
-    auto *pm = common::ObPageManager::thread_local_instance();
     if (this->get_worker_level() == INT32_MAX) {
       this->set_worker_level(0);
     }
@@ -334,14 +333,6 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
       worker_level = get_worker_level();
       if (OB_NOT_NULL(tenant_)) {
         tenant_id = tenant_->id();
-      }
-      if (OB_NOT_NULL(pm)) {
-        if (pm->get_used() != 0) {
-          LOG_ERROR("page manager's used should be 0, unexpected!!!", KP(pm));
-        } else {
-          // Ignore the above warning
-          ret = pm->set_tenant_ctx(tenant_->id(), ObCtxIds::DEFAULT_CTX_ID);
-        }
       }
       CLEAR_INTERRUPTABLE();
       set_th_worker_thread_name();

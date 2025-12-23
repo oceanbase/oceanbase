@@ -17,37 +17,21 @@ using namespace oceanbase;
 using namespace lib;
 
 SubObjectMgr::SubObjectMgr(ObTenantCtxAllocator &ta,
-                           const bool enable_no_log,
-                           const uint32_t ablock_size,
-                           const bool enable_dirty_list,
-                           IBlockMgr *blk_mgr)
+                           const bool enable_no_log)
   : IBlockMgr(ta.get_tenant_id(), ta.get_ctx_id(), ta.get_numa_id()),
     ta_(ta),
     mutex_(common::ObLatchIds::ALLOC_OBJECT_LOCK),
     normal_locker_(mutex_), no_log_locker_(mutex_),
     locker_(!enable_no_log ? static_cast<ISetLocker&>(normal_locker_) :
             static_cast<ISetLocker&>(no_log_locker_)),
-    bs_(), os_(NULL, ablock_size, enable_dirty_list)
+    bs_()
 {
   bs_.set_tenant_ctx_allocator(ta);
   bs_.set_locker(&locker_);
   bs_.set_chunk_mgr(&ta.get_chunk_mgr());
-  os_.set_locker(&locker_);
-  NULL == blk_mgr ? os_.set_block_mgr(this) : os_.set_block_mgr(blk_mgr);
 #ifndef ENABLE_SANITY
   mutex_.enable_record_stat(false);
 #endif
-}
-
-void SubObjectMgr::free_object(AObject *object)
-{
-  ABlock *block = object->block();
-  abort_unless(block->is_valid());
-  abort_unless(block->in_use_);
-  abort_unless(block->obj_set_ != NULL);
-  ObjectSet *os = (ObjectSet *)block->obj_set_;
-  abort_unless(&os_ == os);
-  os->free_object(object);
 }
 
 int64_t SubObjectMgr::sync_wash(int64_t wash_size)
@@ -68,24 +52,19 @@ void SubObjectMgr::free_block(ABlock *block)
 
 ObjectMgr::ObjectMgr(ObTenantCtxAllocator &ta,
                      bool enable_no_log,
-                     uint32_t ablock_size,
-                     int parallel,
-                     bool enable_dirty_list,
-                     IBlockMgr *blk_mgr)
+                     int parallel)
   : IBlockMgr(ta.get_tenant_id(), ta.get_ctx_id(), ta.get_numa_id()),
     ta_(ta),
     enable_no_log_(enable_no_log),
-    ablock_size_(ablock_size),
     parallel_(parallel),
-    enable_dirty_list_(enable_dirty_list),
-    blk_mgr_(blk_mgr),
     sub_cnt_(1),
-    root_mgr_(ta, enable_no_log, ablock_size_,
-              enable_dirty_list, blk_mgr_),
-    obj_mgr_v2_(parallel, this),
+    root_mgr_(ta, enable_no_log),
     last_wash_ts_(0),
     last_washed_size_(0)
 {
+  for (int i = 0; i < parallel_; ++i) {
+    obj_sets_[i].set_block_mgr(this);
+  }
   MEMSET(sub_mgrs_, 0, sizeof(sub_mgrs_));
   sub_mgrs_[0] = &root_mgr_;
 }
@@ -105,50 +84,19 @@ void ObjectMgr::reset() {
   ATOMIC_STORE(&sub_cnt_, 1);
 }
 
-AObject *ObjectMgr::alloc_object(uint64_t size, const ObMemAttr &attr)
+AObject *ObjectMgr::alloc_object(const uint64_t size, const ObMemAttr &attr)
 {
-  if (OB_LIKELY(attr.use_malloc_v2_)) return obj_mgr_v2_.alloc_object(size, attr);
-  AObject *obj = NULL;
-  const uint64_t start = common::get_itid();
-  SubObjectMgr *sub_mgr = nullptr;
-  for (uint64_t i = 0; NULL == obj && i < ATOMIC_LOAD(&sub_cnt_); i++) {
-    uint64_t idx = (start + i) % sub_cnt_;
-    sub_mgr = ATOMIC_LOAD(&sub_mgrs_[idx]);
-    if (OB_ISNULL(sub_mgr)) {
-      // do nothing
-    } else if (sub_mgr->trylock()) {
-      obj = sub_mgr->alloc_object(size, attr);
-      sub_mgr->unlock();
-    }
-  }
-  if (OB_ISNULL(obj)) {
-    auto cnt = ATOMIC_LOAD(&sub_cnt_);
-    if (cnt < parallel_) {
-      if (OB_NOT_NULL(sub_mgr = create_sub_mgr())) {
-        if (ATOMIC_BCAS(&sub_mgrs_[cnt], nullptr, sub_mgr)) {
-          obj = sub_mgr->alloc_object(size, attr);
-          ATOMIC_INC(&sub_cnt_);
-        } else {
-          destroy_sub_mgr(sub_mgr);
-        }
-      }
-    }
-    if (OB_ISNULL(obj)) {
-      root_mgr_.lock();
-      obj = root_mgr_.alloc_object(size, attr);
-      root_mgr_.unlock();
-    }
-  }
-  return obj;
+  static int64_t global_idx = 0;
+  static thread_local int idx = ATOMIC_FAA(&global_idx, 1);
+  return obj_sets_[idx & (parallel_ - 1)].alloc_object(size, attr);
 }
 
 AObject *ObjectMgr::realloc_object(
     AObject *obj, const uint64_t size, const ObMemAttr &attr)
 {
-  if (OB_LIKELY(attr.use_malloc_v2_)) return obj_mgr_v2_.realloc_object(obj, size, attr);
   AObject *new_obj = NULL;
 
-  if (NULL != obj) {
+  if (OB_UNLIKELY(NULL != obj)) {
     abort_unless(obj->MAGIC_CODE_ == AOBJECT_MAGIC_CODE
                  || obj->MAGIC_CODE_ == BIG_AOBJECT_MAGIC_CODE);
 
@@ -156,32 +104,15 @@ AObject *ObjectMgr::realloc_object(
 
     abort_unless(block->is_valid());
     abort_unless(block->in_use_);
-    abort_unless(block->obj_set_ != NULL);
 
-    ObjectSet *os = (ObjectSet *)block->obj_set_;
+    ObjectSet *os = block->obj_set_;
     abort_unless(os);
-    if (os != NULL) {
-      os->lock();
-      new_obj = os->realloc_object(obj, size, attr);
-      os->unlock();
-    }
+    new_obj = os->realloc_object(obj, size, attr);
   } else {
     new_obj = alloc_object(size, attr);
   }
 
   return new_obj;
-}
-
-void ObjectMgr::free_object(AObject *obj)
-{
-  ABlock *block = obj->block();
-  abort_unless(block->is_valid());
-  abort_unless(block->in_use_);
-  abort_unless(block->obj_set_ != NULL);
-
-  ObjectSet *set = (ObjectSet *)block->obj_set_;
-  set->free_object(obj);
-  // TODO by fengshuo.fs: when object_set is empty, try free the sub_mgr of it.
 }
 
 ABlock *ObjectMgr::alloc_block(uint64_t size, const ObMemAttr &attr)
@@ -244,29 +175,37 @@ SubObjectMgr *ObjectMgr::create_sub_mgr()
   attr.label_ = common::ObModIds::OB_TENANT_CTX_ALLOCATOR;
   attr.ctx_id_ = ObCtxIds::DEFAULT_CTX_ID;
   attr.ignore_version_ = true;
-  class SubObjectMgrWrapper {
-  public:
-    SubObjectMgrWrapper(SubObjectMgr& sub_mgr)
-      : sub_mgr_(sub_mgr)
-    {}
-    AObject *realloc_object(AObject *obj,  const uint64_t size, const ObMemAttr &attr)
+  struct SubObjectMgrWrapper : IBlockMgr
+  {
+    SubObjectMgrWrapper(SubObjectMgr &mgr) : mgr_(mgr), os_()
     {
-      sub_mgr_.lock();
-      AObject *new_obj = sub_mgr_.realloc_object(obj, size, attr);
-      sub_mgr_.unlock();
-      return new_obj;
+      os_.set_block_mgr(this);
     }
-    void free_object(AObject *obj)
+    OB_INLINE AObject *realloc_object(AObject *obj,  const uint64_t size, const ObMemAttr &attr)
     {
-      sub_mgr_.free_object(obj);
+      return os_.realloc_object(obj, size, attr);
     }
-  private:
-    SubObjectMgr& sub_mgr_;
-  } root_mgr(static_cast<ObjectMgr&>(ta->get_block_mgr()).root_mgr_);
+    OB_INLINE ABlock *alloc_block(uint64_t size, const ObMemAttr &attr) override
+    {
+      mgr_.lock();
+      ABlock *block = mgr_.alloc_block(size, attr);
+      mgr_.unlock();
+      return block;
+    }
+    void free_block(ABlock *block) override
+    {
+      mgr_.lock();
+      mgr_.free_block(block);
+      mgr_.unlock();
+    }
+    int64_t sync_wash(int64_t wash_size) override { return 0; }
+    SubObjectMgr &mgr_;
+    ObjectSet os_;
+  };
+  static SubObjectMgrWrapper root_mgr(static_cast<ObjectMgr&>(ta->get_block_mgr()).root_mgr_);
   void *ptr = ObTenantCtxAllocator::common_realloc(NULL, sizeof(SubObjectMgr), attr, *(ta.ref_allocator()), root_mgr);
   if (OB_NOT_NULL(ptr)) {
-    sub_mgr = new (ptr) SubObjectMgr(ta_, enable_no_log_,
-        ablock_size_, enable_dirty_list_, blk_mgr_);
+    sub_mgr = new (ptr) SubObjectMgr(ta_, enable_no_log_);
   }
   return sub_mgr;
 }
@@ -341,38 +280,6 @@ bool ObjectMgr::check_has_unfree()
 
 bool ObjectMgr::check_has_unfree(char *first_label, char *first_bt)
 {
-  bool has_unfree = obj_mgr_v2_.check_has_unfree(first_label, first_bt);
-  for (uint64_t idx = 0; idx < ATOMIC_LOAD(&sub_cnt_) && !has_unfree; idx++) {
-    auto sub_mgr = ATOMIC_LOAD(&sub_mgrs_[idx]);
-    if (OB_ISNULL(sub_mgr)) {
-      // do nothing
-    } else {
-      sub_mgr->lock();
-      DEFER(sub_mgr->unlock());
-      has_unfree = sub_mgr->check_has_unfree(first_label, first_bt);
-    }
-  }
-  return has_unfree;
-}
-
-ObjectMgrV2::ObjectMgrV2(int parallel, IBlockMgr *blk_mgr)
-  : parallel_(blk_mgr->get_tenant_id() == OB_SERVER_TENANT_ID &&
-    blk_mgr->get_ctx_id() == ObCtxIds::GLIBC ? OBJECT_SET_CNT : parallel)
-{
-  for (int i = 0; i < parallel_; ++i) {
-    obj_sets_[i].set_block_mgr(blk_mgr);
-  }
-}
-
-void ObjectMgrV2::do_cleanup()
-{
-  for (uint64_t idx = 0; idx < parallel_; idx++) {
-    obj_sets_[idx].do_cleanup();
-  }
-}
-
-bool ObjectMgrV2::check_has_unfree(char *first_label, char *first_bt)
-{
   bool has_unfree = false;
   for (uint64_t idx = 0; idx < parallel_ && !has_unfree; idx++) {
     has_unfree = obj_sets_[idx].check_has_unfree(first_label, first_bt);
@@ -380,26 +287,11 @@ bool ObjectMgrV2::check_has_unfree(char *first_label, char *first_bt)
   return has_unfree;
 }
 
-AObject *ObjectMgrV2::realloc_object(
-      AObject *obj, const uint64_t size, const ObMemAttr &attr)
+void ObjectMgr::do_cleanup()
 {
-  AObject *new_obj = NULL;
-
-  if (NULL != obj) {
-    abort_unless(obj->MAGIC_CODE_ == AOBJECT_MAGIC_CODE
-                 || obj->MAGIC_CODE_ == BIG_AOBJECT_MAGIC_CODE);
-
-    ABlock *block = obj->block();
-
-    abort_unless(block->is_valid());
-    abort_unless(block->in_use_);
-
-    ObjectSetV2 *os = block->obj_set_v2_;
-    abort_unless(os);
-    new_obj = os->realloc_object(obj, size, attr);
-  } else {
-    new_obj = alloc_object(size, attr);
+  for (uint64_t idx = 0; idx < parallel_; idx++) {
+    obj_sets_[idx].do_cleanup();
   }
-
-  return new_obj;
 }
+
+

@@ -53,19 +53,6 @@ int64_t ObTenantCtxAllocatorV2::sync_wash(int64_t wash_size)
   return washed_size;
 }
 
-void ObTenantCtxAllocatorV2::set_req_chunkmgr_parallel(int32_t parallel)
-{
-  ARRAY_FOREACH_NORET(*this, idx) {
-    allocators_[idx]->set_req_chunkmgr_parallel_(parallel);
-  }
-}
-void ObTenantCtxAllocatorV2::reset_req_chunk_mgr()
-{
-  ARRAY_FOREACH_NORET(*this, idx) {
-    allocators_[idx]->reset_req_chunk_mgr();
-  }
-}
-
 int ObTenantCtxAllocatorV2::reset_idle()
 {
   int ret = OB_SUCCESS;
@@ -105,8 +92,7 @@ int64_t ObTenantCtxAllocator::get_obj_hold(void *ptr)
 
 void* ObTenantCtxAllocator::realloc(const void *ptr, const int64_t size, const ObMemAttr &attr)
 {
-  void *nptr = common_realloc(ptr, size, attr, *this, obj_mgr_);
-  return nptr;
+  return common_realloc(ptr, size, attr, *this, obj_mgr_);
 }
 
 void ObTenantCtxAllocator::free(void *ptr)
@@ -211,11 +197,9 @@ void ObTenantCtxAllocatorV2::print_usage(uint64_t min_print_size) const
     }
 
     if (ctx_hold_bytes > 0 || sum_item.used_ > 0) {
-      int64_t req_chunk_cnt = 0;
       int64_t idle_size = 0;
       int64_t free_size = 0;
       ARRAY_FOREACH_NORET(*this, idx) {
-        req_chunk_cnt += allocators_[idx]->req_chunk_mgr_.n_chunks();
         idle_size += allocators_[idx]->idle_size_;
         free_size += allocators_[idx]->chunk_cnt_ * INTACT_ACHUNK_SIZE;
       }
@@ -223,7 +207,7 @@ void ObTenantCtxAllocatorV2::print_usage(uint64_t min_print_size) const
       _LOG_INFO("\n[MEMORY] tenant_id=%5ld ctx_id=%25s hold=% '15ld used=% '15ld limit=% '15ld"
                 "\n[MEMORY] idle_size=% '10ld free_size=% '10ld"
                 "\n[MEMORY] wash_related_chunks=% '10ld washed_blocks=% '10ld washed_size=% '10ld"
-                "\n[MEMORY] request_cached_chunk_cnt=% '5ld\n%s",
+                "\n%s",
           tenant_id_,
           get_global_ctx_info().get_ctx_name(ctx_id_),
           ctx_hold_bytes,
@@ -234,7 +218,6 @@ void ObTenantCtxAllocatorV2::print_usage(uint64_t min_print_size) const
           ATOMIC_LOAD(&wash_related_chunks_),
           ATOMIC_LOAD(&washed_blocks_),
           ATOMIC_LOAD(&washed_size_),
-          req_chunk_cnt,
           buf);
     }
   }
@@ -449,7 +432,6 @@ void ObTenantCtxAllocatorV2::update_wash_stat(int64_t related_chunks, int64_t bl
 
 void ObTenantCtxAllocator::on_alloc(AObject& obj, const ObMemAttr& attr, const bool light_backtrace_allowed)
 {
-  obj.set_label(attr.label_.str_);
   if (attr.extra_size_ > 0) {
     void *addrs[100] = {nullptr};
     if (light_backtrace_allowed) {
@@ -486,10 +468,7 @@ void ObTenantCtxAllocator::on_free(AObject& obj, ABlock& block)
   SANITY_POISON(obj.data_, obj.alloc_bytes_);
   get_mem_leak_checker().on_free(obj);
 
-  IBlockMgr *blk_mgr = OB_LIKELY(block.is_malloc_v2_) ? block.obj_set_v2_->get_block_mgr() :
-      block.obj_set_->get_block_mgr();
-  abort_unless(NULL != blk_mgr);
-
+  IBlockMgr *blk_mgr = block.obj_set_->get_block_mgr();
   int64_t tenant_id = blk_mgr->get_tenant_id();
   int64_t ctx_id = blk_mgr->get_ctx_id();
   char label[lib::AOBJECT_LABEL_SIZE + 1];
@@ -519,9 +498,7 @@ void ObTenantCtxAllocator::common_free(void *ptr)
       abort_unless(block->is_valid());
       abort_unless(block->in_use_);
       on_free(*obj, *block);
-      abort_unless(NULL != block->obj_set_);
-      OB_LIKELY(block->is_malloc_v2_) ? block->obj_set_v2_->free_object(obj, block) :
-          block->obj_set_->free_object(obj);
+      block->obj_set_->free_object(obj, block);
     }
   }
 }

@@ -24,33 +24,14 @@
 #else
 #include "lib/alloc/ob_latch_v2.h"
 #endif
+#include "lib/lock/ob_mutex.h"
+#include "block_set.h"
 #include "object_set.h"
 
 namespace oceanbase
 {
 namespace lib
 {
-class ObjectMgrV2
-{
-  static const int OBJECT_SET_CNT = 32;
-public:
-  ObjectMgrV2(int parallel, IBlockMgr *blk_mgr);
-  AObject *alloc_object(uint64_t size, const ObMemAttr &attr)
-  {
-    static int64_t global_idx = 0;
-    static thread_local int idx = ATOMIC_FAA(&global_idx, 1);
-    return obj_sets_[idx & (parallel_ - 1)].alloc_object(size, attr);
-  }
-  AObject *realloc_object(
-      AObject *obj, const uint64_t size, const ObMemAttr &attr);
-  void do_cleanup();
-  bool check_has_unfree(char *first_label, char *first_bt);
-
-public:
-  const int parallel_;
-  ObjectSetV2 obj_sets_[OBJECT_SET_CNT];
-}; // end of class ObjectMgrV2
-
 // object_set needs to be lightweight, and some large or logically optional members need to be stripped out
 // SubObjectMgr is a combination of object_set and attributes stripped from object_set, such as block_set, mutex, etc.
 class SubObjectMgr : public IBlockMgr
@@ -58,23 +39,11 @@ class SubObjectMgr : public IBlockMgr
   friend class ObTenantCtxAllocator;
 public:
   SubObjectMgr(ObTenantCtxAllocator &ta,
-               const bool enable_no_log,
-               const uint32_t ablock_size,
-               const bool enable_dirty_list,
-               IBlockMgr *blk_mgr);
+               const bool enable_no_log);
   virtual ~SubObjectMgr() {}
   OB_INLINE void lock() { locker_.lock(); }
   OB_INLINE void unlock() { locker_.unlock(); }
   OB_INLINE bool trylock() { return locker_.trylock(); }
-  OB_INLINE AObject *alloc_object(uint64_t size, const ObMemAttr &attr)
-  {
-    return os_.alloc_object(size, attr);
-  }
-  OB_INLINE AObject *realloc_object(AObject *obj,  const uint64_t size, const ObMemAttr &attr)
-  {
-    return os_.realloc_object(obj, size, attr);
-  }
-  void free_object(AObject *object);
   OB_INLINE ABlock *alloc_block(uint64_t size, const ObMemAttr &attr) override
   {
     return bs_.alloc_block(size, attr);
@@ -88,10 +57,6 @@ public:
   {
     return bs_.check_has_unfree();
   }
-  OB_INLINE bool check_has_unfree(char *first_label, char *first_bt)
-  {
-    return os_.check_has_unfree(first_label, first_bt);
-  }
 private:
   ObTenantCtxAllocator &ta_;
 #ifndef ENABLE_SANITY
@@ -103,12 +68,12 @@ private:
   SetLockerNoLog<decltype(mutex_)> no_log_locker_;
   ISetLocker &locker_;
   BlockSet bs_;
-  ObjectSet os_;
 };
 
 class ObjectMgr final : public IBlockMgr
 {
   static const int N = 32;
+  static const int OBJECT_SET_CNT = 32;
   friend class SubObjectMgr;
 public:
   struct Stat
@@ -122,14 +87,10 @@ public:
 public:
   ObjectMgr(ObTenantCtxAllocator &ta,
             bool enable_no_log,
-            uint32_t ablock_size,
-            int parallel,
-            bool enable_dirty_list,
-            IBlockMgr *blk_mgr);
-  ~ObjectMgr();
+            int parallel);
+  virtual ~ObjectMgr();
   void reset();
-
-  AObject *alloc_object(uint64_t size, const ObMemAttr &attr);
+  AObject *alloc_object(const uint64_t size, const ObMemAttr &attr);
   AObject *realloc_object(
       AObject *obj, const uint64_t size, const ObMemAttr &attr);
 
@@ -137,13 +98,11 @@ public:
 
   ABlock *alloc_block(uint64_t size, const ObMemAttr &attr) override;
   void free_block(ABlock *block) override;
-
-  void print_usage() const;
   int64_t sync_wash(int64_t wash_size) override;
   Stat get_stat();
   bool check_has_unfree();
   bool check_has_unfree(char *first_label, char *first_bt);
-  void do_cleanup() { obj_mgr_v2_.do_cleanup(); }
+  void do_cleanup();
 private:
   SubObjectMgr *create_sub_mgr();
   void destroy_sub_mgr(SubObjectMgr *sub_mgr);
@@ -151,14 +110,11 @@ private:
 public:
   ObTenantCtxAllocator &ta_;
   bool enable_no_log_;
-  uint32_t ablock_size_;
   int parallel_;
-  bool enable_dirty_list_;
-  IBlockMgr *blk_mgr_;
   int sub_cnt_;
   SubObjectMgr root_mgr_;
   SubObjectMgr *sub_mgrs_[N];
-  ObjectMgrV2 obj_mgr_v2_;
+  ObjectSet obj_sets_[OBJECT_SET_CNT];
   int64_t last_wash_ts_;
   int64_t last_washed_size_;
 }; // end of class ObjectMgr

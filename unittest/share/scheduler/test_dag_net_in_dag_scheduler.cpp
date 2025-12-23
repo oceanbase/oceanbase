@@ -143,14 +143,6 @@ void wait_scheduler() {
   while (!scheduler->is_empty()) {
     usleep(100000);
   }
-  ObIAllocator &basic_allocator = scheduler->get_allocator(false /*is_ha*/);
-  ObIAllocator &basic_root_allocator = static_cast<ObParallelAllocator *>(&basic_allocator)->root_allocator_;
-  while ((basic_allocator.used() - basic_root_allocator.used()) != 0) {
-    ::usleep(100000);
-  }
-  while ((basic_allocator.total() - basic_root_allocator.total()) != 0) {
-    ::usleep(100000);
-  }
 }
 
 class ObBasicDag : public ObIDag

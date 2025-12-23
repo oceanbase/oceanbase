@@ -11,88 +11,108 @@
  */
 
 #include "lib/allocator/ob_allocator_v2.h"
-#include "lib/allocator/ob_mem_leak_checker.h"
+#include "lib/utility/ob_backtrace.h"
 #include "lib/resource/ob_affinity_ctrl.h"
 
 using namespace oceanbase::lib;
+using namespace oceanbase::common;
 namespace oceanbase
 {
 namespace common
 {
+
+ObAllocator::ObAllocator(__MemoryContext__ *mem_context, const ObMemAttr &attr)
+  : mem_context_(mem_context), ta_(NULL), attr_(attr),
+    hold_(0)
+{
+  attr_.numa_id_ = attr.tenant_id_ != OB_SYS_TENANT_ID ? AFFINITY_CTRL.get_numa_id() : 0;
+  ta_ = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(
+  attr_.tenant_id_, attr_.ctx_id_, attr_.numa_id_);
+  abort_unless(ta_ != NULL);
+  head_.next_ = &head_;
+  head_.prev_ = &head_;
+}
+
+void *ObAllocator::alloc(const int64_t size)
+{
+  return alloc(size, attr_);
+}
+
 void *ObAllocator::alloc(const int64_t size, const ObMemAttr &attr)
 {
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
-  UNUSED(attr);
-  void *ptr = nullptr;
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = init();
-  }
-  if (OB_SUCC(ret)) {
-    ObMemAttr inner_attr = attr_;
-    if (attr.label_.is_valid()) {
-      inner_attr.label_ = attr.label_;
-    }
-    auto ta = lib::ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(inner_attr.tenant_id_,
-                                                                                inner_attr.ctx_id_,
-                                                                                inner_attr.numa_id_);
-    if (OB_LIKELY(NULL != ta)) {
-      ptr = ObTenantCtxAllocator::common_realloc(NULL, size, inner_attr, *(ta.ref_allocator()), os_);
-    } else if (FORCE_MALLOC_FOR_ABSENT_TENANT()) {
-      inner_attr.tenant_id_ = OB_SERVER_TENANT_ID;
-      ta = lib::ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(inner_attr.tenant_id_,
-                                                                            inner_attr.ctx_id_,
-                                                                            inner_attr.numa_id_);
-      ptr = ObTenantCtxAllocator::common_realloc(NULL, size, inner_attr, *(ta.ref_allocator()), nos_);
-    }
-
+  void *ptr = NULL;
+  ObMemAttr inner_attr = attr_;
+  inner_attr.label_ = attr.label_;
+  const int64_t real_size = sizeof(AllocNode) + size;
+  AllocNode *node = (AllocNode *)ta_->alloc(real_size, inner_attr);
+  if (OB_LIKELY(NULL != node)) {
+    AObject *obj = reinterpret_cast<AObject*>((char*)node - AOBJECT_HEADER_SIZE);
+    push(node, obj->alloc_bytes_);
+    ptr = node->data_;
   }
   return ptr;
 }
 
 void ObAllocator::free(void *ptr)
 {
-  SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
-  // directly free object instead of using tenant allocator.
-  ObTenantCtxAllocator::common_free(ptr);
+  if (OB_LIKELY(NULL != ptr)) {
+    AllocNode *node = reinterpret_cast<AllocNode*>((char*)ptr - sizeof(AllocNode));
+    AObject *obj = reinterpret_cast<AObject*>((char*)node - AOBJECT_HEADER_SIZE);
+    remove(node, obj->alloc_bytes_);
+    ta_->free(node);
+  }
 }
 
-void *ObParallelAllocator::alloc(const int64_t size, const ObMemAttr &attr)
+void ObAllocator::reset()
 {
-  void *ptr = NULL;
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    lib::ObLockGuard<decltype(mutex_)> guard(mutex_);
-    if (!is_inited_) {
-      ret = init();
+  AllocNode *next = popall();
+  if (next) {
+    AObject *obj = reinterpret_cast<AObject*>((char*)next - AOBJECT_HEADER_SIZE);
+    char bt[MAX_BACKTRACE_LENGTH];
+    if (obj->on_malloc_sample_) {
+      parray(bt, sizeof(bt), (int64_t*)obj->bt(), AOBJECT_BACKTRACE_COUNT);
+    } else {
+      bt[0] = '\0';
+    }
+    const static int buf_len = 512;
+    char buf[buf_len] = {'\0'};
+    snprintf(buf, buf_len, "label: %s, backtrace: %s", obj->label_, bt);
+    has_unfree_callback(buf);
+    while (next) {
+      void *ptr = next;
+      next = next->next_;
+      ta_->free(ptr);
     }
   }
-  if (OB_SUCC(ret)) {
-    bool found = false;
-    const int64_t start = common::get_itid();
-    for (int64_t i = 0; nullptr == ptr && i < sub_cnt_ && !found; i++) {
-      int64_t idx = (start + i) % sub_cnt_;
-      if (sub_allocators_[idx]->trylock()) {
-        ptr = sub_allocators_[idx]->alloc(size, attr);
-        sub_allocators_[idx]->unlock();
-        found = true;
-        break;
-      }
-    }
-    if (!found && nullptr == ptr) {
-      const int64_t idx = start % sub_cnt_;
-      sub_allocators_[idx]->lock();
-      ptr = sub_allocators_[idx]->alloc(size, attr);
-      sub_allocators_[idx]->unlock();
-    }
-  }
-  return ptr;
 }
 
-void ObParallelAllocator::free(void *ptr)
+ObParallelAllocator::ObParallelAllocator(__MemoryContext__ *mem_context, const ObMemAttr &attr)
+  : ObAllocator(mem_context, attr),
+    lock_()
+{}
+
+void ObParallelAllocator::push(AllocNode *node, const int64_t size)
 {
-  ObTenantCtxAllocator::common_free(ptr);
+  lock_.lock();
+  ObAllocator::push(node, size);
+  lock_.unlock();
 }
 
+void ObParallelAllocator::remove(AllocNode *node, const int64_t size)
+{
+  lock_.lock();
+  ObAllocator::remove(node, size);
+  lock_.unlock();
+}
+
+ObAllocator::AllocNode *ObParallelAllocator::popall()
+{
+  AllocNode *ret = nullptr;
+  lock_.lock();
+  ret = ObAllocator::popall();
+  lock_.unlock();
+  return ret;
+}
 } // end of namespace common
 } // end of namespace oceanbase

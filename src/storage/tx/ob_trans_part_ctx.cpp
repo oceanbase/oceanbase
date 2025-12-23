@@ -3801,8 +3801,7 @@ int ObPartTransCtx::submit_commit_log_()
     int64_t suggested_buf_size = ObTxAdaptiveLogBuf::NORMAL_LOG_BUF_SIZE;
     if (local_tx &&
         mds_cache_.get_final_notify_array().count() == 0 &&
-        // 512B
-        ((mt_ctx_.get_pending_log_size() < ObTxAdaptiveLogBuf::MIN_LOG_BUF_SIZE / 4) ||
+        ((mt_ctx_.get_pending_log_size() < ObTxAdaptiveLogBuf::MIN_LOG_BUF_SIZE / 2) ||
          // for corner case test
          IS_CORNER(10000))) {
       suggested_buf_size = ObTxAdaptiveLogBuf::MIN_LOG_BUF_SIZE;

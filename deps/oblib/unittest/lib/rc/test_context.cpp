@@ -53,9 +53,6 @@ TEST_F(TestContext, Basic)
   ObMallocAllocator *ma = ObMallocAllocator::get_instance();
   ASSERT_EQ(OB_SUCCESS, ma->create_and_add_tenant_allocator(tenant_id));
 
-  ObPageManager g_pm;
-  ObPageManager::set_thread_local_instance(g_pm);
-  g_pm.set_tenant_ctx(tenant_id, ctx_id);
   MemoryContext &root = MemoryContext::root();
   ContextParam param;
   param.set_mem_attr(tenant_id, "Context", ctx_id);
@@ -65,7 +62,7 @@ TEST_F(TestContext, Basic)
   int ret = root->CREATE_CONTEXT(mem_context, param);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(&mem_context->get_allocator(), &mem_context->get_arena_allocator());
-  int64_t used = g_pm.used_;
+  int64_t used = mem_context->hold();
   ASSERT_EQ(0, used);
   void *ptr = nullptr;
   ObMemAttr attr(OB_SERVER_TENANT_ID, ObNewModIds::TEST);
@@ -73,7 +70,7 @@ TEST_F(TestContext, Basic)
     ptr = ctxalp(100);
     ASSERT_NE(ptr, nullptr);
     MEMSET(ptr, 0, 100);
-    ASSERT_GT(g_pm.used_, used);
+    ASSERT_GT(mem_context->hold(), used);
 
     auto &P_MCTX = CURRENT_CONTEXT;
     auto &P_MFLOW = Flow::current_flow();
@@ -92,10 +89,10 @@ TEST_F(TestContext, Basic)
         ptr = ctxalp(100);
         ASSERT_NE(ptr, nullptr);
       }
-      ASSERT_GT(g_pm.used_, used);
+      ASSERT_GT(mem_context->hold(), used);
       ASSERT_EQ(p_hold, P_MCTX->hold());
       ASSERT_LT(hold, CURRENT_CONTEXT->hold());
-      int64_t orig_pm_used = g_pm.used_;
+      int64_t orig_pm_used = mem_context->hold();
       has_unfree = false;
       CREATE_WITH_TEMP_CONTEXT(param) {
         for (int i = 0; i < 64; ++i) {
@@ -118,7 +115,7 @@ TEST_F(TestContext, Basic)
         ASSERT_TRUE(false);
       }
       ASSERT_TRUE(has_unfree);
-      ASSERT_EQ(orig_pm_used, g_pm.used_);
+      ASSERT_EQ(orig_pm_used, mem_context->hold());
       CREATE_WITH_TEMP_CONTEXT(param) {
         {
           // In order to allow the object_set inside current_ctx to allocate free_list in advance
@@ -150,11 +147,9 @@ TEST_F(TestContext, Basic)
             ASSERT_TRUE(false);
           }
         }
-        ASSERT_GT(g_pm.used_, orig_pm_used);
         for (int i = 0; i < sub_cnt/2; ++i) {
           DESTROY_CONTEXT(subs[i]);
         }
-        ASSERT_GT(g_pm.used_, orig_pm_used);
         // check child num
         int child_cnt = 0;
         for (auto cur = CURRENT_CONTEXT->tree_node_.child_;cur;cur=cur->next_,child_cnt++);
@@ -162,16 +157,15 @@ TEST_F(TestContext, Basic)
       } else {
         ASSERT_TRUE(false);
       }
-      ASSERT_EQ(g_pm.used_, orig_pm_used);
+      ASSERT_EQ(mem_context->hold(), orig_pm_used);
     } else {
       ASSERT_TRUE(false);
     }
   } else {
     ASSERT_TRUE(false);
   }
-  ASSERT_GT(g_pm.used_, used);
+  ASSERT_GT(mem_context->hold(), used);
   DESTROY_CONTEXT(mem_context);
-  ASSERT_EQ(g_pm.used_, used);
 
   {
     get_mem_leak_checker().init();
@@ -226,44 +220,6 @@ TEST_F(TestContext, Basic)
   ObMemoryDump::get_instance().push(task);
   usleep(1000000);
   ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(500, ObCtxIds::DEFAULT_CTX_ID)->print_memory_usage();
-}
-
-bool req_cache_empty(ObTenantCtxAllocator *ta)
-{
-  for (int i = 0; i < ta->req_chunk_mgr_.parallel_; i++) {
-    if (ta->req_chunk_mgr_.chunks_[i]) {
-      return false;
-    }
-  }
-  return true;
-}
-
-TEST_F(TestContext, PM_Wash)
-{
-  uint64_t tenant_id = 1002;
-  uint64_t ctx_id = ObCtxIds::DEFAULT_CTX_ID;
-  ObMallocAllocator *ma = ObMallocAllocator::get_instance();
-  ASSERT_EQ(OB_SUCCESS, ma->create_and_add_tenant_allocator(tenant_id));
-  auto ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(tenant_id, ctx_id);
-  ObMemAttr attr(tenant_id, "test", ctx_id);
-  ObPageManager g_pm;
-  ObPageManager::set_thread_local_instance(g_pm);
-  g_pm.set_tenant_ctx(tenant_id, ctx_id);
-  ContextTLOptGuard guard(true);
-  ContextParam param;
-  param.set_mem_attr(attr);
-  param.properties_ = USE_TL_PAGE_OPTIONAL;
-  ASSERT_TRUE(req_cache_empty(ta.ref_allocator()));
-  int ret = OB_SUCCESS;
-  CREATE_WITH_TEMP_CONTEXT(param) {
-    void *ptr = ctxalf(100, attr);
-    ASSERT_NE(nullptr, ptr);
-    ctxfree(ptr);
-    ASSERT_FALSE(req_cache_empty(ta.ref_allocator()));
-    ta->set_limit(ta->get_hold());
-    ASSERT_NE(ob_malloc(OB_MALLOC_BIG_BLOCK_SIZE, attr), nullptr);
-    ASSERT_TRUE(req_cache_empty(ta.ref_allocator()));
-  }
 }
 
 void emptySignalHandler(int) {}

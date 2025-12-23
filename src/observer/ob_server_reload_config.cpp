@@ -136,9 +136,7 @@ int ObServerReloadConfig::operator()()
       OB_SERVER_DISK_SPACE_MGR.reload_ss_cache_maxsize_percpu_config(GCONF);
     }
 #endif
-    // The actual semantics of _enable_malloc_v2 is to enable malloc_v3.
-    // Therefore, when _enable_malloc_v2 is true, it means malloc_v3 is enabled and malloc_v2 is disabled.
-    enable_malloc_v2(!GCONF._enable_malloc_v2);
+    enable_malloc_v2(GCONF._enable_malloc_v2);
     GMEMCONF.reload_config(GCONF);
     const int64_t limit_memory = GMEMCONF.get_server_memory_limit();
     OB_LOGGER.set_info_as_wdiag(GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_1_0_0);

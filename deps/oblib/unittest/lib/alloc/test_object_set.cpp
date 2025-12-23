@@ -9,435 +9,98 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
 #include <gtest/gtest.h>
-#include "lib/allocator/page_arena.h"
+#define private public
+#define protected public
+#include "lib/alloc/object_mgr.h"
+#include "lib/alloc/ob_malloc_allocator.h"
+#include "lib/alloc/ob_malloc_sample_struct.h"
+#include "lib/utility/ob_backtrace.h"
 
 using namespace oceanbase::lib;
-using namespace std;
 using namespace oceanbase::common;
-ObMemAttr attr;
+using namespace std;
 
-#if 0
-class TestObjectSet
-    : public ::testing::Test
+class TestObjectSet : public ::testing::Test, public ObjectSet
 {
-  class ObjecSetLocker: public ISetLocker
-  {
-  public:
-    ObjecSetLocker() {}
-    void lock() override
-    {
-    }
-    void unlock() override
-    {
-    }
-    bool trylock() override
-    {
-      return true;
-    }
-  };
 public:
   TestObjectSet()
-    : tallocator_(500),
-      os_locker_(), bs_(), os_()
-  {}
-
-  virtual void SetUp()
   {
-    cout << BLOCKS_PER_CHUNK << endl;
-    cout << AOBJECT_META_SIZE << " " << ABLOCK_HEADER_SIZE << endl;
-    tallocator_.set_tenant_memory_mgr();
-    tallocator_.set_limit(1000L << 20);
-    bs_.reset();
-    bs_.set_tenant_ctx_allocator(tallocator_);
-    os_.set_block_mgr(&bs_);
-    os_.set_locker(&os_locker_);
-    os_.reset();
+    ObTenantCtxAllocatorGuard ta = ObMallocAllocator::get_instance()->
+        get_tenant_ctx_allocator(OB_SERVER_TENANT_ID, ObCtxIds::GLIBC);
+    ObjectSet::set_block_mgr(&ta->get_block_mgr());
   }
-
-  virtual void TearDown()
-  {
-  }
-
-  void *Malloc(uint64_t size)
-  {
-    void *p = NULL;
-    AObject *obj = os_.alloc_object(size, attr);
-    if (obj != NULL) {
-      p = obj->data_;
-      // memset(p, 0, size);
-    }
-    return p;
-  }
-
-  void Free(void *ptr)
-  {
-    AObject *obj = reinterpret_cast<AObject*>(
-        (char*)ptr - AOBJECT_HEADER_SIZE);
-    os_.free_object(obj);
-  }
-
-  void *Realloc(void *ptr, uint64_t size)
-  {
-    AObject *obj = NULL;
-    if (ptr != NULL) {
-      obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);
-    }
-    obj = os_.realloc_object(obj, size, attr);
-    return obj->data_;
-  }
-
-  void Reset()
-  {
-    os_.reset();
-  }
-
-  void check_ptr(void *ptr)
-  {
-    EXPECT_TRUE(ptr != NULL);
-    UNUSED(ptr);
-  }
-
-protected:
-  ObTenantCtxAllocator tallocator_;
-  ObjecSetLocker os_locker_;
-  BlockSet bs_;
-  ObjectSet os_;
 };
 
-TEST_F(TestObjectSet, Basic)
+TEST_F(TestObjectSet, basic)
 {
-  void *p = NULL;
-  int64_t cnt = 1L << 20;
-  uint64_t sz = 32;
-
-  while (cnt--) {
-    p = Malloc(sz);
-    check_ptr(p);
-    Free(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    Free(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    Free(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    Free(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    Free(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    Free(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    Free(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    Free(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    Free(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    Free(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    Free(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    Free(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    Free(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    Free(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    Free(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    Free(p);
-    sz = ((sz | reinterpret_cast<size_t>(p)) & ((1<<13) - 1));
-  }
-}
-
-TEST_F(TestObjectSet, Basic2)
-{
-  void *p[128] = {};
-  int64_t cnt = 1L << (28 - 10);
-  uint64_t sz = 1024;
-
-  while (cnt--) {
-    int i = 0;
-    p[i++] = Malloc(sz);
-    p[i++] = Malloc(sz);
-    p[i++] = Malloc(sz);
-    p[i++] = Malloc(sz);
-    p[i++] = Malloc(sz);
-    p[i++] = Malloc(sz);
-    p[i++] = Malloc(sz);
-    p[i++] = Malloc(sz);
-    p[i++] = Malloc(sz);
-    p[i++] = Malloc(sz);
-    p[i++] = Malloc(sz);
-    p[i++] = Malloc(sz);
-    p[i++] = Malloc(sz);
-    p[i++] = Malloc(sz);
-    p[i++] = Malloc(sz);
-    p[i++] = Malloc(sz);
-    while (i--) {
-      Free(p[i]);
+  uint64_t size = 2048;
+  ObMemAttr attr(OB_SERVER_TENANT_ID, "test", ObCtxIds::GLIBC);
+  // check the status of block is FULL->PARTITIAL->FULL->PARTITIAL->EMPTY
+  // check the order of alloc_object is local->avail->new_block
+  const int max_cnt = 16;
+  AObject *objs[max_cnt + 1];
+  memset(objs, 0, sizeof(objs));
+  objs[0] = alloc_object(size, attr);
+  ABlock *block = objs[0]->block();
+  const int sc_idx = block->sc_idx_;
+  ABlock *&avail_blist = scs[sc_idx].avail_blist_;
+  ASSERT_EQ(max_cnt, block->max_cnt_);
+  ASSERT_TRUE(ABlock::FULL == block->status_);
+  ASSERT_EQ(NULL, avail_blist);
+  free_object(objs[0], block);
+  ASSERT_TRUE(ABlock::PARTITIAL == block->status_);
+  ASSERT_EQ(block, avail_blist);
+  for (int i = 0; i < max_cnt; ++i) {
+    AObject *local = scs[sc_idx].local_free_;
+    ABlock *avail = avail_blist;
+    objs[i] = alloc_object(size, attr);
+    if (NULL != local) {
+      ASSERT_EQ(local, objs[i]);
+    } else if (NULL != avail) {
+      ASSERT_EQ(NULL, avail_blist);
+      ASSERT_EQ(avail, objs[i]->block());
     }
-    sz = ((sz | reinterpret_cast<size_t>(p[0])) & ((1<<13) - 1));
+    ASSERT_EQ(block, objs[i]->block());
   }
+  objs[max_cnt] = alloc_object(size, attr);
+  ASSERT_NE(block, objs[max_cnt]->block());
+  free_object( objs[max_cnt], objs[max_cnt]->block());
+  ASSERT_TRUE(ABlock::FULL == block->status_);
+  free_object(objs[0], block);
+  for (int i = 1; i < max_cnt; ++i) {
+    ASSERT_TRUE(ABlock::PARTITIAL == block->status_);
+    free_object(objs[i], block);
+  }
+  ASSERT_TRUE(ABlock::EMPTY == block->status_);
 }
 
-TEST_F(TestObjectSet, SplitBug)
+TEST(TestMallocAllocator, recycle_tenant_allocator)
 {
-  void *p[128] = {};
-
-  {
-    // build free list
-    for (int i = 0; i < 8; i++) {
-      p[i] = Malloc(8192);
-    }
-    for (int i = 0; i < 8; i++) {
-      Free(p[i]);
-    }
-  }
-
-  for (int i = 0; i < 8; i++) {
-    p[i] = Malloc(1008);
-  }
-  for (int i = 0; i < 7; i++) {
-    Free(p[i]);
-  }
-  for (int i = 0; i < 6; i++) {
-    p[i] = Malloc(1008);
-    memset(p[i], 0, 1008);
-  }
-  Free(p[0]);
-  Free(p[7]);
-
-  // The last remainder will indicate a invalid address if splitting
-  // obj doesn't work well.
-  Malloc(1);
+  int64_t tenant_id = 1001;
+  int64_t ctx_id = ObCtxIds::DEFAULT_CTX_ID;
+  const char label[] = "Test";
+  ObMemAttr attr(tenant_id, label, ctx_id);
+  auto ma = ObMallocAllocator::get_instance();
+  ASSERT_EQ(OB_SUCCESS, ma->create_and_add_tenant_allocator(tenant_id));
+  void *ptr = ma->alloc(1024, attr);
+  AObject *obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);
+  char bt[MAX_BACKTRACE_LENGTH] = {'\0'};
+  parray(bt, MAX_BACKTRACE_LENGTH, (int64_t*)(obj->bt()), AOBJECT_BACKTRACE_COUNT);
+  auto ta = ma->get_tenant_ctx_allocator(tenant_id, ctx_id);
+  char first_label[AOBJECT_LABEL_SIZE + 1] = {'\0'};
+  char first_bt[MAX_BACKTRACE_LENGTH] = {'\0'};
+  ta->check_has_unfree(first_label, first_bt);
+  ASSERT_TRUE(0 == STRNCMP(first_label, label, STRLEN(label)));
+  ASSERT_TRUE(0 == STRNCMP(first_bt, bt, STRLEN(bt)));
 }
-
-TEST_F(TestObjectSet, Reset)
-{
-  void *p = NULL;
-  int64_t cnt = 1L << (28 - 10);
-  uint64_t sz = 32;
-
-  while (cnt--) {
-    p = Malloc(sz);
-    check_ptr(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    p = Malloc(sz);
-    check_ptr(p);
-    Reset();
-    sz = ((sz | reinterpret_cast<size_t>(p)) & ((1<<13) - 1));
-  }
-}
-
-TEST_F(TestObjectSet, NormalObject)
-{
-  void *p = NULL;
-  int64_t cnt = 1L << (28 - 6);
-  uint64_t sz = 1 < 13;
-
-  while (cnt--) {
-    p = Malloc(sz);
-    check_ptr(p);
-    Free(p);
-  }
-}
-
-TEST_F(TestObjectSet, NormalObject_plus_1)
-{
-  void *p = NULL;
-  int64_t cnt = 1L << (28 - 6);
-  uint64_t sz = (1 << 13) + 1;
-
-  p = Malloc(sz);
-  while (cnt--) {
-    p = Malloc(sz);
-    check_ptr(p);
-    Free(p);
-  }
-}
-
-TEST_F(TestObjectSet, MallocReset)
-{
-  int64_t cnt = 1L << 22;
-  const int sz = 1 << 13;
-
-  while (cnt--) {
-    Malloc(sz);
-    Reset();
-  }
-}
-
-TEST_F(TestObjectSet, PageArena)
-{
-  int64_t cnt = 1L << 22;
-  const int sz = 32;
-
-  while (cnt--) {
-    Malloc(sz);
-    Malloc(sz);
-    Malloc(sz);
-    Malloc(sz);
-    Malloc(sz);
-    Malloc(sz);
-    Malloc(sz);
-    Malloc(sz);
-    Malloc(sz);
-    Malloc(sz);
-    Malloc(sz);
-    Malloc(sz);
-    Malloc(sz);
-    Malloc(sz);
-    Malloc(sz);
-    Malloc(sz);
-    Reset();
-  }
-}
-
-TEST_F(TestObjectSet, PageArenaOrigin)
-{
-  //int64_t cnt = 1L << 22;
-  int64_t cnt = 1L << 20L;
-  const int sz = 32;
-
-  oceanbase::common::PageArena<> pa;
-
-  while (cnt--) {
-    pa.alloc(sz);
-    pa.alloc(sz);
-    pa.alloc(sz);
-    pa.alloc(sz);
-    pa.alloc(sz);
-    pa.alloc(sz);
-    pa.alloc(sz);
-    pa.alloc(sz);
-    pa.alloc(sz);
-    pa.alloc(sz);
-    pa.alloc(sz);
-    pa.alloc(sz);
-    pa.alloc(sz);
-    pa.alloc(sz);
-    pa.alloc(sz);
-    pa.alloc(sz);
-    pa.free();
-  }
-}
-
-TEST_F(TestObjectSet, ReallocInc1M)
-{
-  void *p = NULL;
-  int64_t cnt = 1L << 10;
-  uint64_t sz = 1;
-
-  p = Realloc(p, 0);
-  EXPECT_TRUE(p != NULL);
-
-  while (cnt-- && sz < (1 << 20)) {
-    p = Realloc(p, sz);
-    memset(p, 0, sz);
-    p = Realloc(p, sz);
-    memset(p, 0, sz);
-    p = Realloc(p, sz);
-    memset(p, 0, sz);
-    p = Realloc(p, sz);
-    memset(p, 0, sz);
-    p = Realloc(p, sz);
-    memset(p, 0, sz);
-    p = Realloc(p, sz);
-    memset(p, 0, sz);
-    p = Realloc(p, sz);
-    memset(p, 0, sz);
-    sz += (reinterpret_cast<int64_t>(p) & ((1 << 6) - 1));
-  }
-  Free(p);
-}
-
-TEST_F(TestObjectSet, ReallocDec1M)
-{
-  void *p = NULL;
-  int64_t cnt = 1L << 10;
-  int64_t sz = 1 << 20;
-
-  while (cnt-- && sz > 0) {
-    p = Realloc(p, sz);
-    memset(p, 0, sz);
-    p = Realloc(p, sz);
-    memset(p, 0, sz);
-    p = Realloc(p, sz);
-    memset(p, 0, sz);
-    p = Realloc(p, sz);
-    memset(p, 0, sz);
-    p = Realloc(p, sz);
-    memset(p, 0, sz);
-    p = Realloc(p, sz);
-    memset(p, 0, sz);
-    p = Realloc(p, sz);
-    memset(p, 0, sz);
-    sz -= (reinterpret_cast<int64_t>(p) & ((1 << 6) - 1));
-  }
-  Free(p);
-}
-
-TEST_F(TestObjectSet, BlockCacheSize)
-{
-  static const int64_t SZ = 8192;
-  static const int64_t COUNT = 10000;
-  void *objs[COUNT] = {};
-  for (int i = 0; i < COUNT; ++i) {
-    objs[i] = Malloc(SZ);
-  }
-  for (int i = 0; i < COUNT/10; ++i) {
-    Free(objs[i]);
-  }
-  EXPECT_EQ(os_.get_normal_hold() - os_.get_normal_used(), SZ + AOBJECT_META_SIZE);
-}
-#endif
 
 int main(int argc, char *argv[])
 {
   signal(49, SIG_IGN);
   ::testing::InitGoogleTest(&argc, argv);
+  OB_LOGGER.set_file_name("test_object_set.log", true, true);
+  OB_LOGGER.set_log_level("INFO");
+  enable_memleak_light_backtrace(true);
   return RUN_ALL_TESTS();
 }
