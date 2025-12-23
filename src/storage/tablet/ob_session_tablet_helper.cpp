@@ -239,6 +239,7 @@ int ObSessionTabletCreateHelper::choose_log_stream(
     ObSessionTabletInfo data_table_info;
     common::ObSEArray<share::ObLSID, 1> ls_id_array;
     rootserver::ObNewTableTabletAllocator new_table_tablet_allocator(tenant_id_, schema_guard, GCTX.sql_proxy_);
+    const share::schema::ObTableSchema *schema = &table_schema;
     if (table_schema.is_oracle_tmp_table_v2_index_table()) {
       const uint64_t data_table_id = table_schema.get_data_table_id();
       const share::schema::ObTableSchema *data_table_schema = nullptr;
@@ -252,6 +253,7 @@ int ObSessionTabletCreateHelper::choose_log_stream(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("data table schema is null", KR(ret), K(data_table_id));
       } else {
+        schema = data_table_schema;
         const bool has_lob_column = data_table_schema->has_lob_column(true/*ignore unused column*/);
         common::ObSArray<uint64_t> table_ids;
         if (OB_FAIL(table_ids.assign(table_ids_))) {
@@ -275,7 +277,7 @@ int ObSessionTabletCreateHelper::choose_log_stream(
     if (FAILEDx(new_table_tablet_allocator.init())) {
       LOG_WARN("failed to init tablet allocator", KR(ret));
     } else if (OB_FAIL(new_table_tablet_allocator.prepare_for_oracle_temp_table(trans_,
-                                                                                table_schema,
+                                                                                *schema,
                                                                                 tablegroup_schema,
                                                                                 data_table_info))) {
       LOG_WARN("failed to prepare tablet allocator", KR(ret), K(data_table_info), K(table_schema));

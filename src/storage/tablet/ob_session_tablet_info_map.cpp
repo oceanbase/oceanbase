@@ -128,7 +128,7 @@ int ObSessionTabletInfoMap::add_session_tablet(
     LOG_WARN("failed to set table ids", KR(ret), K(table_ids));
   } else if (OB_FAIL(create_helper.do_work())) {
     LOG_WARN("failed to create session tablet", KR(ret), K(table_ids));
-  } else if (OB_UNLIKELY(create_helper.get_tablet_ids().count() != table_ids.count())) {
+  } else if (OB_UNLIKELY(create_helper.get_tablet_ids().count() < table_ids.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error", KR(ret), K(create_helper.get_tablet_ids().count()), K(table_ids.count()));
   } else {
