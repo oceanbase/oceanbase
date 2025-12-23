@@ -129,8 +129,16 @@ int ObMVChecker::check_mv_stmt_refresh_type_basic(const ObSelectStmt &stmt, bool
   bool has_cur_time = false;
   bool table_type_valid = false;
   bool has_non_proctime_table = false;
+  bool enable_fast_refresh_with_cur_time = false;
   is_valid = true;
-  if (stmt.is_set_stmt() && is_child_stmt(&stmt)) {
+  if (OB_ISNULL(stmt.get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(stmt.get_query_ctx()));
+  } else if (OB_FAIL(stmt.get_query_ctx()->get_global_hint().opt_params_.
+             get_bool_opt_param(ObOptParamHint::ENABLE_FAST_REFRESH_WITH_CUR_TIME, 
+                                enable_fast_refresh_with_cur_time))) {
+    LOG_WARN("failed to get enable fast refresh with cur time", K(ret));
+  } else if (stmt.is_set_stmt() && is_child_stmt(&stmt)) {
     // child stmt is set stmt, has multi-level set stmt
     is_valid = false;
     fast_refreshable_error_.assign_fmt("query with set operators UNION/INTERSECT/EXCEPT/MINUS is not supported");
@@ -170,7 +178,7 @@ int ObMVChecker::check_mv_stmt_refresh_type_basic(const ObSelectStmt &stmt, bool
     fast_refreshable_error_.assign_fmt("non-deterministic query is not supported");
   } else if (OB_FAIL(stmt.has_special_expr(CNT_CUR_TIME, has_cur_time))) {
     LOG_WARN("failed to check stmt has special expr", K(ret));
-  } else if (has_cur_time) {
+  } else if (has_cur_time && !enable_fast_refresh_with_cur_time) {
     is_valid = false;
     fast_refreshable_error_.assign_fmt("query with current time expression is not supported");
   } else if (OB_FAIL(check_mv_table_type_valid(stmt, table_type_valid))) {

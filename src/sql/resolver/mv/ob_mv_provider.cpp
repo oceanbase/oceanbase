@@ -149,7 +149,6 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
         } else if (OB_FAIL(check_is_rt_expand(check_refreshable_only, *mv_schema, mv_printer_ctx, is_rt_expand))) {
           LOG_WARN("failed to check is rt expand", K(ret));
         } else {
-          query_ctx->get_query_hint_for_update().reset();
           ObMVChecker checker(*view_stmt,
                               expr_factory,
                               session_info,
@@ -170,6 +169,7 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
             LOG_TRACE("mv not support fast refresh, need additional dependent columns", K(mv_schema->get_table_name()), K(fast_refresh_dependent_columns));
           } else if (check_refreshable_only) {
             inited_ = true;
+          } else if (OB_FALSE_IT(query_ctx->get_query_hint_for_update().reset())) {
           } else if (OB_FAIL(print_mv_operators(mv_printer_ctx,
                                                 checker,
                                                 *mv_schema,

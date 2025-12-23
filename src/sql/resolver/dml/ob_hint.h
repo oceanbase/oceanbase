@@ -221,6 +221,9 @@ struct ObOptParamHint
     DEF(APPROX_COUNT_DISTINCT_PRECISION,)           \
     DEF(ENABLE_RUNTIME_FILTER_ADAPTIVE_APPLY, )     \
     DEF(ENABLE_DELETE_INSERT_SCAN,)                 \
+    DEF(ENABLE_FAST_REFRESH_WITH_CUR_TIME,)         \
+    
+
 
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
