@@ -3154,3 +3154,7 @@ DEF_CAP(_replay_pending_log_memory_limit, OB_TENANT_PARAMETER, "128M", "[1M, 102
 DEF_BOOL(_enable_randomize_redo_logging_slot, OB_CLUSTER_PARAMETER, "False",
         "specifies whether enable randomize redo logging slot when parallel logging is enabled",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(_max_access_entries_for_external_table_partition, OB_TENANT_PARAMETER, "1000000", "[1,)",
+        "max number of entries accessed in a single partition for external table, including directories and files.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
