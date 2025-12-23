@@ -993,7 +993,7 @@ int ObTableTTLDeleteTask::execute_ttl_delete(ObKvSchemaCacheGuard &schema_cache_
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
-  bool is_index_scan = !scan_index_.empty();
+  bool is_index_scan = !ObTTLUtil::is_default_scan_index(scan_index_);
   while (OB_SUCC(ret)) {
     ObNewRow *row = nullptr;
     if (OB_FAIL(ttl_row_iter.get_next_row(row))) {
