@@ -20,6 +20,7 @@
 #include "mtlenv/mock_tenant_module_env.h"
 #include "storage/schema_utils.h"
 #include "storage/test_dml_common.h"
+#include "unittest/storage/test_tablet_helper.h"
 
 namespace oceanbase
 {

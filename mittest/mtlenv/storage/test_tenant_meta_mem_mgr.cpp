@@ -29,7 +29,14 @@
 namespace oceanbase
 {
 using namespace share;
-
+namespace common
+{
+int ObClusterVersion::get_tenant_data_version(const uint64_t tenant_id, uint64_t &data_version)
+{
+  data_version = DATA_CURRENT_VERSION;  // 返回指定的 data_version
+  return OB_SUCCESS;
+}
+}
 namespace memtable {
 
 int ObMemtable::batch_remove_unused_callback_for_uncommited_txn(const ObLSID, const memtable::ObMemtableSet *)
@@ -1801,7 +1808,7 @@ TEST_F(TestTenantMetaMemMgr, test_normal_tablet_buffer_fragment)
 int main(int argc, char **argv)
 {
   system("rm -f test_tenant_meta_mem_mgr.log*");
-  OB_LOGGER.set_file_name("test_tenant_meta_mem_mgr.log", true);
+  OB_LOGGER.set_file_name("test_tenant_meta_mem_mgr.log");
   OB_LOGGER.set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
