@@ -117,6 +117,13 @@ int ObSessionTabletInfoMap::add_session_tablet(
   if (OB_UNLIKELY(table_ids.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(table_ids));
+  } else if (OB_FAIL(check_session_tablet_by_table_id_from_inner_table(table_ids, session_id, sequence))) {
+    if (OB_ENTRY_EXIST == ret) {
+      ret = OB_SUCCESS;
+      LOG_INFO("session tablet already exists", KR(ret), K(table_ids), K(session_id), K(sequence));
+    } else {
+      LOG_WARN("failed to check session tablet by table id from inner table or some exist", KR(ret), K(table_ids), K(session_id), K(sequence));
+    }
   } else if (OB_FAIL(create_helper.set_table_ids(table_ids))) {
     LOG_WARN("failed to set table ids", KR(ret), K(table_ids));
   } else if (OB_FAIL(create_helper.do_work())) {
@@ -132,18 +139,12 @@ int ObSessionTabletInfoMap::add_session_tablet(
       const uint64_t table_id = table_ids.at(i);
       const common::ObTabletID &tablet_id = tablet_ids.at(i);
       tablet_info.reset();
-      if (OB_FAIL(inner_get_session_tablet(table_id, sequence, session_id, tablet_info)) && OB_ENTRY_NOT_EXIST != ret) {
-        LOG_WARN("failed to inner get session tablet", KR(ret), K(table_id), K(sequence), K(session_id));
-      } else if (OB_ENTRY_NOT_EXIST == ret) {
-        if (OB_FAIL(tablet_info.init(tablet_id, ls_id, table_id, sequence, session_id, 0/*transfer_seq*/))) {
-          LOG_WARN("failed to init session tablet info", KR(ret), K(table_ids.at(i)));
-        } else if (FALSE_IT(tablet_info.is_creator_ = true)) {
-        } else if (OB_FAIL(tablet_infos_.push_back(tablet_info))) {
-          LOG_WARN("failed to push back", KR(ret), K(tablet_info));
-        }
-      } else {
-        ret = OB_ENTRY_EXIST;
-        LOG_WARN("session tablet already exists", KR(ret), K(table_id), K(sequence), K(session_id));
+      // The tablet has been newly created, so it must be inserted into tablet_infos_.
+      if (OB_FAIL(tablet_info.init(tablet_id, ls_id, table_id, sequence, session_id, 0/*transfer_seq*/))) {
+        LOG_WARN("failed to init session tablet info", KR(ret), K(table_ids.at(i)));
+      } else if (FALSE_IT(tablet_info.is_creator_ = true)) {
+      } else if (OB_FAIL(tablet_infos_.push_back(tablet_info))) {
+        LOG_WARN("failed to push back", KR(ret), K(tablet_info));
       }
     }
     if (OB_SUCC(ret)) {
@@ -187,7 +188,19 @@ int ObSessionTabletInfoMap::inner_get_session_tablet(
     }
   }
   if (OB_SUCC(ret) && i >= tablet_infos_.count()) {
-    ret = OB_ENTRY_NOT_EXIST;
+    // try get from inner table
+    if (OB_FAIL(share::ObTabletToGlobalTmpTableOperator::point_get(*GCTX.sql_proxy_, MTL_ID(), table_id, sequence, session_tablet_info))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        LOG_WARN("failed to get session tablet from inner table", KR(ret), K(table_id), K(sequence));
+      }
+    } else if (OB_UNLIKELY(!session_tablet_info.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", KR(ret), K(session_tablet_info));
+    } else if (OB_FAIL(tablet_infos_.push_back(session_tablet_info))) {
+      LOG_WARN("failed to push back", KR(ret), K(session_tablet_info));
+    } else {
+      FLOG_INFO("session tablet get from inner table", KR(ret), K(table_id), K(sequence), K(session_tablet_info), K(tablet_infos_));
+    }
   }
   return ret;
 }
@@ -232,6 +245,53 @@ int ObSessionTabletInfoMap::get_table_ids_by_session_id_and_sequence(
         if (OB_FAIL(table_ids.push_back(tablet_infos_.at(i).table_id_))) {
           LOG_WARN("failed to push back", KR(ret), K(tablet_infos_.at(i)));
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSessionTabletInfoMap::check_session_tablet_by_table_id_from_inner_table(
+  const common::ObIArray<uint64_t> &table_ids,
+  const uint32_t session_id,
+  const int64_t sequence)
+{
+  int ret = OB_SUCCESS;
+  common::ObSEArray<ObSessionTabletInfo, MAX_SESSION_TABLET_COUNT> tablet_infos;
+  common::ObArray<uint64_t> exist_table_ids;
+  if (OB_UNLIKELY(table_ids.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(table_ids));
+  } else if (OB_FAIL(share::ObTabletToGlobalTmpTableOperator::batch_get_by_table_ids(*GCTX.sql_proxy_, MTL_ID(), table_ids, tablet_infos))) {
+    LOG_WARN("failed to get session tablet infos from inner table", KR(ret), K(table_ids));
+  } else if (0 == tablet_infos.count()) { // fast path for tablet infos not exist
+    ret = OB_SUCCESS;
+    LOG_INFO("session tablet not exist", KR(ret), K(table_ids), K(tablet_infos));
+  } else if (OB_FAIL(exist_table_ids.reserve(table_ids.count()))) {
+    LOG_WARN("failed to reserve", KR(ret), K(table_ids));
+  } else {
+    int64_t exist_count = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_infos.count(); ++i) {
+      if (tablet_infos.at(i).sequence_ == sequence &&
+          tablet_infos.at(i).session_id_ == session_id &&
+          !is_contain(exist_table_ids, tablet_infos.at(i).table_id_) && // table id in one session should be unique
+          is_contain(table_ids, tablet_infos.at(i).table_id_)) {
+        exist_count++;
+        if (OB_FAIL(exist_table_ids.push_back(tablet_infos.at(i).table_id_))) {
+          LOG_WARN("failed to push back", KR(ret), K(tablet_infos.at(i).table_id_));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (exist_count == table_ids.count()) {
+        ret = OB_ENTRY_EXIST;
+        LOG_INFO("session tablet already exists", KR(ret), K(table_ids), K(tablet_infos));
+      } else if (0 == exist_count) {
+        ret = OB_SUCCESS;
+        LOG_INFO("session tablet not exist", KR(ret), K(table_ids), K(tablet_infos));
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("session tablet exist but not all", KR(ret), K(table_ids), K(tablet_infos));
       }
     }
   }

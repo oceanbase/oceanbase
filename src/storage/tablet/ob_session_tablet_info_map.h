@@ -176,6 +176,13 @@ public:
       const uint32_t session_id,
       const int64_t sequence,
       common::ObIArray<uint64_t> &table_ids);
+  // if not exist, return OB_SUCCESS
+  // if all exist, return OB_ENTRY_EXIST
+  // else return OB_ERR_UNEXPECTED
+  int check_session_tablet_by_table_id_from_inner_table(
+      const common::ObIArray<uint64_t> &table_ids,
+      const uint32_t session_id,
+      const int64_t sequence);
   TO_STRING_KV(K_(tablet_infos));
 private:
   const static int64_t MAX_SESSION_TABLET_COUNT = 64;
