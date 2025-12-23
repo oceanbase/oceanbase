@@ -20,6 +20,8 @@ namespace oceanbase
 namespace pl
 {
 
+struct ObPLExecCtx;
+
 class ObDBMSUpgrade
 {
 public:
@@ -27,12 +29,12 @@ public:
   virtual ~ObDBMSUpgrade() {}
 public:
   static int upgrade_single(
-    sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result);
+    ObPLExecCtx &ctx, sql::ParamStore &params, common::ObObj &result);
   static int upgrade_all(
-    sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result);
+    ObPLExecCtx &ctx, sql::ParamStore &params, common::ObObj &result);
   static int get_job_action(ObSqlString &job_action, ObSqlString &query_sql);
   static int flush_dll_ncomp(
-    sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result);
+    ObPLExecCtx &ctx, sql::ParamStore &params, common::ObObj &result);
 };
 
 } // end of pl

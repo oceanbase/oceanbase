@@ -13,7 +13,9 @@
 #define USING_LOG_PREFIX PL
 
 #include "pl/sys_package/ob_dbms_upgrade.h"
+#include "pl/ob_pl.h"
 #include "pl/ob_pl_package_manager.h"
+#include "pl/ob_pl_type.h"
 
 namespace oceanbase
 {
@@ -21,15 +23,17 @@ namespace pl
 {
 
 int ObDBMSUpgrade::upgrade_single(
-  sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result)
+  ObPLExecCtx &ctx, sql::ParamStore &params, common::ObObj &result)
 {
   int ret = OB_SUCCESS;
+  sql::ObExecContext *exec_ctx = ctx.exec_ctx_;
   ObString package_name;
   bool load_from_file = true;
   ObCompatibilityMode mode = lib::is_oracle_mode() ? ObCompatibilityMode::ORACLE_MODE
                                                    : ObCompatibilityMode::MYSQL_MODE;
   UNUSED(result);
-  CK (OB_NOT_NULL(ctx.get_sql_proxy()));
+  CK (OB_NOT_NULL(exec_ctx));
+  CK (OB_NOT_NULL(exec_ctx->get_sql_proxy()));
   // OBServer 4.2.4 has added new parameters on the __DBMS_UPGRADE
   // interface to control whether to load the system package source code from
   // a file or embeded c string. To maintain compatibility during upgarding,
@@ -51,19 +55,21 @@ int ObDBMSUpgrade::upgrade_single(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("__DBMS_UPGRADE.UPGRADE_SINGLE require one or two arguments", K(ret), K(params));
   }
-  OZ (ObPLPackageManager::load_sys_package(*ctx.get_sql_proxy(), package_name, mode, load_from_file));
+  OZ (ObPLPackageManager::load_sys_package(*exec_ctx->get_sql_proxy(), package_name, mode, load_from_file));
   return ret;
 }
 
 int ObDBMSUpgrade::upgrade_all(
-  sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result)
+  ObPLExecCtx &ctx, sql::ParamStore &params, common::ObObj &result)
 {
   int ret = OB_SUCCESS;
+  sql::ObExecContext *exec_ctx = ctx.exec_ctx_;
   bool load_from_file = true;
   ObCompatibilityMode mode = lib::is_oracle_mode() ? ObCompatibilityMode::ORACLE_MODE
                                                    : ObCompatibilityMode::MYSQL_MODE;
   UNUSED(result);
-  CK (OB_NOT_NULL(ctx.get_sql_proxy()));
+  CK (OB_NOT_NULL(exec_ctx));
+  CK (OB_NOT_NULL(exec_ctx->get_sql_proxy()));
   if (OB_FAIL(ret)) {
   } else if (0 == params.count()) {
     // do nothing
@@ -74,7 +80,7 @@ int ObDBMSUpgrade::upgrade_all(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("__DBMS_UPGRADE.UPGRADE_ALL require none or one arguments", K(ret), K(params));
   }
-  OZ (ObPLPackageManager::load_all_common_sys_package(*ctx.get_sql_proxy(), mode, load_from_file));
+  OZ (ObPLPackageManager::load_all_common_sys_package(*exec_ctx->get_sql_proxy(), mode, load_from_file));
   return ret;
 }
 
@@ -117,9 +123,10 @@ int ObDBMSUpgrade::get_job_action(ObSqlString &job_action, ObSqlString &query_sq
   return ret;
 }
 
-int ObDBMSUpgrade::flush_dll_ncomp(sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result)
+int ObDBMSUpgrade::flush_dll_ncomp(ObPLExecCtx &ctx, sql::ParamStore &params, common::ObObj &result)
 {
   int ret = OB_SUCCESS;
+  sql::ObExecContext *exec_ctx = ctx.exec_ctx_;
   UNUSED(params);
   UNUSED(result);
   ObSqlString job_action;
@@ -130,14 +137,15 @@ int ObDBMSUpgrade::flush_dll_ncomp(sql::ObExecContext &ctx, sql::ParamStore &par
   common::sqlclient::ObMySQLResult *mysql_result = NULL;
   ObArray<int64_t> key_ids;
 
-  CK (OB_NOT_NULL(ctx.get_sql_proxy()));
-  CK (OB_NOT_NULL(session = ctx.get_my_session()));
+  CK (OB_NOT_NULL(exec_ctx));
+  CK (OB_NOT_NULL(exec_ctx->get_sql_proxy()));
+  CK (OB_NOT_NULL(session = exec_ctx->get_my_session()));
   OZ (get_job_action(job_action, query_sql));
   OX (tenant_id = session->get_effective_tenant_id());
   if (OB_SUCC(ret)) {
     // get deleted pl obj and insert into __all_pl_recompile_objinfo
     SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
-      OZ (ctx.get_sql_proxy()->read(res, tenant_id, query_sql.ptr()));
+      OZ (exec_ctx->get_sql_proxy()->read(res, tenant_id, query_sql.ptr()));
       CK (OB_NOT_NULL(mysql_result = res.get_result()));
       if (OB_SUCC(ret)) {
         int64_t key_id;
@@ -170,12 +178,12 @@ int ObDBMSUpgrade::flush_dll_ncomp(sql::ObExecContext &ctx, sql::ParamStore &par
                                   " ref_obj_name = VALUES(ref_obj_name), "
                                   " schema_version = VALUES(schema_version), "
                                   " fail_count = VALUES(fail_count); "));
-        OZ (ctx.get_sql_proxy()->write(tenant_id, query_sql.ptr(), affected_rows));
+        OZ (exec_ctx->get_sql_proxy()->write(tenant_id, query_sql.ptr(), affected_rows));
       }
     }
   }
   // delete old version disk cache obj
-  OZ (ctx.get_sql_proxy()->write(tenant_id, job_action.ptr(), affected_rows));
+  OZ (exec_ctx->get_sql_proxy()->write(tenant_id, job_action.ptr(), affected_rows));
   LOG_INFO("flush dll ncomp", K(ret), K(job_action), K(query_sql), K(affected_rows));
 
   return ret;
