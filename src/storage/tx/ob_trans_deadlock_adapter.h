@@ -146,7 +146,8 @@ class ObTransDeadlockDetectorAdapter
                                                            const ObTransID &conflict_trans_id,
                                                            const ObAddr &scheduler_addr);
   // for all path
-  static void unregister_from_deadlock_detector(const ObTransID &self_trans_id, const UnregisterPath path);
+  template<typename KeyType>
+  static void unregister_from_deadlock_detector(const KeyType &key, const UnregisterPath path);
   /**********************************/
   static int get_conflict_trans_scheduler(const ObTransID &self_trans_id, ObAddr &scheduler_addr);
   static int kill_tx(const SessionIDPair sess_id_pair);
@@ -333,6 +334,31 @@ int ObTransDeadlockDetectorAdapter::create_detector_node_without_session_and_blo
   }
   return ret;
   #undef PRINT_WRAPPER
+}
+
+// Call from ALL PATH, unregister detector, and mark the reason
+//
+// @param [in] key the key to unregister (can be ObTransID or ObTransDeadlockDetectorKey).
+// @param [in] path call from which code path.
+// @return void.
+template<typename KeyType>
+void ObTransDeadlockDetectorAdapter::unregister_from_deadlock_detector(const KeyType &key,
+                                                                       const UnregisterPath path)
+{
+  int ret = common::OB_SUCCESS;
+  ObDeadLockDetectorMgr *mgr = nullptr;
+  if (nullptr == (mgr = MTL(ObDeadLockDetectorMgr*))) {
+    ret = OB_ERR_UNEXPECTED;
+    DETECT_LOG(WARN, "fail to get ObDeadLockDetectorMgr", K(key), K(to_string(path)));
+  } else if (OB_FAIL(mgr->unregister_key(key))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      DETECT_LOG(WARN, "unregister from deadlock detector failed", K(key), K(to_string(path)));
+    } else {
+      ret = OB_SUCCESS;// it's ok if detector not exist
+    }
+  } else {
+    DETECT_LOG(TRACE, "unregister from deadlock detector success", K(key), K(to_string(path)));
+  }
 }
 
 } // namespace transaction

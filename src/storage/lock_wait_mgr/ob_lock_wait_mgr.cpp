@@ -974,10 +974,11 @@ int ObLockWaitMgr::handle_remote_exec_side_node_(Node* remote_exec_side_node,
   }
   wait_succ = wait_(remote_exec_side_node, delete_node, is_placeholder);
   if (OB_UNLIKELY(!wait_succ && deadlock_registered)) {
-      (void) ObTransDeadlockDetectorAdapter::unregister_from_deadlock_detector(self_tx_id,
-                                                                               ObTransDeadlockDetectorAdapter::
-                                                                               UnregisterPath::
-                                                                               LOCK_WAIT_MGR_WAIT_FAILED);
+    ObTransDeadlockDetectorKey detector_key(ObDeadlockKeyType::REMOTE_EXEC_SIDE, self_tx_id);
+    (void) ObTransDeadlockDetectorAdapter::unregister_from_deadlock_detector(detector_key,
+                                                                             ObTransDeadlockDetectorAdapter::
+                                                                             UnregisterPath::
+                                                                             LOCK_WAIT_MGR_WAIT_FAILED);
   }
   TRANS_LOG(TRACE, "handle remote execution side node finish", K(ret), K(wait_succ), KP(delete_node), KP(remote_exec_side_node), K(query_sql));
   return ret;
@@ -1756,12 +1757,13 @@ int ObLockWaitMgr::repost(Node* node)
     TRANS_LOG(ERROR, "lock wait mgr not inited", K(ret));
   } else {
     ObTransID self_tx_id(node->tx_id_);
-    ObTransDeadlockDetectorAdapter::unregister_from_deadlock_detector(self_tx_id,
-                                                                      ObTransDeadlockDetectorAdapter::
-                                                                      UnregisterPath::
-                                                                      LOCK_WAIT_MGR_REPOST);
     node->reset_wait_timeout_ts();
     if (node->get_node_type() == Node::REMOTE_EXEC_SIDE) {
+      ObTransDeadlockDetectorKey detector_key(ObDeadlockKeyType::REMOTE_EXEC_SIDE, self_tx_id);
+      ObTransDeadlockDetectorAdapter::unregister_from_deadlock_detector(detector_key,
+                                                                        ObTransDeadlockDetectorAdapter::
+                                                                        UnregisterPath::
+                                                                        LOCK_WAIT_MGR_REPOST);
       if (node->is_placeholder()) {
         // just discard and wakeup next waiter
         fetch_and_repost_head(node->hash());
@@ -1769,6 +1771,10 @@ int ObLockWaitMgr::repost(Node* node)
         TRANS_LOG(WARN, "inform remote lock release fail", K(ret), KPC(node));
       }
       free_node_(node);
+    } else if (FALSE_IT(ObTransDeadlockDetectorAdapter::unregister_from_deadlock_detector(self_tx_id,
+                                                                                          ObTransDeadlockDetectorAdapter::
+                                                                                          UnregisterPath::
+                                                                                          LOCK_WAIT_MGR_REPOST))) {
     } else if (FALSE_IT(end_row_lock_wait_event(node))) {
     } else if (OB_FAIL(OBSERVER.get_net_frame().get_deliver().repost((void*)node))) {
       TRANS_LOG(WARN, "report error", K(ret));

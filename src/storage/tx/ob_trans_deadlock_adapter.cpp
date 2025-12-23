@@ -435,6 +435,7 @@ int ObTransDeadlockDetectorAdapter::lock_wait_mgr_reconstruct_conflict_trans_ids
   int ret = OB_SUCCESS;
   SessionGuard session_guard;
   bool is_detector_exist = false;
+  ObTransDeadlockDetectorKey detector_key(ObDeadlockKeyType::REMOTE_EXEC_SIDE, self_tx_id);
   if (sess_id_pair.get_valid_sess_id() == 1) {
     DETECT_LOG(INFO, "inner session no need register to deadlock", PRINT_WRAPPER);
   } else if (sess_id_pair.get_valid_sess_id() == 0) {
@@ -450,10 +451,10 @@ int ObTransDeadlockDetectorAdapter::lock_wait_mgr_reconstruct_conflict_trans_ids
   } else if (OB_ISNULL(MTL(ObDeadLockDetectorMgr*))) {
     ret = OB_ERR_UNEXPECTED;
     DETECT_LOG(ERROR, "MTL ObDeadLockDetectorMgr is NULL", PRINT_WRAPPER);
-  } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->check_detector_exist(self_tx_id, is_detector_exist))) {
+  } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->check_detector_exist(detector_key, is_detector_exist))) {
     DETECT_LOG(WARN, "fail to get detector exist status", PRINT_WRAPPER);
   } else if (is_detector_exist) {
-    unregister_from_deadlock_detector(self_tx_id,
+    unregister_from_deadlock_detector(detector_key,
                                       UnregisterPath::REPLACE_MEET_TOTAL_DIFFERENT_LIST);
   }
   if (OB_FAIL(ret)) {
@@ -912,10 +913,7 @@ int ObTransDeadlockDetectorAdapter::lock_wait_mgr_reconstruct_detector_waiting_f
     if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->check_detector_exist(detector_key, exist))) {
       DETECT_LOG(WARN, "fail to check detector exist", PRINT_WRAPPER);
     } else if (exist) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(MTL(ObDeadLockDetectorMgr*)->unregister_key(detector_key))) {
-        DETECT_LOG(WARN, "fail to unregister key", PRINT_WRAPPER, K(tmp_ret));
-      }
+      unregister_from_deadlock_detector(detector_key, UnregisterPath::LOCK_WAIT_MGR_REPOST);
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(create_detector_node_without_session_and_block_row_(on_collect_op,
@@ -1083,29 +1081,6 @@ int ObTransDeadlockDetectorAdapter::autonomous_register_to_deadlock(const ObTran
   return ret;
 }
 
-// Call from ALL PATH, unregister detector, and mark the reason
-// 
-// @param [in] self_trans_id who am i.
-// @param [in] path call from which code path.
-// @return void.
-void ObTransDeadlockDetectorAdapter::unregister_from_deadlock_detector(const ObTransID &self_trans_id,
-                                                                       const UnregisterPath path)
-{
-  int ret = common::OB_SUCCESS;
-  ObDeadLockDetectorMgr *mgr = nullptr;
-  if (nullptr == (mgr = MTL(ObDeadLockDetectorMgr*))) {
-    ret = OB_ERR_UNEXPECTED;
-    DETECT_LOG(WARN, "fail to get ObDeadLockDetectorMgr", K(self_trans_id), K(to_string(path)));
-  } else if (OB_FAIL(mgr->unregister_key(self_trans_id))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
-      DETECT_LOG(WARN, "unregister from deadlock detector failed", K(self_trans_id), K(to_string(path)));
-    } else {
-      ret = OB_SUCCESS;// it's ok if detector not exist
-    }
-  } else {
-    DETECT_LOG(TRACE, "unregister from deadlock detector success", K(self_trans_id), K(to_string(path)));
-  }
-}
 
 } // namespace transaction
 } // namespace oceanbase
