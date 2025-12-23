@@ -403,6 +403,8 @@ public:
   }
   inline double get_online_sample_percent() const { return online_sample_percent_; }
   inline void set_online_sample_percent(double v) { online_sample_percent_ = v; }
+  inline void set_is_online_gather_statistics(const bool is_online_gather_statistics) { is_online_gather_statistics_ = is_online_gather_statistics; }
+  inline bool get_is_online_gather_statistics() const { return is_online_gather_statistics_; }
   int64_t get_das_dop() { return das_dop_; }
   void set_das_dop(int64_t v) { das_dop_ = v; }
   void set_gen_plan_usec(uint64_t v) { stat_.gen_plan_usec_  = v; }
