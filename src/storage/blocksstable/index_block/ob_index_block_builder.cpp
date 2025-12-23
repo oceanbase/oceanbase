@@ -3353,7 +3353,9 @@ int ObDataIndexBlockBuilder::write_clustered_index_micro_block()
 }
 
 void ObDataIndexBlockBuilder::update_macro_meta_with_offset(
-    const int64_t macro_block_row_count, const int64_t ddl_start_row_offset) {
+  const int64_t macro_block_row_count,
+  const int64_t ddl_start_row_offset)
+{
   if (leaf_store_desc_->get_major_working_cluster_version() >= DATA_VERSION_4_3_1_0) {
     if (ddl_start_row_offset >= 0) {
       macro_meta_.val_.ddl_end_row_offset_ =
@@ -3361,8 +3363,6 @@ void ObDataIndexBlockBuilder::update_macro_meta_with_offset(
     } else {
       macro_meta_.val_.ddl_end_row_offset_ = -1 /*default*/;
     }
-  } else {
-    macro_meta_.val_.version_ = ObDataBlockMetaVal::DATA_BLOCK_META_VAL_VERSION;
   }
 }
 
@@ -4283,8 +4283,7 @@ int ObIndexBlockRebuilder::check_and_get_abs_offset(
       break;
     case REBUILD_DDL_TASK:
     case REBUILD_BACKUP_DDL_TASK:
-      if (macro_meta.val_.version_ < ObDataBlockMetaVal::DATA_BLOCK_META_VAL_VERSION_V2
-          || macro_meta.val_.ddl_end_row_offset_ < 0) {
+      if (macro_meta.val_.ddl_end_row_offset_ < 0) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "unexpectd ddl end row offset", K(ret), K(macro_meta));
       } else {
