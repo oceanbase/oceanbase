@@ -495,6 +495,56 @@ int ObTabletToGlobalTmpTableOperator::get_by_table_id(
   return ret;
 }
 
+int ObTabletToGlobalTmpTableOperator::get_tablet_ids_by_table_id_with_schema_version(
+  common::ObISQLClient &sql_proxy,
+  const int64_t schema_version,
+  const uint64_t tenant_id,
+  const common::ObTableID &table_id,
+  common::ObIArray<common::ObTabletID> &tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || table_id == OB_INVALID_ID || schema_version < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(table_id), K(schema_version));
+  } else {
+    tablet_ids.reset();
+    SMART_VAR(ObISQLClient::ReadResult, result) {
+      ObSqlString sql;
+      if (FAILEDx(sql.append_fmt(
+        "SELECT DISTINCT(tablet_id) FROM %s WHERE table_id = %lu AND schema_version <= %ld AND is_deleted = 0 AND tablet_id NOT IN (SELECT DISTINCT(tablet_id) FROM %s WHERE schema_version <= %ld AND is_deleted = 1)",
+        OB_ALL_TABLET_TO_TABLE_HISTORY_TNAME, table_id, schema_version,
+        OB_ALL_TABLET_TO_TABLE_HISTORY_TNAME, schema_version))) {
+        LOG_WARN("fail to assign sql", KR(ret), K(sql));
+      } else if (OB_FAIL(sql_proxy.read(result, tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql));
+      } else if (OB_ISNULL(result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get mysql result failed", KR(ret), K(sql));
+      } else {
+        while (OB_SUCC(ret) && OB_SUCC(result.get_result()->next())) {
+          int64_t tablet_id = ObTabletID::INVALID_TABLET_ID;
+          EXTRACT_INT_FIELD_MYSQL(*result.get_result(), "tablet_id", tablet_id, int64_t);
+          if (OB_UNLIKELY(OB_INVALID_ID == tablet_id)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid tablet_id", KR(ret), K(tablet_id));
+          } else if (OB_FAIL(tablet_ids.push_back(ObTabletID(tablet_id)))) {
+            LOG_WARN("fail to push back tablet_id", KR(ret), K(tablet_id));
+          }
+        }
+        if (OB_ITER_END != ret) {
+          if (OB_UNLIKELY(OB_SUCCESS == ret)) {
+            ret = OB_ERR_UNEXPECTED;
+          }
+          LOG_WARN("fail to get next row to the end", KR(ret));
+        } else {
+          ret = OB_SUCCESS;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 } // end namespace share
 } // end namespace oceanbase
 

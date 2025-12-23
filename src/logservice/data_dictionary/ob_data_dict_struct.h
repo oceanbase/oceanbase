@@ -404,7 +404,7 @@ public:
   bool operator==(const ObDictTableMeta &other) const;
 
 public:
-  int init(const share::schema::ObTableSchema &table_schema);
+  int init(const share::schema::ObTableSchema &table_schema, const int64_t schema_version = OB_INVALID_VERSION);
   int assign(const ObDictTableMeta &src_table_meta);
 
 public:

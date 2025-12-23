@@ -1074,7 +1074,7 @@ DEFINE_GET_SERIALIZE_SIZE(ObDictTableMeta)
   return len;
 }
 
-int ObDictTableMeta::init(const schema::ObTableSchema &table_schema)
+int ObDictTableMeta::init(const schema::ObTableSchema &table_schema, const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
 
@@ -1104,6 +1104,16 @@ int ObDictTableMeta::init(const schema::ObTableSchema &table_schema)
       if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid table_id to get_session_tablet_ids_by_table_id", KR(ret), K(table_id));
+      } else if (OB_INVALID_VERSION != schema_version) {
+        if (OB_FAIL(share::ObTabletToGlobalTmpTableOperator::get_tablet_ids_by_table_id_with_schema_version(
+                                                                                          *GCTX.sql_proxy_,
+                                                                                          schema_version,
+                                                                                          tenant_id,
+                                                                                          ObTableID(table_id),
+                                                                                          tablet_id_arr_))) {
+          LOG_WARN("get_tablet_ids_by_table_id_with_schema_version failed", KR(ret), K(tenant_id), K(table_id),
+                   K(table_schema.get_schema_version()), K(schema_version));
+        }
       } else if (OB_FAIL(table_ids.push_back(table_id))) {
         LOG_WARN("push_back table_id failed", KR(ret), K(tenant_id), K(table_id));
       } else if (OB_FAIL(share::ObTabletToGlobalTmpTableOperator::batch_get_by_table_ids(*GCTX.sql_proxy_,

@@ -187,27 +187,19 @@ int ObLogPartMgr::add_all_user_tablets_and_tables_info(const int64_t timeout)
       } else if (is_oracle_tmp_table_v2) {
         common::ObMySQLProxy &sql_proxy = TCTX.get_sql_proxy();
         const uint64_t table_id = table_schema->get_table_id();
-        ObArray<storage::ObSessionTabletInfo> session_tablet_infos;
-        if (OB_FAIL(share::ObTabletToGlobalTmpTableOperator::get_by_table_id(sql_proxy,
+        ObArray<common::ObTabletID> tablet_ids;
+        if (OB_FAIL(share::ObTabletToGlobalTmpTableOperator::get_tablet_ids_by_table_id_with_schema_version(sql_proxy,
+                                                                             cur_schema_version_,
                                                                              tenant_id_,
                                                                              table_id,
-                                                                             session_tablet_infos))) {
+                                                                             tablet_ids))) {
           if (OB_ENTRY_NOT_EXIST != ret) {
-            LOG_WARN("get_by_table_id failed", KR(ret), K(tenant_id_), K(table_id), K(session_tablet_infos));
+            LOG_WARN("get_by_table_id failed", KR(ret), K(tenant_id_), K(table_id), K(cur_schema_version_));
           } else {
             ret = OB_SUCCESS;
           }
-        } else {
-          ObArray<common::ObTabletID> tablet_ids;
-          ARRAY_FOREACH(session_tablet_infos, idx) {
-            const common::ObTabletID &tablet_id = session_tablet_infos.at(idx).get_tablet_id();
-            if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
-              LOG_WARN("push_back tablet_id failed", KR(ret), K(tenant_id_), K(table_id), K(idx), K(tablet_id));
-            }
-          }
-          if (FAILEDx(insert_tablet_table_info_(*table_schema, tablet_ids))) {
-            LOG_ERROR("insert_tablet_table_info_ failed", KR(ret), K_(tenant_id), KPC(table_schema));
-          }
+        } else if (OB_FAIL(insert_tablet_table_info_(*table_schema, tablet_ids))) {
+          LOG_ERROR("insert_tablet_table_info_ failed", KR(ret), K_(tenant_id), KPC(table_schema), K(tablet_ids));
         }
       }
 

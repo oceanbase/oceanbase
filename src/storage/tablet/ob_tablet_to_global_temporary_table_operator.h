@@ -120,6 +120,12 @@ public:
     const uint64_t tenant_id,
     const common::ObTableID &table_id,
     ObIArray<storage::ObSessionTabletInfo> &infos);
+  static int get_tablet_ids_by_table_id_with_schema_version(
+    common::ObISQLClient &sql_proxy,
+    const int64_t schema_version,
+    const uint64_t tenant_id,
+    const common::ObTableID &table_id,
+    common::ObIArray<common::ObTabletID> &tablet_ids);
   const static int64_t MAX_BATCH_COUNT = 200;
 private:
   static int inner_batch_insert_by_sql(
