@@ -94,6 +94,8 @@ public:
     int64_t addr_cnt, int64_t piece_size);
   int process_first_phase_recieve_count(
       ObRFBloomFilterMsg &msg, bool &first_phase_end);
+  int forward_second_phase_message(int64_t begin_idx, int64_t end_idx,
+                                   const ObIArray<ObAddr> &next_phase_addrs);
   virtual int process_msg_internal(bool &need_free);
   virtual int regenerate() override;
   int atomic_merge(ObP2PDatahubMsgBase &other_msg);
