@@ -435,9 +435,30 @@ def check_cluster_status(query_cur):
   (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_MAJOR_COMPACTION where (GLOBAL_BROADCAST_SCN > LAST_SCN or STATUS != 'IDLE')""")
   if results[0][0] > 0 :
     fail_list.append('{0} tenant is merging, please check'.format(results[0][0]))
-  (desc, results) = query_cur.exec_query("""select /*+ query_timeout(1000000000) */ count(1) from __all_virtual_tablet_compaction_info where max_received_scn > finished_scn and max_received_scn > 0""")
-  if results[0][0] > 0 :
-    fail_list.append('{0} tablet is merging, please check'.format(results[0][0]))
+
+  # check adaptive compaction
+  min_cluster_version = 0
+  sql = """select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'"""
+  (desc, results) = query_cur.exec_query(sql)
+  if len(results) != 1:
+    fail_list.append('min_observer_version is not sync')
+  elif len(results[0]) != 1:
+    fail_list.append('column cnt not match')
+  else:
+    min_cluster_version = get_version(results[0][0])
+  if min_cluster_version < get_version("4.5.0.0"):
+    get_data_version_sql = """select distinct value from oceanbase.__all_virtual_tenant_parameter_info where name='compatible'"""
+    (desc, results) = query_cur.exec_query(sql)
+    if len(results) != 1:
+      fail_list.append('compatible is not sync')
+    elif len(results[0]) != 1:
+      fail_list.append('column cnt not match')
+    else:
+      data_version = get_version(results[0][0])
+      if (data_version < get_version("4.5.0.0")):
+        (desc, results) = query_cur.exec_query("""select /*+ query_timeout(1000000000) */ count(1) from __all_virtual_tablet_compaction_info where max_received_scn > finished_scn and max_received_scn > 0""")
+        if results[0][0] > 0 :
+          fail_list.append('{0} tablet is merging, please check'.format(results[0][0]))
   logging.info('check cluster status success')
 
 # 5. 检查是否有异常租户(creating，延迟删除，恢复中，租户unit有残留)
