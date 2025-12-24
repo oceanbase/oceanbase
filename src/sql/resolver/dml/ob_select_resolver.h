@@ -353,7 +353,7 @@ private:
                             const ObIArray<ObCubeItem> &cube_items,
                             bool &can_find,
                             ObStmtCompareContext *check_context = NULL);
-  int check_subquery_return_one_column(const ObRawExpr &expr, bool is_exists_param = false);
+  int check_subquery_return_one_column(const ObRawExpr &expr, bool is_compare_param = false);
 
   int mark_nested_aggr_if_required(const ObIArray<ObAggFunRawExpr*> &aggr_exprs);
 
