@@ -123,15 +123,16 @@ int ObSessionTabletCreateHelper::do_work()
     } else {
       // 1. Acquire a ROW EXCLUSIVE table lock on the table (Table ID).
       // 2. Acquire a SHARE Online DDL lock on the table (Table ID).
+      const int64_t timeout_us = MIN(THIS_WORKER.get_timeout_remain(), 10000000/* us */);
       const uint64_t table_id = table_schema->is_oracle_tmp_table_v2_index_table() ? table_schema->get_data_table_id() : table_schema->get_table_id();
       transaction::tablelock::ObLockTableRequest table_lock_arg;
       table_lock_arg.lock_mode_ = transaction::tablelock::ROW_EXCLUSIVE;
-      table_lock_arg.timeout_us_ = MIN(THIS_WORKER.get_timeout_remain(), 10000000/* us */);
+      table_lock_arg.timeout_us_ = timeout_us;
       table_lock_arg.table_id_ = table_id;
       table_lock_arg.op_type_ = transaction::tablelock::IN_TRANS_COMMON_LOCK;
       if (OB_FAIL(transaction::tablelock::ObInnerConnectionLockUtil::lock_table(tenant_id_, table_lock_arg, conn))) {
         LOG_WARN("lock table failed", KR(ret), K(table_lock_arg));
-      } else if (OB_FAIL(ObOnlineDDLLock::lock_table_in_trans(tenant_id_, table_id, transaction::tablelock::SHARE, conn->get_ob_query_timeout(), trans_))) {
+      } else if (OB_FAIL(ObOnlineDDLLock::lock_table_in_trans(tenant_id_, table_id, transaction::tablelock::SHARE, timeout_us, trans_))) {
         LOG_WARN("lock online ddl table failed", KR(ret), K(table_lock_arg));
       } else {
         const share::schema::ObTablegroupSchema *tablegroup_schema = nullptr;
@@ -394,13 +395,14 @@ int ObSessionTabletDeleteHelper::do_work()
       // 3. Acquire an EXCLUSIVE Online DDL lock on tablet (Tablet ID).
       uint64_t table_id = table_schema->is_oracle_tmp_table_v2_index_table() ? table_schema->get_data_table_id() : table_schema->get_table_id();
       transaction::tablelock::ObLockTableRequest table_lock_arg;
+      const int64_t timeout_us = MIN(THIS_WORKER.get_timeout_remain(), 10000000/* us */);
       table_lock_arg.lock_mode_ = transaction::tablelock::ROW_EXCLUSIVE;
-      table_lock_arg.timeout_us_ = 0; // try lock, if not success, will be deleted by GC tasks later
+      table_lock_arg.timeout_us_ = timeout_us; // try lock, if not success, will be deleted by GC tasks later
       table_lock_arg.table_id_ = table_id;
       table_lock_arg.op_type_ = transaction::tablelock::IN_TRANS_COMMON_LOCK;
       if (OB_FAIL(transaction::tablelock::ObInnerConnectionLockUtil::lock_table(tenant_id_, table_lock_arg, conn))) {
         LOG_WARN("lock table failed", KR(ret), K(table_lock_arg));
-      } else if (OB_FAIL(ObOnlineDDLLock::lock_table_in_trans(tenant_id_, table_id, transaction::tablelock::EXCLUSIVE, 0 /*try lock*/, trans_))) {
+      } else if (OB_FAIL(ObOnlineDDLLock::lock_table_in_trans(tenant_id_, table_id, transaction::tablelock::EXCLUSIVE, timeout_us, trans_))) {
         LOG_WARN("lock online ddl table failed", KR(ret), K(table_lock_arg));
       } else if (OB_FAIL(delete_tablets(tablet_ids, new_schema_version))) {
         LOG_WARN("failed to delete tablets", KR(ret));
