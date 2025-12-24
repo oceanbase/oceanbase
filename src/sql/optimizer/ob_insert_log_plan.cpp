@@ -95,10 +95,10 @@ int ObInsertLogPlan::generate_normal_raw_plan()
           LOG_WARN("failed to get sys online sample percent", K(ret));
         } else {
           if (get_optimizer_context().get_direct_load_optimizer_ctx().use_direct_load()) {
-            get_optimizer_context().get_exec_ctx()->get_table_direct_insert_ctx()
-              .set_is_online_gather_statistics(tmp_need_osg);
-            get_optimizer_context().get_exec_ctx()->get_table_direct_insert_ctx()
-              .set_online_sample_percent(online_sample_percent);
+            get_optimizer_context().get_direct_load_optimizer_ctx().set_is_online_gather_statistics(
+              tmp_need_osg);
+            get_optimizer_context().get_direct_load_optimizer_ctx().set_online_sample_percent(
+              online_sample_percent);
           } else {
             need_osg = tmp_need_osg;
           }

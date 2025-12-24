@@ -40,7 +40,8 @@ int ObTableDirectInsertCtx::init(
     const bool is_incremental,
     const bool enable_inc_replace,
     const bool is_insert_overwrite,
-    const double online_sample_percent)
+    const double online_sample_percent,
+    const bool is_online_gather_statistics)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
@@ -115,7 +116,7 @@ int ObTableDirectInsertCtx::init(
         param.column_count_ = column_ids.count();
         param.need_sort_ = table_schema->is_table_without_pk() ? phy_plan.get_direct_load_need_sort() : true;
         param.px_mode_ = true;
-        param.online_opt_stat_gather_ = is_online_gather_statistics_;
+        param.online_opt_stat_gather_ = is_online_gather_statistics;
         param.dup_action_ = (enable_inc_replace ? sql::ObLoadDupActionType::LOAD_REPLACE
                                                 : sql::ObLoadDupActionType::LOAD_STOP_ON_DUP);
         param.method_ = method;
@@ -177,7 +178,6 @@ void ObTableDirectInsertCtx::destroy()
   }
   is_inited_ = false;
   is_direct_ = false;
-  is_online_gather_statistics_ = false;
 }
 
 int ObTableDirectInsertCtx::get_partition_level_tablet_ids(

@@ -401,6 +401,8 @@ public:
   }
   inline double get_online_sample_percent() const { return online_sample_percent_; }
   inline void set_online_sample_percent(double v) { online_sample_percent_ = v; }
+  inline void set_is_online_gather_statistics(const bool is_online_gather_statistics) { is_online_gather_statistics_ = is_online_gather_statistics; }
+  inline bool get_is_online_gather_statistics() const { return is_online_gather_statistics_; }
   int64_t get_das_dop() { return das_dop_; }
   void set_das_dop(int64_t v) { das_dop_ = v; }
   void set_gen_plan_usec(uint64_t v) { stat_.gen_plan_usec_  = v; }
@@ -793,6 +795,7 @@ private:
   bool enable_replace_; // for incremental direct load
   bool insert_overwrite_; // for insert overwrite
   double online_sample_percent_; // for incremental direct load
+  bool is_online_gather_statistics_; // for incremental direct load
   std::atomic<bool> can_set_feedback_info_;
   bool need_switch_to_table_lock_worker_; // for table lock switch worker thread
   bool data_complement_gen_doc_id_;
@@ -807,6 +810,7 @@ private:
   common::ObFixedArray<common::ObAddr, common::ObIAllocator> px_node_addrs_;
   int64_t px_node_count_;
   int64_t px_worker_share_plan_enabled_;
+  bool extend_sql_plan_monitor_metrics_;
   uint64_t optimizer_features_enable_version_;
 };
 
