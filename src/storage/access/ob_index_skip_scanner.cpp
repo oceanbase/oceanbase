@@ -109,24 +109,6 @@ ObIndexSkipScanner::~ObIndexSkipScanner()
   }
 }
 
-void ObIndexSkipScanner::reuse()
-{
-  is_disabled_ = false;
-  is_border_after_disabled_ = false;
-  is_reverse_scan_ = false;
-  is_prefix_filled_ = false;
-  is_scan_range_complete_ = false;
-  micro_start_ = 0;
-  micro_last_ = 0;
-  micro_current_ = 0;
-  prefix_range_idx_ = 0;
-  index_skip_state_.reset();
-  scan_range_ = nullptr;
-  skip_range_ = nullptr;
-  range_alloc_.reuse();
-  prefix_alloc_.reuse();
-}
-
 void ObIndexSkipScanner::reset()
 {
   is_inited_ = false;
@@ -229,7 +211,10 @@ int ObIndexSkipScanner::skip(ObMicroIndexInfo &index_info, ObIndexSkipState &pre
   const ObCommonDatumRowkey &endkey = index_info.endkey_;
   LOG_DEBUG("[INDEX SKIP SCAN] try skip data by endkey", K(prev_state), K(state), K(endkey), K_(complete_range),
             KPC(this), K(lbt()));
-  if (!is_prefix_filled_) {
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), KP(this), K(lbt()));
+  } else if (!is_prefix_filled_) {
     LOG_DEBUG("[INDEX SKIP SCAN] prefix not filled, can not skip", K(state_determined), K(prev_state), K(state),
               K(endkey), K_(complete_range), KPC(this));
   } else {
@@ -342,7 +327,10 @@ int ObIndexSkipScanner::skip(
 {
   int ret = OB_SUCCESS;
   const ObCommonDatumRowkey &endkey = index_info.endkey_;
-  if (OB_UNLIKELY(!is_reverse_scan_)) {
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), KP(this), K(lbt()));
+  } else if (OB_UNLIKELY(!is_reverse_scan_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected state, only reverse scan can reach here", KR(ret), K(lbt()));
   } else {
@@ -386,7 +374,10 @@ int ObIndexSkipScanner::skip(
 {
   int ret = OB_SUCCESS;
   ObIndexSkipState &state = index_info.skip_state_;
-  if (is_disabled() && !is_border_after_disabled_) {
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), KP(this), K(lbt()));
+  } else if (is_disabled() && !is_border_after_disabled_) {
     LOG_DEBUG("[INDEX SKIP SCAN] skip scanner is disabled and not border", K(first), K(state), K(micro_scanner), KPC(this));
   } else if (OB_FAIL(check_and_preprocess(first, micro_scanner, state))) {
     LOG_WARN("failed to check and preprocess", KR(ret));
@@ -461,8 +452,10 @@ int ObIndexSkipScanner::skip(ObMemtableSkipScanIterator &mem_iter, bool &is_end,
   bool is_start_equal = false;
   bool is_end_equal = false;
   const ObDatumRow *store_row = nullptr;
-  const ObIArray<ObColDesc> &col_descs = read_info_->get_columns_desc();
-  if (first) {
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), KP(this), K(lbt()));
+  } else if (first) {
     if (OB_FAIL(mem_iter.get_next_skip_row(store_row))) {
       if (OB_LIKELY(OB_ITER_END == ret)) {
         is_end = true;
@@ -982,7 +975,7 @@ int ObIndexSkipScanFactory::build_index_skip_scanner(
   const int64_t prefix_cnt = iter_param.get_ss_rowkey_prefix_cnt();
   const ObDatumRange *skip_range = iter_param.get_ss_datum_range();
   const ObITableReadInfo *read_info = iter_param.get_read_info();
-  ObIAllocator &stmt_allocator = *access_ctx.stmt_allocator_;
+  ObIAllocator &stmt_allocator = *access_ctx.allocator_;
 
   ObIndexSkipScanFactory *skip_scan_factory = access_ctx.get_skip_scan_factory();
   if (OB_ISNULL(skip_scan_factory)) {
@@ -994,10 +987,8 @@ int ObIndexSkipScanFactory::build_index_skip_scanner(
     LOG_WARN("invalid argument to build index skip scanner", K(prefix_cnt), KP(range),
              KP(skip_range), KP(skip_scanner));
   } else if (nullptr != skip_scanner) {
-    if (OB_FAIL(skip_scanner->switch_info(is_reverse_scan, prefix_cnt, *range, *skip_range,
-                                          *read_info, stmt_allocator))) {
-      LOG_WARN("failed to switch index skip scanner", KR(ret));
-    }
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("skip scanner is not null", KR(ret), K(lbt()));
   } else if (OB_ISNULL(skip_scanner = OB_NEWx(ObIndexSkipScanner, &stmt_allocator, is_for_memtable, read_info->get_datum_utils()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc index skip scanner", KR(ret));

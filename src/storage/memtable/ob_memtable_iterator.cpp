@@ -1270,7 +1270,7 @@ int ObMemtableSkipScanIterator::init(
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObMemtableScanIterator::init(param, context, table, query_range))) {
     LOG_WARN("failed to init memtable scan iter", K(ret));
-  } else if ((nullptr == skip_scanner_ || !skip_scanner_->is_opened()) &&
+  } else if (nullptr == skip_scanner_ &&
              OB_FAIL(storage::ObIndexSkipScanFactory::build_index_skip_scanner(param,
                                                                                context,
                                                                                static_cast<const ObDatumRange *>(query_range),
@@ -1298,20 +1298,6 @@ void ObMemtableSkipScanIterator::reset()
   memtable_ = nullptr;
   param_ = nullptr;
   context_ = nullptr;
-}
-
-void ObMemtableSkipScanIterator::reuse()
-{
-  is_end_ = false;
-  is_skip_start_ = false;
-  is_false_range_ = false;
-  memtable_ = nullptr;
-  param_ = nullptr;
-  context_ = nullptr;
-  if (nullptr != skip_scanner_) {
-    skip_scanner_->reuse();
-  }
-  ObMemtableScanIterator::reset();
 }
 
 int ObMemtableSkipScanIterator::skip_to_range(const ObDatumRange &range)
