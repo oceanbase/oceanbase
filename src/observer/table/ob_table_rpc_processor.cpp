@@ -408,8 +408,21 @@ int ObTableApiProcessorBase::check_user_access(const ObString &credential_str)
   } else if (OB_FAIL(check_mode())) {
     LOG_WARN("fail to check mode", K(ret));
   } else {
-    enable_query_response_time_stats_ = TABLEAPI_SESS_POOL_MGR->is_enable_query_response_time_stats();
-    LOG_DEBUG("user can access", K_(credential));
+    ObTableApiSessNodeVal* sess_node_val = sess_guard_.get_sess_node_val();
+    if (OB_ISNULL(sess_node_val)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sess node val is null", K(ret));
+    } else if (OB_ISNULL(sess_node_val->get_owner_node())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sess node val is null", K(ret));
+    } else if (OB_FAIL(sess_node_val->get_owner_node()->is_user_locked())) {
+      ret = OB_ERR_USER_IS_LOCKED;
+      LOG_WARN("user is locked", K(ret));
+      LOG_USER_ERROR(OB_ERR_USER_IS_LOCKED);
+    } else {
+      enable_query_response_time_stats_ = TABLEAPI_SESS_POOL_MGR->is_enable_query_response_time_stats();
+      LOG_DEBUG("user can access", K_(credential));
+    }
   }
   return ret;
 }

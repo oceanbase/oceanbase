@@ -170,6 +170,23 @@ public:
     bool is_inited_;
     ObTableApiSessPoolMgr *sess_pool_mgr_;
   };
+  class ObTableUserLockStatusRefreshTask : public common::ObTimerTask
+  {
+  public:
+    ObTableUserLockStatusRefreshTask()
+        : is_inited_(false),
+          sess_pool_mgr_(nullptr)
+    {
+    }
+    TO_STRING_KV(K_(is_inited), KPC_(sess_pool_mgr));
+    void runTimerTask(void);
+  private:
+    int run_refresh_user_lock_status_task();
+  public:
+    bool is_inited_;
+    ObTableApiSessPoolMgr *sess_pool_mgr_;
+  };
+
 public:
   static int mtl_init(ObTableApiSessPoolMgr *&mgr);
   int start();
@@ -214,11 +231,13 @@ private:
 private:
   static const int64_t ELIMINATE_SESSION_DELAY = 5 * 1000 * 1000; // 5s
   static const int64_t SYS_VAR_REFRESH_DELAY = 5 * 1000 * 1000; // 5s
+  static const int64_t USER_LOCK_STATUS_REFRESH_DELAY = 5 * 1000 * 1000; // 5s
   bool is_inited_;
   common::ObArenaAllocator allocator_;
   ObTableApiSessPool *pool_;
   ObTableApiSessEliminationTask elimination_task_;
   ObTableApiSessSysVarUpdateTask sys_var_update_task_;
+  ObTableUserLockStatusRefreshTask user_lock_status_refresh_task_;
   ObTableRelatedSysVars sys_vars_;
   ObSpinLock lock_; // for double check pool creating
 private:
@@ -253,6 +272,7 @@ public:
   int evict_retired_sess();
   int create_node_safe(ObTableApiCredential &credential, ObTableApiSessNode *&node);
   int move_node_to_retired_list(ObTableApiSessNode *node);
+  int refresh_all_user_locked_status();
 private:
   int replace_sess_node_safe(ObTableApiCredential &credential);
   int create_and_add_node_safe(ObTableApiCredential &credential);
@@ -292,6 +312,8 @@ public:
     sess_info_.get_tx_desc() = nullptr;
   }
   int push_back_to_queue();
+
+  OB_INLINE ObTableApiSessNode* get_owner_node() const { return owner_node_; }
 private:
   bool is_inited_;
   uint64_t tenant_id_;
@@ -348,6 +370,35 @@ public:
     }
   }
   OB_INLINE void dec_ref_cnt() { ATOMIC_DEC(&sess_ref_cnt_); }
+
+  struct UserState {
+    UserState() : last_refresh_ts_(0), last_schema_version_(0), is_user_locked_(false) {}
+
+    int64_t last_refresh_ts_;
+    int64_t last_schema_version_;
+    bool is_user_locked_;
+
+    void reset() {
+      last_refresh_ts_ = 0;
+      last_schema_version_ = 0;
+      ATOMIC_STORE(&is_user_locked_, false);
+    }
+
+    TO_STRING_KV(K_(last_refresh_ts), K_(last_schema_version), K_(is_user_locked));
+  };
+  // Thread-safe methods for accessing user state
+  OB_INLINE UserState& get_user_state() { return user_state_; }
+  OB_INLINE const UserState& get_user_state() const { return user_state_; }
+
+  // High-performance atomic read for external use
+  OB_INLINE bool is_user_locked() const {
+    return ATOMIC_LOAD(&user_state_.is_user_locked_);
+  }
+
+  void update_user_state_atomic(bool is_locked, int64_t schema_version);
+
+  int refresh_user_locked_status(share::schema::ObSchemaGetterGuard &schema_guard);
+
 private:
   int extend_and_get_sess_val(ObTableApiSessGuard &guard);
 private:
@@ -361,6 +412,7 @@ private:
   ObString user_name_;
   ObFixedQueue<ObTableApiSessNodeVal> sess_queue_;
   int64_t sess_ref_cnt_;
+  UserState user_state_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableApiSessNode);
 };

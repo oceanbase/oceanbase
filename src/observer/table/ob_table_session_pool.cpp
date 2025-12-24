@@ -146,9 +146,15 @@ int ObTableApiSessPoolMgr::start()
                                  SYS_VAR_REFRESH_DELAY/* 5s */,
                                  true/* repeat */))) {
     LOG_WARN("failed to schedule tableapi update sys var task", K(ret));
+  } else if (OB_FAIL(TG_SCHEDULE(MTL(omt::ObSharedTimer*)->get_tg_id(),
+                                 user_lock_status_refresh_task_,
+                                 USER_LOCK_STATUS_REFRESH_DELAY/* 5s */,
+                                 true/* repeat */))) {
+    LOG_WARN("failed to schedule tableapi user lock status refresh task", K(ret));
   } else {
     elimination_task_.is_inited_ = true;
     sys_var_update_task_.is_inited_ = true;
+    user_lock_status_refresh_task_.is_inited_ = true;
   }
 
   return ret;
@@ -163,6 +169,9 @@ void ObTableApiSessPoolMgr::stop()
   if (OB_LIKELY(sys_var_update_task_.is_inited_)) {
     TG_CANCEL_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), sys_var_update_task_);
   }
+  if (OB_LIKELY(user_lock_status_refresh_task_.is_inited_)) {
+    TG_CANCEL_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), user_lock_status_refresh_task_);
+  }
 }
 
 // tableapi retired session task wait
@@ -173,6 +182,9 @@ void ObTableApiSessPoolMgr::wait()
   }
   if (OB_LIKELY(sys_var_update_task_.is_inited_)) {
     TG_WAIT_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), sys_var_update_task_);
+  }
+  if (OB_LIKELY(user_lock_status_refresh_task_.is_inited_)) {
+    TG_WAIT_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), user_lock_status_refresh_task_);
   }
 }
 
@@ -206,6 +218,16 @@ void ObTableApiSessPoolMgr::destroy()
         }
       }
     }
+    if (user_lock_status_refresh_task_.is_inited_) {
+      bool is_exist = true;
+      if (OB_SUCC(TG_TASK_EXIST(MTL(omt::ObSharedTimer*)->get_tg_id(), user_lock_status_refresh_task_, is_exist))) {
+        if (is_exist) {
+          TG_CANCEL_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), user_lock_status_refresh_task_);
+          TG_WAIT_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), user_lock_status_refresh_task_);
+          user_lock_status_refresh_task_.is_inited_ = false;
+        }
+      }
+    }
 
     // 2. destroy session pool
     if (OB_NOT_NULL(pool_)) {
@@ -226,6 +248,7 @@ int ObTableApiSessPoolMgr::init()
   if (!is_inited_) {
     elimination_task_.sess_pool_mgr_ = this;
     sys_var_update_task_.sess_pool_mgr_ = this;
+    user_lock_status_refresh_task_.sess_pool_mgr_ = this;
     is_inited_ = true;
   }
 
@@ -396,6 +419,29 @@ int ObTableApiSessPoolMgr::ObTableApiSessSysVarUpdateTask::run_update_sys_var_ta
     LOG_WARN("sess_pool_mgr_ is null", K(ret));
   } else if (OB_FAIL(sess_pool_mgr_->update_sys_vars(true/*only_update_dynamic_vars*/))) {
     LOG_WARN("fail to update sys var", K(ret));
+  }
+
+  return ret;
+}
+
+void ObTableApiSessPoolMgr::ObTableUserLockStatusRefreshTask::runTimerTask()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(run_refresh_user_lock_status_task())) {
+    LOG_WARN("fail to run refresh user lock status task", K(ret));
+  }
+}
+
+int ObTableApiSessPoolMgr::ObTableUserLockStatusRefreshTask::run_refresh_user_lock_status_task()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(sess_pool_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sess_pool_mgr_ is null", K(ret));
+  } else if (OB_NOT_NULL(sess_pool_mgr_->pool_) && OB_FAIL(sess_pool_mgr_->pool_->refresh_all_user_locked_status())) {
+    LOG_WARN("fail to refresh user lock status", K(ret));
   }
 
   return ret;
@@ -740,6 +786,41 @@ int ObTableApiSessPool::replace_sess_node_safe(ObTableApiCredential &credential)
   return ret;
 }
 
+int ObTableApiSessPool::refresh_all_user_locked_status()
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("session pool is not inited", K(ret));
+  } else {
+    // 获取schema guard
+    share::schema::ObSchemaGetterGuard schema_guard;
+    if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(MTL_ID(), schema_guard))) {
+      LOG_WARN("fail to get schema guard", K(ret), K(MTL_ID()));
+    } else {
+      // 遍历所有session nodes并刷新用户锁定状态
+      ObTableApiSessForeachOp op;
+      if (OB_FAIL(key_node_map_.foreach_refactored(op))) {
+        LOG_WARN("fail to foreach sess key node map", K(ret));
+      } else {
+        const ObTableApiSessForeachOp::SessKvArray &arr = op.get_key_value_array();
+        const int64_t N = arr.count();
+        for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+          const ObTableApiSessForeachOp::ObTableApiSessKV &kv = arr.at(i);
+          if (OB_NOT_NULL(kv.node_)) {
+            if (OB_FAIL(kv.node_->refresh_user_locked_status(schema_guard))) {
+              LOG_WARN("fail to refresh user locked status", K(ret), K(kv.node_->get_credential()));
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
 void ObTableApiSessNodeVal::destroy()
 {
   sess_info_.~ObSQLSessionInfo();
@@ -996,6 +1077,43 @@ int ObTableApiSessNode::extend_and_get_sess_val(ObTableApiSessGuard &guard)
       mem_ctx_->free(val);
       val = nullptr;
       buf = nullptr;
+    }
+  }
+
+  return ret;
+}
+
+void ObTableApiSessNode::update_user_state_atomic(bool is_locked, int64_t schema_version)
+{
+  user_state_.last_schema_version_ = schema_version;
+  user_state_.last_refresh_ts_ = ObTimeUtility::fast_current_time();
+  ATOMIC_STORE(&user_state_.is_user_locked_, is_locked);
+}
+
+int ObTableApiSessNode::refresh_user_locked_status(share::schema::ObSchemaGetterGuard &schema_guard)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("session node is not inited", K(ret));
+  } else {
+    int64_t current_schema_version = 0;
+    if (OB_FAIL(schema_guard.get_schema_version(credential_.tenant_id_, current_schema_version))) {
+      LOG_WARN("fail to get schema version", K(ret), K(credential_.tenant_id_));
+    } else if (current_schema_version == user_state_.last_schema_version_) {
+      // no need to refresh
+    } else {
+      const share::schema::ObUserInfo *user_info = nullptr;
+      if (OB_FAIL(schema_guard.get_user_info(credential_.tenant_id_, credential_.user_id_, user_info))) {
+        LOG_WARN("fail to get user info", K(ret), K(credential_.tenant_id_), K(credential_.user_id_));
+      } else if (OB_ISNULL(user_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("user info is null", K(ret), K(credential_.tenant_id_), K(credential_.user_id_));
+      } else {
+        update_user_state_atomic(user_info->get_is_locked(), current_schema_version);
+        LOG_DEBUG("refresh user locked status", K(credential_), K(user_state_));
+      }
     }
   }
 
