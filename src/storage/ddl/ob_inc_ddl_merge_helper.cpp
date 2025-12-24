@@ -821,7 +821,7 @@ int ObIncMajorDDLMergeHelper::assemble_sstable(ObDDLTabletMergeDagParamV2 &merge
     } else if (OB_FALSE_IT(first_major_sstable = static_cast<ObSSTable *>(
         table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(false/*first*/)))) {
     } else if (OB_NOT_NULL(first_major_sstable)
-        && OB_UNLIKELY(first_major_sstable->get_snapshot_version() >= merge_param.ddl_task_param_.snapshot_version_)) {
+        && OB_UNLIKELY(first_major_sstable->get_snapshot_version() >= merge_param.inc_major_trans_version_)) {
       major_already_included = true;
       FLOG_INFO("snapshot version is already included in major sstable",
           K(major_already_included), KPC(first_major_sstable), K(merge_param));
