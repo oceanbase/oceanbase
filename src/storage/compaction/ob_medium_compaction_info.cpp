@@ -181,8 +181,12 @@ int ObParallelMergeInfo::generate_from_range_array(
     for (int64_t i = 0; i < paral_range.count(); ++i) {
       sum_range_cnt += paral_range.at(i).count();
     }
-    if (sum_range_cnt <= VALID_CONCURRENT_CNT || sum_range_cnt > UINT8_MAX) {
+    if (sum_range_cnt < MIN_VALID_CONCURRENT_CNT || sum_range_cnt > UINT8_MAX) {
       // do nothing
+    } else if (1 == sum_range_cnt) {
+      list_size_ = 1; // whole range, don't need to split actually, but set list_size_ as 1 for compatibility
+      ret = generate_datum_rowkey_list(allocator, paral_range);
+      LOG_INFO("generate datum rowkey list for whole range", KR(ret), K(paral_range), K(list_size_));
     } else {
       list_size_ = sum_range_cnt - 1;
       uint64_t compat_version = 0;

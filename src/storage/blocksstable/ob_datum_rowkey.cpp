@@ -267,7 +267,11 @@ DEF_TO_STRING(ObDatumRowkey)
 void ObDatumRowkey::destroy(ObIAllocator &allocator)
 {
   if (OB_NOT_NULL(datums_)) {
-    allocator.free(datums_);
+    if (datums_ == &ObDatumRowkey::MAX_DATUM || datums_ == &ObDatumRowkey::MIN_DATUM) {
+      // datums_ inited by ObDatumRowkey::from_rowkey can not be freed by allocator
+    } else {
+      allocator.free(datums_);
+    }
     datums_ = nullptr;
   }
   reset();
