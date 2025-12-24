@@ -476,19 +476,11 @@ int ObHbaseColumnFamilyService::del(const ObHbaseQuery &hbase_query, ObTableExec
       if (OB_UNLIKELY(timestamp <= 0)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid timestamp", K(ret), K(timestamp));
-      } else if (OB_FALSE_IT(cell.get_cell(ObHTableConstants::COL_IDX_T).set_int(-timestamp))) {
-        // do nothing
       } else {
-        // process Q
-        ObString qualifier = cell.get_cell(ObHTableConstants::COL_IDX_Q).get_string(); // qualifier format: cf\0qualifier
-        if (OB_NOT_NULL(qualifier.find('\0')) && is_legal_family_name(qualifier.split_on('\0'))) {
-          ObString original_qualifier = qualifier.after('\0');
-          cell.get_cell(ObHTableConstants::COL_IDX_Q).set_varbinary(original_qualifier);
+        cell.get_cell(ObHTableConstants::COL_IDX_T).set_int(-timestamp);
+        if (OB_FAIL(delete_cell(hbase_query, exec_ctx, cell, *adapter))) {
+          LOG_WARN("fail to delete one cell", K(ret), K(hbase_query), K(cell), K(tablet_cnt), K(wide_row));
         }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(delete_cell(hbase_query, exec_ctx, cell, *adapter))) {
-        LOG_WARN("fail to delete one cell", K(ret), K(hbase_query), K(cell), K(tablet_cnt), K(wide_row));
       }
     }
   }

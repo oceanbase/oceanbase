@@ -587,7 +587,7 @@ int ObHBaseModel::work(ObTableExecCtx &ctx, const ObTableLSOpRequest &req, ObTab
         } else {
           switch (group->type_) {
             case ObTableOperationType::INSERT_OR_UPDATE:
-            case ObTableOperationType::DEL:
+            // case ObTableOperationType::DEL: old delete should not execute here
               if (OB_FAIL(process_mutation_group(ctx, *group, *cf_service))) {
                 LOG_WARN("failed to process mutation group", K(ret), K(group));
               }
@@ -920,9 +920,6 @@ int ObHBaseModel::process_mutation_group(ObTableExecCtx &ctx,
         case ObTableOperationType::PUT:
         case ObTableOperationType::INSERT_OR_UPDATE:
           ret = cf_service.put(table_cells, ctx);
-          break;
-        case ObTableOperationType::DEL:
-          ret = cf_service.del(table_cells, ctx);
           break;
         default:
           ret = OB_ERR_UNEXPECTED;
