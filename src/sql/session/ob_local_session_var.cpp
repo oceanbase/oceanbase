@@ -292,19 +292,6 @@ int ObLocalSessionVar::assign(const ObLocalSessionVar &other)
 
 void ObLocalSessionVar::reset()
 {
-  if (OB_NOT_NULL(alloc_)) {
-    ObSessionSysVar *var = NULL;
-    void *deep_copy_ptr = NULL;
-    for (int64_t i = 0; i < local_session_vars_.count(); ++i) {
-      if (OB_ISNULL(var = local_session_vars_.at(i))
-          || OB_ISNULL(deep_copy_ptr = var->val_.get_deep_copy_obj_ptr())) {
-        /* do nothing */
-      } else {
-        alloc_->free(deep_copy_ptr);
-        var->val_.reset();
-      }
-    }
-  }
   local_session_vars_.reset();
 }
 
