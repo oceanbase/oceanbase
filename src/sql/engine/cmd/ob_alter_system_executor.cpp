@@ -1477,6 +1477,48 @@ int ObSetConfigExecutor::execute(ObExecContext &ctx, ObSetConfigStmt &stmt)
   }
 
   if (OB_FAIL(ret)) {
+  } else {
+    ObString system_protected_tenant_parameters = GCONF.system_protected_tenant_parameters.get_value_string();
+    if (system_protected_tenant_parameters.empty()) {
+    } else {
+      ObSQLSessionInfo *session_info = NULL;
+      if (OB_NOT_NULL(session_info = ctx.get_my_session())) {
+        if ((!session_info->is_oracle_compatible() && session_info->is_mysql_root_user())
+            || (session_info->is_oracle_compatible() && session_info->is_oracle_sys_user())) {
+        } else {
+          obrpc::ObAdminSetConfigArg &arg = stmt.get_rpc_arg();
+          for (int64_t i = 0; OB_SUCC(ret) && i < arg.items_.count(); i++) {
+            const obrpc::ObAdminSetConfigItem &item = arg.items_.at(i);
+            // Check if item.name_ exactly matches any parameter in the comma-separated list
+            bool is_protected = false;
+            const int64_t MAX_LEN = 4096;
+            int64_t config_len = system_protected_tenant_parameters.length();
+            if (config_len > 0 && config_len < MAX_LEN) {
+              HEAP_VAR(char[MAX_LEN], tmp_str) {
+                MEMCPY(tmp_str, system_protected_tenant_parameters.ptr(), config_len);
+                tmp_str[config_len] = '\0';
+                char *save_ptr = NULL;
+                char *token = STRTOK_R(tmp_str, ",", &save_ptr);
+                while (!is_protected && OB_NOT_NULL(token)) {
+                  size_t token_len = STRLEN(token);
+                  if (token_len > 0 && 0 == item.name_.str().case_compare(token)) {
+                    is_protected = true;
+                  }
+                  token = STRTOK_R(NULL, ",", &save_ptr);
+                }
+              }
+            }
+            if (is_protected) {
+              ret = OB_ERR_NO_PRIVILEGE;
+              LOG_WARN("no privilege to set protected tenant parameter", KR(ret), K(item.name_));
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(task_exec_ctx)) {
     ret = OB_NOT_INIT;
     LOG_WARN("get task executor context failed");
