@@ -1346,7 +1346,7 @@ void* ObObj::get_deep_copy_obj_ptr()
   } else if (ob_is_rowid_tc(this->get_type())) {
     ptr = (void *)v_.string_;
   } else if (ob_is_lob_locator(this->get_type())) {
-    ptr = (void *)&v_.lob_locator_;
+    ptr = (void *)v_.lob_locator_;
   } else {
     // do nothing
   }
