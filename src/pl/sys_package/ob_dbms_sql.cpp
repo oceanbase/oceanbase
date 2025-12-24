@@ -1719,7 +1719,8 @@ int ObPLDbmsSql::fill_dbms_cursor(ObSQLSessionInfo *session,
     if (cursor->is_streaming()) {
       // we can't reopen the cursor, so if fill cursor has error. we will report to client.
       bool is_iter_end = false;
-      OZ (spi_cursor->init_row_desc(new_cursor->get_field_columns()));
+      CK (OB_NOT_NULL(cursor->get_cursor_handler()->get_result_set()));
+      OZ (spi_cursor->init_row_desc(*(cursor->get_cursor_handler()->get_result_set())));
       if (OB_SUCC(ret) && cursor->get_cursor_handler()->enable_streaming_cursor_prefetch()
           && OB_NOT_NULL(cursor->get_cursor_handler()->get_spi_cursor()) && cursor->get_cursor_handler()->get_spi_cursor()->cur_ < cursor->get_cursor_handler()->get_spi_cursor()->row_store_.get_row_cnt()) {
         ObSPICursor *orig_spi_cursor = cursor->get_cursor_handler()->get_spi_cursor();

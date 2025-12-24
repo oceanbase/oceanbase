@@ -2765,14 +2765,16 @@ int ObPsCursorInfo::init_params(ParamStore &exec_params)
   return ret;
 }
 
-int ObPsCursorInfo::prepare_cursor_store(sql::ObSQLSessionInfo &session,
-                                         const common::ColumnsFieldIArray &fields)
+int ObPsCursorInfo::prepare_cursor_store(sql::ObSQLSessionInfo &session, sql::ObResultSet &result_set)
 {
   int ret = OB_SUCCESS;
   ObIAllocator *allocator = NULL;
   if (OB_ISNULL(allocator = get_allocator())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is null", K(ret));
+  } else if (OB_ISNULL(result_set.get_field_columns())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("result set field columns is null", K(ret));
   } else if (OB_ISNULL(cursor_store_)) {
     cursor_store_ = static_cast<ObSPICursor *>(allocator->alloc(sizeof(ObSPICursor)));
     if (OB_ISNULL(cursor_store_)) {
@@ -2796,11 +2798,11 @@ int ObPsCursorInfo::prepare_cursor_store(sql::ObSQLSessionInfo &session,
                                                "PSCursorRowStore"))) {
       LOG_WARN("row store init failed", K(ret));
     } else if (OB_FAIL(ObDbmsInfo::deep_copy_field_columns(*allocator,
-                                                           &fields,
+                                                           result_set.get_field_columns(),
                                                            cursor_store_->fields_))) {
       LOG_WARN("deeo copy field columns failed", K(ret));
-    } else if (OB_FAIL(cursor_store_->init_row_desc(fields))) {
-      LOG_WARN("init row desc failed", K(ret), K(fields));
+    } else if (OB_FAIL(cursor_store_->init_row_desc(result_set))) {
+      LOG_WARN("init row desc failed", K(ret), K(result_set));
     }
   }
   return ret;
@@ -2935,7 +2937,7 @@ int ObPLCursorInfo::convert_to_unstreaming(ObSQLSessionInfo &session)
     OX (spi_cursor_ = NULL);
     OZ (session.get_tmp_table_size(size));
     OZ (prepare_spi_cursor(spi_cursor, session.get_effective_tenant_id(), size, false, &session));
-    OZ (spi_cursor->init_row_desc(*(spi_result->get_result_set()->get_field_columns())));
+    OZ (spi_cursor->init_row_desc(*(spi_result->get_result_set())));
     if (OB_SUCC(ret) && fetched_with_row_ && current_row_.is_valid()) { //when convert to unstreaming cursor, spi_result will be released, so keep current_row_ in row_store's first row
       OZ (ObSPIService::fill_cursor_row(spi_cursor, current_row_));
       OX (need_set_current_row = true);
