@@ -9701,7 +9701,11 @@ int ObRawExprUtils::set_call_in_pl(ObRawExpr *&raw_expr)
     LOG_USER_ERROR(OB_ERR_FUNC_ONLY_IN_SQL, "DECODE");
   } else {
     int64_t N = raw_expr->get_param_count();
-    raw_expr->set_is_called_in_sql(false);
+    if (raw_expr->is_transformed_to_assign()) {
+      raw_expr->set_is_called_in_sql(true);
+    } else {
+      raw_expr->set_is_called_in_sql(false);
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
       OZ (SMART_CALL(set_call_in_pl(raw_expr->get_param_expr(i))));
     }

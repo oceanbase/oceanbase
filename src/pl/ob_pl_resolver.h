@@ -713,7 +713,16 @@ public:
   static int get_into_expr_expected_type(ObRawExpr *into_expr,
                                          ObPLBlockNS *ns,
                                          ObPLResolveCtx *pl_resolve_ctx,
-                                         ObPLDataType &expected_type_local);
+                                         ObPLDataType &expected_type_local,
+                                         ObRawExpr *value_expr,
+                                         ObPLDependencyTable &dependency_table);
+
+  static int set_into_expr_type_from_value_expr(ObRawExpr *value_expr,
+                                                ObRawExpr *into_expr,
+                                                ObPLDataType &expected_type,
+                                                ObPLBlockNS &ns,
+                                                ObPLResolveCtx &pl_resolve_ctx,
+                                                ObPLDependencyTable &dependency_table);
 
   static int add_column_convert_expr(ObRawExpr *&expr,
                                      const ObPLDataType *expected_type,
@@ -1067,14 +1076,13 @@ private:
                                          ObPLStmt *&old_stmt,
                                          ObIArray<ObPLDataType> &into_expr_types,
                                          bool &can_transform_to_assign_stmt);
-  int check_expr_contains_subquery_or_agg(ObRawExpr *expr, bool &contains);
-  int check_value_expr_has_same_expr_with_into_expr(ObRawExpr *value_expr,
-                                                    ObPLFunctionAST &func,
-                                                    ObPLSqlStmt *sql_stmt,
-                                                    int64_t into_idx,
-                                                    bool &has_same_expr);
+  int check_value_expr_can_transform(ObRawExpr *expr,
+                                     ObPLFunctionAST &func,
+                                     ObPLSqlStmt *sql_stmt,
+                                     int64_t into_idx,
+                                     bool &can_transform);
   int transform_value_expr(ObRawExpr *&value_expr, ObPLDataType &into_expr_type);
-  int replace_seq_expr_recursively(ObRawExpr *&expr);
+  int replace_seq_expr_recursively(ObRawExpr *&expr, ObPLBlockNS *ns);
   int remove_cast_expr_for_temporal_type(ObRawExpr *&expr);
 private:
   int check_duplicate_condition(const ObPLConditionValue &value,

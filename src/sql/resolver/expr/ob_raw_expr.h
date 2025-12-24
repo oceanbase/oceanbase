@@ -1987,6 +1987,7 @@ public:
        extra_(),
        is_shared_reference_(false),
        is_called_in_sql_(true),
+       is_transformed_to_assign_(false),
        is_calculated_(false),
        is_deterministic_(true),
        local_session_var_id_(OB_INVALID_INDEX_INT64),
@@ -2009,6 +2010,7 @@ public:
        extra_(),
        is_shared_reference_(false),
        is_called_in_sql_(true),
+       is_transformed_to_assign_(false),
        is_calculated_(false),
        is_deterministic_(true),
        local_session_var_id_(OB_INVALID_INDEX_INT64),
@@ -2314,9 +2316,11 @@ public:
   void reset_rt_expr() { rt_expr_ = NULL; }
   void set_expr_hash(uint64_t expr_hash) { expr_hash_ = expr_hash; }
   void set_is_called_in_sql(bool is_called_in_sql) { is_called_in_sql_ = is_called_in_sql; }
+  void set_is_transformed_to_assign(bool is_transformed_to_assign) { is_transformed_to_assign_ = is_transformed_to_assign; }
   void set_is_calculated(bool is_calculated) { is_calculated_ = is_calculated; }
   uint64_t get_expr_hash() const { return expr_hash_; }
   bool is_called_in_sql() const { return is_called_in_sql_; }
+  bool is_transformed_to_assign() const { return is_transformed_to_assign_; }
   bool is_calculated() const { return is_calculated_; }
   bool is_deterministic() const { return is_deterministic_; }
   bool is_bool_expr() const;
@@ -2445,6 +2449,7 @@ protected:
   ObRawExprExtraInfo extra_;
   bool is_shared_reference_;
   bool is_called_in_sql_; // 用于区分是被 pl 还是 sql 调用
+  bool is_transformed_to_assign_; // valid for select into from dual transformed to assign stmt in pl!
   bool is_calculated_; // 用于在新引擎 cg 中检查 raw expr 是否被重复计算
   bool is_deterministic_; //expr is deterministic, given the same inputs, returns the same result
   union {
