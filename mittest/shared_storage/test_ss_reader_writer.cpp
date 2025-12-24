@@ -1017,7 +1017,7 @@ TEST_F(TestSSReaderWriter, private_tablet_meta_reader_writer)
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
   ASSERT_EQ(OB_SUCCESS, private_tablet_meta_writer.aio_write(write_info_, write_object_handle));
   ASSERT_EQ(OB_FILE_ALREADY_EXIST, write_object_handle.wait());
-  check_object_type_stat(macro_id, 0/*read_cnt*/, 0/*read_size*/, 1/*write_cnt*/, write_info_.size_, write_object_handle);
+  check_object_type_stat(macro_id, 0/*read_cnt*/, 0/*read_size*/, 2/*write_cnt*/, write_info_.size_ * 2, write_object_handle);
   write_object_handle.reset();
 
   // 2. read and compare the read data with the written data

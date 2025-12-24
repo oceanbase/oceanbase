@@ -19,6 +19,7 @@
 #include "storage/shared_storage/ob_ss_object_access_util.h"
 #include "storage/blocksstable/ob_ss_obj_util.h"
 #include "storage/shared_storage/ob_ss_local_cache_service.h"
+#include "storage/shared_storage/ob_file_manager.h"
 #endif
 
 namespace oceanbase
@@ -350,7 +351,8 @@ int ObStorageObjectHandle::ss_update_object_type_rw_stat(const blocksstable::ObS
 {
   int ret = OB_SUCCESS;
   // 500 tenant not have local cache service
-  if ((is_meta_tenant(MTL_ID()) || is_sys_tenant(MTL_ID()) || is_user_tenant(MTL_ID())) && macro_id_.is_id_mode_share()) {
+  if (!GCTX.is_shared_storage_mode()) {
+  } else if ((is_meta_tenant(MTL_ID()) || is_sys_tenant(MTL_ID()) || is_user_tenant(MTL_ID())) && macro_id_.is_id_mode_share()) {
     ObSSLocalCacheService *local_cache_service = nullptr;
     if (OB_ISNULL(local_cache_service = MTL(ObSSLocalCacheService *))) {
       ret = OB_ERR_UNEXPECTED;
@@ -375,6 +377,45 @@ int ObStorageObjectHandle::ss_update_object_type_rw_stat(const blocksstable::ObS
   }
   return ret;
 }
+
+int ObStorageObjectHandle::update_atomic_write_file(int result)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFileManager *file_manager = nullptr;
+  ObAtomicWriteFileInfo atomic_write_file;
+  ObIOFlag io_flag;
+  if (!GCTX.is_shared_storage_mode()) {
+  } else if (OB_FAIL(io_handle_.get_io_flag(io_flag))) {
+    LOG_WARN("fail to get io flag", KR(ret));
+  } else {
+    ObIOMode mode = io_flag.get_mode();
+    if (mode == ObIOMode::WRITE && (is_meta_tenant(MTL_ID()) || is_sys_tenant(MTL_ID()) || is_user_tenant(MTL_ID())) && macro_id_.is_id_mode_share()) {
+      if (OB_ISNULL(file_manager = MTL(ObTenantFileManager*))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("file manager is null", KR(ret));
+      } else if (OB_FAIL(file_manager->get_from_atomic_write_file_map(false/*is_clean*/, macro_id_, atomic_write_file))) {
+        if (OB_HASH_NOT_EXIST != ret) {
+          LOG_WARN("fail to get from atomic write file map", KR(ret), K(macro_id_), K(atomic_write_file));
+        } else {
+          // macro id is not atomic write file, do nothing
+          ret = OB_SUCCESS;
+        }
+      } else {
+        if (result != OB_SUCCESS) {
+          if (OB_FAIL(file_manager->push_to_atomic_write_file_map(true/*is_clean*/, macro_id_, atomic_write_file))) {
+            LOG_WARN("fail to push to atomic write file map", KR(ret), K(macro_id_), K(atomic_write_file));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(file_manager->erase_from_atomic_write_file_map(false/*is_clean*/, macro_id_))) {
+            LOG_WARN("fail to erase from atomic write file map", KR(ret), K(macro_id_));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
 #endif
 
 int ObStorageObjectHandle::wait()
@@ -384,6 +425,9 @@ int ObStorageObjectHandle::wait()
     // do nothing
   } else if (OB_FAIL(io_handle_.wait())) {
     LOG_WARN("fail to wait block io, may be retry", K(macro_id_), K(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+    IGNORE_RETURN update_atomic_write_file(ret);
+#endif
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = report_bad_block())) {
       LOG_WARN("fail to report bad block", K(tmp_ret), K(ret));
@@ -393,6 +437,9 @@ int ObStorageObjectHandle::wait()
         (OB_DATA_OUT_OF_RANGE == ret)) {
       // cannot reset io_handle_ for slog, cuz io_handle_.get_data_size() will be called
     } else {
+#ifdef OB_BUILD_SHARED_STORAGE
+      IGNORE_RETURN ss_update_object_type_rw_stat(macro_id_.storage_object_type(), ret, 1/*delta_cnt*/);
+#endif
       io_handle_.reset();
     }
   } else if ((macro_id_.is_id_mode_share()) &&
@@ -400,7 +447,11 @@ int ObStorageObjectHandle::wait()
             (get_data_size() < get_user_io_size())) {
     ret = OB_DATA_OUT_OF_RANGE;
     LOG_WARN("real read size is smaller than expected read size", KR(ret), "real_read_size",
-            get_data_size(), "expected_read_size", get_user_io_size());
+             get_data_size(), "expected_read_size", get_user_io_size());
+  } else {
+#ifdef OB_BUILD_SHARED_STORAGE
+    IGNORE_RETURN update_atomic_write_file(ret);
+#endif
   }
 
   print_slow_local_io_info(ret);

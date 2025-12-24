@@ -2089,7 +2089,132 @@ TEST_F(TestFileManager, test_list_and_delete_dir_operator)
 
   // test13: delete ls dir file
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_ls_dir(ls_id, ls_epoch_id));
+}
 
+TEST_F(TestFileManager, test_delete_tmp_seq_files)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFileManager* tenant_file_mgr = MTL(ObTenantFileManager*);
+  ASSERT_NE(nullptr, tenant_file_mgr);
+  ObTenantDiskSpaceManager *tenant_disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, tenant_disk_space_mgr);
+  tenant_file_mgr->tmp_seq_file_clean_task_.destroy();
+  // step 1: write tmp_seq_file
+  uint64_t tablet_id = 100;
+  uint64_t server_id = 1;
+  LOG_INFO("start to write tmp seq file", K(tablet_id), K(server_id));
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tablet_data_tablet_id_private_transfer_epoch_dir(MTL_ID(), MTL_EPOCH_ID(), tablet_id, 0/*trasfer_seq*/));
+  MacroBlockId macro_id;
+  macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+  macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
+  macro_id.set_second_id(tablet_id); // tablet_id
+  macro_id.set_third_id(100); // seq_id
+  macro_id.set_macro_private_transfer_epoch(0); // transfer_seq
+  macro_id.set_tenant_seq(server_id);  //tenant_seq
+  ASSERT_TRUE(macro_id.is_valid());
+  ObStorageObjectHandle write_object_handle;
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
+  const int64_t write_io_size = 2 * 1024 * 1024; // 2MB
+  char write_buf[write_io_size] = { 0 };
+  memset(write_buf, 'a', write_io_size);
+  ObStorageObjectWriteInfo write_file_info;
+  write_file_info.buffer_ = write_buf;
+  write_file_info.offset_ = 0;
+  write_file_info.size_ = write_io_size;
+  write_file_info.io_desc_.set_wait_event(1);
+  write_file_info.mtl_tenant_id_ = MTL_ID();
+  write_file_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  TP_SET_EVENT(EventTable::EN_FILE_SYSTEM_RENAME_ERROR, OB_ERR_SYS, 0, 1);
+  ObSSMacroCacheStat file_cache_stat;
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_write_file(write_file_info, write_object_handle));
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::MACRO_BLOCK, file_cache_stat));
+  ObAtomicWriteFileInfo atomic_write_file;
+  // step 2: check map before wait fail
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->get_from_atomic_write_file_map(false/*is_clean*/, macro_id, atomic_write_file));
+  ASSERT_EQ(MTL_EPOCH_ID(), atomic_write_file.ls_epoch_id_);
+  ASSERT_EQ(write_io_size, atomic_write_file.size_);
+  ASSERT_NE(OB_SUCCESS, write_object_handle.wait());
+  TP_SET_EVENT(EventTable::EN_FILE_SYSTEM_RENAME_ERROR, OB_ERR_SYS, 0, 0);
+  // step 3: check map and tmp file after wait fail
+  ASSERT_EQ(OB_HASH_NOT_EXIST, tenant_file_mgr->get_from_atomic_write_file_map(false/*is_clean*/, macro_id, atomic_write_file));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->get_from_atomic_write_file_map(true/*is_clean*/, macro_id, atomic_write_file));
+  ASSERT_EQ(MTL_EPOCH_ID(), atomic_write_file.ls_epoch_id_);
+  ASSERT_EQ(write_io_size, atomic_write_file.size_);
+  write_object_handle.reset();
+  ObPathContext ctx;
+  ASSERT_EQ(OB_SUCCESS, ctx.set_atomic_write_ctx(macro_id, atomic_write_file.ls_epoch_id_, atomic_write_file.seq_));
+  ObIODFileStat stat;
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::stat(ctx.get_path(), stat));
+  // step 4: sleep CLEAN_MAP_SAFE_DEL_TIME_S + 1 and clean
+  const int64_t CLEAN_MAP_SAFE_DEL_TIME_S = 5L; // 5s
+  sleep(CLEAN_MAP_SAFE_DEL_TIME_S + 1);
+  tenant_file_mgr->tmp_seq_file_clean_task_.init();
+  tenant_file_mgr->tmp_seq_file_clean_task_.runTimerTask();
+  ASSERT_EQ(OB_HASH_NOT_EXIST, tenant_file_mgr->get_from_atomic_write_file_map(true/*is_clean*/, macro_id, atomic_write_file));
+  ASSERT_NE(OB_SUCCESS, ObIODeviceLocalFileOp::stat(ctx.get_path(), stat));
+}
+
+TEST_F(TestFileManager, test_delete_not_exist_tmp_seq_file)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFileManager* tenant_file_mgr = MTL(ObTenantFileManager*);
+  ASSERT_NE(nullptr, tenant_file_mgr);
+  ObTenantDiskSpaceManager *tenant_disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, tenant_disk_space_mgr);
+  tenant_file_mgr->tmp_seq_file_clean_task_.destroy();
+  // step 1: write tmp_seq_file
+  uint64_t tablet_id = 100;
+  uint64_t server_id = 1;
+  LOG_INFO("start to write tmp seq file", K(tablet_id), K(server_id));
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tablet_data_tablet_id_private_transfer_epoch_dir(MTL_ID(), MTL_EPOCH_ID(), tablet_id, 0/*trasfer_seq*/));
+  MacroBlockId macro_id;
+  macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+  macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
+  macro_id.set_second_id(tablet_id); // tablet_id
+  macro_id.set_third_id(100); // seq_id
+  macro_id.set_macro_private_transfer_epoch(0); // transfer_seq
+  macro_id.set_tenant_seq(server_id);  //tenant_seq
+  ASSERT_TRUE(macro_id.is_valid());
+  ObStorageObjectHandle write_object_handle;
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
+  const int64_t write_io_size = 2 * 1024 * 1024; // 2MB
+  char write_buf[write_io_size] = { 0 };
+  memset(write_buf, 'a', write_io_size);
+  ObStorageObjectWriteInfo write_file_info;
+  write_file_info.buffer_ = write_buf;
+  write_file_info.offset_ = 0;
+  write_file_info.size_ = write_io_size;
+  write_file_info.io_desc_.set_wait_event(1);
+  write_file_info.mtl_tenant_id_ = MTL_ID();
+  write_file_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  TP_SET_EVENT(EventTable::EN_FILE_SYSTEM_RENAME_ERROR, OB_ERR_SYS, 0, 1);
+  ObSSMacroCacheStat file_cache_stat;
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_write_file(write_file_info, write_object_handle));
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::MACRO_BLOCK, file_cache_stat));
+  ObAtomicWriteFileInfo atomic_write_file;
+  // step 2: check map before wait fail
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->get_from_atomic_write_file_map(false/*is_clean*/, macro_id, atomic_write_file));
+  ASSERT_EQ(MTL_EPOCH_ID(), atomic_write_file.ls_epoch_id_);
+  ASSERT_EQ(write_io_size, atomic_write_file.size_);
+  ASSERT_NE(OB_SUCCESS, write_object_handle.wait());
+  TP_SET_EVENT(EventTable::EN_FILE_SYSTEM_RENAME_ERROR, OB_ERR_SYS, 0, 0);
+  write_object_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->get_from_atomic_write_file_map(true/*is_clean*/, macro_id, atomic_write_file));
+  // step 3: delete tmp seq file in disk
+  ObPathContext ctx;
+  ASSERT_EQ(OB_SUCCESS, ctx.set_atomic_write_ctx(macro_id, atomic_write_file.ls_epoch_id_, atomic_write_file.seq_));
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::unlink(ctx.get_path()));
+  // step 4: sleep CLEAN_MAP_SAFE_DEL_TIME_S + 1 and clean
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::MACRO_BLOCK, file_cache_stat));
+  int64_t used_size = file_cache_stat.used_;
+  const int64_t CLEAN_MAP_SAFE_DEL_TIME_S = 5L; // 5s
+  sleep(CLEAN_MAP_SAFE_DEL_TIME_S + 1);
+  tenant_file_mgr->tmp_seq_file_clean_task_.init();
+  tenant_file_mgr->tmp_seq_file_clean_task_.runTimerTask();
+  ASSERT_EQ(OB_HASH_NOT_EXIST, tenant_file_mgr->get_from_atomic_write_file_map(true/*is_clean*/, macro_id, atomic_write_file));
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::MACRO_BLOCK, file_cache_stat));
+  // if tmp seq file is not exist, the used size should be the same
+  ASSERT_EQ(used_size, file_cache_stat.used_);
 }
 
 TEST_F(TestFileManager, test_list_local_files_rec)
@@ -2177,7 +2302,7 @@ TEST_F(TestFileManager, test_list_local_files_rec)
   ASSERT_EQ(0, tablet_ids.count());
 }
 
-TEST_F(TestFileManager, test_delete_tmp_seq_files)
+TEST_F(TestFileManager, test_delete_tmp_seq_files_in_calibrate_task)
 {
   int ret = OB_SUCCESS;
   ObTenantFileManager* tenant_file_mgr = MTL(ObTenantFileManager*);

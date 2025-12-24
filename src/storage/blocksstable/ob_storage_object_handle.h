@@ -102,6 +102,7 @@ private:
   int ss_async_write(const ObStorageObjectWriteInfo &write_info);
   int ss_update_object_type_rw_stat(const blocksstable::ObStorageObjectType &object_type, const int result,
     const int64_t delta_cnt);
+  int update_atomic_write_file(int result);
 #endif
 
 private:
