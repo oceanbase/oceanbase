@@ -31,6 +31,12 @@ enum class ObLakeTableFormat
   ODPS
 };
 
+enum class ObURISelectionMode
+{
+  SEQUENTIAL = 0,
+  MAX_MODE
+};
+
 class ObCatalogProperties
 {
 public:

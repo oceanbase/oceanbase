@@ -602,74 +602,69 @@ int ObHiveTableMetadata::extract_host_and_port(const ObString &uri, char *host, 
   } else if (OB_ISNULL(host)) {
     ret = OB_INVALID_HMS_HOST;
     LOG_WARN("failed to handle host is null", K(ret), K(uri));
-  } else if (OB_UNLIKELY(!uri.prefix_match("thrift://"))) {
-    ret = OB_INVALID_HMS_METASTORE;
-    LOG_WARN("invalid metastore uri without prefix - thrift://", K(ret), K(uri));
   } else {
-    // Full path is qualified, i.e. "thrift://host:port".
-    // Extract "host" and "port".
-    // Skip the "thrift://"
-    const char *p = uri.ptr() + 9;
-    const int l = uri.length() - 9;
-    ObString tmp_uri(l, p);
+    // For HA mode: iterate through semicolon-separated URIs until one succeeds.
+    const char *cur = uri.ptr();
+    const char *end = uri.ptr() + uri.length();
+    bool found = false;
 
-    LOG_TRACE("get metastore uri in detail", K(ret), K(uri), K(tmp_uri));
-    const char *ptr = tmp_uri.ptr();
-    const char *needed_colon = strchr(ptr, ':');
-    if (OB_ISNULL(needed_colon)) {
-      ret = OB_INVALID_HMS_METASTORE;
-      LOG_WARN("failed to handle host and port", K(ret), K(uri), K(tmp_uri));
-    }
+    while (!found && cur < end) {
+      // Find next semicolon or end.
+      const char *sep = static_cast<const char *>(memchr(cur, ';', end - cur));
+      const int64_t len = (sep != nullptr) ? (sep - cur) : (end - cur);
+      ObString segment(len, cur);
 
-    const int64_t tmp_uri_len = tmp_uri.length();
-    if (OB_FAIL(ret)) {
-    } else {
-      // Handle host.
-      const int64_t ip_len = needed_colon - ptr;
-      if (OB_UNLIKELY(ip_len > tmp_uri_len)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("expected host len execeed malloc", K(ret), K(ip_len), K(tmp_uri_len));
+      // Skip empty segment.
+      if (len <= 0) {
+        // do nothing
+      } else if (len <= 9 || 0 != strncmp(cur, "thrift://", 9)) {
+        // Must start with "thrift://".
+        LOG_WARN("invalid uri without thrift:// prefix, try next",
+                 K(segment),
+                 "prefix_len",
+                 len > 9 ? 9 : len);
       } else {
-        strncpy(host, ptr, ip_len);
-        host[ip_len] = '\0';
-      }
+        const char *p = cur + 9;
+        const int64_t remain = len - 9;
+        const char *colon = static_cast<const char *>(memchr(p, ':', remain));
 
-      if (OB_FAIL(ret)) {
-      } else {
-        // Handle port.
-        const char *port_str = needed_colon + 1;
-        const int64_t port_len = tmp_uri_len - ip_len - 1;
-
-        char tmp_port[port_len + 1];
-        if (OB_UNLIKELY(port_len > tmp_uri_len)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("expected port len exceed malloc",
-                   K(ret),
-                   K(port_str),
-                   K(port_len),
-                   K(tmp_uri_len));
+        if (OB_ISNULL(colon) || colon <= p || colon >= cur + len - 1) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid uri missing colon, try next", K(segment));
+        } else if (colon <= p || colon >= cur + len - 1) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid uri with empty host, try next", K(segment));
         } else {
-          strncpy(tmp_port, port_str, port_len);
+          const int64_t host_len = colon - p;
+          const int64_t port_len = (cur + len) - colon - 1;
+          char tmp_port[port_len + 1];
+          strncpy(tmp_port, colon + 1, port_len);
           tmp_port[port_len] = '\0';
-        }
-        // Port should be a int number.
-        if (OB_FAIL(ret)) {
-        } else {
-          port = ::obsys::ObStringUtil::str_to_int(tmp_port, 0);
-          if (OB_UNLIKELY(!::obsys::ObStringUtil::is_int(tmp_port))) {
-            ret = OB_INVALID_HMS_PORT;
-            LOG_WARN("port is not int type", K(ret), K(port), K(port_len), K(port_str));
-          } else if (OB_LIKELY(port == 0)) {
-            ret = OB_INVALID_HMS_PORT;
-            LOG_WARN("failed to get port", K(ret));
+
+          if (!::obsys::ObStringUtil::is_int(tmp_port)) {
+            LOG_WARN("invalid uri port not integer, try next", K(segment), K(ObString(tmp_port)));
           } else {
-            LOG_TRACE("get port success", K(ret), K(port));
+            int tmp = ::obsys::ObStringUtil::str_to_int(tmp_port, 0);
+            if (tmp <= 0) {
+              LOG_WARN("invalid uri port value, try next", K(segment), K(tmp));
+            } else {
+              strncpy(host, p, host_len);
+              host[host_len] = '\0';
+              port = tmp;
+              found = true;
+              LOG_TRACE("extracted host and port", K(segment), K(ObString(host)), K(port));
+            }
           }
         }
       }
+      cur = (sep != nullptr) ? (sep + 1) : end;
+    }
+
+    if (!found) {
+      ret = OB_INVALID_HMS_METASTORE;
+      LOG_WARN("no valid uri found in list", K(ret), K(uri));
     }
   }
-
   return ret;
 }
 
