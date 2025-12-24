@@ -1470,7 +1470,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprParseDateTime::calc_parse_date_time                  /* 886 */
   NULL, // ObExprIsNan::eval_is_nan,                                  /* 887 */
   ObExprCollectFileList::collect_file_list,                           /* 888 */
-  NULL, // ObExprVoid::calc_void_expr                                 /* 889 */
+  ObExprVoid::calc_void_expr,                                         /* 889 */
   NULL, // ObExprRandCanonical                                        /* 890 */
   NULL, // ObExprLoadFile::eval_load_file                             /* 891 */
   NULL, // ObExprAIParseDocument::eval_ai_parse_document              /* 892 */

@@ -35,7 +35,7 @@ int ObExprVoid::calc_result_type1(ObExprResType &type,
                                   common::ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  type.set_type(type1.get_type());
+  OZ(type.assign(type1));
   return ret;
 }
 
