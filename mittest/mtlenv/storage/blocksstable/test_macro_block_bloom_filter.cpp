@@ -35,7 +35,7 @@ using namespace blocksstable;
 namespace blocksstable
 {
 
-// Old data block meta val without bloom filter.
+// Old data block meta val without bloom filter before 4.3.5.1
 class MockDataBlockMetaVal final
 {
 public:
@@ -416,7 +416,7 @@ TEST_F(TestMacroBlockBloomFilter, test_serialize_1)
   ASSERT_EQ(OB_SUCCESS, mb_bf.serialize(buf, 2 * 1024 * 1024, pos));
 }
 
-TEST_F(TestMacroBlockBloomFilter, test_compat)
+TEST_F(TestMacroBlockBloomFilter, test_data_macro_meta_val_compat)
 {
   const int64_t buf_len = 2 * 1024 * 1024; // 2MB
   char * buf = new char[buf_len];
@@ -436,6 +436,70 @@ TEST_F(TestMacroBlockBloomFilter, test_compat)
   ASSERT_EQ(pos, mock_pos);
   ASSERT_EQ(0, macro_meta_val.macro_block_bf_size_);
   ASSERT_EQ(10, macro_meta_val.ddl_end_row_offset_);
+
+  // test new meta can deserialize old meta with version 1
+  mock_macro_meta_val.version_ = MockDataBlockMetaVal::DATA_BLOCK_META_VAL_VERSION;
+  mock_macro_meta_val.ddl_end_row_offset_ = -1;
+  mock_macro_meta_val.row_count_ = 20251223;
+  set_macro_id_to_valid(mock_macro_meta_val.macro_id_);
+
+  int64_t old_pos = 0;
+  ASSERT_EQ(OB_SUCCESS, mock_macro_meta_val.serialize(buf, buf_len, old_pos));
+  ASSERT_EQ(old_pos, mock_macro_meta_val.get_serialize_size());
+
+  macro_meta_val.reset();
+  int64_t new_pos = 0;
+  ASSERT_EQ(OB_SUCCESS, macro_meta_val.deserialize(buf, old_pos, new_pos));
+  ASSERT_EQ(new_pos, old_pos);
+  ASSERT_EQ(int64_t(MockDataBlockMetaVal::DATA_BLOCK_META_VAL_VERSION_V2), macro_meta_val.version_);
+  ASSERT_EQ(20251223, macro_meta_val.row_count_);
+  ASSERT_EQ(-1, macro_meta_val.ddl_end_row_offset_);
+
+  // test old meta can deserialize new meta with version 2 and ddl_end_row_offset_ is -1
+  macro_meta_val.version_ = ObDataBlockMetaVal::DATA_BLOCK_META_VAL_VERSION_V2;
+  macro_meta_val.row_count_ = 1;
+  macro_meta_val.column_count_ = 2;
+  macro_meta_val.micro_block_count_ = 3;
+  macro_meta_val.occupy_size_ = 4;
+  macro_meta_val.data_size_ = 5;
+  macro_meta_val.data_zsize_ = 6;
+  macro_meta_val.original_size_ = 7;
+  macro_meta_val.progressive_merge_round_ = 8;
+  macro_meta_val.block_offset_ = 9;
+  macro_meta_val.block_size_ = 10;
+  macro_meta_val.row_count_ = 11;
+  macro_meta_val.row_count_delta_ = 12;
+  macro_meta_val.max_merged_trans_version_ = 13;
+  macro_meta_val.is_encrypted_ = true;
+  macro_meta_val.is_deleted_ = true;
+  macro_meta_val.contain_uncommitted_row_ = true;
+  macro_meta_val.compressor_type_ = ObCompressorType::ZSTD_COMPRESSOR;
+  macro_meta_val.master_key_id_ = 14;
+  macro_meta_val.encrypt_id_ = 15;
+  macro_meta_val.row_store_type_ = ObRowStoreType::ENCODING_ROW_STORE;
+  macro_meta_val.schema_version_ = 16;
+  macro_meta_val.snapshot_version_ = 17;
+  macro_meta_val.logic_id_ = ObLogicMacroBlockId(18, 19, 20);
+  set_macro_id_to_valid(macro_meta_val.macro_id_);
+  macro_meta_val.column_checksums_.push_back(22);
+  macro_meta_val.has_string_out_row_ = true;
+  macro_meta_val.all_lob_in_row_ = true;
+  macro_meta_val.agg_row_len_ = 0;
+  macro_meta_val.agg_row_buf_ = nullptr;
+  macro_meta_val.ddl_end_row_offset_ = -1;
+  macro_meta_val.macro_block_bf_size_ = 0;
+  macro_meta_val.macro_block_bf_buf_ = nullptr;
+  new_pos = 0;
+  ASSERT_EQ(OB_SUCCESS, macro_meta_val.serialize(buf, buf_len, new_pos, DATA_VERSION_4_3_5_0));
+  ASSERT_EQ(new_pos, macro_meta_val.get_serialize_size(DATA_VERSION_4_3_5_0));
+
+  old_pos = 0;
+  ASSERT_EQ(OB_SUCCESS, mock_macro_meta_val.deserialize(buf, new_pos, old_pos));
+  ASSERT_EQ(new_pos, old_pos);
+  ASSERT_EQ(int64_t(ObDataBlockMetaVal::DATA_BLOCK_META_VAL_VERSION_V2), mock_macro_meta_val.version_);
+  ASSERT_EQ(11, mock_macro_meta_val.row_count_);
+  ASSERT_EQ(-1, mock_macro_meta_val.ddl_end_row_offset_);
+  ASSERT_EQ(9, mock_macro_meta_val.block_offset_);
 }
 
 constexpr int SEED = 20240415;
@@ -558,14 +622,13 @@ TEST_F(TestMacroBlockBloomFilter, test_insert)
     FLOG_INFO("cmdebug, hashset insert and merge", K(cost_ts));
   }
 }
-
 } // namespace blocksstable
 } // namespace oceanbase
 
 int main(int argc, char **argv)
 {
   system("rm -f test_macro_block_bloom_filter.log*");
-  OB_LOGGER.set_file_name("test_macro_block_bloom_filter.log", true, false);
+  OB_LOGGER.set_file_name("test_macro_block_bloom_filter.log");
   OB_LOGGER.set_log_level("INFO");
   STORAGE_LOG(INFO, "begin unittest: test_macro_block_bloom_filter");
   testing::InitGoogleTest(&argc, argv);

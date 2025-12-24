@@ -36,10 +36,6 @@ enum ObMacroBlockMetaType
 class ObDataBlockMetaVal final
 {
 public:
-  static const int32_t DATA_BLOCK_META_VAL_VERSION = 1;
-  static const int32_t DATA_BLOCK_META_VAL_VERSION_V2 = 2;
-
-public:
   ObDataBlockMetaVal();
   explicit ObDataBlockMetaVal(ObIAllocator &allocator);
   ~ObDataBlockMetaVal();
@@ -62,6 +58,9 @@ public:
         K_(agg_row_len), KP_(agg_row_buf), K_(ddl_end_row_offset), K_(macro_block_bf_size), KP_(macro_block_bf_buf));
 
 private:
+  static const int32_t DATA_BLOCK_META_VAL_VERSION = 1; // abandon after 431
+  static const int32_t DATA_BLOCK_META_VAL_VERSION_V2 = 2;
+
   DISALLOW_COPY_AND_ASSIGN(ObDataBlockMetaVal);
 
 public:
