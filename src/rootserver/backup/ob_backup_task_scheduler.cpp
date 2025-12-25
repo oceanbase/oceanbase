@@ -16,6 +16,7 @@
 #include "share/ob_zone_table_operation.h"
 #include "share/backup/ob_backup_server_mgr.h"
 #include "share/backup/ob_backup_connectivity.h"
+#include "share/ob_debug_sync.h"
 
 namespace oceanbase
 
@@ -116,6 +117,7 @@ int ObBackupTaskSchedulerQueue::init(
     task_allocator_.set_label(OB_BACKUP_TASK_SCHEDULER);
     rpc_proxy_ = rpc_proxy;
     task_scheduler_ = task_scheduler;
+    has_overflowed_task_ = false;
     sql_proxy_ = &sql_proxy;
     is_inited_ = true;
   }
@@ -132,21 +134,45 @@ int ObBackupTaskSchedulerQueue::push_task(const ObBackupScheduleTask &task)
   return ret;
 }
 
+int ObBackupTaskSchedulerQueue::check_queue_is_full(bool &is_full)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup scheduler queue not init", K(ret));
+  } else {
+    int64_t queue_capacity = max_size_;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(gen_user_tenant_id(MTL_ID())));
+    if (tenant_config.is_valid() && 0 != tenant_config->_backup_task_queue_size) {
+      queue_capacity = tenant_config->_backup_task_queue_size;
+    }
+    ObMutexGuard guard(mutex_);
+    // To prevent the queue from overflowing repeatedly under high load, we use a
+    // dynamic threshold. If the queue has overflowed before, we apply a stricter
+    // check (50% capacity) to throttle new services's loop frequency. This strict
+    // mode is disabled once the queue size drops below the 50% mark.
+    if (has_overflowed_task_) {
+      is_full = (get_task_cnt_() >= (queue_capacity / 2));
+      if (!is_full) {
+        has_overflowed_task_ = false;
+      }
+    } else {
+      is_full = (get_task_cnt_() >= queue_capacity);
+      if (is_full) {
+        has_overflowed_task_ = true;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObBackupTaskSchedulerQueue::push_task_without_lock_(const ObBackupScheduleTask &task)
 {
   int ret = OB_SUCCESS;
-  int64_t queue_capacity = max_size_;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(gen_user_tenant_id(MTL_ID())));
-  if (tenant_config.is_valid() && 0 != tenant_config->_backup_task_queue_size) {
-    queue_capacity = tenant_config->_backup_task_queue_size;
-  }
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup scheduler queue not inited", K(ret));
   } else if (task_scheduler_->has_set_stop()) {
-  } else if (get_task_cnt_() >= queue_capacity) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("task scheduler queue is full, cant't push task", K(ret), K(get_task_cnt_()), K(queue_capacity));
   } else if (OB_FAIL(check_push_unique_task_(task))) {
     LOG_WARN("fail to check unique task", K(ret), K(task));
   } else {
@@ -878,32 +904,6 @@ int ObBackupTaskSchedulerQueue::execute_over(const ObBackupScheduleTask &task, c
   return ret;
 }
 
-int ObBackupTaskSchedulerQueue::reload_task(const ObArray<ObBackupScheduleTask *> &need_reload_tasks)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("backup scheduler queue not inited", K(ret));
-  } else if (need_reload_tasks.empty()) {
-  } else {
-    for (int j = 0; OB_SUCC(ret) && j < need_reload_tasks.count(); ++j) {
-      ObBackupScheduleTask *task = need_reload_tasks.at(j);
-      if (nullptr == task) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("nullptr task", K(ret));
-      } else if (OB_FAIL(push_task(*task))) {
-        if (OB_ENTRY_EXIST == ret) {
-          ret = OB_SUCCESS;
-          LOG_INFO("task exist, no need to reload", KPC(task));
-        } else {
-          LOG_WARN("failed to push task", K(ret));
-        }
-      } 
-    }
-  } 
-  return ret;
-}
-
 int ObBackupTaskSchedulerQueue::cancel_tasks(
     const BackupJobType &type, 
     const uint64_t job_id, 
@@ -1290,11 +1290,17 @@ void ObBackupTaskScheduler::run2()
         LOG_WARN("fail to chaeck tenant status normal", K(ret));
       } else if (is_normal) {
         dump_statistics_(last_dump_time);
+        bool queue_is_full = false;
         if (OB_FAIL(check_leader())) {
           LOG_WARN("fail to check leader", K(ret));
+        } else if (OB_FAIL(queue_.check_queue_is_full(queue_is_full))) {
+          LOG_WARN("failed to check queue is full(or half full)", K(ret));
+        } else if (queue_is_full) {
+          LOG_INFO("queue is full, skip reload task this turn", K(ret));
         } else if (OB_FAIL(reload_task_(last_reload_task_ts, reload_flag))) {
           LOG_WARN("failed to reload task", K(ret));
-        } else {
+        }
+        if (OB_SUCC(ret)) {
           // error code has no effect between pop_and_send_task() and check_alive()
           if (OB_FAIL(pop_and_send_task_())) {
             LOG_WARN("fail to pop and send task", K(ret));
@@ -1344,36 +1350,23 @@ int ObBackupTaskScheduler::reload_task_(int64_t &last_reload_task_ts, bool &relo
   const int64_t now = ObTimeUtility::current_time();
   const int64_t MAX_CHECK_TIME_INTERVAL = 10 * 60 * 1000 * 1000L;
   common::ObArenaAllocator allocator;
-  ObArray<ObBackupScheduleTask *> need_reload_tasks;
   reload_flag = false;
   ARRAY_FOREACH(backup_srv_array_, i) {
-    need_reload_tasks.reset();
     ObBackupService *backup_service = backup_srv_array_.at(i);
     if (!backup_service->can_schedule() || now > MAX_CHECK_TIME_INTERVAL + last_reload_task_ts) {
-      if (OB_FAIL(backup_service->get_need_reload_task(allocator, need_reload_tasks))) {
-        LOG_WARN("failed to get need reload tasks", K(ret));
-      } else if (need_reload_tasks.empty()) {
-      } else if (OB_FAIL(queue_.reload_task(need_reload_tasks))) {
-        LOG_WARN("failed to reload task", K(ret), K(need_reload_tasks));
+      if (OB_FAIL(backup_service->do_reload_task(allocator, queue_))) {
+        LOG_WARN("failed to do reload tasks", K(ret));
       } else {
-        LOG_INFO("succeed reload tasks", K(need_reload_tasks));
+        LOG_INFO("succeed reload tasks", "task_count", queue_.get_task_cnt());
       }
 
       if (OB_SUCC(ret)) {
         backup_service->enable_backup();
-        last_reload_task_ts = now;
         reload_flag = true;
         backup_service->wakeup();
       } else {
         reload_flag = false;
         backup_service->disable_backup();
-      }
-      ARRAY_FOREACH(need_reload_tasks, i) {
-        ObBackupScheduleTask *task = need_reload_tasks.at(i);
-        if (nullptr != task) {
-          task->~ObBackupScheduleTask();
-          task = nullptr;
-        }
       }
     }
   }
@@ -1385,6 +1378,9 @@ int ObBackupTaskScheduler::reload_task_(int64_t &last_reload_task_ts, bool &relo
 
 int ObBackupTaskScheduler::pop_and_send_task_()
 {
+#ifdef ERRSIM
+  DEBUG_SYNC(BEFORE_SEND_LS_TASK_TO_OBSERVER);
+#endif
   int ret = OB_SUCCESS;
   common::ObArenaAllocator allocator;
   ObBackupScheduleTask *task = nullptr;
@@ -1577,6 +1573,24 @@ int ObBackupTaskScheduler::do_execute_(const ObBackupScheduleTask &task)
     LOG_WARN("fail to execute task", K(ret), K(task));
   }
   FLOG_INFO("execute send backup scheduler task", K(ret), K(task));
+  return ret;
+}
+
+int ObBackupTaskScheduler::check_can_add_task(bool &can_add)
+{
+  int ret = OB_SUCCESS;
+  can_add = false;
+  bool is_full = true;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup task scheduler not inited", K(ret));
+  } else {
+    if (OB_FAIL(queue_.check_queue_is_full(is_full))) {
+      LOG_WARN("fail to check queue is full", K(ret));
+    } else {
+      can_add = !is_full;
+    }
+  }
   return ret;
 }
 

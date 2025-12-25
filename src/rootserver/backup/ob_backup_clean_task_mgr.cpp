@@ -395,7 +395,9 @@ int ObBackupCleanTaskMgr::persist_ls_tasks_()
           LOG_WARN("failed to check leader", K(ret));
         } else if (OB_FAIL(ObBackupCleanLSTaskOperator::insert_ls_task(trans, new_ls_attr))) {
           LOG_WARN("failed to insert backup log stream task", K(ret), K(new_ls_attr));
-        } 
+        } else {
+          backup_service_->wakeup();
+        }
       }
     }
     bool has_complement_log = task_attr_.is_delete_backup_set_task() && backup_set_info_.plus_archivelog_;
@@ -410,6 +412,8 @@ int ObBackupCleanTaskMgr::persist_ls_tasks_()
         LOG_WARN("failed to check leader", K(ret));
       } else if (OB_FAIL(ObBackupCleanLSTaskOperator::insert_ls_task(trans, new_ls_attr))) {
         LOG_WARN("failed to insert backup delete complement log task", K(ret), K(new_ls_attr));
+      } else {
+        backup_service_->wakeup();
       }
     }
 

@@ -62,7 +62,6 @@ public:
   int execute_over(const ObBackupScheduleTask &task, const share::ObHAResultInfo &result_info);
   // remove task 
   // When finished, task memory will be released and %task can not be used again.
-  int reload_task(const ObArray<ObBackupScheduleTask *> &need_reload_tasks);
   int cancel_tasks(const BackupJobType &type, const uint64_t job_id, const uint64_t tenant_id);
   int cancel_tasks(const BackupJobType &type, const uint64_t tenant_id);
   int check_task_exist(const ObBackupScheduleTaskKey key, bool &is_exist);
@@ -72,6 +71,8 @@ public:
   int dump_statistics();
   int64_t get_task_cnt() const { return task_map_.size(); }
   int update_task_last_alive_time(const ObBackupScheduleTask *task);
+
+  int check_queue_is_full(bool &is_full);
   struct ObBackupServerPriorityCmp
   {
     bool operator()(const ObBackupServer &lhs, const ObBackupServer &rhs) const
@@ -112,13 +113,13 @@ private:
   // remove task from the scheduler_list and wait_list
   int remove_task_(ObBackupScheduleTask *task, const bool &in_schedule);
   int check_push_unique_task_(const ObBackupScheduleTask &task);
-
   int64_t get_task_cnt_() const { return task_map_.size(); }
   int64_t get_wait_task_cnt_() const { return wait_list_.get_size(); }
   int64_t get_in_schedule_task_cnt_() const { return schedule_list_.get_size(); }
 
 private:
   bool is_inited_;
+  bool has_overflowed_task_;
   lib::ObMutex mutex_;
   int64_t max_size_;
   // Count the number of tasks per tenant. key: tenant_id, value :struct for task_cnt
@@ -177,6 +178,7 @@ public:
   int register_backup_srv(ObBackupService &srv);
   int reuse();
   uint64_t get_exec_tenant_id() { return gen_user_tenant_id(tenant_id_); }
+  int check_can_add_task(bool &can_add);
 private:
   int reload_task_(int64_t &last_reload_task_ts, bool &reload_flag);
   // Send task to execute.

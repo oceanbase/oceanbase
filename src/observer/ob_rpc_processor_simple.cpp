@@ -77,6 +77,7 @@
 #include "share/object_storage/ob_device_config_mgr.h"
 #include "rootserver/restore/ob_restore_service.h"
 #include "rootserver/backup/ob_archive_scheduler_service.h"
+#include "rootserver/backup/ob_backup_service.h"
 #include "rootserver/ob_alter_ls_command.h"
 #include "storage/high_availability/ob_rebuild_service.h"
 #include "storage/ob_inner_tablet_access_service.h"
@@ -3727,6 +3728,12 @@ int ObRpcNotifyTenantThreadP::process()
 #endif
       } else if (obrpc::ObNotifyTenantThreadArg::RESTORE_SERVICE == arg_.get_thread_type()) {
         rootserver::ObRestoreService *service = MTL(rootserver::ObRestoreService*);
+        WAKE_UP_TENANT_SERVICE
+      } else if (obrpc::ObNotifyTenantThreadArg::BACKUP_SERVICE == arg_.get_thread_type()) {
+        rootserver::ObBackupDataService *service = MTL(rootserver::ObBackupDataService*);
+        WAKE_UP_TENANT_SERVICE
+      } else if (obrpc::ObNotifyTenantThreadArg::BACKUP_CLEAN_SERVICE == arg_.get_thread_type()) {
+        rootserver::ObBackupCleanService *service = MTL(rootserver::ObBackupCleanService*);
         WAKE_UP_TENANT_SERVICE
       } else {
         ret = OB_ERR_UNEXPECTED;

@@ -4497,6 +4497,8 @@ public:
     PROTECTION_MODE_MGR,
     TENANT_INFO_LOADER,
     COMMON_LS_SERVICE,
+    BACKUP_SERVICE,
+    BACKUP_CLEAN_SERVICE,
   };
   ObNotifyTenantThreadArg() : tenant_id_(OB_INVALID_TENANT_ID), thread_type_(INVALID_TYPE) {}
   ~ObNotifyTenantThreadArg() {}

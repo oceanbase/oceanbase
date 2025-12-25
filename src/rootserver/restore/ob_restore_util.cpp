@@ -15,6 +15,7 @@
 #include "ob_restore_util.h"
 #include "share/restore/ob_restore_uri_parser.h"
 #include "share/backup/ob_archive_path.h"
+#include "rootserver/ob_root_utils.h"
 #include "share/ob_upgrade_utils.h"
 #include "share/ob_max_id_fetcher.h"
 #include "share/backup/ob_backup_connectivity.h"
@@ -2138,27 +2139,8 @@ int ObRestoreUtil::get_multi_path_backup_sys_time_zone_(
 int ObRestoreUtil::notify_restore_service(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  ObNotifyTenantThreadArg arg;
-  int tmp_ret = OB_SUCCESS;
-  ObAddr leader;
-  const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)
-      || OB_UNLIKELY(!(is_user_tenant(tenant_id) || is_sys_tenant(tenant_id)))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(arg.init(meta_tenant_id, obrpc::ObNotifyTenantThreadArg::RESTORE_SERVICE))) {
-    LOG_WARN("fail to init notify tenant thread arg", KR(ret), K(meta_tenant_id));
-  } else if (OB_ISNULL(GCTX.srv_rpc_proxy_) || OB_ISNULL(GCTX.location_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("srv_rpc_proxy_ is NULL", KR(ret), KP(GCTX.srv_rpc_proxy_), KP(GCTX.location_service_));
-  } else if (OB_FAIL(GCTX.location_service_->get_leader(GCONF.cluster_id,
-                     meta_tenant_id, SYS_LS, false/*force_renew*/, leader))) {
-    LOG_WARN("failed to get ls leader", KR(ret), K(meta_tenant_id));
-  } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(leader).by(tenant_id)
-                        .timeout(GCONF.rpc_timeout).notify_tenant_thread(arg))) {
-    LOG_WARN("fail to send rpc", KR(ret), K(arg));
-  } else {
-    LOG_INFO("success to wakeup tenant restore service", KR(ret), K(meta_tenant_id));
+  if (OB_FAIL(ObRootUtils::notify_tenant_service(tenant_id, obrpc::ObNotifyTenantThreadArg::RESTORE_SERVICE))) {
+    LOG_WARN("failed to notify restore service", K(ret), K(tenant_id));
   }
   return ret;
 }

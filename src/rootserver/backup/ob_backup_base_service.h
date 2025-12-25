@@ -29,6 +29,7 @@ class ObBackupBaseService : public lib::TGRunnable,
                             public logservice::ObICheckpointSubHandler
 {
 public:
+  static const int64_t OB_SERVICE_DEFAULT_IDLE_TIME = 10 * 60 * 1000 * 1000LL; // 10min
   static const int64_t OB_MAX_IDLE_TIME = 60 * 1000 * 1000; // 1min
   static const int64_t OB_MIDDLE_IDLE_TIME = 30 * 1000 * 1000; // 30s
   static const int64_t OB_FAST_IDLE_TIME = 1 * 1000 * 1000; // 1s

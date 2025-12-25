@@ -20,6 +20,7 @@
 #include "share/backup/ob_backup_helper.h"
 #include "share/backup/ob_backup_connectivity.h"
 #include "rootserver/restore/ob_restore_util.h"
+#include "rootserver/ob_root_utils.h"
 #include "share/ob_global_stat_proxy.h"
 #include "share/schema/ob_mview_info.h"
 
@@ -79,9 +80,9 @@ int ObBackupDataScheduler::force_cancel(const uint64_t &tenant_id)
   return ret;
 }
 
-int ObBackupDataScheduler::get_need_reload_task(
+int ObBackupDataScheduler::reload_task(
     common::ObIAllocator &allocator,
-    common::ObIArray<ObBackupScheduleTask *> &tasks)
+    ObBackupTaskSchedulerQueue &queue)
 {
   // 1. step1: get doing jobs from __all_backup_job;
   // 2. step1: get all peindg or doing ls tasks in __all_backup_ls_task from all doing jobs
@@ -108,63 +109,104 @@ int ObBackupDataScheduler::get_need_reload_task(
       } else if (OB_FAIL(ObBackupTaskOperator::get_backup_task(
           *sql_proxy_, job.job_id_, job.tenant_id_, false/*for update*/, set_task_attr))) {
         LOG_WARN("[DATA_BACKUP]failed to get set task", K(ret), K(job));
-      } else if (OB_FAIL(ObBackupLSTaskOperator::get_ls_tasks(*sql_proxy_, job.job_id_, job.tenant_id_, for_update, ls_tasks))) {
-        LOG_WARN("[DATA_BACKUP]failed to get ls tasks", K(ret), K(job));
-      } else if (ls_tasks.empty()) { // no ls task, no need to reload
-      } else if (OB_FAIL(do_get_need_reload_task_(job, set_task_attr, ls_tasks, allocator, tasks))) {
-        LOG_WARN("[DATA_BACKUP]failed to reload ls task to scheduler", K(ret), K(job), K(ls_tasks));
+      } else if (OB_FAIL(reload_ls_tasks_(job, set_task_attr, for_update, allocator, queue))) {
+        LOG_WARN("[DATA_BACKUP]failed to reload ls task to scheduler", K(ret), K(job));
       }
     }
   }
   return ret;
 }
 
-int ObBackupDataScheduler::do_get_need_reload_task_(
+// reload ls tasks for this job
+int ObBackupDataScheduler::reload_ls_tasks_(
     const ObBackupJobAttr &job,
     const ObBackupSetTaskAttr &set_task_attr,
-    ObIArray<ObBackupLSTaskAttr> &ls_tasks,
+    const bool for_update,
     common::ObIAllocator &allocator,
-    ObIArray<ObBackupScheduleTask *> &tasks)
+    ObBackupTaskSchedulerQueue &queue)
+{
+  int ret = OB_SUCCESS;
+  if (!job.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("[DATA_BACKUP]invalid argument", K(ret), K(job));
+  } else {
+    ObBackupLSTaskOperator::LSTaskIterator iter;
+    if (OB_FAIL(iter.init(*sql_proxy_, job.tenant_id_, job.job_id_))) {
+      LOG_WARN("[DATA_BACKUP]failed to init iterator", K(ret));
+    } else {
+      ObBackupLSTaskAttr ls_task;
+      while (OB_SUCC(ret)) {
+        ls_task.reset();
+        if (OB_FAIL(iter.next(ls_task))) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+            break;
+          } else {
+            LOG_WARN("[DATA_BACKUP]failed to get next ls task", K(ret));
+          }
+        } else if (OB_FAIL(do_reload_single_ls_task_(job, set_task_attr, ls_task, allocator, queue))) {
+          LOG_WARN("[DATA_BACKUP]failed to reload single ls task", K(ret), K(ls_task));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBackupDataScheduler::do_reload_single_ls_task_(
+    const ObBackupJobAttr &job,
+    const ObBackupSetTaskAttr &set_task_attr,
+    ObBackupLSTaskAttr &ls_task,
+    common::ObIAllocator &allocator,
+    ObBackupTaskSchedulerQueue &queue)
 {
   int ret = OB_SUCCESS;
   int64_t full_replica_num = 0;
-  if (!job.is_valid() || ls_tasks.empty()) {
+  ObBackupScheduleTask *task = nullptr;
+  bool is_dropped = false;
+  if (!job.is_valid() || !ls_task.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("[DATA_BACKUP]invalid argument", K(ret), K(job), K(ls_tasks));
+    LOG_WARN("[DATA_BACKUP]invalid argument", K(ret), K(job), K(ls_task));
+  } else if (!(job.plus_archivelog_ && set_task_attr.status_.is_backup_log())
+      && OB_FAIL(ObBackupDataLSTaskMgr::check_ls_is_dropped(ls_task, *sql_proxy_, is_dropped))) {
+    LOG_WARN("failed to check ls is dropped", K(ret), K(ls_task));
+  } else if (is_dropped) {
+    // ls deleted, no need to reload, mark it to finish
+    ObHAResultInfo result_info(ObHAResultInfo::ROOT_SERVICE,
+                              GCONF.self_addr_,
+                              share::ObTaskId(*ObCurTraceId::get_trace_id()),
+                              OB_LS_NOT_EXIST);
+    if (OB_FAIL(ObBackupDataLSTaskMgr::handle_execute_over(
+          *backup_service_, *sql_proxy_, ls_task, result_info))) {
+      LOG_WARN("failed to handle execute over", K(ret), K(ls_task));
+    }
+  } else if (OB_FAIL(ObBackupUtils::get_full_replica_num(ls_task.tenant_id_, full_replica_num))) {
+    LOG_WARN("failed to get full replica num", K(ret));
+  } else if (ls_task.black_servers_.count() >= full_replica_num && OB_FALSE_IT(ls_task.black_servers_.reset())) {
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < ls_tasks.count(); ++i) {
-      ObBackupLSTaskAttr &ls_task = ls_tasks.at(i);
-      ObBackupScheduleTask *task = nullptr;
-      bool is_dropped = false;
-      if (ObBackupTaskStatus::Status::FINISH == ls_task.status_.status_ && OB_SUCCESS == ls_task.result_) {
-        // do nothing
-      } else if (!(job.plus_archivelog_ && set_task_attr.status_.is_backup_log())
-          && OB_FAIL(ObBackupDataLSTaskMgr::check_ls_is_dropped(ls_task, *sql_proxy_, is_dropped))) {
-        LOG_WARN("failed to check ls is dropped", K(ret), K(ls_task));
-      } else if (is_dropped) {
-        // ls deleted, no need to reload, mark it to finish
-        ObHAResultInfo result_info(ObHAResultInfo::ROOT_SERVICE,
-                                  GCONF.self_addr_,
-                                  share::ObTaskId(*ObCurTraceId::get_trace_id()),
-                                  OB_LS_NOT_EXIST);
-        if (OB_FAIL(ObBackupDataLSTaskMgr::handle_execute_over(
-              *backup_service_, *sql_proxy_, ls_task, result_info))) {
-          LOG_WARN("failed to handle execute over", K(ret), K(ls_task));
-        }
-      } else if (OB_FAIL(ObBackupUtils::get_full_replica_num(ls_task.tenant_id_, full_replica_num))) {
-        LOG_WARN("failed to get full replica num", K(ret));
-      } else if (ls_task.black_servers_.count() >= full_replica_num && OB_FALSE_IT(ls_task.black_servers_.reset())) {
-      } else if (OB_FAIL(build_task_(job, set_task_attr, ls_task, allocator, task))) {
-        LOG_WARN("[DATA_BACKUP]failed to build task", K(ret), K(job), K(ls_task));
-      } else if (OB_ISNULL(task)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("task is nullptr is unexpected", K(ret));
-      } else if (ObBackupTaskStatus::Status::PENDING == ls_task.status_.status_
-          || ObBackupTaskStatus::Status::DOING == ls_task.status_.status_) {
-        if (OB_FAIL(tasks.push_back(task))) {
-          LOG_WARN("[DATA_BACKUP]failed to push back task", K(ret), KPC(task));
-        }
+    bool queue_is_full = false;
+    if (OB_FAIL(build_task_(job, set_task_attr, ls_task, allocator, task))) {
+      LOG_WARN("[DATA_BACKUP]failed to build task", K(ret), K(job), K(ls_task));
+    } else if (OB_ISNULL(task)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("task is nullptr is unexpected", K(ret));
+    } else if (OB_FAIL(queue.check_queue_is_full(queue_is_full))) {
+      LOG_WARN("[DATA_BACKUP]failed to check queue is full", K(ret));
+    } else if (queue_is_full) {
+      ret = OB_SIZE_OVERFLOW;
+      LOG_WARN("[DATA_BACKUP]queue is full, stop reload ls tasks", KPC(task));
+    } else if (OB_FAIL(queue.push_task(*task))) {
+      if (OB_ENTRY_EXIST == ret) {
+        LOG_DEBUG("[DATA_BACKUP]task already exist in queue, skip", KPC(task));
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("[DATA_BACKUP]failed to push task to queue", K(ret), KPC(task));
       }
+    }
+    if (nullptr != task) {
+      task->~ObBackupScheduleTask();
+      allocator.free(task);
+      task = nullptr;
     }
   }
   return ret;
@@ -283,7 +325,10 @@ int ObBackupDataScheduler::cancel_backup_data(
         LOG_INFO("tenant status not normal, no need to schedule backup", K(need_cancel_backup_tenant));
       } else if (OB_FAIL(ObBackupJobOperator::cancel_jobs(*sql_proxy_, need_cancel_backup_tenant))) {
         LOG_WARN("fail to cancel backup jobs", K(ret), K(need_cancel_backup_tenant));
-      } 
+      } else {
+        // wakeup backup user tenant service to check job status, the return value is ignored
+        backup_service_->wakeup_tenant_service(need_cancel_backup_tenant);
+      }
     }
   }
   ROOTSERVICE_EVENT_ADD("backup_data", "cancel_backup_data", K(tenant_id), K(backup_tenant_ids));
@@ -339,9 +384,11 @@ int ObBackupDataScheduler::start_backup_data(const obrpc::ObBackupDatabaseArg &i
       LOG_WARN("[DATA_BACKUP]tenant backup should not initiate another tenant", K(ret), K(in_arg));
     } else if (OB_FAIL(start_tenant_backup_data_(template_job_attr))) {
       LOG_WARN("[DATA_BACKUP]failed to start tenant backup", K(ret), K(in_arg));
+    } else {
+      // wakeup backup user tenant service to check job status, the return value is ignored
+      backup_service_->wakeup_tenant_service(in_arg.tenant_id_);
     }
   }
-
   if (OB_SUCC(ret)) {
     backup_service_->wakeup();
     FLOG_INFO("[DATA_BACKUP]insert backup data job succeed", K(in_arg));
@@ -922,47 +969,69 @@ int ObBackupDataScheduler::handle_failed_job_(
   return ret;
 } 
 
+bool ObBackupDataScheduler::check_has_canceling_job_(const ObIArray<ObBackupJobAttr> &backup_jobs)
+{
+  bool has_canceling_job = false;
+  for (int64_t i = 0; i < backup_jobs.count(); ++i) {
+    if (ObBackupStatus::Status::CANCELING == backup_jobs.at(i).status_.status_) {
+      has_canceling_job = true;
+      break;
+    }
+  }
+  return has_canceling_job;
+}
+
 int ObBackupDataScheduler::process()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObArray<ObBackupJobAttr> backup_jobs;
-  ObIBackupJobMgr *job_mgr = nullptr;
+  bool can_add_task = false;
+  bool has_canceling_job = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("[DATA_BACKUP]backup up data scheduler not init", K(ret));
   } else if (OB_FAIL(ObBackupJobOperator::get_jobs(*sql_proxy_, tenant_id_, false/*not for update*/, backup_jobs))) {
     LOG_WARN("[DATA_BACKUP]failed to get backup jobs", K(ret), K_(tenant_id));
   } else if (backup_jobs.empty()) {
-  } else if (OB_FAIL(ObBackupJobMgrAlloctor::alloc(tenant_id_, job_mgr))) {
-    LOG_WARN("fail to alloc job mgr", K(ret), K_(tenant_id));
-  } else if (OB_ISNULL(job_mgr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("backup job mgr can't be nullptr", K(ret), K_(tenant_id));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < backup_jobs.count(); ++i) {
-    ObBackupJobAttr &job_attr = backup_jobs.at(i);
-    job_mgr->reset();
-    if (!job_attr.is_valid()) {
+  } else if (OB_FAIL(task_scheduler_->check_can_add_task(can_add_task))) {
+    LOG_WARN("failed to check can add task", K(ret));
+  } else if (OB_FALSE_IT(has_canceling_job = check_has_canceling_job_(backup_jobs))) {
+    LOG_WARN("failed to check has canceling job", K(ret), K(backup_jobs));
+  } else if (!can_add_task && !has_canceling_job) { // if queue is full and no canceling job, skip
+    LOG_INFO("queue is full and no canceling job, skip process this round", K(has_canceling_job), K(can_add_task));
+  } else {
+    ObIBackupJobMgr *job_mgr = nullptr;
+    if (OB_FAIL(ObBackupJobMgrAlloctor::alloc(tenant_id_, job_mgr))) {
+      LOG_WARN("fail to alloc job mgr", K(ret), K_(tenant_id));
+    } else if (OB_ISNULL(job_mgr)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("[DATA_BACKUP]backup job is not valid", K(ret), K(job_attr));
-    } else if (OB_FAIL(job_mgr->init(tenant_id_, job_attr, *sql_proxy_, *rpc_proxy_, *task_scheduler_, *schema_service_,
-        *backup_service_))) {
-      LOG_WARN("[DATA_BACKUP]failed to init tenant backup job mgr", K(ret), K_(tenant_id), K(job_attr));
-    } else if (OB_SUCCESS != (tmp_ret = job_mgr->process())) { // tenant level backups are isolated
-      LOG_WARN("[DATA_BACKUP]failed to schedule tenant backup job", K(tmp_ret), K_(tenant_id), K(job_attr));
-      if (job_attr.status_.is_backup_finish()) { // completed, failed or canceled job no need to deal error code
-      } else if (!is_sys_tenant(tenant_id_) && OB_SUCCESS != (tmp_ret = handle_failed_job_(tenant_id_, tmp_ret, *job_mgr, job_attr))) {
-        LOG_WARN("failed to handle user tenant failed job", K(tmp_ret), K(job_attr));
-      } else {
-        backup_service_->wakeup();
+      LOG_WARN("backup job mgr can't be nullptr", K(ret), K_(tenant_id));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < backup_jobs.count(); ++i) {
+      ObBackupJobAttr &job_attr = backup_jobs.at(i);
+      job_mgr->reset();
+      if (!job_attr.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("[DATA_BACKUP]backup job is not valid", K(ret), K(job_attr));
+      } else if (OB_FAIL(job_mgr->init(tenant_id_, job_attr, *sql_proxy_, *rpc_proxy_, *task_scheduler_, *schema_service_,
+          *backup_service_))) {
+        LOG_WARN("[DATA_BACKUP]failed to init tenant backup job mgr", K(ret), K_(tenant_id), K(job_attr));
+      } else if (OB_SUCCESS != (tmp_ret = job_mgr->process())) { // tenant level backups are isolated
+        LOG_WARN("[DATA_BACKUP]failed to schedule tenant backup job", K(tmp_ret), K_(tenant_id), K(job_attr));
+        if (job_attr.status_.is_backup_finish()) { // completed, failed or canceled job no need to deal error code
+        } else if (!is_sys_tenant(tenant_id_) && OB_SUCCESS != (tmp_ret = handle_failed_job_(tenant_id_, tmp_ret, *job_mgr, job_attr))) {
+          LOG_WARN("failed to handle user tenant failed job", K(tmp_ret), K(job_attr));
+        } else {
+          backup_service_->wakeup();
+        }
       }
     }
-  }
-  if (OB_NOT_NULL(job_mgr)) {
-    job_mgr->~ObIBackupJobMgr();
-    ObBackupJobMgrAlloctor::free(tenant_id_, job_mgr);
-    job_mgr = nullptr;
+    if (OB_NOT_NULL(job_mgr)) {
+      job_mgr->~ObIBackupJobMgr();
+      ObBackupJobMgrAlloctor::free(tenant_id_, job_mgr);
+      job_mgr = nullptr;
+    }
   }
   return ret;
 }
@@ -1207,6 +1276,10 @@ int ObUserTenantBackupJobMgr::move_to_history_()
     if (OB_SUCC(ret)) {
       LOG_INFO("succeed to move job to history. backup job finish", "tenant_id", job_attr_->tenant_id_, "job_id", job_attr_->job_id_);
       backup_service_->wakeup();
+      // wakeup sys tenant backup service to advance sys job status if the job is initiated by sys tenant
+      if (is_sys_tenant(job_attr_->initiator_tenant_id_)) {
+        backup_service_->wakeup_tenant_service(job_attr_->initiator_tenant_id_);
+      }
     }
   }
   return ret;
@@ -1546,11 +1619,12 @@ int ObUserTenantBackupJobMgr::get_next_task_id_(common::ObISQLClient &sql_proxy,
 {
   int ret = OB_SUCCESS;
   task_id = -1;
-  if (OB_FAIL(ObLSBackupInfoOperator::get_next_task_id(sql_proxy, tenant_id_, task_id))) {
-    LOG_WARN("[DATA_BACKUP]failed to get next task id", K(ret));
+  const int64_t batch_size = 1;
+  if (OB_FAIL(ObLSBackupInfoOperator::get_next_task_id(sql_proxy, tenant_id_, batch_size, task_id))) {
+    LOG_WARN("[DATA_BACKUP]failed to get next task id batch", K(ret), K(batch_size));
   } else if (-1 == task_id) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("[DATA_BACKUP]invalid task id", K(ret), K(task_id));
+    LOG_WARN("[DATA_BACKUP]invalid task id", K(ret), K(task_id), K(batch_size));
   }
   return ret;
 }

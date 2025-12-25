@@ -678,6 +678,11 @@ public:
       const obrpc::ObNotifySwitchLeaderArg::SwitchLeaderComment &comment);
   static int check_tenant_ls_balance(uint64_t tenant_id, int &check_ret);
 
+  // Notify tenant service to wakeup (used by backup, restore, clean, and other services)
+  static int notify_tenant_service(
+      const uint64_t tenant_id,
+      const obrpc::ObNotifyTenantThreadArg::TenantThreadType type);
+
   template<typename T>
   static int copy_array(const common::ObIArray<T> &src_array,
                         const int64_t start_pos,
