@@ -962,6 +962,13 @@ int ObMergeJoinOp::ChildBatchFetcher::init(
     datum_store_.set_mem_stat(&(merge_join_op_.sql_mem_processor_));
     datum_store_.set_io_observer(&(merge_join_op_.io_event_observer_));
     datum_store_.set_dir_id(merge_join_op_.sql_mem_processor_.get_dir_id());
+    const int64_t mem_size = ObBitVector::memory_size(batch_size_);
+    if (OB_ISNULL(backup_rows_bit_vec_ = to_bit_vector(merge_join_op_.mem_context_->get_malloc_allocator().alloc(mem_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate ChildBatchFetcher's backup_rows_bit_vec failed", K(ret), K(mem_size));
+    } else {
+      backup_rows_bit_vec_->reset(batch_size_);
+    }
     for (int64_t i = 0; i < equal_cond_infos.count() && OB_SUCC(ret); i++) {
       const ObMergeJoinSpec::EqualConditionInfo &equal_cond = equal_cond_infos.at(i);
       ObExpr *param_expr = NULL;
@@ -1013,7 +1020,7 @@ int ObMergeJoinOp::ChildBatchFetcher::get_next_batch(const int64_t max_row_cnt)
       }
       brs_.size_ = restore_cnt;
       brs_.end_ = false;
-      brs_.skip_ = NULL;
+      brs_.skip_ = backup_rows_bit_vec_;
       backup_rows_used_ += restore_cnt;
     }
   } else {
