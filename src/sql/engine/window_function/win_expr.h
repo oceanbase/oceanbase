@@ -160,8 +160,7 @@ struct WinExprEvalCtx
   WinExprEvalCtx(RowStore &input_rows, WinFuncColExpr &win_col, const int64_t tenant_id) :
     input_rows_(input_rows), win_col_(win_col),
     allocator_(ObModIds::OB_SQL_WINDOW_LOCAL, OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id,
-               ObCtxIds::WORK_AREA),
-    extra_(nullptr)
+               ObCtxIds::WORK_AREA)
   {}
 
   char *reserved_buf(int32_t len)
@@ -170,14 +169,12 @@ struct WinExprEvalCtx
   }
   ~WinExprEvalCtx()
   {
-    extra_ = nullptr;
     allocator_.reset();
   }
   RowStore &input_rows_;
   sql::WinFuncColExpr &win_col_;
   // used for tmp memory allocating during partition process.
   common::ObArenaAllocator allocator_;
-  void *extra_; // maybe useless
 };
 
 class IWinExpr
@@ -194,7 +191,7 @@ public:
                                 const int64_t part_end, const int64_t row_start,
                                 const int64_t row_end, const ObBitVector &skip) = 0;
   // used to generate extra ctx for expr evaluation
-  virtual int generate_extra(ObIAllocator &allocator, void *&extra) = 0;
+  virtual int generate_extra() = 0;
 
   virtual bool is_aggregate_expr() const = 0;
   virtual void destroy() = 0;
@@ -208,9 +205,9 @@ public:
   virtual int process_partition(WinExprEvalCtx &ctx, const int64_t part_start,
                                 const int64_t part_end, const int64_t row_start,
                                 const int64_t row_end, const ObBitVector &skip) override;
-  virtual int generate_extra(ObIAllocator &allocator, void *&extra) override
+  virtual int generate_extra() override
   {
-    return OB_NOT_IMPLEMENT;
+    return OB_SUCCESS;
   }
   virtual void destroy() override
   { // do nothing
@@ -232,6 +229,11 @@ protected:
   {
     ParamStatus() : flags_(0), int_val_(0)
     {}
+    void reset()
+    {
+      flags_ = 0;
+      int_val_ = 0;
+    }
     union
     {
       struct
@@ -269,7 +271,6 @@ public:
 
   virtual int process_window(WinExprEvalCtx &ctx, const Frame &frame, const int64_t row_idx,
                    char *res, bool &is_null) override;
-  virtual int generate_extra(ObIAllocator &allocator, void *&extra) override;
 private:
   int64_t rank_of_prev_row_;
 };
@@ -279,7 +280,6 @@ class RowNumber final: public NonAggrWinExpr
 public:
   virtual int process_window(WinExprEvalCtx &ctx, const Frame &frame, const int64_t row_idx,
                              char *res, bool &is_null) override;
-  virtual int generate_extra(ObIAllocator &allocator, void *&extra) override;
 };
 
 class Ntile final: public NonAggrWinExpr
@@ -287,7 +287,9 @@ class Ntile final: public NonAggrWinExpr
 public:
   virtual int process_window(WinExprEvalCtx &ctx, const Frame &frame, const int64_t row_idx,
                              char *res, bool &is_null) override;
-  virtual int generate_extra(ObIAllocator &allocator, void *&extra) override;
+  virtual int generate_extra() override;
+private:
+  ParamStatus param_status_;
 };
 
 class NthValue final: public NonAggrWinExpr
@@ -300,7 +302,7 @@ public:
         param_index_(-1), reuse_count_(0), store_count_(0) {}
   virtual int process_window(WinExprEvalCtx &ctx, const Frame &frame, const int64_t row_idx,
                              char *res, bool &is_null) override;
-  virtual int generate_extra(ObIAllocator &allocator, void *&extra) override;
+  virtual int generate_extra() override;
   virtual void destroy() override;
 private:
   // -- optimize for first()/last() in half sliding window
@@ -330,7 +332,6 @@ class LeadOrLag final: public NonAggrWinExpr
 public:
   virtual int process_window(WinExprEvalCtx &ctx, const Frame &frame, const int64_t row_idx,
                              char *res, bool &is_null) override;
-  virtual int generate_extra(ObIAllocator &allocator, void *&extra) override;
 };
 
 class CumeDist final: public NonAggrWinExpr
@@ -338,7 +339,6 @@ class CumeDist final: public NonAggrWinExpr
 public:
   virtual int process_window(WinExprEvalCtx &ctx, const Frame &frame, const int64_t row_idx,
                              char *res, bool &is_null) override;
-  virtual int generate_extra(ObIAllocator &allocator, void *&extra) override;
 };
 
 class AggrExpr final: public WinExprWrapper<AggrExpr>
@@ -353,11 +353,6 @@ public:
   bool is_aggregate_expr() const override { return true; }
   virtual int collect_part_results(WinExprEvalCtx &ctx, const int64_t row_start,
                                    const int64_t row_end, const ObBitVector &skip) override;
-  virtual int generate_extra(ObIAllocator &allocator, void *&extra) override
-  {
-    return OB_SUCCESS;
-  }
-
   static int set_result_for_invalid_frame(WinExprEvalCtx &ctx, char *agg_row);
 
   virtual void destroy() override;
@@ -457,19 +452,6 @@ int RankLikeExpr<rank_op>::process_window(WinExprEvalCtx &ctx, const Frame &fram
     if (OB_SUCC(ret)) {
       rank_of_prev_row_ = rank;
     }
-  }
-  return ret;
-}
-
-template<ObItemType rank_op>
-int RankLikeExpr<rank_op>::generate_extra(ObIAllocator &allocator, void *&extra)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(extra = allocator.alloc(sizeof(int64_t)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("allocate memory failed", K(ret));
-  } else {
-    *reinterpret_cast<int64_t *>(extra) = 0;
   }
   return ret;
 }

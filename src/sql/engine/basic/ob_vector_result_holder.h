@@ -42,6 +42,12 @@ public:
     saved_size_(0), tmp_alloc_(tmp_alloc)
   {}
   int init(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx);
+
+  // vector hold will backup/restore `batch_size` rows
+  // operator must guarantee that all changes will happened within [0, batch_size] rows
+  // otherwise, undefined behaviors are expected.
+  // if vector holder is inited by following interface, use `save_actual_rows` to backup rows
+  int init_for_actual_rows(const common::ObIArray<ObExpr *> &exprs, const int32_t batch_size, ObEvalCtx &eval_ctx);
   int save(const int64_t batch_size);
   int restore() const;
   int restore_single_row(int64_t from_idx, int64_t to_idx) const;
@@ -59,6 +65,7 @@ public:
   void destroy();
   static int calc_backup_size(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx, int32_t &mem_size);
 private:
+  int inner_init(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx, const int64_t max_row_cnt);
   template<VectorFormat>
   static int calc_col_backup_size(ObExpr *expr, int32_t batch_size, int32_t &mem_size);
   struct ObColResultHolder

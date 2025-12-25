@@ -435,7 +435,7 @@ void ObVectorsResultHolder::ObColResultHolder::extend_continuous_base_vector(ObV
   }
 }
 
-int ObVectorsResultHolder::init(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx)
+int ObVectorsResultHolder::inner_init(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx, const int64_t max_row_cnt)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
@@ -453,7 +453,7 @@ int ObVectorsResultHolder::init(const common::ObIArray<ObExpr *> &exprs, ObEvalC
       LOG_WARN("failed to alloc ptrs", K(ret));
     } else {
       for (int64_t i = 0; i < exprs.count(); ++i) {
-        new (&backup_cols_[i]) ObColResultHolder(eval_ctx.max_batch_size_, exprs.at(i));
+        new (&backup_cols_[i]) ObColResultHolder(max_row_cnt, exprs.at(i));
       }
     }
     inited_ = true;
@@ -461,36 +461,52 @@ int ObVectorsResultHolder::init(const common::ObIArray<ObExpr *> &exprs, ObEvalC
   return ret;
 }
 
+int ObVectorsResultHolder::init(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx)
+{
+  return inner_init(exprs, eval_ctx, eval_ctx.max_batch_size_);
+}
+
+int ObVectorsResultHolder::init_for_actual_rows(const common::ObIArray<ObExpr *> &exprs,
+                                                const int32_t batch_size, ObEvalCtx &eval_ctx)
+{
+  return inner_init(exprs, eval_ctx, batch_size);
+}
+
 int ObVectorsResultHolder::ObColResultHolder::save(ObIAllocator &alloc, const int64_t batch_size,
                                                    ObEvalCtx *eval_ctx)
 {
   int ret = OB_SUCCESS;
   VectorFormat format = header_.format_;
-  switch (format) {
-    case VEC_FIXED:
-      OZ(copy_fixed_base(
-          static_cast<const ObFixedLengthBase &>(*expr_->get_vector(*eval_ctx)), alloc, batch_size, *eval_ctx));
-      break;
-    case VEC_DISCRETE:
-      OZ(copy_discrete_base(
-          static_cast<const ObDiscreteBase &>(*expr_->get_vector(*eval_ctx)), alloc, batch_size, *eval_ctx));
-      break;
-    case VEC_CONTINUOUS:
-      OZ(copy_continuous_base(
-          static_cast<const ObContinuousBase &>(*expr_->get_vector(*eval_ctx)), alloc, batch_size, *eval_ctx));
-      break;
-    case VEC_UNIFORM:
-      OZ(copy_uniform_base(expr_, static_cast<const ObUniformBase &>(*expr_->get_vector(*eval_ctx)),
-          false, *eval_ctx, alloc, batch_size));
-      break;
-    case VEC_UNIFORM_CONST:
-      OZ(copy_uniform_base(expr_, static_cast<const ObUniformBase &>(*expr_->get_vector(*eval_ctx)),
-          true, *eval_ctx, alloc, batch_size));
-      break;
-    default:
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get wrong vector format", K(format), K(ret));
-      break;
+  if (OB_UNLIKELY(batch_size > max_row_cnt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid batch size", K(ret), K(max_row_cnt_), K(batch_size));
+  } else {
+    switch (format) {
+      case VEC_FIXED:
+        OZ(copy_fixed_base(
+            static_cast<const ObFixedLengthBase &>(*expr_->get_vector(*eval_ctx)), alloc, batch_size, *eval_ctx));
+        break;
+      case VEC_DISCRETE:
+        OZ(copy_discrete_base(
+            static_cast<const ObDiscreteBase &>(*expr_->get_vector(*eval_ctx)), alloc, batch_size, *eval_ctx));
+        break;
+      case VEC_CONTINUOUS:
+        OZ(copy_continuous_base(
+            static_cast<const ObContinuousBase &>(*expr_->get_vector(*eval_ctx)), alloc, batch_size, *eval_ctx));
+        break;
+      case VEC_UNIFORM:
+        OZ(copy_uniform_base(expr_, static_cast<const ObUniformBase &>(*expr_->get_vector(*eval_ctx)),
+            false, *eval_ctx, alloc, batch_size));
+        break;
+      case VEC_UNIFORM_CONST:
+        OZ(copy_uniform_base(expr_, static_cast<const ObUniformBase &>(*expr_->get_vector(*eval_ctx)),
+            true, *eval_ctx, alloc, batch_size));
+        break;
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get wrong vector format", K(format), K(ret));
+        break;
+    }
   }
   return ret;
 }

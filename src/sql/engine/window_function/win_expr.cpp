@@ -233,7 +233,7 @@ int NonAggrWinExpr::collect_part_results(WinExprEvalCtx &ctx, const int64_t row_
   }
   default: {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected format", K(ret));
+    LOG_WARN("unexpected format", K(ret), K(fmt));
   }
   }
   if (OB_FAIL(ret)) {
@@ -247,7 +247,7 @@ int NonAggrWinExpr::collect_part_results(WinExprEvalCtx &ctx, const int64_t row_
 int Ntile::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int64_t row_idx, char *res, bool &is_null)
 {
   int ret = OB_SUCCESS;
-  ParamStatus *param_status = reinterpret_cast<ParamStatus *>(ctx.extra_);
+  ParamStatus *param_status = &param_status_;
   is_null = false;
   if (OB_UNLIKELY(!param_status->calculated_)) {
     // calculated bucket number
@@ -315,15 +315,10 @@ int Ntile::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int64_t
   return ret;
 }
 
-int Ntile::generate_extra(ObIAllocator &allocator, void *&extra)
+int Ntile::generate_extra()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(extra = allocator.alloc(sizeof(ParamStatus)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("allocate memory failed", K(ret));
-  } else {
-    new(extra)ParamStatus();
-  }
+  param_status_.reset();
   return ret;
 }
 
@@ -605,20 +600,9 @@ int NthValue::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int6
   return ret;
 }
 
-int NthValue::generate_extra(ObIAllocator &allocator, void *&extra)
+int NthValue::generate_extra()
 {
   int ret = OB_SUCCESS;
-  extra = nullptr;
-  if (lib::is_mysql_mode()) {
-    void *buf = allocator.alloc(sizeof(ParamStatus));
-    if (OB_ISNULL(buf)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory failed", K(ret));
-    } else {
-      new (buf) ParamStatus();
-      extra = buf;
-    }
-  }
   last_result_is_valid_ = false;
   last_result_ = nullptr;
   last_result_capacity_ = 0;
@@ -753,13 +737,6 @@ int LeadOrLag::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int
   return ret;
 }
 
-int LeadOrLag::generate_extra(ObIAllocator &allocator, void *&extra)
-{
-  int ret = OB_SUCCESS;
-  extra = nullptr;
-  return ret;
-}
-
 int CumeDist::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int64_t row_idx,
                              char *res, bool &is_null)
 {
@@ -842,13 +819,6 @@ int CumeDist::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int6
   return ret;
 }
 
-int CumeDist::generate_extra(ObIAllocator &allocator, void *&extra)
-{
-  int ret = OB_SUCCESS;
-  extra = nullptr;
-  return ret;
-}
-
 int RowNumber::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int64_t row_idx,
                               char *res, bool &is_null)
 {
@@ -867,13 +837,6 @@ int RowNumber::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int
   } else {
     *reinterpret_cast<int64_t *>(res) = row_nmb;
   }
-  return ret;
-}
-
-int RowNumber::generate_extra(ObIAllocator &allocator, void *&extra)
-{
-  int ret = OB_SUCCESS;
-  extra = nullptr;
   return ret;
 }
 
@@ -2469,11 +2432,10 @@ int WinExprWrapper<Derived>::process_partition(WinExprEvalCtx &ctx, const int64_
         void *extra = nullptr;
         int32_t non_aggr_row_size = ctx.win_col_.non_aggr_reserved_row_size();
         bool is_null = false;
-        if (OB_FAIL(static_cast<Derived *>(this)->generate_extra(ctx.allocator_, extra))) {
+        if (OB_FAIL(static_cast<Derived *>(this)->generate_extra())) {
           LOG_WARN("generate extra data failed", K(ret));
         } else {
           MEMSET(ctx.win_col_.non_aggr_results_, 0, non_aggr_row_size * (row_end - row_start));
-          ctx.extra_ = extra;
         }
         for (int64_t row_idx = row_start; OB_SUCC(ret) && row_idx < row_end; row_idx++) {
           int64_t batch_idx = row_idx - row_start;
