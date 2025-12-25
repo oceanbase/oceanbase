@@ -7025,21 +7025,6 @@ int ObInnerTableSchema::all_virtual_core_all_table_ora_schema(ObTableSchema &tab
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("FTS_INDEX_TYPE", //column_name
-      ++column_id, //column_id
-      0, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObNumberType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      38, //column_length
-      38, //column_precision
-      0, //column_scale
-      false, //is_nullable
-      false); //is_autoincrement
-  }
-
-  if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA("TTL_FLAG", //column_name
       ++column_id, //column_id
       0, //rowkey_id

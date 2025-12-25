@@ -331,7 +331,6 @@ all_table_def = dict(
       ('micro_block_format_version', 'int', 'false', 'ObMicroBlockFormatVersionHelper::DEFAULT_VERSION'),
       ('semistruct_properties', 'longtext', 'false', ''),
       ('mview_expand_definition', 'longtext', 'false', ''),
-      ('fts_index_type', 'int', 'false', '0'),
       ('ttl_flag', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'false', '\\x01'),
       ('delta_format', 'varchar:OB_MAX_VARCHAR_LENGTH', 'false', 'flat'),
       ('skip_index_level', 'int', 'false', '0'),
