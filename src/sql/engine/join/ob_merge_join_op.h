@@ -227,7 +227,7 @@ private:
         match_groups_(match_groups), merge_join_op_(merge_join_op),
         all_exprs_(NULL), datum_store_(), backup_datums_(),
         backup_rows_cnt_(0), backup_rows_used_(0), brs_holder_(),
-        equal_param_idx_(allocator)
+        equal_param_idx_(allocator), backup_rows_bit_vec_(NULL)
     {}
     int init(const uint64_t tenant_id, bool is_left, ObOperator *child,
              const ObIArray<ObMergeJoinSpec::EqualConditionInfo> &equal_cond_infos,
@@ -241,6 +241,27 @@ private:
                              ObRADatumStore::StoredRow *&new_stored_row);
     int get_next_batch(const int64_t max_row_cnt);
     int backup_remain_rows();
+    int save(int64_t batch_size)
+    {
+      return brs_holder_.save(batch_size);
+    }
+
+    int restore()
+    {
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(brs_holder_.restore())) {
+        SQL_ENG_LOG(WARN, "failed to restore", K(ret));
+      }
+      for (int i = 0; OB_SUCC(ret) && i < all_exprs_->count(); i++) {
+        ObExpr *expr = all_exprs_->at(i);
+        if (OB_FAIL(expr->eval_batch(merge_join_op_.eval_ctx_, *(brs_.skip_),
+                                    brs_.size_))) {
+          SQL_ENG_LOG(WARN, "failed to evaluate batch", K(ret), K(expr));
+        }
+      }
+      return ret;
+    }
+
     int get_next_nonskip_row(bool &got_next_batch);
     bool iter_end() { return brs_.end_ && 0 == brs_.size_; }
     int get_list_row(int64_t idx, ObRADatumStore::StoredRow *&stored_row);
@@ -269,6 +290,9 @@ private:
       backup_rows_cnt_ = 0;
       backup_rows_used_ = 0;
       brs_holder_.reset();
+      if (OB_NOT_NULL(backup_rows_bit_vec_)) {
+        merge_join_op_.mem_context_->get_malloc_allocator().free(backup_rows_bit_vec_);
+      }
     }
     int64_t cur_idx_;
     ObBatchRows brs_;
@@ -287,6 +311,7 @@ private:
     ObBatchResultHolder brs_holder_;
 
     common::ObFixedArray<int64_t, common::ObIAllocator> equal_param_idx_;
+    ObBitVector *backup_rows_bit_vec_;
   };
 
   enum ObJoinState {
