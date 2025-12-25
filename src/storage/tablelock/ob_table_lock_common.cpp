@@ -43,14 +43,18 @@ const char *get_name(const ObTableLockPriority intype)
   return type_name;
 }
 
-const char *get_name(const ObTableLockMode intype)
+const char *get_name(const ObTableLockMode intype, const bool in_short)
 {
   const char *type_name = "U";
   switch (intype) {
-#define DEF_LOCK_MODE(n, type, name)            \
-    case n:                                     \
-      type_name = #name;                        \
-      break;
+#define DEF_LOCK_MODE(n, type, name) \
+  case n:                            \
+    if (in_short) {                  \
+      type_name = #name;             \
+    } else {                         \
+      type_name = #type;             \
+    }                                \
+    break;
 #include "ob_table_lock_def.h"
 #undef DEF_LOCK_MODE
   default:
