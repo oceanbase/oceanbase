@@ -902,6 +902,9 @@ public:
                     const uint64_t tenant_id,
                     const uint64_t user_id,
                     const sql::DependenyTableStore &dep_obj);
+  int handle_privilege_error(share::schema::ObSchemaGetterGuard &guard,
+                            const share::schema::ObSchemaObjVersion &schema_obj,
+                            int &ret);
 
   inline bool is_top_call() const { return top_call_; }
   inline uint64_t get_loc() const { return loc_; }

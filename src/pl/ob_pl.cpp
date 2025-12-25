@@ -5290,6 +5290,125 @@ int ObPLExecState::check_pl_execute_priv(ObSchemaGetterGuard &guard,
   return ret;
 }
 
+int ObPLExecState::handle_privilege_error(ObSchemaGetterGuard &guard,
+                                         const ObSchemaObjVersion &schema_obj,
+                                         int &ret)
+{
+  int tmp_ret = ret;
+  const uint64_t fetch_tenant_id = get_tenant_id_by_object_id(schema_obj.get_object_id());
+  const ObSchemaType schema_type = schema_obj.get_schema_type();
+  common::ObString object_name;
+  const bool is_anonymous = (STANDALONE_ANONYMOUS == func_.get_proc_type());
+  const uint64_t line = get_current_line();
+  const uint64_t col = get_loc() & 0x00000000ffffffff;
+
+  switch (schema_type) {
+    case TENANT_SCHEMA: {
+      const ObTenantSchema *info = nullptr;
+      if (OB_SUCCESS == guard.get_tenant_info(fetch_tenant_id, info) && info) {
+        object_name = info->get_tenant_name_str();
+      }
+      break;
+    }
+    case DATABASE_SCHEMA: {
+      const ObDatabaseSchema *info = nullptr;
+      if (OB_SUCCESS == guard.get_database_schema(fetch_tenant_id, schema_obj.get_object_id(), info) && info) {
+        object_name = info->get_database_name_str();
+      }
+      break;
+    }
+    case TABLEGROUP_SCHEMA: {
+      const ObTablegroupSchema *info = nullptr;
+      if (OB_SUCCESS == guard.get_tablegroup_schema(fetch_tenant_id, schema_obj.get_object_id(), info) && info) {
+        object_name = info->get_tablegroup_name();
+      }
+      break;
+    }
+    case TABLE_SCHEMA:
+    case VIEW_SCHEMA: {
+      const ObTableSchema *info = nullptr;
+      if (OB_SUCCESS == guard.get_table_schema(fetch_tenant_id, schema_obj.get_object_id(), info) && info) {
+        object_name = info->get_table_name_str();
+      }
+      break;
+    }
+    case USER_SCHEMA: {
+      const ObUserInfo *info = nullptr;
+      if (OB_SUCCESS == guard.get_user_info(fetch_tenant_id, schema_obj.get_object_id(), info) && info) {
+        object_name = info->get_user_name_str();
+      }
+      break;
+    }
+    case ROUTINE_SCHEMA: {
+      const ObRoutineInfo *info = nullptr;
+      if (OB_SUCCESS == guard.get_routine_info(fetch_tenant_id, schema_obj.get_object_id(), info) && info) {
+        object_name = info->get_routine_name();
+      }
+      break;
+    }
+    case PACKAGE_SCHEMA: {
+      const ObPackageInfo *info = nullptr;
+      if (OB_SUCCESS == guard.get_package_info(fetch_tenant_id, schema_obj.get_object_id(), info) && info) {
+        object_name = info->get_package_name();
+      }
+      break;
+    }
+    case SEQUENCE_SCHEMA: {
+      const ObSequenceSchema *info = nullptr;
+      if (OB_SUCCESS == guard.get_sequence_schema(fetch_tenant_id, schema_obj.get_object_id(), info) && info) {
+        object_name = info->get_sequence_name();
+      }
+      break;
+    }
+    case SYNONYM_SCHEMA: {
+      const ObSimpleSynonymSchema *info = nullptr;
+      if (OB_SUCCESS == guard.get_simple_synonym_info(fetch_tenant_id, schema_obj.get_object_id(), info) && info) {
+        object_name = info->get_synonym_name();
+      }
+      break;
+    }
+    case UDT_SCHEMA: {
+      const ObUDTTypeInfo *info = nullptr;
+      if (OB_SUCCESS == guard.get_udt_info(fetch_tenant_id, schema_obj.get_object_id(), info) && info) {
+        object_name = info->get_type_name();
+      }
+      break;
+    }
+    case TRIGGER_SCHEMA: {
+      const ObTriggerInfo *info = nullptr;
+      if (OB_SUCCESS == guard.get_trigger_info(fetch_tenant_id, schema_obj.get_object_id(), info) && info) {
+        object_name = info->get_trigger_name();
+      }
+      break;
+    }
+    default:
+      object_name.assign_ptr("privilege error", strlen("privilege error"));
+      break;
+  }
+
+  LOG_USER_ERROR(OB_WRONG_COLUMN_NAME, object_name.length(), object_name.ptr());
+
+  if (OB_NOT_NULL(ctx_.exec_ctx_->get_my_session())) {
+    ret = OB_SUCCESS;
+    ObSqlString &err_msg = ctx_.exec_ctx_->get_my_session()->get_pl_exact_err_msg();
+    err_msg.reset();
+    OZ (err_msg.append_fmt("\nat "));
+    if (is_anonymous) {
+      OZ (err_msg.append_fmt("anonymous block ,"));
+    } else {
+      const ObString &func_name = func_.get_function_name();
+      OZ (err_msg.append_fmt("%.*s", func_name.length(), func_name.ptr()));
+    }
+    OZ (err_msg.append_fmt(" line : %lu, col : %lu", line, col));
+    if (OB_SUCC(ret)) {
+      ret = tmp_ret;
+    }
+  } else {
+    ret = tmp_ret;
+  }
+  return ret;
+}
+
 int ObPLExecState::check_pl_priv(
     ObSchemaGetterGuard &guard,
     const uint64_t tenant_id,
@@ -5301,6 +5420,9 @@ int ObPLExecState::check_pl_priv(
     const ObSchemaObjVersion &schema_obj = dep_obj.at(i);
     OZ(check_pl_execute_priv(guard, tenant_id, user_id, schema_obj,
                              ctx_.exec_ctx_->get_my_session()->get_enable_role_array()));
+    if (OB_FAIL(ret) && OB_WRONG_COLUMN_NAME == ret && top_call_) {
+      handle_privilege_error(guard, schema_obj, ret);
+    }
   }
     // check func self priv
   return ret;
