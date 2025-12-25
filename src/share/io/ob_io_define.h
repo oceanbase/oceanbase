@@ -545,7 +545,7 @@ public:
   int transform_group_config_index_to_usage_index(const ObIOGroupKey &key, uint64_t &usage_index);
   ObThreadCond &get_cond() { return cond_; }
 
-  TO_STRING_KV(K(is_inited_), K(is_finished_), K(is_canceled_), K(has_estimated_), K(complete_size_), K(offset_), K(size_),
+  TO_STRING_KV(KP(this), K(is_inited_), K(is_finished_), K(is_canceled_), K(has_estimated_), K(complete_size_), K(offset_), K(size_),
                K(timeout_us_), K(result_ref_cnt_), K(out_ref_cnt_), K(flag_), K(ret_code_), K(tenant_id_), K(tenant_io_mgr_),
                KP(user_data_buf_), KP(buf_), KP(io_callback_), K_(time_log));
   DISALLOW_COPY_AND_ASSIGN(ObIOResult);
@@ -628,8 +628,8 @@ public:
 
   int64_t get_remained_io_timeout_us();
 
-  TO_STRING_KV(K(is_inited_), K(tenant_id_), KP(control_block_), K(ref_cnt_), KP(raw_buf_), K(fd_), K(is_limit_net_bandwidth_req()),
-               K(trace_id_), K(retry_count_), K(tenant_io_mgr_), K_(storage_accesser),
+  TO_STRING_KV(KP(this), KP(io_result_), K(is_inited_), K(tenant_id_), KP(control_block_), K(ref_cnt_), KP(raw_buf_), K(fd_), K(is_limit_net_bandwidth_req()),
+               K(align_size_), K(align_offset_), K(trace_id_), K(retry_count_), K(tenant_io_mgr_), K_(storage_accesser),
                KPC(io_result_), K_(part_id));
 private:
   friend class ObTenantIOSchedulerV2;
