@@ -280,7 +280,7 @@ struct ObDoArithFixedConstVectorEval
       }
       res_vec->get_nulls()->unset_all(bound.start(), bound.end());
       if (expr.may_not_need_raw_check_ && ob_is_int_less_than_64(expr.args_[0]->datum_meta_.type_)
-          && INT_MIN < *right_val < INT_MAX) {
+          && (INT_MIN < *right_val && *right_val < INT_MAX)) {
         // do nothing
       } else {
         for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
@@ -326,7 +326,7 @@ struct ObDoArithConstFixedVectorEval
         ArithOp::raw_op(res_arr[idx], *left_val, right_arr[idx], args...);
       }
       res_vec->get_nulls()->unset_all(bound.start(), bound.end());
-      if (expr.may_not_need_raw_check_ && INT_MIN < *left_val < INT_MAX
+      if (expr.may_not_need_raw_check_ && (INT_MIN < *left_val && *left_val < INT_MAX)
           && ob_is_int_less_than_64(expr.args_[1]->datum_meta_.type_)) {
       } else {
         // do nothing
