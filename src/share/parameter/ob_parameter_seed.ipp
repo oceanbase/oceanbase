@@ -3221,11 +3221,9 @@ DEF_BOOL(enable_mv_binlog_minimal_mode, OB_TENANT_PARAMETER, "False",
 DEF_INT(_ivf_max_scan_vectors, OB_TENANT_PARAMETER, "100000",
         "The upper limit of ivf iter-filter search nums. Range: [0,)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
 DEF_INT(_max_access_entries_for_external_table_partition, OB_TENANT_PARAMETER, "1000000", "[1,)",
         "max number of entries accessed in a single partition for external table, including directories and files.",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
 DEF_TIME(_tablet_replica_info_cache_expire_time, OB_CLUSTER_PARAMETER, "10m", "[0, 1d]",
         "the expire time for tablet replica info cache, from 0 to 1day, "
         "with default 10minutes. Range: [0, 1d]",
@@ -3233,7 +3231,6 @@ DEF_TIME(_tablet_replica_info_cache_expire_time, OB_CLUSTER_PARAMETER, "10m", "[
 DEF_INT(_mv_adaptive_complete_refresh_threshold, OB_TENANT_PARAMETER, "0", "[0, 100]",
         "adaptive complete refresh percentage threshold, set to 0 to disable adaptive complete refresh",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
 // for upgraded tenant, default _append_update_global_indexes_for_dynamic_partition will be OFF
 // for new created tenant, default _append_update_global_indexes_for_dynamic_partition will be AUTO
 DEF_STR_WITH_CHECKER(_append_update_global_indexes_for_dynamic_partition, OB_TENANT_PARAMETER, "OFF",
@@ -3248,7 +3245,6 @@ DEF_CAP(_replay_memory_limit, OB_TENANT_PARAMETER, "512M", "[1M, 1024000000M]",
 DEF_CAP(_replay_pending_log_memory_limit, OB_TENANT_PARAMETER, "128M", "[1M, 1024000000M]",
         "the size of the memory reserved for replay pending log. Range: [1M, 1024000000M]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
 DEF_BOOL(_enable_randomize_redo_logging_slot, OB_CLUSTER_PARAMETER, "False",
         "specifies whether enable randomize redo logging slot when parallel logging is enabled",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -3257,3 +3253,9 @@ DEF_STR_WITH_CHECKER(system_protected_tenant_parameters, OB_CLUSTER_PARAMETER, "
   "tenant parameters that are not allowed to be modified by regular users, "
   "format: single parameter name or comma-separated parameter names",
   ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_sslog_table_meta_cache_usage_threshold, OB_TENANT_PARAMETER, "0", "[0,)",
+        "Controls the write throttling mechanism based on the percentage of the sslog table occupying the meta tenant disk. "
+        "If set to 0, write throttling caused by sslog table size is disabled; Otherwise, if the size of sslog table is "
+        "larger than (meta tenant disk limit * threshold), write throttling is triggered to slow down incoming write requests."
+        "Range: [0, )",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

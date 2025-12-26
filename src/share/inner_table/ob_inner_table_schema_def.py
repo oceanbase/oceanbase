@@ -17216,7 +17216,8 @@ def_table_schema(
     ('is_collected', 'bool'),
     ('gc_end_scn', 'int'),
     ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
-    ('svr_port', 'int')
+    ('svr_port', 'int'),
+    ('safe_recycle_scn', 'int')
   ],
 )
 
