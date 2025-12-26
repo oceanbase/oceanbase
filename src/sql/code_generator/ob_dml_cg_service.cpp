@@ -3211,29 +3211,30 @@ int ObDmlCgService::is_disable_trigger(ObLogPlan *log_plan,
                                        bool &is_disabled)
 {
   const ObQueryCtx *query_ctx = nullptr;
-  const ObGlobalHint *global_hint = nullptr;
-  const TriggerHint* disable_trigger_hint = nullptr;
   int ret = OB_SUCCESS;
   // default not disabled
   is_disabled = false;
   if (OB_ISNULL(log_plan) ||
       OB_ISNULL(query_ctx = log_plan->get_optimizer_context().get_query_ctx()) ||
-      OB_ISNULL(global_hint = &(query_ctx->get_global_hint())) ||
-      OB_ISNULL(disable_trigger_hint = &(global_hint->trigger_hint_)) ||
-      OB_ISNULL(trigger_name)) {
+      trigger_name.empty()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected status", K(ret));
-  } else if (disable_trigger_hint->get_disable_all()) {
+  }
+  if (OB_SUCC(ret)) {
+    const ObGlobalHint &global_hint = query_ctx->get_global_hint();
+    const TriggerHint &disable_trigger_hint = global_hint.trigger_hint_;
+    if (disable_trigger_hint.get_disable_all()) {
       is_disabled = true;
-  } else if (disable_trigger_hint->trigger_hints_.empty()) {
-      // do nothing
-  } else {
-      const ObIArray<ObString> &hint_triggers = disable_trigger_hint->get_trigger_hints();
-      for (int64_t i = 0; OB_SUCC(ret) && !is_disabled && i < hint_triggers.count(); ++i) {
-        if (trigger_name.case_compare(hint_triggers.at(i)) == 0) {
-          is_disabled = true;
+    } else if (disable_trigger_hint.trigger_hints_.empty()) {
+        // do nothing
+    } else {
+        const ObIArray<ObString> &hint_triggers = disable_trigger_hint.get_trigger_hints();
+        for (int64_t i = 0; OB_SUCC(ret) && !is_disabled && i < hint_triggers.count(); ++i) {
+          if (trigger_name.case_compare(hint_triggers.at(i)) == 0) {
+            is_disabled = true;
+          }
         }
-      }
+    }
   }
   return ret;
 }
@@ -3292,7 +3293,6 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
       } else {
         if (OB_FAIL(is_disable_trigger(log_plan, trigger_info->get_trigger_name(), is_disabled))) {
           LOG_WARN("failed to check is disable trigger", K(ret));
-          ret = OB_SUCCESS;
         }
         // if disable trigger, use the previous plan cache, whether trigger is enable ???
         need_fire = trigger_info->has_event(dml_event) && trigger_info->is_enable();
