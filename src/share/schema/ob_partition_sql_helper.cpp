@@ -473,7 +473,7 @@ int ObAddPartInfoHelper::add_partition_info()
 {
   int ret = OB_SUCCESS;
   const bool is_only_history = false;
-  const bool is_include_hidden = true;
+  const bool is_include_hidden = false;
   if (OB_ISNULL(table_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table is null", K(ret));
