@@ -114,6 +114,9 @@ private:
       const share::schema::ObRefreshSchemaInfo &new_schema_info,
       ObIArray<uint64_t> &tenant_ids,
       bool &skip_refresh);
+  int construct_tenants_to_refresh_schema_from_root_service_(
+      ObIArray<uint64_t> &tenant_ids,
+      bool &skip_refresh);
   int process_release_task();
   int process_async_refresh_tasks(const common::ObIArray<ObServerSchemaTask> &tasks);
 

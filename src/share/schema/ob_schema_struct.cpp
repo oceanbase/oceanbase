@@ -815,6 +815,12 @@ ObDDLSequenceID::CompareResult ObDDLSequenceID::compare_to_other_id(const ObDDLS
   return result;
 }
 
+bool ObDDLSequenceID::is_same_epoch(const ObDDLSequenceID &l, const ObDDLSequenceID &r)
+{
+  // only consider new mode
+  return l.enable_new_seq_id_ && r.enable_new_seq_id_ && l.get_sys_leader_epoch() == r.get_sys_leader_epoch();
+}
+
 OB_SERIALIZE_MEMBER(ObDDLSequenceID, seq_id_, sys_leader_epoch_, enable_new_seq_id_);
 
 ObRefreshSchemaInfo::ObRefreshSchemaInfo(const ObRefreshSchemaInfo &other)

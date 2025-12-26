@@ -791,6 +791,8 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_AI_MODEL, ObRpcDropAiModelP, drop_ai_
 // sensitive rule
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_SENSITIVE_RULE_DDL, ObRpcHandleSensitiveRuleDDLP, handle_sensitive_rule_ddl(arg_));
 
+DEFINE_RS_RPC_PROCESSOR(obrpc::OB_GET_REFRESHED_SCHEMA_VERSIONS, ObRpcGetRefreshedSchemaVersionsP, get_refreshed_schema_versions(result_));
+
 #undef DEFINE_RS_RPC_PROCESSOR_
 #undef DEFINE_RS_RPC_PROCESSOR
 #undef DEFINE_LIMITED_RS_RPC_PROCESSOR

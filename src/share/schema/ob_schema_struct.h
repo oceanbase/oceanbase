@@ -687,6 +687,8 @@ public:
   bool enable_new_seq_id() const { return enable_new_seq_id_; }
 
   TO_STRING_KV(K_(seq_id), K_(sys_leader_epoch), K_(enable_new_seq_id));
+public:
+  static bool is_same_epoch(const ObDDLSequenceID &l, const ObDDLSequenceID &r);
 private:
   uint64_t seq_id_;
   int64_t sys_leader_epoch_;

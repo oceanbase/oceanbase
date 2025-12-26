@@ -14765,5 +14765,7 @@ OB_SERIALIZE_MEMBER((ObSensitiveRuleDDLArg, ObDDLArg),
                      schema_,
                      user_id_);
 
+OB_SERIALIZE_MEMBER(ObGetRefreshedSchemaVersionsRes, refreshed_schema_versions_);
+
 }//end namespace obrpc
 }//end namespace oceanbase

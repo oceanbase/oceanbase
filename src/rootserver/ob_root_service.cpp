@@ -12417,5 +12417,34 @@ int ObRootService::handle_sensitive_rule_ddl(const obrpc::ObSensitiveRuleDDLArg 
   return ret;
 }
 
+int ObRootService::get_refreshed_schema_versions(obrpc::ObGetRefreshedSchemaVersionsRes &res)
+{
+  int ret = OB_SUCCESS;
+  res.refreshed_schema_versions_.reset();
+  ObArray<uint64_t> tenant_ids;
+
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_ISNULL(schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service_ is null", KR(ret));
+  } else if (OB_FAIL(schema_service_->get_tenant_ids(tenant_ids))) {
+    LOG_WARN("get tenant ids failed", KR(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
+      const uint64_t tenant_id = tenant_ids.at(i);
+      int64_t schema_version = OB_INVALID_VERSION;
+      if (OB_FAIL(schema_service_->get_tenant_refreshed_schema_version(tenant_id, schema_version))) {
+        LOG_WARN("get schema version fail", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(res.refreshed_schema_versions_.push_back(std::make_pair(tenant_id, schema_version)))) {
+        LOG_WARN("push_back fail", KR(ret), K(tenant_id), K(schema_version));
+      }
+    }
+  }
+  LOG_INFO("get_refreshed_schema_versions done", KR(ret), K(res));
+  return ret;
+}
+
 } // end namespace rootserver
 } // end namespace oceanbase

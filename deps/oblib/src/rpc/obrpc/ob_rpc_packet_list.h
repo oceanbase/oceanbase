@@ -1408,6 +1408,7 @@ PCODE_DEF(OB_PUSH_SS_GC_LAST_SUCC_SCN, 0x1686)
 // for drop database and purge database
 // PCODE_DEF(OB_NON_ATOMIC_DROP_TABLE_IN_DATABASE, 0x1687)
 
+PCODE_DEF(OB_GET_REFRESHED_SCHEMA_VERSIONS, 0x1688)
 //**** 注意：在此行之前增加新的RPC ID ******
 //
 //占位须知：

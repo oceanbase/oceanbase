@@ -14885,6 +14885,21 @@ public:
   uint64_t user_id_; // grant privilege when create
 };
 
+struct ObGetRefreshedSchemaVersionsRes
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObGetRefreshedSchemaVersionsRes()
+    : refreshed_schema_versions_()
+  {}
+  ~ObGetRefreshedSchemaVersionsRes() = default;
+  TO_STRING_KV(K_(refreshed_schema_versions));
+public:
+  common::ObSEArray<std::pair<uint64_t, int64_t>, 64> refreshed_schema_versions_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObGetRefreshedSchemaVersionsRes);
+};
+
 }//end namespace obrpc
 }//end namespace oceanbase
 #endif
