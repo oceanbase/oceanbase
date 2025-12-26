@@ -9,11 +9,11 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#include "storage/blocksstable/ob_shared_macro_block_manager.h"
-#include "storage/ddl/ob_cg_block_tmp_file.h"
-
 #ifndef OB_STORAGE_BLOCKSSTABLE_OB_MACRO_BLOCK_FLUSHER_H_
 #define OB_STORAGE_BLOCKSSTABLE_OB_MACRO_BLOCK_FLUSHER_H_
+
+#include "storage/blocksstable/ob_shared_macro_block_manager.h"
+#include "storage/ddl/ob_cg_block_tmp_file.h"
 
 namespace oceanbase
 {

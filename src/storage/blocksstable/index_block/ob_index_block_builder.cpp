@@ -312,11 +312,11 @@ bool ObSSTableMergeRes::is_valid_small_sstable_params() const
   bool ret = true;
   const bool is_empty_sstable = 0 == data_blocks_cnt_;
   if (is_small_sstable_) {
-    ret = nested_offset_ > 0 && DEFAULT_MACRO_BLOCK_SIZE != nested_size_;
+    ret = nested_offset_ > 0 && OB_DEFAULT_MACRO_BLOCK_SIZE != nested_size_ && nested_size_ > 0;
   } else if (is_empty_sstable) {
     ret = 0 == nested_offset_ && 0 == nested_size_;
   } else {
-    ret = 0 == nested_offset_ && DEFAULT_MACRO_BLOCK_SIZE == nested_size_;
+    ret = 0 == nested_offset_ && OB_DEFAULT_MACRO_BLOCK_SIZE == nested_size_;
   }
   return ret;
 }
@@ -351,6 +351,7 @@ int ObSSTableMergeRes::assign(const ObSSTableMergeRes &src)
     is_small_sstable_ = src.is_small_sstable_;
     root_row_store_type_ = src.root_row_store_type_;
     root_macro_seq_ = src.root_macro_seq_;
+    is_small_sstable_ = src.is_small_sstable_;
     MEMCPY(encrypt_key_, src.encrypt_key_, sizeof(encrypt_key_));
 
     if (OB_FAIL(data_block_ids_.reserve(src.data_block_ids_.count()))) {
@@ -1735,7 +1736,8 @@ int ObSSTableIndexBuilder::close_with_macro_seq_inner(
     LOG_INFO("succeed to close sstable index builder", K(res), KP(this));
     if (1 == res.data_block_ids_.count()) {
       MacroBlockId block_id = res.data_block_ids_.at(0);
-      LOG_INFO("sstable has single data block", K(block_id));
+      FLOG_INFO("sstable has single data block", K(block_id), K(res.is_small_sstable_), K(res.nested_offset_), K(res.nested_size_),
+                                                 K(data_store_desc_.get_desc().get_tablet_id()));
     }
   } else {
     int64_t data_blocks_cnt = 0;

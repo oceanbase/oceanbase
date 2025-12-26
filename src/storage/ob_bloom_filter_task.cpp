@@ -169,7 +169,7 @@ int ObBloomFilterBuildTask::build_bloom_filter()
         LOG_WARN("Fail to read macro block", K(ret), K(read_info));
       } else if (OB_FAIL(macro_bare_iter->open(
           read_info.buf_, macro_handle.get_data_size(), true /*check*/))) {
-        LOG_WARN("Fail to open bare macro block iterator", K(ret), K(macro_handle));
+        LOG_WARN("Fail to open bare macro block iterator", K(ret), K(macro_handle), K(table_id_));
       } else if (OB_FAIL(macro_bare_iter->get_macro_block_header(macro_header))) {
         LOG_WARN("Fail to get macro block header", K(ret));
       } else if (OB_UNLIKELY(!macro_header.is_valid() || macro_header.is_normal_cg_)) {

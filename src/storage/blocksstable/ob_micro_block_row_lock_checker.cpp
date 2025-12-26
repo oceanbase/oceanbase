@@ -46,6 +46,8 @@ void ObMicroBlockRowLockChecker::inc_empty_read(ObSSTableReadHandle &read_handle
                                                        sstable_->get_key(),
                                                        macro_id_,
                                                        read_handle.get_rowkey_datum_cnt(),
+                                                       sstable_->get_macro_offset(),
+                                                       sstable_->get_macro_read_size(),
                                                        &read_handle);
   }
 }
@@ -286,6 +288,8 @@ void ObMicroBlockRowLockMultiChecker::inc_empty_read(ObSSTableReadHandle &read_h
                                                        sstable_->get_key(),
                                                        macro_id_,
                                                        rows_info_->get_datum_cnt(),
+                                                       sstable_->get_macro_offset(),
+                                                       sstable_->get_macro_read_size(),
                                                        &read_handle,
                                                        empty_read_cnt_);
   }

@@ -820,16 +820,19 @@ int ObBloomFilterCache::inc_empty_read(
     const storage::ObITable::TableKey &sstable_key,
     const MacroBlockId &macro_id,
     const int64_t empty_read_prefix,
+    const int64_t nested_offset,
+    const int64_t nested_size,
     const ObSSTableReadHandle * read_handle,
     const int64_t empty_read_cnt)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || !macro_id.is_valid()
+  if (OB_UNLIKELY((nested_offset > 0 || nested_size != OB_DEFAULT_MACRO_BLOCK_SIZE)
+                  || OB_INVALID_TENANT_ID == tenant_id || !macro_id.is_valid()
                   || (table_id == OB_INVALID_ID || table_id < 0)
                   || !(empty_read_prefix > 0
                        && empty_read_prefix <= OB_USER_MAX_ROWKEY_COLUMN_NUMBER /* max rowkey column count */))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(ret), K(tenant_id), K(macro_id), K(table_id), K(empty_read_prefix));
+    LOG_WARN("Invalid argument", K(ret), K(tenant_id), K(macro_id), K(table_id), K(empty_read_prefix), K(nested_offset), K(nested_size));
   } else if (0 == bf_cache_miss_count_threshold_) {
     // bf cache is disabled, do nothing
   } else {

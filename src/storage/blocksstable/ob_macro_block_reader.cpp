@@ -26,8 +26,6 @@ using namespace compaction;
 namespace blocksstable
 {
 
-class ObIndexBlockRowParser;
-
 ObMacroBlockReader::ObMacroBlockReader(const uint64_t tenant_id)
     :compressor_(NULL),
      uncomp_buf_(NULL),

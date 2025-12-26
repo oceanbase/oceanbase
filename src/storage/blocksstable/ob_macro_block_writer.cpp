@@ -2444,11 +2444,11 @@ int ObMacroBlockWriter::check_write_complete(const MacroBlockId &macro_block_id)
       read_handle.get_data_size(),
       CHECK_LEVEL_PHYSICAL))) {
     STORAGE_LOG(WARN, "fail to verity macro block", K(ret), K(macro_block_id));
-  } else if (OB_FAIL(ObSSTableMacroBlockChecker::check_macro_block(
+  } else if (OB_FAIL(ObSSTableMacroBlockChecker::check_data_macro_block_rows_and_index(
       read_handle.get_buffer(),
       read_handle.get_data_size(),
       CHECK_LEVEL_PHYSICAL))) {
-    STORAGE_LOG(WARN, "fail to check macro block", K(ret), KPC(data_store_desc_), K(macro_block_id));
+    STORAGE_LOG(WARN, "fail to check data macro block rows and index", K(ret), KPC(data_store_desc_), K(macro_block_id));
   } else {
     STORAGE_LOG(INFO, "succeed to check write complete", K(ret), KPC(data_store_desc_), K(macro_block_id));
   }
