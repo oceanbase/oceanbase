@@ -1604,7 +1604,9 @@ int ObResolverUtils::check_anonymous_associative_array(ObIArray<ObRoutineMatchIn
     ObSEArray<int, 16> assoc_array_args;
     for (int64_t i = 0; OB_SUCC(ret) && i < match_infos.at(0).match_info_.count(); ++i) {
       for (int64_t j = 0; OB_SUCC(ret) && j < match_infos.count(); ++j) {
-        if (match_infos.at(j).is_anonymous_associative_array(i)) {
+        // Check bounds: routines with default params may have different parameter counts
+        if (i < match_infos.at(j).match_info_.count()
+            && match_infos.at(j).is_anonymous_associative_array(i)) {
           OZ (assoc_array_args.push_back(i));
           break;
         }
@@ -1613,7 +1615,9 @@ int ObResolverUtils::check_anonymous_associative_array(ObIArray<ObRoutineMatchIn
     for (int64_t i = 0; OB_SUCC(ret) && i < match_infos.count(); ++i) {
       bool has_assoc_array = true;
       for (int64_t j = 0; OB_SUCC(ret) && j < assoc_array_args.count(); ++j) {
-        if (!match_infos.at(i).is_anonymous_associative_array(assoc_array_args.at(j))) {
+        // Check bounds: routines with default params may have different parameter counts
+        if (assoc_array_args.at(j) >= match_infos.at(i).match_info_.count()
+            || !match_infos.at(i).is_anonymous_associative_array(assoc_array_args.at(j))) {
           OX (has_assoc_array = false);
           break;
         }
