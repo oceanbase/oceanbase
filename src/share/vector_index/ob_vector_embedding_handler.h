@@ -151,6 +151,12 @@ public:
   }
 };
 
+enum class ObEmbeddingTasSourceType
+{
+  INDEX_PIPELINE = 0,
+  ASYNC_INDEX = 1,
+};
+
 class ObEmbeddingTaskHandler;
 
 // Constants for field lengths
@@ -169,7 +175,10 @@ class ObEmbeddingTask
           int64_t dimension,
           int64_t http_timeout_us,
           int64_t http_max_retries,
-          storage::ObEmbeddingIOCallbackHandle *cb_handle = nullptr);
+          int64_t source_task_id,
+          ObEmbeddingTasSourceType source_task_type,
+          storage::ObEmbeddingIOCallbackHandle *cb_handle = nullptr,
+          bool always_retry = false);
   template <typename ThreadPoolType>
   int do_work(ThreadPoolType *thread_pool);
   int64_t get_task_id() const { return task_id_; }
@@ -178,17 +187,30 @@ class ObEmbeddingTask
 
   TO_STRING_KV(K_(is_inited),
                 K_(task_id),
+                K_(phase),
                 K_(model_url),
                 K_(model_name),
-                K_(user_key),
                 K(input_chunks_.count()),
                 K(output_vectors_.count()),
                 K_(dimension),
                 K_(batch_size),
+                K_(current_batch_idx),
+                K_(http_total_retry_count),
+                K_(http_retry_count),
+                K_(http_max_retry_count),
+                K_(http_retry_start_time_us),
+                K_(http_last_retry_time_us),
                 K_(processed_chunks),
                 K_(total_chunks),
                 K_(process_callback_offset),
-                K_(col_type));
+                K_(col_type),
+                K_(current_input_token_limit),
+                K_(need_cancel),
+                K_(source_task_id),
+                K_(source_task_type),
+                K_(always_retry),
+                K_(next_handle_task_time_us),
+                K_(internal_error_code));
   bool is_completed();
   void retain_if_managed();
   void release_if_managed();
@@ -196,12 +218,25 @@ class ObEmbeddingTask
   // 公共方法用于外部设置任务失败
   int mark_task_failed(int error_code);
   int maybe_callback();
-  int wait_for_completion();
+  // Wait for task completion with periodic check interval
+  // @param check_interval_us: the interval to wait before returning, must be > 0
+  // @return:
+  //   - OB_INVALID_ARGUMENT: if check_interval_us <= 0
+  //   - OB_NOT_INIT: if task is not initialized
+  //   - OB_SUCCESS: if task completed (callback_done_ is true)
+  //   - OB_TIMEOUT: if task has exceeded wait_for_completion_timeout_us_ (real timeout)
+  //   - OB_EAGAIN: if wait timed out but task not yet exceeded total timeout,
+  //                caller should check cancel status and retry
+  // Usage: call in a loop, check for cancel between calls, handle OB_TIMEOUT as task failure
+  int wait_for_completion(int64_t check_interval_us);
   int wake_up();
   void disable_callback();
   void set_callback_done();
   bool need_callback() { return cb_handle_ != nullptr ? true : false; };
-
+  void set_need_cancel() { ATOMIC_STORE(&need_cancel_, true); }
+  bool need_cancel() const { return ATOMIC_LOAD(&need_cancel_); }
+  common::ObCurTraceId::TraceId get_trace_id() const { return trace_id_; }
+  void set_always_retry(bool always_retry) { always_retry_ = always_retry; }
 public:
   static const ObString MODEL_URL_NAME;
   static const ObString MODEL_NAME_NAME;
@@ -213,28 +248,35 @@ public:
   static const ObString USER_KEY_NAME;
   static const ObString INPUT_NAME;
   static const ObString DIMENSIONS_NAME;
+  static const ObString REQUEST_TOO_LARGE_ERROR_MSG;
 
   static const int64_t HTTP_REQUEST_TIMEOUT; // 20 seconds
 
   // Reschedule related constants
   static const int64_t MAX_RESCHEDULE_RETRY_CNT;
   static const int64_t RESCHEDULE_RETRY_INTERVAL_US;
+  static const int64_t MAX_NEXT_HANDLE_INTERVAL_US;
 
   // HTTP retry related constants
   static const int64_t MAX_HTTP_RETRY_CNT;
   static const int64_t HTTP_RETRY_BASE_INTERVAL_US;
   static const int64_t HTTP_RETRY_MAX_INTERVAL_US;
   static const int64_t HTTP_RETRY_MULTIPLIER;
+  static const int64_t ALWAYS_RETRY_MIN_INTERVAL_US;
+  static const int64_t MIN_EMBEDDING_MODEL_RPM;
+  static const int64_t EMBEDDING_MODEL_WAIT_RATIO;
 
   // Callback related constants
   static const int64_t CALLBACK_BATCH_SIZE;
+  static const int64_t MAX_INPUT_TOKEN; // Default max token count for each input: 512
 
 private:
+  void init_members();  // Common initialization for all constructors
   void reset();
   bool is_finished() const;  // Internal use only - no lock needed
-  void set_stop();
+  void set_stop(int ret_code);
   int set_phase(ObEmbeddingTaskPhase new_phase);
-  int complete_task(ObEmbeddingTaskPhase new_phase, int result_code, bool finished = true);
+  int complete_task(int result_code, bool finished = true);
   int start_async_work();
   int check_async_progress();
 
@@ -254,14 +296,24 @@ private:
   int parse_embedding_response(const char *response_data, size_t response_size);
 
   // Helper methods for retry logic
-  bool should_retry_http_request(int64_t http_error_code) const;
+  bool should_retry_http_request(int64_t http_error_code, const ObString &http_error_msg) const;
   bool is_batch_size_related_error(int64_t http_error_code) const;
   int64_t calculate_retry_interval() const;
   int adjust_batch_size_for_retry();
+  int adjust_input_token_limit_for_retry();
   void reset_retry_state();
   int map_http_error_to_internal_error(int64_t http_error_code) const;
   void try_increase_batch_size();
   int init_curl_handler(const ObString &model_url, const ObString &user_key, const int64_t http_timeout_us);
+  bool is_request_too_large(int64_t http_error_code, const ObString &content) const;
+  int truncate_text_by_token_count(ObString &text, const ObCollationType cs_type, const int64_t max_token_count) const;
+  bool can_retry_request() const { return http_retry_count_ < http_max_retry_count_; }
+  bool is_ready_to_handle() const; // Check if current time exceeds next_handle_task_time_us_
+  int finish_task();
+  int try_rescheule_task();
+  int calc_max_wait_completion_time_us(int64_t http_timeout_us, int64_t http_max_retry_count,
+                                       int64_t batch_size, int64_t input_chunks_count,
+                                       int64_t &max_wait_completion_time_us) const;
 
   struct HttpResponseData {
     HttpResponseData(ObIAllocator &allocator) : data(nullptr), size(0), allocator(allocator) {}
@@ -363,12 +415,17 @@ private:
   int64_t wait_for_completion_timeout_us_; // For controlling the maximum timeout of waiting for completion
 
   bool need_retry_flag_;
+  bool always_retry_; // If true, task can retry even after exceeding max retry count, but must wait at least 3 minutes
+  int64_t last_exceeded_retry_time_us_; // Time when retry count was exceeded
 
   // Batch size adjustment for retry
   uint32_t original_batch_size_;
   bool batch_size_adjusted_;
   uint32_t current_batch_size_;
   uint32_t successful_requests_count_;
+
+  // Input token limit adjustment for retry (when request too large)
+  int64_t current_input_token_limit_;
 
   ObThreadCond task_cond_;
   bool callback_done_;
@@ -377,7 +434,12 @@ private:
   // ref_cnt_ is only used to track the reference count of the post create embedding task
   int64_t ref_cnt_;
   ObCollationType col_type_;
-
+  bool need_cancel_;
+  common::ObCurTraceId::TraceId trace_id_;
+  int64_t source_task_id_;
+  ObEmbeddingTasSourceType source_task_type_;
+  int64_t next_handle_task_time_us_;
+  ObEmbeddingTaskHandler *thread_pool_;
   private:
     DISALLOW_COPY_AND_ASSIGN(ObEmbeddingTask);
 };

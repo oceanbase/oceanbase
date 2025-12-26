@@ -1817,7 +1817,7 @@ int ObHNSWEmbeddingOperator::init(const ObTabletID &tablet_id)
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc ObEmbeddingTaskMgr", K(ret));
       } else {
-        embedmgr_ = new (buf) ObEmbeddingTaskMgr();
+        embedmgr_ = new (buf) ObEmbeddingTaskMgr(*this);
       }
     }
 
