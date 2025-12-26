@@ -74,11 +74,7 @@ int sqlclient::ObDblinkErrorTrans::external_errno_to_ob_errno(bool is_oracle_err
       LOG_WARN("allocate memory failed", K(ret));
     } else if (external_errno >= 2000 && // google "Client Error Message Reference"
         external_errno <= 2075 && // you will known errno in [2000, 2075] is client error at dev.mysql.com
-        (!is_oracle_err ||
-        (is_oracle_err &&
-        (OB_NOT_NULL(external_errmsg) && 0 != STRLEN(external_errmsg)) &&
-        0 != std::memcmp(oracle_msg_prefix, external_errmsg,
-        std::min(STRLEN(oracle_msg_prefix), STRLEN(external_errmsg)))))) {
+        !lib::is_oracle_mode()) {
       ob_errno = external_errno; // do not map, show user client errno directly.
     } else if (is_oracle_err
                && -external_errno >= OB_MIN_RAISE_APPLICATION_ERROR
