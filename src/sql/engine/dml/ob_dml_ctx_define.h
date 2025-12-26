@@ -325,7 +325,8 @@ public:
       uint64_t is_ref_new_row_ : 1;
       uint64_t is_ref_old_rowid_ : 1;
       uint64_t is_ref_new_rowid_ : 1;
-      uint64_t reserved_: 60;
+      uint64_t is_prune_columns_ : 1;
+      uint64_t reserved_: 59;
     };
   };
 };
