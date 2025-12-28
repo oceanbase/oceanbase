@@ -34,6 +34,7 @@ static const char *migration_op_type_strs[] = {
     "RESTORE_STANDBY_LS_OP",
     "REBUILD_TABLET_OP",
     "REPLACE_LS_OP",
+    "RESTORE_LS_OP"
 };
 
 const char *ObMigrationOpType::get_str(const TYPE &type)

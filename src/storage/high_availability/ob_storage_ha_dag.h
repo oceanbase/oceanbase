@@ -66,6 +66,9 @@ public:
     REBUILD_TABLET = 7,
     SS_LS_MIGRATION = 8,
     SS_TRANSFER_BACKFILL_TX = 9,
+    SS_MACRO_COPY = 10,
+    SS_MACRO_DELETE = 11,
+    SS_LS_RESTORE = 12,
     MAX
   };
 

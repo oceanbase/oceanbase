@@ -17985,6 +17985,10 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15539', all_def_ke
 # 15541: __all_sync_standby_status
 # 15542: __all_virtual_tablet_window_loop_info
 
+# 15543: __all_virtual_macro_block_copy_task
+# 15544: __all_virtual_macro_block_copy_task_progress
+# 15545: __all_virtual_macro_block_copy_task_history
+
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
 # - 示例：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
