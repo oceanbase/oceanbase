@@ -28,6 +28,7 @@
 #include "sql/engine/expr/ob_expr_res_type_map.h"
 
 #include "ob_log_utils.h"                           // _M_
+#include "sql/engine/expr/ob_expr_lob_utils.h"      // ObTextStringHelper
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -171,7 +172,10 @@ int ObObj2strHelper::obj2str(const uint64_t tenant_id,
           K(obj), K(obj_type), K(str));
     }
   } else if (ObRoaringBitmapType == obj_type) {
-    if (OB_FAIL(ObRbUtils::binary_format_convert(allocator, obj.get_string(), str))) {
+    ObString rb_bin;
+    if (OB_FAIL(obj.get_string(rb_bin))) {
+      OBLOG_LOG(ERROR, "get_string from obj fail", KR(ret), K(obj));
+    } else if (OB_FAIL(ObRbUtils::binary_format_convert(allocator, rb_bin, str))) {
       OBLOG_LOG(ERROR, "binary_format_convert fail", KR(ret), K(table_id), K(column_id),
           K(obj), K(obj_type), K(str));
     }
@@ -190,10 +194,21 @@ int ObObj2strHelper::obj2str(const uint64_t tenant_id,
     if (string_deep_copy) {
       // need deep-copy
       void *dst_buf = NULL;
-      ObString src_str = obj.get_string();
-      int64_t str_len = obj.get_val_len();
+      int64_t str_len = 0;
+      ObString src_str;
 
-      if (str_len > 0) {
+      if (obj.is_lob_storage()) {
+        if (OB_FAIL(obj.get_string(src_str))) {
+          OBLOG_LOG(ERROR, "get_string from ObObj fail", KR(ret), K(obj));
+        } else {
+          str_len = src_str.length();
+        }
+      } else {
+        str_len = obj.get_string().length();
+        src_str.assign_ptr(obj.get_string().ptr(), str_len);
+      }
+
+      if (OB_SUCC(ret) && str_len > 0) {
         if (OB_ISNULL(dst_buf = allocator.alloc(str_len))) {
           OBLOG_LOG(ERROR, "allocate memory fail", K(str_len));
           ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -457,8 +472,14 @@ int ObObj2strHelper::convert_ob_geometry_to_ewkt_(const common::ObObj &obj,
     common::ObString &str,
     common::ObIAllocator &allocator) const
 {
-  const ObString &wkb = obj.get_string();
-  return ObGeoTypeUtil::geo_to_ewkt(wkb, str, allocator, -1 /*use default prec*/, true /*output_srid0*/);
+  int ret = OB_SUCCESS;
+  ObString wkb;
+  if (OB_FAIL(obj.get_string(wkb))) {
+    OBLOG_LOG(ERROR, "get_string from obj fail", KR(ret), K(obj));
+  } else if (OB_FAIL(ObGeoTypeUtil::geo_to_ewkt(wkb, str, allocator, -1 /*use default prec*/, true /*output_srid0*/))) {
+    OBLOG_LOG(ERROR, "gdo convert_to_utls fail", KR(ret));
+  }
+  return ret;
 }
 
 int ObObj2strHelper::convert_xmltype_to_text_(
@@ -477,9 +498,16 @@ int ObObj2strHelper::convert_collection_to_text_(
     const common::ObSqlCollectionInfo *collection_info,
     common::ObIAllocator &allocator) const
 {
-  const ObString &data = obj.get_string();
+  int ret = OB_SUCCESS;
+  ObString data;
   const ObCollectionTypeBase *collection_meta = collection_info ? collection_info->collection_meta_ : nullptr;
-  return ObArrayUtil::convert_collection_bin_to_string(data, extended_type_info, collection_meta, allocator, str);
+
+  if (OB_FAIL(obj.get_string(data))) {
+    OBLOG_LOG(ERROR, "get_string from obj fail", KR(ret), K(obj));
+  } else if (OB_FAIL(ObArrayUtil::convert_collection_bin_to_string(data, extended_type_info, collection_meta, allocator, str))) {
+    OBLOG_LOG(ERROR, "convert_collection_bin_to_string fail", KR(ret), K(obj), K(data));
+  }
+  return ret;
 }
 
 bool ObObj2strHelper::need_padding_(const lib::Worker::CompatMode &compat_mode,

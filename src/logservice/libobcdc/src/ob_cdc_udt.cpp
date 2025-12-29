@@ -146,7 +146,7 @@ int ObCDCUdtValueMap::add_hidden_column_value_(
     cv_node->value_ = value;
     cv_node->column_id_ = column_schema_info.get_column_id();
     cv_node->is_out_row_ = is_out_row;
-    column_cast(cv_node->value_, column_schema_info);
+    column_cast(cv_node->value_, column_schema_info, is_out_row);
     if (OB_FAIL(udt_val.add_child(cv_node))) {
       LOG_ERROR("add value to udt fail", KR(ret), K(udt_val), KP(cv_node));
     }
@@ -198,7 +198,7 @@ int ObCDCUdtValueMap::create_udt_value_(uint64_t udt_set_id, ColValue *&cv_node)
     cv_node->reset();
     cv_node->column_id_ = column_schema_info->get_column_id();
     cv_node->is_out_row_ = 0;
-    column_cast(cv_node->value_, *column_schema_info);
+    column_cast(cv_node->value_, *column_schema_info, false);
   }
 
   if (OB_FAIL(ret) && OB_NOT_NULL(cv_node)) {

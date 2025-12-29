@@ -1065,7 +1065,7 @@ int ObLogPartTransParser::check_row_need_ignore_(
   if (OB_FAIL(check_row_need_rollback_(part_trans_task, row, need_rollback))) {
     LOG_ERROR("check_row_need_rollback_ failed", KR(ret), K(part_trans_task), K(redo_log_entry_task), K(row));
   } else if (need_rollback) {
-    LOG_DEBUG("rollback row by RollbackToSavepoint",
+    LOG_TRACE("rollback row by RollbackToSavepoint",
         "tls_id", part_trans_task.get_tls_id(),
         "trans_id", part_trans_task.get_trans_id(),
         "row_seq_no", row.get_seq_no());
@@ -1141,7 +1141,7 @@ int ObLogPartTransParser::parse_ext_info_log_mutator_row_(
   } else if (OB_FAIL(check_row_need_rollback_(part_trans_task, *row, need_rollback))) {
     LOG_ERROR("check_row_need_rollback_ failed", KR(ret), K(part_trans_task), K(redo_log_entry_task), KPC(row));
   } else if (need_rollback) {
-    LOG_DEBUG("rollback row by RollbackToSavepoint",
+    LOG_TRACE("rollback row by RollbackToSavepoint",
         "tls_id", part_trans_task.get_tls_id(),
         "trans_id", part_trans_task.get_trans_id(),
         "row_seq_no", row->seq_no_);

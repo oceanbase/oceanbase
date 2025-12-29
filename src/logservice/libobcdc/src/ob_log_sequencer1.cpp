@@ -1014,7 +1014,7 @@ int ObLogSequencer::handle_multi_data_source_info_(
           if (OB_FAIL(part_mgr.apply_create_tablet_change(tablet_change_info))) {
             LOG_ERROR("apply_create_tablet_change failed", KR(ret), K(tablet_change_info), K(tenant), KPC(part_trans_task));
           } else {
-            LOG_DEBUG("CDC_CREATE_TABLET", KR(ret), K(tablet_change_info), K(part_trans_task), KPC(part_trans_task), K(tenant));
+            LOG_TRACE("CDC_CREATE_TABLET", KR(ret), K(tablet_change_info), K(part_trans_task), KPC(part_trans_task), K(tenant));
           }
         } else if (tablet_change_info.is_delete_tablet_op()) {
           const bool skip_delete_tablet_op = (1 == TCONF.skip_delete_tablet_op);
@@ -1034,7 +1034,7 @@ int ObLogSequencer::handle_multi_data_source_info_(
           } else if (OB_FAIL(part_mgr.apply_delete_tablet_change(tablet_change_info))) {
             LOG_ERROR("apply_delete_tablet_change failed", KR(ret), K(tablet_change_info), K(tenant), KPC(part_trans_task));
           } else {
-            LOG_DEBUG("CDC_DELETE_TABLET", KR(ret), K(tablet_change_info), K(part_trans_task), KPC(part_trans_task), K(tenant));
+            LOG_TRACE("CDC_DELETE_TABLET", KR(ret), K(tablet_change_info), K(part_trans_task), KPC(part_trans_task), K(tenant));
           }
         } else if (tablet_change_info.is_exchange_tablet_op()) {
           if (OB_FAIL(wait_until_parser_done_("exchange_tablet_op", stop_flag))) {
