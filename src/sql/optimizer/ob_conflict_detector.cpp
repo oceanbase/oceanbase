@@ -1808,8 +1808,6 @@ int ObConflictDetectorGenerator::deduce_redundant_join_conds_with_equal_set(cons
           LOG_WARN("get unexpected null", K(ret));
         } else if (OB_FAIL(new_expr->pull_relation_id())) {
           LOG_WARN("failed to pull releation id");
-        } else if (OB_FAIL(connect_infos.push_back(table_ids))) {
-            LOG_WARN("failed to push back array", K(ret));
         } else if (OB_FAIL(redundant_quals.push_back(new_expr))) {
           LOG_WARN("failed to push back array", K(ret));
         }
