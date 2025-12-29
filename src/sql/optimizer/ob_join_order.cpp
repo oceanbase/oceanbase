@@ -1167,7 +1167,8 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
       range_info.set_valid();
       if (query_range_provider->is_new_query_range()) {
         bool bvalue = OPT_CTX.get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_4_1 &&
-                      GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0;
+                      GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0 &&
+                      !is_oracle_inner_index_table;
         range_info.set_pre_range_graph(static_cast<ObPreRangeGraph*>(query_range_provider));
         static_cast<ObPreRangeGraph*>(query_range_provider)->set_enable_new_false_range(bvalue);
       } else {

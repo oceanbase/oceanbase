@@ -17,6 +17,7 @@
 #include "sql/engine/expr/ob_expr_column_conv.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/ob_sql_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -89,7 +90,11 @@ int ObVirtualTableIterator::free_convert_ctx()
   return ret;
 }
 
-int ObVirtualTableIterator::convert_key(const ObRowkey &src, ObRowkey &dst, common::ObIArray<const ObColumnSchemaV2*> &key_cols)
+int ObVirtualTableIterator::convert_key(const ObRowkey &src,
+                                        ObRowkey &dst,
+                                        common::ObIArray<const ObColumnSchemaV2*> &key_cols,
+                                        bool is_start_key,
+                                        ObBorderFlag &border_flag)
 {
   int ret = OB_SUCCESS;
   if (src.get_obj_cnt() > 0) {
@@ -110,7 +115,7 @@ int ObVirtualTableIterator::convert_key(const ObRowkey &src, ObRowkey &dst, comm
     lib::CompatModeGuard g(lib::Worker::CompatMode::MYSQL);
     const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(session_);
     ObCastCtx cast_ctx(allocator_, &dtc_params, CM_NONE, ObCharset::get_system_collation());
-    for (uint64_t nth_obj = 0; OB_SUCC(ret) && nth_obj < src.get_obj_cnt(); ++nth_obj) {
+    for (int64_t nth_obj = 0; OB_SUCC(ret) && nth_obj < src.get_obj_cnt(); ++nth_obj) {
       const ObObj &src_obj = src_key_objs[nth_obj];
       if (src_obj.is_min_value()) {
         new_key_obj[nth_obj].set_min_value();
@@ -118,6 +123,27 @@ int ObVirtualTableIterator::convert_key(const ObRowkey &src, ObRowkey &dst, comm
         new_key_obj[nth_obj].set_max_value();
       } else if (src_obj.is_null()) {
         new_key_obj[nth_obj].set_null();
+      } else if (ObIntType == key_cols.at(nth_obj)->get_data_type() &&
+                 src_key_objs[nth_obj].is_number()) {
+        const number::ObNumber &nmb = src_key_objs[nth_obj].get_number();
+        int64_t int_value = 0;
+        int cmp = 0;
+        if (nmb.is_valid_int64(int_value)) {
+          new_key_obj[nth_obj].set_int(int_value);
+        } else {
+          if (OB_FAIL(sql::ObSQLUtils::convert_number_to_int_with_trunc(nmb, int_value, cmp))) {
+            LOG_WARN("fail to convert number to int", K(ret), K(nmb));
+          } else {
+            new_key_obj[nth_obj].set_int(int_value);
+            if (OB_FAIL(sql::ObSQLUtils::adjust_key_border_for_number_convert(cmp, is_start_key,
+                                                                               nth_obj == src.get_obj_cnt() - 1,
+                                                                               nth_obj,
+                                                                               static_cast<int64_t>(src.get_obj_cnt()),
+                                                                               new_key_obj, border_flag))) {
+              LOG_WARN("fail to adjust key border", K(ret), K(cmp), K(is_start_key));
+            }
+          }
+        }
       } else {
         if (OB_FAIL(ObObjCaster::to_type(key_cols.at(nth_obj)->get_data_type(),
                                         cast_ctx,
@@ -220,9 +246,17 @@ int ObVirtualTableIterator::convert_key_ranges()
         ObNewRange new_range;
         new_range.table_id_ = key_ranges_.at(i).table_id_;
         new_range.border_flag_ = key_ranges_.at(i).border_flag_;
-        if (OB_FAIL(convert_key(key_ranges_.at(i).start_key_, new_range.start_key_, key_cols))) {
+        if (OB_FAIL(convert_key(key_ranges_.at(i).start_key_,
+                                new_range.start_key_,
+                                key_cols,
+                                true,
+                                new_range.border_flag_))) {
           LOG_WARN("fail to convert start key", K(ret), K(allocator_));
-        } else if (OB_FAIL(convert_key(key_ranges_.at(i).end_key_, new_range.end_key_, key_cols))) {
+        } else if (OB_FAIL(convert_key(key_ranges_.at(i).end_key_,
+                                       new_range.end_key_,
+                                       key_cols,
+                                       false,
+                                       new_range.border_flag_))) {
           LOG_WARN("fail to convert end key", K(ret), K(allocator_));
         } else if (OB_FAIL(tmp_range.push_back(new_range))) {
           LOG_WARN("fail to push back new range", K(ret), K(allocator_));

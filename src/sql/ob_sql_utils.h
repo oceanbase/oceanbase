@@ -523,6 +523,17 @@ public:
 
   static int wrap_column_convert_ctx(const common::ObExprCtx &expr_ctx, common::ObCastCtx &column_conv_ctx);
 
+  static int convert_number_to_int_with_trunc(const number::ObNumber &nmb,
+                                               int64_t &int_value,
+                                               int &cmp);
+  static int adjust_key_border_for_number_convert(const int cmp,
+                                                   const bool is_start_key,
+                                                   const bool is_last_obj,
+                                                   int64_t &nth_obj,
+                                                   const int64_t obj_cnt,
+                                                   common::ObObj *new_key_obj,
+                                                   common::ObBorderFlag &border_flag);
+
   static void init_type_ctx(const ObSQLSessionInfo *session, ObExprTypeCtx &type_ctx);
   static int get_solidified_vars_from_ctx(const ObRawExpr &expr,
                                           const ObLocalSessionVar *&local_vars);
@@ -1183,7 +1194,8 @@ public:
       const bool has_tenant_id_col,
       const int64_t tenant_id_col_idx);
 private:
-  int convert_key(const ObRowkey &src, ObRowkey &dst, bool is_start_key, int64_t pos);
+  int convert_key(const ObRowkey &src, ObRowkey &dst, bool is_start_key, int64_t pos,
+                  ObBorderFlag &border_flag);
   int get_all_columns_schema();
   int init_output_row(int64_t cell_cnt);
   int get_need_convert_key_ranges_pos(ObNewRange &key_range, int64_t &pos);

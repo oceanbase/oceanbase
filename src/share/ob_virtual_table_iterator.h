@@ -95,7 +95,11 @@ private:
   int init_convert_ctx();
   int convert_key_ranges();
   int get_key_cols(common::ObIArray<const share::schema::ObColumnSchemaV2*> &key_cols);
-  int convert_key(const common::ObRowkey &src, common::ObRowkey &dst, common::ObIArray<const share::schema::ObColumnSchemaV2*> &key_cols);
+  int convert_key(const common::ObRowkey &src,
+                  common::ObRowkey &dst,
+                  common::ObIArray<const share::schema::ObColumnSchemaV2*> &key_cols,
+                  bool is_start_key,
+                  ObBorderFlag &border_flag);
   int free_convert_ctx();
   void reset_convert_ctx();
   int convert_output_row(ObNewRow *&cur_row);
