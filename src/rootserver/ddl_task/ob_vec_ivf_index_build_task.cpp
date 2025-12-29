@@ -2093,6 +2093,7 @@ int ObVecIVFIndexBuildTask::submit_drop_vec_index_task()
     LOG_WARN("fail to get table schema", K(ret), K(object_id_));
   } else if (OB_ISNULL(data_table_schema)) {
     if (create_index_arg_.is_offline_rebuild_) {
+      drop_index_task_submitted_ = true;
       LOG_INFO("hidden data_table maybe removed when offline ddl is failed, skip submit drop", K(ret), K(object_id_));
     } else {
       ret = OB_ERR_UNEXPECTED;
@@ -2238,6 +2239,7 @@ int ObVecIVFIndexBuildTask::cleanup_impl()
     int64_t refreshed_schema_version = 0;
     ObTableLockOwnerID owner_id;
     ObMySQLTransaction trans;
+    bool is_skip_unlock = false;
     if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_,
                                                               schema_guard))) {
       LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id_));
@@ -2245,6 +2247,9 @@ int ObVecIVFIndexBuildTask::cleanup_impl()
                                                      data_table_id,
                                                      data_schema))) {
       LOG_WARN("fail to get table schema", K(ret), K(data_table_id));
+    } else if (create_index_arg_.is_offline_rebuild_ && OB_ISNULL(data_schema)) {
+      is_skip_unlock = true;
+      LOG_INFO("the data table schema is null, skip unlock for the offline ddl rebuild ivf index", K(ret), K(object_id_));
     } else if (OB_ISNULL(data_schema)) {
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("fail to get table schema", K(ret), KP(data_schema));
@@ -2253,7 +2258,8 @@ int ObVecIVFIndexBuildTask::cleanup_impl()
     } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
                                                    task_id_))) {
       LOG_WARN("failed to get owner id", K(ret), K(task_id_));
-    } else if (OB_FAIL(ObDDLLock::unlock_for_add_drop_index(*data_schema,
+    } else if (!is_skip_unlock &&
+               OB_FAIL(ObDDLLock::unlock_for_add_drop_index(*data_schema,
                                                             index_table_id,
                                                             false,
                                                             owner_id,
