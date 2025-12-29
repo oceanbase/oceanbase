@@ -420,7 +420,9 @@ int ObAllVirtualProxyPartitionInfo::fill_row_(const ObTableSchema &table_schema)
             if (table_schema.is_table_with_pk() && column_schema->is_generated_column()) {
               idx = info.get_size() + next_part_key_idx_;
               ret = OB_SUCCESS;
-            } else if (table_schema.is_vir_table() || table_schema.is_table_without_pk()) {
+            } else if (table_schema.is_vir_table()
+                       || table_schema.is_table_without_pk()
+                       || table_schema.is_mlog_table()) {
               idx = -1;
               ret = OB_SUCCESS;
             } else {
