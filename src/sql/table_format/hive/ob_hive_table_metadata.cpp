@@ -962,7 +962,7 @@ int ObHiveTableMetadata::set_partition_expr(const FieldSchemas &par_cols,
 
 int ObHiveTableMetadata::calculate_part_val_from_string(const ObTableSchema &table_schema,
                                                         const bool &is_part_table,
-                                                        ObArray<ObString> &one_part_vals,
+                                                        ObIArray<ObString> &one_part_vals,
                                                         ObIAllocator &allocator,
                                                         ObNewRow &ob_part_row)
 {
@@ -987,7 +987,7 @@ int ObHiveTableMetadata::calculate_part_val_from_string(const ObTableSchema &tab
       ob_part_row.assign(obj_array, part_size);
     }
 
-    for (int j = 0; OB_SUCC(ret) && j < one_part_vals.size(); j++) {
+    for (int j = 0; OB_SUCC(ret) && j < one_part_vals.count(); j++) {
       const ObRowkeyColumn *part_col = part_key_info.get_column(j);
       ObObjType part_key_type = ObUnknownType;
       ObString part_val(one_part_vals.at(j));

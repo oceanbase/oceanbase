@@ -139,7 +139,7 @@ public:
 
   static int calculate_part_val_from_string(const share::schema::ObTableSchema &table_schema,
                                             const bool &is_part_table,
-                                            ObArray<ObString> &one_part_vals,
+                                            ObIArray<ObString> &one_part_vals,
                                             ObIAllocator &allocator,
                                             ObNewRow &ob_part_row);
 

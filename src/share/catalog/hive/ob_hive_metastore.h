@@ -625,6 +625,7 @@ public:
                                const ObString &tb_name,
                                const ObNameCaseMode case_mode,
                                const std::vector<std::string> &partition_names,
+                               Partitions &partitions,
                                std::vector<ObHiveBasicStats> &partition_basic_stats);
 
 private:

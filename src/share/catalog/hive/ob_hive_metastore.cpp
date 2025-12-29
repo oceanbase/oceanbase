@@ -1357,6 +1357,7 @@ int ObHiveMetastoreClient::get_partition_basic_stats(const ObString &ns_name,
                                                     const ObString &tb_name,
                                                     const ObNameCaseMode case_mode,
                                                     const std::vector<std::string> &partition_names,
+                                                    Partitions &partitions,
                                                     std::vector<ObHiveBasicStats> &partition_basic_stats)
 {
   int ret = OB_SUCCESS;
@@ -1386,7 +1387,6 @@ int ObHiveMetastoreClient::get_partition_basic_stats(const ObString &ns_name,
              K(ret), K(cat_name.c_str()), K(ns_name), K(tb_name));
   } else {
     // 获取指定分区的信息
-    Partitions partitions;
     GetPartitionsByNamesOperation partitions_op(partitions,
                                                 cat_name,
                                                 d_name,
