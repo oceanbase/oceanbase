@@ -125,6 +125,9 @@ int ObDDLRedefinitionSSTableBuildTask::process()
   } else if (OB_ISNULL(data_table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("error unexpected, table schema must not be nullptr", K(ret), K(tenant_id_), K(data_table_id_));
+  } else if (data_table_schema->is_oracle_tmp_table_v2() || data_table_schema->is_oracle_tmp_table_v2_index_table()) {
+    ret = OB_SUCCESS;
+    LOG_INFO("oracle temporary table v2 has no tablet, skip rebuild", K(ret), K(data_table_schema));
   } else if (!mview_refresh_info_.is_mview_complete_refresh_) {
     ObString partition_names;
     if (OB_FAIL(ObDDLUtil::generate_build_replica_sql(tenant_id_,

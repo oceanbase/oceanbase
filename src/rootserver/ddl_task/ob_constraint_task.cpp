@@ -64,6 +64,9 @@ int ObCheckConstraintValidationTask::process()
     LOG_WARN("table schema not exist", K(ret));
   } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, VALIDATE_CONSTRAINT_OR_FOREIGN_KEY_TASK_FAILED))) {
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
+  } else if (table_schema->is_oracle_tmp_table_v2_index_table() || table_schema->is_oracle_trx_tmp_table_v2()) {
+    ret = OB_SUCCESS;
+    LOG_INFO("oracle tmp table v2 index table or oracle trx tmp table v2, skip check constraint validation", K(ret), K(table_schema->get_table_id()));
   } else if (!check_table_empty_ && OB_ISNULL(constraint = table_schema->get_constraint(constraint_id_))) {
     ret = OB_ERR_CONTRAINT_NOT_FOUND;
     LOG_WARN("error unexpected, can not get constraint", K(ret));
