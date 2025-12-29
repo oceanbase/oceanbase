@@ -1354,7 +1354,12 @@ int ObFreezer::submit_log_for_freeze(bool is_try)
   share::ObLSID ls_id = get_ls_id();
   const int64_t start = ObTimeUtility::current_time();
   ObTabletID tablet_id(INT64_MAX); // used for diagnose
-
+  bool trace_id_need_reset = false;
+  if (!ObCurTraceId::get_trace_id()->is_valid()) {
+    ObCurTraceId::init(GCONF.self_addr_);
+    bool trace_id_need_reset = true;
+  }
+  bool need_retry = false;
   do {
     ret = OB_SUCCESS;
     transaction::ObTransID fail_tx_id;
@@ -1389,9 +1394,17 @@ int ObFreezer::submit_log_for_freeze(bool is_try)
     if (OB_LOG_OUTOF_DISK_SPACE == ret) {
       ob_throttle_usleep(100 * 1000, ret, ls_id.id());
     }
-  } while (!(is_try && (ObTimeUtility::current_time() - start > 10 * 1_s))
-           // we break the loop if we retry with a long time with the try semantic
-           && OB_FAIL(ret));
+    need_retry = OB_FAIL(ret) &&
+                (OB_TX_NOLOGCB != ret) &&
+                 // no need to retry if we have retried for a long time with the try semantic
+                 (!(is_try && (ObClockGenerator::getClock() - start > 10 * 1_s)));
+    if (OB_TX_NOLOGCB == ret && REACH_TIME_INTERVAL(1_s)) {
+      TRANS_LOG(INFO,
+                "[Freezer] exit submit_log_for_freeze loop due to OB_TX_NOLOGCB",
+                K(ls_id),
+                K(is_try));
+    }
+  } while (need_retry);
 
   if (OB_SUCC(ret)) {
     DEL_SUSPECT_INFO(MINI_MERGE, ls_id, tablet_id);
