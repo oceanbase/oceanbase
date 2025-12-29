@@ -69,6 +69,7 @@ private:
   int init_parallel_mini_merge(compaction::ObBasicTabletMergeCtx &merge_ctx);
   int init_parallel_mini_minor_merge(compaction::ObBasicTabletMergeCtx &merge_ctx);
   int init_parallel_major_merge(compaction::ObBasicTabletMergeCtx &merge_ctx);
+  int init_parallel_merge(const compaction::ObParallelMergeInfo &paral_info);
   void calc_adaptive_parallel_degree(
       const int64_t prio,
       const int64_t mem_per_thread,

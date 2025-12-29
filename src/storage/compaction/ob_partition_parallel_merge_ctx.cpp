@@ -130,27 +130,48 @@ int ObParallelMergeCtx::init(const compaction::ObMediumCompactionInfo &medium_in
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to init parallel merge", K(ret), K(medium_info));
   } else {
-    ObDatumRange schema_rowkey_range;
-    ObDatumRange multi_version_range;
     const compaction::ObParallelMergeInfo &paral_info = medium_info.parallel_merge_info_;
     if (OB_UNLIKELY(!paral_info.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "parallel info is invalid", KR(ret), K(paral_info));
+    } else if (paral_info.is_special_serial_merge()) {
+      // for special case, paral_info.get_size() == 1 but the range is (MAX, MAX), means serial merge
+      if (OB_FAIL(init_serial_merge())) {
+        STORAGE_LOG(WARN, "Failed to init serialize merge", K(ret));
+      } else {
+        is_inited_ = true;
+        STORAGE_LOG(INFO, "success to init serial parallel merge ctx from medium_info", K(ret), KPC(this), K(paral_info));
+      }
     } else {
-      range_array_.reset();
-
-      schema_rowkey_range.start_key_.set_min_rowkey();
-      schema_rowkey_range.end_key_.set_min_rowkey();
-      schema_rowkey_range.set_left_open();
-      schema_rowkey_range.set_right_closed();
+      if (OB_FAIL(init_parallel_merge(paral_info))) {
+        STORAGE_LOG(WARN, "Failed to init parallel merge", K(ret));
+      }
     }
+  }
+  return ret;
+}
+
+int ObParallelMergeCtx::init_parallel_merge(const compaction::ObParallelMergeInfo &paral_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!paral_info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid argument to init parallel merge", K(ret), K(paral_info));
+  } else {
+    ObDatumRange schema_rowkey_range;
+    ObDatumRange multi_version_range;
+    range_array_.reset();
+    schema_rowkey_range.start_key_.set_min_rowkey();
+    schema_rowkey_range.end_key_.set_min_rowkey();
+    schema_rowkey_range.set_left_open();
+    schema_rowkey_range.set_right_closed();
 
     for (int i = 0; OB_SUCC(ret) && i < paral_info.get_size() + 1; ++i) {
       if (i > 0 && OB_FAIL(schema_rowkey_range.end_key_.deep_copy(schema_rowkey_range.start_key_, allocator_))) { // end_key -> start_key
-        STORAGE_LOG(WARN, "failed to deep copy start key", K(ret), K(i), K(medium_info));
+        STORAGE_LOG(WARN, "failed to deep copy start key", K(ret), K(i), K(paral_info));
       } else if (i < paral_info.get_size()) {
         if (OB_FAIL(paral_info.deep_copy_datum_rowkey(i/*idx*/, allocator_, schema_rowkey_range.end_key_))) {
-          STORAGE_LOG(WARN, "failed to deep copy end key", K(ret), K(i), K(medium_info));
+          STORAGE_LOG(WARN, "failed to deep copy end key", K(ret), K(i), K(paral_info));
         }
       } else { // i == paral_info.get_size()
         schema_rowkey_range.end_key_.set_max_rowkey();

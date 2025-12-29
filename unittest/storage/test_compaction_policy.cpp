@@ -1839,6 +1839,24 @@ TEST_F(TestCompactionPolicy, check_minor_across_major3)
   ASSERT_EQ(3, result.handle_.get_count());
   ASSERT_EQ(1, result.handle_.get_table(0)->get_start_scn().get_val_for_gts());
 }
+
+TEST_F(TestCompactionPolicy, destroy_parallel_merge_info)
+{
+  int ret = OB_SUCCESS;
+  ObArrayArray<ObStoreRange> multi_range_split_array;
+  ObSEArray<ObStoreRange, 8> range_split_array;
+  ObStoreRange store_range;
+  store_range.set_start_key(ObStoreRowkey::MIN_STORE_ROWKEY);
+  store_range.set_end_key(ObStoreRowkey::MAX_STORE_ROWKEY);
+  medium_info_.allocator_ = &mds::DefaultAllocator::get_instance();
+
+  ASSERT_EQ(OB_SUCCESS, range_split_array.push_back(store_range));
+  ASSERT_EQ(OB_SUCCESS, multi_range_split_array.push_back(range_split_array));
+  ASSERT_EQ(OB_SUCCESS, medium_info_.gene_parallel_info(multi_range_split_array));
+  LOG_INFO("finish generate parallel info", K_(medium_info));
+  medium_info_.~ObMediumCompactionInfo();
+}
+
 } //unittest
 } //oceanbase
 
