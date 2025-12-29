@@ -2208,7 +2208,8 @@ int ObTableLocation::set_location_calc_node(const ObDMLStmt &stmt,
                                             bool &get_all,
                                             bool &is_range_get,
                                             const bool is_in_range_optimization_enabled,
-                                            const bool use_new_query_range)
+                                            const bool use_new_query_range,
+                                            const ObTableSchema *table_schema)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ColumnItem, 5> part_columns;
@@ -2241,7 +2242,8 @@ int ObTableLocation::set_location_calc_node(const ObDMLStmt &stmt,
                                             exec_ctx,
                                             query_ctx,
                                             is_in_range_optimization_enabled,
-                                            use_new_query_range))) {
+                                            use_new_query_range,
+                                            table_schema))) {
     LOG_WARN("Failed to get location calc node", K(ret));
   } else if (gen_cols.count() > 0) {
     //analyze information with dependented column of generated column
@@ -2251,7 +2253,8 @@ int ObTableLocation::set_location_calc_node(const ObDMLStmt &stmt,
                                                                 filter_exprs,
                                                                 always_true,
                                                                 gen_col_node,
-                                                                exec_ctx))) {
+                                                                exec_ctx,
+                                                                table_schema))) {
       LOG_WARN("Get query range node error", K(ret));
     } else if (!use_new_query_range && OB_FAIL(get_query_range_node(part_level,
                                                                     gen_cols,
@@ -2557,7 +2560,8 @@ int ObTableLocation::record_not_insert_dml_partition_info(
                                      part_get_all_,
                                      is_part_range_precise_get_,
                                      is_in_range_optimization_enabled,
-                                     use_new_query_range))) {
+                                     use_new_query_range,
+                                     table_schema))) {
     LOG_WARN("failed to set location calc node for first-level partition", K(ret));
   } else if (PARTITION_LEVEL_TWO == part_level_
              && OB_FAIL(set_location_calc_node(stmt,
@@ -2573,7 +2577,8 @@ int ObTableLocation::record_not_insert_dml_partition_info(
                                                subpart_get_all_,
                                                is_subpart_range_precise_get_,
                                                is_in_range_optimization_enabled,
-                                               use_new_query_range))) {
+                                               use_new_query_range,
+                                               table_schema))) {
     LOG_WARN("failed to set location calc node for second-level partition", K(ret));
   }
 
@@ -2663,7 +2668,8 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
                                             ObExecContext *exec_ctx,
                                             ObQueryCtx *query_ctx,
                                             const bool is_in_range_optimization_enabled,
-                                            const bool use_new_query_range)
+                                            const bool use_new_query_range,
+                                            const ObTableSchema *table_schema)
 {
   int ret = OB_SUCCESS;
   uint64_t column_id = OB_INVALID_ID;
@@ -2692,7 +2698,8 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
                                            filter_exprs,
                                            always_true,
                                            calc_node,
-                                           exec_ctx))) {
+                                           exec_ctx,
+                                           table_schema))) {
         LOG_WARN("Get query range node error", K(ret));
       } else if (always_true) {
         get_all = true;
@@ -2760,7 +2767,7 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
         column_always_true = false;
         if (use_new_query_range) {
           if (OB_FAIL(get_pre_range_graph_node(part_level, partition_columns, normal_filters,
-                                               column_always_true, column_node, exec_ctx))) {
+                                               column_always_true, column_node, exec_ctx, table_schema))) {
             LOG_WARN("Failed to get query range node", K(ret));
           } else if (OB_NOT_NULL(column_node)) {
             is_column_precise_get = static_cast<ObPLPreRangeGraphNode*>(column_node)->pre_range_graph_.is_precise_get();
@@ -2858,7 +2865,8 @@ int ObTableLocation::get_pre_range_graph_node(const ObPartitionLevel part_level,
                                               const ObIArray<ObRawExpr*> &filter_exprs,
                                               bool &always_true,
                                               ObPartLocCalcNode *&calc_node,
-                                              ObExecContext *exec_ctx)
+                                              ObExecContext *exec_ctx,
+                                              const ObTableSchema* table_schema)
 {
   int ret = OB_SUCCESS;
   bool phy_rowid_for_table_loc = (part_level == part_level_);
@@ -2878,7 +2886,7 @@ int ObTableLocation::get_pre_range_graph_node(const ObPartitionLevel part_level,
                                                                        phy_rowid_for_table_loc,
                                                                        false,
                                                                        -1,
-                                                                       NULL,
+                                                                       table_schema,
                                                                        NULL,
                                                                        NULL,
                                                                        true))) {
