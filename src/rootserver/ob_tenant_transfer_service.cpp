@@ -1242,6 +1242,7 @@ int ObTenantTransferService::generate_related_tablet_ids_for_oracle_tmp_table_v2
   } else if (related_table_schemas.empty()) {
     // skip
   } else {
+    const int64_t limit_tablet_count = get_tablet_count_threshold_();
     ObArray<ObTableID> table_ids;
     ObArray<storage::ObSessionTabletInfo> session_tablet_infos;
     ARRAY_FOREACH(related_table_schemas, idx) {
@@ -1273,13 +1274,14 @@ int ObTenantTransferService::generate_related_tablet_ids_for_oracle_tmp_table_v2
       // related_table_schemas.count() * tablet_ids_get_by_data_table_id.count()
 
       // Temporary data structures for grouping: session_id -> all tablet infos for that session
-      ObArray<uint32_t> session_ids;  // List of discovered session IDs
+      ObArray<hash::HashMapPair<uint32_t, int64_t>> session_keys;  // List of discovered session IDs
       ObArray<ObArray<storage::ObSessionTabletInfo>> grouped_infos;  // Array of tablet info arrays corresponding to each session ID
 
       // Step 1: Group by session_id
       ARRAY_FOREACH(session_tablet_infos, i) {
         const storage::ObSessionTabletInfo &info = session_tablet_infos.at(i);
-        uint32_t session_id = info.get_session_id();
+        const uint32_t session_id = info.get_session_id();
+        const int64_t sequence = info.get_sequence();
         int64_t group_idx = -1;
         // only get tablet infos from src_ls
         if (src_ls != info.get_ls_id()) {
@@ -1287,8 +1289,8 @@ int ObTenantTransferService::generate_related_tablet_ids_for_oracle_tmp_table_v2
         }
 
         // Find if this session_id already exists
-        for (int64_t j = 0; j < session_ids.count(); j++) {
-          if (session_ids.at(j) == session_id) {
+        for (int64_t j = 0; j < session_keys.count(); j++) {
+          if (session_keys.at(j).first == session_id && session_keys.at(j).second == sequence) {
             group_idx = j;
             break;
           }
@@ -1297,9 +1299,12 @@ int ObTenantTransferService::generate_related_tablet_ids_for_oracle_tmp_table_v2
         // If this is a new session_id, create a new group
         if (group_idx == -1) {
           ObArray<storage::ObSessionTabletInfo> new_group;
+          hash::HashMapPair<uint32_t, int64_t> new_key;
+          new_key.first = session_id;
+          new_key.second = sequence;
           if (OB_FAIL(new_group.push_back(info))) {
             LOG_WARN("fail to push back info to new group", KR(ret), K(info));
-          } else if (OB_FAIL(session_ids.push_back(session_id))) {
+          } else if (OB_FAIL(session_keys.push_back(new_key))) {
             LOG_WARN("fail to push back session_id", KR(ret), K(session_id));
           } else if (OB_FAIL(grouped_infos.push_back(new_group))) {
             LOG_WARN("fail to push back new group", KR(ret));
@@ -1320,7 +1325,6 @@ int ObTenantTransferService::generate_related_tablet_ids_for_oracle_tmp_table_v2
           const ObArray<storage::ObSessionTabletInfo> &group = grouped_infos.at(i);
           bool can_migrate = false;
           ObTabletID data_table_tablet_id;
-
           // Check if any tablet_id in this group exists in tablet_ids_get_by_data_table_id
           for (int64_t j = 0; j < group.count(); j++) {
             const ObTabletID &tablet_id = group.at(j).get_tablet_id();
@@ -1334,10 +1338,18 @@ int ObTenantTransferService::generate_related_tablet_ids_for_oracle_tmp_table_v2
 
           // If this group can be transferred, add all tablet_ids to the result
           if (can_migrate) {
-            for (int64_t j = 0; OB_SUCC(ret) && j < group.count(); j++) {
-              const ObTabletID &tablet_id = group.at(j).get_tablet_id();
-              if (tablet_id != data_table_tablet_id && OB_FAIL(tablet_ids.push_back(tablet_id))) {
-                LOG_WARN("fail to push back tablet_id", KR(ret), K(tablet_id));
+            if (OB_UNLIKELY(group.count() > related_table_schemas.count() + 1)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("single group count exceeds expected", KR(ret), K(group.count()), K(related_table_schemas.count()), K(i), K(session_keys.at(i)));
+            } else if (tablet_ids.count() + group.count() > limit_tablet_count) {
+              LOG_INFO("tablet count exceeds limit", KR(ret), K(tablet_ids.count()), K(group.count()), K(limit_tablet_count));
+              break;
+            } else {
+              for (int64_t j = 0; OB_SUCC(ret) && j < group.count(); j++) {
+                const ObTabletID &tablet_id = group.at(j).get_tablet_id();
+                if (tablet_id != data_table_tablet_id && OB_FAIL(tablet_ids.push_back(tablet_id))) {
+                  LOG_WARN("fail to push back tablet_id", KR(ret), K(tablet_id));
+                }
               }
             }
           }
@@ -1357,7 +1369,7 @@ int ObTenantTransferService::generate_related_tablet_ids_for_oracle_tmp_table_v2
           } else {
             TTS_INFO("generate related tablet_ids for oracle tmp table v2 success",
                 K(new_added_count), K(expected_count), K(tablet_ids.count()),
-                K(session_ids.count()), K(grouped_infos.count()));
+                K(session_keys.count()), K(grouped_infos.count()));
           }
         }
       }
