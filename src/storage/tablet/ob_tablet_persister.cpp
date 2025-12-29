@@ -23,6 +23,7 @@
 #include "storage/tablet/ob_tablet_obj_load_helper.h"
 #include "storage/tablet/ob_tablet_persister.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "share/ob_upgrade_utils.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "share/compaction/ob_shared_storage_compaction_util.h"
 #include "storage/incremental/atomic_protocol/ob_atomic_tablet_meta_define.h"
@@ -54,6 +55,106 @@ OB_INLINE bool ObSharedBlockIndex::operator ==(const ObSharedBlockIndex &other) 
   return other.shared_macro_id_ == shared_macro_id_ && other.nested_offset_ == nested_offset_;
 }
 
+ObTabletPersisterParam::ObTabletPersisterParam(
+  const int64_t data_version,
+  const share::ObLSID ls_id,
+  const int64_t ls_epoch,
+  const ObTabletID tablet_id,
+  const int64_t tablet_transfer_seq,
+  const int64_t meta_version)
+: data_version_(data_version),
+  ls_id_(ls_id),
+  ls_epoch_(ls_epoch),
+  tablet_id_(tablet_id),
+  tablet_transfer_seq_(tablet_transfer_seq),
+  snapshot_version_(0),
+  start_macro_seq_(0),
+  ddl_redo_callback_(nullptr),
+  ddl_finish_callback_(nullptr)
+  #ifdef OB_BUILD_SHARED_STORAGE
+  , op_handle_(nullptr),
+  file_(nullptr),
+  update_reason_(ObMetaUpdateReason::INVALID_META_UPDATE_REASON),
+  reorganization_scn_(0),
+  meta_version_(meta_version)
+  #endif
+{
+  if (!share::ObUpgradeChecker::check_data_version_exist(data_version)) {
+    int ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid data version", K(ret), K(data_version));
+    ob_abort();
+  }
+}
+
+// shared_major tablet meta persistence
+ObTabletPersisterParam::ObTabletPersisterParam(
+  const uint64_t data_version,
+  const ObTabletID tablet_id,
+  const int64_t tablet_transfer_seq,
+  const int64_t snapshot_version,
+  const int64_t start_macro_seq,
+  blocksstable::ObIMacroBlockFlushCallback *ddl_redo_callback,
+  blocksstable::ObIMacroBlockFlushCallback *ddl_finish_callback)
+  : data_version_(data_version),
+    ls_id_(),
+    ls_epoch_(0),
+    tablet_id_(tablet_id),
+    tablet_transfer_seq_(tablet_transfer_seq),
+    snapshot_version_(snapshot_version),
+    start_macro_seq_(start_macro_seq),
+    ddl_redo_callback_(ddl_redo_callback),
+    ddl_finish_callback_(ddl_finish_callback)
+    #ifdef OB_BUILD_SHARED_STORAGE
+    , op_handle_(nullptr),
+    file_(nullptr),
+    update_reason_(ObMetaUpdateReason::INVALID_META_UPDATE_REASON),
+    reorganization_scn_(0),
+    meta_version_(0)
+    #endif
+{
+  if (!share::ObUpgradeChecker::check_data_version_exist(data_version)) {
+    int ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid data version", K(ret), K(data_version));
+    ob_abort();
+  }
+}
+
+#ifdef OB_BUILD_SHARED_STORAGE
+ObTabletPersisterParam::ObTabletPersisterParam(
+  const uint64_t data_version,
+  const share::ObLSID ls_id,
+  const ObTabletID tablet_id,
+  const ObMetaUpdateReason update_reason,
+  const int64_t sstable_op_id,
+  const int64_t start_macro_seq,
+  ObAtomicOpHandle<ObAtomicTabletMetaOp> *handle,
+  ObAtomicTabletMetaFile *file,
+  blocksstable::ObIMacroBlockFlushCallback *ddl_redo_callback,
+  blocksstable::ObIMacroBlockFlushCallback *ddl_finish_callback,
+  const int64_t reorganization_scn)
+  : data_version_(data_version),
+    ls_id_(ls_id),
+    ls_epoch_(0),
+    tablet_id_(tablet_id),
+    tablet_transfer_seq_(OB_INVALID_TRANSFER_SEQ),
+    snapshot_version_(0),
+    start_macro_seq_(start_macro_seq),
+    ddl_redo_callback_(ddl_redo_callback),
+    ddl_finish_callback_(ddl_finish_callback),
+    op_handle_(handle),
+    file_(file),
+    update_reason_(update_reason),
+    sstable_op_id_(sstable_op_id),
+    reorganization_scn_(reorganization_scn),
+    meta_version_(0)
+{
+  if (!share::ObUpgradeChecker::check_data_version_exist(data_version)) {
+    int ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid data version", K(ret), K(data_version));
+    ob_abort();
+  }
+}
+#endif
 ObTabletTransformArg::ObTabletTransformArg()
   : rowkey_read_info_ptr_(nullptr),
     tablet_macro_info_ptr_(nullptr),

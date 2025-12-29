@@ -188,85 +188,38 @@ struct ObTabletPersisterParam final
 public:
   // private tablet meta persistence
   ObTabletPersisterParam(
-      const int64_t data_version,
-      const share::ObLSID ls_id,
-      const int64_t ls_epoch,
-      const ObTabletID tablet_id,
-      const int64_t tablet_transfer_seq,
-      const int64_t meta_version)
-    : data_version_(data_version),
-      ls_id_(ls_id),
-      ls_epoch_(ls_epoch),
-      tablet_id_(tablet_id),
-      tablet_transfer_seq_(tablet_transfer_seq),
-      snapshot_version_(0),
-      start_macro_seq_(0),
-      ddl_redo_callback_(nullptr),
-      ddl_finish_callback_(nullptr)
-      #ifdef OB_BUILD_SHARED_STORAGE
-      , op_handle_(nullptr),
-      file_(nullptr),
-      reorganization_scn_(0),
-      meta_version_(meta_version)
-      #endif
-    {}
+    const int64_t data_version,
+    const share::ObLSID ls_id,
+    const int64_t ls_epoch,
+    const ObTabletID tablet_id,
+    const int64_t tablet_transfer_seq,
+    const int64_t meta_version);
 
   // shared_major tablet meta persistence
   ObTabletPersisterParam(
-      const uint64_t data_version,
-      const ObTabletID tablet_id,
-      const int64_t tablet_transfer_seq,
-      const int64_t snapshot_version,
-      const int64_t start_macro_seq,
-      blocksstable::ObIMacroBlockFlushCallback *ddl_redo_callback = nullptr,
-      blocksstable::ObIMacroBlockFlushCallback *ddl_finish_callback = nullptr
-      )
-  : data_version_(data_version),
-    ls_id_(),
-    ls_epoch_(0),
-    tablet_id_(tablet_id),
-    tablet_transfer_seq_(tablet_transfer_seq),
-    snapshot_version_(snapshot_version),
-    start_macro_seq_(start_macro_seq),
-    ddl_redo_callback_(ddl_redo_callback),
-    ddl_finish_callback_(ddl_finish_callback)
-    #ifdef OB_BUILD_SHARED_STORAGE
-    , op_handle_(nullptr),
-    file_(nullptr),
-    reorganization_scn_(0),
-    meta_version_(0)
-    #endif
-  {}
+    const uint64_t data_version,
+    const ObTabletID tablet_id,
+    const int64_t tablet_transfer_seq,
+    const int64_t snapshot_version,
+    const int64_t start_macro_seq,
+    blocksstable::ObIMacroBlockFlushCallback *ddl_redo_callback,
+    blocksstable::ObIMacroBlockFlushCallback *ddl_finish_callback);
+
   #ifdef OB_BUILD_SHARED_STORAGE
   // inc_shared tablet meta persistence
   ObTabletPersisterParam(
-      const uint64_t data_version,
-      const share::ObLSID ls_id,
-      const ObTabletID tablet_id,
-      const ObMetaUpdateReason update_reason,
-      const int64_t sstable_op_id,
-      const int64_t start_macro_seq,
-      ObAtomicOpHandle<ObAtomicTabletMetaOp> *handle,
-      ObAtomicTabletMetaFile *file,
-      blocksstable::ObIMacroBlockFlushCallback *ddl_redo_callback,
-      blocksstable::ObIMacroBlockFlushCallback *ddl_finish_callback,
-      const int64_t reorganization_scn)
-  : data_version_(data_version),
-    ls_id_(ls_id),
-    ls_epoch_(0),
-    tablet_id_(tablet_id),
-    tablet_transfer_seq_(OB_INVALID_TRANSFER_SEQ),
-    snapshot_version_(0),
-    start_macro_seq_(start_macro_seq),
-    ddl_redo_callback_(ddl_redo_callback),
-    ddl_finish_callback_(ddl_finish_callback),
-    op_handle_(handle),
-    file_(file),
-    update_reason_(update_reason),
-    sstable_op_id_(sstable_op_id),
-    reorganization_scn_(reorganization_scn),
-    meta_version_(0)
-  {}
+    const uint64_t data_version,
+    const share::ObLSID ls_id,
+    const ObTabletID tablet_id,
+    const ObMetaUpdateReason update_reason,
+    const int64_t sstable_op_id,
+    const int64_t start_macro_seq,
+    ObAtomicOpHandle<ObAtomicTabletMetaOp> *handle,
+    ObAtomicTabletMetaFile *file,
+    blocksstable::ObIMacroBlockFlushCallback *ddl_redo_callback,
+    blocksstable::ObIMacroBlockFlushCallback *ddl_finish_callback,
+    const int64_t reorganization_scn);
+
   #endif
 
   ObTabletPersisterParam() = delete;
