@@ -1644,12 +1644,20 @@ int ObPLCompiler::compile_subprogram_table(common::ObIAllocator &allocator,
             lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN)));
             if (OB_FAIL(cg.init())) {
               LOG_WARN("init code generator failed", K(ret));
-            } else if (OB_FAIL(cg.generate(*routine))) {
-              LOG_WARN("code generate failed", "routine name", routine_ast->get_name(), K(ret));
             } else {
-              routine->set_ret_type(routine_ast->get_ret_type());
-              if (OB_FAIL(compile_unit.add_routine(routine))) {
-                LOG_WARN("package add routine failed", K(ret));
+              if (session_info.is_pl_debug_on() || (session_info.get_pl_code_coverage() != nullptr)) {
+                if (OB_FAIL(routine_ast->generate_symbol_debuginfo())) {
+                  LOG_WARN("failed to generate symbol debuginfo for nested procedure", K(ret), K(routine_ast->get_name()));
+                }
+              }
+              if (OB_FAIL(ret)) {
+              } else if (OB_FAIL(cg.generate(*routine))) {
+                LOG_WARN("code generate failed", "routine name", routine_ast->get_name(), K(ret));
+              } else {
+                routine->set_ret_type(routine_ast->get_ret_type());
+                if (OB_FAIL(compile_unit.add_routine(routine))) {
+                  LOG_WARN("package add routine failed", K(ret));
+                }
               }
             }
           } // end of HEAP_VAR
