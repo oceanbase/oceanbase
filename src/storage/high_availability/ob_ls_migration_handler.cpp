@@ -442,7 +442,7 @@ int ObLSMigrationHandler::add_ls_migration_task(
   return ret;
 }
 
-int ObLSMigrationHandler::switch_next_stage(const int32_t result)
+int ObLSMigrationHandler::switch_next_stage_(const int32_t result)
 {
   int ret = OB_SUCCESS;
 
@@ -749,7 +749,7 @@ int ObLSMigrationHandler::do_init_status_()
       }
 
       // INIT -> PREPARE_LS
-      if (OB_TMP_FAIL(switch_next_stage(ret))) {
+      if (OB_TMP_FAIL(switch_next_stage_(ret))) {
         LOG_WARN("failed to switch next stage", K(tmp_ret), K(ret), K(status));
       }
     }
@@ -785,7 +785,7 @@ int ObLSMigrationHandler::do_prepare_ls_status_()
   }
 
   // PREPARE_LS -> WAIT_PREPARE_LS
-  if (OB_TMP_FAIL(switch_next_stage(ret))) {
+  if (OB_TMP_FAIL(switch_next_stage_(ret))) {
     LOG_WARN("failed to switch next stage", K(tmp_ret), K(ret), KPC(ls_));
   }
   return ret;
@@ -819,7 +819,7 @@ int ObLSMigrationHandler::do_build_ls_status_()
   }
 
   // BUILD_LS -> WAIT_BUILD_LS
-  if (OB_TMP_FAIL(switch_next_stage(ret))) {
+  if (OB_TMP_FAIL(switch_next_stage_(ret))) {
     LOG_WARN("failed to switch next stage", K(tmp_ret), K(ret), KPC(ls_));
   }
   return ret;
@@ -848,7 +848,7 @@ int ObLSMigrationHandler::do_complete_ls_status_()
 
   if (is_complete() || can_skip_complete) {
     // COMPLETE_LS -> WAIT_COMPLETE_LS
-    if (OB_TMP_FAIL(switch_next_stage(ret))) {
+    if (OB_TMP_FAIL(switch_next_stage_(ret))) {
       LOG_WARN("failed to switch next stage", K(tmp_ret), K(ret), KPC(ls_));
     }
   }
@@ -878,7 +878,7 @@ int ObLSMigrationHandler::do_wait_status_()
     LOG_WARN("failed to handle current task", K(ret), KPC(ls_));
   } else if (need_wait) {
     // do nothing, won't switch status
-  } else if (OB_FAIL(switch_next_stage(task_result))) {
+  } else if (OB_FAIL(switch_next_stage_(task_result))) {
     // WAIT_PREPARE_LS -> BUILD_LS
     // WAIT_BUILD_LS -> COMPLETE_LS
     // WAIT_COMPLETE_LS -> FINISH
@@ -887,7 +887,7 @@ int ObLSMigrationHandler::do_wait_status_()
   }
 
   if (OB_FAIL(ret)) {
-    if (OB_TMP_FAIL(switch_next_stage(ret))) { // WAIT -> COMPLETE_LS (except for WAIT_COMPLETE_LS)
+    if (OB_TMP_FAIL(switch_next_stage_(ret))) { // WAIT -> COMPLETE_LS (except for WAIT_COMPLETE_LS)
       LOG_WARN("failed to report result at wait status", K(tmp_ret), K(ret), K(status_));
     }
   }
@@ -1536,15 +1536,16 @@ int ObLSMigrationHandler::switch_next_stage_with_nolock_(const int32_t result)
   if (OB_FAIL(ObLSMigrationHandlerStatusHelper::get_next_change_status(status_, new_result, next_status))) {
     LOG_WARN("failed to get next change status", K(ret), K(status_), K(result), K(new_result));
   } else {
+    const int64_t ls_id = OB_NOT_NULL(ls_) ? ls_->get_ls_id().id() : ObLSID::INVALID_LS_ID;
 #ifdef ERRSIM
     SERVER_EVENT_SYNC_ADD("storage_ha", "migration_handler_change_status",
-        "tenant_id", ls_->get_tenant_id(),
-        "ls_id", ls_->get_ls_id().id(),
+        "tenant_id", MTL_ID(),
+        "ls_id", ls_id,
         "current_status", status_,
         "next_status", next_status,
         "result", new_result);
 #endif
-    FLOG_INFO("report result", K(result), K(new_result), K(result_), K(status_), K(next_status));
+    FLOG_INFO("report result", "ls_id", ls_id, K(result), K(new_result), K(result_), K(status_), K(next_status));
     result_ = new_result;
     status_ = next_status;
   }
