@@ -458,7 +458,10 @@ OB_INLINE int ObRangeGenerator::generate_precise_get_range(const ObRangeNode &no
         always_false = true;
       } else if (OB_LIKELY(ObSQLUtils::is_same_type_for_compare(starts[i].get_meta(),
                                                                 meta->column_type_.get_obj_meta()) &&
-                           !starts[i].is_decimal_int())) {
+                           !starts[i].is_decimal_int() &&
+                           (((meta->column_type_.get_obj_meta().get_type_class() != ObDoubleTC &&
+                             meta->column_type_.get_obj_meta().get_type_class() != ObFloatTC) ||
+                             meta->column_type_.get_accuracy().get_scale() == starts[i].get_meta().get_scale())))) {
         starts[i].set_collation_type(meta->column_type_.get_collation_type());
       } else if (OB_LIKELY(!starts[i].is_overflow_integer(meta->column_type_.get_type()))) {
         //fast cast with integer value
@@ -1285,7 +1288,8 @@ int ObRangeGenerator::try_cast_value(ObIAllocator &allocator,
   if (!value.is_min_value() && !value.is_max_value() && !value.is_unknown() &&
       (!ObSQLUtils::is_same_type_for_compare(value.get_meta(), meta.column_type_.get_obj_meta()) ||
        value.is_decimal_int() ||
-       (meta.column_type_.get_obj_meta().get_type_class() == ObDoubleTC &&
+       ((meta.column_type_.get_obj_meta().get_type_class() == ObDoubleTC ||
+         meta.column_type_.get_obj_meta().get_type_class() == ObFloatTC) &&
         meta.column_type_.get_accuracy().get_scale() != value.get_meta().get_scale()))) {
     const ObObj *dest_val = NULL;
     ObCollationType collation_type = meta.column_type_.get_collation_type();
@@ -1319,6 +1323,15 @@ int ObRangeGenerator::try_cast_value(ObIAllocator &allocator,
       */
       if (OB_FAIL(cast_double_to_fixed_double(meta, value, tmp_dest_obj))) {
         LOG_WARN("failed to cast double to fixed double", K(ret));
+      } else {
+        dest_val = &tmp_dest_obj;
+      }
+    } else if (lib::is_mysql_mode() &&
+               value.get_meta().get_type_class() == ObFloatTC &&
+               meta.column_type_.get_obj_meta().get_type_class() == ObFloatTC &&
+               meta.column_type_.get_accuracy().get_scale() != SCALE_UNKNOWN_YET) {
+      if (OB_FAIL(cast_float_to_fixed_float(meta, value, tmp_dest_obj))) {
+        LOG_WARN("failed to cast float to fixed float", K(ret));
       } else {
         dest_val = &tmp_dest_obj;
       }
@@ -2276,7 +2289,10 @@ int ObRangeGenerator::check_can_final_fast_nlj_range(const ObPreRangeGraph &pre_
       // do nothing
     } else if (OB_LIKELY(ObSQLUtils::is_same_type_for_compare(src_obj->get_meta(),
                                                               meta->column_type_.get_obj_meta()) &&
-                         !src_obj->is_decimal_int())) {
+                         !src_obj->is_decimal_int() &&
+                         (((meta->column_type_.get_obj_meta().get_type_class() != ObDoubleTC &&
+                           meta->column_type_.get_obj_meta().get_type_class() != ObFloatTC) ||
+                         meta->column_type_.get_accuracy().get_scale() == src_obj->get_meta().get_scale())))) {
       // do nothing
     } else {
       is_valid = false;
@@ -2297,6 +2313,25 @@ int ObRangeGenerator::cast_double_to_fixed_double(const ObRangeColumnMeta &meta,
     LOG_WARN("failed to real range check", K(ret));
   } else {
     out_value.set_double(meta.column_type_.get_type(), value);
+  }
+  return ret;
+}
+
+int ObRangeGenerator::cast_float_to_fixed_float(const ObRangeColumnMeta &meta,
+                                                const ObObj& in_value,
+                                                ObObj &out_value)
+{
+  int ret = OB_SUCCESS;
+  float value = in_value.get_float();
+  if (ObUFloatType == meta.column_type_.get_type() && value < 0.) {
+    out_value.set_float(meta.column_type_.get_type(), 0.);
+  } else {
+    double double_value = static_cast<double>(value);
+    if (OB_FAIL(refine_real_range(meta.column_type_.get_accuracy(), double_value))) {
+      LOG_WARN("failed to real range check", K(ret));
+    } else {
+      out_value.set_float(meta.column_type_.get_type(), static_cast<float>(double_value));
+    }
   }
   return ret;
 }

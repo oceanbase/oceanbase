@@ -266,6 +266,10 @@ private:
                                          const ObObj& in_value,
                                          ObObj &out_value);
 
+  static int cast_float_to_fixed_float(const ObRangeColumnMeta &meta,
+                                        const ObObj& in_value,
+                                        ObObj &out_value);
+
   static int refine_real_range(const ObAccuracy &accuracy, double &value);
   int final_json_member_of_range_node(const ObRangeNode *node, ObTmpRange *&range, bool need_cache);
   int fill_domain_range_node(const ObRangeNode &node,
