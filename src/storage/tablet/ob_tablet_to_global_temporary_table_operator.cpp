@@ -225,6 +225,7 @@ int ObTabletToGlobalTmpTableOperator::point_get(
     const uint64_t tenant_id,
     const uint64_t table_id,
     const int64_t sequence,
+    const uint32_t session_id,
     storage::ObSessionTabletInfo &info)
 {
   int ret = OB_SUCCESS;
@@ -233,17 +234,18 @@ int ObTabletToGlobalTmpTableOperator::point_get(
       || table_id == OB_INVALID_ID
       || sequence == INT64_MAX)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(table_id), K(sequence));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(table_id), K(sequence), K(session_id));
   } else {
     SMART_VAR(ObISQLClient::ReadResult, result) {
       ObSqlString sql;
       common::ObSEArray<storage::ObSessionTabletInfo, 1> infos;
       if (FAILEDx(sql.append_fmt(
-          "SELECT %s FROM %s WHERE table_id = %lu AND sequence = %ld",
+          "SELECT %s FROM %s WHERE table_id = %lu AND sequence = %ld AND session_id = %u",
           query_column_str,
           OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_TNAME,
           table_id,
-          sequence))) {
+          sequence,
+          session_id))) {
         LOG_WARN("fail to assign sql", KR(ret), K(sql));
       } else if (OB_FAIL(sql_proxy.read(result, tenant_id, sql.ptr()))) {
         LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql));
@@ -256,12 +258,12 @@ int ObTabletToGlobalTmpTableOperator::point_get(
       if (OB_SUCC(ret)) {
         if (infos.empty()) {
           ret = OB_ENTRY_NOT_EXIST;
-          LOG_WARN("session tablet not exist", KR(ret), K(tenant_id), K(table_id), K(sequence), K(sql));
+          LOG_WARN("session tablet not exist", KR(ret), K(tenant_id), K(table_id), K(sequence), K(session_id), K(sql));
         } else if (1 == infos.count()) {
           info = infos.at(0);
         } else {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("session tablet should be one", KR(ret), K(tenant_id), K(table_id), K(sequence), K(sql));
+          LOG_WARN("session tablet should be one", KR(ret), K(tenant_id), K(table_id), K(sequence), K(session_id), K(sql), K(infos));
         }
       }
     }

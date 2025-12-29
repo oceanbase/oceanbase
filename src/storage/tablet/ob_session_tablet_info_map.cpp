@@ -190,9 +190,9 @@ int ObSessionTabletInfoMap::inner_get_session_tablet(
   }
   if (OB_SUCC(ret) && i >= tablet_infos_.count()) {
     // try get from inner table
-    if (OB_FAIL(share::ObTabletToGlobalTmpTableOperator::point_get(*GCTX.sql_proxy_, MTL_ID(), table_id, sequence, session_tablet_info))) {
+    if (OB_FAIL(share::ObTabletToGlobalTmpTableOperator::point_get(*GCTX.sql_proxy_, MTL_ID(), table_id, sequence, session_id, session_tablet_info))) {
       if (OB_ENTRY_NOT_EXIST != ret) {
-        LOG_WARN("failed to get session tablet from inner table", KR(ret), K(table_id), K(sequence));
+        LOG_WARN("failed to get session tablet from inner table", KR(ret), K(table_id), K(sequence), K(session_id));
       }
     } else if (OB_UNLIKELY(!session_tablet_info.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
@@ -200,7 +200,7 @@ int ObSessionTabletInfoMap::inner_get_session_tablet(
     } else if (OB_FAIL(tablet_infos_.push_back(session_tablet_info))) {
       LOG_WARN("failed to push back", KR(ret), K(session_tablet_info));
     } else {
-      FLOG_INFO("session tablet get from inner table", KR(ret), K(table_id), K(sequence), K(session_tablet_info), K(tablet_infos_));
+      FLOG_INFO("session tablet get from inner table", KR(ret), K(table_id), K(sequence), K(session_id), K(session_tablet_info), K(tablet_infos_));
     }
   }
   return ret;

@@ -68,6 +68,7 @@ public:
   // @param [in] tenant_id, tenant for query
   // @param [in] table_id, table_id for getting
   // @param [in] sequence, sequence for getting
+  // @param [in] session_id, session_id for getting
   // @param [out] info, ObSessionTabletInfo for getting
   // @return OB_SUCCESS if exist, OB_ENTRY_NOT_EXIST if not exist
   static int point_get(
@@ -75,6 +76,7 @@ public:
     const uint64_t tenant_id,
     const uint64_t table_id,
     const int64_t sequence,
+    const uint32_t session_id,
     storage::ObSessionTabletInfo &info);
   // Update ls_id and transfer_seq for a tablet in global temporary table
   //
