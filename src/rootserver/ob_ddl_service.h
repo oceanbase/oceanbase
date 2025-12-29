@@ -1140,6 +1140,15 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
                                          const AlterTableSchema &alter_table_schema,
                                          bool &is_alter_decimal_int_off);
   int check_inner_stat() const;
+  static int print_view_expanded_definition_impl(
+             common::ObIAllocator &allocator,
+             const common::ObString &database_name,
+             const common::ObString &table_name,
+             const common::ObString &view_definition,
+             bool if_not_exist,
+             bool is_materialized_view,
+             bool is_oracle_mode,
+             common::ObString &ddl_stmt_str);
 private:
   enum PartitionBornMethod : int64_t
   {

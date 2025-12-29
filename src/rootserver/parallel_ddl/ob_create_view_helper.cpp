@@ -10,9 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
- #define USING_LOG_PREFIX RS
- #include "rootserver/parallel_ddl/ob_create_view_helper.h"
- #include "sql/resolver/ddl/ob_create_view_resolver.h"
+#define USING_LOG_PREFIX RS
+#include "rootserver/parallel_ddl/ob_create_view_helper.h"
+#include "rootserver/ob_ddl_service.h"
+#include "sql/resolver/ddl/ob_create_view_resolver.h"
  #include "share/schema/ob_multi_version_schema_service.h"
  #include "share/schema/ob_table_sql_service.h"
  #include "share/schema/ob_rls_sql_service.h"
@@ -619,41 +620,33 @@
    return ret;
  }
 
- int ObCreateViewHelper::print_view_expanded_definition_()
- {
-   int ret = OB_SUCCESS;
-   char *buf = nullptr;
-   int64_t buf_len = OB_MAX_VARCHAR_LENGTH;
-   int64_t pos = 0;
-   bool is_oracle_mode = false;
-   if (OB_ISNULL(buf = static_cast<char*>(allocator_.alloc(buf_len)))) {
-     ret = OB_ALLOCATE_MEMORY_FAILED;
-     LOG_WARN("fail to allocate memory", KR(ret), K(buf_len));
-   } else if (OB_ISNULL(new_table_schema_)) {
-     ret = OB_ERR_UNEXPECTED;
-     LOG_WARN("new_table_schema_ is null", KR(ret));
-   } else if (OB_FAIL(latest_schema_guard_.get_database_schema(arg_.schema_.get_database_id(), database_schema_))) {
-     LOG_WARN("fail to get database schema", KR(ret));
-   } else if (OB_ISNULL(database_schema_)) {
-     ret = OB_ERR_UNEXPECTED;
-     LOG_WARN("database schema is null", KR(ret), K(arg_.schema_.get_database_id()));
-   } else if (OB_FAIL(new_table_schema_->check_if_oracle_compat_mode(is_oracle_mode))) {
-     LOG_WARN("fail to check oracle mode", KR(ret));
-   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-              is_oracle_mode ? "CREATE%s %sVIEW \"%s\".\"%s\" AS %.*s;"
-                             : "CREATE%s %sVIEW `%s`.`%s` AS %.*s;",
-              arg_.if_not_exist_ ? " OR REPLACE" : "",
-              new_table_schema_->is_materialized_view() ? "MATERIALIZED " : "",
-              database_schema_->get_database_name(),
-              new_table_schema_->get_table_name(),
-              new_table_schema_->get_view_schema().get_view_definition_str().length(),
-              new_table_schema_->get_view_schema().get_view_definition_str().ptr()))) {
-     LOG_WARN("fail to print view definition", KR(ret));
-   } else {
-     ddl_stmt_str_.assign_ptr(buf, static_cast<int32_t>(pos));
-   }
-   return ret;
- }
+int ObCreateViewHelper::print_view_expanded_definition_()
+{
+  int ret = OB_SUCCESS;
+  bool is_oracle_mode = false;
+  if (OB_ISNULL(new_table_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("new_table_schema_ is null", KR(ret));
+  } else if (OB_FAIL(latest_schema_guard_.get_database_schema(arg_.schema_.get_database_id(), database_schema_))) {
+    LOG_WARN("fail to get database schema", KR(ret));
+  } else if (OB_ISNULL(database_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("database schema is null", KR(ret), K(arg_.schema_.get_database_id()));
+  } else if (OB_FAIL(new_table_schema_->check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("fail to check oracle mode", KR(ret));
+  } else if (OB_FAIL(ObDDLService::print_view_expanded_definition_impl(
+                       allocator_,
+                       database_schema_->get_database_name_str(),
+                       new_table_schema_->get_table_name_str(),
+                       new_table_schema_->get_view_schema().get_view_definition_str(),
+                       arg_.if_not_exist_,
+                       new_table_schema_->is_materialized_view(),
+                       is_oracle_mode,
+                       ddl_stmt_str_))) {
+    LOG_WARN("fail to print view expanded definition impl", KR(ret));
+  }
+  return ret;
+}
 
  int ObCreateViewHelper::calc_schema_version_cnt_()
  {
