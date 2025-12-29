@@ -843,10 +843,14 @@ int ObRoutinePersistentInfo::get_pl_extra_info(const DependencyTable &dep_table,
         break;
       }
     }
-    //in normal resolve phase,we will collect body itself in dependency table for body obj which is
-    // different with dependency table (not collect body itself), so we do not collect body itself in extra_info
+    //in normal resolve phase,we will collect pl itself in dependency table  which is
+    // different with all_virtual_dependency table (not collect pl itself), so we do not collect itself in extra_info
+    // but for type body , we should collect type spec , so here if not found same object_id, we should collect type spec dep
+    // even if it has the same object_id with type body itself
     if (!found) {
-      OZ (dep_table_objs.push_back(dep_table.at(i)));
+      if (key_id != dep_table.at(i).object_id_ || DEPENDENCY_TYPE == dep_table.at(i).object_type_) {
+        OZ (dep_table_objs.push_back(dep_table.at(i)));
+      }
     }
   }
   OX (lib::ob_sort(dep_table_objs.begin(), dep_table_objs.end(), ob_schema_obj_version_less));
