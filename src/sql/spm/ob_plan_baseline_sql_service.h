@@ -32,6 +32,23 @@ namespace sql
 struct ObImportBaseline;
 class ObSpmBaselineLoader;
 
+struct BaselinePlanHashCmp
+{
+  inline bool operator()(const ObPlanBaselineItem *l, const ObPlanBaselineItem *r)
+  {
+    return l->get_plan_hash_value() < r->get_plan_hash_value();
+  }
+};
+
+struct UpdateInfo {
+  uint64_t plan_hash_;
+  const ObEvolutionStat *stat_;
+  bool update_last_verified_;
+  int assign(const UpdateInfo &other);
+  bool operator<(const UpdateInfo &other) const { return plan_hash_ < other.plan_hash_; }
+  TO_STRING_EMPTY();
+};
+
 class ObPlanBaselineSqlService
 {
 public:
