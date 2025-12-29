@@ -860,7 +860,8 @@ int ObPLCompiler::analyze_package(const ObString &source,
       }
     }
     OZ (parser.parse_package(source, parse_tree, session_info_.get_dtc_params(), 
-                             &schema_guard_, is_for_trigger, is_wrap, trg_info));
+                             &schema_guard_, is_for_trigger, is_wrap, trg_info,
+                             true, &session_info_));
     OZ (resolver.init(package_ast));
     OZ (resolver.resolve(parse_tree, package_ast));
     if (OB_SUCC(ret) && PL_PACKAGE_SPEC == package_ast.get_package_type()) {
@@ -984,7 +985,8 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
                                             package_info.get_package_id(),
                                             source,
                                             schema::PACKAGE_TYPE == package_info.get_type(),
-                                            schema_guard_, package.get_allocator()));
+                                            schema_guard_, package.get_allocator(),
+                                            &session_info_));
       LOG_DEBUG("trigger package source", K(source), K(package_info.get_type()), K(ret));
     } else {
       source = package_info.get_source();
