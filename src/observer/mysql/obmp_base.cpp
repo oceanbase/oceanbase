@@ -399,7 +399,11 @@ int ObMPBase::do_after_process(sql::ObSQLSessionInfo &session,
   // @todo 重构wb逻辑
   if (!async_resp_used) { // 异步回包不重置warning buffer，重置操作在callback中做
     session.reset_warnings_buf();
-    session.set_session_sleep();
+    if (!session.get_is_in_retry()) {
+      session.set_session_sleep();
+      session.reset_cur_sql_id();
+      session.reset_current_plan_id();
+    }
   }
   // clear tsi warning buffer
   ob_setup_tsi_warning_buffer(NULL);
