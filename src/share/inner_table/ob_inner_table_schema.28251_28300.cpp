@@ -15572,7 +15572,7 @@ int ObInnerTableSchema::all_tablet_to_global_temporary_table_idx_temp_table_id_s
   table_schema.set_rowkey_column_num(1);
   table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
   table_schema.set_table_type(USER_INDEX);
-  table_schema.set_index_type(INDEX_TYPE_NORMAL_LOCAL);
+  table_schema.set_index_type(INDEX_TYPE_UNIQUE_LOCAL);
   table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
 
   if (OB_SUCC(ret)) {
@@ -15636,9 +15636,41 @@ int ObInnerTableSchema::all_tablet_to_global_temporary_table_idx_temp_table_id_s
   }
 
   if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("sequence", //column_name
+      column_id + 4, //column_id
+      3, //rowkey_id
+      3, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false,//is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("shadow_pk_0", //column_name
+      column_id + 32768, //column_id
+      4, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true,//is_nullable
+      false,//is_autoincrement
+      true,//is_hidden
+      false);//is_storing_column
+  }
+
+  if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA("tablet_id", //column_name
       column_id + 1, //column_id
-      3, //rowkey_id
+      0, //rowkey_id
       0, //index_id
       0, //part_key_pos
       ObIntType, //column_type
@@ -15650,10 +15682,10 @@ int ObInnerTableSchema::all_tablet_to_global_temporary_table_idx_temp_table_id_s
       false); //is_autoincrement
   }
   table_schema.set_index_status(INDEX_STATUS_AVAILABLE);
-  table_schema.set_index_type(INDEX_TYPE_NORMAL_LOCAL);
+  table_schema.set_index_type(INDEX_TYPE_UNIQUE_LOCAL);
   table_schema.set_data_table_id(OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_TID);
 
-  table_schema.set_max_used_column_id(column_id + 5);
+  table_schema.set_max_used_column_id(column_id + 32768);
   return ret;
 }
 

@@ -167,7 +167,7 @@ int ObTabletToGlobalTmpTableOperator::inner_batch_insert_by_sql(
         LOG_WARN("fail to finish row", KR(ret));
       }
     }
-    if (FAILEDx(dml_splicer.splice_batch_insert_update_sql(OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_TNAME, sql))) {
+    if (FAILEDx(dml_splicer.splice_batch_insert_sql(OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_TNAME, sql))) {
       LOG_WARN("fail to splice batch insert sql", KR(ret), K(sql));
     } else if (OB_FAIL(sql_proxy.write(tenant_id, sql.ptr(), affected_rows))) {
       LOG_WARN("fail to write sql", KR(ret), K(sql), K(affected_rows), K(infos), K(start_idx), K(end_idx));

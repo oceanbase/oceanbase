@@ -80675,9 +80675,9 @@ def_sys_index_table(
 def_sys_index_table(
   index_name = 'idx_temp_table_id_session_id',
   index_table_id = 101122,
-  index_columns = ['table_id', 'session_id'],
+  index_columns = ['table_id', 'session_id', 'sequence'],
   index_using_type = 'USING_BTREE',
-  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  index_type = 'INDEX_TYPE_UNIQUE_LOCAL',
   keywords = all_def_keywords['__all_tablet_to_global_temporary_table'])
 
 def_sys_index_table(
