@@ -173,6 +173,7 @@ void ObDataDictService::destroy()
 void ObDataDictService::runTimerTask()
 {
   ObCurTraceId::init(GCONF.self_addr_);
+  int ret = OB_SUCCESS;
 
   if (IS_INIT) {
     refresh_config_();
@@ -186,9 +187,18 @@ void ObDataDictService::runTimerTask()
         && (! last_dump_succ_snapshot_scn_.is_valid() || last_dump_succ_snapshot_scn_ < expected_dump_snapshot_scn_);
     const bool force_need_dump = ATOMIC_LOAD(&force_need_dump_);
 
-    if (is_leader && (is_reach_time_interval || force_need_dump || need_dump_as_expected)) {
-      LOG_INFO("begin do_dump_data_dict_", K(start_time), K(is_reach_time_interval), K(force_need_dump), K(need_dump_as_expected));
-      int ret = OB_SUCCESS;
+    // Check if data dictionary table has records, if not, need to dump
+    bool has_data_dict_record = true;
+    if (is_leader && OB_FAIL(sql_client_.check_has_data_dict_record(tenant_id_, has_data_dict_record))) {
+      LOG_WARN("check_has_data_dict_record failed", KR(ret), K_(tenant_id));
+      // assume already has valid data_dict record and set ret = OB_SUCCESS
+      ret = OB_SUCCESS;
+    } else if (!has_data_dict_record) {
+      LOG_INFO("no valid dump rececord, maybe a new tenant, need trigger dump", K_(tenant_id));
+    }
+
+    if (is_leader && (is_reach_time_interval || force_need_dump || need_dump_as_expected || !has_data_dict_record)) {
+      LOG_INFO("begin do_dump_data_dict_", K(start_time), K(is_reach_time_interval), K(force_need_dump), K(need_dump_as_expected), K(has_data_dict_record));
       uint64_t data_version = 0;
 
       if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {

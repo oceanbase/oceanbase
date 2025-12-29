@@ -43,6 +43,9 @@ const char *ObDataDictSqlClient::report_data_dict_persist_info_sql_format =
 const char *ObDataDictSqlClient::recycle_dict_history_sql_format =
     "DELETE FROM %s WHERE SNAPSHOT_SCN < %lu";
 
+const char *ObDataDictSqlClient::check_has_data_dict_record_sql_format =
+    "SELECT COUNT(*) AS CNT FROM %s";
+
 ObDataDictSqlClient::ObDataDictSqlClient()
   : is_inited_(false),
     sql_proxy_(NULL)
@@ -237,6 +240,53 @@ int ObDataDictSqlClient::recycle_hisotry_dict_info(
       }
     }
   }
+  return ret;
+}
+
+int ObDataDictSqlClient::check_has_data_dict_record(
+    const uint64_t tenant_id,
+    bool &has_record)
+{
+  int ret = OB_SUCCESS;
+  has_record = false;
+
+  IF_CLIENT_VALID {
+    if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid tenant_id for check_has_data_dict_record", KR(ret), K(tenant_id));
+    } else {
+      ObSqlString sql;
+      int64_t record_count = 0;
+
+      SMART_VAR(ObISQLClient::ReadResult, result) {
+        if (OB_FAIL(sql.assign_fmt(check_has_data_dict_record_sql_format,
+            OB_ALL_DATA_DICTIONARY_IN_LOG_TNAME))) {
+          LOG_WARN("assign_fmt to sql_string failed", KR(ret), K(tenant_id));
+        } else if (OB_FAIL(sql_proxy_->read(result, tenant_id, sql.ptr()))) {
+          LOG_WARN("read from sql_proxy_ for check_has_data_dict_record failed", KR(ret),
+              K(tenant_id), "sql", sql.ptr());
+        } else if (OB_ISNULL(result.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get sql result failed", KR(ret), "sql", sql.ptr());
+        } else if (OB_FAIL(result.get_result()->next())) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+            has_record = false;
+            LOG_INFO("no record in data_dictionary_in_log table", K(tenant_id));
+          } else {
+            LOG_WARN("get next result failed", KR(ret), K(tenant_id));
+          }
+        } else {
+          EXTRACT_INT_FIELD_MYSQL(*result.get_result(), "CNT", record_count, int64_t);
+          if (OB_SUCC(ret)) {
+            has_record = (record_count > 0);
+            LOG_TRACE("check_has_data_dict_record", K(tenant_id), K(record_count), K(has_record));
+          }
+        }
+      }
+    }
+  }
+
   return ret;
 }
 

@@ -55,10 +55,14 @@ public:
       const uint64_t tenant_id,
       const share::SCN &recycle_until_scn,
       int64_t &recycle_count);
+  int check_has_data_dict_record(
+      const uint64_t tenant_id,
+      bool &has_record);
 private:
   static const char *query_tenant_schema_version_sql_format;
   static const char *report_data_dict_persist_info_sql_format;
   static const char *recycle_dict_history_sql_format;
+  static const char *check_has_data_dict_record_sql_format;
 private:
   int parse_record_from_row_(
       common::sqlclient::ObMySQLResult &result,
