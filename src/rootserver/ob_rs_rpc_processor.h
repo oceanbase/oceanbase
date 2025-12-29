@@ -69,6 +69,8 @@ inline bool allow_ddl_thread_rpc_not_match(const obrpc::ObRpcPacketCode pcode)
          || obrpc::OB_CREATE_RESOURCE_UNIT == pcode
          || obrpc::OB_DROP_RESOURCE_UNIT == pcode
          || obrpc::OB_CLONE_RESOURCE_POOL == pcode
+         || obrpc::OB_CLONE_TENANT == pcode
+         || obrpc::OB_ADMIN_UPGRADE_VIRTUAL_SCHEMA == pcode
          || obrpc::OB_CREATE_RESOURCE_POOL == pcode
          || obrpc::OB_DROP_RESOURCE_POOL == pcode
          || obrpc::OB_SPLIT_RESOURCE_POOL == pcode
@@ -247,7 +249,7 @@ protected:
       // check whether the thread name and rpc type match
       if (!allow_ddl_thread_rpc_not_match(pcode)
            && ((is_ddl_like_ && !is_ddl_thread()) || (!is_ddl_like_ && is_ddl_thread()))) {
-        LOG_ERROR("thread name and rpc type not match, need fix", K(is_ddl_thread()), K_(is_ddl_like), K(pcode));
+        LOG_ERROR("thread name and rpc type not match, need fix", K(is_ddl_thread()), K_(is_ddl_like), KPHEX(&pcode, sizeof(pcode)));
       }
       // check other conditions
       if (is_ddl_like_
