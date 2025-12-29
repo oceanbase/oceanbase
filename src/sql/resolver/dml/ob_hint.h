@@ -237,6 +237,7 @@ struct ObOptParamHint
     DEF(APPROX_COUNT_DISTINCT_PRECISION,)           \
     DEF(ENABLE_DELETE_INSERT_SCAN,)                 \
     DEF(ENABLE_FAST_REFRESH_WITH_CUR_TIME,)         \
+    DEF(DISABLE_SHARED_EXPR_EXTRACTION,)            \
 
 
 
