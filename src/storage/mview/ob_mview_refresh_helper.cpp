@@ -140,24 +140,25 @@ int ObMViewRefreshHelper::generate_purge_mlog_sql(ObSchemaGetterGuard &schema_gu
       LOG_WARN("fail to generate new name with escape character", KR(ret),
                K(table_schema->get_table_name_str()), K(is_oracle_mode));
     } else {
-      if (is_oracle_mode) {
-        if (OB_FAIL(sql_string.assign_fmt("DELETE /*+ ENABLE_PARALLEL_DML PARALLEL(%d)*/ FROM \"%.*s\".\"%.*s\" WHERE ora_rowscn <= %lu;",
+      if (purge_log_parallel > 0) {
+        if (OB_FAIL(sql_string.assign_fmt("DELETE /*+ NO_REWRITE DYNAMIC_SAMPLING(0) ENABLE_PARALLEL_DML DML_PARALLEL(%d) PARALLEL(%d) */",
                                           static_cast<int>(purge_log_parallel),
-                                          static_cast<int>(database_name.length()),
-                                          database_name.ptr(),
-                                          static_cast<int>(table_name.length()), table_name.ptr(),
-                                          purge_scn.get_val_for_sql()))) {
+                                          static_cast<int>(purge_log_parallel)))) {
           LOG_WARN("fail to assign sql", KR(ret));
         }
       } else {
-        if (OB_FAIL(sql_string.assign_fmt("DELETE /*+ ENABLE_PARALLEL_DML PARALLEL(%d)*/ FROM `%.*s`.`%.*s` WHERE ora_rowscn <= %lu;",
-                                          static_cast<int>(purge_log_parallel),
-                                          static_cast<int>(database_name.length()),
-                                          database_name.ptr(),
-                                          static_cast<int>(table_name.length()), table_name.ptr(),
-                                          purge_scn.get_val_for_sql()))) {
+        if (OB_FAIL(sql_string.assign_fmt("DELETE /*+ NO_REWRITE DYNAMIC_SAMPLING(0) */"))) {
           LOG_WARN("fail to assign sql", KR(ret));
         }
+      }
+      if (OB_SUCC(ret)
+          && OB_FAIL(sql_string.append_fmt(is_oracle_mode ?
+                                           " FROM \"%.*s\".\"%.*s\" WHERE ora_rowscn <= %lu;" :
+                                           " FROM `%.*s`.`%.*s` WHERE ora_rowscn <= %lu;",
+                                           static_cast<int>(database_name.length()), database_name.ptr(),
+                                           static_cast<int>(table_name.length()), table_name.ptr(),
+                                           purge_scn.get_val_for_sql()))) {
+        LOG_WARN("fail to append sql", KR(ret));
       }
     }
   }
