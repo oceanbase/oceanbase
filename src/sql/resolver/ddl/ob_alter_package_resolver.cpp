@@ -105,11 +105,17 @@ int ObAlterPackageResolver::analyze_package(ObPLCompiler &compiler,
   int ret = OB_SUCCESS;
   ObString source;
   ObString package_name;
+  ObPackageInfo tmp_package_info;
 
+  char buf[OB_MAX_PROC_ENV_LENGTH];
+  int64_t pos = 0;
   CK (OB_NOT_NULL(package_info));
   CK (OB_NOT_NULL(session_info_));
   CK (OB_NOT_NULL(schema_checker_));
   CK (OB_NOT_NULL(schema_checker_->get_schema_guard()));
+  OZ (tmp_package_info.assign(*package_info));
+  OZ (ObExecEnv::gen_exec_env(*session_info_, buf, OB_MAX_PROC_ENV_LENGTH, pos));
+  OZ (tmp_package_info.set_exec_env(ObString(pos, buf))); //ObPLCompilerEnvGuard use tmp_package_info, keep exec_env consistent
   CK (package_info->is_package() || package_info->is_package_body());
   OX (package_name = package_info->get_package_name());
   OX (source = package_info->get_source());
@@ -117,7 +123,7 @@ int ObAlterPackageResolver::analyze_package(ObPLCompiler &compiler,
           *allocator_, session_info_->get_dtc_params(), source));
 
   if (OB_SUCC(ret)) {
-    ObPLCompilerEnvGuard guard(*package_info, *session_info_, *(schema_checker_->get_schema_guard()), ret, parent_ns);
+    ObPLCompilerEnvGuard guard(tmp_package_info, *session_info_, *(schema_checker_->get_schema_guard()), ret, parent_ns);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(compiler.analyze_package(source, parent_ns, package_ast,
                                                 false /* is_for_trigger */))) {
