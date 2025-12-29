@@ -152,7 +152,10 @@ struct ObCSVGeneralFormat {
     "FILE_EXTENSION",
     "PARSE_HEADER",
     "BINARY_FORMAT",
-    "IGNORE_LAST_EMPTY_COLUMN"
+    "IGNORE_LAST_EMPTY_COLUMN",
+    "PARALLEL_PARSE_ON_SINGLE_FILE",
+    "PARALLEL_PARSE_FILE_SIZE_THRESHOLD",
+    "MAX_ROW_LENGTH"
   };
 
   // ObCSVOptionsEnum should keep the same order as OPTION_NAMES
@@ -173,6 +176,9 @@ struct ObCSVGeneralFormat {
     PARSE_HEADER,
     BINARY_FORMAT,
     IGNORE_LAST_EMPTY_COLUMN,
+    PARALLEL_PARSE_ON_SINGLE_FILE,
+    PARALLEL_PARSE_FILE_SIZE_THRESHOLD,
+    MAX_ROW_LENGTH,
     // put new options here, before MAX_OPTIONS
     // ....
     MAX_OPTIONS
@@ -190,6 +196,7 @@ struct ObCSVGeneralFormat {
     GZIP = 2,
     DEFLATE = 3,
     ZSTD = 4,
+    SNAPPY = 5,
   };
   enum class ObCSVBinaryFormat {
     DEFAULT = 0,
