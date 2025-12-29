@@ -117,6 +117,16 @@ enum ObAppendStrategy
   OB_APPEND_STRATEGY_TYPE
 };
 
+enum ObStorageHandleType
+{
+  OB_STORAGE_HANDLE_FILE = 0,
+  OB_STORAGE_HANDLE_OSS = 1,
+  OB_STORAGE_HANDLE_S3 = 2,
+  OB_STORAGE_HANDLE_HDFS = 3,
+  OB_STORAGE_HANDLE_OBDAL = 4,
+  OB_STORAGE_HANDLE_MAX_TYPE
+};
+
 struct ObStorageObjectVersionParam {
   // Must be monotone increasing
   int64_t version_;
@@ -224,7 +234,7 @@ public:
   // should not use retry during physical backup
   // When physical backup lease is timeout, retry won't stop until 300s.
   explicit ObStorageUtil();
-  virtual ~ObStorageUtil() {}
+  virtual ~ObStorageUtil();
   int open(common::ObObjectStorageInfo *storage_info);
   void close();
 
@@ -361,16 +371,23 @@ private:
   int del_appendable_file(const common::ObString &uri);
 
   int head_object_meta_(const ObString &uri, ObStorageObjectMetaBase &obj_meta);
+  void reset();
 
-  ObStorageFileUtil file_util_;
-  ObStorageOssUtil oss_util_;
-  ObStorageS3Util s3_util_;
-  ObStorageHdfsJniUtil hdfs_util_;
-  ObStorageObDalUtil obdal_util_;
+  union UtilUnion
+  {
+    UtilUnion() {}
+    ~UtilUnion() {}
+    ObStorageFileUtil    file_util_;
+    ObStorageOssUtil     oss_util_;
+    ObStorageS3Util      s3_util_;
+    ObStorageHdfsJniUtil hdfs_util_;
+    ObStorageObDalUtil   obdal_util_;
+  } util_union_;
   ObIStorageUtil* util_;
   common::ObObjectStorageInfo* storage_info_;
   bool init_state;
   ObStorageType device_type_;
+  ObStorageHandleType handle_type_;
   DISALLOW_COPY_AND_ASSIGN(ObStorageUtil);
 };
 
@@ -430,16 +447,23 @@ public:
       common::ObObjectStorageInfo *storage_info, const bool head_meta = true);
   int pread(char *buf, const int64_t buf_size, int64_t offset, int64_t &read_size);
   int close();
+  void reset();
   int64_t get_length() const { return file_length_; }
 
 protected:
   int64_t file_length_;
   ObIStorageReader *reader_;
-  ObStorageFileReader file_reader_;
-  ObStorageOssReader oss_reader_;
-  ObStorageS3Reader s3_reader_;
-  ObStorageHdfsReader hdfs_reader_;
-  ObStorageObDalReader obdal_reader_;
+  union ReaderUnion
+  {
+    ReaderUnion() {}
+    ~ReaderUnion() {}
+    ObStorageFileReader  file_reader_;
+    ObStorageOssReader   oss_reader_;
+    ObStorageS3Reader    s3_reader_;
+    ObStorageHdfsReader  hdfs_reader_;
+    ObStorageObDalReader obdal_reader_;
+  } reader_union_;
+  ObStorageHandleType handle_type_;
   int64_t start_ts_;
   char uri_[OB_MAX_URI_LENGTH];
   bool has_meta_;
@@ -458,6 +482,7 @@ public:
   int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info);
   int pread(char *buf, const int64_t buf_size, const int64_t offset, int64_t &read_size);
   int close();
+  void reset();
   int64_t get_length() const { return meta_.length_; }
 
 private:
@@ -466,11 +491,17 @@ private:
   ObString bucket_;
   ObString object_;
   ObIStorageReader *reader_;
-  ObStorageFileReader file_reader_;
-  ObStorageOssReader oss_reader_;
-  ObStorageS3Reader s3_reader_;
-  ObStorageHdfsReader hdfs_reader_;
-  ObStorageObDalReader obdal_reader_;
+  union AdaptiveReaderUnion
+  {
+    AdaptiveReaderUnion() {}
+    ~AdaptiveReaderUnion() {}
+    ObStorageFileReader  file_reader_;
+    ObStorageOssReader   oss_reader_;
+    ObStorageS3Reader    s3_reader_;
+    ObStorageHdfsReader  hdfs_reader_;
+    ObStorageObDalReader obdal_reader_;
+  } reader_union_;
+  ObStorageHandleType handle_type_;
   int64_t start_ts_;
   char uri_[OB_MAX_URI_LENGTH];
   ObObjectStorageInfo *storage_info_;
@@ -485,13 +516,20 @@ public:
   virtual int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info);
   int write(const char *buf,const int64_t size);
   int close();
+  void reset();
 protected:
   ObIStorageWriter *writer_;
-  ObStorageFileSingleWriter file_writer_;
-  ObStorageOssWriter oss_writer_;
-  ObStorageS3Writer s3_writer_;
-  ObStorageHdfsWriter hdfs_writer_;
-  ObStorageObDalWriter obdal_writer_;
+  union WriterUnion
+  {
+    WriterUnion() {}
+    ~WriterUnion() {}
+    ObStorageFileSingleWriter file_writer_;
+    ObStorageOssWriter        oss_writer_;
+    ObStorageS3Writer         s3_writer_;
+    ObStorageHdfsWriter       hdfs_writer_;
+    ObStorageObDalWriter      obdal_writer_;
+  } writer_union_;
+  ObStorageHandleType handle_type_;
   int64_t start_ts_;
   char uri_[OB_MAX_URI_LENGTH];
   ObObjectStorageInfo *storage_info_;
@@ -515,25 +553,33 @@ public:
   int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info);
   int pwrite(const char *buf, const int64_t size, const int64_t offset);
   int close();
+  void reset();
   bool is_opened() const { return is_opened_; }
   int64_t get_length();
-  void set_open_mode(StorageOpenMode mode) {file_appender_.set_open_mode(mode);}
+  void set_open_mode(StorageOpenMode mode) { open_mode_ = mode; }
   int seal_for_adaptive();
-  TO_STRING_KV(KP_(appender), K_(start_ts), K_(is_opened), KCSTRING_(uri));
+  TO_STRING_KV(KP_(appender), K_(start_ts), K_(is_opened), KCSTRING_(uri), K_(open_mode), KPC(storage_info_), K(type_), K(open_mode_), K(handle_type_));
 
 private:
   ObIStorageWriter *appender_;
-  ObStorageFileAppender file_appender_;
-  ObStorageOssAppendWriter oss_appender_;
-  ObStorageS3AppendWriter s3_appender_;
-  ObStorageHdfsAppendWriter hdfs_appender_;
-  ObStorageObDalAppendWriter obdal_appender_;
+  union AppenderUnion
+  {
+    AppenderUnion() {}
+    ~AppenderUnion() {}
+    ObStorageFileAppender      file_appender_;
+    ObStorageOssAppendWriter   oss_appender_;
+    ObStorageS3AppendWriter    s3_appender_;
+    ObStorageHdfsAppendWriter  hdfs_appender_;
+    ObStorageObDalAppendWriter obdal_appender_;
+  } appender_union_;
+  ObStorageHandleType handle_type_;
   int64_t start_ts_;
   bool is_opened_;
   char uri_[OB_MAX_URI_LENGTH];
   common::ObObjectStorageInfo *storage_info_;
   ObArenaAllocator allocator_;
   ObStorageType type_;
+  StorageOpenMode open_mode_;
 
   int repeatable_pwrite_(const char *buf, const int64_t size, const int64_t offset);
   DISALLOW_COPY_AND_ASSIGN(ObStorageAppender);
@@ -551,16 +597,23 @@ public:
   int complete();
   int abort();
   int close();
+  void reset();
   bool is_opened()  const {return is_opened_;}
   int64_t get_length();
-  TO_STRING_KV(KP_(multipart_writer), K_(start_ts), K_(is_opened), KCSTRING_(uri));
+  TO_STRING_KV(KP_(multipart_writer), K_(start_ts), K_(is_opened), KCSTRING_(uri), KPC(storage_info_), K(handle_type_));
 
 protected:
   ObIStorageMultiPartWriter *multipart_writer_;
-  ObStorageFileMultiPartWriter file_multipart_writer_;
-  ObStorageOssMultiPartWriter oss_multipart_writer_;
-  ObStorageS3MultiPartWriter s3_multipart_writer_;
-  ObStorageObDalMultiPartWriter obdal_multipart_writer_;
+  union MultiPartWriterUnion
+  {
+    MultiPartWriterUnion() {}
+    ~MultiPartWriterUnion() {}
+    ObStorageFileMultiPartWriter  file_multipart_writer_;
+    ObStorageOssMultiPartWriter   oss_multipart_writer_;
+    ObStorageS3MultiPartWriter    s3_multipart_writer_;
+    ObStorageObDalMultiPartWriter obdal_multipart_writer_;
+  } multipart_writer_union_;
+  ObStorageHandleType handle_type_;
   int64_t start_ts_;
   bool is_opened_;
   char uri_[OB_MAX_URI_LENGTH];
@@ -580,10 +633,16 @@ public:
 
 protected:
   ObIStorageParallelMultipartWriter *multipart_writer_;
-  ObStorageParallelFileMultiPartWriter file_multipart_writer_;
-  ObStorageParallelOssMultiPartWriter oss_multipart_writer_;
-  ObStorageParallelS3MultiPartWriter s3_multipart_writer_;
-  ObStorageParallelObDalMultiPartWriter obdal_multipart_writer_;
+  union ParallelMultiPartWriterUnion
+  {
+    ParallelMultiPartWriterUnion() {}
+    ~ParallelMultiPartWriterUnion() {}
+    ObStorageParallelFileMultiPartWriter  file_multipart_writer_;
+    ObStorageParallelOssMultiPartWriter   oss_multipart_writer_;
+    ObStorageParallelS3MultiPartWriter    s3_multipart_writer_;
+    ObStorageParallelObDalMultiPartWriter obdal_multipart_writer_;
+  } multipart_writer_union_;
+  ObStorageHandleType handle_type_;
   int64_t start_ts_;
   bool is_opened_;
   char uri_[OB_MAX_URI_LENGTH];
