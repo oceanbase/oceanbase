@@ -116,6 +116,11 @@ public:
   static bool is_working_service(
       const int64_t service_type,
       const uint64_t tenant_id);
+  // write slog without lock
+  static int update_ls_id_meta_for_flush(
+      const int64_t id_service_type,
+      const int64_t limited_id,
+      const SCN latest_log_ts);
 
   //获取数值或数值组
   int get_number(const int64_t range, const int64_t base_id, int64_t &start_id, int64_t &end_id);
