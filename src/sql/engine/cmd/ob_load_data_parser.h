@@ -1155,6 +1155,7 @@ struct ObExternalFileFormat
     ODPS_FORMAT,
     ORC_FORMAT,
     PLUGIN_FORMAT,
+    KAFKA_FORMAT,
     MAX_FORMAT
   };
 

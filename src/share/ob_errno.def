@@ -2957,6 +2957,7 @@ DEFINE_ERROR(OB_ERR_INVALID_PRIVILEGE_ON_SENSITIVE_RULES, -11127, -1, "HY000", "
 DEFINE_ERROR(OB_AP_QUERY_NEED_RETRY, -11128, -1, "HY000", "AP query will retry with column replica");
 
 DEFINE_ERROR_EXT(OB_KAFKA_ERROR, -11129, -1, "HY000", "kafka server throw error", "kafka server throw error: ErrorMsg=%s");
+DEFINE_ERROR(OB_KAFKA_NEED_RETRY, -11130, -1, "HY000", "retry with kafka error");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // SQL扩展区段1：[-11000, -12000)
