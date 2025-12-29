@@ -80,7 +80,7 @@ int ObSimpleMJVPrinter::gen_delete_for_simple_mjv(ObIArray<ObDMLStmt*> &dml_stmt
         LOG_WARN("get unexpected null table item", K(ret), K(i));
       } else if (is_table_skip_refresh(*orig_table_items.at(i))) {
         // do nothing, no need to gen delete stmt
-      } else if (OB_FAIL(gen_exists_cond_for_table(orig_table_items.at(i), mv_table, true, true, semi_filter))) {
+      } else if (OB_FAIL(gen_exists_cond_for_table(orig_table_items.at(i), mv_table, true, false, true, semi_filter))) {
         LOG_WARN("failed to create simple column exprs", K(ret));
       } else if (orig_table_items.count() - 1 == i) {
         if (OB_FAIL(base_del_stmt->add_condition_expr(semi_filter))) {
@@ -88,7 +88,7 @@ int ObSimpleMJVPrinter::gen_delete_for_simple_mjv(ObIArray<ObDMLStmt*> &dml_stmt
         } else if (OB_FAIL(add_semi_to_inner_hint(base_del_stmt))) {
           LOG_WARN("failed to add semi to inner hint", K(ret));
         } else if (NULL != marker_filter
-                   && OB_FAIL(base_del_stmt->get_condition_exprs().push_back(marker_filter))) {
+                   && OB_FAIL(base_del_stmt->add_condition_expr(marker_filter))) {
           LOG_WARN("failed to push back maker filter", K(ret));
         } else if (OB_FAIL(dml_stmts.push_back(base_del_stmt))) {
           LOG_WARN("failed to push back delete stmt", K(ret));
@@ -103,7 +103,7 @@ int ObSimpleMJVPrinter::gen_delete_for_simple_mjv(ObIArray<ObDMLStmt*> &dml_stmt
       } else if (OB_FAIL(add_semi_to_inner_hint(del_stmt))) {
         LOG_WARN("failed to add semi to inner hint", K(ret));
       } else if (NULL != marker_filter
-                 && OB_FAIL(del_stmt->get_condition_exprs().push_back(marker_filter))) {
+                 && OB_FAIL(del_stmt->add_condition_expr(marker_filter))) {
         LOG_WARN("failed to push back maker filter", K(ret));
       } else if (OB_FAIL(dml_stmts.push_back(del_stmt))) {
         LOG_WARN("failed to push back delete stmt", K(ret));
@@ -190,9 +190,9 @@ int ObSimpleMJVPrinter::gen_access_mv_data_for_simple_mjv(ObSelectStmt *&sel_stm
         LOG_WARN("get unexpected null table item", K(ret), K(i));
       } else if (is_table_skip_refresh(*orig_table_items.at(i))) {
         // do nothing, no need to gen exists cond
-      } else if (OB_FAIL(gen_exists_cond_for_table(orig_table_items.at(i), mv_table, false, true, anti_filter))) {
+      } else if (OB_FAIL(gen_exists_cond_for_table(orig_table_items.at(i), mv_table, false, false, true, anti_filter))) {
         LOG_WARN("failed to create simple column exprs", K(ret));
-      } else if (OB_FAIL(sel_stmt->get_condition_exprs().push_back(anti_filter))) {
+      } else if (OB_FAIL(sel_stmt->add_condition_expr(anti_filter))) {
         LOG_WARN("failed to push back", K(ret));
       }
     }
@@ -203,134 +203,113 @@ int ObSimpleMJVPrinter::gen_access_mv_data_for_simple_mjv(ObSelectStmt *&sel_stm
 int ObSimpleMJVPrinter::gen_access_delta_data_for_simple_mjv(ObIArray<ObSelectStmt*> &access_delta_stmts)
 {
   int ret = OB_SUCCESS;
-  ObSelectStmt *base_delta_stmt = NULL;
-  ObSEArray<ObRawExpr*, 2> semi_filters;
   ObSEArray<ObRawExpr*, 2> anti_filters;
-  const int64_t table_size = mv_def_stmt_.get_table_items().count();
-  if (OB_UNLIKELY(table_size < 1)) {
+  const ObIArray<TableItem*> &orig_table_items = mv_def_stmt_.get_table_items();
+  if (OB_UNLIKELY(orig_table_items.empty())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected params", K(ret), K(table_size));
-  } else if (OB_FAIL(prepare_gen_access_delta_data_for_simple_mjv(base_delta_stmt,
-                                                                  semi_filters,
-                                                                  anti_filters))) {
-    LOG_WARN("failed to prepare generate access delta data for simple_mjv", K(ret));
+    LOG_WARN("unexpected params", K(ret), K(orig_table_items.count()));
+  } else if (OB_FAIL(anti_filters.prepare_allocate(orig_table_items.count()))) {
+    LOG_WARN("failed to prepare allocate arrays", K(ret), K(orig_table_items.count()));
   }
 
-  for (int64_t i = 0; OB_SUCC(ret) && i < table_size; ++i) {
-    const TableItem *ori_table = mv_def_stmt_.get_table_item(i);
-    ObSelectStmt *delta_stmt = NULL;
-    if (OB_ISNULL(ori_table)) {
+  // generate anti filters
+  for (int64_t i = 0; OB_SUCC(ret) && i < orig_table_items.count(); ++i) {
+    if (OB_ISNULL(orig_table_items.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null table item", K(ret), K(i));
-    } else if (is_table_skip_refresh(*ori_table)) {
-      // do nothing, no need to gen access delta data
-      continue;
-    } else if (table_size - 1 == i) {
-      if (OB_FAIL(base_delta_stmt->get_condition_exprs().push_back(semi_filters.at(i)))) {
-        LOG_WARN("failed to push back", K(ret));
-      } else {
-        delta_stmt = base_delta_stmt;
-      }
-    } else if (OB_FAIL(gen_one_access_delta_data_for_simple_mjv(*base_delta_stmt,
-                                                                i,
-                                                                semi_filters,
-                                                                anti_filters,
-                                                                delta_stmt))) {
-      LOG_WARN("failed to generate one access delta data for simple_mjv", K(ret));
+    } else if (is_table_skip_refresh(*orig_table_items.at(i))) {
+      // do nothing, no need to gen exists cond
+    } else if (OB_FAIL(gen_pre_scn_filter_for_table(*orig_table_items.at(i),
+                                                    anti_filters.at(i)))) {
+      LOG_WARN("failed to generate pre scn filter", K(ret));
     }
-    if (OB_SUCC(ret) && OB_FAIL(access_delta_stmts.push_back(delta_stmt))) {
+  }
+
+  // generate access delta data stmt for each delta table
+  for (int64_t i = 0; OB_SUCC(ret) && i < orig_table_items.count(); ++i) {
+    const TableItem *ori_table = mv_def_stmt_.get_table_item(i);
+    ObSelectStmt *delta_stmt = NULL;
+    if (OB_ISNULL(orig_table_items.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null table item", K(ret), K(i));
+    } else if (is_table_skip_refresh(*orig_table_items.at(i))) {
+      // do nothing, no need to gen exists cond
+    } else if (OB_FAIL(gen_one_access_delta_data_for_simple_mjv(i, anti_filters, delta_stmt))) {
+      LOG_WARN("failed to generate one access delta data stmt", K(ret));
+    } else if (OB_FAIL(access_delta_stmts.push_back(delta_stmt))) {
       LOG_WARN("failed to push back stmt", K(ret));
     }
   }
   return ret;
 }
 
-int ObSimpleMJVPrinter::prepare_gen_access_delta_data_for_simple_mjv(ObSelectStmt *&base_delta_stmt,
-                                                                     ObIArray<ObRawExpr*> &semi_filters,
-                                                                     ObIArray<ObRawExpr*> &anti_filters)
+int ObSimpleMJVPrinter::gen_one_access_delta_data_for_simple_mjv(const int64_t delta_table_idx,
+                                                                 ObIArray<ObRawExpr*> &anti_filters,
+                                                                 ObSelectStmt *&delta_stmt)
 {
   int ret = OB_SUCCESS;
-  base_delta_stmt = NULL;
-  ObSemiToInnerHint *semi_to_inner_hint = NULL;
-  ObSEArray<ObItemType, 1> conflict_hints;
-  const ObIArray<TableItem*> &orig_table_items = mv_def_stmt_.get_table_items();
-  if (OB_FAIL(semi_filters.prepare_allocate(orig_table_items.count()))
-      || OB_FAIL(anti_filters.prepare_allocate(orig_table_items.count()))) {
-    LOG_WARN("failed to prepare allocate arrays", K(ret), K(orig_table_items.count()));
-  } else if (OB_FAIL(deep_copy_mv_def_stmt(base_delta_stmt))) {
-    LOG_WARN("failed to deep copy mv def stmt", K(ret));
-  } else if (OB_FAIL(add_semi_to_inner_hint(base_delta_stmt))) {
-    LOG_WARN("failed to add semi to inner hint", K(ret));
-  } else {
-    const ObIArray<TableItem*> &cur_table_items = base_delta_stmt->get_table_items();
-    if (OB_UNLIKELY(cur_table_items.count() != orig_table_items.count())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected table items count", K(ret), K(cur_table_items.count()), K(orig_table_items.count()));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < orig_table_items.count(); ++i) {
-      if (OB_ISNULL(orig_table_items.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null table item", K(ret), K(i));
-      } else if (is_table_skip_refresh(*orig_table_items.at(i))) {
-        // do nothing, no need to gen exists cond
-      } else if (OB_FAIL(gen_exists_cond_for_table(orig_table_items.at(i),
-                                                   cur_table_items.at(i),
-                                                   true, false,
-                                                   semi_filters.at(i)))) {
-        LOG_WARN("failed to generate exists filter", K(ret));
-      } else if (OB_FAIL(gen_exists_cond_for_table(orig_table_items.at(i),
-                                                   cur_table_items.at(i),
-                                                   false, false,
-                                                   anti_filters.at(i)))) {
-        LOG_WARN("failed to generate not exists filter", K(ret));
-      }
+  delta_stmt = NULL;
+  ObRawExprCopier copier(ctx_.expr_factory_);
+  ObSelectStmt *delta_table_stmt = NULL;
+  const TableItem *ori_delta_table = NULL;
+  if (OB_UNLIKELY(delta_table_idx < 0 || delta_table_idx >= mv_def_stmt_.get_table_size()
+                  || mv_def_stmt_.get_table_size() != anti_filters.count())
+      || OB_ISNULL(ori_delta_table = mv_def_stmt_.get_table_item(delta_table_idx))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected params", K(ret), K(delta_table_idx), K(anti_filters.count()),
+                                      K(mv_def_stmt_.get_table_size()));
+  } else if (OB_FAIL(gen_delta_table_view(*ori_delta_table, delta_table_stmt))) {
+    LOG_WARN("failed to generate delta table view", K(ret), K(delta_table_idx));
+  } else if (OB_FAIL(create_simple_stmt(delta_stmt))) {
+    LOG_WARN("failed to create simple stmt", K(ret));
+  } else if (OB_ISNULL(delta_stmt) || OB_ISNULL(delta_table_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(delta_stmt), K(delta_table_stmt));
+  }
+
+  // 1. construct table items
+  for (int64_t i = 0; OB_SUCC(ret) && i < mv_def_stmt_.get_table_size(); ++i) {
+    const TableItem *ori_table = mv_def_stmt_.get_table_item(i);
+    TableItem *new_table = NULL;
+    if (OB_FAIL(create_table_item_with_infos(delta_stmt,
+                                             ori_table,
+                                             new_table,
+                                             delta_table_idx == i ? delta_table_stmt : NULL,
+                                             delta_table_idx == i ? DELTA_TABLE_FORMAT_NAME : NULL,
+                                             false))) {
+      LOG_WARN("failed to create simple table item", K(ret));
     }
   }
-  return ret;
-}
 
-// delta_mv = delta_t1 join pre_t2 join pre_t3 ... join pre_tn
-//            union all t1 join delta_t2 join pre_t3 ... join pre_tn
-//            ...
-//            union all t1 join t2 join t3 ... join delta_tn
-// input table_idx specify the delta table
-int ObSimpleMJVPrinter::gen_one_access_delta_data_for_simple_mjv(const ObSelectStmt &base_delta_stmt,
-                                                                 const int64_t table_idx,
-                                                                 const ObIArray<ObRawExpr*> &semi_filters,
-                                                                 const ObIArray<ObRawExpr*> &anti_filters,
-                                                                 ObSelectStmt *&sel_stmt)
-{
-  int ret = OB_SUCCESS;
-  sel_stmt = NULL;
-  if (OB_UNLIKELY(table_idx < 0 || table_idx >= semi_filters.count()
-                  || semi_filters.count() != mv_def_stmt_.get_table_size()
-                  || anti_filters.count() != mv_def_stmt_.get_table_size())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected params", K(ret), K(table_idx), K(semi_filters.count()), K(anti_filters.count()));
-  } else if (OB_FAIL(create_simple_stmt(sel_stmt))) {
-    LOG_WARN("failed to create simple stmt", K(ret));
-  } else if (OB_FAIL(sel_stmt->get_joined_tables().assign(base_delta_stmt.get_joined_tables()))
-             || OB_FAIL(sel_stmt->get_table_items().assign(base_delta_stmt.get_table_items()))
-             || OB_FAIL(sel_stmt->get_from_items().assign(base_delta_stmt.get_from_items()))
-             || OB_FAIL(sel_stmt->get_select_items().assign(base_delta_stmt.get_select_items()))
-             || OB_FAIL(sel_stmt->get_condition_exprs().assign(base_delta_stmt.get_condition_exprs()))
-             || OB_FAIL(sel_stmt->get_stmt_hint().merge_stmt_hint(base_delta_stmt.get_stmt_hint()))) {
-    LOG_WARN("failed to assign structure", K(ret));
-  } else if (OB_FAIL(sel_stmt->add_condition_expr(semi_filters.at(table_idx)))) {
-    LOG_WARN("failed to push back semi filter", K(ret));
-  } else if (OB_FAIL(add_semi_to_inner_hint(sel_stmt))) {
-    LOG_WARN("failed to add semi to inner hint", K(ret));
-  } else {
-    for (int64_t i = table_idx + 1; OB_SUCC(ret) && i < anti_filters.count(); ++i) {
-      const TableItem *orig_table = mv_def_stmt_.get_table_item(i);
-      if (OB_ISNULL(orig_table)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null table item", K(ret), K(i));
-      } else if (is_table_skip_refresh(*orig_table)) {
-        // do nothing, no need to add anti filter
-      } else if (OB_FAIL(sel_stmt->add_condition_expr(anti_filters.at(i)))) {
-        LOG_WARN("failed to push back anti filter", K(ret));
-      }
+  // 2. construct joined table, from items, condition exprs
+  if OB_FAIL(ret) {
+  } else if (OB_FAIL(init_expr_copier_for_stmt(*delta_stmt, copier))) {
+    LOG_WARN("failed to init expr copier for stmt", K(ret));
+  } else if (OB_FAIL(construct_from_items_for_simple_mjv_delta_data(copier, *delta_stmt))) {
+    LOG_WARN("failed to construct from items for simple mjv delta data", K(ret));
+  } else if (OB_FAIL(copier.copy_on_replace(mv_def_stmt_.get_condition_exprs(), delta_stmt->get_condition_exprs()))) {
+    LOG_WARN("failed to deep copy where conditions", K(ret));
+  }
+
+  // 3. construct select items
+  for (int64_t i = 0; OB_SUCC(ret) && i < mv_def_stmt_.get_select_item_size(); ++i) {
+    const SelectItem &ori_sel_item = mv_def_stmt_.get_select_item(i);
+    SelectItem new_sel_item;
+    new_sel_item.is_real_alias_ = true;
+    new_sel_item.alias_name_ = ori_sel_item.alias_name_;
+    if (OB_FAIL(copier.copy_on_replace(ori_sel_item.expr_, new_sel_item.expr_))) {
+      LOG_WARN("failed to copy select expr", K(ret));
+    } else if (OB_FAIL(delta_stmt->get_select_items().push_back(new_sel_item))) {
+      LOG_WARN("failed to push back select item", K(ret));
+    }
+  }
+
+  // 4. add anti join filter
+  for (int64_t i = delta_table_idx + 1; OB_SUCC(ret) && i < mv_def_stmt_.get_table_size(); ++i) {
+    if (NULL == anti_filters.at(i)) {
+      /* do nothing */
+    } else if (OB_FAIL(delta_stmt->add_condition_expr(anti_filters.at(i)))) {
+      LOG_WARN("failed to push back anti join filter", K(ret));
     }
   }
   return ret;

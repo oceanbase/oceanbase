@@ -103,8 +103,8 @@ struct ObMVPrinterCtx {
     refresh_info_(refresh_info),
     marker_idx_(OB_INVALID_INDEX)
   {}
-  inline bool for_rt_expand() const { return NULL == refresh_info_; }
-  inline bool for_union_all_child_query() const { return OB_INVALID_INDEX != marker_idx_; }
+  OB_INLINE bool for_rt_expand() const { return NULL == refresh_info_; }
+  OB_INLINE bool for_union_all_child_query() const { return OB_INVALID_INDEX != marker_idx_; }
   ObIAllocator &alloc_;
   ObSQLSessionInfo &session_info_;
   ObStmtFactory &stmt_factory_;
@@ -179,8 +179,11 @@ protected:
   int gen_exists_cond_for_table(const TableItem *source_table,
                                 const TableItem *outer_table,
                                 const bool is_exists,
+                                const bool access_new_data,
                                 const bool use_orig_sel_alias,
                                 ObRawExpr *&exists_expr);
+  int gen_pre_scn_filter_for_table(const TableItem &ori_table,
+                                   ObRawExpr *&scn_filter);
   int gen_rowkey_join_conds_for_table(const TableItem &origin_table,
                                       const TableItem &left_table,
                                       const TableItem &right_table,
@@ -204,10 +207,12 @@ protected:
                                 ObIArray<ObRawExpr*> &filters,
                                 const bool get_old_row = true,
                                 const bool get_new_row = true);
-  int gen_delta_pre_table_view(const TableItem *ori_table,
-                               ObSelectStmt *&view_stmt,
-                               const bool is_delta_view,
-                               const bool need_hint = true);
+  int gen_delete_insert_data_access_stmt(const TableItem &source_table,
+                                         const bool is_delete_data,
+                                         ObSelectStmt *&access_sel);
+  OB_INLINE int gen_delta_table_view(const TableItem &ori_table, ObSelectStmt *&view_stmt)
+  { return gen_delete_insert_data_access_stmt(ori_table, false, view_stmt); }
+  int gen_pre_table_view(const TableItem &ori_table, ObSelectStmt *&view_stmt);
   int gen_delta_mlog_table_view(const TableItem &source_table,
                                 ObSelectStmt *&view_stmt,
                                 const uint64_t ext_sel_flags = UINT64_MAX);
@@ -223,11 +228,14 @@ protected:
   int add_normal_column_to_select_list(const TableItem &table,
                                        const ObString &col_name,
                                        ObIArray<SelectItem> &select_items);
-  int add_normal_column_to_select_list(const TableItem &table,
+  int add_table_columns_to_select_list(const TableItem &table,
                                        const TableItem &source_table,
                                        ObIArray<SelectItem> &select_items,
-                                       const bool is_for_mlog_table,
-                                       const bool need_all_normal_col = true);
+                                       const bool is_for_mlog_table);
+  int add_table_rowkey_to_select_list(const TableItem &table,
+                                      const TableItem &source_table,
+                                      ObIArray<SelectItem> &select_items,
+                                      const bool is_for_mlog_table);
   int add_max_min_seq_window_to_select_list(const TableItem &table,
                                             const TableItem &source_table,
                                             ObRawExpr *sequence_expr,
@@ -273,9 +281,10 @@ protected:
                                             ObRawExpr *&marker_filter);
   int add_union_all_child_refresh_filter_if_needed(ObDMLStmt *stmt,
                                                    const TableItem *mv_table);
-  int assign_simple_sel_stmt(ObSelectStmt &target_stmt, ObSelectStmt &source_stmt);
-  int append_old_new_col_filter(const TableItem &table, ObIArray<ObRawExpr*>& conds);
-  int deep_copy_mv_def_stmt(ObSelectStmt *&new_stmt);
+  int append_old_new_col_filter(const TableItem &table,
+                                const bool access_new,
+                                const bool access_null,
+                                ObIArray<ObRawExpr*>& conds);
   int get_table_rowkey_ids(const ObTableSchema *table_schema, ObIArray<uint64_t> &rowkey_ids);
   int get_table_rowkey_exprs(const TableItem &table,
                              const TableItem &source_table,
@@ -298,7 +307,7 @@ protected:
                               const ObIArray<ObRawExpr*> &equal_cond_exprs,
                               ObRawExpr *&exists_expr);
   template <typename StmtType>
-  inline int create_simple_stmt(StmtType *&stmt)
+  OB_INLINE int create_simple_stmt(StmtType *&stmt)
   {
     int ret = common::OB_SUCCESS;
     if (OB_ISNULL(ctx_.stmt_factory_.get_query_ctx())) {

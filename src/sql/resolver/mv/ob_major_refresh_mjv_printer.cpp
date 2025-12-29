@@ -339,8 +339,8 @@ int ObMajorRefreshMJVPrinter::gen_mr_rt_mv_access_mv_data_stmt(ObSelectStmt *&se
     LOG_WARN("failed to create delta right table", K(ret));
   } else if (OB_FAIL(create_mr_rt_mv_access_mv_from_table(*sel_stmt, *mv_table, *delta_left_table, *delta_right_table))) {
     LOG_WARN("failed to create major refresh real time mview access mv from table", K(ret));
-  } else if (OB_FAIL(append_old_new_col_filter(*delta_left_table, sel_stmt->get_condition_exprs()))
-             || OB_FAIL(append_old_new_col_filter(*delta_right_table, sel_stmt->get_condition_exprs()))) {
+  } else if (OB_FAIL(append_old_new_col_filter(*delta_left_table, true, true, sel_stmt->get_condition_exprs()))
+             || OB_FAIL(append_old_new_col_filter(*delta_right_table, true, true, sel_stmt->get_condition_exprs()))) {
     LOG_WARN("failed to build old_new filter", K(ret));
   } else if (OB_FAIL(gen_mr_rt_mv_access_mv_data_select_list(*sel_stmt, *mv_table, *delta_left_table, *delta_right_table))) {
     LOG_WARN("failed to generate major refresh real time mview access mv select list", K(ret));
