@@ -424,7 +424,8 @@ LATCH_DEF(UUID_TIME_LOCK, 386, "UUID time lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(CONNECT_RESOURCE_MGR_LOCK, 387, "connect resource manager lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(OB_DIAG_LOCK, 388, "ob diag lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(TRANSPORT_SERVICE_TASK_LOCK, 389, "transport status task lock", LATCH_FIFO, 2000, 0, true)
-LATCH_DEF(LATCH_END, 390, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(STANDBY_ACK_STATUS_LOCK, 390, "standby ack status lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(LATCH_END, 391, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 
