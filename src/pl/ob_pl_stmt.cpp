@@ -2642,8 +2642,7 @@ int ObPLBlockNS::find_sub_attr_by_name(const ObUserDefinedType &user_type,
         if (get_block_type() == BLOCK_ROUTINE && access_idxs.count() > 0) {
           ObObjAccessIdx &parent_access_idx = access_idxs.at(access_idxs.count() - 1);
           if ((0 == parent_access_idx.var_index_ || 1 == parent_access_idx.var_index_)
-              && TriggerHandle::is_trigger_body_routine(package_id_, routine_id_,
-                                                           pl::ObProcType::PACKAGE_PROCEDURE)) {
+              && schema::ObTriggerInfo::is_trigger_body_package_id(package_id_)) {
             bool is_mysql_trg = lib::is_mysql_mode()
                                 && (parent_access_idx.var_name_.case_compare_equal("NEW")
                                     || parent_access_idx.var_name_.case_compare_equal("OLD"));
