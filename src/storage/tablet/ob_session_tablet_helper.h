@@ -65,6 +65,7 @@ public:
   int do_work();
   ~ObSessionTabletCreateHelper() = default;
   const common::ObIArray<common::ObTabletID> &get_tablet_ids() const { return tablet_ids_; }
+  const common::ObIArray<uint64_t> &get_table_ids() const { return table_ids_; }
   share::ObLSID get_ls_id() const { return ls_id_; }
   TO_STRING_KV(K_(tenant_id), K_(table_ids), K_(sequence), K_(session_id), K_(ls_id), K(tablet_ids_));
 

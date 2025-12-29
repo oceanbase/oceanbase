@@ -133,22 +133,23 @@ int ObSessionTabletInfoMap::add_session_tablet(
     LOG_WARN("unexpected error", KR(ret), K(create_helper.get_tablet_ids().count()), K(table_ids.count()));
   } else {
     const common::ObIArray<common::ObTabletID> &tablet_ids = create_helper.get_tablet_ids();
+    const common::ObIArray<uint64_t> &create_table_ids = create_helper.get_table_ids();
     const share::ObLSID &ls_id = create_helper.get_ls_id();
     lib::ObMutexGuard guard(mutex_);
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
-      const uint64_t table_id = table_ids.at(i);
+      const uint64_t table_id = create_table_ids.at(i);
       const common::ObTabletID &tablet_id = tablet_ids.at(i);
       tablet_info.reset();
       // The tablet has been newly created, so it must be inserted into tablet_infos_.
       if (OB_FAIL(tablet_info.init(tablet_id, ls_id, table_id, sequence, session_id, 0/*transfer_seq*/))) {
-        LOG_WARN("failed to init session tablet info", KR(ret), K(table_ids.at(i)));
+        LOG_WARN("failed to init session tablet info", KR(ret), K(create_table_ids.at(i)));
       } else if (FALSE_IT(tablet_info.is_creator_ = true)) {
       } else if (OB_FAIL(tablet_infos_.push_back(tablet_info))) {
         LOG_WARN("failed to push back", KR(ret), K(tablet_info));
       }
     }
     if (OB_SUCC(ret)) {
-      FLOG_INFO("session tablet added", KR(ret), K(table_ids), K(sequence), K(session_id), K(tablet_ids), K(tablet_infos_));
+      FLOG_INFO("session tablet added", KR(ret), K(table_ids), K(create_table_ids), K(sequence), K(session_id), K(tablet_ids), K(tablet_infos_));
     }
   }
   return ret;
