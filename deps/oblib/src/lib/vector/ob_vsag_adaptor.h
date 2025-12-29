@@ -35,6 +35,7 @@ enum IndexType {
   HGRAPH_TYPE = 6,
   // SPIV_TYPE,
   IPIVF_TYPE = 8,
+  IPIVF_SQ_TYPE = 9,
   MAX_INDEX_TYPE
 };
 
