@@ -633,14 +633,20 @@ int ObSessionTabletGCHelper::is_table_has_active_session(
       LOG_WARN("failed to reserve session alive array", KR(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < session_tablet_infos.count(); i++) {
-        if (OB_FAIL(session_id_array.push_back(session_tablet_infos.at(i).get_session_id()))) {
+        if (observer::ObInnerSQLConnection::INNER_SQL_SESS_ID == session_tablet_infos.at(i).get_session_id()
+            || observer::ObInnerSQLConnection::INNER_SQL_PROXY_SESS_ID == session_tablet_infos.at(i).get_session_id()) {
+          // skip the inner session
+        } else if (OB_FAIL(session_id_array.push_back(session_tablet_infos.at(i).get_session_id()))) {
           LOG_WARN("failed to push back session id", KR(ret));
         } else if (OB_FAIL(session_alive_array.push_back(false))) {
           LOG_WARN("failed to push back session alive", KR(ret));
         }
       }
       // TODO: the local observer needs not rpc to check session alive
-      if (FAILEDx(transaction::tablelock::ObTableLockDetectFuncList::batch_detect_session_alive_at_least_one(tenant_id,
+      if (OB_FAIL(ret)) {
+      } else if (session_id_array.count() == 0) {
+        // no session to check
+      } else if (OB_FAIL(transaction::tablelock::ObTableLockDetectFuncList::batch_detect_session_alive_at_least_one(tenant_id,
           session_id_array, nullptr, session_alive_array))) {
         LOG_WARN("failed to batch detect session alive", KR(ret));
       } else if (is_contain(session_alive_array, true)) {

@@ -420,6 +420,8 @@ int ObInnerSQLConnection::init_session_info(
           } else if (OB_FAIL(session->get_pc_mem_conf(pc_mem_conf))) {
             LOG_WARN("fail to get pc mem conf", K(ret));
           } else {
+            session->gen_gtt_trans_scope_unique_id();
+            session->gen_gtt_session_scope_unique_id();
             session->set_database_id(OB_SYS_DATABASE_ID);
             //TODO shengle ?
             InnerDDLInfo ddl_info;
