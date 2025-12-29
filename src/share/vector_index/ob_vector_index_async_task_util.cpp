@@ -2417,7 +2417,7 @@ int ObVecIndexAsyncTask::execute_exchange()
       LOG_WARN("fail to get snapshot", K(ret));
     } else if (OB_FAIL(exchange_snap_index_rows(*data_schema, *snapshot_schema, tx_desc, snapshot, timeout_us))) {
       LOG_WARN("fail to exchange snap index rows", K(ret), K(ctx_));
-    } else if (OB_FAIL(new_adapter_->renew_single_snap_index(new_adapter_->get_snap_index_type() == VIAT_HNSW_BQ))) {
+    } else if (OB_FAIL(new_adapter_->renew_single_snap_index(new_adapter_->get_snap_index_type() == VIAT_HNSW_BQ || new_adapter_->get_snap_index_type() == VIAT_IPIVF))) {
       LOG_WARN("fail to renew single snap index", K(ret));
     }
     /* Warning!!!
@@ -3392,7 +3392,7 @@ int ObVecIndexAsyncTask::optimize_vector_index(ObPluginVectorIndexAdaptor &adapt
   } else if (OB_FALSE_IT(ctx_->task_status_.progress_info_.vec_opt_status_ = OB_VECTOR_ASYNC_OPT_SERIALIZE)) {
   } else if (OB_FAIL(refresh_snapshot_index_data(adaptor, tx_desc, snapshot))) {
     LOG_WARN("failed to refresh snapshot index data", K(ret));
-  } else if (OB_FAIL(adaptor.renew_single_snap_index(adaptor.get_snap_index_type() == VIAT_HNSW_BQ))) {
+  } else if (OB_FAIL(adaptor.renew_single_snap_index(adaptor.get_snap_index_type() == VIAT_HNSW_BQ || adaptor.get_snap_index_type() == VIAT_IPIVF))) {
     LOG_WARN("fail to renew single snap index", K(ret));
   }
   /* Warning!!!
