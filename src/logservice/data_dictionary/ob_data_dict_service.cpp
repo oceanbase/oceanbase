@@ -179,13 +179,15 @@ void ObDataDictService::runTimerTask()
     bool is_leader = ATOMIC_LOAD(&is_leader_);
     const int64_t start_time = ObClockGenerator::getClock();
     const int64_t dump_interval = ATOMIC_LOAD(&dump_interval_);
-    const bool is_reach_time_interval = (start_time >= ATOMIC_LOAD(&last_dump_succ_time_) + dump_interval)
-        && (dump_interval > 0 || last_dump_succ_time_ <=0);
+    const bool enable_dump_by_interval = dump_interval > 0;
+    const bool is_reach_time_interval = enable_dump_by_interval
+        && ((start_time >= ATOMIC_LOAD(&last_dump_succ_time_) + dump_interval) || last_dump_succ_time_ <=0);
     const bool need_dump_as_expected = expected_dump_snapshot_scn_.is_valid()
         && (! last_dump_succ_snapshot_scn_.is_valid() || last_dump_succ_snapshot_scn_ < expected_dump_snapshot_scn_);
     const bool force_need_dump = ATOMIC_LOAD(&force_need_dump_);
 
     if (is_leader && (is_reach_time_interval || force_need_dump || need_dump_as_expected)) {
+      LOG_INFO("begin do_dump_data_dict_", K(start_time), K(is_reach_time_interval), K(force_need_dump), K(need_dump_as_expected));
       int ret = OB_SUCCESS;
       uint64_t data_version = 0;
 
@@ -433,23 +435,27 @@ int ObDataDictService::check_cluster_status_normal_(bool &is_normal)
 int ObDataDictService::get_snapshot_scn_(share::SCN &snapshot_scn)
 {
   int ret = OB_SUCCESS;
-  static const int64_t gts_get_timeout_ns = 4 * _SEC_ * NS_CONVERSION;
+  static const int64_t gts_get_timeout = 10 * _SEC_;
   SCN gts_scn;
   const transaction::MonotonicTs stc = transaction::MonotonicTs::current_time();
   transaction::MonotonicTs tmp_receive_gts_ts(0);
-  const int64_t expire_ts_ns = get_timestamp_ns() + gts_get_timeout_ns;
+  const int64_t expire_ts = get_timestamp_us() + gts_get_timeout;
   int64_t retry_cnt = 0;
   const static int64_t PRINT_INTERVAL = 10;
 
   do{
     if (OB_FAIL(OB_TS_MGR.get_gts(tenant_id_, stc, NULL, gts_scn, tmp_receive_gts_ts))) {
-      if (OB_EAGAIN == ret) {
+      if (get_timestamp_us() > expire_ts) {
+        int tmp_ret = OB_TIMEOUT;
+        LOG_WARN("get_gts for data_dict_service failed and timeout", KR(ret), KR(tmp_ret), K(expire_ts), K(gts_scn));
+        ret = tmp_ret;
+      } else if (OB_EAGAIN == ret) {
         ob_usleep(100 * _MSEC_);
         if (++retry_cnt % PRINT_INTERVAL == 0) {
-          LOG_WARN("retry get_gts for data_dict_service failed", KR(ret), K(retry_cnt));
+          LOG_WARN("retry get_gts for data_dict_service failed", KR(ret), K(retry_cnt), K(expire_ts));
         }
       } else {
-        LOG_WARN("get_gts for data_dict_service failed", KR(ret));
+        LOG_WARN("get_gts for data_dict_service failed", KR(ret), K(expire_ts));
       }
     } else if (OB_UNLIKELY(!gts_scn.is_valid_and_not_min())) {
       ret = OB_ERR_UNEXPECTED;
@@ -666,11 +672,13 @@ int ObDataDictService::handle_table_metas_(
 {
   int ret = OB_SUCCESS;
   const int64_t total_table_count = table_ids.count();
+  const int64_t start_time = get_timestamp_us();
   lib::ObMemAttr mem_attr(tenant_id_, "ObDatDictTbMeta");
   ObArenaAllocator tb_meta_allocator(mem_attr);
   static const int64_t batch_table_meta_size = 200;
   filter_table_count = 0;
   int64_t dump_succ_tb_cnt = 0;
+  const static int64_t print_interval = 10 * _SEC_;
   schema::ObSchemaGetterGuard schema_guard; // will reset while getting schem_guard
 
   for (int i = 0; OB_SUCC(ret) && i < total_table_count; i++) {
@@ -683,6 +691,7 @@ int ObDataDictService::handle_table_metas_(
 
     if (i % batch_table_meta_size == 0) {
       tb_meta_allocator.reset();
+      ob_usleep(100 * _MSEC_); // sleep 100ms to avoid too much cpu usage
     }
 
     if (OB_FAIL(table_ids.at(i, table_id))) {
@@ -711,6 +720,11 @@ int ObDataDictService::handle_table_metas_(
     } else {
       dump_succ_tb_cnt ++;
       LOG_DEBUG("handle dict_table_meta succ", KR(ret), K(table_meta), K(header), KPC(table_schema));
+      if (REACH_TIME_INTERVAL(print_interval)) {
+        int64_t cost_sec = (get_timestamp_us() - start_time) / _SEC_;
+        _LOG_INFO("dump table_meta(schema_version=%ld) progress: %ld/%ld, success: %ld, filtered: %ld, cost: %ld sec",
+          schema_version, i, total_table_count, dump_succ_tb_cnt, filter_table_count, cost_sec);
+      }
       if (i == 0) {
         DEBUG_SYNC(BEFORE_DATA_DICT_DUMP_FINISH);
       }
