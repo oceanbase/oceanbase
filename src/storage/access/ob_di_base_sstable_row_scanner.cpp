@@ -79,11 +79,15 @@ int ObDIBaseSSTableRowScanner::get_next_rows()
   int ret = OB_SUCCESS;
   ObStoreRowIterator *iter = nullptr;
   ObBlockRowStore *block_row_store = access_ctx_->block_row_store_;
+  ObAggregatedStoreVec *agg_store_vec = access_param_->iter_param_.enable_pd_aggregate() && access_param_->iter_param_.plan_use_new_format()
+      ? static_cast<ObAggregatedStoreVec *>(block_row_store) : nullptr;
   while (OB_SUCC(ret) && !block_row_store->is_end() && curr_di_base_idx_ < get_di_base_iter_cnt()) {
     iter = get_di_base_iter(curr_di_base_idx_);
     if (OB_ISNULL(iter)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("di base iter is null", K(ret), K(curr_di_base_idx_), K(di_base_iters_));
+    } else if (nullptr != agg_store_vec && OB_FAIL(agg_store_vec->prepare_batch_scan())) {
+      LOG_WARN("Fail to prepare batch scan", K(ret), KPC(agg_store_vec));
     } else if (OB_FAIL(iter->get_next_rows())) {
       if (OB_UNLIKELY(OB_PUSHDOWN_STATUS_CHANGED != ret && OB_ITER_END != ret)) {
         LOG_WARN("fail to get next rows", K(ret), K(curr_di_base_idx_), K(di_base_iters_));
