@@ -161,7 +161,6 @@ private:
   int collect_tables_primary_key_for_select(const ObSelectStmt &stmt,
                                             const bool has_outer_join);
   int collect_all_single_columns_for_select(const ObSelectStmt &stmt);
-  int check_mv_stmt_use_special_expr(const ObSelectStmt &stmt, bool &has_special_expr);
   int check_mv_table_type_valid(const ObSelectStmt &stmt, bool &is_valid);
   int check_mv_has_non_proctime_table(const ObSelectStmt &stmt, bool &has_non_proctime_table);
   int check_has_rowid_exprs(const ObDMLStmt *stmt, bool &has_rowid);
@@ -195,10 +194,6 @@ private:
                                         ObRawExpr *&replace_expr);
   static int get_equivalent_null_check_param(const ObRawExpr *param_expr, const ObRawExpr *&check_param);
   static int get_mav_default_count(const ObIArray<ObAggFunRawExpr*> &aggrs, const ObAggFunRawExpr *&count_aggr);
-  static int get_target_aggr(const ObItemType target_aggr_type,
-                             const ObRawExpr *param_expr,
-                             const ObIArray<ObAggFunRawExpr*> &aggrs,
-                             const ObAggFunRawExpr *&target_aggr);
   int check_mjv_refresh_type(const ObSelectStmt &stmt, ObMVRefreshableType &refresh_type);
   int check_join_mv_fast_refresh_valid(const ObSelectStmt &stmt,
                                        const bool for_join_mav,
