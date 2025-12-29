@@ -151,7 +151,7 @@ int ObMViewMdsOpTask::update_mview_mds_op()
       ObMViewOpArg arg;
       if (OB_FAIL(mview_mds_map.get_refactored(del_tx_id.at(idx), arg))) {
         LOG_WARN("get mview mds failed", KR(ret), K(del_tx_id.at(idx)));
-      } else if (arg.start_ts_ + MVIEW_MDS_OP_EXPIRE_TIME > ObTimeUtil::current_time()) {
+      } else if (ObTimeUtil::current_time() >= arg.start_ts_ + MVIEW_MDS_OP_EXPIRE_TIME) {
         if (OB_FAIL(mview_mds_map.erase_refactored(del_tx_id.at(idx)))) {
           LOG_WARN("erase tx_id failed", KR(ret), K(del_tx_id.at(idx)));
         }
