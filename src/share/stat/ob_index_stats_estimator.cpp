@@ -68,6 +68,8 @@ int ObIndexStatsEstimator::estimate(const ObOptStatGatherParam &param,
     LOG_WARN("failed to get valid duration time", K(ret));
   } else if (OB_FAIL(fill_query_timeout_info(ctx_.get_allocator(), duration_time))) {
     LOG_WARN("failed to fill query timeout info", K(ret));
+  } else if (OB_FAIL(fill_sample_info(allocator, param.sample_info_))) {
+    LOG_WARN("failed to fill sample info", K(ret));
   } else if (dst_opt_stats.count() > 1 &&
              OB_FAIL(fill_index_group_by_info(ctx_.get_allocator(), param, calc_part_id_str))) {
     LOG_WARN("failed to group by info", K(ret));
@@ -255,7 +257,7 @@ int ObIndexStatsEstimator::fast_gather_index_stats(ObExecContext &ctx,
   if (OB_FAIL(get_all_need_gather_partition_ids(data_param, index_param, gather_part_ids))) {
     LOG_WARN("failed to get all need gather partition ids", K(ret));
   } else if (gather_part_ids.empty()) {
-    //do nothing
+    is_fast_gather = true;
   } else if (OB_UNLIKELY(index_param.is_global_index_ && gather_part_ids.count() != 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(index_param.is_global_index_), K(gather_part_ids.count()));
