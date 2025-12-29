@@ -33,8 +33,9 @@ public:
   typedef common::ObFixedArray<int32_t, common::ObIAllocator> Projector;
   typedef common::ObFixedArray<int32_t, common::ObIAllocator> ColumnsIndex;
   typedef common::ObFixedArray<ObColDesc, common::ObIAllocator> ObColDescArray;
-
   typedef common::ObFixedArray<uint64_t, common::ObIAllocator> ColumnIdArray;
+  typedef common::ObFixedArray<ObString, common::ObIAllocator> ExtendedTypeInfos;
+
   explicit ObTableSchemaParam(common::ObIAllocator &allocator);
   virtual ~ObTableSchemaParam();
   void reset();
@@ -177,6 +178,7 @@ private:
   uint64_t vec_embedded_col_id_;
   ColumnIdArray search_idx_included_cids_;
   Projector search_idx_included_cid_idxes_;
+  ExtendedTypeInfos search_idx_included_extended_type_infos_;
 };
 
 class ObTableDMLParam
