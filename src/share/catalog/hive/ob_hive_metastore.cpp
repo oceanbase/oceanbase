@@ -20,7 +20,6 @@
 #include "ob_hms_client_pool.h"
 #include "share/catalog/hive/ob_kerberos.h"
 #include "share/catalog/hive/thrift/transport/ob_t_sasl_client_transport.h"
-#include "share/catalog/ob_catalog_properties.h"
 #include "share/external_table/ob_external_table_file_mgr.h"
 #include "share/external_table/ob_hdfs_storage_info.h"
 
@@ -324,12 +323,13 @@ void GetPartitionsByNamesOperation::execute_impl(ThriftHiveMetastoreClient *clie
 /* --------------------- end of Hive Client Operations ---------------------*/
 /* --------------------- start of ObHiveMetastoreClient ---------------------*/
 ObHiveMetastoreClient::ObHiveMetastoreClient()
-    : allocator_(nullptr), socket_(), transport_(), protocol_(), hive_metastore_client_(), uri_(),
+    : allocator_(nullptr), socket_(), transport_(), protocol_(), hive_metastore_client_(),
       properties_(), hms_keytab_(), hms_principal_(), hms_krb5conf_(), hms_default_catalog_(),
       service_(), server_FQDN_(), state_lock_(ObLatchIds::OBJECT_DEVICE_LOCK),
       conn_lock_(ObLatchIds::OBJECT_DEVICE_LOCK), kerberos_lock_(ObLatchIds::OBJECT_DEVICE_LOCK),
       is_inited_(false), is_opened_(false), last_kinit_ts_(0), client_id_(0), client_pool_(nullptr),
-      is_in_use_(false), socket_timeout_(-1)
+      is_in_use_(false), socket_timeout_(-1), uri_list_(), current_uri_idx_(0),
+      uri_selection_mode_(ObURISelectionMode::SEQUENTIAL)
 {
 }
 
@@ -371,8 +371,8 @@ int ObHiveMetastoreClient::setup_hive_metastore_client(const ObString &uri,
     LOG_WARN("invald meta uri str", K(ret), K(uri));
   } else if (OB_FAIL(ob_write_string(*allocator_, properties, properties_, true))) {
     LOG_WARN("failed to write properties", K(ret), K(properties));
-  } else if (OB_FAIL(ob_write_string(*allocator_, uri, uri_, true))) {
-    LOG_WARN("failed to write metastore uri", K(ret), K(uri));
+  } else if (OB_FAIL(parse_uri_list(uri))) {
+    LOG_WARN("failed to parse uri list", K(ret), K(uri));
   } else if (OB_FAIL(hive_catalog_properties.load_from_string(properties_, temp_allocator))) {
     LOG_WARN("failed to init hive catalog properties", K(ret));
   } else if (OB_FAIL(ob_write_string(*allocator_,
@@ -401,98 +401,41 @@ int ObHiveMetastoreClient::setup_hive_metastore_client(const ObString &uri,
   }
 
   if (OB_FAIL(ret)) {
-  } else {
-    int port = 0;
-    const int64_t uri_len = uri.length();
-    char host[uri_len];
-    // Length of host and port must be less than total meta uri.
-    if (OB_FAIL(extract_host_and_port(uri, host, port))) {
-      LOG_WARN("failed to get namenode and path", K(ret), K(uri));
-    } else if (socket_timeout_ < 0) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid socket timeout", K(ret), K(socket_timeout_));
+  } else if (OB_UNLIKELY(uri_list_.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("uri list is empty after parse", K(ret));
+  } else if (!hms_keytab_.empty() && !hms_principal_.empty()) {
+    // Extract service and server_FQDN from principal (only once during setup).
+    ObString temp_princ;
+    ObArenaAllocator temp_allocator;
+    if (OB_FAIL(ob_write_string(temp_allocator, hms_principal_, temp_princ, true))) {
+      LOG_WARN("failed to copy the hms principal", K(ret), K_(hms_principal));
     } else {
-      LOG_TRACE("get host and port in detail", K(ret), K(ObString(host)), K(port));
-      // Create socket
-      String str_host = String(host);
-      socket_ = std::make_shared<TSocket>(str_host, port);
-      socket_->setKeepAlive(true);
-
-      int64_t timeout_ms;
-      if (socket_timeout_ == 0) {
-        timeout_ms = socket_timeout_;
-      } else if (OB_FALSE_IT(timeout_ms = socket_timeout_ / 1000)) {
-      } else if (timeout_ms == 0) {
-        // 用户只是设置了一个不到1ms的值，并不是禁用超时
-        // 但socket的api入参的单位是ms，所以设置一个最小的ms的值
-        timeout_ms = 1;
-      }
-
-      // Default is 10 seconds.
-      socket_->setConnTimeout(timeout_ms);
-      socket_->setRecvTimeout(timeout_ms);
-      socket_->setSendTimeout(timeout_ms);
-    }
-
-    if (OB_FAIL(ret)) {
-    } else {
-      // Create transport
-      transport_ = std::make_shared<TBufferedTransport>(socket_);
-      // If the keytab and pricipal is valid, init kerberos.
-      if (OB_NOT_NULL(hms_keytab_) && 0 < hms_keytab_.length() && OB_NOT_NULL(hms_principal_)
-          && 0 < hms_principal_.length()) {
-        LOG_TRACE("step into kerberos initialize step",
-                  K(ret),
-                  K(hms_keytab_),
-                  K(hms_principal_),
-                  K(hms_krb5conf_));
-        ObString cache_name;
-        ObString temp_princ;
-        // Using temp_allocator to store temp variables.
-        ObArenaAllocator temp_allocator;
-        if (OB_FAIL(init_kerberos(hms_keytab_, hms_principal_, hms_krb5conf_, cache_name))) {
-          LOG_WARN("failed to init kerberos env", K(ret));
-        } else if (OB_FAIL(ob_write_string(temp_allocator, hms_principal_, temp_princ, true))) {
-          LOG_WARN("failed to copy the hms principal", K(ret), K_(hms_principal));
-        } else {
-          // service and server_FQDN can seperate by principal.
-          // Because the GSSAPI would assembly by service and server_FQDN to be the principal.
-          // Such as service "hive" and server_FQDN "hadoop" -> "hive/hadoop@EXAMPLE.COM".
-          // TODO(bitao): this principal may be not same as "hive/hadoop@EXAMPLE.COM" in the
-          // kerberos config.
-          ObString tmp_service = temp_princ.split_on('/').trim_space_only();
-          ObString tmp_server_FQDN = temp_princ.split_on('@').trim_space_only();
-          // Note: service_ and server_FQDN_ should be c_style.
-          if (OB_FAIL(ob_write_string(*allocator_, tmp_service, service_, true))) {
-            LOG_WARN("failed to write service value", K(ret), K(tmp_service));
-          } else if (OB_FAIL(ob_write_string(*allocator_, tmp_server_FQDN, server_FQDN_, true))) {
-            LOG_WARN("failed to write service_FQDN value", K(ret), K(tmp_server_FQDN));
-          } else if (OB_UNLIKELY(service_.empty())) {
-            ret = OB_INVALID_HMS_SERVICE;
-            LOG_WARN("service should not be empty", K(ret), K(temp_princ), K_(service));
-          } else if (OB_UNLIKELY(server_FQDN_.empty())) {
-            ret = OB_INVALID_HMS_SERVICE_FQDN;
-            LOG_WARN("service_FQDN should not be empty", K(ret), K(temp_princ), K(server_FQDN_));
-          } else {
-            transport_
-                = TSaslClientTransport::wrap_client_transports(service_, server_FQDN_, transport_);
-          }
-        }
-      }
-      if (OB_FAIL(ret)) {
-      } else {
-        // Create protocol
-        protocol_ = std::make_shared<TBinaryProtocol>(transport_);
-        // Create thrift hive metastore client
-        hive_metastore_client_ = std::make_shared<ThriftHiveMetastoreClient>(protocol_);
+      // service and server_FQDN can seperate by principal.
+      // Because the GSSAPI would assembly by service and server_FQDN to be the principal.
+      // Such as service "hive" and server_FQDN "hadoop" -> "hive/hadoop@EXAMPLE.COM".
+      // TODO(bitao): this principal may be not same as "hive/hadoop@EXAMPLE.COM" in the
+      // kerberos config.
+      ObString tmp_service = temp_princ.split_on('/').trim_space_only();
+      ObString tmp_server_FQDN = temp_princ.split_on('@').trim_space_only();
+      if (OB_FAIL(ob_write_string(*allocator_, tmp_service, service_, true))) {
+        LOG_WARN("failed to write service value", K(ret), K(tmp_service));
+      } else if (OB_FAIL(ob_write_string(*allocator_, tmp_server_FQDN, server_FQDN_, true))) {
+        LOG_WARN("failed to write service_FQDN value", K(ret), K(tmp_server_FQDN));
+      } else if (OB_UNLIKELY(service_.empty())) {
+        ret = OB_INVALID_HMS_SERVICE;
+        LOG_WARN("service should not be empty", K(ret), K(temp_princ), K_(hms_principal), K_(service));
+      } else if (OB_UNLIKELY(server_FQDN_.empty())) {
+        ret = OB_INVALID_HMS_SERVICE_FQDN;
+        LOG_WARN("service_FQDN should not be empty", K(ret), K_(hms_principal), K_(server_FQDN));
       }
     }
   }
 
-  // Make sure that the hive client is valid.
+  // Connect with failover support.
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(open())) {
-    LOG_WARN("failed to open hive metastore client", K(ret));
+  } else if (OB_FAIL(connect_with_failover())) {
+    LOG_WARN("failed to connect with failover", K(ret));
   }
   return ret;
 }
@@ -602,10 +545,13 @@ ObHiveMetastoreClient::~ObHiveMetastoreClient()
 
   SpinWLockGuard guard(state_lock_);
   if (OB_NOT_NULL(allocator_)) {
-    // Check to avoid double free.
-    if (!uri_.empty()) {
-      allocator_->free(uri_.ptr());
+    // Free uri list memory.
+    for (int64_t i = 0; i < uri_list_.count(); ++i) {
+      if (!uri_list_.at(i).empty()) {
+        allocator_->free(uri_list_.at(i).ptr());
+      }
     }
+    uri_list_.reset();
     if (!hms_keytab_.empty()) {
       allocator_->free(hms_keytab_.ptr());
     }
@@ -801,51 +747,57 @@ template <typename Operation>
 int ObHiveMetastoreClient::try_call_hive_client(Operation &&op)
 {
   int ret = OB_SUCCESS;
-  int try_times = 0;
   String err_msg;
-  // check if the client is valid
-  if (OB_UNLIKELY(!is_valid())) {
-    ret = OB_HMS_ERROR;
-    LOG_WARN("invalid hive metastore client", K(ret));
+  bool success = false;
+  const int64_t uri_count = uri_list_.count();
+
+  if (OB_UNLIKELY(uri_count <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("uri list is empty", K(ret));
   }
 
-  for (; OB_SUCC(ret) && try_times < MAX_HIVE_METASTORE_CLIENT_RETRY; ++try_times) {
-    try {
-      if (OB_FAIL(open())) {
-        LOG_WARN("failed to connect to hive metastore", K(ret));
-        // Reset ret to OB_SUCCESS to continue the loop.
-        ret = OB_SUCCESS;
-      } else {
+  // Outer loop: retry rounds.
+  for (int try_times = 0; OB_SUCC(ret) && !success && try_times < MAX_HIVE_METASTORE_CLIENT_RETRY; ++try_times) {
+    // Inner loop: iterate all URIs for failover.
+    for (int64_t i = 0; OB_SUCC(ret) && !success && i < uri_count; ++i) {
+      int64_t uri_idx = (current_uri_idx_ + i) % uri_count;
+
+      // Close existing connection before switching URI.
+      if (i > 0 || try_times > 0) {
+        int close_ret = close();
+        if (OB_SUCCESS != close_ret) {
+          LOG_WARN("failed to close connection", K(close_ret));
+        }
+        // Rebuild connection for new URI.
+        if (OB_FAIL(setup_connection_for_uri(uri_idx))) {
+          LOG_WARN("failed to setup connection for uri", K(ret), K(uri_idx));
+          ret = OB_SUCCESS;
+          continue;
+        }
+      }
+
+      try {
+        if (OB_FAIL(open())) {
+          LOG_WARN("failed to open connection", K(ret), K(uri_idx));
+          ret = OB_SUCCESS;
+          continue;
+        }
         op.execute(hive_metastore_client_.get());
-        break; // success, break the loop
-      }
-    } catch (apache::thrift::transport::TTransportException &e) {
-      err_msg = e.what();
-      LOG_WARN("error on executing to hive metastore", K(ret), K(try_times), K(err_msg.c_str()));
-      // Close the transport when error occurs.
-      if (OB_FAIL(close())) {
-        LOG_WARN("failed to close transport in try step", K(ret));
-        // Reset the ret to OB_SUCCESS to continue the loop.
-        ret = OB_SUCCESS;
-      }
-    } catch (apache::thrift::TException &e) {
-      err_msg = e.what();
-      LOG_WARN("meta exception on executing to hive metastore",
-               K(ret),
-               K(try_times),
-               K(err_msg.c_str()));
-      // Close the transport when error occurs.
-      if (OB_FAIL(close())) {
-        LOG_WARN("failed to close transport in try step", K(ret));
-        // Reset the ret to OB_SUCCESS to continue the loop.
-        ret = OB_SUCCESS;
+        current_uri_idx_ = uri_idx;
+        success = true;
+      } catch (apache::thrift::transport::TTransportException &e) {
+        err_msg = e.what();
+        LOG_WARN("transport error, try next uri", K(try_times), K(uri_idx), K(err_msg.c_str()));
+      } catch (apache::thrift::TException &e) {
+        err_msg = e.what();
+        LOG_WARN("thrift error, try next uri", K(try_times), K(uri_idx), K(err_msg.c_str()));
       }
     }
   }
 
-  if (OB_FAIL(ret) || try_times >= MAX_HIVE_METASTORE_CLIENT_RETRY) {
+  if (!success) {
     ret = OB_HMS_ERROR;
-    LOG_WARN("hive metastore expired", K(ret), K(err_msg.c_str()));
+    LOG_WARN("failed to execute on all uris", K(ret), K(uri_count), K(err_msg.c_str()));
   }
   return ret;
 }
@@ -934,6 +886,178 @@ int ObHiveMetastoreClient::init_kerberos(ObString &keytab,
           LOG_TRACE("latest kerberos kinit timestamp", K(ret), K(last_kinit_ts_));
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObHiveMetastoreClient::parse_uri_list(const ObString &uri_str)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(allocator_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("allocator is null", K(ret));
+  } else if (OB_ISNULL(uri_str) || uri_str.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid uri str for parse uri list", K(ret), K(uri_str));
+  } else {
+    uri_list_.reset();
+    current_uri_idx_ = 0;
+
+    const char *start = uri_str.ptr();
+    const char *end = uri_str.ptr() + uri_str.length();
+    const char *pos = start;
+
+    while (OB_SUCC(ret) && pos <= end) {
+      if (pos == end || *pos == ';') {
+        int64_t len = pos - start;
+        if (len > 0) {
+          ObString single_uri(len, start);
+          ObString stored_uri;
+          if (OB_FAIL(ob_write_string(*allocator_, single_uri, stored_uri, true))) {
+            LOG_WARN("failed to write uri string", K(ret), K(single_uri));
+          } else if (OB_FAIL(uri_list_.push_back(stored_uri))) {
+            LOG_WARN("failed to push uri to list", K(ret), K(stored_uri));
+          }
+        }
+        start = pos + 1;
+      }
+      ++pos;
+    }
+
+    if (OB_SUCC(ret) && uri_list_.empty()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("no valid uri found in uri str", K(ret), K(uri_str));
+    }
+
+    // TODO(bitao): Shuffle uri list if random mode.
+
+    LOG_TRACE("parse uri list completed",
+              K(ret),
+              K(uri_str),
+              "uri_count", uri_list_.count(),
+              K_(uri_selection_mode));
+  }
+  return ret;
+}
+
+int ObHiveMetastoreClient::setup_connection_for_uri(const int64_t uri_idx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(uri_idx < 0 || uri_idx >= uri_list_.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid uri index", K(ret), K(uri_idx), "uri_count", uri_list_.count());
+  } else if (OB_UNLIKELY(socket_timeout_ < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid socket timeout", K(ret), K_(socket_timeout));
+  } else {
+    const ObString &uri = uri_list_.at(uri_idx);
+    int port = 0;
+    const int64_t uri_len = uri.length();
+    char host[uri_len];
+
+    if (OB_FAIL(extract_host_and_port(uri, host, port))) {
+      LOG_WARN("failed to extract host and port", K(ret), K(uri), K(uri_idx));
+    } else {
+      LOG_TRACE("setup connection for uri", K(uri_idx), K(uri), K(ObString(host)), K(port));
+
+      int64_t timeout_ms = 0;
+      if (socket_timeout_ == 0) {
+        timeout_ms = socket_timeout_;
+      } else {
+        timeout_ms = socket_timeout_ / 1000;
+        if (timeout_ms == 0) {
+          timeout_ms = 1;
+        }
+      }
+
+      // Create socket.
+      String str_host = String(host);
+      socket_ = std::make_shared<TSocket>(str_host, port);
+      socket_->setKeepAlive(true);
+      socket_->setConnTimeout(timeout_ms);
+      socket_->setRecvTimeout(timeout_ms);
+      socket_->setSendTimeout(timeout_ms);
+
+      // Create transport.
+      transport_ = std::make_shared<TBufferedTransport>(socket_);
+
+      // Handle kerberos if configured.
+      if (!hms_keytab_.empty() && !hms_principal_.empty()) {
+        ObString cache_name;
+        if (OB_FAIL(init_kerberos(hms_keytab_, hms_principal_, hms_krb5conf_, cache_name))) {
+          LOG_WARN("failed to init kerberos", K(ret));
+        } else if (!service_.empty() && !server_FQDN_.empty()) {
+          transport_ = TSaslClientTransport::wrap_client_transports(service_, server_FQDN_, transport_);
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        // Create protocol and client.
+        protocol_ = std::make_shared<TBinaryProtocol>(transport_);
+        hive_metastore_client_ = std::make_shared<ThriftHiveMetastoreClient>(protocol_);
+        current_uri_idx_ = uri_idx;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObHiveMetastoreClient::connect_with_failover()
+{
+  int ret = OB_SUCCESS;
+  const int64_t uri_count = uri_list_.count();
+  if (OB_UNLIKELY(uri_count <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("uri list is empty", K(ret));
+  } else {
+    // Close existing connection if any.
+    if (is_opened_) {
+      int close_ret = close();
+      if (OB_SUCCESS != close_ret) {
+        LOG_WARN("failed to close existing connection", K(close_ret));
+      }
+    }
+
+    bool connected = false;
+    int last_ret = OB_SUCCESS;
+    // Try each URI starting from current_uri_idx_.
+    for (int64_t i = 0; !connected && i < uri_count; ++i) {
+      int64_t uri_idx = (current_uri_idx_ + i) % uri_count;
+      if (OB_FAIL(setup_connection_for_uri(uri_idx))) {
+        LOG_WARN("failed to setup connection for uri", K(ret), K(uri_idx));
+        last_ret = ret;
+        ret = OB_SUCCESS; // reset for next URI
+      } else {
+        try {
+          transport_->open();
+          is_opened_ = true;
+          connected = true;
+          current_uri_idx_ = uri_idx;
+          LOG_INFO("connected to hive metastore", K(uri_idx), "uri", uri_list_.at(uri_idx));
+        } catch (apache::thrift::transport::TTransportException &e) {
+          last_ret = OB_HMS_ERROR;
+          LOG_WARN("failed to open transport",
+                   K(uri_idx),
+                   "uri",
+                   uri_list_.at(uri_idx),
+                   "err_msg",
+                   e.what());
+        } catch (apache::thrift::TException &e) {
+          last_ret = OB_HMS_ERROR;
+          LOG_WARN("failed to open transport",
+                   K(uri_idx),
+                   "uri",
+                   uri_list_.at(uri_idx),
+                   "err_msg",
+                   e.what());
+        }
+      }
+    }
+
+    if (!connected) {
+      ret = last_ret;
+      LOG_WARN("failed to connect to any uri", K(ret), K(uri_count));
     }
   }
   return ret;
