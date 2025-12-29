@@ -5267,7 +5267,7 @@ int ObTableSchema::check_alter_column_type(const ObColumnSchemaV2 &src_column,
     } else {
       if ((dst_meta.is_json() && src_meta.is_string_type()) ||
           (src_meta.is_json() && dst_meta.is_string_type())) {
-        if (is_oracle_mode) {
+        if (is_oracle_mode || src_meta.is_text() || dst_meta.is_text()) {
           is_offline = true;
         } else {
           ret = OB_NOT_SUPPORTED;
