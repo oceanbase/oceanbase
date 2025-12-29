@@ -15,6 +15,7 @@
 #include "ob_create_package_stmt.h"
 #include "pl/ob_pl_package.h"
 #include "pl/ob_pl_compile.h"
+#include "pl/ob_pl_router.h"
 
 namespace oceanbase
 {
@@ -830,6 +831,7 @@ int ObCreatePackageBodyResolver::update_routine_route_sql(ObIAllocator &allocato
 {
   int ret = OB_SUCCESS;
   const ObPLRoutineInfo *pl_routine_info = NULL;
+  ObPLFunctionAST *routine_ast = NULL;
   ObRoutineInfo routine_info;
   for (int64_t i = ObPLRoutineTable::NORMAL_ROUTINE_START_IDX;
        OB_SUCC(ret) && i < spec_routine_table.get_count(); i++) {
@@ -837,6 +839,7 @@ int ObCreatePackageBodyResolver::update_routine_route_sql(ObIAllocator &allocato
     bool found = false;
     OX (routine_info.reset());
     OZ (body_routine_table.get_routine_info(i, pl_routine_info));
+    OZ (body_routine_table.get_routine_ast(i, routine_ast));
     for (int64_t j = 0; OB_SUCC(ret) && j < routine_infos.count(); ++j) {
       tmp_routine_info = routine_infos.at(j);
       if (tmp_routine_info->get_subprogram_id() == i) {
@@ -851,6 +854,9 @@ int ObCreatePackageBodyResolver::update_routine_route_sql(ObIAllocator &allocato
         OX (routine_info.set_route_sql(route_sql));
         OZ (ObSQLUtils::convert_sql_text_to_schema_for_storing(allocator, session_info.get_dtc_params(), routine_body));
         OX (routine_info.set_routine_body(routine_body));
+        if (OB_SUCC(ret) && OB_NOT_NULL(routine_ast)) {
+          OZ (pl::ObPLRouter::mark_sql_transpiler_eligible(*routine_ast, routine_info));
+        }
         if (OB_SUCC(ret)) {
           // reset flag attr
           routine_info.reset_analyze_flag();

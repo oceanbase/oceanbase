@@ -23,14 +23,14 @@ namespace oceanbase
 namespace pl
 {
 
-class ObPLFunction;
 class ObPLPackageGuard
 {
 public:
   ObPLPackageGuard(uint64_t tenant_id)
     : alloc_(),
       dblink_guard_(alloc_),
-      req_time_guard_()
+      req_time_guard_(),
+      local_cache_obj_idx_(0)
   {
     lib::ObMemAttr attr;
     attr.label_ = "PLPKGGuard";
@@ -50,12 +50,26 @@ public:
   {
     return map_.get_refactored(package_id, package);
   }
-
+  void* alloc()
+  {
+    void *ptr = nullptr;
+    if (local_cache_obj_idx_ < 4) {
+      ptr = local_cache_obj_guard_ + local_cache_obj_idx_ * sizeof(sql::ObCacheObjGuard);
+      local_cache_obj_idx_++;
+    } else {
+      ptr = alloc_.alloc(sizeof(sql::ObCacheObjGuard));
+    }
+    return ptr;
+  }
+private:
   common::ObArenaAllocator alloc_;
+public:
   ObPLDbLinkGuard dblink_guard_;
 private:
   common::hash::ObHashMap<uint64_t, sql::ObCacheObjGuard*, common::hash::NoPthreadDefendMode> map_;
   observer::ObReqTimeGuard req_time_guard_;
+  char local_cache_obj_guard_[sizeof(sql::ObCacheObjGuard) * 4];
+  int local_cache_obj_idx_;
 };
 
 }

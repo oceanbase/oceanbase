@@ -25,13 +25,14 @@ namespace pl
  *ob_compatibility_version
  *_enable_old_charset_aggregation
 */
-static constexpr int64_t PL_CACHE_SYS_VAR_COUNT = 5;
+static constexpr int64_t PL_CACHE_SYS_VAR_COUNT = 6;
 static constexpr share::ObSysVarClassType InfluencePLMap[PL_CACHE_SYS_VAR_COUNT + 1] = {
   share::SYS_VAR_DIV_PRECISION_INCREMENT,
   share::SYS_VAR_NLS_LENGTH_SEMANTICS,
   share::SYS_VAR_OB_COMPATIBILITY_VERSION,
   share::SYS_VAR__ENABLE_OLD_CHARSET_AGGREGATION,
   share::SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN,
+  share::SYS_VAR_SQL_TRANSPILER,
   share::SYS_VAR_INVALID
 };
 

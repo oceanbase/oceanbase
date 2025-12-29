@@ -6065,7 +6065,8 @@ int ObBasicSessionInfo::is_sys_var_actully_changed(const ObSysVarClassType &sys_
       case SYS_VAR_OB_COMPATIBILITY_MODE:
       case SYS_VAR__OB_OLS_POLICY_SESSION_LABELS:
       case SYS_VAR__OB_ENABLE_ROLE_IDS:
-      case SYS_VAR__OB_PROXY_SESSION_TEMPORARY_TABLE_USED: {
+      case SYS_VAR__OB_PROXY_SESSION_TEMPORARY_TABLE_USED:
+      case SYS_VAR__CURRENT_DEFAULT_CATALOG: {
        changed = old_val.get_meta() == new_val.get_meta() ? old_val != new_val : true;
       }
       break;

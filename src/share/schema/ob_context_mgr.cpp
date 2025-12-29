@@ -510,8 +510,8 @@ int ObContextMgr::get_context_schema_with_name(const uint64_t tenant_id,
     if (OB_FAIL(context_map_.get_refactored(hash_wrap, tmp_schema))) {
       if (OB_HASH_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
-        LOG_INFO("context is not exist", K(tenant_id), K(ctx_namespace),
-                 "map_cnt", context_map_.item_count());
+        // LOG_INFO("context is not exist", K(tenant_id), K(ctx_namespace),
+        //          "map_cnt", context_map_.item_count());
       }
     } else {
       context_schema = tmp_schema;

@@ -11486,7 +11486,7 @@ static struct VarsInit{
       ObSysVars[838].name_ = "sql_transpiler" ;
       ObSysVars[838].data_type_ = ObIntType ;
       ObSysVars[838].enum_names_ = "[u'OFF', u'ON', u'BASIC']" ;
-      ObSysVars[838].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[838].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::INFLUENCE_PL ;
       ObSysVars[838].id_ = SYS_VAR_SQL_TRANSPILER ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SQL_TRANSPILER)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR_SQL_TRANSPILER] = 838 ;

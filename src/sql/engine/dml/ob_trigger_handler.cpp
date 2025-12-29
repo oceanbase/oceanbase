@@ -502,6 +502,7 @@ int TriggerHandle::calc_trigger_routine(
   bool old_flag = false;
   common::ObArenaAllocator tmp_allocator(common::ObMemAttr(MTL_ID(), "TriggerExec"));
   pl::ObPLExecuteArg pl_execute_arg;
+  OX (pl_execute_arg.get_pl_ctx().set_disable_pl_exec_cache(true));
   CK (OB_NOT_NULL(exec_ctx.get_my_session()));
   OX (old_flag = exec_ctx.get_my_session()->is_for_trigger_package());
   OX (exec_ctx.get_my_session()->set_for_trigger_package(true));
@@ -511,7 +512,6 @@ int TriggerHandle::calc_trigger_routine(
   OZ (exec_ctx.get_pl_engine()->execute(
     exec_ctx, tmp_allocator, trigger_id, routine_id, path, params, nocopy_params, result, pl_execute_arg),
       trigger_id, routine_id, params);
-  CK (OB_NOT_NULL(exec_ctx.get_my_session()));
   OZ (exec_ctx.get_my_session()->reset_all_package_state_by_dbms_session(true));
   if (exec_ctx.get_my_session()->is_for_trigger_package()) {
     // whether `ret == OB_SUCCESS`, need to restore flag

@@ -336,21 +336,14 @@ struct ObTrigDMLRtDef
   ObTrigDMLRtDef()
     : old_record_(nullptr),
       new_record_(nullptr),
-      tg_row_point_params_(),
-      tg_all_params_(nullptr),
-      update_columns_(nullptr),
-      tg_update_columns_(pl::PL_NESTED_TABLE_TYPE, OB_INVALID_ID)
+      tg_row_point_params_()
   { }
   TO_STRING_KV(K_(old_record),
                K_(new_record),
-               K_(tg_row_point_params),
-               KPC_(tg_all_params));
+               K_(tg_row_point_params));
   pl::ObPLRecord *old_record_;
   pl::ObPLRecord *new_record_;
   ParamStore *tg_row_point_params_;
-  common::ObObjParam *tg_all_params_;
-  ObObj *update_columns_;
-  pl::ObPLCollection tg_update_columns_;
 };
 
 struct ObForeignKeyColumn

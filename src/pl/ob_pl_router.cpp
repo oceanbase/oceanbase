@@ -170,6 +170,18 @@ int ObPLRouter::simple_resolve(ObPLFunctionAST &func_ast)
     func_ast.set_proc_type(STANDALONE_PROCEDURE);
   } else if (ROUTINE_FUNCTION_TYPE == routine_info_.get_routine_type()) {
     func_ast.set_proc_type(STANDALONE_FUNCTION);
+  } else if (ROUTINE_PACKAGE_TYPE == routine_info_.get_routine_type()) {
+    if (routine_info_.is_procedure()) {
+      func_ast.set_proc_type(PACKAGE_PROCEDURE);
+    } else {
+      func_ast.set_proc_type(PACKAGE_FUNCTION);
+    }
+  } else if (ROUTINE_UDT_TYPE == routine_info_.get_routine_type()) {
+    if (routine_info_.is_procedure()) {
+      func_ast.set_proc_type(UDT_PROCEDURE);
+    } else {
+      func_ast.set_proc_type(UDT_FUNCTION);
+    }
   }
   if (routine_info_.is_udt_routine()) {
       func_ast.set_is_udt_routine();
