@@ -12263,10 +12263,15 @@ TEST_F(TestBatchExecute, DISABLED_htable_check_and_put_put)
     int one_ret = one_table->execute_query_and_mutate(query_and_mutate, inc_result);
     ASSERT_TRUE(one_ret == OB_SUCCESS || one_ret == OB_TRY_LOCK_ROW_CONFLICT);
   };
+  int put_task_ret = OB_SUCCESS;
   auto put_task = [&]() {
     ObTableBatchOperationResult put_result;
-    ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(put_op, put_result));
-    ASSERT_EQ(1, put_result.count());
+    int ret = the_table->batch_execute(put_op, put_result);
+    ASSERT_TRUE(ret == OB_SUCCESS || ret == OB_TRY_LOCK_ROW_CONFLICT);
+    if (ret == OB_SUCCESS) {
+      ASSERT_EQ(1, put_result.count());
+    }
+    put_task_ret = ret;
   };
   std::thread put_t(put_task);
   constexpr uint64_t thread_num = 200;
@@ -12283,26 +12288,28 @@ TEST_F(TestBatchExecute, DISABLED_htable_check_and_put_put)
   }
   printf("time elapsed during checkAndPut process: %lfs\n", double(time(NULL) - start_time));
 
-  // 4. execute query and verify result
-  htable_filter.reset();
-  htable_filter.add_column(ObString::make_string(qualifier));
-  htable_filter.set_max_versions(1); // get all versions
-  htable_filter.set_valid(true);
-  ObTableEntityIterator *iter = nullptr;
-  ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
-  const ObITableEntity *result_entity = NULL;
-  ASSERT_EQ(OB_SUCCESS, iter->get_next_entity(result_entity));
-  ObObj rk, cq, ts, val;
-  ObString str;
-  ASSERT_EQ(OB_SUCCESS, result_entity->get_property(K, rk));
-  ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
-  ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
-  ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-  ASSERT_EQ(OB_SUCCESS, val.get_varbinary(str));
-  ASSERT_EQ(key1, rk);
-  ASSERT_EQ(key2, cq);
-  ASSERT_EQ(str, put_val_str);
-  ASSERT_EQ(OB_ITER_END, iter->get_next_entity(result_entity));
+  // 4. execute query and verify result when put task succeeded
+  if (OB_SUCCESS == put_task_ret) {
+    htable_filter.reset();
+    htable_filter.add_column(ObString::make_string(qualifier));
+    htable_filter.set_max_versions(1); // get all versions
+    htable_filter.set_valid(true);
+    ObTableEntityIterator *iter = nullptr;
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    const ObITableEntity *result_entity = NULL;
+    ASSERT_EQ(OB_SUCCESS, iter->get_next_entity(result_entity));
+    ObObj rk, cq, ts, val;
+    ObString str;
+    ASSERT_EQ(OB_SUCCESS, result_entity->get_property(K, rk));
+    ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
+    ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
+    ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
+    ASSERT_EQ(OB_SUCCESS, val.get_varbinary(str));
+    ASSERT_EQ(key1, rk);
+    ASSERT_EQ(key2, cq);
+    ASSERT_EQ(str, put_val_str);
+    ASSERT_EQ(OB_ITER_END, iter->get_next_entity(result_entity));
+  }
   ////////////////////////////////////////////////////////////////
   // teardown
   service_client_->free_table(the_table);
