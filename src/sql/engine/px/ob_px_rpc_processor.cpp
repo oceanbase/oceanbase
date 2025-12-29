@@ -199,6 +199,7 @@ int ObInitSqcP::startup_normal_sqc(ObPxSqcHandler &sqc_handler)
     */
     arg.exec_ctx_->set_ori_frames(arg.exec_ctx_->get_frames());
     arg.exec_ctx_->set_ori_frame_cnt(arg.exec_ctx_->get_frame_cnt());
+    arg.exec_ctx_->set_ori_expr_op_size(arg.exec_ctx_->get_expr_op_size());
     if (OB_FAIL(session->store_query_string(ObString::make_string("PX SUB COORDINATOR")))) {
       LOG_WARN("store query string to session failed", K(ret));
     } else if (OB_FAIL(sub_coord.pre_process())) {
