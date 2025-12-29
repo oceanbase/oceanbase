@@ -4287,8 +4287,20 @@ int ObDMLResolver::build_column_schemas_for_orc(const orc::Type* type,
             break;
           }
           case orc::TypeKind::STRING:
-          case orc::TypeKind::VARCHAR:
           case orc::TypeKind::BINARY:
+          {
+            orc::TypeKind kind = type->getSubtype(i)->getKind();
+            ObCharsetType cs_type = (kind == orc::TypeKind::STRING) ? CHARSET_UTF8MB4 : CHARSET_BINARY;
+            ObCollationType collation = (kind == orc::TypeKind::STRING) ? ObCharset::get_system_collation() : CS_TYPE_BINARY;
+            if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_string(lib::is_oracle_mode(),
+                                                                        cs_type,
+                                                                        collation,
+                                                                        column_schema))) {
+              LOG_WARN("failed to setup string");
+            }
+            break;
+          }
+          case orc::TypeKind::VARCHAR:
           {
             int64_t max_len = static_cast<int64_t>(type->getSubtype(i)->getMaximumLength());
             if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_varchar(lib::is_oracle_mode(),
