@@ -59,8 +59,7 @@ void *ObMemtableCtx::alloc_mvcc_row_callback()
   if (OB_ISNULL(ret = std::malloc(sizeof(ObMvccRowCallback)))) {
     TRANS_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "callback alloc error, no memory", K(*this));
   } else {
-    ATOMIC_FAA(&callback_mem_used_, sizeof(ObMvccRowCallback));
-    ATOMIC_INC(&callback_alloc_count_);
+    callback_alloc_count_.inc();
   }
   return ret;
 }
@@ -70,7 +69,7 @@ void ObMemtableCtx::free_mvcc_row_callback(ObITransCallback *cb)
   if (OB_ISNULL(cb)) {
     TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "cb is null, unexpected error", KP(cb), K(*this));
   } else {
-    ATOMIC_INC(&callback_free_count_);
+    callback_free_count_.inc();
     std::free(cb);
     cb = NULL;
   }
@@ -248,13 +247,18 @@ public:
     ObTabletMemtableMgr *memtable_mgr = new ObTabletMemtableMgr;
     int64_t schema_version  = 1;
     uint32_t freeze_clock = 0;
+    bool memtable_use_hash_index = true;
+#ifdef MEMTABLE_USE_HASH_INDEX_FLAG
+    memtable_use_hash_index = (MEMTABLE_USE_HASH_INDEX_FLAG != 0);
+#endif
 
     EXPECT_EQ(OB_SUCCESS, memtable->init(table_key,
                                          ls_handle,
                                          freezer,
                                          memtable_mgr,
                                          schema_version,
-                                         freeze_clock));
+                                         freeze_clock,
+                                         memtable_use_hash_index));
 
     return memtable;
   }
@@ -3711,11 +3715,19 @@ int ObLSTxCtxMgr::init(const int64_t tenant_id,
 
 int main(int argc, char **argv)
 {
-  system("rm -rf test_memtable.log*");
-  OB_LOGGER.set_file_name("test_memtable.log", true, false,
-                          "test_memtable.log",
-                          "test_memtable.log",
-                          "test_memtable.log");
+  bool memtable_use_hash_index = true;
+  #ifdef MEMTABLE_USE_HASH_INDEX_FLAG
+      memtable_use_hash_index = (MEMTABLE_USE_HASH_INDEX_FLAG != 0);
+  #endif
+  std::string log_file_name = "test_memtable.log";
+  if (!memtable_use_hash_index) {
+    log_file_name = "test_memtable_no_hash_index.log";
+  }
+  system(std::string("rm -rf " + log_file_name + "*").c_str());
+  OB_LOGGER.set_file_name(log_file_name.c_str(), true, false,
+                          log_file_name.c_str(),
+                          log_file_name.c_str(),
+                          log_file_name.c_str());
   OB_LOGGER.set_log_level("INFO");
   STORAGE_LOG(INFO, "begin unittest: test simple memtable");
   ::testing::InitGoogleTest(&argc, argv);

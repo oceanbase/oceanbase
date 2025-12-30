@@ -41,9 +41,8 @@ ObMemtableCtx::ObMemtableCtx()
       lock_for_read_elapse_(0),
       trans_mem_total_size_(0),
       unsubmitted_cnt_(0),
-      callback_mem_used_(0),
-      callback_alloc_count_(0),
-      callback_free_count_(0),
+      callback_alloc_count_(),
+      callback_free_count_(),
       is_read_only_(false),
       is_master_(true),
       has_row_updated_(false),
@@ -109,10 +108,7 @@ int ObMemtableCtx::enable_lock_table(ObLSTxCtxMgr *ls_tx_ctx_mgr)
 void ObMemtableCtx::reset()
 {
   if (IS_INIT) {
-    if ((ATOMIC_LOAD(&callback_mem_used_) > 8 * 1024 * 1024) && REACH_TIME_INTERVAL(200000)) {
-      TRANS_LOG(INFO, "memtable callback memory used > 8MB", K(callback_mem_used_), K(*this));
-    }
-    if (OB_UNLIKELY(callback_alloc_count_ != callback_free_count_)) {
+    if (OB_UNLIKELY(callback_alloc_count_.value() != callback_free_count_.value())) {
       TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "callback alloc and free count not match", K(*this));
       OB_SAFE_ABORT();
     }
@@ -134,9 +130,8 @@ void ObMemtableCtx::reset()
       }
     }
     is_inited_ = false;
-    callback_free_count_ = 0;
-    callback_alloc_count_ = 0;
-    callback_mem_used_ = 0;
+    callback_free_count_.reset();
+    callback_alloc_count_.reset();
     has_row_updated_ = false;
     trans_mem_total_size_ = 0;
     lock_for_read_retry_count_ = 0;
@@ -186,7 +181,7 @@ int64_t ObMemtableCtx::to_string(char *buf, const int64_t buf_len) const
   common::databuff_printf(buf, buf_len, pos, " row_callback[alloc:%ld, free:%ld, unsubmit:%ld] "
                           "redo[fill:%ld,sync_succ:%ld, sync_fail:%ld] "
                           "main_list_len=%ld pending_log_size=%ld ",
-                          callback_alloc_count_, callback_free_count_, unsubmitted_cnt_,
+                          callback_alloc_count_.value(), callback_free_count_.value(), unsubmitted_cnt_,
                           log_gen_.get_redo_filled_count(),
                           log_gen_.get_redo_sync_succ_count(),
                           log_gen_.get_redo_sync_fail_count(),
@@ -335,7 +330,6 @@ void *ObMemtableCtx::old_row_alloc(const int64_t size)
   if (OB_ISNULL(ret = ctx_cb_allocator_.alloc(size))) {
     TRANS_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "old row alloc error, no memory", K(size), K(*this));
   } else {
-    ATOMIC_FAA(&callback_mem_used_, size);
     TRANS_LOG(DEBUG, "old row alloc succ", K(*this), KP(ret), K(lbt()));
   }
   return ret;
@@ -358,8 +352,7 @@ void *ObMemtableCtx::alloc_mvcc_row_callback()
   if (OB_ISNULL(ret = trans_mgr_.alloc_mvcc_row_callback())) {
     TRANS_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "callback alloc error, no memory", K(*this));
   } else {
-    ATOMIC_FAA(&callback_mem_used_, sizeof(ObMvccRowCallback));
-    ATOMIC_INC(&callback_alloc_count_);
+    callback_alloc_count_.inc();
     TRANS_LOG(DEBUG, "callback alloc succ", K(*this), KP(ret), K(lbt()));
   }
   return ret;
@@ -374,7 +367,7 @@ void ObMemtableCtx::free_mvcc_row_callback(ObITransCallback *cb)
   } else if (MutatorType::MUTATOR_ROW_EXT_INFO == cb->get_mutator_type()) {
     TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "try to free ext info callback as mvcc row callback", KP(cb), K(*this));
   } else {
-    ATOMIC_INC(&callback_free_count_);
+    callback_free_count_.inc();
     TRANS_LOG(DEBUG, "callback release succ", KP(cb), K(*this), K(lbt()));
     trans_mgr_.free_mvcc_row_callback(cb);
     cb = NULL;
@@ -529,7 +522,7 @@ int ObMemtableCtx::do_trans_end(
     }
     // after a transaction finishes, callback memory should be released
     // and check memory leakage
-    if (OB_UNLIKELY(ATOMIC_LOAD(&callback_alloc_count_) != ATOMIC_LOAD(&callback_free_count_))) {
+    if (OB_UNLIKELY(callback_alloc_count_.value() != callback_free_count_.value())) {
       TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "callback alloc and free count not match", KPC(this));
       OB_SAFE_ABORT();
     }

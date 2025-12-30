@@ -19,6 +19,7 @@
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/lock/ob_small_spin_lock.h"
 #include "lib/utility/ob_macro_utils.h"
+#include "lib/alloc/alloc_struct.h"
 #include "ob_clock_generator.h"
 #include "share/ob_define.h"
 #include "storage/ob_memtable_ctx_obj_pool.h"
@@ -45,6 +46,7 @@ struct ObTableLockInfo;
 
 namespace memtable
 {
+using SmallTCCounter = common::ObCounter<8, common::ObCounterSlotPickerByThread>;
 class ObTxCallbackListStat;
 struct RetryInfo
 {
@@ -234,34 +236,24 @@ private:
 // The page size is 8K, support concurrency, but at a poor performance.
 class ObMemtableCtxCbAllocator final : public common::ObIAllocator
 {
-  enum { NWay_NUM = 16};
 public:
   explicit ObMemtableCtxCbAllocator()
     : ctx_cb_mem_limiter_(),
-      alloc_count_(0),
-      free_count_(0),
-      alloc_size_(0),
       is_inited_(false),
       expand_nway_called_(false) {}
   ~ObMemtableCtxCbAllocator()
   {
-    if (OB_UNLIKELY(ATOMIC_LOAD(&free_count_) != ATOMIC_LOAD(&alloc_count_))) {
-      TRANS_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "callback memory leak found", K(alloc_count_), K(free_count_), K(alloc_size_));
-    }
     ATOMIC_STORE(&is_inited_, false);
   }
-  // FIFOAllocator doesn't support double init, even after reset, so is_inited_ is handled specially here.
+  // Allocator doesn't support double init, even after reset, so is_inited_ is handled specially here.
   int init(const uint64_t tenant_id)
   {
     int ret = OB_SUCCESS;
     ObMemAttr attr(tenant_id, ObModIds::OB_MEMTABLE_CALLBACK, ObCtxIds::TX_CALLBACK_CTX_ID);
-    if (OB_UNLIKELY(free_count_ != alloc_count_)) {
-      TRANS_LOG(ERROR, "callback memory leak found", K(alloc_count_), K(free_count_), K(alloc_size_));
-    }
     if (IS_NOT_INIT) {
       if (OB_FAIL(allocator_.init(common::OB_MALLOC_NORMAL_BLOCK_SIZE,
                                   ctx_cb_mem_limiter_,
-                                  attr))) {
+                                  SET_IGNORE_MEM_VERSION(attr)))) {
         TRANS_LOG(ERROR, "callback allocator init failed", K(ret), K(lbt()), K(tenant_id));
       } else {
         ATOMIC_STORE(&is_inited_, true);
@@ -270,31 +262,35 @@ public:
     if (OB_SUCC(ret)) {
       allocator_.set_attr(attr);
       allocator_.set_nway(1);
+      ATOMIC_STORE(&expand_nway_called_, false);
     }
-    ATOMIC_STORE(&alloc_count_, 0);
-    ATOMIC_STORE(&free_count_, 0);
-    ATOMIC_STORE(&alloc_size_, 0);
     return ret;
   }
   void reset(bool only_check = false)
   {
-    if (OB_UNLIKELY(free_count_ != alloc_count_)) {
-      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "callback memory leak found", K(alloc_count_), K(free_count_), K(alloc_size_));
-      OB_SAFE_ABORT();
-    }
-    if (!only_check) {
-      allocator_.purge();
-      ATOMIC_STORE(&alloc_count_, 0);
-      ATOMIC_STORE(&free_count_, 0);
-      ATOMIC_STORE(&alloc_size_, 0);
-      ATOMIC_STORE(&is_inited_, false);
+    // ObVSliceAlloc default constructed using default_blk_alloc,
+    // if ObVSliceAlloc has not been initialized, ObVSliceAlloc::used() may not equal 0.
+    if (IS_INIT) {
+      if (OB_UNLIKELY(allocator_.used() != 0)) {
+        // If VSliceAlloc::set_nway is called during VSliceAlloc::alloc, Arena may cache unused block,
+        // call ObVSliceAlloc::purge() to purge the unused block. However, this case is extremely rare,
+        // and purge is an expensive operation, so it is only called when used() != 0
+        allocator_.purge();
+        if (OB_UNLIKELY(allocator_.used() != 0)) {
+          TRANS_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "callback memory leak found", K(used()));
+          OB_SAFE_ABORT();
+        }
+      }
+      if (!only_check) {
+        ATOMIC_STORE(&is_inited_, false);
+      }
     }
   }
   inline void expand_nway()
   {
     if (!expand_nway_called_) {
       if (ATOMIC_BCAS(&expand_nway_called_, false, true)) {
-        allocator_.set_nway(NWay_NUM);
+        allocator_.set_nway(get_cpu_num() / 2);
       }
     }
   }
@@ -302,11 +298,7 @@ public:
   {
     void *ret = nullptr;
     if (OB_ISNULL(ret = allocator_.alloc(size))) {
-      TRANS_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "callback memory failed",
-        K(alloc_count_), K(free_count_), K(alloc_size_), K(size));
-    } else {
-      ATOMIC_INC(&alloc_count_);
-      ATOMIC_FAA(&alloc_size_, size);
+      TRANS_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "callback memory failed", K(used()), K(size));
     }
     return ret;
   }
@@ -320,17 +312,13 @@ public:
     if (OB_ISNULL(ptr)) {
       // do nothing
     } else {
-      ATOMIC_INC(&free_count_);
       allocator_.free(ptr);
     }
   }
 private:
   ObBlockAllocMgr ctx_cb_mem_limiter_;
-  ObVSliceAllocT<NWay_NUM> allocator_;
-  int64_t alloc_count_;
-  int64_t free_count_;
-  int64_t alloc_size_;
-  // used to record the init condition of FIFO allocator
+  ObDynamicVSliceAlloc allocator_;
+  // used to record the init condition of allocator
   bool is_inited_;
   bool expand_nway_called_;
 };
@@ -616,9 +604,8 @@ private:
   int64_t trans_mem_total_size_;
   // statistics for txn logging
   int64_t unsubmitted_cnt_;
-  int64_t callback_mem_used_;
-  int64_t callback_alloc_count_;
-  int64_t callback_free_count_;
+  SmallTCCounter callback_alloc_count_;
+  SmallTCCounter callback_free_count_;
   bool is_read_only_;
   bool is_master_;
   // Used to indicate whether mvcc row is updated or not.

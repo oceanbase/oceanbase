@@ -1542,36 +1542,46 @@ int ObTransService::check_replica_readable_(const ObTxReadSnapshot &snapshot,
                ObTxReadSnapshot::SRC::WEAK_READ_SERVICE == src) {
       // to compatible with SQL's retry-logic, trigger re-choose replica
       ret = OB_REPLICA_NOT_READABLE;
-    } else if (OB_FAIL(ls.get_max_decided_scn(max_replayed_scn))) {
-      TRANS_LOG(WARN, "get max decided scn failed", K(ret));
-      // rewrite ret code when get max decided scn failed
-      ret = OB_NOT_MASTER;
-    } else if (OB_FAIL(ls.get_tx_svr()->get_tx_ls_log_adapter()->check_dup_tablet_readable(
-                   tablet_id,
-                   snapshot.core_.version_,
-                   leader,
-                   max_replayed_scn,
-                   dup_table_readable))) {
-      TRANS_LOG(WARN, "check dup tablet readable error", K(ret));
-    } else if (dup_table_readable) {
-      TRANS_LOG(INFO,
-                "the dup tablet is readable now",
-                K(ret),
-                K(tablet_id),
-                K(snapshot),
-                K(leader),
-                K(max_replayed_scn),
-                K(dup_table_readable),
-                K(ls_id),
-                K(expire_ts));
-      ret = OB_SUCCESS;
     } else {
-      if (OB_SUCC(wait_follower_readable_(ls, expire_ts, snapshot.core_.version_, src))) {
-        TRANS_LOG(INFO, "read from follower", K(snapshot),  K(snapshot), K(ls));
-      } else if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
-        ret = OB_NOT_MASTER;
-      } else {
-        ret = OB_REPLICA_NOT_READABLE;
+      bool is_force_refresh = false;
+      do {
+        if (OB_FAIL(ls.get_max_decided_scn_snapshot(max_replayed_scn, is_force_refresh))) {
+          TRANS_LOG(WARN, "get max decided scn failed", K(ret), K(max_replayed_scn), K(is_force_refresh));
+          // rewrite ret code when get max decided scn failed
+          ret = OB_NOT_MASTER;
+        } else if (OB_FAIL(ls.get_tx_svr()->get_tx_ls_log_adapter()->check_dup_tablet_readable(
+                      tablet_id,
+                      snapshot.core_.version_,
+                      leader,
+                      max_replayed_scn,
+                      dup_table_readable))) {
+          TRANS_LOG(WARN, "check dup tablet readable error", K(ret), K(dup_table_readable), K(max_replayed_scn));
+        } else if (dup_table_readable) {
+          TRANS_LOG(INFO,
+                    "the dup tablet is readable now",
+                    K(ret),
+                    K(tablet_id),
+                    K(snapshot),
+                    K(leader),
+                    K(max_replayed_scn),
+                    K(dup_table_readable),
+                    K(ls_id),
+                    K(expire_ts));
+          ret = OB_SUCCESS;
+        } else {
+          TRANS_LOG(TRACE, "check dup tablet readable failed", K(ret), K(dup_table_readable), K(max_replayed_scn));
+        }
+        is_force_refresh = !is_force_refresh;
+      } while (OB_SUCC(ret) && is_force_refresh && !dup_table_readable);
+
+      if (OB_SUCC(ret) && !dup_table_readable) {
+        if (OB_SUCC(wait_follower_readable_(ls, expire_ts, snapshot.core_.version_, src))) {
+          TRANS_LOG(INFO, "read from follower", K(snapshot),  K(snapshot), K(ls));
+        } else if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
+          ret = OB_NOT_MASTER;
+        } else {
+          ret = OB_REPLICA_NOT_READABLE;
+        }
       }
     }
   }

@@ -390,10 +390,14 @@ int ObLogReplayService::add_ls(const share::ObLSID &id)
 {
   int ret = OB_SUCCESS;
   ObReplayStatus *replay_status = NULL;
+  LSKey hash_map_key(id.id());
   ObMemAttr attr(MTL_ID(), ObModIds::OB_LOG_REPLAY_STATUS);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "replay service not init", K(ret));
+  } else if (OB_UNLIKELY(!id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(ERROR, "Invalid argument", K(id));
   } else if (NULL == (replay_status = static_cast<ObReplayStatus*>(mtl_malloc(sizeof(ObReplayStatus), attr)))){
     ret = OB_ALLOCATE_MEMORY_FAILED;
     CLOG_LOG(WARN, "failed to alloc replay status", K(ret), K(id));
@@ -405,11 +409,12 @@ int ObLogReplayService::add_ls(const share::ObLSID &id)
       CLOG_LOG(WARN, "failed to init replay status", K(ret), K(id), K(palf_env_), K(this));
     } else {
       replay_status->inc_ref();
-      if (OB_FAIL(replay_status_map_.insert(id, replay_status))) {
+      if (OB_FAIL(replay_status_map_.insert_and_get(hash_map_key, replay_status))) {
         // enable后已经开始回放,不能直接free
         CLOG_LOG(ERROR, "failed to insert log stream", K(ret), K(id), KPC(replay_status));
         revert_replay_status_(replay_status);
       } else {
+        replay_status_map_.revert(replay_status);
         CLOG_LOG(INFO, "add_ls success", K(ret), K(id), KPC(replay_status));
       }
     }
@@ -422,10 +427,19 @@ int ObLogReplayService::remove_ls(const share::ObLSID &id)
 {
   int ret = OB_SUCCESS;
   RemoveReplayStatusFunctor functor;
+  LSKey hash_map_key(id.id());
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "replay service not inited", K(ret), K(id));
-  } else if (OB_FAIL(replay_status_map_.erase_if(id, functor))) {
+  } else if (OB_UNLIKELY(!id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", K(id));
+  } else if (OB_FAIL(replay_status_map_.operate(hash_map_key, functor))) {
+    CLOG_LOG(WARN, "failed to remove log stream", K(ret), K(id));
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    }
+  } else if (OB_FAIL(replay_status_map_.del(hash_map_key))) {
     CLOG_LOG(WARN, "failed to remove log stream", K(ret), K(id));
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
@@ -810,21 +824,13 @@ share::SCN ObLogReplayService::inner_get_replayable_point_() const
 
 int ObLogReplayService::stat_for_each(const common::ObFunction<int (const ObReplayStatus &)> &func)
 {
-  auto stat_func = [&func](const ObLSID &id, ObReplayStatus *replay_status) -> bool {
-    int ret = OB_SUCCESS;
-    bool bret = true;
-    if (OB_FAIL(func(*replay_status))) {
-      bret = false;
-      CLOG_LOG(WARN, "iter replay stat failed", K(ret));
-    }
-    return bret;
-  };
+  StatReplayStatusFunctor functor(func);
   int ret = OB_SUCCESS;
   if (!func.is_valid()) {
     // ObFunction will be invalid when allocating memory failed.
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
-    ret = replay_status_map_.for_each(stat_func);
+    ret = replay_status_map_.for_each(functor);
   }
   return ret;
 }
@@ -877,14 +883,22 @@ int ObLogReplayService::get_replay_status_(const share::ObLSID &id,
                                            ObReplayStatusGuard &guard)
 {
   int ret = OB_SUCCESS;
-  GetReplayStatusFunctor functor(guard);
+  LSKey hash_map_key(id.id());
+  ObReplayStatus *replay_status = NULL;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "replay service not init", K(ret));
-  } else if (OB_FAIL(replay_status_map_.operate(id, functor))) {
+  } else if (OB_UNLIKELY(!id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(ERROR, "Invalid argument", K(id));
+  } else if (OB_FAIL(replay_status_map_.get(hash_map_key, replay_status))) {
     CLOG_LOG(WARN, "replay service get replay status failed", K(ret), K(id));
   } else {
+    guard.set_replay_status(replay_status);
     CLOG_LOG(TRACE, "replay service get success", K(ret), K(id));
+  }
+  if (NULL != replay_status) {
+    replay_status_map_.revert(replay_status);
   }
   return ret;
 }
@@ -1610,7 +1624,7 @@ int ObLogReplayService::remove_all_ls_()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "replay service not inited", K(ret));
-  } else if (OB_FAIL(replay_status_map_.for_each(functor))) {
+  } else if (OB_FAIL(replay_status_map_.remove_if(functor))) {
     CLOG_LOG(WARN, "failed to remove log stream", K(ret));
   } else {
     CLOG_LOG(INFO, "replay service remove all ls", K(ret));
@@ -1638,21 +1652,7 @@ int ObLogReplayService::diagnose(const share::ObLSID &id,
   return ret;
 }
 
-bool ObLogReplayService::GetReplayStatusFunctor::operator()(const share::ObLSID &id,
-                                                            ObReplayStatus *replay_status)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(replay_status)) {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(WARN, "replay status is NULL", K(id), KR(ret));
-  } else {
-    guard_.set_replay_status(replay_status);
-  }
-  ret_code_ = ret;
-  return OB_SUCCESS == ret;
-}
-
-bool ObLogReplayService::RemoveReplayStatusFunctor::operator()(const share::ObLSID &id,
+bool ObLogReplayService::RemoveReplayStatusFunctor::operator()(const palf::LSKey &id,
                                                                ObReplayStatus *replay_status)
 {
   int ret = OB_SUCCESS;
@@ -1662,18 +1662,11 @@ bool ObLogReplayService::RemoveReplayStatusFunctor::operator()(const share::ObLS
   } else if (OB_FAIL(replay_status->disable())) {
     CLOG_LOG(WARN, "failed to disable replay status", K(ret), K(id), KPC(replay_status));
   }
-  if (OB_SUCCESS == ret) {
-    if (0 == replay_status->dec_ref()) {
-      CLOG_LOG(INFO, "free replay status", KPC(replay_status));
-      replay_status->~ObReplayStatus();
-      mtl_free(replay_status);
-    }
-  }
   ret_code_ = ret;
   return OB_SUCCESS == ret;
 }
 
-bool ObLogReplayService::StatReplayProcessFunctor::operator()(const share::ObLSID &id,
+bool ObLogReplayService::StatReplayProcessFunctor::operator()(const palf::LSKey &id,
                                                               ObReplayStatus *replay_status)
 {
   int ret = OB_SUCCESS;
@@ -1699,7 +1692,21 @@ bool ObLogReplayService::StatReplayProcessFunctor::operator()(const share::ObLSI
   return true;
 }
 
-bool ObLogReplayService::FetchLogFunctor::operator()(const share::ObLSID &id,
+bool ObLogReplayService::StatReplayStatusFunctor::operator()(const palf::LSKey &id,
+                                                              ObReplayStatus *replay_status)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(replay_status)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "replay status is NULL", K(id), KR(ret));
+  } else if (OB_FAIL(func_(*replay_status))) {
+    CLOG_LOG(WARN, "iter replay stat failed", K(ret));
+  }
+  ret_code_ = ret;
+  return OB_SUCCESS == ret;
+}
+
+bool ObLogReplayService::FetchLogFunctor::operator()(const palf::LSKey &id,
                                                      ObReplayStatus *replay_status)
 {
   int ret = OB_SUCCESS;

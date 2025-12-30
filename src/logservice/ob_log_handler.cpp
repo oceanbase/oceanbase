@@ -78,7 +78,8 @@ ObLogHandler::ObLogHandler() : self_(),
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
                                libpalf_proposer_config_mgr_(),
 #endif
-                               get_max_decided_scn_debug_time_(OB_INVALID_TIMESTAMP)
+                               get_max_decided_scn_debug_time_(OB_INVALID_TIMESTAMP),
+                               max_decided_scn_snapshot_()
 {
 }
 
@@ -253,6 +254,7 @@ void ObLogHandler::destroy()
 #ifdef OB_BUILD_LOG_STORAGE_COMPRESS
   compressor_wrapper_.reset();
 #endif
+  max_decided_scn_snapshot_.reset();
 }
 
 int ObLogHandler::append(const void *buffer,
@@ -2036,6 +2038,22 @@ int ObLogHandler::get_max_decided_scn(SCN &scn)
     scn = std::max(max_replayed_scn, max_applied_scn) > SCN::min_scn() ?
              std::max(max_replayed_scn, max_applied_scn) : SCN::min_scn();
     CLOG_LOG(TRACE, "get_max_decided_scn", K(ret), K(id), K(max_replayed_scn), K(max_applied_scn), K(scn));
+  }
+  return ret;
+}
+
+// just for check dup tablet readable, do not use without the owner's confirmation.
+int ObLogHandler::get_max_decided_scn_snapshot(SCN &scn, const bool is_force_refresh)
+{
+  int ret = OB_SUCCESS;
+  SCN snapshot_scn = max_decided_scn_snapshot_.atomic_load();
+  if (!is_force_refresh && snapshot_scn.is_valid()) {
+    scn = snapshot_scn;
+  } else if (OB_FAIL(get_max_decided_scn(snapshot_scn))) {
+    CLOG_LOG(WARN, "get_max_decided_scn refresh snapshot failed", K(ret), K(snapshot_scn));
+  } else {
+    scn = snapshot_scn;
+    max_decided_scn_snapshot_.atomic_set(snapshot_scn);
   }
   return ret;
 }

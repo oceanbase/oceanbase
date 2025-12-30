@@ -2528,12 +2528,16 @@ int main(int argc, char **argv)
   uint64_t checksum2 = ob_crc64(c, (void*)&checksum, sizeof(uint64_t));
   int64_t tx_id = 21533427;
   uint64_t h = murmurhash(&tx_id, sizeof(tx_id), 0);
-  system("rm -rf test_tx.log*");
+  std::string log_file_name = "test_tx.log";
+  #ifdef TX_NODE_MEMTABLE_USE_HASH_INDEX_FLAG
+      log_file_name = "test_tx_no_hash_index.log";
+  #endif
+  system(std::string("rm -rf " + log_file_name + "*").c_str());
   ObLogger &logger = ObLogger::get_logger();
-  logger.set_file_name("test_tx.log", true, false,
-                       "test_tx.log", // rs
-                       "test_tx.log", // election
-                       "test_tx.log"); // audit
+  logger.set_file_name(log_file_name.c_str(), true, false,
+                       log_file_name.c_str(), // rs
+                       log_file_name.c_str(), // election
+                       log_file_name.c_str()); // audit
   logger.set_log_level(OB_LOG_LEVEL_DEBUG);
   ::testing::InitGoogleTest(&argc, argv);
   TRANS_LOG(INFO, "mmhash:", K(h), K(checksum1), K(checksum2));

@@ -255,6 +255,61 @@ int ObQueryEngine::get(const ObMemtableKey *parameter_key,
   return ret;
 }
 
+int ObQueryEngine::get_from_btree(const ObMemtableKey *parameter_key,
+                                  ObMvccRow *&row,
+                                  ObMemtableKey *returned_key)
+{
+  int ret = OB_SUCCESS;
+  row = nullptr;
+
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "not init", K(this));
+    ret = OB_NOT_INIT;
+  } else if (OB_ISNULL(parameter_key)) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid param", KP(parameter_key));
+  } else {
+    const ObStoreRowkeyWrapper parameter_key_wrapper(parameter_key->get_rowkey());
+
+    if (OB_FAIL(keybtree_.get(parameter_key_wrapper, row))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        TRANS_LOG(WARN, "get from keyhash fail", KR(ret), KPC(parameter_key));
+      }
+      row = nullptr;
+    } else if (OB_ISNULL(row)) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "get NULL value from keyhash", KR(ret), KPC(parameter_key));
+    }
+  }
+  return ret;
+}
+
+int ObQueryEngine::create_btree_kv(const ObMemtableKey *parameter_key,
+                                  const ObMvccRowCreator &row_creator,
+                                  ObMvccRow *&row)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "not init", K(this));
+    ret = OB_NOT_INIT;
+  } else if (OB_ISNULL(parameter_key)) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid param", KP(parameter_key));
+  } else if (OB_UNLIKELY(!row_creator.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid row creator", K(row_creator));
+  } else {
+    const ObStoreRowkeyWrapper parameter_key_wrapper(parameter_key->get_rowkey());
+    if (OB_FAIL(keybtree_.insert_or_get(parameter_key_wrapper, row_creator, row))) {
+      TRANS_LOG(WARN, "fail to insert or get", KR(ret), KPC(parameter_key));
+    }
+  }
+
+  return ret;
+}
+
+
 // The caller need to guarantee the mutual exclusive enforced here, otherwise
 // the concurrent modification will violate the rules of the btree(the ERROR
 // will be reported if two same key is inserted into keybtree successively)

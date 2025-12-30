@@ -1534,10 +1534,12 @@ int ObDDLKV::init(const ObITable::TableKey &table_key,
                   ObFreezer *freezer,
                   ObTabletMemtableMgr *memtable_mgr,
                   const int64_t schema_version,
-                  const uint32_t freeze_clock)
+                  const uint32_t freeze_clock,
+                  const bool use_hash_index)
 {
   int ret = OB_SUCCESS;
   const lib::ObMemAttr attr(MTL_ID(), "DDLKVMemAlloc");
+  UNUSED(use_hash_index);
 
   if (is_inited_) {
     TRANS_LOG(WARN, "init twice", K(*this));

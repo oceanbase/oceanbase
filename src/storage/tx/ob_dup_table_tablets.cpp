@@ -352,7 +352,7 @@ int ObLSDupTabletsMgr::init(ObDupTableLSHandler *dup_ls_handle)
 {
   int ret = OB_SUCCESS;
 
-  SpinWLockGuard guard(dup_tablets_lock_);
+  TCRWLock::WLockGuard guard(dup_tablets_lock_);
 
   if (!ATOMIC_LOAD(&is_stopped_)) {
     ret = OB_INIT_TWICE;
@@ -463,7 +463,7 @@ int ObLSDupTabletsMgr::offline()
   int ret = OB_SUCCESS;
 
   // DUP_TABLE_LOG(INFO, "before dup_tablets_mgr offline", K(ret),KPC(this));
-  SpinWLockGuard guard(dup_tablets_lock_);
+  TCRWLock::WLockGuard guard(dup_tablets_lock_);
   if (OB_FAIL(clean_unlog_tablets_())) {
     DUP_TABLE_LOG(WARN, "clean unlog tablets failed", K(ret), KPC(this));
   } else if (OB_FAIL(clean_durable_confirming_tablets_(share::SCN::max_scn()))) {
@@ -484,7 +484,7 @@ int ObLSDupTabletsMgr::check_readable(const common::ObTabletID &tablet_id,
   readable = false;
   DupTabletInfo tmp_status;
 
-  SpinRLockGuard guard(dup_tablets_lock_);
+  TCRWLock::RLockGuard guard(dup_tablets_lock_);
 
   DLIST_FOREACH(readable_node, readable_tablets_list_)
   {
@@ -546,7 +546,7 @@ int ObLSDupTabletsMgr::search_dup_tablet_in_redo_log(const common::ObTabletID &t
   is_dup_table = false;
   DupTabletInfo tmp_status;
 
-  SpinRLockGuard guard(dup_tablets_lock_);
+  TCRWLock::RLockGuard guard(dup_tablets_lock_);
 
   // for DEBUG
   // no need to check dup_table which has not submitted
@@ -641,7 +641,7 @@ int ObLSDupTabletsMgr::search_dup_tablet_for_read(const common::ObTabletID &tabl
   is_dup_table = false;
   DupTabletInfo tmp_status;
 
-  SpinRLockGuard guard(dup_tablets_lock_);
+  TCRWLock::RLockGuard guard(dup_tablets_lock_);
 
   if (OB_NOT_NULL(changing_new_set_)) {
     if (OB_SUCC(changing_new_set_->get_refactored(tablet_id, tmp_status))) {
@@ -865,7 +865,7 @@ int ObLSDupTabletsMgr::scan_readable_set_for_gc(const int64_t leader_takeover_ts
   const int64_t last_scan_task_succ_ts =
       MTL(ObTransService *)->get_dup_table_scan_task().get_last_scan_task_succ_ts();
 
-  SpinWLockGuard guard(dup_tablets_lock_);
+  TCRWLock::WLockGuard guard(dup_tablets_lock_);
 
   if (OB_ISNULL(removing_old_set_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -991,7 +991,7 @@ int ObLSDupTabletsMgr::refresh_dup_tablet(const common::ObTabletID &tablet_id,
 {
   int ret = OB_SUCCESS;
 
-  SpinWLockGuard guard(dup_tablets_lock_);
+  TCRWLock::WLockGuard guard(dup_tablets_lock_);
 
   if (!tablet_id.is_valid() || ATOMIC_LOAD(&is_stopped_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1141,7 +1141,7 @@ int ObLSDupTabletsMgr::prepare_serialize(int64_t &max_ser_size,
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
 
-  SpinWLockGuard guard(dup_tablets_lock_);
+  TCRWLock::WLockGuard guard(dup_tablets_lock_);
 
   unique_id_array.reuse();
 
@@ -1333,7 +1333,7 @@ int ObLSDupTabletsMgr::serialize_tablet_log(const DupTabletSetIDArray &unique_id
 
   int64_t tmp_pos = pos;
 
-  SpinRLockGuard guard(dup_tablets_lock_);
+  TCRWLock::RLockGuard guard(dup_tablets_lock_);
 
   if (OB_ISNULL(buf) || buf_len <= 0 || pos <= 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -1381,7 +1381,7 @@ int ObLSDupTabletsMgr::deserialize_tablet_log(DupTabletSetIDArray &unique_id_arr
   common::ObTimeGuard timeguard("deserialize_tablet_log", 500 * 1000);
   unique_id_array.reset();
 
-  SpinWLockGuard guard(dup_tablets_lock_);
+  TCRWLock::WLockGuard guard(dup_tablets_lock_);
   timeguard.click();
 
   if (OB_ISNULL(buf) || data_len <= 0 || pos <= 0) {
@@ -1511,7 +1511,7 @@ int ObLSDupTabletsMgr::tablet_log_submitted(const bool submit_result,
   int ret = OB_SUCCESS;
 
   common::ObTimeGuard timeguard("tablet_log_submitted", 500 * 1000);
-  SpinWLockGuard guard(dup_tablets_lock_);
+  TCRWLock::WLockGuard guard(dup_tablets_lock_);
 
   timeguard.click();
   UNUSED(for_replay);
@@ -1552,7 +1552,7 @@ int ObLSDupTabletsMgr::tablet_log_synced(const bool sync_result,
 
   bool contain_readable_set = false;
   modify_readable_set = false;
-  SpinWLockGuard guard(dup_tablets_lock_);
+  TCRWLock::WLockGuard guard(dup_tablets_lock_);
 
 
   for (int i = 0; OB_SUCC(ret) && i < unique_id_array.count(); i++) {
@@ -1791,7 +1791,7 @@ int ObLSDupTabletsMgr::merge_into_readable_tablets_(DupTabletChangeMap *change_m
 
 int64_t ObLSDupTabletsMgr::get_dup_tablet_count()
 {
-  SpinRLockGuard guard(dup_tablets_lock_);
+  TCRWLock::RLockGuard guard(dup_tablets_lock_);
   int64_t total_size = 0;
 
   if (OB_NOT_NULL(changing_new_set_)) {
@@ -1820,7 +1820,7 @@ int64_t ObLSDupTabletsMgr::get_dup_tablet_count()
 
 int64_t ObLSDupTabletsMgr::get_readable_tablet_count()
 {
-  SpinRLockGuard guard(dup_tablets_lock_);
+  TCRWLock::RLockGuard guard(dup_tablets_lock_);
   int64_t total_size = 0;
 
   DLIST_FOREACH_X(readable_set_ptr, readable_tablets_list_, true)
@@ -1837,7 +1837,7 @@ int64_t ObLSDupTabletsMgr::get_readable_tablet_set_count()
 {
   int64_t cnt = 0;
 
-  SpinRLockGuard guard(dup_tablets_lock_);
+  TCRWLock::RLockGuard guard(dup_tablets_lock_);
   cnt = readable_tablets_list_.get_size();
 
   return cnt;
@@ -1847,7 +1847,7 @@ int64_t ObLSDupTabletsMgr::get_need_confirm_tablet_set_count()
 {
   int64_t cnt = 0;
 
-  SpinRLockGuard guard(dup_tablets_lock_);
+  TCRWLock::RLockGuard guard(dup_tablets_lock_);
   cnt = need_confirm_new_queue_.get_size();
 
   return cnt;
@@ -1856,7 +1856,7 @@ int64_t ObLSDupTabletsMgr::get_need_confirm_tablet_set_count()
 int64_t ObLSDupTabletsMgr::get_all_tablet_set_count()
 {
   int64_t cnt = 0;
-  SpinRLockGuard guard(dup_tablets_lock_);
+  TCRWLock::RLockGuard guard(dup_tablets_lock_);
 
   if (OB_NOT_NULL(changing_new_set_)) {
     cnt += 1;
@@ -1876,7 +1876,7 @@ int64_t ObLSDupTabletsMgr::get_all_tablet_set_count()
 bool ObLSDupTabletsMgr::check_removing_tablet_exist()
 {
   bool bool_ret = false;
-  SpinRLockGuard guard(dup_tablets_lock_);
+  TCRWLock::RLockGuard guard(dup_tablets_lock_);
 
   if (OB_ISNULL(removing_old_set_)) {
     bool_ret = false;
@@ -1895,7 +1895,7 @@ bool ObLSDupTabletsMgr::check_removing_tablet_exist()
 bool ObLSDupTabletsMgr::check_changing_new_tablet_exist()
 {
   bool bool_ret = false;
-  SpinRLockGuard guard(dup_tablets_lock_);
+  TCRWLock::RLockGuard guard(dup_tablets_lock_);
 
   if (OB_ISNULL(changing_new_set_)) {
     bool_ret = false;
@@ -1915,7 +1915,7 @@ int ObLSDupTabletsMgr::leader_takeover(const bool is_resume,
 {
   int ret = OB_SUCCESS;
 
-  SpinWLockGuard guard(dup_tablets_lock_);
+  TCRWLock::WLockGuard guard(dup_tablets_lock_);
 
   if (!is_resume) {
     if (OB_FAIL(construct_clean_confirming_set_task_())) {
@@ -1942,7 +1942,7 @@ int ObLSDupTabletsMgr::leader_revoke(const bool is_logging)
 
   int ret = OB_SUCCESS;
 
-  SpinWLockGuard guard(dup_tablets_lock_);
+  TCRWLock::WLockGuard guard(dup_tablets_lock_);
 
   if (!is_logging) {
     // clean unreadable tablets to make replay from clean sets.
@@ -1962,7 +1962,7 @@ int ObLSDupTabletsMgr::try_to_confirm_tablets(
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  SpinWLockGuard guard(dup_tablets_lock_);
+  TCRWLock::WLockGuard guard(dup_tablets_lock_);
   if (!lease_valid_follower_max_replayed_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     DUP_TABLE_LOG(WARN, "invalid confirm ts", KR(ret), K(lease_valid_follower_max_replayed_scn));
@@ -2023,7 +2023,7 @@ int ObLSDupTabletsMgr::try_to_confirm_tablets(
 
 void ObLSDupTabletsMgr::print_tablet_diag_info_log(bool is_master)
 {
-  SpinRLockGuard guard(dup_tablets_lock_);
+  TCRWLock::RLockGuard guard(dup_tablets_lock_);
   int ret = OB_SUCCESS;
 
   const uint64_t TABLET_SET_PRINT_BUF_LEN =
@@ -3022,7 +3022,7 @@ int ObLSDupTabletsMgr::get_tablets_stat(ObDupLSTabletsStatIterator &collect_iter
   const ObAddr addr = GCTX.self_addr();
   const int64_t tenant_id = MTL_ID();
   const int64_t collect_ts = ObTimeUtility::current_time();
-  SpinRLockGuard rlock(dup_tablets_lock_);
+  TCRWLock::RLockGuard rlock(dup_tablets_lock_);
 
   // iter changing new
   if (OB_NOT_NULL(changing_new_set_)) {
@@ -3110,7 +3110,7 @@ int ObLSDupTabletsMgr::get_tablet_set_stat(ObDupLSTabletSetStatIterator &collect
   int ret = OB_SUCCESS;
   // iter changing new
   const int64_t tenant_id = MTL_ID();
-  SpinRLockGuard rlock(dup_tablets_lock_);
+  TCRWLock::RLockGuard rlock(dup_tablets_lock_);
 
   if (OB_NOT_NULL(changing_new_set_)) {
     DupTabletSetChangeStatus *tmp_status = changing_new_set_->get_change_status();

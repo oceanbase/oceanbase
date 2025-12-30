@@ -306,12 +306,16 @@ int main(int argc, char **argv)
 {
   int64_t tx_id = 21533427;
   uint64_t h = murmurhash(&tx_id, sizeof(tx_id), 0);
-  system("rm -rf test_register_mds.log*");
+  std::string log_file_name = "test_register_mds.log";
+  #ifdef TX_NODE_MEMTABLE_USE_HASH_INDEX_FLAG
+      log_file_name = "test_register_mds_no_hash_index.log";
+  #endif
+  system(std::string("rm -rf " + log_file_name + "*").c_str());
   ObLogger &logger = ObLogger::get_logger();
-  logger.set_file_name("test_register_mds.log", true, false,
-                       "test_register_mds.log",  // rs
-                       "test_register_mds.log",  // election
-                       "test_register_mds.log"); // audit
+  logger.set_file_name(log_file_name.c_str(), true, false,
+                       log_file_name.c_str(), // rs
+                       log_file_name.c_str(), // election
+                       log_file_name.c_str()); // audit
   logger.set_log_level(OB_LOG_LEVEL_DEBUG);
   ::testing::InitGoogleTest(&argc, argv);
   TRANS_LOG(INFO, "mmhash:", K(h));

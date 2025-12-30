@@ -202,6 +202,7 @@ public:
   virtual int enable_replay(const palf::LSN &initial_lsn, const share::SCN &initial_scn) = 0;
   virtual int disable_replay() = 0;
   virtual int get_max_decided_scn(share::SCN &scn) = 0;
+  virtual int get_max_decided_scn_snapshot(share::SCN &scn, const bool is_force_refresh) = 0;
   virtual int pend_submit_replay_log() = 0;
   virtual int restore_submit_replay_log() = 0;
   virtual bool is_replay_enabled() const = 0;
@@ -828,6 +829,14 @@ public:
   // OB_STATE_NOT_MATCH: ls is offline or stopped
   // OB_SUCCESS
   int get_max_decided_scn(share::SCN &scn) override final;
+  // @brief, just for check dup tablet readable, get max decided scn considering both apply and replay, priority use snapshot.
+  // @param[out] int64_t&, max decided scn.
+  // @param[in] const bool is_force_refresh: whether to force refresh the snapshot.
+  // @return
+  // OB_NOT_INIT: not inited
+  // OB_STATE_NOT_MATCH: ls is offline or stopped
+  // OB_SUCCESS
+  int get_max_decided_scn_snapshot(share::SCN &scn, const bool is_force_refresh) override final;
   // @brief: store a persistent flag which means this paxos replica  can not reply ack when receiving logs.
   // By default, paxos replica can reply ack.
   // @param[in] need_check_log_missing: for rebuildinng caused by log missing, need check whether log
@@ -935,6 +944,7 @@ private:
   libpalf::LibPalfProposerConfigMgr libpalf_proposer_config_mgr_;
 #endif
   mutable int64_t get_max_decided_scn_debug_time_;
+  mutable SCN max_decided_scn_snapshot_;
 };
 
 struct ObLogStat

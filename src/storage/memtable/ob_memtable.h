@@ -184,6 +184,7 @@ public:
 class ObMemtable : public ObITabletMemtable
 {
 public:
+
 struct TabletMemtableUpdateFreezeInfo
 {
 public:
@@ -247,7 +248,8 @@ public: // derived from ObITabletMemtable
                    storage::ObFreezer *freezer,
                    storage::ObTabletMemtableMgr *memtable_mgr,
                    const int64_t schema_version,
-                   const uint32_t freeze_clock) override;
+                   const uint32_t freeze_clock,
+                   const bool use_hash_index) override;
   virtual void print_ready_for_flush() override;
   virtual void set_allow_freeze(const bool allow_freeze) override;
   virtual int set_frozen() override { local_allocator_.set_frozen(); return OB_SUCCESS; }
@@ -396,8 +398,8 @@ public:
                               ObIArray<blocksstable::ObDatumRange> &sample_memtable_ranges);
 
   ObQueryEngine &get_query_engine() { return query_engine_; }
-  ObMvccEngine &get_mvcc_engine() { return mvcc_engine_; }
-  const ObMvccEngine &get_mvcc_engine() const { return mvcc_engine_; }
+  ObMvccEngine &get_mvcc_engine() { return *mvcc_engine_; }
+  const ObMvccEngine &get_mvcc_engine() const { return *mvcc_engine_; }
   void pre_batch_destroy_keybtree();
   static int batch_remove_unused_callback_for_uncommited_txn(
     const share::ObLSID ls_id,
@@ -467,6 +469,7 @@ public:
                        K_(transfer_freeze_flag),
                        K_(recommend_snapshot_version),
                        K_(is_delete_insert_table),
+                       K_(use_hash_index),
                        K_(micro_block_format_version));
 private:
   static const int64_t OB_EMPTY_MEMSTORE_MAX_SIZE = 10L << 20; // 10MB
@@ -532,19 +535,17 @@ private:
       storage::ObTableAccessContext &context,
       const common::ObStoreRowkey &rowkey,
       const ObMemtableKey &mtk);
-
+  bool ready_for_flush_();
   int post_row_write_conflict_(ObMvccAccessCtx &acc_ctx,
                                const ObMemtableKey &row_key,
                                storage::ObStoreRowLockState &lock_state,
                                const int64_t last_compact_cnt,
                                const int64_t total_trans_node_count);
-  bool ready_for_flush_();
   int64_t try_split_range_for_sample_(const ObStoreRange &input_range,
                                       const int64_t range_count,
                                       ObIAllocator &allocator,
                                       ObIArray<blocksstable::ObDatumRange> &sample_memtable_ranges);
   int try_report_dml_stat_(const int64_t table_id);
-  int report_residual_dml_stat_();
 
   int build_row_data_(ObMemtableCtx *mem_ctx,
                       const int64_t rowkey_column_cnt,
@@ -553,6 +554,8 @@ private:
                       blocksstable::ObCompatRowWriter &row_writer,
                       ObRowData &old_row_data,
                       ObMemtableData &mtd);
+  int report_residual_dml_stat_();
+
 
   OB_INLINE void cleanup_old_row_(ObMemtableCtx *mem_ctx,
                                   ObTxNodeArgs &tx_node_args);
@@ -567,18 +570,20 @@ private:
   void mvcc_undo_(ObMvccWriteResult &res);
   int check_set_row_with_nop_col_(const ObMemtableSetArg &memtable_set_arg) const;
 
-private:
+protected:
   DISALLOW_COPY_AND_ASSIGN(ObMemtable);
   bool is_inited_;
   bool transfer_freeze_flag_;
   bool contain_hotspot_row_;
   bool is_delete_insert_table_;
+  bool use_hash_index_;
 
   storage::ObLSHandle ls_handle_;
   ObSingleMemstoreAllocator local_allocator_;
   ObMTKVBuilder kv_builder_;
   ObQueryEngine query_engine_;
-  ObMvccEngine mvcc_engine_;
+  alignas(8) char mvcc_engine_buffer_[sizeof(ObMvccEngineWithoutHashIndex)];
+  ObMvccEngine *mvcc_engine_;
   mutable ObReportedDmlStat reported_dml_stat_;
   int64_t max_data_schema_version_;  // to record the max schema version of write data
   // TODO(handora.qc): remove it as soon as possible
