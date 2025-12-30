@@ -3514,15 +3514,7 @@ int ObTimeConverter::ob_time_to_str(const ObTime &ob_time, ObDTMode mode, int16_
         const int32_t max_sacle = is_oracle_timestamp ? 9 : 6;
         int32_t usec = parts[DT_USEC];
         if (0 == scale) {
-          if (is_oracle_timestamp) {
-            if (OB_LIKELY((buf_len - pos) > (scale + 1))) {
-              *(buf + pos++) = '.';
-            } else {
-              ret = OB_SIZE_OVERFLOW;
-            }
-          } else {
-            //do nothing
-          }
+          // do nothing
         } else if (OB_UNLIKELY(usec >= max_value)
                    || OB_UNLIKELY(usec < 0)) {
           ret = OB_ERR_UNEXPECTED;
