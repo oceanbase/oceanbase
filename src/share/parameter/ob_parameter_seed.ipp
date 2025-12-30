@@ -3004,6 +3004,10 @@ DEF_INT(external_table_disk_cache_max_percentage, OB_CLUSTER_PARAMETER, "50", "[
         "The maximum ratio of external table disk space to datafile_size in shared-nothing mode, "
         "ranges from [0, 95] in integer, with a default of 50",
         ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(external_table_csv_max_buffer_size, OB_TENANT_PARAMETER, "1G", "[0B,)",
+        "Maximum buffer size for parsing CSV external table files. "
+        "Range: [0B, +∞), default: 1G",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(_orc_filter_pushdown_level, OB_TENANT_PARAMETER, "4", "[0, 4]",
         "This parameter controls the filter pushdown level for ORC external tables, "
