@@ -248,6 +248,8 @@ private:
                                int64_t &idx);
 
   static int choose_storage_estimation_partitions(const int64_t partition_limit,
+                                                  share::schema::ObSchemaGetterGuard *schema_guard,
+                                                  const uint64_t table_id,
                                                   const ObCandiTabletLocIArray &partitions,
                                                   ObCandiTabletLocIArray &chosen_partitions);
   static int choose_storage_estimation_ranges(const int64_t range_limit,

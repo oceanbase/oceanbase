@@ -1629,7 +1629,8 @@ int ObSimpleTableSchemaV2::get_part_idx_by_part_id(const ObIArray<int64_t> &part
                                                    ObIArray<int64_t> &subpart_idx) const
 {
   int ret = OB_SUCCESS;
-  ObHashSet<int64_t> id_hashset;
+  ObHashMap<int64_t, std::pair<int64_t, int64_t>> id_hashmap;
+  std::pair<int64_t, int64_t> part_info(OB_INVALID_INDEX, OB_INVALID_INDEX);
   ObPartition **part_array = NULL;
   int64_t part_num = get_partition_num();
   part_idx.reuse();
@@ -1638,11 +1639,11 @@ int ObSimpleTableSchemaV2::get_part_idx_by_part_id(const ObIArray<int64_t> &part
       OB_UNLIKELY(PARTITION_LEVEL_ZERO == part_level_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid part", KR(ret), KPC(this));
-  } else if (OB_FAIL(id_hashset.create(get_all_part_num()))) {
-    LOG_WARN("create hashset failed", K(ret));
+  } else if (OB_FAIL(id_hashmap.create(get_all_part_num(), ObModIds::OB_SCHEMA))) {
+    LOG_WARN("create hashmap failed", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < part_ids.count(); i ++) {
-    if (OB_FAIL(id_hashset.set_refactored(part_ids.at(i)))) {
+    if (OB_FAIL(id_hashmap.set_refactored(part_ids.at(i), part_info))) {
       LOG_WARN("failed to set refactored", K(ret));
     }
   }
@@ -1651,13 +1652,16 @@ int ObSimpleTableSchemaV2::get_part_idx_by_part_id(const ObIArray<int64_t> &part
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("NULL ptr", K(i), KPC(this), KR(ret));
     } else if (PARTITION_LEVEL_ONE == part_level_) {
-      int tmp_ret = id_hashset.exist_refactored(part_array[i]->get_part_id());
-      if (OB_HASH_EXIST == tmp_ret) {
-        OZ(part_idx.push_back(i));
-        OZ(subpart_idx.push_back(OB_INVALID_ID));
-      } else if (OB_UNLIKELY(OB_HASH_NOT_EXIST != tmp_ret)) {
-        ret = tmp_ret;
-        LOG_WARN("fail to check part id exist", K(ret));
+      if (OB_FAIL(id_hashmap.get_refactored(part_array[i]->get_part_id(), part_info))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to check tablet id exist", K(ret));
+        }
+      } else if (OB_FAIL(id_hashmap.set_refactored(part_array[i]->get_part_id(),
+                                                   std::make_pair(i, OB_INVALID_INDEX),
+                                                   1/*overwrite*/))) {
+        LOG_WARN("failed to set refactored", K(ret));
       }
     } else if (PARTITION_LEVEL_TWO == part_level_) {
       ObSubPartition **subpart_array = part_array[i]->get_subpart_array();
@@ -1671,13 +1675,15 @@ int ObSimpleTableSchemaV2::get_part_idx_by_part_id(const ObIArray<int64_t> &part
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("NULL ptr", KPC(this), KR(ret));
         } else {
-          int tmp_ret = id_hashset.exist_refactored(subpart_array[j]->get_sub_part_id());
-          if (OB_HASH_EXIST == tmp_ret) {
-            OZ(part_idx.push_back(i));
-            OZ(subpart_idx.push_back(j));
-          } else if (OB_UNLIKELY(OB_HASH_NOT_EXIST != tmp_ret)) {
-            ret = tmp_ret;
-            LOG_WARN("fail to check part id exist", K(ret));
+          if (OB_FAIL(id_hashmap.get_refactored(subpart_array[j]->get_sub_part_id(), part_info))) {
+            if (OB_HASH_NOT_EXIST == ret) {
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("fail to check tablet id exist", K(ret));
+            }
+          } else if (OB_FAIL(id_hashmap.set_refactored(subpart_array[j]->get_sub_part_id(),
+                                                       std::make_pair(i, j), 1/*overwrite*/))) {
+            LOG_WARN("failed to set refactored", K(ret));
           }
         }
       }
@@ -1686,8 +1692,20 @@ int ObSimpleTableSchemaV2::get_part_idx_by_part_id(const ObIArray<int64_t> &part
       LOG_WARN("4.0 not support part type", KR(ret), KPC(this));
     }
   }
-  if (id_hashset.created()) {
-    int tmp_ret = id_hashset.destroy();
+  for (int64_t i = 0; OB_SUCC(ret) && i < part_ids.count(); i ++) {
+    if (OB_FAIL(id_hashmap.get_refactored(part_ids.at(i), part_info))) {
+      LOG_WARN("failed to set refactored", K(ret));
+    } else if (OB_UNLIKELY(OB_INVALID_INDEX == part_info.first ||
+                           OB_INVALID_INDEX == part_info.second && PARTITION_LEVEL_TWO == part_level_)) {
+      ret = OB_PARTITION_NOT_EXIST;
+      LOG_WARN("partition is not exist", K(part_ids.at(i)), KPC(this), KR(ret));
+    } else if (OB_FAIL(part_idx.push_back(part_info.first)) ||
+               OB_FAIL(subpart_idx.push_back(part_info.second))) {
+      LOG_WARN("failed to push back part idx", K(ret));
+    }
+  }
+  if (id_hashmap.created()) {
+    int tmp_ret = id_hashmap.destroy();
     if (OB_SUCC(ret) && OB_FAIL(tmp_ret)) {
       LOG_WARN("failed to destory hashset", K(ret));
     }

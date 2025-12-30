@@ -495,20 +495,6 @@ int ObAccessPathEstimation::choose_best_est_method(ObOptimizerContext &ctx,
     }
   }
 
-  //check opt stats is expired
-  if (OB_SUCC(ret) && !is_simple_scene && !is_complex_scene && can_use_ds) {
-    const ObLogPlan* log_plan = NULL;
-    const OptTableMeta *table_meta = NULL;
-    if (!paths.empty() && paths.at(0)->parent_ != NULL &&
-        (log_plan = paths.at(0)->parent_->get_plan()) != NULL &&
-        (table_meta = log_plan->get_basic_table_metas().get_table_meta_by_table_id(paths.at(0)->table_id_)) != NULL &&
-        table_meta->is_opt_stat_expired() &&
-        !table_meta->is_stat_locked()) {
-      is_simple_scene = false;
-      is_complex_scene = true;
-    }
-  }
-
   if (OB_FAIL(ret)) {
   } else if (is_simple_scene) {
     method = choose_one_est_method(valid_methods, simple_est_priority, priority_cnt);
@@ -902,6 +888,8 @@ int ObAccessPathEstimation::add_storage_estimation_task(ObOptimizerContext &ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("access path is invalid", K(ret), K(ap), K(table_meta));
   } else if (OB_FAIL(choose_storage_estimation_partitions(partition_limit,
+                                                          ctx.get_schema_guard(),
+                                                          ap.index_id_,
                                                           index_partitions,
                                                           chosen_partitions))) {
     LOG_WARN("failed to choose partitions", K(ret));
@@ -1001,6 +989,8 @@ int ObAccessPathEstimation::add_storage_estimation_task_by_ranges(ObOptimizerCon
       if (OB_SUCC(ret)) {
         if (!valid_partitions_for_range.empty()) {
           if (OB_FAIL(choose_storage_estimation_partitions(partition_limit,
+                                                          ctx.get_schema_guard(),
+                                                          ap.index_id_,
                                                           valid_partitions_for_range,
                                                           chosen_partitions))) {
             LOG_WARN("failed to choose partitions", K(ret));
@@ -1010,6 +1000,8 @@ int ObAccessPathEstimation::add_storage_estimation_task_by_ranges(ObOptimizerCon
         } else {
           // no valid partitions, choose random partitions from all partitions
           if (OB_FAIL(choose_storage_estimation_partitions(partition_limit,
+                                                          ctx.get_schema_guard(),
+                                                          ap.index_id_,
                                                           index_partitions,
                                                           chosen_partitions))) {
             LOG_WARN("failed to choose partitions", K(ret));
@@ -1155,14 +1147,16 @@ int ObAccessPathEstimation::process_storage_estimation_result(ObOptimizerContext
 
   // Scale up results of each range based on the partition sample ratio
   // Sum and scale up results of ranges for each path based on the range sample ratio
-  for (int64_t i = 0; i < result_helpers.count(); i ++) {
+  for (int64_t i = 0; is_reliable && i < result_helpers.count(); i ++) {
     EstResultHelper &helper = result_helpers.at(i);
     double est_range_count = 0;
+    bool is_sample = false;
     if (helper.different_parts_) {
       for (int64_t j = 0; j < helper.range_result_.count(); j ++) {
         if (helper.range_result_.at(j).est_partition_count_ > 0) {
           double part_sample_ratio = 1.0 * helper.range_result_.at(j).valid_partition_count_ /
                                      helper.range_result_.at(j).est_partition_count_;
+          is_sample |= (helper.range_result_.at(j).valid_partition_count_ > helper.range_result_.at(j).est_partition_count_);
           part_sample_ratio = MAX(part_sample_ratio, 1.0);
           helper.result_.logical_row_count_ += helper.range_result_.at(j).logical_row_count_ * part_sample_ratio;
           helper.result_.physical_row_count_ += helper.range_result_.at(j).physical_row_count_ * part_sample_ratio;
@@ -1173,6 +1167,7 @@ int ObAccessPathEstimation::process_storage_estimation_result(ObOptimizerContext
       if (helper.result_.est_partition_count_ > 0) {
         double part_sample_ratio = 1.0 * helper.result_.valid_partition_count_ /
                                    helper.result_.est_partition_count_;
+        is_sample |= (helper.result_.valid_partition_count_ > helper.result_.est_partition_count_);
         part_sample_ratio = std::max(part_sample_ratio, 1.0);
         helper.result_.logical_row_count_ *= part_sample_ratio;
         helper.result_.physical_row_count_ *= part_sample_ratio;
@@ -1184,20 +1179,20 @@ int ObAccessPathEstimation::process_storage_estimation_result(ObOptimizerContext
       range_sample_ratio = MAX(range_sample_ratio, 1.0);
       helper.result_.logical_row_count_ *= range_sample_ratio;
       helper.result_.physical_row_count_ *= range_sample_ratio;
+      double stat_range_rows = OB_ISNULL(helper.path_) ? 0.0 :
+                               helper.path_->est_cost_info_.logical_query_range_row_count_;
+
+      is_sample |= (helper.total_scan_range_count_ > est_range_count);
+      is_reliable = !(is_sample &&
+                      helper.result_.logical_row_count_ < 1.0 &&
+                      helper.result_.physical_row_count_ < 1.0 &&
+                      stat_range_rows > 1.0);
     } else {
       helper.result_.logical_row_count_ = -1.0;
-    }
-  }
-
-  // Check whether results are reliable
-  for (int64_t i = 0; OB_SUCC(ret) && is_reliable && i < result_helpers.count(); ++i) {
-    // all choosed partitions are empty, do not use the result
-    if ((result_helpers.at(i).path_->is_global_index_ &&
-        result_helpers.at(i).path_->est_cost_info_.ranges_.count() == 1 &&
-        result_helpers.at(i).path_->est_cost_info_.ranges_.at(0).is_whole_range() &&
-        result_helpers.at(i).result_.logical_row_count_ == 0) ||
-        result_helpers.at(i).result_.logical_row_count_ < 0) {
       is_reliable = false;
+    }
+
+    if (!is_reliable) {
       LOG_WARN("storage estimation result is not reliable", K(result_helpers.at(i)), K(tasks));
       OPT_TRACE("storage estimation result is not reliable for index ", result_helpers.at(i).path_->index_id_);
     }
@@ -1441,7 +1436,25 @@ void ObAccessPathEstimation::fill_batch_type_info(ObCostTableScanInfo &est_cost_
   }
 }
 
+struct PartCmp {
+  PartCmp(const ObIArray<int64_t> & part_idx,
+    const ObSEArray<int64_t, 16> & subpart_idx)
+    : part_idx_(part_idx), subpart_idx_(subpart_idx) {}
+
+  bool operator()(const int64_t i, const int64_t j) const {
+    return part_idx_.at(i) < part_idx_.at(j) ||
+           (part_idx_.at(i) == part_idx_.at(j) && subpart_idx_.at(i) < subpart_idx_.at(j));
+  }
+
+  const ObIArray<int64_t> &part_idx_;
+  const ObSEArray<int64_t, 16> &subpart_idx_;
+
+  DISALLOW_COPY_AND_ASSIGN(PartCmp);
+};
+
 int ObAccessPathEstimation::choose_storage_estimation_partitions(const int64_t partition_limit,
+                                                                 share::schema::ObSchemaGetterGuard *schema_guard,
+                                                                 const uint64_t ref_table_id,
                                                                  const ObCandiTabletLocIArray &partitions,
                                                                  ObCandiTabletLocIArray &chosen_partitions)
 {
@@ -1449,28 +1462,59 @@ int ObAccessPathEstimation::choose_storage_estimation_partitions(const int64_t p
   ObSqlBitSet<> min_max_index;
   int64_t min_index = 0;
   int64_t max_index = 0;
+  const share::schema::ObSimpleTableSchemaV2 *table_schema = NULL;
   if (partition_limit <= 0 || partition_limit >= partitions.count()) {
     if (OB_FAIL(chosen_partitions.assign(partitions))) {
       LOG_WARN("failed to assign", K(ret));
     }
+  } else if (OB_ISNULL(schema_guard)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_guard is null", K(ret));
+  } else if (OB_FAIL(schema_guard->get_simple_table_schema(MTL_ID(), ref_table_id, table_schema))) {
+    LOG_WARN("failed to get simple table schema", K(ret), K(ref_table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table_schema is null", K(ret), K(ref_table_id));
   } else {
-    for (int64_t i = 1; i < partitions.count(); i ++) {
-      if (partitions.at(i).get_partition_location().get_tablet_id().id() <
-          partitions.at(min_index).get_partition_location().get_tablet_id().id()) {
-        min_index = i;
-      }
-      if (partitions.at(i).get_partition_location().get_tablet_id().id() >
-          partitions.at(max_index).get_partition_location().get_tablet_id().id()) {
-        max_index = i;
+    // use (part_idx, subpart_idx) comparison
+    ObSEArray<int64_t, 16> part_ids;
+    ObSEArray<int64_t, 16> part_idx;
+    ObSEArray<int64_t, 16> subpart_idx;
+    // collect all part ids
+    for (int64_t i = 0; OB_SUCC(ret) && i < partitions.count(); i++) {
+      int64_t part_id = partitions.at(i).get_partition_location().get_partition_id();
+      if (OB_FAIL(part_ids.push_back(part_id))) {
+        LOG_WARN("failed to push back part_id", K(ret));
       }
     }
-    if (OB_FAIL(min_max_index.add_member(min_index)) ||
-        OB_FAIL(min_max_index.add_member(max_index))) {
-      LOG_WARN("failed to add member", K(ret));
-    } else if (OB_FAIL(ObOptimizerUtil::choose_random_members(
-                          STORAGE_EST_SAMPLE_SEED, partitions, partition_limit,
-                          chosen_partitions, &min_max_index))) {
-      LOG_WARN("failed to choose random partitions", K(ret), K(partition_limit));
+    // get (part_idx, subpart_idx) for all partitions
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(table_schema->get_part_idx_by_part_id(part_ids, part_idx, subpart_idx))) {
+      LOG_WARN("failed to get part_idx by tablets", K(ret));
+    } else if (OB_UNLIKELY(part_idx.count() != partitions.count() ||
+                           subpart_idx.count() != partitions.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected part_idx or subpart_idx count", K(ret),
+               K(part_idx.count()), K(subpart_idx.count()), K(partitions.count()));
+    } else {
+      // find min and max by comparing (part_idx, subpart_idx)
+      PartCmp part_cmp(part_idx, subpart_idx);
+      for (int64_t i = 1; i < partitions.count(); i++) {
+        if (part_cmp(i, min_index)) {
+          min_index = i;
+        }
+        if (part_cmp(max_index, i)) {
+          max_index = i;
+        }
+      }
+      if (OB_FAIL(min_max_index.add_member(min_index)) ||
+          OB_FAIL(min_max_index.add_member(max_index))) {
+        LOG_WARN("failed to add member", K(ret));
+      } else if (OB_FAIL(ObOptimizerUtil::choose_random_members(
+                            STORAGE_EST_SAMPLE_SEED, partitions, partition_limit,
+                            chosen_partitions, &min_max_index))) {
+        LOG_WARN("failed to choose random partitions", K(ret), K(partition_limit));
+      }
     }
   }
   return ret;
@@ -2273,6 +2317,8 @@ int ObAccessPathEstimation::storage_estimate_range_rowcount(ObOptimizerContext &
   } else if (OB_FAIL(choose_storage_estimation_ranges(range_limit, *ranges, false, chosen_scan_ranges))) {
     LOG_WARN("failed to choose scan ranges", K(ret));
   } else if (OB_FAIL(choose_storage_estimation_partitions(partition_limit,
+                                                          ctx.get_schema_guard(),
+                                                          meta.ref_table_id_,
                                                           part_loc_infos,
                                                           chosen_partitions))) {
     LOG_WARN("failed to choose partitions", K(ret));
