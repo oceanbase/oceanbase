@@ -325,9 +325,14 @@ public:
       uint64_t is_ref_new_row_ : 1;
       uint64_t is_ref_old_rowid_ : 1;
       uint64_t is_ref_new_rowid_ : 1;
-      uint64_t reserved_: 60;
+      uint64_t is_prune_columns_ : 1;
+      uint64_t reserved_: 59;
     };
   };
+  bool inline is_ref_old_row() const { return is_ref_old_row_ || !is_prune_columns_; }
+  bool inline is_ref_new_row() const { return is_ref_new_row_ || !is_prune_columns_; }
+  bool inline is_ref_old_rowid() const { return is_ref_old_rowid_ || !is_prune_columns_; }
+  bool inline is_ref_new_rowid() const { return is_ref_new_rowid_ || !is_prune_columns_; }
 };
 
 //trigger runtime context definition
