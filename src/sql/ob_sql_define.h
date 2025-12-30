@@ -127,6 +127,7 @@ enum JtColType {
   COL_TYPE_ORDINALITY_XML = 9,
   COL_TYPE_RB_ITERATE = 10,
   COL_TYPE_UNNEST = 11,
+  COL_TYPE_INDEX_DATE_GEN = 12,
 };
 
 enum ObNameTypeClass

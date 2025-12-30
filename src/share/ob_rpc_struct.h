@@ -3020,7 +3020,8 @@ public:
         is_offline_rebuild_(false),
         index_key_(-1),
         data_version_(0),
-        generated_column_names_()
+        generated_column_names_(),
+        def_index_id_(common::OB_INVALID_ID)
   {
     index_action_type_ = ADD_INDEX;
     index_using_type_ = share::schema::USING_BTREE;
@@ -3059,6 +3060,7 @@ public:
     index_key_ = -1;
     data_version_ = 0;
     generated_column_names_.reset();
+    def_index_id_ = common::OB_INVALID_ID;
   }
   void set_index_action_type(const IndexActionType type) { index_action_type_  = type; }
   bool is_valid() const;
@@ -3104,6 +3106,7 @@ public:
       is_offline_rebuild_ = other.is_offline_rebuild_;
       index_key_ = other.index_key_;
       data_version_ = other.data_version_;
+      def_index_id_ = other.def_index_id_;
     }
     return ret;
   }
@@ -3179,6 +3182,7 @@ public:
   int64_t index_key_;
   uint64_t data_version_;
   common::ObSEArray<ObString, common::OB_PREALLOCATED_NUM> generated_column_names_;
+  uint64_t def_index_id_;
 };
 
 struct ObIndexOfflineDdlArg : ObDDLArg

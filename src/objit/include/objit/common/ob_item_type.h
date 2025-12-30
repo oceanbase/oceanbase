@@ -3028,6 +3028,7 @@ typedef enum ObItemType
   T_FILTER_ADAPTIVE = 4962,
   T_PRE_FILTER = 4963,
   T_POST_FILTER = 4964,
+  T_INDEX_DATA_GEN_EXPRESSION = 4965,
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
