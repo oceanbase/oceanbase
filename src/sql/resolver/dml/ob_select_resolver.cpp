@@ -7513,7 +7513,7 @@ int ObSelectResolver::check_ntile_validity(const ObSelectStmt *stmt,
  * 子查询为exists、not exists的参数时，
  * 允许子查询返回多列，
  */
-int ObSelectResolver::check_subquery_return_one_column(const ObRawExpr &expr, bool is_exists_param)
+int ObSelectResolver::check_subquery_return_one_column(const ObRawExpr &expr, bool is_compare_param)
 {
   int ret = OB_SUCCESS;
   if (T_FUN_UDF == expr.get_expr_type()) {
@@ -7521,12 +7521,16 @@ int ObSelectResolver::check_subquery_return_one_column(const ObRawExpr &expr, bo
     // do nothing
   } else if (expr.has_flag(IS_SUB_QUERY)) {
     const ObQueryRefRawExpr &query_expr = static_cast<const ObQueryRefRawExpr&>(expr);
-    if (1 != query_expr.get_output_column() && !is_exists_param && !query_expr.is_cursor()) {
+    if (1 != query_expr.get_output_column() && !is_compare_param && !query_expr.is_cursor()) {
       ret = OB_ERR_TOO_MANY_VALUES;
       LOG_WARN("subquery return too many columns", K(query_expr.get_output_column()));
     }
   } else {
-    bool is_exists_param = T_OP_EXISTS == expr.get_expr_type() || T_OP_NOT_EXISTS == expr.get_expr_type();
+    bool is_compare_param = T_OP_EXISTS == expr.get_expr_type() ||
+                            T_OP_NOT_EXISTS == expr.get_expr_type() ||
+                            T_OP_IN == expr.get_expr_type() ||
+                            T_OP_NOT_IN == expr.get_expr_type() ||
+                            IS_SUBQUERY_COMPARISON_OP(expr.get_expr_type());
     for (int64_t i = 0; OB_SUCC(ret) && i < expr.get_param_count(); ++i) {
       const ObRawExpr *cur_expr = expr.get_param_expr(i);
       if (OB_ISNULL(cur_expr)) {
@@ -7534,7 +7538,7 @@ int ObSelectResolver::check_subquery_return_one_column(const ObRawExpr &expr, bo
         LOG_WARN("get null expr", K(ret));
       } else if (!cur_expr->has_flag(CNT_SUB_QUERY)) {
         // do nothing
-      } else if (OB_FAIL(check_subquery_return_one_column(*cur_expr, is_exists_param))) {
+      } else if (SMART_CALL(OB_FAIL(check_subquery_return_one_column(*cur_expr, is_compare_param)))) {
         LOG_WARN("failed to check subquery return one column", K(ret));
       }
     }
