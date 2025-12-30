@@ -1692,5 +1692,12 @@ bool ObConfigServerFullSchemaRefreshParallelismChecker::check(const ObConfigItem
          || 0 == t.case_compare(SERVER_FULL_SCHEMA_REFRESH_PARALLELISM_OBJECT);
 }
 
+bool ObConfigAppendUpdateGlobalIndexesForDynamicPartitionChecker::check(const ObConfigItem& t) const
+{
+  return 0 == t.case_compare("AUTO")
+         || 0 == t.case_compare("ON")
+         || 0 == t.case_compare("OFF");
+}
+
 } // end of namepace common
 } // end of namespace oceanbase

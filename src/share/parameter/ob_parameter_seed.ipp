@@ -2858,3 +2858,12 @@ DEF_BOOL(_enable_randomize_redo_logging_slot, OB_CLUSTER_PARAMETER, "False",
 DEF_BOOL(_enable_direct_load_hidden_table_partition_pruning, OB_TENANT_PARAMETER, "False",
          "Enable or disable hidden table partition pruning for direct load.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+// for upgraded tenant, default _append_update_global_indexes_for_dynamic_partition will be OFF
+// for new created tenant, default _append_update_global_indexes_for_dynamic_partition will be AUTO
+DEF_STR_WITH_CHECKER(_append_update_global_indexes_for_dynamic_partition, OB_TENANT_PARAMETER, "OFF",
+        common::ObConfigAppendUpdateGlobalIndexesForDynamicPartitionChecker,
+        "specify whether to enable update global indexes for dynamic partition when dropping expired partitions."
+        "values: AUTO(follow _ob_enable_truncate_partition_preserve_global_index), ON, OFF",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+        "AUTO, ON, OFF");

@@ -1191,6 +1191,16 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObHNSWIterFilterScanNumChecker);
 };
 
+class ObConfigAppendUpdateGlobalIndexesForDynamicPartitionChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigAppendUpdateGlobalIndexesForDynamicPartitionChecker() {}
+  virtual ~ObConfigAppendUpdateGlobalIndexesForDynamicPartitionChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigAppendUpdateGlobalIndexesForDynamicPartitionChecker);
+};
 
 } // namespace common
 } // namespace oceanbase
