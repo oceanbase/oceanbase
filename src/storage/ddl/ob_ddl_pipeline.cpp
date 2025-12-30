@@ -1154,6 +1154,8 @@ int ObHNSWIndexBuildOperator::serialize_vector_index(
       if (OB_ISNULL(adp)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected nullptr", K(ret), KP(adp), K(is_vec_tablet_rebuild));
+      } else if (is_vec_tablet_rebuild && OB_FAIL(adaptor_guard.set_adapter(adp))) {
+        LOG_WARN("fail to set new adapter guard", K(ret));
       } else if (OB_FAIL(adp->check_snap_hnswsq_index())) {
         LOG_WARN("failed to check snap hnswsq index", K(ret));
       } else if (OB_FAIL(adp->set_snapshot_key_prefix(tablet_id_.id(), ctx.snapshot_version_, ObVectorIndexSliceStore::OB_VEC_IDX_SNAPSHOT_KEY_LENGTH))) {
