@@ -2086,6 +2086,7 @@ int ObPlanCacheValue::get_all_dep_schema(ObPlanCacheCtx &pc_ctx,
 {
   int ret = OB_SUCCESS;
   need_check_schema = false;
+  schema_array.reset();
   if (OB_FAIL(need_check_schema_version(pc_ctx,
                                         new_schema_version,
                                         need_check_schema))) {
@@ -2096,7 +2097,6 @@ int ObPlanCacheValue::get_all_dep_schema(ObPlanCacheCtx &pc_ctx,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(pc_ctx.sql_ctx_.schema_guard_));
   } else {
-    schema_array.reset();
     const ObSimpleTableSchemaV2 *table_schema = nullptr;
     PCVSchemaObj tmp_schema_obj;
     uint64_t tenant_id = OB_INVALID_ID;
