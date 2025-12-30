@@ -1109,25 +1109,6 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
           if (info->is_called_in_sql_ && OB_NOT_NULL(ctx.exec_ctx_.get_pl_ctx())) {
             ctx.exec_ctx_.get_pl_ctx()->reset_obj_range_to_end(cur_obj_count);
           }
-          bool has_out_param = false;
-          for (int64_t i = 0; !has_out_param && i < info->params_desc_.count(); ++i) {
-            if (info->params_desc_.at(i).is_out()) {
-              has_out_param = true;
-            }
-          }
-          if (has_out_param) {
-            int tmp = process_out_params(objs,
-                                        expr.arg_cnt_,
-                                        *udf_params,
-                                        *alloc,
-                                        ctx.exec_ctx_,
-                                        info->nocopy_params_,
-                                        info->params_desc_,
-                                        info->params_type_);
-            if (OB_SUCCESS != tmp) {
-              LOG_WARN("fail to process out param", K(tmp), K(ret));
-            }
-          }
         }
       } catch(...) {
         throw;
