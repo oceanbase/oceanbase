@@ -2061,7 +2061,7 @@ int ObDbmsStatsExecutor::try_use_prefix_index_refine_min_max(ObExecContext &ctx,
         // do nothing
       } else if (OB_FALSE_IT(first_column_id = rowkey_ids.at(0))) {
       } else if (index_schema->is_global_index_table() &&
-                 table_schema->get_part_level() != ObPartitionLevel::PARTITION_LEVEL_ONE) {
+                 table_schema->get_part_level() != ObPartitionLevel::PARTITION_LEVEL_ZERO) {
         // do nothing
       } else if (ObOptimizerUtil::find_item(refine_columns, first_column_id)) {
         // do nothing
