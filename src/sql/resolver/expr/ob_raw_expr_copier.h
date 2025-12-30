@@ -154,6 +154,8 @@ public:
                       ObIArray<T *> &to_exprs,
                       ObIRawExprReplacer *replacer = NULL);
 
+  int after_copy(ObRawExpr *from, ObRawExpr *&to);
+
   bool is_existed(const ObRawExpr *from) const;
 
   int do_copy_expr(const ObRawExpr *old_expr, ObRawExpr *&new_expr) override;

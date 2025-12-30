@@ -346,7 +346,9 @@ int ObRawExprCopier::copy_on_replace(ObRawExpr *from_expr,
     if (OB_FAIL(replacer->generate_new_expr(expr_factory_, from_expr, tmp))) {
         LOG_WARN("failed to generate new expr", K(ret));
     } else if (NULL != tmp) {
-      if (OB_FAIL(add_expr(from_expr, tmp))) {
+      if (from_expr == tmp && T_OP_ROW == from_expr->get_expr_type()) {
+        to_expr = tmp;
+      } else if (OB_FAIL(add_expr(from_expr, tmp))) {
         LOG_WARN("failed to add expr into replace map", K(ret));
       } else {
         to_expr = tmp;
@@ -372,9 +374,45 @@ int ObRawExprCopier::copy_on_replace(ObRawExpr *from_expr,
         to_expr->get_param_expr(i) = new_param;
       }
     }
+    if (FAILEDx(after_copy(from_expr, to_expr))) {
+      LOG_WARN("failed to after copy", K(ret));
+    }
   }
   if (OB_SUCC(ret) && is_root && from_expr != to_expr) {
     to_expr->calc_hash();
+  }
+  return ret;
+}
+
+int ObRawExprCopier::after_copy(ObRawExpr *from_expr, ObRawExpr *&to_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(to_expr) || OB_ISNULL(from_expr) ||
+      OB_UNLIKELY(from_expr->get_param_count() != to_expr->get_param_count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("to expr is null", K(ret));
+  } else if (from_expr != to_expr) {
+    // To avoid shared row expr in different parents,
+    // we need to copy all child row expr nodes iff the expr node is deep copied.
+    for (int64_t i = 0; OB_SUCC(ret) && i < to_expr->get_param_count(); ++i) {
+      ObRawExpr *from_param = from_expr->get_param_expr(i);
+      ObRawExpr *to_param = to_expr->get_param_expr(i);
+      if (OB_ISNULL(from_param) || OB_ISNULL(to_param)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param expr is null", K(ret));
+      } else if (T_OP_ROW == from_param->get_expr_type() &&
+                 from_param == to_param &&
+                 !is_existed(from_param)) {
+        ObRawExpr *copied_row_expr = NULL;
+        if (OB_FAIL(copy_expr_node(from_param, copied_row_expr))) {
+          LOG_WARN("failed to copy T_OP_ROW expr node", K(ret));
+        } else if (OB_FAIL(SMART_CALL(after_copy(from_param, copied_row_expr)))) {
+          LOG_WARN("failed to copy T_OP_ROW expr node", K(ret));
+        } else {
+          to_expr->get_param_expr(i) = copied_row_expr;
+        }
+      }
+    }
   }
   return ret;
 }
