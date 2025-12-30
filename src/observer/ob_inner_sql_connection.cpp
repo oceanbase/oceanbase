@@ -398,7 +398,9 @@ int ObInnerSQLConnection::init_session_info(
         }
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(session->update_sys_variable(
+        if (OB_FAIL(session->gen_exec_env())) {
+          LOG_WARN("fail to gen exec env", K(ret));
+        } else if (OB_FAIL(session->update_sys_variable(
             SYS_VAR_SQL_MODE, is_oracle_mode ? oracle_sql_mode : mysql_sql_mode))) {
           LOG_WARN("update sys variables failed", K(ret));
         } else if (OB_FAIL(session->update_sys_variable(
