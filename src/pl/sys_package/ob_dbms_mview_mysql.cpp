@@ -27,7 +27,7 @@ using namespace storage;
 /*
 PROCEDURE purge_log(
     IN     master_name            VARCHAR(65535),
-    IN     purge_log_parallel     INT            DEFAULT 1);
+    IN     purge_log_parallel     INT            DEFAULT 0);
 */
 int ObDBMSMViewMysql::purge_log(ObExecContext &ctx, ParamStore &params, ObObj &result)
 {
@@ -44,7 +44,7 @@ int ObDBMSMViewMysql::purge_log(ObExecContext &ctx, ParamStore &params, ObObj &r
     ObMViewPurgeLogExecutor purge_executor;
     // fill params
     purge_params.master_ = params.at(0).get_varchar();
-    purge_params.purge_log_parallel_ = params.at(1).get_int() >= 0 ? params.at(1).get_int() : 1;
+    purge_params.purge_log_parallel_ = params.at(1).get_int();
     if (OB_FAIL(purge_executor.execute(ctx, purge_params))) {
       LOG_WARN("fail to execute mlog purge", KR(ret), K(purge_params));
     }

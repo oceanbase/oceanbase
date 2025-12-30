@@ -4,7 +4,7 @@ CREATE OR REPLACE PACKAGE dbms_mview AUTHID CURRENT_USER IS
     master              IN   VARCHAR2,
     num                 IN   BINARY_INTEGER := 1,
     flag                IN   VARCHAR2       := 'NOP',
-    purge_log_parallel  IN   BINARY_INTEGER := 1);
+    purge_log_parallel  IN   BINARY_INTEGER := 0);
 
   PROCEDURE refresh(
     list                   IN     VARCHAR2,
