@@ -240,6 +240,16 @@ int ObRFBloomFilterMsg::process_msg_internal(bool &need_free)
       need_free = true;
     } else {
       need_merge = false; // set success, not need to merge
+      if (is_first_phase() && get_msg_receive_expect_cnt() == 1 && expect_first_phase_count_ == 1) {
+        // for the bloom filter which only contain one piece, we should forward
+        // the second phase message directly, otherwise, we will forward the
+        // second phase message in the process of merge.
+        if (OB_FAIL(forward_second_phase_message(bloom_filter_.get_begin_idx(),
+                                                 bloom_filter_.get_end_idx(),
+                                                 get_next_phase_addrs()))) {
+          LOG_WARN("failed to forward second phase message");
+        }
+      }
       int reg_dm_ret = OB_SUCCESS;
 #ifdef ERRSIM
       reg_dm_ret = OB_E(EventTable::EN_PX_P2P_MSG_REG_DM_FAILED) OB_SUCCESS;
@@ -349,6 +359,36 @@ int ObRFBloomFilterMsg::process_first_phase_recieve_count(
   return ret;
 }
 
+int ObRFBloomFilterMsg::forward_second_phase_message(
+    int64_t begin_idx,
+    int64_t end_idx, const ObIArray<ObAddr> &next_phase_addrs) {
+  int ret = OB_SUCCESS;
+  obrpc::ObP2PDhRpcProxy &rpc_proxy = PX_P2P_DH.get_proxy();
+  ObPxP2PDatahubArg arg;
+  ObRFBloomFilterMsg second_phase_msg;
+  arg.msg_ = &second_phase_msg;
+  if (OB_FAIL(second_phase_msg.shadow_copy(*this))) {
+    LOG_WARN("fail to shadow copy second phase msg", K(ret));
+  } else {
+    second_phase_msg.phase_ = SECOND_LEVEL;
+    second_phase_msg.set_msg_cur_cnt(expect_first_phase_count_);
+    second_phase_msg.bloom_filter_.set_begin_idx(begin_idx);
+    second_phase_msg.bloom_filter_.set_end_idx(end_idx);
+  }
+  for (int i = 0; OB_SUCC(ret) && i < next_phase_addrs.count(); ++i) {
+    if (next_phase_addrs.at(i) != GCTX.self_addr()) {
+      if (OB_FAIL(rpc_proxy.to(next_phase_addrs.at(i))
+                      .by(get_tenant_id())
+                      .timeout(get_timeout_ts())
+                      .compressed(ObCompressorType::LZ4_COMPRESSOR)
+                      .send_p2p_dh_message(arg, NULL))) {
+        LOG_WARN("fail to send bloom filter", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObRFBloomFilterMsg::process_receive_count(ObP2PDatahubMsgBase &rf_msg)
 {
   int ret = OB_SUCCESS;
@@ -373,28 +413,10 @@ int ObRFBloomFilterMsg::process_receive_count(ObP2PDatahubMsgBase &rf_msg)
     if (OB_FAIL(process_first_phase(bf_msg))) {
       LOG_WARN("fail to process first phase", K(ret));
     } else if (first_phase_end && !bf_msg.get_next_phase_addrs().empty()) {
-      obrpc::ObP2PDhRpcProxy &rpc_proxy = PX_P2P_DH.get_proxy();
-      ObPxP2PDatahubArg arg;
-      ObRFBloomFilterMsg second_phase_msg;
-      arg.msg_ = &second_phase_msg;
-      if (OB_FAIL(second_phase_msg.shadow_copy(*this))) {
-        LOG_WARN("fail to shadow copy second phase msg", K(ret));
-      } else {
-        second_phase_msg.phase_ = SECOND_LEVEL;
-        second_phase_msg.set_msg_cur_cnt(expect_first_phase_count_);
-        second_phase_msg.bloom_filter_.set_begin_idx(bf_msg.bloom_filter_.get_begin_idx());
-        second_phase_msg.bloom_filter_.set_end_idx(bf_msg.bloom_filter_.get_end_idx());
-      }
-      for (int i = 0; OB_SUCC(ret) && i < bf_msg.get_next_phase_addrs().count(); ++i) {
-        if (bf_msg.get_next_phase_addrs().at(i) != GCTX.self_addr()) {
-          if (OB_FAIL(rpc_proxy.to(bf_msg.get_next_phase_addrs().at(i))
-              .by(bf_msg.get_tenant_id())
-              .timeout(bf_msg.get_timeout_ts())
-              .compressed(ObCompressorType::LZ4_COMPRESSOR)
-              .send_p2p_dh_message(arg, NULL))) {
-            LOG_WARN("fail to send bloom filter", K(ret));
-          }
-        }
+      if (OB_FAIL(forward_second_phase_message(bf_msg.bloom_filter_.get_begin_idx(),
+                                               bf_msg.bloom_filter_.get_end_idx(),
+                                               bf_msg.get_next_phase_addrs()))) {
+        LOG_WARN("failed to forward second phase message");
       }
       (void)check_finish_receive();
     } else if (bf_msg.get_next_phase_addrs().empty()) {

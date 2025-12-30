@@ -5758,14 +5758,11 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
             join_filter_create->set_is_shared_join_filter();
             join_filter_use->set_is_shared_join_filter();
             has_shared_join_filter = true;
-            const OptTableMetas &table_metas = get_plan()->get_basic_table_metas();
-            const OptTableMeta *table_meta = table_metas.get_table_meta_by_table_id(info.filter_table_id_);
-            if (OB_ISNULL(table_meta)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("table_meta unexpected null", K(info.filter_table_id_));
-            } else {
-              join_filter_use->set_basic_table_row_count(table_meta->get_rows());
-              LOG_TRACE("calc rf basic table row count", K(node->get_width()), K(table_meta->get_rows()));
+            if (LOG_TABLE_SCAN == node->get_type()) {
+              ObLogTableScan *scan = static_cast<ObLogTableScan*>(node);
+              join_filter_use->set_basic_table_row_count(scan->get_logical_query_range_row_count());
+              LOG_TRACE("calc rf basic table row count", K(node->get_width()),
+                        K(scan->get_logical_query_range_row_count()));
             }
           } else {
             join_filter_create->set_is_non_shared_join_filter();
