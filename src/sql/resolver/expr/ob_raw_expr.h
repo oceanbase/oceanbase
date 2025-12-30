@@ -4477,16 +4477,19 @@ public:
   int64_t id1_; // variable index
   int64_t id2_; // subprogram id
   int64_t id3_; // package id
+  OutType obj_access_type_;
 
   ObUDFParamDesc()
-    : type_(OutType::NOT_OUT), id1_(OB_INVALID_ID), id2_(OB_INVALID_ID), id3_(OB_INVALID_ID) {}
+    : type_(OutType::NOT_OUT), id1_(OB_INVALID_ID), id2_(OB_INVALID_ID), id3_(OB_INVALID_ID), obj_access_type_(OutType::NOT_OUT) {}
   ObUDFParamDesc(OutType type,
                  int64_t id1 = OB_INVALID_ID,
                  int64_t id2 = OB_INVALID_ID,
-                 int64_t id3 = OB_INVALID_ID)
-    : type_(type), id1_(id1), id2_(id2), id3_(id3) {}
+                 int64_t id3 = OB_INVALID_ID,
+                 OutType obj_access_type = OutType::NOT_OUT
+                )
+    : type_(type), id1_(id1), id2_(id2), id3_(id3), obj_access_type_(obj_access_type) {}
   OB_INLINE bool operator==(const ObUDFParamDesc &other) const {
-    return type_ == other.type_ && id1_ == other.id1_ &&
+    return type_ == other.type_ && obj_access_type_ == other.obj_access_type_ && id1_ == other.id1_ &&
            id2_ == other.id2_ && id3_ == other.id3_; }
   OB_INLINE bool is_out() const { return type_ != NOT_OUT; }
   OB_INLINE bool is_local_out() const { return OutType::LOCAL_OUT == type_; }
@@ -4494,12 +4497,14 @@ public:
   OB_INLINE bool is_subprogram_var_out() const { return OutType::SUBPROGRAM_VAR_OUT == type_; }
   OB_INLINE bool is_obj_access_out() const { return OutType::OBJ_ACCESS_OUT == type_ || OutType::OBJ_ACCESS_INOUT == type_; }
   OB_INLINE bool is_obj_access_pure_out() const { return OutType::OBJ_ACCESS_OUT == type_; }
+  OB_INLINE bool is_obj_access_package_var_out() const { return OutType::PACKAGE_VAR_OUT == obj_access_type_; }
+  OB_INLINE bool is_obj_access_subprogram_var_out() const { return OutType::SUBPROGRAM_VAR_OUT == obj_access_type_; }
 
   OB_INLINE int64_t get_index() const { return id1_; }
   OB_INLINE int64_t get_subprogram_id() const { return id2_; }
   OB_INLINE int64_t get_package_id() const { return id3_; }
 
-  TO_STRING_KV(K_(type), K_(id1), K_(id2), K_(id3));
+  TO_STRING_KV(K_(type), K_(id1), K_(id2), K_(id3), K_(obj_access_type));
   NEED_SERIALIZE_AND_DESERIALIZE;
 };
 class ObUDFRawExpr : public ObSysFunRawExpr
