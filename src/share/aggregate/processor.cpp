@@ -772,14 +772,22 @@ int Processor::single_row_agg_batch(AggrRowPtr *agg_rows, const int64_t batch_si
         int32_t aggr_cell_len = 0;
         int32_t output_size = 0;
         for (int agg_col_id = 0; OB_SUCC(ret) && agg_col_id < aggregates_.count(); agg_col_id++) {
-          char *aggr_cell = agg_ctx_.row_meta().locate_cell_payload(agg_col_id, row);
-          int32_t aggr_cell_len = agg_ctx_.row_meta().get_cell_len(agg_col_id, row);
-          if (OB_FAIL(aggregates_.at(agg_col_id)->add_batch_rows(agg_ctx_,
-                                                                 agg_col_id,
-                                                                 skip,
-                                                                 bound,
-                                                                 aggr_cell))) {
-            SQL_LOG(WARN, "add batch rows failed", K(ret));
+          ObAggrInfo &aggr_info = agg_ctx_.aggr_infos_.at(agg_col_id);
+          if (OB_ISNULL(aggr_info.expr_)) {
+            ret = OB_ERR_UNEXPECTED;
+            SQL_LOG(WARN, "invalid null expr", K(ret));
+          } else if (aggr_info.is_implicit_first_aggr()) {
+            // do nothing
+          } else {
+            char *aggr_cell = agg_ctx_.row_meta().locate_cell_payload(agg_col_id, row);
+            int32_t aggr_cell_len = agg_ctx_.row_meta().get_cell_len(agg_col_id, row);
+            if (OB_FAIL(aggregates_.at(agg_col_id)->add_batch_rows(agg_ctx_,
+                                                                   agg_col_id,
+                                                                   skip,
+                                                                   bound,
+                                                                   aggr_cell))) {
+              SQL_LOG(WARN, "add batch rows failed", K(ret));
+            }
           }
         } // end for
       }
@@ -787,10 +795,18 @@ int Processor::single_row_agg_batch(AggrRowPtr *agg_rows, const int64_t batch_si
 
     // must do init vector here, otherwise value stored in agg_expr is reset unexpectedly.
     for (int col_id = 0; OB_SUCC(ret) && col_id < aggregates_.count(); col_id++) {
-      ObExpr *agg_expr = agg_ctx_.aggr_infos_.at(col_id).expr_;
-      if (OB_FAIL(agg_expr->init_vector_for_write(
-            agg_ctx_.eval_ctx_, agg_expr->get_default_res_format(), batch_size))) {
-        LOG_WARN("init vector for write failed", K(ret));
+      ObAggrInfo &aggr_info = agg_ctx_.aggr_infos_.at(col_id);
+      if (OB_ISNULL(aggr_info.expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_LOG(WARN, "invalid null expr", K(ret));
+      } else if (aggr_info.is_implicit_first_aggr()) {
+        // do nothing
+      } else {
+        ObExpr *agg_expr = agg_ctx_.aggr_infos_.at(col_id).expr_;
+        if (OB_FAIL(agg_expr->init_vector_for_write(
+              agg_ctx_.eval_ctx_, agg_expr->get_default_res_format(), batch_size))) {
+          LOG_WARN("init vector for write failed", K(ret));
+        }
       }
     } // end for
     for (int i = 0; OB_SUCC(ret) && i < batch_size; i++) {
@@ -799,7 +815,13 @@ int Processor::single_row_agg_batch(AggrRowPtr *agg_rows, const int64_t batch_si
       }
       int32_t output_size = 0;
       for (int agg_col_id = 0; OB_SUCC(ret) && agg_col_id < aggregates_.count(); agg_col_id++) {
-        if (OB_FAIL(aggregates_.at(agg_col_id)->collect_batch_group_results(
+        ObAggrInfo &aggr_info = agg_ctx_.aggr_infos_.at(agg_col_id);
+        if (OB_ISNULL(aggr_info.expr_)) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_LOG(WARN, "invalid null expr", K(ret));
+        } else if (aggr_info.is_implicit_first_aggr()) {
+          // do nothing
+        } else if (OB_FAIL(aggregates_.at(agg_col_id)->collect_batch_group_results(
                                                   agg_ctx_, agg_col_id, i, i, 1, output_size, nullptr, false))) {
           SQL_LOG(WARN, "collect result batch faile", K(ret));
         } else if (OB_UNLIKELY(output_size != 1)) {
