@@ -779,7 +779,7 @@ int ObLoadDataResolver::resolve_filename_server_disk(ObLoadArgument &load_args, 
           LOG_WARN("file not exist", K(ret), K(i), K(file_array[i]));
         } else if (OB_FAIL(session_info_->get_secure_file_priv(secure_file_priv))) {
           LOG_WARN("failed to get secure file priv", K(ret));
-        } else if (OB_FAIL(ObResolverUtils::check_secure_path(secure_file_priv, actual_path))) {
+        } else if (!session_info_->is_inner() && OB_FAIL(ObResolverUtils::check_secure_path(secure_file_priv, actual_path))) {
           LOG_WARN("failed to check secure path", K(ret), K(secure_file_priv), K(actual_path));
         } else if (OB_FAIL(load_args.file_iter_.add_files(&file_array[i]))) {
           LOG_WARN("fail to add files", K(ret));
