@@ -3037,12 +3037,20 @@ int ObParquetTableRowIterator::project_lazy_columns(int64_t &read_count, int64_t
       }
 
       // Check if this batch will cross page boundary
-      bool cross_page
-          = !sector_iter_.is_cross_page(cur_col_id_)
-                ? false
-                : sector_iter_.check_if_batch_cross_page(cur_col_id_,
-                                                         state_.read_row_counts_[cur_col_id_],
-                                                         capacity);
+      bool cross_page = true;
+      if (!sector_iter_.is_cross_page(cur_col_id_)) {
+        cross_page = false;
+      } else {
+        // 计算当前批次的总行数：包括跳过的行数和需要读取的行数
+        int64_t read_batch_size = 0;
+        for (int64_t j = 0; j < skip_range.count(); ++j) {
+          read_batch_size += skip_range.at(j);
+          read_batch_size += read_range.at(j);
+        }
+        cross_page = sector_iter_.check_if_batch_cross_page(cur_col_id_,
+                                                            state_.read_row_counts_[cur_col_id_],
+                                                            read_batch_size);
+      }
       for (int64_t j = 0; OB_SUCC(ret) && j < skip_range.count(); ++j) {
         int64_t skip_count = SkipRowsInColumn(cur_col_id_, skip_range.at(j),
                                               state_.logical_read_row_count_ + tmp_logical_read,
