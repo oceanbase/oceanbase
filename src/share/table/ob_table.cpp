@@ -1641,6 +1641,7 @@ OB_DEF_SERIALIZE(ObTableSingleOpQuery)
           }
         }
         OB_UNIS_ENCODE(filter_string_);
+        OB_UNIS_ENCODE(flag_);
       }
     }
   }
@@ -1674,6 +1675,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSingleOpQuery)
           len += ObTableSerialUtil::get_serialize_size(key_ranges_[i]);
         }
         OB_UNIS_ADD_LEN(filter_string_);
+        OB_UNIS_ADD_LEN(flag_);
       }
     }
   }
@@ -1747,6 +1749,9 @@ OB_DEF_DESERIALIZE(ObTableSingleOpQuery, )
     }
     if (OB_SUCC(ret) && pos < data_len) {
       LST_DO_CODE(OB_UNIS_DECODE, ob_params_);
+    }
+    if (OB_SUCC(ret) && pos < data_len) {
+      LST_DO_CODE(OB_UNIS_DECODE, flag_);
     }
   }
 
