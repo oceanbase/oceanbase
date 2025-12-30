@@ -1871,6 +1871,61 @@ int ObDDLService::set_tablegroup_id(ObTableSchema &table_schema)
   return ret;
 }
 
+int ObDDLService::print_view_expanded_definition_impl(
+    common::ObIAllocator &allocator,
+    const common::ObString &database_name,
+    const common::ObString &table_name,
+    const common::ObString &view_definition,
+    bool if_not_exist,
+    bool is_materialized_view,
+    bool is_oracle_mode,
+    common::ObString &ddl_stmt_str)
+{
+  int ret = OB_SUCCESS;
+  char *buf = NULL;
+  const int64_t max_buf_len = OB_MAX_LONGTEXT_LENGTH;
+  int64_t buf_len = 0;
+  int64_t pos = 0;
+  const char *fmt = NULL;
+
+  if (is_oracle_mode) {
+    fmt = "CREATE%s %sVIEW \"%.*s\".\"%.*s\" AS %.*s;";
+  } else {
+    fmt = "CREATE%s %sVIEW `%.*s`.`%.*s` AS %.*s;";
+  }
+
+  // 计算所需长度，避免循环重试
+  buf_len = snprintf(NULL, 0, fmt,
+                     if_not_exist ? " OR REPLACE" : "",
+                     is_materialized_view ? "MATERIALIZED " : "",
+                     database_name.length(), database_name.ptr(),
+                     table_name.length(), table_name.ptr(),
+                     view_definition.length(), view_definition.ptr());
+  if (buf_len < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("snprintf length calc failed", KR(ret));
+  } else {
+    ++buf_len; // for '\0'
+    if (buf_len > max_buf_len) {
+      ret = OB_SIZE_OVERFLOW;
+      LOG_WARN("view definition too long", KR(ret), K(buf_len), K(max_buf_len));
+    } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(buf_len)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory", KR(ret), K(buf_len));
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, fmt,
+                   if_not_exist ? " OR REPLACE" : "",
+                   is_materialized_view ? "MATERIALIZED " : "",
+                   database_name.length(), database_name.ptr(),
+                   table_name.length(), table_name.ptr(),
+                   view_definition.length(), view_definition.ptr()))) {
+      LOG_WARN("fail to print view definition", KR(ret), K(buf_len));
+    } else {
+      ddl_stmt_str.assign_ptr(buf, static_cast<int32_t>(pos));
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::print_view_expanded_definition(
     const ObTableSchema &table_schema,
     ObString &ddl_stmt_str,
@@ -1879,37 +1934,28 @@ int ObDDLService::print_view_expanded_definition(
     bool if_not_exist)
 {
   int ret = OB_SUCCESS;
-  char *buf = NULL;
-  int64_t buf_len = OB_MAX_VARCHAR_LENGTH;
-  int64_t pos = 0;
-  bool is_oracle_mode;
+  bool is_oracle_mode = false;
   const ObDatabaseSchema *database_schema = NULL;
   const uint64_t tenant_id = table_schema.get_tenant_id();
   const int64_t database_id = table_schema.get_database_id();
 
-  if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(buf_len)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate memory", K(ret), K(OB_MAX_VARCHAR_LENGTH));
-  } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, database_id, database_schema))) {
-    LOG_WARN("failed to get database schema", K(ret), K(tenant_id), K(database_id));
+  if (OB_FAIL(schema_guard.get_database_schema(tenant_id, database_id, database_schema))) {
+    LOG_WARN("failed to get database schema", KR(ret), K(tenant_id), K(database_id));
   } else if (OB_ISNULL(database_schema)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("database not exist", K(ret), K(database_id));
+    LOG_WARN("database not exist", KR(ret), K(database_id));
   } else if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
-    LOG_WARN("fail to check is oracle mode", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-        is_oracle_mode ? "CREATE%s %sVIEW \"%s\".\"%s\" AS %.*s" : "CREATE%s %sVIEW `%s`.`%s` AS %.*s",
-        if_not_exist ? " OR REPLACE" : "",
-        table_schema.is_materialized_view() ? "MATERIALIZED " : "",
-        database_schema->get_database_name(),
-        table_schema.get_table_name(),
-        table_schema.get_view_schema().get_view_definition_str().length(),
-        table_schema.get_view_schema().get_view_definition_str().ptr()))) {
-   LOG_WARN("fail to print view definition", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, ";"))) {
-   LOG_WARN("fail to print end", K(ret));
-  } else {
-   ddl_stmt_str.assign_ptr(buf, static_cast<int32_t>(pos));
+    LOG_WARN("fail to check is oracle mode", KR(ret));
+  } else if (OB_FAIL(print_view_expanded_definition_impl(
+                       allocator,
+                       database_schema->get_database_name_str(),
+                       table_schema.get_table_name_str(),
+                       table_schema.get_view_schema().get_view_definition_str(),
+                       if_not_exist,
+                       table_schema.is_materialized_view(),
+                       is_oracle_mode,
+                       ddl_stmt_str))) {
+    LOG_WARN("fail to print view expanded definition impl", KR(ret));
   }
   return ret;
 }
