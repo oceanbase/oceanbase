@@ -394,7 +394,7 @@ int ObAddPartInfoHelper::add_partition_info()
 {
   int ret = OB_SUCCESS;
   const bool is_only_history = false;
-  const bool is_include_hidden = true;
+  const bool is_include_hidden = false;
   if (OB_FAIL(iterate_part_info(is_only_history))) {
     LOG_WARN("iterate part info failed", K(ret));
   } else if (OB_FAIL(iterate_all_part(is_only_history, is_include_hidden))) {
