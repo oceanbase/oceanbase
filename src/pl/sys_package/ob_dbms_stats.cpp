@@ -5972,9 +5972,11 @@ int ObDbmsStats::do_gather_table_stats(sql::ObExecContext &ctx,
         lib::CompatModeGuard compat_guard(lib::Worker::CompatMode::MYSQL);
         if (OB_FAIL(gather_table_stats_with_default_param(ctx, duration_time, stat_table, task_info))) {
           LOG_WARN("failed to gather table stats with default param", K(ret));
+          ret = ObDbmsStatsUtils::error_code_wrapper(ret);
         }
       } else if (OB_FAIL(gather_table_stats_with_default_param(ctx, duration_time, stat_table, task_info))) {
         LOG_WARN("failed to gather table stats with default param", K(ret));
+        ret = ObDbmsStatsUtils::error_code_wrapper(ret);
       }
 
       if (OB_FAIL(ret)) {
@@ -7590,6 +7592,7 @@ int ObDbmsStats::do_async_gather_table_stats(sql::ObExecContext &ctx,
     StatTable stat_table(table_schema->get_database_id(), async_table.table_id_, true/*is_async_gather*/);
     if (OB_FAIL(build_stat_table_by_async_table(ctx, tenant_id, *table_schema, async_table, stat_table))) {
       LOG_WARN("failed to construct stat table", K(ret));
+      ret = ObDbmsStatsUtils::error_code_wrapper(ret);
     } else if (stat_table.async_partition_ids_.empty()) {
       if (OB_LIKELY(task_info.task_table_count_ > 0)) {
         --task_info.task_table_count_;
@@ -7597,6 +7600,7 @@ int ObDbmsStats::do_async_gather_table_stats(sql::ObExecContext &ctx,
     } else {
       if (OB_FAIL(gather_table_stats_with_default_param(ctx, duration_time, stat_table, task_info))) {
         LOG_WARN("failed to gather table stats with default param", K(ret));
+        ret = ObDbmsStatsUtils::error_code_wrapper(ret);
         if (OB_ERR_QUERY_INTERRUPTED == ret) {
           LOG_WARN("query interrupted", K(ret));
         } else if (OB_TABLE_NOT_EXIST == ret || OB_TIMEOUT == ret) {
