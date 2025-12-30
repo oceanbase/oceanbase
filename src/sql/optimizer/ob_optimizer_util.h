@@ -803,6 +803,7 @@ public:
                                              ObRawExpr *const_expr,
                                              ObRawExpr *&offset_int_expr,
                                              ObRawExpr *zero_expr,
+                                             ObItemType &cons_cmp_type,
                                              bool &offset_is_not_neg,
                                              ObTransformerCtx *ctx);
 
