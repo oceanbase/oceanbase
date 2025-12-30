@@ -6849,15 +6849,21 @@ int ObOptimizerUtil::gen_set_target_list(ObIAllocator *allocator,
         new_select_item.expr_name_ = select_item.expr_name_;
         new_select_item.is_real_alias_ = select_item.is_real_alias_ ||
                     ObRawExprUtils::is_column_ref_skip_implicit_cast(select_item.expr_);
-        new_select_item.questions_pos_ = select_item.questions_pos_;
-        new_select_item.params_idx_ = select_item.params_idx_;
-        new_select_item.neg_param_idx_ = select_item.neg_param_idx_;
         new_select_item.esc_str_flag_ = select_item.esc_str_flag_;
         new_select_item.paramed_alias_name_ = select_item.paramed_alias_name_;
         new_select_item.need_check_dup_name_ = select_item.need_check_dup_name_;
-        if (OB_FAIL(ObRawExprUtils::make_set_op_expr(*expr_factory, i, set_op_type,
-                                                     res_types.at(i), session_info,
-                                                     new_select_item.expr_))) {
+        if (OB_FAIL(new_select_item.questions_pos_.assign(select_item.questions_pos_))) {
+          LOG_WARN("failed to assign questions pos", K(ret));
+        } else if (OB_FAIL(new_select_item.params_idx_.assign(select_item.params_idx_))) {
+          LOG_WARN("failed to assign params idx", K(ret));
+        } else if (OB_FAIL(new_select_item.neg_param_idx_.assign(select_item.neg_param_idx_))) {
+          LOG_WARN("failed to assign neg param idx", K(ret));
+        } else if (OB_FAIL(ObRawExprUtils::make_set_op_expr(*expr_factory,
+                                                            i,
+                                                            set_op_type,
+                                                            res_types.at(i),
+                                                            session_info,
+                                                            new_select_item.expr_))) {
           LOG_WARN("create set op expr failed", K(ret));
         } else if (OB_FAIL(select_stmt->add_select_item(new_select_item))) {
           LOG_WARN("push back set select item failed", K(ret));
