@@ -25179,11 +25179,36 @@ int ObDDLService::make_recover_restore_tables_visible(obrpc::ObAlterTableArg &al
           } else if (OB_FAIL(ObPLDDLService::rebuild_triggers_on_hidden_table(alter_table_arg, *orig_table_schema, *hidden_table_schema,
               *src_tenant_schema_guard, *dst_tenant_schema_guard, ddl_operator, trans))) {
             LOG_WARN("rebuild triggers failed", K(ret));
-          } else if (OB_FAIL(ddl_operator.update_table_attribute(tmp_schema, trans, OB_DDL_ALTER_TABLE/*operation_type*/, nullptr/*ddl_stmt_str*/))) {
+          } else if (hidden_table_schema->has_lob_aux_table()) {
+            // update aux lob table with OB_DDL_RECOVER_TABLE_END, so that the cdc can add them into black-list and not sync log.
+            const ObTableSchema *lob_meta_schema = nullptr;
+            const ObTableSchema *lob_piece_schema = nullptr;
+            if (OB_FAIL(dst_tenant_schema_guard->get_table_schema(dst_tenant_id, hidden_table_schema->get_aux_lob_meta_tid(), lob_meta_schema))) {
+              LOG_WARN("get lob meta failed", K(ret), K(dst_tenant_id), "tid", hidden_table_schema->get_aux_lob_meta_tid());
+            } else if (OB_ISNULL(lob_meta_schema)) {
+              ret = OB_TABLE_NOT_EXIST;
+              LOG_WARN("table not exist", K(ret), K(dst_tenant_id), "tid", hidden_table_schema->get_aux_lob_meta_tid());
+            } else if (OB_FAIL(dst_tenant_schema_guard->get_table_schema(dst_tenant_id, hidden_table_schema->get_aux_lob_piece_tid(), lob_piece_schema))) {
+              LOG_WARN("get lob meta failed", K(ret), K(dst_tenant_id), "tid", hidden_table_schema->get_aux_lob_piece_tid());
+            } else if (OB_ISNULL(lob_piece_schema)) {
+              ret = OB_TABLE_NOT_EXIST;
+              LOG_WARN("table not exist", K(ret), K(dst_tenant_id), "tid", hidden_table_schema->get_aux_lob_piece_tid());
+            } else {
+              HEAP_VARS_2 ((ObTableSchema, tmp_lob_meta_schema), (ObTableSchema, tmp_lob_piece_schema)) {
+                if (OB_FAIL(tmp_lob_meta_schema.assign(*lob_meta_schema))) {
+                  LOG_WARN("assign failed", K(ret));
+                } else if (OB_FAIL(tmp_lob_piece_schema.assign(*lob_piece_schema))) {
+                  LOG_WARN("assign failed", K(ret));
+                } else if (OB_FAIL(ddl_operator.update_table_attribute(tmp_lob_meta_schema, trans, OB_DDL_RECOVER_TABLE_END/*operation_type*/, nullptr/*ddl_stmt_str*/))) {
+                  LOG_WARN("failed to update data table schema attribute", K(ret));
+                } else if (OB_FAIL(ddl_operator.update_table_attribute(tmp_lob_piece_schema, trans, OB_DDL_RECOVER_TABLE_END/*operation_type*/, nullptr/*ddl_stmt_str*/))) {
+                  LOG_WARN("failed to update data table schema attribute", K(ret));
+                }
+              }
+            }
+          }
+          if (FAILEDx(ddl_operator.update_table_attribute(tmp_schema, trans, OB_DDL_RECOVER_TABLE_END/*operation_type*/, nullptr/*ddl_stmt_str*/))) {
             LOG_WARN("failed to update data table schema attribute", K(ret));
-          } else {
-            // Notice that, all index have already built and set to normal state flag when rebuild them.
-            // TODO yiren, rebuild trigger and foreign key, and check object duplicated too.
           }
         }
       }
