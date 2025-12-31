@@ -145,23 +145,6 @@ int ObExprSTIntersects::eval_st_intersects(const ObExpr &expr, ObEvalCtx &ctx, O
           LOG_WARN("add geo2 to const cache failed", K(ret));
         }
       }
-      ObGeoEvalCtx gis_context(*mem_ctx);
-      bool result = false;
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(gis_context.append_geo_arg(geo1)) || OB_FAIL(gis_context.append_geo_arg(geo2))) {
-        LOG_WARN("build gis context failed", K(ret), K(gis_context.get_geo_count()));
-      } else if (OB_FAIL(ObGeoFunc<ObGeoFuncType::Intersects>::geo_func::eval(gis_context, result))) {
-        LOG_WARN("eval st intersection failed", K(ret));
-        ObGeoExprUtils::geo_func_error_handle(ret, N_ST_INTERSECTS);
-      } else {
-        if (geo1->type() == ObGeoType::POINT
-            && geo2->type() == ObGeoType::POINT
-            && result == true
-            && OB_FAIL(ObGeoTypeUtil::eval_point_box_intersects(srs, geo1, geo2, result))) {
-          LOG_WARN("eval box intersection failed", K(ret));
-        }
-      }
-
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObGeoExprUtils::get_intersects_res(*geo1, *geo2, gis_arg1, gis_arg2,
                                                             const_param_cache, srs,
