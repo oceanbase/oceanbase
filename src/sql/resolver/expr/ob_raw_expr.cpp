@@ -4574,7 +4574,7 @@ bool ObSysFunRawExpr::inner_json_expr_same_as(
       r_param_expr = nullptr;
       if (l_param_expr->is_const_expr()) {
         ObString path_str = (static_cast<const ObConstRawExpr*>(l_param_expr))->get_value().get_string();
-        bool_ret = path_str.empty();
+        bool_ret = path_str.empty() || (path_str.length() == 1 && path_str.ptr()[0] == '$');
       }
     } else if (r_param_expr->is_wrappered_json_extract()) {
       r_column_expr = r_param_expr->get_param_expr(0)->get_param_expr(0);
