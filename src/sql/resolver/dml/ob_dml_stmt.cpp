@@ -2236,7 +2236,7 @@ int ObDMLStmt::set_sharable_expr_reference(ObRawExpr &expr, ExplicitedRefType re
   if (expr.is_column_ref_expr() || expr.is_aggr_expr() ||
       expr.is_win_func_expr() || expr.is_query_ref_expr() ||
       ObRawExprUtils::is_pseudo_column_like_expr(expr) ||
-      expr.is_match_against_expr()) {
+      expr.is_match_against_expr() || expr.is_udf_expr()) {
     expr.set_explicited_reference(ref_type);
     if (expr.is_column_ref_expr()) {
       ObColumnRefRawExpr &column_expr = static_cast<ObColumnRefRawExpr&>(expr);
@@ -2292,7 +2292,8 @@ int ObDMLStmt::set_sharable_expr_reference(ObRawExpr &expr, ExplicitedRefType re
        expr.has_flag(CNT_WINDOW_FUNC) || expr.has_flag(CNT_SUB_QUERY) ||
        expr.has_flag(CNT_ROWNUM) || expr.has_flag(CNT_SEQ_EXPR) ||
        expr.has_flag(CNT_PSEUDO_COLUMN) || expr.has_flag(CNT_ONETIME) ||
-       expr.has_flag(CNT_DYNAMIC_PARAM) || expr.has_flag(CNT_MATCH_EXPR))) {
+       expr.has_flag(CNT_DYNAMIC_PARAM) || expr.has_flag(CNT_MATCH_EXPR) ||
+       expr.has_flag(CNT_PL_UDF))) {
     ref_type = expr.is_match_against_expr() ? ExplicitedRefType::REF_BY_MATCH_EXPR : ref_type;
     for (int64_t i = 0; OB_SUCC(ret) && i < expr.get_param_count(); i++) {
       if (OB_ISNULL(expr.get_param_expr(i))) {
@@ -2460,6 +2461,7 @@ int ObDMLStmt::clear_sharable_expr_reference()
 {
   int ret = OB_SUCCESS;
   ObRawExpr *expr = NULL;
+  ObSEArray<ObRawExpr*, 4> udf_exprs;
   // for column items
   for (int64_t i = 0; OB_SUCC(ret) && i < column_items_.count(); i++) {
     if (OB_ISNULL(expr = column_items_.at(i).expr_)) {
@@ -2495,7 +2497,28 @@ int ObDMLStmt::clear_sharable_expr_reference()
       }
     }
   }
-
+  for (int64_t i = 0; OB_SUCC(ret) && i < match_exprs_.count(); ++i) {
+    if (OB_ISNULL(match_exprs_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("match expr is null", K(ret));
+    } else {
+      match_exprs_.at(i)->clear_explicited_referece();
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(get_udf_exprs(udf_exprs))) {
+      LOG_WARN("failed to get udf exprs", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < udf_exprs.count(); ++i) {
+        if (OB_ISNULL(udf_exprs.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("udf expr is null", K(ret));
+        } else {
+          udf_exprs.at(i)->clear_explicited_referece();
+        }
+      }
+    }
+  }
   return ret;
 }
 

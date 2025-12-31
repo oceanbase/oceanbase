@@ -777,10 +777,13 @@ int ObConflictDetectorGenerator::generate_inner_join_detectors(const ObDMLStmt *
     //找到table item的过滤谓词
     for (int64_t j = 0; OB_SUCC(ret) && j < quals.count(); ++j) {
       ObRawExpr *expr = quals.at(j);
+      bool has_risky_state_func = false;
       if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null expr", K(ret));
-      } else if (!expr->is_deterministic() && !expr->has_flag(CNT_ASSIGN_EXPR)) {
+      } else if (OB_FAIL(ObOptimizerUtil::check_has_risky_state_func(expr, has_risky_state_func))) {
+        LOG_WARN("failed to check has risky state func", K(ret));
+      } else if (has_risky_state_func) {
         // don't pushdown condition which is not deterministic
         // do nothing
       } else if (!expr->get_relation_ids().is_subset(table_ids) ||
