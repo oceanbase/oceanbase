@@ -331,7 +331,7 @@ int ObAggCell::can_use_index_info(const blocksstable::ObMicroIndexInfo &index_in
     const bool is_cg, bool &can_agg)
 {
   int ret = OB_SUCCESS;
-  if (index_info.has_agg_data() && can_use_index_info()) {
+  if (!ignore_eval_index_info_ && index_info.has_agg_data() && can_use_index_info()) {
     if (OB_FAIL(read_agg_datum(index_info, is_cg))) {
       LOG_WARN("fail to read agg datum", K(ret), K(is_cg), K(index_info));
     } else {
@@ -2774,7 +2774,7 @@ int ObFirstRowAggCell::can_use_index_info(const blocksstable::ObMicroIndexInfo &
     const bool is_cg, bool &can_agg)
 {
   int ret = OB_SUCCESS;
-  can_agg = can_use_index_info();
+  can_agg = !ignore_eval_index_info_ && can_use_index_info();
   return ret;
 }
 
@@ -3394,7 +3394,7 @@ int ObGroupByCell::assign_agg_cells(const sql::ObExpr *col_expr, common::ObIArra
       if (OB_FAIL(agg_idxs.push_back(i))) {
         LOG_WARN("Failed to push back", K(ret));
       } else {
-        agg_cell->set_assigned_to_group_by_processor();
+        agg_cell->set_assigned_to_group_by_processor(true);
       }
     }
   }
@@ -3420,6 +3420,21 @@ int ObGroupByCell::init_agg_cells(const ObTableAccessParam &param, const ObTable
                                   batch_size_, is_pad_char_to_full_length(context.sql_mode_));
     if (OB_FAIL(agg_cell_factory_.alloc_cell(basic_info, agg_cells_, exclude_null, !is_for_single_row, &eval_ctx))) {
       LOG_WARN("Failed to alloc agg cell", K(ret), K(i));
+    }
+  }
+  return ret;
+}
+
+int ObGroupByCell::clear_agg_cell_assign_status()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < agg_cells_.count(); ++i) {
+    ObAggCell *agg_cell = agg_cells_.at(i);
+    if (OB_ISNULL(agg_cell)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected null agg cell", K(ret), K(i), K_(agg_cells));
+    } else {
+      agg_cell->set_assigned_to_group_by_processor(false);
     }
   }
   return ret;

@@ -1098,7 +1098,6 @@ int ObCOSSTableRowScanner::fetch_group_by_rows()
       } else if (!group_by_cell_->is_exceed_sql_batch()) {
         output_cnt = group_by_cell_->get_distinct_cnt();
       } else {
-        group_by_cell_->reset_projected_cnt();
         group_by_cell_->set_is_processing(true);
         already_init_header = true;
       }

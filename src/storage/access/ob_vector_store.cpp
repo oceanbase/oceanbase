@@ -429,7 +429,6 @@ int ObVectorStore::fill_group_by_rows(
     } else if (!group_by_cell_->is_exceed_sql_batch()) {
       output_cnt = group_by_cell_->get_distinct_cnt();
     } else {
-      group_by_cell_->reset_projected_cnt();
       group_by_cell_->set_is_processing(true);
       already_init_header = true;
     }
@@ -613,10 +612,26 @@ int ObVectorStore::fill_group_idx(const int64_t group_idx)
   return ret;
 }
 
+int ObVectorStore::reuse_for_refresh_table()
+{
+  int ret = OB_SUCCESS;
+  ObBlockBatchedRowStore::reuse_for_refresh_table();
+  if (nullptr != group_by_cell_) {
+    if (OB_FAIL(group_by_cell_->clear_agg_cell_assign_status())) {
+      LOG_WARN("Failed to clear agg cell assign status", K(ret));
+    }
+  }
+  return ret;
+}
+
 int64_t ObVectorStore::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   J_OBJ_START();
+  J_NAME("ObBlockBatchedRowStore");
+  J_COLON();
+  pos += ObBlockBatchedRowStore::to_string(buf + pos, buf_len - pos);
+  J_COMMA();
   J_KV(K_(default_datums),
        K_(cols_projector),
        K_(count),

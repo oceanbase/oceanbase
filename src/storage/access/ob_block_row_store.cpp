@@ -29,8 +29,8 @@ ObBlockRowStore::ObBlockRowStore(ObTableAccessContext &context)
       pd_filter_info_(),
       context_(context),
       iter_param_(nullptr),
-      disabled_(false),
       is_aggregated_in_prefetch_(false),
+      disabled_(false),
       where_optimizer_(nullptr)
 {}
 

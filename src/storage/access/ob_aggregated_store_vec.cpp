@@ -125,6 +125,21 @@ int ObAggGroupVec::fill_index_info(const blocksstable::ObMicroIndexInfo &index_i
   return ret;
 }
 
+int ObAggGroupVec::set_ignore_eval_index_info(const bool ignore_eval_index_info)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < agg_cells_.count(); ++i) {
+    ObAggCellVec *agg_cell = agg_cells_.at(i);
+    if (OB_ISNULL(agg_cell)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected null agg cell", K(ret), K(i), KP(agg_cell));
+    } else {
+      agg_cell->set_ignore_eval_index_info(ignore_eval_index_info);
+    }
+  }
+  return ret;
+}
+
 int ObAggGroupVec::agg_pushdown_decoder(
     blocksstable::ObIMicroBlockReader *reader,
     const int32_t col_offset,
@@ -298,6 +313,14 @@ void ObAggregatedStoreVec::reuse()
   ObVectorStore::reuse();
   iter_end_flag_ = IterEndState::PROCESSING;
   count_ = 0;
+}
+
+int ObAggregatedStoreVec::reuse_for_refresh_table()
+{
+  ObVectorStore::reuse_for_refresh_table();
+  iter_end_flag_ = IterEndState::PROCESSING;
+  count_ = 0;
+  return OB_SUCCESS;
 }
 
 int ObAggregatedStoreVec::reuse_capacity(const int64_t capacity)
@@ -813,6 +836,21 @@ int ObAggregatedStoreVec::prepare_batch_scan()
     LOG_WARN("Failed to aggregate rows", K(ret));
   } else if (OB_FAIL(reset_agg_row_id())) {
     LOG_WARN("Failed to reset agg row id", K(ret));
+  }
+  return ret;
+}
+
+int ObAggregatedStoreVec::set_ignore_eval_index_info(const bool ignore_eval_index_info)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < agg_groups_.count(); ++i) {
+    ObAggGroupVec *agg_group = agg_groups_.at(i);
+    if (OB_ISNULL(agg_group)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected null aggregate group", K(ret), KP(agg_group));
+    } else {
+      agg_group->set_ignore_eval_index_info(ignore_eval_index_info);
+    }
   }
   return ret;
 }

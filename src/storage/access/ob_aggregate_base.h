@@ -150,8 +150,8 @@ public:
   int reserve_bitmap(const int64_t size);
   OB_INLINE bool is_assigned_to_group_by_processor() const
   { return is_assigned_to_group_by_processor_; }
-  OB_INLINE void set_assigned_to_group_by_processor()
-  { is_assigned_to_group_by_processor_ = true; }
+  OB_INLINE void set_assigned_to_group_by_processor(bool is_assigned)
+  { is_assigned_to_group_by_processor_ = is_assigned; }
   OB_INLINE const ObDatum &get_result_datum() const { return result_datum_; };
   OB_INLINE ObPDAggType get_type() const { return agg_type_; }
   OB_INLINE bool is_min_agg() const
@@ -163,7 +163,8 @@ public:
     return (PD_MAX == agg_type_ && is_monotonic_asc()) || (PD_MIN == agg_type_ && is_monotonic_desc());
   }
   OB_INLINE ObBitmap &get_bitmap() { return *bitmap_; };
-  VIRTUAL_TO_STRING_KV(K_(agg_type), K_(is_inited), K_(param_prop), KP_(agg_row_reader),
+  OB_INLINE void set_ignore_eval_index_info(const bool ignore_eval_index_info) { ignore_eval_index_info_ = ignore_eval_index_info; }
+  VIRTUAL_TO_STRING_KV(K_(agg_type), K_(is_inited), K_(param_prop), KP_(agg_row_reader), K_(ignore_eval_index_info),
     K_(result_datum), K_(skip_index_datum), K_(skip_index_datum_is_prefix), K_(is_assigned_to_group_by_processor), KPC_(bitmap));
 protected:
   OB_INLINE bool is_monotonic_asc() const { return share::Monotonicity::ASC == param_prop_.mono_; }
@@ -180,6 +181,7 @@ protected:
   share::ObAggrParamProperty param_prop_;
   bool is_assigned_to_group_by_processor_;
   bool skip_index_datum_is_prefix_;
+  bool ignore_eval_index_info_;
   bool is_inited_;
 };
 
@@ -208,6 +210,7 @@ public:
   virtual int can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info, bool &can_agg) = 0;
   virtual int fill_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg) = 0;
   virtual int collect_aggregated_result() = 0;
+  virtual int set_ignore_eval_index_info(const bool ignore_eval_index_info) = 0;
   DECLARE_PURE_VIRTUAL_TO_STRING;
 };
 
@@ -282,6 +285,7 @@ public:
   virtual int output_extra_group_by_result(int64_t &count, const ObTableIterParam &iter_param) = 0;
   virtual int pad_column_in_group_by(const int64_t row_cap) = 0;
   virtual int assign_agg_cells(const sql::ObExpr *col_expr, common::ObIArray<int32_t> &agg_idxs) = 0;
+  virtual int clear_agg_cell_assign_status() = 0;
   virtual int check_distinct_and_ref_valid();
   virtual int clear_evaluated_infos() { return OB_SUCCESS; }
   OB_INLINE int64_t get_batch_size() const { return batch_size_; }
@@ -301,9 +305,14 @@ public:
   OB_INLINE void set_distinct_cnt(const int64_t distinct_cnt) { distinct_cnt_ = distinct_cnt; }
   OB_INLINE bool need_extract_distinct() const { return need_extract_distinct_; }
   OB_INLINE bool is_processing() const { return is_processing_; }
-  OB_INLINE void set_is_processing(const bool is_processing) { is_processing_ = is_processing; }
-  OB_INLINE void reset_projected_cnt() { projected_cnt_ = 0; }
+  OB_INLINE void set_is_processing(const bool is_processing)
+  {
+    is_processing_ = is_processing;
+    projected_cnt_ = 0;
+  }
   OB_INLINE void set_row_capacity(const int64_t row_capacity) { row_capacity_ = row_capacity; }
+  // When decide_use_group_by() return true, only can refresh table when the whole micro block is scanned.
+  OB_INLINE bool can_refresh() const { return !is_exceed_sql_batch() || (projected_cnt_ >= distinct_cnt_); }
   template <typename T>
   int decide_use_group_by(const int64_t row_cnt, const int64_t read_cnt, const int64_t distinct_cnt, const T *bitmap, bool &use_group_by)
   {

@@ -67,7 +67,7 @@ public:
   OB_INLINE bool is_valid() const { return is_inited_; }
   OB_INLINE bool is_disabled() const { return disabled_; }
   OB_INLINE void disable() { disabled_ = true; }
-  OB_INLINE bool can_refresh() const { return !is_aggregated_in_prefetch_; }
+  OB_INLINE virtual bool can_refresh() const { return !is_aggregated_in_prefetch_; }
   OB_INLINE void set_aggregated_in_prefetch() { is_aggregated_in_prefetch_ = true; }
   // for blockscan
   OB_INLINE bool filter_pushdown() const { return pd_filter_info_.is_pd_filter_; }
@@ -88,15 +88,20 @@ public:
   }
   virtual bool is_end() const { return false; }
   virtual bool is_empty() const { return true; }
+  virtual int reuse_for_refresh_table()
+  {
+    disabled_ = false;
+    return OB_SUCCESS;
+  }
   VIRTUAL_TO_STRING_KV(K_(is_inited), K_(disabled), K_(is_aggregated_in_prefetch), K_(pd_filter_info));
 protected:
   bool is_inited_;
   sql::PushdownFilterInfo pd_filter_info_;
   ObTableAccessContext &context_;
   const ObTableIterParam *iter_param_;
+  bool is_aggregated_in_prefetch_;
 private:
   bool disabled_;
-  bool is_aggregated_in_prefetch_;
   ObWhereOptimizer *where_optimizer_;
 };
 

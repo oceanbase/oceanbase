@@ -476,6 +476,7 @@ public:
   int output_extra_group_by_result(int64_t &count, const ObTableIterParam &iter_param) override;
   int pad_column_in_group_by(const int64_t row_cap);
   int assign_agg_cells(const sql::ObExpr *col_expr, common::ObIArray<int32_t> &agg_idxs) override;
+  int clear_agg_cell_assign_status() override;
   int clear_evaluated_infos() override;
   OB_INLINE common::ObIArray<ObAggCellVec *> &get_agg_cells() { return agg_cells_; }
   OB_INLINE common::ObDatum *get_group_by_col_datums_to_fill() override
