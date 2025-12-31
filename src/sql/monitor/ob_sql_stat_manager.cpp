@@ -69,9 +69,13 @@ int ObSqlStatManager::mtl_init(ObSqlStatManager *&sql_stat_manager) {
 }
 
 void ObSqlStatManager::mtl_destroy(ObSqlStatManager *&sql_stat_manager) {
-  int ret = OB_SUCCESS;
-  common::ob_delete(sql_stat_manager);
-  LOG_INFO("success to destroy sql stat manager", K(MTL_ID()));
+  if (is_virtual_tenant_id(MTL_ID())) {
+    // do nothing
+  } else if (OB_NOT_NULL(sql_stat_manager)) {
+    sql_stat_manager->destroy();
+    common::ob_delete(sql_stat_manager);
+    LOG_INFO("success to destroy sql stat manager", K(MTL_ID()));
+  }
 }
 
 int ObSqlStatManager::init() {
@@ -141,16 +145,10 @@ void ObSqlStatManager::wait() {
 
 void ObSqlStatManager::destroy() {
   int ret = OB_SUCCESS;
-  bool is_exist = false;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("sql stat manager is not inited", K(ret));
   } else {
-    if (TG_TASK_EXIST(MTL(omt::ObSharedTimer *)->get_tg_id(), stat_task_,
-                      is_exist) == OB_SUCCESS && is_exist) {
-      TG_CANCEL_TASK(MTL(omt::ObSharedTimer *)->get_tg_id(), stat_task_);
-      TG_WAIT_TASK(MTL(omt::ObSharedTimer *)->get_tg_id(), stat_task_);
-    }
     sql_stat_infos_.reset();
     sql_stat_infos_.destroy();
     allocator_.destroy();
