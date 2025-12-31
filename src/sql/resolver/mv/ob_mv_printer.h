@@ -28,6 +28,7 @@
 #define DELETE_TABLE_FORMAT_NAME "DEL_%.*s$$"
 #define INSERT_TABLE_FORMAT_NAME "INS_%.*s$$"
 #define INNER_TABLE_FORMAT_NAME "INR_%.*s$$"
+#define GROUP_RE_CALC_AGGR_FORMAT_NAME "RE_CALC_AGGR_%ld$$"
 
 namespace oceanbase
 {
@@ -140,6 +141,7 @@ public:
   static const ObString DELTA_MV_VIEW_NAME;
   static const ObString INNER_RT_MV_VIEW_NAME;
   static const ObString MV_STAT_VIEW_NAME;
+  static const ObString GROUP_CALC_AGGR_VIEW_NAME;
   // column name
   static const ObString HEAP_TABLE_ROWKEY_COL_NAME;
   static const ObString OLD_NEW_COL_NAME;
@@ -261,6 +263,10 @@ protected:
                                ObSelectStmt *view_stmt = NULL,
                                const bool add_to_from = true,
                                const TableItem *source_table = NULL);
+  int gen_format_string_name(const char *name_format_string,
+                             const int64_t idx,
+                             ObString &format_name,
+                             const int64_t buf_len = 64 /* OB_MAX_SUBQUERY_NAME_LENGTH */);
   int gen_format_string_name(const char *name_format_string,
                              const ObString &ori_name,
                              ObString &format_name,
