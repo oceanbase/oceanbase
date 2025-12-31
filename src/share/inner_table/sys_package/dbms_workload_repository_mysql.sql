@@ -11,9 +11,10 @@ CREATE OR REPLACE PACKAGE dbms_workload_repository AUTHID CURRENT_USER
     high_snap_id   INT);
 
   PROCEDURE MODIFY_SNAPSHOT_SETTINGS(
-    retention     INT    DEFAULT  NULL,
-    interval      INT    DEFAULT  NULL,
-    topnsql       INT    DEFAULT  NULL);
+    retention        INT    DEFAULT  NULL,
+    interval         INT    DEFAULT  NULL,
+    topnsql          INT    DEFAULT  NULL,
+    sqlstat_interval INT    DEFAULT  NULL);
 
   FUNCTION ASH_REPORT_TEXT(BTIME         TIMESTAMP,
                            ETIME         TIMESTAMP,

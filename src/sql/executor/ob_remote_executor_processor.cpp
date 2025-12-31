@@ -786,6 +786,14 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
     if (enable_sqlstat && OB_NOT_NULL(exec_ctx_.get_sql_ctx())) {
       sqlstat_record.record_sqlstat_end_value();
       sqlstat_record.set_is_plan_cache_hit(exec_ctx_.get_sql_ctx()->plan_cache_hit_);
+      sqlstat_record.set_is_muti_query(session->get_capability().cap_flags_.OB_CLIENT_MULTI_STATEMENTS);
+      if (OB_NOT_NULL(exec_ctx_.get_sql_ctx()) && OB_NOT_NULL(exec_ctx_.get_sql_ctx())) {
+        sqlstat_record.set_is_muti_query_batch(exec_ctx_.get_sql_ctx()->multi_stmt_item_.is_batched_multi_stmt());
+      }
+      if (OB_NOT_NULL(plan)) {
+        sqlstat_record.set_is_full_table_scan(plan->contain_table_scan());
+      }
+      sqlstat_record.set_is_failed(0 != ret && OB_ITER_END != ret);
       sqlstat_record.move_to_sqlstat_cache(*session, exec_ctx_.get_sql_ctx()->cur_sql_ ,plan);
     }
     //此处代码要放在scanner.set_err_code(ret)代码前,避免ret被都写成了OB_SUCCESS
@@ -1103,6 +1111,12 @@ int ObRpcRemoteExecuteP::process()
     if (enable_sqlstat && OB_NOT_NULL(exec_ctx_.get_sql_ctx())) {
       sqlstat_record.record_sqlstat_end_value();
       sqlstat_record.set_is_plan_cache_hit(exec_ctx_.get_sql_ctx()->plan_cache_hit_);
+      sqlstat_record.set_is_muti_query(session->get_capability().cap_flags_.OB_CLIENT_MULTI_STATEMENTS);
+      if (OB_NOT_NULL(exec_ctx_.get_sql_ctx()) && OB_NOT_NULL(exec_ctx_.get_sql_ctx())) {
+        sqlstat_record.set_is_muti_query_batch(exec_ctx_.get_sql_ctx()->multi_stmt_item_.is_batched_multi_stmt());
+      }
+      sqlstat_record.set_is_full_table_scan(phy_plan_.contain_table_scan());
+      sqlstat_record.set_is_failed(0 != ret && OB_ITER_END != ret);
       sqlstat_record.move_to_sqlstat_cache(*session, exec_ctx_.get_sql_ctx()->cur_sql_, &phy_plan_);
     }
 

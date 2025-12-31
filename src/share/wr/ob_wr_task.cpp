@@ -18,6 +18,7 @@
 #include "share/location_cache/ob_location_service.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "ob_wr_collector.h"
+#include "share/wr/ob_sql_stat_dump_task.h"
 
 using namespace oceanbase::common::sqlclient;
 
@@ -25,8 +26,6 @@ namespace oceanbase
 {
 namespace share
 {
-
-#define WR_SNAP_ID_SEQNENCE_NAME "OB_WORKLOAD_REPOSITORY_SNAP_ID_SEQNENCE"
 
 WorkloadRepositoryTask::WorkloadRepositoryTask()
     : wr_proxy_(),
@@ -1030,7 +1029,7 @@ int WorkloadRepositoryTask::fetch_retention_usec_from_wr_control(int64_t &retent
   return ret;
 }
 
-int WorkloadRepositoryTask::fetch_interval_num_from_wr_control(int64_t &interval)
+int WorkloadRepositoryTask::fetch_interval_num_from_wr_control(int64_t &interval, const char *col_name)
 {
   int ret = OB_SUCCESS;
   const int64_t tenant_id = OB_SYS_TENANT_ID;
@@ -1042,8 +1041,8 @@ int WorkloadRepositoryTask::fetch_interval_num_from_wr_control(int64_t &interval
     if (OB_ISNULL(GCTX.sql_proxy_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("GCTX.sql_proxy_ is null", K(ret));
-    } else if (OB_FAIL(sql.assign_fmt("SELECT /*+ WORKLOAD_REPOSITORY */ snapint_num FROM %s where tenant_id = %ld",
-                   OB_WR_CONTROL_TNAME, tenant_id))) {
+    } else if (OB_FAIL(sql.assign_fmt("SELECT /*+ WORKLOAD_REPOSITORY */ %s FROM %s where tenant_id = %ld",
+                   col_name, OB_WR_CONTROL_TNAME, tenant_id))) {
       LOG_WARN("failed to assign create sequence sql string", KR(ret));
     } else if (OB_FAIL(ObWrCollector::exec_read_sql_with_retry(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
       LOG_WARN("failed to fetch next snap_id sequence", KR(ret), K(sql));
@@ -1055,10 +1054,20 @@ int WorkloadRepositoryTask::fetch_interval_num_from_wr_control(int64_t &interval
         // no record in __wr_control table.
         ret = OB_SUCCESS;
         // interval in second
-        interval = WorkloadRepositoryTask::DEFAULT_SNAPSHOT_INTERVAL * 60;
+        if (strcmp(col_name, "snapint_num") == 0) {
+          interval = WorkloadRepositoryTask::DEFAULT_SNAPSHOT_INTERVAL * 60;
+        } else if (strcmp(col_name, "sqlstat_interval") == 0) {
+          //convert sqlstat_interval from us to minutes
+          interval = ObSqlStatDumpTask::REFRESH_INTERVAL / 60 / 1000 / 1000;
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected col name", K(col_name));
+        }
         ObSqlString wr_control_sql_string;
         int64_t affected_rows = 0;
-        if (OB_FAIL(get_init_wr_control_sql_string(OB_SYS_TENANT_ID, wr_control_sql_string))) {
+        if (OB_FAIL(ret)) {
+          //do nothing
+        } else if (OB_FAIL(get_init_wr_control_sql_string(OB_SYS_TENANT_ID, wr_control_sql_string))) {
           LOG_WARN("failed to get init wr control sql string", K(wr_control_sql_string));
         } else if (OB_FAIL(ObWrCollector::exec_write_sql_with_retry(gen_meta_tenant_id(tenant_id), wr_control_sql_string.ptr(), affected_rows))) {
           LOG_WARN("failed to insert default value into wr_control", KR(ret), K(wr_control_sql_string));
@@ -1071,7 +1080,7 @@ int WorkloadRepositoryTask::fetch_interval_num_from_wr_control(int64_t &interval
         LOG_WARN("get next result failed", KR(ret), K(tenant_id), K(sql));
       }
     } else {
-      EXTRACT_INT_FIELD_MYSQL(*result, "snapint_num", interval, int64_t);
+      EXTRACT_INT_FIELD_MYSQL(*result, col_name, interval, int64_t);
     }
   }
   return ret;
@@ -1108,7 +1117,8 @@ int WorkloadRepositoryTask::get_init_wr_control_sql_string(
   char default_interval_char[OB_MAX_TIME_STR_LENGTH] = "";
   int64_t default_snap_retention_mins = WorkloadRepositoryTask::DEFAULT_SNAPSHOT_RETENTION;
   char default_retention_char[OB_MAX_TIME_STR_LENGTH] = "";
-  int64_t default_topnsql = 30;
+  int64_t default_topnsql = 100;
+  int64_t default_sqlstat_interval = 10;
   if (OB_FAIL(WorkloadRepositoryTask::mins_to_duration(default_snap_interval_mins,
                                                        default_interval_char))) {
     LOG_WARN("failed to transform mins to duration string",K(ret), K(default_snap_interval_mins));
@@ -1116,13 +1126,13 @@ int WorkloadRepositoryTask::get_init_wr_control_sql_string(
                                                               default_retention_char))) {
     LOG_WARN("failed to transform mins to duration string",K(ret), K(default_snap_retention_mins));
   } else if (OB_FAIL(sql.assign_fmt("INSERT IGNORE /*+ WORKLOAD_REPOSITORY use_plan_cache(none) */ INTO %s (tenant_id,  "
-      "snap_interval, snapint_num, retention, retention_num, topnsql) VALUES",
+      "snap_interval, snapint_num, retention, retention_num, topnsql, sqlstat_interval) VALUES",
         OB_WR_CONTROL_TNAME))) {
     LOG_WARN("sql append failed", K(ret));
-  } else if (OB_FAIL(sql.append_fmt("(%ld, '%s', %ld, '%s', %ld, %ld)", tenant_id,
+  } else if (OB_FAIL(sql.append_fmt("(%ld, '%s', %ld, '%s', %ld, %ld, %ld)", tenant_id,
                                       default_interval_char, default_snap_interval_mins*60L,
                                       default_retention_char, default_snap_retention_mins*60L,
-                                      default_topnsql))) {
+                                      default_topnsql, default_sqlstat_interval))) {
     LOG_WARN("sql append failed", K(ret));
   }
   return ret;

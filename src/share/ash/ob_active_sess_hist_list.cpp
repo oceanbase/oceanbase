@@ -17,6 +17,12 @@
 #include "share/config/ob_server_config.h"
 #include "lib/guard/ob_shared_guard.h"          // ObShareGuard
 #include "lib/ob_running_mode.h"
+#include "share/ash/ob_ash_refresh_task.h"
+
+constexpr int64_t SET_COMPRESS_FLAG_THRESHOLD = 3;
+constexpr int64_t RESET_COMPRESS_FLAG_THRESHOLD = 3;
+constexpr double EXPECT_WRITE_SPEED_TIMES = 1.0;
+
 namespace oceanbase
 {
 namespace common
@@ -32,7 +38,13 @@ using namespace oceanbase::share;
 ObActiveSessHistList::ObActiveSessHistList()
     : ash_size_(0),
     mutex_(common::ObLatchIds::ASH_LOCK),
-    ash_buffer_()
+    ash_buffer_(),
+    prev_write_nums_(),
+    over_thread_seconds_count_(0),
+    below_thread_seconds_count_(0),
+    prev_write_array_index_(0),
+    last_compress_num_(0),
+    is_compress_(false)
 {
   if (GCONF.is_valid()) {
     ash_size_ = GCONF._ob_ash_size;
@@ -128,4 +140,68 @@ int ObActiveSessHistList::allocate_ash_buffer(int64_t ash_size, common::ObShared
     }
   }
   return ret;
+}
+
+double ObActiveSessHistList::cal_expect_write_speed(double times)
+{
+  double expect_write_speed = 0;
+  double remaining_seconds = (ASH_REFRESH_INTERVAL - (ObTimeUtility::current_time() - pre_check_snapshot_time_)) / 1000000;
+  if (remaining_seconds - 1e-6 > 0) {
+    expect_write_speed = free_slots_num() * times / remaining_seconds;
+  } else {
+    expect_write_speed = free_slots_num() * times / ASH_REFRESH_INTERVAL * 1000000;
+  }
+  return expect_write_speed;
+}
+
+double ObActiveSessHistList::cal_avg_pre_write_num()
+{
+  double avg_pre_write_num = 0;
+  int64_t total_write_num = 0;
+  for (int64_t i = 0; i < PREV_WRITE_NUM_ARRAY_SIZE; i++) {
+    total_write_num += prev_write_nums_[i];
+  }
+  avg_pre_write_num = total_write_num / (prev_write_array_index_ > PREV_WRITE_NUM_ARRAY_SIZE ? PREV_WRITE_NUM_ARRAY_SIZE
+                                                                                             : prev_write_array_index_);
+  return avg_pre_write_num;
+}
+
+void ObActiveSessHistList::check_if_need_compress()
+{
+  int ret = OB_SUCCESS;
+  if (is_compress_ || prev_write_array_index_ == 0) {
+    //do nothing
+  } else {
+    double expect_write_speed = cal_expect_write_speed(EXPECT_WRITE_SPEED_TIMES);
+    double avg_pre_write_speed = cal_avg_pre_write_num();
+    LOG_INFO("check if need compress", K(expect_write_speed), K(avg_pre_write_speed), K(is_compress_), K(over_thread_seconds_count_), K(last_compress_num_), K(SET_COMPRESS_FLAG_THRESHOLD), K(prev_write_nums_[0]), K(prev_write_nums_[1]), K(prev_write_nums_[2]), K(free_slots_num()));
+    if (avg_pre_write_speed < expect_write_speed) {
+      over_thread_seconds_count_ = 0;
+    } else if (expect_write_speed > 0) {
+      over_thread_seconds_count_ += avg_pre_write_speed / expect_write_speed;
+    }
+  }
+  if (over_thread_seconds_count_ >= SET_COMPRESS_FLAG_THRESHOLD) {
+    is_compress_ = true;
+    below_thread_seconds_count_ = 0;
+  }
+}
+
+void ObActiveSessHistList::check_if_can_reset_compress_flag()
+{
+  int ret = OB_SUCCESS;
+  if (is_compress_) {
+    double expect_write_speed = cal_expect_write_speed(EXPECT_WRITE_SPEED_TIMES);
+    double avg_pre_write_speed = cal_avg_pre_write_num();
+    LOG_INFO("check if need reset compress", K(expect_write_speed), K(avg_pre_write_speed), K(is_compress_), K(over_thread_seconds_count_), K(below_thread_seconds_count_), K(RESET_COMPRESS_FLAG_THRESHOLD), K(last_compress_num_), K(SET_COMPRESS_FLAG_THRESHOLD), K(prev_write_nums_[0]), K(prev_write_nums_[1]), K(prev_write_nums_[2]), K(free_slots_num()));
+    if (avg_pre_write_speed + last_compress_num_ < expect_write_speed) {
+      below_thread_seconds_count_++;
+    } else {
+      below_thread_seconds_count_ = 0;
+    }
+    if (below_thread_seconds_count_ >= RESET_COMPRESS_FLAG_THRESHOLD) {
+      is_compress_ = false;
+      over_thread_seconds_count_ = 0;
+    }
+  }
 }

@@ -1502,7 +1502,9 @@ def gen_iterate_private_virtual_table_def(
     raise Exception("base table should be cluster private")
   else:
     ten_idx = [i for i, x in enumerate(kw['rowkey_columns']) if x[0] == 'tenant_id']
-    if not ten_idx or ten_idx[0] != 0:
+    # ash report often use sample_time instead of tenant_id to filter data from __wr_active_session_history_v2
+    # and __all_virtual_wr_active_session_history_v2, so we skip the check for these two tables
+    if table_id not in ['573', '12576'] and (not ten_idx or ten_idx[0] != 0):
       raise Exception("tenant_id must be prefix of primary key", kw['rowkey_columns'])
 
   if kw.has_key('index'):

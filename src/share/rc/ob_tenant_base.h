@@ -72,6 +72,7 @@ namespace sql {
   class ObPCachedExternalFileService;
   class ObExternalDataAccessMgr;
   class ObSQLCCLRuleManager;
+  class ObSqlStatManager;
 }
 namespace blocksstable {
   class ObSharedMacroBlockMgr;
@@ -437,6 +438,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       transaction::ObTimestampAccess*,               \
       transaction::ObTransIDService*,                \
       transaction::ObUniqueIDService*,               \
+      sql::ObSqlStatManager*,                        \
       sql::ObPlanBaselineMgr*,                       \
       sql::ObPsCache*,                               \
       sql::ObPlanCache*,                             \

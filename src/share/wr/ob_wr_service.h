@@ -15,6 +15,7 @@
 
 #include "logservice/ob_log_base_type.h"
 #include "share/wr/ob_wr_task.h"
+#include "share/wr/ob_sql_stat_dump_task.h"
 
 namespace oceanbase
 {
@@ -23,15 +24,20 @@ namespace share
 
 class ObWorkloadRepositoryContext {
 public:
-  ObWorkloadRepositoryContext(): is_inited_(false), mutex_() {}
+  ObWorkloadRepositoryContext(): is_inited_(false), ash_snapshot_mutex_(), sqlstat_snapshot_mutex_() {}
   static int mtl_init(ObWorkloadRepositoryContext* &ptr);
   void destroy();
-  int try_lock();
-  int lock(const int64_t abs_timeout_us = INT64_MAX);
-  void release_lock();
+  int try_lock_ash_snapshot_ahead();
+  void release_lock_ash_snapshot_ahead();
+  int try_lock_sqlstat_snapshot_ahead();
+  void release_lock_sqlstat_snapshot_ahead();
+  int try_lock_all();
+  int lock_all(const int64_t abs_timeout_us = INT64_MAX);
+  void release_all();
 private:
   bool is_inited_;
-  lib::ObMutex mutex_;
+  lib::ObMutex ash_snapshot_mutex_; //ash sanpshot ahead lock
+  lib::ObMutex sqlstat_snapshot_mutex_; //sqlstat snapshot ahead lock
 };
 
 class ObWorkloadRepositoryService : public logservice::ObIReplaySubHandler,
@@ -61,6 +67,7 @@ public:
   int64_t get_snapshot_interval(bool is_laze_load = true) {return wr_timer_task_.get_snapshot_interval(is_laze_load);};
   // when is_lazy_load is false, the func will send inner SQL, avoid frequently calling
   WorkloadRepositoryTask& get_wr_timer_task() {return wr_timer_task_;};
+  ObSqlStatDumpTask& get_sql_stat_dump_task() {return sql_stat_dump_task_;};
   INHERIT_TO_STRING_KV("ObIRoleChangeSubHandler", ObIRoleChangeSubHandler,
                         K_(is_inited),
                         K_(wr_timer_task));
@@ -76,6 +83,7 @@ private:
   int inner_switch_to_follower();
   bool is_inited_;
   WorkloadRepositoryTask wr_timer_task_;
+  ObSqlStatDumpTask sql_stat_dump_task_;
 };
 
 }  // end namespace share

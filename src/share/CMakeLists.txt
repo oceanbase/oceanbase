@@ -779,6 +779,7 @@ ob_set_subtarget(ob_share wr
   wr/ob_wr_task.cpp
   wr/ob_wr_snapshot_rpc_processor.cpp
   wr/ob_wr_collector.cpp
+  wr/ob_sql_stat_dump_task.cpp
 )
 
 ob_set_subtarget(ob_share object_storage

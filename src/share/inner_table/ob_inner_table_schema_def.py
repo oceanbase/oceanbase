@@ -8526,12 +8526,160 @@ all_ai_model_endpoint_def = dict(
 def_table_schema(**all_ai_model_endpoint_def)
 
 # 573 : __wr_active_session_history_v2
+
+def_table_schema(
+  owner = 'zhangyiqiang.zyq',
+  table_id      = '573',
+  table_name    = '__wr_active_session_history_v2',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns    = [],
+  rowkey_columns = [
+    ('sample_time', 'timestamp'),
+    ('tenant_id', 'int'),
+    ('cluster_id', 'int'),
+    ('snap_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('sample_id', 'int'),
+    ('session_id', 'int'),
+  ],
+  in_tenant_space=True,
+  is_cluster_private=True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('user_id', 'int', 'true'),
+    ('session_type', 'bool', 'true'),
+    ('sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH', 'true'),
+    ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true'),
+    ('event_no', 'int', 'true'),
+    ('time_waited', 'int', 'true'),
+    ('p1', 'int', 'true'),
+    ('p2', 'int', 'true'),
+    ('p3', 'int', 'true'),
+    ('sql_plan_line_id', 'int', 'true'),
+    ('time_model', 'uint', 'true'),
+    ('module', 'varchar:64', 'true'),
+    ('action', 'varchar:64', 'true'),
+    ('client_id', 'varchar:64', 'true'),
+    ('backtrace', 'varchar:512', 'true'),
+    ('plan_id', 'int', 'true'),
+    ('program', 'varchar:64', 'true'),
+    ('tm_delta_time', 'int', 'true'),
+    ('tm_delta_cpu_time', 'int', 'true'),
+    ('tm_delta_db_time', 'int', 'true'),
+    ('top_level_sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH', 'true'),
+    ('plsql_entry_object_id', 'int', 'true'),
+    ('plsql_entry_subprogram_id', 'int', 'true'),
+    ('plsql_entry_subprogram_name', 'varchar:32', 'true'),
+    ('plsql_object_id', 'int', 'true'),
+    ('plsql_subprogram_id', 'int', 'true'),
+    ('plsql_subprogram_name', 'varchar:32', 'true'),
+    ('event_id', 'int', 'true'),
+    ('group_id', 'int', 'true'),
+    ('tx_id', 'int', 'true'),
+    ('blocking_session_id', 'int', 'true'),
+    ('plan_hash', 'uint', 'true'),
+    ('thread_id', 'int', 'true'),
+    ('stmt_type', 'int', 'true'),
+    ('tablet_id', 'int', 'true'),
+    ('proxy_sid', 'int', 'true'),
+    ('delta_read_io_requests', 'int', 'true', '0'),
+    ('delta_read_io_bytes', 'int', 'true', '0'),
+    ('delta_write_io_requests', 'int', 'true', '0'),
+    ('delta_write_io_bytes', 'int', 'true', '0'),
+    ('weight', 'double', 'true')
+  ],
+)
 # 574: __all_tenant_macro_block_copy_task
 # 575: __all_tenant_macro_block_copy_task_progress
 # 576: __all_tenant_macro_block_copy_task_history
 # 577: __all_tablet_to_global_temporary_table
 # 578: __all_tiered_metadata_store
 # 579: __wr_sqlstat_v2
+def_table_schema(
+    owner = 'zhangyiqiang.zyq',
+    table_id = 579,
+    table_name = '__wr_sqlstat_v2',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = [],
+    rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('cluster_id', 'int'),
+      ('sample_time', 'timestamp'),
+      ('snap_id', 'int'),
+      ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+      ('svr_port', 'int'),
+      ('sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH'),
+      ('plan_hash', 'uint'),
+      ('source_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+      ('source_port', 'int'),
+    ],
+    in_tenant_space=True,
+    is_cluster_private=True,
+    meta_record_in_sys = False,
+    normal_columns = [
+        ('plan_type', 'int'),
+        ('module', 'varchar:64', 'true'),
+        ('action', 'varchar:64', 'true'),
+        ('parsing_db_id', 'int'),
+        ('parsing_db_name', 'varchar:OB_MAX_DATABASE_NAME_LENGTH'),
+        ('parsing_user_id', 'int'),
+        ('executions_total', 'bigint', 'false', '0'),
+        ('executions_delta', 'bigint', 'false', '0'),
+        ('disk_reads_total', 'bigint', 'false', '0'),
+        ('disk_reads_delta', 'bigint', 'false', '0'),
+        ('buffer_gets_total', 'bigint', 'false', '0'),
+        ('buffer_gets_delta', 'bigint', 'false', '0'),
+        ('elapsed_time_total', 'bigint', 'false', '0'),
+        ('elapsed_time_delta', 'bigint', 'false', '0'),
+        ('cpu_time_total', 'bigint', 'false', '0'),
+        ('cpu_time_delta', 'bigint', 'false', '0'),
+        ('ccwait_total', 'bigint', 'false', '0'),
+        ('ccwait_delta', 'bigint', 'false', '0'),
+        ('userio_wait_total', 'bigint', 'false', '0'),
+        ('userio_wait_delta', 'bigint', 'false', '0'),
+        ('apwait_total', 'bigint', 'false', '0'),
+        ('apwait_delta', 'bigint', 'false', '0'),
+        ('physical_read_requests_total', 'bigint', 'false', '0'),
+        ('physical_read_requests_delta', 'bigint', 'false', '0'),
+        ('physical_read_bytes_total', 'bigint', 'false', '0'),
+        ('physical_read_bytes_delta', 'bigint', 'false', '0'),
+        ('write_throttle_total', 'bigint', 'false', '0'),
+        ('write_throttle_delta', 'bigint', 'false', '0'),
+        ('rows_processed_total', 'bigint', 'false', '0'),
+        ('rows_processed_delta', 'bigint', 'false', '0'),
+        ('memstore_read_rows_total', 'bigint', 'false', '0'),
+        ('memstore_read_rows_delta', 'bigint', 'false', '0'),
+        ('minor_ssstore_read_rows_total', 'bigint', 'false', '0'),
+        ('minor_ssstore_read_rows_delta', 'bigint', 'false', '0'),
+        ('major_ssstore_read_rows_total', 'bigint', 'false', '0'),
+        ('major_ssstore_read_rows_delta', 'bigint', 'false', '0'),
+        ('rpc_total', 'bigint', 'false', '0'),
+        ('rpc_delta', 'bigint', 'false', '0'),
+        ('fetches_total', 'bigint', 'false', '0'),
+        ('fetches_delta', 'bigint', 'false', '0'),
+        ('retry_total', 'bigint', 'false', '0'),
+        ('retry_delta', 'bigint', 'false', '0'),
+        ('partition_total', 'bigint', 'false', '0'),
+        ('partition_delta', 'bigint', 'false', '0'),
+        ('nested_sql_total', 'bigint', 'false', '0'),
+        ('nested_sql_delta', 'bigint', 'false', '0'),
+        ('route_miss_total', 'bigint', 'false', '0'),
+        ('route_miss_delta', 'bigint', 'false', '0'),
+        ('first_load_time', 'timestamp', 'true'),
+        ('plan_cache_hit_total', 'bigint', 'false', '0'),
+        ('plan_cache_hit_delta', 'bigint', 'false', '0'),
+        ('muti_query_total', 'bigint', 'false', '0'),
+        ('muti_query_delta', 'bigint', 'false', '0'),
+        ('muti_query_batch_total', 'bigint', 'false', '0'),
+        ('muti_query_batch_delta', 'bigint', 'false', '0'),
+        ('full_table_scan_total', 'bigint', 'false', '0'),
+        ('full_table_scan_delta', 'bigint', 'false', '0'),
+        ('error_count_total', 'bigint', 'false', '0'),
+        ('error_count_delta', 'bigint', 'false', '0'),
+        ('latest_active_time', 'timestamp', 'true'),
+    ],
+)
 # 580: __all_lob_check_exception_result
 # 581: __all_sync_standby_dest
 # 582: __all_sync_standby_status
@@ -17360,13 +17508,23 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# 12576: __all_virtual_wr_active_session_history_v2
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12576',
+  table_name = '__all_virtual_wr_active_session_history_v2',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__wr_active_session_history_v2']))
+
 # 12577: __all_virtual_macro_block_copy_task
 # 12578: __all_virtual_macro_block_copy_task_progress
 # 12579: __all_virtual_macro_block_copy_task_history
 # 12580: __all_virtual_tablet_to_global_temporary_table
 # 12581: __all_virtual_external_catalog_client_pool_stat
 # 12582: __all_virtual_wr_sqlstat_v2
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12582',
+  table_name = '__all_virtual_wr_sqlstat_v2',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__wr_sqlstat_v2']))
 # 12583: __all_virtual_lob_check_exception_result
 # 12584: __all_virtual_sync_standby_dest
 # 12585: __all_virtual_sync_standby_status
@@ -17978,7 +18136,8 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15532', all_def_keyword
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15533', all_def_keywords['__all_virtual_source']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15534', all_def_keywords['__all_virtual_ss_diagnose_info']))
 # 15535: __all_virtual_wr_active_session_history_v2
-# 15536: __all_virtual_wr_sqlstat_v2
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15535', all_def_keywords['__all_virtual_wr_active_session_history_v2'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15536', all_def_keywords['__all_virtual_wr_sqlstat_v2'])))
 # 15537: __all_virtual_lob_check_exception_result
 
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15538', all_def_keywords['__all_sensitive_rule']))
@@ -29815,7 +29974,10 @@ PROXY_SID,
 DELTA_READ_IO_REQUESTS,
 DELTA_READ_IO_BYTES,
 DELTA_WRITE_IO_REQUESTS,
-DELTA_WRITE_IO_BYTES FROM oceanbase.GV$OB_ACTIVE_SESSION_HISTORY
+DELTA_WRITE_IO_BYTES,
+WEIGHT,
+IS_WR_WEIGHT_SAMPLE
+FROM oceanbase.GV$OB_ACTIVE_SESSION_HISTORY
 """.replace("\n", " "),
   normal_columns  = [],
 )
@@ -29898,7 +30060,9 @@ PROXY_SID,
 DELTA_READ_IO_REQUESTS,
 DELTA_READ_IO_BYTES,
 DELTA_WRITE_IO_REQUESTS,
-DELTA_WRITE_IO_BYTES
+DELTA_WRITE_IO_BYTES,
+WEIGHT,
+IS_WR_WEIGHT_SAMPLE
 FROM oceanbase.gv$active_session_history WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
   normal_columns  = [],
@@ -35430,18 +35594,14 @@ def_table_schema(
       ASH.DELTA_WRITE_IO_REQUESTS AS DELTA_WRITE_IO_REQUESTS,
       ASH.DELTA_WRITE_IO_BYTES AS DELTA_WRITE_IO_BYTES,
       ASH.TABLET_ID AS TABLET_ID,
-      ASH.PROXY_SID AS PROXY_SID
+      ASH.PROXY_SID AS PROXY_SID,
+      ASH.WEIGHT AS WEIGHT
   FROM
     (
-      OCEANBASE.__ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY ASH
-      JOIN OCEANBASE.__ALL_VIRTUAL_WR_SNAPSHOT SNAP
-      ON ASH.CLUSTER_ID = SNAP.CLUSTER_ID
-      AND ASH.TENANT_ID = SNAP.TENANT_ID
-      AND ASH.SNAP_ID = SNAP.SNAP_ID
+      oceanbase.__all_virtual_wr_active_session_history_v2 ASH
     )
   WHERE
-    ASH.TENANT_ID = EFFECTIVE_TENANT_ID()
-    AND SNAP.STATUS = 0;
+    ASH.TENANT_ID = EFFECTIVE_TENANT_ID();
   """.replace("\n", " ")
 )
 # 21390: CDB_WR_ACTIVE_SESSION_HISTORY
@@ -35521,17 +35681,12 @@ def_table_schema(
       ASH.DELTA_WRITE_IO_REQUESTS AS DELTA_WRITE_IO_REQUESTS,
       ASH.DELTA_WRITE_IO_BYTES AS DELTA_WRITE_IO_BYTES,
       ASH.TABLET_ID AS TABLET_ID,
-      ASH.PROXY_SID AS PROXY_SID
+      ASH.PROXY_SID AS PROXY_SID,
+      ASH.WEIGHT AS WEIGHT
   FROM
     (
-      OCEANBASE.__ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY ASH
-      JOIN OCEANBASE.__ALL_VIRTUAL_WR_SNAPSHOT SNAP
-      ON ASH.CLUSTER_ID = SNAP.CLUSTER_ID
-      AND ASH.TENANT_ID = SNAP.TENANT_ID
-      AND ASH.SNAP_ID = SNAP.SNAP_ID
-    )
-  WHERE
-    SNAP.STATUS = 0;
+      oceanbase.__all_virtual_wr_active_session_history_v2 ASH
+    );
   """.replace("\n", " ")
 )
 # 21391: DBA_WR_SNAPSHOT
@@ -38224,10 +38379,12 @@ def_table_schema(
       STAT.FULL_TABLE_SCAN_TOTAL AS FULL_TABLE_SCAN_TOTAL,
       STAT.FULL_TABLE_SCAN_DELTA AS FULL_TABLE_SCAN_DELTA,
       STAT.ERROR_COUNT_TOTAL AS ERROR_COUNT_TOTAL,
-      STAT.ERROR_COUNT_DELTA AS ERROR_COUNT_DELTA
+      STAT.ERROR_COUNT_DELTA AS ERROR_COUNT_DELTA,
+      STAT.SAMPLE_TIME AS SAMPLE_TIME,
+      STAT.LATEST_ACTIVE_TIME AS LATEST_ACTIVE_TIME
     FROM
     (
-      oceanbase.__all_virtual_wr_sqlstat STAT
+      oceanbase.__all_virtual_wr_sqlstat_v2 STAT
     )
     WHERE
       STAT.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -38310,9 +38467,11 @@ def_table_schema(
       STAT.FULL_TABLE_SCAN_TOTAL AS FULL_TABLE_SCAN_TOTAL,
       STAT.FULL_TABLE_SCAN_DELTA AS FULL_TABLE_SCAN_DELTA,
       STAT.ERROR_COUNT_TOTAL AS ERROR_COUNT_TOTAL,
-      STAT.ERROR_COUNT_DELTA AS ERROR_COUNT_DELTA
+      STAT.ERROR_COUNT_DELTA AS ERROR_COUNT_DELTA,
+      STAT.SAMPLE_TIME AS SAMPLE_TIME,
+      STAT.LATEST_ACTIVE_TIME AS LATEST_ACTIVE_TIME
     FROM
-      oceanbase.__all_virtual_wr_sqlstat STAT
+      oceanbase.__all_virtual_wr_sqlstat_v2 STAT
   """.replace("\n", " ")
 )
 def_table_schema(
@@ -64369,16 +64528,12 @@ def_table_schema(
       ASH.DELTA_WRITE_IO_REQUESTS AS DELTA_WRITE_IO_REQUESTS,
       ASH.DELTA_WRITE_IO_BYTES AS DELTA_WRITE_IO_BYTES,
       ASH.TABLET_ID AS TABLET_ID,
-      ASH.PROXY_SID AS PROXY_SID
+      ASH.PROXY_SID AS PROXY_SID,
+      ASH.WEIGHT AS WEIGHT
   FROM
-    SYS.ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY ASH,
-    SYS.ALL_VIRTUAL_WR_SNAPSHOT SNAP
+    SYS.ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY_V2 ASH
   WHERE
-    ASH.TENANT_ID = EFFECTIVE_TENANT_ID()
-    AND ASH.CLUSTER_ID = SNAP.CLUSTER_ID
-    AND ASH.TENANT_ID = SNAP.TENANT_ID
-    AND ASH.SNAP_ID = SNAP.SNAP_ID
-    AND SNAP.STATUS = 0;
+    ASH.TENANT_ID = EFFECTIVE_TENANT_ID();
   """.replace("\n", " ")
 )
 # 25230: DBA_WR_SNAPSHOT
@@ -65720,9 +65875,11 @@ def_table_schema(
       STAT.FULL_TABLE_SCAN_TOTAL AS FULL_TABLE_SCAN_TOTAL,
       STAT.FULL_TABLE_SCAN_DELTA AS FULL_TABLE_SCAN_DELTA,
       STAT.ERROR_COUNT_TOTAL AS ERROR_COUNT_TOTAL,
-      STAT.ERROR_COUNT_DELTA AS ERROR_COUNT_DELTA
+      STAT.ERROR_COUNT_DELTA AS ERROR_COUNT_DELTA,
+      STAT.SAMPLE_TIME AS SAMPLE_TIME,
+      STAT.LATEST_ACTIVE_TIME AS LATEST_ACTIVE_TIME
   FROM
-    SYS.ALL_VIRTUAL_WR_SQLSTAT STAT
+    SYS.ALL_VIRTUAL_WR_SQLSTAT_V2 STAT
   WHERE
     STAT.TENANT_ID = EFFECTIVE_TENANT_ID()
   """.replace("\n", " ")
@@ -73430,7 +73587,8 @@ def_table_schema(
       DELTA_WRITE_IO_REQUESTS,
       DELTA_WRITE_IO_BYTES,
       WEIGHT,
-      IS_WR_WEIGHT_SAMPLE FROM SYS.GV$ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+      IS_WR_WEIGHT_SAMPLE
+      FROM SYS.GV$ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 )
 

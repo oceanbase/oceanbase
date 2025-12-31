@@ -19,21 +19,28 @@
 #include "common/row/ob_row.h"
 #include "sql/monitor/ob_sql_stat_record.h"
 #include "observer/omt/ob_multi_tenant_operator.h"
+#include "sql/monitor/ob_sql_stat_manager.h"
 
 namespace oceanbase
 {
 namespace observer
 {
-typedef common::hash::ObHashMap<sql::ObSqlStatRecordKey, sql::ObExecutedSqlStatRecord*> TmpSqlStatMap;
-struct ObGetAllSqlStatCacheIdOp
+typedef common::hash::ObHashSet<ObSqlStatRecordKey> SqlStatManagerKeySet;
+struct ObGetAllSqlStatKeyOp
 {
-  ObGetAllSqlStatCacheIdOp(common::ObIArray<uint64_t> *key_array)
-    : key_array_(key_array)
+  ObGetAllSqlStatKeyOp(SqlStatManagerKeySet *sql_stat_manager_key_set)
+    : sql_stat_manager_key_set_(sql_stat_manager_key_set)
   {}
-  void reset() { key_array_ = NULL; }
-  int operator()(common::hash::HashMapPair<ObCacheObjID, ObILibCacheObject *> &entry);
+  void reset() { sql_stat_manager_key_set_ = nullptr; }
+  bool operator()(sql::ObSqlStatRecordKey &key, sql::ObExecutedSqlStatRecord *sqlstat);
 public:
-  common::ObIArray<uint64_t> *key_array_;
+  SqlStatManagerKeySet *sql_stat_manager_key_set_;
+};
+
+struct ObMergeSqlStatOp
+{
+  ObMergeSqlStatOp()=default;
+  int operator()(common::hash::HashMapPair<ObCacheObjID, ObILibCacheObject *> &entry);
 };
 
 class ObAllVirtualSqlStat : public common::ObVirtualTableScannerIterator,
@@ -42,17 +49,15 @@ class ObAllVirtualSqlStat : public common::ObVirtualTableScannerIterator,
 public:
   ObAllVirtualSqlStat() :
       ipstr_(), port_(0), last_sql_stat_record_(nullptr),
-      tmp_sql_stat_map_(),
-      sql_stat_cache_id_array_(),
-      sql_stat_cache_id_array_idx_(0),
+      sql_stat_manager_key_set_(),
       first_enter_(true) {}
   virtual ~ObAllVirtualSqlStat() { reset(); }
 
-public:
+  public:
   void reset();
   int inner_get_next_row(common::ObNewRow *&row);
   virtual void release_last_tenant() override;
-  bool operator()(sql::ObSQLSessionMgr::Key key, sql::ObSQLSessionInfo *sess_info);
+  bool operator()(sql::ObSQLSessionMgr::Key key, ObSQLSessionInfo *sess_info);
   virtual bool is_need_process(uint64_t tenant_id) override {
     if (is_sys_tenant(effective_tenant_id_) || tenant_id == effective_tenant_id_) {
       return true;
@@ -144,9 +149,7 @@ private:
   common::ObString ipstr_;
   int32_t port_;
   ObExecutedSqlStatRecord *last_sql_stat_record_;
-  TmpSqlStatMap tmp_sql_stat_map_;
-  common::ObSEArray<uint64_t, 1024> sql_stat_cache_id_array_;
-  int64_t sql_stat_cache_id_array_idx_;
+  SqlStatManagerKeySet sql_stat_manager_key_set_;
   bool first_enter_;
 };
 

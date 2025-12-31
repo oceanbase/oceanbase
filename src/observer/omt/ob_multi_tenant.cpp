@@ -157,6 +157,7 @@
 #include "sql/ob_sql_ccl_rule_manager.h"
 #include "observer/report/ob_tenant_offline_tablet_cleanup_service.h"
 #include "observer/virtual_table/ob_all_virtual_tablet_replica_info.h"
+#include "sql/monitor/ob_sql_stat_manager.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -511,6 +512,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, share::detector::ObDeadLockDetectorMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, rootserver::ObTenantSnapshotScheduler::mtl_init, nullptr, rootserver::ObTenantSnapshotScheduler::mtl_stop, rootserver::ObTenantSnapshotScheduler::mtl_wait, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, rootserver::ObCloneScheduler::mtl_init, nullptr, rootserver::ObCloneScheduler::mtl_stop, rootserver::ObCloneScheduler::mtl_wait, mtl_destroy_default);
+    MTL_BIND2(ObSqlStatManager::mtl_new, ObSqlStatManager::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, ObSqlStatManager::mtl_destroy);
 #ifdef OB_BUILD_ARBITRATION
     MTL_BIND2(mtl_new_default, ObPlanBaselineMgr::mtl_init, nullptr, ObPlanBaselineMgr::mtl_stop, ObPlanBaselineMgr::mtl_wait, mtl_destroy_default);
 #endif
