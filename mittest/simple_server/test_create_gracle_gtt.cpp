@@ -14,6 +14,10 @@
  */
 
 #include <gmock/gmock.h>
+#include <thread>
+#include <mutex>
+#include <atomic>
+#include <vector>
 #define USING_LOG_PREFIX STORAGE
 #define protected public
 #define private public
@@ -374,6 +378,249 @@ TEST_F(TestCreateOracleGTT, test_create_multiple_sessions)
   }
 
   LOG_INFO("Test create multiple sessions completed");
+}
+
+// 测试并行的创建和删除tablet
+TEST_F(TestCreateOracleGTT, test_parallel_create_and_delete_tablet)
+{
+  int ret = OB_SUCCESS;
+  const int64_t sequence = 1;
+  const int thread_count = 10;
+  THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + 30000000);
+
+  ObSessionTabletInfoMap session_tablet_map;
+  ObSEArray<ObTabletID, 10> tablet_ids;
+  ObSEArray<ObLSID, 10> ls_ids;
+  ObSEArray<uint32_t, 10> session_ids;
+  std::mutex tablet_ids_mutex;
+  std::atomic<int> create_success_count(0);
+  std::atomic<int> create_fail_count(0);
+
+  // Phase 1: Parallel creation of tablets
+  LOG_INFO("Starting parallel tablet creation");
+  std::vector<std::thread> create_threads;
+
+  for (int i = 0; i < thread_count; i++) {
+    create_threads.emplace_back([&, i]() {
+      THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + 30000000);
+      int local_ret = OB_SUCCESS;
+      uint32_t session_id = 40000 + i;
+
+      ObSessionTabletCreateHelper create_helper(g_tenant_id, g_gtt_table_id, sequence, session_id, session_tablet_map);
+
+      if (OB_SUCCESS == (local_ret = create_helper.do_work())) {
+        const ObTabletID &tablet_id = create_helper.get_tablet_ids().at(0);
+        const ObLSID &ls_id = create_helper.get_ls_id();
+
+        {
+          std::lock_guard<std::mutex> lock(tablet_ids_mutex);
+          tablet_ids.push_back(tablet_id);
+          ls_ids.push_back(ls_id);
+          session_ids.push_back(session_id);
+        }
+
+        create_success_count++;
+        LOG_INFO("Thread created tablet successfully", K(i), K(tablet_id), K(session_id));
+      } else {
+        create_fail_count++;
+        LOG_WARN("Thread failed to create tablet", K(local_ret), K(i), K(session_id));
+      }
+    });
+  }
+
+  // Wait for all creation threads to complete
+  for (auto &thread : create_threads) {
+    thread.join();
+  }
+
+  LOG_INFO("Parallel creation completed", K(create_success_count.load()), K(create_fail_count.load()));
+  ASSERT_EQ(thread_count, create_success_count.load());
+  ASSERT_EQ(0, create_fail_count.load());
+  ASSERT_EQ(thread_count, tablet_ids.count());
+
+  // Verify all tablets exist
+  for (int i = 0; i < tablet_ids.count(); i++) {
+    bool exists = false;
+    ASSERT_EQ(OB_SUCCESS, check_tablet_exists_in_tablet_to_ls(tablet_ids[i], exists, g_tenant_id));
+    ASSERT_TRUE(exists);
+
+    exists = false;
+    ASSERT_EQ(OB_SUCCESS, check_tablet_exists_in_gtt_operator(tablet_ids[i], exists, g_tenant_id));
+    ASSERT_TRUE(exists);
+
+    LOG_INFO("Verified tablet exists", K(i), K(tablet_ids[i]));
+  }
+
+  // Phase 2: Parallel deletion of tablets
+  LOG_INFO("Starting parallel tablet deletion");
+  std::atomic<int> delete_success_count(0);
+  std::atomic<int> delete_fail_count(0);
+  std::vector<std::thread> delete_threads;
+
+  for (int i = 0; i < tablet_ids.count(); i++) {
+    delete_threads.emplace_back([&, i]() {
+      int local_ret = OB_SUCCESS;
+
+      ObSessionTabletInfo tablet_info;
+      if (OB_FAIL(tablet_info.init(tablet_ids[i], ls_ids[i], g_gtt_table_id, sequence, session_ids[i], 0))) {
+        LOG_WARN("Failed to init tablet_info", K(local_ret), K(i));
+        delete_fail_count++;
+        return;
+      }
+      tablet_info.is_creator_ = true;
+
+      ObSessionTabletDeleteHelper delete_helper(g_tenant_id, tablet_info);
+      if (OB_SUCCESS == (local_ret = delete_helper.do_work())) {
+        delete_success_count++;
+        LOG_INFO("Thread deleted tablet successfully", K(i), K(tablet_ids[i]));
+      } else {
+        delete_fail_count++;
+        LOG_WARN("Thread failed to delete tablet", K(local_ret), K(i), K(tablet_ids[i]));
+      }
+    });
+  }
+
+  // Wait for all deletion threads to complete
+  for (auto &thread : delete_threads) {
+    thread.join();
+  }
+
+  LOG_INFO("Parallel deletion completed", K(delete_success_count.load()), K(delete_fail_count.load()));
+  ASSERT_EQ(thread_count, delete_success_count.load());
+  ASSERT_EQ(0, delete_fail_count.load());
+
+  // Verify all tablets are deleted
+  for (int i = 0; i < tablet_ids.count(); i++) {
+    bool exists = true;
+    ASSERT_EQ(OB_SUCCESS, check_tablet_exists_in_tablet_to_ls(tablet_ids[i], exists, g_tenant_id));
+    ASSERT_FALSE(exists);
+
+    exists = true;
+    ASSERT_EQ(OB_SUCCESS, check_tablet_exists_in_gtt_operator(tablet_ids[i], exists, g_tenant_id));
+    ASSERT_FALSE(exists);
+
+    LOG_INFO("Verified tablet deleted", K(i), K(tablet_ids[i]));
+  }
+
+  LOG_INFO("Test parallel create and delete completed successfully");
+}
+
+// 测试混合并发场景：同时进行创建和删除
+TEST_F(TestCreateOracleGTT, test_mixed_parallel_create_and_delete)
+{
+  int ret = OB_SUCCESS;
+  const int64_t sequence = 1;
+  const int create_count = 5;
+  const int delete_count = 3;
+  THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + 30000000);
+
+  // First, prepare some tablets to delete
+  ObSessionTabletInfoMap session_tablet_map;
+  ObSEArray<ObTabletID, 10> tablets_to_delete;
+  ObSEArray<ObLSID, 10> ls_ids_to_delete;
+  ObSEArray<uint32_t, 10> session_ids_to_delete;
+
+  LOG_INFO("Preparing tablets for deletion test");
+  for (int i = 0; i < delete_count; i++) {
+    uint32_t session_id = 50000 + i;
+    ObSessionTabletCreateHelper create_helper(g_tenant_id, g_gtt_table_id, sequence, session_id, session_tablet_map);
+    ASSERT_EQ(OB_SUCCESS, create_helper.do_work());
+
+    tablets_to_delete.push_back(create_helper.get_tablet_ids().at(0));
+    ls_ids_to_delete.push_back(create_helper.get_ls_id());
+    session_ids_to_delete.push_back(session_id);
+
+    LOG_INFO("Prepared tablet for deletion", K(i), K(tablets_to_delete[i]));
+  }
+
+  // Now start mixed parallel operations
+  std::mutex result_mutex;
+  ObSEArray<ObTabletID, 10> newly_created_tablets;
+  ObSEArray<ObLSID, 10> newly_created_ls_ids;
+  ObSEArray<uint32_t, 10> newly_created_session_ids;
+  std::atomic<int> create_success(0);
+  std::atomic<int> delete_success(0);
+  std::vector<std::thread> threads;
+
+  LOG_INFO("Starting mixed parallel create and delete operations");
+
+  // Launch create threads
+  for (int i = 0; i < create_count; i++) {
+    threads.emplace_back([&, i]() {
+      THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + 30000000);
+      uint32_t session_id = 60000 + i;
+      ObSessionTabletCreateHelper create_helper(g_tenant_id, g_gtt_table_id, sequence, session_id, session_tablet_map);
+
+      if (OB_SUCCESS == create_helper.do_work()) {
+        const ObTabletID &tablet_id = create_helper.get_tablet_ids().at(0);
+        const ObLSID &ls_id = create_helper.get_ls_id();
+
+        {
+          std::lock_guard<std::mutex> lock(result_mutex);
+          newly_created_tablets.push_back(tablet_id);
+          newly_created_ls_ids.push_back(ls_id);
+          newly_created_session_ids.push_back(session_id);
+        }
+
+        create_success++;
+        LOG_INFO("Create thread succeeded", K(i), K(tablet_id));
+      }
+    });
+  }
+
+  // Launch delete threads
+  for (int i = 0; i < delete_count; i++) {
+    threads.emplace_back([&, i]() {
+      ObSessionTabletInfo tablet_info;
+      if (OB_SUCCESS == tablet_info.init(tablets_to_delete[i], ls_ids_to_delete[i],
+                                          g_gtt_table_id, sequence, session_ids_to_delete[i], 0)) {
+        tablet_info.is_creator_ = true;
+        ObSessionTabletDeleteHelper delete_helper(g_tenant_id, tablet_info);
+
+        if (OB_SUCCESS == delete_helper.do_work()) {
+          delete_success++;
+          LOG_INFO("Delete thread succeeded", K(i), K(tablets_to_delete[i]));
+        }
+      }
+    });
+  }
+
+  // Wait for all operations to complete
+  for (auto &thread : threads) {
+    thread.join();
+  }
+
+  LOG_INFO("Mixed operations completed", K(create_success.load()), K(delete_success.load()));
+  ASSERT_EQ(create_count, create_success.load());
+  ASSERT_EQ(delete_count, delete_success.load());
+
+  // Verify newly created tablets exist
+  for (int i = 0; i < newly_created_tablets.count(); i++) {
+    bool exists = false;
+    ASSERT_EQ(OB_SUCCESS, check_tablet_exists_in_gtt_operator(newly_created_tablets[i], exists, g_tenant_id));
+    ASSERT_TRUE(exists);
+    LOG_INFO("Verified newly created tablet exists", K(i), K(newly_created_tablets[i]));
+  }
+
+  // Verify deleted tablets don't exist
+  for (int i = 0; i < tablets_to_delete.count(); i++) {
+    bool exists = true;
+    ASSERT_EQ(OB_SUCCESS, check_tablet_exists_in_gtt_operator(tablets_to_delete[i], exists, g_tenant_id));
+    ASSERT_FALSE(exists);
+    LOG_INFO("Verified deleted tablet doesn't exist", K(i), K(tablets_to_delete[i]));
+  }
+
+  // Cleanup newly created tablets
+  for (int i = 0; i < newly_created_tablets.count(); i++) {
+    ObSessionTabletInfo tablet_info;
+    ASSERT_EQ(OB_SUCCESS, tablet_info.init(newly_created_tablets[i], newly_created_ls_ids[i],
+                                            g_gtt_table_id, sequence, newly_created_session_ids[i], 0));
+    tablet_info.is_creator_ = true;
+    ObSessionTabletDeleteHelper delete_helper(g_tenant_id, tablet_info);
+    ASSERT_EQ(OB_SUCCESS, delete_helper.do_work());
+  }
+
+  LOG_INFO("Test mixed parallel create and delete completed successfully");
 }
 
 } // namespace storage

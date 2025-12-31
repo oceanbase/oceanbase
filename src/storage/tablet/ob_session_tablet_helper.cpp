@@ -102,16 +102,18 @@ int ObSessionTabletCreateHelper::do_work()
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
     LOG_WARN("failed to get min data version", KR(ret), K(tenant_id_));
   } else {
-    share::schema::ObLatestSchemaGuard schema_guard(schema_service, tenant_id_);
+    share::schema::ObSchemaGetterGuard schema_guard;
     observer::ObInnerSQLConnection *conn = NULL;
     if (OB_FAIL(trans_.start(GCTX.sql_proxy_, tenant_id_))) {
       LOG_WARN("failed to begin transaction", KR(ret), K(tenant_id_));
+    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+      LOG_WARN("failed to get schema guard", KR(ret), K(tenant_id_));
     } else if (OB_FAIL(tablet_creator_.init(true/* need_check_tablet_cnt */))) {
       LOG_WARN("failed to init tablet creator", KR(ret));
-    } else if (OB_FAIL(schema_guard.get_table_schema(table_ids_.at(0), table_schema))) {
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, table_ids_.at(0), table_schema))) {
       LOG_WARN("failed to get table schema", KR(ret), K(table_ids_.at(0)));
     } else if (OB_ISNULL(table_schema)) {
-      ret = OB_INVALID_ARGUMENT;
+      ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("table schema is null", KR(ret), K(table_ids_.at(0)));
     } else if (OB_UNLIKELY(PARTITION_LEVEL_ZERO != table_schema->get_part_level()
                         || !(table_schema->is_oracle_tmp_table_v2() || table_schema->is_oracle_tmp_table_v2_index_table()))) {
@@ -130,21 +132,29 @@ int ObSessionTabletCreateHelper::do_work()
       table_lock_arg.timeout_us_ = timeout_us;
       table_lock_arg.table_id_ = table_id;
       table_lock_arg.op_type_ = transaction::tablelock::IN_TRANS_COMMON_LOCK;
+      table_lock_arg.owner_id_.convert_from_client_sessid(conn->get_session().get_sessid_for_table(), conn->get_session().get_client_create_time());
       if (OB_FAIL(transaction::tablelock::ObInnerConnectionLockUtil::lock_table(tenant_id_, table_lock_arg, conn))) {
         LOG_WARN("lock table failed", KR(ret), K(table_lock_arg));
       } else if (OB_FAIL(ObOnlineDDLLock::lock_table_in_trans(tenant_id_, table_id, transaction::tablelock::SHARE, timeout_us, trans_))) {
         LOG_WARN("lock online ddl table failed", KR(ret), K(table_lock_arg));
       } else {
+        const share::schema::ObTableSchema *latest_table_schema = nullptr;
+        share::schema::ObLatestSchemaGuard latest_schema_guard(schema_service, tenant_id_);
         const share::schema::ObTablegroupSchema *tablegroup_schema = nullptr;
-        if (OB_INVALID_ID != table_schema->get_tablegroup_id()) {
-          if (OB_FAIL(schema_guard.get_tablegroup_schema(table_schema->get_tablegroup_id(), tablegroup_schema))) {
-            LOG_WARN("failed to get tablegroup schema", KR(ret), K(table_schema->get_tablegroup_id()));
+        if (OB_FAIL(latest_schema_guard.get_table_schema(table_ids_.at(0), latest_table_schema))) {
+          LOG_WARN("failed to get table schema", KR(ret), K(table_ids_.at(0)));
+        } else if (OB_ISNULL(latest_table_schema)) {
+          ret = OB_TABLE_NOT_EXIST;
+          LOG_WARN("latest table schema is null", KR(ret), K(table_ids_.at(0)));
+        } else if (OB_INVALID_ID != latest_table_schema->get_tablegroup_id()) {
+          if (OB_FAIL(latest_schema_guard.get_tablegroup_schema(latest_table_schema->get_tablegroup_id(), tablegroup_schema))) {
+            LOG_WARN("failed to get tablegroup schema", KR(ret), K(latest_table_schema->get_tablegroup_id()));
           } else if (OB_ISNULL(tablegroup_schema)) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("tablegroup schema is null", KR(ret), K(table_schema->get_tablegroup_id()), KPC(table_schema));
+            LOG_WARN("tablegroup schema is null", KR(ret), K(latest_table_schema->get_tablegroup_id()), KPC(latest_table_schema));
           }
         }
-        if (FAILEDx(generate_tablet_create_arg(*schema_service, schema_guard, tenant_data_version, table_schema, tablegroup_schema))) {
+        if (FAILEDx(generate_tablet_create_arg(*schema_service, latest_schema_guard, tenant_data_version, latest_table_schema, tablegroup_schema))) {
           LOG_WARN("failed to generate tablet create arg", KR(ret));
         } else if (OB_FAIL(tablet_creator_.execute())) {
           LOG_WARN("failed to execute tablet creator", KR(ret));
@@ -169,20 +179,20 @@ int ObSessionTabletCreateHelper::do_work()
             LOG_WARN("failed to batch update tablet info", KR(ret));
           } else if (OB_FAIL(share::ObTabletToGlobalTmpTableOperator::batch_insert(trans_, tenant_id_, session_tablet_infos))) {
             LOG_WARN("failed to batch insert tablet info", KR(ret));
-          } else if (OB_FAIL(share::ObTabletToTableHistoryOperator::create_tablet_to_table_history(trans_, tenant_id_, table_schema->get_schema_version(), tablet_table_pairs))) {
+          } else if (OB_FAIL(share::ObTabletToTableHistoryOperator::create_tablet_to_table_history(trans_, tenant_id_, latest_table_schema->get_schema_version(), tablet_table_pairs))) {
             LOG_WARN("failed to create tablet to table history", KR(ret));
           } else {
             FLOG_INFO("session tablet created", KR(ret), K(table_ids_), K(ls_id_), K(tablet_ids_), K(session_tablet_infos), K(tablet_table_pairs));
           }
         }
+        if (OB_SUCC(ret) && OB_NOT_NULL(latest_table_schema)) { // serialize inc schemas for cdc
+          if (OB_FAIL(serialize_inc_schema(tenant_id_, trans_, *latest_table_schema))) {
+            LOG_WARN("fail to serialize inc schemas", KR(ret), K(tenant_id_), KPC(latest_table_schema));
+          }
+        }
       }
     }
     if (trans_.is_started()) {
-      if (OB_SUCC(ret) && OB_NOT_NULL(table_schema)) { // serialize inc schemas for cdc
-        if (OB_FAIL(serialize_inc_schema(tenant_id_, trans_, *table_schema))) {
-          LOG_WARN("fail to serialize inc schemas", KR(ret), K(tenant_id_), KPC(table_schema));
-        }
-      }
       int tmp_ret = OB_SUCCESS;
       bool is_commit = (OB_SUCCESS == ret);
       if (OB_TMP_FAIL(trans_.end(is_commit))) {
@@ -251,7 +261,7 @@ int ObSessionTabletCreateHelper::choose_log_stream(
       } else if (OB_FAIL(lastest_schema_guard.get_table_schema(data_table_id, data_table_schema))) {
         LOG_WARN("failed to get data table schema", KR(ret), K(data_table_id));
       } else if (OB_ISNULL(data_table_schema)) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("data table schema is null", KR(ret), K(data_table_id));
       } else {
         schema = data_table_schema;
@@ -316,7 +326,7 @@ int ObSessionTabletCreateHelper::generate_tablet_create_arg(
       if (OB_FAIL(schema_guard.get_table_schema(table_ids_.at(i), schema))) {
         LOG_WARN("failed to get table schema", KR(ret), K(table_ids_.at(i)));
       } else if (OB_ISNULL(schema)) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("table schema is null", KR(ret), K(table_ids_.at(i)));
       } else if (OB_FAIL(table_schemas.push_back(schema))) {
         LOG_WARN("failed to push back table schema", KR(ret));
@@ -358,20 +368,23 @@ int ObSessionTabletDeleteHelper::do_work()
     observer::ObInnerSQLConnection *conn = NULL;
     common::ObSEArray<common::ObTabletID, 1> tablet_ids;
     const share::schema::ObTableSchema *table_schema = nullptr;
-    share::schema::ObLatestSchemaGuard schema_guard(schema_service, tenant_id_);
+    share::schema::ObSchemaGetterGuard schema_guard;
     int64_t new_schema_version = OB_INVALID_VERSION;
+    const int64_t timeout_us = MIN(THIS_WORKER.get_timeout_remain(), 10000000/* us */);
     if (OB_FAIL(schema_service->gen_new_schema_version(tenant_id_, new_schema_version))) {
       LOG_WARN("fail to gen new schema_version", KR(ret), K(tenant_id_));
     } else if (OB_FAIL(trans_.start(GCTX.sql_proxy_, tenant_id_))) {
       LOG_WARN("failed to begin transaction", KR(ret), K(tenant_id_));
     } else if (OB_FAIL(tablet_ids.push_back(tablet_info_.tablet_id_))) {
       LOG_WARN("failed to push back tablet id", KR(ret));
-    } else if (OB_FAIL(schema_guard.get_table_schema(tablet_info_.table_id_, table_schema))) {
+    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+      LOG_WARN("failed to get schema guard", KR(ret), K(tenant_id_));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, tablet_info_.table_id_, table_schema))) {
       if (OB_ERR_SCHEMA_HISTORY_EMPTY == ret || OB_INVALID_ARGUMENT == ret) {
         ret = OB_SUCCESS;
         LOG_INFO("table schema is empty, delete the tablet directly", KR(ret), K(tablet_info_.table_id_));
         // the table is not exist, delete the tablet directly
-        if (OB_FAIL(delete_tablets(tablet_ids, new_schema_version))) {
+        if (OB_FAIL(delete_tablets(tablet_ids, new_schema_version, timeout_us))) {
           LOG_WARN("failed to delete tablets", KR(ret));
         }
       } else {
@@ -379,7 +392,7 @@ int ObSessionTabletDeleteHelper::do_work()
       }
     } else if (OB_ISNULL(table_schema)) {
       // the table is not exist, delete the tablet directly
-      if (OB_FAIL(delete_tablets(tablet_ids, new_schema_version))) {
+      if (OB_FAIL(delete_tablets(tablet_ids, new_schema_version, timeout_us))) {
         LOG_WARN("failed to delete tablets", KR(ret));
       }
     } else if (OB_UNLIKELY(PARTITION_LEVEL_ZERO != table_schema->get_part_level()
@@ -390,21 +403,27 @@ int ObSessionTabletDeleteHelper::do_work()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("connection is null", KR(ret), K(tenant_id_));
     } else {
+      //
       // 1. Acquire a ROW EXCLUSIVE table lock on table (Table ID).
-      // 2. Acquire an EXCLUSIVE Online DDL lock on table (Table ID).
+      // 2. Acquire a ROW EXCLUSIVE Online DDL lock on table (Table ID).
       // 3. Acquire an EXCLUSIVE Online DDL lock on tablet (Tablet ID).
+      // 4. Acquire an EXCLUSIVE table lock on tablet (Tablet ID).
       uint64_t table_id = table_schema->is_oracle_tmp_table_v2_index_table() ? table_schema->get_data_table_id() : table_schema->get_table_id();
       transaction::tablelock::ObLockTableRequest table_lock_arg;
-      const int64_t timeout_us = MIN(THIS_WORKER.get_timeout_remain(), 10000000/* us */);
       table_lock_arg.lock_mode_ = transaction::tablelock::ROW_EXCLUSIVE;
       table_lock_arg.timeout_us_ = timeout_us; // try lock, if not success, will be deleted by GC tasks later
       table_lock_arg.table_id_ = table_id;
       table_lock_arg.op_type_ = transaction::tablelock::IN_TRANS_COMMON_LOCK;
+      table_lock_arg.owner_id_.convert_from_client_sessid(conn->get_session().get_sessid_for_table(), conn->get_session().get_client_create_time());
       if (OB_FAIL(transaction::tablelock::ObInnerConnectionLockUtil::lock_table(tenant_id_, table_lock_arg, conn))) {
         LOG_WARN("lock table failed", KR(ret), K(table_lock_arg));
-      } else if (OB_FAIL(ObOnlineDDLLock::lock_table_in_trans(tenant_id_, table_id, transaction::tablelock::EXCLUSIVE, timeout_us, trans_))) {
+      } else if (OB_FAIL(ObOnlineDDLLock::lock_table_in_trans(tenant_id_, table_id, transaction::tablelock::ROW_EXCLUSIVE, timeout_us, trans_))) {
         LOG_WARN("lock online ddl table failed", KR(ret), K(table_lock_arg));
-      } else if (OB_FAIL(delete_tablets(tablet_ids, new_schema_version))) {
+      } else if (OB_FAIL(ObOnlineDDLLock::lock_tablets_in_trans(tenant_id_, tablet_ids, transaction::tablelock::EXCLUSIVE, timeout_us /*try lock*/, trans_))) {
+        LOG_WARN("lock online ddl tablets failed", KR(ret), K(tablet_ids));
+      } else if (OB_FAIL(ObInnerConnectionLockUtil::lock_tablet(tenant_id_, table_id, tablet_ids, transaction::tablelock::EXCLUSIVE, timeout_us /*try lock*/, conn))) {
+        LOG_WARN("lock tablets failed", KR(ret), K(tablet_ids));
+      } else if (OB_FAIL(delete_tablets(tablet_ids, new_schema_version, timeout_us))) {
         LOG_WARN("failed to delete tablets", KR(ret));
       } else {
         LOG_INFO("succeed to remove tablet", KR(ret), K(tablet_info_), K(lbt()));
@@ -428,14 +447,13 @@ int ObSessionTabletDeleteHelper::do_work()
 }
 
 // tablets must be locked before being deleted
-int ObSessionTabletDeleteHelper::delete_tablets(const ObIArray<common::ObTabletID> &tablet_ids, const int64_t schema_version)
+int ObSessionTabletDeleteHelper::delete_tablets(const ObIArray<common::ObTabletID> &tablet_ids, const int64_t schema_version,
+      const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!trans_.is_started() || tablet_ids.count() == 0 || schema_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(trans_.is_started()), K(tablet_ids), K(schema_version));
-  } else if (OB_FAIL(ObOnlineDDLLock::lock_tablets_in_trans(tenant_id_, tablet_ids, transaction::tablelock::EXCLUSIVE, 0 /*try lock*/, trans_))) {
-    LOG_WARN("lock online ddl tablets failed", KR(ret), K(tablet_ids));
   } else if (OB_FAIL(share::ObTabletToLSTableOperator::batch_remove(trans_, tenant_id_, tablet_ids))) {
     LOG_WARN("failed to batch remove tablet", KR(ret));
   } else if (OB_FAIL(mds_remove_tablet(tenant_id_, tablet_info_.ls_id_, tablet_ids, trans_))) {
@@ -496,13 +514,6 @@ int ObSessionTabletDeleteHelper::mds_remove_tablet(
   }
 
   return ret;
-}
-
-bool compare_sequence(const storage::ObSessionTabletInfo &lhs, const storage::ObSessionTabletInfo &rhs)
-{
-  int64_t lhs_sequence = lhs.get_sequence() & ((1LL << 43) - 1LL);
-  int64_t rhs_sequence = rhs.get_sequence() & ((1LL << 43) - 1LL);
-  return lhs_sequence < rhs_sequence;
 }
 
 int ObSessionTabletGCHelper::do_work()
