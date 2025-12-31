@@ -424,6 +424,7 @@ int ObStatsEstimator::do_estimate(const ObOptStatGatherParam &gather_param,
   ObCharsetType old_connection_charset_type = CHARSET_UTF8MB4;
   ObCharsetType old_result_charset_type = CHARSET_UTF8MB4;
   ObCollationType old_collation_type = CS_TYPE_UTF8MB4_GENERAL_CI;
+  bool need_restore = false;
   if (OB_ISNULL(sql_proxy) || OB_ISNULL(session) ||
       OB_UNLIKELY(dst_opt_stats.empty() || raw_sql.empty())) {
     ret = OB_ERR_UNEXPECTED;
@@ -434,7 +435,8 @@ int ObStatsEstimator::do_estimate(const ObOptStatGatherParam &gather_param,
                                                old_client_charset_type,
                                                old_connection_charset_type,
                                                old_result_charset_type,
-                                               old_collation_type))) {
+                                               old_collation_type,
+                                               need_restore))) {
     LOG_WARN("failed to save session", K(ret));
   } else if (lib::is_oracle_mode()) {
     if (OB_FAIL(oracle_proxy.init(ctx_.get_sql_proxy()->get_pool()))) {
@@ -499,19 +501,21 @@ int ObStatsEstimator::do_estimate(const ObOptStatGatherParam &gather_param,
         ret = COVER_SUCC(tmp_ret);
       }
     }
+  }
+  if (OB_NOT_NULL(session_value)) {
     int tmp_ret = OB_SUCCESS;
-    if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = restore_session(session,
-                                                             session_value,
-                                                             old_client_charset_type,
-                                                             old_connection_charset_type,
-                                                             old_result_charset_type,
-                                                             old_collation_type)))) {
+    if (!need_restore) {
+      // do nothing
+    } else if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = restore_session(session,
+                                                                    session_value,
+                                                                    old_client_charset_type,
+                                                                    old_connection_charset_type,
+                                                                    old_result_charset_type,
+                                                                    old_collation_type)))) {
       LOG_WARN("failed to restore session", K(tmp_ret));
       ret = COVER_SUCC(tmp_ret);
     }
-    if (OB_NOT_NULL(session_value)) {
-      session_value->reset();
-    }
+    session_value->reset();
   }
   return ret;
 }
@@ -521,7 +525,8 @@ int ObStatsEstimator::prepare_and_store_session(ObSQLSessionInfo *session,
                                                 ObCharsetType& old_client_charset_type,
                                                 ObCharsetType& old_connection_charset_type,
                                                 ObCharsetType& old_result_charset_type,
-                                                ObCollationType& old_collation_type)
+                                                ObCollationType& old_collation_type,
+                                                bool &need_restore)
 {
   int ret = OB_SUCCESS;
   void *ptr = NULL;
@@ -537,6 +542,7 @@ int ObStatsEstimator::prepare_and_store_session(ObSQLSessionInfo *session,
       LOG_WARN("failed to save session", K(ret));
     } else if (session->is_in_external_catalog() && OB_FAIL(session->set_internal_catalog_db())) {
       LOG_WARN("failed to set catalog", K(ret));
+    } else if (OB_FALSE_IT(need_restore = true)) {
     } else {
       ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
       ObCollationType default_collation_type = ObCharset::get_system_collation();
