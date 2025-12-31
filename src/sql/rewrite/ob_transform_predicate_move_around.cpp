@@ -3628,7 +3628,8 @@ int ObTransformPredicateMoveAround::transform_predicates(
     OPT_TRACE(input_preds);
   }
   if (OB_SUCC(ret) && !is_pullup) {
-    if (!stmt.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_1)) {
+    if (!stmt.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP5, COMPAT_VERSION_4_4_0,
+                                                        COMPAT_VERSION_4_4_1)) {
       // do nothing
     } else if (OB_FAIL(transform_other_predicates(input_preds, target_exprs))) {
       LOG_WARN("failed to add split in exprs into input preds", K(ret));
