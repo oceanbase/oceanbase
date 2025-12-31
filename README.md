@@ -27,7 +27,7 @@
 
 <p align="center">
     <a href="https://discord.gg/74cF8vbNEs">
-        <img alt="Support" src="https://img.shields.io/badge/Disord-Join%20Oceanbase-brightgreen?logo=discord" />
+        <img alt="Support" src="https://img.shields.io/badge/Discord-Join%20Oceanbase-brightgreen?logo=discord" />
     </a>
     <a href="https://stackoverflow.com/questions/tagged/oceanbase">
         <img alt="Stack Overflow" src="https://img.shields.io/badge/Stack-Stack%20Overflow-brightgreen?logo=stackoverflow" />
