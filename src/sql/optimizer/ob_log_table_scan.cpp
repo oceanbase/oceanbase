@@ -6200,6 +6200,7 @@ int ObLogTableScan::check_das_need_scan_with_domain_id()
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_column_size(); i++) {
       const ColumnItem *col_item = stmt->get_column_item(i);
+      ObIndexType index_type = ObIndexType::INDEX_TYPE_MAX;
       if (OB_ISNULL(col_item) || OB_ISNULL(col_item->expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(col_item), K(ret));
@@ -6207,17 +6208,16 @@ int ObLogTableScan::check_das_need_scan_with_domain_id()
         // do nothing
       } else {
         bool res = false;
-        for (int64_t j = 0; OB_SUCC(ret) && j < ObDomainIdUtils::ObDomainIDType::MAX; j++) {
-          ObDomainIdUtils::ObDomainIDType cur_type = static_cast<ObDomainIdUtils::ObDomainIDType>(j);
-          ObIndexType index_type = ObIndexType::INDEX_TYPE_MAX;
-          if (col_item->expr_->is_vec_cid_column()) {
-            if (col_item->expr_->is_vec_pq_cids_column() || col_item->expr_->is_vec_cid_column()) {
-              if (OB_FAIL(ObVectorIndexUtil::get_vector_domain_index_type(
-                  schema_guard->get_schema_guard(), *table_schema, col_item->expr_->get_column_id(), index_type))) {
-                LOG_WARN("fail to get vector index type", K(ret), KPC(col_item->expr_));
-              }
+        if (col_item->expr_->is_vec_cid_column()) {
+          if (col_item->expr_->is_vec_pq_cids_column() || col_item->expr_->is_vec_cid_column()) {
+            if (OB_FAIL(ObVectorIndexUtil::get_vector_domain_index_type(
+                schema_guard->get_schema_guard(), *table_schema, col_item->expr_->get_column_id(), index_type))) {
+              LOG_WARN("fail to get vector index type", K(ret), KPC(col_item->expr_));
             }
           }
+        }
+        for (int64_t j = 0; OB_SUCC(ret) && j < ObDomainIdUtils::ObDomainIDType::MAX; j++) {
+          ObDomainIdUtils::ObDomainIDType cur_type = static_cast<ObDomainIdUtils::ObDomainIDType>(j);
           if (FAILEDx(ObDomainIdUtils::check_column_need_domain_id_merge(
               *table_schema, cur_type, col_item->expr_, index_type, *schema_guard, res))) {
             LOG_WARN("fail to check column need domain id merge", K(ret), K(cur_type), KPC(col_item));

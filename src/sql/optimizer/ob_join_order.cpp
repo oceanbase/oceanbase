@@ -3197,6 +3197,113 @@ int ObJoinOrder::refine_unique_range_rowcnt(const uint64_t table_id,
   return ret;
 }
 
+int ObJoinOrder::check_need_domain_id_scan(const uint64_t table_id,
+                                           const uint64_t ref_table_id,
+                                           bool &need_domain_id_scan)
+{
+  int ret = OB_SUCCESS;
+  ObLogPlan *plan = nullptr;
+  const ObDMLStmt *stmt = nullptr;
+  ObSqlSchemaGuard *schema_guard = nullptr;
+  const ObTableSchema *table_schema = nullptr;
+  need_domain_id_scan = false;
+  if (OB_ISNULL(plan = get_plan()) || OB_ISNULL(stmt = plan->get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null plan or stmt", K(ret), KP(plan), KP(stmt));
+  } else if (!(stmt->is_delete_stmt() || stmt->is_update_stmt() || stmt->is_select_stmt())) {
+    // only dml/select need domain id check
+  } else if (is_virtual_table(ref_table_id)) {
+    // skip virtual table
+  } else if (OB_ISNULL(schema_guard = plan->get_optimizer_context().get_sql_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema guard is null", K(ret));
+  } else if (OB_FAIL(schema_guard->get_table_schema(table_id,
+                                                    ref_table_id,
+                                                    stmt,
+                                                    table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret), K(table_id), K(ref_table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null table schema", K(ret), K(table_id), K(ref_table_id));
+  } else if (ObDomainIdUtils::is_domain_id_index_table(table_schema)) {
+    // domain index table itself will not set domain id scan flag
+  } else if (plan->get_optimizer_context().is_insert_stmt_in_online_ddl()) {
+    const TableItem *insert_table_item = plan->get_optimizer_context().get_root_stmt()->get_table_item(0);
+    const schema::ObTableSchema *ddl_table_schema = nullptr;
+    if (OB_ISNULL(insert_table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("insert table item is null", K(ret));
+    } else if (OB_FAIL(schema_guard->get_table_schema(insert_table_item->ddl_table_id_, ddl_table_schema))) {
+      LOG_WARN("failed to get ddl table schema", K(ret), K(insert_table_item->ddl_table_id_));
+    } else if (OB_ISNULL(ddl_table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null ddl table schema", K(ret), KP(ddl_table_schema));
+    } else {
+      bool res = false;
+      for (int64_t i = 0; OB_SUCC(ret) && !need_domain_id_scan && i < ObDomainIdUtils::ObDomainIDType::MAX; ++i) {
+        ObDomainIdUtils::ObDomainIDType cur_type = static_cast<ObDomainIdUtils::ObDomainIDType>(i);
+        if (OB_FAIL(ObDomainIdUtils::check_table_need_domain_id_merge(cur_type,
+                                                                      *schema_guard->get_schema_guard(),
+                                                                      *table_schema,
+                                                                      ddl_table_schema,
+                                                                      res))) {
+          LOG_WARN("failed to check table need domain id merge", K(ret), K(cur_type));
+        } else if (res) {
+          need_domain_id_scan = true;
+        }
+      }
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !need_domain_id_scan && i < stmt->get_column_size(); ++i) {
+      const ColumnItem *col_item = stmt->get_column_item(i);
+      if (OB_ISNULL(col_item) || OB_ISNULL(col_item->expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null column item", K(ret), KPC(col_item));
+      } else if (col_item->table_id_ != table_id || !col_item->expr_->is_explicited_reference()) {
+        // not target table column
+      } else {
+        bool res = false;
+        ObIndexType index_type = ObIndexType::INDEX_TYPE_MAX;
+        if (col_item->expr_->is_vec_cid_column()
+            && (col_item->expr_->is_vec_pq_cids_column() || col_item->expr_->is_vec_cid_column())) {
+          if (OB_FAIL(ObVectorIndexUtil::get_vector_domain_index_type(schema_guard->get_schema_guard(),
+                                                                      *table_schema,
+                                                                      col_item->expr_->get_column_id(),
+                                                                      index_type))) {
+            LOG_WARN("failed to get vector domain index type", K(ret), KPC(col_item->expr_));
+          }
+        }
+        for (int64_t j = 0; OB_SUCC(ret) && !need_domain_id_scan && j < ObDomainIdUtils::ObDomainIDType::MAX; ++j) {
+          ObDomainIdUtils::ObDomainIDType cur_type = static_cast<ObDomainIdUtils::ObDomainIDType>(j);
+          if (OB_FAIL(ObDomainIdUtils::check_column_need_domain_id_merge(*table_schema,
+                                                                         cur_type,
+                                                                         col_item->expr_,
+                                                                         index_type,
+                                                                         *schema_guard,
+                                                                         res))) {
+            LOG_WARN("failed to check column need domain id merge", K(ret), K(cur_type), KPC(col_item));
+          } else if (res) {
+            uint64_t domain_table_id = common::OB_INVALID_ID;
+            if (OB_FAIL(ObDomainIdUtils::get_domain_tid_table_by_cid(static_cast<ObDomainIdUtils::ObDomainIDType>(j),
+                                                                     schema_guard,
+                                                                     table_schema,
+                                                                     col_item->expr_->get_column_id(),
+                                                                     domain_table_id))) {
+              LOG_WARN("failed to get domain_tid", K(ret));
+            } else if (common::OB_INVALID_ID == domain_table_id) {
+              // do nothing
+            } else {
+              need_domain_id_scan = true;
+            }
+          }
+        }
+      }
+    }
+  }
+  LOG_TRACE("check need domain id scan", K(ret), K(table_id), K(ref_table_id), K(need_domain_id_scan));
+  return ret;
+}
+
 int ObJoinOrder::create_access_paths(const uint64_t table_id,
                                      const uint64_t ref_table_id,
                                      PathHelper &helper,
@@ -3228,6 +3335,10 @@ int ObJoinOrder::create_access_paths(const uint64_t table_id,
                                                   helper.filters_,
                                                   helper))) {
     LOG_WARN("get prefix index qual failed", K(ret));
+  } else if (OB_FAIL(check_need_domain_id_scan(table_id,
+                                               ref_table_id,
+                                               helper.need_domain_id_scan_))) {
+    LOG_WARN("failed to check need domain id scan", K(ret));
   } else if (OB_FAIL(init_basic_text_retrieval_info(table_id,
                                                     ref_table_id,
                                                     helper,
@@ -3395,6 +3506,8 @@ int ObJoinOrder::create_index_merge_access_paths(const uint64_t table_id,
     OPT_TRACE("can not create index merge paths due to optimizer feature control");
   } else if (is_virtual_table(ref_table_id)) {
     OPT_TRACE("can not create index merge paths for virtual table");
+  } else if (helper.need_domain_id_scan_) {
+    OPT_TRACE("can not create index merge paths because domain id scan is needed");
   } else if (OB_FAIL(get_index_merge_tree(table_id,
                                           ref_table_id,
                                           helper,
@@ -5162,7 +5275,7 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
     } else if (OB_FAIL(add_valid_fts_index_ids_for_dml_and_es_match(helper, table_id, valid_index_ids))) {
       LOG_WARN("failed to add valid fts index ids", K(ret));
     }
-  } else if (OB_FALSE_IT(add_only_fts_index_id = (!helper.match_expr_infos_.empty() && !stmt->is_select_stmt()))) {
+  } else if (OB_FALSE_IT(add_only_fts_index_id = (!helper.match_expr_infos_.empty() && helper.need_domain_id_scan_))) {
   } else if (add_only_fts_index_id) {
     // TODO: Delete when DML functional lookup is supported.
     if (OB_FAIL(add_valid_fts_index_ids_for_dml(helper, table_id, valid_index_ids))) {
