@@ -17,8 +17,6 @@
 #include "share/ob_ls_id.h"
 #include "ob_hbase_tablet_merge_iterator.h"
 #include "share/table/ob_table_util.h"
-#include "share/ob_server_struct.h"
-#include "lib/net/ob_addr.h"
 
 namespace oceanbase
 {
@@ -2053,24 +2051,21 @@ int ObHbaseRowIterator::should_enable_get_optimization(bool &bret)
         // TODO: no qualifier specified, disable optimization if timestamp is specified
         if (is_wildcard_mode_ && !htable_filter_.with_all_time()) {
           bret = false;
-        } else {
-          // 检查是否属于同一个ls, 并且ls leader是当前节点
+        } else if (exec_ctx_.get_table_schema()->is_partitioned_table()) { // only partitioned table need to check
+          ObAddr leader;
           ObLSID ls_id = exec_ctx_.get_ls_id();
           // ls_id is valid means the tablet is on the same ls with the current node
           if (!ls_id.is_valid()) {
             bret = false;
-          } else {
-            // check if the ls leader is the current node
-            ObAddr leader;
-            if (OB_FAIL(GCTX.location_service_->get_leader(GCONF.cluster_id,
+          } else if (OB_FAIL(GCTX.location_service_->get_leader(GCONF.cluster_id,
                                                           MTL_ID(),
                                                           ls_id,
                                                           false,/* force_renew */
                                                           leader))) {
-              LOG_WARN("fail to get leader", K(ret), K(ls_id));
-            } else if (leader != GCTX.self_addr()) {
-              bret = false;
-            }
+            LOG_WARN("fail to get leader", K(ret), K(ls_id));
+            bret = false;
+          } else if (leader != GCTX.self_addr()) {
+            bret = false;
           }
         }
       }
