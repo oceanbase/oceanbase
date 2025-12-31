@@ -47,7 +47,6 @@ void ObCSVTableRowIterator::release_buf()
 int ObCSVTableRowIterator::expand_buf()
 {
   int ret = OB_SUCCESS;
-  const int64_t MAX_BUFFER_SIZE = (1 << 30); //MEMORY LIMIT 1G
   int64_t new_buf_len = 0;
   char *old_buf = state_.buf_;
   char *new_buf = nullptr;
@@ -64,9 +63,9 @@ int ObCSVTableRowIterator::expand_buf()
     }
   }
 
-  if (OB_UNLIKELY(new_buf_len > MAX_BUFFER_SIZE)) {
+  if (OB_UNLIKELY(new_buf_len > max_buffer_size_)) {
     ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("buffer size overflow", K(ret), K(new_buf_len));
+    LOG_WARN("buffer size overflow", K(ret), K(new_buf_len), K(max_buffer_size_));
   } else if (OB_ISNULL(new_buf = static_cast<char *>(malloc_alloc_.alloc(new_buf_len)))
              || OB_ISNULL(new_escape_buf = static_cast<char *>(malloc_alloc_.alloc(new_buf_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -111,6 +110,12 @@ int ObCSVTableRowIterator::init(const storage::ObTableScanParam *scan_param)
     OZ (parser_.init(scan_param->external_file_format_.csv_format_));
     OZ (file_reader_.init(scan_param_->external_file_location_, scan_param->external_file_access_info_,
                           scan_param_->external_file_format_.csv_format_.compression_algorithm_, malloc_alloc_));
+    if (OB_SUCC(ret)) {
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+      if (tenant_config.is_valid()) {
+        max_buffer_size_ = tenant_config->external_table_csv_max_buffer_size;
+      }
+    }
     OZ (expand_buf());
 
     if (OB_SUCC(ret)) {
