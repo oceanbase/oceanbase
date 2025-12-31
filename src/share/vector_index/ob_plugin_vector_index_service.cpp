@@ -1124,6 +1124,8 @@ void ObPluginVectorIndexService::destroy()
     }
     // destroy kmeans build task handler
     kmeans_build_task_handler_.destroy();
+    // destroy async task handler
+    vec_async_task_handle_.destroy();
   }
 }
 

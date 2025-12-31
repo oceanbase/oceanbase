@@ -1697,9 +1697,7 @@ void ObPluginVectorIndexLoadScheduler::stop()
 
 void ObPluginVectorIndexLoadScheduler::destroy()
 {
-  if (OB_NOT_NULL(vector_index_service_)) {
-    vector_index_service_->get_vec_async_task_handle().destroy();
-  }
+  // do nothing
 }
 
 // ------ implement mem sync task ------
