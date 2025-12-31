@@ -296,8 +296,7 @@ int ObColDataStoreDesc::init(
         STORAGE_LOG(WARN, "Failed to reserve column desc array", K(ret));
       } else if (OB_FAIL(merge_schema.get_multi_version_column_descs(col_desc_array_))) {
         STORAGE_LOG(WARN, "Failed to generate multi version column ids", K(ret));
-      } else if ((is_major || static_desc.is_delete_insert_merge_engine()) &&
-                 OB_FAIL(generate_skip_index_meta(merge_schema, nullptr/*cg_schema*/, static_desc))) {
+      } else if (OB_FAIL(generate_skip_index_meta(merge_schema, nullptr/*cg_schema*/, static_desc))) {
         STORAGE_LOG(WARN, "failed to generate skip index meta", K(ret));
       }
     } else {
@@ -305,8 +304,7 @@ int ObColDataStoreDesc::init(
         STORAGE_LOG(WARN, "fail to reserve column desc array", K(ret));
       } else if (OB_FAIL(merge_schema.get_mulit_version_rowkey_column_ids(col_desc_array_))) {
         STORAGE_LOG(WARN, "fail to get rowkey column ids", K(ret));
-      } else if ((is_major || static_desc.is_delete_insert_merge_engine()) &&
-                 OB_FAIL(generate_skip_index_meta(merge_schema, nullptr/*cg_schema*/, static_desc))) {
+      } else if (OB_FAIL(generate_skip_index_meta(merge_schema, nullptr/*cg_schema*/, static_desc))) {
         STORAGE_LOG(WARN, "failed to generate skip index meta", K(ret));
       }
     }
@@ -505,6 +503,7 @@ int ObColDataStoreDesc::generate_skip_index_meta(
   int ret = OB_SUCCESS;
   ObArray<ObSkipIndexColumnAttr> skip_idx_attrs;
   const bool is_major = compaction::is_major_or_meta_merge_type(static_desc.merge_type_);
+  const bool enable_precise_agg = is_major || static_desc.is_delete_insert_merge_engine();
   const bool is_full_column_sstable = !(nullptr != cg_schema && !cg_schema->is_all_column_group());
   if (OB_UNLIKELY(!schema.is_valid() || (nullptr != cg_schema && !cg_schema->is_valid()))) {
     ret = OB_INVALID_ARGUMENT;
@@ -530,7 +529,7 @@ int ObColDataStoreDesc::generate_skip_index_meta(
     for (int64_t i = 0; OB_SUCC(ret) && i < full_stored_col_cnt_; ++i) {
       if (!skip_idx_attrs.at(i).has_skip_index()) {
       } else if (OB_FAIL(blocksstable::ObSkipIndexColMeta::append_skip_index_meta(
-                  skip_idx_attrs.at(i), i, agg_meta_array_))) {
+                  enable_precise_agg, skip_idx_attrs.at(i), i, agg_meta_array_))) {
         STORAGE_LOG(WARN, "failed to append skip index meta array", K(ret), KPC(cg_schema), K(i));
       }
     }
@@ -549,7 +548,7 @@ int ObColDataStoreDesc::generate_skip_index_meta(
       const uint16_t column_idx = cg_schema->get_column_idx(i);
       if (!skip_idx_attrs.at(column_idx).has_skip_index()) {
       } else if (OB_FAIL(blocksstable::ObSkipIndexColMeta::append_skip_index_meta(
-                  skip_idx_attrs.at(column_idx), i, agg_meta_array_))) {
+                  enable_precise_agg, skip_idx_attrs.at(column_idx), i, agg_meta_array_))) {
         STORAGE_LOG(WARN, "failed to append skip index meta array", K(ret), KPC(cg_schema), K(i), K(column_idx));
       }
     }
@@ -579,7 +578,7 @@ int ObColDataStoreDesc::generate_single_cg_skip_index_meta(
       single_cg_skip_idx_attr.set_sum();
     }
     if (OB_FAIL(blocksstable::ObSkipIndexColMeta::append_skip_index_meta(
-                single_cg_skip_idx_attr, 0, agg_meta_array_))) {
+                true, single_cg_skip_idx_attr, 0, agg_meta_array_))) {
       STORAGE_LOG(WARN, "failed to append skip index meta array", K(ret), K(column_idx), K(cg_schema));
     }
 

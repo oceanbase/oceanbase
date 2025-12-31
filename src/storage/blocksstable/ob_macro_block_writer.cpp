@@ -2407,12 +2407,9 @@ void ObMacroBlockWriter::dump_macro_block(ObMacroBlock &macro_block)
 int ObMacroBlockWriter::init_pre_agg_util(const ObDataStoreDesc &data_store_desc)
 {
   int ret = OB_SUCCESS;
-  bool is_delete_insert_table = data_store_desc.is_delete_insert_merge_engine();
   const ObIArray<ObSkipIndexColMeta> &full_agg_metas = data_store_desc.get_agg_meta_array();
-  const bool need_pre_aggregation =
-      (data_store_desc.is_major_or_meta_merge_type() || is_delete_insert_table)
-      && nullptr != data_store_desc.sstable_index_builder_
-      && full_agg_metas.count() > 0;
+  const bool need_pre_aggregation = nullptr != data_store_desc.sstable_index_builder_ &&
+      full_agg_metas.count() > 0;
   bool agg_meta_valid_for_minor = true;
   for (int64_t i = 0; i < full_agg_metas.count(); ++i) {
     const ObSkipIndexColMeta &agg_meta = full_agg_metas.at(i);

@@ -1963,8 +1963,7 @@ int ObIndexBlockAggregator::init(const ObDataStoreDesc &store_desc, ObIAllocator
     ret = OB_INIT_TWICE;
     LOG_WARN("Already inited", K(ret));
   } else {
-    need_data_aggregate_ = store_desc.get_agg_meta_array().count() != 0 &&
-        (store_desc.is_delete_insert_merge_engine() || store_desc.is_major_or_meta_merge_type());
+    need_data_aggregate_ = store_desc.get_agg_meta_array().count() != 0;
     if (!need_data_aggregate_) {
     } else if (OB_FAIL(skip_index_aggregator_.init(
                 store_desc.is_major_or_meta_merge_type(),

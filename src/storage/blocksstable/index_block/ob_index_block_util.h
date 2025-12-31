@@ -90,6 +90,7 @@ struct ObSkipIndexColMeta
   }
 
   static int append_skip_index_meta(
+      const bool enable_precise_agg,
       const share::schema::ObSkipIndexColumnAttr &skip_idx_attr,
       const int64_t col_idx,
       common::ObIArray<ObSkipIndexColMeta> &skip_idx_metas);
