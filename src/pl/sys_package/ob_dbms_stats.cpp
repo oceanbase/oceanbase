@@ -6016,7 +6016,8 @@ int ObDbmsStats::build_stat_table_by_async_table(sql::ObExecContext &ctx,
   if (!id_to_part_stat_map.created() && OB_FAIL(id_to_part_stat_map.create(64, "partMap", "DBMS_STATS"))) {
     LOG_WARN("create id_to_part_stat_map fail", K(ret));
   } else if (OB_FAIL(ObBasicStatsEstimator::check_table_statistics_state(
-                 ctx, tenant_id, table_id, global_part_id, is_locked, stat_table.partition_stat_infos_))) {
+                 ctx, tenant_id, table_id, global_part_id, is_locked,
+                 stat_table.is_async_gather_, stat_table.partition_stat_infos_))) {
     LOG_WARN("failed to check table has any statistics", K(ret));
   } else if (is_locked) {
     // if table is locked, don't gather stats.
@@ -6090,7 +6091,8 @@ int ObDbmsStats::get_table_stale_percent(sql::ObExecContext &ctx,
   const int64_t global_part_id = PARTITION_LEVEL_ZERO == table_schema.get_part_level() ? table_id : -1;
   bool is_locked = false;
   if (OB_FAIL(ObBasicStatsEstimator::check_table_statistics_state(
-          ctx, tenant_id, table_id, global_part_id, is_locked, stat_table.partition_stat_infos_))) {
+          ctx, tenant_id, table_id, global_part_id, is_locked,
+          stat_table.is_async_gather_, stat_table.partition_stat_infos_))) {
     LOG_WARN("failed to check table has any statistics", K(ret));
   } else if (is_locked) {
     // if table is locked, don't gather stats.
@@ -6254,8 +6256,10 @@ int ObDbmsStats::gather_table_stats_with_default_param(ObExecContext &ctx,
               failed_part_and_subpart_ids, succ_part_and_subpart_ids,  running_monitor))) {
     LOG_WARN("failed to gather table stats", K(ret));
     int tmp_ret_code = ret;
+    int64_t success_part_count = running_monitor.success_part_ids_cnt_ + task_info.success_part_count_;
     if ((stat_table.is_async_gather_ || task_info.type_ == ObOptStatGatherType::AUTO_GATHER) &&
         (OB_ERR_INTERRUPTED != ret && !failed_part_and_subpart_ids.empty()) &&
+        (ret != OB_TIMEOUT || (ret == OB_TIMEOUT && success_part_count == 0)) &&
         OB_FAIL(update_analyze_failed_count(stat_param, failed_part_and_subpart_ids, stat_table))) {
       LOG_WARN("failed to update ANALYZE failed-count when gather table stats", K(ret));
     }
@@ -6307,6 +6311,7 @@ int ObDbmsStats::gather_table_stats_with_default_param(ObExecContext &ctx,
   }
   ObOptStatGatherStatList::instance().remove(gather_stat);
   task_info.completed_table_count_ ++;
+  task_info.success_part_count_ += running_monitor.success_part_ids_cnt_;
   return ret;
 }
 

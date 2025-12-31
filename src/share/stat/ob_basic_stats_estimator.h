@@ -116,6 +116,7 @@ public:
                                           const uint64_t table_id,
                                           const int64_t global_part_id,
                                           bool &is_locked,
+                                          bool is_async_gather,
                                           ObIArray<ObPartitionStatInfo> &partition_stat_infos);
 
   static int check_partition_stat_state(const int64_t partition_id,

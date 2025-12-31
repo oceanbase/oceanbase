@@ -69,6 +69,7 @@ int ObOptStatTaskInfo::deep_copy(ObOptStatTaskInfo &other, char *buf, int64_t bu
     ret_code_ = other.ret_code_;
     failed_count_ = other.failed_count_;
     completed_table_count_ = other.completed_table_count_;
+    success_part_count_ = other.success_part_count_;
   }
   return ret;
 }

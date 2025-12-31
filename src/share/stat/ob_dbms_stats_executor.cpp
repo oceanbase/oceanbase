@@ -177,6 +177,9 @@ int ObDbmsStatsExecutor::gather_partition_stats(ObExecContext &ctx,
             int tmp_ret = OB_SUCCESS;
             if (OB_SUCCESS != (tmp_ret = OB_FAIL(gather_trans.end(true)))) {
               LOG_WARN("fail to commit transaction", K(tmp_ret));
+            } else if (OB_FAIL(collect_executed_part_cnt(derive_param,
+                                                         gather_helper.running_monitor_.success_part_ids_cnt_))) {
+              LOG_WARN("failed to collect executed part cnt", K(ret));
             }
           } else {
             int tmp_ret = OB_SUCCESS;
@@ -2189,6 +2192,22 @@ int ObDbmsStatsExecutor::collect_executed_part_ids(const ObTableStatParam &stat_
     if (OB_FAIL(part_ids.push_back(stat_param.global_part_id_))) {
       LOG_WARN("failed to push back failed part_info_id", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObDbmsStatsExecutor::collect_executed_part_cnt(const ObTableStatParam &stat_param, int64_t &part_cnt)
+{
+  int ret = OB_SUCCESS;
+  if (stat_param.subpart_stat_param_.need_modify_) {
+    part_cnt += stat_param.subpart_infos_.count();
+  }
+  if (stat_param.part_stat_param_.need_modify_) {
+    part_cnt += stat_param.part_infos_.count();
+    part_cnt += stat_param.approx_part_infos_.count();
+  }
+  if (stat_param.global_stat_param_.need_modify_) {
+    part_cnt += 1;
   }
   return ret;
 }
