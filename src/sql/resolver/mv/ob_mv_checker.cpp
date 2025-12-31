@@ -1710,11 +1710,9 @@ int ObMVChecker::check_column_store_valid(const ObSelectStmt &stmt,
   if (OB_ISNULL(left_table_schema) || OB_ISNULL(right_table_schema)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("table schema is null", KR(ret), K(left_table_schema), K(right_table_schema));
-  } else if (OB_FAIL(mv_container_table_schema_.get_is_column_store(is_column_store))) {
-    LOG_WARN("failed to get is column store", KR(ret));
-  } else if (is_column_store) {
+  } else if (mv_container_table_schema_.is_column_store_supported()) {
     is_valid = false;
-    LOG_INFO("[MAJ_REF_MV] mv container table is column store table",
+    LOG_INFO("[MAJ_REF_MV] mv container table is column store table (contains WITH COLUMN GROUP clause in CREATE MATERIALIZED VIEW statement)",
              K(mv_container_table_schema_.get_table_name()));
   } else if (OB_FAIL(left_table_schema->get_is_column_store(is_column_store))) {
     LOG_WARN("failed to get is column store", KR(ret));
