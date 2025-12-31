@@ -6189,7 +6189,8 @@ int ObTableSqlService::update_origin_column_group_with_new_schema(ObISQLClient &
   if (OB_UNLIKELY(!sql_client.is_active()
                   || !origin_table_schema.is_valid()
                   || !new_table_schema.is_valid()
-                  || origin_tenant_id != new_tenant_id)) {
+                  || origin_tenant_id != new_tenant_id
+                  || !new_table_schema.is_column_store_supported())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(origin_table_schema), K(new_table_schema));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(origin_tenant_id, data_version))) {
@@ -6198,7 +6199,7 @@ int ObTableSqlService::update_origin_column_group_with_new_schema(ObISQLClient &
     LOG_WARN("fail to check column store valid for origin table schema", KR(ret), K(origin_table_schema));
   } else if (OB_FAIL(check_column_store_valid(new_table_schema, data_version))) {
     LOG_WARN("fail to check column store valid for new table schema", KR(ret), K(new_table_schema));
-  } else if (OB_FAIL(delete_column_group(sql_client, origin_table_schema, delete_schema_version))) {
+  } else if (origin_table_schema.is_column_store_supported() && OB_FAIL(delete_column_group(sql_client, origin_table_schema, delete_schema_version))) {
     LOG_WARN("fail to delete column group for origin table schema", KR(ret), K(origin_table_schema));
   } else if (OB_FAIL(add_column_groups(sql_client, new_table_schema, insert_schema_version, false/*only_history*/))) {
     LOG_WARN("fail to add column groups from new table schema", KR(ret), K(new_table_schema), K(insert_schema_version));

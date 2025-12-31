@@ -1615,6 +1615,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
   ObScale avg_scale_increment_ = 4;
   ObScale sum_scale_increment_ = 0;
   ObScale scale_increment_recover = -2;
+  ObPrecision precision_increment_recover = -2;
   int ret = OB_SUCCESS;
   ObExprResType result_type;
   if (OB_FAIL(check_group_aggr_param(expr))) {
@@ -1841,15 +1842,20 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
             // todo jiuren
             if (result_type.get_scale() == -1) {
               scale_increment_recover = static_cast<ObScale>(-1);
+              precision_increment_recover = static_cast<ObPrecision>(-1);
               result_type.set_scale(static_cast<ObScale>(scale_increment));
+              result_type.set_precision(static_cast<ObPrecision>(ObMySQLUtil::float_length(scale_increment)));
             } else {
               scale_increment_recover = result_type.get_scale();
+              precision_increment_recover = result_type.get_precision();
               result_type.set_scale(static_cast<ObScale>(result_type.get_scale() + scale_increment));
+              result_type.set_precision(result_type.get_precision() + scale_increment);
             }
           } else if (ob_is_float_tc(obj_type) || ob_is_double_tc(obj_type)) {
             result_type.set_double();
             if (result_type.get_scale() >= 0) {
               scale_increment_recover = result_type.get_scale();
+              precision_increment_recover = result_type.get_precision();
               result_type.set_scale(static_cast<ObScale>(result_type.get_scale() + scale_increment));
               if (T_FUN_AVG == expr.get_expr_type()) {
                 result_type.set_precision(
@@ -1916,9 +1922,11 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
             // todo jiuren
             if (result_type.get_scale() == -1) {
               scale_increment_recover = static_cast<ObScale>(-1);
+              precision_increment_recover = static_cast<ObPrecision>(-1);
               result_type.set_scale(static_cast<ObScale>(scale_increment));
             } else {
               scale_increment_recover = result_type.get_scale();
+              precision_increment_recover = result_type.get_precision();
               result_type.set_scale(static_cast<ObScale>(
                 MIN(OB_MAX_DOUBLE_FLOAT_SCALE, result_type.get_scale() + scale_increment)));
               result_type.set_calc_scale(
@@ -2274,6 +2282,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
       }
       if (T_FUN_AVG == expr.get_expr_type() && -2 != scale_increment_recover) {
         result_type.set_calc_scale(scale_increment_recover);
+        result_type.set_calc_precision(precision_increment_recover);
       }
       ObObjType child_type = expr.get_param_expr(0)->get_result_type().get_type();
       if (T_FUN_SUM == expr.get_expr_type() && result_type.get_calc_meta().is_decimal_int()

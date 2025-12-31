@@ -156,6 +156,7 @@ int ObPlAggUdfFunction::call_pl_engine_exectue_udf(ParamStore& udf_params,
   } else if (FALSE_IT(obj_id = share::schema::ObUDTObjectType::mask_object_id(routine_info->get_package_id()))){
   } else if (FALSE_IT(sub_udf_id = (OB_INVALID_ID != routine_info->get_package_id()) ? routine_info->get_subprogram_id()
                                                                                      : routine_info->get_routine_id())) {
+  } else if (FALSE_IT(pl_execute_arg.set_is_agg_func())) {
   } else if (OB_FAIL(pl_execute_arg.obtain_routine(*exec_ctx_,
                                                    obj_id,
                                                    sub_udf_id,

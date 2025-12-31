@@ -25,6 +25,7 @@
 #include "storage/incremental/share/ob_ss_diagnose_mgr.h"
 #include "storage/incremental/ob_shared_meta_service.h"
 #include "storage/incremental/ob_ss_checkpoint_rpc.h"
+#include "storage/incremental/garbage_collector/ob_ss_garbage_collector_service.h"
 #endif
 
 namespace oceanbase
@@ -695,12 +696,27 @@ private:
       const SCN ss_ckpt_scn = ss_ls_meta.get_ss_checkpoint_scn();
       const int64_t scn_ts_gap = (sn_ckpt_scn.convert_to_ts() - ss_ckpt_scn.convert_to_ts());
 
+      // Check if SSLOG_TABLE size exceeds meta tenant memory limit threshold
+      bool sslog_table_size_exceeded = false;
+      if (is_sys_tenant(MTL_ID()) && ls.get_ls_id().is_sslog_ls()) {
+        // the meta data of this ls will store in palf_kv, so we do not consider it here.
+      } else {
+        ObSSGarbageCollectorService *gc_service = MTL(ObSSGarbageCollectorService *);
+        if (OB_NOT_NULL(gc_service)) {
+          (void)gc_service->sslog_table_size_exceeded(sslog_table_size_exceeded);
+        }
+      }
+
       if (!ls.get_inc_sstable_uploader().finish_reloading()) {
         (void)ls.disable_flush();
         FLOG_INFO("disable ls flush to wait uploader reloading", PRINT_CKPT_INFO_WRAPPER);
       } else if (ls.get_inc_sstable_uploader().task_overflowed()) {
         (void)ls.disable_flush();
         FLOG_INFO("disable ls flush to handle current tasks", PRINT_CKPT_INFO_WRAPPER);
+      } else if (sslog_table_size_exceeded) {
+        (void)ls.disable_flush();
+        FLOG_INFO("disable ls flush because SSLOG_TABLE size exceeded meta tenant memory limit threshold",
+                  PRINT_CKPT_INFO_WRAPPER);
       } else if ((sn_ckpt_lsn > ss_ckpt_lsn) && (sn_ckpt_lsn - ss_ckpt_lsn > max_lsn_gap) &&
                  (scn_ts_gap > 2 * advance_ckpt_interval)) {
         (void)ls.disable_flush();

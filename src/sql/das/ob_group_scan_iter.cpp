@@ -356,7 +356,7 @@ void ObGroupScanIter::reset_expr_datum_ptr()
     FOREACH_CNT(e, *row_store_.access_exprs_) {
       (*e)->locate_datums_for_update(*row_store_.eval_ctx_, row_store_.max_size_);
       ObEvalInfo &info = (*e)->get_eval_info(*row_store_.eval_ctx_);
-      info.point_to_frame_ = true;
+      info.set_point_to_frame(true);
     }
   }
 }

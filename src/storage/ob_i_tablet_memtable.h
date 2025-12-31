@@ -294,7 +294,8 @@ public:
                    ObFreezer *freezer,
                    ObTabletMemtableMgr *memtable_mgr,
                    const int64_t schema_version,
-                   const uint32_t freeze_clock) = 0;
+                   const uint32_t freeze_clock,
+                   const bool use_hash_index) = 0;
   virtual void print_ready_for_flush() = 0;
   virtual void set_allow_freeze(const bool allow_freeze) = 0;
   virtual int set_frozen() = 0;

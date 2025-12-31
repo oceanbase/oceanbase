@@ -833,6 +833,9 @@ STAT_EVENT_ADD_DEF(USER_IO_WAIT_TIME, "user io wait total time", ObStatClassIds:
 STAT_EVENT_ADD_DEF(APWAIT_TIME, "application wait total time", ObStatClassIds::SYS, 220003, true, true, true, "Total wait time (in microseconds) caused by user application code (such as lock waits due to row-level locking or explicit lock commands). This is the cumulative total of corresponding wait events in OceanBase.")
 STAT_EVENT_ADD_DEF(SCHEDULE_WAIT_TIME, "schedule wait total time", ObStatClassIds::SYS, 220004, true, true, true, "Total time consumed (in microseconds) by SCHEDULER-related wait events. This is the cumulative total of corresponding wait events in OceanBase.")
 STAT_EVENT_ADD_DEF(NETWORK_WAIT_TIME, "network wait total time", ObStatClassIds::SYS, 220005, true, true, true, "Total time consumed (in microseconds) by network-related wait events. This is the cumulative total of corresponding wait events in OceanBase.")
+STAT_EVENT_ADD_DEF(PX_EXECUTE_TIME, "parallel task total execute time", ObStatClassIds::SYS, 220006, true, true, true, "Total time consumed (in microseconds) by px task.")
+STAT_EVENT_ADD_DEF(PX_CPU_TIME, "parallel task total cpu time", ObStatClassIds::SYS, 220007, true, true, true, "Total cpu time consumed (in microseconds) by px task.")
+STAT_EVENT_ADD_DEF(PX_TASK_CNT, "parallel task total count", ObStatClassIds::SYS, 220008, true, true, true, "Total count of px task.")
 
 // shared-storage local_cache(2400xx)
 STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_HIT, "ss_micro_cache hit count", ObStatClassIds::CACHE, 240001, true, true, true, "Total number of user requests that hit the local micro block cache in shared storage mode. When a user request requires access to micro block data, and the data is retrieved from the local micro block cache, it is considered a cache hit. this count is incremented by 1 for each hit.")

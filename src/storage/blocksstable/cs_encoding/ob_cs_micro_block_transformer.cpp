@@ -1530,7 +1530,7 @@ int ObCSMicroBlockTransformHelper::build_string_column_decoder_ctx_(
           ctx.offset_data_ = buf + transform_desc_.stream_data_pos_arr_[col_second_stream_idx].offset_;
         }
       }
-      LOG_TRACE("build_string_column_decoder_ctx", K(col_first_stream_idx), K(col_end_stream_idx), K(col_idx), K(ctx));
+      LOG_DEBUG("build_string_column_decoder_ctx", K(col_first_stream_idx), K(col_end_stream_idx), K(col_idx), K(ctx));
     }
   }
 
@@ -1587,7 +1587,7 @@ int ObCSMicroBlockTransformHelper::build_integer_dict_decoder_ctx_(const ObObjMe
               sizeof(ObIntegerStreamDecoderCtx));
           ctx.ref_data_ = buf + transform_desc_.stream_data_pos_arr_[col_second_stream_idx].offset_;
 
-          LOG_TRACE("build_integer_dict_decoder_ctx",
+          LOG_DEBUG("build_integer_dict_decoder_ctx",
               K(col_first_stream_idx), K(col_end_stream_idx), K(col_idx), K(ctx));
         }
       }

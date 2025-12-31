@@ -5267,7 +5267,7 @@ int ObTableSchema::check_alter_column_type(const ObColumnSchemaV2 &src_column,
     } else {
       if ((dst_meta.is_json() && src_meta.is_string_type()) ||
           (src_meta.is_json() && dst_meta.is_string_type())) {
-        if (is_oracle_mode) {
+        if (is_oracle_mode || src_meta.is_text() || dst_meta.is_text()) {
           is_offline = true;
         } else {
           ret = OB_NOT_SUPPORTED;
@@ -10968,6 +10968,26 @@ int ObTableSchema::check_identity_column_for_interval_part() const
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("identity column as interval key is not supported", KR(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "identity column as interval key is");
+    }
+  }
+  return ret;
+}
+
+int ObTableSchema::get_hidden_column_count(int64_t &hidden_column_count) const
+{
+  int ret = OB_SUCCESS;
+  hidden_column_count = 0;
+  for (ObTableSchema::const_column_iterator iter = column_begin();
+       OB_SUCC(ret) && iter != column_end();
+       ++iter) {
+    const ObColumnSchemaV2 *column_schema = *iter;
+    if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Column schema is NULL", K(ret));
+    } else if (column_schema->is_unused()) {
+      // do nothing
+    } else if (column_schema->is_hidden()) {
+      hidden_column_count++;
     }
   }
   return ret;

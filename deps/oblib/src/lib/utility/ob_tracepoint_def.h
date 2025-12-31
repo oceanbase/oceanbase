@@ -512,7 +512,6 @@ GLOBAL_ERRSIM_POINT_DEF(801, EN_FORCE_PARALLEL_MINI_MERGE, "used to force set pa
 GLOBAL_ERRSIM_POINT_DEF(802, EN_COMPACTION_SKIP_WRITE_MDS_IN_MEDIUM_CLOG, "");
 GLOBAL_ERRSIM_POINT_DEF(803, EN_MOCK_LARGE_COLUMN_META, "used to mock large column meta");
 GLOBAL_ERRSIM_POINT_DEF(804, EN_COMPACTION_MLOG_MERGE_FAILED, "inject error during mlog table compaction merge");
-GLOBAL_ERRSIM_POINT_DEF(805, EN_COMPACTION_ENABLE_LOCAL_MINOR_ON_SSWRITER, "enable local minor compaction on sswriter node for specific ls and tablet (error_code: high 32bit=ls_id, low 32bit=tablet_id)");
 
 // compaction 801 - 899
 //LS Migration Related 900 - 1000
@@ -677,5 +676,5 @@ GLOBAL_ERRSIM_POINT_DEF(2652, EN_DDL_SCAN_TASK_PERIOD, "ddl scan task timer thre
 
 // DDL end
 GLOBAL_ERRSIM_POINT_DEF(2701, EN_DUMP_THREAD_LEVEL_MEM_CTX, "Whether enable dump thread-level memory context");
-GLOBAL_ERRSIM_POINT_DEF(2702, EN_ENABLE_OPERATOR_DUMMY_MEM_CHECK, "Used to track whether the operator has been closed && destroyed in test mode");
+GLOBAL_ERRSIM_POINT_DEF(2703, EN_ENABLE_OPERATOR_DUMMY_MEM_CHECK, "Used to track whether the operator has been closed && destroyed in test mode");
 #endif /*GLOBAL_ERRSIM_POINT_DEF*/

@@ -331,7 +331,6 @@ all_table_def = dict(
       ('micro_block_format_version', 'int', 'false', 'ObMicroBlockFormatVersionHelper::DEFAULT_VERSION'),
       ('semistruct_properties', 'longtext', 'false', ''),
       ('mview_expand_definition', 'longtext', 'false', ''),
-      ('fts_index_type', 'int', 'false', '0'),
       ('ttl_flag', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'false', '\\x01'),
       ('delta_format', 'varchar:OB_MAX_VARCHAR_LENGTH', 'false', 'flat'),
       ('skip_index_level', 'int', 'false', '0'),
@@ -8537,6 +8536,7 @@ def_table_schema(**all_ai_model_endpoint_def)
 # 581: __all_sync_standby_dest
 # 582: __all_sync_standby_status
 # 583: __all_routine_load_job
+# 584: __all_ss_gc_reserved_snapshot
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -17217,7 +17217,8 @@ def_table_schema(
     ('is_collected', 'bool'),
     ('gc_end_scn', 'int'),
     ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
-    ('svr_port', 'int')
+    ('svr_port', 'int'),
+    ('safe_recycle_scn', 'int')
   ],
 )
 
@@ -17401,6 +17402,8 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
 )
+
+# 12588: __all_virtual_routine_load_job
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -17984,6 +17987,13 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15539', all_def_ke
 # 15540: __all_sync_standby_dest
 # 15541: __all_sync_standby_status
 # 15542: __all_virtual_tablet_window_loop_info
+
+# 15543: __all_virtual_macro_block_copy_task
+# 15544: __all_virtual_macro_block_copy_task_progress
+# 15545: __all_virtual_macro_block_copy_task_history
+
+# 15546: __all_routine_load_job
+# 15547: idx_routine_load_job_name_real_agent
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -30036,7 +30046,7 @@ def_table_schema(
     CAST(T.NUMBER_OF_ARGUMENT AS SIGNED) AS NUMBER_OF_ARGUMENTS,
     CAST(NULL AS CHAR(4000)) AS SCHEDULE_OWNER,
     CAST(NULL AS CHAR(4000)) AS SCHEDULE_NAME,
-    CAST(NULL AS CHAR(12)) AS SCHEDULE_TYPE,
+    CAST(T.SCHEDULE_TYPE AS CHAR(12)) AS SCHEDULE_TYPE,
     CAST(T.START_DATE AS DATETIME(6)) AS START_DATE,
     CAST(T.REPEAT_INTERVAL AS CHAR(4000)) AS REPEAT_INTERVAL,
     CAST(NULL AS CHAR(128)) AS EVENT_QUEUE_OWNER,
@@ -30057,7 +30067,7 @@ def_table_schema(
     CAST(T.RUN_COUNT AS SIGNED) AS RUN_COUNT,
     CAST(NULL AS SIGNED) AS MAX_RUNS,
     CAST(T.FAILURES AS SIGNED) AS FAILURE_COUNT,
-    CAST(NULL AS SIGNED) AS MAX_FAILURES,
+    CAST(T.MAX_FAILURES AS SIGNED) AS MAX_FAILURES,
     CAST(T.RETRY_COUNT AS SIGNED) AS RETRY_COUNT,
     CAST(T.LAST_DATE AS DATETIME(6)) AS LAST_START_DATE,
     CAST(T.LAST_RUN_DURATION AS SIGNED) AS LAST_RUN_DURATION,
@@ -30075,9 +30085,9 @@ def_table_schema(
     CAST(NULL AS CHAR(128)) AS SOURCE,
     CAST(NULL AS SIGNED) AS NUMBER_OF_DESTINATIONS,
     CAST(NULL AS CHAR(261)) AS DESTINATION_OWNER,
-    CAST(NULL AS CHAR(261)) AS DESTINATION,
+    CAST(T.DESTINATION_NAME AS CHAR(261)) AS DESTINATION,
     CAST(NULL AS CHAR(128)) AS CREDENTIAL_OWNER,
-    CAST(NULL AS CHAR(128)) AS CREDENTIAL_NAME,
+    CAST(T.CREDENTIAL_NAME AS CHAR(128)) AS CREDENTIAL_NAME,
     CAST(T.FIELD1 AS CHAR(128)) AS INSTANCE_ID,
     CAST(NULL AS CHAR(5)) AS DEFERRED_DROP,
     CAST(NULL AS CHAR(5)) AS ALLOW_RUNS_IN_RESTRICTED_MODE,
@@ -30085,7 +30095,13 @@ def_table_schema(
     CAST(T.FLAG AS SIGNED) AS FLAGS,
     CAST(NULL AS CHAR(5)) AS RESTARTABLE,
     CAST(NULL AS CHAR(128)) AS CONNECT_CREDENTIAL_OWNER,
-    CAST(NULL AS CHAR(128)) AS CONNECT_CREDENTIAL_NAME
+    CAST(NULL AS CHAR(128)) AS CONNECT_CREDENTIAL_NAME,
+    CAST(T.THIS_DATE AS DATETIME(6)) AS THIS_DATE,
+    CAST(T.USER_ID AS SIGNED) AS USER_ID,
+    CAST(T.DATABASE_ID AS SIGNED) AS DATABASE_ID,
+    CAST(T.THIS_EXEC_DATE AS DATETIME(6)) AS THIS_EXEC_DATE,
+    CAST(T.THIS_EXEC_ADDR AS CHAR(128)) AS THIS_EXEC_ADDR,
+    CAST(T.THIS_EXEC_TRACE_ID AS CHAR(128)) AS THIS_EXEC_TRACE_ID
   FROM oceanbase.__all_tenant_scheduler_job T WHERE T.JOB_NAME != '__dummy_guard' and T.JOB > 0
 """.replace("\n", " ")
 )
@@ -45073,6 +45089,9 @@ def_table_schema(
   WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
   """.replace("\n", " ")
 )
+
+# 21710: DBA_OB_ROUTINE_LOAD_JOB
+# 21711: CDB_OB_ROUTINE_LOAD_JOB
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -72138,7 +72157,7 @@ def_table_schema(
     CAST(T.NUMBER_OF_ARGUMENT AS NUMBER) AS NUMBER_OF_ARGUMENTS,
     CAST(NULL AS VARCHAR2(4000)) AS SCHEDULE_OWNER,
     CAST(NULL AS VARCHAR2(4000)) AS SCHEDULE_NAME,
-    CAST(NULL AS VARCHAR2(12)) AS SCHEDULE_TYPE,
+    CAST(T.SCHEDULE_TYPE AS VARCHAR2(12)) AS SCHEDULE_TYPE,
     CAST(T.START_DATE AS TIMESTAMP(6) WITH TIME ZONE) AS START_DATE,
     CAST(T.REPEAT_INTERVAL AS VARCHAR2(4000)) AS REPEAT_INTERVAL,
     CAST(NULL AS VARCHAR2(128)) AS EVENT_QUEUE_OWNER,
@@ -72159,7 +72178,7 @@ def_table_schema(
     CAST(T.RUN_COUNT AS NUMBER) AS RUN_COUNT,
     CAST(NULL AS NUMBER) AS MAX_RUNS,
     CAST(T.FAILURES AS NUMBER) AS FAILURE_COUNT,
-    CAST(NULL AS NUMBER) AS MAX_FAILURES,
+    CAST(T.MAX_FAILURES AS NUMBER) AS MAX_FAILURES,
     CAST(T.RETRY_COUNT AS NUMBER) AS RETRY_COUNT,
     CAST(T.LAST_DATE AS TIMESTAMP(6) WITH TIME ZONE) AS LAST_START_DATE,
     CAST((TIMESTAMP'1970-01-01 08:00:00' + T.MAX_RUN_DURATION / (60 * 60 * 24) - TIMESTAMP'1970-01-01 08:00:00') AS INTERVAL DAY(9) TO SECOND(6)) AS LAST_RUN_DURATION,
@@ -72177,9 +72196,9 @@ def_table_schema(
     CAST(NULL AS VARCHAR2(128)) AS SOURCE,
     CAST(NULL AS NUMBER) AS NUMBER_OF_DESTINATIONS,
     CAST(NULL AS VARCHAR2(261)) AS DESTINATION_OWNER,
-    CAST(NULL AS VARCHAR2(261)) AS DESTINATION,
+    CAST(T.DESTINATION_NAME AS VARCHAR2(261)) AS DESTINATION,
     CAST(NULL AS VARCHAR2(128)) AS CREDENTIAL_OWNER,
-    CAST(NULL AS VARCHAR2(128)) AS CREDENTIAL_NAME,
+    CAST(T.CREDENTIAL_NAME AS VARCHAR2(128)) AS CREDENTIAL_NAME,
     CAST(T.FIELD1 AS VARCHAR2(128)) AS INSTANCE_ID,
     CAST(NULL AS VARCHAR2(5)) AS DEFERRED_DROP,
     CAST(NULL AS VARCHAR2(5)) AS ALLOW_RUNS_IN_RESTRICTED_MODE,
@@ -72187,7 +72206,13 @@ def_table_schema(
     CAST(T.FLAG AS NUMBER) AS FLAGS,
     CAST(NULL AS VARCHAR2(5)) AS RESTARTABLE,
     CAST(NULL AS VARCHAR2(128)) AS CONNECT_CREDENTIAL_OWNER,
-    CAST(NULL AS VARCHAR2(128)) AS CONNECT_CREDENTIAL_NAME
+    CAST(NULL AS VARCHAR2(128)) AS CONNECT_CREDENTIAL_NAME,
+    CAST(T.THIS_DATE AS TIMESTAMP(6) WITH TIME ZONE) AS THIS_DATE,
+    CAST(T.USER_ID AS NUMBER) AS USER_ID,
+    CAST(T.DATABASE_ID AS NUMBER) AS DATABASE_ID,
+    CAST(T.THIS_EXEC_DATE AS TIMESTAMP(6) WITH TIME ZONE) AS THIS_EXEC_DATE,
+    CAST(T.THIS_EXEC_ADDR AS VARCHAR2(128)) AS THIS_EXEC_ADDR,
+    CAST(T.THIS_EXEC_TRACE_ID AS VARCHAR2(128)) AS THIS_EXEC_TRACE_ID
     FROM SYS.ALL_VIRTUAL_TENANT_SCHEDULER_JOB_REAL_AGENT T WHERE T.JOB_NAME != '__dummy_guard' AND T.JOB > 0
 """.replace("\n", " ")
 )
@@ -79616,6 +79641,7 @@ def_table_schema(
 # 28292: DBA_OB_TTL_TASKS
 # 28293: DBA_OB_TTL_TASK_HISTORY
 # 28294: DBA_OB_SYNC_STANDBY_DEST
+# 28295: DBA_OB_ROUTINE_LOAD_JOB
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位

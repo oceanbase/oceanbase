@@ -169,6 +169,10 @@ class FLTControlInfo : public FLTExtraInfo
   }
   ~FLTControlInfo() {}
 
+  double get_sample_pct() { return sample_pct_; }
+
+  void set_sample_pct(double sample_pct) { sample_pct_ = sample_pct; }
+
   bool is_valid() {
     return level_ > 0 && sample_pct_>0 && sample_pct_<=1 && rp_>0 && rp_<MAX_RECORD_POLICY;
   }

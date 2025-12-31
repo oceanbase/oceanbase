@@ -75,10 +75,11 @@ public:
     const int64_t idx,
     ObIAllocator &allocator,
     blocksstable::ObDatumRowkey &rowkey) const;
+  OB_INLINE bool is_special_serial_merge() const { return (list_size_ == 1) && parallel_datum_rowkey_list_[0].is_max_rowkey(); }
 public:
   int64_t to_string(char* buf, const int64_t buf_len) const;
   static const int64_t MAX_PARALLEL_RANGE_SERIALIZE_LEN = 1 * 1024 * 1024;
-  static const int64_t VALID_CONCURRENT_CNT = 1;
+  static const int64_t MIN_VALID_CONCURRENT_CNT = 1;
   static const int64_t PARALLEL_INFO_VERSION_V0 = 0; // StoreRowkey
   static const int64_t PARALLEL_INFO_VERSION_V1 = 1; // DatumRowkey
 private:

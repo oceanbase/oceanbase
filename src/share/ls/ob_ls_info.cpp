@@ -1014,6 +1014,9 @@ int ObLSInfo::update_replica_status()
       }
     }
   }
+  if (FAILEDx(filter_sslog_replica_())) {
+    LOG_WARN("fail to filter sslog replica", KR(ret));
+  }
   return ret;
 }
 

@@ -412,7 +412,7 @@ int ObTableApiModifyExecutor::set_heap_table_hidden_pk(const ObTableInsCtDef &in
     } else {
       ObDatum &datum = auto_inc_expr->locate_datum_for_write(eval_ctx_);
       datum.set_uint(autoinc_seq);
-      auto_inc_expr->get_eval_info(eval_ctx_).evaluated_ = true;
+      auto_inc_expr->get_eval_info(eval_ctx_).set_evaluated(true);
     }
   }
   return ret;
@@ -711,8 +711,8 @@ int ObTableApiModifyExecutor::to_expr_skip_old(const ObChunkDatumStore::StoredRo
         LOG_WARN("column info is NULL", K(ret), K(i));
       } else if (column_infos.at(i)->rowkey_position_ > 0) {
         expr->locate_expr_datum(eval_ctx_) = store_row.cells()[i];
-        expr->get_eval_info(eval_ctx_).evaluated_ = true;
-        expr->get_eval_info(eval_ctx_).projected_ = true;
+        expr->get_eval_info(eval_ctx_).set_evaluated(true);
+        expr->get_eval_info(eval_ctx_).set_projected(true);
       }
     }
 
@@ -736,8 +736,8 @@ int ObTableApiModifyExecutor::to_expr_skip_old(const ObChunkDatumStore::StoredRo
         } else if (assign.is_inc_or_append_) {
           // the dependent expr of inc or append column are old_row expr and delta expr
           // and the old row expr is filled by conflict checker, so need clear its evaluated flag
-          expr->get_eval_info(eval_ctx_).evaluated_ = false;
-          expr->get_eval_info(eval_ctx_).projected_ = false;
+          expr->get_eval_info(eval_ctx_).set_evaluated(false);
+          expr->get_eval_info(eval_ctx_).set_projected(false);
         } else if (assign.column_info_->auto_filled_timestamp_ && !assign.is_assigned_) {
           ObDatum *tmp_datum = nullptr;
           if (OB_FAIL(expr->eval(eval_ctx_, tmp_datum))) {
@@ -745,8 +745,8 @@ int ObTableApiModifyExecutor::to_expr_skip_old(const ObChunkDatumStore::StoredRo
           }
         } else {
           expr->locate_expr_datum(eval_ctx_) = store_row.cells()[assign.column_info_->col_idx_];
-          expr->get_eval_info(eval_ctx_).evaluated_ = true;
-          expr->get_eval_info(eval_ctx_).projected_ = true;
+          expr->get_eval_info(eval_ctx_).set_evaluated(true);
+          expr->get_eval_info(eval_ctx_).set_projected(true);
         }
       }
     }

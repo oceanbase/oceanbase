@@ -54,12 +54,13 @@ public:
                                      ObSqlString &sql_string);
 
   static int get_table_row_num(ObMViewTransaction &trans, const uint64_t tenant_id,
-                               const uint64_t table_id, const share::SCN &scn, int64_t &num_rows);
+                               const uint64_t table_id, const share::SCN &scn,
+                               const uint64_t query_parallel, int64_t &num_rows);
 
   static int get_mlog_dml_row_num(ObMViewTransaction &trans, const uint64_t tenant_id,
                                   const uint64_t table_id, const share::ObScnRange &scn_range,
-                                  int64_t &num_rows_ins, int64_t &num_rows_upd,
-                                  int64_t &num_rows_del);
+                                  const uint64_t query_parallel, int64_t &num_rows_ins,
+                                  int64_t &num_rows_upd, int64_t &num_rows_del);
   static int sync_post_nested_mview_rpc(obrpc::ObCheckNestedMViewMdsArg &arg,
                                         obrpc::ObCheckNestedMViewMdsRes &res);
   static int check_dep_mviews_satisfy_target_scn(const uint64_t tenant_id,

@@ -115,6 +115,8 @@ int ObBackupCleanJobOperator::get_jobs(
       ObMySQLResult *result = NULL;
       if (OB_FAIL(fill_select_job_sql_(sql))) {
         LOG_WARN("failed to fill select job sql", K(ret));
+      } else if (OB_FAIL(sql.append_fmt(" order by %s", OB_STR_JOB_ID))) {
+        LOG_WARN("failed to append order by sql", K(ret));
       } else if (need_lock && OB_FAIL(sql.append_fmt(" for update"))) {
         LOG_WARN("failed to append sql", K(ret));
       } else if (OB_FAIL(proxy.read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
@@ -1182,6 +1184,70 @@ int ObBackupCleanLSTaskOperator::parse_ls_result_(
   }
  
   return ret;
+}
+
+int ObBackupCleanLSTaskOperator::LSTaskIterator::init(
+    common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
+    const int64_t task_id)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  const ObBackupTaskStatus pending_status(ObBackupTaskStatus::Status::PENDING);
+  const ObBackupTaskStatus doing_status(ObBackupTaskStatus::Status::DOING);
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("[BACKUP_CLEAN]iterator already inited", K(ret));
+  } else if (OB_FAIL(sql.assign_fmt("select * from %s", OB_ALL_BACKUP_DELETE_LS_TASK_TNAME))) {
+    LOG_WARN("[BACKUP_CLEAN]failed to fill select ls task sql", K(ret));
+  } else if (OB_FAIL(sql.append_fmt(" where %s=%ld", OB_STR_TASK_ID, task_id))) {
+    LOG_WARN("[BACKUP_CLEAN]failed to append where clause", K(ret));
+  } else if (OB_FAIL(sql.append_fmt(" and (%s='%s' or %s='%s')",
+                                            OB_STR_STATUS, pending_status.get_str(),
+                                            OB_STR_STATUS, doing_status.get_str()))) {
+    LOG_WARN("[BACKUP_CLEAN]failed to append status condition", K(ret));
+  } else if (OB_FAIL(sql_proxy.read(res_, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
+    LOG_WARN("[BACKUP_CLEAN]failed to exec sql", K(ret), K(sql), K(tenant_id));
+  } else if (OB_ISNULL(result_ = res_.get_result())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("[BACKUP_CLEAN]result is null", K(ret), K(sql));
+  } else {
+    sql_proxy_ = &sql_proxy;
+    tenant_id_ = tenant_id;
+    is_inited_ = true;
+  }
+
+  return ret;
+}
+
+int ObBackupCleanLSTaskOperator::LSTaskIterator::next(ObBackupCleanLSTaskAttr &ls_task)
+{
+  int ret = OB_SUCCESS;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("[BACKUP_CLEAN]iterator not inited", K(ret));
+  } else if (OB_ISNULL(result_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("[BACKUP_CLEAN]result is null", K(ret));
+  } else if (OB_FAIL(result_->next())) {
+    if (OB_ITER_END != ret) {
+      LOG_WARN("[BACKUP_CLEAN]failed to get next row", K(ret));
+    }
+  } else if (OB_FAIL(ObBackupCleanLSTaskOperator::do_parse_ls_result_(*result_, ls_task))) {
+    LOG_WARN("[BACKUP_CLEAN]failed to parse ls task", K(ret));
+  }
+
+  return ret;
+}
+
+void ObBackupCleanLSTaskOperator::LSTaskIterator::reset()
+{
+  sql_proxy_ = nullptr;
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  result_ = nullptr;
+  is_inited_ = false;
+  res_.reset();
 }
 
 int ObBackupCleanLSTaskOperator::do_parse_ls_result_(ObMySQLResult &result, ObBackupCleanLSTaskAttr &ls_attr)

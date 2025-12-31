@@ -839,26 +839,37 @@ int ObLSMeta::update_id_meta(const int64_t service_type,
 {
   int ret = OB_SUCCESS;
 
-  ObReentrantWLockGuard update_guard(update_lock_);
-  if (OB_FAIL(check_can_update_())) {
-    LOG_WARN("ls meta cannot update", K(ret), K(*this));
-  } else {
-    // TODO: write slog may failed, but the content is updated.
-    ObLSMeta tmp(*this);
-    bool unused_updated = false;
-    tmp.all_id_meta_.update_id_meta(service_type, limited_id, latest_scn, unused_updated);
-    update_guard.click();
-    if (write_slog) {
+  if (write_slog) {
+    ObReentrantWLockGuard update_guard(update_lock_);
+    if (OB_FAIL(check_can_update_())) {
+      LOG_WARN("ls meta cannot update", K(ret), K(*this));
+    } else {
+      // TODO: write slog may failed, but the content is updated.
+      ObLSMeta tmp(*this);
+      bool unused_updated = false;
+      tmp.all_id_meta_.update_id_meta(service_type, limited_id, latest_scn, unused_updated);
+      update_guard.click();
       if (OB_FAIL(write_slog_(tmp))) {
         LOG_WARN("id service flush write slog failed", K(ret));
       }
+      ObReentrantWLockGuard guard(rw_lock_);
+      update_guard.click();
+      all_id_meta_.update_id_meta(service_type, limited_id, latest_scn, unused_updated);
     }
+    LOG_INFO("update id meta", K(ret), K(service_type), K(limited_id),
+        K(latest_scn), K_(all_id_meta));
+  } else {
     ObReentrantWLockGuard guard(rw_lock_);
-    update_guard.click();
-    all_id_meta_.update_id_meta(service_type, limited_id, latest_scn, unused_updated);
+    bool unused_updated = false;
+    if (!is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("log stream meta is not valid", K(ret), K(*this));
+    } else {
+      all_id_meta_.update_id_meta(service_type, limited_id, latest_scn, unused_updated);
+    }
+    LOG_INFO("update id meta", K(ret), K(service_type), K(limited_id),
+        K(latest_scn), K_(all_id_meta));
   }
-  LOG_INFO("update id meta", K(ret), K(service_type), K(limited_id), K(latest_scn),
-           K(*this));
 
   return ret;
 }

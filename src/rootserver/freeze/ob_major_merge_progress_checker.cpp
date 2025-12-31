@@ -800,8 +800,12 @@ int ObMajorMergeProgressChecker::loop_index_ckm_validate_array()
       finish_index_cnt = 0;
       data_table_ckm.clear();
       prev_data_table_id = data_table_id;
-      if (OB_FAIL(data_table_ckm.build(data_table_id, get_compaction_scn(),
-                                       *sql_proxy_, schema_guard, get_tablet_ls_pair_cache()))) {
+      if (OB_FAIL(data_table_ckm.build(data_table_id,
+                                       get_compaction_scn(),
+                                       *sql_proxy_,
+                                       schema_guard,
+                                       get_tablet_ls_pair_cache(),
+                                       true/*include_greater_scn*/))) {
         LOG_WARN("fail to prepare schema checksum items", KR(ret), K_(tenant_id), K(data_table_id));
       } else {
         ++validator_statistics_.query_ckm_sql_cnt_;
@@ -828,9 +832,9 @@ int ObMajorMergeProgressChecker::loop_index_ckm_validate_array()
 
 ERRSIM_POINT_DEF(EN_SPECIAL_INDEX_TABLE_VERIFY);
 int ObMajorMergeProgressChecker::get_idx_ckm_and_validate(
-  const uint64_t index_table_id,
-  ObSchemaGetterGuard &schema_guard,
-  ObTableCkmItems &data_table_ckm)
+    const uint64_t index_table_id,
+    ObSchemaGetterGuard &schema_guard,
+    ObTableCkmItems &data_table_ckm)
 {
   int ret = OB_SUCCESS;
   ObTableCkmItems index_table_ckm(tenant_id_);
@@ -844,20 +848,20 @@ int ObMajorMergeProgressChecker::get_idx_ckm_and_validate(
   if (should_handle_index_table) {
     if (OB_FAIL(index_table_ckm.build(index_table_id, get_compaction_scn(),
                                       *sql_proxy_, schema_guard,
-                                      get_tablet_ls_pair_cache()))) {
+                                      get_tablet_ls_pair_cache(), false/*include_greater_scn*/))) {
       LOG_WARN("failed to get checksum items", KR(ret), K(index_table_id), "compaction_scn", get_compaction_scn());
     } else if (OB_UNLIKELY(index_table_ckm.get_table_schema()->should_not_validate_data_index_ckm())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("should not validate spatial index and data table", KR(ret), K(index_table_id), K(index_table_ckm));
+    } else if (data_table_ckm.should_skip_verify_ckm()) {
+      // data table has larger ckm than compaction scn, should skip to check index ckm
     } else {
       const bool is_global_index = index_table_ckm.get_table_schema()->is_global_index_table();
-      if (OB_FAIL(ObTableCkmItems::validate_ckm_func[is_global_index](
-        freeze_info_,
-        *sql_proxy_,
-        data_table_ckm,
-        index_table_ckm))) {
-        LOG_WARN("failed to validate checksum", KR(ret), "data_table_id", data_table_ckm.get_table_id(),
-          K(index_table_id), K(data_table_ckm), K(index_table_ckm));
+      if (OB_FAIL(ObTableCkmItems::validate_ckm_func[is_global_index](freeze_info_,
+                                                                      *sql_proxy_,
+                                                                      data_table_ckm,
+                                                                      index_table_ckm))) {
+        LOG_WARN("failed to validate checksum", KR(ret), "data_table_id", data_table_ckm.get_table_id(), K(index_table_id), K(data_table_ckm), K(index_table_ckm));
         if (OB_ITEM_NOT_MATCH == ret) {
           (void) uncompact_info_.add_skip_verify_table(index_table_id);
           ret = OB_SUCCESS;

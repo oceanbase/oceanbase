@@ -1234,6 +1234,7 @@ public:
   DISABLE_COPY_ASSIGN(ObConfigDefaultDeltaFormatChecker);
 };
 
+
 class ObConfigZoneDeployModeChecker : public ObConfigChecker
 {
 public:
@@ -1246,6 +1247,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigZoneDeployModeChecker);
 };
 
+class ObConfigAppendUpdateGlobalIndexesForDynamicPartitionChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigAppendUpdateGlobalIndexesForDynamicPartitionChecker() {}
+  virtual ~ObConfigAppendUpdateGlobalIndexesForDynamicPartitionChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigAppendUpdateGlobalIndexesForDynamicPartitionChecker);
+};
+
 class ObConfigEvictOldSSTablePolicyChecker: public ObConfigChecker
 {
 public:
@@ -1254,6 +1266,16 @@ public:
   bool check(const ObConfigItem &t) const;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigEvictOldSSTablePolicyChecker);
+};
+// Checker for comma-separated string list (e.g., "item1,item2,item3" or single "item")
+class ObConfigCommaSeparatedStringChecker : public ObConfigChecker
+{
+public:
+  ObConfigCommaSeparatedStringChecker() {}
+  virtual ~ObConfigCommaSeparatedStringChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigCommaSeparatedStringChecker);
 };
 
 } // namespace common

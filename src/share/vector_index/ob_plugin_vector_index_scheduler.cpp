@@ -275,17 +275,28 @@ void ObPluginVectorIndexLoadScheduler::clean_deprecated_ivf_caches()
           LOG_WARN("get null cache mgr skip current loop", KR(ret), K(cache_tablet_id));
           continue;
         }
-        // Check if tablet exists on this ls
-        if (OB_FAIL(ls_->get_tablet_svr()->get_tablet(cache_tablet_id, tablet_handle))) {
-          if (OB_TABLET_NOT_EXIST != ret) {
-            LOG_WARN("fail to get tablet", K(ret), K(cache_tablet_id));
-          } else {
-            // Tablet not found, need clean cache
-            ret = OB_SUCCESS;
-            need_delete = true;
-            LOG_INFO("ivf cache tablet not exist, need clean", K(cache_tablet_id));
-          }
-        }
+         // Check if table schema exists and is in recyclebin
+         ObSchemaGetterGuard schema_guard;
+         const ObSimpleTableSchemaV2 *simple_table_schema = nullptr;
+         if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, schema_guard))) {
+           LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id_));
+         } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id_, cache_mgr->get_table_id(), simple_table_schema))) {
+           LOG_WARN("failed to get simple table schema", KR(ret), K(tenant_id_), K(cache_mgr->get_table_id()));
+         } else if (OB_ISNULL(simple_table_schema) || simple_table_schema->is_in_recyclebin()) {
+           // remove cache if table not exist or is in recyclebin
+           need_delete = true;
+         }
+         // Check if tablet exists on this ls (only if table schema check passed)
+         if (!need_delete && OB_SUCC(ret)) {
+           if (OB_FAIL(ls_->get_tablet_svr()->get_tablet(cache_tablet_id, tablet_handle))) {
+             if (OB_TABLET_NOT_EXIST != ret) {
+               LOG_WARN("fail to get tablet", K(ret), K(cache_tablet_id));
+             } else {
+               ret = OB_SUCCESS; // not found, moved from this ls
+               need_delete = true;
+             }
+           }
+         }
         // Add to deletion list if needed
         if (need_delete) {
           if (OB_FAIL(delete_cache_tablet_id_array.push_back(cache_tablet_id))) {

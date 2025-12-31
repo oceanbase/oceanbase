@@ -2028,4 +2028,38 @@ DEF_COMMAND(SERVER, del_ss_tablet_macro_cache, 1, "tenant_id:tablet_id")
   COMMON_LOG(INFO, "del_ss_tablet_macro_cache", KR(ret), K(arg), K(result));
   return ret;
 }
+
+DEF_COMMAND(SERVER, push_ss_gc_last_succ_scn, 1, "tenant_id:succ_scn # push ss gc last_succ_scn to specified value")
+{
+  int ret = OB_SUCCESS;
+  string arg_str;
+  obrpc::ObSSGCPushLastSuccScnArg arg;
+  if (cmd_ == action_name_) {
+    ret = OB_INVALID_ARGUMENT;
+    ADMIN_WARN("should provide tenant_id and succ_scn");
+  } else {
+    arg_str = cmd_.substr(action_name_.length() + 1);
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (2 != sscanf(arg_str.c_str(), "%ld:%ld", &arg.tenant_id_, &arg.succ_scn_ns_)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid arg", K(ret), K(arg_str.c_str()));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "argument is invalid", K(ret), K(arg));
+  } else if (OB_FAIL(client_->push_ss_gc_last_succ_scn(arg))) {
+    COMMON_LOG(ERROR, "send req fail", K(ret), K(arg));
+  } else {
+    fprintf(stdout, "push_ss_gc_last_succ_scn success, tenant_id=%ld, succ_scn_ns=%ld\n",
+            arg.tenant_id_, arg.succ_scn_ns_);
+  }
+
+  if (OB_FAIL(ret)) {
+    fprintf(stderr, "fail to push_ss_gc_last_succ_scn, ret=%s\n", ob_error_name(ret));
+  }
+
+  COMMON_LOG(INFO, "push_ss_gc_last_succ_scn finished", KR(ret), K(arg));
+  return ret;
+}
 #endif

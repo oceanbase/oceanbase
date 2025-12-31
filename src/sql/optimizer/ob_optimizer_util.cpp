@@ -4615,6 +4615,7 @@ int ObOptimizerUtil::convert_rownum_filter_as_offset(ObRawExprFactory &expr_fact
                                                      ObRawExpr *const_expr,
                                                      ObRawExpr *&offset_int_expr,
                                                      ObRawExpr *zero_expr,
+                                                     ObItemType &cons_cmp_type,
                                                      bool &offset_is_not_neg,
                                                      ObTransformerCtx *ctx)
 {
@@ -4626,8 +4627,9 @@ int ObOptimizerUtil::convert_rownum_filter_as_offset(ObRawExprFactory &expr_fact
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(const_expr), K(session_info), K(filter_type));
   } else if (T_OP_GT == filter_type) {
-    if (OB_FAIL(ObTransformUtils::compare_const_expr_result(ctx, const_expr, T_OP_GE,
-                                                                    0, offset_is_not_neg))) {
+    cons_cmp_type = T_OP_GE;
+    if (OB_FAIL(ObTransformUtils::compare_const_expr_result(ctx, const_expr, cons_cmp_type,
+                                                            0, offset_is_not_neg))) {
       LOG_WARN("offset value is negative calc failed", K(ret));
     } else if (!offset_is_not_neg) {
       offset_int_expr = zero_expr;
@@ -4636,14 +4638,9 @@ int ObOptimizerUtil::convert_rownum_filter_as_offset(ObRawExprFactory &expr_fact
       LOG_WARN("failed to floor number as offset value", K(ret));
     }
   } else if (T_OP_GE == filter_type) {
-    bool offset_is_zero = false;
-    if (OB_FAIL(ObTransformUtils::compare_const_expr_result(ctx, const_expr, T_OP_EQ, 0, offset_is_zero))) {
-      LOG_WARN("offset value is zero calc failed", K(ret));
-    } else if (offset_is_zero) {
-      offset_int_expr = zero_expr;
-      offset_is_not_neg = true;
-    } else if (OB_FAIL(ObTransformUtils::compare_const_expr_result(ctx, const_expr, T_OP_GT,
-                                                                    0, offset_is_not_neg))) {
+    cons_cmp_type = T_OP_GT;
+    if (OB_FAIL(ObTransformUtils::compare_const_expr_result(ctx, const_expr, cons_cmp_type,
+                                                            0, offset_is_not_neg))) {
       LOG_WARN("offset value is negative calc failed", K(ret));
     } else if (!offset_is_not_neg) {
       offset_int_expr = zero_expr;
@@ -6852,15 +6849,21 @@ int ObOptimizerUtil::gen_set_target_list(ObIAllocator *allocator,
         new_select_item.expr_name_ = select_item.expr_name_;
         new_select_item.is_real_alias_ = select_item.is_real_alias_ ||
                     ObRawExprUtils::is_column_ref_skip_implicit_cast(select_item.expr_);
-        new_select_item.questions_pos_ = select_item.questions_pos_;
-        new_select_item.params_idx_ = select_item.params_idx_;
-        new_select_item.neg_param_idx_ = select_item.neg_param_idx_;
         new_select_item.esc_str_flag_ = select_item.esc_str_flag_;
         new_select_item.paramed_alias_name_ = select_item.paramed_alias_name_;
         new_select_item.need_check_dup_name_ = select_item.need_check_dup_name_;
-        if (OB_FAIL(ObRawExprUtils::make_set_op_expr(*expr_factory, i, set_op_type,
-                                                     res_types.at(i), session_info,
-                                                     new_select_item.expr_))) {
+        if (OB_FAIL(new_select_item.questions_pos_.assign(select_item.questions_pos_))) {
+          LOG_WARN("failed to assign questions pos", K(ret));
+        } else if (OB_FAIL(new_select_item.params_idx_.assign(select_item.params_idx_))) {
+          LOG_WARN("failed to assign params idx", K(ret));
+        } else if (OB_FAIL(new_select_item.neg_param_idx_.assign(select_item.neg_param_idx_))) {
+          LOG_WARN("failed to assign neg param idx", K(ret));
+        } else if (OB_FAIL(ObRawExprUtils::make_set_op_expr(*expr_factory,
+                                                            i,
+                                                            set_op_type,
+                                                            res_types.at(i),
+                                                            session_info,
+                                                            new_select_item.expr_))) {
           LOG_WARN("create set op expr failed", K(ret));
         } else if (OB_FAIL(select_stmt->add_select_item(new_select_item))) {
           LOG_WARN("push back set select item failed", K(ret));

@@ -237,7 +237,11 @@ int ObExprConcat::calc_result_typeN(ObExprResType &type,
   //结果的长度推导
   if (OB_SUCC(ret)) {
     if (lib::is_oracle_mode()) {
-      type.set_length(types[0].get_calc_length() + types[1].get_calc_length());
+      ObLength max_len = 0;
+      for (int64_t i = 0; i < param_num; ++i) {
+        max_len += types[i].get_calc_length();
+      }
+      type.set_length(max_len);
     } else {
       ObLength max_len = 0;
       for (int64_t i = 0; i < param_num; ++i) {

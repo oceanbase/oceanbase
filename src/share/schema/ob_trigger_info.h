@@ -523,7 +523,8 @@ public:
                                 common::ObString &source,
                                 bool is_header,
                                 share::schema::ObSchemaGetterGuard &schema_guard,
-                                common::ObIAllocator &alloc);
+                                common::ObIAllocator &alloc,
+                                sql::ObSQLSessionInfo *session);
   int gen_package_source(const common::ObString &base_object_database,
                          const common::ObString &base_object_name,
                          const ParseNode &parse_node,

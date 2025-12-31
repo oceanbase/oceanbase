@@ -2905,8 +2905,6 @@ int ObSplitDownloadSSTableTask::process()
   ObIDataSplitDag *data_split_dag = nullptr;
   ObLSHandle ls_handle;
   ObTabletHandle local_source_tablet_hdl;
-  int64_t epoch = 0;
-  bool is_sswriter = false;
   if (OB_FAIL(check_need_block_downloading())) {
     LOG_INFO("block downloading", K(ret));
   } else if (OB_UNLIKELY(!is_inited_)) {
@@ -2930,10 +2928,7 @@ int ObSplitDownloadSSTableTask::process()
   } else if (OB_UNLIKELY(!local_source_tablet_hdl.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected tablet", K(ret), K(source_tablet_id_), K(local_source_tablet_hdl));
-  } else if (OB_FAIL(ObSSDataSplitHelper::check_at_sswriter_lease(
-      ls_id_, source_tablet_id_, epoch, is_sswriter))) {
-    LOG_WARN("check executor failed", K(ret));
-  } else if (OB_FAIL(DDL_SIM_WHEN(!is_sswriter, MTL_ID(), 1/*ddl_task_id*/, SPLIT_DOWNLOAD_SSTABLE_SLOW))) {
+  } else if (OB_FAIL(DDL_SIM_WHEN(true/*condition*/, MTL_ID(), 1/*ddl_task_id*/, SPLIT_DOWNLOAD_SSTABLE_SLOW))) {
     LOG_WARN("ddl sim failed, download sstables slow", K(ret));
   } else if (OB_FAIL(download_sstables_and_update_local(
       ls_handle,

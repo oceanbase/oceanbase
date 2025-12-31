@@ -32,10 +32,6 @@ ObExprUDFCtx::~ObExprUDFCtx()
     deterministic_cache_->~ObExprUDFDeterministerCache();
     deterministic_cache_ = nullptr;
   }
-  if (OB_NOT_NULL(phy_plan_ctx_)) {
-    phy_plan_ctx_->~ObPhysicalPlanCtx();
-    phy_plan_ctx_ = nullptr;
-  }
 }
 
 int ObExprUDFCtx::init_param_store(ObExecContext &exec_ctx, int param_num)
@@ -43,21 +39,13 @@ int ObExprUDFCtx::init_param_store(ObExecContext &exec_ctx, int param_num)
   int ret = OB_SUCCESS;
   ObIAllocator &allocator = ctx_allocator_;
   void *param_store_buf = nullptr;
-  void *phy_plan_ctx_buf = nullptr;
-  int64_t query_timeout = 0;
-  if (OB_FAIL(exec_ctx.get_my_session()->get_query_timeout(query_timeout))) {
-    LOG_WARN("failed to get query timeout", K(ret), K(query_timeout));
-  } else if (OB_ISNULL(param_store_buf = allocator.alloc(sizeof(ParamStore)))) {
+  if (OB_ISNULL(param_store_buf = allocator.alloc(sizeof(ParamStore)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret), K(param_num));
   } else if (param_num > 0
              && OB_ISNULL(obj_stack_ = reinterpret_cast<ObObj*>(allocator.alloc(sizeof(ObObj) * param_num)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret), K(param_num));
-  } else if (OB_ISNULL(phy_plan_ctx_buf = allocator.alloc(sizeof(sql::ObPhysicalPlanCtx)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate physical plan ctx", K(ret));
-  } else if (FALSE_IT(phy_plan_ctx_ = new(phy_plan_ctx_buf)sql::ObPhysicalPlanCtx(allocator))) {
   } else {
     params_ = new(param_store_buf)ParamStore(ObWrapperAllocator(allocator));
     if (OB_ISNULL(params_)) {
@@ -71,13 +59,6 @@ int ObExprUDFCtx::init_param_store(ObExecContext &exec_ctx, int param_num)
       }
       params_->reuse();
     }
-    int64_t total_time =
-      (exec_ctx.get_physical_plan_ctx() != NULL
-        && exec_ctx.get_physical_plan_ctx()->get_timeout_timestamp() > 0) ?
-          exec_ctx.get_physical_plan_ctx()->get_timeout_timestamp()
-          : exec_ctx.get_my_session()->get_query_start_time() + query_timeout;
-    phy_plan_ctx_->set_timeout_timestamp(total_time);
-    phy_plan_ctx_->set_cur_time(ObTimeUtility::current_time(), *exec_ctx.get_my_session());
   }
   return ret;
 }
@@ -204,9 +185,6 @@ int ObExprUDFCtx::reuse(const ObExpr &expr)
   } else {
     if (OB_NOT_NULL(params_)) {
       params_->reuse();
-    }
-    if (OB_NOT_NULL(phy_plan_ctx_)) {
-      phy_plan_ctx_->get_param_store_for_update().reuse();
     }
     allocator_.reuse();
     is_first_execute_ = false;
@@ -351,18 +329,20 @@ int ObExprUDFCtx::calc_current_function()
     CK (OB_NOT_NULL(exec_ctx_->get_sql_ctx()->schema_guard_));
     if (get_info()->udf_package_id_ != OB_INVALID_ID) {
       pl::ObPLPackageGuard *package_guard = NULL;
-      if (OB_ISNULL(package_guard = exec_ctx_->get_package_guard())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected package guard", K(ret));
-      } else if (OB_ISNULL(exec_ctx_->get_sql_ctx()->schema_guard_)) {
+      if (OB_ISNULL(exec_ctx_->get_sql_ctx()->schema_guard_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected schema guard", K(ret));
+      } else if (OB_FAIL(exec_ctx_->get_package_guard(package_guard))) {
+        LOG_WARN("failed to get package guard", K(ret));
+      } else if (OB_ISNULL(package_guard)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected package guard", K(ret));
       } else if (!get_info()->is_udt_udf_) { // package routine
         ObArenaAllocator allocator("UDFTmpAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
         pl::ObPLResolveCtx resolve_ctx(allocator,
                                        *session_info_,
                                        *exec_ctx_->get_sql_ctx()->schema_guard_,
-                                       *exec_ctx_->get_package_guard(),
+                                       *package_guard,
                                        *GCTX.sql_proxy_,
                                        false);
         pl::ObPLPackage *package_spec = nullptr;
@@ -391,7 +371,7 @@ int ObExprUDFCtx::calc_current_function()
         CK (OB_NOT_NULL(current_function_));
       }
     } else {
-      CK (OB_NOT_NULL(current_function_ = static_cast<pl::ObPLFunction *>(pl_execute_arg_.get_cacheobj_guard().get_cache_obj())));
+      CK (OB_NOT_NULL(current_function_ = pl_execute_arg_.get_routine()));
       OX (current_compile_unit_ = current_function_);
     }
   }

@@ -253,7 +253,7 @@ int ObExprSet::eval_coll_composite(ObExecContext &exec_ctx, const common::ObObj 
       LOG_WARN("unexpected out args",
                K(ret), K(obj), K(params), K(out_args));
     } else if (OB_FAIL(res->deep_copy(reinterpret_cast<pl::ObPLCollection*>(params.at(1).get_ext()),
-                                      nullptr))) {
+                                      nullptr, false))) {
       LOG_WARN("failed to deep copy result collection", K(ret), K(params), KPC(res));
     } else {
       result = res;

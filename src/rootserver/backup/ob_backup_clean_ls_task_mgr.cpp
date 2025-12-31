@@ -73,6 +73,7 @@ int ObBackupCleanLSTaskMgr::process(int64_t &finish_cnt)
   //        observer will advance stautus to finish. 
   //        when task status is in finish, process only to update can_advance_ls_task_status to  true and result = ls_attr.result
   int ret = OB_SUCCESS;
+  bool can_add_task = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -80,7 +81,11 @@ int ObBackupCleanLSTaskMgr::process(int64_t &finish_cnt)
     LOG_INFO("schedule backup ls task", K(*ls_attr_));
     switch (ls_attr_->status_.status_) {
       case ObBackupTaskStatus::Status::INIT: {
-        if (OB_FAIL(add_task_())) {
+        if (OB_FAIL(task_scheduler_->check_can_add_task(can_add_task))) {
+          LOG_WARN("failed to check can add task", K(ret));
+        } else if (!can_add_task) {
+          LOG_INFO("queue is full, skip add task now", K(ret));
+        } else if (OB_FAIL(add_task_())) {
           LOG_WARN("failed to add task into task schedulers", K(ret), KP(ls_attr_));
         }
         break;
@@ -115,14 +120,14 @@ int ObBackupCleanLSTaskMgr::add_task_()
   next_status.status_ = ObBackupTaskStatus::Status::PENDING;
   if (OB_FAIL(task.build(*task_attr_, *ls_attr_))) {
     LOG_WARN("failed to build task", K(ret), KP(task_attr_), KP(ls_attr_));
+  } else if (OB_FAIL(advance_ls_task_status(*backup_service_, *sql_proxy_, *ls_attr_, next_status))) {
+    LOG_WARN("failed to advance ls task status", K(ret), K(*task_attr_));
 #ifdef ERRSIM
   } else if (OB_FAIL(tmp_ret = ERRSIM_BACKUP_CLEAN_ADD_TASK_FAIL)) {
     LOG_WARN("errsim add task forced fail", K(ret), K(*task_attr_), K(task));
 #endif
   } else if (OB_FAIL(task_scheduler_->add_task(task))) {
     LOG_WARN("failed to add task", K(ret), K(*task_attr_), K(task));
-  } else if (OB_FAIL(advance_ls_task_status(*backup_service_, *sql_proxy_, *ls_attr_, next_status))) {
-    LOG_WARN("failed to advance ls task status", K(ret), K(*task_attr_));
   } else {
     LOG_INFO("[BACKUP_CLEAN]success add task", K(*task_attr_), K(*ls_attr_), K(task)); 
   } 
@@ -180,6 +185,9 @@ int ObBackupCleanLSTaskMgr::finish_(int64_t &finish_cnt)
       } else {
         backup_service_->wakeup();
       }
+    } else {
+      // leave idle time for next retry
+      backup_service_->set_idle_time(OB_BACKUP_RETRY_TIME_INTERVAL);
     }
   } else {
     ret = ls_attr_->result_;

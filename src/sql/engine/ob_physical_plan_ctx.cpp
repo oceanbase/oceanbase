@@ -536,7 +536,7 @@ int ObPhysicalPlanCtx::extend_param_frame(const int64_t old_size)
       VectorHeader *vec_header = nullptr;
       get_param_frame_info(i, datum, eval_info, vec_header);
       *datum = datum_param_store_.at(i).datum_;
-      eval_info->evaluated_ = false;
+      eval_info->set_evaluated(false);
       LOG_TRACE("extend param frame", K(i), K(*datum), K(enable_rich_format_));
     }
   }
@@ -544,7 +544,7 @@ int ObPhysicalPlanCtx::extend_param_frame(const int64_t old_size)
   return ret;
 }
 
-OB_INLINE void ObPhysicalPlanCtx::get_param_frame_info(int64_t param_idx,
+void ObPhysicalPlanCtx::get_param_frame_info(int64_t param_idx,
                                                        ObDatum *&datum,
                                                        ObEvalInfo *&eval_info,
                                                        VectorHeader *&vec_header)
@@ -591,7 +591,7 @@ int ObPhysicalPlanCtx::replace_batch_param_datum(const int64_t cur_group_id,
         } else {
           //assign datum ptr to the real param datum
           *datum = datum_array->data_[cur_group_id];
-          eval_info->evaluated_ = true;
+          eval_info->set_evaluated(true);
           LOG_DEBUG("replace batch param datum", K(cur_group_id), KPC(datum), K(datum));
         }
       }

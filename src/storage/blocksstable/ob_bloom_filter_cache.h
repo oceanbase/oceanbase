@@ -201,6 +201,8 @@ public:
       const storage::ObITable::TableKey &sstable_key,
       const MacroBlockId &macro_id,
       const int64_t empty_read_prefix,
+      const int64_t nested_offset,
+      const int64_t nested_size,
       const ObSSTableReadHandle * read_handle = nullptr,
       const int64_t empty_read_cnt = 1);
   int get_sstable_bloom_filter(

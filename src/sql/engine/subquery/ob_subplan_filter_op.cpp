@@ -1053,7 +1053,7 @@ int ObSubPlanFilterOp::handle_next_batch_with_px_rescan(const int64_t op_max_bat
     }
   }
   FOREACH_CNT_X(e, spec_.output_, OB_SUCC(ret)) {
-    (*e)->get_eval_info(eval_ctx_).projected_ = true;
+    (*e)->get_eval_info(eval_ctx_).set_projected(true);
   }
 
   return ret;
@@ -1187,7 +1187,7 @@ int ObSubPlanFilterOp::handle_next_batch_with_group_rescan(const int64_t op_max_
     }
   }
   FOREACH_CNT_X(e, spec_.output_, OB_SUCC(ret)) {
-    (*e)->get_eval_info(eval_ctx_).projected_ = true;
+    (*e)->get_eval_info(eval_ctx_).set_projected(true);
   }
 
   return ret;
@@ -1277,7 +1277,7 @@ int ObSubPlanFilterOp::inner_get_next_batch(const int64_t max_row_cnt)
           continue;
         }
         FOREACH_CNT_X(e, spec_.output_, OB_SUCC(ret)) {
-          (*e)->get_eval_info(eval_ctx_).projected_ = true;
+          (*e)->get_eval_info(eval_ctx_).set_projected(true);
         }
         break;
       }

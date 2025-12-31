@@ -89,6 +89,7 @@ private:
   int write_ddl_(const ObSqlString &ddl);
   int build_add_partition_sql_(const ObString &specified_precreate_time, ObSqlString &sql);
   int build_drop_partition_sql_(ObSqlString &sql);
+  bool enable_update_global_indexes_();
   int build_precreate_partition_definition_list_(const ObString &specified_precreate_time, ObSqlString &part_def_list);
   int build_expired_partition_name_list_(ObSqlString &part_name_list);
   int build_part_name_(const int64_t timestamp, ObSqlString &str);

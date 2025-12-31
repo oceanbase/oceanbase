@@ -390,6 +390,7 @@ int ObPLCompiler::read_dll_from_disk(bool enable_persistent,
     OZ (cg.codegen_expression(func));
     OZ (func.get_enum_set_ctx().assgin(func_ast.get_enum_set_ctx()));
     OZ (func.set_variables(func_ast.get_symbol_table()));
+    OZ (func.pre_calc_default_values(session_info_, func_ast));
     OZ (func.set_types(func_ast.get_user_type_table()));
     OZ (func.get_dependency_table().assign(func_ast.get_dependency_table()));
     OZ (func.add_members(func_ast.get_flag()));
@@ -859,7 +860,8 @@ int ObPLCompiler::analyze_package(const ObString &source,
       }
     }
     OZ (parser.parse_package(source, parse_tree, session_info_.get_dtc_params(), 
-                             &schema_guard_, is_for_trigger, is_wrap, trg_info));
+                             &schema_guard_, is_for_trigger, is_wrap, trg_info,
+                             true, &session_info_));
     OZ (resolver.init(package_ast));
     OZ (resolver.resolve(parse_tree, package_ast));
     if (OB_SUCC(ret) && PL_PACKAGE_SPEC == package_ast.get_package_type()) {
@@ -983,7 +985,8 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
                                             package_info.get_package_id(),
                                             source,
                                             schema::PACKAGE_TYPE == package_info.get_type(),
-                                            schema_guard_, package.get_allocator()));
+                                            schema_guard_, package.get_allocator(),
+                                            &session_info_));
       LOG_DEBUG("trigger package source", K(source), K(package_info.get_type()), K(ret));
     } else {
       source = package_info.get_source();
@@ -1270,6 +1273,9 @@ int ObPLCompiler::init_function(share::schema::ObSchemaGetterGuard &schema_guard
   }
   if (routine_info.is_invoker_right()) {
     routine.set_invoker_right();
+  }
+  if (routine_info.get_compile_flag().compile_with_intf()) {
+    routine.set_is_pragma_interface();
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < routine_info.get_params().count(); ++i) {
     const ObPLRoutineParam *param = routine_info.get_params().at(i);
@@ -1638,12 +1644,20 @@ int ObPLCompiler::compile_subprogram_table(common::ObIAllocator &allocator,
             lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN)));
             if (OB_FAIL(cg.init())) {
               LOG_WARN("init code generator failed", K(ret));
-            } else if (OB_FAIL(cg.generate(*routine))) {
-              LOG_WARN("code generate failed", "routine name", routine_ast->get_name(), K(ret));
             } else {
-              routine->set_ret_type(routine_ast->get_ret_type());
-              if (OB_FAIL(compile_unit.add_routine(routine))) {
-                LOG_WARN("package add routine failed", K(ret));
+              if (session_info.is_pl_debug_on() || (session_info.get_pl_code_coverage() != nullptr)) {
+                if (OB_FAIL(routine_ast->generate_symbol_debuginfo())) {
+                  LOG_WARN("failed to generate symbol debuginfo for nested procedure", K(ret), K(routine_ast->get_name()));
+                }
+              }
+              if (OB_FAIL(ret)) {
+              } else if (OB_FAIL(cg.generate(*routine))) {
+                LOG_WARN("code generate failed", "routine name", routine_ast->get_name(), K(ret));
+              } else {
+                routine->set_ret_type(routine_ast->get_ret_type());
+                if (OB_FAIL(compile_unit.add_routine(routine))) {
+                  LOG_WARN("package add routine failed", K(ret));
+                }
               }
             }
           } // end of HEAP_VAR

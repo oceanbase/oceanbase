@@ -60,6 +60,7 @@ ob_set_subtarget(ob_server dbms_job
   dbms_scheduler/ob_dbms_sched_job_rpc_proxy.cpp
   dbms_scheduler/ob_dbms_sched_table_operator.cpp
   dbms_scheduler/ob_dbms_sched_service.cpp
+  dbms_scheduler/ob_dbms_sched_time_utils.cpp
  )
 
 ob_set_subtarget(ob_server mysql
@@ -646,6 +647,7 @@ ob_set_subtarget(ob_server virtual_table
 ob_server_add_target(ob_server)
 
 set_source_files_properties(table/htable_filter_lex.cxx PROPERTIES COMPILE_FLAGS -Wno-null-conversion)
+add_subdirectory(dbms_scheduler)
 
 add_library(oceanbase_static
   STATIC

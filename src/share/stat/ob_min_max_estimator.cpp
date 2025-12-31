@@ -143,7 +143,8 @@ int ObMinMaxEstimator::estimate(const ObOptStatGatherParam &param,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(param));
   } else if (!param.partition_infos_.empty() &&
-             OB_FAIL(fill_partition_info(allocator, param, param.partition_infos_.at(0)))) {
+             OB_FAIL(ObStatsEstimator::fill_partition_info(allocator,
+                                                           param.partition_infos_.at(0).part_name_))) {
     LOG_WARN("failed to add partition info", K(ret));
   } else if (OB_FAIL(add_min_max_stat_items(allocator,
                                             param,

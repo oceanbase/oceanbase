@@ -187,7 +187,7 @@ public:
   int64_t get_msg_receive_cur_cnt() const { return msg_receive_cur_cnt_; }
   void set_msg_cur_cnt(int64_t cnt) { msg_receive_cur_cnt_ = cnt; }
   void set_msg_expect_cnt(int64_t cnt) { msg_receive_expect_cnt_ = cnt; }
-  bool is_valid_type() { return NOT_INIT < msg_type_ < MAX_TYPE; }
+  bool is_valid_type() { return NOT_INIT < msg_type_ && msg_type_ < MAX_TYPE; }
   common::ObCurTraceId::TraceId get_trace_id() const { return trace_id_; }
   int64_t get_start_time() const { return start_time_; }
   int64_t get_px_seq_id() const { return px_sequence_id_; }

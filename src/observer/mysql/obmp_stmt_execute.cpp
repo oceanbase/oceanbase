@@ -1502,7 +1502,7 @@ int ObMPStmtExecute::response_result(
     bool &async_resp_used)
 {
   int ret = OB_SUCCESS;
-  bool need_trans_cb  = result.need_end_trans_callback() && (!force_sync_resp);
+  bool need_trans_cb  = result.need_end_trans_callback(force_sync_resp);
 
   // NG_TRACE_EXT(exec_begin, ID(arg1), force_sync_resp, ID(end_trans_cb), need_trans_cb);
 
@@ -1531,9 +1531,15 @@ int ObMPStmtExecute::response_result(
       ret = drv.response_result(result);
     }
   } else {
+    if (session.is_pl_async_commit()) {
+      ObPLEndTransCb &pl_end_trans_cb = session.get_pl_end_trans_cb();
+      pl_end_trans_cb.init(packet_sender_, &session, stmt_id_,
+        params_num_, is_prexecute() ? packet_sender_.get_comp_seq() : 0);
+    }
     if (need_trans_cb) {
       ObSqlEndTransCb &sql_end_cb = session.get_mysql_end_trans_cb();
       ObAsyncCmdDriver drv(gctx_, ctx_, session, retry_ctrl_, *this, is_prexecute());
+      session.set_pl_query_sender(&drv);
       if (OB_FAIL(sql_end_cb.init(packet_sender_, &session,
                                     stmt_id_, params_num_,
                                     is_prexecute() ? packet_sender_.get_comp_seq() : 0))) {
@@ -1545,6 +1551,7 @@ int ObMPStmtExecute::response_result(
                   K(result.get_stmt_type()), K(session.get_local_autocommit()));
       }
       async_resp_used = result.is_async_end_trans_submitted();
+      session.set_pl_query_sender(NULL);
     } else {
       ObSyncCmdDriver drv(gctx_, ctx_, session, retry_ctrl_, *this, is_prexecute());
       session.set_pl_query_sender(&drv);
@@ -3392,7 +3399,7 @@ int ObMPStmtExecute::ps_cursor_open(ObSQLSessionInfo &session,
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc pl_ctx", K(ret));
     } else {
-      new(pl_ctx) ObPLExecCtx(cursor->get_allocator(), &result.get_exec_context(), NULL/*params*/,
+      new(pl_ctx) ObPLExecCtx(cursor->get_allocator(), cursor->get_allocator(), &result.get_exec_context(), NULL/*params*/,
                               NULL/*result*/, &ret, NULL/*func*/, true);
       cursor->set_exec_ctx(pl_ctx);
       if (

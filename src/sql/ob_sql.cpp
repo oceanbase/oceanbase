@@ -1102,6 +1102,12 @@ int ObSql::fill_result_set(const ObPsStmtId stmt_id, const ObPsStmtInfo &stmt_in
   const ObPsSqlMeta &sql_meta = stmt_info.get_ps_sql_meta();
   result.set_p_param_fileds(const_cast<common::ParamsFieldIArray *>(&sql_meta.get_param_fields()));
   result.set_p_column_fileds(const_cast<common::ParamsFieldIArray *>(&sql_meta.get_column_fields()));
+  result.get_external_retrieve_info().parse_question_mark_cnt_ = stmt_info.get_parse_question_mark_count();
+  result.get_external_retrieve_info().external_params_cnt_ = stmt_info.get_external_params_count();
+  if (stmt_info.get_num_of_returning_into() >= 0) {
+    result.get_external_retrieve_info().into_exprs_cnt_ = stmt_info.get_num_of_returning_into();
+    result.set_returning(true);
+  }
   //ObPsSqlMeta::const_column_iterator column_iter = sql_meta.column_begin();
   //result.reserve_field_columns(sql_meta.get_column_size());
   //for (; OB_SUCC(ret) && column_iter != sql_meta.column_end(); ++column_iter) {
@@ -1245,6 +1251,7 @@ int ObSql::do_real_prepare(const ObString &sql,
   ObSQLSessionInfo &session = result.get_session();
   ObExecContext &ectx = result.get_exec_context();
 
+  bool is_parser_dynamic_sql = context.is_prepare_with_params_;
   // normal ps sql also a dynamic sql, we adjust is_dynamic_sql_ for normal ps sql parser.
   context.is_dynamic_sql_ = context.is_dynamic_sql_ || !is_inner_sql;
 
@@ -1267,10 +1274,11 @@ int ObSql::do_real_prepare(const ObString &sql,
                                                               : STD_MODE;
     CHECK_COMPATIBILITY_MODE(context.session_info_);
     MEMSET(&parse_result, 0, SIZEOF(ParseResult));
-    if (FAILEDx(parser.parse(sql, parse_result, parse_mode))) {
+    if (FAILEDx(parser.parse(sql, parse_result, parse_mode, false, false, is_inner_sql, context.is_dbms_sql_, is_parser_dynamic_sql))) {
       LOG_WARN("generate syntax tree failed",
                "sql", parse_result.contain_sensitive_data_ ? ObString(OB_MASKED_STR) : sql);
     }
+    OX (result.get_external_retrieve_info().parse_question_mark_cnt_ = parse_result.question_mark_ctx_.count_);
   } else {
     CK (OB_LIKELY(context.is_pre_execute_));
     CK (OB_LIKELY(context.is_prepare_protocol_));
@@ -1287,7 +1295,7 @@ int ObSql::do_real_prepare(const ObString &sql,
     ret = OB_ERR_PS_TOO_MANY_PARAM;
     LOG_WARN("There are too many parameters in the prepared statement", K(ret));
     LOG_USER_ERROR(OB_ERR_PS_TOO_MANY_PARAM);
-  } else {
+  } else if (!is_parser_dynamic_sql) {
     ps_status_guard.is_varparams_sql_prepare(parse_result.question_mark_ctx_.count_ > 0
                                              && !context.is_prepare_with_params_);
   }
@@ -1295,13 +1303,16 @@ int ObSql::do_real_prepare(const ObString &sql,
 
   OZ (ObResolverUtils::resolve_stmt_type(parse_result, stmt_type));
 
-  if (OB_SUCC(ret)
-      && context.is_prepare_protocol_
-      && context.is_prepare_stage_
-      && context.is_pre_execute_) {
-    CK (OB_NOT_NULL(context.prepare_params_));
-    OZ (construct_param_store(*context.prepare_params_,
-                              ectx.get_physical_plan_ctx()->get_param_store_for_update()));
+  if (OB_FAIL(ret)) {
+  } else if (context.is_prepare_protocol_ && context.is_prepare_stage_) {
+    if (context.is_pre_execute_) {
+      CK (OB_NOT_NULL(context.prepare_params_));
+      OZ (construct_param_store(*context.prepare_params_,
+                                 ectx.get_physical_plan_ctx()->get_param_store_for_update()));
+    } else if (context.is_dynamic_sql_ && is_inner_sql && NULL != context.prepare_params_) {
+      OZ (construct_param_store(*context.prepare_params_,
+                                ectx.get_physical_plan_ctx()->get_param_store_for_update()));
+    }
   }
 
   if (OB_FAIL(ret)) {
@@ -1445,7 +1456,11 @@ int ObSql::do_real_prepare(const ObString &sql,
       //需要确保prepare的文本与客户端发过来的一致
       if (is_inner_sql) {
         // pl
-        info_ctx.normalized_sql_ = basic_stmt->get_query_ctx()->get_sql_stmt();
+        if (context.is_dynamic_sql_ && context.is_from_pl_) {
+          info_ctx.normalized_sql_ = sql;
+        } else {
+          info_ctx.normalized_sql_ = basic_stmt->get_query_ctx()->get_sql_stmt();
+        }
       } else if (result.is_returning() && ObStmt::is_dml_write_stmt(stmt_type)) {
         info_ctx.normalized_sql_ = sql;
         info_ctx.no_param_sql_ = basic_stmt->get_query_ctx()->get_sql_stmt();
@@ -1456,6 +1471,7 @@ int ObSql::do_real_prepare(const ObString &sql,
     if (OB_FAIL(ret)) {
     } else if (result.is_returning() && ObStmt::is_dml_write_stmt(stmt_type)) {
       info_ctx.ps_need_parameterization_ = true;
+      info_ctx.no_param_sql_ = basic_stmt->get_query_ctx()->get_sql_stmt();
     } else if (session.is_enable_ps_parameterize() && pc_ctx.ps_need_parameterized_) {
       info_ctx.ps_need_parameterization_ = true;
       if (!is_inner_sql && stmt::T_ANONYMOUS_BLOCK == stmt_type) {
@@ -1467,14 +1483,18 @@ int ObSql::do_real_prepare(const ObString &sql,
       info_ctx.ps_need_parameterization_ = false;
       pc_ctx.fixed_param_idx_.reset();
       pc_ctx.fp_result_.raw_params_.reset();
-      info_ctx.no_param_sql_ = pc_ctx.ps_need_parameterized_
+      if (context.is_dynamic_sql_ && context.is_from_pl_) {
+        info_ctx.no_param_sql_ = basic_stmt->get_query_ctx()->get_sql_stmt();
+      } else {
+        info_ctx.no_param_sql_ = pc_ctx.ps_need_parameterized_
                                 ? pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_
                                 : info_ctx.normalized_sql_;
+      }
     }
     if (OB_SUCC(ret)) {
       if (basic_stmt->is_insert_stmt() || basic_stmt->is_update_stmt() || basic_stmt->is_delete_stmt()) {
         ObDelUpdStmt *dml_stmt = static_cast<ObDelUpdStmt*>(basic_stmt);
-        if (dml_stmt->get_returning_into_exprs().count() != 0 && dml_stmt->is_returning()) {
+        if (dml_stmt->is_returning()) {
           info_ctx.num_of_returning_into_ = dml_stmt->get_returning_into_exprs().count();
         }
       }
@@ -1499,9 +1519,16 @@ int ObSql::do_real_prepare(const ObString &sql,
     info_ctx.raw_params_ = &pc_ctx.fp_result_.raw_params_;
     info_ctx.fixed_param_idx_ = &pc_ctx.fixed_param_idx_;
     info_ctx.raw_sql_.assign_ptr(sql.ptr(), sql.length());
-    if (OB_FAIL(do_add_ps_cache(info_ctx, *context.schema_guard_, result))) {
+    if (!context.is_dbms_sql_ &&
+        OB_FAIL(do_add_ps_cache(info_ctx, *context.schema_guard_, result))) {
       LOG_WARN("add to ps plan cache failed",
                K(ret), K(info_ctx.normalized_sql_), K(param_cnt));
+    } else if (is_inner_sql) {
+      if (OB_FAIL(ob_write_string(allocator,
+                                  basic_stmt->get_query_ctx()->get_sql_stmt(),
+                                  result.get_stmt_ps_sql(), true))) {
+        LOG_WARN("failed to write string", K(ret));
+      }
     }
   }
   //if the error code is ob_timeout, we add more error info msg for dml query.
@@ -2002,8 +2029,8 @@ int ObSql::handle_ps_prepare(const ObString &stmt,
         LOG_USER_ERROR(OB_ERR_OPEN_CURSORS_EXCEEDED, "prepared statement handles");
         LOG_WARN("exceeds the maximum number of ps handles allowed to open on the session",
         K(ret), K(cur_ps_handle_size), K(open_cursors_limit));
-      } else if (NULL != context.secondary_namespace_ || result.is_simple_ps_protocol()) {
-        // pl发起的sql解析, 由于每次需要计算依赖对象等额外参数, 因此需要做do_real_prepare
+      } else if (NULL != context.secondary_namespace_ || result.is_simple_ps_protocol() || context.is_dbms_sql_) {
+        // pl 或 dbms_sql 发起的sql解析, 由于每次需要计算依赖对象等额外参数, 因此需要做do_real_prepare
         need_do_real_prepare = true;
         if (REACH_TIME_INTERVAL(1000000)) {
           LOG_INFO("need do real prepare",
@@ -2067,6 +2094,12 @@ int ObSql::handle_ps_prepare(const ObString &stmt,
         //prepare ps stmt已成功，失败此处需close
         IGNORE_RETURN session.close_ps_stmt(client_stmt_id);
         LOG_WARN("fill result set failed", K(ret), K(client_stmt_id));
+      } else if (is_inner_sql) {
+        if (OB_FAIL(ob_write_string(allocator,
+                                    context.is_dynamic_sql_ && context.is_from_pl_ ? stmt_info->get_no_param_sql() : stmt_info->get_ps_sql(),
+                                    result.get_stmt_ps_sql(), true))) {
+          LOG_WARN("failed to write string", K(ret));
+        }
       }
       LOG_DEBUG("prepare done", K(ret), K(need_do_real_prepare), K(duplicate_prepare));
       if (OB_FAIL(ret)
@@ -3303,7 +3336,8 @@ int ObSql::generate_stmt(ParseResult &parse_result,
                 result.get_session(),
                 resolver_ctx.secondary_namespace_,
                 resolver_ctx.is_dynamic_sql_ || resolver_ctx.is_dbms_sql_,
-                resolver.get_params().external_param_info_.params_))) {
+                resolver.get_params().external_param_info_.params_,
+                *result.get_exec_context().get_expr_factory()))) {
               SQL_LOG(WARN, "failed to build external retrieve info", K(ret));
             } else {
               if (result.get_external_params().empty() && result.get_into_exprs().empty()) {

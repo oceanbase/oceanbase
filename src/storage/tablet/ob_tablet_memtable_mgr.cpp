@@ -304,6 +304,8 @@ int ObTabletMemtableMgr::create_memtable_(const CreateMemtableArg &arg,
   ObITabletMemtable *new_tablet_memtable = NULL;
   ObLSHandle ls_handle;
   retry_times_ = 0;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  const bool use_memtable_hash_index = tenant_config->_enable_memtable_hash_index;
 
   if (OB_FAIL(acquire_tablet_memtable_(arg.for_inc_direct_load_, memtable_handle))) {
     LOG_WARN("failed to create memtable", K(ret), K(ls_id), K(tablet_id_));
@@ -317,7 +319,7 @@ int ObTabletMemtableMgr::create_memtable_(const CreateMemtableArg &arg,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, invalid ls handle", K(ret), K(ls_handle), K(ls_id), K(tablet_id_));
   } else if (OB_FAIL(new_tablet_memtable->init(
-                 table_key, ls_handle, freezer_, this, arg.schema_version_, logstream_freeze_clock))) {
+                 table_key, ls_handle, freezer_, this, arg.schema_version_, logstream_freeze_clock, use_memtable_hash_index))) {
     LOG_WARN("failed to init memtable",
              K(ret),
              K(ls_id),

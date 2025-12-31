@@ -236,22 +236,22 @@ public:
   {
     ObDatum *expr_datum_0 = &cells_.at(0)->locate_batch_datums(eval_ctx_)[idx];
     expr_datum_0->set_int(row_id);
-    cells_.at(0)->get_eval_info(eval_ctx_).evaluated_ = true;
-    cells_.at(0)->get_eval_info(eval_ctx_).projected_ = true;
+    cells_.at(0)->get_eval_info(eval_ctx_).set_evaluated(true);
+    cells_.at(0)->get_eval_info(eval_ctx_).set_projected(true);
     int64_t max_size = 512;
     if (enable_big_row_ && row_id > 0 && random() % 100000 < 5) {
       max_size = 1 << 20;
     }
     ObDatum *expr_datum_1 = &cells_.at(1)->locate_batch_datums(eval_ctx_)[idx];
     expr_datum_1->set_null();
-    cells_.at(1)->get_eval_info(eval_ctx_).evaluated_ = true;
-    cells_.at(1)->get_eval_info(eval_ctx_).projected_ = true;
+    cells_.at(1)->get_eval_info(eval_ctx_).set_evaluated(true);
+    cells_.at(1)->get_eval_info(eval_ctx_).set_projected(true);
 
     int64_t size = 10 + random() % max_size;
     ObDatum *expr_datum_2 = &cells_.at(2)->locate_batch_datums(eval_ctx_)[idx];
     expr_datum_2->set_string(str_buf_, (int)size);
-    cells_.at(2)->get_eval_info(eval_ctx_).evaluated_ = true;
-    cells_.at(2)->get_eval_info(eval_ctx_).projected_ = true;
+    cells_.at(2)->get_eval_info(eval_ctx_).set_evaluated(true);
+    cells_.at(2)->get_eval_info(eval_ctx_).set_projected(true);
   }
 
   //varify next row

@@ -227,7 +227,7 @@ private:
         match_groups_(match_groups), merge_join_op_(merge_join_op),
         all_exprs_(NULL), datum_store_(), backup_datums_(),
         backup_rows_cnt_(0), backup_rows_used_(0), brs_holder_(),
-        equal_param_idx_(allocator)
+        equal_param_idx_(allocator), backup_rows_bit_vec_(NULL)
     {}
     int init(const uint64_t tenant_id, bool is_left, ObOperator *child,
              const ObIArray<ObMergeJoinSpec::EqualConditionInfo> &equal_cond_infos,
@@ -289,6 +289,9 @@ private:
       backup_rows_cnt_ = 0;
       backup_rows_used_ = 0;
       brs_holder_.reset();
+      if (OB_NOT_NULL(backup_rows_bit_vec_)) {
+        merge_join_op_.mem_context_->get_malloc_allocator().free(backup_rows_bit_vec_);
+      }
     }
     int64_t cur_idx_;
     ObBatchRows brs_;
@@ -307,6 +310,7 @@ private:
     ObBatchResultHolder brs_holder_;
 
     common::ObFixedArray<int64_t, common::ObIAllocator> equal_param_idx_;
+    ObBitVector *backup_rows_bit_vec_;
   };
 
   enum ObJoinState {

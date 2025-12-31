@@ -256,8 +256,8 @@ int ObBackupCleanScheduler::drop_delete_policy(const obrpc::ObDeletePolicyArg &i
 
 int ObBackupCleanScheduler::get_job_need_reload_task(
     const ObBackupCleanJobAttr &job, 
-    common::ObIAllocator &allocator, 
-    common::ObIArray<ObBackupScheduleTask *> &tasks)
+    common::ObIAllocator &allocator,
+    ObBackupTaskSchedulerQueue &queue)
 {
   int ret = OB_SUCCESS;
   const bool for_update = false;
@@ -269,39 +269,41 @@ int ObBackupCleanScheduler::get_job_need_reload_task(
   } else {
     for (int j = 0; OB_SUCC(ret) && j < task_attrs.count(); ++j) {
       const ObBackupCleanTaskAttr &task_attr = task_attrs.at(j);
-      ObArray<ObBackupCleanLSTaskAttr> ls_tasks;
-      if (OB_FAIL(ObBackupCleanLSTaskOperator::get_ls_tasks_from_task_id(*sql_proxy_, task_attr.task_id_, task_attr.tenant_id_, for_update, ls_tasks))) {
-        LOG_WARN("failed to get ls tasks", K(ret), K(task_attr));
-      } else if (ls_tasks.empty()) {
-        LOG_INFO("[BACKUP_CLEAN]no ls tasks, no need to reload", K(task_attr));
-      } else if (OB_FAIL(do_get_need_reload_task_(task_attr, ls_tasks, allocator, tasks))) {
-        LOG_WARN("failed to get need reload task", K(ret));
+      if (OB_FAIL(do_reload_for_task_(task_attr, allocator, queue))) {
+        LOG_WARN("failed to reload ls tasks", K(ret), K(task_attr));
       }
     }
   }
   return ret;
 }
 
-int ObBackupCleanScheduler::do_get_need_reload_task_(
-    const ObBackupCleanTaskAttr &task_attr, 
-    const ObArray<ObBackupCleanLSTaskAttr> &ls_tasks,
+
+int ObBackupCleanScheduler::do_reload_for_task_(
+    const ObBackupCleanTaskAttr &task_attr,
     common::ObIAllocator &allocator,
-    ObIArray<ObBackupScheduleTask *> &tasks)
+    ObBackupTaskSchedulerQueue &queue)
 {
   int ret = OB_SUCCESS;
-  if (!task_attr.is_valid() || ls_tasks.empty()) {
+  if (!task_attr.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(task_attr), K(ls_tasks));
+    LOG_WARN("[BACKUP_CLEAN]invalid argument", K(ret), K(task_attr));
   } else {
-    for (int i = 0; OB_SUCC(ret) && i < ls_tasks.count(); ++i) {
-      const ObBackupCleanLSTaskAttr &ls_task = ls_tasks.at(i);
-      ObBackupScheduleTask *task = nullptr;
-      if (OB_FAIL(build_task_(task_attr, ls_task, allocator, task))) {
-        LOG_WARN("failed to build task", K(ret), K(task_attr), K(ls_task));
-      } else if (ObBackupTaskStatus::Status::PENDING == ls_task.status_.status_
-          || ObBackupTaskStatus::Status::DOING == ls_task.status_.status_) {
-        if (OB_FAIL(tasks.push_back(task))) {
-          LOG_WARN("failed to push back task", K(ret), K(*task));
+    ObBackupCleanLSTaskOperator::LSTaskIterator iter;
+    if (OB_FAIL(iter.init(*sql_proxy_, task_attr.tenant_id_, task_attr.task_id_))) {
+      LOG_WARN("[BACKUP_CLEAN]failed to init iterator", K(ret));
+    } else {
+      ObBackupCleanLSTaskAttr ls_task;
+      while (OB_SUCC(ret)) {
+        ls_task.reset();
+        if (OB_FAIL(iter.next(ls_task))) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+            break;
+          } else {
+            LOG_WARN("[BACKUP_CLEAN]failed to get next ls task", K(ret));
+          }
+        } else if (OB_FAIL(do_reload_single_clean_ls_task_(task_attr, ls_task, allocator, queue))) {
+          LOG_WARN("[BACKUP_CLEAN]failed to process single ls task", K(ret), K(ls_task));
         }
       }
     }
@@ -309,9 +311,49 @@ int ObBackupCleanScheduler::do_get_need_reload_task_(
   return ret;
 }
 
-int ObBackupCleanScheduler::get_need_reload_task(
-    common::ObIAllocator &allocator, 
-    common::ObIArray<ObBackupScheduleTask *> &tasks)
+int ObBackupCleanScheduler::do_reload_single_clean_ls_task_(
+    const ObBackupCleanTaskAttr &task_attr,
+    const ObBackupCleanLSTaskAttr &ls_task,
+    common::ObIAllocator &allocator,
+    ObBackupTaskSchedulerQueue &queue)
+{
+  int ret = OB_SUCCESS;
+  ObBackupScheduleTask *task = nullptr;
+  if (!task_attr.is_valid() || !ls_task.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(task_attr), K(ls_task));
+  } else {
+    bool queue_is_full = false;
+    if (OB_FAIL(build_task_(task_attr, ls_task, allocator, task))) {
+      LOG_WARN("failed to build task", K(ret), K(task_attr), K(ls_task));
+    } else if (OB_ISNULL(task)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("nullptr task", K(ret));
+    } else if (OB_FAIL(queue.check_queue_is_full(queue_is_full))) {
+      LOG_WARN("[BACKUP_CLEAN]failed to check can add task", K(ret));
+    } else if (queue_is_full) {
+      ret = OB_SIZE_OVERFLOW;
+      LOG_WARN("[BACKUP_CLEAN]queue is full, stop reload ls tasks", KPC(task));
+    } else if (OB_FAIL(queue.push_task(*task))) {
+      if (OB_ENTRY_EXIST == ret) {
+        LOG_DEBUG("task already exist in queue, skip", KPC(task));
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to push task to queue", K(ret), KPC(task));
+      }
+    }
+    if (nullptr != task) {
+      task->~ObBackupScheduleTask();
+      allocator.free(task);
+      task = nullptr;
+    }
+  }
+  return ret;
+}
+
+int ObBackupCleanScheduler::reload_task(
+    common::ObIAllocator &allocator,
+    ObBackupTaskSchedulerQueue &queue)
 {
   int ret = OB_SUCCESS;
   bool for_update = false;
@@ -333,7 +375,7 @@ int ObBackupCleanScheduler::get_need_reload_task(
         LOG_WARN("failed to check tenant status", K(ret));
       } else if (!is_valid) {
         LOG_INFO("[BACKUP_CLEAN]tenant status is not valid, no need to reload task");
-      } else if (OB_FAIL(get_job_need_reload_task(job, allocator, tasks))){
+      } else if (OB_FAIL(get_job_need_reload_task(job, allocator, queue))) {
         LOG_WARN("failed to get job need reload task", K(ret));
       }
     }
@@ -411,6 +453,9 @@ int ObBackupCleanScheduler::cancel_backup_clean_job(const obrpc::ObBackupCleanAr
         LOG_INFO("tenant status not normal, no need to schedule backup", K(need_cancel_backup_tenant));
       } else if (OB_FAIL(cancel_tenant_jobs_(need_cancel_backup_tenant))) {
         LOG_WARN("failed to cancel tenant jobs", K(ret), K(need_cancel_backup_tenant));
+      } else {
+        // wakeup backup user tenant service to check job status, the return value is ignored
+        backup_service_->wakeup_tenant_service(need_cancel_backup_tenant);
       }
     }
   }
@@ -495,6 +540,9 @@ int ObBackupCleanScheduler::start_schedule_backup_clean(const obrpc::ObBackupCle
       LOG_WARN("tenant backup clean should not initiate another tenant", K(ret), K(in_arg));
     } else if (OB_FAIL(start_tenant_backup_clean_(template_job_attr))) {
       LOG_WARN("failed to start tenant backup clean", K(ret), K(in_arg));
+    } else {
+      // wakeup backup user tenant service to check job status, the return value is ignored
+      backup_service_->wakeup_tenant_service(in_arg.tenant_id_);
     }
   }
   if (OB_SUCC(ret)) {
@@ -925,10 +973,22 @@ int ObBackupCleanScheduler::process_tenant_delete_jobs_(const uint64_t tenant_id
   return ret;
 }
 
+bool ObBackupCleanScheduler::check_need_cancel_job_(const ObIArray<ObBackupCleanJobAttr> &clean_jobs)
+{
+  bool need_cancel_job = false;
+  if (clean_jobs.empty()) {
+  } else if (ObBackupCleanStatus::Status::CANCELING == clean_jobs.at(0).status_.status_) {
+    need_cancel_job = true;
+  }
+  return need_cancel_job;
+}
+
 int ObBackupCleanScheduler::process()
 {
   int ret = OB_SUCCESS;
   ObArray<ObBackupCleanJobAttr> clean_jobs;
+  bool can_add_task = false;
+  bool need_cancel_job = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup clean scheduler not init", K(ret));
@@ -936,6 +996,11 @@ int ObBackupCleanScheduler::process()
     LOG_WARN("failed to get backup clean jobs", K(ret));
   } else if (clean_jobs.empty()) {
     // do nothing
+  } else if (OB_FALSE_IT(need_cancel_job = check_need_cancel_job_(clean_jobs))) {
+  } else if (OB_FAIL(task_scheduler_->check_can_add_task(can_add_task))) {
+    LOG_WARN("failed to check can add task", K(ret));
+  } else if (!can_add_task && !need_cancel_job) { // if queue is full and no canceling job, skip
+    LOG_INFO("queue is full and no canceling job, skip process this round", K(need_cancel_job), K(can_add_task));
   } else if (OB_FAIL(process_tenant_delete_jobs_(tenant_id_, clean_jobs))) {
     LOG_WARN("failed to process tenant delete jobs", K(ret), K(tenant_id_), K(clean_jobs));
   } else {
@@ -1252,6 +1317,10 @@ int ObUserTenantBackupDeleteMgr::move_to_history_()
       } else {
         LOG_INFO("succeed to move job to history. backup delete job finish", "tenant_id", job_attr_->tenant_id_, "job_id", job_attr_->job_id_);
         backup_service_->wakeup();
+        // if the job is initiated by sys tenant, wakeup sys tenant backup service to advance sys job status
+        if (is_sys_tenant(job_attr_->initiator_tenant_id_)) {
+          backup_service_->wakeup_tenant_service(job_attr_->initiator_tenant_id_);
+        }
       }
     } else {
       int tmp_ret = OB_SUCCESS;
@@ -1710,20 +1779,30 @@ int ObUserTenantBackupDeleteMgr::persist_backup_clean_tasks_(
 {
   int ret = OB_SUCCESS;
   bool is_exist = false;
-  for (int64_t i = 0; OB_SUCC(ret) && i < set_list.count(); i++) {
-    const ObBackupSetFileDesc &backup_set_info = set_list.at(i);
-    ObBackupCleanTaskAttr task_attr;
-    if (OB_FAIL(get_backup_clean_task_(backup_set_info, task_attr))) {
-      LOG_WARN("failed to get backup set task", K(ret));
-    } else if (!task_attr.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("backup clean set task is valid", K(ret), K(task_attr), K(backup_set_info));
-    } else if (OB_FAIL(backup_service_->check_leader())) {
-      LOG_WARN("failed to check leader", K(ret));
-    } else if (OB_FAIL(ObBackupCleanTaskOperator::insert_backup_clean_task(trans, task_attr))) {
-      LOG_WARN("failed to insert backup task", K(ret), K(task_attr));
+  if (!set_list.empty()) {
+    int64_t task_size = set_list.count();
+    int64_t start_task_id = -1;
+    if (OB_FAIL(get_next_task_id_(task_size, start_task_id))) {
+      LOG_WARN("failed to get next task id batch", K(ret), K(task_size));
     } else {
-      LOG_INFO("[BACKUP_CLEAN]success insert backup clean task", K(ret), K(task_attr), K(backup_set_info)); 
+      ObBackupCleanTaskAttr task_attr;
+      for (int64_t i = 0; OB_SUCC(ret) && i < task_size; ++i) {
+        task_attr.reset();
+        const ObBackupSetFileDesc &backup_set_info = set_list.at(i);
+        const int64_t task_id = start_task_id + i;
+        if (OB_FAIL(generate_backup_clean_set_task_(backup_set_info, task_id, task_attr))) {
+          LOG_WARN("failed to generate backup clean task", K(ret), K(backup_set_info), K(task_id));
+        } else if (!task_attr.is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("backup clean set task is invalid", K(ret), K(task_attr), K(backup_set_info));
+        } else if (OB_FAIL(backup_service_->check_leader())) {
+          LOG_WARN("failed to check leader", K(ret));
+        } else if (OB_FAIL(ObBackupCleanTaskOperator::insert_backup_clean_task(trans, task_attr))) {
+          LOG_WARN("failed to insert backup task", K(ret), K(task_attr));
+        } else {
+          LOG_INFO("[BACKUP_CLEAN]success insert backup clean task", K(ret), K(task_attr), K(backup_set_info));
+        }
+      }
     }
   }
   return ret;
@@ -1735,18 +1814,30 @@ int ObUserTenantBackupDeleteMgr::persist_backup_piece_task_(
 {
   int ret = OB_SUCCESS;
   bool is_exist = false;
-  for (int64_t i = 0; OB_SUCC(ret) && i < piece_list.count(); i++) {
-    const ObTenantArchivePieceAttr &backup_piece_info = piece_list.at(i);
-    ObBackupCleanTaskAttr task_attr;
-    if (OB_FAIL(get_backup_piece_task_(backup_piece_info, task_attr))) {
-      LOG_WARN("failed to insert backup piece task", K(ret));
-    } else if (!task_attr.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("backup clean set task is valid", K(ret));
-    } else if (OB_FAIL(backup_service_->check_leader())) {
-      LOG_WARN("failed to check leader", K(ret));
-    } else if (OB_FAIL(ObBackupCleanTaskOperator::insert_backup_clean_task(trans, task_attr))) {
-      LOG_WARN("failed to insert backup task", K(ret), K(task_attr));
+  if (!piece_list.empty()) {
+    int64_t start_task_id = -1;
+    int64_t task_size = piece_list.count();
+    if (OB_FAIL(get_next_task_id_(task_size, start_task_id))) {
+      LOG_WARN("failed to get next task id batch", K(ret), K(task_size));
+    } else {
+      ObBackupCleanTaskAttr task_attr;
+      for (int64_t i = 0; OB_SUCC(ret) && i < task_size; ++i) {
+        task_attr.reset();
+        const ObTenantArchivePieceAttr &backup_piece_info = piece_list.at(i);
+        const int64_t task_id = start_task_id + i;
+        if (OB_FAIL(generate_backup_clean_piece_task_(backup_piece_info, task_id, task_attr))) {
+          LOG_WARN("failed to generate backup piece task", K(ret), K(backup_piece_info), K(task_id));
+        } else if (!task_attr.is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("backup clean piece task is invalid", K(ret), K(task_attr), K(backup_piece_info));
+        } else if (OB_FAIL(backup_service_->check_leader())) {
+          LOG_WARN("failed to check leader", K(ret));
+        } else if (OB_FAIL(ObBackupCleanTaskOperator::insert_backup_clean_task(trans, task_attr))) {
+          LOG_WARN("failed to insert backup task", K(ret), K(task_attr));
+        } else {
+          LOG_INFO("[BACKUP_CLEAN]success insert backup clean task", K(ret), K(task_attr), K(backup_piece_info));
+        }
+      }
     }
   }
   return ret;
@@ -1888,14 +1979,15 @@ int ObUserTenantBackupDeleteMgr::persist_backup_clean_task_()
   return ret;
 }
 
-int ObUserTenantBackupDeleteMgr::get_backup_clean_task_(const ObBackupSetFileDesc &backup_set_info, ObBackupCleanTaskAttr &task_attr)
+int ObUserTenantBackupDeleteMgr::generate_backup_clean_set_task_(const ObBackupSetFileDesc &backup_set_info,
+  const int64_t task_id,
+  ObBackupCleanTaskAttr &task_attr)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(task_attr.backup_path_.assign(backup_set_info.backup_path_))) {
     LOG_WARN("failed to assign backup dest", K(ret), K(*job_attr_));
-  } else if (OB_FAIL(get_next_task_id_(task_attr.task_id_))) {
-    LOG_WARN("failed to get next task id");
   } else {
+    task_attr.task_id_ = task_id;
     task_attr.tenant_id_ = backup_set_info.tenant_id_;
     task_attr.job_id_ = job_attr_-> job_id_;
     task_attr.incarnation_id_ = backup_set_info.incarnation_;
@@ -1911,14 +2003,15 @@ int ObUserTenantBackupDeleteMgr::get_backup_clean_task_(const ObBackupSetFileDes
   return ret;
 }
 
-int ObUserTenantBackupDeleteMgr::get_backup_piece_task_(const ObTenantArchivePieceAttr &backup_piece_info, ObBackupCleanTaskAttr &task_attr)
+int ObUserTenantBackupDeleteMgr::generate_backup_clean_piece_task_(const ObTenantArchivePieceAttr &backup_piece_info,
+    const int64_t task_id,
+    ObBackupCleanTaskAttr &task_attr)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(task_attr.backup_path_.assign(backup_piece_info.path_))) {
     LOG_WARN("failed to assign backup dest", K(ret), K(*job_attr_));
-  } else if (OB_FAIL(get_next_task_id_(task_attr.task_id_))) {
-    LOG_WARN("failed to get next task id", K(backup_piece_info), K(task_attr));
   } else {
+    task_attr.task_id_ = task_id;
     task_attr.tenant_id_ = backup_piece_info.key_.tenant_id_;
     task_attr.job_id_ = job_attr_->job_id_;
     task_attr.incarnation_id_ = backup_piece_info.incarnation_;
@@ -1935,15 +2028,15 @@ int ObUserTenantBackupDeleteMgr::get_backup_piece_task_(const ObTenantArchivePie
   return ret;
 }
 
-int ObUserTenantBackupDeleteMgr::get_next_task_id_(int64_t &task_id)
+int ObUserTenantBackupDeleteMgr::get_next_task_id_(const int64_t batch_size, int64_t &start_task_id)
 {
   int ret = OB_SUCCESS;
-  task_id = -1;
-  if (OB_FAIL(ObLSBackupInfoOperator::get_next_task_id(*sql_proxy_, tenant_id_, task_id))) {
-    LOG_WARN("failed to get next task id", K(ret));
-  } else if (-1 == task_id) {
+  start_task_id = -1;
+  if (OB_FAIL(ObLSBackupInfoOperator::get_next_task_id(*sql_proxy_, tenant_id_, batch_size, start_task_id))) {
+    LOG_WARN("failed to get next task id batch", K(ret), K(batch_size));
+  } else if (-1 == start_task_id) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid task id", K(ret), K(task_id));
+    LOG_WARN("invalid start task id", K(ret), K(start_task_id));
   }
   return ret;
 }

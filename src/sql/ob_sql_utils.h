@@ -218,12 +218,12 @@ public:
                                        ObIAllocator &allocator);
 
   static void clear_expr_eval_flags(const ObExpr &expr, ObEvalCtx &ctx);
-  static int clear_expr_eval_flags_norecursive(const ObExpr &expr, ObEvalCtx &ctx);
 
   static int calc_sql_expression_without_row(ObExecContext &exec_ctx,
                                              const ObISqlExpression &expr,
                                              ObObj &result,
-                                             ObIAllocator *allocator = NULL);
+                                             ObIAllocator *allocator = NULL,
+                                             bool is_pl_expr_eval = false);
 
   static int calc_const_expr(const ObRawExpr *expr,
                              const ParamStore *params,

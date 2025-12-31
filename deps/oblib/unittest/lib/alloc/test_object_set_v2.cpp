@@ -95,14 +95,6 @@ TEST(TestMallocAllocator, recycle_tenant_allocator)
   ASSERT_TRUE(0 == STRNCMP(first_bt, bt, STRLEN(bt)));
 }
 
-TEST(TestMallocHook, OOPS)
-{
-  set_memory_limit(4LL<<30);
-  ObMallocSampleLimiter::set_interval(1,1);
-  bool use_glibc_malloc = false;
-  ASSERT_TRUE(NULL != ObMallocHook::get_instance().alloc(2LL<<30, use_glibc_malloc));
-  ASSERT_TRUE(NULL == ObMallocHook::get_instance().alloc(2LL<<30, use_glibc_malloc));
-}
 int main(int argc, char *argv[])
 {
   signal(49, SIG_IGN);

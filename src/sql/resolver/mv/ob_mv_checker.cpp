@@ -1357,9 +1357,13 @@ int ObMVChecker::get_table_rowkey_ids(const ObTableSchema *table_schema,
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t, 4> ori_rowkey_ids;
   bool has_logic_pk = false;
-  if (OB_ISNULL(table_schema) || OB_ISNULL(schema_guard)) {
+  if (OB_ISNULL(table_schema) || OB_ISNULL(schema_guard)
+      || OB_UNLIKELY(table_schema->is_mlog_table())) {
+    // For the partition table without primary key, the PK (M_ROW$$, SEQUENCE$$)
+    // of its mlog table is not unique (missing the partition key, only partition
+    // level unique). So should NOT use this function to get the PK of an mlog table.
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(table_schema), K(schema_guard));
+    LOG_WARN("get unexpected null", K(ret), KPC(table_schema), K(schema_guard));
   } else if (OB_FAIL(table_schema->is_table_with_logic_pk(*schema_guard, has_logic_pk))) {
     LOG_WARN("failed to check table with logic pk", K(ret), KPC(table_schema));
   } else if (has_logic_pk) {
@@ -1709,11 +1713,9 @@ int ObMVChecker::check_column_store_valid(const ObSelectStmt &stmt,
   if (OB_ISNULL(left_table_schema) || OB_ISNULL(right_table_schema)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("table schema is null", KR(ret), K(left_table_schema), K(right_table_schema));
-  } else if (OB_FAIL(mv_container_table_schema_.get_is_column_store(is_column_store))) {
-    LOG_WARN("failed to get is column store", KR(ret));
-  } else if (is_column_store) {
+  } else if (mv_container_table_schema_.is_column_store_supported()) {
     is_valid = false;
-    LOG_INFO("[MAJ_REF_MV] mv container table is column store table",
+    LOG_INFO("[MAJ_REF_MV] mv container table is column store table (contains WITH COLUMN GROUP clause in CREATE MATERIALIZED VIEW statement)",
              K(mv_container_table_schema_.get_table_name()));
   } else if (OB_FAIL(left_table_schema->get_is_column_store(is_column_store))) {
     LOG_WARN("failed to get is column store", KR(ret));

@@ -53,9 +53,7 @@ void ObSSTableRowScanner<PrefetchType>::reset()
 template<typename PrefetchType>
 void ObSSTableRowScanner<PrefetchType>::reuse()
 {
-  if (nullptr != skip_scanner_) {
-    skip_scanner_->reuse();
-  }
+  storage::ObIndexSkipScanFactory::destroy_index_skip_scanner(skip_scanner_);
   ObStoreRowIterator::reuse();
   range_idx_ = 0;
   is_opened_ = false;

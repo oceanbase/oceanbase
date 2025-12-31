@@ -28,6 +28,7 @@
 #include "lib/atomic/ob_atomic.h"
 
 #include <curl/curl.h>
+#include <type_traits>
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -37,7 +38,7 @@ using namespace oceanbase::json;
 #define HANDLE_TASK_FAILURE_AND_CLEANUP(task, thread_pool, ret, error_msg) \
   do { \
     LOG_WARN(error_msg, K(ret), K(*task)); \
-    task->set_stop(); \
+    task->set_stop(ret); \
     if (OB_NOT_NULL(thread_pool)) { \
       thread_pool->remove_task_from_tracking(task); \
       thread_pool->dec_task_ref(); \
@@ -66,30 +67,36 @@ const ObString ObEmbeddingTask::BASE64_FORMAT = "base64";
 const ObString ObEmbeddingTask::USER_KEY_NAME = "user_key";
 const ObString ObEmbeddingTask::INPUT_NAME = "input";
 const ObString ObEmbeddingTask::DIMENSIONS_NAME = "dimensions";
+const ObString ObEmbeddingTask::REQUEST_TOO_LARGE_ERROR_MSG = "Please reduce your prompt; or completion length.";
 
 const int64_t ObEmbeddingTask::HTTP_REQUEST_TIMEOUT = 60 * 1000 * 1000; // default http request timeout. 60 seconds
 
 // Reschedule related constants
 const int64_t ObEmbeddingTask::MAX_RESCHEDULE_RETRY_CNT = 3;
 const int64_t ObEmbeddingTask::RESCHEDULE_RETRY_INTERVAL_US = 100 * 1000; // 100ms
+const int64_t ObEmbeddingTask::MAX_NEXT_HANDLE_INTERVAL_US = 60 * 1000 * 1000; // 1 minute
 
 // HTTP retry related constants
 const int64_t ObEmbeddingTask::MAX_HTTP_RETRY_CNT = 2;
 const int64_t ObEmbeddingTask::HTTP_RETRY_BASE_INTERVAL_US = 1 * 1000 * 1000; // 1 second
 const int64_t ObEmbeddingTask::HTTP_RETRY_MAX_INTERVAL_US = 10 * 1000 * 1000; // 10 seconds
 const int64_t ObEmbeddingTask::HTTP_RETRY_MULTIPLIER = 2;
+const int64_t ObEmbeddingTask::MIN_EMBEDDING_MODEL_RPM = 9; // Minimum requests per minute for embedding model
+const int64_t ObEmbeddingTask::EMBEDDING_MODEL_WAIT_RATIO = 2; // Wait ratio for embedding model
 
 // Callback related constants
 const int64_t ObEmbeddingTask::CALLBACK_BATCH_SIZE = 64;
+
+const int64_t ObEmbeddingTask::MAX_INPUT_TOKEN = 512;
 
 //=============================================== ObEmbeddingTaskPhaseManager ================================================
 // Phase transition validation - strict state machine
 // Each array contains valid transitions FROM that phase
 // Note: DONE is allowed from any state for failure handling
-const ObEmbeddingTaskPhase ObEmbeddingTaskPhaseManager::VALID_TRANSITIONS_FROM_INIT[] = {OB_EMBEDDING_TASK_HTTP_SENT, OB_EMBEDDING_TASK_DONE};
-const ObEmbeddingTaskPhase ObEmbeddingTaskPhaseManager::VALID_TRANSITIONS_FROM_HTTP_SENT[] = {OB_EMBEDDING_TASK_INIT, OB_EMBEDDING_TASK_HTTP_COMPLETED, OB_EMBEDDING_TASK_DONE};// add OB_EMBEDDING_TASK_INIT to support retry from sent state
-const ObEmbeddingTaskPhase ObEmbeddingTaskPhaseManager::VALID_TRANSITIONS_FROM_HTTP_COMPLETED[] = {OB_EMBEDDING_TASK_PARSED, OB_EMBEDDING_TASK_DONE};
-const ObEmbeddingTaskPhase ObEmbeddingTaskPhaseManager::VALID_TRANSITIONS_FROM_PARSED[] = {OB_EMBEDDING_TASK_INIT, OB_EMBEDDING_TASK_DONE};
+const ObEmbeddingTaskPhase ObEmbeddingTaskPhaseManager::VALID_TRANSITIONS_FROM_INIT[] = {OB_EMBEDDING_TASK_HTTP_SENT, OB_EMBEDDING_TASK_DONE, OB_EMBEDDING_TASK_INIT};
+const ObEmbeddingTaskPhase ObEmbeddingTaskPhaseManager::VALID_TRANSITIONS_FROM_HTTP_SENT[] = {OB_EMBEDDING_TASK_INIT, OB_EMBEDDING_TASK_HTTP_COMPLETED, OB_EMBEDDING_TASK_DONE, OB_EMBEDDING_TASK_INIT};// add OB_EMBEDDING_TASK_INIT to support retry from sent state
+const ObEmbeddingTaskPhase ObEmbeddingTaskPhaseManager::VALID_TRANSITIONS_FROM_HTTP_COMPLETED[] = {OB_EMBEDDING_TASK_PARSED, OB_EMBEDDING_TASK_DONE, OB_EMBEDDING_TASK_INIT};
+const ObEmbeddingTaskPhase ObEmbeddingTaskPhaseManager::VALID_TRANSITIONS_FROM_PARSED[] = {OB_EMBEDDING_TASK_INIT, OB_EMBEDDING_TASK_DONE, OB_EMBEDDING_TASK_INIT};
 const ObEmbeddingTaskPhase ObEmbeddingTaskPhaseManager::VALID_TRANSITIONS_FROM_DONE[] = {}; // No valid transitions from DONE (terminal state)
 
 bool ObEmbeddingTaskPhaseManager::is_valid_transition(ObEmbeddingTaskPhase from_phase, ObEmbeddingTaskPhase to_phase) {
@@ -144,107 +151,74 @@ bool ObEmbeddingTaskPhaseManager::is_valid_transition(ObEmbeddingTaskPhase from_
   return bret;
 }
 
+void ObEmbeddingTask::init_members()
+{
+  model_url_.reset();
+  model_name_.reset();
+  provider_.reset();
+  use_base64_format_ = false;
+  user_key_.reset();
+  dimension_ = 0;
+  input_chunks_.reset();
+  output_vectors_.reset();
+  cb_handle_ = nullptr;
+  process_callback_offset_ = 0;
+  is_inited_ = false;
+  tenant_id_ = common::OB_INVALID_ID;
+  task_id_ = OB_INVALID_ID;
+  phase_ = OB_EMBEDDING_TASK_INIT;
+  process_start_time_us_ = 0;
+  process_end_time_us_ = 0;
+  processed_chunks_ = 0;
+  total_chunks_ = 0;
+  http_send_count_ = 0;
+  http_error_code_ = 0;
+  http_error_message_.reset();
+  internal_error_code_ = 0;
+  internal_error_message_.reset();
+  batch_size_ = 10;
+  current_batch_idx_ = 0;
+  http_send_time_us_ = 0;
+  http_response_data_size_ = 0;
+  http_response_data_ = nullptr;
+  curl_multi_handle_ = nullptr;
+  curl_easy_handle_ = nullptr;
+  curl_request_in_progress_ = false;
+  curl_response_data_ = nullptr;
+  curl_headers_ = nullptr;
+  http_retry_count_ = 0;
+  http_total_retry_count_ = 0;
+  http_retry_start_time_us_ = 0;
+  http_last_retry_time_us_ = 0;
+  http_max_retry_count_ = 0;
+  wait_for_completion_timeout_us_ = 0;
+  need_retry_flag_ = false;
+  always_retry_ = false;
+  last_exceeded_retry_time_us_ = 0;
+  original_batch_size_ = batch_size_;
+  batch_size_adjusted_ = false;
+  current_batch_size_ = 10;
+  successful_requests_count_ = 0;
+  current_input_token_limit_ = MAX_INPUT_TOKEN;
+  callback_done_ = false;
+  ref_cnt_ = 0;
+  col_type_ = CS_TYPE_INVALID;
+  need_cancel_ = false;
+  next_handle_task_time_us_ = 0;
+  thread_pool_ = nullptr;
+}
+
 ObEmbeddingTask::ObEmbeddingTask() : local_allocator_("EmbeddingTask", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-                                    allocator_(local_allocator_),
-                                    model_url_(),
-                                    model_name_(),
-                                    provider_(),
-                                    use_base64_format_(false),
-                                    user_key_(),
-                                    dimension_(0),
-                                    input_chunks_(),
-                                    output_vectors_(),
-                                    cb_handle_(nullptr),
-                                    process_callback_offset_(0),
-                                    is_inited_(false),
-                                    tenant_id_(common::OB_INVALID_ID),
-                                    task_id_(OB_INVALID_ID),
-                                    phase_(OB_EMBEDDING_TASK_INIT),
-                                    process_start_time_us_(0),
-                                    process_end_time_us_(0),
-                                    processed_chunks_(0),
-                                    total_chunks_(0),
-                                    http_send_count_(0),
-                                    http_error_code_(0),
-                                    http_error_message_(),
-                                    internal_error_code_(0),
-                                    internal_error_message_(),
-                                    task_lock_(),
-                                    batch_size_(10),
-                                    current_batch_idx_(0),
-                                    http_send_time_us_(0),
-                                    http_response_data_size_(0),
-                                    http_response_data_(nullptr),
-                                    curl_multi_handle_(nullptr),
-                                    curl_easy_handle_(nullptr),
-                                    curl_request_in_progress_(false),
-                                    curl_response_data_(nullptr),
-                                    curl_headers_(nullptr),
-                                    http_retry_count_(0),
-                                    http_total_retry_count_(0),
-                                    http_retry_start_time_us_(0),
-                                    http_last_retry_time_us_(0),
-                                    http_max_retry_count_(0),
-                                    wait_for_completion_timeout_us_(0),
-                                    need_retry_flag_(false),
-                                    original_batch_size_(batch_size_),
-                                    batch_size_adjusted_(false),
-                                    current_batch_size_(10),
-                                    successful_requests_count_(0),
-                                    task_cond_(),
-                                    callback_done_(false),
-                                    ref_cnt_(0),
-                                    col_type_(CS_TYPE_INVALID) {}
-ObEmbeddingTask::ObEmbeddingTask(ObArenaAllocator &allocator) : local_allocator_(), allocator_(allocator),
-                                     model_url_(),
-                                     model_name_(),
-                                     provider_(),
-                                     use_base64_format_(false),
-                                     user_key_(),
-                                     dimension_(0),
-                                     input_chunks_(),
-                                     output_vectors_(),
-                                     cb_handle_(nullptr),
-                                     process_callback_offset_(0),
-                                     is_inited_(false),
-                                     tenant_id_(common::OB_INVALID_ID),
-                                     task_id_(OB_INVALID_ID),
-                                     phase_(OB_EMBEDDING_TASK_INIT),
-                                     process_start_time_us_(0),
-                                     process_end_time_us_(0),
-                                     processed_chunks_(0),
-                                     total_chunks_(0),
-                                     http_send_count_(0),
-                                     http_error_code_(0),
-                                     http_error_message_(),
-                                     internal_error_code_(0),
-                                     internal_error_message_(),
-                                     task_lock_(),
-                                     batch_size_(10),
-                                     current_batch_idx_(0),
-                                     http_send_time_us_(0),
-                                     http_response_data_size_(0),
-                                     http_response_data_(nullptr),
-                                     curl_multi_handle_(nullptr),
-                                     curl_easy_handle_(nullptr),
-                                     curl_request_in_progress_(false),
-                                     curl_response_data_(nullptr),
-                                     curl_headers_(nullptr),
-                                     http_retry_count_(0),
-                                     http_total_retry_count_(0),
-                                     http_retry_start_time_us_(0),
-                                     http_last_retry_time_us_(0),
-                                     http_max_retry_count_(0),
-                                     wait_for_completion_timeout_us_(0),
-                                     need_retry_flag_(false),
-                                     original_batch_size_(batch_size_),
-                                     batch_size_adjusted_(false),
-                                     current_batch_size_(10),
-                                     successful_requests_count_(0),
-                                     task_cond_(),
-                                     callback_done_(false),
-                                     ref_cnt_(0),
-                                     col_type_(CS_TYPE_INVALID) {}
+                                     allocator_(local_allocator_)
+{
+  init_members();
+}
+
+ObEmbeddingTask::ObEmbeddingTask(ObArenaAllocator &allocator) : local_allocator_(),
+                                                                allocator_(allocator)
+{
+  init_members();
+}
 ObEmbeddingTask::~ObEmbeddingTask() {
   reset();
 }
@@ -258,7 +232,10 @@ int ObEmbeddingTask::init(const ObString &model_url,
                           int64_t dimension,
                           int64_t http_timeout_us,
                           int64_t http_max_retries,
-                          storage::ObEmbeddingIOCallbackHandle *cb_handle)
+                          int64_t source_task_id,
+                          ObEmbeddingTasSourceType source_task_type,
+                          storage::ObEmbeddingIOCallbackHandle *cb_handle,
+                          bool always_retry)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -281,7 +258,11 @@ int ObEmbeddingTask::init(const ObString &model_url,
     LOG_WARN("failed to copy user_key", K(ret));
   } else if (OB_FAIL(ob_write_string(allocator_, provider, provider_))) {
     LOG_WARN("failed to copy provider", K(ret));
+  } else if (OB_FAIL(calc_max_wait_completion_time_us(http_timeout_us, http_max_retries, batch_size_,
+                                                      input_chunks.count(), wait_for_completion_timeout_us_))) {
+    LOG_WARN("failed to calculate max wait completion time", K(ret));
   } else {
+    trace_id_.init(GCONF.self_addr_);
     tenant_id_ = MTL_ID();
     task_id_ = (static_cast<int64_t>(tenant_id_) << 32) | (ObTimeUtility::current_time() & 0xFFFFFFFF);
     use_base64_format_ = ObAIFuncUtils::is_provider_support_base64(provider);
@@ -309,9 +290,6 @@ int ObEmbeddingTask::init(const ObString &model_url,
     // Initialize retry related variables
     http_timeout_us_ = http_timeout_us;
     http_max_retry_count_ = http_max_retries;
-    // task total timeout for all retries
-    wait_for_completion_timeout_us_ = (http_max_retry_count_ + 1) * http_timeout_us_ * input_chunks.count() / batch_size_ +
-                                      (http_max_retry_count_ + 1) * HTTP_RETRY_MAX_INTERVAL_US;
 
 
     http_retry_start_time_us_ = 0;
@@ -322,9 +300,40 @@ int ObEmbeddingTask::init(const ObString &model_url,
     current_batch_size_ = batch_size_;
     successful_requests_count_ = 0;
     col_type_ = col_type;
-    LOG_DEBUG("task initialized successfully", K(user_key_), K(task_id_), K(dimension_), K(http_max_retry_count_), K(http_timeout_us));
+    source_task_id_ = source_task_id;
+    source_task_type_ = source_task_type;
+    always_retry_ = always_retry;
+    last_exceeded_retry_time_us_ = 0;
   }
+  LOG_INFO("task initialized finished", K(ret), KPC(this), K_(trace_id));
 
+  return ret;
+}
+
+int ObEmbeddingTask::calc_max_wait_completion_time_us(int64_t http_timeout_us, int64_t http_max_retry_count, int64_t batch_size,
+                                                      int64_t input_chunks_count, int64_t &max_wait_completion_time_us) const
+{
+  int ret = OB_SUCCESS;
+  if (http_timeout_us <= 0 || http_max_retry_count < 0 || batch_size <= 0 || input_chunks_count <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(http_timeout_us), K(http_max_retry_count), K(batch_size), K(input_chunks_count));
+  } else {
+    // Calculate request count (ceiling division)
+    int64_t request_count = (input_chunks_count + batch_size - 1) / batch_size;
+
+    // Calculate retry-based time:
+    // - Each request has (http_max_retry_count + 1) attempts (1 initial + retries)
+    // - Each attempt may timeout at http_timeout_us
+    // - Between retries, there is HTTP_RETRY_MAX_INTERVAL_US wait (http_max_retry_count times per request)
+    int64_t retry_based_time_us = request_count * (http_max_retry_count + 1) * http_timeout_us +
+                                  request_count * http_max_retry_count * HTTP_RETRY_MAX_INTERVAL_US;
+
+    // Calculate RPM-based time (ceiling division):
+    // time_minutes = request_count / MIN_EMBEDDING_MODEL_RPM
+    int64_t rpm_based_time_us = (request_count * 60 * 1000000 * EMBEDDING_MODEL_WAIT_RATIO + MIN_EMBEDDING_MODEL_RPM - 1) / MIN_EMBEDDING_MODEL_RPM;
+
+    max_wait_completion_time_us = OB_MAX(retry_based_time_us, rpm_based_time_us);
+  }
   return ret;
 }
 
@@ -435,9 +444,9 @@ void ObEmbeddingTask::reset()
   task_cond_.destroy();
 }
 
-void ObEmbeddingTask::set_stop()
+void ObEmbeddingTask::set_stop(int ret_code)
 {
-  int ret = set_phase(OB_EMBEDDING_TASK_DONE);
+  int ret = complete_task(ret_code, false);
   if (OB_FAIL(ret)) {
     LOG_WARN("failed to set phase to DONE when stopping task", K(ret));
   }
@@ -483,8 +492,8 @@ int ObEmbeddingTask::reschedule(ObEmbeddingTaskHandler *thread_pool)
 int ObEmbeddingTask::handle_reschedule_failure(ObEmbeddingTaskHandler *thread_pool, int error_code)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(complete_task(OB_EMBEDDING_TASK_DONE, error_code, true))) {
-    LOG_WARN("failed to handle task failure after reschedule failure", K(ret));
+  if (OB_FAIL(finish_task())) {
+    LOG_WARN("failed to finish task after reschedule failure", K(ret));
   } else {
     LOG_WARN("task reschedule failed, marking as failed", K(error_code), K(*this));
   }
@@ -505,7 +514,9 @@ int ObEmbeddingTask::start_async_work()
         // 记录开始时间
         {
           ObThreadCondGuard guard(task_cond_);
-          process_start_time_us_ = ObTimeUtility::current_time();
+          if (process_start_time_us_ == 0) {
+            process_start_time_us_ = ObTimeUtility::current_time();
+          }
         }
       }
     } else {
@@ -518,7 +529,7 @@ int ObEmbeddingTask::start_async_work()
     uint64_t total_text_length = 0;
     if (OB_FAIL(ret)) {
     } else if (start_idx >= input_chunks_.count()
-              && OB_FAIL(complete_task(OB_EMBEDDING_TASK_DONE, OB_SUCCESS, true))) {
+              && OB_FAIL(finish_task())) {
       LOG_WARN("failed to complete task successfully", K(ret));
     } else {
       // TODO: Depending on the model type, different HTTP requests need to be generated
@@ -543,6 +554,8 @@ int ObEmbeddingTask::start_async_work()
             }
           }
           if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(truncate_text_by_token_count(new_utf8_text, CS_TYPE_UTF8MB4_GENERAL_CI, current_input_token_limit_))) {
+            LOG_WARN("failed to truncate text by token count", K(ret), K(i));
           } else if (OB_FAIL(json_builder.array_add_string(input_array, new_utf8_text))) {
             LOG_WARN("failed to add new_utf8_text to input array", K(ret), K(i));
           } else {
@@ -570,9 +583,7 @@ int ObEmbeddingTask::start_async_work()
               LOG_WARN("failed to convert json to string", K(ret));
             } else {
               if (OB_FAIL(send_http_request_async(json_buf, json_len))) {
-                if (OB_FAIL(complete_task(OB_EMBEDDING_TASK_DONE, ret, true))) {
-                  LOG_WARN("failed to handle task failure", K(ret));
-                }
+                LOG_WARN("failed to send http request", K(ret));
               } else {
                 LOG_DEBUG("HTTP request sent successfully for batch", K(current_batch_idx_),
                                                                     K(start_idx),
@@ -615,9 +626,6 @@ int ObEmbeddingTask::check_async_progress()
             LOG_WARN("failed to reset phase for retry", K(ret));
           } else if (OB_FAIL(start_async_work())) {
             LOG_WARN("failed to retry HTTP request", K(ret));
-            if (OB_FAIL(complete_task(OB_EMBEDDING_TASK_DONE, ret, true))) {
-              LOG_WARN("failed to handle retry failure", K(ret));
-            }
           }
           // reset flag
           if (OB_SUCC(ret)) {
@@ -629,9 +637,6 @@ int ObEmbeddingTask::check_async_progress()
         }
       } else {
         // non-retryable error
-        if (OB_FAIL(complete_task(OB_EMBEDDING_TASK_DONE, ret, true))) {
-          LOG_WARN("failed to handle task failure", K(ret));
-        }
       }
     } else if (is_http_response_ready()) {
       // Successful response, reset retry state
@@ -647,9 +652,7 @@ int ObEmbeddingTask::check_async_progress()
     }
   } else if (current_phase == OB_EMBEDDING_TASK_HTTP_COMPLETED) {
     if (OB_FAIL(process_http_response())) {
-      if (OB_FAIL(complete_task(OB_EMBEDDING_TASK_DONE, ret, true))) {
-        LOG_WARN("failed to handle task failure", K(ret), K(*this));
-      }
+      LOG_WARN("failed to process http response", K(ret), K(*this));
     } else {
       int64_t actual_chunks_in_batch = OB_MIN(batch_size_, input_chunks_.count() - (current_batch_idx_ * batch_size_));
       {
@@ -669,8 +672,8 @@ int ObEmbeddingTask::check_async_progress()
         LOG_WARN("failed to set phase to INIT for next batch", K(ret), K(*this));
       }
     } else {
-      if (OB_FAIL(complete_task(OB_EMBEDDING_TASK_DONE, OB_SUCCESS, true))) {
-        LOG_WARN("failed to handle task success", K(ret), K(*this));
+      if (OB_FAIL(finish_task())) {
+        LOG_WARN("failed to finish", K(ret), K(*this));
       }
     }
   }
@@ -770,6 +773,7 @@ int ObEmbeddingTask::check_http_progress()
       need_retry_flag_ = false;
       CURLMsg *msg = nullptr;
       int msgs_in_queue = 0;
+      bool need_check_retry = false;
       while (OB_SUCC(ret) && (msg = curl_multi_info_read(curl_multi_handle_, &msgs_in_queue))) {
         if (OB_ISNULL(msg)) {
           ret = OB_ERR_UNEXPECTED;
@@ -803,18 +807,16 @@ int ObEmbeddingTask::check_http_progress()
                   http_error_message_ = ObString(curl_response_data_->size, curl_response_data_->data);
                 }
                 http_error_code_ = response_code;
-                need_retry_flag_ = should_retry_http_request(response_code);
+                need_retry_flag_ = should_retry_http_request(response_code, http_error_message_);
                 // Check if we should retry this http request
                 if (need_retry_flag_) {
-                  http_retry_count_++;
-                  http_total_retry_count_++;
-
                   // Check if we need to adjust batch size for retry
                   if (is_batch_size_related_error(response_code) && OB_FAIL(adjust_batch_size_for_retry())) {
                     LOG_WARN("failed to adjust batch size for retry", K(ret), K(*this));
-                  } else {
-                    // Set retry flag to indicate we should retry
-                    ret = OB_NEED_RETRY;
+                  // Check if request is too large and adjust input token limit
+                  } else if (is_request_too_large(response_code, http_error_message_) &&
+                             OB_FAIL(adjust_input_token_limit_for_retry())) {
+                    LOG_WARN("failed to adjust input token limit for retry", K(ret), K(*this));
                   }
                 } else {
                   // Map HTTP error to internal error code
@@ -824,21 +826,12 @@ int ObEmbeddingTask::check_http_progress()
                   LOG_WARN("HTTP request failed, no retry", K(response_code), K_(internal_error_code), K_(http_error_message), K(*this));
                 }
               }
-
-              if (need_retry_flag_) {
-                if (http_retry_count_ == 1) { // 第一次重试
-                  http_retry_start_time_us_ = ObTimeUtility::current_time();
-                }
-                http_last_retry_time_us_ = ObTimeUtility::current_time();
-              }
-              LOG_WARN("curl request error, need retry", K(ret), K(need_retry_flag_), K(http_retry_count_), K(http_max_retry_count_));
+              LOG_WARN("curl request error", K(ret), K(need_retry_flag_), K(http_error_code_), K(http_error_message_),
+                                                     K(http_retry_count_), K(http_max_retry_count_));
             }
           } else if (res == CURLE_OPERATION_TIMEDOUT) { // curl timeout
-            if (++http_retry_count_ < http_max_retry_count_) {
+            if (can_retry_request()) {
               need_retry_flag_ = true;
-              http_total_retry_count_++;
-              http_last_retry_time_us_ = ObTimeUtility::current_time();
-              ret = OB_NEED_RETRY;
             } else {
               ret = OB_TIMEOUT;
             }
@@ -846,6 +839,17 @@ int ObEmbeddingTask::check_http_progress()
           } else {
             ret = OB_CURL_ERROR;
             LOG_WARN("curl request failed", K(ret), K(res), K(*this));
+          }
+
+          if (OB_SUCC(ret) && need_retry_flag_) {
+            ret = OB_NEED_RETRY;
+            http_retry_count_++;
+            http_total_retry_count_++;
+            http_last_retry_time_us_ = ObTimeUtility::current_time();
+            if (http_retry_count_ == 1) { // 第一次重试
+              http_retry_start_time_us_ = ObTimeUtility::current_time();
+            }
+            LOG_INFO("curl request failed, need retry", K(ret), KPC(this));
           }
         }
       }
@@ -963,17 +967,31 @@ void ObEmbeddingTask::release_if_managed()
 template <typename ThreadPoolType>
 int ObEmbeddingTask::do_work(ThreadPoolType *thread_pool)
 {
+  // Compile-time type check: ensure ThreadPoolType is ObEmbeddingTaskHandler
+  static_assert(std::is_same<ThreadPoolType, ObEmbeddingTaskHandler>::value,
+                "ThreadPoolType must be ObEmbeddingTaskHandler");
+
   int ret = OB_SUCCESS;
 
+  DEBUG_SYNC(BEFORE_DO_EMBEDDING_TASK);
+  bool continue_processing = true;
+  thread_pool_ = static_cast<ObEmbeddingTaskHandler *>(thread_pool);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObEmbeddingTask not inited", K(ret), K(*this));
   } else if (is_finished()) {
     LOG_DEBUG("task already finished, no work needed", K(*this));
+  } else if (need_cancel()) {
+    ret = OB_CANCELED;
+    LOG_WARN("task cancelled, cleaning up", K(*this));
+    HANDLE_TASK_FAILURE_AND_CLEANUP(this, thread_pool, ret, "task cancelled");
+  } else if (!is_ready_to_handle()) {
+    if (OB_FAIL(try_rescheule_task())) {
+      LOG_WARN("failed to try rescheule task", K(ret));
+    }
   } else {
-    LOG_DEBUG("processing embedding task", K(*this), "internal_phase", phase_);
+    LOG_DEBUG("processing embedding task", K(*this));
 
-    bool continue_processing = true;
     while (OB_SUCC(ret) && continue_processing && !is_finished()) {
       switch (phase_) {
         case OB_EMBEDDING_TASK_INIT: {
@@ -993,13 +1011,8 @@ int ObEmbeddingTask::do_work(ThreadPoolType *thread_pool)
             HANDLE_TASK_COMPLETION_AND_CLEANUP(this, thread_pool, "task completed during HTTP progress check");
           } else if (!is_http_response_ready()) {
             LOG_DEBUG("HTTP request still in progress, rescheduling", K(*this));
-            if (OB_NOT_NULL(thread_pool)) {
-              if (OB_FAIL(reschedule(thread_pool))) {
-                if (OB_FAIL(handle_reschedule_failure(thread_pool, ret))) {
-                  LOG_WARN("failed to handle reschedule failure", K(ret));
-                }
-                HANDLE_TASK_FAILURE_AND_CLEANUP(this, thread_pool, ret, "failed to reschedule task");
-              }
+            if (OB_FAIL(try_rescheule_task())) {
+              LOG_WARN("failed to try rescheule task", K(ret));
             }
             continue_processing = false;
           } else {
@@ -1019,9 +1032,6 @@ int ObEmbeddingTask::do_work(ThreadPoolType *thread_pool)
         case OB_EMBEDDING_TASK_PARSED: {
           LOG_DEBUG("Finalizing PARSED task", K(*this));
           if (OB_FAIL(check_async_progress())) {
-            if (OB_FAIL(complete_task(OB_EMBEDDING_TASK_DONE, ret, true))) {
-              LOG_WARN("failed to mark task as failed", K(ret), K(*this));
-            }
             HANDLE_TASK_FAILURE_AND_CLEANUP(this, thread_pool, ret, "failed to finalize task");
           } else if (is_finished()) {
             HANDLE_TASK_COMPLETION_AND_CLEANUP(this, thread_pool, "task finalized successfully");
@@ -1068,8 +1078,19 @@ int ObEmbeddingTask::set_phase(ObEmbeddingTaskPhase new_phase)
         should_callback = true;
       }
     }
-  }
 
+    if (phase_ != OB_EMBEDDING_TASK_DONE) {
+      LOG_INFO("set phase finished", K(ret), K(*this),
+              "new_phase", ObEmbeddingTaskPhaseManager::get_phase_string(new_phase),
+              "current_phase", ObEmbeddingTaskPhaseManager::get_phase_string(current_phase),
+              K(should_callback));
+    } else {
+      LOG_INFO("set phase finished, task completed successfully", K(ret), K(*this),
+              "new_phase", ObEmbeddingTaskPhaseManager::get_phase_string(new_phase),
+              "current_phase", ObEmbeddingTaskPhaseManager::get_phase_string(current_phase),
+              K(should_callback));
+    }
+  }
   if (OB_SUCC(ret) && should_callback) {
     int cb_ret = maybe_callback();
     if (OB_SUCCESS != cb_ret) {
@@ -1086,26 +1107,55 @@ int ObEmbeddingTask::set_phase(ObEmbeddingTaskPhase new_phase)
 
 
 
-int ObEmbeddingTask::complete_task(ObEmbeddingTaskPhase new_phase, int result_code, bool finished)
+int ObEmbeddingTask::try_rescheule_task()
 {
   int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(thread_pool_)) {
+    if (OB_FAIL(reschedule(thread_pool_))) {
+      if (OB_FAIL(handle_reschedule_failure(thread_pool_, ret))) {
+        LOG_WARN("failed to handle reschedule failure", K(ret));
+      }
+    } else {
+      LOG_DEBUG("try rescheule task successfully", K(ret), K(*this));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("thread_pool_ is unexpected null", K(ret));
+  }
+  return ret;
+}
+
+int ObEmbeddingTask::complete_task(int result_code, bool finished)
+{
+  int ret = OB_SUCCESS;
+  DEBUG_SYNC(BEFORE_COMPLETE_EMBEDDING_TASK);
 
   {
     ObThreadCondGuard guard(task_cond_);
     internal_error_code_ = result_code;
   }
-
-  if (OB_FAIL(set_phase(new_phase))) {
-    LOG_WARN("invalid phase transition for task completion", K(ret),
-            "to", ObEmbeddingTaskPhaseManager::get_phase_string(new_phase));
-  } else {
-    ObThreadCondGuard guard(task_cond_);
-    if (finished && new_phase == OB_EMBEDDING_TASK_DONE) {
-      process_end_time_us_ = ObTimeUtility::current_time();
+  if (always_retry_ && !need_cancel() && !finished) {
+    // alway need retry for ddl task except cancel
+    if (OB_FAIL(set_phase(OB_EMBEDDING_TASK_INIT))) {
+      LOG_WARN("failed to reset phase for retry", K(ret));
+    } else {
+      http_total_retry_count_++;
+      // Add equal jitter to avoid thundering herd
+      // Use equal jitter: interval = interval/2 + random(0, interval/2)
+      // This keeps the average interval unchanged while adding randomness
+      int64_t half_interval = MAX_NEXT_HANDLE_INTERVAL_US / 2;
+      int64_t jitter = (half_interval * (rand() % 100)) / 100;
+      next_handle_task_time_us_ = ObTimeUtility::current_time() + half_interval + jitter;
+      reset_retry_state();
+      if (OB_FAIL(try_rescheule_task())) {
+        LOG_WARN("failed to try rescheule task", K(ret));
+      } else {
+        LOG_INFO("task reschedule for retry successfully", K(ret), K(finished), K(*this));
+      }
     }
-    LOG_DEBUG("task completion phase transition successful",
-              "new_phase", ObEmbeddingTaskPhaseManager::get_phase_string(new_phase),
-              K(result_code), K(finished));
+  } else if (OB_FAIL(set_phase(OB_EMBEDDING_TASK_DONE))) {
+    LOG_WARN("invalid phase transition for task completion", K(ret),
+            "to", ObEmbeddingTaskPhaseManager::get_phase_string(OB_EMBEDDING_TASK_DONE));
   }
 
   return ret;
@@ -1113,7 +1163,24 @@ int ObEmbeddingTask::complete_task(ObEmbeddingTaskPhase new_phase, int result_co
 
 int ObEmbeddingTask::mark_task_failed(int error_code)
 {
-  return complete_task(OB_EMBEDDING_TASK_DONE, error_code, true);
+  return complete_task(error_code, false);
+}
+
+bool ObEmbeddingTask::is_ready_to_handle() const
+{
+  bool bret = false;
+  // If next_handle_task_time_us_ is 0, it means the task can be handled immediately
+  if (next_handle_task_time_us_ == 0) {
+    bret = true;
+  } else if (ObTimeUtility::current_time() >= next_handle_task_time_us_) {
+    bret = true;
+  }
+  return bret;
+}
+
+int ObEmbeddingTask::finish_task()
+{
+  return complete_task(OB_SUCCESS, true);
 }
 
 // placeholder for virtual table
@@ -1378,7 +1445,11 @@ void ObEmbeddingTaskHandler::handle(void *task)
     LOG_WARN("invalid argument", KR(ret));
   } else {
     embedding_task = static_cast<ObEmbeddingTask *>(task);
-    LOG_INFO("handling embedding task", K_(task_ref_cnt), KPC(embedding_task));
+    common::ObCurTraceId::set(embedding_task->get_trace_id());
+
+    if (TC_REACH_TIME_INTERVAL(60L * 1000L * 1000L)) {
+      LOG_INFO("handling embedding task", K_(tg_id), K_(task_ref_cnt), KPC(embedding_task));
+    }
 
     if (OB_FAIL(embedding_task->do_work(this))) {
       LOG_WARN("failed to do work for embedding task", K(ret), KPC(embedding_task));
@@ -1388,7 +1459,7 @@ void ObEmbeddingTaskHandler::handle(void *task)
   if (OB_NOT_NULL(embedding_task)) {
     embedding_task->release_if_managed();
   }
-  LOG_INFO("task handling completed", K_(task_ref_cnt));
+  LOG_DEBUG("task handling completed", K_(task_ref_cnt));
 }
 
 void ObEmbeddingTaskHandler::handle_drop(void *task)
@@ -1468,22 +1539,29 @@ int ObEmbeddingTaskHandler::remove_task_from_tracking(ObEmbeddingTask *task)
 
 //=============================================== HTTP Retry Helper Methods ================================================
 
-bool ObEmbeddingTask::should_retry_http_request(int64_t http_error_code) const
+// check should retry after receive http error code and message
+bool ObEmbeddingTask::should_retry_http_request(int64_t http_error_code, const ObString &http_error_msg) const
 {
-  // Retry for transient errors that might succeed on retry
-  switch (http_error_code) {
-    // TODO: implement this
-    // case 500: // Internal Server Error
-    //   return http_retry_count_ < MAX_HTTP_RETRY_CNT;
-    case 429:
-    case 500:
-    case 502:
-    case 503:
-    case 504:
-      return http_retry_count_ < http_max_retry_count_;
-    default:
-      return false;
+  bool can_retry = can_retry_request();
+
+  if (can_retry) {
+    switch (http_error_code) {
+      case 408: // request timeout
+      case 409: // resource conflict/lock conflict
+      case 429:
+      case 500:
+      case 502:
+      case 503:
+      case 504: {
+        break;
+      }
+      default: {
+        can_retry = is_request_too_large(http_error_code, http_error_msg);
+        break;
+      }
+    }
   }
+  return can_retry;
 }
 
 bool ObEmbeddingTask::is_batch_size_related_error(int64_t http_error_code) const
@@ -1498,19 +1576,17 @@ bool ObEmbeddingTask::is_batch_size_related_error(int64_t http_error_code) const
 
 int64_t ObEmbeddingTask::calculate_retry_interval() const
 {
-  // Exponential backoff with jitter
-  int64_t base_interval = HTTP_RETRY_BASE_INTERVAL_US;
-  int64_t max_interval = HTTP_RETRY_MAX_INTERVAL_US;
-  int64_t multiplier = HTTP_RETRY_MULTIPLIER;
-
-  int64_t interval = base_interval;
-  for (int64_t i = 0; i < http_retry_count_ && interval < max_interval; i++) {
-    interval *= multiplier;
+  // Exponential backoff with equal jitter
+  // Equal jitter: interval = base/2 + random(0, base/2)
+  // This keeps the average interval unchanged while adding randomness
+  int64_t base = HTTP_RETRY_BASE_INTERVAL_US;
+  for (int64_t i = 0; i < http_retry_count_ && base < HTTP_RETRY_MAX_INTERVAL_US; i++) {
+    base *= HTTP_RETRY_MULTIPLIER;
   }
-
-  // Add some jitter to avoid thundering herd
-  int64_t jitter = (interval * (rand() % 100)) / 100;
-  interval = OB_MIN(interval + jitter, max_interval);
+  base = OB_MIN(base, HTTP_RETRY_MAX_INTERVAL_US);
+  int64_t half_base = base / 2;
+  int64_t jitter = (half_base * (rand() % 100)) / 100;
+  int64_t interval = half_base + jitter;
 
   return interval;
 }
@@ -1530,12 +1606,30 @@ int ObEmbeddingTask::adjust_batch_size_for_retry()
   return ret;
 }
 
+int ObEmbeddingTask::adjust_input_token_limit_for_retry()
+{
+  int ret = OB_SUCCESS;
+
+  if (current_input_token_limit_ > 1) {
+    current_input_token_limit_ = current_input_token_limit_ / 2;
+    LOG_INFO("adjusted input token limit for retry", K(current_input_token_limit_));
+  } else {
+    // token limit is already 1, cannot decrease further
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("input token limit can not be decreased further", K(ret), K_(current_input_token_limit));
+  }
+
+  return ret;
+}
+
 void ObEmbeddingTask::reset_retry_state()
 {
   http_retry_count_ = 0;
   http_retry_start_time_us_ = 0;
   http_last_retry_time_us_ = 0;
   need_retry_flag_ = false;
+  // Reset input token limit to initial value after successful retry
+  current_input_token_limit_ = MAX_INPUT_TOKEN;
   // Try to increase batch size after successful request
   try_increase_batch_size();
 }
@@ -1691,19 +1785,36 @@ int ObEmbeddingTask::init_curl_handler(const ObString &model_url, const ObString
 
 }
 
-int ObEmbeddingTask::wait_for_completion()
+int ObEmbeddingTask::wait_for_completion(int64_t check_interval_us)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("task is not inited", K(ret));
+  } else if (check_interval_us <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid check_interval_us", K(ret), K(check_interval_us));
   } else {
     ObThreadCondGuard guard(task_cond_);
     if (callback_done_) {
-      // do nothing
+      // do nothing, task is already done
     } else {
-      if (OB_FAIL(task_cond_.wait(wait_for_completion_timeout_us_ / 1000))) {
-        LOG_WARN("failed to wait for completion", K(ret));
+      if (OB_FAIL(task_cond_.wait_us(check_interval_us))) {
+        if (ret == OB_TIMEOUT) {
+          int64_t current_time_us = ObTimeUtility::current_time();
+          int64_t elapsed_time_us = current_time_us - process_start_time_us_;
+          if (elapsed_time_us >= wait_for_completion_timeout_us_) {
+            // task has already exceeded timeout, return OB_TIMEOUT directly
+            LOG_WARN("task has exceeded timeout", K(ret), K(elapsed_time_us), K(wait_for_completion_timeout_us_));
+          } else {
+            ret = OB_EAGAIN;
+            LOG_DEBUG("wait_for_completion periodic check, return EAGAIN", K(check_interval_us));
+          }
+        } else {
+          LOG_WARN("failed to wait for completion", K(ret));
+        }
+      } else {
+        // If signaled (ret == OB_SUCCESS), task is done, return OB_SUCCESS
       }
     }
   }
@@ -1723,4 +1834,57 @@ int ObEmbeddingTask::wake_up()
     }
   }
   return ret;
+}
+
+// Truncate text by codepoint count (each codepoint counts as 1 token)
+int ObEmbeddingTask::truncate_text_by_token_count(ObString &text, const ObCollationType cs_type, const int64_t max_token_count) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(max_token_count <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid max_token_count", K(ret), K(max_token_count));
+  } else if (OB_ISNULL(text.ptr()) || text.length() <= 0) {
+    // Empty text, nothing to truncate
+  } else {
+    // Count codepoints (characters)
+    int64_t codepoint_count = ObCharset::strlen_char(cs_type, text.ptr(), text.length());
+
+    if (codepoint_count > max_token_count) {
+      // Find the byte position of the max_token_count-th codepoint
+      int64_t truncate_byte_pos = ObCharset::charpos(cs_type, text.ptr(), text.length(), max_token_count);
+
+      if (OB_UNLIKELY(truncate_byte_pos <= 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected truncate byte position", K(ret), K(truncate_byte_pos), K(text.length()), K(codepoint_count), K(max_token_count));
+      } else {
+        // Ensure truncate_byte_pos doesn't exceed text length
+        if (truncate_byte_pos > text.length()) {
+          truncate_byte_pos = text.length();
+        }
+        // Truncate the text
+        text.assign_ptr(text.ptr(), static_cast<int32_t>(truncate_byte_pos));
+        LOG_INFO("truncated text by token count", K(codepoint_count), K(max_token_count), K(truncate_byte_pos), K(text.length()));
+      }
+    }
+  }
+  return ret;
+}
+
+// todo: need implement by provider later
+bool ObEmbeddingTask::is_request_too_large(int64_t http_error_code, const ObString &content) const
+{
+  bool bret = false;
+  if (OB_UNLIKELY(http_error_code == 413)) {
+    bret = true;
+  } else {
+    int64_t error_msg_len = REQUEST_TOO_LARGE_ERROR_MSG.length();
+    if (content.length() >= error_msg_len) {
+      void *found = memmem(content.ptr(), content.length(),
+                           REQUEST_TOO_LARGE_ERROR_MSG.ptr(), error_msg_len);
+      if (OB_NOT_NULL(found)) {
+        bret = true;
+      }
+    }
+  }
+  return bret;
 }

@@ -43,6 +43,8 @@ class ObPLRoutineInfo;
 }
 namespace sql
 {
+struct ObTriggerRowRefType;
+class ObTriggerArg;
 class ObRawExprUtils;
 class ObSynonymChecker;
 class ObRoutineMatchInfo
@@ -51,15 +53,28 @@ public:
   struct MatchInfo
   {
     MatchInfo()
-      : need_cast_(false), src_type_(ObMaxType), dest_type_(ObMaxType) {}
-    MatchInfo(bool need_cast, ObObjType src_type, ObObjType dst_type)
-      : need_cast_(need_cast), src_type_(src_type), dest_type_(dst_type) {}
+      : need_cast_(false),
+        src_type_(ObMaxType),
+        dest_type_(ObMaxType),
+        is_anonymous_associative_array_(false) {}
+
+    MatchInfo(bool need_cast,
+            ObObjType src_type,
+            ObObjType dst_type)
+    : need_cast_(need_cast),
+      src_type_(src_type),
+      dest_type_(dst_type),
+      is_anonymous_associative_array_(false) {}
 
     bool need_cast_;
     ObObjType src_type_;
     ObObjType dest_type_;
+    bool is_anonymous_associative_array_;
 
-    TO_STRING_KV(K_(need_cast), K_(src_type), K_(dest_type));
+    TO_STRING_KV(K_(need_cast),
+                 K_(src_type),
+                 K_(dest_type),
+                 K_(is_anonymous_associative_array));
   };
 
   bool need_cast()
@@ -92,6 +107,11 @@ public:
   ObObjType get_type(int i)
   {
     return match_info_.at(i).dest_type_;
+  }
+
+  bool is_anonymous_associative_array(int i) const
+  {
+    return match_info_.at(i).is_anonymous_associative_array_;
   }
 
   bool has_null_actual_params()
@@ -146,13 +166,6 @@ public:
                                            ObResolverParams &params,
                                            const ObString &column_name,
                                            bool& exists);
-
-  static int collect_schema_version(share::schema::ObSchemaGetterGuard &schema_guard,
-                                    const ObSQLSessionInfo *session_info,
-                                    ObRawExpr *expr,
-                                    ObIArray<ObSchemaObjVersion> &dependency_objects,
-                                    bool is_called_in_sql = false,
-                                    ObIArray<uint64_t> *dep_db_array = NULL);
 
   static int resolve_extended_type_info(const ParseNode &str_list_node,
                                         ObIArray<ObString>& type_info_array);
@@ -269,6 +282,7 @@ public:
                    const common::ObIArray<sql::ObRawExpr *> &expr_params,
                    const common::ObIArray<const share::schema::ObIRoutineInfo *> &routine_infos,
                    const share::schema::ObRoutineInfo *&routine_info);
+  static int check_anonymous_associative_array(ObIArray<ObRoutineMatchInfo> &match_infos);
   static int get_routine(pl::ObPLPackageGuard &package_guard,
                          ObResolverParams &params,
                          uint64_t tenant_id,
@@ -976,6 +990,12 @@ public:
                                                               const ObColumnSchemaV2 &column,
                                                               uint64_t table_id,
                                                               bool &need);
+  static int collect_trigger_ref_column(ObSQLSessionInfo &session_info,
+                                        share::schema::ObSchemaGetterGuard &schema_guard,
+                                        const ObTriggerInfo &trigger_info,
+                                        const ObTableSchema &table_schema,
+                                        int64_t col_cnt,
+                                        ObIArray<ObTriggerRowRefType> &ref_types);
 private:
   static int try_convert_to_unsiged(const ObRawExprResType &restype,
                                     ObRawExpr& src_expr,
@@ -1019,6 +1039,10 @@ private:
                                                         const ObIArray<uint64_t> &trigger_list,
                                                         const ObString &column_name,
                                                         bool &need);
+  static int collect_trigger_func_ref_column(pl::ObPLFunction *func,
+                                int64_t col_cnt,
+                                const ObTableSchema &table_schema,
+                                ObIArray<ObTriggerRowRefType> &ref_types);
 
   // disallow construct
   ObResolverUtils();

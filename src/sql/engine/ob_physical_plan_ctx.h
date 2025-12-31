@@ -568,15 +568,15 @@ public:
   inline void set_enable_adaptive_pc(bool v) { enable_adaptive_pc_ = v; }
   inline bool enable_adaptive_pc() const { return enable_adaptive_pc_; }
   bool is_param_datum_frame_inited() const { return param_frame_ptrs_.count() > 0; }
+  void get_param_frame_info(int64_t param_idx,
+                            ObDatum *&datum,
+                            ObEvalInfo *&eval_info,
+                            VectorHeader *&vec_header);
 private:
   int init_param_store_after_deserialize();
   void reset_datum_frame(char *frame, int64_t expr_cnt);
   int extend_param_frame(const int64_t old_size);
   int reserve_param_frame(const int64_t capacity);
-  void get_param_frame_info(int64_t param_idx,
-                            ObDatum *&datum,
-                            ObEvalInfo *&eval_info,
-                            VectorHeader *&vec_header);
   int inner_get_subschema_id_by_type_info(const ObObjMeta &obj_meta,
                                           const ObIArray<common::ObString> &type_info,
                                           uint16_t &subschema_id) const;

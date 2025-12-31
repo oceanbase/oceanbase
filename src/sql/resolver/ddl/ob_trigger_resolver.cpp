@@ -1025,7 +1025,15 @@ int ObTriggerResolver::resolve_trigger_body(const ParseNode &parse_node,
                                           parse_node,
                                           session_info_->get_dtc_params(),
                                           procedure_source));
-    OZ (parser.parse_package(procedure_source, parse_tree, session_info_->get_dtc_params(), NULL, true, is_wrap));
+    OZ (parser.parse_package(procedure_source,
+                             parse_tree,
+                             session_info_->get_dtc_params(),
+                             nullptr,
+                             true,
+                             is_wrap,
+                             nullptr,
+                             true,
+                             session_info_));
     if (OB_SUCC(ret)) {
       params_.tg_timing_event_ = static_cast<int64_t>(trigger_info.get_timing_event());
       HEAP_VAR(ObCreateProcedureResolver, resolver, params_) {
@@ -1407,7 +1415,7 @@ int ObTriggerResolver::analyze_trigger(ObSchemaGetterGuard &schema_guard,
                                 NULL));
       OZ (ObTriggerInfo::gen_package_source(trigger_info.get_tenant_id(),
                                             trigger_info.get_trigger_spec_package_id(trigger_info.get_trigger_id()),
-                                            source, true, schema_guard, allocator));
+                                            source, true, schema_guard, allocator, session_info));
       OZ (compiler.analyze_package(source, NULL, package_spec_ast, true, is_wrap));
       OZ (package_body_ast.init(db_name,
                                 pkg_name,
@@ -1418,7 +1426,7 @@ int ObTriggerResolver::analyze_trigger(ObSchemaGetterGuard &schema_guard,
                                 &package_spec_ast));
       OZ (ObTriggerInfo::gen_package_source(trigger_info.get_tenant_id(),
                                             trigger_info.get_trigger_body_package_id(trigger_info.get_trigger_id()),
-                                            source, false, schema_guard, allocator));
+                                            source, false, schema_guard, allocator, session_info));
       OZ (compiler.analyze_package(source,
                                    &(package_spec_ast.get_body()->get_namespace()),
                                    package_body_ast,

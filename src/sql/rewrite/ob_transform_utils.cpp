@@ -10351,6 +10351,7 @@ int ObTransformUtils::add_param_not_null_constraint(ObIArray<ObExprConstraint> &
     LOG_WARN("pre calculable expr is expected here", K(ret));
   } else {
     ObExprConstraint cons(not_null_expr, PRE_CALC_RESULT_NOT_NULL);
+    not_null_expr->calc_hash();
     if (OB_FAIL(add_var_to_array_no_dup(constraints, cons))) {
       LOG_WARN("failed to push back pre calc constraints", K(ret));
     }
@@ -10388,6 +10389,7 @@ int ObTransformUtils::add_param_null_constraint(ObTransformerCtx &ctx,
     LOG_WARN("pre calculable expr is expected here", K(ret));
   } else {
     ObExprConstraint cons(null_expr, PRE_CALC_RESULT_NULL);
+    null_expr->calc_hash();
     if (OB_FAIL(add_var_to_array_no_dup(ctx.expr_constraints_, cons))) {
       LOG_WARN("failed to push back pre calc constraints", K(ret));
     }
@@ -11211,6 +11213,7 @@ int ObTransformUtils::add_param_bool_constraint(ObTransformerCtx *ctx,
         ? PreCalcExprExpectResult::PRE_CALC_RESULT_TRUE
         : PreCalcExprExpectResult::PRE_CALC_RESULT_FALSE;
     ObExprConstraint cons(bool_expr, expect_result);
+    bool_expr->calc_hash();
     cons.ignore_const_check_ = ignore_const_check;
     if (OB_FAIL(add_var_to_array_no_dup(ctx->expr_constraints_, cons))) {
       LOG_WARN("failed to push back pre calc constraints", K(ret));
@@ -12712,24 +12715,6 @@ int ObTransformUtils::extract_udt_exprs(ObRawExpr *expr, ObIArray<ObRawExpr *> &
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       if (OB_FAIL(SMART_CALL(extract_udt_exprs(expr->get_param_expr(i), udt_exprs)))) {
         LOG_WARN("Failed to extract rowid exprs", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObTransformUtils::extract_udf_exprs(ObRawExpr *expr, ObIArray<ObRawExpr *> &udf_exprs)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(expr));
-  } else if (expr->is_udf_expr() && OB_FAIL(add_var_to_array_no_dup(udf_exprs, expr))) {
-    LOG_WARN("failed to add var to array no dup", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-      if (OB_FAIL(SMART_CALL(extract_udf_exprs(expr->get_param_expr(i), udf_exprs)))) {
-        LOG_WARN("failed to extract udf exprs", K(ret));
       }
     }
   }

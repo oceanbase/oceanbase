@@ -1827,6 +1827,7 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
       }
     }
     if (OB_SUCC(ret) &&
+        !params_.disable_shared_expr_ &&
         current_scope_ != T_INSERT_SCOPE &&
         current_scope_ != T_UPDATE_SCOPE &&
         !is_hierarchical_query &&
@@ -4410,8 +4411,20 @@ int ObDMLResolver::build_column_schemas_for_orc(const orc::Type* type,
             break;
           }
           case orc::TypeKind::STRING:
-          case orc::TypeKind::VARCHAR:
           case orc::TypeKind::BINARY:
+          {
+            orc::TypeKind kind = type->getSubtype(i)->getKind();
+            ObCharsetType cs_type = (kind == orc::TypeKind::STRING) ? CHARSET_UTF8MB4 : CHARSET_BINARY;
+            ObCollationType collation = (kind == orc::TypeKind::STRING) ? ObCharset::get_system_collation() : CS_TYPE_BINARY;
+            if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_string(lib::is_oracle_mode(),
+                                                                        cs_type,
+                                                                        collation,
+                                                                        column_schema))) {
+              LOG_WARN("failed to setup string");
+            }
+            break;
+          }
+          case orc::TypeKind::VARCHAR:
           {
             int64_t max_len = static_cast<int64_t>(type->getSubtype(i)->getMaximumLength());
             if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_varchar(lib::is_oracle_mode(),
@@ -4875,34 +4888,44 @@ int ObDMLResolver::build_column_schemas_for_csv(const ObExternalFileFormat &form
     }
   }
 
+  int64_t MAX_BUF_SIZE = 1024 * 1024 * 1024;  // default 1G
+  if (OB_SUCC(ret)) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      MAX_BUF_SIZE = tenant_config->external_table_csv_max_buffer_size;
+    }
+  }
+
   if (OB_SUCC(ret)) {
     const int64_t INIT_BUF_SIZE = OB_MALLOC_BIG_BLOCK_SIZE;
-    const int64_t MAX_BUF_SIZE = 64 * 1024 * 1024; // 64MB上限
     int64_t cur_buf_size = INIT_BUF_SIZE;
     ObArrayWrap<char> buf;
     int64_t read_size = 0;
     int64_t nrows = 2;
     bool is_one_line = false;
+    int64_t remain_size = 0; // 上次未解析完的数据大小
 
     do {
-      if (OB_FAIL(buf.allocate_array(allocator, cur_buf_size))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to alloc memory", K(ret));
+      if (buf.get_data() == NULL) {
+        if (OB_FAIL(buf.allocate_array(allocator, cur_buf_size))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc memory", K(ret));
+        }
       }
 
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(reader_.read(buf.get_data(), buf.count(), read_size))) {
+        if (OB_FAIL(reader_.read(buf.get_data() + remain_size, buf.count() - remain_size, read_size))) {
           LOG_WARN("failed to read file", K(ret));
         } else {
           // 尝试解析当前buffer中的数据
           ObSEArray<ObCSVGeneralParser::LineErrRec, 16> err_records;
           const char *begin = buf.get_data();
-          const char *end = buf.get_data() + read_size;
+          const char *end = buf.get_data() + remain_size + read_size;
           nrows = 2;
-          if (OB_FAIL(parser.scan(begin, end, nrows, NULL, NULL, handle_one_line, err_records, true))) {
+          if (OB_FAIL(parser.scan(begin, end, nrows, NULL, NULL, handle_one_line, err_records, reader_.eof()))) {
             LOG_WARN("fail to scan buf", K(ret));
           } else if (nrows <= 1) {
-            if (read_size < cur_buf_size) {
+            if (read_size < cur_buf_size - remain_size) {
               // 文件只有一行
               is_one_line = true;
             } else if (cur_buf_size >= MAX_BUF_SIZE) {
@@ -4912,11 +4935,26 @@ int ObDMLResolver::build_column_schemas_for_csv(const ObExternalFileFormat &form
             } else {
               col_cnt = 0;
               // 需要扩大buffer继续读取
-              cur_buf_size = MIN(cur_buf_size * 2, MAX_BUF_SIZE);
-              if (OB_NOT_NULL(buf.get_data())) {
-                allocator.free(buf.get_data());
-              }
+              // 保留未解析完的数据
+              int64_t unparsed_size = end - begin;
+              char *old_buf = buf.get_data();
               buf.reset();
+              cur_buf_size = MIN(cur_buf_size * 2, MAX_BUF_SIZE);
+
+              if (OB_FAIL(buf.allocate_array(allocator, cur_buf_size))) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                LOG_WARN("fail to alloc memory for expanded buffer", K(ret));
+                if (OB_NOT_NULL(old_buf)) {
+                  allocator.free(old_buf);
+                }
+              } else {
+                // 将未解析的数据复制到新buffer的开头
+                MEMCPY(buf.get_data(), begin, unparsed_size);
+                remain_size = unparsed_size;
+                if (OB_NOT_NULL(old_buf)) {
+                  allocator.free(old_buf);
+                }
+              }
             }
           }
         }
@@ -5881,8 +5919,7 @@ int ObDMLResolver::build_mocked_external_table_schema(const ParseNode *location_
       } else if(OB_ISNULL(location_node->children_[0]->children_[0])) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("location child node is null", K(ret));
-      }
-      else {
+      } else {
         if (location_node->children_[0]->type_ == T_LOCATION_OBJECT) {
           using_location_object = true;
           if(location_node->children_[0]->num_child_ != 2) {
@@ -16313,6 +16350,12 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
       } else {
         ret = OB_ERR_HINT_UNKNOWN;
         LOG_WARN("Unknown hint value", "hint_name", get_type_name(hint_node.type_));
+      }
+      break;
+    }
+    case T_TABLE_LOCK_MODE_HINT: {
+      CHECK_HINT_PARAM(hint_node, 1) {
+        global_hint.merge_table_lock_mode_hint(child0->value_);
       }
       break;
     }

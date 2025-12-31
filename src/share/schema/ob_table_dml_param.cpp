@@ -61,7 +61,10 @@ ObTableSchemaParam::ObTableSchemaParam(ObIAllocator &allocator)
     merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN),
     inc_pk_doc_id_col_id_(OB_INVALID_ID),
     vec_chunk_col_id_(OB_INVALID_ID),
-    vec_embedded_col_id_(OB_INVALID_ID)
+    vec_embedded_col_id_(OB_INVALID_ID),
+    search_idx_included_cids_(allocator),
+    search_idx_included_cid_idxes_(allocator),
+    search_idx_included_extended_type_infos_(allocator)
 {
 }
 
@@ -106,6 +109,9 @@ void ObTableSchemaParam::reset()
   is_delete_insert_ = false;
   merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN;
   inc_pk_doc_id_col_id_ = OB_INVALID_ID;
+  search_idx_included_cids_.reset();
+  search_idx_included_cid_idxes_.reset();
+  search_idx_included_extended_type_infos_.reset();
 }
 
 int ObTableSchemaParam::convert(const ObTableSchema *schema)
@@ -671,6 +677,9 @@ OB_DEF_SERIALIZE(ObTableSchemaParam)
   OB_UNIS_ENCODE(inc_pk_doc_id_col_id_);
   OB_UNIS_ENCODE(vec_chunk_col_id_);
   OB_UNIS_ENCODE(vec_embedded_col_id_);
+  OB_UNIS_ENCODE(search_idx_included_cids_);
+  OB_UNIS_ENCODE(search_idx_included_cid_idxes_);
+  OB_UNIS_ENCODE(search_idx_included_extended_type_infos_);
   return ret;
 }
 
@@ -834,6 +843,23 @@ OB_DEF_DESERIALIZE(ObTableSchemaParam)
   OB_UNIS_DECODE(inc_pk_doc_id_col_id_);
   OB_UNIS_DECODE(vec_chunk_col_id_);
   OB_UNIS_DECODE(vec_embedded_col_id_);
+  OB_UNIS_DECODE(search_idx_included_cids_);
+  OB_UNIS_DECODE(search_idx_included_cid_idxes_);
+  OB_UNIS_DECODE(search_idx_included_extended_type_infos_);
+  if (OB_SUCC(ret) && search_idx_included_extended_type_infos_.count() > 0) {
+    // ObString decoded from buffer points to rpc buffer, deep copy to allocator_ to avoid dangling pointer
+    for (int64_t i = 0; OB_SUCC(ret) && i < search_idx_included_extended_type_infos_.count(); ++i) {
+      const ObString &src = search_idx_included_extended_type_infos_.at(i);
+      if (!src.empty()) {
+        ObString dst;
+        if (OB_FAIL(ob_write_string(allocator_, src, dst))) {
+          LOG_WARN("failed to deep copy extended type info after deserialize", K(ret), K(i), K(src));
+        } else {
+          search_idx_included_extended_type_infos_.at(i) = dst;
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -891,6 +917,9 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchemaParam)
   OB_UNIS_ADD_LEN(inc_pk_doc_id_col_id_);
   OB_UNIS_ADD_LEN(vec_chunk_col_id_);
   OB_UNIS_ADD_LEN(vec_embedded_col_id_);
+  OB_UNIS_ADD_LEN(search_idx_included_cids_);
+  OB_UNIS_ADD_LEN(search_idx_included_cid_idxes_);
+  OB_UNIS_ADD_LEN(search_idx_included_extended_type_infos_);
   return len;
 }
 

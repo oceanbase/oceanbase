@@ -805,7 +805,7 @@ int ObExprUDFUtils::process_out_params(ObExprUDFCtx &udf_ctx, ObEvalCtx &eval_ct
                                      eval_ctx.exec_ctx_,
                                      udf_ctx.get_info()->nocopy_params_,
                                      udf_ctx.get_info()->params_desc_,
-                                     udf_ctx.get_info()->params_type_));
+                                     udf_ctx.get_info()->out_params_type_));
   }
   return ret;
 }
@@ -1095,9 +1095,9 @@ int ObExprUDFUtils::process_package_out_param(int64_t idx,
   }
   ObObj origin_value = objs_stack[idx];
   ObIAllocator *allocator = NULL;
-  pl::ObPLExecCtx plctx(nullptr, &exec_ctx, nullptr,nullptr,nullptr,nullptr);
-  plctx.guard_ = exec_ctx.get_package_guard();
+  pl::ObPLExecCtx plctx(nullptr, nullptr, &exec_ctx, nullptr,nullptr,nullptr,nullptr);
   ObIAllocator *composite_allocator = nullptr;
+  OZ (exec_ctx.get_package_guard(plctx.guard_));
   OZ (extract_allocator_and_restore_obj(origin_value, origin_value, composite_allocator));
   if (OB_SUCC(ret)) {
     if (OB_NOT_NULL(composite_allocator)) {

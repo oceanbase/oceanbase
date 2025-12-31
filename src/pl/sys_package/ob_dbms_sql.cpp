@@ -854,7 +854,7 @@ int ObPLDbmsSql::do_parse(ObExecContext &exec_ctx,
     bool skip_locked = false;
     ParamStore dummy_params;
     ObSqlString sql_str;
-    ObPLExecCtx pl_ctx(cursor->get_allocator(), &exec_ctx, &dummy_params,
+    ObPLExecCtx pl_ctx(cursor->get_allocator(), cursor->get_allocator(), &exec_ctx, &dummy_params,
                      NULL/*result*/, &ret, NULL/*func*/, true);
     CK (OB_NOT_NULL(exec_ctx.get_my_session()));
     OZ (sql_str.append(sql_cs));
@@ -1145,7 +1145,7 @@ int ObPLDbmsSql::do_execute(ObExecContext &exec_ctx,
                             ObDbmsCursorInfo &dbms_cursor)
 {
   int ret = OB_SUCCESS;
-  ObPLExecCtx pl_ctx(dbms_cursor.get_allocator(), &exec_ctx, NULL/*params*/,
+  ObPLExecCtx pl_ctx(dbms_cursor.get_allocator(), dbms_cursor.get_allocator(), &exec_ctx, NULL/*params*/,
                      NULL/*result*/, &ret, NULL/*func*/, true);
   OZ (ObSPIService::dbms_dynamic_open(&pl_ctx, dbms_cursor));
   return ret;
@@ -1158,7 +1158,7 @@ int ObPLDbmsSql::do_execute(ObExecContext &exec_ctx,
 {
   int ret = OB_SUCCESS;
   number::ObNumber num;
-  ObPLExecCtx pl_ctx(cursor.get_allocator(), &exec_ctx, &params,
+  ObPLExecCtx pl_ctx(cursor.get_allocator(), cursor.get_allocator(), &exec_ctx, &params,
                      NULL/*result*/, &ret, NULL/*func*/, true);
   OZ (cursor.expand_params());
   OZ (ObSPIService::dbms_dynamic_open(&pl_ctx, cursor, true));
@@ -1198,7 +1198,7 @@ int ObPLDbmsSql::do_fetch(ObExecContext &exec_ctx,
   bool is_last_fetch_with_row = cursor.get_fetched_with_row();
 
   if (OB_SUCC(ret)) {
-    ObPLExecCtx pl_ctx(cursor.get_allocator(), &exec_ctx, &params,
+    ObPLExecCtx pl_ctx(cursor.get_allocator(), cursor.get_allocator(), &exec_ctx, &params,
                         NULL/*result*/, &ret, NULL/*func*/, true);
     int64_t fetch_cnt = 0;
     ObNumber row_count;
@@ -1653,6 +1653,15 @@ int ObPLDbmsSql::fill_dbms_cursor(ObSQLSessionInfo *session,
       bool is_iter_end = false;
       CK (OB_NOT_NULL(cursor->get_cursor_handler()->get_result_set()));
       OZ (spi_cursor->init_row_desc(*(cursor->get_cursor_handler()->get_result_set())));
+      if (OB_SUCC(ret) && cursor->get_cursor_handler()->enable_streaming_cursor_prefetch()
+          && OB_NOT_NULL(cursor->get_cursor_handler()->get_spi_cursor()) && cursor->get_cursor_handler()->get_spi_cursor()->cur_ < cursor->get_cursor_handler()->get_spi_cursor()->row_store_.get_row_cnt()) {
+        ObSPICursor *orig_spi_cursor = cursor->get_cursor_handler()->get_spi_cursor();
+        for (int64_t i = orig_spi_cursor->cur_; OB_SUCC(ret) && i < orig_spi_cursor->row_store_.get_row_cnt(); i++) {
+          const ObNewRow *cur_row = NULL;
+          OZ (orig_spi_cursor->row_store_.get_row(i, cur_row));
+          OZ (ObSPIService::fill_cursor_row(spi_cursor, *cur_row));
+        }
+      }
       OZ (ObSPIService::fill_cursor(
         cursor->get_cursor_entity(),
         *(cursor->get_cursor_handler()->get_result_set()), spi_cursor, 0, is_iter_end));

@@ -83,7 +83,12 @@ int ObBackupDataLSTaskMgr::process(int64_t &finish_cnt)
     FLOG_INFO("[DATA_BACKUP]schedule backup ls task", KPC(ls_attr_));
     switch (ls_attr_->status_.status_) {
       case ObBackupTaskStatus::Status::INIT: {
-        if (OB_FAIL(gen_and_add_task_())) {
+        bool can_add_task = false;
+        if (OB_FAIL(task_scheduler_->check_can_add_task(can_add_task))) {
+          LOG_WARN("failed to check can add task", K(ret));
+        } else if (!can_add_task) {
+          LOG_INFO("queue is full, skip add task now", K(ret));
+        } else if (OB_FAIL(gen_and_add_task_())) {
           LOG_WARN("[DATA_BACKUP]failed to gen and add task into task schedulers", K(ret), KPC(ls_attr_));
         }
         break;
@@ -455,7 +460,9 @@ int ObBackupDataLSTaskMgr::finish_(int64_t &finish_cnt)
     ObMySQLTransaction trans;
     if (OB_FAIL(ret)) {
     } else if (job_attr_->can_retry_) {
-      if (ObTimeUtility::current_time() < ls_attr_->end_ts_ + OB_BACKUP_RETRY_TIME_INTERVAL) {
+      int64_t cur_ts = ObTimeUtility::current_time();
+      if (cur_ts < ls_attr_->end_ts_ + OB_BACKUP_RETRY_TIME_INTERVAL) {
+        backup_service_->set_idle_time(OB_BACKUP_RETRY_TIME_INTERVAL);
       } else if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(ls_attr_->tenant_id_)))) {
         LOG_WARN("fail to start trans", K(ret));
       } else {

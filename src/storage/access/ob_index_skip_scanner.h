@@ -154,7 +154,6 @@ class ObIndexSkipScanner
 public:
   ObIndexSkipScanner(const bool is_for_memtable, const blocksstable::ObStorageDatumUtils &datum_utils);
   ~ObIndexSkipScanner();
-  void reuse();
   void reset();
   int init(
       const bool is_reverse_scan,

@@ -1581,6 +1581,8 @@ int ObMultiTenant::update_ss_garbage_collection_service_config()
       LOG_WARN("update_ss_gc_task_exec_interval failed", KR(ret));
     } else if (OB_FAIL(ss_gc_service->update_block_check_interval(block_check_interval))) {
       LOG_WARN("update_block_check_interval failed", KR(ret));
+    } else if (OB_FAIL(ss_gc_service->update_thread_num_if_changed())) {
+      LOG_WARN("update_thread_num_if_changed failed", KR(ret));
     }
   }
 

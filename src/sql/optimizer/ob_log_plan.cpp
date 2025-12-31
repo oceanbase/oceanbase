@@ -3247,6 +3247,7 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
     scan->set_index_prefix(ap->index_prefix_);
     scan->set_mr_mv_scan(table_item->mr_mv_flags_);
     if (!ap->is_inner_path_ &&
+        (OB_NOT_NULL(ap->pre_range_graph_) ? !ap->pre_range_graph_->has_fake_const_udf() : true) &&
         OB_FAIL(scan->set_query_ranges(ap->get_cost_table_scan_info().ranges_,
                                        ap->get_cost_table_scan_info().ss_ranges_))) {
       LOG_WARN("failed to set query ranges", K(ret));
@@ -19731,6 +19732,14 @@ int ObLogPlan::remove_duplicate_constraints()
       if (OB_SUCC(ret) && find_duplicate &&
           OB_FAIL(query_ctx->all_plan_const_param_constraints_.remove(i))) {
         LOG_WARN("failed to remove a element from array", K(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < query_ctx->all_expr_constraints_.count(); i++) {
+      if (OB_ISNULL(query_ctx->all_expr_constraints_.at(i).pre_calc_expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(query_ctx->all_expr_constraints_.at(i).pre_calc_expr_->calc_hash())) {
+        LOG_WARN("failed to calc hash", K(ret));
       }
     }
     for (int64_t i = query_ctx->all_expr_constraints_.count() - 1; OB_SUCC(ret) && i >= 0; i--) {

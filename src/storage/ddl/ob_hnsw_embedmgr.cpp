@@ -428,6 +428,7 @@ void ObTaskSlotRing::clean_all_slots()
   for (int64_t i = 0; i < slots_.count(); ++i) {
     Slot &slot = slots_.at(i);
     if (OB_NOT_NULL(slot.task_)) {
+      slot.task_->set_need_cancel();
       slot.task_->release_if_managed();
       slot.task_ = nullptr;
     }
@@ -440,24 +441,11 @@ void ObTaskSlotRing::clean_all_slots()
   }
 }
 
-int ObTaskSlotRing::wait_all_tasks_finished()
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < slots_.count(); ++i) {
-    Slot &slot = slots_.at(i);
-    if (OB_NOT_NULL(slot.task_)) {
-      if (OB_FAIL(slot.task_->wait_for_completion())) {
-        LOG_WARN("wait for task completion failed", K(ret), K(i));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObTaskSlotRing::wait_for_head_completion()
+int ObTaskSlotRing::wait_for_head_completion(bool &is_finished)
 {
   int ret = OB_SUCCESS;
   share::ObEmbeddingTask *task_to_wait = nullptr;
+  is_finished = true;
 
   {
     ObSpinLockGuard guard(lock_);
@@ -470,8 +458,19 @@ int ObTaskSlotRing::wait_for_head_completion()
   }
 
   if (OB_NOT_NULL(task_to_wait)) {
-    if (OB_FAIL(task_to_wait->wait_for_completion())) {
-      LOG_WARN("wait for head embedding task completion failed", K(ret));
+    // Use periodic check mode to allow cancel detection
+    if (OB_FAIL(task_to_wait->wait_for_completion(CHECK_INTERVAL_US))) {
+      if (ret == OB_EAGAIN) {
+        // Periodic check return, task not finished yet, return for caller to check cancel status
+        ret = OB_SUCCESS;
+        is_finished = false;
+        LOG_DEBUG("wait for head embedding task periodic check", KPC(task_to_wait));
+      } else if (ret == OB_TIMEOUT) {
+        // Task has exceeded timeout, this is an error
+        LOG_WARN("wait for head embedding task timeout", K(ret), KPC(task_to_wait));
+      } else {
+        LOG_WARN("wait for head embedding task completion failed", K(ret));
+      }
     }
   }
   return ret;
@@ -548,15 +547,28 @@ void ObEmbeddingIOCallbackHandle::release()
 }
 
 // -------------------------------- ObEmbeddingTaskMgr --------------------------------
+ObEmbeddingTaskMgr::ObEmbeddingTaskMgr(ObHNSWEmbeddingOperator &embedding_operator)
+  : allocator_("EmbedTaskMgr", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    embedding_handler_(nullptr),
+    slot_ring_(),
+    ring_capacity_(8),
+    cfg_(),
+    is_inited_(false),
+    is_failed_(false),
+    cs_type_(CS_TYPE_INVALID),
+    embedding_operator_(embedding_operator),
+    task_id_(OB_INVALID_ID)
+{
+}
+
 ObEmbeddingTaskMgr::~ObEmbeddingTaskMgr()
 {
+  FLOG_INFO("embedding task mgr destroyed", K(task_id_));
   int ret = OB_SUCCESS;
   if (is_inited_) {
     slot_ring_.disable_all_callbacks();
-    if (OB_FAIL(slot_ring_.wait_all_tasks_finished())) {
-      LOG_WARN("failed to wait for all tasks to finish", K(ret));
-    }
     slot_ring_.clean_all_slots();
+    task_id_ = OB_INVALID_ID;
     is_inited_ = false;
   }
 }
@@ -596,11 +608,27 @@ int ObEmbeddingTaskMgr::init(const ObString &model_id, const ObCollationType col
     const int64_t reserve_slots = ring_capacity_;
     if (OB_FAIL(slot_ring_.init(reserve_slots))) {
       LOG_WARN("init slot ring failed", K(ret), K(reserve_slots));
+    } else if (OB_FAIL(init_task_id())) {
+      LOG_WARN("init task id failed", K(ret));
     } else {
       is_inited_ = true;
     }
   }
 
+  return ret;
+}
+
+int ObEmbeddingTaskMgr::init_task_id()
+{
+  int ret = OB_SUCCESS;
+  ObDDLIndependentDag *dag = static_cast<ObDDLIndependentDag *>(embedding_operator_.get_dag());
+  ObDDLTabletContext *tablet_context = nullptr;
+  if (OB_ISNULL(dag)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null dag", K(ret));
+  } else {
+    task_id_ = dag->get_ddl_task_param().ddl_task_id_;
+  }
   return ret;
 }
 
@@ -663,8 +691,9 @@ int ObEmbeddingTaskMgr::submit_batch_info(ObTaskBatchInfo *&batch_info)
             } else {
               task = new (task_mem) share::ObEmbeddingTask();
               const int64_t vec_dim = results.at(0)->get_vector_dim();
-              if (OB_FAIL(task->init(cfg_.model_url_, cfg_.model_name_, cfg_.provider_,
-                                   cfg_.user_key_, texts, cs_type_, vec_dim, model_request_timeout_us_, model_max_retries_, cb_handle))) {
+              if (OB_FAIL(task->init(cfg_.model_url_, cfg_.model_name_, cfg_.provider_, cfg_.user_key_,
+                                     texts, cs_type_, vec_dim, model_request_timeout_us_, model_max_retries_,
+                                     task_id_, ObEmbeddingTasSourceType::INDEX_PIPELINE, cb_handle, true))) {
                 LOG_WARN("failed to initialize EmbeddingTask", K(ret));
               }
             }
@@ -787,11 +816,29 @@ int ObEmbeddingTaskMgr::mark_task_ready(const int64_t slot_idx, const int ret_co
 int ObEmbeddingTaskMgr::wait_for_completion()
 {
   int ret = OB_SUCCESS;
+  bool task_finished = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("embedding task mgr not inited", K(ret));
-  } else if (OB_FAIL(slot_ring_.wait_for_head_completion())) {
-    LOG_WARN("wait for head completion failed", K(ret));
+  } else {
+    int64_t start_time = ObTimeUtility::current_time();
+    while (OB_SUCC(ret) && !task_finished) {
+      if (OB_FAIL(slot_ring_.wait_for_head_completion(task_finished))) {
+        if (ret == OB_TIMEOUT) {
+          LOG_WARN("wait for head completion timeout", K(ret));
+          ret = OB_CANCELED; // avoid ddl endless retry logic
+        } else {
+          LOG_WARN("wait for head completion failed", K(ret));
+        }
+      } else if (need_stop()) {
+        ret = OB_CANCELED;
+        LOG_WARN("need to stop, exit wait_for_completion", K(ret));
+      }
+    }
+
+    if (ObTimeUtility::current_time() - start_time > 60 * 1000 * 1000) {
+      LOG_WARN("wait for embedding task completion too long", K(ret), K(task_finished), K_(slot_ring), K(start_time));
+    }
   }
   return ret;
 }
@@ -799,4 +846,17 @@ int ObEmbeddingTaskMgr::wait_for_completion()
 void ObEmbeddingTaskMgr::set_failed()
 {
   is_failed_ = true;
+}
+
+bool ObEmbeddingTaskMgr::need_stop() const
+{
+  bool bret = false;
+  ObIDag *dag = embedding_operator_.get_dag();
+  if (OB_ISNULL(dag)) {
+    bret = true;
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "should not reach here, dag is null", K(bret));
+  } else {
+    bret = dag->is_final_status();
+  }
+  return bret;
 }

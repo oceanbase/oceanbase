@@ -473,7 +473,11 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::add_batch(const ObBatchRows 
     }
   }
   bool need_load_data = true;
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
+    SQL_ENG_LOG(WARN, "failed to add batch", K(ret));
+  } else if (OB_FAIL(comp_.check_sort_key_has_null(*eval_ctx_, input_brs))) {
+    SQL_ENG_LOG(WARN, "failed to check sort key has null", K(ret));
+  } else {
     const ObBatchRows *input_brs_ptr = nullptr;
     if (is_topn_sort() && OB_NOT_NULL(topn_filter_) && OB_LIKELY(!topn_filter_->is_by_pass())) {
       need_load_data = false;
@@ -499,8 +503,6 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::add_batch(const ObBatchRows 
         ret = add_quick_sort_batch(*input_brs_ptr, start_pos, append_row_count);
       }
     }
-  } else {
-    SQL_ENG_LOG(WARN, "failed to add batch", K(ret));
   }
   return ret;
 }
@@ -520,6 +522,8 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::add_batch(const ObBatchRows 
     }
   }
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(comp_.check_sort_key_has_null(*eval_ctx_, input_brs))) {
+    SQL_ENG_LOG(WARN, "failed to check sort key has null", K(ret));
   } else if (use_heap_sort_) {
     ret = add_heap_sort_batch(input_brs, selector, size);
   } else if (use_partition_topn_sort_) {

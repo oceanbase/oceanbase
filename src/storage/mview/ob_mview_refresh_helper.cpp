@@ -140,24 +140,25 @@ int ObMViewRefreshHelper::generate_purge_mlog_sql(ObSchemaGetterGuard &schema_gu
       LOG_WARN("fail to generate new name with escape character", KR(ret),
                K(table_schema->get_table_name_str()), K(is_oracle_mode));
     } else {
-      if (is_oracle_mode) {
-        if (OB_FAIL(sql_string.assign_fmt("DELETE /*+ ENABLE_PARALLEL_DML PARALLEL(%d)*/ FROM \"%.*s\".\"%.*s\" WHERE ora_rowscn <= %lu;",
+      if (purge_log_parallel > 0) {
+        if (OB_FAIL(sql_string.assign_fmt("DELETE /*+ NO_REWRITE DYNAMIC_SAMPLING(0) ENABLE_PARALLEL_DML DML_PARALLEL(%d) PARALLEL(%d) */",
                                           static_cast<int>(purge_log_parallel),
-                                          static_cast<int>(database_name.length()),
-                                          database_name.ptr(),
-                                          static_cast<int>(table_name.length()), table_name.ptr(),
-                                          purge_scn.get_val_for_sql()))) {
+                                          static_cast<int>(purge_log_parallel)))) {
           LOG_WARN("fail to assign sql", KR(ret));
         }
       } else {
-        if (OB_FAIL(sql_string.assign_fmt("DELETE /*+ ENABLE_PARALLEL_DML PARALLEL(%d)*/ FROM `%.*s`.`%.*s` WHERE ora_rowscn <= %lu;",
-                                          static_cast<int>(purge_log_parallel),
-                                          static_cast<int>(database_name.length()),
-                                          database_name.ptr(),
-                                          static_cast<int>(table_name.length()), table_name.ptr(),
-                                          purge_scn.get_val_for_sql()))) {
+        if (OB_FAIL(sql_string.assign_fmt("DELETE /*+ NO_REWRITE DYNAMIC_SAMPLING(0) */"))) {
           LOG_WARN("fail to assign sql", KR(ret));
         }
+      }
+      if (OB_SUCC(ret)
+          && OB_FAIL(sql_string.append_fmt(is_oracle_mode ?
+                                           " FROM \"%.*s\".\"%.*s\" WHERE ora_rowscn <= %lu;" :
+                                           " FROM `%.*s`.`%.*s` WHERE ora_rowscn <= %lu;",
+                                           static_cast<int>(database_name.length()), database_name.ptr(),
+                                           static_cast<int>(table_name.length()), table_name.ptr(),
+                                           purge_scn.get_val_for_sql()))) {
+        LOG_WARN("fail to append sql", KR(ret));
       }
     }
   }
@@ -166,6 +167,7 @@ int ObMViewRefreshHelper::generate_purge_mlog_sql(ObSchemaGetterGuard &schema_gu
 
 int ObMViewRefreshHelper::get_table_row_num(ObMViewTransaction &trans, const uint64_t tenant_id,
                                             const uint64_t table_id, const SCN &scn,
+                                            const uint64_t query_parallel,
                                             int64_t &num_rows)
 {
   int ret = OB_SUCCESS;
@@ -210,8 +212,12 @@ int ObMViewRefreshHelper::get_table_row_num(ObMViewTransaction &trans, const uin
         ObSqlString sql;
         sqlclient::ObMySQLResult *sql_result = nullptr;
         int64_t count = 0;
+        OZ(sql.assign_fmt("select "));
+        if (query_parallel > 0) {
+          OZ(sql.append_fmt("/*+parallel(%lu)*/ ", query_parallel));
+        }
         if (is_oracle_mode) {
-          if (OB_FAIL(sql.assign_fmt("select count(*) as COUNT from \"%.*s\".\"%.*s\"",
+          if (OB_FAIL(sql.append_fmt("count(*) as COUNT from \"%.*s\".\"%.*s\"",
                                      static_cast<int>(database_name.length()), database_name.ptr(),
                                      static_cast<int>(table_name.length()), table_name.ptr()))) {
             LOG_WARN("fail to assign sql", KR(ret));
@@ -220,7 +226,7 @@ int ObMViewRefreshHelper::get_table_row_num(ObMViewTransaction &trans, const uin
             LOG_WARN("fail to append sql", KR(ret));
           }
         } else {
-          if (OB_FAIL(sql.assign_fmt("select count(*) as COUNT from `%.*s`.`%.*s`",
+          if (OB_FAIL(sql.append_fmt("count(*) as COUNT from `%.*s`.`%.*s`",
                                      static_cast<int>(database_name.length()), database_name.ptr(),
                                      static_cast<int>(table_name.length()), table_name.ptr()))) {
             LOG_WARN("fail to assign sql", KR(ret));
@@ -247,8 +253,8 @@ int ObMViewRefreshHelper::get_table_row_num(ObMViewTransaction &trans, const uin
 
 int ObMViewRefreshHelper::get_mlog_dml_row_num(ObMViewTransaction &trans, const uint64_t tenant_id,
                                                const uint64_t table_id, const ObScnRange &scn_range,
-                                               int64_t &num_rows_ins, int64_t &num_rows_upd,
-                                               int64_t &num_rows_del)
+                                               const uint64_t query_parallel, int64_t &num_rows_ins,
+                                               int64_t &num_rows_upd, int64_t &num_rows_del)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
@@ -296,10 +302,14 @@ int ObMViewRefreshHelper::get_mlog_dml_row_num(ObMViewTransaction &trans, const 
         sqlclient::ObMySQLResult *sql_result = nullptr;
         ObString dml_type;
         int64_t count = 0;
+        OZ(sql.assign_fmt("select "));
+        if (query_parallel > 0) {
+          OZ(sql.append_fmt("/*+parallel(%lu)*/ ", query_parallel));
+        }
         if (is_oracle_mode) {
           if (scn_range.start_scn_.is_valid()) {
-            OZ(sql.assign_fmt(
-              "select DMLTYPE$$, count(*) as COUNT from \"%.*s\".\"%.*s\""
+            OZ(sql.append_fmt(
+              "DMLTYPE$$, count(*) as COUNT from \"%.*s\".\"%.*s\""
               " where ora_rowscn > %lu and ora_rowscn <= %lu"
               " group by DMLTYPE$$;",
               static_cast<int>(database_name.length()), database_name.ptr(),
@@ -307,7 +317,7 @@ int ObMViewRefreshHelper::get_mlog_dml_row_num(ObMViewTransaction &trans, const 
               scn_range.start_scn_.get_val_for_sql(), scn_range.end_scn_.get_val_for_sql()));
           } else {
             OZ(
-              sql.assign_fmt("select DMLTYPE$$, count(*) as COUNT from \"%.*s\".\"%.*s\""
+              sql.append_fmt("DMLTYPE$$, count(*) as COUNT from \"%.*s\".\"%.*s\""
                              " where ora_rowscn <= %lu"
                              " group by DMLTYPE$$;",
                              static_cast<int>(database_name.length()), database_name.ptr(),
@@ -316,8 +326,8 @@ int ObMViewRefreshHelper::get_mlog_dml_row_num(ObMViewTransaction &trans, const 
           }
         } else {
           if (scn_range.start_scn_.is_valid()) {
-            OZ(sql.assign_fmt(
-              "select DMLTYPE$$, count(*) as COUNT from `%.*s`.`%.*s`"
+            OZ(sql.append_fmt(
+              "DMLTYPE$$, count(*) as COUNT from `%.*s`.`%.*s`"
               " where ora_rowscn > %lu and ora_rowscn <= %lu"
               " group by DMLTYPE$$;",
               static_cast<int>(database_name.length()), database_name.ptr(),
@@ -325,7 +335,7 @@ int ObMViewRefreshHelper::get_mlog_dml_row_num(ObMViewTransaction &trans, const 
               scn_range.start_scn_.get_val_for_sql(), scn_range.end_scn_.get_val_for_sql()));
           } else {
             OZ(
-              sql.assign_fmt("select DMLTYPE$$, count(*) as COUNT from `%.*s`.`%.*s`"
+              sql.append_fmt("DMLTYPE$$, count(*) as COUNT from `%.*s`.`%.*s`"
                              " where ora_rowscn <= %lu"
                              " group by DMLTYPE$$;",
                              static_cast<int>(database_name.length()), database_name.ptr(),

@@ -465,7 +465,12 @@ int ObTabletSplitUtil::check_data_split_finished(
     ObTabletHandle ss_tablet_handle;
     if (OB_FAIL(ObTabletSplitUtil::get_tablet(tmp_arena,
         ls_handle, source_tablet_id, true/*is_shared_mode*/, ss_tablet_handle, ObMDSGetTabletMode::READ_ALL_COMMITED))) {
-      LOG_WARN("get ss tablet failed", K(ret), K(ls_id), K(source_tablet_id));
+      if (OB_TABLET_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        FLOG_INFO("ignore to check cant gc flag due to the source tablet not exist", K(ret), K(ls_id), K(source_tablet_id));
+      } else {
+        LOG_WARN("get ss tablet failed", K(ret), K(ls_id), K(source_tablet_id));
+      }
     } else if (OB_UNLIKELY(!ss_tablet_handle.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected err", K(ret), K(ls_id), K(source_tablet_id));

@@ -28,14 +28,14 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
     master                IN     VARCHAR2,
     num                   IN     BINARY_INTEGER := 1,
     flag                  IN     VARCHAR2       := 'NOP',
-    purge_log_parallel    IN     BINARY_INTEGER := 1);
+    purge_log_parallel    IN     BINARY_INTEGER := 0);
   PRAGMA INTERFACE(C, DBMS_MVIEW_PURGE_LOG);
 
   PROCEDURE purge_log(
     master                IN     VARCHAR2,
     num                   IN     BINARY_INTEGER := 1,
     flag                  IN     VARCHAR2       := 'NOP',
-    purge_log_parallel    IN     BINARY_INTEGER := 1)
+    purge_log_parallel    IN     BINARY_INTEGER := 0)
   IS
   BEGIN
     COMMIT;

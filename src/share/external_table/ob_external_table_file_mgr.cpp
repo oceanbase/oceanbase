@@ -1632,7 +1632,6 @@ int ObExternalTableFileManager::get_one_location_from_cache(
   int ret = OB_SUCCESS;
 
   const ObExternalTableFiles *table_files_from_cache = NULL;
-  ObExternalTableFiles tmp_file_list;
   ObKVCacheHandle handle;
   ObExternalTableFileListKey key;
   key.tenant_id_ = tenant_id;
@@ -1647,15 +1646,25 @@ int ObExternalTableFileManager::get_one_location_from_cache(
   } else {
     if (OB_NOT_NULL(table_files_from_cache)) {
       ObExternalTableFiles *files = NULL;
+      int64_t cnt = table_files_from_cache->file_urls_.count();
       if (OB_ISNULL(files = OB_NEWx(ObExternalTableFiles, &allocator))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc for external table files", K(ret), K(key));
       } else if (OB_FAIL(external_table_files.push_back(files))) {
         LOG_WARN("failed to add external table file", K(ret));
+      } else if (OB_FAIL(files->file_urls_.allocate_array(allocator, cnt))
+                 || OB_FAIL(files->file_sizes_.allocate_array(allocator, cnt))
+                 || OB_FAIL(files->modify_times_.allocate_array(allocator, cnt))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc for external table files", K(ret), K(key));
       } else {
-        files->file_urls_.assign(table_files_from_cache->file_urls_);
-        files->file_sizes_.assign(table_files_from_cache->file_sizes_);
-        files->modify_times_.assign(table_files_from_cache->modify_times_);
+        for (int64_t i = 0; OB_SUCC(ret) && i < table_files_from_cache->file_urls_.count(); i++) {
+          files->file_sizes_.at(i) = table_files_from_cache->file_sizes_.at(i);
+          files->modify_times_.at(i) = table_files_from_cache->modify_times_.at(i);
+          OZ(ob_write_string(allocator,
+                             table_files_from_cache->file_urls_.at(i),
+                             files->file_urls_.at(i)));
+        }
       }
     } else {
       ret = OB_ERR_UNEXPECTED;

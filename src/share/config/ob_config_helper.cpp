@@ -1808,5 +1808,62 @@ bool ObConfigEvictOldSSTablePolicyChecker::check(const ObConfigItem &t) const
   return bret;
 }
 
+bool ObConfigAppendUpdateGlobalIndexesForDynamicPartitionChecker::check(const ObConfigItem& t) const
+{
+  return 0 == t.case_compare("AUTO")
+         || 0 == t.case_compare("ON")
+         || 0 == t.case_compare("OFF");
+}
+// Check if the string is either a single parameter name or comma-separated parameter names
+// Empty string is also valid
+// Rules:
+// 1. Empty string is valid
+// 2. No spaces allowed when comma-separated
+// 3. Cannot end with comma
+// 4. Cannot start with comma
+// 5. Cannot have consecutive commas
+// Valid examples: "", "param1", "param1,param2", "a,b,c"
+// Invalid examples: ",", "param1,", ",param1", "param1,,param2", "param1, param2"
+bool ObConfigCommaSeparatedStringChecker::check(const ObConfigItem &t) const
+{
+  bool bret = true;
+  const char *str = t.str();
+  if (OB_ISNULL(str)) {
+    bret = false;
+  } else {
+    size_t str_len = STRLEN(str);
+    const int64_t MAX_LEN = 4096;
+    // Empty string is valid
+    if (0 == str_len) {
+      bret = true;
+    } else if (str_len > MAX_LEN) {
+      bret = false;
+      OB_LOG_RET(WARN, OB_INVALID_CONFIG, "config size is over limit", K(MAX_LEN));
+    } else {
+      // Check: cannot contain spaces
+      for (size_t i = 0; bret && i < str_len; ++i) {
+        if (str[i] == ' ') {
+          bret = false;
+        }
+      }
+      // Check: cannot start with comma
+      if (bret && str[0] == ',') {
+        bret = false;
+      }
+      // Check: cannot end with comma
+      if (bret && str[str_len - 1] == ',') {
+        bret = false;
+      }
+      // Check: cannot have consecutive commas
+      for (size_t i = 1; bret && i < str_len; ++i) {
+        if (str[i] == ',' && str[i - 1] == ',') {
+          bret = false;
+        }
+      }
+    }
+  }
+  return bret;
+}
+
 } // end of namepace common
 } // end of namespace oceanbase

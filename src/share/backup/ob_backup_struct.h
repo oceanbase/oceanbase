@@ -1642,6 +1642,7 @@ struct ObBackupLSTaskAttr final
   ~ObBackupLSTaskAttr() {}
   bool is_valid() const;
   int assign(const ObBackupLSTaskAttr &other);
+  void reset();
   int get_black_server_str(const ObIArray<ObAddr> &black_servers, ObSqlString &sql_string) const;
   int set_black_servers(const ObString &str);
   TO_STRING_KV(K_(task_id), K_(tenant_id), K_(ls_id), K_(job_id), K_(backup_set_id), K_(backup_type), K_(task_type),

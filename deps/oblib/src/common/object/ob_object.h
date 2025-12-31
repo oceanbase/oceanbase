@@ -120,6 +120,13 @@ public:
     return (type_ == other.type_ && cs_level_ == other.cs_level_ && cs_type_ == other.cs_type_);
   }
   OB_INLINE bool operator !=(const ObObjMeta &other) const { return !this->operator ==(other); }
+  OB_INLINE int hash(uint64_t &res, uint64_t seed) const
+  {
+    res = murmurhash(&type_, sizeof(type_), seed);
+    res = murmurhash(&cs_level_, sizeof(cs_level_), seed);
+    res = murmurhash(&cs_type_, sizeof(cs_type_), seed);
+    return OB_SUCCESS;
+  }
   // this method is inefficient, you'd better use set_tinyint() etc. instead
   OB_INLINE void set_type(const ObObjType &type)
   {

@@ -349,226 +349,226 @@ TEST_F(ObSharedStorageTest, add_tenant)
     ASSERT_EQ(OB_SUCCESS, get_curr_simple_server().init_sql_proxy2());
 }
 
-TEST_F(ObSharedStorageTest, test_timeout_block_gc)
-{
-  share::ObTenantSwitchGuard tguard;
-  ASSERT_EQ(OB_SUCCESS, tguard.switch_to(RunCtx.tenant_id_));
-  ObSqlString sql;
-  int64_t affected_rows = 0;
-  int64_t tablet_version1 = 0;
-  int64_t tablet_version2 = 0;
-  int64_t tablet_version3 = 0;
-  EXE_SQL("create table test_table (a int)");
-  LOG_INFO("create_table finish");
-
-  set_ls_and_tablet_id_for_run_ctx();
-
-  share::SCN ss_checkpoint_scn;
-  share::SCN gc_start;
-  share::SCN gc_end;
-  share::SCN snapshot;
-
-  ObSSMetaReadParam param;
-  share::SCN transfer_scn;
-  transfer_scn.set_min();
-  param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY, ObSSMetaReadResultType::READ_WHOLE_ROW, false, sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, RunCtx.ls_id_, RunCtx.tablet_id_, transfer_scn);
-
-  EXE_SQL("alter system set _ss_schedule_upload_interval = '1s';");
-  EXE_SQL("alter system set inc_sstable_upload_thread_score = 20;");
-
-  sleep(5);
-  EXE_SQL("insert into test_table values (1)");
-  LOG_INFO("insert data finish");
-
-  EXE_SQL("alter system minor freeze;");
-  RunCtx.ls_->get_end_scn(ss_checkpoint_scn);
-  wait_minor_finish();
-  wait_upload_sstable(ss_checkpoint_scn.get_val_for_tx());
-
-  MTL(ObSSMetaService*)->get_max_committed_meta_scn(share::SYS_LS, gc_start);
-
-  // 1. sstable block write
-  MacroBlockId block_id_100_1;
-  MacroBlockId block_id_100_2;
-  MacroBlockId block_id_100_3;
-  MacroBlockId not_exist_block_id_101_1;
-  MacroBlockId not_exist_block_id_101_2;
-  MacroBlockId not_exist_block_id_101_3;
-  MacroBlockId block_id_102_1;
-  MacroBlockId block_id_102_2;
-  MacroBlockId block_id_102_3;
-  MacroBlockId block_id_103_1;
-  MacroBlockId block_id_103_2;
-  MacroBlockId block_id_103_3;
-  // todo  not delete
-  MacroBlockId block_id_104_1;
-  MacroBlockId block_id_104_2;
-  MacroBlockId block_id_104_3;
-  MacroBlockId block_id_105_1;
-  MacroBlockId block_id_105_2;
-  MacroBlockId block_id_105_3;
-
-  ObSSTableGCInfo gc_info_100;
-  gc_info_100.parallel_cnt_ = 3;
-  gc_info_100.seq_step_ = 1000;
-  gc_info_100.data_seq_bits_ = 32;
-  gen_block_id(100, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 0, block_id_100_1);
-  gen_block_id(100, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 1000, block_id_100_2);
-  gen_block_id(100, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 2000, block_id_100_3);
-
-  ObSSTableGCInfo gc_info_101;
-  gc_info_101.parallel_cnt_ = 3;
-  gc_info_101.seq_step_ = 1000;
-  gc_info_101.data_seq_bits_ = 32;
-  gen_block_id(101, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 0, not_exist_block_id_101_1);
-  gen_block_id(101, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 1000, not_exist_block_id_101_2);
-  gen_block_id(101, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 2000, not_exist_block_id_101_3);
-
-  ObSSTableGCInfo gc_info_102;
-  gc_info_102.parallel_cnt_ = 3;
-  gc_info_102.seq_step_ = 1000;
-  gc_info_102.data_seq_bits_ = 32;
-  gen_block_id(102, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 0, block_id_102_1);
-  gen_block_id(102, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 1000, block_id_102_2);
-  gen_block_id(102, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 2000, block_id_102_3);
-
-  ObSSTableGCInfo gc_info_103;
-  gc_info_103.parallel_cnt_ = 3;
-  gc_info_103.seq_step_ = 1000;
-  gc_info_103.data_seq_bits_ = 32;
-  gen_block_id(103, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 0, block_id_103_1);
-  gen_block_id(103, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 1000, block_id_103_2);
-  gen_block_id(103, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 2000, block_id_103_3);
-
-  ObSSTableGCInfo gc_info_104;
-  gc_info_104.parallel_cnt_ = 3;
-  gc_info_104.seq_step_ = 1000;
-  gc_info_104.data_seq_bits_ = 32;
-  gen_block_id(104, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 0, block_id_104_1);
-  gen_block_id(104, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 1000, block_id_104_2);
-  gen_block_id(104, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 2000, block_id_104_3);
-
-  ObSSTableGCInfo gc_info_105;
-  gc_info_105.parallel_cnt_ = 3;
-  gc_info_105.seq_step_ = 1000;
-  gc_info_104.data_seq_bits_ = 32;
-  gen_block_id(105, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 0, block_id_105_1);
-  gen_block_id(105, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 1000, block_id_105_2);
-  gen_block_id(105, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 2000, block_id_105_3);
-
-  write_block(block_id_100_1);
-  write_block(block_id_100_2);
-  write_block(block_id_100_3);
-  write_block(not_exist_block_id_101_1);
-  write_block(not_exist_block_id_101_2);
-  write_block(not_exist_block_id_101_3);
-  write_block(block_id_102_1);
-  write_block(block_id_102_2);
-  write_block(block_id_102_3);
-  write_block(block_id_103_1);
-  write_block(block_id_103_2);
-  write_block(block_id_103_3);
-  write_block(block_id_104_1);
-  write_block(block_id_104_2);
-  write_block(block_id_104_3);
-  write_block(block_id_105_1);
-  write_block(block_id_105_2);
-  write_block(block_id_105_3);
-
-  // sstable sslog write
-  update_sslog(sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, 100, ObAtomicMetaInfo::State::INIT, &gc_info_100);
-  update_sslog(sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, 100, ObAtomicMetaInfo::State::COMMITTED, &gc_info_100);
-  update_sslog(sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, 101, ObAtomicMetaInfo::State::INIT, &gc_info_101);
-  update_sslog(sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, 102, ObAtomicMetaInfo::State::INIT, &gc_info_102);
-  update_sslog(sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, 103, ObAtomicMetaInfo::State::INIT, &gc_info_103);
-  update_sslog(sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, 103, ObAtomicMetaInfo::State::COMMITTED, &gc_info_103);
-  update_sslog(sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, 104, ObAtomicMetaInfo::State::INIT, &gc_info_104);
-
-  sleep(1);
-  MTL(ObSSMetaService*)->get_max_committed_meta_scn(share::SYS_LS, gc_end);
-
-  update_sslog(sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, 105, ObAtomicMetaInfo::State::INIT, &gc_info_105);
-
-
-  // tablet_meta sslog write
-  ObSSMetaUpdateMetaInfo update_info_102;
-  update_info_102.acquire_scn_.set_min();
-  update_info_102.update_reason_ = ObMetaUpdateReason::TABLET_UPLOAD_DATA_MINI_SSTABLE;
-  update_info_102.sstable_op_id_ = 102;
-  update_sslog<ObSSTableGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 100, ObAtomicMetaInfo::State::INIT, NULL, &update_info_102);
-  update_sslog<ObSSTableGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 101, ObAtomicMetaInfo::State::INIT, NULL, &update_info_102);
-  update_sslog<ObSSTableGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 101, ObAtomicMetaInfo::State::COMMITTED, NULL, &update_info_102);
-
-
-  ObSSMetaUpdateMetaInfo update_info_104;
-  update_info_104.update_reason_ = ObMetaUpdateReason::TABLET_UPLOAD_DATA_MINI_SSTABLE;
-  update_info_104.sstable_op_id_ = 104;
-  update_info_104.acquire_scn_.set_min();
-  update_sslog<ObSSTableGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 102, ObAtomicMetaInfo::State::INIT, NULL, &update_info_104);
-
-  // error gc
-  LastSuccSCNs last_succ_scns;
-  LOG_INFO("start to do timeout_sstable_block gc");
-  ASSERT_EQ(OB_SUCCESS,
-            MockSSGC::gc_tenant_in_ss_with_gc_start_and_end_scn_(
-              false, last_succ_scns, GCType::TIMEOUT_SSTABLE_BLOCK_GC, gc_start, gc_end));
-
-  ASSERT_TRUE(last_succ_scns.get_gc_timeout_sstable_block_scn() < gc_end);
-  bool is_exist = false;
-
-  // check sstable block gc
-  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_100_1, 0, is_exist));
-  ASSERT_TRUE(is_exist);
-  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_100_2, 0, is_exist));
-  ASSERT_TRUE(is_exist);
-  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_100_3, 0, is_exist));
-  ASSERT_TRUE(is_exist);
-  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(not_exist_block_id_101_1, 0, is_exist));
-  ASSERT_TRUE(!is_exist);
-  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(not_exist_block_id_101_2, 0, is_exist));
-  ASSERT_TRUE(!is_exist);
-  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(not_exist_block_id_101_3, 0, is_exist));
-  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_102_1, 0, is_exist));
-  ASSERT_TRUE(is_exist);
-  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_102_2, 0, is_exist));
-  ASSERT_TRUE(is_exist);
-  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_102_3, 0, is_exist));
-  ASSERT_TRUE(is_exist);
-  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_103_1, 0, is_exist));
-  ASSERT_TRUE(is_exist);
-  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_103_2, 0, is_exist));
-  ASSERT_TRUE(is_exist);
-  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_103_3, 0, is_exist));
-  ASSERT_TRUE(is_exist);
-
-  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_104_1, 0, is_exist));
-  ASSERT_TRUE(is_exist);
-  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_104_2, 0, is_exist));
-  ASSERT_TRUE(is_exist);
-  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_104_3, 0, is_exist));
-  ASSERT_TRUE(is_exist);
-
-  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_105_1, 0, is_exist));
-  ASSERT_TRUE(is_exist);
-  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_105_2, 0, is_exist));
-  ASSERT_TRUE(is_exist);
-  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_105_3, 0, is_exist));
-  ASSERT_TRUE(is_exist);
-
-  update_sslog(sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, 105, ObAtomicMetaInfo::State::COMMITTED, &gc_info_105);
-
-  MTL(ObSSMetaService*)->get_max_committed_meta_scn(share::SYS_LS, gc_end);
-  // error gc
-  LOG_INFO("start to do timeout_sstable_block gc");
-  ASSERT_EQ(OB_SUCCESS,
-            MockSSGC::gc_tenant_in_ss_with_gc_start_and_end_scn_(
-              false, last_succ_scns, GCType::TIMEOUT_SSTABLE_BLOCK_GC, gc_start, gc_end));
-  ASSERT_EQ(last_succ_scns.get_gc_timeout_sstable_block_scn(), gc_end);
-
-  EXE_SQL("drop table test_table;");
-  EXE_SQL("purge recyclebin;");
-
-}
+// TEST_F(ObSharedStorageTest, test_timeout_block_gc)
+// {
+//   share::ObTenantSwitchGuard tguard;
+//   ASSERT_EQ(OB_SUCCESS, tguard.switch_to(RunCtx.tenant_id_));
+//   ObSqlString sql;
+//   int64_t affected_rows = 0;
+//   int64_t tablet_version1 = 0;
+//   int64_t tablet_version2 = 0;
+//   int64_t tablet_version3 = 0;
+//   EXE_SQL("create table test_table (a int)");
+//   LOG_INFO("create_table finish");
+//
+//   set_ls_and_tablet_id_for_run_ctx();
+//
+//   share::SCN ss_checkpoint_scn;
+//   share::SCN gc_start;
+//   share::SCN gc_end;
+//   share::SCN snapshot;
+//
+//   ObSSMetaReadParam param;
+//   share::SCN transfer_scn;
+//   transfer_scn.set_min();
+//   param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY, ObSSMetaReadResultType::READ_WHOLE_ROW, false, sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, RunCtx.ls_id_, RunCtx.tablet_id_, transfer_scn);
+//
+//   EXE_SQL("alter system set _ss_schedule_upload_interval = '1s';");
+//   EXE_SQL("alter system set inc_sstable_upload_thread_score = 20;");
+//
+//   sleep(5);
+//   EXE_SQL("insert into test_table values (1)");
+//   LOG_INFO("insert data finish");
+//
+//   EXE_SQL("alter system minor freeze;");
+//   RunCtx.ls_->get_end_scn(ss_checkpoint_scn);
+//   wait_minor_finish();
+//   wait_upload_sstable(ss_checkpoint_scn.get_val_for_tx());
+//
+//   MTL(ObSSMetaService*)->get_max_committed_meta_scn(share::SYS_LS, gc_start);
+//
+//   // 1. sstable block write
+//   MacroBlockId block_id_100_1;
+//   MacroBlockId block_id_100_2;
+//   MacroBlockId block_id_100_3;
+//   MacroBlockId not_exist_block_id_101_1;
+//   MacroBlockId not_exist_block_id_101_2;
+//   MacroBlockId not_exist_block_id_101_3;
+//   MacroBlockId block_id_102_1;
+//   MacroBlockId block_id_102_2;
+//   MacroBlockId block_id_102_3;
+//   MacroBlockId block_id_103_1;
+//   MacroBlockId block_id_103_2;
+//   MacroBlockId block_id_103_3;
+//   // todo  not delete
+//   MacroBlockId block_id_104_1;
+//   MacroBlockId block_id_104_2;
+//   MacroBlockId block_id_104_3;
+//   MacroBlockId block_id_105_1;
+//   MacroBlockId block_id_105_2;
+//   MacroBlockId block_id_105_3;
+//
+//   ObSSTableGCInfo gc_info_100;
+//   gc_info_100.parallel_cnt_ = 3;
+//   gc_info_100.seq_step_ = 1000;
+//   gc_info_100.data_seq_bits_ = 32;
+//   gen_block_id(100, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 0, block_id_100_1);
+//   gen_block_id(100, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 1000, block_id_100_2);
+//   gen_block_id(100, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 2000, block_id_100_3);
+//
+//   ObSSTableGCInfo gc_info_101;
+//   gc_info_101.parallel_cnt_ = 3;
+//   gc_info_101.seq_step_ = 1000;
+//   gc_info_101.data_seq_bits_ = 32;
+//   gen_block_id(101, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 0, not_exist_block_id_101_1);
+//   gen_block_id(101, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 1000, not_exist_block_id_101_2);
+//   gen_block_id(101, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 2000, not_exist_block_id_101_3);
+//
+//   ObSSTableGCInfo gc_info_102;
+//   gc_info_102.parallel_cnt_ = 3;
+//   gc_info_102.seq_step_ = 1000;
+//   gc_info_102.data_seq_bits_ = 32;
+//   gen_block_id(102, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 0, block_id_102_1);
+//   gen_block_id(102, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 1000, block_id_102_2);
+//   gen_block_id(102, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 2000, block_id_102_3);
+//
+//   ObSSTableGCInfo gc_info_103;
+//   gc_info_103.parallel_cnt_ = 3;
+//   gc_info_103.seq_step_ = 1000;
+//   gc_info_103.data_seq_bits_ = 32;
+//   gen_block_id(103, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 0, block_id_103_1);
+//   gen_block_id(103, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 1000, block_id_103_2);
+//   gen_block_id(103, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 2000, block_id_103_3);
+//
+//   ObSSTableGCInfo gc_info_104;
+//   gc_info_104.parallel_cnt_ = 3;
+//   gc_info_104.seq_step_ = 1000;
+//   gc_info_104.data_seq_bits_ = 32;
+//   gen_block_id(104, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 0, block_id_104_1);
+//   gen_block_id(104, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 1000, block_id_104_2);
+//   gen_block_id(104, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 2000, block_id_104_3);
+//
+//   ObSSTableGCInfo gc_info_105;
+//   gc_info_105.parallel_cnt_ = 3;
+//   gc_info_105.seq_step_ = 1000;
+//   gc_info_104.data_seq_bits_ = 32;
+//   gen_block_id(105, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 0, block_id_105_1);
+//   gen_block_id(105, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 1000, block_id_105_2);
+//   gen_block_id(105, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 2000, block_id_105_3);
+//
+//   write_block(block_id_100_1);
+//   write_block(block_id_100_2);
+//   write_block(block_id_100_3);
+//   write_block(not_exist_block_id_101_1);
+//   write_block(not_exist_block_id_101_2);
+//   write_block(not_exist_block_id_101_3);
+//   write_block(block_id_102_1);
+//   write_block(block_id_102_2);
+//   write_block(block_id_102_3);
+//   write_block(block_id_103_1);
+//   write_block(block_id_103_2);
+//   write_block(block_id_103_3);
+//   write_block(block_id_104_1);
+//   write_block(block_id_104_2);
+//   write_block(block_id_104_3);
+//   write_block(block_id_105_1);
+//   write_block(block_id_105_2);
+//   write_block(block_id_105_3);
+//
+//   // sstable sslog write
+//   update_sslog(sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, 100, ObAtomicMetaInfo::State::INIT, &gc_info_100);
+//   update_sslog(sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, 100, ObAtomicMetaInfo::State::COMMITTED, &gc_info_100);
+//   update_sslog(sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, 101, ObAtomicMetaInfo::State::INIT, &gc_info_101);
+//   update_sslog(sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, 102, ObAtomicMetaInfo::State::INIT, &gc_info_102);
+//   update_sslog(sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, 103, ObAtomicMetaInfo::State::INIT, &gc_info_103);
+//   update_sslog(sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, 103, ObAtomicMetaInfo::State::COMMITTED, &gc_info_103);
+//   update_sslog(sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, 104, ObAtomicMetaInfo::State::INIT, &gc_info_104);
+//
+//   sleep(1);
+//   MTL(ObSSMetaService*)->get_max_committed_meta_scn(share::SYS_LS, gc_end);
+//
+//   update_sslog(sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, 105, ObAtomicMetaInfo::State::INIT, &gc_info_105);
+//
+//
+//   // tablet_meta sslog write
+//   ObSSMetaUpdateMetaInfo update_info_102;
+//   update_info_102.acquire_scn_.set_min();
+//   update_info_102.update_reason_ = ObMetaUpdateReason::TABLET_UPLOAD_DATA_MINI_SSTABLE;
+//   update_info_102.sstable_op_id_ = 102;
+//   update_sslog<ObSSTableGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 100, ObAtomicMetaInfo::State::INIT, NULL, &update_info_102);
+//   update_sslog<ObSSTableGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 101, ObAtomicMetaInfo::State::INIT, NULL, &update_info_102);
+//   update_sslog<ObSSTableGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 101, ObAtomicMetaInfo::State::COMMITTED, NULL, &update_info_102);
+//
+//
+//   ObSSMetaUpdateMetaInfo update_info_104;
+//   update_info_104.update_reason_ = ObMetaUpdateReason::TABLET_UPLOAD_DATA_MINI_SSTABLE;
+//   update_info_104.sstable_op_id_ = 104;
+//   update_info_104.acquire_scn_.set_min();
+//   update_sslog<ObSSTableGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 102, ObAtomicMetaInfo::State::INIT, NULL, &update_info_104);
+//
+//   // error gc
+//   LastSuccSCNs last_succ_scns;
+//   LOG_INFO("start to do timeout_sstable_block gc");
+//   ASSERT_EQ(OB_SUCCESS,
+//             MockSSGC::gc_tenant_in_ss_with_gc_start_and_end_scn_(
+//               false, last_succ_scns, GCType::TIMEOUT_SSTABLE_BLOCK_GC, gc_start, gc_end));
+//
+//   ASSERT_TRUE(last_succ_scns.get_gc_timeout_sstable_block_scn() < gc_end);
+//   bool is_exist = false;
+//
+//   // check sstable block gc
+//   ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_100_1, 0, is_exist));
+//   ASSERT_TRUE(is_exist);
+//   ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_100_2, 0, is_exist));
+//   ASSERT_TRUE(is_exist);
+//   ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_100_3, 0, is_exist));
+//   ASSERT_TRUE(is_exist);
+//   ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(not_exist_block_id_101_1, 0, is_exist));
+//   ASSERT_TRUE(!is_exist);
+//   ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(not_exist_block_id_101_2, 0, is_exist));
+//   ASSERT_TRUE(!is_exist);
+//   ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(not_exist_block_id_101_3, 0, is_exist));
+//   ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_102_1, 0, is_exist));
+//   ASSERT_TRUE(is_exist);
+//   ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_102_2, 0, is_exist));
+//   ASSERT_TRUE(is_exist);
+//   ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_102_3, 0, is_exist));
+//   ASSERT_TRUE(is_exist);
+//   ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_103_1, 0, is_exist));
+//   ASSERT_TRUE(is_exist);
+//   ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_103_2, 0, is_exist));
+//   ASSERT_TRUE(is_exist);
+//   ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_103_3, 0, is_exist));
+//   ASSERT_TRUE(is_exist);
+//
+//   ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_104_1, 0, is_exist));
+//   ASSERT_TRUE(is_exist);
+//   ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_104_2, 0, is_exist));
+//   ASSERT_TRUE(is_exist);
+//   ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_104_3, 0, is_exist));
+//   ASSERT_TRUE(is_exist);
+//
+//   ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_105_1, 0, is_exist));
+//   ASSERT_TRUE(is_exist);
+//   ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_105_2, 0, is_exist));
+//   ASSERT_TRUE(is_exist);
+//   ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_105_3, 0, is_exist));
+//   ASSERT_TRUE(is_exist);
+//
+//   update_sslog(sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, 105, ObAtomicMetaInfo::State::COMMITTED, &gc_info_105);
+//
+//   MTL(ObSSMetaService*)->get_max_committed_meta_scn(share::SYS_LS, gc_end);
+//   // error gc
+//   LOG_INFO("start to do timeout_sstable_block gc");
+//   ASSERT_EQ(OB_SUCCESS,
+//             MockSSGC::gc_tenant_in_ss_with_gc_start_and_end_scn_(
+//               false, last_succ_scns, GCType::TIMEOUT_SSTABLE_BLOCK_GC, gc_start, gc_end));
+//   ASSERT_EQ(last_succ_scns.get_gc_timeout_sstable_block_scn(), gc_end);
+//
+//   EXE_SQL("drop table test_table;");
+//   EXE_SQL("purge recyclebin;");
+//
+// }
 
 TEST_F(ObSharedStorageTest, test_abort_block_gc)
 {

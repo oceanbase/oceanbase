@@ -349,7 +349,6 @@ int ObMockSSTableSecMetaIterator::get_next(ObDataMacroBlockMeta &macro_meta)
     meta.val_.logic_id_.tablet_id_ = 1;
     meta.val_.logic_id_.logic_version_ = 1;
     meta.val_.macro_id_.set_block_index(100);
-    meta.val_.version_ = ObDataBlockMetaVal::DATA_BLOCK_META_VAL_VERSION;
     meta.val_.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
     meta.val_.row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
     ++macro_block_idx_;

@@ -341,6 +341,16 @@ OB_DEF_SERIALIZE(ObJsonTableSpec)
     for (size_t i = 1; OB_SUCC(ret) && i < value_exprs_.count(); ++i) {
       OB_UNIS_ENCODE(value_exprs_.at(i));
     }
+  } else if (table_type_ == MulModeTableType::OB_INDEX_DATA_GEN_TABLE_TYPE) {
+    OB_UNIS_ENCODE(table_type_);
+    int32_t value_exprs_count = value_exprs_.count() - 1;
+    OB_UNIS_ENCODE(value_exprs_count);
+    for (size_t i = 1; OB_SUCC(ret) && i < value_exprs_.count(); ++i) {
+      OB_UNIS_ENCODE(value_exprs_.at(i));
+    }
+    OB_UNIS_ENCODE(inc_pk_proj_);
+    OB_UNIS_ENCODE(index_column_cnt_);
+    OB_UNIS_ENCODE(search_idx_included_cid_idxes_);
   }
 
   return ret;
@@ -373,6 +383,16 @@ OB_DEF_SERIALIZE_SIZE(ObJsonTableSpec)
     for (size_t i = 1; i < value_exprs_.count(); ++i) {
       OB_UNIS_ADD_LEN(value_exprs_.at(i));
     }
+  } else if (table_type_ == MulModeTableType::OB_INDEX_DATA_GEN_TABLE_TYPE) {
+    OB_UNIS_ADD_LEN(table_type_);
+    int32_t value_exprs_count = value_exprs_.count() - 1;
+    OB_UNIS_ADD_LEN(value_exprs_count);
+    for (size_t i = 1; i < value_exprs_.count(); ++i) {
+      OB_UNIS_ADD_LEN(value_exprs_.at(i));
+    }
+    OB_UNIS_ADD_LEN(inc_pk_proj_);
+    OB_UNIS_ADD_LEN(index_column_cnt_);
+    OB_UNIS_ADD_LEN(search_idx_included_cid_idxes_);
   }
   return len;
 }
@@ -437,6 +457,25 @@ OB_DEF_DESERIALIZE(ObJsonTableSpec)
         LOG_WARN("fail to store value expr.", K(ret));
       }
     }
+  } else if (table_type_flag == OB_INDEX_DATA_GEN_TABLE_TYPE) {
+    OB_UNIS_DECODE(table_type_);
+     int32_t value_exprs_count = 0;
+    OB_UNIS_DECODE(value_exprs_count);
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(value_exprs_.init(value_exprs_count + 1))) {
+      LOG_WARN("fail to init value_exprs_ array.", K(ret));
+    } else if (OB_FAIL(value_exprs_.push_back(value_expr))) {
+      LOG_WARN("fail to store value expr.", K(ret));
+    }
+    for (size_t i = 0; OB_SUCC(ret) && i < value_exprs_count; ++i) {
+      OB_UNIS_DECODE(value_expr);
+      if (OB_SUCC(ret) && OB_FAIL(value_exprs_.push_back(value_expr))) {
+        LOG_WARN("fail to store value expr.", K(ret));
+      }
+    }
+    OB_UNIS_DECODE(inc_pk_proj_);
+    OB_UNIS_DECODE(index_column_cnt_);
+    OB_UNIS_DECODE(search_idx_included_cid_idxes_);
   } else if (OB_FAIL(value_exprs_.init(1))) {
     LOG_WARN("fail to init value_exprs_ array.", K(ret));
   } else if (OB_FAIL(value_exprs_.push_back(value_expr))) {
@@ -813,7 +852,7 @@ void ObJsonTableOp::reset_columns()
     ObExpr* col_expr = jt_ctx_.spec_ptr_->column_exprs_.at(i);
     col_expr->locate_datum_for_write(*jt_ctx_.eval_ctx_).reset();
     col_expr->locate_datum_for_write(*jt_ctx_.eval_ctx_).set_null();
-    col_expr->get_eval_info(*jt_ctx_.eval_ctx_).evaluated_ = true;
+    col_expr->get_eval_info(*jt_ctx_.eval_ctx_).set_evaluated(true);
   }
 }
 
@@ -823,7 +862,7 @@ void ScanNode::reset_reg_columns(JtScanCtx* ctx)
     ObExpr* col_expr = ctx->spec_ptr_->column_exprs_.at(reg_col_node(i)->col_info_.output_column_idx_);
     col_expr->locate_datum_for_write(*ctx->eval_ctx_).reset();
     col_expr->locate_datum_for_write(*ctx->eval_ctx_).set_null();
-    col_expr->get_eval_info(*ctx->eval_ctx_).evaluated_ = true;
+    col_expr->get_eval_info(*ctx->eval_ctx_).set_evaluated(true);
   }
 }
 
@@ -2073,7 +2112,7 @@ int ObRegCol::eval_regular_col(void *in, JtScanCtx* ctx, bool& is_null_value)
     } else {
       col_expr->locate_datum_for_write(*ctx->eval_ctx_).set_int(ctx->ord_val_);
     }
-    col_expr->get_eval_info(*ctx->eval_ctx_).evaluated_ = true;
+    col_expr->get_eval_info(*ctx->eval_ctx_).set_evaluated(true);
   } else {
     if (OB_FAIL(ctx->table_func_->col_res_type_check(*this, ctx))) {
       LOG_WARN("check column res type failed", K(ret), K(col_info_.data_type_), K(col_info_.col_type_));
@@ -2163,7 +2202,7 @@ int ObRegCol::eval_regular_col(void *in, JtScanCtx* ctx, bool& is_null_value)
   }
   if (OB_SUCC(ret)) {
     res_flag_ = NOT_DATUM;
-    col_expr->get_eval_info(*ctx->eval_ctx_).evaluated_ = true;
+    col_expr->get_eval_info(*ctx->eval_ctx_).set_evaluated(true);
   }
 
   return ret;

@@ -1366,7 +1366,7 @@ OB_INLINE int ObTableScanOp::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef
   das_rtdef.tx_lock_timeout_ = my_session->get_trx_lock_timeout();
   das_rtdef.scan_flag_ = MY_CTDEF.scan_flags_;
   LOG_DEBUG("scan flag", K(MY_CTDEF.scan_flags_));
-  das_rtdef.scan_flag_.index_back_ = MY_SPEC.is_index_back();
+  das_rtdef.scan_flag_.index_back_ = is_lookup && MY_SPEC.is_index_back();
   das_rtdef.scan_flag_.is_show_seed_ = plan_ctx->get_show_seed();
   LOG_DEBUG("scan flag", K(das_rtdef.scan_flag_));
   das_rtdef.tsc_monitor_info_ = &tsc_monitor_info_;
@@ -4191,8 +4191,8 @@ int ObTableScanOp::fill_generated_multivalue_column(ObStorageDatum* store_datums
         LOG_WARN("fill multivalue index row failed", K(ret));
       }
     }
-    eval_info->evaluated_ = true;
-    eval_info->projected_ = true;
+    eval_info->set_evaluated(true);
+    eval_info->set_projected(true);
   }
 
   return ret;
@@ -4408,8 +4408,8 @@ int ObTableScanOp::inner_get_next_spiv_index_row()
         if (OB_FAIL(datum->from_storage_datum(store_datums[i], type))) {
           LOG_WARN("fill sparse vector index row failed", K(ret));
         }
-        eval_info->evaluated_ = true;
-        eval_info->projected_ = true;
+        eval_info->set_evaluated(true);
+        eval_info->set_projected(true);
       }
     }
   }
@@ -4565,8 +4565,8 @@ int ObTableScanOp::fill_generated_cellid_mbr(const ObStorageDatum &cellid, const
       if (OB_FAIL(datum->from_storage_datum(value, type))) {
         LOG_WARN("fill spatial index row failed", K(ret));
       } else {
-        eval_info->evaluated_ = true;
-        eval_info->projected_ = true;
+        eval_info->set_evaluated(true);
+        eval_info->set_projected(true);
       }
     }
   }
@@ -4665,8 +4665,8 @@ int ObTableScanOp::fill_generated_fts_cols(blocksstable::ObDatumRow *row)
         if (OB_FAIL(datum.from_storage_datum(row->storage_datums_[i], types[i]))) {
           LOG_WARN("fail to fill fulltext index row", K(ret), K(i), K(MY_SPEC.output_), KPC(row));
         } else {
-          eval_info.evaluated_ = true;
-          eval_info.projected_ = true;
+          eval_info.set_evaluated(true);
+          eval_info.set_projected(true);
         }
       }
     }

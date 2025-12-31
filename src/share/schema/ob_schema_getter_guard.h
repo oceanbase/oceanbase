@@ -789,6 +789,9 @@ public:
                                   const common::ObString &pacakge_name,
                                   ObPackageType package_type,
                                   uint64_t &package_id);
+  int get_simple_trigger_schema(const uint64_t tenant_id,
+                                const uint64_t trigger_id,
+                                const ObSimpleTriggerSchema *&simple_trigger);
   //procedure
   inline int check_standalone_procedure_exist(uint64_t tenant_id, uint64_t database_id,
                                               const common::ObString &procedure_name, bool &exist) const
@@ -1333,9 +1336,7 @@ private:
                               const uint64_t role_id,
                               ObSessionPrivInfo &s_priv,
                               common::ObIArray<uint64_t> &enable_role_id_array);
-  int get_simple_trigger_schema(const uint64_t tenant_id,
-                                const uint64_t trigger_id,
-                                const ObSimpleTriggerSchema *&simple_trigger);
+
   int get_simple_trigger_schema(const uint64_t tenant_id,
                                 const uint64_t database_id,
                                 const common::ObString &trigger_name,

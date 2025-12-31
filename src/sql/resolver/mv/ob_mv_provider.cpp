@@ -669,22 +669,16 @@ int ObMVProvider::get_complete_refresh_mview_str(const ObTableSchema &mv_schema,
   int ret = OB_SUCCESS;
   mview_str.reset();
   lib::ContextParam param;
-  ObMVRefreshableType refresh_type = OB_MV_REFRESH_INVALID;
-  FastRefreshableNotes fast_refreshable_note;
-  ObSEArray<std::pair<ObRawExpr*, int64_t>, 8> fast_refresh_dependent_columns;
-  ObSEArray<ObMVRequiredColumnsInfo, 8> required_columns_infos;
   param.set_mem_attr(session_info.get_effective_tenant_id(), "MVProvider", ObCtxIds::DEFAULT_CTX_ID)
        .set_properties(lib::USE_TL_PAGE_OPTIONAL)
        .set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE);
   CREATE_WITH_TEMP_CONTEXT(param) {
     ObIAllocator &alloc = CURRENT_CONTEXT->get_arena_allocator();
     ObSelectStmt *view_stmt = NULL;
-    ObDMLStmt *trans_stmt = NULL;
     ObStmtFactory stmt_factory(alloc);
     ObRawExprFactory expr_factory(alloc);
     ObSchemaChecker schema_checker;
     ObQueryCtx *query_ctx = NULL;
-    const ObTableSchema *mv_container_schema = NULL;
     SMART_VARS_2((ObExecContext, exec_ctx, alloc), (ObPhysicalPlanCtx, phy_plan_ctx, alloc)) {
       LinkExecCtxGuard link_guard(session_info, exec_ctx);
       exec_ctx.set_my_session(&session_info);
@@ -697,10 +691,6 @@ int ObMVProvider::get_complete_refresh_mview_str(const ObTableSchema &mv_schema,
       } else if (OB_FAIL(schema_checker.init(query_ctx->sql_schema_guard_, (session_info.get_session_type() != ObSQLSessionInfo::INNER_SESSION
                                                                             ? session_info.get_sessid_for_table() : OB_INVALID_ID)))) {
         LOG_WARN("init schema checker failed", K(ret));
-      } else if (OB_FAIL(query_ctx->sql_schema_guard_.get_table_schema(mv_schema.get_data_table_id(), mv_container_schema))
-                 || OB_ISNULL(mv_container_schema)) {
-        COVER_SUCC(OB_ERR_UNEXPECTED);
-        LOG_WARN("fail to get mv container schema", KR(ret), K(mv_schema.get_data_table_id()), K(mv_container_schema));
       } else if (OB_FAIL(generate_mv_stmt(alloc,
                                           stmt_factory,
                                           expr_factory,
@@ -709,27 +699,6 @@ int ObMVProvider::get_complete_refresh_mview_str(const ObTableSchema &mv_schema,
                                           mv_schema,
                                           view_stmt))) {
         LOG_WARN("failed to gen mv stmt", K(ret));
-      } else if (OB_FALSE_IT(trans_stmt = view_stmt)) {
-      } else if (OB_FAIL(transform_mv_def_stmt(trans_stmt,
-                                               &alloc,
-                                               &schema_checker,
-                                               &session_info,
-                                               &expr_factory,
-                                               &stmt_factory))) {
-        LOG_WARN("failed to transform mv stmt", K(ret));
-      } else if (OB_FALSE_IT(view_stmt = static_cast<ObSelectStmt *>(trans_stmt))) {
-      } else if (OB_FAIL(ObMVChecker::check_mv_fast_refresh_type(
-                           view_stmt, &alloc, &schema_checker, &stmt_factory,
-                           &expr_factory, &session_info, *mv_container_schema,
-                           mv_schema.mv_on_query_computation(), refresh_type, fast_refreshable_note,
-                           fast_refresh_dependent_columns, required_columns_infos))) {
-        LOG_WARN("fail to check mv type", KR(ret));
-      } else if (OB_FAIL(expand_mv_stmt_with_dependent_columns(view_stmt,
-                                                               fast_refresh_dependent_columns,
-                                                               alloc,
-                                                               &session_info,
-                                                               expr_factory))) {
-        LOG_WARN("failed to expand mv stmt with dependency columns", K(ret));
       } else if (OB_FAIL(ObMVPrinter::print_complete_refresh_mview_operator(expr_factory,
                                                                             mv_refresh_scn,
                                                                             table_refresh_scn,
@@ -867,6 +836,9 @@ int ObMVProvider::check_is_rt_expand(const bool check_refreshable_only,
   return ret;
 }
 
+// ATTENTION:
+// Only call expand_mv_stmt_with_dependent_columns ONCE when creating materialized view!
+// When refreshing or checking refreshable, use the expand_view_definition_for_mv_ stored in the schema
 int ObMVProvider::expand_mv_stmt_with_dependent_columns(ObSelectStmt *view_stmt,
                                                         const ObIArray<std::pair<ObRawExpr*, int64_t>> &dependent_columns,
                                                         ObIAllocator &alloc,

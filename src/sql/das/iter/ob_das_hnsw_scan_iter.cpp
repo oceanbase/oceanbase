@@ -579,8 +579,8 @@ int ObDASHNSWScanIter::save_distance_expr_result(ObNewRow *row)
     }
     if (OB_SUCC(ret)) {
       distance.set_double(dis_value);
-      eval_info.evaluated_ = true;
-      eval_info.projected_ = true;
+      eval_info.set_evaluated(true);
+      eval_info.set_projected(true);
     }
   }
   return ret;
@@ -748,8 +748,8 @@ int ObDASHNSWScanIter::save_distance_expr_result(ObNewRow *row, int64_t size)
         wr_datum.set_double(dis_value);
 
         ObEvalInfo &eval_info = distance_calc_->get_eval_info(*sort_rtdef_->eval_ctx_);
-        eval_info.evaluated_ = true;
-        eval_info.projected_ = true;
+        eval_info.set_evaluated(true);
+        eval_info.set_projected(true);
       }
     }
   }

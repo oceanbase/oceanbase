@@ -313,13 +313,13 @@ int ObPLPackageState::init()
   return inner_allocator_.init(nullptr);
 }
 
-int ObPLPackageState::add_package_var_val(const common::ObObj &value, ObPLType type)
+int ObPLPackageState::add_package_var_val(const common::ObObj &value, ObPLPackageVarMetaInfo &meta_info)
 {
   int ret = OB_SUCCESS;
-  OZ (types_.push_back(type));
+  OZ (meta_infos_.push_back(meta_info));
   if (OB_SUCC(ret) && OB_FAIL(vars_.push_back(value))) {
-    types_.pop_back();
-    LOG_WARN("failed to push back", K(ret), K(value), K(type));
+    meta_infos_.pop_back();
+    LOG_WARN("failed to push back", K(ret), K(value), K(meta_info));
   }
   return ret;
 }
@@ -327,22 +327,22 @@ int ObPLPackageState::add_package_var_val(const common::ObObj &value, ObPLType t
 void ObPLPackageState::reset(ObSQLSessionInfo *session_info)
 {
   changed_vars_.reset();
-  for (int64_t i = 0; i < types_.count(); ++i) {
+  for (int64_t i = 0; i < meta_infos_.count(); ++i) {
     if (!vars_.at(i).is_ext()) {
       void * ptr = vars_.at(i).get_deep_copy_obj_ptr();
       if (nullptr != ptr) {
         inner_allocator_.free(ptr);
       }
-    } else if (PL_RECORD_TYPE == types_.at(i)
-               || PL_NESTED_TABLE_TYPE == types_.at(i)
-               || PL_ASSOCIATIVE_ARRAY_TYPE == types_.at(i)
-               || PL_VARRAY_TYPE == types_.at(i)
-               || PL_OPAQUE_TYPE == types_.at(i)) {
+    } else if (PL_RECORD_TYPE == meta_infos_.at(i).type_
+               || PL_NESTED_TABLE_TYPE == meta_infos_.at(i).type_
+               || PL_ASSOCIATIVE_ARRAY_TYPE == meta_infos_.at(i).type_
+               || PL_VARRAY_TYPE == meta_infos_.at(i).type_
+               || PL_OPAQUE_TYPE == meta_infos_.at(i).type_) {
       int ret = OB_SUCCESS;
       if (OB_FAIL(ObUserDefinedType::destruct_objparam(inner_allocator_, vars_.at(i), session_info))) {
         LOG_WARN("failed to destruct composte obj", K(ret));
       }
-    } else if (PL_CURSOR_TYPE == types_.at(i)) {
+    } else if (PL_CURSOR_TYPE == meta_infos_.at(i).type_) {
       ObPLCursorInfo *cursor = reinterpret_cast<ObPLCursorInfo *>(vars_.at(i).get_ext());
       if (OB_NOT_NULL(cursor)) {
         cursor->close(*session_info);
@@ -350,7 +350,7 @@ void ObPLPackageState::reset(ObSQLSessionInfo *session_info)
       }
     }
   }
-  types_.reset();
+  meta_infos_.reset();
   vars_.reset();
   inner_allocator_.reset();
   cursor_allocator_.reset();
@@ -359,7 +359,6 @@ void ObPLPackageState::reset(ObSQLSessionInfo *session_info)
 
 int ObPLPackageState::set_package_var_val(const int64_t var_idx,
                                           const ObObj &value,
-                                          const ObPLResolveCtx &resolve_ctx,
                                           bool deep_copy_complex)
 {
   int ret = OB_SUCCESS;
@@ -385,8 +384,8 @@ int ObPLPackageState::set_package_var_val(const int64_t var_idx,
       OX (vars_.at(var_idx) = copy);
     } else if (value.is_null()
                && vars_.at(var_idx).is_pl_extend()
-               && types_.at(var_idx) != PL_CURSOR_TYPE
-               && types_.at(var_idx) != PL_REF_CURSOR_TYPE) {
+               && meta_infos_.at(var_idx).type_ != PL_CURSOR_TYPE
+               && meta_infos_.at(var_idx).type_ != PL_REF_CURSOR_TYPE) {
       CK (vars_.at(var_idx).get_ext() != 0);
       OZ (ObUserDefinedType::reset_composite(vars_.at(var_idx), NULL));
     } else {
@@ -418,6 +417,18 @@ int ObPLPackageState::get_package_var_val(const int64_t var_idx, ObObj &value)
     LOG_WARN("invalid var index", K(var_idx), K(vars_.count()), K(ret));
   } else {
     OX (value = vars_.at(var_idx));
+  }
+  return ret;
+}
+
+int ObPLPackageState::get_package_var_meta_info(const int64_t var_idx, ObPLPackageVarMetaInfo &meta_info)
+{
+  int ret = OB_SUCCESS;
+  if (var_idx < 0 || var_idx >= meta_infos_.count()) {
+    ret = OB_ARRAY_OUT_OF_RANGE;
+    LOG_WARN("invalid var index", K(var_idx), K(meta_infos_.count()), K(ret));
+  } else {
+    OX (meta_info = meta_infos_.at(var_idx));
   }
   return ret;
 }

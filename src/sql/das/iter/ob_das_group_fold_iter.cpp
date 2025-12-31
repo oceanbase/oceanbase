@@ -163,7 +163,7 @@ void ObDASGroupFoldIter::reset_expr_datum_ptr()
     {
       (*e)->locate_datums_for_update(*group_save_rows_.eval_ctx_, group_save_rows_.max_size_);
       ObEvalInfo &info = (*e)->get_eval_info(*group_save_rows_.eval_ctx_);
-      info.point_to_frame_ = true;
+      info.set_point_to_frame(true);
     }
   }
 }

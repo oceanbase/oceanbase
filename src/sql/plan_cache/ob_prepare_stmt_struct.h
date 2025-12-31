@@ -177,6 +177,10 @@ public:
 
   inline void set_question_mark_count(int64_t count) { question_mark_count_ = count; }
   inline int64_t get_question_mark_count() { return question_mark_count_; }
+  inline void set_parse_question_mark_count(int64_t count) { parse_question_mark_count_ = count; }
+  inline int64_t get_parse_question_mark_count()const { return parse_question_mark_count_; }
+  inline void set_external_params_count(int64_t count) { external_params_count_ = count; }
+  inline int64_t get_external_params_count()const { return external_params_count_; }
   inline int64_t get_ref_count() const { return ATOMIC_LOAD(&ref_count_); }
   inline int64_t get_num_of_param() const { return ps_sql_meta_.get_param_size(); }
   inline int64_t get_num_of_column() const { return ps_sql_meta_.get_column_size(); }
@@ -301,6 +305,8 @@ private:
   ObFixedArray<int64_t, common::ObIAllocator> raw_params_idx_;
   stmt::StmtType literal_stmt_type_;
   bool ps_need_parameterization_;
+  int64_t parse_question_mark_count_;
+  int64_t external_params_count_;
 };
 
 struct TypeInfo {

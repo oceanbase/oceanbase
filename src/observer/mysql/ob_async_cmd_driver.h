@@ -43,6 +43,7 @@ public:
   virtual ~ObAsyncCmdDriver();
 
   virtual int response_result(ObMySQLResultSet &result);
+  int flush_buffer(bool is_last);
 
 private:
   /* disallow copy & assign */

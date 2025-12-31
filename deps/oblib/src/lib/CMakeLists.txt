@@ -468,7 +468,7 @@ if (BUILD_CDC_ONLY)
   set_target_properties(malloc_hook PROPERTIES EXCLUDE_FROM_ALL TRUE)
 endif()
 
-target_link_libraries(malloc_hook oblib_base)
+target_link_libraries(malloc_hook oblib_base_without_pass)
 
 if(OB_BUILD_CLOSE_MODULES)
   target_link_libraries(oblib_lib PUBLIC

@@ -15,6 +15,7 @@
 #include "lib/allocator/page_arena.h"
 #include "lib/container/ob_array.h"
 #include "lib/string/ob_string.h"
+#include "share/catalog/ob_catalog_properties.h"
 #include "share/schema/ob_schema_struct.h"
 #include "share/catalog/hive/thrift/gen_cpp/ThriftHiveMetastore.h"
 
@@ -650,7 +651,10 @@ private:
                     ObString &krb5conf,
                     ObString &cache_name,
                     int64_t kinit_timeout = DEFAULT_KINIT_TIMEOUT_US);
-  int extract_access_info(const char *access_info);
+
+  int parse_uri_list(const ObString &uri_str);
+  int setup_connection_for_uri(int64_t uri_idx);
+  int connect_with_failover();
 
 private:
   ObIAllocator *allocator_;
@@ -660,7 +664,6 @@ private:
   std::shared_ptr<TTransport> transport_;
   std::shared_ptr<TProtocol> protocol_;
   std::shared_ptr<ThriftHiveMetastoreClient> hive_metastore_client_;
-  ObString uri_;
   ObString properties_;
   ObString hms_keytab_;
   ObString hms_principal_;
@@ -682,6 +685,12 @@ private:
   ObHMSClientPool *client_pool_; // Pool pointer for auto return
   bool is_in_use_;               // Flag to indicate if client is currently in use
   int64_t socket_timeout_;       // us
+
+  // Support HA for thrift connections.
+  ObSEArray<ObString, 4> uri_list_;
+  int64_t current_uri_idx_;
+  ObURISelectionMode uri_selection_mode_;
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObHiveMetastoreClient);
 };

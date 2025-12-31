@@ -51,6 +51,7 @@ static const int64_t CREATE_JOB_PARAMETER_COUNT = 28;
   DECLARE_FUNC(set_job_class_attribute);
   DECLARE_FUNC(purge_log);
   DECLARE_FUNC(get_and_increase_job_id);
+  DECLARE_FUNC(evaluate_calendar_string);
 
 #undef DECLARE_FUNC
 

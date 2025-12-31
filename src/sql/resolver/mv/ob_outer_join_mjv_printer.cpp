@@ -62,11 +62,11 @@ int ObOuterJoinMJVPrinter::gen_delta_pre_table_views()
     if (OB_ISNULL(ori_table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("source table is null", K(ret), K(i));
-    } else if (OB_FAIL(gen_delta_pre_table_view(ori_table, all_pre_table_views_.at(i), false))) {
+    } else if (OB_FAIL(gen_pre_table_view(*ori_table, all_pre_table_views_.at(i)))) {
       LOG_WARN("failed to generate pre table view", K(ret), K(i));
     } else if (is_table_skip_refresh(*ori_table)) {
       // do nothing, no need to gen delta table view
-    } else if (OB_FAIL(gen_delta_pre_table_view(ori_table, all_delta_table_views_.at(i), true))) {
+    } else if (OB_FAIL(gen_delta_table_view(*ori_table, all_delta_table_views_.at(i)))) {
       LOG_WARN("failed to generate delta table view", K(ret), K(i));
     }
   }
@@ -138,7 +138,7 @@ int ObOuterJoinMJVPrinter::gen_delete_for_inner_join(const TableItem *delta_tabl
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(del_stmt), K(mv_table));
   } else if (OB_FALSE_IT(mv_table->database_name_ = mv_db_name_)) {
-  } else if (OB_FAIL(gen_exists_cond_for_table(delta_table, mv_table, true, true, semi_filter))) {
+  } else if (OB_FAIL(gen_exists_cond_for_table(delta_table, mv_table, true, false, true, semi_filter))) {
     LOG_WARN("failed to create simple column exprs", K(ret));
   } else if (OB_FAIL(del_stmt->add_condition_expr(semi_filter))) {
     LOG_WARN("failed to push back semi filter", K(ret));
@@ -359,10 +359,17 @@ int ObOuterJoinMJVPrinter::gen_select_for_left_join_first_delete(const TableItem
     LOG_WARN("failed to create simple table item", K(ret));
   } else if (OB_FAIL(gen_delta_mlog_table_view(*delta_table, dlt_t_mlog_stmt, MLOG_EXT_COL_ROWKEY_ONLY))) {
     LOG_WARN("failed to generate dlt_t_mlog view", K(ret), KPC(delta_table));
-  } else if (OB_ISNULL(mv_stat_stmt) || OB_ISNULL(mv_table) || OB_ISNULL(dlt_t_mlog_stmt)) {
+  } else if (OB_ISNULL(mv_stat_stmt) || OB_ISNULL(mv_table) || OB_ISNULL(dlt_t_mlog_stmt)
+             || OB_UNLIKELY(!dlt_t_mlog_stmt->is_single_table_stmt())
+             || OB_ISNULL(dlt_t_mlog_stmt->get_table_item(0))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(mv_stat_stmt), K(mv_table), K(dlt_t_mlog_stmt));
+    LOG_WARN("get unexpected null", K(ret), K(mv_stat_stmt), K(mv_table), KPC(dlt_t_mlog_stmt));
   } else if (OB_FALSE_IT(dlt_t_mlog_stmt->assign_distinct())) {
+  } else if (OB_FAIL(append_old_new_col_filter(*dlt_t_mlog_stmt->get_table_item(0),
+                                               false, /* access_new */
+                                               false, /* access_null */
+                                               dlt_t_mlog_stmt->get_condition_exprs()))) {
+    LOG_WARN("failed to append old new filter", K(ret));
   } else if (OB_FAIL(gen_format_string_name(DELTA_TABLE_FORMAT_NAME, delta_table->get_object_name(), dlt_t_mlog_table_name))) {
     LOG_WARN("failed to generate dlt_t_mlog table name", K(ret));
   } else if (OB_FAIL(create_simple_table_item(mv_stat_stmt, dlt_t_mlog_table_name, dlt_t_mlog_table, dlt_t_mlog_stmt, false))) {
@@ -418,7 +425,7 @@ int ObOuterJoinMJVPrinter::gen_select_for_left_join_first_delete(const TableItem
     LOG_WARN("get unexpected null table item", K(ret), K(in_sel_mv_table));
   } else if (OB_FAIL(gen_format_string_name(INNER_TABLE_FORMAT_NAME, mv_schema_.get_table_name(), in_sel_mv_table->alias_name_))) {
     LOG_WARN("failed to generate format table name", K(ret));
-  } else if (OB_FAIL(gen_exists_cond_for_table(delta_table, in_sel_mv_table, true, true, in_sel_cond_expr))) {
+  } else if (OB_FAIL(gen_exists_cond_for_table(delta_table, in_sel_mv_table, true, false, true, in_sel_cond_expr))) {
     LOG_WARN("failed to generate exists cond for mv_stat cond", K(ret));
   } else if (OB_FAIL(in_sel_stmt->add_condition_expr(in_sel_cond_expr))) {
     LOG_WARN("failed to push back semi filter", K(ret));
@@ -487,7 +494,7 @@ int ObOuterJoinMJVPrinter::gen_select_for_left_join_first_delete(const TableItem
   } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(
                  ctx_.expr_factory_, T_OP_OR, or_param_1, or_param_2, cond_sel_stmt_cond))) {
     LOG_WARN("failed to build binary op expr", K(ret));
-  } else if (OB_FAIL(cond_sel_stmt->get_condition_exprs().push_back(cond_sel_stmt_cond))) {
+  } else if (OB_FAIL(cond_sel_stmt->add_condition_expr(cond_sel_stmt_cond))) {
     LOG_WARN("failed to push back where condition", K(ret));
   }
   return ret;
@@ -636,7 +643,7 @@ int ObOuterJoinMJVPrinter::gen_update_for_left_join(const TableItem *delta_table
   } else if (OB_ISNULL(upd_stmt) || OB_ISNULL(mv_table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(upd_stmt), K(mv_table));
-  } else if (OB_FAIL(gen_exists_cond_for_table(delta_table, mv_table, true, true, semi_filter))) {
+  } else if (OB_FAIL(gen_exists_cond_for_table(delta_table, mv_table, true, false, true, semi_filter))) {
     LOG_WARN("failed to gen exists semi filter", K(ret));
   } else if (OB_FAIL(upd_stmt->add_condition_expr(semi_filter))) {
     LOG_WARN("failed to push back semi filter", K(ret));
@@ -870,7 +877,7 @@ int ObOuterJoinMJVPrinter::gen_select_for_left_join_second_delete(const TableIte
   } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(
                  ctx_.expr_factory_, T_OP_GT, col_rownum, col_cnt_pk, rownum_gt_cnt_pk))) {
     LOG_WARN("failed to build binary op expr", K(ret));
-  } else if (OB_FAIL(cond_sel_stmt->get_condition_exprs().push_back(rownum_gt_cnt_pk))) {
+  } else if (OB_FAIL(cond_sel_stmt->add_condition_expr(rownum_gt_cnt_pk))) {
     LOG_WARN("failed to push back where condition", K(ret));
   }
   return ret;

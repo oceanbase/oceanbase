@@ -3020,7 +3020,8 @@ public:
         is_offline_rebuild_(false),
         index_key_(-1),
         data_version_(0),
-        generated_column_names_()
+        generated_column_names_(),
+        def_index_id_(common::OB_INVALID_ID)
   {
     index_action_type_ = ADD_INDEX;
     index_using_type_ = share::schema::USING_BTREE;
@@ -3059,6 +3060,7 @@ public:
     index_key_ = -1;
     data_version_ = 0;
     generated_column_names_.reset();
+    def_index_id_ = common::OB_INVALID_ID;
   }
   void set_index_action_type(const IndexActionType type) { index_action_type_  = type; }
   bool is_valid() const;
@@ -3104,6 +3106,7 @@ public:
       is_offline_rebuild_ = other.is_offline_rebuild_;
       index_key_ = other.index_key_;
       data_version_ = other.data_version_;
+      def_index_id_ = other.def_index_id_;
     }
     return ret;
   }
@@ -3179,6 +3182,7 @@ public:
   int64_t index_key_;
   uint64_t data_version_;
   common::ObSEArray<ObString, common::OB_PREALLOCATED_NUM> generated_column_names_;
+  uint64_t def_index_id_;
 };
 
 struct ObIndexOfflineDdlArg : ObDDLArg
@@ -4497,6 +4501,8 @@ public:
     PROTECTION_MODE_MGR,
     TENANT_INFO_LOADER,
     COMMON_LS_SERVICE,
+    BACKUP_SERVICE,
+    BACKUP_CLEAN_SERVICE,
   };
   ObNotifyTenantThreadArg() : tenant_id_(OB_INVALID_TENANT_ID), thread_type_(INVALID_TYPE) {}
   ~ObNotifyTenantThreadArg() {}
@@ -12286,6 +12292,23 @@ public:
   bool is_for_sslog_table_;
 };
 
+struct ObSSGCPushLastSuccScnArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObSSGCPushLastSuccScnArg() : tenant_id_(OB_INVALID_TENANT_ID), succ_scn_ns_(0) {}
+  ObSSGCPushLastSuccScnArg(const uint64_t tenant_id, const int64_t succ_scn_ns)
+      : tenant_id_(tenant_id), succ_scn_ns_(succ_scn_ns)
+  {}
+  ~ObSSGCPushLastSuccScnArg() {}
+  bool is_valid() const { return OB_INVALID_TENANT_ID != tenant_id_ && succ_scn_ns_ > 0; }
+  TO_STRING_KV(K_(tenant_id), K_(succ_scn_ns));
+
+public:
+  uint64_t tenant_id_;
+  int64_t succ_scn_ns_;
+};
+
 struct ObSSGCLastSuccSCNsRes final
 {
   OB_UNIS_VERSION(1);
@@ -14864,6 +14887,21 @@ public:
   share::schema::ObSchemaOperationType ddl_type_;
   share::schema::ObSensitiveRuleSchema schema_;
   uint64_t user_id_; // grant privilege when create
+};
+
+struct ObGetRefreshedSchemaVersionsRes
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObGetRefreshedSchemaVersionsRes()
+    : refreshed_schema_versions_()
+  {}
+  ~ObGetRefreshedSchemaVersionsRes() = default;
+  TO_STRING_KV(K_(refreshed_schema_versions));
+public:
+  common::ObSEArray<std::pair<uint64_t, int64_t>, 64> refreshed_schema_versions_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObGetRefreshedSchemaVersionsRes);
 };
 
 }//end namespace obrpc

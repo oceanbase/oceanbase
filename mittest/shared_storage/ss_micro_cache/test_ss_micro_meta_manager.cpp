@@ -27,6 +27,7 @@
 #include "storage/shared_storage/micro_cache/ob_ss_micro_range_manager.h"
 #include "storage/shared_storage/micro_cache/ob_ss_micro_cache_stat.h"
 #include "storage/shared_storage/micro_cache/ob_ss_micro_cache_util.h"
+#include "storage/shared_storage/micro_cache/ob_ss_micro_cache_define.h"
 #include "mittest/shared_storage/clean_residual_data.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 
@@ -958,6 +959,89 @@ TEST_F(TestSSMicroMetaManager, test_micro_alloc_limit_when_increasing_memory)
   // modify memory to original value
   tenant_base->set_unit_memory_size(original_mtl_mem_size);
   sleep(3);
+}
+
+// Test bitfield race condition: concurrent access to sub_range bitfields
+// Thread 1: calls init_range->set_sub_range_offset_len() to modify offset_ and length_
+// Thread 2: calls init_range->link_micro_meta_directly() to modify micro_meta_cnt_
+TEST_F(TestSSMicroMetaManager, test_sub_range_bitfield_race_condition)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("TEST_CASE: start test_sub_range_bitfield_race_condition");
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ObSSMicroRangeManager &micro_range_mgr = micro_cache->micro_range_mgr_;
+  ObSSMicroMetaManager *micro_meta_mgr = &micro_cache->get_micro_meta_mgr();
+
+  const int64_t TEST_LOOP_CNT = 100000;
+  const uint64_t EXPECTED_OFFSET = 100;
+  const uint64_t EXPECTED_LENGTH = 100;
+  const int64_t EXPECTED_MICRO_CNT = 2;
+  int64_t error_cnt = 0;
+
+  // Create init_range and sub_range for each iteration
+  ObSSMicroInitRangeInfo *init_range = nullptr;
+  ASSERT_EQ(OB_SUCCESS, micro_range_mgr.create_init_range(init_range));
+  ASSERT_NE(nullptr, init_range);
+  init_range->end_hval_ = SS_MICRO_KEY_MAX_HASH_VAL;
+
+  ObSSMicroSubRangeInfo *sub_range = nullptr;
+  ASSERT_EQ(OB_SUCCESS, micro_range_mgr.create_sub_range(sub_range, false));
+  ASSERT_NE(nullptr, sub_range);
+  init_range->next_ = sub_range;
+
+  // Pre-allocate micro_meta
+  ObSSMicroBlockMetaHandle micro_meta_handle;
+  ASSERT_EQ(OB_SUCCESS, micro_meta_mgr->alloc_micro_block_meta(micro_meta_handle));
+  ASSERT_EQ(true, micro_meta_handle.is_valid());
+
+  // Concurrent test: in each loop iteration, two threads concurrently modify different bitfields
+  for (int64_t i = 0; i < TEST_LOOP_CNT; ++i) {
+    // Reset sub_range
+    sub_range->reset();
+    sub_range->set_end_hval(SS_MICRO_KEY_MAX_HASH_VAL);
+    sub_range->offset_ = 0;
+    sub_range->length_ = 0;
+    sub_range->micro_meta_cnt_ = 1;
+
+    std::thread thread1([&]() {
+      ObTenantBase *tenant_base = MTL_CTX();
+      ObTenantEnv::set_tenant(tenant_base);
+      ASSERT_EQ(OB_SUCCESS, init_range->set_sub_range_offset_len(sub_range, EXPECTED_OFFSET, EXPECTED_LENGTH));
+    });
+
+    std::thread thread2([&]() {
+      ObTenantBase *tenant_base = MTL_CTX();
+      ObTenantEnv::set_tenant(tenant_base);
+      ASSERT_EQ(OB_SUCCESS, init_range->link_micro_meta_directly(sub_range, micro_meta_handle));
+    });
+
+    thread1.join();
+    thread2.join();
+
+    // Check values after each concurrent operation
+    const uint64_t final_offset = sub_range->offset_;
+    const uint64_t final_length = sub_range->length_;
+    const int64_t final_micro_cnt = sub_range->micro_meta_cnt_;
+
+    if (final_offset != EXPECTED_OFFSET || final_length != EXPECTED_LENGTH || final_micro_cnt != EXPECTED_MICRO_CNT) {
+      LOG_WARN("TEST_CASE: bitfield race condition detected",
+          "loop_idx", i,
+          "final_offset", final_offset,
+          "final_length", final_length,
+          "final_micro_cnt", final_micro_cnt,
+          "expected_offset", EXPECTED_OFFSET,
+          "expected_length", EXPECTED_LENGTH,
+          "expected_micro_cnt", EXPECTED_MICRO_CNT);
+      error_cnt++;
+    }
+  }
+
+  micro_meta_handle.reset();
+  micro_range_mgr.destroy_sub_range(sub_range);
+  OB_DELETEx(ObSSMicroInitRangeInfo, &micro_range_mgr.allocator_, init_range);
+
+  ASSERT_EQ(0, error_cnt);
+  LOG_INFO("TEST_CASE: finish test_sub_range_bitfield_race_condition");
 }
 
 }  // namespace storage

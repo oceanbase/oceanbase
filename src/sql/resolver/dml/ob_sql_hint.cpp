@@ -223,7 +223,7 @@ int ObQueryHint::set_stmt_id_map_info(const ObDMLStmt &stmt, ObString &qb_name)
   return ret;
 }
 
-int ObQueryHint::set_params_from_hint(const ObResolverParams &params) const
+int ObQueryHint::set_params_from_hint(ObResolverParams &params) const
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session_info = NULL;
@@ -252,6 +252,10 @@ int ObQueryHint::set_params_from_hint(const ObResolverParams &params) const
       query_ctx->optimizer_features_enable_version_ = global_hint_.opt_features_version_;
     } else if (OB_FAIL(session_info->get_optimizer_features_enable_version(query_ctx->optimizer_features_enable_version_))) {
       LOG_WARN("failed to check ddl schema version", K(ret));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(global_hint_.opt_params_.get_bool_opt_param(ObOptParamHint::DISABLE_SHARED_EXPR_EXTRACTION, params.disable_shared_expr_))) {
+      LOG_WARN("failed to get bool opt param", K(ret));
     }
   }
   return ret;

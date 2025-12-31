@@ -53,6 +53,7 @@ void ObExprUDF::reset()
   subprogram_path_.reset();
   result_type_.reset();
   params_type_.reset();
+  out_params_type_.reset();
   params_desc_.reset();
   nocopy_params_.reset();
   is_udt_udf_ = false;
@@ -79,6 +80,8 @@ int ObExprUDF::assign(const ObExprOperator &other)
     LOG_WARN("failed to assign params desc", K(ret));
   } else if (OB_FAIL(nocopy_params_.assign(tmp_other->get_nocopy_params()))) {
     LOG_WARN("failed to assign nocopy params", K(ret));
+  } else if (OB_FAIL(out_params_type_.assign(tmp_other->get_out_params_type()))) {
+    LOG_WARN("failed to assign out params type", K(ret));
   } else if (OB_FAIL(ObExprOperator::assign(other))) {
     LOG_WARN("failed to ObExprOperator::assign", K(ret));
   } else {
@@ -196,7 +199,7 @@ int ObExprUDF::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObEx
       }
     }
     if (OB_SUCC(ret) && OB_NOT_NULL(expr_cg_ctx.schema_guard_)) {
-      OX (info->is_deterministic_ = lib::is_oracle_mode() && info->is_deterministic_);
+      OX (info->is_deterministic_ = lib::is_oracle_mode() && info->is_deterministic_ && info->is_called_in_sql_);
       for (int64_t i = 0; OB_SUCC(ret) && info->is_deterministic_ && i < info->params_type_.count(); ++i) {
         if (ObExtendType == info->params_type_.at(i).get_type()) {
           info->is_deterministic_ = false;
@@ -279,6 +282,8 @@ int ObExprUDFInfo::deep_copy(common::ObIAllocator &allocator,
     LOG_WARN("failed to assign params desc", K(ret));
   } else if (OB_FAIL(other->nocopy_params_.assign(nocopy_params_))) {
     LOG_WARN("failed to assign nocopy params", K(ret));
+  } else if (OB_FAIL(other->out_params_type_.assign(out_params_type_))) {
+    LOG_WARN("failed to assign out params type", K(ret));
   } else {
     other->udf_id_ = udf_id_;
     other->udf_package_id_ = udf_package_id_;
@@ -386,10 +391,15 @@ int ObExprUDFInfo::from_raw_expr(RE &raw_expr)
   // const ObUDFRawExpr &udf_expr = raw_expr;
   ObUDFRawExpr &udf_expr = const_cast<ObUDFRawExpr &>(static_cast<const ObUDFRawExpr&>(raw_expr));
   ObIArray<ObRawExprResType> &params_type = udf_expr.get_params_type();
+  ObIArray<ObRawExprResType> &out_params_type = udf_expr.get_out_params_type();
   OZ (subprogram_path_.assign(udf_expr.get_subprogram_path()));
   OZ (params_type_.init(params_type.count()));
+  OZ (out_params_type_.init(out_params_type.count()));
   for (int64_t i = 0; OB_SUCC(ret) && i < params_type.count(); ++i) {
     OZ (params_type_.push_back(params_type.at(i)));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < out_params_type.count(); ++i) {
+    OZ (out_params_type_.push_back(out_params_type.at(i)));
   }
   OZ (params_desc_.assign(udf_expr.get_params_desc()));
   OZ (nocopy_params_.assign(udf_expr.get_nocopy_params()));
@@ -445,20 +455,6 @@ ObExprUDFEnvGuard::ObExprUDFEnvGuard(ObEvalCtx &ctx, ObExprUDFCtx &udf_ctx, int 
   if (OB_NOT_NULL(ctx.exec_ctx_.get_pl_ctx())) {
     cur_obj_count_ = ctx_.exec_ctx_.get_pl_ctx()->get_objects().count();
   }
-  exec_ctx_bak_.backup(ctx.exec_ctx_);
-  if (udf_ctx_.get_exec_ctx_bak().phy_plan_ctx_ != NULL) {
-    udf_ctx_.get_exec_ctx_bak().restore(ctx.exec_ctx_);
-  } else {
-    ctx.exec_ctx_.set_physical_plan_ctx(udf_ctx_.get_phy_plan_ctx());
-  }
-}
-
-void ObExprUDFEnvGuard::restore_exec_ctx()
-{
-  if (udf_ctx_.get_exec_ctx_bak().phy_plan_ctx_ == NULL) {
-    udf_ctx_.get_exec_ctx_bak().backup(ctx_.exec_ctx_);
-  }
-  exec_ctx_bak_.restore(ctx_.exec_ctx_);
 }
 
 ObExprUDFEnvGuard::~ObExprUDFEnvGuard()
@@ -761,11 +757,9 @@ int ObExprUDF::eval_udf_single(const ObExpr &expr, ObEvalCtx &eval_ctx, ObExprUD
                                                   udf_ctx.get_info()->loc_,
                                                   udf_ctx.get_info()->is_called_in_sql_,
                                                   udf_ctx.get_info()->dblink_id_,
-                                                  nullptr,
-                                                  udf_ctx.is_first_execute()))) {
+                                                  nullptr))) {
         LOG_WARN("failed to eval udf use pl engine", K(ret));
       }
-      env_guard.restore_exec_ctx();
       // Out Params will rewrite to Parent ParamStore, so this function must called after ~ObExprUDFEnvGuard
       if (OB_SUCC(ret) && OB_FAIL(process_out_params(udf_ctx, eval_ctx))) {
         LOG_WARN("failed to process out params", K(ret));

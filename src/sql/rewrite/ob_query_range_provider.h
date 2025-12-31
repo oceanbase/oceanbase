@@ -72,6 +72,7 @@ public:
   virtual bool is_precise_get() const = 0;
   virtual int64_t get_column_count() const = 0;
   virtual bool has_exec_param() const = 0;
+  virtual bool has_fake_const_udf() const = 0;
   virtual bool is_ss_range() const = 0;
   virtual int64_t get_skip_scan_offset() const = 0;
   virtual int reset_skip_scan_range() = 0;

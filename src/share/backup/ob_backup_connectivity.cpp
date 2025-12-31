@@ -1561,6 +1561,9 @@ int ObBackupStorageInfoOperator::get_restore_shared_storage_limit(const common::
         LOG_WARN("fail to get next row", K(ret));
       }
     }
+    if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+      LOG_INFO("SSNT:get_restore_shared_storage_limit", K(ret), K(sql), K(storage_key), K(max_iops), K(max_bandwidth));
+    }
   }
   return ret;
 }

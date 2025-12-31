@@ -3037,12 +3037,20 @@ int ObParquetTableRowIterator::project_lazy_columns(int64_t &read_count, int64_t
       }
 
       // Check if this batch will cross page boundary
-      bool cross_page
-          = !sector_iter_.is_cross_page(cur_col_id_)
-                ? false
-                : sector_iter_.check_if_batch_cross_page(cur_col_id_,
-                                                         state_.read_row_counts_[cur_col_id_],
-                                                         capacity);
+      bool cross_page = true;
+      if (!sector_iter_.is_cross_page(cur_col_id_)) {
+        cross_page = false;
+      } else {
+        // 计算当前批次的总行数：包括跳过的行数和需要读取的行数
+        int64_t read_batch_size = 0;
+        for (int64_t j = 0; j < skip_range.count(); ++j) {
+          read_batch_size += skip_range.at(j);
+          read_batch_size += read_range.at(j);
+        }
+        cross_page = sector_iter_.check_if_batch_cross_page(cur_col_id_,
+                                                            state_.read_row_counts_[cur_col_id_],
+                                                            read_batch_size);
+      }
       for (int64_t j = 0; OB_SUCC(ret) && j < skip_range.count(); ++j) {
         int64_t skip_count = SkipRowsInColumn(cur_col_id_, skip_range.at(j),
                                               state_.logical_read_row_count_ + tmp_logical_read,
@@ -3294,16 +3302,22 @@ int ObParquetTableRowIterator::ParquetSectorIterator::fill_ranges(
   read_ranges_.reuse();
   if (idx_ < size_) {
     int64_t start_idx = idx_;
-    if (idx_ + batch_size > size_) {
-      idx_ = size_;
-    } else {
-      idx_ += batch_size;
-    }
     if (has_no_skip_bits) {
+      if (idx_ + batch_size > size_) {
+        idx_ = size_;
+      } else {
+        idx_ += batch_size;
+      }
       // 没有被过滤数据时，可以直接生成 ranges
       OZ (skip_ranges_.push_back(0));
       OZ (read_ranges_.push_back(idx_ - start_idx));
     } else {
+      int64_t read_count = 0;
+      for (; read_count < batch_size && idx_ < size_; ++idx_) {
+        if (0 == bitmap_.get_data()[idx_]) {
+          ++read_count;
+        }
+      }
       int64_t end_idx = idx_;
       int8_t val = bitmap_.get_data()[start_idx++];
       int64_t continus_len = 1;
@@ -3431,9 +3445,23 @@ void ObParquetTableRowIterator::ParquetSectorIterator::check_cross_pages(const i
 
 bool ObParquetTableRowIterator::ParquetSectorIterator::has_no_skip_bits()
 {
-  return (iter_->delete_bitmap_ == nullptr
-          || iter_->delete_bitmap_->get_cardinality() == 0)
+  bool check = (iter_->delete_bitmap_ == nullptr || iter_->delete_bitmap_->get_cardinality() == 0)
          && !iter_->has_eager_columns();
+
+  if (check) {
+    // 需要检查 rg_bitmap_ 中是否有被设置的位
+    bool has_skip_in_rg = false;
+    if (iter_->rg_bitmap_ != nullptr && iter_->state_.cur_row_group_row_count_ > 0) {
+      int64_t start = iter_->state_.logical_eager_read_row_count_;
+      int64_t end = std::min(start + capacity_, iter_->state_.cur_row_group_row_count_);
+      // 检查当前sector范围内是否有需要跳过的位
+      if (iter_->rg_bitmap_->accumulate_bit_cnt(start, end) > 0) {
+        has_skip_in_rg = true;
+      }
+    }
+    check = !has_skip_in_rg;
+  }
+  return check;
 }
 
 bool ObParquetTableRowIterator::ParquetSectorIterator::check_if_batch_cross_page(
@@ -3909,7 +3937,7 @@ int ObParquetTableRowIterator::calc_column_convert(const int64_t read_count,
     if (cur_col_id == OB_INVALID_ID || column_need_conv_.at(cur_col_id)) {
       //column_conv_exprs is 1-1 mapped to column_exprs
       //calc gen column exprs
-      if (!column_conv_exprs.at(cur_col_id)->get_eval_info(eval_ctx).evaluated_) {
+      if (!column_conv_exprs.at(cur_col_id)->get_eval_info(eval_ctx).is_evaluated(eval_ctx)) {
         OZ (column_conv_exprs.at(cur_col_id)->init_vector_default(eval_ctx, read_count));
         OZ (column_conv_exprs.at(cur_col_id)->eval_vector(eval_ctx, *bit_vector_cache_, read_count, true));
         column_conv_exprs.at(cur_col_id)->set_evaluated_projected(eval_ctx);

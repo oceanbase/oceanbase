@@ -1594,6 +1594,7 @@ struct ObExprEqualCheckContext
     param_expr_(),
     need_check_deterministic_(false),
     ignore_param_(false),
+    ignore_for_write_(false),
     error_code_(0)
   { }
   ObExprEqualCheckContext(bool need_check_deterministic)
@@ -1608,6 +1609,7 @@ struct ObExprEqualCheckContext
     param_expr_(),
     need_check_deterministic_(need_check_deterministic),
     ignore_param_(false),
+    ignore_for_write_(false),
     error_code_(0)
   { }
   virtual ~ObExprEqualCheckContext() {}
@@ -1652,6 +1654,7 @@ struct ObExprEqualCheckContext
     param_expr_.reset();
     need_check_deterministic_ = false;
     ignore_param_ = false;
+    ignore_for_write_ = false;
     error_code_ = 0;
   }
   bool override_const_compare_;
@@ -1666,6 +1669,7 @@ struct ObExprEqualCheckContext
   common::ObSEArray<ParamExprPair, 3, common::ModulePageAllocator, true> param_expr_;
   bool need_check_deterministic_;
   bool ignore_param_; // only compare structure of expr
+  bool ignore_for_write_; // ignore for_write_ field in ObObjAccessRawExpr comparison
   int64_t error_code_; //error code to return
 
 private:
@@ -1805,7 +1809,8 @@ struct ObResolveContext
     is_from_show_resolver_(false),
     is_in_system_view_(false),
     match_exprs_(NULL),
-    formalize_const_int_prec_(false)
+    formalize_const_int_prec_(false),
+    for_cdc_resolve_generated_col_(false)
   {
   }
 
@@ -1858,6 +1863,7 @@ struct ObResolveContext
   bool is_in_system_view_;
   common::ObIArray<ObMatchFunRawExpr*> *match_exprs_;
   bool formalize_const_int_prec_;
+  bool for_cdc_resolve_generated_col_;
 };
 
 typedef ObResolveContext<ObRawExprFactory> ObExprResolveContext;
@@ -1983,6 +1989,7 @@ public:
        extra_(),
        is_shared_reference_(false),
        is_called_in_sql_(true),
+       is_transformed_to_assign_(false),
        is_calculated_(false),
        is_deterministic_(true),
        local_session_var_id_(OB_INVALID_INDEX_INT64),
@@ -2005,6 +2012,7 @@ public:
        extra_(),
        is_shared_reference_(false),
        is_called_in_sql_(true),
+       is_transformed_to_assign_(false),
        is_calculated_(false),
        is_deterministic_(true),
        local_session_var_id_(OB_INVALID_INDEX_INT64),
@@ -2310,9 +2318,11 @@ public:
   void reset_rt_expr() { rt_expr_ = NULL; }
   void set_expr_hash(uint64_t expr_hash) { expr_hash_ = expr_hash; }
   void set_is_called_in_sql(bool is_called_in_sql) { is_called_in_sql_ = is_called_in_sql; }
+  void set_is_transformed_to_assign(bool is_transformed_to_assign) { is_transformed_to_assign_ = is_transformed_to_assign; }
   void set_is_calculated(bool is_calculated) { is_calculated_ = is_calculated; }
   uint64_t get_expr_hash() const { return expr_hash_; }
   bool is_called_in_sql() const { return is_called_in_sql_; }
+  bool is_transformed_to_assign() const { return is_transformed_to_assign_; }
   bool is_calculated() const { return is_calculated_; }
   bool is_deterministic() const { return is_deterministic_; }
   bool is_bool_expr() const;
@@ -2441,6 +2451,7 @@ protected:
   ObRawExprExtraInfo extra_;
   bool is_shared_reference_;
   bool is_called_in_sql_; // 用于区分是被 pl 还是 sql 调用
+  bool is_transformed_to_assign_; // valid for select into from dual transformed to assign stmt in pl!
   bool is_calculated_; // 用于在新引擎 cg 中检查 raw expr 是否被重复计算
   bool is_deterministic_; //expr is deterministic, given the same inputs, returns the same result
   union {

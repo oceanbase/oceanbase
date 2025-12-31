@@ -62,7 +62,6 @@ public:
       K_(main_tablet_id),
       K_(lob_meta_tablet_id),
       K_(lob_piece_tablet_id),
-      K(rowkey_objs_[0]), K(rowkey_objs_[1]), K(rowkey_objs_[3]), K(rowkey_objs_[3]),
       K_(seq_id_local_buf),
       K_(scan_param),
       KP_(row_iter),

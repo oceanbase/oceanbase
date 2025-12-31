@@ -346,7 +346,8 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
                           const ColumnIdInfoMap *geo_column_id_map,
                           const bool force_no_link,
                           const ObTableSchema *index_schema,
-                          ObRawExprFactory *constraints_expr_factory)
+                          ObRawExprFactory *constraints_expr_factory,
+                          const bool ignore_fake_const_udf)
 {
   int ret = OB_SUCCESS;
   ObQueryCtx *query_ctx = NULL;
@@ -363,8 +364,7 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
     LOG_WARN("failed to check not in range enabled", K(ret));
   } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_bool_opt_param(ObOptParamHint::ENABLE_RANGE_EXTRACTION_FOR_NOT_IN, enable_not_in_range_))) {
     LOG_WARN("fail to check opt param not in range enabled", K(ret));
-  } else if (OB_FAIL(exec_ctx_->get_my_session()->
-             get_optimizer_features_enable_version(optimizer_features_enable_version_))) {
+  } else if (OB_FALSE_IT(optimizer_features_enable_version_ = query_ctx->optimizer_features_enable_version_)) {
     LOG_WARN("failed to get optimizer features enable version", K(ret));
   } else {
     column_cnt_ = range_columns.count();
@@ -380,6 +380,7 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
     is_geo_range_ = geo_column_id_map != NULL;
     force_no_link_ = force_no_link;
     constraints_expr_factory_ = constraints_expr_factory;
+    ignore_fake_const_udf_ = ignore_fake_const_udf;
     if (OB_NOT_NULL(index_schema) &&
         index_schema->is_unique_index() &&
         index_schema->get_index_column_num() > 0) {
@@ -632,7 +633,8 @@ int ObPreRangeGraph::preliminary_extract_query_range(const ObIArray<ColumnItem> 
                                                      const int64_t index_prefix /* =-1*/,
                                                      const ObTableSchema *index_schema /* = NULL*/,
                                                      const ColumnIdInfoMap *geo_column_id_map /* = NULL*/,
-                                                     ObRawExprFactory *constraint_expr_factory /* = NULL*/)
+                                                     ObRawExprFactory *constraint_expr_factory /* = NULL*/,
+                                                     const bool ignore_fake_const_udf /* = false*/)
 {
   int ret = OB_SUCCESS;
   bool force_no_link = false;
@@ -647,7 +649,7 @@ int ObPreRangeGraph::preliminary_extract_query_range(const ObIArray<ColumnItem> 
                               params, &expr_factory,
                               phy_rowid_for_table_loc, ignore_calc_failure, index_prefix,
                               geo_column_id_map, force_no_link, index_schema,
-                              constraint_expr_factory))) {
+                              constraint_expr_factory, ignore_fake_const_udf))) {
     LOG_WARN("failed to init query range context");
   } else {
     ObExprRangeConverter converter(allocator_, ctx);
@@ -1359,6 +1361,7 @@ int ObPreRangeGraph::get_range_exprs(ObRawExprFactory &expr_factory,
   const ColumnIdInfoMap *geo_column_id_map = nullptr;
   const ObTableSchema *index_schema = nullptr;
   bool force_no_link = true;
+  bool ignore_fake_const_udf = false;
   ObQueryRangeCtx ctx(exec_ctx);
   if (OB_FAIL(fill_column_metas(range_columns))) {
     LOG_WARN("failed to fill column metas");
@@ -1366,7 +1369,7 @@ int ObPreRangeGraph::get_range_exprs(ObRawExprFactory &expr_factory,
                               params, &expr_factory,
                               phy_rowid_for_table_loc, ignore_calc_failure, index_prefix,
                               geo_column_id_map, force_no_link, index_schema,
-                              NULL))) {
+                              NULL, ignore_fake_const_udf))) {
     LOG_WARN("failed to init query range context");
   } else {
     ObExprRangeConverter converter(allocator_, ctx);

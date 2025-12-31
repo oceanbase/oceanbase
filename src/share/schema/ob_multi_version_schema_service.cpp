@@ -2628,11 +2628,16 @@ int ObMultiVersionSchemaService::try_update_last_refreshed_schema_info(
       lib::ob_sort(refresh_schema_infos.begin(), refresh_schema_infos.end(), ObRefreshSchemaInfo::less_than);
     }
 
+    // check if new sequence id is consecutive
     ObDDLSequenceID pre_sequence_id = local_sequence_id;
     for (int64_t i = 0; OB_SUCC(ret) && consecutive && i < refresh_schema_infos.count(); i++) {
       const ObRefreshSchemaInfo &schema_info = refresh_schema_infos.at(i);
       const ObDDLSequenceID &sequence_id = schema_info.get_sequence_id();
-      if (ObDDLSequenceID::ONE_OVER != sequence_id.compare_to_other_id(pre_sequence_id)) {
+      if (ObDDLSequenceID::LESS_THAN == sequence_id.compare_to_other_id(local_sequence_id)
+          || ObDDLSequenceID::EQUAL_TO == sequence_id.compare_to_other_id(local_sequence_id)) {
+        // sequence id is the same or less than local sequence id, just ignore
+      } else if (ObDDLSequenceID::ONE_OVER != sequence_id.compare_to_other_id(pre_sequence_id)) {
+        // gap found, not consecutive
         consecutive = false;
       } else {
         pre_sequence_id = sequence_id;
@@ -2988,6 +2993,7 @@ int ObMultiVersionSchemaService::auto_switch_mode_and_refresh_schema(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_USER_TENANT_REFRESH_AND_ADD_SCHEMA_FAILED);
 // refresh schema by tenant
 // 1. System tenants strengthen the consistency of reading and brushing schema
 // 2. user tenants of the primary cluster strengthened to read and refresh schema consistently
@@ -3010,6 +3016,10 @@ int ObMultiVersionSchemaService::refresh_tenant_schema(
   } else if (OB_ISNULL(sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("proxy is null", KR(ret));
+  } else if (OB_UNLIKELY(ERRSIM_USER_TENANT_REFRESH_AND_ADD_SCHEMA_FAILED) && is_user_tenant(tenant_id)) {
+    ret = ERRSIM_USER_TENANT_REFRESH_AND_ADD_SCHEMA_FAILED;
+    LOG_WARN("[ERRSIM] inject error when ERRSIM_USER_TENANT_REFRESH_AND_ADD_SCHEMA_FAILED is set",
+             KR(ret), K(tenant_id));
   } else if (!ObSchemaService::g_liboblog_mode_
              && OB_FAIL(check_tenant_is_restore(NULL, tenant_id, is_restore))) {
     LOG_WARN("fail to check restore tenant exist", KR(ret), K(tenant_id));
@@ -4394,7 +4404,7 @@ int ObMultiVersionSchemaService::set_last_refreshed_schema_info(const ObRefreshS
   if (!new_sequence_id.is_valid()
       || (last_sequence_id.is_valid() && (ObDDLSequenceID::LESS_THAN == new_sequence_id.compare_to_other_id(last_sequence_id)
                                           || ObDDLSequenceID::EQUAL_TO == new_sequence_id.compare_to_other_id(last_sequence_id)))) {
-    LOG_INFO("no need to set last refreshed schema info", K(ret), K(last_refreshed_schema_info_), K(schema_info));
+    // skip, no need to set last refreshed schema info
   } else if (OB_FAIL(last_refreshed_schema_info_.assign(schema_info))) {
     LOG_WARN("fail to assign last refreshed schema info", K(ret), K(schema_info), K_(last_refreshed_schema_info));
   }

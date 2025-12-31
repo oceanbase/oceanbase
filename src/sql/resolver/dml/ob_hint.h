@@ -237,6 +237,7 @@ struct ObOptParamHint
     DEF(APPROX_COUNT_DISTINCT_PRECISION,)           \
     DEF(ENABLE_DELETE_INSERT_SCAN,)                 \
     DEF(ENABLE_FAST_REFRESH_WITH_CUR_TIME,)         \
+    DEF(DISABLE_SHARED_EXPR_EXTRACTION,)            \
 
 
 
@@ -454,6 +455,7 @@ struct ObGlobalHint {
   void merge_plan_cache_hint(ObPlanCachePolicy policy);
   void merge_log_level_hint(const ObString &log_level);
   void merge_read_consistency_hint(ObConsistencyLevel read_consistency, int64_t frozen_version);
+  void merge_table_lock_mode_hint(int64_t table_lock_mode);
   void merge_opt_features_version_hint(uint64_t opt_features_version);
   void merge_osg_hint(int8_t flag);
   void merge_dynamic_sampling_hint(int64_t dynamic_sampling);
@@ -566,6 +568,7 @@ struct ObGlobalHint {
   int64_t max_concurrent_;
   bool enable_lock_early_release_;
   bool force_refresh_lc_;
+  int64_t table_lock_mode_;
   common::ObString log_level_;
   int64_t parallel_;
   int64_t dml_parallel_;
@@ -589,7 +592,6 @@ struct ObGlobalHint {
   common::ObString resource_group_;
   ObPxNodeHint px_node_hint_;
   DisableOpRichFormatHint disable_op_rich_format_hint_;
-  int64_t table_lock_mode_;
   TriggerHint trigger_hint_;
 private:
   bool has_hint_exclude_concurrent_;  // not hint, used to mark weather exists hint exclude max_concurrent
@@ -626,8 +628,13 @@ public:
 
   void reset();
 
-  TO_STRING_KV(K_(read_consistency), K_(query_timeout), K_(plan_cache_policy),
-               K_(force_trace_log), K_(log_level), K_(parallel), K_(monitor),
+  TO_STRING_KV(K_(read_consistency),
+               K_(query_timeout),
+               K_(plan_cache_policy),
+               K_(force_trace_log),
+               K_(log_level),
+               K_(parallel),
+               K_(monitor),
                K_(table_lock_mode));
 
   common::ObConsistencyLevel read_consistency_;

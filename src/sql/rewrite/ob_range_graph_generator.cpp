@@ -173,6 +173,8 @@ int ObRangeGraphGenerator::generate_range_node(ObRawExpr* expr,
       LOG_WARN("failed to generate or range node");
     }
   } else if (OB_FALSE_IT(ctx_.refresh_max_offset_ = false)) {
+  } else if (OB_FAIL(process_filter_with_udf_const(expr))) {
+    LOG_WARN("failed to process filter with udf const", K(ret));
   } else if (OB_FAIL(range_node_generator.convert_expr_to_range_node(expr, range_node, expr_depth, is_precise))) {
     LOG_WARN("failed to generate range node");
   } else if (OB_ISNULL(range_node)) {
@@ -1317,6 +1319,7 @@ int ObRangeGraphGenerator::generate_expr_final_info()
   range_map.in_params_.reset();
   int64_t N = final_exprs.count();
   bool cnt_exec_param = false;
+  bool cnt_fake_const_udf = false;
   ObSqlBitSet<> final_expr_bits(N);
   ObSqlBitSet<> in_params_bits(ctx_.in_params_.count());
   if (OB_ISNULL(exec_ctx) || OB_ISNULL(exec_ctx->get_sql_ctx())) {
@@ -1379,6 +1382,9 @@ int ObRangeGraphGenerator::generate_expr_final_info()
         cnt_exec_param = true;
         expr_info.cnt_exec_param_ = true;
       }
+      if (expr->has_flag(CNT_FAKE_CONST_UDF)) {
+        cnt_fake_const_udf = true;
+      }
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < ctx_.null_safe_value_idxs_.count(); ++i) {
@@ -1416,6 +1422,7 @@ int ObRangeGraphGenerator::generate_expr_final_info()
       LOG_WARN("failed to assign in params");
     } else {
       pre_range_graph_->set_contain_exec_param(cnt_exec_param);
+      pre_range_graph_->set_cnt_fake_const_udf(cnt_fake_const_udf);
     }
   }
   return ret;
@@ -2280,7 +2287,69 @@ int ObRangeGraphGenerator::collect_graph_infos_dp(ObRangeNode *range_node,
   return ret;
 }
 
-
+// To maintain compatibility with the behavior of extracting query range when UDFs with constant
+// input parameters (regardless of whether they are deterministic or not) are written in filters
+// under Oracle mode, this function will copy constant UDFs and uniformly set them as deterministic
+// for query range extraction.
+int ObRangeGraphGenerator::process_filter_with_udf_const(ObRawExpr *&filter_expr) {
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 2> udf_exprs;
+  if (OB_ISNULL(filter_expr) || OB_ISNULL(ctx_.expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (!is_oracle_mode() || !filter_expr->has_flag(CNT_PL_UDF)) {
+    // do nothing
+  } else if (ctx_.optimizer_features_enable_version_ < COMPAT_VERSION_4_4_2) {
+    // do nothing
+  } else if (ctx_.ignore_fake_const_udf_) {
+    // do nothing
+  } else if (OB_FAIL(ObRawExprUtils::extract_udf_exprs(filter_expr, udf_exprs))) {
+    LOG_WARN("failed to extract udf exprs", K(ret));
+  } else {
+    uint64_t tenant_id = ctx_.session_info_->get_effective_tenant_id();
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid() && tenant_config->_force_const_udf_query_range_extraction) {
+      ObRawExprCopier copier(*filter_expr->get_expr_factory());
+      bool has_copied_const_udf = false;
+      for (int64_t i = 0; OB_SUCC(ret) && i < udf_exprs.count(); ++i) {
+        ObRawExpr *new_expr = NULL;
+        ObUDFRawExpr *new_udf_expr = NULL;
+        bool all_params_const = false;
+        if (OB_ISNULL(udf_exprs.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (udf_exprs.at(i)->is_const_expr()) {
+          // deterministic, do nothing
+        } else if (OB_FAIL(ObRawExprUtils::check_all_params_const(udf_exprs.at(i), all_params_const))) {
+          LOG_WARN("failed to check all params const", K(ret));
+        } else if (!all_params_const) {
+          // do nothing
+        } else if (OB_FAIL(copier.copy(udf_exprs.at(i), new_expr))) {
+          LOG_WARN("failed to copy udf expr", K(ret));
+        } else if (OB_ISNULL(new_expr) || !new_expr->is_udf_expr()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else {
+          has_copied_const_udf = true;
+          new_udf_expr = static_cast<ObUDFRawExpr*>(new_expr);
+          new_udf_expr->set_is_deterministic(true);
+          new_udf_expr->add_flag(IS_FAKE_CONST_UDF);
+        }
+      }
+      if (OB_FAIL(ret) || !has_copied_const_udf) {
+        // do nothing
+      } else if (OB_FAIL(copier.copy_on_replace(filter_expr, filter_expr))) {
+        LOG_WARN("failed to copy on replace", K(ret));
+      } else if (OB_ISNULL(filter_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(filter_expr->formalize(ctx_.session_info_))) {
+        LOG_WARN("failed to formalize filter expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
 
 }
 }

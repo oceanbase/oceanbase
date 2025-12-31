@@ -784,6 +784,7 @@ public:
                                  enable_ps_parameterize_(true),
                                  enable_seq_wrap_around_flush_cache_(false),
                                  enable_sql_ccl_rule_(true),
+                                 enable_streaming_cursor_prefetch_(true),
                                  force_unstreaming_cursor_(false),
                                  conf_enable_sql_audit_(false),
                                  extend_sql_plan_monitor_metrics_(false),
@@ -841,6 +842,7 @@ public:
     }
 
     bool enable_ps_parameterize() const { return enable_ps_parameterize_; }
+    bool enable_streaming_cursor_prefetch() const { return enable_streaming_cursor_prefetch_; }
     bool force_unstreaming_cursor() const { return force_unstreaming_cursor_; }
     bool conf_enable_sql_audit() const { return conf_enable_sql_audit_; }
     bool extend_sql_plan_monitor_metrics() const { return extend_sql_plan_monitor_metrics_; }
@@ -882,6 +884,7 @@ public:
     bool enable_ps_parameterize_;
     bool enable_seq_wrap_around_flush_cache_;
     bool enable_sql_ccl_rule_;
+    bool enable_streaming_cursor_prefetch_;
     bool force_unstreaming_cursor_;
     bool conf_enable_sql_audit_;
     bool extend_sql_plan_monitor_metrics_;
@@ -1219,6 +1222,7 @@ public:
   {
     return end_trans_cb_.get_mysql_end_trans_cb();
   }
+  observer::ObPLEndTransCb &get_pl_end_trans_cb() { return end_trans_cb_.get_pl_end_trans_cb(); }
   int get_collation_type_of_names(const ObNameTypeClass type_class, common::ObCollationType &cs_type) const;
   int name_case_cmp(const common::ObString &name, const common::ObString &name_other,
                     const ObNameTypeClass type_class, bool &is_equal) const;
@@ -1626,6 +1630,11 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.enable_enhanced_cursor_validation();
+  }
+  bool enable_streaming_cursor_prefetch()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.enable_streaming_cursor_prefetch();
   }
   bool force_unstreaming_cursor()
   {
@@ -2084,6 +2093,10 @@ private:
   public:
   pl::ObUtlHttp* get_ob_utl_http_info() {return ob_utl_http_info_;}
   void set_ob_utl_http_info(pl::ObUtlHttp* ob_utl_http_info_ptr) { ob_utl_http_info_ = ob_utl_http_info_ptr;}
+  void set_is_pl_async_commit(bool is_pl_async_commit) { end_trans_cb_.set_is_pl_async_commit(is_pl_async_commit); }
+  bool is_pl_async_commit() { return end_trans_cb_.is_pl_async_commit(); }
+  void set_has_async_query_sender(bool has_async_query_sender) { end_trans_cb_.set_has_async_query_sender(has_async_query_sender); }
+  bool has_async_query_sender() { return end_trans_cb_.has_async_query_sender(); }
 };
 
 

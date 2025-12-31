@@ -285,6 +285,7 @@ public:
       common::ObMySQLProxy &mysql_proxy,
       const SCN &compaction_scn,
       const common::ObIArray<ObTabletLSPair> &tablet_pairs,
+      const bool include_greater_scn,
       ObReplicaCkmArray &items);
   static int construct_tablet_id_list(const ObIArray<ObTabletID> &tablet_ids, ObSqlString &sql);
 private:

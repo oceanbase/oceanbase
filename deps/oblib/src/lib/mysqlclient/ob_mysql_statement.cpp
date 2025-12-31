@@ -107,19 +107,7 @@ int ObMySQLStatement::execute_update(int64_t &affected_rows)
         // conn -> server pool -> connection pool
         conn_->get_root()->get_root()->signal_refresh(); // refresh server pool immediately
       }
-      if (OB_INVALID_ID != conn_->get_dblink_id()) {
-        LOG_WARN("dblink connection error", K(ret),
-                                            KP(conn_),
-                                            K(conn_->get_dblink_id()),
-                                            K(conn_->get_sessid()),
-                                            K(conn_->usable()),
-                                            K(stmt_->host),
-                                            K(stmt_->port),
-                                            K(errmsg),
-                                            K(sql_str_.length()),
-                                            K(sql_str_));
-        TRANSLATE_CLIENT_ERR(ret, errmsg);
-      }
+      conn_->handler_dblink_error(ret, false, errmsg);
       if (is_need_disconnect_error(ret)) {
         conn_->set_usable(false);
       }
@@ -202,18 +190,8 @@ ObMySQLResult *ObMySQLStatement::execute_query(bool enable_use_result)
       if (OB_SUCCESS == ret) {
         ret = OB_ERR_SQL_CLIENT;
         LOG_WARN("can not get errno", K(ret));
-      } else if (OB_INVALID_ID != conn_->get_dblink_id()) {
-        LOG_WARN("dblink connection error", K(ret),
-                                            KP(conn_),
-                                            K(conn_->get_dblink_id()),
-                                            K(conn_->get_sessid()),
-                                            K(conn_->usable()),
-                                            K(stmt_->host),
-                                            K(stmt_->port),
-                                            K(errmsg),
-                                            K(sql_str_.length()),
-                                            K(sql_str_));
-        TRANSLATE_CLIENT_ERR(ret, errmsg);
+      } else {
+        conn_->handler_dblink_error(ret, false, errmsg);
       }
       if (is_need_disconnect_error(ret)) {
         conn_->set_usable(false);

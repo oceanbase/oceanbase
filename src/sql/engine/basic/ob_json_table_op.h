@@ -49,6 +49,8 @@ enum table_type : int8_t {
   OB_XML_TABLE = 2,
   OB_RB_ITERATE_TABLE = 3,
   OB_UNNEST_TABLE = 4,
+  OB_AI_SPLIT_DOCUMENT_TABLE = 5,
+  OB_INDEX_DATA_GEN_TABLE = 6,
 };
 
 typedef enum JtNodeType {
@@ -130,7 +132,10 @@ public:
       alloc_(&alloc),
       cols_def_(alloc),
       table_type_(MulModeTableType::OB_ORA_JSON_TABLE_TYPE),
-      namespace_def_(alloc) {}
+      namespace_def_(alloc),
+      inc_pk_proj_(0),
+      index_column_cnt_(0),
+      search_idx_included_cid_idxes_(alloc) {}
 
   int dup_origin_column_defs(common::ObIArray<ObJtColBaseInfo*>& columns);
   int construct_tree(common::ObArray<ObMultiModeTableNode*> all_nodes, JoinNode* parent);
@@ -145,6 +150,9 @@ public:
   common::ObFixedArray<ObJtColInfo*, common::ObIAllocator> cols_def_;
   MulModeTableType table_type_;
   common::ObFixedArray<ObString, common::ObIAllocator> namespace_def_;
+  int64_t inc_pk_proj_;
+  int64_t index_column_cnt_;
+  common::ObFixedArray<int32_t, common::ObIAllocator> search_idx_included_cid_idxes_;
 };
 
 class ObJsonTableOp;

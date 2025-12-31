@@ -161,6 +161,7 @@ WAIT_EVENT_DEF(PARALLEL_TASK_CONTROLLER_COND_WAIT, 18122, "parallel task control
 WAIT_EVENT_DEF(DETECT_MANAGER_COND_WAIT, 18123, "detect manager condition wait", "address", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(DDL_TASK_COND_WAIT, 18124, "ddl task condition wait", "address", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(SHARED_JOIN_FILTER_CONSTRUCTOR_COND_WAIT, 18125, "shared join filter constructor condition wait", "address", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(TABLE_LOAD_COORDINATOR_COND_WAIT, 18126, "table load coordinator condition wait", "address", "", "", CONCURRENCY, true, true)
 
 //sleep
 WAIT_EVENT_DEF(BANDWIDTH_THROTTLE_SLEEP, 20000, "sleep: bandwidth throttle sleep wait", "sleep_interval", "", "", NETWORK, true, true)

@@ -289,7 +289,7 @@ int ObChecksumValidator::validate_checksum(
     } else if (replica_ckm_items_.count() > 0) {
       int tmp_ret = OB_SUCCESS;
       last_table_ckm_items_.clear();
-      if (OB_TMP_FAIL(last_table_ckm_items_.build(*schema_guard_, *simple_schema_, cur_tablet_ls_pair_array_, replica_ckm_items_))) {
+      if (OB_TMP_FAIL(last_table_ckm_items_.build(*schema_guard_, get_compaction_scn(), *simple_schema_, cur_tablet_ls_pair_array_, replica_ckm_items_))) {
         LOG_WARN("failed to build table ckm items", KR(tmp_ret), K_(table_id), K_(cur_tablet_ls_pair_array),
           K_(replica_ckm_items));
       } else {
@@ -843,6 +843,7 @@ int ObChecksumValidator::verify_table_index(
   FREEZE_TIME_GUARD;
   const uint64_t index_table_id = index_simple_schema.get_table_id();
   const uint64_t data_table_id = index_simple_schema.get_data_table_id();
+
   if (replica_ckm_items_.empty() && OB_FAIL(get_replica_ckm())) {
     LOG_WARN("fail to batch get tablet replica checksum items", KR(ret), K_(tenant_id),  "compaction_scn", get_compaction_scn());
   } else if (replica_ckm_items_.get_tablet_cnt() < cur_tablet_ls_pair_array_.count()) {
@@ -863,17 +864,24 @@ int ObChecksumValidator::verify_table_index(
         ++statistics_.use_cached_ckm_cnt_;
       }
     }
+
     if (nullptr != data_table_ckm_ptr || OB_FAIL(ret)) {
     } else if (FALSE_IT(data_table_ckm_ptr = &data_table_ckm)) {
-    } else if (OB_FAIL(data_table_ckm.build(data_table_id, get_compaction_scn(),
-                                     *sql_proxy_, *schema_guard_,
-                                     tablet_ls_pair_cache_))) {
+    } else if (OB_FAIL(data_table_ckm.build(data_table_id,
+                                            get_compaction_scn(),
+                                            *sql_proxy_,
+                                            *schema_guard_,
+                                            tablet_ls_pair_cache_,
+                                            true/*include_greater_scn*/))) {
       LOG_WARN("failed to get checksum items", K(ret), K(data_table_id), "compaction_scn", get_compaction_scn());
     } else {
       ++statistics_.query_ckm_sql_cnt_;
     }
-    if (FAILEDx(index_table_ckm.build(*schema_guard_, index_simple_schema, cur_tablet_ls_pair_array_,
-                                      replica_ckm_items_))) {
+
+    if (OB_FAIL(ret)) {
+    } else if (data_table_ckm_ptr->should_skip_verify_ckm()) {
+      // data table has larger ckm than compaction scn, skip to check index ckm, set index ckm as verified later
+    } else if (OB_FAIL(index_table_ckm.build(*schema_guard_, get_compaction_scn(), index_simple_schema, cur_tablet_ls_pair_array_, replica_ckm_items_))) {
       LOG_WARN("failed to assgin checksum items", K(ret), K(replica_ckm_items_));
     } else {
       const bool is_global_index = index_simple_schema.is_global_index_table();
@@ -922,8 +930,12 @@ int ObChecksumValidator::build_ckm_item_for_fts(const int64_t table_id,
   } else if (OB_UNLIKELY(!table_compaction_info.is_compacted())) {
     LOG_WARN("exist special status table", KR(ret), K(table_compaction_info));
     skip_verify = true;
-  } else if (OB_FAIL(ckm_item.build(table_id, get_compaction_scn(), *sql_proxy_,
-                                    *schema_guard_, tablet_ls_pair_cache_))) {
+  } else if (OB_FAIL(ckm_item.build(table_id,
+                                    get_compaction_scn(),
+                                    *sql_proxy_,
+                                    *schema_guard_,
+                                    tablet_ls_pair_cache_,
+                                    false/*include_greater_scn*/))) {
     if (OB_TABLE_NOT_EXIST == ret || OB_STATE_NOT_MATCH == ret || OB_ITEM_NOT_MATCH == ret) {
       skip_verify = true;
       ret = OB_SUCCESS;

@@ -117,13 +117,13 @@ int ObSortVecOpProvider::init_sort_impl_instance(ObSortVecOpContext &ctx, ObISor
   if (ctx.enable_single_col_compare_ && (is_basic_cmp_ || is_str_cmp_)) {
     if (is_basic_cmp_) {
       if (OB_SUCCESS
-          != (ret = alloc_sort_impl_instance<RTSingleColSortImplType<sk_type, true>>(
+          != (ret = alloc_sort_impl_instance<RTSingleColSortImplType<sk_type, has_addon, true>>(
                 ctx, sort_op_impl))) {
         LOG_WARN("failed to alloc sort impl instance", K(ret));
       }
     } else {
       if (OB_SUCCESS
-          != (ret = alloc_sort_impl_instance<RTSingleColSortImplType<sk_type, false>>(
+          != (ret = alloc_sort_impl_instance<RTSingleColSortImplType<sk_type, has_addon, false>>(
                 ctx, sort_op_impl))) {
         LOG_WARN("failed to alloc sort impl instance", K(ret));
       }

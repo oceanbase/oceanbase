@@ -1154,6 +1154,8 @@ int ObHNSWIndexBuildOperator::serialize_vector_index(
       if (OB_ISNULL(adp)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected nullptr", K(ret), KP(adp), K(is_vec_tablet_rebuild));
+      } else if (is_vec_tablet_rebuild && OB_FAIL(adaptor_guard.set_adapter(adp))) {
+        LOG_WARN("fail to set new adapter guard", K(ret));
       } else if (OB_FAIL(adp->check_snap_hnswsq_index())) {
         LOG_WARN("failed to check snap hnswsq index", K(ret));
       } else if (OB_FAIL(adp->set_snapshot_key_prefix(tablet_id_.id(), ctx.snapshot_version_, ObVectorIndexSliceStore::OB_VEC_IDX_SNAPSHOT_KEY_LENGTH))) {
@@ -1175,7 +1177,7 @@ int ObHNSWIndexBuildOperator::serialize_vector_index(
         if (!tenant_config.is_valid()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("fail get tenant_config", KR(ret), K(adp->get_tenant_id()));
-        } else if (OB_FAIL(adp->renew_single_snap_index(type == VIAT_HNSW_BQ
+        } else if (OB_FAIL(adp->renew_single_snap_index((type == VIAT_HNSW_BQ || type == VIAT_IPIVF)
             || (tenant_config->vector_index_memory_saving_mode && (type == VIAT_HNSW || type == VIAT_HNSW_SQ || type == VIAT_HGRAPH))))) {
           LOG_WARN("fail to renew single snap index", K(ret));
         }
@@ -1817,7 +1819,7 @@ int ObHNSWEmbeddingOperator::init(const ObTabletID &tablet_id)
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc ObEmbeddingTaskMgr", K(ret));
       } else {
-        embedmgr_ = new (buf) ObEmbeddingTaskMgr();
+        embedmgr_ = new (buf) ObEmbeddingTaskMgr(*this);
       }
     }
 

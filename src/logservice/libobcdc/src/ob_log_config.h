@@ -293,6 +293,9 @@ public:
   // Whether output column by table defination
   T_DEF_BOOL(enable_output_by_table_def, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
 
+  // Whether output the virtual generated column
+  T_DEF_BOOL(enable_output_virtual_generated_column, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
+
   // Number of active ls count in memory
   // This value can be used as a reference for the number of data structure objects cached at the ls level
   T_DEF_INT_INFT(active_ls_count, OB_CLUSTER_PARAMETER, 10000, 1, "active ls count in memory");

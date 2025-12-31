@@ -62,6 +62,7 @@ enum MulModeTableType {
   OB_ORA_XML_TABLE_TYPE = 2,
   OB_RB_ITERATE_TABLE_TYPE = 3,
   OB_UNNEST_TABLE_TYPE = 4,
+  OB_INDEX_DATA_GEN_TABLE_TYPE = 5,
 };
 
 typedef struct ObJtColBaseInfo
@@ -808,6 +809,7 @@ public:
                                           ObSQLSessionInfo *session_info,
                                           bool explicit_for_col);
   int set_sharable_expr_reference(ObRawExpr &expr, ExplicitedRefType ref_type);
+  int calc_relation_expr_hash();
   int check_pseudo_column_valid();
   int check_stmt_valid();
   int recursively_check_stmt_valid();

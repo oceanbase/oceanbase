@@ -222,6 +222,7 @@
   RPC_S(PR5 schedule_tablet_split, OB_TABLET_SPLIT_SCHEDULE, (obrpc::ObTabletSplitScheduleArg), obrpc::ObLSTabletSplitScheduleRes);
   RPC_S(PR5 get_min_ss_gc_last_succ_scn, OB_GET_MIN_SS_GC_LAST_SUCC_SCN, (obrpc::ObSSGCLastSuccScnArg), obrpc::Int64);
   RPC_S(PR5 get_ss_gc_last_succ_scns, OB_GET_SS_GC_LAST_SUCC_SCNS, (obrpc::ObSSGCLastSuccScnArg), obrpc::ObSSGCLastSuccSCNsRes);
+  RPC_S(PR5 push_ss_gc_last_succ_scn, OB_PUSH_SS_GC_LAST_SUCC_SCN, (obrpc::ObSSGCPushLastSuccScnArg));
   RPC_S(PR5 del_ss_macro_cache, OB_DEL_SS_MACRO_CACHE, (obrpc::ObGetSSMacroBlockArg), obrpc::ObDelSSMacroCacheRes);
   RPC_S(PR5 del_ss_tablet_macro_cache, OB_DEL_SS_TABLET_MACRO_CACHE, (obrpc::ObDelSSTabletMacroCacheArg), obrpc::ObDelSSTabletMacroCacheRes);
   #endif

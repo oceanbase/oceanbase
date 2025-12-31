@@ -431,7 +431,7 @@ int print_block_meta(AChunk *chunk, ABlock *block, char *buf, int64_t buf_len, i
   int ret = OB_SUCCESS;
   ret = databuff_printf(buf, buf_len, pos,
                         "    block: %p, offset: %03d, in_use: %d, is_large: %d, is_washed: %d, nblocks: %03d," \
-                        " alloc_bytes: %lu, aobject_size: %d, obj_set: %p\n",
+                        " alloc_bytes: %u, aobject_size: %d, obj_set: %p\n",
                         chunk->blk_data(block), chunk->blk_offset(block), block->in_use_, block->is_large_,
                         block->is_washed_, chunk->blk_nblocks(block),
                         block->alloc_bytes_, AOBJECT_CELL_BYTES, block->obj_set_);

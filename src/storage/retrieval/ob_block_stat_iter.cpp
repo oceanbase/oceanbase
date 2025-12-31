@@ -657,7 +657,9 @@ int ObBlockStatIterator::advance_memtable_iters(const ObDatumRowkey &advance_key
 
 int ObBlockStatIterator::check_rowkey_in_range(const ObDatumRow &row, bool &rowkey_in_range) const
 {
-  ObDatumRowkey rowkey(row.storage_datums_, rowkey_read_info_->get_rowkey_count());
+  // Since block boundary is based on major sstable, which guarantees that no duplicate rowkey between micro blocks.
+  // And memtable iter does not project multi-version rowkey columns for now, we should use schema rowkey for compare.
+  ObDatumRowkey rowkey(row.storage_datums_, rowkey_read_info_->get_schema_rowkey_count());
   return check_rowkey_in_range(rowkey, rowkey_in_range);
 }
 
@@ -681,6 +683,8 @@ int ObBlockStatIterator::shrink_scan_range(const ObDatumRowkey &start_key)
   int ret = OB_SUCCESS;
   if (OB_FAIL(start_key.deep_copy(curr_scan_start_key_, allocator_))) {
     LOG_WARN("failed to deep copy start key", K(ret), K(start_key));
+  } else if (OB_FAIL(curr_scan_start_key_.prepare_memtable_readable(rowkey_read_info_->get_columns_desc(), allocator_))) {
+    LOG_WARN("failed to prepare memtable readable", K(ret), K(curr_scan_start_key_));
   } else {
     curr_scan_range_.start_key_ = curr_scan_start_key_;
   }

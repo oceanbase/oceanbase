@@ -2070,6 +2070,7 @@ constexpr int OB_INVALID_DATE_TRUNC_FORMAT = -11126;
 constexpr int OB_ERR_INVALID_PRIVILEGE_ON_SENSITIVE_RULES = -11127;
 constexpr int OB_AP_QUERY_NEED_RETRY = -11128;
 constexpr int OB_KAFKA_ERROR = -11129;
+constexpr int OB_KAFKA_NEED_RETRY = -11130;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -2166,7 +2167,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_TERM_NOT_MATCH__USER_ERROR_MSG "Term not match"
 #define OB_START_LOG_CURSOR_INVALID__USER_ERROR_MSG "Invalid log cursor"
 #define OB_LOCK_NOT_MATCH__USER_ERROR_MSG "Lock not match"
-#define OB_DEAD_LOCK__USER_ERROR_MSG "Deadlock"
+#define OB_DEAD_LOCK__USER_ERROR_MSG "Deadlock found when trying to get lock"
 #define OB_PARTIAL_LOG__USER_ERROR_MSG "Incomplete log entry"
 #define OB_CHECKSUM_ERROR__USER_ERROR_MSG "Data checksum error"
 #define OB_INIT_FAIL__USER_ERROR_MSG "Initialize error"
@@ -4590,6 +4591,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_INVALID_PRIVILEGE_ON_SENSITIVE_RULES__USER_ERROR_MSG "Privilege not allowed for sensitive rules"
 #define OB_AP_QUERY_NEED_RETRY__USER_ERROR_MSG "AP query will retry with column replica"
 #define OB_KAFKA_ERROR__USER_ERROR_MSG "kafka server throw error: ErrorMsg=%s"
+#define OB_KAFKA_NEED_RETRY__USER_ERROR_MSG "retry with kafka error"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -9619,6 +9621,8 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_AP_QUERY_NEED_RETRY__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11128, AP query will retry with column replica"
 #define OB_KAFKA_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11129, kafka server throw error: ErrorMsg=%s"
 #define OB_KAFKA_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11129, kafka server throw error: ErrorMsg=%s"
+#define OB_KAFKA_NEED_RETRY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11130, retry with kafka error"
+#define OB_KAFKA_NEED_RETRY__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11130, retry with kafka error"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR__OBE_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
@@ -9638,7 +9642,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 
-extern int g_all_ob_errnos[2516];
+extern int g_all_ob_errnos[2517];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

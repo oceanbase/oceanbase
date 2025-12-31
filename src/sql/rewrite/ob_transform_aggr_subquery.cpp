@@ -1902,14 +1902,17 @@ int ObTransformAggrSubquery::modify_vector_comparison_expr_if_necessary(ObSelect
     LOG_WARN("invalid argument", K(ret), K(expr_factory), K(parent_expr_of_query_ref), K(select_exprs));
   } else if (IS_SUBQUERY_COMPARISON_OP(parent_expr_of_query_ref->get_expr_type())) {
     // construct a T_OP_ROW expr through vector projection term of subquery
-    ObOpRawExpr* op_row_expr;
-    ObSEArray<ObRawExpr*, 4> temp_expr;
-    if (OB_FAIL(ObTransformUtils::build_row_expr(*expr_factory, select_exprs, op_row_expr))) {
-      LOG_WARN("failed to create op row expr", K(ret));
-    } else if (OB_FAIL(temp_expr.push_back(op_row_expr))) {
-      LOG_WARN("failed to push back op row expr", K(ret));
+    if (select_exprs.count() > 1) {
+      ObOpRawExpr* op_row_expr;
+      ObSEArray<ObRawExpr*, 4> temp_expr;
+      if (OB_FAIL(ObTransformUtils::build_row_expr(*expr_factory, select_exprs, op_row_expr))) {
+        LOG_WARN("failed to create op row expr", K(ret));
+      } else if (OB_FAIL(temp_expr.push_back(op_row_expr))) {
+        LOG_WARN("failed to push back op row expr", K(ret));
+      } else if (OB_FAIL(select_exprs.assign(temp_expr))) {
+        LOG_WARN("failed to assign select exprs", K(ret));
+      }
     }
-    select_exprs.assign(temp_expr);
     // replace parent_expr_of_query_ref with subquery comparison operator to the one of common comparison operator
     ObItemType value_cmp_type = T_INVALID;
     if (FAILEDx(ObTransformUtils::query_cmp_to_value_cmp(parent_expr_of_query_ref->get_expr_type(), value_cmp_type))) {

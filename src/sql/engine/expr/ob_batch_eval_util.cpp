@@ -33,7 +33,7 @@ int binary_operand_batch_eval(const ObExpr &expr,
       LOG_WARN("batch evaluate failed", K(ret), K(expr));
     } else if (left.is_batch_result()) {
       const ObBitVector *rskip = &skip;
-      if (!left.get_eval_info(ctx).notnull_) {
+      if (!left.get_eval_info(ctx).is_notnull()) {
         ObBitVector &my_skip = expr.get_pvt_skip(ctx);
         rskip = &my_skip;
         my_skip.deep_copy(skip, size);

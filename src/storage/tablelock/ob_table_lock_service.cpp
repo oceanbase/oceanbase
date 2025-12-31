@@ -806,7 +806,8 @@ int ObTableLockService::lock_partition_or_subpartition(ObTxDesc &tx_desc,
 int ObTableLockService::lock(ObTxDesc &tx_desc,
                              const ObTxParam &tx_param,
                              const ObLockRequest &arg,
-                             const bool is_for_replace)
+                             const bool is_for_replace,
+                             const bool force_use_priority)
 {
   int ret = OB_SUCCESS;
 
@@ -825,9 +826,8 @@ int ObTableLockService::lock(ObTxDesc &tx_desc,
     if (OB_FAIL(ctx.set_by_lock_req(arg))) {
       LOG_WARN("set ObTableLockCtx failed", K(ret), K(arg));
     } else {
-      if (is_for_replace) {
-        ctx.is_for_replace_ = true;
-      }
+      ctx.is_for_replace_ = is_for_replace;
+      ctx.is_enable_lock_priority_ = ctx.is_enable_lock_priority_ ? true : force_use_priority;
       ctx.is_in_trans_ = true;
       ctx.tx_desc_ = &tx_desc;
       ctx.tx_param_ = tx_param;

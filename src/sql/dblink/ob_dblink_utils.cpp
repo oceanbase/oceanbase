@@ -336,6 +336,7 @@ ObReverseLink::ObReverseLink()
     host_name_(),
     port_(0)
 {
+  reverse_conn_.set_is_dblink_reverse_conn(true);
 }
 
 ObReverseLink::~ObReverseLink()

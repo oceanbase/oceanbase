@@ -53,6 +53,9 @@ int ObRawExprReplacer::replace(ObRawExpr *&expr)
   } else if (OB_FAIL(expr->preorder_accept(*this))) {
     LOG_WARN("failed to preorder accept expr", K(ret));
   }
+  if (OB_SUCC(ret) && replace_happened_) {
+    expr->calc_hash();
+  }
   return ret;
 }
 

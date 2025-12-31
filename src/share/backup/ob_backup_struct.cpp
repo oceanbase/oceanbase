@@ -4066,6 +4066,31 @@ bool ObBackupLSTaskAttr::is_valid() const
       && max_tablet_checkpoint_scn_.is_valid();
 }
 
+void ObBackupLSTaskAttr::reset()
+{
+  task_id_ = 0;
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  ls_id_.reset();
+  job_id_ = 0;
+  backup_set_id_ = 0;
+  backup_type_.reset();
+  task_type_.type_ = ObBackupDataTaskType::BACKUP_MAX;
+  status_.status_ = ObBackupTaskStatus::MAX_STATUS;
+  start_ts_ = 0;
+  end_ts_ = 0;
+  backup_date_ = 0;
+  black_servers_.reset();
+  dst_.reset();
+  task_trace_id_.reset();
+  stats_.reset();
+  start_turn_id_ = 0;
+  turn_id_ = 0;
+  retry_id_ = 0;
+  result_ = OB_SUCCESS;
+  comment_.reset();
+  max_tablet_checkpoint_scn_.reset();
+}
+
 int ObBackupLSTaskAttr::get_black_server_str(const ObIArray<ObAddr> &black_servers, ObSqlString &sql_string) const
 {
   int ret = OB_SUCCESS;

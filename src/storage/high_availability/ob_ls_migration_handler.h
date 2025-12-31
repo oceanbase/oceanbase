@@ -94,7 +94,6 @@ public:
       common::ObMySQLProxy *sql_proxy);
   int add_ls_migration_task(const share::ObTaskId &task_id, const ObMigrationOpArg &arg);
   virtual int process();
-  int switch_next_stage(const int32_t result);
   int check_task_exist(const share::ObTaskId &task_id, bool &is_exist);
   void destroy();
   void stop();
@@ -157,6 +156,7 @@ private:
   int get_ha_src_info_(ObStorageHASrcInfo &src_info) const;
   int get_ls_migration_task_with_nolock_(ObLSMigrationTask &task) const;
   int check_task_exist_with_nolock_(const share::ObTaskId &task_id, bool &is_exist) const;
+  int switch_next_stage_(const int32_t result);
   int switch_next_stage_with_nolock_(const int32_t result);
   int generate_build_tablet_dag_net_();
   int check_need_to_abort_(bool &need_to_abort);

@@ -182,6 +182,10 @@ int ObDataBlockMetaVal::assign(const ObDataBlockMetaVal &val)
     LOG_WARN("fail to assign column checksums", K(ret), K(val.column_checksums_));
   } else {
     version_ = val.version_;
+    if (DATA_BLOCK_META_VAL_VERSION == version_) {
+      // compat action: abandon old version 1
+      version_ = DATA_BLOCK_META_VAL_VERSION_V2;
+    }
     length_ = val.length_;
     data_checksum_ = val.data_checksum_;
     rowkey_count_ = val.rowkey_count_;
@@ -343,7 +347,12 @@ int ObDataBlockMetaVal::deserialize(const char *buf, const int64_t data_len, int
     } else if (OB_UNLIKELY(version_ != DATA_BLOCK_META_VAL_VERSION && version_ != DATA_BLOCK_META_VAL_VERSION_V2)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("object version mismatch", K(ret), K(version_));
-    } else if (OB_FAIL(serialization::decode_i32(buf, data_len, pos, &length_))) {
+    } else if (DATA_BLOCK_META_VAL_VERSION == version_) {
+      // compat action: abandon old version 1
+      version_ = DATA_BLOCK_META_VAL_VERSION_V2;
+    }
+
+    if (FAILEDx(serialization::decode_i32(buf, data_len, pos, &length_))) {
       LOG_WARN("fail to decode length", K(ret), K(data_len), K(pos));
     } else if (OB_UNLIKELY(pos + sizeof(encrypt_key_) > data_len)) {
       ret = OB_ERR_UNEXPECTED;

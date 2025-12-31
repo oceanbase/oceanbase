@@ -131,6 +131,7 @@
 #include "sql/engine/table/ob_external_data_access_mgr.h"
 #include "observer/omt/ob_tenant_ai_service.h"
 #include "share/scheduler/ob_partition_auto_split_helper.h"
+#include "storage/tx/wrs/ob_weak_read_service.h"
 
 namespace oceanbase
 {
@@ -439,6 +440,8 @@ private:
   common::ObSimpleMemLimitGetter getter_;
   observer::ObStartupAccelTaskHandler startup_accel_handler_;
 
+  transaction::ObWeakReadService weak_read_service_;
+
   bool inited_;
   bool destroyed_;
 
@@ -674,6 +677,7 @@ void MockTenantModuleEnv::init_gctx_gconf()
   GCTX.bandwidth_throttle_ = &bandwidth_throttle_;
   GCTX.log_block_mgr_ = &log_block_mgr_;
   GCTX.startup_accel_handler_ = &startup_accel_handler_;
+  GCTX.weak_read_service_ = &weak_read_service_;
 }
 
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -829,6 +833,8 @@ int MockTenantModuleEnv::init_before_start_mtl()
     STORAGE_LOG(WARN, "fail to init env", K(ret));
   } else if (OB_FAIL(ObTsMgr::get_instance().start())) {
     STORAGE_LOG(WARN, "fail to init env", K(ret));
+  } else if (OB_FAIL(weak_read_service_.init(net_frame_.get_req_transport()))) {
+    STORAGE_LOG(WARN, "fail to init weak read service", K(ret));
   } else if (OB_FAIL(oceanbase::palf::election::GLOBAL_INIT_ELECTION_MODULE())) {
     STORAGE_LOG(WARN, "fail to init env", K(ret));
   } else if (OB_FAIL(tmp_file::ObTmpPageCache::get_instance().init("tmp_page_cache", 1))) {
@@ -870,6 +876,7 @@ int MockTenantModuleEnv::init()
       STORAGE_LOG(ERROR, "init_before_start_mtl failed", K(ret));
     } else {
       oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
+      oceanbase::ObClusterVersion::get_instance().update_cluster_version(DATA_CURRENT_VERSION);
       MTL_BIND2(ObTenantIOManager::mtl_new, ObTenantIOManager::mtl_init, mtl_start_default, mtl_stop_default, nullptr, ObTenantIOManager::mtl_destroy);
       MTL_BIND2(mtl_new_default, omt::ObSharedTimer::mtl_init, omt::ObSharedTimer::mtl_start, omt::ObSharedTimer::mtl_stop, omt::ObSharedTimer::mtl_wait, mtl_destroy_default);
       MTL_BIND2(ObTimerService::mtl_new, nullptr, ObTimerService::mtl_start, ObTimerService::mtl_stop, ObTimerService::mtl_wait, ObTimerService::mtl_destroy);
@@ -998,6 +1005,8 @@ int MockTenantModuleEnv::start_()
     STORAGE_LOG(WARN, "fail to start external file disk space mgr", K(ret));
   } else if (OB_FAIL(startup_accel_handler_.start())) {
     STORAGE_LOG(WARN, "fail to start server startup task handler", KR(ret));
+  } else if (OB_FAIL(weak_read_service_.start())) {
+    STORAGE_LOG(WARN, "fail to start weak read service", K(ret));
   } else if (OB_FAIL(SERVER_STORAGE_META_SERVICE.start())) {
     STORAGE_LOG(ERROR, "server storage meta service fail", K(ret));
   } else if (OB_FAIL(multi_tenant_.create_hidden_sys_tenant())) {
@@ -1071,6 +1080,10 @@ void MockTenantModuleEnv::destroy()
   guard_.release();
 
   startup_accel_handler_.destroy();
+
+  weak_read_service_.stop();
+  weak_read_service_.wait();
+  weak_read_service_.destroy();
 
   multi_tenant_.stop();
   multi_tenant_.wait();

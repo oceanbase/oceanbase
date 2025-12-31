@@ -296,7 +296,8 @@ int ObTabletTableStore::init(
       LOG_WARN("failed to check ready for read", K(ret));
     } else {
       try_cache_local_sstables(allocator);
-      FLOG_INFO("succeed to build new table store", "tablet_id", tablet.get_tablet_id(), KP(this), K(major_tables_), K(minor_tables_), K(mds_sstables_), K(memtables_), K(PRINT_TS(*this)));
+      FLOG_INFO("succeed to build new table store", "tablet_id", tablet.get_tablet_id(), KP(this),
+                K(major_tables_), K(inc_major_tables_), K(minor_tables_), K(mds_sstables_), K(memtables_), K(PRINT_TS(*this)));
     }
   }
   return ret;
@@ -605,7 +606,7 @@ int ObTabletTableStore::init(
     } else {
       try_cache_local_sstables(allocator);
       FLOG_INFO("succeed to assign table store with replace sstable array", K(replace_sstable_array),
-                K(major_tables_), K(minor_tables_), K(memtables_), K(PRINT_TS(*this)));
+                K(major_tables_), K(inc_major_tables_), K(minor_tables_), K(memtables_), K(PRINT_TS(*this)));
     }
   }
   return ret;

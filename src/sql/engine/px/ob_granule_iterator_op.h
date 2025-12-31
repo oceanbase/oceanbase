@@ -149,11 +149,12 @@ public:
 class ObGranuleIteratorOp : public ObOperator
 {
 private:
-  enum ObGranuleIteratorState {
+  enum ObGranuleIteratorState { //FARM COMPAT WHITELIST
     GI_UNINITIALIZED,
     GI_PREPARED,
     GI_TABLE_SCAN,
     GI_GET_NEXT_GRANULE_TASK,
+    GI_EXTERNAL_TASK_GEN,
     GI_END,
   };
   class RescanTasksInfo

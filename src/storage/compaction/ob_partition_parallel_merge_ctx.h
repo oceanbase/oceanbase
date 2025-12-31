@@ -52,6 +52,7 @@ public:
   bool is_valid() const;
   int init(compaction::ObBasicTabletMergeCtx &merge_ctx);
   int init(const compaction::ObMediumCompactionInfo &medium_info);
+  int init_parallel_merge(const compaction::ObParallelMergeInfo &paral_info);
   int init_serial_merge();
   OB_INLINE int64_t get_concurrent_cnt() const { return concurrent_cnt_; }
   int get_merge_range(const int64_t parallel_idx, blocksstable::ObDatumRange &merge_range);

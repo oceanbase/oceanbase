@@ -79,6 +79,8 @@ ObTableIterParam::~ObTableIterParam()
 
 void ObTableIterParam::reuse()
 {
+  ss_rowkey_prefix_cnt_ = 0;
+  ss_datum_range_ = nullptr;
   ObSSTableIndexFilterFactory::destroy_sstable_index_filter(sstable_index_filter_);
 }
 
@@ -439,6 +441,7 @@ int ObTableAccessParam::check_skip_scan(const ObTableScanParam &scan_param, ObTa
         STORAGE_LOG(WARN, "invalid argument", K(ret), K(prefix), K(scan_param.key_ranges_), K(scan_param.ss_key_ranges_));
       } else {
         iter_param.ss_rowkey_prefix_cnt_ = prefix;
+        iter_param.set_use_stmt_iter_pool();
       }
     }
   }

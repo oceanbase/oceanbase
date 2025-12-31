@@ -151,8 +151,8 @@ int ObRbUtils::build_empty_binary(ObIAllocator &allocator, ObString &res_rb_bin)
     LOG_WARN("failed to append version", K(ret));
   } else if (OB_FAIL(res_buf.append(reinterpret_cast<const char*>(&bin_type), RB_BIN_TYPE_SIZE))) {
     LOG_WARN("failed to append bin_type", K(ret));
-  } else {
-    res_rb_bin.assign_ptr(res_buf.ptr(), res_buf.length());
+  } else if (OB_FAIL(res_buf.get_result_string(res_rb_bin))) {
+    LOG_WARN("failed to get result string from buffer", K(ret));
   }
   return ret;
 }
@@ -173,8 +173,8 @@ int ObRbUtils::to_roaring64_bin(ObIAllocator &allocator, ObRbBinType rb_type, co
       LOG_WARN("failed to append map prefix", K(ret));
     } else if (OB_FAIL(bin_buf.append(rb_bin.ptr() + offset, rb_bin.length() - offset))) {
       LOG_WARN("failed to append serialized string", K(ret), K(rb_bin));
-    } else {
-      roaring64_bin.assign_ptr(bin_buf.ptr(), bin_buf.length());
+    } else if (OB_FAIL(bin_buf.get_result_string(roaring64_bin))) {
+      LOG_WARN("failed to get result string from buffer", K(ret));
     }
   } else {
     ret = OB_INVALID_ARGUMENT;
@@ -473,7 +473,8 @@ int ObRbUtils::binary_calc(ObIAllocator &allocator, const ObString &rb1_bin, con
         LOG_WARN("failed to calculate and", K(ret));
     } else if (op == ObRbOperation::ANDNOT && OB_FAIL(rb1->calc_andnot(rb2, res_buf, res_card))) {
         LOG_WARN("failed to calculate andnot", K(ret));
-    } else if (OB_FALSE_IT(res_rb_bin.assign_ptr(res_buf.ptr(), res_buf.length()))) {
+    } else if (OB_FAIL(res_buf.get_result_string(res_rb_bin))) {
+      LOG_WARN("failed to get result string from buffer", K(ret));
     } else if (res_card <= MAX_BITMAP_SET_VALUES) {
     // convert to smaller bintype
       ObRoaringBitmap *rb = NULL;
@@ -545,8 +546,8 @@ int ObRbUtils::rb_serialize(ObIAllocator &allocator, ObString &res_rb_bin, ObRoa
     LOG_WARN("failed to optimize the roaringbitmap", K(ret));
   } else if (OB_FAIL(rb->serialize(res_buf))) {
     LOG_WARN("failed to serialize the roaringbitmap");
-  } else {
-    res_rb_bin.assign_ptr(res_buf.ptr(), res_buf.length());
+  } else if (OB_FAIL(res_buf.get_result_string(res_rb_bin))) {
+    LOG_WARN("failed to get result string from buffer", K(ret));
   }
   return ret;
 }
@@ -590,8 +591,9 @@ int ObRbUtils::convert_to_bitmap_binary(ObIAllocator &allocator, const ObString 
       LOG_WARN("failed to convert roaringbitmap to bitmap type", K(ret));
     } else if (OB_FAIL(rb->serialize(res_buf))) {
       LOG_WARN("failed to serialize the roaringbitmap");
-    } else if (OB_FALSE_IT(bitmap_bin.assign_ptr(res_buf.ptr(), res_buf.length()))) {
-    } else if(get_bin_type(bitmap_bin, bin_type)) {
+    } else if (OB_FAIL(res_buf.get_result_string(bitmap_bin))) {
+      LOG_WARN("failed to get result string from buffer", K(ret));
+    } else if (OB_FAIL(get_bin_type(bitmap_bin, bin_type))) {
       LOG_WARN("failed to get binary type", K(ret));
     }
     rb_destroy(rb);
@@ -636,8 +638,8 @@ int ObRbUtils::binary_format_convert(ObIAllocator &allocator, const ObString &rb
           LOG_WARN("failed to append roaring32_cookie", K(ret));
         } else if (OB_FAIL(res_buf.append(reinterpret_cast<const char*>(&container_num), sizeof(uint32_t)))) {
           LOG_WARN("failed to append container_num", K(ret));
-        } else {
-          binary_str.assign_ptr(res_buf.ptr(), res_buf.length());
+        } else if (OB_FAIL(res_buf.get_result_string(binary_str))) {
+          LOG_WARN("failed to get result string from buffer", K(ret));
         }
       } else if (buckets == 1) {
         // read high32 and check if high32 == 0
@@ -658,8 +660,8 @@ int ObRbUtils::binary_format_convert(ObIAllocator &allocator, const ObString &rb
               LOG_WARN("failed to append bin_type", K(ret));
             } else if (OB_FAIL(res_buf.append(bitmap_bin.ptr() + offset, bitmap_bin.length() - offset))) {
               LOG_WARN("failed to append roaring binary string" ,K(ret));
-            } else {
-              binary_str.assign_ptr(res_buf.ptr(), res_buf.length());
+            } else if (OB_FAIL(res_buf.get_result_string(binary_str))) {
+              LOG_WARN("failed to get result string from buffer", K(ret));
             }
           } else {
             // no need to convert
@@ -894,8 +896,8 @@ int ObRbUtils::rb_to_string(ObIAllocator &allocator, const ObString &rb_bin, ObS
     } // end switch
   }
 
-  if (OB_SUCC(ret)) {
-    res_rb_str.assign_ptr(res_buf.ptr(), res_buf.length());
+  if (OB_SUCC(ret) && OB_FAIL(res_buf.get_result_string(res_rb_str))) {
+    LOG_WARN("failed to get result string from buffer", K(ret));
   }
   return ret;
 }

@@ -87,6 +87,8 @@ int ObAllVirtualSSGCDetectInfo::process_curr_tenant(ObNewRow *&row)
 #ifndef OB_BUILD_SHARED_STORAGE
   ret = OB_ITER_END;
 #else
+  const common::hash::ObHashMap<ObSSPreciseGCTablet, share::SCN> &gc_start_scn_map =
+    MTL(ObSSGarbageCollectorService *)->get_gc_start_scn_map();
   if (!GCTX.is_shared_storage_mode()) {
     ret = OB_ITER_END;
   } else if (!start_to_read_ && OB_FAIL(prepare_start_to_read())) {
@@ -124,7 +126,9 @@ int ObAllVirtualSSGCDetectInfo::process_curr_tenant(ObNewRow *&row)
         break;
       }
       case GC_END_SCN: {
-        cur_row_.cells_[i].set_int(gc_info_.row_scn_.get_val_for_inner_table_field());
+        const share::SCN *gc_end_scn_last_time = gc_start_scn_map.get(gc_tablet);
+        const share::SCN gc_start_scn = OB_ISNULL(gc_end_scn_last_time) ? share::SCN::min_scn() : *gc_end_scn_last_time;
+        cur_row_.cells_[i].set_int(gc_start_scn.get_val_for_inner_table_field());
         break;
       }
       case SVR_IP: {
@@ -141,6 +145,10 @@ int ObAllVirtualSSGCDetectInfo::process_curr_tenant(ObNewRow *&row)
       case SVR_PORT: {
         // svr_port
         cur_row_.cells_[i].set_int(gc_info_.addr_.get_port());
+        break;
+      }
+      case SAFE_RECYCLE_SCN: {
+        cur_row_.cells_[i].set_int(gc_info_.row_scn_.get_val_for_inner_table_field());
         break;
       }
       default: {

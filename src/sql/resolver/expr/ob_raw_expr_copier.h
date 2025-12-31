@@ -146,12 +146,15 @@ public:
 
   int copy_on_replace(ObRawExpr *from,
                       ObRawExpr *&to,
-                      ObIRawExprReplacer *replacer = NULL);
-  
+                      ObIRawExprReplacer *replacer = NULL,
+                      const bool is_root = true);
+
   template <typename T>
   int copy_on_replace(const ObIArray<T *> &from_exprs,
                       ObIArray<T *> &to_exprs,
                       ObIRawExprReplacer *replacer = NULL);
+
+  int after_copy(ObRawExpr *from, ObRawExpr *&to);
 
   bool is_existed(const ObRawExpr *from) const;
 
@@ -192,7 +195,8 @@ int ObRawExprCopier::copy_on_replace(const common::ObIArray<T *> &from_exprs,
     ObRawExpr *to_expr = NULL;
     if (OB_FAIL(copy_on_replace(from_exprs.at(i),
                                 to_expr,
-                                replacer))) {
+                                replacer,
+                                true))) {
       SQL_RESV_LOG(WARN, "failed to replace expr", K(ret));
     } else if (tmp == to_expr || std::is_same<T, ObRawExpr>::value) {
       // do nothing

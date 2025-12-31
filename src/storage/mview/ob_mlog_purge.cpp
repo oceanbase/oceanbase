@@ -155,8 +155,8 @@ int ObMLogPurger::prepare_for_purge()
     } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_table_id(
                  tenant_id, mlog_table_id, is_oracle_mode_))) {
       LOG_WARN("check if oracle mode failed", KR(ret), K(mlog_table_id));
-    } else {
-      // mlog purge parallel use dop
+    } else if (0 == purge_param_.purge_log_parallel_) {
+      // use dop from table schema only if user didn't specify purge_log_parallel
       purge_param_.purge_log_parallel_ = mlog_table_schema->get_dop();
     }
   }

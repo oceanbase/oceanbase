@@ -74,14 +74,15 @@ static const unsigned char compatibility_matrix[] = { 0x0, /* EXCLUSIVE    : 000
                                                       0xc, /* ROW EXCLUSIVE: 1100 */
                                                       0xe  /* ROW SHARE    : 1110 */ };
 
-const char *get_name(const ObTableLockMode intype);
+const char *get_name(const ObTableLockMode intype, const bool in_short);
 static inline
 int lock_mode_to_string(const ObTableLockMode lock_mode,
                         char *str,
-                        const int64_t str_len)
+                        const int64_t str_len,
+                        const bool in_short = true)
 {
   int ret = OB_SUCCESS;
-  strncpy(str, get_name(lock_mode), str_len);
+  strncpy(str, get_name(lock_mode, in_short), str_len);
   return ret;
 }
 
@@ -684,7 +685,7 @@ private:
   }
 public:
   TO_STRING_KV(K_(lock_id), K_(lock_mode),
-               "lock_mode_name", get_name(lock_mode_),
+               "lock_mode_name", get_name(lock_mode_, true),
                K_(owner_id), K_(create_trans_id), K_(op_type),
                "op_type_name", get_name(op_type_),
                K_(lock_op_status),

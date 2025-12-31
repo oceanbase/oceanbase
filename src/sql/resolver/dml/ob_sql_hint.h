@@ -83,7 +83,7 @@ struct ObQueryHint {
   int add_stmt_id_map(const int64_t stmt_id, stmt::StmtType stmt_type);
   int set_stmt_id_map_info(const ObDMLStmt &stmt, ObString &qb_name);
   int init_query_hint(ObIAllocator *allocator, ObSQLSessionInfo *session_info, const ObGlobalHint &global_hint, ObDMLStmt *stmt);
-  int set_params_from_hint(const ObResolverParams &params) const;
+  int set_params_from_hint(ObResolverParams &params) const;
   int check_ddl_schema_version_from_hint(TableItem *table_item) const;
   int distribute_hint_to_orig_stmt(ObDMLStmt *stmt);
   int adjust_qb_name_for_stmt(ObIAllocator &allocator,

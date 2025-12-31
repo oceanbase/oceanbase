@@ -162,6 +162,24 @@ private:
 class ObBackupCleanLSTaskOperator
 {
 public:
+  class LSTaskIterator final
+  {
+  public:
+    LSTaskIterator() : sql_proxy_(nullptr), tenant_id_(OB_INVALID_TENANT_ID),
+                       result_(nullptr), is_inited_(false) {}
+    ~LSTaskIterator() { reset(); }
+    int init(common::ObISQLClient &sql_proxy, const uint64_t tenant_id, const int64_t task_id);
+    int next(ObBackupCleanLSTaskAttr &ls_task);
+    void reset();
+    bool is_inited() const { return is_inited_; }
+  private:
+    common::ObISQLClient *sql_proxy_;
+    uint64_t tenant_id_;
+    ObMySQLProxy::ReadResult res_;
+    sqlclient::ObMySQLResult *result_;
+    bool is_inited_;
+  };
+
   static int insert_ls_task(common::ObISQLClient &proxy, const ObBackupCleanLSTaskAttr &ls_attr);
   static int advance_ls_task_status(
       common::ObISQLClient &proxy, 

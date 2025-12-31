@@ -7435,6 +7435,7 @@ int ObTransformPreProcess::try_transform_generated_rownum_as_limit_offset(ObDMLS
     ObRawExpr *offset_value = NULL;
     ObItemType limit_cmp_type = T_INVALID;
     ObItemType offset_cmp_type = T_INVALID;
+    ObItemType offset_cons_cmp_type = T_INVALID;
     ObRawExpr *select_expr = NULL;
     ColumnItem *column_item = NULL;
     ObRawExpr *upper_cond_expr = NULL;
@@ -7593,6 +7594,7 @@ int ObTransformPreProcess::try_transform_generated_rownum_as_limit_offset(ObDMLS
                                                                         offset_value,
                                                                         init_offset_expr,
                                                                         zero_expr,
+                                                                        offset_cons_cmp_type,
                                                                         offset_is_not_neg,
                                                                         ctx_))) {
       LOG_WARN("failed tp conver rownum as filter", K(ret));
@@ -7609,7 +7611,7 @@ int ObTransformPreProcess::try_transform_generated_rownum_as_limit_offset(ObDMLS
       LOG_WARN("check is not neg false", K(ret));
     } else if (NULL != offset_value && OB_FAIL(ObRawExprUtils::create_double_op_expr(*ctx_->expr_factory_,
                                                                                       ctx_->session_info_,
-                                                                                      T_OP_GE,
+                                                                                      offset_cons_cmp_type,
                                                                                       offset_cmp_expr,
                                                                                       offset_value,
                                                                                       zero_expr))) {

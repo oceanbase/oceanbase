@@ -37,9 +37,6 @@ protected:
   int gen_delta_pre_data_views();
   int gen_inner_delta_mav_for_simple_join_mav(const int64_t inner_delta_no,
                                               ObSelectStmt *&inner_delta_mav);
-  int gen_delete_insert_data_access_stmt(const TableItem &source_table,
-                                         const bool is_delete_data,
-                                         ObSelectStmt *&access_sel);
 
 private:
   virtual int gen_refresh_dmls(ObIArray<ObDMLStmt*> &dml_stmts) override;

@@ -499,6 +499,10 @@ int TestCompactionPolicy::mock_memtable(
     LOG_WARN("failed to get_protected_memtable_mgr_handle", K(ret));
   }
   ObTabletMemtableMgr *mt_mgr = static_cast<ObTabletMemtableMgr *>(protected_handle->memtable_mgr_handle_.get_memtable_mgr());
+  bool use_hash_index = true;
+  #ifdef MEMTABLE_USE_HASH_INDEX_FLAG
+      use_hash_index = MEMTABLE_USE_HASH_INDEX_FLAG;
+  #endif
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(t3m->acquire_data_memtable(table_handle))) {
     LOG_WARN("failed to acquire memtable", K(ret));
@@ -509,7 +513,7 @@ int TestCompactionPolicy::mock_memtable(
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_FAIL(ls_svr->get_ls(mt_mgr->ls_->get_ls_id(), ls_handle, ObLSGetMod::DATA_MEMTABLE_MOD))) {
     LOG_WARN("failed to get ls handle", K(ret));
-  } else if (OB_FAIL(memtable->init(table_key, ls_handle, mt_mgr->freezer_, mt_mgr, 0, mt_mgr->freezer_->get_freeze_clock()))) {
+  } else if (OB_FAIL(memtable->init(table_key, ls_handle, mt_mgr->freezer_, mt_mgr, 0, mt_mgr->freezer_->get_freeze_clock(), use_hash_index))) {
     LOG_WARN("failed to init memtable", K(ret));
   } else if (OB_FAIL(mt_mgr->add_memtable_(table_handle))) {
     LOG_WARN("failed to add memtable to mgr", K(ret));
@@ -1895,14 +1899,36 @@ TEST_F(TestCompactionPolicy, check_minor_across_major3)
   ASSERT_EQ(3, result.handle_.get_count());
   ASSERT_EQ(1, result.handle_.get_table(0)->get_start_scn().get_val_for_gts());
 }
+
+TEST_F(TestCompactionPolicy, destroy_parallel_merge_info)
+{
+  int ret = OB_SUCCESS;
+  ObArrayArray<ObStoreRange> multi_range_split_array;
+  ObSEArray<ObStoreRange, 8> range_split_array;
+  ObStoreRange store_range;
+  store_range.set_start_key(ObStoreRowkey::MIN_STORE_ROWKEY);
+  store_range.set_end_key(ObStoreRowkey::MAX_STORE_ROWKEY);
+  medium_info_.allocator_ = &mds::DefaultAllocator::get_instance();
+
+  ASSERT_EQ(OB_SUCCESS, range_split_array.push_back(store_range));
+  ASSERT_EQ(OB_SUCCESS, multi_range_split_array.push_back(range_split_array));
+  ASSERT_EQ(OB_SUCCESS, medium_info_.gene_parallel_info(multi_range_split_array));
+  LOG_INFO("finish generate parallel info", K_(medium_info));
+  medium_info_.~ObMediumCompactionInfo();
+}
+
 } //unittest
 } //oceanbase
 
 
 int main(int argc, char **argv)
 {
-  system("rm -rf test_compaction_policy.log*");
-  OB_LOGGER.set_file_name("test_compaction_policy.log");
+  std::string log_file_name = "test_compaction_policy.log";
+  #ifdef MEMTABLE_USE_HASH_INDEX_FLAG
+      log_file_name = "test_compaction_policy_no_hash_index.log";
+  #endif
+  system(std::string("rm -rf " + log_file_name + "*").c_str());
+  OB_LOGGER.set_file_name(log_file_name.c_str());
   OB_LOGGER.set_log_level("INFO");
   CLOG_LOG(INFO, "begin unittest: test_compaction_policy");
   ::testing::InitGoogleTest(&argc, argv);

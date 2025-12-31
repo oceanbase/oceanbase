@@ -158,6 +158,7 @@ int ObTmpFileBlockManager::alloc_block_(ObTmpFileBlock *&block, ObTmpFileBlock::
 {
   int ret = OB_SUCCESS;
   ObTmpFileBlock* blk = nullptr;
+  ObTmpFileBlockHandle handle;
   const uint64_t blk_size = sizeof(ObTmpFileBlock);
   void *buf = nullptr;
   int64_t block_index = ObTmpFileGlobal::INVALID_TMP_FILE_BLOCK_INDEX;
@@ -169,19 +170,15 @@ int ObTmpFileBlockManager::alloc_block_(ObTmpFileBlock *&block, ObTmpFileBlock::
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory for tmp file block", KR(ret), K(blk_size));
   } else if (FALSE_IT(blk = new (buf) ObTmpFileBlock())) {
+  } else if (OB_FAIL(handle.init(blk))) {
+    LOG_WARN("fail to init tmp file block handle", KR(ret), KP(blk));
   } else if (FALSE_IT(block_index = ATOMIC_AAF(&block_index_generator_, 1))) {
   } else if (OB_FAIL(blk->init(block_index, block_type, this))) {
     LOG_WARN("fail to init tmp file block", KR(ret), K(block_index), K(block_type));
-  } else if (OB_FAIL(block_map_.insert(ObTmpFileBlockKey(block_index), blk))) {
+  } else if (OB_FAIL(block_map_.insert(ObTmpFileBlockKey(block_index), handle))) {
     LOG_WARN("fail to insert block into block map", KR(ret), KPC(blk));
   } else {
     block = blk;
-  }
-
-  if (OB_FAIL(ret) && OB_NOT_NULL(blk)) {
-    blk->~ObTmpFileBlock();
-    block_allocator_.free(blk);
-    blk = nullptr;
   }
 
   LOG_DEBUG("create tmp file block over", KR(ret), K(block_index), KPC(blk));

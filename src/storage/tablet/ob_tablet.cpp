@@ -499,10 +499,10 @@ int ObTablet::init_for_merge(
              && OB_FAIL(try_update_min_ss_tablet_version(param))) {
     LOG_WARN("failed to update min_ss_tablet_version for ss_tablet", K(ret), KPC(this));
 #endif  // OB_BUILD_SHARED_STORAGE
-  } else {
-    int64_t finish_medium_scn = 0;
-    finish_medium_scn = get_last_major_snapshot_version();
-    tablet_meta_.update_extra_medium_info(param.compaction_info_.merge_type_, finish_medium_scn, param.need_wait_check_flag_);
+  } else if (need_report_major)  {
+    tablet_meta_.update_extra_medium_info(param.compaction_info_.merge_type_,
+                                          get_last_major_snapshot_version(),
+                                          param.need_wait_check_flag_);
   }
 
   if (OB_FAIL(ret)) {

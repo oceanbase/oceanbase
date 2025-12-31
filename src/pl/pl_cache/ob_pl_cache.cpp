@@ -374,30 +374,32 @@ int ObPLObjectValue::set_max_concurrent_num_for_add(ObPLCacheCtx &pc_ctx)
 int ObPLObjectValue::set_max_concurrent_num_for_get(ObPLCacheCtx &pc_ctx)
 {
   int ret = OB_SUCCESS;
-  ObString sql_id;
-  const uint64_t database_id = pc_ctx.session_info_->get_database_id();
-  const ObOutlineInfo *outline_info = NULL;
-  ObOutlineState state;
-  ObArenaAllocator tmp_alloc(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-  OZ (ob_write_string(tmp_alloc, pl_routine_obj_->get_stat().sql_id_, sql_id));
-  OZ (pc_ctx.schema_guard_->get_outline_info_with_sql_id(
-                        pc_ctx.session_info_->get_effective_tenant_id(),
-                        database_id,
-                        sql_id,
-                        false,
-                        outline_info));
-  if (OB_SUCCESS != ret) {
-  } else if (NULL != outline_info) {
-    if (outline_info->get_outline_id() == pl_routine_obj_->get_stat().outline_version_.object_id_
-        && pl_routine_obj_->get_stat().outline_version_.version_ == outline_info->get_schema_version()) {
-      // do nothing
-    } else if (outline_info->has_outline_params()) {
-      // reset concurrent num
-      OZ (inner_set_max_concurrent_num(outline_info));
+  if (!ObTriggerInfo::is_trigger_package_id(pc_ctx.key_.key_id_)) {
+    ObString sql_id;
+    const uint64_t database_id = pc_ctx.session_info_->get_database_id();
+    const ObOutlineInfo *outline_info = NULL;
+    ObOutlineState state;
+    ObArenaAllocator tmp_alloc(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    OZ (ob_write_string(tmp_alloc, pl_routine_obj_->get_stat().sql_id_, sql_id));
+    OZ (pc_ctx.schema_guard_->get_outline_info_with_sql_id(
+                          pc_ctx.session_info_->get_effective_tenant_id(),
+                          database_id,
+                          sql_id,
+                          false,
+                          outline_info));
+    if (OB_SUCCESS != ret) {
+    } else if (NULL != outline_info) {
+      if (outline_info->get_outline_id() == pl_routine_obj_->get_stat().outline_version_.object_id_
+          && pl_routine_obj_->get_stat().outline_version_.version_ == outline_info->get_schema_version()) {
+        // do nothing
+      } else if (outline_info->has_outline_params()) {
+        // reset concurrent num
+        OZ (inner_set_max_concurrent_num(outline_info));
+      }
+    } else {
+      OX (pl_routine_obj_->get_stat_for_update().outline_version_.reset());
+      OX (pl_routine_obj_->set_max_concurrent_num(ObMaxConcurrentParam::UNLIMITED));
     }
-  } else {
-    OX (pl_routine_obj_->get_stat_for_update().outline_version_.reset());
-    OX (pl_routine_obj_->set_max_concurrent_num(ObMaxConcurrentParam::UNLIMITED));
   }
   return ret;
 }

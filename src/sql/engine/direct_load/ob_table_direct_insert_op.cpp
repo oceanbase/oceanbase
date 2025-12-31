@@ -48,6 +48,9 @@ ObTableDirectInsertOp::ObTableDirectInsertOp(
     px_task_id_(0),
     ddl_task_id_(0),
     row_projector_(nullptr),
+    column_ids_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_, "DirectInsertOp")),
+    datum_vectors_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_, "DirectInsertOp")),
+    vectors_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_, "DirectInsertOp")),
     table_ctx_(nullptr),
     px_writer_(nullptr),
     tablet_id_(),
@@ -115,7 +118,10 @@ void ObTableDirectInsertOp::destroy()
     px_writer_->~ObTableLoadStoreTransPXWriter();
     px_writer_ = nullptr;
   }
+  vectors_.reset();
+  datum_vectors_.reset();
   datum_row_.reset();
+  column_ids_.reset();
   allocator_.reset();
   ObTableModifyOp::destroy();
 }

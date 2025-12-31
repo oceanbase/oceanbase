@@ -934,6 +934,7 @@ public:
 #endif
   int root_rebuild_tablet(const obrpc::ObRebuildTabletArg &arg);
   int parallel_htable_ddl(const obrpc::ObHTableDDLArg &arg, obrpc::ObHTableDDLRes &res);
+  int get_refreshed_schema_versions(obrpc::ObGetRefreshedSchemaVersionsRes &res);
 private:
 #ifdef OB_BUILD_TDE_SECURITY
   int get_root_key_from_obs_(const obrpc::ObRootKeyArg &arg, obrpc::ObRootKeyResult &result);

@@ -799,9 +799,8 @@ int ObAccessService::check_write_allowed_(
                                       // so it will lead to incorrect error
                                       lock_expired_ts))) {
       LOG_WARN("get lock param failed", K(ret), K(lock_id));
-    // When locking the table, the tablet is not detected to be deleted.
     } else if (OB_FAIL(ls->lock(ctx_guard.get_store_ctx(), lock_param))) {
-      LOG_WARN("lock tablet failed", K(ret), K(lock_param));
+        LOG_WARN("lock tablet failed", K(ret), K(lock_param), K(enable_table_lock), K(is_local_index_table));
     } else {
       // do nothing
     }
@@ -1445,7 +1444,9 @@ int ObAccessService::check_mlog_safe_(
       // query has no filter
     } else if (OB_FAIL(get_query_begin_version_for_mlog(*scan_param.op_filters_, scan_param.op_->get_eval_ctx(), begin_version))) {
       LOG_WARN("failed to get_query_begin_version_for_mlog", KR(ret), K(scan_param), K(tablet));
-    } else if (-1 != begin_version) {
+    } else if (-1 != begin_version
+               && OB_NOT_NULL(scan_param.op_->get_eval_ctx().exec_ctx_.get_my_session())
+               && !scan_param.op_->get_eval_ctx().exec_ctx_.get_my_session()->get_ddl_info().is_refreshing_mview()) {
       ObTabletCreateDeleteMdsUserData user_data;
       if (OB_FAIL(tablet.ObITabletMdsInterface::get_tablet_status(
               share::SCN::max_scn(), user_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {

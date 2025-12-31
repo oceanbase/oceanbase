@@ -2136,6 +2136,70 @@ int ObBackupLSTaskOperator::do_parse_ls_result_(ObMySQLResult &result, ObBackupL
   return ret;
 }
 
+int ObBackupLSTaskOperator::LSTaskIterator::init(
+    common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
+    const int64_t job_id)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  const ObBackupTaskStatus pending_status(ObBackupTaskStatus::Status::PENDING);
+  const ObBackupTaskStatus doing_status(ObBackupTaskStatus::Status::DOING);
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("[DATA_BACKUP]iterator already inited", K(ret));
+  } else if (OB_FAIL(ObBackupLSTaskOperator::fill_select_ls_task_sql_(sql))) {
+    LOG_WARN("[DATA_BACKUP]failed to fill select ls task sql", K(ret));
+  } else if (OB_FAIL(sql.append_fmt(" where %s=%ld", OB_STR_JOB_ID, job_id))) {
+    LOG_WARN("[DATA_BACKUP]failed to append where clause", K(ret));
+  } else if (OB_FAIL(sql.append_fmt(" and (%s='%s' or %s='%s')",
+                                            OB_STR_STATUS, pending_status.get_str(),
+                                            OB_STR_STATUS, doing_status.get_str()))) {
+    LOG_WARN("[DATA_BACKUP]failed to append status condition", K(ret));
+  } else if (OB_FAIL(sql_proxy.read(res_, ObBackupBaseTableOperator::get_exec_tenant_id(tenant_id), sql.ptr()))) {
+    LOG_WARN("[DATA_BACKUP]failed to exec sql", K(ret), K(sql), K(tenant_id));
+  } else if (OB_ISNULL(result_ = res_.get_result())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("[DATA_BACKUP]result is null", K(ret), K(sql));
+  } else {
+    sql_proxy_ = &sql_proxy;
+    tenant_id_ = tenant_id;
+    is_inited_ = true;
+  }
+
+  return ret;
+}
+
+int ObBackupLSTaskOperator::LSTaskIterator::next(ObBackupLSTaskAttr &ls_task)
+{
+  int ret = OB_SUCCESS;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("[DATA_BACKUP]iterator not inited", K(ret));
+  } else if (OB_ISNULL(result_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("[DATA_BACKUP]result is null", K(ret));
+  } else if (OB_FAIL(result_->next())) {
+    if (OB_ITER_END != ret) {
+      LOG_WARN("[DATA_BACKUP]failed to get next row", K(ret));
+    }
+  } else if (OB_FAIL(ObBackupLSTaskOperator::do_parse_ls_result_(*result_, ls_task))) {
+    LOG_WARN("[DATA_BACKUP]failed to parse ls task", K(ret));
+  }
+
+  return ret;
+}
+
+void ObBackupLSTaskOperator::LSTaskIterator::reset()
+{
+  sql_proxy_ = nullptr;
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  result_ = nullptr;
+  is_inited_ = false;
+  res_.reset();
+}
+
 int ObBackupLSTaskOperator::update_dst_and_status(
     common::ObISQLClient &proxy, 
     const int64_t task_id,
@@ -2853,27 +2917,33 @@ int ObLSBackupInfoOperator::get_next_job_id(common::ObISQLClient &trans, const u
   return ret;
 }
 
-int ObLSBackupInfoOperator::get_next_task_id(common::ObISQLClient &trans, const uint64_t tenant_id, int64_t &task_id)
+int ObLSBackupInfoOperator::get_next_task_id(common::ObISQLClient &trans,
+                                                   const uint64_t tenant_id,
+                                                   const int64_t batch_size,
+                                                   int64_t &start_task_id)
 {
-  int ret = OB_SUCCESS;
+  int ret = OB_SUCCESS ;
   InfoItem item;
   item.name_ = OB_STR_TASK_ID;
+  int64_t current_task_id = 0;
   if (OB_FAIL(get_item(trans, get_exec_tenant_id(tenant_id), item, true))) {
     if (ret == OB_BACKUP_INFO_NOT_EXIST) {
-      task_id = 1/*first job id*/;
+      current_task_id = 1/*first task id*/;
       ret = OB_SUCCESS;
     }
-  } else if (OB_FAIL(ob_atoll(item.value_.ptr(), task_id))) {
+  } else if (OB_FAIL(ob_atoll(item.value_.ptr(), current_task_id))) {
     LOG_WARN("failed to change char to int64_t", K(ret), K(item));
-  } else {
-    ++task_id;
   }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(set_item_value(item.value_, task_id))) {
-    LOG_WARN("failed to set item value");
-  } else if (OB_FAIL(insert_item_with_update(trans, get_exec_tenant_id(tenant_id), item))) {
-    LOG_WARN("fail to insert item with update", K(ret), K(tenant_id), K(item));
-  }  
+
+  if (OB_SUCC(ret)) {
+    start_task_id = current_task_id + 1;
+    int64_t end_task_id = current_task_id + batch_size;
+    if (OB_FAIL(set_item_value(item.value_, end_task_id))) {
+      LOG_WARN("failed to set item value", K(ret), K(end_task_id));
+    } else if (OB_FAIL(insert_item_with_update(trans, get_exec_tenant_id(tenant_id), item))) {
+      LOG_WARN("fail to insert item with update", K(ret), K(tenant_id), K(item));
+    }
+  }
   return ret;
 }
 

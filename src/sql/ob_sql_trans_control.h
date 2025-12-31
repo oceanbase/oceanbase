@@ -26,6 +26,10 @@ namespace transaction
 {
 class ObStartTransParam;
 class ObTxDesc;
+namespace tablelock
+{
+enum class ObTableLockPriority : int8_t;
+}
 }
 
 namespace share
@@ -172,6 +176,8 @@ public:
                                     bool reuse_tx_desc = false,
                                     bool active_tx_end = true,
                                     const uint64_t data_version = 0);
+
+  static void process_cursor_when_end_trans(ObSQLSessionInfo *session, int64_t tx_id);
   static int create_stash_savepoint(ObExecContext &exec_ctx, const ObString &name);
   static int release_stash_savepoint(ObExecContext &exec_ctx, const ObString &name);
   static int explicit_start_trans(ObExecContext &exec_ctx, const bool read_only, const ObString hint = ObString());
@@ -192,7 +198,8 @@ public:
                        const bool is_explicit,
                        ObEndTransAsyncCallback *callback = NULL,
                        bool reset_trans_variable = true,
-                       const ObString hint = ObString());
+                       const ObString hint = ObString(),
+                       ObPhysicalPlanCtx *plan_ctx = NULL);
   static int end_trans_before_cmd_execute(ObSQLSessionInfo &session,
                                           bool &need_disconnect,
                                           TransState &trans_state,
@@ -240,6 +247,9 @@ public:
                                    transaction::ObTransService* txs,
                                    const int64_t nested_level,
                                    const bool is_for_sslog);
+  static int acquire_table_lock_if_needed_(ObSQLSessionInfo *session,
+                                           const ObPhysicalPlan *plan,
+                                           ObExecContext &exec_ctx);
   static int end_stmt(ObExecContext &exec_ctx, const bool is_rollback, const bool will_retry);
   static int alloc_branch_id(ObExecContext &exec_ctx, const int64_t count, int16_t &branch_id);
   static int kill_query_session(ObSQLSessionInfo &session, const ObSQLSessionState &status);
@@ -275,7 +285,9 @@ public:
                         const uint64_t table_id,
                         const ObIArray<ObObjectID> &part_ids,
                         const transaction::tablelock::ObTableLockMode lock_mode,
-                        const int64_t wait_lock_seconds);
+                        const int64_t wait_lock_seconds,
+                        const transaction::tablelock::ObTableLockPriority lock_priority =
+                          transaction::tablelock::ObTableLockPriority::INVALID);
   static void clear_xa_branch(const transaction::ObXATransID &xid, transaction::ObTxDesc *&tx_desc);
   static int check_ls_readable(const uint64_t tenant_id,
                                const share::ObLSID &ls_id,
@@ -349,6 +361,7 @@ public:
   static transaction::ObTxCleanPolicy
   decide_stmt_rollback_tx_clean_policy_(const int error_code, const bool will_retry);
   static int set_audit_tx_id_(ObSQLSessionInfo *session);
+  static int process_pl_async_commit(ObSQLSessionInfo *session, ObPhysicalPlanCtx *plan_ctx, const int64_t expire_ts, ObEndTransAsyncCallback *callback);
 };
 
 inline int ObSqlTransControl::get_trans_expire_ts(const ObSQLSessionInfo &my_session,

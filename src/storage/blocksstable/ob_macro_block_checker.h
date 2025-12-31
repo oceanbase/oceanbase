@@ -45,8 +45,8 @@ public:
   static int check(
       const char *macro_block_buf,
       const int64_t macro_block_buf_size,
-      ObMacroBlockCheckLevel check_level = CHECK_LEVEL_PHYSICAL);
-  static int check_macro_block(
+      const ObMacroBlockCheckLevel check_level = CHECK_LEVEL_PHYSICAL);
+  static int check_data_macro_block_rows_and_index(
       const char *macro_block_buf,
       const int64_t macro_block_buf_size,
       const ObMacroBlockCheckLevel check_level);

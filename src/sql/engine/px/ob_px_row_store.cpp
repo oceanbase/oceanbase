@@ -480,8 +480,8 @@ int ObReceiveRowReader::attach_rows(const common::ObIArray<ObExpr*> &exprs,
         }
         e->set_evaluated_projected(eval_ctx);
         ObEvalInfo &info = e->get_eval_info(eval_ctx);
-        info.notnull_ = false;
-        info.point_to_frame_ = false;
+        info.set_notnull(false);
+        info.set_point_to_frame(false);
       }
     }
     // deep copy dynamic const expr datum
@@ -528,8 +528,8 @@ int ObReceiveRowReader::attach_vectors(const common::ObIArray<ObExpr*> &exprs,
         }
         e->set_evaluated_projected(eval_ctx);
         ObEvalInfo &info = e->get_eval_info(eval_ctx);
-        info.notnull_ = false;
-        info.point_to_frame_ = false;
+        info.set_notnull(false);
+        info.set_point_to_frame(false);
       }
     }
     // deep copy dynamic const expr datum
@@ -611,8 +611,8 @@ int ObReceiveRowReader::attach_vectors(const common::ObIArray<ObExpr*> &exprs,
       }
       e->set_evaluated_projected(eval_ctx);
       ObEvalInfo &info = e->get_eval_info(eval_ctx);
-      info.notnull_ = false;
-      info.point_to_frame_ = false;
+      info.set_notnull(false);
+      info.set_point_to_frame(false);
     }
   }
   if (OB_SUCC(ret) && dynamic_const_exprs.count() > 0 && read_rows > 0) {

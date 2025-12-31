@@ -495,6 +495,10 @@ DEF_BOOL(_enable_seq_wrap_around_flush_cache, OB_TENANT_PARAMETER, "True",
          "Specifies whether to enable clearing cache when sequence wrap around ",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_BOOL(_force_const_udf_query_range_extraction, OB_TENANT_PARAMETER, "True",
+         "Specifies whether to force UDF with const params (regardless of deterministic or not) to extract query range under ORACLE mode",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 // tenant memtable consumption related
 DEF_INT(memstore_limit_percentage, OB_CLUSTER_PARAMETER, "0", "[0, 100)",
         "used in calculating the value of MEMSTORE_LIMIT parameter: "
@@ -548,6 +552,9 @@ DEF_INT(_mds_memory_limit_percentage, OB_TENANT_PARAMETER, "10", "(0, 100)",
 DEF_TIME(writing_throttling_maximum_duration, OB_TENANT_PARAMETER, "2h", "[1s, 3d]",
           "maximum duration of writting throttling(in minutes), max value is 3 days",
           ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_memtable_hash_index, OB_TENANT_PARAMETER, "True",
+         "use memtable hash index if enable",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(plan_cache_evict_interval, OB_CLUSTER_PARAMETER, "5s", "[0s,)",
          "time interval for periodic plan cache eviction. Range: [0s, +∞)",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -2997,6 +3004,10 @@ DEF_INT(external_table_disk_cache_max_percentage, OB_CLUSTER_PARAMETER, "50", "[
         "The maximum ratio of external table disk space to datafile_size in shared-nothing mode, "
         "ranges from [0, 95] in integer, with a default of 50",
         ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(external_table_csv_max_buffer_size, OB_TENANT_PARAMETER, "1G", "[0B,)",
+        "Maximum buffer size for parsing CSV external table files. "
+        "Range: [0B, +∞), default: 1G",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(_orc_filter_pushdown_level, OB_TENANT_PARAMETER, "4", "[0, 4]",
         "This parameter controls the filter pushdown level for ORC external tables, "
@@ -3143,6 +3154,9 @@ DEF_BOOL(ob_enable_utl_http, OB_CLUSTER_PARAMETER, "False",
 DEF_BOOL(ob_enable_utl_tcp, OB_CLUSTER_PARAMETER, "False",
          "controls whether UTL_TCP is enabled",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_streaming_cursor_prefetch, OB_TENANT_PARAMETER, "False",
+        "controls whether to enable streaming cursor prefetch",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_ss_garbage_collector_defensive_check, OB_TENANT_PARAMETER, "True",
          "Enable or disable defensive checks for garbage collection on shared storage.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -3214,11 +3228,9 @@ DEF_BOOL(enable_mv_binlog_minimal_mode, OB_TENANT_PARAMETER, "False",
 DEF_INT(_ivf_max_scan_vectors, OB_TENANT_PARAMETER, "100000",
         "The upper limit of ivf iter-filter search nums. Range: [0,)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
 DEF_INT(_max_access_entries_for_external_table_partition, OB_TENANT_PARAMETER, "1000000", "[1,)",
         "max number of entries accessed in a single partition for external table, including directories and files.",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
 DEF_TIME(_tablet_replica_info_cache_expire_time, OB_CLUSTER_PARAMETER, "10m", "[0, 1d]",
         "the expire time for tablet replica info cache, from 0 to 1day, "
         "with default 10minutes. Range: [0, 1d]",
@@ -3226,14 +3238,31 @@ DEF_TIME(_tablet_replica_info_cache_expire_time, OB_CLUSTER_PARAMETER, "10m", "[
 DEF_INT(_mv_adaptive_complete_refresh_threshold, OB_TENANT_PARAMETER, "0", "[0, 100]",
         "adaptive complete refresh percentage threshold, set to 0 to disable adaptive complete refresh",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
+// for upgraded tenant, default _append_update_global_indexes_for_dynamic_partition will be OFF
+// for new created tenant, default _append_update_global_indexes_for_dynamic_partition will be AUTO
+DEF_STR_WITH_CHECKER(_append_update_global_indexes_for_dynamic_partition, OB_TENANT_PARAMETER, "OFF",
+                     common::ObConfigAppendUpdateGlobalIndexesForDynamicPartitionChecker,
+                     "specify whether to enable update global indexes for dynamic partition when dropping expired partitions."
+                     "values: AUTO(follow _ob_enable_truncate_partition_preserve_global_index), ON, OFF",
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+                     "AUTO, ON, OFF");
 DEF_CAP(_replay_memory_limit, OB_TENANT_PARAMETER, "512M", "[1M, 1024000000M]",
         "the size of the memory reserved for replay engine. range: [1M, 1024000000M]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(_replay_pending_log_memory_limit, OB_TENANT_PARAMETER, "128M", "[1M, 1024000000M]",
         "the size of the memory reserved for replay pending log. Range: [1M, 1024000000M]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
 DEF_BOOL(_enable_randomize_redo_logging_slot, OB_CLUSTER_PARAMETER, "False",
         "specifies whether enable randomize redo logging slot when parallel logging is enabled",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(system_protected_tenant_parameters, OB_CLUSTER_PARAMETER, "",
+  common::ObConfigCommaSeparatedStringChecker,
+  "tenant parameters that are not allowed to be modified by regular users, "
+  "format: single parameter name or comma-separated parameter names",
+  ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_sslog_table_meta_cache_usage_threshold, OB_TENANT_PARAMETER, "0", "[0,)",
+        "Controls the write throttling mechanism based on the percentage of the sslog table occupying the meta tenant disk. "
+        "If set to 0, write throttling caused by sslog table size is disabled; Otherwise, if the size of sslog table is "
+        "larger than (meta tenant disk limit * threshold), write throttling is triggered to slow down incoming write requests."
+        "Range: [0, )",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

@@ -171,6 +171,24 @@ private:
 class ObBackupLSTaskOperator : public ObBackupBaseTableOperator
 {
 public:
+  class LSTaskIterator final
+  {
+  public:
+    LSTaskIterator() : sql_proxy_(nullptr), tenant_id_(OB_INVALID_TENANT_ID),
+                       result_(nullptr), is_inited_(false) {}
+    ~LSTaskIterator() { reset(); }
+    int init(common::ObISQLClient &sql_proxy, const uint64_t tenant_id, const int64_t job_id);
+    int next(ObBackupLSTaskAttr &ls_task);
+    void reset();
+    bool is_inited() const { return is_inited_; }
+  private:
+    common::ObISQLClient *sql_proxy_;
+    uint64_t tenant_id_;
+    ObMySQLProxy::ReadResult res_;
+    sqlclient::ObMySQLResult *result_;
+    bool is_inited_;
+  };
+
   static int insert_ls_task(common::ObISQLClient &proxy, const ObBackupLSTaskAttr &ls_attr);
   static int report_ls_task(common::ObISQLClient &proxy, const ObBackupLSTaskAttr &ls_attr, const ObSqlString &extra_condition);
   static int report_ls_task(common::ObISQLClient &proxy, const ObBackupLSTaskAttr &ls_attr);
@@ -223,7 +241,7 @@ public:
   };
 public:
   static int get_next_job_id(common::ObISQLClient &trans, const uint64_t tenant_id, int64_t &job_id);
-  static int get_next_task_id(common::ObISQLClient &trans, const uint64_t tenant_id, int64_t &task_id);
+  static int get_next_task_id(common::ObISQLClient &trans, const uint64_t tenant_id, const int64_t batch_size, int64_t &start_task_id);
   static int get_next_backup_set_id(common::ObISQLClient &trans, const uint64_t &tenant_id, int64_t &backup_set_id);
   static int get_next_dest_id(common::ObISQLClient &trans, const uint64_t &tenant_id, int64_t &dest_id);
   static int set_backup_version(common::ObISQLClient &trans, const uint64_t tenant_id, const uint64_t data_version);

@@ -787,6 +787,10 @@ public:
   // @brief, get max decided log scn considering both apply and replay.
   // @param[out] share::SCN&, max decided log scn.
   DELEGATE_WITH_RET(log_handler_, get_max_decided_scn, int);
+  // @brief, just for check dup tablet readable, get max decided scn considering both apply and replay, priority use snapshot.
+  // @param[out] int64_t&, max decided scn.
+  // @param[in] const bool is_force_refresh: whether to force refresh the snapshot.
+  DELEGATE_WITH_RET(log_handler_, get_max_decided_scn_snapshot, int);
   // @breif,get member stat: whether in paxos member list or learner list and whether is migrating
   // @param[in] const common::ObAddr, request server.
   // @param[out] bool &(is_valid_member),

@@ -70,8 +70,8 @@ public:
                                 const bool need_check_sum);
   // get uncompressed data micro block and raw micro block filled in macro block when whole macro block scan
   int get_next_micro_block_desc(ObMicroBlockDesc &uncompressed_micro_block_desc,
-      ObMicroBlockDesc &micro_block_desc,
-      ObIAllocator &allocator);
+                                ObMicroBlockDesc &micro_block_desc,
+                                ObIAllocator &allocator);
   // get data micro block and micro_index_data when scan by range or whole macro block scan
   int get_next_micro_block_desc(
       ObMicroBlockDesc &micro_block_desc,

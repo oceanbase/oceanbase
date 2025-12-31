@@ -162,6 +162,16 @@ public:
     : old_type_(RT_NONE),
       new_type_(RT_NONE)
   {}
+  inline bool is_none_old_column() const { return old_type_ == RT_NONE; }
+  inline bool is_read_old_column() const { return old_type_ == RT_READ; }
+  inline bool is_write_old_column() const { return old_type_ == RT_WRITE; }
+  inline bool is_none_new_column() const { return new_type_ == RT_NONE; }
+  inline bool is_read_new_column() const { return new_type_ == RT_READ; }
+  inline bool is_write_new_column() const { return new_type_ == RT_WRITE; }
+  inline void set_read_old_column() { old_type_ = RT_READ; }
+  inline void set_write_old_column() { old_type_ = RT_WRITE; }
+  inline void set_read_new_column() { new_type_ = RT_READ; }
+  inline void set_write_new_column() { new_type_ = RT_WRITE; }
   TO_STRING_KV(K_(old_type), K_(new_type));
   RefType old_type_;
   RefType new_type_;
@@ -175,8 +185,19 @@ public:
     : trigger_id_(common::OB_INVALID_ID),
       trigger_events_(),
       timing_points_(),
-      analyze_flag_(0)
+      analyze_flag_(0),
+      trigger_type_(0),
+      ref_types_()
   {}
+  ObTriggerArg(ObIAllocator &alloc)
+    : trigger_id_(common::OB_INVALID_ID),
+      trigger_events_(),
+      timing_points_(),
+      analyze_flag_(0),
+      trigger_type_(0),
+      ref_types_(alloc)
+  {}
+public:
   inline void reset()
   {
     trigger_id_ = common::OB_INVALID_ID;
@@ -184,6 +205,7 @@ public:
     timing_points_.reset();
     analyze_flag_ = 0;
     trigger_type_ = 0;
+    ref_types_.reset();
   }
 
   inline void set_trigger_id(uint64_t trigger_id)
@@ -225,6 +247,10 @@ public:
   inline bool has_after_stmt_point() const { return timing_points_.has_after_stmt(); }
   inline const share::schema::ObTriggerEvents &get_trigger_events() const { return trigger_events_; }
   inline const share::schema::ObTimingPoints &get_timing_points() const { return timing_points_; }
+  inline void set_trigger_type(int64_t trigger_type) { trigger_type_ = trigger_type; }
+  inline int64_t get_trigger_type() const { return trigger_type_; }
+  inline ObFixedArray<ObTriggerRowRefType, ObIAllocator> &get_ref_types() { return ref_types_; }
+  inline const ObFixedArray<ObTriggerRowRefType, ObIAllocator> &get_ref_types() const { return ref_types_; }
 
   TO_STRING_KV(K(trigger_id_),
                K(trigger_events_.bit_value_),
@@ -254,7 +280,7 @@ private:
       uint64_t reserved_:54;
     };
   };
-  uint64_t trigger_type_;
+  int64_t trigger_type_;
   // pair<old_row_ref_type, new_row_ref_type>
   ObFixedArray<ObTriggerRowRefType, ObIAllocator> ref_types_;
 };
@@ -273,12 +299,16 @@ public:
       old_row_exprs_(alloc),
       new_row_exprs_(alloc),
       rowid_old_expr_(nullptr),
-      rowid_new_expr_(nullptr)
+      rowid_new_expr_(nullptr),
+      ref_types_(alloc),
+      trig_flags_(0)
   { }
   TO_STRING_KV(K_(tg_event),
                K_(tg_args),
                K_(trig_col_info),
-               K_(all_tm_points_.bit_value));
+               K_(all_tm_points_.bit_value),
+               K_(ref_types),
+               K_(trig_flags));
   uint64_t tg_event_;
   ObTriggerArgArray tg_args_;
   share::schema::ObTimingPoints all_tm_points_;
@@ -295,7 +325,8 @@ public:
       uint64_t is_ref_new_row_ : 1;
       uint64_t is_ref_old_rowid_ : 1;
       uint64_t is_ref_new_rowid_ : 1;
-      uint64_t reserved_: 60;
+      uint64_t is_prune_columns_ : 1;
+      uint64_t reserved_: 59;
     };
   };
 };
@@ -306,7 +337,6 @@ struct ObTrigDMLRtDef
   ObTrigDMLRtDef()
     : old_record_(nullptr),
       new_record_(nullptr),
-      tg_when_point_params_(nullptr),
       tg_row_point_params_(),
       tg_all_params_(nullptr),
       update_columns_(nullptr),
@@ -314,12 +344,10 @@ struct ObTrigDMLRtDef
   { }
   TO_STRING_KV(K_(old_record),
                K_(new_record),
-               K_(tg_when_point_params),
                K_(tg_row_point_params),
                KPC_(tg_all_params));
   pl::ObPLRecord *old_record_;
   pl::ObPLRecord *new_record_;
-  ParamStore *tg_when_point_params_;
   ParamStore *tg_row_point_params_;
   common::ObObjParam *tg_all_params_;
   ObObj *update_columns_;

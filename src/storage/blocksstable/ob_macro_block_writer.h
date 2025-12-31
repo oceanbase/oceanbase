@@ -140,48 +140,6 @@ private:
 
 class ObMacroBlockWriter
 {
-private:
-  /**
-  * -----------------------------------------------------------------ObDefaultMacroBlockFlusher---------------------------------------------------------------
-  */
-  class ObDefaultMacroBlockFlusher : public ObIMacroBlockFlusher
-  {
-  public:
-    ObDefaultMacroBlockFlusher();
-    virtual ~ObDefaultMacroBlockFlusher();
-    virtual void reset();
-    virtual int write_disk(ObMacroBlock& macro_block, const bool is_close_flush) override;
-    OB_INLINE void set_writer_and_handles(ObMacroBlockWriter &macro_block_writer,
-                                          ObStorageObjectHandle *macro_handle,
-                                          ObIODevice *device_handle)
-    {
-      macro_block_writer_ = &macro_block_writer;
-      macro_handle_ = macro_handle;
-      device_handle_ = device_handle;
-    }
-  protected:
-    ObMacroBlockWriter *macro_block_writer_;
-  private:
-    ObStorageObjectHandle *macro_handle_;
-    ObIODevice *device_handle_;
-  };
-  /**
-  * --------------------------------------------------------------ObSmallSStableMacroBlockFlusher------------------------------------------------------------
-  */
-  class ObSmallSStableMacroBlockFlusher : public ObDefaultMacroBlockFlusher
-  {
-  public:
-    ObSmallSStableMacroBlockFlusher();
-    virtual ~ObSmallSStableMacroBlockFlusher();
-    virtual void reset() override;
-    virtual int write_disk(ObMacroBlock& macro_block, const bool is_close_flush) override;
-    int init(ObMacroBlockWriter &macro_block_writer,
-             ObMacroBlocksWriteCtx &block_write_ctx);
-  private:
-    ObBlockInfo block_info_;
-    ObMacroBlocksWriteCtx *block_write_ctx_;
-    bool is_inited_;
-  };
 public:
   explicit ObMacroBlockWriter(const bool is_need_macro_buffer = false);
   virtual ~ObMacroBlockWriter();
@@ -343,6 +301,48 @@ protected:
   int64_t current_index_;
   volatile bool concurrent_lock_;
   ObIMacroBlockFlusher *custom_macro_flusher_;
+private:
+  /**
+  * -----------------------------------------------------------------ObDefaultMacroBlockFlusher---------------------------------------------------------------
+  */
+  class ObDefaultMacroBlockFlusher : public ObIMacroBlockFlusher
+  {
+  public:
+    ObDefaultMacroBlockFlusher();
+    virtual ~ObDefaultMacroBlockFlusher();
+    virtual void reset();
+    virtual int write_disk(ObMacroBlock& macro_block, const bool is_close_flush) override;
+    OB_INLINE void set_writer_and_handles(ObMacroBlockWriter &macro_block_writer,
+                                          ObStorageObjectHandle *macro_handle,
+                                          ObIODevice *device_handle)
+    {
+      macro_block_writer_ = &macro_block_writer;
+      macro_handle_ = macro_handle;
+      device_handle_ = device_handle;
+    }
+  protected:
+    ObMacroBlockWriter *macro_block_writer_;
+  private:
+    ObStorageObjectHandle *macro_handle_;
+    ObIODevice *device_handle_;
+  };
+  /**
+  * --------------------------------------------------------------ObSmallSStableMacroBlockFlusher------------------------------------------------------------
+  */
+  class ObSmallSStableMacroBlockFlusher : public ObDefaultMacroBlockFlusher
+  {
+  public:
+    ObSmallSStableMacroBlockFlusher();
+    virtual ~ObSmallSStableMacroBlockFlusher();
+    virtual void reset() override;
+    virtual int write_disk(ObMacroBlock& macro_block, const bool is_close_flush) override;
+    int init(ObMacroBlockWriter &macro_block_writer,
+             ObMacroBlocksWriteCtx &block_write_ctx);
+  private:
+    ObBlockInfo block_info_;
+    ObMacroBlocksWriteCtx *block_write_ctx_;
+    bool is_inited_;
+  };
 private:
   bool is_curr_block_pre_allocated_;
   ObMicroBlockBloomFilter micro_block_bf_;

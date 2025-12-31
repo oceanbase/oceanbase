@@ -70,6 +70,7 @@ public:
       : allocator_(allocator),
         external_params_(allocator),
         into_exprs_(allocator),
+        value_exprs_(allocator),
         ref_objects_(allocator),
         route_sql_(),
         is_select_for_update_(false),
@@ -78,22 +79,32 @@ public:
         stmt_sql_(),
         is_bulk_(false),
         has_link_table_(false),
-        is_skip_locked_(false) {}
+        is_skip_locked_(false),
+        parse_question_mark_cnt_(0),
+        external_params_cnt_(0),
+        into_exprs_cnt_(0) {}
     virtual ~ExternalRetrieveInfo() {}
 
     int build(ObStmt &stmt,
               ObSQLSessionInfo &session_info,
               pl::ObPLBlockNS *ns,
               bool is_dynamic_sql,
-              common::ObIArray<ExternalParamInfo> &param_info);
+              common::ObIArray<ExternalParamInfo> &param_info,
+              ObRawExprFactory &expr_factory);
     int build_into_exprs(ObStmt &stmt, pl::ObPLBlockNS *ns, bool is_dynamic_sql);
     int check_into_exprs(ObStmt &stmt, ObArray<ObDataType> &basic_types, ObBitSet<> &basic_into);
     const ObIArray<ObRawExpr*>& get_into_exprs() const { return into_exprs_; }
     int recount_dynamic_param_info(ObIArray<ExternalParamInfo> &param_info);
+    int build_value_exprs(ObStmt &stmt,
+                          common::ObIArray<ExternalParamInfo> &param_info,
+                          ObSQLSessionInfo &session_info,
+                          bool is_dynamic_sql,
+                          ObRawExprFactory &expr_factory);
 
     common::ObIAllocator &allocator_;
     common::ObFixedArray<ObRawExpr*, common::ObIAllocator> external_params_;
     common::ObFixedArray<ObRawExpr*, common::ObIAllocator> into_exprs_;
+    common::ObFixedArray<ObRawExpr*, common::ObIAllocator> value_exprs_;
     common::ObFixedArray<share::schema::ObSchemaObjVersion, common::ObIAllocator> ref_objects_;
     ObString route_sql_;
     bool is_select_for_update_;
@@ -103,6 +114,9 @@ public:
     bool is_bulk_;
     bool has_link_table_;
     bool is_skip_locked_;
+    int64_t parse_question_mark_cnt_;
+    int64_t external_params_cnt_;
+    int64_t into_exprs_cnt_;
   };
 
   enum PsMode
@@ -168,8 +182,13 @@ public:
   { p_returning_param_columns_ = p_returning_param_columns; }
   void set_exec_result(ObIExecuteResult *exec_result) { exec_result_ = exec_result; }
   ExternalRetrieveInfo &get_external_retrieve_info() { return external_retrieve_info_; }
+  ExternalRetrieveInfo &get_external_retrieve_info() const { return external_retrieve_info_; }
   ObIArray<ObRawExpr*> &get_external_params();
+  int64_t get_external_params_cnt() const;
+  int64_t get_parse_question_mark_cnt() const;
   ObIArray<ObRawExpr*> &get_into_exprs();
+  int64_t get_into_exprs_cnt() const;
+  ObIArray<ObRawExpr*> &get_value_exprs();
   common::ObIArray<share::schema::ObSchemaObjVersion> &get_ref_objects();
   const common::ObIArray<share::schema::ObSchemaObjVersion> &get_ref_objects() const;
   ObString &get_route_sql();
@@ -183,7 +202,7 @@ public:
   /// whether the result is with rows (true for SELECT statement)
   bool is_with_rows() const;
   // tell mysql if need to do async end trans
-  bool need_end_trans_callback() const;
+  bool need_end_trans_callback(bool force_sync_resp) const;
   bool need_end_trans() const;
   // get physical plan
   // we do not want you to change the pointer of the plan. if you indeed to do that, please
@@ -638,14 +657,34 @@ inline const common::ParamsFieldIArray *ObResultSet::get_returning_param_fields(
   return p_returning_param_columns_;
 }
 
+inline int64_t ObResultSet::get_parse_question_mark_cnt() const
+{
+  return external_retrieve_info_.parse_question_mark_cnt_;
+}
+
 inline ObIArray<ObRawExpr*> &ObResultSet::get_external_params()
 {
   return external_retrieve_info_.external_params_;
 }
 
+inline int64_t ObResultSet::get_external_params_cnt() const
+{
+  return external_retrieve_info_.external_params_cnt_;
+}
+
 inline ObIArray<ObRawExpr*> &ObResultSet::get_into_exprs()
 {
   return external_retrieve_info_.into_exprs_;
+}
+
+inline int64_t ObResultSet::get_into_exprs_cnt() const
+{
+  return external_retrieve_info_.into_exprs_cnt_;
+}
+
+inline ObIArray<ObRawExpr*> &ObResultSet::get_value_exprs()
+{
+  return external_retrieve_info_.value_exprs_;
 }
 
 inline const common::ObIArray<share::schema::ObSchemaObjVersion> &ObResultSet::get_ref_objects() const

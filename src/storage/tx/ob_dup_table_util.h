@@ -270,7 +270,7 @@ private:
   share::ObLSID ls_id_;
 
   bool is_inited_;
-  SpinRWLock init_rw_lock_;
+  TCRWLock init_rw_lock_;
 
   // set these flag for a normal ls without dup_table
   ObDupTableLSRoleStateHelper ls_state_helper_;

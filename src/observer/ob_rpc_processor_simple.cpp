@@ -77,6 +77,7 @@
 #include "share/object_storage/ob_device_config_mgr.h"
 #include "rootserver/restore/ob_restore_service.h"
 #include "rootserver/backup/ob_archive_scheduler_service.h"
+#include "rootserver/backup/ob_backup_service.h"
 #include "rootserver/ob_alter_ls_command.h"
 #include "storage/high_availability/ob_rebuild_service.h"
 #include "storage/ob_inner_tablet_access_service.h"
@@ -2636,6 +2637,31 @@ int ObRpcGetSSGCLastSuccScnsP::process()
   }
   return ret;
 }
+
+int ObRpcPushSSGCLastSuccScnP::process()
+{
+  int ret = OB_SUCCESS;
+  ObSSGarbageCollectorService *ss_gc_srv = nullptr;
+  share::SCN succ_scn;
+
+  if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("push ss gc last succ scn arg is invalid", KR(ret), K_(arg));
+  } else if (OB_FAIL(succ_scn.convert_for_tx(arg_.succ_scn_ns_))) {
+    LOG_WARN("convert succ scn failed", KR(ret), K_(arg));
+  } else {
+    MTL_SWITCH(arg_.tenant_id_)
+    {
+      if (OB_ISNULL(ss_gc_srv = MTL(ObSSGarbageCollectorService *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ObSSGarbageCollectorService is null", KR(ret), K_(arg));
+      } else if (OB_FAIL(ss_gc_srv->push_last_succ_scn(succ_scn))) {
+        LOG_WARN("push last succ scn failed", KR(ret), K(succ_scn), K_(arg));
+      }
+    }
+  }
+  return ret;
+}
 #endif
 
 #ifdef OB_BUILD_TDE_SECURITY
@@ -3702,6 +3728,12 @@ int ObRpcNotifyTenantThreadP::process()
 #endif
       } else if (obrpc::ObNotifyTenantThreadArg::RESTORE_SERVICE == arg_.get_thread_type()) {
         rootserver::ObRestoreService *service = MTL(rootserver::ObRestoreService*);
+        WAKE_UP_TENANT_SERVICE
+      } else if (obrpc::ObNotifyTenantThreadArg::BACKUP_SERVICE == arg_.get_thread_type()) {
+        rootserver::ObBackupDataService *service = MTL(rootserver::ObBackupDataService*);
+        WAKE_UP_TENANT_SERVICE
+      } else if (obrpc::ObNotifyTenantThreadArg::BACKUP_CLEAN_SERVICE == arg_.get_thread_type()) {
+        rootserver::ObBackupCleanService *service = MTL(rootserver::ObBackupCleanService*);
         WAKE_UP_TENANT_SERVICE
       } else {
         ret = OB_ERR_UNEXPECTED;

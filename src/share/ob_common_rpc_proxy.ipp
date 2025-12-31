@@ -345,3 +345,5 @@
   //----Definitions for sensitive rule----
   RPC_S(PRD handle_sensitive_rule_ddl, obrpc::OB_HANDLE_SENSITIVE_RULE_DDL, (ObSensitiveRuleDDLArg));
   //----End of definitions for sensitive rule----
+
+  RPC_S(PR5 get_refreshed_schema_versions, obrpc::OB_GET_REFRESHED_SCHEMA_VERSIONS, obrpc::ObGetRefreshedSchemaVersionsRes);

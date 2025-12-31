@@ -19,6 +19,7 @@
 #include "observer/dbms_scheduler/ob_dbms_sched_job_rpc_proxy.h"
 #include "share/ob_scheduled_manage_dynamic_partition.h"
 #include "share/balance/ob_scheduled_trigger_partition_balance.h" // ObScheduledTriggerPartitionBalance
+#include "observer/dbms_scheduler/ob_dbms_sched_time_utils.h"
 
 namespace oceanbase
 {
@@ -203,7 +204,7 @@ int ObDBMSScheduler::create_job(
 
         //check repeat interval
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(ObDBMSSchedJobUtils::check_is_valid_repeat_interval(params.at(6).get_string(), true))) {
+          if (OB_FAIL(ObDBMSSchedJobUtils::check_is_valid_repeat_interval(tenant_id, params.at(6).get_string(), true))) {
             if (OB_INVALID_ARGUMENT_NUM == ret) {
               ObString err_info("calendar expression restriction MAX_FREQUENCY_INTERVAL encountered");
               LOG_ORACLE_USER_ERROR(OB_SP_RAISE_APPLICATION_ERROR, 27418L, err_info.length(), err_info.ptr());
@@ -1032,6 +1033,25 @@ int ObDBMSScheduler::purge_log(
   }
   OZ (_do_purge_log(ctx, tenant_id, job_name, job_info.get_job_id(), log_history, OB_ALL_TENANT_SCHEDULER_JOB_RUN_DETAIL_TNAME, false));
   LOG_INFO("purge log", K(ret), K(tenant_id));
+  return ret;
+}
+
+int ObDBMSScheduler::evaluate_calendar_string(sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(result);
+  ObDBMSSchedTimeUtil util;
+  ObString calendar_string;
+  int64_t start_date;
+  int64_t return_date_after;
+  int64_t next_run_date;
+  CK (OB_NOT_NULL(ctx.get_my_session()));
+  CK (OB_LIKELY(4 == params.count()));
+  OZ (params.at(0).get_varchar(calendar_string));
+  OX (start_date = params.at(1).get_int();)
+  OX (return_date_after = params.at(2).get_int();)
+  OZ (util.calc_repeat_interval_next_date(calendar_string, start_date, next_run_date, start_date, return_date_after));
+  OX (params.at(3).set_timestamp(next_run_date);)
   return ret;
 }
 

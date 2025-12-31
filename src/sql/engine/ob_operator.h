@@ -657,7 +657,7 @@ protected:
         if (OB_FAIL((*e)->eval_batch(eval_ctx_, *brs_.skip_, brs_.size_))) {
           SQL_ENG_LOG(WARN, "expr evaluate failed", K(ret), K(*e));
         } else {
-          (*e)->get_eval_info(eval_ctx_).projected_ = true;
+          (*e)->get_eval_info(eval_ctx_).set_projected(true);
         }
       }
     }

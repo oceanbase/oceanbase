@@ -2355,3 +2355,44 @@ const char *oceanbase::rootserver::resource_type_to_str(const ObResourceType &t)
   else { str = "NONE"; }
   return str;
 }
+
+int ObRootUtils::notify_tenant_service(
+    const uint64_t tenant_id,
+    const obrpc::ObNotifyTenantThreadArg::TenantThreadType type)
+{
+  int ret = OB_SUCCESS;
+  ObNotifyTenantThreadArg arg;
+  ObAddr leader;
+  const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)
+      || OB_UNLIKELY(!(is_user_tenant(tenant_id) || is_sys_tenant(tenant_id)))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(arg.init(meta_tenant_id, type))) {
+    LOG_WARN("fail to init notify tenant thread arg", KR(ret), K(meta_tenant_id), K(type));
+  } else if (OB_ISNULL(GCTX.srv_rpc_proxy_) || OB_ISNULL(GCTX.location_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("srv_rpc_proxy_ is NULL", KR(ret), KP(GCTX.srv_rpc_proxy_), KP(GCTX.location_service_));
+  } else if (OB_FAIL(GCTX.location_service_->get_leader(GCONF.cluster_id,
+                     meta_tenant_id, SYS_LS, false/*force_renew*/, leader))) {
+    LOG_WARN("failed to get ls leader", KR(ret), K(meta_tenant_id));
+  } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(leader).by(tenant_id)
+                        .timeout(GCONF.rpc_timeout).notify_tenant_thread(arg))) {
+    LOG_WARN("fail to send rpc", KR(ret), K(arg), K(leader));
+    int tmp_ret = OB_SUCCESS;
+    leader.reset();
+    if (OB_TMP_FAIL(GCTX.location_service_->get_leader(GCONF.cluster_id,
+                        meta_tenant_id, SYS_LS, true/*force_renew*/, leader))) {
+      LOG_WARN("failed to get ls leader after renew", KR(ret), KR(tmp_ret), K(meta_tenant_id));
+    } else if (OB_TMP_FAIL(GCTX.srv_rpc_proxy_->to(leader).by(tenant_id)
+                          .timeout(GCONF.rpc_timeout).notify_tenant_thread(arg))) {
+      LOG_WARN("fail to send rpc after retry", KR(ret), KR(tmp_ret), K(arg), K(leader));
+    } else {
+      ret = OB_SUCCESS;
+      LOG_INFO("success to wakeup tenant service after retry", KR(ret), K(meta_tenant_id), K(type), K(leader));
+    }
+  } else {
+    LOG_INFO("success to wakeup tenant service", KR(ret), K(meta_tenant_id), K(type));
+  }
+  return ret;
+}

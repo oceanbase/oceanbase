@@ -447,12 +447,14 @@ enum ObIndexType
   // hybrid vec hnsw
   INDEX_TYPE_HYBRID_INDEX_LOG_LOCAL = 43,
   INDEX_TYPE_HYBRID_INDEX_EMBEDDED_LOCAL = 44,
+  INDEX_TYPE_SEARCH_DEF_INDEX_LOCAL = 45,
+  INDEX_TYPE_SEARCH_DATA_INDEX_LOCAL = 46,
 
   /*
   * Attention!!! when add new index type,
   * need update func ObSimpleTableSchemaV2::should_not_validate_data_index_ckm()
   */
-  INDEX_TYPE_MAX = 45,
+  INDEX_TYPE_MAX = 47,
 };
 
 bool is_support_split_index_type(const ObIndexType index_type);
@@ -685,6 +687,8 @@ public:
   bool enable_new_seq_id() const { return enable_new_seq_id_; }
 
   TO_STRING_KV(K_(seq_id), K_(sys_leader_epoch), K_(enable_new_seq_id));
+public:
+  static bool is_same_epoch(const ObDDLSequenceID &l, const ObDDLSequenceID &r);
 private:
   uint64_t seq_id_;
   int64_t sys_leader_epoch_;
@@ -2576,7 +2580,7 @@ private:
 
 public:
   static const int64_t MIN_AUTO_PART_SIZE = 1LL; // 1
-  static const int64_t MIN_AUTO_PART_SIZE_BY_USER = 128LL * 1024 * 1024; // 128M
+  static const int64_t MIN_AUTO_PART_SIZE_BY_USER = 1LL * 1024 * 1024; // 8MB
 
 private:
   ObPartitionFuncType part_func_type_;

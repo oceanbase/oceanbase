@@ -34,7 +34,7 @@ public:
 public:
   virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
-  enum TABLE_COLUMN
+  enum TABLE_COLUMN  //FARM COMPAT WHITELIST
   {
     TENANT_ID = common::OB_APP_MIN_COLUMN_ID,
     LS_ID,
@@ -43,7 +43,8 @@ public:
     IS_COLLECTED,
     GC_END_SCN,
     SVR_IP,
-    SVR_PORT
+    SVR_PORT,
+    SAFE_RECYCLE_SCN
   };
 
 private:

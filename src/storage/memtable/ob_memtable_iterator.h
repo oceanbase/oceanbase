@@ -304,7 +304,7 @@ public:
       storage::ObITable *table,
       const void *query_range) override;
   virtual void reset() override;
-  virtual void reuse() override;
+  virtual void reuse() override { reset(); }
   int skip_to_range(const ObDatumRange &range);
   int check_always_false(const ObDatumRange &range, bool &is_false);
   int get_next_skip_row(const blocksstable::ObDatumRow *&row);

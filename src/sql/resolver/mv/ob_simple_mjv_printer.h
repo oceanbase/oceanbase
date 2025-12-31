@@ -39,14 +39,9 @@ private:
   int gen_insert_into_select_for_simple_mjv(ObIArray<ObDMLStmt*> &dml_stmts);
   int gen_access_mv_data_for_simple_mjv(ObSelectStmt *&sel_stmt);
   int gen_access_delta_data_for_simple_mjv(ObIArray<ObSelectStmt*> &access_delta_stmts);
-  int prepare_gen_access_delta_data_for_simple_mjv(ObSelectStmt *&base_delta_stmt,
-                                                   ObIArray<ObRawExpr*> &semi_filters,
-                                                   ObIArray<ObRawExpr*> &anti_filters);
-  int gen_one_access_delta_data_for_simple_mjv(const ObSelectStmt &base_delta_stmt,
-                                               const int64_t table_idx,
-                                               const ObIArray<ObRawExpr*> &semi_filters,
-                                               const ObIArray<ObRawExpr*> &anti_filters,
-                                               ObSelectStmt *&sel_stmt);
+  int gen_one_access_delta_data_for_simple_mjv(const int64_t delta_table_idx,
+                                               ObIArray<ObRawExpr*> &anti_filters,
+                                               ObSelectStmt *&delta_stmt);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSimpleMJVPrinter);
 };

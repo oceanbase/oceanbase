@@ -434,8 +434,8 @@ int ObFakeCTETableOp::attach_rows(
     if (OB_SUCC(ret)) {
       e->set_evaluated_projected(ctx);
       ObEvalInfo &info = e->get_eval_info(ctx);
-      info.notnull_ = false;
-      info.point_to_frame_ = false;
+      info.set_notnull(false);
+      info.set_point_to_frame(false);
     }
   }
   return ret;

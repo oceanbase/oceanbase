@@ -664,7 +664,8 @@ int ObHybridVectorRefreshTask::prepare_for_embedding(ObPluginVectorIndexAdaptor 
           } else if (OB_FAIL(ob_write_string(task_ctx->allocator_, endpoint->get_url(), url, true))) {
             LOG_WARN("fail to write string", K(ret));
           } else if (OB_FAIL(task_ctx->embedding_task_->init(url, endpoint->get_request_model_name(),
-                             endpoint->get_provider(), access_key, chunk_array, col_type, dim, http_timeout_us, http_max_retries))) {
+                             endpoint->get_provider(), access_key, chunk_array, col_type, dim, http_timeout_us,
+                             http_max_retries, ctx_->task_status_.task_id_, ObEmbeddingTasSourceType::ASYNC_INDEX))) {
             LOG_WARN("failed to init embedding task", K(ret), KPC(endpoint));
           } else {
             ObEmbeddingTaskHandler *embedding_handler = nullptr;

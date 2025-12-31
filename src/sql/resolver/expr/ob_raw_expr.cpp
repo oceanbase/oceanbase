@@ -891,7 +891,7 @@ bool ObRawExpr::same_as(const ObRawExpr &expr,
 #ifdef ENABLE_DEBUG_LOG
     if (bret && is_hash_different(expr, check_context)) {
       const ObFatalErrExtraInfoGuard *info = ObFatalErrExtraInfoGuard::get_thd_local_val_ptr();
-      LOG_WARN("expr hash should not be different", K(bret), KPC(this), K(expr), KPC(info));
+      LOG_ERROR("expr hash should not be different", K(bret), KPC(this), K(expr), KPC(info));
     }
 #endif
   }
@@ -1979,11 +1979,26 @@ bool ObQueryRefRawExpr::inner_same_as(
 
 void ObQueryRefRawExpr::inner_calc_hash()
 {
-  expr_hash_ = common::do_hash(get_expr_type(), expr_hash_);
-  expr_hash_ = common::do_hash(is_set_, expr_hash_);
-  expr_hash_ = common::do_hash(is_multiset_, expr_hash_);
-  expr_hash_ = common::do_hash(get_ref_id(), expr_hash_);
-  expr_hash_ = common::do_hash(ref_stmt_, expr_hash_);
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; i < exec_params_.count(); ++i) {
+    if (NULL != exec_params_.at(i)) {
+      exec_params_.at(i)->inner_calc_hash();
+    }
+  }
+  if (NULL != ref_stmt_) {
+    if (OB_FAIL(ref_stmt_->calc_relation_expr_hash())) {
+      LOG_WARN("failed to calc relation expr hash", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    expr_hash_ = 0;
+  } else {
+    expr_hash_ = common::do_hash(get_expr_type(), expr_hash_);
+    expr_hash_ = common::do_hash(is_set_, expr_hash_);
+    expr_hash_ = common::do_hash(is_multiset_, expr_hash_);
+    expr_hash_ = common::do_hash(get_ref_id(), expr_hash_);
+    expr_hash_ = common::do_hash(ref_stmt_, expr_hash_);
+  }
 }
 
 bool ObExprEqualCheckContext::compare_query(const ObQueryRefRawExpr &left,
@@ -3503,11 +3518,12 @@ bool ObObjAccessRawExpr::inner_same_as(const ObRawExpr &expr,
   if (get_expr_type() != expr.get_expr_type()) {
   } else if (ObOpRawExpr::inner_same_as(expr, check_context)) {
     const ObObjAccessRawExpr &obj_access_expr = static_cast<const ObObjAccessRawExpr &>(expr);
+    bool ignore_for_write = (check_context != NULL && check_context->ignore_for_write_);
     bool_ret = get_attr_func_ == obj_access_expr.get_attr_func_
-        && 0 == func_name_.case_compare(obj_access_expr.func_name_)
+        && (ignore_for_write || 0 == func_name_.case_compare(obj_access_expr.func_name_)) // "get_attr_for_write_var_name_A_0" / "get_attr_var_name_A_0"
         && is_array_equal(access_indexs_, obj_access_expr.access_indexs_)
         && is_array_equal(var_indexs_, obj_access_expr.var_indexs_)
-        && for_write_ == obj_access_expr.for_write_
+        && (ignore_for_write || for_write_ == obj_access_expr.for_write_)
         && property_type_ == obj_access_expr.property_type_
         && is_array_equal(orig_access_indexs_, obj_access_expr.orig_access_indexs_);
   } else { /*do nothing*/ }
@@ -5688,6 +5704,7 @@ ObExprOperator *ObUDFRawExpr::get_op()
       OZ (udf_op->set_params_type(params_type_));
       OZ (udf_op->set_params_desc(params_desc_v2_));
       OZ (udf_op->set_nocopy_params(nocopy_params_));
+      OZ (udf_op->set_out_params_type(out_params_type_));
     }
   }
   return OB_SUCCESS == ret ? expr_op : NULL;

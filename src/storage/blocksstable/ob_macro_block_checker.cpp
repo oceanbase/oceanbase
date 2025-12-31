@@ -24,7 +24,7 @@ namespace blocksstable
 int ObSSTableMacroBlockChecker::check(
     const char *macro_block_buf,
     const int64_t macro_block_buf_size,
-    ObMacroBlockCheckLevel check_level)
+    const ObMacroBlockCheckLevel check_level)
 {
   int ret = OB_SUCCESS;
   const bool need_logic_check = CHECK_LEVEL_LOGICAL == check_level;
@@ -81,7 +81,7 @@ int ObSSTableMacroBlockChecker::check(
   return ret;
 }
 
-int ObSSTableMacroBlockChecker::check_macro_block(
+int ObSSTableMacroBlockChecker::check_data_macro_block_rows_and_index(
     const char *macro_block_buf,
     const int64_t macro_block_buf_size,
     const ObMacroBlockCheckLevel check_level)

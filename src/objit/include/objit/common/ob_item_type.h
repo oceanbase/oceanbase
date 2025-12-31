@@ -1079,6 +1079,7 @@ typedef enum ObItemType
   T_FUN_SYS_TO_UNIX_TIMESTAMP = 2095,
   T_FUN_SYS_VOID = 2096,
   T_FUN_COLLECT_FILE_LIST = 2097,
+  T_FUN_SYS_PARSE_DATE_TIME = 2098,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
@@ -3003,7 +3004,7 @@ typedef enum ObItemType
   T_DELTA_FORMAT = 4943, // delta_format table option
   T_SKIP_INDEX_LEVEL = 4944,
   T_DSL_QUERY = 4945, // hybrid search dsl query
-  T_DISABLE_PARALLEL_PARSE_SINGLE_CSV = 4946, // disable parallel parse single csv
+  T_PARALLEL_PARSE_ON_SINGLE_FILE = 4946, // disable parallel parse single csv
   T_TTL_DEFINITION_WITH_TYPE = 4947,
   T_WITH_INDEX = 4948, // prewarm data table with index table
   T_PREWARM_SS_LOCAL_CACHE = 4949, // prewarm data into ss_local_cache
@@ -3017,8 +3018,8 @@ typedef enum ObItemType
   T_RESUME_ROUTINE_LOAD = 4955,
   T_STOP_ROUTINE_LOAD = 4956,
 
-  T_CSV_LARGE_FILE_SIZE_THRESHOLD = 4957,
-  T_MAX_CSV_ROW_LENGTH = 4958,
+  T_PARALLEL_PARSE_FILE_SIZE_THRESHOLD = 4957,
+  T_MAX_ROW_LENGTH = 4958,
   T_HYBRID_SEARCH_SCORE = 4959, // hybrid search score
   T_AI_SPLIT_DOCUMENT_EXPRESSION = 4960, // ai_split_document
 
@@ -3027,6 +3028,7 @@ typedef enum ObItemType
   T_FILTER_ADAPTIVE = 4962,
   T_PRE_FILTER = 4963,
   T_POST_FILTER = 4964,
+  T_INDEX_DATA_GEN_EXPRESSION = 4965,
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;

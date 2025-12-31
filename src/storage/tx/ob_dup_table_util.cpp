@@ -310,7 +310,7 @@ int ObDupTableLSHandler::init(bool is_dup_table)
     if (is_inited()) {
       ret = OB_INIT_TWICE;
     } else {
-      SpinWLockGuard init_w_guard(init_rw_lock_);
+      TCRWLock::WLockGuard init_w_guard(init_rw_lock_);
       // init by dup_tablet_scan_task_.
 
       ObDupTableLogOperator *tmp_log_operator = static_cast<ObDupTableLogOperator *>(
@@ -451,7 +451,7 @@ int ObDupTableLSHandler::offline()
       ret = OB_SUCCESS;
     }
   } else {
-    SpinRLockGuard r_init_guard(init_rw_lock_);
+    TCRWLock::RLockGuard r_init_guard(init_rw_lock_);
     if (is_inited_) {
       if (OB_NOT_NULL(log_operator_) && log_operator_->is_busy()) {
         ret = OB_EAGAIN;
@@ -526,7 +526,7 @@ void ObDupTableLSHandler::destroy() { reset(); }
 void ObDupTableLSHandler::reset()
 {
   // ATOMIC_STORE(&is_inited_, false);
-  SpinWLockGuard w_init_guard(init_rw_lock_);
+  TCRWLock::WLockGuard w_init_guard(init_rw_lock_);
   ls_state_helper_.reset();
 
   dup_ls_ckpt_.reset();
@@ -568,7 +568,7 @@ void ObDupTableLSHandler::reset()
 
 bool ObDupTableLSHandler::is_inited()
 {
-  SpinRLockGuard r_init_guard(init_rw_lock_);
+  TCRWLock::RLockGuard r_init_guard(init_rw_lock_);
   return is_inited_;
 }
 
@@ -1259,7 +1259,7 @@ void ObDupTableLSHandler::switch_to_follower_forcedly()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
 
-  SpinRLockGuard r_init_guard(init_rw_lock_);
+  TCRWLock::RLockGuard r_init_guard(init_rw_lock_);
 
   ObDupTableLSRoleStateContainer restore_state_container;
   if (OB_FAIL(ls_state_helper_.prepare_state_change(ObDupTableLSRoleState::LS_REVOKE_SUCC,
@@ -1285,7 +1285,7 @@ int ObDupTableLSHandler::switch_to_follower_gracefully()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
 
-  SpinRLockGuard r_init_guard(init_rw_lock_);
+  TCRWLock::RLockGuard r_init_guard(init_rw_lock_);
 
   ObDupTableLSRoleStateContainer restore_state_container;
   if (OB_FAIL(ls_state_helper_.prepare_state_change(ObDupTableLSRoleState::LS_REVOKE_SUCC,
@@ -1328,7 +1328,7 @@ int ObDupTableLSHandler::resume_leader()
 
   const bool is_resume = true;
 
-  SpinRLockGuard r_init_guard(init_rw_lock_);
+  TCRWLock::RLockGuard r_init_guard(init_rw_lock_);
 
   ObDupTableLSRoleStateContainer restore_state_container;
   if (OB_FAIL(ls_state_helper_.prepare_state_change(ObDupTableLSRoleState::LS_TAKEOVER_SUCC,
@@ -1366,7 +1366,7 @@ int ObDupTableLSHandler::switch_to_leader()
 
   const bool is_resume = false;
 
-  SpinRLockGuard r_init_guard(init_rw_lock_);
+  TCRWLock::RLockGuard r_init_guard(init_rw_lock_);
 
   ObDupTableLSRoleStateContainer restore_state_container;
   if (OB_FAIL(ls_state_helper_.prepare_state_change(ObDupTableLSRoleState::LS_TAKEOVER_SUCC,

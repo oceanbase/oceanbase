@@ -249,7 +249,7 @@ int ObUserDefinedType::deep_copy_obj(
     case PL_VARRAY_TYPE: //fallthrough
 #endif
     case PL_RECORD_TYPE: {
-      OZ (ObPLComposite::copy_element(src, dst, allocator, NULL, NULL, NULL,  need_new_allocator, ignore_del_element));
+      OZ (ObPLComposite::copy_element(src, dst, allocator, true, NULL, NULL, NULL,  need_new_allocator, ignore_del_element));
     }
       break;
 
@@ -3930,6 +3930,7 @@ int ObPLComposite::deep_copy(ObPLComposite &src,
                              bool ignore_del_element)
 {
   int ret = OB_SUCCESS;
+  bool need_convert_basic_type = true;
 
 #ifdef OB_BUILD_ORACLE_PL
 #define COPY_COLLECTION(TYPE) \
@@ -3944,16 +3945,19 @@ int ObPLComposite::deep_copy(ObPLComposite &src,
         } else {                                                          \
           TYPE *collection = static_cast<TYPE*>(dest);                    \
           CK (OB_NOT_NULL(collection));                                   \
-          LOG_INFO("src is: ", KP(&src), K(src), KP(dest), K(src.get_init_size()));                                   \
           OX (new(collection)TYPE(src.get_id()));                         \
           OZ (collection->init_allocator(allocator, need_new_allocator));  \
           OX (keep_collectin_attr = false);  \
+          OX (need_convert_basic_type = false); \
           if (OB_FAIL(ret) && OB_NOT_NULL(dest)) {  \
             allocator.free(dest);   \
           }   \
         }                   \
       } else { \
         CK (OB_NOT_NULL(dest->get_allocator())); \
+        if (OB_SUCC(ret) && src.get_id() == dest->get_id()) { \
+          OX (need_convert_basic_type = false); \
+        } \
       } \
       OX (collection = static_cast<TYPE*>(dest)); \
       if (OB_SUCC(ret)) { \
@@ -3962,7 +3966,7 @@ int ObPLComposite::deep_copy(ObPLComposite &src,
         OZ (ObUserDefinedType::destruct_obj(destruct_obj, session, true)); \
       } \
       if (OB_FAIL(ret)) {    \
-      } else if (OB_FAIL(collection->deep_copy(static_cast<TYPE*>(&src), NULL, ignore_del_element))) { \
+      } else if (OB_FAIL(collection->deep_copy(static_cast<TYPE*>(&src), NULL, need_convert_basic_type, ignore_del_element))) { \
         ObObj destruct_obj; \
         int tmp = OB_SUCCESS; \
         destruct_obj.set_extend(reinterpret_cast<int64_t>(collection), collection->get_type()); \
@@ -3991,14 +3995,18 @@ int ObPLComposite::deep_copy(ObPLComposite &src,
       OX (new(composite)ObPLRecord(src.get_id(), static_cast<ObPLRecord&>(src).get_count()));
       OZ (composite->init_data(allocator, need_new_allocator));
       OX (need_free = true);
+      OX (need_convert_basic_type = false);
       if (OB_FAIL(ret) && OB_NOT_NULL(composite)) {
         allocator.free(composite);
       }
     } else {
       OX (composite = static_cast<ObPLRecord*>(dest));
+      if (OB_SUCC(ret) && src.get_id() == dest->get_id()) {
+        OX (need_convert_basic_type = false);
+      }
     }
     if (OB_SUCC(ret)) {
-      OZ (composite->deep_copy(static_cast<ObPLRecord&>(src), allocator, ns, session, ignore_del_element));
+      OZ (composite->deep_copy(static_cast<ObPLRecord&>(src), allocator, need_convert_basic_type, ns, session, ignore_del_element));
       if (OB_FAIL(ret) && need_free) {
         ObObj destruct_obj;
         int tmp = OB_SUCCESS;
@@ -4021,16 +4029,19 @@ int ObPLComposite::deep_copy(ObPLComposite &src,
       } else {
         ObPLNestedTable *collection = static_cast<ObPLNestedTable*>(dest);
         CK (OB_NOT_NULL(collection));
-        LOG_INFO("src is: ", KP(&src), K(src), KP(dest), K(src.get_init_size()));
         OX (new(collection)ObPLNestedTable(src.get_id()));
         OZ (collection->init_allocator(allocator, need_new_allocator));
         OX (keep_collectin_attr = false);
+        OX (need_convert_basic_type = false);
         if (OB_FAIL(ret) && OB_NOT_NULL(dest)) {
           allocator.free(dest);
         }
       }
     } else {
       CK (OB_NOT_NULL(dest->get_allocator()));
+      if (OB_SUCC(ret) && src.get_id() == dest->get_id()) {
+        OX (need_convert_basic_type = false);
+      }
     }
     OX (collection = static_cast<ObPLNestedTable*>(dest));
     if (OB_SUCC(ret)) {
@@ -4039,7 +4050,7 @@ int ObPLComposite::deep_copy(ObPLComposite &src,
       OZ (ObUserDefinedType::destruct_obj(destruct_obj, session, true));
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(collection->deep_copy(static_cast<ObPLNestedTable*>(&src), NULL, ignore_del_element))) {
+    } else if (OB_FAIL(collection->deep_copy(static_cast<ObPLNestedTable*>(&src), NULL, need_convert_basic_type, ignore_del_element))) {
       ObObj destruct_obj;
       int tmp = OB_SUCCESS;
       destruct_obj.set_extend(reinterpret_cast<int64_t>(collection), collection->get_type());
@@ -4092,6 +4103,7 @@ int ObPLComposite::assign_element(ObObj &src, ObObj &dest, ObIAllocator &allocat
 int ObPLComposite::copy_element(const ObObj &src,
                                 ObObj &dest,
                                 ObIAllocator &allocator,
+                                bool need_convert_basic_type,
                                 const ObPLINS *ns,
                                 sql::ObSQLSessionInfo *session,
                                 const ObDataType *dest_type,
@@ -4146,12 +4158,15 @@ int ObPLComposite::copy_element(const ObObj &src,
     OX (result_type.set_meta(dest_type->get_meta_type()));
     OX (result_type.set_accuracy(dest_type->get_accuracy()));
     OX (src_tmp = src);
-    OZ (ObSPIService::spi_convert(*session, tmp_allocator, src_tmp, result_type, result));
+    if (need_convert_basic_type) {
+      OZ (ObSPIService::spi_convert(*session, tmp_allocator, src_tmp, result_type, result));
+    } else {
+      OX (result = src_tmp);
+    }
     OZ (ObUserDefinedType::destruct_objparam(allocator, dest));
     OZ (deep_copy_obj(allocator, result, dest));
   } else {
     if (src.is_null() && 0 != src.get_unknown()) {
-      LOG_INFO("here maybe a bug", K(src), K(&src), K(src.get_unknown()));
     }
     OZ (ObUserDefinedType::destruct_objparam(allocator, dest));
     OZ (deep_copy_obj(allocator, src, dest));
@@ -4395,6 +4410,7 @@ int ObPLRecord::assign(ObPLRecord *src, ObIAllocator *allocator)
 
 int ObPLRecord::deep_copy(ObPLRecord &src,
                           ObIAllocator &allocator,
+                          bool need_convert_basic_type,
                           const ObPLINS *ns,
                           sql::ObSQLSessionInfo *session,
                           bool ignore_del_element)
@@ -4434,6 +4450,7 @@ int ObPLRecord::deep_copy(ObPLRecord &src,
       OZ (ObPLComposite::copy_element(src_element,
                                       *dest_element,
                                       *get_allocator(),
+                                      need_convert_basic_type,
                                       ns,
                                       session,
                                       NULL == elem_type ? NULL : elem_type->get_data_type(),
@@ -4551,6 +4568,7 @@ int ObPLCollection::init_allocator(common::ObIAllocator &allocator, bool need_ne
  * */
 int ObPLCollection::deep_copy(ObPLCollection *src,
                               ObIAllocator *allocator,
+                              bool need_convert_basic_type,
                               bool ignore_del_element)
 {
   int ret = OB_SUCCESS;
@@ -4594,6 +4612,7 @@ int ObPLCollection::deep_copy(ObPLCollection *src,
             OZ (ObPLComposite::copy_element(old_obj,
                                             new_objs[k],
                                             *coll_allocator,
+                                            need_convert_basic_type,
                                             NULL, /*ns*/
                                             NULL, /*session*/
                                             NULL, /*dest_type*/
@@ -5447,14 +5466,14 @@ int ObPLAssocArray::exist(int64_t idx, ObObj &result)
   return ret;
 }
 
-int ObPLAssocArray::deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool ignore_del_element)
+int ObPLAssocArray::deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool need_convert_basic_type, bool ignore_del_element)
 {
   int ret = OB_SUCCESS;
   ObObj *key = NULL;
   int64_t *sort = NULL;
   CK (OB_NOT_NULL(src));
   CK (src->is_associative_array());
-  OZ (ObPLCollection::deep_copy(src, allocator, ignore_del_element));
+  OZ (ObPLCollection::deep_copy(src, allocator, need_convert_basic_type, ignore_del_element));
   if (OB_SUCC(ret) && src->get_inner_capacity() > 0) {
     ObPLAssocArray *src_aa = static_cast<ObPLAssocArray*>(src);
     CK (OB_NOT_NULL(src_aa));
@@ -5894,13 +5913,13 @@ int ObPLAssocArray::reserve_assoc_key()
 
 //---------- for ObPLVarray ----------
 
-int ObPLVArray::deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool ignore_del_element)
+int ObPLVArray::deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool need_convert_basic_type, bool ignore_del_element)
 {
   int ret = OB_SUCCESS;
   ObPLVArray *src_va = NULL;
   CK (OB_NOT_NULL(src));
   CK (src->is_varray());
-  OZ (ObPLCollection::deep_copy(src, allocator, ignore_del_element));
+  OZ (ObPLCollection::deep_copy(src, allocator, need_convert_basic_type, ignore_del_element));
   CK (OB_NOT_NULL(src_va = static_cast<ObPLVArray*>(src)));
   OX (set_capacity(src_va->get_capacity()));
   return ret;

@@ -61,7 +61,8 @@ public:
                     bool is_for_trigger,
                     bool &is_wrap,
                     const share::schema::ObTriggerInfo *trg_info = NULL,
-                    bool need_unwrap = true /* for wrapped package */);
+                    bool need_unwrap = true /* for wrapped package */,
+                    sql::ObSQLSessionInfo *session = nullptr);
 #ifdef OB_BUILD_ORACLE_PL
   static bool is_wrapped_parse_tree(const ParseNode &parse_tree);
   static int check_wrapped_parse_tree_legal(const ParseNode &parse_tree);
@@ -81,7 +82,8 @@ private:
   int reconstruct_trigger_package(ObStmtNodeTree *&package_stmt,
                                   const share::schema::ObTriggerInfo *trg_info,
                                   const ObDataTypeCastParams &dtc_params,
-                                  share::schema::ObSchemaGetterGuard *schema_guard);
+                                  share::schema::ObSchemaGetterGuard *schema_guard,
+                                  sql::ObSQLSessionInfo *session);
 #ifdef OB_BUILD_ORACLE_PL
   int decode_cipher_text(common::ObIAllocator &allocator,
                          const ObStmtNodeTree *cipher_stmt,

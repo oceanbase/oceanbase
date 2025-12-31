@@ -821,7 +821,7 @@ int ObIncMajorDDLMergeHelper::assemble_sstable(ObDDLTabletMergeDagParamV2 &merge
     } else if (OB_FALSE_IT(first_major_sstable = static_cast<ObSSTable *>(
         table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(false/*first*/)))) {
     } else if (OB_NOT_NULL(first_major_sstable)
-        && OB_UNLIKELY(first_major_sstable->get_snapshot_version() >= merge_param.ddl_task_param_.snapshot_version_)) {
+        && OB_UNLIKELY(first_major_sstable->get_snapshot_version() >= merge_param.inc_major_trans_version_)) {
       major_already_included = true;
       FLOG_INFO("snapshot version is already included in major sstable",
           K(major_already_included), KPC(first_major_sstable), K(merge_param));
@@ -1098,9 +1098,18 @@ int ObIncMajorDDLMergeHelper::update_tablet_table_store(
     gc_inc_major_ddl_scns.set_attr(ObMemAttr(MTL_ID(), "GCIncDDLScn"));
 
     ObUpdateTableStoreParam table_store_param(snapshot_version, multi_version_start, storage_schema, rebuild_seq, major_sstable, true);
-    if (OB_FAIL(table_store_param.init_with_compaction_info(ObCompactionTableStoreParam(for_major ? compaction::MEDIUM_MERGE : compaction::MINI_MERGE,
+    ObMergeType merge_type = compaction::MERGE_TYPE_MAX;
+    if (for_major) {
+      if (OB_NOT_NULL(major_sstable)) {
+        merge_type = compaction::MEDIUM_MERGE;
+      }
+    } else {
+      merge_type = compaction::MINI_MERGE;
+    }
+
+    if (OB_FAIL(table_store_param.init_with_compaction_info(ObCompactionTableStoreParam(merge_type,
                                                                                         share::SCN::min_scn(),
-                                                                                        for_major /* need_report*/,
+                                                                                        false /* need_report*/,
                                                                                         false /* has truncate info*/)))) {
       LOG_WARN("init with compaction info failed", K(ret));
     } else if (for_major && OB_ISNULL(major_sstable)) {
@@ -2075,7 +2084,7 @@ int ObSSIncMajorDDLMergeHelper::update_tablet_table_store(
                                   ObCompactionTableStoreParam(for_major ? compaction::MEDIUM_MERGE
                                                                         : compaction::MINOR_MERGE,
                                   share::SCN::min_scn(),
-                                  for_major /* need_report*/,
+                                  false /* need_report*/,
                                   false /* has truncate info*/)))) {
       LOG_WARN("init with compaction info failed", K(ret));
     } else {

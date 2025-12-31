@@ -18,6 +18,7 @@
 #include "lib/string/ob_string.h"
 #include "deps/oblib/src/common/ob_field.h"
 #include "observer/ob_server_struct.h"
+#include "rpc/obmysql/packet/ompk_eof.h"
 
 namespace oceanbase
 {
@@ -70,6 +71,8 @@ public:
                                     bool has_more_result,
                                     bool &can_retry,
                                     int64_t fetch_limit  = common::OB_INVALID_COUNT);
+  virtual int send_eof_packet(bool has_more_result);
+  virtual int seal_eof_packet(bool has_more_result, obmysql::OMPKEOF& eofp);
   ObIMPPacketSender& get_packet_sender() { return sender_; }
   int response_query_header(const ColumnsFieldIArray &fields,
                                     bool has_more_result = false,

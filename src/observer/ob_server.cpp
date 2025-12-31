@@ -151,7 +151,6 @@ ObServer::ObServer()
     bandwidth_throttle_(),
     sys_bkgd_net_percentage_(0),
     ethernet_speed_(0),
-    cpu_frequency_(DEFAULT_CPU_FREQUENCY),
     session_mgr_(),
     root_service_monitor_(root_service_, rs_mgr_),
     ob_service_(gctx_),
@@ -3817,17 +3816,9 @@ void ObServer::ObRefreshCpuFreqTimeTask::runTimerTask()
 int ObServer::refresh_cpu_frequency()
 {
   int ret = OB_SUCCESS;
-  uint64_t cpu_frequency = get_cpufreq_khz();
-
-  if (0 == cpu_frequency) {
-    LOG_WARN_RET(OB_ERR_UNEXPECTED, "get cpu frequency failed");
-    cpu_frequency = ObServerFrequence::DEFAULT_CPU_FREQUENCY;
+  if(OB_FAIL(ObServerFrequence::get_instance().refresh_cpu_frequency())) {
+    LOG_WARN("refresh cpu frequency failed", KR(ret));
   }
-  if (cpu_frequency != cpu_frequency_) {
-    LOG_INFO("Cpu frequency changed", "from", cpu_frequency_, "to", cpu_frequency);
-    ObServerFrequence::get_instance().get_cpu_frequency_khz() = cpu_frequency;
-  }
-
   return ret;
 }
 

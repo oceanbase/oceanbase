@@ -85,6 +85,7 @@ enum ObVectorIndexAlgorithmType : uint16_t
   VIAT_HGRAPH,
   VIAT_SPIV,
   VIAT_IPIVF,
+  VIAT_IPIVF_SQ,
   VIAT_MAX
 };
 

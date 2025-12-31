@@ -15,6 +15,7 @@
 #include "rpc/obmysql/ob_mysql_field.h"
 #include "sql/engine/px/ob_px_admission.h"
 #include "sql/engine/cmd/ob_table_direct_insert_service.h"
+#include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "src/sql/plan_cache/ob_plan_cache.h"
 #include "sql/dblink/ob_tm_service.h"
 #include "storage/tx/ob_xa_ctx.h"
@@ -1338,18 +1339,22 @@ void ObResultSet::force_refresh_location_cache(bool is_nonblock, int err)
 }
 
 // 告诉mysql是否要传入一个EndTransCallback
-bool ObResultSet::need_end_trans_callback() const
+bool ObResultSet::need_end_trans_callback(bool force_sync_resp) const
 {
   int ret = OB_SUCCESS;
   bool need = false;
   ObPhysicalPlan* physical_plan_ = static_cast<ObPhysicalPlan*>(cache_obj_guard_.get_cache_obj());
-  if (stmt::T_SELECT == get_stmt_type()) {
+  my_session_.set_is_pl_async_commit(false);
+  my_session_.set_has_async_query_sender(false);
+  bool has_temp_table = my_session_.get_has_temp_table_flag() || my_session_.has_tx_level_temp_table();
+  if (force_sync_resp) {
+    // skip
+  } else if (stmt::T_SELECT == get_stmt_type()) {
     // 对于select语句，总不走callback，无论事务状态如何
     need = false;
   } else if (is_returning_) {
     need = false;
-  } else if (my_session_.get_has_temp_table_flag()
-             || my_session_.has_tx_level_temp_table()
+  } else if (has_temp_table
              || (OB_NOT_NULL(physical_plan_) && physical_plan_->is_contain_oracle_trx_level_temporary_table())) {
     // temporary table will be committed synchronously, and then drop_temp_tables will be called to delete the data.
     need = false;
@@ -1361,7 +1366,20 @@ bool ObResultSet::need_end_trans_callback() const
     if (OB_FAIL(my_session_.get_autocommit(ac))) {
       LOG_ERROR("fail to get autocommit", K(ret));
     } else {}
-    if (stmt::T_ANONYMOUS_BLOCK == get_stmt_type() && is_oracle_mode()) {
+    if (my_session_.get_local_ob_enable_pl_async_commit()
+        && OB_SYS_TENANT_ID != my_session_.get_effective_tenant_id()
+        && !my_session_.is_inner()
+        && my_session_.is_user_session()) {
+      if ((stmt::T_CALL_PROCEDURE == get_stmt_type() || stmt::T_ANONYMOUS_BLOCK == get_stmt_type())
+          && OB_ISNULL(my_session_.get_pl_profiler())
+          && OB_ISNULL(my_session_.get_pl_code_coverage())) {
+        // PL with result set should use sync driver, not async driver
+        // Only PL without result set can use async commit callback
+        need = !is_with_rows();
+        my_session_.set_is_pl_async_commit(true);
+        my_session_.set_has_async_query_sender(need);
+      }
+    } else if (stmt::T_ANONYMOUS_BLOCK == get_stmt_type() && is_oracle_mode()) {
       need = ac && !explicit_start_trans && !is_with_rows();
     } else if (OB_LIKELY(NULL != physical_plan_) &&
                OB_LIKELY(physical_plan_->is_need_trans()) &&
@@ -1489,15 +1507,88 @@ int ObResultSet::ExternalRetrieveInfo::recount_dynamic_param_info(
   return ret;
 }
 
+// Check if the statement is a simple SELECT INTO FROM DUAL statement
+// that can be optimized (no WHERE, GROUP BY, HAVING, aggregation, window functions, etc.)
+static bool is_simple_select_into_from_dual(const ObSelectStmt &select_stmt,
+                                             int64_t into_exprs_count,
+                                             const ObFixedArray<ObRawExpr*, ObIAllocator> &into_exprs)
+{
+  bool can_transform = true;
+  // Check if select items count matches into expressions count
+  if (select_stmt.get_select_items().count() != into_exprs_count) {
+    can_transform = false;
+  } else {
+    // Check that it's a simple SELECT FROM DUAL without complex features
+    can_transform = 0 == select_stmt.get_condition_exprs().count()           // No WHERE clause
+        && 0 == select_stmt.get_from_item_size()                    // FROM DUAL (no explicit FROM)
+        && 0 == select_stmt.get_aggr_item_size()                     // No aggregation functions
+        && !select_stmt.has_group_by()                              // No GROUP BY
+        && !select_stmt.has_having()                                // No HAVING
+        && !select_stmt.has_window_function()                      // No window functions
+        && !select_stmt.is_set_stmt();                             // No UNION/INTERSECT/EXCEPT
+  }
+  return can_transform;
+}
+
+int ObResultSet::ExternalRetrieveInfo::build_value_exprs(ObStmt &stmt,
+                                                        common::ObIArray<ExternalParamInfo> &param_info,
+                                                        ObSQLSessionInfo &session_info,
+                                                        bool is_dynamic_sql,
+                                                        ObRawExprFactory &expr_factory)
+{
+  int ret = OB_SUCCESS;
+  bool can_transform = false;
+  OZ (session_info.check_feature_enable(
+                      ObCompatFeatureType::PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN,
+                      can_transform));
+  if (stmt.is_select_stmt()
+      && is_oracle_mode()
+      && can_transform
+      && session_info.get_local_plsql_can_transform_sql_to_assign()
+      && !is_dynamic_sql) {
+    ObSelectStmt &select_stmt = static_cast<ObSelectStmt&>(stmt);
+    int64_t into_exprs_count = into_exprs_.count();
+    int64_t select_exprs_count = select_stmt.get_select_items().count();
+    // Only optimize simple SELECT INTO FROM DUAL statements
+    if (is_simple_select_into_from_dual(select_stmt, into_exprs_count, into_exprs_)) {
+      // Save the original value expressions for potential optimization in execute phase
+      // DO NOT modify stmt here to avoid breaking code generation
+      OZ (value_exprs_.reserve(select_exprs_count));
+      for (int64_t j = 0; OB_SUCC(ret) && j < param_info.count(); ++j) {
+        ObRawExpr *new_expr = param_info.at(j).element<1>();
+        ObRawExpr *old_expr = param_info.at(j).element<0>();
+        CK (OB_NOT_NULL(old_expr) && OB_NOT_NULL(new_expr));
+        OX (old_expr->set_result_type(new_expr->get_result_type()));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs_count; ++i) {
+        ObRawExpr *value_expr = select_stmt.get_select_item(i).expr_;
+        ObRawExpr *new_value_expr = NULL;
+        OZ (ObPLExprCopier::copy_expr(expr_factory, value_expr, new_value_expr));
+        CK (OB_NOT_NULL(new_value_expr));
+        // restore src pl expr from replaced question mark expr
+        for (int64_t j = 0; OB_SUCC(ret) && j < param_info.count(); ++j) {
+          OZ (ObRawExprUtils::replace_ref_column(value_expr,
+              param_info.at(j).element<1>(), param_info.at(j).element<0>()));
+        }
+        OZ (value_exprs_.push_back(value_expr));
+        OX (select_stmt.get_select_item(i).expr_ = new_value_expr);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObResultSet::ExternalRetrieveInfo::build(
   ObStmt &stmt,
   ObSQLSessionInfo &session_info,
   pl::ObPLBlockNS *ns,
   bool is_dynamic_sql,
-  common::ObIArray<ExternalParamInfo> &param_info)
+  common::ObIArray<ExternalParamInfo> &param_info,
+  ObRawExprFactory &expr_factory)
 {
   int ret = OB_SUCCESS;
   OZ (build_into_exprs(stmt, ns, is_dynamic_sql));
+  OZ (build_value_exprs(stmt, param_info, session_info, is_dynamic_sql, expr_factory));
   CK (OB_NOT_NULL(session_info.get_cur_exec_ctx()));
   CK (OB_NOT_NULL(session_info.get_cur_exec_ctx()->get_sql_ctx()));
   OX (is_bulk_ = session_info.get_cur_exec_ctx()->get_sql_ctx()->is_bulk_);
@@ -1540,6 +1631,8 @@ int ObResultSet::ExternalRetrieveInfo::build(
         OX (param_info.pop_back());
       }
       OX (external_params_.set_capacity(param_info.count()));
+      OX (external_params_cnt_ = param_info.count());
+      OX (into_exprs_cnt_ = into_exprs_.count());
       for (int64_t i = 0; OB_SUCC(ret) && i < param_info.count(); ++i) {
         if (OB_ISNULL(param_info.at(i).element<0>()) || OB_ISNULL(param_info.at(i).element<1>())) {
           ret = OB_ERR_UNEXPECTED;

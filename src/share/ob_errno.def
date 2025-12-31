@@ -192,7 +192,7 @@ DEFINE_ERROR(OB_TERM_LAGGED, -4097, -1, "HY000", "Term lagged");
 DEFINE_ERROR(OB_TERM_NOT_MATCH, -4098, -1, "HY000", "Term not match");
 DEFINE_ERROR_DEP(OB_START_LOG_CURSOR_INVALID, -4099, -1, "HY000", "Invalid log cursor");
 DEFINE_ERROR_DEP(OB_LOCK_NOT_MATCH, -4100, -1, "HY000", "Lock not match");
-DEFINE_ORACLE_ERROR_DEP(OB_DEAD_LOCK, -4101, ER_LOCK_DEADLOCK, "HY000", "Deadlock", 60, "deadlock detected while waiting for resource");
+DEFINE_ORACLE_ERROR_DEP(OB_DEAD_LOCK, -4101, ER_LOCK_DEADLOCK, "HY000", "Deadlock found when trying to get lock", 60, "deadlock detected while waiting for resource");
 DEFINE_ERROR(OB_PARTIAL_LOG, -4102, -1, "HY000", "Incomplete log entry");
 DEFINE_ERROR_DEP(OB_CHECKSUM_ERROR, -4103, -1, "42000", "Data checksum error");
 DEFINE_ERROR_DEP(OB_INIT_FAIL, -4104, -1, "HY000", "Initialize error");
@@ -2957,6 +2957,7 @@ DEFINE_ERROR(OB_ERR_INVALID_PRIVILEGE_ON_SENSITIVE_RULES, -11127, -1, "HY000", "
 DEFINE_ERROR(OB_AP_QUERY_NEED_RETRY, -11128, -1, "HY000", "AP query will retry with column replica");
 
 DEFINE_ERROR_EXT(OB_KAFKA_ERROR, -11129, -1, "HY000", "kafka server throw error", "kafka server throw error: ErrorMsg=%s");
+DEFINE_ERROR(OB_KAFKA_NEED_RETRY, -11130, -1, "HY000", "retry with kafka error");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // SQL扩展区段1：[-11000, -12000)

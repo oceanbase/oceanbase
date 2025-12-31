@@ -11498,7 +11498,7 @@ static struct VarsInit{
       ObSysVars[839].info_ = "Whether can transform the PL/SQL select into from dual statement to an assignment statement" ;
       ObSysVars[839].name_ = "plsql_can_transform_sql_to_assign" ;
       ObSysVars[839].data_type_ = ObIntType ;
-      ObSysVars[839].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[839].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INFLUENCE_PL ;
       ObSysVars[839].id_ = SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN] = 839 ;
