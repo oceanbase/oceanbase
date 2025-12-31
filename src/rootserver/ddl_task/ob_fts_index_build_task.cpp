@@ -2020,9 +2020,7 @@ int ObFtsIndexBuildTask::cleanup_impl()
                                                                        parser_name,
                                                                        charset_type,
                                                                        dic_loader_handle))) {
-
-          LOG_WARN("fail to get dic loader",
-              K(ret), K(tenant_id_), K(parser_name), K(charset_type));
+          LOG_WARN("fail to get dic loader", K(ret), K(tenant_id_), K(parser_name), K(charset_type));
       } else if (OB_UNLIKELY(!dic_loader_handle.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("the dic loader handle is not valid", K(ret), K(tenant_id_), K(dic_loader_handle));

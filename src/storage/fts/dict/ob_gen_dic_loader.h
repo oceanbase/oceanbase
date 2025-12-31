@@ -79,8 +79,11 @@ public:
     return ins;
   }
   int init();
+
+  static int parser_name_without_version(const ObString &parser_name, ObString &no_version_parser_name);
+
   int get_dic_loader(const uint64_t tenant_id,
-                     const ObString &parser_name,
+                     const ObString &parser_name_without_version,
                      const ObCharsetType charset,
                      ObTenantDicLoaderHandle &loader_handle);
   int destroy_dic_loader_for_tenant();
