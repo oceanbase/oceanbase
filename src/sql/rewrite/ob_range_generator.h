@@ -176,7 +176,10 @@ private:
                                   const ObObj& in_value,
                                   ObObj &out_value);
 
-  int refine_real_range(const ObAccuracy &accuracy, double &value);
+  static int refine_real_range(const ObAccuracy &accuracy, double &value);
+  static int cast_float_to_fixed_float(const ObRangeColumnMeta &meta,
+                                       const ObObj& in_value,
+                                       ObObj &out_value);
 private:
   ObRangeGenerator();
   static const int64_t RANGE_BUCKET_SIZE = 1000;
