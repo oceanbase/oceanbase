@@ -13,7 +13,7 @@ At present, the guide is composed of the following parts:
     1. [Install toolchain](toolchain.md)
     2. [Get the code, build and run](build-and-run.md)
     3. [Set up an IDE](ide-settings.md)
-    4. [Coding Convensions](coding-convension.md)
+    4. [Coding Conventions](coding-convention.md)
     5. [Write and run unit tests](unittest.md)
     6. [Running MySQL test](mysqltest.md)
     7. [Debug](debug.md)
@@ -23,7 +23,7 @@ At present, the guide is composed of the following parts:
    
     1. [Logging System](logging.md)
     2. [Memory Management](memory.md)
-    3. [Bais Data Structures](container.md)
+    3. [Basic Data Structures](container.md)
     4. [Architecture](architecture.md)
     5. [Coding Standard](coding_standard.md)
 
