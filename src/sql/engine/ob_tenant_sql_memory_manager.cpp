@@ -909,6 +909,11 @@ int ObTenantSqlMemoryManager::get_max_work_area_size(
               ? remain_memory_size + total_alloc_size
               : total_alloc_size;
     double alloc_ratio = total_alloc_size * 1.0 / tmp_max_wa_memory_size;
+    if (alloc_ratio < 0) {
+      LOG_ERROR("alloc ratio is less than 0", K(alloc_ratio), K(total_alloc_size), K(tmp_max_wa_memory_size));
+      alloc_ratio = 0;
+      sql_mem_callback_.reset_total_alloc_size_if_negative();
+    }
     // if (total_alloc_size >= tmp_max_wa_memory_size) {
     //   // 这里用最近N次的结果来拟合可能比较好，但由于global bound 决定后，内存使用有延迟，比较难决定他们之间的关系
     //   max_wa_memory_size = (tmp_max_wa_memory_size >> 1);
