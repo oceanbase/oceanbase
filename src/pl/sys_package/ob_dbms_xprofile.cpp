@@ -101,7 +101,9 @@ int ObDbmsXprofile::display_profile(ObExecContext &ctx, ParamStore &params, ObOb
 int ObDbmsXprofile::set_display_type(const ObString &format, ProfileDisplayType &type)
 {
   int ret = OB_SUCCESS;
-  if (format.case_compare("AGGREGATED") == 0 || format.case_compare("AGGREGATED_PRETTY") == 0) {
+  // format maybe set as null or '', use default strategy
+  if (format.length() == 0 || format.case_compare("AGGREGATED") == 0 ||
+      format.case_compare("AGGREGATED_PRETTY") == 0) {
     type = ProfileDisplayType::AGGREGATED_PRETTY;
   } else if (format.case_compare("AGGREGATED_JSON") == 0) {
     type = ProfileDisplayType::AGGREGATED_JSON;
@@ -243,7 +245,7 @@ int ObDbmsXprofile::aggregate_op_profile(ObExecContext &ctx,
 }
 
 int ObDbmsXprofile::format_summary_info(const ObMergedProfileItem *compile_profile,
-                                        const ObIArray<ObMergedProfileItem> &merged_items,
+                                        ObIArray<ObMergedProfileItem> &merged_items,
                                         int64_t execution_count, ProfileText &profile_text)
 {
   int ret = OB_SUCCESS;
@@ -252,18 +254,22 @@ int ObDbmsXprofile::format_summary_info(const ObMergedProfileItem *compile_profi
   char *buf = profile_text.buf_;
 
   uint64_t total_db_time = 0;
-  ObTMArray<ObMergedProfileItem> copied_items;
-  if (OB_FAIL(copied_items.assign(merged_items))) {
+  ObTMArray<ObMergedProfileItem *> copied_items;
+  if (OB_FAIL(copied_items.reserve(merged_items.count()))) {
     LOG_WARN("failed to reserve", K(merged_items.count()));
   }
 
-  for (int64_t i = 0; i < copied_items.count() && OB_SUCC(ret); ++i) {
-    total_db_time += merged_items.at(i).max_db_time_;
+  for (int64_t i = 0; i < merged_items.count() && OB_SUCC(ret); ++i) {
+    if (OB_FAIL(copied_items.push_back(&merged_items.at(i)))) {
+      LOG_WARN("failed to push back");
+    } else {
+      total_db_time += merged_items.at(i).max_db_time_;
+    }
   }
 
   OZ(BUF_PRINTF("\nSQL ID: "));
   if (OB_SUCC(ret)) {
-    const ObString sql_id = copied_items.at(0).sql_id_;
+    const ObString sql_id = copied_items.at(0)->sql_id_;
     pos += sql_id.to_string(buf + pos, buf_len - pos);
     OZ(BUF_PRINTF(", Execution Count: %d", execution_count));
   }
@@ -285,14 +291,23 @@ int ObDbmsXprofile::format_summary_info(const ObMergedProfileItem *compile_profi
     static constexpr int64_t TOP_K = 10;
     double rate;
     for (int64_t k = 0; k < TOP_K && k < copied_items.count() && OB_SUCC(ret); ++k) {
-      const ObMergedProfileItem &cur = copied_items.at(copied_items.count() - k - 1);
-      rate = double(cur.max_db_time_) / total_db_time * 100;
+      ObMergedProfileItem *cur = copied_items.at(copied_items.count() - k - 1);
+      rate = double(cur->max_db_time_) / total_db_time * 100;
+      cur->rate_ = rate;
       if (rate < 1) {
         break;
+      } else if (rate < 10) {
+        cur->color_ = ObMergedProfileItem::DEFAULT_COLOR;
+      } else if (rate >= 10 && rate < 25) {
+        cur->color_ = ObMergedProfileItem::COLORS[0]; // yellow
+      } else if (rate >= 25 && rate < 40) {
+        cur->color_ = ObMergedProfileItem::COLORS[1]; // orange
+      } else if (rate >= 40) {
+        cur->color_ = ObMergedProfileItem::COLORS[2]; // red
       }
-      OZ(BUF_PRINTF("  %ld. ", k + 1));
-      OZ(BUF_PRINTF("%s(id=%ld): %.3fms, (%.2f%%)\n", cur.profile_->get_name_str(), cur.op_id_,
-                    double(cur.max_db_time_) / 1000 / 1000, rate));
+      OZ(BUF_PRINTF("%s  %ld. %s(id=%ld):", cur->color_, k + 1, cur->profile_->get_name_str(), cur->op_id_));
+      OZ(value_print_help(buf, buf_len, pos, cur->max_db_time_, metric::Unit::TIME_NS, false));
+      OZ(BUF_PRINTF(" (%.2f%%)\n", rate));
     }
   }
   return ret;
@@ -357,7 +372,7 @@ int ObDbmsXprofile::format_agg_profiles(const ObIArray<ObMergedProfileItem> &mer
       }
     }
   }
-  OZ(BUF_PRINTF("\n"));
+  OZ(BUF_PRINTF("%s\n", ObMergedProfileItem::DEFAULT_COLOR));
   return ret;
 }
 
@@ -434,8 +449,27 @@ int ObDbmsXprofile::set_display_result_for_oracle(ObExecContext &exec_ctx,
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < profile_strs.count(); ++i) {
       row.reuse();
-      obj.set_varchar(profile_strs.at(i));
-      if (OB_FAIL(row.push_back(obj))) {
+      if (!(profile_strs.at(i).prefix_match(ObMergedProfileItem::COLORS[0])
+          || profile_strs.at(i).prefix_match(ObMergedProfileItem::COLORS[1])
+          ||  profile_strs.at(i).prefix_match(ObMergedProfileItem::COLORS[2])
+          ||  profile_strs.at(i).prefix_match(ObMergedProfileItem::DEFAULT_COLOR))) {
+        // in oracle mode, add default color prefix for output line alignment
+        int64_t alloc_len = profile_strs.at(i).length() + strlen(ObMergedProfileItem::DEFAULT_COLOR);
+        char *str = static_cast<char *>(exec_ctx.get_allocator().alloc(alloc_len));
+        if (OB_ISNULL(str)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory", K(alloc_len));
+        } else {
+          MEMSET(str, 0, alloc_len);
+          MEMCPY(str, ObMergedProfileItem::DEFAULT_COLOR, strlen(ObMergedProfileItem::DEFAULT_COLOR));
+          MEMCPY(str + strlen(ObMergedProfileItem::DEFAULT_COLOR), profile_strs.at(i).ptr(), profile_strs.at(i).length());
+          obj.set_varchar(str, alloc_len);
+        }
+      } else {
+        obj.set_varchar(profile_strs.at(i));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(row.push_back(obj))) {
         LOG_WARN("failed to push back object", K(ret));
       } else if (OB_FAIL(table->set_row(row, i))) {
         LOG_WARN("failed to set row", K(ret));
@@ -492,11 +526,11 @@ int ProfilePrefixHelper::prepare_pretty_prefix(const ObIArray<ObMergedProfileIte
   if (!is_full_plan_) {
     for (int64_t i = 0; i < prefix_infos_.count() && OB_SUCC(ret); ++i) {
       PrefixInfo &current_op = prefix_infos_.at(i);
-      if (OB_FAIL(append_profile_prefix(current_op, current_op.plan_depth_))) {
+      if (OB_FAIL(append_profile_prefix(current_op, current_op.plan_depth_, merged_items.at(i)))) {
         LOG_WARN("failed to append profile prefix");
       } else if (OB_FAIL(append_profile_suffix(current_op, merged_items.at(i)))) {
         LOG_WARN("failed to append profile suffix");
-      } else if (OB_FAIL(append_metric_prefix(current_op, current_op.plan_depth_))) {
+      } else if (OB_FAIL(append_metric_prefix(current_op, current_op.plan_depth_, merged_items.at(i)))) {
         LOG_WARN("failed to append metric prefix");
       }
     }
@@ -540,11 +574,11 @@ int ProfilePrefixHelper::prepare_pretty_prefix(const ObIArray<ObMergedProfileIte
       }
 
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(append_profile_prefix(current_op, current_depth))) {
+      } else if (OB_FAIL(append_profile_prefix(current_op, current_depth, merged_items.at(i)))) {
         LOG_WARN("failed to append profile prefix");
       } else if (OB_FAIL(append_profile_suffix(current_op, merged_items.at(i)))) {
         LOG_WARN("failed to append profile suffix");
-      } else if (OB_FAIL(append_metric_prefix(current_op, current_depth))) {
+      } else if (OB_FAIL(append_metric_prefix(current_op, current_depth, merged_items.at(i)))) {
         LOG_WARN("failed to append metric prefix");
       } else if (OB_FAIL(ancestors_stack_.push_back(
                     {current_op.op_id_, current_op.last_child_op_id_, last_child_processed}))) {
@@ -556,7 +590,8 @@ int ProfilePrefixHelper::prepare_pretty_prefix(const ObIArray<ObMergedProfileIte
 }
 
 int ProfilePrefixHelper::append_profile_prefix(PrefixInfo &current_profile,
-                                               int64_t current_depth)
+                                               int64_t current_depth,
+                                               const ObMergedProfileItem &merged_item)
 {
   int ret = OB_SUCCESS;
   char *buf = NULL;
@@ -565,6 +600,10 @@ int ProfilePrefixHelper::append_profile_prefix(PrefixInfo &current_profile,
   if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(buf_len)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocate buffer failed", K(buf_len));
+  } else if (OB_FAIL(BUF_PRINTF("%s", merged_item.color_ != nullptr
+                                          ? merged_item.color_
+                                          : ""))) {
+    LOG_WARN("failed to print color", K(merged_item.color_));
   } else if (!is_full_plan_) {
     for (int64_t j = 0; OB_SUCC(ret) && j < current_depth; ++j) {
       OZ(BUF_PRINTF("  "));
@@ -632,7 +671,12 @@ int ProfilePrefixHelper::append_profile_suffix(PrefixInfo &current_profile,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocate buffer failed", K(buf_len));
   } else {
-    OZ(BUF_PRINTF("(dop=%ld)", merged_item.parallel_));
+    if (merged_item.rate_ > 1) {
+      OZ(BUF_PRINTF("(%.2f%%", merged_item.rate_));
+    } else {
+      OZ(BUF_PRINTF("(<1%"));
+    }
+    OZ(BUF_PRINTF(", dop=%ld)", merged_item.parallel_));
   }
   if (OB_SUCC(ret)) {
     (void)current_profile.profile_suffix_.assign(buf, pos);
@@ -641,7 +685,8 @@ int ProfilePrefixHelper::append_profile_suffix(PrefixInfo &current_profile,
 }
 
 int ProfilePrefixHelper::append_metric_prefix(PrefixInfo &current_profile,
-                                              int64_t current_depth)
+                                              int64_t current_depth,
+                                              const ObMergedProfileItem &merged_item)
 {
   int ret = OB_SUCCESS;
   char *buf = NULL;
@@ -650,6 +695,10 @@ int ProfilePrefixHelper::append_metric_prefix(PrefixInfo &current_profile,
   if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(buf_len)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocate buffer failed", K(buf_len));
+  } else if (OB_FAIL(BUF_PRINTF("%s", merged_item.color_ != nullptr
+                                          ? merged_item.color_
+                                          : ""))) {
+    LOG_WARN("failed to print color", K(merged_item.color_));
   } else if (!is_full_plan_) {
     for (int64_t j = 0; OB_SUCC(ret) && j <= current_depth; ++j) {
       OZ(BUF_PRINTF("  "));

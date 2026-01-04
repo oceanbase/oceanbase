@@ -64,16 +64,16 @@ inline void join_filter()
   INC_METRIC_VAL(ObMetricId::JOIN_FILTER_FILTERED_COUNT, filter_count);
   INC_METRIC_VAL(ObMetricId::JOIN_FILTER_TOTAL_COUNT, total_count);
   uint64_t io_time=999999;//999,999
-  INC_METRIC_VAL(ObMetricId::TOTAL_IO_TIME, io_time);
+  INC_METRIC_VAL(ObMetricId::IO_TIME, io_time);
   OZ(get_current_profile()->to_format_json(&arena_alloc, json));
   cout << json << endl;
-  ASSERT_STREQ("{\"PHY_JOIN_FILTER\":{\"filtered row count\":20000, \"total row count\":22000, \"total io time\":\"999.999us\"}}", json);
+  ASSERT_STREQ("{\"PHY_JOIN_FILTER\":{\"filtered row count\":20000, \"total row count\":22000, \"io time\":\"999.999us\"}}", json);
   OZ(get_current_profile()->to_persist_profile(persist_profile, persist_profile_size, &arena_alloc));
   OZ(convert_persist_profile_to_realtime(persist_profile, persist_profile_size, new_profile, &arena_alloc));
   OZ(new_profile->to_format_json(&arena_alloc, persist_profile_json));
   cout << persist_profile_json << endl;
   cout << persist_profile_size << endl;
-  ASSERT_STREQ("{\"PHY_JOIN_FILTER\":{\"filtered row count\":20000, \"total row count\":22000, \"total io time\":\"999.999us\"}}", persist_profile_json);
+  ASSERT_STREQ("{\"PHY_JOIN_FILTER\":{\"filtered row count\":20000, \"total row count\":22000, \"io time\":\"999.999us\"}}", persist_profile_json);
   ASSERT_EQ(96, persist_profile_size);
   merge_profile->~ObOpProfile<ObMergeMetric>();
   merge_profile = nullptr;
@@ -85,7 +85,7 @@ inline void join_filter()
     OZ(merge_profile->to_format_json(&arena_alloc, merge_profile_json));
     cout << merge_profile_json << endl;
   }
-  ASSERT_STREQ("{\"PHY_JOIN_FILTER\":{\"filtered row count\":{\"sum\":40000, \"min\":20000, \"max\":20000}, \"total row count\":{\"sum\":44000, \"min\":22000, \"max\":22000}, \"total io time\":{\"avg\":\"999.999us\", \"min\":\"999.999us\", \"max\":\"999.999us\"}}}", merge_profile_json);
+  ASSERT_STREQ("{\"PHY_JOIN_FILTER\":{\"filtered row count\":{\"sum\":40000, \"min\":20000, \"max\":20000}, \"total row count\":{\"sum\":44000, \"min\":22000, \"max\":22000}, \"io time\":{\"avg\":\"999.999us\", \"min\":\"999.999us\", \"max\":\"999.999us\"}}}", merge_profile_json);
   ASSERT_EQ(0, ret);
 };
 
@@ -125,20 +125,20 @@ inline void hash_join()
 
 
   uint64_t io_time=999999;
-  INC_METRIC_VAL(ObMetricId::TOTAL_IO_TIME, io_time);
+  INC_METRIC_VAL(ObMetricId::IO_TIME, io_time);
 
   uint64_t bucket_size = 2048;
   SET_METRIC_VAL(ObMetricId::HASH_BUCKET_COUNT, bucket_size);
 
   OZ(get_current_profile()->to_format_json(&arena_alloc, json, true, metric::Level::AD_HOC));
   cout << json << endl;
-  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"total io time\":\"999.999us\", \"bucket size\":2048}}", json);
+  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"io time\":\"999.999us\", \"bucket size\":2048}}", json);
   OZ(get_current_profile()->to_persist_profile(persist_profile, persist_profile_size, &arena_alloc));
   OZ(convert_persist_profile_to_realtime(persist_profile, persist_profile_size, new_profile, &arena_alloc));
   OZ(new_profile->to_format_json(&arena_alloc, persist_profile_json, true, metric::Level::AD_HOC));
   cout << persist_profile_json << endl;
   cout << persist_profile_size << endl;
-  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"total io time\":\"999.999us\", \"bucket size\":2048}}", persist_profile_json);
+  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"io time\":\"999.999us\", \"bucket size\":2048}}", persist_profile_json);
   ASSERT_EQ(80, persist_profile_size);
   merge_profile->~ObOpProfile<ObMergeMetric>();
   merge_profile = nullptr;
@@ -150,18 +150,18 @@ inline void hash_join()
     OZ(merge_profile->to_format_json(&arena_alloc, merge_profile_json, true, metric::Level::AD_HOC));
     cout << merge_profile_json << endl;
   }
-  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"total io time\":{\"avg\":\"999.999us\", \"min\":\"999.999us\", \"max\":\"999.999us\"}, \"bucket size\":{\"sum\":4096}}}", merge_profile_json);
+  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"io time\":{\"avg\":\"999.999us\", \"min\":\"999.999us\", \"max\":\"999.999us\"}, \"bucket size\":{\"sum\":4096}}}", merge_profile_json);
 
   join_filter();
   OZ(get_current_profile()->to_format_json(&arena_alloc, json, true, metric::Level::AD_HOC));
   cout << json << endl;
-  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"total io time\":\"999.999us\", \"bucket size\":2048, \"PHY_JOIN_FILTER\":{\"filtered row count\":20000, \"total row count\":22000, \"total io time\":\"999.999us\"}}}", json);
+  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"io time\":\"999.999us\", \"bucket size\":2048, \"PHY_JOIN_FILTER\":{\"filtered row count\":20000, \"total row count\":22000, \"io time\":\"999.999us\"}}}", json);
   OZ(get_current_profile()->to_persist_profile(persist_profile, persist_profile_size, &arena_alloc));
   OZ(convert_persist_profile_to_realtime(persist_profile, persist_profile_size, new_profile, &arena_alloc));
   OZ(new_profile->to_format_json(&arena_alloc, persist_profile_json, true, metric::Level::AD_HOC));
   cout << persist_profile_json << endl;
   cout << persist_profile_size << endl;
-  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"total io time\":\"999.999us\", \"bucket size\":2048, \"PHY_JOIN_FILTER\":{\"filtered row count\":20000, \"total row count\":22000, \"total io time\":\"999.999us\"}}}", persist_profile_json);
+  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"io time\":\"999.999us\", \"bucket size\":2048, \"PHY_JOIN_FILTER\":{\"filtered row count\":20000, \"total row count\":22000, \"io time\":\"999.999us\"}}}", persist_profile_json);
   ASSERT_EQ(152, persist_profile_size);
   merge_profile->~ObOpProfile<ObMergeMetric>();
   merge_profile = nullptr;
@@ -172,20 +172,20 @@ inline void hash_join()
   OZ(ObProfileUtil::merge_profile(*merge_profile, new_profile, &arena_alloc));
   OZ(merge_profile->to_format_json(&arena_alloc, merge_profile_json));
   cout << merge_profile_json << endl;
-  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"total io time\":{\"avg\":\"999.999us\", \"min\":\"999.999us\", \"max\":\"999.999us\"}, \"bucket size\":{\"sum\":4096}, \"PHY_JOIN_FILTER\":{\"filtered row count\":{\"sum\":40000, \"min\":20000, \"max\":20000}, \"total row count\":{\"sum\":44000, \"min\":22000, \"max\":22000}, \"total io time\":{\"avg\":\"999.999us\", \"min\":\"999.999us\", \"max\":\"999.999us\"}}}}", merge_profile_json);
+  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"io time\":{\"avg\":\"999.999us\", \"min\":\"999.999us\", \"max\":\"999.999us\"}, \"bucket size\":{\"sum\":4096}, \"PHY_JOIN_FILTER\":{\"filtered row count\":{\"sum\":40000, \"min\":20000, \"max\":20000}, \"total row count\":{\"sum\":44000, \"min\":22000, \"max\":22000}, \"io time\":{\"avg\":\"999.999us\", \"min\":\"999.999us\", \"max\":\"999.999us\"}}}}", merge_profile_json);
 
 
   uint64_t hash_row_count = 13000;
   INC_METRIC_VAL(ObMetricId::HASH_ROW_COUNT, hash_row_count);
   OZ(get_current_profile()->to_format_json(&arena_alloc, json, true, metric::Level::AD_HOC));
   cout << json << endl;
-  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"total io time\":\"999.999us\", \"bucket size\":2048, \"total row count\":13000, \"PHY_JOIN_FILTER\":{\"filtered row count\":20000, \"total row count\":22000, \"total io time\":\"999.999us\"}}}", json);
+  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"io time\":\"999.999us\", \"bucket size\":2048, \"total row count\":13000, \"PHY_JOIN_FILTER\":{\"filtered row count\":20000, \"total row count\":22000, \"io time\":\"999.999us\"}}}", json);
   OZ(get_current_profile()->to_persist_profile(persist_profile, persist_profile_size, &arena_alloc));
   OZ(convert_persist_profile_to_realtime(persist_profile, persist_profile_size, new_profile, &arena_alloc));
   OZ(new_profile->to_format_json(&arena_alloc, persist_profile_json, true, metric::Level::AD_HOC));
   cout << persist_profile_json << endl;
   cout << persist_profile_size << endl;
-  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"total io time\":\"999.999us\", \"bucket size\":2048, \"total row count\":13000, \"PHY_JOIN_FILTER\":{\"filtered row count\":20000, \"total row count\":22000, \"total io time\":\"999.999us\"}}}", persist_profile_json);
+  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"io time\":\"999.999us\", \"bucket size\":2048, \"total row count\":13000, \"PHY_JOIN_FILTER\":{\"filtered row count\":20000, \"total row count\":22000, \"io time\":\"999.999us\"}}}", persist_profile_json);
   ASSERT_EQ(168, persist_profile_size);
   merge_profile->~ObOpProfile<ObMergeMetric>();
   merge_profile = nullptr;
@@ -197,7 +197,7 @@ inline void hash_join()
     OZ(merge_profile->to_format_json(&arena_alloc, merge_profile_json));
     cout << merge_profile_json << endl;
   }
-  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"total io time\":{\"avg\":\"999.999us\", \"min\":\"999.999us\", \"max\":\"999.999us\"}, \"bucket size\":{\"sum\":4096}, \"total row count\":{\"sum\":26000}, \"PHY_JOIN_FILTER\":{\"filtered row count\":{\"sum\":40000, \"min\":20000, \"max\":20000}, \"total row count\":{\"sum\":44000, \"min\":22000, \"max\":22000}, \"total io time\":{\"avg\":\"999.999us\", \"min\":\"999.999us\", \"max\":\"999.999us\"}}}}", merge_profile_json);
+  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"io time\":{\"avg\":\"999.999us\", \"min\":\"999.999us\", \"max\":\"999.999us\"}, \"bucket size\":{\"sum\":4096}, \"total row count\":{\"sum\":26000}, \"PHY_JOIN_FILTER\":{\"filtered row count\":{\"sum\":40000, \"min\":20000, \"max\":20000}, \"total row count\":{\"sum\":44000, \"min\":22000, \"max\":22000}, \"io time\":{\"avg\":\"999.999us\", \"min\":\"999.999us\", \"max\":\"999.999us\"}}}}", merge_profile_json);
   ASSERT_EQ(0, ret);
 }
 
@@ -239,7 +239,7 @@ TEST_F(ObRuntimeProfileTest, test_mock_rpc_send_persist_profile)
   OZ(convert_persist_profile_to_realtime(des_persist_profile, persist_profile_size, new_profile, &arena_alloc));
   OZ(new_profile->to_format_json(&arena_alloc, persist_profile_json, true, metric::Level::AD_HOC));
   cout << persist_profile_json << endl;
-  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"bucket size\":2048, \"PHY_JOIN_FILTER\":{\"filtered row count\":20000, \"total row count\":22000, \"total io time\":\"999.999us\"}}}", persist_profile_json);
+  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"bucket size\":2048, \"PHY_JOIN_FILTER\":{\"filtered row count\":20000, \"total row count\":22000, \"io time\":\"999.999us\"}}}", persist_profile_json);
   ASSERT_EQ(136, persist_profile_size);
   ASSERT_EQ(0, ret);
 }
@@ -465,11 +465,11 @@ TEST_F(ObRuntimeProfileTest, test_pretty_print_profile_1)
               └─14.PHY_TABLE_SCAN
   */
   printer.print_selected_profile({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14}, buf);
-  ASSERT_STREQ("0.PHY_PX_FIFO_COORD(dop=1)\n\xE2\x94\x82  output batches:100 [min=100, max=100]\n\xE2\x94\x82  output rows:100 [min=100, max=100]\n\xE2\x94\x94\xE2\x94\x80" "1.PHY_PX_REDUCE_TRANSMIT(dop=1)\n  \xE2\x94\x82  output batches:100 [min=100, max=100]\n  \xE2\x94\x82  output rows:100 [min=100, max=100]\n  \xE2\x94\x94\xE2\x94\x80" "2.PHY_MERGE_UNION(dop=1)\n    \xE2\x94\x82  output batches:100 [min=100, max=100]\n    \xE2\x94\x82  output rows:100 [min=100, max=100]\n    \xE2\x94\x9C\xE2\x94\x80" "3.PHY_PX_FIFO_RECEIVE(dop=1)\n    \xE2\x94\x82 \xE2\x94\x82  output batches:100 [min=100, max=100]\n    \xE2\x94\x82 \xE2\x94\x82  output rows:100 [min=100, max=100]\n    \xE2\x94\x82 \xE2\x94\x94\xE2\x94\x80" "4.PHY_PX_REPART_TRANSMIT(dop=1)\n    \xE2\x94\x82   \xE2\x94\x82  output batches:100 [min=100, max=100]\n    \xE2\x94\x82   \xE2\x94\x82  output rows:100 [min=100, max=100]\n    \xE2\x94\x82   \xE2\x94\x94\xE2\x94\x80" "5.PHY_GRANULE_ITERATOR(dop=1)\n    \xE2\x94\x82     \xE2\x94\x82  output batches:100 [min=100, max=100]\n    \xE2\x94\x82     \xE2\x94\x82  output rows:100 [min=100, max=100]\n    \xE2\x94\x82     \xE2\x94\x94\xE2\x94\x80" "6.PHY_TABLE_SCAN(dop=1)\n    \xE2\x94\x82         output batches:100 [min=100, max=100]\n    \xE2\x94\x82         output rows:100 [min=100, max=100]\n    \xE2\x94\x82         Lake Table File Reader\n    \xE2\x94\x82           lake table read count:100\n    \xE2\x94\x82           lake table sync read count:100\n    \xE2\x94\x82         Lake Table Storage IO\n    \xE2\x94\x82           lake table max io time:100ns [max=100ns]\n    \xE2\x94\x82           lake table avg io time:100ns\n    \xE2\x94\x9C\xE2\x94\x80" "7.PHY_PX_FIFO_RECEIVE(dop=1)\n    \xE2\x94\x82 \xE2\x94\x82  output batches:100 [min=100, max=100]\n    \xE2\x94\x82 \xE2\x94\x82  output rows:100 [min=100, max=100]\n    \xE2\x94\x82 \xE2\x94\x94\xE2\x94\x80" "8.PHY_PX_REPART_TRANSMIT(dop=1)\n    \xE2\x94\x82   \xE2\x94\x82  output batches:100 [min=100, max=100]\n    \xE2\x94\x82   \xE2\x94\x82  output rows:100 [min=100, max=100]\n    \xE2\x94\x82   \xE2\x94\x94\xE2\x94\x80" "9.PHY_GRANULE_ITERATOR(dop=1)\n    \xE2\x94\x82     \xE2\x94\x82  output batches:100 [min=100, max=100]\n    \xE2\x94\x82     \xE2\x94\x82  output rows:100 [min=100, max=100]\n    \xE2\x94\x82     \xE2\x94\x94\xE2\x94\x80" "10.PHY_TABLE_SCAN(dop=1)\n    \xE2\x94\x82         output batches:100 [min=100, max=100]\n    \xE2\x94\x82         output rows:100 [min=100, max=100]\n    \xE2\x94\x94\xE2\x94\x80" "11.PHY_PX_FIFO_RECEIVE(dop=1)\n      \xE2\x94\x82  output batches:100 [min=100, max=100]\n      \xE2\x94\x82  output rows:100 [min=100, max=100]\n      \xE2\x94\x94\xE2\x94\x80" "12.PHY_PX_REPART_TRANSMIT(dop=1)\n        \xE2\x94\x82  output batches:100 [min=100, max=100]\n        \xE2\x94\x82  output rows:100 [min=100, max=100]\n        \xE2\x94\x94\xE2\x94\x80" "13.PHY_GRANULE_ITERATOR(dop=1)\n          \xE2\x94\x82  output batches:100 [min=100, max=100]\n          \xE2\x94\x82  output rows:100 [min=100, max=100]\n          \xE2\x94\x94\xE2\x94\x80" "14.PHY_TABLE_SCAN(dop=1)\n              output batches:100 [min=100, max=100]\n              output rows:100 [min=100, max=100]\n", buf);
+  ASSERT_STREQ("0.PHY_PX_FIFO_COORD(<1%, dop=1)\n\xE2\x94\x82  output batches:100 [min=100, max=100]\n\xE2\x94\x82  output rows:100 [min=100, max=100]\n\xE2\x94\x94\xE2\x94\x80" "1.PHY_PX_REDUCE_TRANSMIT(<1%, dop=1)\n  \xE2\x94\x82  output batches:100 [min=100, max=100]\n  \xE2\x94\x82  output rows:100 [min=100, max=100]\n  \xE2\x94\x94\xE2\x94\x80" "2.PHY_MERGE_UNION(<1%, dop=1)\n    \xE2\x94\x82  output batches:100 [min=100, max=100]\n    \xE2\x94\x82  output rows:100 [min=100, max=100]\n    \xE2\x94\x9C\xE2\x94\x80" "3.PHY_PX_FIFO_RECEIVE(<1%, dop=1)\n    \xE2\x94\x82 \xE2\x94\x82  output batches:100 [min=100, max=100]\n    \xE2\x94\x82 \xE2\x94\x82  output rows:100 [min=100, max=100]\n    \xE2\x94\x82 \xE2\x94\x94\xE2\x94\x80" "4.PHY_PX_REPART_TRANSMIT(<1%, dop=1)\n    \xE2\x94\x82   \xE2\x94\x82  output batches:100 [min=100, max=100]\n    \xE2\x94\x82   \xE2\x94\x82  output rows:100 [min=100, max=100]\n    \xE2\x94\x82   \xE2\x94\x94\xE2\x94\x80" "5.PHY_GRANULE_ITERATOR(<1%, dop=1)\n    \xE2\x94\x82     \xE2\x94\x82  output batches:100 [min=100, max=100]\n    \xE2\x94\x82     \xE2\x94\x82  output rows:100 [min=100, max=100]\n    \xE2\x94\x82     \xE2\x94\x94\xE2\x94\x80" "6.PHY_TABLE_SCAN(<1%, dop=1)\n    \xE2\x94\x82         output batches:100 [min=100, max=100]\n    \xE2\x94\x82         output rows:100 [min=100, max=100]\n    \xE2\x94\x82         Lake Table File Reader\n    \xE2\x94\x82           lake table read count:100\n    \xE2\x94\x82           lake table sync read count:100\n    \xE2\x94\x82         Lake Table Storage IO\n    \xE2\x94\x82           lake table max io time:100ns [max=100ns]\n    \xE2\x94\x82           lake table avg io time:100ns\n    \xE2\x94\x9C\xE2\x94\x80" "7.PHY_PX_FIFO_RECEIVE(<1%, dop=1)\n    \xE2\x94\x82 \xE2\x94\x82  output batches:100 [min=100, max=100]\n    \xE2\x94\x82 \xE2\x94\x82  output rows:100 [min=100, max=100]\n    \xE2\x94\x82 \xE2\x94\x94\xE2\x94\x80" "8.PHY_PX_REPART_TRANSMIT(<1%, dop=1)\n    \xE2\x94\x82   \xE2\x94\x82  output batches:100 [min=100, max=100]\n    \xE2\x94\x82   \xE2\x94\x82  output rows:100 [min=100, max=100]\n    \xE2\x94\x82   \xE2\x94\x94\xE2\x94\x80" "9.PHY_GRANULE_ITERATOR(<1%, dop=1)\n    \xE2\x94\x82     \xE2\x94\x82  output batches:100 [min=100, max=100]\n    \xE2\x94\x82     \xE2\x94\x82  output rows:100 [min=100, max=100]\n    \xE2\x94\x82     \xE2\x94\x94\xE2\x94\x80" "10.PHY_TABLE_SCAN(<1%, dop=1)\n    \xE2\x94\x82         output batches:100 [min=100, max=100]\n    \xE2\x94\x82         output rows:100 [min=100, max=100]\n    \xE2\x94\x94\xE2\x94\x80" "11.PHY_PX_FIFO_RECEIVE(<1%, dop=1)\n      \xE2\x94\x82  output batches:100 [min=100, max=100]\n      \xE2\x94\x82  output rows:100 [min=100, max=100]\n      \xE2\x94\x94\xE2\x94\x80" "12.PHY_PX_REPART_TRANSMIT(<1%, dop=1)\n        \xE2\x94\x82  output batches:100 [min=100, max=100]\n        \xE2\x94\x82  output rows:100 [min=100, max=100]\n        \xE2\x94\x94\xE2\x94\x80" "13.PHY_GRANULE_ITERATOR(<1%, dop=1)\n          \xE2\x94\x82  output batches:100 [min=100, max=100]\n          \xE2\x94\x82  output rows:100 [min=100, max=100]\n          \xE2\x94\x94\xE2\x94\x80" "14.PHY_TABLE_SCAN(<1%, dop=1)\n              output batches:100 [min=100, max=100]\n              output rows:100 [min=100, max=100]\n", buf);
   printer.print_selected_profile({0, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}, buf);
-  ASSERT_STREQ("0.PHY_PX_FIFO_COORD(dop=1)\n   output batches:100 [min=100, max=100]\n   output rows:100 [min=100, max=100]\n      3.PHY_PX_FIFO_RECEIVE(dop=1)\n         output batches:100 [min=100, max=100]\n         output rows:100 [min=100, max=100]\n        4.PHY_PX_REPART_TRANSMIT(dop=1)\n           output batches:100 [min=100, max=100]\n           output rows:100 [min=100, max=100]\n          5.PHY_GRANULE_ITERATOR(dop=1)\n             output batches:100 [min=100, max=100]\n             output rows:100 [min=100, max=100]\n            6.PHY_TABLE_SCAN(dop=1)\n               output batches:100 [min=100, max=100]\n               output rows:100 [min=100, max=100]\n               Lake Table File Reader\n                 lake table read count:100\n                 lake table sync read count:100\n               Lake Table Storage IO\n                 lake table max io time:100ns [max=100ns]\n                 lake table avg io time:100ns\n      7.PHY_PX_FIFO_RECEIVE(dop=1)\n         output batches:100 [min=100, max=100]\n         output rows:100 [min=100, max=100]\n        8.PHY_PX_REPART_TRANSMIT(dop=1)\n           output batches:100 [min=100, max=100]\n           output rows:100 [min=100, max=100]\n          9.PHY_GRANULE_ITERATOR(dop=1)\n             output batches:100 [min=100, max=100]\n             output rows:100 [min=100, max=100]\n            10.PHY_TABLE_SCAN(dop=1)\n               output batches:100 [min=100, max=100]\n               output rows:100 [min=100, max=100]\n      11.PHY_PX_FIFO_RECEIVE(dop=1)\n         output batches:100 [min=100, max=100]\n         output rows:100 [min=100, max=100]\n        12.PHY_PX_REPART_TRANSMIT(dop=1)\n           output batches:100 [min=100, max=100]\n           output rows:100 [min=100, max=100]\n", buf);
+  ASSERT_STREQ("0.PHY_PX_FIFO_COORD(<1%, dop=1)\n   output batches:100 [min=100, max=100]\n   output rows:100 [min=100, max=100]\n      3.PHY_PX_FIFO_RECEIVE(<1%, dop=1)\n         output batches:100 [min=100, max=100]\n         output rows:100 [min=100, max=100]\n        4.PHY_PX_REPART_TRANSMIT(<1%, dop=1)\n           output batches:100 [min=100, max=100]\n           output rows:100 [min=100, max=100]\n          5.PHY_GRANULE_ITERATOR(<1%, dop=1)\n             output batches:100 [min=100, max=100]\n             output rows:100 [min=100, max=100]\n            6.PHY_TABLE_SCAN(<1%, dop=1)\n               output batches:100 [min=100, max=100]\n               output rows:100 [min=100, max=100]\n               Lake Table File Reader\n                 lake table read count:100\n                 lake table sync read count:100\n               Lake Table Storage IO\n                 lake table max io time:100ns [max=100ns]\n                 lake table avg io time:100ns\n      7.PHY_PX_FIFO_RECEIVE(<1%, dop=1)\n         output batches:100 [min=100, max=100]\n         output rows:100 [min=100, max=100]\n        8.PHY_PX_REPART_TRANSMIT(<1%, dop=1)\n           output batches:100 [min=100, max=100]\n           output rows:100 [min=100, max=100]\n          9.PHY_GRANULE_ITERATOR(<1%, dop=1)\n             output batches:100 [min=100, max=100]\n             output rows:100 [min=100, max=100]\n            10.PHY_TABLE_SCAN(<1%, dop=1)\n               output batches:100 [min=100, max=100]\n               output rows:100 [min=100, max=100]\n      11.PHY_PX_FIFO_RECEIVE(<1%, dop=1)\n         output batches:100 [min=100, max=100]\n         output rows:100 [min=100, max=100]\n        12.PHY_PX_REPART_TRANSMIT(<1%, dop=1)\n           output batches:100 [min=100, max=100]\n           output rows:100 [min=100, max=100]\n", buf);
   printer.print_selected_profile({0, 5, 6, 9, 10, 11, 12}, buf);
-  ASSERT_STREQ("0.PHY_PX_FIFO_COORD(dop=1)\n   output batches:100 [min=100, max=100]\n   output rows:100 [min=100, max=100]\n          5.PHY_GRANULE_ITERATOR(dop=1)\n             output batches:100 [min=100, max=100]\n             output rows:100 [min=100, max=100]\n            6.PHY_TABLE_SCAN(dop=1)\n               output batches:100 [min=100, max=100]\n               output rows:100 [min=100, max=100]\n               Lake Table File Reader\n                 lake table read count:100\n                 lake table sync read count:100\n               Lake Table Storage IO\n                 lake table max io time:100ns [max=100ns]\n                 lake table avg io time:100ns\n          9.PHY_GRANULE_ITERATOR(dop=1)\n             output batches:100 [min=100, max=100]\n             output rows:100 [min=100, max=100]\n            10.PHY_TABLE_SCAN(dop=1)\n               output batches:100 [min=100, max=100]\n               output rows:100 [min=100, max=100]\n      11.PHY_PX_FIFO_RECEIVE(dop=1)\n         output batches:100 [min=100, max=100]\n         output rows:100 [min=100, max=100]\n        12.PHY_PX_REPART_TRANSMIT(dop=1)\n           output batches:100 [min=100, max=100]\n           output rows:100 [min=100, max=100]\n", buf);
+  ASSERT_STREQ("0.PHY_PX_FIFO_COORD(<1%, dop=1)\n   output batches:100 [min=100, max=100]\n   output rows:100 [min=100, max=100]\n          5.PHY_GRANULE_ITERATOR(<1%, dop=1)\n             output batches:100 [min=100, max=100]\n             output rows:100 [min=100, max=100]\n            6.PHY_TABLE_SCAN(<1%, dop=1)\n               output batches:100 [min=100, max=100]\n               output rows:100 [min=100, max=100]\n               Lake Table File Reader\n                 lake table read count:100\n                 lake table sync read count:100\n               Lake Table Storage IO\n                 lake table max io time:100ns [max=100ns]\n                 lake table avg io time:100ns\n          9.PHY_GRANULE_ITERATOR(<1%, dop=1)\n             output batches:100 [min=100, max=100]\n             output rows:100 [min=100, max=100]\n            10.PHY_TABLE_SCAN(<1%, dop=1)\n               output batches:100 [min=100, max=100]\n               output rows:100 [min=100, max=100]\n      11.PHY_PX_FIFO_RECEIVE(<1%, dop=1)\n         output batches:100 [min=100, max=100]\n         output rows:100 [min=100, max=100]\n        12.PHY_PX_REPART_TRANSMIT(<1%, dop=1)\n           output batches:100 [min=100, max=100]\n           output rows:100 [min=100, max=100]\n", buf);
 }
 
 int main(int argc, char **argv)

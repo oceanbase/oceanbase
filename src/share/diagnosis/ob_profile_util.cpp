@@ -71,6 +71,14 @@ enum FETCH_COLUMN
   RAW_PROFILE           // varchar
 };
 
+const char *ObMergedProfileItem::COLORS[] = {
+  "\033[1;38;5;229m", //yellow
+  "\033[1;38;5;208m", //orange
+  "\033[1;38;5;160m", //red
+};
+
+const char *ObMergedProfileItem::DEFAULT_COLOR = "\033[0000000000m";
+
 int ObMergedProfileItem::init_from(ObIAllocator *alloc, const ObProfileItem &profile_item)
 {
   int ret = OB_SUCCESS;
@@ -188,9 +196,23 @@ int ObProfileUtil::get_merged_profiles(ObIAllocator *alloc,
         }
       } else {
         // different op_id, or another sql execution, save and new one
-        const ObMergeMetric *metric = merged_item.profile_->get_metric(ObMetricId::DB_TIME);
-        if (OB_NOT_NULL(metric)) {
-          merged_item.max_db_time_ = metric->get_max_value();
+        ObPhyOperatorType phy_type = static_cast<ObPhyOperatorType>(merged_item.profile_->get_id());
+        if (IS_PX_RECEIVE(phy_type) || IS_PX_TRANSMIT(phy_type)) {
+          // for transmit/receive operator, we will reduce the dtl wait time for displaying most
+          // time consuming operators
+          const ObMergeMetric *cpu_time = merged_item.profile_->get_metric(ObMetricId::CPU_TIME);
+          if (OB_NOT_NULL(cpu_time)) {
+            merged_item.max_db_time_ = cpu_time->get_max_value();
+          }
+          const ObMergeMetric *dump_time = merged_item.profile_->get_metric(ObMetricId::DUMP_RW_TIME);
+          if (OB_NOT_NULL(dump_time)) {
+            merged_item.max_db_time_ += dump_time->get_max_value();
+          }
+        } else {
+          const ObMergeMetric *db_time = merged_item.profile_->get_metric(ObMetricId::DB_TIME);
+          if (OB_NOT_NULL(db_time)) {
+            merged_item.max_db_time_ = db_time->get_max_value();
+          }
         }
         if (OB_FAIL(merged_profile_items.push_back(merged_item))) {
           LOG_WARN("failed to pushback");
@@ -505,7 +527,8 @@ int ObProfileUtil::fill_metrics_into_profile(ObProfileItem &profile_item)
   SET_METRIC_VAL(ObMetricId::RESCAN_TIMES, profile_item.rescan_times_);
   SET_METRIC_VAL(ObMetricId::OUTPUT_ROWS, profile_item.output_rows_);
   SET_METRIC_VAL(ObMetricId::DB_TIME, profile_item.db_time_);
-  SET_METRIC_VAL(ObMetricId::TOTAL_IO_TIME, profile_item.io_time_);
+  SET_METRIC_VAL(ObMetricId::CPU_TIME, profile_item.db_time_ - profile_item.io_time_);
+  SET_METRIC_VAL(ObMetricId::IO_TIME, profile_item.io_time_);
   SET_METRIC_VAL(ObMetricId::WORKAREA_MEM, profile_item.workarea_mem_);
   SET_METRIC_VAL(ObMetricId::WORKAREA_MAX_MEM, profile_item.workarea_max_mem_);
   SET_METRIC_VAL(ObMetricId::WORKAREA_TEMPSEG, profile_item.workarea_tempseg_);

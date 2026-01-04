@@ -73,7 +73,7 @@ private:
                                   const ObString &trace_id, ProfileText &profile_text);
 
   static int format_summary_info(const ObMergedProfileItem *compile_profile,
-                                 const ObIArray<ObMergedProfileItem> &merged_items,
+                                 ObIArray<ObMergedProfileItem> &merged_items,
                                  int64_t execution_count, ProfileText &profile_text);
 
   static int format_agg_profiles(const ObIArray<ObMergedProfileItem> &merged_items,
@@ -122,9 +122,11 @@ public:
   const ObIArray<PrefixInfo> &get_prefixs() const { return prefix_infos_; }
   bool is_full_plan() const { return is_full_plan_; }
 private:
-  int append_profile_prefix(PrefixInfo &current_profile, int64_t current_depth);
+  int append_profile_prefix(PrefixInfo &current_profile, int64_t current_depth,
+                            const ObMergedProfileItem &merged_item);
   int append_profile_suffix(PrefixInfo &current_profile, const ObMergedProfileItem &merged_item);
-  int append_metric_prefix(PrefixInfo &current_profile, int64_t current_depth);
+  int append_metric_prefix(PrefixInfo &current_profile, int64_t current_depth,
+                           const ObMergedProfileItem &merged_item);
 private:
   ObIAllocator &allocator_;
   ObSEArray<PrefixInfo, 4> prefix_infos_;

@@ -81,7 +81,7 @@ SQL_MONITOR_STATNAME_DEF(TOTAL_READ_ROW_COUNT, metric::Unit::INT, "total rows pr
 SQL_MONITOR_STATNAME_DEF(SKIP_INDEX_SKIP_BLOCK_CNT, metric::Unit::INT, "total blocks skipped by skip index", "total blocks skipped by skip index", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)
 
 // Common Metrics
-SQL_MONITOR_STATNAME_DEF(TOTAL_IO_TIME, metric::Unit::TIME_NS, "total io time", "total io time", M_AVG | E_MIN | E_MAX, metric::Level::CRITICAL)
+SQL_MONITOR_STATNAME_DEF(IO_TIME, metric::Unit::TIME_NS, "io time", "io time", M_AVG | E_MIN | E_MAX, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(OUTPUT_ROWS, metric::Unit::INT, "output rows", "output rows", M_SUM | E_MIN | E_MAX, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(OUTPUT_BATCHES, metric::Unit::INT, "output batches", "output batches", M_SUM | E_MIN | E_MAX, metric::Level::AD_HOC)
 SQL_MONITOR_STATNAME_DEF(SKIPPED_ROWS, metric::Unit::INT, "skipped rows", "skipped rows", M_SUM | E_MIN | E_MAX, metric::Level::AD_HOC)
@@ -171,6 +171,10 @@ SQL_MONITOR_STATNAME_DEF(ELAPSED_TIME, metric::Unit::TIME_NS, "elapsed time", "e
 
 // Plan Cache Metrics
 SQL_MONITOR_STATNAME_DEF(IS_HIT_PLAN, metric::Unit::INT, "is hit plan", "is hit plan", M_SUM, metric::Level::STANDARD)
+
+SQL_MONITOR_STATNAME_DEF(CPU_TIME, metric::Unit::TIME_NS, "cpu time", "cpu time", M_AVG | E_MIN | E_MAX, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(DTL_BLOCKING_TIME, metric::Unit::TIME_NS, "dtl blocking time", "receive block dtl channel time", M_AVG | E_MIN | E_MAX, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(DUMP_RW_TIME, metric::Unit::CPU_CYCLE, "read/write time for dumped data", "read/write time for dumped data", M_AVG | E_MIN | E_MAX, metric::Level::AD_HOC)
 
 //end
 SQL_MONITOR_STATNAME_DEF(MONITOR_STATNAME_END, metric::Unit::INVALID, "monitor end", "monitor stat name end", E_MIN | E_MAX, metric::Level::AD_HOC)

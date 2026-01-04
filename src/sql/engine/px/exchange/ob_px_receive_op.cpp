@@ -624,6 +624,14 @@ int ObPxReceiveOp::send_channel_ready_msg(int64_t child_dfo_id)
   }
   return ret;
 }
+
+int ObPxReceiveOp::inner_close() {
+  int ret = OB_SUCCESS;
+  if (dfc_.get_total_block_time() > 0) {
+    INC_METRIC_VAL(ObMetricId::DTL_BLOCKING_TIME, dfc_.get_total_block_time() * 1000);
+  }
+  return ObOperator::inner_close();
+}
 //------------- end ObPxReceiveOp-----------------
 
 

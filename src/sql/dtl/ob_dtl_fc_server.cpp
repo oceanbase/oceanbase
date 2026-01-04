@@ -292,6 +292,8 @@ int ObTenantDfc::block_tenant_dfc(ObDtlFlowControl *dfc, int64_t ch_idx, int64_t
   if (need_block(dfc)) {
     if (OB_FAIL(enforce_block(dfc, ch_idx))) {
       LOG_WARN("failed to block channel", K(size), K(dfc), K(ret), K(ch_idx));
+    } else {
+      dfc->begin_block_time_counting();
     }
   }
   return ret;
