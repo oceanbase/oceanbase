@@ -667,7 +667,8 @@ int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
                                                                  extra_info.length(),
                                                                  unit_ast.get_dependency_table(),
                                                                  match,
-                                                                 schema_guard))) {
+                                                                 schema_guard,
+                                                                 key_id_))) {
                     LOG_WARN("failed to decode_stack_sizes", K(ret));
                   }
                 }
@@ -755,17 +756,23 @@ int ObRoutinePersistentInfo::encode_pl_extra_info(char *buf,
                                                const int64_t len,
                                                int64_t &pos,
                                                const sql::DependenyTableStore &dep_table,
-                                               schema::ObSchemaGetterGuard &schema_guard)
+                                               schema::ObSchemaGetterGuard &schema_guard,
+                                               uint64_t key_id)
 {
   int ret = OB_SUCCESS;
   ObPLExtraInfo extra_info;
+  if (share::schema::ObTriggerInfo::is_trigger_body_package_id(key_id)) {
+    key_id = share::schema::ObTriggerInfo::get_package_trigger_id(key_id);
+  } else if (share::schema::ObUDTObjectType::is_object_id(key_id)) {
+    key_id = share::schema::ObUDTObjectType::clear_object_id_mask(key_id);
+  }
   if (OB_ISNULL(buf)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(lbt()));
   } else if (OB_UNLIKELY(pos + dep_obj_ids_md5_len > len)) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("buffer is not enough", K(ret), K(pos), K(len));
-  } else if (OB_FAIL(get_pl_extra_info(dep_table, extra_info, schema_guard))) {
+  } else if (OB_FAIL(get_pl_extra_info(dep_table, extra_info, schema_guard, key_id))) {
     LOG_WARN("failed to get pl extra info for disk cache check", K(ret));
   } else {
     MEMCPY(buf + pos, extra_info.dep_obj_ids_md5_, dep_obj_ids_md5_len);
@@ -778,7 +785,8 @@ int ObRoutinePersistentInfo::decode_and_check_extra_info(char *buf,
                                                          const int64_t len,
                                                          const ObPLDependencyTable &dep_table,
                                                          bool &match,
-                                                         schema::ObSchemaGetterGuard &schema_guard)
+                                                         schema::ObSchemaGetterGuard &schema_guard,
+                                                         uint64_t key_id)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
@@ -795,7 +803,12 @@ int ObRoutinePersistentInfo::decode_and_check_extra_info(char *buf,
     pos += dep_obj_ids_md5_len;
   }
   // get current extra_info
-  OZ (get_pl_extra_info(dep_table, extra_info, schema_guard));
+  if (share::schema::ObTriggerInfo::is_trigger_body_package_id(key_id)) {
+    key_id = share::schema::ObTriggerInfo::get_package_trigger_id(key_id);
+  } else if (share::schema::ObUDTObjectType::is_object_id(key_id)) {
+    key_id = share::schema::ObUDTObjectType::clear_object_id_mask(key_id);
+  }
+  OZ (get_pl_extra_info(dep_table, extra_info, schema_guard, key_id));
   if (OB_SUCC(ret)) {
     // check whether extra_info match
     if (std::strcmp(stored_dep_obj_ids_md5, extra_info.dep_obj_ids_md5_) != 0) {
@@ -817,7 +830,8 @@ bool ob_schema_obj_version_less(const share::schema::ObSchemaObjVersion &a,
 template<typename DependencyTable>
 int ObRoutinePersistentInfo::get_pl_extra_info(const DependencyTable &dep_table,
                                                ObPLExtraInfo& extra_info,
-                                               schema::ObSchemaGetterGuard &schema_guard)
+                                               schema::ObSchemaGetterGuard &schema_guard,
+                                               uint64_t key_id)
 {
   int ret = OB_SUCCESS;
   ObPLDependencyTable dep_table_objs;
@@ -832,10 +846,14 @@ int ObRoutinePersistentInfo::get_pl_extra_info(const DependencyTable &dep_table,
         break;
       }
     }
-    //in normal resolve phase,we will collect body itself in dependency table for body obj which is
-    // different with dependency table (not collect body itself), so we do not collect body itself in extra_info
+    //in normal resolve phase,we will collect pl itself in dependency table  which is
+    // different with all_virtual_dependency table (not collect pl itself), so we do not collect itself in extra_info
+    // but for type body , we should collect type spec , so here if not found same object_id, we should collect type spec dep
+    // even if it has the same object_id with type body itself
     if (!found) {
-      OZ (dep_table_objs.push_back(dep_table.at(i)));
+      if (key_id != dep_table.at(i).object_id_ || DEPENDENCY_TYPE == dep_table.at(i).object_type_) {
+        OZ (dep_table_objs.push_back(dep_table.at(i)));
+      }
     }
   }
   OX (lib::ob_sort(dep_table_objs.begin(), dep_table_objs.end(), ob_schema_obj_version_less));
@@ -864,7 +882,7 @@ int ObRoutinePersistentInfo::get_pl_extra_info(const DependencyTable &dep_table,
             // do nothing
           } else {
             // column_id_,meta_type_,charset_type_,accuracy_,is_invisible_col_,column_name_
-            OZ (concat_ids_sql.append_fmt("%d%d%d%d%ld%ld%ld%d%s",
+            OZ (concat_ids_sql.append_fmt("%d|%d|%d|%d|%d|%ld|%ld|%ld|%s",
                                           column_schema->get_column_id(),
                                           static_cast<uint8_t>(column_schema->get_meta_type().get_type()),
                                           static_cast<uint8_t>(column_schema->get_meta_type().get_cs_level()),
@@ -877,12 +895,13 @@ int ObRoutinePersistentInfo::get_pl_extra_info(const DependencyTable &dep_table,
             // extended_type_info
             const common::ObIArray<common::ObString>& type_info = column_schema->get_extended_type_info();
             for (int64_t j = 0; OB_SUCC(ret) && j < type_info.count(); ++j) {
-              OZ (concat_ids_sql.append_fmt("%s", type_info.at(j).ptr()));
+              OZ (concat_ids_sql.append_fmt("|%s", type_info.at(j).ptr()));
             }
           }
         }
       }
     }
+    OZ (concat_ids_sql.append_fmt("| "));
   }
   OZ (ObSQLUtils::md5(concat_ids_sql.string(), extra_info.dep_obj_ids_md5_, dep_obj_ids_md5_len));
   return ret;
@@ -891,12 +910,14 @@ int ObRoutinePersistentInfo::get_pl_extra_info(const DependencyTable &dep_table,
 template int ObRoutinePersistentInfo::get_pl_extra_info<ObPLDependencyTable>(
                                           const ObPLDependencyTable &dep_schema_objs,
                                           ObPLExtraInfo& extra_info,
-                                          schema::ObSchemaGetterGuard &schema_guard);
+                                          schema::ObSchemaGetterGuard &schema_guard,
+                                          uint64_t key_id);
 
 template int ObRoutinePersistentInfo::get_pl_extra_info<sql::DependenyTableStore>(
                                           const sql::DependenyTableStore &dep_schema_objs,
                                           ObPLExtraInfo& extra_info,
-                                          schema::ObSchemaGetterGuard &schema_guard);
+                                          schema::ObSchemaGetterGuard &schema_guard,
+                                          uint64_t key_id);
 int ObRoutinePersistentInfo::insert_or_update_dll_to_disk(schema::ObSchemaGetterGuard &schema_guard,
                                                           const ObString &binary,
                                                           const ObString &stack_sizes,
@@ -996,7 +1017,7 @@ int ObRoutinePersistentInfo::process_storage_dll(ObIAllocator &alloc,
     }
     OZ (encode_stack_sizes(buf, stack_size_length, pos, unit));
     OZ (encode_pl_extra_info(buf,
-            stack_size_length + extra_info_length, pos, unit.get_dependency_table(), schema_guard));
+            stack_size_length + extra_info_length, pos, unit.get_dependency_table(), schema_guard, key_id_));
     if (OB_SUCC(ret)) {
       buf[stack_size_length + extra_info_length - 1] = '\0';
       extra_info_str.assign_ptr(buf + stack_size_length, extra_info_length);
