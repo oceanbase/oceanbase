@@ -1474,6 +1474,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprRandCanonical                                        /* 890 */
   NULL, // ObExprLoadFile::eval_load_file                             /* 891 */
   NULL, // ObExprAIParseDocument::eval_ai_parse_document              /* 892 */
+  NULL, // ObExprSearchIndexInnerType::calc_search_index_inner_type   /* 893 */
+  NULL, // ObExprSearchIndexInnerValue::calc_search_index_inner_value /* 894 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
