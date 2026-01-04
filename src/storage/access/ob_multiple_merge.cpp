@@ -2083,8 +2083,7 @@ OB_INLINE void ObMultipleMerge::set_base_version() const
 {
   // When the major table is currently being processed, the snapshot version is taken and placed
   // in the current context for base version to filter unnecessary rows in the mini or minor sstable
-  if (!access_ctx_->is_mview_query() &&
-      (is_scan() || access_ctx_->is_inc_major_query_)) {
+  if (!access_ctx_->is_mview_query()) {
     access_ctx_->trans_version_range_.base_version_ = major_table_version_;
     LOG_DEBUG("set base version", K_(access_ctx_->trans_version_range));
   }
@@ -2133,6 +2132,14 @@ int ObMultipleMerge::check_table_need_read(const ObITable *table, bool &need_tab
     } else if (OB_FAIL(compaction::ObIncMajorTxHelper::check_can_access(*access_ctx_, *sstable, need_table))) {
       LOG_WARN("fail to check can access", KR(ret));
     }
+  }
+  // check minor sstable need read
+  if (OB_SUCC(ret) &&
+      !access_ctx_->is_mview_query() &&
+      table->is_minor_sstable() &&
+      table->get_upper_trans_version() <= major_table_version_) {
+    need_table = false;
+    STORAGE_LOG(DEBUG, "skip minor with upper trans version less than base version", KPC(table), K(major_table_version_));
   }
   return ret;
 }

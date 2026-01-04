@@ -835,7 +835,7 @@ int ObMemtable::get(
           *  INC_MAJOR  INSERT 1 (version 110)
           *  MEMTABLE   DELETE 1 (version 90)
           */
-          if (context.is_inc_major_query_ && row_scn <= context.trans_version_range_.base_version_) {
+          if (row_scn <= context.trans_version_range_.base_version_) {
             row.row_flag_.reset();
             row.row_flag_.set_flag(DF_NOT_EXIST);
           } else if (param.need_scn_) {

@@ -323,7 +323,6 @@ int ObMicroBlockRowGetter::project_cache_row(const ObRowCacheValue &value, ObDat
     }
     if (sstable_->is_minor_sstable() &&
         value.get_flag().is_exist() &&
-        context_->is_inc_major_query_ &&
         -datums[trans_col_idx].get_int() <= context_->trans_version_range_.base_version_) {
       row.row_flag_.reset();
       row.row_flag_.set_flag(DF_NOT_EXIST);
@@ -350,7 +349,9 @@ int ObMicroBlockRowGetter::inner_get_row(
     LOG_WARN("failed to prepare reader", K(ret), K(block_addr));
   } else if (OB_FAIL(row_.reserve(read_info_->get_request_count()))) {
     LOG_WARN("fail to reserve memory for datum row", K(ret), K(read_info_->get_request_count()));
-  } else if (OB_UNLIKELY(sstable_->is_minor_sstable() && context_->is_inc_major_query_)) {
+  } else if (OB_UNLIKELY(sstable_->is_minor_sstable() &&
+                         sstable_->get_start_scn().get_val_for_tx() <= context_->trans_version_range_.base_version_)) {
+    // TODO: zhanghuidong.zhd, check min_merged_trans_version instead
     if (OB_FAIL(reader_->get_row_and_trans_version(block_addr, block_data, rowkey, *read_info_, row_, trans_version))) {
       if (OB_UNLIKELY(OB_BEYOND_THE_RANGE != ret)) {
         LOG_WARN("Fail to get row", K(ret), K(rowkey), K(block_data), KPC_(read_info), KPC_(param), KPC_(context), K(block_addr));

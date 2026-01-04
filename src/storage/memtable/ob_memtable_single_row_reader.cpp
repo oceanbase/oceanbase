@@ -364,7 +364,7 @@ int ObMemtableSingleRowReader::fill_in_next_row_by_value_iter_(const ObMemtableK
       *  INC_MAJOR  INSERT 1 (version 110)
       *  MEMTABLE   DELETE 1 (version 90)
       */
-      if (context_->is_inc_major_query_ && next_row_scn <= context_->trans_version_range_.base_version_) {
+      if (next_row_scn <= context_->trans_version_range_.base_version_) {
         next_row.row_flag_.reset();
         next_row.row_flag_.set_flag(DF_NOT_EXIST);
       }
