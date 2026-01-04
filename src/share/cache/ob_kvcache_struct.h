@@ -28,7 +28,7 @@ namespace oceanbase
 namespace common
 {
 
-static const int64_t MAX_CACHE_NUM = 32;
+static const int64_t MAX_CACHE_NUM = 48;
 static const int64_t INVALID_CACHE_ID = -1;  // cache id must be in [0,MAX_CACHE_NUM)
 static const int64_t MAX_TENANT_NUM_PER_SERVER = 1024;
 static const int32_t MAX_CACHE_NAME_LENGTH = 127;

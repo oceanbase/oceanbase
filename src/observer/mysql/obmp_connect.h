@@ -161,6 +161,86 @@ private:
   int get_proxy_user_name(ObString &real_user);
   int execute_trigger(const uint64_t tenant_id,
                       sql::ObSQLSessionInfo &session);
+
+  int get_user_required_plugin(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const share::schema::ObUserLoginInfo &login_info,
+      ObSMConnection *conn,
+      common::ObString &required_plugin,
+      const common::ObSEArray<const share::schema::ObUserInfo *, 2> &user_infos,
+      const share::schema::ObUserInfo *&matched_user_info);
+
+  int handle_auth_switch_if_needed(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      share::schema::ObUserLoginInfo &login_info,
+      ObSMConnection *conn,
+      sql::ObSQLSessionInfo &session,
+      const common::ObString &required_plugin);
+
+  int send_auth_switch_request(
+      ObSMConnection *conn,
+      sql::ObSQLSessionInfo &session,
+      const common::ObString &required_plugin);
+
+  int receive_auth_switch_response(
+      share::schema::ObUserLoginInfo &login_info,
+      ObSMConnection *conn,
+      const common::ObString &required_plugin);
+
+  // caching_sha2_password authentication methods
+  int handle_caching_sha2_authentication_if_need(
+      share::schema::ObUserLoginInfo &login_info,
+      ObSMConnection *conn,
+      sql::ObSQLSessionInfo &session,
+      const common::ObString &required_plugin,
+      const share::schema::ObUserInfo *matched_user_info,
+      SSL *ssl_st);
+
+  int try_caching_sha2_fast_auth(
+      share::schema::ObUserLoginInfo &login_info,
+      ObSMConnection *conn,
+      sql::ObSQLSessionInfo &session,
+      const share::schema::ObUserInfo *matched_user_info,
+      bool &need_full_auth);
+
+  int perform_caching_sha2_full_auth(
+      share::schema::ObUserLoginInfo &login_info,
+      ObSMConnection *conn,
+      sql::ObSQLSessionInfo &session,
+      SSL *ssl_st);
+
+  int perform_ssl_full_auth(
+      share::schema::ObUserLoginInfo &login_info);
+
+  int perform_rsa_full_auth(
+      share::schema::ObUserLoginInfo &login_info,
+      sql::ObSQLSessionInfo &session);
+
+  // Helper methods for perform_rsa_full_auth
+  int check_rsa_keys_available();
+
+  int receive_client_rsa_packet(
+      obmysql::ObMySQLPacket *&client_pkt);
+
+  int handle_rsa_public_key_request(
+      obmysql::ObMySQLPacket *&client_pkt,
+      sql::ObSQLSessionInfo &session,
+      const char *&client_data,
+      int64_t &client_data_len);
+
+  int send_rsa_public_key(
+      sql::ObSQLSessionInfo &session);
+
+  int receive_encrypted_password(
+      obmysql::ObMySQLPacket *&client_pkt,
+      const char *&client_data,
+      int64_t &client_data_len);
+
+  int decrypt_rsa_password(
+      const char *client_data,
+      int64_t client_data_len,
+      share::schema::ObUserLoginInfo &login_info);
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMPConnect);
   obmysql::OMPKHandshakeResponse hsr_;

@@ -6799,10 +6799,12 @@ int ObDDLOperator::init_tenant_user(const uint64_t tenant_id,
   if (OB_SUCC(ret)) {
     ObSqlString ddl_stmt_str;
     ObString ddl_sql;
+    ObString plugin_name;
     if (OB_FAIL(ObDDLSqlGenerator::gen_create_user_sql(ObAccountArg(user.get_user_name_str(),
                                                        user.get_host_name_str(),
                                                        user.is_role()),
                                                        user.get_passwd_str(),
+                                                       plugin_name,
                                                        ddl_stmt_str))) {
       LOG_WARN("gen create user sql failed", K(user), K(ret));
     } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
@@ -7494,7 +7496,8 @@ int ObDDLOperator::set_passwd(
     const uint64_t user_id,
     const common::ObString &passwd,
     const ObString *ddl_stmt_str,
-    common::ObMySQLTransaction &trans)
+    common::ObMySQLTransaction &trans,
+    const common::ObString &plugin)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
@@ -7523,6 +7526,8 @@ int ObDDLOperator::set_passwd(
       } else if (OB_FAIL(new_user_info.set_passwd(passwd))) {
         LOG_WARN("set passwd failed", K(ret));
       } else if (OB_FALSE_IT(new_user_info.set_password_last_changed(ObTimeUtility::current_time()))) {
+      } else if (!plugin.empty() && OB_FAIL(new_user_info.set_plugin(plugin))) {
+        LOG_WARN("set plugin failed", K(ret));
       } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
         LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
       } else if (OB_FAIL(schema_sql_service->get_user_sql_service().set_passwd(

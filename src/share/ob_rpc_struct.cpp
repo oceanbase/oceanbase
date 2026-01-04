@@ -5618,6 +5618,15 @@ OB_DEF_DESERIALIZE(ObGrantArg)
       }
     }
   }
+  // Fill plugins_ with empty strings for old version compatibility
+  if (OB_SUCC(ret) && hosts_.count() > 0 && plugins_.empty()) {
+    const ObString EMPTY_PLUGIN("");
+    for (int64_t i = 0; i < hosts_.count() && OB_SUCC(ret); ++i) {
+      if (OB_FAIL(plugins_.push_back(EMPTY_PLUGIN))) {
+        LOG_WARN("fail to push_back empty plugin", K(ret));
+      }
+    }
+  }
   return ret;
 }
 

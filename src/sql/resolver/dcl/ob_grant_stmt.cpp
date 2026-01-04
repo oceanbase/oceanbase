@@ -27,6 +27,9 @@ ObGrantStmt::ObGrantStmt(ObIAllocator *name_pool)
       database_(),
       table_(),
       tenant_id_(OB_INVALID_ID),
+      grantees_(),
+      users_(),
+      plugins_(),
       masked_sql_(),
       need_create_user_(false),
       need_create_user_priv_(false),
@@ -55,6 +58,9 @@ ObGrantStmt::ObGrantStmt()
       database_(),
       table_(),
       tenant_id_(OB_INVALID_ID),
+      grantees_(),
+      users_(),
+      plugins_(),
       masked_sql_(),
       need_create_user_(false),
       need_create_user_priv_(false),
@@ -83,7 +89,8 @@ ObGrantStmt::~ObGrantStmt()
 int ObGrantStmt::add_user(const common::ObString &user_name,
                           const common::ObString &host_name,
                           const common::ObString &pwd,
-                          const common::ObString &need_enc)
+                          const common::ObString &need_enc,
+                          const common::ObString &plugin)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(users_.add_string(user_name))) {
@@ -94,6 +101,8 @@ int ObGrantStmt::add_user(const common::ObString &user_name,
     LOG_WARN("failed to add password", K(ret));
   } else if (OB_FAIL(users_.add_string(need_enc))) {
     LOG_WARN("failed to add need enc", K(ret));
+  } else if (OB_FAIL(plugins_.add_string(plugin))) {
+    LOG_WARN("failed to add plugin to plugins array", K(ret));
   } else {
     //do nothing
   }

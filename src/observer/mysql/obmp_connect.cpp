@@ -24,9 +24,15 @@
 #include "sql/privilege_check/ob_privilege_check.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
 #include "rpc/obmysql/packet/ompk_auth_switch.h"
+#include "rpc/obmysql/packet/ompk_caching_sha2_response.h"
+#include "rpc/obmysql/packet/ompk_rsa_public_key.h"
 #include "sql/engine/dml/ob_trigger_handler.h"
 #include "share/ob_license_utils.h"
 #include "share/ob_tenant_info_proxy.h"
+#include "lib/encrypt/ob_encrypted_helper.h"
+#include "lib/encrypt/ob_sha256_crypt.h"
+#include "lib/encrypt/ob_caching_sha2_cache_mgr.h"
+#include "lib/encrypt/ob_rsa_getter.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -541,7 +547,6 @@ inline void reset_inner_proxyro_scramble(
   login_info.scramble_str_.assign_ptr(conn.scramble_result_buf_, sizeof(conn.scramble_result_buf_));
 }
 
-const char *AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD = "mysql_native_password";
 int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
 {
   LOG_DEBUG("load privilege info");
@@ -694,99 +699,48 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
         if (OB_FAIL(ret)) {
           // Do nothing
         } else {
-          login_info.scramble_str_.assign_ptr(conn->scramble_result_buf_, sizeof(conn->scramble_result_buf_));
-          login_info.passwd_ = hsr_.get_auth_response();// Assume client is use mysql_native_password
-          bool is_empty_passwd = false;
-          if (OB_FAIL(schema_guard.is_user_empty_passwd(login_info, is_empty_passwd))) {
-            LOG_WARN("failed to check is user account is empty && login_info.passwd_ is empty", K(ret), K(login_info.passwd_));
-          } else if (!is_empty_passwd && // user account with empty password do not need auth switch, same as MySQL 5.7 and 8.x
-                    OB_CLIENT_NON_STANDARD == conn->client_type_ && // client is not OB's C/JAVA client
-                    !hsr_.get_auth_plugin_name().empty() && // client do not use mysql_native_method
-                    hsr_.get_auth_plugin_name().compare(AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD) &&
-                    GCONF._enable_auth_switch &&
-                    (!conn->is_proxy_ || conn->proxy_version_ >= PROXY_VERSION_4_3_3_0)) {
-            // Client is not use mysql_native_password method,
-            // but observer only support mysql_native_password in user account's authentication,
-            // so observer need tell client use mysql_native_password method by sending "AuthSwitchRequest"
-            LOG_TRACE("auth plugin from client is not mysql_native_password, start to auth switch request", K(ret), K(hsr_.get_auth_plugin_name()));
-            conn->set_auth_switch_phase(); // State of connection turn to auth_switch_phase
-            OMPKAuthSwitch auth_switch;
-            auth_switch.set_plugin_name(ObString(AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD));
-            // "AuthSwitchRequest" carry 20 bit random salt value(MySQL call it scramble) to client which has sent in "Initial Handshake Packet"
-            auth_switch.set_scramble(ObString(sizeof(conn->scramble_result_buf_), conn->scramble_result_buf_));
-            /*-------------------START-----------------If error occur, disconnect-------------------START-----------------*/
-            if (OB_FAIL(packet_sender_.response_packet(auth_switch, &session))) {
-              RPC_LOG(WARN, "failed to send auth switch request packet, disconnect", K(auth_switch), K(ret));
-              LOG_WARN("failed to send auth switch request packet, disconnect", K(auth_switch), K(ret));
-              packet_sender_.disable_response(); // The connection is about to be closed, do not need response ok pkt or err pkt, so disable it
-              disconnect();// If send "AuthSwitchRequest" failed, observer need disconnect with client
-            } else if (OB_FAIL(packet_sender_.flush_buffer(false/*is_last*/))) { // "AuthSwitchRequest" may not have been sent yet, flush the buffer to ensure it has been sent.
-              RPC_LOG(WARN, "failed to flush socket buffer while sending auth switch request packet, disconnect", K(auth_switch), K(ret));
-              LOG_WARN("failed to flush socket buffer while sending auth switch request packet, disconnect", K(auth_switch), K(ret));
-              packet_sender_.disable_response(); // The connection is about to be closed, do not need response ok pkt or err pkt, so disable it
-              disconnect();// If send "AuthSwitchRequest" failed, observer need disconnect with client
-            } else {
-              LOG_TRACE("suuc to send auth switch request", K(ret));
-              obmysql::ObMySQLPacket *asr_pkt = NULL;
-              int64_t start_wait_asr_time = ObTimeUtil::current_time();
-              int receive_asr_times = 0;
-              while (OB_SUCC(ret) && OB_ISNULL(asr_pkt)) {
-                ++receive_asr_times;
-                ob_usleep(10 * 1000); // Sleep 10 ms at every time trying receive auth-switch-response mysql pkt
-                // TO DO:
-                // In most unix system, The max TCP Retransmission Timeout is under 240 seconds,
-                // we need to set a suitable timeout, what should this be?
-                if (ObTimeUtil::current_time() - start_wait_asr_time > 10000000) {
-                  ret = OB_WAIT_NEXT_TIMEOUT;
-                  RPC_LOG(WARN, "read auth switch response pkt timeout, disconnect", K(ret), K(receive_asr_times));
-                  LOG_WARN("read auth switch response pkt timeout, disconnect", K(ret), K(receive_asr_times));
-                  packet_sender_.disable_response(); // The connection is about to be closed, do not need response ok pkt or err pkt, so disable it
-                  disconnect(); // If receive "AuthSwitchResponse" timeout, observer need disconnect with client
-                } else if (OB_FAIL(read_packet(asr_mem_pool_, asr_pkt))) {
-                  RPC_LOG(WARN, "failed to read auth switch response pkt, disconnect", K(ret), K(receive_asr_times));
-                  LOG_WARN("failed to read auth switch response pkt, disconnect", K(ret), K(receive_asr_times));
-                  packet_sender_.disable_response(); // The connection is about to be closed, do not need response ok pkt or err pkt, so disable it
-                  disconnect(); // If receive "AuthSwitchResponse" failed, observer need disconnect with client
-                } else {
-                  LOG_WARN("succ try to read auth switch response pkt", K(ret), K(receive_asr_times), KP(asr_pkt));
-                }
-              }
-              if (OB_FAIL(ret)) {
-                // Do nothing
-              } else if (OB_ISNULL(asr_pkt)) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("unexpected null ptr, disconnect", K(ret));
-                packet_sender_.disable_response(); // The connection is about to be closed, do not need response ok pkt or err pkt, so disable it
-                disconnect(); // If receive "AuthSwitchResponse" failed, observer need disconnect with client
-              } else {
-              /*--------------------END------------------if error occur, disconnect--------------------END------------------*/
-                LOG_TRACE("suuc to receive auth switch response", K(ret));
-                const obmysql::ObMySQLRawPacket *asr_raw_pkt  = reinterpret_cast<const ObMySQLRawPacket*>(asr_pkt);
-                const char *auth_data = asr_raw_pkt->get_cdata();
-                const int64_t auth_data_len = asr_raw_pkt->get_clen();
-                void *auth_buf = NULL;
-                // Length of authentication response data in AuthSwitchResponse which is using mysql_native_password methon is 20 byte,
-                // the ObSMConnection::SCRAMBLE_BUF_SIZE is 20
-                if (ObSMConnection::SCRAMBLE_BUF_SIZE != auth_data_len) {
-                  ret = OB_PASSWORD_WRONG;
-                  LOG_WARN("invalid length of authentication response data", K(ret), K(auth_data_len), K(ObString(auth_data_len, auth_data)));
-                } else if (OB_ISNULL(auth_buf = asr_mem_pool_.alloc(auth_data_len))) {
-                  ret = OB_ALLOCATE_MEMORY_FAILED;
-                  LOG_WARN("alloc auth data buffer for auth switch response failed", K(ret), K(auth_data_len));
-                } else {
-                  // packet_sender_.release_packet will recycle mem of auth_data, need using mem allocated by asr_mem_pool_ to save it
-                  MEMCPY(auth_buf, auth_data, auth_data_len);
-                  login_info.scramble_str_.assign_ptr(conn->scramble_result_buf_, sizeof(conn->scramble_result_buf_));
-                  login_info.passwd_.assign_ptr(static_cast<const char*>(auth_buf), auth_data_len);
-                }
-                packet_sender_.release_packet(asr_pkt);
-                asr_pkt = NULL;
-                asr_raw_pkt = NULL;
+          // ========== Step 1: Get user's authentication plugin ==========
+          ObString required_plugin;
+          ObSEArray<const ObUserInfo *, 2> user_infos;
+          const ObUserInfo *matched_user_info = nullptr;
+
+          if (OB_FAIL(schema_guard.get_user_info(conn->tenant_id_, login_info.user_name_, user_infos))) {
+            LOG_WARN("failed to get user info", K(ret), K(login_info.user_name_), K(conn->tenant_id_));
+          } else if (OB_FAIL(get_user_required_plugin(schema_guard,
+                                                      login_info,
+                                                      conn,
+                                                      required_plugin,
+                                                      user_infos,
+                                                      matched_user_info))) {
+            LOG_WARN("failed to get user required plugin", K(ret));
+          } else {
+            login_info.scramble_str_.assign_ptr(conn->scramble_result_buf_, sizeof(conn->scramble_result_buf_));
+            login_info.passwd_ = hsr_.get_auth_response();
+
+            // ========== Step 2: Handle authentication switch if needed ==========
+            if (OB_FAIL(handle_auth_switch_if_needed(schema_guard, login_info, conn, session, required_plugin))) {
+              LOG_WARN("failed to handle auth switch", K(ret));
+            }
+
+            // ========== Step 3: Handle caching_sha2_password authentication ==========
+            if (OB_SUCC(ret)) {
+              if (OB_FAIL(handle_caching_sha2_authentication_if_need(login_info,
+                                                                     conn,
+                                                                     session,
+                                                                     required_plugin,
+                                                                     matched_user_info,
+                                                                     ssl_st))) {
+                LOG_WARN("failed to handle caching_sha2_password authentication", K(ret));
               }
             }
-            conn->set_auth_phase(); // State of connection turn to auth_phase
           }
         }
+
+        // Step 4: Verify password using check_user_access
+        // check_user_access will perform the actual authentication:
+        //   - For mysql native password (20-byte scramble): verify against stored digest
+        //   - For sha256 fast auth (32-byte scramble): verify against cached digest
+        //   - For sha256 full auth (plaintext password): verify and update cache
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(schema_guard.check_user_access(login_info, session_priv, enable_role_id_array, ssl_st, user_info))) {
           int inner_ret = OB_SUCCESS;
@@ -2652,6 +2606,634 @@ int ObMPConnect::execute_trigger(const uint64_t tenant_id,
     LOG_WARN("get schema guard failed", K(ret));
   } else if (OB_FAIL(TriggerHandle::calc_system_trigger_logon(session))) {
     LOG_WARN("calc system trigger failed", K(ret));
+  }
+  return ret;
+}
+
+int ObMPConnect::get_user_required_plugin(
+    ObSchemaGetterGuard &schema_guard,
+    const ObUserLoginInfo &login_info,
+    ObSMConnection *conn,
+    ObString &required_plugin,
+    const ObSEArray<const ObUserInfo *, 2> &user_infos,
+    const ObUserInfo *&matched_user_info)
+{
+  int ret = OB_SUCCESS;
+  matched_user_info = nullptr;
+
+  for (int64_t i = 0; i < user_infos.count() && OB_ISNULL(matched_user_info) && OB_SUCC(ret); ++i) {
+    const ObUserInfo *tmp_user = user_infos.at(i);
+    if (OB_ISNULL(tmp_user)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("user info is null", K(ret), K(i));
+    } else if (obsys::ObNetUtil::is_match(login_info.client_ip_, tmp_user->get_host_name_str())) {
+      matched_user_info = tmp_user;
+    }
+  }
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(matched_user_info)) {
+    // Get the user's authentication plugin
+    ObString user_plugin = matched_user_info->get_plugin();
+    if (user_plugin.empty()) {
+      required_plugin = ObString::make_string(AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD);
+    } else {
+      required_plugin = user_plugin;
+    }
+    LOG_TRACE("found matched user for authentication",
+              K(login_info.user_name_), K(login_info.client_ip_),
+              K(matched_user_info->get_host_name_str()), K(required_plugin));
+  }
+
+  return ret;
+}
+
+int ObMPConnect::handle_auth_switch_if_needed(
+    ObSchemaGetterGuard &schema_guard,
+    ObUserLoginInfo &login_info,
+    ObSMConnection *conn,
+    ObSQLSessionInfo &session,
+    const ObString &required_plugin)
+{
+  int ret = OB_SUCCESS;
+  bool is_empty_passwd = false;
+  if (OB_FAIL(schema_guard.is_user_empty_passwd(login_info, is_empty_passwd))) {
+    LOG_WARN("failed to check if user account has empty password", K(ret), K(login_info.passwd_));
+  } else if (!is_empty_passwd &&
+             GCONF._enable_auth_switch &&
+             !hsr_.get_auth_plugin_name().empty() && // jinmao TODO: proxy 做的预处理应该去掉，不应该由 proxy 端来决定。
+             (!conn->is_proxy_ || conn->proxy_version_ >= PROXY_VERSION_4_3_3_0)) {
+    ObString client_plugin = hsr_.get_auth_plugin_name().empty() ? AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD
+                                                                 : hsr_.get_auth_plugin_name();
+    // If client plugin does not match user's required plugin, send AuthSwitchRequest
+    if (0 != client_plugin.compare(required_plugin)) {
+      conn->set_auth_switch_phase();
+      if (OB_FAIL(send_auth_switch_request(conn, session, required_plugin))) {
+        LOG_WARN("failed to send auth switch request", K(ret));
+      } else if (OB_FAIL(receive_auth_switch_response(login_info, conn, required_plugin))) {
+        LOG_WARN("failed to receive auth switch response", K(ret));
+      }
+      LOG_TRACE("client plugin does not match required plugin, sending AuthSwitchRequest",
+                K(client_plugin), K(required_plugin));
+      conn->set_auth_phase();
+    }
+  }
+  return ret;
+}
+
+int ObMPConnect::send_auth_switch_request(
+    ObSMConnection *conn,
+    ObSQLSessionInfo &session,
+    const ObString &required_plugin)
+{
+  int ret = OB_SUCCESS;
+  OMPKAuthSwitch auth_switch;
+  auth_switch.set_plugin_name(required_plugin);
+  auth_switch.set_scramble(ObString(sizeof(conn->scramble_result_buf_), conn->scramble_result_buf_));
+
+  if (OB_FAIL(packet_sender_.response_packet(auth_switch, &session))) {
+    RPC_LOG(WARN, "failed to send auth switch request packet, disconnect", K(auth_switch), K(ret));
+    LOG_WARN("failed to send auth switch request packet, disconnect", K(auth_switch), K(ret));
+    packet_sender_.disable_response();
+    disconnect();
+  } else if (OB_FAIL(packet_sender_.flush_buffer(false))) {
+    RPC_LOG(WARN, "failed to flush socket buffer while sending auth switch request packet, disconnect",
+            K(auth_switch), K(ret));
+    LOG_WARN("failed to flush socket buffer while sending auth switch request packet, disconnect",
+            K(auth_switch), K(ret));
+    packet_sender_.disable_response();
+    disconnect();
+  } else {
+    LOG_TRACE("succeeded to send auth switch request", K(ret));
+  }
+
+  return ret;
+}
+
+int ObMPConnect::receive_auth_switch_response(
+    ObUserLoginInfo &login_info,
+    ObSMConnection *conn,
+    const ObString &required_plugin)
+{
+  int ret = OB_SUCCESS;
+  obmysql::ObMySQLPacket *asr_pkt = NULL;
+  int64_t start_wait_asr_time = ObTimeUtil::current_time();
+  int receive_asr_times = 0;
+
+  while (OB_SUCC(ret) && OB_ISNULL(asr_pkt)) {
+    ++receive_asr_times;
+    ob_usleep(10 * 1000); // Sleep 10 ms
+
+    if (ObTimeUtil::current_time() - start_wait_asr_time > 10000000) {
+      ret = OB_WAIT_NEXT_TIMEOUT;
+      RPC_LOG(WARN, "read auth switch response pkt timeout, disconnect", K(ret), K(receive_asr_times));
+      LOG_WARN("read auth switch response pkt timeout, disconnect", K(ret), K(receive_asr_times));
+      packet_sender_.disable_response();
+      disconnect();
+    } else if (OB_FAIL(read_packet(asr_mem_pool_, asr_pkt))) {
+      RPC_LOG(WARN, "failed to read auth switch response pkt, disconnect", K(ret), K(receive_asr_times));
+      LOG_WARN("failed to read auth switch response pkt, disconnect", K(ret), K(receive_asr_times));
+      packet_sender_.disable_response();
+      disconnect();
+    } else if (OB_NOT_NULL(asr_pkt)) {
+      LOG_TRACE("succeeded to read auth switch response pkt", K(ret), K(receive_asr_times), KP(asr_pkt));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(asr_pkt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr, disconnect", K(ret));
+    packet_sender_.disable_response();
+    disconnect();
+  } else {
+    const obmysql::ObMySQLRawPacket *asr_raw_pkt = reinterpret_cast<const ObMySQLRawPacket*>(asr_pkt);
+    const char *auth_data = asr_raw_pkt->get_cdata();
+    const int64_t auth_data_len = asr_raw_pkt->get_clen();
+
+    // Validate authentication response length based on plugin
+    int64_t expected_auth_data_len = 0;
+    if (0 == required_plugin.case_compare(AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD)) {
+      expected_auth_data_len = ObSMConnection::SCRAMBLE_BUF_SIZE; // 20 bytes
+    } else if (0 == required_plugin.case_compare(AUTH_PLUGIN_CACHING_SHA2_PASSWORD)) {
+      expected_auth_data_len = OB_SHA256_DIGEST_LENGTH; // 32 bytes
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected plugin", K(ret), K(required_plugin));
+      packet_sender_.disable_response();
+      disconnect();
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (expected_auth_data_len != auth_data_len) {
+      ret = OB_PASSWORD_WRONG;
+      LOG_WARN("invalid length of authentication response data",
+               K(ret), K(auth_data_len), K(expected_auth_data_len),
+               K(required_plugin), K(ObString(auth_data_len, auth_data)));
+    } else {
+      void *auth_buf = asr_mem_pool_.alloc(auth_data_len);
+      if (OB_ISNULL(auth_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc auth data buffer for auth switch response failed", K(ret), K(auth_data_len));
+      } else {
+        MEMCPY(auth_buf, auth_data, auth_data_len);
+        login_info.scramble_str_.assign_ptr(conn->scramble_result_buf_, sizeof(conn->scramble_result_buf_));
+        login_info.passwd_.assign_ptr(static_cast<const char*>(auth_buf), auth_data_len);
+      }
+    }
+
+    packet_sender_.release_packet(asr_pkt);
+    LOG_TRACE("succeeded to receive auth switch response", K(ret));
+  }
+
+  return ret;
+}
+
+int ObMPConnect::handle_caching_sha2_authentication_if_need(
+    ObUserLoginInfo &login_info,
+    ObSMConnection *conn,
+    ObSQLSessionInfo &session,
+    const ObString &required_plugin,
+    const ObUserInfo *matched_user_info,
+    SSL *ssl_st)
+{
+  int ret = OB_SUCCESS;
+
+  if (0 != required_plugin.case_compare(AUTH_PLUGIN_CACHING_SHA2_PASSWORD)) {
+    // do nothing
+  } else {
+    bool need_full_auth = false;
+    if (login_info.passwd_.length() == 0) {
+      // Empty password case
+      need_full_auth = false;
+    } else if (login_info.passwd_.length() != OB_SHA256_DIGEST_LENGTH) {
+      // Unexpected length, need full auth
+      need_full_auth = true;
+      LOG_TRACE("caching_sha2_password: unexpected auth data length, need full auth",
+                K(login_info.passwd_.length()));
+    } else if (OB_FAIL(try_caching_sha2_fast_auth(login_info, conn, session,
+                                                  matched_user_info, need_full_auth))) {
+      LOG_WARN("failed to try fast auth", K(ret));
+    }
+    // Perform full authentication if needed
+    if (OB_SUCC(ret) && need_full_auth && login_info.passwd_.length() > 0) {
+      if (OB_FAIL(perform_caching_sha2_full_auth(login_info, conn, session, ssl_st))) {
+        LOG_WARN("failed to perform full auth", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMPConnect::try_caching_sha2_fast_auth(
+    ObUserLoginInfo &login_info,
+    ObSMConnection *conn,
+    ObSQLSessionInfo &session,
+    const ObUserInfo *matched_user_info,
+    bool &need_full_auth)
+{
+  int ret = OB_SUCCESS;
+  need_full_auth = false;
+
+  // Check if user info is provided
+  if (OB_ISNULL(matched_user_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("user not found in pre-check", K(ret));
+    packet_sender_.disable_response();
+    disconnect();
+  } else {
+    ObCachingSha2Handle cache_handle;
+    ObString user_name = login_info.user_name_;
+    ObString host_name = matched_user_info->get_host_name_str();
+    int64_t password_last_changed_timestamp = matched_user_info->get_password_last_changed();
+    int cache_ret = ObCachingSha2CacheMgr::get_instance().get_digest(user_name,
+                                                                     host_name,
+                                                                     conn->tenant_id_,
+                                                                     password_last_changed_timestamp,
+                                                                     cache_handle);
+    if (OB_SUCCESS == cache_ret && OB_NOT_NULL(cache_handle.digest_)) {
+      // Cache hit, try fast auth
+      LOG_TRACE("caching_sha2_password: cache hit, attempting fast auth",
+                K(user_name), K(host_name));
+
+      ObString cached_digest(cache_handle.digest_->get_digest_len(),
+                             cache_handle.digest_->get_digest());
+      bool fast_auth_success_flag = false;
+
+      int verify_ret = ObSha256Crypt::verify_fast_auth_scramble(
+                        login_info.passwd_,
+                        ObString(ObSMConnection::SCRAMBLE_BUF_SIZE, login_info.scramble_str_.ptr()),
+                        cached_digest,
+                        fast_auth_success_flag);
+
+      if (OB_SUCCESS != verify_ret) {
+        LOG_WARN("Failed to verify fast auth scramble", K(verify_ret), K(login_info));
+        fast_auth_success_flag = false;
+        need_full_auth = true;
+      } else if (fast_auth_success_flag) {
+        // Fast auth succeeded, send FAST_AUTH_SUCCESS flag
+        need_full_auth = false;
+        LOG_TRACE("caching_sha2_password: fast auth succeeded, sending fast_auth_success",
+                  K(user_name), K(host_name));
+        OMPKCachingSha2Response fast_auth_response(FAST_AUTH_SUCCESS);
+        if (OB_FAIL(packet_sender_.response_packet(fast_auth_response, &session))) {
+          LOG_WARN("failed to send fast_auth_success flag", K(ret));
+          packet_sender_.disable_response();
+          disconnect();
+        } else if (OB_FAIL(packet_sender_.flush_buffer(false))) {
+          LOG_WARN("failed to flush fast_auth_success flag", K(ret));
+          packet_sender_.disable_response();
+          disconnect();
+        } else {
+          LOG_INFO("sent fast_auth_success flag (0x03), fast auth completed");
+        }
+      } else {
+        // Fast auth failed (password mismatch)
+        need_full_auth = true;
+        LOG_TRACE("caching_sha2_password: fast auth password mismatch, need full auth",
+                  K(user_name), K(host_name));
+      }
+    } else {
+      // Cache miss
+      need_full_auth = true;
+      LOG_TRACE("caching_sha2_password: cache miss, need full auth",
+                K(cache_ret), K(user_name), K(host_name));
+    }
+  }
+  return ret;
+}
+
+int ObMPConnect::perform_caching_sha2_full_auth(
+  ObUserLoginInfo &login_info,
+  ObSMConnection *conn,
+  ObSQLSessionInfo &session,
+  SSL *ssl_st)
+{
+int ret = OB_SUCCESS;
+bool is_secure = (conn->is_in_ssl_connect_phase() || OB_NOT_NULL(ssl_st));
+// Send perform_full_authentication flag (0x04)
+OMPKCachingSha2Response full_auth_response(PERFORM_FULL_AUTHENTICATION);
+if (OB_FAIL(packet_sender_.response_packet(full_auth_response, &session))) {
+  LOG_WARN("failed to send perform_full_authentication flag", K(ret));
+  packet_sender_.disable_response();
+  disconnect();
+} else if (OB_FAIL(packet_sender_.flush_buffer(false))) {
+  LOG_WARN("failed to flush perform_full_authentication flag", K(ret));
+  packet_sender_.disable_response();
+  disconnect();
+} else {
+  // Set connection to auth_switch phase before reading client response
+  conn->set_auth_switch_phase();
+  // Choose different authentication paths based on connection security
+  if (is_secure) {
+    LOG_INFO("caching_sha2_password: performing SSL full authentication");
+    // SSL/TLS secure connection: receive plaintext password
+    if (OB_FAIL(perform_ssl_full_auth(login_info))) {
+      LOG_WARN("failed to perform SSL full authentication", K(ret));
+    }
+  } else {
+    // Insecure connection: use RSA encrypted authentication
+    LOG_INFO("caching_sha2_password: performing RSA full authentication");
+    if (OB_FAIL(perform_rsa_full_auth(login_info, session))) {
+      LOG_WARN("failed to perform RSA full authentication", K(ret));
+    }
+  }
+  // Reset connection state to auth phase
+  conn->set_auth_phase();
+}
+return ret;
+}
+
+int ObMPConnect::perform_ssl_full_auth(
+    ObUserLoginInfo &login_info)
+{
+  int ret = OB_SUCCESS;
+  obmysql::ObMySQLPacket *pwd_pkt = NULL;
+  int64_t start_wait_time = ObTimeUtil::current_time();
+  int receive_times = 0;
+  const int64_t timeout_us = 10000000; // 10 seconds
+  // Receive plaintext password
+  while (OB_SUCC(ret) && OB_ISNULL(pwd_pkt)) {
+    ++receive_times;
+    ob_usleep(10 * 1000);
+
+    if (ObTimeUtil::current_time() - start_wait_time > timeout_us) {
+      ret = OB_WAIT_NEXT_TIMEOUT;
+      LOG_WARN("wait for plaintext password timeout", K(ret), K(receive_times));
+      packet_sender_.disable_response();
+      disconnect();
+    } else if (OB_FAIL(read_packet(asr_mem_pool_, pwd_pkt))) {
+      LOG_WARN("failed to read plaintext password packet", K(ret), K(receive_times));
+      packet_sender_.disable_response();
+      disconnect();
+    } else if (OB_NOT_NULL(pwd_pkt)) {
+      LOG_TRACE("received plaintext password packet", K(ret), K(receive_times), KP(pwd_pkt));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(pwd_pkt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("plaintext password packet is null", K(ret));
+    packet_sender_.disable_response();
+    disconnect();
+  } else {
+    // Extract plaintext password
+    const obmysql::ObMySQLRawPacket *pwd_raw_pkt =
+        reinterpret_cast<const ObMySQLRawPacket*>(pwd_pkt);
+    const char *plaintext_pwd = pwd_raw_pkt->get_cdata();
+    int64_t plaintext_pwd_len = pwd_raw_pkt->get_clen();
+    // Remove trailing '\0' if exists
+    if (plaintext_pwd_len > 0 && plaintext_pwd[plaintext_pwd_len - 1] == '\0') {
+      plaintext_pwd_len--;
+    }
+    // Replace scramble with plaintext password in login_info
+    void *pwd_buf = asr_mem_pool_.alloc(plaintext_pwd_len);
+    if (OB_ISNULL(pwd_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for plaintext password",
+               K(ret), K(plaintext_pwd_len));
+    } else {
+      MEMCPY(pwd_buf, plaintext_pwd, plaintext_pwd_len);
+      login_info.passwd_.assign_ptr(static_cast<const char*>(pwd_buf), plaintext_pwd_len);
+      login_info.is_passwd_plaintext_ = true;
+      LOG_TRACE("prepared plaintext password for full authentication verification");
+    }
+    packet_sender_.release_packet(pwd_pkt);
+  }
+  return ret;
+}
+
+// RSA full authentication main flow
+int ObMPConnect::perform_rsa_full_auth(
+    ObUserLoginInfo &login_info,
+    ObSQLSessionInfo &session)
+{
+  int ret = OB_SUCCESS;
+  obmysql::ObMySQLPacket *client_pkt = NULL;
+  const char *client_data = NULL;
+  int64_t client_data_len = 0;
+
+  // Step 1: Check if RSA key is available
+  if (!ObRsaGetter::instance().is_key_loaded()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("RSA keys not loaded, cannot perform RSA authentication", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED,
+        "caching_sha2_password authentication over insecure channel without RSA keys");
+    packet_sender_.disable_response();
+    disconnect();
+  }
+
+  // Step 2: Receive client RSA request
+  if (OB_SUCC(ret) && OB_FAIL(receive_client_rsa_packet(client_pkt))) {
+    LOG_WARN("failed to receive client RSA packet", K(ret));
+  }
+
+  // Step 3: Handle RSA public key request and receive encrypted password
+  if (OB_SUCC(ret) && OB_FAIL(handle_rsa_public_key_request(client_pkt, session, client_data, client_data_len))) {
+    LOG_WARN("failed to handle RSA public key request", K(ret));
+  }
+
+  // Step 4: Decrypt RSA encrypted password
+  if (OB_SUCC(ret) && OB_FAIL(decrypt_rsa_password(client_data, client_data_len, login_info))) {
+    LOG_WARN("failed to decrypt RSA password", K(ret));
+  }
+
+  // Step 5: Release packet
+  if (OB_NOT_NULL(client_pkt)) {
+    packet_sender_.release_packet(client_pkt);
+  }
+
+  return ret;
+}
+
+
+// Receive client RSA related packet
+int ObMPConnect::receive_client_rsa_packet(
+    obmysql::ObMySQLPacket *&client_pkt)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_wait_time = ObTimeUtil::current_time();
+  int receive_times = 0;
+  const int64_t timeout_us = 10000000; // 10 seconds
+
+  while (OB_SUCC(ret) && OB_ISNULL(client_pkt)) {
+    ++receive_times;
+    ob_usleep(10 * 1000);
+
+    if (ObTimeUtil::current_time() - start_wait_time > timeout_us) {
+      ret = OB_WAIT_NEXT_TIMEOUT;
+      LOG_WARN("wait for client RSA request timeout", K(ret), K(receive_times));
+      packet_sender_.disable_response();
+      disconnect();
+    } else if (OB_FAIL(read_packet(asr_mem_pool_, client_pkt))) {
+      LOG_WARN("failed to read client RSA packet", K(ret), K(receive_times));
+      packet_sender_.disable_response();
+      disconnect();
+    } else if (OB_NOT_NULL(client_pkt)) {
+      LOG_TRACE("received client RSA packet", K(ret), K(receive_times), KP(client_pkt));
+    }
+  }
+
+  if (OB_SUCC(ret) && OB_ISNULL(client_pkt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("client RSA packet is null", K(ret));
+    packet_sender_.disable_response();
+    disconnect();
+  }
+  return ret;
+}
+
+// Handle RSA public key request and receive encrypted password
+int ObMPConnect::handle_rsa_public_key_request(
+    obmysql::ObMySQLPacket *&client_pkt,
+    sql::ObSQLSessionInfo &session,
+    const char *&client_data,
+    int64_t &client_data_len)
+{
+  int ret = OB_SUCCESS;
+  const obmysql::ObMySQLRawPacket *client_raw_pkt = reinterpret_cast<const ObMySQLRawPacket*>(client_pkt);
+  client_data = client_raw_pkt->get_cdata();
+  client_data_len = client_raw_pkt->get_clen();
+  // Check if client is requesting public key (0x02)
+  if (client_data_len != 1 || static_cast<uint8_t>(client_data[0]) != REQUEST_PUBLIC_KEY) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("caching_sha2_password: client not requesting RSA public key", K(ret));
+    packet_sender_.disable_response();
+    disconnect();
+  } else {
+    // Send RSA public key
+    if (OB_FAIL(send_rsa_public_key(session))) {
+      LOG_WARN("failed to send RSA public key", K(ret));
+    }
+
+    // Release the first packet
+    packet_sender_.release_packet(client_pkt);
+    client_pkt = NULL;
+
+    // Receive encrypted password
+    if (FAILEDx(receive_encrypted_password(client_pkt, client_data, client_data_len))) {
+      LOG_WARN("failed to receive encrypted password", K(ret));
+    }
+  }
+  return ret;
+}
+
+// Send RSA public key
+int ObMPConnect::send_rsa_public_key(
+    sql::ObSQLSessionInfo &session)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator;
+  ObString public_key;
+
+  if (OB_FAIL(ObRsaGetter::instance().get_public_key(public_key, allocator))) {
+    LOG_WARN("failed to get RSA public key", K(ret));
+    packet_sender_.disable_response();
+    disconnect();
+  } else {
+    LOG_TRACE("caching_sha2_password: sending RSA public key", K(public_key.length()));
+    OMPKRsaPublicKey rsa_key_pkt(public_key.ptr(), public_key.length());
+
+    if (OB_FAIL(packet_sender_.response_packet(rsa_key_pkt, &session))) {
+      LOG_WARN("failed to send RSA public key", K(ret));
+      packet_sender_.disable_response();
+      disconnect();
+    } else if (OB_FAIL(packet_sender_.flush_buffer(false))) {
+      LOG_WARN("failed to flush RSA public key", K(ret));
+      packet_sender_.disable_response();
+      disconnect();
+    }
+  }
+
+  return ret;
+}
+
+// Receive encrypted password packet
+int ObMPConnect::receive_encrypted_password(
+    obmysql::ObMySQLPacket *&client_pkt,
+    const char *&client_data,
+    int64_t &client_data_len)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_wait_time = ObTimeUtil::current_time();
+  int receive_times = 0;
+  const int64_t timeout_us = 10000000; // 10 seconds
+
+  while (OB_SUCC(ret) && OB_ISNULL(client_pkt)) {
+    ++receive_times;
+    ob_usleep(10 * 1000);
+
+    if (ObTimeUtil::current_time() - start_wait_time > timeout_us) {
+      ret = OB_WAIT_NEXT_TIMEOUT;
+      LOG_WARN("wait for encrypted password timeout", K(ret), K(receive_times));
+      packet_sender_.disable_response();
+      disconnect();
+    } else if (OB_FAIL(read_packet(asr_mem_pool_, client_pkt))) {
+      LOG_WARN("failed to read encrypted password packet", K(ret), K(receive_times));
+      packet_sender_.disable_response();
+      disconnect();
+    } else if (OB_NOT_NULL(client_pkt)) {
+      LOG_TRACE("received encrypted password packet", K(ret), K(receive_times));
+    }
+  }
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(client_pkt)) {
+    const obmysql::ObMySQLRawPacket *client_raw_pkt =
+        reinterpret_cast<const ObMySQLRawPacket*>(client_pkt);
+    // What we receive from client is RSA_encrypt(password XOR scramble)
+    client_data = client_raw_pkt->get_cdata();
+    client_data_len = client_raw_pkt->get_clen();
+  }
+
+  return ret;
+}
+
+// Decrypt RSA encrypted password
+int ObMPConnect::decrypt_rsa_password(
+    const char *client_data,
+    int64_t client_data_len,
+    share::schema::ObUserLoginInfo &login_info)
+{
+  int ret = OB_SUCCESS;
+  unsigned char decrypted_pwd[OB_RSA_MAX_DECRYPT_SIZE];
+  int64_t decrypted_len = 0;
+
+  if (OB_FAIL(ObRsaGetter::instance().decrypt_with_private_key(
+          reinterpret_cast<const unsigned char*>(client_data),
+          client_data_len,
+          decrypted_pwd,
+          decrypted_len,
+          sizeof(decrypted_pwd)))) {
+    LOG_WARN("failed to decrypt password with RSA private key", K(ret));
+    packet_sender_.disable_response();
+    disconnect();
+  } else {
+    // XOR with scramble to get plaintext password
+    const char *scramble = login_info.scramble_str_.ptr();
+    int64_t scramble_len = login_info.scramble_str_.length();
+
+    for (int64_t i = 0; i < decrypted_len && i < scramble_len; ++i) {
+      decrypted_pwd[i] ^= scramble[i];
+    }
+
+    // Remove trailing '\0' if exists
+    int64_t plaintext_pwd_len = decrypted_len;
+    if (plaintext_pwd_len > 0 && decrypted_pwd[plaintext_pwd_len - 1] == '\0') {
+      plaintext_pwd_len--;
+    }
+
+    // Store plaintext password
+    void *pwd_buf = asr_mem_pool_.alloc(plaintext_pwd_len);
+    if (OB_ISNULL(pwd_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for decrypted password",
+              K(ret), K(plaintext_pwd_len));
+    } else {
+      MEMCPY(pwd_buf, decrypted_pwd, plaintext_pwd_len);
+      login_info.passwd_.assign_ptr(static_cast<const char*>(pwd_buf), plaintext_pwd_len);
+      login_info.is_passwd_plaintext_ = true;
+      LOG_INFO("caching_sha2_password: RSA password decrypted successfully");
+    }
   }
   return ret;
 }

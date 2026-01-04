@@ -15,12 +15,15 @@
 
 #include "ob_schema_getter_guard.h"
 #include "lib/encrypt/ob_encrypted_helper.h"
+#include "lib/encrypt/ob_sha256_crypt.h"
 #include "lib/net/ob_net_util.h"
+#include "lib/allocator/ob_allocator.h"
 #include "share/schema/ob_part_mgr_util.h"
 #include "share/ob_schema_status_proxy.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
 #include "share/catalog/ob_catalog_utils.h"
+#include "lib/encrypt/ob_caching_sha2_cache_mgr.h"
 
 #include "ob_external_resource_schema_getter_guard.ipp"
 #include "ob_ai_model_schema_getter_guard.ipp"
@@ -2744,6 +2747,7 @@ int ObSchemaGetterGuard::is_user_empty_passwd(const ObUserLoginInfo &login_info,
 }
 
 // for privilege
+// jinmao TODO: 密码认证相关的逻辑拆出去单独维护
 int ObSchemaGetterGuard::check_user_access(
     const ObUserLoginInfo &login_info,
     ObSessionPrivInfo &s_priv,
@@ -2794,35 +2798,108 @@ int ObSchemaGetterGuard::check_user_access(
             LOG_WARN("password error", KR(ret), K(login_info.passwd_.length()),
                      K(user_info->get_passwd_str().length()));
           } else {
-            char stored_stage2_hex[SCRAMBLE_LENGTH] = {0};
-            ObString stored_stage2_trimed;
-            ObString stored_stage2_hex_str;
-            if (user_info->get_passwd_str().length() < SCRAMBLE_LENGTH *2 + 1) {
-              ret = OB_NOT_IMPLEMENT;
-              LOG_WARN("Currently hash method other than MySQL 4.1 hash is not implemented.",
-                       "hash str length", user_info->get_passwd_str().length());
-            } else {
-              //trim the leading '*'
-              stored_stage2_trimed.assign_ptr(user_info->get_passwd_str().ptr() + 1,
-                                              user_info->get_passwd_str().length() - 1);
-              stored_stage2_hex_str.assign_buffer(stored_stage2_hex, SCRAMBLE_LENGTH);
-              stored_stage2_hex_str.set_length(SCRAMBLE_LENGTH);
-              //first, we restore the stored, displayable stage2 hash to its hex form
-              ObEncryptedHelper::displayable_to_hex(stored_stage2_trimed, stored_stage2_hex_str);
-              //then, we call the mysql validation logic.
-              if (OB_FAIL(ObEncryptedHelper::check_login(login_info.passwd_,
-                                                         login_info.scramble_str_,
-                                                         stored_stage2_hex_str,
-                                                         is_found))) {
-                LOG_WARN("Failed to check login", K(login_info), KR(ret));
-              } else if (!is_found) {
-                LOG_INFO("password error", "tenant_name", login_info.tenant_name_,
-                         "user_name", login_info.user_name_,
-                         "client_ip", login_info.client_ip_,
-                         "host_name", user_info->get_host_name_str());
+            // Get user's authentication plugin
+            ObString plugin = user_info->get_plugin_str();
+            if (plugin.empty()) {
+              // Default to mysql_native_password if not specified
+              plugin = ObString::make_string(AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD);
+            }
+
+            // Dispatch to different authentication methods based on plugin
+            if (0 == plugin.case_compare(AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD)) {
+              // mysql_native_password authentication
+              char stored_stage2_hex[SCRAMBLE_LENGTH] = {0};
+              ObString stored_stage2_trimed;
+              ObString stored_stage2_hex_str;
+              if (user_info->get_passwd_str().length() < SCRAMBLE_LENGTH *2 + 1) {
+                ret = OB_NOT_IMPLEMENT;
+                LOG_WARN("Currently hash method other than MySQL 4.1 hash is not implemented.",
+                         "hash str length", user_info->get_passwd_str().length());
               } else {
-                //found it
+                //trim the leading '*'
+                stored_stage2_trimed.assign_ptr(user_info->get_passwd_str().ptr() + 1,
+                                                user_info->get_passwd_str().length() - 1);
+                stored_stage2_hex_str.assign_buffer(stored_stage2_hex, SCRAMBLE_LENGTH);
+                stored_stage2_hex_str.set_length(SCRAMBLE_LENGTH);
+                //first, we restore the stored, displayable stage2 hash to its hex form
+                ObEncryptedHelper::displayable_to_hex(stored_stage2_trimed, stored_stage2_hex_str);
+                //then, we call the mysql validation logic.
+                if (OB_FAIL(ObEncryptedHelper::check_login(login_info.passwd_,
+                                                           login_info.scramble_str_,
+                                                           stored_stage2_hex_str,
+                                                           is_found))) {
+                  LOG_WARN("Failed to check login", K(login_info), KR(ret));
+                } else if (!is_found) {
+                  LOG_INFO("password error", "tenant_name", login_info.tenant_name_,
+                           "user_name", login_info.user_name_,
+                           "client_ip", login_info.client_ip_,
+                           "host_name", user_info->get_host_name_str());
+                } else {
+                  //found it
+                }
               }
+            } else if (0 == plugin.case_compare(AUTH_PLUGIN_CACHING_SHA2_PASSWORD)) {
+              // caching_sha2_password authentication
+              LOG_DEBUG("caching_sha2_password authentication",
+                        K(login_info.user_name_), K(login_info.passwd_.length()),
+                        K(login_info.is_passwd_plaintext_));
+
+              if (login_info.is_passwd_plaintext_) {
+                // Full authentication mode: verify with plaintext password
+                if (OB_FAIL(ObSha256Crypt::check_sha256_password(
+                        login_info.passwd_,
+                        login_info.scramble_str_,
+                        user_info->get_passwd_str(),
+                        is_found))) {
+                  LOG_WARN("Failed to check caching_sha2_password with plaintext", K(ret), K(login_info));
+                } else if (!is_found) {
+                  LOG_INFO("caching_sha2_password full authentication failed",
+                           "tenant_name", login_info.tenant_name_,
+                           "user_name", login_info.user_name_,
+                           "client_ip", login_info.client_ip_,
+                           "host_name", user_info->get_host_name_str());
+                } else {
+                  // Full authentication succeeded; generate and cache double SHA256 digest
+                  unsigned char digest_buf[OB_SHA256_DIGEST_LENGTH];
+                  int tmp_ret = OB_SUCCESS;
+
+                  if (OB_SUCCESS != (tmp_ret = ObSha256Crypt::generate_sha2_digest_for_cache(
+                                                              login_info.passwd_.ptr(),
+                                                              login_info.passwd_.length(),
+                                                              digest_buf,
+                                                              OB_SHA256_DIGEST_LENGTH))) {
+                    LOG_WARN("failed to generate sha2 digest for cache", K(tmp_ret));
+                    // Cache failure does not affect authentication success, continue
+                  } else if (OB_SUCCESS != (tmp_ret = ObCachingSha2CacheMgr::get_instance().put_digest(
+                                                      login_info.user_name_,
+                                                      user_info->get_host_name_str(),
+                                                      s_priv.tenant_id_,
+                                                      user_info->get_password_last_changed(),
+                                                      digest_buf,
+                                                      OB_SHA256_DIGEST_LENGTH))) {
+                    LOG_WARN("failed to put digest to cache", K(tmp_ret),
+                             K(login_info.user_name_), K(user_info->get_host_name_str()));
+                    // Cache failure does not affect authentication success, continue
+                  } else {
+                    LOG_INFO("successfully cached sha2 digest for fast auth",
+                             K(login_info.user_name_),
+                             K(user_info->get_host_name_str()),
+                             K(s_priv.tenant_id_),
+                             K(user_info->get_password_last_changed()));
+                  }
+
+                  // Clear sensitive data
+                  MEMSET(digest_buf, 0, sizeof(digest_buf));
+                }
+              } else {
+                // Fast authentication mode: verify with scramble response
+                // Fast authentication is already done at connect time, no need to repeat in this phase
+                is_found = true;
+              }
+            } else {
+              // Unsupported authentication plugin
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("Unsupported authentication plugin", K(ret), K(plugin), K(login_info.user_name_));
             }
           }
         }

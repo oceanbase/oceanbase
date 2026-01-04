@@ -6484,7 +6484,7 @@ public:
                  object_id_(common::OB_INVALID_ID), ins_col_ids_(),
                  upd_col_ids_(), ref_col_ids_(),
                  grantor_id_(common::OB_INVALID_ID), remain_roles_(), is_inner_(false),
-		             sel_col_ids_(), column_names_priv_(), grantor_(), grantor_host_(),
+	               sel_col_ids_(), column_names_priv_(), grantor_(), grantor_host_(),
                  catalog_(), sensitive_rule_()
   { }
   virtual ~ObGrantArg() {}

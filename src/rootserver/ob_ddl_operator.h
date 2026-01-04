@@ -586,7 +586,8 @@ public:
                          const uint64_t user_id,
                          const common::ObString &passwd,
                          const common::ObString *ddl_stmt_str,
-                         common::ObMySQLTransaction &trans);
+                         common::ObMySQLTransaction &trans,
+                         const common::ObString &plugin);
   virtual int set_max_connections(const uint64_t tenant_id,
                                   const uint64_t user_id,
                                   const uint64_t max_connections_per_hour,

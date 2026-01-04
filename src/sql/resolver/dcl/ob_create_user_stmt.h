@@ -33,7 +33,8 @@ public:
   int add_user(const common::ObString &user_name,
                const common::ObString &host_name,
                const common::ObString &password,
-               const common::ObString &need_enc);
+               const common::ObString &need_enc,
+               const common::ObString &plugin);
   int add_ssl_info(const common::ObString &ssl_type,
                    const common::ObString &ssl_cipher,
                    const common::ObString &x509_issuer,
@@ -42,6 +43,7 @@ public:
   uint64_t get_tenant_id() { return tenant_id_; }
   bool get_if_not_exists() const { return if_not_exist_; }
   const common::ObStrings &get_users() const { return users_; }
+  const common::ObStrings &get_plugins() const { return plugins_; }
   const common::ObString &get_masked_sql() const { return masked_sql_; }
   virtual bool cause_implicit_commit() const { return true; }
   virtual obrpc::ObDDLArg &get_ddl_arg() { return create_user_arg_; }
@@ -65,6 +67,7 @@ private:
                             //  user2, host2, pass2, need_enc2,
                             //  ...,
                             //  ssl_type, ssl_cipher, x509_issuer, x509_subject)
+  common::ObStrings plugins_; // (plugin1, plugin2, ...) 单独记录plugin信息，使用时校验user数量和plugin数量
   common::ObString masked_sql_;
   bool if_not_exist_;
   uint64_t profile_id_; //only used in oracle mode

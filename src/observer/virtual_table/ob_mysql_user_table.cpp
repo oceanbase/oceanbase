@@ -157,8 +157,8 @@ int ObMySQLUserTable::inner_get_next_row(common::ObNewRow *&row)
                   COLUMN_SET_WITH_TYPE(X509_SUBJECT, varchar, user_info->get_x509_subject());
                   COLUMN_SET_WITH_TYPE(MAX_QUESTIONS, int, 0);
                   COLUMN_SET_WITH_TYPE(MAX_UPDATES, int, 0);
-                  COLUMN_SET_WITH_TYPE(PLUGIN, varchar, "ob_native_password");
-                  COLUMN_SET_WITH_TYPE(AUTHENTICATION_STRING, varchar, "");
+                  COLUMN_SET_WITH_TYPE(PLUGIN, varchar, user_info->get_plugin());
+                  COLUMN_SET_WITH_TYPE(AUTHENTICATION_STRING, varchar, user_info->get_passwd_str());
                   COLUMN_SET_WITH_TYPE(PASSWORD_EXPIRED, varchar, "");
                   COLUMN_SET_WITH_TYPE(ACCOUNT_LOCKED, varchar, user_info->get_is_locked() ? "Y" : "N");
 

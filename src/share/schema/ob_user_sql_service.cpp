@@ -619,10 +619,13 @@ int ObUserSqlService::set_passwd_impl(
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
   const uint64_t user_id = user_info.get_user_id();
   ObSqlString sql_string;
+  uint64_t compat_version = 0;
   if (OB_INVALID_ID == tenant_id
      || OB_INVALID_ID == user_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid id", K(tenant_id), K(user_id), K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
   } else {
     int64_t affected_rows = 0;
     ObDMLExecHelper exec(sql_client, exec_tenant_id);
@@ -631,11 +634,19 @@ int ObUserSqlService::set_passwd_impl(
                                                exec_tenant_id, tenant_id)))
         || OB_FAIL(dml.add_pk_column("user_id", ObSchemaUtils::get_extract_schema_id(
                                                 exec_tenant_id, user_id)))
-        || OB_FAIL(dml.add_column("passwd", user_info.get_passwd()))
+        || OB_FAIL(dml.add_column("passwd", ObHexEscapeSqlStr(user_info.get_passwd())))
         || OB_FAIL(dml.add_time_column("password_last_changed",
                                       user_info.get_password_last_changed()))
         || OB_FAIL(dml.add_gmt_modified())) {
       LOG_WARN("add column failed", K(ret));
+    }
+
+    if (OB_SUCC(ret)
+        && ((compat_version >= MOCK_DATA_VERSION_4_4_2_0 && compat_version < DATA_VERSION_4_5_0_0)
+            || compat_version >= DATA_VERSION_4_5_1_0)) {
+      if (OB_FAIL(dml.add_column("plugin", ObHexEscapeSqlStr(user_info.get_plugin())))) {
+        LOG_WARN("add plugin column failed", K(user_info.get_plugin()), K(ret));
+      }
     }
 
     // udpate __all_user table
@@ -1010,7 +1021,7 @@ int ObUserSqlService::gen_user_dml(
                                               exec_tenant_id,user.get_user_id())))
       || OB_FAIL(dml.add_column("user_name", ObHexEscapeSqlStr(user.get_user_name())))
       || OB_FAIL(dml.add_column("host", ObHexEscapeSqlStr(user.get_host_name())))
-      || OB_FAIL(dml.add_column("passwd", user.get_passwd()))
+      || OB_FAIL(dml.add_column("passwd", ObHexEscapeSqlStr(user.get_passwd())))
       || OB_FAIL(dml.add_column("info", user.get_info()))
       || OB_FAIL(dml.add_column("PRIV_ALTER", user.get_priv(OB_PRIV_ALTER) ? 1 : 0))
       || OB_FAIL(dml.add_column("PRIV_CREATE", user.get_priv(OB_PRIV_CREATE) ? 1 : 0))
@@ -1120,6 +1131,14 @@ int ObUserSqlService::gen_user_dml(
     }
   } else if (OB_FAIL(dml.add_column("flags", user.get_flags()))) {
     LOG_WARN("add flags column failed", K(user.get_flags()), K(ret));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (!((compat_version >= MOCK_DATA_VERSION_4_4_2_0 && compat_version < DATA_VERSION_4_5_0_0)
+               || compat_version >= DATA_VERSION_4_5_1_0)) {
+    // do nothing
+  } else if (OB_FAIL(dml.add_column("plugin", ObHexEscapeSqlStr(user.get_plugin())))) {
+    LOG_WARN("add plugin column failed", K(user.get_plugin()), K(ret));
   }
   return ret;
 }

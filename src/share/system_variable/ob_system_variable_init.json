@@ -780,7 +780,8 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": ""
+    "ref_url": "",
+    "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_default_authentication_plugin"
   },
   "disabled_storage_engines": {
     "id": 51,

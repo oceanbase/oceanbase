@@ -17552,7 +17552,7 @@ user opt_host_name
 ;
 
 password:
-STRING_VALUE
+text_string
 {
   result->contain_sensitive_data_ = true;
   $$ = $1;

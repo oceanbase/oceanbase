@@ -11049,45 +11049,6 @@ int ObRootService::get_tenant_schema_versions(
   return ret;
 }
 
-int ObRootService::generate_user(const ObClusterRole &cluster_role,
-                                 const char* user_name,
-                                 const char* user_passwd)
-{
-  int ret = OB_SUCCESS;
-  ObSqlString ddl_stmt_str;
-  int64_t affected_row = 0;
-  ObString passwd(user_passwd);
-  ObString encry_passwd;
-  char enc_buf[ENC_BUF_LEN] = {0};
-  if (OB_ISNULL(user_name) || OB_ISNULL(user_passwd)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(user_name), K(user_passwd));
-  } else if (PRIMARY_CLUSTER != cluster_role) {
-    LOG_INFO("standby cluster, no need to create user", K(cluster_role));
-  } else if (OB_FAIL(sql::ObCreateUserExecutor::encrypt_passwd(passwd, encry_passwd, enc_buf, ENC_BUF_LEN))) {
-    LOG_WARN("Encrypt passwd failed", K(ret));
-  } else if (OB_FAIL(ObDDLSqlGenerator::gen_create_user_sql(ObAccountArg(user_name, OB_SYS_HOST_NAME),
-                                                     encry_passwd, ddl_stmt_str))) {
-    LOG_WARN("fail to gen create user sql", KR(ret));
-  } else if (OB_FAIL(sql_proxy_.write(ddl_stmt_str.ptr(), affected_row))) {
-    LOG_WARN("execute sql failed", K(ret), K(ddl_stmt_str));
-  } else {
-    LOG_INFO("create user success", K(user_name), K(affected_row));
-  }
-  ddl_stmt_str.reset();
-  if (OB_FAIL(ret) || PRIMARY_CLUSTER != cluster_role) {
-    //nothing todo
-  } else if (OB_FAIL(ddl_stmt_str.assign_fmt("grant select on *.* to '%s'",
-                                             user_name))) {
-    LOG_WARN("fail to assign fmt", KR(ret));
-  } else if (OB_FAIL(sql_proxy_.write(ddl_stmt_str.ptr(), affected_row))) {
-    LOG_WARN("fail to write", KR(ret), K(ddl_stmt_str));
-  } else {
-    LOG_INFO("grant privilege success", K(ddl_stmt_str));
-  }
-  return ret;
-}
-
 int ObRootService::get_recycle_schema_versions(
     const obrpc::ObGetRecycleSchemaVersionsArg &arg,
     obrpc::ObGetRecycleSchemaVersionsResult &result)

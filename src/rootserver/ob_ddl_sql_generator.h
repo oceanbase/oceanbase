@@ -42,6 +42,7 @@ public:
                                    common::ObSqlString &priv_str);
   static int gen_create_user_sql(const obrpc::ObAccountArg &account,
                                  const common::ObString &password,
+                                 const common::ObString &plugin,
                                  common::ObSqlString &sql_string);
   static int gen_alter_role_sql(const obrpc::ObAccountArg &account,
                                 const common::ObString &password,
@@ -53,7 +54,8 @@ public:
                                  common::ObSqlString &sql_string);
   static int gen_set_passwd_sql(const obrpc::ObAccountArg &account,
                                 const common::ObString &passwd,
-                                common::ObSqlString &sql_string);
+                                common::ObSqlString &sql_string,
+                                const common::ObString &plugin);
   static int gen_set_max_connections_sql(const obrpc::ObAccountArg &account,
                                         const uint64_t max_connections_per_hour,
                                         const uint64_t max_user_connections,

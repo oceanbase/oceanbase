@@ -27,7 +27,6 @@ namespace oceanbase
 {
 namespace observer
 {
-const char *AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD = "mysql_native_password";
 int ObMPChangeUser::deserialize()
 {
   int ret = OB_SUCCESS;

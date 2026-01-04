@@ -23,6 +23,11 @@ namespace obmysql
 #define OBPROXY_MYSQL_CMD_START 64
 #define PREXECUTE_CMD 161
 
+// caching_sha2_password protocol constants
+#define REQUEST_PUBLIC_KEY 0x02           // Request public key
+#define FAST_AUTH_SUCCESS 0x03            // Fast authentication success
+#define PERFORM_FULL_AUTHENTICATION 0x04  // Server requests full authentication
+
 static const int64_t OB_MYSQL_MAX_PACKET_LENGTH = (1L << 24); //3bytes , 16M
 static const int64_t OB_MYSQL_MAX_PAYLOAD_LENGTH = (OB_MYSQL_MAX_PACKET_LENGTH - 1);
 // EASY_IO_BUFFER_SIZE is 16k, reserve 3k for libeasy header and request
