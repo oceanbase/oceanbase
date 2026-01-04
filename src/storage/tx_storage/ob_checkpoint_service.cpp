@@ -905,7 +905,7 @@ public:
       STORAGE_LOG(WARN, "flush ls to recycle clog failed", KR(ret), K(ls));
     }
 
-    // returen OB_SUCCESS to iterate all logstreams
+    // return OB_SUCCESS to iterate all logstreams
     return OB_SUCCESS;
   }
 };
@@ -916,7 +916,7 @@ void ObCheckPointService::ObSSAdvanceCkptTask::runTimerTask()
   int ret = OB_SUCCESS;
   INIT_TRACE_GUARD;
 
-  // set 10 minutes as defualt value
+  // set 10 minutes as default value
   int64_t advance_checkpoint_interval = 10LL * 60LL * 1000LL * 1000LL;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   if (tenant_config.is_valid()) {
