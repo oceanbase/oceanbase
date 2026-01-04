@@ -12,6 +12,7 @@
 
 #include "share/diagnosis/ob_runtime_profile.h"
 #include "lib/container/ob_array_iterator.h"
+#include "observer/ob_server.h"
 
 #define USING_LOG_PREFIX COMMON
 
@@ -403,6 +404,12 @@ int ObOpProfile<ObMetric>::convert_current_profile_to_persist(char *buf, int64_t
     while (nullptr != cur_metric && buf_pos + step <= buf_len) {
       uint64_t metric_id = cur_metric->elem_.get_metric_id();
       uint64_t metric_value = cur_metric->elem_.value();
+      metric::Unit unit = get_metric_unit(cur_metric->elem_.id_);
+      if (unit == metric::Unit::CPU_CYCLE) {
+        // convert cpu cycle to ns
+        static const int64_t scale = (1000 << 20) / OBSERVER_FREQUENCE.get_cpu_frequency_khz();
+        metric_value = (metric_value * scale >> 20) * 1000;
+      }
       *cur_buf++ = metric_id;
       *cur_buf++ = metric_value;
       buf_pos += step;

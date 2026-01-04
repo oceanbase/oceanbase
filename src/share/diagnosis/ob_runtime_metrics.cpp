@@ -21,7 +21,7 @@ namespace oceanbase
 namespace common
 {
 int value_print_help(char *buf, const int64_t buf_len, int64_t &pos, uint64_t value,
-                     metric::Unit unit, bool as_json_format = true)
+                     metric::Unit unit, bool as_json_format)
 {
   static constexpr uint64_t kilo = 1000UL;
   static constexpr uint64_t mega = 1000UL * 1000UL;
@@ -64,6 +64,8 @@ int value_print_help(char *buf, const int64_t buf_len, int64_t &pos, uint64_t va
     UNIT_PRINT(kilo_byte, mega_byte, giga_byte, "B", "KB", "MB", "GB", value)
     break;
   }
+  case metric::Unit::CPU_CYCLE:
+  // already transformed into ns in convert_current_profile_to_persist
   case metric::Unit::TIME_NS: {
     UNIT_PRINT(kilo, mega, giga, "ns", "us", "ms", "s", value)
     break;
@@ -376,12 +378,14 @@ void ObMergeMetric::update(uint64_t value)
     }
   }
   if (agg_type & E_MIN) {
-    if (min_value_ == 0 || min_value_ > value) {
+    // if min_value_==0, we cannot distinguish whether it has been set.
+    if (!is_min_set_ || min_value_ > value) {
       min_value_ = value;
+      is_min_set_ = true;
     }
   }
   if (agg_type & E_MAX) {
-    if (max_value_ == 0 || max_value_ < value) {
+    if (max_value_ < value) {
       max_value_ = value;
     }
   }

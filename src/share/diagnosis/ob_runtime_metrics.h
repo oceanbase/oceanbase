@@ -36,6 +36,7 @@ enum class Unit
   BYTES,
   TIMESTAMP,
   TIME_NS,
+  CPU_CYCLE,
 };
 
 enum class Level
@@ -100,6 +101,10 @@ inline metric::Level get_metric_level(ObMetricId id)
   }
 }
 
+int value_print_help(char *buf, const int64_t buf_len, int64_t &pos,
+                     uint64_t value, metric::Unit unit,
+                     bool as_json_format = true);
+
 template<typename MetricType>
 class ObOpProfile;
 
@@ -162,6 +167,7 @@ private:
   uint64_t count_{0};
   uint64_t sum_value_{0};
   uint64_t min_value_{0};
+  bool is_min_set_{false};
   uint64_t max_value_{0};
   uint64_t first_value_{0};
   uint64_t variance_value_{0};

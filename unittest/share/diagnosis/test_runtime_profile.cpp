@@ -40,10 +40,10 @@ inline void join_filter()
   INC_METRIC_VAL(ObMetricId::JOIN_FILTER_FILTERED_COUNT, filter_count);
   INC_METRIC_VAL(ObMetricId::JOIN_FILTER_TOTAL_COUNT, total_count);
   uint64_t io_time=999999;
-  INC_METRIC_VAL(ObMetricId::TOTAL_IO_TIME, io_time);
+  INC_METRIC_VAL(ObMetricId::IO_TIME, io_time);
   get_current_profile()->to_format_json(&arena_alloc, json);
   cout << json << endl;
-  ASSERT_STREQ("{\"PHY_JOIN_FILTER\":{\"filtered row count\":20000, \"total row count\":22000, \"total io time\":\"999.999us\"}}", json);
+  ASSERT_STREQ("{\"PHY_JOIN_FILTER\":{\"filtered row count\":20000, \"total row count\":22000, \"io time\":\"999.999us\"}}", json);
 
 };
 
@@ -60,29 +60,29 @@ inline void hash_join()
   ASSERT_STREQ("{\"PHY_HASH_JOIN\":{}}", json);
 
   uint64_t io_time=999999;
-  INC_METRIC_VAL(ObMetricId::TOTAL_IO_TIME, io_time);
+  INC_METRIC_VAL(ObMetricId::IO_TIME, io_time);
 
   uint64_t bucket_size = 2048;
   SET_METRIC_VAL(ObMetricId::HASH_BUCKET_COUNT, bucket_size);
 
   get_current_profile()->to_format_json(&arena_alloc, json, true, metric::Level::AD_HOC);
   cout << json << endl;
-  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"total io time\":\"999.999us\", \"bucket size\":2048}}", json);
+  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"io time\":\"999.999us\", \"bucket size\":2048}}", json);
 
   join_filter();
   get_current_profile()->to_format_json(&arena_alloc, json, true, metric::Level::AD_HOC);
   cout << json << endl;
-  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"total io time\":\"999.999us\", \"bucket size\":2048, \"PHY_JOIN_FILTER\":{\"filtered row count\":20000, \"total row count\":22000, \"total io time\":\"999.999us\"}}}", json);
+  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"io time\":\"999.999us\", \"bucket size\":2048, \"PHY_JOIN_FILTER\":{\"filtered row count\":20000, \"total row count\":22000, \"io time\":\"999.999us\"}}}", json);
 
   uint64_t hash_row_count = 13000;
   INC_METRIC_VAL(ObMetricId::HASH_ROW_COUNT, hash_row_count);
   get_current_profile()->to_format_json(&arena_alloc, json, true, metric::Level::AD_HOC);
   cout << json << endl;
-  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"total io time\":\"999.999us\", \"bucket size\":2048, \"total row count\":13000, \"PHY_JOIN_FILTER\":{\"filtered row count\":20000, \"total row count\":22000, \"total io time\":\"999.999us\"}}}", json);
+  ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"io time\":\"999.999us\", \"bucket size\":2048, \"total row count\":13000, \"PHY_JOIN_FILTER\":{\"filtered row count\":20000, \"total row count\":22000, \"io time\":\"999.999us\"}}}", json);
 
   get_current_profile()->to_format_json(&arena_alloc, json, false, metric::Level::AD_HOC);
   cout << json << endl;
-  ASSERT_STREQ("{\"total io time\":\"999.999us\", \"bucket size\":2048, \"total row count\":13000, \"PHY_JOIN_FILTER\":{\"filtered row count\":20000, \"total row count\":22000, \"total io time\":\"999.999us\"}}", json);
+  ASSERT_STREQ("{\"io time\":\"999.999us\", \"bucket size\":2048, \"total row count\":13000, \"PHY_JOIN_FILTER\":{\"filtered row count\":20000, \"total row count\":22000, \"io time\":\"999.999us\"}}", json);
 
 }
 
@@ -105,20 +105,20 @@ TEST_F(ObRuntimeProfileTest, test_more_metrics)
   INC_METRIC_VAL(ObMetricId::JOIN_FILTER_LENGTH, 100);
   INC_METRIC_VAL(ObMetricId::JOIN_FILTER_BIT_SET, 100);
   INC_METRIC_VAL(ObMetricId::JOIN_FILTER_BY_BASS_COUNT_BEFORE_READY, 100);
-  INC_METRIC_VAL(ObMetricId::TOTAL_IO_TIME, 100);
+  INC_METRIC_VAL(ObMetricId::IO_TIME, 100);
   INC_METRIC_VAL(ObMetricId::OUTPUT_ROWS, 100);
   INC_METRIC_VAL(ObMetricId::OUTPUT_BATCHES, 100);
   INC_METRIC_VAL(ObMetricId::SKIPPED_ROWS, 100);
   INC_METRIC_VAL(ObMetricId::RESCAN_TIMES, 100);
   get_current_profile()->to_format_json(&arena_alloc, json, true, metric::Level::AD_HOC);
   cout << json << endl;
-  ASSERT_STREQ("{\"PHY_JOIN_FILTER\":{\"filtered row count\":100, \"total row count\":100, \"check row count\":100, \"filter id\":100, \"filter length\":100, \"filter bitset\":100, \"by-pass row count\":100, \"total io time\":\"100ns\", \"output rows\":100, \"output batches\":100, \"skipped rows\":100, \"rescan times\":100}}", json);
+  ASSERT_STREQ("{\"PHY_JOIN_FILTER\":{\"filtered row count\":100, \"total row count\":100, \"check row count\":100, \"filter id\":100, \"filter length\":100, \"filter bitset\":100, \"by-pass row count\":100, \"io time\":\"100ns\", \"output rows\":100, \"output batches\":100, \"skipped rows\":100, \"rescan times\":100}}", json);
   get_current_profile()->to_format_json(&arena_alloc, json, true, metric::Level::STANDARD);
   cout << json << endl;
-  ASSERT_STREQ("{\"PHY_JOIN_FILTER\":{\"filtered row count\":100, \"total row count\":100, \"check row count\":100, \"filter length\":100, \"total io time\":\"100ns\", \"output rows\":100, \"rescan times\":100}}", json);
+  ASSERT_STREQ("{\"PHY_JOIN_FILTER\":{\"filtered row count\":100, \"total row count\":100, \"check row count\":100, \"filter length\":100, \"io time\":\"100ns\", \"output rows\":100, \"rescan times\":100}}", json);
   get_current_profile()->to_format_json(&arena_alloc, json, true, metric::Level::CRITICAL);
   cout << json << endl;
-  ASSERT_STREQ("{\"PHY_JOIN_FILTER\":{\"total io time\":\"100ns\", \"output rows\":100}}", json);
+  ASSERT_STREQ("{\"PHY_JOIN_FILTER\":{\"io time\":\"100ns\", \"output rows\":100}}", json);
   cout << json << endl;
 }
 

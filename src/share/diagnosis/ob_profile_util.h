@@ -83,9 +83,11 @@ struct ObProfileItem
 
 struct ObMergedProfileItem
 {
-  static bool cmp_by_db_time(const ObMergedProfileItem &a, const ObMergedProfileItem &b)
+  static const char *COLORS[];
+  static const char *DEFAULT_COLOR;
+  static bool cmp_by_db_time(const ObMergedProfileItem *a, const ObMergedProfileItem *b)
   {
-    return a.max_db_time_ < b.max_db_time_;
+    return a->max_db_time_ < b->max_db_time_;
   }
   int64_t to_string(char *buf, const int64_t buf_len) const
   {
@@ -99,6 +101,8 @@ struct ObMergedProfileItem
   ObString sql_id_;
   int64_t parallel_{0};
   ObMergedProfile *profile_{nullptr};
+  const char *color_{nullptr}; // for print
+  double rate_{0};
 };
 
 struct ExecutionBound
