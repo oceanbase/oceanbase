@@ -255,16 +255,25 @@ int ObTableQueryASyncMgr::generate_query_sessid(uint64_t &sess_id)
       if (OB_UNLIKELY(sess_id == INVALID_SESSION_ID)) {
         // need to extend session ids and try to get session id again
         if (OB_FAIL(generate_new_session_ids(session_count))) {
-          LOG_WARN("fail to generate new session ids", K(ret), K(session_count));
+          if (ret == OB_EAGAIN) {
+            LOG_INFO("meet OB_EAGAIN and neet to retry", K(ret), K(retry_count), K(session_count));
+            ret = OB_SUCCESS; // overwrite ret
+          } else {
+            LOG_WARN("fail to generate new session ids", K(ret), K(session_count));
+          }
         }
       } else {
         ret = OB_ITER_END;
       }
       if (OB_SUCC(ret)) { // OB_ITER_END means generate successfully, other errors need to keep error codes
         now = ObTimeUtility::fast_current_time();
-        if (now > timeout_ts) {
+        if (now >= timeout_ts) {
           ret = OB_TIMEOUT;
           LOG_WARN("timeout when generate query sessid", K(ret), K(timeout_ts), K(now), K(retry_count));
+        } else {
+          int64_t sleep_interval = MIN_QUERY_SESSION_CLEAN_DELAY / 1000; // 1ms
+          int64_t min_sleep_interval = min(sleep_interval, timeout_ts - now);
+          ob_usleep(min_sleep_interval);
         }
       }
       ++retry_count;
