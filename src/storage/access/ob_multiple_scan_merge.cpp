@@ -227,7 +227,7 @@ int ObMultipleScanMerge::construct_iters()
 
         if (OB_SUCC(ret)) {
           consumers_[consumer_cnt_++] = i - get_di_base_table_cnt();
-          STORAGE_LOG(DEBUG, "add iter for consumer", K(i), KPC(table));
+          STORAGE_LOG(TRACE, "add iter for consumer", K(i), KP(iter), KPC(table));
         }
       }
     }

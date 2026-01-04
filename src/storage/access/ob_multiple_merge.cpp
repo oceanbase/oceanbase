@@ -1802,7 +1802,11 @@ int ObMultipleMerge::refresh_table_on_demand()
       } else {
         STORAGE_LOG(WARN, "fail to save current rowkey", K(ret));
       }
-    } else if (FALSE_IT(reset_iter_array(access_param_->is_use_global_iter_pool()))) {
+    } else if (FALSE_IT(access_param_->iter_param_.set_use_stmt_iter_pool())) {
+    } else if (OB_FAIL(access_ctx_->alloc_iter_pool(access_param_->iter_param_.is_use_column_store()))) {
+      LOG_WARN("Failed to init iter pool", K(ret));
+    } else if (FALSE_IT(stmt_iter_pool_ = access_ctx_->get_stmt_iter_pool())) {
+    } else if (FALSE_IT(reuse_iter_array())) {
     } else if (FALSE_IT(access_ctx_->reuse_skip_scan_factory())) {
     } else if (OB_FAIL(refresh_tablet_iter())) {
       STORAGE_LOG(WARN, "fail to refresh tablet iter", K(ret));
