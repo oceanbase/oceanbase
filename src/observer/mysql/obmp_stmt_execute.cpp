@@ -321,6 +321,7 @@ int ObMPStmtExecute::construct_execute_param_for_arraybinding(int64_t pos)
     CK (1 == coll->get_column_count());
     CK (OB_NOT_NULL(data = reinterpret_cast<ObObj*>(coll->get_data())));
     OX (params_->at(i) = *(data + pos));
+    OX (params_->at(i).set_param_meta());
   }
   return ret;
 }
