@@ -34,6 +34,8 @@ public:
       se_rowkey_dist_ctx_(nullptr),
       table_rowkey_(),
       batch_distinct_fk_cnt_(0),
+      foreign_key_database_name_(),
+      foreign_key_name_(),
       allocator_(nullptr)
   {
   }
@@ -48,7 +50,9 @@ public:
                KPC_(se_rowkey_dist_ctx),
                K_(table_rowkey),
                K_(batch_distinct_fk_cnt),
-               K_(clear_exprs));
+               K_(clear_exprs),
+               K_(foreign_key_name),
+               K_(foreign_key_database_name));
 
   int reset();
   int reuse();
@@ -62,6 +66,8 @@ public:
                                const ObExprFrameInfo *expr_frame_info,
                                ObForeignKeyCheckerCtdef &fk_ctdef,
                                const ObExprPtrIArray &row,
+                               const common::ObString &foreign_key_database_name,
+                               const common::ObString &foreign_key_name,
                                ObIAllocator *allocator);
 
   int build_fk_check_das_task(const ObIArray<ObForeignKeyColumn> &columns,
@@ -115,6 +121,8 @@ public:
   ObRowkey table_rowkey_;
   int64_t batch_distinct_fk_cnt_;
   ObSEArray<ObExpr *, 4> clear_exprs_;
+  common::ObString foreign_key_database_name_; // for error message
+  common::ObString foreign_key_name_; // for error message
   ObIAllocator *allocator_;
 };
 

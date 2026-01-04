@@ -1029,7 +1029,7 @@ DEFINE_ERROR_EXT(OB_ERR_INVALID_COLUMN_ID, -5311, -1, "HY000", "Invalid column i
 DEFINE_ERROR_EXT(OB_SYNC_DDL_DUPLICATE, -5312, -1, "HY000", "Duplicated ddl id", "Duplicated ddl id '%.*s'");
 DEFINE_ERROR_EXT(OB_SYNC_DDL_ERROR, -5313, -1, "HY000", "Failed to sync ddl", "Failed to sync ddl '%.*s'");
 DEFINE_ORACLE_ERROR(OB_ERR_ROW_IS_REFERENCED, -5314, ER_ROW_IS_REFERENCED_2, "23000", "Cannot delete or update a parent row: a foreign key constraint fails", 2292, "integrity constraint violated - child record found");
-DEFINE_ORACLE_ERROR(OB_ERR_NO_REFERENCED_ROW, -5315, ER_NO_REFERENCED_ROW_2, "23000", "Cannot add or update a child row: a foreign key constraint fails", 2291, "integrity constraint violated - parent key not found");
+DEFINE_ORACLE_ERROR_EXT(OB_ERR_NO_REFERENCED_ROW, -5315, ER_NO_REFERENCED_ROW_2, "23000", "Cannot add or update a child row: a foreign key constraint fails", "Cannot add or update a child row: a foreign key constraint (%.*s.%.*s) fails", 2291, "integrity constraint violated - parent key not found", "integrity constraint (%.*s.%.*s) violated - parent key not found");
 DEFINE_ERROR_EXT(OB_ERR_FUNC_RESULT_TOO_LARGE, -5316, ER_WARN_ALLOWED_PACKET_OVERFLOWED, "HY000", "Result of function was larger than max_allowed_packet - truncated", "Result of %s() was larger than max_allowed_packet (%d) - truncated");
 DEFINE_ERROR(OB_ERR_CANNOT_ADD_FOREIGN, -5317, ER_CANNOT_ADD_FOREIGN, "HY000", "Cannot add foreign key constraint");
 DEFINE_ERROR(OB_ERR_WRONG_FK_DEF, -5318, ER_WRONG_FK_DEF, "42000", "Incorrect foreign key definition: Key reference and table reference don't match");
