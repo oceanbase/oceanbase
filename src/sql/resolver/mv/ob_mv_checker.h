@@ -118,6 +118,9 @@ class ObMVChecker
   int check_mv_stmt_refresh_type(const ObSelectStmt &stmt, ObMVRefreshableType &refresh_type);
   ObMVRefreshableType get_refersh_type() const { return refresh_type_; };
   static bool is_basic_aggr(const ObItemType aggr_type);
+  static bool is_group_recalculate_aggr(const ObItemType aggr_type);
+  static int extract_group_recalculate_aggrs(const ObIArray<ObAggFunRawExpr*> &all_aggrs,
+                                             ObIArray<ObAggFunRawExpr*> &group_recalculate_aggrs);
   static int get_dependent_aggr_of_fun_sum(const ObSelectStmt &stmt, const ObRawExpr *sum_param, const ObAggFunRawExpr *&dep_aggr);
   const ObSelectStmt &get_stmt() const {  return stmt_; }
   const MlogSchemaPairIArray &get_mlog_tables() const {  return mlog_tables_; }
@@ -125,22 +128,10 @@ class ObMVChecker
   const ObIArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>> &get_expand_aggrs() const {  return expand_aggrs_;  }
   int64_t get_union_all_marker_idx() const {  return marker_idx_;  }
   const ObIArray<ObMVRefreshableType> &get_child_refresh_types() const {  return child_refresh_types_;  }
-  int get_group_by_column_ids(const uint64_t log_table_id,
-                              const ObIArray<ObRawExpr*> &group_by_exprs,
-                              const ObIArray<ObColumnRefRawExpr*> &gen_cols,
-                              ObIArray<uint64_t> &group_by_col_ids);
-  int get_valid_index_for_cols(ObSqlSchemaGuard &sql_schema_guard,
-                               const uint64_t phy_table_id,
-                               const ObIArray<uint64_t> &group_by_col_ids,
-                               const ObTableSchema *&index_schema);
-  ObIArray<ObColumnRefRawExpr*> &get_gen_cols()  { return gen_cols_;  }
   static int pre_process_view_stmt(ObRawExprFactory *expr_factory,
                                    ObSQLSessionInfo *session_info,
-                                   ObIArray<ObColumnRefRawExpr*> &gen_cols,
                                    ObSelectStmt &view_stmt);
   static int adjust_set_stmt_sel_item(ObSelectStmt &view_stmt);
-  static int get_generated_columns_recursively(ObDMLStmt *stmt,
-                                               ObIArray<ObColumnRefRawExpr*> &gen_cols);
   static int reset_ref_query_stmt_id_recursively(ObSelectStmt *stmt);
   static int get_table_rowkey_ids(const ObTableSchema *table_schema,
                                   ObSchemaGetterGuard *schema_guard,
@@ -184,10 +175,7 @@ private:
                                 ObAggFunRawExpr *aggr,
                                 ObIArray<ObAggFunRawExpr*> &all_aggrs,
                                 ObIArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>> &expand_aggrs,
-                                bool &need_check_min_max_aggr,
                                 bool &is_valid);
-  int check_min_max_aggr_fast_refresh_valid(const ObSelectStmt &stmt,
-                                            bool &is_valid);
   int try_replace_equivalent_count_aggr(const ObSelectStmt &stmt,
                                         const int64_t orig_aggr_count,
                                         ObIArray<ObAggFunRawExpr*> &all_aggrs,
@@ -236,7 +224,6 @@ private:
   // union all mv child refreshable type
   common::ObSEArray<ObMVRefreshableType, 4, common::ModulePageAllocator, true> child_refresh_types_;
   ObTableReferencedColumnsInfo *table_referenced_columns_info_;
-  common::ObSEArray<ObColumnRefRawExpr*, 4, common::ModulePageAllocator, true> gen_cols_;
   // automatically generated invisible columns for refresh
   common::ObIArray<std::pair<ObRawExpr*, int64_t>> &refresh_dep_columns_;
   int64_t stmt_idx_; // union all child mv stmt idx in select list
