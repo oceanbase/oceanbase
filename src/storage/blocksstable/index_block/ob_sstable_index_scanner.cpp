@@ -357,12 +357,12 @@ int ObSSTableIndexBlockLevelScanner::advance_to(const ObDatumRowkey &rowkey, con
           found_advanced_key = true;
         }
       }
-    }
 
-    if (OB_SUCC(ret) && !found_advanced_key) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("block contains advanced key already prefetched but not found",
-          K(ret), K_(last_prefetch_key), K_(query_range), K_(is_root_block));
+      if (OB_SUCC(ret) && !found_advanced_key) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("block contains advanced key already prefetched but not found",
+            K(ret), K_(last_prefetch_key), K_(query_range), K_(is_root_block));
+      }
     }
   } else {
     // advance to rowkey that is not prefetched yet
