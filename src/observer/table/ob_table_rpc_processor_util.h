@@ -78,6 +78,15 @@ namespace observer
 class ObTableRpcProcessorUtil
 {
 public:
+  OB_INLINE static bool is_general_need_retry_err(const int err)
+  {
+    return err == OB_TRY_LOCK_ROW_CONFLICT
+        || err == OB_TRANSACTION_SET_VIOLATION
+        || err == OB_SCHEMA_EAGAIN
+        || err == OB_SNAPSHOT_DISCARDED
+        || err == OB_TRANS_WEAK_READ_VERSION_NOT_READY;
+  }
+
   OB_INLINE static bool is_require_rerouting_err(const int err)
   {
     // rerouting: whether client should refresh location cache and retry

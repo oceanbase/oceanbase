@@ -634,14 +634,17 @@ bool ObTableApiProcessorBase::can_retry(const int retcode, bool &did_local_retry
   bool tmp_can_retry = false;
   bool tmp_local_retry = false;
   bool is_max_local_retry_count = retry_count_ >= retry_policy_.max_local_retry_count_;
-  if ((OB_TRY_LOCK_ROW_CONFLICT == retcode ||
-      OB_TRANSACTION_SET_VIOLATION == retcode ||
-      OB_SCHEMA_EAGAIN == retcode) && !is_max_local_retry_count) {
+  if (ObTableRpcProcessorUtil::is_general_need_retry_err(retcode) && !is_max_local_retry_count) {
     tmp_can_retry = true;
     // retry in current thread
     tmp_local_retry = true;
     if (OB_TRANSACTION_SET_VIOLATION == retcode) {
       EVENT_INC(TABLEAPI_TSC_VIOLATE_COUNT);
+    }
+    if (OB_SNAPSHOT_DISCARDED == retcode) {
+      // OB_SNAPSHOT_DISCARDED need to inform the client and odp to refresh table meta cache
+      require_rerouting_ = true;
+      kv_route_meta_error_ = true;
     }
     // retry these error codes based on allow_retry_
     can_retry = tmp_can_retry && retry_policy_.allow_retry();
