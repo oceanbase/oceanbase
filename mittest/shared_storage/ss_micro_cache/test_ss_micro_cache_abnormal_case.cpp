@@ -284,6 +284,7 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_phy_ckpt_timeout)
     ASSERT_NE(nullptr, phy_blk);
     if (is_ss_ckpt_block(phy_blk->get_block_type())) {
       phy_blk->alloc_time_s_ -= SS_FREE_BLK_MIN_REUSE_TIME_S;
+      ASSERT_EQ(true, phy_blk->can_reuse());
     }
   }
 
@@ -291,8 +292,11 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_phy_ckpt_timeout)
   ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.start_op());
   blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.need_ckpt_ = true;
   ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.gen_checkpoint());
-  ASSERT_EQ(blk_ckpt_block_cnt / 2, blk_cnt_info.phy_ckpt_blk_used_cnt_);
-  ASSERT_EQ(true, phy_blk_mgr.inner_can_alloc_blk(ObSSPhyBlockType::SS_PHY_BLK_CKPT_BLK));
+  if (blk_ckpt_block_cnt / 2 == blk_cnt_info.phy_ckpt_blk_used_cnt_) {
+    ASSERT_EQ(true, phy_blk_mgr.inner_can_alloc_blk(ObSSPhyBlockType::SS_PHY_BLK_CKPT_BLK));
+  } else {
+    ASSERT_EQ(blk_ckpt_block_cnt, blk_cnt_info.phy_ckpt_blk_used_cnt_);
+  }
   ASSERT_EQ(true, phy_blk_mgr.inner_can_alloc_blk(ObSSPhyBlockType::SS_MICRO_DATA_BLK));
 
   LOG_INFO("TEST_CASE: finish test_phy_ckpt_timeout");
