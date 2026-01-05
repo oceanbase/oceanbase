@@ -86,6 +86,7 @@ public:
   /*---------------------- MemberList related functions begin -----------------------*/
   // format-related functions
   static int member_list2text(const MemberList &member_list, ObSqlString &text);
+  static int member_list2addrs(const MemberList &member_list, common::ObIArray<common::ObAddr> &addrs);
   static int text2learner_list(const char *text, GlobalLearnerList &learner_list);
   static int text2member_list(const char *text, MemberList &member_list);
   // transform ObMemberList into MemberList

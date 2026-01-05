@@ -24,6 +24,7 @@
 #include "storage/tablelock/ob_table_lock_service.h" // ObTableLockService
 #include "storage/ddl/ob_ddl_lock.h" // ObDDLLock
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
+#include "storage/ob_storage_async_rpc.h" // ObFetchLSReplayScnProxy
 #include "storage/tablet/ob_tablet_to_global_temporary_table_operator.h"
 
 namespace oceanbase
@@ -438,7 +439,7 @@ int ObTenantTransferService::check_ls_member_list_and_learner_list_(
   int ret = OB_SUCCESS;
   result_comment = EMPTY_COMMENT;
   bool all_members_are_active = false;
-  bool all_learners_are_active = false;
+  bool replay_scn_check_pass = false;
   ObLSReplica::MemberList src_ls_member_list;
   ObLSReplica::MemberList dest_ls_member_list;
   GlobalLearnerList src_ls_learner_list;
@@ -473,6 +474,22 @@ int ObTenantTransferService::check_ls_member_list_and_learner_list_(
     result_comment = INACTIVE_SERVER_IN_MEMBER_LIST;
     LOG_WARN("member_list has inactive server", KR(ret), K(src_ls),
         K(src_ls_member_list), K(all_members_are_active), K(result_comment));
+  } else if (OB_FAIL(check_replay_scn_in_member_list_(
+      src_ls,
+      src_ls_member_list,
+      replay_scn_check_pass))) {
+    LOG_WARN("check replay scn of src_ls failed", KR(ret), K(src_ls), K(src_ls_member_list));
+  } else if (!replay_scn_check_pass) {
+    result_comment = WAIT_FOR_REPLAY_SCN;
+    LOG_WARN("replay scn of src_ls is abnormal", KR(ret), K(src_ls), K(src_ls_member_list));
+  } else if (OB_FAIL(check_replay_scn_in_member_list_(
+      dest_ls,
+      dest_ls_member_list,
+      replay_scn_check_pass))) {
+    LOG_WARN("check replay scn of dest_ls failed", KR(ret), K(dest_ls), K(dest_ls_member_list));
+  } else if (!replay_scn_check_pass) {
+    result_comment = WAIT_FOR_REPLAY_SCN;
+    LOG_WARN("replay scn of dest_ls is abnormal", KR(ret), K(dest_ls), K(dest_ls_member_list));
   } else if (0 != src_ls_learner_list.get_member_number()
       || 0 != dest_ls_learner_list.get_member_number()) {
     // has R replica, duplicate ls maybe exist
@@ -515,6 +532,9 @@ int ObTenantTransferService::check_ls_member_list_and_learner_list_(
   } else if (OB_NO_READABLE_REPLICA == EN_TENANT_TRANSFER_CHECK_LS_MEMBER_LIST_NOT_SAME) {
     result_comment = WAIT_FOR_LEARNER_LIST;
     TTS_INFO("errsim tenant transfer check ls learner list not same", K(result_comment));
+  } else if (OB_LOG_REPLAY_ERROR == EN_TENANT_TRANSFER_CHECK_LS_MEMBER_LIST_NOT_SAME) {
+    result_comment = WAIT_FOR_REPLAY_SCN;
+    TTS_INFO("errsim tenant transfer check ls replay scn not same", K(result_comment));
   }
   return ret;
 }
@@ -630,6 +650,67 @@ int ObTenantTransferService::construct_ls_member_list_and_learner_list_(
       ls_learner_list_ptr,
       ls_learner_list))) {
     LOG_WARN("text2learner_list failed", KR(ret), K(ls_learner_list_str));
+  }
+  return ret;
+}
+
+int ObTenantTransferService::check_replay_scn_in_member_list_(
+    const ObLSID &ls_id,
+    const ObLSReplica::MemberList &ls_member_list,
+    bool &check_pass)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObAddr> member_addrs;
+  check_pass = false;
+  ObTimeoutCtx timeout_ctx;
+  storage::ObFetchLSReplayScnProxy batch_rpc_proxy(
+      *(GCTX.storage_rpc_proxy_), &obrpc::ObStorageRpcProxy::fetch_ls_replay_scn);
+  ObFetchLSReplayScnArg arg;
+  ObHAAsyncRpcArg async_rpc_arg;
+  ObArray<obrpc::ObFetchLSReplayScnRes> responses;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id_)
+      || !ls_id.is_valid()
+      || ls_member_list.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(tenant_id_), K(ls_id), K(ls_member_list));
+  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(timeout_ctx, GCONF.rpc_timeout))) {
+    LOG_WARN("set default timeout ctx failed", KR(ret));
+  } else if (OB_FAIL(ObLSReplica::member_list2addrs(ls_member_list, member_addrs))) {
+    LOG_WARN("member list2addrs failed", KR(ret), K(ls_member_list), K(member_addrs));
+  } else if (OB_FAIL(async_rpc_arg.set_ha_async_arg(
+      tenant_id_,
+      share::OBCG_TRANSFER/*group_id*/,
+      timeout_ctx.get_timeout(),
+      member_addrs))) {
+    LOG_WARN("failed to set ha async arg", KR(ret), K(tenant_id_), K(timeout_ctx), K(member_addrs));
+  } else if (FALSE_IT(arg.tenant_id_ = tenant_id_)) {
+  } else if (FALSE_IT(arg.ls_id_ = ls_id)) {
+  } else if (OB_FAIL(ObHAAsyncRpc::send_async_rpc(async_rpc_arg, arg, batch_rpc_proxy, responses))) {
+    LOG_WARN("failed to send async rpc", KR(ret), K(async_rpc_arg), K(arg));
+  } else if (OB_UNLIKELY(responses.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("responses is empty", KR(ret), K(tenant_id_), K(ls_id), K(member_addrs), K(responses));
+  } else {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+    // This threshold aligns with the implementation of storage layer.
+    const int64_t threshold = tenant_config.is_valid()
+        ? tenant_config->_transfer_start_trans_timeout * 0.5
+        : 500_ms;
+    SCN min_scn = SCN::max_scn();
+    SCN max_scn = SCN::min_scn();
+    ARRAY_FOREACH_NORET(responses, idx) {
+      const SCN &scn = responses.at(idx).replay_scn_;
+      min_scn = MIN(min_scn, scn);
+      max_scn = MAX(max_scn, scn);
+    }
+    check_pass = max_scn.convert_to_ts() - min_scn.convert_to_ts() < threshold;
+    if (!check_pass) {
+      LOG_WARN("unexpected replay scn", KR(ret), K(ls_id), K(member_addrs),
+          K(responses), K(min_scn), K(max_scn), K(threshold));
+    }
   }
   return ret;
 }

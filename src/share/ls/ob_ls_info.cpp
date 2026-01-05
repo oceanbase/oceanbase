@@ -484,6 +484,20 @@ int ObLSReplica::member_list2text(
   return ret;
 }
 
+int ObLSReplica::member_list2addrs(
+    const MemberList &member_list,
+    common::ObIArray<common::ObAddr> &addrs)
+{
+  int ret = OB_SUCCESS;
+  addrs.reset();
+  ARRAY_FOREACH(member_list, idx) {
+    if (OB_FAIL(addrs.push_back(member_list.at(idx).get_server()))) {
+      LOG_WARN("failed to push back server", KR(ret), K(member_list));
+    }
+  }
+  return ret;
+}
+
 int ObLSReplica::parse_addr_from_learner_string_(
     const ObString &input_string,
     ObAddr &learner_addr,

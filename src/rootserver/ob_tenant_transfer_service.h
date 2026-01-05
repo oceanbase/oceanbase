@@ -282,6 +282,10 @@ private:
       share::ObTransferTaskID &last_failed_task_id);
   int64_t get_transfer_config_retry_interval_();
   int check_if_task_is_finished_(const share::ObTransferTaskID &task_id, bool &is_finished);
+  int check_replay_scn_in_member_list_(
+      const share::ObLSID &ls_id,
+      const share::ObLSReplica::MemberList &ls_member_list,
+      bool &check_pass);
 private:
   static const int64_t IDLE_TIME_US = 10 * 1000 * 1000L; // 10s
   static const int64_t BUSY_IDLE_TIME_US = 100 * 1000L; // 100ms
