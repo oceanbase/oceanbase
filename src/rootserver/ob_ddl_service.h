@@ -38,6 +38,7 @@
 #include "rootserver/parallel_ddl/ob_tablet_balance_allocator.h"
 #include "pl_ddl/ob_pl_ddl_service.h"
 #include "share/ob_create_hidden_tablev2_rpc_struct.h"
+#include "share/ob_max_id_cache.h"
 
 namespace oceanbase
 {
@@ -125,6 +126,7 @@ public:
   {
      return non_partitioned_tablet_allocator_;
   }
+  ObMaxIdCacheMgr &get_max_id_cache_mgr() { return max_id_cache_mgr_; }
 
   // create_index_table will fill table_id and frozen_version to table_schema
   virtual int create_index_table(const obrpc::ObCreateIndexArg &arg,
@@ -2746,6 +2748,7 @@ private:
   // for paralled ddl to cache oracle's index name map
   share::schema::ObIndexNameChecker index_name_checker_;
   share::schema::ObNonPartitionedTableTabletAllocator non_partitioned_tablet_allocator_;
+  ObMaxIdCacheMgr max_id_cache_mgr_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDDLService);
 };

@@ -29,17 +29,20 @@ public:
       const uint64_t size, ObMySQLProxy *sql_proxy);
 private:
   int fetch_ids_from_inner_table_(const uint64_t size, ObMySQLProxy *sql_proxy);
-  int fetch_ids_by_cache_(const uint64_t size, uint64_t &id);
+  int fetch_ids_by_cache_without_lock_(const uint64_t size, uint64_t &id);
   bool cached_id_valid_();
 private:
   static const uint64_t CACHE_SIZE = 1024;
+  static const int64_t FETCH_RETRY_INTERVAL_US = 10 * 1000; // 10ms retry interval
+  static const int64_t MAX_FETCH_RETRY_CNT = 10;            // max retry count before bypass lock
 private:
   // [min_id, min_id + size) is valid
   uint64_t min_id_;
   uint64_t size_;
   uint64_t tenant_id_;
   ObMaxIdType type_;
-  common::ObLatch latch_;
+  common::ObLatch latch_;              // protect cache allocation
+  common::ObLatch fetch_latch_;        // serialize inner table fetch
 };
 
 class ObMaxIdCache

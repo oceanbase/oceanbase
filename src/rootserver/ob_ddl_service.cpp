@@ -117,7 +117,8 @@ ObDDLService::ObDDLService()
     snapshot_mgr_(NULL),
     ddl_lock_(),
     index_name_checker_(),
-    non_partitioned_tablet_allocator_()
+    non_partitioned_tablet_allocator_(),
+    max_id_cache_mgr_()
 {
 }
 
@@ -137,6 +138,8 @@ int ObDDLService::init(obrpc::ObSrvRpcProxy &rpc_proxy,
     LOG_WARN("fail to init index name checker", KR(ret));
   } else if (OB_FAIL(non_partitioned_tablet_allocator_.init(sql_proxy))) {
     LOG_WARN("fail to init non partitioned tablet allocator", KR(ret));
+  } else if (OB_FAIL(max_id_cache_mgr_.init(&sql_proxy))) {
+    LOG_WARN("fail to init max id cache mgr", KR(ret));
   } else {
     rpc_proxy_ = &rpc_proxy;
     common_rpc_ = &common_rpc;
@@ -149,6 +152,7 @@ int ObDDLService::init(obrpc::ObSrvRpcProxy &rpc_proxy,
   }
   return ret;
 }
+
 
 int ObDDLService::get_tenant_schema_guard_with_version_in_inner_table(const uint64_t tenant_id, ObSchemaGetterGuard &schema_guard)
 {

@@ -203,6 +203,8 @@ int ObDDLServiceLauncher::switch_to_follower_gracefully()
       FLOG_INFO("reset non partitioned tablet allocator success");
       ObRsAutoSplitScheduler::get_instance().reset_direct_cache();
       FLOG_INFO("reset RS auto split scheduler direct cache success");
+      GCTX.root_service_->get_ddl_service().get_max_id_cache_mgr().reset();
+      FLOG_INFO("max id cache mgr reset");
     }
     ATOMIC_SET(&is_ddl_service_started_, false);
   }

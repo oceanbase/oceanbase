@@ -391,8 +391,8 @@ int ObMaxIdFetcher::fetch_max_id_from_cache_(const uint64_t tenant_id, ObMaxIdTy
   } else if (OB_FAIL(check_use_max_id_cache_(id_type, use_cache))) {
     LOG_WARN("failed to check use max id cache", KR(ret), K(id_type));
   } else if (OB_UNLIKELY(!use_cache)) {
-  } else if (OB_FAIL(GCTX.root_service_->get_max_id_cache_mgr().fetch_max_id(tenant_id, id_type,
-          min_id, size))) {
+  } else if (OB_FAIL(GCTX.root_service_->get_ddl_service().get_max_id_cache_mgr().fetch_max_id(
+                 tenant_id, id_type, min_id, size))) {
     LOG_WARN("failed to fetch max id", KR(ret), K(tenant_id), K(id_type), K(size));
   } else if (FALSE_IT(max_id = min_id + size - 1)) {
   } else if (max_id < min_id) {

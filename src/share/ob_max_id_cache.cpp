@@ -22,7 +22,8 @@ namespace share
 {
 
 ObMaxIdCacheItem::ObMaxIdCacheItem(const ObMaxIdType &type, const uint64_t tenant_id) :
-  min_id_(OB_INVALID_ID), size_(OB_INVALID_SIZE), tenant_id_(tenant_id), type_(type), latch_()
+  min_id_(OB_INVALID_ID), size_(OB_INVALID_SIZE), tenant_id_(tenant_id), type_(type),
+  latch_(), fetch_latch_()
 {
 }
 
@@ -31,23 +32,121 @@ bool ObMaxIdCacheItem::cached_id_valid_()
   return min_id_ != OB_INVALID_ID && size_ != OB_INVALID_SIZE;
 }
 
+// Logic flow:
+//
+// fetch_max_id()
+//     │
+//     ├─► Fast path: cache sufficient → allocate directly
+//     │
+//     └─► Slow path: cache insufficient
+//             │
+//             ├─► trylock fetch_latch_ (max 10 retries, 10ms each)
+//             │       │
+//             │       ├─► success → got_fetch_lock = true
+//             │       │
+//             │       └─► retry exhausted → bypass_lock = true
+//             │
+//             ├─► Double check: cache may have been filled during waiting
+//             │       │
+//             │       └─► cache sufficient → allocate directly (skip inner table)
+//             │
+//             └─► Fetch from inner table → allocate from cache
+//
+// Key design:
+// 1. Fast path: only acquire latch_, quick return when cache is sufficient
+// 2. Serialize inner table fetch with fetch_latch_ to avoid ID waste
+// 3. Timeout mechanism: after 10 retries (~100ms), bypass lock for availability
+// 4. Double check before inner table fetch: avoid redundant fetch when cache already filled
+// 5. Inner table operation does NOT hold latch_, so cache allocation is not blocked
+//
 int ObMaxIdCacheItem::fetch_max_id(const uint64_t tenant_id, const ObMaxIdType max_id_type,
     uint64_t &id, const uint64_t size, ObMySQLProxy *sql_proxy)
 {
   int ret = OB_SUCCESS;
+  bool need_fetch_from_inner_table = false;
+  bool got_fetch_lock = false;
+  bool bypass_lock = false;
+
   if (tenant_id != tenant_id_ || max_id_type != type_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("argument not match", KR(ret), K(tenant_id), K(tenant_id_), K(max_id_type), K(type_));
-  } else if (!cached_id_valid_() || size_ < size) {
-    const uint64_t fetch_size = common::max(CACHE_SIZE, size);
-    if (OB_FAIL(fetch_ids_from_inner_table_(fetch_size, sql_proxy))) {
-      LOG_WARN("failed to fetch ids from inner table", KR(ret), K(tenant_id), K(fetch_size),
-          K(max_id_type), K(size));
+  }
+
+  // Fast path: try to allocate from cache
+  if (OB_SUCC(ret)) {
+    ObLatchWGuard guard(latch_, ObLatchIds::MAX_ID_CACHE_LOCK);
+    if (cached_id_valid_() && size_ >= size) {
+      if (OB_FAIL(fetch_ids_by_cache_without_lock_(size, id))) {
+        LOG_WARN("failed to fetch ids from cache", KR(ret), K(size), K(max_id_type), K(tenant_id));
+      }
+    } else {
+      need_fetch_from_inner_table = true;
     }
   }
-  if (FAILEDx(fetch_ids_by_cache_(size, id))) {
-    LOG_WARN("failed to fetch ids from cache", KR(ret), K(size), K(max_id_type), K(tenant_id));
+
+  // Slow path: need to fetch from inner table
+  if (OB_SUCC(ret) && need_fetch_from_inner_table) {
+    int64_t retry_cnt = 0;
+
+    // Try to acquire fetch_latch_ with retry limit
+    while (!got_fetch_lock && !bypass_lock) {
+      if (OB_SUCCESS == fetch_latch_.try_wrlock(ObLatchIds::MAX_ID_CACHE_LOCK)) {
+        got_fetch_lock = true;
+      } else {
+        // Failed to acquire lock, wait and retry
+        ob_usleep(static_cast<uint32_t>(FETCH_RETRY_INTERVAL_US));
+        retry_cnt++;
+
+        // Prevent infinite waiting
+        if (retry_cnt >= MAX_FETCH_RETRY_CNT) {
+          bypass_lock = true;
+          LOG_WARN("wait fetch_latch too long, bypass lock",
+                   K(retry_cnt), K(tenant_id), K(max_id_type));
+        }
+      }
+    }
+
+    // Double check: cache may have been filled by other threads during waiting
+    // This check applies to both got_fetch_lock and bypass_lock cases
+    if (OB_SUCC(ret)) {
+      ObLatchWGuard guard(latch_, ObLatchIds::MAX_ID_CACHE_LOCK);
+      if (cached_id_valid_() && size_ >= size) {
+        if (OB_FAIL(fetch_ids_by_cache_without_lock_(size, id))) {
+          LOG_WARN("failed to fetch ids from cache", KR(ret), K(size), K(max_id_type), K(tenant_id));
+        }
+        need_fetch_from_inner_table = false;
+      }
+    }
   }
+
+  // Fetch from inner table
+  if (OB_SUCC(ret) && need_fetch_from_inner_table) {
+    const uint64_t fetch_size = common::max(CACHE_SIZE, size);
+    if (OB_FAIL(fetch_ids_from_inner_table_(fetch_size, sql_proxy))) {
+      LOG_WARN("failed to fetch ids from inner table", KR(ret), K(tenant_id),
+               K(fetch_size), K(max_id_type), K(bypass_lock));
+    }
+
+    // Allocate from cache
+    if (OB_SUCC(ret)) {
+      ObLatchWGuard guard(latch_, ObLatchIds::MAX_ID_CACHE_LOCK);
+      if (cached_id_valid_() && size_ >= size) {
+        if (OB_FAIL(fetch_ids_by_cache_without_lock_(size, id))) {
+          LOG_WARN("failed to fetch ids from cache", KR(ret), K(size), K(max_id_type), K(tenant_id));
+        }
+      } else {
+        ret = OB_EAGAIN;
+        LOG_WARN("cache exhausted after fetch", KR(ret), K(size_), K(size),
+                 K(tenant_id), K(max_id_type), K(bypass_lock));
+      }
+    }
+  }
+
+  // Release fetch_latch_ if held
+  if (got_fetch_lock) {
+    fetch_latch_.unlock();
+  }
+
   return ret;
 }
 
@@ -88,14 +187,13 @@ int ObMaxIdCacheItem::fetch_ids_from_inner_table_(const uint64_t size, ObMySQLPr
   return ret;
 }
 
-int ObMaxIdCacheItem::fetch_ids_by_cache_(const uint64_t size, uint64_t &id)
+int ObMaxIdCacheItem::fetch_ids_by_cache_without_lock_(const uint64_t size, uint64_t &id)
 {
   int ret = OB_SUCCESS;
   if (OB_INVALID_ID == min_id_ || OB_INVALID_SIZE == size_ || size_ < size) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("size out of range", KR(ret), K(min_id_), K(size_), K(size));
   } else {
-    ObLatchWGuard guard(latch_, ObLatchIds::MAX_ID_CACHE_LOCK);
     id = min_id_;
     min_id_ += size;
     size_ -= size;

@@ -4269,6 +4269,8 @@ int ObTableSqlService::add_sequence_dml(share::ObDMLSqlSplicer &dml,
 {
   int ret = OB_SUCCESS;
   const uint64_t exec_tenant_id = tenant_id;
+  uint64_t sequence_value = 0 == auto_increment ? 1 : auto_increment;
+  uint64_t sync_value = 0 == auto_increment ? 0 : (auto_increment - 1);
   if (OB_FAIL(dml.add_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
                                       exec_tenant_id, tenant_id)))) {
     LOG_WARN("failed to add tenant_id", KR(ret), K(tenant_id));
@@ -4277,9 +4279,9 @@ int ObTableSqlService::add_sequence_dml(share::ObDMLSqlSplicer &dml,
     LOG_WARN("failed to add sequence_key", KR(ret), K(table_id));
   } else if (OB_FAIL(dml.add_pk_column("column_id", column_id))) {
     LOG_WARN("failed to add column_id", KR(ret), K(column_id));
-  } else if (OB_FAIL(dml.add_column("sequence_value", 0 == auto_increment ? 1 : share::ObRealUInt64(auto_increment)))) {
+  } else if (OB_FAIL(dml.add_column("sequence_value", sequence_value))) {
     LOG_WARN("failed to add sequence_value", KR(ret), K(auto_increment));
-  } else if (OB_FAIL(dml.add_column("sync_value", 0 == auto_increment ? 0 : share::ObRealUInt64(auto_increment - 1)))) {
+  } else if (OB_FAIL(dml.add_column("sync_value", sync_value))) {
     LOG_WARN("failed to add sync_value", KR(ret), K(auto_increment));
   } else if (OB_FAIL(dml.add_column("truncate_version", truncate_version))) {
     LOG_WARN("failed to add truncate_version", KR(ret), K(truncate_version));

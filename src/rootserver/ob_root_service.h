@@ -906,7 +906,6 @@ public:
   int broadcast_schema(const obrpc::ObBroadcastSchemaArg &arg);
   ObDDLService &get_ddl_service() { return ddl_service_; }
   ObTenantDDLService &get_tenant_ddl_service() { return tenant_ddl_service_; }
-  ObMaxIdCacheMgr &get_max_id_cache_mgr() { return max_id_cache_mgr_; }
   ObZoneStorageManager &get_zone_storage_manager() { return zone_storage_manager_; }
   int get_recycle_schema_versions(
       const obrpc::ObGetRecycleSchemaVersionsArg &arg,
@@ -1169,9 +1168,6 @@ private:
   ObLoadSysPackageTask load_all_sys_package_task_; // repeat to succeed & no retry
   //rebuild tablet
   ObRootRebuildTablet root_rebuild_tablet_;
-
-  // max id cache for object_id and tablet_id
-  ObMaxIdCacheMgr max_id_cache_mgr_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRootService);

@@ -645,8 +645,7 @@ ObRootService::ObRootService()
     global_ctx_task_(*this),
     alter_log_external_table_task_(*this),
     load_all_sys_package_task_(*this),
-    root_rebuild_tablet_(),
-    max_id_cache_mgr_()
+    root_rebuild_tablet_()
 {
 }
 
@@ -1219,8 +1218,6 @@ int ObRootService::stop()
       master_key_mgr_.stop();
       FLOG_INFO("master key mgr stop");
 #endif
-      max_id_cache_mgr_.reset();
-      FLOG_INFO("max id cache mgr reset");
       TG_STOP(lib::TGDefIDs::GlobalCtxTimer);
       FLOG_INFO("global ctx timer stop");
     }
@@ -5487,11 +5484,6 @@ int ObRootService::do_restart()
     FLOG_WARN("failed to start ddl service", KR(ret));
   } else {
     FLOG_INFO("success to start ddl service", KR(ret));
-  }
-  if (FAILEDx(max_id_cache_mgr_.init(&sql_proxy_))) {
-    FLOG_WARN("max id cache mgr start failed", KR(ret));
-  } else {
-    FLOG_INFO("success to start max id cache mgr");
   }
 #ifdef OB_BUILD_TDE_SECURITY
   if (FAILEDx(master_key_mgr_.start())) {
