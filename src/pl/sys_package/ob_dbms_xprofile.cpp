@@ -559,6 +559,7 @@ int ProfilePrefixHelper::prepare_pretty_prefix(const ObIArray<ObMergedProfileIte
         current_depth = current_op.plan_depth_;
       } else if (current_op.plan_depth_ == current_depth) {
         // brother
+        ancestors_stack_.pop_back(); // pop previous brother
       } else {
         // brother of ancestor
         current_depth = current_op.plan_depth_;

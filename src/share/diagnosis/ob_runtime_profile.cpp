@@ -275,9 +275,10 @@ int ObOpProfile<MetricType>::pretty_print_metrics(char *buf, const int64_t buf_l
   return ret;
 }
 
-template<typename MetricType>
-int ObOpProfile<MetricType>::register_metric(ObMetricId metric_id, MetricType *&metric)
-{
+template <typename MetricType>
+int ObOpProfile<MetricType>::register_metric(ObMetricId metric_id,
+                                             MetricType *&metric,
+                                             bool head_insert) {
   int ret = OB_SUCCESS;
   MetricWrap *new_metric = nullptr;
   int64_t metric_count = ATOMIC_LOAD_RLX(&metric_count_);
@@ -302,15 +303,24 @@ int ObOpProfile<MetricType>::register_metric(ObMetricId metric_id, MetricType *&
   if (OB_SUCC(ret)) {
     metrics_id_map_[metric_id] = metric_count;
     metric = &new_metric->elem_;
-    if (0 == metric_count) {
-      // first metric
-      ATOMIC_STORE_RLX(&metric_head_, new_metric);
+    if (OB_LIKELY(!head_insert)) {
+      if (0 == metric_count) {
+        // first metric
+        ATOMIC_STORE_RLX(&metric_head_, new_metric);
+      } else {
+        ATOMIC_STORE_RLX(&(metric_tail_->next_), new_metric);
+      }
+      // tail only access by query thread
+      metric_tail_ = new_metric;
     } else {
-      ATOMIC_STORE_RLX(&(metric_tail_->next_), new_metric);
+      MetricWrap *old_head = ATOMIC_LOAD(&metric_head_);
+      ATOMIC_STORE_RLX(&(new_metric->next_), old_head);
+      ATOMIC_STORE_RLX(&metric_head_, new_metric);
+      if (0 == metric_count) {
+        // if this is the first metric, also update tail
+        metric_tail_ = new_metric;
+      }
     }
-    // tail only access by query thread
-    metric_tail_ = new_metric;
-    // add metric count finally
     __sync_fetch_and_add(&metric_count_, 1, __ATOMIC_RELAXED);
   }
   return ret;
