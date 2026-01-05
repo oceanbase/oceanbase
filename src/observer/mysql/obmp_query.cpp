@@ -1319,7 +1319,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
 
       audit_record.is_executor_rpc_ = false;
       audit_record.is_inner_sql_ = false;
-      audit_record.is_hit_plan_cache_ = result.get_is_from_plan_cache();
+      audit_record.is_hit_plan_cache_ = result.get_is_from_plan_cache() && !ctx_.self_add_plan_;
       audit_record.is_multi_stmt_ = session.get_capability().cap_flags_.OB_CLIENT_MULTI_STATEMENTS;
       audit_record.is_batched_multi_stmt_ = ctx_.multi_stmt_item_.is_batched_multi_stmt();
 
