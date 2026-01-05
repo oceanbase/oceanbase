@@ -30,8 +30,7 @@ ObTxLogTypeChecker::need_replay_barrier(const ObTxLogType log_type,
 
   // multi data source trans's redo log
   if (ObTxLogType::TX_MULTI_DATA_SOURCE_LOG == log_type) {
-    if (data_source_type == ObTxDataSourceType::CREATE_TABLET_NEW_MDS
-        || data_source_type == ObTxDataSourceType::DELETE_TABLET_NEW_MDS
+    if (data_source_type == ObTxDataSourceType::DELETE_TABLET_NEW_MDS
         || data_source_type == ObTxDataSourceType::UNBIND_TABLET_NEW_MDS
         || data_source_type == ObTxDataSourceType::START_TRANSFER_OUT
         || data_source_type == ObTxDataSourceType::START_TRANSFER_OUT_PREPARE
