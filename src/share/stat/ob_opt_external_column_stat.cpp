@@ -110,7 +110,15 @@ int ObOptExternalColumnStat::deep_copy(char *buf, const int64_t buf_len,
                    tmp->max_value_.deep_copy(max_value_, buf, buf_len, pos))) {
       COMMON_LOG(WARN, "deep copy max value failed.", K(ret), K(max_value_));
     } else {
-      MEMCPY(tmp->bitmap_, bitmap_, bitmap_size_);
+      if (bitmap_size_ == 0) {
+        tmp->bitmap_ = NULL;
+      } else if (pos + bitmap_size_ > buf_len) {
+        ret = OB_SIZE_OVERFLOW;
+        COMMON_LOG(WARN, "bitmap size is too large.", K(ret), K(pos), K(buf_len), K(bitmap_size_));
+      } else {
+        tmp->bitmap_ = buf + pos;
+        MEMCPY(tmp->bitmap_, bitmap_, bitmap_size_);
+      }
       value = tmp;
     }
   }
