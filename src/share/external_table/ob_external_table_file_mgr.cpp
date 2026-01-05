@@ -1647,7 +1647,9 @@ int ObExternalTableFileManager::get_one_location_from_cache(
     if (OB_NOT_NULL(table_files_from_cache)) {
       ObExternalTableFiles *files = NULL;
       int64_t cnt = table_files_from_cache->file_urls_.count();
-      if (OB_ISNULL(files = OB_NEWx(ObExternalTableFiles, &allocator))) {
+      if (cnt == 0) {
+        // empty, ignore
+      } else if (OB_ISNULL(files = OB_NEWx(ObExternalTableFiles, &allocator))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc for external table files", K(ret), K(key));
       } else if (OB_FAIL(external_table_files.push_back(files))) {
@@ -1656,7 +1658,7 @@ int ObExternalTableFileManager::get_one_location_from_cache(
                  || OB_FAIL(files->file_sizes_.allocate_array(allocator, cnt))
                  || OB_FAIL(files->modify_times_.allocate_array(allocator, cnt))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc for external table files", K(ret), K(key));
+        LOG_WARN("failed to alloc for external table files", K(ret), K(key), K(cnt));
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < table_files_from_cache->file_urls_.count(); i++) {
           files->file_sizes_.at(i) = table_files_from_cache->file_sizes_.at(i);
