@@ -7859,7 +7859,7 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
         for (int64_t i = 0; OB_SUCC(ret) && i < actual_column_count; ++i) {
           OZ (row_desc.push_back(static_cast<ObSPICursor*>(result_set)->row_desc_.at(i)));
         }
-        if (OB_SUCC(ret) && static_cast<ObSPICursor*>(result_set)->subschema_ctx_.is_inited()) {
+        if (OB_SUCC(ret) && OB_NOT_NULL(exec_ctx->get_physical_plan_ctx()) && static_cast<ObSPICursor*>(result_set)->subschema_ctx_.is_inited()) {
           ObSubSchemaCtx & subschema_ctx = exec_ctx->get_physical_plan_ctx()->get_subschema_ctx();
           if (OB_FAIL(subschema_ctx.assgin(static_cast<ObSPICursor*>(result_set)->subschema_ctx_))) {
             LOG_WARN("fail to assign subschema ctx", K(ret));
