@@ -1287,6 +1287,7 @@ int ObTenant::get_new_request(
       ret = group->multi_level_queue_.pop_timeup(task, wk_level, timeout);
       if ((ret == OB_SUCCESS && nullptr == task) || ret == OB_ENTRY_NOT_EXIST) {
         ret = OB_ENTRY_NOT_EXIST;
+        ObUsleepBlockingGuard guard(false/*count as blocking*/);
         ob_usleep(10 * 1000L);
       } else if (ret == OB_SUCCESS){
         rpc::ObRequest *tmp_req = static_cast<rpc::ObRequest*>(task);
@@ -1321,6 +1322,7 @@ int ObTenant::get_new_request(
         ret = OB_ENTRY_NOT_EXIST; // If the pop comes out and finds that there is not enough time, then push the front back, ret is succ,
                                   // But because of this situation, the subsequent processing strategy should be the same as the original queue itself is empty.
                                   // So set ret to be the same as the queue empty situation, that is, set to entry not exist
+        ObUsleepBlockingGuard guard(false/*count as blocking*/);
         ob_usleep(10 * 1000L);
       } else if (ret == OB_SUCCESS){
         rpc::ObRequest *tmp_req = static_cast<rpc::ObRequest*>(task);
@@ -2035,6 +2037,7 @@ void ObTenant::lq_wait(ObThWorker &w)
                                          last_query_us);
   wait_us = std::min(wait_us, min(100 * 1000, w.get_timeout_remain()));
   if (wait_us > 10 * 1000) {
+    ObUsleepBlockingGuard guard(false/*count as blocking*/);
     ob_usleep(wait_us);
     w.set_last_wakeup_ts(ObTimeUtility::current_time());
   }
