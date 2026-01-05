@@ -103,6 +103,7 @@ extern int easy_vsnprintf(char *buf, size_t size, const char *fmt, va_list args)
 
 %nonassoc BASIC OUTLINE EXTENDED EXTENDED_NOADDR PARTITIONS PLANREGRESS
 %nonassoc PRETTY PRETTY_COLOR
+%nonassoc MERGE /*for solve explain_stmt conflict*/
 %nonassoc KILL_EXPR
 %nonassoc CONNECTION QUERY
 %nonassoc LOWER_COMMA
@@ -215,7 +216,7 @@ NEG_SIGN
 
 %token /*can not be relation name*/
 _BINARY _UTF8 _UTF8MB4 _UTF8MB3 _GBK _UTF16 _GB18030 _GB18030_2022 _LATIN1 _GB2312 _ASCII _TIS620 _UJIS _EUCKR _EUCJPMS _CP932 _UTF16LE _SJIS _BIG5 _DEC8 _CP850 _HP8 _MACROMAN _SWE7 _HKSCS _HKSCS31 CNNOP
-SELECT_HINT_BEGIN UPDATE_HINT_BEGIN DELETE_HINT_BEGIN INSERT_HINT_BEGIN REPLACE_HINT_BEGIN HINT_HINT_BEGIN HINT_END
+SELECT_HINT_BEGIN UPDATE_HINT_BEGIN DELETE_HINT_BEGIN INSERT_HINT_BEGIN REPLACE_HINT_BEGIN MERGE_HINT_BEGIN HINT_HINT_BEGIN HINT_END
 LOAD_DATA_HINT_BEGIN CREATE_HINT_BEGIN ALTER_HINT_BEGIN
 END_P SET_VAR DELIMITER
 
@@ -319,7 +320,7 @@ END_P SET_VAR DELIMITER
         MAJOR MAP MANHATTAN MANUAL MASTER MASTER_AUTO_POSITION MASTER_CONNECT_RETRY MASTER_DELAY MASTER_HEARTBEAT_PERIOD
         MASTER_HOST MASTER_LOG_FILE MASTER_LOG_POS MASTER_PASSWORD MASTER_PORT MASTER_RETRY_COUNT
         MASTER_SERVER_ID MASTER_SSL MASTER_SSL_CA MASTER_SSL_CAPATH MASTER_SSL_CERT MASTER_SSL_CIPHER
-        MASTER_SSL_CRL MASTER_SSL_CRLPATH MASTER_SSL_KEY MASTER_USER MAX MAX_CONNECTIONS_PER_HOUR MAX_CPU MAX_CONCURRENCY
+        MASTER_SSL_CRL MASTER_SSL_CRLPATH MASTER_SSL_KEY MASTER_USER MATCHED MAX MAX_CONNECTIONS_PER_HOUR MAX_CPU MAX_CONCURRENCY
         MAX_FILE_SIZE MAX_TOKEN_SIZE MAX_NGRAM_SIZE LOG_DISK_SIZE MAX_NET_BANDWIDTH MAX_IOPS MEMORY_SIZE MAX_QUERIES_PER_HOUR MAX_ROWS MAX_SIZE
         MAX_UPDATES_PER_HOUR MAX_USER_CONNECTIONS MAXVALUE MEDIUM MEMORY MEMTABLE MESSAGE_TEXT META MICROSECOND MICRO_BLOCK_FORMAT_VERSION
         MIGRATE MIN MIN_CPU MIN_IOPS MIN_MAX MIN_NGRAM_SIZE MIN_TOKEN_SIZE MINOR MIN_ROWS MINUS MINUTE MISMATCH MODE MODIFY MODULE MONTH MOVE MODEL
@@ -388,7 +389,7 @@ END_P SET_VAR DELIMITER
         ORGANIZATION OVERWRITE
 //-----------------------------non_reserved keyword end---------------------------------------------
 %type <node> sql_stmt stmt_list stmt opt_end_p
-%type <node> select_stmt update_stmt delete_stmt
+%type <node> select_stmt update_stmt delete_stmt merge_stmt
 %type <node> insert_stmt single_table_insert values_clause dml_table_name
 %type <node> create_table_stmt create_table_like_stmt opt_table_option_list table_option_list table_option table_option_list_space_seperated create_function_stmt drop_function_stmt parallel_option lob_storage_clause lob_storage_parameter lob_storage_parameters lob_chunk_size
 %type <node> opt_force
@@ -424,7 +425,7 @@ END_P SET_VAR DELIMITER
 %type <node> table_element_list table_element column_definition column_definition_ref column_definition_list column_name_list
 %type <node> opt_generated_keyname opt_generated_option_list opt_generated_column_attribute_list generated_column_attribute opt_storage_type
 %type <node> data_type special_table_type opt_if_not_exists opt_if_exists opt_charset collation opt_collation cast_data_type
-%type <node> replace_with_opt_hint insert_with_opt_hint column_list opt_on_duplicate_key_clause opt_into opt_replace opt_temporary opt_algorithm opt_sql_security opt_definer view_algorithm no_param_column_ref
+%type <node> replace_with_opt_hint insert_with_opt_hint column_list opt_insert_columns opt_on_duplicate_key_clause opt_into opt_replace opt_temporary opt_algorithm opt_sql_security opt_definer view_algorithm no_param_column_ref
 %type <node> insert_vals_list insert_vals value_or_values opt_insert_row_alias
 %type <node> select_with_parens select_no_parens select_clause select_into no_table_select_with_order_and_limit simple_select_with_order_and_limit select_with_parens_with_order_and_limit select_clause_set_with_order_and_limit
 %type <node> simple_select no_table_select limit_clause select_expr_list opt_approx
@@ -436,7 +437,7 @@ END_P SET_VAR DELIMITER
 %type <node> from_list table_references table_reference table_factor normal_relation_factor dot_relation_factor relation_factor
 %type <node> relation_factor_in_hint relation_factor_in_hint_list relation_factor_in_pq_hint opt_relation_factor_in_hint_list relation_factor_in_use_join_hint_list relation_factor_in_mv_hint_list opt_relation_factor_in_mv_hint_list
 %type <node> relation_factor_in_leading_hint_list joined_table tbl_name table_subquery table_subquery_alias
-%type <node> relation_factor_with_star relation_with_star_list opt_with_star
+%type <node> relation_factor_with_star relation_with_star_list opt_with_star source_relation_factor
 %type <node> index_hint_type key_or_index index_hint_scope index_element index_list opt_index_list opt_index_prefix
 %type <node> add_key_or_index_opt add_key_or_index add_unique_key_opt add_unique_key add_constraint_uniq_key_opt add_constraint_uniq_key add_constraint_pri_key_opt add_constraint_pri_key add_primary_key_opt add_primary_key add_spatial_index_opt add_spatial_index
 %type <node> index_hint_definition index_hint_list
@@ -480,7 +481,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_comment opt_as
 %type <node> column_name relation_name relation_name_list opt_relation_name function_name column_label var_name relation_name_or_string row_format_option compression_name merge_engine_types
 %type <node> audit_stmt audit_clause op_audit_tail_clause audit_operation_clause audit_all_shortcut_list audit_all_shortcut auditing_on_clause auditing_by_user_clause audit_user_list audit_user audit_user_with_host_name
-%type <node> opt_hint_list hint_option select_with_opt_hint update_with_opt_hint delete_with_opt_hint hint_list_with_end global_hint transform_hint optimize_hint
+%type <node> opt_hint_list hint_option select_with_opt_hint update_with_opt_hint delete_with_opt_hint merge_with_opt_hint hint_list_with_end global_hint transform_hint optimize_hint
 %type <node> create_index_stmt index_name sort_column_list sort_column_key opt_index_option_list opt_fulltext_index_option_list index_option fulltext_index_option opt_sort_column_key_length opt_index_using_algorithm index_using_algorithm visibility_option opt_constraint_name constraint_name create_with_opt_hint index_expr alter_with_opt_hint
 %type <node> opt_when check_state constraint_definition
 %type <node> create_mlog_stmt opt_mlog_option_list opt_mlog_options mlog_option opt_mlog_with mlog_with_values mlog_with_special_columns mlog_with_reference_columns mlog_with_special_column_list mlog_with_reference_column_list mlog_with_special_column mlog_with_reference_column opt_mlog_new_values mlog_including_or_excluding opt_mlog_purge mlog_purge_values mlog_purge_immediate_sync_or_async mlog_purge_start mlog_purge_next
@@ -516,6 +517,7 @@ END_P SET_VAR DELIMITER
 %type <node> into_opt into_clause field_opt field_term field_term_list line_opt line_term line_term_list into_var_list into_var file_partition_opt file_opt file_option_list file_option file_size_const binary_format
 %type <node> string_list text_string string_val_list ulong_num
 %type <node> balance_task_type opt_balance_task_type balance_job_op
+%type <node> merge_update_clause merge_insert_clause opt_merge_update_delete
 %type <node> list_expr list_partition_element list_partition_expr list_partition_list list_partition_option opt_list_partition_list opt_list_subpartition_list list_subpartition_list list_subpartition_element drop_partition_name_list
 %type <node> primary_zone_name change_tenant_name_or_tenant_id distribute_method distribute_method_list opt_distribute_method_list
 %type <node> load_data_stmt opt_load_local opt_duplicate opt_compression opt_load_charset opt_load_ignore_rows infile_string url_spec
@@ -637,6 +639,7 @@ opt_end_p:
 stmt:
     select_stmt             { $$ = $1; question_mark_issue($$, result); }
   | insert_stmt             { $$ = $1; question_mark_issue($$, result); }
+  | merge_stmt              { $$ = $1; question_mark_issue($$, result); }
   | create_table_stmt       {
     $$ = $1;
     ParseNode *parse_tree = $1;
@@ -11684,6 +11687,158 @@ expr { $$ = $1;}
 
 /*****************************************************************************
  *
+ *	merge grammar
+ *
+ *****************************************************************************/
+merge_with_opt_hint:
+MERGE {$$ = NULL;}
+| MERGE_HINT_BEGIN hint_list_with_end
+{$$ = $2;}
+;
+
+merge_stmt:
+merge_with_opt_hint INTO source_relation_factor USING source_relation_factor
+ON '(' expr ')'
+merge_update_clause merge_insert_clause
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MERGE, 6,
+                           $3,   /* target relation */
+                           $5,   /* source relation */
+                           $8, /*match condition*/
+                           $10, /*merge update clause*/
+                           $11, /*merge insert clause*/
+                           $1 /*hint*/
+                           );
+}
+| merge_with_opt_hint INTO source_relation_factor USING source_relation_factor
+ON '(' expr ')'
+merge_insert_clause merge_update_clause
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MERGE, 6,
+                           $3,   /* target relation */
+                           $5,   /* source relation */
+                           $8, /*match condition*/
+                           $10, /*merge insert clause*/
+                           $11, /*merge update clause*/
+                           $1 /*hint*/
+                           );
+}
+| merge_with_opt_hint INTO source_relation_factor USING source_relation_factor
+ON '(' expr ')'
+merge_insert_clause
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MERGE, 6,
+                           $3,   /* target relation */
+                           $5,   /* source relation */
+                           $8, /*match condition*/
+                           NULL, /*merge update clause*/
+                           $10, /*merge insert clause*/
+                           $1 /*hint*/
+                           );
+}
+| merge_with_opt_hint INTO source_relation_factor USING source_relation_factor
+ON '(' expr ')'
+merge_update_clause
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MERGE, 6,
+                           $3,   /* target relation */
+                           $5,   /* source relation */
+                           $8, /*match condition*/
+                           $10, /*merge update clause*/
+                           NULL, /*merge insert clause*/
+                           $1 /*hint*/
+                           );
+}
+;
+
+merge_update_clause:
+WHEN MATCHED THEN UPDATE SET update_asgn_list opt_where opt_merge_update_delete
+{
+  ParseNode *assign_list = NULL;
+  merge_nodes(assign_list, result, T_ASSIGN_LIST, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_UPDATE, 3,
+                           assign_list, /* assign list */
+                           $7, /* where condition */
+                           $8 /* update delete condition */
+                           );
+}
+;
+
+opt_merge_update_delete:
+/* EMPTY */
+{$$ = NULL;}
+| DELETE WHERE expr
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WHERE_CLAUSE, 2, $3, NULL);
+}
+;
+
+merge_insert_clause:
+WHEN NOT MATCHED THEN INSERT opt_insert_columns VALUES '(' insert_vals ')' opt_where
+{
+  ParseNode *val_list = NULL;
+  merge_nodes(val_list, result, T_VALUE_LIST, $9);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INSERT, 3,
+                           $6,           /* column list */
+                           val_list,     /* value list */
+                           $11            /* opt where clause */
+                           );
+
+}
+;
+
+opt_insert_columns:
+'(' column_list ')'
+{
+  merge_nodes($$, result, T_COLUMN_LIST, $2);
+}
+| /* EMPTY */
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_EMPTY);
+}
+;
+
+source_relation_factor:
+relation_factor %prec LOWER_PARENS
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 4, $1, NULL, NULL, NULL);
+}
+| relation_factor relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 4, $1, $2, NULL, NULL);
+}
+| relation_factor use_partition relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 4, $1, $3, NULL, $2);
+}
+| relation_factor use_partition %prec LOWER_PARENS
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 4, $1, NULL, NULL, $2);
+}
+| select_with_parens %prec LOWER_PARENS
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 4, $1, NULL, NULL, NULL);
+}
+| select_with_parens relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 4, $1, $2, NULL, NULL);
+}
+| TABLE '(' select_no_parens ')'
+{
+  ParseNode *collection_expr = NULL;
+  malloc_non_terminal_node(collection_expr, result->malloc_pool_, T_TABLE_COLLECTION_EXPRESSION, 2, $3, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 4, collection_expr, NULL, NULL, NULL);
+}
+| TABLE '(' select_no_parens ')' relation_name
+{
+  ParseNode *collection_expr = NULL;
+  malloc_non_terminal_node(collection_expr, result->malloc_pool_, T_TABLE_COLLECTION_EXPRESSION, 2, $3, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 4, collection_expr, NULL, NULL, NULL);
+}
+;
+
+/*****************************************************************************
+ *
  *	select grammar
  *
  *****************************************************************************/
@@ -16135,6 +16290,7 @@ explainable_stmt:
 select_stmt         { $$ = $1; }
 | delete_stmt         { $$ = $1; }
 | insert_stmt         { $$ = $1; }
+| merge_stmt         { $$ = $1; }
 | update_stmt         { $$ = $1; }
 ;
 
@@ -27069,6 +27225,7 @@ ACCESS_INFO
 |       MASTER_SSL_CRLPATH
 |       MASTER_SSL_KEY
 |       MASTER_USER
+|       MATCHED
 |       MAX
 |       MAX_CONNECTIONS_PER_HOUR
 |       MAX_CPU
@@ -28115,6 +28272,7 @@ int obsql_mysql_fast_parse(ParseResult *p)
                 DELETE_HINT_BEGIN == token ||
                 INSERT_HINT_BEGIN == token ||
                 REPLACE_HINT_BEGIN == token ||
+                MERGE_HINT_BEGIN == token ||
                 LOAD_DATA_HINT_BEGIN == token ||
                 CREATE_HINT_BEGIN == token
                 /* token == INSERT_HINT_BEGIN */) {
