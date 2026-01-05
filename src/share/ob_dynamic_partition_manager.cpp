@@ -1289,6 +1289,11 @@ int ObDynamicPartitionManager::check_is_supported(const ObTableSchema &table_sch
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("specify dynamic partition on table not partitioned by range is not supported", KR(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "specify dynamic partition on table not partitioned by range is");
+  } else if (ObPartitionLevel::PARTITION_LEVEL_TWO == table_schema.get_part_level()
+             && !table_schema.has_sub_part_template_def()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("specify dynamic partition on table which has no sub part template definition is not supported", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "specify dynamic partition on table which has no sub part template definition is");
   } else if (OB_FAIL(table_schema.get_part_key_column_type(0, col_data_type))) {
     LOG_WARN("fail to get part key column type", KR(ret));
   } else if (!support_part_key_type_(col_data_type)) {
