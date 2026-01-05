@@ -15860,9 +15860,14 @@ int ObLogPlan::check_das_need_scan_with_domain_id(ObLogicalOperator *op)
     if (OB_FAIL(scan->check_das_need_scan_with_domain_id())) {
       LOG_WARN("failed to check das scan with doc id", K(ret));
     } else if (OB_UNLIKELY((scan->has_func_lookup() || scan->use_index_merge()) && scan->is_tsc_with_domain_id())) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("complex query with dml on fulltext index / vector index not supported", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "complex query with dml on fulltext index is");
+      if (scan->use_index_merge()) {
+        // index merge should be disabled when generating access path
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("complex query with dml on index merge not supported", K(ret));
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "complex query with dml on fulltext / vector index is");
+      }
     }
   }
   for (int i = 0; OB_SUCC(ret) && i < op->get_num_of_child(); ++i) {
