@@ -880,179 +880,122 @@ int ObLoadDataResolver::resolve_filename(ObLoadDataStmt *load_stmt, ParseNode *n
       ret = OB_FILE_NOT_EXIST;
       LOG_WARN("file not exist", K(ret), K(file_name));
     } else if (file_name_array.count() == 1) {
-      // 单文件模式，通配符匹配属于单文件模式
-      ObString storage_info_str;
-      const char *storage_info_ptr = nullptr;
-      ObString actual_file_name;
-      if (OB_NOT_NULL(storage_info_ptr = file_name_array[0].reverse_find('?'))) {
-        int32_t storage_info_len = file_name_array[0].length() - (storage_info_ptr - file_name_array[0].ptr() + 1);
-        if (OB_FAIL(ob_write_string(*allocator_, ObString(file_name_array[0].length() - storage_info_len - 1, file_name_array[0].ptr()), actual_file_name, true))) {
-          LOG_WARN("fail to copy string", K(ret));
-        } else if (OB_FAIL(ob_write_string(*allocator_, ObString(storage_info_len, storage_info_ptr + 1), storage_info_str, true))) {
-          LOG_WARN("fail to copy string", K(ret));
-        } else if (OB_FAIL(load_args.access_info_.set(actual_file_name.ptr(), storage_info_str.ptr()))) {
-          LOG_WARN("failed to set access info", K(ret), K(actual_file_name), K(storage_info_str));
-        }
-      } else {
-        actual_file_name = file_name_array[0];
+      if (OB_FAIL(resolve_single_file(load_args, file_name_array[0]))) {
+        LOG_WARN("failed to resolve single file", K(ret), K(file_name_array));
       }
-      if (OB_SUCC(ret)) {
-        load_args.file_name_ = actual_file_name;
-        if (ObLoadDataFormat::is_backup(load_args.access_info_.get_load_data_format())) {
-          if (ObLoadFileLocation::CLIENT_DISK == load_args.load_file_storage_) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("direct load backup data from client disk is not supported", K(ret));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "direct load backup data from client disk is");
-          }
-        } else {
-          if (ObLoadFileLocation::SERVER_DISK == load_args.load_file_storage_) {
-            if (OB_FAIL(resolve_filename_server_disk(load_args, actual_file_name, true/*wildcard_check*/))) {
-              LOG_WARN("failed to resolve filename from server disk", K(ret), K(load_args), K(actual_file_name));
-            }
-          } else if (ObLoadFileLocation::OSS == load_args.load_file_storage_) {
-            if (OB_FAIL(resolve_filename_oss(load_args, actual_file_name))) {
-              LOG_WARN("failed to resolve filename from oss", K(ret), K(load_args), K(actual_file_name));
-            }
-          } else if (ObLoadFileLocation::CLIENT_DISK == load_args.load_file_storage_) {
-            if (OB_FAIL(resolve_filename_client_disk(load_args, actual_file_name))) {
-              LOG_WARN("failed to resolve filename from client disk", K(ret), K(load_args), K(actual_file_name));
-            }
-          }
-        }
-      } else if (ObLoadFileLocation::OSS == load_args.load_file_storage_) {
-        const char *storage_ptr = file_name.reverse_find('?');
-        const char *file_ptr = nullptr;
-        ObString temp_file_name = file_name;
-        if (OB_ISNULL(storage_ptr)) {
-          ObSessionPrivInfo session_priv;
-          share::schema::ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
-          const ObLocationSchema *schema_ptr = NULL;
-          if (OB_ISNULL(schema_guard)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("got null ptr", K(ret));
-          } else if (OB_FAIL(session_info_->get_session_priv_info(session_priv))) {
-            LOG_WARN("get session priv failed", K(ret));
-          } else if (OB_FAIL(schema_guard->get_location_schema_by_prefix_match_with_priv(
-                                    session_priv,
-                                    session_info_->get_enable_role_array(),
-                                    session_info_->get_effective_tenant_id(),
-                                    file_name,
-                                    schema_ptr,
-                                    false))) {
-            LOG_WARN("get location schema failed", K(ret), K(session_info_->get_effective_tenant_id()), K(file_name));
-          } else if (OB_ISNULL(schema_ptr)) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("match location object failed", K(ret), K(session_info_->get_effective_tenant_id()), K(file_name));
-          } else if (OB_FAIL(ob_write_string(*allocator_, temp_file_name, load_args.file_name_, true))) {
-            LOG_WARN("fail to copy string", K(ret));
-          } else if(OB_FAIL(load_args.access_info_.set(load_args.file_name_.ptr(), schema_ptr->get_location_access_info()))) {
-            LOG_WARN("failed to set access info", K(ret), K(load_args.file_name_), K(schema_ptr->get_location_access_info()));
-          }
-        } else {
-          temp_file_name = file_name.split_on(storage_ptr).trim_space_only();
-          ObString storage_info;
-          if (OB_FAIL(ob_write_string(*allocator_, temp_file_name, load_args.file_name_, true))) {
-            LOG_WARN("fail to copy string", K(ret));
-          } else if (OB_FAIL(ob_write_string(*allocator_, file_name, storage_info, true))) {
-            LOG_WARN("fail to copy string", K(ret));
-          } else if (temp_file_name.length() <= 0 || storage_info.length() <= 0) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "file name or access key");
-          } else if (OB_FAIL(load_args.access_info_.set(load_args.file_name_.ptr(), storage_info.ptr()))) {
-            if (ret == OB_INVALID_BACKUP_DEST) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_USER_ERROR(OB_INVALID_ARGUMENT, "access info");
-            } else {
-              LOG_WARN("failed to set access info", K(ret), K(load_args.file_name_), K(storage_info));
-            }
-          }
-        }
-
-        if (OB_FAIL(ret)) {
-          // do nothing
-        } else {
-          ObString pattern;
-          ObString dir_path;
-          bool matched = false;
-          char *path = nullptr;
-          int64_t path_len = 0;
-          ObArray<ObString> file_list;
-          if (load_args.access_info_.get_load_data_format() == ObLoadDataFormat::OB_BACKUP_1_4) {
-            load_args.file_name_ = temp_file_name;
-          } else {
-            if (OB_ISNULL(file_ptr = temp_file_name.reverse_find('/'))) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_USER_ERROR(OB_INVALID_ARGUMENT, "file name");
-            } else {
-              dir_path.assign_ptr(temp_file_name.ptr(), file_ptr - temp_file_name.ptr() + 1);
-              pattern.assign_ptr(file_ptr + 1, temp_file_name.length() - dir_path.length());
-              if (exist_wildcard(dir_path)) {
-                ret = OB_NOT_SUPPORTED;
-                LOG_WARN("directory does not support wildcard matching", K(ret));
-              } else {
-                ObBackupIoAdapter adapter;
-                ObFileListArrayOp op(file_list, *allocator_);
-                if (OB_ISNULL(path = static_cast<char *>(allocator_->alloc(MAX_PATH_SIZE)))) {
-                  ret = OB_ALLOCATE_MEMORY_FAILED;
-                  LOG_WARN("fail to allocate memory", K(ret));
-                } else if (OB_FAIL(databuff_printf(path, MAX_PATH_SIZE, path_len, "%.*s",
-                                                   dir_path.length(), dir_path.ptr()))) {
-                  LOG_WARN("fail to fill path", K(ret), K(path_len));
-                } else if (!exist_wildcard(pattern)) {
-                  if (OB_FAIL(file_list.push_back(pattern))) {
-                    LOG_WARN("fail to push back", K(ret));
-                  }
-                } else if (OB_FAIL(adapter.list_files(ObString(path_len, path), &load_args.access_info_, op))) {
-                  LOG_WARN("fail to list files", K(ret));
-                }
-              }
-            }
-            for (int32_t i = 0; OB_SUCC(ret) && i < file_list.size(); i++) {
-              if (OB_FAIL(pattern_match(file_list[i], pattern, matched))) {
-                LOG_WARN("fail to pattern match", K(ret));
-              } else if (matched) {
-                ObString match_file;
-                int64_t pos = path_len;
-                if (OB_FAIL(databuff_printf(path, MAX_PATH_SIZE, pos, "%.*s",
-                                            file_list[i].length(), file_list[i].ptr()))) {
-                  LOG_WARN("fail to fill path", K(ret));
-                } else if (OB_FAIL(ob_write_string(*allocator_, ObString(pos, path), match_file, true))) {
-                  LOG_WARN("fail to copy string", K(ret));
-                } else if (OB_FAIL(load_args.file_iter_.add_files(&match_file))) {
-                  LOG_WARN("fail to add files", K(ret));
-                }
-              }
-            }
-            if (OB_SUCC(ret) && load_args.file_iter_.count() == 0) {
-              ret = OB_FILE_NOT_EXIST;
-              LOG_WARN("files not exists", K(ret), K(load_args.file_name_), K(storage_info_str));
-            }
-          }
-        }
-      }
-      LOG_INFO("resolve filename result", K(ret), K(load_args.file_name_), K(load_args.load_file_storage_));
     } else {
-      // 多文件模式，目前只有旁路导入的server disk会走到这条路径
-      // 不支持通配符和指定load_data_format
-      if (ObLoadFileLocation::SERVER_DISK != load_args.load_file_storage_) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not support multi files", K(ret), K(file_name_array), K(load_args.load_file_storage_));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "load multi files is");
-      } else {
-        load_args.file_name_ = file_name;
-        for (int64_t i = 0; OB_SUCC(ret) && i < file_name_array.count(); i++) {
-          ObString actual_file_name = file_name_array[i];
-          if (exist_wildcard(actual_file_name)) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("in multi file mode, wildcard matching or specify load_data_format is not supported", K(ret), K(i), K(actual_file_name));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "in multi file mode, wildcard matching or specify load_data_format is");
-          } else if (OB_FAIL(resolve_filename_server_disk(load_args, actual_file_name, false/*wildcard_check*/))) {
-            LOG_WARN("failed to resolve filename from server disk", K(ret), K(load_args), K(actual_file_name));
-          }
-        }
-        LOG_INFO("resolve filename result", K(ret), K(load_args.file_name_), K(load_args.load_file_storage_));
+      if (OB_FAIL(resolve_multi_files(load_args, file_name, file_name_array))) {
+        LOG_WARN("failed to resolve multi files", K(ret), K(file_name_array));
       }
     }
+  }
+  return ret;
+}
+
+int ObLoadDataResolver::resolve_single_file(ObLoadArgument &load_args, const ObString &file_name)
+{
+  int ret = OB_SUCCESS;
+  ObString storage_info_str;
+  const char *storage_info_ptr = nullptr;
+  ObString actual_file_name;
+
+  if (OB_NOT_NULL(storage_info_ptr = file_name.reverse_find('?'))) {
+    // 文件名包含'?'，提取storage_info_str
+    int32_t storage_info_len = file_name.length() - (storage_info_ptr - file_name.ptr() + 1);
+    if (OB_FAIL(ob_write_string(*allocator_, ObString(file_name.length() - storage_info_len - 1, file_name.ptr()), actual_file_name, true))) {
+      LOG_WARN("fail to copy string", K(ret));
+    } else if (OB_FAIL(ob_write_string(*allocator_, ObString(storage_info_len, storage_info_ptr + 1), storage_info_str, true))) {
+      LOG_WARN("fail to copy string", K(ret));
+    }
+  } else {
+    // 文件名不包含'?'
+    actual_file_name = file_name;
+  }
+
+  if (OB_SUCC(ret)) {
+    if (!storage_info_str.empty()) {
+      // 有显式指定storage_info_str，直接使用
+      if (OB_FAIL(load_args.access_info_.set(actual_file_name.ptr(), storage_info_str.ptr()))) {
+        LOG_WARN("failed to set access info", K(ret), K(actual_file_name), K(storage_info_str));
+      }
+    } else if (ObLoadFileLocation::OSS == load_args.load_file_storage_) {
+      // OSS但没有storage_info，需要从location对象获取并检查权限
+      ObSessionPrivInfo session_priv;
+      share::schema::ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
+      const ObLocationSchema *schema_ptr = NULL;
+      if (OB_ISNULL(schema_guard)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("got null ptr", K(ret));
+      } else if (OB_FAIL(session_info_->get_session_priv_info(session_priv))) {
+        LOG_WARN("get session priv failed", K(ret));
+      } else if (OB_FAIL(schema_guard->get_location_schema_by_prefix_match_with_priv(
+                                session_priv,
+                                session_info_->get_enable_role_array(),
+                                session_info_->get_effective_tenant_id(),
+                                actual_file_name,
+                                schema_ptr,
+                                false))) {
+        LOG_WARN("get location schema failed", K(ret), K(session_info_->get_effective_tenant_id()), K(actual_file_name));
+      } else if (OB_ISNULL(schema_ptr)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("match location object failed", K(ret), K(session_info_->get_effective_tenant_id()), K(actual_file_name));
+      } else if (OB_FAIL(load_args.access_info_.set(actual_file_name.ptr(), schema_ptr->get_location_access_info()))) {
+        LOG_WARN("failed to set access info", K(ret), K(actual_file_name), K(schema_ptr->get_location_access_info()));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    load_args.file_name_ = actual_file_name;
+    if (ObLoadDataFormat::is_backup(load_args.access_info_.get_load_data_format())) {
+      if (ObLoadFileLocation::CLIENT_DISK == load_args.load_file_storage_) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("direct load backup data from client disk is not supported", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "direct load backup data from client disk is");
+      }
+    } else {
+      if (ObLoadFileLocation::SERVER_DISK == load_args.load_file_storage_) {
+        if (OB_FAIL(resolve_filename_server_disk(load_args, actual_file_name, true/*wildcard_check*/))) {
+          LOG_WARN("failed to resolve filename from server disk", K(ret), K(load_args), K(actual_file_name));
+        }
+      } else if (ObLoadFileLocation::OSS == load_args.load_file_storage_) {
+        if (OB_FAIL(resolve_filename_oss(load_args, actual_file_name))) {
+          LOG_WARN("failed to resolve filename from oss", K(ret), K(load_args), K(actual_file_name));
+        }
+      } else if (ObLoadFileLocation::CLIENT_DISK == load_args.load_file_storage_) {
+        if (OB_FAIL(resolve_filename_client_disk(load_args, actual_file_name))) {
+          LOG_WARN("failed to resolve filename from client disk", K(ret), K(load_args), K(actual_file_name));
+        }
+      }
+    }
+  }
+  LOG_INFO("resolve filename result", K(ret), K(load_args.file_name_), K(load_args.load_file_storage_));
+  return ret;
+}
+
+int ObLoadDataResolver::resolve_multi_files(ObLoadArgument &load_args, const ObString &file_name,
+                                            const ObArray<ObString> &file_name_array)
+{
+  int ret = OB_SUCCESS;
+  // 多文件模式，目前只有旁路导入的server disk会走到这条路径
+  // 不支持通配符和指定load_data_format
+  if (ObLoadFileLocation::SERVER_DISK != load_args.load_file_storage_) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support multi files", K(ret), K(file_name_array), K(load_args.load_file_storage_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "load multi files is");
+  } else {
+    load_args.file_name_ = file_name;
+    for (int64_t i = 0; OB_SUCC(ret) && i < file_name_array.count(); i++) {
+      ObString actual_file_name = file_name_array[i];
+      if (exist_wildcard(actual_file_name)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("in multi file mode, wildcard matching or specify load_data_format is not supported", K(ret), K(i), K(actual_file_name));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "in multi file mode, wildcard matching or specify load_data_format is");
+      } else if (OB_FAIL(resolve_filename_server_disk(load_args, actual_file_name, false/*wildcard_check*/))) {
+        LOG_WARN("failed to resolve filename from server disk", K(ret), K(load_args), K(actual_file_name));
+      }
+    }
+    LOG_INFO("resolve filename result", K(ret), K(load_args.file_name_), K(load_args.load_file_storage_));
   }
   return ret;
 }

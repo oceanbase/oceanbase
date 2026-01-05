@@ -71,6 +71,8 @@ private:
   int resolve_filename_server_disk(ObLoadArgument &load_args, ObString &file_name, bool wildcard_check);
   int resolve_filename_client_disk(ObLoadArgument &load_args, ObString &file_name);
   int resolve_filename_oss(ObLoadArgument &load_args, ObString &file_name);
+  int resolve_single_file(ObLoadArgument &load_args, const ObString &file_name);
+  int resolve_multi_files(ObLoadArgument &load_args, const ObString &file_name, const ObArray<ObString> &file_name_array);
 private:
   enum ParameterEnum {
     ENUM_OPT_LOCAL = 0,
