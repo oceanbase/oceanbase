@@ -1032,7 +1032,7 @@ int ObInnerTableSchema::all_virtual_sensitive_rule_schema(ObTableSchema &table_s
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      OB_MAX_ORIGINAL_NANE_LENGTH, //column_length
+      OB_MAX_SENSITIVE_RULE_NAME_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable
@@ -1229,7 +1229,7 @@ int ObInnerTableSchema::all_virtual_sensitive_rule_history_schema(ObTableSchema 
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      OB_MAX_ORIGINAL_NANE_LENGTH, //column_length
+      OB_MAX_SENSITIVE_RULE_NAME_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
       true, //is_nullable
@@ -1668,7 +1668,7 @@ int ObInnerTableSchema::all_virtual_sensitive_rule_privilege_schema(ObTableSchem
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      OB_MAX_USER_NAME_LENGTH, //column_length
+      OB_MAX_SENSITIVE_RULE_NAME_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable
@@ -1809,7 +1809,7 @@ int ObInnerTableSchema::all_virtual_sensitive_rule_privilege_history_schema(ObTa
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      OB_MAX_USER_NAME_LENGTH, //column_length
+      OB_MAX_SENSITIVE_RULE_NAME_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable

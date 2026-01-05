@@ -2924,7 +2924,7 @@ DEFINE_ERROR_EXT(OB_SENSITIVE_RULE_EXIST, -11094, -1, "HY000", "Sensitive rule e
 DEFINE_ERROR_EXT(OB_SENSITIVE_RULE_NOT_EXIST, -11095, -1, "HY000", "Sensitive rule does not exists", "Sensitive rule '%.*s' does not exist");
 DEFINE_ERROR_EXT(OB_SENSITIVE_COLUMN_EXIST, -11096, -1, "HY000", "Sensitive column exists", "Sensitive column %.*s(%.*s) exists");
 DEFINE_ERROR_EXT(OB_SENSITIVE_COLUMN_NOT_EXIST, -11097, -1, "HY000", "Sensitive column does not exists", "Sensitive column %.*s(%.*s) does not exist");
-DEFINE_ERROR_EXT(OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE, -11098, -1, "HY000", "No privilege to access sensitive field", "Access sensitive field protected by sensitive rule '%.*s' denied to user '%.*s'@'%.*s'");
+DEFINE_ERROR_EXT(OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE, -11098, -1, "HY000", "Command denied to user for sensitive rule", "%.*s command denied to user '%.*s'@'%.*s' for sensitive rule '%.*s'");
 DEFINE_ERROR_EXT(OB_WRONG_SENSITIVE_RULE_NAME, -11099, -1, "HY000", "Invalid sensitive rule name", "Invalid sensitive rule name '%.*s'");
 DEFINE_ERROR(OB_KERBEROS_ERROR, -11100, -1, "HY000", "Kereberos execution error");
 DEFINE_ERROR(OB_HMS_ERROR, -11101, -1, "HY000", "HMS execution error");
