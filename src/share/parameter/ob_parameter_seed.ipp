@@ -2276,7 +2276,7 @@ DEF_INT(_restore_io_max_retry_count, OB_CLUSTER_PARAMETER, "3", "[0, 64]",
         "the maximum number of retry attempts for restoring when encountering I/O errors."
         "Range: [0,64] in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_STR_WITH_CHECKER(_server_full_schema_refresh_parallelism, OB_TENANT_PARAMETER, "REQUEST",
+DEF_STR_WITH_CHECKER(_server_full_schema_refresh_parallelism, OB_TENANT_PARAMETER, "OBJECT",
                      common::ObConfigServerFullSchemaRefreshParallelismChecker,
                      "specifies whether observer's full schema refresh is request-level parallelism or object-level parallelism."
                      "values: REQUEST, OBJECT",
