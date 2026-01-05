@@ -738,7 +738,7 @@ int ObInnerSQLConnection::process_audit_record(sql::ObResultSet &result_set,
 
     audit_record.is_executor_rpc_ = false;
     audit_record.is_inner_sql_ = !is_from_pl;
-    audit_record.is_hit_plan_cache_ = result_set.get_is_from_plan_cache();
+    audit_record.is_hit_plan_cache_ = result_set.get_is_from_plan_cache() && !sql_ctx.self_add_plan_;
     audit_record.is_multi_stmt_ = false; //是否是multi sql
     audit_record.is_perf_event_closed_ = !lib::is_diagnose_info_enabled();
 

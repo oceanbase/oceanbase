@@ -1421,7 +1421,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
 
       audit_record.is_executor_rpc_ = false;
       audit_record.is_inner_sql_ = false;
-      audit_record.is_hit_plan_cache_ = result.get_is_from_plan_cache();
+      audit_record.is_hit_plan_cache_ = result.get_is_from_plan_cache() && !ctx_.self_add_plan_;
       audit_record.sql_ = const_cast<char *>(ctx_.raw_sql_.ptr());
       audit_record.sql_len_ = min(ctx_.raw_sql_.length(), OB_MAX_SQL_LENGTH);
       audit_record.sql_cs_type_ = session.get_local_collation_connection();
