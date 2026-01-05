@@ -106,9 +106,7 @@ delimiter ;//
 
 call geom_insert(10000);
 
-# return 4016 if bug ocurr
---replace_regex /[1-9][0-9]*/ /
-explain select x,y,st_astext(poi) from gis_point order by x,y desc limit 1;
+explain basic select x,y,st_astext(poi) from gis_point order by x,y desc limit 1;
 
 drop table if exists gis_point;
 

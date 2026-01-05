@@ -106,27 +106,27 @@ SET i=i+1;
 END WHILE;
 END//
 call geom_insert(10000);
-explain select x,y,st_astext(poi) from gis_point order by x,y desc limit  ;
+explain basic select x,y,st_astext(poi) from gis_point order by x,y desc limit 1;
 Query Plan
-==================================================================
-|ID|OPERATOR           |NAME               |EST.ROWS|EST.TIME(us)|
-------------------------------------------------------------------
-|0 |NESTED-LOOP JOIN   |                   |        |         |
-|  |├─TOP-N SORT       |                   |        |         |
-|  |│ └─TABLE FULL SCAN|gis_point(xy_index)|    |         |
-|  |└─TABLE GET        |gis_point_alias    |        |            |
-==================================================================
+============================================
+|ID|OPERATOR           |NAME               |
+--------------------------------------------
+|0 |NESTED-LOOP JOIN   |                   |
+|1 |├─TOP-N SORT       |                   |
+|2 |│ └─TABLE FULL SCAN|gis_point(xy_index)|
+|3 |└─TABLE GET        |gis_point_alias    |
+============================================
 Outputs & filters:
 -------------------------------------
   0 - output([gis_point.x], [gis_point.y], [st_astext(gis_point_alias.poi)]), filter(nil)
       conds(nil), nl_params_([gis_point.__pk_increment(:0)]), use_batch=false
-    - output([gis_point.__pk_increment], [gis_point.x], [gis_point.y]), filter(nil)
-      sort_keys([gis_point.x, ASC], [gis_point.y, DESC]), topn( ), prefix_pos( )
-    - output([gis_point.__pk_increment], [gis_point.x], [gis_point.y]), filter(nil)
+  1 - output([gis_point.__pk_increment], [gis_point.x], [gis_point.y]), filter(nil)
+      sort_keys([gis_point.x, ASC], [gis_point.y, DESC]), topn(1), prefix_pos(1)
+  2 - output([gis_point.__pk_increment], [gis_point.x], [gis_point.y]), filter(nil)
       access([gis_point.__pk_increment], [gis_point.x], [gis_point.y]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([gis_point.x], [gis_point.y], [gis_point.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
-    - output([gis_point_alias.poi]), filter(nil)
+  3 - output([gis_point_alias.poi]), filter(nil)
       access([gis_point_alias.poi]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([gis_point_alias.__pk_increment]), range(MIN ; MAX), 
