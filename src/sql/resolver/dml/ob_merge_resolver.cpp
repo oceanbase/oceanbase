@@ -124,7 +124,8 @@ int ObMergeResolver::check_stmt_validity()
   const ObTableSchema *table_schema = NULL;
   ObSchemaGetterGuard *schema_guard = NULL;
   ObMergeStmt *merge_stmt = get_merge_stmt();
-  if (OB_ISNULL(merge_stmt) || OB_ISNULL(params_.schema_checker_) ||
+  bool enabled_merge_into = true;
+  if (OB_ISNULL(merge_stmt) || OB_ISNULL(params_.query_ctx_) || OB_ISNULL(params_.schema_checker_) ||
       OB_ISNULL(schema_guard = params_.schema_checker_->get_schema_guard()) ||
       OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -135,6 +136,14 @@ int ObMergeResolver::check_stmt_validity()
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("the behavior of rownum is undefined in merge stmt", K(ret), K(merge_stmt));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "the behavior of rownum in merge stmt");
+  } else if (lib::is_mysql_mode() && !session_info_->get_ddl_info().is_refreshing_mview()
+             && OB_FAIL(params_.query_ctx_->get_global_hint().opt_params_.has_enable_opt_param(ObOptParamHint::ENABLE_MERGE_INTO, enabled_merge_into))) {
+    LOG_WARN("failed to check has enable opt param", K(ret));
+  } else if (!enabled_merge_into) {
+    ret = OB_NOT_SUPPORTED;
+    // merge into can be enabled by hint /*+ opt_param('ENABLE_MERGE_INTO', 'true') */
+    LOG_WARN("The MERGE INTO syntax in mysql mode not supported");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "The MERGE INTO syntax in mysql mode");
   } else if (merge_stmt->get_subquery_exprs().empty()) {
     /*do nothing*/
   } else if (OB_FAIL(ObOptimizerUtil::check_expr_contain_subquery(merge_stmt->get_delete_condition_exprs(),

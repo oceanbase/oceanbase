@@ -559,6 +559,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"master_ssl_verify_server_cert", MASTER_SSL_VERIFY_SERVER_CERT},
   {"master_user", MASTER_USER},
   {"match", MATCH},
+  {"matched", MATCHED},
   {"max", MAX},
   {"maxvalue", MAXVALUE},
   {"maximize", MAXIMIZE},
