@@ -137,6 +137,64 @@ TEST_F(ObRuntimeMetricTest, test_pretty_print)
   ASSERT_STREQ("│  filtered row count:10 [min=10, max=10]", buf);
 }
 
+TEST_F(ObRuntimeMetricTest, test_standard_deviation) {
+  // Test standard deviation calculation using Welford's algorithm
+  // test with values [10, 20]
+  // mean: (10+20) / 2 = 15
+  // variance: sum((x-15)^2) / 2 = (25+25) / 2 = 25
+  // standard deviation: sqrt(25) = 5
+  ObMergeMetric merged_metric;
+  merged_metric.id_ = ObMetricId::OUTPUT_ROWS;
+  merged_metric.update(10);
+  merged_metric.update(20);
+  ASSERT_EQ(5, merged_metric.get_deviation_value());
+
+  // test with values [2, 4, 4, 4, 5, 5, 7, 9]
+  // mean: (2+4+4+4+5+5+7+9) / 8 = 40 / 8 = 5
+  // variance: sum((x-5)^2) / 8 = (9+1+1+1+0+0+4+16) / 8 = 32 / 8 = 4
+  // standard deviation: sqrt(4) = 2
+  ObMergeMetric merged_metric2;
+  merged_metric2.id_ = ObMetricId::OUTPUT_ROWS;
+  uint64_t test_values[] = {2, 4, 4, 4, 5, 5, 7, 9};
+  int num_values = sizeof(test_values) / sizeof(test_values[0]);
+
+  for (int i = 0; i < num_values; i++) {
+    merged_metric2.update(test_values[i]);
+  }
+
+  ASSERT_EQ(2, merged_metric2.get_deviation_value());
+
+  // test all same values
+  ObMergeMetric merged_metric3;
+  merged_metric3.id_ = ObMetricId::OUTPUT_ROWS;
+  for (int i = 0; i < 5; i++) {
+    merged_metric3.update(100);
+  }
+  ASSERT_EQ(0, merged_metric3.get_deviation_value());
+
+  // test large values
+  // mean: (1000+2000+3000+4000+5000) / 5 = 3000
+  // variance: sum((x-3000)^2) / 5 = (4M+1M+0+1M+4M) / 5 = 10M / 5 = 2M
+  // standard deviation: sqrt(2000000) ≈ 1414.21
+  ObMergeMetric merged_metric4;
+  merged_metric4.id_ = ObMetricId::OUTPUT_ROWS;
+  uint64_t large_values[] = {1000, 2000, 3000, 4000, 5000};
+  int num_large = sizeof(large_values) / sizeof(large_values[0]);
+
+  for (int i = 0; i < num_large; i++) {
+    merged_metric4.update(large_values[i]);
+  }
+  ASSERT_EQ(1414, merged_metric4.get_deviation_value());
+
+  ObArenaAllocator alloc;
+  int64_t buf_len = 1024;
+  int64_t pos = 0;
+  char *buf = static_cast<char *>(alloc.alloc(buf_len));
+  merged_metric4.pretty_print(buf, buf_len, pos, "");
+  cout << buf << endl;
+  ASSERT_STREQ("output rows:15000 [min=1000, max=5000, stddev=1414]", buf);
+}
+
 int main(int argc, char **argv)
 {
   int ret = OB_SUCCESS;

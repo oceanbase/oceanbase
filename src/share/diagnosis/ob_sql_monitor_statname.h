@@ -82,7 +82,7 @@ SQL_MONITOR_STATNAME_DEF(SKIP_INDEX_SKIP_BLOCK_CNT, metric::Unit::INT, "total bl
 
 // Common Metrics
 SQL_MONITOR_STATNAME_DEF(IO_TIME, metric::Unit::TIME_NS, "io time", "io time", M_AVG | E_MIN | E_MAX, metric::Level::CRITICAL)
-SQL_MONITOR_STATNAME_DEF(OUTPUT_ROWS, metric::Unit::INT, "output rows", "output rows", M_SUM | E_MIN | E_MAX, metric::Level::CRITICAL)
+SQL_MONITOR_STATNAME_DEF(OUTPUT_ROWS, metric::Unit::INT, "output rows", "output rows", M_SUM | E_MIN | E_MAX | E_STDDEV, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(OUTPUT_BATCHES, metric::Unit::INT, "output batches", "output batches", M_SUM | E_MIN | E_MAX, metric::Level::AD_HOC)
 SQL_MONITOR_STATNAME_DEF(SKIPPED_ROWS, metric::Unit::INT, "skipped rows", "skipped rows", M_SUM | E_MIN | E_MAX, metric::Level::AD_HOC)
 SQL_MONITOR_STATNAME_DEF(RESCAN_TIMES, metric::Unit::INT, "rescan times", "rescan times", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)
