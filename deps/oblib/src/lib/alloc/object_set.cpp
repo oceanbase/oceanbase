@@ -75,10 +75,8 @@ bool ObjectSet::check_has_unfree(ABlock* block, char *first_label, char *first_b
         STRNCPY(first_label, obj->label_, AOBJECT_LABEL_SIZE);
         first_label[AOBJECT_LABEL_SIZE] = '\0';
       }
-      if (obj->on_malloc_sample_ && '\0' == first_bt[0]) {
-        void *addrs[AOBJECT_BACKTRACE_COUNT];
-        MEMCPY((char*)addrs, obj->bt(), AOBJECT_BACKTRACE_SIZE);
-        IGNORE_RETURN parray(first_bt, MAX_BACKTRACE_LENGTH, (int64_t*)addrs, AOBJECT_BACKTRACE_COUNT);
+      if ('\0' == first_bt[0]) {
+        PARRAY_MALLOC_BACKTRACE(obj, first_bt, MAX_BACKTRACE_LENGTH);
       }
       if (!has_unfree) {
         has_unfree = true;

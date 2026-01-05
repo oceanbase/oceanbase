@@ -903,6 +903,14 @@ extern bool is_memleak_light_backtrace_enabled();
 
 #define FORCE_MALLOC_FOR_ABSENT_TENANT() \
   OB_UNLIKELY(oceanbase::lib::ObMallocAllocator::get_instance()->force_malloc_for_absent_tenant_)
+
+#define PARRAY_MALLOC_BACKTRACE(object, backtrace, length)                \
+  SANITY_DISABLE_CHECK_RANGE();                                           \
+  if (object->on_malloc_sample_) {                                        \
+    void *addrs[AOBJECT_BACKTRACE_COUNT];                                 \
+    MEMCPY((char*)addrs, object->bt(), AOBJECT_BACKTRACE_SIZE);           \
+    parray(backtrace, length, (int64_t*)addrs, AOBJECT_BACKTRACE_COUNT);  \
+  }
 } // end of namespace lib
 } // end of namespace oceanbase
 

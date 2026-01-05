@@ -69,12 +69,8 @@ void ObAllocator::reset()
   AllocNode *next = popall();
   if (next) {
     AObject *obj = reinterpret_cast<AObject*>((char*)next - AOBJECT_HEADER_SIZE);
-    char bt[MAX_BACKTRACE_LENGTH];
-    if (obj->on_malloc_sample_) {
-      parray(bt, sizeof(bt), (int64_t*)obj->bt(), AOBJECT_BACKTRACE_COUNT);
-    } else {
-      bt[0] = '\0';
-    }
+    char bt[MAX_BACKTRACE_LENGTH] = {'\0'};
+    PARRAY_MALLOC_BACKTRACE(obj, bt, MAX_BACKTRACE_LENGTH);
     const static int buf_len = 512;
     char buf[buf_len] = {'\0'};
     snprintf(buf, buf_len, "label: %s, backtrace: %s", obj->label_, bt);
