@@ -477,6 +477,7 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
       }
     }
     if (OB_SUCC(ret) &&
+        !params_.disable_shared_expr_ &&
         current_scope_ != T_INSERT_SCOPE &&
         current_scope_ != T_UPDATE_SCOPE &&
         !is_hierarchical_query &&
@@ -10925,6 +10926,12 @@ int ObDMLResolver::resolve_hints(const ParseNode *node)
   // record origin stmt qb name
   if (OB_SUCC(ret) && OB_FAIL(query_ctx->get_query_hint_for_update().set_stmt_id_map_info(*stmt, qb_name))) {
     LOG_WARN("failed to add id name pair", K(ret));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_bool_opt_param(
+                ObOptParamHint::DISABLE_SHARED_EXPR_EXTRACTION, params_.disable_shared_expr_))) {
+    LOG_WARN("failed to get bool opt param", K(ret));
   }
   return ret;
 }
