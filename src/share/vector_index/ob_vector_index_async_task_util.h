@@ -561,6 +561,7 @@ private:
   int get_read_snapshot_table_scn(share::SCN &target_scn);
   int try_deseriale_snapshot_data(common::ObNewRowIterator *snapshot_idx_iter, const bool need_unvisible);
   int check_finished_exchange_before(share::SCN &current_scn, bool &is_finised);
+  int fetch_commit_scn_from_tx_table(const transaction::ObTransID &tx_id, share::SCN &commit_scn);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObVecIndexAsyncTask);

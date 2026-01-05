@@ -439,7 +439,7 @@ ObPluginVectorIndexAdaptor::ObPluginVectorIndexAdaptor(common::ObIAllocator *all
     rowkey_vid_table_id_(OB_INVALID_ID), vid_rowkey_table_id_(OB_INVALID_ID),
     ref_cnt_(0), idle_cnt_(0), mem_check_cnt_(0), is_mem_limited_(false), all_vsag_use_mem_(nullptr), allocator_(allocator),
     parent_mem_ctx_(entity), index_identity_(), follower_sync_statistics_(), is_in_opt_task_(false), need_be_optimized_(false), extra_info_column_count_(0),
-    query_lock_(), reload_finish_(false), last_embedding_time_(ObTimeUtility::fast_current_time()), is_need_vid_(true), sparse_vector_type_(nullptr)
+    query_lock_(), reload_finish_(false), last_embedding_time_(ObTimeUtility::fast_current_time()), is_need_vid_(true), sparse_vector_type_(nullptr), replace_scn_()
 {
 }
 
@@ -2105,6 +2105,7 @@ int ObPluginVectorIndexAdaptor::set_snapshot_key_prefix(uint64_t tablet_id, uint
         snapshot_key_prefix_.reset();
       }
       snapshot_key_prefix_.assign(key_prefix_str, pos);
+      LOG_INFO("change vector index snapshot_key_prefix success", K(snapshot_key_prefix_), KP(this), K(*this));
     }
   }
   return ret;
@@ -2130,7 +2131,7 @@ int ObPluginVectorIndexAdaptor::set_snapshot_key_prefix(const ObString &snapshot
     if (OB_FAIL(ob_write_string(*allocator_, snapshot_key_prefix, snapshot_key_prefix_))) {
       LOG_WARN("fail set vector index snapshot_key_prefix ", KR(ret), K(*this));
     } else {
-      LOG_INFO("change vector index snapshot_key_prefix success", K(snapshot_key_prefix), K(*this));
+      LOG_INFO("change vector index snapshot_key_prefix success", K(snapshot_key_prefix), KP(this), K(*this));
     }
   }
   return ret;
@@ -2145,7 +2146,7 @@ int ObPluginVectorIndexAdaptor::set_snapshot_key_scn(const int64_t &snapshot_key
   } else if (OB_FAIL(snap_data_->scn_.convert_for_sql(snapshot_key_scn))) {
     LOG_WARN("fail to convert scn", K(ret), K(snapshot_key_scn));
   }
-  LOG_INFO("set snapshot key scn", K(ret), K(snapshot_key_scn), K(*this));
+  LOG_INFO("set snapshot key scn", K(ret), K(snapshot_key_scn), KP(this), K(*this));
   return ret;
 }
 
@@ -2156,6 +2157,24 @@ int ObPluginVectorIndexAdaptor::get_snapshot_key_scn(SCN &snapshot_key_scn)
     snapshot_key_scn = snap_data_->scn_;
   }
   return OB_SUCCESS;
+}
+
+int ObPluginVectorIndexAdaptor::set_replace_scn(const SCN &replace_scn)
+{
+  int ret = OB_SUCCESS;
+  if (replace_scn.is_valid()) {
+    replace_scn_ = replace_scn;
+    LOG_INFO("set replace scn", K(ret), K(replace_scn), KP(this), K(*this));
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret), K(replace_scn), KP(this), K(*this));
+  }
+  return ret;
+}
+
+SCN ObPluginVectorIndexAdaptor::get_replace_scn()
+{
+  return replace_scn_;
 }
 
 int ObPluginVectorIndexAdaptor::copy_meta_info(ObPluginVectorIndexAdaptor &other)

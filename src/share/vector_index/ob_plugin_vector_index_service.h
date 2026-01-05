@@ -174,6 +174,8 @@ public:
                                     ObVecIdxSharedTableInfoMap &info_map,
                                     ObIAllocator &allocator);
   int replace_old_adapter(ObPluginVectorIndexAdaptor *new_adapter);
+  // Replace old adapter with replace scn check (optimistic lock)
+  int replace_old_adapter_with_scn_check(ObPluginVectorIndexAdaptor *new_adapter, bool &has_replace);
   common::RWLock& get_adapter_map_lock() { return adapter_map_rwlock_; }
   int replace_with_full_partial_adapter(ObVectorIndexAcquireCtx &ctx,
                                         ObIAllocator &allocator,

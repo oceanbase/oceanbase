@@ -1742,6 +1742,30 @@ int ObVecIndexIAsyncTask::init(
   return ret;
 }
 
+int ObVecIndexAsyncTask::fetch_commit_scn_from_tx_table(
+    const transaction::ObTransID &tx_id,
+    share::SCN &commit_scn)
+{
+  int ret = OB_SUCCESS;
+  int64_t tx_state = 0;
+  share::SCN recycled_scn;
+  ObLSHandle ls_handle;
+  if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::TRANS_MOD))) {
+    LOG_WARN("get ls handle fail", K(ret), K(ls_id_));
+  } else {
+    ObTxTableGuard tx_table_guard;
+    if (OB_FAIL(ls_handle.get_ls()->get_tx_table()->get_tx_table_guard(tx_table_guard))) {
+      LOG_WARN("get tx table guard failed", KR(ret), K(ls_id_));
+    } else if (OB_FAIL(tx_table_guard.try_get_tx_state(tx_id, tx_state, commit_scn, recycled_scn))) {
+      LOG_WARN("get tx state from tx_table failed", KR(ret), K(ls_id_), K(tx_id));
+    } else if (tx_state != ObTxData::COMMIT) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected tx state", K(ret), K(tx_state), K(tx_id));
+    }
+  }
+  return ret;
+}
+
 /**************************** ObVecIndexAsyncTask ******************************/
 int ObVecIndexAsyncTask::do_work()
 {
@@ -2147,7 +2171,11 @@ int ObVecIndexAsyncTask::parallel_optimize_vec_index()
       DEBUG_SYNC(PARALLEL_VEC_TASK_EXECUTE_EXCHANGE);
       if (!need_redo_current_status) {
         RWLock::WLockGuard lock_guard(vec_idx_mgr_->get_adapter_map_lock());
-        if (OB_FAIL(vec_idx_mgr_->replace_old_adapter(new_adapter_))) {
+        // can skip only use when create vector index and no dml
+        new_adapter_->update_can_skip(NOT_SKIP);
+        if (OB_FAIL(new_adapter_->set_replace_scn(ctx_->task_status_.target_scn_))) {
+          LOG_WARN("failed to set replace scn", K(ret), K(ctx_->task_status_.target_scn_));
+        } else if (OB_FAIL(vec_idx_mgr_->replace_old_adapter(new_adapter_))) {
           LOG_WARN("failed to replace old adapter", K(ret));
         }
       }
@@ -2164,11 +2192,20 @@ int ObVecIndexAsyncTask::parallel_optimize_vec_index()
   // clean.
   // delete table 5 un-visible data when fail or finish
   if (OB_FAIL(ret) || ctx_->task_status_.status_ == ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_CLEAN) {
-    if (OB_TMP_FAIL(execute_clean())) {
-      LOG_WARN("fail to execute clean", K(ret), K(tmp_ret), KPC(ctx_));
+    bool need_retry = true;
+    while (need_retry) {
+      if (OB_TMP_FAIL(execute_clean())) {
+        LOG_WARN("fail to execute clean", K(ret), K(tmp_ret), KPC(ctx_));
+      }
+      if (tmp_ret == OB_SCHEMA_EAGAIN) { // is other err code need retry?
+        need_retry = true;
+        LOG_INFO("need retry execute_clean", K(ret), K(tenant_id_), KPC(ctx_));
+      } else {
+        need_retry = false;
+        DEBUG_SYNC(PARALLEL_VEC_TASK_EXECUTE_CLEAN);
+        ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
+      }
     }
-    DEBUG_SYNC(PARALLEL_VEC_TASK_EXECUTE_CLEAN);
-    ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
   }
   LOG_INFO("end parallel optimize vec index", K(ret), KPC(ctx_));
   return ret;
@@ -2374,7 +2411,7 @@ int ObVecIndexAsyncTask::execute_inner_sql(
       LOG_WARN("inner sql execute fail", K(ret), K(ctx_));
     } else {
       ret = ret_code;
-      LOG_INFO("execute inner sql ret code", K(ret), K(task_id));
+      LOG_INFO("execute inner sql ret code", K(ret), K(task_id), KPC(ctx_));
     }
   }
   return ret;
@@ -2426,17 +2463,25 @@ int ObVecIndexAsyncTask::execute_exchange()
     * otherwise, a deadlock could occur between the query and asynchronous tasks. */
     RWLock::WLockGuard query_lock_guard(old_adapter_->get_query_lock()); // lock for query before end trans
     RWLock::WLockGuard lock_guard(vec_idx_mgr_->get_adapter_map_lock());
+    share::SCN commit_scn;
+    transaction::ObTransID tx_id = tx_desc->get_tx_id(); // save tx_id before end_trans
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = ObInsertLobColumnHelper::end_trans(tx_desc, OB_SUCCESS != ret, timeout_us))) {
       ret = tmp_ret;
-      LOG_WARN("fail to end trans", K(ret), KPC(tx_desc));
+      LOG_WARN("fail to end trans", K(ret), KPC(tx_desc), KPC(ctx_));
+    } else if (OB_FAIL(fetch_commit_scn_from_tx_table(tx_id, commit_scn))) {
+      LOG_WARN("fail to fetch commit scn from tx_table", K(ret), K(tx_id));
     }
+
     if (OB_FAIL(ret)) {
+    } else if (OB_FALSE_IT(new_adapter_->update_can_skip(NOT_SKIP))) { // can skip only use when create vector index and no dml
+    } else if (OB_FAIL(new_adapter_->set_replace_scn(commit_scn))) {
+      LOG_WARN("failed to set replace scn", K(ret), K(commit_scn));
     } else if (OB_FAIL(vec_idx_mgr_->replace_old_adapter(new_adapter_))) {
       LOG_WARN("failed to replace old adapter", K(ret));
     }
   }
-  LOG_INFO("end execute_exchange", K(ret));
+  LOG_INFO("end execute_exchange", K(ret), KPC(ctx_));
   return ret;
 }
 
@@ -2836,6 +2881,7 @@ int ObVecIndexAsyncTask::exchange_snap_index_rows(
     }
     snap_data_iter = nullptr;
   }
+  LOG_INFO("end exchange snap rows", K(ret), KPC(ctx_));
   return ret;
 }
 
@@ -3400,16 +3446,24 @@ int ObVecIndexAsyncTask::optimize_vector_index(ObPluginVectorIndexAdaptor &adapt
   * Therefore, the order of these two locks must not be reversed;
   * otherwise, a deadlock could occur between the query and asynchronous tasks. */
   RWLock::WLockGuard query_lock_guard(old_adapter_->get_query_lock()); // lock for query before end trans
+  share::SCN commit_scn;
+  transaction::ObTransID tx_id = tx_desc->get_tx_id(); // save tx_id before end_trans
   int tmp_ret = OB_SUCCESS;
   if (trans_start && OB_SUCCESS != (tmp_ret = ObInsertLobColumnHelper::end_trans(tx_desc, OB_SUCCESS != ret, timeout_us))) {
     ret = tmp_ret;
     LOG_WARN("fail to end trans", K(ret), KPC(tx_desc));
+  } else if (OB_FAIL(fetch_commit_scn_from_tx_table(tx_id, commit_scn))) {
+    LOG_WARN("fail to fetch commit scn from tx_table", K(ret), K(tx_id));
   }
 
   RWLock::WLockGuard lock_guard(vec_idx_mgr_->get_adapter_map_lock());
   if (OB_SUCC(ret)) {
     ctx_->task_status_.progress_info_.vec_opt_status_ = OB_VECTOR_ASYNC_OPT_REPLACE;
-    if (OB_FAIL(vec_idx_mgr_->replace_old_adapter(&adaptor))) {
+    // can skip only use when create vector index and no dml
+    adaptor.update_can_skip(NOT_SKIP);
+    if (OB_FAIL(adaptor.set_replace_scn(commit_scn))) {
+      LOG_WARN("failed to set replace scn", K(ret), K(commit_scn));
+    } else if (OB_FAIL(vec_idx_mgr_->replace_old_adapter(&adaptor))) {
       LOG_WARN("failed to replace old adapter", K(ret));
     }
   }
