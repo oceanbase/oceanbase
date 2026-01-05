@@ -403,8 +403,6 @@ int ObStaticEngineCG::postorder_generate_op(ObLogicalOperator &op,
     if (OB_FAIL(ObSQLUtils::get_external_table_type(scan_ctdef.external_file_format_str_.str_,
                                                     format_type))) {
       LOG_WARN("fail to get external table format", K(ret));
-    } else if (ObExternalFileFormat::PLUGIN_FORMAT == format_type) {
-      // plugin support both rich and non-rich format
     } else if (ObExternalFileFormat::CSV_FORMAT != format_type && !spec->use_rich_format_) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "Using non-rich vector format in external tables");
