@@ -2937,8 +2937,7 @@ MOD '(' expr ',' expr ')'
         data = $3;
         
         malloc_terminal_node(path, result->malloc_pool_, T_VARCHAR);
-        path->str_value_ = "";
-        path->str_len_ = 0;
+        path->str_value_ = parse_strdup("$", result->malloc_pool_, &(path->str_len_));
         path->is_hidden_const_ = 1;
       } else if ($3->type_ == T_FUN_SYS_JSON_VALUE) {
         path = $3->children_[1];
