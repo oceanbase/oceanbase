@@ -939,6 +939,8 @@ public:
                          int64_t new_query_start_time,
                          int64_t orc_max_ret_rows = INT64_MAX);
 
+  static int fill_cursor_row(ObSPICursor *cursor, const ObNewRow &row);
+
   static int cursor_release(pl::ObPLExecCtx *ctx,
                             ObSQLSessionInfo *session,
                             pl::ObPLCursorInfo *cursor,
@@ -947,6 +949,7 @@ public:
                             uint64_t routine_id,
                             bool ignore);
 
+  static int convert_to_unstreaming_cursor(pl::ObPLExecCtx *ctx, ObSQLSessionInfo &session, int64_t cursor_index, int64_t tx_id, bool &converted);
   static int spi_pl_profiler_before_record(pl::ObPLExecCtx *ctx, int64_t line, int64_t level);
 
   static int spi_pl_profiler_after_record(pl::ObPLExecCtx *ctx, int64_t line, int64_t level);

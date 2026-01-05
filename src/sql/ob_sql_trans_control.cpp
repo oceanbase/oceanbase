@@ -309,6 +309,10 @@ int ObSqlTransControl::end_trans(ObSQLSessionInfo *session,
       need_disconnect = false;
     }
   } else {
+    if (!is_rollback) {
+      // convert streaming cursor to unstreaming cursor
+      process_cursor_when_end_trans(session, session->get_tx_id().get_id());
+    }
     // add tx id to AuditRecord
     set_audit_tx_id_(session);
     int64_t expire_ts = get_stmt_expire_ts(NULL, *session);
@@ -1764,6 +1768,15 @@ int ObSqlTransControl::reset_session_tx_state(ObBasicSessionInfo *session,
   session->get_trans_result().reset();
   session->reset_tx_variable(reset_trans_variable);
   return ret;
+}
+
+void ObSqlTransControl::process_cursor_when_end_trans(ObSQLSessionInfo *session, int64_t tx_id)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(session));
+  if (OB_SUCC(ret) && OB_NOT_NULL(session->get_pl_context())) {
+    OZ (session->get_pl_context()->process_cursor_when_end_trans(*session, tx_id));
+  }
 }
 
 int ObSqlTransControl::reset_session_tx_state(ObSQLSessionInfo *session, bool reuse_tx_desc, bool reset_trans_variable)

@@ -779,7 +779,9 @@ public:
     profiler_time_stack_(nullptr),
     need_free_(),
     param_converted_(),
-    cur_complex_obj_count_(INT64_MAX)
+    cur_complex_obj_count_(INT64_MAX),
+    has_tx_cursor_(false),
+    tx_cursor_idx_set_()
   { }
   virtual ~ObPLExecState();
 
@@ -853,6 +855,10 @@ public:
   inline void set_profiler_time_stack(ObPLProfilerTimeStack *time_stack) { profiler_time_stack_ = time_stack;}
 
   inline ObPLProfilerTimeStack *get_profiler_time_stack() { return profiler_time_stack_; }
+  inline bool has_tx_cursor() { return has_tx_cursor_; }
+  inline void set_has_tx_cursor(bool has_tx_cursor) { has_tx_cursor_ = has_tx_cursor; }
+  inline hash::ObHashSet<int64_t>* get_tx_cursor_idx_set() { return tx_cursor_idx_set_; }
+  int init_tx_cursor_idx_set(ObIAllocator &allocator);
 
   bool need_free_arg(int64_t i)
   {
@@ -899,6 +905,9 @@ private:
   common::ObSEArray<bool,8> need_free_;
   common::ObSEArray<bool,8> param_converted_;
   int64_t cur_complex_obj_count_; // for destory plctx record's obj
+  bool has_tx_cursor_;
+  hash::ObHashSet<int64_t>* tx_cursor_idx_set_; // for tx cursor idx
+
 };
 
 class ObPLCallStackTrace;
@@ -906,11 +915,11 @@ class ObPLContext
 {
   friend class LinkPLStackGuard;
 public:
-  ObPLContext()
+  ObPLContext() :
 #ifdef OB_BUILD_ORACLE_PL
-      : call_stack_trace_(nullptr),
-        alloc_("PlCallStack", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
+      call_stack_trace_(nullptr),
 #endif
+      alloc_("PlCallStack", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
       { reset(); }
   virtual ~ObPLContext() { reset(); }
   void reset()
@@ -1027,6 +1036,18 @@ public:
                                sql::ObExecContext &ctx,
                                bool trans_xa_branch_fail);
 
+  static int add_tx_cursor_idx_to_local_state(sql::ObSQLSessionInfo &session_info,
+                                              uint64_t package_id,
+                                              uint64_t routine_id,
+                                              int64_t cursor_index);
+
+  static int del_tx_cursor_idx_from_local_state(sql::ObSQLSessionInfo &session_info,
+                                                uint64_t package_id,
+                                                uint64_t routine_id,
+                                                int64_t cursor_index);
+
+  int process_cursor_when_end_trans(sql::ObSQLSessionInfo &session_info, int64_t tx_id);
+
   int inc_and_check_depth(int64_t package_id, int64_t routine_id, bool is_function);
   void dec_and_check_depth(int64_t package_id, int64_t routine_id, int &ret, bool inner_call);
 
@@ -1080,8 +1101,8 @@ public:
 
 #ifdef OB_BUILD_ORACLE_PL
   ObPLCallStackTrace *get_call_stack_trace();
-  ObIAllocator &get_allocator() { return alloc_; }
 #endif
+ObIAllocator &get_allocator() { return alloc_; }
 
 private:
   ObPLContext* get_stack_pl_ctx();
@@ -1136,8 +1157,8 @@ private:
   common::ObSEArray<ObPLExecState*, 4> exec_stack_;
 #ifdef OB_BUILD_ORACLE_PL
   ObPLCallStackTrace *call_stack_trace_;
-  ObArenaAllocator alloc_;
 #endif
+  ObArenaAllocator alloc_;
   ObPLContext *parent_stack_ctx_;
   ObPLContext *top_stack_ctx_;
   sql::ObExecContext *my_exec_ctx_; //my exec context

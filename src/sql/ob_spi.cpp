@@ -3555,6 +3555,24 @@ int ObSPIService::spi_get_cursor_info(ObPLExecCtx *ctx, int64_t index,
   return ret;
 }
 
+int ObSPIService::convert_to_unstreaming_cursor(ObPLExecCtx *ctx, ObSQLSessionInfo &session, int64_t cursor_index, int64_t tx_id, bool &converted)
+{
+  int ret = OB_SUCCESS;
+  ObPLCursorInfo *cursor = NULL;
+  ObObjParam cursor_var;
+  converted = false;
+  OZ (ObSPIService::spi_get_cursor_info(ctx, cursor_index, cursor, cursor_var));
+  if (OB_SUCC(ret) && OB_NOT_NULL(cursor) && cursor->get_snapshot().tx_id().get_id() == tx_id) { //in the same transaction, convert to unstreaming cursor
+    if (cursor->isopen() && cursor->is_streaming()) {
+      OZ (cursor->convert_to_unstreaming(session));
+    }
+    cursor->set_is_in_tx_cursor(false);
+    cursor->set_tx_cursor_idx(OB_INVALID_ID, OB_INVALID_ID, OB_INVALID_INDEX);
+    converted = true;
+  }
+  return ret;
+}
+
 int ObSPIService::spi_dynamic_open(ObPLExecCtx *ctx,
                                   const int64_t sql_idx,
                                   const int64_t *sql_param_exprs_idx,
@@ -4151,6 +4169,11 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
     }
     if (OB_SUCC(ret) && DECL_PKG != loc) {
       OZ (release_cursor_parameters(ctx, *session_info, package_id, routine_id, formal_param_idxs, cursor_param_count));
+    }
+    if (OB_SUCC(ret) && session_info->enable_enhanced_cursor_validation() && cursor->is_need_check_snapshot() && cursor->is_streaming() && !cursor->is_for_update()) {
+      OZ (ObPLContext::add_tx_cursor_idx_to_local_state(*session_info, package_id, routine_id, cursor_index));
+      OX (cursor->set_is_in_tx_cursor(true));
+      OX (cursor->set_tx_cursor_idx(package_id, routine_id, cursor_index));
     }
   }
   if (OB_FAIL(ret) && lib::is_mysql_mode()) {
@@ -8837,6 +8860,8 @@ int ObSPIService::fill_cursor(ObResultSet &result_set,
   if (OB_ISNULL(cursor) || OB_ISNULL(cursor->allocator_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Argument passed in is NULL", K(cursor), K(ret));
+  } else if (result_set.get_errcode() != OB_SUCCESS && result_set.get_errcode() != OB_ITER_END) {
+    LOG_INFO("cursor result set already failed, stop fill_cursor", K(result_set.get_errcode()));
   } else {
     const common::ObNewRow *row = NULL;
     const common::ColumnsFieldIArray *fields = result_set.get_field_columns();
@@ -8885,40 +8910,49 @@ int ObSPIService::fill_cursor(ObResultSet &result_set,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get a invalud row", K(ret));
       } else {
-        ObNewRow tmp_row = *row;
-        for (int64_t i = 0; OB_SUCC(ret) && i < tmp_row.get_count(); ++i) {
-          ObObj& obj = tmp_row.get_cell(i);
-          ObObj tmp;
-          if (obj.is_pl_extend()) {
-            if (pl::PL_REF_CURSOR_TYPE == obj.get_meta().get_extend_type()) {
-              pl::ObPLCursorInfo* cursor_info = reinterpret_cast<ObPLCursorInfo*>(obj.get_ext());
-              if (OB_NOT_NULL(cursor_info)) {
-                if (OB_FAIL(cursor->complex_objs_.push_back(obj))) {
-                  LOG_WARN("failed to push back", K(ret));
-                } else {
-                  cursor_info->inc_ref_count();
-                }
-              }
-            } else {
-              if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(*(cursor->allocator_), obj, tmp))) {
-                LOG_WARN("failed to copy pl extend", K(ret));
-              } else {
-                obj = tmp;
-                if (OB_FAIL(cursor->complex_objs_.push_back(tmp))) {
-                  int tmp_ret = ObUserDefinedType::destruct_obj(tmp, cursor->session_info_);
-                  LOG_WARN("fail to push back", K(ret), K(tmp_ret));
-                }
-              }
-            }
-          }
-        }
-        if (OB_SUCC(ret) && OB_FAIL(cursor->row_store_.add_row(tmp_row))) {
-          LOG_WARN("failed to add row to row store", K(ret));
+        if (OB_FAIL(fill_cursor_row(cursor, *row))) {
+          LOG_WARN("failed to fill cursor row", K(ret));
         }
       }
     }
   }
   THIS_WORKER.set_timeout_ts(old_time_out_ts);
+  return ret;
+}
+
+int ObSPIService::fill_cursor_row(ObSPICursor *cursor, const ObNewRow &row)
+{
+  int ret = OB_SUCCESS;
+  ObNewRow tmp_row = row;
+  for (int64_t i = 0; OB_SUCC(ret) && i < tmp_row.get_count(); ++i) {
+    ObObj& obj = tmp_row.get_cell(i);
+    ObObj tmp;
+    if (obj.is_pl_extend()) {
+      if (pl::PL_REF_CURSOR_TYPE == obj.get_meta().get_extend_type()) {
+        pl::ObPLCursorInfo* cursor_info = reinterpret_cast<ObPLCursorInfo*>(obj.get_ext());
+        if (OB_NOT_NULL(cursor_info)) {
+          if (OB_FAIL(cursor->complex_objs_.push_back(obj))) {
+            LOG_WARN("failed to push back", K(ret));
+          } else {
+            cursor_info->inc_ref_count();
+          }
+        }
+      } else {
+        if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(*(cursor->allocator_), obj, tmp))) {
+          LOG_WARN("failed to copy pl extend", K(ret));
+        } else {
+          obj = tmp;
+          if (OB_FAIL(cursor->complex_objs_.push_back(tmp))) {
+            int tmp_ret = ObUserDefinedType::destruct_obj(tmp, cursor->session_info_);
+            LOG_WARN("fail to push back", K(ret), K(tmp_ret));
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(cursor->row_store_.add_row(tmp_row))) {
+    LOG_WARN("failed to add row to row store", K(ret));
+  }
   return ret;
 }
 

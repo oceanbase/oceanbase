@@ -2499,6 +2499,11 @@ int ObPLCursorInfo::close(sql::ObSQLSessionInfo &session, bool is_reuse)
       get_snapshot().reset();
     }
 #endif
+    if (is_in_tx_cursor()) {
+      int del_ret = ObPLContext::del_tx_cursor_idx_from_local_state(session, std::get<0>(get_tx_cursor_idx()), std::get<1>(get_tx_cursor_idx()), std::get<2>(get_tx_cursor_idx()));
+      ret = (OB_SUCCESS == ret ? del_ret : ret);
+      set_is_in_tx_cursor(false);
+    }
   } else {
     LOG_INFO("NOTICE: cursor is closed without openning", K(*this), K(ret));
   }
@@ -2749,6 +2754,65 @@ int ObPLCursorInfo::set_current_position(int64_t position) {
     }
   }
   current_position_ = position;
+  return ret;
+}
+
+int ObPLCursorInfo::convert_to_unstreaming(ObSQLSessionInfo &session)
+{
+  //streaming cursor convert to unstreaming cursor need to reuse the ObPLCursorInfo
+  int ret = OB_SUCCESS;
+  ObSPIResultSet *spi_result = NULL;
+  ObSPICursor *spi_cursor = NULL;
+  uint64_t size = 0;
+  bool is_iter_end = false;
+  const ObNewRow *curr_row = NULL;
+  bool need_set_current_row = false;
+  CK (is_streaming());
+  CK (isopen());
+  CK (OB_NOT_NULL(spi_result = get_cursor_handler()));
+  CK (OB_NOT_NULL(spi_result->get_result_set()));
+  CK (OB_NOT_NULL(spi_result->get_result_set()->get_field_columns()));
+  if (OB_SUCC(ret)) {
+    // when select GV$OPEN_CURSOR, we will add get_thread_data_lock to fetch cursor map, so we need get_thread_data_lock here
+    sql::ObSQLSessionInfo::LockGuard lock_guard(session.get_thread_data_lock());
+    OX (spi_cursor_ = NULL);
+    OZ (session.get_tmp_table_size(size));
+    OZ (prepare_spi_cursor(spi_cursor, session.get_effective_tenant_id(), size, false, &session));
+    if (OB_SUCC(ret) && fetched_with_row_ && current_row_.is_valid()) { //when convert to unstreaming cursor, spi_result will be released, so keep current_row_ in row_store's first row
+      OZ (ObSPIService::fill_cursor_row(spi_cursor, current_row_));
+      OX (need_set_current_row = true);
+    }
+    OZ (ObSPIService::fill_cursor(get_cursor_entity(), *(spi_result->get_result_set()), spi_cursor, 0));
+    OX (spi_cursor->row_store_.finish_add_row());
+    if (OB_SUCC(ret) && need_set_current_row) {
+      OZ (spi_cursor->row_store_.get_row(spi_cursor->cur_, curr_row));
+      CK (OB_NOT_NULL(curr_row));
+      OX (spi_cursor->cur_++);
+    }
+    if (OB_FAIL(ret)) {
+      //if convert failed, recover to streaming cursor, release spi_cursor
+      spi_cursor_ = spi_result;
+      if (OB_NOT_NULL(spi_cursor)) {
+        spi_cursor->~ObSPICursor();
+        if (OB_NOT_NULL(get_allocator())) {
+          get_allocator()->free(spi_cursor);
+        }
+      }
+    } else {
+      //if convert success, set to unstreaming cursor, close spi_result
+      set_unstreaming();
+      OB_NOT_NULL(curr_row) ? (void)(current_row_ = *curr_row) : (current_row_.reset());
+      open(spi_cursor);
+      OZ (spi_result->set_cursor_env(session));
+      last_stream_cursor_ = false;
+      int close_ret = spi_result->close_result_set(); // close spi_result
+      ret = (OB_SUCCESS == ret ? close_ret : ret);
+      spi_result->destruct_exec_params(session);
+      int reset_ret = spi_result->reset_cursor_env(session);
+      ret = (OB_SUCCESS == ret ? reset_ret : ret);
+      spi_result->~ObSPIResultSet();
+    }
+  }
   return ret;
 }
 

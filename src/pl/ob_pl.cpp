@@ -1691,6 +1691,71 @@ int ObPLContext::set_subprogram_var(
   return ret;
 }
 
+int ObPLContext::add_tx_cursor_idx_to_local_state(ObSQLSessionInfo &session_info, uint64_t package_id, uint64_t routine_id, int64_t cursor_index)
+{
+  int ret = OB_SUCCESS;
+  ObPLExecState *state = NULL;
+  hash::ObHashSet<int64_t>* tx_cursor_idx_set = NULL;
+  OZ (get_exec_state_from_local(session_info, package_id, routine_id, state));
+  CK (OB_NOT_NULL(state));
+  CK (OB_NOT_NULL(session_info.get_pl_context()));
+  OZ (state->init_tx_cursor_idx_set(session_info.get_pl_context()->get_allocator()));
+  CK (OB_NOT_NULL(state->get_tx_cursor_idx_set()));
+  CK (state->get_tx_cursor_idx_set()->created());
+  OZ (state->get_tx_cursor_idx_set()->set_refactored(cursor_index));
+  OX (state->set_has_tx_cursor(true));
+  return ret;
+}
+
+int ObPLContext::del_tx_cursor_idx_from_local_state(ObSQLSessionInfo &session_info, uint64_t package_id, uint64_t routine_id, int64_t cursor_index)
+{
+  int ret = OB_SUCCESS;
+  ObPLExecState *state = NULL;
+  OZ (get_exec_state_from_local(session_info, package_id, routine_id, state));
+  CK (OB_NOT_NULL(state));
+  CK (OB_NOT_NULL(state->get_tx_cursor_idx_set()));
+  CK (state->get_tx_cursor_idx_set()->created());
+  OZ (state->get_tx_cursor_idx_set()->erase_refactored(cursor_index));
+  if (state->get_tx_cursor_idx_set()->empty()) {
+    OX (state->set_has_tx_cursor(false));
+  }
+  return ret;
+}
+
+int ObPLContext::process_cursor_when_end_trans(ObSQLSessionInfo &session_info, int64_t tx_id)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObIArray<ObPLExecState*> &exec_stack = get_exec_stack();
+  for (int64_t i = exec_stack.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
+    ObPLExecState *state = exec_stack.at(i);
+    CK (OB_NOT_NULL(state));
+    if (OB_SUCC(ret) && state->has_tx_cursor() && OB_NOT_NULL(state->get_tx_cursor_idx_set())) {
+      ObSEArray<int64_t, 8> converted_cursor_idxs;
+      for (hash::ObHashSet<int64_t>::const_iterator iter = state->get_tx_cursor_idx_set()->begin(); OB_SUCC(ret) && iter != state->get_tx_cursor_idx_set()->end(); ++iter) {
+        bool converted = false;
+        if (OB_SUCCESS != (tmp_ret = ObSPIService::convert_to_unstreaming_cursor(&state->get_exec_ctx(), session_info, iter->first, tx_id, converted))) {
+          LOG_WARN("failed to convert tx cursor to unstreaming", K(tmp_ret), K(iter->first));
+          ret = (OB_SUCCESS == ret ? tmp_ret : ret);
+        }
+        if (converted) {
+          if (OB_SUCCESS != (tmp_ret = converted_cursor_idxs.push_back(iter->first))) {
+            LOG_WARN("failed to push back converted cursor idx", K(tmp_ret), K(iter->first));
+            ret = (OB_SUCCESS == ret ? tmp_ret : ret);
+          }
+        }
+      }
+      for (int64_t j = 0; j < converted_cursor_idxs.count(); ++j) {
+        if (OB_SUCCESS != (tmp_ret = state->get_tx_cursor_idx_set()->erase_refactored(converted_cursor_idxs.at(j)))) {
+          LOG_WARN("failed to erase tx cursor idx", K(tmp_ret), K(converted_cursor_idxs.at(j)));
+          ret = (OB_SUCCESS == ret ? tmp_ret : ret);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 #ifdef OB_BUILD_ORACLE_PL
 ObPLCallStackTrace* ObPLContext::get_call_stack_trace()
 {
@@ -3155,6 +3220,10 @@ ObPLExecState::~ObPLExecState()
     dwarf_helper_->~ObDWARFHelper();
   }
 #endif
+   if (tx_cursor_idx_set_ != NULL) {
+    tx_cursor_idx_set_->~ObHashSet();
+    tx_cursor_idx_set_ = NULL;
+   }
 }
 
 int ObPLExecState::get_var(int64_t var_idx, ObObjParam& result)
@@ -4731,6 +4800,21 @@ void ObPLExecState::try_clear_complex_obj()
   } else {
     LOG_ERROR("pl ctx is null, unexpected error");
   }
+}
+
+int ObPLExecState::init_tx_cursor_idx_set(ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(tx_cursor_idx_set_)) {
+    if (OB_ISNULL(tx_cursor_idx_set_ = reinterpret_cast<hash::ObHashSet<int64_t>*>(allocator.alloc(sizeof(hash::ObHashSet<int64_t>))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc memory for tx cursor idx set", K(ret));
+    } else {
+      new (tx_cursor_idx_set_) hash::ObHashSet<int64_t>();
+      OX (tx_cursor_idx_set_->create(32, SET_IGNORE_MEM_VERSION(ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA)))));
+    }
+  }
+  return ret;
 }
 
 int ObPLExecState::execute()
