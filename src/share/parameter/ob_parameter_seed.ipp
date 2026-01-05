@@ -2868,6 +2868,9 @@ DEF_TIME(_ss_sslog_weak_read_threshold, OB_TENANT_PARAMETER, "5s", "[0s,2h]",
          "If the difference time between the local max decided scn and gts is less than this configuration item value,"
          "the read operation inside the sslog atomic operation can be weak. Range: [0s, 2h]",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_ss_sslog_table_sql_timeout, OB_CLUSTER_PARAMETER, "30s", "[1s,)",
+        "The maximum timeout for sslog table sql. Range: [1s, +∞)",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_enable_async_load_sys_package, OB_CLUSTER_PARAMETER, "False",
          "Controls the ability to enable/disable async load sys package",
