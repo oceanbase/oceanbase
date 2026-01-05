@@ -2280,6 +2280,7 @@ int ObMultiTenant::del_tenant(const uint64_t tenant_id)
     }
 
     if (OB_SUCC(ret)) {
+      bool has_free_disk_space = false;
       do {
         // 保证remove_tenant, clear_tenant_log_dir可以幂等重试,
         // 如果失败会但不是加锁失败会一直无限重试, 保证如果prepare log写成功一定会有commit日志，
@@ -2303,11 +2304,17 @@ int ObMultiTenant::del_tenant(const uint64_t tenant_id)
         } else if (GCTX.is_shared_storage_mode()
             && OB_FAIL(OB_SERVER_FILE_MGR.delete_local_tenant_dir(tenant_id, tenant_epoch))) {
           LOG_ERROR("fail to delete local tenant dir files", KR(ret), K(tenant_id), K(tenant_epoch));
-        } else if (GCTX.is_shared_storage_mode()
-            && OB_FAIL(OB_SERVER_DISK_SPACE_MGR.free(local_unit.get_effective_actual_data_disk_size()))) {
-          LOG_ERROR("fail to free data disk size", KR(ret), K(tenant_id), K(tenant_epoch), K(local_unit.config_));
+        } else if (GCTX.is_shared_storage_mode() && !has_free_disk_space) {
+          if (OB_FAIL(OB_SERVER_DISK_SPACE_MGR.free(local_unit.get_effective_actual_data_disk_size()))) {
+            LOG_ERROR("fail to free data disk size", KR(ret), K(tenant_id), K(tenant_epoch), K(local_unit.config_));
+            SLEEP(1);
+          } else {
+            has_free_disk_space = true;
+          }
 #endif
-        } else if (OB_FAIL(SERVER_STORAGE_META_SERVICE.commit_delete_tenant(tenant_id, tenant_epoch))) {
+        }
+
+        if (FAILEDx(SERVER_STORAGE_META_SERVICE.commit_delete_tenant(tenant_id, tenant_epoch))) {
           LOG_WARN("fail to commit delete tenant", K(ret), K(tenant_id));
         }
       } while (OB_FAIL(ret));
