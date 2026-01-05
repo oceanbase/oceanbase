@@ -1066,7 +1066,9 @@ int ObMPPacketSender::flush_buffer(const bool is_last)
       if (comp_context_.use_compress()) {
         ObEasyBuffer orig_send_buf(*ez_buf_);
         if (OB_FAIL(ObMySQLRequestUtils::flush_compressed_buffer(is_last, comp_context_, orig_send_buf, *req_))) {
-          LOG_WARN("failed to flush buffer for compressed sql nio", K(ret));
+          LOG_ERROR("failed to flush buffer for compressed sql nio, need disconnect", K(ret));
+          disconnect();
+          conn_valid_ = false;
         }
       } else {
         if (is_last) {
