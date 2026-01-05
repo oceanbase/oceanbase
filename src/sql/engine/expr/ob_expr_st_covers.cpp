@@ -150,11 +150,6 @@ int ObExprPrivSTCovers::eval_st_covers_common(const ObExpr &expr, ObEvalCtx &ctx
     ObGeoEvalCtx gis_context(*mem_ctx, srs);
     bool result = false;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(gis_context.append_geo_arg(geo2)) || OB_FAIL(gis_context.append_geo_arg(geo1))) {
-      LOG_WARN("build gis context failed", K(ret), K(gis_context.get_geo_count()));
-    } else if (OB_FAIL(ObGeoFunc<ObGeoFuncType::CoveredBy>::geo_func::eval(gis_context, result))) {
-      LOG_WARN("eval st coveredBy failed", K(ret));
-      ObGeoExprUtils::geo_func_error_handle(ret, N_PRIV_ST_COVERS);
     } else {
       ObGeoEvalCtx gis_context(*mem_ctx);
       bool result = false;
