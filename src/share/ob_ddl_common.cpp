@@ -3887,7 +3887,7 @@ int ObDDLUtil::get_tablet_physical_row_cnt(
         } else {
           LOG_WARN("get next table failed", K(ret));
         }
-      } else if (OB_UNLIKELY(OB_ISNULL(table))) {
+      } else if (OB_ISNULL(table)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected err", K(ret), KPC(table));
       } else if (calc_sstable && table->is_sstable()) {
@@ -3897,6 +3897,8 @@ int ObDDLUtil::get_tablet_physical_row_cnt(
         } else if (OB_ISNULL(sstable) || !sstable->is_valid()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("the sstable is null or invalid", K(ret));
+        } else if (sstable->is_mds_sstable()) {
+          // do nothing.
         } else if (OB_FAIL(sstable->get_meta(sstable_meta_hdl))) {
           LOG_WARN("get sstable meta failed", K(ret), KPC(sstable));
         } else {

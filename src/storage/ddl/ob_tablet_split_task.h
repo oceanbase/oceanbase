@@ -200,6 +200,10 @@ public:
   virtual int report_replica_build_status() const = 0;
   virtual int get_complement_data_ret() const = 0;
   virtual void set_complement_data_ret(const int ret_code) = 0;
+  virtual void report_build_stat(
+    const char *event_name,
+    const int result,
+    const char *event_info = nullptr) const = 0;
 protected:
   int alloc_and_add_common_task(
     ObITask *last_task,
@@ -240,6 +244,10 @@ public:
       ret_code : context_.complement_data_ret_;
   }
   int calc_total_row_count();
+  virtual void report_build_stat(
+    const char *event_name,
+    const int result,
+    const char *event_info = nullptr) const override;
 private:
   bool is_inited_;
   ObTabletSplitParam param_;

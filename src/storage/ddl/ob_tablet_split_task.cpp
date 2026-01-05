@@ -929,6 +929,25 @@ int ObTabletSplitDag::report_replica_build_status() const
     } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(rs_addr).build_ddl_single_replica_response(arg))) {
       LOG_WARN("fail to send build ddl single replica response", K(ret), K(arg));
     }
+    char split_event_info[common::MAX_ROOTSERVICE_EVENT_VALUE_LENGTH/*512*/];
+    snprintf(split_event_info, sizeof(split_event_info),
+      "physical_rows_cnt: %ld, split_rows_cnt: %ld", context_.physical_row_count_, context_.row_inserted_);
+    report_build_stat("replica_split_resp", context_.complement_data_ret_, split_event_info);
+  }
+  FLOG_INFO("send tablet split response to RS", K(ret), K(context_), K(arg));
+  return ret;
+}
+
+void ObTabletSplitDag::report_build_stat(
+    const char *event_name,
+    const int result,
+    const char *event_info) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("dag not init", K(ret));
+  } else {
     bool is_split_executor = true;
   #ifdef OB_BUILD_SHARED_STORAGE
     is_split_executor = GCTX.is_shared_storage_mode() ? context_.is_data_split_executor_ : is_split_executor;
@@ -942,15 +961,12 @@ int ObTabletSplitDag::report_replica_build_status() const
       param_.dest_tablets_id_.empty() ? 0 : param_.dest_tablets_id_.at(param_.dest_tablets_id_.count() - 1).id(),
       param_.can_reuse_macro_block_,
       is_split_executor);
-    SERVER_EVENT_ADD("ddl", "split_resp",
-        "result", context_.complement_data_ret_,
+    SERVER_EVENT_ADD("ddl", event_name,
+        "result", result,
         "split_basic_info", split_basic_info,
-        "physical_row_count", context_.physical_row_count_,
-        "split_total_rows", context_.row_inserted_,
-        "trace_id", *ObCurTraceId::get_trace_id());
+        "trace_id", *ObCurTraceId::get_trace_id(),
+        "event_info", event_info);
   }
-  FLOG_INFO("send tablet split response to RS", K(ret), K(context_), K(arg));
-  return ret;
 }
 
 int ObTabletSplitPrepareTask::init(
@@ -2508,6 +2524,10 @@ int ObSplitDownloadSSTableTask::prewarm(
       }
     }
   }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(get_dag())) {
+    static_cast<ObIDataSplitDag *>(get_dag())->report_build_stat("split_prewarm", ret);
+  }
   return ret;
 }
 
@@ -3100,9 +3120,9 @@ int ObSplitDownloadSSTableTask::download_sstables_and_update_local(
                 batch_sstables_handle))) {
             LOG_WARN("collect split sstables failed", K(ret), K(ss_tablet_handle));
           } else if (!batch_sstables_handle.empty()) {
-            if (OB_FAIL(prewarm(ss_tablet_handle, batch_sstables_handle))) {
-              LOG_WARN("failed to do split prewarm", K(ret));
-            } else if (OB_FAIL(ObTabletSplitUtil::build_update_table_store_param(
+            // Try to warm up the cache, but success is not guaranteed.
+            prewarm(ss_tablet_handle, batch_sstables_handle);
+            if (OB_FAIL(ObTabletSplitUtil::build_update_table_store_param(
                 dest_reorg_scn_,
                 ls_rebuild_seq_,
                 snapshot_version/*snapshot_version*/,
@@ -3124,6 +3144,16 @@ int ObSplitDownloadSSTableTask::download_sstables_and_update_local(
             }
           }
           FLOG_INFO("DEBUG CODE, CHANGE TO TRACE LATER", K(ret), K(source_tablet_id_), K(dst_tablet_id), K(merge_type), K(param));
+        }
+        if (OB_NOT_NULL(get_dag())) {
+          char split_event_info[common::MAX_ROOTSERVICE_EVENT_VALUE_LENGTH/*512*/];
+          snprintf(split_event_info, sizeof(split_event_info),
+            "tablet_id: %ld, snapshot: %ld, mult_version_start: %ld, tablet_versions: %ld, %ld, %ld",
+            dst_tablet_id.id(), snapshot_version, mult_version_start,
+            target_tablet_versions.count() > 0 ? target_tablet_versions.at(0).get_val_for_gts() : -1/*minor_version*/,
+            target_tablet_versions.count() > 1 ? target_tablet_versions.at(1).get_val_for_gts() : -1/*mds_version*/,
+            target_tablet_versions.count() > 2 ? target_tablet_versions.at(2).get_val_for_gts() : -1/*major_version*/);
+          static_cast<ObIDataSplitDag *>(get_dag())->report_build_stat("split_download", ret, split_event_info);
         }
       }
     }
