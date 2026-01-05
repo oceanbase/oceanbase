@@ -1827,6 +1827,7 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
       }
     }
     if (OB_SUCC(ret) &&
+        !params_.disable_shared_expr_ &&
         current_scope_ != T_INSERT_SCOPE &&
         current_scope_ != T_UPDATE_SCOPE &&
         !is_hierarchical_query &&
