@@ -391,9 +391,18 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
 
     if (OB_SUCC(ret) && stmt->is_select_stmt()) {
       is_happened = false;
-      if (OB_FAIL(replace_common_exprs(static_cast<ObSelectStmt*>(stmt)->get_having_exprs(),
-                                       const_ctx,
-                                       is_happened))) {
+      if (has_rollup_or_groupingsets) {
+        if (OB_FAIL(replace_common_exprs_skip_agg(static_cast<ObSelectStmt*>(stmt)->get_having_exprs(),
+                                                  const_ctx,
+                                                  is_happened))) {
+          LOG_WARN("failed to replace having exprs skip agg", K(ret));
+        } else {
+          trans_happened |= is_happened;
+          LOG_TRACE("succeed to do const propagation for having expr", K(is_happened));
+        }
+      } else if (OB_FAIL(replace_common_exprs(static_cast<ObSelectStmt*>(stmt)->get_having_exprs(),
+                                              const_ctx,
+                                              is_happened))) {
         LOG_WARN("failed to replace having exprs", K(ret));
       } else {
         trans_happened |= is_happened;
@@ -414,7 +423,8 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
     }
 
     // replace select exprs using common const info and post-gby const info
-    if (OB_SUCC(ret) && !const_ctx.active_const_infos_.empty() && stmt->is_select_stmt() && !ignore_all_select_exprs) {
+    if (OB_SUCC(ret) && !const_ctx.active_const_infos_.empty() && stmt->is_select_stmt()
+        && !has_rollup_or_groupingsets && !ignore_all_select_exprs) {
       is_happened = false;
       if (static_cast<ObSelectStmt*>(stmt)->get_aggr_item_size() > 0) {
         if (OB_FAIL(replace_select_exprs_skip_agg(static_cast<ObSelectStmt*>(stmt),
@@ -2711,8 +2721,8 @@ int ObTransformConstPropagate::collect_from_pullup_const_infos(ObDMLStmt *stmt,
 }
 
 int ObTransformConstPropagate::replace_select_exprs_skip_agg(ObSelectStmt *stmt,
-                                                    ConstInfoContext &const_ctx,
-                                                    bool &trans_happened)
+                                                             ConstInfoContext &const_ctx,
+                                                             bool &trans_happened)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 8> parent_exprs;
@@ -2730,11 +2740,11 @@ int ObTransformConstPropagate::replace_select_exprs_skip_agg(ObSelectStmt *stmt,
       LOG_WARN("invalid parameter", K(ret));
     } else if (cur_expr->is_column_ref_expr()) {
       //do nothing, const infos have been pulluped befored collect having const infos
-    } else if (OB_FAIL(replace_select_exprs_skip_agg_internal(cur_expr,
-                                                          const_ctx,
-                                                          parent_exprs,
-                                                          internal_trans_happened,
-                                                          false))) {
+    } else if (OB_FAIL(replace_expr_skip_agg_internal(cur_expr,
+                                                      const_ctx,
+                                                      parent_exprs,
+                                                      internal_trans_happened,
+                                                      false))) {
       LOG_WARN("failed to replace select exprs based on equal_pair", K(ret));
     } else {
       trans_happened |= internal_trans_happened;
@@ -2743,11 +2753,34 @@ int ObTransformConstPropagate::replace_select_exprs_skip_agg(ObSelectStmt *stmt,
   return ret;
 }
 
-int ObTransformConstPropagate::replace_select_exprs_skip_agg_internal(ObRawExpr *&cur_expr,
-                                                                      ConstInfoContext &const_ctx,
-                                                                      ObIArray<ObRawExpr *> &parent_exprs,
-                                                                      bool &trans_happened,
-                                                                      bool used_in_compare)
+int ObTransformConstPropagate::replace_common_exprs_skip_agg(ObIArray<ObRawExpr*> &exprs,
+                                                             ConstInfoContext &const_ctx,
+                                                             bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 8> parent_exprs;
+  trans_happened = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+    parent_exprs.reuse();
+    bool internal_trans_happened = false;
+    if (OB_FAIL(replace_expr_skip_agg_internal(exprs.at(i),
+                                               const_ctx,
+                                               parent_exprs,
+                                               internal_trans_happened,
+                                               false))) {
+      LOG_WARN("failed to replace common exprs skip agg", K(ret), K(i), KPC(exprs.at(i)));
+    } else {
+      trans_happened |= internal_trans_happened;
+    }
+  }
+  return ret;
+}
+
+int ObTransformConstPropagate::replace_expr_skip_agg_internal(ObRawExpr *&cur_expr,
+                                                              ConstInfoContext &const_ctx,
+                                                              ObIArray<ObRawExpr *> &parent_exprs,
+                                                              bool &trans_happened,
+                                                              bool used_in_compare)
 {
   int ret = OB_SUCCESS;
   trans_happened = false;
@@ -2774,11 +2807,11 @@ int ObTransformConstPropagate::replace_select_exprs_skip_agg_internal(ObRawExpr 
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
       bool param_trans_happened = false;
-      if (OB_FAIL(SMART_CALL(replace_select_exprs_skip_agg_internal(cur_expr->get_param_expr(i),
-                                                                    const_ctx,
-                                                                    parent_exprs,
-                                                                    param_trans_happened,
-                                                                    used_in_compare)))) {
+      if (OB_FAIL(SMART_CALL(replace_expr_skip_agg_internal(cur_expr->get_param_expr(i),
+                                                            const_ctx,
+                                                            parent_exprs,
+                                                            param_trans_happened,
+                                                            used_in_compare)))) {
         LOG_WARN("fail to replace scalar select exprs internal", K(ret));
       } else {
         trans_happened |= param_trans_happened;
