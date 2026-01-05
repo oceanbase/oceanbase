@@ -683,7 +683,7 @@ int ObPartitionBalance::try_swap_weighted_pg_between_ls_(
           break; // swap only the large weights on the left and the small weights on the right
         } else {
           const double diff_before = fabs(src_ls->get_part_groups_weight() - avg) + fabs(dest_ls->get_part_groups_weight() - avg);
-          const double diff_after = fabs(dest_ls->get_part_groups_weight() - left_weight + right_weight - avg)
+          const double diff_after = fabs(src_ls->get_part_groups_weight() - left_weight + right_weight - avg)
               + fabs(dest_ls->get_part_groups_weight() + left_weight - right_weight - avg);
           LOG_TRACE("compare diff for trying swap pg between ls for weight balance",
               K(diff_before), K(diff_after), K(avg), K(left_weight), K(right_weight), KPC(src_ls), KPC(dest_ls));
