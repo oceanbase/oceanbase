@@ -2708,6 +2708,7 @@ int ObDmlCgService::generate_trigger_arg(ObTrigDMLCtDef &trig_ctdef,
   } else {
     int64_t col_cnt = table_schema.get_column_count();
     int64_t hidden_column_count = 0;
+    trig_ctdef.is_prune_columns_ = is_prune_columns;
     OZ (table_schema.get_hidden_column_count(hidden_column_count));
     if (OB_SUCC(ret)) {
       col_cnt -= hidden_column_count;
