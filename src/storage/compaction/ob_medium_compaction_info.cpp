@@ -352,6 +352,7 @@ OB_SERIALIZE_MEMBER(ObIncMajorSSTableInfo::IncMajorInfo, start_scn_, end_scn_, d
 
 ObIncMajorSSTableInfo::ObIncMajorSSTableInfo()
   : version_(INC_MAJOR_INFO_VERSION_V0),
+    inc_major_type_(INVALID),
     reserved_(0),
     list_size_(0),
     info_list_(nullptr)
@@ -371,6 +372,7 @@ void ObIncMajorSSTableInfo::destroy(common::ObIAllocator &allocator)
     info_list_ = nullptr;
   }
   list_size_ = 0;
+  inc_major_type_ = INVALID;
 }
 
 int ObIncMajorSSTableInfo::alloc_list(common::ObIAllocator &allocator, const int64_t list_size)
@@ -422,17 +424,26 @@ int ObIncMajorSSTableInfo::init(
     } else if (OB_FAIL(alloc_list(allocator, end_pos))) {
       LOG_WARN("failed to alloc buf for lists", K(ret));
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < list_size_; ++i) {
+      inc_major_type_ = INVALID;
+      for (int64_t i = 0; i < list_size_; ++i) {
         ObSSTable *table = static_cast<ObSSTable *>(inc_major_tables.at(i));
         info_list_[i] = IncMajorInfo(table->get_key().get_start_scn().get_val_for_tx(),
                                      table->get_key().get_end_scn().get_val_for_tx(),
                                      table->is_co_sstable() ? static_cast<ObCOSSTableV2 *>(table)->get_cs_meta().data_checksum_ : table->get_data_checksum(),
                                      table->get_row_count());
+        IncMajorType cur_type = table->is_inc_column_store_sstable() ? ALL_COLUMN_STORE : ALL_ROW_STORE;
+        if (INVALID == inc_major_type_) {
+          inc_major_type_ = cur_type;
+        } else if (MIXED == inc_major_type_) {
+          // do nothing
+        } else if (cur_type != inc_major_type_) {
+          inc_major_type_ = MIXED;
+        }
       }
+    }
 
-      if (OB_FAIL(ret)) {
-        destroy(allocator);
-      }
+    if (OB_FAIL(ret)) {
+      destroy(allocator);
     }
   }
   return ret;
@@ -486,6 +497,7 @@ int ObIncMajorSSTableInfo::deserialize(
   } else {
     int64_t list_size = 0;
     LST_DO_CODE(OB_UNIS_DECODE, inc_major_info_, list_size);
+
     if (OB_FAIL(ret) || 0 == list_size) {
       // do nothing
     } else if (OB_FAIL(alloc_list(allocator, list_size))) {
@@ -515,7 +527,7 @@ int64_t ObIncMajorSSTableInfo::to_string(char* buf, const int64_t buf_len) const
   if (OB_ISNULL(buf) || buf_len <= 0) {
   } else {
     J_OBJ_START();
-    J_KV(K_(list_size));
+    J_KV(K_(version), K_(inc_major_type), K_(list_size));
     for (int64_t i = 0; i < list_size_; ++i) {
       J_COMMA();
       J_KV(K(i), K(info_list_[i]));
