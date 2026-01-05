@@ -17562,6 +17562,7 @@ def_table_schema(
 )
 
 # 12588: __all_virtual_routine_load_job
+# 12589: __all_virtual_ss_macro_cache_info
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
