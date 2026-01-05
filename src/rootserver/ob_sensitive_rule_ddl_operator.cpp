@@ -182,43 +182,15 @@ int ObSensitiveRuleDDLOperator::grant_or_revoke_after_ddl(ObSensitiveRuleSchema 
   } else if (OB_ISNULL(schema_sql_service = schema_service_.get_schema_service())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("schema_sql_service must not null", K(ret));
-  } else if (OB_DDL_CREATE_SENSITIVE_RULE == ddl_type) {
-    if (lib::Worker::CompatMode::MYSQL == compat_mode) {
-      ObSensitiveRulePrivSortKey sensitive_rule_priv_key(tenant_id,
-                                                         user_id,
-                                                         schema.get_sensitive_rule_name_str());
-      ObPrivSet priv_set = OB_PRIV_PLAINACCESS;
-      OZ(grant_revoke_sensitive_rule(sensitive_rule_priv_key, priv_set, true, ObString(), trans));
-    } else {
-      int64_t new_schema_version_ora = OB_INVALID_VERSION;
-      ObObjPrivSortKey obj_priv_key(tenant_id,
-                                    schema.get_sensitive_rule_id(),
-                                    static_cast<uint64_t>(ObObjectType::SENSITIVE_RULE),
-                                    OBJ_LEVEL_FOR_TAB_PRIV,
-                                    OB_ORA_SYS_USER_ID,
-                                    user_id);
-      share::ObRawObjPrivArray new_obj_priv_array;
-      share::ObRawObjPrivArray obj_priv_array;
-      OZ(obj_priv_array.push_back(OBJ_PRIV_ID_PLAINACCESS));
-      OZ(ddl_operator.set_need_flush_ora(schema_guard, obj_priv_key, 0, obj_priv_array, new_obj_priv_array));
-      if (new_obj_priv_array.count() > 0) {
-        OZ(schema_service_.gen_new_schema_version(tenant_id, new_schema_version_ora));
-        OZ(schema_sql_service->get_priv_sql_service().grant_table_ora_only(NULL,
-                                                                           trans,
-                                                                           new_obj_priv_array,
-                                                                           0,
-                                                                           obj_priv_key,
-                                                                           new_schema_version_ora,
-                                                                           false,
-                                                                           false));
-      }
-    }
   } else if (OB_DDL_DROP_SENSITIVE_RULE == ddl_type) {
     if (lib::Worker::CompatMode::ORACLE == compat_mode) {
       OZ(ddl_operator.drop_obj_privs(tenant_id, schema.get_sensitive_rule_id(),
                                      static_cast<uint64_t>(ObObjectType::SENSITIVE_RULE), trans,
                                      schema_service_, schema_guard));
     }
+  } else {
+    // do nothing.
+    // DO NOT automatically grant PLAINACCESS privilege to the rule creator due to security concerns
   }
   return ret;
 }

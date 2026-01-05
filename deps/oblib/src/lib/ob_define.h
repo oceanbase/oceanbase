@@ -432,6 +432,7 @@ const int64_t LOCATION_DEFINE_LENGTH = 8 * 1024;
 const uint64_t OB_MAX_INTERVAL_PARTITIONS = 1048575; // interval parted table max partitions
 const int64_t OB_MAX_BALANCE_GROUP_NAME_LENGTH = 512;
 const int64_t OB_SERVICE_NAME_LENGTH = 64;
+const int64_t OB_MAX_SENSITIVE_RULE_NAME_LENGTH = 256;
 
 //plan cache
 const int64_t OB_PC_NOT_PARAM_COUNT = 8;

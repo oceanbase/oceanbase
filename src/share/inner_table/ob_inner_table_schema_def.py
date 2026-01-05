@@ -8377,7 +8377,7 @@ all_sensitive_rule_def = dict(
   in_tenant_space = True,
 
   normal_columns = [
-    ('sensitive_rule_name', 'varchar:OB_MAX_ORIGINAL_NANE_LENGTH'),
+    ('sensitive_rule_name', 'varchar:OB_MAX_SENSITIVE_RULE_NAME_LENGTH'),
     ('protection_policy', 'int'),  # 1: NONE, 2: ENCRYPTION, 3: MASKING
     ('method', 'varchar: OB_MAX_COMMAND_LENGTH'),
     ('enabled', 'int'), # 0: disabled, 1: enabled
@@ -8418,7 +8418,7 @@ all_sensitive_rule_privilege_def = dict(
   rowkey_columns  = [
     ('tenant_id', 'int'),
     ('user_id', 'int'),
-    ('sensitive_rule_name', 'varchar:OB_MAX_USER_NAME_LENGTH'),
+    ('sensitive_rule_name', 'varchar:OB_MAX_SENSITIVE_RULE_NAME_LENGTH'),
   ],
   in_tenant_space = True,
 
