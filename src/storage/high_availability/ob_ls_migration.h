@@ -63,6 +63,10 @@ public:
   ObHATabletGroupMgr tablet_group_mgr_;
   int64_t check_tablet_info_cost_time_;
   CopyTabletSimpleInfoMap tablet_simple_info_map_;
+  // tablet ids of the tablets whose meta can be read initially but later deleted at migration source
+  // used to detect split source tablet GC and prevent split log replay blocking
+  // (see ObMigrationFinishTask::check_split_tablets_ready_)
+  ObArray<common::ObTabletID> non_existent_tablet_id_array_;
 
   INHERIT_TO_STRING_KV(
       "ObIHADagNetCtx", ObIHADagNetCtx,
@@ -585,6 +589,7 @@ public:
 private:
   int generate_migration_init_dag_();
   int record_server_event_();
+  int check_split_tablets_ready_(bool &is_ready);
 private:
   bool is_inited_;
   ObMigrationCtx *ctx_;
@@ -603,7 +608,6 @@ struct ObLSMigrationUtils
       ObLS *ls,
       ObStorageHATableInfoMgr *ha_table_info_mgr,
       ObStorageHATabletsBuilder &ha_tablets_builder);
-
 };
 
 
