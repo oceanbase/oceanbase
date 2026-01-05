@@ -618,18 +618,16 @@ int ObDirectLoadInsertDataTableContext::init(
     LOG_WARN("invalid args", KR(ret), K(param), K(ls_partition_ids), K(target_ls_partition_ids));
   } else {
     param_ = param;
-    if (OB_FAIL(inner_init())) {
-      LOG_WARN("fail to inner init", KR(ret));
-    }
     ddl_ctrl_.direct_load_type_ = ObDirectLoadMgrAgent::load_data_get_direct_load_type(param.is_incremental_,
                                                                                        param.data_version_ ,
                                                                                        GCTX.is_shared_storage_mode(),
                                                                                        param.is_inc_major_);
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(MTL(ObTenantDirectLoadMgr *)->alloc_execution_context_id(ddl_ctrl_.context_id_))) {
+    if (OB_FAIL(MTL(ObTenantDirectLoadMgr *)->alloc_execution_context_id(ddl_ctrl_.context_id_))) {
       LOG_WARN("alloc execution context id failed", K(ret));
     } else if (param_.enable_dag_ && OB_FAIL(init_dag(target_ls_partition_ids))) {
       LOG_WARN("fail to init dag", KR(ret));
+    } else if (OB_FAIL(inner_init())) {
+      LOG_WARN("fail to inner init", KR(ret), K_(param));
     } else if (OB_FAIL(create_all_tablet_contexts(ls_partition_ids, target_ls_partition_ids))) {
       LOG_WARN("fail to create all tablet contexts", KR(ret), K(ls_partition_ids),
                K(target_ls_partition_ids));
@@ -670,6 +668,7 @@ int ObDirectLoadInsertDataTableContext::init_dag(
       init_param.tx_info_.tx_desc_ = param_.trans_param_.tx_desc_;
       init_param.tx_info_.trans_id_ = param_.trans_param_.tx_id_;
       init_param.tx_info_.seq_no_ = param_.trans_param_.tx_seq_.cast_to_int();
+      param_.snapshot_version_ = current_scn.get_val_for_tx();
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < ls_partition_ids.count(); i++) {
