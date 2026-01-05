@@ -411,7 +411,7 @@ int ObDDLMergeScheduler::schedule_ss_update_inc_major_and_gc_inc_major(
                                                    ss_meta_info,
                                                    row_scn))) {
       LOG_WARN("fail to get ss tablet", KR(ret), K(ls_id), K(tablet_id));
-    } else if (ss_meta_info.table_store_meta_info_.uncommited_inc_major_cnt_ > 0) {
+    } else if (ss_meta_info.table_store_meta_info_.uncommitted_inc_major_cnt_ > 0) {
       ObDirectLoadSSUpdateSharedIncMajorTask shared_task(*ls, *shared_tablet_handle.get_obj(), ls_id, tablet_id);
       if (OB_FAIL(shared_task.process())) {
         LOG_WARN("fail to process shared task", KR(ret));
