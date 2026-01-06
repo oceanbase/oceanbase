@@ -107,7 +107,7 @@ ObThWorker::ObThWorker()
       query_start_time_(0), last_check_time_(0),
       can_retry_(true), need_retry_(false),
       last_wakeup_ts_(0), blocking_ts_(nullptr),
-      idle_us_(0), is_doing_ddl_(nullptr)
+      idle_us_(0), is_doing_ddl_(nullptr), is_running_(false)
 {
   module_name_[0] = '\0';
 }
@@ -339,6 +339,7 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
       this->set_worker_level(0);
     }
     snprintf(module_name_, MAX_MODULE_NAME_LEN, "ReqWorker(Level:%d)", get_worker_level());
+    ATOMIC_STORE(&is_running_, true);
     while (!has_set_stop()) {
       worker_level = get_worker_level();
       if (OB_NOT_NULL(tenant_)) {
@@ -448,6 +449,7 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
       }
     }
   }
+  ATOMIC_STORE(&is_running_, false);
   procor_.th_destroy();
 }
 

@@ -2749,13 +2749,16 @@ void ObMultiTenant::run1()
   lib::set_thread_name("MultiTenant");
   while (!has_set_stop()) {
     {
+      ObTimeGuard timeguard("multi_tenant_timeup", 100 * 1000);
       SpinRLockGuard guard(lock_);
+      timeguard.click("tenant_list_lock");
       bool need_regist_cgroup = false;
       if (REACH_TIME_INTERVAL(1 * 1000 * 1000L)) {  // every 1s
         if (OB_NOT_NULL(GCTX.cgroup_ctrl_)) {
           need_regist_cgroup = GCTX.cgroup_ctrl_->check_cgroup_status();
         }
       }
+      timeguard.click("check_cgroup_status");
       for (TenantList::iterator it = tenants_.begin(); it != tenants_.end(); it++) {
         if (OB_ISNULL(*it)) {
           LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected condition");
@@ -2768,6 +2771,7 @@ void ObMultiTenant::run1()
           (*it)->timeup();
         }
       }
+      timeguard.click("tenant_timeup");
     }
     ob_usleep(TIME_SLICE_PERIOD, true/*is_idle_sleep*/);
 

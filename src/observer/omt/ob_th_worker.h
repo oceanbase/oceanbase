@@ -104,6 +104,7 @@ public:
   OB_INLINE int64_t blocking_ts() const { return OB_NOT_NULL(blocking_ts_) ? (*blocking_ts_) : 0; }
   OB_INLINE const char *get_module_name() const { return module_name_; }
   OB_INLINE bool is_doing_ddl() const { return OB_NOT_NULL(is_doing_ddl_) ? (*is_doing_ddl_) : false; }
+  OB_INLINE bool is_running() const { return ATOMIC_LOAD(&is_running_); }
 
   static thread_local uint64_t serving_tenant_id_;
   int acquire_diagnostic_info(ObDiagnosticInfo *&di, rpc::ObRequest *req);
@@ -140,6 +141,7 @@ private:
   static const int64_t MAX_MODULE_NAME_LEN = 23; //no more than 3 int64_t
   char module_name_[MAX_MODULE_NAME_LEN];
   bool* is_doing_ddl_;
+  bool is_running_ CACHE_ALIGNED;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObThWorker);
 }; // end of class ObThWorker

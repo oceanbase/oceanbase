@@ -286,6 +286,7 @@ void* Thread::__th_start(void *arg)
   ob_set_thread_tenant_id(th->get_tenant_id());
   current_thread_ = th;
   th->tid_ = gettid();
+  int64_t thread_start_time_us = ObTimeUtility::current_time();
 
 #ifndef OB_USE_ASAN
   ObStackHeader *stack_header = ProtectedStackAllocator::stack_header(th->stack_addr_);
@@ -338,6 +339,10 @@ void* Thread::__th_start(void *arg)
       } else {
         WITH_CONTEXT(*mem_context) {
           try {
+            int64_t thread_pre_run_cost_time = ObTimeUtility::current_time() - thread_start_time_us;
+            if (OB_UNLIKELY(thread_pre_run_cost_time > 10 * 1000)) {
+              LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "thread_pre_run_cost_time is too long", K(thread_pre_run_cost_time));
+            }
             in_try_stmt = true;
             ATOMIC_STORE(&th->create_ret_, OB_SUCCESS);
             th->run();
