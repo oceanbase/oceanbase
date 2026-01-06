@@ -3171,3 +3171,7 @@ DEF_STR_WITH_CHECKER(_append_update_global_indexes_for_dynamic_partition, OB_TEN
         "values: AUTO(follow _ob_enable_truncate_partition_preserve_global_index), ON, OFF",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
         "AUTO, ON, OFF");
+
+DEF_BOOL(_ob_mysql_run_definer_pl_as_invoker, OB_TENANT_PARAMETER, "False",
+        "in mysql mode, run definer pl as invoker right",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

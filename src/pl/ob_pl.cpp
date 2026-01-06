@@ -1565,7 +1565,9 @@ int ObPLContext::set_role_id_array(ObPLFunction &routine,
   OZ (old_role_id_array_.assign(session_info_->get_enable_role_array()));
   OX (old_priv_user_id_ = session_info_->get_priv_user_id());
   OX (old_user_priv_set_ = session_info_->get_user_priv_set());
-  OX (old_db_priv_set_ = session_info_->get_db_priv_set());
+  if (!need_reset_default_database_) { // has saved in set_default_database
+    OX (old_db_priv_set_ = session_info_->get_db_priv_set());
+  }
   /* All roles are disabled in any named PL/SQL block (stored procedure, function, or trigger)
      that executes with definer's rights. Roles are not used for privilege checking
      and you cannot set roles within a definer's rights procedure. */
@@ -1608,45 +1610,49 @@ int ObPLContext::set_role_id_array(ObPLFunction &routine,
              0 != routine.get_priv_user().length()
              /* 兼容存量存储过程，存量存储过程的priv_user为空。mysql存储过程默认为definer行为，
               当前ob mysql模式做成了默认invoker行为，支持definer后，ob mysql模式也默认为definer行为 */) {
-    ObString priv_user = routine.get_priv_user();
-    ObString user_name = priv_user.split_on('@');
-    ObString host_name = priv_user;
-    uint64_t priv_user_id = OB_INVALID_ID;
-    const ObUserInfo *user_info = NULL;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session_info_->get_effective_tenant_id()));
+    bool switch_definer_to_invoker = tenant_config->_ob_mysql_run_definer_pl_as_invoker;
+    if (!switch_definer_to_invoker) {
+      ObString priv_user = routine.get_priv_user();
+      ObString user_name = priv_user.split_on('@');
+      ObString host_name = priv_user;
+      uint64_t priv_user_id = OB_INVALID_ID;
+      const ObUserInfo *user_info = NULL;
 
-    OZ (guard.get_user_info(session_info_->get_effective_tenant_id(),
-                            user_name, host_name, user_info));
-    if (OB_SUCC(ret) && OB_ISNULL(user_info)) {
-      ret = OB_ERR_USER_NOT_EXIST;
-      LOG_WARN("fail to get priv user id", K(session_info_->get_effective_tenant_id()),
-                                           K(user_name), K(host_name), K(routine.get_priv_user()));
-    }
-    OX (priv_user_id = user_info->get_user_id());
-    /* save priv user id, and set new priv user id, change grantee_id, for priv check */
-    if (OB_SUCC(ret) && priv_user_id != session_info_->get_priv_user_id()) {
-
-      OX (need_reset_role_id_array_ = true);
-
-      //assign new session values
-      //1. priv user_id
-      OX (session_info_->set_priv_user_id(priv_user_id));
-      //2. roles
-      bool activate_all_role = false;
-      OZ (session_info_->get_activate_all_role_on_login(activate_all_role));
-      OX (session_info_->get_enable_role_array().reuse());
-      for (int i = 0; OB_SUCC(ret) && i < user_info->get_role_id_array().count(); ++i) {
-        if (activate_all_role
-            || user_info->get_disable_option(user_info->get_role_id_option_array().at(i)) == 0) {
-          OZ (session_info_->get_enable_role_array().push_back(user_info->get_role_id_array().at(i)));
-        }
+      OZ (guard.get_user_info(session_info_->get_effective_tenant_id(),
+                              user_name, host_name, user_info));
+      if (OB_SUCC(ret) && OB_ISNULL(user_info)) {
+        ret = OB_ERR_USER_NOT_EXIST;
+        LOG_WARN("fail to get priv user id", K(session_info_->get_effective_tenant_id()),
+                                            K(user_name), K(host_name), K(routine.get_priv_user()));
       }
-      //3. user priv set
-      OX (session_info_->set_user_priv_set(user_info->get_priv_set()));
-      //4. db priv set
-      ObPrivSet db_priv_set;
-      OZ (guard.get_db_priv_set(session_info_->get_effective_tenant_id(),
-                                priv_user_id, session_info_->get_database_name(), db_priv_set));
-      OX (session_info_->set_db_priv_set(db_priv_set));
+      OX (priv_user_id = user_info->get_user_id());
+      /* save priv user id, and set new priv user id, change grantee_id, for priv check */
+      if (OB_SUCC(ret) && priv_user_id != session_info_->get_priv_user_id()) {
+
+        OX (need_reset_role_id_array_ = true);
+
+        //assign new session values
+        //1. priv user_id
+        OX (session_info_->set_priv_user_id(priv_user_id));
+        //2. roles
+        bool activate_all_role = false;
+        OZ (session_info_->get_activate_all_role_on_login(activate_all_role));
+        OX (session_info_->get_enable_role_array().reuse());
+        for (int i = 0; OB_SUCC(ret) && i < user_info->get_role_id_array().count(); ++i) {
+          if (activate_all_role
+              || user_info->get_disable_option(user_info->get_role_id_option_array().at(i)) == 0) {
+            OZ (session_info_->get_enable_role_array().push_back(user_info->get_role_id_array().at(i)));
+          }
+        }
+        //3. user priv set
+        OX (session_info_->set_user_priv_set(user_info->get_priv_set()));
+        //4. db priv set
+        ObPrivSet db_priv_set;
+        OZ (guard.get_db_priv_set(session_info_->get_effective_tenant_id(),
+                                  priv_user_id, session_info_->get_database_name(), db_priv_set));
+        OX (session_info_->set_db_priv_set(db_priv_set));
+      }
     }
   }
   return ret;
@@ -1707,6 +1713,13 @@ int ObPLContext::set_default_database(ObPLFunction &routine,
       OX (database_id_ = session_info_->get_database_id());
       OZ (session_info_->set_default_database(routine.get_database_name()));
       OX (session_info_->set_database_id(routine.get_database_id()));
+      OX (old_db_priv_set_ = session_info_->get_db_priv_set());
+      ObPrivSet db_priv_set;
+      OZ (guard.get_db_priv_set(session_info_->get_effective_tenant_id(),
+                                session_info_->get_priv_user_id(),
+                                session_info_->get_database_name(),
+                                db_priv_set));
+      OX (session_info_->set_db_priv_set(db_priv_set));
       OX (need_reset_default_database_ = true);
     }
   }
@@ -1726,6 +1739,7 @@ void ObPLContext::reset_default_database(int &ret)
       LOG_ERROR("failed to reset default database", K(ret), K(tmp_ret), K(database_name_));
     } else {
       session_info_->set_database_id(database_id_);
+      session_info_->set_db_priv_set(old_db_priv_set_);
     }
   }
 }
