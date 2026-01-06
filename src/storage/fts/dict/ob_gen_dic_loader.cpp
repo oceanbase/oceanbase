@@ -16,6 +16,7 @@
 #include "share/ob_server_struct.h"
 #include "storage/fts/dict/ob_ik_utf8_dic_loader.h"
 #include "storage/fts/ob_fts_literal.h"
+#include "lib/alloc/alloc_struct.h"
 #define USING_LOG_PREFIX STORAGE_FTS
 
 namespace oceanbase
@@ -247,6 +248,7 @@ int ObGenDicLoader::gen_dic_loader(
   }
   if (0 == parser_name.case_compare(ObFTSLiteral::PARSER_NAME_IK)) {
     ObMemAttr attr(OB_SERVER_TENANT_ID, "dic_loader");
+    SET_IGNORE_MEM_VERSION(attr);
     switch (charset)
     {
       case ObCharsetType::CHARSET_UTF8MB4: {
