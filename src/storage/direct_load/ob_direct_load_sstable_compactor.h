@@ -52,10 +52,6 @@ private:
   int64_t index_block_count_;
   int64_t row_count_;
   common::ObArray<ObDirectLoadSSTableFragment> fragments_;
-  common::ObArenaAllocator start_key_allocator_;
-  common::ObArenaAllocator end_key_allocator_;
-  blocksstable::ObDatumRowkey start_key_;
-  blocksstable::ObDatumRowkey end_key_;
   bool is_inited_;
 };
 

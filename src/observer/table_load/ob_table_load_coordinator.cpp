@@ -1820,7 +1820,7 @@ int ObTableLoadCoordinator::finish_trans_peers(ObTableLoadCoordinatorTrans *tran
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadCoordinator not init", KR(ret), KP(this));
   } else {
-    LOG_INFO("coordinator finish trans peers");
+    LOG_INFO("coordinator finish trans peers", K(trans->get_trans_id()));
     if (OB_FAIL(pre_finish_trans_peers(trans))) {
       LOG_WARN("fail to pre finish trans peers", KR(ret));
     } else if (OB_FAIL(check_trans_commit(trans))) {
@@ -1837,7 +1837,7 @@ int ObTableLoadCoordinator::commit_trans(ObTableLoadCoordinatorTrans *trans)
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadCoordinator not init", KR(ret), KP(this));
   } else {
-    LOG_INFO("coordinator commit trans");
+    LOG_INFO("coordinator commit trans", K(trans->get_trans_id()));
     if (OB_FAIL(trans->set_trans_status_commit())) {
       LOG_WARN("fail to set trans status commit", KR(ret));
     } else if (OB_FAIL(coordinator_ctx_->commit_trans(trans))) {
@@ -2177,7 +2177,7 @@ public:
         if (OB_FAIL(coordinator.init())) {
           LOG_WARN("fail to init coordinator", KR(ret));
         } else if (OB_FAIL(coordinator.finish_trans_peers(trans_))) {
-          LOG_WARN("fail to finish trans peers", KR(ret));
+          LOG_WARN("fail to finish trans peers", KR(ret), K(trans_->get_trans_id()));
         }
       }
     }
@@ -2223,8 +2223,11 @@ int ObTableLoadCoordinator::flush(ObTableLoadCoordinatorTrans *trans)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadCoordinator not init", KR(ret), KP(this));
+  } else if (OB_ISNULL(trans)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("trans is nullptr", KR(ret));
   } else {
-    LOG_DEBUG("coordinator flush");
+    LOG_INFO("coordinator flush", K(trans->get_trans_id()));
     if (OB_FAIL(trans->set_trans_status_frozen())) {
       LOG_WARN("fail to freeze trans", KR(ret));
     } else {

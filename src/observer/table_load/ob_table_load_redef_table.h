@@ -160,5 +160,17 @@ private:
                                      const int64_t schema_version);
 };
 
+class ObTableLoadErrorMessageGuard
+{
+public:
+  ObTableLoadErrorMessageGuard();
+  ~ObTableLoadErrorMessageGuard();
+private:
+  ObArenaAllocator allocator_;
+  int error_code_;
+  char *error_message_;
+  bool need_reset_;
+};
+
 } // namespace observer
 } // namespace oceanbase

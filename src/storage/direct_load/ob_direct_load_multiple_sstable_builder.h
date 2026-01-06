@@ -30,7 +30,7 @@ public:
   ObDirectLoadMultipleSSTableBuildParam();
   ~ObDirectLoadMultipleSSTableBuildParam();
   bool is_valid() const;
-  TO_STRING_KV(K_(tablet_id), K_(table_data_desc), KP_(datum_utils), KP_(file_mgr));
+  TO_STRING_KV(K_(tablet_id), K_(table_data_desc), KP_(datum_utils), KP_(file_mgr), K_(dir_id));
 public:
   common::ObTabletID tablet_id_;
   ObDirectLoadTableDataDesc table_data_desc_;
@@ -38,6 +38,7 @@ public:
   ObDirectLoadTmpFileManager *file_mgr_;
   char *extra_buf_;
   int64_t extra_buf_size_;
+  int64_t dir_id_;
 };
 
 class ObDirectLoadMultipleSSTableBuilder : public ObIDirectLoadPartitionTableBuilder
@@ -82,10 +83,8 @@ private:
     bool is_inited_;
   };
 private:
-  common::ObArenaAllocator allocator_;
   ObDirectLoadMultipleSSTableBuildParam param_;
   RowType row_;
-  RowkeyType first_rowkey_;
   RowkeyType last_rowkey_;
   common::ObArenaAllocator last_rowkey_allocator_;
   ObDirectLoadTmpFileHandle index_file_handle_;

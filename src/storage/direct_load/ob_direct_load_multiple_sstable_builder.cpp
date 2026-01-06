@@ -27,7 +27,7 @@ using namespace blocksstable;
  */
 
 ObDirectLoadMultipleSSTableBuildParam::ObDirectLoadMultipleSSTableBuildParam()
-  : datum_utils_(nullptr), file_mgr_(nullptr), extra_buf_(nullptr), extra_buf_size_(0)
+  : datum_utils_(nullptr), file_mgr_(nullptr), extra_buf_(nullptr), extra_buf_size_(0), dir_id_(-1)
 {
 }
 
@@ -124,12 +124,10 @@ int ObDirectLoadMultipleSSTableBuilder::DataBlockFlushCallback::write(char *buf,
  */
 
 ObDirectLoadMultipleSSTableBuilder::ObDirectLoadMultipleSSTableBuilder()
-  : allocator_("TLD_MSST_Build"),
-    last_rowkey_allocator_("TLD_LastPK"),
+  : last_rowkey_allocator_("TLD_LastPK"),
     is_closed_(false),
     is_inited_(false)
 {
-  allocator_.set_tenant_id(MTL_ID());
   last_rowkey_allocator_.set_tenant_id(MTL_ID());
 }
 
@@ -148,8 +146,8 @@ int ObDirectLoadMultipleSSTableBuilder::init(const ObDirectLoadMultipleSSTableBu
     LOG_WARN("invalid args", KR(ret), K(param));
   } else {
     param_ = param;
-    int64_t dir_id = -1;
-    if (OB_FAIL(param_.file_mgr_->alloc_dir(dir_id))) {
+    int64_t dir_id = param.dir_id_;
+    if (dir_id == -1 && OB_FAIL(param_.file_mgr_->alloc_dir(dir_id))) {
       LOG_WARN("fail to alloc dir", KR(ret));
     } else if (OB_FAIL(param_.file_mgr_->alloc_file(dir_id, index_file_handle_))) {
       LOG_WARN("fail to alloc file", KR(ret));
@@ -185,7 +183,6 @@ int ObDirectLoadMultipleSSTableBuilder::init(const ObDirectLoadMultipleSSTableBu
     } else if (OB_FAIL(rowkey_block_writer_.open(rowkey_file_handle_))) {
       LOG_WARN("fail to open file", KR(ret));
     } else {
-      first_rowkey_.set_min_rowkey();
       last_rowkey_.set_min_rowkey();
       is_inited_ = true;
     }
@@ -267,9 +264,7 @@ int ObDirectLoadMultipleSSTableBuilder::save_rowkey(const RowkeyType &rowkey)
 {
   int ret = OB_SUCCESS;
   last_rowkey_allocator_.reuse();
-  if (first_rowkey_.is_min_rowkey() && OB_FAIL(first_rowkey_.deep_copy(rowkey, allocator_))) {
-    LOG_WARN("fail to deep copy rowkey", KR(ret));
-  } else if (OB_FAIL(last_rowkey_.deep_copy(rowkey, last_rowkey_allocator_))) {
+  if (OB_FAIL(last_rowkey_.deep_copy(rowkey, last_rowkey_allocator_))) {
     LOG_WARN("fail to deep copy rowkey", KR(ret));
   } else if (ObDirectLoadSampleMode::is_row_sample(param_.table_data_desc_.sample_mode_) &&
              0 == data_block_writer_.get_item_count() % param_.table_data_desc_.num_per_sample_ &&
@@ -345,8 +340,7 @@ int ObDirectLoadMultipleSSTableBuilder::get_tables(ObDirectLoadTableHandleArray 
     create_param.row_count_ = data_block_writer_.get_item_count();
     create_param.rowkey_count_ = rowkey_block_writer_.get_item_count();
     create_param.max_data_block_size_ = data_block_writer_.get_max_block_size();
-    create_param.start_key_ = first_rowkey_;
-    create_param.end_key_ = last_rowkey_;
+    create_param.compressor_type_ = param_.table_data_desc_.compressor_type_;
     if (OB_FAIL(fragment.index_file_handle_.assign(index_file_handle_))) {
       LOG_WARN("fail to assign index file handle", KR(ret));
     } else if (OB_FAIL(fragment.data_file_handle_.assign(data_file_handle_))) {
