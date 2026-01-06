@@ -423,6 +423,7 @@ static const char* TRANSFER_TASK_COMMENT_ARRAY[] =
   "Wait for learner list to be same",
   "Unable to process task due to all partitions being locked",
   "Unable to process task due to partitions being locked or non-existent",
+  "Wait to retry due to abnormal replay scn in member list",
   "Unknow"/*MAX_COMMENT*/
 };
 
