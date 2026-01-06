@@ -243,12 +243,12 @@ void ObLogRestoreService::do_thread_task_()
 
     if (reach_time_interval_(current_ts, SCHEDULE_FETCH_LOG_INTERVAL, schedule_fetch_log_ts_)) {
       if (restore_source_.is_valid()) {
-        ObDIActionGuard(ObDIActionGuard::NS_ACTION, "SourceType[%s]", ObLogRestoreSourceItem::get_source_type_str(restore_source_.type_));
+        ObDIActionGuard di_action_guard(ObDIActionGuard::NS_ACTION, "SourceType[%s]", ObLogRestoreSourceItem::get_source_type_str(restore_source_.type_));
         // log restore source exist, do schedule
         // source_exist means tenant_role is standby or restore and log_restore_source exists
         schedule_fetch_log_(restore_source_);
       }
-      ObDIActionGuard(ObDIActionGuard::NS_ACTION, "SourceType[%s]", ObLogRestoreSourceItem::get_source_type_str(restore_source_.type_));
+      ObDIActionGuard di_action_guard(ObDIActionGuard::NS_ACTION, "SourceType[%s]", ObLogRestoreSourceItem::get_source_type_str(restore_source_.type_));
       schedule_resource_(restore_source_.type_);
     }
 

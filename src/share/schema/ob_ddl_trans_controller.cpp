@@ -110,7 +110,7 @@ void ObDDLTransController::run1()
           int64_t schema_version = OB_INVALID_VERSION;
           int64_t start_time = ObTimeUtility::current_time();
           ObCurTraceId::init(GCONF.self_addr_);
-          ObDIActionGuard(ObDIActionGuard::NS_ACTION, "control tenant[T_%ld]", tenant_id);
+          ObDIActionGuard di_action_guard(ObDIActionGuard::NS_ACTION, "control tenant[T_%ld]", tenant_id);
 
           if (OB_ISNULL(GCTX.root_service_)) {
             ret = OB_INVALID_ARGUMENT;

@@ -2260,7 +2260,7 @@ void ObAsyncIOChannel::get_events()
         const int system_errno = io_events_->get_ith_ret_code(i);
         const int complete_size = io_events_->get_ith_ret_bytes(i);
         if (OB_LIKELY(0 == system_errno)) { // io succ
-          ObDIActionGuard("IO success");
+          ObDIActionGuard di_action_guard("IO success");
           if (complete_size == io_size) { // full complete
             LOG_DEBUG("Success to get io event", K(*req), K(complete_size));
             if (OB_FAIL(on_full_return(*req, io_size))) {
@@ -2289,7 +2289,7 @@ void ObAsyncIOChannel::get_events()
             }
           }
         } else { // io failed
-          ObDIActionGuard("IO failed");
+          ObDIActionGuard di_action_guard("IO failed");
           int tmp_ret = convert_sys_errno(system_errno);
           LOG_ERROR("io request failed", K(ret), K(tmp_ret), K(system_errno), K(complete_size), K(*req));
           if (EAGAIN == system_errno) { //retry
