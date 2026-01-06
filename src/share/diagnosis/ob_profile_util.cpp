@@ -72,7 +72,7 @@ enum FETCH_COLUMN
 };
 
 const char *ObMergedProfileItem::COLORS[] = {
-  "\033[1;38;5;229m", //yellow
+  "\033[1;38;5;220m", //yellow (darker for better visibility on white background)
   "\033[1;38;5;208m", //orange
   "\033[1;38;5;160m", //red
 };
