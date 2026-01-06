@@ -932,6 +932,7 @@ int ObTenantSnapshotScheduler::decide_tenant_snapshot_scn_(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_WAIT_CLONE_STANDBY_TENANT_SNAPSHOT);
 int ObTenantSnapshotScheduler::check_standby_gts_exceed_snapshot_scn_(
     ObTenantSnapshotTableOperator &table_op,
     const uint64_t &tenant_id,
@@ -947,22 +948,29 @@ int ObTenantSnapshotScheduler::check_standby_gts_exceed_snapshot_scn_(
     LOG_WARN("invalid argument", KR(ret), K(snapshot_scn_to_check), K(tenant_id));
   } else {
     const int64_t start_check_time = ObTimeUtility::current_time();
-    const int64_t check_wait_interval = 1 * 1000L * 1000L; // 1s
+    const int64_t check_wait_interval = GCONF.internal_sql_execute_timeout; // 30s by default
     const int64_t sleep_time = 100 * 1000L; // 100ms
-    if (OB_SUCC(ret) && !finished && ObTimeUtility::current_time() - start_check_time < check_wait_interval) {
+    while (OB_SUCC(ret) && !finished && ObTimeUtility::current_time() - start_check_time < check_wait_interval) {
       if (OB_FAIL(OB_TS_MGR.get_ts_sync(tenant_id, GCONF.rpc_timeout, gts_scn))) {
         LOG_WARN("fail to get gts sync", KR(ret), K(tenant_id));
+      } else if (OB_UNLIKELY(ERRSIM_WAIT_CLONE_STANDBY_TENANT_SNAPSHOT)) {
+        gts_scn = share::SCN::min_scn();
+      }
+      if (OB_FAIL(ret)) {
       } else if (gts_scn < snapshot_scn_to_check) {
         // need to wait
         finished = false;
-        LOG_TRACE("standby tenant gts_scn not exceed snapshot_scn, need to wait", K(tenant_id),
-                  K(snapshot_scn_to_check), K(gts_scn));
+        if (TC_REACH_TIME_INTERVAL(1 * 1000 * 1000L)) {
+          // print log every 1s
+          FLOG_INFO("standby tenant gts_scn not exceed snapshot_scn, need to wait", K(tenant_id),
+                    K(snapshot_scn_to_check), K(gts_scn));
+        }
         ob_usleep(sleep_time);
       } else {
         // good, gts_scn for standby tenant has already exceed sync_scn
         finished = true;
         ObTenantSnapItem item;
-        LOG_INFO("standby tenant gts_scn exceeded sync_scn", K(tenant_id), K(snapshot_scn_to_check), K(gts_scn));
+        FLOG_INFO("standby tenant gts_scn exceeded sync_scn", K(tenant_id), K(snapshot_scn_to_check), K(gts_scn));
         if (OB_FAIL(table_op.get_tenant_snap_item(tenant_snapshot_id, false/*need_lock*/, item))) {
           LOG_WARN("fail to get tenant snapshot item", KR(ret), K(tenant_snapshot_id));
         } else if (OB_FAIL(table_op.update_tenant_snap_item(
@@ -972,6 +980,12 @@ int ObTenantSnapshotScheduler::check_standby_gts_exceed_snapshot_scn_(
           LOG_WARN("fail to update snapshot status", KR(ret), K(tenant_snapshot_id), K(item));
         }
       }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (!finished) {
+      ret = OB_CLONE_TENANT_TIMEOUT;
+      LOG_WARN("standby tenant gts_scn not exceed snapshot scn", KR(ret), K(tenant_id),
+               K(tenant_snapshot_id), K(snapshot_scn_to_check), K(finished));
     }
   }
   return ret;
