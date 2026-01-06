@@ -21,6 +21,13 @@ using namespace oceanbase::lib;
 
 thread_local ObMemTracker ObMemTrackerGuard::mem_tracker_;
 
+ObMemTrackerGuard::ObMemTrackerGuard(lib::MemoryContext &mem_context)
+{
+  mem_tracker_.reset();
+  mem_tracker_.mem_context_ = &mem_context;
+  mem_tracker_.tenant_id_ = MTL_ID();
+}
+
 void ObMemTrackerGuard::reset_try_check_tick()
 {
   mem_tracker_.try_check_tick_ = 0;
@@ -28,10 +35,10 @@ void ObMemTrackerGuard::reset_try_check_tick()
 
 void ObMemTrackerGuard::dump_mem_tracker_info()
 {
-  int64_t tenant_mem_limit = lib::get_tenant_memory_limit(MTL_ID());
+  int64_t tenant_mem_limit = lib::get_tenant_memory_limit(mem_tracker_.tenant_id_);
   int64_t mem_quota_pct = 100;
   int64_t tree_mem_hold = 0;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(mem_tracker_.tenant_id_));
   if (OB_UNLIKELY(tenant_config.is_valid())) {
     mem_quota_pct = tenant_config->query_memory_limit_percentage;
   }
@@ -39,15 +46,15 @@ void ObMemTrackerGuard::dump_mem_tracker_info()
     tree_mem_hold = mem_tracker_.mem_context_->tree_mem_hold();
   }
   int64_t mem_limit = tenant_mem_limit / 100 * mem_quota_pct;
-  SQL_LOG(INFO, "dump memory tracker info", K(MTL_ID()), K(tenant_mem_limit), K(mem_limit),
+  SQL_LOG(INFO, "dump memory tracker info", K(mem_tracker_.tenant_id_), K(tenant_mem_limit), K(mem_limit),
           K(tree_mem_hold));
 }
 
 void ObMemTrackerGuard::update_config()
 {
   int ret = common::OB_SUCCESS;
-  int64_t tenant_mem_limit = lib::get_tenant_memory_limit(MTL_ID());
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  int64_t tenant_mem_limit = lib::get_tenant_memory_limit(mem_tracker_.tenant_id_);
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(mem_tracker_.tenant_id_));
   if (OB_UNLIKELY(tenant_config.is_valid())) {
     mem_tracker_.mem_quota_pct_ = tenant_config->query_memory_limit_percentage;
   }
