@@ -600,6 +600,11 @@ int ObAllVirtualProxySchema::init_data_(
       const common::ObString &view_definition = table_schema->get_view_schema().get_view_definition_str();
       const ObTableSchema *new_table_schema = NULL;
       bool is_oracle_mode = false;
+      // If the view is found through synonym resolution, use the view's database name
+      // instead of the original input database name for view definition parsing
+      const ObString &view_db_name = (CT_SYNONYM == complex_table_type_ && !level1_decoded_db_name_.empty()) 
+                                     ? level1_decoded_db_name_ 
+                                     : database_name;
       if (OB_FAIL(table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
         LOG_WARN("fail to check oracle mode", KR(ret), KPC(table_schema));
       } else if (OB_FAIL(get_view_decoded_schema_(tenant_id,
@@ -607,7 +612,7 @@ int ObAllVirtualProxySchema::init_data_(
                                                   view_definition,
                                                   is_oracle_mode,
                                                   new_table_schema,
-                                                  database_name))) {
+                                                  view_db_name))) {
         LOG_WARN("get_view_decoded_schema failed", KR(ret));
       } else if (OB_NOT_NULL(new_table_schema)) {
         table_schema = new_table_schema;
