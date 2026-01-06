@@ -63,10 +63,8 @@ public:
       K_(lob_meta_tablet_id),
       K_(lob_piece_tablet_id),
       K_(seq_id_local_buf),
-      K_(scan_param),
       KP_(row_iter),
-      KPC_(row_iter),
-      KP_(adaptor));
+      KPC_(row_iter));
 
 protected:
   // tablet id of main table
