@@ -14065,42 +14065,7 @@ int ObPLResolver::resolve_udf_info(
         }
       }
     }
-    if (OB_SUCC(ret) && lib::is_mysql_mode()) {
-      ObUDFRawExpr *udf_expr = nullptr;
-      CK (OB_NOT_NULL(udf_expr = udf_info.ref_expr_));
-      for (int64_t i = 0; OB_SUCC(ret) && i < udf_expr->get_param_count(); ++i) {
-        ObRawExpr *param_expr = udf_expr->get_param_expr(i);
-        ObRawExpr *convert_expr = param_expr;
-        const ObEnumSetMeta *enum_set_meta = nullptr;
-        const ObIArray<ObString> *type_infos = nullptr;
-        bool need_add = false;
-        if (udf_expr->get_params_desc().at(i).is_out() || udf_expr->get_params_type().at(i).is_ext()) {
-          // do nothing
-        } else {
-          need_add = true;
-        }
-        if (need_add) {
-          if (ob_is_enum_or_set_type(udf_expr->get_params_type().at(i).get_type())) {
-            OZ (ObRawExprUtils::extract_enum_set_meta(udf_expr->get_params_type().at(i),
-                                                      &resolve_ctx_.session_info_,
-                                                      enum_set_meta));
-            CK (OB_NOT_NULL(enum_set_meta));
-            OX (type_infos = enum_set_meta->get_str_values());
-          }
-          OZ (ObRawExprUtils::build_column_conv_expr(&resolve_ctx_.session_info_,
-                                                      expr_factory_,
-                                                      udf_expr->get_params_type().at(i).get_type(),
-                                                      udf_expr->get_params_type().at(i).get_collation_type(),
-                                                      udf_expr->get_params_type().at(i).get_accuracy().get_accuracy(),
-                                                      true,
-                                                      NULL,
-                                                      type_infos,
-                                                      convert_expr,
-                                                      false /*is_in_pl*/));
-          OZ (udf_expr->replace_param_expr(i, convert_expr));
-        }
-      }
-    }
+
     if (OB_SUCC(ret)) {
       ObUDFRawExpr *udf_raw_expr = NULL;
       CK (OB_NOT_NULL(udf_raw_expr = udf_info.ref_expr_));
