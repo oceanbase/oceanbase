@@ -27,6 +27,7 @@ using namespace blocksstable;
 
 namespace compaction
 {
+ERRSIM_POINT_DEF(EN_COMPACTION_OPEN_CROSS_MACRO);
 int ObDefaultRowIter::init(
     const ObMergeParameter &merge_param,
     const int64_t sstable_idx,
@@ -148,7 +149,8 @@ ObPartitionMergeIter::ObPartitionMergeIter(common::ObIAllocator &allocator)
     is_rowkey_first_row_already_output_(false),
     is_rowkey_shadow_row_reused_(false),
     is_delete_insert_merge_(false),
-    is_ha_compeleted_(true)
+    is_ha_compeleted_(true),
+    reuse_micro_in_border_macro_(false)
 {
 }
 
@@ -184,6 +186,7 @@ void ObPartitionMergeIter::reset()
   is_rowkey_shadow_row_reused_ = false;
   is_delete_insert_merge_ = false;
   is_ha_compeleted_ = true;
+  reuse_micro_in_border_macro_ = false;
   ObMergeIter::reset();
 }
 
@@ -338,7 +341,7 @@ int ObPartitionMergeIter::init(const ObMergeParameter &merge_param,
   return ret;
 }
 
-int ObPartitionMergeIter::check_merge_range_cross(ObDatumRange &data_range, bool &range_cross)
+int ObPartitionMergeIter::check_merge_range_cross(const ObDatumRange &data_range, bool &range_cross)
 {
   int ret = OB_SUCCESS;
   range_cross = false;
@@ -359,13 +362,11 @@ int ObPartitionMergeIter::check_merge_range_cross(ObDatumRange &data_range, bool
       datum_utils = &read_info_->get_datum_utils();
     }
 
-    // safe to modify range of curr_macro_block with overwriting ptr only
     if (FAILEDx(merge_range_.get_start_key().compare(data_range.get_start_key(),
                                                      *datum_utils,
                                                      cmp_ret))) {
       STORAGE_LOG(WARN, "Failed to compare start key", K(ret), K_(merge_range), K(data_range));
     } else if (cmp_ret > 0) {
-      data_range.start_key_ = merge_range_.get_start_key();
       range_cross = true;
     }
     if (FAILEDx(merge_range_.get_end_key().compare(data_range.get_end_key(),
@@ -373,14 +374,15 @@ int ObPartitionMergeIter::check_merge_range_cross(ObDatumRange &data_range, bool
                                                    cmp_ret))) {
       STORAGE_LOG(WARN, "Failed to compare end key", K(ret), K_(merge_range), K(data_range));
     } else if (cmp_ret <= 0) {
-      data_range.end_key_ = merge_range_.get_end_key();
       range_cross = true;
+    }
+    if (OB_SUCC(ret)) {
+      set_reuse_micro_in_border_macro(range_cross);
     }
   }
   LOG_DEBUG("check macro block range cross", K(ret), K(data_range), K(merge_range_), K(range_cross));
   return ret;
 }
-
 
 void ObPartitionMergeIter::revise_macro_range(ObDatumRange &range) const
 {
@@ -926,7 +928,7 @@ ObPartitionMicroMergeIter::ObPartitionMicroMergeIter(common::ObIAllocator &alloc
     micro_block_opened_(false),
     macro_reader_(),
     need_reuse_micro_block_(true),
-    need_check_schema_version_(false)
+    merge_data_version_(0)
 {
 }
 
@@ -945,7 +947,6 @@ void ObPartitionMicroMergeIter::reset()
   curr_micro_block_ = nullptr;
   micro_block_opened_ = false;
   need_reuse_micro_block_ = true;
-  need_check_schema_version_ = false;
   ObPartitionMacroMergeIter::reset();
 }
 
@@ -996,7 +997,7 @@ int ObPartitionMicroMergeIter::inner_init(const ObMergeParameter &merge_param)
   } else {
     curr_micro_block_ = nullptr;
     micro_block_opened_ = false;
-    need_check_schema_version_ = merge_param.static_param_.data_version_ < DATA_VERSION_4_3_3_0;
+    merge_data_version_ = merge_param.static_param_.data_version_;
     if (sstable->is_small_sstable()) {
       is_small_sstable_iter_ = true;
     }
@@ -1009,11 +1010,25 @@ void ObPartitionMicroMergeIter::check_need_reuse_micro_block()
 {
   if (curr_block_desc_.schema_version_ <= 0) {
     need_reuse_micro_block_ = false;
-  } else if (curr_block_desc_.schema_version_ != schema_version_ && need_check_schema_version_) {
+  } else if (curr_block_desc_.schema_version_ != schema_version_ && need_check_schema_version()) {
     need_reuse_micro_block_ = false;
   } else {
     need_reuse_micro_block_ = true;
   }
+}
+
+void ObPartitionMicroMergeIter::set_reuse_micro_in_border_macro(const bool reuse_micro_in_border_macro)
+{
+  if (merge_data_version_ >= DATA_VERSION_4_5_1_0) {
+    reuse_micro_in_border_macro_ = reuse_micro_in_border_macro;
+  } else {
+    reuse_micro_in_border_macro_ = false;
+  }
+#ifdef ERRSIM
+  if (OB_UNLIKELY(EN_COMPACTION_OPEN_CROSS_MACRO)) {
+    reuse_micro_in_border_macro_ = false;
+  }
+#endif
 }
 
 int ObPartitionMicroMergeIter::next_range()
@@ -1031,8 +1046,23 @@ int ObPartitionMicroMergeIter::next_range()
   } else if (macro_block_opened_) {
     // try get next micro block
     if (need_reuse_micro_block_) {
+      iter_row_id_ += old_micro_row_count;
       micro_block_opened_ = false;
       if (OB_SUCC(micro_block_iter_.next(curr_micro_block_))) {
+        if (reuse_micro_in_border_macro_) {
+          const bool need_check_open = micro_block_iter_.is_left_border()  || micro_block_iter_.is_right_border();
+          if (need_check_open) {
+            ObDatumRange rowkey_range;
+            ObCSRange cs_range;
+            bool is_clamped = false;
+            if (OB_FAIL(get_clamped_micro_range(rowkey_range, cs_range, is_clamped))) {
+              LOG_WARN("failed to get clamped micro range", K(ret), KPC(curr_micro_block_), K_(merge_range), K(curr_block_desc_.range_));
+            } else if (!is_clamped) { // no need to open micro block if not clamped
+            } else if (OB_FAIL(open_curr_micro_block(rowkey_range, cs_range))) {
+              LOG_WARN("failed to open curr micro block", K(ret), KPC(curr_micro_block_), K_(merge_range), K(curr_block_desc_.range_));
+            }
+          }
+        }
       } else if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("Failed to get next micro block", K(ret));
       } else {
@@ -1040,7 +1070,6 @@ int ObPartitionMicroMergeIter::next_range()
         macro_block_opened_ = false;
         ret = OB_SUCCESS;
       }
-      iter_row_id_ += old_micro_row_count;
     } else {
       macro_block_opened_ = false;
     }
@@ -1056,26 +1085,37 @@ int ObPartitionMicroMergeIter::next_range()
   } else if (OB_SUCC(macro_block_iter_->get_next_macro_block(curr_block_desc_))) {
     check_need_reuse_micro_block();
     macro_block_opened_for_cmp_ = false;
+    reuse_micro_in_border_macro_ = false;
     macro_block_opened_ = false;
     micro_block_opened_ = false;
 
-    bool need_rewrite = false;
+    bool open_macro_for_reuse = false;
+    bool open_macro_for_rewrite = false;
+    bool range_cross = false;
     // get first macro block or prev macro block finished iteration
     if (is_small_sstable_iter() && !need_reuse_micro_block_) {
-      need_rewrite = true; // small stable should init row iter to rewrite macro block
-    } else if (OB_FAIL(check_merge_range_cross(curr_block_desc_.range_, need_rewrite))) {
+      // do not check merge range // rewrite macro block
+      open_macro_for_rewrite = true;
+    } else if (FALSE_IT(open_macro_for_reuse = is_small_sstable_iter())) {
+    } else if (OB_FAIL(check_merge_range_cross(curr_block_desc_.range_, range_cross))) {
       LOG_WARN("failed to check range cross", K(ret), K(curr_block_desc_.range_));
+    } else if (range_cross) {
+      if (reuse_micro_in_border_macro_) {
+        open_macro_for_reuse = true;
+      } else {
+        open_macro_for_rewrite = true;
+      }
     }
 
     if (OB_FAIL(ret)) {
-    } else if (!need_rewrite && !is_small_sstable_iter()) {
-      // no need to open curr range
-    } else if (OB_FAIL(open_curr_range(need_rewrite))) {
-      if (OB_UNLIKELY(OB_ITER_END != ret)) {
-        LOG_WARN("failed to open curr range", K(ret), K(curr_block_desc_));
+    } else if (open_macro_for_reuse || open_macro_for_rewrite) {
+      if (OB_FAIL(open_curr_range(open_macro_for_rewrite))) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          LOG_WARN("failed to open curr range", K(ret), K(curr_block_desc_));
+        }
+      } else {
+        LOG_TRACE("open macro for rewrite", K(ret), K(open_macro_for_reuse), K(open_macro_for_rewrite), K(curr_block_desc_), KPC(table_), KPC(curr_row_));
       }
-    } else {
-      LOG_TRACE("open macro for rewrite", K(ret), K(need_rewrite), K(need_reuse_micro_block_), K(curr_block_desc_), KPC(table_), KPC(curr_row_));
     }
   } else if (OB_UNLIKELY(OB_ITER_END != ret)) {
     LOG_WARN("Failed to get next macro block", K(ret), KPC(macro_block_iter_));
@@ -1114,8 +1154,12 @@ int ObPartitionMicroMergeIter::open_curr_range(const bool for_rewrite, const boo
       LOG_DEBUG("open curr range for macro block", K(*this), K(curr_block_desc_));
     }
   } else if (macro_block_opened_) {
-    if (OB_FAIL(open_curr_micro_block())) {
-      STORAGE_LOG(ERROR, "Failed to open curr micro block", K(ret), K(for_rewrite), K(*this));
+    ObDatumRange rowkey_range;
+    ObCSRange cs_range;
+    if (OB_FAIL(get_full_micro_range(rowkey_range, cs_range))) {
+      LOG_WARN("failed to get full micro range", K(ret), K(curr_micro_block_), K_(merge_range));
+    } else if (OB_FAIL(open_curr_micro_block(rowkey_range, cs_range))) {
+      LOG_WARN("failed to open curr micro block", K(ret), K(curr_micro_block_), K_(merge_range));
     } else {
       LOG_DEBUG("open curr range for micro block", K(*this));
     }
@@ -1129,6 +1173,7 @@ int ObPartitionMicroMergeIter::open_curr_range(const bool for_rewrite, const boo
       read_info = read_info_;
     }
     micro_block_iter_.reset();
+    // can't modify curr_block_desc_.range_, cause it will be checked in check_range_include_rowkey_array()
     if (FAILEDx(micro_block_iter_.init(
                 curr_block_desc_,
                 *read_info,
@@ -1158,8 +1203,13 @@ int ObPartitionMicroMergeIter::check_row_changed(const blocksstable::ObDatumRow 
     LOG_WARN("Unexpected arguments", K(ret), K(micro_block_opened_), KPC(table_), K(row_id), K(iter_row_id_));
   } else if (macro_block_opened_) {
     const blocksstable::ObDatumRow *temp_row = nullptr;
-    if (OB_FAIL(open_curr_micro_block(row_id - iter_row_id_ - 1))) {
-      STORAGE_LOG(WARN, "fail to open curr micro", K(ret), K(row_id), K(iter_row_id_));
+    ObDatumRange rowkey_range;
+    ObCSRange cs_range;
+    bool is_clamped = false; /*no used*/
+    if (OB_FAIL(get_clamped_micro_range(rowkey_range, cs_range, is_clamped, row_id - iter_row_id_ - 1))) {
+      LOG_WARN("failed to get clamped micro range", K(ret), K(curr_micro_block_), K_(merge_range));
+    } else if (OB_FAIL(open_curr_micro_block(rowkey_range, cs_range, true/*tmp_open*/))) {
+      LOG_WARN("failed to open curr micro block", K(ret), K(curr_micro_block_), K_(merge_range));
     } else if (OB_FAIL(micro_row_scanner_->get_next_row(temp_row))) {
       STORAGE_LOG(WARN, "fail to get next row", K(ret), KPC(micro_row_scanner_));
     } else if (OB_ISNULL(temp_row)) {
@@ -1175,7 +1225,76 @@ int ObPartitionMicroMergeIter::check_row_changed(const blocksstable::ObDatumRow 
   return ret;
 }
 
-int ObPartitionMicroMergeIter::open_curr_micro_block(const int64_t start_row_id)
+int ObPartitionMicroMergeIter::get_full_micro_range(ObDatumRange &rowkey_range, ObCSRange &cs_range)
+{
+  int ret = OB_SUCCESS;
+  rowkey_range = curr_micro_block_->range_;
+  cs_range.start_row_id_ = 0;
+  cs_range.end_row_id_ = curr_micro_block_->header_.row_count_ - 1;
+  return ret;
+}
+
+int ObPartitionMicroMergeIter::get_clamped_micro_range(
+    ObDatumRange &rowkey_range,
+    ObCSRange &cs_range,
+    bool &is_clamped,
+    const int64_t start_row_id)
+{
+  int ret = OB_SUCCESS;
+  const int64_t row_count = curr_micro_block_->header_.row_count_;
+  rowkey_range = curr_micro_block_->range_;
+  cs_range.start_row_id_ = MAX(0, start_row_id);
+  cs_range.end_row_id_ = row_count - 1;
+  if (!merge_range_.is_whole_range()) {
+    // For row-store iteration, the first micro block does not have an exact left border,
+    // so it's hard to determine if there is a real intersection with the merge range.
+    // Therefore, both the left and right borders are conservatively clamped for row-store.
+    // The optimization here only applies to column-store tables.
+    is_clamped = true;
+#define UPDATE_ROWKEY_RANGE(is_border, key, border_flag) \
+  if (is_border) { \
+    rowkey_range.key##_ = merge_range_.get_##key(); \
+    if (merge_range_.is_##border_flag##_closed()) { \
+      rowkey_range.set_##border_flag##_closed(); \
+    } else { \
+      rowkey_range.set_##border_flag##_open(); \
+    } \
+  }
+    // left border micro
+    UPDATE_ROWKEY_RANGE(micro_block_iter_.is_left_border(), start_key, left);
+    // right border micro
+    UPDATE_ROWKEY_RANGE(micro_block_iter_.is_right_border(), end_key, right);
+#undef UPDATE_ROWKEY_RANGE
+
+    if (table_->is_normal_cg_sstable()) {
+      const int64_t micro_start_global = // global rowid of first row in this micro block
+        curr_block_desc_.start_row_offset_ + curr_micro_block_->range_.get_end_key().datums_[0].get_int() - row_count + 1;
+#define UPDATE_CS_RANGE_ROW_ID(is_border, key_flag, limit_flag, border_flag, op, adjust_fn) \
+  if (OB_SUCC(ret) && is_border) { \
+    if (!merge_range_.get_##key_flag##_key().is_##limit_flag##_rowkey()) { \
+      const int64_t range_##key_flag##_global = merge_range_.is_##border_flag##_closed() \
+          ? merge_range_.get_##key_flag##_key().datums_[0].get_int() \
+          : (merge_range_.get_##key_flag##_key().datums_[0].get_int() op 1); \
+      cs_range.key_flag##_row_id_ = adjust_fn(cs_range.key_flag##_row_id_, range_##key_flag##_global - micro_start_global); \
+    } \
+  }
+      // left border micro
+      UPDATE_CS_RANGE_ROW_ID(micro_block_iter_.is_left_border(), start, min, left, +, MAX);
+      // right border micro
+      UPDATE_CS_RANGE_ROW_ID(micro_block_iter_.is_right_border(), end, max, right, -, MIN);
+#undef UPDATE_CS_RANGE_ROW_ID
+      if (cs_range.end_row_id_ - cs_range.start_row_id_ == row_count - 1) {
+        is_clamped = false;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPartitionMicroMergeIter::open_curr_micro_block(
+    ObDatumRange &rowkey_range,
+    ObCSRange &cs_range,
+    const bool tmp_open)
 {
   int ret = OB_SUCCESS;
   ObMicroBlockData decompressed_data;
@@ -1205,16 +1324,19 @@ int ObPartitionMicroMergeIter::open_curr_micro_block(const int64_t start_row_id)
       is_compressed))) {
     LOG_WARN("Failed to decrypt and decompress data", K(ret), KPC_(curr_micro_block));
   } else if (table_->is_normal_cg_sstable()) {
-    ObCSRange range;
-    range.start_row_id_ = MAX(0, start_row_id);
-    range.end_row_id_ = curr_micro_block_->header_.row_count_ - 1;
-    if (OB_FAIL(micro_row_scanner_->open_column_block(curr_block_desc_.macro_block_id_,
-                                          decompressed_data,
-                                          range))) {
-      STORAGE_LOG(WARN, "failed to open column block", K(ret), K(curr_block_desc_), K(decompressed_data),K(range));
+    if (cs_range.is_valid()) {
+      if (OB_FAIL(micro_row_scanner_->open_column_block(curr_block_desc_.macro_block_id_,
+                                                        decompressed_data,
+                                                        cs_range))) {
+        STORAGE_LOG(WARN, "failed to open column block", K(ret), K(curr_block_desc_), K(decompressed_data), K(cs_range));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid cs range", K(ret), K(cs_range), K(merge_range_), K(curr_block_desc_.range_),
+        K(curr_micro_block_->range_), K(curr_micro_block_->header_.row_count_));
     }
-  } else if (OB_FAIL(micro_row_scanner_->set_range(curr_micro_block_->range_))) {
-    LOG_WARN("Failed to init micro scanner", K(ret));
+  } else if (OB_FAIL(micro_row_scanner_->set_range(rowkey_range))) {
+    LOG_WARN("Failed to set micro scanner range", K(ret));
   } else if (OB_FAIL(micro_row_scanner_->open(
       curr_block_desc_.macro_block_id_,
       decompressed_data,
@@ -1223,7 +1345,7 @@ int ObPartitionMicroMergeIter::open_curr_micro_block(const int64_t start_row_id)
     LOG_WARN("Failed to open micro scanner", K(ret));
   }
 
-  if (OB_SUCC(ret) && start_row_id == -1) {
+  if (OB_SUCC(ret) && !tmp_open) {
     micro_block_opened_ = true;
     ret = next();
   }

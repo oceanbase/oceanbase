@@ -50,8 +50,8 @@ public:
     return *micro_block_infos_;
   }
   OB_INLINE const common::ObIArray<blocksstable::ObDatumRowkey> &get_end_keys() { return *endkeys_; }
-  OB_INLINE bool is_left_border() { return 0 == cur_micro_cursor_; }
-  OB_INLINE bool is_right_border() { return micro_block_infos_->count() - 1 == cur_micro_cursor_; }
+  OB_INLINE bool is_left_border() { return 1 == cur_micro_cursor_; }
+  OB_INLINE bool is_right_border() { return micro_block_infos_->count() == cur_micro_cursor_; }
   OB_INLINE int64_t get_micro_index() const { return cur_micro_cursor_; }
 
   OB_INLINE int64_t get_range_block_count();
