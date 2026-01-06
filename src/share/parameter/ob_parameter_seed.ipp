@@ -2811,7 +2811,7 @@ DEF_INT(approx_count_distinct_precision, OB_TENANT_PARAMETER, "10", "[4, 16]",
         "specify the result accuracy of approx_count_distinct",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_STR_WITH_CHECKER(_server_full_schema_refresh_parallelism, OB_TENANT_PARAMETER, "REQUEST",
+DEF_STR_WITH_CHECKER(_server_full_schema_refresh_parallelism, OB_TENANT_PARAMETER, "OBJECT",
                      common::ObConfigServerFullSchemaRefreshParallelismChecker,
                      "specifies whether observer's full schema refresh is request-level parallelism or object-level parallelism."
                      "values: REQUEST, OBJECT",

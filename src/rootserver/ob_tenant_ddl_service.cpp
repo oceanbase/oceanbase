@@ -2283,8 +2283,6 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
   ObString config_value_ddl_thread_isolution("false");
   ObString config_name_update_trigger("_update_all_columns_for_trigger");
   ObString config_value_update_trigger("true");
-  ObString config_name_server_full_schema_refresh_parallelism("_server_full_schema_refresh_parallelism");
-  ObString config_value_server_full_schema_refresh_parallelism("OBJECT");
   ObString config_name_enable_mlog_auto_maintenance("enable_mlog_auto_maintenance");
   ObString config_value_enable_mlog_auto_maintenance("true");
   ObString config_name_spf_batch_rescan("_enable_spf_batch_rescan");
@@ -2317,8 +2315,6 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
         LOG_WARN("fail to add config", KR(ret), K(config_name_ddl_thread_isolution), K(config_value_ddl_thread_isolution));
       } else if (OB_FAIL(tenant_init_config.add_config(config_name_update_trigger, config_value_update_trigger))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name_update_trigger), K(config_value_update_trigger));
-      } else if (OB_FAIL(tenant_init_config.add_config(config_name_server_full_schema_refresh_parallelism, config_value_server_full_schema_refresh_parallelism))) {
-        LOG_WARN("fail to add config", KR(ret), K(config_name_server_full_schema_refresh_parallelism), K(config_value_server_full_schema_refresh_parallelism));
       } else if (OB_FAIL(tenant_init_config.add_config(config_name_enable_mlog_auto_maintenance, config_value_enable_mlog_auto_maintenance))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name_enable_mlog_auto_maintenance), K(config_value_enable_mlog_auto_maintenance));
       } else if (OB_FAIL(tenant_init_config.add_config(config_name_enable_ps_paramterize, config_value_enable_ps_paramterize))) {
