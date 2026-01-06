@@ -1607,10 +1607,11 @@ int ObInsertResolver::adjust_select_column_accuracy_for_csv_url_table(
 
   if (OB_SUCC(ret) && is_valid_scenario && csv_url_table_id != OB_INVALID_INDEX) {
     if (select_stmt.get_select_item_size() != insert_stmt.get_values_desc().count()) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_ERR_COULUMN_VALUE_NOT_MATCH;
       LOG_WARN("select item size is not equal to values desc size", K(ret),
                K(select_stmt.get_select_item_size()),
                K(insert_stmt.get_values_desc().count()));
+      LOG_USER_ERROR(OB_ERR_COULUMN_VALUE_NOT_MATCH, 1l);
     } else {
       const ObIArray<ObColumnRefRawExpr*> &values_desc = insert_stmt.get_values_desc();
       for (int64_t i = 0; OB_SUCC(ret) && i < values_desc.count(); ++i) {
