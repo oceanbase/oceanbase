@@ -127,7 +127,8 @@ private:
                                       const ObIArray<ObExpr *> &new_row_exprs,
                                       pl::ObPLRecord *new_record,
                                       bool check,
-                                      const ObTriggerArg &tg_arg);
+                                      const ObTriggerArg &tg_arg,
+                                      bool is_prune_columns);
   static int do_handle_rowid_before_row(ObTableModifyOp &dml_op,
                                         const ObTrigDMLCtDef &trig_ctdef,
                                         ObTrigDMLRtDef &trig_rtdef,

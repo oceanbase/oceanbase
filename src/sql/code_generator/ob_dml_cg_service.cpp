@@ -2992,25 +2992,37 @@ int ObDmlCgService::generate_trigger_arg(ObTrigDMLCtDef &trig_ctdef,
                                          bool is_instead_of)
 {
   int ret = OB_SUCCESS;
-  int64_t col_cnt = table_schema.get_column_count();
-  int64_t hidden_column_count = 0;
-  OZ (table_schema.get_hidden_column_count(hidden_column_count));
-  if (OB_SUCC(ret)) {
-    col_cnt -= hidden_column_count;
-    if (lib::is_oracle_mode() && !is_instead_of) {
-      col_cnt += 1; // rowid
+  bool is_prune_columns = false;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (OB_UNLIKELY(!tenant_config.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get tenant config", K(ret));
+  } else if (FALSE_IT(is_prune_columns = !tenant_config->_update_all_columns_for_trigger)) {
+  } else {
+    int64_t col_cnt = table_schema.get_column_count();
+    int64_t hidden_column_count = 0;
+    trig_ctdef.is_prune_columns_ = is_prune_columns;
+    OZ (table_schema.get_hidden_column_count(hidden_column_count));
+    if (OB_SUCC(ret)) {
+      col_cnt -= hidden_column_count;
+      if (lib::is_oracle_mode() && !is_instead_of) {
+        col_cnt += 1; // rowid
+      }
+    }
+    OZ (trig_ctdef.tg_args_.init(trigger_infos.count()));
+    for (int64_t i = 0; OB_SUCC(ret) && i < trigger_infos.count(); i++) {
+      ObTriggerArg trigger_arg(cg_.phy_plan_->get_allocator());
+      CK (OB_NOT_NULL(trigger_infos.at(i)));
+      OZ (generate_trigger_arg(session_info, schema_guard, table_schema, *trigger_infos.at(i), trigger_arg, col_cnt,
+                               is_prune_columns));
+      OZ (trig_ctdef.tg_args_.push_back(trigger_arg));
+      OX (trig_ctdef.all_tm_points_.merge(trigger_arg.get_timing_points()));
+      OX (LOG_DEBUG("TRIGGER", K(trigger_infos.at(i)->get_trigger_name())));
+    }
+    if (OB_SUCC(ret) && is_prune_columns) {
+      OZ (merge_trigger_ref_types(trig_ctdef, is_instead_of, col_cnt));
     }
   }
-  OZ (trig_ctdef.tg_args_.init(trigger_infos.count()));
-  for (int64_t i = 0; OB_SUCC(ret) && i < trigger_infos.count(); i++) {
-    ObTriggerArg trigger_arg(cg_.phy_plan_->get_allocator());
-    CK (OB_NOT_NULL(trigger_infos.at(i)));
-    OZ (generate_trigger_arg(session_info, schema_guard, table_schema, *trigger_infos.at(i), trigger_arg, col_cnt));
-    OZ (trig_ctdef.tg_args_.push_back(trigger_arg));
-    OX (trig_ctdef.all_tm_points_.merge(trigger_arg.get_timing_points()));
-    OX (LOG_DEBUG("TRIGGER", K(trigger_infos.at(i)->get_trigger_name())));
-  }
-  OZ (merge_trigger_ref_types(trig_ctdef, is_instead_of, col_cnt));
   return ret;
 }
 
@@ -3019,7 +3031,8 @@ int ObDmlCgService::generate_trigger_arg(ObSQLSessionInfo &session_info,
                                          const ObTableSchema &table_schema,
                                          const ObTriggerInfo &trigger_info,
                                          ObTriggerArg &trigger_arg,
-                                         int64_t col_cnt)
+                                         int64_t col_cnt,
+                                         bool is_prune_columns)
 {
   int ret = OB_SUCCESS;
 
@@ -3028,7 +3041,7 @@ int ObDmlCgService::generate_trigger_arg(ObSQLSessionInfo &session_info,
   trigger_arg.set_timing_points(trigger_info.get_timing_points());
   trigger_arg.set_analyze_flag(trigger_info.get_analyze_flag());
   trigger_arg.set_trigger_type(static_cast<int64_t>(trigger_info.get_trigger_type()));
-  if (trigger_info.has_row_point()) {
+  if (is_prune_columns && trigger_info.has_row_point()) {
     ObFixedArray<ObTriggerRowRefType, ObIAllocator> &ref_types = trigger_arg.get_ref_types();
     OZ (ref_types.init(col_cnt));
     for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; ++i) {
