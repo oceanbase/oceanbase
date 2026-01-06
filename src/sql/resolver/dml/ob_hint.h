@@ -222,6 +222,7 @@ struct ObOptParamHint
     DEF(ENABLE_RUNTIME_FILTER_ADAPTIVE_APPLY, )     \
     DEF(ENABLE_DELETE_INSERT_SCAN,)                 \
     DEF(ENABLE_FAST_REFRESH_WITH_CUR_TIME,)         \
+    DEF(DISABLE_SHARED_EXPR_EXTRACTION,)            \
     
 
 
