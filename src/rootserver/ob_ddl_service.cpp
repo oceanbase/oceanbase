@@ -23496,6 +23496,8 @@ int ObDDLService::add_extra_tenant_init_config_(
   ObString config_value("true");
   ObString config_name_pb("partition_balance_schedule_interval");
   ObString config_value_pb("0");
+  ObString config_name_definer("_ob_mysql_run_definer_pl_as_invoker");
+  ObString config_value_definer("true");
   for (int index = 0 ; !find && OB_SUCC(ret) && index < init_configs.count(); ++index) {
     if (tenant_id == init_configs.at(index).get_tenant_id()) {
       find = true;
@@ -23504,6 +23506,8 @@ int ObDDLService::add_extra_tenant_init_config_(
         LOG_WARN("fail to add config", KR(ret), K(config_name), K(config_value));
       } else if (OB_FAIL(tenant_init_config.add_config(config_name_pb, config_value_pb))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name_pb), K(config_value_pb));
+      } else if (OB_FAIL(tenant_init_config.add_config(config_name_definer, config_value_definer))) {
+        LOG_WARN("fail to add config", KR(ret), K(config_name_definer), K(config_value_definer));
       }
     }
   }

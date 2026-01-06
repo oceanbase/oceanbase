@@ -1245,28 +1245,32 @@ int ObPLContext::set_role_id_array(ObPLFunction &routine,
       OX (need_reset_role_id_array_ = true);
     }
   } else if (lib::is_mysql_mode() && !routine.is_invoker_right() &&
-             0 != routine.get_priv_user().length()
-             /* 兼容存量存储过程，存量存储过程的priv_user为空。mysql存储过程默认为definer行为，
-              当前ob mysql模式做成了默认invoker行为，支持definer后，ob mysql模式也默认为definer行为 */) {
-    ObString priv_user = routine.get_priv_user();
-    ObString user_name = priv_user.split_on('@');
-    ObString host_name = priv_user;
-    uint64_t priv_user_id = OB_INVALID_ID;
+              0 != routine.get_priv_user().length()
+              /* 兼容存量存储过程，存量存储过程的priv_user为空。mysql存储过程默认为definer行为，
+                当前ob mysql模式做成了默认invoker行为，支持definer后，ob mysql模式也默认为definer行为 */) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session_info_->get_effective_tenant_id()));
+    bool switch_definer_to_invoker = tenant_config->_ob_mysql_run_definer_pl_as_invoker;
+    if (!switch_definer_to_invoker) {
+      ObString priv_user = routine.get_priv_user();
+      ObString user_name = priv_user.split_on('@');
+      ObString host_name = priv_user;
+      uint64_t priv_user_id = OB_INVALID_ID;
 
-    OZ (guard.get_user_id(session_info_->get_effective_tenant_id(),
-                          user_name,
-                          host_name,
-                          priv_user_id));
-    if (OB_SUCC(ret) && OB_INVALID_ID == priv_user_id) {
-      ret = OB_ERR_USER_NOT_EXIST;
-      LOG_WARN("fail to get priv user id", K(session_info_->get_effective_tenant_id()),
-                                           K(user_name), K(host_name), K(routine.get_priv_user()));
-    }
-    /* save priv user id, and set new priv user id, change grantee_id, for priv check */
-    if (OB_SUCC(ret) && priv_user_id != session_info_->get_priv_user_id()) {
-      OX (old_priv_user_id_ = session_info_->get_priv_user_id());
-      OX (session_info_->set_priv_user_id(priv_user_id));
-      OX (need_reset_role_id_array_ = true);
+      OZ (guard.get_user_id(session_info_->get_effective_tenant_id(),
+                            user_name,
+                            host_name,
+                            priv_user_id));
+      if (OB_SUCC(ret) && OB_INVALID_ID == priv_user_id) {
+        ret = OB_ERR_USER_NOT_EXIST;
+        LOG_WARN("fail to get priv user id", K(session_info_->get_effective_tenant_id()),
+                                            K(user_name), K(host_name), K(routine.get_priv_user()));
+      }
+      /* save priv user id, and set new priv user id, change grantee_id, for priv check */
+      if (OB_SUCC(ret) && priv_user_id != session_info_->get_priv_user_id()) {
+        OX (old_priv_user_id_ = session_info_->get_priv_user_id());
+        OX (session_info_->set_priv_user_id(priv_user_id));
+        OX (need_reset_role_id_array_ = true);
+      }
     }
   }
   return ret;
@@ -1325,6 +1329,13 @@ int ObPLContext::set_default_database(ObPLFunction &routine,
       OX (database_id_ = session_info_->get_database_id());
       OZ (session_info_->set_default_database(database_schema->get_database_name_str()));
       OX (session_info_->set_database_id(routine.get_database_id()));
+      OX (old_db_priv_set_ = session_info_->get_db_priv_set());
+      ObPrivSet db_priv_set;
+      OZ (guard.get_db_priv_set(session_info_->get_effective_tenant_id(),
+                                session_info_->get_priv_user_id(),
+                                session_info_->get_database_name(),
+                                db_priv_set));
+      OX (session_info_->set_db_priv_set(db_priv_set));
       OX (need_reset_default_database_ = true);
     }
   }
@@ -1344,6 +1355,7 @@ void ObPLContext::reset_default_database(int &ret)
       LOG_ERROR("failed to reset default database", K(ret), K(tmp_ret), K(database_name_));
     } else {
       session_info_->set_database_id(database_id_);
+      session_info_->set_db_priv_set(old_db_priv_set_);
     }
   }
 }

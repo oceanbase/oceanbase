@@ -812,6 +812,7 @@ public:
     need_reset_role_id_array_ = false;
     old_role_id_array_.reset();
     old_priv_user_id_ = OB_INVALID_ID;
+    old_db_priv_set_ = OB_PRIV_SET_EMPTY;
     old_in_definer_ = false;
     has_output_arguments_ = false;
 #ifdef OB_BUILD_ORACLE_PL
@@ -969,6 +970,7 @@ private:
   uint64_t database_id_;
   common::ObSEArray<uint64_t, 8> old_role_id_array_;
   uint64_t old_priv_user_id_;
+  ObPrivSet old_db_priv_set_;
   bool old_in_definer_;
   bool need_reset_default_database_;
   bool need_reset_role_id_array_;
