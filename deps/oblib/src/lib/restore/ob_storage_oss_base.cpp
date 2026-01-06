@@ -426,11 +426,12 @@ int ObStorageOSSRetryStrategy::set_retry_list_object_params(oss_list_object_para
 }
 
 bool ObStorageOSSRetryStrategy::should_retry_impl_(
-    const RetType &outcome, const int64_t attempted_retries) const
+    const RetType &outcome, const int64_t attempted_retries)
 {
   bool bret = false;
-  if (OB_SUCCESS != EventTable::EN_OBJECT_STORAGE_IO_RETRY) {
+  if (OB_SUCCESS != EventTable::EN_OBJECT_STORAGE_IO_RETRY && errsim_retry_count_ < MAX_ERRSIM_RETRY_COUNT) {
     bret = true;
+    errsim_retry_count_++;
     OB_LOG(INFO, "errsim object storage IO retry");
   } else if (OB_ISNULL(outcome)) {
     bret = false;

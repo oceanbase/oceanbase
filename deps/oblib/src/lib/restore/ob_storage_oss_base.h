@@ -69,6 +69,8 @@ int ob_oss_str_assign(aos_string_t &dst, const int64_t len, const char *src);
 class ObStorageOSSRetryStrategy : public ObStorageIORetryStrategy<aos_status_t *>
 {
 public:
+  using ObStorageIORetryStrategyBase<aos_status_t *>::errsim_retry_count_;
+  using ObStorageIORetryStrategyBase<aos_status_t *>::MAX_ERRSIM_RETRY_COUNT;
   ObStorageOSSRetryStrategy(const int64_t timeout_us = ObObjectStorageTenantGuard::get_timeout_us());
   virtual ~ObStorageOSSRetryStrategy();
 
@@ -88,7 +90,7 @@ public:
 
 protected:
   virtual bool should_retry_impl_(
-      const RetType &outcome, const int64_t attempted_retries) const override;
+      const RetType &outcome, const int64_t attempted_retries) override;
 
   int reinitialize_headers_() const;
   int reinitialize_buffer_() const;

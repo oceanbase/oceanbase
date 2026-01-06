@@ -66,7 +66,7 @@ public:
   }
   virtual int64_t current_time_us() const = 0;
 
-  bool should_retry(const RetType &outcome, const int64_t attempted_retries) const
+  bool should_retry(const RetType &outcome, const int64_t attempted_retries)
   {
     bool bret = should_retry_impl_(outcome, attempted_retries);
     if (bret && is_timeout_(attempted_retries)) {
@@ -91,12 +91,14 @@ protected:
   virtual bool is_timeout_(const int64_t attempted_retries) const = 0;
 
   virtual bool should_retry_impl_(
-      const RetType &outcome, const int64_t attempted_retries) const = 0;
+      const RetType &outcome, const int64_t attempted_retries) = 0;
 
 protected:
   static const uint32_t BASE_DELAY_US = 25 * 1000;        // 25ms
   static const uint32_t MAX_DELAY_US = 5 * 1000 * 1000LL; // 5s
   static const uint32_t DELAY_EXPONENT = 3;
+  static const uint32_t MAX_ERRSIM_RETRY_COUNT = 5;
+  int64_t errsim_retry_count_;
   int64_t start_time_us_;
   int64_t timeout_us_;
   int64_t delay_us_;
