@@ -12225,7 +12225,8 @@ int ObJoinOrder::check_valid_for_inner_path(const ObIArray<ObRawExpr*> &join_con
     is_valid = true;
   } else if (join_conditions.empty() || path_info.force_mat_ ||
       (ACCESS != right_tree.get_type() && SUBQUERY != right_tree.get_type()) ||
-      (!has_equal_cond && !OPT_CTX.is_nested_join_enabled())) {
+      (!has_equal_cond && !OPT_CTX.is_nested_join_enabled() && 
+       !OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP6))) {
     is_valid = false;
   } else if (OB_FAIL(right_tree.check_can_push_join_pred(right_tree_can_push_pred))) {
     LOG_WARN("failed to check right tree can push join pred", K(ret));
@@ -18700,7 +18701,7 @@ int ObJoinOrder::compute_valid_inner_path(Path *inner_path,
     LOG_WARN("failed to append pushdown filters", K(ret));
   } else if (OB_FAIL(append(all_pushdown_filters, get_plan()->get_pushdown_filters()))) {
     LOG_WARN("failed to append pushdown filters", K(ret));
-  } else if (OB_FAIL(extract_range_filters(inner_path, all_range_filters))) {
+  } else if (OB_FAIL(extract_valid_range_filters(inner_path, all_range_filters))) {
     LOG_WARN("failed to extract range filters", K(ret));
   } else if (OB_FAIL(ObRawExprUtils::extract_dynamic_params(all_range_filters, range_params, true))) {
     LOG_WARN("failed to extract range params", K(ret));
@@ -18715,7 +18716,7 @@ int ObJoinOrder::compute_valid_inner_path(Path *inner_path,
   return ret;
 }
 
-int ObJoinOrder::extract_range_filters(Path *inner_path, ObIArray<ObRawExpr*> &all_range_filters)
+int ObJoinOrder::extract_valid_range_filters(Path *inner_path, ObIArray<ObRawExpr*> &all_range_filters)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(inner_path)) {
@@ -18732,30 +18733,33 @@ int ObJoinOrder::extract_range_filters(Path *inner_path, ObIArray<ObRawExpr*> &a
         LOG_WARN("failed to get all scan access paths", K(ret));
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < scan_paths.count(); ++i) {
-        if (OB_FAIL(SMART_CALL(extract_range_filters(scan_paths.at(i), all_range_filters)))) {
+        if (OB_FAIL(SMART_CALL(extract_valid_range_filters(scan_paths.at(i), all_range_filters)))) {
           LOG_WARN("failed to get scan node range param", K(ret), KPC(scan_paths.at(i)));
         }
       }
     } else {
       ObQueryRangeProvider *pre_range = access_path->get_query_range_provider();
+      ObSEArray<ObRawExpr*, 8> candi_filters;
       if (NULL == pre_range) {
         //do nothing
-      } else if (OB_FAIL(append(all_range_filters, pre_range->get_range_exprs()))) {
+      } else if (OB_FAIL(append(candi_filters, pre_range->get_range_exprs()))) {
         LOG_WARN("failed to append range exprs", K(ret));
-      } else if (OB_FAIL(append(all_range_filters, pre_range->get_unprecise_range_exprs()))) {
+      } else if (OB_FAIL(append(candi_filters, pre_range->get_unprecise_range_exprs()))) {
         LOG_WARN("failed to append unprecise range exprs", K(ret));
+      } else if (OB_FAIL(extract_valid_range_filters(candi_filters, all_range_filters))) {
+        LOG_WARN("failed to extract valid range filters", K(ret));
       }
     }
   } else if (inner_path->is_subquery_path()) {
     SubQueryPath *subquery_path = static_cast<SubQueryPath*>(inner_path);
-    if (OB_FAIL(extract_range_filters(subquery_path->root_, all_range_filters))) {
+    if (OB_FAIL(extract_valid_range_filters(subquery_path->root_, all_range_filters))) {
       LOG_WARN("failed to extract range filters", K(ret));
     }
   }
   return ret;
 }
 
-int ObJoinOrder::extract_range_filters(ObLogicalOperator *root, ObIArray<ObRawExpr*> &all_range_filters)
+int ObJoinOrder::extract_valid_range_filters(ObLogicalOperator *root, ObIArray<ObRawExpr*> &all_range_filters)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(root)) {
@@ -18765,23 +18769,92 @@ int ObJoinOrder::extract_range_filters(ObLogicalOperator *root, ObIArray<ObRawEx
     ObLogTableScan *table_scan = static_cast<ObLogTableScan*>(root);
     const ObQueryRangeProvider *pre_range = table_scan->get_pre_graph();
     const ObCostTableScanInfo *est_cost_info = table_scan->get_est_cost_info();
+    ObSEArray<ObRawExpr*, 8> candi_filters;
     if (NULL == pre_range) {
       //do nothing
-    } else if (OB_FAIL(append(all_range_filters, pre_range->get_range_exprs()))) {
+    } else if (OB_FAIL(append(candi_filters, pre_range->get_range_exprs()))) {
       LOG_WARN("failed to append range exprs", K(ret));
-    } else if (OB_FAIL(append(all_range_filters, pre_range->get_unprecise_range_exprs()))) {
+    } else if (OB_FAIL(append(candi_filters, pre_range->get_unprecise_range_exprs()))) {
       LOG_WARN("failed to append unprecise range exprs", K(ret));
-    }
-    if (NULL == est_cost_info || OB_FAIL(ret)) {
-      //do nothing
-    } else if (OB_FAIL(append(all_range_filters, est_cost_info->pushdown_prefix_filters_))) {
-      LOG_WARN("failed to append pushdown filters", K(ret));
+    } else if (NULL != est_cost_info &&
+              OB_FAIL(append(candi_filters, est_cost_info->pushdown_prefix_filters_))) {
+      LOG_WARN("failed to append pushdown prefix filters", K(ret));
+    }else if (OB_FAIL(extract_valid_range_filters(candi_filters, all_range_filters))) {
+      LOG_WARN("failed to extract valid range filters", K(ret));
     }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < root->get_num_of_child(); ++i) {
-      if (OB_FAIL(SMART_CALL(extract_range_filters(root->get_child(i), all_range_filters)))) {
+      if (OB_FAIL(SMART_CALL(extract_valid_range_filters(root->get_child(i), all_range_filters)))) {
         LOG_WARN("failed to extract range filters", K(ret));
       }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::extract_valid_range_filters(ObIArray<ObRawExpr*> &candi_filters, ObIArray<ObRawExpr*> &all_range_filters)
+{
+  int ret = OB_SUCCESS;
+  bool exists_static_eq_filter = false;
+  ObSEArray<ObRawExpr*, 2> static_filters;
+  ObSEArray<ObRawExpr*, 2> dynamic_filters;
+  ObSEArray<ObRawExpr*, 2> static_filter_columns;
+  ObSEArray<ObRawExpr*, 2> dynamic_filter_columns;
+  ObSEArray<ObRawExpr*, 2>  static_eq_filter_columns;
+  if (OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP6)) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < candi_filters.count(); ++i) {
+      ObRawExpr *filter = candi_filters.at(i);
+      if (OB_ISNULL(filter)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null filter", K(ret));
+      } else if (filter->has_flag(CNT_DYNAMIC_PARAM)) {
+        if (OB_FAIL(dynamic_filters.push_back(filter))) {
+          LOG_WARN("failed to append dynamic filter", K(ret));
+        }
+      } else {
+        if (OB_FAIL(static_filters.push_back(filter))) {
+          LOG_WARN("failed to append static filter", K(ret));
+        } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(filter, static_filter_columns))) {
+          LOG_WARN("failed to extract column exprs", K(ret));
+        } else if (OB_FAIL(all_range_filters.push_back(filter))) {
+          LOG_WARN("failed to append all range filter", K(ret));
+        } else if (T_OP_EQ == filter->get_expr_type()) {
+          exists_static_eq_filter = true;
+          if (OB_FAIL(ObRawExprUtils::extract_column_exprs(filter, static_eq_filter_columns))) {
+            LOG_WARN("failed to extract column exprs", K(ret));
+          }
+        }
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < dynamic_filters.count(); ++i) {
+      ObRawExpr *filter = dynamic_filters.at(i);
+      dynamic_filter_columns.reuse();
+      if (OB_ISNULL(filter)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null filter", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(filter, dynamic_filter_columns))) {
+        LOG_WARN("failed to extract column exprs", K(ret));
+      } else if (!exists_static_eq_filter && T_OP_EQ == filter->get_expr_type()) {
+        if (OB_FAIL(all_range_filters.push_back(filter))) {
+          LOG_WARN("failed to append all range filter", K(ret));
+        }
+      } else if (exists_static_eq_filter && T_OP_EQ == filter->get_expr_type()) {
+        if (!ObOptimizerUtil::is_subset(dynamic_filter_columns, static_eq_filter_columns) &&
+            OB_FAIL(all_range_filters.push_back(filter))) {
+          LOG_WARN("failed to append all range filter", K(ret));
+        }
+      } else if (exists_static_eq_filter && T_OP_EQ != filter->get_expr_type()) {
+        //do nothing
+      } else if (!exists_static_eq_filter && T_OP_EQ != filter->get_expr_type()) {
+        if (!ObOptimizerUtil::is_subset(dynamic_filter_columns, static_filter_columns) &&
+            OB_FAIL(all_range_filters.push_back(filter))) {
+          LOG_WARN("failed to append all range filter", K(ret));
+        }
+      }
+    }
+  } else {
+    if (OB_FAIL(append(all_range_filters, candi_filters))) {
+      LOG_WARN("failed to append all range filters", K(ret));
     }
   }
   return ret;

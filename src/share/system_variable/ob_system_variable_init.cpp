@@ -3306,7 +3306,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[234].default_value_ = "4.3.5.5" ;
+      ObSysVars[234].default_value_ = "4.3.5.6" ;
       ObSysVars[234].info_ = "enabling a series of optimizer features based on an OceanBase release number" ;
       ObSysVars[234].name_ = "optimizer_features_enable" ;
       ObSysVars[234].data_type_ = ObVarcharType ;
@@ -11481,7 +11481,7 @@ static struct VarsInit{
 
     [&] (){
       ObSysVars[838].default_value_ = "0" ;
-      ObSysVars[838].info_ = "control whether the sql transpiler is enabled" ;
+      ObSysVars[838].info_ = "control whether the sql transpiler is enabled. When enabled, PL/SQL functions are automatically transpiled into SQL expressions whenever possible, without user intervention." ;
       ObSysVars[838].name_ = "sql_transpiler" ;
       ObSysVars[838].data_type_ = ObIntType ;
       ObSysVars[838].enum_names_ = "[u'OFF', u'ON', u'BASIC']" ;
