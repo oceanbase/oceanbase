@@ -447,6 +447,7 @@ _ob_get_gts_ahead_interval
 _ob_immediate_row_conflict_check
 _ob_logstore_service_addr
 _ob_max_thread_num
+_ob_mysql_run_definer_pl_as_invoker
 _ob_obj_dep_maint_task_interval
 _ob_plan_cache_auto_flush_interval
 _ob_plan_cache_gc_strategy

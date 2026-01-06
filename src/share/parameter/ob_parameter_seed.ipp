@@ -2333,3 +2333,7 @@ ERRSIM_DEF_INT(errsim_backup_override_start_scn, OB_CLUSTER_PARAMETER, "0", "[0,
 DEF_BOOL(_enable_insertup_direct_update, OB_TENANT_PARAMETER, "False",
          "Enable or disable insert up do direct update path without splitting into delete and insert",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_ob_mysql_run_definer_pl_as_invoker, OB_TENANT_PARAMETER, "False",
+        "in mysql mode, run definer pl as invoker right",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
