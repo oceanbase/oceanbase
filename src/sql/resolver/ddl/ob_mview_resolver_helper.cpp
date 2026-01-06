@@ -486,17 +486,13 @@ int ObMViewResolverHelper::resolve_materialized_view(const ParseNode &parse_tree
                                                      ObCreateViewResolver &resolver)
 {
   int ret = OB_SUCCESS;
-
   if (OB_ISNULL(stmt) || OB_ISNULL(select_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(stmt), K(select_stmt));
   } else {
     ObMVAdditionalInfo *mv_ainfo = nullptr;
     ObSEArray<ObConstraint, 4> &csts = stmt->get_create_table_arg().constraint_list_;
-    omt::ObTenantConfigGuard tenant_config(
-        TENANT_CONF(resolver.session_info_->get_effective_tenant_id()));
     uint64_t tenant_data_version = 0;
-
     if (OB_FAIL(GET_MIN_DATA_VERSION(resolver.session_info_->get_effective_tenant_id(),
                                      tenant_data_version))) {
       LOG_WARN("get tenant data version failed", KR(ret));
@@ -518,14 +514,10 @@ int ObMViewResolverHelper::resolve_materialized_view(const ParseNode &parse_tree
     } else if (OB_FAIL(load_mview_dep_session_vars(*resolver.session_info_, select_stmt,
                                                    table_schema.get_local_session_var()))) {
       LOG_WARN("fail to load mview dep session variables", K(ret));
-    } else if (!tenant_config.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tenant config is invalid", KR(ret));
-    } else if (OB_NOT_NULL(parse_tree.children_[ObCreateViewResolver::COLUMN_GROUP_NODE]) &&
-               OB_FAIL(resolver.resolve_column_group_helper(
-                   parse_tree.children_[ObCreateViewResolver::COLUMN_GROUP_NODE],
-                   mv_ainfo->container_table_schema_))) {
-      LOG_WARN("fail to resolve column group", KR(ret));
+    } else if (OB_NOT_NULL(parse_tree.children_[ObCreateViewResolver::COLUMN_GROUP_NODE])
+               && OB_FALSE_IT(mv_ainfo->container_table_schema_.set_column_store(true))) {
+      // mark is_column_store_supported_ in advance for the major refresh check in ObMVChecker
+      // set_column_store will also be done in resolve_column_group_helper
     } else if (OB_FAIL(resolve_mv_options(select_stmt,
                                           parse_tree.children_[ObCreateViewResolver::MVIEW_NODE],
                                           mv_ainfo->mv_refresh_info_,
@@ -534,6 +526,11 @@ int ObMViewResolverHelper::resolve_materialized_view(const ParseNode &parse_tree
                                           mv_ainfo->required_columns_infos_,
                                           resolver))) {
       LOG_WARN("fail to resolve mv options", K(ret));
+    } else if (OB_NOT_NULL(parse_tree.children_[ObCreateViewResolver::COLUMN_GROUP_NODE]) &&
+               OB_FAIL(resolver.resolve_column_group_helper(
+                   parse_tree.children_[ObCreateViewResolver::COLUMN_GROUP_NODE],
+                   mv_ainfo->container_table_schema_))) {
+      LOG_WARN("fail to resolve column group", KR(ret));
     } else if (OB_UNLIKELY(tenant_data_version < DATA_VERSION_4_3_5_4
                            && table_schema.is_mv_cnt_proctime_table())) {
       ret = OB_NOT_SUPPORTED;
@@ -556,7 +553,6 @@ int ObMViewResolverHelper::resolve_materialized_view(const ParseNode &parse_tree
       }
     }
   }
-
   return ret;
 }
 
