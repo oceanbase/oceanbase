@@ -1594,7 +1594,7 @@ int ObBasicStatsEstimator::get_async_gather_stats_tables(ObExecContext &ctx,
           "  JOIN      %s gp "\
           "  ON        gp.sname = 'ASYNC_GATHER_STALE_RATIO' "\
           "  where m.tenant_id = %lu AND "\
-          " (CASE WHEN (m.last_inserts-m.last_deletes) = 0 THEN 1 + cast(coalesce(up.valchar, gp.spare4) as "\
+          " (CASE WHEN (m.last_inserts-m.last_deletes) = 0 and (m.inserts - m.deletes) > 0 THEN 1 + cast(coalesce(up.valchar, gp.spare4) as "\
           " double) "\
           "    ELSE (m.inserts - m.last_inserts + m.updates - m.last_updates + m.deletes - m.last_deletes) * 1.0 "\
           " / (m.last_inserts-m.last_deletes) END) > cast(coalesce(up.valchar, gp.spare4) as double) "\
