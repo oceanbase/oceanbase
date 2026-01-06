@@ -114,7 +114,8 @@ bool ObExprLockFunc::proxy_is_support(const ObExecContext &exec_ctx)
                    "proxy is not support this feature",
                    K(session->get_server_sid()),
                    K(session->is_feedback_proxy_info_support()),
-                   K(session->is_client_sessid_support()));
+                   K(session->is_client_sessid_support()),
+                   K(session->get_client_sid()));
     }
   }
   return is_support;

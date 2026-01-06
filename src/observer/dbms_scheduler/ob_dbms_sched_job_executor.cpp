@@ -118,6 +118,7 @@ int ObDBMSSchedJobExecutor::init_session(
   }
   OX (session.gen_gtt_session_scope_unique_id());
   OX (session.gen_gtt_trans_scope_unique_id());
+  OX (session.set_client_sessid(session.get_sid()));
   if (OB_SUCC(ret)) {
     if (job_info.is_mview_job()) {
       // set larger timeout for mview scheduler jobs
