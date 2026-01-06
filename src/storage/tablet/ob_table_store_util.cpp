@@ -1375,7 +1375,7 @@ int ObTableStoreUtil::sort_column_store_tables(ObSEArray<ObITable *, MAX_SSTABLE
   if (tables.empty()) {
     // no need sort
   } else {
-    if (tables.at(0)->is_ddl_sstable()) {
+    if (tables.at(0)->is_ddl_type_sstable()) {
       ObITableDDLCompare comp(ret);
       lib::ob_sort(tables.begin(), tables.end(), comp);
     } else {
