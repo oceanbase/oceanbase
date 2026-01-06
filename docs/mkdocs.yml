@@ -26,7 +26,7 @@ nav:
   - toolchain.md
   - build-and-run.md
   - ide-settings.md
-  - coding-convension.md
+  - coding-convention.md
   - unittest.md
   - mysqltest.md
   - debug.md
