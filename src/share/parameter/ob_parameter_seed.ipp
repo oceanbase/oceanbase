@@ -2882,7 +2882,7 @@ DEF_BOOL(_enable_pl_recompile_job, OB_TENANT_PARAMETER, "False",
 DEF_BOOL(enable_pl_rich_error_msg, OB_TENANT_PARAMETER, "False",
          "specifies whether add ip:port, time and trace id to PLSQL sqlerrm.",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(_enable_px_task_rebalance, OB_TENANT_PARAMETER, "False",
+DEF_BOOL(_enable_px_task_rebalance, OB_TENANT_PARAMETER, "True",
          "Enable or disable px task rebalance.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(_px_task_rebalance_trigger_time, OB_TENANT_PARAMETER, "10ms", "[1us, 1h]",

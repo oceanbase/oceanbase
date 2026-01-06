@@ -559,6 +559,7 @@ public:
   uint32_t get_child_cnt() const { return child_cnt_; }
   ObOperator *get_child() { return child_; }
   ObOperator *get_child(int32_t child_idx) { return children_[child_idx]; }
+  ObOperator *get_parent() { return parent_; }
   bool is_opened() { return opened_; }
   ObMonitorNode &get_monitor_info() { return op_monitor_info_; }
   bool is_vectorized() const { return spec_.is_vectorized(); }
@@ -692,7 +693,7 @@ private:
   int save_brs();
   int setup_op_feedback_info();
   // child can implement this interface, but can't call this directly
-  virtual int inner_drain_exch() { return common::OB_SUCCESS; };
+  virtual int inner_drain_exch() { return common::OB_SUCCESS; }
 
   bool enable_get_next_row() const;
   int try_push_stash_rows(const int64_t max_row_cnt);

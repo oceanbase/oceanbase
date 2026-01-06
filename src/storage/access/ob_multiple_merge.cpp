@@ -465,6 +465,13 @@ int ObMultipleMerge::get_next_row(ObDatumRow *&row)
         if (OB_SUCC(ret)) {
           is_unprojected_row_valid_ = true;
           scan_state_ = ScanState::SINGLE_ROW;
+          bool do_pause = false;
+          // `unprojected_row_` is used to generate range in pause
+          if (OB_FAIL(pause(do_pause))) {
+            LOG_WARN("failed to pause!");
+          } else if (do_pause) {
+            ret = OB_ITER_END;
+          }
         }
       }
       if (OB_SUCC(ret)) {
@@ -584,6 +591,7 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
     } else {
       reuse_lob_locator();
     }
+    bool do_pause = false;
     while (OB_SUCC(ret) && !vector_store->is_end()) {
       /* causes of vector_store->is_end()
        * 1. batch full;
@@ -604,6 +612,10 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
               scan_state_ = ScanState::SINGLE_ROW;
               break;
             } else if (FALSE_IT(need_init_exprs_uniform_header = true)) {
+            } else if (OB_FAIL(pause(do_pause))) {
+              LOG_WARN("Failed to pause");
+            } else if (OB_UNLIKELY(do_pause)) {
+              ret = OB_ITER_END;
             } else if (OB_FAIL(inner_get_next_rows())) {
               if (OB_UNLIKELY(OB_PUSHDOWN_STATUS_CHANGED != ret && OB_ITER_END != ret)) {
                 LOG_WARN("fail to get next rows fast", K(ret), K(is_unprojected_row_valid_), KPC(vector_store), KPC(di_base_sstable_row_scanner_));
@@ -649,6 +661,11 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
                   break;
                 }
               }
+            // `unprojected_row_` is used to generate range in pause
+            } else if (OB_FAIL(pause(do_pause))) {
+              LOG_WARN("Failed to pause");
+            } else if (OB_UNLIKELY(do_pause)) {
+              ret = OB_ITER_END;
             } else {
               is_unprojected_row_valid_ = true;
               if (unprojected_row_.is_di_delete()) {
@@ -2091,6 +2108,27 @@ OB_INLINE void ObMultipleMerge::set_base_version() const
     access_ctx_->trans_version_range_.base_version_ = major_table_version_;
     LOG_DEBUG("set base version", K_(access_ctx_->trans_version_range));
   }
+}
+
+int ObMultipleMerge::is_paused(bool& do_pause) const
+{
+  INIT_SUCC(ret);
+  do_pause = false;
+  ScanResumePoint *scan_resume_point = access_ctx_->scan_resume_point_;
+  if (scan_resume_point == nullptr || !scan_resume_point->is_paused()) {
+  } else if (OB_UNLIKELY(!scan_resume_point->empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ranges is not empty", K(scan_resume_point->get_ranges()));
+  } else if (OB_UNLIKELY(!is_scan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get cannot be paused");
+  } else if (ScanState::NONE == scan_state_) {
+  } else if (ScanState::DI_BASE == scan_state_) {
+    // not supported
+  } else {
+    do_pause = true;
+  }
+  return ret;
 }
 
 int ObMultipleMerge::check_final_result(const ObNopPos &nop_pos, bool &final_result)

@@ -3419,16 +3419,11 @@ int ObLogicalOperator::px_estimate_size_factor_pre()
     }
   }
   if (LOG_GRANULE_ITERATOR == type_) {
-    bool partition_granule = false;
     ObLogGranuleIterator *log_gi = static_cast<ObLogGranuleIterator*>(this);
-    if (OB_FAIL(log_gi->is_partition_gi(partition_granule))) {
-      LOG_WARN("failed to judge partition gi", K(ret));
+    if (log_gi->is_partition_gi()) {
+      px_est_size_factor_.partition_granule_child_ = true;
     } else {
-      if (partition_granule) {
-        px_est_size_factor_.partition_granule_child_ = true;
-      } else {
-        px_est_size_factor_.block_granule_child_ = true;
-      }
+      px_est_size_factor_.block_granule_child_ = true;
     }
   }
   return ret;
@@ -3444,17 +3439,12 @@ int ObLogicalOperator::px_estimate_size_factor_post()
       px_est_size_factor_.single_partition_table_scan_ = true;
     }
   } else if (LOG_GRANULE_ITERATOR == type_) {
-    bool partition_granule = false;
     ObLogGranuleIterator *log_gi = static_cast<ObLogGranuleIterator*>(this);
     px_est_size_factor_.revert_leaf_factor();
-    if (OB_FAIL(log_gi->is_partition_gi(partition_granule))) {
-      LOG_WARN("failed to judge partition gi", K(ret));
+    if (log_gi->is_partition_gi()) {
+      px_est_size_factor_.partition_granule_parent_ = true;
     } else {
-      if (partition_granule) {
-        px_est_size_factor_.partition_granule_parent_ = true;
-      } else {
-        px_est_size_factor_.block_granule_parent_ = true;
-      }
+      px_est_size_factor_.block_granule_parent_ = true;
     }
   } else if (LOG_EXCHANGE == type_) {
     ObLogExchange *exchange = static_cast<ObLogExchange*>(this);
@@ -4464,12 +4454,11 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
         }
       }
 
-      if (OB_FAIL(ret)) {
-        /* do nothing */
-      } else if (OB_FAIL(gi_op->is_partition_gi(partition_granule))) {
-        LOG_WARN("failed judge partition granule", K(ret));
-      } else if (ctx.is_force_partition() || partition_granule) {
-        gi_op->add_flag(GI_FORCE_PARTITION_GRANULE);
+      if (OB_SUCC(ret)) {
+        partition_granule = gi_op->is_partition_gi();
+        if (ctx.is_force_partition() || partition_granule) {
+          gi_op->add_flag(GI_FORCE_PARTITION_GRANULE);
+        }
       }
 
       if (OB_SUCC(ret)) {
@@ -4496,6 +4485,14 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
           LOG_WARN("failed to set px rf info", K(ret));
         }
       }
+
+      if (OB_FAIL(ret)) {
+      } else if (LOG_TABLE_SCAN == get_type()
+                 && OB_FAIL(gi_op->check_adaptive_task_splitting(
+                        static_cast<ObLogTableScan *>(this)))) {
+        LOG_WARN("failed to check adaptive task splitting");
+      }
+
       LOG_TRACE("succ to allocate granule iterator nodes above operator", K(get_name()),
                 K(get_cost()), K(get_card()), K(ctx.is_in_pw_affinity_state()),
                 K(ctx.is_in_partition_wise_state()));

@@ -499,7 +499,7 @@ int ObDirectLoadOriginTableScanner::open(const ObDatumRange &query_range)
     allocator_.reuse();
     datum_row_.reset();
     datum_row_.seq_no_ = 0;
-    if (OB_FAIL(query_range.deep_copy(query_range_, allocator_))) {
+    if (OB_FAIL(query_range_.partial_copy(/* src */ query_range, allocator_))) {
       LOG_WARN("fail to deep copy query range", KR(ret), K(query_range));
     } else if (OB_FAIL(query_range_.prepare_memtable_readable(*(origin_table_->get_meta().col_descs_), allocator_))) {
       LOG_WARN("fail to prepare memtable readable", KR(ret), K(query_range_));
@@ -545,7 +545,7 @@ int ObDirectLoadOriginTableScanner::reinit_open()
   ObDirectLoadOriginTable *origin_table = origin_table_;
   bool skip_read_lob = skip_read_lob_;
   bool skip_del_row = skip_del_row_;
-  if (OB_FAIL(query_range_.deep_copy(query_range, tmp_allocator))) {
+  if (OB_FAIL(query_range.partial_copy(/* src */ query_range_, tmp_allocator))) {
     LOG_WARN("fail to deep copy query range", KR(ret), K(query_range_));
   } else if (datum_row_.is_valid()) {
     blocksstable::ObDatumRowkey datum_row_key(datum_row_.storage_datums_,

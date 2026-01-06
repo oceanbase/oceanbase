@@ -322,6 +322,40 @@ int ObDatumRowkey::from_rowkey(const ObRowkey &rowkey, common::ObIAllocator &all
   return ret;
 }
 
+int ObDatumRowkey::to_rowkey(ObRowkey &rowkey, const ObObjMeta* obj_metas, common::ObIAllocator &allocator) const
+{
+  int ret = OB_SUCCESS;
+  ObObj *objs = nullptr;
+
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid argument to transfer from rowkey to datum rowkey", K(ret), K(rowkey));
+  } else if (is_max_rowkey()) {
+    rowkey.set_max_row();
+  } else if (is_min_rowkey()) {
+    rowkey.set_min_row();
+  } else {
+    if (OB_ISNULL(objs = reinterpret_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * datum_cnt_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "Failed to alloc memory", K(ret), K(datum_cnt_));
+    } else  {
+      // maybe we do not need the constructor
+      objs = new (objs) ObObj[datum_cnt_];
+      for (int64_t i = 0; OB_SUCC(ret) && i < datum_cnt_; i++) {
+        if (OB_FAIL(datums_[i].to_obj_enhance(objs[i], obj_metas[i]))) {
+          STORAGE_LOG(WARN, "Failed to from obj to datum", K(ret), K(i));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      rowkey = ObRowkey(objs, datum_cnt_);
+    } else if (nullptr != objs) {
+      allocator.free(objs);
+    }
+  }
+  return ret;
+}
+
 int ObDatumRowkey::from_rowkey(const ObRowkey &rowkey, ObStorageDatumBuffer &datum_buffer)
 {
   int ret = OB_SUCCESS;
@@ -502,7 +536,7 @@ int ObDatumRowkey::to_multi_version_range(common::ObIAllocator &allocator, ObDat
   } else {
     dest.border_flag_.unset_inclusive_end();
     dest.border_flag_.unset_inclusive_start();
-    dest.group_idx_ = group_idx_;
+    dest.set_group_idx(group_idx_);
   }
 
   return ret;

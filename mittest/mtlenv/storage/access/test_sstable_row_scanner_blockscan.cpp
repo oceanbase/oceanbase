@@ -361,7 +361,7 @@ void TestSSTableRowScannerBlockscan::do_scan_and_check(std::vector<int> &begin, 
   }
   scan_range_.start_key_.assign(begin_row_.storage_datums_, DEFAULT_ROWKEY_CNT);
   scan_range_.end_key_.assign(end_row_.storage_datums_, DEFAULT_ROWKEY_CNT);
-  scan_range_.group_idx_ = DEFAULT_GROUP_IDX;
+  scan_range_.set_group_idx(DEFAULT_GROUP_IDX);
   scan_range_.set_left_closed();
   scan_range_.set_right_closed();
 

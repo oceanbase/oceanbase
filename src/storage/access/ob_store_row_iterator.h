@@ -128,6 +128,11 @@ public:
     UNUSEDx(curr_scan_index, rowkey, allocator);
     return OB_NOT_IMPLEMENT;
   }
+  virtual int get_next_border_rowkey(const blocksstable::ObDatumRowkey *&border_rowkey) const
+  {
+    UNUSED(border_rowkey);
+    return OB_NOT_IMPLEMENT;
+  }
   VIRTUAL_TO_STRING_KV(K_(type), K_(is_sstable_iter), K_(is_reclaimed), KP_(block_row_store), KP_(long_life_allocator));
 
 protected:

@@ -62,6 +62,8 @@ protected:
   // TODO: zhanghuidong.zhd, refactor the interfaces for building border rowkey and refresh blockscan
   int prepare_blockscan_after_construct_iters();
   int locate_blockscan_border();
+  virtual int pause(bool& do_pause) override;
+  virtual int get_current_range(ObDatumRange& current_range) const;
 private:
   int prepare_blockscan(ObStoreRowIterator &iter);
   void inner_calc_scan_range(const blocksstable::ObDatumRange *&range,

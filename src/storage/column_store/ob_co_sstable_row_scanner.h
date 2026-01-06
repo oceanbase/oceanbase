@@ -67,6 +67,10 @@ public:
   virtual int get_next_rowkey(int64_t &curr_scan_index,
                               blocksstable::ObDatumRowkey& rowkey,
                               common::ObIAllocator &allocator) final;
+  virtual int get_next_border_rowkey(const blocksstable::ObDatumRowkey *&border_rowkey) const override final
+  {
+    return row_scanner_->get_next_border_rowkey(border_rowkey);
+  }
   TO_STRING_KV(K_(range_idx),
                K_(is_new_group),
                K_(reverse_scan),

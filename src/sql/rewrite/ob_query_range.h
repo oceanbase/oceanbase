@@ -567,6 +567,7 @@ public:
                                     const ObString &escape_str,
                                     const ObString &pattern_str,
                                     int32_t &pattern_prefix_len);
+  bool is_equal_range() const override { return table_graph_.is_equal_range_; }
 private:
 
   int init_query_range_ctx(common::ObIAllocator &allocator,

@@ -378,7 +378,9 @@ int ObPxReceiveOp::inner_drain_exch()
     if (OB_FAIL(try_link_channel())) {
       LOG_WARN("failed to link channel", K(ret));
     } else if (OB_FAIL(active_all_receive_channel())) {
-      LOG_WARN("failed to active all receive channel", K(ret));
+      if (OB_ITER_END != ret) {
+        LOG_WARN("failed to active all receive channel", K(ret));
+      }
     }
     LOG_TRACE("drain px receive", K(get_spec().id_), K(ret), K(lbt()));
     dfc_.drain_all_channels();

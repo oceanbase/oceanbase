@@ -57,7 +57,6 @@ public:
   static int deep_copy(const common::ObStoreRange &src, common::ObStoreRange &dest, common::ObIAllocator &allocator);
   static int deep_copy(const blocksstable::ObDatumRow &src, blocksstable::ObDatumRow &dest, common::ObIAllocator &allocator);
   static int deep_copy(const blocksstable::ObStorageDatum &src, blocksstable::ObStorageDatum &dest, common::ObIAllocator &allocator);
-  static int deep_copy(const blocksstable::ObDatumRowkey &src, blocksstable::ObDatumRowkey &dest, common::ObIAllocator &allocator);
   static int deep_copy(const blocksstable::ObDatumRange &src, blocksstable::ObDatumRange &dest, common::ObIAllocator &allocator);
   static int deep_copy(const sql::ObSQLSessionInfo &src, sql::ObSQLSessionInfo &dest, common::ObIAllocator &allocator);
 

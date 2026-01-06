@@ -347,6 +347,7 @@ int ObDASScanOp::init_scan_param()
   scan_param_.in_row_cache_threshold_ = scan_rtdef_->in_row_cache_threshold_;
   scan_param_.external_object_ctx_ = &scan_ctdef_->external_object_ctx_;
   scan_param_.row_scan_cnt_ = &scan_rtdef_->row_scan_cnt_;
+  scan_param_.scan_resume_point_ = scan_rtdef_->scan_resume_point_;
   if (scan_rtdef_->is_for_foreign_check_) {
     scan_param_.trans_desc_ = trans_desc_;
   }

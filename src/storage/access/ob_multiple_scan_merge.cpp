@@ -700,6 +700,121 @@ int ObMultipleScanMerge::set_rows_merger(const int64_t table_cnt)
   return ret;
 }
 
+int ObMultipleScanMerge::pause(bool& do_pause)
+{
+  INIT_SUCC(ret);
+
+  if (OB_FAIL(ObMultipleMerge::is_paused(do_pause))) {
+    LOG_WARN("failed to check if paused", K(ret));
+  } else if (OB_LIKELY(!do_pause)) {
+  } else {
+    const bool is_reverse_scan = access_ctx_->query_flag_.is_reverse_scan();
+    const ObITableReadInfo *read_info =
+        access_param_->iter_param_.get_read_info();
+    ScanResumePoint *scan_resume_point =
+        access_ctx_->scan_resume_point_; // must not be null as has been
+                                         // checked in is_paused()
+    ObStoreRowIterator *iter;
+    ObDatumRowkey next_rowkey;
+    blocksstable::ObDatumRange range;
+
+    switch (get_scan_state()) {
+      case ScanState::SINGLE_ROW: {
+        ObDatumRowkey curr_rowkey;
+        if (OB_FAIL(curr_rowkey.assign(
+                unprojected_row_.storage_datums_,
+                access_param_->iter_param_.get_schema_rowkey_count()))) {
+          LOG_WARN(
+              "Failed to assign curr rowkey", K(ret), K_(unprojected_row));
+        } else if (OB_FAIL(get_current_range(range))) {
+          LOG_WARN("failed to get current range");
+        } else {
+          range.change_boundary(
+              curr_rowkey, is_reverse_scan, true);
+        }
+        break;
+      }
+      case ScanState::BATCH: {
+        const ObDatumRowkey* border_rowkey;
+        int cmp_ret = 0;
+        if (OB_UNLIKELY(consumer_cnt_ != 1)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("Invalid argument", K(ret), K_(consumer_cnt));
+        } else if (tables_.count() > 1) {
+          // disable pause for batch scan with inc data
+          // TODO @cuiyuntian.cyt fix this
+          do_pause = false;
+        } else if (OB_ISNULL(iter = iters_.at(consumers_[0]))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected null iter", K(ret), K(consumers_[0]));
+        } else if (OB_FAIL(iter->get_next_rowkey(curr_scan_index_,
+                                                 next_rowkey,
+                                                 *access_ctx_->allocator_))) {
+          if (OB_UNLIKELY(ret != OB_ERR_UNSUPPORTED_TYPE )) {
+            LOG_WARN("Failed to get next rowkey", K(iter->get_iter_type()));
+          } else {
+            // `iter` has never called `get_next_rows`
+            do_pause = false;
+            ret = OB_SUCCESS;
+          }
+        } else if (!next_rowkey.is_valid() ||
+                   (is_reverse_scan &&
+                    next_rowkey.is_min_rowkey()) ||
+                   (!is_reverse_scan &&
+                    next_rowkey.is_max_rowkey())) {
+          // `iter` has never called `get_next_rows` or has reached the end
+          // cannot do pause
+          do_pause = false;
+        // TODO @cuiyuntian.cyt support keep order blockscan
+        } else if (OB_FAIL(iter->get_next_border_rowkey(border_rowkey))) {
+          LOG_WARN("failed to get next border rowkey", K(ret));
+        } else if (OB_FAIL(next_rowkey.compare(*border_rowkey, read_info->get_datum_utils(), cmp_ret))) {
+          LOG_WARN("failed to compare rowkey", K(ret), K(next_rowkey), K(border_rowkey));
+        } else if ((!is_reverse_scan && cmp_ret > 0) || (is_reverse_scan && cmp_ret < 0)) {
+          next_rowkey = *border_rowkey;
+        }
+        if (OB_FAIL(ret) || !do_pause) {
+        } else if (OB_FAIL(get_current_range(range))) {
+          LOG_WARN("failed to get current range");
+        } else if (FALSE_IT(range.change_boundary(
+                       next_rowkey,
+                       is_reverse_scan,
+                       true))) {
+        } else if (OB_UNLIKELY(!range.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected invalid range!", K(range), K(next_rowkey));
+        }
+        break;
+      }
+      default: {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("Unsupported scan state", K(get_scan_state()));
+      }
+    }
+    if (OB_FAIL(ret) || !do_pause) {
+    } else if (OB_FAIL(scan_resume_point->add_range(*read_info, range))) {
+      LOG_WARN("failed to add range");
+    } else {
+      LOG_INFO("success to pause and save remain range", K(range));
+    }
+    if (OB_FAIL(ret)) {
+      scan_resume_point->reset_ranges();
+    }
+  }
+  return ret;
+}
+
+int ObMultipleScanMerge::get_current_range(ObDatumRange& current_range) const
+{
+  INIT_SUCC(ret);
+  if (OB_ISNULL(range_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("range_ is null!");
+  } else {
+    current_range = *range_;
+  }
+  return ret;
+}
 
 }
 }

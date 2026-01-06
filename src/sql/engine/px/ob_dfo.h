@@ -982,7 +982,8 @@ public:
       px_worker_prepare_cost_(0),
       dispatch_task_cost_(0)
   {
-
+    allocator_.set_tenant_id(MTL_ID());
+    allocator_.set_label("PxTaskArena");
   }
   ~ObPxTask() = default;
   ObPxTask (const ObPxTask &other) {
@@ -1141,6 +1142,7 @@ public:
   // record the time that px worker prepare arg before execute plan
   int64_t px_worker_prepare_cost_;
   int64_t dispatch_task_cost_;
+  ObArenaAllocator allocator_;
 };
 
 class ObPxRpcInitTaskArgs

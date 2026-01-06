@@ -294,7 +294,8 @@ public:
       das_execute_remote_info_(nullptr),
       do_local_dynamic_filter_(false),
       local_dynamic_filter_params_(),
-      topn_param_()
+      topn_param_(),
+      scan_resume_point_(nullptr)
   { }
 
   virtual ~ObDASScanRtDef();
@@ -366,6 +367,7 @@ public:
   common::ObSEArray<common::ObDatum, 4> local_dynamic_filter_params_;
   common::ObLimitParam topn_param_;
 
+  ScanResumePoint *scan_resume_point_;
 private:
   union {
     storage::ObRow2ExprsProjector row2exprs_projector_;

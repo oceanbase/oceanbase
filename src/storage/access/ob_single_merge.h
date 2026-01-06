@@ -29,6 +29,7 @@ public:
   virtual void reset() override;
   virtual void reuse() override;
   virtual void reclaim() override;
+  virtual int pause(bool& do_pause) override final { do_pause = false; return OB_SUCCESS; }
   INHERIT_TO_STRING_KV("ObMultipleMerge", ObMultipleMerge, K(handle_), K(fuse_row_cache_fetcher_));
 protected:
   virtual int calc_scan_range() override;
