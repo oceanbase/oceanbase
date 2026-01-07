@@ -5271,8 +5271,8 @@ int ObBasicSessionInfo::serialize_(char *buf, int64_t buf_len, int64_t &pos) con
   OB_UNIS_ENCODE(client_sessid_);
   OB_UNIS_ENCODE(diagnosis_info_);
   OB_UNIS_ENCODE(client_create_time_);
-  OB_UNIS_ENCODE(route_to_column_replica_);
   OB_UNIS_ENCODE(sys_var_in_pl_cache_str_);
+  OB_UNIS_ENCODE(route_to_column_replica_);
   return ret;
 }
 
@@ -5589,7 +5589,6 @@ int ObBasicSessionInfo::deserialize(const char *buf, const int64_t data_len, int
     OB_UNIS_DECODE(client_sessid_);
     OB_UNIS_DECODE(diagnosis_info_);
     OB_UNIS_DECODE(client_create_time_);
-    OB_UNIS_DECODE(route_to_column_replica_);
 
     if (OB_SUCC(ret)) {
       if (OB_FAIL(gen_exec_env())) {
@@ -5603,6 +5602,7 @@ int ObBasicSessionInfo::deserialize(const char *buf, const int64_t data_len, int
         LOG_WARN("fail to write sys_var_in_pl_cache_str to string_buf_", K(sys_var_in_pl_cache_str_), K(ret));
       }
     }
+    OB_UNIS_DECODE(route_to_column_replica_);
     pos = pos_orig + len;
   }
   return ret;
@@ -5900,8 +5900,8 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
   OB_UNIS_ADD_LEN(client_sessid_);
   OB_UNIS_ADD_LEN(diagnosis_info_);
   OB_UNIS_ADD_LEN(client_create_time_);
-  OB_UNIS_ADD_LEN(route_to_column_replica_);
   OB_UNIS_ADD_LEN(sys_var_in_pl_cache_str_);
+  OB_UNIS_ADD_LEN(route_to_column_replica_);
   return len;
 }
 
