@@ -2235,7 +2235,7 @@ int ObSqlParameterization::mark_tree(TransformTreeCtx &ctx, ParseNode *tree ,Sql
   } else if (T_OP_LIKE == tree->type_) {
     if (3 == tree->num_child_) {   // child[0] like child[1] escape child[2]
       const int64_t ARGS_NUMBER_THREE = 3;
-      bool mark_arr[ARGS_NUMBER_THREE] = {0, 1, 1}; //0表示参数化, 1 表示不参数化
+      bool mark_arr[ARGS_NUMBER_THREE] = {0, 0, 1}; //0表示参数化, 1 表示不参数化
       if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_THREE, sql_info))) {
         SQL_PC_LOG(WARN, "fail to mark substr arg", K(ret));
       }

@@ -170,6 +170,7 @@ public:
   static int create_expr_constraint(ObQueryCtx &query_ctx,
                                     ObExecContext &exec_ctx,
                                     const ObIArray<ObHiddenColumnItem> &pre_calc_exprs,
+                                    const ObIArray<ObConstraintExtra> &cons_extras,
                                     const PreCalcExprExpectResult expect_result);
   //simplyfy and rewrite stmt
   static int transform_stmt(ObSqlSchemaGuard *sql_schema_guard,

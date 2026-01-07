@@ -1278,20 +1278,43 @@ enum PreCalcExprExpectResult {
   PRE_CALC_JSON_TYPE,
 };
 
+union ObConstraintExtra{
+  ObConstraintExtra() : extra_(-1) {}
+  int64_t extra_;
+  struct {
+    int64_t escape_char_  :   8;
+    int64_t reserved_     :   56;
+  };
+  TO_STRING_KV(K_(extra), K_(escape_char));
+};
+
 struct ObExprConstraint
 {
   ObExprConstraint() :
       pre_calc_expr_(NULL),
       expect_result_(PRE_CALC_RESULT_NONE),
-      ignore_const_check_(false) {}
+      ignore_const_check_(false),
+      cons_extra_() {}
   ObExprConstraint(ObRawExpr *expr, PreCalcExprExpectResult expect_result) :
       pre_calc_expr_(expr),
       expect_result_(expect_result),
-      ignore_const_check_(false) {}
+      ignore_const_check_(false),
+      cons_extra_() {}
+  ObExprConstraint(ObRawExpr *expr, PreCalcExprExpectResult expect_result, ObConstraintExtra extra) :
+      pre_calc_expr_(expr),
+      expect_result_(expect_result),
+      ignore_const_check_(false),
+      cons_extra_(extra) {}
   bool operator==(const ObExprConstraint &rhs) const;
+  static bool has_extra(PreCalcExprExpectResult expect_result)
+  {
+    return PRE_CALC_PRECISE == expect_result ||
+           PRE_CALC_NOT_PRECISE == expect_result;
+  }
   ObRawExpr *pre_calc_expr_;
   PreCalcExprExpectResult expect_result_;
   bool ignore_const_check_;
+  ObConstraintExtra cons_extra_;
   TO_STRING_KV(KP_(pre_calc_expr),
                K_(expect_result),
                K_(ignore_const_check));
@@ -1302,16 +1325,19 @@ struct ObPreCalcExprConstraint : public common::ObDLinkBase<ObPreCalcExprConstra
   public:
     ObPreCalcExprConstraint(common::ObIAllocator &allocator):
       pre_calc_expr_info_(allocator),
-      expect_result_(PRE_CALC_RESULT_NONE)
+      expect_result_(PRE_CALC_RESULT_NONE),
+      cons_extras_(allocator)
     {
     }
     virtual int assign(const ObPreCalcExprConstraint &other, common::ObIAllocator &allocator);
     virtual int check_is_match(ObDatumObjParam &datum_param,
                                ObExecContext &exec_ctx,
+                               ObConstraintExtra *extra,
                                bool &is_match) const;
     TO_STRING_KV(K(expect_result_));
     ObPreCalcExprFrameInfo pre_calc_expr_info_;
     PreCalcExprExpectResult expect_result_;
+    ObFixedArray<ObConstraintExtra, common::ObIAllocator> cons_extras_;
 };
 
 struct ObRowidConstraint : public ObPreCalcExprConstraint
@@ -1327,6 +1353,7 @@ struct ObRowidConstraint : public ObPreCalcExprConstraint
                        common::ObIAllocator &allocator) override;
     virtual int check_is_match(ObDatumObjParam &datum_param,
                                ObExecContext &exec_ctx,
+                               ObConstraintExtra *extra,
                                bool &is_match) const override;
     uint8_t rowid_version_;
     ObFixedArray<ObObjType, common::ObIAllocator> rowid_type_array_;

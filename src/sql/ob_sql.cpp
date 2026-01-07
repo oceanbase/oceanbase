@@ -5997,14 +5997,18 @@ int ObSql::create_expr_constraints(ObQueryCtx &query_ctx, ObExecContext &exec_ct
   } else {
     ObIArray<ObExprConstraint> &expr_constraints = query_ctx.all_expr_constraints_;
     ObSEArray<ObHiddenColumnItem, 4> pre_calc_exprs;
+    ObSEArray<ObConstraintExtra, 4> cons_extras;
     ObHiddenColumnItem hidden_column_item;
     int64_t idx = -1;
     const int64_t dummy_count = -1;
+    bool has_extra = false;
     for (int64_t i = PRE_CALC_RESULT_NULL; OB_SUCC(ret) && i <= PRE_CALC_NOT_PRECISE; ++i) {
       PreCalcExprExpectResult expect_result = static_cast<PreCalcExprExpectResult>(i);
       pre_calc_exprs.reuse();
+      cons_extras.reuse();
       for (int64_t j = 0; OB_SUCC(ret) && j < expr_constraints.count(); ++j) {
         if (expr_constraints.at(j).expect_result_ == expect_result) {
+          has_extra = ObExprConstraint::has_extra(expect_result);
           hidden_column_item.expr_ = expr_constraints.at(j).pre_calc_expr_;
           hidden_column_item.hidden_idx_ = ++idx;
           if (OB_ISNULL(hidden_column_item.expr_)) {
@@ -6018,6 +6022,8 @@ int ObSql::create_expr_constraints(ObQueryCtx &query_ctx, ObExecContext &exec_ct
             LOG_WARN("unexpect calculable expr", K(ret), KPC(hidden_column_item.expr_));
           } else if (OB_FAIL(pre_calc_exprs.push_back(hidden_column_item))) {
             LOG_WARN("failed to push back to array", K(ret));
+          } else if (has_extra && OB_FAIL(cons_extras.push_back(expr_constraints.at(j).cons_extra_))) {
+            LOG_WARN("failed to push back to array", K(ret));
           }
         }
       }
@@ -6025,6 +6031,7 @@ int ObSql::create_expr_constraints(ObQueryCtx &query_ctx, ObExecContext &exec_ct
         if (OB_FAIL(create_expr_constraint(query_ctx,
                                            exec_ctx,
                                            pre_calc_exprs,
+                                           cons_extras,
                                            expect_result))) {
           LOG_WARN("failed to create expr constraints for new engine", K(ret));
         }
@@ -6037,6 +6044,7 @@ int ObSql::create_expr_constraints(ObQueryCtx &query_ctx, ObExecContext &exec_ct
 int ObSql::create_expr_constraint(ObQueryCtx &query_ctx,
                                   ObExecContext &exec_ctx,
                                   const ObIArray<ObHiddenColumnItem> &pre_calc_exprs,
+                                  const ObIArray<ObConstraintExtra> &cons_extras,
                                   const PreCalcExprExpectResult expect_result)
 {
   int ret = OB_SUCCESS;
@@ -6060,6 +6068,8 @@ int ObSql::create_expr_constraint(ObQueryCtx &query_ctx,
     if (OB_FAIL(expr_cg.generate_calculable_exprs(pre_calc_exprs,
                                                   pre_calc_constraint->pre_calc_expr_info_))) {
       LOG_WARN("failed to generate calculable exprs", K(ret));
+    } else if (!cons_extras.empty() && OB_FAIL(pre_calc_constraint->cons_extras_.assign(cons_extras))) {
+      LOG_WARN("failed to assign constraint extra array", K(ret));
     } else if (OB_UNLIKELY(!query_ctx.all_pre_calc_constraints_.add_last(pre_calc_constraint))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to push back pre calc constraint", K(ret));

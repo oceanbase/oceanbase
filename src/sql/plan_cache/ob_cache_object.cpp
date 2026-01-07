@@ -170,10 +170,18 @@ int ObPlanCacheObject::check_pre_calc_cons(const bool is_ignore_stmt,
     is_match = false;
     ret = OB_SUCCESS;
   } else {
+    const ObIArray<ObConstraintExtra> &cons_extras = pre_calc_con.cons_extras_;
     for (int64_t i = 0; OB_SUCC(ret) && is_match && i < datum_params.count(); ++i) {
-      if (OB_FAIL(pre_calc_con.check_is_match(datum_params.at(i), exec_ctx, is_match))) {
-        LOG_WARN("failed to check is match", K(ret));
-      } // else end
+      if (cons_extras.empty()) {
+        if (OB_FAIL(pre_calc_con.check_is_match(datum_params.at(i), exec_ctx, nullptr, is_match))) {
+          LOG_WARN("failed to check is match", K(ret));
+        }
+      } else {
+        ObConstraintExtra extra = cons_extras.at(i);
+        if (OB_FAIL(pre_calc_con.check_is_match(datum_params.at(i), exec_ctx, &extra, is_match))) {
+          LOG_WARN("failed to check is match", K(ret));
+        }
+      }
     } // for end
   }
   return ret;

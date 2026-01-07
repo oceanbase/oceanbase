@@ -1095,7 +1095,7 @@ int ObExprRangeConverter::build_decode_like_expr(ObRawExpr *pattern,
                                                           escape_ch,
                                                           ctx_.cur_is_precise_))) {
       LOG_WARN("failed to jugde whether is precise", K(ret));
-    } else if (OB_FAIL(add_precise_constraint(pattern, ctx_.cur_is_precise_))) {
+    } else if (OB_FAIL(add_precise_constraint(pattern, ctx_.cur_is_precise_, escape_ch))) {
       LOG_WARN("failed to add precise constraint", K(ret));
     } else if (OB_FAIL(add_prefix_pattern_constraint(pattern))) {
       LOG_WARN("failed to add prefix pattern constraint", K(ret));
@@ -1881,12 +1881,14 @@ int ObExprRangeConverter::check_calculable_expr_valid(const ObRawExpr *expr,
   return ret;
 }
 
-int ObExprRangeConverter::add_precise_constraint(const ObRawExpr *expr, bool is_precise)
+int ObExprRangeConverter::add_precise_constraint(const ObRawExpr *expr, bool is_precise, char escape)
 {
   int ret = OB_SUCCESS;
   PreCalcExprExpectResult expect_result = is_precise ? PreCalcExprExpectResult::PRE_CALC_PRECISE :
                                                        PreCalcExprExpectResult::PRE_CALC_NOT_PRECISE;
-  ObExprConstraint cons(const_cast<ObRawExpr*>(expr), expect_result);
+  ObConstraintExtra cons_extra;
+  cons_extra.escape_char_ = static_cast<int8_t>(escape);
+  ObExprConstraint cons(const_cast<ObRawExpr*>(expr), expect_result, cons_extra);
   if (NULL == ctx_.expr_constraints_) {
     // do nothing
   } else if (OB_FAIL(add_var_to_array_no_dup(*ctx_.expr_constraints_, cons))) {

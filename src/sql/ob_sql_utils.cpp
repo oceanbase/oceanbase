@@ -5135,6 +5135,7 @@ bool ObExprConstraint::operator==(const ObExprConstraint &rhs) const
     bret = false;
   } else {
     bret = expect_result_ == rhs.expect_result_ &&
+           cons_extra_.extra_ == rhs.cons_extra_.extra_ &&
            pre_calc_expr_->same_as(*rhs.pre_calc_expr_);
   }
   return bret;
@@ -5184,6 +5185,8 @@ int ObPreCalcExprConstraint::assign(const ObPreCalcExprConstraint &other, common
   int ret = OB_SUCCESS;
   if (OB_FAIL(pre_calc_expr_info_.assign(other.pre_calc_expr_info_, allocator))) {
     LOG_WARN("failed to copy pre calculable expression info");
+  } else if (OB_FAIL(cons_extras_.assign(other.cons_extras_))) {
+    LOG_WARN("failed to copy constraint extra info");
   } else {
     expect_result_ = other.expect_result_;
   }
@@ -5192,6 +5195,7 @@ int ObPreCalcExprConstraint::assign(const ObPreCalcExprConstraint &other, common
 
 int ObPreCalcExprConstraint::check_is_match(ObDatumObjParam &datum_param,
                                             ObExecContext &exec_ctx,
+                                            ObConstraintExtra *extra,
                                             bool &is_match) const
 {
   int ret = OB_SUCCESS;
@@ -5223,10 +5227,14 @@ int ObPreCalcExprConstraint::check_is_match(ObDatumObjParam &datum_param,
       case PRE_CALC_NOT_PRECISE: {
         //default escape
         //@todu JueHui: make escape value can be parameterized
-        char escape = '\\';
+        char escape = '\0';
         bool is_precise = false;
         bool expect_precise = PRE_CALC_PRECISE == expect_result_;
-        if (OB_FAIL(ObQueryRange::is_precise_like_range(obj_param, escape, is_precise))) {
+        if (OB_ISNULL(extra) || extra->escape_char_ < 0) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid escape", K(ret), K(extra->escape_char_));
+        } else if (FALSE_IT(escape = static_cast<char>(extra->escape_char_))) {
+        } else if (OB_FAIL(ObQueryRange::is_precise_like_range(obj_param, escape, is_precise))) {
           LOG_WARN("failed to check precise constraint.", K(ret));
         } else {
           is_match = is_precise == expect_precise;
@@ -5274,6 +5282,7 @@ int ObRowidConstraint::assign(const ObPreCalcExprConstraint &other, common::ObIA
 
 int ObRowidConstraint::check_is_match(ObDatumObjParam &datum_param,
                                       ObExecContext &exec_ctx,
+                                      ObConstraintExtra *extra,
                                       bool &is_match) const
 {
   int ret = OB_SUCCESS;

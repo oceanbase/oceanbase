@@ -1889,7 +1889,8 @@ int ObQueryRange::get_column_key_part(const ObRawExpr *l_expr,
                                               query_range_ctx_->cur_expr_is_precise_))) {
                 LOG_WARN("failed to judge whether is precise", K(ret));
               } else if (OB_FAIL(add_precise_constraint(const_expr,
-                                                        query_range_ctx_->cur_expr_is_precise_))) {
+                                                        query_range_ctx_->cur_expr_is_precise_,
+                                                        escape_ch))) {
                 LOG_WARN("failed to add precise constraint", K(ret));
               } else if (OB_FAIL(add_prefix_pattern_constraint(const_expr))) {
                 LOG_WARN("failed to add prefix pattern constraint", K(ret));
@@ -9866,12 +9867,14 @@ int ObQueryRange::get_calculable_expr_val(const ObRawExpr *expr,
   return ret;
 }
 
-int ObQueryRange::add_precise_constraint(const ObRawExpr *expr, bool is_precise)
+int ObQueryRange::add_precise_constraint(const ObRawExpr *expr, bool is_precise, char escape)
 {
   int ret = OB_SUCCESS;
   PreCalcExprExpectResult expect_result = is_precise ? PreCalcExprExpectResult::PRE_CALC_PRECISE :
                                               PreCalcExprExpectResult::PRE_CALC_NOT_PRECISE;
-  ObExprConstraint cons(const_cast<ObRawExpr*>(expr), expect_result);
+  ObConstraintExtra cons_extra;
+  cons_extra.escape_char_ = static_cast<int8_t>(escape);
+  ObExprConstraint cons(const_cast<ObRawExpr*>(expr), expect_result, cons_extra);
   if (OB_ISNULL(query_range_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
