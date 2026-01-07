@@ -414,6 +414,35 @@ int ObStaticEngineCG::postorder_generate_op(ObLogicalOperator &op,
       spec->use_rich_format_ = false;
     }
   }
+  if (OB_SUCC(ret) && log_op_def::LOG_SELECT_INTO == op.get_type()) {
+    ObSelectIntoSpec *select_into_spec =
+        static_cast<ObSelectIntoSpec *>(spec);
+
+    if (!select_into_spec->external_properties_.str_.empty()) {
+      // select into是一个dml算子，它本身没有实现向量化，那它的rich
+      // format就是false
+      bool use_odps_jni_connector = GCONF._use_odps_jni_connector;
+      ObExternalFileFormat::FormatType format_type =
+          ObExternalFileFormat::INVALID_FORMAT;
+      if (OB_FAIL(ObSQLUtils::get_external_table_type(
+              select_into_spec->external_properties_.str_, format_type))) {
+        LOG_WARN("fail to get external table format", K(ret));
+      } else if ((ObExternalFileFormat::PARQUET_FORMAT == format_type || ObExternalFileFormat::ORC_FORMAT == format_type)
+          && !phy_plan_->get_use_rich_format()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support odps format in not rich format, please "
+                 "_enable_rich_vector_format=true",
+                 K(ret));
+      } else if (ObExternalFileFormat::ODPS_FORMAT == format_type) {
+        if (use_odps_jni_connector && !phy_plan_->get_use_rich_format()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not support odps format in not rich format in java mode, please "
+                   "_enable_rich_vector_format=true",
+                   K(ret));
+        }
+      }
+    }
+  }
   partial_frame_gen.px_coord_cnt_ -= is_px_coord ? 1 : 0;
   partial_frame_gen.dfo_raw_exprs_ = origin_dfo_raw_exprs;
   return ret;
