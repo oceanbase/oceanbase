@@ -722,6 +722,8 @@ int ObDiagnosticInfoContainer::for_each_and_delay_release_ref(
         int ret = OB_SUCCESS;
         if (OB_FAIL(runnings.inc_ref(di))) {
           LOG_WARN("failed to inc ref di", K(ret));
+          //ignore error to continue iteration
+          ret = OB_SUCCESS;
         } else if (OB_FAIL(di_array.push_back(di))) {
           LOG_WARN("faield to push back id to di_array", K(ret));
           int tmp_ret = OB_SUCCESS;
@@ -735,7 +737,7 @@ int ObDiagnosticInfoContainer::for_each_and_delay_release_ref(
         } else if (OB_FAIL(fn(id, di))) {
           LOG_WARN("faield to exec fn", K(ret));
         }
-        return ret;
+        return ret == OB_SUCCESS;
       };
 
   if (OB_FAIL(for_each_running_di(fn_wrapper))) {

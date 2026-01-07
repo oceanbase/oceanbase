@@ -97,7 +97,7 @@ int ObDiagnosticInfoUtil::get_all_diag_info(
             }
           }
         }
-        return OB_SUCCESS == ret;
+        return ret;
       };
   if (!is_virtual_tenant_id(tenant_id)) {
     MTL_SWITCH(tenant_id)
@@ -127,7 +127,7 @@ int ObDiagnosticInfoUtil::get_the_diag_info(uint64_t tenant_id, ObDiagnoseTenant
           const_cast<ObDiagnosticInfo *>(di)->get_event_stats().accumulate_to(
               diag_info.get_event_stats());
         }
-        return true;
+        return OB_SUCCESS;
       };
   MTL_SWITCH(tenant_id)
   {
@@ -216,7 +216,7 @@ int ObDiagnosticInfoUtil::get_group_diag_info(uint64_t tenant_id,
         const_cast<ObDiagnosticInfo *>(di)->get_event_stats().accumulate_to(tdi->get_event_stats());
       }
     }
-    return OB_SUCCESS == ret;
+    return ret;
   };
 
   std::function<void(int64_t, const ObDiagnoseTenantInfo &)> summary_fn =
