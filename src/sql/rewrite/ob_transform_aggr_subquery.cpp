@@ -615,6 +615,9 @@ int ObTransformAggrSubquery::check_aggr_first_validity(ObDMLStmt &stmt,
   } else if (!is_valid) {
     LOG_TRACE("order by item is invalid", K(is_valid));
     OPT_TRACE("subquery order by item contain correlated subquery");
+  } else if (parent_expr.has_flag(CNT_WINDOW_FUNC)) {
+    is_valid = false;
+    OPT_TRACE("window function in subquery comparison is not supported");
   }
   return ret;
 }
@@ -1561,6 +1564,9 @@ int ObTransformAggrSubquery::check_join_first_validity(ObQueryRefRawExpr &query_
     is_valid = false;
     LOG_TRACE("invalid subquery", K(is_valid), K(*subquery));
     OPT_TRACE("subquery has rollup/win_func/sequence");
+  } else if (parent_expr.has_flag(CNT_WINDOW_FUNC)) {
+    is_valid = false;
+    OPT_TRACE("window function in subquery comparison is not supported");
   } else if (in_exists) {
     if (!subquery->has_having()) {
       is_valid = false;
