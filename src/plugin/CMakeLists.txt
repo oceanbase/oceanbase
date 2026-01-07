@@ -13,6 +13,8 @@ ob_set_subtarget(ob_plugin sys
 ob_set_subtarget(ob_plugin adaptor
   adaptor/ob_plugin_adaptor.cpp
   adaptor/ob_plugin_ftparser_adaptor.cpp
+  adaptor/ob_plugin_kms_adaptor.cpp
+  adaptor/ob_plugin_kms_client.cpp
 )
 
 ob_set_subtarget(ob_plugin share
@@ -44,6 +46,7 @@ add_library(ob_plugin_export_static
   export/ob_plugin.cpp
   export/ob_plugin_ftparser.cpp
   export/ob_plugin_allocator.cpp
+  export/ob_plugin_kms.cpp
   export/ob_plugin_log.cpp
 )
 

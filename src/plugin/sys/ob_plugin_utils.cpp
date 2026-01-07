@@ -40,6 +40,7 @@ const char *ob_plugin_type_to_string(ObPluginType type)
     case OBP_PLUGIN_TYPE_INVALID:      return "INVALID";
     case OBP_PLUGIN_TYPE_FT_PARSER:    return "FTPARSER";
     case OBP_PLUGIN_TYPE_EXTERNAL:     return "EXTERNAL TABLE";
+    case OBP_PLUGIN_TYPE_KMS:          return "KMS";
     default:                           return "UNKNOWN PLUGIN TYPE";
   }
 }

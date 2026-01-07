@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE
 
+#include "oceanbase/ob_plugin_kms.h"
 #include "lib/string/ob_string.h"
 #include "share/ob_server_struct.h"
 #include "storage/fts/ob_fts_stop_word.h"
@@ -28,30 +29,31 @@ using namespace common;
 using namespace storage;
 
 namespace plugin {
+const ObString ObPluginHelper::KMS_NAME_PREFIX{"plugin."};
 
 int ObPluginHelper::find_plugin_entry(const ObString &name,
                                       ObPluginType type,
-                                      int64_t interface_current_version,
+                                      ObPluginVersion current_version,
                                       ObPluginEntryHandle *&entry_handle)
 {
   int ret = OB_SUCCESS;
   entry_handle = nullptr;
   if (OB_FAIL(GCTX.plugin_mgr_->find_plugin(type, name, entry_handle))) {
-    LOG_DEBUG("failed to find parser", K(name), K(ret));
+    LOG_DEBUG("failed to find plugin", K(name), K(ret));
   } else if (OB_ISNULL(entry_handle)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("find plugin success but got null", K(name), K(ret));
   } else if (!entry_handle->ready()) {
     ret = OB_FUNCTION_NOT_DEFINED;
     LOG_WARN("plugin is not ready", K(name));
-  } else if (entry_handle->entry().interface_version > interface_current_version) {
+  } else if (entry_handle->entry().interface_version > current_version) {
     ret = OB_FUNCTION_NOT_DEFINED;
     LOG_WARN("invalid interface version",
              K(ObPluginVersionAdaptor(entry_handle->entry().interface_version)),
-             K(ObPluginVersionAdaptor(interface_current_version)));
+             K(ObPluginVersionAdaptor(current_version)));
   } else if (OB_ISNULL(entry_handle->entry().descriptor)) {
     ret = OB_FUNCTION_NOT_DEFINED;
-    LOG_WARN("find ftparser but descriptor is null", K(ret), K(name));
+    LOG_WARN("find plugin but descriptor is null", K(ret), K(name));
   } else {
     LOG_TRACE("find plugin", K(name));
   }
@@ -110,6 +112,37 @@ int ObPluginHelper::find_ftparser(const ObString &parser_name, ObIFTParserDesc *
   return ret;
 }
 
+int ObPluginHelper::find_kms(const ObString &name, ObPluginKmsIntf *&kms, ObPluginParam *&param)
+{
+  int ret = OB_SUCCESS;
+  kms = nullptr;
+  param = nullptr;
+  ObPluginEntryHandle *entry_handle = nullptr;
+  ObString real_name;
+  if (name.prefix_match_ci(KMS_NAME_PREFIX)) {
+    real_name.assign_ptr(name.ptr() + KMS_NAME_PREFIX.length(), name.length() - KMS_NAME_PREFIX.length());
+  } else {
+    real_name.assign_ptr(name.ptr(), name.length());
+  }
+
+  if (OB_FAIL(find_plugin_entry(real_name, OBP_PLUGIN_TYPE_KMS, OBP_KMS_INTERFACE_VERSION_CURRENT, entry_handle))) {
+    if (OB_FUNCTION_NOT_DEFINED == ret) {
+      LOG_USER_ERROR(OB_FUNCTION_NOT_DEFINED, real_name.length(), real_name.ptr());
+      LOG_DEBUG("no such plugin", K(real_name), K(name));
+    } else {
+      LOG_WARN("failed to find plugin", K(real_name), K(name), K(ret));
+    }
+  } else if (OB_ISNULL(entry_handle->entry().plugin_handle)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("find a plugin entry without plugin handle", K(ret), KPC(entry_handle));
+  } else {
+    kms = reinterpret_cast<ObPluginKmsIntf *>(entry_handle->entry().descriptor);
+    param = &entry_handle->entry().plugin_handle->plugin_param();
+    LOG_TRACE("find kms plugin", K(real_name), K(name));
+  }
+  return ret;
+}
+
 int ObPluginHelper::find_external_table(const common::ObString &name,
                                         ObIExternalDescriptor *&external_desc)
 {
@@ -126,6 +159,7 @@ int ObPluginHelper::find_external_table(const common::ObString &name,
   }
   return ret;
 }
+
 int ObPluginHelper::register_plugin_entry(ObPluginParamPtr param,
                                           ObPluginType type,
                                           const char *name,

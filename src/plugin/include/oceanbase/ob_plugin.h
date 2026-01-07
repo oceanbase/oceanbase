@@ -30,14 +30,14 @@
  * @details This is a constant value
  */
 #define OBP_PLUGIN_API_VERSION OBP_MAKE_VERSION(0, 1, 0)
-
 #define OBP_PLUGIN_API_VERSION_0_2_0 OBP_MAKE_VERSION(0, 2, 0)
+#define OBP_PLUGIN_API_VERSION_0_3_0 OBP_MAKE_VERSION(0, 3, 0)
 
 /**
  * current API version
  * @details This value will change if we add more API
  */
-#define OBP_PLUGIN_API_VERSION_CURRENT OBP_PLUGIN_API_VERSION_0_2_0
+#define OBP_PLUGIN_API_VERSION_CURRENT OBP_PLUGIN_API_VERSION_0_3_0
 
 #ifdef OBP_DYNAMIC_PLUGIN
 /** in dynamic library plugin **/
