@@ -4391,8 +4391,6 @@ int ObPLExecState::process_param(const ParamStore &params,
       //res_obj没有指向result的地址，需要将res_obj的值拷贝到result中
       result = *res_obj;
     }
-  } else if (!is_oracle_mode && func_.is_function()) { // add column convert at resolve stage
-    result = param;
   } else {
     common::ObIArray<common::ObString>* type_info = NULL;
     if (OB_FAIL(func_.get_variables().at(param_idx).get_type_info(type_info))) {
