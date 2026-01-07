@@ -14,6 +14,7 @@
 #define LIB_STRING_OB_STRING_HOLDER_H
 #include "lib/allocator/ob_allocator.h"
 #include "lib/allocator/ob_malloc.h"
+#include "meta_programming/ob_mover.h"
 #include "ob_string.h"
 #include <utility>
 
@@ -42,16 +43,19 @@ public:
     }
   }
   // move sematic
-  ObStringHolder(ObStringHolder &&rhs) : ObStringHolder() { *this = std::move(rhs); }
-  ObStringHolder &operator=(ObStringHolder &&rhs) {
+  void move_from(meta::ObMover<ObStringHolder> rhs) {
     reset();
-    if (rhs.buffer_ == rhs.local_buffer_for_tiny_str_) {// tiny str
-      copy_from_tiny_ob_str_(rhs.get_ob_string());
+    ObStringHolder &rvalue_obj = rhs.get_object();
+    if (rvalue_obj.buffer_ == rvalue_obj.local_buffer_for_tiny_str_) {// tiny str
+      copy_from_tiny_ob_str_(rvalue_obj.get_ob_string());
     } else {// big str
-      std::swap(buffer_, rhs.buffer_);
-      std::swap(len_, rhs.len_);
+      std::swap(buffer_, rvalue_obj.buffer_);
+      std::swap(len_, rvalue_obj.len_);
     }
-    return *this;
+  }
+  int assign(meta::ObMover<ObStringHolder> rhs) {
+    move_from(rhs);
+    return OB_SUCCESS;
   }
   // not allow copy construction and copy assignment
   ObStringHolder(const ObStringHolder &) = delete;

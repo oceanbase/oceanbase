@@ -1526,24 +1526,24 @@ int ObTableLockService::deal_with_deadlock_(ObTableLockCtx &ctx)
 {
   int ret = OB_SUCCESS;
   SessionGuard session_guard;
-  const uint32_t sess_id = ctx.tx_desc_->get_session_id();
-  if (OB_FAIL(ObTransDeadlockDetectorAdapter::get_session_info(sess_id, session_guard))) {
-    LOG_WARN("get session info failed", K(ret), K(sess_id));
+  transaction::SessionIDPair sess_id_pair(ctx.tx_desc_->get_session_id(), ctx.tx_desc_->get_assoc_session_id());
+  if (OB_FAIL(ObTransDeadlockDetectorAdapter::get_session_info(sess_id_pair, session_guard))) {
+    LOG_WARN("get session info failed", K(ret), K(sess_id_pair));
   } else if (!session_guard.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session guard invalid", K(ret), K(sess_id));
+    LOG_WARN("session guard invalid", K(ret), K(sess_id_pair));
   } else if (ObCompatibilityMode::MYSQL_MODE == session_guard->get_compatibility_mode()) {
-    ret = ObTransDeadlockDetectorAdapter::kill_tx(sess_id);
+    ret = ObTransDeadlockDetectorAdapter::kill_tx(sess_id_pair);
   } else if (ObCompatibilityMode::ORACLE_MODE == session_guard->get_compatibility_mode()) {
-    ret = ObTransDeadlockDetectorAdapter::kill_stmt(sess_id);
+    ret = ObTransDeadlockDetectorAdapter::kill_stmt(sess_id_pair);
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("unknown mode", K(ret), K(session_guard->get_compatibility_mode()));
   }
   if (!OB_SUCC(ret)) {
-    LOG_WARN("kill trans or stmt failed", K(ret), K(sess_id));
+    LOG_WARN("kill trans or stmt failed", K(ret), K(sess_id_pair));
   }
-  LOG_DEBUG("ObTableLockService::deal_with_deadlock_", K(ret), K(sess_id));
+  LOG_DEBUG("ObTableLockService::deal_with_deadlock_", K(ret), K(sess_id_pair));
   return ret;
 }
 

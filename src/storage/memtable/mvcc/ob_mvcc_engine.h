@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_MEMTABLE_MVCC_OB_MVCC_ENGINE_
 #define OCEANBASE_MEMTABLE_MVCC_OB_MVCC_ENGINE_
 
+#include "ob_tablet_id.h"
 #include "share/ob_define.h"
 #include "storage/memtable/ob_concurrent_control.h"
 #include "storage/memtable/mvcc/ob_mvcc_ctx.h"
@@ -60,7 +61,7 @@ public:
                    ObQueryEngine *query_engine,
                    ObMemtable *memtable);
   virtual void destroy();
-
+public:
   // Mvcc engine read interface
   int get(ObMvccAccessCtx &ctx,
           const ObQueryFlag &query_flag,

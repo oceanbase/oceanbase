@@ -14,6 +14,7 @@
 
 #include "sql/engine/ob_exec_context.h"
 #include "sql/executor/ob_remote_task_executor.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -99,10 +100,10 @@ int ObRemoteTaskExecutor::execute(ObExecContext &query_ctx, ObJob *job, ObTaskIn
       const ObPhysicalPlan *plan = plan_ctx->get_phy_plan();
       if (plan && plan->is_need_trans()) {
         int tmp_ret = handle_tx_after_rpc(handler->get_result(),
-                                        session,
-                                        has_sent_task,
-                                        has_transfer_err,
-                                        plan,
+                                          session,
+                                          has_sent_task,
+                                          has_transfer_err,
+                                          plan,
                                           query_ctx);
         ret = COVER_SUCC(tmp_ret);
       }
@@ -192,21 +193,38 @@ int ObRemoteTaskExecutor::handle_tx_after_rpc(ObScanner *scanner,
   auto tx_desc = session->get_tx_desc();
   bool remote_trans =
     session->get_local_autocommit() && !session->has_explicit_start_trans();
-  if (remote_trans) {
+  transaction::ObTransService *trans_service = MTL(transaction::ObTransService*);
+  if (OB_ISNULL(trans_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("trans service is NULL", K(ret));
+  } else if (remote_trans) {
+    // remote trx, autocommit=true
+    if (phy_plan->is_stmt_modify_trans() && has_sent_task) {
+      if (has_transfer_err) {
+      } else if (OB_ISNULL(scanner)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("task result is NULL", K(ret));
+      } else if (OB_TRY_LOCK_ROW_CONFLICT == scanner->get_err_code()) {
+        transaction::ObTxExecResult &result = scanner->get_trans_result();
+        session->get_trans_result().assign(result);
+        LOG_TRACE("ac = 1 remote report tx result",
+                  "scanner_trans_result", session->get_trans_result());
+      }
+    }
   } else if (OB_ISNULL(tx_desc)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("dml need acquire transaction", K(ret), KPC(session));
   } else if (phy_plan->is_stmt_modify_trans() && has_sent_task) {
+    // local trx
     if (has_transfer_err) {
     } else if (OB_ISNULL(scanner)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("task result is NULL", K(ret));
-    } else if (OB_FAIL(MTL(transaction::ObTransService*)
-                       ->add_tx_exec_result(*tx_desc,
-                                            scanner->get_trans_result()))) {
+    } else if (OB_FAIL(trans_service->add_tx_exec_result(*tx_desc,
+                                                         scanner->get_trans_result()))) {
       LOG_WARN("fail to report tx result", K(ret),
-                 "scanner_trans_result", scanner->get_trans_result(),
-               K(tx_desc));
+                "scanner_trans_result", scanner->get_trans_result(),
+              K(tx_desc));
     } else {
       LOG_TRACE("report tx result",
                 "scanner_trans_result", scanner->get_trans_result(),
@@ -226,7 +244,7 @@ int ObRemoteTaskExecutor::handle_tx_after_rpc(ObScanner *scanner,
         } else if (OB_TMP_FAIL(session->get_trans_result().add_touched_ls(ls_ids))) {
           LOG_WARN("add touched ls to txn failed", K(tmp_ret));
         } else {
-         LOG_INFO("add touched ls succ", K(ls_ids));
+          LOG_INFO("add touched ls succ", K(ls_ids));
         }
         if (OB_TMP_FAIL(tmp_ret)) {
           LOG_WARN("remote execute use plan fail with transfer_error and try add touched ls failed, tx will rollback", K(tmp_ret));

@@ -11,9 +11,11 @@
  */
 
 #include "ob_memtable_context.h"
+#include "meta_programming/ob_mover.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tablelock/ob_lock_memtable.h"
 #include "storage/tx/ob_trans_deadlock_adapter.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 
 namespace oceanbase
 {
@@ -716,71 +718,54 @@ int ObMemtableCtx::get_callback_list_stat(ObIArray<ObTxCallbackListStat> &stats)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-int ObMemtableCtx::get_conflict_trans_ids(common::ObIArray<ObTransIDAndAddr> &array)
+int ObMemtableCtx::fetch_conflict_info_array(common::ObIArray<ObRowConflictInfo> &array)
 {
   int ret = OB_SUCCESS;
-  common::ObArray<transaction::ObTransID> conflict_ids;
+  array.reset();
   {
     ObByteLockGuard guard(lock_, ObWaitEventIds::MEMTABLE_CTX_ACCESS_LOCK);
-    ret = conflict_ids.assign(conflict_trans_ids_);
-  }
-  if (OB_FAIL(ret)) {
-    DETECT_LOG(ERROR, "fail to copy conflict_trans_ids_", KR(ret), KPC(this));
-  } else if (OB_ISNULL(ctx_)) {
-    ret = OB_BAD_NULL_ERROR;
-    DETECT_LOG(ERROR, "trans part ctx on ObMemtableCtx is NULL", KR(ret), KPC(this));
-  } else {
-    for (int64_t idx = 0; idx < conflict_ids.count() && OB_SUCC(ret); ++idx) {
-      ObAddr scheduler_addr;
-      if (OB_FAIL(ObTransDeadlockDetectorAdapter::get_trans_scheduler_info_on_participant(conflict_ids.at(idx),
-                                                                                          ctx_->get_ls_id(),
-                                                                                          scheduler_addr))) {
-        if (ret == OB_TRANS_CTX_NOT_EXIST) {
-          DETECT_LOG(INFO, "tx ctx not exist anymore, give up blocking on this tx_id",
-                           KR(ret), KPC(this), K(conflict_ids), K(array), K(idx));
-          ret = OB_SUCCESS;
-        } else {
-          DETECT_LOG(WARN, "fail to get conflict trans scheduler addr",
-                           KR(ret), KPC(this), K(conflict_ids), K(array), K(idx));
-        }
-      } else if (OB_FAIL(array.push_back({conflict_ids[idx], scheduler_addr}))) {
-        DETECT_LOG(ERROR, "copy block trans id failed",
-                          KR(ret), KPC(this), K(conflict_ids), K(array), K(idx));
+    for (int64_t idx = 0; idx < row_conflict_info_array_.count() && OB_SUCC(ret); ++idx) {
+      if (OB_FAIL(array.push_back(ObRowConflictInfo()))) {
+        DETECT_LOG(WARN, "fail to push back", KR(ret), K(idx), KPC(this));
+      } else if (OB_FAIL(array.at(array.count() - 1).assign(meta::ObMover<ObRowConflictInfo>(row_conflict_info_array_[idx])))) {
+        DETECT_LOG(WARN, "move operation failed, should not happen", KR(ret), K(idx), KPC(this));
       }
+    }// MUST RELASE LOCK!!! THEN YOU CAN FIND TRANS SCHEDULER, OR DEADLOCK RISK!!!
+    row_conflict_info_array_.reset();
+  }
+  return ret;
+}
+
+bool ObMemtableCtx::check_if_contains_conflict_info_(meta::ObMover<ObRowConflictInfo> conflict_info)
+{
+  bool ret = false;
+  for (int64_t idx = 0; idx < this->row_conflict_info_array_.count(); ++idx) {
+    if (this->row_conflict_info_array_[idx].conflict_tx_id_ == conflict_info.get_object().conflict_tx_id_) {
+      ret = true;
     }
   }
   return ret;
 }
 
-void ObMemtableCtx::reset_conflict_trans_ids()
+int ObMemtableCtx::add_conflict_info(meta::ObMover<ObRowConflictInfo> conflict_info)// just receive rvalue, cause don't want do extra memory allocation
 {
-  ObByteLockGuard guard(lock_, ObWaitEventIds::MEMTABLE_CTX_ACCESS_LOCK);
-  conflict_trans_ids_.reset();
-}
-
-int ObMemtableCtx::add_conflict_trans_id(const ObTransID conflict_trans_id)
-{
-  auto if_contains = [this](const ObTransID trans_id) -> bool
-  {
-    for (int64_t idx = 0; idx < this->conflict_trans_ids_.count(); ++idx) {
-      if (this->conflict_trans_ids_[idx] == trans_id) {
-        return true;
-      }
-    }
-    return false;
-  };
   ObByteLockGuard guard(lock_, ObWaitEventIds::MEMTABLE_CTX_ACCESS_LOCK);
   int ret = OB_SUCCESS;
-
-  if (conflict_trans_ids_.count() >= MAX_RESERVED_CONFLICT_TX_NUM) {
-    ret = OB_SIZE_OVERFLOW;
-    DETECT_LOG(WARN, "too many conflict trans_id", K(*this), K(conflict_trans_id), K(conflict_trans_ids_));
-  } else if (if_contains(conflict_trans_id)) {
+  if (conflict_info.get_object().conflict_hash_ <= 0) {
     // do nothing
-  } else if (OB_FAIL(conflict_trans_ids_.push_back(conflict_trans_id))) {
-    DETECT_LOG(WARN, "push trans id to blocked trans ids failed", K(*this), K(conflict_trans_id), K(conflict_trans_ids_));
+  } else if (check_if_contains_conflict_info_(conflict_info)) {
+    // do nothing
+  } else if (row_conflict_info_array_.count() >= MAX_RESERVED_CONFLICT_TX_NUM) {
+    ret = OB_SIZE_OVERFLOW;
+    DETECT_LOG(WARN, "too many conflict tx", K(*this), K(conflict_info), K(row_conflict_info_array_));
+  } else {
+    if (OB_FAIL(row_conflict_info_array_.push_back(ObRowConflictInfo()))) {
+      DETECT_LOG(WARN, "push trans id to blocked trans ids failed", K(*this), K(conflict_info), K(row_conflict_info_array_));
+    } else if (OB_FAIL(row_conflict_info_array_[row_conflict_info_array_.count() - 1].assign(meta::ObMover<ObRowConflictInfo>(conflict_info)))) {
+      DETECT_LOG(ERROR, "fail to assign rvalue data, should not happen", K(*this), K(conflict_info), K(row_conflict_info_array_));
+      row_conflict_info_array_.pop_back();
+    }
   }
-
   return ret;
 }
 

@@ -157,58 +157,59 @@ bool ObDetectorPriority::operator>=(const ObDetectorPriority &rhs) const
   return ((*this) > rhs) || ((*this) == rhs);
 }
 
-/* * * * * * definition of ObDependencyResource * * * * */
+/* * * * * * definition of ObDependencyHolder * * * * */
 
-ObDependencyResource::ObDependencyResource()
-{
-  // do nothing
-}
+ObDependencyHolder::ObDependencyHolder()
+: addr_(),
+user_key_() {}
 
-ObDependencyResource::ObDependencyResource(const ObDependencyResource &rhs)
+ObDependencyHolder::ObDependencyHolder(const ObDependencyHolder &rhs)
 {
   operator=(rhs);
 }
 
-ObDependencyResource::ObDependencyResource(const ObAddr &addr, const UserBinaryKey &user_key) :
-  addr_(addr),
-  user_key_(user_key) {}
+ObDependencyHolder::ObDependencyHolder(const ObAddr &addr,
+                                       const UserBinaryKey &user_key)
+: addr_(addr),
+user_key_(user_key) {}
 
-void ObDependencyResource::reset()
+void ObDependencyHolder::reset()
 {
   addr_.reset();
   user_key_.reset();
 }
 
-int ObDependencyResource::set_args(const common::ObAddr &addr, const UserBinaryKey &user_key)
+int ObDependencyHolder::set_args(const common::ObAddr &addr,
+                                 const UserBinaryKey &user_key)
 {
   addr_ = addr;
   user_key_ = user_key;
   return OB_SUCCESS;
 }
 
-const ObAddr& ObDependencyResource::get_addr() const
+const ObAddr& ObDependencyHolder::get_addr() const
 {
   return addr_;
 }
 
-const UserBinaryKey &ObDependencyResource::get_user_key() const
+const UserBinaryKey &ObDependencyHolder::get_user_key() const
 {
   return user_key_;
 }
 
-bool ObDependencyResource::is_valid() const
+bool ObDependencyHolder::is_valid() const
 {
   return user_key_.is_valid() && addr_.is_valid();
 }
 
-ObDependencyResource& ObDependencyResource::operator=(const ObDependencyResource &rhs)
+ObDependencyHolder& ObDependencyHolder::operator=(const ObDependencyHolder &rhs)
 {
   addr_ = rhs.addr_;
   user_key_ = rhs.user_key_;
   return *this;
 }
 
-uint64_t ObDependencyResource::hash() const
+uint64_t ObDependencyHolder::hash() const
 {
   uint64_t hash_val = 0;
   hash_val = addr_.hash();
@@ -217,12 +218,12 @@ uint64_t ObDependencyResource::hash() const
   return hash_val;
 }
 
-bool ObDependencyResource::operator==(const ObDependencyResource &rhs) const
+bool ObDependencyHolder::operator==(const ObDependencyHolder &rhs) const
 {
   return  addr_ == rhs.addr_ && user_key_ == rhs.user_key_;
 }
 
-bool ObDependencyResource::operator<(const ObDependencyResource &rhs) const
+bool ObDependencyHolder::operator<(const ObDependencyHolder &rhs) const
 {
   if (addr_ < rhs.addr_) {
     return true;
@@ -294,6 +295,16 @@ const ObString &ObDetectorUserReportInfo::get_resource_visitor() const
 const ObString &ObDetectorUserReportInfo::get_required_resource() const
 {
   return required_resource_;
+}
+
+void ObDetectorUserReportInfo::set_blocked_seq(const transaction::ObTxSEQ &blocked_seq)
+{
+  blocked_seq_ = blocked_seq;
+}
+
+transaction::ObTxSEQ ObDetectorUserReportInfo::get_blocked_seq() const
+{
+  return blocked_seq_;
 }
 
 const ObSArray<ObString> &ObDetectorUserReportInfo::get_extra_columns_names() const
@@ -417,6 +428,19 @@ int ObDetectorUserReportInfo::assign(const ObDetectorUserReportInfo &rhs)
     module_name_guard_ = rhs.module_name_guard_;
     resource_visitor_guard_ = rhs.resource_visitor_guard_;
     required_resource_guard_ = rhs.required_resource_guard_;
+    blocked_seq_ = rhs.blocked_seq_;
+  }
+  return ret;
+}
+
+int ObDetectorUserReportInfo::append_column(const char *column_name,
+                                            const common::ObSharedGuard<char> &column_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(set_columns_(-1, ValueType::COLUMN_NAME, column_name))) {
+    DETECT_LOG(WARN, "failt to set column name", KR(ret), K(column_name), K(column_info.get_ptr()));
+  } else if (OB_FAIL(set_columns_(-1, ValueType::COLUMN_VALUE, column_info))) {
+    DETECT_LOG(WARN, "failt to push column value", KR(ret), K(column_name), K(column_info.get_ptr()));
   }
   return ret;
 }

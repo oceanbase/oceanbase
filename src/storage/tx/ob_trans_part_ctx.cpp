@@ -5836,6 +5836,7 @@ int ObPartTransCtx::replay_active_info(const ObTxActiveInfoLog &log,
     }
     trans_expired_time_ = log.get_tx_expired_time();
     session_id_ = log.get_session_id();
+    associated_session_id_ = log.get_associated_session_id();
     // schema_version
     can_elr_ = log.is_elr();
     // cur_query_start_time

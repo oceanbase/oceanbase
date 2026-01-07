@@ -41,15 +41,77 @@ namespace detector
 constexpr int64_t LCL_MSG_CACHE_LIMIT = 4096;
 
 class ObLCLMessage;
-class ObDependencyResource;
+class ObDependencyHolder;
 class ObDetectorPriority;
 class ObDetectorUserReportInfo;
 class ObDetectorInnerReportInfo;
 class ObDeadLockCollectInfoMessage;
+class DetectorNodeInfoForVirtualTable;
+class ObDeadLockNotifyParentMessage;
 typedef common::ObFunction<int(const common::ObIArray<ObDetectorInnerReportInfo> &,
                                const int64_t)> DetectCallBack;
-typedef common::ObFunction<int(ObIArray<ObDependencyResource>&,bool&)> BlockCallBack;
-typedef common::ObFunction<int(ObDetectorUserReportInfo&)> CollectCallBack;
+typedef common::ObFunction<int(ObIArray<ObDependencyHolder>&,bool&)> BlockCallBack;
+typedef common::ObFunction<int(const ObDependencyHolder&/*next resource in loop*/,
+                               ObDetectorUserReportInfo&)> CollectCallBack;
+typedef common::ObFunction<int(const bool,/*need fill conflict actions flag*/
+                               char *,/*to_string buffer*/
+                               const int64_t/*to_string buffer length*/,
+                               int64_t &,/*to_string current position*/
+                               DetectorNodeInfoForVirtualTable&/*virtual info to fill*/)> FillVirtualInfoCallBack;
+
+struct DummyFillCallBack {
+  int operator()(const bool,
+                 char *,/*to_string buffer*/
+                 const int64_t/*to_string buffer length*/,
+                 int64_t &,/*to_string current position*/
+                 DetectorNodeInfoForVirtualTable&/*virtual info to fill*/) { return OB_SUCCESS; }
+};
+
+struct DetectorNodeInfoForVirtualTable
+{
+  DetectorNodeInfoForVirtualTable()
+  : detector_id_(-1),
+  visitor_(),
+  module_(),
+  waiter_create_time_(0),
+  create_time_(0),
+  timeout_ts_(0),
+  allow_detect_time_(0),
+  lclv_(0),
+  lcl_period_(0),
+  private_label_(),
+  public_label_(),
+  action_(),
+  static_block_list_(),
+  static_block_resource_(),
+  dynamic_block_list_(),
+  dynamic_block_resource_(),
+  parent_list_(),
+  count_down_allow_detect_(0) {}
+  TO_STRING_KV(K_(detector_id), K_(visitor), K_(module), KTIME_(waiter_create_time), KTIME_(create_time), KTIME_(timeout_ts),
+               K_(allow_detect_time), K_(lclv), K_(lcl_period), K_(private_label), K_(public_label), K_(action),
+               K_(static_block_list), K_(static_block_resource), K_(dynamic_block_list), K_(dynamic_block_resource), K_(conflict_actions),
+               K_(parent_list), K_(count_down_allow_detect))
+  int64_t detector_id_;
+  ObString visitor_;
+  ObString module_;
+  int64_t waiter_create_time_;
+  int64_t create_time_;
+  int64_t timeout_ts_;
+  int64_t allow_detect_time_;
+  int64_t lclv_;
+  int64_t lcl_period_;
+  ObString private_label_;
+  ObString public_label_;
+  ObString action_;
+  ObString static_block_list_;
+  ObString static_block_resource_;
+  ObString dynamic_block_list_;
+  ObString dynamic_block_resource_;
+  ObString conflict_actions_;
+  ObString parent_list_;
+  int64_t count_down_allow_detect_;
+};
 
 class ObIDeadLockDetector : public common::LinkHashValue<UserBinaryKey>
 {
@@ -59,26 +121,34 @@ public:
 public:
   virtual ~ObIDeadLockDetector() {};
 public:
-  virtual int add_parent(const ObDependencyResource &) = 0;
+  virtual int add_parent(const ObDependencyHolder &) = 0;
   virtual void set_timeout(const uint64_t timeout) = 0;
+  virtual int check_and_renew_lease(const ObDeadLockNotifyParentMessage &notify_msg, bool &success) = 0;
   virtual int register_timer_task() = 0;
   virtual void unregister_timer_task() = 0;
   virtual void dec_count_down_allow_detect() = 0;
   virtual int64_t to_string(char *buffer, const int64_t length) const = 0;// for debugging
   virtual const ObDetectorPriority &get_priority() const = 0;// return detector's priority
   // build a directed dependency relationship to other
-  virtual int block(const ObDependencyResource &) = 0;
+  virtual int block(const ObDependencyHolder &) = 0;
   virtual int block(const BlockCallBack &) = 0;
-  virtual int get_block_list(common::ObIArray<ObDependencyResource> &cur_list) const = 0;
+  virtual int get_block_list(common::ObIArray<ObDependencyHolder> &cur_list) const = 0;
   // releace block list
-  virtual int replace_block_list(const common::ObIArray<ObDependencyResource> &) = 0;
+  virtual int replace_block_list(const common::ObIArray<ObDependencyHolder> &) = 0;
+  virtual int replace_collect_callback(const CollectCallBack &new_cb) = 0;
   // remove a directed dependency relationship to other
-  virtual int activate(const ObDependencyResource &) = 0;
+  virtual int activate(const ObDependencyHolder &) = 0;
   virtual int activate_all() = 0;
   virtual uint64_t get_resource_id() const = 0;// get self resource id
   virtual int process_collect_info_message(const ObDeadLockCollectInfoMessage &) = 0;
   // handle message for scheme LCL
   virtual int process_lcl_message(const ObLCLMessage &) = 0;
+  // fill virtual info
+  virtual int fill_virtual_info(const bool need_fill_conflict_actions_flag,
+                                DetectorNodeInfoForVirtualTable &info,
+                                char *buffer,
+                                const int64_t buffer_size,
+                                int64_t &pos) = 0;
 };
 
 class ObDetectorPriority
@@ -115,6 +185,8 @@ public:
   int set_module_name(const common::ObSharedGuard<char> &module_name);
   int set_visitor(const common::ObSharedGuard<char> &visitor);
   int set_resource(const common::ObSharedGuard<char> &resource);
+  void set_blocked_seq(const transaction::ObTxSEQ &blocked_seq);
+  transaction::ObTxSEQ get_blocked_seq() const;
   const common::ObString &get_module_name() const;
   const common::ObString &get_resource_visitor() const;
   const common::ObString &get_required_resource() const;
@@ -135,7 +207,8 @@ public:
   // user should keep the rules above, or runtime error.
   template <class ...Args>
   int set_extra_info(const Args &...rest);
-  TO_STRING_KV(K_(module_name), K_(resource_visitor), K_(required_resource),
+  int append_column(const char *column_name, const common::ObSharedGuard<char> &column_info);
+  TO_STRING_KV(K_(module_name), K_(resource_visitor), K_(blocked_seq), K_(required_resource),
                K_(extra_columns_names), K_(extra_columns_values), K_(valid_extra_column_size));
 private:
   enum class ValueType
@@ -187,6 +260,7 @@ public:
                const uint64_t start_delay,
                const ObDetectorPriority &priority,
                const ObDetectorUserReportInfo &user_report_info);
+  transaction::ObTxSEQ get_hold_seq() const;
   bool is_valid() const;
   const UserBinaryKey &get_user_key() const;
   uint64_t get_tenant_id() const;
@@ -229,18 +303,18 @@ private:
   ObDetectorUserReportInfo user_report_info_;// described by user
 };
 
-// ObDependencyResource describes the network resource on internet
+// ObDependencyHolder describes the network resource on internet
 // this structure could uniquely identified a detector on internet by address and user key
-class ObDependencyResource
+class ObDependencyHolder
 {
 public:
-  ObDependencyResource();
-  ObDependencyResource(const ObDependencyResource &rhs);
-  ObDependencyResource(const common::ObAddr &addr, const UserBinaryKey &user_key);
-  ObDependencyResource &operator=(const ObDependencyResource &rhs);
-  bool operator==(const ObDependencyResource &rhs) const;
-  bool operator<(const ObDependencyResource &rhs) const;
-  ~ObDependencyResource() = default;
+  ObDependencyHolder();
+  ObDependencyHolder(const ObDependencyHolder &rhs);
+  ObDependencyHolder(const common::ObAddr &addr, const UserBinaryKey &user_key);
+  ObDependencyHolder &operator=(const ObDependencyHolder &rhs);
+  bool operator==(const ObDependencyHolder &rhs) const;
+  bool operator<(const ObDependencyHolder &rhs) const;
+  ~ObDependencyHolder() = default;
   void reset();
   int set_args(const common::ObAddr &addr, const UserBinaryKey &user_key);
   const common::ObAddr &get_addr() const;

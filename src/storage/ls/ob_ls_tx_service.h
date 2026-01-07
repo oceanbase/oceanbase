@@ -96,9 +96,11 @@ public:
                               const bool for_replay,
                               transaction::ObPartTransCtx *&tx_ctx,
                               const int64_t lock_timeout) const;
-  int get_tx_scheduler(const transaction::ObTransID &tx_id,
-                       ObAddr &scheduler) const;
-  int get_tx_start_session_id(const transaction::ObTransID &tx_id, uint32_t &session_id) const;
+  int get_tx_scheduler_and_sess_id(const transaction::ObTransID &tx_id,
+                                   ObAddr &scheduler,
+                                   uint32_t &sess_id,
+                                   uint32_t &assco_sess_id) const;
+  int get_tx_start_session_id_and_ts(const transaction::ObTransID &tx_id, uint32_t &session_id, int64_t &trans_start_ts) const;
   int revert_tx_ctx(transaction::ObTransCtx *ctx) const;
   int get_read_store_ctx(const transaction::ObTxReadSnapshot &snapshot,
                          const bool read_latest,

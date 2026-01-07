@@ -10,11 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "lib/utility/ob_macro_utils.h"
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_memtable.h"
 #include "share/stat/ob_opt_stat_monitor_manager.h"
-#include "storage/memtable/ob_lock_wait_mgr.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "storage/memtable/ob_memtable_read_row_util.h"
 #include "storage/memtable/ob_row_conflict_handler.h"
 #include "storage/memtable/ob_row_compactor.h"
@@ -25,6 +26,7 @@
 #include "storage/access/ob_row_sample_iterator.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 #include "logservice/ob_log_service.h"
+#include "storage/tx/ob_trans_deadlock_adapter.h"
 
 namespace oceanbase
 {
@@ -35,6 +37,7 @@ using namespace share::schema;
 
 using namespace storage;
 using namespace transaction;
+using namespace lockwaitmgr;
 namespace memtable
 {
 
@@ -1318,7 +1321,7 @@ int ObMemtable::after_check_row_locked_on_frozen_stores_(
       if (res.has_insert()
           && lock_state.lock_trans_id_ == my_tx_id
           && blocksstable::ObDmlFlag::DF_LOCK == writer_dml_flag) {
-        (void)mvcc_engine_->mvcc_undo(value);
+            (void)mvcc_engine_->mvcc_undo(value);
         res.need_insert_ = false;
       }
 
@@ -2470,20 +2473,6 @@ int ObMemtable::multi_set_(
     // use finish_kvs as the final step of ObMemtable::multi_set. Therefore, it
     // is safe to make the data visible.
     (void)mvcc_engine_->finish_kvs(mvcc_results);
-
-    /*****[for deadlock]*****/
-    // recored this row is hold by this trans for deadlock detector
-    if (param.is_non_unique_local_index_) {
-      // no need to detect deadlock for non-unique local index table
-    } else {
-      ObMemtableKeyGenerator::ObMemtableKeyBuffer *memtable_key_buffer = memtable_key_generator.get_key_buffer();
-      for (int64_t idx = 0; idx < memtable_key_buffer->count(); ++idx) {
-        MTL(ObLockWaitMgr*)->set_hash_holder(key_.get_tablet_id(),
-                                             memtable_key_buffer->at(idx),
-                                             context.store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_tx_id());
-      }
-    }
-    /***********************/
   }
 
    // Step5: summarize the write results from the memtable::multi_set_ operation.
@@ -2635,17 +2624,6 @@ int ObMemtable::set_(
     // use finish_kvs as the final step of ObMemtable::set. Therefore, it is
     // safe to make the data visible.
     (void)mvcc_engine_->finish_kv(mvcc_result);
-
-    /*****[for deadlock]*****/
-    // recored this row is hold by this trans for deadlock detector
-    if (param.is_non_unique_local_index_) {
-      // no need to detect deadlock for non-unique local index table
-    } else {
-      MTL(ObLockWaitMgr*)->set_hash_holder(key_.get_tablet_id(),
-                                           mtk,
-                                           context.store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_tx_id());
-    }
-    /***********************/
   }
 
   if (OB_SUCC(ret)) {
@@ -2768,17 +2746,6 @@ int ObMemtable::lock_(
       // use finish_kvs as the final step of ObMemtable::lock. Therefore, it is
       // safe to make the data visible.
       (void)mvcc_engine_->finish_kvs(mvcc_results);
-
-      /*****[for deadlock]*****/
-      // recored this row is hold by this trans for deadlock detector
-      if (param.is_non_unique_local_index_) {
-        // no need to detect deadlock for non-unique local index table
-      } else {
-        MTL(ObLockWaitMgr*)->set_hash_holder(key_.get_tablet_id(),
-                                             mtk,
-                                             context.store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_tx_id());
-      }
-      /***********************/
     }
   }
 
@@ -2855,7 +2822,6 @@ int ObMemtable::mvcc_replay_(storage::ObStoreCtx &ctx,
     TRANS_LOG(WARN, "register_row_replay_cb fail", K(ret));
   } else if (FALSE_IT(timeguard.click("register_row_replay_cb"))) {
   }
-
   return ret;
 }
 
@@ -3136,7 +3102,6 @@ struct ReCheckFun {
       locked = lock_state_.is_locked_ && lock_state_.lock_trans_id_ != tx_id;
       wait_on_row = !lock_state_.is_delayed_cleanout_;
     }
-
     return ret;
   }
 private:
@@ -3155,10 +3120,7 @@ int ObMemtable::post_row_write_conflict_(ObMvccAccessCtx &acc_ctx,
   ObTransID conflict_tx_id = lock_state.lock_trans_id_;
   ObMemtableCtx *mem_ctx = acc_ctx.get_mem_ctx();
   int64_t current_ts = common::ObClockGenerator::getClock();
-  int64_t lock_wait_start_ts = mem_ctx->get_lock_wait_start_ts() > 0
-    ? mem_ctx->get_lock_wait_start_ts()
-    : current_ts;
-  int64_t lock_wait_expire_ts = acc_ctx.eval_lock_expire_ts(lock_wait_start_ts);
+  int64_t lock_wait_expire_ts = acc_ctx.eval_lock_expire_ts(current_ts);
   if (current_ts >= lock_wait_expire_ts) {
     ret = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;
     TRANS_LOG(WARN, "exclusive lock conflict", K(ret), K(row_key),
@@ -3168,50 +3130,54 @@ int ObMemtable::post_row_write_conflict_(ObMvccAccessCtx &acc_ctx,
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "can not get tenant lock_wait_mgr MTL", K(mem_ctx->get_tenant_id()));
   } else {
-    mem_ctx->add_conflict_trans_id(conflict_tx_id);
     mem_ctx->on_wlock_retry(row_key, conflict_tx_id);
     int tmp_ret = OB_SUCCESS;
     transaction::ObPartTransCtx *tx_ctx = acc_ctx.tx_ctx_;
     transaction::ObTransID tx_id = acc_ctx.get_tx_id();
+    SessionIDPair sess_id_pair(acc_ctx.tx_desc_->get_session_id(), acc_ctx.tx_desc_->get_assoc_session_id());
     bool remote_tx = tx_ctx->get_scheduler() != tx_ctx->get_addr();
-    ObFunction<int(bool&, bool&)> recheck_func([&](bool &locked, bool &wait_on_row) -> int {
-      int ret = OB_SUCCESS;
-      lock_state.is_locked_ = false;
-      if (lock_state.is_delayed_cleanout_) {
-        transaction::ObTxSEQ lock_data_sequence = lock_state.lock_data_sequence_;
-        storage::ObTxTableGuards &tx_table_guards = acc_ctx.get_tx_table_guards();
-        if (OB_FAIL(tx_table_guards.check_row_locked(
-                tx_id, conflict_tx_id, lock_data_sequence, lock_state.trans_scn_, lock_state))) {
-          TRANS_LOG(WARN, "re-check row locked via tx_table fail", K(ret), K(tx_id), K(lock_state));
-        }
-      } else {
-        if (OB_FAIL(lock_state.mvcc_row_->check_row_locked(acc_ctx, lock_state))) {
-          TRANS_LOG(WARN, "re-check row locked via mvcc_row fail", K(ret), K(tx_id), K(lock_state));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        locked = lock_state.is_locked_ && lock_state.lock_trans_id_ != tx_id;
-        wait_on_row = !lock_state.is_delayed_cleanout_;
-      }
-      return ret;
-    });
+    ObFunction<int(bool &, bool &)> recheck_fun(ReCheckFun(lock_state, acc_ctx));
+    share::ObLSID ls_id;
+    if (OB_TMP_FAIL(get_ls_id(ls_id))) {
+      TRANS_LOG(WARN, "fail to get ls_id", K(ret), K(tx_id), K(lock_state));
+    }
+    ObRowConflictInfo conflict_info;
     tmp_ret = lock_wait_mgr->post_lock(OB_TRY_LOCK_ROW_CONFLICT,
+                                       ls_id,
                                        key_.get_tablet_id(),
                                        *row_key.get_rowkey(),
                                        lock_wait_expire_ts,
                                        remote_tx,
                                        last_compact_cnt,
                                        total_trans_node_cnt,
-                                       acc_ctx.tx_desc_->get_assoc_session_id(),
                                        tx_id,
+                                       sess_id_pair,
                                        conflict_tx_id,
-                                       get_ls_id(),
-                                       recheck_func);
+                                       lock_state.lock_data_sequence_,
+                                       conflict_info,
+                                       recheck_fun);
+    (void)mem_ctx->add_conflict_info(conflict_info);
+    if (OB_UNLIKELY(!ObDeadLockDetectorMgr::is_deadlock_enabled())) {
+      if (REACH_TIME_INTERVAL(10_s)) {
+        DETECT_LOG(WARN, "deadlock detector not running", K(key_), KPC(row_key.get_rowkey()));
+      }
+    } else {
+      // this is just for defence
+      RowHolderInfo holder_info;
+      if (lock_state.is_delayed_cleanout_) {// conflict_tx_id is more accurate
+      } else if (OB_TMP_FAIL(lock_wait_mgr->get_hash_holder(LockHashHelper::hash_rowkey(key_.get_tablet_id(),
+                                                                            ObMemtableKey(row_key.get_rowkey())),
+                                                            holder_info))) {
+        DETECT_LOG(INFO, "can't get row holder, maybe meet delay cleanout",
+                         KR(tmp_ret), K(key_), KPC(row_key.get_rowkey()), K(conflict_tx_id));
+      } else if (holder_info.tx_id_ != conflict_tx_id) {
+        DETECT_LOG(WARN, "conflict tx id not actually hold this row",
+                          K(key_), KPC(row_key.get_rowkey()), K(conflict_tx_id), K(holder_info));
+      }
+    }
     if (OB_SUCCESS != tmp_ret) {
       TRANS_LOG(WARN, "post_lock after tx conflict failed",
                 K(tmp_ret), K(tx_id), K(conflict_tx_id));
-    } else if (mem_ctx->get_lock_wait_start_ts() <= 0) {
-      mem_ctx->set_lock_wait_start_ts(lock_wait_start_ts);
     }
   }
   return ret;

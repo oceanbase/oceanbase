@@ -415,6 +415,11 @@ int ObVirtualASH::convert_node_to_row(const ObActiveSessionStatItem &node, ObNew
         } else {
           cells[cell_idx].set_null();
         }
+        if (node.block_sessid_ != 0) {
+          cells[cell_idx].set_int(node.block_sessid_);
+        } else {
+          cells[cell_idx].set_null();
+        }
         break;
       }
       case PLAN_HASH: {

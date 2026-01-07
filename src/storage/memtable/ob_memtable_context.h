@@ -31,6 +31,7 @@
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tablelock/ob_mem_ctx_table_lock.h"
 #include "storage/tx_table/ob_tx_table.h"
+#include "ob_row_conflict_info.h"
 
 namespace oceanbase
 {
@@ -343,11 +344,6 @@ public:
   virtual void old_row_free(void *row) override;
   virtual common::ObIAllocator &get_query_allocator();
   virtual void inc_lock_for_read_retry_count();
-  // When row lock conflict occurs in a remote execution, record the trans id in
-  // transaction context, and carries it back after execution, for dead lock detect use
-  virtual int add_conflict_trans_id(const transaction::ObTransID conflict_trans_id);
-  void reset_conflict_trans_ids();
-  int get_conflict_trans_ids(common::ObIArray<transaction::ObTransIDAndAddr> &array);
   virtual int read_lock_yield()
   {
     return ATOMIC_LOAD(&end_code_);
@@ -436,6 +432,10 @@ public:
   void reset_pdml_stat();
   int clean_unlog_callbacks();
   int check_tx_mem_size_overflow(bool &is_overflow);
+  // When row lock conflict occurs in a remote execution, record the trans id in
+  // transaction context, and carries it back after execution, for dead lock detect use
+  int add_conflict_info(meta::ObMover<ObRowConflictInfo> rhs);
+  int fetch_conflict_info_array(common::ObIArray<ObRowConflictInfo> &array);
 public:
   void on_key_duplication_retry(const ObMemtableKey& key,
                                 const ObMvccRow *value,
@@ -491,6 +491,7 @@ public: // callback
   void free_prio_link_node(void *ptr)
   { mem_ctx_obj_pool_.free<transaction::tablelock::ObMemCtxLockPrioOpLinkNode>(ptr); }
   int64_t get_write_epoch() const { return trans_mgr_.get_write_epoch(); }
+  bool check_if_contains_conflict_info_(meta::ObMover<ObRowConflictInfo> conflict_info);
 public:
   // tx_status
   enum ObTxStatus {
@@ -612,10 +613,9 @@ private:
   // When a statement is update or select for update, the value can be set ture;
   bool has_row_updated_;
   // For deaklock detection
-  // The trans id of the holder of the conflict row lock
   // TODO(Handora), for non-local execution, if no-occupy-thread wait is implemented,
   // it should be carried back the same way as local execution
-  common::ObArray<transaction::ObTransID> conflict_trans_ids_;
+  common::ObArray<ObRowConflictInfo> row_conflict_info_array_;
   transaction::ObMemtableCtxObjPool mem_ctx_obj_pool_;
   // table lock mem ctx.
   transaction::tablelock::ObLockMemCtx lock_mem_ctx_;

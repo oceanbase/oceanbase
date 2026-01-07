@@ -11,8 +11,11 @@
  */
 
 #include "ob_lcl_node.h"
+#include "lib/list/ob_dlist.h"
+#include "lib/ob_errno.h"
 #include "share/deadlock/ob_deadlock_inner_table_service.h"
 #include "share/deadlock/ob_deadlock_detector_rpc.h"
+#include "storage/tx/ob_trans_define.h"
 
 namespace oceanbase
 {
@@ -29,30 +32,36 @@ ObLCLNode::ObLCLNode(const UserBinaryKey &user_key,
                      const uint64_t resource_id,
                      const DetectCallBack &on_detect_operation,
                      const CollectCallBack &on_collect_operation,
+                     const FillVirtualInfoCallBack &fill_virtual_info_callbeck,
+                     const int64_t waiter_create_time,
                      const ObDetectorPriority &priority,
                      const uint64_t start_delay,
                      const uint32_t count_down_allow_detect,
                      const bool auto_activate_when_detected)
   :push_state_task_(*this),
   self_key_(user_key),
+  waiter_create_time_(waiter_create_time),
   timeout_ts_(0),
   lclv_(0),
   private_label_(resource_id, priority),
   public_label_(private_label_),
   detect_callback_(on_detect_operation),
   collect_callback_(on_collect_operation),
+  fill_virtual_info_callbeck_(fill_virtual_info_callbeck),
   auto_activate_when_detected_(auto_activate_when_detected),
   is_timer_task_canceled_(false),
   lcl_period_(0),
   last_report_waiting_for_period_(0),
   last_send_collect_info_period_(0),
   count_down_allow_detect_(count_down_allow_detect),
+  last_notify_parent_ts_(0),
   lock_(ObLatchIds::DEADLOCK_LOCK)
 {
   #define PRINT_WRAPPER K(*this), K(resource_id), K(on_detect_operation),\
                         K(priority), K(auto_activate_when_detected)
   successfully_constructed_ = detect_callback_.is_valid() &&
-                              on_collect_operation.is_valid();
+                              collect_callback_.is_valid() &&
+                              fill_virtual_info_callbeck_.is_valid();
   created_time_ = ObClockGenerator::getRealClock();
   allow_detect_time_ = created_time_ + start_delay;
   DETECT_LOG_(TRACE, "new detector instance created", PRINT_WRAPPER);
@@ -70,7 +79,7 @@ const ObDetectorPriority &ObLCLNode::get_priority() const
   return private_label_.get_priority();
 }
 
-int ObLCLNode::add_parent(const ObDependencyResource &parent)
+int ObLCLNode::add_parent(const ObDependencyHolder &parent)
 {
   int ret = OB_SUCCESS;
 
@@ -96,6 +105,23 @@ void ObLCLNode::set_timeout(const uint64_t timeout)
 {
   LockGuard lock_guard(lock_);
   timeout_ts_ = ObClockGenerator::getRealClock() + timeout;
+}
+
+int ObLCLNode::check_and_renew_lease(const ObDeadLockNotifyParentMessage &notify_msg, bool &success)
+{
+  int ret = OB_SUCCESS;
+  LockGuard lock_guard(lock_);
+  ObDependencyHolder holder(notify_msg.get_src_addr(), notify_msg.get_src_key());
+  if (block_list_.count() != 1) {
+    ret = OB_ERR_UNEXPECTED;
+    DETECT_LOG_(WARN, "static block list is not 1", K(*this));
+  } else if (block_list_[0] == holder) {
+    timeout_ts_ = ObClockGenerator::getRealClock() + INNER_NODE_LEASE;
+    success = true;
+  } else {
+    success = false;// detector should be re-constructed
+  }
+  return ret;
 }
 
 int ObLCLNode::register_timer_task()
@@ -203,7 +229,7 @@ void ObLCLNode::revert_self_ref_count_()
   MTL(ObDeadLockDetectorMgr*)->detector_map_.revert(this);
 }
 
-int ObLCLNode::add_resource_to_list_(const ObDependencyResource &resource,
+int ObLCLNode::add_resource_to_list_(const ObDependencyHolder &resource,
                                      BlockList &block_list)
 {
   int ret = OB_SUCCESS;
@@ -220,7 +246,7 @@ int ObLCLNode::add_resource_to_list_(const ObDependencyResource &resource,
   if (i != block_list.count()) {
     ret = OB_ENTRY_EXIST;
   } else {
-    ObDependencyResource new_resource(resource.get_addr(), resource.get_user_key());
+    ObDependencyHolder new_resource(resource.get_addr(), resource.get_user_key());
     if (OB_FAIL(block_list.push_back(resource))) {
       DETECT_LOG_(WARN, "block_list_ push resource failed", K(resource));
     }
@@ -229,7 +255,7 @@ int ObLCLNode::add_resource_to_list_(const ObDependencyResource &resource,
   return ret;
 }
 
-int ObLCLNode::block(const ObDependencyResource &resource)
+int ObLCLNode::block(const ObDependencyHolder &resource)
 {
   DETECT_TIME_GUARD(100_ms);
   LockGuard lock_guard(lock_);
@@ -237,7 +263,7 @@ int ObLCLNode::block(const ObDependencyResource &resource)
   return block_(resource);
 }
 
-int ObLCLNode::block_(const ObDependencyResource &resource)
+int ObLCLNode::block_(const ObDependencyHolder &resource)
 {
   #define PRINT_WRAPPER KR(ret), K(block_list_), K(*this)
   int ret = OB_SUCCESS;
@@ -282,13 +308,13 @@ int ObLCLNode::block(const BlockCallBack &func)
   return ret;
 }
 
-int ObLCLNode::activate(const ObDependencyResource &resource)
+int ObLCLNode::activate(const ObDependencyHolder &resource)
 {
   LockGuard lock_guard(lock_);
   return activate_(resource);
 }
 
-int ObLCLNode::activate_(const ObDependencyResource &resource)
+int ObLCLNode::activate_(const ObDependencyHolder &resource)
 {
   #define PRINT_WRAPPER KR(ret), K(resource), K(*this)
   int ret = OB_SUCCESS;
@@ -328,7 +354,7 @@ int ObLCLNode::activate_all()
   #undef PRINT_WRAPPER
 }
 
-int ObLCLNode::get_block_list(common::ObIArray<ObDependencyResource> &cur_list) const
+int ObLCLNode::get_block_list(common::ObIArray<ObDependencyHolder> &cur_list) const
 {
   #define PRINT_WRAPPER KR(ret), K(*this)
   int ret = OB_SUCCESS;
@@ -341,7 +367,7 @@ int ObLCLNode::get_block_list(common::ObIArray<ObDependencyResource> &cur_list) 
   #undef PRINT_WRAPPER
 }
 
-int ObLCLNode::replace_block_list(const ObIArray<ObDependencyResource> &new_list)
+int ObLCLNode::replace_block_list(const ObIArray<ObDependencyHolder> &new_list)
 {
   #define PRINT_WRAPPER KR(ret), K(*this), K(new_list)
   int ret = OB_SUCCESS;
@@ -359,7 +385,7 @@ int ObLCLNode::replace_block_list(const ObIArray<ObDependencyResource> &new_list
         for (int64_t idx2 = 0; idx2 < block_list_.count(); ++idx2) {
           if (new_list.at(idx1) == block_list_.at(idx2)) {
             resource_exist = true;
-          } else if (new_list.at(idx1) == ObDependencyResource(GCTX.self_addr(), self_key_)) {
+          } else if (new_list.at(idx1) == ObDependencyHolder(GCTX.self_addr(), self_key_)) {
             resource_exist = true;
             DETECT_LOG_(ERROR, "replace block list to block myself, should not happen", PRINT_WRAPPER);
           }
@@ -384,11 +410,23 @@ int ObLCLNode::replace_block_list(const ObIArray<ObDependencyResource> &new_list
   #undef PRINT_WRAPPER
 }
 
+int ObLCLNode::replace_collect_callback(const CollectCallBack &new_cb)
+{
+  int ret = OB_SUCCESS;
+  DETECT_TIME_GUARD(100_ms);
+  CLICK();
+  LockGuard lock_guard(lock_);
+  if (OB_FAIL(collect_callback_.assign(new_cb))) {
+    DETECT_LOG(WARN, "replace collect callback failed", KPC(this));
+  }
+  return ret;
+}
+
 int ObLCLNode::get_resource_from_callback_list_(BlockList &blocklist_snapshot,
                                                 ObIArray<bool> &remove_idxs)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObDependencyResource, 5> resource_array;
+  ObSEArray<ObDependencyHolder, 5> resource_array;
   bool need_remove_call_back_flag = false;
 
   DETECT_TIME_GUARD(100_ms);
@@ -412,7 +450,7 @@ int ObLCLNode::get_resource_from_callback_list_(BlockList &blocklist_snapshot,
           if (!resource_array[idx].is_valid()) {
             ret = OB_ERR_UNEXPECTED;
             DETECT_LOG_(WARN, "get invalid resource", KR(ret), K(*this));
-          } else if (resource_array[idx] == ObDependencyResource(GCTX.self_addr(), self_key_)) {
+          } else if (resource_array[idx] == ObDependencyHolder(GCTX.self_addr(), self_key_)) {
             ret = OB_ERR_UNEXPECTED;
             DETECT_LOG_(WARN, "result of callback shows block myself, should not happen",
                               KR(ret), K(resource_array[idx]), K(*this));
@@ -463,6 +501,7 @@ int ObLCLNode::remove_unuseful_callback_(ObIArray<bool> &remove_idxs)
   } else {}
   return ret;
 }
+
 
 void ObLCLNode::get_state_snapshot_(BlockList &blocklist_snapshot,
                                    int64_t &lclv_snapshot,
@@ -615,15 +654,12 @@ int ObLCLNode::process_collect_info_message(const ObDeadLockCollectInfoMessage &
     DETECT_LOG_(INFO, "reveive collect info message", K(collected_info.count()), PRINT_WRAPPER);
     if (CLICK() && OB_SUCC(check_and_process_completely_collected_msg_with_lock_(collected_info))) {
       DETECT_LOG_(INFO, "collect info done", PRINT_WRAPPER);
-      CLICK();
-      (void) ObDeadLockInnerTableService::insert_all(collected_info);
+      MTL(ObDeadLockDetectorMgr*)->check_and_report_cycle_(msg_copy);
     } else if (CLICK() && check_dead_loop_with_lock_(collected_info)) {
       DETECT_LOG_(INFO, "message dead loop, just drop this message", PRINT_WRAPPER);
     } else if (CLICK() && OB_FAIL(generate_event_id_with_lock_(collected_info, event_id))) {
       DETECT_LOG_(WARN, "generate event id failed", PRINT_WRAPPER);
-    } else if (CLICK() && OB_FAIL(append_report_info_to_msg_(msg_copy, event_id))) {
-      DETECT_LOG_(WARN, "append report info to collect info message failed", PRINT_WRAPPER);
-    } else if (CLICK() && OB_FAIL(broadcast_with_lock_(msg_copy))) {
+    } else if (CLICK() && OB_FAIL(broadcast_with_lock_(event_id, msg_copy))) {
       DETECT_LOG_(WARN, "keep boardcasting collect info msg failed", PRINT_WRAPPER);
     } else {
       DETECT_LOG_(INFO, "successfully keep broadcasting collect info msg", PRINT_WRAPPER);
@@ -660,7 +696,7 @@ int ObLCLNode::check_and_process_completely_collected_msg_with_lock_(
           if (collected_info.count() == next_idx) {
             next_idx = 0;
           }
-          ObDependencyResource peer_resource(collected_info.at(next_idx).get_addr(),
+          ObDependencyHolder peer_resource(collected_info.at(next_idx).get_addr(),
                                              collected_info.at(next_idx).get_user_key());
           int64_t peer_resource_idx = -1;
           for (int64_t idx = 0; idx < block_list_.count(); ++idx) {
@@ -736,22 +772,23 @@ bool ObLCLNode::check_dead_loop_with_lock_(const ObIArray<ObDetectorInnerReportI
   return idx != collected_info.count();
 }
 
-int ObLCLNode::append_report_info_to_msg_(ObDeadLockCollectInfoMessage &msg,
-                                          const uint64_t event_id)
+int ObLCLNode::append_report_info_to_msg_with_lock_(const ObDependencyHolder &blocked_holder,
+                                                    const uint64_t event_id,
+                                                    ObDeadLockCollectInfoMessage &msg)
 {
   int ret = OB_SUCCESS;
   ObDetectorInnerReportInfo inner_report_info;
   ObDetectorUserReportInfo user_report_info;
 
   DETECT_TIME_GUARD(100_ms);
-  if (CLICK() && OB_FAIL(collect_callback_(user_report_info))) {
+
+  LockGuard guard(lock_);
+  if (CLICK() && OB_FAIL(collect_callback_(blocked_holder, user_report_info))) {
     DETECT_LOG_(WARN, "execute collect callback failed", K(*this));
   } else if (CLICK() && OB_UNLIKELY(false == user_report_info.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     DETECT_LOG_(WARN, "execute collect callback success, but user_report_info invalid", K(*this));
   } else {
-    CLICK();
-    LockGuard guard(lock_);
     if (CLICK() && 
        OB_FAIL(inner_report_info.set_args(self_key_, GCTX.self_addr(),
                                           private_label_.get_id(), ObClockGenerator::getRealClock(),
@@ -769,7 +806,7 @@ int ObLCLNode::append_report_info_to_msg_(ObDeadLockCollectInfoMessage &msg,
   return ret;
 }
 
-int ObLCLNode::broadcast_with_lock_(ObDeadLockCollectInfoMessage &msg)
+int ObLCLNode::broadcast_with_lock_(const uint64_t event_id, ObDeadLockCollectInfoMessage &msg)
 {
   int ret = OB_SUCCESS;
   UserBinaryKey self_key_copy;
@@ -787,9 +824,12 @@ int ObLCLNode::broadcast_with_lock_(ObDeadLockCollectInfoMessage &msg)
   CLICK();
   for (int64_t idx = 0; idx < block_list_copy.count() && OB_SUCC(ret); ++idx) {
     msg.set_dest_key(block_list_copy.at(idx).get_user_key());
-    if (CLICK() &&
-        OB_FAIL(MTL(ObDeadLockDetectorMgr*)->get_rpc().
-                post_collect_info_message(block_list_copy.at(idx).get_addr(), msg))) {
+    if (OB_FAIL(append_report_info_to_msg_with_lock_(block_list_copy.at(idx),
+                                                     event_id,
+                                                     msg))) {
+      DETECT_LOG_(WARN, "fail to generate report message", KR(ret), K(msg));
+    } else if (CLICK() && OB_FAIL(MTL(ObDeadLockDetectorMgr*)->get_rpc().
+               post_collect_info_message(block_list_copy.at(idx).get_addr(), msg))) {
       DETECT_LOG_(WARN, "send collect info message failed", KR(ret), K(msg));
     }
   }
@@ -829,18 +869,33 @@ int ObLCLNode::push_state_to_downstreams_with_lock_()
       DETECT_LOG_(INFO, "waiting for", K_(self_key), K(blocklist_snapshot), KPC(this));
     }
 
-    if (!parent_list_.empty()) {
+    int64_t current_ts = ObClockGenerator::getClock();
+    if (!parent_list_.empty() && current_ts - last_notify_parent_ts_ > 3_s) {
+      ObAddr fake_addr(ObAddr::VER::IPV4, "127.0.0.1", 0);
+      UserBinaryKey fake_key;
+      ObDependencyHolder fake_holder(fake_addr, fake_key);
+      ObDetectorUserReportInfo user_report_info;
       ObDeadLockNotifyParentMessage notify_msg;
-      for (int64_t idx = 0; idx < parent_list_.count(); ++idx) {
-        notify_msg.set_args(parent_list_.at(idx).get_addr(),
-                            parent_list_.at(idx).get_user_key(),
-                            GCTX.self_addr(),
-                            self_key_);
-        if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->get_rpc().
-                    post_notify_parent_message(parent_list_.at(idx).get_addr(), notify_msg))) {
-          DETECT_LOG_(WARN, "post notify parent message failed", KR(ret), K(notify_msg), K(*this));
+      ObStringHolder action;// empty by default
+      if (OB_FAIL(collect_callback_(fake_holder, user_report_info))) {
+        DETECT_LOG_(WARN, "failed to execute collect call back", KR(ret), K(notify_msg), K(*this));
+      } else {
+        if (user_report_info.get_valid_extra_column_size() > 0) {
+          action.assign(user_report_info.get_extra_columns_values()[0]);// if values[0] exists, should be doing action
+        }
+        for (int64_t idx = 0; idx < parent_list_.count(); ++idx) {
+          notify_msg.set_args(parent_list_.at(idx).get_addr(),
+                              parent_list_.at(idx).get_user_key(),
+                              GCTX.self_addr(),
+                              self_key_,
+                              action);
+          if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->get_rpc().
+                      post_notify_parent_message(parent_list_.at(idx).get_addr(), notify_msg))) {
+            DETECT_LOG_(WARN, "post notify parent message failed", KR(ret), K(notify_msg), K(*this));
+          }
         }
       }
+      last_notify_parent_ts_ = current_ts;
     }
   }
 
@@ -928,6 +983,128 @@ uint64_t ObLCLNode::PushStateTask::hash() const
 {
   uint64_t id = lcl_node_.private_label_.get_id();
   return murmurhash(&id, sizeof(id), 0);
+}
+
+template <typename T>
+int obj_to_string_in_buffer(const T &obj, char *buffer, const int64_t buffer_len, int64_t &old_pos, int64_t &cur_pos) {
+  int ret = OB_SUCCESS;
+  old_pos = cur_pos;
+  int64_t pos = 0;
+  ObCStringHelper helper;
+  if (OB_FAIL(databuff_printf(buffer + old_pos, buffer_len - old_pos, pos, "%s", helper.convert(obj)))) {
+    DETECT_LOG(ERROR, "failed to string object");
+  } else {
+    DETECT_LOG(TRACE, "success to string object", K(ObString(pos, buffer + old_pos)));
+    cur_pos += pos;
+  }
+  return ret;
+}
+
+int ObLCLNode::fill_virtual_info(const bool need_fill_conflict_actions_flag,
+                                 DetectorNodeInfoForVirtualTable &info,
+                                 char *buffer,
+                                 const int64_t buffer_size,
+                                 int64_t &pos)// must start from 0
+{
+  #define PRINT_WRAPPER KR(ret), K(*this), K(user_report_info), K(info)
+  int ret = OB_SUCCESS;
+  int64_t pos_old = pos;
+  LockGuard guard(lock_);
+  ObDetectorUserReportInfo user_report_info;
+  ObAddr fake_addr(ObAddr::VER::IPV4, "127.0.0.1", 0);
+  UserBinaryKey fake_key;
+  BlockList static_block_list;
+  ObArray<ObString> static_block_resource;
+  BlockList dynamic_block_list;
+  ObArray<ObString> dynamic_block_resource;
+  ObArray<bool> _;
+  info.detector_id_ = private_label_.get_id();
+  if (OB_FAIL(fake_key.set_user_key(transaction::ObTransID(1)))) {
+    DETECT_LOG(ERROR, "failed to construct fake user key", PRINT_WRAPPER);
+  }
+  if (OB_SUCC(ret)) {
+    ObDependencyHolder fake_holder(fake_addr, fake_key);
+    if (OB_FAIL(collect_callback_(fake_holder, user_report_info))) {
+      DETECT_LOG(WARN, "failed to execute collect callback", PRINT_WRAPPER);
+    } else if (OB_FAIL(obj_to_string_in_buffer(user_report_info.get_resource_visitor(), buffer, buffer_size, pos_old, pos))) {
+      DETECT_LOG(ERROR, "failed to string object", PRINT_WRAPPER);
+    } else if (FALSE_IT(info.visitor_.assign(buffer + pos_old, pos - pos_old))) {
+    } else if (OB_FAIL(obj_to_string_in_buffer(user_report_info.get_module_name(), buffer, buffer_size, pos_old, pos))) {
+      DETECT_LOG(ERROR, "failed to string object", PRINT_WRAPPER);
+    } else if (FALSE_IT(info.module_.assign(buffer + pos_old, pos - pos_old))) {
+    } else if (FALSE_IT(info.waiter_create_time_ = waiter_create_time_)) {
+    } else if (FALSE_IT(info.create_time_ = created_time_)) {
+    } else if (FALSE_IT(info.timeout_ts_ = timeout_ts_)) {
+    } else if (FALSE_IT(info.allow_detect_time_ = allow_detect_time_)) {
+    } else if (FALSE_IT(info.lclv_ = lclv_)) {
+    } else if (FALSE_IT(info.lcl_period_ = lcl_period_)) {
+    } else if (OB_FAIL(obj_to_string_in_buffer(private_label_, buffer, buffer_size, pos_old, pos))) {
+    } else if (FALSE_IT(info.private_label_.assign(buffer + pos_old, pos - pos_old))) {
+    } else if (OB_FAIL(obj_to_string_in_buffer(public_label_, buffer, buffer_size, pos_old, pos))) {
+    } else if (FALSE_IT(info.public_label_.assign(buffer + pos_old, pos - pos_old))) {
+    } else if (OB_FAIL(static_block_list.assign(block_list_))) {
+    } else if (OB_FAIL(get_resource_from_callback_list_(dynamic_block_list, _))) {
+    } else {
+      if (user_report_info.get_valid_extra_column_size() > 0) {// extra[0] should be action
+        if (OB_FAIL(obj_to_string_in_buffer(user_report_info.get_extra_columns_values()[0], buffer, buffer_size, pos_old, pos))) {
+        } else if (FALSE_IT(info.action_.assign(buffer + pos_old, pos - pos_old))) {
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      for (int64_t idx = 0; idx < static_block_list.count() && OB_SUCC(ret); ++idx) {
+        if (OB_FAIL(collect_callback_(static_block_list[idx], user_report_info))) {
+          DETECT_LOG(ERROR, "failed to execute collect callback", PRINT_WRAPPER);
+        } else if (OB_FAIL(obj_to_string_in_buffer(user_report_info.get_required_resource(), buffer, buffer_size, pos_old, pos))) {
+          DETECT_LOG(ERROR, "failed to string object", PRINT_WRAPPER);
+        } else if (OB_FAIL(static_block_resource.push_back(ObString()))) {
+          DETECT_LOG(ERROR, "failed to push back", PRINT_WRAPPER);
+        } else if (FALSE_IT(static_block_resource[static_block_resource.count() - 1].assign(buffer + pos_old, pos - pos_old))) {
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      for (int64_t idx = 0; idx < dynamic_block_list.count() && OB_SUCC(ret); ++idx) {
+        if (OB_FAIL(collect_callback_(dynamic_block_list[idx], user_report_info))) {
+          DETECT_LOG(ERROR, "failed to execute collect callback", PRINT_WRAPPER);
+        } else if (OB_FAIL(obj_to_string_in_buffer(user_report_info.get_required_resource(), buffer, buffer_size, pos_old, pos))) {
+          DETECT_LOG(ERROR, "failed to string object", PRINT_WRAPPER);
+        } else if (OB_FAIL(dynamic_block_resource.push_back(ObString()))) {
+          DETECT_LOG(ERROR, "failed to push back", PRINT_WRAPPER);
+        } else if (FALSE_IT(dynamic_block_resource[dynamic_block_resource.count() - 1].assign(buffer + pos_old, pos - pos_old))) {
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(obj_to_string_in_buffer(static_block_list, buffer, buffer_size, pos_old, pos))) {
+        DETECT_LOG(ERROR, "failed to string object", PRINT_WRAPPER);
+      } else if (FALSE_IT(info.static_block_list_.assign(buffer + pos_old, pos - pos_old))) {
+      } else if (OB_FAIL(obj_to_string_in_buffer(static_block_resource, buffer, buffer_size, pos_old, pos))) {
+        DETECT_LOG(ERROR, "failed to string object", PRINT_WRAPPER);
+      } else if (FALSE_IT(info.static_block_resource_.assign(buffer + pos_old, pos - pos_old))) {
+      } else if (OB_FAIL(obj_to_string_in_buffer(dynamic_block_list, buffer, buffer_size, pos_old, pos))) {
+        DETECT_LOG(ERROR, "failed to string object", PRINT_WRAPPER);
+      } else if (FALSE_IT(info.dynamic_block_list_.assign(buffer + pos_old, pos - pos_old))) {
+      } else if (OB_FAIL(obj_to_string_in_buffer(dynamic_block_resource, buffer, buffer_size, pos_old, pos))) {
+        DETECT_LOG(ERROR, "failed to string object", PRINT_WRAPPER);
+      } else if (FALSE_IT(info.dynamic_block_resource_.assign(buffer + pos_old, pos - pos_old))) {
+      } else if (OB_FAIL(obj_to_string_in_buffer(parent_list_, buffer, buffer_size, pos_old, pos))) {
+        DETECT_LOG(ERROR, "failed to string object", PRINT_WRAPPER);
+      } else if (FALSE_IT(info.parent_list_.assign(buffer + pos_old, pos - pos_old))) {
+      } else if (FALSE_IT(info.count_down_allow_detect_ = count_down_allow_detect_)) {
+      } else {
+        DETECT_LOG(TRACE, "success to fill virtual info by detector", PRINT_WRAPPER);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(fill_virtual_info_callbeck_(need_fill_conflict_actions_flag, buffer, buffer_size, pos, info))) {
+        DETECT_LOG(WARN, "failed to call user fill virtual info callback", PRINT_WRAPPER);
+      } else {
+        DETECT_LOG(TRACE, "success to fill virtual info by user", PRINT_WRAPPER);
+      }
+    }
+  }
+  return ret;
 }
 
 }

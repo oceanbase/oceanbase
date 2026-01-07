@@ -18,6 +18,8 @@
 #include "ob_row_data.h"
 #include "ob_mvcc_row.h"
 #include "ob_mvcc.h"
+#include "share/rc/ob_tenant_base.h"
+#include "storage/memtable/hash_holder/ob_row_hash_holder_map.h"
 #include "storage/memtable/ob_memtable_key.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/memtable/mvcc/ob_tx_callback_list.h"
@@ -495,11 +497,12 @@ public:
   transaction::ObTxSEQ get_seq_no() const { return seq_no_; }
   int get_trans_id(transaction::ObTransID &trans_id) const;
   int get_cluster_version(uint64_t &cluster_version) const override;
-  transaction::ObTransCtx *get_trans_ctx() const;
+  transaction::ObPartTransCtx *get_trans_ctx() const;
   int64_t to_string(char *buf, const int64_t buf_len) const;
   virtual int before_append(const bool is_replay) override;
   virtual int log_submitted(const share::SCN scn, storage::ObIMemtable *&last_mt) override;
   virtual void after_append_fail(const bool is_replay) override;
+  virtual int get_holder_info(RowHolderInfo &holder_info) const override final;
   virtual int64_t get_old_row_data_size() override
   {
     return old_row_.size_;
@@ -537,6 +540,7 @@ private:
   void inc_unsubmitted_cnt_();
   int dec_unsubmitted_cnt_();
   int wakeup_row_waiter_if_need_();
+  void commit_trans_node_();
 private:
   ObIMvccCtx &ctx_;
   ObMemtableKey key_;

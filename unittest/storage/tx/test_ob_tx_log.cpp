@@ -563,6 +563,8 @@ TEST_F(TestObTxLog, test_default_log_deserialize)
   replay_member_cnt++;
   EXPECT_EQ(fill_active_state.get_session_id(), replay_active_state.get_session_id());
   replay_member_cnt++;
+  EXPECT_EQ(fill_active_state.get_associated_session_id(), replay_active_state.get_associated_session_id());
+  replay_member_cnt++;
   EXPECT_EQ(fill_active_state.get_app_trace_id(), replay_active_state.get_app_trace_id());
   replay_member_cnt++;
   EXPECT_EQ(fill_active_state.get_schema_version(), replay_active_state.get_schema_version());
@@ -595,8 +597,6 @@ TEST_F(TestObTxLog, test_default_log_deserialize)
   EXPECT_EQ(fill_active_state.get_xid(), replay_active_state.get_xid());
   replay_member_cnt++;
   EXPECT_EQ(fill_active_state.get_serial_final_seq_no(), replay_active_state.get_serial_final_seq_no());
-  replay_member_cnt++;
-  EXPECT_EQ(fill_active_state.get_associated_session_id(), replay_active_state.get_associated_session_id());
   replay_member_cnt++;
   EXPECT_EQ(fill_active_state.get_prio_op_array().count(), replay_active_state.get_prio_op_array().count());
   replay_member_cnt++;

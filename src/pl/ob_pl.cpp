@@ -700,13 +700,19 @@ int ObPLContext::notify(ObSQLSessionInfo *sql_session)
 }
 
 void ObPLContext::record_tx_id_before_begin_autonomous_session_for_deadlock_(ObSQLSessionInfo &session_info,
-                                                                             ObTransID &last_trans_id)
+                                                                             ObTransID &last_trans_id,
+                                                                             int64_t &trans_start_time)
 {
   last_trans_id = session_info.get_tx_id();
+  transaction::ObTxDesc *desc = session_info.get_tx_desc();
+  if (OB_NOT_NULL(desc)) {
+    trans_start_time = desc->get_active_ts();
+  }
 }
 
 void ObPLContext::register_after_begin_autonomous_session_for_deadlock_(ObSQLSessionInfo &session_info,
-                                                                        const ObTransID last_trans_id)
+                                                                        const ObTransID last_trans_id,
+                                                                        const int64_t last_trans_active_ts)
 {
   DISABLE_SQL_MEMLEAK_GUARD;
   ObTransID now_trans_id = session_info.get_tx_id();
@@ -723,6 +729,7 @@ void ObPLContext::register_after_begin_autonomous_session_for_deadlock_(ObSQLSes
       if (OB_FAIL(ObTransDeadlockDetectorAdapter::
                   autonomous_register_to_deadlock(last_trans_id,
                                                   now_trans_id,
+                                                  last_trans_active_ts,
                                                   query_timeout))) {
         DETECT_LOG(WARN, "autonomous register to deadlock failed",
                          K(last_trans_id), K(now_trans_id), KR(ret));
@@ -939,7 +946,8 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
     session_info.set_has_exec_inner_dml(false);
 
     ObTransID last_trans_id;
-    (void) record_tx_id_before_begin_autonomous_session_for_deadlock_(session_info, last_trans_id);
+    int64_t trans_active_ts = 0;
+    (void) record_tx_id_before_begin_autonomous_session_for_deadlock_(session_info, last_trans_id, trans_active_ts);
     if (OB_SUCC(ret)) {
       if (OB_ISNULL(saved_session_ = (sql::ObBasicSessionInfo::TransSavedValue *)(alloc_.alloc(sizeof(sql::ObBasicSessionInfo::TransSavedValue))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -951,7 +959,6 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
       OX (saved_has_implicit_savepoint_ = session_info.has_pl_implicit_savepoint());
       OX (session_info.clear_pl_implicit_savepoint());
     }
-
     if (OB_FAIL(ret)) {
       // do nothing
     } else if (OB_FAIL(ObSqlTransControl::explicit_start_trans(ctx, false))) {
@@ -962,7 +969,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
                  K(tmp_ret), K(ret));
       }
     } else {
-      (void) register_after_begin_autonomous_session_for_deadlock_(session_info, last_trans_id);
+      (void) register_after_begin_autonomous_session_for_deadlock_(session_info, last_trans_id, trans_active_ts);
     }
   }
 

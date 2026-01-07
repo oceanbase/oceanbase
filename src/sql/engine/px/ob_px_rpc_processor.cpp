@@ -14,6 +14,7 @@
 #include "ob_px_rpc_processor.h"
 #include "ob_px_sqc_handler.h"
 #include "sql/executor/ob_executor_rpc_processor.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "sql/engine/px/ob_px_target_mgr.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "share/detect/ob_detect_manager_utils.h"

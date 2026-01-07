@@ -404,7 +404,6 @@ public:
   static int batch_remove_unused_callback_for_uncommited_txn(
     const share::ObLSID ls_id,
     const memtable::ObMemtableSet *memtable_set);
-
   /* freeze */
   virtual int flush(share::ObLSID ls_id) override;
 

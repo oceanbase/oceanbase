@@ -35,15 +35,23 @@
 #include "../mock_utils/msg_bus.h"
 #include "../mock_utils/basic_fake_define.h"
 #include "../mock_utils/ob_fake_tx_rpc.h"
+#include "ob_mock_lock_wait_mgr.h"
+#include "../mock_utils/ob_mock_lock_wait_mgr_rpc.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
 #include "share/stat/ob_opt_stat_monitor_manager.h"
-#include "storage/memtable/ob_lock_wait_mgr.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
+
+#include <map>
+#include <utility>
+#include <vector>
 
 namespace oceanbase {
 using namespace transaction;
+using namespace lockwaitmgr;
+using namespace memtable;
 using namespace share;
 using namespace common;
-
+using namespace rpc;
 
 namespace transaction {
 template<class T>
@@ -91,6 +99,7 @@ public:
   void wakeup() { if (ATOMIC_BCAS(&is_sleeping_, true, false)) { cond_.signal(); } }
   void set_name(ObString &name) { name_ = name; }
   bool is_idle() { return ATOMIC_LOAD(&is_sleeping_); }
+  common::SimpleCond* get_cond() { return &cond_; }
   TO_STRING_KV(KP(this), K_(name), KP_(queue), K(queue_->size()), K_(stop));
 private:
   ObString name_;
@@ -129,6 +138,77 @@ enum ObTxNodeRole {
   Follower = 2,
 };
 
+
+typedef std::pair<int64_t, int64_t> WriteKV;
+
+struct SingleWrite {
+  WriteKV key_value_;
+  ObAddr runner_addr_;
+  TO_STRING_KV(K(key_value_.first), K(key_value_.second), K_(runner_addr));
+};
+
+class ObTxRetryControl {
+public:
+  ObTxRetryControl() :
+    unfinished_task_num_(0),
+    total_task_num_(0),
+    need_retry_(false),
+    expire_ts_(0),
+    cflict_key_(0),
+    last_cflict_key_(0),
+    last_cflict_addr_(0),
+    req_writes_(),
+    tx_writes_hash_(),
+    tx_param_(),
+    tx_(NULL),
+    node_(NULL),
+    sp_(),
+    exec_ret_(OB_SUCCESS) {}
+  void clear_retry_record()
+  {
+    need_retry_ = false;
+  }
+  bool tx_writes_empty() { return tx_writes_hash_.empty(); }
+  void reset_need_retry() { need_retry_ = false; }
+  int dec_unfinished_task_num() { return ATOMIC_SAF(&unfinished_task_num_, 1);}
+  int inc_unfinished_task_num() { return ATOMIC_AAF(&unfinished_task_num_, 1); }
+  int get_unfinished_task_num() { return ATOMIC_LOAD(&unfinished_task_num_); }
+  void finish_one_req()
+  {
+    for (auto write : req_writes_) {
+      tx_writes_hash_.push_back(write.key_value_.first);
+    }
+    total_task_num_ = 0;
+    req_writes_.clear();
+  }
+
+  void tx_end()
+  {
+    tx_writes_hash_.clear();
+    reset_need_retry();
+    tx_ = NULL;
+    node_ = NULL;
+  }
+  int unfinished_task_num_;
+  int total_task_num_;
+  bool need_retry_;
+  int64_t expire_ts_;
+  int64_t cflict_key_;
+  int64_t last_cflict_key_;
+  ObAddr last_cflict_addr_;
+  std::vector<SingleWrite> req_writes_;
+  std::vector<int64_t> tx_writes_hash_;
+  ObTxParam tx_param_;
+  ObTxDesc* tx_;
+  ObLockWaitNode* node_;
+  ObTxSEQ sp_;
+  int exec_ret_;
+
+  TO_STRING_KV(K_(unfinished_task_num), K_(total_task_num), K_(need_retry), K_(cflict_key),
+    K_(last_cflict_key), K_(last_cflict_addr), K_(expire_ts), K_(tx_param), KPC_(tx), KPC_(node),
+    K_(sp), K_(exec_ret));
+};
+
 class ObTxNode final : public MsgEndPoint {
 public:
   ObTxNode(const int64_t ls_id,
@@ -156,8 +236,29 @@ public:
             const int64_t key,
             const int64_t value,
             const int16_t branch = 0);
+  int get_memtable_key(const int64_t key,
+                       const int64_t value,
+                       ObMemtableKey &mem_key);
   int atomic_write(ObTxDesc &tx, const int64_t key, const int64_t value,
                    const int64_t expire_ts, const ObTxParam &tx_param);
+  void init_tx_fake_request(ObTxDesc &tx,
+                            const std::vector<SingleWrite> &writes,
+                            int64_t expire_ts,
+                            const ObTxParam &tx_param);
+  int write_req_with_lock_wait(ObTxDesc &tx,
+                                      const std::vector<SingleWrite> &writes,
+                                      const int64_t expire_ts,
+                                      const ObTxParam &tx_param,
+                                      bool &wait_succ,
+                                      bool need_change_seq = false);
+  int single_atomic_write_request(ObTxDesc &tx,
+                                  const ObAddr &runner_addr,
+                                  const int64_t key,
+                                  const int64_t value,
+                                  const int64_t expire_ts,
+                                  const ObTxParam &tx_param,
+                                  bool &wait_succ,
+                                  bool need_change_seq = false);
   int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const int64_t ts_ns);
 
   int write_begin(ObTxDesc &tx, const ObTxReadSnapshot &snapshot, ObStoreCtx& write_store_ctx);
@@ -187,6 +288,25 @@ public:
   DELEGATE_TENANT_WITH_RET(txs_, release_explicit_savepoint, int);
   DELEGATE_TENANT_WITH_RET(txs_, rollback_to_implicit_savepoint, int);
   DELEGATE_TENANT_WITH_RET(txs_, interrupt, int);
+  // lock wait mgr
+  DELEGATE_TENANT_WITH_RET(fake_lock_wait_mgr_, setup, void);
+  DELEGATE_TENANT_WITH_RET(fake_lock_wait_mgr_, get_thread_node, ObLockWaitNode*);
+  DELEGATE_TENANT_WITH_RET(fake_lock_wait_mgr_, post_process, int);
+  DELEGATE_TENANT_WITH_RET(fake_lock_wait_mgr_, handle_lock_conflict, void);
+  DELEGATE_TENANT_WITH_RET(fake_lock_wait_mgr_, fetch_wait_node, ObLockWaitNode*);
+  // DELEGATE_TENANT_WITH_RET(fake_lock_wait_mgr_, fetch_wait_head, ObLockWaitNode*);
+  // DELEGATE_TENANT_WITH_RET(fake_lock_wait_mgr_, get_wait_head, ObLockWaitNode*);
+  DELEGATE_TENANT_WITH_RET(fake_lock_wait_mgr_, check_node_exsit, bool);
+  DELEGATE_TENANT_WITH_RET(fake_lock_wait_mgr_, stop_check_timeout, void);
+  DELEGATE_TENANT_WITH_RET(fake_lock_wait_mgr_, start_check_timeout, void);
+  DELEGATE_TENANT_WITH_RET(fake_lock_wait_mgr_, stop_repost_node, void);
+  DELEGATE_TENANT_WITH_RET(fake_lock_wait_mgr_, allow_repost_node, void);
+  DELEGATE_TENANT_WITH_RET(fake_lock_wait_mgr_, get_store_repost_node, ObLockWaitNode*);
+  DELEGATE_TENANT_WITH_RET(fake_lock_wait_mgr_, wait_node_cnt, int);
+  DELEGATE_TENANT_WITH_RET(fake_lock_wait_mgr_, ls_switch_to_follower, void);
+  // memtable
+  DELEGATE_TENANT_WITH_RET((*memtable_), get_tablet_id, ObTabletID);
+
   // tx free route
   DELEGATE_TENANT_WITH_RET(txs_, calc_txn_free_route, int);
 #define  DELEGATE_X__(t)                                                \
@@ -203,6 +323,10 @@ public:
     return txs_.tx_ctx_mgr_.get_tx_ctx(ls_id, tx_id, false, ctx);
   }
   int revert_tx_ctx(ObPartTransCtx *ctx) { return txs_.tx_ctx_mgr_.revert_tx_ctx(ctx); }
+  int commit_with_retry_ctrl(ObTxDesc &tx, const int64_t expire_ts);
+  int handle_request_retry(ObLockWaitNode *node);
+  ObLockWaitNode* get_wait_head(uint64_t key);
+  ObLockWaitNode* fetch_wait_head(uint64_t key);
 public:
   struct MsgPack : ObLink {
     MsgPack(const ObAddr &addr, ObString &body, bool is_sync_msg = false)
@@ -219,6 +343,16 @@ public:
   int recv_msg(const ObAddr &sender, ObString &msg);
   int sync_recv_msg(const ObAddr &sender, ObString &msg, ObString &resp);
   int handle_msg_(MsgPack *pkt);
+  int handle_lwm_msg_(const int16_t msg_type,
+                      const char *buf,
+                      const int64_t size,
+                      int64_t &pos);
+  int receive_request_msg_(const int16_t msg_type,
+                          const char* buf,
+                          int64_t size,
+                          int64_t &pos);
+  int handle_request_msg_(ObFakeRequestMsg *msg);
+int handle_request_retry_(ObLockWaitNode *node);
 private:
   int create_memtable_(const int64_t tablet_id, memtable::ObMemtable *& mt);
   int create_ls_(const ObLSID ls_id);
@@ -313,11 +447,22 @@ public:
   ObFakeTxLogAdapter* fake_tx_log_adapter_;
   ObTabletMemtableMgr fake_memtable_mgr_;
   ObOptStatMonitorManager fake_opt_stat_mgr_;
-  ObLockWaitMgr fake_lock_wait_mgr_;
   ObLSService ls_service_;
   common::hash::ObHashSet<int16_t> drop_msg_type_set_;
   std::function<int(int,void *)> extra_msg_handler_;
   char buf_[256];
+  // for stmt retry
+  std::map<ObTxDesc*, ObTxRetryControl> tx_retry_control_map_;
+  std::map<int64_t, ObTxDesc*> tx_map_;
+  std::map<ObLockWaitNode*, ObTxDesc*> lock_wait_node_to_tx_map_;
+  bool stop_request_retry_;
+  // request consumer
+  ObLinkQueue req_queue_;
+  QueueConsumer<Node> req_consumer_;
+  ObLinkQueue req_msg_queue_;
+  QueueConsumer<ObFakeRequestMsg> req_msg_consumer_;
+  ObMockLockWaitMgr fake_lock_wait_mgr_;
+  common::ObMySQLProxy sql_proxy_;
 };
 
 } // transaction

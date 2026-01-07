@@ -197,7 +197,7 @@ namespace compaction
   class ObTenantLSMergeScheduler;
   class ObTenantLSMergeChecker;
 }
-namespace memtable
+namespace lockwaitmgr
 {
   class ObLockWaitMgr;
 }
@@ -400,7 +400,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       compaction::ObTenantCompactionProgressMgr*,    \
       compaction::ObServerCompactionEventHistory*,   \
       storage::ObTenantTabletStatMgr*,               \
-      memtable::ObLockWaitMgr*,                      \
+      lockwaitmgr::ObLockWaitMgr*,                      \
       transaction::tablelock::ObTableLockService*,   \
       rootserver::ObPrimaryMajorFreezeService*,      \
       rootserver::ObRestoreMajorFreezeService*,      \

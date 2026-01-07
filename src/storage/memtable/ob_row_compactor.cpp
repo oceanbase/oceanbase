@@ -354,6 +354,7 @@ ObMvccTransNode *ObMemtableRowCompactor::construct_compact_node_(const SCN snaps
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(ERROR, "unexpected trans version", K(ret), "node", *save);
         } else {
+          new(trans_node) ObMvccTransNode();
           trans_node->tx_id_ = save->tx_id_;
           trans_node->seq_no_ = save->seq_no_;
           trans_node->trans_version_ = save->trans_version_;
@@ -361,7 +362,7 @@ ObMvccTransNode *ObMemtableRowCompactor::construct_compact_node_(const SCN snaps
           trans_node->acc_checksum_ = save->acc_checksum_;
           trans_node->version_ = save->version_;
           trans_node->type_ = NDT_COMPACT;
-          trans_node->flag_ = save->flag_;
+          trans_node->set_saved_flag(save->get_flag());
           trans_node->scn_ = save->scn_;
           trans_node->set_snapshot_version_barrier(snapshot_version, flag);
           TRANS_LOG(DEBUG, "success to compact row, ", K(trans_node->tx_id_), K(dml_flag), K(compact_row_cnt), KPC(save));

@@ -211,7 +211,7 @@ public:
   int check_dup_table_lease_valid(const share::ObLSID ls_id, bool &is_dup_ls, bool &is_lease_valid);
   //get the memory used condition of transaction module
   int iterate_trans_memory_stat(ObTransMemStatIterator &mem_stat_iter);
-  int get_trans_start_session_id(const share::ObLSID &ls_id, const ObTransID &tx_id, uint32_t &session_id);
+  int get_trans_start_session_id_and_ts(const share::ObLSID &ls_id, const ObTransID &tx_id, uint32_t &session_id, int64_t &tx_start_time);
   int dump_elr_statistic();
   int remove_callback_for_uncommited_txn(
     const share::ObLSID ls_id,

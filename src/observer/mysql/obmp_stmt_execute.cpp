@@ -32,6 +32,7 @@
 #include "sql/plan_cache/ob_ps_cache.h"
 #include "sql/ob_sql_mock_schema_utils.h"
 
+void __attribute__((weak)) request_finish_callback();
 namespace oceanbase
 {
 
@@ -2047,6 +2048,13 @@ int ObMPStmtExecute::process()
       if (OB_SUCCESS != (tmp_ret = sess->get_query_lock().unlock())) {
         LOG_WARN("unlock session failed", K(ret), K(tmp_ret));
       }
+    }
+    // clear thread-local variables used for queue waiting
+    // to prevent async callbacks from finishing before
+    // request_finish_callback, which may free the request.
+    // this operation should be protected by the session lock.
+    if (async_resp_used) {
+      request_finish_callback();
     }
   }
 

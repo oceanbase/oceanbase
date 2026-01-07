@@ -21,6 +21,8 @@
 #include "lib/oblog/ob_log_module.h"
 #include "share/ob_errno.h"
 #include "lib/allocator/ob_malloc.h"
+#include "storage/tx/ob_trans_define.h"
+#include "storage/tx/deadlock_adapter/ob_trans_detector_key.h"
 #define NEED_DECLARATION
 #include "ob_deadlock_key_register.h"
 #undef NEED_DECLARATION
@@ -62,6 +64,8 @@ public:\
 
 class ObDetectorLabelRequest;
 
+bool is_need_wait_remote_lock();
+
 class UserBinaryKey
 {
   // for serialization
@@ -74,6 +78,10 @@ public:
   void reset();
   template <typename T>
   int set_user_key(const T& user_key);
+  template <>
+  int set_user_key<transaction::ObTransID>(const transaction::ObTransID& user_key);
+  template <typename T>
+  int serialize_user_key(const T& user_key);
   bool is_valid() const;
   // for hash
   int compare(const UserBinaryKey &other) const;
@@ -83,17 +91,42 @@ public:
   uint64_t hash() const;
   // for log print
   int64_t to_string(char *buffer, const int64_t length) const;
-  struct BufferFactory {
-    static int get_buffer(uint64_t buffer_length, char *&p_buffer);
-    static void revert_buffer(char* &p_buffer);
-    static uint64_t malloc_times;
-    static uint64_t free_times;
-  };
 private:
   uint64_t key_type_id_;
   uint64_t key_binary_code_buffer_length_;
   char key_binary_code_buffer_[BUFFER_LIMIT_SIZE];
 };
+
+template<>
+inline int UserBinaryKey::set_user_key(const transaction::ObTransID &tx_id)
+{
+  #define PRINT_WRAPPER KR(ret), K(tx_id), K(length), K(*this)
+  int ret = common::OB_SUCCESS;
+  int64_t length = 0;
+
+  if (!is_need_wait_remote_lock()) {
+    if (OB_FAIL(serialize_user_key(tx_id))) {
+      DETECT_LOG(WARN, "tx id serialization failed", PRINT_WRAPPER);
+    } else {
+      key_type_id_ = GET_ID(transaction::ObTransID);
+      key_binary_code_buffer_length_ = tx_id.get_serialize_size();
+    }
+  } else {
+    transaction::ObTransDeadlockDetectorKey detector_key(transaction::ObDeadlockKeyType::DEFAULT, tx_id);
+    if (OB_FAIL(serialize_user_key(detector_key))) {
+      DETECT_LOG(WARN, "tx id detector key serialization failed", PRINT_WRAPPER);
+    } else {
+      key_type_id_ = GET_ID(transaction::ObTransDeadlockDetectorKey);
+      key_binary_code_buffer_length_ = detector_key.get_serialize_size();
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    reset();
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
 
 template<typename T>
 int UserBinaryKey::set_user_key(const T &user_key)
@@ -102,11 +135,7 @@ int UserBinaryKey::set_user_key(const T &user_key)
   int ret = common::OB_SUCCESS;
   int64_t length = 0;
 
-  if (BUFFER_LIMIT_SIZE < user_key.get_serialize_size()) {
-    ret = common::OB_BUF_NOT_ENOUGH;
-  } else if (OB_FAIL(user_key.serialize(key_binary_code_buffer_,
-                                        user_key.get_serialize_size(),
-                                        length))) {
+  if (OB_FAIL(serialize_user_key(user_key))) {
     DETECT_LOG(WARN, "user key serialization failed", PRINT_WRAPPER);
   } else {
     key_type_id_ = GET_ID(T);
@@ -117,6 +146,23 @@ int UserBinaryKey::set_user_key(const T &user_key)
     reset();
   }
 
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
+template<typename T>
+int UserBinaryKey::serialize_user_key(const T &user_key)
+{
+  #define PRINT_WRAPPER KR(ret), K(user_key), K(length), K(*this)
+  int ret = common::OB_SUCCESS;
+  int64_t length = 0;
+  if (BUFFER_LIMIT_SIZE < user_key.get_serialize_size()) {
+    ret = common::OB_BUF_NOT_ENOUGH;
+  } else if (OB_FAIL(user_key.serialize(key_binary_code_buffer_,
+                                        user_key.get_serialize_size(),
+                                        length))) {
+    DETECT_LOG(WARN, "user key serialization failed", PRINT_WRAPPER);
+  }
   return ret;
   #undef PRINT_WRAPPER
 }

@@ -1228,6 +1228,7 @@
 # 12487: __all_virtual_nic_info
 # 12488: __all_virtual_scheduler_job_run_detail_v2
 # 12488: __all_scheduler_job_run_detail_v2  # BASE_TABLE_NAME
+# 12489: __all_virtual_deadlock_detector_stat
 # 12490: __all_virtual_spatial_reference_systems
 # 12490: __all_spatial_reference_systems  # BASE_TABLE_NAME
 # 12491: __all_virtual_log_transport_dest_stat

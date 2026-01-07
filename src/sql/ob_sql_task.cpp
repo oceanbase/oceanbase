@@ -19,6 +19,8 @@ using namespace oceanbase::observer;
 using namespace oceanbase::common;
 using namespace oceanbase::obrpc;
 
+void __attribute__((weak)) request_finish_callback();
+
 void ObSqlTaskHandler::reset()
 {
   task_ = NULL;
@@ -58,6 +60,7 @@ int ObSqlTaskHandler::run()
 //      SQL_LOG(WARN, "handle sql task failed", K(ret), K(*task));
 //    }
   }
+  request_finish_callback();
   return ret;
 }
 
