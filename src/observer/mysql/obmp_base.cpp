@@ -725,7 +725,6 @@ int ObMPBase::load_privilege_info_for_change_user(sql::ObSQLSessionInfo *session
       session->set_user(session_priv.user_name_, session_priv.host_name_, session_priv.user_id_);
       session->set_user_priv_set(session_priv.user_priv_set_);
       session->set_db_priv_set(session_priv.db_priv_set_);
-      session->set_enable_role_array(enable_role_id_array);
       if (OB_FAIL(session->set_tenant(login_info.tenant_name_, session_priv.tenant_id_))) {
         OB_LOG(WARN, "fail to set tenant", "tenant name", login_info.tenant_name_, K(ret));
       } else if (OB_FAIL(session->set_real_client_ip_and_port(login_info.client_ip_, session->get_client_addr_port()))) {
@@ -755,6 +754,7 @@ int ObMPBase::load_privilege_info_for_change_user(sql::ObSQLSessionInfo *session
       } else {
         session->set_database_id(db_id);
         session->reset_user_var();
+        session->set_enable_role_array(enable_role_id_array);
       }
     }
   }

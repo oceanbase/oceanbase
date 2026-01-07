@@ -17,6 +17,7 @@
 #include "observer/mysql/obmp_stmt_send_piece_data.h"
 #include "lib/encrypt/ob_encrypted_helper.h"
 #include "lib/net/ob_net_util.h"
+#include "storage/tablelock/ob_table_lock_live_detector.h"
 
 
 using namespace oceanbase::common;
@@ -58,7 +59,8 @@ int ObMPChangeUser::deserialize()
       const char *end = buf + len;
 
       if (OB_LIKELY(pos < end)) {
-        username_.assign_ptr(pos, static_cast<int32_t>(STRLEN(pos)));
+        int64_t len = strnlen(pos, end - pos);
+        username_.assign_ptr(pos, static_cast<int32_t>(len));
         pos += username_.length() + 1;
       }
 
@@ -69,13 +71,15 @@ int ObMPChangeUser::deserialize()
           auth_response_.assign_ptr(pos, static_cast<int32_t>(auth_response_len));
           pos += auth_response_len;
         } else {
-          auth_response_.assign_ptr(pos, static_cast<int32_t>(STRLEN(pos)));
+          int64_t len = strnlen(pos, end - pos);
+          auth_response_.assign_ptr(pos, static_cast<int32_t>(len));
           pos += auth_response_.length() + 1;
         }
       }
 
       if (OB_LIKELY(pos < end)) {
-        database_.assign_ptr(pos, static_cast<int32_t>(STRLEN(pos)));
+        int64_t len = strnlen(pos, end - pos);
+        database_.assign_ptr(pos, static_cast<int32_t>(len));
         pos += database_.length() + 1;
       }
 
@@ -85,7 +89,8 @@ int ObMPChangeUser::deserialize()
 
       if (OB_LIKELY(pos < end)) {
         if (capability.cap_flags_.OB_CLIENT_PLUGIN_AUTH) {
-          auth_plugin_name_.assign_ptr(pos, static_cast<int32_t>(STRLEN(pos)));
+          int64_t len = strnlen(pos, end - pos);
+          auth_plugin_name_.assign_ptr(pos, static_cast<int32_t>(len));
           pos += auth_plugin_name_.length() + 1;
         }
       }
@@ -259,6 +264,13 @@ int ObMPChangeUser::process()
     }
   }
 
+  // Reset session state for change user
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(reset_session_for_change_user(session))) {
+      LOG_WARN("failed to reset session for change user", K(ret));
+    }
+  }
+
   //send packet to client
   if (OB_SUCC(ret)) {
     /*
@@ -300,43 +312,6 @@ int ObMPChangeUser::process()
       OB_LOG(WARN,"response fail packet fail", K(ret));
     }
     need_disconnect = true;
-  }
-
-  // Releases prepared statements. (include ps stmt, ps cursor, piece)
-  if (OB_SUCC(ret)) {
-    // 1 ps stmt
-    if (OB_FAIL(session->close_all_ps_stmt())) {
-      LOG_WARN("failed to close all stmt", K(ret));
-    }
-
-    // 2 ps cursor
-    if (OB_SUCC(ret) && session->get_cursor_cache().is_inited()) {
-      if (OB_FAIL(session->get_cursor_cache().close_all(*session))) {
-        LOG_WARN("failed to close all cursor", K(ret));
-      } else {
-        session->get_cursor_cache().reset();
-      }
-    }
-
-    // 3 piece
-    if (OB_SUCC(ret) && NULL != session->get_piece_cache()) {
-      observer::ObPieceCache* piece_cache =
-        static_cast<observer::ObPieceCache*>(session->get_piece_cache());
-      if (OB_FAIL(piece_cache->close_all(*session))) {
-        LOG_WARN("failed to close all piece", K(ret));
-      }
-      piece_cache->reset();
-      session->get_session_allocator().free(session->get_piece_cache());
-      session->set_piece_cache(NULL);
-    }
-
-    if (OB_SUCC(ret)) {
-      // 4 ps session info
-      session->reset_ps_session_info();
-
-      // 5 ps name
-      session->reset_ps_name();
-    }
   }
 
   if (OB_UNLIKELY(need_disconnect) && is_conn_valid()) {
@@ -476,6 +451,140 @@ int ObMPChangeUser::handle_user_var(const ObString &var, const ObString &val,
       OB_LOG(WARN, "fail to replace user var", K(ret), K(var), K(sess_var));
     }
   }
+  return ret;
+}
+
+int ObMPChangeUser::reset_session_for_change_user(sql::ObSQLSessionInfo *session)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else {
+    /*
+     * According to MySQL doc https://dev.mysql.com/doc/c-api/8.0/en/mysql-change-user.html,
+     * following work needs to be done for COM_CHANGE_USER:
+     *  1. Rolls back any active transactions and resets autocommit mode.
+     *     (Already done before calling this function)
+     *  2. Releases all table locks. (OB use row lock, do not need do this)
+     *  3. Closes (and drops) all TEMPORARY tables.
+     *  4. Reinitializes session system variables to the values of the corresponding global system variables.
+     *     (Already done in load_privilege_info_for_change_user)
+     *  5. Loses user-defined variable settings.
+     *     (Already done in load_privilege_info_for_change_user)
+     *  6. Releases prepared statements. (include ps stmt, ps cursor, piece)
+     *  7. Closes HANDLER variables. (OB not support HANDLER)
+     *  8. Resets the value of LAST_INSERT_ID() to 0.
+     *  9. Releases locks acquired with GET_LOCK().
+     *  10. OB unique design
+     *      10.1  pl debug
+     *      10.2  package state
+     *      10.3  sequence currval
+     *      10.4  warnings buffer
+     *      10.5  client identifier
+     *      10.6  session label
+     *      10.7  memory context
+     */
+
+    // 3. Closes (and drops) all TEMPORARY tables.
+    if (OB_SUCC(ret)) {
+      if (OB_UNLIKELY(OB_FAIL(session->drop_temp_tables(false, false, true)))) {
+        LOG_WARN("fail to drop temp tables", K(ret));
+      }
+      session->refresh_temp_tables_sess_active_time();
+    }
+
+    // 6. Releases prepared statements. (include ps stmt, ps cursor, piece)
+    if (OB_SUCC(ret)) {
+      // 6.1 ps stmt
+      if (OB_FAIL(session->close_all_ps_stmt())) {
+        LOG_WARN("failed to close all stmt", K(ret));
+      }
+
+      // 6.2 ps cursor
+      if (OB_SUCC(ret) && session->get_cursor_cache().is_inited()) {
+        if (OB_FAIL(session->get_cursor_cache().close_all(*session))) {
+          LOG_WARN("failed to close all cursor", K(ret));
+        } else {
+          session->get_cursor_cache().reset();
+        }
+      }
+
+      // 6.3 piece
+      if (OB_SUCC(ret) && NULL != session->get_piece_cache()) {
+        observer::ObPieceCache* piece_cache =
+          static_cast<observer::ObPieceCache*>(session->get_piece_cache());
+        if (OB_FAIL(piece_cache->close_all(*session))) {
+          LOG_WARN("failed to close all piece", K(ret));
+        }
+        piece_cache->reset();
+        session->get_session_allocator().free(session->get_piece_cache());
+        session->set_piece_cache(NULL);
+      }
+
+      if (OB_SUCC(ret)) {
+        // 6.4 ps session info
+        session->reset_ps_session_info();
+
+        // 6.5 ps name
+        session->reset_ps_name();
+      }
+    }
+
+    // 8. Resets the value of LAST_INSERT_ID() to 0.
+    if (OB_SUCC(ret)) {
+      ObObj last_insert_id;
+      last_insert_id.set_uint64(0);
+      if (OB_FAIL(session->update_sys_variable(SYS_VAR_LAST_INSERT_ID, last_insert_id))) {
+        LOG_WARN("fail to update last_insert_id", K(ret));
+      } else if (OB_FAIL(session->update_sys_variable(SYS_VAR_IDENTITY, last_insert_id))) {
+        LOG_WARN("succ update last_insert_id, but fail to update identity", K(ret));
+      } else {
+        NG_TRACE_EXT(last_insert_id, OB_ID(last_insert_id), 0);
+      }
+    }
+
+    // 9. Releases locks acquired with GET_LOCK().
+    if (OB_SUCC(ret)) {
+      ObTableLockOwnerID owner_id;
+      if (OB_FAIL(owner_id.convert_from_client_sessid(session->get_sid(),
+                                                      session->get_client_create_time()))) {
+        LOG_WARN("failed to convert from client sessid", K(ret));
+      } else if (OB_FAIL(ObTableLockDetector::remove_lock_by_owner_id(owner_id))) {
+        LOG_WARN("failed to remove lock by owner id", K(ret));
+      }
+    }
+
+    // 10. OB unique design
+    if (OB_SUCC(ret)) {
+      // 10.1 pl debug, pl profiler, pl code coverage
+#ifdef OB_BUILD_ORACLE_PL
+      session->reset_pl_debugger_resource();
+      session->reset_pl_profiler_resource();
+      session->reset_pl_code_coverage_resource();
+#endif
+
+      // 10.2 package state
+      session->reset_all_package_state();
+
+      // 10.3 sequence currval
+      session->reuse_all_sequence_value();
+
+      // 10.4 warnings buffer
+      session->reset_warnings_buf();
+      session->reset_show_warnings_buf();
+
+      // 10.5 client identifier
+      session->get_client_identifier_for_update().reset();
+
+      // 10.6 session label
+      session->reuse_labels();
+
+      // 10.7 memory context for dbms_session.create_context
+      session->destory_mem_context();
+    }
+  }
+
   return ret;
 }
 
