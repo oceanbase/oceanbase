@@ -91,6 +91,8 @@ typedef enum ObItemType
   T_VAR_INT = 65,
 
   T_EXEC_VAR = 66,
+  T_JSON_NUMBER = 67,
+  T_JSON_STRING = 68,
 
   T_REF_ALIAS_COLUMN = 88,
   T_REF_COLUMN = 89,

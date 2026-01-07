@@ -88,7 +88,7 @@ public:
   ObExprJsonQueryParamInfo(common::ObIAllocator &alloc, ObExprOperatorType type)
       : ObIExprExtraInfo(alloc, type), allocator_(alloc), truncate_(0),
         format_json_(0), wrapper_(0), empty_type_(0), error_type_(0),
-        pretty_type_(0), ascii_type_(0), scalars_type_(0),
+        pretty_type_(0), ascii_type_(0), scalars_type_(0), pick_(T_NULL),
         path_str_(), on_mismatch_(alloc),
         on_mismatch_type_(alloc), j_path_(nullptr)
   {
@@ -112,6 +112,7 @@ public:
   int8_t pretty_type_;
   int8_t ascii_type_;
   int8_t scalars_type_;
+  ObItemType pick_;
   ObString path_str_;
   common::ObFixedArray<int8_t, common::ObIAllocator> on_mismatch_;
   common::ObFixedArray<int8_t, common::ObIAllocator> on_mismatch_type_;

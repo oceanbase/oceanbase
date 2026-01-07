@@ -99,7 +99,8 @@ OB_DEF_SERIALIZE_SIZE(ObExprJsonQueryParamInfo)
               scalars_type_,
               path_str_,
               on_mismatch_,
-              on_mismatch_type_);
+              on_mismatch_type_,
+              pick_);
   return len;
 }
 
@@ -117,7 +118,8 @@ OB_DEF_SERIALIZE(ObExprJsonQueryParamInfo)
               scalars_type_,
               path_str_,
               on_mismatch_,
-              on_mismatch_type_);
+              on_mismatch_type_,
+              pick_);
   return ret;
 }
 
@@ -135,7 +137,8 @@ OB_DEF_DESERIALIZE(ObExprJsonQueryParamInfo)
               scalars_type_,
               path_str_,
               on_mismatch_,
-              on_mismatch_type_);
+              on_mismatch_type_,
+              pick_);
   OZ(parse_json_path(path_str_, j_path_));
   return ret;
 }
