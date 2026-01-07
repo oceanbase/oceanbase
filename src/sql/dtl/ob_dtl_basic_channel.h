@@ -115,6 +115,8 @@ static DtlWriterType msg_writer_map[] =
   CONTROL_WRITER, // DH_JOIN_FILTER_COUNT_ROW_WHOLE_MSG,
   MAX_WRITER, // DH_STATISTICS_COLLECTOR_PIECE_MSG, placeholder
   MAX_WRITER, // DH_STATISTICS_COLLECTOR_WHOLE_MSG, placeholder
+  CONTROL_WRITER, // DH_DIRECT_INSERT_PIECE_MSG
+  CONTROL_WRITER, // DH_DIRECT_INSERT_WHOLE_MSG
 };
 
 static_assert(ARRAYSIZEOF(msg_writer_map) == ObDtlMsgType::MAX, "invalid ms_writer_map size");
