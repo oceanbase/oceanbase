@@ -143,7 +143,8 @@ bool ObExternalTablePartitionsKey::operator==(const ObIKVCacheKey &other) const
   bool r = this->tenant_id_ == other_key.tenant_id_
            && this->catalog_id_ == other_key.catalog_id_
            && this->db_name_.case_compare(other_key.db_name_) == 0
-           && this->tb_name_.case_compare(other_key.tb_name_) == 0;
+           && this->tb_name_.case_compare(other_key.tb_name_) == 0
+           && this->lake_table_metadata_version_ == other_key.lake_table_metadata_version_;
   return r;
 }
 
@@ -154,6 +155,7 @@ uint64_t ObExternalTablePartitionsKey::hash() const
   hash_code = murmurhash(&catalog_id_, sizeof(uint64_t), hash_code);
   hash_code = db_name_.hash(hash_code);
   hash_code = tb_name_.hash(hash_code);
+  hash_code = murmurhash(&lake_table_metadata_version_, sizeof(int64_t), hash_code);
   return hash_code;
 }
 
@@ -168,6 +170,7 @@ int ObExternalTablePartitionsKey::deep_copy(char *buf, const int64_t buf_len, Ob
   } else {
     new_value->tenant_id_ = this->tenant_id_;
     new_value->catalog_id_ = this->catalog_id_;
+    new_value->lake_table_metadata_version_ = this->lake_table_metadata_version_;
     OZ(ob_write_string(allocator, this->db_name_, new_value->db_name_));
     OZ(ob_write_string(allocator, this->tb_name_, new_value->tb_name_));
     OX(key = new_value);
@@ -1696,7 +1699,6 @@ int ObExternalTableFileManager::get_external_file_list_on_device_with_cache(
     const ObIArray<common::ObString> &location,
     const uint64_t tenant_id,
     const ObIArray<int64_t> &part_id,
-    const ObIArray<int64_t> &modify_ts,
     const common::ObString &pattern,
     const common::ObString &access_info,
     common::ObIAllocator &allocator,
@@ -1708,6 +1710,25 @@ int ObExternalTableFileManager::get_external_file_list_on_device_with_cache(
   ObSEArray<ObString, 4> tmp_need_get_location; // 需要从远程拉取文件列表
 
   if (refresh_interval_ms > 0) {
+
+    // 远程获取这些路径的最新修改时间
+    // 1. 防止出现同名但被修改的文件(先删除、再put一个同名、但内容不同的文件）
+    // 2. 防止用户绕过hms，直接put一个文件到一个路径下
+    ObExternalFileInfoCollector collector(allocator);
+    ObSEArray<int64_t, 1> modify_ts;
+
+    if (location.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("empty location", K(location));
+    } else if (OB_FAIL(collector.init(location.at(0), access_info))) {
+      LOG_WARN("failed to init", K(ret), K(location), K(access_info));
+    } else if (OB_FAIL(collector.collect_files_modify_time(location, modify_ts))) {
+      LOG_WARN("failed to get file list", K(ret), K(location));
+    } else if (modify_ts.count() != location.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("check count error", K(ret), K(location.count()), K(modify_ts.count()));
+    }
+
     for (int64_t i = 0; OB_SUCC(ret) && i < location.count(); i++) {
       ret = get_one_location_from_cache(location.at(i),
                                         tenant_id,
@@ -2034,6 +2055,7 @@ int ObExternalTableFileManager::get_partitions_info_with_cache(const ObTableSche
                                                 tmp_allocator};
   Partitions partitions;
   const ObExternalTablePartitions *table_partitions = NULL;
+  ObExternalTablePartitions pts;
   ObKVCacheHandle handle;
   if (OB_ISNULL(metadata)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2045,6 +2067,7 @@ int ObExternalTableFileManager::get_partitions_info_with_cache(const ObTableSche
     key.catalog_id_ = table_schema.get_catalog_id();
     key.db_name_ = metadata->namespace_name_;
     key.tb_name_ = metadata->table_name_;
+    key.lake_table_metadata_version_ = metadata->lake_table_metadata_version_;
     if (OB_FAIL(external_partitions_cache_.get(key, table_partitions, handle))) {
       if (OB_ENTRY_NOT_EXIST != ret) {
         LOG_WARN("fail to get from external_partitions_cache", K(ret), K(key));
@@ -2076,7 +2099,6 @@ int ObExternalTableFileManager::get_partitions_info_with_cache(const ObTableSche
              && is_cache_value_timeout(table_partitions->create_ts_, refresh_interval_ms))
             || OB_ENTRY_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
-          ObExternalTablePartitions pts;
           if (OB_FAIL(get_partitions_info(table_schema, sql_schema_guard, allocator, pts))) {
             LOG_WARN("fail to get partitions info", K(ret), K(table_schema));
           } else if (OB_FAIL(external_partitions_cache_
@@ -2092,7 +2114,6 @@ int ObExternalTableFileManager::get_partitions_info_with_cache(const ObTableSche
       }
     }
   } else {
-    ObExternalTablePartitions pts;
     if (OB_FAIL(get_partitions_info(table_schema, sql_schema_guard, allocator, pts))) {
       LOG_WARN("fail to get partitions info", K(ret), K(table_schema));
     }

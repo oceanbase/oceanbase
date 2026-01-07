@@ -164,13 +164,14 @@ public:
     return sizeof(ObExternalTablePartitionsKey) + db_name_.length() + 1 + tb_name_.length() + 1;
   }
   int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *&key) const override;
-  TO_STRING_KV(K(tenant_id_), K(catalog_id_), K(db_name_), K(tb_name_));
+  TO_STRING_KV(K(tenant_id_), K(catalog_id_), K(db_name_), K(tb_name_), K(lake_table_metadata_version_));
 
 public:
   uint64_t tenant_id_;
   uint64_t catalog_id_;
   ObString db_name_;
   ObString tb_name_;
+  int64_t lake_table_metadata_version_;
 };
 
 struct PartitionInfo
@@ -361,7 +362,6 @@ public:
       const ObIArray<common::ObString> &location,
       const uint64_t tenant_id,
       const ObIArray<int64_t> &part_id,
-      const ObIArray<int64_t> &part_modify_ts,
       const common::ObString &pattern,
       const common::ObString &access_info,
       common::ObIAllocator &allocator,

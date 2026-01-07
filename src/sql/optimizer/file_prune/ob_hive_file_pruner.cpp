@@ -249,7 +249,6 @@ int ObHiveFilePruner::prune_partition_by_hms(ObExecContext &exec_ctx,
 
   ObSEArray<int64_t, 4> tmp_part_id;
   ObSEArray<ObString, 4> tmp_part_path;
-  ObSEArray<int64_t, 4> tmp_part_modify_ts;
 
   if (OB_FAIL(sql_schema_guard_->get_table_schema(loc_meta_.ref_table_id_, table_schema))) {
     LOG_WARN("failed to get table schema", K(ret), K(loc_meta_.ref_table_id_));
@@ -379,7 +378,6 @@ int ObHiveFilePruner::prune_partition_by_hms(ObExecContext &exec_ctx,
           if (OB_SUCC(ret)) {
             tmp_part_id.push_back(part_index);
             tmp_part_path.push_back(partition_info->path_);
-            tmp_part_modify_ts.push_back(partition_info->modify_ts_);
           }
         }
       }
@@ -391,7 +389,6 @@ int ObHiveFilePruner::prune_partition_by_hms(ObExecContext &exec_ctx,
           table_schema->get_tenant_id(),
           tmp_part_path,
           tmp_part_id,
-          tmp_part_modify_ts,
           table_schema->get_external_file_location_access_info(),
           empty_patten,
           allocator_,

@@ -368,7 +368,6 @@ class ObExternalTableUtils {
   static int collect_external_file_list_with_cache(const uint64_t tenant_id,
                                                    const ObIArray<ObString> &part_path,
                                                    const ObIArray<int64_t> &part_id,
-                                                   const ObIArray<int64_t> &part_modify_ts,
                                                    const ObString &access_info,
                                                    const ObString &pattern,
                                                    ObIAllocator &allocator,
