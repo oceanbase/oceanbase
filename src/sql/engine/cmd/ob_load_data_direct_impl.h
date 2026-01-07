@@ -12,6 +12,7 @@
 #pragma once
 
 #include "lib/allocator/page_arena.h"
+#include "lib/oblog/ob_warning_buffer.h"
 #include "observer/table_load/ob_table_load_object_allocator.h"
 #include "observer/table_load/ob_table_load_task.h"
 #include "share/table/ob_table_load_array.h"
@@ -476,8 +477,6 @@ private:
     int64_t get_total_line_count() const { return total_line_count_; }
     int check_status();
   private:
-    int check_support_direct_load();
-  private:
     ObArenaAllocator allocator_;
     const LoadExecuteParam *execute_param_;
     LoadExecuteContext *execute_ctx_;
@@ -493,6 +492,7 @@ private:
     int64_t next_subpart_idx_;
     int64_t total_line_count_;
     int task_error_code_;
+    char task_error_msg_[ObWarningBuffer::WarningItem::STR_LEN];
     bool is_inited_;
   };
 

@@ -164,6 +164,7 @@ public:
   virtual int64_t get_iter_row_count() const { return iter_row_count_; }
   virtual int64_t get_ghost_row_count() const { return 0; }
   virtual int collect_tnode_dml_stat(storage::ObTransNodeDMLStat &tnode_stat) const { UNUSED(tnode_stat); return OB_NOT_SUPPORTED; }
+  virtual void set_reuse_micro_in_border_macro(const bool reuse_micro_in_border_macro) { reuse_micro_in_border_macro_ = false; }
   OB_INLINE bool is_compact_completed_row() const
   {
     bool bret = false;
@@ -178,7 +179,7 @@ public:
     return is_compact_completed_row() ||
         (is_delete_insert_merge_ && nullptr != curr_row_ && !curr_row_->is_uncommitted_row());
   }
-  int check_merge_range_cross(ObDatumRange &data_range, bool &range_cross);
+  int check_merge_range_cross(const ObDatumRange &data_range, bool &range_cross);
   virtual int64_t to_string(char *buf, const int64_t len) const override;
   void set_major_idx(const int64_t major_idx) { major_idx_ = major_idx; }
   int64_t get_major_idx() const { return major_idx_; }
@@ -225,6 +226,8 @@ protected:
   bool is_reserve_mode_;
   bool is_delete_insert_merge_;
   bool is_ha_compeleted_;
+  // for macro range cross
+  bool reuse_micro_in_border_macro_;
 };
 
 class ObPartitionRowMergeIter : public ObPartitionMergeIter
@@ -310,15 +313,19 @@ public:
     micro_block = curr_micro_block_;
     return OB_SUCCESS;
   }
+  virtual void set_reuse_micro_in_border_macro(const bool reuse_micro_in_border_macro) override;
   virtual int check_row_changed(const blocksstable::ObDatumRow &row, const int64_t row_id, bool &is_changed) override;
   INHERIT_TO_STRING_KV("ObPartitionMicroMergeIter", ObPartitionMacroMergeIter, K_(micro_block_opened), K_(need_reuse_micro_block),
-                       K_(need_check_schema_version), KPC(curr_micro_block_), KP_(micro_row_scanner));
+                       KPC(curr_micro_block_), KP_(micro_row_scanner), K_(merge_data_version));
 private:
   virtual int inner_init(const ObMergeParameter &merge_param) override;
   virtual bool inner_check(const ObMergeParameter &merge_param) override;
   virtual int next_range() override;
-  int open_curr_micro_block(const int64_t start_row_id = -1);
+  int open_curr_micro_block(ObDatumRange &rowkey_range, ObCSRange &cs_range, const bool tmp_open = false);
   void check_need_reuse_micro_block();
+  int get_full_micro_range(ObDatumRange &rowkey_range, ObCSRange &cs_range);
+  int get_clamped_micro_range(ObDatumRange &rowkey_range, ObCSRange &cs_range, bool &is_clamped, const int64_t start_row_id = -1);
+  OB_INLINE bool need_check_schema_version() const { return merge_data_version_ < DATA_VERSION_4_3_3_0; }
 private:
   ObIndexBlockMicroIterator micro_block_iter_;
   blocksstable::ObIMicroBlockRowScanner *micro_row_scanner_;
@@ -326,7 +333,7 @@ private:
   bool micro_block_opened_;
   blocksstable::ObMacroBlockReader macro_reader_;
   bool need_reuse_micro_block_;
-  bool need_check_schema_version_; // used for reuse micro block
+  uint64_t merge_data_version_;
 };
 
 class ObPartitionMinorRowMergeIter : public ObPartitionMergeIter

@@ -119,25 +119,26 @@ int TriggerHandle::init_trigger_params(
     // FIXME: for delete it has no new_rowid_expr, trig_col_info hasn't add rowid
     int64_t rowtype_col_count = trig_ctdef.trig_col_info_.get_rowtype_count();
     int64_t init_size = pl::ObRecordType::get_init_size(rowtype_col_count);
-    if (trig_ctdef.all_tm_points_.has_when_condition() || trig_ctdef.all_tm_points_.has_row_point()) {
-      if (trig_ctdef.is_ref_old_row_) {
+    if (trig_ctdef.all_tm_points_.has_when_condition() || trig_ctdef.all_tm_points_.has_row_point()
+        || !trig_ctdef.is_prune_columns_  ) {
+      if (trig_ctdef.is_ref_old_row()) {
         OZ (init_trigger_row(das_ctx.get_exec_ctx().get_allocator(), rowtype_col_count, old_record));
       }
-      if (trig_ctdef.is_ref_new_row_) {
+      if (trig_ctdef.is_ref_new_row()) {
         OZ (init_trigger_row(das_ctx.get_exec_ctx().get_allocator(), rowtype_col_count, new_record));
       }
     }
     LOG_DEBUG("trigger init", K(rowtype_col_count), K(ret));
 
     if (OB_SUCC(ret) && trig_ctdef.all_tm_points_.has_row_point()) {
-      if (trig_ctdef.is_ref_old_row_) {
+      if (trig_ctdef.is_ref_old_row()) {
         trig_rtdef.tg_row_point_params_->at(0).set_extend(reinterpret_cast<int64_t>(old_record),
                                               pl::PL_RECORD_TYPE, init_size);
         trig_rtdef.tg_row_point_params_->at(0).set_param_meta();
       } else {
         trig_rtdef.tg_row_point_params_->at(0).set_null();
       }
-      if (trig_ctdef.is_ref_new_row_) {
+      if (trig_ctdef.is_ref_new_row()) {
         trig_rtdef.tg_row_point_params_->at(1).set_extend(reinterpret_cast<int64_t>(new_record),
                                               pl::PL_RECORD_TYPE, init_size);
         trig_rtdef.tg_row_point_params_->at(1).set_param_meta();
@@ -187,7 +188,7 @@ int TriggerHandle::init_param_old_row(
 {
   int ret = OB_SUCCESS;
   if ((trig_ctdef.all_tm_points_.has_when_condition() || trig_ctdef.all_tm_points_.has_row_point())
-      && trig_ctdef.is_ref_old_row_) {
+      && trig_ctdef.is_ref_old_row()) {
     ObObj *cells = nullptr;
     if (OB_ISNULL(trig_rtdef.old_record_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -205,7 +206,7 @@ int TriggerHandle::init_param_old_row(
       ObObj result;
       ObObj dst;
       bool is_udt = false;
-      if (trig_ctdef.ref_types_.at(i).is_none_old_column()) {
+      if (trig_ctdef.is_prune_columns_ && trig_ctdef.ref_types_.at(i).is_none_old_column()) {
         // not reference the column
         continue;
       } else if (OB_FAIL(trig_ctdef.old_row_exprs_.at(i)->eval(eval_ctx, datum))) {
@@ -260,7 +261,7 @@ int TriggerHandle::init_param_new_row(
   int ret = OB_SUCCESS;
   LOG_DEBUG("debug init param new row", K(ret));
   if ((trig_ctdef.all_tm_points_.has_when_condition() || trig_ctdef.all_tm_points_.has_row_point())
-      && trig_ctdef.is_ref_new_row_) {
+      && trig_ctdef.is_ref_new_row()) {
     ObObj *cells = nullptr;
     if (OB_ISNULL(trig_rtdef.new_record_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -278,7 +279,7 @@ int TriggerHandle::init_param_new_row(
       ObObj result;
       ObObj dst;
       bool is_udt =false;
-      if (trig_ctdef.ref_types_.at(i).is_none_new_column()) {
+      if (trig_ctdef.is_prune_columns_ && trig_ctdef.ref_types_.at(i).is_none_new_column()) {
         // not reference the column
         continue;
       } else if (OB_FAIL(trig_ctdef.new_row_exprs_.at(i)->eval(eval_ctx, datum))) {
@@ -419,7 +420,7 @@ int TriggerHandle::do_handle_rowid_before_row(
   uint64_t tg_event)
 {
   int ret = OB_SUCCESS;
-  if (trig_ctdef.is_ref_new_rowid_ || trig_ctdef.is_ref_old_rowid_) {
+  if (trig_ctdef.is_ref_new_rowid() || trig_ctdef.is_ref_old_rowid()) {
     if (NULL != trig_ctdef.rowid_new_expr_ && ObTriggerEvents::is_insert_event(tg_event)) {
       // we set a invalid rowid obj into old_row/new_row
       ObObj *rowid_val = NULL;
@@ -428,11 +429,11 @@ int TriggerHandle::do_handle_rowid_before_row(
       } else if (OB_ISNULL(rowid_val)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected status: rowid is null", K(ret));
-      } else if (trig_ctdef.is_ref_old_rowid_ && OB_FAIL(TriggerHandle::set_rowid_into_row(trig_ctdef.trig_col_info_,
+      } else if (trig_ctdef.is_ref_old_rowid() && OB_FAIL(TriggerHandle::set_rowid_into_row(trig_ctdef.trig_col_info_,
                                                         *rowid_val,
                                                         trig_rtdef.old_record_))) {
         LOG_WARN("failed to set rowid to old record", K(ret));
-      } else if (trig_ctdef.is_ref_new_rowid_ && OB_FAIL(TriggerHandle::set_rowid_into_row(trig_ctdef.trig_col_info_,
+      } else if (trig_ctdef.is_ref_new_rowid() && OB_FAIL(TriggerHandle::set_rowid_into_row(trig_ctdef.trig_col_info_,
                                                         *rowid_val,
                                                         trig_rtdef.new_record_))) {
         LOG_WARN("failed to set rowid to old record", K(ret));
@@ -440,7 +441,7 @@ int TriggerHandle::do_handle_rowid_before_row(
       LOG_DEBUG("handle rowid before insert success", K(tg_event), K(*rowid_val));
     } else if (NULL != trig_ctdef.rowid_old_expr_
                && ObTriggerEvents::is_delete_event(tg_event)
-               && trig_ctdef.is_ref_new_rowid_) {
+               && trig_ctdef.is_ref_new_rowid()) {
       // new.rowid should be same with old.rowid
       OZ (TriggerHandle::set_rowid_into_row(trig_ctdef.trig_col_info_,
                                             dml_op.get_eval_ctx(),
@@ -527,7 +528,8 @@ int TriggerHandle::check_and_update_new_row(
   const ObIArray<ObExpr *> &new_row_exprs,
   pl::ObPLRecord *new_record,
   bool check,
-  const ObTriggerArg &tg_arg)
+  const ObTriggerArg &tg_arg,
+  bool is_prune_columns)
 {
   int ret = OB_SUCCESS;
   // plus 1 is for rowid
@@ -541,7 +543,7 @@ int TriggerHandle::check_and_update_new_row(
     for (int64_t i = 0; OB_SUCC(ret) && check && i < columns.get_count(); i++) {
       if (columns.get_flags()[i].is_rowid_
           || !columns.get_flags()[i].is_update_
-          || tg_arg.get_ref_types().at(i).new_type_ != ObTriggerRowRefType::RT_WRITE) {
+          || (is_prune_columns && tg_arg.get_ref_types().at(i).new_type_ != ObTriggerRowRefType::RT_WRITE)) {
       } else {
         ObDatum *datum;
         ObObj new_obj;
@@ -590,10 +592,10 @@ int TriggerHandle::check_and_update_new_row(
     // Firstly calculate the basic columns
     for (int64_t i = 0; OB_SUCC(ret) && i < columns.get_count(); i++) {
       if (columns.get_flags()[i].is_gen_col_) {
-        if (!tg_arg.get_ref_types().at(i).is_none_new_column()) {
+        if (!is_prune_columns || !tg_arg.get_ref_types().at(i).is_none_new_column()) {
           self_op->clear_dml_evaluated_flag(new_row_exprs.at(i));
         }
-      } else if (tg_arg.get_ref_types().at(i).new_type_ == ObTriggerRowRefType::RT_WRITE) {
+      } else if (!is_prune_columns || tg_arg.get_ref_types().at(i).new_type_ == ObTriggerRowRefType::RT_WRITE) {
         self_op->clear_dml_evaluated_flag(new_row_exprs.at(i));
         ObExpr *expr = new_row_exprs.at(i);
         if (OB_ISNULL(expr)) {
@@ -632,7 +634,8 @@ int TriggerHandle::check_and_update_new_row(
     }
     // Secondly calculate the generated column
     for (int64_t i = 0; OB_SUCC(ret) && i < columns.get_count(); i++) {
-      if (columns.get_flags()[i].is_gen_col_ && !tg_arg.get_ref_types().at(i).is_none_new_column()) {
+      if (columns.get_flags()[i].is_gen_col_
+          && (!is_prune_columns || !tg_arg.get_ref_types().at(i).is_none_new_column())) {
         // for generated column, the dependent column is already evaluated
         // so the generated column can evalate by eval_function
         ObDatum *datum;
@@ -692,14 +695,15 @@ int TriggerHandle::do_handle_before_row(
               LOG_WARN("failed to calc before row", K(ret));
             } else if ((ObTriggerEvents::is_update_event(tg_event) || ObTriggerEvents::is_insert_event(tg_event))
                         && !trig_ctdef.all_tm_points_.has_instead_row()
-                        && trig_ctdef.is_ref_new_row_) {
+                        && trig_ctdef.is_ref_new_row()) {
                 if (OB_FAIL(check_and_update_new_row(&dml_op,
                                               trig_ctdef.trig_col_info_,
                                               dml_op.get_eval_ctx(),
                                               trig_ctdef.new_row_exprs_,
                                               trig_rtdef.new_record_,
                                               ObTriggerEvents::is_update_event(tg_event),
-                                              tg_arg))) {
+                                              tg_arg,
+                                              trig_ctdef.is_prune_columns_))) {
                   LOG_WARN("failed to check updated new row", K(ret));
               }
             }
@@ -830,17 +834,17 @@ int TriggerHandle::do_handle_rowid_after_row(
   uint64_t tg_event)
 {
   int ret = OB_SUCCESS;
-  if (trig_ctdef.is_ref_new_rowid_ || trig_ctdef.is_ref_old_rowid_) {
+  if (trig_ctdef.is_ref_new_rowid() || trig_ctdef.is_ref_old_rowid()) {
     if (NULL != trig_ctdef.rowid_new_expr_ && ObTriggerEvents::is_insert_event(tg_event)) {
       // old.rowid should be same with new.rowid for insert
       trig_ctdef.rowid_new_expr_->get_eval_info(dml_op.get_eval_ctx()).clear_evaluated_flag();
-      if (trig_ctdef.is_ref_old_rowid_) {
+      if (trig_ctdef.is_ref_old_rowid()) {
         OZ (TriggerHandle::set_rowid_into_row(trig_ctdef.trig_col_info_,
                                               dml_op.get_eval_ctx(),
                                               trig_ctdef.rowid_new_expr_,
                                               trig_rtdef.old_record_));
       }
-      if (trig_ctdef.is_ref_new_rowid_) {
+      if (trig_ctdef.is_ref_new_rowid()) {
         OZ (TriggerHandle::set_rowid_into_row(trig_ctdef.trig_col_info_,
                                               dml_op.get_eval_ctx(),
                                               trig_ctdef.rowid_new_expr_,
@@ -848,7 +852,7 @@ int TriggerHandle::do_handle_rowid_after_row(
       }
       LOG_DEBUG("handle rowid after insert success", K(tg_event));
     } else if (NULL != trig_ctdef.rowid_old_expr_ && ObTriggerEvents::is_delete_event(tg_event)) {
-      if (trig_ctdef.is_ref_new_rowid_) {
+      if (trig_ctdef.is_ref_new_rowid()) {
         // new.rowid should be same with old.rowid
         OZ (TriggerHandle::set_rowid_into_row(trig_ctdef.trig_col_info_,
                                               dml_op.get_eval_ctx(),

@@ -26,6 +26,7 @@ const ObString ObMVPrinter::DELTA_BASIC_MV_VIEW_NAME = "DLT_BASIC_MV$$";
 const ObString ObMVPrinter::DELTA_MV_VIEW_NAME = "DLT_MV$$";
 const ObString ObMVPrinter::INNER_RT_MV_VIEW_NAME = "INNER_RT_MV$$";
 const ObString ObMVPrinter::MV_STAT_VIEW_NAME = "MVS$$";
+const ObString ObMVPrinter::GROUP_CALC_AGGR_VIEW_NAME = "GROUP_CALC_VIEW$$";
 // column name
 const ObString ObMVPrinter::HEAP_TABLE_ROWKEY_COL_NAME  = "M_ROW$$";
 const ObString ObMVPrinter::OLD_NEW_COL_NAME  = "OLD_NEW$$";
@@ -735,6 +736,26 @@ int ObMVPrinter::create_simple_table_item(ObDMLStmt *stmt,
     if (OB_SUCC(ret) && add_to_from && OB_FAIL(stmt->add_from_item(table_item->table_id_))) {
       LOG_WARN("failed to add from item", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObMVPrinter::gen_format_string_name(const char *name_format_string,
+                                        const int64_t idx,
+                                        ObString &format_name,
+                                        const int64_t buf_len /* = 64 (OB_MAX_SUBQUERY_NAME_LENGTH) */)
+{
+  int ret = OB_SUCCESS;
+  char buf[buf_len];
+  int64_t pos = 0;
+  MEMSET(buf, 0, buf_len);
+  if (OB_ISNULL(name_format_string)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("name format string is null", K(ret));
+  } else if (OB_FAIL(BUF_PRINTF(name_format_string, idx))) {
+    LOG_WARN("failed to buf print format name", K(ret));
+  } else if (OB_FAIL(ob_write_string(ctx_.alloc_, ObString(pos, buf), format_name))) {
+    LOG_WARN("failed to write string", K(ret), K(pos));
   }
   return ret;
 }

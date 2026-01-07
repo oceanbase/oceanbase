@@ -63,7 +63,7 @@ public:
     ObString class_name(name);
     result = nullptr;
 
-    ObLatchMutexGuard guard(cached_class.first, ObLatchIds::DEFAULT_SPIN_LOCK);
+    ObLatchMutexGuard guard(cached_class.first, ObLatchIds::JAVA_CACHED_CLASS_LOCK);
 
     if (OB_UNLIKELY(!cached_class.second.created())) {
       if (OB_FAIL(cached_class.second.create(16, "JavaUDFStatic"))) {

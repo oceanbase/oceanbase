@@ -53,6 +53,7 @@ select_hint_begin       (select{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/
 update_hint_begin       (update{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
 delete_hint_begin       (delete{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
 insert_hint_begin       (insert{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
+merge_hint_begin        (merge{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
 replace_hint_begin      (replace{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
 load_data_hint_begin    (load{space}+data{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
 create_hint_begin    (create{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
@@ -961,6 +962,12 @@ Timestamp{whitespace}?\"[^\"]*\" {
   ParseResult *p = (ParseResult *)yyextra;
   p->is_ignore_token_ = p->is_ignore_hint_;
   return INSERT_HINT_BEGIN;
+}
+{merge_hint_begin} {
+  BEGIN(hint);
+  ParseResult *p = (ParseResult *)yyextra;
+  p->is_ignore_token_ = p->is_ignore_hint_;
+  return MERGE_HINT_BEGIN;
 }
 {replace_hint_begin} {
   BEGIN(hint);

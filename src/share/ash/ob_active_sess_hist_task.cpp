@@ -92,11 +92,14 @@ void ObActiveSessHistTask::runTimerTask()
   int64_t current_time = ObTimeUtility::current_time();
   common::ObBKGDSessInActiveGuard inactive_guard;
   int ret = OB_SUCCESS;
-  ObActiveSessHistList::get_instance().lock();
+  ObActiveSessHistList &ash_list = ObActiveSessHistList::get_instance();
+  ash_list.lock();
   if (true == GCONF._ob_ash_enable) {
     WR_STAT_GUARD(ASH_SCHEDULAR);
     sample_time_ = ObTimeUtility::current_time();
     tsc_sample_time_ = rdtsc();
+    int64_t begin_write_pos = ash_list.write_pos();
+    ash_list.check_if_need_compress();
 
     std::function<bool(const SessionID&, ObDiagnosticInfo *)> fn = std::bind(&ObActiveSessHistTask::process_running_di, this, std::placeholders::_1, std::placeholders::_2);
 
@@ -110,6 +113,8 @@ void ObActiveSessHistTask::runTimerTask()
           if (MTL(ObDiagnosticInfoContainer *)->is_inited() && OB_FAIL(MTL(ObDiagnosticInfoContainer *)->for_each_running_di(fn))) {
             LOG_WARN("fail to process tenant ash stat, prceed anyway", K(ret), K(tenant_id));
             ret = OB_SUCCESS;
+          } else if (ash_list.need_compress()) {
+            MTL(ObDiagnosticInfoContainer *)->copy_wait_request_to_ash_buffer_and_reset(tenant_id);
           }
         } else {
           LOG_WARN("failed to switch to current tenant, prceed anyway", K(ret), K(tenant_id));
@@ -119,9 +124,15 @@ void ObActiveSessHistTask::runTimerTask()
     }
     if (OB_FAIL(ObDiagnosticInfoContainer::get_global_di_container()->for_each_running_di(fn))) {
       LOG_WARN("failed to get global diagnostic info", K(ret), KPC(ObDiagnosticInfoContainer::get_global_di_container()));
+    } else if (ash_list.need_compress()) {
+      ObDiagnosticInfoContainer::get_global_di_container()->copy_wait_request_to_ash_buffer_and_reset(OB_SYS_TENANT_ID);
     }
+    int64_t write_num = ash_list.write_pos() - begin_write_pos;
+    ash_list.set_current_write_num(write_num);
+    ash_list.check_if_can_reset_compress_flag();
+    ash_list.reset_compress_num();
   }
-  ObActiveSessHistList::get_instance().unlock();
+  ash_list.unlock();
   int64_t duration = ObTimeUtility::current_time() - current_time;
   int64_t next_schedule_time = REFRESH_INTERVAL - duration;
   if (next_schedule_time < 0) {
@@ -146,11 +157,17 @@ bool ObActiveSessHistTask::process_running_di(const SessionID &session_id, ObDia
   if (di->is_active_session() ||
       ObWaitEventIds::NETWORK_QUEUE_WAIT == di->get_ash_stat().event_no_ ||
       di->get_ash_stat().is_in_row_lock_wait()) {
-    di->get_ash_stat().sample_time_ = sample_time_;
-    ObActiveSessionStat::calc_db_time(di, sample_time_, tsc_sample_time_);
-    ObActiveSessionStat::calc_retry_wait_event(di->get_ash_stat(), sample_time_);
-    ObActiveSessionStat::cal_delta_io_data(di);
-    ObActiveSessHistList::get_instance().add(di->get_ash_stat());
+    ObActiveSessHistList &ash_list = ObActiveSessHistList::get_instance();
+    if (OB_UNLIKELY(ash_list.need_compress() &&
+                    ObWaitEventIds::NETWORK_QUEUE_WAIT == di->get_ash_stat().event_no_)) {
+      MTL(ObDiagnosticInfoContainer *)->calculate_wait_in_request_queue(di);
+    } else {
+      di->get_ash_stat().sample_time_ = sample_time_;
+      ObActiveSessionStat::calc_db_time(di, sample_time_, tsc_sample_time_);
+      ObActiveSessionStat::calc_retry_wait_event(di->get_ash_stat(), sample_time_);
+      ObActiveSessionStat::cal_delta_io_data(di);
+      ash_list.add(di->get_ash_stat());
+    }
   } else {
     // inactive session
 // #ifdef ENABLE_DEBUG_LOG

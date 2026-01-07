@@ -157,6 +157,7 @@
 #include "sql/ob_sql_ccl_rule_manager.h"
 #include "observer/report/ob_tenant_offline_tablet_cleanup_service.h"
 #include "observer/virtual_table/ob_all_virtual_tablet_replica_info.h"
+#include "sql/monitor/ob_sql_stat_manager.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -511,6 +512,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, share::detector::ObDeadLockDetectorMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, rootserver::ObTenantSnapshotScheduler::mtl_init, nullptr, rootserver::ObTenantSnapshotScheduler::mtl_stop, rootserver::ObTenantSnapshotScheduler::mtl_wait, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, rootserver::ObCloneScheduler::mtl_init, nullptr, rootserver::ObCloneScheduler::mtl_stop, rootserver::ObCloneScheduler::mtl_wait, mtl_destroy_default);
+    MTL_BIND2(ObSqlStatManager::mtl_new, ObSqlStatManager::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, ObSqlStatManager::mtl_destroy);
 #ifdef OB_BUILD_ARBITRATION
     MTL_BIND2(mtl_new_default, ObPlanBaselineMgr::mtl_init, nullptr, ObPlanBaselineMgr::mtl_stop, ObPlanBaselineMgr::mtl_wait, mtl_destroy_default);
 #endif
@@ -2278,6 +2280,7 @@ int ObMultiTenant::del_tenant(const uint64_t tenant_id)
     }
 
     if (OB_SUCC(ret)) {
+      bool has_free_disk_space = false;
       do {
         // 保证remove_tenant, clear_tenant_log_dir可以幂等重试,
         // 如果失败会但不是加锁失败会一直无限重试, 保证如果prepare log写成功一定会有commit日志，
@@ -2301,11 +2304,17 @@ int ObMultiTenant::del_tenant(const uint64_t tenant_id)
         } else if (GCTX.is_shared_storage_mode()
             && OB_FAIL(OB_SERVER_FILE_MGR.delete_local_tenant_dir(tenant_id, tenant_epoch))) {
           LOG_ERROR("fail to delete local tenant dir files", KR(ret), K(tenant_id), K(tenant_epoch));
-        } else if (GCTX.is_shared_storage_mode()
-            && OB_FAIL(OB_SERVER_DISK_SPACE_MGR.free(local_unit.get_effective_actual_data_disk_size()))) {
-          LOG_ERROR("fail to free data disk size", KR(ret), K(tenant_id), K(tenant_epoch), K(local_unit.config_));
+        } else if (GCTX.is_shared_storage_mode() && !has_free_disk_space) {
+          if (OB_FAIL(OB_SERVER_DISK_SPACE_MGR.free(local_unit.get_effective_actual_data_disk_size()))) {
+            LOG_ERROR("fail to free data disk size", KR(ret), K(tenant_id), K(tenant_epoch), K(local_unit.config_));
+            SLEEP(1);
+          } else {
+            has_free_disk_space = true;
+          }
 #endif
-        } else if (OB_FAIL(SERVER_STORAGE_META_SERVICE.commit_delete_tenant(tenant_id, tenant_epoch))) {
+        }
+
+        if (FAILEDx(SERVER_STORAGE_META_SERVICE.commit_delete_tenant(tenant_id, tenant_epoch))) {
           LOG_WARN("fail to commit delete tenant", K(ret), K(tenant_id));
         }
       } while (OB_FAIL(ret));
@@ -2740,13 +2749,16 @@ void ObMultiTenant::run1()
   lib::set_thread_name("MultiTenant");
   while (!has_set_stop()) {
     {
+      ObTimeGuard timeguard("multi_tenant_timeup", 100 * 1000);
       SpinRLockGuard guard(lock_);
+      timeguard.click("tenant_list_lock");
       bool need_regist_cgroup = false;
       if (REACH_TIME_INTERVAL(1 * 1000 * 1000L)) {  // every 1s
         if (OB_NOT_NULL(GCTX.cgroup_ctrl_)) {
           need_regist_cgroup = GCTX.cgroup_ctrl_->check_cgroup_status();
         }
       }
+      timeguard.click("check_cgroup_status");
       for (TenantList::iterator it = tenants_.begin(); it != tenants_.end(); it++) {
         if (OB_ISNULL(*it)) {
           LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected condition");
@@ -2759,6 +2771,7 @@ void ObMultiTenant::run1()
           (*it)->timeup();
         }
       }
+      timeguard.click("tenant_timeup");
     }
     ob_usleep(TIME_SLICE_PERIOD, true/*is_idle_sleep*/);
 

@@ -16,6 +16,7 @@
 #include "sql/resolver/dcl/ob_alter_role_stmt.h"
 #include "sql/resolver/dcl/ob_set_password_resolver.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "lib/encrypt/ob_encrypted_helper.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -34,6 +35,7 @@ ObAlterRoleResolver::~ObAlterRoleResolver()
 int ObAlterRoleResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
+  bool is_plugin_supported = true;
   CHECK_COMPATIBILITY_MODE(session_info_);
   ObAlterRoleStmt *alter_role_stmt = NULL;
   if (T_ALTER_ROLE != parse_tree.type_
@@ -78,16 +80,27 @@ int ObAlterRoleResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("pw_node is NULL", K(ret));
     } else {
       ObString password(pw_node->str_len_, pw_node->str_value_);
+      // jinmao TODO: oracle 模式支持为 role 设置插件
+      ObString plugin;
       if (1 == need_enc_node->value_) { // identified by 
         alter_role_stmt->set_need_enc(true);
       } else {                          // identified by values
         alter_role_stmt->set_need_enc(false);
-        if (!ObSetPasswordResolver::is_valid_mysql41_passwd(password)) {
+        // 如果密码已经是加密格式（need_enc = false），必须进行格式校验
+        if (!ObSetPasswordResolver::is_valid_encrypted_passwd(password, plugin)) {
           ret = OB_ERR_PASSWORD_FORMAT;
-          LOG_WARN("Wrong password format", K(password), K(ret));
+          LOG_WARN("Wrong password format", K(password), K(plugin), K(ret));
         }
       }
+      if (FAILEDx(ObEncryptedHelper::check_data_version_for_auth_plugin(plugin,
+                  params_.session_info_->get_effective_tenant_id(), is_plugin_supported))) {
+        LOG_WARN("failed to check data version for auth plugin", K(ret));
+      } else if (OB_UNLIKELY(!is_plugin_supported)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("caching_sha2_password is not supported when MIN_DATA_VERSION is below 4_4_2_0", K(ret));
+      }
       OX (alter_role_stmt->set_password(password);)
+      OX (alter_role_stmt->set_plugin(plugin);)
     }
   }
   // replace password to *** in query_string for audit

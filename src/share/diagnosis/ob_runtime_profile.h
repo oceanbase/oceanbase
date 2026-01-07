@@ -172,8 +172,9 @@ public:
   }
 
   // get metric if exists, register metric if not exists
-  OB_INLINE int get_or_register_metric(ObMetricId metric_id, MetricType *&metric)
-  {
+  OB_INLINE int get_or_register_metric(ObMetricId metric_id,
+                                       MetricType *&metric,
+                                       bool head_insert = false) {
     int ret = OB_SUCCESS;
     uint8_t arr_idx = metrics_id_map_[metric_id];
     if (arr_idx != UINT8_MAX) {
@@ -182,7 +183,7 @@ public:
       } else {
         metric = &non_local_metrics_.at(arr_idx - LOCAL_METRIC_CNT)->elem_;
       }
-    } else if (OB_FAIL(register_metric(metric_id, metric))) {
+    } else if (OB_FAIL(register_metric(metric_id, metric, head_insert))) {
       COMMON_LOG(WARN, "failed to register metric");
     }
     return ret;
@@ -205,7 +206,7 @@ private:
                         metric::Level display_level) const;
   int64_t get_persist_profile_size(int64_t metric_count, int64_t child_cnt) const;
 
-  int register_metric(ObMetricId metric_id, MetricType *&metric);
+  int register_metric(ObMetricId metric_id, MetricType *&metric, bool head_insert = false);
 
 private:
   union

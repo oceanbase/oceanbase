@@ -170,6 +170,13 @@ bool ObIteratePrivateVirtualTable::check_tenant_in_range_(const uint64_t tenant_
            || (end.is_number() && end.get_number().compare(tenant_id) > 0))) {
     in_range = false;
   }
+  //ash report often use sample_time instead of tenant_id to filter data,
+  //so the first column of rowkey is sample_time instead of tenant_id
+  //here use the first column of rowkey to filter tenant_id, but the first colum of
+  // OB_WR_ACTIVE_SESSION_HISTORY_V2's rowkey is sample_time, so we set in_range to true
+  if (base_table_id_ == OB_WR_ACTIVE_SESSION_HISTORY_V2_TID) {
+    in_range = true;
+  }
   return in_range;
 }
 
@@ -208,6 +215,13 @@ int ObIteratePrivateVirtualTable::setup_inital_rowkey_condition(
         LOG_WARN("sql append failed", KR(ret), K_(cur_tenant_id));
       }
     }
+  }
+  //ash report often use sample_time instead of tenant_id to filter data,
+  //so the first column of rowkey is sample_time instead of tenant_id
+  //usually the base_rowkey_offset_ is 1, because the first column of rowkey is tenant_id and can be skipped
+  //but for OB_WR_ACTIVE_SESSION_HISTORY_V2, the first column of rowkey is sample_time and can't be skipped
+  if (base_table_id_ == OB_WR_ACTIVE_SESSION_HISTORY_V2_TID) {
+    base_rowkey_offset_ = 0;
   }
 
   return ret;

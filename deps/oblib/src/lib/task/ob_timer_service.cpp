@@ -101,7 +101,7 @@ void ObTimerTaskThreadPool::handle(void *task_token)
     THIS_WORKER.set_timeout_ts(INT64_MAX); // reset timeout to INT64_MAX
     ObCurTraceId::reset(); // reset trace_id
     set_ext_tname(token);
-    ObDIActionGuard(typeid(*token->task_));
+    ObDIActionGuard di_action_guard(typeid(*token->task_));
     token->task_->runTimerTask();
     clear_ext_tname(); // reset ext_tname
     const int64_t end_time = ::oceanbase::common::ObTimeUtility::current_time();
@@ -586,7 +586,7 @@ void ObTimerService::run1()
   int64_t thread_id = GETTID();
   set_thread_name("TimerSvr");
   const char *module_name = ob_get_tname() != nullptr ? ob_get_tname() : "DefaultTimer";
-  ObDIActionGuard("TimerThreadPool", module_name, nullptr);
+  ObDIActionGuard di_action_guard("TimerThreadPool", module_name, nullptr);
   OB_LOG(INFO, "TimerService thread started",
       KP(this), K(thread_id), K_(tenant_id), KCSTRING(lbt()));
 

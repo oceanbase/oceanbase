@@ -99,6 +99,7 @@ public:
               int &cmp_ret,
               const bool compare_datum_cnt = true) const;
   int from_rowkey(const ObRowkey &rowkey, common::ObIAllocator &allocator);
+  int to_rowkey(ObRowkey &rowkey, const ObObjMeta* obj_metas, common::ObIAllocator &allocator) const;
   int from_rowkey(const ObRowkey &rowkey, ObStorageDatumBuffer &datum_buffer);
   int to_store_rowkey(const common::ObIArray<share::schema::ObColDesc> &col_descs,
                       common::ObIAllocator &allocator,

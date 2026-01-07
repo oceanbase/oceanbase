@@ -71,6 +71,14 @@ enum FETCH_COLUMN
   RAW_PROFILE           // varchar
 };
 
+const char *ObMergedProfileItem::COLORS[] = {
+  "\033[1;38;5;220m", //yellow (darker for better visibility on white background)
+  "\033[1;38;5;208m", //orange
+  "\033[1;38;5;160m", //red
+};
+
+const char *ObMergedProfileItem::DEFAULT_COLOR = "\033[0000000000m";
+
 int ObMergedProfileItem::init_from(ObIAllocator *alloc, const ObProfileItem &profile_item)
 {
   int ret = OB_SUCCESS;
@@ -188,9 +196,23 @@ int ObProfileUtil::get_merged_profiles(ObIAllocator *alloc,
         }
       } else {
         // different op_id, or another sql execution, save and new one
-        const ObMergeMetric *metric = merged_item.profile_->get_metric(ObMetricId::DB_TIME);
-        if (OB_NOT_NULL(metric)) {
-          merged_item.max_db_time_ = metric->get_max_value();
+        ObPhyOperatorType phy_type = static_cast<ObPhyOperatorType>(merged_item.profile_->get_id());
+        if (IS_PX_RECEIVE(phy_type) || IS_PX_TRANSMIT(phy_type)) {
+          // for transmit/receive operator, we will reduce the dtl wait time for displaying most
+          // time consuming operators
+          const ObMergeMetric *cpu_time = merged_item.profile_->get_metric(ObMetricId::CPU_TIME);
+          if (OB_NOT_NULL(cpu_time)) {
+            merged_item.max_db_time_ = cpu_time->get_max_value();
+          }
+          const ObMergeMetric *dump_time = merged_item.profile_->get_metric(ObMetricId::DUMP_RW_TIME);
+          if (OB_NOT_NULL(dump_time)) {
+            merged_item.max_db_time_ += dump_time->get_max_value();
+          }
+        } else {
+          const ObMergeMetric *db_time = merged_item.profile_->get_metric(ObMetricId::DB_TIME);
+          if (OB_NOT_NULL(db_time)) {
+            merged_item.max_db_time_ = db_time->get_max_value();
+          }
         }
         if (OB_FAIL(merged_profile_items.push_back(merged_item))) {
           LOG_WARN("failed to pushback");
@@ -491,25 +513,40 @@ int ObProfileUtil::fill_metrics_into_profile(ObProfileItem &profile_item)
 {
   int ret = OB_SUCCESS;
   ObProfileSwitcher switcher(profile_item.profile_);
-  SET_METRIC_VAL(ObMetricId::OPEN_TIME, profile_item.open_time_);
-  SET_METRIC_VAL(ObMetricId::CLOSE_TIME, profile_item.close_time_);
+
+  // fill common metrics into profile with head insert mode, so the metrics will be displayed
+  // in the order of the metrics in the profile
+#define FILL_COMMON_METRIC(metric_id, value)                                   \
+  if (OB_SUCC(ret)) {                                                          \
+    ObMetric *metric = nullptr;                                                \
+    if (OB_FAIL(profile_item.profile_->get_or_register_metric(                 \
+            metric_id, metric, true/* head insert mode */))) {                 \
+      COMMON_LOG(WARN, "failed to register metric", K(metric_id));             \
+    } else {                                                                   \
+      metric->set(value);                                                      \
+    }                                                                          \
+  }
+
+  FILL_COMMON_METRIC(ObMetricId::WORKAREA_MEM, profile_item.workarea_mem_);
+  FILL_COMMON_METRIC(ObMetricId::WORKAREA_MAX_MEM, profile_item.workarea_max_mem_);
+  FILL_COMMON_METRIC(ObMetricId::WORKAREA_TEMPSEG, profile_item.workarea_tempseg_);
+  FILL_COMMON_METRIC(ObMetricId::WORKAREA_MAX_TEMPSEG, profile_item.workarea_max_tempseg_);
+  FILL_COMMON_METRIC(ObMetricId::OPEN_TIME, profile_item.open_time_);
+  FILL_COMMON_METRIC(ObMetricId::CLOSE_TIME, profile_item.close_time_);
   // first row time and last row time may not filled by operator, skip it
   if (OB_SUCC(ret) && profile_item.first_row_time_ != 0) {
-    SET_METRIC_VAL(ObMetricId::FIRST_ROW_TIME, profile_item.first_row_time_);
+    FILL_COMMON_METRIC(ObMetricId::FIRST_ROW_TIME, profile_item.first_row_time_);
   }
   if (OB_SUCC(ret) && profile_item.last_row_time_ != 0) {
-    SET_METRIC_VAL(ObMetricId::LAST_ROW_TIME, profile_item.last_row_time_);
+    FILL_COMMON_METRIC(ObMetricId::LAST_ROW_TIME, profile_item.last_row_time_);
   }
-  SET_METRIC_VAL(ObMetricId::OUTPUT_BATCHES, profile_item.output_batches_);
-  SET_METRIC_VAL(ObMetricId::SKIPPED_ROWS, profile_item.skipped_rows_);
-  SET_METRIC_VAL(ObMetricId::RESCAN_TIMES, profile_item.rescan_times_);
-  SET_METRIC_VAL(ObMetricId::OUTPUT_ROWS, profile_item.output_rows_);
-  SET_METRIC_VAL(ObMetricId::DB_TIME, profile_item.db_time_);
-  SET_METRIC_VAL(ObMetricId::TOTAL_IO_TIME, profile_item.io_time_);
-  SET_METRIC_VAL(ObMetricId::WORKAREA_MEM, profile_item.workarea_mem_);
-  SET_METRIC_VAL(ObMetricId::WORKAREA_MAX_MEM, profile_item.workarea_max_mem_);
-  SET_METRIC_VAL(ObMetricId::WORKAREA_TEMPSEG, profile_item.workarea_tempseg_);
-  SET_METRIC_VAL(ObMetricId::WORKAREA_MAX_TEMPSEG, profile_item.workarea_max_tempseg_);
+  FILL_COMMON_METRIC(ObMetricId::OUTPUT_BATCHES, profile_item.output_batches_);
+  FILL_COMMON_METRIC(ObMetricId::SKIPPED_ROWS, profile_item.skipped_rows_);
+  FILL_COMMON_METRIC(ObMetricId::RESCAN_TIMES, profile_item.rescan_times_);
+  FILL_COMMON_METRIC(ObMetricId::OUTPUT_ROWS, profile_item.output_rows_);
+  FILL_COMMON_METRIC(ObMetricId::IO_TIME, profile_item.io_time_);
+  FILL_COMMON_METRIC(ObMetricId::CPU_TIME, profile_item.db_time_ - profile_item.io_time_);
+  FILL_COMMON_METRIC(ObMetricId::DB_TIME, profile_item.db_time_);
 
 #define FILL_OTHER_STAT(N)                                                                         \
   if (OB_SUCC(ret) && profile_item.other_##N##_id_ != 0) {                                         \

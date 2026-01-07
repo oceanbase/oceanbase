@@ -25,7 +25,7 @@ int ObDDLTransController::init(share::schema::ObMultiVersionSchemaService *schem
   int ret = OB_SUCCESS;
   if (!inited_) {
     for (int i=0; OB_SUCC(ret) && i < DDL_TASK_COND_SLOT; i++) {
-      if (OB_FAIL(cond_slot_[i].init(ObWaitEventIds::DEFAULT_COND_WAIT))) {
+      if (OB_FAIL(cond_slot_[i].init(ObWaitEventIds::DDL_TASK_COND_WAIT))) {
         LOG_WARN("init cond fail", KR(ret));
       }
     }
@@ -110,7 +110,7 @@ void ObDDLTransController::run1()
           int64_t schema_version = OB_INVALID_VERSION;
           int64_t start_time = ObTimeUtility::current_time();
           ObCurTraceId::init(GCONF.self_addr_);
-          ObDIActionGuard(ObDIActionGuard::NS_ACTION, "control tenant[T_%ld]", tenant_id);
+          ObDIActionGuard di_action_guard(ObDIActionGuard::NS_ACTION, "control tenant[T_%ld]", tenant_id);
 
           if (OB_ISNULL(GCTX.root_service_)) {
             ret = OB_INVALID_ARGUMENT;

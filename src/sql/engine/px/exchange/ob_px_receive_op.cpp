@@ -378,7 +378,9 @@ int ObPxReceiveOp::inner_drain_exch()
     if (OB_FAIL(try_link_channel())) {
       LOG_WARN("failed to link channel", K(ret));
     } else if (OB_FAIL(active_all_receive_channel())) {
-      LOG_WARN("failed to active all receive channel", K(ret));
+      if (OB_ITER_END != ret) {
+        LOG_WARN("failed to active all receive channel", K(ret));
+      }
     }
     LOG_TRACE("drain px receive", K(get_spec().id_), K(ret), K(lbt()));
     dfc_.drain_all_channels();
@@ -621,6 +623,14 @@ int ObPxReceiveOp::send_channel_ready_msg(int64_t child_dfo_id)
     }
   }
   return ret;
+}
+
+int ObPxReceiveOp::inner_close() {
+  int ret = OB_SUCCESS;
+  if (dfc_.get_total_block_time() > 0) {
+    INC_METRIC_VAL(ObMetricId::DTL_BLOCKING_TIME, dfc_.get_total_block_time() * 1000);
+  }
+  return ObOperator::inner_close();
 }
 //------------- end ObPxReceiveOp-----------------
 

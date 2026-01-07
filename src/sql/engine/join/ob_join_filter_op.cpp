@@ -88,7 +88,7 @@ OB_SERIALIZE_MEMBER(ObJoinFilterOpInput,
 
 int SharedJoinFilterConstructor::init()
 {
-  return cond_.init(common::ObWaitEventIds::DEFAULT_COND_WAIT);
+  return cond_.init(common::ObWaitEventIds::SHARED_JOIN_FILTER_CONSTRUCTOR_COND_WAIT);
 }
 
 int SharedJoinFilterConstructor::reset_for_rescan()

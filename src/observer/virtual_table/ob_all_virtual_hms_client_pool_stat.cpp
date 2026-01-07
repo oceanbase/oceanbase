@@ -167,6 +167,7 @@ int ObAllVirtualHMSClientPoolStat::fill_scanner(const uint64_t &tenant_id)
     ret = OB_ERR_UNEXPECTED;
   } else {
     port_ = addr.get_port();
+    scanner_.reuse();
     MTL_SWITCH(tenant_id)
     {
       ObHMSClientPoolGetter getter(scanner_,

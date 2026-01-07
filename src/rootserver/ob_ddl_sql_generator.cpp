@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX RS
 #include "rootserver/ob_ddl_sql_generator.h"
 #include "share/ob_rpc_struct.h"
+#include "lib/encrypt/ob_encrypted_helper.h"
 
 namespace oceanbase
 {
@@ -154,6 +155,7 @@ int ObDDLSqlGenerator::get_priv_name(const int64_t priv, const char *&name)
 
 int ObDDLSqlGenerator::gen_create_user_sql(const ObAccountArg &account,
                                            const ObString &password,
+                                           const ObString &plugin,
                                            ObSqlString &sql_string)
 {
   int ret = OB_SUCCESS;
@@ -192,18 +194,24 @@ int ObDDLSqlGenerator::gen_create_user_sql(const ObAccountArg &account,
     }
   }
   // mysql mode 且密码不为空串
+  ObCStringHelper helper;
+  const char *password_str = helper.convert(ObHexEscapeSqlStr(password, false, false));
+  const char *plugin_str = helper.convert(ObHexEscapeSqlStr(plugin, false, false));
   if (OB_SUCC(ret) && !lib::is_oracle_mode() && !password.empty()) {
-    if (OB_FAIL(sql_string.append_fmt(" IDENTIFIED BY PASSWORD '%.*s'",
-                                      password.length(),
-                                      password.ptr()))) {
+    if (OB_FAIL(sql_string.append_fmt(" IDENTIFIED WITH %.*s BY PASSWORD '%.*s'",
+                                      static_cast<int32_t>(strlen(plugin_str)),
+                                      plugin_str,
+                                      static_cast<int32_t>(strlen(password_str)),
+                                      password_str))) {
       LOG_WARN("append sql failed", K(password), K(ret), K(account));
     }
   } else if (OB_SUCC(ret) && lib::is_oracle_mode() 
              && !password.empty()) {
+    // jinmao TODO: oracle 模式支持设置 plugin 之后，需要加上 plugin 参数
     // oracle mode 且密码不为空串
     if (OB_FAIL(sql_string.append_fmt(" IDENTIFIED BY VALUES \"%.*s\"",
-                                      password.length(),
-                                      password.ptr()))) {
+                                      static_cast<int32_t>(strlen(password_str)),
+                                      password_str))) {
       LOG_WARN("append sql failed", K(password), K(ret), K(account));
     }
   } else if (OB_SUCC(ret) && lib::is_oracle_mode() 
@@ -301,33 +309,47 @@ int ObDDLSqlGenerator::append_ssl_info_sql(const ObSSLType &ssl_type,
 
 int ObDDLSqlGenerator::gen_set_passwd_sql(const ObAccountArg &account,
                                           const ObString &password,
-                                          ObSqlString &sql_string)
+                                          ObSqlString &sql_string,
+                                          const ObString &plugin)
 {
   int ret = OB_SUCCESS;
-  char SET_PASSWD_SQL[] = "SET PASSWORD FOR `%.*s` = '%.*s'";
-  char NEW_SET_PASSWD_SQL[] = "SET PASSWORD FOR `%.*s`@`%.*s` = '%.*s'";
+  char ALTER_USER_WITH_PLUGIN_SQL[] = "ALTER USER `%.*s`@`%.*s` IDENTIFIED WITH %.*s AS '%.*s'";
+  char ALTER_USER_WITH_PLUGIN_ORACLE_SQL[] = "ALTER USER `%.*s`@`%.*s` IDENTIFIED BY VALUES '%.*s'";
+  ObCStringHelper helper;
+  const char *password_str = helper.convert(ObHexEscapeSqlStr(password, false, false));
+  const char *plugin_str = helper.convert(ObHexEscapeSqlStr(plugin, false, false));
   if (OB_UNLIKELY(!account.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("username or password should not be null", K(account), K(password), K(ret));
-  } else {
-    if (0 == account.host_name_.compare(OB_DEFAULT_HOST_NAME)) {
-      if (OB_FAIL(sql_string.append_fmt(adjust_ddl_format_str(SET_PASSWD_SQL),
-                                        account.user_name_.length(),
-                                        account.user_name_.ptr(),
-                                        password.length(),
-                                        password.ptr()))) {
-        LOG_WARN("append sql failed", K(account), K(password), K(ret));
-      }
+  } else if (is_mysql_mode()) {
+    // ALTER USER ... IDENTIFIED WITH plugin AS ...
+    if (plugin.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("plugin should not be empty", K(ret));
     } else {
-      if (OB_FAIL(sql_string.append_fmt(adjust_ddl_format_str(NEW_SET_PASSWD_SQL),
+      if (OB_FAIL(sql_string.append_fmt(adjust_ddl_format_str(ALTER_USER_WITH_PLUGIN_SQL),
                                         account.user_name_.length(),
                                         account.user_name_.ptr(),
                                         account.host_name_.length(),
                                         account.host_name_.ptr(),
-                                        password.length(),
-                                        password.ptr()))) {
-        LOG_WARN("append sql failed", K(account), K(password), K(ret));
+                                        static_cast<int32_t>(strlen(plugin_str)),
+                                        plugin_str,
+                                        static_cast<int32_t>(strlen(password_str)),
+                                        password_str))) {
+        LOG_WARN("append sql failed", K(account), K(password), K(plugin), K(ret));
       }
+    }
+  } else {
+    // ALTER USER ... IDENTIFIED BY VALUES ...
+    // jinmao TODO: oracle 模式支持设置 plugin 之后，统一生成 alter user 语句
+    if (OB_FAIL(sql_string.append_fmt(adjust_ddl_format_str(ALTER_USER_WITH_PLUGIN_ORACLE_SQL),
+                                      account.user_name_.length(),
+                                      account.user_name_.ptr(),
+                                      account.host_name_.length(),
+                                      account.host_name_.ptr(),
+                                      static_cast<int32_t>(strlen(password_str)),
+                                      password_str))) {
+      LOG_WARN("append sql failed", K(account), K(password), K(ret));
     }
   }
   return ret;

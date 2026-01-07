@@ -91,6 +91,7 @@ public:
   virtual int get_total_range_sizes(common::ObIArray<uint64_t> &total_range_sizes) const = 0;
   virtual bool is_fast_nlj_range() const = 0;
   virtual bool enable_new_false_range() const = 0;
+  virtual bool is_equal_range() const = 0;
 };
 
 }

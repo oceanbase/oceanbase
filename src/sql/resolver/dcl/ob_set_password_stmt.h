@@ -25,13 +25,14 @@ public:
   ObSetPasswordStmt();
   virtual ~ObSetPasswordStmt();
   int set_user_password(const common::ObString &user_name, const common::ObString &host_name,
-                        const common::ObString &password);
+                        const common::ObString &password, const common::ObString &plugin);
   int add_ssl_info(const common::ObString &ssl_type,
                    const common::ObString &ssl_cipher,
                    const common::ObString &x509_issuer,
                    const common::ObString &x509_subject);
   void set_masked_sql(const common::ObString &masked_sql) { masked_sql_ = masked_sql; }
   const common::ObStrings *get_user_password() const { return &user_pwd_; }
+  const common::ObStrings *get_plugins() const { return &plugins_; }
   const common::ObString &get_masked_sql() const { return masked_sql_; }
   uint64_t get_tenant_id() const { return tenant_id_; }
   void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
@@ -61,6 +62,7 @@ private:
   bool modify_max_connections_;
   uint64_t max_connections_per_hour_;
   uint64_t max_user_connections_;
+  common::ObStrings plugins_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSetPasswordStmt);
 };

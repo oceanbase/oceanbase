@@ -2078,8 +2078,8 @@ constexpr int OB_ERR_UPDATE_TWICE = -30926;
 constexpr int OB_ERR_FLASHBACK_QUERY_WITH_UPDATE = -32491;
 constexpr int OB_ERR_UPDATE_ON_EXPR = -38104;
 constexpr int OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS = -38105;
-constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
+constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 
 
 #define OB_SUCCESS__USER_ERROR_MSG "Success"
@@ -2961,7 +2961,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_SYNC_DDL_DUPLICATE__USER_ERROR_MSG "Duplicated ddl id '%.*s'"
 #define OB_SYNC_DDL_ERROR__USER_ERROR_MSG "Failed to sync ddl '%.*s'"
 #define OB_ERR_ROW_IS_REFERENCED__USER_ERROR_MSG "Cannot delete or update a parent row: a foreign key constraint fails"
-#define OB_ERR_NO_REFERENCED_ROW__USER_ERROR_MSG "Cannot add or update a child row: a foreign key constraint fails"
+#define OB_ERR_NO_REFERENCED_ROW__USER_ERROR_MSG "Cannot add or update a child row: a foreign key constraint (%.*s.%.*s) fails"
 #define OB_ERR_FUNC_RESULT_TOO_LARGE__USER_ERROR_MSG "Result of %s() was larger than max_allowed_packet (%d) - truncated"
 #define OB_ERR_CANNOT_ADD_FOREIGN__USER_ERROR_MSG "Cannot add foreign key constraint"
 #define OB_ERR_WRONG_FK_DEF__USER_ERROR_MSG "Incorrect foreign key definition: Key reference and table reference don't match"
@@ -4559,7 +4559,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_SENSITIVE_RULE_NOT_EXIST__USER_ERROR_MSG "Sensitive rule '%.*s' does not exist"
 #define OB_SENSITIVE_COLUMN_EXIST__USER_ERROR_MSG "Sensitive column %.*s(%.*s) exists"
 #define OB_SENSITIVE_COLUMN_NOT_EXIST__USER_ERROR_MSG "Sensitive column %.*s(%.*s) does not exist"
-#define OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE__USER_ERROR_MSG "Access sensitive field protected by sensitive rule '%.*s' denied to user '%.*s'@'%.*s'"
+#define OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE__USER_ERROR_MSG "%.*s command denied to user '%.*s'@'%.*s' for sensitive rule '%.*s'"
 #define OB_WRONG_SENSITIVE_RULE_NAME__USER_ERROR_MSG "Invalid sensitive rule name '%.*s'"
 #define OB_KERBEROS_ERROR__USER_ERROR_MSG "Kereberos execution error"
 #define OB_HMS_ERROR__USER_ERROR_MSG "HMS execution error"
@@ -4599,8 +4599,8 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_FLASHBACK_QUERY_WITH_UPDATE__USER_ERROR_MSG "snapshot expression not allowed here"
 #define OB_ERR_UPDATE_ON_EXPR__USER_ERROR_MSG "Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__USER_ERROR_MSG "specified row no longer exists"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__USER_ERROR_MSG "Data too long for column '%.*s' at row %ld"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
 
 
 #define OB_SUCCESS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: 0, Success"
@@ -6361,8 +6361,8 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_SYNC_DDL_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -5313, Failed to sync ddl '%.*s'"
 #define OB_ERR_ROW_IS_REFERENCED__ORA_USER_ERROR_MSG "ORA-02292: integrity constraint violated - child record found"
 #define OB_ERR_ROW_IS_REFERENCED__OBE_USER_ERROR_MSG "OBE-02292: integrity constraint violated - child record found"
-#define OB_ERR_NO_REFERENCED_ROW__ORA_USER_ERROR_MSG "ORA-02291: integrity constraint violated - parent key not found"
-#define OB_ERR_NO_REFERENCED_ROW__OBE_USER_ERROR_MSG "OBE-02291: integrity constraint violated - parent key not found"
+#define OB_ERR_NO_REFERENCED_ROW__ORA_USER_ERROR_MSG "ORA-02291: integrity constraint (%.*s.%.*s) violated - parent key not found"
+#define OB_ERR_NO_REFERENCED_ROW__OBE_USER_ERROR_MSG "OBE-02291: integrity constraint (%.*s.%.*s) violated - parent key not found"
 #define OB_ERR_FUNC_RESULT_TOO_LARGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5316, Result of %s() was larger than max_allowed_packet (%d) - truncated"
 #define OB_ERR_FUNC_RESULT_TOO_LARGE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -5316, Result of %s() was larger than max_allowed_packet (%d) - truncated"
 #define OB_ERR_CANNOT_ADD_FOREIGN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5317, Cannot add foreign key constraint"
@@ -9557,8 +9557,8 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_SENSITIVE_COLUMN_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11096, Sensitive column %.*s(%.*s) exists"
 #define OB_SENSITIVE_COLUMN_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11097, Sensitive column %.*s(%.*s) does not exist"
 #define OB_SENSITIVE_COLUMN_NOT_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11097, Sensitive column %.*s(%.*s) does not exist"
-#define OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11098, Access sensitive field protected by sensitive rule '%.*s' denied to user '%.*s'@'%.*s'"
-#define OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11098, Access sensitive field protected by sensitive rule '%.*s' denied to user '%.*s'@'%.*s'"
+#define OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11098, %.*s command denied to user '%.*s'@'%.*s' for sensitive rule '%.*s'"
+#define OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11098, %.*s command denied to user '%.*s'@'%.*s' for sensitive rule '%.*s'"
 #define OB_WRONG_SENSITIVE_RULE_NAME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11099, Invalid sensitive rule name '%.*s'"
 #define OB_WRONG_SENSITIVE_RULE_NAME__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11099, Invalid sensitive rule name '%.*s'"
 #define OB_KERBEROS_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11100, Kereberos execution error"
@@ -9637,10 +9637,10 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_UPDATE_ON_EXPR__OBE_USER_ERROR_MSG "OBE-38104: Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__ORA_USER_ERROR_MSG "ORA-08006: specified row no longer exists"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__OBE_USER_ERROR_MSG "OBE-08006: specified row no longer exists"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
 extern int g_all_ob_errnos[2517];
 

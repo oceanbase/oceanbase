@@ -19,18 +19,17 @@
 #include "lib/utility/utility.h"
 #include "sql/plan_cache/ob_lib_cache_register.h"
 #include "lib/atomic/ob_atomic.h"
-
+#include "lib/hash/ob_link_hashmap_deps.h"
 #define OB_MAX_SQL_STAT_QUERY_SQL_LEN 1024
 namespace oceanbase
 {
 namespace sql
 {
-
-struct ObSqlStatRecordKey : public sql::ObILibCacheKey
+class ObExecutedSqlStatRecord;
+struct ObSqlStatRecordKey
 {
 public:
-  ObSqlStatRecordKey()
-    : sql::ObILibCacheKey(ObLibCacheNameSpace::NS_SQLSTAT),
+  ObSqlStatRecordKey():
       plan_hash_(0),
       source_addr_()
   {
@@ -38,19 +37,24 @@ public:
     sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
   }
 
+  virtual ~ObSqlStatRecordKey() = default;
+  int compare(const ObSqlStatRecordKey &other) const;
+  bool operator==(const ObSqlStatRecordKey &other) const
+  {
+    return 0 == compare(other);
+  }
   void reset()
   {
-    namespace_ = ObLibCacheNameSpace::NS_SQLSTAT;
     sql_id_[0] = '\0';
     sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
     plan_hash_ = 0;
     source_addr_.reset();
   }
-  virtual int deep_copy(common::ObIAllocator &allocator, const sql::ObILibCacheKey &other);
-  int deep_copy(const sql::ObILibCacheKey &other);
+  virtual int deep_copy(common::ObIAllocator &allocator, const sql::ObSqlStatRecordKey &other);
+  int deep_copy(const sql::ObSqlStatRecordKey &other);
   virtual uint64_t hash() const;
   int hash(uint64_t &hash_val) const;
-  virtual bool is_equal(const sql::ObILibCacheKey &other) const;
+  virtual bool is_equal(const sql::ObSqlStatRecordKey &other) const;
   inline bool is_valid() const { return sql_id_[0] != '\0'; }
   void set_sql_id(const ObString& sql_id) { sql_id.to_string(sql_id_, OB_MAX_SQL_ID_LENGTH); }
   void set_plan_hash(const uint64_t plan_hash_val) { ATOMIC_STORE(&plan_hash_,plan_hash_val); }
@@ -128,7 +132,7 @@ public:
                             ObString &cur_sql,
                             const ObPhysicalPlan *plan = nullptr,
                             const bool is_px_remote_exec = false);
-
+  int move_to_sqlstat_cache(ObSqlStatRecordKey &key); //only for das
   bool get_is_in_retry() const { return is_in_retry_; }
   void set_is_in_retry(const bool is_in_retry) { is_in_retry_ = is_in_retry; }
   void set_rows_processed(int64_t rows_processed) { rows_processed_end_ = rows_processed; }
@@ -138,6 +142,14 @@ public:
   void set_is_route_miss(const bool is_route_miss) { is_route_miss_ = is_route_miss; }
   bool is_plan_cache_hit() const { return is_plan_cache_hit_;}
   void set_is_plan_cache_hit(const bool is_plan_cache_hit) { is_plan_cache_hit_ = is_plan_cache_hit; }
+  bool is_muti_query() const { return is_muti_query_; }
+  void set_is_muti_query(const bool is_muti_query) { is_muti_query_ = is_muti_query; }
+  bool is_muti_query_batch() const { return is_muti_query_batch_; }
+  void set_is_muti_query_batch(const bool is_muti_query_batch) { is_muti_query_batch_ = is_muti_query_batch; }
+  bool is_full_table_scan() const { return is_full_table_scan_; }
+  void set_is_full_table_scan(const bool is_full_table_scan) { is_full_table_scan_ = is_full_table_scan; }
+  bool is_failed() const { return is_failed_; }
+  void set_is_failed(const bool failed) { is_failed_ = failed; }
 #define DEF_SQL_STAT_ITEM_DELTA_FUNC(def_name)                 \
     int64_t get_##def_name##_delta() const {                   \
       int64_t delta = def_name##_end_ - def_name##_start_;     \
@@ -166,6 +178,10 @@ public:
   bool is_in_retry_;
   bool is_route_miss_;
   bool is_plan_cache_hit_;
+  bool is_muti_query_;
+  bool is_muti_query_batch_;
+  bool is_full_table_scan_;
+  bool is_failed_;
 #define DEF_SQL_STAT_ITEM(def_name)           \
   int64_t def_name##_start_;                  \
   int64_t def_name##_end_;
@@ -188,13 +204,26 @@ public:
   DEF_SQL_STAT_ITEM(partition);
   DEF_SQL_STAT_ITEM(nested_sql);
 #undef DEF_SQL_STAT_ITEM
+
+  TO_STRING_KV(K_(is_in_retry), K_(is_route_miss), K_(is_plan_cache_hit),
+               K_(disk_reads_start), K_(disk_reads_end), K_(buffer_gets_start), K_(buffer_gets_end),
+               K_(elapsed_time_start), K_(elapsed_time_end), K_(cpu_time_start), K_(cpu_time_end),
+               K_(ccwait_start), K_(ccwait_end), K_(userio_wait_start), K_(userio_wait_end),
+               K_(apwait_start), K_(apwait_end), K_(physical_read_requests_start), K_(physical_read_requests_end),
+               K_(physical_read_bytes_start), K_(physical_read_bytes_end), K_(write_throttle_start), K_(write_throttle_end),
+               K_(rows_processed_start), K_(rows_processed_end), K_(memstore_read_rows_start), K_(memstore_read_rows_end),
+               K_(minor_ssstore_read_rows_start), K_(minor_ssstore_read_rows_end), K_(major_ssstore_read_rows_start), K_(major_ssstore_read_rows_end),
+               K_(rpc_start), K_(rpc_end), K_(fetches_start), K_(fetches_end), K_(partition_start), K_(partition_end),
+               K_(nested_sql_start), K_(nested_sql_end));
 };
 
-class ObExecutedSqlStatRecord
+typedef common::LinkHashValue<ObSqlStatRecordKey> ObSqlStatRecordKeyHashValue;
+class ObExecutedSqlStatRecord : public ObSqlStatRecordKeyHashValue
 {
 public:
-  ObExecutedSqlStatRecord(): sql_stat_info_()
-  {
+  const static int64_t BATCH_COUNT = 50;
+  ObExecutedSqlStatRecord()
+      : sql_stat_info_(), latest_active_time_(0), avg_elapsed_time_(0.0), lock_(false) {
 #define DEF_SQL_STAT_ITEM_CONSTRUCT(def_name)           \
     def_name##_total_ = 0;                              \
     def_name##_last_snap_ = 0;
@@ -220,20 +249,74 @@ public:
     DEF_SQL_STAT_ITEM_CONSTRUCT(nested_sql);
     DEF_SQL_STAT_ITEM_CONSTRUCT(route_miss);
     DEF_SQL_STAT_ITEM_CONSTRUCT(plan_cache_hit);
+    DEF_SQL_STAT_ITEM_CONSTRUCT(muti_query);
+    DEF_SQL_STAT_ITEM_CONSTRUCT(muti_query_batch);
+    DEF_SQL_STAT_ITEM_CONSTRUCT(full_table_scan);
+    DEF_SQL_STAT_ITEM_CONSTRUCT(error_count);
 #undef DEF_SQL_STAT_ITEM_CONSTRUCT
   }
+
+  ObExecutedSqlStatRecord(const ObExecutedSqlStatRecord& other)
+    : sql_stat_info_(),
+      latest_active_time_(other.latest_active_time_),
+      avg_elapsed_time_(other.avg_elapsed_time_),
+      lock_(false)
+{
+  //only use in sum_to_global_and_refresh_avg_elapsed_time
+  //we do not mind if assign failed
+  sql_stat_info_.assign(other.get_sql_stat_info());
+#define DEF_COPY_STAT_ITEM(def_name)           \
+  def_name##_total_ = other.def_name##_total_;       \
+  def_name##_last_snap_ = other.def_name##_last_snap_;
+  DEF_COPY_STAT_ITEM(executions);
+  DEF_COPY_STAT_ITEM(disk_reads);
+  DEF_COPY_STAT_ITEM(buffer_gets);
+  DEF_COPY_STAT_ITEM(elapsed_time);
+  DEF_COPY_STAT_ITEM(cpu_time);
+  DEF_COPY_STAT_ITEM(ccwait);
+  DEF_COPY_STAT_ITEM(userio_wait);
+  DEF_COPY_STAT_ITEM(apwait);
+  DEF_COPY_STAT_ITEM(physical_read_requests);
+  DEF_COPY_STAT_ITEM(physical_read_bytes);
+  DEF_COPY_STAT_ITEM(write_throttle);
+  DEF_COPY_STAT_ITEM(rows_processed);
+  DEF_COPY_STAT_ITEM(memstore_read_rows);
+  DEF_COPY_STAT_ITEM(minor_ssstore_read_rows);
+  DEF_COPY_STAT_ITEM(major_ssstore_read_rows);
+  DEF_COPY_STAT_ITEM(rpc);
+  DEF_COPY_STAT_ITEM(fetches);
+  DEF_COPY_STAT_ITEM(retry);
+  DEF_COPY_STAT_ITEM(partition);
+  DEF_COPY_STAT_ITEM(nested_sql);
+  DEF_COPY_STAT_ITEM(route_miss);
+  DEF_COPY_STAT_ITEM(plan_cache_hit);
+  DEF_COPY_STAT_ITEM(muti_query);
+  DEF_COPY_STAT_ITEM(muti_query_batch);
+  DEF_COPY_STAT_ITEM(full_table_scan);
+  DEF_COPY_STAT_ITEM(error_count);
+#undef DEF_COPY_STAT_ITEM
+}
 
   ~ObExecutedSqlStatRecord() = default;
   int copy_sql_stat_info(const ObSqlStatInfo& sql_stat_info);
   int sum_stat_value(ObExecutingSqlStatRecord& executing_record);
   int sum_stat_value(ObExecutedSqlStatRecord& executed_record);
+  int sub_stat_value(ObExecutedSqlStatRecord& executed_record);
   ObSqlStatInfo& get_sql_stat_info() {return sql_stat_info_;}
   const ObSqlStatInfo& get_sql_stat_info() const {return sql_stat_info_;}
   ObSqlStatRecordKey& get_key() {return sql_stat_info_.get_key();};
   const ObSqlStatRecordKey& get_key() const {return sql_stat_info_.get_key();};
+  int64_t get_latest_active_time() const { return latest_active_time_; }
+  void set_latest_active_time(const int64_t latest_active_time) { latest_active_time_ = latest_active_time; }
+  double get_avg_elapsed_time() const { return avg_elapsed_time_; }
+  int set_avg_elapsed_time(ObSqlStatRecordKey &key, const ObSQLSessionInfo &session_info, const ObString &sql, const ObPhysicalPlan *plan);
+  int sum_to_global_and_refresh_avg_elapsed_time(ObSqlStatRecordKey &key, const ObSQLSessionInfo &session_info, const ObString &sql, const ObPhysicalPlan *plan);
   int assign(const ObExecutedSqlStatRecord& other);
   int reset();
   int update_last_snap_record_value();
+  bool try_lock() { return ATOMIC_BCAS(&lock_, false, true); }
+  bool unlock() { return ATOMIC_BCAS(&lock_, true, false); }
+  int move_to_sqlstat_cache(ObSqlStatRecordKey &key, bool need_lock = false); //plan cache evict and select from __all_virtual_sql_stat
   #define DEF_SQL_STAT_ITEM_DELTA_FUNC(def_name)                                           \
     int64_t get_##def_name##_total() const { return def_name##_total_;}                    \
     int64_t get_##def_name##_last_snap() const { return def_name##_last_snap_;}            \
@@ -263,9 +346,13 @@ public:
     DEF_SQL_STAT_ITEM_DELTA_FUNC(nested_sql);
     DEF_SQL_STAT_ITEM_DELTA_FUNC(route_miss);
     DEF_SQL_STAT_ITEM_DELTA_FUNC(plan_cache_hit);
+    DEF_SQL_STAT_ITEM_DELTA_FUNC(muti_query);
+    DEF_SQL_STAT_ITEM_DELTA_FUNC(muti_query_batch);
+    DEF_SQL_STAT_ITEM_DELTA_FUNC(full_table_scan);
+    DEF_SQL_STAT_ITEM_DELTA_FUNC(error_count);
   #undef DEF_SQL_STAT_ITEM_DELTA_FUNC
 
-  TO_STRING_KV(K_(sql_stat_info));
+  TO_STRING_KV(K_(sql_stat_info), K_(executions_total), K_(executions_last_snap), K_(disk_reads_total), K_(disk_reads_last_snap), K_(buffer_gets_total), K_(buffer_gets_last_snap), K_(elapsed_time_total), K_(elapsed_time_last_snap), K_(cpu_time_total), K_(cpu_time_last_snap), K_(ccwait_total), K_(ccwait_last_snap), K_(userio_wait_total), K_(userio_wait_last_snap), K_(apwait_total), K_(apwait_last_snap), K_(physical_read_requests_total), K_(physical_read_requests_last_snap), K_(physical_read_bytes_total), K_(physical_read_bytes_last_snap), K_(write_throttle_total), K_(write_throttle_last_snap), K_(rows_processed_total), K_(rows_processed_last_snap), K_(memstore_read_rows_total), K_(memstore_read_rows_last_snap), K_(minor_ssstore_read_rows_total), K_(minor_ssstore_read_rows_last_snap), K_(major_ssstore_read_rows_total), K_(major_ssstore_read_rows_last_snap), K_(rpc_total), K_(rpc_last_snap), K_(fetches_total), K_(fetches_last_snap), K_(retry_total), K_(retry_last_snap), K_(partition_total), K_(partition_last_snap), K_(nested_sql_total), K_(nested_sql_last_snap), K_(route_miss_total), K_(route_miss_last_snap), K_(plan_cache_hit_total), K_(plan_cache_hit_last_snap), K_(latest_active_time), K_(avg_elapsed_time));
 private:
   ObSqlStatInfo sql_stat_info_;
   #define DEF_SQL_STAT_ITEM(def_name)           \
@@ -293,50 +380,18 @@ private:
     DEF_SQL_STAT_ITEM(nested_sql);
     DEF_SQL_STAT_ITEM(route_miss);
     DEF_SQL_STAT_ITEM(plan_cache_hit);
+    DEF_SQL_STAT_ITEM(muti_query);
+    DEF_SQL_STAT_ITEM(muti_query_batch);
+    DEF_SQL_STAT_ITEM(full_table_scan);
+    DEF_SQL_STAT_ITEM(error_count);
   #undef DEF_SQL_STAT_ITEM
+  int64_t latest_active_time_; //only use in sqlstat manager
+  double avg_elapsed_time_; //only use in physical plan
+  bool lock_;
 };
 
 
 /*************************************************************************************************/
-
-class ObSqlStatRecordNode: public ObILibCacheNode
-{
-public:
-  ObSqlStatRecordNode(ObPlanCache *lib_cache, lib::MemoryContext &mem_context)
-      : ObILibCacheNode(lib_cache, mem_context),
-        cache_obj_(nullptr) {}
-  virtual ~ObSqlStatRecordNode() {}
-  virtual int inner_get_cache_obj(sql::ObILibCacheCtx &ctx,
-                                sql::ObILibCacheKey *key,
-                                sql::ObILibCacheObject *&cache_obj) override;
-  virtual int inner_add_cache_obj(sql::ObILibCacheCtx &ctx,
-                                sql::ObILibCacheKey *key,
-                                sql::ObILibCacheObject *cache_obj) override;
-private:
-  sql::ObILibCacheObject *cache_obj_;
-};
-
-class ObSqlStatRecordObj: public sql::ObILibCacheObject
-{
-public:
-  ObSqlStatRecordObj(lib::MemoryContext &mem_context)
-  : sql::ObILibCacheObject(ObLibCacheNameSpace::NS_SQLSTAT, mem_context),
-    record_value_() {}
-
-  virtual ~ObSqlStatRecordObj() = default;
-  OB_INLINE sql::ObExecutedSqlStatRecord* get_record_value() { return &record_value_; }
-  OB_INLINE const sql::ObExecutedSqlStatRecord* get_record_value() const { return &record_value_; }
-private:
-  sql::ObExecutedSqlStatRecord record_value_;
-};
-
-class ObSqlStatRecordUtil
-{
-public:
-  static int get_cache_obj(ObSqlStatRecordKey &key, ObCacheObjGuard& guard);
-  static int create_cache_obj(ObSqlStatRecordKey &key, ObCacheObjGuard& guard);
-  int add_cache_obj(ObSqlStatRecordKey &key, ObCacheObjGuard& guard);
-};
 } // end sql
 } // end oceanbase
 

@@ -69,7 +69,8 @@ public:
       distinct_exprs_(alloc),
       grouping_id_(nullptr),
       group_distinct_exprs_(alloc),
-      group_sort_collations_(alloc)
+      group_sort_collations_(alloc),
+      limit_expr_(nullptr)
     {
     }
 
@@ -95,6 +96,7 @@ public:
   ObExpr *grouping_id_;
   ObFixedArray<ExprFixedArray, common::ObIAllocator> group_distinct_exprs_;
   ObFixedArray<ObSortCollations, common::ObIAllocator> group_sort_collations_;
+  ObExpr *limit_expr_;
 };
 
 // 输入数据已经按照groupby列排序

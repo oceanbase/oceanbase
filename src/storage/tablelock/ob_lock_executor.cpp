@@ -75,6 +75,7 @@ int ObLockContext::init(ObExecContext &ctx,
       ObTransID parent_tx_id;
       parent_tx_id = session_info->get_tx_id();
       OZ (session_info->begin_autonomous_session(saved_session_));
+
       OX (have_saved_session_ = true);
       OZ (ObSqlTransControl::explicit_start_trans(ctx, false));
       if (OB_SUCC(ret)) {
@@ -86,6 +87,8 @@ int ObLockContext::init(ObExecContext &ctx,
     }
     OX (my_exec_ctx_ = &ctx);
     OZ (open_inner_conn_());
+    OX (is_inner_session_ = session_info->is_inner());
+    OX (session_info->set_inner_session());
   }
   return ret;
 }
@@ -142,6 +145,9 @@ int ObLockContext::destroy(ObExecContext &ctx,
         ret = COVER_SUCC(tmp_ret);
         LOG_ERROR("restore autocommit value failed", K(tmp_ret), K(ret));
       }
+    }
+    if (!is_inner_session_) {
+      session_info->set_user_session();
     }
   }
   return ret;

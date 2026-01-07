@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/cmd/ob_set_password_executor.h"
 #include "lib/encrypt/ob_encrypted_helper.h"
+#include "lib/encrypt/ob_sha256_crypt.h"
 #include "sql/resolver/dcl/ob_set_password_stmt.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/cmd/ob_user_cmd_executor.h"
@@ -43,6 +44,7 @@ int ObSetPasswordExecutor::execute(ObExecContext &ctx, ObSetPasswordStmt &stmt)
   obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
   const uint64_t tenant_id = stmt.get_tenant_id();
   const common::ObStrings *user_passwd = NULL;
+  const common::ObStrings *plugins = NULL;
   const int64_t FIX_MEMBER_CNT = 7;
   if (OB_ISNULL(session = ctx.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
@@ -62,6 +64,9 @@ int ObSetPasswordExecutor::execute(ObExecContext &ctx, ObSetPasswordStmt &stmt)
   } else if (OB_UNLIKELY(FIX_MEMBER_CNT != user_passwd->count())) {
     ret = OB_ERR_UNEXPECTED;;
     LOG_WARN("invalid set pwd stmt, wrong user passwd count", K(ret));
+  } else if (OB_ISNULL(plugins = stmt.get_plugins())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("plugins is null", K(ret));
   } else {
     ObString user_name;
     ObString host_name;
@@ -71,6 +76,7 @@ int ObSetPasswordExecutor::execute(ObExecContext &ctx, ObSetPasswordStmt &stmt)
     ObString x509_issuer;
     ObString x509_subject;
     ObSSLType ssl_type_enum = ObSSLType::SSL_TYPE_NOT_SPECIFIED;
+    ObString plugin;
 
     if (OB_FAIL(user_passwd->get_string(0, user_name))) {
       LOG_WARN("Get user name failed", K(ret));
@@ -86,11 +92,14 @@ int ObSetPasswordExecutor::execute(ObExecContext &ctx, ObSetPasswordStmt &stmt)
       LOG_WARN("Get string from ObStrings error", K(ret));
     } else if (OB_FAIL(user_passwd->get_string(6, x509_subject))) {
       LOG_WARN("Get string from ObStrings error", K(ret));
+    } else if (OB_FAIL(plugins->get_string(0, plugin))) {
+      LOG_WARN("Get string from ObStrings error", K(ret));
     } else if (OB_UNLIKELY(ObSSLType::SSL_TYPE_MAX == (ssl_type_enum = get_ssl_type_from_string(ssl_type)))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("known ssl_type", K(ssl_type), K(ret));
     } else {
-      char enc_buf[ENC_BUF_LEN] = {0};
+      // 使用更大的缓冲区以支持 caching_sha2_password
+      char enc_buf[CACHING_SHA2_PASSWD_BUF_LEN] = {0};
       ObSetPasswdArg arg;
       arg.tenant_id_ = tenant_id;
       arg.user_ = user_name;
@@ -103,8 +112,9 @@ int ObSetPasswordExecutor::execute(ObExecContext &ctx, ObSetPasswordStmt &stmt)
       arg.max_connections_per_hour_ = stmt.get_max_connections_per_hour();
       arg.max_user_connections_= stmt.get_max_user_connections();
       arg.modify_max_connections_ = stmt.get_modify_max_connections();
+      arg.plugin_ = plugin;
       if (stmt.get_need_enc()) {
-        if (OB_FAIL(ObCreateUserExecutor::encrypt_passwd(passwd, arg.passwd_, enc_buf, ENC_BUF_LEN))) {
+        if (OB_FAIL(ObCreateUserExecutor::encrypt_passwd(passwd, plugin, arg.passwd_, enc_buf, CACHING_SHA2_PASSWD_BUF_LEN, session))) {
           LOG_WARN("Encrypt passwd failed", K(ret));
         }
       } else {

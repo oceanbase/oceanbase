@@ -352,6 +352,7 @@ ObCgroupCtrl *ObTenantBase::get_cgroup()
 
 int ObTenantBase::pre_run()
 {
+  ObTimeGuard timeguard("tenant_pre_run", 10 * 1000);
   int ret = OB_SUCCESS;
   ObTenantEnv::set_tenant(this);
   ob_get_origin_tenant_id() = this->id();
@@ -376,10 +377,12 @@ int ObTenantBase::pre_run()
       }
     }
   }
+  timeguard.click("add_to_thread_list");
   ATOMIC_INC(&thread_count_);
   if (GCONF._enable_numa_aware && OB_NUMA_SHARED_INDEX == AFFINITY_CTRL.get_tls_node()) {
     AFFINITY_CTRL.thread_bind_to_node(thread_count_);
   }
+  timeguard.click("bind_numa_node");
   // register in tenant cgroup without modifying group_id
   ObCgroupCtrl *cgroup_ctrl = get_cgroup();
   if (OB_NOT_NULL(cgroup_ctrl) && cgroup_ctrl->is_valid()) {

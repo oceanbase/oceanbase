@@ -2992,25 +2992,37 @@ int ObDmlCgService::generate_trigger_arg(ObTrigDMLCtDef &trig_ctdef,
                                          bool is_instead_of)
 {
   int ret = OB_SUCCESS;
-  int64_t col_cnt = table_schema.get_column_count();
-  int64_t hidden_column_count = 0;
-  OZ (table_schema.get_hidden_column_count(hidden_column_count));
-  if (OB_SUCC(ret)) {
-    col_cnt -= hidden_column_count;
-    if (lib::is_oracle_mode() && !is_instead_of) {
-      col_cnt += 1; // rowid
+  bool is_prune_columns = false;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (OB_UNLIKELY(!tenant_config.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get tenant config", K(ret));
+  } else if (FALSE_IT(is_prune_columns = !tenant_config->_update_all_columns_for_trigger)) {
+  } else {
+    int64_t col_cnt = table_schema.get_column_count();
+    int64_t hidden_column_count = 0;
+    trig_ctdef.is_prune_columns_ = is_prune_columns;
+    OZ (table_schema.get_hidden_column_count(hidden_column_count));
+    if (OB_SUCC(ret)) {
+      col_cnt -= hidden_column_count;
+      if (lib::is_oracle_mode() && !is_instead_of) {
+        col_cnt += 1; // rowid
+      }
+    }
+    OZ (trig_ctdef.tg_args_.init(trigger_infos.count()));
+    for (int64_t i = 0; OB_SUCC(ret) && i < trigger_infos.count(); i++) {
+      ObTriggerArg trigger_arg(cg_.phy_plan_->get_allocator());
+      CK (OB_NOT_NULL(trigger_infos.at(i)));
+      OZ (generate_trigger_arg(session_info, schema_guard, table_schema, *trigger_infos.at(i), trigger_arg, col_cnt,
+                               is_prune_columns));
+      OZ (trig_ctdef.tg_args_.push_back(trigger_arg));
+      OX (trig_ctdef.all_tm_points_.merge(trigger_arg.get_timing_points()));
+      OX (LOG_DEBUG("TRIGGER", K(trigger_infos.at(i)->get_trigger_name())));
+    }
+    if (OB_SUCC(ret) && is_prune_columns) {
+      OZ (merge_trigger_ref_types(trig_ctdef, is_instead_of, col_cnt));
     }
   }
-  OZ (trig_ctdef.tg_args_.init(trigger_infos.count()));
-  for (int64_t i = 0; OB_SUCC(ret) && i < trigger_infos.count(); i++) {
-    ObTriggerArg trigger_arg(cg_.phy_plan_->get_allocator());
-    CK (OB_NOT_NULL(trigger_infos.at(i)));
-    OZ (generate_trigger_arg(session_info, schema_guard, table_schema, *trigger_infos.at(i), trigger_arg, col_cnt));
-    OZ (trig_ctdef.tg_args_.push_back(trigger_arg));
-    OX (trig_ctdef.all_tm_points_.merge(trigger_arg.get_timing_points()));
-    OX (LOG_DEBUG("TRIGGER", K(trigger_infos.at(i)->get_trigger_name())));
-  }
-  OZ (merge_trigger_ref_types(trig_ctdef, is_instead_of, col_cnt));
   return ret;
 }
 
@@ -3019,7 +3031,8 @@ int ObDmlCgService::generate_trigger_arg(ObSQLSessionInfo &session_info,
                                          const ObTableSchema &table_schema,
                                          const ObTriggerInfo &trigger_info,
                                          ObTriggerArg &trigger_arg,
-                                         int64_t col_cnt)
+                                         int64_t col_cnt,
+                                         bool is_prune_columns)
 {
   int ret = OB_SUCCESS;
 
@@ -3028,7 +3041,7 @@ int ObDmlCgService::generate_trigger_arg(ObSQLSessionInfo &session_info,
   trigger_arg.set_timing_points(trigger_info.get_timing_points());
   trigger_arg.set_analyze_flag(trigger_info.get_analyze_flag());
   trigger_arg.set_trigger_type(static_cast<int64_t>(trigger_info.get_trigger_type()));
-  if (trigger_info.has_row_point()) {
+  if (is_prune_columns && trigger_info.has_row_point()) {
     ObFixedArray<ObTriggerRowRefType, ObIAllocator> &ref_types = trigger_arg.get_ref_types();
     OZ (ref_types.init(col_cnt));
     for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; ++i) {
@@ -4026,6 +4039,8 @@ int ObDmlCgService::generate_fk_arg(ObForeignKeyArg &fk_arg,
   const ObIArray<uint64_t> &value_column_ids = check_parent_table ? fk_info.child_column_ids_ : fk_info.parent_column_ids_;
   const ObIArray<uint64_t> &name_column_ids = check_parent_table ? fk_info.parent_column_ids_ : fk_info.child_column_ids_;
   uint64_t name_table_id = check_parent_table ? fk_info.parent_table_id_ : fk_info.child_table_id_;
+  const ObTableSchema *child_table_schema = NULL;
+  const ObDatabaseSchema *foreign_key_database_schema = NULL;
 
   if (OB_FAIL(generate_dml_column_ids(op, index_dml_info.column_exprs_, column_ids))) {
     LOG_WARN("add column ids failed", K(ret));
@@ -4059,6 +4074,29 @@ int ObDmlCgService::generate_fk_arg(ObForeignKeyArg &fk_arg,
                                          fk_arg.table_name_))) {
     LOG_WARN("failed to deep copy ob string", K(fk_arg),
              K(table_schema->get_table_name()), K(ret));
+  } else if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(),
+                                                   fk_info.child_table_id_,
+                                                   child_table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret), K(fk_info.child_table_id_));
+  } else if (OB_ISNULL(child_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("child table schema is null", K(ret), K(fk_info.child_table_id_));
+  } else if (OB_FAIL(schema_guard.get_database_schema(child_table_schema->get_tenant_id(),
+                                                      child_table_schema->get_database_id(),
+                                                      foreign_key_database_schema))) {
+    LOG_WARN("failed to get database schema", K(ret), K(child_table_schema->get_database_id()));
+  } else if (OB_ISNULL(foreign_key_database_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("foreign key database schema is null", K(ret), K(child_table_schema->get_database_id()));
+  } else if (OB_FAIL(deep_copy_ob_string(allocator,
+                                         foreign_key_database_schema->get_database_name(),
+                                         fk_arg.foreign_key_database_name_))) {
+    LOG_WARN("failed to deep copy ob string", K(ret), K(fk_arg),
+             K(foreign_key_database_schema->get_database_name()));
+  } else if (OB_FAIL(deep_copy_ob_string(allocator,
+                                         fk_info.foreign_key_name_,
+                                         fk_arg.foreign_key_name_))) {
+    LOG_WARN("failed to deep copy ob string", K(ret), K(fk_arg), K(fk_info.foreign_key_name_));
   } else if (FALSE_IT(fk_arg.columns_.reset())) {
   } else if (OB_FAIL(fk_arg.columns_.reserve(name_column_ids.count()))) {
     LOG_WARN("failed to reserve foreign key columns", K(name_column_ids.count()), K(ret));
@@ -4419,14 +4457,27 @@ int ObDmlCgService::convert_foreign_keys(ObLogDelUpd &op,
           if (lib::is_mysql_mode() && fk_info.is_parent_table_mock_) {
             ObSQLSessionInfo *session = nullptr;
             int64_t foreign_key_checks = 0;
+            const ObDatabaseSchema *foreign_key_database_schema = NULL;
             if (OB_ISNULL(op.get_plan())
                 || OB_ISNULL(session = op.get_plan()->get_optimizer_context().get_session_info())) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("session is invalid", K(op.get_plan()), K(session));
             } else if (OB_FAIL(session->get_foreign_key_checks(foreign_key_checks))) {
               LOG_WARN("get foreign_key_checks failed", K(ret));
+            } else if (OB_FAIL(schema_guard->get_database_schema(table_schema->get_tenant_id(),
+                                                                 table_schema->get_database_id(),
+                                                                 foreign_key_database_schema))) {
+              LOG_WARN("failed to get database schema", K(ret), K(table_schema->get_database_id()));
+            } else if (OB_ISNULL(foreign_key_database_schema)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("foreign key database schema is null", K(ret), K(table_schema->get_database_id()));
             } else if (1 == foreign_key_checks) {
               ret = OB_ERR_NO_REFERENCED_ROW;
+              LOG_USER_ERROR(OB_ERR_NO_REFERENCED_ROW,
+                             foreign_key_database_schema->get_database_name_str().length(),
+                             foreign_key_database_schema->get_database_name_str().ptr(),
+                             fk_info.foreign_key_name_.length(),
+                             fk_info.foreign_key_name_.ptr());
               LOG_WARN("insert or update a child table with a mock parent table", K(ret));
             } else { // skip fk check while foreign_key_checks if off
               fk_arg.ref_action_ = ACTION_INVALID;

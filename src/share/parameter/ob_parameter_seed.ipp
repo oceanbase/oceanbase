@@ -2868,6 +2868,9 @@ DEF_TIME(_ss_sslog_weak_read_threshold, OB_TENANT_PARAMETER, "5s", "[0s,2h]",
          "If the difference time between the local max decided scn and gts is less than this configuration item value,"
          "the read operation inside the sslog atomic operation can be weak. Range: [0s, 2h]",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_ss_sslog_table_sql_timeout, OB_CLUSTER_PARAMETER, "30s", "[1s,)",
+        "The maximum timeout for sslog table sql. Range: [1s, +∞)",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_enable_async_load_sys_package, OB_CLUSTER_PARAMETER, "False",
          "Controls the ability to enable/disable async load sys package",
@@ -2879,7 +2882,7 @@ DEF_BOOL(_enable_pl_recompile_job, OB_TENANT_PARAMETER, "False",
 DEF_BOOL(enable_pl_rich_error_msg, OB_TENANT_PARAMETER, "False",
          "specifies whether add ip:port, time and trace id to PLSQL sqlerrm.",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(_enable_px_task_rebalance, OB_TENANT_PARAMETER, "False",
+DEF_BOOL(_enable_px_task_rebalance, OB_TENANT_PARAMETER, "True",
          "Enable or disable px task rebalance.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(_px_task_rebalance_trigger_time, OB_TENANT_PARAMETER, "10ms", "[1us, 1h]",
@@ -3266,3 +3269,8 @@ DEF_INT(_sslog_table_meta_cache_usage_threshold, OB_TENANT_PARAMETER, "0", "[0,)
         "larger than (meta tenant disk limit * threshold), write throttling is triggered to slow down incoming write requests."
         "Range: [0, )",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(system_protected_sys_variables, OB_CLUSTER_PARAMETER, "",
+  common::ObConfigCommaSeparatedStringChecker,
+  "sys variables that are not allowed to be modified by regular users, "
+  "format: single variables name or comma-separated variables names",
+  ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

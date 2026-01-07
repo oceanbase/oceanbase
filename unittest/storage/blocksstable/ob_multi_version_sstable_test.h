@@ -516,6 +516,8 @@ void ObMultiVersionSSTableTest::prepare_data_end(
       table_schema_.get_column_count() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   ASSERT_EQ(OB_SUCCESS, root_index_builder_->close(res));
 
+  const int64_t upper_trans_version = res.contain_uncommitted_row_ ?
+      INT64_MAX : res.max_merged_trans_version_;
   ObTabletCreateSSTableParam param;
   param.set_init_value_for_column_store_();
   table_key_.table_type_ = table_type;
@@ -562,6 +564,9 @@ void ObMultiVersionSSTableTest::prepare_data_end(
   param.recycle_version_ = 0;
   param.root_macro_seq_ = 0;
   param.rec_scn_ = table_key_.get_start_scn();
+  param.max_merged_trans_version_ = res.max_merged_trans_version_;
+  param.contain_uncommitted_row_ = res.contain_uncommitted_row_;
+  param.upper_trans_version_ = upper_trans_version;
   if (table_type == ObITable::MAJOR_SSTABLE) {
     ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_));
   }

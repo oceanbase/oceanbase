@@ -14,6 +14,7 @@
 
 #include "ob_agent_table_base.h"
 #include "src/share/interrupt/ob_interrupt_rpc_proxy.h"
+#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {
@@ -521,6 +522,7 @@ int ObAgentTableBase::rowkey2condition(common::ObSqlString &cols,  common::ObSql
         convert_alloc_.reuse();
         int64_t val_pos = vals.length();
         ObObj new_value = c;
+        ObObjPrintParams params(session_->get_timezone_info());
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(rowkey_info.get_column_id(i, cid))) {
           LOG_WARN("get column id failed", K(ret), K(i), K(rowkey_info));
@@ -530,7 +532,7 @@ int ObAgentTableBase::rowkey2condition(common::ObSqlString &cols,  common::ObSql
           LOG_WARN("reserve buffer failed", K(ret), K(buf_len));
         } else if (OB_FAIL(change_column_value(mapping_[cid], convert_alloc_, new_value))) {
           LOG_WARN("fail to change column value", K(ret), K(new_value));
-        } else if (OB_FAIL(new_value.print_sql_literal(vals.ptr(), vals.capacity(), val_pos))) {
+        } else if (OB_FAIL(new_value.print_sql_literal(vals.ptr(), vals.capacity(), val_pos, params))) {
           LOG_WARN("print obj to sql literal failed", K(ret), K(c));
         } else if (OB_FAIL(vals.set_length(val_pos))) {
           LOG_WARN("set sql string length failed", K(ret), K(val_pos), K(vals));

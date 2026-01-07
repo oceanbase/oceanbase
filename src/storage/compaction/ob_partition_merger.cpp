@@ -845,7 +845,34 @@ int ObPartitionMajorMerger::rewrite_macro_block(MERGE_ITER_ARRAY &minimum_iters)
   return ret;
 }
 
-int ObPartitionMajorMerger::reuse_base_small_sstable(ObPartitionMergeIter *base_iter)
+int ObPartitionMajorMerger::inner_reuse_micro_or_row(ObPartitionMergeIter &base_iter, const MERGE_ITER_ARRAY &merge_iters)
+{
+  int ret = OB_SUCCESS;
+  const blocksstable::ObMicroBlock *micro_block = nullptr;
+  if (OB_ISNULL(base_iter.get_curr_row())) {
+    if (OB_FAIL(base_iter.get_curr_micro_block(micro_block))) {
+      STORAGE_LOG(WARN, "failed to get_curr_micro_block", K(ret), K(base_iter));
+    } else if (OB_ISNULL(micro_block) || !micro_block->is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected micro block", K(ret), K(base_iter), KPC(micro_block));
+    } else if (OB_FAIL(process(*micro_block, base_iter.get_sstable_idx()))) {
+      STORAGE_LOG(WARN, "failed to process micro block", K(ret));
+    }
+  } else if (OB_FAIL(process(*base_iter.get_curr_row(), false/*is_incremental_row*/))) {
+    STORAGE_LOG(WARN, "Failed to process row", K(ret), K(partition_fuser_->get_result_row()));
+    if (GCONF._enable_compaction_diagnose) {
+      ObPartitionMergeDumper::print_error_info(ret, merge_iters, *merge_ctx_);
+    }
+  }
+  if (FAILEDx(base_iter.next())) {
+    if (OB_ITER_END != ret) {
+      STORAGE_LOG(WARN, "Failed to get next", K(ret), K(base_iter));
+    }
+  }
+  return ret;
+}
+
+int ObPartitionMajorMerger::reuse_base_small_sstable(ObPartitionMergeIter *base_iter, const MERGE_ITER_ARRAY &merge_iters)
 {
   int ret = OB_SUCCESS;
 
@@ -853,20 +880,9 @@ int ObPartitionMajorMerger::reuse_base_small_sstable(ObPartitionMergeIter *base_
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected base iter stat for small sstable", K(ret), K(base_iter));
   }
-
   while (OB_SUCC(ret)) {
-    const blocksstable::ObMicroBlock *micro_block = nullptr;
-    if (OB_FAIL(base_iter->get_curr_micro_block(micro_block))) {
-      STORAGE_LOG(WARN, "failed to get_curr_micro_block", K(ret), KPC(base_iter));
-    } else if (OB_ISNULL(micro_block) || !micro_block->is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "unexpected micro block", K(ret), KPC(base_iter), KPC(micro_block));
-    } else if (OB_FAIL(process(*micro_block, base_iter->get_sstable_idx()))) {
-      STORAGE_LOG(WARN, "failed to process micro block", K(ret));
-    } else if (OB_FAIL(base_iter->next())) {
-      if (OB_ITER_END != ret) {
-        STORAGE_LOG(WARN, "Failed to get next", K(ret), KPC(base_iter));
-      }
+    if (OB_FAIL(inner_reuse_micro_or_row(*base_iter, merge_iters))) {
+      STORAGE_LOG(WARN, "failed to inner_reuse_micro_or_row", K(ret), K(base_iter), K(merge_iters));
     }
   }
   return ret;
@@ -893,24 +909,14 @@ int ObPartitionMajorMerger::reuse_base_sstable(ObPartitionMergeHelper &merge_hel
       if (base_iter->is_iter_end()) {
         ret = OB_ITER_END;
       } else if (base_table->is_small_sstable() && compat_version >= DATA_VERSION_4_3_5_1 && nullptr == base_iter->get_curr_row()) {
-        if (OB_FAIL(reuse_base_small_sstable(base_iter))) {
+        if (OB_FAIL(reuse_base_small_sstable(base_iter, minimum_iters))) {
           LOG_WARN("failed to reuse base small sstable", K(ret));
         }
       } else if (base_iter->is_macro_block_opened()) { // opend for cross range
         // flush all row in curr macro block
         while (OB_SUCC(ret) && base_iter->is_macro_block_opened()) {
-          if (OB_ISNULL(base_iter->get_curr_row())) {
-            ret = OB_ERR_UNEXPECTED;
-            STORAGE_LOG(WARN, "curr row is unexpected null", K(ret), KPC(base_iter));
-          } else if (OB_FAIL(process(*base_iter->get_curr_row()))) {
-            STORAGE_LOG(WARN, "Failed to process row", K(ret), K(partition_fuser_->get_result_row()));
-            if (GCONF._enable_compaction_diagnose) {
-              ObPartitionMergeDumper::print_error_info(ret, minimum_iters, *merge_ctx_);
-            }
-          } else if (OB_FAIL(base_iter->next())) {
-            if (OB_ITER_END != ret) {
-              STORAGE_LOG(WARN, "Failed to get next", K(ret), KPC(base_iter));
-            }
+          if (OB_FAIL(inner_reuse_micro_or_row(*base_iter, minimum_iters))) {
+            STORAGE_LOG(WARN, "failed to inner_reuse_micro_or_row", K(ret), K(base_iter), K(minimum_iters));
           }
         } // end of while
       } else if (OB_FAIL(base_iter->get_curr_macro_block(macro_desc, micro_block_data))) {

@@ -299,6 +299,8 @@ public:
   using typename ObStorageIORetryStrategy<OutcomeType>::RetType;
   using ObStorageIORetryStrategy<OutcomeType>::start_time_us_;
   using ObStorageIORetryStrategy<OutcomeType>::timeout_us_;
+  using ObStorageIORetryStrategyBase<OutcomeType>::errsim_retry_count_;
+  using ObStorageIORetryStrategyBase<OutcomeType>::MAX_ERRSIM_RETRY_COUNT;
 
   ObStorageS3RetryStrategy(const int64_t timeout_us = ObObjectStorageTenantGuard::get_timeout_us())
       : ObStorageIORetryStrategy<OutcomeType>(timeout_us)
@@ -326,11 +328,12 @@ public:
 
 protected:
   virtual bool should_retry_impl_(
-      const RetType &outcome, const int64_t attempted_retries) const override
+      const RetType &outcome, const int64_t attempted_retries) override
   {
     bool bret = false;
-    if (OB_SUCCESS != EventTable::EN_OBJECT_STORAGE_IO_RETRY) {
+    if (OB_SUCCESS != EventTable::EN_OBJECT_STORAGE_IO_RETRY && errsim_retry_count_ < MAX_ERRSIM_RETRY_COUNT) {
       bret = true;
+      errsim_retry_count_++;
       OB_LOG(INFO, "errsim object storage IO retry", K(outcome.IsSuccess()));
     } else if (outcome.IsSuccess()) {
       bret = false;

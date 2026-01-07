@@ -451,12 +451,16 @@ int ObPartitionSplitQuery::fill_range_filter_param(
   if (OB_ISNULL(filter_params)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(filter_params));
-  } else if (lower_bound.get_datum_cnt() != upper_bound.get_datum_cnt()) {
+  } else if (lower_bound.is_min_rowkey() && upper_bound.is_max_rowkey()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected whole row key range");
+  } else if (!lower_bound.is_min_rowkey() && !upper_bound.is_max_rowkey()
+             && lower_bound.get_datum_cnt() != upper_bound.get_datum_cnt()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected partition datum cnt", K(ret), K(lower_bound), K(upper_bound));
   } else {
     const int64_t filter_params_cnt = filter_params->count();
-    const int64_t part_column_cnt = lower_bound.get_datum_cnt();
+    const int64_t part_column_cnt = max(lower_bound.get_datum_cnt(), upper_bound.get_datum_cnt());
     const int64_t total_filled_cnt = part_column_cnt * 2 + 1;
 
     if (filter_params_cnt != total_filled_cnt) {
@@ -478,34 +482,48 @@ int ObPartitionSplitQuery::fill_range_filter_param(
         if (i == 0) { // 1. bypass param expr.
           expr_datum.set_int(0);
         } else if (i <= part_column_cnt) { // 2. lower bound param expr.
-          const ObDatum &lower_datum = lower_bound.get_datum(col_idx);
-          if (lower_datum.is_min()) {
+          if (lower_bound.is_min_rowkey()) {
             expr_datum.set_outrow(); // min
             if (expr_datum.is_outrow()) {
               LOG_DEBUG("set is outrow", K(ret), K(expr_datum));
             }
-          } else if (lower_datum.is_max()) {
+          } else {
+            const ObDatum &lower_datum = lower_bound.get_datum(col_idx);
+            if (lower_datum.is_min()) {
+              expr_datum.set_outrow(); // min
+              if (expr_datum.is_outrow()) {
+                LOG_DEBUG("set is outrow", K(ret), K(expr_datum));
+              }
+            } else if (lower_datum.is_max()) {
+              expr_datum.set_ext(); // max
+              if (expr_datum.is_ext()) {
+                LOG_DEBUG("set is ext", K(ret), K(expr_datum));
+              }
+            } else if (OB_FAIL(expr->deep_copy_datum(eval_ctx, lower_datum))) {
+              LOG_WARN("fail to from storage datum", K(ret), K(lower_datum));
+            }
+          }
+        } else if (i <= part_column_cnt * 2) { // 3. upper bound param expr.
+          if (upper_bound.is_max_rowkey()) {
             expr_datum.set_ext(); // max
             if (expr_datum.is_ext()) {
               LOG_DEBUG("set is ext", K(ret), K(expr_datum));
             }
-          } else if (OB_FAIL(expr->deep_copy_datum(eval_ctx, lower_datum))) {
-            LOG_WARN("fail to from storage datum", K(ret), K(lower_datum));
-          }
-        } else if (i <= part_column_cnt * 2) { // 3. upper bound param expr.
-          const ObDatum &upper_datum = upper_bound.get_datum(col_idx);
-          if (upper_datum.is_max()) {
-            expr_datum.set_ext();  // max
-            if (expr_datum.is_ext()) {
-              LOG_DEBUG("set is ext", K(ret), K(expr_datum));
+          } else {
+            const ObDatum &upper_datum = upper_bound.get_datum(col_idx);
+            if ( upper_datum.is_max()) {
+              expr_datum.set_ext();  // max
+              if (expr_datum.is_ext()) {
+                LOG_DEBUG("set is ext", K(ret), K(expr_datum));
+              }
+            } else if (upper_datum.is_min()) {
+              expr_datum.set_outrow();  // min
+              if (expr_datum.is_outrow()) {
+                LOG_DEBUG("set is outrow", K(ret), K(expr_datum));
+              }
+            } else if (OB_FAIL(expr->deep_copy_datum(eval_ctx, upper_datum))) {
+              LOG_WARN("fail to from deep_copy_datum", K(ret), K(upper_datum));
             }
-          } else if (upper_datum.is_min()) {
-            expr_datum.set_outrow();  // min
-            if (expr_datum.is_outrow()) {
-              LOG_DEBUG("set is outrow", K(ret), K(expr_datum));
-            }
-          } else if (OB_FAIL(expr->deep_copy_datum(eval_ctx, upper_datum))) {
-            LOG_WARN("fail to from storage datum", K(ret), K(upper_datum));
           }
         }
       }

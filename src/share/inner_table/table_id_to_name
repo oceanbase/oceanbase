@@ -421,6 +421,8 @@
 # 571: __all_ai_model_history
 # 571: __all_ai_model  # BASE_TABLE_NAME
 # 572: __all_ai_model_endpoint
+# 573: __wr_active_session_history_v2
+# 579: __wr_sqlstat_v2
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
 # 10003: __tenant_virtual_table_index
@@ -1345,6 +1347,10 @@
 # 12574: __all_virtual_ai_model_endpoint
 # 12574: __all_ai_model_endpoint  # BASE_TABLE_NAME
 # 12575: __all_virtual_ss_object_type_io_stat
+# 12576: __all_virtual_wr_active_session_history_v2
+# 12576: __wr_active_session_history_v2  # BASE_TABLE_NAME
+# 12582: __all_virtual_wr_sqlstat_v2
+# 12582: __wr_sqlstat_v2  # BASE_TABLE_NAME
 # 12587: __all_virtual_tablet_replica_info
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
@@ -2085,6 +2091,12 @@
 # 15533: __all_virtual_source  # BASE_TABLE_NAME
 # 15534: ALL_VIRTUAL_SS_DIAGNOSE_INFO
 # 15534: __all_virtual_ss_diagnose_info  # BASE_TABLE_NAME
+# 15535: ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY_V2
+# 15535: __wr_active_session_history_v2  # BASE_TABLE_NAME
+# 15535: __all_virtual_wr_active_session_history_v2  # BASE_TABLE_NAME1
+# 15536: ALL_VIRTUAL_WR_SQLSTAT_V2
+# 15536: __wr_sqlstat_v2  # BASE_TABLE_NAME
+# 15536: __all_virtual_wr_sqlstat_v2  # BASE_TABLE_NAME1
 # 15538: ALL_VIRTUAL_SENSITIVE_RULE_REAL_AGENT
 # 15538: __all_sensitive_rule  # BASE_TABLE_NAME
 # 15539: ALL_VIRTUAL_SENSITIVE_COLUMN_REAL_AGENT

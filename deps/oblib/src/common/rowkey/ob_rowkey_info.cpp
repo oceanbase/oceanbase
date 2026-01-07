@@ -492,3 +492,16 @@ int ObRowkeyInfo::get_spatial_mbr_col_id(uint64_t &column_id) const
 {
   return get_spatial_col_id_by_type(column_id, ObVarcharType);
 }
+
+bool ObRowkeyInfo::equals(const ObRowkeyInfo &other) const
+{
+  bool bret = false;
+  if ((size_ == other.size_)
+      && (capacity_ == other.capacity_)
+      && ((OB_ISNULL(columns_) && OB_ISNULL(other.columns_))
+          || (OB_NOT_NULL(columns_) && OB_NOT_NULL(other.columns_)
+              && (*columns_ == *other.columns_)))) {
+    bret = true;
+  }
+  return bret;
+}

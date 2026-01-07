@@ -37,7 +37,10 @@ public:
     : das_factory_(CURRENT_CONTEXT->get_arena_allocator()),
       exec_ctx_(CURRENT_CONTEXT->get_arena_allocator(), gctx.session_mgr_),
       frame_info_(CURRENT_CONTEXT->get_arena_allocator()),
-      das_remote_info_()
+      das_remote_info_(),
+      is_enable_sqlstat_(false),
+      sqlstat_key_(),
+      sqlstat_record_()
   {
     RpcProcessor::set_preserve_recv_data();
   }
@@ -58,6 +61,9 @@ protected:
   ObExprFrameInfo frame_info_;
   share::schema::ObSchemaGetterGuard schema_guard_;
   ObDASRemoteInfo das_remote_info_;
+  bool is_enable_sqlstat_;
+  ObSqlStatRecordKey sqlstat_key_;
+  ObExecutingSqlStatRecord sqlstat_record_;
   //tsc monitor info
   int64_t monitor_val_[10];
   ObTSCMonitorInfo tsc_monitor_info_;

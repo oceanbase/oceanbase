@@ -54,7 +54,6 @@ int ObDirectLoadSSTableBuilder::init(const ObDirectLoadSSTableBuildParam &param)
   } else {
     const uint64_t tenant_id = MTL_ID();
     param_ = param;
-    start_key_.set_min_rowkey();
     end_key_.set_min_rowkey();
     int64_t dir_id = -1;
     if (OB_ISNULL(param_.file_mgr_)) {
@@ -108,10 +107,6 @@ int ObDirectLoadSSTableBuilder::append_row(const ObTabletID &tablet_id,
       LOG_WARN("fail to from datum row", KR(ret));
     } else if (OB_FAIL(data_block_writer_.append_row(external_row))) {
       LOG_WARN("fail to append row to data block writer", KR(ret), K(external_row));
-    } else if (start_key_.is_min_rowkey()) {
-      if (OB_FAIL(key.deep_copy(start_key_, allocator_))) {
-        LOG_WARN("fail to deep copy", KR(ret));
-      }
     }
   }
   return ret;
@@ -139,10 +134,6 @@ int ObDirectLoadSSTableBuilder::append_row(const ObDirectLoadExternalRow &extern
       LOG_WARN("fail to check rowkey order", KR(ret), K(external_row));
     } else if (OB_FAIL(data_block_writer_.append_row(external_row))) {
       LOG_WARN("fail to append row to data block writer", KR(ret), K(external_row));
-    } else if (start_key_.is_min_rowkey()) {
-      if (OB_FAIL(key.deep_copy(start_key_, allocator_))) {
-        LOG_WARN("fail to deep copy", KR(ret));
-      }
     }
   }
   return ret;
@@ -199,8 +190,6 @@ int ObDirectLoadSSTableBuilder::get_tables(ObDirectLoadTableHandleArray &table_a
       param.row_count_ = data_block_writer_.get_total_row_count();
       param.index_block_count_ =
         (param.index_item_count_ + index_item_num_per_block - 1) / index_item_num_per_block;
-      param.start_key_ = start_key_;
-      param.end_key_ = end_key_;
       if (param.row_count_ > 0) {
         ObDirectLoadSSTableFragment fragment;
         fragment.meta_.row_count_ = data_block_writer_.get_total_row_count();

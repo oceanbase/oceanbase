@@ -55,6 +55,11 @@ public:
   virtual int get_next_rowkey(int64_t &curr_scan_index,
                               blocksstable::ObDatumRowkey& rowkey,
                               common::ObIAllocator &allocator) final;
+  virtual int get_next_border_rowkey(const blocksstable::ObDatumRowkey *&border_rowkey) const override final
+  {
+    border_rowkey = &prefetcher_.get_border_rowkey();
+    return OB_SUCCESS;
+  }
   OB_INLINE bool is_end_of_scan() const
   {
     return prefetcher_.is_prefetch_end_ &&

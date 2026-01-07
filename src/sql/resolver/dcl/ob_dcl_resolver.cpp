@@ -15,6 +15,7 @@
 #include "sql/engine/expr/ob_expr_validate_password_strength.h"
 #include "sql/resolver/dcl/ob_dcl_resolver.h"
 #include "share/catalog/ob_catalog_utils.h"
+#include "lib/encrypt/ob_encrypted_helper.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -502,14 +503,14 @@ int ObDCLResolver::resolve_user_host(const ParseNode *user_pass,
       /* here code is to mock a auth plugin check. */
       ObString auth_plugin(static_cast<int32_t>(user_pass->children_[4]->str_len_),
                             user_pass->children_[4]->str_value_);
-      ObString default_auth_plugin;
-      if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN,
-                                                  default_auth_plugin))) {
-        LOG_WARN("fail to get block encryption variable", K(ret));
-      } else if (OB_UNLIKELY(0 != auth_plugin.case_compare(default_auth_plugin))) {
-        ret = OB_ERR_PLUGIN_IS_NOT_LOADED;
-        LOG_USER_ERROR(OB_ERR_PLUGIN_IS_NOT_LOADED, auth_plugin.length(), auth_plugin.ptr());
-      } else {/* do nothing */}
+      bool is_plugin_supported = true;
+      if (OB_FAIL(ObEncryptedHelper::check_data_version_for_auth_plugin(auth_plugin,
+        session_info_->get_effective_tenant_id(), is_plugin_supported))) {
+        LOG_WARN("failed to check data version for auth plugin", K(ret));
+      } else if (OB_UNLIKELY(!is_plugin_supported)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("caching_sha2_password is not supported when MIN_DATA_VERSION is below 4_4_2_0", K(ret));
+      }
     }
     if (OB_SUCC(ret) && lib::is_oracle_mode() && 0 != host_name.compare(OB_DEFAULT_HOST_NAME)) {
       ret = OB_NOT_SUPPORTED;

@@ -1368,7 +1368,6 @@ int ObDbmsXplan::get_plan_info_by_session_id(ObPLExecCtx &ctx,
                                     AND SVR_PORT=%ld \
                                     LIMIT 1) C\
                               WHERE B.TRACE_ID = C.TRACE_ID\
-                              AND B.REQUEST_ID < 0\
                               GROUP BY B.PLAN_LINE_ID) D\
                         ON A.ID = D.ID\
                     WHERE SVR_IP='%.*s'\

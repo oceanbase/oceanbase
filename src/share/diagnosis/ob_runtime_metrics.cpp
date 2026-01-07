@@ -21,7 +21,7 @@ namespace oceanbase
 namespace common
 {
 int value_print_help(char *buf, const int64_t buf_len, int64_t &pos, uint64_t value,
-                     metric::Unit unit, bool as_json_format = true)
+                     metric::Unit unit, bool as_json_format)
 {
   static constexpr uint64_t kilo = 1000UL;
   static constexpr uint64_t mega = 1000UL * 1000UL;
@@ -64,6 +64,8 @@ int value_print_help(char *buf, const int64_t buf_len, int64_t &pos, uint64_t va
     UNIT_PRINT(kilo_byte, mega_byte, giga_byte, "B", "KB", "MB", "GB", value)
     break;
   }
+  case metric::Unit::CPU_CYCLE:
+  // already transformed into ns in convert_current_profile_to_persist
   case metric::Unit::TIME_NS: {
     UNIT_PRINT(kilo, mega, giga, "ns", "us", "ms", "s", value)
     break;
@@ -144,8 +146,8 @@ int key_value_print_help(char *buf, const int64_t buf_len, int64_t &pos,
   if (agg_type & E_MAX) {
     PRINT_EXTRA_AGG_NAME(max, max);
   }
-  if (agg_type & E_VARIANCE) {
-    PRINT_EXTRA_AGG_NAME(variance, variance);
+  if (agg_type & E_STDDEV) {
+    PRINT_EXTRA_AGG_NAME(deviation, deviation);
   }
 #undef PRINT_MAIN_AGG_NAME
 #undef PRINT_EXTRA_AGG_NAME
@@ -262,7 +264,7 @@ int64_t ObMergeMetric::get_format_size(bool with_braces)
     agg_name_len += 3;
     agg_count++;
   }
-  if (agg_type & E_VARIANCE) {
+  if (agg_type & E_STDDEV) {
     agg_name_len += 8;
     agg_count++;
   }
@@ -342,12 +344,12 @@ int ObMergeMetric::pretty_print(char *buf, const int64_t buf_len, int64_t &pos,
       OZ(value_print_help(buf, buf_len, pos, get_max_value(), get_metric_unit(id_), false));
       need_comma = true;
     }
-    if (agg_type & E_VARIANCE) {
+    if (agg_type & E_STDDEV) {
       if (need_comma) {
         OZ(J_COMMA());
       }
-      OZ(BUF_PRINTF("variance="));
-      OZ(value_print_help(buf, buf_len, pos, get_variance_value(), get_metric_unit(id_), false));
+      OZ(BUF_PRINTF("stddev="));
+      OZ(value_print_help(buf, buf_len, pos, get_deviation_value(), get_metric_unit(id_), false));
     }
     OZ(BUF_PRINTF("]"));
   }
@@ -363,6 +365,11 @@ void ObMergeMetric::update(uint64_t value)
       if (first_value_ == 0) {
         first_value_ = value;
       }
+      if (agg_type & E_STDDEV) {
+        // if need standard deviation, also update sum and count
+        sum_value_ += value;
+        count_++;
+      }
       break;
     }
     case M_SUM:
@@ -376,22 +383,29 @@ void ObMergeMetric::update(uint64_t value)
     }
   }
   if (agg_type & E_MIN) {
-    if (min_value_ == 0 || min_value_ > value) {
+    // if min_value_==0, we cannot distinguish whether it has been set.
+    if (!is_min_set_ || min_value_ > value) {
       min_value_ = value;
+      is_min_set_ = true;
     }
   }
   if (agg_type & E_MAX) {
-    if (max_value_ == 0 || max_value_ < value) {
+    if (max_value_ < value) {
       max_value_ = value;
     }
   }
-  if (agg_type & E_VARIANCE) {
-    if (count_ > 1) {
-      uint64_t cur_avg = sum_value_ / count_;
-      uint64_t last_avg = (sum_value_ - value) / (count_ - 1);
-      uint64_t last_variance2 = variance_value_ * variance_value_;
-      variance_value_ =
-          sqrt(last_variance2 + ((value - cur_avg) * (value - last_avg) - last_variance2) / count_);
+  if (agg_type & E_STDDEV) {
+    if (count_ == 1) {
+      M2_ = 0.0;
+    } else {
+      // Update M2 using Welford's algorithm
+      // old_mean is the mean before adding the new value
+      double old_mean = static_cast<double>(sum_value_ - value) / static_cast<double>(count_ - 1);
+      // new_mean is the mean after adding the new value
+      double new_mean = static_cast<double>(sum_value_) / static_cast<double>(count_);
+      double delta = static_cast<double>(value) - old_mean;
+      double delta2 = static_cast<double>(value) - new_mean;
+      M2_ += delta * delta2;
     }
   }
 }

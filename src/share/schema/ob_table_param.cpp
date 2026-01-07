@@ -1709,15 +1709,13 @@ int ObTableParam::check_is_safe_filter_with_di(
     for (int64_t i = 0; !has_lob_column_out && i < out_cols.count(); i++) {
       has_lob_column_out = (is_lob_storage(out_cols.at(i).col_type_.get_type()));
     }
-    if (has_lob_column_out) {
-      for (int64_t i = 0; OB_SUCC(ret) && is_safe_filter_with_di_ && i < exprs.count(); i++) {
-        const sql::ObRawExpr *expr = exprs.at(i);
-        if (OB_ISNULL(expr)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Unexpected null filter expr", K(ret), K(exprs));
-        } else if (expr->is_topn_filter()) {
-          is_safe_filter_with_di_ = false;
-        }
+    for (int64_t i = 0; OB_SUCC(ret) && is_safe_filter_with_di_ && i < exprs.count(); i++) {
+      const sql::ObRawExpr *expr = exprs.at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected null filter expr", K(ret), K(exprs));
+      } else if ((has_lob_column_out && expr->is_topn_filter()) || !expr->is_deterministic()) {
+        is_safe_filter_with_di_ = false;
       }
     }
     if (OB_SUCC(ret) && is_safe_filter_with_di_) {

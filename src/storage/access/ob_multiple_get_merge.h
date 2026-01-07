@@ -93,6 +93,7 @@ public:
   virtual void reset() override;
   virtual void reuse() override;
   virtual void reclaim() override;
+  virtual int pause(bool& do_pause) override final { do_pause = false; return OB_SUCCESS; }
 protected:
   virtual int prepare() override;
   virtual int calc_scan_range() override;

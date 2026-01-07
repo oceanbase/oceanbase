@@ -76,8 +76,7 @@ public:
                K_(row_count),
                K_(rowkey_count),
                K_(max_data_block_size),
-               K_(start_key),
-               K_(end_key),
+               K_(compressor_type),
                K_(fragments));
 public:
   common::ObTabletID tablet_id_;
@@ -92,8 +91,7 @@ public:
   int64_t row_count_;
   int64_t rowkey_count_;
   int64_t max_data_block_size_;
-  ObDirectLoadMultipleDatumRowkey start_key_;
-  ObDirectLoadMultipleDatumRowkey end_key_;
+  common::ObCompressorType compressor_type_;
   common::ObArray<ObDirectLoadMultipleSSTableFragment> fragments_;
 };
 
@@ -126,6 +124,7 @@ public:
   int64_t row_count_;
   int64_t rowkey_count_;
   int64_t max_data_block_size_;
+  common::ObCompressorType compressor_type_;
 };
 
 class ObDirectLoadMultipleSSTable : public ObDirectLoadITable
@@ -144,8 +143,8 @@ public:
   int copy(const ObDirectLoadMultipleSSTable &other);
   bool is_empty() const { return 0 == meta_.row_count_; }
   const ObDirectLoadMultipleSSTableMeta &get_meta() const { return meta_; }
-  const ObDirectLoadMultipleDatumRowkey &get_start_key() const { return start_key_; }
-  const ObDirectLoadMultipleDatumRowkey &get_end_key() const { return end_key_; }
+  int get_start_key(ObDirectLoadMultipleDatumRowkey &start_key, ObIAllocator &allocator);
+  int get_end_key(ObDirectLoadMultipleDatumRowkey &end_key, ObIAllocator &allocator);
   const common::ObIArray<ObDirectLoadMultipleSSTableFragment> &get_fragments() const
   {
     return fragments_;
@@ -193,14 +192,11 @@ public:
                         common::ObIAllocator &allocator,
                         ObIDirectLoadDatumRowkeyIterator *&rowkey_iter);
 
-  TO_STRING_KV(K_(meta), K_(start_key), K_(end_key), K_(fragments));
+  TO_STRING_KV(K_(meta), K_(fragments));
 private:
-  common::ObArenaAllocator allocator_;
   common::ObTabletID tablet_id_; // invalid in multiple mode
   ObDirectLoadMultipleSSTableMeta meta_;
-  ObDirectLoadMultipleDatumRowkey start_key_;
-  ObDirectLoadMultipleDatumRowkey end_key_;
-  common::ObArray<ObDirectLoadMultipleSSTableFragment> fragments_;
+  common::ObSEArray<ObDirectLoadMultipleSSTableFragment, 1> fragments_;
   bool is_inited_;
 };
 

@@ -1041,6 +1041,35 @@ int64_t ObDbmsStatsUtils::get_truncated_str_len(const ObString &str, const ObCol
   return truncated_str_len;
 }
 
+/*
+ * a wapper for error code
+ * when ret is from the following:
+ * OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH
+ * OB_MAPPING_BETWEEN_TABLET_AND_LS_NOT_EXIST
+ * OB_TABLE_NOT_EXIST
+ * OB_NOT_SUPPORTED
+ * rewrite to user error
+ *
+ */
+int ObDbmsStatsUtils::error_code_wrapper(int ret)
+{
+  int rewrite_ret = ret;
+  switch (ret) {
+    case OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH:
+    case OB_MAPPING_BETWEEN_TABLET_AND_LS_NOT_EXIST:
+    case OB_TABLE_NOT_EXIST:
+    case OB_NOT_SUPPORTED: {
+      rewrite_ret = OB_ERR_DBMS_STATS_PL;
+      LOG_WARN("failed to do stats gathering", K(ret));
+      LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "ddl during stats gathering");
+    }
+    break;
+    default:
+    break;
+  }
+  return rewrite_ret;
+}
+
 int64_t ObDbmsStatsUtils::check_text_can_reuse(const ObObj &obj, bool &can_reuse)
 {
   int ret = OB_SUCCESS;

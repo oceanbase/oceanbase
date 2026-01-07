@@ -451,7 +451,7 @@ void ObDedupQueue::run1()
   ThreadMeta &thread_meta = thread_metas_[thread_pos];
   thread_meta.init();
   COMMON_LOG(INFO, "dedup queue thread start", KP(this));
-  ObDIActionGuard("DedupQueueThreadPool", thread_name_, nullptr);
+  ObDIActionGuard di_action_guard("DedupQueueThreadPool", thread_name_, nullptr);
   if (OB_NOT_NULL(thread_name_)) {
     lib::set_thread_name(thread_name_);
   }

@@ -2378,11 +2378,12 @@ int LogLeadingHint::init_leading_info_from_table(const ObDMLStmt &stmt,
 int LogJoinHint::assign(const LogJoinHint &other)
 {
   int ret = OB_SUCCESS;
+  join_tables_ = other.join_tables_;
   local_methods_ = other.local_methods_;
   dist_methods_ = other.dist_methods_;
+  parallel_ = other.parallel_;
   slave_mapping_ = other.slave_mapping_;
   nl_material_ = other.nl_material_;
-  join_tables_ = other.join_tables_;
   if (OB_FAIL(local_method_hints_.assign(other.local_method_hints_))) {
     LOG_WARN("fail to assign local method hints", K(ret));
   } else if (OB_FAIL(dist_method_hints_.assign(other.dist_method_hints_))) {

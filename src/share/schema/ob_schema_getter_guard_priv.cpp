@@ -1269,11 +1269,20 @@ int ObSchemaGetterGuard::check_sensitive_rule_priv(const ObSessionPrivInfo &sess
                                      | sensitive_rule_priv_set
                                      | total_sensitive_rule_priv_set_role;
       if (!OB_TEST_PRIVS(user_sensitive_rule_priv_set, need_priv.priv_set_)) {
-        ret = OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE;
-        LOG_USER_ERROR(OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE,
-                       need_priv.sensitive_rule_.length(), need_priv.sensitive_rule_.ptr(),
-                       session_priv.user_name_.length(), session_priv.user_name_.ptr(),
-                       session_priv.host_name_.length(), session_priv.host_name_.ptr());
+        ObPrivSet lack_priv_set = need_priv.priv_set_ & (~user_sensitive_rule_priv_set);
+        const ObPrivMgr &priv_mgr = mgr->priv_mgr_;
+        const char *priv_name = priv_mgr.get_first_priv_name(lack_priv_set);
+        if (OB_ISNULL(priv_name)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("Invalid priv type", "priv_set", lack_priv_set);
+        } else {
+          ret = OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE;
+          LOG_USER_ERROR(OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE,
+                         (int)strlen(priv_name), priv_name,
+                         session_priv.user_name_.length(), session_priv.user_name_.ptr(),
+                         session_priv.host_name_.length(), session_priv.host_name_.ptr(),
+                         need_priv.sensitive_rule_.length(), need_priv.sensitive_rule_.ptr());
+        }
       }
     }
   }

@@ -67,6 +67,21 @@ int ObDASBaseAccessP<pcode>::before_process()
                                        das_remote_info_.stmt_type_);
   }
 
+  {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(task.get_task_op()->get_tenant_id()));
+    if (tenant_config.is_valid()) {
+      is_enable_sqlstat_ = tenant_config->_ob_sqlstat_enable && lib::is_diagnose_info_enabled();
+      // sqlstat has a dependency on the statistics mechanism, so turning off perf event will turn off sqlstat at the same time.
+    }
+  }
+
+  if (is_enable_sqlstat_) {
+    sqlstat_record_.record_sqlstat_start_value();
+    sqlstat_key_.set_sql_id(ObString::make_string(das_remote_info_.sql_id_));
+    sqlstat_key_.set_plan_hash(das_remote_info_.plan_hash_);
+    sqlstat_key_.set_source_addr(ObRpcProcessorBase::get_peer());
+  }
+
   if (OB_FAIL(RpcProcessor::before_process())) {
     LOG_WARN("do rpc processor before_process failed", K(ret));
   } else if (das_remote_info_.need_calc_expr_ &&
@@ -254,6 +269,16 @@ int ObDASBaseAccessP<pcode>::after_process(int error_code)
   } else if (elapsed_time >= ObServerConfig::get_instance().trace_log_slow_query_watermark) {
     //slow das task, print trace info
     FORCE_PRINT_TRACE(THE_TRACE, "[slow das rpc process]");
+  } else {
+    if (is_enable_sqlstat_) {
+      sqlstat_record_.record_sqlstat_end_value();
+      int64_t error_sim_code = -EVENT_CALL(EventTable::EN_DAS_RECORD_SQLSTAT);
+      if (error_sim_code > 0) {
+        //do nothing
+      } else {
+        sqlstat_record_.move_to_sqlstat_cache(sqlstat_key_);
+      }
+    }
   }
   //执行相关的错误信息不用传递给RPC框架，RPC框架不处理具体的RPC执行错误信息，始终返回OB_SUCCESS
   return OB_SUCCESS;

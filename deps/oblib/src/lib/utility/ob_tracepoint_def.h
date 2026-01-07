@@ -634,6 +634,8 @@ GLOBAL_ERRSIM_POINT_DEF(2304, EN_FORCE_WINFUNC_STORE_DUMP, "Force to dump row st
 GLOBAL_ERRSIM_POINT_DEF(2305, EN_TRACEPOINT_TEST, "For testing new versions of tracepoint");
 
 GLOBAL_ERRSIM_POINT_DEF(2306, EN_DISABLE_VEC_MERGE_DISTINCT, "Used to control whether to turn off the vectorization 2.0 merge distinct operator. It is turned on by default.");
+GLOBAL_ERRSIM_POINT_DEF(2307, EN_SQLSTAT_MGR_MEM, "For testing evict of sqlstat");
+GLOBAL_ERRSIM_POINT_DEF(2308, EN_DAS_RECORD_SQLSTAT, "For testing das record sqlstat");
 // force dump
 GLOBAL_ERRSIM_POINT_DEF(2400, EN_SQL_FORCE_DUMP, "For testing force dump once");
 GLOBAL_ERRSIM_POINT_DEF(2401, EN_TEST_FOR_HASH_UNION, "Used to control whether to turn off the vectorization 2.0 hash set operator. It is turned on by default.");

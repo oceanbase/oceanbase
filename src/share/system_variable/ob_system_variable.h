@@ -964,6 +964,11 @@ public:
                                                 const ObBasicSysVar &sys_var,
                                                 const common::ObObj &in_val,
                                                 common::ObObj &out_val);
+  static int check_and_convert_caching_sha2_password_digest_rounds(sql::ObExecContext &ctx,
+                                                                   const ObSetVar &set_var,
+                                                                   const ObBasicSysVar &sys_var,
+                                                                   const common::ObObj &in_val,
+                                                                   common::ObObj &out_val);
   static int check_locale_type_is_valid(sql::ObExecContext &ctx,
                                         const ObSetVar &set_var,
                                         const ObBasicSysVar &sys_var,
@@ -989,6 +994,11 @@ public:
                                                      const ObBasicSysVar &sys_var,
                                                      const common::ObObj &in_val,
                                                      common::ObObj &out_val);
+  static int check_and_convert_default_authentication_plugin(sql::ObExecContext &ctx,
+                                                              const ObSetVar &set_var,
+                                                              const ObBasicSysVar &sys_var,
+                                                              const common::ObObj &in_val,
+                                                              common::ObObj &out_val);
 private:
   static int check_session_readonly(sql::ObExecContext &ctx,
                                     const ObSetVar &set_var,

@@ -21,6 +21,7 @@
 #include "ob_storage_ha_src_provider.h"
 #include "ob_cs_replica_migration.h"
 #include "ob_sstable_copy_start_task.h"
+#include "share/ob_tablet_reorganize_history_table_operator.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #endif
 
@@ -54,7 +55,8 @@ ObMigrationCtx::ObMigrationCtx()
     sys_tablet_id_array_(),
     data_tablet_id_array_(),
     ha_table_info_mgr_(),
-    check_tablet_info_cost_time_(0)
+    check_tablet_info_cost_time_(0),
+    non_existent_tablet_id_array_()
 {
   local_clog_checkpoint_scn_.set_min();
 }
@@ -86,6 +88,7 @@ void ObMigrationCtx::reset()
   ObIHADagNetCtx::reset();
   check_tablet_info_cost_time_ = 0;
   tablet_simple_info_map_.reuse();
+  non_existent_tablet_id_array_.reset();
 }
 
 int ObMigrationCtx::fill_comment(char *buf, const int64_t buf_len) const
@@ -132,6 +135,7 @@ void ObMigrationCtx::reuse()
   ObIHADagNetCtx::reuse();
   check_tablet_info_cost_time_ = 0;
   tablet_simple_info_map_.reuse();
+  non_existent_tablet_id_array_.reset();
 }
 
 /******************ObCopyTabletCtx*********************/
@@ -2760,7 +2764,9 @@ int ObTabletMigrationTask::process()
     LOG_WARN("failed to get copy tablet status", K(ret), KPC(copy_tablet_ctx_));
   } else if (ObCopyTabletStatus::TABLET_NOT_EXIST == status) {
     FLOG_INFO("copy tablet is not exist, skip copy it", KPC(copy_tablet_ctx_));
-    if (OB_FAIL(update_ha_expected_status_(status))) {
+    if (OB_FAIL(ctx_->non_existent_tablet_id_array_.push_back(copy_tablet_ctx_->tablet_id_))) {
+      LOG_WARN("failed to push back non existent tablet id", K(ret), KPC(copy_tablet_ctx_));
+    } else if (OB_FAIL(update_ha_expected_status_(status))) {
       LOG_WARN("failed to update ha expected status", K(ret), KPC(copy_tablet_ctx_));
     }
   } else if (OB_FAIL(build_copy_table_key_info_())) {
@@ -3570,7 +3576,17 @@ int ObTabletFinishMigrationTask::update_data_and_expected_status_()
     LOG_WARN("tablet should not be NULL", K(ret), KPC(copy_tablet_ctx_));
   } else if (ObCopyTabletStatus::TABLET_NOT_EXIST == status) {
     const ObTabletExpectedStatus::STATUS expected_status = ObTabletExpectedStatus::DELETED;
-    if (OB_FAIL(ls_->get_tablet_svr()->update_tablet_ha_expected_status(tablet->get_reorganization_scn(),
+    ObMigrationCtx *migration_ctx = nullptr;
+
+    if (ObIHADagNetCtx::LS_MIGRATION != ha_dag_net_ctx_->get_dag_net_ctx_type()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dag net ctx type is unexpected", K(ret), KPC(ha_dag_net_ctx_));
+    } else if (OB_ISNULL(migration_ctx = static_cast<ObMigrationCtx *>(ha_dag_net_ctx_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("migration ctx should not be null", K(ret));
+    } else if (OB_FAIL(migration_ctx->non_existent_tablet_id_array_.push_back(copy_tablet_ctx_->tablet_id_))) {
+      LOG_WARN("failed to push tablet id into array", K(ret), KPC(copy_tablet_ctx_));
+    } else if (OB_FAIL(ls_->get_tablet_svr()->update_tablet_ha_expected_status(tablet->get_reorganization_scn(),
         copy_tablet_ctx_->tablet_id_, expected_status))) {
       if (OB_TABLET_NOT_EXIST == ret) {
         LOG_INFO("migration tablet maybe deleted, skip it", K(ret), KPC(copy_tablet_ctx_));
@@ -3590,7 +3606,7 @@ int ObTabletFinishMigrationTask::update_data_and_expected_status_()
           "sstable_count", copy_table_count_,
           "cost_time_us", ObTimeUtility::current_time() - task_gen_time_,
           "expected_status", expected_status);
-      }
+    }
   } else {
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
@@ -5186,11 +5202,27 @@ int ObMigrationFinishTask::process()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  bool is_ready = true;
   FLOG_INFO("start do migration finish task");
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("migration finish task do not init", K(ret));
+  } else if (ctx_->is_failed()) {
+    // skip check split tablets when migration is already failed
+  } else if (OB_FAIL(check_split_tablets_ready_(is_ready))) {
+    LOG_WARN("failed to check split tablets ready", K(ret));
+  } else if (!is_ready) {
+    int result = OB_NEED_RETRY;
+    LOG_INFO("split tablet is not ready, migration need retry", K(result), KPC(ctx_));
+    if (OB_TMP_FAIL(ctx_->set_result(result, true/*need_retry*/, this->get_dag()->get_type()))) {
+      LOG_WARN("failed to set result", K(tmp_ret), KPC(ctx_));
+    }
+  } else {
+    LOG_INFO("split tablet is ready, migration can continue", KPC(ctx_));
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (ctx_->is_failed()) {
     bool allow_retry = false;
     if (OB_FAIL(ctx_->check_allow_retry(allow_retry))) {
@@ -5200,8 +5232,8 @@ int ObMigrationFinishTask::process()
         LOG_WARN("failed to generate migration init dag", K(ret), KPC(ctx_));
       }
     }
-  } else {
   }
+
   if (OB_SUCCESS != (tmp_ret = record_server_event_())) {
     LOG_WARN("failed to record server event", K(tmp_ret), K(ret));
   }
@@ -5283,6 +5315,84 @@ int ObMigrationFinishTask::record_server_event_()
                      "total_cost_time_us", total_cost_time,
                      "total_tablet_count", total_tablet_count,
                      "avg_cost_time_us", avg_cost_time);
+  }
+  return ret;
+}
+
+int ObMigrationFinishTask::check_split_tablets_ready_(bool &is_ready)
+{
+  int ret = OB_SUCCESS;
+  is_ready = true;
+  ObMigrationDagNet *migration_dag_net = nullptr;
+  common::ObMySQLProxy *sql_proxy = nullptr;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+
+  if (OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx should not be null", K(ret));
+  } else if (ctx_->non_existent_tablet_id_array_.empty()) {
+    // no non-existent tablets, skip check
+  } else if (OB_ISNULL(dag_net_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag net should not be null", K(ret));
+  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net_->get_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net_));
+  } else if (OB_ISNULL(migration_dag_net = static_cast<ObMigrationDagNet *>(dag_net_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("migration dag net should not be null", K(ret), KP(migration_dag_net));
+  } else if (OB_ISNULL(sql_proxy = migration_dag_net->get_sql_proxy())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy should not be null", K(ret));
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
+    LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be null", K(ret));
+  } else {
+    const uint64_t tenant_id = ctx_->tenant_id_;
+    const share::ObLSID &ls_id = ctx_->arg_.ls_id_;
+    ObArray<share::ReorganizeTabletPair> tablet_pairs;
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->non_existent_tablet_id_array_.count(); ++i) {
+      const common::ObTabletID &tablet_id = ctx_->non_existent_tablet_id_array_.at(i);
+      tablet_pairs.reuse();
+
+      if (!is_ready) {
+        break;
+      } else if (OB_FAIL(share::ObTabletReorganizeHistoryTableOperator::get_split_tablet_pairs_by_src(
+              *sql_proxy, tenant_id, ls_id, tablet_id, tablet_pairs))) {
+        LOG_WARN("failed to get split tablet pairs by src", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
+      } else if (tablet_pairs.empty()) {
+        // not a split src tablet, skip
+      } else {
+        // is a split src tablet, check if all dest tablets is allow ready (is complete)
+        for (int64_t j = 0; OB_SUCC(ret) && is_ready && j < tablet_pairs.count(); ++j) {
+          const common::ObTabletID &dest_tablet_id = tablet_pairs.at(j).dest_tablet_id_;
+          ObTabletHandle tablet_handle;
+          ObTablet *tablet = nullptr;
+
+          if (OB_FAIL(ls->ha_get_tablet(dest_tablet_id, tablet_handle))) {
+            if (OB_TABLET_NOT_EXIST == ret) {
+              // dest tablet not exist, data incomplete, need retry
+              is_ready = false;
+              ret = OB_SUCCESS;
+              LOG_WARN("split dest tablet not exist, need retry", K(tablet_id), K(dest_tablet_id));
+            } else {
+              LOG_WARN("failed to get tablet", K(ret), K(dest_tablet_id));
+            }
+          } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("tablet should not be null", K(ret), K(dest_tablet_id));
+          } else if (!tablet->get_tablet_meta().ha_status_.check_allow_read()) {
+            is_ready = false;
+            LOG_WARN("split dest tablet is not allow read, need retry",
+                K(tablet_id), K(dest_tablet_id), "tablet_meta", tablet->get_tablet_meta());
+          }
+        }
+      }
+    }
   }
   return ret;
 }

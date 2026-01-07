@@ -15,6 +15,7 @@
 
 #include "lib/stat/ob_diagnostic_info_summary.h"
 #include "lib/objectpool/ob_server_object_pool.h"
+#include "rpc/obrpc/ob_rpc_packet.h"
 
 namespace oceanbase
 {
@@ -193,7 +194,8 @@ public:
   int return_di_to_cache(ObDiagnosticInfo *di_info);
   bool check_element_all_freed() const;
   void print_all_running_dis();
-
+  void calculate_wait_in_request_queue(ObDiagnosticInfo *di);
+  void copy_wait_request_to_ash_buffer_and_reset(int64_t tenant_id);
 private:
   int aggregate_diagnostic_info_summary(ObDiagnosticInfo *di_info);
   int return_diagnostic_info(ObDiagnosticInfo *di_info);
@@ -214,6 +216,7 @@ private:
   ObBaseDiagnosticInfoSummary summarys_;
   ObRunningDiagnosticInfoContainer runnings_;
   ObDiagnosticInfoCache<ObDiagnosticInfo> cache_;
+  int64_t pcode_in_request_queue_[obrpc::ObRpcPacketSet::THE_PCODE_COUNT + 1];//+1 from mysql request
 };
 
 } /* namespace common */

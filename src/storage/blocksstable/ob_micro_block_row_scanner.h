@@ -176,7 +176,10 @@ public:
       bool &range_finished);
   int compare_rowkey(const ObDatumRowkey &rowkey, const bool is_cmp_end, int32_t &cmp_ret) const;
   OB_INLINE void skip_to_end()
-  { current_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX; }
+  {
+    current_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
+    reserved_pos_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
+  }
   VIRTUAL_TO_STRING_KV(K_(is_left_border), K_(is_right_border), K_(can_ignore_multi_version), K_(use_private_bitmap),
                        K_(can_blockscan), K_(is_filter_applied), K_(current), K_(start), K_(last), K_(reserved_pos), K_(step),
                        K_(macro_id));

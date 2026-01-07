@@ -32,6 +32,7 @@
 #include "storage/direct_load/ob_direct_load_external_multi_partition_table.h"
 #include "storage/direct_load/ob_direct_load_insert_table_row_writer.h"
 #include "storage/direct_load/ob_direct_load_multiple_sstable_builder.h"
+#include "storage/direct_load/ob_direct_load_tmp_file.h"
 #include "share/ob_tablet_autoincrement_service.h"
 #include "share/ob_heap_organized_table_util.h"
 
@@ -343,7 +344,9 @@ int ObTableLoadTransStoreWriter::StoreWriter::new_table_builder(
     param.extra_buf_ = reinterpret_cast<char *>(1); // unuse, delete in future
     param.extra_buf_size_ = param.table_data_desc_.extra_buf_size_;
     ObDirectLoadMultipleSSTableBuilder *sstable_builder = nullptr;
-    if (OB_ISNULL(table_builder = sstable_builder =
+	if (OB_FAIL(param.file_mgr_->alloc_dir(param.dir_id_))) {
+		LOG_WARN("fail to alloc dir", KR(ret));
+	} else if (OB_ISNULL(table_builder = sstable_builder =
                     OB_NEWx(ObDirectLoadMultipleSSTableBuilder, &allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObDirectLoadMultipleSSTableBuilder", KR(ret));

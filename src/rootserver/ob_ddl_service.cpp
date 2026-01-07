@@ -25179,11 +25179,36 @@ int ObDDLService::make_recover_restore_tables_visible(obrpc::ObAlterTableArg &al
           } else if (OB_FAIL(ObPLDDLService::rebuild_triggers_on_hidden_table(alter_table_arg, *orig_table_schema, *hidden_table_schema,
               *src_tenant_schema_guard, *dst_tenant_schema_guard, ddl_operator, trans))) {
             LOG_WARN("rebuild triggers failed", K(ret));
-          } else if (OB_FAIL(ddl_operator.update_table_attribute(tmp_schema, trans, OB_DDL_ALTER_TABLE/*operation_type*/, nullptr/*ddl_stmt_str*/))) {
+          } else if (hidden_table_schema->has_lob_aux_table()) {
+            // update aux lob table with OB_DDL_RECOVER_TABLE_END, so that the cdc can add them into black-list and not sync log.
+            const ObTableSchema *lob_meta_schema = nullptr;
+            const ObTableSchema *lob_piece_schema = nullptr;
+            if (OB_FAIL(dst_tenant_schema_guard->get_table_schema(dst_tenant_id, hidden_table_schema->get_aux_lob_meta_tid(), lob_meta_schema))) {
+              LOG_WARN("get lob meta failed", K(ret), K(dst_tenant_id), "tid", hidden_table_schema->get_aux_lob_meta_tid());
+            } else if (OB_ISNULL(lob_meta_schema)) {
+              ret = OB_TABLE_NOT_EXIST;
+              LOG_WARN("table not exist", K(ret), K(dst_tenant_id), "tid", hidden_table_schema->get_aux_lob_meta_tid());
+            } else if (OB_FAIL(dst_tenant_schema_guard->get_table_schema(dst_tenant_id, hidden_table_schema->get_aux_lob_piece_tid(), lob_piece_schema))) {
+              LOG_WARN("get lob meta failed", K(ret), K(dst_tenant_id), "tid", hidden_table_schema->get_aux_lob_piece_tid());
+            } else if (OB_ISNULL(lob_piece_schema)) {
+              ret = OB_TABLE_NOT_EXIST;
+              LOG_WARN("table not exist", K(ret), K(dst_tenant_id), "tid", hidden_table_schema->get_aux_lob_piece_tid());
+            } else {
+              HEAP_VARS_2 ((ObTableSchema, tmp_lob_meta_schema), (ObTableSchema, tmp_lob_piece_schema)) {
+                if (OB_FAIL(tmp_lob_meta_schema.assign(*lob_meta_schema))) {
+                  LOG_WARN("assign failed", K(ret));
+                } else if (OB_FAIL(tmp_lob_piece_schema.assign(*lob_piece_schema))) {
+                  LOG_WARN("assign failed", K(ret));
+                } else if (OB_FAIL(ddl_operator.update_table_attribute(tmp_lob_meta_schema, trans, OB_DDL_RECOVER_TABLE_END/*operation_type*/, nullptr/*ddl_stmt_str*/))) {
+                  LOG_WARN("failed to update data table schema attribute", K(ret));
+                } else if (OB_FAIL(ddl_operator.update_table_attribute(tmp_lob_piece_schema, trans, OB_DDL_RECOVER_TABLE_END/*operation_type*/, nullptr/*ddl_stmt_str*/))) {
+                  LOG_WARN("failed to update data table schema attribute", K(ret));
+                }
+              }
+            }
+          }
+          if (FAILEDx(ddl_operator.update_table_attribute(tmp_schema, trans, OB_DDL_RECOVER_TABLE_END/*operation_type*/, nullptr/*ddl_stmt_str*/))) {
             LOG_WARN("failed to update data table schema attribute", K(ret));
-          } else {
-            // Notice that, all index have already built and set to normal state flag when rebuild them.
-            // TODO yiren, rebuild trigger and foreign key, and check object duplicated too.
           }
         }
       }
@@ -33014,6 +33039,7 @@ int ObDDLService::set_passwd(const ObSetPasswdArg &arg)
   const uint64_t max_connections_per_hour = arg.max_connections_per_hour_;
   const uint64_t max_user_connections = arg.max_user_connections_;
   const share::schema::ObSSLType ssl_type = arg.ssl_type_;
+  const ObString &plugin = arg.plugin_;
 
   ObSchemaGetterGuard schema_guard;
   if (OB_FAIL(check_inner_stat())) {
@@ -33042,11 +33068,11 @@ int ObDDLService::set_passwd(const ObSetPasswdArg &arg)
         }
       } else {
         if (OB_FAIL(ObDDLSqlGenerator::gen_set_passwd_sql(ObAccountArg(user_name, host_name),
-              passwd, ddl_stmt_str))) {
+              passwd, ddl_stmt_str, plugin))) {
           LOG_WARN("gen_set_passwd_sql failed", K(ret), K(arg));
         } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
         } else if (OB_FAIL(set_passwd_in_trans(tenant_id, user_id, passwd,
-                                        &ddl_sql, schema_guard))) {
+                                        &ddl_sql, schema_guard, plugin))) {
           LOG_WARN("Set passwd failed", K(tenant_id), K(user_id), K(passwd), K(ret));
         }
       }
@@ -33108,7 +33134,8 @@ int ObDDLService::set_passwd_in_trans(
     const uint64_t user_id,
     const common::ObString &new_passwd,
     const ObString *ddl_stmt_str,
-    share::schema::ObSchemaGetterGuard &schema_guard)
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    const common::ObString &plugin)
 {
   int ret = OB_SUCCESS;
   ObDDLSQLTransaction trans(schema_service_);
@@ -33129,7 +33156,8 @@ int ObDDLService::set_passwd_in_trans(
                                           user_id,
                                           new_passwd,
                                           ddl_stmt_str,
-                                          trans))) {
+                                          trans,
+                                          plugin))) {
         LOG_WARN("fail to set password", K(ret), K(tenant_id), K(user_id), K(new_passwd));
       }
       if (trans.is_started()) {
@@ -33724,13 +33752,18 @@ int ObDDLService::grant(const ObGrantArg &arg)
     } else {
       const ObSArray<ObString> &users_passwd = arg.users_passwd_;
       const ObSArray<ObString> &hosts = arg.hosts_;
+      const ObSArray<ObString> &plugins = arg.plugins_;
       if (OB_UNLIKELY(users_passwd.count() % 2 != 0)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("users should have even string", K(users_passwd.count()), K(ret));
+      } else if (OB_UNLIKELY(plugins.count() != users_passwd.count() / 2)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("plugins should have even string", K(plugins.count()), K(users_passwd.count()), K(ret));
       } else {
         ObString user_name;
         ObString host_name;
         ObString pwd;
+        ObString plugin;
         int tmp_ret = OB_SUCCESS;
         for (int64_t i = 0; OB_SUCC(ret) && i < users_passwd.count(); i += 2) {
           bool is_user_exist = false;
@@ -33744,6 +33777,9 @@ int ObDDLService::grant(const ObGrantArg &arg)
           } else if (OB_FAIL(users_passwd.at(i + 1, pwd))) {
             SQL_ENG_LOG(WARN, "Get string from ObSArray error", "count",
                 users_passwd.count(), K(i), K(ret));
+          } else if (OB_FAIL(plugins.at(i / 2, plugin))) {
+            SQL_ENG_LOG(WARN, "Get string from ObSArray error", "count",
+                plugins.count(), K(i), K(ret));
           } else if (OB_FAIL(schema_service_->check_user_exist(arg.tenant_id_, user_name, host_name,
                   user_id, is_user_exist))) {
             LOG_WARN("Failed to check whether user exist", K(arg.tenant_id_), K(user_name), K(host_name), K(ret));
@@ -33751,10 +33787,10 @@ int ObDDLService::grant(const ObGrantArg &arg)
             if (!pwd.empty()) { //change password
               ObSqlString ddl_stmt_str;
               ObString ddl_sql;
-              if (OB_FAIL(ObDDLSqlGenerator::gen_set_passwd_sql(ObAccountArg(user_name, host_name), pwd, ddl_stmt_str))) {
+              if (OB_FAIL(ObDDLSqlGenerator::gen_set_passwd_sql(ObAccountArg(user_name, host_name), pwd, ddl_stmt_str, plugin))) {
                 LOG_WARN("gen set passwd sql failed", K(user_name), K(host_name), K(pwd), K(ret));
               } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
-              } else if (OB_FAIL(set_passwd_in_trans(arg.tenant_id_, user_id, pwd, &ddl_sql, schema_guard))) {
+              } else if (OB_FAIL(set_passwd_in_trans(arg.tenant_id_, user_id, pwd, &ddl_sql, schema_guard, plugin))) {
                 LOG_WARN("Set password error", KR(ret), K(arg), K(user_id), K(pwd), K(ddl_sql));
               }
             }
@@ -33772,6 +33808,8 @@ int ObDDLService::grant(const ObGrantArg &arg)
                   LOG_WARN("set_host error", "tenant_id", arg.tenant_id_, K(user_name), K(host_name), K(ret));
                 } else if (OB_FAIL(user_info.set_passwd(pwd))) {
                   LOG_WARN("set_passwd error", "tenant_id", arg.tenant_id_, K(user_name), K(host_name), K(ret));
+                } else if (OB_FAIL(user_info.set_plugin(plugin))) {
+                  LOG_WARN("set_plugin error", "tenant_id", arg.tenant_id_, K(user_name), K(host_name), K(ret));
                 } else if (OB_FAIL(create_user(user_info,
                                                OB_INVALID_ID,
                                                user_id))) {
@@ -36895,6 +36933,7 @@ int ObDDLService::create_user_in_trans(share::schema::ObUserInfo &user_info,
     } else if (OB_FAIL(ObDDLSqlGenerator::gen_create_user_sql(
         ObAccountArg(user_info.get_user_name_str(), user_info.get_host_name_str(), is_role),
         user_info.get_passwd_str(),
+        user_info.get_plugin_str(),
         ddl_stmt_str))) {
       LOG_WARN("gen create user sql failed", K(ret));
     } else if (OB_FAIL(ObDDLSqlGenerator::append_ssl_info_sql(user_info.get_ssl_type(),

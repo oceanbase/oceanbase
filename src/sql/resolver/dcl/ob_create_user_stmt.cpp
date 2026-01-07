@@ -22,6 +22,7 @@ ObCreateUserStmt::ObCreateUserStmt(ObIAllocator *name_pool)
     : ObDDLStmt(name_pool, stmt::T_CREATE_USER),
       tenant_id_(OB_INVALID_ID),
       users_(),
+      plugins_(),
       masked_sql_(),
       if_not_exist_(false),
       profile_id_(OB_INVALID_ID),
@@ -34,6 +35,7 @@ ObCreateUserStmt::ObCreateUserStmt()
     : ObDDLStmt(NULL, stmt::T_CREATE_USER),
       tenant_id_(OB_INVALID_ID),
       users_(),
+      plugins_(),
       masked_sql_(),
       if_not_exist_(false),
       profile_id_(OB_INVALID_ID),
@@ -49,7 +51,8 @@ ObCreateUserStmt::~ObCreateUserStmt()
 int ObCreateUserStmt::add_user(const common::ObString &user_name,
                                const common::ObString &host_name,
                                const common::ObString &password,
-                               const common::ObString &need_enc)
+                               const common::ObString &need_enc,
+                               const common::ObString &plugin)
 {
   int ret = OB_SUCCESS;
 
@@ -61,6 +64,8 @@ int ObCreateUserStmt::add_user(const common::ObString &user_name,
     LOG_WARN("failed to add password", K(ret));
   } else if (OB_FAIL(users_.add_string(need_enc))) {
     LOG_WARN("failed to add need enc", K(ret));
+  } else if (OB_FAIL(plugins_.add_string(plugin))) {
+    LOG_WARN("failed to add plugin to plugins array", K(ret));
   } else {
     //do nothing
   }

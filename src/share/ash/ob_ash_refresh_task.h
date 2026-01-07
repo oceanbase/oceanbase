@@ -15,6 +15,9 @@
 
 #include "lib/task/ob_timer.h"
 #include "share/wr/ob_wr_snapshot_rpc_processor.h"
+// refersh task update its state and do decision making
+// every ASH_REFRESH_INTERVAL
+constexpr int64_t ASH_REFRESH_INTERVAL = 120 * 1000L * 1000L;  // 120s
 
 namespace oceanbase
 {

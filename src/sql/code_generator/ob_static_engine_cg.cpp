@@ -403,8 +403,6 @@ int ObStaticEngineCG::postorder_generate_op(ObLogicalOperator &op,
     if (OB_FAIL(ObSQLUtils::get_external_table_type(scan_ctdef.external_file_format_str_.str_,
                                                     format_type))) {
       LOG_WARN("fail to get external table format", K(ret));
-    } else if (ObExternalFileFormat::PLUGIN_FORMAT == format_type) {
-      // plugin support both rich and non-rich format
     } else if (ObExternalFileFormat::CSV_FORMAT != format_type && !spec->use_rich_format_) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "Using non-rich vector format in external tables");
@@ -4392,6 +4390,11 @@ int ObStaticEngineCG::generate_spec(ObLogGranuleIterator &op, ObGranuleIteratorS
     }
   }
 
+  if (OB_SUCC(ret)) {
+    spec.enable_adaptive_task_splitting_ = op.enable_adaptive_task_splitting();
+    spec.hash_part_ = op.is_hash_part();
+  }
+
   const bool pwj_gi = ObGranuleUtil::pwj_gi(spec.gi_attri_flag_);
   const bool enable_repart_pruning = ObGranuleUtil::enable_partition_pruning(spec.gi_attri_flag_);
   if (OB_SUCC(ret) && (pwj_gi || enable_repart_pruning)) {
@@ -6038,6 +6041,9 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
         }
       }
     }
+  }
+  if (OB_SUCC(ret)) {
+    spec.is_scan_resumable_ = op.is_scan_resumable();
   }
   return ret;
 }

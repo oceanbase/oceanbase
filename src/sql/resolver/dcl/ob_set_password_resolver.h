@@ -29,6 +29,10 @@ public:
   static bool is_hex_literal(const common::ObString &str);
 
   static bool is_valid_mysql41_passwd(const common::ObString &str);
+
+  static bool is_valid_mysql70_passwd(const common::ObString &str);
+
+  static bool is_valid_encrypted_passwd(const common::ObString &str, const common::ObString &plugin);
 private:
   int resolve_require_node(const ParseNode &require_info, const common::ObString &user_name,
                           const common::ObString &host_name, ObSSLType &ssl_type, ObString *infos);

@@ -259,7 +259,7 @@ void ObDDLTaskExecutor::run1()
         }
         break;
       } else {
-        ObDIActionGuard(ObDIActionGuard::NS_ACTION, "TaskType:%d", task->get_type());
+        ObDIActionGuard di_action_guard(ObDIActionGuard::NS_ACTION, "TaskType:%d", task->get_type());
         task->process();
         ++executed_task_count;
         if (task->need_retry()) {

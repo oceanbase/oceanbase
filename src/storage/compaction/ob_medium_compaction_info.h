@@ -135,9 +135,19 @@ public:
     OB_UNIS_VERSION(1);
   };
 
+  enum IncMajorType : uint8_t {
+    INVALID = 0,
+    ALL_ROW_STORE = 1,
+    ALL_COLUMN_STORE = 2,
+    MIXED = 3,
+  };
+
   ObIncMajorSSTableInfo();
   ~ObIncMajorSSTableInfo();
-  int init(common::ObIAllocator &allocator, const int64_t boundary_snapshot, const common::ObIArray<ObITable *> &tables);
+  int init(
+      common::ObIAllocator &allocator,
+      const int64_t boundary_snapshot,
+      const common::ObIArray<ObITable *> &tables);
   int assign(common::ObIAllocator &allocator, const ObIncMajorSSTableInfo &other);
   void destroy(common::ObIAllocator &allocator);
   int64_t get_size() const { return list_size_; }
@@ -158,7 +168,8 @@ public:
     uint32_t inc_major_info_;
     struct {
       uint32_t version_         : 8;
-      uint32_t reserved_        : 24;
+      uint32_t inc_major_type_  : 8;
+      uint32_t reserved_        : 16;
     };
   };
   int64_t list_size_;

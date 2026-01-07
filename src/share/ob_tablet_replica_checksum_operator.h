@@ -345,7 +345,7 @@ public:
   ObTabletDataChecksumChecker();
   ~ObTabletDataChecksumChecker();
   void reset();
-  int set_data_checksum(const ObTabletReplicaChecksumItem& curr_item);
+  int handle_first_item(const ObTabletReplicaChecksumItem& curr_item);
   int check_data_checksum(const ObTabletReplicaChecksumItem& curr_item);
   TO_STRING_KV(KPC_(normal_ckm_item), K_(cs_replica_ckm_items));
 private:

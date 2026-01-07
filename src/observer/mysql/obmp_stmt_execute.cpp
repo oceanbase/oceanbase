@@ -1373,6 +1373,12 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
       sqlstat_record.set_is_route_miss(result.get_session().partition_hit().get_bool()? 0 : 1);
       sqlstat_record.set_is_plan_cache_hit(ctx_.plan_cache_hit_);
       ObString sql_id = ObString::make_string(ctx_.sql_id_);
+      sqlstat_record.set_is_muti_query(session.get_capability().cap_flags_.OB_CLIENT_MULTI_STATEMENTS);
+      sqlstat_record.set_is_muti_query_batch(ctx_.multi_stmt_item_.is_batched_multi_stmt());
+      if (OB_NOT_NULL(result.get_physical_plan())) {
+        sqlstat_record.set_is_full_table_scan(result.get_physical_plan()->contain_table_scan());
+      }
+      sqlstat_record.set_is_failed(0 != ret && OB_ITER_END != ret);
       sqlstat_record.move_to_sqlstat_cache(result.get_session(),
                                                  ctx_.cur_sql_,
                                                  result.get_physical_plan());
@@ -1415,7 +1421,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
 
       audit_record.is_executor_rpc_ = false;
       audit_record.is_inner_sql_ = false;
-      audit_record.is_hit_plan_cache_ = result.get_is_from_plan_cache();
+      audit_record.is_hit_plan_cache_ = result.get_is_from_plan_cache() && !ctx_.self_add_plan_;
       audit_record.sql_ = const_cast<char *>(ctx_.raw_sql_.ptr());
       audit_record.sql_len_ = min(ctx_.raw_sql_.length(), OB_MAX_SQL_LENGTH);
       audit_record.sql_cs_type_ = session.get_local_collation_connection();

@@ -27,7 +27,7 @@ namespace metric
 #define M_AVG               (1ULL << 1)
 #define E_MIN               (1ULL << 2)
 #define E_MAX               (1ULL << 3)
-#define E_VARIANCE          (1ULL << 4)
+#define E_STDDEV             (1ULL << 4)
 
 enum class Unit
 {
@@ -36,6 +36,7 @@ enum class Unit
   BYTES,
   TIMESTAMP,
   TIME_NS,
+  CPU_CYCLE,
 };
 
 enum class Level
@@ -100,6 +101,10 @@ inline metric::Level get_metric_level(ObMetricId id)
   }
 }
 
+int value_print_help(char *buf, const int64_t buf_len, int64_t &pos,
+                     uint64_t value, metric::Unit unit,
+                     bool as_json_format = true);
+
 template<typename MetricType>
 class ObOpProfile;
 
@@ -154,17 +159,21 @@ public:
   uint64_t get_min_value() const { return min_value_; }
   uint64_t get_max_value() const { return max_value_; }
   uint64_t get_first_value() const { return first_value_; }
-  uint64_t get_variance_value() const { return variance_value_; }
-  TO_STRING_KV(K(id_), K(count_), K(sum_value_), K(min_value_), K(max_value_), K(first_value_), K(variance_value_));
-
+  uint64_t get_deviation_value() const {
+    // Calculate standard deviation: sqrt(variance) = sqrt(M2 / count)
+    double standard_deviation = sqrt(M2_ / static_cast<double>(count_));
+    return static_cast<uint64_t>(standard_deviation);
+  }
+  TO_STRING_KV(K(id_), K(count_), K(sum_value_), K(min_value_), K(max_value_), K(first_value_), K(M2_));
 private:
   ObMetricId id_;
   uint64_t count_{0};
   uint64_t sum_value_{0};
   uint64_t min_value_{0};
+  bool is_min_set_{false};
   uint64_t max_value_{0};
   uint64_t first_value_{0};
-  uint64_t variance_value_{0};
+  double M2_{0.0};  // sum of squared differences from mean (for Welford's algorithm)
   friend ObOpProfile<ObMergeMetric>;
 };
 

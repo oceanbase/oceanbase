@@ -481,7 +481,7 @@ public:
       uint64_t is_fts_ddl_                      : 1; // mark if ddl table is the fts index or fts doc word aux table.
       uint64_t is_fts_index_aux_                : 1; // mark if ddl table is the fts index aux table.
       uint64_t is_multivalue_ddl_               : 1;
-      uint64_t can_be_paused_                   : 1;
+      uint64_t is_scan_resumable_               : 1; // FARM COMPAT WHITELIST, compact with can_be_paused_
       uint64_t need_check_outrow_lob_           : 1;
       uint64_t is_spiv_ddl_                     : 1;
       uint64_t reserved_                        : 47;
@@ -794,6 +794,7 @@ private:
   int fetch_next_fts_index_rows();
   int fill_generated_fts_cols(ObDatumRow *row);
   int get_output_fts_col_expr_by_type(const ObExprOperatorType &type, ObExpr *&expr);
+  bool is_resume_point_saved();
 protected:
   DASOpResultIter scan_result_;
   ObTableScanRtDef tsc_rtdef_;

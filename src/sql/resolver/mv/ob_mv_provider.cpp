@@ -157,7 +157,7 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
                               fast_refreshable_note_,
                               fast_refresh_dependent_columns,
                               table_referenced_columns_info);
-          if (OB_FAIL(ObMVChecker::pre_process_view_stmt(&expr_factory, session_info, checker.get_gen_cols(), *view_stmt))) {
+          if (OB_FAIL(ObMVChecker::pre_process_view_stmt(&expr_factory, session_info, *view_stmt))) {
             LOG_WARN("failed to pre process view stmt", K(ret));
           } else if (OB_FAIL(checker.check_mv_refresh_type())) {
             LOG_WARN("failed to check mv refresh type", K(ret));

@@ -328,8 +328,12 @@ int ObSqlTransControl::end_trans(ObSQLSessionInfo *session,
         || OB_TRANS_ROLLBACKED == ret;
       reset_session_tx_state(session, reuse_tx, reset_trans_variable);
     }
-    if (OB_SUCC(ret) && pl_async_commit_need_wait) {
-      if (OB_NOT_NULL(callback)) {
+    if (pl_async_commit_need_wait) {
+      if (OB_FAIL(ret)) {
+        ObSpinLockGuard lock_guard(session->get_pl_end_trans_cb().get_lock());
+        session->get_pl_end_trans_cb().reset();
+        LOG_WARN("fail to submit pl async commit task", K(ret));
+      } else if (OB_NOT_NULL(callback)) {
         ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
         session->get_tx_desc() = NULL;
         reset_session_tx_state(session, false, reset_trans_variable);

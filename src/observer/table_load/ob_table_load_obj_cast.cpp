@@ -155,13 +155,15 @@ int ObTableLoadObjCaster::cast_obj(ObTableLoadCastObjCtx &cast_obj_ctx,
       LOG_WARN("fail to get subschema for collection", KR(ret), K(src), K(dst));
     }
     if (OB_FAIL(ret)) {
-    } else if (column_schema->is_enum_or_set()) {
-      if (OB_FAIL(handle_string_to_enum_set(cast_obj_ctx, column_schema, src, dst))) {
-        LOG_WARN("fail to convert string to enum or set", KR(ret), K(src), K(dst));
-      }
     } else {
-      if (OB_FAIL(to_type(expect_type, column_schema, cast_obj_ctx, accuracy, *convert_src_obj, dst))) {
-        LOG_WARN("fail to do to type", KR(ret));
+      if (column_schema->is_enum_or_set() && src.is_string_type()) { // load data from csv is string type, load data from backup need skip
+        if (OB_FAIL(handle_string_to_enum_set(cast_obj_ctx, column_schema, src, dst))) {
+          LOG_WARN("fail to convert string to enum or set", KR(ret), K(src), K(dst));
+        }
+      } else {
+        if (OB_FAIL(to_type(expect_type, column_schema, cast_obj_ctx, accuracy, *convert_src_obj, dst))) {
+          LOG_WARN("fail to do to type", KR(ret));
+        }
       }
     }
 

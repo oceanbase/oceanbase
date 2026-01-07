@@ -465,6 +465,13 @@ int ObMultipleMerge::get_next_row(ObDatumRow *&row)
         if (OB_SUCC(ret)) {
           is_unprojected_row_valid_ = true;
           scan_state_ = ScanState::SINGLE_ROW;
+          bool do_pause = false;
+          // `unprojected_row_` is used to generate range in pause
+          if (OB_FAIL(pause(do_pause))) {
+            LOG_WARN("failed to pause!");
+          } else if (do_pause) {
+            ret = OB_ITER_END;
+          }
         }
       }
       if (OB_SUCC(ret)) {
@@ -584,6 +591,7 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
     } else {
       reuse_lob_locator();
     }
+    bool do_pause = false;
     while (OB_SUCC(ret) && !vector_store->is_end()) {
       /* causes of vector_store->is_end()
        * 1. batch full;
@@ -604,6 +612,10 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
               scan_state_ = ScanState::SINGLE_ROW;
               break;
             } else if (FALSE_IT(need_init_exprs_uniform_header = true)) {
+            } else if (OB_FAIL(pause(do_pause))) {
+              LOG_WARN("Failed to pause");
+            } else if (OB_UNLIKELY(do_pause)) {
+              ret = OB_ITER_END;
             } else if (OB_FAIL(inner_get_next_rows())) {
               if (OB_UNLIKELY(OB_PUSHDOWN_STATUS_CHANGED != ret && OB_ITER_END != ret)) {
                 LOG_WARN("fail to get next rows fast", K(ret), K(is_unprojected_row_valid_), KPC(vector_store), KPC(di_base_sstable_row_scanner_));
@@ -649,6 +661,11 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
                   break;
                 }
               }
+            // `unprojected_row_` is used to generate range in pause
+            } else if (OB_FAIL(pause(do_pause))) {
+              LOG_WARN("Failed to pause");
+            } else if (OB_UNLIKELY(do_pause)) {
+              ret = OB_ITER_END;
             } else {
               is_unprojected_row_valid_ = true;
               if (unprojected_row_.is_di_delete()) {
@@ -1802,7 +1819,11 @@ int ObMultipleMerge::refresh_table_on_demand()
       } else {
         STORAGE_LOG(WARN, "fail to save current rowkey", K(ret));
       }
-    } else if (FALSE_IT(reset_iter_array(access_param_->is_use_global_iter_pool()))) {
+    } else if (FALSE_IT(access_param_->iter_param_.set_use_stmt_iter_pool())) {
+    } else if (OB_FAIL(access_ctx_->alloc_iter_pool(access_param_->iter_param_.is_use_column_store()))) {
+      LOG_WARN("Failed to init iter pool", K(ret));
+    } else if (FALSE_IT(stmt_iter_pool_ = access_ctx_->get_stmt_iter_pool())) {
+    } else if (FALSE_IT(reuse_iter_array())) {
     } else if (FALSE_IT(access_ctx_->reuse_skip_scan_factory())) {
     } else if (OB_FAIL(refresh_tablet_iter())) {
       STORAGE_LOG(WARN, "fail to refresh tablet iter", K(ret));
@@ -2083,11 +2104,31 @@ OB_INLINE void ObMultipleMerge::set_base_version() const
 {
   // When the major table is currently being processed, the snapshot version is taken and placed
   // in the current context for base version to filter unnecessary rows in the mini or minor sstable
-  if (!access_ctx_->is_mview_query() &&
-      (is_scan() || access_ctx_->is_inc_major_query_)) {
+  if (!access_ctx_->is_mview_query()) {
     access_ctx_->trans_version_range_.base_version_ = major_table_version_;
     LOG_DEBUG("set base version", K_(access_ctx_->trans_version_range));
   }
+}
+
+int ObMultipleMerge::is_paused(bool& do_pause) const
+{
+  INIT_SUCC(ret);
+  do_pause = false;
+  ScanResumePoint *scan_resume_point = access_ctx_->scan_resume_point_;
+  if (scan_resume_point == nullptr || !scan_resume_point->is_paused()) {
+  } else if (OB_UNLIKELY(!scan_resume_point->empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ranges is not empty", K(scan_resume_point->get_ranges()));
+  } else if (OB_UNLIKELY(!is_scan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get cannot be paused");
+  } else if (ScanState::NONE == scan_state_) {
+  } else if (ScanState::DI_BASE == scan_state_) {
+    // not supported
+  } else {
+    do_pause = true;
+  }
+  return ret;
 }
 
 int ObMultipleMerge::check_final_result(const ObNopPos &nop_pos, bool &final_result)
@@ -2133,6 +2174,14 @@ int ObMultipleMerge::check_table_need_read(const ObITable *table, bool &need_tab
     } else if (OB_FAIL(compaction::ObIncMajorTxHelper::check_can_access(*access_ctx_, *sstable, need_table))) {
       LOG_WARN("fail to check can access", KR(ret));
     }
+  }
+  // check minor sstable need read
+  if (OB_SUCC(ret) &&
+      !access_ctx_->is_mview_query() &&
+      table->is_minor_sstable() &&
+      table->get_upper_trans_version() <= major_table_version_) {
+    need_table = false;
+    STORAGE_LOG(DEBUG, "skip minor with upper trans version less than base version", KPC(table), K(major_table_version_));
   }
   return ret;
 }

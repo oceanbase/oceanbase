@@ -750,8 +750,6 @@ int ObPxDistTransmitOp::add_row_for_piece_msg(ObChunkDatumStore &sample_store)
       OZ(last_row_.shadow_copy(MY_SPEC.sampling_saving_row_, eval_ctx_));
     }
 
-    OZ(setup_sampled_rows_output());
-
     if (OB_SUCC(ret)) {
       const int64_t input_rows = sampled_input_rows_.get_row_cnt();
       int64_t sample_rows = input_rows / DYNAMIC_SAMPLE_INTERVAL;
@@ -767,6 +765,7 @@ int ObPxDistTransmitOp::add_row_for_piece_msg(ObChunkDatumStore &sample_store)
         OZ(sample_store.add_row(MY_SPEC.dist_exprs_, &eval_ctx_));
       }
     }
+    OZ(setup_sampled_rows_output());
   }
   return ret;
 }
@@ -843,7 +842,6 @@ int ObPxDistTransmitOp::add_batch_row_for_piece_msg(ObChunkDatumStore &sample_st
     } else {
       brs_.end_ = false;
     }
-    OZ(setup_sampled_rows_output());
 
     if (OB_SUCC(ret)) {
       const int64_t input_rows = sampled_input_rows_.get_row_cnt();
@@ -864,6 +862,7 @@ int ObPxDistTransmitOp::add_batch_row_for_piece_msg(ObChunkDatumStore &sample_st
       }
       clear_evaluated_flag();
     }
+    OZ(setup_sampled_rows_output());
   }
   return ret;
 }
@@ -945,7 +944,6 @@ int ObPxDistTransmitOp::add_batch_row_for_piece_msg_vec(ObChunkDatumStore &sampl
     } else {
       brs_.end_ = false;
     }
-    OZ(setup_sampled_rows_output());
 
     if (OB_SUCC(ret)) {
       const int64_t input_rows = sampled_input_rows_.get_row_cnt();
@@ -966,6 +964,7 @@ int ObPxDistTransmitOp::add_batch_row_for_piece_msg_vec(ObChunkDatumStore &sampl
       }
       clear_evaluated_flag();
     }
+    OZ(setup_sampled_rows_output());
   }
   return ret;
 }

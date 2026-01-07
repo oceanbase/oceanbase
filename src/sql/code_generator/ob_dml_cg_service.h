@@ -330,7 +330,8 @@ private:
                            const ObTableSchema &table_schema,
                            const ObTriggerInfo &trigger_info,
                            ObTriggerArg &trigger_arg,
-                           int64_t col_cnt);
+                           int64_t col_cnt,
+                           bool is_prune_columns);
   int generate_trigger_arg(ObTrigDMLCtDef &trig_ctdef,
                            ObIArray<const ObTriggerInfo *> &trigger_infos,
                            ObSQLSessionInfo &session_info,

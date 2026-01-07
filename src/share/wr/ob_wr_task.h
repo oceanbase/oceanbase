@@ -24,7 +24,9 @@ namespace share
 #define LAST_SNAPSHOT_RECORD_SNAP_ID -1L
 #define LAST_SNAPSHOT_RECORD_CLUSTER_ID -1L
 #define LAST_SNAPSHOT_RECORD_SVR_PORT -1L
-
+constexpr int64_t SQL_STAT_SNAPSHOT_AHEAD_SNAP_ID = -2;
+constexpr int64_t INVALID_LAST_SNAPSHOT_BEGIN_TIME = -1;
+constexpr int64_t INVALID_LAST_SNAPSHOT_END_TIME = -1;
 enum class ObWrSnapshotStatus : int64_t
 {
   SUCCESS = 0,
@@ -159,7 +161,7 @@ public:
                                const char* time_col_name,
                                const int64_t tenant_id);
   static int fetch_retention_usec_from_wr_control(int64_t &retention);
-  static int fetch_interval_num_from_wr_control(int64_t &interval);
+  static int fetch_interval_num_from_wr_control(int64_t &interval, const char *col_name="snapint_num");
   static int update_snap_info_in_wr_control(const int64_t tenant_id, const int64_t snap_id,
                                       const int64_t end_interval_time);
   static int get_init_wr_control_sql_string(const int64_t tenant_id,

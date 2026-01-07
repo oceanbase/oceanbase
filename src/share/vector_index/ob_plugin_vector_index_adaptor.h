@@ -814,6 +814,9 @@ public:
   int get_snapshot_key_scn(SCN &snapshot_key_scn);
   int copy_meta_info(ObPluginVectorIndexAdaptor &other);
 
+  int set_replace_scn(const SCN &replace_scn);
+  SCN get_replace_scn();
+
   void set_reload_finish(const bool value) { reload_finish_ = value; };
   bool get_reload_finish() { return reload_finish_; };
   int get_inc_index_row_cnt(int64_t &count);
@@ -872,7 +875,7 @@ public:
               K_(inc_table_id),  K_(vbitmap_table_id), K_(snapshot_table_id), K_(embedded_table_id),
               K_(ref_cnt), K_(idle_cnt), KP_(allocator),
               K_(index_identity), K_(follower_sync_statistics),
-              K_(mem_check_cnt), K_(is_mem_limited), K_(is_need_vid), K_(snapshot_key_prefix));
+              K_(mem_check_cnt), K_(is_mem_limited), K_(is_need_vid), K_(snapshot_key_prefix), K_(replace_scn));
 
 private:
   void *get_incr_index();
@@ -962,6 +965,7 @@ private:
   bool need_be_optimized_;
   int64_t extra_info_column_count_;
   ObString snapshot_key_prefix_; // name rule: TabletID_SCN
+
   common::ObSpinLock opt_task_lock_;
   common::ObSpinLock reload_lock_;  // lock for reload from table
   RWLock query_lock_;// lock for async task and query
@@ -972,6 +976,11 @@ private:
   bool is_need_vid_;
   ObCollectionMapType *sparse_vector_type_;
 
+  /*
+   * record scn for replace_old_adapter to deal with task conflict between memdata sync and async task.
+   * we can't get scn from snapshot_key_prefix_ because it is invaild in some cases like BQ
+   */
+  SCN replace_scn_;
   constexpr static uint32_t VEC_INDEX_INCR_DATA_SYNC_THRESHOLD = 100;
   constexpr static uint32_t VEC_INDEX_VBITMAP_SYNC_THRESHOLD = 100;
   constexpr static uint32_t VEC_INDEX_SNAP_DATA_SYNC_THRESHOLD = 1;

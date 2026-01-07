@@ -122,6 +122,48 @@ private:
   common::ObSEArray <Item, 4> outputs_;
 };
 
+class ScanResumePoint
+{
+public:
+  int init(bool *is_paused, int64_t tenant_id);
+
+  void destroy()
+  {
+    reset_ranges();
+    allocator_.reset();
+  }
+
+  inline bool is_paused() const
+  {
+    return OB_NOT_NULL(is_paused_) && ATOMIC_LOAD(is_paused_);
+  }
+
+  void set_paused()
+  {
+    if (OB_NOT_NULL(is_paused_)) {
+      ATOMIC_STORE(is_paused_, true);
+    }
+  }
+
+  void clear_paused() {
+    if (OB_NOT_NULL(is_paused_)) {
+      ATOMIC_STORE(is_paused_, false);
+    }
+  }
+
+  bool empty() const { return ranges_.empty(); }
+  int add_range(const ObITableReadInfo& read_info, const blocksstable::ObDatumRange& datum_range);
+  void reset_ranges() { ranges_.reset(); }
+  ObSEArray<ObNewRange, 1>& get_ranges() { return ranges_; }
+
+private:
+  // is_paused_ reference to ObGITaskReBalancer.worker_paused_flags_[worker_id]
+  bool *is_paused_{nullptr};
+  // range return by storage layer
+  ObSEArray<ObNewRange, 1> ranges_;
+  ObArenaAllocator allocator_;
+};
+
 class ObTableScanParam : public common::ObVTableScanParam
 {
 public:
@@ -144,6 +186,7 @@ public:
         in_bf_cache_threshold_(common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM),
         in_fuse_row_cache_threshold_(common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM),
         in_row_cache_threshold_(common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM),
+        scan_resume_point_(nullptr),
         mds_collector_(nullptr),
         row_scan_cnt_(NULL),
         enable_new_false_range_(false)
@@ -189,6 +232,7 @@ public:
   int64_t in_bf_cache_threshold_;
   int64_t in_fuse_row_cache_threshold_;
   int64_t in_row_cache_threshold_;
+  ScanResumePoint *scan_resume_point_; // for scan pause
   ObMdsReadInfoCollector *mds_collector_; // used for collect mds info when query mds sstable
   uint64_t *row_scan_cnt_;
   bool enable_new_false_range_;

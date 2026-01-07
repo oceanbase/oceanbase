@@ -738,7 +738,7 @@ int ObInnerSQLConnection::process_audit_record(sql::ObResultSet &result_set,
 
     audit_record.is_executor_rpc_ = false;
     audit_record.is_inner_sql_ = !is_from_pl;
-    audit_record.is_hit_plan_cache_ = result_set.get_is_from_plan_cache();
+    audit_record.is_hit_plan_cache_ = result_set.get_is_from_plan_cache() && !sql_ctx.self_add_plan_;
     audit_record.is_multi_stmt_ = false; //是否是multi sql
     audit_record.is_perf_event_closed_ = !lib::is_diagnose_info_enabled();
 
@@ -1036,6 +1036,12 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
             sqlstat_record.set_partition_cnt(res.result_set().get_exec_context().get_das_ctx().get_related_tablet_cnt());
             sqlstat_record.set_is_route_miss(get_session().partition_hit().get_bool()? 0 : 1);
             sqlstat_record.set_is_plan_cache_hit(res.sql_ctx().plan_cache_hit_);
+            sqlstat_record.set_is_muti_query(get_session().get_capability().cap_flags_.OB_CLIENT_MULTI_STATEMENTS);
+            sqlstat_record.set_is_muti_query_batch(res.sql_ctx().multi_stmt_item_.is_batched_multi_stmt());
+            if (OB_NOT_NULL(res.result_set().get_physical_plan())) {
+              sqlstat_record.set_is_full_table_scan(res.result_set().get_physical_plan()->contain_table_scan());
+            }
+            sqlstat_record.set_is_failed(0 != ret && OB_ITER_END != ret);
             sqlstat_record.move_to_sqlstat_cache(get_session(),
                                                 res.sql_ctx().cur_sql_,
                                                 res.result_set().get_physical_plan());

@@ -320,6 +320,8 @@ void TestScanBasic::prepare_create_basic_sst_param(
       table_schema_.get_column_count() +
       ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   ASSERT_EQ(OB_SUCCESS, root_index_builder_->close(res));
+  const int64_t upper_trans_version = res.contain_uncommitted_row_ ?
+      INT64_MAX : res.max_merged_trans_version_;
   param.set_init_value_for_column_store_();
   ASSERT_EQ(OB_SUCCESS, param.data_block_ids_.assign(res.data_block_ids_));
   ASSERT_EQ(OB_SUCCESS, param.other_block_ids_.assign(res.other_block_ids_));
@@ -365,6 +367,9 @@ void TestScanBasic::prepare_create_basic_sst_param(
   param.recycle_version_ = 0;
   param.root_macro_seq_ = 0;
   param.rec_scn_.set_min();
+  param.max_merged_trans_version_ = res.max_merged_trans_version_;
+  param.contain_uncommitted_row_ = res.contain_uncommitted_row_;
+  param.upper_trans_version_ = upper_trans_version;
 }
 
 void TestScanBasic::prepare_create_row_sst_param(

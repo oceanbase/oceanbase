@@ -1478,6 +1478,7 @@ struct MergeKeyInfoHelper
         force_inner_nl_(false),
         is_semi_anti_join_(false),
         is_index_merge_(false),
+        need_domain_id_scan_(false),
         child_stmt_(NULL),
         pushdown_filters_(),
         filters_(),
@@ -1493,6 +1494,7 @@ struct MergeKeyInfoHelper
       bool force_inner_nl_;
       bool is_semi_anti_join_;
       bool is_index_merge_;
+      bool need_domain_id_scan_;
       ObSelectStmt *child_stmt_;
       // when generate inner access path, save all pushdown filters
       // when generate subquery path, save all pushdown filters after rename
@@ -1851,6 +1853,9 @@ struct MergeKeyInfoHelper
                                                   const uint64_t ref_table_id,
                                                   IndexMergePath* index_merge_path,
                                                   ObIndexMergeNode* root_node);
+    int check_need_domain_id_scan(const uint64_t table_id,
+                                  const uint64_t ref_table_id,
+                                  bool &need_domain_id_scan);
     int create_access_paths(const uint64_t table_id,
                             const uint64_t ref_table_id,
                             PathHelper &helper,

@@ -4429,9 +4429,7 @@ int ObSql::pc_get_plan(ObPlanCacheCtx &pc_ctx,
       need_disconnect = false;
       //FIXME qianfu NG_TRACE_EXT(set_need_disconnect, OB_ID(need_disconnect), false);
       pc_ctx.sql_ctx_.plan_cache_hit_ = true;
-      //极限性能场景下(perf_event=true)，不再校验权限信息
-      if (OB_SUCC(ret) && !pc_ctx.sql_ctx_.is_remote_sql_ && GCONF.enable_perf_event) {
-        //如果是remote sql第二次重入plan cache，不需要再做权限检查，因为在第一次进入plan cache已经检查过了
+      if (OB_SUCC(ret) && !pc_ctx.sql_ctx_.is_remote_sql_) {
         if (OB_FAIL(ObPrivilegeCheck::check_read_only(pc_ctx.sql_ctx_, plan->get_stmt_type(), false,
                                                       plan->get_stmt_need_privs()))) {
           LOG_WARN("database or table is read only, cannot execute this stmt");

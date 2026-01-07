@@ -244,6 +244,10 @@ public:
       ret_code : context_.data_ret_;
   }
   int calc_total_row_count();
+  virtual void report_build_stat(
+    const char *event_name,
+    const int result,
+    const char *event_info = nullptr) const override;
 private:
   bool is_inited_;
   ObLobSplitParam param_;

@@ -83,17 +83,23 @@ int ObDirectLoadMultipleSSTableDataBlockScanner::locate_left_border(
 {
   int ret = OB_SUCCESS;
   int cmp_ret = 0;
+  ObDirectLoadMultipleDatumRowkey start_key;
+  ObDirectLoadMultipleDatumRowkey end_key;
+  ObArenaAllocator allocator("TLD_getkey");
   if (range_->start_key_.is_min_rowkey()) {
     left_index_entry_iter_ = sstable_->index_entry_begin();
     left_data_block_offset_ = 0;
-  } else if (OB_FAIL(
-               range_->start_key_.compare(sstable_->get_start_key(), *datum_utils_, cmp_ret))) {
+  } else if (OB_FAIL(sstable_->get_start_key(start_key, allocator))) {
+    LOG_WARN("fail to get start rowkey", KR(ret));
+  } else if (OB_FAIL(range_->start_key_.compare(start_key, *datum_utils_, cmp_ret))) {
     LOG_WARN("fail to compare rowkey", KR(ret));
   } else if (cmp_ret < 0 ||
              (cmp_ret == 0 && range_->is_left_closed())) { // range.start_key_ < sstable
     left_index_entry_iter_ = sstable_->index_entry_begin();
     left_data_block_offset_ = 0;
-  } else if (OB_FAIL(range_->start_key_.compare(sstable_->get_end_key(), *datum_utils_, cmp_ret))) {
+  } else if (OB_FAIL(sstable_->get_end_key(end_key, allocator))) {
+    LOG_WARN("fail to get end rowkey", KR(ret));
+  } else if (OB_FAIL(range_->start_key_.compare(end_key, *datum_utils_, cmp_ret))) {
     LOG_WARN("fail to compare rowkey", KR(ret));
   } else if (cmp_ret > 0 ||
              (cmp_ret == 0 && range_->is_left_open())) { // range.start_key_ > sstable
@@ -144,15 +150,22 @@ int ObDirectLoadMultipleSSTableDataBlockScanner::locate_right_border(
 {
   int ret = OB_SUCCESS;
   int cmp_ret = 0;
+  ObDirectLoadMultipleDatumRowkey start_key;
+  ObDirectLoadMultipleDatumRowkey end_key;
+  ObArenaAllocator allocator("TLD_getkey");
   if (range_->end_key_.is_max_rowkey()) {
     right_index_entry_iter_ = sstable_->index_entry_end();
     right_data_block_offset_ = 0;
-  } else if (OB_FAIL(range_->end_key_.compare(sstable_->get_start_key(), *datum_utils_, cmp_ret))) {
+  } else if (OB_FAIL(sstable_->get_start_key(start_key, allocator))) {
+    LOG_WARN("fail to get start rowkey", KR(ret));
+  } else if (OB_FAIL(range_->end_key_.compare(start_key, *datum_utils_, cmp_ret))) {
     LOG_WARN("fail to compare rowkey", KR(ret));
   } else if (cmp_ret < 0 || (cmp_ret == 0 && range_->is_right_open())) { // range.end_key_ < sstable
     right_index_entry_iter_ = sstable_->index_entry_begin();
     right_data_block_offset_ = 0;
-  } else if (OB_FAIL(range_->end_key_.compare(sstable_->get_end_key(), *datum_utils_, cmp_ret))) {
+  } else if (OB_FAIL(sstable_->get_end_key(end_key, allocator))) {
+    LOG_WARN("fail to get end rowkey", KR(ret));
+  } else if (OB_FAIL(range_->end_key_.compare(end_key, *datum_utils_, cmp_ret))) {
     LOG_WARN("fail to compare rowkey", KR(ret));
   } else if (cmp_ret > 0 ||
              (cmp_ret == 0 && range_->is_right_closed())) { // range.end_key_ > sstable

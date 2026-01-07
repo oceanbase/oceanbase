@@ -17,6 +17,7 @@
 #include "share/external_table/ob_external_table_utils.h"
 #include "share/external_table/ob_external_table_file_mgr.h"
 #include "sql/das/ob_das_simple_op.h"
+#include "src/sql/engine/px/ob_granule_iterator_op.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -49,7 +50,62 @@ int ObParallelBlockRangeTaskParams::valid() const
   return ret;
 }
 
-bool ObGranuleUtil::is_partition_granule(int64_t partition_count,
+int ObGranuleUtil::use_partition_granule(ObGranulePumpArgs &args, bool &partition_granule)
+{
+  int ret = OB_SUCCESS;
+  partition_granule = false;
+  const ObGranuleIteratorSpec *gi_op = args.op_info_.gi_op_;
+  const ObIArray<const ObTableScanSpec *> &scan_ops = args.op_info_.get_scan_ops();
+  int64_t partition_count = args.tablet_arrays_.at(0).count();
+  const ObExecContext *exec_ctx = args.ctx_;
+  ObSQLSessionInfo *session_info = nullptr;
+  int64_t partition_scan_hold = 0;
+  int64_t hash_partition_scan_hold = 0;
+  bool hash_part = false;
+  if (OB_UNLIKELY(scan_ops.count() != 1 || args.tablet_arrays_.count() != 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected count", K(scan_ops.count()), K(args.tablet_arrays_.count()));
+  } else if (OB_ISNULL(session_info = exec_ctx->get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Get unexpected null");
+  } else if (gi_op->get_phy_plan()->get_min_cluster_version() > CLUSTER_VERSION_4_4_1_0) {
+    hash_part = gi_op->hash_part_;
+  } else {
+    // for compaction, plan generated in lower version has not set hash_part_ flag
+    uint64_t ref_table_id = scan_ops.at(0)->get_ref_table_id();
+    int64_t tenant_id = exec_ctx->get_my_session()->get_effective_tenant_id();
+    const ObTableSchema *table_schema = nullptr;
+    ObSchemaGetterGuard schema_guard;
+    if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+      LOG_WARN("Failed to get schema guard", K(ret));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, ref_table_id, table_schema))) {
+      LOG_WARN("Failed to get table schema", K(ret), K(ref_table_id));
+    } else if (OB_ISNULL(table_schema)) {
+      // may be fake table, skip
+    } else {
+      hash_part = table_schema->is_hash_part() || table_schema->is_hash_subpart()
+                  || table_schema->is_key_part() || table_schema->is_key_subpart();
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(session_info->get_sys_variable(share::SYS_VAR__PX_PARTITION_SCAN_THRESHOLD,
+                                                    partition_scan_hold))) {
+    LOG_WARN("failed to get sys variable px partition scan threshold", K(ret));
+  } else if (OB_FAIL(session_info->get_sys_variable(share::SYS_VAR__PX_MIN_GRANULES_PER_SLAVE,
+                                                    hash_partition_scan_hold))) {
+    LOG_WARN("failed to get sys variable px min granule per slave", K(ret));
+  } else if (scan_ops.at(0)->is_external_table_) {
+    partition_granule = false;
+  } else {
+    partition_granule = ObGranuleUtil::use_partition_granule(args.tablet_arrays_.at(0).count(),
+                                                             args.parallelism_, partition_scan_hold,
+                                                             hash_partition_scan_hold, hash_part);
+  }
+  return ret;
+}
+
+bool ObGranuleUtil::use_partition_granule(int64_t partition_count,
                                          int64_t parallelism,
                                          int64_t partition_scan_hold,
                                          int64_t hash_partition_scan_hold,
@@ -474,7 +530,7 @@ int ObGranuleUtil::split_block_ranges(ObExecContext &exec_ctx,
         pk_idx++;
       }
     }
-    LOG_TRACE("gi partition granule");
+    LOG_TRACE("gi partition granule", K(range_independent));
   } else if (OB_FAIL(split_block_granule(exec_ctx,
                                          allocator,
                                          tsc,
@@ -569,6 +625,8 @@ int ObGranuleUtil::split_block_granule(ObExecContext &exec_ctx,
       } else {
         // B to KB
         partition_size = partition_size / 1024;
+        LOG_TRACE("print partition_size", K(partition_size), "tsc_op_id",
+                  tsc == nullptr ? 0 : tsc->get_id());
       }
 
       if (OB_SUCC(ret)) {

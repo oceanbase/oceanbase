@@ -2012,6 +2012,11 @@ int ObSchemaRetrieveUtils::fill_user_schema(
       EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, flags, user_info, int64_t,
                                               true/* skip null error*/, ignore_column_error, default_flags);
     }
+    if (OB_SUCC(ret)) {
+      ObString default_plugin;
+      EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE( result, plugin, user_info,
+                                              false, ignore_column_error, default_plugin);
+    }
   }
   return ret;
 }

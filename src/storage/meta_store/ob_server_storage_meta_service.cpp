@@ -162,7 +162,7 @@ int ObServerStorageMetaService::prepare_create_tenant(const omt::ObTenantMeta &m
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
 #ifdef OB_BUILD_SHARED_STORAGE
-  } else if (is_shared_storage_ && OB_STORAGE_OBJECT_MGR.alloc_tenant_epoch(meta.unit_.tenant_id_, epoch))  {
+  } else if (is_shared_storage_ && OB_FAIL(OB_STORAGE_OBJECT_MGR.alloc_tenant_epoch(meta.unit_.tenant_id_, epoch)))  {
     LOG_WARN("fail to allocate tenant epoch", K(ret), K(meta.unit_.tenant_id_));
 #endif
   } else {

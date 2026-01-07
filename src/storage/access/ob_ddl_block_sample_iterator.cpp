@@ -193,7 +193,7 @@ int ObDDLBlockSampleIterator::reservoir_block_sample()
     } else if (OB_UNLIKELY(nullptr == (range = OB_NEWx(ObDatumRange, &range_allocator_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "fail to allocate memory for datum range", K(ret));
-    } else if (OB_FAIL(next_range->deep_copy(*range, range_allocator_))) {
+    } else if (OB_FAIL(range->partial_copy(/* src */ *next_range, range_allocator_))) {
       STORAGE_LOG(WARN, "fail to deep copy datum range", K(ret));
     } else if (reservoir_.count() < ObBlockSampleRangeIterator::EXPECTED_OPEN_RANGE_NUM) {
       if (OB_FAIL(reservoir_.push_back(range))) {

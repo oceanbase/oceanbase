@@ -232,7 +232,8 @@ private:
   virtual int merge_same_rowkey_iters(MERGE_ITER_ARRAY &merge_iters, bool is_incremental_row = true) override;
   int merge_micro_block_iter(ObPartitionMergeIter &iter, int64_t &reuse_row_cnt);
   int reuse_base_sstable(ObPartitionMergeHelper &merge_helper);
-  int reuse_base_small_sstable(ObPartitionMergeIter *base_iter);
+  int reuse_base_small_sstable(ObPartitionMergeIter *base_iter, const MERGE_ITER_ARRAY &merge_iters);
+  int inner_reuse_micro_or_row(ObPartitionMergeIter &base_iter, const MERGE_ITER_ARRAY &merge_iters);
 };
 
 class ObPartitionMinorMerger : public ObPartitionMerger

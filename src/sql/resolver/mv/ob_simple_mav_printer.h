@@ -38,21 +38,6 @@ protected:
   virtual int gen_refresh_dmls(ObIArray<ObDMLStmt*> &dml_stmts) override;
   virtual int gen_real_time_view(ObSelectStmt *&sel_stmt) override;
   virtual int gen_inner_delta_mav_for_mav(ObIArray<ObSelectStmt*> &inner_delta_mavs);
-  int gen_update_insert_delete_for_simple_mav(ObIArray<ObDMLStmt*> &dml_stmts);
-  int gen_insert_for_mav(ObSelectStmt *delta_mv_stmt,
-                         ObInsertStmt *&insert_stmt);
-  int gen_select_for_insert_subquery(const ObIArray<ObRawExpr*> &values,
-                                     ObIArray<SelectItem> &select_items);
-  int gen_exists_cond_for_insert(const ObIArray<ObRawExpr*> &values,
-                                 ObIArray<ObRawExpr*> &conds);
-  int gen_update_for_mav(ObSelectStmt *delta_mv_stmt,
-                         ObUpdateStmt *&update_stmt);
-  int gen_update_conds(const TableItem &target_table,
-                       const TableItem &source_table,
-                       ObIArray<ObRawExpr*> &conds);
-  int gen_delete_for_mav(ObDeleteStmt *&delete_stmt);
-  int gen_delete_conds(const TableItem &target_table,
-                       ObIArray<ObRawExpr*> &conds);
   int gen_real_time_view_filter_for_mav(ObSelectStmt &sel_stmt);
   int gen_inner_real_time_view_for_mav(ObSelectStmt *&inner_rt_view);
   int gen_merge_for_simple_mav(ObMergeStmt *&merge_stmt);
@@ -93,9 +78,8 @@ protected:
   int add_nvl_above_exprs(ObRawExpr *expr, ObRawExpr *default_expr, ObRawExpr *&res_expr);
   int add_replaced_expr_for_min_max_aggr(const TableItem &source_table, ObRawExprCopier &copier);
   int get_inner_sel_name_for_aggr(const ObAggFunRawExpr &aggr, ObString &sel_name);
-  int gen_min_max_aggr_print_expr(const ObIArray<ObRawExpr*> &outer_group_by_exprs,
-                                  ObAggFunRawExpr &aggr_expr,
-                                  ObRawExpr *&aggr_print_expr);
+  int gen_group_recalculate_aggr_view(ObSelectStmt *&view_stmt);
+  int gen_mav_delta_mv_view(ObSelectStmt *simple_delta_stmt, ObSelectStmt *&delta_stmt);
   inline const ObIArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>> &get_expand_aggrs() const {  return expand_aggrs_;  }
 protected:
   const ObIArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>> &expand_aggrs_;

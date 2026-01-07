@@ -200,18 +200,21 @@ public:
                                const int64_t len,
                                int64_t &pos,
                                const sql::DependenyTableStore &dep_table,
-                               schema::ObSchemaGetterGuard &schema_guard);
+                               schema::ObSchemaGetterGuard &schema_guard,
+                               uint64_t key_id);
 
   static int decode_and_check_extra_info(char *buf,
                                          const int64_t len,
                                          const ObPLDependencyTable &dep_table,
                                          bool &match,
-                                         schema::ObSchemaGetterGuard &schema_guard);
+                                         schema::ObSchemaGetterGuard &schema_guard,
+                                         uint64_t key_id);
 
   template<typename DependencyTable>
   static int get_pl_extra_info(const DependencyTable &dep_table,
                                ObPLExtraInfo& extra_info,
-                               schema::ObSchemaGetterGuard &schema_guard);
+                               schema::ObSchemaGetterGuard &schema_guard,
+                               uint64_t key_id);
   static bool is_extra_info_column_exist(const uint64_t data_version);
   static bool is_stack_size_column_exist(const uint64_t data_version);
 

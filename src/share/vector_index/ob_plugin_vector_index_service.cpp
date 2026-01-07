@@ -1124,6 +1124,8 @@ void ObPluginVectorIndexService::destroy()
     }
     // destroy kmeans build task handler
     kmeans_build_task_handler_.destroy();
+    // destroy async task handler
+    vec_async_task_handle_.destroy();
   }
 }
 
@@ -1524,6 +1526,56 @@ int ObPluginVectorIndexMgr::replace_old_adapter(ObPluginVectorIndexAdaptor *new_
         LOG_WARN("failed to erase new complete partial adapter", K(new_adapter->get_embedded_tablet_id()), KR(ret));
       } else if (OB_FAIL(set_complete_adapter_(new_adapter->get_embedded_tablet_id(), new_adapter, overwrite))) {
         LOG_WARN("failed to set new complete partial adapter", K(new_adapter->get_embedded_tablet_id()), KR(ret));
+      }
+    }
+  }
+  LOG_INFO("replace old adapter", K(ret), KP(new_adapter), K(*new_adapter));
+  return ret;
+}
+
+int ObPluginVectorIndexMgr::replace_old_adapter_with_scn_check(ObPluginVectorIndexAdaptor *new_adapter, bool &has_replace)
+{
+  int ret = OB_SUCCESS;
+  has_replace = false;
+  bool need_replace = true;
+  if (OB_ISNULL(new_adapter)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null adapter", KR(ret));
+  } else {
+    // Optimistic lock: compare and swap
+    DEBUG_SYNC(BEFORE_REPLACE_OLD_ADAPTOR);
+    ObPluginVectorIndexAdaptor *cur_adapter = nullptr;
+    if (OB_FAIL(complete_index_adpt_map_.get_refactored(new_adapter->get_inc_tablet_id(), cur_adapter))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        // No old adapter exists, can replace, may not go there
+        ret = OB_SUCCESS;
+        LOG_INFO("No old adapter exists", KPC(new_adapter));
+      } else {
+        LOG_WARN("failed to get old adapter for replace scn comparison", K(*new_adapter), KR(ret));
+      }
+    } else if (OB_NOT_NULL(cur_adapter)) {
+      share::SCN cur_adapter_replace_scn = cur_adapter->get_replace_scn();
+      share::SCN new_adapter_replace_scn = new_adapter->get_replace_scn();
+      if (!cur_adapter_replace_scn.is_valid()) {
+        new_adapter->update_can_skip(cur_adapter->get_can_skip());
+        LOG_INFO("cur may create by ddl, can replace",
+                  K(new_adapter_replace_scn), K(cur_adapter_replace_scn), K(*new_adapter));
+      } else if (cur_adapter_replace_scn >= new_adapter_replace_scn) {
+        need_replace = false;
+        LOG_INFO("scn check failed, skip replace",
+                  K(new_adapter_replace_scn), K(cur_adapter_replace_scn), K(*new_adapter));
+      } else {
+        new_adapter->update_can_skip(cur_adapter->get_can_skip());
+        LOG_INFO("scn check pass, will replace cur adapter",
+                  K(new_adapter_replace_scn), K(cur_adapter_replace_scn), KP(new_adapter), K(*new_adapter));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (need_replace && OB_FAIL(replace_old_adapter(new_adapter))) {
+        LOG_WARN("failed to replace old adapter", KR(ret));
+      } else {
+        has_replace = need_replace;
       }
     }
   }

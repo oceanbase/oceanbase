@@ -12,8 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/optimizer/ob_log_granule_iterator.h"
-
 #include "sql/optimizer/ob_log_table_scan.h"
+#include "sql/optimizer/ob_log_join.h"
+#include "sql/optimizer/ob_log_subplan_filter.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -35,13 +36,9 @@ const char *ObLogGranuleIterator::get_name() const
     "PX BLOCK HASH JOIN-FILTER"
   };
   const char *result = nullptr;
-  bool is_part_gi = false;
-  int tmp_ret = OB_SUCCESS;
+  bool is_part_gi = is_partition_gi();
   int64_t index = 0;
-  if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = is_partition_gi(is_part_gi)))) {
-    LOG_ERROR_RET(tmp_ret, "failed to check is partition gi", K(tmp_ret));
-    index = 1;
-  } else if (is_part_gi) {
+  if (is_part_gi) {
     index = 1;
   } else {
     index = 2;
@@ -197,36 +194,200 @@ int ObLogGranuleIterator::est_cost()
   return ret;
 }
 
-int ObLogGranuleIterator::is_partition_gi(bool &partition_granule) const
+bool ObLogGranuleIterator::is_partition_gi() const
 {
-  int ret = OB_SUCCESS;
-  ObOptimizerContext *optimizer_context = NULL;
-  ObSQLSessionInfo *session_info = NULL;
-  partition_granule = false;
-  int64_t partition_scan_hold = 0;
-  int64_t hash_partition_scan_hold = 0;
-  if (OB_ISNULL(get_plan())
-      || OB_ISNULL(optimizer_context = &get_plan()->get_optimizer_context())
-      || OB_ISNULL(session_info = optimizer_context->get_session_info())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Get unexpected null", K(get_plan()), K(session_info), K(ret));
-  } else if (OB_FAIL(session_info->get_sys_variable(share::SYS_VAR__PX_PARTITION_SCAN_THRESHOLD, partition_scan_hold))) {
-    LOG_WARN("failed to get sys variable px partition scan threshold", K(ret));
-  } else if (OB_FAIL(session_info->get_sys_variable(share::SYS_VAR__PX_MIN_GRANULES_PER_SLAVE, hash_partition_scan_hold))) {
-    LOG_WARN("failed to get sys variable px min granule per slave", K(ret));
-  } else if (is_used_by_external_table() && !is_used_by_lake_table()) {
-  //external table only support block iter
+  bool partition_granule = true;
+  if (is_used_by_external_table() && !is_used_by_lake_table()) {
+    // external table only support block iter
     partition_granule = false;
   } else {
-    partition_granule = ObGranuleUtil::is_partition_granule_flag(gi_attri_flag_)
-        || ObGranuleUtil::is_partition_granule(partition_count_, parallel_, partition_scan_hold, hash_partition_scan_hold, hash_part_);
+    partition_granule = ObGranuleUtil::is_partition_granule_flag(gi_attri_flag_) || parallel_ == 1;
   }
-  return ret;
+  return partition_granule;
 }
 
 void ObLogGranuleIterator::add_flag(uint64_t attri)
 {
   gi_attri_flag_ |= attri;
+  // when gi_attri_flag_ changed, px adaptive task splitting may lose effectiveness.
+  if (enable_adaptive_task_splitting_ && !ObGranuleUtil::can_resplit_gi_task(gi_attri_flag_)) {
+    enable_adaptive_task_splitting_ = false;
+    if (OB_NOT_NULL(controlled_tsc_)) {
+      static_cast<ObLogTableScan *>(controlled_tsc_)->set_scan_resumable(false);
+    }
+  }
+}
+
+int ObLogGranuleIterator::check_adaptive_task_splitting(ObLogTableScan *tsc)
+{
+  int ret = OB_SUCCESS;
+  int64_t tenant_id =
+        get_plan()->get_optimizer_context().get_session_info()->get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  bool exist_deadlock_condition = false;
+  uint64_t min_version = GET_MIN_CLUSTER_VERSION();
+  bool version_check =
+      min_version >= CLUSTER_VERSION_4_5_1_0
+      || (min_version >= MOCK_CLUSTER_VERSION_4_4_2_0 && min_version < CLUSTER_VERSION_4_5_0_0)
+      || (min_version >= MOCK_CLUSTER_VERSION_4_3_5_3 && min_version < CLUSTER_VERSION_4_4_0_0);
+  if (!version_check) {
+  } else if (!tenant_config.is_valid() || !tenant_config->_enable_px_task_rebalance) {
+  } else if (!ObGranuleUtil::can_resplit_gi_task(gi_attri_flag_)) {
+  } else if (is_rescanable()) {
+    // for rescanable gi, we can not handle the rescan process among all workers since gi task
+    // changes cross several rescan tasks
+  } else if (OB_FAIL(check_exist_deadlock_condition(this, exist_deadlock_condition))) {
+    LOG_WARN("failed to check_exist_deadlock_condition");
+  } else if (exist_deadlock_condition) {
+    // adaptive task splitting will add a synchronize point which may cause deadlock with other
+    // synchronize point so disable this feature in some cases
+  } else if (OB_ISNULL(tsc)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr");
+  } else {
+    // find the table scan which can be paused
+    SampleInfo::SampleMethod sample_method = tsc->get_sample_info().method_;
+    bool is_table_get = false;
+    // pre_graph maybe null
+    const ObQueryRangeProvider *pre_graph = tsc->get_pre_graph();
+    if (tsc->get_scan_order() == common::ObQueryFlag::ScanOrder::NoOrder) {
+      // not support for delete insert noorder scan
+    } else if (!tsc->get_pushdown_aggr_exprs().empty()
+               || !tsc->get_pushdown_groupby_columns().empty()) {
+      // not support for aggregate/group by push down
+    } else if (tsc->get_index_back()) {
+      // not support for index back
+    } else if (tsc->is_tsc_with_domain_id()) {
+      // not support for access domain id in full text index
+    } else if (tsc->use_das()) {
+      // not support das split
+    } else if (tsc->get_table_type() == share::schema::EXTERNAL_TABLE) {
+      // not support external table now
+    } else if (nullptr != pre_graph && tsc->get_pre_graph()->is_ss_range()) {
+      // not support in skip scan scene
+    } else if (nullptr != pre_graph && OB_FAIL(pre_graph->is_get(is_table_get))) {
+      LOG_WARN("failed to do is_table_get");
+    } else if (is_table_get) {
+      // meaningless to split task again
+    } else if (sample_method != SampleInfo::NO_SAMPLE) {
+      // not support for sample scan
+    } else {
+      controlled_tsc_ = tsc;
+      tsc->set_scan_resumable(true);
+      // gi attribution may changed, here is not the final decision.
+      enable_adaptive_task_splitting_ = true;
+    }
+  }
+  return ret;
+}
+
+bool ObLogGranuleIterator::is_rescanable()
+{
+  bool is_rescanable = false;
+  ObLogicalOperator *cur_op = this;
+  while (cur_op != nullptr && cur_op->get_parent() != nullptr) {
+    ObLogicalOperator *parent_op = cur_op->get_parent();
+    ObLogicalOperator *child_op = cur_op;
+    if (log_op_def::LOG_JOIN == parent_op->get_type()) {
+      ObLogJoin *log_join = static_cast<ObLogJoin *>(parent_op);
+      if (JoinAlgo::NESTED_LOOP_JOIN == log_join->get_join_algo()
+          && log_join->get_child(second_child) == child_op
+          && OB_NOT_NULL(log_join->get_join_path())
+          && !log_join->get_join_path()->need_mat_) {
+        // GI in NLJ right branch without material is rescanable
+        is_rescanable = true;
+        break;
+      }
+    } else if (log_op_def::LOG_SUBPLAN_FILTER == parent_op->get_type()) {
+      ObLogSubPlanFilter *sub_plan_filter = static_cast<ObLogSubPlanFilter *>(parent_op);
+      for (int64_t i = 1; i < parent_op->get_num_of_child(); ++i) {
+        if (parent_op->get_child(i) != child_op) {
+        } else if (sub_plan_filter->get_onetime_idxs().has_member(i)
+                   || sub_plan_filter->get_initplan_idxs().has_member(i)) {
+          // onetime expr / initial plan is not rescanable
+        } else {
+          is_rescanable = true;
+          break;
+        }
+      }
+    }
+    cur_op = parent_op;
+  }
+  return is_rescanable;
+}
+
+int ObLogGranuleIterator::branch_has_exchange(const ObLogicalOperator *op, bool &has_exchange)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr");
+  } else if (op->get_type() == log_op_def::LOG_EXCHANGE) {
+    has_exchange = true;
+  } else {
+    for (int64_t i = 0; i < op->get_num_of_child() && OB_SUCC(ret) && !has_exchange; ++i) {
+      if (OB_FAIL(SMART_CALL(branch_has_exchange(op->get_child(i), has_exchange)))) {
+        LOG_WARN("failed to branch_has_exchange");
+      }
+    }
+  }
+  return ret;
+}
+
+
+// see
+// if gi on the left of join, and there is a receive on the right of join,
+// it will generate a deadlock scene.
+int ObLogGranuleIterator::check_exist_deadlock_condition(const ObLogicalOperator *op, bool &exist)
+{
+  // 1. find parent who has more than one child
+  // 2. find if there is any receive op in the right branch of this parent
+  int ret = OB_SUCCESS;
+  const ObLogicalOperator *parent_op = op->get_parent();
+  if (OB_ISNULL(op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr");
+  } else if (op->is_block_op()) {
+    // block op will block all child, stop finding deadlock recursively
+  } else if (OB_ISNULL(parent_op)) {
+  } else if (parent_op->get_type() == log_op_def::LOG_EXCHANGE) {
+    // no crossing dfo search
+  } else if (parent_op->get_num_of_child() == 1) {
+    if (OB_FAIL(SMART_CALL(check_exist_deadlock_condition(parent_op, exist)))) {
+      LOG_WARN("failed to check_exist_deadlock_condition");
+    }
+  } else {
+    bool continue_check = true;
+    int64_t this_child_idx = -1;
+    // find this op is which child of parent
+    for (int64_t i = 0; i < parent_op->get_num_of_child() && OB_SUCC(ret); ++i) {
+      if (parent_op->get_child(i) == op) {
+        this_child_idx = i;
+        if (parent_op->is_block_input(i)) {
+          continue_check = false;
+        }
+        break;
+      }
+    }
+    // find if there is exchange node in another right branch
+    if (continue_check && this_child_idx != -1) {
+      bool has_exchange = false;
+      for (int64_t i = this_child_idx + 1; i < parent_op->get_num_of_child() && OB_SUCC(ret); ++i) {
+        if (OB_FAIL(branch_has_exchange(parent_op->get_child(i), has_exchange))) {
+          LOG_WARN("failed to branch_has_exchange");
+        } else if (has_exchange) {
+          exist = true;
+          break;
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (exist || !continue_check) {
+    } else if (OB_FAIL(SMART_CALL(check_exist_deadlock_condition(parent_op, exist)))) {
+      LOG_WARN("failed to check_exist_deadlock_condition");
+    }
+  }
+  return ret;
 }
 
 }

@@ -167,13 +167,16 @@ private:
                            ConstInfoContext &const_ctx,
                            bool &trans_happened);
   int replace_select_exprs_skip_agg(ObSelectStmt *stmt,
-                                  ConstInfoContext &const_ctx,
-                                  bool &trans_happened);
-  int replace_select_exprs_skip_agg_internal(ObRawExpr *&cur_expr,
-                                          ConstInfoContext &const_ctx,
-                                          ObIArray<ObRawExpr *> &parent_exprs,
-                                          bool &trans_happened,
-                                          bool used_in_compare);
+                                   ConstInfoContext &const_ctx,
+                                   bool &trans_happened);
+  int replace_common_exprs_skip_agg(ObIArray<ObRawExpr*> &exprs,
+                                    ConstInfoContext &const_ctx,
+                                    bool &trans_happened);
+  int replace_expr_skip_agg_internal(ObRawExpr *&cur_expr,
+                                     ConstInfoContext &const_ctx,
+                                     ObIArray<ObRawExpr *> &parent_exprs,
+                                     bool &trans_happened,
+                                     bool used_in_compare);
 
   int replace_assignment_exprs(ObIArray<ObAssignment> &assignments,
                                ConstInfoContext &const_ctx,

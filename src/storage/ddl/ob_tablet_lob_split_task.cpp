@@ -654,6 +654,25 @@ int ObTabletLobSplitDag::report_replica_build_status() const
     } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(rs_addr).build_ddl_single_replica_response(arg))) {
       LOG_WARN("fail to send build split tablet data response", K(ret), K(arg));
     }
+    char split_event_info[common::MAX_ROOTSERVICE_EVENT_VALUE_LENGTH/*512*/];
+    snprintf(split_event_info, sizeof(split_event_info),
+      "physical_rows_cnt: %ld, split_rows_cnt: %ld", context_.physical_row_count_, context_.row_inserted_);
+    report_build_stat("replica_split_resp", context_.data_ret_, split_event_info);
+  }
+  FLOG_INFO("lob tablet split finished", K(ret), K(context_.data_ret_));
+  return ret;
+}
+
+void ObTabletLobSplitDag::report_build_stat(
+    const char *event_name,
+    const int result,
+    const char *event_info) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
     bool is_split_executor = true;
   #ifdef OB_BUILD_SHARED_STORAGE
     is_split_executor = GCTX.is_shared_storage_mode() ? context_.is_data_split_executor_ : is_split_executor;
@@ -667,15 +686,12 @@ int ObTabletLobSplitDag::report_replica_build_status() const
       param_.new_lob_tablet_ids_.empty() ? 0 : param_.new_lob_tablet_ids_.at(param_.new_lob_tablet_ids_.count() - 1).id(),
       false/*param_.can_reuse_macro_block_*/,
       is_split_executor);
-    SERVER_EVENT_ADD("ddl", "replica_split_resp",
-        "result", context_.data_ret_,
+    SERVER_EVENT_ADD("ddl", event_name,
+        "result", result,
         "split_basic_info", split_basic_info,
-        "physical_row_count", context_.physical_row_count_,
-        "split_total_rows", context_.row_inserted_,
-        "trace_id", *ObCurTraceId::get_trace_id());
+        "trace_id", *ObCurTraceId::get_trace_id(),
+        "event_info", event_info);
   }
-  FLOG_INFO("lob tablet split finished", K(ret), K(context_.data_ret_));
-  return ret;
 }
 
 ObTabletLobBuildMapTask::~ObTabletLobBuildMapTask()

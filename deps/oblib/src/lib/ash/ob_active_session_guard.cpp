@@ -391,6 +391,16 @@ int64_t ObAshBuffer::append(const ObActiveSessionStat &stat)
   return idx;
 }
 
+int64_t ObAshBuffer::append_item(ObActiveSessionStatItem &stat)
+{
+  OB_ASSERT(stat.wait_time_ == 0);
+  stat.sample_time_ = ObTimeUtility::current_time();
+  int64_t idx = (write_pos_++ + buffer_.size()) % buffer_.size();
+  MEMCPY(&buffer_[idx], &stat, sizeof(ObActiveSessionStatItem));
+  buffer_[idx].id_ = write_pos_;
+  return idx;
+}
+
 void ObAshBuffer::fixup_stat(int64_t index, const ObWaitEventDesc &desc)
 {
   if (OB_UNLIKELY(index < 0 || index >= write_pos_)) {

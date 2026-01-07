@@ -14,6 +14,7 @@
 #include "sql/resolver/dcl/ob_create_user_resolver.h"
 #include "sql/resolver/ddl/ob_database_resolver.h"
 #include "sql/resolver/dcl/ob_set_password_resolver.h"
+#include "lib/encrypt/ob_encrypted_helper.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -106,6 +107,26 @@ int ObCreateUserResolver::resolve(const ParseNode &parse_tree)
           ObString password;
           ObString need_enc_str = ObString::make_string("NO");
           bool need_enc = true;
+          ObString plugin;
+          bool is_plugin_supported = true;
+          // 先获取插件名，用于后续密码格式校验
+          if (OB_SUCC(ret) && lib::is_mysql_mode()) {
+            if (OB_NOT_NULL(user_pass->children_[4])) {
+              plugin.assign_ptr(str_tolower(const_cast<char *>(user_pass->children_[4]->str_value_),
+                                            static_cast<int32_t>(user_pass->children_[4]->str_len_)),
+                                            static_cast<int32_t>(user_pass->children_[4]->str_len_));
+              if (plugin.empty()) {
+                ret = OB_ERR_PLUGIN_IS_NOT_LOADED;
+                LOG_WARN("invalid auth plugin", K(plugin), K(ret));
+              }
+            } else {
+              // Use default_authentication_plugin system variable as default
+              if (OB_FAIL(params_.session_info_->get_sys_variable(
+                      share::SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN, plugin))) {
+                LOG_WARN("fail to get default_authentication_plugin variable", K(ret));
+              }
+            }
+          }
           if (OB_SUCC(ret)) {
             if (user_name.empty()) {
               ret = OB_CANNOT_USER;
@@ -126,9 +147,9 @@ int ObCreateUserResolver::resolve(const ParseNode &parse_tree)
                 need_enc_str = ObString::make_string("YES");
               } else {
                 //no enc
-                if (!ObSetPasswordResolver::is_valid_mysql41_passwd(password)) {
+                if (!ObSetPasswordResolver::is_valid_encrypted_passwd(password, plugin)) {
                   ret = OB_ERR_PASSWORD_FORMAT;
-                  LOG_WARN("Wrong password format", K(user_name), K(password), K(ret));
+                  LOG_WARN("Wrong password format", K(user_name), K(password), K(plugin), K(ret));
                 }
               }
             }
@@ -175,8 +196,14 @@ int ObCreateUserResolver::resolve(const ParseNode &parse_tree)
                 ret = OB_NOT_SUPPORTED;
                 LOG_USER_ERROR(OB_NOT_SUPPORTED, "create a user with an excessively long password");
               }
-            } else if (OB_FAIL(create_user_stmt->add_user(user_name, host_name, password, need_enc_str))) {
-              LOG_WARN("Failed to add user to ObCreateUserStmt", K(user_name), K(host_name), K(password), K(ret));
+            } else if (OB_FAIL(ObEncryptedHelper::check_data_version_for_auth_plugin(plugin,
+              params_.session_info_->get_effective_tenant_id(), is_plugin_supported))) {
+              LOG_WARN("failed to check data version for auth plugin", K(ret));
+            } else if (OB_UNLIKELY(!is_plugin_supported)) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("caching_sha2_password is not supported when MIN_DATA_VERSION is below 4_4_2_0", K(ret));
+            } else if (OB_FAIL(create_user_stmt->add_user(user_name, host_name, password, need_enc_str, plugin))) {
+              LOG_WARN("Failed to add user to ObCreateUserStmt", K(user_name), K(host_name), K(password), K(plugin), K(ret));
             } else {
               //do nothing
             }

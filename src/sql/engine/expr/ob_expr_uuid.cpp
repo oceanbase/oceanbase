@@ -119,7 +119,7 @@ int ObUUIDNode::init()
 int ObUUIDTime::get_time(uint64_t &time, uint16_t &seq)
 {
   int ret = OB_SUCCESS;
-  ObLatchWGuard guard(lock_, ObLatchIds::DEFAULT_MUTEX);
+  ObLatchWGuard guard(lock_, ObLatchIds::UUID_TIME_LOCK);
   uint64_t now = 0;
   if (OB_FAIL(time_now(now))) {
     LOG_WARN("get time failed", K(ret));

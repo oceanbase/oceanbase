@@ -857,7 +857,6 @@ int ObOperator::open()
       op_monitor_info_.profile_ = &monitor_profile_;
     }
     ObProfileSwitcher switcher(op_monitor_info_.profile_);
-    SET_METRIC_VAL(ObMetricId::OPEN_TIME, op_monitor_info_.open_time_);
     while (OB_SUCC(ret) && open_order != OPEN_EXIT) {
       switch (open_order) {
       case OPEN_CHILDREN_FIRST:
@@ -1043,7 +1042,6 @@ int ObOperator::inner_rescan()
   // so when rescan, for operator which not support rich format, we reset the output format
   reset_output_format();
   op_monitor_info_.rescan_times_++;
-  INC_METRIC_VAL(ObMetricId::RESCAN_TIMES, 1);
   output_batches_b4_rescan_ = op_monitor_info_.output_batches_;
   if (spec_.need_check_output_datum_) {
     output_ptr_checker_.reset();
@@ -1173,6 +1171,9 @@ int ObOperator::close()
 {
   int ret = OB_SUCCESS;
   ObProfileSwitcher switcher(op_monitor_info_.profile_);
+  if (io_event_observer_.get_io_time() > 0) {
+    SET_METRIC_VAL(ObMetricId::DUMP_RW_TIME, io_event_observer_.get_io_time());
+  }
   OperatorOpenOrder open_order = get_operator_open_order();
   ASH_ITEM_ATTACH_GUARD(plan_line_id, spec_.id_);
   if (OPEN_SELF_ONLY != open_order) {
@@ -1230,12 +1231,12 @@ int ObOperator::setup_op_feedback_info()
     common::ObIArray<ObExecFeedbackNode> &nodes = fb_info.get_feedback_nodes();
     int64_t &total_db_time = fb_info.get_total_db_time();
     uint64_t db_time = op_monitor_info_.calc_db_time();
-    uint64_t cpu_khz = OBSERVER_FREQUENCE.get_cpu_frequency_khz();
-    db_time = db_time * 1000 / cpu_khz;
+    static const uint64_t scale = (1000 << 20) / OBSERVER_FREQUENCE.get_cpu_frequency_khz();
+    db_time = (db_time * scale) >> 20;
     total_db_time += db_time;
     if (fb_node_idx_ >= 0 && fb_node_idx_ < nodes.count()) {
       ObExecFeedbackNode &node = nodes.at(fb_node_idx_);
-      node.block_time_ = op_monitor_info_.block_time_ * 1000 / cpu_khz;;
+      node.block_time_ = (op_monitor_info_.block_time_ * scale) >> 20;
       node.db_time_ = db_time;
       node.op_close_time_ = op_monitor_info_.close_time_;
       node.op_first_row_time_ = op_monitor_info_.first_row_time_;
@@ -1259,7 +1260,6 @@ int ObOperator::submit_op_monitor_node()
     // Some records that meets the conditions needs to be archived
     // Reference document:
     op_monitor_info_.close_time_ = oceanbase::common::ObClockGenerator::getClock();
-    SET_METRIC_VAL(ObMetricId::CLOSE_TIME, op_monitor_info_.close_time_);
     ObPlanMonitorNodeList *list = MTL(ObPlanMonitorNodeList*);
     if (list && spec_.plan_ && ctx_.get_physical_plan_ctx()) {
       if (spec_.plan_->get_phy_plan_hint().monitor_
@@ -1357,10 +1357,8 @@ int ObOperator::get_next_row()
 
       if (OB_SUCCESS == ret) {
         op_monitor_info_.output_row_count_++;
-        INC_METRIC_VAL(ObMetricId::OUTPUT_ROWS, 1);
         if (!got_first_row_) {
           op_monitor_info_.first_row_time_ = oceanbase::common::ObClockGenerator::getClock();
-          SET_METRIC_VAL(ObMetricId::FIRST_ROW_TIME, op_monitor_info_.first_row_time_);
           got_first_row_ = true;
         }
       } else if (OB_ITER_END == ret) {
@@ -1371,7 +1369,6 @@ int ObOperator::get_next_row()
         }
         if (got_first_row_) {
           op_monitor_info_.last_row_time_ = oceanbase::common::ObClockGenerator::getClock();
-          SET_METRIC_VAL(ObMetricId::LAST_ROW_TIME, op_monitor_info_.last_row_time_);
         }
       }
     }
@@ -1598,14 +1595,10 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
         skipped_rows_count = brs_.skip_->accumulate_bit_cnt(brs_.size_);
         int64_t rows = brs_.size_ - skipped_rows_count;
         op_monitor_info_.output_row_count_ += rows;
-        INC_METRIC_VAL(ObMetricId::OUTPUT_ROWS, rows);
         op_monitor_info_.skipped_rows_count_ += skipped_rows_count; // for batch
-        INC_METRIC_VAL(ObMetricId::SKIPPED_ROWS, skipped_rows_count);
         ++op_monitor_info_.output_batches_; // for batch
-        INC_METRIC_VAL(ObMetricId::OUTPUT_BATCHES, 1);
         if (!got_first_row_ && !brs_.end_) {
           op_monitor_info_.first_row_time_ = ObClockGenerator::getClock();
-          SET_METRIC_VAL(ObMetricId::FIRST_ROW_TIME, op_monitor_info_.first_row_time_);
           got_first_row_ = true;
         }
         if (brs_.end_) {
@@ -1614,7 +1607,6 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
             LOG_WARN("drain exchange data failed", K(tmp_ret));
           }
           op_monitor_info_.last_row_time_ = ObClockGenerator::getClock();
-          SET_METRIC_VAL(ObMetricId::LAST_ROW_TIME, op_monitor_info_.last_row_time_);
         }
       }
     } else {

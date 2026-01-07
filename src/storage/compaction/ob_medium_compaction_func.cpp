@@ -1348,25 +1348,23 @@ int ObMediumCompactionScheduleFunc::check_tablet_checksum(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid idx range for check tablet checksums", K(ret), K(start_idx), K(end_idx));
   } else if (start_idx + 1 == end_idx) {
+  } else if (FALSE_IT(data_checksum_checker.reset())) {
+  } else if (OB_FAIL(data_checksum_checker.handle_first_item(checksum_items.at(start_idx)))) {
+    LOG_WARN("fail to handle first item", KR(ret), K(data_checksum_checker), K(checksum_items.at(start_idx)));
   } else {
-    const ObTabletReplicaChecksumItem *prev_item = nullptr;
-    data_checksum_checker.reset();
     ObLSID prev_error_ls_id;
-    for (int64_t idx = start_idx; OB_SUCC(ret) && idx < end_idx; ++idx) {
+    for (int64_t idx = start_idx + 1; OB_SUCC(ret) && idx < end_idx; ++idx) {
+      const ObTabletReplicaChecksumItem &prev_item = checksum_items.at(idx - 1);
       const ObTabletReplicaChecksumItem &curr_item = checksum_items.at(idx);
-      if (OB_ISNULL(prev_item)) {
-        if (OB_FAIL(data_checksum_checker.set_data_checksum(curr_item))) {
-          LOG_WARN("fail to set data checksum", KR(ret), K(data_checksum_checker), K(curr_item));
-        }
-      } else if (!curr_item.is_same_tablet(*prev_item)) {
+      if (!curr_item.is_same_tablet(prev_item)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("not continuous same tablet id", K(ret), K(curr_item), KPC(prev_item));
+        LOG_WARN("not continuous same tablet id", K(ret), K(curr_item), K(prev_item));
       } else if (OB_TMP_FAIL(data_checksum_checker.check_data_checksum(curr_item))
-              || OB_TMP_FAIL(curr_item.verify_column_checksum(*prev_item))) {
+              || OB_TMP_FAIL(curr_item.verify_column_checksum(prev_item))) {
         if (OB_CHECKSUM_ERROR == tmp_ret) {
           int tmp_ret = OB_SUCCESS;
-          LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "checksum error in tablet replica checksum", KR(tmp_ret),
-                        K(curr_item), KPC(prev_item), K(data_checksum_checker));
+          LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "checksum error in tablet replica checksum",
+                        K(curr_item), K(prev_item), K(data_checksum_checker));
           check_ret = OB_CHECKSUM_ERROR;
           if (curr_item.ls_id_ != prev_error_ls_id) {
             prev_error_ls_id = curr_item.ls_id_;
@@ -1379,7 +1377,7 @@ int ObMediumCompactionScheduleFunc::check_tablet_checksum(
           }
         } else {
           ret = tmp_ret;
-          LOG_WARN("unexpected error in tablet replica checksum", KR(ret), K(curr_item), KPC(prev_item));
+          LOG_WARN("unexpected error in tablet replica checksum", KR(ret), K(curr_item), K(prev_item));
         }
       }
 #ifdef ERRSIM
@@ -1396,7 +1394,6 @@ int ObMediumCompactionScheduleFunc::check_tablet_checksum(
         }
       }
 #endif
-      prev_item = &curr_item;
     }
   }
   return ret;

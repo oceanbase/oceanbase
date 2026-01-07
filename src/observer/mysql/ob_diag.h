@@ -40,7 +40,7 @@ private:
 }; // end of class ObDiag
 
 inline ObDiag::ObDiag()
-    : lock_(ObLatchIds::DEFAULT_MUTEX), passwd_(), fresh_timestamp_(0L)
+    : lock_(ObLatchIds::OB_DIAG_LOCK), passwd_(), fresh_timestamp_(0L)
 {
 }
 

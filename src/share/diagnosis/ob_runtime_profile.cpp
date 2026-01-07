@@ -12,6 +12,7 @@
 
 #include "share/diagnosis/ob_runtime_profile.h"
 #include "lib/container/ob_array_iterator.h"
+#include "observer/ob_server.h"
 
 #define USING_LOG_PREFIX COMMON
 
@@ -274,9 +275,10 @@ int ObOpProfile<MetricType>::pretty_print_metrics(char *buf, const int64_t buf_l
   return ret;
 }
 
-template<typename MetricType>
-int ObOpProfile<MetricType>::register_metric(ObMetricId metric_id, MetricType *&metric)
-{
+template <typename MetricType>
+int ObOpProfile<MetricType>::register_metric(ObMetricId metric_id,
+                                             MetricType *&metric,
+                                             bool head_insert) {
   int ret = OB_SUCCESS;
   MetricWrap *new_metric = nullptr;
   int64_t metric_count = ATOMIC_LOAD_RLX(&metric_count_);
@@ -301,15 +303,24 @@ int ObOpProfile<MetricType>::register_metric(ObMetricId metric_id, MetricType *&
   if (OB_SUCC(ret)) {
     metrics_id_map_[metric_id] = metric_count;
     metric = &new_metric->elem_;
-    if (0 == metric_count) {
-      // first metric
-      ATOMIC_STORE_RLX(&metric_head_, new_metric);
+    if (OB_LIKELY(!head_insert)) {
+      if (0 == metric_count) {
+        // first metric
+        ATOMIC_STORE_RLX(&metric_head_, new_metric);
+      } else {
+        ATOMIC_STORE_RLX(&(metric_tail_->next_), new_metric);
+      }
+      // tail only access by query thread
+      metric_tail_ = new_metric;
     } else {
-      ATOMIC_STORE_RLX(&(metric_tail_->next_), new_metric);
+      MetricWrap *old_head = ATOMIC_LOAD(&metric_head_);
+      ATOMIC_STORE_RLX(&(new_metric->next_), old_head);
+      ATOMIC_STORE_RLX(&metric_head_, new_metric);
+      if (0 == metric_count) {
+        // if this is the first metric, also update tail
+        metric_tail_ = new_metric;
+      }
     }
-    // tail only access by query thread
-    metric_tail_ = new_metric;
-    // add metric count finally
     __sync_fetch_and_add(&metric_count_, 1, __ATOMIC_RELAXED);
   }
   return ret;
@@ -403,6 +414,12 @@ int ObOpProfile<ObMetric>::convert_current_profile_to_persist(char *buf, int64_t
     while (nullptr != cur_metric && buf_pos + step <= buf_len) {
       uint64_t metric_id = cur_metric->elem_.get_metric_id();
       uint64_t metric_value = cur_metric->elem_.value();
+      metric::Unit unit = get_metric_unit(cur_metric->elem_.id_);
+      if (unit == metric::Unit::CPU_CYCLE) {
+        // convert cpu cycle to ns
+        static const int64_t scale = (1000 << 20) / OBSERVER_FREQUENCE.get_cpu_frequency_khz();
+        metric_value = (metric_value * scale >> 20) * 1000;
+      }
       *cur_buf++ = metric_id;
       *cur_buf++ = metric_value;
       buf_pos += step;
@@ -513,6 +530,8 @@ int convert_persist_profile_to_realtime(const char *persist_profile, const int64
     uint64_t cur_metric_id = 0;
     uint64_t cur_metric_value;
     ObOpProfile<ObMetric> *new_profile = nullptr;
+    // even if the profile id unknown, we still create the profile,
+    // since we need to keep the profile tree structure
     for (int64_t i = 0; OB_SUCC(ret) && i < profile_cnt; ++i) {
       if (profile_head[i].parent_idx_ != -1 && profile_head[i].parent_idx_ < profile_cnt
           && OB_NOT_NULL(profiles_array[profile_head[i].parent_idx_])) {
@@ -533,8 +552,11 @@ int convert_persist_profile_to_realtime(const char *persist_profile, const int64
           cur_metric_value = *cur_metric_and_value_ptr++;
           pos += step;
           ObMetric *metric = nullptr;
-          if (OB_FAIL(new_profile->get_or_register_metric(
-                  static_cast<ObMetricId>(cur_metric_id), metric))) {
+          if (cur_metric_id <= ObMetricId::MONITOR_STATNAME_BEGIN ||
+              cur_metric_id >= ObMetricId::MONITOR_STATNAME_END) {
+            // for compatibility, ignore the new metric from higher version
+          } else if (OB_FAIL(new_profile->get_or_register_metric(
+                         static_cast<ObMetricId>(cur_metric_id), metric))) {
             LOG_WARN("failed to register metric");
           } else if (OB_NOT_NULL(metric)) {
             metric->set(cur_metric_value);

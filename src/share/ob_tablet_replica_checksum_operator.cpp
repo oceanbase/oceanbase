@@ -1563,6 +1563,23 @@ void ObTabletDataChecksumChecker::reset()
   cs_replica_ckm_items_.reset();
 }
 
+// The first item does not need to check checksum, but should be considered for future checking
+int ObTabletDataChecksumChecker::handle_first_item(const ObTabletReplicaChecksumItem& curr_item)
+{
+  int ret = OB_SUCCESS;
+  bool is_cs_replica = false;
+  if (OB_FAIL(curr_item.check_data_checksum_type(is_cs_replica))) {
+    LOG_WARN("fail to check data checksum type", KR(ret), K(curr_item));
+  } else if (is_cs_replica) {
+    if (OB_FAIL(cs_replica_ckm_items_.push_back(&curr_item))) {
+      LOG_WARN("failed to push back item", K(ret), K_(cs_replica_ckm_items));
+    }
+  } else {
+    normal_ckm_item_ = &curr_item;
+  }
+  return ret;
+}
+
 int ObTabletDataChecksumChecker::check_data_checksum(const ObTabletReplicaChecksumItem& curr_item)
 {
   int ret = OB_SUCCESS;
@@ -1597,20 +1614,6 @@ int ObTabletDataChecksumChecker::check_data_checksum(const ObTabletReplicaChecks
     } else if (normal_ckm_item_->data_checksum_ != curr_item.data_checksum_) {
       ret = OB_CHECKSUM_ERROR;
       LOG_WARN("find data checksum error", K(ret), K(curr_item), KPC_(normal_ckm_item));
-    }
-  }
-  return ret;
-}
-
-int ObTabletDataChecksumChecker::set_data_checksum(const ObTabletReplicaChecksumItem& curr_item)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(normal_ckm_item_)) {
-    bool is_cs_replica = false;
-    if (OB_FAIL(curr_item.check_data_checksum_type(is_cs_replica))) {
-      LOG_WARN("fail to check data checksum type", KR(ret), K(curr_item));
-    } else if (!is_cs_replica) {
-      normal_ckm_item_ = &curr_item;
     }
   }
   return ret;

@@ -272,7 +272,7 @@ int ObAlterSystemResolverUtil::check_tablet_id_effective(const uint64_t tenant_i
 {
   int ret = OB_SUCCESS;
   ObLSID ls_id;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+  if (OB_UNLIKELY(!tablet_id.is_valid_with_tenant(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "Invalid tenant id");
@@ -283,6 +283,21 @@ int ObAlterSystemResolverUtil::check_tablet_id_effective(const uint64_t tenant_i
   } else if (OB_UNLIKELY(nullptr == GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, sql proxy is nullptr", KR(ret));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is null", KR(ret));
+  } else if (tablet_id.is_sys_tablet()) { // check sys table that not in __all_tablet_to_ls
+    ObSchemaGetterGuard schema_guard;
+    const ObTableSchema *table_schema = nullptr;
+    if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+      LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, tablet_id.id(), table_schema))) { // sys table id equal to tablet_id
+      LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(tablet_id));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("system table tablet does not exist", KR(ret), K(tenant_id), K(tenant_id), K(tablet_id));
+      LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "Tablet not exist");
+    }
   } else if (OB_FAIL(ObTabletToLSTableOperator::get_ls_by_tablet(*GCTX.sql_proxy_, tenant_id, tablet_id, ls_id))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       LOG_WARN("tablet not exist in tenant", KR(ret), K(tenant_id), K(tablet_id));

@@ -2976,9 +2976,13 @@ int ObSelectResolver::try_add_sensitive_field_expr(
 {
   int ret = OB_SUCCESS;
   ObSysFunRawExpr *sensitive_field_expr = NULL;
+  const char *plainaccess_priv_name = NULL;
   if (OB_ISNULL(session_info_) || OB_ISNULL(allocator_) || OB_ISNULL(select_item.expr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(session_info_), K(allocator_), K(select_item.expr_));
+  } else if (OB_ISNULL(plainaccess_priv_name = ObPrivMgr::get_priv_name(OB_PRIV_PLAINACCESS_SHIFT))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("plainaccess_priv_name should not be null", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < sensitive_rules.count(); ++i) {
     ObPCPrivInfo priv_info;
@@ -3000,11 +3004,11 @@ int ObSelectResolver::try_add_sensitive_field_expr(
         ret = OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE;
         LOG_WARN("Lack of plainaccess privilege for rule", K(sensitive_rule->get_sensitive_rule_name()));
         LOG_USER_ERROR(OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE,
-                       sensitive_rule->get_sensitive_rule_name_str().length(),
-                       sensitive_rule->get_sensitive_rule_name(),
+                       (int)strlen(plainaccess_priv_name), plainaccess_priv_name,
                        session_info_->get_user_name().length(), session_info_->get_user_name().ptr(),
-                       session_info_->get_host_name().length(), session_info_->get_host_name().ptr());
-      // otherwise, apply sensitive field expr to this field
+                       session_info_->get_host_name().length(), session_info_->get_host_name().ptr(),
+                       sensitive_rule->get_sensitive_rule_name_str().length(), sensitive_rule->get_sensitive_rule_name());
+        // otherwise, apply sensitive field expr to this field
       } else if (OB_FAIL(add_sensitive_field_expr(select_item, *sensitive_rule, sensitive_field_expr))) {
         LOG_WARN("failed to add sensitive field expr", K(ret));
       }

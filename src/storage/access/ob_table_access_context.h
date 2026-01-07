@@ -371,6 +371,7 @@ public:
   ObRowSampleFilter *sample_filter_;
   compaction::ObCachedTransStateMgr *trans_state_mgr_;
   ObMviewScanInfo *mview_scan_info_;
+  ScanResumePoint *scan_resume_point_; // for scan pause
   ObTruncatePartitionFilter *truncate_part_filter_;
   ObMdsReadInfoCollector *mds_collector_; // used for collect mds info when query mds sstable
   uint64_t *row_scan_cnt_;

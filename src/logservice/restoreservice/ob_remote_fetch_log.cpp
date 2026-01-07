@@ -64,7 +64,7 @@ void ObRemoteFetchLogImpl::destroy()
 
 int ObRemoteFetchLogImpl::do_schedule(const share::ObLogRestoreSourceItem &source)
 {
-  ObDIActionGuard(ObDIActionGuard::NS_ACTION, "SourceType[%s]", ObLogRestoreSourceItem::get_source_type_str(source.type_));
+  ObDIActionGuard di_action_guard(ObDIActionGuard::NS_ACTION, "SourceType[%s]", ObLogRestoreSourceItem::get_source_type_str(source.type_));
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;

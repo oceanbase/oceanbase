@@ -987,6 +987,8 @@ typedef enum ObItemType
   T_FUN_CK_RAND_CANONICAL = 1940,
   T_FUN_SYS_LOAD_FILE = 1941,
   T_FUN_SYS_AI_PARSE_DOCUMENT = 1942,
+  T_FUN_SYS_SEARCH_INDEX_INNER_TYPE = 1943,
+  T_FUN_SYS_SEARCH_INDEX_INNER_VALUE = 1944,
 
   ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,

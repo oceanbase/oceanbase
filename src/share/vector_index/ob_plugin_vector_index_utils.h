@@ -53,6 +53,10 @@ class ObPluginVectorIndexUtils
 {
 public:
   static int get_task_read_snapshot(ObLSID &ls_id, SCN &read_version);
+
+  static int check_can_do_refresh_memdata(ObPluginVectorIndexAdaptor *adapter,
+                                          SCN target_scn,
+                                          bool &can_do_refresh_memdata);
   static int refresh_memdata(ObLSID &ls_id,
                              ObPluginVectorIndexAdaptor *adapter,
                              SCN target_scn,

@@ -160,6 +160,7 @@ public:
 
   static int64_t check_text_can_reuse(const ObObj &obj, bool &can_reuse);
 
+  static int error_code_wrapper(int ret);
   static int get_current_opt_stats(const ObTableStatParam &param,
                                    ObIArray<ObOptTableStatHandle> &cur_tab_handles,
                                    ObIArray<ObOptColumnStatHandle> &cur_col_handles);

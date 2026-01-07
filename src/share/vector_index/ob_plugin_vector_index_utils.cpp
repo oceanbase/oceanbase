@@ -1140,6 +1140,25 @@ int ObPluginVectorIndexUtils::query_need_refresh_memdata(ObPluginVectorIndexAdap
   return ret;
 }
 
+int ObPluginVectorIndexUtils::check_can_do_refresh_memdata(ObPluginVectorIndexAdaptor *adapter, SCN target_scn, bool &can_do_refresh_memdata)
+{
+  int ret = OB_SUCCESS;
+  can_do_refresh_memdata = false;
+  if (OB_ISNULL(adapter)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret));
+  } else {
+    SCN cur_adapter_replace_scn = adapter->get_replace_scn();
+    if (!cur_adapter_replace_scn.is_valid()) {
+      can_do_refresh_memdata = true;
+    } else {
+      can_do_refresh_memdata = target_scn > cur_adapter_replace_scn;
+    }
+    LOG_INFO("scn check result", K(target_scn), K(cur_adapter_replace_scn), K(can_do_refresh_memdata), K(*adapter));
+  }
+  return ret;
+}
+
 int ObPluginVectorIndexUtils::refresh_memdata(ObLSID &ls_id,
                                               ObPluginVectorIndexAdaptor *adapter,
                                               SCN target_scn,
@@ -1162,10 +1181,13 @@ int ObPluginVectorIndexUtils::refresh_memdata(ObLSID &ls_id,
     LOG_WARN("fail to test read local data.", K(ret), K(ls_id), K(INDEX_TYPE_IS_NOT));
   }
 #endif
+  bool can_do_refresh_memdata = false;
   if (OB_ISNULL(adapter)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid adapter", K(ret), KPC(adapter));
-  } else {
+  } else if (OB_FAIL(check_can_do_refresh_memdata(adapter, target_scn, can_do_refresh_memdata))) {
+    LOG_WARN("failed to check can do refresh memdata", K(ret));
+  } else if (can_do_refresh_memdata) {
     MTL_SWITCH(adapter->get_tenant_id()) {
       ObPluginVectorIndexAdaptor *new_adapter = adapter;
       ObPluginVectorIndexService *vector_index_service = MTL(ObPluginVectorIndexService *);
@@ -1186,14 +1208,18 @@ int ObPluginVectorIndexUtils::refresh_memdata(ObLSID &ls_id,
         LOG_WARN("failed to refresh adapter from table", K(ret), KPC(adapter));
       }
       if (adapter != new_adapter && OB_NOT_NULL(new_adapter)) {
+        bool has_replace = false;
         if (OB_SUCC(ret)) {
+          // Set replace scn before replace_old_adapter
           RWLock::WLockGuard lock_guard(vec_idx_mgr->get_adapter_map_lock());
-          if (OB_FAIL(vec_idx_mgr->replace_old_adapter(new_adapter))) {
+          if (OB_FAIL(new_adapter->set_replace_scn(target_scn))) {
+            LOG_WARN("failed to set replace scn", K(ret), K(target_scn));
+          } else if (OB_FAIL(vec_idx_mgr->replace_old_adapter_with_scn_check(new_adapter, has_replace))) {
             LOG_WARN("failed to replace old adapter", K(ret));
           }
         }
-        if (OB_FAIL(ret)) {
-          LOG_INFO("release new vector index adapter on failed", K(ret), K(new_adapter));
+        if (OB_FAIL(ret) || !has_replace) {
+          LOG_INFO("release new vector index adapter on failed", K(ret), K(new_adapter), K(has_replace));
           new_adapter->~ObPluginVectorIndexAdaptor();
           void *adpt_buff  = reinterpret_cast<void*>(new_adapter);
           vector_index_service->get_allocator().free(adpt_buff);

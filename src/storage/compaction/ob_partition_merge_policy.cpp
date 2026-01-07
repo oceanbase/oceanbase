@@ -2871,15 +2871,21 @@ int ObIncMajorTxHelper::check_inc_major_table_status(
                                                            cur_table->get_data_checksum(),
                                                            cur_table->get_row_count());
         const ObIncMajorSSTableInfo::IncMajorInfo &info_in_clog = medium_info.inc_major_info_.info_list_[idx];
-
-        if (is_cs_replica) {
+        const ObIncMajorSSTableInfo::IncMajorType cur_type = static_cast<ObIncMajorSSTableInfo::IncMajorType>(medium_info.inc_major_info_.inc_major_type_);
+        if (OB_LIKELY(cur_info == info_in_clog)) {
+          // check success
+        } else if (!is_cs_replica) {
+          ret = OB_ERR_UNEXPECTED;
+        } else if ((cur_table->is_inc_column_store_sstable() && ObIncMajorSSTableInfo::ALL_COLUMN_STORE == cur_type) ||
+                   (!cur_table->is_inc_column_store_sstable() && ObIncMajorSSTableInfo::ALL_ROW_STORE == cur_type)) {
+          ret = OB_ERR_UNEXPECTED;
+        } else {
+          // only check row count
           if (OB_UNLIKELY(info_in_clog.row_count_ != cur_info.row_count_
                        || info_in_clog.start_scn_ != cur_info.start_scn_
                        || info_in_clog.end_scn_ != cur_info.end_scn_)) {
             ret = OB_ERR_UNEXPECTED;
           }
-        } else if (OB_UNLIKELY(info_in_clog != cur_info)) {
-          ret = OB_ERR_UNEXPECTED;
         }
 
         if (OB_FAIL(ret)) {

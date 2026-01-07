@@ -333,7 +333,7 @@ TEST_F(TestIncMajorGet, test_old_version_mini_single_merge)
   OK(single_merge.get_next_row(row));
   ASSERT_EQ(row->count_, 5);
   ASSERT_EQ(row->storage_datums_[0].get_int(), 1);
-  ASSERT_EQ(row->storage_datums_[1].get_int(), -1761312445524527001);
+  ASSERT_EQ(row->storage_datums_[1].get_int(), -1761312565088476000);
   ASSERT_EQ(row->storage_datums_[2].get_int(), 0);
   ASSERT_EQ(row->storage_datums_[3].get_int(), 19);
   ASSERT_EQ(row->storage_datums_[4].get_int(), 29);

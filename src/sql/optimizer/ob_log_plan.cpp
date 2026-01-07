@@ -746,6 +746,7 @@ int ObLogPlan::pre_process_quals(const ObIArray<TableItem*> &table_items,
   //1. where conditions
   for (int64_t i = 0; OB_SUCC(ret) && i < quals.count(); ++i) {
     ObRawExpr *qual = quals.at(i);
+    bool has_risky_state_func = false;
     if (OB_FAIL(ObRawExprUtils::copy_and_formalize(qual, onetime_copier_, get_optimizer_context().get_session_info()))) {
       LOG_WARN("failed to try replace onetime subquery", K(ret));
     } else if (OB_ISNULL(qual)) {
@@ -780,7 +781,9 @@ int ObLogPlan::pre_process_quals(const ObIArray<TableItem*> &table_items,
           LOG_WARN("failed to add startup filter", K(ret));
         }
       }
-    } else if (!qual->is_deterministic() && !qual->has_flag(CNT_ASSIGN_EXPR)) {
+    } else if (OB_FAIL(ObOptimizerUtil::check_has_risky_state_func(qual, has_risky_state_func))) {
+      LOG_WARN("failed to check has risky state func", K(ret));
+    } else if (has_risky_state_func) {
       ret = add_special_expr(qual);
     } else if (ObOptimizerUtil::has_hierarchical_expr(*qual)) {
       ret = normal_quals.push_back(qual);
@@ -15943,9 +15946,14 @@ int ObLogPlan::check_das_need_scan_with_domain_id(ObLogicalOperator *op)
     if (OB_FAIL(scan->check_das_need_scan_with_domain_id())) {
       LOG_WARN("failed to check das scan with doc id", K(ret));
     } else if (OB_UNLIKELY((scan->has_func_lookup() || scan->use_index_merge()) && scan->is_tsc_with_domain_id())) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("complex query with dml on fulltext index / vector index not supported", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "complex query with dml on fulltext index is");
+      if (scan->use_index_merge()) {
+        // index merge should be disabled when generating access path
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("complex query with dml on index merge not supported", K(ret));
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "complex query with dml on fulltext / vector index is");
+      }
     }
   }
   for (int i = 0; OB_SUCC(ret) && i < op->get_num_of_child(); ++i) {

@@ -470,11 +470,11 @@ int ObVirtualASH::convert_node_to_row(const ObActiveSessionStatItem &node, ObNew
         break;
       }
       case WEIGHT: {
-        cells[cell_idx].set_int(0);
+        cells[cell_idx].set_int(node.weight_);
         break;
       }
       case IS_WR_WEIGHT_SAMPLE: {
-        cells[cell_idx].set_bool(false);
+        cells[cell_idx].set_bool(node.is_wr_weight_sample_);
         break;
       }
       default: {
