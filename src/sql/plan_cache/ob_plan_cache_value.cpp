@@ -374,7 +374,7 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
         if (is_contain_tmp_tbl()) {
           //临时表的行为取决于用户创建的session，而对于远程执行而言，远程的session id是一个临时的session_id
           //因此这里统一应该使用master session id，来保证匹配计划一直使用的是用户session
-          sessid_ = pc_ctx.sql_ctx_.session_info_->get_sid();
+          sessid_ = pc_ctx.sql_ctx_.session_info_->get_sessid_for_table();
           sess_create_time_ = pc_ctx.sql_ctx_.session_info_->get_sess_create_time();
           // 获取临时表的表名
           pc_ctx.tmp_table_names_.reset();
@@ -472,6 +472,7 @@ int ObPlanCacheValue::match_all_params_info(ObPlanSet *batch_plan_set,
 
 int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
                                   const ObIArray<PCVSchemaObj> &schema_array,
+                                  const bool check_schema,
                                   ObPlanCacheObject *&plan_out)
 {
   int ret = OB_SUCCESS;
@@ -485,8 +486,8 @@ int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
   //如果不为最新的,在plan cache层会删除该value，并重新add plan
   //TODO shengle 此处拷贝需要想办法处理掉
   int64_t spm_mode = 0;
-  bool need_check_schema = (schema_array.count() != 0);
   int64_t new_switchover_epoch = MTL_GET_SWITCHOVER_EPOCH();
+  bool need_check_schema = 0 == schema_array.count() ? false : check_schema;
   if (schema_array.count() == 0 && stored_schema_objs_.count() == 0) {
     need_check_schema = true;
   }
@@ -1827,7 +1828,6 @@ int ObPlanCacheValue::match(ObPlanCacheCtx &pc_ctx,
       LOG_WARN("failed to check tpl sql const cons", K(ret));
     }
   }
-
   // check for temp tables and same table
   if (OB_SUCC(ret) && is_same && schema_array.count() != 0) {
     if (OB_FAIL(match_dep_schema(pc_ctx, schema_array, is_same))) {
@@ -2087,11 +2087,36 @@ int ObPlanCacheValue::get_all_dep_schema(ObPlanCacheCtx &pc_ctx,
   int ret = OB_SUCCESS;
   need_check_schema = false;
   schema_array.reset();
-  if (OB_FAIL(need_check_schema_version(pc_ctx,
+  bool has_mysql_tmp_table;
+  /*
+  session1 :
+       create temporary table t1(c1 int, c2 int);
+  session2 :
+       create table t1(c1 int);
+       insert into t1 values(1);
+       select * from t1;
+  session1 :
+       select * from t1;   ->The plan match is wrong, the entity table t1 is queried, and one row is returned
+
+    First create a temporary table and then create a normal table,
+    and then add the plan of the normal table to the plan cache. In
+    this case, it is impossible to predict whether there is a
+    temporary table with the same name in the current session.
+    Therefore, if there is a temporary table, you need to recheck the schema .
+  */
+  if (OB_ISNULL(pc_ctx.sql_ctx_.session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is null", KR(ret));
+  } else if (OB_FAIL(pc_ctx.sql_ctx_.session_info_->get_session_temp_table_used(has_mysql_tmp_table))) {
+    LOG_WARN("fail to get seesion_temp_table_uesd", KR(ret));
+  } else if (FALSE_IT(has_mysql_tmp_table = !lib::is_oracle_mode() &&
+                                            (has_mysql_tmp_table ? has_mysql_tmp_table
+                                                                 : pc_ctx.sql_ctx_.session_info_->get_has_temp_table_flag()))) {
+  } else if (OB_FAIL(need_check_schema_version(pc_ctx,
                                         new_schema_version,
                                         need_check_schema))) {
     LOG_WARN("failed to get need_check_schema flag", K(ret));
-  } else if (!need_check_schema) {
+  } else if (!need_check_schema && !has_mysql_tmp_table) {
     // do nothing
   } else if (OB_ISNULL(pc_ctx.sql_ctx_.schema_guard_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -2107,7 +2132,7 @@ int ObPlanCacheValue::get_all_dep_schema(ObPlanCacheCtx &pc_ctx,
       if (OB_ISNULL(pcv_schema)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("got unexpected null", K(ret));
-      } else if (TABLE_SCHEMA != pcv_schema->schema_type_) {
+      } else if (need_check_schema && TABLE_SCHEMA != pcv_schema->schema_type_) {
         // if no table schema, get schema version is enough
         int64_t new_version = 0;
         if (PACKAGE_SCHEMA == stored_schema_objs_.at(i)->schema_type_
@@ -2394,22 +2419,6 @@ int ObPlanCacheValue::need_check_schema_version(ObPlanCacheCtx &pc_ctx,
     LOG_WARN("failed to get tenant schema version", K(ret));
   } else {
     int64_t cached_tenant_schema_version = ATOMIC_LOAD(&tenant_schema_version_);
-    /*
-      session1 :
-           create temporary table t1(c1 int, c2 int);
-      session2 :
-           create table t1(c1 int);
-           insert into t1 values(1);
-           select * from t1;
-      session1 :
-           select * from t1;   ->The plan match is wrong, the entity table t1 is queried, and one row is returned
-
-        First create a temporary table and then create a normal table,
-        and then add the plan of the normal table to the plan cache. In
-        this case, it is impossible to predict whether there is a
-        temporary table with the same name in the current session.
-        Therefore, if there is a temporary table, you need to recheck the schema .
-     */
     need_check = ((new_schema_version != cached_tenant_schema_version)
                   || is_contain_tmp_tbl()
                   || is_contain_sys_pl_object()

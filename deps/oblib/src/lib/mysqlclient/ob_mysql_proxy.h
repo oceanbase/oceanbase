@@ -34,6 +34,7 @@ class ObISQLConnectionPool;
 class ObDbLinkConnectionPool;
 }
 
+
 struct InnerDDLInfo final
 {
 public:
@@ -149,6 +150,7 @@ private:
   InnerDDLInfo ddl_info_;
   uint64_t session_id_;
 };
+
 struct ObSessionParam final
 {
 public:

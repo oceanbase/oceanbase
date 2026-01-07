@@ -217,6 +217,7 @@ public:
   // choose an appropriate physical plan
   int choose_plan(ObPlanCacheCtx &pc_ctx,
                   const common::ObIArray<PCVSchemaObj> &schema_array,
+                  const bool check_schema,
                   ObPlanCacheObject *&plan);
   // add a physical plan
   int add_plan(ObPlanCacheObject &cache_obj,

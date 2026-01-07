@@ -159,7 +159,11 @@ public:
                           common::ObIArray<ObUnit> &units) const;
   int get_alive_servers_by_tenant(
       const uint64_t tenant_id,
-      common::ObIArray<common::ObAddr> &server_array) const;
+      common::ObIArray<common::ObAddr> &server_array,
+      bool is_strict = false) const;
+  int get_all_servers_by_tenant(const uint64_t tenant_id,
+                                common::ObIArray<common::ObAddr> &server_array,
+                                bool is_strict = false) const;
   int get_units_by_unit_ids(const ObIArray<uint64_t> &unit_ids,
                             common::ObIArray<ObUnit> &units);
   int get_unit_by_id(common::ObISQLClient &client, const uint64_t unit_id, ObUnit &unit) const;

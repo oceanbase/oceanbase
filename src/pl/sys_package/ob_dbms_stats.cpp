@@ -271,6 +271,8 @@ int ObDbmsStats::gather_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
         }
       } else if (share::schema::ObTableType::EXTERNAL_TABLE == stat_param.ref_table_type_) {
         // not allow gather external table in schema scope
+      } else if (share::schema::ObTableType::TMP_TABLE == stat_param.ref_table_type_) {
+        // not allow gather mysql tmp table in schema scope
       } else if (OB_FAIL(ObDbmsStatsExecutor::gather_table_stats(ctx, stat_param, running_monitor))) {
         LOG_WARN("failed to gather table stats", K(ret));
       } else if (OB_FAIL(update_stat_cache(ctx.get_my_session()->get_rpc_tenant_id(),

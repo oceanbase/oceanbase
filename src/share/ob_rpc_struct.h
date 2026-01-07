@@ -213,6 +213,7 @@ public:
 
   operator uint64_t () { return v_; }
   operator uint64_t () const { return v_; }
+  bool is_valid() const { return true; }
   DEFINE_TO_STRING(BUF_PRINTO(v_));
 
 private:

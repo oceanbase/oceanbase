@@ -132,33 +132,6 @@ public:
 
 public:
   //Refer to ObPurgeCompletedMonitorInfoTask
-  class ObCTASCleanUpTask: public common::ObTimerTask
-  {
-  public:
-    ObCTASCleanUpTask();
-    virtual ~ObCTASCleanUpTask() {}
-    int init(ObServer *observer, int tg_id);
-    void destroy();
-    virtual void runTimerTask() override;
-  private:
-    const static int64_t CLEANUP_INTERVAL = 60L * 1000L * 1000L;//60s
-    ObServer *obs_;
-    bool is_inited_;
-  };
-
-  class ObRefreshTimeTask: public common::ObTimerTask
-  {
-  public:
-    ObRefreshTimeTask();
-    virtual ~ObRefreshTimeTask() {}
-    int init(ObServer *observer, int tg_id);
-    void destroy();
-    virtual void runTimerTask() override;
-  private:
-    const static int64_t REFRESH_INTERVAL = 60L * 60L * 1000L * 1000L;//1hr
-    ObServer *obs_;
-    bool is_inited_;
-  };
 
   class ObRefreshNetworkSpeedTask: public common::ObTimerTask
   {
@@ -213,35 +186,6 @@ public:
     DISALLOW_COPY_AND_ASSIGN(ObRefreshTime);
   };
 
-  class ObCTASCleanUp
-  {
-  public:
-    explicit ObCTASCleanUp(ObServer *obs, bool drop_flag): obs_(obs), session_id_(0), 
-              schema_version_(0), drop_flag_(drop_flag), cleanup_rule_type_(0) {}
-    virtual ~ObCTASCleanUp(){}
-    bool operator()(sql::ObSQLSessionMgr::Key key, sql::ObSQLSessionInfo *sess_info);
-    inline void set_session_id(uint64_t  session_id) {session_id_ = session_id; }
-    inline uint64_t get_session_id() { return session_id_; }
-    inline void set_schema_version(int64_t  schema_version) {schema_version_ = schema_version; }
-    inline int64_t get_schema_version() { return schema_version_; }
-    inline void set_drop_flag(bool drop_flag) { drop_flag_ = drop_flag; }
-    inline bool get_drop_flag() { return drop_flag_; }
-    inline void set_cleanup_type(int type) { cleanup_rule_type_ = type; }
-    inline int get_cleanup_type() { return cleanup_rule_type_; }
-    enum CLEANUP_RULE
-    {
-      CTAS_RULE,          //Query cleanup rules for table creation
-      TEMP_TAB_RULE,      //Cleanup rules for temporary tables (direct connection)
-      TEMP_TAB_PROXY_RULE //Temporary table cleanup rules (PROXY)
-    };
-  private:
-    ObServer *obs_;
-    uint64_t session_id_;      //Determine whether the sesion_id of the table schema needs to be dropped
-    int64_t schema_version_;  //Determine whether the version number of the table schema that needs to be dropped
-    bool drop_flag_;           //Do you need a drop table
-    int cleanup_rule_type_;    //According to the temporary table rules or query table building rules
-    DISALLOW_COPY_AND_ASSIGN(ObCTASCleanUp);
-  };
   share::schema::ObMultiVersionSchemaService &get_schema_service() { return schema_service_; }
   ObInOutBandwidthThrottle &get_bandwidth_throttle() { return bandwidth_throttle_; }
   int64_t get_network_speed() const { return ethernet_speed_; }
@@ -315,14 +259,11 @@ private:
   int refresh_io_calibration();
   int clean_up_invalid_tables();
   int clean_up_invalid_tables_by_tenant(const uint64_t tenant_id);
-  int init_ctas_clean_up_task(); //Regularly clean up the residuals related to querying and building tables and temporary tables
   int init_redef_heart_beat_task();
 #ifdef OB_BUILD_SHARED_STORAGE
   int init_tenant_dir_gc_task();
 #endif
   int init_ddl_heart_beat_task_container();
-  int refresh_temp_table_sess_active_time();
-  int init_refresh_active_time_task(); //Regularly update the sess_active_time of the temporary table created by the proxy connection sess
   int init_refresh_network_speed_task();
   int init_refresh_cpu_frequency();
   int init_device_manifest_task();
@@ -351,7 +292,6 @@ private:
 public:
   static int get_network_speed_from_config_file(int64_t &network_speed);
 public:
-  volatile bool need_ctas_cleanup_; //true: ObCTASCleanUpTask should traverse all table schemas to find the one need be dropped
 private:
   //thread to deal signals
   char sig_buf_[sizeof(ObSignalWorker) + sizeof(ObSignalHandle)] __attribute__((__aligned__(16)));
@@ -472,9 +412,7 @@ private:
   common::ObMysqlRandom scramble_rand_;
   ObTenantDutyTask duty_task_;
   ObTenantSqlMemoryTimerTask sql_mem_task_;
-  ObCTASCleanUpTask ctas_clean_up_task_;     // repeat & no retry
   ObRedefTableHeartBeatTask redef_table_heart_beat_task_;
-  ObRefreshTimeTask refresh_active_time_task_; // repeat & no retry
   ObRefreshNetworkSpeedTask refresh_network_speed_task_; // repeat & no retry
   ObRefreshCpuFreqTimeTask refresh_cpu_frequency_task_;
   ObRefreshIOCalibrationTimeTask refresh_io_calibration_task_; // retry to success & no repeat

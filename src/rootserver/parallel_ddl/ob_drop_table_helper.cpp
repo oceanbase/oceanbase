@@ -589,7 +589,17 @@ int ObDropTableHelper::lock_tables_by_name_()
     for (int64_t i = 0; OB_SUCC(ret) && i < table_items_.count(); i++) {
       const ObString &database_name = table_items_.at(i).database_name_;
       const ObString &table_name = table_items_.at(i).table_name_;
-      if (OB_FAIL(add_lock_object_by_name_(database_name, table_name, TABLE_SCHEMA, EXCLUSIVE))) {
+      if (TMP_TABLE == arg_.table_type_) {
+        // direct drop temp table can only lock table name with session id
+        if (OB_FAIL(add_lock_object_by_name_(database_name, table_name, TABLE_SCHEMA, EXCLUSIVE, arg_.session_id_))) {
+          LOG_WARN("fail to lock object by table name", KR(ret), K_(tenant_id), K(database_name), K(table_name));
+        }
+      } else if (USER_TABLE == arg_.table_type_) {
+        // drop user table may drop normal table or temp table
+        if (OB_FAIL(add_lock_table_by_name_with_session_id_zero_(database_name, table_name, EXCLUSIVE, arg_.session_id_))) {
+          LOG_WARN("fail to lock object by table name", KR(ret), K_(tenant_id), K(database_name), K(table_name));
+        }
+      } else if (OB_FAIL(add_lock_object_by_name_(database_name, table_name, TABLE_SCHEMA, EXCLUSIVE))) {
         LOG_WARN("fail to lock object by table name", KR(ret), K_(tenant_id), K(database_name), K(table_name));
       }
     }
@@ -666,6 +676,11 @@ int ObDropTableHelper::prefetch_table_schemas_()
         ret = OB_OP_NOT_ALLOW;
         LOG_WARN("this type of table is not allowed for parallel drop table", KR(ret), K(table_type));
         LOG_USER_ERROR(OB_OP_NOT_ALLOW, "parallel drop sys table is");
+      } else if (TMP_TABLE == arg_.table_type_ && TMP_TABLE != table_type) {
+        LOG_WARN("table does not exist", KR(ret), K(table_name), K(session_id));
+        if (OB_FAIL(log_table_not_exist_msg_(table_items_.at(i)))) {
+          LOG_WARN("fail to log table not exsit msg", KR(ret));
+        }
       } else if (!ObSchemaUtils::is_support_parallel_drop(table_type)) {
         // skip
         LOG_WARN("this type of table should be invisable for drop table", KR(ret), KPC(table_schema));

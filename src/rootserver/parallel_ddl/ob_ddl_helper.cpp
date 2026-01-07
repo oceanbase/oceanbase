@@ -648,7 +648,41 @@ int ObDDLHelper::add_lock_object_by_name_(
     const ObString &database_name,
     const ObString &object_name,
     const share::schema::ObSchemaType schema_type,
-    const transaction::tablelock::ObTableLockMode lock_mode)
+    const transaction::tablelock::ObTableLockMode lock_mode,
+    const uint64_t session_id)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString name;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(database_name.empty() || object_name.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("database_name/object_name is invalid", KR(ret), K(database_name), K(object_name));
+  } else if (schema::TABLE_SCHEMA == schema_type
+             && session_id != 0
+             && session_id != OB_INVALID_ID) {
+    if (OB_FAIL(name.append_fmt("%s%lu", object_name.ptr(), session_id))) {
+      LOG_WARN("fail to append object name", KR(ret));
+    }
+  } else if (OB_FAIL(name.append(object_name))) {
+    LOG_WARN("fail to append object name", KR(ret));
+  }
+  if OB_SUCC(ret) {
+    uint64_t lock_obj_id = cast_obj_name_to_id_(database_name, name.string());
+    if (OB_FAIL(add_lock_object_to_map_(lock_obj_id, lock_mode, lock_object_name_map_))) {
+      LOG_WARN("fail to add lock object to map", KR(ret), K(lock_obj_id), K(lock_mode));
+    }
+    LOG_INFO("add lock object by name", KR(ret), K(database_name),
+             K(name), K(schema_type), K(lock_mode), K(lock_obj_id));
+  }
+  return ret;
+}
+
+int ObDDLHelper::add_lock_table_by_name_with_session_id_zero_(
+                 const ObString &database_name,
+                 const ObString &object_name,
+                 const transaction::tablelock::ObTableLockMode lock_mode,
+                 const uint64_t session_id)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat_())) {
@@ -656,17 +690,13 @@ int ObDDLHelper::add_lock_object_by_name_(
   } else if (OB_UNLIKELY(database_name.empty() || object_name.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("database_name/object_name is invalid", KR(ret), K(database_name), K(object_name));
-  } else {
-    uint64_t lock_obj_id = cast_obj_name_to_id_(database_name, object_name);
-    if (OB_FAIL(add_lock_object_to_map_(lock_obj_id, lock_mode, lock_object_name_map_))) {
-      LOG_WARN("fail to add lock object to map", KR(ret), K(lock_obj_id), K(lock_mode));
-    }
-    LOG_INFO("add lock object by name", KR(ret), K(database_name),
-             K(object_name), K(schema_type), K(lock_mode), K(lock_obj_id));
+  } else if (OB_FAIL(add_lock_object_by_name_(database_name, object_name, share::schema::TABLE_SCHEMA, lock_mode, session_id))) {
+    LOG_WARN("fail to add lock object by name", KR(ret), K(database_name), K(object_name), K(lock_mode), K(session_id));
+  } else if (OB_FAIL(add_lock_object_by_name_(database_name, object_name, share::schema::TABLE_SCHEMA, lock_mode, 0 /*session_id*/))) {
+    LOG_WARN("fail to add lock object by name", KR(ret), K(database_name), K(object_name), K(lock_mode), K(session_id));
   }
   return ret;
 }
-
 int ObDDLHelper::lock_existed_objects_by_name_()
 {
   return lock_objects_in_map_(ObLockOBJType::OBJ_TYPE_OBJECT_NAME, lock_object_name_map_);

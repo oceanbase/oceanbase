@@ -354,10 +354,15 @@ int ObVectorClusterHelper::create_inner_session(
   } else {
     session->set_inner_session();
     session->set_compatibility_mode(is_oracle_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE);
-    session->get_ddl_info().set_is_dummy_ddl_for_inner_visibility(true);
+    InnerDDLInfo ddl_info;
+    ddl_info.set_is_dummy_ddl_for_inner_visibility(true);
     session->set_database_id(OB_SYS_DATABASE_ID);
     session->set_query_start_time(ObTimeUtil::current_time());
-    LOG_INFO("[VECTOR INDEX]: Succ to create inner session", K(ret), K(tenant_id), KP(session));
+    if (OB_FAIL(session->get_ddl_info().init(ddl_info, 0 /*session_id*/))) {
+      LOG_WARN("fail to init ddl info", KR(ret), K(ddl_info));
+    } else {
+      LOG_INFO("[VECTOR INDEX]: Succ to create inner session", K(ret), K(tenant_id), KP(session));
+    }
   }
   if (OB_FAIL(ret)) {
     release_inner_session(free_session_ctx, session);
@@ -369,7 +374,7 @@ void ObVectorClusterHelper::release_inner_session(sql::ObFreeSessionCtx &free_se
 {
   if (nullptr != session) {
     LOG_INFO("[VECTOR INDEX]: Release inner session", KP(session));
-    session->get_ddl_info().set_is_dummy_ddl_for_inner_visibility(false);
+    session->get_ddl_info().reset();
     session->set_session_sleep();
     GCTX.session_mgr_->revert_session(session);
     GCTX.session_mgr_->free_session(free_session_ctx);

@@ -3134,9 +3134,29 @@ int ObSql::generate_stmt(ParseResult &parse_result,
   } else {
     if (result.get_session().get_session_type() != ObSQLSessionInfo::INNER_SESSION) {
       session_id = result.get_session().get_sessid_for_table();
+    } else if (result.get_session().get_ddl_info().is_valid()) {
+      // some ddl will send inner sql to operate table with session id.
+      // need to set session id to make that table visible
+      // FIXME:@wenyu.ffz sql
+      // The current SQL system has many information collection features that rely on
+      // concatenating table names to generate new SQL statements for execution via inner SQL.
+      // To prevent the general functionality of temporary tables from being affected,
+      // now it allows inner SQL direct consumption of temporary tables through table names.
+      // However, it is important to note that this approach may lead to unintended behavior
+      // when there are tables with the same name as temporary tables.
+      // Specifically, when the intended target is a normal (non-temporary) table,
+      // the system might mistakenly consume the temporary table instead.
+      // This scenario requires careful analysis and resolution to avoid such conflicts.
+      if (result.get_session().get_ddl_info().is_ddl()) {
+        session_id = result.get_session().get_ddl_info().get_session_id();
+      } else {
+        // some call functions have valid ddl_info, but not ddl
+        session_id = result.get_session().get_sessid_for_table();
+      }
     } else {
-      session_id = OB_INVALID_ID; //内部session, 不受table_schema->session_id的可见性影响, 能看到查询建表过程中的表
+      session_id = 0;
     }
+    LOG_TRACE("session id check", K(session_id), K(result.get_session()), K(result.get_session().get_session_type()));
     schema_checker = OB_NEWx(ObSchemaChecker, (&allocator));
     if (OB_UNLIKELY(NULL == schema_checker)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -3146,7 +3166,6 @@ int ObSql::generate_stmt(ParseResult &parse_result,
       LOG_WARN("context schema guard is null", K(ret));
     }
   }
-
   if (OB_SUCC(ret)) {
     resolver_ctx.allocator_  = &allocator;
     resolver_ctx.schema_checker_ = schema_checker;

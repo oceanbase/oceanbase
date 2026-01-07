@@ -6786,14 +6786,19 @@ int ObDDLResolver::init_empty_session(const common::ObTimeZoneInfoWrap &tz_info_
     LOG_WARN("failed to get table compatibility mode", K(ret));
   } else {
     ObSessionDDLInfo ddl_info;
-    ddl_info.set_ddl_check_default_value(true);
-    empty_session.set_ddl_info(ddl_info);
-    empty_session.set_nls_formats(nls_formats);
-    empty_session.set_compatibility_mode(
-      is_oracle_compat_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE);
-    empty_session.set_sql_mode(sql_mode);
-    empty_session.set_default_database(db_schema->get_database_name_str());
-    empty_session.set_database_id(table_schema.get_database_id());
+    InnerDDLInfo inner_ddl_info;
+    inner_ddl_info.set_ddl_check_default_value(true);
+    if (OB_FAIL(ddl_info.init(inner_ddl_info, 0/*session_id*/))) {
+      LOG_WARN("fail to init ddl info", KR(ret), K(inner_ddl_info));
+    } else {
+      empty_session.set_ddl_info(ddl_info);
+      empty_session.set_nls_formats(nls_formats);
+      empty_session.set_compatibility_mode(
+        is_oracle_compat_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE);
+      empty_session.set_sql_mode(sql_mode);
+      empty_session.set_default_database(db_schema->get_database_name_str());
+      empty_session.set_database_id(table_schema.get_database_id());
+    }
   }
   if (OB_SUCC(ret) && NULL != local_session_var) {
     if (OB_FAIL(local_session_var->update_session_vars_with_local(empty_session))) {
@@ -7173,7 +7178,8 @@ int ObDDLResolver::calc_default_value(share::schema::ObColumnSchemaV2 &column,
       const ObTenantSchema *tenant_schema = NULL;
       ObSchemaGetterGuard guard;
       ObSessionDDLInfo ddl_info;
-      ddl_info.set_ddl_check_default_value(true);
+      InnerDDLInfo inner_ddl_info;
+      inner_ddl_info.set_ddl_check_default_value(true);
       ParamStore empty_param_list( (ObWrapperAllocator(allocator)) );
       params.expr_factory_ = &expr_factory;
       params.allocator_ = &allocator;
@@ -7181,7 +7187,9 @@ int ObDDLResolver::calc_default_value(share::schema::ObColumnSchemaV2 &column,
       params.param_list_ = &empty_param_list;
       exec_ctx.set_my_session(&empty_session);
       exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
-      if (OB_FAIL(empty_session.test_init(0, 0, 0, &allocator))) {
+      if (OB_FAIL(ddl_info.init(inner_ddl_info, 0/*session_id*/))) {
+        LOG_WARN("fail to init ddl info", KR(ret), K(inner_ddl_info));
+      } else if (OB_FAIL(empty_session.test_init(0, 0, 0, &allocator))) {
         LOG_WARN("init empty session failed", K(ret));
       } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, guard))) {
         LOG_WARN("get schema guard failed", K(ret));
@@ -8106,6 +8114,10 @@ int ObDDLResolver::resolve_fts_index_constraint(
     LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS,
                    column_name.length(),
                    column_name.ptr());
+  } else if (table_schema.is_mysql_tmp_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("fulltext index on mysql temporary table is not supported", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "fulltext index on mysql temporary table is");
   } else if (OB_FAIL(resolve_fts_index_constraint(*column_schema,
                                                   index_keyname_value))) {
     LOG_WARN("resolve fts index constraint fail", K(ret), K(index_keyname_value));
@@ -8150,6 +8162,10 @@ int ObDDLResolver::resolve_vec_index_constraint(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("create vector index on column has vector index is not supported", K(ret), K(column_name));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "create vector index on column has vector index is");
+  } else if (table_schema.is_mysql_tmp_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("mysql temp table not support vector index", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "mysql temporary table create vector index is");
   } else if (OB_FAIL(resolve_vec_index_constraint(*column_schema,
                                                   index_keyname_value,
                                                   node))) {

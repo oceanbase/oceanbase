@@ -1872,6 +1872,10 @@ int ObIndexBuilder::generate_schema(
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("tenant data version is less than 4.3.2, create fulltext index on existing table is not supported", K(ret), K(tenant_data_version));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.2, fulltext index");
+        } else if (data_schema.is_mysql_tmp_table()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("mysql temp table not support fulltext index", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "mysql temporary table create fulltext index is");
         }
       } else if (is_multivalue_index(arg.index_type_)) {
         uint64_t tenant_data_version = 0;
@@ -1882,6 +1886,10 @@ int ObIndexBuilder::generate_schema(
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("tenant data version is less than 4.3.1, multivalue index is not supported", K(ret), K(tenant_data_version));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.1, multivalue index");
+        } else if (data_schema.is_mysql_tmp_table()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("mysql temp table not support multivalue index", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "mysql temporary table create multivalue index is");
         }
       } else if (share::schema::is_vec_index(arg.index_type_)) {
         uint64_t tenant_data_version = 0;
@@ -1892,6 +1900,10 @@ int ObIndexBuilder::generate_schema(
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("tenant data version is less than 4.3.3, vector index is not supported", K(ret), K(tenant_data_version));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.3, vector index");
+        } else if (data_schema.is_mysql_tmp_table()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("mysql temp table not support vector index", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "mysql temporary table create vector index is");
         }
       }
       if (OB_SUCC(ret)

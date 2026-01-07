@@ -484,7 +484,7 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
 
     if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
       LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
-    } else if (!table_schema->is_user_table()) {
+    } else if (!table_schema->is_user_table() && !table_schema->is_mysql_tmp_table()) {
       ret = OB_NOT_SUPPORTED;
       if (lib::is_oracle_mode() && table_schema->is_tmp_table()) {
         LOG_WARN("direct-load does not support oracle temporary table", KR(ret));

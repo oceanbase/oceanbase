@@ -367,6 +367,108 @@ int ObTableLockDetectFuncList::get_owner_id_list_from_table_(ObIAllocator &alloc
   return ret;
 }
 
+int ObTableLockDetectFuncList::do_session_at_least_one_alive_detect_for_rpc(const uint32_t session_id, obrpc::Bool &is_alive)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObSessionAliveChecker session_alive_task(session_id);
+  sql::ObSQLSessionMgr *session_mgr = GCTX.session_mgr_;
+  if (OB_ISNULL(session_mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("there's no session mgr in GCTX", KR(ret), K(session_id));
+  } else if (OB_FAIL(session_mgr->for_each_session(session_alive_task))) {
+    LOG_WARN("fail to check session alive", KR(ret), K(session_alive_task));
+  } else {
+    is_alive = session_alive_task.is_alive();
+  }
+  LOG_INFO("detect session alive", K(session_id), K(is_alive));
+  return ret;
+}
+
+int ObTableLockDetectFuncList::get_tenant_servers(const uint64_t tenant_id, common::ObIArray<common::ObAddr> &server_array)
+{
+  int ret = OB_SUCCESS;
+  ObUnitTableOperator ut_operator;
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret), KP(GCTX.root_service_), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(ut_operator.init(*GCTX.sql_proxy_))) {
+    LOG_WARN("fail to init unit table operator", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(ut_operator.get_all_servers_by_tenant(tenant_id, server_array, true /*strict*/))) {
+    LOG_WARN("get alive server failed", KR(ret), K(tenant_id));
+  }
+  return ret;
+}
+
+int ObTableLockDetectFuncList::do_session_at_least_one_alive_detect(const uint64_t tenant_id, const uint32_t session_id, const ObArray<ObAddr> *dest_server, bool &is_alive)
+{
+  int ret = OB_SUCCESS;
+  is_alive = true;
+  const ObArray<ObAddr> *server_list = nullptr;
+  ObArray<ObAddr> tmp_server;
+  if (OB_ISNULL(dest_server)){
+    if (OB_FAIL(get_tenant_servers(tenant_id, tmp_server))) {
+      LOG_WARN("fail to get tenant server", KR(ret), K(tenant_id));
+    }
+    server_list = &tmp_server;
+  } else {
+    server_list = dest_server;
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_ISNULL(GCTX.srv_rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("server rpc proxy is null", KR(ret));
+  } else {
+    rootserver::ObDetectClientSessionAliveProxy proxy(*GCTX.srv_rpc_proxy_, &ObSrvRpcProxy::detect_client_session_alive);
+    const int64_t rpc_timeout = GCONF.rpc_timeout;
+    int64_t timeout = 0;
+    FOREACH_X(s, *server_list, OB_SUCC(ret)) {
+      if (OB_ISNULL(s)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("s is null", K(ret));
+      } else {
+        timeout = std::min(THIS_WORKER.get_timeout_remain(), rpc_timeout);
+        if (FAILEDx(proxy.call(*s, timeout, session_id))) {
+          LOG_WARN("send session alive detect rpc failed", KR(ret),
+              K(timeout), K(session_id), "server", *s);
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      ObArray<int> return_code_array;
+      if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
+        LOG_WARN("wait all batch result failed", KR(ret), KR(tmp_ret));
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
+      }
+      if (FAILEDx(proxy.check_return_cnt(return_code_array.count()))) {
+        LOG_WARN("fail to check return cnt", KR(ret), "return_cnt", return_code_array.count());
+      }
+      is_alive = false;
+      ARRAY_FOREACH_X(proxy.get_results(), idx, cnt, OB_SUCC(ret)) {
+        const obrpc::Bool *result = proxy.get_results().at(idx);
+        const ObAddr &dest_addr = proxy.get_dests().at(idx);
+        tmp_ret = return_code_array.at(idx);
+        if (OB_SUCCESS != tmp_ret) {
+          is_alive = true;
+          LOG_WARN("fail to send rpc to detect alive session", KR(ret), KR(tmp_ret), K(dest_addr),
+                                                               K(session_id), K(idx));
+          break;
+        } else if (OB_ISNULL(result)) {
+          tmp_ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("result is null", KR(ret), KR(tmp_ret), KP(result));
+        } else if (true == *result) {
+          is_alive = true;
+          break;
+        }
+        LOG_INFO("detect session alive", K(session_id), K(dest_addr), K(*result), K(is_alive));
+      }
+    }
+  }
+  return ret;
+}
+
 ObTableLockDetectFunc<> ObTableLockDetector::func1(DETECT_SESSION_ALIVE,
                                                    ObTableLockDetectFuncList::do_session_alive_detect);
 
@@ -1568,6 +1670,20 @@ bool ObTableLockDetector::is_unlock_task_(const ObTableLockTaskType &task_type)
   return (UNLOCK_TABLE == task_type || UNLOCK_PARTITION == task_type || UNLOCK_SUBPARTITION == task_type
           || UNLOCK_TABLET == task_type || UNLOCK_OBJECT == task_type || UNLOCK_ALONE_TABLET == task_type);
 }
+
+bool ObSessionAliveChecker::operator()(sql::ObSQLSessionMgr::Key key, sql::ObSQLSessionInfo *sess_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(sess_info) || OB_ISNULL(GCTX.session_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null pointer", KR(ret), KP(sess_info), KP(GCTX.session_mgr_));
+  } else if (sess_info->get_sid() == session_id_) {
+    is_alive_ = true;
+  }
+  LOG_INFO("check session qual", K(sess_info->get_sid()), K(session_id_), K(is_alive_));
+  return OB_SUCCESS == ret;
+}
+
 }  // namespace tablelock
 }  // namespace transaction
 }  // namespace oceanbase

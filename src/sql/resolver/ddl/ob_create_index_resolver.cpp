@@ -293,6 +293,10 @@ int ObCreateIndexResolver::resolve_index_column_node(
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("experimental feature: build multivalue index afterward is experimental feature", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "build multivalue index afterward");
+        } else if (OB_UNLIKELY(tbl_schema->is_mysql_tmp_table())) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("create multivalue index on mysql temporary not supported", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "create multivalue index on mysql temporary table");
         }
       } else if (index_keyname_ == FTS_KEY) {
         uint64_t tenant_data_version = 0;
@@ -313,6 +317,10 @@ int ObCreateIndexResolver::resolve_index_column_node(
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("create fulltext index on materialized view not supported", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "create fulltext index on materialized view");
+        } else if (OB_UNLIKELY(tbl_schema->is_mysql_tmp_table())) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("create fulltext index on mysql temporary not supported", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "create fulltext index on mysql temporary table");
         }
       } else if (index_keyname_ == INDEX_KEYNAME::VEC_KEY) {
         if (sort_item.is_func_index_) {
@@ -993,6 +1001,10 @@ int ObCreateIndexResolver::set_table_option_to_stmt(
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not support global fts index now", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "global fulltext index is");
+      } else if (OB_UNLIKELY(tbl_schema.is_mysql_tmp_table())) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("create fulltext index on mysql temporary not supported", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create fulltext index on mysql temporary table");
       } else {
         // set type to fts_index_aux first, append other fts arg later
         index_arg.index_type_ = INDEX_TYPE_FTS_INDEX_LOCAL;
@@ -1009,6 +1021,10 @@ int ObCreateIndexResolver::set_table_option_to_stmt(
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not support global multivalue index now", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "not support global multivalue index");
+      } else if (OB_UNLIKELY(tbl_schema.is_mysql_tmp_table())) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("create multivalue index on mysql temporary not supported", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create multivalue index on mysql temporary table");
       } else if (MULTI_KEY == index_keyname_) {
         index_arg.index_type_ = INDEX_TYPE_NORMAL_MULTIVALUE_LOCAL;
       } else {
@@ -1023,6 +1039,10 @@ int ObCreateIndexResolver::set_table_option_to_stmt(
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("tenant data version is less than 4.3.3, create vector index on existing table not supported", K(ret), K(tenant_data_version));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.3, vector index");
+      } else if (OB_UNLIKELY(tbl_schema.is_mysql_tmp_table())) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("create vector index on mysql temporary not supported", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create vector index on mysql temporary table");
       } else if (global_) {
         // TODO @lhd support global index?
         ret = OB_NOT_SUPPORTED;

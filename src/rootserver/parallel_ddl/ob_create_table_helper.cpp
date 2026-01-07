@@ -190,8 +190,10 @@ int ObCreateTableHelper::lock_objects_by_name_()
 
     // 1. table
     const ObString &table_name = table.get_table_name();
+    uint64_t session_id = table.get_session_id();
+    // create table can directly get table's seesion_id
     if (OB_FAIL(add_lock_object_by_name_(database_name, table_name,
-        share::schema::TABLE_SCHEMA, transaction::tablelock::EXCLUSIVE))) {
+        share::schema::TABLE_SCHEMA, transaction::tablelock::EXCLUSIVE, session_id))) {
       LOG_WARN("fail to lock object by table name", KR(ret), K_(tenant_id), K(database_name), K(table_name));
     }
 
@@ -857,6 +859,15 @@ int ObCreateTableHelper::generate_table_schema_()
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("fail to generate schema, not support semistruct properties for this version",
              KR(ret), K_(tenant_id), K(compat_version), K(arg_));
+  } else if ((compat_version < MOCK_DATA_VERSION_4_3_5_4
+              || (compat_version < MOCK_DATA_VERSION_4_4_2_0
+                  && compat_version >= DATA_VERSION_4_4_0_0)
+              || (compat_version < DATA_VERSION_4_5_1_0
+                  && compat_version >= DATA_VERSION_4_5_0_0))
+             && arg_.schema_.is_mysql_tmp_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "MySQL compatible temporary table");
+    LOG_WARN("not support to create mysql tmp table", KR(ret), K_(tenant_id), K(compat_version), K(arg_.schema_));
   } else if (arg_.schema_.is_duplicate_table()) { // check compatibility for duplicate table
     bool is_compatible = false;
     if (OB_FAIL(ObShareUtil::check_compat_version_for_readonly_replica(tenant_id_, is_compatible))) {

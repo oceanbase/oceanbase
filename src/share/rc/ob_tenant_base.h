@@ -244,6 +244,7 @@ namespace observer
   class ObTableSessIDService;
   class ObTenantTabletCleanupService;
   class ObTabletReplicaInfoCacheMgr;
+  class ObSessionTmpTableCleaner;
 }
 
 // for ObTenantSwitchGuard 临时使用>>>>>>>>
@@ -535,6 +536,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       storage::ObInnerTabletAccessService*,          \
       storage::ObTabletReorgInfoTableService*,       \
       observer::ObTableSessIDService*,                \
+      observer::ObSessionTmpTableCleaner*,            \
       omt::ObTenantAiService*,                       \
       sql::ObSQLCCLRuleManager*,                     \
       share::ObBackupDestIOPermissionMgr*,           \

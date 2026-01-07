@@ -1817,7 +1817,7 @@ int ObResolverUtils::get_routine(const pl::ObPLResolveCtx &resolve_ctx,
   ObSchemaChecker schema_checker;
   routine = NULL;
   uint64_t udt_id = OB_INVALID_ID;
-  OZ (schema_checker.init(resolve_ctx.schema_guard_, resolve_ctx.session_info_.get_server_sid()));
+  OZ (schema_checker.init(resolve_ctx.schema_guard_));
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(get_candidate_routines(schema_checker,
                                      tenant_id,
