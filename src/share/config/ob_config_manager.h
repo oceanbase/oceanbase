@@ -47,9 +47,11 @@ public:
   virtual ~ObConfigManager();
 
   // get newest version received
-  const int64_t &get_version() const;
+  int64_t get_version() const;
   // config version current used
   int64_t get_current_version() const;
+  // config version current can read
+  int64_t get_read_version() const;
 
   int base_init();
 
@@ -130,9 +132,19 @@ inline ObConfigManager::ObConfigManager(ObServerConfig &server_config,
   dump_path_[0] = '\0';
 }
 
+inline int64_t ObConfigManager::get_version() const
+{
+  return update_task_.version_;
+}
+
 inline int64_t ObConfigManager::get_current_version() const
 {
   return current_version_;
+}
+
+inline int64_t ObConfigManager::get_read_version() const
+{
+  return system_config_.get_version();
 }
 
 inline ObServerConfig &ObConfigManager::get_config(void)

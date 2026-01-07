@@ -1253,10 +1253,15 @@ int ObAdminSetConfig::broadcast_config_version_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KP(GCTX.srv_rpc_proxy_));
   } else {
+    bool set_config_wait_sync = OB_SUCCESS != (OB_E(EventTable::EN_SET_CONFIG_WAIT_SYNC_TIMEOUT) OB_SUCCESS);
     for (int64_t index = 0; index < server_list.count(); ++index) {
       if (OB_SUCCESS != (tmp_ret = GCTX.srv_rpc_proxy_->to(server_list.at(index)).by(OB_SYS_TENANT_ID)
                                                        .timeout(rpc_timeout).broadcast_config_version(broadcast_arg))) {
         LOG_WARN("fail to broadcast config version", KR(tmp_ret), K(server_list.at(index)), K(index), K(broadcast_arg));
+        if (set_config_wait_sync && OB_SUCCESS == ret) {
+          ret = tmp_ret;
+          LOG_WARN("fail to broadcast config version", KR(ret), K(set_config_wait_sync));
+        }
         if (OB_SUCCESS != (tmp_ret = failed_list.push_back(std::make_pair(server_list.at(index), tmp_ret)))) {
           LOG_WARN("fail to add failed infos", KR(tmp_ret), K(server_list.at(index)), K(index));
         }

@@ -1531,6 +1531,82 @@ int ObSetConfigExecutor::execute(ObExecContext &ctx, ObSetConfigStmt &stmt)
     } else {
       LOG_WARN("set config rpc failed", K(ret), "rpc_arg", stmt.get_rpc_arg());
     }
+  } else if (OB_FAIL(wait_config_sync(stmt.get_rpc_arg()))) {
+    LOG_WARN("wait config sync failed", K(ret), "rpc_arg", stmt.get_rpc_arg());
+  }
+  return ret;
+}
+
+int ObSetConfigExecutor::wait_config_sync(const obrpc::ObAdminSetConfigArg &arg)
+{
+  int ret = OB_SUCCESS;
+  bool all_sync = false;
+  bool is_sys_config_sync = false;
+  int64_t sys_config_version = 0;
+  ObArray<omt::ObTenantID> all_tenant;
+  ObSEArray<std::pair<uint64_t, int64_t>, 4> tenant_versions;
+
+  int wait_timeout_sec = OB_E(EventTable::EN_SET_CONFIG_WAIT_SYNC_TIMEOUT) 0;
+  int64_t wait_timeout_us = std::abs(wait_timeout_sec) * 1000 * 1000L;
+  const int64_t SLEEP_INTERVAL_US = 2 * 1000 * 1000L;
+  const int64_t start_time = ObTimeUtility::current_time();
+
+  if (0 == wait_timeout_us) {
+    all_sync = true;
+  } else if (OB_ISNULL(GCTX.config_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("config mgr is null", KR(ret));
+  } else if (OB_FAIL(OTC_MGR.get_all_tenant_id(all_tenant))) {
+    LOG_WARN("failed to get all tenant id", KR(ret));
+  } else {
+    sys_config_version = GCTX.config_mgr_->get_version();
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_tenant.count(); ++i) {
+      uint64_t tenant_id = all_tenant.at(i).tenant_id_;
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+      if (!tenant_config.is_valid()) {
+        // do nothing
+        LOG_TRACE("tenant config is not valid", K(ret), K(tenant_id));
+      } else if (OB_FAIL(tenant_versions.push_back(std::make_pair(tenant_id, tenant_config->version_)))) {
+        LOG_WARN("failed to push back tenant version", KR(ret), K(tenant_id));
+      }
+    }
+  }
+
+  while (OB_SUCC(ret) && !all_sync) {
+    ObSEArray<std::pair<uint64_t, int64_t>, 4> current_versions;
+    if (ObTimeUtility::current_time() - start_time > wait_timeout_us) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("use too much time", K(ret), "cost_us", ObTimeUtility::current_time() - start_time);
+      LOG_USER_ERROR(OB_ERR_UNEXPECTED, "wait config sync timeout");
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_versions.count(); ++i) {
+      uint64_t tenant_id = tenant_versions.at(i).first;
+      int64_t tenant_version = tenant_versions.at(i).second;
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+      if (!tenant_config.is_valid()) {
+        // do nothing
+        LOG_TRACE("tenant config is not valid", K(ret), K(tenant_id));
+      } else if (tenant_config->get_read_version() >= tenant_version) {
+        LOG_TRACE("tenant config is synced", K(tenant_id), K(tenant_version), K(tenant_config->get_read_version()));
+      } else if (OB_FAIL(current_versions.push_back(tenant_versions.at(i)))) {
+        LOG_WARN("failed to push back current version", K(ret), K(tenant_id));
+      } else {
+        LOG_INFO("tenant config is not synced", K(tenant_id), K(tenant_version), K(tenant_config->get_read_version()));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(tenant_versions.assign(current_versions))) {
+      LOG_WARN("failed to assign current versions", K(ret));
+    } else {
+      all_sync = GCTX.config_mgr_->get_read_version() >= sys_config_version && tenant_versions.empty();
+      if (all_sync) {
+        LOG_TRACE("all config is synced", K(sys_config_version), K(tenant_versions));
+      } else {
+        LOG_INFO("wait for config sync", K(tenant_versions), K(sys_config_version),
+                 "current_version", GCTX.config_mgr_->get_read_version());
+        ob_usleep(SLEEP_INTERVAL_US);
+      }
+    }
   }
   return ret;
 }
