@@ -52,25 +52,27 @@ int ObMediumCompactionScheduleFunc::choose_medium_snapshot(
     int64_t &schema_version)
 {
   int ret = OB_SUCCESS;
-  ObGetMergeTablesParam param;
-  param.merge_type_ = MEDIUM_MERGE;
   int64_t max_reserved_snapshot = 0;
   ObTablet &tablet = *tablet_handle_.get_obj();
   const int64_t transfer_start_snapshot = tablet.get_tablet_meta().transfer_info_.transfer_start_scn_.get_val_for_tx();
 
-  if (OB_FAIL(ObAdaptiveMergePolicy::get_meta_merge_tables(param, ls_, tablet, result))) {
+  if (OB_FAIL(ObAdaptiveMergePolicy::find_adaptive_merge_tables(MEDIUM_MERGE, tablet, result))) {
     if (OB_NO_NEED_MERGE != ret) {
-      LOG_WARN("failed to get meta merge tables", K(ret), K(param));
+      LOG_WARN("failed to get medium merge snapshot", K(ret), KPC(this));
     }
   } else if (FALSE_IT(medium_info.medium_snapshot_ = result.version_range_.snapshot_version_)) {
   } else if (OB_FAIL(get_max_reserved_snapshot(max_reserved_snapshot))) {
     LOG_WARN("failed to get reserved snapshot", K(ret), KPC(this));
-  } else if (medium_info.medium_snapshot_ < max_reserved_snapshot
-    // 1) chosen medium snapshot is far too old
-      || medium_info.medium_snapshot_ > tablet.get_snapshot_version()) {
-    // 2) snapshot is larger than tablet, should get_newest_schema_version
-    if (OB_FAIL(choose_new_medium_snapshot(max_reserved_snapshot, medium_info, result, schema_version))) {
-      LOG_WARN("failed to choose new medium snapshot", KR(ret), K(medium_info), K(max_reserved_snapshot));
+  } else if (medium_info.medium_snapshot_ < max_reserved_snapshot) { // the chosen medium snapshot is too old
+    const int64_t old_medium_snapshot = medium_info.medium_snapshot_;
+    medium_info.medium_snapshot_ = max_reserved_snapshot + 1;
+
+    // update schema version for cur medium scn
+    if (OB_FAIL(tablet.get_newest_schema_version(schema_version))) {
+      LOG_WARN("failed to get schema version from tablet", K(ret), K(tablet));
+    } else {
+      LOG_INFO("chosen new medium snapshot", K(ret), KPC(this), K(old_medium_snapshot),
+               K(medium_info), K(max_reserved_snapshot), K(result), K(schema_version));
     }
   } else if (OB_FAIL(tablet.get_schema_version_from_storage_schema(schema_version))) {
     LOG_WARN("failed to get schema version from tablet", KR(ret), K(tablet));
@@ -90,11 +92,10 @@ int ObMediumCompactionScheduleFunc::choose_medium_snapshot(
   } else {
     medium_info.set_basic_info(ObMediumCompactionInfo::MEDIUM_COMPACTION, merge_reason_, medium_info.medium_snapshot_);
     result.reset();
-    // TODO(@DanLing) refactor choose_xxx_snapshot logic
     if (OB_FAIL(ObPartitionMergePolicy::get_result_by_snapshot(ls_, tablet, medium_info.medium_snapshot_, result, false/*need_check_tablet*/))) {
       LOG_WARN("failed get result by medium snapshot", K(ret), K(medium_info));
     }
-    LOG_TRACE("choose_medium_snapshot", K(ret), KPC(this), K(result), K(medium_info));
+    LOG_TRACE("choose medium snapshot", K(ret), KPC(this), K(result), K(medium_info));
   }
   return ret;
 }
@@ -549,39 +550,6 @@ int ObMediumCompactionScheduleFunc::get_max_reserved_snapshot(int64_t &max_reser
   return ret;
 }
 
-int ObMediumCompactionScheduleFunc::choose_new_medium_snapshot(
-  const int64_t max_reserved_snapshot,
-  ObMediumCompactionInfo &medium_info,
-  ObGetMergeTablesResult &result,
-  int64_t &schema_version)
-{
-  int ret = OB_SUCCESS;
-  ObTablet *tablet = tablet_handle_.get_obj();
-  int64_t snapshot_gc_ts = 0;
-  if (medium_info.medium_snapshot_ == tablet->get_snapshot_version() //  no uncommitted sstable
-      && weak_read_ts_ + DEFAULT_SCHEDULE_MEDIUM_INTERVAL < ObTimeUtility::current_time_ns()) {
-    snapshot_gc_ts = MTL(ObTenantFreezeInfoMgr *)->get_snapshot_gc_ts();
-    // data before weak_read_ts & latest storage schema on memtable is match for schedule medium
-    medium_info.medium_snapshot_ = MAX(max_reserved_snapshot, MIN(weak_read_ts_, snapshot_gc_ts));
-  }
-  if (medium_info.medium_snapshot_ < max_reserved_snapshot) {
-    // may not rewrite medium_snapshot above
-    ret = OB_NO_NEED_MERGE;
-  } else {
-    LOG_INFO("use weak_read_ts to schedule medium", K(ret), KPC(this),
-      K(medium_info), K(max_reserved_snapshot), K_(weak_read_ts), K(snapshot_gc_ts));
-  }
-  // update schema version for cur medium scn
-  if (FAILEDx(tablet->get_newest_schema_version(schema_version))) {
-    LOG_WARN("failed to get schema version from tablet", K(ret), KPC(tablet));
-  } else {
-    LOG_INFO("chosen new medium snapshot", K(ret), KPC(this),
-      K(medium_info), K(max_reserved_snapshot), K(result), K(schema_version),
-             K(medium_info), K(max_reserved_snapshot), K_(weak_read_ts), K(snapshot_gc_ts));
-  }
-  return ret;
-}
-
 int ObMediumCompactionScheduleFunc::decide_medium_snapshot(bool &medium_clog_submitted)
 {
   int ret = OB_SUCCESS;
@@ -603,7 +571,7 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(bool &medium_clog_sub
     LOG_WARN("failed to add dependent tablet", K(ret), KPC(this));
   } else {
     const ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
-    LOG_TRACE("decide_medium_snapshot", K(ret), KPC(this), K(compat_version), K(tablet_id), K(max_sync_medium_scn), K_(merge_reason));
+    LOG_TRACE("decide medium snapshot", K(ret), KPC(this), K(compat_version), K(tablet_id), K(max_sync_medium_scn), K_(merge_reason));
     int64_t schema_version = 0;
     ObGetMergeTablesResult result;
     ObMediumCompactionInfo medium_info(allocator_);

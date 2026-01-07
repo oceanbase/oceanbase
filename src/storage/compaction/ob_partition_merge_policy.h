@@ -316,7 +316,6 @@ public:
       storage::ObLS &ls,
       const storage::ObTablet &tablet,
       storage::ObGetMergeTablesResult &result);
-
   static int get_adaptive_merge_reason(
       storage::ObTablet &tablet,
       AdaptiveMergeReason &reason,
@@ -336,11 +335,10 @@ public:
   static int check_tombstone_reason(
       const storage::ObTablet &tablet,
       AdaptiveMergeReason &reason);
-private:
   static int find_adaptive_merge_tables(
-        const ObMergeType &merge_type,
-        const storage::ObTablet &tablet,
-        storage::ObGetMergeTablesResult &result);
+      const ObMergeType &merge_type,
+      const storage::ObTablet &tablet,
+      storage::ObGetMergeTablesResult &result);
 private:
   static int check_load_data_situation(
       const storage::ObTabletStatAnalyzer &analyzer,

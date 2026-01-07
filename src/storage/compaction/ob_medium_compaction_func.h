@@ -185,11 +185,6 @@ protected:
     const int64_t major_snapshot,
     bool &medium_clog_submitted);
 
-  int choose_new_medium_snapshot(
-    const int64_t max_reserved_snapshot,
-    ObMediumCompactionInfo &medium_info,
-    ObGetMergeTablesResult &result,
-    int64_t &schema_version);
   int get_max_reserved_snapshot(int64_t &max_reserved_snapshot);
   int check_frequency(
     const int64_t max_reserved_snapshot,
