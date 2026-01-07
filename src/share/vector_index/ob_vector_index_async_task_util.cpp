@@ -2462,7 +2462,7 @@ int ObVecIndexAsyncTask::execute_exchange()
     * Therefore, the order of these two locks must not be reversed;
     * otherwise, a deadlock could occur between the query and asynchronous tasks. */
     RWLock::WLockGuard query_lock_guard(old_adapter_->get_query_lock()); // lock for query before end trans
-    RWLock::WLockGuard lock_guard(vec_idx_mgr_->get_adapter_map_lock());
+
     share::SCN commit_scn;
     transaction::ObTransID tx_id = tx_desc->get_tx_id(); // save tx_id before end_trans
     int tmp_ret = OB_SUCCESS;
@@ -2473,6 +2473,7 @@ int ObVecIndexAsyncTask::execute_exchange()
       LOG_WARN("fail to fetch commit scn from tx_table", K(ret), K(tx_id));
     }
 
+    RWLock::WLockGuard lock_guard(vec_idx_mgr_->get_adapter_map_lock());
     if (OB_FAIL(ret)) {
     } else if (OB_FALSE_IT(new_adapter_->update_can_skip(NOT_SKIP))) { // can skip only use when create vector index and no dml
     } else if (OB_FAIL(new_adapter_->set_replace_scn(commit_scn))) {
