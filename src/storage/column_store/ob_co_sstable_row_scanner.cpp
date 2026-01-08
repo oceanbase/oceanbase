@@ -1291,7 +1291,12 @@ ERRSIM_POINT_DEF(ERRSIM_CO_SCAN_USE_ROW_PROJ)
 bool ObCOSSTableRowScanner::use_row_store_projector(const ObTableIterParam& row_param, const ObTableAccessContext& context, const ObCOSSTableV2& co_sstable) const
 {
   bool b_ret = false;
-  if (!co_sstable.is_all_cg_base() || co_sstable.is_ddl_sstable()) {
+  if (nullptr != project_iter_) {
+    // we should not switch between row store projector and column store projector
+    // if project_iter_ has been initialized, return whether it uses row store
+    b_ret = project_iter_->get_type() == ObICGIterator::OB_CG_ROW_SCANNER &&
+            static_cast<ObCGRowScanner *>(project_iter_)->is_all_cg();
+  } else if (!co_sstable.is_all_cg_base() || co_sstable.is_ddl_sstable()) {
   } else if (row_param.enable_pd_aggregate()) {
   } else if (row_param.enable_pd_group_by()) {
   } else if (OB_SUCCESS != ERRSIM_CO_SCAN_USE_ROW_PROJ) {
