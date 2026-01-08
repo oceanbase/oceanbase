@@ -1002,7 +1002,7 @@ DEFINE_ORACLE_ERROR(OB_NO_PARTITION_FOR_GIVEN_VALUE, -5284, ER_NO_PARTITION_FOR_
 DEFINE_ORACLE_ERROR(OB_EER_NULL_IN_VALUES_LESS_THAN, -5285, ER_NULL_IN_VALUES_LESS_THAN, "HY000", "Not allowed to use NULL value in VALUES LESS THAN", 14019, "partition bound element must be one of: datetime or interval literal, number, or MAXVALUE");
 DEFINE_ERROR(OB_ERR_PARTITION_CONST_DOMAIN_ERROR, -5286, ER_PARTITION_CONST_DOMAIN_ERROR, "HY000", "Partition constant is out of partition function domain");
 DEFINE_ERROR(OB_ERR_TOO_MANY_PARTITION_FUNC_FIELDS, -5287, ER_TOO_MANY_PARTITION_FUNC_FIELDS_ERROR, "HY000", "Too many fields in \'list of partition fields\'");
-DEFINE_ERROR_EXT(OB_ERR_BAD_FT_COLUMN, -5288, ER_BAD_FT_COLUMN, "HY000", "Column cannot be part of FULLTEXT index", "Column '%.*s' cannot be part of FULLTEXT index");
+DEFINE_ERROR_EXT(OB_ERR_BAD_FT_COLUMN, -5288, ER_BAD_FT_COLUMN, "HY000", "Column cannot be part of FULLTEXT index", "'%.*s' '%.*s' cannot be part of FULLTEXT index");
 DEFINE_ERROR_EXT(OB_ERR_KEY_DOES_NOT_EXISTS, -5289, ER_KEY_DOES_NOT_EXITS, "42000", "key does not exist in table", "Key '%.*s' doesn't exist in table '%.*s'");
 DEFINE_ORACLE_ERROR_EXT(OB_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN, -5290, ER_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN, "HY000", "non-default value for generated column is not allowed", "The value specified for generated column '%.*s' in table '%.*s' is not allowed", 54013, "INSERT operation disallowed on virtual columns", "INSERT operation disallowed on virtual columns '%.*s'.'%.*s'");
 DEFINE_ERROR(OB_ERR_BAD_CTXCAT_COLUMN, -5291, -1, "HY000", "The CTXCAT column must be contiguous in the index column list");
