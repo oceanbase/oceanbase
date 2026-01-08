@@ -2036,6 +2036,7 @@ int ObLogHandler::get_max_decided_scn(SCN &scn)
   } else {
     scn = std::max(max_replayed_scn, max_applied_scn) > SCN::min_scn() ?
              std::max(max_replayed_scn, max_applied_scn) : SCN::min_scn();
+    max_decided_scn_snapshot_.atomic_set(scn);
     CLOG_LOG(TRACE, "get_max_decided_scn", K(ret), K(id), K(max_replayed_scn), K(max_applied_scn), K(scn));
   }
   return ret;
