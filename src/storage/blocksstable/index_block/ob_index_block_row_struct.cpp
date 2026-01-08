@@ -401,7 +401,7 @@ int ObIndexBlockRowBuilder::calc_data_size(
       size += sizeof(int64_t); // add row offset for major sstable
     }
   } else {
-    if (desc.get_major_working_cluster_version() >= DATA_VERSION_4_4_1_0 || !desc.is_major_or_meta_merge_type()) {
+    if (desc.get_major_working_cluster_version() >= DATA_VERSION_4_5_0_0 || !desc.is_major_or_meta_merge_type()) {
       size = sizeof(ObIndexBlockRowHeader) + sizeof(ObIndexBlockRowMinorMetaInfo);
     } else {
       size = sizeof(ObIndexBlockRowHeader);
@@ -435,7 +435,7 @@ int ObIndexBlockRowBuilder::append_header_and_meta(const ObIndexBlockRowDesc &de
   } else {
     header_ = reinterpret_cast<ObIndexBlockRowHeader *>(data_buf_);
     header_->version_ =
-      desc.get_major_working_cluster_version() >= DATA_VERSION_4_4_1_0 ? ObIndexBlockRowHeader::INDEX_BLOCK_HEADER_V3 : ObIndexBlockRowHeader::INDEX_BLOCK_HEADER_V2;
+      desc.get_major_working_cluster_version() >= DATA_VERSION_4_5_0_0 ? ObIndexBlockRowHeader::INDEX_BLOCK_HEADER_V3 : ObIndexBlockRowHeader::INDEX_BLOCK_HEADER_V2;
     header_->row_store_type_ = static_cast<uint8_t>(desc.get_row_store_type());
     header_->compressor_type_ = static_cast<uint8_t>(desc.get_compressor_type());
     // This micro block is a index tree micro block or a meta tree micro block
