@@ -456,7 +456,7 @@ public:
     abort_unless(attr.numa_id_ == ta.get_numa_id());
     ObDisableDiagnoseGuard disable_diagnose_guard;
     SANITY_DISABLE_CHECK_RANGE();
-    ObSyncLogGuard guard;
+    ObAllocContextGuard alloc_guard;
     if (!attr.label_.is_valid()) {
       LIB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "OB_MOD_DO_NOT_USE_ME REALLOC", K(size));
     }

@@ -3274,3 +3274,8 @@ DEF_STR_WITH_CHECKER(system_protected_sys_variables, OB_CLUSTER_PARAMETER, "",
   "sys variables that are not allowed to be modified by regular users, "
   "format: single variables name or comma-separated variables names",
   ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_CAP(syslog_sync_size_threshold, OB_CLUSTER_PARAMETER, "0M", "[0M,)",
+        "When the accumulated syslog data reaches this threshold, the system automatically performs disk synchronization."
+        "Value 0 disables this function.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

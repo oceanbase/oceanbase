@@ -292,6 +292,8 @@ int ObServerReloadConfig::operator()()
       GCONF.syslog_io_bandwidth_limit.get_value());
   share::ObTaskController::get().set_diag_per_error_limit(
       GCONF.diag_syslog_per_error_limit.get_value());
+  common::ObPLogFileStruct::set_sync_size_threshold(
+      GCONF.syslog_sync_size_threshold.get_value());
 
   lib::g_runtime_enabled = true;
 

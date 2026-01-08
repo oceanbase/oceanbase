@@ -247,27 +247,6 @@ enum class ProbeAction
  PROBE_STACK,
 };
 
-class ObSyncLogGuard
-{
-public:
-  ObSyncLogGuard()
-    : last_(enable_tl_sync_log())
-  {
-    enable_tl_sync_log() = true;
-  }
-  ~ObSyncLogGuard()
-  {
-    enable_tl_sync_log() = last_;
-  }
-  static bool &enable_tl_sync_log()
-  {
-    static __thread bool tl_enable = false;
-    return tl_enable;
-  }
-private:
-  const bool last_;
-};
-
 //@class ObLogger
 //@brief main class of logging facilities. Provide base function, for example log_message(),
 //parse_set().
@@ -1349,7 +1328,7 @@ inline void ObLogger::do_log_message(const char *mod_name,
 
     if (OB_SUCC(ret)) {
       limited_left_log_size_ = std::max(0L, log_item->get_data_len() - NORMAL_LOG_SIZE);
-      const bool is_async = !ObSyncLogGuard::enable_tl_sync_log() && is_async_log_used();
+      const bool is_async = is_async_log_used();
       if (is_async) {
         const int32_t tl_type = log_item->get_tl_type();
         if (OB_FAIL(append_log(*log_item))) {

@@ -896,6 +896,28 @@ private:
   int64_t hold_[OB_MAX_CPU_NUM];
 };
 
+
+class ObAllocContextGuard
+{
+public:
+  ObAllocContextGuard()
+    : last_(in_alloc_context())
+  {
+    in_alloc_context() = true;
+  }
+  ~ObAllocContextGuard()
+  {
+    in_alloc_context() = last_;
+  }
+  static bool &in_alloc_context()
+  {
+    static __thread bool in_alloc_ctx = false;
+    return in_alloc_ctx;
+  }
+private:
+  const bool last_;
+};
+
 #define UNMAMAGED_MEMORY_STAT ObUnmanagedMemoryStat::get_instance()
 
 extern int64_t get_unmanaged_memory_size();
