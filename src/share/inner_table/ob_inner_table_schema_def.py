@@ -18201,6 +18201,7 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15539', all_def_ke
 
 # 15546: __all_routine_load_job
 # 15547: idx_routine_load_job_name_real_agent
+# 15548: __all_virtual_ss_local_cache_diagnose_info
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -45299,6 +45300,8 @@ def_table_schema(
 
 # 21710: DBA_OB_ROUTINE_LOAD_JOB
 # 21711: CDB_OB_ROUTINE_LOAD_JOB
+# 21712: GV$OB_SS_LOCAL_CACHE_DIAGNOSE
+# 21713: V$OB_SS_LOCAL_CACHE_DIAGNOSE
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
