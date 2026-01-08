@@ -445,9 +445,12 @@ int ObExprTokenize::TokenizeParam::try_load_dictionary_for_ik(const uint64_t ten
     LOG_WARN("fail to check need to load dic",
         K(ret), K(tenant_id), K(parser_name_), K(need_to_load_dic));
   } else if (need_to_load_dic) {
-    if (OB_FAIL(ObGenDicLoader::get_instance().get_dic_loader(
+    ObString parser_name_without_version;
+    if (OB_FAIL(ObGenDicLoader::parser_name_without_version(parser_name_, parser_name_without_version))) {
+      LOG_WARN("fail to get parser name without version", K(ret), K(parser_name_));
+    } else if (OB_FAIL(ObGenDicLoader::get_instance().get_dic_loader(
                     tenant_id,
-                    ObString::make_string(ObFTSLiteral::PARSER_NAME_IK), // currently only ik, use parser_name_ without version suffix
+                    parser_name_without_version,
                     ObCharset::charset_type_by_coll(meta_.get_collation_type()),
                     dic_loader_handle))) {
       LOG_WARN("fail to get dic loader", K(ret), K(tenant_id));

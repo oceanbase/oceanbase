@@ -16,6 +16,7 @@
 
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "storage/fts/dict/ob_ik_dic.h"
+#include "lib/allocator/ob_sql_mem_leak_checker.h"
 
 namespace oceanbase
 {
@@ -24,6 +25,9 @@ namespace storage
 int ObTenantIKUTF8DicLoader::init()
 {
   int ret = OB_SUCCESS;
+  // This memory will be released by background thread every 60 seconds
+  //   after the tenant is dropped, we ignore the memory leak of this memory
+  DISABLE_SQL_MEMLEAK_GUARD;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("the dic loader initialize twice", K(ret));

@@ -2181,12 +2181,14 @@ int ObFtsIndexBuilderUtil::try_load_and_lock_dictionary_tables(
       }
       if (OB_SUCC(ret)) {
         ObTenantDicLoaderHandle dic_loader_handle;
-        if (OB_FAIL(ObGenDicLoader::get_instance().get_dic_loader(tenant_id,
-                                                                  parser_name,
+        ObString parser_name_without_version;
+        if (OB_FAIL(ObGenDicLoader::parser_name_without_version(parser_name, parser_name_without_version))) {
+          LOG_WARN("fail to get parser name without version", K(ret), K(parser_name));
+        } else if (OB_FAIL(ObGenDicLoader::get_instance().get_dic_loader(tenant_id,
+                                                                  parser_name_without_version,
                                                                   charset_type,
                                                                   dic_loader_handle))) {
-          LOG_WARN("fail to get dic loader",
-              K(ret), K(tenant_id), K(parser_name), K(charset_type));
+          LOG_WARN("fail to get dic loader", K(ret), K(tenant_id), K(parser_name), K(charset_type));
         } else if (OB_UNLIKELY(!dic_loader_handle.is_valid())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("the dic loader handle is not valid", K(ret), K(tenant_id), K(dic_loader_handle));
@@ -2231,10 +2233,12 @@ int ObFtsIndexBuilderUtil::try_load_dictionary_for_all_tenants()
           LOG_WARN("fail to get tenant mode", K(ret), K(tenant_id), K(compat_mode));
         } else if (compat_mode == lib::Worker::CompatMode::MYSQL) {
           ObTenantDicLoaderHandle dic_loader_handle;
+          // hard code ik parser for all tenants
+          ObString parser_name_without_version(ObFTSLiteral::PARSER_NAME_IK);
           if (OB_FAIL(ObGenDicLoader::get_instance().get_dic_loader(tenant_id,
-                                                                    ObFTSLiteral::PARSER_NAME_IK,
-                                                                    ObCharsetType::CHARSET_UTF8MB4,
-                                                                    dic_loader_handle))) {
+                                                                      parser_name_without_version,
+                                                                      ObCharsetType::CHARSET_UTF8MB4,
+                                                                      dic_loader_handle))) {
             LOG_WARN("fail to get dic loader", K(ret), K(tenant_id));
           } else if (OB_UNLIKELY(!dic_loader_handle.is_valid())) {
             ret = OB_ERR_UNEXPECTED;
