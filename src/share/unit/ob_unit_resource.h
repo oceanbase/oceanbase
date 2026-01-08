@@ -19,6 +19,7 @@
 
 namespace oceanbase
 {
+
 namespace share
 {
 
@@ -327,7 +328,8 @@ public:
   // 2. after divide_meta_tenant, self become user tenant resource,
   //    is valid for user tenant, but may not be valid for unit
   //    ex. MEMORY 1G, after divide, meta MEMORY is 512M, self MEMORY is 512M
-  int divide_meta_tenant(ObUnitResource &meta_resource);
+  // 3. tenant_id is used to check for injected meta memory ratio via trace point
+  int divide_meta_tenant(ObUnitResource &meta_resource, const uint64_t tenant_id = OB_INVALID_TENANT_ID);
 
   // generate sys tenant default unit resource based on configuration
   int gen_sys_tenant_default_unit_resource(const bool is_hidden_sys = false);
@@ -377,17 +379,8 @@ public:
     return meta_cpu;
   }
   // generate meta tenant memory by unit memory
-  static int64_t gen_meta_tenant_memory(const int64_t unit_memory)
-  {
-    int64_t meta_tenant_memory = 0;
-    if (unit_memory < UNIT_SAFE_MIN_MEMORY) {
-      meta_tenant_memory = META_TENANT_MIN_MEMORY;
-    } else {
-      const int64_t meta_memory_by_percent = unit_memory * META_TENANT_MEMORY_PERCENTAGE / 100;
-      meta_tenant_memory = max(meta_memory_by_percent, META_TENANT_SAFE_MIN_MEMORY);
-    }
-    return meta_tenant_memory;
-  }
+  // Implementation is in .cpp file to allow trace point usage
+  static int64_t gen_meta_tenant_memory(const int64_t unit_memory, const uint64_t tenant_id = OB_INVALID_TENANT_ID);
   // generate meta tenant log disk by unit log disk
   static int64_t gen_meta_tenant_log_disk_size(const int64_t unit_log_disk)
   {

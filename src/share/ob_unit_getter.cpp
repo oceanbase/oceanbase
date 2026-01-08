@@ -114,8 +114,8 @@ int ObUnitInfoGetter::ObTenantConfig::divide_meta_tenant(ObTenantConfig& meta_te
   if (OB_UNLIKELY(! is_valid())) {
     ret = OB_NOT_INIT;
     LOG_WARN("not valid tenant config, can't divide meta tenant", KR(ret), KPC(this));
-  } else if (OB_FAIL(self_resource.divide_meta_tenant(meta_resource))) {
-    LOG_WARN("divide meta tenant resource fail", KR(ret), K(config_));
+  } else if (OB_FAIL(self_resource.divide_meta_tenant(meta_resource, tenant_id_))) {
+    LOG_WARN("divide meta tenant resource fail", KR(ret), K(config_), K(tenant_id_));
   } else if (OB_FAIL(meta_config.init(
       config_.unit_config_id(),
       config_.name(),
