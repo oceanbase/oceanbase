@@ -4282,6 +4282,26 @@ int ObAdminAlterLSReplicaArg::init_cancel(
   return ret;
 }
 
+int ObAdminAlterLSReplicaArg::init_replace(
+    const share::ObLSID& ls_id,
+    const common::ObAddr& server_addr,
+    const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!ls_id.is_valid()
+               || !server_addr.is_valid()
+               || !is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_id), K(server_addr), K(tenant_id));
+  } else {
+    ls_id_ = ls_id;
+    server_addr_ = server_addr;
+    tenant_id_ = tenant_id;
+    alter_task_type_ = ObAlterLSReplicaTaskType(ObAlterLSReplicaTaskType::ReplaceLSReplicaTask);
+  }
+  return ret;
+}
+
 void ObAdminAlterLSReplicaArg::reset()
 {
   ls_id_.reset();

@@ -83,10 +83,12 @@ public:
   static int check_and_get_paxos_replica_num(const ParseNode* paxos_replica_num_node,
                                              int64_t& paxos_replica_num);
   static int check_compatibility_for_alter_ls_replica(const uint64_t cur_tenant_id);
+  static int check_compatibility_for_replace_ls(const uint64_t cur_tenant_id);
   static int do_check_for_alter_ls_replica(const ParseNode *tenant_name_node,
                                            ObSchemaChecker *schema_checker,
                                            ObSQLSessionInfo *session_info,
-                                           uint64_t &target_tenant_id);
+                                           uint64_t &target_tenant_id,
+                                           const bool is_replace_task = false);
   static int resolve_logservice_access_point(const ParseNode *parse_tree,
                                              ObString &logservice_access_point);
   static int resolve_shared_storage_info(const ParseNode *parse_tree,
@@ -169,6 +171,7 @@ DEF_SIMPLE_CMD_RESOLVER(ObMigrateLSReplicaResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObModifyLSReplicaResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObModifyLSPaxosReplicaNumResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObCancelLSReplicaTaskResolver);
+DEF_SIMPLE_CMD_RESOLVER(ObReplaceLSResolver);
 
 DEF_SIMPLE_CMD_RESOLVER(ObUpgradeVirtualSchemaResolver);
 

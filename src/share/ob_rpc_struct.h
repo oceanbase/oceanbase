@@ -4898,6 +4898,7 @@ public:
   bool is_modify_replica_task() const { return ModifyLSReplicaTypeTask == type_; }
   bool is_modify_paxos_replica_num_task() const { return ModifyLSPaxosReplicaNumTask == type_; }
   bool is_cancel_task() const { return CancelLSReplicaTask == type_; }
+  bool is_replace_task() const { return ReplaceLSReplicaTask == type_; }
   int parse_from_string(const ObString &type);
   const AlterLSReplicaTaskType &get_type() const { return type_; }
   const char* get_type_str() const;
@@ -4953,6 +4954,10 @@ public:
   int init_cancel(
             const common::ObFixedLengthString<common::OB_MAX_TRACE_ID_BUFFER_SIZE + 1>& task_id,
             const uint64_t tenant_id);
+  int init_replace(
+            const share::ObLSID& ls_id,
+            const common::ObAddr& server_addr,
+            const uint64_t tenant_id);
   void reset();
   TO_STRING_KV(K_(ls_id),
                K_(server_addr),
@@ -4970,7 +4975,8 @@ public:
        || (alter_task_type_.is_migrate_task() && is_migrate_valid_())
        || (alter_task_type_.is_modify_replica_task() && is_modify_replica_valid_())
        || (alter_task_type_.is_modify_paxos_replica_num_task() && is_modify_paxos_replica_num_valid_())
-       || (alter_task_type_.is_cancel_task() && is_cancel_valid_()));
+       || (alter_task_type_.is_cancel_task() && is_cancel_valid_())
+       || (alter_task_type_.is_replace_task() && is_replace_valid_()));
   }
   const share::ObLSID &get_ls_id() const { return ls_id_; }
   const common::ObAddr &get_server_addr() const { return server_addr_; }
@@ -5017,7 +5023,11 @@ private:
   bool is_cancel_valid_() const {
     return !task_id_.is_empty() && is_valid_tenant_id(tenant_id_);
   }
-
+  bool is_replace_valid_() const {
+    return ls_id_.is_valid()
+        && server_addr_.is_valid()
+        && is_valid_tenant_id(tenant_id_);
+  }
   share::ObLSID ls_id_;
   common::ObAddr server_addr_;
   common::ObAddr destination_addr_;

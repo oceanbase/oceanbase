@@ -1705,10 +1705,20 @@ int ObAlterLSReplicaExecutor::execute(ObExecContext &ctx, ObAlterLSReplicaStmt &
   } else if (sys_data_version >= DATA_VERSION_4_3_5_1) {
     ObDRWorker dr_worker;
     ObNotifyTenantThreadArg arg;
-    if (OB_FAIL(dr_worker.execute_manual_dr_task(stmt.get_rpc_arg()))) {
+    uint64_t notify_tenant_id = gen_meta_tenant_id(stmt.get_rpc_arg().get_tenant_id());
+    if (stmt.get_rpc_arg().get_alter_task_type().is_replace_task()) {
+      if (is_sys_tenant(stmt.get_rpc_arg().get_tenant_id())) {
+        // already been checked in resolver
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("replace LS command is not allowed for sys tenant", KR(ret), K(stmt));
+      } else if (is_meta_tenant(stmt.get_rpc_arg().get_tenant_id())) {
+        notify_tenant_id = OB_SYS_TENANT_ID;
+      }
+      LOG_INFO("execute replace ls task", KR(ret), K(stmt), K(notify_tenant_id));
+    }
+    if (FAILEDx(dr_worker.execute_manual_dr_task(stmt.get_rpc_arg()))) {
       LOG_WARN("failed to execute manual drtask", KR(ret), K(stmt));
-    } else if (OB_FAIL(arg.init(gen_meta_tenant_id(stmt.get_rpc_arg().get_tenant_id()),
-                                obrpc::ObNotifyTenantThreadArg::DISASTER_RECOVERY_SERVICE))) {
+    } else if (OB_FAIL(arg.init(notify_tenant_id, obrpc::ObNotifyTenantThreadArg::DISASTER_RECOVERY_SERVICE))) {
       LOG_WARN("failed to init arg", KR(ret), K(stmt));
     } else if (OB_FAIL(DisasterRecoveryUtils::wakeup_tenant_service(arg))) {
       LOG_WARN("fail to wake up", KR(ret), K(stmt), K(arg));

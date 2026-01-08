@@ -21247,6 +21247,13 @@ alter_with_opt_hint SYSTEM CANCEL REPLICA TASK TASK_ID opt_equal_mark STRING_VAL
   malloc_non_terminal_node($$, result->malloc_pool_, T_CANCEL_LS_REPLICA_TASK, 2, $8, $9);
 }
 |
+alter_with_opt_hint SYSTEM REPLACE ls SERVER opt_equal_mark STRING_VALUE opt_tenant_name
+{
+  (void)($1);
+  (void)($6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_REPLACE_LS, 3, $4, $7, $8);
+}
+|
 alter_with_opt_hint SYSTEM UPGRADE VIRTUAL SCHEMA
 {
   (void)($1);

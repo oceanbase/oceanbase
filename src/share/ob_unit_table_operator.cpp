@@ -356,8 +356,9 @@ int ObUnitTableOperator::update_unit_exclude_ug_id(common::ObISQLClient &client,
   } else if (!unit.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid unit", K(unit), KR(ret));
-  } else if (need_check_conflict_with_clone
-      && OB_FAIL(check_unit_conflict_with_clone_(client, unit))) {
+  } else if (!GCTX.is_shared_storage_mode()
+          && need_check_conflict_with_clone
+          && OB_FAIL(check_unit_conflict_with_clone_(client, unit))) {
     LOG_WARN("fail to check unit conflict with clone", KR(ret), K(unit));
   } else {
     ObDMLSqlSplicer dml;
@@ -703,7 +704,7 @@ int ObUnitTableOperator::update_resource_pool(common::ObISQLClient &client,
         zone_list_str, MAX_ZONE_LIST_LENGTH))) {
       LOG_WARN("zone_list2str failed", "zone_list", resource_pool.zone_list_, K(ret));
     // try lock resource pool to update for clone tenant conflict check
-    } else if (need_check_conflict_with_clone) {
+    } else if (!GCTX.is_shared_storage_mode() && need_check_conflict_with_clone) {
       if (!is_valid_tenant_id(resource_pool.tenant_id_)) {
         // this resource pool has not granted to any tenant, just ignore
       } else if (OB_FAIL(rootserver::ObTenantSnapshotUtil::check_tenant_not_in_cloning_procedure(

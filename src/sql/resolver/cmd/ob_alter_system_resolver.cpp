@@ -3528,6 +3528,24 @@ int ObAlterSystemResolverUtil::check_and_get_paxos_replica_num(
   return ret;
 }
 
+int ObAlterSystemResolverUtil::check_compatibility_for_replace_ls(
+    const uint64_t cur_tenant_id)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_data_version = 0;
+  if (OB_UNLIKELY(!is_valid_tenant_id(cur_tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(cur_tenant_id));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(cur_tenant_id, tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", KR(ret), K(cur_tenant_id));
+  } else if (tenant_data_version < DATA_VERSION_4_5_1_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("data version does not match", KR(ret), K(cur_tenant_id), KDV(tenant_data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Tenant data version does not match, replace LS command is");
+  }
+  return ret;
+}
+
 int ObAlterSystemResolverUtil::check_compatibility_for_alter_ls_replica(
     const uint64_t cur_tenant_id)
 {
@@ -3554,7 +3572,8 @@ int ObAlterSystemResolverUtil::do_check_for_alter_ls_replica(
     const ParseNode *tenant_name_node,
     ObSchemaChecker *schema_checker,
     ObSQLSessionInfo *session_info,
-    uint64_t &target_tenant_id)
+    uint64_t &target_tenant_id,
+    const bool is_replace_task)
 {
   int ret = OB_SUCCESS;
   target_tenant_id = OB_INVALID_TENANT_ID;
@@ -3566,9 +3585,18 @@ int ObAlterSystemResolverUtil::do_check_for_alter_ls_replica(
                                                 target_tenant_id))) {
     LOG_WARN("get and verify tenant_name failed", KR(ret),
             KP(tenant_name_node), K(session_info->get_effective_tenant_id()));
+  } else if (is_replace_task) {
+    if (is_sys_tenant(target_tenant_id)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("replace LS command is not supported for sys tenant", KR(ret), K(target_tenant_id));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Replace LS for sys tenant is");
+    } else if (OB_FAIL(Util::check_compatibility_for_replace_ls(target_tenant_id))) {
+      LOG_WARN("check compatibility for replace ls failed", KR(ret), K(target_tenant_id));
+    }
   } else if (OB_FAIL(Util::check_compatibility_for_alter_ls_replica(target_tenant_id))) {
     LOG_WARN("check compatibility for alter ls replica failed", KR(ret), K(target_tenant_id));
-  } else if (ObSchemaChecker::is_ora_priv_check()) {
+  }
+  if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
     if (OB_FAIL(schema_checker->check_ora_ddl_priv(
                           session_info->get_effective_tenant_id(),
                           session_info->get_priv_user_id(), ObString(""),
@@ -4029,6 +4057,62 @@ int ObCancelLSReplicaTaskResolver::resolve(const ParseNode &parse_tree)
     }
   }
   FLOG_INFO("resolve cancel parse tree over", KR(ret));
+  return ret;
+}
+
+int ObReplaceLSResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  ObAlterLSReplicaStmt *stmt = NULL;
+  LOG_INFO("start resolve replace ls parse tree");
+  if (!GCTX.is_shared_storage_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("non-ss not support replace ls", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Not in shared storage mode, replace LS is");
+  } else if (OB_UNLIKELY(T_REPLACE_LS != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_REPLACE_LS", KR(ret), "type", get_type_name(parse_tree.type_));
+  } else if (OB_ISNULL(parse_tree.children_) || OB_UNLIKELY(parse_tree.num_child_ != 3)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", KR(ret), "type", get_type_name(parse_tree.type_),
+             "child_num", parse_tree.num_child_);
+  } else if (OB_ISNULL(parse_tree.children_[0])
+          || OB_ISNULL(parse_tree.children_[1])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parse tree", KR(ret), KP(parse_tree.children_[0]), KP(parse_tree.children_[1]));
+  } else if (OB_ISNULL(stmt = create_stmt<ObAlterLSReplicaStmt>())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("create ObAlterLSReplicaStmt failed", KR(ret));
+  } else if (OB_ISNULL(session_info_) || OB_ISNULL(schema_checker_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("found null ptr", KR(ret), KP(session_info_), KP(schema_checker_));
+  } else {
+    stmt_ = stmt;
+    ParseNode *ls_id_node = parse_tree.children_[0];
+    ParseNode *server_addr_node = parse_tree.children_[1];
+    ParseNode *tenant_name_node = parse_tree.children_[2]; // may be null
+    int64_t ls_id = 0;
+    common::ObAddr server_addr;
+    uint64_t tenant_id = OB_INVALID_TENANT_ID;
+    if (OB_FAIL(Util::do_check_for_alter_ls_replica(tenant_name_node,
+                                              schema_checker_,
+                                              session_info_,
+                                              tenant_id,
+                                              true/*is_replace_task*/))) {
+      LOG_WARN("do check for alter ls replica failed", KR(ret),
+              KP(tenant_name_node), KP(schema_checker_), KP(session_info_));
+    } else if (OB_FAIL(Util::resolve_ls_id(ls_id_node, ls_id))) {
+      LOG_WARN("resolve ls id failed", KR(ret), KP(ls_id_node));
+    } else if (OB_FAIL(Util::check_and_get_server_addr(server_addr_node, server_addr))) {
+      LOG_WARN("resolve server failed", KR(ret), KP(server_addr_node));
+    } else {
+      share::ObLSID id(ls_id);
+      if (OB_FAIL(stmt->get_rpc_arg().init_replace(id, server_addr, tenant_id))) {
+        LOG_WARN("init rpc arg failed", KR(ret), K(id), K(server_addr), K(tenant_id));
+      }
+    }
+  }
+  FLOG_INFO("resolve replace ls parse tree over", KR(ret));
   return ret;
 }
 

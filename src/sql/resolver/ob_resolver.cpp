@@ -618,6 +618,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(CancelLSReplicaTask);
         break;
       }
+      case T_REPLACE_LS: {
+        REGISTER_STMT_RESOLVER(ReplaceLS);
+        break;
+      }
       case T_ADD_ARBITRATION_SERVICE: {
         REGISTER_STMT_RESOLVER(AddArbitrationService);
         break;
