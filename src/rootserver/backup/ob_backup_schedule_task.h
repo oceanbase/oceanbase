@@ -281,6 +281,7 @@ public:
       const share::ObLSReplica &replica,
       char *buf,
       const int64_t size,
+      int64_t &pos,
       bool &can_do_backup);
   int get_backup_dest_id(const uint64_t tenant_id, int64_t &dest_id) const;
 private:
