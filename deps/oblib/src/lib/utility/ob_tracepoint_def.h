@@ -680,4 +680,5 @@ GLOBAL_ERRSIM_POINT_DEF(2652, EN_DDL_SCAN_TASK_PERIOD, "ddl scan task timer thre
 // DDL end
 GLOBAL_ERRSIM_POINT_DEF(2701, EN_DUMP_THREAD_LEVEL_MEM_CTX, "Whether enable dump thread-level memory context");
 GLOBAL_ERRSIM_POINT_DEF(2703, EN_ENABLE_OPERATOR_DUMMY_MEM_CHECK, "Used to track whether the operator has been closed && destroyed in test mode");
+GLOBAL_ERRSIM_POINT_DEF(2704, EN_VSLICE_ALLOC_INIT_MEM, "Used to enable ObVSliceAlloc block memory initialization");
 #endif /*GLOBAL_ERRSIM_POINT_DEF*/
