@@ -530,6 +530,8 @@ int convert_persist_profile_to_realtime(const char *persist_profile, const int64
     uint64_t cur_metric_id = 0;
     uint64_t cur_metric_value;
     ObOpProfile<ObMetric> *new_profile = nullptr;
+    // even if the profile id unknown, we still create the profile,
+    // since we need to keep the profile tree structure
     for (int64_t i = 0; OB_SUCC(ret) && i < profile_cnt; ++i) {
       if (profile_head[i].parent_idx_ != -1 && profile_head[i].parent_idx_ < profile_cnt
           && OB_NOT_NULL(profiles_array[profile_head[i].parent_idx_])) {
@@ -550,8 +552,11 @@ int convert_persist_profile_to_realtime(const char *persist_profile, const int64
           cur_metric_value = *cur_metric_and_value_ptr++;
           pos += step;
           ObMetric *metric = nullptr;
-          if (OB_FAIL(new_profile->get_or_register_metric(
-                  static_cast<ObMetricId>(cur_metric_id), metric))) {
+          if (cur_metric_id <= ObMetricId::MONITOR_STATNAME_BEGIN ||
+              cur_metric_id >= ObMetricId::MONITOR_STATNAME_END) {
+            // for compatibility, ignore the new metric from higher version
+          } else if (OB_FAIL(new_profile->get_or_register_metric(
+                         static_cast<ObMetricId>(cur_metric_id), metric))) {
             LOG_WARN("failed to register metric");
           } else if (OB_NOT_NULL(metric)) {
             metric->set(cur_metric_value);
