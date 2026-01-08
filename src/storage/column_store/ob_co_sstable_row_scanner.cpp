@@ -35,6 +35,7 @@ ObCOSSTableRowScanner::ObCOSSTableRowScanner()
     is_new_group_(false),
     reverse_scan_(false),
     is_limit_end_(false),
+    use_row_store_projector_(false),
     state_(BEGIN),
     blockscan_state_(MAX_STATE),
     group_by_project_idx_(0),
@@ -144,6 +145,7 @@ void ObCOSSTableRowScanner::reset()
   is_limit_end_ = false;
   pending_end_row_id_ = OB_INVALID_CS_ROW_ID;
   column_group_cnt_ = -1;
+  use_row_store_projector_ = false;
   getter_projector_.reset();
 }
 
@@ -1293,16 +1295,14 @@ bool ObCOSSTableRowScanner::use_row_store_projector(const ObTableIterParam& row_
   bool b_ret = false;
   if (nullptr != project_iter_) {
     // we should not switch between row store projector and column store projector
-    // if project_iter_ has been initialized, return whether it uses row store
-    b_ret = project_iter_->get_type() == ObICGIterator::OB_CG_ROW_SCANNER &&
-            static_cast<ObCGRowScanner *>(project_iter_)->is_all_cg();
+    b_ret = use_row_store_projector_;
   } else if (!co_sstable.is_all_cg_base() || co_sstable.is_ddl_sstable()) {
   } else if (row_param.enable_pd_aggregate()) {
   } else if (row_param.enable_pd_group_by()) {
   } else if (OB_SUCCESS != ERRSIM_CO_SCAN_USE_ROW_PROJ) {
-    b_ret = true;
+    b_ret = use_row_store_projector_ = true;
   } else {
-    b_ret = !context.block_row_store_->filter_is_null() && row_param.output_exprs_->count() >= ROW_STORE_PROJECTION_THRESHOLD;
+    b_ret = use_row_store_projector_ = !context.block_row_store_->filter_is_null() && row_param.output_exprs_->count() >= ROW_STORE_PROJECTION_THRESHOLD;
   }
   return b_ret;
 }

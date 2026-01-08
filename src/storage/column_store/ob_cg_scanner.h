@@ -145,7 +145,6 @@ public:
   int deep_copy_projected_rows(const int64_t datum_offset, const uint64_t count);
   void set_project_type(const bool project_without_filter)
   { return prefetcher_.set_project_type(project_without_filter); }
-  bool is_all_cg() const { return sstable_->is_all_cg_base(); }
   TO_STRING_KV(K_(is_inited), K_(is_reverse_scan), K_(current),
                K_(query_index_range), K_(prefetcher), KP_(filter_bitmap));
 
