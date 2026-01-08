@@ -1015,8 +1015,12 @@ int ObCSVGeneralParser::scan_utf8_ex(const char *&str,
       }
     }
     if (NO_FIELD && OB_NOT_NULL(line_t)) {
-      str = line_t + 1;
-      find_new_line = true;
+      if (line_t != end) {
+        str = line_t + 1;
+        find_new_line = true;
+      } else {
+        str = end;
+      }
     } else if (OB_NOT_NULL(line_t)) {
       process_term<SKIP_BLANK_LINES, IGNORE_LAST_EMPTY_COLUMN, USE_HANDLE_BATCH_LINES> (line_t, ori_field_begin, field_begin,
                                       str, field_idx, find_new_line, output_line_no);
