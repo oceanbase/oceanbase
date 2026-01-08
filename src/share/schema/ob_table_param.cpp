@@ -638,6 +638,7 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     access_virtual_col_cnt_(0),
     aggregate_param_props_(allocator),
     plan_enable_rich_format_(false),
+    table_type_(ObTableType::MAX_TABLE_TYPE),
     merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN)
 {
   reset();
@@ -678,6 +679,7 @@ void ObTableParam::reset()
   access_virtual_col_cnt_ = 0;
   aggregate_param_props_.reset();
   plan_enable_rich_format_ = false;
+  table_type_ = ObTableType::MAX_TABLE_TYPE;
   merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN;
 }
 
@@ -742,6 +744,7 @@ OB_DEF_SERIALIZE(ObTableParam)
     OB_UNIS_ENCODE(access_virtual_col_cnt_);
     OB_UNIS_ENCODE(aggregate_param_props_);
     OB_UNIS_ENCODE(plan_enable_rich_format_);
+    OB_UNIS_ENCODE(table_type_);
     OB_UNIS_ENCODE(merge_engine_type_);
   }
   return ret;
@@ -862,6 +865,7 @@ OB_DEF_DESERIALIZE(ObTableParam)
     LST_DO_CODE(OB_UNIS_DECODE, access_virtual_col_cnt_);
     LST_DO_CODE(OB_UNIS_DECODE, aggregate_param_props_);
     LST_DO_CODE(OB_UNIS_DECODE, plan_enable_rich_format_);
+    LST_DO_CODE(OB_UNIS_DECODE, table_type_);
     LST_DO_CODE(OB_UNIS_DECODE, merge_engine_type_);
   }
   return ret;
@@ -935,6 +939,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
                 access_virtual_col_cnt_,
                 aggregate_param_props_,
                 plan_enable_rich_format_,
+                table_type_,
                 merge_engine_type_);
   }
   return len;
@@ -1411,6 +1416,7 @@ int ObTableParam::convert(const ObTableSchema &table_schema,
     // if mocked rowid index is used
     // because eventually, we use primary key to do table scan
   table_id_ = table_schema.get_table_id();
+  table_type_ = table_schema.get_table_type();
   bool is_oracle_mode = false;
   const common::ObIArray<ObColumnParam *> *cols_param = nullptr;
 
@@ -1755,7 +1761,8 @@ int64_t ObTableParam::to_string(char *buf, const int64_t buf_len) const
        K_(is_safe_filter_with_di),
        K_(aggregate_param_props),
        K_(access_virtual_col_cnt),
-       K_(plan_enable_rich_format));
+       K_(plan_enable_rich_format),
+       K_(table_type));
   J_OBJ_END();
 
   return pos;
