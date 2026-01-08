@@ -378,7 +378,7 @@ const int64_t OB_MAX_TRANSFER_BINDING_TABLET_CNT = OB_MAX_AUX_TABLE_PER_MAIN_TAB
 
 // Note:
 // - When adding new index type, you should modifiy "tools/obtest/t/quick/partition_balance.test" and
-//       "tools/obtest/t/shared_storage/local_cache/partition_balance.test" to verify that all aux tables of the new index
+//       "tools/obtest/t/shared_storage/partition_balance.test" to verify that all aux tables of the new index
 //       can be properly distributed after table creation and partition rebalanceing.
 //
 //       If the new index has multiple aux tables, you need to make sure that OB_MAX_AUX_TABLE_PER_MAIN_TABLE is correct and
