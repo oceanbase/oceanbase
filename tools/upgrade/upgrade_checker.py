@@ -1079,34 +1079,25 @@ def check_cos_archive_and_backup(query_cur):
   else:
     logging.info("check upgrade for cos:// prefix in archive, backup and restore task failed")
 
-def get_bootstrap_version(query_cur):
-  (desc, results) = query_cur.exec_query("""select value1 from __all_cluster_event_history where event='BOOTSTRAP_SUCCESS'""")
-  version = ''
+def check_sys_table_progressive_merge_round_by_tenant(tenant_id, query_cur):
+  sql = """select distinct table_id from ((select table_id, progressive_merge_round from __all_virtual_table where tenant_id={tenant_id}) union (select table_id, progressive_merge_round from __all_virtual_core_all_table where tenant_id={tenant_id})) where progressive_merge_round=1 and table_id in (select table_id from __all_virtual_table_history where tenant_id={tenant_id} and table_id < 10000 group by table_id having count(*) > 1)""".format(tenant_id=tenant_id)
+  (desc, results) = query_cur.exec_query(sql)
   if len(results) == 0:
-    # 4.0 has no __all_cluster_event_history
-    version = '4.0.0.0'
-  elif len(results) > 1 or len(results[0]) != 1:
-    fail_list.append('unexpected rows in __all_cluster_event_history')
+    logging.info("tenant {} check sys table progressive_merge_round success".format(tenant_id))
   else:
-    version = results[0][0]
-    logging.info('get bootstrap version: {}'.format(version))
-  return version
+    fail_list.append("tenant has sys table with progressive_merge_round=1: tenant_id {} table_ids '{}'"
+                     .format(tenant_id, ",".join(map(lambda x: str(x[0]), results))))
 
-def check_upgrade_from_425_for_merge(query_cur):
-  (desc, results) = query_cur.exec_query("""select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'""")
-  if len(results) != 1:
-    fail_list.append('min_observer_version is not sync')
-  elif cmp(results[0][0], '4.3.0.0') >= 0 :
-    logging.info('upgrade from version is larger than 4.3, no need to check, version: {}'.format(results[0][0]))
-  elif cmp(get_bootstrap_version(query_cur), '4.2.5.0') >= 0:
-    logging.info('bootstrap version is larger than 4.2.5.0, no need to check')
+def check_sys_table_progressive_merge_round(query_cur):
+  (desc, results) = query_cur.exec_query("""select tenant_id from __all_tenant order by tenant_id""")
+  if len(results) == 0:
+    fail_list.append('failed to get all tenant_ids')
   else:
-    (desc, results) = query_cur.exec_query("""select tenant_id from CDB_OB_MAJOR_COMPACTION where LAST_FINISH_TIME < (select max(gmt_modified) from __all_rootservice_job where job_type like 'UPGRADE%')""")
-    if len(results) > 0:
-      fail_list.append('some tenant not finish merge since last upgrade, tenants: {}'.format(
-          ','.join(map(lambda x: str(x[0]), results))))
-    else:
-      logging.info('check tenant merge after upgrade success')
+    for result in results:
+      if len(result) != 1:
+        fail_list.append('check_sys_table_progressive_merge_round result length not match: {}'.format(result))
+      else:
+        check_sys_table_progressive_merge_round_by_tenant(result[0], query_cur)
 
 # 开始升级前的检查
 def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params, cpu_arch):
@@ -1153,7 +1144,7 @@ def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params, cpu_
       check_direct_load_job_exist(cur, query_cur)
       check_enable_insertup_direct_update(query_cur)
       check_enable_logonly_replica(cur, query_cur)
-      check_upgrade_from_425_for_merge(query_cur)
+      check_sys_table_progressive_merge_round(query_cur)
       check_fail_list()
       modify_server_permanent_offline_time(cur)
     except Exception as e:
