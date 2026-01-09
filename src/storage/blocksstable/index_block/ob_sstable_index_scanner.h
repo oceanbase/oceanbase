@@ -164,9 +164,8 @@ private:
   int init_level_scanners(
       const ObDatumRange &scan_range,
       const ObSSTableIndexScanParam &scan_param,
-      ObSSTable &sstable,
-      ObIAllocator &scan_allocator);
-  int init_index_row(const ObSSTableIndexScanParam &scan_param, ObIAllocator &scan_allocator);
+      ObSSTable &sstable);
+  int init_index_row(const ObSSTableIndexScanParam &scan_param);
   int inner_get_next_index_row(ObSSTableIndexRow &index_row);
   int process_endkey(const ObMicroIndexInfo &index_info, ObSSTableIndexRow &index_row);
   int project_skip_index_row(const ObMicroIndexInfo &index_info, ObSSTableIndexRow &index_row);

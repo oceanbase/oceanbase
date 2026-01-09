@@ -337,7 +337,7 @@ int ObSRBMWIterImpl::next_pivot_range(int64_t &skip_range_cnt)
       minimum_max_domain_id = max_score_tuple->max_domain_id_;
     } else if (OB_FAIL(domain_id_cmp_.compare(*max_score_tuple->max_domain_id_, *minimum_max_domain_id, cmp_ret))) {
       LOG_WARN("failed to compare domain id", K(ret));
-    } else if (0 < cmp_ret) {
+    } else if (0 > cmp_ret) {
       minimum_max_domain_id = max_score_tuple->max_domain_id_;
     }
   }
@@ -585,7 +585,7 @@ int ObSRBMWIterImpl::try_generate_next_range_from_merge_heap(
         curr_range_reach_end = true;
       } else if (OB_FAIL(domain_id_cmp_.compare(*max_score_tuple->max_domain_id_, *minimum_max_domain_id, cmp_ret))) {
         LOG_WARN("failed to compare max domain id with minimum max domain id", K(ret));
-      } else if (0 < cmp_ret) {
+      } else if (0 > cmp_ret) {
         minimum_max_domain_id = max_score_tuple->max_domain_id_;
       }
 
