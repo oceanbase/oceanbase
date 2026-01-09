@@ -105,7 +105,8 @@ int MutatorRow::parse_columns_(
     const bool enable_output_hidden_primary_key,
     const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info,
     const bool is_macroblock_row,
-    ColValueList &cols)
+    ColValueList &cols,
+    const bool is_mow_table_insert)
 {
   int ret = OB_SUCCESS;
 
@@ -224,6 +225,7 @@ int MutatorRow::parse_columns_(
             const bool is_lob_storage = obj_meta.is_lob_storage();
             // Default is false
             bool is_out_row = false;
+            const bool enable_filte_mow_lob_col = (1 == TCTX.enable_filter_mow_lob_);
 
             if (obj.is_null()) {
               // do nothing
@@ -241,6 +243,12 @@ int MutatorRow::parse_columns_(
                 // only DML needs to reserve lob header
                 if (OB_NOT_NULL(all_ddl_operation_table_schema_info)) {
                   obj.set_string(obj.get_type(), lob_common.get_inrow_data_ptr(), lob_common.get_byte_size(datum.len_));
+                }
+              } else if (is_mow_table_insert && enable_filte_mow_lob_col) {
+                if (REACH_TIME_INTERVAL(10 * _SEC_)) {
+                  LOG_INFO("is_mow_table_insert and enable_filte_mow_lob_col", K(ret), K(obj), K(column_id));
+                } else {
+                  LOG_DEBUG("is_mow_table_insert and enable_filte_mow_lob_col", K(ret), K(obj), K(column_id));
                 }
               } else if (OB_FAIL(parse_outrow_lob_column_(is_parse_new_col, dml_flag, column_id, lob_common))) {
                 LOG_ERROR("parse_outrow_lob_column_ failed", K(ret), K(obj), K(column_id));
@@ -940,7 +948,8 @@ int MacroBlockMutatorRow::parse_cols(
       enable_output_hidden_primary_key,
       all_ddl_operation_table_schema_info,
       true/*is_macroblock_row*/,
-      new_cols_))) {
+      new_cols_,
+      false))) {
       LOG_ERROR("parse new columns fail", KR(ret), K(tenant_id), K(table_id), K(obj2str_helper),
           K(tb_schema_info), K(enable_output_hidden_primary_key));
     }
@@ -1155,6 +1164,15 @@ int MemtableMutatorRow::parse_cols(
   blocksstable::ObRowReader row_reader;
   blocksstable::ObDatumRow datum_row(tenant_id);
 
+  // MOW table: UPDATE splits into DELETE + INSERT
+  // Log pattern: DELETE contains new data, INSERT contains old data
+  bool is_mow_table_insert = false;
+  if (blocksstable::ObDmlFlag::DF_INSERT == dml_flag_) {
+    if (OB_NOT_NULL(old_row_.data_) && old_row_.size_ > 0) {
+      is_mow_table_insert = true;
+    }
+  }
+
   // parse value of new column
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(new_row_.data_) || OB_UNLIKELY(new_row_.size_ <= 0)) {
@@ -1176,7 +1194,8 @@ int MemtableMutatorRow::parse_cols(
         enable_output_hidden_primary_key,
         all_ddl_operation_table_schema_info,
         false/*is_macroblock_row*/,
-        new_cols_))) {
+        new_cols_,
+        is_mow_table_insert))) {
       LOG_ERROR("parse new columns fail", KR(ret), K(tenant_id), K(table_id), K(new_row_), K(obj2str_helper),
           K(tb_schema_info), K(enable_output_hidden_primary_key));
     } else {
@@ -1204,7 +1223,8 @@ int MemtableMutatorRow::parse_cols(
         enable_output_hidden_primary_key,
         all_ddl_operation_table_schema_info,
         false/*is_macroblock_row*/,
-        old_cols_))) {
+        old_cols_,
+        is_mow_table_insert))) {
       LOG_ERROR("parse old columns fail", KR(ret), K(tenant_id), K(table_id), K(old_row_), K(obj2str_helper),
           K(tb_schema_info), K(enable_output_hidden_primary_key));
     } else {

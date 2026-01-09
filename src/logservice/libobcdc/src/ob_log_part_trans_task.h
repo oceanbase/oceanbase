@@ -265,7 +265,8 @@ protected:
       const bool enable_output_hidden_primary_key,
       const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info,
       const bool is_macroblock_row,
-      ColValueList &cols);
+      ColValueList &cols,
+      const bool is_mow_table_insert);
   int parse_outrow_lob_column_(
       const bool is_parse_new_col,
       const blocksstable::ObDmlRowFlag &dml_flag,

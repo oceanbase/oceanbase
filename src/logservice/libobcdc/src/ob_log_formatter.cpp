@@ -2240,9 +2240,13 @@ int ObLogFormatter::format_dml_insert_(IBinlogRecord *br_data, const RowValue *r
         ObString *str_val = row_value->orig_default_value_[i];
 
         if (OB_ISNULL(str_val)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("column original default value is NULL", KR(ret), K(i),
-              "column_num", row_value->column_num_);
+          if (row_value->is_null_lob_columns_[i]) {
+            ObLogBR::mark_value_populated_by_cdc(*br_data, true /*is_new_col*/, "insert_op unchanged_col with null_lob", i);
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("column original default value is NULL", KR(ret), K(i),
+                "column_num", row_value->column_num_);
+          }
         } else {
           br_data->putNew(str_val->ptr(), str_val->length());
         }
@@ -2250,9 +2254,13 @@ int ObLogFormatter::format_dml_insert_(IBinlogRecord *br_data, const RowValue *r
         ObString *str_val = row_value->new_columns_[i];
 
         if (OB_ISNULL(str_val)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("changed column new value is NULL", KR(ret), K(i),
-              "column_num", row_value->column_num_);
+          if (row_value->is_null_lob_columns_[i]) {
+            ObLogBR::mark_value_populated_by_cdc(*br_data, true /*is_new_col*/, "insert_op changed_col with null_lob", i);
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("changed column new value is NULL", KR(ret), K(i),
+                "column_num", row_value->column_num_);
+          }
         } else {
           br_data->putNew(str_val->ptr(), str_val->length());
         }
