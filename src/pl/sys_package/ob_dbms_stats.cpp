@@ -206,6 +206,7 @@ int ObDbmsStats::gather_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
     LOG_WARN("failed to init gather task info", K(ret));
   } else {
     int64_t i = 0;
+    ObSQLSessionInfo::LockGuard query_lock_guard(ctx.get_my_session()->get_query_lock());
     for (; OB_SUCC(ret) && i < table_ids.count(); ++i) {
       StatTable stat_table;
       stat_table.database_id_ = global_param.db_id_;
