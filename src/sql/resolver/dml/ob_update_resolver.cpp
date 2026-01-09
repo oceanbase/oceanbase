@@ -508,6 +508,8 @@ int ObUpdateResolver::generate_update_table_info(ObTableAssignment &table_assign
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(check_is_mview_refresh_sql(*table_schema))) {
+    LOG_WARN("failed to check is mview refresh sql", K(ret));
   } else if (OB_FAIL(schema_checker_->get_can_write_index_array(params_.session_info_->get_effective_tenant_id(),
                                                                 table_item->get_base_table_item().ref_id_,
                                                                 index_tid, gindex_cnt, true))) {

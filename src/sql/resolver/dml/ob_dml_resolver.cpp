@@ -3913,6 +3913,21 @@ int ObDMLResolver::check_is_table_supported_for_mview(const ObItemType table_nod
   return ret;
 }
 
+// Only call check_is_mview_refresh_sql for update/delete/insert/merge stmt's write table
+// When refreshing mview and write a container table, it is a mview refresh sql
+int ObDMLResolver::check_is_mview_refresh_sql(const ObTableSchema &dml_table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(session_info_) || OB_ISNULL(params_.query_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session_info_ or query_ctx_ is null", K(ret), K(session_info_), K(params_.query_ctx_));
+  } else if (dml_table_schema.mv_container_table()
+             && session_info_->get_ddl_info().is_refreshing_mview()) {
+    params_.query_ctx_->set_is_mview_refresh_sql(true);
+  }
+  return ret;
+}
+
 int ObDMLResolver::resolve_table_check_constraint_items(const TableItem *table_item,
                                                         const ObTableSchema *table_schema)
 {

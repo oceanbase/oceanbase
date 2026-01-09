@@ -852,6 +852,7 @@ protected:
   int resolve_basic_table_with_cte(const ParseNode &parse_tree, TableItem *&table_item);
   int check_is_table_supported_for_mview(const TableItem &table_item, const ObTableSchema &table_schema);
   int check_is_table_supported_for_mview(const ObItemType table_node_type);
+  int check_is_mview_refresh_sql(const ObTableSchema &dml_table_schema);
   int resolve_cte_table(const ParseNode &parse_tree, const TableItem *CTE_table_item, TableItem *&table_item);
   int resolve_recursive_cte_table(const ParseNode &parse_tree, TableItem *&table_item);
   int resolve_with_clause_opt_alias_colnames(const ParseNode *parse_tree, TableItem *&table_item);

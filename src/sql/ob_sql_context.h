@@ -863,7 +863,8 @@ public:
       initial_type_ctx_(),
       has_hybrid_search_(false),
       pl_sql_transpiled_exprs_(),
-      forbid_pl_sql_transpiler_(false)
+      forbid_pl_sql_transpiler_(false),
+      is_mview_refresh_sql_(false)
   {
   }
   TO_STRING_KV(N_PARAM_NUM, question_marks_count_,
@@ -914,6 +915,7 @@ public:
     has_hybrid_search_ = false;
     pl_sql_transpiled_exprs_.reuse();
     forbid_pl_sql_transpiler_ = false;
+    is_mview_refresh_sql_ = false;
   }
 
   int64_t get_new_stmt_id() { return stmt_count_++; }
@@ -963,6 +965,8 @@ public:
   bool is_type_ctx_inited() const { return NULL != initial_type_ctx_.get_session(); }
   const ObExprTypeCtx& get_initial_type_ctx() const { return initial_type_ctx_; };
   bool has_hybrid_search() const { return has_hybrid_search_; }
+  inline bool is_mview_refresh_sql() const { return is_mview_refresh_sql_; }
+  inline void set_is_mview_refresh_sql(bool is_mview_refresh_sql) { is_mview_refresh_sql_ = is_mview_refresh_sql; }
 public:
   static const int64_t CALCULABLE_EXPR_NUM = 1;
   typedef common::ObSEArray<ObHiddenColumnItem, CALCULABLE_EXPR_NUM, common::ModulePageAllocator, true> CalculableItems;
@@ -1046,6 +1050,7 @@ public:
 
   ObSEArray<ObUDFRawExpr *, 4, common::ModulePageAllocator, true> pl_sql_transpiled_exprs_;
   bool forbid_pl_sql_transpiler_ = false;
+  bool is_mview_refresh_sql_;
 };
 
 template<typename... Args>
