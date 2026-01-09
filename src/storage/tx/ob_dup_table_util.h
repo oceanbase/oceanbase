@@ -13,6 +13,7 @@
 
 // #include "lib/hash/ob_hashset.h"
 #include "logservice/ob_log_base_type.h"
+#include "lib/lock/ob_spin_rwlock.h"
 #include "storage/tx/ob_dup_table_tablets.h"
 #include "storage/tx/ob_dup_table_lease.h"
 #include "storage/tx/ob_trans_define.h"
@@ -277,7 +278,7 @@ private:
 
   int64_t total_block_confirm_ref_; // block new dup tablet confirmed
 
-  ObSpinLock committing_dup_trx_lock_;
+  common::SpinRWLock committing_dup_trx_lock_;
   common::hash::ObHashSet<ObTransID> committing_dup_trx_set_;
 
   share::SCN self_max_replayed_scn_;

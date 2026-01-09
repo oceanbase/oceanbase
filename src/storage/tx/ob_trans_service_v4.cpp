@@ -1559,16 +1559,22 @@ int ObTransService::check_replica_readable_(const ObTxReadSnapshot &snapshot,
                       dup_table_readable))) {
           TRANS_LOG(WARN, "check dup tablet readable error", K(ret), K(dup_table_readable), K(max_replayed_scn));
         } else if (dup_table_readable) {
-          TRANS_LOG(INFO,
-                    "the dup tablet is readable now",
-                    K(ret),
-                    K(tablet_id),
-                    K(snapshot),
-                    K(leader),
-                    K(max_replayed_scn),
-                    K(dup_table_readable),
-                    K(ls_id),
-                    K(expire_ts));
+          bool enable_dump_all_logs = false;
+#ifdef ENABLE_DEBUG_LOG
+          enable_dump_all_logs = true;
+#endif
+          if (REACH_TIME_INTERVAL(10 * 1000) || enable_dump_all_logs) {
+            TRANS_LOG(INFO,
+                      "the dup tablet is readable now",
+                      K(ret),
+                      K(tablet_id),
+                      K(snapshot),
+                      K(leader),
+                      K(max_replayed_scn),
+                      K(dup_table_readable),
+                      K(ls_id),
+                      K(expire_ts));
+          }
           ret = OB_SUCCESS;
         } else {
           TRANS_LOG(TRACE, "check dup tablet readable failed", K(ret), K(dup_table_readable), K(max_replayed_scn));
@@ -1824,9 +1830,15 @@ OB_NOINLINE int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_
   }
 
   if (role == FOLLOWER) {
-    TRANS_LOG(INFO, "acquire local snapshot from a dup ls follower", K(ret), K(leader), K(epoch),
-              K(role), K(ls_id), K(dup_trx_status), K(committing_dup_trx_cnt),
-              K(can_elr), K(snapshot));
+    bool enable_dump_all_logs = false;
+#ifdef ENABLE_DEBUG_LOG
+    enable_dump_all_logs = true;
+#endif
+    if (REACH_TIME_INTERVAL(10 * 1000) || enable_dump_all_logs) {
+      TRANS_LOG(INFO, "acquire local snapshot from a dup ls follower", K(ret), K(leader), K(epoch),
+                K(role), K(ls_id), K(dup_trx_status), K(committing_dup_trx_cnt),
+                K(can_elr), K(snapshot));
+    }
   }
 
 #ifdef ENABLE_DEBUG_LOG

@@ -1574,7 +1574,7 @@ int ObDupTableLSHandler::check_and_update_max_replayed_scn(const share::SCN &max
 
 int64_t ObDupTableLSHandler::get_committing_dup_trx_cnt()
 {
-  ObSpinLockGuard guard(committing_dup_trx_lock_);
+  SpinRLockGuard guard(committing_dup_trx_lock_);
   int64_t cnt = committing_dup_trx_set_.size();
   if (cnt > 0) {
     if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
@@ -1587,7 +1587,7 @@ int64_t ObDupTableLSHandler::get_committing_dup_trx_cnt()
 int ObDupTableLSHandler::add_commiting_dup_trx(const ObTransID &tx_id)
 {
   int ret = OB_SUCCESS;
-  ObSpinLockGuard guard(committing_dup_trx_lock_);
+  SpinWLockGuard guard(committing_dup_trx_lock_);
   if (!committing_dup_trx_set_.created()) {
     if (OB_FAIL(committing_dup_trx_set_.create(128, "DupTrxBucket", "DupTrxCnt", MTL_ID()))) {
       TRANS_LOG(WARN, "create dup trx set failed", K(ret), K(ls_id_), K(tx_id));
@@ -1605,7 +1605,7 @@ int ObDupTableLSHandler::add_commiting_dup_trx(const ObTransID &tx_id)
 int ObDupTableLSHandler::remove_commiting_dup_trx(const ObTransID &tx_id)
 {
   int ret = OB_SUCCESS;
-  ObSpinLockGuard guard(committing_dup_trx_lock_);
+  SpinWLockGuard guard(committing_dup_trx_lock_);
 
   if (OB_SUCC(ret)) {
     if (!committing_dup_trx_set_.created()) {
