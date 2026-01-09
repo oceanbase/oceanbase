@@ -150,7 +150,8 @@ int ObAccessService::check_read_allowed_(
         }
       }
     } else if (OB_FAIL(construct_store_ctx_other_variables_(*ls, tablet_id, scan_param.timeout_,
-         ctx.mvcc_acc_ctx_.get_snapshot_version(), tablet_handle, ctx_guard))) {
+         ctx.mvcc_acc_ctx_.get_snapshot_version(), tablet_handle, ctx_guard,
+         nullptr != scan_param.table_param_ ? scan_param.table_param_->get_table_type() : ObTableType::MAX_TABLE_TYPE))) {
       if (OB_SNAPSHOT_DISCARDED == ret && scan_param.fb_snapshot_.is_valid()) {
         ret = OB_TABLE_DEFINITION_CHANGED;
       } else {
