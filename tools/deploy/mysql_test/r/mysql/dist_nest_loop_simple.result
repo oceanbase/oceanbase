@@ -981,15 +981,15 @@ Outputs & filters:
   0 - output([INTERNAL_FUNCTION(a.c1, a.c3, a.yyy, a.max(c4), b.c1, b.c2, b.c3, b.c4, c.c1, c.c2, c.c3, c.c4)]), filter(nil), rowset=16
   1 - output([INTERNAL_FUNCTION(a.c1, a.c3, a.yyy, a.max(c4), b.c1, b.c2, b.c3, b.c4, c.c1, c.c2, c.c3, c.c4)]), filter(nil), rowset=16
       dop=1
-  2 - output([c.c1], [a.c1], [b.c3], [c.c3], [c.c2], [c.c4], [b.c1], [a.c3], [b.c2], [b.c4], [a.yyy], [a.max(c4)]), filter(nil), rowset=16
-      equal_conds([c.c1 = a.c1], [b.c3 = c.c3]), other_conds(nil)
+  2 - output([c.c1], [a.c1], [c.c3], [a.c3], [c.c2], [c.c4], [b.c1], [b.c3], [b.c2], [b.c4], [a.yyy], [a.max(c4)]), filter(nil), rowset=16
+      equal_conds([c.c1 = a.c1], [c.c3 = a.c3]), other_conds(nil)
   3 - output([c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
       affinitize, partition wise, force partition granule
   4 - output([c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
       access([c.c1], [c.c2], [c.c3], [c.c4]), partitions(p0sp[0-2])
       is_index_back=false, is_global_index=false, 
       range_key([c.c1], [c.c2], [c.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
-  5 - output([a.c1], [b.c3], [b.c1], [a.c3], [b.c2], [b.c4], [a.yyy], [a.max(c4)]), filter(nil), rowset=16
+  5 - output([a.c1], [a.c3], [b.c1], [b.c3], [b.c2], [b.c4], [a.yyy], [a.max(c4)]), filter(nil), rowset=16
       equal_conds([a.c1 = b.c1], [a.c3 = b.c3]), other_conds(nil)
   6 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), rowset=16
       affinitize, partition wise, force partition granule
@@ -1020,70 +1020,70 @@ Outputs & filters:
       range_key([t4.c1], [t4.c2], [t4.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain  select  * from t5 as a join (select c1, c3, sum(c2) as yyy, max(c4) from t4 group by c3 order by yyy limit 1) as b on a.c1 = b.c1 and a.c3 = b.c3 join t6 as c on b.c1=c.c1 and b.c3 = c.c3;
 Query Plan
-=====================================================================
-|ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------------
-|0 |HASH JOIN                        |        |1       |27          |
-|1 |├─SUBPLAN SCAN                   |b       |1       |10          |
-|2 |│ └─LIMIT                        |        |1       |10          |
-|3 |│   └─PX COORDINATOR MERGE SORT  |        |1       |10          |
-|4 |│     └─EXCHANGE OUT DISTR       |:EX10000|1       |9           |
-|5 |│       └─TOP-N SORT             |        |1       |7           |
-|6 |│         └─PX PARTITION ITERATOR|        |1       |7           |
-|7 |│           └─HASH GROUP BY      |        |1       |7           |
-|8 |│             └─TABLE FULL SCAN  |t4      |1       |7           |
-|9 |└─HASH JOIN                      |        |1       |18          |
-|10|  ├─PX COORDINATOR               |        |1       |9           |
-|11|  │ └─EXCHANGE OUT DISTR         |:EX20000|1       |8           |
-|12|  │   └─PX PARTITION ITERATOR    |        |1       |7           |
-|13|  │     └─TABLE FULL SCAN        |a       |1       |7           |
-|14|  └─PX COORDINATOR               |        |1       |9           |
-|15|    └─EXCHANGE OUT DISTR         |:EX30000|1       |8           |
-|16|      └─PX PARTITION ITERATOR    |        |1       |7           |
-|17|        └─TABLE FULL SCAN        |c       |1       |7           |
-=====================================================================
+================================================================================
+|ID|OPERATOR                                    |NAME    |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------------
+|0 |PX COORDINATOR                              |        |1       |32          |
+|1 |└─EXCHANGE OUT DISTR                        |:EX10002|1       |30          |
+|2 |  └─HASH JOIN                               |        |1       |26          |
+|3 |    ├─PX PARTITION ITERATOR                 |        |1       |7           |
+|4 |    │ └─TABLE FULL SCAN                     |c       |1       |7           |
+|5 |    └─HASH JOIN                             |        |1       |19          |
+|6 |      ├─PX PARTITION ITERATOR               |        |1       |7           |
+|7 |      │ └─TABLE FULL SCAN                   |a       |1       |7           |
+|8 |      └─EXCHANGE IN DISTR                   |        |1       |12          |
+|9 |        └─EXCHANGE OUT DISTR (PKEY)         |:EX10001|1       |11          |
+|10|          └─SUBPLAN SCAN                    |b       |1       |10          |
+|11|            └─LIMIT                         |        |1       |10          |
+|12|              └─EXCHANGE IN MERGE SORT DISTR|        |1       |10          |
+|13|                └─EXCHANGE OUT DISTR        |:EX10000|1       |9           |
+|14|                  └─TOP-N SORT              |        |1       |7           |
+|15|                    └─PX PARTITION ITERATOR |        |1       |7           |
+|16|                      └─HASH GROUP BY       |        |1       |7           |
+|17|                        └─TABLE FULL SCAN   |t4      |1       |7           |
+================================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([a.c1], [a.c2], [a.c3], [a.c4], [b.c1], [b.c3], [b.yyy], [b.max(c4)], [c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
-      equal_conds([b.c1 = c.c1], [b.c3 = c.c3], [a.c3 = b.c3]), other_conds(nil)
-  1 - output([b.c1], [b.c3], [b.yyy], [b.max(c4)]), filter(nil), rowset=16
-      access([b.c1], [b.c3], [b.yyy], [b.max(c4)])
-  2 - output([t4.c1], [t4.c3], [T_FUN_SUM(t4.c2)], [T_FUN_MAX(t4.c4)]), filter(nil), rowset=16
-      limit(1), offset(nil)
-  3 - output([t4.c1], [t4.c3], [T_FUN_SUM(t4.c2)], [T_FUN_MAX(t4.c4)]), filter(nil), rowset=16
-      sort_keys([T_FUN_SUM(t4.c2), ASC])
-  4 - output([t4.c1], [t4.c3], [T_FUN_SUM(t4.c2)], [T_FUN_MAX(t4.c4)]), filter(nil), rowset=16
+  0 - output([INTERNAL_FUNCTION(a.c1, a.c2, a.c3, a.c4, b.c1, b.c3, b.yyy, b.max(c4), c.c1, c.c2, c.c3, c.c4)]), filter(nil), rowset=16
+  1 - output([INTERNAL_FUNCTION(a.c1, a.c2, a.c3, a.c4, b.c1, b.c3, b.yyy, b.max(c4), c.c1, c.c2, c.c3, c.c4)]), filter(nil), rowset=16
       dop=1
-  5 - output([t4.c1], [t4.c3], [T_FUN_SUM(t4.c2)], [T_FUN_MAX(t4.c4)]), filter(nil), rowset=16
-      sort_keys([T_FUN_SUM(t4.c2), ASC]), topn(1)
-  6 - output([t4.c1], [t4.c3], [T_FUN_SUM(t4.c2)], [T_FUN_MAX(t4.c4)]), filter(nil), rowset=16
-      partition wise, force partition granule
-  7 - output([t4.c1], [t4.c3], [T_FUN_SUM(t4.c2)], [T_FUN_MAX(t4.c4)]), filter(nil), rowset=16
-      group([t4.c3]), agg_func([T_FUN_SUM(t4.c2)], [T_FUN_MAX(t4.c4)])
-  8 - output([t4.c1], [t4.c2], [t4.c3], [t4.c4]), filter(nil), rowset=16
-      access([t4.c1], [t4.c2], [t4.c3], [t4.c4]), partitions(p0sp[0-2])
-      is_index_back=false, is_global_index=false, 
-      range_key([t4.c1], [t4.c2], [t4.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
-  9 - output([a.c1], [a.c2], [a.c3], [a.c4], [c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
-      equal_conds([c.c1 = a.c1]), other_conds(nil)
- 10 - output([a.c1], [a.c2], [a.c3], [a.c4]), filter(nil), rowset=16
- 11 - output([a.c1], [a.c2], [a.c3], [a.c4]), filter(nil), rowset=16
-      dop=1
- 12 - output([a.c1], [a.c2], [a.c3], [a.c4]), filter(nil), rowset=16
-      force partition granule
- 13 - output([a.c1], [a.c2], [a.c3], [a.c4]), filter(nil), rowset=16
-      access([a.c1], [a.c2], [a.c3], [a.c4]), partitions(p0sp[0-2])
-      is_index_back=false, is_global_index=false, 
-      range_key([a.c1], [a.c2], [a.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
- 14 - output([c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
- 15 - output([c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
-      dop=1
- 16 - output([c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
-      force partition granule
- 17 - output([c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
+  2 - output([c.c1], [a.c1], [c.c3], [a.c3], [c.c2], [c.c4], [b.c1], [b.c3], [a.c2], [a.c4], [b.yyy], [b.max(c4)]), filter(nil), rowset=16
+      equal_conds([c.c1 = a.c1], [c.c3 = a.c3]), other_conds(nil)
+  3 - output([c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
+      affinitize, partition wise, force partition granule
+  4 - output([c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
       access([c.c1], [c.c2], [c.c3], [c.c4]), partitions(p0sp[0-2])
       is_index_back=false, is_global_index=false, 
       range_key([c.c1], [c.c2], [c.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+  5 - output([a.c1], [a.c3], [b.c1], [b.c3], [a.c2], [a.c4], [b.yyy], [b.max(c4)]), filter(nil), rowset=16
+      equal_conds([a.c1 = b.c1], [a.c3 = b.c3]), other_conds(nil)
+  6 - output([a.c1], [a.c2], [a.c3], [a.c4]), filter(nil), rowset=16
+      affinitize, partition wise, force partition granule
+  7 - output([a.c1], [a.c2], [a.c3], [a.c4]), filter(nil), rowset=16
+      access([a.c1], [a.c2], [a.c3], [a.c4]), partitions(p0sp[0-2])
+      is_index_back=false, is_global_index=false, 
+      range_key([a.c1], [a.c2], [a.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+  8 - output([b.c1], [b.c3], [b.yyy], [b.max(c4)]), filter(nil), rowset=16
+  9 - output([b.c1], [b.c3], [b.yyy], [b.max(c4)]), filter(nil), rowset=16
+      (#keys=1, [b.c3]), is_single, dop=1
+ 10 - output([b.c1], [b.c3], [b.yyy], [b.max(c4)]), filter(nil), rowset=16
+      access([b.c1], [b.c3], [b.yyy], [b.max(c4)])
+ 11 - output([t4.c1], [t4.c3], [T_FUN_SUM(t4.c2)], [T_FUN_MAX(t4.c4)]), filter(nil), rowset=16
+      limit(1), offset(nil)
+ 12 - output([t4.c1], [t4.c3], [T_FUN_SUM(t4.c2)], [T_FUN_MAX(t4.c4)]), filter(nil), rowset=16
+      sort_keys([T_FUN_SUM(t4.c2), ASC])
+ 13 - output([t4.c1], [t4.c3], [T_FUN_SUM(t4.c2)], [T_FUN_MAX(t4.c4)]), filter(nil), rowset=16
+      dop=1
+ 14 - output([t4.c1], [t4.c3], [T_FUN_SUM(t4.c2)], [T_FUN_MAX(t4.c4)]), filter(nil), rowset=16
+      sort_keys([T_FUN_SUM(t4.c2), ASC]), topn(1)
+ 15 - output([t4.c1], [t4.c3], [T_FUN_SUM(t4.c2)], [T_FUN_MAX(t4.c4)]), filter(nil), rowset=16
+      partition wise, force partition granule
+ 16 - output([t4.c1], [t4.c3], [T_FUN_SUM(t4.c2)], [T_FUN_MAX(t4.c4)]), filter(nil), rowset=16
+      group([t4.c3]), agg_func([T_FUN_SUM(t4.c2)], [T_FUN_MAX(t4.c4)])
+ 17 - output([t4.c1], [t4.c2], [t4.c3], [t4.c4]), filter(nil), rowset=16
+      access([t4.c1], [t4.c2], [t4.c3], [t4.c4]), partitions(p0sp[0-2])
+      is_index_back=false, is_global_index=false, 
+      range_key([t4.c1], [t4.c2], [t4.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain  select  * from t5 as a join t6 as b on a.c1 = b.c1 and a.c3 = b.c3 join (select c1, c3, sum(c2) as yyy, max(c4) from t4 group by c3 order by yyy limit 1) as c on b.c1=c.c1 and b.c3 = c.c3;
 Query Plan
 ================================================================================
@@ -1093,10 +1093,10 @@ Query Plan
 |1 |└─EXCHANGE OUT DISTR                        |:EX10002|1       |30          |
 |2 |  └─HASH JOIN                               |        |1       |26          |
 |3 |    ├─PX PARTITION ITERATOR                 |        |1       |7           |
-|4 |    │ └─TABLE FULL SCAN                     |a       |1       |7           |
+|4 |    │ └─TABLE FULL SCAN                     |b       |1       |7           |
 |5 |    └─HASH JOIN                             |        |1       |19          |
 |6 |      ├─PX PARTITION ITERATOR               |        |1       |7           |
-|7 |      │ └─TABLE FULL SCAN                   |b       |1       |7           |
+|7 |      │ └─TABLE FULL SCAN                   |a       |1       |7           |
 |8 |      └─EXCHANGE IN DISTR                   |        |1       |12          |
 |9 |        └─EXCHANGE OUT DISTR (PKEY)         |:EX10001|1       |11          |
 |10|          └─SUBPLAN SCAN                    |c       |1       |10          |
@@ -1113,22 +1113,22 @@ Outputs & filters:
   0 - output([INTERNAL_FUNCTION(a.c1, a.c2, a.c3, a.c4, b.c1, b.c2, b.c3, b.c4, c.c1, c.c3, c.yyy, c.max(c4))]), filter(nil), rowset=16
   1 - output([INTERNAL_FUNCTION(a.c1, a.c2, a.c3, a.c4, b.c1, b.c2, b.c3, b.c4, c.c1, c.c3, c.yyy, c.max(c4))]), filter(nil), rowset=16
       dop=1
-  2 - output([a.c1], [b.c1], [a.c3], [b.c3], [a.c2], [a.c4], [c.c1], [c.c3], [b.c2], [b.c4], [c.yyy], [c.max(c4)]), filter(nil), rowset=16
+  2 - output([a.c1], [b.c1], [a.c3], [b.c3], [b.c2], [b.c4], [c.c1], [c.c3], [a.c2], [a.c4], [c.yyy], [c.max(c4)]), filter(nil), rowset=16
       equal_conds([a.c1 = b.c1], [a.c3 = b.c3]), other_conds(nil)
-  3 - output([a.c1], [a.c2], [a.c3], [a.c4]), filter(nil), rowset=16
+  3 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), rowset=16
       affinitize, partition wise, force partition granule
-  4 - output([a.c1], [a.c2], [a.c3], [a.c4]), filter(nil), rowset=16
-      access([a.c1], [a.c2], [a.c3], [a.c4]), partitions(p0sp[0-2])
-      is_index_back=false, is_global_index=false, 
-      range_key([a.c1], [a.c2], [a.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
-  5 - output([b.c1], [b.c3], [c.c1], [c.c3], [b.c2], [b.c4], [c.yyy], [c.max(c4)]), filter(nil), rowset=16
-      equal_conds([b.c1 = c.c1], [b.c3 = c.c3]), other_conds(nil)
-  6 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), rowset=16
-      affinitize, partition wise, force partition granule
-  7 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), rowset=16
+  4 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), rowset=16
       access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0sp[0-2])
       is_index_back=false, is_global_index=false, 
       range_key([b.c1], [b.c2], [b.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+  5 - output([a.c1], [a.c3], [c.c1], [c.c3], [a.c2], [a.c4], [c.yyy], [c.max(c4)]), filter(nil), rowset=16
+      equal_conds([c.c1 = a.c1], [c.c3 = a.c3]), other_conds(nil)
+  6 - output([a.c1], [a.c2], [a.c3], [a.c4]), filter(nil), rowset=16
+      affinitize, partition wise, force partition granule
+  7 - output([a.c1], [a.c2], [a.c3], [a.c4]), filter(nil), rowset=16
+      access([a.c1], [a.c2], [a.c3], [a.c4]), partitions(p0sp[0-2])
+      is_index_back=false, is_global_index=false, 
+      range_key([a.c1], [a.c2], [a.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   8 - output([c.c1], [c.c3], [c.yyy], [c.max(c4)]), filter(nil), rowset=16
   9 - output([c.c1], [c.c3], [c.yyy], [c.max(c4)]), filter(nil), rowset=16
       (#keys=1, [c.c3]), is_single, dop=1
@@ -1216,56 +1216,68 @@ Outputs & filters:
       range_cond([:0 = c.c1])
 explain  select /*+use_nl(a b) use_nl(b c)*/ * from t5 as a join (select c1, c3, sum(c2) as yyy, max(c4) from t4 group by c3 order by yyy limit 1) as b on a.c1 = b.c1 and a.c3 = b.c3 join t6 as c on b.c1=c.c1 and b.c3 = c.c3;
 Query Plan
-=======================================================================
-|ID|OPERATOR                           |NAME    |EST.ROWS|EST.TIME(us)|
------------------------------------------------------------------------
-|0 |NESTED-LOOP JOIN                   |        |1       |42          |
-|1 |├─NESTED-LOOP JOIN                 |        |1       |26          |
-|2 |│ ├─SUBPLAN SCAN                   |b       |1       |10          |
-|3 |│ │ └─LIMIT                        |        |1       |10          |
-|4 |│ │   └─PX COORDINATOR MERGE SORT  |        |1       |10          |
-|5 |│ │     └─EXCHANGE OUT DISTR       |:EX10000|1       |9           |
-|6 |│ │       └─TOP-N SORT             |        |1       |7           |
-|7 |│ │         └─PX PARTITION ITERATOR|        |1       |7           |
-|8 |│ │           └─HASH GROUP BY      |        |1       |7           |
-|9 |│ │             └─TABLE FULL SCAN  |t4      |1       |7           |
-|10|│ └─DISTRIBUTED TABLE RANGE SCAN   |a       |1       |46          |
-|11|└─DISTRIBUTED TABLE RANGE SCAN     |c       |1       |46          |
-=======================================================================
+==============================================================================
+|ID|OPERATOR                                  |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------------------
+|0 |PX COORDINATOR                            |        |1       |41          |
+|1 |└─EXCHANGE OUT DISTR                      |:EX10002|1       |39          |
+|2 |  └─HASH JOIN                             |        |1       |35          |
+|3 |    ├─EXCHANGE IN DISTR                   |        |1       |12          |
+|4 |    │ └─EXCHANGE OUT DISTR (PKEY)         |:EX10001|1       |11          |
+|5 |    │   └─SUBPLAN SCAN                    |b       |1       |10          |
+|6 |    │     └─LIMIT                         |        |1       |10          |
+|7 |    │       └─EXCHANGE IN MERGE SORT DISTR|        |1       |10          |
+|8 |    │         └─EXCHANGE OUT DISTR        |:EX10000|1       |9           |
+|9 |    │           └─TOP-N SORT              |        |1       |7           |
+|10|    │             └─PX PARTITION ITERATOR |        |1       |7           |
+|11|    │               └─HASH GROUP BY       |        |1       |7           |
+|12|    │                 └─TABLE FULL SCAN   |t4      |1       |7           |
+|13|    └─PX PARTITION ITERATOR               |        |1       |23          |
+|14|      └─NESTED-LOOP JOIN                  |        |1       |23          |
+|15|        ├─TABLE FULL SCAN                 |a       |1       |7           |
+|16|        └─TABLE RANGE SCAN                |c       |1       |46          |
+==============================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([a.c1], [a.c2], [a.c3], [a.c4], [b.c1], [b.c3], [b.yyy], [b.max(c4)], [c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
-      conds(nil), nl_params_([a.c1(:2)], [b.c3(:3)]), use_batch=true
-  1 - output([a.c1], [b.c3], [a.c2], [a.c3], [a.c4], [b.c1], [b.yyy], [b.max(c4)]), filter(nil), rowset=16
-      conds(nil), nl_params_([b.c1(:0)], [b.c3(:1)]), use_batch=true
-  2 - output([b.c1], [b.c3], [b.yyy], [b.max(c4)]), filter(nil), rowset=16
-      access([b.c1], [b.c3], [b.yyy], [b.max(c4)])
-  3 - output([t4.c1], [t4.c3], [T_FUN_SUM(t4.c2)], [T_FUN_MAX(t4.c4)]), filter(nil), rowset=16
-      limit(1), offset(nil)
-  4 - output([t4.c1], [t4.c3], [T_FUN_SUM(t4.c2)], [T_FUN_MAX(t4.c4)]), filter(nil), rowset=16
-      sort_keys([T_FUN_SUM(t4.c2), ASC])
-  5 - output([t4.c1], [t4.c3], [T_FUN_SUM(t4.c2)], [T_FUN_MAX(t4.c4)]), filter(nil), rowset=16
+  0 - output([INTERNAL_FUNCTION(a.c1, a.c2, a.c3, a.c4, b.c1, b.c3, b.yyy, b.max(c4), c.c1, c.c2, c.c3, c.c4)]), filter(nil), rowset=16
+  1 - output([INTERNAL_FUNCTION(a.c1, a.c2, a.c3, a.c4, b.c1, b.c3, b.yyy, b.max(c4), c.c1, c.c2, c.c3, c.c4)]), filter(nil), rowset=16
       dop=1
+  2 - output([a.c1], [b.c1], [a.c3], [b.c3], [b.yyy], [b.max(c4)], [a.c2], [a.c4], [c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
+      equal_conds([a.c1 = b.c1], [a.c3 = b.c3]), other_conds(nil)
+  3 - output([b.c1], [b.c3], [b.yyy], [b.max(c4)]), filter(nil), rowset=16
+  4 - output([b.c1], [b.c3], [b.yyy], [b.max(c4)]), filter(nil), rowset=16
+      (#keys=1, [b.c3]), is_single, dop=1
+  5 - output([b.c1], [b.c3], [b.yyy], [b.max(c4)]), filter(nil), rowset=16
+      access([b.c1], [b.c3], [b.yyy], [b.max(c4)])
   6 - output([t4.c1], [t4.c3], [T_FUN_SUM(t4.c2)], [T_FUN_MAX(t4.c4)]), filter(nil), rowset=16
-      sort_keys([T_FUN_SUM(t4.c2), ASC]), topn(1)
+      limit(1), offset(nil)
   7 - output([t4.c1], [t4.c3], [T_FUN_SUM(t4.c2)], [T_FUN_MAX(t4.c4)]), filter(nil), rowset=16
-      partition wise, force partition granule
+      sort_keys([T_FUN_SUM(t4.c2), ASC])
   8 - output([t4.c1], [t4.c3], [T_FUN_SUM(t4.c2)], [T_FUN_MAX(t4.c4)]), filter(nil), rowset=16
+      dop=1
+  9 - output([t4.c1], [t4.c3], [T_FUN_SUM(t4.c2)], [T_FUN_MAX(t4.c4)]), filter(nil), rowset=16
+      sort_keys([T_FUN_SUM(t4.c2), ASC]), topn(1)
+ 10 - output([t4.c1], [t4.c3], [T_FUN_SUM(t4.c2)], [T_FUN_MAX(t4.c4)]), filter(nil), rowset=16
+      partition wise, force partition granule
+ 11 - output([t4.c1], [t4.c3], [T_FUN_SUM(t4.c2)], [T_FUN_MAX(t4.c4)]), filter(nil), rowset=16
       group([t4.c3]), agg_func([T_FUN_SUM(t4.c2)], [T_FUN_MAX(t4.c4)])
-  9 - output([t4.c1], [t4.c2], [t4.c3], [t4.c4]), filter(nil), rowset=16
+ 12 - output([t4.c1], [t4.c2], [t4.c3], [t4.c4]), filter(nil), rowset=16
       access([t4.c1], [t4.c2], [t4.c3], [t4.c4]), partitions(p0sp[0-2])
       is_index_back=false, is_global_index=false, 
       range_key([t4.c1], [t4.c2], [t4.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
- 10 - output([a.c1], [a.c2], [a.c3], [a.c4]), filter([a.c3 = :1]), rowset=16
-      access([GROUP_ID], [a.c1], [a.c2], [a.c3], [a.c4]), partitions(p0sp[0-2])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([a.c1], [a.c2], [a.c3]), range(MIN ; MAX), 
-      range_cond([a.c1 = :0])
- 11 - output([c.c1], [c.c2], [c.c3], [c.c4]), filter([:3 = c.c3]), rowset=16
+ 13 - output([a.c1], [a.c3], [a.c2], [a.c4], [c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
+      affinitize, partition wise, force partition granule
+ 14 - output([a.c1], [a.c3], [a.c2], [a.c4], [c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
+      conds(nil), nl_params_([a.c1(:0)], [a.c3(:1)]), use_batch=true
+ 15 - output([a.c1], [a.c2], [a.c3], [a.c4]), filter(nil), rowset=16
+      access([a.c1], [a.c2], [a.c3], [a.c4]), partitions(p0sp[0-2])
+      is_index_back=false, is_global_index=false, 
+      range_key([a.c1], [a.c2], [a.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+ 16 - output([c.c1], [c.c2], [c.c3], [c.c4]), filter([c.c3 = :1]), rowset=16
       access([GROUP_ID], [c.c1], [c.c2], [c.c3], [c.c4]), partitions(p0sp[0-2])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([c.c1], [c.c2], [c.c3]), range(MIN ; MAX), 
-      range_cond([c.c1 = :2])
+      range_cond([c.c1 = :0])
 explain  select /*+use_nl(a b) use_nl(b c)*/ * from t5 as a join t6 as b on a.c1 = b.c1 and a.c3 = b.c3 join (select c1, c3, sum(c2) as yyy, max(c4) from t4 group by c3 order by yyy limit 1) as c on b.c1=c.c1 and b.c3 = c.c3;
 Query Plan
 ==============================================================================
@@ -1294,8 +1306,8 @@ Outputs & filters:
   0 - output([INTERNAL_FUNCTION(a.c1, a.c2, a.c3, a.c4, b.c1, b.c2, b.c3, b.c4, c.c1, c.c3, c.yyy, c.max(c4))]), filter(nil), rowset=16
   1 - output([INTERNAL_FUNCTION(a.c1, a.c2, a.c3, a.c4, b.c1, b.c2, b.c3, b.c4, c.c1, c.c3, c.yyy, c.max(c4))]), filter(nil), rowset=16
       dop=1
-  2 - output([c.c1], [a.c1], [b.c3], [c.c3], [c.yyy], [c.max(c4)], [a.c3], [a.c2], [a.c4], [b.c1], [b.c2], [b.c4]), filter(nil), rowset=16
-      equal_conds([c.c1 = a.c1], [b.c3 = c.c3]), other_conds(nil)
+  2 - output([c.c1], [a.c1], [c.c3], [a.c3], [c.yyy], [c.max(c4)], [a.c2], [a.c4], [b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), rowset=16
+      equal_conds([c.c1 = a.c1], [c.c3 = a.c3]), other_conds(nil)
   3 - output([c.c1], [c.c3], [c.yyy], [c.max(c4)]), filter(nil), rowset=16
   4 - output([c.c1], [c.c3], [c.yyy], [c.max(c4)]), filter(nil), rowset=16
       (#keys=1, [c.c3]), is_single, dop=1
@@ -1317,9 +1329,9 @@ Outputs & filters:
       access([t4.c1], [t4.c2], [t4.c3], [t4.c4]), partitions(p0sp[0-2])
       is_index_back=false, is_global_index=false, 
       range_key([t4.c1], [t4.c2], [t4.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
- 13 - output([a.c1], [b.c3], [a.c3], [a.c2], [a.c4], [b.c1], [b.c2], [b.c4]), filter(nil), rowset=16
+ 13 - output([a.c1], [a.c3], [a.c2], [a.c4], [b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), rowset=16
       affinitize, partition wise, force partition granule
- 14 - output([a.c1], [b.c3], [a.c3], [a.c2], [a.c4], [b.c1], [b.c2], [b.c4]), filter(nil), rowset=16
+ 14 - output([a.c1], [a.c3], [a.c2], [a.c4], [b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), rowset=16
       conds(nil), nl_params_([a.c1(:0)], [a.c3(:1)]), use_batch=true
  15 - output([a.c1], [a.c2], [a.c3], [a.c4]), filter(nil), rowset=16
       access([a.c1], [a.c2], [a.c3], [a.c4]), partitions(p0sp[0-2])
