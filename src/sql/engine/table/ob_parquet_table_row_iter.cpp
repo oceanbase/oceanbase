@@ -671,7 +671,8 @@ int ObParquetTableRowIterator::DataLoader::to_numeric_hive(
     LOG_WARN("overflow", K(length), K(data_len));
   } else {
     //to little endian
-    MEMSET(buf, (*str >> 8), data_len); // fill 1 when the input value is negetive, otherwise fill 0
+    // fill 1 when the input value is negetive, otherwise fill 0
+    MEMSET(buf, (static_cast<unsigned char>(*str) & 0x80) ? 0xFF : 0x00, data_len);
     if (data_len <= 4) {
       //for precision <= 9
       MEMCPY(buf + 4 - length, str, length);
