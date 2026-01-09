@@ -1821,17 +1821,19 @@ int ObSSIncMajorDDLMergeHelper::prepare_cg_table_key(
   }
 
   if (OB_SUCC(ret)) {
-    SCN max_scn = SCN::min_scn(); // unused
-    ObArray<ObDDLKVHandle> ddl_kvs;
-    ObTableStoreIterator ddl_dump_sstables;
-    if (OB_FAIL(get_ddl_kvs_and_ddl_dump_sstables(tablet_handle,
-                                                  dag_merge_param,
-                                                  false/*frozen_only*/,
-                                                  ddl_kvs,
-                                                  ddl_dump_sstables))) {
-      LOG_WARN("failed to get ddl kvs and ddl dump sstables", KR(ret), K(tablet_handle), K(dag_merge_param));
-    } else if (OB_FAIL(get_min_max_scn(ddl_kvs, ddl_dump_sstables, cur_cg_table_key.scn_range_.start_scn_, max_scn))) {
-      LOG_WARN("failed to get min max scn", KR(ret), K(dag_merge_param));
+    ObTabletDDLCompleteMdsUserData user_data;
+    ObArenaAllocator allocator(ObMemAttr(MTL_ID(), "SS_INC_MAJOR"));
+    if (OB_FAIL(tablet_handle.get_obj()->get_inc_major_direct_load_info(
+                                                share::SCN::max_scn(),
+                                                allocator,
+                                                ObTabletDDLCompleteMdsUserDataKey(dag_merge_param.trans_id_),
+                                                user_data))) {
+      LOG_WARN("fail to get inc major direct load info", KR(ret), K(dag_merge_param));
+    } else if (OB_UNLIKELY(!user_data.start_scn_.is_valid_and_not_min())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected inc major start scn", KR(ret), K(user_data));
+    } else {
+      cur_cg_table_key.scn_range_.start_scn_ = user_data.start_scn_;
     }
   }
   return ret;
