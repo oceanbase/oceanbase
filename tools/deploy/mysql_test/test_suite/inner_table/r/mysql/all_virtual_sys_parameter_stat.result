@@ -136,6 +136,7 @@ enable_transfer
 enable_upgrade_mode
 enable_user_defined_rewrite_rules
 external_kms_info
+external_table_csv_max_buffer_size
 freeze_trigger_percentage
 fuse_row_cache_priority
 global_background_cpu_quota

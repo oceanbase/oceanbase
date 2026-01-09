@@ -2867,3 +2867,7 @@ DEF_STR_WITH_CHECKER(_append_update_global_indexes_for_dynamic_partition, OB_TEN
         "values: AUTO(follow _ob_enable_truncate_partition_preserve_global_index), ON, OFF",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
         "AUTO, ON, OFF");
+DEF_CAP(external_table_csv_max_buffer_size, OB_TENANT_PARAMETER, "1G", "[0B,)",
+        "Maximum buffer size for parsing CSV external table files. "
+        "Range: [0B, +∞), default: 1G",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

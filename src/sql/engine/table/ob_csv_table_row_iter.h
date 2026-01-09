@@ -87,7 +87,7 @@ public:
   static const int64_t MIN_EXTERNAL_TABLE_FILE_ID = 1;
   static const int64_t MIN_EXTERNAL_TABLE_LINE_NUMBER = 1;
   static const int max_ipv6_port_length = 100;
-  ObCSVTableRowIterator() : bit_vector_cache_(NULL) {}
+  ObCSVTableRowIterator() : bit_vector_cache_(NULL),max_buffer_size_(1024 * 1024 * 1024)  {}
   virtual ~ObCSVTableRowIterator();
   virtual int init(const storage::ObTableScanParam *scan_param) override;
   int get_next_row() override;
@@ -133,6 +133,7 @@ private:
   ObSqlString url_;
   ObExpr *file_name_expr_;
   bool use_handle_batch_lines_ = false;
+  int64_t max_buffer_size_;
 };
 
 
