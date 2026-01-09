@@ -525,6 +525,18 @@ int ObStorageObDalWriter::open(const common::ObString &uri, common::ObObjectStor
   return ret;
 }
 
+bool is_in_object_storage_if_match_whitelist(const ObString &uri)
+{
+  bool is_in_whitelist = false;
+  const int64_t count = ARRAYSIZEOF(OBJECT_STORAGE_IF_MATCH_WHITELIST);
+  for (int64_t i = 0; i < count && !is_in_whitelist; ++i) {
+    if (uri.suffix_match(OBJECT_STORAGE_IF_MATCH_WHITELIST[i])) {
+      is_in_whitelist = true;
+    }
+  }
+  return is_in_whitelist;
+}
+
 int ObStorageObDalWriter::write(const char *buf, const int64_t size)
 {
   int ret = OB_SUCCESS;
@@ -557,7 +569,11 @@ int ObStorageObDalWriter::write(const char *buf, const int64_t size)
         OB_LOG(WARN, "failed to read", K(ret), KP(reader), K(read_buf_size));
       } else if (OB_UNLIKELY(read_size != size || 0 != MEMCMP(read_buf, buf, size))) {
         ret = OB_OBJECT_STORAGE_CONDITION_NOT_MATCH;
-        OB_LOG(ERROR, "failed write_with_if_match", KR(ret), K(read_size), K(size));
+        if (is_in_object_storage_if_match_whitelist(object_)) {
+          OB_LOG(WARN, "failed write_with_if_match, but in whitelist", KR(ret), K(read_size), K(size), K(object_), K(obdal_account_));
+        } else {
+          OB_LOG(ERROR, "failed write_with_if_match", KR(ret), K(read_size), K(size), K(object_), K(obdal_account_));
+        }
       } else {
         // if 'if-match' is enabled, the lastmodify time of the object will no longer be accurate.
         OB_LOG(INFO, "an overlay write occurs and the data is consistent", K(ret), K(object_), K(bucket_), K(obdal_account_));

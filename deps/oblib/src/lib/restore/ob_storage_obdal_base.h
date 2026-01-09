@@ -44,6 +44,15 @@ static constexpr int MAX_OBDAL_SECRET_KEY_LENGTH = 256;
 static constexpr char OB_STORAGE_OBDAL_ALLOCATOR[] = "StorageObDal";
 static constexpr char OB_DAL_SDK[] = "OBDALSDK";
 
+// please look enum class ObStorageObjectType
+static const char* OBJECT_STORAGE_IF_MATCH_WHITELIST[] =
+{
+  ".T14", // MAJOR_PREWARM_DATA_INDEX
+  ".T16"  // MAJOR_PREWARM_META_INDEX
+};
+
+bool is_in_object_storage_if_match_whitelist(const ObString &uri);
+
 class ObDalEnvIniter
 {
 public:
