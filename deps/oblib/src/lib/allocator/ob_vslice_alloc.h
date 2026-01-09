@@ -16,6 +16,8 @@
 #include "lib/allocator/ob_block_alloc_mgr.h"
 #include "lib/allocator/ob_slice_alloc.h"
 #include "lib/lock/ob_small_spin_lock.h"
+#include "lib/lock/ob_spin_lock.h"
+#include "lib/utility/ob_tracepoint.h"
 #include "lib/utility/ob_utility.h"
 
 namespace oceanbase
@@ -283,6 +285,10 @@ private:
     Block *blk = NULL;
     void *buf = NULL;
     if (NULL != (buf = blk_alloc_.alloc_block(bsize_, mattr_))) {
+      int tmp_ret = OB_E(EventTable::EN_VSLICE_ALLOC_INIT_MEM) OB_SUCCESS;
+      if (OB_SUCCESS != tmp_ret) {
+        memset(buf, 0, bsize_);
+      }
       blk = new(buf)Block(this, bsize_);
     }
     return blk;

@@ -544,7 +544,7 @@ int ObKVCacheStore::get_avg_cache_item_size(const uint64_t tenant_id, const int6
   } else {
     HazptrHolder hazptr_holder;
     bool protect_success;
-    for (int64_t i = 0; i < cur_mb_num_; ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < cur_mb_num_; ++i) {
       if (OB_FAIL(hazptr_holder.protect(protect_success, &mb_handles_[i]))) {
         COMMON_LOG(WARN, "failed to protect mb_handle");
       } else if (protect_success) {
@@ -901,7 +901,7 @@ int ObKVCacheStore::inner_flush_washable_mb(const int64_t cache_id, const int64_
               size_retired += size;
             }
           } else {
-            if (force_flush && protect_success) {
+            if (OB_SUCC(ret) && force_flush && protect_success) {
               ret = OB_ERR_UNEXPECTED;
               COMMON_LOG(WARN,
                   "Can not sync wash memblock of erased tenant",
@@ -914,7 +914,7 @@ int ObKVCacheStore::inner_flush_washable_mb(const int64_t cache_id, const int64_
           }
           handle = static_cast<ObKVMemBlockHandle*>(link_next(handle));
 
-          if (!force_flush && check_idx > 0 && 0 == check_idx % check_interval) {
+          if (OB_SUCC(ret) && !force_flush && check_idx > 0 && 0 == check_idx % check_interval) {
             const int64_t cost = ObTimeUtility::current_time() - start;
             if (cost > timeout_us) {
               ret = OB_SYNC_WASH_MB_TIMEOUT;
