@@ -959,7 +959,7 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
               get_session().sql_sess_record_sql_stat_start_value(sqlstat_record);
             }
           }
-
+          get_session().set_retry_wait_event_begin_time();
           const uint64_t tenant_id = get_session().get_effective_tenant_id();
 
           if (OB_FAIL(ret)){

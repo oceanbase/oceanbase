@@ -174,7 +174,7 @@ int ObPxTaskProcess::process()
         sqlstat_record.set_is_in_retry(session->get_is_in_retry());
         session->sql_sess_record_sql_stat_start_value(sqlstat_record);
       }
-
+      session->set_retry_wait_event_begin_time();
       //监控项统计开始
       exec_start_timestamp_ = enqueue_timestamp_;
 

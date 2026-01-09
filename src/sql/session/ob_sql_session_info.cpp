@@ -5179,13 +5179,16 @@ int ObSQLSessionInfo::sql_sess_record_sql_stat_start_value(ObExecutingSqlStatRec
   int ret = OB_SUCCESS;
   if (OB_FAIL(executing_sql_stat_record_.assign(executing_sqlstat))) {
     LOG_WARN("failed to assign executing sql stat record");
-  } else {
-    ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
-    if (OB_NOT_NULL(di)) {
-      di->get_ash_stat().record_cur_query_start_ts(get_is_in_retry());
-    }
   }
   return ret;
+}
+
+void ObSQLSessionInfo::set_retry_wait_event_begin_time()
+{
+  ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+  if (OB_NOT_NULL(di)) {
+    di->get_ash_stat().record_cur_query_start_ts(get_is_in_retry());
+  }
 }
 
 int ObSQLSessionInfo::set_service_name(const ObString& service_name)

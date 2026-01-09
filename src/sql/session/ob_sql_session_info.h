@@ -2045,6 +2045,7 @@ public:
   void set_job_info(dbms_scheduler::ObDBMSSchedJobInfo *job_info) { job_info_ = job_info; }
   void *get_external_resource_schema_cache() { return external_resource_schema_cache_; }
   void set_external_resource_schema_cache(void *cache) { external_resource_schema_cache_ = cache; }
+  void set_retry_wait_event_begin_time();
 
 private:
   transaction::ObTxnFreeRouteCtx txn_free_route_ctx_;

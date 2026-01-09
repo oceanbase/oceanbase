@@ -244,6 +244,7 @@ int ObMPStmtSendPieceData::do_process(ObSQLSessionInfo &session)
       sqlstat_record.set_is_in_retry(session.get_is_in_retry());
       session.sql_sess_record_sql_stat_start_value(sqlstat_record);
     }
+    session.set_retry_wait_event_begin_time();
     int64_t execution_id = 0;
     ObString sql = "send long data";
     //监控项统计开始

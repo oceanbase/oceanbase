@@ -761,6 +761,7 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
       sqlstat_record.set_is_in_retry(false);
       session.sql_sess_record_sql_stat_start_value(sqlstat_record);
     }
+    session.set_retry_wait_event_begin_time();
     ctx_.enable_sql_resource_manage_ = true;
     if (OB_FAIL(set_session_active(sql, session, single_process_timestamp_))) {
       LOG_WARN("fail to set session active", K(ret));
@@ -1068,6 +1069,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
         sqlstat_record.set_is_in_retry(session.get_is_in_retry());
         session.sql_sess_record_sql_stat_start_value(sqlstat_record);
       }
+      session.set_retry_wait_event_begin_time();
       result.set_has_more_result(has_more_result);
       ObTaskExecutorCtx &task_ctx = result.get_exec_context().get_task_exec_ctx();
       task_ctx.schema_service_ = gctx_.schema_service_;
