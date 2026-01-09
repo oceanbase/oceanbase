@@ -320,6 +320,7 @@ int ObCOMergeWriter::basic_init(const blocksstable::ObDatumRow &default_row,
   } else if (OB_FAIL(move_iters_next())) {
     LOG_WARN("failed to move iters next", K(ret));
   } else {
+    compat_version_ = merge_param.static_param_.data_version_;
     is_inited_ = true;
     LOG_INFO("Succ to init merge writer", K(ret));
   }
@@ -959,11 +960,37 @@ int ObCOMergeBaseRowWriter::replay_mergelog(const ObMergeLog &mergelog)
 {
   int ret = OB_SUCCESS;
   ObMergeIter *iter = merge_iter_.iter_;
+  int64_t curr_end_row_id = 0;
+  int64_t expected_end_row_id = 0;
+#define GET_CURR_END_ROW_ID(iter, end_row_id) \
+  if (nullptr == iter->get_curr_row()) { \
+    if (OB_FAIL(iter->get_curr_range_end_rowid(end_row_id))) { \
+      LOG_WARN("failed to get curr range end row id", K(ret), K(iter)); \
+    } \
+  } else if (OB_FAIL(iter->get_curr_row_id(end_row_id))) { \
+    LOG_WARN("failed to get curr row id", K(ret), K(iter)); \
+  }
+  if (OB_NOT_NULL(iter)) {
+    GET_CURR_END_ROW_ID(iter, expected_end_row_id);
+  }
+  if (OB_SUCC(ret) && mergelog.row_id_ != INT64_MAX && mergelog.row_id_ != expected_end_row_id) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected curr end row id", K(ret), K(mergelog), K(expected_end_row_id));
+  }
   while (OB_SUCC(ret) && OB_NOT_NULL(iter) && !iter->is_iter_end()) {
     if (OB_FAIL(append_iter_curr_row_or_range(&merge_iter_))) {
       LOG_WARN("failed to append iter curr row or range", K(ret), K(merge_iter_));
-    } else if (mergelog.row_id_ != INT64_MAX) {
+    } else {
+      GET_CURR_END_ROW_ID(iter, curr_end_row_id);
+    }
+    if (OB_FAIL(ret)) {
+    } else if (compat_version_ < DATA_VERSION_4_5_1_0 && mergelog.row_id_ != INT64_MAX) {
       break;
+    } else if (mergelog.row_id_ == curr_end_row_id) {
+      break;
+    } else if (mergelog.row_id_ < curr_end_row_id) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected curr end row id", K(ret), K(mergelog), K(curr_end_row_id));
     } else if (OB_FAIL(iter->next())) {
       if (OB_LIKELY(ret == OB_ITER_END)) {
         ret = OB_SUCCESS;
@@ -972,6 +999,7 @@ int ObCOMergeBaseRowWriter::replay_mergelog(const ObMergeLog &mergelog)
       }
     }
   }
+#undef GET_CURR_END_ROW_ID
   return ret;
 }
 

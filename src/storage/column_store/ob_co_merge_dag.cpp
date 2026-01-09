@@ -34,6 +34,7 @@ ERRSIM_POINT_DEF(EN_COMPACTION_PERSIST_GENERATE_NEXT_FAILED);
 ERRSIM_POINT_DEF(EN_COMPACTION_REPLAY_FAILED);
 ERRSIM_POINT_DEF(EN_COMPACTION_UPDATE_TABLET_FAILED);
 ERRSIM_POINT_DEF(EN_COMPACTION_GENERATE_NEXT_FAILED);
+ERRSIM_POINT_DEF(EN_COMPACTION_RANDOM_BATCH_SIZE);
 ObCOMergeDagParam::ObCOMergeDagParam()
   : ObTabletMergeDagParam(),
     compat_mode_(lib::Worker::CompatMode::INVALID),
@@ -501,7 +502,12 @@ void ObCOMergeExeDag::try_update_merge_batch_size()
       merge_batch_size_ = MIN(merge_batch_size_ * 2, cg_count_);
       need_update_batch_size_ = false;
     }
-
+#ifdef ERRSIM
+    if (EN_COMPACTION_RANDOM_BATCH_SIZE) {
+      merge_batch_size_ = ObRandom::rand(merge_batch_size_ - 1, merge_batch_size_);
+      SERVER_EVENT_SYNC_ADD("merge_errsim", "random_merge_batch_size", "merge_batch_size", merge_batch_size_);
+    }
+#endif
     FLOG_INFO("[ADAPTIVE_SCHED] update co merge batch size", K(merge_thread),
         K(mem_allow_used), K(batch_mem_allow_per_thread), K(mem_allow_batch_size), K(merge_batch_size_));
   }
@@ -670,11 +676,17 @@ int ObCOMergeExeDag::get_next_replay_cg_pair(
       ret = OB_ITER_END;
     }
   } else {
+    bool only_check_batch_size = false;
+#ifdef ERRSIM
+    if (EN_COMPACTION_RANDOM_BATCH_SIZE) {
+      only_check_batch_size = true;
+    }
+#endif
     while (OB_SUCC(ret) && end_cg_idx < cg_count_ && OB_NOT_NULL(cg_merge_status_)) {
       const CGMergeStatus &cg_merge_status = cg_merge_status_[range_idx * cg_count_ + end_cg_idx];
       if (cg_merge_status == CG_NEED_REPLAY) {
         end_cg_idx++;
-        if (cg_count_ - end_cg_idx < merge_batch_size_) { // the last batch
+        if (!only_check_batch_size && cg_count_ - end_cg_idx < merge_batch_size_) { // the last batch
         } else if (start_cg_idx + merge_batch_size_ <= end_cg_idx) {
           break;
         }

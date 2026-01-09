@@ -199,6 +199,7 @@ protected:
   // for skip update nop or no need cg opt
   int64_t last_skip_major_idx_;
   int64_t last_skip_major_row_id_;
+  uint64_t compat_version_;
 };
 
 class ObCOMergeRowWriter : public ObCOMergeWriter

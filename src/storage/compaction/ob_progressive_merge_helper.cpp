@@ -19,6 +19,7 @@ using namespace common;
 namespace compaction
 {
 ERRSIM_POINT_DEF(EN_CO_MERGE_REUSE_MICRO);
+ERRSIM_POINT_DEF(EN_FORCE_CHECK_MACRO_BLOCK_OP);
 
 ObProgressiveMergeMgr::ObProgressiveMergeMgr()
   : progressive_merge_round_(0),
@@ -184,6 +185,12 @@ int ObProgressiveMergeHelper::init(
           && tables.at(0)->is_normal_cg_sstable() && rewrite_macro_cnt < CG_TABLE_CHECK_REWRITE_CNT_) {
         check_macro_need_merge_ = true;
       }
+#ifdef ERRSIM
+      if (EN_FORCE_CHECK_MACRO_BLOCK_OP) {
+        check_macro_need_merge_ = table_idx_ == 0;
+        SERVER_EVENT_SYNC_ADD("merge_errsim", "force_check_macro_block_op", "tablet_id", static_param.get_tablet_id());
+      }
+#endif
       FLOG_INFO("finish macro block need merge check", "tablet_id", static_param.get_tablet_id(), K(check_macro_need_merge_), K(rewrite_macro_cnt), K(reduce_macro_cnt), K(table_idx_));
     }
   }
@@ -301,7 +308,7 @@ int ObProgressiveMergeHelper::check_macro_block_op(const ObMacroBlockDesc &macro
     if (block_op.is_none() && check_macro_need_merge_) {
       bool need_set_block_op = macro_desc.macro_meta_->val_.data_zsize_ < REWRITE_MACRO_SIZE_THRESHOLD;
 #ifdef ERRSIM
-      if (OB_UNLIKELY(EN_CO_MERGE_REUSE_MICRO)) {
+      if (OB_UNLIKELY(EN_CO_MERGE_REUSE_MICRO || EN_FORCE_CHECK_MACRO_BLOCK_OP)) {
         ret = OB_SUCCESS;
         need_set_block_op = true;
         FLOG_INFO("ERRSIM EN_CO_MERGE_REUSE_MICRO", KR(ret), K(need_set_block_op));
@@ -312,7 +319,7 @@ int ObProgressiveMergeHelper::check_macro_block_op(const ObMacroBlockDesc &macro
         block_op.set_rewrite();
       } else {
         block_op.set_reorg();
-        LOG_INFO("check macro block op", K(ret), "data_zsize", macro_desc.macro_meta_->val_.data_zsize_);
+        LOG_INFO("check macro block op", K(ret), "data_zsize", macro_desc.macro_meta_->val_.data_zsize_, K(table_idx_));
       }
     }
   }
