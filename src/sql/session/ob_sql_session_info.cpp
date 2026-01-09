@@ -2170,6 +2170,15 @@ int ObSQLSessionInfo::deserialize(const char *buf, const int64_t data_len, int64
       OB_UNIS_DECODE(affected_rows_);
     }
 
+    if (OB_SUCC(ret) && version == 2 && enable_role_ids_.empty()) {
+      // If version = 2 (the cluster contains 42x or earlier versions), the serialization result of enable_role_ids_ is
+      // always empty. In this case, only the information in the enable_role_array_ field can be used, so
+      // enable_role_array_ needs to be assigned to enable_role_ids_.
+      if (OB_FAIL(enable_role_ids_.assign(enable_role_array_))) {
+        LOG_WARN("failed to assign role id array", K(ret));
+      }
+    }
+
     OB_UNIS_DECODE(unit_gc_min_sup_proxy_version_);
     OB_UNIS_DECODE(gtt_tablet_info_map_);
     (void)ObSQLUtils::adjust_time_by_ntp_offset(thread_data_.cur_query_start_time_);
@@ -3430,7 +3439,11 @@ int ObSQLSessionInfo::end_nested_session(StmtSavedValue &saved_value)
 int ObSQLSessionInfo::set_enable_role_array(const ObIArray<uint64_t> &role_id_array)
 {
   int ret = OB_SUCCESS;
-  ret = set_enable_role_ids(role_id_array);
+  if (OB_FAIL(enable_role_array_.assign(role_id_array))) {
+    LOG_WARN("failed to assign role id array", K(ret));
+  } else if (OB_FAIL(set_enable_role_ids(role_id_array))) {
+    LOG_WARN("failed to set enable role ids", K(ret));
+  }
   return ret;
 }
 

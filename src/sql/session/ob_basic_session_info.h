@@ -2813,6 +2813,7 @@ protected:
   // Configurations that will influence execution plan.
   ObConfigInfoInPC inf_pc_configs_;
   common::ObString client_identifier_;
+  common::ObSEArray<uint64_t, 4> enable_role_ids_;
 
   //为了性能做的系统变量本地缓存值
 public:
@@ -2905,7 +2906,6 @@ private:
   // just used to plan cache key
   bool config_use_rich_format_;
 
-  common::ObSEArray<uint64_t, 4> enable_role_ids_;
   uint64_t sys_var_config_hash_val_;
   char thread_name_[OB_THREAD_NAME_BUF_LEN];
   bool is_real_inner_session_;

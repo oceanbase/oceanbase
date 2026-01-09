@@ -3052,7 +3052,12 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
     }
     case SYS_VAR__OB_ENABLE_ROLE_IDS: {
       ObString serialized_data;
-      enable_role_ids_.reuse();
+      if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_2_0) {
+       // SYS_VAR__OB_ENABLE_ROLE_IDS was introduced in 4.3.2.0,
+       // If Proxy Switch Route switches from an older version before 4.3.2.0 to the current version,
+       // enable_role_ids_ MUST NOT be cleared, otherwise permissions will be lost.
+        enable_role_ids_.reuse();
+      }
       if (OB_FAIL(val.get_string(serialized_data))) {
         LOG_WARN("fail to get str value", K(ret), K(var));
       } else if (!serialized_data.empty()) {
