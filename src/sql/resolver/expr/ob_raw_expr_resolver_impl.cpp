@@ -1027,6 +1027,36 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
         }
         break;
       }
+      case T_FUN_SYS_SESSIONTIMEZONE: {
+        ObSysFunRawExpr *f_expr = NULL;
+        if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_SESSIONTIMEZONE, f_expr))) {
+          LOG_WARN("fail to create raw expr", K(ret));
+        } else {
+          f_expr->set_func_name(ObString::make_string(N_SESSIONTIMEZONE));
+          expr = f_expr;
+        }
+        break;
+      }
+      case T_FUN_SYS_DBTIMEZONE: {
+        ObSysFunRawExpr *f_expr = NULL;
+        if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_DBTIMEZONE, f_expr))) {
+          LOG_WARN("fail to create raw expr", K(ret));
+        } else {
+          f_expr->set_func_name(ObString::make_string(N_DBTIMEZONE));
+          expr = f_expr;
+        }
+        break;
+      }
+      case T_FUN_SYS_USER: {
+        ObSysFunRawExpr *f_expr = NULL;
+        if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_USER, f_expr))) {
+          LOG_WARN("fail to create raw expr", K(ret));
+        } else {
+          f_expr->set_func_name(ObString::make_string(N_USER));
+          expr = f_expr;
+        }
+        break;
+      }
       case T_FUN_SYS_CUR_TIME: {
         ObString err_info("current_time");
         if (OB_FAIL(process_timestamp_node(node, err_info, expr))) {
@@ -2619,8 +2649,13 @@ int ObRawExprResolverImpl::check_pl_variable(ObQualifiedName &q_name, bool &is_p
 int ObRawExprResolverImpl::check_sys_func(ObQualifiedName &q_name, bool &is_sys_func)
 {
   int ret = OB_SUCCESS;
+  ObString func_name = q_name.access_idents_.at(0).access_name_;
+  // CURRENT_DATE is a reserved keyword in Oracle mode, but the operator name is "cur_date".
+  if (0 == func_name.case_compare("CURRENT_DATE")) {
+    func_name = ObString::make_string(N_CUR_DATE);
+  }
   is_sys_func = 1 == q_name.access_idents_.count()
-      && (IS_FUN_SYS_TYPE(ObExprOperatorFactory::get_type_by_name(q_name.access_idents_.at(0).access_name_))
+      && (IS_FUN_SYS_TYPE(ObExprOperatorFactory::get_type_by_name(func_name))
           || 0 == q_name.access_idents_.at(0).access_name_.case_compare("sqlerrm")
           || 0 == q_name.access_idents_.at(0).access_name_.case_compare("sqlcode")
           || 0 == q_name.access_idents_.at(0).access_name_.case_compare("xmlagg"))
@@ -2746,12 +2781,40 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
 {
   int ret = OB_SUCCESS;
   const ParseNode &func_node = left_node;
-  if (OB_ISNULL(func_node.children_[0])) {
+  if (OB_ISNULL(func_node.children_[0]) &&
+      !(func_node.type_ == T_FUN_SYS_SYSTIMESTAMP ||
+      func_node.type_ == T_FUN_SYS_SYSDATE ||
+      func_node.type_ == T_FUN_SYS_CUR_TIMESTAMP ||
+      func_node.type_ == T_FUN_SYS_LOCALTIMESTAMP ||
+      func_node.type_ == T_FUN_SYS_CUR_DATE ||
+      func_node.type_ == T_FUN_SYS_SESSIONTIMEZONE ||
+      func_node.type_ == T_FUN_SYS_DBTIMEZONE ||
+      func_node.type_ == T_FUN_SYS_USER)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("node is NULL", K(func_node.num_child_), K(ret));
   } else {
-    ObString ident_name(static_cast<int32_t>(
+    ObString ident_name;
+    if (T_FUN_SYS_SYSTIMESTAMP == func_node.type_) {
+      ident_name = ObString::make_string("SYSTIMESTAMP");
+    } else if (T_FUN_SYS_SYSDATE == func_node.type_) {
+      ident_name = ObString::make_string("SYSDATE");
+    } else if (T_FUN_SYS_CUR_TIMESTAMP == func_node.type_) {
+      ident_name = ObString::make_string("CURRENT_TIMESTAMP");
+    } else if (T_FUN_SYS_LOCALTIMESTAMP == func_node.type_) {
+      ident_name = ObString::make_string("LOCALTIMESTAMP");
+    } else if (T_FUN_SYS_CUR_DATE == func_node.type_) {
+      ident_name = ObString::make_string("CURRENT_DATE");
+    } else if (T_FUN_SYS_SESSIONTIMEZONE == func_node.type_) {
+      ident_name = ObString::make_string("SESSIONTIMEZONE");
+    } else if (T_FUN_SYS_DBTIMEZONE == func_node.type_) {
+      ident_name = ObString::make_string("DBTIMEZONE");
+    } else if (T_FUN_SYS_USER == func_node.type_) {
+      ident_name = ObString::make_string("USER");
+    } else {
+      ident_name = ObString(static_cast<int32_t>(
       func_node.children_[0]->str_len_), func_node.children_[0]->str_value_);
+    }
+
     get_special_func_ident_name(ident_name, func_node.type_);
 
     // first bit in value_ of T_FUN_SYS node is used to mark NEW keyword,
@@ -2813,7 +2876,16 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
           } else if (0 == q_name.access_idents_.at(0).access_name_.case_compare("json_equal")) {
             ret = OB_ERR_JSON_EQUAL_OUTSIDE_PREDICATE;
             LOG_WARN("JSON_EQUAL used outside predicate", K(ret));
-          } else if (func_node.type_ == T_FUN_SYS_XMLPARSE) {
+          } else if (T_FUN_SYS_SYSDATE == func_node.type_
+                    || T_FUN_SYS_SYSTIMESTAMP == func_node.type_
+                    || T_FUN_SYS_CUR_TIMESTAMP == func_node.type_
+                    || T_FUN_SYS_LOCALTIMESTAMP == func_node.type_
+                    || T_FUN_SYS_CUR_DATE == func_node.type_
+                    || T_FUN_SYS_SESSIONTIMEZONE == func_node.type_
+                    || T_FUN_SYS_DBTIMEZONE == func_node.type_
+                    || T_FUN_SYS_USER == func_node.type_) {
+            OZ (recursive_resolve(&func_node, func_expr));
+          }  else if (func_node.type_ == T_FUN_SYS_XMLPARSE) {
             OZ (process_xmlparse_node(&func_node, func_expr));
           } else if (func_node.type_ == T_FUN_SYS_XML_ELEMENT) {
             OZ (process_xml_element_node(&func_node, func_expr));
@@ -2874,7 +2946,17 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
           }
         } // fall through. continue resolve parameter expression of type method.
         case PL_VAR: {
-          if (func_node.num_child_ != 2 || OB_ISNULL(func_node.children_[1])) {
+          // In Oracle PL/SQL, reserved sysfunc identifiers may be used as variable names
+          // (e.g. procedure arg named SYSTIMESTAMP). Those identifiers are parsed as `T_FUN_SYS`
+          // in `T_OBJ_ACCESS_REF` and should be resolved as PL variables when they exist.
+          if (PL_VAR == name_type
+              && !access_ident.has_brackets_
+              && (func_node.num_child_ <= 1 || OB_ISNULL(func_node.children_[1]))) {
+            // For plain variable reference (no brackets / no parameter list), accept it here.
+            // If not set_pl_var() here, the identifier will be resolved as a function name,
+            // which is not expected.
+            access_ident.set_pl_var();
+          } else if (func_node.num_child_ != 2 || OB_ISNULL(func_node.children_[1])) {
             if (0 == access_ident.access_name_.case_compare("UID")) {
               // do nothing
             } else {
@@ -2942,7 +3024,15 @@ int ObRawExprResolverImpl::resolve_left_node_of_obj_access_idents(const ParseNod
              || T_FUN_SYS_XML_ELEMENT == left_node.type_
              || T_FUN_SYS_XML_FOREST == left_node.type_
              || T_FUN_SYS_XMLPARSE == left_node.type_
-             || T_FUN_ORA_XMLAGG == left_node.type_) {
+             || T_FUN_ORA_XMLAGG == left_node.type_
+             || T_FUN_SYS_SYSDATE == left_node.type_
+             || T_FUN_SYS_SYSTIMESTAMP == left_node.type_
+             || T_FUN_SYS_CUR_DATE == left_node.type_
+             || T_FUN_SYS_LOCALTIMESTAMP == left_node.type_
+             || T_FUN_SYS_CUR_TIMESTAMP == left_node.type_
+             || T_FUN_SYS_SESSIONTIMEZONE == left_node.type_
+             || T_FUN_SYS_DBTIMEZONE == left_node.type_
+             || T_FUN_SYS_USER == left_node.type_) {
     OZ (resolve_func_node_of_obj_access_idents(left_node, q_name));
   } else if (left_node.type_ == T_LINK_NODE && left_node.value_ == 3) {
     ret = OB_ERR_PARSER_SYNTAX; // array not in object access ref : array[1]
