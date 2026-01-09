@@ -1194,7 +1194,7 @@ int ObPLPackageManager::load_package_spec(const ObPLResolveCtx &resolve_ctx,
     // generate cacheobj_guard to protect package and package will be destoried by map's destructor
     ObCacheObjGuard* cacheobj_guard = NULL;
     void* buf = NULL;
-    if (OB_ISNULL(buf = resolve_ctx.package_guard_.alloc_.alloc(sizeof(ObCacheObjGuard)))) {
+    if (OB_ISNULL(buf = resolve_ctx.package_guard_.alloc())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory.", K(ret));
     } else if (FALSE_IT(cacheobj_guard = new (buf)ObCacheObjGuard(PACKAGE_SPEC_HANDLE))) {
@@ -1299,7 +1299,7 @@ int ObPLPackageManager::load_package_body(const ObPLResolveCtx &resolve_ctx,
     ObCacheObjGuard* cacheobj_guard = NULL;
     void* buf = NULL;
     if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(buf = resolve_ctx.package_guard_.alloc_.alloc(sizeof(ObCacheObjGuard)))) {
+    } else if (OB_ISNULL(buf = resolve_ctx.package_guard_.alloc())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory.", K(ret));
     } else if (FALSE_IT(cacheobj_guard = new (buf)ObCacheObjGuard(PACKAGE_BODY_HANDLE))) {
@@ -1882,67 +1882,53 @@ int ObPLPackageManager::get_package_from_plan_cache(const ObPLResolveCtx &resolv
 {
   int ret = OB_SUCCESS;
   package = NULL;
-  bool is_overflow = false;
-  if (OB_FAIL(check_stack_overflow(is_overflow))) {
-    LOG_WARN("failed to check stack overflow", K(ret));
-  } else if (is_overflow) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("too deep recusive", K(ret));
+
+  uint64_t database_id = OB_INVALID_ID;
+  resolve_ctx.session_info_.get_database_id(database_id);
+
+  ObPLCacheCtx pc_ctx;
+  pc_ctx.session_info_ = &resolve_ctx.session_info_;
+  pc_ctx.schema_guard_ = &resolve_ctx.schema_guard_;
+  pc_ctx.key_.namespace_ = ObLibCacheNameSpace::NS_PKG;
+  pc_ctx.key_.db_id_ = database_id;
+  pc_ctx.key_.key_id_ = package_id;
+  pc_ctx.key_.sessid_ =
+    (get_tenant_id_by_object_id(package_id) != OB_SYS_TENANT_ID && resolve_ctx.session_info_.is_pl_debug_on())
+      ? resolve_ctx.session_info_.get_server_sid() : 0;
+  pc_ctx.key_.mode_ = static_cast<uint64_t>(ObPLObjectKey::ObjectMode::NORMAL);
+  if (resolve_ctx.session_info_.get_pl_profiler() != nullptr) {
+    pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::PROFILE);
   }
-  if (OB_FAIL(ret)) {
+  if (resolve_ctx.session_info_.get_pl_code_coverage() != nullptr) {
+    pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::CODE_COVERAGE);
+  }
+  if (resolve_ctx.session_info_.is_pl_debug_on()) {
+    pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::DEBUG);
+  }
+
+  // get package from plan cache
+  ObCacheObjGuard* cacheobj_guard = NULL;
+  void* buf = NULL;
+  if (OB_ISNULL(buf = resolve_ctx.package_guard_.alloc())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory.", K(ret));
+  } else if (FALSE_IT(cacheobj_guard = new (buf)ObCacheObjGuard(GET_PKG_HANDLE))) {
     // do nothing
-  } else {
-    //SMART_VAR(ObExecContext, exec_ctx, resolve_ctx.allocator_) {
-
-      uint64_t database_id = OB_INVALID_ID;
-      resolve_ctx.session_info_.get_database_id(database_id);
-
-      ObPLCacheCtx pc_ctx;
-      pc_ctx.session_info_ = &resolve_ctx.session_info_;
-      pc_ctx.schema_guard_ = &resolve_ctx.schema_guard_;
-      pc_ctx.key_.namespace_ = ObLibCacheNameSpace::NS_PKG;
-      pc_ctx.key_.db_id_ = database_id;
-      pc_ctx.key_.key_id_ = package_id;
-      pc_ctx.key_.sessid_ =
-        (get_tenant_id_by_object_id(package_id) != OB_SYS_TENANT_ID && resolve_ctx.session_info_.is_pl_debug_on())
-          ? resolve_ctx.session_info_.get_server_sid() : 0;
-      pc_ctx.key_.mode_ = static_cast<uint64_t>(ObPLObjectKey::ObjectMode::NORMAL);
-      if (resolve_ctx.session_info_.get_pl_profiler() != nullptr) {
-        pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::PROFILE);
-      }
-      if (resolve_ctx.session_info_.get_pl_code_coverage() != nullptr) {
-        pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::CODE_COVERAGE);
-      }
-      if (resolve_ctx.session_info_.is_pl_debug_on()) {
-        pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::DEBUG);
-      }
-
-      // get package from plan cache
-      ObCacheObjGuard* cacheobj_guard = NULL;
-      void* buf = NULL;
-      if (OB_FAIL(ret)) {
-      } else if (OB_ISNULL(buf = resolve_ctx.package_guard_.alloc_.alloc(sizeof(ObCacheObjGuard)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate memory.", K(ret));
-      } else if (FALSE_IT(cacheobj_guard = new (buf)ObCacheObjGuard(GET_PKG_HANDLE))) {
-        // do nothing
-      } else if (OB_FAIL(ObPLCacheMgr::get_pl_cache(resolve_ctx.session_info_.get_plan_cache(), *cacheobj_guard, pc_ctx))) {
-        LOG_INFO("get pl package from plan cache failed", K(ret), K(package_id));
-        HANDLE_PL_CACHE_RET_VALUE(ret);
-      } else if (FALSE_IT(package = static_cast<ObPLPackage*>(cacheobj_guard->get_cache_obj()))) {
-        // do nothing
-      } else if (OB_NOT_NULL(package)) {
-        if (OB_FAIL(resolve_ctx.package_guard_.put(package_id, cacheobj_guard))) {
-          LOG_WARN("failed to put package to package guard", K(ret), K(package_id));
-          // pointer should be free manualy
-          cacheobj_guard->~ObCacheObjGuard();
-          package = NULL;
-        } else {
-          LOG_DEBUG("get package from plan cache success", K(ret), K(package_id));
-        }
-      } else {}
-    //}
-  }
+  } else if (OB_FAIL(ObPLCacheMgr::get_pl_cache(resolve_ctx.session_info_.get_plan_cache(), *cacheobj_guard, pc_ctx))) {
+    LOG_INFO("get pl package from plan cache failed", K(ret), K(package_id));
+    HANDLE_PL_CACHE_RET_VALUE(ret);
+  } else if (FALSE_IT(package = static_cast<ObPLPackage*>(cacheobj_guard->get_cache_obj()))) {
+    // do nothing
+  } else if (OB_NOT_NULL(package)) {
+    if (OB_FAIL(resolve_ctx.package_guard_.put(package_id, cacheobj_guard))) {
+      LOG_WARN("failed to put package to package guard", K(ret), K(package_id));
+      // pointer should be free manualy
+      cacheobj_guard->~ObCacheObjGuard();
+      package = NULL;
+    } else {
+      LOG_DEBUG("get package from plan cache success", K(ret), K(package_id));
+    }
+  } else {}
   return ret;
 }
 

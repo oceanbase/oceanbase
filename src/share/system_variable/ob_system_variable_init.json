@@ -11820,7 +11820,7 @@
     "base_value": 0,
     "data_type": "enum",
     "info": "control whether the sql transpiler is enabled. When enabled, PL/SQL functions are automatically transpiled into SQL expressions whenever possible, without user intervention.",
-    "flags": "SESSION | GLOBAL | NEED_SERIALIZE | INFLUENCE_PLAN",
+    "flags": "SESSION | GLOBAL | NEED_SERIALIZE | INFLUENCE_PLAN | INFLUENCE_PL",
     "enum_names": [
       "OFF",
       "ON",

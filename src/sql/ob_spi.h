@@ -102,12 +102,12 @@ private:
 struct ObSPICursor
 {
   ObSPICursor(ObIAllocator &allocator, sql::ObSQLSessionInfo* session_info) :
-    row_store_(), row_desc_(), allocator_(&allocator), cur_(0), fields_(allocator), complex_objs_(),
+    allocator_(&allocator), row_store_(),
+    row_desc_(allocator), cur_(0), fields_(allocator), complex_objs_(),
     session_info_(session_info),
     plan_type_(ObPhyPlanType::OB_PHY_PLAN_UNINITIALIZED), plan_id_(OB_INVALID_ID), plan_hash_(OB_INVALID_ID),
     subschema_ctx_(allocator)
   {
-    row_desc_.set_tenant_id(MTL_ID());
     complex_objs_.reset();
     complex_objs_.set_tenant_id(MTL_ID());
     sql_id_[0]='\0';
@@ -124,9 +124,9 @@ struct ObSPICursor
 
   int release_complex_obj(ObObj &complex_obj);
 
+  ObIAllocator *allocator_;
   ObRARowStore row_store_;
-  ObArray<ObDataType> row_desc_; //ObRowStore里数据自带的Meta可能是T_NULL，所以这里自备一份
-  ObIAllocator* allocator_;
+  ObFixedArray<ObDataType, ObIAllocator> row_desc_; //ObRowStore里数据自带的Meta可能是T_NULL，所以这里自备一份
   int64_t cur_;
   common::ColumnsFieldArray fields_;
   ObArray<ObObj> complex_objs_;
@@ -141,12 +141,11 @@ struct ObSPICursor
 
 struct ObSPIOutParams
 {
-  ObSPIOutParams() : has_out_param_(false), out_params_() {}
+  ObSPIOutParams() : has_out_param_(false) {}
 
   inline void reset()
   {
     has_out_param_ = false;
-    out_params_.reset();
   }
 
   inline int push_back(const ObObj &v)
@@ -154,19 +153,17 @@ struct ObSPIOutParams
     if (!v.is_null()) {
       has_out_param_ = true;
     }
-    return out_params_.push_back(v);
+    return OB_SUCCESS;
   }
 
   inline bool has_out_param() { return has_out_param_; }
   inline void set_has_out_param(bool v) { has_out_param_ = v; }
 
-  inline ObIArray<ObObj> &get_out_params() { return out_params_; }
 
-  TO_STRING_KV(K_(has_out_param), K_(out_params));
+  TO_STRING_KV(K_(has_out_param));
 
 private:
   bool has_out_param_;
-  ObSEArray<ObObj, OB_DEFAULT_SE_ARRAY_COUNT> out_params_; // 用于记录function的返回值
 };
 
 class ObSPIResultSet
@@ -295,6 +292,8 @@ public:
   }
   void set_enable_streaming_cursor_prefetch(bool enable) { enable_streaming_cursor_prefetch_ = enable; }
   bool enable_streaming_cursor_prefetch() const { return enable_streaming_cursor_prefetch_; }
+  char *get_local_param_value_buffer() { return local_param_value_buffer_; }
+  int64_t get_local_param_value_buffer_len() { return local_param_value_buffer_len_; }
 private:
   bool is_inited_;
   EndStmtType need_end_nested_stmt_;
@@ -319,6 +318,8 @@ private:
   ObSPICursor *cursor_prefetch_cache_; //cache cursor row data for streaming cursor
   uint64_t batch_fill_count_;
   bool enable_streaming_cursor_prefetch_;
+  static const int64_t local_param_value_buffer_len_ = 512;
+  char local_param_value_buffer_[local_param_value_buffer_len_];
 };
 
 class ObSPIService
@@ -1437,6 +1438,10 @@ private:
                                      bool has_hidden_rowid,
                                      bool is_dbms_cursor = false,
                                      int64_t orc_max_ret_rows = INT64_MAX);
+  static int store_params_string(sql::ObSQLSessionInfo &session,
+                                 ParamStore *params,
+                                 char *params_value,
+                                 int64_t &params_value_len);
   static int store_params_string(pl::ObPLExecCtx *ctx, ObSPIResultSet &spi_result, ParamStore *exec_params);
 
   static int setup_cursor_snapshot_verify_(pl::ObPLCursorInfo *cursor, ObSPIResultSet *spi_result);

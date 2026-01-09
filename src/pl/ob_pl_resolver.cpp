@@ -19992,8 +19992,6 @@ int ObPLResolver::try_sql_transpiler(ObObjAccessIdx &access_idx,
 
   if (ObObjAccessIdx::IS_UDF_NS != access_idx.access_type_) {
     // do nothing
-  } else if (!resolve_ctx_.is_sql_scope_) {
-    // do nothing
   } else if (get_resolve_ctx().forbid_pl_sql_transpiler_) {
     // do nothing
   } else if (OB_ISNULL(access_idx.get_sysfunc_)) {

@@ -1633,17 +1633,20 @@ int ObPLCacheCtx::adjust_definer_database_id()
   int ret = OB_SUCCESS;
   ObLibCacheNameSpace ns = key_.namespace_;
   uint64_t key_id = key_.key_id_;
+
 #define TRANS_DB_ID(type)                                                        \
 do {                                                                             \
   OZ(schema_guard_->get_##type##_info(get_tenant_id_by_object_id(key_id),        \
                                       key_id, tmp_##type##_info));               \
-  if (OB_ISNULL(tmp_##type##_info)) {                                            \
+  if (OB_FAIL(ret)) {                                                            \
+  } else if (OB_ISNULL(tmp_##type##_info)) {                                     \
     ret = OB_ERR_INVALID_SCHEMA;                                                 \
     LOG_WARN("failed to get " #type " info. ", K(ret), K(key_id));               \
   } else if (!tmp_##type##_info->is_invoker_right()) {                           \
     key_.db_id_ = tmp_##type##_info->get_database_id();                          \
   }                                                                              \
 } while (0)
+
   switch (ns) {
     case NS_PRCR:
     case NS_SFC: {
@@ -1657,6 +1660,18 @@ do {                                                                            
       if (ObUDTObjectType::is_object_id_masked(key_id)) {
         // TODO: udt info need set is_invoker_right flag
         LOG_WARN("udt can not adjust db id for definer, will create new cache node", K(key_id));
+      } else if (ObTriggerInfo::is_trigger_package_id(key_id)) {
+        const ObSimpleTriggerSchema *simple_trigger = NULL;
+        OZ (schema_guard_->get_simple_trigger_schema(get_tenant_id_by_object_id(key_id),
+                                                     ObTriggerInfo::get_package_trigger_id(key_id),
+                                                     simple_trigger));
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(simple_trigger)) {
+          ret = OB_ERR_INVALID_SCHEMA;
+          LOG_WARN("failed to get simple trigger info.", K(ret), K(key_id));
+        } else {
+          key_.db_id_ = simple_trigger->get_database_id();
+        }
       } else {
         const ObPackageInfo* tmp_package_info = NULL;
         TRANS_DB_ID(package);
