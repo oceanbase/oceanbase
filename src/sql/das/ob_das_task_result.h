@@ -163,7 +163,8 @@ public:
       allocator_(tenant_id),
       profile_(ObSqlWorkAreaType::HASH_WORK_AREA),
       sql_mem_processor_(profile_),
-      mutex_(common::ObLatchIds::SQL_MEMORY_MGR_MUTEX_LOCK)
+      mutex_(common::ObLatchIds::SQL_MEMORY_MGR_MUTEX_LOCK),
+      total_alloc_size_(0)
   { }
   ~ObDASMemProfileInfo() {}
 
@@ -171,12 +172,17 @@ public:
   {
     lib::ObMutexGuard guard(mutex_);
     sql_mem_processor_.alloc(size);
+    total_alloc_size_ += size;
   }
 
   void free(int64_t size)
   {
     lib::ObMutexGuard guard(mutex_);
     sql_mem_processor_.free(size);
+    total_alloc_size_ -= size;
+    if (total_alloc_size_ < 0) {
+      SQL_DAS_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "total_alloc_size_ is less than 0", K(total_alloc_size_), K(lbt()));
+    }
   }
 
   void dumped(int64_t size)
@@ -209,6 +215,7 @@ public:
   ObSqlWorkAreaProfile profile_;
   ObSqlMemMgrProcessor sql_mem_processor_;
   lib::ObMutex mutex_;
+  int64_t total_alloc_size_;
 };
 
 class ObDASTaskResultGC

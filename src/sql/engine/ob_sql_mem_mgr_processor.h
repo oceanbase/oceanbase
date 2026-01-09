@@ -30,7 +30,8 @@ public:
     sql_mem_mgr_(nullptr), mem_callback_(nullptr), tenant_id_(OB_INVALID_ID),
     periodic_cnt_(1024), origin_max_mem_size_(0), default_available_mem_size_(0),
     is_auto_mgr_(false), dir_id_(0),
-    dummy_ptr_(nullptr), dummy_alloc_(nullptr)
+    dummy_ptr_(nullptr), dummy_alloc_(nullptr),
+    total_alloc_size_(0)
   {
     // trace memory dump
     op_monitor_info_->otherstat_6_id_ = ObSqlMonitorStatIds::MEMORY_DUMP;
@@ -41,7 +42,8 @@ public:
     sql_mem_mgr_(nullptr), mem_callback_(nullptr), tenant_id_(OB_INVALID_ID),
     periodic_cnt_(1024), origin_max_mem_size_(0), default_available_mem_size_(0),
     is_auto_mgr_(false), dir_id_(0),
-    dummy_ptr_(nullptr), dummy_alloc_(nullptr) {}
+    dummy_ptr_(nullptr), dummy_alloc_(nullptr),
+    total_alloc_size_(0) {}
   virtual ~ObSqlMemMgrProcessor() {}
 
   void set_sql_mem_mgr(ObTenantSqlMemoryManager *sql_mem_mgr)
@@ -111,12 +113,17 @@ public:
   {
     profile_.delta_size_ += size;
     update_memory_delta_size(profile_.delta_size_);
+    total_alloc_size_ += size;
   }
 
   void free(int64_t size)
   {
     profile_.delta_size_ -= size;
     update_memory_delta_size(profile_.delta_size_);
+    total_alloc_size_ -= size;
+    if (total_alloc_size_ < 0) {
+      SQL_ENG_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "total_alloc_size_ is less than 0", K(total_alloc_size_), K(lbt()));
+    }
   }
 
   void dumped(int64_t delta_size)
@@ -196,6 +203,7 @@ private:
   int64_t dir_id_;
   char *dummy_ptr_;
   ObIAllocator *dummy_alloc_;
+  int64_t total_alloc_size_;
 };
 
 class ObSqlWorkareaUtil
