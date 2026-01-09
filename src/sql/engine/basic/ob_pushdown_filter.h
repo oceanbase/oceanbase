@@ -1291,9 +1291,9 @@ public:
   }
   inline void set_filter_action(DynamicFilterAction value) {filter_action_ = value; }
   inline DynamicFilterAction get_filter_action() const { return filter_action_; }
-  inline bool is_filter_all_data() { return DynamicFilterAction::FILTER_ALL == filter_action_; }
-  inline bool is_pass_all_data() { return DynamicFilterAction::PASS_ALL == filter_action_; }
-  inline bool is_check_all_data() { return DynamicFilterAction::DO_FILTER == filter_action_; }
+  inline bool is_filter_all_data() const { return DynamicFilterAction::FILTER_ALL == filter_action_; }
+  inline bool is_pass_all_data() const { return DynamicFilterAction::PASS_ALL == filter_action_; }
+  inline bool is_check_all_data() const { return DynamicFilterAction::DO_FILTER == filter_action_; }
   inline bool is_data_prepared() const { return is_data_prepared_; }
   inline void set_stored_data_version(int64_t data_version)
   {

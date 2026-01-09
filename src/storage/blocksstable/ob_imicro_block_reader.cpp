@@ -198,7 +198,19 @@ int ObIMicroBlockReader::filter_white_filter(
       case sql::WHITE_OP_BT: {
         int cmp_ret_0 = 0;
         int cmp_ret_1 = 0;
-        if (OB_UNLIKELY(ref_datums.count() != 2)) {
+        bool need_compare = true;
+        if (filter.is_filter_dynamic_node()) {
+          const sql::ObDynamicFilterExecutor &dynamic_filter =
+              static_cast<const sql::ObDynamicFilterExecutor &>(filter);
+          if (!dynamic_filter.is_data_prepared() || dynamic_filter.is_pass_all_data()) {
+            filtered = false;
+            need_compare = false;
+          } else if (dynamic_filter.is_filter_all_data()) {
+            need_compare = false;
+          }
+        }
+        if (!need_compare) {
+        } else if (OB_UNLIKELY(ref_datums.count() != 2)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("Invalid argument for between operators", K(ret), K(ref_datums));
         } else if (datum.is_null()) {
