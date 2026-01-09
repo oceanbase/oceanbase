@@ -8673,6 +8673,7 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
       } else if (NULL != ns) {
         pl_resolver.get_current_namespace() = *ns;
       }
+      OX (pl_resolver.get_params().secondary_namespace_ = ns);
       if (OB_NOT_NULL(query_ctx)) {
         OX (pl_resolver.get_resolve_ctx().forbid_pl_sql_transpiler_ = query_ctx->forbid_pl_sql_transpiler_);
         OZ (pl_resolver.get_resolve_ctx().pl_sql_transpiled_exprs_.assign(query_ctx->pl_sql_transpiled_exprs_));

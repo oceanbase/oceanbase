@@ -16327,7 +16327,7 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
           CK (OB_NOT_NULL(local_var = sym_tbl->get_symbol(var_idx)));
           OX (pl_data_type = local_var->get_type());
           if (OB_FAIL(ret)) {
-          } else if (resolve_ctx_.is_sql_scope_ && OB_ISNULL(external_ns_.get_parent_ns())) {
+          } else if (resolve_ctx_.is_sql_scope_ && OB_ISNULL(get_params().secondary_namespace_)) {
             //sql scope, use :1.c0, resolve as IS_UDF_NS for check whether contain batch stmt parameter
             ObConstRawExpr *var_expr = NULL;
             ObObjParam val;
