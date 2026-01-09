@@ -1873,7 +1873,7 @@ int ObBasicSessionInfo::gen_exec_env(ObSysVarClassType sys_var_id)
 {
   int ret = OB_SUCCESS;
   OZ (exec_env_.load(*this, NULL, sys_var_id));
-  OX (exec_env_inited_ = true);
+  OX (sys_var_id == share::SYS_VAR_INVALID ? (void)(exec_env_inited_ = true) : (void)NULL); //update specific sys_var does not set exec_env_inited_
   return ret;
 }
 
