@@ -373,7 +373,6 @@ private:
   common::ObInOutBandwidthThrottle bandwidth_throttle_;
   int64_t sys_bkgd_net_percentage_;
   int64_t ethernet_speed_;
-  uint64_t cpu_frequency_;
 
   // sql session_mgr
   sql::ObSQLSessionMgr session_mgr_;
