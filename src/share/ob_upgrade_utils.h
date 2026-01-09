@@ -372,7 +372,17 @@ DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 5, 3)
 
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 5, 4)
 
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 5, 5)
+class ObUpgradeFor4355Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor4355Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor4355Processor() {}
+  virtual int pre_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override;
+  virtual int finish_upgrade() override { return common::OB_SUCCESS; }
+private:
+  int post_upgrade_for_sys_table_progressive_merge_round_();
+};
 
 /* =========== special upgrade processor end   ============= */
 

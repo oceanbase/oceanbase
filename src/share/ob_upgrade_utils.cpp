@@ -1928,5 +1928,92 @@ int ObUpgradeFor4352Processor::post_upgrade_for_dynamic_partition()
 }
 /* =========== 4352 upgrade processor end ============= */
 
+/* =========== 4355 upgrade processor begin ============= */
+
+int ObUpgradeFor4355Processor::post_upgrade()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_sys_table_progressive_merge_round_())) {
+    LOG_WARN("fail to post upgrade for sys table progressive merge round", KR(ret));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4355Processor::post_upgrade_for_sys_table_progressive_merge_round_()
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  ObArray<uint64_t> table_ids;
+  obrpc::ObBatchUpgradeTableSchemaArg arg;
+  const int64_t timeout = GCONF._ob_ddl_timeout;
+  const int64_t start_time = ObTimeUtility::current_time();
+
+  if (OB_ISNULL(sql_proxy_) || OB_ISNULL(common_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", KR(ret), KP(sql_proxy_), KP(common_proxy_));
+  } else if (!is_valid_tenant_id(tenant_id_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id_));
+  } else if (OB_FAIL(sql.assign_fmt(
+      "SELECT table_id from "
+      "((select table_id, progressive_merge_round from %s where tenant_id = %ld) "
+      "union (select table_id, progressive_merge_round from %s where tenant_id = %ld)) "
+      " where progressive_merge_round = 1 and table_id in "
+      "(select table_id from %s where tenant_id = %ld and table_id < %ld group by table_id having count(*) > 1)"
+      "order by table_id",
+      // tenant_id in sys table is 0, tenant_id in virtual table is real tenant_id 
+      OB_ALL_TABLE_TNAME, OB_INVALID_TENANT_ID, OB_ALL_VIRTUAL_CORE_ALL_TABLE_TNAME, tenant_id_,
+      OB_ALL_TABLE_HISTORY_TNAME, OB_INVALID_TENANT_ID, OB_MAX_SYS_TABLE_ID))) {
+    LOG_WARN("fail to assign sql", KR(ret));
+  } else {
+    ObTimeoutCtx ctx;
+    if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.internal_sql_execute_timeout))) {
+      LOG_WARN("failed to set default timeout ctx", KR(ret));
+    } else {
+      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+        ObMySQLResult *result = NULL;
+        if (OB_FAIL(sql_proxy_->read(res, tenant_id_, sql.ptr()))) {
+          LOG_WARN("fail to execute sql", KR(ret), K(sql));
+        } else if (NULL == (result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get sql result", KR(ret));
+        } else {
+          uint64_t table_id = OB_INVALID_ID;
+          while (OB_SUCC(ret) && OB_SUCC(result->next())) {
+            EXTRACT_INT_FIELD_MYSQL(*result, "table_id", table_id, uint64_t);
+            if (OB_FAIL(ret)) {
+              LOG_WARN("fail to extract table_id", KR(ret));
+            } else if (OB_FAIL(table_ids.push_back(table_id))) {
+              LOG_WARN("fail to push back table_id", KR(ret), K(table_id));
+            }
+          }
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+          }
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && table_ids.count() > 0) {
+    // Call batch_upgrade_table_schema RPC if there are tables to upgrade
+    if (OB_FAIL(arg.init(tenant_id_, table_ids))) {
+      LOG_WARN("fail to init batch upgrade table schema arg", KR(ret), K(tenant_id_), K(table_ids));
+    } else if (OB_FAIL(common_proxy_->timeout(timeout).batch_upgrade_table_schema(arg))) {
+      LOG_WARN("fail to batch upgrade table schema", KR(ret), K(tenant_id_), K(arg));
+    } else {
+      LOG_INFO("successfully batch upgrade table schema", KR(ret), K(tenant_id_), 
+               K(table_ids), "cost", ObTimeUtility::current_time() - start_time);
+    }
+  } else if (OB_SUCC(ret)) {
+    LOG_INFO("no tables need to update", KR(ret), K(tenant_id_));
+  }
+  return ret;
+}
+
+/* =========== 4355 upgrade processor end ============= */
+
 } // end share
 } // end oceanbase

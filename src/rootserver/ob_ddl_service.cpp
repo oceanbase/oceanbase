@@ -30232,7 +30232,8 @@ int ObDDLService::batch_alter_system_table_column_(
           } else if (OB_FAIL(get_alter_system_table_schema_(*orig_table_schema, hard_code_schema,
                   add_column_ids, alter_column_ids, new_table_schema))) {
             LOG_WARN("failed to get table new schema", KR(ret), K(*orig_table_schema), K(hard_code_schema));
-          } else if (0 == add_column_ids.count() && 0 == alter_column_ids.count()) {
+          } else if (0 == add_column_ids.count() && 0 == alter_column_ids.count()
+              && orig_table_schema->get_progressive_merge_round() != 1) {
             LOG_INFO("system table's column schemas not changed, just skip", KR(ret), K(tenant_id), K(table_id));
           // increase progressive_merge_round to update schema in sstable
           } else if (FALSE_IT(new_table_schema.set_progressive_merge_round(
