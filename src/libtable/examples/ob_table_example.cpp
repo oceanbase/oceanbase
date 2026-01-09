@@ -60,7 +60,6 @@ int main(int argc, char *argv[])
   ObTable* table = NULL;
   ret = service_client.alloc_table(ObString::make_string(table_name), table);
   CHECK_RET(ret);
-                                                                                                            62,3          Top
   ret = service_client.alloc_table(ObString::make_string(table_name), table);
   CHECK_RET(ret);
   // 4. insert
@@ -124,9 +123,6 @@ int main(int argc, char *argv[])
     fprintf(stderr, "failed to replace row: %d\n", ret);
   } else {
     ObCStringHelper helper;
-                                                                                                            61,3          37%
-  } else {
-    ObCStringHelper helper;
     const char *ptr = helper.convert(result);
     fprintf(stderr, "replace row succ. %s\n", nullptr != ptr ? ptr : "NULL");
   }
@@ -174,21 +170,6 @@ int main(int argc, char *argv[])
   CHECK_RET(ret);
   table_op = ObTableOperation::insert_or_update(entity);
   ret = table->execute(table_op, result);
-  if (OB_SUCCESS != ret) {
-    fprintf(stderr, "failed to insert_or_update row: %d\n", ret);
-  } else {
-    ObCStringHelper helper;
-    const char *ptr = helper.convert(result);
-    fprintf(stderr, "insert_or_update row succ. %s\n", nullptr != ptr ? ptr : "NULL");
-  }
-  // get the row
-  get_row_and_print(table, rk);
-  table_op = ObTableOperation::del(entity);
-  ret = table->execute(table_op, result);
-  if (OB_SUCCESS != ret) {
-    fprintf(stderr, "failed to del row: %d\n", ret);
-  } else {
-                                                                                                            122,3         76%
   if (OB_SUCCESS != ret) {
     fprintf(stderr, "failed to insert_or_update row: %d\n", ret);
   } else {
