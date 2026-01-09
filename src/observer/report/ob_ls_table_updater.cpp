@@ -304,9 +304,11 @@ int ObLSTableUpdater::batch_process_tasks(
     if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
         || !ls_id.is_valid()
         || OB_ISNULL(GCTX.ob_service_)
-        || OB_ISNULL(GCTX.lst_operator_))) {
+        || OB_ISNULL(GCTX.lst_operator_)
+        || OB_ISNULL(GCTX.omt_))) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", KR(ret));
+      LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id),
+          KP(GCTX.ob_service_), KP(GCTX.lst_operator_), KP(GCTX.omt_));
     } else {
       // Make sure the superior tenant which stores meta table has not been dropped and it's schema is ready.
       // User tenant's superior tenant is meta; Meta tenant's superior tenant is sys; Sys tenant manages itself.
@@ -328,7 +330,15 @@ int ObLSTableUpdater::batch_process_tasks(
             ls_id,
             replica))) {
           if (OB_LS_NOT_EXIST == ret || OB_TENANT_NOT_IN_SERVER == ret) { // remove from table if not exist
-            if (OB_FAIL(GCTX.lst_operator_->remove(tenant_id, ls_id, server, inner_table_only))) {
+            // During the restart process, the creation of the omt tenant will trigger an LS report.
+            // At this time, due to the slow slog replay, the omt tenant is not yet ready and
+            // an error message OB_TENANT_NOT_IN_SERVER will be here.
+            if (!GCTX.omt_->has_synced()) {
+              ret = OB_NEED_WAIT;
+              if (REACH_TIME_INTERVAL(1_s)) {
+                LOG_WARN("tenant is not synced, need wait", KR(ret), K(tenant_id), K(ls_id), K(task));
+              }
+            } else if (OB_FAIL(GCTX.lst_operator_->remove(tenant_id, ls_id, server, inner_table_only))) {
               LOG_WARN("fail to remove replica",
                   KR(ret), K(tenant_id), K(ls_id), "self_addr", server);
             } else {
