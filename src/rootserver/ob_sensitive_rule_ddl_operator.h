@@ -53,7 +53,7 @@ public:
                                           ObSchemaGetterGuard &schema_guard);
   int drop_sensitive_column_in_drop_table(const ObTableSchema &table_schema,
                                           ObMySQLTransaction &trans,
-                                          ObIArray<ObSensitiveRuleSchema *> &sensitive_rules);
+                                          ObIArray<const ObSensitiveRuleSchema *> &sensitive_rules);
   int drop_sensitive_column_cascades(const ObTableSchema &table_schema,
                                      const ObIArray<uint64_t> &drop_column_ids,
                                      common::ObMySQLTransaction &trans,

@@ -992,7 +992,7 @@ int ObLatestSchemaGuard::get_obj_privs(const uint64_t obj_id,
 
 int ObLatestSchemaGuard::get_sensitive_rule_schemas_by_table(
   const ObTableSchema &table_schema,
-  ObIArray<ObSensitiveRuleSchema *> &schemas)
+  ObIArray<const ObSensitiveRuleSchema *> &schemas)
 {
   int ret = OB_SUCCESS;
   int64_t schema_version = INT64_MAX;

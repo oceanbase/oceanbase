@@ -464,7 +464,8 @@ int ObSchemaServiceSQLImpl::gen_new_schema_version(
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
-  } else if (in_parallel_ddl_thread_()) {
+  // create tenant now need in_parallel_ddl_thread_()
+  } else if (ob_batch_generate_schema_version() || in_parallel_ddl_thread_()) {
     auto *tsi_generator = GET_TSI(TSISchemaVersionGenerator);
     if (OB_ISNULL(tsi_generator)) {
       ret = OB_ERR_UNEXPECTED;
@@ -495,10 +496,11 @@ int ObSchemaServiceSQLImpl::gen_batch_new_schema_versions(
       || version_cnt < 1)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", KR(ret), K(tenant_id), K(version_cnt));
-  } else if (OB_UNLIKELY(!in_parallel_ddl_thread_())) {
+  } else if (OB_UNLIKELY(!ob_batch_generate_schema_version() && !in_parallel_ddl_thread_())) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("this interface only works in parallel ddl thread",
-             KR(ret), "thread_name", ob_get_origin_thread_name());
+    LOG_WARN("this interface only works for parallel-enable ddl",
+             KR(ret), "thread_name", ob_get_origin_thread_name(),
+             K(ob_batch_generate_schema_version()));
   } else {
     auto *tsi_generator = GET_TSI(TSISchemaVersionGenerator);
     int64_t end_schema_version = OB_INVALID_VERSION;
@@ -870,6 +872,27 @@ int ObSchemaServiceSQLImpl::get_core_version(
     ObGlobalStatProxy proxy(sql_client_retry_weak, tenant_id);
     if (OB_FAIL(proxy.get_core_schema_version(core_schema_version))) {
       LOG_WARN("get_core_schema_version failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSchemaServiceSQLImpl::get_core_and_sys_version(
+    common::ObISQLClient &sql_client,
+    const uint64_t &tenant_id,
+    int64_t &core_schema_version,
+    int64_t &sys_schema_version)
+{
+  int ret = OB_SUCCESS;
+  if (!check_inner_stat()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
+    core_schema_version = OB_INVALID_VERSION;
+    sys_schema_version = OB_INVALID_VERSION;
+    ObGlobalStatProxy proxy(sql_client, tenant_id);
+    if (OB_FAIL(proxy.get_core_and_sys_schema_version(core_schema_version, sys_schema_version))) {
+      LOG_WARN("get_core_and_sys_schema_version failed", K(ret));
     }
   }
   return ret;

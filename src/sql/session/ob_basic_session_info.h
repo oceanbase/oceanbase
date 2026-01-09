@@ -1196,6 +1196,7 @@ public:
 
   /// check the existence of the system variable
   int sys_variable_exists(const common::ObString &var, bool &is_exist) const;
+  int sys_variable_exists(const share::ObSysVarClassType sys_var_id, bool &is_exist) const;
 
   int set_client_identifier(const common::ObString &client_identifier);
   const common::ObString& get_client_identifier() const { return client_identifier_; }

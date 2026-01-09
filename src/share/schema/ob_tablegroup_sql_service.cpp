@@ -190,8 +190,10 @@ int ObTablegroupSqlService::delete_tablegroup(
     //insert delete record in __all_part_info_history, __all_part_history,
     //__all_subpart_history, __all_def_subpart_history
     const ObPartitionSchema *tg_schema = &new_tablegroup_schema;
-    ObDropPartInfoHelper part_helper(tg_schema, sql_client);
-    if (FAILEDx(part_helper.delete_partition_info())) {
+    ObDropPartInfoHelper part_helper(sql_client, tenant_id);
+    if (FAILEDx(part_helper.init(tg_schema))) {
+      LOG_WARN("failed to init part_helper", KR(ret), KPC(tg_schema));
+    } else if (OB_FAIL(part_helper.delete_partition_info())) {
       LOG_WARN("delete partition info failed", K(ret));
     }
   }

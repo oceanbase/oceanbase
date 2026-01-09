@@ -29,9 +29,12 @@ namespace oceanbase
 {
 namespace rootserver
 {
-inline bool is_parallel_ddl(const obrpc::ObRpcPacketCode pcode)
+inline bool is_parallel_ddl(const obrpc::ObRpcPacketCode pcode, const obrpc::ObDDLArg *ddl_arg = nullptr)
 {
-  return obrpc::OB_TRUNCATE_TABLE_V2 == pcode
+  bool bret = false;
+  int ret = OB_SUCCESS;
+  uint64_t tenant_data_version = OB_INVALID_VERSION;
+  bret = obrpc::OB_TRUNCATE_TABLE_V2 == pcode
          || obrpc::OB_PARALLEL_CREATE_TABLE == pcode
          || obrpc::OB_PARALLEL_SET_COMMENT == pcode
          || obrpc::OB_PARALLEL_CREATE_INDEX == pcode
@@ -39,6 +42,19 @@ inline bool is_parallel_ddl(const obrpc::ObRpcPacketCode pcode)
          || obrpc::OB_PARALLEL_DROP_TABLE == pcode
          || obrpc::OB_PARALLEL_CREATE_NORMAL_TENANT == pcode
          || obrpc::OB_PARALLEL_HTABLE_DDL == pcode;
+  if (OB_ISNULL(ddl_arg)) {
+  } else if (!is_valid_tenant_id(ddl_arg->exec_tenant_id_)) {
+    ret = OB_INVALID_ARGUMENT;
+    RS_LOG(WARN, "invalid tenant id", KR(ret), K(ddl_arg->exec_tenant_id_));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(ddl_arg->exec_tenant_id_, tenant_data_version))) {
+    RS_LOG(WARN, "get tenant data version failed", KR(ret), K(ddl_arg->exec_tenant_id_));
+  } else if ((tenant_data_version >= MOCK_DATA_VERSION_4_2_5_3
+              && tenant_data_version < DATA_VERSION_4_3_0_0)
+             || (tenant_data_version >= MOCK_DATA_VERSION_4_4_2_0 && tenant_data_version < DATA_VERSION_4_5_0_0)
+             || (tenant_data_version >= DATA_VERSION_4_5_1_0)) {
+    bret = bret && ddl_arg->is_parallel_;
+  }
+  return bret;
 }
 
 inline bool need_ddl_lock(const obrpc::ObRpcPacketCode pcode)
@@ -320,7 +336,7 @@ protected:
           bool with_ddl_lock = false;
           if (is_ddl_like_ && need_ddl_lock(pcode)) {
             RS_LOG(INFO, "[DDL] try to get ddl lock");
-            if (is_parallel_ddl(pcode)) {
+            if (is_parallel_ddl(pcode, ddl_arg_)) {
               if (OB_FAIL(root_service_.get_ddl_service().ddl_rlock())) {
                 RS_LOG(WARN, "root service ddl lock fail", K(ret), K(ddl_arg_));
               }
@@ -527,6 +543,8 @@ DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_DROP_INDEX_ON_FAILED, ObRpcDropIndexO
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REBUILD_VEC_INDEX, ObRpcRebuildVecIndexP, rebuild_vec_index(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_MLOG, ObRpcCreateMLogP, create_mlog(arg_, result_));
 DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_CREATE_TABLE_LIKE, ObRpcCreateTableLikeP, create_table_like(arg_));
+DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_PARALLEL_CREATE_TABLE_LIKE, ObRpcParallelCreateTableLikeP, parallel_create_table_like(arg_, result_));
+
 DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_CREATE_USER, ObRpcCreateUserP, create_user(arg_, result_));
 DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_DROP_USER, ObRpcDropUserP, drop_user(arg_, result_));
 DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_RENAME_USER, ObRpcRenameUserP, rename_user(arg_, result_));

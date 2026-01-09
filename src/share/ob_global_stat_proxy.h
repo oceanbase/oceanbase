@@ -48,6 +48,7 @@ public:
   bool is_valid() const { return core_table_.is_valid(); }
 
   virtual int set_init_value(const int64_t core_schema_version,
+                             const int64_t sys_schema_version,
                              const int64_t baseline_schema_version,
                              const int64_t rootservice_epoch,
                              const SCN &snapshot_gc_scn,
@@ -58,6 +59,7 @@ public:
                              const uint64_t upgrade_begin_data_version);
 
   virtual int set_tenant_init_global_stat(const int64_t core_schema_version,
+                                          const int64_t sys_schema_version,
                                           const int64_t baseline_schema_version,
                                           const SCN &snapshot_gc_scn,
                                           const int64_t ddl_epoch,
@@ -66,10 +68,14 @@ public:
                                           const uint64_t upgrade_begin_data_version);
 
   virtual int set_core_schema_version(const int64_t core_schema_version);
+  virtual int set_sys_schema_version(const int64_t sys_schema_version);
+  virtual int get_core_schema_version(int64_t &core_schema_version);
+  virtual int get_sys_schema_version(int64_t &sys_schema_version);
+  virtual int get_core_and_sys_schema_version(int64_t &core_schema_version,
+      int64_t &sys_schema_version);
   virtual int set_baseline_schema_version(const int64_t baseline_schema_version);
   virtual int inc_rootservice_epoch();
 
-  virtual int get_core_schema_version(int64_t &core_schema_version);
   virtual int get_baseline_schema_version(int64_t &baseline_schema_version);
 
   virtual int get_rootservice_epoch(int64_t &rootservice_epoch);

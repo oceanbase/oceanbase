@@ -556,19 +556,46 @@ int ObMajorFreezeHelper::do_one_tenant_admin_merge(
 
 int ObMajorFreezeHelper::get_frozen_status(
     const int64_t tenant_id,
-    const SCN &frozen_scn,
+    const share::SCN &frozen_scn,
     share::ObFreezeInfo &frozen_status)
+{
+  return get_frozen_status(tenant_id, frozen_scn, frozen_status, GCTX.sql_proxy_);
+}
+
+int ObMajorFreezeHelper::get_frozen_status(
+    const int64_t tenant_id,
+    const SCN &frozen_scn,
+    share::ObFreezeInfo &frozen_status,
+    ObISQLClient *proxy)
 {
   int ret = OB_SUCCESS;
   share::ObFreezeInfoProxy freeze_info_proxy(tenant_id);
 
-  if (OB_ISNULL(GCTX.sql_proxy_)) {
+  if (OB_ISNULL(proxy) || !is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid GCTX", KR(ret));
-  } else if (OB_FAIL(freeze_info_proxy.get_freeze_info(*GCTX.sql_proxy_, frozen_scn, frozen_status))) {
+  } else if (OB_FAIL(freeze_info_proxy.get_freeze_info(*proxy, frozen_scn, frozen_status))) {
     if (OB_ITER_END != ret && OB_TABLE_NOT_EXIST != ret) {
       LOG_WARN("fail to get freeze info", KR(ret), K(frozen_scn), K(tenant_id));
     }
+  }
+
+  return ret;
+}
+
+int ObMajorFreezeHelper::get_frozen_scn(
+    const int64_t tenant_id,
+    SCN &frozen_scn,
+    ObISQLClient *proxy)
+{
+  int ret = OB_SUCCESS;
+  share::ObFreezeInfo frozen_status;
+
+  // use min_scn to get frozen_status, means get one with biggest frozen_scn
+  if (OB_FAIL(get_frozen_status(tenant_id, SCN::min_scn(), frozen_status, proxy))) {
+    LOG_WARN("fail to get frozen info", KR(ret));
+  } else {
+    frozen_scn = frozen_status.frozen_scn_;
   }
 
   return ret;

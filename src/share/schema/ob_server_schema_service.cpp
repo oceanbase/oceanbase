@@ -6836,10 +6836,162 @@ int ObServerSchemaService::init_schema_struct(uint64_t tenant_id)
   return ret;
 }
 
+int ObServerSchemaService::check_need_refresh_increment_sys_schema_(
+      const uint64_t tenant_id,
+      ObISQLClient &sql_client,
+      const int64_t &local_schema_version,
+      int64_t &core_schema_version,
+      bool &core_schema_change,
+      bool &sys_schema_change)
+{
+  int ret = OB_SUCCESS;
+  int64_t sys_schema_version = 0;
+  core_schema_change = true;
+  sys_schema_change = true;
+  if (OB_ISNULL(schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pointer is null", K(ret), KP(schema_service_));
+  } else if (OB_FAIL(schema_service_->get_core_and_sys_version(sql_client, tenant_id,
+          core_schema_version, sys_schema_version))) {
+    LOG_WARN("failed to get core and sys version", KR(ret), K(tenant_id));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (core_schema_version <= local_schema_version) {
+    core_schema_change = false;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (0 == sys_schema_version || OB_INVALID_VERSION == sys_schema_version) {
+    // in upgrade mode, sys_schema_version is not initialized
+    sys_schema_change = true;
+  } else if (core_schema_version > sys_schema_version) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sys_schema_version is invalid", KR(ret), K(sys_schema_version), K(core_schema_version));
+  } else if (sys_schema_version <= local_schema_version) {
+    sys_schema_change = false;
+    LOG_INFO("skip refresh core and sys schema", KR(ret), K(sys_schema_version),
+        K(core_schema_version), K(local_schema_version));
+  }
+  return ret;
+}
+
+int ObServerSchemaService::refresh_increment_core_schema_(
+    const ObRefreshSchemaStatus &schema_status,
+    ObISQLClient &sql_client,
+    const int64_t &local_schema_version,
+    const int64_t &core_schema_version)
+{
+  int ret = OB_SUCCESS;
+  bool core_schema_change = false;
+  if (core_schema_version <= OB_CORE_SCHEMA_VERSION + 1) {
+    ret = OB_EAGAIN;
+    LOG_WARN("schema may be not persisted, try again",
+        KR(ret), K(schema_status), K(core_schema_version));
+  } else if (core_schema_version <= local_schema_version) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("core_schema_version should be larger than local_schema_version", KR(ret),
+        K(core_schema_version), K(local_schema_version));
+  } else {
+    int64_t publish_version = OB_INVALID_INDEX;
+    if (OB_FAIL(ObSchemaService::gen_core_temp_version(
+            core_schema_version, publish_version))) {
+      LOG_WARN("gen_core_temp_version failed", KR(ret), K(schema_status), K(core_schema_version));
+    } else if (OB_FAIL(try_fetch_publish_core_schemas(schema_status,
+            core_schema_version, publish_version, sql_client, core_schema_change))) {
+      LOG_WARN("try_fetch_publish_core_schemas failed", KR(ret), K(schema_status),
+          K(core_schema_version), K(publish_version));
+    }
+  }
+  return ret;
+}
+int ObServerSchemaService::refresh_increment_sys_schema_(
+    const ObRefreshSchemaStatus &schema_status,
+    ObISQLClient &sql_client,
+    const int64_t &local_schema_version,
+    const int64_t &core_schema_version,
+    const int64_t &schema_version_in_inner_table)
+{
+  int ret = OB_SUCCESS;
+  bool core_schema_change = false;
+  bool sys_schema_change = false;
+  if (schema_version_in_inner_table < local_schema_version) {
+    if (local_schema_version <= OB_CORE_SCHEMA_VERSION + 1) {
+      ret = OB_EAGAIN;
+      LOG_WARN("schema may be not persisted, try again",
+          KR(ret), K(schema_status), K(schema_version_in_inner_table), K(local_schema_version));
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("schema version fallback, unexpected",
+          KR(ret), K(schema_status), K(schema_version_in_inner_table), K(local_schema_version));
+    }
+  } else if (core_schema_version > schema_version_in_inner_table) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("schema version fallback, unexpected",
+        KR(ret), K(schema_status), K(core_schema_version), K(schema_version_in_inner_table));
+  } else {
+    int64_t publish_version = 0;
+    if (OB_FAIL(ObSchemaService::gen_sys_temp_version(schema_version_in_inner_table, publish_version))) {
+      LOG_WARN("gen_sys_temp_version failed", KR(ret), K(schema_status), K(schema_version_in_inner_table));
+    } else if (OB_FAIL(try_fetch_publish_sys_schemas(schema_status, schema_version_in_inner_table,
+            publish_version, sql_client, sys_schema_change))) {
+      LOG_WARN("try_fetch_publish_sys_schemas failed", KR(ret), K(schema_status),
+          K(schema_version_in_inner_table), K(publish_version));
+    }
+  }
+  return ret;
+}
+
+int ObServerSchemaService::refresh_increment_all_schema_(
+      const ObRefreshSchemaStatus &schema_status,
+      ObISQLClient &sql_client,
+      const int64_t &core_schema_version,
+      const int64_t &schema_version_in_inner_table,
+      const int64_t &local_schema_version,
+      ObSchemaMgr *&schema_mgr_for_cache)
+{
+  int ret = OB_SUCCESS;
+  const int64_t fetch_version = std::max(core_schema_version, schema_version_in_inner_table);
+  const uint64_t tenant_id = schema_status.tenant_id_;
+  ObSchemaService::SchemaOperationSetWithAlloc schema_operations;
+  if (OB_ISNULL(schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pointer is null", K(ret), KP(schema_service_));
+  } else if (OB_FAIL(schema_mgr_for_cache_map_.get_refactored(tenant_id, schema_mgr_for_cache))) {
+    LOG_WARN("fail to get schema_mgr_for_cache", KR(ret), K(schema_status));
+  } else if (OB_ISNULL(schema_mgr_for_cache)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema mgr for cache is null", KR(ret));
+  } else if (OB_FAIL(schema_service_->get_increment_schema_operations(schema_status,
+          local_schema_version, fetch_version, sql_client, schema_operations))) {
+    LOG_WARN("get_increment_schema_operations failed", KR(ret), K(schema_status),
+        K(local_schema_version), K(fetch_version));
+  } else if (schema_operations.count() > 0) {
+    // new cache
+    SMART_VAR(AllSchemaKeys, all_keys) {
+      if (OB_FAIL(replay_log(*schema_mgr_for_cache, schema_operations, all_keys))) {
+        LOG_WARN("replay_log failed", KR(ret), K(schema_status), K(schema_operations));
+      } else if (OB_FAIL(update_schema_mgr(sql_client, schema_status,
+              *schema_mgr_for_cache, fetch_version, all_keys))){
+        LOG_WARN("update schema mgr failed", KR(ret), K(schema_status));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    schema_mgr_for_cache->set_schema_version(fetch_version);
+    if (OB_FAIL(publish_schema(tenant_id))) {
+      LOG_WARN("publish_schema failed", KR(ret), K(schema_status));
+    } else {
+      LOG_INFO("change schema version", K(schema_status),
+          K(schema_version_in_inner_table), K(core_schema_version));
+    }
+  }
+  return ret;
+}
+
 int ObServerSchemaService::refresh_increment_schema(
     const ObRefreshSchemaStatus &schema_status)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   const uint64_t tenant_id = schema_status.tenant_id_;
   ObSchemaMgr *schema_mgr_for_cache = NULL;
   if (!check_inner_stat()) {
@@ -6851,7 +7003,6 @@ int ObServerSchemaService::refresh_increment_schema(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema mgr for cache is null", KR(ret), K(schema_status));
   } else {
-    ObSchemaService::SchemaOperationSetWithAlloc schema_operations;
     bool core_schema_change = true;
     bool sys_schema_change = true;
     int64_t local_schema_version = schema_mgr_for_cache->get_schema_version();
@@ -6869,7 +7020,6 @@ int ObServerSchemaService::refresh_increment_schema(
         break;
       } else if (retry_count > 0) {
         LOG_WARN("refresh_increment_schema failed", K(retry_count), K(schema_status));
-
         const int64_t current_ts = ObTimeUtility::current_time();
         if (current_ts >= abs_timeout) {
           // ret will be overwrite when core/system table schemas were changed in the meantime.
@@ -6878,139 +7028,53 @@ int ObServerSchemaService::refresh_increment_schema(
           LOG_WARN("already timeout", KR(ret), K(start_ts), K(abs_timeout), K(current_ts), K(abs_timeout));
           break;
         }
-
       }
       ObISQLClient &sql_client = *sql_proxy_;
-      if (OB_SUCC(ret) && core_schema_change) {
-        if (OB_FAIL(schema_service_->get_core_version(
-            sql_client, schema_status, core_schema_version))) {
-          LOG_WARN("get_core_version failed", KR(ret), K(schema_status));
-        } else if (core_schema_version <= OB_CORE_SCHEMA_VERSION + 1) {
-          ret = OB_EAGAIN;
-          LOG_WARN("schema may be not persisted, try again",
-                   KR(ret), K(schema_status), K(core_schema_version));
-        } else if (core_schema_version > local_schema_version) {
-          int64_t publish_version = OB_INVALID_INDEX;
-          if (OB_FAIL(ObSchemaService::gen_core_temp_version(
-              core_schema_version, publish_version))) {
-            LOG_WARN("gen_core_temp_version failed", KR(ret), K(schema_status), K(core_schema_version));
-          } else if (OB_FAIL(try_fetch_publish_core_schemas(schema_status,
-                     core_schema_version, publish_version, sql_client, core_schema_change))) {
-            LOG_WARN("try_fetch_publish_core_schemas failed", KR(ret), K(schema_status),
-                     K(core_schema_version), K(publish_version));
-          } else {}
-        } else {
-          core_schema_change = false;
-        }
+      if (OB_FAIL(check_need_refresh_increment_sys_schema_(schema_status.tenant_id_, sql_client,
+              local_schema_version, core_schema_version, core_schema_change, sys_schema_change))) {
+        LOG_WARN("failed to check need refresh increment sys schema", KR(ret), K(schema_status),
+            K(local_schema_version));
+      } else if (core_schema_change && OB_FAIL(refresh_increment_core_schema_(schema_status,
+              sql_client, local_schema_version, core_schema_version))) {
+        LOG_WARN("failed to refresh core schema", KR(ret), K(schema_status), K(local_schema_version),
+              K(core_schema_version), K(core_schema_change));
+      } else if (OB_FAIL(get_schema_version_in_inner_table(sql_client, schema_status, schema_version))) {
+        LOG_WARN("fail to get schema version in inner table", KR(ret), K(schema_status));
+      } else if ((core_schema_change || sys_schema_change) && OB_FAIL(refresh_increment_sys_schema_(
+              schema_status, sql_client, local_schema_version, core_schema_version, schema_version))) {
+        LOG_WARN("failed to refresh sys schema", KR(ret), K(schema_status), K(local_schema_version),
+            K(core_schema_version), K(schema_version), K(core_schema_change), K(sys_schema_change));
+      } else if (OB_FAIL(check_core_schema_change_(sql_client, schema_status, core_schema_version, core_schema_change))) {
+        LOG_WARN("failed to check core schema change", KR(ret), K(schema_status), K(core_schema_version));
+      } else if (core_schema_change) {
+        // the first two stage refresh rely on core schema
+        // make sure core schema not changed in the first two stage
+        ret = OB_EAGAIN;
+        LOG_WARN("core schema change", KR(ret), K(schema_status), K(core_schema_version),
+            K(core_schema_change));
+      } else if (OB_FAIL(refresh_increment_all_schema_(schema_status, sql_client, core_schema_version,
+                 schema_version, local_schema_version, schema_mgr_for_cache))) {
+        LOG_WARN("failed to refresh user schema", KR(ret), K(schema_status), K(core_schema_change),
+                 K(schema_version), K(local_schema_version));
+      } else {
+        break;
       }
-
-      if (OB_SUCC(ret) && !core_schema_change && sys_schema_change) {
-        if (OB_FAIL(get_schema_version_in_inner_table(sql_client, schema_status, schema_version))) {
-          LOG_WARN("fail to get schema version in inner table", KR(ret), K(schema_status));
-        } else if (schema_version < local_schema_version) {
-          if (local_schema_version <= OB_CORE_SCHEMA_VERSION + 1) {
-            ret = OB_EAGAIN;
-            LOG_WARN("schema may be not persisted, try again",
-                     KR(ret), K(schema_status), K(schema_version), K(local_schema_version));
-          } else {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_ERROR("schema version fallback, unexpected",
-                      KR(ret), K(schema_status), K(schema_version), K(local_schema_version));
-          }
-        } else if (core_schema_version > schema_version) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("schema version fallback, unexpected",
-                    KR(ret), K(schema_status), K(core_schema_version), K(schema_version));
-        } else if (OB_FAIL(check_core_schema_change_(sql_client, schema_status,
-                   core_schema_version, core_schema_change))) {
-           LOG_WARN("fail to check core schema version change", KR(ret), K(schema_status), K(core_schema_version));
-        } else if (core_schema_change) {
-          sys_schema_change = true;
-          LOG_WARN("core schema version change, try again",
-                   KR(ret), K(schema_status), K(core_schema_version), K(schema_version));
-        } else if (OB_FAIL(check_sys_schema_change(sql_client, schema_status,
-                   local_schema_version, schema_version, sys_schema_change))) {
-          LOG_WARN("check_sys_schema_change failed", KR(ret), K(schema_status), K(schema_version));
-        } else if (sys_schema_change) {
-          const int64_t sys_formal_version = std::max(core_schema_version, schema_version);
-          int64_t publish_version = 0;
-          if (OB_FAIL(ObSchemaService::gen_sys_temp_version(sys_formal_version, publish_version))) {
-            LOG_WARN("gen_sys_temp_version failed", KR(ret), K(schema_status), K(sys_formal_version));
-          } else if (OB_FAIL(try_fetch_publish_sys_schemas(schema_status, schema_version,
-                     publish_version, sql_client, sys_schema_change))) {
-            LOG_WARN("try_fetch_publish_sys_schemas failed", KR(ret), K(schema_status),
-                     K(schema_version), K(publish_version));
-          } else {}
-        }
-
-        if (OB_FAIL(ret)) {
-          // check whether failed because of core table schema change, go to suitable pos
-          int temp_ret = OB_SUCCESS;
-          if (OB_SUCCESS != (temp_ret = check_core_schema_change_(
-              sql_client, schema_status, core_schema_version, core_schema_change))) {
-            LOG_WARN("get_core_version failed", KR(ret), KR(temp_ret), K(schema_status), K(core_schema_version));
-          } else if (core_schema_change) {
-            sys_schema_change = true;
-            LOG_WARN("core schema version change, try again",
-                     KR(ret), K(schema_status), K(core_schema_version), K(schema_version));
-            ret = OB_SUCCESS;
-          }
-        }
-      }
-
-      if (OB_SUCC(ret) && !core_schema_change && !sys_schema_change) {
-        const int64_t fetch_version = std::max(core_schema_version, schema_version);
-        if (OB_FAIL(schema_mgr_for_cache_map_.get_refactored(tenant_id, schema_mgr_for_cache))) {
-          LOG_WARN("fail to get schema_mgr_for_cache", KR(ret), K(schema_status));
-        } else if (OB_ISNULL(schema_mgr_for_cache)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("schema mgr for cache is null", KR(ret));
-        } else if (OB_FAIL(schema_service_->get_increment_schema_operations(schema_status,
-            local_schema_version, fetch_version, sql_client, schema_operations))) {
-          LOG_WARN("get_increment_schema_operations failed", KR(ret), K(schema_status),
-              K(local_schema_version), K(fetch_version));
-        } else if (schema_operations.count() > 0) {
-          // new cache
-          SMART_VAR(AllSchemaKeys, all_keys) {
-            if (OB_FAIL(replay_log(*schema_mgr_for_cache, schema_operations, all_keys))) {
-              LOG_WARN("replay_log failed", KR(ret), K(schema_status), K(schema_operations));
-            } else if (OB_FAIL(update_schema_mgr(sql_client, schema_status,
-                       *schema_mgr_for_cache, fetch_version, all_keys))){
-              LOG_WARN("update schema mgr failed", KR(ret), K(schema_status));
-            }
-          }
-        } else {}
-
-
-        if (OB_SUCC(ret)) {
-          schema_mgr_for_cache->set_schema_version(fetch_version);
-          if (OB_FAIL(publish_schema(tenant_id))) {
-            LOG_WARN("publish_schema failed", KR(ret), K(schema_status));
-          } else {
-            LOG_INFO("change schema version", K(schema_status), K(schema_version), K(core_schema_version));
-            break;
-          }
-        }
-
-        if (OB_FAIL(ret)) {
-          // check whether failed because of sys table schema change, go to suitable pos,
-          // if during check core table schema change, go to suitable pos
-          int temp_ret = OB_SUCCESS;
-          if (OB_SUCCESS != (temp_ret = check_core_or_sys_schema_change(sql_client, schema_status,
-              core_schema_version, schema_version, core_schema_change, sys_schema_change))) {
-            LOG_WARN("check_core_or_sys_schema_change failed, need retry", KR(ret), KR(temp_ret),
-                     K(schema_status), K(core_schema_version), K(schema_version));
-          } else if (core_schema_change || sys_schema_change) {
-            ret = OB_SUCCESS;
-          }
+      if (OB_FAIL(ret)) {
+        // check whether failed because of sys table schema change, go to suitable pos,
+        // if during check core table schema change, go to suitable pos
+        if (OB_TMP_FAIL(check_core_or_sys_schema_change(sql_client, schema_status,
+                core_schema_version, schema_version, core_schema_change, sys_schema_change))) {
+          LOG_WARN("check_core_or_sys_schema_change failed, need retry", KR(ret), KR(tmp_ret),
+              K(schema_status), K(core_schema_version), K(schema_version));
+        } else if (core_schema_change || sys_schema_change) {
+          ret = OB_SUCCESS;
         }
       }
       ++retry_count;
     } // end while
 
     if (OB_FAIL(ret)) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = schema_mgr_for_cache_map_.get_refactored(tenant_id, schema_mgr_for_cache))) {
+      if (OB_TMP_FAIL(schema_mgr_for_cache_map_.get_refactored(tenant_id, schema_mgr_for_cache))) {
         LOG_ERROR("fail to get schema_mgr_for_cache", KR(ret), K(tmp_ret), K(schema_status));
       } else if (OB_ISNULL(schema_mgr_for_cache)) {
         tmp_ret = OB_ERR_UNEXPECTED;

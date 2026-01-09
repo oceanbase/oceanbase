@@ -376,6 +376,8 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
         LOG_WARN("failed to write string to session", K(ret));
       }
     }
+    uint64_t data_version = 0;
+    uint64_t tenant_id = create_table_arg.schema_.get_tenant_id();
     if (OB_SUCC(ret)) {
       ObInnerSQLConnectionPool *pool = static_cast<observer::ObInnerSQLConnectionPool*>(sql_proxy->get_pool());
       if (OB_ISNULL(pool)) {
@@ -397,8 +399,25 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("create ctas for interval part table is not supported", KR(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "create ctas for interval part table is");
-      } else if (OB_FAIL(common_rpc_proxy->create_table(create_table_arg, create_table_res))) { //2, 建表;
-        LOG_WARN("rpc proxy create table failed", K(ret), "dst", common_rpc_proxy->get_server());
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+        LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+      } else if ((data_version >= MOCK_DATA_VERSION_4_2_5_3
+                  && data_version < DATA_VERSION_4_3_0_0)
+                 || (data_version >= MOCK_DATA_VERSION_4_4_2_0
+                     && data_version < DATA_VERSION_4_5_0_0)
+                 || (data_version >= DATA_VERSION_4_5_1_0)) {// 2. create table
+        DEBUG_SYNC(BEFORE_SEND_PARALLEL_CREATE_TABLE);
+        create_table_arg.is_parallel_ = false;
+        if (OB_FAIL(ObDDLExecutorUtil::execute_pcreate_table(*common_rpc_proxy, my_session, "[parallel create table]",
+                                                            &ObCommonRpcProxy::parallel_create_table, create_table_arg, create_table_res,
+                                                            tenant_id))) {
+          LOG_WARN("fail to execute parallel ddl", KR(ret), K(create_table_arg), K(create_table_res));
+        }
+      } else if (OB_FAIL(common_rpc_proxy->create_table(create_table_arg, create_table_res))) {
+        LOG_WARN("rpc proxy create table failed", KR(ret), "dst", common_rpc_proxy->get_server());
+      }
+      if (OB_FAIL(ret)) {
+        // do nothing
       } else if (!(OB_INVALID_ID == create_table_res.table_id_
                   || (OB_INVALID_ID != create_table_res.table_id_
                       && true == create_table_res.do_nothing_)) ) { //如果表已存在则后续的查询插入不进行
@@ -626,7 +645,7 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("common rpc proxy should not be null", K(ret));
     } else if (OB_ISNULL(select_stmt) || stmt.is_sub_select_empty_set()) { // 普通建表的处理
-      bool is_parallel_create = false;
+      bool &is_parallel_create = create_table_arg.is_parallel_;
       if (OB_FAIL(ctx.get_sql_ctx()->schema_guard_->reset())){
         LOG_WARN("schema_guard reset failed", KR(ret));
       } else if (table_schema.is_view_table()) {
@@ -635,8 +654,8 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
             || table_schema.is_materialized_view()) {
           is_parallel_create = false;
         } else if (OB_FAIL(ObParallelDDLControlMode::is_parallel_ddl_enable(
-                          ObParallelDDLControlMode::CREATE_VIEW,
-                          tenant_id, is_parallel_create))) {
+                           ObParallelDDLControlMode::CREATE_VIEW,
+                           tenant_id, is_parallel_create))) {
           LOG_WARN("fail to check whether is parallel create view", KR(ret), K(tenant_id));
         }
       } else {
@@ -646,32 +665,22 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
       }
       if (OB_FAIL(ret)) {
         // do nothing
-      } else if (!is_parallel_create) {
-        if (OB_FAIL(common_rpc_proxy->create_table(create_table_arg, res))) {
-          LOG_WARN("rpc proxy create table failed", KR(ret), "dst", common_rpc_proxy->get_server());
-        }
       } else {
-        DEBUG_SYNC(BEFORE_SEND_PARALLEL_CREATE_TABLE);
-        int64_t start_time = ObTimeUtility::current_time();
-        ObTimeoutCtx ctx;
-        create_table_arg.is_parallel_ = true;
-        if (OB_FAIL(ctx.set_timeout(common_rpc_proxy->get_timeout()))) {
-          LOG_WARN("fail to set timeout ctx", K(ret));
-        } else if (OB_FAIL(common_rpc_proxy->parallel_create_table(create_table_arg, res))) {
-          LOG_WARN("rpc proxy create table failed", KR(ret), "dst", common_rpc_proxy->get_server());
-        } else {
-          int64_t refresh_time = ObTimeUtility::current_time();
-          if (OB_FAIL(ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
-              ctx, my_session, tenant_id, res.schema_version_, res.do_nothing_ /*skip_consensus*/))) {
-            LOG_WARN("fail to check paralleld ddl schema in sync", KR(ret), K(res));
+        if (!is_parallel_create && !((data_version >= MOCK_DATA_VERSION_4_2_5_3
+                                      && data_version < DATA_VERSION_4_3_0_0)
+                                     || (data_version >= MOCK_DATA_VERSION_4_4_2_0
+                                         && data_version < DATA_VERSION_4_5_0_0)
+                                     || (data_version >= DATA_VERSION_4_5_1_0))) {
+          if (OB_FAIL(common_rpc_proxy->create_table(create_table_arg, res))) {
+            LOG_WARN("rpc proxy create table failed", KR(ret), "dst", common_rpc_proxy->get_server());
           }
-          int64_t end_time = ObTimeUtility::current_time();
-          LOG_INFO("[parallel_create_table]", KR(ret),
-                   "table_type", create_table_arg.schema_.get_table_type(),
-                   "cost", end_time - start_time,
-                   "execute_time", refresh_time - start_time,
-                   "wait_schema", end_time - refresh_time,
-                   "table_name", create_table_arg.schema_.get_table_name());
+        } else {
+          DEBUG_SYNC(BEFORE_SEND_PARALLEL_CREATE_TABLE);
+          if (OB_FAIL(ObDDLExecutorUtil::execute_pcreate_table(*common_rpc_proxy, my_session, "[parallel create table]",
+                                                            &ObCommonRpcProxy::parallel_create_table, create_table_arg, res,
+                                                            tenant_id))) {
+            LOG_WARN("fail to execute parallel ddl", KR(ret), K(create_table_arg), K(res));
+          }
         }
       }
       if (OB_SUCC(ret)) {
@@ -701,7 +710,10 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
         const uint64_t part_id = -1;
         bool collect_statistics_on_create = false;
         bool is_odps_external_table = false;
-        if (OB_FAIL(ObSQLUtils::is_odps_external_table(&table_schema, is_odps_external_table))) {
+        if (OB_FAIL(GCTX.schema_service_->async_refresh_schema(tenant_id,
+                                                               res.schema_version_))) {
+          LOG_WARN("failed to async refresh schema", KR(ret));
+        } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(tenant_id, res.table_id_, is_odps_external_table))) {
           LOG_WARN("failed to check is odps external table or not", K(ret));
         } else if (is_odps_external_table) {
           sql::ObExternalFileFormat ex_format;
@@ -2510,12 +2522,18 @@ int ObCreateTableLikeExecutor::execute(ObExecContext &ctx, ObCreateTableLikeStmt
   const obrpc::ObCreateTableLikeArg &create_table_like_arg = stmt.get_create_table_like_arg();
   obrpc::ObCreateTableLikeArg &tmp_arg = const_cast<obrpc::ObCreateTableLikeArg&>(create_table_like_arg);
   ObString first_stmt;
+  ObSQLSessionInfo *my_session = ctx.get_my_session();
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
     LOG_WARN("get first statement failed", K(ret));
+  } else if (OB_ISNULL(my_session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", KR(ret));
   } else {
+    uint64_t data_version = 0;
     tmp_arg.ddl_stmt_str_ = first_stmt;
     tmp_arg.consumer_group_id_ = THIS_WORKER.get_group_id();
-    tmp_arg.session_id_ = ctx.get_my_session()->get_sessid_for_table();
+    tmp_arg.session_id_ = my_session->get_sessid_for_table();
+    tmp_arg.is_parallel_ = false;
     ObTaskExecutorCtx *task_exec_ctx = NULL;
     obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
     if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
@@ -2526,8 +2544,26 @@ int ObCreateTableLikeExecutor::execute(ObExecContext &ctx, ObCreateTableLikeStmt
     } else if (OB_ISNULL(common_rpc_proxy)){
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("common rpc proxy should not be null", K(ret));
-    } else if (OB_FAIL(common_rpc_proxy->create_table_like(create_table_like_arg))) {
-      LOG_WARN("rpc proxy create table like failed", K(ret));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tmp_arg.tenant_id_, data_version))) {
+      LOG_WARN("fail to get data version", KR(ret), K_(tmp_arg.tenant_id));
+    }
+    if (OB_FAIL(ret)) {
+    } else if ((data_version >= MOCK_DATA_VERSION_4_2_5_3
+                && data_version < DATA_VERSION_4_3_0_0)
+               || (data_version >= MOCK_DATA_VERSION_4_4_2_0
+                   && data_version < DATA_VERSION_4_5_0_0)
+                   || (data_version >= DATA_VERSION_4_5_1_0)) {
+      DEBUG_SYNC(BEFORE_SEND_PARALLEL_CREATE_TABLE);
+      ObCreateTableRes res;
+      if (OB_FAIL(ObDDLExecutorUtil::execute_pcreate_table(*common_rpc_proxy, my_session, "[parallel create table like]",
+                                                          &ObCommonRpcProxy::parallel_create_table_like, tmp_arg, res,
+                                                          tmp_arg.tenant_id_))) {
+        LOG_WARN("fail to execute parallel ddl", KR(ret), K(tmp_arg), K(res));
+      }
+    } else {
+      if (OB_FAIL(common_rpc_proxy->create_table_like(create_table_like_arg))) {
+        LOG_WARN("rpc proxy create table like failed", K(ret));
+      }
     }
   }
   return ret;

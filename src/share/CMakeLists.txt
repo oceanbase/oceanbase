@@ -225,6 +225,7 @@ ob_set_subtarget(ob_share common
   ob_ls_id.cpp
   ob_table_range.cpp
   ob_max_id_fetcher.cpp
+  ob_max_id_cache.cpp
   ob_occam_time_guard.cpp
   ob_order_perserving_encoder.cpp
   ob_partition_modify.cpp
@@ -628,6 +629,7 @@ ob_set_subtarget(ob_share schema
   schema/ob_ccl_schema_struct.cpp
   schema/ob_ccl_rule_mgr.cpp
   schema/ob_ccl_rule_sql_service.cpp
+  schema/ob_schema_guard_wrapper.cpp
 
   schema/ob_sensitive_rule_mgr.cpp
   schema/ob_sensitive_rule_schema_struct.cpp

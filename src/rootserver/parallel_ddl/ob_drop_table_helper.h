@@ -109,7 +109,7 @@ private:
   bool is_to_recyclebin_(const ObTableSchema &table_schema);
   int log_table_not_exist_msg_(const obrpc::ObTableItem &table_item);
   int get_sensitive_rule_schemas_by_table_(const ObTableSchema &table_schema,
-                                           ObIArray<ObSensitiveRuleSchema *> &sensitive_rules);
+                                           ObIArray<const ObSensitiveRuleSchema *> &sensitive_rules);
 private:
   const obrpc::ObDropTableArg &arg_;
   obrpc::ObDropTableRes &res_;

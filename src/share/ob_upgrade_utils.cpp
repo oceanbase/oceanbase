@@ -32,6 +32,7 @@
 #include "share/ob_scheduled_manage_dynamic_partition.h"
 #include "share/balance/ob_scheduled_trigger_partition_balance.h" // ObScheduledTriggerPartitionBalance
 #include "logservice/data_dictionary/ob_data_dict_scheduler.h"    // ObDataDictScheduler
+#include "share/ob_global_stat_proxy.h"
 
 namespace oceanbase
 {
@@ -2297,6 +2298,16 @@ int ObUpgradeFor4410Processor::post_upgrade_for_scheduled_trigger_dump_data_dict
 /* =========== 4410 upgrade processor end ============= */
 
 /* =========== 4420 upgrade processor start ============= */
+int ObUpgradeFor4420Processor::post_upgrade()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_sys_schema_version())) {
+    LOG_WARN("fail to post upgrade for sys schema version", KR(ret));
+  }
+  return ret;
+}
 int ObUpgradeFor4420Processor::finish_upgrade()
 {
   int ret = OB_SUCCESS;
@@ -2304,6 +2315,54 @@ int ObUpgradeFor4420Processor::finish_upgrade()
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(finish_upgrade_for_grant_sys_privs())) {
     LOG_WARN("fail to post upgrade for grant sys privs", KR(ret));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4420Processor::post_upgrade_for_sys_schema_version()
+{
+  int ret = OB_SUCCESS;
+  bool is_primary = false;
+  ObSqlString sql;
+  if (OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pointer is null", KR(ret), KP(sql_proxy_));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::is_primary_tenant(sql_proxy_, tenant_id_, is_primary))) {
+    LOG_WARN("check is standby tenant failed", KR(ret), K(tenant_id_));
+  } else if (!is_primary) {
+    LOG_INFO("not primary tenant, ignore", K(tenant_id_));
+  } else {
+    share::ObGlobalStatProxy proxy(*sql_proxy_, tenant_id_);
+    int64_t sys_schema_version = 0;
+    if (OB_SUCC(proxy.get_sys_schema_version(sys_schema_version)) &&
+        sys_schema_version != OB_INVALID_VERSION && sys_schema_version != 0) {
+      // sys schema version in inner table is valid, no need to update
+    } else if (OB_FAIL(sql.assign_fmt("select max(schema_version) max_schema_version from %s",
+            OB_ALL_DDL_OPERATION_TNAME))) {
+      LOG_WARN("failed to assign sql", KR(ret));
+    } else {
+      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+        ObMySQLResult *result = NULL;
+        if (OB_FAIL(sql_proxy_->read(res, tenant_id_, sql.ptr()))) {
+          LOG_WARN("failed to read max schema_version", KR(ret), K(sql), K(tenant_id_));
+        } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get result. ", K(ret));
+        } else if (OB_FAIL(result->next())) {
+          if (OB_ITER_END != ret) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("empty row", K(ret), K(tenant_id_));
+          } else {
+            LOG_WARN("fail to fetch next row", K(ret));
+          }
+        } else {
+          EXTRACT_INT_FIELD_MYSQL(*result, "max_schema_version", sys_schema_version, int64_t);
+        }
+      }
+      if (FAILEDx(proxy.set_sys_schema_version(sys_schema_version))) {
+        LOG_WARN("failed to set sys schema version", KR(ret), K(sys_schema_version));
+      }
+    }
   }
   return ret;
 }

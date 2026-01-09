@@ -616,6 +616,10 @@ public:
   virtual int get_core_version(common::ObISQLClient &sql_client,
                                const ObRefreshSchemaStatus &schema_status,
                                int64_t &core_schema_version);
+  virtual int get_core_and_sys_version(common::ObISQLClient &sql_client,
+                               const uint64_t &tenant_id,
+                               int64_t &core_schema_version,
+                               int64_t &sys_schema_version);
   virtual int get_baseline_schema_version(
               common::ObISQLClient &sql_client,
               const ObRefreshSchemaStatus &schema_status,

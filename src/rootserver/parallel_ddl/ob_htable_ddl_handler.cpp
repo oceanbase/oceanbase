@@ -144,7 +144,7 @@ int ObCreateHTableHandler::gen_create_helpers_(ObCreateTablegroupHelper *&create
       ObCreateTableArg &create_table_arg = param_->cf_arg_list_.at(i);
       ObCreateTableRes &create_table_res = *create_table_results.at(i);
       create_table_helpers.at(i) = new (buf + sizeof(ObCreateTableHelper) * i)
-          ObCreateTableHelper(&schema_service_, tenant_id, create_table_arg, create_table_res, &trans);
+          ObCreateTableHelper(&schema_service_, tenant_id, create_table_arg, create_table_res, &trans, true /*enable_ddl_parallel*/);
       if (OB_FAIL(create_table_helpers.at(i)->init(ddl_service_))) {
         LOG_WARN("fail to init create table helper", KR(ret));
       }
@@ -679,13 +679,13 @@ int ObHTableLockHelper::check_htable_exist(const ObString &tablegroup_name,
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (OB_FAIL(latest_schema_guard_.get_tablegroup_id(tablegroup_name, tablegroup_id_))) {
+  } else if (OB_FAIL(schema_guard_wrapper_.get_tablegroup_id(tablegroup_name, tablegroup_id_))) {
     LOG_WARN("fail to get table group id", KR(ret), K(tablegroup_name));
   } else if (OB_INVALID_ID == tablegroup_id_) {
     ret = OB_KV_HBASE_TABLE_NOT_FOUND;
     LOG_WARN("the table group for hbase table not found", KR(ret), K(tablegroup_name));
     LOG_USER_ERROR(OB_KV_HBASE_TABLE_NOT_FOUND, tablegroup_name.length(), tablegroup_name.ptr());
-  } else if (OB_FAIL(latest_schema_guard_.get_database_id(database_name, database_id_))) {
+  } else if (OB_FAIL(schema_guard_wrapper_.get_database_id(database_name, database_id_))) {
     LOG_WARN("fail to get database id", KR(ret), K(database_name));
   } else if (OB_INVALID_ID == database_id_) {
     ret = OB_ERR_BAD_DATABASE;
@@ -696,7 +696,7 @@ int ObHTableLockHelper::check_htable_exist(const ObString &tablegroup_name,
       uint64_t table_id = OB_INVALID_ID;
       ObTableType table_type = ObTableType::MAX_TABLE_TYPE;
       int64_t schema_version = OB_INVALID_VERSION;
-      if (OB_FAIL(latest_schema_guard_.get_table_id(database_id_, 0 /* sess_id */, table_name,
+      if (OB_FAIL(schema_guard_wrapper_.get_table_id(database_id_, 0 /* sess_id */, table_name,
             table_id, table_type, schema_version))) {
         LOG_WARN("fail to get table id", KR(ret), K(database_id_), K(table_name));
       } else if (OB_INVALID_ID == table_id) {
@@ -721,13 +721,13 @@ int ObHTableLockHelper::check_htable_not_exist(const ObString &tablegroup_name,
   uint64_t database_id = OB_INVALID_ID;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (OB_FAIL(latest_schema_guard_.get_tablegroup_id(tablegroup_name, tablegroup_id))) {
+  } else if (OB_FAIL(schema_guard_wrapper_.get_tablegroup_id(tablegroup_name, tablegroup_id))) {
     LOG_WARN("fail to get table group id", KR(ret), K(tablegroup_name));
   } else if (OB_INVALID_ID != tablegroup_id) {
     ret = OB_KV_HBASE_TABLE_EXISTS;
     LOG_WARN("the table group for hbase table has already existed", KR(ret), K(tablegroup_name));
     LOG_USER_ERROR(OB_KV_HBASE_TABLE_EXISTS, tablegroup_name.length(), tablegroup_name.ptr());
-  } else if (OB_FAIL(latest_schema_guard_.get_database_id(database_name, database_id))) {
+  } else if (OB_FAIL(schema_guard_wrapper_.get_database_id(database_name, database_id))) {
     LOG_WARN("fail to get database id", KR(ret), K(database_name));
   } else if (OB_INVALID_ID == database_id) {
     ret = OB_ERR_BAD_DATABASE;
@@ -739,13 +739,13 @@ int ObHTableLockHelper::check_htable_not_exist(const ObString &tablegroup_name,
       uint64_t parent_table_id = OB_INVALID_ID;
       ObTableType table_type = ObTableType::MAX_TABLE_TYPE;
       int64_t schema_version = OB_INVALID_VERSION;
-      if (OB_FAIL(latest_schema_guard_.get_table_id(database_id, 0 /* sess_id */, table_name,
+      if (OB_FAIL(schema_guard_wrapper_.get_table_id(database_id, 0 /* sess_id */, table_name,
             table_id, table_type, schema_version))) {
         LOG_WARN("fail to get table id", KR(ret), K(database_id), K(table_name));
       } else if (OB_INVALID_ID != table_id) {
         ret = OB_ERR_TABLE_EXIST;
         LOG_WARN("table has already existed", KR(ret), K(table_name));
-      } else if (OB_FAIL(latest_schema_guard_.get_mock_fk_parent_table_id(database_id, table_name, parent_table_id ))) {
+      } else if (OB_FAIL(schema_guard_wrapper_.get_mock_fk_parent_table_id(database_id, table_name, parent_table_id ))) {
         LOG_WARN("fail to get mock fk parent table id", KR(ret), K(database_id), K(table_name));
       } else if (parent_table_id != OB_INVALID_ID) {
         ret = OB_NOT_SUPPORTED;
@@ -820,7 +820,7 @@ int ObHTableLockHelper::lock_htable_objects_by_id_()
     ObArray<ObString> latest_table_names;  // not used
     if (OB_FAIL(ori_table_ids.assign(table_ids_))) {
       LOG_WARN("fail to assign origin table ids", KR(ret));
-    } else if (OB_FAIL(latest_schema_guard_.get_table_id_and_table_name_in_tablegroup(tablegroup_id_,
+    } else if (OB_FAIL(schema_guard_wrapper_.get_table_id_and_table_name_in_tablegroup(tablegroup_id_,
         latest_table_names, latest_table_ids))) {
       LOG_WARN("failed to get table schemas in table group", KR(ret), K_(tablegroup_id));
     } else if (ori_table_ids.count() != latest_table_ids.count()) {

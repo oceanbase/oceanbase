@@ -139,7 +139,12 @@ public:
   static int get_frozen_status(const int64_t tenant_id,
                                const share::SCN &frozen_scn,
                                share::ObFreezeInfo &frozen_status);
+  static int get_frozen_status(const int64_t tenant_id,
+                               const share::SCN &frozen_scn,
+                               share::ObFreezeInfo &frozen_status,
+                               ObISQLClient *proxy);
   static int get_frozen_scn(const int64_t tenant_id, share::SCN &frozen_scn);
+  static int get_frozen_scn(const int64_t tenant_id, share::SCN &frozen_scn, ObISQLClient *proxy);
 
 private:
   static int get_freeze_info(
