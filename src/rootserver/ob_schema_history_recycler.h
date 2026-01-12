@@ -173,15 +173,18 @@ public:
   int get_recycle_schema_versions(
       const obrpc::ObGetRecycleSchemaVersionsArg &arg,
       obrpc::ObGetRecycleSchemaVersionsResult &result);
+  void set_exist_unfinished_recycle() { exist_unfinished_recycle_ = true; }
 private:
   int check_inner_stat();
   bool is_valid_recycle_schema_version(const int64_t recycle_schema_version);
   int idle();
   int try_recycle_schema_history();
-  int try_recycle_schema_history(const common::ObIArray<uint64_t> &tenant_ids);
+  int try_recycle_schema_history(
+      const common::ObIArray<uint64_t> &tenant_ids);
   int try_recycle_schema_history(
       const uint64_t tenant_id,
-      const int64_t recycle_schema_version);
+      const int64_t recycle_schema_version,
+      bool &exist_failed_recycle);
   int check_can_skip_tenant(
       const uint64_t tenant_id,
       bool &skip);
@@ -213,6 +216,8 @@ private:
   ObZoneManager *zone_mgr_;
   common::ObMySQLProxy *sql_proxy_;
   common::hash::ObHashMap<uint64_t, int64_t, common::hash::ReadWriteDefendMode> recycle_schema_versions_;
+  common::hash::ObHashMap<uint64_t, int64_t, common::hash::ReadWriteDefendMode> last_recycle_schema_versions_;
+  bool exist_unfinished_recycle_;
   DISALLOW_COPY_AND_ASSIGN(ObSchemaHistoryRecycler);
 };
 
