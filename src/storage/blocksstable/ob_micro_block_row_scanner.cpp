@@ -2196,7 +2196,7 @@ int ObMultiVersionMicroBlockRowScanner::lock_for_read(
                                             scn_trans_version))) {
     LOG_WARN("failed to check transaction status", K(ret), K(*context_->store_ctx_));
   } else {
-    trans_version = scn_trans_version.get_val_for_tx();
+    trans_version = scn_trans_version.get_val_for_tx(true /* ignore_invalid_scn */);
     if (OB_NOT_NULL(context_->trans_state_mgr_) &&
       OB_TMP_FAIL(context_->trans_state_mgr_->add_trans_state(
         lock_for_read_arg.data_trans_id_, lock_for_read_arg.data_sql_sequence_,
