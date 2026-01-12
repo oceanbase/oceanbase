@@ -743,6 +743,9 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session_info = NULL;
   int64_t rowgoal_type = -1;
+  uint64_t max_permutation = 2000;
+  uint64_t join_order_enum_threshold = 10;
+  uint64_t idp_reduction_threshold = 5000;
   const ObOptParamHint &opt_params = ctx_.get_global_hint().opt_params_;
   if (OB_UNLIKELY(FORCE_INC_DIRECT_WRITE)) {
     if (stmt::T_INSERT == stmt.get_stmt_type()) {
@@ -790,7 +793,26 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
     LOG_WARN("failed to check extend sql plan monitor metrics");
   } else if (OB_FAIL(check_enable_delete_insert_scan())) {
     LOG_WARN("failed to check enable delete insert scan");
-  } else { /*do nothing*/ }
+  } else if (OB_FAIL(opt_params.get_sys_var(ObOptParamHint::JOIN_ORDER_ENUM_THRESHOLD,
+                                            session_info,
+                                            share::SYS_VAR__JOIN_ORDER_ENUM_THRESHOLD,
+                                            join_order_enum_threshold))) {
+    LOG_WARN("failed to get hint param", K(ret));
+  } else if (OB_FAIL(opt_params.get_sys_var(ObOptParamHint::OPTIMIZER_MAX_PERMUTATIONS,
+                                            session_info,
+                                            share::SYS_VAR__OPTIMIZER_MAX_PERMUTATIONS,
+                                            max_permutation))) {
+    LOG_WARN("failed to get hint param", K(ret));
+  } else if (OB_FAIL(opt_params.get_sys_var(ObOptParamHint::IDP_STEP_REDUCTION_THRESHOLD,
+                                            session_info,
+                                            share::SYS_VAR__IDP_STEP_REDUCTION_THRESHOLD,
+                                            idp_reduction_threshold))) {
+    LOG_WARN("failed to get hint param", K(ret));
+  } else {
+    ctx_.set_max_permutation(max_permutation);
+    ctx_.set_join_order_enum_threshold(join_order_enum_threshold);
+    ctx_.set_idp_reduction_threshold(idp_reduction_threshold);
+  }
   return ret;
 }
 

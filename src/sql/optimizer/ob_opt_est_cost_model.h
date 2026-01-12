@@ -71,6 +71,23 @@ struct ObTableMetaInfo
   virtual ~ObTableMetaInfo()
   { }
 
+  void reuse() {
+    ref_table_id_ = OB_INVALID_ID;
+    schema_version_ = share::OB_INVALID_SCHEMA_VERSION;
+    part_count_ = 0;
+    micro_block_size_ = 0;
+    table_column_count_ = 0;
+    table_rowkey_count_ = 0;
+    table_row_count_ = 0;
+    part_size_ = 0;
+    average_row_size_ = 0;
+    row_count_ = 0;
+    has_opt_stat_ = false;
+    micro_block_count_ = 0;
+    table_type_ = share::schema::MAX_TABLE_TYPE;
+    is_broadcast_table_ = false;
+  }
+
   void assign(const ObTableMetaInfo &table_meta_info);
   double get_micro_block_numbers() const;
   TO_STRING_KV(K_(ref_table_id), K_(part_count), K_(micro_block_size),

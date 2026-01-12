@@ -50,6 +50,8 @@
 #include "share/vector_index/ob_vector_index_util.h"
 #include "sql/optimizer/ob_log_expand.h"
 #include "share/ob_fts_index_builder_util.h"
+#include "sql/optimizer/ob_join_order_enum_idp.h"
+#include "sql/optimizer/ob_join_order_enum_permutation.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -90,15 +92,6 @@ ObLogPlan::ObLogPlan(ObOptimizerContext &ctx, const ObDMLStmt *stmt)
     subplan_infos_(),
     outline_print_flags_(0),
     onetime_exprs_(),
-    join_order_(NULL),
-    id_order_map_allocer_(RELORDER_HASHBUCKET_SIZE,
-                          ObWrapperAllocator(&allocator_)),
-    bucket_allocator_wrapper_(&allocator_),
-    relid_joinorder_map_(),
-    join_path_set_allocer_(JOINPATH_SET_HASHBUCKET_SIZE,
-                           ObWrapperAllocator(&allocator_)),
-    join_path_set_(),
-    recycled_join_paths_(),
     pred_sels_(),
     multi_stmt_rowkey_pos_(),
     equal_sets_(),
@@ -124,11 +117,6 @@ ObLogPlan::ObLogPlan(ObOptimizerContext &ctx, const ObDMLStmt *stmt)
 
 ObLogPlan::~ObLogPlan()
 {
-  if (NULL != join_order_) {
-    join_order_->~ObJoinOrder();
-    join_order_ = NULL;
-  }
-
   for(int64_t i = 0; i< subplan_infos_.count(); ++i) {
     if (NULL != subplan_infos_.at(i)) {
       subplan_infos_.at(i)->~SubPlanInfo();
@@ -213,184 +201,45 @@ int64_t ObLogPlan::to_string(char *buf,
   return pos;
 }
 
-int ObLogPlan::get_base_table_items(const ObDMLStmt *stmt,
-                                    ObIArray<TableItem*> &base_tables)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_from_item_size(); ++i) {
-    TableItem *item = NULL;
-    if (OB_FAIL(stmt->get_from_table(i, item))) {
-      LOG_WARN("failed to get from table", K(ret), K(i));
-    } else if (OB_ISNULL(item)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null table item", K(ret));
-    } else if (!item->is_joined_table()) {
-      ret = base_tables.push_back(item);
-    } else {
-      JoinedTable *joined_table = static_cast<JoinedTable*>(item);
-      for (int64_t j = 0; OB_SUCC(ret) && j < joined_table->single_table_ids_.count(); ++j) {
-        TableItem *table = stmt->get_table_item_by_id(joined_table->single_table_ids_.at(j));
-        ret = base_tables.push_back(table);
-      }
-    }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_semi_info_size(); ++i) {
-    SemiInfo *semi_info = NULL;
-    if (OB_ISNULL(semi_info = stmt->get_semi_infos().at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null semi info", K(ret), K(i));
-    } else {
-      TableItem *table = stmt->get_table_item_by_id(semi_info->right_table_id_);
-      ret = base_tables.push_back(table);
-    }
-  }
-  return ret;
-}
-
-//1. 添加基本表的ObJoinOrder结构到base level
-//2. 添加Semi Join的右支block到base level
-//3. 条件下推到基表
-//4. 初始化动态规划数据结构，即每层ObJoinOrders
-//5. 生成第一级ObJoinOrder， 即单表路径
-//6. 选择location
-//7. 设置第一级ObJoinOrder的sharding info
-//8. 依次进行下一层级的规划过程(generate_join_levels())
-//9. 取出最后一级的ObJoinOrder，输出
-int ObLogPlan::generate_join_orders()
+int ObLogPlan::generate_join_orders(ObJoinOrder *&join_order)
 {
   int ret = OB_SUCCESS;
   const ObDMLStmt *stmt = NULL;
+  ObQueryCtx *query_ctx = NULL;
   ObSEArray<ObRawExpr*, 8> quals;
   ObSEArray<TableItem*, 8> from_table_items;
-  ObSEArray<TableItem*, 8> base_table_items;
-  ObSEArray<ObSEArray<ObRawExpr*,4>, 8> baserel_filters;
-  JoinOrderArray base_level;
-  int64_t join_level = 0;
-  common::ObArray<JoinOrderArray> join_rels;
-  if (OB_ISNULL(stmt = get_stmt())) {
+  if (OB_ISNULL(stmt = get_stmt()) || OB_ISNULL(query_ctx = get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(stmt), K(ret));
   } else if (OB_FAIL(stmt->get_from_tables(from_table_items))) {
     LOG_WARN("failed to get table items", K(ret));
-  } else if (OB_FAIL(get_base_table_items(stmt, base_table_items))) {
-    LOG_WARN("failed to flatten table items", K(ret));
   } else if (OB_FAIL(append(quals, stmt->get_condition_exprs()))) {
     LOG_WARN("failed to append exprs", K(ret));
   } else if (OB_FAIL(append(quals, get_pushdown_filters()))) {
     LOG_WARN("failed to append exprs", K(ret));
-  }
-
-  if (OB_SUCC(ret)) {
-    ObConflictDetectorGenerator generator(get_allocator(),
-                                          get_optimizer_context().get_expr_factory(),
-                                          get_optimizer_context().get_session_info(),
-                                          onetime_copier_,
-                                          true, /* should_pushdown_const_filters */
-                                          table_depend_infos_,
-                                          push_subq_exprs_,
-                                          bushy_tree_infos_,
-                                          new_or_quals_,
-                                          get_optimizer_context().get_query_ctx());
-    if (OB_FAIL(pre_process_quals(from_table_items,
-                                  stmt->get_semi_infos(),
-                                  quals))) {
-      LOG_WARN("failed to distribute special quals", K(ret));
-    } else if (OB_FAIL(generate_base_level_join_order(base_table_items,
-                                                      base_level))) {
-      LOG_WARN("fail to generate base level join order", K(ret));
-    } else if (OB_FAIL(init_function_table_depend_info(base_table_items))) {
-      LOG_WARN("failed to init function table depend infos", K(ret));
-    } else if (OB_FAIL(init_json_table_depend_info(base_table_items))) {
-      LOG_WARN("failed to init json table depend infos", K(ret));
-    } else if (OB_FAIL(init_lateral_table_depend_info(base_table_items))) {
-      LOG_WARN("failed to init lateral table depend info", K(ret));
-    } else if (OB_FALSE_IT(conflict_detectors_.reuse())) {
-    } else if (OB_FAIL(generator.generate_conflict_detectors(get_stmt(),
-                                                             from_table_items,
-                                                             stmt->get_semi_infos(),
-                                                             quals,
-                                                             baserel_filters,
-                                                             conflict_detectors_))) {
-      LOG_WARN("failed to generate conflict detectors", K(ret));
-    } else if (OB_FAIL(distribute_filters_to_baserels(base_level, baserel_filters))) {
-      LOG_WARN("failed to distribute filters to baserels", K(ret));
-    } else {
-      //初始化动规数据结构
-      join_level = base_level.count(); //需要连接的层次数
-      if (OB_UNLIKELY(join_level < 1)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected join level", K(ret), K(join_level));
-      } else if (OB_FAIL(join_rels.prepare_allocate(join_level))) {
-        LOG_WARN("failed to prepare allocate join rels", K(ret));
-      } else if (OB_FAIL(join_rels.at(0).assign(base_level))) {
-        LOG_WARN("failed to assign base level join order", K(ret));
-      } else if (OB_FAIL(prepare_ordermap_pathset(base_level))) {
-        LOG_WARN("failed to prepare order map and path set", K(ret));
+  } else if (OB_FAIL(pre_process_quals(from_table_items,
+                                       stmt->get_semi_infos(),
+                                       quals))) {
+    LOG_WARN("failed to distribute special quals", K(ret));
+  } else if (OB_FAIL(init_width_estimation_info(stmt))) {
+    LOG_WARN("failed to init width estimation info", K(ret));
+  } else if (query_ctx->check_opt_compat_version(COMPAT_VERSION_4_5_1) &&
+             get_optimizer_context().get_join_order_enum_threshold() <=
+             stmt->get_table_items().count()) {
+    SMART_VAR(ObJoinOrderEnumPermutation, join_order_enum, *this, quals) {
+      if (OB_FAIL(join_order_enum.enumerate())) {
+        LOG_WARN("failed to enumerate join order", K(ret), K(join_order_enum));
+      } else {
+        join_order = join_order_enum.get_output_join_order();
       }
     }
-  }
-
-  //生成第一级Array：单表路径
-  OPT_TRACE_TITLE("GENERATE BASE PATH");
-  for (int64_t i = 0; OB_SUCC(ret) && i < join_level; ++i) {
-    if (OB_ISNULL(join_rels.at(0).at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("join_rels_.at(0).at(i) is null", K(ret), K(i));
-    } else if (OB_FAIL(mock_base_rel_detectors(join_rels.at(0).at(i)))) {
-      LOG_WARN("failed to mock base rel detectors", K(ret));
-    } else {
-      OPT_TRACE("create base path for ", join_rels.at(0).at(i));
-      OPT_TRACE_BEGIN_SECTION;
-      ret = join_rels.at(0).at(i)->generate_base_paths();
-      OPT_TRACE_MEM_USED;
-      OPT_TRACE_END_SECTION;
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(append(get_optimizer_context().get_deduce_info(),
-                              join_rels.at(0).at(i)->get_deduce_info()))) {
-      LOG_WARN("failed to append deduce info", K(ret));
-    }
-  }
-
-  //枚举join order
-  //如果有leading hint就在这里按leading hint指定的join order枚举,
-  //如果根据leading hint没有枚举到有效join order，就忽略hint重新枚举。
-  if (OB_SUCC(ret)) {
-    OPT_TRACE_TITLE("BASIC TABLE STATISTICS");
-    OPT_TRACE_STATIS(stmt, get_basic_table_metas());
-    OPT_TRACE_TITLE("UPDATE TABLE STATISTICS");
-    OPT_TRACE_STATIS(stmt, get_update_table_metas());
-    OPT_TRACE_TITLE("START GENERATE JOIN ORDER");
-    if (OB_FAIL(init_bushy_tree_info(from_table_items))) {
-      LOG_WARN("failed to init bushy tree infos", K(ret));
-    } else if (OB_FAIL(init_width_estimation_info(stmt))) {
-      LOG_WARN("failed to init width estimation info", K(ret));
-    } else if (OB_FAIL(generate_join_levels_with_IDP(join_rels))) {
-      LOG_WARN("failed to generate join levels with dynamic program", K(ret));
-    } else if (join_rels.at(join_level - 1).count() < 1 &&
-               OB_FAIL(generate_join_levels_with_orgleading(join_rels))) {
-      LOG_WARN("failed to enum with greedy", K(ret));
-    } else if (1 != join_rels.at(join_level - 1).count()) {
-      ret = OB_ERR_NO_JOIN_ORDER_GENERATED;
-      LOG_WARN("No final JoinOrder generated",
-                K(ret), K(join_level), K(join_rels.at(join_level -1).count()));
-    } else if (OB_ISNULL(join_order_ = join_rels.at(join_level -1).at(0))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("null join order", K(ret), K(join_order_));
-    } else if (OB_UNLIKELY(join_order_->get_interesting_paths().empty())) {
-      ret = OB_ERR_NO_PATH_GENERATED;
-      LOG_WARN("No final join path generated", K(ret), K(*join_order_));
-    } else {
-      LOG_TRACE("succeed to generate join order", K(ret));
-      OPT_TRACE("SUCCEED TO GENERATE JOIN ORDER, try path count:",
-                        join_order_->get_total_path_num(),
-                        ",interesting path count:", join_order_->get_interesting_paths().count());
-      OPT_TRACE_TIME_USED;
-      OPT_TRACE_MEM_USED;
+  } else {
+    SMART_VAR(ObJoinOrderEnumIDP, join_order_enum, *this, quals) {
+      if (OB_FAIL(join_order_enum.enumerate())) {
+        LOG_WARN("failed to enumerate join order", K(ret), K(join_order_enum));
+      } else {
+        join_order = join_order_enum.get_output_join_order();
+      }
     }
   }
   return ret;
@@ -655,85 +504,6 @@ int ObLogPlan::check_push_subq_expr_match_index(ObRawExpr *expr,
   return ret;
 }
 
-int ObLogPlan::distribute_filters_to_baserels(ObIArray<ObJoinOrder*> &base_level,
-                                              ObIArray<ObSEArray<ObRawExpr*,4>> &baserel_filters)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < base_level.count(); ++i) {
-    ObJoinOrder *cur_rel= base_level.at(i);
-    ObSEArray<int64_t, 1> rel_id;
-    if (OB_ISNULL(cur_rel)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), K(i));
-    } else if (OB_FAIL(cur_rel->get_tables().to_array(rel_id))) {
-      LOG_WARN("failed to get rel id", K(ret));
-    } else if (OB_UNLIKELY(1 != rel_id.count())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected rel id count", K(ret), K(rel_id.count()));
-    } else if (OB_UNLIKELY(rel_id.at(0) < 1 || rel_id.at(0) > baserel_filters.count())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected rel id", K(ret), K(rel_id.at(0)), K(baserel_filters.count()));
-    } else if (OB_FAIL(append(cur_rel->get_restrict_infos(), baserel_filters.at(rel_id.at(0) - 1)))) {
-      LOG_WARN("failed to append restrict infos", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObLogPlan::prepare_ordermap_pathset(const JoinOrderArray base_level)
-{
-  int ret = OB_SUCCESS;
-  if (!relid_joinorder_map_.created() &&
-      OB_FAIL(relid_joinorder_map_.create(RELORDER_HASHBUCKET_SIZE,
-                                          &id_order_map_allocer_,
-                                          &bucket_allocator_wrapper_))) {
-    LOG_WARN("create hash map failed", K(ret));
-  } else if (!join_path_set_.created() &&
-             OB_FAIL(join_path_set_.create(JOINPATH_SET_HASHBUCKET_SIZE,
-                                          &join_path_set_allocer_,
-                                          &bucket_allocator_wrapper_))) {
-    LOG_WARN("create hash set failed", K(ret));
-  } else {
-    int64_t join_level = base_level.count();
-    for (int64_t i = 0; OB_SUCC(ret) && i < join_level; ++i) {
-      ObJoinOrder *join_order = base_level.at(i);
-      if (OB_ISNULL(join_order)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid join order", K(ret));
-      } else if (OB_FAIL(relid_joinorder_map_.set_refactored(join_order->get_tables(), join_order))) {
-        LOG_WARN("failed to add basic join orders into map", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-//生成单表ObJoinOrder结构, 并设置ObJoinOrder中table_set_
-int ObLogPlan::generate_base_level_join_order(const ObIArray<TableItem*> &table_items,
-                                              ObIArray<ObJoinOrder*> &base_level)
-{
-  int ret = OB_SUCCESS;
-  ObJoinOrder *this_jo = NULL;
-  //首先加入基表
-  int64_t N = table_items.count();
-  for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
-    if (OB_ISNULL(table_items.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("null table item", K(ret), K(i));
-    } else if (OB_ISNULL(this_jo = create_join_order(ACCESS))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate an ObJoinOrder", K(ret));
-    } else if (OB_FAIL(this_jo->init_base_join_order(table_items.at(i)))) {
-      LOG_WARN("fail to generate the base rel", K(ret), K(*table_items.at(i)));
-      this_jo->~ObJoinOrder();
-      this_jo = NULL;
-    } else if (OB_FAIL(base_level.push_back(this_jo))) {
-      LOG_WARN("fail to push back an ObJoinOrder", K(ret));
-    } else { /*do nothing*/ }
-  }
-  return ret;
-}
-
 int ObLogPlan::pre_process_quals(const ObIArray<TableItem*> &table_items,
                                  const ObIArray<SemiInfo*> &semi_infos,
                                  ObIArray<ObRawExpr*> &quals)
@@ -883,34 +653,6 @@ int ObLogPlan::pre_process_quals(TableItem *table_item)
       }
     }
   }
-  return ret;
-}
-
-int ObLogPlan::mock_base_rel_detectors(ObJoinOrder *&base_rel)
-{
-  int ret = OB_SUCCESS;
-  ObConflictDetector *detector = NULL;
-  // mock a conflict detector whose join info's where_condition
-  // is base rel's base table pushdown filter, and add it into
-  // used_conflict_detector, which will be used for width est.
-  // see ObJoinOrder::est_join_width() condition exclusion for detail
-  if (OB_ISNULL(base_rel)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid input", K(ret));
-  } else if (base_rel->get_restrict_infos().empty() ||
-             !base_rel->get_conflict_detectors().empty()) {
-    // do nothing
-  } else if (OB_FAIL(ObConflictDetector::build_detector(get_allocator(), detector))) {
-    LOG_WARN("failed to build conflict detector", K(ret));
-  } else if (OB_ISNULL(detector)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null detector", K(ret));
-  } else if (OB_FAIL(append_array_no_dup(detector->get_join_info().where_conditions_,
-                                         base_rel->get_restrict_infos()))) {
-    LOG_WARN("failed to push back expr", K(ret));
-  } else if (OB_FAIL(add_var_to_array_no_dup(base_rel->get_conflict_detectors(), detector))) {
-    LOG_WARN("failed to append into used conflict detectors", K(ret));
-  } else {/*do nothing*/}
   return ret;
 }
 
@@ -1447,96 +1189,6 @@ int ObLogPlan::select_one_server(const ObAddr &selected_server,
   return ret;
 }
 
-int ObLogPlan::init_bushy_tree_info(const ObIArray<TableItem*> &table_items)
-{
-  int ret = OB_SUCCESS;
-  ObIArray<LeadingInfo> &leading_infos = log_plan_hint_.join_order_.leading_infos_;
-  for (int64_t i = 0; OB_SUCC(ret) && i < leading_infos.count(); ++i) {
-    const LeadingInfo &info = leading_infos.at(i);
-    if (info.left_table_set_.num_members() > 1 &&
-        info.right_table_set_.num_members() > 1) {
-      ret = bushy_tree_infos_.push_back(info.table_set_);
-    }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < table_items.count(); ++i) {
-    if (OB_FAIL(init_bushy_tree_info_from_joined_tables(table_items.at(i)))) {
-      LOG_WARN("failed to init bushy tree info", K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    LOG_TRACE("succeed to get bushy infos", K(bushy_tree_infos_));
-  }
-  return ret;
-}
-
-int ObLogPlan::init_bushy_tree_info_from_joined_tables(TableItem *table)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(table) || OB_ISNULL(get_stmt())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null table item or stmt", K(ret), K(table), K(get_stmt()));
-  } else if (!table->is_joined_table()) {
-    //do nothing
-  } else {
-    JoinedTable *joined_table = static_cast<JoinedTable*>(table);
-    if (OB_ISNULL(joined_table->left_table_) ||
-        OB_ISNULL(joined_table->right_table_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null table item", K(ret));
-    } else if (joined_table->left_table_->is_joined_table() &&
-               joined_table->right_table_->is_joined_table()) {
-      ObRelIds table_ids;
-      if (OB_FAIL(get_stmt()->get_table_rel_ids(*table, table_ids))) {
-        LOG_WARN("failed to get table ids", K(ret));
-      } else if (OB_FAIL(bushy_tree_infos_.push_back(table_ids))) {
-        LOG_WARN("failed to push back table ids", K(ret));
-      }
-    }
-    if (OB_FAIL(ret)) {
-      //do nothing
-    } else if (OB_FAIL(SMART_CALL(init_bushy_tree_info_from_joined_tables(joined_table->left_table_)))) {
-      LOG_WARN("failed to init bushy tree infos", K(ret));
-    } else if (OB_FAIL(SMART_CALL(init_bushy_tree_info_from_joined_tables(joined_table->right_table_)))) {
-      LOG_WARN("failed to init bushy tree infos", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObLogPlan::init_function_table_depend_info(const ObIArray<TableItem*> &table_items)
-{
-  int ret = OB_SUCCESS;
-  const ObDMLStmt *stmt = get_stmt();
-  if (OB_ISNULL(stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null stmt", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < table_items.count(); ++i) {
-    TableItem *table = table_items.at(i);
-    TableDependInfo info;
-    if (OB_ISNULL(table)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null table item", K(ret));
-    } else if (!table->is_function_table()) {
-      //do nothing
-    } else if (OB_ISNULL(table->function_table_expr_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null function table expr", K(ret));
-    } else if (table->function_table_expr_->get_relation_ids().is_empty()) {
-      //do thing
-    } else if (OB_FAIL(info.depend_table_set_.add_members(table->function_table_expr_->get_relation_ids()))) {
-      LOG_WARN("failed to assign table ids", K(ret));
-    } else if (OB_FALSE_IT(info.table_idx_ = stmt->get_table_bit_index(table->table_id_))) {
-    } else if (OB_FAIL(table_depend_infos_.push_back(info))) {
-      LOG_WARN("failed to push back info", K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    LOG_TRACE("succeed to init function table depend info", K(table_depend_infos_));
-  }
-  return ret;
-}
-
 int ObLogPlan::init_width_estimation_info(const ObDMLStmt *stmt)
 {
   int ret = OB_SUCCESS;
@@ -1613,1151 +1265,6 @@ int ObLogPlan::init_width_estimation_info(const ObDMLStmt *stmt)
       }
     }
   }
-  return ret;
-}
-
-int ObLogPlan::init_default_val_json(ObRelIds& depend_table_set,
-                                     ObRawExpr*& default_expr)
-{
-  int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(default_expr)) {
-    if (default_expr->get_relation_ids().is_empty()) {
-      //do nothing
-    } else if (OB_FAIL(depend_table_set.add_members(default_expr->get_relation_ids()))) {
-      LOG_WARN("failed to assign table ids", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObLogPlan::init_json_table_column_depend_info(ObRelIds& depend_table_set,
-                                                   TableItem* json_table,
-                                                   const ObDMLStmt *stmt)
-{
-  int ret = OB_SUCCESS;
-  ColumnItem* column_item = NULL;
-  common::ObArray<ColumnItem> stmt_column_items;
-  if (OB_ISNULL(stmt) || OB_ISNULL(json_table)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null stmt", K(ret));
-  } else if (OB_FAIL(stmt->get_column_items(json_table->table_id_, stmt_column_items))) {
-    LOG_WARN("fail to get column_items", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < stmt_column_items.count(); i++) {
-    if (json_table->table_id_ != stmt_column_items.at(i).table_id_) {
-    } else if (OB_NOT_NULL(stmt_column_items.at(i).default_value_expr_)
-                && OB_FAIL(init_default_val_json(depend_table_set, stmt_column_items.at(i).default_value_expr_))) {
-      LOG_WARN("fail to init error default value depend info", K(ret));
-    } else if (OB_NOT_NULL(stmt_column_items.at(i).default_empty_expr_)
-                && OB_FAIL(init_default_val_json(depend_table_set, stmt_column_items.at(i).default_empty_expr_))) {
-      LOG_WARN("fail to init error default value depend info", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObLogPlan::init_json_table_depend_info(const ObIArray<TableItem*> &table_items)
-{
-  int ret = OB_SUCCESS;
-  const ObDMLStmt *stmt = get_stmt();
-  if (OB_ISNULL(stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null stmt", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < table_items.count(); ++i) {
-    TableItem *table = table_items.at(i);
-    TableDependInfo info;
-    if (OB_ISNULL(table)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null table item", K(ret));
-    } else if (!table->is_json_table()) {
-      //do nothing
-    } else if (OB_ISNULL(table->json_table_def_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null function table expr", K(ret));
-    } else {
-      bool is_all_relation_id_empty = true;
-      for (int64_t j = 0; OB_SUCC(ret) && j < table->json_table_def_->doc_exprs_.count(); ++j) {
-        if (OB_ISNULL(table->json_table_def_->doc_exprs_.at(j))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("doc_expr in json_table_def is null", K(ret));
-        } else if (table->json_table_def_->doc_exprs_.at(j)->get_relation_ids().is_empty()) {
-          //do nothing
-        } else if (OB_FAIL(info.depend_table_set_.add_members(table->json_table_def_->doc_exprs_.at(j)->get_relation_ids()))) {
-          LOG_WARN("failed to assign table ids", K(ret));
-        } else {
-          is_all_relation_id_empty = false;
-        }
-        if (OB_FAIL(ret) || is_all_relation_id_empty) {
-        } else if (OB_FAIL(init_json_table_column_depend_info(info.depend_table_set_, table, stmt))) { // deal column items default value
-          LOG_WARN("fail to init json table default value depend info", K(ret));
-        } else if (OB_FALSE_IT(info.table_idx_ = stmt->get_table_bit_index(table->table_id_))) {
-        } else if (OB_FAIL(table_depend_infos_.push_back(info))) {
-          LOG_WARN("failed to push back info", K(ret));
-        }
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    LOG_TRACE("succeed to init function table depend info", K(table_depend_infos_));
-  }
-  return ret;
-}
-
-int ObLogPlan::check_need_bushy_tree(common::ObIArray<JoinOrderArray> &join_rels,
-                                    const int64_t level,
-                                    bool &need)
-{
-  int ret = OB_SUCCESS;
-  need = false;
-  if (level >= join_rels.count()) {
-    ret = OB_INDEX_OUT_OF_RANGE;
-    LOG_WARN("Index out of range", K(ret), K(join_rels.count()), K(level));
-  } else if (join_rels.at(level).empty()) {
-    need = true;
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && !need && i < bushy_tree_infos_.count(); ++i) {
-    const ObRelIds &table_ids = bushy_tree_infos_.at(i);
-    if (table_ids.num_members() != level + 1) {
-      //do nothing
-    } else {
-      bool has_generated = false;
-      int64_t N = join_rels.at(level).count();
-      for (int64_t j = 0; OB_SUCC(ret) && !has_generated && j < N; ++j) {
-        ObJoinOrder *join_order = join_rels.at(level).at(j);
-        if (OB_ISNULL(join_order)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpect null join order", K(ret));
-        } else if (table_ids.is_subset(join_order->get_tables())) {
-          has_generated = true;
-        }
-      }
-      if (OB_SUCC(ret)) {
-        need = !has_generated;
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLogPlan::init_idp(int64_t initial_idp_step,
-                        common::ObIArray<JoinOrderArray> &idp_join_rels,
-                        common::ObIArray<JoinOrderArray> &full_join_rels)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(idp_join_rels.prepare_allocate(initial_idp_step))) {
-    LOG_WARN("failed to prepare allocate join rels", K(ret));
-  } else if (relid_joinorder_map_.created() || join_path_set_.created()) {
-    relid_joinorder_map_.reuse();
-    join_path_set_.reuse();
-  }
-  if (OB_SUCC(ret)) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < full_join_rels.at(0).count(); ++i) {
-      if (OB_FAIL(idp_join_rels.at(0).push_back(full_join_rels.at(0).at(i)))) {
-        LOG_WARN("failed to init level 0 rels", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLogPlan::generate_join_levels_with_IDP(common::ObIArray<JoinOrderArray> &join_rels)
-{
-  int ret = OB_SUCCESS;
-  int64_t join_level = join_rels.count();
-  if (has_join_order_hint() &&
-      OB_FAIL(inner_generate_join_levels_with_IDP(join_rels,
-                                                false))) {
-    LOG_WARN("failed to generate join levels with hint", K(ret));
-  } else if (1 == join_rels.at(join_level - 1).count()) {
-    //根据hint，枚举到了有效join order
-    OPT_TRACE("succeed to generate join order with hint");
-  } else if (OB_FAIL(inner_generate_join_levels_with_IDP(join_rels,
-                                                        true))) {
-    LOG_WARN("failed to generate join level in generate_join_orders", K(ret), K(join_level));
-  }
-  return ret;
-}
-
-int ObLogPlan::generate_join_levels_with_orgleading(common::ObIArray<JoinOrderArray> &join_rels)
-{
-  int ret = OB_SUCCESS;
-  ObArray<JoinOrderArray> temp_join_rels;
-  int64_t join_level = join_rels.count();
-  const ObDMLStmt *stmt = get_stmt();
-  ObSEArray<TableItem*, 4> table_items;
-  if (OB_ISNULL(stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected NULL", K(stmt), K(ret));
-  } else if (OB_FAIL(stmt->get_from_tables(table_items))) {
-      LOG_WARN("failed to get table items", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_semi_infos().count(); ++i) {
-    SemiInfo *semi_info = stmt->get_semi_infos().at(i);
-    if (OB_ISNULL(semi_info)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null semi info", K(ret));
-    } else {
-      TableItem *table = stmt->get_table_item_by_id(semi_info->right_table_id_);
-      ret = table_items.push_back(table);
-    }
-  }
-  int64_t temp_join_level = table_items.count();
-  LOG_TRACE("idp start enum join order with orig leading", K(temp_join_level));
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(process_join_level_info(table_items,
-                                             join_rels,
-                                             temp_join_rels))) {
-    LOG_WARN("failed to preprocess for linear", K(ret));
-  } else if (OB_FAIL(generate_join_levels_with_IDP(temp_join_rels))) {
-    LOG_WARN("failed to generate join level in generate_join_orders", K(ret), K(join_level));
-  } else if (OB_FALSE_IT(join_rels.at(join_level - 1).reset())) {
-  } else if (OB_FAIL(append(join_rels.at(join_level - 1),
-                            temp_join_rels.at(temp_join_level -1)))) {
-    LOG_WARN("failed to append join orders", K(ret));
-  }
-  return ret;
-}
-
-int ObLogPlan::inner_generate_join_levels_with_IDP(common::ObIArray<JoinOrderArray> &join_rels,
-                                                   bool ignore_hint)
-{
-  int ret = OB_SUCCESS;
-  // stop plan enumeration if
-  // a. illegal ordered hint
-  // b. idp path num exceeds limitation
-  // c. idp enumeration failed, under bushy cases, etc
-  ObIDPAbortType abort_type = ObIDPAbortType::IDP_NO_ABORT;
-  uint32_t join_level = 0;
-  ObArray<JoinOrderArray> temp_join_rels;
-  if (ignore_hint) {
-    OPT_TRACE("IDP without hint");
-  } else {
-    OPT_TRACE("IDP with hint");
-  }
-  if (join_rels.empty()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect empty join rels", K(ret));
-  } else {
-    join_level = join_rels.at(0).count();
-    uint32_t initial_idp_step = join_level;
-    if (OB_FAIL(init_idp(initial_idp_step, temp_join_rels, join_rels))) {
-      LOG_WARN("failed to init idp", K(ret));
-    } else {
-      uint32_t curr_idp_step = initial_idp_step;
-      uint32_t curr_level = 1;
-      for (uint32_t i = 1; OB_SUCC(ret) && i < join_level &&
-          ObIDPAbortType::IDP_NO_ABORT == abort_type; i += curr_level) {
-        if (curr_idp_step > join_level - i + 1) {
-          curr_idp_step = join_level - i + 1;
-        }
-        LOG_TRACE("start new round of idp", K(i), K(curr_idp_step));
-        OPT_TRACE("start new round of idp", KV(i), KV(curr_idp_step));
-        if (OB_FAIL(do_one_round_idp(temp_join_rels,
-                                    curr_idp_step,
-                                    ignore_hint,
-                                    curr_level,
-                                    abort_type))) {
-          LOG_WARN("failed to do idp internal", K(ret));
-        } else if (ObIDPAbortType::IDP_INVALID_HINT_ABORT == abort_type) {
-          LOG_WARN("failed to do idp internal", K(ret));
-        } else if (temp_join_rels.at(curr_level).count() < 1) {
-          abort_type = ObIDPAbortType::IDP_ENUM_FAILED_ABORT;
-          OPT_TRACE("failed to enum join order at current level", KV(curr_level));
-        } else {
-          OPT_TRACE("end new round of idp", K(i), K(curr_idp_step));
-          ObJoinOrder *best_order = NULL;
-          bool is_last_round = (i >= join_level - curr_level);
-          if (abort_type == ObIDPAbortType::IDP_STOPENUM_EXPDOWN_ABORT) {
-            curr_idp_step /= 2;
-            curr_idp_step = max(curr_idp_step, 2U);
-          } else if (abort_type == ObIDPAbortType::IDP_STOPENUM_LINEARDOWN_ABORT) {
-            curr_idp_step -= 2;
-            curr_idp_step = max(curr_idp_step, 2U);
-          }
-          OPT_TRACE("select best join order");
-          if (OB_FAIL(greedy_idp_best_order(curr_level,
-                                            temp_join_rels,
-                                            best_order))) {
-            LOG_WARN("failed to greedy idp best order", K(ret));
-          } else if (OB_ISNULL(best_order)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected invalid best order", K(ret));
-          } else if (!is_last_round &&
-                    OB_FAIL(prepare_next_round_idp(temp_join_rels,
-                                                   initial_idp_step,
-                                                   best_order))) {
-            LOG_WARN("failed to prepare next round of idp", K(curr_level));
-          } else {
-            if (abort_type == ObIDPAbortType::IDP_STOPENUM_EXPDOWN_ABORT ||
-                abort_type == ObIDPAbortType::IDP_STOPENUM_LINEARDOWN_ABORT) {
-              abort_type = ObIDPAbortType::IDP_NO_ABORT;
-            }
-            if (is_last_round) {
-              if (OB_FALSE_IT(join_rels.at(join_level - 1).reset())) {
-              } else if (OB_FAIL(append(join_rels.at(join_level - 1),
-                                        temp_join_rels.at(curr_level)))) {
-                LOG_WARN("failed to append join orders", K(ret));
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLogPlan::do_one_round_idp(common::ObIArray<JoinOrderArray> &temp_join_rels,
-                                uint32_t curr_idp_step,
-                                bool ignore_hint,
-                                uint32_t &real_base_level,
-                                ObIDPAbortType &abort_type)
-{
-  int ret = OB_SUCCESS;
-  real_base_level = 1;
-  for (uint32_t base_level = 1; OB_SUCC(ret) && base_level < curr_idp_step &&
-       ObIDPAbortType::IDP_NO_ABORT == abort_type; ++base_level) {
-    LOG_TRACE("idp start base level plan enumeration", K(base_level), K(curr_idp_step));
-    OPT_TRACE("idp start base level plan enumeration", K(base_level), K(curr_idp_step));
-    for (uint32_t i = 0; OB_SUCC(ret) && i <= base_level/2 &&
-         ObIDPAbortType::IDP_NO_ABORT == abort_type; ++i) {
-      uint32_t right_level = i;
-      uint32_t left_level = base_level - 1 - right_level;
-      if (right_level > left_level) {
-        //do nothing
-      } else if (OB_FAIL(THIS_WORKER.check_status())) {
-        LOG_WARN("check status fail", K(ret));
-      } else if (OB_FAIL(generate_single_join_level_with_DP(temp_join_rels,
-                                                            left_level,
-                                                            right_level,
-                                                            base_level,
-                                                            ignore_hint,
-                                                            abort_type))) {
-        LOG_WARN("failed to generate join order with dynamic program", K(ret));
-      }
-      bool need_bushy = false;
-      if (OB_FAIL(ret) || right_level > left_level) {
-      } else if (abort_type < ObIDPAbortType::IDP_NO_ABORT) {
-        LOG_TRACE("abort idp join order generation",
-                  K(left_level), K(right_level), K(abort_type));
-      } else if (temp_join_rels.count() <= base_level) {
-        ret = OB_INDEX_OUT_OF_RANGE;
-        LOG_WARN("Index out of range", K(ret), K(temp_join_rels.count()), K(base_level));
-      } else if (OB_FAIL(check_need_bushy_tree(temp_join_rels,
-                                              base_level,
-                                              need_bushy))) {
-        LOG_WARN("failed to check need bushy tree", K(ret));
-      } else if (need_bushy) {
-        OPT_TRACE("no valid ZigZag tree or leading hint required, we will enumerate bushy tree");
-      } else {
-        //如果当前level已经枚举到了有效计划，默认关闭bushy tree
-        OPT_TRACE("there is valid ZigZag tree, we will not enumerate bushy tree");
-        break;
-      }
-    }
-    if (OB_SUCC(ret)) {
-      real_base_level = base_level;
-      if (abort_type == ObIDPAbortType::IDP_NO_ABORT &&
-          OB_FAIL(check_and_abort_curr_round_idp(temp_join_rels,
-                                                 base_level,
-                                                 abort_type))) {
-        LOG_WARN("failed to check and abort current round idp", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLogPlan::check_and_abort_curr_level_dp(common::ObIArray<JoinOrderArray> &idp_join_rels,
-                                             uint32_t curr_level,
-                                             ObIDPAbortType &abort_type)
-{
-  int ret = OB_SUCCESS;
-  if (curr_level < 0 || curr_level >= idp_join_rels.count()) {
-    ret = OB_INDEX_OUT_OF_RANGE;
-    LOG_WARN("Index out of range", K(ret), K(idp_join_rels.count()), K(curr_level));
-  } else if (abort_type < ObIDPAbortType::IDP_NO_ABORT) {
-    // do nothing
-  } else {
-    uint64_t total_path_num = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < idp_join_rels.at(curr_level).count(); ++i) {
-      total_path_num += idp_join_rels.at(curr_level).at(i)->get_total_path_num();
-    }
-    if (OB_SUCC(ret)) {
-      uint64_t stop_down_abort_limit = 2 * IDP_PATHNUM_THRESHOLD;
-      if (total_path_num >= stop_down_abort_limit) {
-        abort_type = ObIDPAbortType::IDP_STOPENUM_EXPDOWN_ABORT;
-        OPT_TRACE("there is too much path, we will stop current level idp ",
-        KV(total_path_num), KV(stop_down_abort_limit));
-      } else {
-        // do nothing
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLogPlan::check_and_abort_curr_round_idp(common::ObIArray<JoinOrderArray> &idp_join_rels,
-                                              uint32_t curr_level,
-                                              ObIDPAbortType &abort_type)
-{
-  int ret = OB_SUCCESS;
-  if (curr_level < 0 || curr_level >= idp_join_rels.count()) {
-    ret = OB_INDEX_OUT_OF_RANGE;
-    LOG_WARN("Index out of range", K(ret), K(idp_join_rels.count()), K(curr_level));
-  } else if (abort_type < ObIDPAbortType::IDP_NO_ABORT) {
-    // do nothing
-  } else {
-    uint64_t total_path_num = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < idp_join_rels.at(curr_level).count(); ++i) {
-      total_path_num += idp_join_rels.at(curr_level).at(i)->get_total_path_num();
-    }
-    if (OB_SUCC(ret)) {
-      uint64_t stop_abort_limit = IDP_PATHNUM_THRESHOLD;
-      if (total_path_num >= stop_abort_limit) {
-        abort_type = ObIDPAbortType::IDP_STOPENUM_LINEARDOWN_ABORT;
-        OPT_TRACE("there is too much path, we will stop current round idp ",
-        KV(total_path_num), KV(stop_abort_limit));
-      } else {
-        // do nothing
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLogPlan::prepare_next_round_idp(common::ObIArray<JoinOrderArray> &idp_join_rels,
-                                      uint32_t initial_idp_step,
-                                      ObJoinOrder *&best_order)
-{
-  int ret = OB_SUCCESS;
-  JoinOrderArray remained_rels;
-  if (OB_ISNULL(best_order)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid best order", K(best_order), K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < idp_join_rels.at(0).count(); ++i) {
-      if (!idp_join_rels.at(0).at(i)->get_tables().overlap2(best_order->get_tables())) {
-        if (OB_FAIL(remained_rels.push_back(idp_join_rels.at(0).at(i)))) {
-          LOG_WARN("failed to add level 0 rels", K(ret));
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      for (int64_t j = 0; OB_SUCC(ret) && j < initial_idp_step; ++j) {
-        idp_join_rels.at(j).reuse();
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(idp_join_rels.at(0).assign(remained_rels))) {
-          LOG_WARN("failed to add remained rels", K(ret));
-        } else if (OB_FAIL(idp_join_rels.at(0).push_back(best_order))) {
-          LOG_WARN("failed to add selected tree rels", K(ret));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLogPlan::greedy_idp_best_order(uint32_t current_level,
-                                     common::ObIArray<JoinOrderArray> &idp_join_rels,
-                                     ObJoinOrder *&best_order)
-{
-  // choose best order from join_rels at current_level
-  // can be based on cost/min cards/max interesting path num
-  // currently based on cost
-  int ret = OB_SUCCESS;
-  best_order = NULL;
-  if (current_level < 0 ||
-      current_level >= idp_join_rels.count()) {
-    ret = OB_INDEX_OUT_OF_RANGE;
-    LOG_WARN("index out of range", K(ret), K(idp_join_rels.count()), K(current_level));
-  } else if (idp_join_rels.at(current_level).count() < 1) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("illegal join rels at current level", K(ret));
-  }
-  if (OB_SUCC(ret)) {
-    Path *min_cost_path = NULL;
-    for (int64_t i = 0; OB_SUCC(ret) && i < idp_join_rels.at(current_level).count(); ++i) {
-      ObJoinOrder * join_order = idp_join_rels.at(current_level).at(i);
-      if (OB_ISNULL(join_order)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid join order found", K(ret));
-      } else {
-        for (int64_t j = 0; OB_SUCC(ret) && j < join_order->get_interesting_paths().count(); ++j) {
-          Path *path = join_order->get_interesting_paths().at(j);
-          if (OB_ISNULL(path)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("invalid join order found", K(ret));
-          } else if (NULL == min_cost_path || min_cost_path->cost_ > path->cost_) {
-            best_order = join_order;
-            min_cost_path = path;
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-/**
- * 进行join order枚举前，需要为所有的joined table生成join order
- * 然后把joined table当前整体进行join reorder
- **/
-int ObLogPlan::process_join_level_info(const ObIArray<TableItem*> &table_items,
-                                      ObIArray<JoinOrderArray> &join_rels,
-                                      ObIArray<JoinOrderArray> &new_join_rels)
-{
-  int ret = OB_SUCCESS;
-  int64_t new_join_level = table_items.count();
-  if (join_rels.empty()) {
-    ret = OB_INDEX_OUT_OF_RANGE;
-    LOG_WARN("join_rels is empty", K(ret), K(join_rels.count()));
-  } else if (OB_FAIL(new_join_rels.prepare_allocate(new_join_level))) {
-    LOG_WARN("failed to prepare allocate join rels", K(ret));
-  } else if (relid_joinorder_map_.created() || join_path_set_.created()) {
-    // clear relid_joinorder map to avoid existing join order misuse
-    relid_joinorder_map_.reuse();
-    join_path_set_.reuse();
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < table_items.count(); ++i) {
-    ObJoinOrder *join_tree = NULL;
-    if (OB_FAIL(generate_join_order_with_table_tree(join_rels,
-                                                    table_items.at(i),
-                                                    join_tree))) {
-      LOG_WARN("failed to generate join order", K(ret));
-    } else if (OB_ISNULL(join_tree)) {
-      ret = OB_ERR_NO_JOIN_ORDER_GENERATED;
-      LOG_WARN("no valid join order generated", K(ret));
-    } else if (OB_FAIL(new_join_rels.at(0).push_back(join_tree))) {
-      LOG_WARN("failed to push back base level join order", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObLogPlan::generate_join_order_with_table_tree(ObIArray<JoinOrderArray> &join_rels,
-                                                  TableItem *table,
-                                                  ObJoinOrder* &join_tree)
-{
-  int ret = OB_SUCCESS;
-  JoinedTable *joined_table = NULL;
-  ObJoinOrder *left_tree = NULL;
-  ObJoinOrder *right_tree = NULL;
-  join_tree = NULL;
-  if (OB_ISNULL(table) || join_rels.empty()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null param", K(ret));
-  } else if (!table->is_joined_table()) {
-    //find base join rels
-    ObIArray<ObJoinOrder *> &single_join_rels = join_rels.at(0);
-    for (int64_t i = 0; OB_SUCC(ret) && NULL == join_tree && i < single_join_rels.count(); ++i) {
-      ObJoinOrder *base_rel = single_join_rels.at(i);
-      if (OB_ISNULL(base_rel)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null base rel", K(ret));
-      } else if (table->table_id_ == base_rel->get_table_id()) {
-        join_tree = base_rel;
-      }
-    }
-  } else if (OB_FALSE_IT(joined_table = static_cast<JoinedTable*>(table))) {
-    // do nothing
-  } else if (OB_FAIL(SMART_CALL(generate_join_order_with_table_tree(join_rels,
-                                                                    joined_table->left_table_,
-                                                                    left_tree)))) {
-    LOG_WARN("failed to generate join order", K(ret));
-  } else if (OB_FAIL(SMART_CALL(generate_join_order_with_table_tree(join_rels,
-                                                                    joined_table->right_table_,
-                                                                    right_tree)))) {
-    LOG_WARN("failed to generate join order", K(ret));
-  } else if (OB_ISNULL(left_tree) || OB_ISNULL(right_tree)) {
-    ret = OB_ERR_NO_JOIN_ORDER_GENERATED;
-    LOG_WARN("no valid join order generated", K(ret));
-  } else {
-    bool is_valid_join = false;
-    int64_t level = left_tree->get_tables().num_members() + right_tree->get_tables().num_members() - 1;
-    if (OB_FAIL(inner_generate_join_order(join_rels,
-                                          left_tree,
-                                          right_tree,
-                                          level,
-                                          false,
-                                          false,
-                                          is_valid_join,
-                                          join_tree))) {
-      LOG_WARN("failed to generated join order", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObLogPlan::generate_single_join_level_with_DP(ObIArray<JoinOrderArray> &join_rels,
-                                                  uint32_t left_level,
-                                                  uint32_t right_level,
-                                                  uint32_t level,
-                                                  bool ignore_hint,
-                                                  ObIDPAbortType &abort_type)
-{
-  int ret = OB_SUCCESS;
-  abort_type = ObIDPAbortType::IDP_NO_ABORT;
-  if (join_rels.empty() ||
-      left_level >= join_rels.count() ||
-      right_level >= join_rels.count() ||
-      level >= join_rels.count()) {
-    ret = OB_INDEX_OUT_OF_RANGE;
-    LOG_WARN("Index out of range", K(ret), K(join_rels.count()),
-                          K(left_level), K(right_level), K(level));
-  } else {
-    ObIArray<ObJoinOrder *> &left_rels = join_rels.at(left_level);
-    ObIArray<ObJoinOrder *> &right_rels = join_rels.at(right_level);
-    ObJoinOrder *left_tree = NULL;
-    ObJoinOrder *right_tree = NULL;
-    ObJoinOrder *join_tree = NULL;
-    //优先枚举有连接条件的join order
-    for (int64_t i = 0; OB_SUCC(ret) && i < left_rels.count() &&
-         ObIDPAbortType::IDP_NO_ABORT == abort_type; ++i) {
-      left_tree = left_rels.at(i);
-      if (OB_ISNULL(left_tree)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null join tree", K(ret));
-      } else {
-        OPT_TRACE("Permutations for Starting Table :", left_tree);
-        OPT_TRACE_BEGIN_SECTION;
-        for (int64_t j = 0; OB_SUCC(ret) && j < right_rels.count() &&
-             ObIDPAbortType::IDP_NO_ABORT == abort_type; ++j) {
-          right_tree = right_rels.at(j);
-          bool match_hint = false;
-          bool is_legal = true;
-          bool is_strict_order = true;
-          bool is_valid_join = false;
-          if (OB_ISNULL(right_tree)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpect null join tree", K(ret));
-          } else if (!ignore_hint &&
-                    OB_FAIL(check_join_hint(left_tree->get_tables(),
-                                            right_tree->get_tables(),
-                                            match_hint,
-                                            is_legal,
-                                            is_strict_order))) {
-            LOG_WARN("failed to check join hint", K(ret));
-          } else if (!is_legal) {
-            //与hint冲突
-            OPT_TRACE("join order conflict with leading hint,", left_tree, right_tree);
-            LOG_TRACE("join order conflict with leading hint",
-                      K(left_tree->get_tables()), K(right_tree->get_tables()));
-          } else if (OB_FAIL(inner_generate_join_order(join_rels,
-                                                        is_strict_order ? left_tree : right_tree,
-                                                        is_strict_order ? right_tree : left_tree,
-                                                        level,
-                                                        match_hint,
-                                                        !match_hint,
-                                                        is_valid_join,
-                                                        join_tree))) {
-            LOG_WARN("failed to generate join order", K(level), K(ret));
-          } else if (match_hint &&
-                     !get_leading_tables().is_subset(left_tree->get_tables()) &&
-                     !is_valid_join) {
-            abort_type = ObIDPAbortType::IDP_INVALID_HINT_ABORT;
-            OPT_TRACE("leading hint is invalid, stop idp ", left_tree, right_tree);
-          } else if (OB_FAIL(check_and_abort_curr_level_dp(join_rels,
-                                                           level,
-                                                           abort_type))) {
-            LOG_WARN("failed to check abort current dp", K(level), K(abort_type));
-          } else {
-            LOG_TRACE("succeed to generate join order", K(left_tree->get_tables()),
-                       K(right_tree->get_tables()), K(is_valid_join), K(abort_type));
-          }
-          OPT_TRACE_TIME_USED;
-          OPT_TRACE_MEM_USED;
-        }
-        OPT_TRACE_END_SECTION;
-      }
-    }
-  }
-  return ret;
-}
-
-/**
- * 使用动态规划算法
- * 通过join_rels[left_level]组合join_rels[right_level]
- * 来枚举join_rels[level]的有效计划
- */
-int ObLogPlan::inner_generate_join_order(ObIArray<JoinOrderArray> &join_rels,
-                                        ObJoinOrder *left_tree,
-                                        ObJoinOrder *right_tree,
-                                        uint32_t level,
-                                        bool hint_force_order,
-                                        bool delay_cross_product,
-                                        bool &is_valid_join,
-                                        ObJoinOrder *&join_tree)
-{
-  int ret = OB_SUCCESS;
-  is_valid_join = false;
-  join_tree = NULL;
-  bool need_gen = true;
-  if (join_rels.empty() || level >= join_rels.count() ||
-      OB_ISNULL(left_tree) || OB_ISNULL(right_tree)) {
-    ret = OB_INDEX_OUT_OF_RANGE;
-    LOG_WARN("Index out of range", K(ret), K(join_rels.count()),
-                          K(left_tree), K(right_tree), K(level));
-  } else {
-    //依次检查每一个join info，是否有合法的连接
-    ObSEArray<ObConflictDetector*, 4> valid_detectors;
-    ObRelIds cur_relids;
-    JoinInfo join_info;
-    bool is_strict_order = true;
-    bool is_detector_valid = true;
-    if (left_tree->get_tables().overlap(right_tree->get_tables())) {
-      //非法连接，do nothing
-    } else if (OB_FAIL(cur_relids.add_members(left_tree->get_tables()))) {
-      LOG_WARN("fail to add left tree' table ids", K(ret));
-    } else if (OB_FAIL(cur_relids.add_members(right_tree->get_tables()))) {
-      LOG_WARN("fail to add right tree' table ids", K(ret));
-    } else if (OB_FAIL(find_join_rel(cur_relids, join_tree))) {
-      LOG_WARN("fail to find join rel", K(ret), K(level));
-    } else if (OB_FAIL(check_need_gen_join_path(left_tree, right_tree, need_gen))) {
-      LOG_WARN("failed to find join tree pair", K(ret));
-    } else if (!need_gen) {
-      // do nothing
-      is_valid_join = true;
-      OPT_TRACE(left_tree, right_tree,
-      " is legal, and has join path cache, no need to generate join path");
-    } else if (OB_FAIL(ObConflictDetector::choose_detectors(left_tree->get_tables(),
-                                                            right_tree->get_tables(),
-                                                            left_tree->get_conflict_detectors(),
-                                                            right_tree->get_conflict_detectors(),
-                                                            table_depend_infos_,
-                                                            conflict_detectors_,
-                                                            valid_detectors,
-                                                            delay_cross_product,
-                                                            is_strict_order))) {
-      LOG_WARN("failed to choose join info", K(ret));
-    } else if (valid_detectors.empty()) {
-      OPT_TRACE("there is no valid join condition for ", left_tree, "join", right_tree);
-      LOG_TRACE("there is no valid join info for ", K(left_tree->get_tables()),
-                                                    K(right_tree->get_tables()));
-    } else if (NULL != join_tree &&
-               OB_FAIL(check_detector_valid(left_tree,
-                                            right_tree,
-                                            valid_detectors,
-                                            join_tree,
-                                            is_detector_valid))) {
-      LOG_WARN("failed to check detector valid", K(ret));
-    } else if (!is_detector_valid) {
-      OPT_TRACE("join tree will be remove: ", left_tree, "join", right_tree);
-    } else if (OB_FAIL(ObConflictDetector::merge_join_info(valid_detectors,
-                                                           join_info))) {
-      LOG_WARN("failed to merge join info", K(ret));
-    } else if (OB_FAIL(process_join_pred(left_tree, right_tree, join_info))) {
-      LOG_WARN("failed to preocess join pred", K(ret));
-    } else if (NULL != join_tree && level <= 1 && !hint_force_order) {
-      //level==1的时候，左右树都是单表，如果已经生成过AB的话，BA的path也已经生成了，没必要再次生成一遍BA
-      is_valid_join = true;
-      OPT_TRACE("path has been generated in level one");
-    } else {
-      if (!is_strict_order) {
-        if (!hint_force_order) {
-          std::swap(left_tree, right_tree);
-        } else {
-          //如果leading hint指定了join order，但是合法的join order与
-          //leading hint指定的join order相反，那么应该把连接类型取反
-          join_info.join_type_ = get_opposite_join_type(join_info.join_type_);
-        }
-      }
-      JoinPathPairInfo pair;
-      pair.left_ids_ = left_tree->get_tables();
-      pair.right_ids_ = right_tree->get_tables();
-      if (NULL == join_tree) {
-        if(OB_ISNULL(join_tree = create_join_order(JOIN))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to create join tree", K(ret));
-        } else if (OB_FAIL(join_tree->init_join_order(left_tree,
-                                                      right_tree,
-                                                      &join_info,
-                                                      valid_detectors))) {
-          LOG_WARN("failed to init join order", K(ret));
-        } else if (OB_FAIL(join_rels.at(level).push_back(join_tree))) {
-          LOG_WARN("failed to push back join order", K(ret));
-        } else if (relid_joinorder_map_.created() &&
-                   OB_FAIL(relid_joinorder_map_.set_refactored(join_tree->get_tables(), join_tree))) {
-          LOG_WARN("failed to add table ids join order to hash map", K(ret));
-        }
-      }
-      OPT_TRACE_TITLE("Now", left_tree, "join", right_tree, join_info);
-      if (OB_FAIL(ret)) {
-        //do nothing
-      } else if (OB_FAIL(join_tree->calc_cardinality(left_tree,
-                                                     right_tree,
-                                                     join_info))) {
-        LOG_WARN("failed to revise ambient card", K(ret));
-      } else if (OB_FAIL(join_tree->generate_join_paths(*left_tree,
-                                                        *right_tree,
-                                                        join_info,
-                                                        hint_force_order))) {
-        LOG_WARN("failed to generate join paths for left_tree", K(level), K(ret));
-      } else if (join_path_set_.created() &&
-                 OB_FAIL(join_path_set_.set_refactored(pair))) {
-        LOG_WARN("failed to add join path set", K(ret));
-      } else {
-        is_valid_join = true;
-        LOG_TRACE("succeed to generate join order for ", K(left_tree->get_tables()),
-                  K(right_tree->get_tables()), K(is_strict_order));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLogPlan::check_detector_valid(ObJoinOrder *left_tree,
-                                    ObJoinOrder *right_tree,
-                                    const ObIArray<ObConflictDetector*> &valid_detectors,
-                                    ObJoinOrder *cur_tree,
-                                    bool &is_valid)
-{
-  int ret = OB_SUCCESS;
-  is_valid = true;
-  ObSEArray<ObConflictDetector*, 4> all_detectors;
-  ObSEArray<ObConflictDetector*, 4> common_detectors;
-  if (OB_ISNULL(left_tree) || OB_ISNULL(right_tree) || OB_ISNULL(cur_tree)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null param", K(ret));
-  } else if (OB_FAIL(append_array_no_dup(all_detectors, left_tree->get_conflict_detectors()))) {
-    LOG_WARN("failed to append detectors", K(ret));
-  } else if (OB_FAIL(append_array_no_dup(all_detectors, right_tree->get_conflict_detectors()))) {
-    LOG_WARN("failed to append detectors", K(ret));
-  } else if (OB_FAIL(append_array_no_dup(all_detectors, valid_detectors))) {
-    LOG_WARN("failed to append detectors", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::intersect(all_detectors, cur_tree->get_conflict_detectors(), common_detectors))) {
-    LOG_WARN("failed to calc common detectors", K(ret));
-  } else if (common_detectors.count() != all_detectors.count() ||
-             common_detectors.count() != cur_tree->get_conflict_detectors().count()) {
-    is_valid = false;
-  }
-  return ret;
-}
-
-/**
- * Remove redundant join conditions and extract equal join conditions
- *
- * Try keep EQ preds that join same two tables.
- * For example, we will keep the two preds which join t1 and t3 in the below case.
- * (t1 join t2 on t1.c1 = t2.c1)
- *   join
- * (t3 join t4 on t3.c2 = t4.c2)
- *   on t1.c1 = t3.c1 and t2.c1 = t3.c1 and t1.c2 = t3.c2 and t1.c2 = t4.c2
- * =>
- * (t1 join t2 on t1.c1 = t2.c1)
- *   join
- * (t3 join t4 on t3.c2 = t4.c2)
- *   on t1.c1 = t3.c1 and t1.c2 = t3.c2
- *
- * Remove preds which is equation between two exprs in the same equal sets
- * (t1 where c1 = 1) join (t2 where c2 = 1) on t1.c1 = t2.c1
- *  => (t1 where c1 = 1) join (t2 where c2 = 1) on true
- * */
-int ObLogPlan::process_join_pred(ObJoinOrder *left_tree,
-                                 ObJoinOrder *right_tree,
-                                 JoinInfo &join_info)
-{
-  int ret = OB_SUCCESS;
-  // remove redundancy pred
-  if (INNER_JOIN == join_info.join_type_ ||
-      LEFT_SEMI_JOIN == join_info.join_type_ ||
-      LEFT_ANTI_JOIN == join_info.join_type_ ||
-      RIGHT_SEMI_JOIN == join_info.join_type_ ||
-      RIGHT_ANTI_JOIN == join_info.join_type_ ||
-      LEFT_OUTER_JOIN == join_info.join_type_ ||
-      RIGHT_OUTER_JOIN == join_info.join_type_) {
-    ObIArray<ObRawExpr*> &join_pred = IS_NOT_INNER_JOIN(join_info.join_type_) ?
-                                      join_info.on_conditions_ :
-                                      join_info.where_conditions_;
-    EqualSets input_equal_sets;
-    if (OB_FAIL(ObEqualAnalysis::merge_equal_set(&allocator_,
-                                                 left_tree->get_output_equal_sets(),
-                                                 right_tree->get_output_equal_sets(),
-                                                 input_equal_sets))) {
-      LOG_WARN("failed to compute equal sets for inner join", K(ret));
-    } else if (OB_FAIL(inner_remove_redundancy_pred(join_pred,
-                                                    input_equal_sets,
-                                                    left_tree,
-                                                    right_tree))) {
-      LOG_WARN("failed to inner remove redundancy pred", K(ret));
-    }
-  }
-  // extract equal join conditions
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (INNER_JOIN == join_info.join_type_) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < join_info.where_conditions_.count(); ++i) {
-      ObRawExpr *qual = join_info.where_conditions_.at(i);
-      if (OB_ISNULL(qual)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null join qual", K(ret));
-      } else if (!qual->has_flag(IS_JOIN_COND)) {
-        //do nothing
-      } else if (OB_FAIL(join_info.equal_join_conditions_.push_back(qual))) {
-        LOG_WARN("failed to push back join qual", K(ret));
-      }
-    }
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < join_info.on_conditions_.count(); ++i) {
-      ObRawExpr *qual = join_info.on_conditions_.at(i);
-      if (OB_ISNULL(qual)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null join qual", K(ret));
-      } else if (!qual->has_flag(IS_JOIN_COND)) {
-        //do nothing
-      } else if (OB_FAIL(join_info.equal_join_conditions_.push_back(qual))) {
-        LOG_WARN("failed to push back join qual", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLogPlan::join_side_from_one_table(ObJoinOrder &child_tree,
-                                        ObIArray<ObRawExpr*> &join_pred,
-                                        bool &is_valid,
-                                        ObRelIds &intersect_rel_ids)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObRelIds, 4> eq_sets_rel_ids;
-  ObRawExpr *expr_in_tree = NULL;
-  intersect_rel_ids.reuse();
-  is_valid = true;
-  if (OB_FAIL(intersect_rel_ids.add_members(child_tree.get_tables()))){
-    LOG_WARN("failed to add members", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::build_rel_ids_by_equal_sets(child_tree.get_output_equal_sets(),
-                                                                  eq_sets_rel_ids))) {
-    LOG_WARN("failed to build rel ids", K(ret));
-  }
-  const ObRelIds &tree_rel_ids = child_tree.get_tables();
-  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < join_pred.count(); i++) {
-    ObRawExpr *cur_expr = join_pred.at(i);
-    ObRawExpr *left_expr = NULL;
-    ObRawExpr *right_expr = NULL;
-    if (OB_ISNULL(cur_expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), K(cur_expr));
-    } else if (T_OP_EQ == cur_expr->get_expr_type()) {
-      if (OB_ISNULL(left_expr = cur_expr->get_param_expr(0)) ||
-          OB_ISNULL(right_expr = cur_expr->get_param_expr(1))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret), KPC(cur_expr), K(left_expr), K(right_expr));
-      } else if (tree_rel_ids.is_superset(left_expr->get_relation_ids())) {
-        expr_in_tree = left_expr;
-      } else if (tree_rel_ids.is_superset(right_expr->get_relation_ids())) {
-        expr_in_tree = right_expr;
-      } else {
-        is_valid = false;
-      }
-      if (OB_SUCC(ret) && is_valid) {
-        const ObRelIds &expr_rel_ids = expr_in_tree->get_relation_ids();
-        int64_t eq_set_idx = OB_INVALID_ID;
-        if (expr_rel_ids.num_members() != 1) {
-          is_valid = false;
-        } else if (OB_FAIL(ObOptimizerUtil::find_expr_in_equal_sets(child_tree.get_output_equal_sets(),
-                                                                    expr_in_tree,
-                                                                    eq_set_idx))) {
-          LOG_WARN("failed to find expr", K(ret));
-        } else {
-          const ObRelIds &to_intersect = (eq_set_idx == OB_INVALID_ID) ?
-                                          expr_rel_ids :
-                                          eq_sets_rel_ids.at(eq_set_idx);
-          if (OB_FAIL(intersect_rel_ids.intersect_members(to_intersect))) {
-            LOG_WARN("failed to intersect", K(ret));
-          } else if (intersect_rel_ids.is_empty()) {
-            is_valid = false;
-          }
-        }
-      }
-    }
-  }
-  if (OB_FAIL(ret) || !is_valid) {
-  } else if (OB_FAIL(intersect_rel_ids.reserve_first())) {
-    LOG_WARN("failed to reserve first", K(ret));
-  }
-
-  return ret;
-}
-
-// Check if there are some predicates that were lost
-// for situations where predicate derivation did not happen or predicate derivation was incomplete
-int ObLogPlan::re_add_necessary_predicate(ObIArray<ObRawExpr*> &join_pred,
-                                          ObIArray<ObRawExpr*> &new_join_pred,
-                                          ObIArray<bool> &skip,
-                                          EqualSets &equal_sets)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(join_pred.count() != skip.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected params", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < join_pred.count(); i++) {
-    ObRawExpr *cur_expr= join_pred.at(i);
-    ObRawExpr *left_expr = NULL;
-    ObRawExpr *right_expr = NULL;
-    if (OB_ISNULL(cur_expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), K(cur_expr));
-    } else if (skip.at(i)) {
-      // skip
-    } else if (OB_ISNULL(left_expr = cur_expr->get_param_expr(0)) ||
-               OB_ISNULL(right_expr = cur_expr->get_param_expr(1))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), K(left_expr), K(right_expr));
-    } else if (ObOptimizerUtil::is_expr_equivalent(left_expr,
-                                                   right_expr,
-                                                   equal_sets)) {
-      // remove preds which is equation between two exprs in the same equal sets
-      OPT_TRACE("remove redundancy join condition:", cur_expr);
-    } else {
-      bool find = false;
-      for (int64_t j = 0; OB_SUCC(ret) && !find && j < new_join_pred.count(); j++) {
-        ObRawExpr *cur_new_expr = new_join_pred.at(j);
-        ObRawExpr *left_new_expr = NULL;
-        ObRawExpr *right_new_expr = NULL;
-        if (OB_ISNULL(cur_new_expr)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret));
-        } else if (cur_expr->get_expr_type() != cur_new_expr->get_expr_type()) {
-          // skip
-        } else if(OB_ISNULL(left_new_expr = cur_new_expr->get_param_expr(0)) ||
-                  OB_ISNULL(right_new_expr = cur_new_expr->get_param_expr(1))) {
-          LOG_WARN("get unexpected null", K(ret), K(left_new_expr), K(right_new_expr));
-        } else if (ObOptimizerUtil::is_expr_equivalent(left_expr,
-                                                       left_new_expr,
-                                                       equal_sets) &&
-                   ObOptimizerUtil::is_expr_equivalent(right_expr,
-                                                       right_new_expr,
-                                                       equal_sets)) {
-          find = true;
-        } else if (ObOptimizerUtil::is_expr_equivalent(left_expr,
-                                                       right_new_expr,
-                                                       equal_sets) &&
-                   ObOptimizerUtil::is_expr_equivalent(right_expr,
-                                                       left_new_expr,
-                                                       equal_sets)) {
-          find = true;
-        }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (!find && OB_FAIL(new_join_pred.push_back(cur_expr))) {
-        LOG_WARN("failed to push back", K(ret));
-      } else if (find) {
-        // remove preds which do not join the given two tables
-        OPT_TRACE("remove redundancy join condition:", cur_expr);
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLogPlan::inner_remove_redundancy_pred(ObIArray<ObRawExpr*> &join_pred,
-                                            EqualSets &equal_sets,
-                                            ObJoinOrder *left_tree,
-                                            ObJoinOrder *right_tree)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr*, 4> new_join_pred;
-  ObSEArray<bool, 4> has_checked;
-  bool join_two_tables = true;
-  ObRelIds left_table, right_table;
-  if (OB_ISNULL(left_tree) || OB_ISNULL(right_tree)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret));
-  } else if (OB_FAIL(join_side_from_one_table(*left_tree,
-                                              join_pred,
-                                              join_two_tables,
-                                              left_table))) {
-    LOG_WARN("failed to check there is only one left table", K(ret));
-  } else if (join_two_tables &&
-             OB_FAIL(join_side_from_one_table(*right_tree,
-                                              join_pred,
-                                              join_two_tables,
-                                              right_table))) {
-    LOG_WARN("failed to check there is only one right table", K(ret));
-  } else if (join_two_tables &&
-             (OB_UNLIKELY(left_table.num_members() != 1) ||
-              OB_UNLIKELY(right_table.num_members() != 1))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected params", K(ret), K(left_table), K(right_table));
-  } else if (OB_FAIL(has_checked.prepare_allocate(join_pred.count(), false))) {
-    LOG_WARN("failed to allocate", K(ret));
-  }
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < join_pred.count(); i++) {
-    ObRawExpr *cur_expr = join_pred.at(i);
-    ObRawExpr *left_expr = NULL;
-    ObRawExpr *right_expr = NULL;
-    if (OB_ISNULL(cur_expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), K(cur_expr));
-    } else if (T_OP_EQ == cur_expr->get_expr_type() &&
-               2 == cur_expr->get_param_count() &&
-               cur_expr->get_param_expr(0) != cur_expr->get_param_expr(1)) {
-      EqualSets tmp_equal_sets;
-      if (OB_ISNULL(left_expr = cur_expr->get_param_expr(0)) ||
-          OB_ISNULL(right_expr = cur_expr->get_param_expr(1))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret), KPC(cur_expr), K(left_expr), K(right_expr));
-      } else if (!join_two_tables) {
-        // do nothing
-      } else if (left_tree->get_tables().is_superset(left_expr->get_relation_ids()) &&
-          right_tree->get_tables().is_superset(right_expr->get_relation_ids())) {
-        // do nothing
-      } else if (left_tree->get_tables().is_superset(right_expr->get_relation_ids()) &&
-          right_tree->get_tables().is_superset(left_expr->get_relation_ids())) {
-        std::swap(left_expr, right_expr);
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected expression", K(ret), KPC(cur_expr));
-      }
-      if (OB_FAIL(ret)) {
-      } else if (join_two_tables &&
-                 !(left_table.is_superset(left_expr->get_relation_ids()) &&
-                   right_table.is_superset(right_expr->get_relation_ids()))) {
-        // the pred does not join the given two tables,
-        // decide whether remove this qual later
-      } else if (ObOptimizerUtil::in_same_equalset(left_expr,
-                                                   right_expr,
-                                                   equal_sets)) {
-        // remove preds which is equation between two exprs in the same equal sets
-        has_checked.at(i) = true;
-        OPT_TRACE("remove redundancy join condition:", cur_expr);
-      } else if (OB_FAIL(tmp_equal_sets.assign(equal_sets))) {
-        LOG_WARN("failed to append fd equal set", K(ret));
-      } else if (FALSE_IT(equal_sets.reuse())) {
-      } else if (OB_FAIL(ObEqualAnalysis::compute_equal_set(&allocator_,
-                                                            cur_expr,
-                                                            tmp_equal_sets,
-                                                            equal_sets))) {
-        LOG_WARN("failed to compute equal sets for inner join", K(ret));
-      } else if (OB_FAIL(new_join_pred.push_back(cur_expr))) {
-        LOG_WARN("failed to push back", K(ret));
-      } else {
-        has_checked.at(i) = true;
-      }
-    } else if (OB_FAIL(new_join_pred.push_back(cur_expr))) {
-      LOG_WARN("failed to push back", K(ret));
-    } else {
-      has_checked.at(i) = true;
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (join_two_tables &&
-             OB_FAIL(re_add_necessary_predicate(join_pred, new_join_pred,
-                                                has_checked, equal_sets))) {
-    LOG_WARN("failed to re-add preds", K(ret));
-  } else if (new_join_pred.count() == join_pred.count()) {
-  } else if (OB_UNLIKELY(new_join_pred.count() > join_pred.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected pred count", K(ret), K(new_join_pred), K(join_pred));
-  } else if (OB_FAIL(join_pred.assign(new_join_pred))) {
-    LOG_WARN("failed to assign exprs", K(ret));
-  }
-  OPT_TRACE("output join conditions:", join_pred);
   return ret;
 }
 
@@ -2960,48 +1467,6 @@ int ObLogPlan::get_subplan(const ObRawExpr *expr, SubPlanInfo *&info)
       info = get_subplans().at(i);
       found = true;
     } else { /* Do nothing */ }
-  }
-  return ret;
-}
-
-int ObLogPlan::find_join_rel(ObRelIds& relids, ObJoinOrder *&join_rel)
-{
-  int ret = OB_SUCCESS;
-  join_rel = NULL;
-  if (relid_joinorder_map_.created() &&
-      OB_FAIL(relid_joinorder_map_.get_refactored(relids, join_rel))) {
-    if (ret != OB_HASH_NOT_EXIST) {
-      LOG_WARN("failed to get refactored", K(ret), K(relids));
-    } else {
-      ret = OB_SUCCESS;
-    }
-  }
-  return ret;
-}
-
-int ObLogPlan::check_need_gen_join_path(const ObJoinOrder *left_tree,
-                                        const ObJoinOrder *right_tree,
-                                        bool &need_gen)
-{
-  int ret = OB_SUCCESS;
-  int hash_ret = OB_SUCCESS;
-  need_gen = true;
-  if (OB_ISNULL(left_tree) || OB_ISNULL(right_tree)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid input join order", K(left_tree), K(right_tree), K(ret));
-  } else if (join_path_set_.created()) {
-    JoinPathPairInfo pair;
-    pair.left_ids_ = left_tree->get_tables();
-    pair.right_ids_ = right_tree->get_tables();
-    hash_ret = join_path_set_.exist_refactored(pair);
-    if (OB_HASH_EXIST == hash_ret) {
-      need_gen = false;
-    } else if (OB_HASH_NOT_EXIST == hash_ret) {
-      // do nothing
-    } else {
-      ret = hash_ret != OB_SUCCESS ? hash_ret : OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to check hash set exsit", K(ret), K(hash_ret), K(pair));
-    }
   }
   return ret;
 }
@@ -3443,10 +1908,9 @@ int ObLogPlan::allocate_join_path(JoinPath *join_path,
                                   ObLogicalOperator *&out_join_path_op)
 {
   int ret = OB_SUCCESS;
-  ObJoinOrder *join_order = NULL;
-  if (OB_ISNULL(join_path) || OB_ISNULL(join_order = join_path->parent_)) {
+  if (OB_ISNULL(join_path)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(join_path), K(join_order));
+    LOG_WARN("get unexpected null", K(ret), K(join_path));
   } else {
     Path *left_path = const_cast<Path*>(join_path->left_path_);
     Path *right_path = const_cast<Path*>(join_path->right_path_);
@@ -3552,7 +2016,7 @@ int ObLogPlan::compute_join_exchange_info(JoinPath &join_path,
                                           bool right_is_non_preserve_side)
 {
   int ret = OB_SUCCESS;
-  EqualSets equal_sets;
+  TemporaryEqualSets equal_sets;
   ObSEArray<ObRawExpr*, 8> left_keys;
   ObSEArray<ObRawExpr*, 8> right_keys;
   ObSEArray<bool, 8> null_safe_info;
@@ -4599,22 +3063,22 @@ int ObLogPlan::create_plan_tree_from_path(Path *path,
   return ret;
 }
 
-int ObLogPlan::init_candidate_plans()
+int ObLogPlan::init_candidate_plans(ObJoinOrder *join_order)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(join_order_)) {
+  if (OB_ISNULL(join_order)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(join_order_));
+    LOG_WARN("get unexpected null", K(ret), K(join_order));
   } else {
     int64_t total_usage = allocator_.total();
     LOG_TRACE("memory usage after generating join order", K(total_usage));
     ObSEArray<CandidatePlan, 8> candi_plans;
-    for (int64_t i = 0; OB_SUCC(ret) && i < join_order_->get_interesting_paths().count(); i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < join_order->get_interesting_paths().count(); i++) {
       ObLogicalOperator *root = NULL;
-      if (OB_ISNULL(join_order_->get_interesting_paths().at(i))) {
+      if (OB_ISNULL(join_order->get_interesting_paths().at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(i));
-      } else if (OB_FAIL(create_plan_tree_from_path(join_order_->get_interesting_paths().at(i),
+      } else if (OB_FAIL(create_plan_tree_from_path(join_order->get_interesting_paths().at(i),
                                                     root))) {
         LOG_WARN("failed to create a path", K(ret));
       } else if (OB_ISNULL(root)) {
@@ -7351,6 +5815,7 @@ int ObLogPlan::adjust_exprs_by_win_func(ObIArray<ObRawExpr *> &exprs,
 int ObLogPlan::generate_plan_tree()
 {
   int ret = OB_SUCCESS;
+  ObJoinOrder *join_order = NULL;
   if (OB_ISNULL(get_stmt()) || OB_ISNULL(get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Get unexpected null", K(ret), K(get_stmt()));
@@ -7358,10 +5823,10 @@ int ObLogPlan::generate_plan_tree()
     // 1.1 generate access paths
     /* random exprs should be split from condition exprs to avoid being pushed down
      * random exprs will be added back in function candi_init*/
-    if (OB_FAIL(generate_join_orders())) {
-      LOG_WARN("failed to generate the access path for the single-table query",
+    if (OB_FAIL(generate_join_orders(join_order))) {
+      LOG_WARN("failed to generate join orders for the query",
                K(ret), K(get_optimizer_context().get_query_ctx()->get_sql_stmt()));
-    } else if (OB_FAIL(init_candidate_plans())) {
+    } else if (OB_FAIL(init_candidate_plans(join_order))) {
       LOG_WARN("failed to initialized the plan candidates from the join order", K(ret));
     } else {
       LOG_TRACE("plan candidates is initialized from the join order",
@@ -7885,57 +6350,6 @@ int ObLogPlan::allocate_stat_collector_as_top(ObLogicalOperator *&top,
   return ret;
 }
 
-/**
- * 检查当前枚举的join order是否满足leading hint要求
- * match hint是否受leading hint控制
- * is_legal是否与leading hint冲突
- */
-int ObLogPlan::check_join_hint(const ObRelIds &left_set,
-                              const ObRelIds &right_set,
-                              bool &match_hint,
-                              bool &is_legal,
-                              bool &is_strict_order)
-{
-  int ret = OB_SUCCESS;
-  const ObRelIds &leading_tables = get_leading_tables();
-  if (!left_set.overlap(leading_tables) && !right_set.overlap(leading_tables)) {
-    //没有涉及leading hint的表，不需要额外的检查
-    match_hint = false;
-    is_legal = true;
-    is_strict_order = true;
-  } else if (left_set.is_subset(leading_tables) && right_set.is_subset(leading_tables)) {
-    //正在枚举leading hint内部表
-    bool found = false;
-    //查找是否有满足的hint
-    ObIArray<LeadingInfo> &leading_infos = log_plan_hint_.join_order_.leading_infos_;
-    for (int64_t i = 0; !found && i < leading_infos.count(); ++i) {
-      const LeadingInfo &info = leading_infos.at(i);
-      if (left_set.equal(info.left_table_set_) && right_set.equal(info.right_table_set_)) {
-        is_strict_order = true;
-        found = true;
-      } else if (right_set.equal(info.left_table_set_) && left_set.equal(info.right_table_set_)) {
-        is_strict_order = false;
-        found = true;
-      }
-    }
-    if (!found) {
-      //枚举的join order尝试打乱leading hint
-      is_legal = false;
-    } else {
-      match_hint = true;
-      is_legal = true;
-    }
-  } else if (leading_tables.is_subset(left_set)) {
-    //处理完所有leading hint表之后的枚举过程
-    match_hint = true;
-    is_legal = true;
-    is_strict_order = true;
-  } else {
-    //使用部分leading hint的表，非法枚举
-    is_legal = false;
-  }
-  return ret;
-}
 
 int ObLogPlan::allocate_scala_group_by_as_top(ObLogicalOperator *&top,
                                               const ObIArray<ObAggFunRawExpr*> &agg_items,
@@ -9772,7 +8186,7 @@ int ObLogPlan::check_if_subplan_filter_match_partition_wise(ObLogicalOperator *t
                                                             bool &is_partition_wise)
 {
   int ret = OB_SUCCESS;
-  EqualSets input_esets;
+  TemporaryEqualSets input_esets;
   is_partition_wise = false;
   if (OB_ISNULL(top)) {
     ret = OB_ERR_UNEXPECTED;
@@ -9833,7 +8247,7 @@ int ObLogPlan::check_if_subplan_filter_match_repart(ObLogicalOperator *top,
                                                    bool &is_match_repart)
 {
   int ret = OB_SUCCESS;
-  EqualSets input_esets;
+  TemporaryEqualSets input_esets;
   bool is_partition_wise = false;
   is_match_repart = false;
   if (OB_ISNULL(top)) {
@@ -12938,7 +11352,7 @@ int ObLogPlan::candi_allocate_filter(const ObIArray<ObRawExpr*> &filter_exprs)
   int ret = OB_SUCCESS;
   double sel = 1.0;
   ObLogicalOperator *best_plan = NULL;
-  EqualSets equal_sets;
+  TemporaryEqualSets equal_sets;
   if (OB_FAIL(candidates_.get_best_plan(best_plan))) {
     LOG_WARN("failed to get best plan", K(ret));
   } else if (OB_ISNULL(best_plan)) {
@@ -14246,20 +12660,10 @@ EqualSets* ObLogPlan::create_equal_sets()
 {
   EqualSets *esets = NULL;
   void *ptr = NULL;
-  if (OB_LIKELY(NULL != (ptr = get_allocator().alloc(sizeof(EqualSets))))) {
-    esets = new (ptr) EqualSets();
+  if (OB_LIKELY(NULL != (ptr = get_allocator().alloc(sizeof(PersistentEqualSets))))) {
+    esets = new (ptr) PersistentEqualSets();
   }
   return esets;
-}
-
-ObJoinOrder* ObLogPlan::create_join_order(PathType type)
-{
-  void *ptr = NULL;
-  ObJoinOrder *join_order = NULL;
-  if (OB_LIKELY(NULL != (ptr = get_allocator().alloc(sizeof(ObJoinOrder))))) {
-    join_order = new (ptr) ObJoinOrder(&get_allocator(), this, type);
-  }
-  return join_order;
 }
 
 // 将pwj约束每一个分区中的值按照从小到大的顺序排列
@@ -14572,11 +12976,11 @@ int ObLogPlan::init_plan_info()
                                                           get_const_exprs()))) {
     LOG_WARN("failed to compute const equivalent exprs", K(ret));
 #ifndef OB_BUILD_SPM
-  } else if (OB_FAIL(log_plan_hint_.init_log_plan_hint(*schema_guard, *get_stmt(),
+  } else if (OB_FAIL(log_plan_hint_.init_log_plan_hint(allocator_, *schema_guard, *get_stmt(),
                                                        query_ctx->get_query_hint()))) {
     LOG_WARN("failed to init log plan hint", K(ret));
 #else
-  } else if (OB_FAIL(log_plan_hint_.init_log_plan_hint(*schema_guard, *get_stmt(),
+  } else if (OB_FAIL(log_plan_hint_.init_log_plan_hint(allocator_, *schema_guard, *get_stmt(),
                                                        query_ctx->get_query_hint(),
                                                        query_ctx->is_spm_evolution_))) {
     LOG_WARN("failed to init log plan hint", K(ret));
@@ -16256,7 +14660,7 @@ int ObLogPlan::get_cached_hash_sharding_info(const ObIArray<ObRawExpr*> &hash_ex
 {
   int ret = OB_SUCCESS;
   cached_sharding = NULL;
-  EqualSets dummy_equal_sets;
+  TemporaryEqualSets dummy_equal_sets;
   bool find_exact_match = false;
   // Prefer using sharding where partition keys and hash exprs are completely consistent.
   // Otherwise, the sharding key retrieved from the cache in the outline path may differ from the regular path,
@@ -17409,7 +15813,7 @@ int ObLogPlan::compute_subplan_filter_repartition_distribution_info(ObLogicalOpe
                                                                     ObExchangeInfo &exch_info)
 {
   int ret = OB_SUCCESS;
-  EqualSets input_esets;
+  TemporaryEqualSets input_esets;
   if (OB_ISNULL(top) || OB_UNLIKELY(subquery_ops.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(top), K(subquery_ops.empty()));
@@ -19668,47 +18072,6 @@ int ObLogPlan::try_push_topn_into_index_merge_scan(ObLogicalOperator *&top,
     } else {
       need_further_sort = true;
     }
-  }
-  return ret;
-}
-
-int ObLogPlan::init_lateral_table_depend_info(const ObIArray<TableItem*> &table_items)
-{
-  int ret = OB_SUCCESS;
-  const ObDMLStmt *stmt = get_stmt();
-  if (OB_ISNULL(stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null stmt", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < table_items.count(); ++i) {
-    TableItem *table = table_items.at(i);
-    TableDependInfo info;
-    if (OB_ISNULL(table)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null table item", K(ret));
-    } else if (!table->is_lateral_table() ||
-                table->exec_params_.empty()) {
-      //do nothing
-    } else {
-      for (int64_t j = 0; OB_SUCC(ret) && j < table->exec_params_.count(); ++j) {
-        if (OB_ISNULL(table->exec_params_.at(j))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret));
-        } else if (OB_FAIL(info.depend_table_set_.add_members(
-                  table->exec_params_.at(j)->get_ref_expr()->get_relation_ids()))) {
-          LOG_WARN("failed to add table ids", K(ret));
-        }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FALSE_IT(info.table_idx_ = stmt->get_table_bit_index(table->table_id_))) {
-      } else if (OB_FAIL(table_depend_infos_.push_back(info))) {
-        LOG_WARN("failed to push back info", K(ret));
-      }
-    }
-
-  }
-  if (OB_SUCC(ret)) {
-    LOG_TRACE("succeed to init function table depend info", K(table_depend_infos_));
   }
   return ret;
 }

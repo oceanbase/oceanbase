@@ -3307,7 +3307,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[234].default_value_ = "4.5.0.0" ;
+      ObSysVars[234].default_value_ = "4.5.1.0" ;
       ObSysVars[234].info_ = "enabling a series of optimizer features based on an OceanBase release number" ;
       ObSysVars[234].name_ = "optimizer_features_enable" ;
       ObSysVars[234].data_type_ = ObVarcharType ;
@@ -11508,32 +11508,71 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[840].default_value_ = "0" ;
-      ObSysVars[840].info_ = "Whether the PL/SQL async response is used" ;
-      ObSysVars[840].name_ = "ob_enable_pl_async_commit" ;
-      ObSysVars[840].data_type_ = ObIntType ;
-      ObSysVars[840].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[840].id_ = SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT] = 840 ;
-      ObSysVars[840].base_value_ = "0" ;
-    ObSysVars[840].alias_ = "OB_SV_ENABLE_PL_ASYNC_COMMIT" ;
+      ObSysVars[840].default_value_ = "10" ;
+      ObSysVars[840].info_ = "Control the algorithm selection for join order enumeration in query optimization" ;
+      ObSysVars[840].name_ = "_join_order_enum_threshold" ;
+      ObSysVars[840].data_type_ = ObUInt64Type ;
+      ObSysVars[840].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[840].id_ = SYS_VAR__JOIN_ORDER_ENUM_THRESHOLD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__JOIN_ORDER_ENUM_THRESHOLD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__JOIN_ORDER_ENUM_THRESHOLD] = 840 ;
+      ObSysVars[840].base_value_ = "10" ;
+    ObSysVars[840].alias_ = "OB_SV__JOIN_ORDER_ENUM_THRESHOLD" ;
     }();
 
     [&] (){
-      ObSysVars[841].default_value_ = "5000" ;
-      ObSysVars[841].info_ = "Number of SHA256 iterations for password hash stored to disk" ;
-      ObSysVars[841].name_ = "caching_sha2_password_digest_rounds" ;
-      ObSysVars[841].data_type_ = ObIntType ;
-      ObSysVars[841].min_val_ = "5000" ;
-      ObSysVars[841].max_val_ = "4095000" ;
-      ObSysVars[841].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
-      ObSysVars[841].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_caching_sha2_password_digest_rounds" ;
-      ObSysVars[841].id_ = SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS ;
+      ObSysVars[841].default_value_ = "2000" ;
+      ObSysVars[841].info_ = "Optimizer maximum join permutations per enumeration" ;
+      ObSysVars[841].name_ = "_optimizer_max_permutations" ;
+      ObSysVars[841].data_type_ = ObUInt64Type ;
+      ObSysVars[841].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[841].id_ = SYS_VAR__OPTIMIZER_MAX_PERMUTATIONS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__OPTIMIZER_MAX_PERMUTATIONS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__OPTIMIZER_MAX_PERMUTATIONS] = 841 ;
+      ObSysVars[841].base_value_ = "2000" ;
+    ObSysVars[841].alias_ = "OB_SV__OPTIMIZER_MAX_PERMUTATIONS" ;
+    }();
+
+    [&] (){
+      ObSysVars[842].default_value_ = "5000" ;
+      ObSysVars[842].info_ = "When the total number of enumerated join paths exceeds this threshold, the IDP algorithm will automatically reduce its step size to limit the enumeration space and improve optimization efficiency." ;
+      ObSysVars[842].name_ = "_idp_step_reduction_threshold" ;
+      ObSysVars[842].data_type_ = ObUInt64Type ;
+      ObSysVars[842].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[842].id_ = SYS_VAR__IDP_STEP_REDUCTION_THRESHOLD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__IDP_STEP_REDUCTION_THRESHOLD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__IDP_STEP_REDUCTION_THRESHOLD] = 842 ;
+      ObSysVars[842].base_value_ = "5000" ;
+    ObSysVars[842].alias_ = "OB_SV__IDP_STEP_REDUCTION_THRESHOLD" ;
+    }();
+
+    [&] (){
+      ObSysVars[843].default_value_ = "0" ;
+      ObSysVars[843].info_ = "Whether the PL/SQL async response is used" ;
+      ObSysVars[843].name_ = "ob_enable_pl_async_commit" ;
+      ObSysVars[843].data_type_ = ObIntType ;
+      ObSysVars[843].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[843].id_ = SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT] = 843 ;
+      ObSysVars[843].base_value_ = "0" ;
+    ObSysVars[843].alias_ = "OB_SV_ENABLE_PL_ASYNC_COMMIT" ;
+    }();
+
+    [&] (){
+      ObSysVars[844].default_value_ = "5000" ;
+      ObSysVars[844].info_ = "Number of SHA256 iterations for password hash stored to disk" ;
+      ObSysVars[844].name_ = "caching_sha2_password_digest_rounds" ;
+      ObSysVars[844].data_type_ = ObIntType ;
+      ObSysVars[844].min_val_ = "5000" ;
+      ObSysVars[844].max_val_ = "4095000" ;
+      ObSysVars[844].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[844].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_caching_sha2_password_digest_rounds" ;
+      ObSysVars[844].id_ = SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS] = 841 ;
-      ObSysVars[841].base_value_ = "5000" ;
-    ObSysVars[841].alias_ = "OB_SV_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS] = 844 ;
+      ObSysVars[844].base_value_ = "5000" ;
+    ObSysVars[844].alias_ = "OB_SV_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS" ;
     }();
 
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
@@ -11542,7 +11581,7 @@ static struct VarsInit{
   }
 }vars_init;
 
-static int64_t var_amount = 842;
+static int64_t var_amount = 845;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

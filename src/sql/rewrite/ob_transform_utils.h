@@ -141,7 +141,7 @@ class ObTransformUtils
 
     ObRelIds table_set_;
     ObSEArray<ObRawExpr *, 4> const_exprs_;
-    EqualSets equal_sets_;
+    PersistentEqualSets equal_sets_;
     ObFdItemSet fd_sets_;
     ObFdItemSet candi_fd_sets_;
     ObSEArray<ObRawExpr *, 4> not_null_;

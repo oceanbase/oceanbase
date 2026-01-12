@@ -48,6 +48,32 @@ struct JoinInfo
       {}
 
   virtual ~JoinInfo() {};
+  void reuse()
+  {
+    table_set_.reuse();
+    on_conditions_.reuse();
+    where_conditions_.reuse();
+    equal_join_conditions_.reuse();
+    join_type_ = UNKNOWN_JOIN;
+  }
+  int assign(const JoinInfo &other)
+  {
+    int ret = OB_SUCCESS;
+    table_set_.reuse();
+    if (OB_FAIL(table_set_.add_members(other.table_set_))) {
+      SQL_LOG(WARN, "failed to add members", K(ret));
+    } else if (OB_FAIL(on_conditions_.assign(other.on_conditions_))) {
+      SQL_LOG(WARN, "failed to assign", K(ret));
+    } else if (OB_FAIL(where_conditions_.assign(other.where_conditions_))) {
+      SQL_LOG(WARN, "failed to assign", K(ret));
+    } else if (OB_FAIL(equal_join_conditions_.assign(other.equal_join_conditions_))) {
+      SQL_LOG(WARN, "failed to assign", K(ret));
+    } else {
+      join_type_ = other.join_type_;
+    }
+    return ret;
+  }
+  DISABLE_COPY_ASSIGN(JoinInfo);
   TO_STRING_KV(K_(join_type),
                 K_(table_set),
                 K_(on_conditions),
@@ -111,12 +137,12 @@ public:
                                        const ObConflictDetector &right,
                                        bool &is_satisfy);
 
-  static int choose_detectors(ObRelIds &left_tables,
-                              ObRelIds &right_tables,
-                              ObIArray<ObConflictDetector*> &left_used_detectors,
-                              ObIArray<ObConflictDetector*> &right_used_detectors,
-                              ObIArray<TableDependInfo> &table_depend_infos,
-                              ObIArray<ObConflictDetector*> &all_detectors,
+  static int choose_detectors(const ObRelIds &left_tables,
+                              const ObRelIds &right_tables,
+                              const ObIArray<ObConflictDetector*> &left_used_detectors,
+                              const ObIArray<ObConflictDetector*> &right_used_detectors,
+                              const ObIArray<TableDependInfo> &table_depend_infos,
+                              const ObIArray<ObConflictDetector*> &all_detectors,
                               ObIArray<ObConflictDetector*> &valid_detectors,
                               bool delay_cross_product,
                               bool &is_strict_order);
@@ -132,7 +158,7 @@ public:
                        const ObRelIds &right_set,
                        const ObRelIds &combined_set,
                        bool delay_cross_product,
-                       ObIArray<TableDependInfo> &table_depend_infos,
+                       const ObIArray<TableDependInfo> &table_depend_infos,
                        bool &legal);
 
 

@@ -109,7 +109,7 @@ int ObLogSet::compute_equal_set()
 {
   int ret = OB_SUCCESS;
   EqualSets *ordering_esets = NULL;
-  EqualSets temp_ordering_esets;
+  TemporaryEqualSets temp_ordering_esets;
   ObSEArray<ObRawExpr*, 8> ordering_eset_conditions;
   if (OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;

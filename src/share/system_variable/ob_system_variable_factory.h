@@ -6079,19 +6079,40 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(839); }
 };
+class ObSysVarJoinOrderEnumThreshold : public ObIntSysVar
+{
+public:
+  ObSysVarJoinOrderEnumThreshold() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR__JOIN_ORDER_ENUM_THRESHOLD; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(840); }
+};
+class ObSysVarOptimizerMaxPermutations : public ObIntSysVar
+{
+public:
+  ObSysVarOptimizerMaxPermutations() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR__OPTIMIZER_MAX_PERMUTATIONS; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(841); }
+};
+class ObSysVarIdpStepReductionThreshold : public ObIntSysVar
+{
+public:
+  ObSysVarIdpStepReductionThreshold() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR__IDP_STEP_REDUCTION_THRESHOLD; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(842); }
+};
 class ObSysVarObEnablePlAsyncCommit : public ObBoolSysVar
 {
 public:
   ObSysVarObEnablePlAsyncCommit() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT; }
-  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(840); }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(843); }
 };
 class ObSysVarCachingSha2PasswordDigestRounds : public ObIntSysVar
 {
 public:
   ObSysVarCachingSha2PasswordDigestRounds() : ObIntSysVar(ObSysVarOnCheckFuncs::check_and_convert_caching_sha2_password_digest_rounds, NULL, NULL, NULL, NULL) {}
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS; }
-  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(841); }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(844); }
 };
 
 
@@ -6116,7 +6137,7 @@ private:
 
 public:
   const static int64_t MYSQL_SYS_VARS_COUNT = 99;
-  const static int64_t OB_SYS_VARS_COUNT = 743;
+  const static int64_t OB_SYS_VARS_COUNT = 746;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
   const static int64_t INVALID_MAX_READ_STALE_TIME = -1;
 

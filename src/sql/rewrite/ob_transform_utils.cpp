@@ -4567,7 +4567,7 @@ int ObTransformUtils::compute_set_stmt_property(const ObSelectStmt *stmt,
   ObSEArray<ObRawExpr*, 4> set_exprs;
   UniqueCheckInfo right_info;
   ObSEArray<ObRawExpr*, 4> equal_conds;
-  EqualSets tmp_equal_sets;
+  TemporaryEqualSets tmp_equal_sets;
   const ObSelectStmt::SetOperator set_type = stmt->get_set_op();
   ObFdItemFactory *fd_factory = NULL;
   if (OB_ISNULL(stmt) || OB_ISNULL(fd_factory = check_helper.fd_factory_)
@@ -5107,7 +5107,7 @@ int ObTransformUtils::compute_generate_table_property(const ObDMLStmt *stmt,
 {
   int ret = OB_SUCCESS;
   UniqueCheckInfo child_info;
-  EqualSets tmp_equal_set;
+  TemporaryEqualSets tmp_equal_set;
   ObSelectStmt *ref_query = NULL;
   ObSEArray<ObRawExpr*, 4> cur_cond_exprs;
   ObSqlBitSet<> table_set;
@@ -5227,7 +5227,7 @@ int ObTransformUtils::compute_inner_join_property(const ObDMLStmt *stmt,
   ObSEArray<ObRawExpr*, 4> all_left_join_exprs;
   ObSEArray<ObRawExpr*, 4> all_right_join_exprs;
   ObSEArray<ObRawExpr*, 4> cur_cond_exprs;
-  EqualSets tmp_equal_sets;
+  TemporaryEqualSets tmp_equal_sets;
   ObSqlBitSet<> table_set;
   int ret = OB_SUCCESS;
   if (OB_ISNULL(stmt) || OB_ISNULL(check_helper.alloc_) || OB_ISNULL(check_helper.fd_factory_)) {
@@ -5336,7 +5336,7 @@ int ObTransformUtils::compute_outer_join_property(const ObDMLStmt *stmt,
     ObSEArray<ObRawExpr*, 4> all_left_join_exprs;
     ObSEArray<ObRawExpr*, 4> all_right_join_exprs;
     ObSEArray<ObRawExpr*, 4> cur_cond_exprs;
-    EqualSets tmp_equal_sets;
+    TemporaryEqualSets tmp_equal_sets;
     ObSqlBitSet<> table_set;
     if (OB_FAIL(table_set.add_members(left_info.table_set_))
              || OB_FAIL(table_set.add_members(right_info.table_set_))

@@ -187,7 +187,7 @@ struct ObTransformerCtx
   bool is_set_stmt_oversize_;
   // record cost based transformers
   uint64_t happened_cost_based_trans_;
-  EqualSets equal_sets_;
+  PersistentEqualSets equal_sets_;
   //记录semi to inner改写中，代价竞争失败的semi info，避免下一轮迭代重复检查代价
   ObSEArray<uint64_t, 8, common::ModulePageAllocator, true> ignore_semi_infos_;
   ObSEArray<ObSelectStmt*, 8, common::ModulePageAllocator, true> temp_table_ignore_stmts_;

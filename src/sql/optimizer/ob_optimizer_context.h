@@ -318,7 +318,10 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     rowsets_enabled_(false),
     extend_sql_plan_monitor_metrics_(false),
     enable_delete_insert_scan_(false),
-    min_cluster_version_(GET_MIN_CLUSTER_VERSION())
+    min_cluster_version_(GET_MIN_CLUSTER_VERSION()),
+    join_order_enum_threshold_(10),
+    max_permutation_(2000),
+    idp_reduction_threshold_(5000)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -832,6 +835,12 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline uint64_t get_min_cluster_version() const { return min_cluster_version_; }
   inline bool enable_delete_insert_scan() const { return enable_delete_insert_scan_; }
   inline void set_enable_delete_insert_scan(bool enabled) { enable_delete_insert_scan_ = enabled; }
+  inline uint64_t get_join_order_enum_threshold() const { return join_order_enum_threshold_; }
+  inline void set_join_order_enum_threshold(uint64_t threshold) { join_order_enum_threshold_ = threshold; }
+  inline uint64_t get_max_permutation() const { return max_permutation_; }
+  inline void set_max_permutation(uint64_t max_permutation) { max_permutation_ = max_permutation; }
+  inline uint64_t get_idp_reduction_threshold() const { return idp_reduction_threshold_; }
+  inline void set_idp_reduction_threshold(uint64_t threshold) { idp_reduction_threshold_ = threshold; }
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
@@ -968,6 +977,9 @@ private:
   bool extend_sql_plan_monitor_metrics_;
   bool enable_delete_insert_scan_;
   uint64_t min_cluster_version_; // Record the unified cluster version during the optimizer phase
+  uint64_t join_order_enum_threshold_;
+  uint64_t max_permutation_;
+  uint64_t idp_reduction_threshold_;
 };
 }
 }

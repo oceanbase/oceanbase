@@ -127,8 +127,8 @@ private:
     ObSEArray<ObRawExpr*, 16> mv_conds_;                // where/on conditions pulled up from mv join tree
     ObSEArray<ObRawExpr*, 16> query_conds_;             // where/on conditions pulled up from query join tree (only mv part)
     ObSEArray<ObRawExpr*, 16> query_other_conds_;       // where conditions which are not participating in join tree build/compare, will be added into rewrite stmt directly
-    EqualSets mv_equal_sets_;                           // mv equal sets
-    EqualSets query_equal_sets_;                        // origin query equal sets
+    PersistentEqualSets mv_equal_sets_;                 // mv equal sets
+    PersistentEqualSets query_equal_sets_;              // origin query equal sets
     hash::ObHashMap<PtrKey, int64_t> mv_es_map_;        // mv equal sets map, expr -> equal set idx
     hash::ObHashMap<PtrKey, int64_t> query_es_map_;     // origin query equal sets map, expr -> equal set idx
     ObSEArray<ObSqlBitSet<>, 16> equal_sets_map_;       // map origin query equal set to mv equal sets

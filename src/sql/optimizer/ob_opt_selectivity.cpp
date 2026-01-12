@@ -26,7 +26,6 @@ namespace oceanbase
 {
 namespace sql
 {
-inline double revise_ndv(double ndv) { return ndv < 1.0 ? 1.0 : ndv; }
 
 void OptSelectivityCtx::init_op_ctx(ObLogicalOperator *child_op)
 {
@@ -833,7 +832,7 @@ int OptTableMetas::add_set_child_stmt_meta_info(const ObSelectStmt *parent_stmt,
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to allocate place holder for column meta", K(ret));
         } else {
-          column_meta->init(OB_APP_MIN_COLUMN_ID + i, revise_ndv(ndv), num_null, avg_len);
+          column_meta->init(OB_APP_MIN_COLUMN_ID + i, ObOptSelectivity::revise_ndv(ndv), num_null, avg_len);
           column_meta->set_min_max_inited(true);
         }
       }
@@ -936,7 +935,7 @@ int OptTableMetas::add_generate_table_meta_info(const ObDMLStmt *parent_stmt,
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to allocate place holder for column meta", K(ret));
         } else {
-          column_meta->init(column_item.column_id_, revise_ndv(ndv), num_null, avg_len);
+          column_meta->init(column_item.column_id_, ObOptSelectivity::revise_ndv(ndv), num_null, avg_len);
           column_meta->set_min_max_inited(true);
           ObObj maxobj;
           ObObj minobj;
@@ -966,7 +965,7 @@ int OptTableMetas::add_generate_table_meta_info(const ObDMLStmt *parent_stmt,
               LOG_WARN("failed to calculate distinct", K(ret));
             } else {
               nns = ObOptSelectivity::revise_between_0_1(nns);
-              base_ndv = revise_ndv(base_ndv);
+              base_ndv = ObOptSelectivity::revise_ndv(base_ndv);
               column_meta->set_num_null(table_rows * (1 - nns));
               column_meta->set_base_ndv(base_ndv);
             }
@@ -1014,7 +1013,7 @@ int OptTableMetas::add_values_table_meta_info(const ObDMLStmt *stmt,
       } else {
         double avg_len = ObOptEstCost::get_estimate_width_from_type(column_item.expr_->get_result_type());
         column_meta->init(column_item.column_id_,
-                          revise_ndv(table_def->column_ndvs_.at(idx)),
+                          ObOptSelectivity::revise_ndv(table_def->column_ndvs_.at(idx)),
                           table_def->column_nnvs_.at(idx),
                           avg_len);
       }

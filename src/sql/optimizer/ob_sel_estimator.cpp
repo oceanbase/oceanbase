@@ -20,7 +20,6 @@ namespace oceanbase
 {
 namespace sql
 {
-inline double revise_ndv(double ndv) { return ndv < 1.0 ? 1.0 : ndv; }
 
 void SimpleRange::set_whole_range()
 {
@@ -2669,12 +2668,12 @@ double ObInequalJoinSelEstimator::get_equal_sel(double min1,
     overlap = 0.0;
   }
   if (max1 - min1 > OB_DOUBLE_EPSINON) {
-    overlap_ndv1 = revise_ndv(ndv1 * overlap / (max1 - min1)) ;
+    overlap_ndv1 = ObOptSelectivity::revise_ndv(ndv1 * overlap / (max1 - min1)) ;
   } else {
     overlap_ndv1 = 1;
   }
   if (max2 - min2 > OB_DOUBLE_EPSINON) {
-    overlap_ndv2 = revise_ndv(ndv2 * overlap / (max2 - min2)) ;
+    overlap_ndv2 = ObOptSelectivity::revise_ndv(ndv2 * overlap / (max2 - min2)) ;
   } else {
     overlap_ndv2 = 1;
   }

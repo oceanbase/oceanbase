@@ -920,6 +920,7 @@ public:
   int relids_to_table_ids(const ObSqlBitSet<> &table_set, ObIArray<uint64_t> &table_ids) const;
   int get_table_rel_ids(const TableItem &target, ObSqlBitSet<> &table_set) const;
   int get_table_rel_ids(const ObIArray<uint64_t> &table_ids, ObSqlBitSet<> &table_set) const;
+  int get_table_rel_ids(const ObIArray<uint64_t> &table_ids, ObRelIds &table_set) const;
   int get_table_rel_ids(const uint64_t table_id, ObSqlBitSet<> &table_set) const;
   int get_table_rel_ids(const ObIArray<TableItem*> &tables, ObSqlBitSet<> &table_set) const;
   int get_table_rel_ids(const uint64_t table_id, ObRelIds &table_set) const;

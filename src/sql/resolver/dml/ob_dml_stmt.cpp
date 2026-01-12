@@ -3424,6 +3424,23 @@ int ObDMLStmt::get_table_rel_ids(const ObIArray<uint64_t> &table_ids,
   return ret;
 }
 
+int ObDMLStmt::get_table_rel_ids(const ObIArray<uint64_t> &table_ids,
+                                 ObRelIds &table_set) const
+{
+  int ret = OB_SUCCESS;
+  int32_t idx = OB_INVALID_INDEX;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); ++i) {
+    idx = get_table_bit_index(table_ids.at(i));
+    if (OB_UNLIKELY(OB_INVALID_INDEX == idx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect idx", K(ret));
+    } else if (OB_FAIL(table_set.add_member(idx))) {
+      LOG_WARN("failed to add members", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObDMLStmt::get_table_rel_ids(const uint64_t table_id,
                                  ObSqlBitSet<> &table_set) const
 {

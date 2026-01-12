@@ -179,7 +179,7 @@ int ObConflictDetector::check_join_legal(const ObRelIds &left_set,
                                          const ObRelIds &right_set,
                                          const ObRelIds &combined_set,
                                          bool delay_cross_product,
-                                         ObIArray<TableDependInfo> &table_depend_infos,
+                                         const ObIArray<TableDependInfo> &table_depend_infos,
                                          bool &legal)
 {
   int ret = OB_SUCCESS;
@@ -262,7 +262,7 @@ int ObConflictDetector::check_join_legal(const ObRelIds &left_set,
     }
     //检查dependent function table的约束
     for (int64_t i = 0; OB_SUCC(ret) && legal && i < table_depend_infos.count(); ++i) {
-      TableDependInfo &info = table_depend_infos.at(i);
+      const TableDependInfo &info = table_depend_infos.at(i);
       if (left_set.has_member(info.table_idx_)) {
         legal = info.depend_table_set_.is_subset(left_set);
       } else if (right_set.has_member(info.table_idx_)) {
@@ -279,12 +279,12 @@ int ObConflictDetector::check_join_legal(const ObRelIds &left_set,
  * true：left join right是合法的，right join left是非法的
  * false：left join right是非法的，right join left是合法的
  */
-int ObConflictDetector::choose_detectors(ObRelIds &left_tables,
-                                         ObRelIds &right_tables,
-                                         ObIArray<ObConflictDetector*> &left_used_detectors,
-                                         ObIArray<ObConflictDetector*> &right_used_detectors,
-                                         ObIArray<TableDependInfo> &table_depend_infos,
-                                         ObIArray<ObConflictDetector*> &all_detectors,
+int ObConflictDetector::choose_detectors(const ObRelIds &left_tables,
+                                         const ObRelIds &right_tables,
+                                         const ObIArray<ObConflictDetector*> &left_used_detectors,
+                                         const ObIArray<ObConflictDetector*> &right_used_detectors,
+                                         const ObIArray<TableDependInfo> &table_depend_infos,
+                                         const ObIArray<ObConflictDetector*> &all_detectors,
                                          ObIArray<ObConflictDetector*> &valid_detectors,
                                          bool delay_cross_product,
                                          bool &is_strict_order)
@@ -873,7 +873,16 @@ int ObConflictDetectorGenerator::generate_inner_join_detectors(const ObDMLStmt *
       LOG_WARN("failed to add members", K(ret));
     }
   }
-  //3. 生成inner join的冲突规则
+  //3. 生成可选的笛卡尔积
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(generate_cross_product_detector(stmt,
+                                                table_items,
+                                                join_conditions,
+                                                inner_join_detectors))) {
+      LOG_WARN("failed to generate cross product detector", K(ret));
+    }
+  }
+  //4. 生成inner join的冲突规则
   for (int64_t i = 0; OB_SUCC(ret) && i < inner_join_detectors.count(); ++i) {
     ObConflictDetector *inner_detector = inner_join_detectors.at(i);
     const ObRelIds &table_set = inner_detector->join_info_.table_set_;
@@ -926,16 +935,8 @@ int ObConflictDetectorGenerator::generate_inner_join_detectors(const ObDMLStmt *
       }
     }
   }
-  //4. 生成可选的笛卡尔积
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(append(inner_join_detectors, outer_join_detectors))) {
-      LOG_WARN("failed to append detectors", K(ret));
-    } else if (OB_FAIL(generate_cross_product_detector(stmt,
-                                                       table_items,
-                                                       join_conditions,
-                                                       inner_join_detectors))) {
-      LOG_WARN("failed to generate cross product detector", K(ret));
-    }
+  if (FAILEDx(append(inner_join_detectors, outer_join_detectors))) {
+    LOG_WARN("failed to append detectors", K(ret));
   }
   return ret;
 }
@@ -1614,16 +1615,6 @@ int ObConflictDetectorGenerator::generate_cross_product_conflict_rule(const ObDM
         ret = new_connect_infos.push_back(connect_infos.at(i));
       }
     }
-    //使用连通图信息生成冲突规则
-    for (int64_t i = 0; OB_SUCC(ret) && i < base_table_ids.count(); ++i) {
-      if (base_table_ids.at(i).num_members() < 2) {
-        //do nothing
-      } else if (OB_FAIL(add_conflict_rule(base_table_ids.at(i),
-                                          base_table_ids.at(i),
-                                          cross_product_detector->cross_product_rule_))) {
-        LOG_WARN("failed to add conflict rule", K(ret));
-      }
-    }
     for (int64_t i = 0; OB_SUCC(ret) && i < new_connect_infos.count(); ++i) {
       if (new_connect_infos.at(i).num_members() < 2) {
         //do nothing
@@ -1694,7 +1685,7 @@ int ObConflictDetectorGenerator::deduce_redundant_join_conds(const ObDMLStmt *st
                                                              ObIArray<ObRawExpr*> &redundant_quals)
 {
   int ret = OB_SUCCESS;
-  EqualSets all_equal_sets;
+  TemporaryEqualSets all_equal_sets;
   ObSEArray<ObRawExpr*, 8> normal_quals;
   ObSEArray<ObRawExpr*, 8> subquery_quals;
   ObSEArray<ObRelIds, 8> connect_infos;

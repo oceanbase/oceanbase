@@ -3952,7 +3952,7 @@ int ObOptimizerUtil::convert_subplan_scan_equal_sets(ObIAllocator *allocator,
                                                      EqualSets &output_equal_sets)
 {
   int ret = OB_SUCCESS;
-  EqualSets dummy_equal_sets;
+  TemporaryEqualSets dummy_equal_sets;
   ObSEArray<ObRawExpr *, 8> raw_eset;
   TableItem *table_item = NULL;
   if (OB_ISNULL(table_item = parent_stmt.get_table_item_by_id(table_id))) {

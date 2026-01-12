@@ -203,10 +203,10 @@ namespace sql
     virtual int print_outline_data(PlanText &plan_text) override;
     virtual int print_used_hint(PlanText &plan_text) override;
     int add_used_leading_hint(ObIArray<const ObHint*> &used_hints);
-    int check_used_leading(const ObIArray<LeadingInfo> &leading_infos,
+    int check_used_leading(const ObIArray<LeadingInfo *> &leading_infos,
                            const ObLogicalOperator *op,
                            bool &used_hint);
-    bool find_leading_info(const ObIArray<LeadingInfo> &leading_infos,
+    bool find_leading_info(const ObIArray<LeadingInfo *> &leading_infos,
                            const ObRelIds &l_set,
                            const ObRelIds &r_set);
     const ObLogicalOperator *find_child_join(const ObLogicalOperator *input_op);

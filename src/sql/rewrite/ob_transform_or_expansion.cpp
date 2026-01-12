@@ -2921,7 +2921,7 @@ int ObTransformOrExpansion::is_expected_multi_index_plan(ObLogicalOperator* op,
   ObSEArray<ObRawExpr*, 4> range_exprs;
   ObSEArray<ObRawExpr*, 4> candi_exprs;
   ObSEArray<ObRawExpr*, 4> result_exprs;
-  EqualSets deduced_index_expr_equal_sets;
+  TemporaryEqualSets deduced_index_expr_equal_sets;
   if (OB_ISNULL(op) || OB_ISNULL(op->get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null", K(ret), K(op));

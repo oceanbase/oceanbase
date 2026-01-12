@@ -27,8 +27,11 @@ typedef common::ObFixedArray<ObRawExpr*, common::ObIAllocator> ObRawExprSet;
 // reuse will not de-construct existed ObFixedArray
 // A ObFixedArray can not be reused because its size can not be adjusted.
 typedef common::ObSEArray<ObRawExprSet*, 8, common::ModulePageAllocator, true> ObRawExprSets;
+typedef common::ObIArray<ObRawExprSet*> ObIRawExprSets;
 typedef ObRawExprSet EqualSet;
-typedef ObRawExprSets EqualSets;
+typedef ObIRawExprSets EqualSets;
+typedef ObRawExprSets PersistentEqualSets;
+typedef common::ObSEArray<ObRawExprSet*, 8> TemporaryEqualSets;
 
 class ObRawExprSetUtils
 {
@@ -40,7 +43,7 @@ public:
 
   static int add_expr_set(common::ObIAllocator *allocator,
                           const common::ObIArray<ObRawExpr *> &exprs,
-                          ObRawExprSets &expr_sets);
+                          ObIRawExprSets &expr_sets);
 };
 
 

@@ -672,7 +672,7 @@ int ObLogJoin::add_used_leading_hint(ObIArray<const ObHint*> &used_hints)
   return ret;
 }
 
-int ObLogJoin::check_used_leading(const ObIArray<LeadingInfo> &leading_infos,
+int ObLogJoin::check_used_leading(const ObIArray<LeadingInfo *> &leading_infos,
                                   const ObLogicalOperator *op,
                                   bool &used_hint)
 {
@@ -700,14 +700,15 @@ int ObLogJoin::check_used_leading(const ObIArray<LeadingInfo> &leading_infos,
   return ret;
 }
 
-bool ObLogJoin::find_leading_info(const ObIArray<LeadingInfo> &leading_infos,
+bool ObLogJoin::find_leading_info(const ObIArray<LeadingInfo *> &leading_infos,
                                   const ObRelIds &l_set,
                                   const ObRelIds &r_set)
 {
   bool find = false;
   for (int64_t i = 0; !find && i < leading_infos.count(); ++i) {
-    if (l_set.equal(leading_infos.at(i).left_table_set_)
-        && r_set.equal(leading_infos.at(i).right_table_set_)) {
+    if (OB_NOT_NULL(leading_infos.at(i)) &&
+        l_set.equal(leading_infos.at(i)->left_table_set_)
+        && r_set.equal(leading_infos.at(i)->right_table_set_)) {
       find = true;
     }
   }

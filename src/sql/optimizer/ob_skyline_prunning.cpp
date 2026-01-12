@@ -398,7 +398,7 @@ int ObShardingInfoDim::compare(const ObSkylineDim &other, CompareStat &status) c
     status = ObSkylineDim::EQUAL;
     const ObShardingInfoDim &tmp = static_cast<const ObShardingInfoDim &>(other);
     DominateRelation strong_relation = DominateRelation::OBJ_UNCOMPARABLE;
-    EqualSets dummy;
+    TemporaryEqualSets dummy;
     if (is_single_get_ && tmp.is_single_get_) {
       status = ObSkylineDim::EQUAL;
     } else if (OB_FAIL(ObOptimizerUtil::compute_sharding_relationship(sharding_info_,

@@ -3351,7 +3351,7 @@
   "optimizer_features_enable": {
     "id": 10150,
     "name": "optimizer_features_enable",
-    "default_value": "4.5.0.0",
+    "default_value": "4.5.1.0",
     "base_value": "",
     "data_type": "varchar",
     "info": "enabling a series of optimizer features based on an OceanBase release number",
@@ -11854,8 +11854,8 @@
     "flags": "SESSION | GLOBAL",
     "publish_version": "4.5.1",
     "info_cn": "",
-    "ref_url": "",
-    "placeholder": true
+    "background_cn": "",
+    "ref_url": ""
   },
   "_optimizer_max_permutations" : {
     "id": 10757,
@@ -11867,8 +11867,8 @@
     "flags": "SESSION | GLOBAL",
     "publish_version": "4.5.1",
     "info_cn": "",
-    "ref_url": "",
-    "placeholder": true
+    "background_cn": "",
+    "ref_url": ""
   },
   "_idp_step_reduction_threshold" : {
     "id": 10758,
@@ -11880,8 +11880,8 @@
     "flags": "SESSION | GLOBAL",
     "publish_version": "4.5.1",
     "info_cn": "",
-    "ref_url": "",
-    "placeholder": true
+    "background_cn": "",
+    "ref_url": ""
   },
   "ob_enable_pl_async_commit": {
     "id": 10759,
@@ -11924,8 +11924,7 @@
     "publish_version": "4.4.2.0",
     "info_cn": "存储到磁盘的密码哈希所使用的 SHA256 迭代次数",
     "background_cn": "",
-    "ref_url": "",
-    "placeholder": true
+    "ref_url": ""
   },
   "ap_query_route_policy": {
     "id": 10762,

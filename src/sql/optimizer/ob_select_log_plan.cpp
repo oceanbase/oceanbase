@@ -3373,8 +3373,8 @@ int ObSelectLogPlan::check_if_union_all_match_partition_wise(const ObIArray<ObLo
                                                              bool &is_partition_wise)
 {
   int ret = OB_SUCCESS;
-  EqualSets equal_sets;
-  EqualSets first_equal_sets;
+  TemporaryEqualSets equal_sets;
+  TemporaryEqualSets first_equal_sets;
   ObShardingInfo *first_sharding = NULL;
   ObShardingInfo *child_sharding = NULL;
   const ObSelectStmt *child_stmt = NULL;
@@ -3396,8 +3396,9 @@ int ObSelectLogPlan::check_if_union_all_match_partition_wise(const ObIArray<ObLo
       is_partition_wise = false;
     } else if (i == 0) {
       first_sharding = child_sharding;
-      first_equal_sets = child_ops.at(i)->get_output_equal_sets();
-      if (OB_FAIL(child_stmt->get_select_exprs(first_select_exprs))) {
+      if (OB_FAIL(first_equal_sets.assign(child_ops.at(i)->get_output_equal_sets()))) {
+        LOG_WARN("failed to assign", K(ret));
+      } else if (OB_FAIL(child_stmt->get_select_exprs(first_select_exprs))) {
         LOG_WARN("failed to get select exprs", K(ret));
       }
     } else if (OB_FAIL(child_stmt->get_select_exprs(child_select_exprs))) {
@@ -3872,7 +3873,7 @@ int ObSelectLogPlan::allocate_recursive_union_all_as_top(ObLogicalOperator *left
 int ObSelectLogPlan::candi_allocate_distinct_set(const ObIArray<ObSelectLogPlan*> &child_plans)
 {
   int ret = OB_SUCCESS;
-  EqualSets equal_sets;
+  TemporaryEqualSets equal_sets;
   ObSelectLogPlan *left_plan = NULL;
   ObSelectLogPlan *right_plan = NULL;
   const ObSelectStmt *left_stmt = NULL;

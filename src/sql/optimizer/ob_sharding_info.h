@@ -30,9 +30,6 @@ class ObRawExpr;
 class ObOptimizerContext;
 class ObDMLStmt;
 class ObLogPlan;
-typedef common::ObFixedArray<ObRawExpr*, common::ObIAllocator> ObRawExprSet;
-typedef common::ObSEArray<ObRawExprSet*, 8, common::ModulePageAllocator, true> ObRawExprSets;
-typedef ObRawExprSets EqualSets;
 
 class ObShardingInfo
 {

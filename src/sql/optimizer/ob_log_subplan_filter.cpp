@@ -712,7 +712,7 @@ int ObLogSubPlanFilter::get_repart_sharding_info(ObLogicalOperator* child_op,
   ObSEArray<ObRawExpr*, 4> src_keys;
   ObSEArray<ObRawExpr*, 4> target_keys;
   ObSEArray<bool, 4> null_safe_info;
-  EqualSets input_esets;
+  TemporaryEqualSets input_esets;
 
   for (int64_t i = 1; OB_SUCC(ret) && i < get_num_of_child(); i++) {
     if (OB_ISNULL(child = get_child(i))) {

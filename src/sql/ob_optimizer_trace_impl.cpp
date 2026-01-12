@@ -351,7 +351,7 @@ int ObOptimizerTraceImpl::append(const uint32_t &value)
 
 int ObOptimizerTraceImpl::append(const double & value)
 {
-  return append_format<32>("%f", value);
+  return append_format<32>("%g", value);
 }
 
 int ObOptimizerTraceImpl::append(const ObObj& value)
@@ -562,6 +562,8 @@ int ObOptimizerTraceImpl::append(const Path *path)
   if (OB_NOT_NULL(path)) {
     increase_section();
     new_line();
+    append("path#");
+    append(path->path_number_, ",");
     append_ptr(path);
     new_line();
     append("tables:", path->parent_);
@@ -613,6 +615,9 @@ int ObOptimizerTraceImpl::append(const Path *path)
     append(", server count:", path->server_cnt_);
     new_line();
     append(path->get_sharding());
+    new_line();
+    append("ordering:", path->get_ordering());
+    append("intersting info:", path->get_interesting_order_info());
     decrease_section();
   }
   return ret;
@@ -624,6 +629,8 @@ int ObOptimizerTraceImpl::append(const JoinPath* join_path)
   if (OB_NOT_NULL(join_path)) {
     increase_section();
     new_line();
+    append("path#");
+    append(join_path->path_number_, ",");
     append_ptr(join_path);
     new_line();
     if (HASH_JOIN == join_path->join_algo_) {
@@ -643,12 +650,33 @@ int ObOptimizerTraceImpl::append(const JoinPath* join_path)
     new_line();
     append(join_path->get_sharding());
     new_line();
+    if (join_path->is_nl_style_pipelined_path()) {
+      append("Is nl style pipeline path");
+      new_line();
+    } else if (join_path->is_pipelined_path()) {
+      append("Is pipeline path");
+      new_line();
+    }
+    if (join_path->contain_normal_nl()) {
+      append("Contain normal nl");
+      new_line();
+    }
+    if (join_path->has_none_equal_join()) {
+      append("Contain non-equal join");
+      new_line();
+    }
+    if (join_path->contain_expansion_join()) {
+      append("Contain expansion join");
+      new_line();
+    }
     append("left path:");
     if (OB_NOT_NULL(join_path->left_path_) && OB_NOT_NULL(join_path->left_path_->parent_)) {
       increase_section();
       new_line();
       append("tables:", join_path->left_path_->parent_);
       new_line();
+      append("path#");
+      append(join_path->left_path_->path_number_, ",");
       append_ptr(join_path->left_path_);
       new_line();
       append("cost:", join_path->left_path_->cost_, ",card:", join_path->left_path_->parent_->get_output_rows(),
@@ -658,6 +686,8 @@ int ObOptimizerTraceImpl::append(const JoinPath* join_path)
       if (NULL != join_path->left_path_->get_sharding()) {
         append(",part count:", join_path->left_path_->get_sharding()->get_part_cnt());
       }
+      new_line();
+      append("ordering:", join_path->left_path_->get_ordering());
       decrease_section();
     }
     new_line();
@@ -672,6 +702,8 @@ int ObOptimizerTraceImpl::append(const JoinPath* join_path)
         new_line();
         append("tables:", join_path->right_path_->parent_);
         new_line();
+        append("path#");
+        append(join_path->right_path_->path_number_, ",");
         append_ptr(join_path->right_path_);
         new_line();
         append("cost:", join_path->right_path_->cost_, ",card:", join_path->right_path_->parent_->get_output_rows(),
@@ -1041,6 +1073,23 @@ int ObOptimizerTraceImpl::append<ColumnItem>(const ObIArrayWrap<ColumnItem>& val
   for (int i = 0; OB_SUCC(ret) && i < value.count(); ++i) {
     if (OB_FAIL(append(value.at(i).column_name_))) {
     } else if (i > 0 && OB_FAIL(new_line())) {
+    }
+  }
+  return ret;
+}
+
+int ObOptimizerTraceImpl::append(const OrderItem &order)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(append(order.expr_))) {
+    LOG_WARN("failed to append");
+  } else if (order.is_ascending()) {
+    if (OB_FAIL(append(" ASC"))) {
+      LOG_WARN("failed to append");
+    }
+  } else {
+    if (OB_FAIL(append(" DESC"))) {
+      LOG_WARN("failed to append");
     }
   }
   return ret;

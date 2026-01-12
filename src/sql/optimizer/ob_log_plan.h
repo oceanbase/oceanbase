@@ -92,14 +92,31 @@ struct ObTextRetrievalInfo;
 class ObHashRollupInfo;
 class ObGroupingSetInfo;
 class ObTablePartitionInfo;
+class ObJoinOrderEnum;
 
 struct TableDependInfo {
+  TableDependInfo() :
+   depend_table_set_(),
+   table_idx_(OB_INVALID_INDEX)
+   {}
+
   TO_STRING_KV(
     K_(depend_table_set),
     K_(table_idx)
   );
+  int assign(const TableDependInfo &other)
+  {
+    int ret = OB_SUCCESS;
+    depend_table_set_.reuse();
+    table_idx_ = other.table_idx_;
+    ret = depend_table_set_.add_members(other.depend_table_set_);
+    return ret;
+  }
+
   ObRelIds depend_table_set_;  //function table expr所依赖的表
   int64_t table_idx_; //function table的bit index
+
+  DISALLOW_COPY_AND_ASSIGN(TableDependInfo);
 };
 
 #undef KYES_DEF
@@ -312,8 +329,6 @@ typedef common::ObSEArray<ObJoinOrder*, 4> JoinOrderArray;
 class ObLogPlan
 {
 public:
-  static const int64_t RELORDER_HASHBUCKET_SIZE = 256;
-  static const int64_t JOINPATH_SET_HASHBUCKET_SIZE = 3000;
   friend class ::test::ObLogPlanTest_ob_explain_test_Test;
 
   typedef common::ObList<common::ObAddr, common::ObArenaAllocator> ObAddrList;
@@ -493,17 +508,6 @@ public:
   int get_current_semi_infos(const ObIArray<SemiInfo*> &semi_infos,
                              const ObIArray<TableItem*> &table_items,
                              ObIArray<SemiInfo*> &current_semi_infos);
-
-  inline ObIArray<ObConflictDetector*>& get_conflict_detectors() { return conflict_detectors_; }
-  inline const ObIArray<ObConflictDetector*>& get_conflict_detectors() const { return conflict_detectors_; }
-
-  int get_base_table_items(const ObDMLStmt *stmt,
-                           ObIArray<TableItem*> &base_tables);
-
-  int generate_base_level_join_order(const common::ObIArray<TableItem*> &table_items,
-                                     common::ObIArray<ObJoinOrder*> &base_level);
-
-  int prepare_ordermap_pathset(const JoinOrderArray base_level);
 
   int select_location(ObTablePartitionInfo *tbl_part_info);
 
@@ -761,7 +765,7 @@ public:
    * @retval OB_SUCCESS execute success
    * @retval OB_SOME_ERROR special errno need to handle
    */
-  int generate_join_orders();
+  int generate_join_orders(ObJoinOrder *&join_order);
 
   /** @brief Allcoate operator for access path */
   int allocate_access_path(AccessPath *ap,
@@ -902,7 +906,7 @@ public:
                                  ObLogicalOperator *&out_plan_tree);
 
   /** @brief Initialize the candidate plans from join order */
-  int init_candidate_plans();
+  int init_candidate_plans(ObJoinOrder *join_order_tree);
 
   int init_candidate_plans(ObIArray<CandidatePlan> &candi_plans);
 
@@ -1666,17 +1670,9 @@ public:
                                     const EqualSets &equal_sets,
                                     ObShardingInfo *&cached_sharding);
 
-  inline const common::ObIArray<TableDependInfo> &get_table_depend_infos() const
-  {
-    return table_depend_infos_;
-  }
-
   int allocate_output_expr_for_values_op(ObLogicalOperator &values_op);
 
-  inline common::ObIArray<JoinPath*> &get_recycled_join_paths()
-  {
-    return recycled_join_paths_;
-  }
+  inline ObRawExprCopier *get_onetime_copier() { return onetime_copier_; }
 
   int get_rowkey_exprs(const uint64_t table_id,
                        const uint64_t ref_table_id,
@@ -1927,118 +1923,17 @@ protected:
 
   int pre_process_quals(TableItem *table_item);
 
-  int mock_base_rel_detectors(ObJoinOrder *&base_rel);
-
-  int init_bushy_tree_info(const ObIArray<TableItem*> &table_items);
-
-  int init_bushy_tree_info_from_joined_tables(TableItem *table);
-
-  int init_function_table_depend_info(const ObIArray<TableItem*> &table_items);
-
-  int init_json_table_depend_info(const ObIArray<TableItem*> &table_items);
-  // init json_table non_const default value
-  int init_json_table_column_depend_info(ObRelIds& depend_table_set,
-                                                   TableItem* json_table,
-                                                   const ObDMLStmt *stmt);
-  int init_default_val_json(ObRelIds& depend_table_set,
-                            ObRawExpr*& default_expr);
-  int check_need_bushy_tree(common::ObIArray<JoinOrderArray> &join_rels,
-                            const int64_t join_level,
-                            bool &need);
-
   int init_width_estimation_info(const ObDMLStmt *stmt);
-
-  int init_idp(int64_t initial_idp_step,
-               common::ObIArray<JoinOrderArray> &idp_join_rels,
-               common::ObIArray<JoinOrderArray> &full_join_rels);
-
-  int generate_join_levels_with_IDP(common::ObIArray<JoinOrderArray> &join_rels);
-
-  int inner_generate_join_levels_with_IDP(common::ObIArray<JoinOrderArray> &join_rels,
-                                          bool ignore_hint);
-
-  int generate_join_levels_with_orgleading(common::ObIArray<JoinOrderArray> &join_rels);
-
-  int do_one_round_idp(common::ObIArray<JoinOrderArray> &temp_join_rels,
-                      uint32_t curr_idp_step,
-                      bool ignore_hint,
-                      uint32_t &outer_base_level,
-                      ObIDPAbortType &abort_type);
-
-  int process_join_level_info(const ObIArray<TableItem*> &table_items,
-                              ObIArray<JoinOrderArray> &join_rels,
-                              ObIArray<JoinOrderArray> &new_join_rels);
-
-  int generate_join_order_with_table_tree(ObIArray<JoinOrderArray> &join_rels,
-                                          TableItem *table,
-                                          ObJoinOrder* &join_tree);
-
-  int generate_single_join_level_with_DP(ObIArray<JoinOrderArray> &join_rels,
-                                         uint32_t left_level,
-                                         uint32_t right_level,
-                                         uint32_t level,
-                                         bool ignore_hint,
-                                         ObIDPAbortType &abort_type);
-
-  int inner_generate_join_order(ObIArray<JoinOrderArray> &join_rels,
-                                ObJoinOrder *left_tree,
-                                ObJoinOrder *right_tree,
-                                uint32_t level,
-                                bool force_order,
-                                bool delay_cross_product,
-                                bool &is_valid_join,
-                                ObJoinOrder *&join_tree);
-
-  int check_detector_valid(ObJoinOrder *left_tree,
-                          ObJoinOrder *right_tree,
-                          const ObIArray<ObConflictDetector*> &valid_detectors,
-                          ObJoinOrder *cur_tree,
-                          bool &is_valid);
-
-  int process_join_pred(ObJoinOrder *left_tree,
-                        ObJoinOrder *right_tree,
-                        JoinInfo &join_info);
 
   int try_keep_pred_join_same_tables(ObJoinOrder *left_tree,
                                      ObJoinOrder *right_tree,
                                      ObIArray<ObRawExpr*> &join_pred);
-
-  int join_side_from_one_table(ObJoinOrder &child_tree,
-                               ObIArray<ObRawExpr*> &join_pred,
-                               bool &is_valid,
-                               ObRelIds &intersect_rel_ids);
-
-  int re_add_necessary_predicate(ObIArray<ObRawExpr*> &join_pred,
-                                 ObIArray<ObRawExpr*> &new_join_pred,
-                                 ObIArray<bool> &skip,
-                                 EqualSets &equal_sets);
-
-  int inner_remove_redundancy_pred(ObIArray<ObRawExpr*> &join_pred,
-                                   EqualSets &equal_sets,
-                                   ObJoinOrder *left_tree,
-                                   ObJoinOrder *right_tree);
 
   int sort_qual_by_selectivity(ObIArray<ObRawExpr*> &join_pred);
 
   int generate_subplan_for_query_ref(ObQueryRefRawExpr *query_ref,
                                      SubPlanInfo *&subplan_info,
                                      bool is_exists);
-
-  int greedy_idp_best_order(uint32_t current_level,
-                            common::ObIArray<JoinOrderArray> &idp_join_rels,
-                            ObJoinOrder *&best_order);
-
-  int prepare_next_round_idp(common::ObIArray<JoinOrderArray> &idp_join_rels,
-                             uint32_t initial_idp_step,
-                             ObJoinOrder *&best_order);
-
-  int check_and_abort_curr_level_dp(common::ObIArray<JoinOrderArray> &idp_join_rels,
-                                    uint32_t curr_level,
-                                    ObIDPAbortType &abort_type);
-
-  int check_and_abort_curr_round_idp(common::ObIArray<JoinOrderArray> &idp_join_rels,
-                                     uint32_t curr_level,
-                                     ObIDPAbortType &abort_type);
   /**
    * SubPlanInfo相关接口
    * @return
@@ -2092,32 +1987,6 @@ protected:
    * @return
    */
   int process_scalar_in(ObRawExpr *&expr);
-
-  /**
-   * 根据表的id找到基表（其实这里不一定是基表，而是fromitem里的基本对象，可以是用户写的OJ，也可能是个SubQueryScan）
-   * @param base_level
-   * @param table_id
-   * @return
-   */
-  int find_base_rel(common::ObIArray<ObJoinOrder *> &base_level, int64_t table_idx, ObJoinOrder *&base_rel);
-
-  /**
-   * 根据relids找到一个joinrel
-   * @param join_level
-   * @param relids
-   * @return
-   */
-  int find_join_rel(ObRelIds &relids, ObJoinOrder *&join_rel);
-
-  int check_need_gen_join_path(const ObJoinOrder *left_tree,
-                               const ObJoinOrder *right_tree,
-                               bool &need_gen);
-
-  int check_join_hint(const ObRelIds &left_set,
-                      const ObRelIds &right_set,
-                      bool &match_hint,
-                      bool &is_legal,
-                      bool &is_strict_order);
 
   // 用于计算 px 场景下 select、update 等语句需要的线程数
   int calc_plan_resource();
@@ -2256,46 +2125,6 @@ private: // member variable
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> winfunc_exprs_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> push_subq_exprs_; // exprs containing subquery that need to be pushed down
 private:
-  struct JoinPathPairInfo
-  {
-    JoinPathPairInfo()
-    : left_ids_(),
-      right_ids_() {}
-    virtual ~JoinPathPairInfo() = default;
-    uint64_t hash() const
-    {
-      return left_ids_.hash() + right_ids_.hash();;
-    }
-    int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
-    bool operator ==(const JoinPathPairInfo &src_info) const
-    {
-      return (left_ids_ == src_info.left_ids_) && (right_ids_ == src_info.right_ids_);
-    }
-    TO_STRING_KV(K_(left_ids), K_(right_ids));
-    ObRelIds left_ids_;
-    ObRelIds right_ids_;
-  };
-  typedef common::ObPooledAllocator<common::hash::HashMapTypes<ObRelIds, ObJoinOrder *>::AllocType,
-                                    common::ObWrapperAllocator> IdOrderMapAllocer;
-  typedef common::ObPooledAllocator<common::hash::HashSetTypes<JoinPathPairInfo>::AllocType,
-                                    common::ObWrapperAllocator> JoinPathSetAllocer;
-  typedef common::hash::ObHashMap<ObRelIds,
-                                  ObJoinOrder *,
-                                  common::hash::NoPthreadDefendMode,
-                                  common::hash::hash_func<ObRelIds>,
-                                  common::hash::equal_to<ObRelIds>,
-                                  IdOrderMapAllocer,
-                                  common::hash::NormalPointer,
-                                  common::ObWrapperAllocator,
-                                  2> IdOrderMap;
-  typedef common::hash::ObHashSet<JoinPathPairInfo,
-                                  common::hash::NoPthreadDefendMode,
-                                  common::hash::hash_func<JoinPathPairInfo>,
-                                  common::hash::equal_to<JoinPathPairInfo>,
-                                  JoinPathSetAllocer,
-                                  common::hash::NormalPointer,
-                                  common::ObWrapperAllocator,
-                                  2> JoinPathSet;
 
   ObLogPlanHint log_plan_hint_;
   enum OUTLINE_PRINT_FLAG { // FARM COMPAT WHITELIST
@@ -2304,24 +2133,14 @@ private:
     ADDED_PUSH_SUBQ_HINT  = 1 << 2
   };
   uint64_t outline_print_flags_; // used print outline
-  common::ObSEArray<ObRelIds, 8, common::ModulePageAllocator, true> bushy_tree_infos_;
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> onetime_exprs_; // allocated onetime exprs
-  common::ObSEArray<TableDependInfo, 8, common::ModulePageAllocator, true> table_depend_infos_;
-  common::ObSEArray<ObConflictDetector*, 8, common::ModulePageAllocator, true> conflict_detectors_;
-  ObJoinOrder *join_order_;
-  IdOrderMapAllocer id_order_map_allocer_;
-  common::ObWrapperAllocator bucket_allocator_wrapper_;
-  IdOrderMap relid_joinorder_map_;
-  JoinPathSetAllocer join_path_set_allocer_;
-  JoinPathSet join_path_set_;
-  common::ObSEArray<JoinPath*, 1024, common::ModulePageAllocator, true> recycled_join_paths_;
   common::ObSEArray<ObExprSelPair, 16, common::ModulePageAllocator, true> pred_sels_;
   common::ObSEArray<int64_t, 4, common::ModulePageAllocator, true> multi_stmt_rowkey_pos_;
 
   // used as default equal sets/ unique sets for ObLogicalOperator
   const ObRawExprSets empty_expr_sets_;
   const ObRelIds empty_table_set_;
-  EqualSets equal_sets_;  // non strict equal sets for stmt_;
+  PersistentEqualSets equal_sets_;  // non strict equal sets for stmt_;
   const ObFdItemSet empty_fd_item_set_;
   // save the maxinum of the logical operator id
   uint64_t max_op_id_;

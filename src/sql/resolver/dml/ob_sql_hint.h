@@ -342,13 +342,25 @@ struct LogTableHint
 };
 
 struct LeadingInfo {
-  TO_STRING_KV(K_(table_set),
-                 K_(left_table_set),
-                 K_(right_table_set));
+  LeadingInfo() :
+    left_info_(nullptr),
+    right_info_(nullptr)
+    {}
+
+  TO_STRING_KV(KP(this),
+               K_(table_set),
+               K_(left_table_set),
+               K_(right_table_set),
+               KP_(left_info),
+               KP_(right_info));
 
   ObRelIds table_set_;
   ObRelIds left_table_set_;
   ObRelIds right_table_set_;
+  LeadingInfo *left_info_;
+  LeadingInfo *right_info_;
+
+  DISALLOW_COPY_AND_ASSIGN(LeadingInfo);
 };
 
 struct JoinFilterPushdownHintInfo
@@ -371,33 +383,51 @@ struct JoinFilterPushdownHintInfo
 
 struct LogLeadingHint
 {
+  LogLeadingHint() :
+    top_leading_info_(NULL),
+    hint_(NULL) {}
+
   void reset() {
     leading_tables_.reuse();
     leading_infos_.reuse();
+    top_leading_info_ = NULL;
     hint_ = NULL;
   }
 
-  int init_leading_info(const ObDMLStmt &stmt,
+  int init_leading_info(ObIAllocator &allocator,
+                        const ObDMLStmt &stmt,
                         const ObQueryHint &query_hint,
                         const ObHint *hint);
-  int init_leading_info_from_leading_hint(const ObDMLStmt &stmt,
+  int init_leading_info_from_leading_hint(ObIAllocator &allocator,
+                                          const ObDMLStmt &stmt,
                                           const ObQueryHint &query_hint,
                                           const ObLeadingTable &cur_table,
-                                          ObRelIds& table_set);
-  int init_leading_info_from_ordered_hint(const ObDMLStmt &stmt);
-  int init_leading_info_from_table(const ObDMLStmt &stmt,
-                                   ObIArray<LeadingInfo> &leading_infos,
+                                          ObRelIds& table_set,
+                                          LeadingInfo *&leading_info);
+  int init_leading_info_from_ordered_hint(ObIAllocator &allocator,
+                                          const ObDMLStmt &stmt);
+  int init_leading_info_from_table(ObIAllocator &allocator,
+                                   const ObDMLStmt &stmt,
+                                   ObIArray<LeadingInfo *> &leading_infos,
                                    TableItem *table,
-                                   ObRelIds &table_set);
-  int try_init_leading_info_for_major_refresh_real_time_mview(const ObDMLStmt &stmt);
+                                   ObRelIds &table_set,
+                                   LeadingInfo *&leading_info);
+  int try_init_leading_info_for_major_refresh_real_time_mview(ObIAllocator &allocator,
+                                                              const ObDMLStmt &stmt);
+  int create_leading_info(ObIAllocator &allocator,
+                          LeadingInfo *&leading_info);
 
   TO_STRING_KV(K_(leading_tables),
                K_(leading_infos),
-               K_(hint));
+               K_(hint),
+               K_(top_leading_info));
 
   ObRelIds leading_tables_;
-  common::ObSEArray<LeadingInfo, 8, common::ModulePageAllocator, true> leading_infos_;
+  common::ObSEArray<LeadingInfo *, 8, common::ModulePageAllocator, true> leading_infos_;
+  LeadingInfo *top_leading_info_;
   const ObJoinOrderHint *hint_;
+
+  DISALLOW_COPY_AND_ASSIGN(LogLeadingHint);
 };
 
 struct ObLogPlanHint
@@ -406,11 +436,13 @@ struct ObLogPlanHint
   void reset();
   int init_normal_hints(const ObIArray<ObHint*> &normal_hints, const ObQueryCtx &query_ctx);
 #ifndef OB_BUILD_SPM
-  int init_log_plan_hint(ObSqlSchemaGuard &schema_guard,
+  int init_log_plan_hint(ObIAllocator &allocator,
+                         ObSqlSchemaGuard &schema_guard,
                          const ObDMLStmt &stmt,
                          const ObQueryHint &query_hint);
 #else
-  int init_log_plan_hint(ObSqlSchemaGuard &schema_guard,
+  int init_log_plan_hint(ObIAllocator &allocator,
+                         ObSqlSchemaGuard &schema_guard,
                          const ObDMLStmt &stmt,
                          const ObQueryHint &query_hint,
                          const bool is_spm_evolution);
@@ -531,6 +563,8 @@ struct ObLogPlanHint
   common::ObSEArray<LogJoinHint, 8, common::ModulePageAllocator, true> join_hints_;
   common::ObSEArray<const ObHint*, 8, common::ModulePageAllocator, true> normal_hints_;
   uint64_t optimizer_features_enable_version_;
+
+  DISALLOW_COPY_AND_ASSIGN(ObLogPlanHint);
 };
 
 }

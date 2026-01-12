@@ -239,8 +239,9 @@ struct ObOptParamHint
     DEF(ENABLE_FAST_REFRESH_WITH_CUR_TIME,)         \
     DEF(DISABLE_SHARED_EXPR_EXTRACTION,)            \
     DEF(ENABLE_MERGE_INTO,)                         \
-
-
+    DEF(JOIN_ORDER_ENUM_THRESHOLD,)                 \
+    DEF(OPTIMIZER_MAX_PERMUTATIONS,)                \
+    DEF(IDP_STEP_REDUCTION_THRESHOLD,)              \
 
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
@@ -258,6 +259,7 @@ struct ObOptParamHint
   int get_bool_opt_param(const OptParamType param_type, bool &val) const;
   int get_integer_opt_param(const OptParamType param_type, int64_t &val, bool &is_exists) const;
   int get_integer_opt_param(const OptParamType param_type, int64_t &val) const;
+  int get_integer_opt_param(const OptParamType param_type, uint64_t &val) const;
   int get_opt_param_runtime_filter_type(int64_t &rf_type) const;
   int get_hash_rollup_param(ObObj &val, bool &has_opt_param) const;
   int get_enum_opt_param(const OptParamType param_type, int64_t &val) const;
@@ -275,6 +277,10 @@ struct ObOptParamHint
                   const ObSQLSessionInfo *session,
                   const share::ObSysVarClassType sys_var_id,
                   int64_t &val) const;
+  int get_sys_var(const OptParamType param_type,
+                  const ObSQLSessionInfo *session,
+                  const share::ObSysVarClassType sys_var_id,
+                  uint64_t &val) const;
   int get_sys_var(const OptParamType param_type,
                   const ObSQLSessionInfo *session,
                   const share::ObSysVarClassType sys_var_id,
@@ -421,7 +427,8 @@ struct ObGlobalHint {
 #define COMPAT_VERSION_4_4_1      (oceanbase::common::cal_version(4, 4, 1, 0))
 #define COMPAT_VERSION_4_4_2      (oceanbase::common::cal_version(4, 4, 2, 0))
 #define COMPAT_VERSION_4_5_0      (oceanbase::common::cal_version(4, 5, 0, 0))
-#define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_5_0
+#define COMPAT_VERSION_4_5_1      (oceanbase::common::cal_version(4, 5, 1, 0))
+#define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_5_1
   static bool is_valid_opt_features_version(uint64_t version)
   { return COMPAT_VERSION_4_0 <= version && (LASTED_COMPAT_VERSION >= version || CLUSTER_CURRENT_VERSION >= version); }
 

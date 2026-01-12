@@ -1968,8 +1968,8 @@ int ObStmtComparer::check_stmt_set_containment(const ObDMLStmt *first,
   } else {
     const ObSelectStmt *first_sel = static_cast<const ObSelectStmt*>(first);
     const ObSelectStmt *second_sel = static_cast<const ObSelectStmt*>(second);
-    EqualSets first_equal_sets;
-    EqualSets second_equal_sets;
+    TemporaryEqualSets first_equal_sets;
+    TemporaryEqualSets second_equal_sets;
     ObArenaAllocator alloc;
     if (OB_FAIL(first_sel->get_stmt_equal_sets(first_equal_sets, alloc, true))) {
       LOG_WARN("failed to get first stmt equal sets", K(ret));

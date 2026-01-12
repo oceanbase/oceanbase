@@ -1393,11 +1393,13 @@ void ObLogPlanHint::reset()
 }
 
 #ifndef OB_BUILD_SPM
-int ObLogPlanHint::init_log_plan_hint(ObSqlSchemaGuard &schema_guard,
+int ObLogPlanHint::init_log_plan_hint(ObIAllocator &allocator,
+                                      ObSqlSchemaGuard &schema_guard,
                                       const ObDMLStmt &stmt,
                                       const ObQueryHint &query_hint)
 #else
-int ObLogPlanHint::init_log_plan_hint(ObSqlSchemaGuard &schema_guard,
+int ObLogPlanHint::init_log_plan_hint(ObIAllocator &allocator,
+                                      ObSqlSchemaGuard &schema_guard,
                                       const ObDMLStmt &stmt,
                                       const ObQueryHint &query_hint,
                                       const bool is_spm_evolution)
@@ -1411,7 +1413,7 @@ int ObLogPlanHint::init_log_plan_hint(ObSqlSchemaGuard &schema_guard,
 #endif
   optimizer_features_enable_version_ = stmt.get_query_ctx()->optimizer_features_enable_version_;
   const ObStmtHint &stmt_hint = stmt.get_stmt_hint();
-  if (OB_FAIL(join_order_.init_leading_info(stmt, query_hint, stmt_hint.get_normal_hint(T_LEADING)))) {
+  if (OB_FAIL(join_order_.init_leading_info(allocator, stmt, query_hint, stmt_hint.get_normal_hint(T_LEADING)))) {
     LOG_WARN("failed to get leading hint info", K(ret));
   } else if (OB_FAIL(init_normal_hints(stmt_hint.normal_hints_, *stmt.get_query_ctx()))) {
     LOG_WARN("failed to init normal hints", K(ret));
@@ -2173,7 +2175,21 @@ bool ObLogPlanHint::is_spm_evolution() const
   return bret;
 }
 
-int LogLeadingHint::init_leading_info(const ObDMLStmt &stmt,
+int LogLeadingHint::create_leading_info(ObIAllocator &allocator, LeadingInfo *&leading_info)
+{
+  int ret = OB_SUCCESS;
+  void *ptr = nullptr;
+  if (OB_ISNULL(ptr = allocator.alloc(sizeof(LeadingInfo)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate leading info", K(ret));
+  } else {
+    leading_info = new(ptr) LeadingInfo();
+  }
+  return ret;
+}
+
+int LogLeadingHint::init_leading_info(ObIAllocator &allocator,
+                                      const ObDMLStmt &stmt,
                                       const ObQueryHint &query_hint,
                                       const ObHint *hint)
 {
@@ -2181,7 +2197,7 @@ int LogLeadingHint::init_leading_info(const ObDMLStmt &stmt,
   reset();
   if (NULL == hint) {
     /* do nothing */
-    if (OB_FAIL(try_init_leading_info_for_major_refresh_real_time_mview(stmt))) {
+    if (OB_FAIL(try_init_leading_info_for_major_refresh_real_time_mview(allocator, stmt))) {
       LOG_WARN("failed to try init leading info for major refresh real time mview.", K(ret));
     }
   } else if (OB_UNLIKELY(!hint->is_join_order_hint())) {
@@ -2191,14 +2207,15 @@ int LogLeadingHint::init_leading_info(const ObDMLStmt &stmt,
     ObRelIds table_set;
     hint_ = static_cast<const ObJoinOrderHint*>(hint);
     if (hint_->is_ordered_hint() &&
-        OB_FAIL(init_leading_info_from_ordered_hint(stmt))) {
+        OB_FAIL(init_leading_info_from_ordered_hint(allocator, stmt))) {
       LOG_TRACE("failed to init leading info from ordered hint.", K(ret));
     } else if (!hint_->is_ordered_hint() &&
-               OB_FAIL(init_leading_info_from_leading_hint(stmt, query_hint, hint_->get_table(), table_set))) {
+               OB_FAIL(init_leading_info_from_leading_hint(allocator, stmt, query_hint,
+                                                           hint_->get_table(), table_set,
+                                                           top_leading_info_))) {
       LOG_TRACE("failed to init leading info from leading hint.", K(ret));
     } else if (NULL == hint_) {
-      leading_tables_.reuse();
-      leading_infos_.reuse();
+      reset();
     } else {
       LOG_TRACE("succeed to get leading infos", K(*this));
     }
@@ -2206,7 +2223,8 @@ int LogLeadingHint::init_leading_info(const ObDMLStmt &stmt,
   return ret;
 }
 
-int LogLeadingHint::try_init_leading_info_for_major_refresh_real_time_mview(const ObDMLStmt &stmt)
+int LogLeadingHint::try_init_leading_info_for_major_refresh_real_time_mview(ObIAllocator &allocator,
+                                                                            const ObDMLStmt &stmt)
 {
   int ret = OB_SUCCESS;
   leading_infos_.reuse();
@@ -2226,8 +2244,7 @@ int LogLeadingHint::try_init_leading_info_for_major_refresh_real_time_mview(cons
     LOG_WARN("unexpected NULL", K(ret), K(table_item));
   } else if (ObMajorRefreshMJVPrinter::MR_MV_RT_QUERY_LEADING_TABLE_FLAG != table_item->mr_mv_flags_) {
     /* do nothing */
-  } else if (OB_ISNULL(leading_info = leading_infos_.alloc_place_holder())) {
-    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(create_leading_info(allocator, leading_info))) {
     LOG_WARN("alloc LeadingInfo failed", K(ret));
   } else if (OB_FAIL(leading_info->left_table_set_.add_member(stmt.get_table_bit_index(table_item->table_id_)))) {
     LOG_WARN("failed to add member", K(ret));
@@ -2238,17 +2255,23 @@ int LogLeadingHint::try_init_leading_info_for_major_refresh_real_time_mview(cons
     LOG_WARN("failed to get table ids", K(ret));
   } else if (OB_FAIL(leading_info->table_set_.add_members(leading_tables_))) {
     LOG_WARN("failed to add table ids", K(ret));
+  } else if (OB_FAIL(leading_infos_.push_back(leading_info))) {
+    LOG_WARN("failed to push back");
+  } else {
+    top_leading_info_ = leading_info;
   }
   return ret;
 }
 
-int LogLeadingHint::init_leading_info_from_leading_hint(const ObDMLStmt &stmt,
+int LogLeadingHint::init_leading_info_from_leading_hint(ObIAllocator &allocator,
+                                                        const ObDMLStmt &stmt,
                                                         const ObQueryHint &query_hint,
                                                         const ObLeadingTable &cur_table,
-                                                        ObRelIds& table_set)
+                                                        ObRelIds& table_set,
+                                                        LeadingInfo *&leading_info)
 {
   int ret = OB_SUCCESS;
-  LeadingInfo leading_info;
+  leading_info = nullptr;
   if (NULL != cur_table.table_) {
     int32_t index = OB_INVALID_INDEX;
     if (OB_FAIL(query_hint.get_table_bit_index_by_hint_table(stmt, *cur_table.table_, index))) {
@@ -2261,27 +2284,31 @@ int LogLeadingHint::init_leading_info_from_leading_hint(const ObDMLStmt &stmt,
                || OB_FAIL(table_set.add_member(index))) {
       LOG_WARN("failed to add members", K(ret));
     }
+  } else if (OB_FAIL(create_leading_info(allocator, leading_info))) {
+    LOG_WARN("failed to create leading info", K(ret));
   } else if (OB_ISNULL(cur_table.left_table_) || OB_ISNULL(cur_table.right_table_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null.", K(ret), K(cur_table.left_table_), K(cur_table.right_table_));
-  } else if (OB_FAIL(SMART_CALL(init_leading_info_from_leading_hint(stmt, query_hint,
+  } else if (OB_FAIL(SMART_CALL(init_leading_info_from_leading_hint(allocator, stmt, query_hint,
                                                                     *cur_table.left_table_,
-                                                                    leading_info.left_table_set_)))) {
+                                                                    leading_info->left_table_set_,
+                                                                    leading_info->left_info_)))) {
     LOG_WARN("failed to init leading info from leading", K(ret));
   } else if (NULL == hint_) {
     /* do nothing */
-  } else if (OB_FAIL(SMART_CALL(init_leading_info_from_leading_hint(stmt, query_hint,
+  } else if (OB_FAIL(SMART_CALL(init_leading_info_from_leading_hint(allocator, stmt, query_hint,
                                                                     *cur_table.right_table_,
-                                                                    leading_info.right_table_set_)))) {
+                                                                    leading_info->right_table_set_,
+                                                                    leading_info->right_info_)))) {
     LOG_WARN("failed to init leading info from leading", K(ret));
   } else if (NULL == hint_) {
     /* do nothing */
-  } else if (OB_FAIL(leading_info.table_set_.add_members(leading_info.left_table_set_))
-             || OB_FAIL(leading_info.table_set_.add_members(leading_info.right_table_set_))) {
+  } else if (OB_FAIL(leading_info->table_set_.add_members(leading_info->left_table_set_))
+             || OB_FAIL(leading_info->table_set_.add_members(leading_info->right_table_set_))) {
     LOG_WARN("failed to add table ids", K(ret));
   } else if (OB_FAIL(leading_infos_.push_back(leading_info))) {
     LOG_WARN("failed to push back hint info", K(ret));
-  } else if (OB_FAIL(table_set.add_members(leading_info.table_set_))) {
+  } else if (OB_FAIL(table_set.add_members(leading_info->table_set_))) {
     LOG_WARN("failed to add table ids", K(ret));
   }
   return ret;
@@ -2290,43 +2317,56 @@ int LogLeadingHint::init_leading_info_from_leading_hint(const ObDMLStmt &stmt,
 /**
  * for ordered hint, init leading hint info by the ordering of tables in stmt
  */
-int LogLeadingHint::init_leading_info_from_ordered_hint(const ObDMLStmt &stmt)
+int LogLeadingHint::init_leading_info_from_ordered_hint(ObIAllocator &allocator, const ObDMLStmt &stmt)
 {
   int ret = OB_SUCCESS;
   const ObIArray<FromItem> &from_items = stmt.get_from_items();
   const ObIArray<SemiInfo*> &semi_infos = stmt.get_semi_infos();
   SemiInfo *semi_info = NULL;
   ObRelIds leading_tables;
+  ObRelIds right_table_set;
   const int64_t N = from_items.count() + semi_infos.count();
   for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
-    LeadingInfo leading_info;
+    LeadingInfo *leading_info = nullptr;
+    LeadingInfo *right_leading_info = nullptr;
+    right_table_set.reuse();
     if (i < from_items.count()) {
       const FromItem &from_item = from_items.at(i);
       TableItem *table_item = from_item.is_joined_
                               ? stmt.get_joined_table(from_item.table_id_)
                               : stmt.get_table_item_by_id(from_item.table_id_);
-      if (OB_FAIL(init_leading_info_from_table(stmt, leading_infos_,
-                                               table_item, leading_info.right_table_set_))) {
+      if (OB_FAIL(init_leading_info_from_table(allocator, stmt, leading_infos_,
+                                               table_item, right_table_set,
+                                               right_leading_info))) {
         LOG_WARN("failed to init leading infos from table.", K(ret));
       }
     } else if (OB_ISNULL(semi_info = semi_infos.at(i - from_items.count()))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null semi info", K(ret));
-    } else if (OB_FAIL(leading_info.right_table_set_.add_member(
+    } else if (OB_FAIL(right_table_set.add_member(
                                     stmt.get_table_bit_index(semi_info->right_table_id_)))) {
       LOG_WARN("failed to add members", K(ret));
     }
 
     if (i == 0) {
-      ret = leading_tables.add_members(leading_info.right_table_set_);
-    } else if (OB_FAIL(leading_info.left_table_set_.add_members(leading_tables))) {
+      ret = leading_tables.add_members(right_table_set);
+      top_leading_info_ = right_leading_info;
+    } else if (OB_FAIL(create_leading_info(allocator, leading_info))) {
+      LOG_WARN("failed to create leading info", K(ret));
+    } else if (OB_FAIL(leading_info->right_table_set_.add_members(right_table_set))) {
       LOG_WARN("failed to add table ids", K(ret));
-    } else if (OB_FAIL(leading_tables.add_members(leading_info.right_table_set_))) {
+    } else if (OB_FAIL(leading_info->left_table_set_.add_members(leading_tables))) {
+      LOG_WARN("failed to add table ids", K(ret));
+    } else if (OB_FAIL(leading_tables.add_members(leading_info->right_table_set_))) {
       LOG_WARN("failed to get table ids", K(ret));
-    } else if (OB_FAIL(leading_info.table_set_.add_members(leading_tables))) {
+    } else if (OB_FAIL(leading_info->table_set_.add_members(leading_tables))) {
       LOG_WARN("failed to add table ids", K(ret));
     } else if (OB_FAIL(leading_infos_.push_back(leading_info))) {
       LOG_WARN("failed to push back hint info", K(ret));
+    } else {
+      leading_info->left_info_ = top_leading_info_;
+      leading_info->right_info_ = right_leading_info;
+      top_leading_info_ = leading_info;
     }
   }
   if (OB_SUCC(ret) && OB_FAIL(leading_tables_.add_members(leading_tables))) {
@@ -2338,12 +2378,15 @@ int LogLeadingHint::init_leading_info_from_ordered_hint(const ObDMLStmt &stmt)
 /**
  * init leading hint info for table item
  */
-int LogLeadingHint::init_leading_info_from_table(const ObDMLStmt &stmt,
-                                                  ObIArray<LeadingInfo> &leading_infos,
-                                                  TableItem *table,
-                                                  ObRelIds &table_set)
+int LogLeadingHint::init_leading_info_from_table(ObIAllocator &allocator,
+                                                 const ObDMLStmt &stmt,
+                                                 ObIArray<LeadingInfo *> &leading_infos,
+                                                 TableItem *table,
+                                                 ObRelIds &table_set,
+                                                 LeadingInfo *&leading_info)
 {
   int ret = OB_SUCCESS;
+  leading_info = nullptr;
   if (OB_ISNULL(table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null table item", K(ret));
@@ -2352,21 +2395,24 @@ int LogLeadingHint::init_leading_info_from_table(const ObDMLStmt &stmt,
       LOG_WARN("failed to add members", K(ret));
     }
   } else {
-    LeadingInfo leading_info;
     JoinedTable *joined_table = static_cast<JoinedTable*>(table);
-    if (OB_FAIL(SMART_CALL(init_leading_info_from_table(stmt, leading_infos,
-                                                        joined_table->left_table_,
-                                                        leading_info.left_table_set_)))) {
+    if (OB_FAIL(create_leading_info(allocator, leading_info))) {
+      LOG_WARN("failed to create leading info", K(ret));
+    } else if (OB_FAIL(SMART_CALL(init_leading_info_from_table(allocator, stmt, leading_infos,
+                                                               joined_table->left_table_,
+                                                               leading_info->left_table_set_,
+                                                               leading_info->left_info_)))) {
       LOG_WARN("failed to get leading hint info", K(ret));
-    } else if (OB_FAIL(SMART_CALL(init_leading_info_from_table(stmt, leading_infos,
+    } else if (OB_FAIL(SMART_CALL(init_leading_info_from_table(allocator, stmt, leading_infos,
                                                                joined_table->right_table_,
-                                                               leading_info.right_table_set_)))) {
+                                                               leading_info->right_table_set_,
+                                                               leading_info->right_info_)))) {
       LOG_WARN("failed to get leading hint info", K(ret));
-    } else if (OB_FAIL(leading_info.table_set_.add_members(leading_info.left_table_set_))) {
+    } else if (OB_FAIL(leading_info->table_set_.add_members(leading_info->left_table_set_))) {
       LOG_WARN("failed to add members", K(ret));
-    } else if (OB_FAIL(leading_info.table_set_.add_members(leading_info.right_table_set_))) {
+    } else if (OB_FAIL(leading_info->table_set_.add_members(leading_info->right_table_set_))) {
       LOG_WARN("failed to add members", K(ret));
-    } else if (OB_FAIL(table_set.add_members(leading_info.table_set_))) {
+    } else if (OB_FAIL(table_set.add_members(leading_info->table_set_))) {
       LOG_WARN("failed to add members", K(ret));
     } else if (OB_FAIL(leading_infos.push_back(leading_info))) {
       LOG_WARN("failed to push back hint info", K(ret));

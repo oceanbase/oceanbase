@@ -1198,6 +1198,9 @@ ob_set_subtarget(ob_sql optimizer
   optimizer/ob_index_info_cache.cpp
   optimizer/ob_insert_all_log_plan.cpp
   optimizer/ob_insert_log_plan.cpp
+  optimizer/ob_join_order_enum_idp.cpp
+  optimizer/ob_join_order_enum_permutation.cpp
+  optimizer/ob_join_order_enum.cpp
   optimizer/ob_join_order.cpp
   optimizer/ob_log_count.cpp
   optimizer/ob_log_del_upd.cpp

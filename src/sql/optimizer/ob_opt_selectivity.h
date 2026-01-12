@@ -862,6 +862,8 @@ public:
            (ignore_inf_error ? 1.0 : num);
   }
 
+  static inline double revise_ndv(double ndv) { return ndv < 1.0 ? 1.0 : ndv; }
+
   static int get_column_range_sel(const OptTableMetas &table_metas,
                                   const OptSelectivityCtx &ctx,
                                   const ObColumnRefRawExpr &col_expr,

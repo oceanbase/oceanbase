@@ -62,6 +62,8 @@ namespace sql
   class ObSelectLogPlan;
   class ObConflictDetector;
   class ObLakeTablePartitionInfo;
+  class ObLogPlan;
+  class ObJoinOrderEnum;
   struct CandiRangeExprs
   {
     int64_t column_id_;
@@ -154,6 +156,28 @@ namespace sql
       unstable_index_name_()
     {}
 
+    void reuse() {
+      optimization_method_ = OptimizationMethod::MAX_METHOD;
+      heuristic_rule_ = HeuristicRule::MAX_RULE;
+      available_index_id_.reuse();
+      available_index_name_.reuse();
+      pruned_index_name_.reuse();
+      unstable_index_name_.reuse();
+    }
+
+    int assign(const BaseTableOptInfo &other) {
+      int ret = OB_SUCCESS;
+      optimization_method_ = other.optimization_method_;
+      heuristic_rule_ = other.heuristic_rule_;
+      if (OB_FAIL(available_index_id_.assign(other.available_index_id_)) ||
+          OB_FAIL(available_index_name_.assign(other.available_index_name_)) ||
+          OB_FAIL(pruned_index_name_.assign(other.pruned_index_name_)) ||
+          OB_FAIL(unstable_index_name_.assign(other.unstable_index_name_))) {
+        SQL_LOG(WARN, "failed to assign", K(ret));
+      }
+      return ret;
+    }
+
     // this following variables are tracked to remember how base table access path are generated
     OptimizationMethod optimization_method_;
     HeuristicRule heuristic_rule_;
@@ -161,6 +185,8 @@ namespace sql
     common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> available_index_name_;
     common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> pruned_index_name_;
     common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> unstable_index_name_;
+
+    DISABLE_COPY_ASSIGN(BaseTableOptInfo);
   };
   struct JoinFilterInfo {
   JoinFilterInfo()
@@ -370,7 +396,8 @@ class Path
       op_parallel_rule_(OpParallelRule::OP_DOP_RULE_MAX),
       available_parallel_(ObGlobalHint::DEFAULT_PARALLEL),
       server_cnt_(1),
-      inherit_sharding_index_(-1)
+      inherit_sharding_index_(-1),
+      path_number_(-1)
     {  }
     Path(ObJoinOrder* parent)
       : parent_(parent),
@@ -403,8 +430,10 @@ class Path
         is_pipelined_path_(false),
         is_nl_style_pipelined_path_(false),
         inherit_sharding_index_(-1),
-        is_valid_inner_path_(false)
+        is_valid_inner_path_(false),
+        path_number_(-1)
     {  }
+    virtual void reuse();
     virtual ~Path() {}
     int assign(const Path &other, common::ObIAllocator *allocator);
     bool is_cte_path() const;
@@ -484,6 +513,7 @@ class Path
       return is_local() || is_remote() || is_match_all();
     }
     virtual int estimate_cost()=0;
+    int try_re_estimate_cost(EstimateCostInfo &info, double &card, double &cost);
     virtual int re_estimate_cost(EstimateCostInfo &info, double &card, double &cost);
     double get_path_output_rows() const;
     bool contain_fake_cte() const { return contain_fake_cte_; }
@@ -582,6 +612,7 @@ class Path
     int64_t inherit_sharding_index_;
     // mark this access path is inner path and contribute query range
     bool is_valid_inner_path_;
+    int64_t path_number_;
 
   private:
     DISALLOW_COPY_AND_ASSIGN(Path);
@@ -920,6 +951,7 @@ class Path
       can_use_batch_nlj_(false),
       is_naaj_(false),
       is_sna_(false),
+      contain_expansion_join_(false),
       join_output_rows_(-1.0)
     {
     }
@@ -955,13 +987,31 @@ class Path
         can_use_batch_nlj_(false),
         is_naaj_(false),
         is_sna_(false),
+        contain_expansion_join_(false),
         join_output_rows_(-1.0)
       {
       }
+    void init(ObJoinOrder* parent,
+              const Path* left_path,
+              const Path* right_path,
+              JoinAlgo join_algo,
+              DistAlgo join_dist_algo,
+              ObJoinType join_type,
+              bool need_mat = false)
+    {
+      parent_ = parent;
+      left_path_ = left_path;
+      right_path_ = right_path;
+      join_algo_ = join_algo;
+      join_dist_algo_ = join_dist_algo;
+      join_type_ = join_type;
+      need_mat_ = need_mat;
+    }
+
     virtual ~JoinPath() {}
     int assign(const JoinPath &other, common::ObIAllocator *allocator);
     virtual int estimate_cost() override;
-    void reuse();
+    virtual void reuse() override;
     virtual int re_estimate_cost(EstimateCostInfo &info, double &card, double &cost) override;
     int do_re_estimate_cost(EstimateCostInfo &info, double &card, double &op_cost, double &cost);
     int get_re_estimate_param(EstimateCostInfo &param,
@@ -1053,6 +1103,9 @@ class Path
     void set_contain_normal_nl(bool contain) { contain_normal_nl_ = contain; }
     bool has_none_equal_join() const { return has_none_equal_join_; }
     void set_has_none_equal_join(bool has) { has_none_equal_join_ = has; }
+    bool contain_expansion_join() const { return contain_expansion_join_; }
+    void set_contain_expansion_join(bool contain) { contain_expansion_join_ = contain; }
+    bool is_expansion_join() const;
     int check_is_contain_normal_nl();
     virtual int compute_pipeline_info() override;
     virtual int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
@@ -1148,6 +1201,7 @@ class Path
                  K_(can_use_batch_nlj),
                  K_(is_naaj),
                  K_(is_sna),
+                 K_(contain_expansion_join),
                  K_(inherit_sharding_index),
                  K_(join_output_rows));
   public:
@@ -1178,6 +1232,7 @@ class Path
     bool can_use_batch_nlj_;
     bool is_naaj_; // is null aware anti join
     bool is_sna_; // is single null aware anti join
+    bool contain_expansion_join_; // contains expansion join (self or in children)
     /**
      * estimated rowcount under the current left and right join order trees,
      * might be different with the rowcount of parent_ join order
@@ -1200,6 +1255,7 @@ class Path
         root_(root) {}
     virtual ~SubQueryPath() { }
     int assign(const SubQueryPath &other, common::ObIAllocator *allocator);
+    virtual void reuse() override;
     virtual int estimate_cost() override;
     virtual int re_estimate_cost(EstimateCostInfo &info, double &card, double &cost) override;
     virtual int compute_pipeline_info() override;
@@ -1228,6 +1284,7 @@ class Path
         value_expr_(NULL) {}
     virtual ~FunctionTablePath() { }
     int assign(const FunctionTablePath &other, common::ObIAllocator *allocator);
+    virtual void reuse() override;
     virtual int estimate_cost() override;
     virtual int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
     {
@@ -1254,6 +1311,7 @@ class Path
         column_param_default_exprs_() {}
     virtual ~JsonTablePath() {}
     int assign(const JsonTablePath &other, common::ObIAllocator *allocator);
+    virtual void reuse() override;
     virtual int estimate_cost() override;
     virtual int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
     {
@@ -1281,6 +1339,7 @@ class Path
         root_(NULL) { }
     virtual ~TempTablePath() { }
     int assign(const TempTablePath &other, common::ObIAllocator *allocator);
+    virtual void reuse() override;
     virtual int estimate_cost() override;
     virtual int re_estimate_cost(EstimateCostInfo &info, double &card, double &cost) override;
     int compute_sharding_info();
@@ -1311,6 +1370,7 @@ class Path
         ref_table_id_(OB_INVALID_ID) {}
     virtual ~CteTablePath() { }
     int assign(const CteTablePath &other, common::ObIAllocator *allocator);
+    virtual void reuse() override;
     virtual int estimate_cost() override;
     virtual int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
     {
@@ -1336,6 +1396,7 @@ class Path
         table_def_(NULL) {}
     virtual ~ValuesTablePath() { }
     int assign(const ValuesTablePath &other, common::ObIAllocator *allocator);
+    virtual void reuse() override;
     virtual int estimate_cost() override;
     virtual int estimate_row_count();
     virtual int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
@@ -1379,11 +1440,25 @@ struct InnerPathInfo {
                K_(force_inner_nl),
                K_(join_type));
 
+  int assign(const InnerPathInfo &other) {
+    int ret = OB_SUCCESS;
+    force_inner_nl_ = other.force_inner_nl_;
+    join_type_ = other.join_type_;
+    if (OB_FAIL(join_conditions_.assign(other.join_conditions_)) ||
+        OB_FAIL(inner_paths_.assign(other.inner_paths_)) ||
+        OB_FAIL(table_opt_info_.assign(other.table_opt_info_))) {
+      SQL_LOG(WARN, "failed to assign", K(ret));
+    }
+    return ret;
+  }
+
   common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> join_conditions_;
   common::ObSEArray<Path *, 8, common::ModulePageAllocator, true> inner_paths_;
   BaseTableOptInfo table_opt_info_;
   bool force_inner_nl_; //force generation of inner path, ignoring range check
   ObJoinType join_type_;
+
+  DISABLE_COPY_ASSIGN(InnerPathInfo);
 };
 typedef  common::ObSEArray<InnerPathInfo, 8, common::ModulePageAllocator, true> InnerPathInfos;
 
@@ -1518,41 +1593,10 @@ struct MergeKeyInfoHelper
       ObVecIdxAdaTryPath vec_idx_try_path_;
     };
 
-    ObJoinOrder(common::ObIAllocator *allocator,
-                ObLogPlan *plan,
-                PathType type)
-    : allocator_(allocator),
-      plan_(plan),
-      type_(type),
-      table_id_(common::OB_INVALID_ID),
-      table_set_(),
-      output_table_set_(),
-      output_rows_(-1.0),
-      output_row_size_(-1.0),
-      table_partition_info_(NULL),
-      sharding_info_(NULL),
-      table_meta_info_(common::OB_INVALID_ID),
-      join_info_(NULL),
-      used_conflict_detectors_(),
-      restrict_info_set_(),
-      interesting_paths_(),
-      is_at_most_one_row_(false),
-      output_equal_sets_(),
-      output_const_exprs_(),
-      table_opt_info_(),
-      available_access_paths_(),
-      diverse_path_count_(0),
-      fd_item_set_(),
-      candi_fd_item_set_(),
-      not_null_columns_(),
-      inner_path_infos_(),
-      cnt_rownum_(false),
-      total_path_num_(0),
-      current_join_output_rows_(-1.0),
-      best_cost_(-1.0)
-    {
-    }
+    ObJoinOrder(ObJoinOrderEnum &join_order_enum,
+                PathType type);
     virtual ~ObJoinOrder();
+    void reuse();
 
     int skyline_prunning_index(const uint64_t table_id,
                                const uint64_t base_table_id,
@@ -1669,7 +1713,6 @@ struct MergeKeyInfoHelper
      */
     int add_path(Path* path);
     int update_cost_and_cardinality(const Path &path);
-    int add_recycled_paths(Path* path);
     int compute_vec_idx_path_relationship(const AccessPath &first_path,
                                           const AccessPath &second_path,
                                           DominateRelation &relation);
@@ -1796,13 +1839,15 @@ struct MergeKeyInfoHelper
 
     inline void set_output_rows(double rows) { output_rows_ = rows;}
 
+    inline double get_best_cost() const {return best_cost_;}
+
     inline common::ObIArray<ObConflictDetector*>& get_conflict_detectors() {return used_conflict_detectors_;}
     inline const common::ObIArray<ObConflictDetector*>& get_conflict_detectors() const {return used_conflict_detectors_;}
     int merge_conflict_detectors(ObJoinOrder *left_tree,
                                  ObJoinOrder *right_tree,
                                  const common::ObIArray<ObConflictDetector*>& detectors);
-    inline JoinInfo* get_join_info() {return join_info_;}
-    inline const JoinInfo* get_join_info() const {return join_info_;}
+    inline JoinInfo& get_join_info() {return join_info_;}
+    inline const JoinInfo& get_join_info() const {return join_info_;}
 
     inline ObRelIds& get_tables() {return table_set_;}
     inline const ObRelIds& get_tables() const { return table_set_; }
@@ -1816,6 +1861,7 @@ struct MergeKeyInfoHelper
 
     inline common::ObIArray<Path*>& get_interesting_paths() {return interesting_paths_;}
     inline const common::ObIArray<Path*>& get_interesting_paths() const {return interesting_paths_;}
+    inline const common::ObIArray<Path*>& get_latest_interesting_paths() const {return latest_interesting_paths_;}
 
     inline void set_type(PathType type) {type_ = type;}
 
@@ -1835,6 +1881,10 @@ struct MergeKeyInfoHelper
 
     inline void set_is_at_most_one_row(bool is_at_most_one_row) { is_at_most_one_row_ = is_at_most_one_row; }
     inline bool get_is_at_most_one_row() const { return is_at_most_one_row_; }
+
+    ObJoinOrderEnum &get_join_order_enum() { return join_order_enum_; }
+
+    int prune_join_paths_global();
 
     int alloc_join_path(JoinPath *&join_path);
     int check_can_use_vec_primary_opt(const uint64_t ref_table_id,
@@ -2305,11 +2355,11 @@ struct MergeKeyInfoHelper
      */
     int init_join_order(const ObJoinOrder* left_tree,
                         const ObJoinOrder* right_tree,
-                        const JoinInfo* join_info,
+                        const JoinInfo &join_info,
                         const common::ObIArray<ObConflictDetector*>& detectors);
     int compute_join_property(const ObJoinOrder *left_tree,
                               const ObJoinOrder *right_tree,
-                              const JoinInfo *join_info);
+                              const JoinInfo &join_info);
     int generate_join_paths(const ObJoinOrder &left_tree,
                             const ObJoinOrder &right_tree,
                             const JoinInfo &join_info,
@@ -2668,6 +2718,7 @@ struct MergeKeyInfoHelper
 
     TO_STRING_KV(K_(type),
                  K_(output_rows),
+                 K_(table_set),
                  K_(interesting_paths));
   private:
     int add_access_filters(AccessPath *path,
@@ -2800,21 +2851,21 @@ struct MergeKeyInfoHelper
 
     int compute_fd_item_set_for_join(const ObJoinOrder *left_tree,
                                      const ObJoinOrder *right_tree,
-                                     const JoinInfo *join_info,
+                                     const JoinInfo &join_info,
                                      const ObJoinType join_type);
 
     int compute_fd_item_set_for_inner_join(const ObJoinOrder *left_tree,
                                            const ObJoinOrder *right_tree,
-                                           const JoinInfo *join_info);
+                                           const JoinInfo &join_info);
 
     int compute_fd_item_set_for_semi_anti_join(const ObJoinOrder *left_tree,
                                                const ObJoinOrder *right_tree,
-                                               const JoinInfo *join_info,
+                                               const JoinInfo &join_info,
                                                const ObJoinType join_type);
 
     int compute_fd_item_set_for_outer_join(const ObJoinOrder *left_tree,
                                            const ObJoinOrder *right_tree,
-                                           const JoinInfo *ljoin_info,
+                                           const JoinInfo &ljoin_info,
                                            const ObJoinType join_type);
 
     int compute_fd_item_set_for_subquery(const uint64_t table_id,
@@ -3252,9 +3303,11 @@ struct MergeKeyInfoHelper
                                   bool &found);
     friend class ::test::TestJoinOrder_ob_join_order_param_check_Test;
     friend class ::test::TestJoinOrder_ob_join_order_src_Test;
+
   private:
     common::ObIAllocator *allocator_;
     ObLogPlan *plan_;
+    ObJoinOrderEnum &join_order_enum_;
     PathType type_;
     uint64_t table_id_; //如果是基表（Base table/Generated table/Joined table）记录table id
     ObRelIds table_set_; //存在这里的是TableItem所在的下标
@@ -3264,12 +3317,13 @@ struct MergeKeyInfoHelper
     ObTablePartitionInfo *table_partition_info_; // only for base table
     ObShardingInfo *sharding_info_; // only for base table and local index
     ObTableMetaInfo table_meta_info_; // only for base table
-    JoinInfo* join_info_; //记录连接信息
+    JoinInfo join_info_; //记录连接信息
     common::ObSEArray<ObConflictDetector*, 8, common::ModulePageAllocator, true> used_conflict_detectors_; //记录当前join order用掉了哪些冲突检测器
     common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> restrict_info_set_; //对于基表（SubQuery）记录单表条件；对于普通Join为空
     common::ObSEArray<Path*, 32, common::ModulePageAllocator, true> interesting_paths_;
+    common::ObSEArray<Path*, 4, common::ModulePageAllocator, true> latest_interesting_paths_;
     bool is_at_most_one_row_;
-    EqualSets output_equal_sets_;
+    PersistentEqualSets output_equal_sets_;
     common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> output_const_exprs_;
     BaseTableOptInfo table_opt_info_;
     common::ObSEArray<AccessPath*, 4, common::ModulePageAllocator, true> available_access_paths_;
