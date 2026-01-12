@@ -14467,27 +14467,40 @@ private:
 
 struct ObTriggerStorageCacheArg final
 {
-  OB_UNIS_VERSION(1);
+  // Version 2: add policy_status_ and tablet_id_ for set status operation
+  OB_UNIS_VERSION(2);
 public:
   enum ObStorageCacheOp
   {
     TRIGGER = 0,
+    SET_STATUS = 1,
     MAX_OP,
   };
-  ObTriggerStorageCacheArg() : op_(MAX_OP), tenant_id_(OB_INVALID_TENANT_ID) {}
+  ObTriggerStorageCacheArg() : op_(MAX_OP), tenant_id_(OB_INVALID_TENANT_ID),
+                               tablet_id_(common::OB_INVALID_ID), policy_status_(0) {}
   ~ObTriggerStorageCacheArg() {}
   bool is_valid() const
   {
-    return op_ < MAX_OP && is_valid_tenant_id(tenant_id_);
+    bool is_valid = op_ < MAX_OP && is_valid_tenant_id(tenant_id_);
+    if (SET_STATUS == op_ && common::OB_INVALID_ID == tablet_id_) {
+      is_valid = false;
+    }
+    return is_valid;
   }
   ObStorageCacheOp get_op() const { return op_; }
-  int get_tenant_id() const { return tenant_id_; }
+  int64_t get_tenant_id() const { return tenant_id_; }
+  int64_t get_tablet_id() const { return tablet_id_; }
+  int8_t get_policy_status() const { return policy_status_; }
   void set_tenant_id(int64_t tenant_id) { tenant_id_ = tenant_id; }
   void set_op(ObStorageCacheOp op) { op_ = op; }
-  TO_STRING_KV(K_(op), K_(tenant_id));
+  void set_tablet_id(int64_t tablet_id) { tablet_id_ = tablet_id; }
+  void set_policy_status(int8_t policy_status) { policy_status_ = policy_status; }
+  TO_STRING_KV(K_(op), K_(tenant_id), K_(tablet_id), K_(policy_status));
 public:
   ObStorageCacheOp op_;
   int64_t tenant_id_;
+  int64_t tablet_id_;
+  int8_t policy_status_;  // 0: HOT, 1: AUTO
 };
 
 struct ObNotifySharedStorageInfoResult final
