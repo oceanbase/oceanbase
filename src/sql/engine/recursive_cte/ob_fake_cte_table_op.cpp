@@ -231,8 +231,8 @@ void ObFakeCTETableOp::reuse()
   bulk_rows_.reset();
   next_read_row_id_ = 0;
   round_limit_ = 0;
-  intermedia_table_.reuse();
   intermedia_data_reader_.reuse();
+  intermedia_table_.reuse();
   if (OB_NOT_NULL(pump_row_)) {
     allocator_.free(const_cast<ObChunkDatumStore::StoredRow *>(pump_row_));
     pump_row_ = nullptr;
@@ -241,8 +241,8 @@ void ObFakeCTETableOp::reuse()
 
 void ObFakeCTETableOp::destroy()
 {
-  intermedia_table_.reset();
   intermedia_data_reader_.reset();
+  intermedia_table_.reset();
   destroy_mem_context();
 
   ObOperator::destroy();

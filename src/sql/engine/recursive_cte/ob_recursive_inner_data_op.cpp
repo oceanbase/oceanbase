@@ -840,8 +840,8 @@ int ObRecursiveInnerDataMysqlOp::rescan()
   state_ = R_UNION_READ_LEFT;
 
   hash_table_.reuse();
-  pump_operator_->reuse();
   hash_value_reader_->reuse();
+  pump_operator_->reuse();
   curr_level_ = 0;
 
   return ret;
