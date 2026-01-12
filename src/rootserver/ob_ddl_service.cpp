@@ -30491,7 +30491,7 @@ int ObDDLService::refresh_schema(uint64_t tenant_id, const bool inc_sequence_id,
       if (OB_ISNULL(schema_service)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("schema_service is null", K(ret));
-      } else if (OB_FAIL(schema_service->inc_sequence_id())) {
+      } else if (inc_sequence_id && OB_FAIL(schema_service->inc_sequence_id())) {
         LOG_WARN("increase sequence_id failed", K(ret));
       } else if (FALSE_IT(schema_info.set_sequence_id(schema_service->get_sequence_id()))) {
       } else if (OB_FAIL(schema_service->set_refresh_schema_info(schema_info))) {
