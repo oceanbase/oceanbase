@@ -26,7 +26,7 @@ struct ObMemTracker
   ObMemTracker() :
     cur_mem_used_(0), peek_mem_used_(0),
     cache_mem_limit_(-1), check_status_times_(0), try_check_tick_(0), mem_quota_pct_(0),
-    mem_context_(nullptr)
+    tenant_id_(0), mem_context_(nullptr)
   {}
   void reset()
   {
@@ -36,6 +36,7 @@ struct ObMemTracker
     check_status_times_ = 0;
     try_check_tick_ = 0;
     mem_quota_pct_ = 0;
+    tenant_id_ = 0;
     mem_context_ = nullptr;
   }
 
@@ -45,6 +46,7 @@ struct ObMemTracker
   uint16_t check_status_times_;
   uint16_t try_check_tick_;
   int64_t mem_quota_pct_;
+  uint64_t tenant_id_;
   lib::MemoryContext *mem_context_;
 };
 
@@ -54,11 +56,7 @@ public:
   const static uint64_t DEFAULT_CHECK_STATUS_TRY_TIMES = 1024;
   const static uint64_t UPDATE_MEM_LIMIT_THRESHOLD = 512;
   const static int64_t UNLIMITED_MEM_QUOTA_PCT = 100;
-  ObMemTrackerGuard(lib::MemoryContext &mem_context)
-  {
-    mem_tracker_.reset();
-    mem_tracker_.mem_context_ = &mem_context;
-  }
+  ObMemTrackerGuard(lib::MemoryContext &mem_context);
   ~ObMemTrackerGuard()
   {
     mem_tracker_.reset();
