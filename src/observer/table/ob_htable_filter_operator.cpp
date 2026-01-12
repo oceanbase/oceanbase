@@ -1902,7 +1902,7 @@ bool ObHTableRowIterator::should_enable_get_optimization()
     // batch get single cf
     if (columns.count() == 1) {
       ObString qualifier = columns.at(0);
-      if (qualifier.contains(".")
+      if (OB_NOT_NULL(qualifier.find('.'))
           && is_legal_family_name(qualifier.split_on('.'))
           && qualifier.after('.').empty()) {
         is_wildcard_mode_ = true;
@@ -2277,7 +2277,6 @@ int ObHTableRowIterator::get_next_result_internal_with_get_optimization(ResultTy
     if (NULL == curr_cell_.get_ob_row()) {
       if (is_wildcard_mode_) {
         // Wildcard mode: get next cell from iterator
-        ObNewRow *first_row = nullptr;
         if (OB_FAIL(next_cell())) {
           if (OB_ITER_END == ret) {
             // No more data for this rowkey
@@ -2287,21 +2286,33 @@ int ObHTableRowIterator::get_next_result_internal_with_get_optimization(ResultTy
             LOG_WARN("fail to get cell in wildcard mode", K(ret));
           }
           continue;
-        } else {
-          // curr_cell_ is already set by next_cell()
         }
       } else {
-        // Explicit qualifiers mode: rescan for current qualifier
-        ObString qualifier = qualifiers.at(current_qualifier_idx_);
-        if (OB_FAIL(rescan_for_qualifier(qualifier))) {
-          if (OB_ITER_END == ret) {
-            // No data for this qualifier, move to next
-            ret = OB_SUCCESS;
-            current_qualifier_idx_++;
-            continue;
-          } else {
-            LOG_WARN("fail to rescan for qualifier", K(ret), K(qualifier), K_(current_qualifier_idx));
-            continue;
+        if (0 == current_qualifier_idx_) {
+          // For the first qualifier (idx == 0), the scan range has already been optimized
+          // in check_and_apply_get_optimization, so we can directly get cell from iterator
+          if (OB_FAIL(next_cell())) {
+            if (OB_ITER_END == ret) {
+              // No more data for this rowkey
+              loop = false;
+              ret = OB_SUCCESS;
+              continue;
+            } else {
+              LOG_WARN("fail to get cell in explicit mode", K(ret));
+            }
+          }
+        } else {
+          // Explicit qualifiers mode: rescan for current qualifier
+          ObString qualifier = qualifiers.at(current_qualifier_idx_);
+          if (OB_FAIL(rescan_for_qualifier(qualifier))) {
+            if (OB_ITER_END == ret) {
+              // No data for this qualifier, move to next
+              ret = OB_SUCCESS;
+              current_qualifier_idx_++;
+              continue;
+            } else {
+              LOG_WARN("fail to rescan for qualifier", K(ret), K(qualifier), K_(current_qualifier_idx));
+            }
           }
         }
       }
@@ -2352,16 +2363,23 @@ int ObHTableRowIterator::get_next_result_internal_with_get_optimization(ResultTy
 
         // Move to next qualifier after processing current one
         if (OB_SUCC(ret)) {
-          ObString previous_qualifier;
-          if (is_wildcard_mode_ && NULL != curr_cell_.get_ob_row()) {
-            previous_qualifier = curr_cell_.get_ob_row()->get_cell(ObHTableConstants::COL_IDX_Q).get_varbinary();
-          }
-          curr_cell_.set_ob_row(nullptr);
-          if (OB_FAIL(move_to_next_qualifier_and_rescan(loop, previous_qualifier))) {
-            if (OB_ITER_END == ret) {
-              ret = OB_SUCCESS;
-            } else {
-              LOG_WARN("fail to move to next qualifier", K(ret));
+          // Optimization: if single qualifier hint is set and we're in wildcard mode,
+          // skip the rescan and directly return after getting the first result
+          if (is_wildcard_mode_ && OB_NOT_NULL(query_) && query_->is_query_with_single_qualifier_hint()) {
+            // Only one cell expected, so we can finish after getting the first result
+            loop = false;
+          } else {
+            ObString previous_qualifier;
+            if (is_wildcard_mode_ && NULL != curr_cell_.get_ob_row()) {
+              previous_qualifier = curr_cell_.get_ob_row()->get_cell(ObHTableConstants::COL_IDX_Q).get_varbinary();
+            }
+            curr_cell_.set_ob_row(nullptr);
+            if (OB_FAIL(move_to_next_qualifier_and_rescan(loop, previous_qualifier))) {
+              if (OB_ITER_END == ret) {
+                ret = OB_SUCCESS;
+              } else {
+                LOG_WARN("fail to move to next qualifier", K(ret));
+              }
             }
           }
         }

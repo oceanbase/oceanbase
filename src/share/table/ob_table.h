@@ -1268,6 +1268,7 @@ public:
   }
   OB_INLINE bool is_hot_only() const { return hot_only_; }
   OB_INLINE bool is_get_optimization() const { return get_optimization_; }
+  OB_INLINE bool is_query_with_single_qualifier_hint() const { return query_with_single_qualifier_hint_; }
 
   TO_STRING_KV(K_(key_ranges),
                K_(select_columns),
@@ -1284,7 +1285,8 @@ public:
                K_(ob_params),
                K_(tablet_ids),
                K_(hot_only),
-               K_(get_optimization)
+               K_(get_optimization),
+               K_(query_with_single_qualifier_hint)
                );
 
 public:
@@ -1313,7 +1315,8 @@ protected:
     struct {
       bool hot_only_ : 1;
       bool get_optimization_ : 1;
-      bool reserved_ : 62;
+      bool query_with_single_qualifier_hint_ : 1;
+      bool reserved_ : 61;
     };
   };
 };

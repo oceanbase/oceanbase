@@ -837,19 +837,37 @@ int ObHbaseRowIterator::get_next_row_internal_normal_with_get_optimization(Resul
           curr_cell_.set_ob_row(first_row);
         }
       } else {
-        // Explicit qualifiers mode: rescan for current qualifier
-        ObString qualifier = hbase_query_.get_qualifier_with_family() ?
-                            qualifiers.at(current_qualifier_idx_).after('.') :
-                            qualifiers.at(current_qualifier_idx_);
-        if (OB_FAIL(rescan_for_qualifier(qualifier))) {
-          if (OB_ITER_END == ret) {
-            // No data for this qualifier, move to next
-            ret = OB_SUCCESS;
-            current_qualifier_idx_++;
-            continue;
+        if (0 == current_qualifier_idx_) {
+          // For the first qualifier (idx == 0), the scan range has already been optimized
+          // in check_and_apply_get_optimization, so we can directly get cell from iterator
+          ObHbaseICellIter *child_cell_iter = get_forward_cell_iter();
+          ObNewRow *first_row = nullptr;
+          if (OB_FAIL(child_cell_iter->get_next_cell(first_row))) {
+            if (OB_ITER_END == ret) {
+              // No data for this qualifier, move to next
+              loop = false;
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("fail to get cell for first qualifier in explicit mode", K(ret));
+            }
           } else {
-            LOG_WARN("fail to rescan for qualifier", K(ret), K(qualifier), K_(current_qualifier_idx));
-            continue;
+            curr_cell_.set_ob_row(first_row);
+          }
+        } else {
+          // Explicit qualifiers mode: rescan for current qualifier
+          ObString qualifier = hbase_query_.get_qualifier_with_family() ?
+                              qualifiers.at(current_qualifier_idx_).after('.') :
+                              qualifiers.at(current_qualifier_idx_);
+          if (OB_FAIL(rescan_for_qualifier(qualifier))) {
+            if (OB_ITER_END == ret) {
+              // No data for this qualifier, move to next
+              ret = OB_SUCCESS;
+              current_qualifier_idx_++;
+              continue;
+            } else {
+              LOG_WARN("fail to rescan for qualifier", K(ret), K(qualifier), K_(current_qualifier_idx));
+              continue;
+            }
           }
         }
       }
@@ -895,16 +913,23 @@ int ObHbaseRowIterator::get_next_row_internal_normal_with_get_optimization(Resul
 
         // Move to next qualifier after processing current one
         if (OB_SUCC(ret)) {
-          ObString previous_qualifier;
-          if (is_wildcard_mode_ && NULL != curr_cell_.get_ob_row()) {
-            previous_qualifier = curr_cell_.get_ob_row()->get_cell(ObHTableConstants::COL_IDX_Q).get_varbinary();
-          }
-          curr_cell_.set_ob_row(nullptr);
-          if (OB_FAIL(move_to_next_qualifier_and_rescan(loop, previous_qualifier))) {
-            if (OB_ITER_END == ret) {
-              ret = OB_SUCCESS;
-            } else {
-              LOG_WARN("fail to move to next qualifier", K(ret));
+          // Optimization: if single qualifier hint is set and we're in wildcard mode,
+          // skip the rescan and directly return after getting the first result
+          if (is_wildcard_mode_ && hbase_query_.get_query().is_query_with_single_qualifier_hint()) {
+            // Only one cell expected, so we can finish after getting the first result
+            loop = false;
+          } else {
+            ObString previous_qualifier;
+            if (is_wildcard_mode_ && NULL != curr_cell_.get_ob_row()) {
+              previous_qualifier = curr_cell_.get_ob_row()->get_cell(ObHTableConstants::COL_IDX_Q).get_varbinary();
+            }
+            curr_cell_.set_ob_row(nullptr);
+            if (OB_FAIL(move_to_next_qualifier_and_rescan(loop, previous_qualifier))) {
+              if (OB_ITER_END == ret) {
+                ret = OB_SUCCESS;
+              } else {
+                LOG_WARN("fail to move to next qualifier", K(ret));
+              }
             }
           }
         }
@@ -2041,9 +2066,9 @@ int ObHbaseRowIterator::should_enable_get_optimization(bool &bret)
         // batch get single cf
         if (columns.count() == 1) {
           ObString qualifier = columns.at(0);
-          if (qualifier.contains(".")
+          if (OB_NOT_NULL(qualifier.find('.'))
               && ObHbaseColumnFamilyService::is_legal_family_name(qualifier.split_on('.'))
-              && qualifier.after(".").empty()) {
+              && qualifier.after('.').empty()) {
             is_wildcard_mode_ = true;
           }
         }
