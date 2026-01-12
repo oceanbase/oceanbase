@@ -599,6 +599,12 @@ int ObMPStmtPrepare::response_result(
   } else if (OB_FAIL(send_column_packet(session, result))) {
     LOG_WARN("send column packet failed", K(ret));
   }
+  if (OB_FAIL(ret)) {
+    int sret = OB_SUCCESS;
+    if (OB_SUCCESS != (sret = send_error_packet(ret, NULL))) {
+      LOG_WARN("send error packet fail", K(sret), K(ret));
+    }
+  }
   return ret;
 }
 
