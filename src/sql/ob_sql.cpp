@@ -617,8 +617,10 @@ int ObSql::fill_result_set(ObResultSet &result_set,
           OZ (result_set.add_field_column(column_field),
               K(i), K(question_marks_count), K(column_field));
         } else if (OB_NOT_NULL(call_stmt)
+                   && OB_NOT_NULL(call_stmt->get_call_proc_info())
                    && call_stmt->get_call_proc_info()->is_out_param_by_question_mark_idx(i)) {
-          OX (param_field.inout_mode_ = ObRoutineParamInOut::SP_PARAM_INOUT);
+          OX (param_field.inout_mode_ =
+                  call_stmt->get_call_proc_info()->get_out_mode_by_question_mark_idx(i));
         }
         OZ (result_set.add_param_column(param_field),
             K(param_field), K(i), K(question_marks_count));

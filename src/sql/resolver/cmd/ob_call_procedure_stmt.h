@@ -74,6 +74,18 @@ public:
   inline bool is_out_param_by_question_mark_idx(int64_t i) const {
     return i < question_mark_idx_.count() && is_out_param(question_mark_idx_.at(i));
   }
+  int64_t get_out_mode_by_question_mark_idx(int64_t i) const {
+    // first locate the corresponding index of question mark idx in the `out_param_id_` array
+    // the array `out_param_id_` wouldn't be too long, so linear search is just ok
+    int64_t idx = OB_INVALID_INDEX;
+    for (int64_t j = 0; j < out_param_id_.count(); ++j) {
+      if (out_param_id_.at(j) == i) {
+        idx = j;
+        break;
+      }
+    }
+    return idx != OB_INVALID_INDEX ? out_mode_.at(idx) : ObRoutineParamInOut::SP_PARAM_INVALID;
+  }
   int add_out_param(int64_t i,
                     int64_t mode,
                     const ObString &name,
@@ -142,6 +154,8 @@ private:
   /* MySQL mode does not return out parameters to non-standard drivers (obclient, opensource MySQL
    * driver) unless the parameter is bound with "?" */
   ObBitSet<> out_client_params_;
+  /* record the question mark index of the out params
+   */
   ObSEArray<int64_t, 32> out_param_id_;
   /* record corresponding param idx of the question marks, for example:
    *     call proc(arg1, ?, arg3, ?, arg5);
