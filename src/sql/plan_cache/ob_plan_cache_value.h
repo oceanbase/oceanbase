@@ -373,7 +373,8 @@ private:
   int cmp_not_param_info(const NotParamInfoList &l_param_info_list,
                          const NotParamInfoList &r_param_info_list,
                          bool &is_equal);
-  int check_need_force_miss_match(const ObPlanCacheObject &plan);
+  int check_need_force_miss_match(const ObPlanCacheCtx &pc_ctx,
+                                  const ObPlanCacheObject &plan);
 
   friend class ::test::TestPlanSet_basic_Test;
   friend class ::test::TestPlanCacheValue_basic_Test;

@@ -279,10 +279,11 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
       LOG_WARN("failed to add bitset members", K(ret));
     } else if (OB_FAIL(fmt_int_or_ch_decint_idx_.add_members2(pc_ctx.fmt_int_or_ch_decint_idx_))) {
       LOG_WARN("failed to add bitset members", K(ret));
-    } else if (OB_FAIL(check_need_force_miss_match(*plan))) {
+    } else if (OB_FAIL(check_need_force_miss_match(pc_ctx, *plan))) {
       LOG_WARN("failed to check need force miss match", K(ret));
-    } else if (!force_miss_match_ && OB_FAIL(set_stored_schema_objs(plan->get_dependency_table(),
-                                                                    pc_ctx.sql_ctx_.schema_guard_))) {
+    } else if (!ObPlanCache::is_contains_external_object(plan->get_dependency_table())
+               && OB_FAIL(set_stored_schema_objs(plan->get_dependency_table(),
+                                                 pc_ctx.sql_ctx_.schema_guard_))) {
       LOG_WARN("failed to set stored schema objs",
                K(ret), K(plan->get_dependency_table()), K(pc_ctx.sql_ctx_.schema_guard_));
     } else if (OB_FAIL(assign_udr_infos(pc_ctx))) {
@@ -2477,10 +2478,20 @@ int ObPlanCacheValue::get_evolving_evolution_task(EvolutionPlanList &evo_task_li
 }
 #endif
 
-int ObPlanCacheValue::check_need_force_miss_match(const ObPlanCacheObject &plan)
+int ObPlanCacheValue::check_need_force_miss_match(const ObPlanCacheCtx &pc_ctx,
+                                                  const ObPlanCacheObject &plan)
 {
   int ret = OB_SUCCESS;
+  const ObQueryCtx *query_ctx = NULL;
+  force_miss_match_ = false;
   if (ObPlanCache::is_contains_external_object(plan.get_dependency_table())) {
+    force_miss_match_ = true;
+  } else if (OB_ISNULL(pc_ctx.sql_ctx_.cur_stmt_)
+             || OB_ISNULL(query_ctx = pc_ctx.sql_ctx_.cur_stmt_->get_query_ctx())) {
+    // just add the plan into plan cache, do not need throw error
+    LOG_DEBUG("failed to get query ctx", K(ret), K(pc_ctx.sql_ctx_.cur_stmt_), K(query_ctx));
+  } else if (query_ctx->is_mview_refresh_sql()
+             && OB_USE_PLAN_CACHE_INVALID == query_ctx->get_global_hint().plan_cache_policy_) {
     force_miss_match_ = true;
   }
   return ret;
