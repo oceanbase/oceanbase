@@ -253,6 +253,8 @@ private:
   int try_cast_expr_to_int(ObRawExprFactory *expr_factory,
                            const ObSQLSessionInfo *session,
                            ObSysFunRawExpr *&expr);
+  int fold_cnn_expr(ObOpRawExpr *ori_cnn_expr, ObOpRawExpr *&folded_cnn_expr);
+  int create_cnn_expr_with_same_type(ObOpRawExpr *ori_cnn_expr, const ObIArray<ObRawExpr*> &group, ObIArray<ObRawExpr*> &final_groups);
 private:
   // data members
   ObExprResolveContext &ctx_;

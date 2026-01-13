@@ -238,6 +238,114 @@ int ObRawExprResolverImpl::try_negate_const(ObRawExpr *&expr,
   return ret;
 }
 
+// 将T_OP_CNN折叠为左深，仅保留连续的相同类型的展平节点
+// T_OP_CNN(a, a, a, b, c, c, c) -> T_OP_CNN(T_OP_CNN(T_OP_CNN(a, a, a), b), (T_OP_CNN(c, c, c)))
+int ObRawExprResolverImpl::fold_cnn_expr(ObOpRawExpr *ori_cnn_expr, ObOpRawExpr *&folded_cnn_expr)
+{
+  int ret = OB_SUCCESS;
+  folded_cnn_expr = NULL;
+  if (OB_ISNULL(ori_cnn_expr) || OB_UNLIKELY(2 > ori_cnn_expr->get_param_count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ori_cnn_expr));
+  } else if (2 == ori_cnn_expr->get_param_count()) {
+    folded_cnn_expr = ori_cnn_expr;
+  } else {
+    // 按连续同类型分组，T_OP_CNN(a, a, a, b, c, c, c) -> T_OP_CNN(T_OP_CNN(a, a, a), b, T_OP_CNN(c, c, c))
+    ObSEArray<ObRawExpr*, 4> current_type_exprs;
+    ObSEArray<ObRawExpr*, 4> final_param_exprs; // 存储折叠后的所有叶结点
+    ObRawExpr *child = NULL;
+    const ObRawExprResType* current_type = NULL;
+    bool null_type = false;
+    bool new_type = false;
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < ori_cnn_expr->get_param_count(); ++i) {
+      if (OB_ISNULL(child = ori_cnn_expr->get_param_expr(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("child expr is null", K(ret), K(i));
+      } else if (OB_FALSE_IT(null_type = (child->get_result_type().get_type() == ObNullType || child->get_result_type().get_type() == ObMaxType))) {
+      } else if (OB_FALSE_IT(new_type = null_type || NULL == current_type || current_type->get_obj_meta() != child->get_result_type().get_obj_meta())) {
+      } else if (OB_FALSE_IT(current_type = null_type ? NULL : &child->get_result_type())) {
+      } else if (new_type && !current_type_exprs.empty()) {
+        if (OB_FAIL(create_cnn_expr_with_same_type(ori_cnn_expr, current_type_exprs, final_param_exprs))) {
+          LOG_WARN("failed to create cnn expr with same type", K(ret));
+        }
+        current_type_exprs.reset();
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(current_type_exprs.push_back(child))) {
+        LOG_WARN("failed to push back child expr", K(ret));
+      } else if (ori_cnn_expr->get_param_count() - 1 == i &&
+                 OB_FAIL(create_cnn_expr_with_same_type(ori_cnn_expr, current_type_exprs, final_param_exprs))) {  // 处理最后一个类型分组
+        LOG_WARN("failed to create cnn expr with last type", K(ret));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(final_param_exprs.empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected final param exprs count", K(ret), KPC(ori_cnn_expr));
+    } else {
+      // 将根结点的多叉树折叠为左深树，T_OP_CNN(T_OP_CNN(a, a, a), b, T_OP_CNN(c, c, c)) -> T_OP_CNN(T_OP_CNN(T_OP_CNN(a, a, a), b), T_OP_CNN(c, c, c))
+      ObRawExpr *current = final_param_exprs.at(0);
+      for (int64_t i = 1; OB_SUCC(ret) && i < final_param_exprs.count(); ++i) {
+        ObOpRawExpr *new_cnn = NULL;
+        if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_OP_CNN, new_cnn))) {
+          LOG_WARN("fail to create new cnn expr", K(ret), K(i));
+        } else if (OB_FAIL(new_cnn->init_param_exprs(2))) {
+          LOG_WARN("fail to init param exprs for new cnn", K(ret));
+        } else if (OB_FAIL(new_cnn->add_param_expr(current))) {
+          LOG_WARN("fail to add left param", K(ret));
+        } else if (OB_FAIL(new_cnn->add_param_expr(final_param_exprs.at(i)))) {
+          LOG_WARN("fail to add right param", K(ret));
+        } else {
+          current = new_cnn;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        folded_cnn_expr = static_cast<ObOpRawExpr*>(current);
+      }
+    }
+  }
+
+  return ret;
+}
+
+// 创建组表达式：单元素直接返回，多元素创建T_OP_CNN
+int ObRawExprResolverImpl::create_cnn_expr_with_same_type(ObOpRawExpr *ori_cnn_expr,
+                                                          const ObIArray<ObRawExpr*> &same_type_exprs,
+                                                          ObIArray<ObRawExpr*> &final_param_exprs)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(ori_cnn_expr) || OB_UNLIKELY(0 == same_type_exprs.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected argument", K(ret), K(same_type_exprs.count()), KPC(ori_cnn_expr));
+  } else if (1 == same_type_exprs.count()) {
+    // 单元素分组, 无需处理
+    if (OB_FAIL(final_param_exprs.push_back(same_type_exprs.at(0)))) {
+      LOG_WARN("fail to add single expr to final groups", K(ret));
+    }
+  } else if (ori_cnn_expr->get_param_count() == same_type_exprs.count()) {
+    // 原表达式只有一种类型参数, 无需处理
+    if (OB_FAIL(final_param_exprs.push_back(ori_cnn_expr))) {
+      LOG_WARN("fail to add original cnn expr to final groups", K(ret));
+    }
+  } else {
+    // 创建包含多个连续相同类型的表达式的T_OP_CNN节点， 即展平的情况
+    ObOpRawExpr *cnn_expr_with_same_type = NULL;
+    if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_OP_CNN, cnn_expr_with_same_type))) {
+      LOG_WARN("fail to create cnn expr with same type", K(ret));
+    } else if (OB_FAIL(cnn_expr_with_same_type->set_param_exprs(same_type_exprs))) {
+      LOG_WARN("fail to set param exprs for cnn expr with same type", K(ret));
+    } else if (OB_FAIL(final_param_exprs.push_back(cnn_expr_with_same_type))) {
+      LOG_WARN("fail to add cnn expr with same type to final param exprs", K(ret));
+    }
+  }
+
+  return ret;
+}
+
 int ObRawExprResolverImpl::recursive_resolve(const ParseNode *node, ObRawExpr *&expr, bool is_root_expr)
 {
   return SMART_CALL(do_recursive_resolve(node, expr, is_root_expr));
@@ -691,6 +799,8 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
         ObOpRawExpr *m_expr = NULL;
         if (OB_FAIL(process_node_with_children(node, node->num_child_, m_expr, is_root_expr))) {
           LOG_WARN("fail to process node with children", K(ret), K(node));
+        } else if (OB_FAIL(fold_cnn_expr(m_expr, m_expr))) {
+          LOG_WARN("fail to fold cnn expr", K(ret), K(m_expr));
         } else {
           expr = m_expr;
         }

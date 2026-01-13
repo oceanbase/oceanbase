@@ -29089,38 +29089,46 @@ question_mask_size: 0
               "children": [
                  {
                   "type":"T_OP_CNN",
-                  "int_val":4,
+                  "int_val":2,
                   "str_len":0,
                   "str_val":"",
                   "children": [
                      {
-                      "type":"T_VARCHAR",
-                      "int_val":9223372036854775807,
-                      "str_len":7,
-                      "str_val":"prefix_",
+                      "type":"T_OP_CNN",
+                      "int_val":2,
+                      "str_len":0,
+                      "str_val":"",
                       "children": [
-                         { },
                          {
                           "type":"T_VARCHAR",
                           "int_val":9223372036854775807,
                           "str_len":7,
-                          "str_val":"prefix_"
-                        }
-                      ]
-                    },
-                     {
-                      "type":"T_COLUMN_REF",
-                      "int_val":9223372036854775807,
-                      "str_len":11,
-                      "str_val":"column_name",
-                      "children": [
-                         { },
-                         { },
+                          "str_val":"prefix_",
+                          "children": [
+                             { },
+                             {
+                              "type":"T_VARCHAR",
+                              "int_val":9223372036854775807,
+                              "str_len":7,
+                              "str_val":"prefix_"
+                            }
+                          ]
+                        },
                          {
-                          "type":"T_IDENT",
+                          "type":"T_COLUMN_REF",
                           "int_val":9223372036854775807,
                           "str_len":11,
-                          "str_val":"column_name"
+                          "str_val":"column_name",
+                          "children": [
+                             { },
+                             { },
+                             {
+                              "type":"T_IDENT",
+                              "int_val":9223372036854775807,
+                              "str_len":11,
+                              "str_val":"column_name"
+                            }
+                          ]
                         }
                       ]
                     },
