@@ -473,7 +473,7 @@ all_user_def = dict(
       ('priv_create_database_link', 'int', 'false', '0'),
       ('priv_others', 'int', 'false', '0'),
       ('flags', 'int', 'false', '0'),
-      ('plugin', 'varchar:64', 'false', 'mysql_native_password'),
+      ('plugin', 'varchar:64', 'false', ''),
     ],
 )
 

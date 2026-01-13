@@ -3659,7 +3659,7 @@ int ObSysVarOnCheckFuncs::check_and_convert_default_authentication_plugin(ObExec
   UNUSED(ctx);
   UNUSED(sys_var);
   int ret = OB_SUCCESS;
-  if (set_var.is_set_default_ || in_val.is_null()) {
+  if (in_val.is_null()) {
     // do nothing
   } else if (!ob_is_string_type(in_val.get_type())) {
     ret = OB_ERR_WRONG_TYPE_FOR_VAR;
@@ -3674,17 +3674,8 @@ int ObSysVarOnCheckFuncs::check_and_convert_default_authentication_plugin(ObExec
                      set_var.var_name_.ptr(), plugin_name.length(), plugin_name.ptr());
       LOG_WARN("invalid authentication plugin name", K(ret), K(plugin_name));
     } else {
-      out_val = in_val;
-      ObString tmp_out_val = out_val.get_string();
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObCharset::tolower(in_val.get_collation_type(),
-                                            in_val.get_string(),
-                                            tmp_out_val,
-                                            ctx.get_allocator()))) {
-        LOG_WARN("Isolation level change to upper string failed", K(ret));
-      } else {
-        out_val.set_varchar(tmp_out_val);
-      }
+      ObString tmp_out_val = in_val.get_string();
+      out_val.set_varchar(ObEncryptedHelper::format_plugin_name(tmp_out_val));
     }
   }
   return ret;

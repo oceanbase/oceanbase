@@ -10397,7 +10397,7 @@ int ObInnerTableSchema::all_virtual_user_real_agent_ora_schema(ObTableSchema &ta
       64, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 

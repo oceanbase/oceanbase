@@ -24,11 +24,40 @@
 #include "lib/allocator/ob_mod_define.h"
 #include "lib/alloc/ob_malloc_callback.h"
 #include "lib/utility/ob_tracepoint.h"
+#include "rpc/obmysql/ob_i_cs_mem_pool.h"
+#include "rpc/obmysql/packet/ompk_handshake_response.h"
 
 namespace oceanbase
 {
+namespace share
+{
+namespace schema
+{
+class ObUserLoginInfo;
+class ObUserInfo;
+class ObSchemaGetterGuard;
+}
+}
 namespace observer
 {
+struct ObSMConnection;
+
+class AuthSwitchResonseMemPool : public obmysql::ObICSMemPool
+{
+public:
+  explicit AuthSwitchResonseMemPool(ObIAllocator *allocator)
+      : allocator_(allocator)
+  {}
+
+  virtual ~AuthSwitchResonseMemPool() {}
+
+  void *alloc(int64_t size) override
+  {
+    return allocator_->alloc(size);
+  }
+private:
+  ObIAllocator *allocator_;
+};
 
 class ObMPBase : public rpc::frame::ObSqlProcessor, public ObIMPPacketSender
 {
@@ -137,6 +166,97 @@ protected:
                                 bool &need_response_error);
   int process_kill_client_session(sql::ObSQLSessionInfo &session, bool is_connect = false);
   int load_privilege_info_for_change_user(sql::ObSQLSessionInfo *session);
+
+  // Authentication related methods
+  int get_user_required_plugin(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const share::schema::ObUserLoginInfo &login_info,
+      ObSMConnection *conn,
+      common::ObString &required_plugin,
+      const common::ObSEArray<const share::schema::ObUserInfo *, 2> &user_infos,
+      const share::schema::ObUserInfo *&matched_user_info);
+
+  int handle_auth_switch_if_needed(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      share::schema::ObUserLoginInfo &login_info,
+      ObSMConnection *conn,
+      sql::ObSQLSessionInfo &session,
+      const common::ObString &required_plugin,
+      const obmysql::OMPKHandshakeResponse &hsr,
+      obmysql::ObICSMemPool &mem_pool);
+
+  int send_auth_switch_request(
+      ObSMConnection *conn,
+      sql::ObSQLSessionInfo &session,
+      const common::ObString &required_plugin);
+
+  int receive_auth_switch_response(
+      share::schema::ObUserLoginInfo &login_info,
+      ObSMConnection *conn,
+      const common::ObString &required_plugin,
+      obmysql::ObICSMemPool &mem_pool,
+      sql::ObSQLSessionInfo &session);
+
+  // caching_sha2_password authentication methods
+  int handle_caching_sha2_authentication_if_need(
+      share::schema::ObUserLoginInfo &login_info,
+      ObSMConnection *conn,
+      sql::ObSQLSessionInfo &session,
+      const common::ObString &required_plugin,
+      const share::schema::ObUserInfo *matched_user_info,
+      SSL *ssl_st,
+      obmysql::ObICSMemPool &mem_pool);
+
+  int try_caching_sha2_fast_auth(
+      share::schema::ObUserLoginInfo &login_info,
+      ObSMConnection *conn,
+      sql::ObSQLSessionInfo &session,
+      const share::schema::ObUserInfo *matched_user_info,
+      bool &need_full_auth);
+
+  int perform_caching_sha2_full_auth(
+      share::schema::ObUserLoginInfo &login_info,
+      ObSMConnection *conn,
+      sql::ObSQLSessionInfo &session,
+      SSL *ssl_st,
+      obmysql::ObICSMemPool &mem_pool);
+
+  int perform_ssl_full_auth(
+      share::schema::ObUserLoginInfo &login_info,
+      obmysql::ObICSMemPool &mem_pool);
+
+  int perform_rsa_full_auth(
+      share::schema::ObUserLoginInfo &login_info,
+      sql::ObSQLSessionInfo &session,
+      obmysql::ObICSMemPool &mem_pool);
+
+  // Helper methods for perform_rsa_full_auth
+  int receive_client_rsa_packet(
+      obmysql::ObMySQLPacket *&client_pkt,
+      obmysql::ObICSMemPool &mem_pool);
+
+  int handle_rsa_public_key_request(
+      obmysql::ObMySQLPacket *&client_pkt,
+      sql::ObSQLSessionInfo &session,
+      const char *&client_data,
+      int64_t &client_data_len,
+      obmysql::ObICSMemPool &mem_pool);
+
+  int send_rsa_public_key(
+      sql::ObSQLSessionInfo &session);
+
+  int receive_encrypted_password(
+      obmysql::ObMySQLPacket *&client_pkt,
+      const char *&client_data,
+      int64_t &client_data_len,
+      obmysql::ObICSMemPool &mem_pool);
+
+  int decrypt_rsa_password(
+      const char *client_data,
+      int64_t client_data_len,
+      share::schema::ObUserLoginInfo &login_info,
+      obmysql::ObICSMemPool &mem_pool);
+
 protected:
   static const int64_t MAX_TRY_STEPS = 5;
   static int64_t TRY_EZ_BUF_SIZES[MAX_TRY_STEPS];

@@ -6466,7 +6466,8 @@ int ObDDLOperator::init_tenant_database(const ObTenantSchema &tenant_schema,
                                                      OB_SYS_HOST_NAME),
                                                      need_priv,
                                                      true, /*is_grant*/
-                                                     ddl_stmt_str))) {
+                                                     ddl_stmt_str,
+                                                     is_oracle_mode))) {
         LOG_WARN("gen db priv sql failed", K(ret));
       } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
       } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
@@ -6756,6 +6757,8 @@ int ObDDLOperator::init_tenant_user(const uint64_t tenant_id,
     LOG_WARN("set user password failed", K(ret));
   } else if (OB_FAIL(user.set_info(user_comment))) {
     LOG_WARN("set user info failed", K(ret));
+  } else if (OB_FAIL(user.set_plugin(ObEncryptedHelper::get_native_password_plugin(!is_oracle_mode)))) {
+    LOG_WARN("set plugin failed", K(ret));
   } else {
     user.set_is_locked(set_locked);
     user.set_user_id(pure_user_id);
@@ -6774,13 +6777,13 @@ int ObDDLOperator::init_tenant_user(const uint64_t tenant_id,
   if (OB_SUCC(ret)) {
     ObSqlString ddl_stmt_str;
     ObString ddl_sql;
-    ObString plugin_name;
     if (OB_FAIL(ObDDLSqlGenerator::gen_create_user_sql(ObAccountArg(user.get_user_name_str(),
                                                        user.get_host_name_str(),
                                                        user.is_role()),
                                                        user.get_passwd_str(),
-                                                       plugin_name,
-                                                       ddl_stmt_str))) {
+                                                       user.get_plugin(),
+                                                       ddl_stmt_str,
+                                                       is_oracle_mode))) {
       LOG_WARN("gen create user sql failed", K(user), K(ret));
     } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
     } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
@@ -7914,17 +7917,23 @@ int ObDDLOperator::revoke_database(
         } else if (OB_ISNULL(user_info)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("user not exist", K(db_priv_key), K(ret));
-        } else if (OB_FAIL(ObDDLSqlGenerator::gen_db_priv_sql(ObAccountArg(user_info->get_user_name_str(), user_info->get_host_name_str()),
-                                                              need_priv,
-                                                              false, /*is_grant*/
-                                                              ddl_stmt_str))) {
-          LOG_WARN("gen_db_priv_sql failed", K(ret), K(need_priv));
-        } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
-        } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
-          LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
-        } else if (OB_FAIL(schema_sql_service->get_priv_sql_service().revoke_database(
-            db_priv_key, new_priv, new_schema_version, &ddl_sql, trans))) {
-          LOG_WARN("Failed to revoke database", K(db_priv_key), K(ret));
+        } else {
+          bool is_oracle_mode = false;
+          if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+            LOG_WARN("fail to check is oracle mode", K(ret));
+          } else if (OB_FAIL(ObDDLSqlGenerator::gen_db_priv_sql(ObAccountArg(user_info->get_user_name_str(), user_info->get_host_name_str()),
+                                                                need_priv,
+                                                                false, /*is_grant*/
+                                                                ddl_stmt_str,
+                                                                is_oracle_mode))) {
+            LOG_WARN("gen_db_priv_sql failed", K(ret), K(need_priv));
+          } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
+          } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+            LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+          } else if (OB_FAIL(schema_sql_service->get_priv_sql_service().revoke_database(
+              db_priv_key, new_priv, new_schema_version, &ddl_sql, trans))) {
+            LOG_WARN("Failed to revoke database", K(db_priv_key), K(ret));
+          }
         }
       }
     }
@@ -8258,20 +8267,25 @@ int ObDDLOperator::grant_routine(
         } else if (OB_ISNULL(user_info)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("user not exist", K(routine_priv_key), K(ret));
-        } else if (gen_ddl_stmt == true && OB_FAIL(ObDDLSqlGenerator::gen_routine_priv_sql(
-            ObAccountArg(user_info->get_user_name_str(), user_info->get_host_name_str()),
-            need_priv, true, /*is_grant*/ ddl_stmt_str))) {
-          LOG_WARN("gen_routine_priv_sql failed", K(ret), K(need_priv));
-        } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
         } else {
-          int64_t new_schema_version = OB_INVALID_VERSION;
-          int64_t new_schema_version_ora = OB_INVALID_VERSION;
-          if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
-            LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
-          } else if (OB_FAIL(schema_sql_service->get_priv_sql_service().grant_routine(
-                routine_priv_key, new_priv, new_schema_version, &ddl_sql, trans, option, true,
-                grantor, grantor_host))) {
-            LOG_WARN("priv sql service grant routine failed", K(ret));
+          bool is_oracle_mode = false;
+          if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+            LOG_WARN("fail to check is oracle mode", K(ret));
+          } else if (gen_ddl_stmt == true && OB_FAIL(ObDDLSqlGenerator::gen_routine_priv_sql(
+              ObAccountArg(user_info->get_user_name_str(), user_info->get_host_name_str()),
+              need_priv, true, /*is_grant*/ ddl_stmt_str, is_oracle_mode))) {
+            LOG_WARN("gen_routine_priv_sql failed", K(ret), K(need_priv));
+          } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
+          } else {
+            int64_t new_schema_version = OB_INVALID_VERSION;
+            int64_t new_schema_version_ora = OB_INVALID_VERSION;
+            if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+              LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+            } else if (OB_FAIL(schema_sql_service->get_priv_sql_service().grant_routine(
+                  routine_priv_key, new_priv, new_schema_version, &ddl_sql, trans, option, true,
+                  grantor, grantor_host))) {
+              LOG_WARN("priv sql service grant routine failed", K(ret));
+            }
           }
         }
       }
@@ -8852,19 +8866,25 @@ int ObDDLOperator::revoke_routine(
         } else if (OB_ISNULL(user_info)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("user not exist", K(routine_priv_key), K(ret));
-        } else if (gen_ddl_stmt == true && OB_FAIL(ObDDLSqlGenerator::gen_routine_priv_sql(
-            ObAccountArg(user_info->get_user_name_str(), user_info->get_host_name_str()),
-            need_priv,
-            false, /*is_grant*/
-            ddl_stmt_str))) {
-          LOG_WARN("gen_routine_priv_sql failed", K(ret), K(need_priv));
-        } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
-        } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id,
-                           new_schema_version))) {
-          LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
-        } else if (OB_FAIL(schema_sql_service->get_priv_sql_service().revoke_routine(
-            routine_priv_key, new_priv, new_schema_version, &ddl_sql, trans, grantor, grantor_host))) {
-          LOG_WARN("Failed to revoke routine", K(routine_priv_key), K(ret));
+        } else {
+          bool is_oracle_mode = false;
+          if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+            LOG_WARN("fail to check is oracle mode", K(ret));
+          } else if (gen_ddl_stmt == true && OB_FAIL(ObDDLSqlGenerator::gen_routine_priv_sql(
+              ObAccountArg(user_info->get_user_name_str(), user_info->get_host_name_str()),
+              need_priv,
+              false, /*is_grant*/
+              ddl_stmt_str,
+              is_oracle_mode))) {
+            LOG_WARN("gen_routine_priv_sql failed", K(ret), K(need_priv));
+          } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
+          } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id,
+                             new_schema_version))) {
+            LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+          } else if (OB_FAIL(schema_sql_service->get_priv_sql_service().revoke_routine(
+              routine_priv_key, new_priv, new_schema_version, &ddl_sql, trans, grantor, grantor_host))) {
+            LOG_WARN("Failed to revoke routine", K(routine_priv_key), K(ret));
+          }
         }
       }
     }

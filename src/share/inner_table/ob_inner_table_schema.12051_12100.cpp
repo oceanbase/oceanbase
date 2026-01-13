@@ -16622,7 +16622,7 @@ int ObInnerTableSchema::all_virtual_user_schema(ObTableSchema &table_schema)
 
   if (OB_SUCC(ret)) {
     ObObj plugin_default;
-    plugin_default.set_varchar(ObString::make_string("mysql_native_password"));
+    plugin_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("plugin", //column_name
       ++column_id, //column_id
       0, //rowkey_id
@@ -17538,7 +17538,7 @@ int ObInnerTableSchema::all_virtual_user_history_schema(ObTableSchema &table_sch
 
   if (OB_SUCC(ret)) {
     ObObj plugin_default;
-    plugin_default.set_varchar(ObString::make_string("mysql_native_password"));
+    plugin_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("plugin", //column_name
       ++column_id, //column_id
       0, //rowkey_id

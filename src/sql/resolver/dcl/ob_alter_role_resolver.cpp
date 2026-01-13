@@ -80,7 +80,6 @@ int ObAlterRoleResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("pw_node is NULL", K(ret));
     } else {
       ObString password(pw_node->str_len_, pw_node->str_value_);
-      // jinmao TODO: oracle 模式支持为 role 设置插件
       ObString plugin;
       if (1 == need_enc_node->value_) { // identified by 
         alter_role_stmt->set_need_enc(true);
@@ -92,15 +91,12 @@ int ObAlterRoleResolver::resolve(const ParseNode &parse_tree)
           LOG_WARN("Wrong password format", K(password), K(plugin), K(ret));
         }
       }
-      if (FAILEDx(ObEncryptedHelper::check_data_version_for_auth_plugin(plugin,
-                  params_.session_info_->get_effective_tenant_id(), is_plugin_supported))) {
-        LOG_WARN("failed to check data version for auth plugin", K(ret));
-      } else if (OB_UNLIKELY(!is_plugin_supported)) {
+      if (OB_SUCC(ret) && ObEncryptedHelper::is_caching_sha2_password_plugin(plugin)) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("caching_sha2_password is not supported when MIN_DATA_VERSION is below 4_4_2_0", K(ret));
+        LOG_WARN("caching_sha2_password plugin is not supported for role", K(ret));
       }
       OX (alter_role_stmt->set_password(password);)
-      OX (alter_role_stmt->set_plugin(plugin);)
+      OX (alter_role_stmt->set_plugin(ObEncryptedHelper::format_plugin_name(plugin));)
     }
   }
   // replace password to *** in query_string for audit

@@ -772,13 +772,13 @@
   "default_authentication_plugin": {
     "id": 50,
     "name": "default_authentication_plugin",
-    "default_value": "mysql_native_password",
+    "default_value": "",
     "base_value": "mysql_native_password",
     "data_type": "varchar",
-    "info": "",
-    "flags": "GLOBAL | SESSION | MYSQL_ONLY",
+    "info": "The default authentication plugin for new users, empty means native_password with SHA1",
+    "flags": "GLOBAL | SESSION",
     "publish_version": "",
-    "info_cn": "",
+    "info_cn": "新用户默认的认证插件，空串表示基于 SHA1 的 native_password 插件",
     "background_cn": "",
     "ref_url": "",
     "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_default_authentication_plugin"

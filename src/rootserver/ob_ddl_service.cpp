@@ -31389,7 +31389,7 @@ int ObDDLService::drop_user(const ObDropUserArg &arg,
           ret = OB_USER_NOT_EXIST; //no such user
           LOG_WARN("Try to drop user", K(ret), K(tenant_id), K(account.user_name_));
         }
-      } else if (OB_FAIL(ObDDLSqlGenerator::gen_drop_user_sql(account, ddl_stmt_str))) {
+      } else if (OB_FAIL(ObDDLSqlGenerator::gen_drop_user_sql(account, ddl_stmt_str, is_oracle_mode))) {
         LOG_WARN("gen drop_user sql failed", K(ret), K(account));
       } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
       } else if (OB_FAIL(user_ids.push_back(user_info->get_user_id()))) {
@@ -31601,6 +31601,10 @@ int ObDDLService::rename_user(const ObRenameUserArg &arg,
   ObAccountArg old_account;
   ObAccountArg new_account;
   const ObUserInfo *user_info = NULL;
+  bool is_oracle_mode = false;
+  if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+    LOG_WARN("fail to check is oracle mode", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < arg.old_users_.count(); ++i) {
     ObSchemaGetterGuard schema_guard;
     ddl_stmt_str.reuse();
@@ -31636,7 +31640,8 @@ int ObDDLService::rename_user(const ObRenameUserArg &arg,
       }
     } else if (OB_FAIL(ObDDLSqlGenerator::gen_rename_user_sql(old_account,
                                                               new_account,
-                                                              ddl_stmt_str))) {
+                                                              ddl_stmt_str,
+                                                              is_oracle_mode))) {
       LOG_WARN("failed to gen rename user sql", K(ret), K(old_account), K(new_account));
     } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
     } else if (OB_FAIL(rename_user_in_trans(tenant_id, user_id, new_account, &ddl_sql, schema_guard))) {
@@ -31711,8 +31716,11 @@ int ObDDLService::set_passwd(const ObSetPasswdArg &arg)
   const ObString &plugin = arg.plugin_;
 
   ObSchemaGetterGuard schema_guard;
+  bool is_oracle_mode = false;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check inner stat faile", K(ret));
+  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+    LOG_WARN("fail to check is oracle mode", K(ret));
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
   } else {
@@ -31727,7 +31735,7 @@ int ObDDLService::set_passwd(const ObSetPasswdArg &arg)
       if (modify_max_connections) {
         if (OB_FAIL(ObDDLSqlGenerator::gen_set_max_connections_sql(
               ObAccountArg(user_name, host_name), max_connections_per_hour, max_user_connections,
-              ddl_stmt_str))) {
+              ddl_stmt_str, is_oracle_mode))) {
           LOG_WARN("gen_set_passwd_sql failed", K(ret), K(arg));
         } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
         } else if (OB_FAIL(set_max_connection_in_trans(tenant_id, user_id,
@@ -31737,7 +31745,7 @@ int ObDDLService::set_passwd(const ObSetPasswdArg &arg)
         }
       } else {
         if (OB_FAIL(ObDDLSqlGenerator::gen_set_passwd_sql(ObAccountArg(user_name, host_name),
-              passwd, ddl_stmt_str, plugin))) {
+              passwd, ddl_stmt_str, plugin, is_oracle_mode))) {
           LOG_WARN("gen_set_passwd_sql failed", K(ret), K(arg));
         } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
         } else if (OB_FAIL(set_passwd_in_trans(tenant_id, user_id, passwd,
@@ -32456,7 +32464,10 @@ int ObDDLService::grant(const ObGrantArg &arg)
             if (!pwd.empty()) { //change password
               ObSqlString ddl_stmt_str;
               ObString ddl_sql;
-              if (OB_FAIL(ObDDLSqlGenerator::gen_set_passwd_sql(ObAccountArg(user_name, host_name), pwd, ddl_stmt_str, plugin))) {
+              bool is_oracle_mode = false;
+              if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(arg.tenant_id_, is_oracle_mode))) {
+                LOG_WARN("fail to check is oracle mode", K(ret));
+              } else if (OB_FAIL(ObDDLSqlGenerator::gen_set_passwd_sql(ObAccountArg(user_name, host_name), pwd, ddl_stmt_str, plugin, is_oracle_mode))) {
                 LOG_WARN("gen set passwd sql failed", K(user_name), K(host_name), K(pwd), K(ret));
               } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
               } else if (OB_FAIL(set_passwd_in_trans(arg.tenant_id_, user_id, pwd, &ddl_sql, schema_guard, plugin))) {
@@ -32654,10 +32665,13 @@ int ObDDLService::revoke(const ObRevokeUserArg &arg)
     ObSqlString ddl_stmt_str;
     ObString ddl_sql;
     ObNeedPriv need_priv;
+    bool is_oracle_mode = false;
     need_priv.priv_set_ = arg.priv_set_;
     need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
-    if (OB_FAIL(ObDDLSqlGenerator::gen_user_priv_sql(ObAccountArg(user_info->get_user_name_str(), user_info->get_host_name_str()),
-                                                     need_priv, grant, ddl_stmt_str))) {
+    if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+      LOG_WARN("fail to check is oracle mode", K(ret));
+    } else if (OB_FAIL(ObDDLSqlGenerator::gen_user_priv_sql(ObAccountArg(user_info->get_user_name_str(), user_info->get_host_name_str()),
+                                                     need_priv, grant, ddl_stmt_str, is_oracle_mode))) {
       LOG_WARN("gen user_priv sql failed", K(arg), K(ret));
     } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
     } else if (OB_FAIL(grant_revoke_user(arg.tenant_id_, arg.user_id_,
@@ -32691,18 +32705,21 @@ int ObDDLService::grant_priv_to_user(const uint64_t tenant_id,
                                      const common::ObString &grantor_host)
 {
   int ret = OB_SUCCESS;
+  bool is_oracle_mode = false;
   if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == user_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Input arguments error", K(tenant_id), K(user_id), K(ret));
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard with version in inner table", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+    LOG_WARN("fail to check is oracle mode", K(ret));
   } else {
     ObSqlString ddl_stmt_str;
     ObString ddl_sql;
     switch (need_priv.priv_level_) {
       case OB_PRIV_USER_LEVEL: {
         if (OB_FAIL(ObDDLSqlGenerator::gen_user_priv_sql(ObAccountArg(user_name, host_name), need_priv,
-                                                         true, ddl_stmt_str))) {
+                                                         true, ddl_stmt_str, is_oracle_mode))) {
           LOG_WARN("gen user_priv sql failed", K(ret), K(user_name), K(host_name));
         } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
         } else if (OB_FAIL(grant_revoke_user(tenant_id, user_id, need_priv.priv_set_,
@@ -32727,7 +32744,7 @@ int ObDDLService::grant_priv_to_user(const uint64_t tenant_id,
       case OB_PRIV_DB_LEVEL: {
         ObOriginalDBKey db_key(tenant_id, user_id, need_priv.db_);
         if (OB_FAIL(ObDDLSqlGenerator::gen_db_priv_sql(ObAccountArg(user_name, host_name), need_priv,
-                                                       true, ddl_stmt_str))) {
+                                                       true, ddl_stmt_str, is_oracle_mode))) {
           LOG_WARN("gen_db_priv sql failed", K(need_priv), K(user_name), K(ret));
         } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
         } else if (OB_FAIL(grant_database(db_key, need_priv.priv_set_, &ddl_sql, schema_guard))) {
@@ -32737,7 +32754,19 @@ int ObDDLService::grant_priv_to_user(const uint64_t tenant_id,
       }
       case OB_PRIV_TABLE_LEVEL: {
         ObTablePrivSortKey table_key(tenant_id, user_id, need_priv.db_, need_priv.table_);
-        if (OB_FAIL(ObDDLSqlGenerator::gen_table_priv_sql(ObAccountArg(user_name, host_name), need_priv, true, ddl_stmt_str))) {
+        if (!is_oracle_mode
+            && OB_FAIL(ObDDLSqlGenerator::gen_table_priv_sql(ObAccountArg(user_name, host_name),
+                                                             need_priv,
+                                                             true,
+                                                             ddl_stmt_str))) {
+          LOG_WARN("gen_table_priv sql failed", K(need_priv), K(ret));
+        } else if (is_oracle_mode
+                   && OB_FAIL(ObDDLSqlGenerator::gen_table_priv_sql_ora(ObAccountArg(user_name, host_name),
+                                                                        table_key,
+                                                                        false,
+                                                                        obj_priv_array,
+                                                                        true,
+                                                                        ddl_stmt_str))) {
           LOG_WARN("gen_table_priv sql failed", K(need_priv), K(ret));
         } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
         } else if (OB_FAIL(grant_table(table_key,
@@ -32758,7 +32787,7 @@ int ObDDLService::grant_priv_to_user(const uint64_t tenant_id,
                                       obj_priv_key.obj_type_ == (int)ObObjectType::PROCEDURE ? ObRoutineType::ROUTINE_PROCEDURE_TYPE :
                                       obj_priv_key.obj_type_ == (int)ObObjectType::FUNCTION ? ObRoutineType::ROUTINE_FUNCTION_TYPE :
                                       ObRoutineType::INVALID_ROUTINE_TYPE);
-        if (OB_FAIL(ObDDLSqlGenerator::gen_routine_priv_sql(ObAccountArg(user_name, host_name), need_priv, true, ddl_stmt_str))) {
+        if (OB_FAIL(ObDDLSqlGenerator::gen_routine_priv_sql(ObAccountArg(user_name, host_name), need_priv, true, ddl_stmt_str, is_oracle_mode))) {
           LOG_WARN("gen_table_priv sql failed", K(need_priv), K(ret));
         } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
         } else if (OB_FAIL(grant_routine(routine_key,
@@ -32896,8 +32925,11 @@ int ObDDLService::grant_or_revoke_column_priv_mysql(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   common::hash::ObHashMap<ObColumnSchemaHashWrapper, ObPrivSet> col_privs;
+  bool is_oracle_mode = false;
   if (OB_FAIL(col_privs.create(OB_MAX_COLUMN_NUMBER, lib::ObLabel("ColPriv")))) {
     LOG_WARN("failed to create column id map", K(ret));
+  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+    LOG_WARN("fail to check is oracle mode", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < column_names_priv.count(); i++) {
       ObColumnSchemaHashWrapper column_key(column_names_priv.at(i).first);
@@ -32928,7 +32960,7 @@ int ObDDLService::grant_or_revoke_column_priv_mysql(const uint64_t tenant_id,
     if (OB_FAIL(need_priv.columns_.push_back(it->first.column_name_))) {
       LOG_WARN("push back failed", K(ret));
     } else if (OB_FAIL(ObDDLSqlGenerator::gen_column_priv_sql(ObAccountArg(user_name, host_name),
-                                                        need_priv, is_grant, ddl_stmt_str))) {
+                                                        need_priv, is_grant, ddl_stmt_str, is_oracle_mode))) {
       LOG_WARN("gen_table_priv sql failed", K(need_priv), K(ret));
     } else if (OB_FALSE_IT(ddl_stmt = ddl_stmt_str.string())) {
     } else if (OB_FAIL(ddl_operator.grant_column(schema_guard,
@@ -32951,6 +32983,7 @@ int ObDDLService::revoke_all(
     share::schema::ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
+  bool is_oracle_mode = false;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init");
   } else if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == user_id
@@ -32958,10 +32991,15 @@ int ObDDLService::revoke_all(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Tenant id or user_id is invalid",
              K(tenant_id), K(user_id), K(user_name), K(ret));
+  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+    LOG_WARN("fail to check is oracle mode", K(ret));
   } else {
     ObDDLSQLTransaction trans(schema_service_);
     int64_t refreshed_schema_version = 0;
-    if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+    bool is_oracle_mode = false;
+    if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+      LOG_WARN("fail to check is oracle mode", K(ret));
+    } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
       LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
     } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("Start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
@@ -32969,7 +33007,7 @@ int ObDDLService::revoke_all(
       ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
       ObSqlString ddl_stmt_str;
       ObString ddl_sql;
-      if (OB_FAIL(ObDDLSqlGenerator::gen_revoke_all_sql(ObAccountArg(user_name, host_name), ddl_stmt_str))) {
+      if (OB_FAIL(ObDDLSqlGenerator::gen_revoke_all_sql(ObAccountArg(user_name, host_name), ddl_stmt_str, is_oracle_mode))) {
         LOG_WARN("gen revoke all sql failed", K(ret));
       } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
       } else if (OB_FAIL(ddl_operator.grant_revoke_user(tenant_id, user_id,
@@ -33396,6 +33434,10 @@ int ObDDLService::lock_user(const obrpc::ObLockUserArg &arg,
   ObString ddl_sql;
   uint64_t user_id = OB_INVALID_ID;
   ObAccountArg account;
+  bool is_oracle_mode = false;
+  if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+    LOG_WARN("fail to check is oracle mode", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < arg.users_.count(); ++i) {
     ObSchemaGetterGuard schema_guard; //FIXME@xiyu: inside for ?
     ddl_stmt_str.reuse();
@@ -33414,7 +33456,7 @@ int ObDDLService::lock_user(const obrpc::ObLockUserArg &arg,
         if (OB_FAIL(failed_index.push_back(i))) {
           LOG_WARN("push_back failed", K(ret));
         }
-      } else if (OB_FAIL(ObDDLSqlGenerator::gen_lock_user_sql(account, arg.locked_, ddl_stmt_str))) {
+      } else if (OB_FAIL(ObDDLSqlGenerator::gen_lock_user_sql(account, arg.locked_, ddl_stmt_str, is_oracle_mode))) {
         LOG_WARN("gen lock_user sql failed", K(ret), K(account), K(ret));
       } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
       } else if (OB_FAIL(lock_user_in_trans(tenant_id, user_id, arg.locked_, &ddl_sql, schema_guard))) {
@@ -35593,19 +35635,26 @@ int ObDDLService::create_user_in_trans(share::schema::ObUserInfo &user_info,
     ObString ddl_sql;
     const bool is_role = user_info.is_role();
     int64_t refreshed_schema_version = 0;
+    bool is_oracle_mode = false;
     if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
       LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
     } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("Failed to start trans", KR(ret), K(tenant_id), K(refreshed_schema_version));
-    } else if (OB_FAIL(ObDDLSqlGenerator::gen_create_user_sql(
-        ObAccountArg(user_info.get_user_name_str(), user_info.get_host_name_str(), is_role),
-        user_info.get_passwd_str(),
-        user_info.get_plugin_str(),
-        ddl_stmt_str))) {
+    } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+      LOG_WARN("fail to check is oracle mode", K(ret));
+    } else if (OB_FAIL(ObDDLSqlGenerator::gen_create_user_sql(ObAccountArg(user_info.get_user_name_str(),
+                                                                           user_info.get_host_name_str(),
+                                                                           is_role),
+                                                              user_info.get_passwd_str(),
+                                                              user_info.get_plugin_str(),
+                                                              ddl_stmt_str,
+                                                              is_oracle_mode))) {
       LOG_WARN("gen create user sql failed", K(ret));
     } else if (OB_FAIL(ObDDLSqlGenerator::append_ssl_info_sql(user_info.get_ssl_type(),
-        user_info.get_ssl_cipher_str(), user_info.get_x509_issuer_str(),
-        user_info.get_x509_subject_str(), ddl_stmt_str))) {
+                                                              user_info.get_ssl_cipher_str(),
+                                                              user_info.get_x509_issuer_str(),
+                                                              user_info.get_x509_subject_str(),
+                                                              ddl_stmt_str))) {
       LOG_WARN("gen append_ssl_info_sql failed", K(ret));
     } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
     } else if (OB_FAIL(ddl_operator.create_user(user_info, &ddl_sql, trans))) {

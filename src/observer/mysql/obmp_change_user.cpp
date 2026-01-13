@@ -17,6 +17,8 @@
 #include "observer/mysql/obmp_stmt_send_piece_data.h"
 #include "lib/encrypt/ob_encrypted_helper.h"
 #include "lib/net/ob_net_util.h"
+#include "rpc/obmysql/packet/ompk_handshake_response.h"
+#include "share/schema/ob_schema_getter_guard.h"
 
 
 using namespace oceanbase::common;
@@ -198,16 +200,6 @@ int ObMPChangeUser::process()
   bool need_response_error = true;
   const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
   int64_t query_timeout = 0;
-  bool need_send_auth_switch =
-      get_conn()->is_support_plugin_auth() &&
-      get_conn()->client_type_ == common::OB_CLIENT_NON_STANDARD &&
-      GCONF._enable_auth_switch &&
-      (!is_proxy_mod || get_proxy_version() >= PROXY_VERSION_4_2_3_0);
-  if (is_proxy_mod && !auth_plugin_name_.empty() &&
-    auth_plugin_name_.compare(AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD) == 0) {
-    // proxy is native_pass_word plugin, no need auth_switch
-    need_send_auth_switch = false;
-  }
   if (OB_FAIL(get_session(session))) {
     LOG_ERROR("get session  fail", K(ret));
   } else if (OB_ISNULL(session)) {
@@ -236,60 +228,106 @@ int ObMPChangeUser::process()
         LOG_WARN("update conn attrs failed", K(ret));
       } else if (OB_FAIL(load_login_info(session))) {
         OB_LOG(WARN,"load log info failed", K(ret),K(session->get_server_sid()));
-      } else if (need_send_auth_switch) {
-        // do nothing
-      } else if (OB_FAIL(load_privilege_info_for_change_user(session))) {
-        OB_LOG(WARN,"load privilige info failed", K(ret),K(session->get_server_sid()));
       } else {
-        if (is_proxy_mod) {
-          if (!sys_vars_.empty()) {
-            for (int64_t i = 0; OB_SUCC(ret) && i < sys_vars_.count(); ++i) {
-              if (OB_FAIL(session->update_sys_variable(sys_vars_.at(i).key_, sys_vars_.at(i).value_))) {
-                OB_LOG(WARN, "fail to update session vars", "sys_var", sys_vars_.at(i), K(ret));
+        // ========== Step 1: Get user's authentication plugin ==========
+        ObSchemaGetterGuard schema_guard;
+        share::schema::ObUserLoginInfo login_info = session->get_login_info();
+        ObString required_plugin;
+        ObSEArray<const ObUserInfo *, 2> user_infos;
+        const ObUserInfo *matched_user_info = nullptr;
+        SSL *ssl_st = SQL_REQ_OP.get_sql_ssl_st(req_);
+
+        if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(
+                        session->get_effective_tenant_id(), schema_guard))) {
+          LOG_WARN("failed to get schema guard", K(ret), K(session->get_effective_tenant_id()));
+        } else if (OB_FAIL(schema_guard.get_user_info(session->get_effective_tenant_id(),
+                                                       login_info.user_name_,
+                                                       user_infos))) {
+          LOG_WARN("failed to get user info", K(ret), K(login_info.user_name_),
+                   K(session->get_effective_tenant_id()));
+        } else if (OB_FAIL(get_user_required_plugin(schema_guard,
+                                                    login_info,
+                                                    get_conn(),
+                                                    required_plugin,
+                                                    user_infos,
+                                                    matched_user_info))) {
+          LOG_WARN("failed to get user required plugin", K(ret));
+        } else {
+          // Update login_info with scramble and auth response
+          login_info.scramble_str_.assign_ptr(get_conn()->scramble_result_buf_,
+                                              ObSMConnection::SCRAMBLE_BUF_SIZE);
+          login_info.passwd_ = auth_response_;
+
+          // Create a simple HandshakeResponse wrapper for change_user
+          OMPKHandshakeResponse hsr_wrapper;
+          hsr_wrapper.set_auth_plugin_name(auth_plugin_name_);
+          hsr_wrapper.set_auth_response(auth_response_);
+
+          // ========== Step 2: Handle authentication switch if needed ==========
+          if (OB_FAIL(handle_auth_switch_if_needed(schema_guard, login_info, get_conn(),
+                                                   *session, required_plugin, hsr_wrapper,
+                                                   asr_mem_pool_))) {
+            LOG_WARN("failed to handle auth switch", K(ret));
+          }
+
+          // ========== Step 3: Handle caching_sha2_password authentication ==========
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(handle_caching_sha2_authentication_if_need(login_info,
+                                                                   get_conn(),
+                                                                   *session,
+                                                                   required_plugin,
+                                                                   matched_user_info,
+                                                                   ssl_st,
+                                                                   asr_mem_pool_))) {
+              LOG_WARN("failed to handle caching_sha2_password authentication", K(ret));
+            }
+          }
+
+          // Update session login_info with the updated password after auth switch/caching_sha2
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(session->set_login_info(login_info))) {
+              LOG_WARN("failed to update login_info after auth switch", K(ret));
+            }
+          }
+        }
+
+        // ========== Step 4: Verify password using check_user_access ==========
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(load_privilege_info_for_change_user(session))) {
+            OB_LOG(WARN,"load privilige info failed", K(ret),K(session->get_server_sid()));
+          } else {
+            if (is_proxy_mod) {
+              if (!sys_vars_.empty()) {
+                for (int64_t i = 0; OB_SUCC(ret) && i < sys_vars_.count(); ++i) {
+                  if (OB_FAIL(session->update_sys_variable(sys_vars_.at(i).key_, sys_vars_.at(i).value_))) {
+                    OB_LOG(WARN, "fail to update session vars", "sys_var", sys_vars_.at(i), K(ret));
+                  }
+                }
               }
-            }
+              if (OB_SUCC(ret) && !user_vars_.empty()) {
+                if (OB_FAIL(replace_user_variables(*session))) {
+                  OB_LOG(WARN, "fail to replace user variables", K(ret));
+                }
+              }
+            }  // end proxy client mod
           }
-          if (OB_SUCC(ret) && !user_vars_.empty()) {
-            if (OB_FAIL(replace_user_variables(*session))) {
-              OB_LOG(WARN, "fail to replace user variables", K(ret));
-            }
-          }
-        }  // end proxy client mod
+        }
       }
     }
   }
 
   //send packet to client
   if (OB_SUCC(ret)) {
-    /*
-     In order to be compatible with the behavior of mysql change user,
-     an AuthSwitchRequest request will be sent every time to the external client.
-
-     If we're dealing with an older client we can't just send a change plugin
-     packet to re-initiate the authentication handshake, because the client
-     won't understand it. The good thing is that we don't need to : the old
-     client expects us to just check the user credentials here, which we can do
-     by just reading the cached data that are placed there by change user's
-     passwd field.
-     * */
-    if (need_send_auth_switch) {
-      // send auth switch request
-      OMPKAuthSwitch auth_switch;
-      auth_switch.set_plugin_name(ObString(AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD));
-      auth_switch.set_scramble(ObString(sizeof(get_conn()->scramble_result_buf_), get_conn()->scramble_result_buf_));
-      if (OB_FAIL(packet_sender_.response_packet(auth_switch, session))) {
-        RPC_LOG(WARN, "failed to send error packet", K(auth_switch), K(ret));
-        disconnect();
-      } else {
-        get_conn()->set_auth_switch_phase();
-      }
-    } else {
+    // Auth switch request is already handled in handle_auth_switch_if_needed if needed
+    // If no auth switch was needed, send OK packet
+    if (!get_conn()->is_in_auth_switch_phase()) {
       ObOKPParam ok_param;
       ok_param.is_on_change_user_ = true;
       if (OB_FAIL(send_ok_packet(*session, ok_param))) {
         OB_LOG(WARN, "response ok packet fail", K(ret));
       }
     }
+    // If auth switch phase is active, the response will be handled in handle_auth_switch_if_needed
     LOG_INFO("MYSQL changeuser", K(session->get_client_ip()),
       K(session->get_client_addr_port()), K(session->get_service_name()),
       K(session->get_failover_mode()), K(get_conn()->client_sessid_), K(get_conn()->sessid_),
@@ -508,7 +546,7 @@ int ObMPChangeUser::load_login_info(ObSQLSessionInfo *session)
     OB_LOG(INFO, "com change user", "username", login_info.user_name_,
           "tenant name", login_info.tenant_name_);
     const ObSMConnection &conn = *get_conn();
-    login_info.scramble_str_.assign_ptr(conn.scramble_result_buf_, sizeof(conn.scramble_result_buf_));
+    login_info.scramble_str_.assign_ptr(conn.scramble_result_buf_, ObSMConnection::SCRAMBLE_BUF_SIZE);
     login_info.passwd_ = auth_response_;
     if (OB_FAIL(session->set_login_info(login_info))) {
       LOG_WARN("failed to set login_info", K(ret));

@@ -799,11 +799,11 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[50].default_value_ = "mysql_native_password" ;
-      ObSysVars[50].info_ = "" ;
+      ObSysVars[50].default_value_ = "" ;
+      ObSysVars[50].info_ = "The default authentication plugin for new users, empty means native_password with SHA1" ;
       ObSysVars[50].name_ = "default_authentication_plugin" ;
       ObSysVars[50].data_type_ = ObVarcharType ;
-      ObSysVars[50].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[50].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
       ObSysVars[50].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_default_authentication_plugin" ;
       ObSysVars[50].id_ = SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN)) ;

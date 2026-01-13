@@ -14,6 +14,7 @@
 
 #include "lib/encrypt/ob_encrypted_helper.h"
 #include "share/ob_cluster_version.h"
+#include "share/ob_get_compat_mode.h"
 
 
 using namespace oceanbase;
@@ -783,7 +784,7 @@ int ObEncryptedHelper::check_data_version_for_auth_plugin(const ObString &plugin
   if (OB_UNLIKELY(!is_valid_auth_plugin(plugin))) {
     ret = OB_ERR_PLUGIN_IS_NOT_LOADED;
     LOG_WARN("invalid auth plugin", K(plugin), K(tenant_id), K(ret));
-  } else if (0 != plugin.case_compare(AUTH_PLUGIN_CACHING_SHA2_PASSWORD)) {
+  } else if (!is_caching_sha2_password_plugin(plugin)) {
     // do nothing
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("failed to get min data version", K(ret));
@@ -792,4 +793,3 @@ int ObEncryptedHelper::check_data_version_for_auth_plugin(const ObString &plugin
   }
   return ret;
 }
-

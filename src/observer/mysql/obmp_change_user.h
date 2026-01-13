@@ -17,6 +17,7 @@
 #include "observer/mysql/obmp_base.h"
 #include "rpc/obmysql/ob_mysql_packet.h"
 #include "sql/parser/parse_node.h"
+#include "lib/allocator/ob_mod_define.h"
 namespace oceanbase
 {
 namespace sql
@@ -41,7 +42,9 @@ public:
       user_vars_(),
       connect_attrs_(),
       client_ip_(),
-      client_port_(0)
+      client_port_(0),
+      allocator_(ObModIds::OB_SQL_SESSION),
+      asr_mem_pool_(&allocator_)
   {
     client_ip_buf_[0] = '\0';
   }
@@ -81,6 +84,8 @@ private:
   char client_ip_buf_[common::MAX_IP_ADDR_LENGTH + 1];
   int32_t client_port_;
   bool has_proxy_connection_id_key_ = false;
+  ObArenaAllocator allocator_;
+  AuthSwitchResonseMemPool asr_mem_pool_;
   DISALLOW_COPY_AND_ASSIGN(ObMPChangeUser);
 };// end of class
 

@@ -267,7 +267,7 @@ int ObSensitiveRuleDDLService::grant_revoke_sensitive_rule(const ObSensitiveRule
   } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
     LOG_WARN("failed to get tenant schema version", K(ret), K(tenant_id));
   } else if (OB_FAIL(ObDDLSqlGenerator::gen_sensitive_rule_priv_sql(ObAccountArg(user_name, host_name),
-                                                                    need_priv, grant, ddl_stmt_sql_str))) {
+                                                                    need_priv, grant, ddl_stmt_sql_str, is_ora_mode))) {
     LOG_WARN("gen_sensitive_rule_priv sql failed", K(ret), K(user_name), K(host_name));
   } else {
     ddl_stmt_str = ddl_stmt_sql_str.string();

@@ -43,7 +43,8 @@ public:
   static int gen_create_user_sql(const obrpc::ObAccountArg &account,
                                  const common::ObString &password,
                                  const common::ObString &plugin,
-                                 common::ObSqlString &sql_string);
+                                 common::ObSqlString &sql_string,
+                                 const bool is_oracle_mode);
   static int gen_alter_role_sql(const obrpc::ObAccountArg &account,
                                 const common::ObString &password,
                                 common::ObSqlString &sql_string);
@@ -55,45 +56,56 @@ public:
   static int gen_set_passwd_sql(const obrpc::ObAccountArg &account,
                                 const common::ObString &passwd,
                                 common::ObSqlString &sql_string,
-                                const common::ObString &plugin);
+                                const common::ObString &plugin,
+                                const bool is_oracle_mode);
   static int gen_set_max_connections_sql(const obrpc::ObAccountArg &account,
                                         const uint64_t max_connections_per_hour,
                                         const uint64_t max_user_connections,
-                                        common::ObSqlString &sql_string);
+                                        common::ObSqlString &sql_string,
+                                        const bool is_oracle_mode);
 
   static int gen_alter_user_require_sql(const obrpc::ObAccountArg &account,
                                         const obrpc::ObSetPasswdArg &arg,
                                         common::ObSqlString &sql_string);
   static int gen_rename_user_sql(const obrpc::ObAccountArg &old_account,
                                  const obrpc::ObAccountArg &new_account,
-                                 common::ObSqlString &sql_string);
+                                 common::ObSqlString &sql_string,
+                                 const bool is_oracle_mode);
   static int gen_lock_user_sql(const obrpc::ObAccountArg &account,
                                const bool locked,
-                               common::ObSqlString &sql_string);
+                               common::ObSqlString &sql_string,
+                               const bool is_oracle_mode);
   static int gen_drop_user_sql(const obrpc::ObAccountArg &account,
-                               common::ObSqlString &sql_string);
+                               common::ObSqlString &sql_string,
+                               const bool is_oracle_mode);
   static int gen_revoke_all_sql(const obrpc::ObAccountArg &account,
-                                common::ObSqlString &sql_string);
+                                common::ObSqlString &sql_string,
+                                const bool is_oracle_mode);
   static int gen_user_priv_sql(const obrpc::ObAccountArg &account,
                                const share::schema::ObNeedPriv &need_priv,
                                const bool is_grant,
-                               common::ObSqlString &sql_string);
+                               common::ObSqlString &sql_string,
+                               const bool is_oracle_mode);
   static int gen_catalog_priv_sql(const obrpc::ObAccountArg &account,
                                   const share::schema::ObNeedPriv &need_priv,
                                   const bool is_grant,
-                                  common::ObSqlString &sql_string);
+                                  common::ObSqlString &sql_string,
+                                  const bool is_oracle_mode);
   static int gen_sensitive_rule_priv_sql(const obrpc::ObAccountArg &account,
                                          const share::schema::ObNeedPriv &need_priv,
                                          const bool is_grant,
-                                         common::ObSqlString &sql_string);
+                                         common::ObSqlString &sql_string,
+                                         const bool is_oracle_mode);
   static int gen_db_priv_sql(const obrpc::ObAccountArg &account,
                              const share::schema::ObNeedPriv &need_priv,
                              const bool is_grant,
-                             common::ObSqlString &sql_string);
+                             common::ObSqlString &sql_string,
+                             const bool is_oracle_mode);
   static int gen_object_priv_sql(const obrpc::ObAccountArg &account,
                                 const share::schema::ObNeedPriv &need_priv,
                                 const bool is_grant,
-                                common::ObSqlString &sql_string);
+                                common::ObSqlString &sql_string,
+                                const bool is_oracle_mode);
   static int gen_table_priv_sql(const obrpc::ObAccountArg &account,
                                 const share::schema::ObNeedPriv &need_priv,
                                 const bool is_grant,
@@ -107,7 +119,8 @@ public:
   static int gen_routine_priv_sql(const obrpc::ObAccountArg &account,
                                   const share::schema::ObNeedPriv &need_priv,
                                   const bool is_grant,
-                                  common::ObSqlString &sql_string);
+                                  common::ObSqlString &sql_string,
+                                  const bool is_oracle_mode);
   static int gen_audit_stmt_sql(const common::ObString &username,
                                 const share::schema::ObSAuditModifyType modify_type,
                                 const share::schema::ObSAuditSchema &audit_schema,
@@ -124,12 +137,13 @@ public:
   static int gen_column_priv_sql(const obrpc::ObAccountArg &account,
                                  const share::schema::ObNeedPriv &need_priv,
                                  const bool is_grant,
-                                 ObSqlString &sql_string);
+                                 ObSqlString &sql_string,
+                                 const bool is_oracle_mode);
   
 private:
   static int get_priv_name(const int64_t priv, const char *&name);
   static int priv_to_name(const ObPrivSet priv, common::ObSqlString &priv_str);
-  static char *adjust_ddl_format_str(char *ori_format_str);
+  static char *adjust_ddl_format_str(char *ori_format_str, const bool is_oracle_mode);
   DISALLOW_COPY_AND_ASSIGN(ObDDLSqlGenerator);
 };
 

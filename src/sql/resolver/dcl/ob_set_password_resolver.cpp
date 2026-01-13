@@ -81,10 +81,10 @@ bool ObSetPasswordResolver::is_valid_encrypted_passwd(const ObString &str, const
   bool bret = false;
   if (str.empty()) {
     bret = true;
-  } else if (plugin.empty() || 0 == plugin.case_compare(AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD)) {
+  } else if (ObEncryptedHelper::is_native_password_plugin(plugin)) {
     // For mysql_native_password plugin, use mysql41 format validation
     bret = is_valid_mysql41_passwd(str);
-  } else if (0 == plugin.case_compare(AUTH_PLUGIN_CACHING_SHA2_PASSWORD)) {
+  } else if (ObEncryptedHelper::is_caching_sha2_password_plugin(plugin)) {
     // For caching_sha2_password plugin, use mysql70 format validation
     bret = is_valid_mysql70_passwd(str);
   } else {
@@ -94,11 +94,10 @@ bool ObSetPasswordResolver::is_valid_encrypted_passwd(const ObString &str, const
   return bret;
 }
 
-
 int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  ParseNode *node = const_cast<ParseNode*>(&parse_tree);
+  ParseNode *node = const_cast<ParseNode *>(&parse_tree);
   ObSetPasswordStmt *set_pwd_stmt = NULL;
   uint64_t compat_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), compat_version))) {
@@ -106,203 +105,213 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(session_info_) || OB_ISNULL(node)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Session info  and nodeshould not be NULL", KP(session_info_), KP(node), K(ret));
-  } else if (OB_UNLIKELY(T_SET_PASSWORD != node->type_) ||
-             OB_UNLIKELY(lib::is_oracle_mode() && 4 != node->num_child_) ||
-             OB_UNLIKELY(lib::is_mysql_mode() && 6 != node->num_child_)) {
+  } else if (OB_UNLIKELY(T_SET_PASSWORD != node->type_) || OB_UNLIKELY(6 != node->num_child_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Set password ParseNode error", K(node->type_), K(node->num_child_), K(ret));
+  } else if (OB_ISNULL(set_pwd_stmt = create_stmt<ObSetPasswordStmt>())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("Failed to create ObSetPasswordStmt", K(ret));
   } else {
-    if (OB_ISNULL(set_pwd_stmt = create_stmt<ObSetPasswordStmt>())) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("Failed to create ObSetPasswordStmt", K(ret));
-    } else {
-      stmt_ = set_pwd_stmt;
-      set_pwd_stmt->set_tenant_id(session_info_->get_effective_tenant_id());
-      ObString user_name;
-      ObString host_name;
-      ObString plugin;
-      bool is_plugin_supported = true;
-      const ObString &session_user_name = session_info_->get_user_name();
-      const ObString &session_host_name = session_info_->get_host_name();
-      bool is_valid = false;
-      if (OB_SUCC(ret) && NULL != node->children_[0]) {
-        ParseNode *user_hostname_node = node->children_[0];
-        if (OB_FAIL(check_role_as_user(user_hostname_node, is_valid))) {
-          LOG_WARN("failed to check role as user", K(ret));
-        } else if (!is_valid) {
-          ret = OB_USER_NOT_EXIST;
-          LOG_ORACLE_USER_ERROR(OB_USER_NOT_EXIST, int(user_hostname_node->str_len_), user_hostname_node->str_value_);
-        } else if (OB_ISNULL(user_hostname_node->children_[0])) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("username should not be NULL", K(ret));
+    stmt_ = set_pwd_stmt;
+    set_pwd_stmt->set_tenant_id(session_info_->get_effective_tenant_id());
+    ObString user_name;
+    ObString host_name;
+    ObString plugin;
+    bool is_plugin_supported = true;
+    const ObString &session_user_name = session_info_->get_user_name();
+    const ObString &session_host_name = session_info_->get_host_name();
+    bool is_valid = false;
+    ObSSLType ssl_type = ObSSLType::SSL_TYPE_NOT_SPECIFIED;
+    ObString infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_MAX)] = {};
+    bool need_set_password = true;
+    // resolve user and host name
+    if (OB_SUCC(ret) && NULL != node->children_[0]) {
+      ParseNode *user_hostname_node = node->children_[0];
+      if (OB_FAIL(check_role_as_user(user_hostname_node, is_valid))) {
+        LOG_WARN("failed to check role as user", K(ret));
+      } else if (!is_valid) {
+        ret = OB_USER_NOT_EXIST;
+        LOG_ORACLE_USER_ERROR(OB_USER_NOT_EXIST, int(user_hostname_node->str_len_), user_hostname_node->str_value_);
+      } else if (OB_ISNULL(user_hostname_node->children_[0])) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("username should not be NULL", K(ret));
+      } else {
+        user_name.assign_ptr(user_hostname_node->children_[0]->str_value_,
+                             static_cast<int32_t>(user_hostname_node->children_[0]->str_len_));
+        if (NULL == user_hostname_node->children_[1]) {
+          host_name.assign_ptr(OB_DEFAULT_HOST_NAME, static_cast<int32_t>(STRLEN(OB_DEFAULT_HOST_NAME)));
         } else {
-          user_name.assign_ptr(user_hostname_node->children_[0]->str_value_,
-                        static_cast<int32_t>(user_hostname_node->children_[0]->str_len_));
-          if (NULL == user_hostname_node->children_[1]) {
-            host_name.assign_ptr(OB_DEFAULT_HOST_NAME, static_cast<int32_t>(STRLEN(OB_DEFAULT_HOST_NAME)));
-          } else {
-            host_name.assign_ptr(user_hostname_node->children_[1]->str_value_,
-                                 static_cast<int32_t>(user_hostname_node->children_[1]->str_len_));
-          }
-          if (0 == user_name.compare(session_user_name)
-              && 0 == host_name.compare(session_host_name)) {
-            set_pwd_stmt->set_for_current_user(true);
-          }
+          host_name.assign_ptr(user_hostname_node->children_[1]->str_value_,
+                               static_cast<int32_t>(user_hostname_node->children_[1]->str_len_));
+        }
+        if (0 == user_name.compare(session_user_name) && 0 == host_name.compare(session_host_name)) {
+          set_pwd_stmt->set_for_current_user(true);
+        }
+      }
+    } else {
+      user_name = session_user_name;
+      host_name = session_host_name;
+      set_pwd_stmt->set_for_current_user(true);
+    }
+    // resolve require and resource option
+    if (OB_FAIL(ret)) {
+    } else if ((NULL == node->children_[1]) && (NULL == node->children_[2])) {
+      need_set_password = false;
+      const ParseNode *child_node = node->children_[3];
+      if (OB_ISNULL(child_node)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("alter user ParseNode error", K(ret));
+      } else if (T_TLS_OPTIONS == child_node->type_) {
+        if (OB_FAIL(resolve_require_node(*child_node, user_name, host_name, ssl_type, infos))) {
+          LOG_WARN("resolve require node failed", K(ret));
+        }
+      } else if (T_USER_RESOURCE_OPTIONS == child_node->type_) {
+        if (OB_FAIL(resolve_resource_option_node(*child_node, user_name, host_name, ssl_type, infos))) {
+          LOG_WARN("resolve resource option node failed", K(ret));
         }
       } else {
-        user_name = session_user_name;
-        host_name = session_host_name;
-        set_pwd_stmt->set_for_current_user(true);
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("alter user ParseNode error", K(ret), K(child_node->type_));
       }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(check_dcl_on_inner_user(node->type_,
-                                            params_.session_info_->get_priv_user_id(),
-                                            user_name,
-                                            host_name))) {
-          LOG_WARN("failed to check dcl on inner-user or unsupport to modify reserved user", K(ret),
-                   K(params_.session_info_->get_priv_user_id()), K(user_name));
+    }
+    // resolve password and plugin
+    if (OB_FAIL(ret) || !need_set_password) {
+    } else if (OB_ISNULL(node->children_[1]) || OB_ISNULL(node->children_[2])) {
+      ret = OB_ERR_PARSE_SQL;
+      LOG_WARN("The child 1 or child 2 should not be NULL",
+               K(ret),
+               "child 1",
+               node->children_[1],
+               "child 2",
+               node->children_[2]);
+    } else {
+      ObString password(static_cast<int32_t>(node->children_[1]->str_len_), node->children_[1]->str_value_);
+      // get user plugin info
+      ObSchemaGetterGuard schema_guard;
+      const ObUserInfo *user_info = NULL;
+      uint64_t tenant_id = session_info_->get_effective_tenant_id();
+      if (OB_ISNULL(GCTX.schema_service_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema service is null", K(ret));
+      } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+        LOG_WARN("failed to get tenant schema guard", K(ret), K(tenant_id));
+      } else if (OB_FAIL(schema_guard.get_user_info(tenant_id, user_name, host_name, user_info))) {
+        LOG_WARN("failed to get user info", K(ret), K(tenant_id), K(user_name), K(host_name));
+      } else if (OB_ISNULL(user_info)) {
+        ret = OB_USER_NOT_EXIST;
+        LOG_WARN("user not exist", K(ret), K(user_name), K(host_name));
+      } else {
+        plugin = user_info->get_plugin();
+      }
+      // resolve password
+      if (OB_FAIL(ret)) {
+      } else if (0 == password.length()) {
+        // empty password, do not need to encrypt
+        set_pwd_stmt->set_need_enc(false);
+      } else {
+        // set need_enc
+        bool need_enc = (1 == node->children_[2]->value_) ? true : false;
+        // deal with plugin info
+        if (NULL == node->children_[5]) {
+          // [set password xxx], can not change auth plugin, use user's plugin
+          // for mysql compatibility, set need_enc to true for SET_PASSWORD statement
+          bool plain_password;
+          if (OB_FAIL(session_info_->check_feature_enable(ObCompatFeatureType::RECV_PLAIN_PASSWORD, plain_password))) {
+            LOG_WARN("failed to check feature enable", K(ret));
+          } else if (lib::is_mysql_mode() && plain_password) {
+            need_enc = true;
+          }
+        } else if (NULL == node->children_[4]) {
+          // [alter user xxxx], did not set plugin, use default_authentication_plugin system variable as default
+          if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN, plugin))) {
+            LOG_WARN("fail to get default_authentication_plugin variable", K(ret));
+          }
+        } else {
+          // [alter user xxxx], set plugin
+          plugin.assign_ptr(str_tolower(const_cast<char *>(node->children_[4]->str_value_),
+                                        static_cast<int32_t>(node->children_[4]->str_len_)),
+                            static_cast<int32_t>(node->children_[4]->str_len_));
+          if (plugin.empty()) {
+            ret = OB_ERR_PLUGIN_IS_NOT_LOADED;
+            LOG_WARN("invalid auth plugin", K(plugin), K(ret));
+          }
+        }
+        // check encrypted password format
+        if (OB_FAIL(ret)) {
+        } else if (!need_enc) {
+          if (OB_UNLIKELY(!is_valid_encrypted_passwd(password, plugin))) {
+            ret = OB_ERR_PASSWORD_FORMAT;
+            LOG_WARN("Wrong password hash format", K(ret));
+          } else {
+            set_pwd_stmt->set_need_enc(false);
+          }
+        } else {
+          if (!lib::is_oracle_mode() && OB_FAIL(check_password_strength(password))) {
+            LOG_WARN("fail to check password strength", K(ret));
+          } else if (lib::is_oracle_mode()
+                     && OB_FAIL(resolve_oracle_password_strength(user_name, host_name, password))) {
+            LOG_WARN("fail to check password strength", K(ret));
+          } else {
+            set_pwd_stmt->set_need_enc(true);
+          }
         }
       }
       if (OB_SUCC(ret)) {
+        if (OB_FAIL(ObEncryptedHelper::check_data_version_for_auth_plugin(plugin,
+              params_.session_info_->get_effective_tenant_id(), is_plugin_supported))) {
+          LOG_WARN("failed to check data version for auth plugin", K(ret));
+        } else if (OB_UNLIKELY(!is_plugin_supported)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("caching_sha2_password is not supported when MIN_DATA_VERSION is below 4_4_2_0", K(ret));
+        } else if (OB_FAIL(set_pwd_stmt->set_user_password(user_name,
+                                                           host_name,
+                                                           password,
+                                                           ObEncryptedHelper::format_plugin_name(plugin)))) {
+          LOG_WARN("Failed to set UserPasswordStmt");
+        } else if (OB_FAIL(set_pwd_stmt->add_ssl_info(get_ssl_type_string(ssl_type),
+                                                      infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_ISSUER)],
+                                                      infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_CIPHER)],
+                                                      infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_SUBJECT)]))) {
+          LOG_WARN("Failed to add_ssl_info", K(ssl_type),
+                   "ISSUER", infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_ISSUER)],
+                   "CIPHER", infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_CIPHER)],
+                   "SUBJECT", infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_SUBJECT)], K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(check_dcl_on_inner_user(node->type_,
+                                          params_.session_info_->get_priv_user_id(),
+                                          user_name,
+                                          host_name))) {
+        LOG_WARN("failed to check dcl on inner-user or unsupport to modify reserved user",
+                 K(ret),
+                 K(params_.session_info_->get_priv_user_id()),
+                 K(user_name));
+      } else if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()
+                 && set_pwd_stmt->get_for_current_user() == false) {
+        OZ(schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
+                                               session_info_->get_priv_user_id(),
+                                               ObString(""),
+                                               stmt::T_SET_PASSWORD,
+                                               session_info_->get_enable_role_array()),
+                                               session_info_->get_effective_tenant_id(),
+                                               session_info_->get_user_id());
+      } else {
         // replace password to *** in query_string for audit
         ObString masked_sql;
         if (session_info_->is_inner()) {
           // do nothing in inner_sql
         } else if (OB_FAIL(mask_password_for_single_user(allocator_,
-            session_info_->get_current_query_string(), node, 1, masked_sql))) {
+                                                         session_info_->get_current_query_string(),
+                                                         node,
+                                                         1,
+                                                         masked_sql))) {
           LOG_WARN("fail to mask_password_for_single_user", K(ret));
         } else {
           set_pwd_stmt->set_masked_sql(masked_sql);
         }
       }
-      if (OB_SUCC(ret)) {
-        ObSSLType ssl_type = ObSSLType::SSL_TYPE_NOT_SPECIFIED;
-        ObString infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_MAX)] = {};
-        if ((NULL == node->children_[1]) && (NULL == node->children_[2])) {
-          const ParseNode *child_node = node->children_[3];
-          if (OB_ISNULL(child_node)) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("alter user ParseNode error", K(ret));
-          } else if (T_TLS_OPTIONS == child_node->type_) {
-            if (OB_FAIL(resolve_require_node(*child_node, user_name, host_name, ssl_type, infos))) {
-              LOG_WARN("resolve require node failed", K(ret));
-            }
-          } else if (T_USER_RESOURCE_OPTIONS == child_node->type_) {
-            if (OB_FAIL(resolve_resource_option_node(*child_node, user_name, host_name, ssl_type, infos))) {
-              LOG_WARN("resolve resource option node failed", K(ret));
-            }
-          } else {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("alter user ParseNode error", K(ret), K(child_node->type_));
-          }
-        } else if (OB_ISNULL(node->children_[1]) || OB_ISNULL(node->children_[2])) {
-          ret = OB_ERR_PARSE_SQL;
-          LOG_WARN("The child 1 or child 2 should not be NULL",
-              K(ret), "child 1", node->children_[1], "child 2", node->children_[2]);
-        } else {
-          ObString password(static_cast<int32_t>(node->children_[1]->str_len_),
-                            node->children_[1]->str_value_);
-          ObSchemaGetterGuard schema_guard;
-          const ObUserInfo *user_info = NULL;
-          uint64_t tenant_id = session_info_->get_effective_tenant_id();
-          if (OB_ISNULL(GCTX.schema_service_)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("schema service is null", K(ret));
-          } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
-            LOG_WARN("failed to get tenant schema guard", K(ret), K(tenant_id));
-          } else if (OB_FAIL(schema_guard.get_user_info(tenant_id, user_name, host_name, user_info))) {
-            LOG_WARN("failed to get user info", K(ret), K(tenant_id), K(user_name), K(host_name));
-          } else if (OB_ISNULL(user_info)) {
-            ret = OB_USER_NOT_EXIST;
-            LOG_WARN("user not exist", K(ret), K(user_name), K(host_name));
-          } else {
-            plugin = user_info->get_plugin();
-          }
-          if (OB_FAIL(ret)) {
-          } else if (!lib::is_oracle_mode() && OB_FAIL(check_password_strength(password))) {
-            LOG_WARN("fail to check password strength", K(ret));
-          } else if (lib::is_oracle_mode() && OB_FAIL(
-                     resolve_oracle_password_strength(user_name, host_name, password))) {
-            LOG_WARN("fail to check password strength", K(ret));
-          } else if (0 != password.length()) {//set password
-            // set need_enc
-            bool need_enc = (1 == node->children_[2]->value_) ? true : false;
-            // deal with plugin info
-            if (lib::is_mysql_mode()) {
-              if (NULL == node->children_[5]) {
-                // set password xxx, can not change auth plugin, use user's plugin
-                // for mysql compatibility, set need_enc to true for SET_PASSWORD statement
-                bool plain_password;
-                if (OB_FAIL(session_info_->check_feature_enable(ObCompatFeatureType::RECV_PLAIN_PASSWORD, plain_password))) {
-                  LOG_WARN("failed to check feature enable", K(ret));
-                } else if (lib::is_mysql_mode() && plain_password) {
-                  need_enc = true;
-                }
-              } else if (NULL == node->children_[4]) {
-                // alter user xxxx, did not set plugin, use default_authentication_plugin system variable as default
-                if (OB_FAIL(session_info_->get_sys_variable(
-                        share::SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN, plugin))) {
-                  LOG_WARN("fail to get default_authentication_plugin variable", K(ret));
-                }
-              } else {
-                // alter user xxxx, set plugin
-                plugin.assign_ptr(str_tolower(const_cast<char *>(node->children_[4]->str_value_),
-                                              static_cast<int32_t>(node->children_[4]->str_len_)),
-                                              static_cast<int32_t>(node->children_[4]->str_len_));
-                if (plugin.empty()) {
-                  ret = OB_ERR_PLUGIN_IS_NOT_LOADED;
-                  LOG_WARN("invalid auth plugin", K(plugin), K(ret));
-                }
-              }
-            } else {
-              // Oracle 模式不支持显式设置 plugin，直接用现有 plugin 定义（从用户信息获得）
-              // jinmao TODO: oracle 模式下需要支持设置 plugin
-            }
-            // check encrypted password format
-            if (!need_enc) {
-              if (OB_UNLIKELY(!is_valid_encrypted_passwd(password, plugin))) {
-                ret = OB_ERR_PASSWORD_FORMAT;
-                LOG_WARN("Wrong password hash format", K(ret));
-              } else {
-                set_pwd_stmt->set_need_enc(false);
-              }
-            } else {
-              set_pwd_stmt->set_need_enc(true);
-            }
-          } else {
-            set_pwd_stmt->set_need_enc(false); //clear password
-          }
-          if (OB_SUCC(ret)) {
-            if (OB_FAIL(ObEncryptedHelper::check_data_version_for_auth_plugin(plugin,
-              params_.session_info_->get_effective_tenant_id(), is_plugin_supported))) {
-              LOG_WARN("failed to check data version for auth plugin", K(ret));
-            } else if (OB_UNLIKELY(!is_plugin_supported)) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("caching_sha2_password is not supported when MIN_DATA_VERSION is below 4_4_2_0", K(ret));
-            } else if (OB_FAIL(set_pwd_stmt->set_user_password(user_name, host_name, password, plugin))) {
-              LOG_WARN("Failed to set UserPasswordStmt");
-            } else if (OB_FAIL(set_pwd_stmt->add_ssl_info(get_ssl_type_string(ssl_type),
-                                                          infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_ISSUER)],
-                                                          infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_CIPHER)],
-                                                          infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_SUBJECT)]))) {
-              LOG_WARN("Failed to add_ssl_info", K(ssl_type),
-                       "ISSUER", infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_ISSUER)],
-                       "CIPHER", infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_CIPHER)],
-                       "SUBJECT", infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_SUBJECT)], K(ret));
-            }
-          }
-        }
-      }
-    }
-    if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check() 
-        && set_pwd_stmt->get_for_current_user() == false) {
-      OZ (schema_checker_->check_ora_ddl_priv(
-            session_info_->get_effective_tenant_id(),
-            session_info_->get_priv_user_id(),
-            ObString(""),
-            stmt::T_SET_PASSWORD,
-            session_info_->get_enable_role_array()),
-            session_info_->get_effective_tenant_id(), session_info_->get_user_id());
     }
   }
   return ret;

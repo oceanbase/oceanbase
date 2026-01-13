@@ -18,6 +18,7 @@
 #include <string.h>
 #include "lib/string/ob_string.h"
 #include "lib/encrypt/ob_sha256_crypt.h"
+#include "lib/worker.h"
 
 #define SHA1_HASH_SIZE 20 /* Hash size in bytes */
 #define ENC_STRING_BUF_LEN SCRAMBLE_LENGTH * 2 + 1 //strlen(hash str) + '*'
@@ -25,6 +26,7 @@
 #define SHA1CircularShift(bits,word) (((word) << (bits)) | ((word) >> (32-(bits))))
 
 #define AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD "mysql_native_password"
+#define AUTH_PLUGIN_OB_NATIVE_PASSWORD "ob_native_password"
 #define AUTH_PLUGIN_CACHING_SHA2_PASSWORD "caching_sha2_password"
 
 namespace oceanbase
@@ -61,12 +63,68 @@ public:
   {
     return plugin.empty() ||
            plugin.case_compare(AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD) == 0 ||
+           plugin.case_compare(AUTH_PLUGIN_OB_NATIVE_PASSWORD) == 0 ||
            plugin.case_compare(AUTH_PLUGIN_CACHING_SHA2_PASSWORD) == 0;
   }
 
   static int check_data_version_for_auth_plugin(const ObString &plugin,
                                                 uint64_t tenant_id,
                                                 bool &is_supported);
+
+  static bool is_native_password_plugin(const ObString &plugin)
+  {
+    return plugin.empty() ||
+           plugin.case_compare(AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD) == 0 ||
+           plugin.case_compare(AUTH_PLUGIN_OB_NATIVE_PASSWORD) == 0;
+  }
+
+  static bool is_caching_sha2_password_plugin(const ObString &plugin)
+  {
+    return plugin.case_compare(AUTH_PLUGIN_CACHING_SHA2_PASSWORD) == 0;
+  }
+
+  static bool is_same_auth_plugin(const ObString &plugin1, const ObString &plugin2)
+  {
+    return (is_native_password_plugin(plugin1) && is_native_password_plugin(plugin2))
+           || (is_caching_sha2_password_plugin(plugin1) && is_caching_sha2_password_plugin(plugin2));
+  }
+
+  // The client does not recognize the ob_native_password plugin and needs to convert it to a client-recognizable name
+  static ObString convert_plugin_name_for_client(const ObString &plugin)
+  {
+    return is_native_password_plugin(plugin) ? AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD : AUTH_PLUGIN_CACHING_SHA2_PASSWORD;
+  }
+
+  // If client use mysql_native_password plugin, we need to convert it to ob_native_password in oracle mode
+  static ObString convert_plugin_name_from_client(const ObString &plugin)
+  {
+    if (plugin.empty() || plugin.case_compare(AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD) == 0) {
+      return ObString::make_string(get_native_password_plugin());
+    } else {
+      return plugin;
+    }
+  }
+
+  static ObString format_plugin_name(const ObString &plugin)
+  {
+    if (is_native_password_plugin(plugin)) {
+      return ObString::make_string(get_native_password_plugin());
+    } else {
+      return ObString::make_string(AUTH_PLUGIN_CACHING_SHA2_PASSWORD);
+    }
+  }
+
+  // Get native password plugin name based on current runtime context
+  // This version uses lib::is_mysql_mode() which must be properly set
+  static const char* get_native_password_plugin()
+  {
+    return lib::is_mysql_mode() ? AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD : AUTH_PLUGIN_OB_NATIVE_PASSWORD;
+  }
+
+  static const char *get_native_password_plugin(bool is_mysql_mode)
+  {
+    return is_mysql_mode ? AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD : AUTH_PLUGIN_OB_NATIVE_PASSWORD;
+  }
 
 private:
   /*

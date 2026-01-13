@@ -600,6 +600,7 @@ ob_set_subtarget(ob_share schema
   schema/ob_schema_getter_guard_priv.cpp
   schema/ob_schema_getter_guard_ccl_rule.cpp
   schema/ob_schema_getter_guard_sensitive_rule.cpp
+  schema/ob_schema_getter_guard_user.cpp
   schema/ob_schema_struct.cpp
   schema/ob_sequence_sql_service.cpp
   schema/ob_server_schema_service.cpp

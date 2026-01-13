@@ -1188,7 +1188,11 @@ int ObGrantResolver::resolve_grant_obj_privileges(
                      K(ret), K(session_info_->get_user_name()), K(user_name));
           } else if (OB_FAIL(grant_stmt->add_grantee(user_name))) {
             LOG_WARN("Add grantee error", K(user_name), K(ret));
-          } else if (OB_FAIL(grant_stmt->add_user(user_name, host_name, pwd, need_enc, plugin))) {
+          } else if (OB_FAIL(grant_stmt->add_user(user_name,
+                                                  host_name,
+                                                  pwd,
+                                                  need_enc,
+                                                  ObEncryptedHelper::format_plugin_name(plugin)))) {
             LOG_WARN("Add user and pwd error", K(user_name), K(pwd), K(plugin), K(ret));
           } else {
             //do nothing
@@ -1548,7 +1552,11 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
                            K(ret), K(session_info_->get_user_name()), K(user_name));
                 } else if (OB_FAIL(grant_stmt->add_grantee(user_name))) {
                   LOG_WARN("Add grantee error", K(user_name), K(ret));
-                } else if (OB_FAIL(grant_stmt->add_user(user_name, host_name, pwd, need_enc, plugin))) {
+                } else if (OB_FAIL(grant_stmt->add_user(user_name,
+                                                        host_name,
+                                                        pwd,
+                                                        need_enc,
+                                                        ObEncryptedHelper::format_plugin_name(plugin)))) {
                   LOG_WARN("Add user and pwd error", K(user_name), K(pwd), K(plugin), K(ret));
                 } else {
                   //do nothing
