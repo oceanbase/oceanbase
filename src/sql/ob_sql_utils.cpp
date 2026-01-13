@@ -3337,9 +3337,8 @@ int ObSQLUtils::choose_best_partition_replica_addr(const ObAddr &local_addr,
         } else {/*do nothing*/}
       } else if (!candi_locality.is_active()
                  || ObServerStatus::OB_SERVER_ACTIVE != candi_locality.get_server_status()
-                 || 0 == candi_locality.get_start_service_time()
                  || 0 != candi_locality.get_server_stop_time()) {
-        // server may not serving
+        LOG_INFO("server may not serving", K(candi_locality));
       } else if (local_addr == candi_addr) {
         selected_addr = candi_addr;
         need_continue = false;

@@ -878,19 +878,20 @@ int ObDbmsStatsExecutor::check_need_split_gather(const ObTableStatParam &param, 
       (param.subpart_stat_param_.need_modify_ ? param.subpart_infos_.count() : 0) +
       (param.part_stat_param_.need_modify_ ? param.part_infos_.count() + param.approx_part_infos_.count() : 0) + 1;
   int64_t column_cnt = origin_column_cnt == 0 ? 1 : origin_column_cnt;
+  int64_t max_wa_memory_size = MIN_GATHER_WORK_ARANA_SIZE;
+  if (OB_FAIL(ObDbmsStatsUtils::get_max_work_area_size(param.tenant_id_, max_wa_memory_size))) {
+    LOG_WARN("failed to get max work area size", K(ret));
+  }
 
-  if (param.is_auto_gather_ || param.is_async_gather_) {
-    int64_t max_wa_memory_size = MIN_GATHER_WORK_ARANA_SIZE;
-    if (OB_FAIL(ObDbmsStatsUtils::get_max_work_area_size(param.tenant_id_, max_wa_memory_size))) {
-      LOG_WARN("failed to get max work area size", K(ret));
-    } else {
-      int64_t max_gather_col_cnt = max_wa_memory_size >= 1 * 1024L * 1024L * 1024L /*1G*/
-                                       ? MAX_GATHER_COLUMN_COUNT_PER_QUERY_FOR_LARGE_TENANT
-                                       : MAX_GATHER_COLUMN_COUNT_PER_QUERY_FOR_SMALL_TENANT;
-      column_cnt = column_cnt > max_gather_col_cnt ? max_gather_col_cnt : column_cnt;
-    }
+  if (OB_FAIL(ret)) {
+  } else if (param.is_auto_gather_ || param.is_async_gather_) {
 
-    if (OB_SUCC(ret) && gather_helper.use_single_part_) {
+    int64_t max_gather_col_cnt = max_wa_memory_size >= 1 * 1024L * 1024L * 1024L /*1G*/
+                                      ? MAX_GATHER_COLUMN_COUNT_PER_QUERY_FOR_LARGE_TENANT
+                                      : MAX_GATHER_COLUMN_COUNT_PER_QUERY_FOR_SMALL_TENANT;
+    column_cnt = column_cnt > max_gather_col_cnt ? max_gather_col_cnt : column_cnt;
+
+    if (gather_helper.use_single_part_) {
       gather_helper.maximum_gather_part_cnt_ = 1;
     } else if (gather_helper.batch_part_size_ == 0) {
       gather_helper.maximum_gather_part_cnt_ = partition_cnt;
@@ -915,8 +916,10 @@ int ObDbmsStatsExecutor::check_need_split_gather(const ObTableStatParam &param, 
       LOG_TRACE("stat gather will use split gather", K(param.degree_), K(gather_helper));
     }
     LOG_TRACE("succeed to get the maximum num of part and column for stat gather", K(param), K(gather_helper));
-  }
-  else {
+  } else {
+    int64_t max_gather_col_cnt = max_wa_memory_size >= 1 * 1024L * 1024L * 1024L /*1G*/
+                                       ? MAX_GATHER_COLUMN_COUNT_PER_QUERY_FOR_LARGE_TENANT
+                                       : MAX_GATHER_COLUMN_COUNT_PER_QUERY_FOR_SMALL_TENANT;
     gather_helper.maximum_gather_part_cnt_ = partition_cnt;
     gather_helper.maximum_gather_col_cnt_ = std::min(column_cnt, MAX_GATHER_COLUMN_COUNT_PER_QUERY_FOR_LARGE_TENANT);
     gather_helper.is_split_gather_ = gather_helper.maximum_gather_part_cnt_ < partition_cnt ||
